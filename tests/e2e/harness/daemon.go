@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net"
 	"net/http"
 	"os"
@@ -190,7 +191,7 @@ func Start(t *testing.T, opts Options) *Harness {
 		// A wide window, walked until something binds. `port: 0` would
 		// mean the default 8120 here, not "let the OS choose".
 		CallbackPortRange:       "20000-60000",
-		BinPort:                 0,
+		BinPort:                 binPortFor(t),
 		AuthMode:                opts.AuthMode,
 		MQTTBroker:              h.mqttBroker,
 		OIDCIssuer:              h.opIssuer,
@@ -309,12 +310,81 @@ func locateDaemonBinary(t *testing.T) string {
 	if runtime.GOOS == "windows" {
 		bin += ".exe"
 	}
-	if _, err := os.Stat(bin); err != nil {
+	info, err := os.Stat(bin)
+	if err != nil {
 		t.Fatalf("openccu-loom binary not found at %s: %v\n"+
 			"run `make build` before `make e2e`, or set OPENCCU_LOOM_E2E_BINARY",
 			bin, err)
 	}
+	assertBinaryNotStale(t, bin, info.ModTime(), repoRoot)
 	return bin
+}
+
+// assertBinaryNotStale refuses to run against a daemon older than the sources
+// under test.
+//
+// The suite starts a prebuilt ./bin/openccu-loom rather than building from the
+// tree, so nothing otherwise connects a test run to the code it claims to
+// exercise. A binary left over from an earlier session turns the whole suite
+// into a measurement of history: it passes or fails on behaviour that no
+// longer exists, and it does so silently. That cost a full investigation —
+// a month-old binary reproduced a port-conflict bug that had long since been
+// fixed, while the same tests were green in CI, which builds fresh every run.
+//
+// The check is deliberately coarse. It compares the binary against the newest
+// Go source in the tree rather than trying to be a build system; a false
+// "rebuild first" is a five-second inconvenience, a false pass is a wrong
+// conclusion nobody notices.
+func assertBinaryNotStale(t *testing.T, bin string, builtAt time.Time, repoRoot string) {
+	t.Helper()
+	// An explicitly supplied binary is the caller's responsibility — CI
+	// builds one into a temp path and points the suite at it.
+	if os.Getenv("OPENCCU_LOOM_E2E_BINARY") != "" {
+		return
+	}
+	newest, newestPath := newestGoSource(repoRoot)
+	if newestPath == "" || !newest.After(builtAt) {
+		return
+	}
+	t.Fatalf("%s was built %s, but %s changed %s — the suite would test a stale daemon.\n"+
+		"Run `make build` first, or set OPENCCU_LOOM_E2E_BINARY to the binary you mean to test.",
+		bin, builtAt.Format(time.RFC3339), newestPath, newest.Format(time.RFC3339))
+}
+
+// newestGoSource returns the newest modification time among the Go sources the
+// daemon is built from, and the file carrying it. Vendored and generated trees
+// are skipped: they change for reasons that do not affect the binary's
+// behaviour and would produce a rebuild demand nobody can satisfy.
+func newestGoSource(repoRoot string) (newest time.Time, path string) {
+	for _, dir := range []string{"cmd", "internal", "pkg"} {
+		root := filepath.Join(repoRoot, dir)
+		_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return nil //nolint:nilerr // an unreadable subtree must not fail the suite
+			}
+			if d.IsDir() {
+				if name := d.Name(); name == "testdata" || name == "spa_dist" {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if !strings.HasSuffix(d.Name(), ".go") || strings.HasSuffix(d.Name(), "_test.go") {
+				return nil
+			}
+			info, statErr := d.Info()
+			if statErr != nil {
+				// A file that vanished mid-walk (an editor's swap file, a
+				// concurrent build) says nothing about staleness; skipping it
+				// is the whole intent, so the error is deliberately dropped.
+				return nil //nolint:nilerr // see comment: a vanished file is not a staleness signal
+			}
+			if info.ModTime().After(newest) {
+				newest, path = info.ModTime(), p
+			}
+			return nil
+		})
+	}
+	return newest, path
 }
 
 // waitForHealth polls GET /api/v1/health until it returns 200 OK or

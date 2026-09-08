@@ -8,6 +8,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A callback listener that cannot bind is visible now.** Both callback
+  listeners stay non-fatal on a bind failure — the daemon has to remain
+  reachable so an operator can fix the conflict — but until now the condition
+  was a single boot warning: `/health` answered 200 and every central reached
+  `readiness.ready` while no CCU event could arrive at all. `/health` carries a
+  `callback.listeners` component, and a new `callback_listener_down` gauge goes
+  to 1, so a dead push path reads as `degraded` instead of as healthy. The
+  status code stays 200: a daemon that can still be reconfigured is not one to
+  drain.
 - **The device list is one table, with column filters and expandable rows.**
   The card grid is gone, and with it the grid/table toggle and its
   preference — one layout means one set of behaviours to learn. Each column

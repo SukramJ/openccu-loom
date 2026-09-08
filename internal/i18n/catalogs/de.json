@@ -71,6 +71,7 @@
   "health.note.client_connected": "Client verbunden",
   "health.note.initial_sync_connected": "Erst-Sync: verbunden",
   "health.note.initial_sync_not_connected": "Erst-Sync: nicht verbunden",
+  "health.note.callback_listeners_bound": "Callback-Listener gebunden",
   "health.note.recovery_completed": "Wiederherstellung abgeschlossen",
   "health.note.recovery_failed_escalated": "Wiederherstellung fehlgeschlagen (eskaliert)",
   "health.note.recovery_started": "Wiederherstellung gestartet",

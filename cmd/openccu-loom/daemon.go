@@ -512,6 +512,12 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	binRPCSrv := binCB.srv
 	binRPCPort := binCB.port
 
+	// Make a dead push path visible. Both listeners are non-fatal on a bind
+	// failure so the daemon stays reachable and reconfigurable, but until this
+	// the condition showed only as a boot WARN: /health stayed 200 and every
+	// central reached readiness.ready while no CCU event could arrive.
+	recordCallbackHealth(healthTracker, metricsReg, cb.bindErr, binCB.bindErr)
+
 	// Resolve the host advertised to each CCU per-central: loopback for a
 	// co-located CCU, the LAN IP for an external one (or PublicHost when
 	// set). A single global host would mis-advertise to any central not

@@ -389,6 +389,9 @@ type xmlrpcCallback struct {
 	ctx  context.Context
 	srv  *rpcserver.XMLRPCServer
 	port int
+	// bindErr is the listen failure, when there was one. Non-nil means the
+	// daemon has no XML-RPC push path at all.
+	bindErr error
 }
 
 // wireXMLRPCCallback stands up the shared XML-RPC callback server (routes by
@@ -403,6 +406,10 @@ func wireXMLRPCCallback(ctx context.Context, cfg *config.Config, allowlist rpcse
 	srv, port, err := startCallbackServer(callbackCtx, cfg, allowlist, obs, logger)
 	if err != nil {
 		logger.Warn("callback.start.failed", slog.String("err", err.Error()))
+		// Kept on the struct, not only logged: the caller records it as a
+		// /health component, because a daemon with no callback listener
+		// reports ready and healthy while no CCU event can ever arrive.
+		cb.bindErr = err
 	}
 	cb.srv = srv
 	cb.port = port
@@ -422,6 +429,9 @@ func wireXMLRPCCallback(ctx context.Context, cfg *config.Config, allowlist rpcse
 type binrpcCallback struct {
 	srv  *rpcserver.BINRPCServer
 	port int
+	// bindErr is the listen failure, when there was one. Non-nil means CUxD
+	// events cannot arrive.
+	bindErr error
 }
 
 // wireBINRPCCallback stands up the shared BIN-RPC callback listener for CUxD
@@ -446,6 +456,7 @@ func wireBINRPCCallback(callbackCtx context.Context, cfg *config.Config, allowli
 	srv, binErr := rpcserver.NewBINRPCServer(binCfg) //nolint:contextcheck // NewBINRPCServer/bindAddr has no ctx parameter; bind is instantaneous
 	if binErr != nil {
 		logger.Warn("callback.binrpc.start.failed", slog.String("err", binErr.Error()))
+		cb.bindErr = binErr
 		return cb
 	}
 	cb.srv = srv
