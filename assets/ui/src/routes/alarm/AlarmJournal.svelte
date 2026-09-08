@@ -7,6 +7,8 @@
   import type { AlarmJournalClass, AlarmJournalEntry } from "$lib/api/types";
 
   import Card from "$lib/components/ui/Card.svelte";
+  import DataTable from "$lib/components/ui/DataTable.svelte";
+  import type { DataColumn } from "$lib/components/ui/data-table";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
@@ -156,6 +158,29 @@
     if (matching.length > 0) entries = [...matching, ...entries];
   });
 
+  const columns: DataColumn<AlarmJournalEntry>[] = $derived([
+    {
+      key: "when",
+      label: t("alarm.journal.col.when"),
+      sortable: true,
+      // Sort on the raw instant, not on the locale-formatted text: a German
+      // "08.09.2026, 14:03" sorts by day-of-month as a string.
+      get: (e) => e.when,
+      cellClass: "whitespace-nowrap tabular-nums text-[var(--ha-secondary-text-color)]",
+    },
+    { key: "zone", label: t("alarm.journal.col.zone"), sortable: true, title: true, get: (e) => zoneName(e.zone_id) },
+    { key: "class", label: t("alarm.journal.col.class"), sortable: true, get: (e) => t(`alarm.journal_class.${e.class}`) },
+    { key: "event", label: t("alarm.journal.col.event"), sortable: true, get: (e) => eventLabel(e.event), cellClass: "text-xs" },
+    { key: "actor", label: t("alarm.journal.col.actor"), sortable: true, get: (e) => e.actor || "—" },
+    {
+      key: "source",
+      label: t("alarm.journal.col.source"),
+      sortable: true,
+      get: (e) => e.source ?? "—",
+      cellClass: "text-xs text-[var(--ha-secondary-text-color)]",
+    },
+  ]);
+
   function zoneName(id: string): string {
     return store.zonesConfig.find((a) => a.id === id)?.name ?? id;
   }
@@ -208,6 +233,22 @@
     URL.revokeObjectURL(url);
   }
 </script>
+
+{#snippet journalCell(e: AlarmJournalEntry, col: DataColumn<AlarmJournalEntry>)}
+  {#if col.key === "when"}
+    {fmtTime(e.when)}
+  {:else if col.key === "zone"}
+    {zoneName(e.zone_id)}
+  {:else if col.key === "class"}
+    <Badge variant={CLASS_VARIANT[e.class]}>{t(`alarm.journal_class.${e.class}`)}</Badge>
+  {:else if col.key === "event"}
+    <span title={e.event}>{eventLabel(e.event)}</span>
+  {:else if col.key === "actor"}
+    {e.actor || "—"}
+  {:else if col.key === "source"}
+    {e.source ?? "—"}
+  {/if}
+{/snippet}
 
 <div>
   <div class="mb-4 flex flex-wrap items-end gap-3">
@@ -286,39 +327,16 @@
   {:else if entries.length === 0}
     <EmptyState icon="mdi:history" message={t("alarm.journal.empty")} />
   {:else}
-    <Card class="overflow-x-auto">
-      <table class="w-full border-collapse text-sm">
-        <thead class="sticky top-0 z-10 bg-[var(--ha-card-background-color)]">
-          <tr class="border-b border-[var(--ha-divider-color)] text-left">
-            <th class="p-2 font-medium">{t("alarm.journal.col.when")}</th>
-            <th class="p-2 font-medium">{t("alarm.journal.col.zone")}</th>
-            <th class="p-2 font-medium">{t("alarm.journal.col.class")}</th>
-            <th class="p-2 font-medium">{t("alarm.journal.col.event")}</th>
-            <th class="p-2 font-medium">{t("alarm.journal.col.actor")}</th>
-            <th class="p-2 font-medium">{t("alarm.journal.col.source")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {#each entries as e (e.id)}
-            <tr class="border-b border-[var(--ha-divider-color)] last:border-0">
-              <td class="whitespace-nowrap p-2 text-[var(--ha-secondary-text-color)]">
-                {fmtTime(e.when)}
-              </td>
-              <td class="p-2">{zoneName(e.zone_id)}</td>
-              <td class="p-2">
-                <Badge variant={CLASS_VARIANT[e.class]}>
-                  {t(`alarm.journal_class.${e.class}`)}
-                </Badge>
-              </td>
-              <td class="p-2 text-xs" title={e.event}>{eventLabel(e.event)}</td>
-              <td class="p-2">{e.actor || "—"}</td>
-              <td class="p-2 text-xs text-[var(--ha-secondary-text-color)]">
-                {e.source ?? "—"}
-              </td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
+    <Card class="p-4">
+      <DataTable
+        rows={entries}
+        {columns}
+        rowKey={(e) => String(e.id)}
+        cell={journalCell}
+        persistKey="alarm-journal"
+        initialSort={{ key: "when", asc: false }}
+        emptyMessage={t("alarm.journal.empty")}
+      />
     </Card>
   {/if}
 </div>
