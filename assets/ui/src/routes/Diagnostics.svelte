@@ -711,6 +711,7 @@
         rows={clients}
         columns={clientCols}
         rowKey={(c) => c.name}
+        persistKey="diagnostics-components"
         emptyMessage={t("diagnostics.empty.components")}
       >
         {#snippet cell(row, col)}
@@ -782,6 +783,7 @@
       rows={interfaces}
       columns={interfaceCols}
       rowKey={(i) => i.id}
+      persistKey="diagnostics-interfaces"
       emptyMessage={t("diagnostics.empty.interfaces")}
     >
       {#snippet cell(row, col)}
@@ -843,6 +845,7 @@
         rows={reliability}
         columns={reliabilityCols}
         rowKey={(r) => `${r.central}/${r.interface}`}
+        persistKey="diagnostics-reliability"
         emptyMessage={t("diagnostics.reliability.empty")}
       >
         {#snippet cell(row, col)}
@@ -1131,6 +1134,7 @@
       rows={unifiedList}
       columns={recordingCols}
       rowKey={(r) => r.kind + ":" + r.id}
+      persistKey="diagnostics-recordings"
       emptyMessage={t("diagnostics.recordings.empty")}
     >
       {#snippet cell(row, col)}

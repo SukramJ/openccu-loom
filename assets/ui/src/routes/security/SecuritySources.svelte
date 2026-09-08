@@ -202,6 +202,11 @@
       sortable: true,
       align: "center",
       get: (s) => (s.relevant ? 1 : 0),
+      filter: "select",
+      filterOptions: [
+        { value: "1", label: t("security.sources.badge.relevant") },
+        { value: "0", label: t("security.sources.badge.not_relevant") },
+      ],
     },
     {
       key: "active",
@@ -209,6 +214,11 @@
       sortable: true,
       align: "center",
       get: (s) => (s.active ? 1 : 0),
+      filter: "select",
+      filterOptions: [
+        { value: "1", label: t("security.sources.badge.active") },
+        { value: "0", label: t("security.sources.badge.inactive") },
+      ],
     },
     {
       key: "override",
@@ -326,6 +336,7 @@
       search
       searchPlaceholder={t("security.sources.search")}
       persistKey="security-sources"
+      columnFilters
       initialSort={{ key: "source", asc: true }}
       emptyMessage={t("security.sources.empty")}
       emptyDescription={t("security.sources.empty.description")}

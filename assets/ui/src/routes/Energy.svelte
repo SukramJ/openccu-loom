@@ -496,6 +496,7 @@
           rows={deviceRows}
           columns={deviceColumns}
           rowKey={(r) => r.address}
+          persistKey="energy-devices"
           initialSort={{ key: "consumed", asc: false }}
           emptyMessage={t("energy.empty")}
           emptyIcon="mdi:zap"

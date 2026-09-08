@@ -168,7 +168,19 @@
 
   const columns: DataColumn<ProgramEntry>[] = $derived([
     { key: "name", label: t("programs.col.name"), sortable: true, title: true, get: (p) => p.name },
-    { key: "status", label: t("programs.col.status"), sortable: true, get: (p) => (p.active === true ? 1 : p.active === false ? 0 : -1) },
+    {
+      key: "status",
+      label: t("programs.col.status"),
+      sortable: true,
+      // Sorted as a number so the two states cluster; filtered as a choice,
+      // because nobody would type the underlying 1/0 into a text box.
+      get: (p) => (p.active === true ? 1 : p.active === false ? 0 : -1),
+      filter: "select",
+      filterOptions: [
+        { value: "1", label: t("programs.active") },
+        { value: "0", label: t("programs.inactive") },
+      ],
+    },
     {
       key: "condition",
       label: t("programs.col.condition"),
@@ -242,6 +254,7 @@
         search
         searchPlaceholder={t("common.search")}
         persistKey="programs"
+        columnFilters
         initialSort={{ key: "name", asc: true }}
         emptyMessage={t("programs.empty")}
         emptyIcon="mdi:play"

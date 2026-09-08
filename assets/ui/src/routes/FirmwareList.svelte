@@ -354,6 +354,7 @@
         search
         searchPlaceholder={t("common.search")}
         persistKey="firmware"
+        columnFilters
         initialSort={{ key: "device", asc: true }}
         emptyMessage={filterMode === "updatable" ? t("firmware.no_updates") : t("devices.empty")}
         emptyIcon="mdi:upload"

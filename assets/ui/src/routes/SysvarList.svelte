@@ -429,9 +429,20 @@
     centralFilter ? sysvars.filter((s) => s.central === centralFilter) : sysvars,
   );
 
+  // The value types the CCU reports, in the order the API schema lists them.
+  const SYSVAR_TYPES = ["BOOL", "INTEGER", "FLOAT", "STRING", "ENUM", "ALARM"];
+
   const columns: DataColumn<SysvarEntry>[] = $derived([
     { key: "name", label: t("sysvars.col.name"), sortable: true, title: true, get: (s) => s.name },
-    { key: "type", label: t("sysvars.col.type"), sortable: true, get: (s) => s.value_type },
+    {
+      key: "type",
+      label: t("sysvars.col.type"),
+      sortable: true,
+      get: (s) => s.value_type,
+      // A closed vocabulary from the CCU — a choice, not a text box.
+      filter: "select",
+      filterOptions: SYSVAR_TYPES.map((v) => ({ value: v, label: v })),
+    },
     { key: "value", label: t("sysvars.col.value"), sortable: true, get: (s) => (s.value == null ? "" : String(s.value)) },
     { key: "actions", label: t("sysvars.col.actions"), align: "right", cellClass: "reflow-actions" },
   ]);
@@ -605,6 +616,7 @@
         search
         searchPlaceholder={t("common.search")}
         persistKey="sysvars"
+        columnFilters
         initialSort={{ key: "name", asc: true }}
         emptyMessage={t("sysvars.empty")}
         emptyIcon="mdi:sliders"

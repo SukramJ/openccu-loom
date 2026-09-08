@@ -434,6 +434,8 @@ const EN: Catalog = {
   "alarm.walktest.progress": "{seen}/{total} sensors verified",
   "alarm.walktest.tested": "verified",
   "alarm.walktest.untested": "pending",
+  "alarm.walktest.col.sensor": "Sensor",
+  "alarm.walktest.col.status": "Status",
   "alarm.walktest.empty": "No sensors in this zone.",
   // Setup wizard (§12.3).
   "alarm.wizard.launch": "Setup wizard",
@@ -4377,6 +4379,8 @@ const DE: Catalog = {
   "alarm.walktest.progress": "{seen}/{total} Sensoren geprüft",
   "alarm.walktest.tested": "geprüft",
   "alarm.walktest.untested": "ausstehend",
+  "alarm.walktest.col.sensor": "Sensor",
+  "alarm.walktest.col.status": "Status",
   "alarm.walktest.empty": "Keine Sensoren in dieser Zone.",
   // Einrichtungsassistent (§12.3).
   "alarm.wizard.launch": "Einrichtungsassistent",

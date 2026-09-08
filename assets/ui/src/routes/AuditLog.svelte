@@ -308,6 +308,7 @@
         search
         searchPlaceholder={t("common.search")}
         persistKey="audit-log"
+        columnFilters
         initialSort={{ key: "time", asc: false }}
         emptyMessage={t("audit.empty")}
         emptyDescription={t("audit.empty.description")}
