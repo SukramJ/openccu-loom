@@ -7,6 +7,7 @@
   import { renderQrSvg } from "$lib/qr";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
+  import Select from "$lib/components/ui/Select.svelte";
   import { ApiError } from "$lib/api/client";
 
   // Pull the active pairing window from the daemon so a page refresh,
@@ -148,14 +149,13 @@
         {/each}
       {/if}
       <div class="flex flex-wrap items-center gap-3 mb-4">
-        <select
-          class="h-10 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 text-base sm:text-sm sm:h-9"
-          bind:value={selectedDuration}
-        >
-          {#each DURATION_OPTIONS as opt}
-            <option value={opt.value}>{opt.label}</option>
-          {/each}
-        </select>
+        <Select
+          class="w-auto"
+          value={String(selectedDuration)}
+          onValueChange={(v) => (selectedDuration = Number(v))}
+          ariaLabel={t("matter.pair.window_open_duration")}
+          options={DURATION_OPTIONS.map((opt) => ({ value: String(opt.value), label: opt.label }))}
+        />
         <Button class="w-full sm:w-auto" disabled={opening || noneReady} onclick={() => void openWindow()}>
           {opening
             ? t("common.saving")

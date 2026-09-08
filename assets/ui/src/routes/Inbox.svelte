@@ -960,24 +960,22 @@
 
         {#if acceptGroups.length > 0}
           <div class="mb-5">
-            <label class="mb-1 block text-sm font-medium" for="inbox-group">
+            <span class="mb-1 block text-sm font-medium">
               {t("inbox.accept_dialog.group_label")}
-            </label>
-            <select
-              id="inbox-group"
-              class="h-10 w-full rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-3 text-sm text-[var(--ha-primary-text-color)]"
+            </span>
+            <Select
+              class="w-full"
               disabled={acceptSubmitting}
               value={acceptGroupId === "" ? "" : String(acceptGroupId)}
-              onchange={(e) => {
-                const v = (e.currentTarget as HTMLSelectElement).value;
+              onValueChange={(v) => {
                 acceptGroupId = v === "" ? "" : Number(v);
               }}
-            >
-              <option value="">{t("inbox.accept_dialog.group_none")}</option>
-              {#each acceptGroups as g (g.id)}
-                <option value={String(g.id)}>{g.name}</option>
-              {/each}
-            </select>
+              ariaLabel={t("inbox.accept_dialog.group_label")}
+              options={[
+                { value: "", label: t("inbox.accept_dialog.group_none") },
+                ...acceptGroups.map((g) => ({ value: String(g.id), label: g.name })),
+              ]}
+            />
             <p class="mt-1 text-xs text-[var(--ha-secondary-text-color)]">
               {t("inbox.accept_dialog.group_hint")}
             </p>
