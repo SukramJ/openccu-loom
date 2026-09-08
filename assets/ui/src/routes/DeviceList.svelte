@@ -425,7 +425,7 @@
           class="w-full rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-3 py-2 text-base text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none focus:ring-1 focus:ring-[var(--ha-primary-color)] sm:w-72 sm:text-sm"
         />
         <Select
-          class="w-auto min-w-[10rem]"
+          class="w-auto"
           bind:value={availability}
           ariaLabel={t("devicelist.availability")}
           options={[
@@ -436,7 +436,7 @@
         />
         {#if rooms.length > 0}
           <Select
-            class="w-auto min-w-[10rem]"
+            class="w-auto"
             bind:value={roomFilter}
             ariaLabel={t("devicelist.room")}
             options={[
@@ -447,9 +447,9 @@
         {/if}
         {#if centrals.length > 1}
           <Select
-            class="w-auto min-w-[10rem]"
+            class="w-auto"
             bind:value={centralFilter}
-            ariaLabel={"CCU"}
+            ariaLabel={t("filter.central_aria")}
             options={[
               { value: "", label: t("common.all_ccus") },
               ...centrals.map((c) => ({ value: c, label: c })),
@@ -458,7 +458,7 @@
         {/if}
         {#if areas.length > 0}
           <Select
-            class="w-auto min-w-[10rem]"
+            class="w-auto"
             bind:value={areaFilter}
             ariaLabel={t("devicelist.area")}
             options={[

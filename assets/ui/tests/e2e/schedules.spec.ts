@@ -24,9 +24,12 @@ test.describe('Schedules overview', () => {
     await expect(page.getByText('Bad Heizung')).toBeVisible();
     await expect(page.getByText('Küche Licht')).toBeVisible();
     // The kind badge is what separates a thermostat (profile in MASTER)
-    // from a device with a dedicated week-profile channel.
-    await expect(page.getByText('Thermostat')).toBeVisible();
-    await expect(page.getByText('Week profile')).toBeVisible();
+    // from a device with a dedicated week-profile channel. Scoped to the
+    // row: the kind column also filters, so its options carry the same
+    // two labels.
+    const rows = page.getByRole('table').locator('tbody');
+    await expect(rows.getByText('Thermostat')).toBeVisible();
+    await expect(rows.getByText('Week profile')).toBeVisible();
   });
 
   test('a row links to the device schedule editor', async ({ page }) => {
@@ -43,7 +46,8 @@ test.describe('Schedules overview', () => {
     await page.waitForSelector('#main');
     await page.waitForTimeout(500);
 
-    await page.getByRole('searchbox').fill('eTRV');
+    // The view's own search box, not one of the table's per-column filters.
+    await page.getByPlaceholder('Search by name, address or model…').fill('eTRV');
     await expect(page.getByText('Bad Heizung')).toBeVisible();
     await expect(page.getByText('Küche Licht')).not.toBeVisible();
   });

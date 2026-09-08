@@ -255,9 +255,9 @@
         />
         {#if centrals.length > 1}
           <Select
-            class="w-auto min-w-[10rem]"
+            class="w-auto"
             bind:value={centralFilter}
-            ariaLabel={t("overview.filter.central_title")}
+            ariaLabel={t("filter.central_aria")}
             options={[
               { value: "", label: t("common.all_ccus") },
               ...centrals.map((c) => ({ value: c, label: c })),
@@ -266,7 +266,7 @@
         {/if}
         {#if rooms.length > 0}
           <Select
-            class="w-auto min-w-[10rem]"
+            class="w-auto"
             bind:value={roomFilter}
             ariaLabel={t("overview.filter.room_title")}
             options={[
@@ -277,7 +277,7 @@
         {/if}
         {#if functions.length > 0}
           <Select
-            class="w-auto min-w-[10rem]"
+            class="w-auto"
             bind:value={functionFilter}
             ariaLabel={t("overview.filter.function_title")}
             options={[
@@ -288,7 +288,7 @@
         {/if}
         {#if areas.length > 0}
           <Select
-            class="w-auto min-w-[10rem]"
+            class="w-auto"
             bind:value={areaFilter}
             ariaLabel={t("overview.filter.area_title")}
             options={[

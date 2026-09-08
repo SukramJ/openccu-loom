@@ -128,9 +128,9 @@
     {#snippet actions()}
       {#if centrals.length > 1}
         <Select
-          class="w-auto min-w-[10rem]"
+          class="w-auto"
           bind:value={centralFilter}
-          ariaLabel={"CCU"}
+          ariaLabel={t("filter.central_aria")}
           options={[
             { value: "", label: t("common.all_ccus") },
             ...centrals.map((c) => ({ value: c, label: c })),

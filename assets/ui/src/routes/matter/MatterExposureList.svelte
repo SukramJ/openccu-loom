@@ -349,7 +349,7 @@
         class="w-full sm:w-64"
       />
       <Select
-        class="w-auto min-w-[10rem]"
+        class="w-auto"
         bind:value={filterKind}
         ariaLabel={t("matter.expose.filter_kind")}
         options={kindOptions.map((k) => ({
