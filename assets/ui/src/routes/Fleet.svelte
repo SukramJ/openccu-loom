@@ -111,7 +111,7 @@
             <CentralStatusBadge available={ccu.available} readiness={ccu.readiness} />
           </div>
 
-          <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+          <dl class="kv-grid gap-x-3 gap-y-1 text-sm" style="--kv-label: 8rem">
             <dt class="text-[var(--ha-secondary-text-color)]">{t("fleet.field.host")}</dt>
             <dd class="min-w-0 truncate font-mono text-xs text-[var(--ha-primary-text-color)]">
               {ccu.host}{ccu.hostname && ccu.hostname !== ccu.host ? ` (${ccu.hostname})` : ""}

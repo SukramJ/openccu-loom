@@ -28,6 +28,7 @@
   import CentralStatusBadge from "$lib/components/ui/CentralStatusBadge.svelte";
 
   import PageShell from "$lib/components/ui/PageShell.svelte";
+  import Select from "$lib/components/ui/Select.svelte";
   // Filter state is seeded from a module store and synced back to it, so the
   // search term and filters survive opening a device and navigating back.
   // Sort is not here: the DataTable owns the column order and persists it
@@ -423,50 +424,48 @@
           bind:value={filter}
           class="w-full rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-3 py-2 text-base text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none focus:ring-1 focus:ring-[var(--ha-primary-color)] sm:w-72 sm:text-sm"
         />
-        <select
+        <Select
+          class="w-auto min-w-[10rem]"
           bind:value={availability}
-          class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
-          title={t("devicelist.availability")}
-        >
-          <option value="all">{t("devicelist.all")}</option>
-          <option value="available">{t("devicelist.available")}</option>
-          <option value="unavailable">{t("devicelist.unavailable")}</option>
-        </select>
+          ariaLabel={t("devicelist.availability")}
+          options={[
+            { value: "all", label: t("devicelist.all") },
+            { value: "available", label: t("devicelist.available") },
+            { value: "unavailable", label: t("devicelist.unavailable") },
+          ]}
+        />
         {#if rooms.length > 0}
-          <select
+          <Select
+            class="w-auto min-w-[10rem]"
             bind:value={roomFilter}
-            class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
-            title={t("devicelist.room")}
-          >
-            <option value="">{t("devicelist.all_rooms")}</option>
-            {#each rooms as r (r)}
-              <option value={r}>{r}</option>
-            {/each}
-          </select>
+            ariaLabel={t("devicelist.room")}
+            options={[
+              { value: "", label: t("devicelist.all_rooms") },
+              ...rooms.map((r) => ({ value: r, label: r })),
+            ]}
+          />
         {/if}
         {#if centrals.length > 1}
-          <select
+          <Select
+            class="w-auto min-w-[10rem]"
             bind:value={centralFilter}
-            class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
-            title="CCU"
-          >
-            <option value="">{t("common.all_ccus")}</option>
-            {#each centrals as c (c)}
-              <option value={c}>{c}</option>
-            {/each}
-          </select>
+            ariaLabel={"CCU"}
+            options={[
+              { value: "", label: t("common.all_ccus") },
+              ...centrals.map((c) => ({ value: c, label: c })),
+            ]}
+          />
         {/if}
         {#if areas.length > 0}
-          <select
+          <Select
+            class="w-auto min-w-[10rem]"
             bind:value={areaFilter}
-            class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
-            title={t("devicelist.area")}
-          >
-            <option value="">{t("devicelist.all_areas")}</option>
-            {#each areas as a (a.id)}
-              <option value={a.id}>{a.name}</option>
-            {/each}
-          </select>
+            ariaLabel={t("devicelist.area")}
+            options={[
+              { value: "", label: t("devicelist.all_areas") },
+              ...areas.map((a) => ({ value: a.id, label: a.name })),
+            ]}
+          />
         {/if}
         <label class="flex items-center gap-1.5 text-xs text-[var(--ha-secondary-text-color)]">
           <input type="checkbox" bind:checked={updateOnly} />

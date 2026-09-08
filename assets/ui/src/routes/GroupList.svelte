@@ -17,6 +17,7 @@
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import PageShell from "$lib/components/ui/PageShell.svelte";
+  import Select from "$lib/components/ui/Select.svelte";
   import GroupEditor from "$lib/components/groups/GroupEditor.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
@@ -126,16 +127,15 @@
   >
     {#snippet actions()}
       {#if centrals.length > 1}
-        <select
+        <Select
+          class="w-auto min-w-[10rem]"
           bind:value={centralFilter}
-          class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-          title="CCU"
-        >
-          <option value="">{t("common.all_ccus")}</option>
-          {#each centrals as c (c)}
-            <option value={c}>{c}</option>
-          {/each}
-        </select>
+          ariaLabel={"CCU"}
+          options={[
+            { value: "", label: t("common.all_ccus") },
+            ...centrals.map((c) => ({ value: c, label: c })),
+          ]}
+        />
       {/if}
       {#if canCreate}
         <Button size="sm" onclick={openCreate}>
@@ -184,7 +184,7 @@
                     {/if}
                   </div>
 
-                  <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+                  <dl class="kv-grid gap-x-3 gap-y-1 text-sm" style="--kv-label: 8rem">
                     <dt class="text-[var(--ha-secondary-text-color)]">{t("groups.field.id")}</dt>
                     <dd class="tabular-nums text-[var(--ha-primary-text-color)]">{g.id}</dd>
 

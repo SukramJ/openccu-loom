@@ -197,7 +197,7 @@
                     </Badge>
                   </div>
                 </div>
-                <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+                <dl class="kv-grid gap-x-4 gap-y-1 text-sm" style="--kv-label: 8rem">
                   {#if ccu.model}
                     <dt class="text-slate-500 dark:text-slate-400">{t("fleet.field.model")}</dt>
                     <dd class="text-slate-700 dark:text-slate-300">{ccu.model}</dd>

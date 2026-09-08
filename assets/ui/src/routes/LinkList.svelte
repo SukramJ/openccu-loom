@@ -24,6 +24,8 @@
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import PageShell from "$lib/components/ui/PageShell.svelte";
+  import DataTable from "$lib/components/ui/DataTable.svelte";
+  import type { DataColumn } from "$lib/components/ui/data-table";
   import { t } from "$lib/i18n";
   import { loadLS, saveLS } from "$lib/utils";
 
@@ -108,17 +110,68 @@
   const filtered = $derived(
     links
       .filter((l) => !centralFilter || l.central_name === centralFilter)
-      .filter((l) => matches(l, search))
-      .sort((a, b) => {
-        const ca = (a.central_name || "").localeCompare(b.central_name || "");
-        if (ca !== 0) return ca;
-        return partyName(a, "sender").localeCompare(
-          partyName(b, "sender"),
-          undefined,
-          { sensitivity: "base" },
-        );
-      }),
+      .filter((l) => matches(l, search)),
   );
+
+  // Column set for the shared DataTable. Sender/receiver read through
+  // partyName() so search, sort and the on-screen text agree — the operator
+  // sorts and filters on exactly what they see. The central column only
+  // earns its place with more than one CCU configured, mirroring the badge
+  // that used to appear conditionally in the card layout; the actions
+  // column likewise only appears while the device-side link editor exists.
+  const columns = $derived([
+    {
+      key: "sender",
+      label: t("links.col.sender"),
+      sortable: true,
+      title: true,
+      get: (l: Link) => partyName(l, "sender"),
+    },
+    {
+      key: "receiver",
+      label: t("links.col.receiver"),
+      sortable: true,
+      get: (l: Link) => partyName(l, "receiver"),
+    },
+    {
+      key: "name",
+      label: t("links.col.name"),
+      sortable: true,
+      get: (l: Link) => l.name || "",
+    },
+    {
+      key: "description",
+      label: t("links.col.description"),
+      sortable: true,
+      get: (l: Link) => l.description || "",
+    },
+    {
+      key: "interface",
+      label: t("links.col.interface"),
+      sortable: true,
+      get: (l: Link) => l.interface_id || "",
+    },
+    ...(centrals.length > 1
+      ? [
+          {
+            key: "central",
+            label: t("links.col.central"),
+            sortable: true,
+            get: (l: Link) => l.central_name || "",
+          },
+        ]
+      : []),
+    ...(linkable
+      ? [
+          {
+            key: "actions",
+            label: t("links.col.actions"),
+            align: "right" as const,
+            cellClass: "reflow-actions",
+          },
+        ]
+      : []),
+  ] satisfies DataColumn<Link>[]);
 </script>
 
 <svelte:head>
@@ -181,58 +234,58 @@
     {#if filtered.length === 0}
       <EmptyState message={t("links.no_matches")} icon="mdi:link" />
     {:else}
-      <ul class="flex flex-col gap-3">
-        {#each filtered as link (link.central_name + "|" + link.sender_address + "->" + link.receiver_address)}
-          <Card class="flex flex-col gap-2 p-4">
-            <div class="flex flex-wrap items-center gap-2">
-              <span class="min-w-0 truncate font-semibold text-[var(--ha-primary-text-color)]">
-                {partyName(link, "sender")}
-              </span>
-              <Icon
-                name="mdi:arrow-right"
-                class="shrink-0 text-[var(--ha-secondary-text-color)]"
-              />
-              <span class="min-w-0 truncate font-semibold text-[var(--ha-primary-text-color)]">
-                {partyName(link, "receiver")}
-              </span>
-              <span class="grow"></span>
-              {#if centrals.length > 1 && link.central_name}
-                <Badge variant="muted">{link.central_name}</Badge>
-              {/if}
-              {#if link.interface_id}
-                <Badge variant="muted">{link.interface_id}</Badge>
-              {/if}
-            </div>
-
-            <div
-              class="flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-xs text-[var(--ha-secondary-text-color)]"
-            >
-              <span>{link.sender_address}</span>
-              <Icon name="mdi:arrow-right" class="shrink-0" />
-              <span>{link.receiver_address}</span>
-            </div>
-
-            {#if link.name}
-              <p class="text-sm text-[var(--ha-primary-text-color)]">{link.name}</p>
-            {/if}
-            {#if link.description}
-              <p class="text-xs text-[var(--ha-secondary-text-color)]">{link.description}</p>
-            {/if}
-
-            {#if linkable}
-              <div>
-                <a
-                  href={`#/devices/${encodeURIComponent(deviceOf(link.sender_address))}?tab=links`}
-                  class="inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:underline dark:text-brand-400"
-                >
-                  <Icon name="mdi:pencil" />
-                  {t("links.edit_on_device")}
-                </a>
-              </div>
-            {/if}
-          </Card>
-        {/each}
-      </ul>
+      <Card class="p-4">
+        <DataTable
+          rows={filtered}
+          {columns}
+          rowKey={(l) => l.central_name + "|" + l.sender_address + "->" + l.receiver_address}
+          cell={linkCell}
+          columnFilters
+          persistKey="links"
+          initialSort={{ key: "sender", asc: true }}
+          emptyMessage={t("links.no_matches")}
+        />
+      </Card>
     {/if}
   {/if}
 </PageShell>
+
+{#snippet linkCell(link: Link, col: DataColumn<Link>)}
+  {#if col.key === "sender"}
+    <span class="block font-semibold text-[var(--ha-primary-text-color)]">
+      {partyName(link, "sender")}
+    </span>
+    <span class="block font-mono text-xs text-[var(--ha-secondary-text-color)]">
+      {link.sender_address}
+    </span>
+  {:else if col.key === "receiver"}
+    <span class="block text-[var(--ha-primary-text-color)]">{partyName(link, "receiver")}</span>
+    <span class="block font-mono text-xs text-[var(--ha-secondary-text-color)]">
+      {link.receiver_address}
+    </span>
+  {:else if col.key === "name"}
+    {link.name || "—"}
+  {:else if col.key === "description"}
+    {link.description || "—"}
+  {:else if col.key === "interface"}
+    {#if link.interface_id}
+      <Badge variant="muted">{link.interface_id}</Badge>
+    {:else}
+      —
+    {/if}
+  {:else if col.key === "central"}
+    {#if link.central_name}
+      <Badge variant="muted">{link.central_name}</Badge>
+    {:else}
+      —
+    {/if}
+  {:else if col.key === "actions" && linkable}
+    <a
+      href={`#/devices/${encodeURIComponent(deviceOf(link.sender_address))}?tab=links`}
+      class="inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:underline dark:text-brand-400"
+    >
+      <Icon name="mdi:pencil" />
+      {t("links.edit_on_device")}
+    </a>
+  {/if}
+{/snippet}

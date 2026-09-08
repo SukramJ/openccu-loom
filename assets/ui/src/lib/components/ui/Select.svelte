@@ -12,6 +12,9 @@
     placeholder?: string;
     disabled?: boolean;
     onValueChange?: (value: string) => void;
+    /** Names the control where no visible <label> does — a toolbar filter,
+     *  typically, whose meaning otherwise lives only in its options. */
+    ariaLabel?: string;
     class?: string;
   };
 
@@ -21,6 +24,7 @@
     placeholder = t("select.placeholder"),
     disabled = false,
     onValueChange,
+    ariaLabel,
     class: className,
   }: Props = $props();
 
@@ -36,6 +40,7 @@
   onValueChange={(v) => typeof v === "string" && onValueChange?.(v)}
 >
   <BitsSelect.Trigger
+    aria-label={ariaLabel}
     class={cn(
       "flex h-10 w-full items-center justify-between rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-3 py-1 text-base text-[var(--ha-primary-text-color)] shadow-sm sm:text-sm",
       "focus-visible:border-[var(--ha-primary-color)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ha-primary-color)]",
