@@ -25,7 +25,6 @@ function setTheme(page: Page, theme: 'light' | 'dark'): Promise<void> {
         locale: 'en',
         navCollapsed: false,
         expertMode: false,
-        deviceView: 'grid',
       }),
     );
   }, theme);

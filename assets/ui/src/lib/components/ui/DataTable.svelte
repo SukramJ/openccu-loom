@@ -28,6 +28,10 @@
     rowClass,
     onRowClick,
     selectedKey = null,
+    columnFilters = false,
+    expand,
+    expandable,
+    onExpand,
   }: {
     rows: Row[];
     columns: DataColumn<Row>[];
@@ -52,9 +56,32 @@
     // it `aria-selected` and tints it, which is what turns a table into a
     // selector for an editor rendered beside or below it.
     selectedKey?: string | null;
+    // Renders a filter row under the header: one control per column that
+    // declares a `filter` (or has a `get` and does not opt out). Filters
+    // combine with AND, and with the search box when both are on.
+    columnFilters?: boolean;
+    // Renders under a row when the operator expands it, spanning every
+    // column. Without this snippet no chevron column appears at all.
+    expand?: Snippet<[Row]>;
+    // Which rows can expand. Defaults to all of them when `expand` is given;
+    // a row that answers false keeps its chevron cell empty so the columns
+    // still line up.
+    expandable?: (row: Row) => boolean;
+    // Called when a row is opened (not when it closes). This is what makes a
+    // lazily loaded expansion possible: the snippet renders only while the
+    // row is open, so it has no moment of its own to start a fetch from.
+    onExpand?: (row: Row) => void;
   } = $props();
 
-  type Persisted = { sortKey: string; sortAsc: boolean; query: string };
+  type Persisted = {
+    sortKey: string;
+    sortAsc: boolean;
+    query: string;
+    // Column key → the operator's filter text. Persisted beside sort and
+    // search: a filter that vanishes on reload is worse than none, because
+    // the table then shows a subset with nothing on screen saying why.
+    filters: Record<string, string>;
+  };
 
   // Compute the initial sort/search inside a function so the `initialSort`
   // prop is read once (non-reactively) rather than captured in a $state
@@ -64,11 +91,15 @@
       sortKey: initialSort?.key ?? "",
       sortAsc: initialSort?.asc ?? true,
       query: "",
+      filters: {},
     };
     if (persistKey) {
       try {
         const raw = localStorage.getItem("datatable:" + persistKey);
-        if (raw) base = { ...base, ...(JSON.parse(raw) as Persisted) };
+        if (raw) {
+          const parsed = JSON.parse(raw) as Partial<Persisted>;
+          base = { ...base, ...parsed, filters: parsed.filters ?? {} };
+        }
       } catch {
         // storage unavailable — fall back to the initial sort.
       }
@@ -80,10 +111,12 @@
   let sortKey = $state(init0.sortKey);
   let sortAsc = $state(init0.sortAsc);
   let query = $state(init0.query);
+  let filters = $state<Record<string, string>>(init0.filters);
+  let expandedKeys = $state<Set<string>>(new Set());
 
   $effect(() => {
     if (!persistKey) return;
-    const snapshot: Persisted = { sortKey, sortAsc, query };
+    const snapshot: Persisted = { sortKey, sortAsc, query, filters };
     try {
       localStorage.setItem("datatable:" + persistKey, JSON.stringify(snapshot));
     } catch {
@@ -148,8 +181,66 @@
     });
   }
 
+  // Which columns actually get a filter control. A column the table cannot
+  // read (`get` absent) is not filterable however it is declared, because the
+  // filter has nothing to match against.
+  function filterKindOf(col: DataColumn<Row>): "text" | "select" | false {
+    if (!columnFilters) return false;
+    if (col.filter === false) return false;
+    if (!col.get) return false;
+    return col.filter ?? "text";
+  }
+
+  const anyFilterable = $derived(columnFilters && columns.some((c) => filterKindOf(c)));
+
+  function setFilter(key: string, value: string) {
+    // Drop an emptied filter rather than storing "" — it keeps the persisted
+    // object small and makes "is anything filtered" a simple key count.
+    const next = { ...filters };
+    if (value.trim()) next[key] = value;
+    else delete next[key];
+    filters = next;
+  }
+
+  const canExpand = $derived(!!expand);
+
+  function rowExpandable(row: Row): boolean {
+    if (!expand) return false;
+    return expandable ? expandable(row) : true;
+  }
+
+  function toggleExpand(row: Row) {
+    const key = rowKey(row);
+    const next = new Set(expandedKeys);
+    if (next.has(key)) {
+      next.delete(key);
+    } else {
+      next.add(key);
+      onExpand?.(row);
+    }
+    expandedKeys = next;
+  }
+
   const processed = $derived.by(() => {
     let list = rows;
+    for (const [key, value] of Object.entries(filters)) {
+      const col = columns.find((c) => c.key === key);
+      const get = col?.get;
+      if (!get) continue;
+      const kind = filterKindOf(col);
+      if (kind === "select") {
+        list = list.filter((r) => {
+          const v = get(r);
+          return v != null && String(v) === value;
+        });
+      } else if (kind === "text") {
+        const match = makeTextMatcher(value);
+        list = list.filter((r) => {
+          const v = get(r);
+          return v != null && match(String(v));
+        });
+      }
+    }
     if (search && query.trim()) {
       const match = makeTextMatcher(query);
       list = list.filter((r) =>
@@ -195,6 +286,11 @@
         class="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wide text-[var(--ha-secondary-text-color)] dark:border-slate-800"
       >
         <tr>
+          {#if canExpand}
+            <th class="w-8 px-2 py-2" scope="col">
+              <span class="sr-only">{t("datatable.details")}</span>
+            </th>
+          {/if}
           {#each columns as col (col.key)}
             <th
               class="px-3 py-2 {alignClass(col)} {col.headClass ?? ''}"
@@ -218,6 +314,40 @@
             </th>
           {/each}
         </tr>
+        {#if anyFilterable}
+          <!-- Filter row. One control per readable column; the filters
+               combine with AND and persist beside sort and search, so a
+               reload never shows a silently narrowed table. -->
+          <tr class="border-b border-slate-200 dark:border-slate-800">
+            {#if canExpand}<th class="px-2 py-1"></th>{/if}
+            {#each columns as col (col.key)}
+              {@const kind = filterKindOf(col)}
+              <th class="px-2 py-1 font-normal">
+                {#if kind === "select"}
+                  <select
+                    class="w-full rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-1.5 py-1 text-xs font-normal text-[var(--ha-primary-text-color)]"
+                    aria-label={t("datatable.filter_by", { column: col.label })}
+                    value={filters[col.key] ?? ""}
+                    onchange={(e) => setFilter(col.key, (e.target as HTMLSelectElement).value)}
+                  >
+                    <option value="">{t("datatable.filter_all")}</option>
+                    {#each col.filterOptions ?? [] as opt (opt.value)}
+                      <option value={opt.value}>{opt.label}</option>
+                    {/each}
+                  </select>
+                {:else if kind === "text"}
+                  <input
+                    type="search"
+                    class="w-full rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-1.5 py-1 text-xs font-normal text-[var(--ha-primary-text-color)]"
+                    aria-label={t("datatable.filter_by", { column: col.label })}
+                    value={filters[col.key] ?? ""}
+                    oninput={(e) => setFilter(col.key, (e.target as HTMLInputElement).value)}
+                  />
+                {/if}
+              </th>
+            {/each}
+          </tr>
+        {/if}
       </thead>
       <tbody>
         {#each processed as row (rowKey(row))}
@@ -234,6 +364,22 @@
             onclick={onRowClick ? rowClickHandler(row) : undefined}
             onkeydown={onRowClick ? rowKeyHandler(row) : undefined}
           >
+            {#if canExpand}
+              <td class="w-8 px-2 py-2">
+                {#if rowExpandable(row)}
+                  {@const isOpen = expandedKeys.has(rowKey(row))}
+                  <button
+                    type="button"
+                    class="inline-flex h-5 w-5 items-center justify-center rounded text-[var(--ha-secondary-text-color)] transition hover:bg-black/5 dark:hover:bg-white/5"
+                    aria-expanded={isOpen}
+                    aria-label={isOpen ? t("datatable.collapse") : t("datatable.expand")}
+                    onclick={() => toggleExpand(row)}
+                  >
+                    <span aria-hidden="true" class="text-[10px]">{isOpen ? "▼" : "▶"}</span>
+                  </button>
+                {/if}
+              </td>
+            {/if}
             {#each columns as col (col.key)}
               <td
                 class="px-3 py-2 {alignClass(col)} {numericClass(col)} {col.title
@@ -245,6 +391,15 @@
               </td>
             {/each}
           </tr>
+          {#if canExpand && expandedKeys.has(rowKey(row))}
+            <!-- The expansion spans every column, chevron cell included, so
+                 nested content is not squeezed into one column's width. -->
+            <tr class="border-b border-slate-100 dark:border-[color-mix(in_srgb,var(--color-slate-800)_60%,transparent)]">
+              <td colspan={columns.length + 1} class="px-3 py-3">
+                {@render expand?.(row)}
+              </td>
+            </tr>
+          {/if}
         {/each}
       </tbody>
     </table>

@@ -25,7 +25,6 @@ test.describe('Settings — navigation & views', () => {
           locale: 'en',
           navCollapsed: false,
           expertMode: false,
-          deviceView: 'grid',
         }),
       );
     });
@@ -127,7 +126,6 @@ test.describe('Settings — navigation & views, visual', () => {
           locale: 'en',
           navCollapsed: false,
           expertMode: false,
-          deviceView: 'grid',
         }),
       );
     });
@@ -147,7 +145,6 @@ test.describe('Settings — navigation & views, visual', () => {
           locale: 'en',
           navCollapsed: false,
           expertMode: false,
-          deviceView: 'grid',
         }),
       );
     });

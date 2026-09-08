@@ -11,7 +11,6 @@ const PREFS = JSON.stringify({
   locale: 'en',
   navCollapsed: false,
   expertMode: false,
-  deviceView: 'grid',
 });
 
 test.describe('App — code-split route failure', () => {

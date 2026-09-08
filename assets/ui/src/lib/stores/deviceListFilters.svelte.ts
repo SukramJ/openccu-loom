@@ -1,12 +1,10 @@
-// Device-list filter/sort state. Held at module scope so it survives the
-// route component unmounting/remounting, and persisted to localStorage so
-// the operator's search term, filters, grouping, and (card-mode) sort also
-// survive a full page reload. (The view mode — cards vs table — is the
-// durable preference in preferences.svelte; the table-mode column sort is
-// persisted by the DataTable itself under its own key.)
+// Device-list filter state. Held at module scope so it survives the route
+// component unmounting/remounting, and persisted to localStorage so the
+// operator's search term, filters and grouping survive a full page reload.
+// Sort is not here: the DataTable owns the column order and persists it
+// under its own key, so a second copy would only be able to disagree.
 
 export type DeviceAvailability = "all" | "available" | "unavailable";
-export type DeviceSortColumn = "name" | "address" | "model";
 
 type DeviceListFilters = {
   filter: string;
@@ -17,8 +15,6 @@ type DeviceListFilters = {
   /** Selected Area id (settings/RoomsFunctionsAdmin.svelte — an
    *  operator-defined grouping ABOVE CCU rooms). Empty = no filter. */
   areaFilter: string;
-  sortColumn: DeviceSortColumn;
-  sortAsc: boolean;
   groupByInterface: boolean;
 };
 
@@ -31,8 +27,6 @@ const defaults: DeviceListFilters = {
   roomFilter: "",
   centralFilter: "",
   areaFilter: "",
-  sortColumn: "name",
-  sortAsc: true,
   groupByInterface: true,
 };
 

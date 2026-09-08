@@ -12,7 +12,6 @@ test.describe('Visual regression - light mode', () => {
           locale: 'en',
           navCollapsed: false,
           expertMode: false,
-          deviceView: 'grid',
         }),
       );
     });
@@ -196,7 +195,6 @@ test.describe('Visual regression - dark mode', () => {
           locale: 'en',
           navCollapsed: false,
           expertMode: false,
-          deviceView: 'grid',
         }),
       );
     });

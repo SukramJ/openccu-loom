@@ -50,7 +50,6 @@ vi.mock("$lib/stores/preferences.svelte", () => ({
   setTheme: vi.fn(),
   setNavCollapsed: vi.fn(),
   setExpertMode: vi.fn(),
-  setDeviceView: vi.fn(),
   bindSystemTheme: vi.fn(() => () => {}),
 }));
 

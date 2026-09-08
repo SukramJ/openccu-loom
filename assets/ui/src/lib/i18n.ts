@@ -2421,6 +2421,12 @@ const EN: Catalog = {
   "device.rename": "Rename",
   "device.remove": "Remove",
   "device.channel_n": "Channel {n}",
+  // DataTable column filters and row expansion (lib/components/ui/DataTable).
+  "datatable.filter_by": "Filter by {column}",
+  "datatable.filter_all": "All",
+  "datatable.expand": "Show details",
+  "datatable.collapse": "Hide details",
+  "datatable.details": "Details",
   // Channel table (device → configure → channels): column headers, the
   // direct-link role derived from LINK_SOURCE_ROLES / LINK_TARGET_ROLES, the
   // status chips, and the heading of the editor below the table.
@@ -3427,9 +3433,9 @@ const EN: Catalog = {
   "devicelist.set_room": "Set room",
   "devicelist.unavailable": "Unavailable",
   "devicelist.update_available": "Update available",
-  "devicelist.view_mode": "View",
-  "devicelist.view_grid": "Grid view",
-  "devicelist.view_list": "Table view",
+  "devicelist.channels_failed": "Could not load this device's channels.",
+  "devicelist.status_reachable": "Reachable",
+  "devicelist.status_unreachable": "Unreachable",
   "garage.cmd.close": "Close",
   "garage.cmd.open": "Open",
   "garage.cmd.stop": "Stop",
@@ -6393,6 +6399,12 @@ const DE: Catalog = {
   "device.rename": "Umbenennen",
   "device.remove": "Entfernen",
   "device.channel_n": "Kanal {n}",
+  // DataTable-Spaltenfilter und aufklappbare Zeilen.
+  "datatable.filter_by": "Nach {column} filtern",
+  "datatable.filter_all": "Alle",
+  "datatable.expand": "Details anzeigen",
+  "datatable.collapse": "Details ausblenden",
+  "datatable.details": "Details",
   // Kanaltabelle (Gerät → Konfigurieren → Kanäle).
   "device.channels.col.number": "Nr.",
   "device.channels.col.name": "Name",
@@ -7372,9 +7384,9 @@ const DE: Catalog = {
   "devicelist.set_room": "Raum setzen",
   "devicelist.unavailable": "Nicht verfügbar",
   "devicelist.update_available": "Update verfügbar",
-  "devicelist.view_mode": "Ansicht",
-  "devicelist.view_grid": "Rasteransicht",
-  "devicelist.view_list": "Tabellenansicht",
+  "devicelist.channels_failed": "Die Kanäle dieses Geräts konnten nicht geladen werden.",
+  "devicelist.status_reachable": "Erreichbar",
+  "devicelist.status_unreachable": "Nicht erreichbar",
   "garage.cmd.close": "Schließen",
   "garage.cmd.open": "Öffnen",
   "garage.cmd.stop": "Halt",

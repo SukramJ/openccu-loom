@@ -19,7 +19,6 @@ test.describe('Overview', () => {
           locale: 'en',
           navCollapsed: false,
           expertMode: false,
-          deviceView: 'grid',
         }),
       );
     });
@@ -81,7 +80,6 @@ test.describe('Overview - visual light', () => {
           locale: 'en',
           navCollapsed: false,
           expertMode: false,
-          deviceView: 'grid',
         }),
       );
     });
@@ -115,7 +113,6 @@ test.describe('Overview - visual dark', () => {
           locale: 'en',
           navCollapsed: false,
           expertMode: false,
-          deviceView: 'grid',
         }),
       );
     });

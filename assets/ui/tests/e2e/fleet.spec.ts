@@ -12,7 +12,7 @@ test.describe('Fleet', () => {
     await page.addInitScript(() => {
       localStorage.setItem(
         'openccu-loom.prefs.v1',
-        JSON.stringify({ theme: 'light', locale: 'en', navCollapsed: false, expertMode: false, deviceView: 'grid' }),
+        JSON.stringify({ theme: 'light', locale: 'en', navCollapsed: false, expertMode: false }),
       );
     });
   });
@@ -83,7 +83,7 @@ test.describe('Fleet - readiness initializing state', () => {
     await page.addInitScript(() => {
       localStorage.setItem(
         'openccu-loom.prefs.v1',
-        JSON.stringify({ theme: 'light', locale: 'en', navCollapsed: false, expertMode: false, deviceView: 'grid' }),
+        JSON.stringify({ theme: 'light', locale: 'en', navCollapsed: false, expertMode: false }),
       );
     });
   });
@@ -112,7 +112,7 @@ test.describe('Fleet - visual light', () => {
     await page.addInitScript(() => {
       localStorage.setItem(
         'openccu-loom.prefs.v1',
-        JSON.stringify({ theme: 'light', locale: 'en', navCollapsed: false, expertMode: false, deviceView: 'grid' }),
+        JSON.stringify({ theme: 'light', locale: 'en', navCollapsed: false, expertMode: false }),
       );
     });
   });
@@ -138,7 +138,7 @@ test.describe('Fleet - visual dark', () => {
     await page.addInitScript(() => {
       localStorage.setItem(
         'openccu-loom.prefs.v1',
-        JSON.stringify({ theme: 'dark', locale: 'en', navCollapsed: false, expertMode: false, deviceView: 'grid' }),
+        JSON.stringify({ theme: 'dark', locale: 'en', navCollapsed: false, expertMode: false }),
       );
     });
   });

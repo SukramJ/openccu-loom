@@ -16,7 +16,7 @@ test.describe('Settings — access administration', () => {
     await page.addInitScript(() => {
       localStorage.setItem(
         'openccu-loom.prefs.v1',
-        JSON.stringify({ theme: 'light', locale: 'en', navCollapsed: false, expertMode: false, deviceView: 'grid' }),
+        JSON.stringify({ theme: 'light', locale: 'en', navCollapsed: false, expertMode: false }),
       );
     });
   });
@@ -148,7 +148,6 @@ test.describe('Settings access - visual light', () => {
           locale: 'en',
           navCollapsed: false,
           expertMode: false,
-          deviceView: 'grid',
         }),
       );
     });
@@ -178,7 +177,6 @@ test.describe('Settings access - visual dark', () => {
           locale: 'en',
           navCollapsed: false,
           expertMode: false,
-          deviceView: 'grid',
         }),
       );
     });

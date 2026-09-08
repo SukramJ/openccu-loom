@@ -4,19 +4,18 @@
   import { centralStore } from "$lib/stores/centrals.svelte";
   import { areasStore } from "$lib/stores/areas.svelte";
   import { subscribe } from "$lib/stores/events.svelte";
-  import type { DeviceSummary, EventEnvelope } from "$lib/api/types";
+  import type { ChannelSummary, DeviceSummary, EventEnvelope } from "$lib/api/types";
   import type { DataColumn } from "$lib/components/ui/data-table";
-  import DeviceCard from "$lib/components/DeviceCard.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import DataTable from "$lib/components/ui/DataTable.svelte";
+  import ChannelTable from "$lib/components/channel/ChannelTable.svelte";
   import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import { api } from "$lib/api/client";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { t } from "$lib/i18n";
   import { makeTextMatcher } from "$lib/utils";
-  import { prefs, setDeviceView } from "$lib/stores/preferences.svelte";
   import {
     deviceListFilters as saved,
     persistDeviceListFilters,
@@ -37,12 +36,9 @@
   let roomFilter = $state(saved.roomFilter);
   let centralFilter = $state(saved.centralFilter);
   let areaFilter = $state(saved.areaFilter);
-  // Sort + interface-grouping mirror the reference config panel's
-  // device-list view: clicking a column toggles asc/desc, and devices
-  // are clustered under interface headers so a multi-CCU setup stays
-  // legible.
-  let sortColumn = $state<"name" | "address" | "model">(saved.sortColumn);
-  let sortAsc = $state(saved.sortAsc);
+  // Interface grouping clusters devices under interface headers so a
+  // multi-CCU setup stays legible. The sort order is the DataTable's own,
+  // persisted under its persistKey rather than duplicated here.
   let groupByInterface = $state(saved.groupByInterface);
   $effect(() => {
     saved.filter = filter;
@@ -51,8 +47,6 @@
     saved.roomFilter = roomFilter;
     saved.centralFilter = centralFilter;
     saved.areaFilter = areaFilter;
-    saved.sortColumn = sortColumn;
-    saved.sortAsc = sortAsc;
     saved.groupByInterface = groupByInterface;
     persistDeviceListFilters();
   });
@@ -70,28 +64,46 @@
     if (!configured.some((c) => c.name === centralFilter)) centralFilter = "";
   });
 
-  // Layout class for the device containers — a multi-column card grid
-  // or a single-column list, per the operator's view preference.
-  const listClass = $derived(
-    prefs.deviceView === "list"
-      ? "flex flex-col gap-2"
-      : "grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4",
-  );
+  // Channels per device address, fetched the first time a row is expanded
+  // and kept for the life of the view. The list can hold hundreds of
+  // devices, so fetching every device's channels up front would cost a
+  // request per row for content nobody opened; and a second expansion of
+  // the same row must not re-fetch.
+  let channelsByAddress = $state<Map<string, ChannelSummary[]>>(new Map());
+  let channelsLoading = $state<Set<string>>(new Set());
+  let channelsFailed = $state<Set<string>>(new Set());
+
+  async function loadChannels(address: string) {
+    if (channelsByAddress.has(address) || channelsLoading.has(address)) return;
+    channelsLoading = new Set(channelsLoading).add(address);
+    try {
+      const channels = await api.listChannels(address);
+      channelsByAddress = new Map(channelsByAddress).set(
+        address,
+        // Same shape the device page shows: the device-level channel and
+        // :0 have their own surfaces there and nothing to configure here.
+        channels.filter((c) => c.address.includes(":") && !c.address.endsWith(":0")),
+      );
+      const failed = new Set(channelsFailed);
+      failed.delete(address);
+      channelsFailed = failed;
+    } catch {
+      // The row shows a retryable error state; the device page owns the
+      // real channel surface, so this must not toast over the whole list.
+      channelsFailed = new Set(channelsFailed).add(address);
+    } finally {
+      const loading = new Set(channelsLoading);
+      loading.delete(address);
+      channelsLoading = loading;
+    }
+  }
+
   let selected = $state<Set<string>>(new Set());
   let bulkBusy = $state(false);
   // Inline "set room" editor — replaces a native prompt() so the bulk
   // flow stays on-brand and works cleanly on touch.
   let roomEditing = $state(false);
   let roomDraft = $state("");
-
-  function setSort(col: "name" | "address" | "model") {
-    if (sortColumn === col) {
-      sortAsc = !sortAsc;
-    } else {
-      sortColumn = col;
-      sortAsc = true;
-    }
-  }
 
   function toggleSelect(addr: string, checked: boolean) {
     const next = new Set(selected);
@@ -223,18 +235,6 @@
     relevantCentrals.some((c) => c.readiness.ready),
   );
 
-  function sortKey(d: { name?: string; address: string; model: string; model_label?: string }) {
-    switch (sortColumn) {
-      case "address":
-        return d.address;
-      case "model":
-        return (d.model_label ?? d.model ?? "").trim();
-      case "name":
-      default:
-        return displayName(d);
-    }
-  }
-
   const nameMatch = $derived(makeTextMatcher(filter));
 
   const filtered = $derived(
@@ -266,16 +266,15 @@
         return true;
       })
       .slice()
-      .sort((a, b) => {
-        const dir = sortAsc ? 1 : -1;
-        return (
-          dir *
-          sortKey(a).localeCompare(sortKey(b), undefined, {
-            numeric: true,
-            sensitivity: "base",
-          })
-        );
-      }),
+      // A stable base order: the DataTable applies the operator's sort on
+      // top, and the grouped sections need a deterministic order of their
+      // own for the ones that carry no persisted sort yet.
+      .sort((a, b) =>
+        displayName(a).localeCompare(displayName(b), undefined, {
+          numeric: true,
+          sensitivity: "base",
+        }),
+      ),
   );
 
   // Interface-grouped buckets — preserves the sort order within each
@@ -299,12 +298,28 @@
   // Columns for the table view mode. The select column carries the
   // multi-select checkbox; name/model/interface/status sort on click.
   const columns: DataColumn<DeviceSummary>[] = $derived([
-    { key: "select", label: "", get: () => "" },
+    // The `get` is a stub so the table's search does not choke on a column
+    // with none; there is nothing to filter a checkbox by, so it opts out.
+    { key: "select", label: "", get: () => "", filter: false },
     { key: "name", label: t("devicelist.col.name"), sortable: true, title: true, get: (d) => d.name || d.address },
     { key: "model", label: t("devicelist.col.model"), sortable: true, get: (d) => d.model_label || d.model },
     { key: "interface", label: t("diagnostics.interfaces"), sortable: true, get: (d) => d.interface_id || d.interface },
     { key: "rooms", label: t("devicelist.col.rooms"), sortable: true, get: (d) => (d.rooms ?? []).join(", ") },
-    { key: "status", label: t("devicelist.col.status"), sortable: true, align: "right", get: (d) => (d.available ? 1 : 0) },
+    {
+      key: "status",
+      label: t("devicelist.col.status"),
+      sortable: true,
+      align: "right",
+      // Sorted as a number so reachable and unreachable cluster, but filtered
+      // as a choice: the underlying value is 1/0, which no operator would
+      // type into a text box.
+      get: (d) => (d.available ? 1 : 0),
+      filter: "select",
+      filterOptions: [
+        { value: "1", label: t("devicelist.status_reachable") },
+        { value: "0", label: t("devicelist.status_unreachable") },
+      ],
+    },
   ]);
 
   onMount(() => {
@@ -407,35 +422,6 @@
         >
           {t("devicelist.ccu_refresh")}
         </Button>
-        <!-- Grid / list layout toggle (persisted preference). -->
-        <div
-          class="ml-auto inline-flex overflow-hidden rounded-md border border-[var(--ha-divider-color)]"
-          role="group"
-          aria-label={t("devicelist.view_mode")}
-        >
-          <button
-            type="button"
-            class="px-2.5 py-2 transition {prefs.deviceView === 'grid'
-              ? 'bg-[color-mix(in_srgb,var(--ha-primary-color)_15%,transparent)] text-[var(--ha-primary-color)]'
-              : 'text-[var(--ha-secondary-text-color)] hover:bg-black/5 dark:hover:bg-white/5'}"
-            aria-pressed={prefs.deviceView === "grid"}
-            title={t("devicelist.view_grid")}
-            onclick={() => setDeviceView("grid")}
-          >
-            <Icon name="mdi:dots-grid" size={18} />
-          </button>
-          <button
-            type="button"
-            class="px-2.5 py-2 transition {prefs.deviceView === 'list'
-              ? 'bg-[color-mix(in_srgb,var(--ha-primary-color)_15%,transparent)] text-[var(--ha-primary-color)]'
-              : 'text-[var(--ha-secondary-text-color)] hover:bg-black/5 dark:hover:bg-white/5'}"
-            aria-pressed={prefs.deviceView === "list"}
-            title={t("devicelist.view_list")}
-            onclick={() => setDeviceView("list")}
-          >
-            <Icon name="mdi:format-list-bulleted" size={18} />
-          </button>
-        </div>
       </div>
     {/snippet}
   </PageHeader>
@@ -506,37 +492,41 @@
     </div>
   {/if}
 
-  <!-- Sort toolbar: in card (grid) mode the buttons drive the order; in
-       table mode the DataTable column headers sort, so only the group-by
-       toggle remains. -->
+  <!-- The DataTable's column headers own the sort order now; only the
+       group-by toggle is left here. -->
   <div class="mb-3 flex flex-wrap items-center gap-2 text-xs text-[var(--ha-secondary-text-color)]">
-    {#if prefs.deviceView !== "list"}
-      <span>{t("common.sort")}</span>
-      {#each [
-        { key: "name", label: t("devicelist.col.name") },
-        { key: "address", label: t("devicelist.col.address") },
-        { key: "model", label: t("devicelist.col.model") },
-      ] as col (col.key)}
-        <button
-          type="button"
-          class="rounded-md border px-2 py-0.5 transition {sortColumn === col.key
-            ? 'border-[var(--ha-primary-color)] text-[var(--ha-primary-color)]'
-            : 'border-[var(--ha-divider-color)] text-[var(--ha-secondary-text-color)] hover:border-[var(--ha-secondary-text-color)]'}"
-          onclick={() => setSort(col.key as "name" | "address" | "model")}
-        >
-          {col.label}
-          {#if sortColumn === col.key}
-            <span aria-hidden="true">{sortAsc ? "↑" : "↓"}</span>
-          {/if}
-        </button>
-      {/each}
-      <span class="mx-1">·</span>
-    {/if}
     <label class="inline-flex items-center gap-1.5 cursor-pointer">
       <input type="checkbox" bind:checked={groupByInterface} />
       {t("devicelist.group_by_interface")}
     </label>
   </div>
+
+  <!-- Expanded device row: the channel table from the device page, in its
+       compact form. Selecting a channel goes straight to that channel's
+       editor, so the list doubles as a channel index without the operator
+       opening each device first. -->
+  {#snippet deviceChannels(device: DeviceSummary)}
+    {@const channels = channelsByAddress.get(device.address)}
+    {#if channelsFailed.has(device.address)}
+      <ErrorState
+        message={t("devicelist.channels_failed")}
+        onRetry={() => void loadChannels(device.address)}
+      />
+    {:else if !channels}
+      <LoadingState message={t("common.loading")} />
+    {:else if channels.length === 0}
+      <EmptyState message={t("device.no_channels")} />
+    {:else}
+      <ChannelTable
+        {channels}
+        selected={null}
+        compact
+        onSelect={(ch) => {
+          location.hash = `#/devices/${encodeURIComponent(device.address)}/channels/${ch.number}`;
+        }}
+      />
+    {/if}
+  {/snippet}
 
   <!-- Per-row cell renderer shared by every device DataTable. -->
   {#snippet deviceCell(device: DeviceSummary, col: DataColumn<DeviceSummary>)}
@@ -598,80 +588,50 @@
     {:else}
       <EmptyState message={t("devices.empty")} />
     {/if}
-  {:else if prefs.deviceView === "list"}
-    <!-- TABLE MODE -->
-    {#if groups}
-      {#each groups as g (g.iface)}
-        <section class="mb-6">
-          <h2 class="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--ha-secondary-text-color)]">
-            {g.iface}
-            <span class="text-[var(--ha-disabled-text-color)]">·&nbsp;{g.items.length}</span>
-          </h2>
-          <Card class="p-4">
-            <DataTable
-              rows={g.items}
-              {columns}
-              rowKey={(d) => d.interface_id + "/" + d.address}
-              cell={deviceCell}
-              initialSort={{ key: "name", asc: true }}
-              emptyMessage={t("devices.empty")}
-            />
-          </Card>
-        </section>
-      {/each}
-    {:else}
-      <Card class="p-4">
-        <DataTable
-          rows={filtered}
-          {columns}
-          rowKey={(d) => d.interface_id + "/" + d.address}
-          cell={deviceCell}
-          persistKey="device-list"
-          initialSort={{ key: "name", asc: true }}
-          emptyMessage={t("devices.empty")}
-        />
-      </Card>
-    {/if}
-    <p class="mt-4 text-sm text-[var(--ha-secondary-text-color)]">
-      {t("devicelist.count", { filtered: filtered.length, total: deviceStore.items.length })}
-    </p>
   {:else if groups}
-    <!-- CARD (GRID) MODE, grouped -->
+    <!-- One table per interface. The grouped sections share no persisted
+         sort: each carries its own key so a sort chosen in one interface's
+         table does not silently reorder another's. -->
     {#each groups as g (g.iface)}
       <section class="mb-6">
         <h2 class="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--ha-secondary-text-color)]">
           {g.iface}
           <span class="text-[var(--ha-disabled-text-color)]">·&nbsp;{g.items.length}</span>
         </h2>
-        <ul class={listClass}>
-          {#each g.items as device (device.interface_id + "/" + device.address)}
-            <li>
-              <DeviceCard
-                {device}
-                selected={selected.has(device.address)}
-                onToggleSelect={(c) => toggleSelect(device.address, c)}
-              />
-            </li>
-          {/each}
-        </ul>
+        <Card class="p-4">
+          <DataTable
+            rows={g.items}
+            {columns}
+            rowKey={(d) => d.interface_id + "/" + d.address}
+            cell={deviceCell}
+            columnFilters
+            expand={deviceChannels}
+            onExpand={(d) => void loadChannels(d.address)}
+            persistKey={"device-list-" + g.iface}
+            initialSort={{ key: "name", asc: true }}
+            emptyMessage={t("devices.empty")}
+          />
+        </Card>
       </section>
     {/each}
     <p class="mt-4 text-sm text-[var(--ha-secondary-text-color)]">
       {t("devicelist.count", { filtered: filtered.length, total: deviceStore.items.length })}
     </p>
   {:else}
-    <!-- CARD (GRID) MODE, flat -->
-    <ul class={listClass}>
-      {#each filtered as device (device.interface_id + "/" + device.address)}
-        <li>
-          <DeviceCard
-            {device}
-            selected={selected.has(device.address)}
-            onToggleSelect={(c) => toggleSelect(device.address, c)}
-          />
-        </li>
-      {/each}
-    </ul>
+    <Card class="p-4">
+      <DataTable
+        rows={filtered}
+        {columns}
+        rowKey={(d) => d.interface_id + "/" + d.address}
+        cell={deviceCell}
+        columnFilters
+        expand={deviceChannels}
+        onExpand={(d) => void loadChannels(d.address)}
+        persistKey="device-list"
+        initialSort={{ key: "name", asc: true }}
+        emptyMessage={t("devices.empty")}
+      />
+    </Card>
     <p class="mt-4 text-sm text-[var(--ha-secondary-text-color)]">
       {t("devicelist.count", { filtered: filtered.length, total: deviceStore.items.length })}
     </p>

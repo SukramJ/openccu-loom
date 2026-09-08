@@ -49,7 +49,6 @@ async function setTheme(
           locale: l,
           navCollapsed: false,
           expertMode: false,
-          deviceView: 'grid',
         }),
       );
     },
