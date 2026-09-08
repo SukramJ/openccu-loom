@@ -16,6 +16,7 @@
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
+  import PageShell from "$lib/components/ui/PageShell.svelte";
   import GroupEditor from "$lib/components/groups/GroupEditor.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
@@ -118,7 +119,7 @@
   <title>{t("page.title.groups")}</title>
 </svelte:head>
 
-<section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+<PageShell>
   <PageHeader
     title={t("groups.title")}
     subtitle={loading ? t("common.loading") : t("groups.count", { count: totalGroups })}
@@ -279,4 +280,4 @@
       onSaved={onEditorSaved}
     />
   {/if}
-</section>
+</PageShell>

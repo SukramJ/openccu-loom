@@ -14,6 +14,7 @@
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import Select from "$lib/components/ui/Select.svelte";
+  import PageShell from "$lib/components/ui/PageShell.svelte";
   import { installModeStore } from "$lib/stores/installMode.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import {
@@ -609,7 +610,7 @@
 
 <svelte:window onkeydown={onDialogKey} />
 
-<section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+<PageShell>
   <PageHeader title={t("inbox.title")} subtitle={t("inbox.subtitle")}>
     {#snippet actions()}
       {#if installModeStore.banner && !installModeStore.active}
@@ -862,7 +863,7 @@
       </DataTable>
     </Card>
   {/if}
-</section>
+</PageShell>
 
 {#if acceptTarget}
   <!-- Accept dialog: optional first-time configuration before the device

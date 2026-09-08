@@ -25,6 +25,7 @@
   import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
+  import PageShell from "$lib/components/ui/PageShell.svelte";
   import { t } from "$lib/i18n";
 
   const REPO_URL = "https://github.com/SukramJ/openccu-loom";
@@ -99,7 +100,7 @@
   <title>{t("page.title.about")}</title>
 </svelte:head>
 
-<section class="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6">
+<PageShell width="narrow">
   <PageHeader title={t("about.title")} subtitle={t("about.subtitle")} />
 
   {#if loading}
@@ -243,4 +244,4 @@
       </Card>
     </div>
   {/if}
-</section>
+</PageShell>

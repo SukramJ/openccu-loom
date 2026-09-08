@@ -4,6 +4,8 @@
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
 
+  import PageShell from "$lib/components/ui/PageShell.svelte";
+  import Tabs from "$lib/components/ui/Tabs.svelte";
   // Section shell for the Security & Safety domain
   // (docs/security-safety-concept.md §7.8). Runs independently of the
   // alarm engine — a smoke/water/gas-only installation still gets the
@@ -48,29 +50,15 @@
   <ErrorState message={t("app.route_load_failed")} onRetry={() => location.reload()} />
 {/snippet}
 
-<section class="mx-auto max-w-6xl px-4 sm:px-6 py-8">
+<PageShell>
   <PageHeader title={t("security.title")} subtitle={t("security.subtitle")} />
 
-  <!-- Tab bar -->
-  <div
-    class="mt-2 flex gap-1 overflow-x-auto border-b"
-    style="border-color: var(--ha-divider-color);"
-    role="tablist"
-  >
-    {#each tabs as { tab, href } (tab)}
-      {@const active = activeTab === tab}
-      <a
-        {href}
-        role="tab"
-        aria-selected={active}
-        class="flex-1 whitespace-nowrap border-b-2 -mb-px px-4 py-3 text-center text-sm font-medium transition {active
-          ? 'border-brand-600 text-brand-600 dark:border-brand-400 dark:text-brand-400'
-          : 'border-transparent text-slate-500 dark:text-slate-400'}"
-      >
-        {t(`security.tab.${tab}`)}
-      </a>
-    {/each}
-  </div>
+  <Tabs
+    class="mt-2"
+    active={activeTab}
+    items={tabs.map((x) => ({ key: x.tab, label: t(`security.tab.${x.tab}`), href: x.href }))}
+    fill
+  />
 
   <!-- Per-tab orientation line. -->
   <p class="mt-4 text-sm text-[var(--ha-secondary-text-color)]">
@@ -105,4 +93,4 @@
       {/await}
     {/if}
   </div>
-</section>
+</PageShell>

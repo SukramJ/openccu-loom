@@ -11,6 +11,7 @@
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import Select from "$lib/components/ui/Select.svelte";
+  import PageShell from "$lib/components/ui/PageShell.svelte";
   import { t } from "$lib/i18n";
   import { prefs } from "$lib/stores/preferences.svelte";
 
@@ -226,9 +227,7 @@
   ]);
 </script>
 
-<section
-  class={embedded ? "" : "mx-auto max-w-6xl px-4 py-6 sm:px-6"}
->
+{#snippet body()}
   {#if !embedded}
     <PageHeader
       title={t("audit.title")}
@@ -418,4 +417,10 @@
       </Button>
     </div>
   {/if}
-</section>
+{/snippet}
+
+{#if embedded}
+  {@render body()}
+{:else}
+  <PageShell>{@render body()}</PageShell>
+{/if}

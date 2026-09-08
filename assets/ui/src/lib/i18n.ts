@@ -3058,6 +3058,8 @@ const EN: Catalog = {
     "Your edit session has expired — reopen the paramset editor to get a new lock.",
   // --- Matter bridge ---
   "nav.matter": "Matter",
+  "matter.subtitle":
+    "Expose channels to Apple Home, Google Home and other Matter controllers.",
   "sidebar.cluster.bridges": "Bridges",
   "matter.tab.expose": "Expose",
   "matter.tab.fabrics": "Fabrics",
@@ -7040,6 +7042,8 @@ const DE: Catalog = {
     "Deine Editiersitzung ist abgelaufen — öffne den Parameter-Editor erneut, um eine neue Sperre zu erhalten.",
   // --- Matter-Bridge ---
   "nav.matter": "Matter",
+  "matter.subtitle":
+    "Kanäle für Apple Home, Google Home und andere Matter-Controller bereitstellen.",
   "sidebar.cluster.bridges": "Bridges",
   "matter.tab.expose": "Verfügbar machen",
   "matter.tab.fabrics": "Fabrics",

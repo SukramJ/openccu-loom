@@ -25,6 +25,7 @@
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
+  import PageShell from "$lib/components/ui/PageShell.svelte";
   import MultiSeriesChart from "$lib/components/MultiSeriesChart.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
@@ -196,7 +197,7 @@
   <title>{t("page.title.diagrams")}</title>
 </svelte:head>
 
-<section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+<PageShell>
   <PageHeader title={t("diagrams.title")} subtitle={t("diagrams.subtitle")}>
     {#snippet actions()}
       {#if historyEnabled}
@@ -298,4 +299,4 @@
     </div>
   {/if}
   {/if}
-</section>
+</PageShell>

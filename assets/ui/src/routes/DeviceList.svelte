@@ -27,6 +27,7 @@
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import CentralStatusBadge from "$lib/components/ui/CentralStatusBadge.svelte";
 
+  import PageShell from "$lib/components/ui/PageShell.svelte";
   // Filter state is seeded from a module store and synced back to it, so the
   // search term and filters survive opening a device and navigating back.
   // Sort is not here: the DataTable owns the column order and persists it
@@ -340,7 +341,71 @@
   });
 </script>
 
-<section class="w-full px-4 py-8 sm:px-6">
+{#snippet deviceChannels(device: DeviceSummary)}
+  {@const channels = channelsByAddress.get(device.address)}
+  {#if channelsFailed.has(device.address)}
+    <ErrorState
+      message={t("devicelist.channels_failed")}
+      onRetry={() => void loadChannels(device.address)}
+    />
+  {:else if !channels}
+    <LoadingState message={t("common.loading")} />
+  {:else if channels.length === 0}
+    <EmptyState message={t("device.no_channels")} />
+  {:else}
+    <ChannelTable
+      {channels}
+      selected={null}
+      compact
+      onSelect={(ch) => {
+        location.hash = `#/devices/${encodeURIComponent(device.address)}/channels/${ch.number}`;
+      }}
+    />
+  {/if}
+{/snippet}
+{#snippet deviceCell(device: DeviceSummary, col: DataColumn<DeviceSummary>)}
+  {#if col.key === "select"}
+    <input
+      type="checkbox"
+      class="h-4 w-4 cursor-pointer accent-[var(--ha-primary-color)]"
+      checked={selected.has(device.address)}
+      onchange={(e) => toggleSelect(device.address, e.currentTarget.checked)}
+      aria-label={device.name || device.address}
+    />
+  {:else if col.key === "name"}
+    <a
+      href="#/devices/{encodeURIComponent(device.address)}"
+      class="font-medium text-[var(--ha-primary-color)] hover:underline"
+    >{device.name || device.address}</a>
+    <span class="block font-mono text-xs text-[var(--ha-secondary-text-color)]">{device.address}</span>
+  {:else if col.key === "model"}
+    <span>{device.model_label || device.model}</span>
+  {:else if col.key === "interface"}
+    <span class="font-mono text-xs">{device.interface_id || device.interface}</span>
+    {#if centrals.length > 1 && device.central}
+      <span class="block text-xs text-[var(--ha-secondary-text-color)]">{device.central}</span>
+    {/if}
+  {:else if col.key === "rooms"}
+    {#if device.rooms && device.rooms.length > 0}
+      <span class="text-xs">{device.rooms.join(", ")}</span>
+    {:else}
+      <span class="text-[var(--ha-secondary-text-color)]">—</span>
+    {/if}
+  {:else if col.key === "status"}
+    <span class="inline-flex flex-wrap items-center justify-end gap-1.5">
+      {#if device.available}
+        <Badge variant="success">{t("device.list.reachable")}</Badge>
+      {:else}
+        <Badge variant="danger">{t("device.list.unreachable")}</Badge>
+      {/if}
+      {#if device.update_available}
+        <Badge variant="warning">{t("firmware.update")}</Badge>
+      {/if}
+    </span>
+  {/if}
+{/snippet}
+
+<PageShell width="wide">
   <PageHeader
     title={t("devices.title")}
     subtitle={deviceStore.lastLoaded
@@ -506,71 +571,8 @@
        compact form. Selecting a channel goes straight to that channel's
        editor, so the list doubles as a channel index without the operator
        opening each device first. -->
-  {#snippet deviceChannels(device: DeviceSummary)}
-    {@const channels = channelsByAddress.get(device.address)}
-    {#if channelsFailed.has(device.address)}
-      <ErrorState
-        message={t("devicelist.channels_failed")}
-        onRetry={() => void loadChannels(device.address)}
-      />
-    {:else if !channels}
-      <LoadingState message={t("common.loading")} />
-    {:else if channels.length === 0}
-      <EmptyState message={t("device.no_channels")} />
-    {:else}
-      <ChannelTable
-        {channels}
-        selected={null}
-        compact
-        onSelect={(ch) => {
-          location.hash = `#/devices/${encodeURIComponent(device.address)}/channels/${ch.number}`;
-        }}
-      />
-    {/if}
-  {/snippet}
 
   <!-- Per-row cell renderer shared by every device DataTable. -->
-  {#snippet deviceCell(device: DeviceSummary, col: DataColumn<DeviceSummary>)}
-    {#if col.key === "select"}
-      <input
-        type="checkbox"
-        class="h-4 w-4 cursor-pointer accent-[var(--ha-primary-color)]"
-        checked={selected.has(device.address)}
-        onchange={(e) => toggleSelect(device.address, e.currentTarget.checked)}
-        aria-label={device.name || device.address}
-      />
-    {:else if col.key === "name"}
-      <a
-        href="#/devices/{encodeURIComponent(device.address)}"
-        class="font-medium text-[var(--ha-primary-color)] hover:underline"
-      >{device.name || device.address}</a>
-      <span class="block font-mono text-xs text-[var(--ha-secondary-text-color)]">{device.address}</span>
-    {:else if col.key === "model"}
-      <span>{device.model_label || device.model}</span>
-    {:else if col.key === "interface"}
-      <span class="font-mono text-xs">{device.interface_id || device.interface}</span>
-      {#if centrals.length > 1 && device.central}
-        <span class="block text-xs text-[var(--ha-secondary-text-color)]">{device.central}</span>
-      {/if}
-    {:else if col.key === "rooms"}
-      {#if device.rooms && device.rooms.length > 0}
-        <span class="text-xs">{device.rooms.join(", ")}</span>
-      {:else}
-        <span class="text-[var(--ha-secondary-text-color)]">—</span>
-      {/if}
-    {:else if col.key === "status"}
-      <span class="inline-flex flex-wrap items-center justify-end gap-1.5">
-        {#if device.available}
-          <Badge variant="success">{t("device.list.reachable")}</Badge>
-        {:else}
-          <Badge variant="danger">{t("device.list.unreachable")}</Badge>
-        {/if}
-        {#if device.update_available}
-          <Badge variant="warning">{t("firmware.update")}</Badge>
-        {/if}
-      </span>
-    {/if}
-  {/snippet}
 
   {#if deviceStore.loading && deviceStore.items.length === 0}
     <LoadingState message={t("devices.loading")} />
@@ -637,4 +639,4 @@
       {t("devicelist.count", { filtered: filtered.length, total: deviceStore.items.length })}
     </p>
   {/if}
-</section>
+</PageShell>

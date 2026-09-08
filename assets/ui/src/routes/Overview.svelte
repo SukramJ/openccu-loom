@@ -36,6 +36,7 @@
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import CentralStatusBadge from "$lib/components/ui/CentralStatusBadge.svelte";
+  import PageShell from "$lib/components/ui/PageShell.svelte";
   import { t } from "$lib/i18n";
   import {
     buildOverviewGroups,
@@ -241,7 +242,7 @@
   });
 </script>
 
-<section class="w-full px-4 py-8 sm:px-6">
+<PageShell width="wide">
   <PageHeader title={t("overview.title")} subtitle={t("overview.subtitle")}>
     {#snippet actions()}
       <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-3">
@@ -422,4 +423,4 @@
       </Card>
     {/each}
   {/if}
-</section>
+</PageShell>

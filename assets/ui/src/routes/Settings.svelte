@@ -18,6 +18,8 @@
   import CCUMaintenancePanel from "$lib/components/settings/CCUMaintenancePanel.svelte";
   import ChangesOverview from "$lib/components/settings/ChangesOverview.svelte";
   import ExpertGate from "$lib/components/ui/ExpertGate.svelte";
+  import PageShell from "$lib/components/ui/PageShell.svelte";
+  import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import {
     prefs,
     setLocale,
@@ -415,23 +417,43 @@
   });
 </script>
 
-<section class="mx-auto max-w-6xl space-y-0 px-4 py-6">
-  <header class="mb-5 flex flex-wrap items-center justify-between gap-3">
-    <div class="space-y-1">
-      <h1 class="text-2xl font-semibold">{t("settings.title")}</h1>
-      <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("settings.subtitle")}</p>
+{#snippet tabButton(tab: Tab, full: boolean)}
+  <button
+    type="button"
+    class="shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-left text-sm transition {full
+      ? 'w-full'
+      : ''}
+      {activeTab === tab.id
+        ? 'bg-brand-50 font-medium text-brand-900 dark:bg-[color-mix(in_srgb,var(--color-brand-900)_20%,transparent)] dark:text-brand-100'
+        : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}"
+    aria-current={activeTab === tab.id ? "page" : undefined}
+    onclick={() => void selectTab(tab.id)}
+  >
+    {tab.label}
+  </button>
+{/snippet}
+
+<PageShell class="space-y-0">
+  <PageHeader
+    title={t("settings.title")}
+    subtitle={t("settings.subtitle")}
+    class="mb-5"
+  >
+    {#snippet children()}
       <ConnectivityLights />
-    </div>
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      onclick={() => void loadSchema()}
-      disabled={schemaLoading}
-    >
-      {t("common.reload")}
-    </Button>
-  </header>
+    {/snippet}
+    {#snippet actions()}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onclick={() => void loadSchema()}
+        disabled={schemaLoading}
+      >
+        {t("common.reload")}
+      </Button>
+    {/snippet}
+  </PageHeader>
 
   {#if schemaError}
     <ErrorState class="mb-4" message={schemaError} onRetry={() => void loadSchema()} />
@@ -445,21 +467,6 @@
     </p>
   {/if}
 
-  {#snippet tabButton(tab: Tab, full: boolean)}
-    <button
-      type="button"
-      class="shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-left text-sm transition {full
-        ? 'w-full'
-        : ''}
-        {activeTab === tab.id
-          ? 'bg-brand-50 font-medium text-brand-900 dark:bg-[color-mix(in_srgb,var(--color-brand-900)_20%,transparent)] dark:text-brand-100'
-          : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}"
-      aria-current={activeTab === tab.id ? "page" : undefined}
-      onclick={() => void selectTab(tab.id)}
-    >
-      {tab.label}
-    </button>
-  {/snippet}
 
   <div class="flex flex-col gap-0 rounded-lg border border-slate-200 bg-white shadow-sm md:flex-row dark:border-slate-800 dark:bg-slate-900">
     <!--
@@ -958,4 +965,4 @@
 
     </div>
   </div>
-</section>
+</PageShell>

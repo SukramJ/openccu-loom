@@ -14,6 +14,7 @@
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import PageHeader from "$lib/components/ui/PageHeader.svelte";
+  import PageShell from "$lib/components/ui/PageShell.svelte";
   import SysvarChannelPicker from "$lib/components/SysvarChannelPicker.svelte";
   import { t } from "$lib/i18n";
   import { loadLS, saveLS } from "$lib/utils";
@@ -452,7 +453,7 @@
   }
 </script>
 
-<section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+<PageShell>
   <PageHeader
     title={t("sysvars.title")}
     subtitle={loading ? t("common.loading") : t("sysvars.count", { count: sysvars.length })}
@@ -668,7 +669,7 @@
       </DataTable>
     </Card>
   {/if}
-</section>
+</PageShell>
 
 <svelte:window onkeydown={onDialogKey} />
 

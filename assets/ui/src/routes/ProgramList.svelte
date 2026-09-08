@@ -13,6 +13,7 @@
   import Select from "$lib/components/ui/Select.svelte";
   import Switch from "$lib/components/ui/Switch.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
+  import PageShell from "$lib/components/ui/PageShell.svelte";
   import { t } from "$lib/i18n";
   import { favoritesStore } from "$lib/stores/favorites.svelte";
   import { loadLS, saveLS } from "$lib/utils";
@@ -192,7 +193,7 @@
   ]);
 </script>
 
-<section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+<PageShell>
   <PageHeader
     title={t("programs.title")}
     subtitle={loading ? t("common.loading") : t("programs.count", { count: programs.length })}
@@ -341,4 +342,4 @@
       </DataTable>
     </Card>
   {/if}
-</section>
+</PageShell>

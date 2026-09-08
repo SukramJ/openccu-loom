@@ -18,6 +18,8 @@
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import type { DataColumn } from "$lib/components/ui/data-table";
+  import PageShell from "$lib/components/ui/PageShell.svelte";
+  import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import { t } from "$lib/i18n";
   import { prefs } from "$lib/stores/preferences.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
@@ -595,13 +597,13 @@
   <title>{t("page.title.diagnostics")}</title>
 </svelte:head>
 
-<section class="mx-auto max-w-6xl px-4 sm:px-6 py-6 space-y-6">
-  <header class="flex flex-wrap items-center justify-between gap-3">
-    <div>
-      <h1 class="text-2xl font-semibold">{t("diagnostics.title")}</h1>
-      <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("diagnostics.subtitle")}</p>
-    </div>
-    <div class="flex flex-wrap items-center gap-2">
+<PageShell class="space-y-6">
+  <PageHeader
+    title={t("diagnostics.title")}
+    subtitle={t("diagnostics.subtitle")}
+    class="mb-0"
+  >
+    {#snippet actions()}
       <Button
         type="button"
         variant="outline"
@@ -619,8 +621,8 @@
       >
         {t("common.reload")}
       </Button>
-    </div>
-  </header>
+    {/snippet}
+  </PageHeader>
 
   {#if loadError}
     <ErrorState message={loadError} onRetry={() => void load()} />
@@ -1211,4 +1213,4 @@
       </ul>
     {/if}
   </Card>
-</section>
+</PageShell>

@@ -5,6 +5,8 @@
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
+  import PageShell from "$lib/components/ui/PageShell.svelte";
+  import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import LogLevelsPanel from "$lib/components/settings/LogLevelsPanel.svelte";
   import { t } from "$lib/i18n";
   import { toastStore } from "$lib/stores/toast.svelte";
@@ -318,15 +320,10 @@
   <title>{t("page.title.logs")}</title>
 </svelte:head>
 
-<section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+<PageShell>
   <!-- Header -->
-  <header class="mb-4 flex flex-wrap items-center justify-between gap-3">
-    <div>
-      <h1 class="text-2xl font-semibold">{t("logs.title")}</h1>
-      <p class="text-sm" style="color: var(--ha-secondary-text-color);">
-        {t("logs.subtitle")}
-      </p>
-    </div>
+  <PageHeader title={t("logs.title")} subtitle={t("logs.subtitle")}>
+    {#snippet actions()}
     <!-- SSE connection badge -->
     <div class="flex items-center gap-2">
       <span class="flex items-center gap-1 text-xs">
@@ -346,7 +343,8 @@
         </span>
       </span>
     </div>
-  </header>
+    {/snippet}
+  </PageHeader>
 
   <!-- Toolbar -->
   <div
@@ -588,4 +586,4 @@
       {/if}
     </p>
   {/if}
-</section>
+</PageShell>

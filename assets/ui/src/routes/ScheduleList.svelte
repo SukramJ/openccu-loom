@@ -25,6 +25,7 @@
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
+  import PageShell from "$lib/components/ui/PageShell.svelte";
   import { t } from "$lib/i18n";
 
   let items = $state<ScheduleDeviceSummary[]>([]);
@@ -83,7 +84,7 @@
   const linkable = $derived(surfacesStore.opensVisible("nav.schedules"));
 </script>
 
-<section class="mx-auto max-w-5xl px-4 py-6 sm:px-6">
+<PageShell>
   <PageHeader title={t("schedules.title")} subtitle={t("schedules.subtitle")} />
 
   {#if loadError}
@@ -159,4 +160,4 @@
       </ul>
     {/if}
   {/if}
-</section>
+</PageShell>

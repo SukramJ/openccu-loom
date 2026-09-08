@@ -5,6 +5,10 @@
   import { t } from "$lib/i18n";
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
+  import PageShell from "$lib/components/ui/PageShell.svelte";
+  import PageHeader from "$lib/components/ui/PageHeader.svelte";
+  import Tabs from "$lib/components/ui/Tabs.svelte";
+  import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import MatterExposureList from "./MatterExposureList.svelte";
   import MatterFabrics from "./MatterFabrics.svelte";
   import MatterPair from "./MatterPair.svelte";
@@ -43,23 +47,19 @@
   const statusEnabled = $derived(matterStore.status?.enabled === true);
 </script>
 
-<section class="mx-auto max-w-6xl px-4 sm:px-6 py-8">
-  <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">
-    {t("nav.matter")}
-  </h1>
+<PageShell>
+  <PageHeader title={t("nav.matter")} subtitle={t("matter.subtitle")} />
 
   {#if matterStore.statusLoading}
-    <p class="mt-4 text-sm text-slate-500 dark:text-slate-400">
-      {t("common.loading")}
-    </p>
+    <LoadingState message={t("common.loading")} />
   {:else if !statusEnabled && matterStore.waitingForCcu}
-    <Card class="mt-6 p-6">
+    <Card class="p-4">
       <p class="text-sm font-medium text-slate-500 dark:text-slate-400">
         {t("matter.readiness.waiting")}
       </p>
     </Card>
   {:else if !statusEnabled}
-    <Card class="mt-6 p-6">
+    <Card class="p-4">
       <p class="text-sm font-medium text-slate-500 dark:text-slate-400">
         {t("matter.status.disabled")}
       </p>
@@ -67,7 +67,7 @@
   {:else}
     <!-- Status card -->
     {@const s = matterStore.status!}
-    <Card class="mt-4 p-4">
+    <Card class="p-4">
       <div class="flex flex-wrap items-center gap-4">
         <span class="font-medium text-slate-900 dark:text-slate-100">
           {t("matter.status.enabled")}
@@ -95,23 +95,17 @@
       </div>
     </Card>
 
-    <!-- Tab bar -->
-    <div
-      class="mt-4 flex gap-1 border-b border-slate-200 dark:border-slate-700 overflow-x-auto"
-      role="tablist"
-    >
-      {#each ([["expose", "#/matter/expose"], ["fabrics", "#/matter/fabrics"], ["pair", "#/matter/pair"], ["diagnostics", "#/matter/diagnostics"]] as const) as [tab, href]}
-        {@const active = activeTab === tab}
-        <a
-          {href}
-          role="tab"
-          aria-selected={active}
-          class="flex-1 text-center px-4 py-3 text-sm font-medium transition border-b-2 -mb-px whitespace-nowrap {active ? 'text-brand-600 dark:text-brand-400 border-brand-600 dark:border-brand-400' : 'text-slate-500 dark:text-slate-400 border-transparent'}"
-        >
-          {t(`matter.tab.${tab}`)}
-        </a>
-      {/each}
-    </div>
+    <Tabs
+      class="mt-4"
+      active={activeTab}
+      items={[
+        { key: "expose", label: t("matter.tab.expose"), href: "#/matter/expose" },
+        { key: "fabrics", label: t("matter.tab.fabrics"), href: "#/matter/fabrics" },
+        { key: "pair", label: t("matter.tab.pair"), href: "#/matter/pair" },
+        { key: "diagnostics", label: t("matter.tab.diagnostics"), href: "#/matter/diagnostics" },
+      ]}
+      fill
+    />
 
     <!-- Tab content -->
     <div class="mt-4">
@@ -126,4 +120,4 @@
       {/if}
     </div>
   {/if}
-</section>
+</PageShell>
