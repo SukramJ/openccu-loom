@@ -389,6 +389,49 @@ describe("AlarmWizard — sensor/output picker search, filter, sort", () => {
   });
 });
 
+describe("AlarmWizard — the two picker filter rows are separate instances", () => {
+  // Both steps render the same PickerFilters component. Sharing the markup
+  // must not share the state: a room picked while choosing sensors would
+  // otherwise silently narrow the outputs step too, and the operator would
+  // see a short list with nothing on screen saying why.
+  it("a room filter set on the sensor step does not narrow the outputs step", async () => {
+    mockDevices = [
+      device({ address: "SWDO001", name: "Front door", model: "HmIP-SWDO", rooms: ["Hallway"] }),
+      device({ address: "SWDO002", name: "Back door", model: "HmIP-SWDO", rooms: ["Garage"] }),
+    ];
+    render(AlarmWizard);
+    await next(); // -> sensors
+
+    await fireEvent.click(
+      within(screen.getByRole("listbox", { name: "alarm.sensors.filter.room" })).getByRole("option", {
+        name: "Garage",
+      }),
+    );
+    expect(screen.queryByText("Front door")).toBeNull();
+
+    await next(); // -> outputs
+    // The outputs step starts unfiltered: both candidates are listed, and
+    // the "Hallway siren" is the one the sensor step's Garage filter would
+    // have removed.
+    expect(await screen.findByText("Hallway siren")).toBeTruthy();
+    expect(screen.getByText("Attic light")).toBeTruthy();
+  });
+
+  it("the show-all toggle belongs to the sensor step only", async () => {
+    mockDevices = [
+      device({ address: "SWDO001", name: "Front door", model: "HmIP-SWDO", rooms: ["Hallway"] }),
+    ];
+    render(AlarmWizard);
+    await next(); // -> sensors
+    await screen.findByText("Front door");
+    expect(screen.getByLabelText(/alarm.sensors.add.show_all/)).toBeTruthy();
+
+    await next(); // -> outputs
+    await screen.findByText("Hallway siren");
+    expect(screen.queryByLabelText(/alarm.sensors.add.show_all/)).toBeNull();
+  });
+});
+
 describe("AlarmWizard — area filter (steps 2 and 3)", () => {
   it("hides the area select on both steps when no areas are defined", async () => {
     mockDevices = [device({ address: "SWDO001", name: "Front door", rooms: ["Hallway"] })];

@@ -40,7 +40,7 @@
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
 
-  import Select from "$lib/components/ui/Select.svelte";
+  import PickerFilters from "$lib/components/alarm/PickerFilters.svelte";
   // Setup wizard (docs/alarm-concept.md §12.3), skeleton pattern borrowed
   // from routes/Setup.svelte: step dots + Back/Skip/Next footer, one atomic
   // write on the last step. Steps ②/③ used to be bare links into the
@@ -374,58 +374,17 @@
       <p class="mb-4 text-sm text-[var(--ha-secondary-text-color)]">
         {t("alarm.wizard.sensors.hint")}
       </p>
-      <div class="mb-2 flex flex-wrap items-center gap-2">
-        <div class="min-w-40 flex-1">
-          <Input type="search" placeholder={t("common.search")} bind:value={sensorSearch} />
-        </div>
-        <Select
-          class="w-auto"
-          value={sensorRoom}
-          ariaLabel={t("alarm.sensors.filter.room")}
-          onValueChange={(v) => (sensorRoom = v)}
-          options={[
-            { value: "", label: t("alarm.sensors.filter.all") },
-            ...sensorRoomOptions.map((r) => ({ value: r, label: r })),
-          ]}
-        />
-        <Select
-          class="w-auto"
-          value={sensorFunc}
-          ariaLabel={t("alarm.sensors.filter.function")}
-          onValueChange={(v) => (sensorFunc = v)}
-          options={[
-            { value: "", label: t("alarm.sensors.filter.all") },
-            ...sensorFuncOptions.map((f) => ({ value: f, label: f })),
-          ]}
-        />
-        {#if areasStore.areas.length > 0}
-          <Select
-            class="w-auto"
-            value={sensorArea}
-            ariaLabel={t("alarm.sensors.filter.area")}
-            onValueChange={(v) => (sensorArea = v)}
-            options={[
-              { value: "", label: t("alarm.sensors.filter.all") },
-              ...areasStore.areas.map((a) => ({ value: a.id, label: a.name })),
-            ]}
-          />
-        {/if}
-        <Select
-          class="w-auto"
-          value={sensorSort}
-          ariaLabel={t("common.sort")}
-          onValueChange={(v) => (sensorSort = v as PickerSortField)}
-          options={[
-            { value: "name", label: t("alarm.wizard.sort.name") },
-            { value: "room", label: t("alarm.wizard.sort.room") },
-            { value: "model", label: t("alarm.wizard.sort.model") },
-          ]}
-        />
-        <label class="flex items-center gap-1.5 text-xs text-[var(--ha-secondary-text-color)]">
-          <input type="checkbox" bind:checked={sensorShowAll} />
-          {t("alarm.sensors.add.show_all")}
-        </label>
-      </div>
+      <PickerFilters
+        bind:search={sensorSearch}
+        bind:room={sensorRoom}
+        bind:func={sensorFunc}
+        bind:area={sensorArea}
+        bind:sort={sensorSort}
+        bind:showAll={sensorShowAll}
+        withShowAll
+        roomOptions={sensorRoomOptions}
+        funcOptions={sensorFuncOptions}
+      />
       <p class="mb-2 text-xs text-[var(--ha-secondary-text-color)]">
         {t("alarm.sensors.selected", { count: store.selectedSensors.length })}
       </p>
@@ -482,54 +441,15 @@
           onRetry={() => store.retryOutputCandidates()}
         />
       {:else}
-        <div class="mb-2 flex flex-wrap items-center gap-2">
-          <div class="min-w-40 flex-1">
-            <Input type="search" placeholder={t("common.search")} bind:value={outputSearch} />
-          </div>
-          <Select
-            class="w-auto"
-            value={outputRoom}
-            ariaLabel={t("alarm.sensors.filter.room")}
-            onValueChange={(v) => (outputRoom = v)}
-            options={[
-              { value: "", label: t("alarm.sensors.filter.all") },
-              ...outputRoomOptions.map((r) => ({ value: r, label: r })),
-            ]}
-          />
-          <Select
-            class="w-auto"
-            value={outputFunc}
-            ariaLabel={t("alarm.sensors.filter.function")}
-            onValueChange={(v) => (outputFunc = v)}
-            options={[
-              { value: "", label: t("alarm.sensors.filter.all") },
-              ...outputFuncOptions.map((f) => ({ value: f, label: f })),
-            ]}
-          />
-          {#if areasStore.areas.length > 0}
-            <Select
-              class="w-auto"
-              value={outputArea}
-              ariaLabel={t("alarm.sensors.filter.area")}
-              onValueChange={(v) => (outputArea = v)}
-              options={[
-                { value: "", label: t("alarm.sensors.filter.all") },
-                ...areasStore.areas.map((a) => ({ value: a.id, label: a.name })),
-              ]}
-            />
-          {/if}
-          <Select
-            class="w-auto"
-            value={outputSort}
-            ariaLabel={t("common.sort")}
-            onValueChange={(v) => (outputSort = v as PickerSortField)}
-            options={[
-              { value: "name", label: t("alarm.wizard.sort.name") },
-              { value: "room", label: t("alarm.wizard.sort.room") },
-              { value: "model", label: t("alarm.wizard.sort.model") },
-            ]}
-          />
-        </div>
+        <PickerFilters
+          bind:search={outputSearch}
+          bind:room={outputRoom}
+          bind:func={outputFunc}
+          bind:area={outputArea}
+          bind:sort={outputSort}
+          roomOptions={outputRoomOptions}
+          funcOptions={outputFuncOptions}
+        />
         <p class="mb-2 text-xs text-[var(--ha-secondary-text-color)]">
           {t("alarm.sensors.selected", { count: store.selectedOutputs.length })}
         </p>
