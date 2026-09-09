@@ -304,8 +304,26 @@ func (d *DefaultDiscoveryBuilder) aggregateChannel(ev Event) (component, nodeID,
 		return "", "", "", nil, false
 	}
 	nodeID = discoveryNodeID(d.centralFor(ev), ev.DeviceAddress)
+	// The frame first, the builder's keys second — the same precedence
+	// discovery_combined.go uses, and the only one now.
+	//
+	// This used to be `maps.Copy(body, base)`, i.e. the frame overwriting the
+	// builder, while the combined seam did the opposite. Two seams with
+	// opposite rules is a coin flip for anyone adding a key, and ADR 0070
+	// makes "later wins" the single rule for the whole pipeline.
+	//
+	// Today the flip is a no-op and provably so: channelBaseBody sets exactly
+	// five top-level keys — unique_id, availability, availability_mode, device,
+	// origin — and no HADiscoveryPayload implementation writes any of them
+	// (all ten build their keys as literals, so a grep is exhaustive). What
+	// changes is what happens next time a builder needs one: it now works
+	// instead of being silently discarded.
 	base := d.channelBaseBody(ev, displayChannelName(ev), uniqueID)
-	maps.Copy(body, base)
+	for k, v := range base {
+		if _, set := body[k]; !set {
+			body[k] = v
+		}
+	}
 	// Strict variant: when neither a rule nor a category-default matches, every
 	// HA-attribute field is stripped from the body so an unknown model gets no
 	// `device_class` etc. (mirrors HA-native behaviour). Without this the legacy
