@@ -39,7 +39,7 @@ var _ payload.HADiscoveryContext = discoveryCtx{}
 func TestTextDisplayHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
 	t.Parallel()
 	var td *TextDisplay
-	comp, body := td.HADiscoveryPayload(discoveryCtx{})
+	comp, body := haBody(t, td.HADiscoveryComponent(discoveryCtx{}))
 	if comp != "" || body != nil {
 		t.Fatalf("nil receiver: want (\"\", nil), got (%q, %v)", comp, body)
 	}
@@ -48,7 +48,7 @@ func TestTextDisplayHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
 func TestTextDisplayHADiscoveryPayload_NilContextReturnsNil(t *testing.T) {
 	t.Parallel()
 	td := New("VCU3756007:3", &stubWriter{})
-	comp, body := td.HADiscoveryPayload(nil)
+	comp, body := haBody(t, td.HADiscoveryComponent(nil))
 	if comp != "" || body != nil {
 		t.Fatalf("nil ctx: want (\"\", nil), got (%q, %v)", comp, body)
 	}
@@ -57,7 +57,7 @@ func TestTextDisplayHADiscoveryPayload_NilContextReturnsNil(t *testing.T) {
 func TestTextDisplayHADiscoveryPayload_Component(t *testing.T) {
 	t.Parallel()
 	td := New("VCU3756007:3", &stubWriter{})
-	comp, body := td.HADiscoveryPayload(discoveryCtx{})
+	comp, body := haBody(t, td.HADiscoveryComponent(discoveryCtx{}))
 	if comp != "text" {
 		t.Fatalf("component = %q, want %q", comp, "text")
 	}
@@ -69,7 +69,7 @@ func TestTextDisplayHADiscoveryPayload_Component(t *testing.T) {
 func TestTextDisplayHADiscoveryPayload_RequiredKeys(t *testing.T) {
 	t.Parallel()
 	td := New("VCU3756007:3", &stubWriter{})
-	_, body := td.HADiscoveryPayload(discoveryCtx{})
+	_, body := haBody(t, td.HADiscoveryComponent(discoveryCtx{}))
 
 	for _, key := range []string{
 		"command_topic",
@@ -86,7 +86,7 @@ func TestTextDisplayHADiscoveryPayload_CommandTopic(t *testing.T) {
 	t.Parallel()
 	td := New("VCU3756007:3", &stubWriter{})
 	ctx := discoveryCtx{}
-	_, body := td.HADiscoveryPayload(ctx)
+	_, body := haBody(t, td.HADiscoveryComponent(ctx))
 
 	wantCmd := ctx.ServiceMethodCommandTopic("write")
 	if v, _ := body["command_topic"].(string); v != wantCmd {
@@ -97,7 +97,7 @@ func TestTextDisplayHADiscoveryPayload_CommandTopic(t *testing.T) {
 func TestTextDisplayHADiscoveryPayload_ModeAndMax(t *testing.T) {
 	t.Parallel()
 	td := New("VCU3756007:3", &stubWriter{})
-	_, body := td.HADiscoveryPayload(discoveryCtx{})
+	_, body := haBody(t, td.HADiscoveryComponent(discoveryCtx{}))
 
 	if v, _ := body["mode"].(string); v != "text" {
 		t.Errorf("mode = %q, want %q", v, "text")
@@ -133,7 +133,7 @@ func TestTextDisplayHADiscoveryPayload_StateTopicPresent(t *testing.T) {
 	t.Parallel()
 	td := New("VCU3756007:3", &stubWriter{})
 	ctx := discoveryCtx{}
-	_, body := td.HADiscoveryPayload(ctx)
+	_, body := haBody(t, td.HADiscoveryComponent(ctx))
 
 	if _, ok := body["state_topic"]; !ok {
 		t.Error("missing state_topic")
@@ -151,7 +151,7 @@ func TestTextDisplayHADiscoveryPayload_StateTopicPresent(t *testing.T) {
 func TestTextDisplayHACommandCarriesRowID(t *testing.T) {
 	t.Parallel()
 	td := New("VCU3756007:3", &stubWriter{})
-	_, body := td.HADiscoveryPayload(discoveryCtx{})
+	_, body := haBody(t, td.HADiscoveryComponent(discoveryCtx{}))
 
 	tmpl, ok := body["command_template"].(string)
 	if !ok {

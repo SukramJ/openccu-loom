@@ -122,9 +122,9 @@ func TestSourceCompletenessAcrossModelLayers(t *testing.T) {
 	}
 }
 
-// TestHADiscoveryPayloadBuilderCompleteness pins ADR 0010's contract:
+// TestHADiscoveryComponentBuilderCompleteness pins ADR 0010's contract:
 // every Custom-DP type that surfaces as an HA-MQTT-Discovery entity
-// MUST implement [payload.HADiscoveryPayloadBuilder] so the bridge
+// MUST implement [payload.HADiscoveryComponentBuilder] so the bridge
 // can dispatch through the model layer rather than fall back to the
 // (deleted) per-builder code in `discovery_aggregate.go`.
 //
@@ -137,27 +137,27 @@ func TestSourceCompletenessAcrossModelLayers(t *testing.T) {
 // `HADiscoveryPayload(ctx) (string, map[string]any)` method. Add one
 // to the type's `payload.go` (see
 // `internal/model/custom/climate/payload.go` for the pattern).
-func TestHADiscoveryPayloadBuilderCompleteness(t *testing.T) {
+func TestHADiscoveryComponentBuilderCompleteness(t *testing.T) {
 	t.Parallel()
 
 	var (
-		_ payload.HADiscoveryPayloadBuilder = (*climate.Climate)(nil)
-		_ payload.HADiscoveryPayloadBuilder = (*cover.Cover)(nil)
-		_ payload.HADiscoveryPayloadBuilder = (*cover.Blind)(nil)
-		_ payload.HADiscoveryPayloadBuilder = (*cover.Garage)(nil)
-		_ payload.HADiscoveryPayloadBuilder = (*lock.Lock)(nil)
-		_ payload.HADiscoveryPayloadBuilder = (*siren.Siren)(nil)
-		_ payload.HADiscoveryPayloadBuilder = (*siren.SmokeSiren)(nil)
-		_ payload.HADiscoveryPayloadBuilder = (*siren.SoundPlayer)(nil)
-		_ payload.HADiscoveryPayloadBuilder = (*valve.Irrigation)(nil)
-		_ payload.HADiscoveryPayloadBuilder = (*valve.Modulating)(nil)
-		_ payload.HADiscoveryPayloadBuilder = (*textdisplay.TextDisplay)(nil)
-		_ payload.HADiscoveryPayloadBuilder = (*light.Light)(nil)
-		_ payload.HADiscoveryPayloadBuilder = (*light.ColorLight)(nil)
-		_ payload.HADiscoveryPayloadBuilder = (*light.ColorTempLight)(nil)
-		_ payload.HADiscoveryPayloadBuilder = (*light.FixedColorLight)(nil)
-		_ payload.HADiscoveryPayloadBuilder = (*light.EffectLight)(nil)
-		_ payload.HADiscoveryPayloadBuilder = (*light.DRGDaliLight)(nil)
+		_ payload.HADiscoveryComponentBuilder = (*climate.Climate)(nil)
+		_ payload.HADiscoveryComponentBuilder = (*cover.Cover)(nil)
+		_ payload.HADiscoveryComponentBuilder = (*cover.Blind)(nil)
+		_ payload.HADiscoveryComponentBuilder = (*cover.Garage)(nil)
+		_ payload.HADiscoveryComponentBuilder = (*lock.Lock)(nil)
+		_ payload.HADiscoveryComponentBuilder = (*siren.Siren)(nil)
+		_ payload.HADiscoveryComponentBuilder = (*siren.SmokeSiren)(nil)
+		_ payload.HADiscoveryComponentBuilder = (*siren.SoundPlayer)(nil)
+		_ payload.HADiscoveryComponentBuilder = (*valve.Irrigation)(nil)
+		_ payload.HADiscoveryComponentBuilder = (*valve.Modulating)(nil)
+		_ payload.HADiscoveryComponentBuilder = (*textdisplay.TextDisplay)(nil)
+		_ payload.HADiscoveryComponentBuilder = (*light.Light)(nil)
+		_ payload.HADiscoveryComponentBuilder = (*light.ColorLight)(nil)
+		_ payload.HADiscoveryComponentBuilder = (*light.ColorTempLight)(nil)
+		_ payload.HADiscoveryComponentBuilder = (*light.FixedColorLight)(nil)
+		_ payload.HADiscoveryComponentBuilder = (*light.EffectLight)(nil)
+		_ payload.HADiscoveryComponentBuilder = (*light.DRGDaliLight)(nil)
 	)
 
 	if testing.Short() {

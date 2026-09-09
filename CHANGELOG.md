@@ -6,6 +6,45 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Every custom data point now returns a typed discovery component.**
+  `HADiscoveryPayloadBuilder` — which returned a `(component string,
+  body map[string]any)` pair — is gone, replaced by
+  `HADiscoveryComponentBuilder` returning a `hadiscovery.Component`.
+  Twenty-one builders across cover, lock, valve, siren, switch,
+  text display, update, climate and the seven light variants were
+  converted; nothing implements the untyped form any more, so the
+  dispatch has one path instead of two.
+
+  Home Assistant's discovery schema is `extra=REMOVE_EXTRA`: a key a
+  platform does not declare is dropped on receipt with no error on the
+  wire and no line in any log. The generated per-platform `Fields`
+  structs carry exactly the keys each platform accepts, so a
+  misspelled key now stops compiling instead of costing a feature
+  silently.
+
+  The conversion is behaviour-preserving and was verified as such: all
+  9,996 discovery payloads the full-fleet capture produces are
+  byte-identical before and after.
+
+### Fixed
+
+- **Lights advertised an `hs` key Home Assistant has never had.**
+  `ColorLight`, `FixedColorLight`, `EffectLight` and `RGBWLight` set
+  `hs: true`; the json light schema declares no such key — verified
+  against both the extracted catalogue and `schema_json.py` itself, in
+  which no `CONF_HS` exists — so it was dropped on receipt every time.
+
+  Nothing was broken by it: colour support is announced through
+  `supported_color_modes` alone, which those builders already set.
+  The key was simply dead, and the typed struct makes it unwritable.
+
+  The discovery guard had not caught it because every light in the
+  capture fleet is colourless, so the key never appeared in a captured
+  payload.
+
+
 ### Fixed
 
 - **A siren's state never parsed.** The three siren Custom-DPs published

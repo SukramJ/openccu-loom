@@ -149,7 +149,7 @@ func TestIPHdmConstructorProducesBlind(t *testing.T) {
 	if !blind.Capabilities.SupportsPosition {
 		t.Error("IPHdm blind must advertise SupportsPosition")
 	}
-	_, body := blind.HADiscoveryPayload(discoveryCtx{})
+	_, body := haBody(t, blind.HADiscoveryComponent(discoveryCtx{}))
 	for _, key := range []string{"position_topic", "set_position_topic"} {
 		if _, has := body[key]; !has {
 			t.Errorf("IPHdm HA payload is missing %q", key)

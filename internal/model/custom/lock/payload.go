@@ -9,6 +9,9 @@ import (
 	"strconv"
 	"strings"
 
+	hacatalog "github.com/SukramJ/go-ha-catalog"
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -17,8 +20,8 @@ import (
 // Compile-time guarantee that *Lock satisfies the universal Source
 // contract and the HA-Discovery payload builder contract (ADR 0010).
 var (
-	_ payload.Source                    = (*Lock)(nil)
-	_ payload.HADiscoveryPayloadBuilder = (*Lock)(nil)
+	_ payload.Source                      = (*Lock)(nil)
+	_ payload.HADiscoveryComponentBuilder = (*Lock)(nil)
 )
 
 // Info returns identity-level fields for a Lock.
@@ -151,7 +154,7 @@ func (l *Lock) invokeLockCommand(ctx context.Context, params map[string]any, pri
 	return fmt.Errorf("%w: %s=%q", payload.ErrServiceInvalidParam, argLockCommand, raw)
 }
 
-// HADiscoveryPayload returns the HA Lock-platform-specific payload
+// HADiscoveryComponent returns the HA Lock-platform-specific payload
 // skeleton. HA lock platform uses a single command_topic with
 // payload_lock / payload_unlock — not separate lock/unlock topics.
 //
@@ -166,9 +169,9 @@ func (l *Lock) invokeLockCommand(ctx context.Context, params map[string]any, pri
 // → wire-parameter command topic where a real VALUES parameter carries
 // the operation, service-method topic otherwise. State reads from the
 // aggregated topic.
-func (l *Lock) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component string, body map[string]any) {
+func (l *Lock) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery.Component {
 	if l == nil || ctx == nil {
-		return "", nil
+		return hadiscovery.Component{}
 	}
 	stateTopic := ctx.CustomDPStateTopic()
 
@@ -204,32 +207,35 @@ func (l *Lock) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component str
 		payloadUnlock = ipTargetUnlocked
 	}
 
-	body = map[string]any{
+	fields := hadiscovery.LockFields{
 		// HA lock: single command_topic, payload_lock/payload_unlock on it.
-		"command_topic":  commandTopic,
-		"payload_lock":   payloadLock,
-		"payload_unlock": payloadUnlock,
+		PayloadLock:   payloadLock,
+		PayloadUnlock: payloadUnlock,
 		// HA lifecycle string tokens — match what StatePayload.lock_state emits.
-		"state_locked":    "LOCKED",
-		"state_unlocked":  "UNLOCKED",
-		"state_jammed":    "JAMMED",
-		"state_unlocking": "UNLOCKING",
-		"state_locking":   "LOCKING",
-		// State from aggregated topic — lock_state is the HA lifecycle string.
-		"state_topic":    stateTopic,
-		"value_template": "{{ value_json.lock_state }}",
-		// optimistic=false — without this HA defaults to true and
-		// shows the lock as locked / unlocked before the CCU echo
-		// arrives. Critical for door locks where a brief connection
-		// drop would otherwise leave HA showing the wrong state.
-		"optimistic": false,
+		StateLocked:    "LOCKED",
+		StateUnlocked:  "UNLOCKED",
+		StateJammed:    "JAMMED",
+		StateUnlocking: "UNLOCKING",
+		StateLocking:   "LOCKING",
 	}
 	// Door-opener (HmIP-DLD) — only IP locks expose the short-time unlock
 	// action, via LOCK_TARGET_LEVEL. RF/Button locks have no open action.
 	if l.Capabilities.SupportsOpen && l.Kind == KindIP {
-		body["payload_open"] = ipTargetOpen
+		fields.PayloadOpen = ipTargetOpen
 	}
-	return "lock", body
+	return hadiscovery.Component{
+		Platform:     hacatalog.PlatformLock,
+		CommandTopic: commandTopic,
+		// State from aggregated topic — lock_state is the HA lifecycle string.
+		StateTopic:    stateTopic,
+		ValueTemplate: "{{ value_json.lock_state }}",
+		// optimistic=false — without this HA defaults to true and
+		// shows the lock as locked / unlocked before the CCU echo
+		// arrives. Critical for door locks where a brief connection
+		// drop would otherwise leave HA showing the wrong state.
+		Optimistic: hadiscovery.Ptr(false),
+		Fields:     fields,
+	}
 }
 
 // kindName maps the internal Kind enum to a wire-stable string label.

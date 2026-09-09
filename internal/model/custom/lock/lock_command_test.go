@@ -50,7 +50,7 @@ func TestButtonLockHACommandReachesMasterWrite(t *testing.T) {
 	t.Parallel()
 	l, w := newMasterButtonLock(t)
 
-	_, body := l.HADiscoveryPayload(discoveryCtx{})
+	_, body := haBody(t, l.HADiscoveryComponent(discoveryCtx{}))
 	topic, _ := body["command_topic"].(string)
 	method, ok := strings.CutPrefix(topic, "test/svc/")
 	if !ok {
@@ -89,7 +89,7 @@ func TestButtonLockHAUnlockPayloadUnlocks(t *testing.T) {
 	t.Parallel()
 	l, w := newMasterButtonLock(t)
 
-	_, body := l.HADiscoveryPayload(discoveryCtx{})
+	_, body := haBody(t, l.HADiscoveryComponent(discoveryCtx{}))
 	unlockPayload, _ := body["payload_unlock"].(string)
 
 	err := l.Invoke(context.Background(), serviceLockCommand,

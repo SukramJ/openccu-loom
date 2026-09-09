@@ -91,7 +91,7 @@ func TestW2CstRFLockStatePolarityIsOneRule(t *testing.T) {
 	ctx := context.Background()
 
 	l, w := w2CstNewRFLock(t)
-	_, body := l.HADiscoveryPayload(lockTargetLevelDiscoveryCtx{})
+	_, body := haBody(t, l.HADiscoveryComponent(lockTargetLevelDiscoveryCtx{}))
 	wantTopic := lockTargetLevelDiscoveryCtx{}.WireParameterCommandTopic(string(hmenum.ParameterState))
 	if got := body["command_topic"]; got != wantTopic {
 		t.Fatalf("command_topic = %v, want %v — the advertised payloads only reach STATE through this topic", got, wantTopic)

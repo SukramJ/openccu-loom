@@ -7,6 +7,9 @@ import (
 	"context"
 	"time"
 
+	hacatalog "github.com/SukramJ/go-ha-catalog"
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -19,13 +22,13 @@ import (
 // custom-DP-level addition is turn_on_for, which bundles ON_TIME +
 // STATE in one atomic put_paramset call.
 var (
-	_ payload.Source                    = (*Switch)(nil)
-	_ payload.HADiscoveryPayloadBuilder = (*Switch)(nil)
-	_ payload.Source                    = (*AccessPermission)(nil)
-	_ payload.HADiscoveryPayloadBuilder = (*AccessPermission)(nil)
+	_ payload.Source                      = (*Switch)(nil)
+	_ payload.HADiscoveryComponentBuilder = (*Switch)(nil)
+	_ payload.Source                      = (*AccessPermission)(nil)
+	_ payload.HADiscoveryComponentBuilder = (*AccessPermission)(nil)
 )
 
-// HADiscoveryPayload returns the HA Switch-platform-specific payload
+// HADiscoveryComponent returns the HA Switch-platform-specific payload
 // skeleton. Switch maps the wire STATE parameter directly to HA's switch
 // entity — toggle bool with payload_on/payload_off mirroring the
 // Generic-Switch wire convention ("true"/"false").
@@ -38,15 +41,14 @@ var (
 // here makes the custom-DP discovery authoritative — the suppression mark on
 // the wire DP is bypassed because the discovery is sourced from the channel's
 // custom-DP, not from the generic STATE itself.
-func (s *Switch) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component string, body map[string]any) {
+func (s *Switch) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery.Component {
 	if s == nil || ctx == nil {
-		return "", nil
+		return hadiscovery.Component{}
 	}
-	body = map[string]any{
-		"command_topic": ctx.WireParameterCommandTopic("STATE"),
-		"payload_on":    "true",
-		"payload_off":   "false",
-		"state_topic":   ctx.WireParameterStateTopic("STATE"),
+	return hadiscovery.Component{
+		Platform:     hacatalog.PlatformSwitch,
+		CommandTopic: ctx.WireParameterCommandTopic("STATE"),
+		StateTopic:   ctx.WireParameterStateTopic("STATE"),
 		// PerDPState envelope carries the value as a JSON boolean
 		// (`{"value":true,...}`). Jinja's default rendering of a
 		// Python boolean is `True`/`False` (capitalised) — that
@@ -68,17 +70,20 @@ func (s *Switch) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component s
 		// applies (valueJSONValueLowerTemplate in
 		// internal/north/mqtt/discovery.go) to the same envelope on
 		// the same topic; the two spellings must not drift.
-		"value_template": `{% if value_json is defined and value_json.value is not none %}{{ value_json.value | lower }}{% endif %}`,
-		"state_on":       "true",
-		"state_off":      "false",
+		ValueTemplate: `{% if value_json is defined and value_json.value is not none %}{{ value_json.value | lower }}{% endif %}`,
 		// Explicit false prevents HA MQTT Switch from applying optimistic
 		// local state updates before the CCU confirms the command via the
 		// state_topic. Without it, HA defaults to optimistic=true when
 		// a command_topic is present, causing the entity to flip locally
 		// even if the CCU rejects or delays the write.
-		"optimistic": false,
+		Optimistic: hadiscovery.Ptr(false),
+		Fields: hadiscovery.SwitchFields{
+			PayloadOn:  "true",
+			PayloadOff: "false",
+			StateOn:    "true",
+			StateOff:   "false",
+		},
 	}
-	return "switch", body
 }
 
 // Info returns identity-level fields for a Switch.

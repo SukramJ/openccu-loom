@@ -65,7 +65,7 @@ func newPayloadSwitch(t *testing.T) *Switch {
 func TestHADiscoveryPayloadComponentIsSwitch(t *testing.T) {
 	s := newPayloadSwitch(t)
 	ctx := &stubDiscoveryCtx{customStateTopic: "hm/state", aggStateTopic: "hm/agg"}
-	component, body := s.HADiscoveryPayload(ctx)
+	component, body := haBody(t, s.HADiscoveryComponent(ctx))
 	if component != "switch" {
 		t.Fatalf("expected component 'switch', got %q", component)
 	}
@@ -77,7 +77,7 @@ func TestHADiscoveryPayloadComponentIsSwitch(t *testing.T) {
 func TestHADiscoveryPayloadTopicsPopulated(t *testing.T) {
 	s := newPayloadSwitch(t)
 	ctx := &stubDiscoveryCtx{}
-	_, body := s.HADiscoveryPayload(ctx)
+	_, body := haBody(t, s.HADiscoveryComponent(ctx))
 	if _, ok := body["command_topic"]; !ok {
 		t.Error("missing command_topic")
 	}
@@ -97,7 +97,7 @@ func TestHADiscoveryPayloadTopicsPopulated(t *testing.T) {
 
 func TestHADiscoveryPayloadNilSwitchReturnsEmpty(t *testing.T) {
 	var s *Switch
-	component, body := s.HADiscoveryPayload(&stubDiscoveryCtx{})
+	component, body := haBody(t, s.HADiscoveryComponent(&stubDiscoveryCtx{}))
 	if component != "" || body != nil {
 		t.Fatalf("expected empty return from nil switch, got (%q, %v)", component, body)
 	}
@@ -105,7 +105,7 @@ func TestHADiscoveryPayloadNilSwitchReturnsEmpty(t *testing.T) {
 
 func TestHADiscoveryPayloadNilContextReturnsEmpty(t *testing.T) {
 	s := newPayloadSwitch(t)
-	component, body := s.HADiscoveryPayload(nil)
+	component, body := haBody(t, s.HADiscoveryComponent(nil))
 	if component != "" || body != nil {
 		t.Fatalf("expected empty return from nil context, got (%q, %v)", component, body)
 	}

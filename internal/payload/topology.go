@@ -93,7 +93,7 @@ type TopicSlot struct {
 // "valve", "siren", "select", "number", "button", "text", "update").
 //
 // Sources that implement this typically also implement
-// [HADiscoveryPayloadBuilder] so the bridge has a body to publish.
+// [HADiscoveryComponentBuilder] so the bridge has a body to publish.
 type HAEntity interface {
 	// HAComponent returns the HA MQTT-Discovery component name. An
 	// empty return opts the source out of HA discovery.
@@ -123,7 +123,7 @@ type Slotted interface {
 // parameter, and suppresses the publish when the rendered JSON matches
 // the cached previous one. The list documents which parameters
 // actually move the payload. It re-renders via
-// [HADiscoveryPayloadBuilder] and re-publishes the retained discovery
+// [HADiscoveryComponentBuilder] and re-publishes the retained discovery
 // topic when the rendered JSON differs from the cached previous
 // version. HA picks up the change automatically (retained discovery
 // → entity reconfiguration).

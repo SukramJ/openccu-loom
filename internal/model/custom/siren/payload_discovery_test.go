@@ -38,7 +38,7 @@ var _ payload.HADiscoveryContext = discoveryCtx{}
 func TestSirenHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
 	t.Parallel()
 	var s *Siren
-	comp, body := s.HADiscoveryPayload(discoveryCtx{})
+	comp, body := haBody(t, s.HADiscoveryComponent(discoveryCtx{}))
 	if comp != "" || body != nil {
 		t.Fatalf("nil receiver: want (\"\", nil), got (%q, %v)", comp, body)
 	}
@@ -51,7 +51,7 @@ func TestSirenHADiscoveryPayload_Component(t *testing.T) {
 		SupportsOptical:  true,
 		SupportsDuration: true,
 	})
-	comp, body := r.siren.HADiscoveryPayload(discoveryCtx{})
+	comp, body := haBody(t, r.siren.HADiscoveryComponent(discoveryCtx{}))
 	if comp != "siren" {
 		t.Fatalf("component = %q, want %q", comp, "siren")
 	}
@@ -66,7 +66,7 @@ func TestSirenHADiscoveryPayload_RequiredKeys(t *testing.T) {
 		SupportsAcoustic: true,
 	})
 	ctx := discoveryCtx{}
-	_, body := r.siren.HADiscoveryPayload(ctx)
+	_, body := haBody(t, r.siren.HADiscoveryComponent(ctx))
 
 	for _, key := range []string{
 		"state_topic",
@@ -104,14 +104,14 @@ func TestSirenSupportVolumeSetReadsCapability(t *testing.T) {
 
 	// With SupportsVolumeSet=false: must be false.
 	r := newRig(t, "HmIP-ASIR:3", &stubWriter{}, custom.SirenCapabilities{SupportsAcoustic: true, SupportsVolumeSet: false})
-	_, body := r.siren.HADiscoveryPayload(discoveryCtx{})
+	_, body := haBody(t, r.siren.HADiscoveryComponent(discoveryCtx{}))
 	if v, _ := body["support_volume_set"].(bool); v {
 		t.Error("support_volume_set: got true, want false when SupportsVolumeSet=false")
 	}
 
 	// With SupportsVolumeSet=true: must be true.
 	r2 := newRig(t, "HmIP-ASIR:3", &stubWriter{}, custom.SirenCapabilities{SupportsAcoustic: true, SupportsVolumeSet: true})
-	_, body2 := r2.siren.HADiscoveryPayload(discoveryCtx{})
+	_, body2 := haBody(t, r2.siren.HADiscoveryComponent(discoveryCtx{}))
 	if v, _ := body2["support_volume_set"].(bool); !v {
 		t.Error("support_volume_set: got false, want true when SupportsVolumeSet=true")
 	}
@@ -122,7 +122,7 @@ func TestSirenSupportVolumeSetReadsCapability(t *testing.T) {
 func TestSmokeSirenHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
 	t.Parallel()
 	var s *SmokeSiren
-	comp, body := s.HADiscoveryPayload(discoveryCtx{})
+	comp, body := haBody(t, s.HADiscoveryComponent(discoveryCtx{}))
 	if comp != "" || body != nil {
 		t.Fatalf("nil receiver: want (\"\", nil), got (%q, %v)", comp, body)
 	}
@@ -140,7 +140,7 @@ func TestSmokeSirenHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
 func TestSmokeSirenHADiscoveryPayload_Component(t *testing.T) {
 	t.Parallel()
 	s := NewSmokeSiren(SmokeSirenConfig{})
-	comp, body := s.HADiscoveryPayload(discoveryCtx{})
+	comp, body := haBody(t, s.HADiscoveryComponent(discoveryCtx{}))
 	if comp != "siren" {
 		t.Fatalf("component = %q, want %q", comp, "siren")
 	}
@@ -153,7 +153,7 @@ func TestSmokeSirenHADiscoveryPayload_RequiredKeys(t *testing.T) {
 	t.Parallel()
 	s := NewSmokeSiren(SmokeSirenConfig{})
 	ctx := discoveryCtx{}
-	_, body := s.HADiscoveryPayload(ctx)
+	_, body := haBody(t, s.HADiscoveryComponent(ctx))
 
 	// state_topic uses the aggregated topic; StatePayload emits only
 	// {state}, satisfying HA's strict SIREN_PLATFORM_PAYLOAD_SCHEMA.
@@ -180,7 +180,7 @@ func TestSmokeSirenHADiscoveryPayload_RequiredKeys(t *testing.T) {
 func TestSoundPlayerHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
 	t.Parallel()
 	var sp *SoundPlayer
-	comp, body := sp.HADiscoveryPayload(discoveryCtx{})
+	comp, body := haBody(t, sp.HADiscoveryComponent(discoveryCtx{}))
 	if comp != "" || body != nil {
 		t.Fatalf("nil receiver: want (\"\", nil), got (%q, %v)", comp, body)
 	}
@@ -191,7 +191,7 @@ func TestSoundPlayerHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
 func TestSoundPlayerHADiscoveryPayload_NilContextReturnsNil(t *testing.T) {
 	t.Parallel()
 	sp := NewSoundPlayer(SoundPlayerConfig{})
-	comp, body := sp.HADiscoveryPayload(nil)
+	comp, body := haBody(t, sp.HADiscoveryComponent(nil))
 	if comp != "" || body != nil {
 		t.Fatalf("nil ctx: want (\"\", nil), got (%q, %v)", comp, body)
 	}
@@ -204,7 +204,7 @@ func TestSoundPlayerHADiscoveryPayload_NilContextReturnsNil(t *testing.T) {
 func TestSoundPlayerHADiscoveryPayload_Component(t *testing.T) {
 	t.Parallel()
 	sp := NewSoundPlayer(SoundPlayerConfig{})
-	comp, body := sp.HADiscoveryPayload(discoveryCtx{})
+	comp, body := haBody(t, sp.HADiscoveryComponent(discoveryCtx{}))
 	if comp != "siren" {
 		t.Fatalf("component = %q, want %q", comp, "siren")
 	}
@@ -221,7 +221,7 @@ func TestSoundPlayerHADiscoveryPayload_RequiredKeys(t *testing.T) {
 	t.Parallel()
 	sp := NewSoundPlayer(SoundPlayerConfig{})
 	ctx := discoveryCtx{}
-	_, body := sp.HADiscoveryPayload(ctx)
+	_, body := haBody(t, sp.HADiscoveryComponent(ctx))
 
 	for _, key := range []string{
 		"state_topic",
@@ -256,7 +256,7 @@ func TestSoundPlayerHADiscoveryPayload_RequiredKeys(t *testing.T) {
 func TestSoundPlayerHADiscoveryPayload_AvailableTonesAbsentWhenNone(t *testing.T) {
 	t.Parallel()
 	sp := NewSoundPlayer(SoundPlayerConfig{}) // no channel → no soundfiles
-	_, body := sp.HADiscoveryPayload(discoveryCtx{})
+	_, body := haBody(t, sp.HADiscoveryComponent(discoveryCtx{}))
 	if _, ok := body["available_tones"]; ok {
 		t.Error("available_tones must be absent when no soundfiles configured")
 	}

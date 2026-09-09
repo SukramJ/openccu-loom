@@ -43,26 +43,26 @@ func TestDeviceUpdateImplementsPayloadSource(t *testing.T) {
 	}
 }
 
-// TestDeviceUpdateImplementsHADiscoveryPayloadBuilder is a compile-time
-// + runtime check that *Update satisfies [payload.HADiscoveryPayloadBuilder].
-func TestDeviceUpdateImplementsHADiscoveryPayloadBuilder(t *testing.T) {
+// TestDeviceUpdateImplementsHADiscoveryComponentBuilder is a compile-time
+// + runtime check that *Update satisfies [payload.HADiscoveryComponentBuilder].
+func TestDeviceUpdateImplementsHADiscoveryComponentBuilder(t *testing.T) {
 	t.Parallel()
 	d := newTestDevice(t)
 	upd := d.Update()
 	if upd == nil {
 		t.Fatal("Update() must be non-nil for an updatable device")
 	}
-	var _ payload.HADiscoveryPayloadBuilder = upd // compile-time assertion
+	var _ payload.HADiscoveryComponentBuilder = upd // compile-time assertion
 	// Build a stub context to drive HADiscoveryPayload.
-	comp, body := upd.HADiscoveryPayload(stubDiscoveryCtx{
+	comp, body := haBody(t, upd.HADiscoveryComponent(stubDiscoveryCtx{
 		stateTopic:   "openccu-loom/ccu/iface/ADDR/update/state",
 		installTopic: "openccu-loom/ccu/iface/ADDR/update/install",
-	})
+	}))
 	if comp != "update" {
 		t.Errorf("component = %q, want \"update\"", comp)
 	}
 	if body == nil {
-		t.Fatal("HADiscoveryPayload() returned nil body")
+		t.Fatal("HADiscoveryComponent() returned no component")
 	}
 }
 
@@ -119,10 +119,10 @@ func TestDeviceUpdateHADiscoveryPayloadShape(t *testing.T) {
 		wantStateTopic   = "openccu-loom/ccu/iface/DEV/update/state"
 		wantInstallTopic = "openccu-loom/ccu/iface/DEV/update/install"
 	)
-	_, body := upd.HADiscoveryPayload(stubDiscoveryCtx{
+	_, body := haBody(t, upd.HADiscoveryComponent(stubDiscoveryCtx{
 		stateTopic:   wantStateTopic,
 		installTopic: wantInstallTopic,
-	})
+	}))
 	if body == nil {
 		t.Fatal("body must not be nil")
 	}

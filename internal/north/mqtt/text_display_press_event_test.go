@@ -104,7 +104,7 @@ func TestBuildTextDisplayPayloadSchema(t *testing.T) {
 }
 
 // TestBuildTextDisplayChannelTypeBuilderDispatch verifies that the aggregator
-// dispatches to the HADiscoveryPayloadBuilder fast path for a text display
+// dispatches to the HADiscoveryComponentBuilder fast path for a text display
 // channel (IPTEXTDISPLAY). The legacy domainForChannelType routing has been
 // removed in ADR 0010. This test pins the end-to-end Build result.
 func TestBuildTextDisplayChannelTypeBuilderDispatch(t *testing.T) {

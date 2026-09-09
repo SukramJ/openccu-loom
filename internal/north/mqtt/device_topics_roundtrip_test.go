@@ -9,6 +9,9 @@ import (
 	"log/slog"
 	"testing"
 
+	hacatalog "github.com/SukramJ/go-ha-catalog"
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+
 	"github.com/SukramJ/openccu-loom/internal/model/custom/cover"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -31,7 +34,7 @@ import (
 //   - discovery_aggregate.go's [DefaultDiscoveryBuilder.BuildChannelEvent]
 //     (the channel-level keypress event, state only) and
 //     [DefaultDiscoveryBuilder.aggregateChannel] driven generically
-//     through a minimal fake [payload.HADiscoveryPayloadBuilder] +
+//     through a minimal fake [payload.HADiscoveryComponentBuilder] +
 //     [payload.Slotted] source — this exercises the SHARED
 //     custom-DP topic plumbing every domain (climate/cover/lock/
 //     light/valve/siren) routes through, not any one domain's own
@@ -64,7 +67,7 @@ import (
 //
 // NOT covered, and why:
 //
-//   - Each custom-DP domain's OWN [payload.HADiscoveryPayloadBuilder]
+//   - Each custom-DP domain's OWN [payload.HADiscoveryComponentBuilder]
 //     body (internal/model/custom/{climate,cover,lock,light,valve,siren}/payload.go)
 //     — driving these faithfully needs each domain's real Source
 //     type (HVAC modes, tilt support, siren tones, …), which is a
@@ -335,7 +338,7 @@ func (fakePressChannel) HasParameter(name string) bool { return name == "PRESS_S
 
 // fakeCustomDPSource is a minimal [payload.Source] (the interface
 // [Event.Source] requires) that also implements
-// [payload.HADiscoveryPayloadBuilder] + [payload.Slotted], used to
+// [payload.HADiscoveryComponentBuilder] + [payload.Slotted], used to
 // drive [DefaultDiscoveryBuilder.aggregateChannel] generically without
 // any one custom-DP domain's real model type. The HADiscoveryPayload
 // method mirrors the shape every domain's own implementation follows
@@ -345,10 +348,11 @@ func (fakePressChannel) HasParameter(name string) bool { return name == "PRESS_S
 // aggregateChannel and return zero values.
 type fakeCustomDPSource struct{ kind string }
 
-func (f fakeCustomDPSource) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component string, body map[string]any) {
-	return "switch", map[string]any{
-		"state_topic":   ctx.CustomDPStateTopic(),
-		"command_topic": ctx.ServiceMethodCommandTopic("set"),
+func (f fakeCustomDPSource) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery.Component {
+	return hadiscovery.Component{
+		Platform:     hacatalog.PlatformSwitch,
+		StateTopic:   ctx.CustomDPStateTopic(),
+		CommandTopic: ctx.ServiceMethodCommandTopic("set"),
 	}
 }
 
@@ -371,10 +375,11 @@ func (fakeCustomDPSource) Invoke(context.Context, string, map[string]any, hmenum
 // doc comment on [TestDevicePlaneTopicsRoundTrip]).
 type fakeUpdateSource struct{}
 
-func (fakeUpdateSource) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component string, body map[string]any) {
+func (fakeUpdateSource) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery.Component {
 	stateTopic := ctx.CustomDPStateTopic()
-	return "update", map[string]any{
-		"state_topic":          stateTopic,
-		"latest_version_topic": stateTopic,
+	return hadiscovery.Component{
+		Platform:   hacatalog.PlatformUpdate,
+		StateTopic: stateTopic,
+		Fields:     hadiscovery.UpdateFields{LatestVersionTopic: stateTopic},
 	}
 }

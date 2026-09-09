@@ -36,7 +36,7 @@ var _ payload.HADiscoveryContext = discoveryCtx{}
 func TestLockHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
 	t.Parallel()
 	var l *Lock
-	comp, body := l.HADiscoveryPayload(discoveryCtx{})
+	comp, body := haBody(t, l.HADiscoveryComponent(discoveryCtx{}))
 	if comp != "" || body != nil {
 		t.Fatalf("nil receiver: want (\"\", nil), got (%q, %v)", comp, body)
 	}
@@ -45,7 +45,7 @@ func TestLockHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
 func TestLockHADiscoveryPayload_NilContextReturnsNil(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{SupportsOpen: true})
-	comp, body := r.lock.HADiscoveryPayload(nil)
+	comp, body := haBody(t, r.lock.HADiscoveryComponent(nil))
 	if comp != "" || body != nil {
 		t.Fatalf("nil ctx: want (\"\", nil), got (%q, %v)", comp, body)
 	}
@@ -54,7 +54,7 @@ func TestLockHADiscoveryPayload_NilContextReturnsNil(t *testing.T) {
 func TestLockHADiscoveryPayload_Component(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{SupportsOpen: true})
-	comp, body := r.lock.HADiscoveryPayload(discoveryCtx{})
+	comp, body := haBody(t, r.lock.HADiscoveryComponent(discoveryCtx{}))
 	if comp != "lock" {
 		t.Fatalf("component = %q, want %q", comp, "lock")
 	}
@@ -66,7 +66,7 @@ func TestLockHADiscoveryPayload_Component(t *testing.T) {
 func TestLockHADiscoveryPayload_RequiredKeys(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{})
-	_, body := r.lock.HADiscoveryPayload(discoveryCtx{})
+	_, body := haBody(t, r.lock.HADiscoveryComponent(discoveryCtx{}))
 
 	for _, key := range []string{
 		"state_topic",
@@ -85,7 +85,7 @@ func TestLockHADiscoveryPayload_TopicValues(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{})
 	ctx := discoveryCtx{}
-	_, body := r.lock.HADiscoveryPayload(ctx)
+	_, body := haBody(t, r.lock.HADiscoveryComponent(ctx))
 
 	if v, _ := body["state_topic"].(string); v != ctx.CustomDPStateTopic() {
 		t.Errorf("state_topic = %q, want %q", v, ctx.CustomDPStateTopic())
@@ -103,7 +103,7 @@ func TestLockHADiscoveryPayload_KindRFUsesState(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, "HM-Sec-Key:1", KindRF, &stubWriter{}, custom.LockCapabilities{})
 	ctx := discoveryCtx{}
-	_, body := r.lock.HADiscoveryPayload(ctx)
+	_, body := haBody(t, r.lock.HADiscoveryComponent(ctx))
 
 	wantCmd := ctx.WireParameterCommandTopic("STATE")
 	if v, _ := body["command_topic"].(string); v != wantCmd {
@@ -127,7 +127,7 @@ func TestLockHADiscoveryPayload_KindButtonUsesServiceMethod(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, "HmIP-DLD:0", KindButton, &stubWriter{}, custom.LockCapabilities{})
 	ctx := discoveryCtx{}
-	_, body := r.lock.HADiscoveryPayload(ctx)
+	_, body := haBody(t, r.lock.HADiscoveryComponent(ctx))
 
 	wantCmd := ctx.ServiceMethodCommandTopic(serviceLockCommand)
 	if v, _ := body["command_topic"].(string); v != wantCmd {
@@ -158,7 +158,7 @@ func TestLockHADiscoveryPayload_PayloadOpenOnlyForIP(t *testing.T) {
 	}
 	for _, tc := range cases {
 		r := newRig(t, "x", tc.kind, &stubWriter{}, custom.LockCapabilities{SupportsOpen: tc.supOpen})
-		_, body := r.lock.HADiscoveryPayload(discoveryCtx{})
+		_, body := haBody(t, r.lock.HADiscoveryComponent(discoveryCtx{}))
 		_, hasOpen := body["payload_open"]
 		if hasOpen != tc.wantOpen {
 			t.Errorf("kind=%d supOpen=%v: payload_open present=%v, want %v", tc.kind, tc.supOpen, hasOpen, tc.wantOpen)
@@ -174,7 +174,7 @@ func TestLockHADiscoveryPayload_PayloadOpenOnlyForIP(t *testing.T) {
 func TestLockHADiscoveryPayload_LockUnlockPayloads(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{SupportsOpen: true})
-	_, body := r.lock.HADiscoveryPayload(discoveryCtx{})
+	_, body := haBody(t, r.lock.HADiscoveryComponent(discoveryCtx{}))
 
 	if v, _ := body["payload_lock"].(string); v != ipTargetLocked {
 		t.Errorf("payload_lock = %q, want %q", v, ipTargetLocked)
