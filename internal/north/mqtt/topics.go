@@ -83,34 +83,34 @@ func (b *TopicBuilder) DiscoveryConfig(component, nodeID, objectID string) strin
 // ParameterState is the canonical retained value topic for one data
 // point in one paramset bucket. Delegates to
 // [naming.PathData.MQTTState].
-func (b *TopicBuilder) ParameterState(centralName, iface, address string, channel int, bucket, parameter string) string {
+func (b *TopicBuilder) ParameterState(centralName, iface, address string, channel int, bucket payload.Bucket, parameter string) string {
 	return b.parameterPathData(centralName, iface, address, channel, bucket, parameter).MQTTState(b.Base, centralName)
 }
 
 // ParameterCommand returns the subscribed `/set` topic.
-func (b *TopicBuilder) ParameterCommand(centralName, iface, address string, channel int, bucket, parameter string) string {
+func (b *TopicBuilder) ParameterCommand(centralName, iface, address string, channel int, bucket payload.Bucket, parameter string) string {
 	return b.parameterPathData(centralName, iface, address, channel, bucket, parameter).MQTTCommand(b.Base, centralName)
 }
 
 // ParameterConfig returns the descriptor-companion `/config` topic.
-func (b *TopicBuilder) ParameterConfig(centralName, iface, address string, channel int, bucket, parameter string) string {
+func (b *TopicBuilder) ParameterConfig(centralName, iface, address string, channel int, bucket payload.Bucket, parameter string) string {
 	return b.parameterPathData(centralName, iface, address, channel, bucket, parameter).MQTTConfig(b.Base, centralName)
 }
 
 // DataPointState resolves to [TopicBuilder.ParameterState] on the
 // VALUES bucket. Retained as a back-compat alias.
 func (b *TopicBuilder) DataPointState(centralName, iface, address string, channel int, parameter string) string {
-	return b.ParameterState(centralName, iface, address, channel, string(payload.BucketValues), parameter)
+	return b.ParameterState(centralName, iface, address, channel, payload.BucketValues, parameter)
 }
 
 // DataPointCommand is the VALUES-bucket /set alias.
 func (b *TopicBuilder) DataPointCommand(centralName, iface, address string, channel int, parameter string) string {
-	return b.ParameterCommand(centralName, iface, address, channel, string(payload.BucketValues), parameter)
+	return b.ParameterCommand(centralName, iface, address, channel, payload.BucketValues, parameter)
 }
 
 // DataPointConfig is the VALUES-bucket /config alias.
 func (b *TopicBuilder) DataPointConfig(centralName, iface, address string, channel int, parameter string) string {
-	return b.ParameterConfig(centralName, iface, address, channel, string(payload.BucketValues), parameter)
+	return b.ParameterConfig(centralName, iface, address, channel, payload.BucketValues, parameter)
 }
 
 // DataPointEvent is the legacy per-event-type pulse topic. Delegates
@@ -151,7 +151,7 @@ func (b *TopicBuilder) SlotState(centralName, iface string, slot payload.TopicSl
 		pd := naming.NewCustomDPPathData(hmtypes.ParseWireInterfaceID(iface), slot.Address, slot.Channel, slot.Parameter)
 		return pd.MQTTCustomDPState(b.Base, centralName)
 	}
-	return b.ParameterState(centralName, iface, slot.Address, slot.Channel, string(slot.Bucket), slot.Parameter)
+	return b.ParameterState(centralName, iface, slot.Address, slot.Channel, slot.Bucket, slot.Parameter)
 }
 
 // SlotConfig resolves to the matching descriptor-companion topic.
@@ -160,7 +160,7 @@ func (b *TopicBuilder) SlotConfig(centralName, iface string, slot payload.TopicS
 		pd := naming.NewCustomDPPathData(hmtypes.ParseWireInterfaceID(iface), slot.Address, slot.Channel, slot.Parameter)
 		return pd.MQTTCustomDPConfig(b.Base, centralName)
 	}
-	return b.ParameterConfig(centralName, iface, slot.Address, slot.Channel, string(slot.Bucket), slot.Parameter)
+	return b.ParameterConfig(centralName, iface, slot.Address, slot.Channel, slot.Bucket, slot.Parameter)
 }
 
 // CustomDPServiceMethod returns the per-method command topic for a
@@ -394,16 +394,16 @@ func (b *TopicBuilder) HubUpdate(centralName string) string {
 //
 // centralName is passed through because the data-point constructor needs it to
 // recover the bare interface from the wire id every caller hands in.
-func (b *TopicBuilder) parameterPathData(centralName, iface, address string, channel int, bucket, parameter string) naming.PathData {
-	if bucket == "" {
-		bucket = string(payload.BucketValues)
+func (b *TopicBuilder) parameterPathData(centralName, iface, address string, channel int, bucket payload.Bucket, parameter string) naming.PathData {
+	if bucket == payload.BucketUnset {
+		bucket = payload.BucketValues
 	}
 	return naming.NewDataPointPathData(
 		centralName,
 		hmtypes.ParseWireInterfaceID(iface),
 		address,
 		channel,
-		naming.Bucket(bucket),
+		bucket,
 		parameter,
 	)
 }

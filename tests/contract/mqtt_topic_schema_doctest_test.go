@@ -59,13 +59,13 @@ func TestMQTTTopicSchemaDoc_StateTopics(t *testing.T) {
 			// §"Concrete mapping examples" / "Actual temperature"
 			name:     "values-state/ACTUAL_TEMPERATURE",
 			docTopic: "openccu-loom/GoOtto/HmIP-RF/000C9709AEF157/1/values/ACTUAL_TEMPERATURE",
-			got:      b.ParameterState(central, iface, addr, ch, string(payload.BucketValues), "ACTUAL_TEMPERATURE"),
+			got:      b.ParameterState(central, iface, addr, ch, payload.BucketValues, "ACTUAL_TEMPERATURE"),
 		},
 		{
 			// §"State topics" table row 2: Per-DP MASTER state
 			name:     "master-state/TEMPERATURE_MINIMUM",
 			docTopic: "openccu-loom/GoOtto/HmIP-RF/000C9709AEF157/1/master/TEMPERATURE_MINIMUM",
-			got:      b.ParameterState(central, iface, addr, ch, string(payload.BucketMaster), "TEMPERATURE_MINIMUM"),
+			got:      b.ParameterState(central, iface, addr, ch, payload.BucketMaster, "TEMPERATURE_MINIMUM"),
 		},
 		{
 			// §"State topics" table row 3: Custom-DP derived state
@@ -128,13 +128,13 @@ func TestMQTTTopicSchemaDoc_CommandTopics(t *testing.T) {
 			// §"Concrete mapping examples" / "Set-point temperature"
 			name:     "values-set/SET_POINT_TEMPERATURE",
 			docTopic: "openccu-loom/GoOtto/HmIP-RF/000C9709AEF157/1/values/SET_POINT_TEMPERATURE/set",
-			got:      b.ParameterCommand(central, iface, addr, ch, string(payload.BucketValues), "SET_POINT_TEMPERATURE"),
+			got:      b.ParameterCommand(central, iface, addr, ch, payload.BucketValues, "SET_POINT_TEMPERATURE"),
 		},
 		{
 			// §"Command topics" table row 2: Write MASTER parameter
 			name:     "master-set/TEMPERATURE_MINIMUM",
 			docTopic: "openccu-loom/GoOtto/HmIP-RF/000C9709AEF157/1/master/TEMPERATURE_MINIMUM/set",
-			got:      b.ParameterCommand(central, iface, addr, ch, string(payload.BucketMaster), "TEMPERATURE_MINIMUM"),
+			got:      b.ParameterCommand(central, iface, addr, ch, payload.BucketMaster, "TEMPERATURE_MINIMUM"),
 		},
 		{
 			// §"Command topics" table row 3: Custom-DP service method

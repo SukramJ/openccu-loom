@@ -8,6 +8,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/SukramJ/go-hamqtt/model"
+	"github.com/SukramJ/go-hamqtt/topic"
+
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -41,23 +44,25 @@ const (
 //
 // String values match the [internal/payload.Bucket] enum verbatim so
 // neither layer needs translation.
-type Bucket string
+// Bucket says which paramset a path addresses. Aliased to the shared model's
+// type — see internal/payload for why there is only one of these now.
+type Bucket = model.Bucket
 
 // Bucket constants.
 const (
 	// BucketUnset is the zero value — used by Hub/Program/Sysvar path
 	// data points that do not live on a channel and therefore have no
-	// paramset context.
-	BucketUnset Bucket = ""
+	// paramset context. It renders empty and the segment disappears.
+	BucketUnset = model.BucketUnset
 	// BucketValues is the runtime VALUES paramset.
-	BucketValues Bucket = "values"
+	BucketValues = model.BucketValues
 	// BucketMaster is the operator-tunable MASTER paramset.
-	BucketMaster Bucket = "master"
+	BucketMaster = model.BucketMaster
 	// BucketCalculated is the synthetic / calculated DP family.
-	BucketCalculated Bucket = "calculated"
+	BucketCalculated = model.BucketCalculated
 	// BucketCustom is the custom-DP aggregate (climate, lock, cover,
 	// …) — the model-level source-of-truth slot.
-	BucketCustom Bucket = "custom"
+	BucketCustom = model.BucketCustom
 )
 
 // PathData is the model-layer descriptor for a single data point's
@@ -135,7 +140,7 @@ func (p PathData) IsZero() bool { return p.SetPath == "" && p.StatePath == "" }
 // All inputs are MQTT-safe-escaped via [TopicSafe]. Wire parameters
 // are upper-case by convention; bucket labels are lower-case.
 func (p PathData) MQTTState(base, centralName string) string {
-	if p.Address == "" || p.Kind == "" || p.Bucket == "" {
+	if p.Address == "" || p.Kind == "" || p.Bucket == BucketUnset {
 		return ""
 	}
 	return fmt.Sprintf(
@@ -145,7 +150,7 @@ func (p PathData) MQTTState(base, centralName string) string {
 		TopicSafe(string(p.Interface)),
 		TopicSafe(p.Address),
 		p.ChannelNo,
-		TopicSafe(string(p.Bucket)),
+		TopicSafe(p.Bucket.String()),
 		TopicSafe(p.Kind),
 	)
 }
@@ -555,9 +560,22 @@ func NewCustomDPPathData(iface hmtypes.WireInterfaceID, address string, channelN
 // Exported because adapter packages (north/mqtt) escape their own
 // non-PathData segments (bridge status, hub topics) and the same
 // rule must apply consistently.
+//
+// Delegates to the shared model. That one also folds tab, newline, carriage
+// return and NUL, which this never did — strictly safer, and a device name
+// containing one of those was already producing a topic no broker would
+// route sensibly.
+//
+// Note the sibling [DiscoverySlug] is deliberately NOT delegated to
+// topic.Slug yet, although the two agree on every German case. They differ
+// on three: topic.Slug collapses a double underscore, and it transliterates
+// accented Latin characters that DiscoverySlug drops outright — "café"
+// slugs to "caf" here and "cafe" there, so "Café" and "Caf" collide today.
+// The shared behaviour is better, but adopting it moves published object
+// ids, so it belongs with the unique_id re-key (ADR 0070, phase 3 step 11)
+// where there is a migration note, not here.
 func TopicSafe(s string) string {
-	replacer := strings.NewReplacer("+", "_", "#", "_", "/", "_", " ", "_")
-	return replacer.Replace(s)
+	return topic.Safe(s)
 }
 
 // NewDataPointPathData builds the path data for a channel-bound data
@@ -590,7 +608,7 @@ func NewDataPointPathData(centralName string, iface hmtypes.WireInterfaceID, add
 	if address == "" || kind == "" {
 		return EmptyPathData
 	}
-	if bucket == "" {
+	if bucket == BucketUnset {
 		// Default to VALUES — preserves the historic single-bucket
 		// behaviour for callers that have not yet been migrated.
 		bucket = BucketValues
@@ -599,12 +617,12 @@ func NewDataPointPathData(centralName string, iface hmtypes.WireInterfaceID, add
 	upperKind := strings.ToUpper(kind)
 
 	var sb strings.Builder
-	sb.Grow(len(upperAddr) + len(upperKind) + len(bucket) + 8)
+	sb.Grow(len(upperAddr) + len(upperKind) + len(bucket.String()) + 8)
 	sb.WriteString(upperAddr)
 	sb.WriteByte('/')
 	sb.WriteString(strconv.Itoa(channelNo))
 	sb.WriteByte('/')
-	sb.WriteString(string(bucket))
+	sb.WriteString(bucket.String())
 	sb.WriteByte('/')
 	sb.WriteString(upperKind)
 	item := sb.String()

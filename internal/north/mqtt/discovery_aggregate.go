@@ -406,7 +406,7 @@ func customDPSlotForEvent(ev Event) (payload.TopicSlot, bool) {
 	if slot.Address == "" {
 		slot.Address = ev.DeviceAddress
 	}
-	if slot.Bucket == "" {
+	if slot.Bucket == payload.BucketUnset {
 		slot.Bucket = payload.BucketCustom
 	}
 	return slot, true
@@ -433,7 +433,7 @@ func (c discoveryCtx) WireParameterStateTopic(parameter string) string {
 	// `value_template "{{ value_json.value }}"`.
 	return c.d.TopicBuilder.ParameterState(
 		c.d.centralFor(c.ev), c.ev.Interface, c.ev.DeviceAddress, c.ev.ChannelNo,
-		string(payload.BucketValues), parameter,
+		payload.BucketValues, parameter,
 	)
 }
 
@@ -444,7 +444,7 @@ func (c discoveryCtx) WireParameterStateTopicOn(channelAddress, parameter string
 	}
 	return c.d.TopicBuilder.ParameterState(
 		c.d.centralFor(c.ev), c.ev.Interface, deviceAddr, channelNo,
-		string(payload.BucketValues), parameter,
+		payload.BucketValues, parameter,
 	)
 }
 

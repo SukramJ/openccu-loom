@@ -40,7 +40,7 @@ func TestNewChannelPathData_Populated(t *testing.T) {
 	if pd.Address != "VCU1234567" || pd.ChannelNo != 2 || pd.Interface != wireHmIPRF {
 		t.Errorf("unexpected fields: %+v", pd)
 	}
-	if pd.Bucket != "" || pd.Kind != "" {
+	if pd.Bucket != BucketUnset || pd.Kind != "" {
 		t.Errorf("bucket/kind must be empty for channel PathData, got bucket=%q kind=%q", pd.Bucket, pd.Kind)
 	}
 }

@@ -631,7 +631,7 @@ func TestTopicBuilderParamterPathDataEmptyBucket(t *testing.T) {
 	t.Parallel()
 	tb := NewTopicBuilder("gh")
 	// ParameterState with empty bucket → defaults to "values".
-	got := tb.ParameterState("ccu", "HmIP-RF", "0001ABCD", 1, "", "STATE")
+	got := tb.ParameterState("ccu", "HmIP-RF", "0001ABCD", 1, pload.BucketUnset, "STATE")
 	want := "gh/ccu/HmIP-RF/0001ABCD/1/values/STATE"
 	if got != want {
 		t.Fatalf("ParameterState empty bucket: got %q want %q", got, want)

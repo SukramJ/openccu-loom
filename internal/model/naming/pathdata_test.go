@@ -97,7 +97,7 @@ func TestNewDataPointPathData_EmptyInputsReturnZero(t *testing.T) {
 
 func TestNewDataPointPathData_EmptyBucketDefaultsToValues(t *testing.T) {
 	t.Parallel()
-	pd := NewDataPointPathData("", wireHmIPRF, "VCU1", 0, "", "STATE")
+	pd := NewDataPointPathData("", wireHmIPRF, "VCU1", 0, BucketUnset, "STATE")
 	if pd.Bucket != BucketValues {
 		t.Errorf("Bucket = %q, want %q (empty bucket → VALUES default)", pd.Bucket, BucketValues)
 	}

@@ -3,7 +3,11 @@
 
 package payload
 
-import "github.com/SukramJ/openccu-loom/pkg/hmenum"
+import (
+	"github.com/SukramJ/go-hamqtt/model"
+
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+)
 
 // Bucket identifies the paramset / kind segment a [TopicSlot] lives
 // under. Mirrors ADR 0011 §"Topic hierarchy" — the four explicit
@@ -12,22 +16,32 @@ import "github.com/SukramJ/openccu-loom/pkg/hmenum"
 //
 // The strings are stable wire identifiers — they appear verbatim in
 // MQTT topic paths consumers depend on.
-type Bucket string
+// Bucket says which paramset a data point belongs to. It is an alias for the
+// shared model's type rather than a second declaration of the same four
+// values: loom used to carry two of these — one here, one in
+// internal/model/naming — kept in step by a comment and bridged by a cast.
+// ADR 0070 collapses them.
+type Bucket = model.Bucket
 
-// Bucket values. The literal string is the topic-segment name.
+// Bucket values. The rendered string is the topic-segment name.
 const (
+	// BucketUnset is the zero value: a hub-level data point that lives on no
+	// channel and therefore has no paramset. It renders empty, so the segment
+	// drops out of the topic entirely.
+	BucketUnset = model.BucketUnset
+
 	// BucketValues is the VALUES paramset bucket — the runtime state
 	// of a parameter (the values HA's normal entities consume).
-	BucketValues Bucket = "values"
+	BucketValues = model.BucketValues
 
 	// BucketMaster is the MASTER paramset bucket — operator-tunable
 	// configuration parameters (HA's `entity_category=config`).
-	BucketMaster Bucket = "master"
+	BucketMaster = model.BucketMaster
 
 	// BucketCalculated is the calculated / synthetic data-point
 	// bucket — derived sensors like DEW_POINT computed from other
 	// observed parameters on the channel.
-	BucketCalculated Bucket = "calculated"
+	BucketCalculated = model.BucketCalculated
 
 	// BucketCustom is the custom-DP aggregate bucket — Climate /
 	// Cover / Lock / Light / Siren / Switch / Valve / TextDisplay
@@ -35,7 +49,7 @@ const (
 	// The custom-DP state topic carries derived fields only
 	// (`hvac_mode`, `preset_mode`, `action`, …); direct wire values
 	// stay under values/<param>/state.
-	BucketCustom Bucket = "custom"
+	BucketCustom = model.BucketCustom
 )
 
 // TopicSlot identifies a source's address in the MQTT topic tree

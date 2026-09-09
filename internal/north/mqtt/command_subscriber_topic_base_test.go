@@ -167,7 +167,7 @@ func TestCommandSubscriberParsesEveryShapeRelativeToTheTopicBase(t *testing.T) {
 			name:   "datapoint values bucket",
 			filter: "/+/+/+/+/+/+/set",
 			topic: func(b *TopicBuilder) string {
-				return b.ParameterCommand(central, iface, addr, 1, string(payload.BucketValues), "STATE")
+				return b.ParameterCommand(central, iface, addr, 1, payload.BucketValues, "STATE")
 			},
 			body: []byte("true"),
 			want: func(t *testing.T, s *commandPlaneSinks) {
@@ -185,7 +185,7 @@ func TestCommandSubscriberParsesEveryShapeRelativeToTheTopicBase(t *testing.T) {
 			name:   "datapoint master bucket",
 			filter: "/+/+/+/+/+/+/set",
 			topic: func(b *TopicBuilder) string {
-				return b.ParameterCommand(central, iface, addr, 1, string(payload.BucketMaster), "TEMPERATURE_MINIMUM")
+				return b.ParameterCommand(central, iface, addr, 1, payload.BucketMaster, "TEMPERATURE_MINIMUM")
 			},
 			body: []byte("17.5"),
 			want: func(t *testing.T, s *commandPlaneSinks) {
