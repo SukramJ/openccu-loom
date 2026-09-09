@@ -43,8 +43,27 @@ import (
 // Shape against
 // `script/discovery_snapshot_diff.py` performs the structural diff.
 //
-// The test always succeeds (it dumps; it does not assert). The diff
-// script produces the pass / fail signal in CI.
+// The test always succeeds: it dumps, it does not assert.
+//
+// It produces NO pass/fail signal, in CI or anywhere else. Nothing invokes
+// `script/discovery_snapshot_diff.py` — not a workflow, not a Makefile target
+// — and the snapshot it writes is gitignored (.gitignore:138), so there is no
+// committed artefact to diff against either. Both halves of the comparison are
+// local and manual. This comment used to claim the script produced the signal
+// in CI; it never did.
+//
+// What actually guards the discovery payloads:
+//
+//   - [TestBrokerSnapshot] asserts against the committed
+//     testdata/broker_discovery_reference.json, and runs in CI through
+//     `make coverage` (integration.yml). That is the real regression net.
+//   - internal/north/mqtt's discovery_ha_schema_test.go and
+//     discovery_payload_test.go run in the ordinary test job.
+//   - discovery_snapshot_field_diff_test.go SKIPS in CI: it needs this
+//     gitignored snapshot plus a Python-produced homematicip_local one, and
+//     neither exists there. It passes without testing anything.
+//
+// Keep that in mind before leaning on this test to catch a discovery change.
 func TestDiscoverySnapshotDumpAgainstGodevccu(t *testing.T) {
 	srv := startMockCCUWithDevices(t, snapshotDevices(t))
 
