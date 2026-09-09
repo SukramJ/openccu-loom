@@ -163,6 +163,7 @@ nav:
           - ADR 0067 — North surface is a model API: adr/0067-north-surface-is-a-model-api.md
           - ADR 0068 — What unique_id promises, per plane: adr/0068-unique-id-stability-per-plane.md
           - ADR 0069 — Master-profile surface serves link data: adr/0069-master-profile-surface-serves-link-data.md
+          - ADR 0070 — Shared HA discovery model module: adr/0070-shared-ha-discovery-model-module.md
   - Credits: attribution.md
 
 # Only the mkdocs machinery itself is excluded. Everything else under
