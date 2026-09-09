@@ -4,7 +4,7 @@
 package mqtt
 
 // ApplyEntityDescription overlays
-// EntityDescription for (component, parameter, model, unit, postfix)
+// HARegistryDescription for (component, parameter, model, unit, postfix)
 // Onto a discovery body.
 // REGISTRY is the authoritative HA-attribute source.
 //

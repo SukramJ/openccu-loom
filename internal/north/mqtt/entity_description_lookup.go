@@ -36,42 +36,42 @@ package mqtt
 // device model — exact hit first, then any device-prefix match.
 // Domain-only tables (cover / siren / valve) use this helper because
 // they have no per-parameter constraint.
-func lookupDeviceOnlyRules(byDevice map[devParam]EntityDescription, deviceModel string) (EntityDescription, bool) {
+func lookupDeviceOnlyRules(byDevice map[devParam]HARegistryDescription, deviceModel string) (HARegistryDescription, bool) {
 	if byDevice == nil {
-		return EntityDescription{}, false
+		return HARegistryDescription{}, false
 	}
 	if d, ok := byDevice[devParam{deviceModel, ""}]; ok {
 		return d, true
 	}
-	for k, d := range byDevice {
+	for k := range byDevice {
 		if k.parameter != "" {
 			continue
 		}
 		if hasModelPrefix(deviceModel, k.devicePrefix) {
-			return d, true
+			return byDevice[k], true
 		}
 	}
-	return EntityDescription{}, false
+	return HARegistryDescription{}, false
 }
 
 // lookupRulesByDeviceAndParam consults `byDevice` first (exact +
 // prefix), then falls through to `byParam`. Used by every per-domain
 // route below to avoid repeating the same boilerplate.
 func lookupRulesByDeviceAndParam(
-	byDevice map[devParam]EntityDescription,
-	byParam map[string]EntityDescription,
+	byDevice map[devParam]HARegistryDescription,
+	byParam map[string]HARegistryDescription,
 	deviceModel, parameter string,
-) (EntityDescription, bool) {
+) (HARegistryDescription, bool) {
 	if byDevice != nil {
 		if d, ok := byDevice[devParam{deviceModel, parameter}]; ok {
 			return d, true
 		}
-		for k, d := range byDevice {
+		for k := range byDevice {
 			if k.parameter != parameter {
 				continue
 			}
 			if hasModelPrefix(deviceModel, k.devicePrefix) {
-				return d, true
+				return byDevice[k], true
 			}
 		}
 	}
@@ -80,13 +80,13 @@ func lookupRulesByDeviceAndParam(
 			return d, true
 		}
 	}
-	return EntityDescription{}, false
+	return HARegistryDescription{}, false
 }
 
 // LookupSensorRule routes a sensor lookup through the
 // the upstream HA-integration reference rule tables. Returns the merged description when
 // any tier produces a hit.
-func LookupSensorRule(deviceModel, parameter string) (EntityDescription, bool) {
+func LookupSensorRule(deviceModel, parameter string) (HARegistryDescription, bool) {
 	return lookupRulesByDeviceAndParam(
 		sensorRulesByDeviceAndParam,
 		sensorRulesByParam,
@@ -95,7 +95,7 @@ func LookupSensorRule(deviceModel, parameter string) (EntityDescription, bool) {
 }
 
 // LookupBinarySensorRule — see [LookupSensorRule].
-func LookupBinarySensorRule(deviceModel, parameter string) (EntityDescription, bool) {
+func LookupBinarySensorRule(deviceModel, parameter string) (HARegistryDescription, bool) {
 	return lookupRulesByDeviceAndParam(
 		binarySensorRulesByDeviceAndParam,
 		binarySensorRulesByParam,
@@ -104,7 +104,7 @@ func LookupBinarySensorRule(deviceModel, parameter string) (EntityDescription, b
 }
 
 // LookupNumberRule — see [LookupSensorRule].
-func LookupNumberRule(deviceModel, parameter string) (EntityDescription, bool) {
+func LookupNumberRule(deviceModel, parameter string) (HARegistryDescription, bool) {
 	return lookupRulesByDeviceAndParam(
 		numberRulesByDeviceAndParam,
 		numberRulesByParam,
@@ -113,7 +113,7 @@ func LookupNumberRule(deviceModel, parameter string) (EntityDescription, bool) {
 }
 
 // LookupSwitchRule — see [LookupSensorRule].
-func LookupSwitchRule(deviceModel, parameter string) (EntityDescription, bool) {
+func LookupSwitchRule(deviceModel, parameter string) (HARegistryDescription, bool) {
 	return lookupRulesByDeviceAndParam(
 		switchRulesByDeviceAndParam,
 		switchRulesByParam,
@@ -125,13 +125,13 @@ func LookupSwitchRule(deviceModel, parameter string) (EntityDescription, bool) {
 // only (every entry's parameter slot is the empty string), so the
 // `parameter` argument is ignored. The lookup returns the first
 // (exact or prefix) device match.
-func LookupCoverRule(deviceModel, _ string) (EntityDescription, bool) {
+func LookupCoverRule(deviceModel, _ string) (HARegistryDescription, bool) {
 	return lookupDeviceOnlyRules(coverRulesByDeviceAndParam, deviceModel)
 }
 
 // LookupLockRule — see [LookupSensorRule].
 // (the upstream HA-integration reference has only a param-only rule for lock.)
-func LookupLockRule(deviceModel, parameter string) (EntityDescription, bool) {
+func LookupLockRule(deviceModel, parameter string) (HARegistryDescription, bool) {
 	return lookupRulesByDeviceAndParam(
 		nil,
 		lockRulesByParam,
@@ -141,17 +141,17 @@ func LookupLockRule(deviceModel, parameter string) (EntityDescription, bool) {
 
 // LookupSirenRule — see [LookupSensorRule]. Like Cover, siren rules
 // are device-only.
-func LookupSirenRule(deviceModel, _ string) (EntityDescription, bool) {
+func LookupSirenRule(deviceModel, _ string) (HARegistryDescription, bool) {
 	return lookupDeviceOnlyRules(sirenRulesByDeviceAndParam, deviceModel)
 }
 
 // LookupValveRule — see [LookupSensorRule]. Device-only.
-func LookupValveRule(deviceModel, _ string) (EntityDescription, bool) {
+func LookupValveRule(deviceModel, _ string) (HARegistryDescription, bool) {
 	return lookupDeviceOnlyRules(valveRulesByDeviceAndParam, deviceModel)
 }
 
 // LookupButtonRule — see [LookupSensorRule].
-func LookupButtonRule(deviceModel, parameter string) (EntityDescription, bool) {
+func LookupButtonRule(deviceModel, parameter string) (HARegistryDescription, bool) {
 	return lookupRulesByDeviceAndParam(
 		nil,
 		buttonRulesByParam,
@@ -160,7 +160,7 @@ func LookupButtonRule(deviceModel, parameter string) (EntityDescription, bool) {
 }
 
 // LookupSelectRule — see [LookupSensorRule].
-func LookupSelectRule(deviceModel, parameter string) (EntityDescription, bool) {
+func LookupSelectRule(deviceModel, parameter string) (HARegistryDescription, bool) {
 	return lookupRulesByDeviceAndParam(
 		nil,
 		selectRulesByParam,
@@ -175,7 +175,7 @@ func LookupSelectRule(deviceModel, parameter string) (EntityDescription, bool) {
 // the upstream HA-integration reference rules (climate, light, update, text, event,
 // text_display) return false — the discovery payload falls through to
 // the descriptor / classifier defaults.
-func LookupRulesForComponent(comp HAComponent, deviceModel, parameter string) (EntityDescription, bool) {
+func LookupRulesForComponent(comp HAComponent, deviceModel, parameter string) (HARegistryDescription, bool) {
 	switch comp { //nolint:exhaustive // climate / light / event / update / text return descriptor defaults — explicit fallthrough at the end
 
 	case HAComponentSensor:
@@ -199,5 +199,5 @@ func LookupRulesForComponent(comp HAComponent, deviceModel, parameter string) (E
 	case HAComponentSelect:
 		return LookupSelectRule(deviceModel, parameter)
 	}
-	return EntityDescription{}, false
+	return HARegistryDescription{}, false
 }

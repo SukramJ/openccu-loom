@@ -588,14 +588,14 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 	// derive precision from a parameter-name table to avoid over-emitting
 	// vs. the HA-native integration.
 
-	// MqttEntityDescription overrides — applied after the Quantity-based resolution
+	// HARegistryDescription overrides — applied after the Quantity-based resolution
 	// so the per-parameter/device table takes precedence over the Quantity-derived defaults.
-	if desc := EntityDescriptionFor(comp, ev.Model, ev.Parameter); desc != (MqttEntityDescription{}) {
+	if desc := EntityDescriptionFor(comp, ev.Model, ev.Parameter); desc.HasHAOverrides() {
 		if desc.EntityCategory != "" {
 			body["entity_category"] = desc.EntityCategory
 		}
-		if desc.EnabledDefault != nil {
-			body["enabled_by_default"] = *desc.EnabledDefault
+		if desc.EnabledByDefault != nil {
+			body["enabled_by_default"] = *desc.EnabledByDefault
 		}
 		if desc.Icon != "" {
 			body["icon"] = desc.Icon
@@ -813,7 +813,7 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 			// to multiply.
 			applyMultiplierNumber(ev, body, stateTopic, commandTopic, registryMultiplier(haDesc))
 			// unit_of_measurement defaults to the Python reference
-			// implementation's `data_point.unit` when the EntityDescription
+			// implementation's `data_point.unit` when the HARegistryDescription
 			// doesn't override (`number.py:236-237`). Mirror that here so
 			// wire units like "s" / "%" / "°C" propagate to HA.
 			if _, has := body["unit_of_measurement"]; !has {

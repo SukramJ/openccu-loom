@@ -9,7 +9,7 @@ package mqtt
 // implementation's hub.py and must not be silently dropped.
 //
 //nolint:unused // anchor — hub discovery consumer pending; maps must not drop
-var _ = [5]map[string]EntityDescription{
+var _ = [5]map[string]HARegistryDescription{
 	hubButtonRulesByName,
 	hubSensorRulesByName,
 	hubSysvarSensorRulesByName,
@@ -41,16 +41,12 @@ var _ = [5]map[string]EntityDescription{
 // Buttons have no device_class, state_class, or unit; entity_category is
 // absent (primary action). EnabledByDefault follows the Python factory
 // default for HmButtonEntityDescription (enabled_default not set → true).
-var hubButtonRulesByName = map[string]EntityDescription{
+var hubButtonRulesByName = map[string]HARegistryDescription{
 	"INSTALL_MODE_HMIP_BUTTON": {
-		Key:                       "INSTALL_MODE_HMIP_BUTTON",
-		EnabledByDefault:          true,
-		SuggestedDisplayPrecision: -1,
+		Key: "INSTALL_MODE_HMIP_BUTTON",
 	},
 	"INSTALL_MODE_BIDCOS_BUTTON": {
-		Key:                       "INSTALL_MODE_BIDCOS_BUTTON",
-		EnabledByDefault:          true,
-		SuggestedDisplayPrecision: -1,
+		Key: "INSTALL_MODE_BIDCOS_BUTTON",
 	},
 }
 
@@ -58,34 +54,24 @@ var hubButtonRulesByName = map[string]EntityDescription{
 // plain HUB_SENSOR data points whose names contain one of these substrings.
 // Mirrors hub.py lines 43–87 (ALARM_MESSAGES, SERVICE_MESSAGES,
 // INSTALL_MODE_HMIP, INSTALL_MODE_BIDCOS, INBOX_SENSOR_NAME="inbox").
-var hubSensorRulesByName = map[string]EntityDescription{
+var hubSensorRulesByName = map[string]HARegistryDescription{
 	"ALARM_MESSAGES": {
-		Key:                       "ALARM_MESSAGES",
-		StateClass:                "measurement",
-		EnabledByDefault:          true,
-		SuggestedDisplayPrecision: -1,
+		Key:        "ALARM_MESSAGES",
+		StateClass: "measurement",
 	},
 	"SERVICE_MESSAGES": {
-		Key:                       "SERVICE_MESSAGES",
-		StateClass:                "measurement",
-		EnabledByDefault:          true,
-		SuggestedDisplayPrecision: -1,
+		Key:        "SERVICE_MESSAGES",
+		StateClass: "measurement",
 	},
 	"INSTALL_MODE_HMIP": {
-		Key:                       "INSTALL_MODE_HMIP",
-		EnabledByDefault:          true,
-		SuggestedDisplayPrecision: -1,
+		Key: "INSTALL_MODE_HMIP",
 	},
 	"INSTALL_MODE_BIDCOS": {
-		Key:                       "INSTALL_MODE_BIDCOS",
-		EnabledByDefault:          true,
-		SuggestedDisplayPrecision: -1,
+		Key: "INSTALL_MODE_BIDCOS",
 	},
 	// INBOX_SENSOR_NAME = "inbox".
 	"inbox": {
-		Key:                       "INBOX",
-		EnabledByDefault:          true,
-		SuggestedDisplayPrecision: -1,
+		Key: "INBOX",
 	},
 }
 
@@ -97,73 +83,57 @@ var hubSensorRulesByName = map[string]EntityDescription{
 //   - Wh  = UnitOfEnergy.WATT_HOUR
 //   - mm  = UnitOfLength.MILLIMETERS
 //   - min = UnitOfTime.MINUTES
-var hubSysvarSensorRulesByName = map[string]EntityDescription{
+var hubSysvarSensorRulesByName = map[string]HARegistryDescription{
 	// Energy counter (total_increasing, Wh)
 	// Note: svEnergyCounterFeedIn must be matched before svEnergyCounter
 	// (longer substring first) when doing contains-checks at runtime.
 	"svEnergyCounterFeedIn": {
-		Key:                       "ENERGY_COUNTER_FEED_IN",
-		DeviceClass:               "energy",
-		UnitOfMeasurement:         "Wh",
-		StateClass:                "total_increasing",
-		EnabledByDefault:          true,
-		SuggestedDisplayPrecision: -1,
+		Key:               "ENERGY_COUNTER_FEED_IN",
+		DeviceClass:       "energy",
+		UnitOfMeasurement: "Wh",
+		StateClass:        "total_increasing",
 	},
 	"svEnergyCounter": {
-		Key:                       "ENERGY_COUNTER",
-		DeviceClass:               "energy",
-		UnitOfMeasurement:         "Wh",
-		StateClass:                "total_increasing",
-		EnabledByDefault:          true,
-		SuggestedDisplayPrecision: -1,
+		Key:               "ENERGY_COUNTER",
+		DeviceClass:       "energy",
+		UnitOfMeasurement: "Wh",
+		StateClass:        "total_increasing",
 	},
 	// Rain counter (total_increasing, mm)
 	// Order matters for contains-matching: longer keys first.
 	"svHmIPRainCounterToday": {
-		Key:                       "RAIN_COUNTER_TODAY",
-		UnitOfMeasurement:         "mm",
-		StateClass:                "total_increasing",
-		EnabledByDefault:          true,
-		SuggestedDisplayPrecision: -1,
+		Key:               "RAIN_COUNTER_TODAY",
+		UnitOfMeasurement: "mm",
+		StateClass:        "total_increasing",
 	},
 	"svHmIPRainCounterYesterday": {
-		Key:                       "RAIN_COUNTER_YESTERDAY",
-		UnitOfMeasurement:         "mm",
-		StateClass:                "total_increasing",
-		EnabledByDefault:          true,
-		SuggestedDisplayPrecision: -1,
+		Key:               "RAIN_COUNTER_YESTERDAY",
+		UnitOfMeasurement: "mm",
+		StateClass:        "total_increasing",
 	},
 	"svHmIPRainCounter": {
-		Key:                       "RAIN_COUNTER",
-		UnitOfMeasurement:         "mm",
-		StateClass:                "total_increasing",
-		EnabledByDefault:          true,
-		SuggestedDisplayPrecision: -1,
+		Key:               "RAIN_COUNTER",
+		UnitOfMeasurement: "mm",
+		StateClass:        "total_increasing",
 	},
 	// Sunshine counter (total_increasing, min, device_class=duration)
 	"svHmIPSunshineCounterToday": {
-		Key:                       "SUNSHINE_COUNTER_TODAY",
-		DeviceClass:               "duration",
-		UnitOfMeasurement:         "min",
-		StateClass:                "total_increasing",
-		EnabledByDefault:          true,
-		SuggestedDisplayPrecision: -1,
+		Key:               "SUNSHINE_COUNTER_TODAY",
+		DeviceClass:       "duration",
+		UnitOfMeasurement: "min",
+		StateClass:        "total_increasing",
 	},
 	"svHmIPSunshineCounterYesterday": {
-		Key:                       "SUNSHINE_COUNTER_YESTERDAY",
-		DeviceClass:               "duration",
-		UnitOfMeasurement:         "min",
-		StateClass:                "total_increasing",
-		EnabledByDefault:          true,
-		SuggestedDisplayPrecision: -1,
+		Key:               "SUNSHINE_COUNTER_YESTERDAY",
+		DeviceClass:       "duration",
+		UnitOfMeasurement: "min",
+		StateClass:        "total_increasing",
 	},
 	"svHmIPSunshineCounter": {
-		Key:                       "SUNSHINE_COUNTER",
-		DeviceClass:               "duration",
-		UnitOfMeasurement:         "min",
-		StateClass:                "total_increasing",
-		EnabledByDefault:          true,
-		SuggestedDisplayPrecision: -1,
+		Key:               "SUNSHINE_COUNTER",
+		DeviceClass:       "duration",
+		UnitOfMeasurement: "min",
+		StateClass:        "total_increasing",
 	},
 }
 
@@ -179,15 +149,14 @@ var hubSysvarSensorRulesByName = map[string]EntityDescription{
 // DIAGNOSTIC, state_class=MEASUREMENT, enabled_default=True because
 // enabled_default is passed explicitly as True). Mirrors hub.py lines
 // 185–222.
-var hubMetricSensorRulesByName = map[string]EntityDescription{
+var hubMetricSensorRulesByName = map[string]HARegistryDescription{
 	// system_health — percentage, no device_class
 	"system_health": {
 		Key:                       "SYSTEM_HEALTH",
 		EntityCategory:            EntityCategoryDiagnostic,
 		Icon:                      "mdi:heart-pulse",
 		StateClass:                "measurement",
-		EnabledByDefault:          true,
-		SuggestedDisplayPrecision: 1,
+		SuggestedDisplayPrecision: entityIntPtr(1),
 	},
 	// connection_latency — duration in milliseconds
 	"connection_latency": {
@@ -197,8 +166,7 @@ var hubMetricSensorRulesByName = map[string]EntityDescription{
 		EntityCategory:            EntityCategoryDiagnostic,
 		Icon:                      "mdi:timer-outline",
 		StateClass:                "measurement",
-		EnabledByDefault:          true,
-		SuggestedDisplayPrecision: 1,
+		SuggestedDisplayPrecision: entityIntPtr(1),
 	},
 	// last_event_age — duration in seconds
 	"last_event_age": {
@@ -208,8 +176,7 @@ var hubMetricSensorRulesByName = map[string]EntityDescription{
 		EntityCategory:            EntityCategoryDiagnostic,
 		Icon:                      "mdi:clock-alert-outline",
 		StateClass:                "measurement",
-		EnabledByDefault:          true,
-		SuggestedDisplayPrecision: 1,
+		SuggestedDisplayPrecision: entityIntPtr(1),
 	},
 }
 
@@ -218,11 +185,9 @@ var hubMetricSensorRulesByName = map[string]EntityDescription{
 //
 // CONNECTIVITY_SENSOR_PREFIX = "Connectivity".
 // Mirrors hub.py lines 88–95.
-var hubBinarySensorRulesByName = map[string]EntityDescription{
+var hubBinarySensorRulesByName = map[string]HARegistryDescription{
 	"Connectivity": {
-		Key:                       "CONNECTIVITY_SENSOR",
-		DeviceClass:               "connectivity",
-		EnabledByDefault:          true,
-		SuggestedDisplayPrecision: -1,
+		Key:         "CONNECTIVITY_SENSOR",
+		DeviceClass: "connectivity",
 	},
 }

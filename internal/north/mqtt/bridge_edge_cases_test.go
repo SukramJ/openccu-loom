@@ -2114,9 +2114,9 @@ func TestEntityDescriptionForExtText(t *testing.T) {
 
 func TestEntityDescriptionForExtUnknownNoResult(t *testing.T) {
 	t.Parallel()
-	// No rules → zero MqttEntityDescription.
+	// No rules → zero HARegistryDescription.
 	got := EntityDescriptionForExt(HAComponentClimate, "UNKNOWN-DEVICE", "UNKNOWN_PARAM", "", "", "")
-	if got != (MqttEntityDescription{}) {
+	if got.HasHAOverrides() {
 		// Some device-class lookups may still return non-zero — just verify no panic.
 		_ = got
 	}
@@ -2788,8 +2788,8 @@ func TestLookupDeviceOnlyRulesNilMap(t *testing.T) {
 func TestLookupDeviceOnlyRulesNonEmptyParameterSkipped(t *testing.T) {
 	t.Parallel()
 	// Entries with non-empty parameter must be skipped by the device-only walk.
-	m := map[devParam]EntityDescription{
-		{devicePrefix: "HmIP", parameter: "STATE"}: {EnabledByDefault: true},
+	m := map[devParam]HARegistryDescription{
+		{devicePrefix: "HmIP", parameter: "STATE"}: {EnabledByDefault: entityBoolPtr(true)},
 	}
 	_, ok := lookupDeviceOnlyRules(m, "HmIP-PSM")
 	if ok {

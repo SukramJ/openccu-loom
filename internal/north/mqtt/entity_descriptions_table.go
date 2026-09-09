@@ -58,7 +58,24 @@ type HARegistryDescriptionRule struct {
 	Priority        int
 }
 
-func entityIntPtr(v int) *int             { return &v }
+func entityIntPtr(v int) *int { return &v }
+
+// HasHAOverrides reports whether the description carries any of the seven
+// Home Assistant attribute fields the discovery body reads.
+//
+// It deliberately ignores Key, TranslationKey, Options, NameSource and
+// Multiplier. Before the three description types were collapsed, this call
+// site compared against an empty MqttEntityDescription — a shape that had
+// only these seven fields, because descToMqtt dropped the rest. An entry
+// carrying nothing but a Key therefore counted as empty and the override
+// block was skipped. Checking every field of the unified type would silently
+// change that, so the comparison keeps the old surface.
+func (d HARegistryDescription) HasHAOverrides() bool {
+	return d.DeviceClass != "" || d.StateClass != "" || d.UnitOfMeasurement != "" ||
+		d.EntityCategory != "" || d.Icon != "" ||
+		d.EnabledByDefault != nil || d.SuggestedDisplayPrecision != nil
+}
+
 func entityFloat64Ptr(v float64) *float64 { return &v }
 func entityBoolPtr(v bool) *bool          { return &v }
 

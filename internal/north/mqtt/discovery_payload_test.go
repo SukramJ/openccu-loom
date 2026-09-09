@@ -1722,8 +1722,10 @@ func TestSirenRuleTableHmIPSWSDDisabledByDefault(t *testing.T) {
 	if !ok {
 		t.Fatal("LookupSirenRule(HmIP-SWSD, STATE) returned ok=false")
 	}
-	if desc.EnabledByDefault != false {
-		t.Errorf("EnabledByDefault=%v want false for HmIP-SWSD", desc.EnabledByDefault)
+	// Tri-state now: nil means "HA's default", so an explicit disable has to
+	// be a non-nil false rather than merely a falsy value.
+	if desc.EnabledByDefault == nil || *desc.EnabledByDefault {
+		t.Errorf("EnabledByDefault=%v want an explicit false for HmIP-SWSD", desc.EnabledByDefault)
 	}
 }
 
@@ -1786,8 +1788,11 @@ func TestBinarySensorMissingEntriesH019(t *testing.T) {
 			if desc.Key != tc.wantKey {
 				t.Errorf("Key=%q want %q", desc.Key, tc.wantKey)
 			}
-			if desc.EnabledByDefault != tc.wantEnabledByDefault {
-				t.Errorf("EnabledByDefault=%v want %v", desc.EnabledByDefault, tc.wantEnabledByDefault)
+			// nil means "HA's default", which is true. The table's booleans
+			// describe the effective value, so resolve the pointer first.
+			enabled := desc.EnabledByDefault == nil || *desc.EnabledByDefault
+			if enabled != tc.wantEnabledByDefault {
+				t.Errorf("EnabledByDefault=%v want %v", enabled, tc.wantEnabledByDefault)
 			}
 		})
 	}

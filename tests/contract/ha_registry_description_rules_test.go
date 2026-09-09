@@ -10,7 +10,7 @@ package contract
 // first match wins and the second entry is never reachable.
 //
 // The test does NOT compare the registry against the hand-written
-// EntityDescription maps in entity_description_rules_*.go because those
+// HARegistryDescription maps in entity_description_rules_*.go because those
 // two systems serve different lookup purposes:
 //   - haRegistryDescriptionRules: full HA-attribute set (device_class,
 //     state_class, entity_category, icon, translation_key, unit,
