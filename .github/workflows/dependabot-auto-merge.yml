@@ -16,7 +16,15 @@ jobs:
         id: meta
         uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98
       - name: Enable auto-merge for non-major updates
-        if: steps.meta.outputs.update-type != 'version-update:semver-major'
+        # go-ha-catalog is excluded deliberately. It is generated from Home
+        # Assistant and released unattended, and it stays in v0.x because Go
+        # cannot express a SemVer major without a /vN import-path change. A
+        # release that drops a vocabulary constant therefore still arrives as a
+        # *minor* bump — semver-major would never catch it, and the compile
+        # error would land on main unreviewed. See openccu-loom ADR 0070.
+        if: >-
+          steps.meta.outputs.update-type != 'version-update:semver-major' &&
+          !contains(steps.meta.outputs.dependency-names, 'go-ha-catalog')
         run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
