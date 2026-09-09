@@ -42,6 +42,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   advisories and do not fail a build. A test that fails for something
   that works is one people re-run instead of read.
 
+- **`mqtt_discovery_invalid`**, a new per-central counter, applies the
+  same check to what a running daemon actually publishes. The payload
+  still goes out: Home Assistant drops the offending key and keeps the
+  rest of the entity, so withholding the config would replace a
+  partly-working entity with no entity at all. The counter is the
+  signal — a non-zero value means a builder emits a key the schema does
+  not declare, which is otherwise invisible by construction.
+
 ### Changed
 
 - **A comment about unit spellings said the opposite of the truth.** It

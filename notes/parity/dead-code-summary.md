@@ -1,14 +1,14 @@
 # Dead-Code Summary
 
-Generated: 214aa057
-HEAD: 214aa057
+Generated: a146ae53
+HEAD: a146ae53
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 5623 |
-| Reachable | 3581 |
+| Total Exported | 5630 |
+| Reachable | 3588 |
 | Whitelisted | 1981 |
 | **Unreachable** | **61** |
 

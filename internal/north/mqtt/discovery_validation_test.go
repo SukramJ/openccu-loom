@@ -4,11 +4,14 @@
 package mqtt
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"testing"
 
 	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+
+	"github.com/SukramJ/openccu-loom/internal/metrics"
 )
 
 func mustJSON(t *testing.T, body map[string]any) []byte {
@@ -92,5 +95,57 @@ func TestValidateDiscoveryBodyRejectsMalformedInput(t *testing.T) {
 	}
 	if err := ValidateDiscoveryBody(string(HAComponentSensor), []byte(`{`)); err == nil {
 		t.Error("a truncated payload validated")
+	}
+}
+
+// TestBridgeCountsAnInvalidDiscoveryPayloadAndPublishesItAnyway pins both
+// halves of the production wiring.
+//
+// Counting is the point: a key Home Assistant does not declare is dropped with
+// no error on the wire and no line in any log, so mqtt_discovery_invalid is
+// the only signal a running daemon gives that a builder emits one.
+//
+// Publishing anyway is the other half, and it is deliberate. Home Assistant
+// drops the offending key and keeps the rest of the entity, so withholding the
+// config would replace a partly-working entity with no entity at all.
+func TestBridgeCountsAnInvalidDiscoveryPayloadAndPublishesItAnyway(t *testing.T) {
+	t.Parallel()
+
+	reg := metrics.NewRegistry()
+	col := metrics.NewMqttCollector(reg)
+	pub := &recordingPublisher{}
+	bridge := NewBridge(BridgeConfig{
+		Base:               "gh",
+		CentralName:        "inv_ccu",
+		HADiscoveryEnabled: true,
+		Collector:          col,
+	}, pub)
+
+	// `nonsense` is declared by no platform, so Home Assistant would strip it.
+	body := mustJSON(t, map[string]any{
+		"unique_id":   "u1",
+		"state_topic": "gh/x",
+		"nonsense":    1,
+	})
+	if err := bridge.publishDiscovery(context.Background(), "inv_ccu",
+		string(HAComponentSensor), "node", "obj", body); err != nil {
+		t.Fatalf("publishDiscovery: %v", err)
+	}
+
+	if got := col.DiscoveryInvalid("inv_ccu").Value(); got != 1 {
+		t.Errorf("DiscoveryInvalid = %d, want 1", got)
+	}
+	if recs := pub.records(); len(recs) != 1 {
+		t.Fatalf("the payload was withheld: %d publishes, want 1", len(recs))
+	}
+
+	// A valid payload must not move the counter, or it measures nothing.
+	valid := mustJSON(t, map[string]any{"unique_id": "u2", "state_topic": "gh/y"})
+	if err := bridge.publishDiscovery(context.Background(), "inv_ccu",
+		string(HAComponentSensor), "node", "obj2", valid); err != nil {
+		t.Fatalf("publishDiscovery (valid): %v", err)
+	}
+	if got := col.DiscoveryInvalid("inv_ccu").Value(); got != 1 {
+		t.Errorf("DiscoveryInvalid after a valid payload = %d, want 1", got)
 	}
 }
