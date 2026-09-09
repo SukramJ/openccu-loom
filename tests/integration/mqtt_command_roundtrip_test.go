@@ -392,7 +392,7 @@ func TestMQTTRawSetCommandDrivesWriteAndRepublishesState(t *testing.T) {
 	iface, dev, ch := findWritableStateChannel(t, rig.central)
 	channelAddress := ch.Address // "<addr>:<ch>"
 
-	cmdTopic := rig.topics.ParameterCommand(cmdRoundtripCentral, iface, dev.Address, ch.Number, "values", "STATE")
+	cmdTopic := rig.topics.ParameterCommand(cmdRoundtripCentral, iface, dev.Address, ch.Number, payload.BucketValues, "STATE")
 	if err := rig.cmdPub.Publish(context.Background(), cmdTopic, []byte("true"), mqtt.QoS1, false); err != nil {
 		t.Fatalf("publish command: %v", err)
 	}
@@ -489,7 +489,7 @@ func TestMQTTVirtualRemotePressButtonRoundTrip(t *testing.T) {
 	iface, dev, ch := findVirtualRemotePressChannel(t, rig.central)
 	channelAddress := ch.Address
 
-	cmdTopic := rig.topics.ParameterCommand(cmdRoundtripCentral, iface, dev.Address, ch.Number, "values", "PRESS_SHORT")
+	cmdTopic := rig.topics.ParameterCommand(cmdRoundtripCentral, iface, dev.Address, ch.Number, payload.BucketValues, "PRESS_SHORT")
 	if err := rig.cmdPub.Publish(context.Background(), cmdTopic, []byte("PRESS"), mqtt.QoS1, false); err != nil {
 		t.Fatalf("publish PRESS command: %v", err)
 	}
