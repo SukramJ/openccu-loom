@@ -572,10 +572,15 @@ func TestDiscoveryRoundTrip_Climate(t *testing.T) {
 // --- siren ------------------------------------------------------------------
 
 // TestDiscoveryRoundTrip_Siren drives the ACTUAL siren-builder output.
-// HA's strict siren schema requires the value_template output to match
-// state_on / state_off; the builder emits `{{ value_json.state }}` and
-// the StatePayload publishes `{"state":"on"|"off"}`. A mismatch leaves
-// HA logging `Payload received … is not one of [on, off]`.
+// HA's strict siren schema requires the state_value_template output to
+// match state_on / state_off; the builder emits `{{ value_json.state }}`
+// and the StatePayload publishes `{"state":"on"|"off"}`. A mismatch
+// leaves HA logging `Payload received … is not one of [on, off]`.
+//
+// The key is state_value_template, not value_template: mqtt.siren does
+// not declare the latter, so it was dropped on receipt and the state
+// never parsed at all — which is why this test asserted a template Home
+// Assistant never saw.
 func TestDiscoveryRoundTrip_Siren(t *testing.T) {
 	t.Parallel()
 	s := siren.New(siren.Config{Writer: roundtripWriter{}})
@@ -585,15 +590,15 @@ func TestDiscoveryRoundTrip_Siren(t *testing.T) {
 	}
 	body = buildAggregateBody(t, "siren", body)
 
-	valueTemplate := mustBodyString(t, body, "value_template")
+	valueTemplate := mustBodyString(t, body, "state_value_template")
 	stateOn := mustBodyString(t, body, "state_on")
 	stateOff := mustBodyString(t, body, "state_off")
 
 	if got := renderJinja(t, valueTemplate, `{"state":"on"}`); got != stateOn {
-		t.Errorf("siren value_template render = %q, want state_on %q", got, stateOn)
+		t.Errorf("siren state_value_template render = %q, want state_on %q", got, stateOn)
 	}
 	if got := renderJinja(t, valueTemplate, `{"state":"off"}`); got != stateOff {
-		t.Errorf("siren value_template render = %q, want state_off %q", got, stateOff)
+		t.Errorf("siren state_value_template render = %q, want state_off %q", got, stateOff)
 	}
 	// The command surface HA sends payload_on/payload_off to must be present.
 	if _, has := body["command_topic"]; !has {

@@ -8,14 +8,15 @@ package metrics
 // Counters:
 //   - MessagesSent          — raw or aggregated state publishes that reached the broker.
 //   - DiscoverySent         — HA discovery config payloads that reached the broker.
+//   - DiscoveryInvalid      — discovery payloads Home Assistant would refuse or silently strip a key from.
 //   - PublishErrors         — broker-level publish failures (non-nil error from Publisher).
 //   - ReceivedCommands      — inbound /set and /invoke messages dispatched by CommandSubscriber.
 //   - SubscribeFailures     — broker-rejected Subscribe calls (non-nil error from Subscriber.Subscribe).
 //   - CircuitBreakerOpened  — number of times the MQTT CircuitBreaker transitioned to Open.
 //
 // A single shared MQTT bridge carries the traffic of every configured
-// CCU, so MessagesSent, DiscoverySent, PublishErrors and
-// ReceivedCommands each carry a `central` Prometheus label — a real
+// CCU, so MessagesSent, DiscoverySent, DiscoveryInvalid, PublishErrors
+// and ReceivedCommands each carry a `central` Prometheus label — a real
 // label, not a name prefix, per the multi-CCU dashboard/alert use case
 // (a label lets "sum by ()" and "sum by (central)" both work against
 // the same series; a name prefix forces every consumer to enumerate
@@ -34,6 +35,7 @@ package metrics
 type MqttCollector struct {
 	messagesSent     *LabeledCounter
 	discoverySent    *LabeledCounter
+	discoveryInvalid *LabeledCounter
 	publishErrors    *LabeledCounter
 	receivedCommands *LabeledCounter
 
@@ -41,7 +43,7 @@ type MqttCollector struct {
 	CircuitBreakerOpened *Counter
 }
 
-// NewMqttCollector registers the six MQTT counters in reg and returns an
+// NewMqttCollector registers the seven MQTT counters in reg and returns an
 // initialised collector. Calling this twice is safe — the Registry
 // deduplicates by name (and, for the labeled counters, by name + label
 // value).
@@ -52,6 +54,8 @@ func NewMqttCollector(reg *Registry) *MqttCollector {
 			"Total MQTT state messages published to the broker, by central.", "central"),
 		discoverySent: reg.LabeledCounter(prefix+"discovery_sent",
 			"Total HA discovery config payloads published, by central.", "central"),
+		discoveryInvalid: reg.LabeledCounter(prefix+"discovery_invalid",
+			"Total discovery payloads Home Assistant would refuse or silently strip a key from, by central.", "central"),
 		publishErrors: reg.LabeledCounter(prefix+"publish_errors",
 			"Total broker-level publish failures, by central.", "central"),
 		receivedCommands: reg.LabeledCounter(prefix+"received_commands",
@@ -71,6 +75,11 @@ func (c *MqttCollector) MessagesSent(central string) *Counter {
 // DiscoverySent returns the discovery_sent series for central.
 func (c *MqttCollector) DiscoverySent(central string) *Counter {
 	return c.discoverySent.WithLabelValue(central)
+}
+
+// DiscoveryInvalid returns the discovery_invalid series for central.
+func (c *MqttCollector) DiscoveryInvalid(central string) *Counter {
+	return c.discoveryInvalid.WithLabelValue(central)
 }
 
 // PublishErrors returns the publish_errors series for central.

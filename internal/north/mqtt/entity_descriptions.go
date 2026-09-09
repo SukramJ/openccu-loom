@@ -20,12 +20,19 @@ const (
 )
 
 // Unit spellings that carry a prefix Unicode encodes twice. Every one of
-// them uses U+00B5 MICRO SIGN, never U+03BC GREEK SMALL LETTER MU: the
-// consumer compares the advertised unit against its own canonical string
-// for the device class, and rejects the whole entity config when the two
-// differ — a PM sensor published with the Greek letter never appears at
-// all. The same spelling is what the domain model normalises CCU units to,
-// so the discovery override and the raw plane agree.
+// them uses U+00B5 MICRO SIGN, never U+03BC GREEK SMALL LETTER MU, and the
+// same spelling is what the domain model normalises CCU units to, so the
+// discovery override and the raw plane agree.
+//
+// Home Assistant does not care which one arrives. Its canonical constant is
+// the Greek letter (UnitOfDensity.MICROGRAMS_PER_CUBIC_METER), and
+// sensor/__init__.py's _native_unit_of_measurement_compat maps the legacy
+// sign onto it with `AMBIGUOUS_UNITS.get(unit, unit)` — a rewrite, not a
+// rejection. An earlier version of this comment claimed a PM sensor
+// published with the Greek letter never appears at all; that was wrong in
+// both directions. Either spelling produces the entity, so the choice here
+// is internal consistency with the raw plane, not a Home Assistant
+// requirement.
 const (
 	unitConcentrationCm3     = "1/cm³"
 	unitConcentrationGramsM3 = "g/m³"

@@ -16,6 +16,8 @@ import (
 	"sync"
 	"time"
 
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+
 	"github.com/SukramJ/openccu-loom/internal/metrics"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	paramlib "github.com/SukramJ/openccu-loom/internal/parameter"
@@ -2049,6 +2051,23 @@ func (b *Bridge) publishDiscovery(ctx context.Context, centralName, component, n
 	if declared && bytesEqual(previous, payload) {
 		return nil
 	}
+	// Count what Home Assistant would refuse or silently strip a key from.
+	//
+	// The payload goes out either way. Home Assistant drops an undeclared
+	// key and keeps the rest of the entity, so withholding the config would
+	// replace a partly-working entity with no entity at all — strictly
+	// worse. The counter is the signal: a non-zero mqtt_discovery_invalid
+	// means a builder emits a key the schema does not declare, which is
+	// otherwise invisible by construction. Advisories (what Home Assistant
+	// accepts and then rewrites) deliberately do not count.
+	//
+	// This runs once per distinct payload: the dedup gate above has already
+	// returned for a config that has not changed.
+	if len(payload) > 0 {
+		if err := ValidateDiscoveryBody(component, payload); errors.Is(err, hadiscovery.ErrInvalidBundle) {
+			b.incDiscoveryInvalid(centralName)
+		}
+	}
 	// Claim the topic BEFORE it reaches the broker. The broker fans a
 	// message out to its subscribers — the orphan sweep's own snapshot
 	// subscription included — before this call returns, so a claim taken
@@ -2100,6 +2119,14 @@ func (b *Bridge) incMessagesSent(centralName string) {
 func (b *Bridge) incDiscoverySent(centralName string) {
 	if b.collector != nil {
 		b.collector.DiscoverySent(centralName).Inc()
+	}
+}
+
+// incDiscoveryInvalid increments the discovery_invalid counter for
+// centralName when a collector is wired.
+func (b *Bridge) incDiscoveryInvalid(centralName string) {
+	if b.collector != nil {
+		b.collector.DiscoveryInvalid(centralName).Inc()
 	}
 }
 
