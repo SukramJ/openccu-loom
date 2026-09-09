@@ -43,7 +43,8 @@ func cloneMap(m map[string]any) map[string]any {
 // stubBuilder extends stubSource with HADiscoveryPayloadBuilder so that
 // aggregateChannel takes the ADR 0010 fast path (builder dispatch) instead
 // of the deleted legacy buildX path. Tests populate component and body
-// directly; the aggregator merges the base body fields on top.
+// directly; the aggregator fills in the base body fields the builder left
+// unset.
 type stubBuilder struct {
 	stubSource
 	component string
@@ -59,9 +60,9 @@ func (s *stubBuilder) HADiscoveryPayload(_ payload.HADiscoveryContext) (componen
 
 // TestAggregatorPassesThroughBuilderBody verifies that aggregateChannel
 // dispatches to the HADiscoveryPayloadBuilder fast path (ADR 0010) and
-// merges the base body fields on top of the builder's returned body.
-// The builder owns all platform-specific payload fields; the aggregator
-// only adds name / unique_id / availability / device / origin.
+// fills in the base body fields the builder left unset. The builder owns all
+// platform-specific payload fields; the aggregator adds name / unique_id /
+// availability / device / origin where the builder said nothing.
 func TestAggregatorPassesThroughBuilderBody(t *testing.T) {
 	t.Parallel()
 
@@ -193,3 +194,55 @@ func TestPublishStateNoLongerAutoPublishesAggregate(t *testing.T) {
 }
 
 var _ = hmenum.ParameterActualTemperature // import keep
+
+// TestBuilderOutranksTheFrame pins the single precedence rule for the whole
+// discovery pipeline: later wins, and the builder runs after the frame.
+//
+// This seam used to do the opposite — `maps.Copy(body, base)`, the frame
+// overwriting the builder — while the combined seam next door already let the
+// projection win. Two seams with opposite rules is a coin flip for anyone
+// adding a key, and it is the inconsistency ADR 0070 collapses.
+//
+// No builder in the tree needs this today: the frame sets exactly five
+// top-level keys and none of the ten implementations writes one. The test is
+// here so the next one that does gets an answer rather than silence.
+func TestBuilderOutranksTheFrame(t *testing.T) {
+	t.Parallel()
+
+	src := &stubBuilder{
+		component: "climate",
+		body: map[string]any{
+			"mode_state_topic": "gh/ccu/HmIP-RF/BWTH001/1/state",
+			// A frame key, deliberately: an entity that must stay usable while
+			// one of its sources is down wants "any", not the frame's "all".
+			"availability_mode": "any",
+		},
+	}
+
+	db := NewDefaultDiscoveryBuilder(NewTopicBuilder("gh"), "ccu")
+	ev := Event{
+		Source:        src,
+		Interface:     "HmIP-RF",
+		DeviceAddress: "BWTH001",
+		ChannelNo:     1,
+		ChannelType:   "CLIMATECONTROL_RT_TRANSCEIVER",
+	}
+	_, _, _, buf, ok := db.Build(ev)
+	if !ok {
+		t.Fatal("aggregateChannel did not return ok")
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal(buf, &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got, _ := body["availability_mode"].(string); got != "any" {
+		t.Errorf("availability_mode = %q, want %q — the frame overwrote the builder", got, "any")
+	}
+	// The frame keys the builder said nothing about must still be filled in.
+	for _, key := range []string{"unique_id", "availability", "device", "origin"} {
+		if _, present := body[key]; !present {
+			t.Errorf("frame key %q missing — the merge stopped filling gaps", key)
+		}
+	}
+}
