@@ -89,6 +89,10 @@ import (
 //     or any model_id absence for a device present in the HA reference.
 //   - SKIP: one or both snapshot files are absent (regenerate with the
 //     respective dump tools first).
+//
+// NOTE: this test skips in CI. It needs the gitignored loom snapshot AND a
+// Python-produced homematicip_local one, and neither is present there — so it
+// reports success without comparing anything. It is a local tool, not a guard.
 func TestDiscoverySnapshotFieldDiff(t *testing.T) {
 	const (
 		ghPath = "testdata/discovery_snapshot_openccu-loom.json"
