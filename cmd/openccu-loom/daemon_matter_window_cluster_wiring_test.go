@@ -37,13 +37,19 @@ func TestMatterCommissioningWindowReachesTheAdminCommissioningCluster(t *testing
 
 	reg := buildTestRegistry(t, "ccu-window")
 	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 
 	wiring, closers, teardown := wireMatterRuntime(
 		ctx, cfg, reg, openTestLoomDB(t), health.NewTracker(), nil,
 		slog.New(slog.DiscardHandler), nil,
 	)
+	// Cancel here rather than in a t.Cleanup of its own. Cleanups run LIFO, and
+	// openTestLoomDB registers its close-and-remove between this call and the
+	// cancel: a separately registered cancel would therefore fire *after* the
+	// database directory was already being removed, leaving ctx-bound
+	// goroutines writing into it and failing the test with
+	// "TempDir RemoveAll cleanup: directory not empty".
 	t.Cleanup(func() {
+		cancel()
 		for _, c := range closers {
 			c()
 		}
