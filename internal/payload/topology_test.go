@@ -21,8 +21,10 @@ func TestBucketStringValues(t *testing.T) {
 		payload.BucketCustom:     "custom",
 	}
 	for got, want := range cases {
-		if string(got) != want {
-			t.Errorf("Bucket %q != %q", string(got), want)
+		// String(), not a conversion: Bucket is the shared model's numeric
+		// type now, so string(b) would yield the rune at that code point.
+		if got.String() != want {
+			t.Errorf("Bucket %q != %q", got.String(), want)
 		}
 	}
 }

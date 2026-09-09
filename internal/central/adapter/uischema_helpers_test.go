@@ -297,7 +297,7 @@ func TestLookupDPSourceDefaultBucket(t *testing.T) {
 	dev := device.New(device.Config{Address: "DPDEV004", InterfaceID: "HmIP-RF", Model: "HmIP-STH"})
 	ch := dev.AddChannel("DPDEV004:1", 1, "CLIMATE", hmenum.ParamsetKeyValues)
 	// Unknown bucket falls through to default (same as VALUES)
-	src, dp := lookupDPSource(ch, "STATE", payload.Bucket("unknown"))
+	src, dp := lookupDPSource(ch, "STATE", payload.Bucket(99))
 	if src != nil || dp != nil {
 		t.Errorf("unknown bucket empty = (%v, %v), want (nil, nil)", src, dp)
 	}

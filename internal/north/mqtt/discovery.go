@@ -468,16 +468,16 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 	if generic.IsForceSensorParameter(ev.Model, hmenum.Parameter(ev.Parameter)) {
 		comp = HAComponentSensor
 	}
-	bucket := string(payload.BucketValues)
+	bucket := payload.BucketValues
 	switch {
 	case ev.descParamset() == hmenum.ParamsetKeyMaster:
-		bucket = string(payload.BucketMaster)
+		bucket = payload.BucketMaster
 	case ev.Calculated:
 		// Calculated DPs publish their state under `calculated/<name>`;
 		// discovery's `state_topic` must point at the same bucket or
 		// HA reads the (empty) values/ topic and shows the sensor as
 		// unavailable.
-		bucket = string(payload.BucketCalculated)
+		bucket = payload.BucketCalculated
 	}
 	central := d.centralFor(ev)
 	pd := naming.NewDataPointPathData(
@@ -485,7 +485,7 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		hmtypes.ParseWireInterfaceID(ev.Interface),
 		ev.DeviceAddress,
 		ev.ChannelNo,
-		naming.Bucket(bucket),
+		bucket,
 		ev.Parameter,
 	)
 	nodeID = pd.DiscoveryNodeID(central)

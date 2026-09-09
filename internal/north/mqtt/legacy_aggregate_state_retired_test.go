@@ -58,6 +58,8 @@ func TestNoTopicBuilderMethodProducesLegacyAggregateStateShape(t *testing.T) {
 				case pt.Kind() == reflect.String:
 					args = append(args, reflect.ValueOf(sampleStringArg(strIdx)))
 					strIdx++
+				case pt == reflect.TypeOf(payload.BucketValues):
+					args = append(args, reflect.ValueOf(payload.BucketValues))
 				case pt.Kind() == reflect.Int:
 					args = append(args, reflect.ValueOf(1))
 				default:

@@ -58,7 +58,7 @@ func (d *DefaultDiscoveryBuilder) BuildPressButton(ev Event) DiscoveryItem {
 		hmtypes.ParseWireInterfaceID(ev.Interface),
 		ev.DeviceAddress,
 		ev.ChannelNo,
-		naming.Bucket(payload.BucketValues),
+		payload.BucketValues,
 		ev.Parameter,
 	)
 	nodeID := pd.DiscoveryNodeID(central)
