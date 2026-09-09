@@ -3,33 +3,40 @@
 
 package payload
 
-// HADiscoveryPayloadBuilder is the optional [Source] extension that
+import hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+
+// HADiscoveryComponentBuilder is the optional [Source] extension that
 // custom-DP types implement when they want to drive Home Assistant's
 // MQTT auto-discovery. The bridge attaches the platform-agnostic
 // availability / device / origin block; the builder fills in the
 // platform-specific fields (state-topic templates, mode lists,
 // command-topic references, …).
 //
-// Returned `body` is the HA-Discovery payload skeleton. The bridge
-// overlays the shared base fields (`name`, `unique_id`,
-// `availability`, `device`, `origin`) and the `state_topic` reference
-// to the channel's aggregated state topic. Builders SHOULD NOT
-// populate those — overlap is silently overwritten by the bridge.
-//
-// `command_topic` references that point at service-method-specific
-// topics use the helpers exposed via [TopicBuildContext]. Builders
-// that need them request the context-aware variant of the method
-// (see [HADiscoveryPayloadContextBuilder]).
+// The returned component is the HA-Discovery payload skeleton. The bridge
+// overlays the shared base fields (`name`, `unique_id`, `availability`,
+// `device`, `origin`). Builders SHOULD NOT populate those.
 //
 // A type that does not implement this interface falls through to the
 // per-parameter classifyComponent path in
 // [internal/north/mqtt/discovery.go] — same as today's
 // `ev.Source == nil` fallback.
 //
+// The keys are typed because Home Assistant's discovery schema is
+// extra=REMOVE_EXTRA: a key a platform does not declare is dropped on receipt
+// with no error on the wire and no line in any log, so a misspelled string key
+// costs a feature and leaves nothing to debug. The generated per-platform
+// Fields structs in go-hamqtt carry exactly the keys each platform accepts, so
+// the same mistake stops compiling.
+//
+// The component names its own platform — [hadiscovery.Component] has a
+// Platform field — so this returns one value where the untyped predecessor
+// returned a (component, body) pair.
+//
 // ADR 0010 introduces the contract; ADR 0009 introduces the
-// service-method command topics that builders reference.
-type HADiscoveryPayloadBuilder interface {
-	HADiscoveryPayload(ctx HADiscoveryContext) (component string, body map[string]any)
+// service-method command topics that builders reference; ADR 0070 step 7
+// typed it.
+type HADiscoveryComponentBuilder interface {
+	HADiscoveryComponent(ctx HADiscoveryContext) hadiscovery.Component
 }
 
 // HADiscoveryContext carries the per-channel topic builders the

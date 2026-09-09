@@ -195,7 +195,7 @@ func TestNewAccessPermissionNilWhenFieldsAbsent(t *testing.T) {
 // ACCESS_AUTHORIZATION is forced to no_create — so a permission that is
 // neither slotted nor discoverable reaches no plane at all: the event
 // bridge drops it at its payload.Slotted assertion and MQTT discovery at
-// its HADiscoveryPayloadBuilder assertion.
+// its HADiscoveryComponentBuilder assertion.
 func TestAccessPermissionIsSlottedAndDiscoverable(t *testing.T) {
 	ap, _, _ := newTestAccessPermission(t, "VCU0002:2", &stubWriter{})
 	if ap == nil {
@@ -220,7 +220,7 @@ func TestAccessPermissionIsSlottedAndDiscoverable(t *testing.T) {
 	}
 
 	ctx := &stubDiscoveryCtx{customStateTopic: "state/custom"}
-	component, body := ap.HADiscoveryPayload(ctx)
+	component, body := haBody(t, ap.HADiscoveryComponent(ctx))
 	if component != "switch" {
 		t.Fatalf("component = %q, want switch", component)
 	}
@@ -256,7 +256,7 @@ func TestAccessPermissionHACommandGrantsAndRevokes(t *testing.T) {
 			// command through.
 			state.OnEvent(tc.wantLabel == accessAuthorizationDisable)
 
-			_, body := ap.HADiscoveryPayload(&stubDiscoveryCtx{customStateTopic: "state/custom"})
+			_, body := haBody(t, ap.HADiscoveryComponent(&stubDiscoveryCtx{customStateTopic: "state/custom"}))
 			arg, _ := body[tc.bodyKey].(string)
 			err := ap.Invoke(context.Background(), serviceAccessPermission,
 				map[string]any{argAccessPermission: arg}, hmenum.CommandPriorityHigh)

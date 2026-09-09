@@ -7,6 +7,9 @@ import (
 	"context"
 	"fmt"
 
+	hacatalog "github.com/SukramJ/go-ha-catalog"
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -16,8 +19,8 @@ import (
 // Source contract and the HA-Discovery payload builder contract
 // (ADR 0010). ADR-0007 step 5.
 var (
-	_ payload.Source                    = (*TextDisplay)(nil)
-	_ payload.HADiscoveryPayloadBuilder = (*TextDisplay)(nil)
+	_ payload.Source                      = (*TextDisplay)(nil)
+	_ payload.HADiscoveryComponentBuilder = (*TextDisplay)(nil)
 )
 
 // Info returns identity-level fields for a TextDisplay.
@@ -94,7 +97,7 @@ func stringsToAny(in []string) []any {
 // quotes or backslashes in the text cannot break the object.
 const haWriteCommandTemplate = `{"id": 1, "text": {{ value | tojson }}}`
 
-// HADiscoveryPayload returns the HA Text-platform-specific payload
+// HADiscoveryComponent returns the HA Text-platform-specific payload
 // skeleton for a TextDisplay (HmIP-WRCD). write is a distinct service
 // method → service-method command topic. State from the aggregated
 // topic via value_json.text with default("") since the device is
@@ -102,33 +105,35 @@ const haWriteCommandTemplate = `{"id": 1, "text": {{ value | tojson }}}`
 //
 // Per ADR 0010: write is unambiguous (single service method) →
 // service-method command topic.
-func (t *TextDisplay) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component string, body map[string]any) {
+func (t *TextDisplay) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery.Component {
 	if t == nil || ctx == nil {
-		return "", nil
+		return hadiscovery.Component{}
 	}
 	stateTopic := ctx.CustomDPStateTopic()
-	body = map[string]any{
+	return hadiscovery.Component{
+		Platform: hacatalog.PlatformText,
 		// write is a distinct service method → service-method topic.
-		"command_topic": ctx.ServiceMethodCommandTopic("write"),
+		CommandTopic: ctx.ServiceMethodCommandTopic("write"),
 		// HA's text platform publishes the bare string the operator typed.
 		// `write` addresses one of the display's [maxDisplayID] rows and
 		// rejects a call without an id, so the payload is templated into
 		// the JSON object the service method expects — a bare string
 		// reaches the handler as {"value": …} and can never succeed.
-		"command_template": haWriteCommandTemplate,
-		// mode=text signals HA free-form text input (not a number).
-		"mode": "text",
+		CommandTemplate: haWriteCommandTemplate,
 		// Max characters per row is [MaxRowLength], the HmIP-WRCD's own
 		// declared DISPLAY_DATA_STRING limit. HA enforces it on the input
 		// field, so a number above the device's limit invites the operator
 		// to type characters that cannot arrive.
-		"min": 0,
-		"max": MaxRowLength,
+		Min: hadiscovery.Ptr(float64(0)),
+		Max: hadiscovery.Ptr(float64(MaxRowLength)),
 		// State from aggregated topic — text field with fallback default.
-		"state_topic":    stateTopic,
-		"value_template": `{{ value_json.text | default("") }}`,
+		StateTopic:    stateTopic,
+		ValueTemplate: `{{ value_json.text | default("") }}`,
+		Fields: hadiscovery.TextFields{
+			// mode=text signals HA free-form text input (not a number).
+			Mode: "text",
+		},
 	}
-	return "text", body
 }
 
 // registerTextDisplayServices wires the text display write operations

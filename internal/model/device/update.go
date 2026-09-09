@@ -10,6 +10,9 @@ import (
 	"sync"
 	"time"
 
+	hacatalog "github.com/SukramJ/go-ha-catalog"
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -29,8 +32,8 @@ type FirmwareRefresher interface {
 // Compile-time guarantee that *Update satisfies the universal Source
 // contract and the HA-Discovery payload builder contract (ADR 0010).
 var (
-	_ payload.Source                    = (*Update)(nil)
-	_ payload.HADiscoveryPayloadBuilder = (*Update)(nil)
+	_ payload.Source                      = (*Update)(nil)
+	_ payload.HADiscoveryComponentBuilder = (*Update)(nil)
 )
 
 // Update is the per-device firmware-update surface — the MVP port of
@@ -155,7 +158,7 @@ func (u *Update) Invoke(ctx context.Context, name string, params map[string]any,
 	return u.svcReg.Invoke(ctx, name, params, priority)
 }
 
-// HADiscoveryPayload returns the HA Update-platform discovery payload.
+// HADiscoveryComponent returns the HA Update-platform discovery payload.
 //
 // Deliberately read-only: no `command_topic` / `payload_install`. HA's
 // `update` entity would publish "INSTALL" straight to the broker on a
@@ -169,31 +172,33 @@ func (u *Update) Invoke(ctx context.Context, name string, params map[string]any,
 // device's firmware lives at `POST /devices/{addr}/firmware/update`;
 // HA still shows the available-version state via `state_topic` +
 // `latest_version_topic`.
-func (u *Update) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component string, body map[string]any) {
+func (u *Update) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery.Component {
 	if u == nil || ctx == nil {
-		return "", nil
+		return hadiscovery.Component{}
 	}
 	stateTopic := ctx.CustomDPStateTopic()
 	model := ""
 	if u.device != nil {
 		model = u.device.Model
 	}
-	body = map[string]any{
-		"device_class":            "firmware",
-		"entity_category":         payload.CombinedEntityCategoryConfig,
-		"state_topic":             stateTopic,
-		"value_template":          "{{ value_json.firmware }}",
-		"latest_version_topic":    stateTopic,
-		"latest_version_template": "{{ value_json.latest_firmware }}",
-		"title":                   model + " Firmware",
-		"display_precision":       0,
+	return hadiscovery.Component{
+		Platform:       hacatalog.PlatformUpdate,
+		DeviceClass:    "firmware",
+		EntityCategory: payload.CombinedEntityCategoryConfig,
+		StateTopic:     stateTopic,
+		ValueTemplate:  "{{ value_json.firmware }}",
 		// json_attributes_topic mirrors the state so operators can
 		// inspect all four fields (firmware, latest_firmware,
 		// in_progress, firmware_update_state) in HA entity attributes.
-		"json_attributes_topic":    stateTopic,
-		"json_attributes_template": "{{ value_json | tojson }}",
+		JSONAttributesTopic:    stateTopic,
+		JSONAttributesTemplate: "{{ value_json | tojson }}",
+		Fields: hadiscovery.UpdateFields{
+			LatestVersionTopic:    stateTopic,
+			LatestVersionTemplate: "{{ value_json.latest_firmware }}",
+			Title:                 model + " Firmware",
+			DisplayPrecision:      hadiscovery.Ptr(0),
+		},
 	}
-	return "update", body
 }
 
 // TranslationKey returns the i18n lookup key for this update entity.

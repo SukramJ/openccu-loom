@@ -9,12 +9,15 @@ import (
 	"maps"
 	"testing"
 
+	hacatalog "github.com/SukramJ/go-ha-catalog"
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // stubSource is a minimal SourceLike fake the source-mode tests use
-// to drive aggregateChannel through the HADiscoveryPayloadBuilder fast
+// to drive aggregateChannel through the HADiscoveryComponentBuilder fast
 // path. Each method returns a fresh map so callers can mutate without
 // affecting later calls.
 type stubSource struct {
@@ -40,26 +43,35 @@ func cloneMap(m map[string]any) map[string]any {
 	return out
 }
 
-// stubBuilder extends stubSource with HADiscoveryPayloadBuilder so that
+// stubBuilder extends stubSource with HADiscoveryComponentBuilder so that
 // aggregateChannel takes the ADR 0010 fast path (builder dispatch) instead
 // of the deleted legacy buildX path. Tests populate component and body
 // directly; the aggregator fills in the base body fields the builder left
 // unset.
+//
+// The keys go into Component.Extra rather than a typed Fields struct on
+// purpose: these tests exercise the aggregator, and several of them feed it
+// bodies no platform would accept. Extra is the escape hatch for exactly that.
 type stubBuilder struct {
 	stubSource
 	component string
 	body      map[string]any
 }
 
-func (s *stubBuilder) HADiscoveryPayload(_ payload.HADiscoveryContext) (component string, body map[string]any) {
+func (s *stubBuilder) HADiscoveryComponent(_ payload.HADiscoveryContext) hadiscovery.Component {
 	if s.body == nil {
-		return s.component, nil
+		// A builder with nothing to say produces no component, which is what
+		// the untyped form signalled with a nil body.
+		return hadiscovery.Component{}
 	}
-	return s.component, cloneMap(s.body)
+	return hadiscovery.Component{
+		Platform: hacatalog.Platform(s.component),
+		Extra:    cloneMap(s.body),
+	}
 }
 
 // TestAggregatorPassesThroughBuilderBody verifies that aggregateChannel
-// dispatches to the HADiscoveryPayloadBuilder fast path (ADR 0010) and
+// dispatches to the HADiscoveryComponentBuilder fast path (ADR 0010) and
 // fills in the base body fields the builder left unset. The builder owns all
 // platform-specific payload fields; the aggregator adds name / unique_id /
 // availability / device / origin where the builder said nothing.

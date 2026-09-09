@@ -7,6 +7,9 @@ import (
 	"context"
 	"time"
 
+	hacatalog "github.com/SukramJ/go-ha-catalog"
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -15,12 +18,12 @@ import (
 // satisfy the universal Source contract and the HA-Discovery payload
 // builder contract (ADR 0010). ADR-0007 step 5.
 var (
-	_ payload.Source                    = (*Siren)(nil)
-	_ payload.Source                    = (*SmokeSiren)(nil)
-	_ payload.Source                    = (*SoundPlayer)(nil)
-	_ payload.HADiscoveryPayloadBuilder = (*Siren)(nil)
-	_ payload.HADiscoveryPayloadBuilder = (*SmokeSiren)(nil)
-	_ payload.HADiscoveryPayloadBuilder = (*SoundPlayer)(nil)
+	_ payload.Source                      = (*Siren)(nil)
+	_ payload.Source                      = (*SmokeSiren)(nil)
+	_ payload.Source                      = (*SoundPlayer)(nil)
+	_ payload.HADiscoveryComponentBuilder = (*Siren)(nil)
+	_ payload.HADiscoveryComponentBuilder = (*SmokeSiren)(nil)
+	_ payload.HADiscoveryComponentBuilder = (*SoundPlayer)(nil)
 )
 
 // --- Siren ---
@@ -178,7 +181,7 @@ func (s *SmokeSiren) State() payload.StatePayload {
 	return &payload.SmokeSirenState{State: state}
 }
 
-// HADiscoveryPayload returns the HA Siren-platform-specific payload
+// HADiscoveryComponent returns the HA Siren-platform-specific payload
 // skeleton. HA siren platform uses a single command_topic with
 // payload_on / payload_off — both values are sent to the same topic.
 //
@@ -190,24 +193,9 @@ func (s *SmokeSiren) State() payload.StatePayload {
 // produce an XML-RPC fault on every HA command.
 //
 // Per ADR 0010: capabilities come from ConfigPayload.
-func (s *Siren) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component string, body map[string]any) {
+func (s *Siren) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery.Component {
 	if s == nil || ctx == nil {
-		return "", nil
-	}
-	body = map[string]any{
-		// HA siren: single command_topic; payload_on/payload_off muxed by value.
-		"command_topic": ctx.ServiceMethodCommandTopic("turn_on"),
-		"payload_on":    "on",
-		"payload_off":   "off",
-		// State from the channel's aggregated state topic — the
-		// StatePayload publishes the HA-compliant minimal JSON
-		// `{"state": "on"|"off"}` so HA's strict siren schema
-		// (SIREN_PLATFORM_PAYLOAD_SCHEMA) accepts it.
-		"state_topic":          ctx.CustomDPStateTopic(),
-		"state_value_template": "{{ value_json.state }}",
-		"state_on":             "on",
-		"state_off":            "off",
-		"optimistic":           false,
+		return hadiscovery.Component{}
 	}
 	// Capabilities from ConfigPayload.
 	cfg, _ := s.Config().(*payload.SirenConfig)
@@ -215,16 +203,34 @@ func (s *Siren) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component st
 	if cfg != nil {
 		supportDuration = cfg.SupportsDuration
 	}
-	body["support_duration"] = supportDuration
-	// SupportsVolumeSet from the capability struct, not a constant.
-	body["support_volume_set"] = s.Capabilities.SupportsVolumeSet
-	if cfg != nil && len(cfg.AvailableTones) > 0 {
-		body["available_tones"] = cfg.AvailableTones
+	fields := hadiscovery.SirenFields{
+		// HA siren: single command_topic; payload_on/payload_off muxed by value.
+		PayloadOn:  "on",
+		PayloadOff: "off",
+		// State from the channel's aggregated state topic — the
+		// StatePayload publishes the HA-compliant minimal JSON
+		// `{"state": "on"|"off"}` so HA's strict siren schema
+		// (SIREN_PLATFORM_PAYLOAD_SCHEMA) accepts it.
+		StateValueTemplate: "{{ value_json.state }}",
+		StateOn:            "on",
+		StateOff:           "off",
+		SupportDuration:    hadiscovery.Ptr(supportDuration),
+		// SupportsVolumeSet from the capability struct, not a constant.
+		SupportVolumeSet: hadiscovery.Ptr(s.Capabilities.SupportsVolumeSet),
 	}
-	return "siren", body
+	if cfg != nil && len(cfg.AvailableTones) > 0 {
+		fields.AvailableTones = cfg.AvailableTones
+	}
+	return hadiscovery.Component{
+		Platform:     hacatalog.PlatformSiren,
+		CommandTopic: ctx.ServiceMethodCommandTopic("turn_on"),
+		StateTopic:   ctx.CustomDPStateTopic(),
+		Optimistic:   hadiscovery.Ptr(false),
+		Fields:       fields,
+	}
 }
 
-// HADiscoveryPayload returns the HA Siren-platform payload for a
+// HADiscoveryComponent returns the HA Siren-platform payload for a
 // SmokeSiren. HmIP-SWSD is *not* a passive sensor — it can be
 // triggered by writing the SMOKE_DETECTOR_COMMAND parameter (mirrors
 // turn_on / turn_off via _SirenCommand.ON / OFF). HA logs `required
@@ -239,58 +245,63 @@ func (s *Siren) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component st
 // The value_template translates the StatePayload `is_active` boolean
 // back into the same enum so HA's two-way binding works without a
 // separate state DP.
-func (s *SmokeSiren) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component string, body map[string]any) {
+func (s *SmokeSiren) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery.Component {
 	if s == nil || ctx == nil {
-		return "", nil
+		return hadiscovery.Component{}
 	}
-	// state_topic uses the aggregated topic; StatePayload emits the
-	// HA-compliant minimal `{"state": "on"|"off"}` JSON so the strict
-	// SIREN_PLATFORM_PAYLOAD_SCHEMA accepts it.
-	body = map[string]any{
-		"command_topic":        ctx.WireParameterCommandTopic("SMOKE_DETECTOR_COMMAND"),
-		"payload_on":           "INTRUSION_ALARM",
-		"payload_off":          "INTRUSION_ALARM_OFF",
-		"state_topic":          ctx.CustomDPStateTopic(),
-		"state_value_template": "{{ value_json.state }}",
-		"state_on":             "on",
-		"state_off":            "off",
-		"support_duration":     false,
-		"support_volume_set":   false,
-		"optimistic":           false,
+	return hadiscovery.Component{
+		Platform:     hacatalog.PlatformSiren,
+		CommandTopic: ctx.WireParameterCommandTopic("SMOKE_DETECTOR_COMMAND"),
+		// state_topic uses the aggregated topic; StatePayload emits the
+		// HA-compliant minimal `{"state": "on"|"off"}` JSON so the strict
+		// SIREN_PLATFORM_PAYLOAD_SCHEMA accepts it.
+		StateTopic: ctx.CustomDPStateTopic(),
+		Optimistic: hadiscovery.Ptr(false),
+		Fields: hadiscovery.SirenFields{
+			PayloadOn:          "INTRUSION_ALARM",
+			PayloadOff:         "INTRUSION_ALARM_OFF",
+			StateValueTemplate: "{{ value_json.state }}",
+			StateOn:            "on",
+			StateOff:           "off",
+			SupportDuration:    hadiscovery.Ptr(false),
+			SupportVolumeSet:   hadiscovery.Ptr(false),
+		},
 	}
-	return "siren", body
 }
 
-// HADiscoveryPayload returns the HA Siren-platform-specific payload
+// HADiscoveryComponent returns the HA Siren-platform-specific payload
 // for a SoundPlayer. turn_on/turn_off multiplexing: command_topic points
 // at the turn_on service-method topic; payload_off ("off") is routed to
 // TurnOff inside the service handler, avoiding a write to a non-existent
 // STATE wire parameter.
-func (sp *SoundPlayer) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component string, body map[string]any) {
+func (sp *SoundPlayer) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery.Component {
 	if sp == nil || ctx == nil {
-		return "", nil
+		return hadiscovery.Component{}
 	}
-	body = map[string]any{
+	fields := hadiscovery.SirenFields{
 		// HA siren: single command_topic; payload_on/payload_off muxed by value.
-		"command_topic": ctx.ServiceMethodCommandTopic("turn_on"),
-		"payload_on":    "on",
-		"payload_off":   "off",
+		PayloadOn:  "on",
+		PayloadOff: "off",
 		// State from the aggregated topic — StatePayload emits only
 		// the HA-compliant `{"state": "on"|"off"}` keys so HA's
 		// strict siren schema validation accepts it.
-		"state_topic":          ctx.CustomDPStateTopic(),
-		"state_value_template": "{{ value_json.state }}",
-		"state_on":             "on",
-		"state_off":            "off",
-		"support_duration":     true,
-		"support_volume_set":   false,
-		"optimistic":           false,
+		StateValueTemplate: "{{ value_json.state }}",
+		StateOn:            "on",
+		StateOff:           "off",
+		SupportDuration:    hadiscovery.Ptr(true),
+		SupportVolumeSet:   hadiscovery.Ptr(false),
 	}
 	// Available soundfiles as tones when present.
 	if cfg, _ := sp.Config().(*payload.SoundPlayerConfig); cfg != nil && len(cfg.AvailableSoundfiles) > 0 {
-		body["available_tones"] = cfg.AvailableSoundfiles
+		fields.AvailableTones = cfg.AvailableSoundfiles
 	}
-	return "siren", body
+	return hadiscovery.Component{
+		Platform:     hacatalog.PlatformSiren,
+		CommandTopic: ctx.ServiceMethodCommandTopic("turn_on"),
+		StateTopic:   ctx.CustomDPStateTopic(),
+		Optimistic:   hadiscovery.Ptr(false),
+		Fields:       fields,
+	}
 }
 
 // registerSmokeSirenServices wires the smoke siren operations onto the

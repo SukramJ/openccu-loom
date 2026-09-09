@@ -38,7 +38,7 @@ var _ payload.HADiscoveryContext = discoveryCtx{}
 func TestLightHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
 	t.Parallel()
 	var l *Light
-	comp, body := l.HADiscoveryPayload(discoveryCtx{})
+	comp, body := haBody(t, l.HADiscoveryComponent(discoveryCtx{}))
 	if comp != "" || body != nil {
 		t.Fatalf("nil receiver: want (\"\", nil), got (%q, %v)", comp, body)
 	}
@@ -47,7 +47,7 @@ func TestLightHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
 func TestLightHADiscoveryPayload_Component(t *testing.T) {
 	t.Parallel()
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
-	comp, body := l.HADiscoveryPayload(discoveryCtx{})
+	comp, body := haBody(t, l.HADiscoveryComponent(discoveryCtx{}))
 	if comp != "light" {
 		t.Fatalf("component = %q, want %q", comp, "light")
 	}
@@ -63,7 +63,7 @@ func TestLightDimmableHASchemaJSON(t *testing.T) {
 	t.Parallel()
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
 	ctx := discoveryCtx{}
-	comp, body := l.HADiscoveryPayload(ctx)
+	comp, body := haBody(t, l.HADiscoveryComponent(ctx))
 
 	if comp != "light" {
 		t.Fatalf("component = %q, want %q", comp, "light")
@@ -78,14 +78,14 @@ func TestLightDimmableHASchemaJSON(t *testing.T) {
 	if v, _ := body["command_topic"].(string); v != wantCmd {
 		t.Errorf("command_topic = %q, want %q", v, wantCmd)
 	}
-	modes, _ := body["supported_color_modes"].([]string)
+	modes := haStrings(t, body, "supported_color_modes")
 	if len(modes) != 1 || modes[0] != "brightness" {
 		t.Errorf("supported_color_modes = %v, want [brightness]", modes)
 	}
 	if v, _ := body["brightness"].(bool); !v {
 		t.Error("brightness must be true for dimmable light")
 	}
-	if v, _ := body["brightness_scale"].(int); v != 255 {
+	if v := haNum(t, body, "brightness_scale"); v != 255 {
 		t.Errorf("brightness_scale = %v, want 255", v)
 	}
 	if v, _ := body["optimistic"].(bool); v {
@@ -107,7 +107,7 @@ func TestLightDimmableHASchemaJSON(t *testing.T) {
 func TestLightDimmableTransitionHASchemaJSON(t *testing.T) {
 	t.Parallel()
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true, Transition: true})
-	_, body := l.HADiscoveryPayload(discoveryCtx{})
+	_, body := haBody(t, l.HADiscoveryComponent(discoveryCtx{}))
 	if v, _ := body["transition"].(bool); !v {
 		t.Error("transition must be true when Capabilities.Transition is set")
 	}
@@ -118,7 +118,7 @@ func TestLightDimmableTransitionHASchemaJSON(t *testing.T) {
 func TestLightDimmableNoTransitionHASchemaJSON(t *testing.T) {
 	t.Parallel()
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
-	_, body := l.HADiscoveryPayload(discoveryCtx{})
+	_, body := haBody(t, l.HADiscoveryComponent(discoveryCtx{}))
 	if _, ok := body["transition"]; ok {
 		t.Error("transition must be absent when Capabilities.Transition is false")
 	}
@@ -128,7 +128,7 @@ func TestLightDimmableNoTransitionHASchemaJSON(t *testing.T) {
 func TestLightNonDimmableHASchemaJSON(t *testing.T) {
 	t.Parallel()
 	l, _ := newLightRig(t, "HM-LC-Sw:1", &stubWriter{}, custom.LightCapabilities{Dimmable: false})
-	_, body := l.HADiscoveryPayload(discoveryCtx{})
+	_, body := haBody(t, l.HADiscoveryComponent(discoveryCtx{}))
 
 	if v, _ := body["schema"].(string); v != "json" {
 		t.Errorf("schema = %q, want %q", v, "json")
@@ -138,7 +138,7 @@ func TestLightNonDimmableHASchemaJSON(t *testing.T) {
 			t.Errorf("missing required non-dimmable key %q", key)
 		}
 	}
-	modes, _ := body["supported_color_modes"].([]string)
+	modes := haStrings(t, body, "supported_color_modes")
 	if len(modes) != 1 || modes[0] != "onoff" {
 		t.Errorf("supported_color_modes = %v, want [onoff]", modes)
 	}
@@ -159,7 +159,7 @@ func TestLightNonDimmableHASchemaJSON(t *testing.T) {
 func TestColorLightHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
 	t.Parallel()
 	var l *ColorLight
-	comp, body := l.HADiscoveryPayload(discoveryCtx{})
+	comp, body := haBody(t, l.HADiscoveryComponent(discoveryCtx{}))
 	if comp != "" || body != nil {
 		t.Fatalf("nil receiver: want (\"\", nil), got (%q, %v)", comp, body)
 	}
@@ -175,19 +175,23 @@ func TestColorLightHASchemaJSON(t *testing.T) {
 		Capabilities: custom.LightCapabilities{SupportsColor: true, Dimmable: true},
 	})
 	ctx := discoveryCtx{}
-	comp, body := l.HADiscoveryPayload(ctx)
+	comp, body := haBody(t, l.HADiscoveryComponent(ctx))
 	if comp != "light" {
 		t.Fatalf("component = %q, want %q", comp, "light")
 	}
 	if v, _ := body["schema"].(string); v != "json" {
 		t.Errorf("schema = %q, want %q", v, "json")
 	}
-	modes, _ := body["supported_color_modes"].([]string)
+	modes := haStrings(t, body, "supported_color_modes")
 	if len(modes) != 1 || modes[0] != "hs" {
 		t.Errorf("supported_color_modes = %v, want [hs]", modes)
 	}
-	if v, _ := body["hs"].(bool); !v {
-		t.Error("hs must be true for ColorLight")
+	// `hs` is deliberately absent. Home Assistant's json light schema
+	// declares no such key — colour support is announced through
+	// supported_color_modes alone — so the daemon's old `hs: true` was
+	// dropped on receipt and never reached anything.
+	if _, present := body["hs"]; present {
+		t.Error("hs is not a key the json light schema declares")
 	}
 	if v, _ := body["optimistic"].(bool); v {
 		t.Error("optimistic must be false")
@@ -219,22 +223,22 @@ func TestColorTempLightHASchemaJSON(t *testing.T) {
 		Writer:       &stubWriter{},
 		Capabilities: custom.LightCapabilities{Dimmable: true, SupportsColorTemp: true},
 	}, 2700, 6500)
-	_, body := l.HADiscoveryPayload(discoveryCtx{})
+	_, body := haBody(t, l.HADiscoveryComponent(discoveryCtx{}))
 
 	if v, _ := body["schema"].(string); v != "json" {
 		t.Errorf("schema = %q, want %q", v, "json")
 	}
-	modes, _ := body["supported_color_modes"].([]string)
+	modes := haStrings(t, body, "supported_color_modes")
 	if len(modes) != 1 || modes[0] != "color_temp" {
 		t.Errorf("supported_color_modes = %v, want [color_temp]", modes)
 	}
 	if v, _ := body["color_temp_kelvin"].(bool); !v {
 		t.Error("color_temp_kelvin must be true")
 	}
-	if v, _ := body["min_kelvin"].(int32); v != 2700 {
+	if v := haNum(t, body, "min_kelvin"); v != 2700 {
 		t.Errorf("min_kelvin = %v, want 2700", v)
 	}
-	if v, _ := body["max_kelvin"].(int32); v != 6500 {
+	if v := haNum(t, body, "max_kelvin"); v != 6500 {
 		t.Errorf("max_kelvin = %v, want 6500", v)
 	}
 	if v, _ := body["optimistic"].(bool); v {
@@ -262,23 +266,17 @@ func TestColorTempLightMinMaxMireds(t *testing.T) {
 		Writer:       &stubWriter{},
 		Capabilities: custom.LightCapabilities{Dimmable: true, SupportsColorTemp: true},
 	}, 2000, 6536)
-	_, body := l.HADiscoveryPayload(discoveryCtx{})
+	_, body := haBody(t, l.HADiscoveryComponent(discoveryCtx{}))
 
-	minMireds, ok := body["min_mireds"].(int)
-	if !ok {
-		t.Fatalf("min_mireds missing or wrong type: %T=%v", body["min_mireds"], body["min_mireds"])
-	}
-	maxMireds, ok := body["max_mireds"].(int)
-	if !ok {
-		t.Fatalf("max_mireds missing or wrong type: %T=%v", body["max_mireds"], body["max_mireds"])
-	}
+	minMireds := haNum(t, body, "min_mireds")
+	maxMireds := haNum(t, body, "max_mireds")
 	// min_mireds = 1e6 / max_kelvin (6536K) = 152
 	if minMireds != 152 {
-		t.Errorf("min_mireds = %d, want 152 (1e6/6536)", minMireds)
+		t.Errorf("min_mireds = %v, want 152 (1e6/6536)", minMireds)
 	}
 	// max_mireds = 1e6 / min_kelvin (2000K) = 500
 	if maxMireds != 500 {
-		t.Errorf("max_mireds = %d, want 500 (1e6/2000)", maxMireds)
+		t.Errorf("max_mireds = %v, want 500 (1e6/2000)", maxMireds)
 	}
 }
 
@@ -287,21 +285,15 @@ func TestColorTempLightMinMaxMireds(t *testing.T) {
 func TestColorTempLightMinMaxMireds_FallbackWhenZeroKelvin(t *testing.T) {
 	t.Parallel()
 	l := &ColorTempLight{} // zero MinKelvin/MaxKelvin
-	_, body := l.HADiscoveryPayload(discoveryCtx{})
+	_, body := haBody(t, l.HADiscoveryComponent(discoveryCtx{}))
 
-	minMireds, ok := body["min_mireds"].(int)
-	if !ok {
-		t.Fatalf("min_mireds missing: %v", body["min_mireds"])
-	}
-	maxMireds, ok := body["max_mireds"].(int)
-	if !ok {
-		t.Fatalf("max_mireds missing: %v", body["max_mireds"])
-	}
+	minMireds := haNum(t, body, "min_mireds")
+	maxMireds := haNum(t, body, "max_mireds")
 	if minMireds != 153 {
-		t.Errorf("min_mireds fallback = %d, want 153", minMireds)
+		t.Errorf("min_mireds fallback = %v, want 153", minMireds)
 	}
 	if maxMireds != 500 {
-		t.Errorf("max_mireds fallback = %d, want 500", maxMireds)
+		t.Errorf("max_mireds fallback = %v, want 500", maxMireds)
 	}
 }
 
@@ -316,12 +308,12 @@ func TestEffectLightHASchemaJSON(t *testing.T) {
 		Writer:       &colorStubWriter{},
 		Capabilities: custom.LightCapabilities{SupportsColor: true, SupportsEffects: true, Dimmable: true},
 	})
-	_, body := l.HADiscoveryPayload(discoveryCtx{})
+	_, body := haBody(t, l.HADiscoveryComponent(discoveryCtx{}))
 
 	if v, _ := body["schema"].(string); v != "json" {
 		t.Errorf("schema = %q, want %q", v, "json")
 	}
-	modes, _ := body["supported_color_modes"].([]string)
+	modes := haStrings(t, body, "supported_color_modes")
 	if len(modes) != 1 || modes[0] != "hs" {
 		t.Errorf("supported_color_modes = %v, want [hs]", modes)
 	}
@@ -356,12 +348,12 @@ func TestDRGDaliLightHASchemaJSON(t *testing.T) {
 		Writer:       &stubWriter{},
 		Capabilities: custom.LightCapabilities{Dimmable: true, SupportsColorTemp: true},
 	}, 2700, 6500)
-	_, body := l.HADiscoveryPayload(discoveryCtx{})
+	_, body := haBody(t, l.HADiscoveryComponent(discoveryCtx{}))
 
 	if v, _ := body["schema"].(string); v != "json" {
 		t.Errorf("schema = %q, want %q", v, "json")
 	}
-	modes, _ := body["supported_color_modes"].([]string)
+	modes := haStrings(t, body, "supported_color_modes")
 	if len(modes) != 1 || modes[0] != "color_temp" {
 		t.Errorf("supported_color_modes = %v, want [color_temp]", modes)
 	}
@@ -389,12 +381,12 @@ func TestRGBWLightHASchemaJSON_RGBMode(t *testing.T) {
 		Capabilities: custom.LightCapabilities{SupportsColor: true, Dimmable: true},
 	})
 	r.recordMode("RGB")
-	_, body := r.HADiscoveryPayload(discoveryCtx{})
+	_, body := haBody(t, r.HADiscoveryComponent(discoveryCtx{}))
 
 	if v, _ := body["schema"].(string); v != "json" {
 		t.Errorf("schema = %q, want %q", v, "json")
 	}
-	modes, _ := body["supported_color_modes"].([]string)
+	modes := haStrings(t, body, "supported_color_modes")
 	if len(modes) != 1 || modes[0] != "hs" {
 		t.Errorf("RGB mode: supported_color_modes = %v, want [hs]", modes)
 	}
@@ -416,13 +408,13 @@ func TestRGBWLightHASchemaJSON_RGBWMode(t *testing.T) {
 		Capabilities: custom.LightCapabilities{SupportsColor: true, SupportsColorTemp: true, Dimmable: true},
 	})
 	r.recordMode("RGBW")
-	_, body := r.HADiscoveryPayload(discoveryCtx{})
+	_, body := haBody(t, r.HADiscoveryComponent(discoveryCtx{}))
 
 	// RGBW mode advertises hs colour only — HA colour modes are mutually
 	// exclusive and the reference has_color_temperature is TUNABLE_WHITE-only,
 	// so colour temperature is not offered in RGBW mode even though the wire
 	// profile carries a KELVIN field.
-	modes, _ := body["supported_color_modes"].([]string)
+	modes := haStrings(t, body, "supported_color_modes")
 	if len(modes) != 1 || modes[0] != "hs" {
 		t.Fatalf("RGBW mode: supported_color_modes = %v, want [hs]", modes)
 	}
@@ -442,15 +434,16 @@ func TestRGBWLightHASchemaJSON_TunableWhiteMode(t *testing.T) {
 		Capabilities: custom.LightCapabilities{SupportsColorTemp: true, Dimmable: true},
 	})
 	r.recordMode("2_TUNABLE_WHITE")
-	_, body := r.HADiscoveryPayload(discoveryCtx{})
+	_, body := haBody(t, r.HADiscoveryComponent(discoveryCtx{}))
 
-	modes, _ := body["supported_color_modes"].([]string)
+	modes := haStrings(t, body, "supported_color_modes")
 	if len(modes) != 1 || modes[0] != "color_temp" {
 		t.Errorf("tunable white: supported_color_modes = %v, want [color_temp]", modes)
 	}
-	// hs must be removed in tunable white mode.
+	// `hs` is absent here as it is everywhere: the json light schema has
+	// no such key.
 	if _, ok := body["hs"]; ok {
-		t.Error("hs flag must not be present in tunable white mode")
+		t.Error("hs flag must not be present")
 	}
 }
 
@@ -464,9 +457,9 @@ func TestRGBWLightHASchemaJSON_PWMMode(t *testing.T) {
 		Capabilities: custom.LightCapabilities{Dimmable: true},
 	})
 	r.recordMode("4_PWM")
-	_, body := r.HADiscoveryPayload(discoveryCtx{})
+	_, body := haBody(t, r.HADiscoveryComponent(discoveryCtx{}))
 
-	modes, _ := body["supported_color_modes"].([]string)
+	modes := haStrings(t, body, "supported_color_modes")
 	if len(modes) != 1 || modes[0] != "brightness" {
 		t.Errorf("PWM mode: supported_color_modes = %v, want [brightness]", modes)
 	}

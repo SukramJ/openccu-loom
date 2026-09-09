@@ -240,7 +240,7 @@ func TestSimpleRfThermostatDiscoveryNamesPublishedTopics(t *testing.T) {
 	_, chs := newSimpleRfThermostatDevice(t, nil)
 	c := climateOn(t, chs[1])
 
-	comp, body := c.HADiscoveryPayload(bindingDiscoveryCtx{channelAddress: chs[1].Address})
+	comp, body := haBody(t, c.HADiscoveryComponent(bindingDiscoveryCtx{channelAddress: chs[1].Address}))
 	if comp != "climate" {
 		t.Fatalf("component = %q, want climate", comp)
 	}

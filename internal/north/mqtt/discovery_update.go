@@ -29,7 +29,7 @@ type UpdateEvent struct {
 	// `payload:"info"` map — same as Event.Device.
 	Device any
 	// Update is the firmware-update source. Must be non-nil.
-	Update payload.HADiscoveryPayloadBuilder
+	Update payload.HADiscoveryComponentBuilder
 }
 
 // updateDiscoveryCtx is the bridge-side [payload.HADiscoveryContext]
@@ -86,8 +86,13 @@ func (d *DefaultDiscoveryBuilder) BuildUpdateDiscovery(centralName string, ev Up
 		iface:       ev.Interface,
 		address:     ev.DeviceAddress,
 	}
-	comp, body := ev.Update.HADiscoveryPayload(ctx)
-	if body == nil || comp == "" {
+	component := ev.Update.HADiscoveryComponent(ctx)
+	if component.Platform == "" {
+		return DiscoveryItem{}
+	}
+	comp := string(component.Platform)
+	body, err := flattenComponent(component)
+	if err != nil {
 		return DiscoveryItem{}
 	}
 

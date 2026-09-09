@@ -907,7 +907,7 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		delete(body, "value_template")
 	default:
 		// Climate / valve / siren / select / button / update / text are rendered
-		// by the HADiscoveryPayloadBuilder fast path in aggregateChannel and never reach this switch.
+		// by the HADiscoveryComponentBuilder fast path in aggregateChannel and never reach this switch.
 	}
 
 	// All state topics carry the JSON envelope (ADR 0011). Patch the

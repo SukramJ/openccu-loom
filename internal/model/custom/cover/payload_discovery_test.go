@@ -42,7 +42,7 @@ var _ payload.HADiscoveryContext = discoveryCtx{}
 func TestCoverHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
 	t.Parallel()
 	var c *Cover
-	comp, body := c.HADiscoveryPayload(discoveryCtx{})
+	comp, body := haBody(t, c.HADiscoveryComponent(discoveryCtx{}))
 	if comp != "" || body != nil {
 		t.Fatalf("nil receiver: want (\"\", nil), got (%q, %v)", comp, body)
 	}
@@ -51,7 +51,7 @@ func TestCoverHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
 func TestCoverHADiscoveryPayload_Component(t *testing.T) {
 	t.Parallel()
 	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
-	comp, body := c.HADiscoveryPayload(discoveryCtx{})
+	comp, body := haBody(t, c.HADiscoveryComponent(discoveryCtx{}))
 	if comp != "cover" {
 		t.Fatalf("component = %q, want %q", comp, "cover")
 	}
@@ -64,7 +64,7 @@ func TestCoverHADiscoveryPayload_RequiredKeys(t *testing.T) {
 	t.Parallel()
 	// SupportsPosition required for position_topic emission (Task #38).
 	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{SupportsPosition: true})
-	_, body := c.HADiscoveryPayload(discoveryCtx{})
+	_, body := haBody(t, c.HADiscoveryComponent(discoveryCtx{}))
 
 	for _, key := range []string{
 		"position_topic",
@@ -82,7 +82,7 @@ func TestCoverHADiscoveryPayload_TopicValues(t *testing.T) {
 	t.Parallel()
 	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{SupportsPosition: true})
 	ctx := discoveryCtx{}
-	_, body := c.HADiscoveryPayload(ctx)
+	_, body := haBody(t, c.HADiscoveryComponent(ctx))
 
 	if v, _ := body["position_topic"].(string); v != ctx.CustomDPStateTopic() {
 		t.Errorf("position_topic = %q, want %q", v, ctx.CustomDPStateTopic())
@@ -100,7 +100,7 @@ func TestCoverHADiscoveryPayload_TopicValues(t *testing.T) {
 func TestCoverHADiscoveryPayload_NoPositionWithoutCapability(t *testing.T) {
 	t.Parallel()
 	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
-	_, body := c.HADiscoveryPayload(discoveryCtx{})
+	_, body := haBody(t, c.HADiscoveryComponent(discoveryCtx{}))
 
 	for _, key := range []string{"position_topic", "set_position_topic", "position_template", "set_position_template"} {
 		if _, ok := body[key]; ok {
@@ -128,7 +128,7 @@ func TestCoverHADiscoveryPayload_CommandTopicDrivesOpenCloseStop(t *testing.T) {
 	w := &putWriter{}
 	c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{SupportsPosition: true, SupportsStop: true})
 	ctx := discoveryCtx{}
-	_, body := c.HADiscoveryPayload(ctx)
+	_, body := haBody(t, c.HADiscoveryComponent(ctx))
 
 	// The method name is part of the published contract — HA writes to the
 	// topic derived from it — so it is pinned literally here.
@@ -198,7 +198,7 @@ func TestCoverInvoke_UnknownCommandTokenRejected(t *testing.T) {
 func TestBlindHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
 	t.Parallel()
 	var b *Blind
-	comp, body := b.HADiscoveryPayload(discoveryCtx{})
+	comp, body := haBody(t, b.HADiscoveryComponent(discoveryCtx{}))
 	if comp != "" || body != nil {
 		t.Fatalf("nil receiver: want (\"\", nil), got (%q, %v)", comp, body)
 	}
@@ -207,7 +207,7 @@ func TestBlindHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
 func TestBlindHADiscoveryPayload_Component(t *testing.T) {
 	t.Parallel()
 	b := newBlindRig(t, "HmIP-BBL:3", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
-	comp, body := b.HADiscoveryPayload(discoveryCtx{})
+	comp, body := haBody(t, b.HADiscoveryComponent(discoveryCtx{}))
 	if comp != "cover" {
 		t.Fatalf("component = %q, want %q", comp, "cover")
 	}
@@ -222,7 +222,7 @@ func TestBlindHADiscoveryPayload_TiltKeys(t *testing.T) {
 	// (Task #38). SupportsTilt unlocks the tilt_* keys this test asserts.
 	b := newBlindRig(t, "HmIP-BBL:3", &putWriter{}, custom.CoverCapabilities{SupportsPosition: true, SupportsTilt: true}, BlindKindHM)
 	ctx := discoveryCtx{}
-	_, body := b.HADiscoveryPayload(ctx)
+	_, body := haBody(t, b.HADiscoveryComponent(ctx))
 
 	for _, key := range []string{
 		"tilt_status_topic",
@@ -253,7 +253,7 @@ func TestBlindHADiscoveryPayload_CommandTopicUsesBlindOverrides(t *testing.T) {
 	w := &putWriter{}
 	b := newBlindRig(t, "HmIP-BBL:3", w, custom.CoverCapabilities{SupportsPosition: true, SupportsTilt: true}, BlindKindHM)
 	ctx := discoveryCtx{}
-	_, body := b.HADiscoveryPayload(ctx)
+	_, body := haBody(t, b.HADiscoveryComponent(ctx))
 
 	const method = "cover_command"
 	if got, _ := body["command_topic"].(string); got != ctx.ServiceMethodCommandTopic(method) {
@@ -282,7 +282,7 @@ func TestBlindHADiscoveryPayload_CommandTopicUsesBlindOverrides(t *testing.T) {
 func TestGarageHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
 	t.Parallel()
 	var g *Garage
-	comp, body := g.HADiscoveryPayload(discoveryCtx{})
+	comp, body := haBody(t, g.HADiscoveryComponent(discoveryCtx{}))
 	if comp != "" || body != nil {
 		t.Fatalf("nil receiver: want (\"\", nil), got (%q, %v)", comp, body)
 	}
@@ -291,7 +291,7 @@ func TestGarageHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
 func TestGarageHADiscoveryPayload_Component(t *testing.T) {
 	t.Parallel()
 	g := NewGarage(GarageConfig{Writer: &stubWriter{}})
-	comp, body := g.HADiscoveryPayload(discoveryCtx{})
+	comp, body := haBody(t, g.HADiscoveryComponent(discoveryCtx{}))
 	if comp != "cover" {
 		t.Fatalf("component = %q, want %q", comp, "cover")
 	}
@@ -304,7 +304,7 @@ func TestGarageHADiscoveryPayload_RequiredKeys(t *testing.T) {
 	t.Parallel()
 	g := NewGarage(GarageConfig{Writer: &stubWriter{}})
 	ctx := discoveryCtx{}
-	_, body := g.HADiscoveryPayload(ctx)
+	_, body := haBody(t, g.HADiscoveryComponent(ctx))
 
 	for _, key := range []string{
 		"command_topic",
@@ -330,7 +330,7 @@ func TestCoverHADiscoveryPayload_StateParity(t *testing.T) {
 	t.Parallel()
 	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
 	ctx := discoveryCtx{}
-	_, body := c.HADiscoveryPayload(ctx)
+	_, body := haBody(t, c.HADiscoveryComponent(ctx))
 
 	// state_topic must equal aggregated state topic.
 	if v, _ := body["state_topic"].(string); v != ctx.CustomDPStateTopic() {
@@ -366,7 +366,7 @@ func TestCoverHADiscoveryPayload_StateParity(t *testing.T) {
 func TestCoverHADiscoveryPayload_NoTiltFields(t *testing.T) {
 	t.Parallel()
 	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
-	_, body := c.HADiscoveryPayload(discoveryCtx{})
+	_, body := haBody(t, c.HADiscoveryComponent(discoveryCtx{}))
 
 	// Plain Cover must not carry tilt fields.
 	for _, key := range []string{"tilt_opened_value", "tilt_closed_value"} {
@@ -382,7 +382,7 @@ func TestBlindHADiscoveryPayload_StateParity(t *testing.T) {
 	t.Parallel()
 	b := newBlindRig(t, "HmIP-BBL:3", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
 	ctx := discoveryCtx{}
-	_, body := b.HADiscoveryPayload(ctx)
+	_, body := haBody(t, b.HADiscoveryComponent(ctx))
 
 	// state_topic must equal aggregated state topic.
 	if v, _ := body["state_topic"].(string); v != ctx.CustomDPStateTopic() {
@@ -418,12 +418,12 @@ func TestBlindHADiscoveryPayload_StateParity(t *testing.T) {
 func TestBlindHADiscoveryPayload_TiltOpenedClosedValues(t *testing.T) {
 	t.Parallel()
 	b := newBlindRig(t, "HmIP-BBL:3", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
-	_, body := b.HADiscoveryPayload(discoveryCtx{})
+	_, body := haBody(t, b.HADiscoveryComponent(discoveryCtx{}))
 
-	if v, _ := body["tilt_opened_value"].(int); v != 100 {
+	if v := haNum(t, body, "tilt_opened_value"); v != 100 {
 		t.Errorf("tilt_opened_value = %v, want 100", v)
 	}
-	if v, _ := body["tilt_closed_value"].(int); v != 0 {
+	if v := haNum(t, body, "tilt_closed_value"); v != 0 {
 		t.Errorf("tilt_closed_value = %v, want 0", v)
 	}
 }
@@ -434,7 +434,7 @@ func TestGarageHADiscoveryPayload_StateParity(t *testing.T) {
 	t.Parallel()
 	g := NewGarage(GarageConfig{Writer: &stubWriter{}})
 	ctx := discoveryCtx{}
-	_, body := g.HADiscoveryPayload(ctx)
+	_, body := haBody(t, g.HADiscoveryComponent(ctx))
 
 	// state_topic must equal aggregated state topic.
 	if v, _ := body["state_topic"].(string); v != ctx.CustomDPStateTopic() {
@@ -493,7 +493,7 @@ func TestGarageHADiscoveryPayloadCarriesNoVentKey(t *testing.T) {
 				Writer:       &stubWriter{},
 				Capabilities: custom.CoverCapabilities{SupportsVent: supportsVent},
 			})
-			_, body := g.HADiscoveryPayload(discoveryCtx{})
+			_, body := haBody(t, g.HADiscoveryComponent(discoveryCtx{}))
 			if _, ok := body["vent_command_topic"]; ok {
 				t.Error("the cover body must carry no vent key: HA's cover schema has no field " +
 					"for one, so it is dropped before any entity sees it. The ventilation " +
@@ -570,7 +570,7 @@ func TestCoverHADiscoveryPayload_VariantDeviceClass(t *testing.T) {
 			t.Parallel()
 			c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
 			c.Variant = tc.variant
-			_, body := c.HADiscoveryPayload(discoveryCtx{})
+			_, body := haBody(t, c.HADiscoveryComponent(discoveryCtx{}))
 			if v, _ := body["device_class"].(string); v != tc.want {
 				t.Errorf("device_class = %q, want %q", v, tc.want)
 			}
@@ -587,7 +587,7 @@ func TestCoverHADiscoveryPayload_DefaultVariantIsShutter(t *testing.T) {
 	if c.Variant != VariantShutter {
 		t.Fatalf("default Variant = %d, want VariantShutter (%d)", c.Variant, VariantShutter)
 	}
-	_, body := c.HADiscoveryPayload(discoveryCtx{})
+	_, body := haBody(t, c.HADiscoveryComponent(discoveryCtx{}))
 	if v, _ := body["device_class"].(string); v != "shutter" {
 		t.Errorf("default device_class = %q, want %q", v, "shutter")
 	}
@@ -602,7 +602,7 @@ func TestBlindHADiscoveryPayload_VariantDeviceClass(t *testing.T) {
 	t.Run("no variant → blind", func(t *testing.T) {
 		t.Parallel()
 		b := newBlindRig(t, "HmIP-BBL:3", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true}, BlindKindIP)
-		_, body := b.HADiscoveryPayload(discoveryCtx{})
+		_, body := haBody(t, b.HADiscoveryComponent(discoveryCtx{}))
 		if v, _ := body["device_class"].(string); v != "blind" {
 			t.Errorf("device_class = %q, want %q", v, "blind")
 		}
@@ -616,7 +616,7 @@ func TestBlindHADiscoveryPayload_VariantDeviceClass(t *testing.T) {
 			Kind:         BlindKindIP,
 			Variant:      VariantShade,
 		})
-		_, body := b.HADiscoveryPayload(discoveryCtx{})
+		_, body := haBody(t, b.HADiscoveryComponent(discoveryCtx{}))
 		if v, _ := body["device_class"].(string); v != "shade" {
 			t.Errorf("device_class = %q, want %q", v, "shade")
 		}
@@ -630,7 +630,7 @@ func TestBlindHADiscoveryPayload_VariantDeviceClass(t *testing.T) {
 			Kind:         BlindKindIP,
 			Variant:      VariantCurtain,
 		})
-		_, body := b.HADiscoveryPayload(discoveryCtx{})
+		_, body := haBody(t, b.HADiscoveryComponent(discoveryCtx{}))
 		if v, _ := body["device_class"].(string); v != "curtain" {
 			t.Errorf("device_class = %q, want %q", v, "curtain")
 		}

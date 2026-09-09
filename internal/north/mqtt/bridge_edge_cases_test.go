@@ -10,7 +10,11 @@ import (
 	"sync/atomic"
 	"testing"
 
+	hacatalog "github.com/SukramJ/go-ha-catalog"
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
+
 	pload "github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -2655,18 +2659,17 @@ func TestResolveSwitchDeviceClassUnknownParam(t *testing.T) {
 
 // ---------------------------------------------------------------------------
 // BuildUpdateDiscovery — 9.5 % covered.
-// A minimal HADiscoveryPayloadBuilder stub lets us exercise the happy path
+// A minimal HADiscoveryComponentBuilder stub lets us exercise the happy path
 // and the nil-Update early-return.
 // ---------------------------------------------------------------------------
 
-// fakeUpdateBuilder is a minimal HADiscoveryPayloadBuilder for testing.
+// fakeUpdateBuilder is a minimal HADiscoveryComponentBuilder for testing.
 type fakeUpdateBuilder struct {
-	comp string
-	body map[string]any
+	component hadiscovery.Component
 }
 
-func (f *fakeUpdateBuilder) HADiscoveryPayload(_ pload.HADiscoveryContext) (component string, body map[string]any) {
-	return f.comp, f.body
+func (f *fakeUpdateBuilder) HADiscoveryComponent(_ pload.HADiscoveryContext) hadiscovery.Component {
+	return f.component
 }
 
 func TestBuildUpdateDiscoveryNilUpdate(t *testing.T) {
@@ -2684,7 +2687,7 @@ func TestBuildUpdateDiscoveryBuilderReturnsEmpty(t *testing.T) {
 	// Builder returns empty component → DiscoveryItem{OK:false}.
 	item := builder.BuildUpdateDiscovery("ccu", UpdateEvent{
 		DeviceAddress: "0001ABCD",
-		Update:        &fakeUpdateBuilder{comp: "", body: nil},
+		Update:        &fakeUpdateBuilder{},
 	})
 	if item.OK {
 		t.Fatal("expected OK=false when builder returns empty component")
@@ -2694,12 +2697,10 @@ func TestBuildUpdateDiscoveryBuilderReturnsEmpty(t *testing.T) {
 func TestBuildUpdateDiscoveryHappyPath(t *testing.T) {
 	t.Parallel()
 	builder := NewDefaultDiscoveryBuilder(NewTopicBuilder("gh"), "ccu")
-	upd := &fakeUpdateBuilder{
-		comp: "update",
-		body: map[string]any{
-			"payload_install": "install",
-		},
-	}
+	upd := &fakeUpdateBuilder{component: hadiscovery.Component{
+		Platform: hacatalog.PlatformUpdate,
+		Fields:   hadiscovery.UpdateFields{PayloadInstall: "install"},
+	}}
 	item := builder.BuildUpdateDiscovery("ccu", UpdateEvent{
 		DeviceAddress: "0001ABCD",
 		DeviceName:    "Bookshelf Lamp",
@@ -2724,10 +2725,10 @@ func TestBuildUpdateDiscoveryDeviceNameFallback(t *testing.T) {
 	t.Parallel()
 	// When DeviceName is empty, DeviceAddress should be used as name fallback.
 	builder := NewDefaultDiscoveryBuilder(NewTopicBuilder("gh"), "ccu")
-	upd := &fakeUpdateBuilder{
-		comp: "update",
-		body: map[string]any{"payload_install": "install"},
-	}
+	upd := &fakeUpdateBuilder{component: hadiscovery.Component{
+		Platform: hacatalog.PlatformUpdate,
+		Fields:   hadiscovery.UpdateFields{PayloadInstall: "install"},
+	}}
 	item := builder.BuildUpdateDiscovery("ccu", UpdateEvent{
 		DeviceAddress: "0001ABCD",
 		DeviceName:    "", // empty → fallback to address

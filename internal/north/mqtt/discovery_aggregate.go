@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+
 	"github.com/SukramJ/openccu-loom/internal/model/event"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/payload"
@@ -266,11 +268,56 @@ func toAnySlice(ss []string) []any {
 // (one per parameter event) deduplicate to a no-op.
 //
 // Returns ok=false when ev.Source does not implement
-// [payload.HADiscoveryPayloadBuilder], the builder returns a nil
+// [payload.HADiscoveryComponentBuilder], the builder returns an empty
 // body, or JSON marshalling fails.
 //
-// ADR 0010: all custom-DP types implement HADiscoveryPayloadBuilder.
+// ADR 0010: all custom-DP types implement HADiscoveryComponentBuilder.
 // The legacy buildX path has been removed.
+// buildCustomDPBody asks the event's custom DP for its discovery body.
+//
+// The custom DP returns a typed [hadiscovery.Component] whose keys the
+// compiler checked against the platform; everything downstream still works on
+// the flattened map, because the frame and the post-processors are converted
+// in their own steps.
+//
+// Flattening goes through Component's own MarshalJSON, which is what merges
+// its typed fields, its platform Fields struct and its Extra map into the one
+// object Home Assistant receives — so what the rest of the pipeline sees is
+// exactly what would go on the wire.
+func buildCustomDPBody(ev Event, ctx payload.HADiscoveryContext) (component string, body map[string]any, ok bool) {
+	builder, is := ev.Source.(payload.HADiscoveryComponentBuilder)
+	if !is || builder == nil {
+		return "", nil, false
+	}
+	comp := builder.HADiscoveryComponent(ctx)
+	if comp.Platform == "" {
+		return "", nil, false
+	}
+	flat, err := flattenComponent(comp)
+	if err != nil {
+		return "", nil, false
+	}
+	return string(comp.Platform), flat, true
+}
+
+// flattenComponent renders a typed component into the flat object Home
+// Assistant receives.
+func flattenComponent(comp hadiscovery.Component) (map[string]any, error) {
+	raw, err := json.Marshal(comp)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]any{}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, err
+	}
+	// `platform` is the bundle discriminator, not a discovery key: the
+	// per-entity form this daemon publishes carries the platform in the topic
+	// and Home Assistant declares the key on no platform at all.
+	delete(out, "platform")
+	return out, nil
+}
+
 func (d *DefaultDiscoveryBuilder) aggregateChannel(ev Event) (component, nodeID, objectID string, buf []byte, ok bool) {
 	// Text-display custom-DPs (HmIP-WRCD) surface ONLY as a `notify`
 	// entity in the reference stack — the TEXT_DISPLAY category maps to
@@ -282,12 +329,8 @@ func (d *DefaultDiscoveryBuilder) aggregateChannel(ev Event) (component, nodeID,
 	if isTextDisplayEvent(ev) {
 		return "", "", "", nil, false
 	}
-	builder, ok := ev.Source.(payload.HADiscoveryPayloadBuilder)
-	if !ok || builder == nil {
-		return "", "", "", nil, false
-	}
-	comp, body := builder.HADiscoveryPayload(d.discoveryContext(ev))
-	if body == nil {
+	comp, body, ok := buildCustomDPBody(ev, d.discoveryContext(ev))
+	if !ok {
 		return "", "", "", nil, false
 	}
 	// The climate preset list leaves the domain as slugs; the ones HA

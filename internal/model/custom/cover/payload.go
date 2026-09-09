@@ -8,6 +8,9 @@ import (
 	"fmt"
 	"strings"
 
+	hacatalog "github.com/SukramJ/go-ha-catalog"
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -17,14 +20,14 @@ import (
 // satisfy the universal Source contract. Cover and Blind inherit
 // the write half (ServiceRegistry) by promotion through their
 // *generic.Float embed; Garage embeds payload.ServiceRegistry directly.
-// HADiscoveryPayloadBuilder is also satisfied by all three types.
+// HADiscoveryComponentBuilder is also satisfied by all three types.
 var (
-	_ payload.Source                    = (*Cover)(nil)
-	_ payload.Source                    = (*Blind)(nil)
-	_ payload.Source                    = (*Garage)(nil)
-	_ payload.HADiscoveryPayloadBuilder = (*Cover)(nil)
-	_ payload.HADiscoveryPayloadBuilder = (*Blind)(nil)
-	_ payload.HADiscoveryPayloadBuilder = (*Garage)(nil)
+	_ payload.Source                      = (*Cover)(nil)
+	_ payload.Source                      = (*Blind)(nil)
+	_ payload.Source                      = (*Garage)(nil)
+	_ payload.HADiscoveryComponentBuilder = (*Cover)(nil)
+	_ payload.HADiscoveryComponentBuilder = (*Blind)(nil)
+	_ payload.HADiscoveryComponentBuilder = (*Garage)(nil)
 )
 
 // --- Cover ---
@@ -381,9 +384,9 @@ func subDPKeysAsStrings(keys []hmtypes.DataPointKey) []string {
 	return out
 }
 
-// --- HADiscoveryPayload implementations ---
+// --- HADiscoveryComponent implementations ---
 
-// HADiscoveryPayload returns the HA Cover-platform-specific payload
+// HADiscoveryComponent returns the HA Cover-platform-specific payload
 // skeleton. Position reads come from the aggregated state topic via
 // value_json.current_position. set_position uses the service-method
 // command topic (unique, 1:1 with the set_position service).
@@ -398,80 +401,90 @@ func subDPKeysAsStrings(keys []hmtypes.DataPointKey) []string {
 //
 // Per ADR 0010: service-method topics for calls that reduce to one
 // domain operation.
-func (c *Cover) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component string, body map[string]any) {
+func (c *Cover) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery.Component {
 	if c == nil || ctx == nil {
-		return "", nil
+		return hadiscovery.Component{}
 	}
 	stateTopic := ctx.CustomDPStateTopic()
-	body = map[string]any{
-		"device_class":  VariantString(c.Variant),
-		"optimistic":    false,
-		"command_topic": ctx.ServiceMethodCommandTopic(serviceCoverCommand),
-		"payload_open":  commandTokenOpen,
-		"payload_close": commandTokenClose,
-		"payload_stop":  commandTokenStop,
-		// State reads from aggregated topic via value_json.state.
-		"state_topic":    stateTopic,
-		"value_template": "{{ value_json.state }}",
-		"state_open":     "open",
-		"state_closed":   "closed",
-		"state_opening":  "opening",
-		"state_closing":  "closing",
-		"state_stopped":  "stopped",
+	fields := hadiscovery.CoverFields{
+		PayloadOpen:  commandTokenOpen,
+		PayloadClose: commandTokenClose,
+		PayloadStop:  commandTokenStop,
+		StateOpen:    "open",
+		StateClosed:  "closed",
+		StateOpening: "opening",
+		StateClosing: "closing",
+		StateStopped: "stopped",
 	}
 	// Only emit position topics when the capability is set. HA's MQTT
 	// cover platform treats the presence of position_topic as "device
 	// supports position" — on devices with no LEVEL write support (e.g.
 	// only STOP) HA would incorrectly render a position slider.
 	if c.Capabilities.SupportsPosition {
-		body["position_open"] = 100
-		body["position_closed"] = 0
-		body["set_position_topic"] = ctx.ServiceMethodCommandTopic("set_position")
-		body["set_position_template"] = "{{ (value | float / 100) }}"
-		body["position_topic"] = stateTopic
-		body["position_template"] = "{{ value_json.current_position }}"
+		fields.PositionOpen = hadiscovery.Ptr(100)
+		fields.PositionClosed = hadiscovery.Ptr(0)
+		fields.SetPositionTopic = ctx.ServiceMethodCommandTopic("set_position")
+		fields.SetPositionTemplate = "{{ (value | float / 100) }}"
+		fields.PositionTopic = stateTopic
+		fields.PositionTemplate = "{{ value_json.current_position }}"
 	}
-	return "cover", body
+	return hadiscovery.Component{
+		Platform:     hacatalog.PlatformCover,
+		DeviceClass:  VariantString(c.Variant),
+		Optimistic:   hadiscovery.Ptr(false),
+		CommandTopic: ctx.ServiceMethodCommandTopic(serviceCoverCommand),
+		// State reads from aggregated topic via value_json.state.
+		StateTopic:    stateTopic,
+		ValueTemplate: "{{ value_json.state }}",
+		Fields:        fields,
+	}
 }
 
-// HADiscoveryPayload returns the HA Cover-platform-specific payload
+// HADiscoveryComponent returns the HA Cover-platform-specific payload
 // for a Blind — extends Cover with tilt. set_tilt is a distinct
 // service-method and gets its own service-method topic. Tilt reads
 // come from value_json.current_tilt_position.
-func (b *Blind) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component string, body map[string]any) {
+func (b *Blind) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery.Component {
 	if b == nil || ctx == nil {
-		return "", nil
+		return hadiscovery.Component{}
 	}
-	// Start from Cover's payload; override device_class for blind.
+	// Start from Cover's component; override device_class for blind.
 	// The Blind's variant is propagated through Cover.Variant so
 	// subtypes like VariantShade (HmIP-HDM) surface the correct class.
 	// When no explicit variant was set (zero value = VariantShutter),
 	// blinds always emit "blind" — a plain Blind is never a shutter.
-	_, body = b.Cover.HADiscoveryPayload(ctx)
-	if body == nil {
-		body = map[string]any{}
+	comp := b.Cover.HADiscoveryComponent(ctx)
+	if comp.Platform == "" {
+		// The untyped builder recovered from an empty base by starting from
+		// an empty body and still emitting its tilt keys; keep that.
+		comp.Platform = hacatalog.PlatformCover
 	}
 	variant := b.Variant
 	if variant == VariantShutter {
 		variant = VariantBlind
 	}
-	body["device_class"] = VariantString(variant)
+	comp.DeviceClass = VariantString(variant)
+
+	// The cast cannot fail: Cover.HADiscoveryComponent above is the only
+	// thing that sets this field, and it always sets a CoverFields.
+	fields, _ := comp.Fields.(hadiscovery.CoverFields)
 	stateTopic := ctx.CustomDPStateTopic()
 	// Tilt: set_tilt is a distinct service method (unique write call).
 	// Tilt_opened_value / tilt_closed_value mirror
 	// (platforms/cover.py:63-64).
-	body["tilt_status_topic"] = stateTopic
-	body["tilt_status_template"] = "{{ value_json.current_tilt_position }}"
-	body["tilt_command_topic"] = ctx.ServiceMethodCommandTopic("set_tilt")
-	body["tilt_command_template"] = "{{ (value | float / 100) }}"
-	body["tilt_min"] = 0
-	body["tilt_max"] = 100
-	body["tilt_opened_value"] = 100
-	body["tilt_closed_value"] = 0
-	return "cover", body
+	fields.TiltStatusTopic = stateTopic
+	fields.TiltStatusTemplate = "{{ value_json.current_tilt_position }}"
+	fields.TiltCommandTopic = ctx.ServiceMethodCommandTopic("set_tilt")
+	fields.TiltCommandTemplate = "{{ (value | float / 100) }}"
+	fields.TiltMin = hadiscovery.Ptr(0)
+	fields.TiltMax = hadiscovery.Ptr(100)
+	fields.TiltOpenedValue = hadiscovery.Ptr(100)
+	fields.TiltClosedValue = hadiscovery.Ptr(0)
+	comp.Fields = fields
+	return comp
 }
 
-// HADiscoveryPayload returns the HA Cover-platform-specific payload
+// HADiscoveryComponent returns the HA Cover-platform-specific payload
 // for a Garage door. open/close/stop/ventilate are all distinct
 // service methods and each gets its own service-method command topic.
 // HA's cover command_topic however sends a single topic with
@@ -486,37 +499,40 @@ func (b *Blind) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component st
 // payload_close to close service via set_position_topic template.
 // Simplest correct approach: command_topic = wire DOOR_COMMAND param
 // (carries string values), state from value_json.door_state.
-func (g *Garage) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component string, body map[string]any) {
+func (g *Garage) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery.Component {
 	if g == nil || ctx == nil {
-		return "", nil
+		return hadiscovery.Component{}
 	}
 	stateTopic := ctx.CustomDPStateTopic()
-	body = map[string]any{
-		"device_class": "garage",
-		"optimistic":   false,
+	return hadiscovery.Component{
+		Platform:    hacatalog.PlatformCover,
+		DeviceClass: "garage",
+		Optimistic:  hadiscovery.Ptr(false),
 		// HA cover: command_topic with string payloads. Garage uses
 		// DOOR_COMMAND wire parameter (OPEN/CLOSE/STOP/PARTIAL_OPEN).
 		// No single service-method maps to all three HA payloads, so
 		// wire-parameter command topic is the correct fallback per spec.
-		"command_topic": ctx.WireParameterCommandTopic("DOOR_COMMAND"),
-		"payload_open":  "OPEN",
-		"payload_close": "CLOSE",
-		"payload_stop":  "STOP",
-		// Position reads from aggregated topic (virtual 0/50/100 from door_state).
-		"position_topic":    stateTopic,
-		"position_template": "{{ value_json.current_position }}",
-		"position_open":     100,
-		"position_closed":   0,
+		CommandTopic: ctx.WireParameterCommandTopic("DOOR_COMMAND"),
 		// State from aggregated topic via value_json.state (lowercase HA-canonical
 		// strings). Previously used door_state (CCU-raw uppercase) which did not
 		// match HA's expected lowercase state strings.
-		"state_topic":    stateTopic,
-		"value_template": "{{ value_json.state }}",
-		"state_open":     "open",
-		"state_closed":   "closed",
-		"state_opening":  "opening",
-		"state_closing":  "closing",
-		"state_stopped":  "stopped",
+		StateTopic:    stateTopic,
+		ValueTemplate: "{{ value_json.state }}",
+		Fields: hadiscovery.CoverFields{
+			PayloadOpen:  "OPEN",
+			PayloadClose: "CLOSE",
+			PayloadStop:  "STOP",
+			// Position reads from aggregated topic (virtual 0/50/100 from door_state).
+			PositionTopic:    stateTopic,
+			PositionTemplate: "{{ value_json.current_position }}",
+			PositionOpen:     hadiscovery.Ptr(100),
+			PositionClosed:   hadiscovery.Ptr(0),
+			StateOpen:        "open",
+			StateClosed:      "closed",
+			StateOpening:     "opening",
+			StateClosing:     "closing",
+			StateStopped:     "stopped",
+		},
 	}
 	// The ventilation position deliberately does not appear here. HA's MQTT
 	// Cover platform validates the discovery body against a closed key
@@ -524,5 +540,4 @@ func (g *Garage) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component s
 	// is dropped before any entity sees it. A vent-capable drive gets a
 	// separate `select` entity instead — see Garage.attachDoorMode — which
 	// HA renders as a real control and can read back.
-	return "cover", body
 }

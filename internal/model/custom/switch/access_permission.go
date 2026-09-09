@@ -7,6 +7,9 @@ import (
 	"context"
 	"fmt"
 
+	hacatalog "github.com/SukramJ/go-ha-catalog"
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -283,7 +286,7 @@ func (a *AccessPermission) registerServices() {
 		})
 }
 
-// HADiscoveryPayload returns the HA Switch-platform payload for a
+// HADiscoveryComponent returns the HA Switch-platform payload for a
 // per-user access permission.
 //
 // Both constituent wire data points are invisible on their own — STATE
@@ -291,24 +294,26 @@ func (a *AccessPermission) registerServices() {
 // forced to no_create — so without this builder the permission has no HA
 // entity at all. State therefore reads from the custom-DP aggregate
 // topic and the command goes to [serviceAccessPermission].
-func (a *AccessPermission) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component string, body map[string]any) {
+func (a *AccessPermission) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery.Component {
 	if a == nil || ctx == nil {
-		return "", nil
+		return hadiscovery.Component{}
 	}
-	body = map[string]any{
-		"command_topic": ctx.ServiceMethodCommandTopic(serviceAccessPermission),
-		"payload_on":    "true",
-		"payload_off":   "false",
-		"state_topic":   ctx.CustomDPStateTopic(),
+	return hadiscovery.Component{
+		Platform:     hacatalog.PlatformSwitch,
+		CommandTopic: ctx.ServiceMethodCommandTopic(serviceAccessPermission),
+		StateTopic:   ctx.CustomDPStateTopic(),
 		// The aggregate omits is_on until STATE has been observed; the
 		// `is defined` guard keeps HA from logging a template error on the
 		// retained pre-observation payload.
-		"value_template": `{% if value_json.is_on is defined %}{{ value_json.is_on | lower }}{% endif %}`,
-		"state_on":       "true",
-		"state_off":      "false",
+		ValueTemplate: `{% if value_json.is_on is defined %}{{ value_json.is_on | lower }}{% endif %}`,
 		// The CCU confirms the grant on STATE; HA must not flip the entity
 		// locally before that echo arrives.
-		"optimistic": false,
+		Optimistic: hadiscovery.Ptr(false),
+		Fields: hadiscovery.SwitchFields{
+			PayloadOn:  "true",
+			PayloadOff: "false",
+			StateOn:    "true",
+			StateOff:   "false",
+		},
 	}
-	return "switch", body
 }

@@ -9,6 +9,9 @@ import (
 	"strings"
 	"time"
 
+	hacatalog "github.com/SukramJ/go-ha-catalog"
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -18,11 +21,11 @@ import (
 // contract (ADR 0007 step 4) and the HA-Discovery payload builder
 // contract (ADR 0010).
 var (
-	_ payload.Source                    = (*Climate)(nil)
-	_ payload.HADiscoveryPayloadBuilder = (*Climate)(nil)
+	_ payload.Source                      = (*Climate)(nil)
+	_ payload.HADiscoveryComponentBuilder = (*Climate)(nil)
 )
 
-// HADiscoveryPayload returns the HA Climate-platform-specific payload
+// HADiscoveryComponent returns the HA Climate-platform-specific payload
 // skeleton. The bridge attaches the shared availability / device
 // origin block plus name / unique_id; the builder fills in
 // climate-specific state references and command topics.
@@ -45,9 +48,9 @@ var (
 //
 // Write side: per-service-method `…/custom/climate/set/<method>`
 // topics (ADR 0009 + ADR 0011 §"Service-method command shape").
-func (c *Climate) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component string, body map[string]any) {
+func (c *Climate) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery.Component {
 	if c == nil || ctx == nil {
-		return "", nil
+		return hadiscovery.Component{}
 	}
 	// Every wire-backed field names the channel + parameter it actually
 	// resolved to (see [Config.Group]); on the HmIP and classic-RF
@@ -56,37 +59,28 @@ func (c *Climate) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component 
 	// HA's temperature_unit field expects "C" or "F" — not the unit-with-degree-sign.
 	// c.TemperatureUnit() returns "°C" / "°F" by default; strip the leading "°".
 	haTempUnit := strings.TrimPrefix(c.TemperatureUnit(), "°")
-	body = map[string]any{
-		"temperature_unit": haTempUnit,
-		"min_temp":         c.MinTemp(),
-		"max_temp":         c.MaxTemp(),
-		"temp_step":        c.TemperatureStep(),
-		// HA derives slider granularity from `temp_step` alone;
-		// `precision` is a HA-MQTT-only display-rounding hint that
-		// `_attr_target_temperature_step`). Emitting both produces a
-		// drift against the HA-native integration without any
-		// behavioural benefit. Dropped per
-		// optimistic=false: HA must not apply setpoint changes locally before
-		// the CCU echoes them back; wrong displayed setpoint during connection
-		// issues would mislead the user.
-		"optimistic": false,
+	fields := hadiscovery.ClimateFields{
+		TemperatureUnit: haTempUnit,
+		MinTemp:         hadiscovery.Ptr(c.MinTemp()),
+		MaxTemp:         hadiscovery.Ptr(c.MaxTemp()),
+		TempStep:        hadiscovery.Ptr(c.TemperatureStep()),
 		// Direct wire values → per-DP topics with `value_json.value`.
-		"current_temperature_topic":    ctx.WireParameterStateTopicOn(c.temperatureSlot.ChannelAddress, string(c.temperatureSlot.Parameter)),
-		"current_temperature_template": "{{ value_json.value }}",
-		"temperature_state_topic":      ctx.WireParameterStateTopicOn(c.setpointSlot.ChannelAddress, string(c.setpointSlot.Parameter)),
-		"temperature_state_template":   "{{ value_json.value }}",
-		"temperature_command_topic":    ctx.ServiceMethodCommandTopic("set_temperature"),
+		CurrentTemperatureTopic:    ctx.WireParameterStateTopicOn(c.temperatureSlot.ChannelAddress, string(c.temperatureSlot.Parameter)),
+		CurrentTemperatureTemplate: "{{ value_json.value }}",
+		TemperatureStateTopic:      ctx.WireParameterStateTopicOn(c.setpointSlot.ChannelAddress, string(c.setpointSlot.Parameter)),
+		TemperatureStateTemplate:   "{{ value_json.value }}",
+		TemperatureCommandTopic:    ctx.ServiceMethodCommandTopic("set_temperature"),
 		// Derived fields → custom-DP aggregate (curated, derived-only).
-		"mode_state_topic":    ctx.CustomDPStateTopic(),
-		"mode_state_template": "{{ value_json.hvac_mode }}",
-		"mode_command_topic":  ctx.ServiceMethodCommandTopic("set_mode"),
+		ModeStateTopic:    ctx.CustomDPStateTopic(),
+		ModeStateTemplate: "{{ value_json.hvac_mode }}",
+		ModeCommandTopic:  ctx.ServiceMethodCommandTopic("set_mode"),
 	}
 	if modes := c.Modes(); len(modes) > 0 {
 		ms := make([]string, len(modes))
 		for i, m := range modes {
 			ms[i] = string(m)
 		}
-		body["modes"] = ms
+		fields.Modes = ms
 	}
 	if profiles := c.Profiles(); len(profiles) > 0 {
 		ps := make([]string, 0, len(profiles))
@@ -102,15 +96,15 @@ func (c *Climate) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component 
 			ps = append(ps, string(p))
 		}
 		if len(ps) > 0 {
-			body["preset_modes"] = ps
-			body["preset_mode_state_topic"] = ctx.CustomDPStateTopic()
-			body["preset_mode_value_template"] = "{{ value_json.preset_mode }}"
-			body["preset_mode_command_topic"] = ctx.ServiceMethodCommandTopic("set_profile")
+			fields.PresetModes = ps
+			fields.PresetModeStateTopic = ctx.CustomDPStateTopic()
+			fields.PresetModeValueTemplate = "{{ value_json.preset_mode }}"
+			fields.PresetModeCommandTopic = ctx.ServiceMethodCommandTopic("set_profile")
 		}
 	}
 	if c.HasHumidity() {
-		body["current_humidity_topic"] = ctx.WireParameterStateTopicOn(c.humiditySlot.ChannelAddress, string(c.humiditySlot.Parameter))
-		body["current_humidity_template"] = "{{ value_json.value }}"
+		fields.CurrentHumidityTopic = ctx.WireParameterStateTopicOn(c.humiditySlot.ChannelAddress, string(c.humiditySlot.Parameter))
+		fields.CurrentHumidityTemplate = "{{ value_json.value }}"
 	}
 	// The action surface is only advertised when the thermostat has an
 	// activity source — see [Climate.HasActivitySource]. For display-only
@@ -125,21 +119,33 @@ func (c *Climate) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component 
 	// MQTT bridge's diff-gated discovery cache re-publishes the changed
 	// bytes (retained).
 	if c.HasActivitySource() {
-		body["action_topic"] = ctx.CustomDPStateTopic()
-		body["action_template"] = "{{ value_json.action }}"
+		fields.ActionTopic = ctx.CustomDPStateTopic()
+		fields.ActionTemplate = "{{ value_json.action }}"
 	}
-	// Json_attributes — surface
-	// extra_state_attributes (schedule_data, temperature_offset,
-	// optimum_start_stop, available_profiles, current_schedule_profile,
-	// device_active_profile_index, schedule_api_version, value_state,
-	// address) as HA entity state-attributes. The template filters
-	// out the keys HA already reads via dedicated state-templates
-	// (hvac_mode, preset_mode, action, state_uncertain) so the
-	// climate-entity properties don't appear duplicated under the
-	// "more attributes" section.
-	body["json_attributes_topic"] = ctx.CustomDPStateTopic()
-	body["json_attributes_template"] = climateJSONAttributesTemplate
-	return "climate", body
+	return hadiscovery.Component{
+		Platform: hacatalog.PlatformClimate,
+		// HA derives slider granularity from `temp_step` alone;
+		// `precision` is a HA-MQTT-only display-rounding hint that
+		// `_attr_target_temperature_step`). Emitting both produces a
+		// drift against the HA-native integration without any
+		// behavioural benefit. Dropped per
+		// optimistic=false: HA must not apply setpoint changes locally before
+		// the CCU echoes them back; wrong displayed setpoint during connection
+		// issues would mislead the user.
+		Optimistic: hadiscovery.Ptr(false),
+		// Json_attributes — surface
+		// extra_state_attributes (schedule_data, temperature_offset,
+		// optimum_start_stop, available_profiles, current_schedule_profile,
+		// device_active_profile_index, schedule_api_version, value_state,
+		// address) as HA entity state-attributes. The template filters
+		// out the keys HA already reads via dedicated state-templates
+		// (hvac_mode, preset_mode, action, state_uncertain) so the
+		// climate-entity properties don't appear duplicated under the
+		// "more attributes" section.
+		JSONAttributesTopic:    ctx.CustomDPStateTopic(),
+		JSONAttributesTemplate: climateJSONAttributesTemplate,
+		Fields:                 fields,
+	}
 }
 
 // climateJSONAttributesTemplate is the Jinja template HA's MQTT

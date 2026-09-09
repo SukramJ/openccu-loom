@@ -86,7 +86,7 @@ func TestLockTargetLevelDiscoveryPayloadsMatchServiceWrites(t *testing.T) {
 		Capabilities: custom.LockCapabilities{SupportsOpen: true},
 	})
 
-	component, body := l.HADiscoveryPayload(lockTargetLevelDiscoveryCtx{})
+	component, body := haBody(t, l.HADiscoveryComponent(lockTargetLevelDiscoveryCtx{}))
 	if component != "lock" {
 		t.Fatalf("component = %q, want %q", component, "lock")
 	}

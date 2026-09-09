@@ -474,7 +474,7 @@ func buildCoverBody(t *testing.T) map[string]any {
 	ch := d.AddChannel(addr, 3, "BLIND", hmenum.ParamsetKeyValues)
 	rtPutFloat(ch, addr, hmenum.ParameterLevel, w)
 	c := cover.New(cover.Config{Channel: ch, Writer: w, Capabilities: custom.CoverCapabilities{SupportsPosition: true}})
-	comp, body := c.HADiscoveryPayload(roundtripDiscoveryCtx{})
+	comp, body := haBody(t, c.HADiscoveryComponent(roundtripDiscoveryCtx{}))
 	if comp != "cover" {
 		t.Fatalf("cover component = %q, want cover", comp)
 	}
@@ -531,7 +531,7 @@ func buildClimateBody(t *testing.T) map[string]any {
 	rtPutFloat(ch, addr, hmenum.ParameterSetTemperature, w)
 	rtPutFloatSensor(ch, addr, hmenum.ParameterActualTemperature)
 	c := climate.New(climate.Config{Channel: ch, Writer: w, Kind: climate.KindRF})
-	comp, body := c.HADiscoveryPayload(roundtripDiscoveryCtx{})
+	comp, body := haBody(t, c.HADiscoveryComponent(roundtripDiscoveryCtx{}))
 	if comp != "climate" {
 		t.Fatalf("climate component = %q, want climate", comp)
 	}
@@ -584,7 +584,7 @@ func TestDiscoveryRoundTrip_Climate(t *testing.T) {
 func TestDiscoveryRoundTrip_Siren(t *testing.T) {
 	t.Parallel()
 	s := siren.New(siren.Config{Writer: roundtripWriter{}})
-	comp, body := s.HADiscoveryPayload(roundtripDiscoveryCtx{})
+	comp, body := haBody(t, s.HADiscoveryComponent(roundtripDiscoveryCtx{}))
 	if comp != "siren" {
 		t.Fatalf("siren component = %q, want siren", comp)
 	}
@@ -621,7 +621,7 @@ func buildIrrigationBody(t *testing.T) map[string]any {
 	if v == nil {
 		t.Fatal("valve.NewIrrigation returned nil (STATE switch not resolved)")
 	}
-	comp, body := v.HADiscoveryPayload(roundtripDiscoveryCtx{})
+	comp, body := haBody(t, v.HADiscoveryComponent(roundtripDiscoveryCtx{}))
 	if comp != "valve" {
 		t.Fatalf("irrigation component = %q, want valve", comp)
 	}
@@ -641,7 +641,7 @@ func buildModulatingBody(t *testing.T) map[string]any {
 	if v == nil {
 		t.Fatal("valve.NewModulating returned nil (LEVEL float not resolved)")
 	}
-	comp, body := v.HADiscoveryPayload(roundtripDiscoveryCtx{})
+	comp, body := haBody(t, v.HADiscoveryComponent(roundtripDiscoveryCtx{}))
 	if comp != "valve" {
 		t.Fatalf("modulating component = %q, want valve", comp)
 	}

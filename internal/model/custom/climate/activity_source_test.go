@@ -157,7 +157,7 @@ func TestDisplayOnlyThermostatOmitsAction(t *testing.T) {
 		t.Errorf("State().Action = %q in OFF mode, want empty for display-only thermostats", state.Action)
 	}
 
-	component, body := c.HADiscoveryPayload(discoveryCtx{})
+	component, body := haBody(t, c.HADiscoveryComponent(discoveryCtx{}))
 	if component != "climate" {
 		t.Fatalf("HADiscoveryPayload component = %q, want climate", component)
 	}
@@ -186,7 +186,7 @@ func TestDiscoveryGainsActionTopicAfterPeerActivity(t *testing.T) {
 
 	c := New(Config{Channel: climateCh, Writer: &stubWriter{}, Kind: KindIP})
 	c.OnMode(ModeHeat) // a non-off mode so the OFF override does not mask the activity
-	if _, body := c.HADiscoveryPayload(discoveryCtx{}); body["action_topic"] != nil {
+	if _, body := haBody(t, c.HADiscoveryComponent(discoveryCtx{})); body["action_topic"] != nil {
 		t.Fatal("discovery must omit action_topic before any source exists")
 	}
 
@@ -197,7 +197,7 @@ func TestDiscoveryGainsActionTopicAfterPeerActivity(t *testing.T) {
 	if got, observed := c.Activity(); !observed || got != ActivityHeating {
 		t.Fatalf("Activity = (%v, %v), want (heating, true) after peer LEVEL push", got, observed)
 	}
-	_, body := c.HADiscoveryPayload(discoveryCtx{})
+	_, body := haBody(t, c.HADiscoveryComponent(discoveryCtx{}))
 	if body["action_topic"] == nil {
 		t.Error("rebuilt discovery must carry action_topic once peer activity is fed")
 	}

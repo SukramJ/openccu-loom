@@ -112,25 +112,29 @@ func TestLSCHADiscoveryAdvertisesColorTempAndHs(t *testing.T) {
 	w := &colorStubWriter{}
 	r := newLSCLightRig(t, w)
 
-	_, body := r.HADiscoveryPayload(discoveryCtx{})
+	_, body := haBody(t, r.HADiscoveryComponent(discoveryCtx{}))
 	if body == nil {
 		t.Fatal("HADiscoveryPayload body must not be nil")
 	}
 
-	modes, _ := body["supported_color_modes"].([]string)
+	modes := haStrings(t, body, "supported_color_modes")
 	if len(modes) != 2 || modes[0] != "color_temp" || modes[1] != "hs" {
 		t.Errorf("supported_color_modes = %v, want [color_temp hs]", modes)
 	}
-	if v, _ := body["hs"].(bool); !v {
-		t.Error("hs must be true")
+	// `hs` is deliberately absent. Home Assistant's json light schema
+	// declares no such key — colour support is announced through
+	// supported_color_modes alone — so the daemon's old `hs: true` was
+	// dropped on receipt and never reached anything.
+	if _, present := body["hs"]; present {
+		t.Error("hs is not a key the json light schema declares")
 	}
 	if v, _ := body["color_temp_kelvin"].(bool); !v {
 		t.Error("color_temp_kelvin must be true")
 	}
-	if v, _ := body["min_kelvin"].(int32); v != r.MinKelvin {
+	if v := haNum(t, body, "min_kelvin"); v != float64(r.MinKelvin) {
 		t.Errorf("min_kelvin = %v, want %v", v, r.MinKelvin)
 	}
-	if v, _ := body["max_kelvin"].(int32); v != r.MaxKelvin {
+	if v := haNum(t, body, "max_kelvin"); v != float64(r.MaxKelvin) {
 		t.Errorf("max_kelvin = %v, want %v", v, r.MaxKelvin)
 	}
 	if r.MinKelvin != hmLgtDeclaredMinKelvin {

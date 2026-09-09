@@ -322,12 +322,11 @@ func TestTextDisplaySubDataPointKeysEmptyWithoutBurstLimitWarning(t *testing.T) 
 func TestTextDisplayHADiscoveryPayloadMaxMatchesMaxRowLength(t *testing.T) {
 	t.Parallel()
 	d := New("VCU0001:3", nil)
-	_, body := d.HADiscoveryPayload(discoveryCtx{})
-	maxVal, ok := body["max"]
-	if !ok {
+	_, body := haBody(t, d.HADiscoveryComponent(discoveryCtx{}))
+	if _, ok := body["max"]; !ok {
 		t.Fatal("HA Discovery payload must contain 'max'")
 	}
-	if maxVal != MaxRowLength {
+	if maxVal := haNum(t, body, "max"); maxVal != float64(MaxRowLength) {
 		t.Fatalf("HA Discovery payload max=%v, want %d", maxVal, MaxRowLength)
 	}
 }

@@ -37,7 +37,7 @@ var _ payload.HADiscoveryContext = discoveryCtx{}
 func TestIrrigationHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
 	t.Parallel()
 	var v *Irrigation
-	comp, body := v.HADiscoveryPayload(discoveryCtx{})
+	comp, body := haBody(t, v.HADiscoveryComponent(discoveryCtx{}))
 	if comp != "" || body != nil {
 		t.Fatalf("nil receiver: want (\"\", nil), got (%q, %v)", comp, body)
 	}
@@ -46,7 +46,7 @@ func TestIrrigationHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
 func TestIrrigationHADiscoveryPayload_Component(t *testing.T) {
 	t.Parallel()
 	v := newTestIrrigation(t, "HmIP-IRRIG:3", &stubWriter{})
-	comp, body := v.HADiscoveryPayload(discoveryCtx{})
+	comp, body := haBody(t, v.HADiscoveryComponent(discoveryCtx{}))
 	if comp != "valve" {
 		t.Fatalf("component = %q, want %q", comp, "valve")
 	}
@@ -59,7 +59,7 @@ func TestIrrigationHADiscoveryPayload_RequiredKeys(t *testing.T) {
 	t.Parallel()
 	v := newTestIrrigation(t, "HmIP-IRRIG:3", &stubWriter{})
 	ctx := discoveryCtx{}
-	_, body := v.HADiscoveryPayload(ctx)
+	_, body := haBody(t, v.HADiscoveryComponent(ctx))
 
 	for _, key := range []string{
 		"command_topic",
@@ -75,7 +75,7 @@ func TestIrrigationHADiscoveryPayload_TopicValues(t *testing.T) {
 	t.Parallel()
 	v := newTestIrrigation(t, "HmIP-IRRIG:3", &stubWriter{})
 	ctx := discoveryCtx{}
-	_, body := v.HADiscoveryPayload(ctx)
+	_, body := haBody(t, v.HADiscoveryComponent(ctx))
 
 	// Irrigation uses STATE (boolean) matching STATE (valve.py:35).
 	wantCmd := ctx.WireParameterCommandTopic("STATE")
@@ -92,7 +92,7 @@ func TestIrrigationHADiscoveryPayload_TopicValues(t *testing.T) {
 func TestModulatingHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
 	t.Parallel()
 	var v *Modulating
-	comp, body := v.HADiscoveryPayload(discoveryCtx{})
+	comp, body := haBody(t, v.HADiscoveryComponent(discoveryCtx{}))
 	if comp != "" || body != nil {
 		t.Fatalf("nil receiver: want (\"\", nil), got (%q, %v)", comp, body)
 	}
@@ -101,7 +101,7 @@ func TestModulatingHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
 func TestModulatingHADiscoveryPayload_Component(t *testing.T) {
 	t.Parallel()
 	v := newTestModulating(t, "x", &stubWriter{})
-	comp, body := v.HADiscoveryPayload(discoveryCtx{})
+	comp, body := haBody(t, v.HADiscoveryComponent(discoveryCtx{}))
 	if comp != "valve" {
 		t.Fatalf("component = %q, want %q", comp, "valve")
 	}
@@ -114,7 +114,7 @@ func TestModulatingHADiscoveryPayload_RequiredKeys(t *testing.T) {
 	t.Parallel()
 	v := newTestModulating(t, "x", &stubWriter{})
 	ctx := discoveryCtx{}
-	_, body := v.HADiscoveryPayload(ctx)
+	_, body := haBody(t, v.HADiscoveryComponent(ctx))
 
 	for _, key := range []string{
 		"command_topic",
@@ -130,7 +130,7 @@ func TestModulatingHADiscoveryPayload_TopicValues(t *testing.T) {
 	t.Parallel()
 	v := newTestModulating(t, "x", &stubWriter{})
 	ctx := discoveryCtx{}
-	_, body := v.HADiscoveryPayload(ctx)
+	_, body := haBody(t, v.HADiscoveryComponent(ctx))
 
 	wantCmd := ctx.ServiceMethodCommandTopic("set_level")
 	if got, _ := body["command_topic"].(string); got != wantCmd {
