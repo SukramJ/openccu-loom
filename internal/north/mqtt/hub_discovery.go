@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
@@ -158,12 +160,12 @@ func hubEntityDeviceBlock(centralName, deviceAddress string, info HubInfo) map[s
 	}
 }
 
-func hubAvailability(t *TopicBuilder) []map[string]string {
-	return []map[string]string{
+func hubAvailability(t *TopicBuilder) []hadiscovery.AvailabilityEntry {
+	return []hadiscovery.AvailabilityEntry{
 		{
-			"topic":                 t.BridgeStatus(),
-			"payload_available":     "online",
-			"payload_not_available": "offline",
+			Topic:               t.BridgeStatus(),
+			PayloadAvailable:    "online",
+			PayloadNotAvailable: "offline",
 		},
 	}
 }
@@ -458,10 +460,10 @@ func (d *DefaultDiscoveryBuilder) buildProgramRole(
 	if role.Topics.Availability != "" {
 		// The role's own gate joins the bridge/device ones; availability_mode
 		// "all" below means every listed topic must report online.
-		availability = append(availability, map[string]string{
-			"topic":                 role.Topics.Availability,
-			"payload_available":     "online",
-			"payload_not_available": "offline",
+		availability = append(availability, hadiscovery.AvailabilityEntry{
+			Topic:               role.Topics.Availability,
+			PayloadAvailable:    "online",
+			PayloadNotAvailable: "offline",
 		})
 	}
 

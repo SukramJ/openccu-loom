@@ -131,9 +131,9 @@ func TestHubEntityDeviceIdentifierMatchesPerDeviceDiscovery(t *testing.T) {
 		DeviceAddress: addr,
 	}
 	perDeviceDesc := deviceDescriptor(ev, "", false)
-	perDeviceIDs, _ := perDeviceDesc["identifiers"].([]string)
+	perDeviceIDs := perDeviceDesc.Identifiers
 	if len(perDeviceIDs) != 1 {
-		t.Fatalf("deviceDescriptor identifiers: got %v want a single-element slice", perDeviceDesc["identifiers"])
+		t.Fatalf("deviceDescriptor identifiers: got %v want a single-element slice", perDeviceDesc.Identifiers)
 	}
 
 	db := newHubBuilder()
@@ -218,7 +218,7 @@ func TestDeviceViaDeviceMatchesTheHubCardIdentifier(t *testing.T) {
 	}
 
 	desc := deviceDescriptor(Event{Central: central, DeviceAddress: "0001ABCD"}, "", false)
-	if got := desc["via_device"]; got != hubIDs[0] {
+	if got := desc.ViaDevice; got != hubIDs[0] {
 		t.Fatalf("per-device via_device = %v, hub card identifier = %q — HA cannot resolve the parent", got, hubIDs[0])
 	}
 
@@ -246,9 +246,9 @@ func TestPhysicalDeviceIdentifierIsCentralScopedForRepeatingAddresses(t *testing
 	descIdentifier := func(t *testing.T, central, addr string) string {
 		t.Helper()
 		desc := deviceDescriptor(Event{Central: central, DeviceAddress: addr}, "", false)
-		ids, ok := desc["identifiers"].([]string)
+		ids, ok := desc.Identifiers, true
 		if !ok || len(ids) != 1 {
-			t.Fatalf("deviceDescriptor identifiers for %q/%q: got %v want a single element", central, addr, desc["identifiers"])
+			t.Fatalf("deviceDescriptor identifiers for %q/%q: got %v want a single element", central, addr, desc.Identifiers)
 		}
 		return ids[0]
 	}

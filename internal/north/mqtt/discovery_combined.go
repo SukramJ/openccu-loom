@@ -7,6 +7,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
 )
 
 // CombinedEvent carries the per-channel context needed to emit one HA
@@ -73,16 +75,16 @@ func (d *DefaultDiscoveryBuilder) BuildCombinedDiscovery(centralName string, ev 
 		Device:        ev.Device,
 	}
 
-	availability := []map[string]string{
+	availability := []hadiscovery.AvailabilityEntry{
 		{
-			"topic":                 d.TopicBuilder.BridgeStatus(),
-			"payload_available":     "online",
-			"payload_not_available": "offline",
+			Topic:               d.TopicBuilder.BridgeStatus(),
+			PayloadAvailable:    "online",
+			PayloadNotAvailable: "offline",
 		},
 		{
-			"topic":                 d.TopicBuilder.DeviceAvailability(centralName, ev.Interface, ev.DeviceAddress),
-			"payload_available":     "online",
-			"payload_not_available": "offline",
+			Topic:               d.TopicBuilder.DeviceAvailability(centralName, ev.Interface, ev.DeviceAddress),
+			PayloadAvailable:    "online",
+			PayloadNotAvailable: "offline",
 		},
 	}
 

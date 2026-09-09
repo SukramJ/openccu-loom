@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"strconv"
 	"strings"
+
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
 )
 
 // WeekProfileDescriptor is the narrow read-side contract on a week-profile
@@ -135,17 +137,17 @@ func (d *DefaultDiscoveryBuilder) BuildWeekProfileDiscovery(centralName string, 
 // buildWeekProfileAvailability builds the two-entry availability list
 // (bridge/status + per-device availability) that mirrors every other
 // channel entity.
-func buildWeekProfileAvailability(d *DefaultDiscoveryBuilder, centralName string, ev WeekProfileEvent) []map[string]string {
-	return []map[string]string{
+func buildWeekProfileAvailability(d *DefaultDiscoveryBuilder, centralName string, ev WeekProfileEvent) []hadiscovery.AvailabilityEntry {
+	return []hadiscovery.AvailabilityEntry{
 		{
-			"topic":                 d.TopicBuilder.BridgeStatus(),
-			"payload_available":     "online",
-			"payload_not_available": "offline",
+			Topic:               d.TopicBuilder.BridgeStatus(),
+			PayloadAvailable:    "online",
+			PayloadNotAvailable: "offline",
 		},
 		{
-			"topic":                 d.TopicBuilder.DeviceAvailability(centralName, ev.Interface, ev.DeviceAddress),
-			"payload_available":     "online",
-			"payload_not_available": "offline",
+			Topic:               d.TopicBuilder.DeviceAvailability(centralName, ev.Interface, ev.DeviceAddress),
+			PayloadAvailable:    "online",
+			PayloadNotAvailable: "offline",
 		},
 	}
 }

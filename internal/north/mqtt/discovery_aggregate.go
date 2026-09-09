@@ -586,16 +586,16 @@ func channelPathData(ev Event) naming.PathData {
 // "offline") — HA's defaults are the same but pinning them avoids a
 // surprise if the bridge contract ever changes.
 func (d *DefaultDiscoveryBuilder) channelBaseBody(ev Event, name, uniqueID string) map[string]any {
-	availability := []map[string]string{
+	availability := []hadiscovery.AvailabilityEntry{
 		{
-			"topic":                 d.TopicBuilder.BridgeStatus(),
-			"payload_available":     "online",
-			"payload_not_available": "offline",
+			Topic:               d.TopicBuilder.BridgeStatus(),
+			PayloadAvailable:    "online",
+			PayloadNotAvailable: "offline",
 		},
 		{
-			"topic":                 d.TopicBuilder.DeviceAvailability(d.centralFor(ev), ev.Interface, ev.DeviceAddress),
-			"payload_available":     "online",
-			"payload_not_available": "offline",
+			Topic:               d.TopicBuilder.DeviceAvailability(d.centralFor(ev), ev.Interface, ev.DeviceAddress),
+			PayloadAvailable:    "online",
+			PayloadNotAvailable: "offline",
 		},
 	}
 	// `name` is JSON-null when blank — that is HA's signal to render

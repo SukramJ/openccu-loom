@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"strconv"
 
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -68,16 +70,16 @@ func (d *DefaultDiscoveryBuilder) BuildPressButton(ev Event) DiscoveryItem {
 		return DiscoveryItem{}
 	}
 	commandTopic := pd.MQTTCommand(d.TopicBuilder.Base, central)
-	availability := []map[string]string{
+	availability := []hadiscovery.AvailabilityEntry{
 		{
-			"topic":                 d.TopicBuilder.BridgeStatus(),
-			"payload_available":     "online",
-			"payload_not_available": "offline",
+			Topic:               d.TopicBuilder.BridgeStatus(),
+			PayloadAvailable:    "online",
+			PayloadNotAvailable: "offline",
 		},
 		{
-			"topic":                 d.TopicBuilder.DeviceAvailability(central, ev.Interface, ev.DeviceAddress),
-			"payload_available":     "online",
-			"payload_not_available": "offline",
+			Topic:               d.TopicBuilder.DeviceAvailability(central, ev.Interface, ev.DeviceAddress),
+			PayloadAvailable:    "online",
+			PayloadNotAvailable: "offline",
 		},
 	}
 	body := map[string]any{

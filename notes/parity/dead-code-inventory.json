@@ -1,6 +1,6 @@
 {
-  "generated": "ba85dd99",
-  "head": "ba85dd99",
+  "generated": "c72f4914",
+  "head": "c72f4914",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/openccu-loom-remote/main.go",
@@ -5107,28 +5107,28 @@
       "identifier": "BuildAlarmMotionResetDiscovery",
       "reason": "auto-whitelist:pattern=mqtt-discovery-builder",
       "file": "internal/north/mqtt/alarm_discovery.go",
-      "line": 181
+      "line": 183
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "BuildAlarmPanelDiscovery",
       "reason": "auto-whitelist:pattern=mqtt-discovery-builder",
       "file": "internal/north/mqtt/alarm_discovery.go",
-      "line": 116
+      "line": 118
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "BuildAlarmTriggeredMotionDiscovery",
       "reason": "auto-whitelist:pattern=mqtt-discovery-builder",
       "file": "internal/north/mqtt/alarm_discovery.go",
-      "line": 230
+      "line": 232
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "BuildSecurityDiscovery",
       "reason": "auto-whitelist:pattern=mqtt-discovery-builder",
       "file": "internal/north/mqtt/security_discovery.go",
-      "line": 135
+      "line": 137
     },
     {
       "package": "internal/north/mqtt",
@@ -5142,7 +5142,7 @@
       "identifier": "CombinedEvent",
       "reason": "constructed in EventBridge.publishCombinedProjection and passed to Bridge.PublishCombinedDiscovery on every combined data point the model carries; reached only as a composite literal at that call site",
       "file": "internal/north/mqtt/discovery_combined.go",
-      "line": 23
+      "line": 25
     },
     {
       "package": "internal/north/mqtt",

@@ -7,6 +7,8 @@ import (
 	"context"
 	"encoding/json"
 
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+
 	"github.com/SukramJ/openccu-loom/internal/payload"
 )
 
@@ -116,16 +118,16 @@ func (d *DefaultDiscoveryBuilder) BuildUpdateDiscovery(centralName string, ev Up
 	// Overlay the shared HA-Discovery scaffolding fields that every entity
 	// must carry: name, unique_id, default_entity_id, availability, device,
 	// origin. Mirrors channelBaseBody but without a channel-number postfix.
-	availability := []map[string]string{
+	availability := []hadiscovery.AvailabilityEntry{
 		{
-			"topic":                 d.TopicBuilder.BridgeStatus(),
-			"payload_available":     "online",
-			"payload_not_available": "offline",
+			Topic:               d.TopicBuilder.BridgeStatus(),
+			PayloadAvailable:    "online",
+			PayloadNotAvailable: "offline",
 		},
 		{
-			"topic":                 d.TopicBuilder.DeviceAvailability(centralName, ev.Interface, ev.DeviceAddress),
-			"payload_available":     "online",
-			"payload_not_available": "offline",
+			Topic:               d.TopicBuilder.DeviceAvailability(centralName, ev.Interface, ev.DeviceAddress),
+			PayloadAvailable:    "online",
+			PayloadNotAvailable: "offline",
 		},
 	}
 

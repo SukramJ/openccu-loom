@@ -8,6 +8,25 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The discovery frame is typed: device block, origin block and
+  availability list.** `deviceDescriptor`, `scheduleSubDeviceDescriptor`,
+  `BuildOriginInfo` and the four availability builders return
+  `*hadiscovery.DeviceInfo`, `*hadiscovery.Origin` and
+  `[]hadiscovery.AvailabilityEntry` instead of maps.
+
+  `haDeviceFields` is gone with them. It was a hand-maintained
+  twelve-key whitelist carrying the warning that anything outside it
+  makes Home Assistant reject the whole discovery message — and it
+  existed twice, once here and once in the schedule builder.
+  `DeviceInfo` *is* that whitelist: a field it does not have cannot be
+  assigned.
+
+  Byte-identical output, verified across all 9,996 payloads of the
+  full-fleet capture.
+
+
+### Changed
+
 - **Every custom data point now returns a typed discovery component.**
   `HADiscoveryPayloadBuilder` — which returned a `(component string,
   body map[string]any)` pair — is gone, replaced by
