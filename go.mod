@@ -34,14 +34,12 @@ require github.com/SukramJ/go-openccu-data v0.1.4
 
 require golang.org/x/term v0.45.0
 
-require (
-	filippo.io/nistec v0.0.4 // indirect
-	github.com/SukramJ/go-ha-catalog v0.1.0 // indirect
-)
+require filippo.io/nistec v0.0.4 // indirect
 
 require (
 	github.com/SukramJ/go-fabric v0.0.0-20260907130242-f06fc1cb3756
-	github.com/SukramJ/go-hamqtt v0.6.0
+	github.com/SukramJ/go-ha-catalog v0.2.0
+	github.com/SukramJ/go-hamqtt v0.8.0
 )
 
 require (
@@ -73,3 +71,5 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )
+
+replace github.com/SukramJ/go-hamqtt => ../go-hamqtt

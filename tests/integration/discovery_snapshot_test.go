@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -19,6 +20,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
 
 	"github.com/SukramJ/openccu-loom/internal/ccudata"
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -43,9 +46,14 @@ import (
 // Shape against
 // `script/discovery_snapshot_diff.py` performs the structural diff.
 //
-// The test always succeeds: it dumps, it does not assert.
+// The dump itself is not a comparison: it produces one half of one, and
+// nothing invokes the diff. What the test does assert is narrower and
+// independent of the other half — every payload it captures is checked
+// against Home Assistant's own discovery schema, which is the only thing that
+// can be judged without a counterpart. See [assertSnapshotEntitiesAreValid].
 //
-// It produces NO pass/fail signal, in CI or anywhere else. Nothing invokes
+// The structural comparison still produces NO pass/fail signal, in CI or
+// anywhere else. Nothing invokes
 // `script/discovery_snapshot_diff.py` — not a workflow, not a Makefile target
 // — and the snapshot it writes is gitignored (.gitignore:138), so there is no
 // committed artefact to diff against either. Both halves of the comparison are
@@ -157,6 +165,48 @@ func TestDiscoverySnapshotDumpAgainstGodevccu(t *testing.T) {
 		t.Fatalf("write %s: %v", out, err)
 	}
 	t.Logf("discovery snapshot written: %s (entities=%d)", out, len(entities))
+
+	assertSnapshotEntitiesAreValid(t, entities)
+}
+
+// assertSnapshotEntitiesAreValid checks every captured payload against Home
+// Assistant's own discovery schema.
+//
+// This is the one thing this test can assert without a counterpart to diff
+// against, and it is worth more than its cost: the fleet here is the largest
+// one any test drives, so a key a platform does not accept shows up in numbers
+// no hand-written fixture reaches. It found a siren publishing
+// `value_template` where Home Assistant's siren declares
+// `state_value_template`, and a button carrying a state it cannot have.
+//
+// It does not make the dump a substitute for the comparison the rest of this
+// file describes: the schema says whether Home Assistant accepts a payload,
+// never whether the payload says the right thing.
+func assertSnapshotEntitiesAreValid(t *testing.T, entities []snapshotEntity) {
+	t.Helper()
+
+	advisories := 0
+	// Indexed rather than ranged by value: a snapshotEntity is 208 bytes and
+	// there are ten thousand of them.
+	for i := range entities {
+		ent := &entities[i]
+		payload, err := json.Marshal(ent.Payload)
+		if err != nil {
+			t.Errorf("%s: marshal: %v", ent.DiscoveryTopic, err)
+			continue
+		}
+		err = mqtt.ValidateDiscoveryBody(ent.Component, payload)
+		switch {
+		case err == nil:
+		case errors.Is(err, hadiscovery.ErrInvalidBundle):
+			t.Errorf("%s: %v", ent.DiscoveryTopic, err)
+		default:
+			advisories++
+		}
+	}
+	if advisories > 0 {
+		t.Logf("%d payloads carry advisories (accepted by Home Assistant, then rewritten)", advisories)
+	}
 }
 
 // ---------------------------------------------------------------------------

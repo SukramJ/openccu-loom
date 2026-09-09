@@ -203,11 +203,11 @@ func (s *Siren) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component st
 		// StatePayload publishes the HA-compliant minimal JSON
 		// `{"state": "on"|"off"}` so HA's strict siren schema
 		// (SIREN_PLATFORM_PAYLOAD_SCHEMA) accepts it.
-		"state_topic":    ctx.CustomDPStateTopic(),
-		"value_template": "{{ value_json.state }}",
-		"state_on":       "on",
-		"state_off":      "off",
-		"optimistic":     false,
+		"state_topic":          ctx.CustomDPStateTopic(),
+		"state_value_template": "{{ value_json.state }}",
+		"state_on":             "on",
+		"state_off":            "off",
+		"optimistic":           false,
 	}
 	// Capabilities from ConfigPayload.
 	cfg, _ := s.Config().(*payload.SirenConfig)
@@ -247,16 +247,16 @@ func (s *SmokeSiren) HADiscoveryPayload(ctx payload.HADiscoveryContext) (compone
 	// HA-compliant minimal `{"state": "on"|"off"}` JSON so the strict
 	// SIREN_PLATFORM_PAYLOAD_SCHEMA accepts it.
 	body = map[string]any{
-		"command_topic":      ctx.WireParameterCommandTopic("SMOKE_DETECTOR_COMMAND"),
-		"payload_on":         "INTRUSION_ALARM",
-		"payload_off":        "INTRUSION_ALARM_OFF",
-		"state_topic":        ctx.CustomDPStateTopic(),
-		"value_template":     "{{ value_json.state }}",
-		"state_on":           "on",
-		"state_off":          "off",
-		"support_duration":   false,
-		"support_volume_set": false,
-		"optimistic":         false,
+		"command_topic":        ctx.WireParameterCommandTopic("SMOKE_DETECTOR_COMMAND"),
+		"payload_on":           "INTRUSION_ALARM",
+		"payload_off":          "INTRUSION_ALARM_OFF",
+		"state_topic":          ctx.CustomDPStateTopic(),
+		"state_value_template": "{{ value_json.state }}",
+		"state_on":             "on",
+		"state_off":            "off",
+		"support_duration":     false,
+		"support_volume_set":   false,
+		"optimistic":           false,
 	}
 	return "siren", body
 }
@@ -278,13 +278,13 @@ func (sp *SoundPlayer) HADiscoveryPayload(ctx payload.HADiscoveryContext) (compo
 		// State from the aggregated topic — StatePayload emits only
 		// the HA-compliant `{"state": "on"|"off"}` keys so HA's
 		// strict siren schema validation accepts it.
-		"state_topic":        ctx.CustomDPStateTopic(),
-		"value_template":     "{{ value_json.state }}",
-		"state_on":           "on",
-		"state_off":          "off",
-		"support_duration":   true,
-		"support_volume_set": false,
-		"optimistic":         false,
+		"state_topic":          ctx.CustomDPStateTopic(),
+		"state_value_template": "{{ value_json.state }}",
+		"state_on":             "on",
+		"state_off":            "off",
+		"support_duration":     true,
+		"support_volume_set":   false,
+		"optimistic":           false,
 	}
 	// Available soundfiles as tones when present.
 	if cfg, _ := sp.Config().(*payload.SoundPlayerConfig); cfg != nil && len(cfg.AvailableSoundfiles) > 0 {

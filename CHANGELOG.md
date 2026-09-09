@@ -6,6 +6,54 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A siren's state never parsed.** The three siren Custom-DPs published
+  `value_template`, but Home Assistant's siren platform declares
+  `state_value_template` — and its discovery schema is
+  `extra=REMOVE_EXTRA`, so the key was dropped on receipt with no error
+  on the wire and no line in any log. The state topic was published and
+  correct all along; nothing read it.
+
+- **Buttons advertised a state they cannot have.** Every parameter-level
+  button carried `state_topic` and `value_template`. Home Assistant's
+  `mqtt.button` declares neither, so both were dropped. Harmless on the
+  wire, but anyone reading the retained payload was told the button
+  reports something.
+
+### Added
+
+- **Discovery payloads are checked against Home Assistant's own schema.**
+  `mqtt.ValidateDiscoveryBody` validates a marshalled config against the
+  extracted schema for its component, and both integration tests that
+  capture what the bridge publishes now assert it — the broker snapshot
+  test over its 49 topics, and the full-fleet dump over all 9,996.
+
+  This is what found the two defects above. The existing guard compares
+  openccu-loom against the Python integration, so it cannot see a key
+  both stacks get wrong or one neither emits; only the schema can.
+
+  One key is exempt by declaration rather than tolerance:
+  `translation_key` is inert on the wire and is what the cross-stack
+  parity tooling compares against, so removing it would cost that signal
+  to fix nothing.
+
+  Things Home Assistant accepts and then rewrites are reported as
+  advisories and do not fail a build. A test that fails for something
+  that works is one people re-run instead of read.
+
+### Changed
+
+- **A comment about unit spellings said the opposite of the truth.** It
+  claimed a PM sensor published with U+03BC GREEK SMALL LETTER MU "never
+  appears at all". Home Assistant's
+  `_native_unit_of_measurement_compat` is `AMBIGUOUS_UNITS.get(unit,
+  unit)` — a rewrite, not a rejection, and its canonical constant is the
+  Greek letter. Either spelling produces the entity. The spelling here
+  is unchanged; the reason for it is now internal consistency with the
+  raw plane, which is what it always actually was.
+
+
 ## [0.77.0] - 2026-09-08
 
 ### Changed

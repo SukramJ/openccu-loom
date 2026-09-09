@@ -868,6 +868,14 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		// string on every button press, which the CCU rejects.
 		body["command_topic"] = commandTopic
 		body["payload_press"] = "PRESS"
+		// A button is stateless: HA's mqtt.button declares neither
+		// `state_topic` nor `value_template`, and its discovery schema
+		// is extra=REMOVE_EXTRA, so both are dropped on receipt without
+		// a word in any log. Emitting them cost nothing visible and
+		// taught anyone reading the retained payload that the button
+		// reports a state it cannot report.
+		delete(body, "state_topic")
+		delete(body, "value_template")
 	case HAComponentText:
 		// HA `text` is a writable, free-form string — used for HmIP-WRCD display
 		// text and similar.
@@ -909,11 +917,15 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 	// availability list — they cover the broker / device-gone cases
 	// the per-DP flag cannot represent.
 	//
-	// Event-type entities parse the raw JSON envelope themselves and
-	// must NOT carry a value_template. Skip the default assignment
-	// when the per-component branch already wrote a tailored template
+	// Two components are exempt. Event-type entities parse the raw JSON
+	// envelope themselves and must NOT carry a value_template. A button has
+	// no state at all — Home Assistant's mqtt.button declares neither
+	// `state_topic` nor `value_template` — so a template here is a key the
+	// discovery schema drops on receipt, silently, which is the failure mode
+	// this exemption exists to avoid. Otherwise skip the default assignment
+	// only when the per-component branch already wrote a tailored template
 	// (multiplier scaling for sensor/number).
-	if comp != HAComponentEvent {
+	if comp != HAComponentEvent && comp != HAComponentButton {
 		if _, has := body["value_template"]; !has {
 			body["value_template"] = jsonValueTemplate(comp)
 		}

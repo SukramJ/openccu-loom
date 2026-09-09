@@ -36,6 +36,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -46,6 +47,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
 
 	"github.com/SukramJ/openccu-loom/internal/ccudata"
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -238,6 +241,8 @@ func TestBrokerSnapshotDiff(t *testing.T) {
 	capMu.Unlock()
 
 	t.Logf("broker captured %d discovery topics from %d devices", len(snapshot), len(loadedDevices))
+
+	assertDiscoveryPayloadsAreValid(t, snapshot)
 	if len(snapshot) == 0 {
 		t.Fatal("no homeassistant/.../config topics were delivered via the broker")
 	}
@@ -1077,4 +1082,50 @@ func writeBrokerReference(t *testing.T, path string, entities map[string]brokerE
 		t.Fatalf("write broker reference %s: %v", path, err)
 	}
 	t.Logf("wrote broker reference snapshot: %s (entities=%d)", path, len(out))
+}
+
+// assertDiscoveryPayloadsAreValid checks every config this run actually put on
+// the broker against Home Assistant's own discovery schema.
+//
+// It is the guard that did not exist. Home Assistant's discovery schema is
+// extra=REMOVE_EXTRA: a key a platform does not declare is dropped with no
+// error on the wire and no line in any log, so the failure mode is a feature
+// that quietly does nothing. The reference snapshot next to this test compares
+// openccu-loom against the Python integration and therefore cannot see a key
+// both stacks get wrong, nor one neither stack emits; only the schema can.
+//
+// Advisories — what Home Assistant accepts and then rewrites — are logged, not
+// failed. Failing them would put this test at the mercy of a spelling
+// preference, and a test that fails for something that works is a test people
+// learn to re-run rather than read.
+func assertDiscoveryPayloadsAreValid(t *testing.T, snapshot map[string][]byte) {
+	t.Helper()
+
+	topics := make([]string, 0, len(snapshot))
+	for topic := range snapshot {
+		topics = append(topics, topic)
+	}
+	sort.Strings(topics)
+
+	advisories := 0
+	for _, topic := range topics {
+		// homeassistant/<component>/<node_id>/<object_id>/config
+		parts := strings.Split(topic, "/")
+		if len(parts) < 3 {
+			t.Errorf("%s: not a discovery topic", topic)
+			continue
+		}
+		err := mqtt.ValidateDiscoveryBody(parts[1], snapshot[topic])
+		switch {
+		case err == nil:
+		case errors.Is(err, hadiscovery.ErrInvalidBundle):
+			t.Errorf("%s: %v", topic, err)
+		default:
+			advisories++
+			t.Logf("%s: %v", topic, err)
+		}
+	}
+	if advisories > 0 {
+		t.Logf("%d discovery payloads carry advisories (accepted by Home Assistant, then rewritten)", advisories)
+	}
 }
