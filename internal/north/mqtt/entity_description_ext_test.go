@@ -12,7 +12,7 @@ import "testing"
 func TestMatchesExtParameterCaseInsensitive(t *testing.T) {
 	r := EntityDescriptionExtRule{
 		Parameter:   "TEMPERATURE",
-		Description: EntityDescription{Key: "temp"},
+		Description: HARegistryDescription{Key: "temp"},
 	}
 	if !r.MatchesExt("", "temperature", "", "", "") {
 		t.Fatal("lowercase parameter should match")
@@ -28,7 +28,7 @@ func TestMatchesExtParameterCaseInsensitive(t *testing.T) {
 func TestMatchesExtUnitExact(t *testing.T) {
 	r := EntityDescriptionExtRule{
 		Unit:        "mHz",
-		Description: EntityDescription{Key: "freq"},
+		Description: HARegistryDescription{Key: "freq"},
 	}
 	if !r.MatchesExt("", "FREQUENCY", "mHz", "", "") {
 		t.Fatal("matching unit must produce a hit")
@@ -41,7 +41,7 @@ func TestMatchesExtUnitExact(t *testing.T) {
 func TestMatchesExtPostfixCaseInsensitive(t *testing.T) {
 	r := EntityDescriptionExtRule{
 		Postfix:     "_2",
-		Description: EntityDescription{Key: "level_2"},
+		Description: HARegistryDescription{Key: "level_2"},
 	}
 	if !r.MatchesExt("", "LEVEL_2", "", "_2", "") {
 		t.Fatal("postfix _2 should match")
@@ -54,7 +54,7 @@ func TestMatchesExtPostfixCaseInsensitive(t *testing.T) {
 func TestMatchesExtVarNameContainsSubstring(t *testing.T) {
 	r := EntityDescriptionExtRule{
 		VarNameContains: "temperature",
-		Description:     EntityDescription{Key: "temp"},
+		Description:     HARegistryDescription{Key: "temp"},
 	}
 	if !r.MatchesExt("", "", "", "", "ACTUAL_TEMPERATURE") {
 		t.Fatal("var name containing substring should match")
@@ -68,7 +68,7 @@ func TestMatchesExtDevicePrefixBoundary(t *testing.T) {
 	r := EntityDescriptionExtRule{
 		DevicePrefix: "HmIP-eTRV",
 		Parameter:    "LEVEL",
-		Description:  EntityDescription{Key: "level"},
+		Description:  HARegistryDescription{Key: "level"},
 	}
 	// Exact match
 	if !r.MatchesExt("HmIP-eTRV", "LEVEL", "", "", "") {
@@ -89,7 +89,7 @@ func TestMatchesExtAllCriteriaAnd(t *testing.T) {
 		DevicePrefix: "HmIP-BS",
 		Parameter:    "ACTUAL_TEMPERATURE",
 		Unit:         "°C",
-		Description:  EntityDescription{Key: "at"},
+		Description:  HARegistryDescription{Key: "at"},
 	}
 	// All criteria satisfied. HmIP-BS-X has the dash boundary after the prefix.
 	if !r.MatchesExt("HmIP-BS-X", "ACTUAL_TEMPERATURE", "°C", "", "") {
@@ -112,8 +112,8 @@ func TestMatchesExtAllCriteriaAnd(t *testing.T) {
 func TestLookupExtRuleInSlicePriorityOrder(t *testing.T) {
 	// Higher priority rule must win even if lower priority rule also matches.
 	rules := []EntityDescriptionExtRule{
-		{Priority: 10, Parameter: "X", Description: EntityDescription{Key: "high"}},
-		{Priority: 0, Parameter: "X", Description: EntityDescription{Key: "low"}},
+		{Priority: 10, Parameter: "X", Description: HARegistryDescription{Key: "high"}},
+		{Priority: 0, Parameter: "X", Description: HARegistryDescription{Key: "low"}},
 	}
 	d, ok := LookupExtRuleInSlice(rules, "", "X", "", "", "")
 	if !ok {
@@ -126,7 +126,7 @@ func TestLookupExtRuleInSlicePriorityOrder(t *testing.T) {
 
 func TestLookupExtRuleInSliceNoMatch(t *testing.T) {
 	rules := []EntityDescriptionExtRule{
-		{Parameter: "FOO", Description: EntityDescription{Key: "foo"}},
+		{Parameter: "FOO", Description: HARegistryDescription{Key: "foo"}},
 	}
 	_, ok := LookupExtRuleInSlice(rules, "", "BAR", "", "", "")
 	if ok {
@@ -151,7 +151,7 @@ func TestEntityDescriptionForExtFallsThroughToExtRules(t *testing.T) {
 			Parameter:   "CUSTOM_FREQ",
 			Unit:        "mHz",
 			Priority:    5,
-			Description: EntityDescription{Key: "custom_freq", UnitOfMeasurement: "mHz", EnabledByDefault: true, SuggestedDisplayPrecision: -1},
+			Description: HARegistryDescription{Key: "custom_freq", UnitOfMeasurement: "mHz", EnabledByDefault: entityBoolPtr(true), SuggestedDisplayPrecision: nil},
 		},
 	}
 
@@ -170,7 +170,7 @@ func TestEntityDescriptionForExtStaticMapWinsOverExtRule(t *testing.T) {
 		{
 			Parameter:   "ACTUAL_TEMPERATURE",
 			Priority:    100, // high priority, but still below static map tier 1
-			Description: EntityDescription{Key: "ext_override", EnabledByDefault: true, SuggestedDisplayPrecision: -1},
+			Description: HARegistryDescription{Key: "ext_override", EnabledByDefault: entityBoolPtr(true), SuggestedDisplayPrecision: nil},
 		},
 	}
 
@@ -197,8 +197,8 @@ func TestValidateEntityDescriptionRulesDetectsExtConflict(t *testing.T) {
 	orig := sensorExtRules
 	defer func() { sensorExtRules = orig }()
 	sensorExtRules = []EntityDescriptionExtRule{
-		{Priority: 5, Parameter: "DUPE", Description: EntityDescription{Key: "a"}},
-		{Priority: 5, Parameter: "DUPE", Description: EntityDescription{Key: "b"}},
+		{Priority: 5, Parameter: "DUPE", Description: HARegistryDescription{Key: "a"}},
+		{Priority: 5, Parameter: "DUPE", Description: HARegistryDescription{Key: "b"}},
 	}
 
 	err := ValidateEntityDescriptionRules()
@@ -213,8 +213,8 @@ func TestValidateEntityDescriptionRulesDifferentPriorityNotConflict(t *testing.T
 	orig := sensorExtRules
 	defer func() { sensorExtRules = orig }()
 	sensorExtRules = []EntityDescriptionExtRule{
-		{Priority: 10, Parameter: "X", Description: EntityDescription{Key: "high"}},
-		{Priority: 0, Parameter: "X", Description: EntityDescription{Key: "low"}},
+		{Priority: 10, Parameter: "X", Description: HARegistryDescription{Key: "high"}},
+		{Priority: 0, Parameter: "X", Description: HARegistryDescription{Key: "low"}},
 	}
 
 	if err := ValidateEntityDescriptionRules(); err != nil {

@@ -32,7 +32,7 @@ func ValidateEntityDescriptionRules() error {
 	// devicePrefix; we adapt them to devParam for uniform treatment.
 	type namedMap struct {
 		name    string
-		entries map[devParam]EntityDescription
+		entries map[devParam]HARegistryDescription
 	}
 
 	deviceMaps := []namedMap{
@@ -48,7 +48,7 @@ func ValidateEntityDescriptionRules() error {
 	// param-only maps: adapt string→devParam for uniform treatment.
 	type namedParamMap struct {
 		name    string
-		entries map[string]EntityDescription
+		entries map[string]HARegistryDescription
 	}
 	paramMaps := []namedParamMap{
 		{"sensor/byParam", sensorRulesByParam},

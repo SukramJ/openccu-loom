@@ -36,7 +36,7 @@ func TestLookupSensorRuleOperatingVoltageDisabledDiagnostic(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s: not found", p)
 		}
-		if d.EnabledByDefault {
+		if d.EnabledByDefault == nil || *d.EnabledByDefault {
 			t.Fatalf("%s: must be disabled by default", p)
 		}
 		if d.EntityCategory != EntityCategoryDiagnostic {
@@ -51,7 +51,7 @@ func TestLookupSensorRuleRSSIAliasesDisabled(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s: not found", p)
 		}
-		if d.EnabledByDefault {
+		if d.EnabledByDefault == nil || *d.EnabledByDefault {
 			t.Fatalf("%s: must be disabled by default", p)
 		}
 		if d.EntityCategory != EntityCategoryDiagnostic {
@@ -83,7 +83,7 @@ func TestLookupBinarySensorRuleSabotageDisabledDiagnostic(t *testing.T) {
 	if !ok {
 		t.Fatal("SABOTAGE: not found")
 	}
-	if d.EnabledByDefault {
+	if d.EnabledByDefault == nil || *d.EnabledByDefault {
 		t.Fatal("SABOTAGE: must be disabled by default")
 	}
 	if d.EntityCategory != EntityCategoryDiagnostic {
@@ -178,8 +178,8 @@ func TestEntityDescriptionForSensorRSSIDeviceDiagnosticDisabled(t *testing.T) {
 	if desc.EntityCategory != EntityCategoryDiagnostic {
 		t.Fatalf("RSSI_DEVICE: entity_category=%q want diagnostic", desc.EntityCategory)
 	}
-	if desc.EnabledDefault == nil || *desc.EnabledDefault != false {
-		t.Fatalf("RSSI_DEVICE: enabled_default must be false, got %v", desc.EnabledDefault)
+	if desc.EnabledByDefault == nil || *desc.EnabledByDefault != false {
+		t.Fatalf("RSSI_DEVICE: enabled_default must be false, got %v", desc.EnabledByDefault)
 	}
 }
 
@@ -188,8 +188,8 @@ func TestEntityDescriptionForSensorOperatingVoltageDiagnosticDisabled(t *testing
 	if desc.EntityCategory != EntityCategoryDiagnostic {
 		t.Fatalf("OPERATING_VOLTAGE: entity_category=%q want diagnostic", desc.EntityCategory)
 	}
-	if desc.EnabledDefault == nil || *desc.EnabledDefault != false {
-		t.Fatalf("OPERATING_VOLTAGE: enabled_default must be false, got %v", desc.EnabledDefault)
+	if desc.EnabledByDefault == nil || *desc.EnabledByDefault != false {
+		t.Fatalf("OPERATING_VOLTAGE: enabled_default must be false, got %v", desc.EnabledByDefault)
 	}
 }
 
@@ -202,9 +202,9 @@ func TestEntityDescriptionForNumberFrequencyUnit(t *testing.T) {
 }
 
 func TestEntityDescriptionForLightComponentReturnsZeroValue(t *testing.T) {
-	// HAComponentLight is not handled — returns the zero MqttEntityDescription.
+	// HAComponentLight is not handled — returns the zero HARegistryDescription.
 	desc := EntityDescriptionFor(HAComponentLight, "HmIP-BDT", "LEVEL")
-	if desc != (MqttEntityDescription{}) {
+	if desc.HasHAOverrides() {
 		t.Fatalf("HAComponentLight must return zero value, got %+v", desc)
 	}
 }

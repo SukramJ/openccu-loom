@@ -138,7 +138,7 @@ func TestBuildTextDisplayChannelTypeBuilderDispatch(t *testing.T) {
 }
 
 // TestTextDisplayEntityDescription verifies that LookupTextDisplayByDevice
-// returns a valid EntityDescription for HmIP-WRCD (exact and prefix).
+// returns a valid HARegistryDescription for HmIP-WRCD (exact and prefix).
 func TestTextDisplayEntityDescription(t *testing.T) {
 	cases := []struct {
 		model   string
@@ -153,7 +153,9 @@ func TestTextDisplayEntityDescription(t *testing.T) {
 		if ok != tc.wantHit {
 			t.Errorf("LookupTextDisplayByDevice(%q): ok=%v want %v", tc.model, ok, tc.wantHit)
 		}
-		if ok && !d.EnabledByDefault {
+		// nil means "HA's default", which is true; an explicit false is the
+		// only way to be disabled.
+		if ok && d.EnabledByDefault != nil && !*d.EnabledByDefault {
 			t.Errorf("LookupTextDisplayByDevice(%q): EnabledByDefault must be true", tc.model)
 		}
 	}
@@ -348,7 +350,10 @@ func TestLookupEventDescriptions(t *testing.T) {
 		if d.DeviceClass != "button" {
 			t.Errorf("LookupEvent(%q).DeviceClass=%q want \"button\"", p, d.DeviceClass)
 		}
-		if !d.EnabledByDefault {
+		// The original asserted `!d.EnabledByDefault`: fail when the entity is
+		// disabled. With the tri-state, nil means HA's default (true), so only
+		// an explicit false is a failure.
+		if d.EnabledByDefault != nil && !*d.EnabledByDefault {
 			t.Errorf("LookupEvent(%q).EnabledByDefault=false, want true", p)
 		}
 	}
