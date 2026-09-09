@@ -284,20 +284,13 @@ func toAnySlice(ss []string) []any {
 // its typed fields, its platform Fields struct and its Extra map into the one
 // object Home Assistant receives — so what the rest of the pipeline sees is
 // exactly what would go on the wire.
-func buildCustomDPBody(ev Event, ctx payload.HADiscoveryContext) (component string, body map[string]any, ok bool) {
+func buildCustomDPComponent(ev Event, ctx payload.HADiscoveryContext) (hadiscovery.Component, bool) {
 	builder, is := ev.Source.(payload.HADiscoveryComponentBuilder)
 	if !is || builder == nil {
-		return "", nil, false
+		return hadiscovery.Component{}, false
 	}
 	comp := builder.HADiscoveryComponent(ctx)
-	if comp.Platform == "" {
-		return "", nil, false
-	}
-	flat, err := flattenComponent(comp)
-	if err != nil {
-		return "", nil, false
-	}
-	return string(comp.Platform), flat, true
+	return comp, comp.Platform != ""
 }
 
 // flattenComponent renders a typed component into the flat object Home
@@ -329,8 +322,22 @@ func (d *DefaultDiscoveryBuilder) aggregateChannel(ev Event) (component, nodeID,
 	if isTextDisplayEvent(ev) {
 		return "", "", "", nil, false
 	}
-	comp, body, ok := buildCustomDPBody(ev, d.discoveryContext(ev))
-	if !ok {
+	built, built0K := buildCustomDPComponent(ev, d.discoveryContext(ev))
+	if !built0K {
+		return "", "", "", nil, false
+	}
+	comp := string(built.Platform)
+	// The frame is applied while the payload is still typed — unique_id,
+	// availability, device, origin and the name — so the five keys the bridge
+	// owns cannot be misspelled either. It runs before the flattening because
+	// the post-processors below still work on keys.
+	frameUniqueID, frameScoped := d.channelUniqueID(ev, comp)
+	if !frameScoped {
+		return "", "", "", nil, false
+	}
+	d.applyChannelFrame(&built, ev, displayChannelName(ev), frameUniqueID)
+	body, err := flattenComponent(built)
+	if err != nil {
 		return "", "", "", nil, false
 	}
 	// The climate preset list leaves the domain as slugs; the ones HA
@@ -342,31 +349,8 @@ func (d *DefaultDiscoveryBuilder) aggregateChannel(ev Event) (component, nodeID,
 	// light effects — carry their labels on the event.
 	applySelectionLabels(body, ev.SelectionLabels)
 	objectID = d.channelObjectID(ev, comp)
-	uniqueID, scoped := d.channelUniqueID(ev, comp)
-	if !scoped {
-		return "", "", "", nil, false
-	}
 	nodeID = discoveryNodeID(d.centralFor(ev), ev.DeviceAddress)
-	// The frame first, the builder's keys second — the same precedence
-	// discovery_combined.go uses, and the only one now.
 	//
-	// This used to be `maps.Copy(body, base)`, i.e. the frame overwriting the
-	// builder, while the combined seam did the opposite. Two seams with
-	// opposite rules is a coin flip for anyone adding a key, and ADR 0070
-	// makes "later wins" the single rule for the whole pipeline.
-	//
-	// Today the flip is a no-op and provably so: channelBaseBody sets exactly
-	// five top-level keys — unique_id, availability, availability_mode, device,
-	// origin — and no HADiscoveryPayload implementation writes any of them
-	// (all ten build their keys as literals, so a grep is exhaustive). What
-	// changes is what happens next time a builder needs one: it now works
-	// instead of being silently discarded.
-	base := d.channelBaseBody(ev, displayChannelName(ev), uniqueID)
-	for k, v := range base {
-		if _, set := body[k]; !set {
-			body[k] = v
-		}
-	}
 	// Strict variant: when neither a rule nor a category-default matches, every
 	// HA-attribute field is stripped from the body so an unknown model gets no
 	// `device_class` etc. (mirrors HA-native behaviour). Without this the legacy
@@ -585,36 +569,66 @@ func channelPathData(ev Event) naming.PathData {
 // match the strings the bridge actually publishes ("online" /
 // "offline") — HA's defaults are the same but pinning them avoids a
 // surprise if the bridge contract ever changes.
+// channelBaseBody is [applyChannelFrame] rendered as a map, for the builders
+// that still assemble their payload that way. One implementation, two views —
+// so the frame cannot drift between the typed and the untyped callers while
+// the rest of the conversion runs.
 func (d *DefaultDiscoveryBuilder) channelBaseBody(ev Event, name, uniqueID string) map[string]any {
-	availability := []hadiscovery.AvailabilityEntry{
-		{
-			Topic:               d.TopicBuilder.BridgeStatus(),
-			PayloadAvailable:    "online",
-			PayloadNotAvailable: "offline",
-		},
-		{
-			Topic:               d.TopicBuilder.DeviceAvailability(d.centralFor(ev), ev.Interface, ev.DeviceAddress),
-			PayloadAvailable:    "online",
-			PayloadNotAvailable: "offline",
-		},
+	var comp hadiscovery.Component
+	d.applyChannelFrame(&comp, ev, name, uniqueID)
+	// The platform is the caller's, not the frame's; a zero one would make
+	// flattenComponent refuse. Marshalling drops the key either way.
+	body, err := flattenComponent(comp)
+	if err != nil {
+		return map[string]any{}
+	}
+	return body
+}
+
+func (d *DefaultDiscoveryBuilder) applyChannelFrame(comp *hadiscovery.Component, ev Event, name, uniqueID string) {
+	// Each field is applied only where the builder left it unset, which is the
+	// precedence this pipeline settled on: the builder wins, the frame fills
+	// the gaps. Today the two sets are disjoint — no custom DP writes any of
+	// these — so every guard holds trivially; they are here so the rule stays
+	// the rule when one of them does.
+	if comp.UniqueID == "" {
+		comp.UniqueID = uniqueID
+	}
+	if len(comp.Availability) == 0 {
+		comp.Availability = []hadiscovery.AvailabilityEntry{
+			{
+				Topic:               d.TopicBuilder.BridgeStatus(),
+				PayloadAvailable:    "online",
+				PayloadNotAvailable: "offline",
+			},
+			{
+				Topic:               d.TopicBuilder.DeviceAvailability(d.centralFor(ev), ev.Interface, ev.DeviceAddress),
+				PayloadAvailable:    "online",
+				PayloadNotAvailable: "offline",
+			},
+		}
+	}
+	if comp.AvailabilityMode == "" {
+		comp.AvailabilityMode = "all"
+	}
+	if comp.Device == nil {
+		comp.Device = deviceDescriptor(ev, d.hubURLFor(ev), d.SubDevicesEnabled)
+	}
+	if comp.Origin == nil {
+		comp.Origin = BuildOriginInfo()
 	}
 	// `name` is JSON-null when blank — that is HA's signal to render
 	// `friendly_name` = device.name alone. An empty string is treated
 	// as "default" (entity-id derived), which produces the same
-	// double-prefix the bug we are fixing originally surfaced.
-	body := map[string]any{
-		"unique_id":         uniqueID,
-		"availability":      availability,
-		"availability_mode": "all",
-		"device":            deviceDescriptor(ev, d.hubURLFor(ev), d.SubDevicesEnabled),
-		"origin":            BuildOriginInfo(),
+	// double-prefix the bug we are fixing originally surfaced, and an
+	// absent key makes Home Assistant derive one from the platform.
+	if comp.Name == "" && !comp.NameNull {
+		if name == "" {
+			comp.NameNull = true
+		} else {
+			comp.Name = name
+		}
 	}
-	if name == "" {
-		body["name"] = nil
-	} else {
-		body["name"] = name
-	}
-	return body
 }
 
 // displayChannelName returns the entity-name string for an aggregated

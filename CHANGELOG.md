@@ -21,6 +21,13 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `DeviceInfo` *is* that whitelist: a field it does not have cannot be
   assigned.
 
+  The aggregate seam applies that frame while the payload is still a
+  typed component, so the five keys the bridge owns — `unique_id`,
+  `availability`, `availability_mode`, `device`, `origin` — cannot be
+  misspelled either. The map merge that used to fill them in is gone;
+  the precedence it encoded (the builder wins, the frame fills gaps)
+  is now a guard per field.
+
   Byte-identical output, verified across all 9,996 payloads of the
   full-fleet capture.
 
