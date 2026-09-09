@@ -201,8 +201,11 @@ test.describe('Security & Safety', () => {
     await expect(page.getByText('Keller Wasser')).toBeVisible();
     await expect(page.getByText('Garage Temperatur')).toBeVisible();
     await expect(page.getByText('Nebenraum Fenster')).toBeVisible();
-    await expect(page.getByText('Overridden')).toBeVisible();
-    await expect(page.getByText('Not relevant')).toBeVisible();
+    // Scoped to the rows: the relevance and activity columns filter as
+    // choices, so their options repeat these labels in the header.
+    const rows = page.getByRole('table').locator('tbody');
+    await expect(rows.getByText('Overridden')).toBeVisible();
+    await expect(rows.getByText('Not relevant')).toBeVisible();
   });
 
   test('the relevant-only filter narrows the source inventory', async ({ page }) => {

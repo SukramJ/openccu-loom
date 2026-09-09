@@ -359,6 +359,7 @@
             rows={rooms}
             columns={roomColumns}
             rowKey={(r) => r.name}
+            persistKey="settings-rooms"
             emptyMessage={t("groups.empty_rooms")}
             emptyIcon="mdi:home"
           >
@@ -449,6 +450,7 @@
             rows={functions}
             columns={fnColumns}
             rowKey={(f) => f.name}
+            persistKey="settings-functions"
             emptyMessage={t("groups.empty_functions")}
             emptyIcon="mdi:format-list-bulleted"
           >
@@ -547,6 +549,7 @@
             rows={areasStore.areas}
             columns={areaColumns}
             rowKey={(a) => a.id}
+            persistKey="settings-areas"
             emptyMessage={t("areas.empty")}
             emptyIcon="mdi:home-group"
           >

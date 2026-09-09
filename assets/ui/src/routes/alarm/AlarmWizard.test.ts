@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup, fireEvent, waitFor, screen } from "@testing-library/svelte";
+import { render, cleanup, fireEvent, waitFor, screen, within } from "@testing-library/svelte";
 import type { AlarmOutputCandidate, DeviceSummary } from "$lib/api/types";
 
 const mockRefresh = vi.fn();
@@ -65,6 +65,13 @@ vi.mock("$lib/i18n", () => ({
   t: (key: string, vars?: Record<string, unknown>) =>
     vars ? `${key}:${JSON.stringify(vars)}` : key,
 }));
+
+// The real Select wraps bits-ui's floating-portal listbox, which happy-dom
+// cannot drive (see SelectStub.svelte).
+vi.mock("$lib/components/ui/Select.svelte", async () => {
+  const mod = await import("../__testutils__/SelectStub.svelte");
+  return { default: mod.default };
+});
 
 import AlarmWizard from "./AlarmWizard.svelte";
 import { alarmWizardStore, ALARM_WIZARD_MAX_TRIGGER_SECONDS } from "$lib/stores/alarmWizard.svelte";
@@ -262,9 +269,11 @@ describe("AlarmWizard — sensor/output picker search, filter, sort", () => {
     expect(await screen.findByText("Front door")).toBeTruthy();
     expect(screen.getByText("Back door")).toBeTruthy();
 
-    await fireEvent.change(screen.getByRole("combobox", { name: "alarm.sensors.filter.room" }), {
-      target: { value: "Garage" },
-    });
+    await fireEvent.click(
+      within(screen.getByRole("listbox", { name: "alarm.sensors.filter.room" })).getByRole("option", {
+        name: "Garage",
+      }),
+    );
 
     expect(screen.queryByText("Front door")).toBeNull();
     expect(screen.getByText("Back door")).toBeTruthy();
@@ -277,9 +286,11 @@ describe("AlarmWizard — sensor/output picker search, filter, sort", () => {
     await screen.findByText("Hallway siren");
     expect(screen.getByText("Attic light")).toBeTruthy();
 
-    await fireEvent.change(screen.getByRole("combobox", { name: "alarm.sensors.filter.room" }), {
-      target: { value: "Hallway" },
-    });
+    await fireEvent.click(
+      within(screen.getByRole("listbox", { name: "alarm.sensors.filter.room" })).getByRole("option", {
+        name: "Hallway",
+      }),
+    );
 
     expect(screen.getByText("Hallway siren")).toBeTruthy();
     expect(screen.queryByText("Attic light")).toBeNull();
@@ -298,9 +309,11 @@ describe("AlarmWizard — sensor/output picker search, filter, sort", () => {
       "Hallway siren",
     ]);
 
-    await fireEvent.change(screen.getByRole("combobox", { name: "common.sort" }), {
-      target: { value: "room" },
-    });
+    await fireEvent.click(
+      within(screen.getByRole("listbox", { name: "common.sort" })).getByRole("option", {
+        name: "alarm.wizard.sort.room",
+      }),
+    );
 
     // By room, "Hallway" sorts before "Zzz-Utility" — the opposite order,
     // proving the sort field actually drives the row order.
@@ -337,9 +350,11 @@ describe("AlarmWizard — sensor/output picker search, filter, sort", () => {
       "Zebra door",
     ]);
 
-    await fireEvent.change(screen.getByRole("combobox", { name: "common.sort" }), {
-      target: { value: "room" },
-    });
+    await fireEvent.click(
+      within(screen.getByRole("listbox", { name: "common.sort" })).getByRole("option", {
+        name: "alarm.wizard.sort.room",
+      }),
+    );
 
     // By room, "Attic" sorts before "Zzz-Utility" — Zebra door (room
     // Attic) now comes first, the opposite of the name-sorted order.
@@ -374,17 +389,60 @@ describe("AlarmWizard — sensor/output picker search, filter, sort", () => {
   });
 });
 
+describe("AlarmWizard — the two picker filter rows are separate instances", () => {
+  // Both steps render the same PickerFilters component. Sharing the markup
+  // must not share the state: a room picked while choosing sensors would
+  // otherwise silently narrow the outputs step too, and the operator would
+  // see a short list with nothing on screen saying why.
+  it("a room filter set on the sensor step does not narrow the outputs step", async () => {
+    mockDevices = [
+      device({ address: "SWDO001", name: "Front door", model: "HmIP-SWDO", rooms: ["Hallway"] }),
+      device({ address: "SWDO002", name: "Back door", model: "HmIP-SWDO", rooms: ["Garage"] }),
+    ];
+    render(AlarmWizard);
+    await next(); // -> sensors
+
+    await fireEvent.click(
+      within(screen.getByRole("listbox", { name: "alarm.sensors.filter.room" })).getByRole("option", {
+        name: "Garage",
+      }),
+    );
+    expect(screen.queryByText("Front door")).toBeNull();
+
+    await next(); // -> outputs
+    // The outputs step starts unfiltered: both candidates are listed, and
+    // the "Hallway siren" is the one the sensor step's Garage filter would
+    // have removed.
+    expect(await screen.findByText("Hallway siren")).toBeTruthy();
+    expect(screen.getByText("Attic light")).toBeTruthy();
+  });
+
+  it("the show-all toggle belongs to the sensor step only", async () => {
+    mockDevices = [
+      device({ address: "SWDO001", name: "Front door", model: "HmIP-SWDO", rooms: ["Hallway"] }),
+    ];
+    render(AlarmWizard);
+    await next(); // -> sensors
+    await screen.findByText("Front door");
+    expect(screen.getByLabelText(/alarm.sensors.add.show_all/)).toBeTruthy();
+
+    await next(); // -> outputs
+    await screen.findByText("Hallway siren");
+    expect(screen.queryByLabelText(/alarm.sensors.add.show_all/)).toBeNull();
+  });
+});
+
 describe("AlarmWizard — area filter (steps 2 and 3)", () => {
   it("hides the area select on both steps when no areas are defined", async () => {
     mockDevices = [device({ address: "SWDO001", name: "Front door", rooms: ["Hallway"] })];
     render(AlarmWizard);
     await next(); // -> sensors
     await screen.findByText("Front door");
-    expect(screen.queryByRole("combobox", { name: "alarm.sensors.filter.area" })).toBeNull();
+    expect(screen.queryByRole("listbox", { name: "alarm.sensors.filter.area" })).toBeNull();
 
     await next(); // -> outputs
     await screen.findByText("Hallway siren");
-    expect(screen.queryByRole("combobox", { name: "alarm.sensors.filter.area" })).toBeNull();
+    expect(screen.queryByRole("listbox", { name: "alarm.sensors.filter.area" })).toBeNull();
   });
 
   it("the area filter narrows the sensor candidate list (step 2)", async () => {
@@ -401,9 +459,11 @@ describe("AlarmWizard — area filter (steps 2 and 3)", () => {
     expect(await screen.findByText("Front door")).toBeTruthy();
     expect(screen.getByText("Back door")).toBeTruthy();
 
-    await fireEvent.change(screen.getByRole("combobox", { name: "alarm.sensors.filter.area" }), {
-      target: { value: "upstairs" },
-    });
+    await fireEvent.click(
+      within(screen.getByRole("listbox", { name: "alarm.sensors.filter.area" })).getByRole("option", {
+        name: "Upstairs",
+      }),
+    );
 
     expect(screen.getByText("Front door")).toBeTruthy();
     expect(screen.queryByText("Back door")).toBeNull();
@@ -419,9 +479,11 @@ describe("AlarmWizard — area filter (steps 2 and 3)", () => {
     await screen.findByText("Hallway siren");
     expect(screen.getByText("Attic light")).toBeTruthy();
 
-    await fireEvent.change(screen.getByRole("combobox", { name: "alarm.sensors.filter.area" }), {
-      target: { value: "upstairs" },
-    });
+    await fireEvent.click(
+      within(screen.getByRole("listbox", { name: "alarm.sensors.filter.area" })).getByRole("option", {
+        name: "Upstairs",
+      }),
+    );
 
     expect(screen.getByText("Hallway siren")).toBeTruthy();
     expect(screen.queryByText("Attic light")).toBeNull();

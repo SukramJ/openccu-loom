@@ -41,6 +41,13 @@ vi.mock("$lib/stores/confirm.svelte", () => ({
   confirmStore: { ask: vi.fn().mockResolvedValue(false) },
 }));
 
+// The real Select wraps bits-ui's floating-portal listbox, which happy-dom
+// cannot drive (see SelectStub.svelte).
+vi.mock("$lib/components/ui/Select.svelte", async () => {
+  const mod = await import("./__testutils__/SelectStub.svelte");
+  return { default: mod.default };
+});
+
 // Capture the handlers the view registers on the WS pump so a test can
 // deliver a `sysvar` envelope — or the daemon's resync signal — without a
 // socket. Both lists have to record: a mock that accepts onResync and
@@ -255,7 +262,7 @@ describe("SysvarList value widget", () => {
       unit: "",
     });
     expect(c.querySelector('[role="switch"]')).not.toBeNull();
-    expect(c.querySelector('[aria-haspopup="listbox"]')).toBeNull();
+    expect(c.querySelector('[role="listbox"]')).toBeNull();
   });
 
   it("renders a dropdown for a labelled LIST sysvar", async () => {
@@ -267,7 +274,7 @@ describe("SysvarList value widget", () => {
       value_list: ["Aus", "Aktivierung", "Vollschutz"],
       unit: "",
     });
-    expect(c.querySelector('[aria-haspopup="listbox"]')).not.toBeNull();
+    expect(c.querySelector('[role="listbox"]')).not.toBeNull();
     expect(c.querySelector('[role="switch"]')).toBeNull();
   });
 
@@ -282,7 +289,7 @@ describe("SysvarList value widget", () => {
     });
     expect(c.querySelector('input[type="number"]')).not.toBeNull();
     expect(c.querySelector('[role="switch"]')).toBeNull();
-    expect(c.querySelector('[aria-haspopup="listbox"]')).toBeNull();
+    expect(c.querySelector('[role="listbox"]')).toBeNull();
   });
 
   it("renders a text input for a STRING sysvar", async () => {
@@ -308,7 +315,7 @@ describe("SysvarList value widget", () => {
       value_list: ["Off", "On"],
       unit: "",
     });
-    expect(c.querySelector('[aria-haspopup="listbox"]')).not.toBeNull();
+    expect(c.querySelector('[role="listbox"]')).not.toBeNull();
     expect(c.querySelector('input[type="number"]')).toBeNull();
   });
 });
@@ -383,16 +390,18 @@ function buttonByText(scope: HTMLElement, re: RegExp): HTMLButtonElement {
   return btn as HTMLButtonElement;
 }
 
-// findSelectByLabel mirrors findByLabel but for the <select> controls
+// findSelectByLabel mirrors findByLabel but for the Select controls
 // (e.g. the create-form's value-type picker), which findByLabel cannot
-// locate since it only looks for <input>.
-function findSelectByLabel(scope: HTMLElement, labelText: string): HTMLSelectElement {
+// locate since it only looks for <input>. It returns the stubbed
+// `role="listbox"` container (see SelectStub.svelte) so a caller can read
+// its `role="option"` children.
+function findSelectByLabel(scope: HTMLElement, labelText: string): HTMLElement {
   const label = [...scope.querySelectorAll("label")].find(
     (l) => l.querySelector("span")?.textContent?.trim() === labelText,
   );
-  const select = label?.querySelector("select");
+  const select = label?.querySelector('[role="listbox"]');
   if (!select) throw new Error(`select for label "${labelText}" not found`);
-  return select as HTMLSelectElement;
+  return select as HTMLElement;
 }
 
 describe("SysvarList edit dialog dispatch", () => {
@@ -706,13 +715,6 @@ describe("SysvarList create dialog dispatch", () => {
   // codes, and the hint text must stay hidden until ALARM is the active
   // selection (the default form value_type is BOOL, so the hint must not
   // leak into the form before the operator has chosen ALARM).
-  //
-  // Driving the native <select> through a simulated "change" event and
-  // asserting the reactive follow-on (the conditional hint paragraph) is
-  // not exercised here: happy-dom's `:checked` selector match — which
-  // Svelte's select binding relies on to read back the chosen option —
-  // only supports <input>, not <option>, so the binding never observes
-  // the simulated selection in this test environment.
   it("offers ALARM in the create-type select and hides the alarm hint by default", async () => {
     const { container } = render(SysvarList);
     await waitFor(() => expect(mockListSysvars).toHaveBeenCalledTimes(1));
@@ -726,7 +728,9 @@ describe("SysvarList create dialog dispatch", () => {
     );
 
     const typeSelect = findSelectByLabel(container, t("sysvars.create.type"));
-    const opts = Array.from(typeSelect.options).map((o) => o.value);
+    const opts = [...typeSelect.querySelectorAll('[role="option"]')].map(
+      (o) => o.textContent?.trim(),
+    );
     expect(opts).toEqual(["BOOL", "INTEGER", "FLOAT", "STRING", "ENUM", "ALARM"]);
     expect(container.textContent).not.toContain(t("sysvars.create.alarm_hint"));
   });

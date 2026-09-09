@@ -4,6 +4,14 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.77.0
+
+No changes to the proxy itself — the version follows the daemon so the two
+add-ons stay in step. What 0.77.0 changes is the Config UI this add-on gives
+you access to: every page now shares one frame, title and tab strip, links and
+schedules became sortable tables like the device list, and a sort you pick is
+remembered. The main add-on's changelog describes those in full.
+
 # 0.76.0
 
 No changes to the proxy itself — the version follows the daemon so the two

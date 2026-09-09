@@ -18,6 +18,9 @@
   import CCUMaintenancePanel from "$lib/components/settings/CCUMaintenancePanel.svelte";
   import ChangesOverview from "$lib/components/settings/ChangesOverview.svelte";
   import ExpertGate from "$lib/components/ui/ExpertGate.svelte";
+  import PageShell from "$lib/components/ui/PageShell.svelte";
+  import PageHeader from "$lib/components/ui/PageHeader.svelte";
+  import Select from "$lib/components/ui/Select.svelte";
   import {
     prefs,
     setLocale,
@@ -415,23 +418,43 @@
   });
 </script>
 
-<section class="mx-auto max-w-6xl space-y-0 px-4 py-6">
-  <header class="mb-5 flex flex-wrap items-center justify-between gap-3">
-    <div class="space-y-1">
-      <h1 class="text-2xl font-semibold">{t("settings.title")}</h1>
-      <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("settings.subtitle")}</p>
+{#snippet tabButton(tab: Tab, full: boolean)}
+  <button
+    type="button"
+    class="shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-left text-sm transition {full
+      ? 'w-full'
+      : ''}
+      {activeTab === tab.id
+        ? 'bg-brand-50 font-medium text-brand-900 dark:bg-[color-mix(in_srgb,var(--color-brand-900)_20%,transparent)] dark:text-brand-100'
+        : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}"
+    aria-current={activeTab === tab.id ? "page" : undefined}
+    onclick={() => void selectTab(tab.id)}
+  >
+    {tab.label}
+  </button>
+{/snippet}
+
+<PageShell class="space-y-0">
+  <PageHeader
+    title={t("settings.title")}
+    subtitle={t("settings.subtitle")}
+    class="mb-5"
+  >
+    {#snippet children()}
       <ConnectivityLights />
-    </div>
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      onclick={() => void loadSchema()}
-      disabled={schemaLoading}
-    >
-      {t("common.reload")}
-    </Button>
-  </header>
+    {/snippet}
+    {#snippet actions()}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onclick={() => void loadSchema()}
+        disabled={schemaLoading}
+      >
+        {t("common.reload")}
+      </Button>
+    {/snippet}
+  </PageHeader>
 
   {#if schemaError}
     <ErrorState class="mb-4" message={schemaError} onRetry={() => void loadSchema()} />
@@ -445,21 +468,6 @@
     </p>
   {/if}
 
-  {#snippet tabButton(tab: Tab, full: boolean)}
-    <button
-      type="button"
-      class="shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-left text-sm transition {full
-        ? 'w-full'
-        : ''}
-        {activeTab === tab.id
-          ? 'bg-brand-50 font-medium text-brand-900 dark:bg-[color-mix(in_srgb,var(--color-brand-900)_20%,transparent)] dark:text-brand-100'
-          : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}"
-      aria-current={activeTab === tab.id ? "page" : undefined}
-      onclick={() => void selectTab(tab.id)}
-    >
-      {tab.label}
-    </button>
-  {/snippet}
 
   <div class="flex flex-col gap-0 rounded-lg border border-slate-200 bg-white shadow-sm md:flex-row dark:border-slate-800 dark:bg-slate-900">
     <!--
@@ -532,65 +540,67 @@
           <div>
             <h2 class="mb-3 text-base font-semibold">{t("settings.interface")}</h2>
             <div class="space-y-3">
-              <label class="flex items-center gap-3 text-sm">
+              <span class="flex items-center gap-3 text-sm">
                 <span class="min-w-24">{t("settings.language")}</span>
-                <select
-                  class="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-900"
+                <Select
+                  class="w-auto"
                   value={prefs.locale}
-                  onchange={(e) =>
-                    setLocale((e.target as HTMLSelectElement).value === "de" ? "de" : "en")}
-                >
-                  <option value="de">Deutsch</option>
-                  <option value="en">English</option>
-                </select>
-              </label>
+                  ariaLabel={t("settings.language")}
+                  onValueChange={(v) => setLocale(v === "de" ? "de" : "en")}
+                  options={[
+                    { value: "de", label: "Deutsch" },
+                    { value: "en", label: "English" },
+                  ]}
+                />
+              </span>
 
-              <label class="flex items-center gap-3 text-sm">
+              <span class="flex items-center gap-3 text-sm">
                 <span class="min-w-24">{t("settings.theme")}</span>
-                <select
-                  class="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-900"
+                <Select
+                  class="w-auto"
                   value={prefs.theme}
-                  onchange={(e) =>
-                    setTheme((e.target as HTMLSelectElement).value as Theme)}
-                >
-                  <option value="light">{t("settings.theme.light")}</option>
-                  <option value="dark">{t("settings.theme.dark")}</option>
-                  <option value="system">{t("settings.theme.system")}</option>
-                </select>
-              </label>
+                  ariaLabel={t("settings.theme")}
+                  onValueChange={(v) => setTheme(v as Theme)}
+                  options={[
+                    { value: "light", label: t("settings.theme.light") },
+                    { value: "dark", label: t("settings.theme.dark") },
+                    { value: "system", label: t("settings.theme.system") },
+                  ]}
+                />
+              </span>
 
-              <label class="flex items-center gap-3 text-sm">
+              <span class="flex items-center gap-3 text-sm">
                 <span class="min-w-24">{t("settings.start_route")}</span>
-                <select
-                  class="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-900"
+                <Select
+                  class="w-auto"
                   value={startRouteValue}
-                  onchange={(e) =>
-                    void saveStartRoute((e.target as HTMLSelectElement).value)}
-                >
-                  <option value="">{t("settings.start_route.default")}</option>
-                  {#each startRouteOptions as opt (opt.href)}
-                    <option value={opt.href}>{opt.label}</option>
-                  {/each}
-                </select>
-              </label>
+                  ariaLabel={t("settings.start_route")}
+                  onValueChange={(v) => void saveStartRoute(v)}
+                  options={[
+                    { value: "", label: t("settings.start_route.default") },
+                    ...startRouteOptions.map((opt) => ({ value: opt.href, label: opt.label })),
+                  ]}
+                />
+              </span>
               <p class="-mt-1 text-xs text-[var(--ha-secondary-text-color)]">
                 {t("settings.start_route.help")}
               </p>
 
               <div class="flex items-start gap-3">
-                <label class="flex items-center gap-3 text-sm">
+                <span class="flex items-center gap-3 text-sm">
                   <span class="min-w-24">{t("settings.appearance.design")}</span>
-                  <select
-                    class="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900"
+                  <Select
+                    class="w-auto"
                     value={prefs.skin}
+                    ariaLabel={t("settings.appearance.design")}
+                    onValueChange={(v) => setSkin(v as Skin)}
                     disabled={isEmbedded()}
-                    onchange={(e) =>
-                      setSkin((e.target as HTMLSelectElement).value as Skin)}
-                  >
-                    <option value="loom">{t("settings.appearance.design.loom")}</option>
-                    <option value="ha">{t("settings.appearance.design.ha")}</option>
-                  </select>
-                </label>
+                    options={[
+                      { value: "loom", label: t("settings.appearance.design.loom") },
+                      { value: "ha", label: t("settings.appearance.design.ha") },
+                    ]}
+                  />
+                </span>
                 <p class="pt-1.5 text-xs text-[var(--ha-secondary-text-color)]">
                   {isEmbedded()
                     ? t("settings.appearance.design.embedded_hint")
@@ -635,20 +645,19 @@
               </div>
 
               <div>
-                <label class="flex items-center gap-3 text-sm">
+                <span class="flex items-center gap-3 text-sm">
                   <span class="min-w-24">{t("settings.prefs.param_density")}</span>
-                  <select
-                    class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-1.5 text-sm"
+                  <Select
+                    class="w-auto"
                     value={prefs.paramDensity}
-                    onchange={(e) =>
-                      setParamDensity(
-                        (e.target as HTMLSelectElement).value as "compact" | "comfortable",
-                      )}
-                  >
-                    <option value="compact">{t("settings.prefs.density.compact")}</option>
-                    <option value="comfortable">{t("settings.prefs.density.comfortable")}</option>
-                  </select>
-                </label>
+                    ariaLabel={t("settings.prefs.param_density")}
+                    onValueChange={(v) => setParamDensity(v as "compact" | "comfortable")}
+                    options={[
+                      { value: "compact", label: t("settings.prefs.density.compact") },
+                      { value: "comfortable", label: t("settings.prefs.density.comfortable") },
+                    ]}
+                  />
+                </span>
               </div>
             </div>
           </div>
@@ -958,4 +967,4 @@
 
     </div>
   </div>
-</section>
+</PageShell>

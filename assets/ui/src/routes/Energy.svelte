@@ -13,6 +13,7 @@
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
+  import PageShell from "$lib/components/ui/PageShell.svelte";
   import { t } from "$lib/i18n";
   import { prefs } from "$lib/stores/preferences.svelte";
 
@@ -311,7 +312,7 @@
   <title>{t("page.title.energy")}</title>
 </svelte:head>
 
-<section class="mx-auto max-w-6xl px-4 py-6 sm:px-6 space-y-6">
+<PageShell class="space-y-6">
   <PageHeader title={t("energy.title")} subtitle={t("energy.subtitle")} />
 
   {#if centralsLoading}
@@ -495,6 +496,7 @@
           rows={deviceRows}
           columns={deviceColumns}
           rowKey={(r) => r.address}
+          persistKey="energy-devices"
           initialSort={{ key: "consumed", asc: false }}
           emptyMessage={t("energy.empty")}
           emptyIcon="mdi:zap"
@@ -527,4 +529,4 @@
       </Card>
     {/if}
   {/if}
-</section>
+</PageShell>

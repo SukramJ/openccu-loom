@@ -129,6 +129,7 @@
         rows={matterStore.fabrics}
         {columns}
         rowKey={(f) => String(f.fabric_index)}
+        persistKey="matter-fabrics"
         emptyMessage={t("matter.fabrics.empty")}
         emptyIcon="mdi:link"
         initialSort={{ key: "vendor", asc: true }}

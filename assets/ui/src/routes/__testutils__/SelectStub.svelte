@@ -10,10 +10,13 @@
     options: Option[];
     value?: string;
     onValueChange?: (value: string) => void;
+    // Carried onto the listbox so a view with several filters on screen can
+    // be driven one control at a time.
+    ariaLabel?: string;
   };
   // `value` is bindable like the real Select's, so a view that drives its
   // state through `bind:value` behaves the same against this stub.
-  let { options, value = $bindable(""), onValueChange }: Props = $props();
+  let { options, value = $bindable(""), onValueChange, ariaLabel }: Props = $props();
 
   function pick(next: string) {
     value = next;
@@ -21,7 +24,7 @@
   }
 </script>
 
-<div role="listbox">
+<div role="listbox" aria-label={ariaLabel}>
   {#each options as o (o.value)}
     <button
       type="button"

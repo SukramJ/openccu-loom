@@ -36,6 +36,8 @@
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import CentralStatusBadge from "$lib/components/ui/CentralStatusBadge.svelte";
+  import PageShell from "$lib/components/ui/PageShell.svelte";
+  import Select from "$lib/components/ui/Select.svelte";
   import { t } from "$lib/i18n";
   import {
     buildOverviewGroups,
@@ -241,7 +243,7 @@
   });
 </script>
 
-<section class="w-full px-4 py-8 sm:px-6">
+<PageShell width="wide">
   <PageHeader title={t("overview.title")} subtitle={t("overview.subtitle")}>
     {#snippet actions()}
       <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-3">
@@ -252,52 +254,48 @@
           class="w-full rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-3 py-2 text-base text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none focus:ring-1 focus:ring-[var(--ha-primary-color)] sm:w-64 sm:text-sm"
         />
         {#if centrals.length > 1}
-          <select
+          <Select
+            class="w-auto"
             bind:value={centralFilter}
-            class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
-            title={t("overview.filter.central_title")}
-          >
-            <option value="">{t("common.all_ccus")}</option>
-            {#each centrals as c (c)}
-              <option value={c}>{c}</option>
-            {/each}
-          </select>
+            ariaLabel={t("filter.central_aria")}
+            options={[
+              { value: "", label: t("common.all_ccus") },
+              ...centrals.map((c) => ({ value: c, label: c })),
+            ]}
+          />
         {/if}
         {#if rooms.length > 0}
-          <select
+          <Select
+            class="w-auto"
             bind:value={roomFilter}
-            class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
-            title={t("overview.filter.room_title")}
-          >
-            <option value="">{t("devicelist.all_rooms")}</option>
-            {#each rooms as r (r)}
-              <option value={r}>{r}</option>
-            {/each}
-          </select>
+            ariaLabel={t("overview.filter.room_title")}
+            options={[
+              { value: "", label: t("devicelist.all_rooms") },
+              ...rooms.map((r) => ({ value: r, label: r })),
+            ]}
+          />
         {/if}
         {#if functions.length > 0}
-          <select
+          <Select
+            class="w-auto"
             bind:value={functionFilter}
-            class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
-            title={t("overview.filter.function_title")}
-          >
-            <option value="">{t("overview.filter.all_functions")}</option>
-            {#each functions as f (f)}
-              <option value={f}>{f}</option>
-            {/each}
-          </select>
+            ariaLabel={t("overview.filter.function_title")}
+            options={[
+              { value: "", label: t("overview.filter.all_functions") },
+              ...functions.map((f) => ({ value: f, label: f })),
+            ]}
+          />
         {/if}
         {#if areas.length > 0}
-          <select
+          <Select
+            class="w-auto"
             bind:value={areaFilter}
-            class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
-            title={t("overview.filter.area_title")}
-          >
-            <option value="">{t("devicelist.all_areas")}</option>
-            {#each areas as a (a.id)}
-              <option value={a.id}>{a.name}</option>
-            {/each}
-          </select>
+            ariaLabel={t("overview.filter.area_title")}
+            options={[
+              { value: "", label: t("devicelist.all_areas") },
+              ...areas.map((a) => ({ value: a.id, label: a.name })),
+            ]}
+          />
         {/if}
         <div
           class="ml-auto inline-flex overflow-hidden rounded-md border border-[var(--ha-divider-color)]"
@@ -422,4 +420,4 @@
       </Card>
     {/each}
   {/if}
-</section>
+</PageShell>

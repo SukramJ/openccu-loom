@@ -15,6 +15,8 @@
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import Select from "$lib/components/ui/Select.svelte";
+  import PageShell from "$lib/components/ui/PageShell.svelte";
+  import Tabs from "$lib/components/ui/Tabs.svelte";
   import { t } from "$lib/i18n";
   import { loadLS, saveLS } from "$lib/utils";
   import { prefs } from "$lib/stores/preferences.svelte";
@@ -436,7 +438,7 @@
   ]);
 </script>
 
-<section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+<PageShell>
   <PageHeader
     title={t("messages.title")}
     subtitle={t("messages.summary", { alarms: alarms.length, services: services.length })}
@@ -472,38 +474,16 @@
     {/snippet}
   </PageHeader>
 
-  <nav class="mb-4 flex gap-1 border-b border-slate-200 dark:border-slate-800">
-    <button
-      type="button"
-      class="border-b-2 px-3 py-2 text-sm transition {tab === 'alarm'
-        ? 'border-brand-500 text-brand-700 dark:text-brand-400'
-        : 'border-transparent text-slate-500 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-400'}"
-      onclick={() => (tab = "alarm")}
-    >
-      {t("messages.alarms")}
-      <Badge variant="muted">{alarms.length}</Badge>
-    </button>
-    <button
-      type="button"
-      class="border-b-2 px-3 py-2 text-sm transition {tab === 'service'
-        ? 'border-brand-500 text-brand-700 dark:text-brand-400'
-        : 'border-transparent text-slate-500 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-400'}"
-      onclick={() => (tab = "service")}
-    >
-      {t("messages.service")}
-      <Badge variant="muted">{services.length}</Badge>
-    </button>
-    <button
-      type="button"
-      class="border-b-2 px-3 py-2 text-sm transition {tab === 'suppressed'
-        ? 'border-brand-500 text-brand-700 dark:text-brand-400'
-        : 'border-transparent text-slate-500 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-400'}"
-      onclick={() => (tab = "suppressed")}
-    >
-      {t("messages.suppressed.tab")}
-      <Badge variant="muted">{suppressed.length}</Badge>
-    </button>
-  </nav>
+  <Tabs
+    class="mb-4"
+    active={tab}
+    onSelect={(key) => (tab = key as typeof tab)}
+    items={[
+      { key: "alarm", label: t("messages.alarms"), badge: alarms.length },
+      { key: "service", label: t("messages.service"), badge: services.length },
+      { key: "suppressed", label: t("messages.suppressed.tab"), badge: suppressed.length },
+    ]}
+  />
 
   {#if loadError}
     <ErrorState message={loadError} onRetry={load} class="mb-4" />
@@ -715,4 +695,4 @@
       </DataTable>
     </Card>
   {/if}
-</section>
+</PageShell>

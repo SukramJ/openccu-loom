@@ -14,6 +14,7 @@
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import PageHeader from "$lib/components/ui/PageHeader.svelte";
+  import PageShell from "$lib/components/ui/PageShell.svelte";
   import SysvarChannelPicker from "$lib/components/SysvarChannelPicker.svelte";
   import { t } from "$lib/i18n";
   import { loadLS, saveLS } from "$lib/utils";
@@ -428,9 +429,20 @@
     centralFilter ? sysvars.filter((s) => s.central === centralFilter) : sysvars,
   );
 
+  // The value types the CCU reports, in the order the API schema lists them.
+  const SYSVAR_TYPES = ["BOOL", "INTEGER", "FLOAT", "STRING", "ENUM", "ALARM"];
+
   const columns: DataColumn<SysvarEntry>[] = $derived([
     { key: "name", label: t("sysvars.col.name"), sortable: true, title: true, get: (s) => s.name },
-    { key: "type", label: t("sysvars.col.type"), sortable: true, get: (s) => s.value_type },
+    {
+      key: "type",
+      label: t("sysvars.col.type"),
+      sortable: true,
+      get: (s) => s.value_type,
+      // A closed vocabulary from the CCU — a choice, not a text box.
+      filter: "select",
+      filterOptions: SYSVAR_TYPES.map((v) => ({ value: v, label: v })),
+    },
     { key: "value", label: t("sysvars.col.value"), sortable: true, get: (s) => (s.value == null ? "" : String(s.value)) },
     { key: "actions", label: t("sysvars.col.actions"), align: "right", cellClass: "reflow-actions" },
   ]);
@@ -452,23 +464,22 @@
   }
 </script>
 
-<section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+<PageShell>
   <PageHeader
     title={t("sysvars.title")}
     subtitle={loading ? t("common.loading") : t("sysvars.count", { count: sysvars.length })}
   >
     {#snippet actions()}
       {#if centrals.length > 1}
-        <select
+        <Select
+          class="w-auto"
           bind:value={centralFilter}
-          class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-          title="CCU"
-        >
-          <option value="">{t("common.all_ccus")}</option>
-          {#each centrals as c (c)}
-            <option value={c}>{c}</option>
-          {/each}
-        </select>
+          ariaLabel={t("filter.central_aria")}
+          options={[
+            { value: "", label: t("common.all_ccus") },
+            ...centrals.map((c) => ({ value: c, label: c })),
+          ]}
+        />
       {/if}
       <Button type="button" variant="outline" size="sm" onclick={() => void reload()} disabled={loading}>
         {t("common.reload")}
@@ -486,15 +497,15 @@
         {#if centrals.length > 1}
           <label class="text-sm md:col-span-2">
             <span class="block text-xs text-slate-500 dark:text-slate-400">CCU</span>
-            <select
+            <Select
+              class="w-full"
               bind:value={createCentral}
-              class="w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-            >
-              <option value="">{t("common.select_placeholder")}</option>
-              {#each centrals as c (c)}
-                <option value={c}>{c}</option>
-              {/each}
-            </select>
+              ariaLabel={t("filter.central_aria")}
+              options={[
+                { value: "", label: t("common.select_placeholder") },
+                ...centrals.map((c) => ({ value: c, label: c })),
+              ]}
+            />
           </label>
         {/if}
         <label class="text-sm">
@@ -503,17 +514,19 @@
         </label>
         <label class="text-sm">
           <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.create.type")}</span>
-          <select
+          <Select
+            class="w-full"
             bind:value={createForm.value_type}
-            class="w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-          >
-            <option value="BOOL">BOOL</option>
-            <option value="INTEGER">INTEGER</option>
-            <option value="FLOAT">FLOAT</option>
-            <option value="STRING">STRING</option>
-            <option value="ENUM">ENUM</option>
-            <option value="ALARM">ALARM</option>
-          </select>
+            ariaLabel={t("sysvars.create.type")}
+            options={[
+              { value: "BOOL", label: "BOOL" },
+              { value: "INTEGER", label: "INTEGER" },
+              { value: "FLOAT", label: "FLOAT" },
+              { value: "STRING", label: "STRING" },
+              { value: "ENUM", label: "ENUM" },
+              { value: "ALARM", label: "ALARM" },
+            ]}
+          />
         </label>
         {#if createForm.value_type === "ALARM"}
           <p class="text-xs text-slate-500 md:col-span-2 dark:text-slate-400">
@@ -604,6 +617,7 @@
         search
         searchPlaceholder={t("common.search")}
         persistKey="sysvars"
+        columnFilters
         initialSort={{ key: "name", asc: true }}
         emptyMessage={t("sysvars.empty")}
         emptyIcon="mdi:sliders"
@@ -668,7 +682,7 @@
       </DataTable>
     </Card>
   {/if}
-</section>
+</PageShell>
 
 <svelte:window onkeydown={onDialogKey} />
 

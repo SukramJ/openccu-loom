@@ -18,6 +18,9 @@
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import type { DataColumn } from "$lib/components/ui/data-table";
+  import PageShell from "$lib/components/ui/PageShell.svelte";
+  import PageHeader from "$lib/components/ui/PageHeader.svelte";
+  import Select from "$lib/components/ui/Select.svelte";
   import { t } from "$lib/i18n";
   import { prefs } from "$lib/stores/preferences.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
@@ -595,13 +598,13 @@
   <title>{t("page.title.diagnostics")}</title>
 </svelte:head>
 
-<section class="mx-auto max-w-6xl px-4 sm:px-6 py-6 space-y-6">
-  <header class="flex flex-wrap items-center justify-between gap-3">
-    <div>
-      <h1 class="text-2xl font-semibold">{t("diagnostics.title")}</h1>
-      <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("diagnostics.subtitle")}</p>
-    </div>
-    <div class="flex flex-wrap items-center gap-2">
+<PageShell class="space-y-6">
+  <PageHeader
+    title={t("diagnostics.title")}
+    subtitle={t("diagnostics.subtitle")}
+    class="mb-0"
+  >
+    {#snippet actions()}
       <Button
         type="button"
         variant="outline"
@@ -619,8 +622,8 @@
       >
         {t("common.reload")}
       </Button>
-    </div>
-  </header>
+    {/snippet}
+  </PageHeader>
 
   {#if loadError}
     <ErrorState message={loadError} onRetry={() => void load()} />
@@ -709,6 +712,7 @@
         rows={clients}
         columns={clientCols}
         rowKey={(c) => c.name}
+        persistKey="diagnostics-components"
         emptyMessage={t("diagnostics.empty.components")}
       >
         {#snippet cell(row, col)}
@@ -780,6 +784,7 @@
       rows={interfaces}
       columns={interfaceCols}
       rowKey={(i) => i.id}
+      persistKey="diagnostics-interfaces"
       emptyMessage={t("diagnostics.empty.interfaces")}
     >
       {#snippet cell(row, col)}
@@ -841,6 +846,7 @@
         rows={reliability}
         columns={reliabilityCols}
         rowKey={(r) => `${r.central}/${r.interface}`}
+        persistKey="diagnostics-reliability"
         emptyMessage={t("diagnostics.reliability.empty")}
       >
         {#snippet cell(row, col)}
@@ -968,15 +974,13 @@
         </label>
         <label class="flex flex-col text-xs">
           <span class="text-[var(--ha-secondary-text-color)]">{t("diagnostics.log_level")}</span>
-          <select
-            bind:value={newLevel}
-            class="rounded border border-slate-300 px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-900"
-          >
-            <option value="debug">debug</option>
-            <option value="info">info</option>
-            <option value="warn">warn</option>
-            <option value="error">error</option>
-          </select>
+          <Select
+            class="w-auto"
+            value={newLevel}
+            onValueChange={(v) => (newLevel = v as "debug" | "info" | "warn" | "error")}
+            ariaLabel={t("diagnostics.log_level")}
+            options={["debug", "info", "warn", "error"].map((lvl) => ({ value: lvl, label: lvl }))}
+          />
         </label>
         <label class="flex flex-col text-xs">
           <span class="text-[var(--ha-secondary-text-color)]">{t("diagnostics.ttl_seconds")}</span>
@@ -1058,15 +1062,15 @@
       {#if recType === "rpc" || recType === "both"}
         <label class="flex flex-col text-xs">
           <span class="text-[var(--ha-secondary-text-color)]">{t("diagnostics.recordings.scope")}</span>
-          <select
+          <Select
+            class="w-auto"
             bind:value={rpcScope}
-            class="rounded border border-slate-300 px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-900"
-          >
-            <option value="">{t("diagnostics.recordings.scope_all")}</option>
-            {#each rpcCentralNames as name (name)}
-              <option value={name}>{name}</option>
-            {/each}
-          </select>
+            ariaLabel={t("diagnostics.recordings.scope")}
+            options={[
+              { value: "", label: t("diagnostics.recordings.scope_all") },
+              ...rpcCentralNames.map((name) => ({ value: name, label: name })),
+            ]}
+          />
         </label>
       {/if}
     </div>
@@ -1129,6 +1133,7 @@
       rows={unifiedList}
       columns={recordingCols}
       rowKey={(r) => r.kind + ":" + r.id}
+      persistKey="diagnostics-recordings"
       emptyMessage={t("diagnostics.recordings.empty")}
     >
       {#snippet cell(row, col)}
@@ -1211,4 +1216,4 @@
       </ul>
     {/if}
   </Card>
-</section>
+</PageShell>

@@ -14,6 +14,7 @@
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import Select from "$lib/components/ui/Select.svelte";
+  import PageShell from "$lib/components/ui/PageShell.svelte";
   import { installModeStore } from "$lib/stores/installMode.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import {
@@ -609,7 +610,7 @@
 
 <svelte:window onkeydown={onDialogKey} />
 
-<section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+<PageShell>
   <PageHeader title={t("inbox.title")} subtitle={t("inbox.subtitle")}>
     {#snippet actions()}
       {#if installModeStore.banner && !installModeStore.active}
@@ -862,7 +863,7 @@
       </DataTable>
     </Card>
   {/if}
-</section>
+</PageShell>
 
 {#if acceptTarget}
   <!-- Accept dialog: optional first-time configuration before the device
@@ -959,24 +960,22 @@
 
         {#if acceptGroups.length > 0}
           <div class="mb-5">
-            <label class="mb-1 block text-sm font-medium" for="inbox-group">
+            <span class="mb-1 block text-sm font-medium">
               {t("inbox.accept_dialog.group_label")}
-            </label>
-            <select
-              id="inbox-group"
-              class="h-10 w-full rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-3 text-sm text-[var(--ha-primary-text-color)]"
+            </span>
+            <Select
+              class="w-full"
               disabled={acceptSubmitting}
               value={acceptGroupId === "" ? "" : String(acceptGroupId)}
-              onchange={(e) => {
-                const v = (e.currentTarget as HTMLSelectElement).value;
+              onValueChange={(v) => {
                 acceptGroupId = v === "" ? "" : Number(v);
               }}
-            >
-              <option value="">{t("inbox.accept_dialog.group_none")}</option>
-              {#each acceptGroups as g (g.id)}
-                <option value={String(g.id)}>{g.name}</option>
-              {/each}
-            </select>
+              ariaLabel={t("inbox.accept_dialog.group_label")}
+              options={[
+                { value: "", label: t("inbox.accept_dialog.group_none") },
+                ...acceptGroups.map((g) => ({ value: String(g.id), label: g.name })),
+              ]}
+            />
             <p class="mt-1 text-xs text-[var(--ha-secondary-text-color)]">
               {t("inbox.accept_dialog.group_hint")}
             </p>

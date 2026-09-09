@@ -14,6 +14,10 @@
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
+  import DataTable from "$lib/components/ui/DataTable.svelte";
+  import type { DataColumn } from "$lib/components/ui/data-table";
+
+  type WalkTestSensor = AlarmWalkTestStatus["sensors"][number];
 
   // Walk test (docs/alarm-concept.md §12.4): an arm-less test session where
   // tripping each sensor ticks its checklist row green with a timestamp.
@@ -134,7 +138,59 @@
       return iso;
     }
   }
+
+  // Sorting by status is the question the operator asks while walking the
+  // building: which sensors are still pending. The tick column stays
+  // unlabelled — it repeats the status column as a glyph.
+  const columns: DataColumn<WalkTestSensor>[] = $derived([
+    { key: "tested", label: "", filter: false },
+    {
+      key: "name",
+      label: t("alarm.walktest.col.sensor"),
+      title: true,
+      sortable: true,
+      get: (s) => s.name || s.id,
+    },
+    {
+      key: "status",
+      label: t("alarm.walktest.col.status"),
+      align: "right",
+      sortable: true,
+      get: (s) => (s.tested ? 1 : 0),
+      cellClass: "text-xs text-[var(--ha-secondary-text-color)]",
+    },
+  ]);
 </script>
+
+{#snippet walkTestCell(s: WalkTestSensor, col: DataColumn<WalkTestSensor>)}
+  {#if col.key === "tested"}
+    {#if s.tested}
+      <Icon
+        name="mdi:check-circle"
+        size={18}
+        class="text-[var(--ha-success-color)]"
+        aria-label=""
+      />
+    {:else}
+      <Icon
+        name="mdi:circle-outline"
+        size={18}
+        class="text-[var(--ha-secondary-text-color)]"
+        aria-label=""
+      />
+    {/if}
+  {:else if col.key === "name"}
+    <span class={s.tested ? "font-medium" : ""}>{s.name || s.id}</span>
+  {:else if col.key === "status"}
+    {#if s.tested}
+      {t("alarm.walktest.tested")}{#if s.last_triggered_at}
+        · {fmtTime(s.last_triggered_at)}
+      {/if}
+    {:else}
+      {t("alarm.walktest.untested")}
+    {/if}
+  {/if}
+{/snippet}
 
 <div>
   {#if store.zonesConfig.length === 0}
@@ -199,48 +255,15 @@
       {#if status.sensors.length === 0}
         <EmptyState icon="mdi:gesture-tap-button" message={t("alarm.walktest.empty")} />
       {:else}
-        <Card class="overflow-x-auto">
-          <table class="w-full border-collapse text-sm">
-            <tbody>
-              {#each status.sensors as s (s.id)}
-                <tr
-                  class="border-b border-[var(--ha-divider-color)] last:border-0 {s.tested
-                    ? ''
-                    : 'opacity-60'}"
-                >
-                  <td class="w-8 p-2">
-                    {#if s.tested}
-                      <Icon
-                        name="mdi:check-circle"
-                        size={18}
-                        class="text-[var(--ha-success-color)]"
-                        aria-label=""
-                      />
-                    {:else}
-                      <Icon
-                        name="mdi:circle-outline"
-                        size={18}
-                        class="text-[var(--ha-secondary-text-color)]"
-                        aria-label=""
-                      />
-                    {/if}
-                  </td>
-                  <td class="p-2 {s.tested ? 'font-medium' : ''}">
-                    {s.name || s.id}
-                  </td>
-                  <td class="p-2 text-right text-xs text-[var(--ha-secondary-text-color)]">
-                    {#if s.tested}
-                      {t("alarm.walktest.tested")}{#if s.last_triggered_at}
-                        · {fmtTime(s.last_triggered_at)}
-                      {/if}
-                    {:else}
-                      {t("alarm.walktest.untested")}
-                    {/if}
-                  </td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
+        <Card class="p-4">
+          <DataTable
+            rows={status.sensors}
+            {columns}
+            rowKey={(s) => s.id}
+            cell={walkTestCell}
+            rowClass={(s) => (s.tested ? "" : "opacity-60")}
+            emptyMessage={t("alarm.walktest.empty")}
+          />
         </Card>
       {/if}
     {/if}

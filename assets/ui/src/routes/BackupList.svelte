@@ -12,6 +12,7 @@
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import Select from "$lib/components/ui/Select.svelte";
+  import PageShell from "$lib/components/ui/PageShell.svelte";
   import { t } from "$lib/i18n";
   import { prefs } from "$lib/stores/preferences.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
@@ -245,7 +246,7 @@
   ]);
 </script>
 
-<section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+<PageShell>
   <PageHeader title={t("backup.title")} subtitle={t("backup.subtitle")}>
     {#snippet actions()}
       <Button type="button" variant="outline" size="sm" onclick={() => void load()} disabled={loading}>
@@ -364,4 +365,4 @@
       </DataTable>
     </Card>
   {/if}
-</section>
+</PageShell>

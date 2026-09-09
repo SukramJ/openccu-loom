@@ -25,6 +25,9 @@
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
+  import PageShell from "$lib/components/ui/PageShell.svelte";
+  import DataTable from "$lib/components/ui/DataTable.svelte";
+  import type { DataColumn } from "$lib/components/ui/data-table";
   import { t } from "$lib/i18n";
 
   let items = $state<ScheduleDeviceSummary[]>([]);
@@ -61,17 +64,7 @@
       .some((v) => (v as string).toLowerCase().includes(needle));
   }
 
-  const filtered = $derived(
-    items
-      .filter((i) => matches(i, search))
-      .sort((a, b) => {
-        const byCentral = (a.central || "").localeCompare(b.central || "");
-        if (byCentral !== 0) return byCentral;
-        return (a.name || a.address).localeCompare(b.name || b.address, undefined, {
-          sensitivity: "base",
-        });
-      }),
-  );
+  const filtered = $derived(items.filter((i) => matches(i, search)));
 
   /** The device's schedule tab — where the program is actually edited. */
   function href(item: ScheduleDeviceSummary): string {
@@ -81,9 +74,95 @@
   // Whether that tab exists in this profile at all. Hidden means the
   // rows lose their link, not that the list loses its rows.
   const linkable = $derived(surfacesStore.opensVisible("nav.schedules"));
+
+  function openRow(item: ScheduleDeviceSummary) {
+    location.hash = href(item);
+  }
+
+  function kindLabel(kind: string): string {
+    return kind === "climate" ? t("schedules.kind.climate") : t("schedules.kind.week_profile");
+  }
+
+  const columns = $derived<DataColumn<ScheduleDeviceSummary>[]>([
+    {
+      key: "name",
+      label: t("schedules.col.name"),
+      sortable: true,
+      title: true,
+      get: (item) => item.name || item.address,
+    },
+    {
+      key: "channel",
+      label: t("schedules.col.channel"),
+      sortable: true,
+      get: (item) => item.channel?.address ?? item.address,
+      cellClass: "font-mono text-xs",
+    },
+    {
+      key: "model",
+      label: t("schedules.col.model"),
+      sortable: true,
+      get: (item) => item.model ?? null,
+    },
+    {
+      key: "kind",
+      label: t("schedules.col.kind"),
+      sortable: true,
+      get: (item) => item.kind,
+      filter: "select",
+      filterOptions: [
+        { value: "climate", label: t("schedules.kind.climate") },
+        { value: "week_profile", label: t("schedules.kind.week_profile") },
+      ],
+    },
+    ...(centrals.length > 1
+      ? [
+          {
+            key: "central",
+            label: t("schedules.col.central"),
+            sortable: true,
+            get: (item: ScheduleDeviceSummary) => item.central ?? null,
+          } satisfies DataColumn<ScheduleDeviceSummary>,
+        ]
+      : []),
+  ]);
 </script>
 
-<section class="mx-auto max-w-5xl px-4 py-6 sm:px-6">
+{#snippet scheduleCell(item: ScheduleDeviceSummary, col: DataColumn<ScheduleDeviceSummary>)}
+  {#if col.key === "name"}
+    <span class="flex min-w-0 items-center gap-2">
+      <Icon
+        name="mdi:calendar-clock"
+        class="shrink-0 text-[var(--ha-secondary-text-color)]"
+      />
+      {#if linkable}
+        <a href={href(item)} class="min-w-0 truncate font-semibold text-[var(--ha-primary-text-color)] no-underline hover:underline">
+          {item.name || item.address}
+        </a>
+      {:else}
+        <span class="min-w-0 truncate font-semibold text-[var(--ha-primary-text-color)]">
+          {item.name || item.address}
+        </span>
+      {/if}
+    </span>
+  {:else if col.key === "channel"}
+    {item.channel?.address ?? item.address}
+  {:else if col.key === "model"}
+    {#if item.model}
+      <Badge variant="muted">{item.model}</Badge>
+    {/if}
+  {:else if col.key === "kind"}
+    <Badge variant={item.kind === "climate" ? "default" : "muted"}>
+      {kindLabel(item.kind)}
+    </Badge>
+  {:else if col.key === "central"}
+    {#if item.central}
+      <Badge variant="muted">{item.central}</Badge>
+    {/if}
+  {/if}
+{/snippet}
+
+<PageShell>
   <PageHeader title={t("schedules.title")} subtitle={t("schedules.subtitle")} />
 
   {#if loadError}
@@ -117,46 +196,19 @@
       />
     </div>
 
-    {#if filtered.length === 0}
-      <EmptyState message={t("schedules.no_matches")} icon="mdi:calendar-clock" />
-    {:else}
-      <ul class="flex flex-col gap-3">
-        {#each filtered as item (item.central + "|" + item.address)}
-          <li>
-            <svelte:element
-              this={linkable ? "a" : "div"}
-              href={linkable ? href(item) : undefined}
-              class="block no-underline"
-            >
-              <Card
-                class={"flex flex-wrap items-center gap-2 p-4" +
-                  (linkable ? " hover:border-brand-500" : "")}
-              >
-                <Icon
-                  name="mdi:calendar-clock"
-                  class="shrink-0 text-[var(--ha-secondary-text-color)]"
-                />
-                <span class="min-w-0 truncate font-semibold text-[var(--ha-primary-text-color)]">
-                  {item.name || item.address}
-                </span>
-                <code class="text-xs text-[var(--ha-secondary-text-color)]">
-                  {item.channel?.address ?? item.address}
-                </code>
-                <span class="grow"></span>
-                {#if item.model}
-                  <Badge variant="muted">{item.model}</Badge>
-                {/if}
-                <Badge variant={item.kind === "climate" ? "default" : "muted"}>
-                  {item.kind === "climate" ? t("schedules.kind.climate") : t("schedules.kind.week_profile")}
-                </Badge>
-                {#if centrals.length > 1 && item.central}
-                  <Badge variant="muted">{item.central}</Badge>
-                {/if}
-              </Card>
-            </svelte:element>
-          </li>
-        {/each}
-      </ul>
-    {/if}
+    <Card class="p-4">
+      <DataTable
+        rows={filtered}
+        {columns}
+        rowKey={(item) => item.central + "|" + item.address}
+        cell={scheduleCell}
+        columnFilters
+        persistKey="schedules"
+        initialSort={{ key: "name", asc: true }}
+        onRowClick={linkable ? openRow : undefined}
+        emptyMessage={t("schedules.no_matches")}
+        emptyIcon="mdi:calendar-clock"
+      />
+    </Card>
   {/if}
-</section>
+</PageShell>
