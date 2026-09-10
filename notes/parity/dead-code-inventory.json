@@ -1,6 +1,6 @@
 {
-  "generated": "f2e908ce",
-  "head": "f2e908ce",
+  "generated": "97146488",
+  "head": "97146488",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/openccu-loom-remote/main.go",
@@ -5450,7 +5450,7 @@
       "identifier": "RawOrphanCandidateMatcher",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/retain_cleanup.go",
-      "line": 918
+      "line": 955
     },
     {
       "package": "internal/north/mqtt",
