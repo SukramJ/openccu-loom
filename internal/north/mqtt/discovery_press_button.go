@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strconv"
 
+	hacatalog "github.com/SukramJ/go-ha-catalog"
 	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
@@ -82,19 +83,30 @@ func (d *DefaultDiscoveryBuilder) BuildPressButton(ev Event) DiscoveryItem {
 			PayloadNotAvailable: "offline",
 		},
 	}
-	body := map[string]any{
-		"name":              pressButtonName(ev),
-		"unique_id":         uniqueID,
-		"command_topic":     commandTopic,
-		"payload_press":     "PRESS",
-		"availability":      availability,
-		"availability_mode": "all",
-		"device":            deviceDescriptor(ev, d.hubURLFor(ev), d.SubDevicesEnabled),
-		"origin":            BuildOriginInfo(),
+	comp := hadiscovery.Component{
+		Platform:         hacatalog.PlatformButton,
+		Name:             pressButtonName(ev),
+		UniqueID:         uniqueID,
+		CommandTopic:     commandTopic,
+		Availability:     availability,
+		AvailabilityMode: "all",
+		Device:           deviceDescriptor(ev, d.hubURLFor(ev), d.SubDevicesEnabled),
+		Origin:           BuildOriginInfo(),
+		Fields: hadiscovery.ButtonFields{
+			PayloadPress: "PRESS",
+		},
+	}
+	body, err := flattenComponent(comp)
+	if err != nil {
+		return DiscoveryItem{}
 	}
 	// The button entity-description rules mirror the reference factory
 	// defaults: PRESS_SHORT / PRESS_LONG buttons exist but are disabled
 	// by default (the keypress event entity is the primary surface).
+	//
+	// Still applied to the flattened body: the description rules write
+	// whatever the registry table yields, which is the one part of this
+	// pipeline that is deliberately dynamic.
 	applyEntityDescription(body, string(HAComponentButton), ev.Parameter, ev.Model, "", "")
 	buf, err := json.Marshal(body)
 	if err != nil {
@@ -114,7 +126,7 @@ func (d *DefaultDiscoveryBuilder) BuildPressButton(ev Event) DiscoveryItem {
 // press-type label with the operator channel name when present, otherwise
 // with ` ch<N>` so the channel number always disambiguates. The device name
 // is prepended by HA.
-func pressButtonName(ev Event) any {
+func pressButtonName(ev Event) string {
 	label, omitted := naming.EntityDisplayName(ev.descLabel(), ev.descLabelOmitted(), ev.Parameter)
 	if omitted {
 		// Primary-parameter omission would leave the button nameless and
