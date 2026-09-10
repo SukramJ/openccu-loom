@@ -1,15 +1,15 @@
 {
-  "generated": "3b02a35e",
-  "head": "3b02a35e",
+  "generated": "f2e908ce",
+  "head": "f2e908ce",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/openccu-loom-remote/main.go",
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 5630,
+    "total_exported": 5625,
     "reachable": 3511,
-    "whitelisted": 1981,
+    "whitelisted": 1976,
     "unreachable": 138
   },
   "by_package": [
@@ -5798,14 +5798,14 @@
       "identifier": "DoorbellEventType",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 266
+      "line": 129
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "DoorbellRingType",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 243
+      "line": 106
     },
     {
       "package": "internal/north/mqtt",
@@ -5823,24 +5823,10 @@
     },
     {
       "package": "internal/north/mqtt",
-      "identifier": "EntityDescriptionExtRule",
-      "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
-      "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 66
-    },
-    {
-      "package": "internal/north/mqtt",
       "identifier": "EntityDescriptionFor",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 312
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "EntityDescriptionForExt",
-      "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
-      "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 165
+      "line": 175
     },
     {
       "package": "internal/north/mqtt",
@@ -5861,7 +5847,7 @@
       "identifier": "EventDeviceClassForModel",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 229
+      "line": 92
     },
     {
       "package": "internal/north/mqtt",
@@ -5966,21 +5952,7 @@
       "identifier": "LookupEvent",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 219
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "LookupExtRuleForComponent",
-      "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
-      "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 144
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "LookupExtRuleInSlice",
-      "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
-      "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 132
+      "line": 82
     },
     {
       "package": "internal/north/mqtt",
@@ -6036,7 +6008,7 @@
       "identifier": "LookupTextDisplayByDevice",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 289
+      "line": 152
     },
     {
       "package": "internal/north/mqtt",
@@ -6050,7 +6022,7 @@
       "identifier": "MapDoorbellEventTypes",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 248
+      "line": 111
     },
     {
       "package": "internal/north/mqtt",
@@ -6156,13 +6128,6 @@
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mqtt/client.go",
       "line": 55
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "ValidateEntityDescriptionRules",
-      "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
-      "file": "internal/north/mqtt/entity_description_validate.go",
-      "line": 25
     },
     {
       "package": "internal/north/mqtt",
