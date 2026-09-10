@@ -56,16 +56,20 @@ type stubBuilder struct {
 	stubSource
 	component string
 	body      map[string]any
+	// fields carries a real platform Fields struct for the tests that need
+	// one — the localisers and the schema checks read those, not Extra.
+	fields any
 }
 
 func (s *stubBuilder) HADiscoveryComponent(_ payload.HADiscoveryContext) hadiscovery.Component {
-	if s.body == nil {
+	if s.body == nil && s.fields == nil {
 		// A builder with nothing to say produces no component, which is what
 		// the untyped form signalled with a nil body.
 		return hadiscovery.Component{}
 	}
 	return hadiscovery.Component{
 		Platform: hacatalog.Platform(s.component),
+		Fields:   s.fields,
 		Extra:    cloneMap(s.body),
 	}
 }

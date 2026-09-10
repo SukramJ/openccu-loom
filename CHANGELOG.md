@@ -8,6 +8,35 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The discovery pipeline is typed end to end.** The per-parameter
+  `Build` switch, `applyEntityDescription`, its strict variant,
+  `localiseClimatePresets` and the two multiplier patches all work on
+  a `hadiscovery.Component` instead of a `map[string]any`.
+
+  These had to move together. `applyEntityDescription` runs in the
+  middle of the switch and later branches read back what it wrote —
+  `device_class` decides whether a binary sensor gets `force_update`,
+  `unit_of_measurement` decides whether the wire unit is filled in.
+  Typing the switch without them was not possible.
+
+  Two things stay on a flattened body, both deliberately:
+  `applySelectionLabels`, which replaces lists under key names the
+  model declares (`effect_list`, `available_tones`) that live on
+  different platform structs — the one genuinely dynamic step; and the
+  single `flattenComponent` call before each marshal.
+
+  `entityName` returned `any` so it could return `nil` for the
+  name-is-the-device-name case. It returns `(string, bool)` now and
+  the null goes through `Component.NameNull`, which says the same
+  thing where a reader can see it.
+
+  Byte-identical output across all 9,996 payloads of the full-fleet
+  capture — the run that matters most here, because the per-parameter
+  path is what that capture consists of.
+
+
+### Changed
+
 - **The combined projections return a typed component.**
   `CombinedProjection.HACombinedDiscovery` returned a
   `(component string, body map[string]any)` pair; it now returns a

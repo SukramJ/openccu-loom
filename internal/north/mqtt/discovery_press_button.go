@@ -4,7 +4,6 @@
 package mqtt
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 
@@ -96,23 +95,11 @@ func (d *DefaultDiscoveryBuilder) BuildPressButton(ev Event) DiscoveryItem {
 			PayloadPress: "PRESS",
 		},
 	}
-	body, err := flattenComponent(comp)
-	if err != nil {
-		return DiscoveryItem{}
-	}
 	// The button entity-description rules mirror the reference factory
 	// defaults: PRESS_SHORT / PRESS_LONG buttons exist but are disabled
 	// by default (the keypress event entity is the primary surface).
-	//
-	// Still applied to the flattened body: the description rules write
-	// whatever the registry table yields, which is the one part of this
-	// pipeline that is deliberately dynamic.
-	applyEntityDescription(body, string(HAComponentButton), ev.Parameter, ev.Model, "", "")
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return DiscoveryItem{}
-	}
-	return DiscoveryItem{Component: string(HAComponentButton), NodeID: nodeID, ObjectID: objectID, Payload: buf, OK: true}
+	applyEntityDescription(&comp, string(HAComponentButton), ev.Parameter, ev.Model, "", "")
+	return discoveryItemFor(comp, nodeID, objectID)
 }
 
 // pressButtonName composes the friendly_name fragment for a press button

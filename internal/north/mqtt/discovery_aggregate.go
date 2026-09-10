@@ -369,23 +369,15 @@ func (d *DefaultDiscoveryBuilder) aggregateChannel(ev Event) (component, nodeID,
 		return "", "", "", nil, false
 	}
 	d.applyChannelFrame(&built, ev, displayChannelName(ev), frameUniqueID)
-	body, err := flattenComponent(built)
-	if err != nil {
-		return "", "", "", nil, false
-	}
 	// The climate preset list leaves the domain as slugs; the ones HA
 	// cannot translate get labels here, where the catalogues are.
 	if HAComponent(comp) == HAComponentClimate {
-		d.localiseClimatePresets(body)
+		d.localiseClimatePresets(&built)
 	}
-	// Lists a custom data point declared localisable — siren tones,
-	// light effects — carry their labels on the event.
-	applySelectionLabels(body, ev.SelectionLabels)
 	objectID = d.channelObjectID(ev, comp)
 	nodeID = discoveryNodeID(d.centralFor(ev), ev.DeviceAddress)
-	//
 	// Strict variant: when neither a rule nor a category-default matches, every
-	// HA-attribute field is stripped from the body so an unknown model gets no
+	// HA-attribute field is stripped so an unknown model gets no
 	// `device_class` etc. (mirrors HA-native behaviour). Without this the legacy
 	// openccu-loom table would keep emitting `device_class=shutter` for models
 	// the HA integration has no cover rule for.
@@ -398,12 +390,12 @@ func (d *DefaultDiscoveryBuilder) aggregateChannel(ev Event) (component, nodeID,
 	if pf, ok := ev.Source.(interface{ NamePostfix() string }); ok {
 		postfix = pf.NamePostfix()
 	}
-	applyEntityDescriptionStrict(body, comp, "", ev.Model, ev.descUnit(), postfix)
+	applyEntityDescriptionStrict(&built, comp, "", ev.Model, ev.descUnit(), postfix)
 	// `translation_key` is a native-HA-integration concept: it resolves
 	// against that integration's own translations.json, which an
 	// MQTT-discovered entity has none of, so HA's MQTT schema strips the
-	// key on receipt and it never affects anything. A body left with
-	// `name: nil` (see channelBaseBody) alongside a translation_key that
+	// key on receipt and it never affects anything. An entity left with
+	// `name: null` (see applyChannelFrame) alongside a translation_key that
 	// would normally have supplied the display suffix therefore shows up
 	// in HA as the bare device name — indistinguishable from any other
 	// single-primary entity on the same device (canonical case: an
@@ -412,11 +404,12 @@ func (d *DefaultDiscoveryBuilder) aggregateChannel(ev Event) (component, nodeID,
 	// catalogue and use the result as the name instead; entities whose
 	// translation_key has no catalogue entry keep the untouched null,
 	// same as before.
-	if body["name"] == nil {
-		if tk, ok := body["translation_key"].(string); ok && tk != "" {
+	if built.NameNull {
+		if tk, ok := built.Extra["translation_key"].(string); ok && tk != "" {
 			nameKey := "discovery.entity_name." + tk
 			if resolved := d.tr(nameKey); resolved != nameKey {
-				body["name"] = resolved
+				built.Name = resolved
+				built.NameNull = false
 			}
 		}
 	}
@@ -426,8 +419,18 @@ func (d *DefaultDiscoveryBuilder) aggregateChannel(ev Event) (component, nodeID,
 	// from the device card; without this flag they show up as
 	// duplicate primary entities and pollute the dashboard.
 	if insp, ok := ev.Channel.(CustomDPNamingInspector); ok && insp.IsCustomDPSecondaryChannel() {
-		body["enabled_by_default"] = false
+		built.EnabledByDefault = hadiscovery.Ptr(false)
 	}
+	body, err := flattenComponent(built)
+	if err != nil {
+		return "", "", "", nil, false
+	}
+	// Lists a custom data point declared localisable — siren tones, light
+	// effects — carry their labels on the event. This one stays on the
+	// flattened body: the keys it rewrites are named by the model
+	// (effect_list, available_tones) and live on different platform structs,
+	// which is what makes it the one genuinely dynamic step here.
+	applySelectionLabels(body, ev.SelectionLabels)
 	out, err := json.Marshal(body)
 	if err != nil {
 		return "", "", "", nil, false
