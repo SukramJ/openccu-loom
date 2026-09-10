@@ -162,21 +162,27 @@ func TestDevicePlaneTopicsRoundTrip(t *testing.T) {
 	// the level/colour pairs map onto, and the select a mode maps onto.
 	collectDeviceDeclaredItem(t, declared, d.BuildCombinedDiscovery(central, CombinedEvent{
 		Interface: iface, DeviceAddress: addr, ChannelNo: 3, Kind: "duration",
-		Component: "number",
-		Body:      map[string]any{"name": "Zeitdauer", "command_topic": topics.CombinedCommand(central, iface, addr, 3, "duration")},
+		Component: hadiscovery.Component{
+			Platform:     hacatalog.PlatformNumber,
+			Name:         "Zeitdauer",
+			CommandTopic: topics.CombinedCommand(central, iface, addr, 3, "duration"),
+		},
 	}))
 	collectDeviceDeclaredItem(t, declared, d.BuildCombinedDiscovery(central, CombinedEvent{
 		Interface: iface, DeviceAddress: addr, ChannelNo: 3, Kind: "hs_color",
-		Component: "sensor",
-		Body:      map[string]any{"name": "Farbe", "value_template": "{{ value_json.hue }}"},
+		Component: hadiscovery.Component{
+			Platform:      hacatalog.PlatformSensor,
+			Name:          "Farbe",
+			ValueTemplate: "{{ value_json.hue }}",
+		},
 	}))
 	collectDeviceDeclaredItem(t, declared, d.BuildCombinedDiscovery(central, CombinedEvent{
 		Interface: iface, DeviceAddress: addr, ChannelNo: 3, Kind: cover.GarageDoorModeKind,
-		Component: "select",
-		Body: map[string]any{
-			"name":          "Tormodus",
-			"command_topic": topics.CombinedCommand(central, iface, addr, 3, cover.GarageDoorModeKind),
-			"options":       []string{"CLOSED", "VENTILATION_POSITION", "OPEN"},
+		Component: hadiscovery.Component{
+			Platform:     hacatalog.PlatformSelect,
+			Name:         "Tormodus",
+			CommandTopic: topics.CombinedCommand(central, iface, addr, 3, cover.GarageDoorModeKind),
+			Options:      []string{"CLOSED", "VENTILATION_POSITION", "OPEN"},
 		},
 	}))
 

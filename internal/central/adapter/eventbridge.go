@@ -3628,7 +3628,7 @@ func (b *EventBridge) publishCombinedProjection(
 		bridge:       b,
 		channelType:  ch.Type,
 	}
-	component, body := proj.HACombinedDiscovery(dctx)
+	projected := proj.HACombinedDiscovery(dctx)
 	notePublish(ctx, bridge.PublishCombinedDiscovery(ctx, centralName, mqtt.CombinedEvent{
 		Central:       centralName,
 		Interface:     iface,
@@ -3638,8 +3638,7 @@ func (b *EventBridge) publishCombinedProjection(
 		Model:         d.Model,
 		Device:        d,
 		Kind:          kind,
-		Component:     component,
-		Body:          body,
+		Component:     projected,
 	}))
 	if state, observed := proj.CombinedStatePayload(); observed {
 		notePublish(ctx, bridge.PublishCombinedState(ctx, centralName, iface, d.Address, channelNo, kind, state))

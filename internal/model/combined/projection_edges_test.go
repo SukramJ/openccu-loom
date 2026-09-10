@@ -87,7 +87,7 @@ func TestCombinedProjectionsDeclineWithoutAContext(t *testing.T) {
 		combined.NewHSColor("VCU0000001:1", nil, "HUE", "SATURATION"),
 	}
 	for _, p := range projections {
-		component, body := p.HACombinedDiscovery(nil)
+		component, body := haBody(t, p.HACombinedDiscovery(nil))
 		if component != "" || body != nil {
 			t.Errorf("%s: HACombinedDiscovery(nil) = (%q, %v), want a declined projection",
 				p.CombinedKind(), component, body)

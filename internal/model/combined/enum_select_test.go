@@ -283,13 +283,21 @@ func TestEnumSelectDoesNotRepublishAnUnchangedState(t *testing.T) {
 func TestEnumSelectProjectsAsASelectCarryingItsModes(t *testing.T) {
 	t.Parallel()
 	e := newGarageSelect(&recordingWriter{})
-	component, body := e.HACombinedDiscovery(stubCombinedContext{})
+	component, body := haBody(t, e.HACombinedDiscovery(stubCombinedContext{}))
 	if component != "select" {
 		t.Fatalf("component = %q, want select", component)
 	}
-	options, ok := body["options"].([]string)
+	rawOptions, ok := body["options"].([]any)
 	if !ok {
-		t.Fatalf("options = %T, want []string", body["options"])
+		t.Fatalf("options = %T, want a list", body["options"])
+	}
+	options := make([]string, 0, len(rawOptions))
+	for _, v := range rawOptions {
+		s, ok := v.(string)
+		if !ok {
+			t.Fatalf("options contains %v (%T), want strings", v, v)
+		}
+		options = append(options, s)
 	}
 	// Presentation order follows the door's travel, closed to open.
 	want := []string{"CLOSED", "VENTILATION_POSITION", "OPEN"}
