@@ -81,7 +81,8 @@ Scope and shape, decided up front:
   codegen to Go). The *format* is shared; the *content* is not.
 - **A clean break.** `unique_id` and topic schemas are harmonised, entities are
   re-created, and each consumer ships it as a major release with a migration
-  note. No compatibility mode.
+  note. No compatibility mode. *(Superseded for this daemon by the amendment
+  below: openccu-loom keeps its `unique_id`.)*
 - The MQTT bootstrap splits along ADR 0050's line: `SplitClient` and a
   connect-retry helper are additive transport ergonomics and go into `go-mqtt`;
   birth, LWT and availability policy are Home Assistant semantics and go into
@@ -186,8 +187,10 @@ The `sensorMetadataByUnit` raw-vs-canonical unit bug — 542 occurrences of raw
 - Entity re-creation breaks history and automations for every consumer's users.
   The orphan sweep retracts the legacy retained configs on first start so no
   ghost entities remain, and each consumer documents the old and new
-  `unique_id` formats. This is the accepted cost of not freezing the drift
-  above — including its bugs — permanently.
+  `unique_id` formats. This was accepted as the cost of not freezing the drift
+  above — including its bugs — permanently. *(No longer applies to this daemon;
+  see the amendment. It still applies to a consumer that chooses the shared
+  scheme.)*
 - Fan-out follows ADR 0050's rule: tag the module first, then each consumer
   bumps its exact pin in its own squash PR. No `latest`, no lockstep.
 - The unattended catalog release is safe *because* of that fan-out rule rather
@@ -201,6 +204,46 @@ The `sensorMetadataByUnit` raw-vs-canonical unit bug — 542 occurrences of raw
   platform schemas), `hagen` (catalog codegen), `hadiff` (catalog drift across
   an HA release), `hadoctor` (live broker inspection — it finds mtec's and
   homeconnect's availability defects automatically).
+
+## Amendment (2026-09-10) — this daemon keeps its `unique_id`
+
+The decision above calls for a clean break: `unique_id` harmonised across the
+six consumers, entities re-created, a migration note per project. For
+openccu-loom that part is withdrawn. **The `unique_id` this daemon publishes
+does not change, and neither does any `entity_id` derived from it.**
+
+The reason is the measurement ADR 0068 already took. Home Assistant's MQTT
+integration has no `unique_id` migration path at all — not `previous_unique_id`,
+not `async_migrate_entries`, and an entity takes the key straight from the
+payload. So a re-key is not a migration a consumer can perform; it is a break
+nobody downstream can repair. ADR 0068 permits such a break under six
+obligations, and states plainly that the mitigation "does not save the history".
+
+Against that, the benefit was harmonisation for its own sake. It buys nothing
+an operator can see: on a fleet of ten thousand entities it costs every one of
+them its history, its area, its customisations and every automation or
+dashboard entry that names it. A shared *format* was never a requirement of the
+shared *model* — `hadiscovery.Component.UniqueID` is a string the consumer
+fills in, exactly as `channelUniqueID` fills it today.
+
+Two things follow, and one deliberately does not:
+
+- **Step 11 keeps its Identity half and loses the re-key.** `model.Identity`
+  and the merge rules are worth having on their own; the key they compute is
+  not published in place of the existing one.
+- **Step 13 is unaffected.** Home Assistant keys its entity registry on
+  `unique_id`, not on the discovery topic, so moving from one retained config
+  per entity to one bundle per device leaves the registry entries in place.
+  That is worth confirming against a live instance before the bundle migration
+  ships, but it is not a reason to re-key.
+- **The six consumers keep different `unique_id` formats.** That is the cost,
+  and it is the smaller one: a new consumer can adopt the shared scheme from
+  its first release, where a break avoided costs nothing.
+
+Everything the typed-discovery work has landed so far already holds to this.
+Across the nine changes of step 7, the full-fleet capture shows zero changes to
+`unique_id`, `default_entity_id`, `object_id` and the discovery topic, over all
+9,996 entities — measured, not assumed.
 
 ## Revisit when
 
@@ -223,6 +266,9 @@ The `sensorMetadataByUnit` raw-vs-canonical unit bug — 542 occurrences of raw
   this ADR extends
 - [ADR 0053](./0053-go-openccu-data-module.md) — the data-artifact module
   pattern reused for the catalog
+- [ADR 0068](./0068-unique-id-stability-per-plane.md) — what a `unique_id`
+  promises per plane, and why an MQTT re-key is a break nobody downstream can
+  repair
 - [ADR 0063](./0063-self-maintained-device-profiles.md) — the rule table stays
   hand-maintained
 - [ADR 0067](./0067-north-surface-is-a-model-api.md) — the MQTT plane keeps its
