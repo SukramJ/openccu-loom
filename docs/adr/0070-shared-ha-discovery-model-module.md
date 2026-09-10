@@ -245,6 +245,53 @@ Across the nine changes of step 7, the full-fleet capture shows zero changes to
 `unique_id`, `default_entity_id`, `object_id` and the discovery topic, over all
 9,996 entities — measured, not assumed.
 
+## Amendment (2026-09-10) — the bundle migration is measured, and ordered
+
+The first amendment left one thing open: "That is worth confirming against a
+live instance before the bundle migration ships." It has been. The measurement
+was taken on a Home Assistant 2026.9 instance with 958 MQTT entities across 82
+devices, using a throwaway device published for the purpose and removed
+afterwards.
+
+**The registry entry survives, exactly as assumed.** A sensor was discovered
+under the per-entity form, then given a custom name, a custom icon and a
+renamed `entity_id`. After the migration it came back carrying all three, on
+the same `device_id`, with the same `unique_id`. Home Assistant keys the entity
+registry on `unique_id` and not on the discovery topic, and this is that
+statement measured rather than read.
+
+**But the order is mandatory, and the wrong one fails silently.** Publishing
+the device bundle while the per-entity config is still retained is refused:
+
+```
+WARNING [homeassistant.components.mqtt.entity] Received a conflicting MQTT
+discovery message for entity sensor.…; the entity was previously discovered on
+topic homeassistant/sensor/…/config …; the conflicting discovery message was
+received on topic homeassistant/device/…/config
+```
+
+A log line is all there is. The retained bundle sits on the broker, the entity
+keeps its old config, and nothing anywhere says the migration did not happen —
+the same shape as every other defect this ADR exists to remove.
+
+The order that works is the reverse: **retract the per-entity config first,
+then publish the bundle.** Retracting removes the entity from the state machine
+but leaves the registry entry; the bundle then reattaches to it.
+
+Three consequences for step 13:
+
+- **The orphan sweep runs before the bundle publish, not after it.** That is
+  the opposite of the natural reading — publish the new thing, then clean up
+  the old — and it is the one this daemon has to implement.
+- **There is a window in which the entity does not exist.** Between the
+  retraction and the bundle it is absent, not merely unavailable. The two
+  publishes belong together, and a crash between them leaves the operator
+  without the entity until the next start republishes it.
+- **`migrate_discovery: true` is not a substitute.** Setting it on the
+  per-entity config did not lift the conflict in this run: the bundle
+  published afterwards was refused with the same warning. Whatever the flag
+  is for, the retraction is what this daemon must rely on.
+
 ## Revisit when
 
 - Phase 3 fails: if this daemon's layer cannot be expressed on the extracted
