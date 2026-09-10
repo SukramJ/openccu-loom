@@ -5,10 +5,10 @@ package mqtt
 
 import (
 	"context"
-	"encoding/json"
 	"strconv"
 	"strings"
 
+	hacatalog "github.com/SukramJ/go-ha-catalog"
 	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
 )
 
@@ -108,30 +108,20 @@ func (d *DefaultDiscoveryBuilder) BuildWeekProfileDiscovery(centralName string, 
 		Device:        ev.Device,
 	}
 
-	body := map[string]any{
-		"name":              d.tr("discovery.week_profile"),
-		"unique_id":         uniqueID,
-		"default_entity_id": defaultEntityID(string(HAComponentSelect), objectID),
-		"state_topic":       stateTopic,
-		"command_topic":     commandTopic,
-		"options":           profiles,
-		"availability":      buildWeekProfileAvailability(d, centralName, ev),
-		"availability_mode": "all",
-		"device":            deviceDescriptor(mockEv, d.hubURLFor(mockEv), d.SubDevicesEnabled),
-		"origin":            BuildOriginInfo(),
+	comp := hadiscovery.Component{
+		Platform:         hacatalog.PlatformSelect,
+		Name:             d.tr("discovery.week_profile"),
+		UniqueID:         uniqueID,
+		DefaultEntityID:  defaultEntityID(string(HAComponentSelect), objectID),
+		StateTopic:       stateTopic,
+		CommandTopic:     commandTopic,
+		Options:          profiles,
+		Availability:     buildWeekProfileAvailability(d, centralName, ev),
+		AvailabilityMode: "all",
+		Device:           deviceDescriptor(mockEv, d.hubURLFor(mockEv), d.SubDevicesEnabled),
+		Origin:           BuildOriginInfo(),
 	}
-
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return DiscoveryItem{}
-	}
-	return DiscoveryItem{
-		Component: string(HAComponentSelect),
-		NodeID:    nodeID,
-		ObjectID:  objectID,
-		Payload:   buf,
-		OK:        true,
-	}
+	return discoveryItemFor(comp, nodeID, objectID)
 }
 
 // buildWeekProfileAvailability builds the two-entry availability list

@@ -8,6 +8,28 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The last standalone discovery builders are typed**: the two
+  schedule builders, the week profile, the press button, the add-on
+  update and the daemon device block. Every builder that assembles a
+  whole discovery payload now hands over a
+  `hadiscovery.Component`.
+
+  The press button keeps its map for one step: `applyEntityDescription`
+  writes whatever the registry rule table yields, so the component is
+  flattened before it runs — the same shape the aggregate seam uses.
+  That post-processor is the one part of this pipeline still working on
+  keys, and typing it is a decision about the rule table rather than a
+  mechanical conversion.
+
+  `pressButtonName` returned `any` although both of its branches return
+  a string. Giving the field a real type is what surfaced it.
+
+  Byte-identical output across all 9,996 payloads of the full-fleet
+  capture.
+
+
+### Changed
+
 - **The standalone discovery builders are typed too**: the three alarm
   builders, the security builder and all fourteen hub builders
   assemble a `hadiscovery.Component` and hand it to a shared

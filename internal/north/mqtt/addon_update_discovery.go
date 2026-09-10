@@ -3,7 +3,10 @@
 
 package mqtt
 
-import "encoding/json"
+import (
+	hacatalog "github.com/SukramJ/go-ha-catalog"
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+)
 
 // daemonDeviceIdentifier groups every daemon-level (not per-central)
 // HA entity under one synthetic device card. Distinct from
@@ -15,12 +18,12 @@ const daemonDeviceIdentifier = "openccu-loom_daemon"
 
 // daemonDeviceBlock builds the synthetic HA `device` block for
 // daemon-level entities.
-func daemonDeviceBlock() map[string]any {
-	return map[string]any{
-		"identifiers":  []string{daemonDeviceIdentifier},
-		"name":         "OpenCCU-Loom",
-		"manufacturer": "OpenCCU-Loom",
-		"model":        "Daemon",
+func daemonDeviceBlock() *hadiscovery.DeviceInfo {
+	return &hadiscovery.DeviceInfo{
+		Identifiers:  []string{daemonDeviceIdentifier},
+		Name:         "OpenCCU-Loom",
+		Manufacturer: "OpenCCU-Loom",
+		Model:        "Daemon",
 	}
 }
 
@@ -44,10 +47,11 @@ const addonUpdateUniqueID = "loom_addon_update"
 // this entity is not scoped to any CCU.
 func (d *DefaultDiscoveryBuilder) BuildAddonUpdateDiscovery() DiscoveryItem {
 	topic := d.TopicBuilder.AddonUpdateState()
-	body := map[string]any{
-		"name":              d.tr("discovery.addon_update"),
-		"unique_id":         addonUpdateUniqueID,
-		"default_entity_id": defaultEntityID(string(HAComponentUpdate), addonUpdateUniqueID),
+	comp := hadiscovery.Component{
+		Platform:        hacatalog.PlatformUpdate,
+		Name:            d.tr("discovery.addon_update"),
+		UniqueID:        addonUpdateUniqueID,
+		DefaultEntityID: defaultEntityID(string(HAComponentUpdate), addonUpdateUniqueID),
 		// No `value_template`: HA's MQTT update platform parses the raw
 		// state_topic payload natively against its state-payload schema
 		// (installed_version, latest_version, in_progress) when no
@@ -55,21 +59,19 @@ func (d *DefaultDiscoveryBuilder) BuildAddonUpdateDiscovery() DiscoveryItem {
 		// is not a schema option at all — HA reads `in_progress` only from
 		// that native parse — so setting either one here left the entity
 		// showing no install-in-progress indication.
-		"state_topic":             topic,
-		"latest_version_topic":    topic,
-		"latest_version_template": "{{ value_json.latest_version }}",
-		"command_topic":           d.TopicBuilder.AddonUpdateCommand(),
-		"payload_install":         "INSTALL",
-		"entity_category":         "diagnostic",
-		"enabled_by_default":      true,
-		"availability":            hubAvailability(d.TopicBuilder),
-		"availability_mode":       "all",
-		"device":                  daemonDeviceBlock(),
-		"origin":                  BuildOriginInfo(),
+		StateTopic:       topic,
+		CommandTopic:     d.TopicBuilder.AddonUpdateCommand(),
+		EntityCategory:   "diagnostic",
+		EnabledByDefault: hadiscovery.Ptr(true),
+		Availability:     hubAvailability(d.TopicBuilder),
+		AvailabilityMode: "all",
+		Device:           daemonDeviceBlock(),
+		Origin:           BuildOriginInfo(),
+		Fields: hadiscovery.UpdateFields{
+			LatestVersionTopic:    topic,
+			LatestVersionTemplate: "{{ value_json.latest_version }}",
+			PayloadInstall:        "INSTALL",
+		},
 	}
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return DiscoveryItem{}
-	}
-	return DiscoveryItem{Component: string(HAComponentUpdate), NodeID: "daemon", ObjectID: "addon_update", Payload: buf, OK: true}
+	return discoveryItemFor(comp, "daemon", "addon_update")
 }

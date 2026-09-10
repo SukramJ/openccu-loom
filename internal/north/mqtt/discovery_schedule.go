@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	hacatalog "github.com/SukramJ/go-ha-catalog"
 	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
 
 	"github.com/SukramJ/openccu-loom/internal/payload"
@@ -77,31 +78,21 @@ func (d *DefaultDiscoveryBuilder) BuildScheduleEntityDiscovery(centralName strin
 		},
 	}
 
-	body := map[string]any{
-		"name":                     d.tr("discovery.schedule"),
-		"unique_id":                objectID,
-		"state_topic":              stateTopic,
-		"json_attributes_topic":    attrsTopic,
-		"json_attributes_template": "{{ value_json | tojson }}",
-		"icon":                     "mdi:calendar-clock",
-		"availability":             availability,
-		"availability_mode":        "all",
-		"device":                   scheduleSubDeviceDescriptor(mockEv, d.hubURLFor(mockEv), d.tr("discovery.schedule")),
-		"origin":                   BuildOriginInfo(),
-		"entity_category":          EntityCategoryDiagnostic,
+	comp := hadiscovery.Component{
+		Platform:               hacatalog.PlatformSensor,
+		Name:                   d.tr("discovery.schedule"),
+		UniqueID:               objectID,
+		StateTopic:             stateTopic,
+		JSONAttributesTopic:    attrsTopic,
+		JSONAttributesTemplate: "{{ value_json | tojson }}",
+		Icon:                   "mdi:calendar-clock",
+		Availability:           availability,
+		AvailabilityMode:       "all",
+		Device:                 scheduleSubDeviceDescriptor(mockEv, d.hubURLFor(mockEv), d.tr("discovery.schedule")),
+		Origin:                 BuildOriginInfo(),
+		EntityCategory:         EntityCategoryDiagnostic,
 	}
-
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return DiscoveryItem{}
-	}
-	return DiscoveryItem{
-		Component: string(HAComponentSensor),
-		NodeID:    nodeID,
-		ObjectID:  objectID,
-		Payload:   buf,
-		OK:        true,
-	}
+	return discoveryItemFor(comp, nodeID, objectID)
 }
 
 // PublishScheduleEntityDiscovery publishes the Zeitplan-sensor HA
@@ -239,35 +230,27 @@ func (d *DefaultDiscoveryBuilder) BuildScheduleSwitchDiscovery(centralName strin
 		},
 	}
 
-	body := map[string]any{
-		"name":              ev.Label,
-		"unique_id":         objectID,
-		"state_topic":       stateTopic,
-		"command_topic":     commandTopic,
-		"payload_on":        "true",
-		"payload_off":       "false",
-		"state_on":          "true",
-		"state_off":         "false",
-		"icon":              "mdi:calendar-check",
-		"availability":      availability,
-		"availability_mode": "all",
-		"device":            scheduleSubDeviceDescriptor(mockEv, d.hubURLFor(mockEv), d.tr("discovery.schedule")),
-		"origin":            BuildOriginInfo(),
-		"entity_category":   EntityCategoryConfig,
-		"optimistic":        false,
+	comp := hadiscovery.Component{
+		Platform:         hacatalog.PlatformSwitch,
+		Name:             ev.Label,
+		UniqueID:         objectID,
+		StateTopic:       stateTopic,
+		CommandTopic:     commandTopic,
+		Icon:             "mdi:calendar-check",
+		Availability:     availability,
+		AvailabilityMode: "all",
+		Device:           scheduleSubDeviceDescriptor(mockEv, d.hubURLFor(mockEv), d.tr("discovery.schedule")),
+		Origin:           BuildOriginInfo(),
+		EntityCategory:   EntityCategoryConfig,
+		Optimistic:       hadiscovery.Ptr(bool(false)),
+		Fields: hadiscovery.SwitchFields{
+			PayloadOn:  "true",
+			PayloadOff: "false",
+			StateOn:    "true",
+			StateOff:   "false",
+		},
 	}
-
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return DiscoveryItem{}
-	}
-	return DiscoveryItem{
-		Component: string(HAComponentSwitch),
-		NodeID:    nodeID,
-		ObjectID:  objectID,
-		Payload:   buf,
-		OK:        true,
-	}
+	return discoveryItemFor(comp, nodeID, objectID)
 }
 
 // PublishScheduleSwitchDiscovery publishes the HA Discovery payload for
