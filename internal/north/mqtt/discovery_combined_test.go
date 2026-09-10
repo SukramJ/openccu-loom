@@ -8,6 +8,9 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	hacatalog "github.com/SukramJ/go-ha-catalog"
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
 )
 
 // ---------------------------------------------------------------------------
@@ -33,11 +36,11 @@ func TestBuildCombinedDiscovery(t *testing.T) {
 				DeviceName:    "Alarmsirene FL",
 				Model:         "HmIP-ASIR",
 				Kind:          "duration",
-				Component:     "number",
-				Body: map[string]any{
-					"name":            "Zeitdauer",
-					"command_topic":   "gh/ccu1/HmIP-RF/0001ABCD/3/combined/duration/set",
-					"entity_category": "config",
+				Component: hadiscovery.Component{
+					Platform:       hacatalog.PlatformNumber,
+					Name:           "Zeitdauer",
+					CommandTopic:   "gh/ccu1/HmIP-RF/0001ABCD/3/combined/duration/set",
+					EntityCategory: "config",
 				},
 			},
 			wantOK: true,
@@ -78,8 +81,12 @@ func TestBuildCombinedDiscovery(t *testing.T) {
 			name: "projection may override a frame key",
 			ev: CombinedEvent{
 				Central: "ccu1", DeviceAddress: "0001ABCD", ChannelNo: 3,
-				Kind: "door_mode", Component: "select",
-				Body: map[string]any{"state_topic": "custom/topic", "options": []string{"A"}},
+				Kind: "door_mode",
+				Component: hadiscovery.Component{
+					Platform:   hacatalog.PlatformSelect,
+					StateTopic: "custom/topic",
+					Options:    []string{"A"},
+				},
 			},
 			wantOK: true,
 			checkFn: func(t *testing.T, item DiscoveryItem) {
@@ -98,24 +105,23 @@ func TestBuildCombinedDiscovery(t *testing.T) {
 		},
 		{
 			name:   "declines without a kind",
-			ev:     CombinedEvent{DeviceAddress: "0001ABCD", Component: "number", Body: map[string]any{"name": "x"}},
+			ev:     CombinedEvent{DeviceAddress: "0001ABCD", Component: hadiscovery.Component{Platform: hacatalog.PlatformNumber, Name: "x"}},
 			wantOK: false,
 		},
 		{
 			name:   "declines without a device address",
-			ev:     CombinedEvent{Kind: "duration", Component: "number", Body: map[string]any{"name": "x"}},
+			ev:     CombinedEvent{Kind: "duration", Component: hadiscovery.Component{Platform: hacatalog.PlatformNumber, Name: "x"}},
 			wantOK: false,
 		},
 		{
 			name:   "declines when the projection returned no component",
-			ev:     CombinedEvent{DeviceAddress: "0001ABCD", Kind: "duration", Body: map[string]any{"name": "x"}},
+			ev:     CombinedEvent{DeviceAddress: "0001ABCD", Kind: "duration", Component: hadiscovery.Component{Name: "x"}},
 			wantOK: false,
 		},
-		{
-			name:   "declines on an empty body",
-			ev:     CombinedEvent{DeviceAddress: "0001ABCD", Kind: "duration", Component: "number"},
-			wantOK: false,
-		},
+		// There used to be a "declines on an empty body" case here. With the
+		// projection returning a typed component there is no separate body to
+		// be empty: a projection either names a platform or it does not, and
+		// the case above covers the one that does not.
 	}
 
 	for _, tc := range cases {
@@ -144,8 +150,10 @@ func TestPublishCombinedDiscovery(t *testing.T) {
 		return CombinedEvent{
 			DeviceAddress: "0001ABCD",
 			Kind:          "duration",
-			Component:     "number",
-			Body:          map[string]any{"name": "Zeitdauer"},
+			Component: hadiscovery.Component{
+				Platform: hacatalog.PlatformNumber,
+				Name:     "Zeitdauer",
+			},
 		}
 	}
 
@@ -176,9 +184,9 @@ func TestPublishCombinedDiscovery(t *testing.T) {
 	t.Run("no-op when builder declines event", func(t *testing.T) {
 		t.Parallel()
 		b, pub := newTestBridge(t)
-		// No component: the projection declined.
+		// No platform: the projection declined.
 		ev := validEvent()
-		ev.Component = ""
+		ev.Component = hadiscovery.Component{}
 		if err := b.PublishCombinedDiscovery(context.Background(), "ccu1", ev); err != nil {
 			t.Fatalf("PublishCombinedDiscovery: %v", err)
 		}

@@ -8,6 +8,28 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The combined projections return a typed component.**
+  `CombinedProjection.HACombinedDiscovery` returned a
+  `(component string, body map[string]any)` pair; it now returns a
+  `hadiscovery.Component`, and `CombinedEvent` carries that one field
+  instead of a separate `Component` string and `Body` map. All four
+  projections — `Timer`, `LevelCombined`, `HSColor`, `EnumSelect` —
+  and `BuildCombinedDiscovery` move with it.
+
+  The frame precedence is unchanged and now reads as such: the
+  projection's fields win, the frame fills the gaps, one guard per
+  field.
+
+  One test case became meaningless and was removed rather than
+  hollowed out: "declines on an empty body" has no subject any more,
+  because a projection either names a platform or it does not.
+
+  Byte-identical output across all 9,996 payloads of the full-fleet
+  capture.
+
+
+### Changed
+
 - **The last standalone discovery builders are typed**: the two
   schedule builders, the week profile, the press button, the add-on
   update and the daemon device block. Every builder that assembles a

@@ -5,7 +5,6 @@ package mqtt
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
@@ -41,13 +40,13 @@ type CombinedEvent struct {
 	// Kind is the combined-DP kind ("duration", "hs_color", …). Used both
 	// as the topic segment and as the suffix on object_id / unique_id.
 	Kind string
-	// Component is the HA component the projection maps onto ("number",
-	// "sensor", "select", …). An empty Component declines discovery.
-	Component string
-	// Body carries the data-point-specific discovery keys. The builder
-	// merges the shared frame around it and never overwrites a key the
-	// projection set.
-	Body map[string]any
+	// Component is what the projection produced: the platform it maps onto
+	// plus its own discovery keys, typed. A component with no platform
+	// declines discovery.
+	//
+	// The builder wraps the shared frame around it and never overwrites a
+	// field the projection set.
+	Component hadiscovery.Component
 }
 
 // BuildCombinedDiscovery builds the HA Discovery payload for one combined
@@ -58,7 +57,7 @@ type CombinedEvent struct {
 // projection declined (empty Component or Body), or JSON marshalling
 // fails.
 func (d *DefaultDiscoveryBuilder) BuildCombinedDiscovery(centralName string, ev CombinedEvent) DiscoveryItem {
-	if ev.Kind == "" || ev.DeviceAddress == "" || ev.Component == "" || len(ev.Body) == 0 {
+	if ev.Kind == "" || ev.DeviceAddress == "" || ev.Component.Platform == "" {
 		return DiscoveryItem{}
 	}
 	nodeID := discoveryNodeID(centralName, ev.DeviceAddress)
@@ -88,33 +87,30 @@ func (d *DefaultDiscoveryBuilder) BuildCombinedDiscovery(centralName string, ev 
 		},
 	}
 
-	// The frame first, the projection's keys second: a projection that
-	// needs a different state_topic (or none) must be able to say so,
-	// and silently discarding that would be the same class of bug the
-	// seam exists to prevent.
-	body := map[string]any{
-		"unique_id":         objectID,
-		"state_topic":       d.TopicBuilder.CombinedState(centralName, ev.Interface, ev.DeviceAddress, ev.ChannelNo, ev.Kind),
-		"availability":      availability,
-		"availability_mode": "all",
-		"device":            deviceDescriptor(mockEv, d.hubURLFor(mockEv), d.SubDevicesEnabled),
-		"origin":            BuildOriginInfo(),
+	// The projection's keys first, the frame filling the gaps: a projection
+	// that needs a different state_topic (or none) must be able to say so,
+	// and silently discarding that would be the same class of bug the seam
+	// exists to prevent.
+	comp := ev.Component
+	if comp.UniqueID == "" {
+		comp.UniqueID = objectID
 	}
-	for k, v := range ev.Body {
-		body[k] = v
+	if comp.StateTopic == "" {
+		comp.StateTopic = d.TopicBuilder.CombinedState(centralName, ev.Interface, ev.DeviceAddress, ev.ChannelNo, ev.Kind)
 	}
-
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return DiscoveryItem{}
+	if len(comp.Availability) == 0 {
+		comp.Availability = availability
 	}
-	return DiscoveryItem{
-		Component: ev.Component,
-		NodeID:    nodeID,
-		ObjectID:  objectID,
-		Payload:   buf,
-		OK:        true,
+	if comp.AvailabilityMode == "" {
+		comp.AvailabilityMode = "all"
 	}
+	if comp.Device == nil {
+		comp.Device = deviceDescriptor(mockEv, d.hubURLFor(mockEv), d.SubDevicesEnabled)
+	}
+	if comp.Origin == nil {
+		comp.Origin = BuildOriginInfo()
+	}
+	return discoveryItemFor(comp, nodeID, objectID)
 }
 
 // PublishCombinedDiscovery publishes the HA Discovery payload for one

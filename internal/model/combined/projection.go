@@ -10,6 +10,9 @@ import (
 	"strings"
 	"time"
 
+	hacatalog "github.com/SukramJ/go-ha-catalog"
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -55,20 +58,21 @@ func (t *Timer) CombinedKind() string { return KindDuration }
 
 // HACombinedDiscovery implements [payload.CombinedProjection]. The timer
 // projects as an HA `number` the operator types a duration into.
-func (t *Timer) HACombinedDiscovery(ctx payload.CombinedDiscoveryContext) (component string, body map[string]any) {
+func (t *Timer) HACombinedDiscovery(ctx payload.CombinedDiscoveryContext) hadiscovery.Component {
 	if ctx == nil {
-		return "", nil
+		return hadiscovery.Component{}
 	}
-	return "number", map[string]any{
-		"name":                t.discoveryLabel(ctx),
-		"command_topic":       ctx.CombinedCommandTopic(),
-		"min":                 float64(0),
-		"max":                 float64(timerMaxSeconds),
-		"step":                float64(1),
-		"unit_of_measurement": "s",
-		"entity_category":     payload.CombinedEntityCategoryConfig,
-		"mode":                "box",
-		"optimistic":          false,
+	return hadiscovery.Component{
+		Platform:       hacatalog.PlatformNumber,
+		Name:           t.discoveryLabel(ctx),
+		CommandTopic:   ctx.CombinedCommandTopic(),
+		Min:            hadiscovery.Ptr(float64(0)),
+		Max:            hadiscovery.Ptr(float64(timerMaxSeconds)),
+		Step:           hadiscovery.Ptr(float64(1)),
+		UnitOfMeasure:  "s",
+		EntityCategory: payload.CombinedEntityCategoryConfig,
+		Optimistic:     hadiscovery.Ptr(false),
+		Fields:         hadiscovery.NumberFields{Mode: "box"},
 	}
 }
 
@@ -139,14 +143,15 @@ func (l *LevelCombined) CombinedKind() string { return KindLevelCombined }
 // HACombinedDiscovery implements [payload.CombinedProjection]. The
 // blind's level+slats pair projects as a diagnostic sensor showing the
 // level; the slats travel in the same JSON body for template access.
-func (l *LevelCombined) HACombinedDiscovery(ctx payload.CombinedDiscoveryContext) (component string, body map[string]any) {
+func (l *LevelCombined) HACombinedDiscovery(ctx payload.CombinedDiscoveryContext) hadiscovery.Component {
 	if ctx == nil {
-		return "", nil
+		return hadiscovery.Component{}
 	}
-	return "sensor", map[string]any{
-		"name":            ctx.Translate("discovery.level_combined"),
-		"value_template":  "{{ value_json.level }}",
-		"entity_category": payload.CombinedEntityCategoryDiagnostic,
+	return hadiscovery.Component{
+		Platform:       hacatalog.PlatformSensor,
+		Name:           ctx.Translate("discovery.level_combined"),
+		ValueTemplate:  "{{ value_json.level }}",
+		EntityCategory: payload.CombinedEntityCategoryDiagnostic,
 	}
 }
 
@@ -178,14 +183,15 @@ func (c *HSColor) CombinedKind() string { return KindHSColor }
 // HACombinedDiscovery implements [payload.CombinedProjection]. The
 // hue/saturation pair projects as a diagnostic sensor showing the hue;
 // saturation travels in the same JSON body for template access.
-func (c *HSColor) HACombinedDiscovery(ctx payload.CombinedDiscoveryContext) (component string, body map[string]any) {
+func (c *HSColor) HACombinedDiscovery(ctx payload.CombinedDiscoveryContext) hadiscovery.Component {
 	if ctx == nil {
-		return "", nil
+		return hadiscovery.Component{}
 	}
-	return "sensor", map[string]any{
-		"name":            ctx.Translate("discovery.hs_color"),
-		"value_template":  "{{ value_json.hue }}",
-		"entity_category": payload.CombinedEntityCategoryDiagnostic,
+	return hadiscovery.Component{
+		Platform:       hacatalog.PlatformSensor,
+		Name:           ctx.Translate("discovery.hs_color"),
+		ValueTemplate:  "{{ value_json.hue }}",
+		EntityCategory: payload.CombinedEntityCategoryDiagnostic,
 	}
 }
 

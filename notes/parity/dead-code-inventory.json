@@ -1,6 +1,6 @@
 {
-  "generated": "e7b3af49",
-  "head": "e7b3af49",
+  "generated": "b1355858",
+  "head": "b1355858",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/openccu-loom-remote/main.go",
@@ -2517,14 +2517,14 @@
       "identifier": "EnumSelectConfig",
       "reason": "constructed in cover.Garage.attachDoorMode and passed to NewEnumSelect; reached only as a composite literal at that call site",
       "file": "internal/model/combined/enum_select.go",
-      "line": 42
+      "line": 45
     },
     {
       "package": "internal/model/combined",
       "identifier": "EnumSelectMode",
       "reason": "constructed as a slice literal inside cover.Garage.attachDoorMode, which NewGarage calls for every vent-capable drive; the analyzer does not resolve a composite literal built inside another package's constructor",
       "file": "internal/model/combined/enum_select.go",
-      "line": 31
+      "line": 34
     },
     {
       "package": "internal/model/combined",
@@ -2538,7 +2538,7 @@
       "identifier": "NewEnumSelect",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/combined/enum_select.go",
-      "line": 119
+      "line": 122
     },
     {
       "package": "internal/model/combined",
@@ -5142,7 +5142,7 @@
       "identifier": "CombinedEvent",
       "reason": "constructed in EventBridge.publishCombinedProjection and passed to Bridge.PublishCombinedDiscovery on every combined data point the model carries; reached only as a composite literal at that call site",
       "file": "internal/north/mqtt/discovery_combined.go",
-      "line": 25
+      "line": 24
     },
     {
       "package": "internal/north/mqtt",
@@ -11974,21 +11974,21 @@
       "identifier": "CombinedDiscoveryContext",
       "reason": "implemented by adapter.combinedDiscoveryContext and passed into every CombinedProjection.HACombinedDiscovery call the event bridge makes; the analyzer resolves neither the implementation nor the interface parameter",
       "file": "internal/payload/combined.go",
-      "line": 91
+      "line": 93
     },
     {
       "package": "internal/payload",
       "identifier": "CombinedProjection",
       "reason": "asserted against in EventBridge.publishCombinedDPSnapshot and MQTTCommandSink.SetCombinedValue, which every combined data point reaches through; a type used only behind an interface assertion, which the analyzer's callgraph does not resolve",
       "file": "internal/payload/combined.go",
-      "line": 44
+      "line": 46
     },
     {
       "package": "internal/payload",
       "identifier": "CombinedWritable",
       "reason": "asserted against in MQTTCommandSink.SetCombinedValue before it dispatches an MQTT write, and satisfied by combined.Timer and combined.EnumSelect; reached only through that interface assertion",
       "file": "internal/payload/combined.go",
-      "line": 81
+      "line": 83
     },
     {
       "package": "internal/payload",

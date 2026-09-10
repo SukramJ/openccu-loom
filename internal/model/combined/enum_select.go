@@ -10,6 +10,9 @@ import (
 	"sync"
 	"time"
 
+	hacatalog "github.com/SukramJ/go-ha-catalog"
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+
 	"github.com/SukramJ/openccu-loom/internal/model/datapoint"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/parameter"
@@ -328,15 +331,16 @@ func (e *EnumSelect) CombinedKind() string { return e.kind }
 
 // HACombinedDiscovery implements [payload.CombinedProjection]. The mode
 // projects as an HA `select` carrying one option per mode.
-func (e *EnumSelect) HACombinedDiscovery(ctx payload.CombinedDiscoveryContext) (component string, body map[string]any) {
+func (e *EnumSelect) HACombinedDiscovery(ctx payload.CombinedDiscoveryContext) hadiscovery.Component {
 	if ctx == nil {
-		return "", nil
+		return hadiscovery.Component{}
 	}
-	return "select", map[string]any{
-		"name":          ctx.Translate(e.labelKey),
-		"command_topic": ctx.CombinedCommandTopic(),
-		"options":       e.Modes(),
-		"optimistic":    false,
+	return hadiscovery.Component{
+		Platform:     hacatalog.PlatformSelect,
+		Name:         ctx.Translate(e.labelKey),
+		CommandTopic: ctx.CombinedCommandTopic(),
+		Options:      e.Modes(),
+		Optimistic:   hadiscovery.Ptr(false),
 	}
 }
 

@@ -134,7 +134,7 @@ func TestCombinedProjectionBodiesAreUnchanged(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			component, body := tc.projection.HACombinedDiscovery(tc.ctx)
+			component, body := haBody(t, tc.projection.HACombinedDiscovery(tc.ctx))
 			if component != tc.wantComponent {
 				t.Errorf("component = %q, want %q", component, tc.wantComponent)
 			}
@@ -517,7 +517,7 @@ func TestEnumSelectIdentity(t *testing.T) {
 func TestEnumSelectDiscoveryDeclinesWithoutAContext(t *testing.T) {
 	t.Parallel()
 	e := newGarageSelect(&recordingWriter{})
-	if component, body := e.HACombinedDiscovery(nil); component != "" || body != nil {
+	if component, body := haBody(t, e.HACombinedDiscovery(nil)); component != "" || body != nil {
 		t.Errorf("HACombinedDiscovery(nil) = (%q, %v), want a declined projection", component, body)
 	}
 }

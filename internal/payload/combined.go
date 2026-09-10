@@ -7,6 +7,8 @@ import (
 	"context"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
 )
 
 // HA entity categories a combined projection can place itself in.
@@ -53,7 +55,7 @@ type CombinedProjection interface {
 	// onto ("number", "sensor", "select", …) and the data-point-specific
 	// discovery keys. Returning an empty component suppresses discovery
 	// for this data point while leaving its state publication intact.
-	HACombinedDiscovery(ctx CombinedDiscoveryContext) (component string, body map[string]any)
+	HACombinedDiscovery(ctx CombinedDiscoveryContext) hadiscovery.Component
 
 	// CombinedStatePayload renders the current value for the retained
 	// state topic. observed is false before the first value arrives, and
