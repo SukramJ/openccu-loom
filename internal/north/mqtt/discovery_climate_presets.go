@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
 )
 
 // weekProgramPresetPrefix is the domain prefix of the week-program
@@ -32,11 +34,15 @@ const weekProgramPresetPrefix = "week_program_"
 // entity reports a state that is not in its own option list and HA logs
 // it as invalid; without the command template the label travels back to
 // `set_profile`, which knows only the slug.
-func (d *DefaultDiscoveryBuilder) localiseClimatePresets(body map[string]any) {
-	raw, ok := presetModeSlugs(body["preset_modes"])
-	if !ok || len(raw) == 0 {
+func (d *DefaultDiscoveryBuilder) localiseClimatePresets(comp *hadiscovery.Component) {
+	// The preset keys live on the climate platform's own struct, which is what
+	// the builder set; a component that carries anything else has no presets
+	// to localise.
+	fields, ok := comp.Fields.(hadiscovery.ClimateFields)
+	if !ok || len(fields.PresetModes) == 0 {
 		return
 	}
+	raw := fields.PresetModes
 	labels := make([]string, len(raw))
 	translated := false
 	for i, slug := range raw {
@@ -47,10 +53,9 @@ func (d *DefaultDiscoveryBuilder) localiseClimatePresets(body map[string]any) {
 	if !translated {
 		return
 	}
-	body["preset_modes"] = labels
-	state, command := presetModeTemplates(raw, labels)
-	body["preset_mode_value_template"] = state
-	body["preset_mode_command_template"] = command
+	fields.PresetModes = labels
+	fields.PresetModeValueTemplate, fields.PresetModeCommandTemplate = presetModeTemplates(raw, labels)
+	comp.Fields = fields
 }
 
 // presetLabel returns the display label for one preset slug and whether

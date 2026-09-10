@@ -3,6 +3,11 @@
 
 package mqtt
 
+import (
+	hacatalog "github.com/SukramJ/go-ha-catalog"
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+)
+
 // ApplyEntityDescription overlays
 // HARegistryDescription for (component, parameter, model, unit, postfix)
 // Onto a discovery body.
@@ -28,9 +33,14 @@ package mqtt
 // (`device_class`, `state_class`, `unit_of_measurement`) keep their
 // fall-through to the Quantity-/legacy-derived defaults because those
 // Are also OCCU-rooted via
-var entityDescriptionAuthoritativeFields = []string{
-	"suggested_display_precision",
-	"translation_key",
+// clearAuthoritativeFields drops the fields the HA integration is the sole
+// source for when no rule matched. Without it the legacy
+// EntityDescriptionFor's SuggestedDisplayPrecision (whose zero value emits an
+// intPtr(0)) would leak `suggested_display_precision: 0` onto every number
+// entity the integration has no rule for.
+func clearAuthoritativeFields(comp *hadiscovery.Component) {
+	comp.Precision = nil
+	delete(comp.Extra, "translation_key")
 }
 
 // The function deletes [entityDescriptionAuthoritativeFields] from the body
@@ -40,85 +50,72 @@ var entityDescriptionAuthoritativeFields = []string{
 // body — e.g. Multiplier, applied separately by [applyMultiplierSensor] /
 // [applyMultiplierNumber] because it needs the parameter's live value,
 // not a static body field — does not have to re-run the lookup.
-func applyEntityDescription(body map[string]any, component, parameter, model, unit, postfix string) *HARegistryDescription {
+func applyEntityDescription(comp *hadiscovery.Component, component, parameter, model, unit, postfix string) *HARegistryDescription {
 	desc := HARegistryDescriptionLookup(component, parameter, model, unit, postfix, "")
 	if desc == nil {
-		// Strict ownership of fields the HA integration is the sole source for
-		// without this the legacy EntityDescriptionFor's
-		// SuggestedDisplayPrecision (zero-value-emits-intPtr(0)) would
-		// leak `suggested_display_precision: 0` for every Number-Entity
-		// the HA integration has no rule for.
-		for _, k := range entityDescriptionAuthoritativeFields {
-			delete(body, k)
-		}
+		clearAuthoritativeFields(comp)
 		return nil
 	}
-	setOrDeleteString(body, "device_class", desc.DeviceClass)
-	setOrDeleteString(body, "state_class", desc.StateClass)
-	setOrDeleteString(body, "entity_category", desc.EntityCategory)
-	setOrDeleteString(body, "icon", desc.Icon)
-	setOrDeleteString(body, "translation_key", desc.TranslationKey)
+	comp.DeviceClass = desc.DeviceClass
+	comp.StateClass = hacatalog.StateClass(desc.StateClass)
+	comp.EntityCategory = hacatalog.EntityCategory(desc.EntityCategory)
+	comp.Icon = desc.Icon
+	setTranslationKey(comp, desc.TranslationKey)
 	if desc.UnitOfMeasurement != "" {
 		// `unit_of_measurement` is special: an empty
 		// `native_unit_of_measurement` in the rule means HA falls back
 		// to `data_point.unit`.
 		// Keep the legacy body value when the rule doesn't override.
-		body["unit_of_measurement"] = desc.UnitOfMeasurement
+		comp.UnitOfMeasure = desc.UnitOfMeasurement
 	}
 	if desc.SuggestedDisplayPrecision != nil {
-		body["suggested_display_precision"] = *desc.SuggestedDisplayPrecision
+		comp.Precision = hadiscovery.Ptr(*desc.SuggestedDisplayPrecision)
 	} else {
-		delete(body, "suggested_display_precision")
+		comp.Precision = nil
 	}
 	if desc.EnabledByDefault != nil {
-		body["enabled_by_default"] = *desc.EnabledByDefault
+		comp.EnabledByDefault = hadiscovery.Ptr(*desc.EnabledByDefault)
 	} else {
 		// HA's default for enabled_by_default is true, which the
 		// MQTT-Discovery convention is to omit. Mirror that.
-		delete(body, "enabled_by_default")
+		comp.EnabledByDefault = nil
 	}
 	if len(desc.Options) > 0 {
-		opts := make([]any, len(desc.Options))
-		for i, v := range desc.Options {
-			opts[i] = v
-		}
-		body["options"] = opts
+		comp.Options = append([]string(nil), desc.Options...)
 	}
 	return desc
 }
 
-// setOrDeleteString is the per-field authoritative-replacement
-// helper: write the value if non-empty, otherwise drop the key.
-func setOrDeleteString(body map[string]any, key, value string) {
-	if value != "" {
-		body[key] = value
-	} else {
-		delete(body, key)
+// setTranslationKey writes or clears the cross-stack parity marker.
+//
+// It lives in Extra because Home Assistant declares `translation_key` on no
+// platform and drops it on receipt; the daemon publishes it anyway so the
+// parity tooling can compare against the Python integration. See
+// discoveryKeysHomeAssistantIgnores.
+func setTranslationKey(comp *hadiscovery.Component, key string) {
+	if key == "" {
+		delete(comp.Extra, "translation_key")
+		return
 	}
+	if comp.Extra == nil {
+		comp.Extra = map[string]any{}
+	}
+	comp.Extra["translation_key"] = key
 }
 
-// applyEntityDescriptionStrict is the strict variant for aggregated
-// custom-DPs (cover, lock, light, valve, siren). When no rule
-// Matches and no per-category default exists
-// the helper purges every HA-attribute field from the body so the
-// resulting MQTT-Discovery payload mirrors HA-native behaviour
-// ("the device has no device_class" rather than "the legacy
-// openccu-loom table guessed a device_class"). Use the regular
-// `applyEntityDescription` for per-parameter entities, where
-// openccu-loom's Quantity-based fall-through is still useful.
-func applyEntityDescriptionStrict(body map[string]any, component, parameter, model, unit, postfix string) {
+func applyEntityDescriptionStrict(comp *hadiscovery.Component, component, parameter, model, unit, postfix string) {
 	desc := HARegistryDescriptionLookup(component, parameter, model, unit, postfix, "")
 	if desc == nil {
 		// No rule and no default → HA-native shows no description-
 		// derived attributes. Match it.
-		delete(body, "device_class")
-		delete(body, "state_class")
-		delete(body, "entity_category")
-		delete(body, "icon")
-		delete(body, "translation_key")
-		delete(body, "suggested_display_precision")
-		delete(body, "enabled_by_default")
+		comp.DeviceClass = ""
+		comp.StateClass = ""
+		comp.EntityCategory = ""
+		comp.Icon = ""
+		setTranslationKey(comp, "")
+		comp.Precision = nil
+		comp.EnabledByDefault = nil
 		return
 	}
-	applyEntityDescription(body, component, parameter, model, unit, postfix)
+	applyEntityDescription(comp, component, parameter, model, unit, postfix)
 }

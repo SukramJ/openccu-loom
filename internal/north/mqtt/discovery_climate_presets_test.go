@@ -7,17 +7,33 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	hacatalog "github.com/SukramJ/go-ha-catalog"
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
 )
 
 // presetBody is the shape the climate custom data point emits: slugs,
 // and the state template that reads the aggregate topic.
-func presetBody(presets ...string) map[string]any {
-	return map[string]any{
-		"preset_modes":               presets,
-		"preset_mode_state_topic":    "gh/ccu/HmIP-RF/0001ABCD/1/custom",
-		"preset_mode_value_template": "{{ value_json.preset_mode }}",
-		"preset_mode_command_topic":  "gh/ccu/HmIP-RF/0001ABCD/1/set_profile",
+func presetComponent(presets ...string) hadiscovery.Component {
+	return hadiscovery.Component{
+		Platform: hacatalog.PlatformClimate,
+		Fields: hadiscovery.ClimateFields{
+			PresetModes:             presets,
+			PresetModeStateTopic:    "gh/ccu/HmIP-RF/0001ABCD/1/custom",
+			PresetModeValueTemplate: "{{ value_json.preset_mode }}",
+			PresetModeCommandTopic:  "gh/ccu/HmIP-RF/0001ABCD/1/set_profile",
+		},
 	}
+}
+
+// presetFields reads the climate fields back after localisation.
+func presetFields(t *testing.T, comp hadiscovery.Component) hadiscovery.ClimateFields {
+	t.Helper()
+	fields, ok := comp.Fields.(hadiscovery.ClimateFields)
+	if !ok {
+		t.Fatalf("Fields = %T, want ClimateFields", comp.Fields)
+	}
+	return fields
 }
 
 // TestClimateWeekProgramPresetsAreTranslatedAndStandardOnesAreNot pins
@@ -38,13 +54,10 @@ func TestClimateWeekProgramPresetsAreTranslatedAndStandardOnesAreNot(t *testing.
 
 	d := NewDefaultDiscoveryBuilder(NewTopicBuilder("gh"), "ccu")
 	d.Locale = "de"
-	body := presetBody("boost", "week_program_1", "week_program_2")
-	d.localiseClimatePresets(body)
+	comp := presetComponent("boost", "week_program_1", "week_program_2")
+	d.localiseClimatePresets(&comp)
 
-	got, ok := body["preset_modes"].([]string)
-	if !ok {
-		t.Fatalf("preset_modes is %T, want []string", body["preset_modes"])
-	}
+	got := presetFields(t, comp).PresetModes
 	if len(got) != 3 {
 		t.Fatalf("got %d presets, want 3: %v", len(got), got)
 	}
@@ -73,11 +86,11 @@ func TestTranslatedClimatePresetsCarryBothTemplates(t *testing.T) {
 
 	d := NewDefaultDiscoveryBuilder(NewTopicBuilder("gh"), "ccu")
 	d.Locale = "de"
-	body := presetBody("boost", "week_program_1")
-	d.localiseClimatePresets(body)
+	comp := presetComponent("boost", "week_program_1")
+	d.localiseClimatePresets(&comp)
 
-	state, _ := body["preset_mode_value_template"].(string)
-	command, _ := body["preset_mode_command_template"].(string)
+	fields := presetFields(t, comp)
+	state, command := fields.PresetModeValueTemplate, fields.PresetModeCommandTemplate
 
 	for _, c := range []struct{ name, tpl, want string }{
 		{"state maps the slug to the label", state, "'week_program_1': 'Wochenprogramm 1'"},
@@ -104,16 +117,17 @@ func TestClimatePresetsWithoutAWeekProgramAreLeftAlone(t *testing.T) {
 
 	d := NewDefaultDiscoveryBuilder(NewTopicBuilder("gh"), "ccu")
 	d.Locale = "de"
-	body := presetBody("boost", "eco")
-	d.localiseClimatePresets(body)
+	comp := presetComponent("boost", "eco")
+	d.localiseClimatePresets(&comp)
 
-	if got, _ := body["preset_modes"].([]string); len(got) != 2 || got[0] != "boost" || got[1] != "eco" {
-		t.Errorf("preset_modes = %v, want the slugs unchanged", body["preset_modes"])
+	fields := presetFields(t, comp)
+	if got := fields.PresetModes; len(got) != 2 || got[0] != "boost" || got[1] != "eco" {
+		t.Errorf("preset_modes = %v, want the slugs unchanged", got)
 	}
-	if tpl, _ := body["preset_mode_value_template"].(string); tpl != "{{ value_json.preset_mode }}" {
+	if tpl := fields.PresetModeValueTemplate; tpl != "{{ value_json.preset_mode }}" {
 		t.Errorf("value template = %q, want the original; nothing needed mapping", tpl)
 	}
-	if _, present := body["preset_mode_command_template"]; present {
+	if fields.PresetModeCommandTemplate != "" {
 		t.Error("a command template was added although no preset was translated")
 	}
 }
@@ -145,15 +159,18 @@ func TestAWeekProgramSuffixThatIsNotANumberIsLeftAlone(t *testing.T) {
 func TestBuildTranslatesWeekProgramPresets(t *testing.T) {
 	t.Parallel()
 
+	// Typed fields rather than an Extra map: a real climate custom DP returns
+	// ClimateFields, and the localiser reads them there. A stub that used the
+	// escape hatch would pin nothing about the path a device actually takes.
 	src := &stubBuilder{
 		component: "climate",
-		body: map[string]any{
-			"min_temp":                   5.0,
-			"max_temp":                   30.5,
-			"preset_modes":               []string{"boost", "week_program_1"},
-			"preset_mode_state_topic":    "gh/ccu-01/HmIP-RF/0001ABCD/1/custom",
-			"preset_mode_value_template": "{{ value_json.preset_mode }}",
-			"preset_mode_command_topic":  "gh/ccu-01/HmIP-RF/0001ABCD/1/set_profile",
+		fields: hadiscovery.ClimateFields{
+			MinTemp:                 hadiscovery.Ptr(5.0),
+			MaxTemp:                 hadiscovery.Ptr(30.5),
+			PresetModes:             []string{"boost", "week_program_1"},
+			PresetModeStateTopic:    "gh/ccu-01/HmIP-RF/0001ABCD/1/custom",
+			PresetModeValueTemplate: "{{ value_json.preset_mode }}",
+			PresetModeCommandTopic:  "gh/ccu-01/HmIP-RF/0001ABCD/1/set_profile",
 		},
 	}
 	db := NewDefaultDiscoveryBuilder(NewTopicBuilder("gh"), "ccu-01")
