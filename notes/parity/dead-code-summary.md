@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 3b02a35e
-HEAD: 3b02a35e
+Generated: f2e908ce
+HEAD: f2e908ce
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 5630 |
+| Total Exported | 5625 |
 | Reachable | 3588 |
-| Whitelisted | 1981 |
+| Whitelisted | 1976 |
 | **Unreachable** | **61** |
 
 ## Top-20 Packages by Dead Code

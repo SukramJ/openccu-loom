@@ -2074,55 +2074,31 @@ func TestBridgePublishWeekProfileStateRawEnabled(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// LookupExtRuleForComponent: all branches.
+// EntityDescriptionFor: the Event / Text tiers, which have no per-domain rule
+// file and are therefore the only path to those two tables.
 // ---------------------------------------------------------------------------
 
-func TestLookupExtRuleForComponentAllBranches(t *testing.T) {
+func TestEntityDescriptionForEventTier(t *testing.T) {
 	t.Parallel()
-	components := []HAComponent{
-		HAComponentSensor,
-		HAComponentBinarySensor,
-		HAComponentNumber,
-		HAComponentSwitch,
-		// Components with no ext rules:
-		HAComponentClimate,
-		HAComponentCover,
-	}
-	for _, comp := range components {
-		// Must not panic.
-		_, _ = LookupExtRuleForComponent(comp, "HmIP-PSM", "STATE", "", "", "")
+	got := EntityDescriptionFor(HAComponentEvent, "HmIP-BSM", "PRESS_SHORT")
+	if got.DeviceClass != "button" {
+		t.Errorf("device_class = %q, want button", got.DeviceClass)
 	}
 }
 
-// ---------------------------------------------------------------------------
-// EntityDescriptionForExt: exercise the Event / Text branches.
-// ---------------------------------------------------------------------------
-
-func TestEntityDescriptionForExtSensor(t *testing.T) {
+func TestEntityDescriptionForTextTier(t *testing.T) {
 	t.Parallel()
-	// Call with a sensor component — exercises tier 1/2 lookup for sensors.
-	_ = EntityDescriptionForExt(HAComponentSensor, "HmIP-PSM", "POWER", "W", "", "power")
+	// A model with no text-display entry falls through to the zero value
+	// rather than to another tier's answer.
+	if got := EntityDescriptionFor(HAComponentText, "NO-SUCH-DISPLAY", "TEXT"); got.HasHAOverrides() {
+		t.Errorf("unknown display model returned overrides: %+v", got)
+	}
 }
 
-func TestEntityDescriptionForExtEvent(t *testing.T) {
+func TestEntityDescriptionForUnknownIsZero(t *testing.T) {
 	t.Parallel()
-	// Event branch — exercises tier 3 event lookup.
-	_ = EntityDescriptionForExt(HAComponentEvent, "HmIP-BSM", "PRESS_SHORT", "", "", "")
-}
-
-func TestEntityDescriptionForExtText(t *testing.T) {
-	t.Parallel()
-	// Text branch — exercises tier 3 text display lookup.
-	_ = EntityDescriptionForExt(HAComponentText, "HmIP-DISPLAY", "TEXT", "", "", "")
-}
-
-func TestEntityDescriptionForExtUnknownNoResult(t *testing.T) {
-	t.Parallel()
-	// No rules → zero HARegistryDescription.
-	got := EntityDescriptionForExt(HAComponentClimate, "UNKNOWN-DEVICE", "UNKNOWN_PARAM", "", "", "")
-	if got.HasHAOverrides() {
-		// Some device-class lookups may still return non-zero — just verify no panic.
-		_ = got
+	if got := EntityDescriptionFor(HAComponentClimate, "UNKNOWN-DEVICE", "UNKNOWN_PARAM"); got.HasHAOverrides() {
+		t.Errorf("unknown lookup returned overrides: %+v", got)
 	}
 }
 
