@@ -708,6 +708,48 @@ func discoveryNodeIDBelongsTo(nodeID string, prefixes []string) bool {
 	return false
 }
 
+// discoveryNodeIDFromTopic extracts the node id from a retained Home
+// Assistant discovery config topic, in either of the two forms Home
+// Assistant accepts:
+//
+//	<prefix>/<component>/<node_id>/<object_id>/config   one entity
+//	<prefix>/device/<node_id>/config                    one device bundle
+//
+// The sweep has to recognise both or it cannot do its job after ADR 0070
+// step 13. A bundle is three segments where the per-entity form is four, so
+// matching only the latter made every bundle invisible: never inspected,
+// never evicted, and therefore retained forever by a broker that no daemon
+// would ever claim it from again.
+//
+// `device` is not ambiguous with a component name. Home Assistant declares 32
+// MQTT platforms and none of them is called that — the closest are
+// `device_automation` and `device_tracker`, which produce four segments
+// anyway. The three-segment per-entity form (node id omitted, which Home
+// Assistant permits) is therefore the only other reading, and the literal
+// first segment separates them.
+//
+// Ownership is not decided here. The caller scopes the node id to this
+// daemon's namespace, which is what keeps a parallel zigbee2mqtt deployment
+// — publishing bundles of its own — untouched.
+func discoveryNodeIDFromTopic(topic, prefix string) (string, bool) {
+	if !strings.HasPrefix(topic, prefix) || !strings.HasSuffix(topic, "/config") {
+		return "", false
+	}
+	parts := strings.Split(strings.TrimPrefix(topic, prefix), "/")
+	switch {
+	case len(parts) == 4:
+		return strings.ToLower(parts[1]), true
+	case len(parts) == 3 && parts[0] == discoveryBundleSegment:
+		return strings.ToLower(parts[1]), true
+	default:
+		return "", false
+	}
+}
+
+// discoveryBundleSegment is the fixed first segment of a device bundle's
+// topic. Home Assistant spells it `device`, and it is not a platform name.
+const discoveryBundleSegment = "device"
+
 // RunDiscoveryOrphanCleanupOnce subscribes to `homeassistant/#` for a
 // short snapshot window, accumulates every retained HA-Discovery
 // config topic that targets a node_id this daemon owns, then evicts
@@ -768,15 +810,10 @@ func (b *Bridge) RunDiscoveryOrphanCleanupOnce(ctx context.Context, centralName 
 		seen    int
 	)
 	handler := func(topic string, _ []byte, _ bool) {
-		if !strings.HasPrefix(topic, prefix) || !strings.HasSuffix(topic, "/config") {
+		nodeID, ok := discoveryNodeIDFromTopic(topic, prefix)
+		if !ok {
 			return
 		}
-		// Topic shape: homeassistant/<component>/<node_id>/<object_id>/config
-		parts := strings.Split(strings.TrimPrefix(topic, prefix), "/")
-		if len(parts) != 4 {
-			return
-		}
-		nodeID := strings.ToLower(parts[1])
 		switch {
 		case discoveryNodeIDBelongsTo(nodeID, nodePrefixes):
 			// The central's own namespace — but the hub plane inside it
