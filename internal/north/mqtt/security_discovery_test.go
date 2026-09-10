@@ -250,13 +250,13 @@ func TestSecurityDeviceBlock_DistinctFromAlarmDeviceBlock(t *testing.T) {
 	secBlock := securityDeviceBlock("Security & Safety", "")
 	alBlock := alarmDeviceBlock()
 
-	secIDs, ok := secBlock["identifiers"].([]string)
-	if !ok || len(secIDs) != 1 {
-		t.Fatalf("security identifiers = %v, want a one-element []string", secBlock["identifiers"])
+	secIDs := secBlock.Identifiers
+	if len(secIDs) != 1 {
+		t.Fatalf("security identifiers = %v, want a one-element slice", secIDs)
 	}
-	alIDs, ok := alBlock["identifiers"].([]string)
-	if !ok || len(alIDs) != 1 {
-		t.Fatalf("alarm identifiers = %v, want a one-element []string", alBlock["identifiers"])
+	alIDs := alBlock.Identifiers
+	if len(alIDs) != 1 {
+		t.Fatalf("alarm identifiers = %v, want a one-element slice", alIDs)
 	}
 	if secIDs[0] == alIDs[0] {
 		t.Fatalf("security and alarm device blocks share identifier %q", secIDs[0])

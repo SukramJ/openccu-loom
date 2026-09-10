@@ -212,8 +212,8 @@ func TestDeviceViaDeviceMatchesTheHubCardIdentifier(t *testing.T) {
 	// spellings coincide and the comparison would be vacuous.
 	const central = "Haus CCÜ"
 
-	hubIDs, ok := hubDeviceBlock(central, HubInfo{})["identifiers"].([]string)
-	if !ok || len(hubIDs) != 1 {
+	hubIDs := hubDeviceBlock(central, HubInfo{}).Identifiers
+	if len(hubIDs) != 1 {
 		t.Fatalf("hub card identifiers = %v, want exactly one", hubIDs)
 	}
 
@@ -223,7 +223,7 @@ func TestDeviceViaDeviceMatchesTheHubCardIdentifier(t *testing.T) {
 	}
 
 	linked := hubEntityDeviceBlock(central, "0001ABCD", HubInfo{})
-	if got := linked["via_device"]; got != hubIDs[0] {
+	if got := linked.ViaDevice; got != hubIDs[0] {
 		t.Fatalf("device-linked hub entity via_device = %v, hub card identifier = %q", got, hubIDs[0])
 	}
 }
@@ -265,9 +265,9 @@ func TestPhysicalDeviceIdentifierIsCentralScopedForRepeatingAddresses(t *testing
 	// the per-device discovery for that central, byte-for-byte, or a
 	// device-linked sysvar lands on a different card than its own device.
 	linked := hubEntityDeviceBlock("CCU", repeating, HubInfo{})
-	linkedIDs, _ := linked["identifiers"].([]string)
+	linkedIDs := linked.Identifiers
 	if len(linkedIDs) != 1 || linkedIDs[0] != first {
-		t.Fatalf("hubEntityDeviceBlock identifiers %v != deviceDescriptor %q — HA would not merge the sysvar into the device card", linked["identifiers"], first)
+		t.Fatalf("hubEntityDeviceBlock identifiers %v != deviceDescriptor %q — HA would not merge the sysvar into the device card", linked.Identifiers, first)
 	}
 
 	// A globally unique hardware address is not central-scoped: a single-CCU

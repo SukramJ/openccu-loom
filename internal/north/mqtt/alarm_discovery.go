@@ -4,8 +4,7 @@
 package mqtt
 
 import (
-	"encoding/json"
-
+	hacatalog "github.com/SukramJ/go-ha-catalog"
 	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
 
 	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
@@ -57,11 +56,11 @@ func alarmBridgeStatusTopic(base string) string { return NewTopicBuilder(base).B
 
 // alarmDeviceBlock is the single synthetic HA device that groups every
 // zone panel (and the master panel) under one card.
-func alarmDeviceBlock() map[string]any {
-	return map[string]any{
-		"identifiers":  []string{"openccu-loom_alarm"},
-		"name":         "OpenCCU-Loom Alarm",
-		"manufacturer": "OpenCCU-Loom",
+func alarmDeviceBlock() *hadiscovery.DeviceInfo {
+	return &hadiscovery.DeviceInfo{
+		Identifiers:  []string{"openccu-loom_alarm"},
+		Name:         "OpenCCU-Loom Alarm",
+		Manufacturer: "OpenCCU-Loom",
 	}
 }
 
@@ -128,38 +127,32 @@ func BuildAlarmPanelDiscovery(base, zoneID, zoneName string, modes []hmenum.Alar
 	// below hang their suffixes off it. An entity id spelled out here as well
 	// is one rename away from two entities for one zone.
 	uniqueID := alarmpanel.PanelUniqueID(zone)
-	body := map[string]any{
-		"name":                 zoneName,
-		"unique_id":            uniqueID,
-		"default_entity_id":    defaultEntityID(string(HAComponentAlarmControlPanel), uniqueID),
-		"state_topic":          alarmStateTopic(base, zone),
-		"command_topic":        alarmCommandTopic(base, zone),
-		"code_arm_required":    codeArmRequired,
-		"code_disarm_required": codeDisarmRequired,
-		"supported_features":   append(alarmpanel.SupportedFeatures(modes), alarmFeatureTrigger),
-		"availability":         alarmAvailability(base, zone),
-		"availability_mode":    "all",
-		"device":               alarmDeviceBlock(),
-		"origin":               BuildOriginInfo(),
+	fields := hadiscovery.AlarmControlPanelFields{
+		CodeArmRequired:    hadiscovery.Ptr(codeArmRequired),
+		CodeDisarmRequired: hadiscovery.Ptr(codeDisarmRequired),
+		SupportedFeatures:  append(alarmpanel.SupportedFeatures(modes), alarmFeatureTrigger),
+	}
+	comp := hadiscovery.Component{
+		Platform:         hacatalog.PlatformAlarmControlPanel,
+		Name:             zoneName,
+		UniqueID:         uniqueID,
+		DefaultEntityID:  defaultEntityID(string(HAComponentAlarmControlPanel), uniqueID),
+		StateTopic:       alarmStateTopic(base, zone),
+		CommandTopic:     alarmCommandTopic(base, zone),
+		Availability:     alarmAvailability(base, zone),
+		AvailabilityMode: "all",
+		Device:           alarmDeviceBlock(),
+		Origin:           BuildOriginInfo(),
 	}
 	// A code-gated panel folds the entered code into the JSON command the
 	// raw plane parses; without a template HA sends the bare action and
 	// the code never reaches loom's validator.
 	if codeArmRequired || codeDisarmRequired {
-		body["code"] = alarmRemoteCode
-		body["command_template"] = alarmCommandTemplate
+		fields.Code = alarmRemoteCode
+		comp.CommandTemplate = alarmCommandTemplate
 	}
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return DiscoveryItem{}
-	}
-	return DiscoveryItem{
-		Component: string(HAComponentAlarmControlPanel),
-		NodeID:    alarmDiscoveryNodeID,
-		ObjectID:  zone,
-		Payload:   buf,
-		OK:        true,
-	}
+	comp.Fields = fields
+	return discoveryItemFor(comp, alarmDiscoveryNodeID, zone)
 }
 
 // alarmTriggeredMotionTopic carries the number of latched motion
@@ -189,13 +182,13 @@ func BuildAlarmMotionResetDiscovery(base, zoneID, zoneName, label string, master
 		return DiscoveryItem{}
 	}
 	uniqueID := alarmpanel.PanelUniqueID(zone) + "_reset_motion"
-	body := map[string]any{
-		"name":              zoneName + " — " + label,
-		"unique_id":         uniqueID,
-		"default_entity_id": defaultEntityID(string(HAComponentButton), uniqueID),
-		"command_topic":     alarmCommandTopic(base, zone),
-		"payload_press":     alarmCommandResetMotion,
-		"icon":              "mdi:motion-sensor-off",
+	comp := hadiscovery.Component{
+		Platform:        hacatalog.PlatformButton,
+		Name:            zoneName + " — " + label,
+		UniqueID:        uniqueID,
+		DefaultEntityID: defaultEntityID(string(HAComponentButton), uniqueID),
+		CommandTopic:    alarmCommandTopic(base, zone),
+		Icon:            "mdi:motion-sensor-off",
 		// No entity_category on purpose. Home Assistant files `config`
 		// entities away in a collapsed section of the device page and
 		// keeps them out of dashboards and the entity picker's default
@@ -205,22 +198,13 @@ func BuildAlarmMotionResetDiscovery(base, zoneID, zoneName, label string, master
 		// entity itself, which carries no category either. The
 		// latched-detector count next to it stays `diagnostic`; that one
 		// really is a readout.
-		"availability":      alarmAvailability(base, zone),
-		"availability_mode": "all",
-		"device":            alarmDeviceBlock(),
-		"origin":            BuildOriginInfo(),
+		Availability:     alarmAvailability(base, zone),
+		AvailabilityMode: "all",
+		Device:           alarmDeviceBlock(),
+		Origin:           BuildOriginInfo(),
+		Fields:           hadiscovery.ButtonFields{PayloadPress: alarmCommandResetMotion},
 	}
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return DiscoveryItem{}
-	}
-	return DiscoveryItem{
-		Component: string(HAComponentButton),
-		NodeID:    alarmDiscoveryNodeID,
-		ObjectID:  zone + "_reset_motion",
-		Payload:   buf,
-		OK:        true,
-	}
+	return discoveryItemFor(comp, alarmDiscoveryNodeID, zone+"_reset_motion")
 }
 
 // BuildAlarmTriggeredMotionDiscovery builds the sensor that reports how
@@ -238,29 +222,20 @@ func BuildAlarmTriggeredMotionDiscovery(base, zoneID, zoneName, label string, ma
 		return DiscoveryItem{}
 	}
 	uniqueID := alarmpanel.PanelUniqueID(zone) + "_triggered_motion"
-	body := map[string]any{
-		"name":                zoneName + " — " + label,
-		"unique_id":           uniqueID,
-		"default_entity_id":   defaultEntityID(string(HAComponentSensor), uniqueID),
-		"state_topic":         alarmTriggeredMotionTopic(base, zone),
-		"state_class":         "measurement",
-		"icon":                "mdi:motion-sensor",
-		"entity_category":     "diagnostic",
-		"unit_of_measurement": "detectors",
-		"availability":        alarmAvailability(base, zone),
-		"availability_mode":   "all",
-		"device":              alarmDeviceBlock(),
-		"origin":              BuildOriginInfo(),
+	comp := hadiscovery.Component{
+		Platform:         hacatalog.PlatformSensor,
+		Name:             zoneName + " — " + label,
+		UniqueID:         uniqueID,
+		DefaultEntityID:  defaultEntityID(string(HAComponentSensor), uniqueID),
+		StateTopic:       alarmTriggeredMotionTopic(base, zone),
+		StateClass:       hacatalog.StateClassMeasurement,
+		Icon:             "mdi:motion-sensor",
+		EntityCategory:   "diagnostic",
+		UnitOfMeasure:    "detectors",
+		Availability:     alarmAvailability(base, zone),
+		AvailabilityMode: "all",
+		Device:           alarmDeviceBlock(),
+		Origin:           BuildOriginInfo(),
 	}
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return DiscoveryItem{}
-	}
-	return DiscoveryItem{
-		Component: string(HAComponentSensor),
-		NodeID:    alarmDiscoveryNodeID,
-		ObjectID:  zone + "_triggered_motion",
-		Payload:   buf,
-		OK:        true,
-	}
+	return discoveryItemFor(comp, alarmDiscoveryNodeID, zone+"_triggered_motion")
 }

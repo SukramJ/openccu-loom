@@ -1185,13 +1185,13 @@ func TestSirenNoAvailableTonesWhenBuilderOmitsIt(t *testing.T) {
 func TestHubDeviceBlockStaticFallback(t *testing.T) {
 	t.Parallel()
 	block := hubDeviceBlock("ccu01", HubInfo{})
-	if block["model"] != "HomeMatic Central" {
-		t.Errorf("model=%v want 'HomeMatic Central'", block["model"])
+	if block.Model != "HomeMatic Central" {
+		t.Errorf("model=%v want 'HomeMatic Central'", block.Model)
 	}
-	if block["name"] != "ccu01" {
-		t.Errorf("name=%v want 'ccu01'", block["name"])
+	if block.Name != "ccu01" {
+		t.Errorf("name=%v want 'ccu01'", block.Name)
 	}
-	if _, present := block["sw_version"]; present {
+	if block.SWVersion != "" {
 		t.Error("sw_version must be absent when HubInfo.Version is empty")
 	}
 }
@@ -1208,20 +1208,20 @@ func TestHubDeviceBlockWithHubInfo(t *testing.T) {
 		URL:     "http://192.168.1.10",
 	}
 	block := hubDeviceBlock("ccu01", info)
-	if block["name"] != "MyHomeMatic" {
-		t.Errorf("name=%v want %q", block["name"], info.Name)
+	if block.Name != "MyHomeMatic" {
+		t.Errorf("name=%v want %q", block.Name, info.Name)
 	}
-	if block["model"] != "CCU3" {
-		t.Errorf("model=%v want %q", block["model"], info.Model)
+	if block.Model != "CCU3" {
+		t.Errorf("model=%v want %q", block.Model, info.Model)
 	}
-	if block["sw_version"] != "3.77.6" {
-		t.Errorf("sw_version=%v want %q", block["sw_version"], info.Version)
+	if block.SWVersion != "3.77.6" {
+		t.Errorf("sw_version=%v want %q", block.SWVersion, info.Version)
 	}
-	if block["serial_number"] != "SER-0001" {
-		t.Errorf("serial_number=%v want %q", block["serial_number"], info.Serial)
+	if block.SerialNumber != "SER-0001" {
+		t.Errorf("serial_number=%v want %q", block.SerialNumber, info.Serial)
 	}
-	if block["configuration_url"] != "http://192.168.1.10" {
-		t.Errorf("configuration_url=%v want %q", block["configuration_url"], info.URL)
+	if block.ConfigurationURL != "http://192.168.1.10" {
+		t.Errorf("configuration_url=%v want %q", block.ConfigurationURL, info.URL)
 	}
 }
 
