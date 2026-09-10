@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+
 	"github.com/SukramJ/openccu-loom/internal/payload"
 )
 
@@ -62,16 +64,16 @@ func (d *DefaultDiscoveryBuilder) BuildScheduleEntityDiscovery(centralName strin
 		Device:        ev.Device,
 	}
 
-	availability := []map[string]string{
+	availability := []hadiscovery.AvailabilityEntry{
 		{
-			"topic":                 d.TopicBuilder.BridgeStatus(),
-			"payload_available":     "online",
-			"payload_not_available": "offline",
+			Topic:               d.TopicBuilder.BridgeStatus(),
+			PayloadAvailable:    "online",
+			PayloadNotAvailable: "offline",
 		},
 		{
-			"topic":                 d.TopicBuilder.DeviceAvailability(centralName, ev.Interface, ev.DeviceAddress),
-			"payload_available":     "online",
-			"payload_not_available": "offline",
+			Topic:               d.TopicBuilder.DeviceAvailability(centralName, ev.Interface, ev.DeviceAddress),
+			PayloadAvailable:    "online",
+			PayloadNotAvailable: "offline",
 		},
 	}
 
@@ -224,16 +226,16 @@ func (d *DefaultDiscoveryBuilder) BuildScheduleSwitchDiscovery(centralName strin
 		Device:        ev.Device,
 	}
 
-	availability := []map[string]string{
+	availability := []hadiscovery.AvailabilityEntry{
 		{
-			"topic":                 d.TopicBuilder.BridgeStatus(),
-			"payload_available":     "online",
-			"payload_not_available": "offline",
+			Topic:               d.TopicBuilder.BridgeStatus(),
+			PayloadAvailable:    "online",
+			PayloadNotAvailable: "offline",
 		},
 		{
-			"topic":                 d.TopicBuilder.DeviceAvailability(centralName, ev.Interface, ev.DeviceAddress),
-			"payload_available":     "online",
-			"payload_not_available": "offline",
+			Topic:               d.TopicBuilder.DeviceAvailability(centralName, ev.Interface, ev.DeviceAddress),
+			PayloadAvailable:    "online",
+			PayloadNotAvailable: "offline",
 		},
 	}
 
@@ -306,7 +308,7 @@ func (b *Bridge) PublishScheduleSwitchDiscovery(ctx context.Context, centralName
 // hardware identity as the parent — HA shows them as related units.
 // suggested_area is also inherited so the sub-device falls into the
 // same room.
-func scheduleSubDeviceDescriptor(ev Event, hubURL, scheduleLabel string) map[string]any {
+func scheduleSubDeviceDescriptor(ev Event, hubURL, scheduleLabel string) *hadiscovery.DeviceInfo {
 	// Through the same helper the parent card declares its own identifier with:
 	// a hand-built "openccu-loom_<addr>" misses the central prefix that helper
 	// adds for the repeating address classes, so via_device pointed at an
@@ -318,42 +320,36 @@ func scheduleSubDeviceDescriptor(ev Event, hubURL, scheduleLabel string) map[str
 	if parentName == "" {
 		parentName = ev.DeviceAddress
 	}
-	desc := map[string]any{
-		"identifiers":  []string{subID},
-		"name":         parentName + " " + scheduleLabel,
-		"manufacturer": "eQ-3",
-		"via_device":   parentID,
+	dev := &hadiscovery.DeviceInfo{
+		Identifiers:  []string{subID},
+		Name:         parentName + " " + scheduleLabel,
+		Manufacturer: "eQ-3",
+		ViaDevice:    parentID,
 	}
 	if hubURL != "" {
-		desc["configuration_url"] = hubURL
+		dev.ConfigurationURL = hubURL
 	}
 	// Pull the parent's model / sw_version / serial / area info from
 	// the device-info `payload:"info"` map so the schedule card carries
-	// the same hardware identity. The fields are HA-whitelisted via
-	// haDeviceFields.
+	// the same hardware identity. Only the keys Home Assistant accepts
+	// exist on the typed block, so nothing has to be filtered.
 	if ev.Device != nil {
 		info := payload.ForWith(ev.Device, payload.KindInfo, payload.Options{UseAltNames: true})
-		for k, v := range info {
-			if _, ok := haDeviceFields[k]; !ok {
-				continue
-			}
-			// `name` is reserved for the sub-device label.
-			if k == "name" {
-				continue
-			}
-			desc[k] = v
-		}
+		// `name` is reserved for the sub-device label.
+		name := dev.Name
+		assignDeviceInfo(dev, info)
+		dev.Name = name
 		// suggested_area fallback: copy the parent's room if present
 		// and not already set by the info map. The parent device
 		// resolves the singular room behind its own lock, so it is
 		// asked rather than reflected over (see [deviceWithRoom]).
-		if _, has := desc["suggested_area"]; !has {
+		if dev.SuggestedArea == "" {
 			if dwr, ok := ev.Device.(deviceWithRoom); ok && dwr.Room() != "" {
-				desc["suggested_area"] = dwr.Room()
+				dev.SuggestedArea = dwr.Room()
 			}
 		}
 	}
-	return desc
+	return dev
 }
 
 // PublishScheduleSwitchState publishes the boolean state of one

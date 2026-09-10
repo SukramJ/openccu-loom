@@ -39,13 +39,13 @@ func TestDeviceDescriptorSuggestedAreaFollowsTheDeviceRoom(t *testing.T) {
 				Device:        fakeRoomDevice{room: tc.room},
 			}
 			desc := deviceDescriptor(ev, "", false)
-			got, _ := desc["suggested_area"].(string)
+			got := desc.SuggestedArea
 			if got != tc.want {
 				t.Errorf("suggested_area = %q, want %q", got, tc.want)
 			}
 			if tc.want == "" {
-				if _, present := desc["suggested_area"]; present {
-					t.Errorf("suggested_area must be absent for an ambiguous room, got %v", desc["suggested_area"])
+				if desc.SuggestedArea != "" {
+					t.Errorf("suggested_area must be absent for an ambiguous room, got %v", desc.SuggestedArea)
 				}
 			}
 		})
@@ -65,7 +65,7 @@ func TestScheduleSubDeviceDescriptorInheritsTheParentRoom(t *testing.T) {
 		Device:        fakeRoomDevice{room: "Bad"},
 	}
 	desc := scheduleSubDeviceDescriptor(ev, "", "Zeitprogramm")
-	if got, _ := desc["suggested_area"].(string); got != "Bad" {
+	if got := desc.SuggestedArea; got != "Bad" {
 		t.Errorf("suggested_area = %q, want Bad", got)
 	}
 }

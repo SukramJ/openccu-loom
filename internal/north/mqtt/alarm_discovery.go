@@ -6,6 +6,8 @@ package mqtt
 import (
 	"encoding/json"
 
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+
 	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -67,17 +69,17 @@ func alarmDeviceBlock() map[string]any {
 // carries: the bridge LWT plus the per-zone alarm availability topic. With
 // availability_mode "all" HA marks the panel available only when both are
 // online (notes/concepts/alarm-concept.md §13.3).
-func alarmAvailability(base, zone string) []map[string]string {
-	return []map[string]string{
+func alarmAvailability(base, zone string) []hadiscovery.AvailabilityEntry {
+	return []hadiscovery.AvailabilityEntry{
 		{
-			"topic":                 alarmBridgeStatusTopic(base),
-			"payload_available":     "online",
-			"payload_not_available": "offline",
+			Topic:               alarmBridgeStatusTopic(base),
+			PayloadAvailable:    "online",
+			PayloadNotAvailable: "offline",
 		},
 		{
-			"topic":                 alarmAvailabilityTopic(base, zone),
-			"payload_available":     "online",
-			"payload_not_available": "offline",
+			Topic:               alarmAvailabilityTopic(base, zone),
+			PayloadAvailable:    "online",
+			PayloadNotAvailable: "offline",
 		},
 	}
 }

@@ -184,7 +184,17 @@ func TestWeekProfileDiscoveryDeviceBlock(t *testing.T) {
 		DeviceName:    "Wandthermostat",
 		Model:         "HmIP-eTRV-2",
 	}
-	refDev := deviceDescriptor(referenceEv, "", false)
+	// Marshalled rather than compared field by field: the point of this loop
+	// is that *every* key the descriptor produces matches, which an
+	// enumeration would silently stop covering as fields are added.
+	refRaw, err := json.Marshal(deviceDescriptor(referenceEv, "", false))
+	if err != nil {
+		t.Fatalf("marshal reference device: %v", err)
+	}
+	refDev := map[string]any{}
+	if err := json.Unmarshal(refRaw, &refDev); err != nil {
+		t.Fatalf("unmarshal reference device: %v", err)
+	}
 	for k, refV := range refDev {
 		// "identifiers" is []string in the reference but []any after JSON
 		// round-trip — skip it here; the per-item check above covers it.

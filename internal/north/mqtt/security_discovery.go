@@ -6,6 +6,8 @@ package mqtt
 import (
 	"encoding/json"
 
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+
 	"github.com/SukramJ/openccu-loom/internal/build"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -56,17 +58,17 @@ func securityDeviceBlock(name, configURL string) map[string]any {
 // consumer marks the entity available only when both are online, so a
 // daemon that is up but has lost the domain is distinguishable from a
 // broker outage.
-func securityAvailability(base string) []map[string]string {
-	return []map[string]string{
+func securityAvailability(base string) []hadiscovery.AvailabilityEntry {
+	return []hadiscovery.AvailabilityEntry{
 		{
-			"topic":                 alarmBridgeStatusTopic(base),
-			"payload_available":     "online",
-			"payload_not_available": "offline",
+			Topic:               alarmBridgeStatusTopic(base),
+			PayloadAvailable:    "online",
+			PayloadNotAvailable: "offline",
 		},
 		{
-			"topic":                 securityAvailabilityTopic(base),
-			"payload_available":     "online",
-			"payload_not_available": "offline",
+			Topic:               securityAvailabilityTopic(base),
+			PayloadAvailable:    "online",
+			PayloadNotAvailable: "offline",
 		},
 	}
 }

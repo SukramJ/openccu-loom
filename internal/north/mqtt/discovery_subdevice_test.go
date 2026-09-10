@@ -39,14 +39,14 @@ func TestDeviceDescriptorSubDevicesDisabled(t *testing.T) {
 		Device:        fakeSubDeviceParent{hasSubs: true},
 	}
 	desc := deviceDescriptor(ev, "", false)
-	ids, _ := desc["identifiers"].([]string)
+	ids := desc.Identifiers
 	if len(ids) != 1 || ids[0] != "openccu-loom_abc0001" {
-		t.Errorf("identifiers=%v, want [openccu-loom_abc0001]", desc["identifiers"])
+		t.Errorf("identifiers=%v, want [openccu-loom_abc0001]", desc.Identifiers)
 	}
-	if got, _ := desc["via_device"].(string); got != "openccu-loom_central_ccu-01" {
+	if got := desc.ViaDevice; got != "openccu-loom_central_ccu-01" {
 		t.Errorf("via_device=%q, want openccu-loom_central_ccu-01", got)
 	}
-	if got, _ := desc["name"].(string); got != "Wohnzimmer Jalousie" {
+	if got := desc.Name; got != "Wohnzimmer Jalousie" {
 		t.Errorf("name=%q, want Wohnzimmer Jalousie", got)
 	}
 }
@@ -64,14 +64,14 @@ func TestDeviceDescriptorSubDevicesActive(t *testing.T) {
 		Device:        fakeSubDeviceParent{hasSubs: true},
 	}
 	desc := deviceDescriptor(ev, "", true)
-	ids, _ := desc["identifiers"].([]string)
+	ids := desc.Identifiers
 	if len(ids) != 1 || ids[0] != "openccu-loom_abc0001-2" {
-		t.Errorf("identifiers=%v, want [openccu-loom_abc0001-2]", desc["identifiers"])
+		t.Errorf("identifiers=%v, want [openccu-loom_abc0001-2]", desc.Identifiers)
 	}
-	if got, _ := desc["via_device"].(string); got != "openccu-loom_abc0001" {
+	if got := desc.ViaDevice; got != "openccu-loom_abc0001" {
 		t.Errorf("via_device=%q, want openccu-loom_abc0001", got)
 	}
-	if got, _ := desc["name"].(string); got != "Jalousie Ost" {
+	if got := desc.Name; got != "Jalousie Ost" {
 		t.Errorf("name=%q, want Jalousie Ost", got)
 	}
 }
@@ -88,11 +88,11 @@ func TestDeviceDescriptorSubDevicesInactiveParent(t *testing.T) {
 		Device:        fakeSubDeviceParent{hasSubs: true},
 	}
 	desc := deviceDescriptor(ev, "", true)
-	ids, _ := desc["identifiers"].([]string)
+	ids := desc.Identifiers
 	if len(ids) != 1 || ids[0] != "openccu-loom_abc0001" {
-		t.Errorf("identifiers=%v, want [openccu-loom_abc0001]", desc["identifiers"])
+		t.Errorf("identifiers=%v, want [openccu-loom_abc0001]", desc.Identifiers)
 	}
-	if got, _ := desc["via_device"].(string); got != "openccu-loom_central_ccu-01" {
+	if got := desc.ViaDevice; got != "openccu-loom_central_ccu-01" {
 		t.Errorf("via_device=%q, want openccu-loom_central_ccu-01", got)
 	}
 }
@@ -110,11 +110,11 @@ func TestDeviceDescriptorSubDevicesParentFlat(t *testing.T) {
 		Device:        fakeSubDeviceParent{hasSubs: false},
 	}
 	desc := deviceDescriptor(ev, "", true)
-	ids, _ := desc["identifiers"].([]string)
+	ids := desc.Identifiers
 	if len(ids) != 1 || ids[0] != "openccu-loom_abc0001" {
-		t.Errorf("identifiers=%v, want [openccu-loom_abc0001]", desc["identifiers"])
+		t.Errorf("identifiers=%v, want [openccu-loom_abc0001]", desc.Identifiers)
 	}
-	if got, _ := desc["via_device"].(string); got != "openccu-loom_central_ccu-01" {
+	if got := desc.ViaDevice; got != "openccu-loom_central_ccu-01" {
 		t.Errorf("via_device=%q, want openccu-loom_central_ccu-01", got)
 	}
 }

@@ -11,6 +11,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/model/datapoint"
 	"github.com/SukramJ/openccu-loom/internal/model/event"
@@ -512,16 +514,16 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 
 	stateTopic := pd.MQTTState(d.TopicBuilder.Base, central)
 	commandTopic := pd.MQTTCommand(d.TopicBuilder.Base, central)
-	availability := []map[string]string{
+	availability := []hadiscovery.AvailabilityEntry{
 		{
-			"topic":                 d.TopicBuilder.BridgeStatus(),
-			"payload_available":     "online",
-			"payload_not_available": "offline",
+			Topic:               d.TopicBuilder.BridgeStatus(),
+			PayloadAvailable:    "online",
+			PayloadNotAvailable: "offline",
 		},
 		{
-			"topic":                 d.TopicBuilder.DeviceAvailability(central, ev.Interface, ev.DeviceAddress),
-			"payload_available":     "online",
-			"payload_not_available": "offline",
+			Topic:               d.TopicBuilder.DeviceAvailability(central, ev.Interface, ev.DeviceAddress),
+			PayloadAvailable:    "online",
+			PayloadNotAvailable: "offline",
 		},
 	}
 
@@ -930,17 +932,17 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 			body["value_template"] = jsonValueTemplate(comp)
 		}
 	}
-	availabilityList, ok := body["availability"].([]map[string]string)
+	availabilityList, ok := body["availability"].([]hadiscovery.AvailabilityEntry)
 	if !ok {
 		// body["availability"] is not the expected slice type — skip patching
 		// to avoid panic; the bridge-level availability entries still work.
 		return string(comp), nodeID, objectID, nil, false
 	}
-	availabilityList = append(availabilityList, map[string]string{
-		"topic":                 stateTopic,
-		"value_template":        `{{ value_json.available | lower }}`,
-		"payload_available":     "true",
-		"payload_not_available": "false",
+	availabilityList = append(availabilityList, hadiscovery.AvailabilityEntry{
+		Topic:               stateTopic,
+		ValueTemplate:       `{{ value_json.available | lower }}`,
+		PayloadAvailable:    "true",
+		PayloadNotAvailable: "false",
 	})
 	body["availability"] = availabilityList
 
@@ -1275,28 +1277,60 @@ func entityName(ev Event) any {
 	return name
 }
 
-// haDeviceFields is the closed set of keys HA accepts inside an MQTT
-// Discovery `device` block (HA 2024.x, see
-// https://www.home-assistant.io/integrations/mqtt#discovery-payload).
-// Anything outside this set causes HA to reject the entire discovery
-// message with `extra keys not allowed @ data['device'][...]` — the
-// device's `payload:"info"` partition contains HM-specific fields
-// (`interface`, `interfaceid`, `model_icon`, `model_label`,
-// `product_group`) that must therefore be filtered out before the block
-// leaves this package.
-var haDeviceFields = map[string]struct{}{
-	"identifiers":       {},
-	"connections":       {},
-	"manufacturer":      {},
-	"model":             {},
-	"model_id":          {},
-	"name":              {},
-	"serial_number":     {},
-	"sw_version":        {},
-	"hw_version":        {},
-	"via_device":        {},
-	"suggested_area":    {},
-	"configuration_url": {},
+// assignDeviceInfo copies the whitelisted keys of a device's `payload:"info"`
+// partition onto the typed device block.
+//
+// This used to be a loop over a haDeviceFields whitelist, because the info
+// partition carries HM-specific fields (`interface`, `interfaceid`,
+// `model_icon`, `model_label`, `product_group`) that Home Assistant rejects
+// with `extra keys not allowed @ data['device'][...]`. The whitelist is gone:
+// [hadiscovery.DeviceInfo] *is* the set of keys Home Assistant accepts, so a
+// field that does not exist there cannot be assigned here.
+//
+// Assignment is per key present, in the caller's order, so an info partition
+// that carries one of the pre-set fields still overrides it exactly as the
+// loop did.
+func assignDeviceInfo(dev *hadiscovery.DeviceInfo, info map[string]any) {
+	str := func(key string) (string, bool) {
+		v, ok := info[key].(string)
+		return v, ok && v != ""
+	}
+	if v, ok := info["identifiers"].([]string); ok && len(v) > 0 {
+		dev.Identifiers = v
+	}
+	if v, ok := info["connections"].([][2]string); ok && len(v) > 0 {
+		dev.Connections = v
+	}
+	if v, ok := str("manufacturer"); ok {
+		dev.Manufacturer = v
+	}
+	if v, ok := str("model"); ok {
+		dev.Model = v
+	}
+	if v, ok := str("model_id"); ok {
+		dev.ModelID = v
+	}
+	if v, ok := str("name"); ok {
+		dev.Name = v
+	}
+	if v, ok := str("serial_number"); ok {
+		dev.SerialNumber = v
+	}
+	if v, ok := str("sw_version"); ok {
+		dev.SWVersion = v
+	}
+	if v, ok := str("hw_version"); ok {
+		dev.HWVersion = v
+	}
+	if v, ok := str("via_device"); ok {
+		dev.ViaDevice = v
+	}
+	if v, ok := str("suggested_area"); ok {
+		dev.SuggestedArea = v
+	}
+	if v, ok := str("configuration_url"); ok {
+		dev.ConfigurationURL = v
+	}
 }
 
 // deviceDescriptor builds the HA `device` block. When ev.Device is
@@ -1390,11 +1424,11 @@ func centralDeviceIdentifier(centralName string) string {
 	return "openccu-loom_central_" + safeLower(centralName)
 }
 
-func deviceDescriptor(ev Event, hubURL string, subDevices bool) map[string]any {
+func deviceDescriptor(ev Event, hubURL string, subDevices bool) *hadiscovery.DeviceInfo {
 	parentID := physicalDeviceIdentifier(ev.Central, ev.DeviceAddress)
-	desc := map[string]any{
-		"identifiers":  []string{parentID},
-		"manufacturer": "eQ-3",
+	dev := &hadiscovery.DeviceInfo{
+		Identifiers:  []string{parentID},
+		Manufacturer: "eQ-3",
 	}
 	// Stamp via_device so HA renders this device as a child of the
 	// OpenCCU-Loom central — same hierarchy as the Python reference
@@ -1403,7 +1437,7 @@ func deviceDescriptor(ev Event, hubURL string, subDevices bool) map[string]any {
 	// via_device floats at the top level, mixed with the central
 	// itself — confusing in the HA Devices view.
 	if ev.Central != "" {
-		desc["via_device"] = centralDeviceIdentifier(ev.Central)
+		dev.ViaDevice = centralDeviceIdentifier(ev.Central)
 	}
 	// Sub-device override: when enabled and the parent device + channel
 	// confirm the multi-group structure, swap the descriptor to identify
@@ -1419,8 +1453,8 @@ func deviceDescriptor(ev Event, hubURL string, subDevices bool) map[string]any {
 				groupNo := sdi.GroupNumber()
 				if groupNo > 0 {
 					subDeviceID := parentID + "-" + strconv.Itoa(groupNo)
-					desc["identifiers"] = []string{subDeviceID}
-					desc["via_device"] = parentID
+					dev.Identifiers = []string{subDeviceID}
+					dev.ViaDevice = parentID
 					subDeviceName = sdi.SubDeviceName()
 				}
 			}
@@ -1432,12 +1466,7 @@ func deviceDescriptor(ev Event, hubURL string, subDevices bool) map[string]any {
 	)
 	if ev.Device != nil {
 		info := payload.ForWith(ev.Device, payload.KindInfo, payload.Options{UseAltNames: true})
-		for k, v := range info {
-			if _, ok := haDeviceFields[k]; !ok {
-				continue
-			}
-			desc[k] = v
-		}
+		assignDeviceInfo(dev, info)
 		// Capture the singular room (set by the model when exactly
 		// one room is assigned) for the suggested_area fallback
 		// below. Multi-room and unassigned devices intentionally
@@ -1448,8 +1477,8 @@ func deviceDescriptor(ev Event, hubURL string, subDevices bool) map[string]any {
 			room = dwr.Room()
 		}
 		// Capture the translated, human-readable model label for the
-		// model_id fallback below. Filtered out of the main loop
-		// because `model_label` is not in HA's whitelist — only
+		// model_id fallback below. Not assignable directly because
+		// `model_label` is not a key Home Assistant accepts — only
 		// `model_id` is, and we deliberately route the label there.
 		if ml, ok := info["model_label"].(string); ok {
 			modelLabel = ml
@@ -1458,21 +1487,20 @@ func deviceDescriptor(ev Event, hubURL string, subDevices bool) map[string]any {
 	// Sub-device naming wins over both the harvested info name and
 	// the event-level default — the sub-device represents only the
 	// channel-group slice of the physical device.
-	if subDeviceName != "" {
-		desc["name"] = subDeviceName
-	} else if _, has := desc["name"]; !has {
-		switch {
-		case ev.DeviceName != "":
-			desc["name"] = ev.DeviceName
-		default:
-			// HA requires a name; fall back to the address so the
-			// entity surfaces with a recognisable label rather than
-			// being rejected with `required key not provided`.
-			desc["name"] = ev.DeviceAddress
-		}
+	switch {
+	case subDeviceName != "":
+		dev.Name = subDeviceName
+	case dev.Name != "":
+	case ev.DeviceName != "":
+		dev.Name = ev.DeviceName
+	default:
+		// HA requires a name; fall back to the address so the
+		// entity surfaces with a recognisable label rather than
+		// being rejected with `required key not provided`.
+		dev.Name = ev.DeviceAddress
 	}
-	if _, has := desc["model"]; !has && ev.Model != "" {
-		desc["model"] = ev.Model
+	if dev.Model == "" && ev.Model != "" {
+		dev.Model = ev.Model
 	}
 	// "HmIP-eTRV-2") and HA `model_id` carries the translated, human-readable
 	// label (e.g. "Heizkörperthermo- stat"). Without this, HA only sees the
@@ -1481,36 +1509,36 @@ func deviceDescriptor(ev Event, hubURL string, subDevices bool) map[string]any {
 	// translation catalogue; an empty label (no translation match) leaves
 	// model_id unset rather than duplicating the wire type, so HA falls back to
 	// its own model rendering.
-	if _, has := desc["model_id"]; !has && modelLabel != "" {
-		desc["model_id"] = modelLabel
+	if dev.ModelID == "" && modelLabel != "" {
+		dev.ModelID = modelLabel
 	}
 	// Stamp sw_version from the device's firmware tracker. Empty firmware
 	// strings (CCU has not reported one yet) leave the field unset rather than
 	// emitting "" — HA renders "Unknown" cleanly when sw_version is absent.
-	if _, has := desc["sw_version"]; !has && ev.Device != nil {
+	if dev.SWVersion == "" && ev.Device != nil {
 		if dwsv, ok := ev.Device.(deviceWithSwVersion); ok {
 			if v := dwsv.SwVersion(); v != "" {
-				desc["sw_version"] = v
+				dev.SWVersion = v
 			}
 		}
 	}
 	// configuration_url points HA at the CCU's WebUI. Same value as the
 	// synthetic hub device (hubDeviceBlock embeds info.URL there) so HA's "Visit
 	// device" button on the per-device card opens the same operator console.
-	if _, has := desc["configuration_url"]; !has && hubURL != "" {
-		desc["configuration_url"] = hubURL
+	if dev.ConfigurationURL == "" && hubURL != "" {
+		dev.ConfigurationURL = hubURL
 	}
 	// Stamp suggested_area from the device's singular room when the
 	// model has resolved exactly one assignment. Multi-room devices
 	// (the model resolves no singular room) produce no suggested_area
 	// on purpose — HA only accepts a single string and an arbitrary
-	// pick would mis-attribute the device. The room is not part of
-	// haDeviceFields (HA would reject the bare key), so this is the
-	// only path the per-device room reaches HA Discovery.
-	if _, has := desc["suggested_area"]; !has && room != "" {
-		desc["suggested_area"] = room
+	// pick would mis-attribute the device. `room` is not a key Home
+	// Assistant accepts, so this is the only path the per-device room
+	// reaches HA Discovery.
+	if dev.SuggestedArea == "" && room != "" {
+		dev.SuggestedArea = room
 	}
-	return desc
+	return dev
 }
 
 // scopedUniqueID builds a device-bound unique_id and reports whether it
