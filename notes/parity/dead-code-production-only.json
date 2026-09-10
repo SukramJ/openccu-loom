@@ -1,6 +1,6 @@
 {
-  "generated": "cc2624ec",
-  "head": "cc2624ec",
+  "generated": "8aa54015",
+  "head": "8aa54015",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/openccu-loom-remote/main.go",
@@ -5742,28 +5742,28 @@
       "identifier": "BuildAlarmMotionResetDiscovery",
       "reason": "auto-whitelist:pattern=mqtt-discovery-builder",
       "file": "internal/north/mqtt/alarm_discovery.go",
-      "line": 183
+      "line": 176
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "BuildAlarmPanelDiscovery",
       "reason": "auto-whitelist:pattern=mqtt-discovery-builder",
       "file": "internal/north/mqtt/alarm_discovery.go",
-      "line": 118
+      "line": 117
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "BuildAlarmTriggeredMotionDiscovery",
       "reason": "auto-whitelist:pattern=mqtt-discovery-builder",
       "file": "internal/north/mqtt/alarm_discovery.go",
-      "line": 232
+      "line": 216
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "BuildSecurityDiscovery",
       "reason": "auto-whitelist:pattern=mqtt-discovery-builder",
       "file": "internal/north/mqtt/security_discovery.go",
-      "line": 137
+      "line": 133
     },
     {
       "package": "internal/north/mqtt",

@@ -5,6 +5,7 @@ package mqtt
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"sort"
@@ -293,9 +294,41 @@ func buildCustomDPComponent(ev Event, ctx payload.HADiscoveryContext) (hadiscove
 	return comp, comp.Platform != ""
 }
 
+// errNoPlatform is what a builder that declined to produce anything yields:
+// a component with no platform cannot name a topic, so it is not a payload.
+var errNoPlatform = errors.New("discovery: component has no platform")
+
+// discoveryItemFor renders a typed component into the item the publishers
+// take, so a standalone builder assembles a [hadiscovery.Component] and hands
+// it over rather than marshalling a map of its own.
+//
+// The body goes through [flattenComponent], which is also what drops the
+// `platform` discriminator: this daemon publishes the per-entity form, where
+// the platform is the topic segment and no schema declares it as a key.
+func discoveryItemFor(comp hadiscovery.Component, nodeID, objectID string) DiscoveryItem {
+	body, err := flattenComponent(comp)
+	if err != nil {
+		return DiscoveryItem{}
+	}
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return DiscoveryItem{}
+	}
+	return DiscoveryItem{
+		Component: string(comp.Platform),
+		NodeID:    nodeID,
+		ObjectID:  objectID,
+		Payload:   buf,
+		OK:        true,
+	}
+}
+
 // flattenComponent renders a typed component into the flat object Home
 // Assistant receives.
 func flattenComponent(comp hadiscovery.Component) (map[string]any, error) {
+	if comp.Platform == "" {
+		return nil, errNoPlatform
+	}
 	raw, err := json.Marshal(comp)
 	if err != nil {
 		return nil, err
@@ -576,12 +609,19 @@ func channelPathData(ev Event) naming.PathData {
 func (d *DefaultDiscoveryBuilder) channelBaseBody(ev Event, name, uniqueID string) map[string]any {
 	var comp hadiscovery.Component
 	d.applyChannelFrame(&comp, ev, name, uniqueID)
-	// The platform is the caller's, not the frame's; a zero one would make
-	// flattenComponent refuse. Marshalling drops the key either way.
-	body, err := flattenComponent(comp)
+	// Marshalled here rather than through flattenComponent: the frame carries
+	// no platform — that is the caller's — and flattenComponent refuses a
+	// component without one, because for a whole payload an absent platform
+	// means the builder declined to produce anything.
+	raw, err := json.Marshal(comp)
 	if err != nil {
 		return map[string]any{}
 	}
+	body := map[string]any{}
+	if err := json.Unmarshal(raw, &body); err != nil {
+		return map[string]any{}
+	}
+	delete(body, "platform")
 	return body
 }
 

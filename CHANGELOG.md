@@ -8,6 +8,33 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The standalone discovery builders are typed too**: the three alarm
+  builders, the security builder and all fourteen hub builders
+  assemble a `hadiscovery.Component` and hand it to a shared
+  `discoveryItemFor` rather than marshalling a map of their own. Their
+  device blocks — `alarmDeviceBlock`, `securityDeviceBlock`,
+  `hubDeviceBlock`, `hubEntityDeviceBlock` — are typed with them.
+
+  Two of those builders are polymorphic, and typing them made the
+  consequence explicit. `BuildSysvarDiscovery` produces a switch,
+  binary sensor, select, sensor, text or number depending on the
+  variable's type; each branch now names the platform struct its keys
+  belong to instead of writing `body["mode"]` next to
+  `body["payload_on"]` with nothing to say which platform accepts
+  which. `buildProgramRole` could in principle have put
+  `state_on`/`state_off` on a button, which declares neither — the two
+  roles a program emits turn out to be disjoint, so nothing changes on
+  the wire, but the typed form is where that had to be checked rather
+  than assumed.
+
+  Byte-identical output across all 9,996 payloads of the full-fleet
+  capture. The alarm, security and hub entities are bridge-level and
+  therefore absent from that capture; their own tests and the broker
+  snapshot cover them.
+
+
+### Changed
+
 - **The discovery frame is typed: device block, origin block and
   availability list.** `deviceDescriptor`, `scheduleSubDeviceDescriptor`,
   `BuildOriginInfo` and the four availability builders return

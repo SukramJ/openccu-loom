@@ -4,8 +4,7 @@
 package mqtt
 
 import (
-	"encoding/json"
-
+	hacatalog "github.com/SukramJ/go-ha-catalog"
 	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
 
 	"github.com/SukramJ/openccu-loom/internal/build"
@@ -39,18 +38,15 @@ func securityAvailabilityTopic(base string) string { return base + "/security/av
 // one identifier set make the card name flap and would rename every
 // existing alarm entity's friendly name. Two cards cost nothing and
 // this is also the "own device" the domain was asked for.
-func securityDeviceBlock(name, configURL string) map[string]any {
-	block := map[string]any{
-		"identifiers":  []string{"openccu-loom_security"},
-		"name":         name,
-		"manufacturer": "OpenCCU-Loom",
-		"model":        "Security & Safety",
-		"sw_version":   build.Version,
+func securityDeviceBlock(name, configURL string) *hadiscovery.DeviceInfo {
+	return &hadiscovery.DeviceInfo{
+		Identifiers:      []string{"openccu-loom_security"},
+		Name:             name,
+		Manufacturer:     "OpenCCU-Loom",
+		Model:            "Security & Safety",
+		SWVersion:        build.Version,
+		ConfigurationURL: configURL,
 	}
-	if configURL != "" {
-		block["configuration_url"] = configURL
-	}
-	return block
 }
 
 // securityAvailability is the two-source availability list every entity
@@ -144,59 +140,47 @@ func BuildSecurityDiscovery(base, deviceName, configURL string, e securityEntity
 		stateTopic = securityStateTopic(base, e.key)
 	}
 
-	body := map[string]any{
-		"name":              e.name,
-		"unique_id":         uniqueID,
-		"default_entity_id": defaultEntityID(string(e.component), uniqueID),
-		"state_topic":       stateTopic,
-		"availability":      securityAvailability(base),
-		"availability_mode": "all",
-		"device":            securityDeviceBlock(deviceName, configURL),
-		"origin":            BuildOriginInfo(),
+	comp := hadiscovery.Component{
+		Platform:         hacatalog.Platform(e.component),
+		Name:             e.name,
+		UniqueID:         uniqueID,
+		DefaultEntityID:  defaultEntityID(string(e.component), uniqueID),
+		StateTopic:       stateTopic,
+		Availability:     securityAvailability(base),
+		AvailabilityMode: "all",
+		Device:           securityDeviceBlock(deviceName, configURL),
+		Origin:           BuildOriginInfo(),
 	}
 	switch {
 	case e.event:
 		// An event entity must not carry a value template — a scalar
 		// destroys the JSON parsing — and must not carry a device
 		// class, whose vocabulary is limited to doorbell/button/motion.
-		body["event_types"] = securityEventTypes
+		comp.Fields = hadiscovery.EventFields{EventTypes: securityEventTypes}
 	default:
-		if e.deviceClass != "" {
-			body["device_class"] = e.deviceClass
-		}
-		if len(e.options) > 0 {
-			body["options"] = e.options
-		}
-		if e.stateClass != "" {
-			body["state_class"] = e.stateClass
-		}
+		comp.DeviceClass = e.deviceClass
+		comp.Options = e.options
+		comp.StateClass = hacatalog.StateClass(e.stateClass)
+		comp.ValueTemplate = e.valueTemplate
 		if e.payloadOn != "" {
-			body["payload_on"] = e.payloadOn
-			body["payload_off"] = e.payloadOff
-		}
-		if e.valueTemplate != "" {
-			body["value_template"] = e.valueTemplate
+			// Only the binary sensor among the security entities carries a
+			// payload pair, and its keys live on that platform's struct —
+			// the typed form is what makes that visible.
+			comp.Fields = hadiscovery.BinarySensorFields{
+				PayloadOn:  e.payloadOn,
+				PayloadOff: e.payloadOff,
+			}
 		}
 		if e.jsonAttributes {
-			body["json_attributes_topic"] = stateTopic
-			body["json_attributes_template"] = "{{ value_json | tojson }}"
+			comp.JSONAttributesTopic = stateTopic
+			comp.JSONAttributesTemplate = "{{ value_json | tojson }}"
 		}
 	}
 	if e.diagnostic {
-		body["entity_category"] = "diagnostic"
+		comp.EntityCategory = "diagnostic"
 	}
 	if !e.enabledByDefault {
-		body["enabled_by_default"] = false
+		comp.EnabledByDefault = hadiscovery.Ptr(false)
 	}
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return DiscoveryItem{}
-	}
-	return DiscoveryItem{
-		Component: string(e.component),
-		NodeID:    securityDiscoveryNodeID,
-		ObjectID:  e.key,
-		Payload:   buf,
-		OK:        true,
-	}
+	return discoveryItemFor(comp, securityDiscoveryNodeID, e.key)
 }
