@@ -54,6 +54,10 @@ type mockPublisher struct {
 	mu   sync.Mutex
 	sent []publishRecord
 	err  error
+	// onPublish runs inside Publish, before the record is kept, so a test
+	// can observe the bridge's state at the moment the broker would be
+	// fanning the message out to its subscribers.
+	onPublish func(topic string)
 }
 
 type publishRecord struct {
@@ -66,6 +70,9 @@ type publishRecord struct {
 func (m *mockPublisher) Publish(_ context.Context, topic string, payload []byte, qos QoS, retain bool, _ ...PublishOption) error {
 	if m.err != nil {
 		return m.err
+	}
+	if m.onPublish != nil {
+		m.onPublish(topic)
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
