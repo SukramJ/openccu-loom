@@ -161,8 +161,15 @@ func TestSecurityDiscoveryRetriesConfigsTheBrokerRefused(t *testing.T) {
 	pub.accept()
 	events.Publish(bus, hmevent.SecurityClassChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
 
-	awaitSecurity(t, "the refused configs to be retried", func() bool {
-		return pub.count(classConfig) == 1 && pub.count(zoneConfig) == 1
+	// Wait on the declaration, not only on the publishes. The reconcile
+	// marks the plane declared *after* its last publish, so the counts
+	// reaching 1/1 says the broker has the configs, not that the pass has
+	// finished — and the assertion below is about the pass. CI caught the
+	// difference under the race detector; locally the window is too small
+	// to lose.
+	awaitSecurity(t, "the refused configs to be retried and the plane to declare", func() bool {
+		return pub.count(classConfig) == 1 && pub.count(zoneConfig) == 1 &&
+			bridge.planeDeclared(securityDiscoveryNodeID)
 	})
 	if n := pub.count(classConfig); n != 1 {
 		t.Fatalf("class config publishes after recovery=%d, want 1", n)
