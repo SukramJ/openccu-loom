@@ -1,0 +1,146 @@
+{
+  "alternate-base": {
+    "topic": "homeassistant/update/daemon/addon_update/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "openccu-loom/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "openccu-loom/system/addon_update/set",
+      "default_entity_id": "update.loom_addon_update",
+      "device": {
+        "identifiers": [
+          "openccu-loom_daemon"
+        ],
+        "manufacturer": "OpenCCU-Loom",
+        "model": "Daemon",
+        "name": "OpenCCU-Loom"
+      },
+      "enabled_by_default": true,
+      "entity_category": "diagnostic",
+      "latest_version_template": "{{ value_json.latest_version }}",
+      "latest_version_topic": "openccu-loom/system/addon_update/state",
+      "name": "Add-on Update",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_install": "INSTALL",
+      "state_topic": "openccu-loom/system/addon_update/state",
+      "unique_id": "loom_addon_update"
+    }
+  },
+  "default": {
+    "topic": "homeassistant/update/daemon/addon_update/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/system/addon_update/set",
+      "default_entity_id": "update.loom_addon_update",
+      "device": {
+        "identifiers": [
+          "openccu-loom_daemon"
+        ],
+        "manufacturer": "OpenCCU-Loom",
+        "model": "Daemon",
+        "name": "OpenCCU-Loom"
+      },
+      "enabled_by_default": true,
+      "entity_category": "diagnostic",
+      "latest_version_template": "{{ value_json.latest_version }}",
+      "latest_version_topic": "gh/system/addon_update/state",
+      "name": "Add-on Update",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_install": "INSTALL",
+      "state_topic": "gh/system/addon_update/state",
+      "unique_id": "loom_addon_update"
+    }
+  },
+  "locale-de": {
+    "topic": "homeassistant/update/daemon/addon_update/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/system/addon_update/set",
+      "default_entity_id": "update.loom_addon_update",
+      "device": {
+        "identifiers": [
+          "openccu-loom_daemon"
+        ],
+        "manufacturer": "OpenCCU-Loom",
+        "model": "Daemon",
+        "name": "OpenCCU-Loom"
+      },
+      "enabled_by_default": true,
+      "entity_category": "diagnostic",
+      "latest_version_template": "{{ value_json.latest_version }}",
+      "latest_version_topic": "gh/system/addon_update/state",
+      "name": "Add-on-Aktualisierung",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_install": "INSTALL",
+      "state_topic": "gh/system/addon_update/state",
+      "unique_id": "loom_addon_update"
+    }
+  },
+  "second-central": {
+    "topic": "homeassistant/update/daemon/addon_update/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/system/addon_update/set",
+      "default_entity_id": "update.loom_addon_update",
+      "device": {
+        "identifiers": [
+          "openccu-loom_daemon"
+        ],
+        "manufacturer": "OpenCCU-Loom",
+        "model": "Daemon",
+        "name": "OpenCCU-Loom"
+      },
+      "enabled_by_default": true,
+      "entity_category": "diagnostic",
+      "latest_version_template": "{{ value_json.latest_version }}",
+      "latest_version_topic": "gh/system/addon_update/state",
+      "name": "Add-on Update",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_install": "INSTALL",
+      "state_topic": "gh/system/addon_update/state",
+      "unique_id": "loom_addon_update"
+    }
+  }
+}
