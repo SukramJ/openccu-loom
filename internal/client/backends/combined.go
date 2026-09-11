@@ -74,11 +74,12 @@ func IsCombinedParameter(name string) bool {
 // ParseCombinedParameter is the decode a running daemon uses for
 // COMBINED_PARAMETER and LEVEL_COMBINED callbacks: the callback handler gates
 // on [IsCombinedParameter] and calls this, and the command tracker resolves
-// optimistic values through it. internal/model/value carries a second,
-// exported CPV decode pair with the same scale constants but a different
-// parser; the two do not agree on every input (a decimal LEVEL_COMBINED byte
-// yields a float there and passes through as a string here), so a caller must
-// not treat them as interchangeable.
+// optimistic values through it. It is now the only decode: internal/model/value
+// carried a second, exported CPV pair with the same scale constants and a
+// different parser — the two disagreed on a decimal LEVEL_COMBINED byte, which
+// yielded a float there and passes through as a string here — and ADR 0070
+// removed it. The encode direction still lives in
+// internal/parameter.ConvertHMLevelToCPV.
 //
 // ParseCombinedParameter parses a CCU combined-parameter wire string
 // into the resulting paramset map. Returns ok=false (and a nil map)
