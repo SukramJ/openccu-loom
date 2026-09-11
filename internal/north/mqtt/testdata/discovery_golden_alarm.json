@@ -1,0 +1,375 @@
+{
+  "button/master-reset-motion": {
+    "topic": "homeassistant/button/alarm/master_reset_motion/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/alarm/master/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/alarm/master/set",
+      "default_entity_id": "button.openccu-loom_alarm_master_reset_motion",
+      "device": {
+        "identifiers": [
+          "openccu-loom_alarm"
+        ],
+        "manufacturer": "OpenCCU-Loom",
+        "name": "OpenCCU-Loom Alarm"
+      },
+      "icon": "mdi:motion-sensor-off",
+      "name": "Alarm system — Reset motion",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_press": "RESET_MOTION",
+      "unique_id": "openccu-loom_alarm_master_reset_motion"
+    }
+  },
+  "button/zone-reset-motion": {
+    "topic": "homeassistant/button/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33_reset_motion/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/set",
+      "default_entity_id": "button.openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33_reset_motion",
+      "device": {
+        "identifiers": [
+          "openccu-loom_alarm"
+        ],
+        "manufacturer": "OpenCCU-Loom",
+        "name": "OpenCCU-Loom Alarm"
+      },
+      "icon": "mdi:motion-sensor-off",
+      "name": "Erdgeschoss — Reset motion",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_press": "RESET_MOTION",
+      "unique_id": "openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33_reset_motion"
+    }
+  },
+  "panel/master-overrides-zone": {
+    "topic": "homeassistant/alarm_control_panel/alarm/master/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/alarm/master/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "code_arm_required": false,
+      "code_disarm_required": false,
+      "command_topic": "gh/alarm/master/set",
+      "default_entity_id": "alarm_control_panel.openccu-loom_alarm_master",
+      "device": {
+        "identifiers": [
+          "openccu-loom_alarm"
+        ],
+        "manufacturer": "OpenCCU-Loom",
+        "name": "OpenCCU-Loom Alarm"
+      },
+      "name": "Alarm system",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/alarm/master/state",
+      "supported_features": [
+        "arm_home",
+        "arm_away",
+        "arm_night",
+        "arm_vacation",
+        "arm_custom_bypass",
+        "trigger"
+      ],
+      "unique_id": "openccu-loom_alarm_master"
+    }
+  },
+  "panel/zone-all-modes": {
+    "topic": "homeassistant/alarm_control_panel/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "code_arm_required": false,
+      "code_disarm_required": false,
+      "command_topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/set",
+      "default_entity_id": "alarm_control_panel.openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33",
+      "device": {
+        "identifiers": [
+          "openccu-loom_alarm"
+        ],
+        "manufacturer": "OpenCCU-Loom",
+        "name": "OpenCCU-Loom Alarm"
+      },
+      "name": "Erdgeschoss",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/state",
+      "supported_features": [
+        "arm_home",
+        "arm_away",
+        "arm_night",
+        "arm_vacation",
+        "arm_custom_bypass",
+        "trigger"
+      ],
+      "unique_id": "openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33"
+    }
+  },
+  "panel/zone-code-arm-only": {
+    "topic": "homeassistant/alarm_control_panel/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "code": "REMOTE_CODE",
+      "code_arm_required": true,
+      "code_disarm_required": false,
+      "command_template": "{\"action\":\"{{ action }}\",\"code\":\"{{ code }}\"}",
+      "command_topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/set",
+      "default_entity_id": "alarm_control_panel.openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33",
+      "device": {
+        "identifiers": [
+          "openccu-loom_alarm"
+        ],
+        "manufacturer": "OpenCCU-Loom",
+        "name": "OpenCCU-Loom Alarm"
+      },
+      "name": "Erdgeschoss",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/state",
+      "supported_features": [
+        "arm_home",
+        "arm_away",
+        "arm_night",
+        "arm_vacation",
+        "arm_custom_bypass",
+        "trigger"
+      ],
+      "unique_id": "openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33"
+    }
+  },
+  "panel/zone-code-disarm-only": {
+    "topic": "homeassistant/alarm_control_panel/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "code": "REMOTE_CODE",
+      "code_arm_required": false,
+      "code_disarm_required": true,
+      "command_template": "{\"action\":\"{{ action }}\",\"code\":\"{{ code }}\"}",
+      "command_topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/set",
+      "default_entity_id": "alarm_control_panel.openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33",
+      "device": {
+        "identifiers": [
+          "openccu-loom_alarm"
+        ],
+        "manufacturer": "OpenCCU-Loom",
+        "name": "OpenCCU-Loom Alarm"
+      },
+      "name": "Erdgeschoss",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/state",
+      "supported_features": [
+        "arm_home",
+        "arm_away",
+        "arm_night",
+        "arm_vacation",
+        "arm_custom_bypass",
+        "trigger"
+      ],
+      "unique_id": "openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33"
+    }
+  },
+  "panel/zone-single-mode": {
+    "topic": "homeassistant/alarm_control_panel/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "code_arm_required": false,
+      "code_disarm_required": false,
+      "command_topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/set",
+      "default_entity_id": "alarm_control_panel.openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33",
+      "device": {
+        "identifiers": [
+          "openccu-loom_alarm"
+        ],
+        "manufacturer": "OpenCCU-Loom",
+        "name": "OpenCCU-Loom Alarm"
+      },
+      "name": "Erdgeschoss",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/state",
+      "supported_features": [
+        "arm_away",
+        "trigger"
+      ],
+      "unique_id": "openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33"
+    }
+  },
+  "sensor/master-triggered-motion": {
+    "topic": "homeassistant/sensor/alarm/master_triggered_motion/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/alarm/master/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "sensor.openccu-loom_alarm_master_triggered_motion",
+      "device": {
+        "identifiers": [
+          "openccu-loom_alarm"
+        ],
+        "manufacturer": "OpenCCU-Loom",
+        "name": "OpenCCU-Loom Alarm"
+      },
+      "entity_category": "diagnostic",
+      "icon": "mdi:motion-sensor",
+      "name": "Alarm system — Triggered motion detectors",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_class": "measurement",
+      "state_topic": "gh/alarm/master/triggered-motion",
+      "unique_id": "openccu-loom_alarm_master_triggered_motion",
+      "unit_of_measurement": "detectors"
+    }
+  },
+  "sensor/zone-triggered-motion": {
+    "topic": "homeassistant/sensor/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33_triggered_motion/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "sensor.openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33_triggered_motion",
+      "device": {
+        "identifiers": [
+          "openccu-loom_alarm"
+        ],
+        "manufacturer": "OpenCCU-Loom",
+        "name": "OpenCCU-Loom Alarm"
+      },
+      "entity_category": "diagnostic",
+      "icon": "mdi:motion-sensor",
+      "name": "Erdgeschoss — Triggered motion detectors",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_class": "measurement",
+      "state_topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/triggered-motion",
+      "unique_id": "openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33_triggered_motion",
+      "unit_of_measurement": "detectors"
+    }
+  }
+}
