@@ -1,14 +1,14 @@
 # Dead-Code Summary
 
-Generated: f63ef977
-HEAD: f63ef977
+Generated: e152f6e2
+HEAD: e152f6e2
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 5625 |
-| Reachable | 3588 |
+| Total Exported | 5621 |
+| Reachable | 3584 |
 | Whitelisted | 1976 |
 | **Unreachable** | **61** |
 

@@ -1,14 +1,14 @@
 {
-  "generated": "f63ef977",
-  "head": "f63ef977",
+  "generated": "e152f6e2",
+  "head": "e152f6e2",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/openccu-loom-remote/main.go",
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 5625,
-    "reachable": 3588,
+    "total_exported": 5621,
+    "reachable": 3584,
     "whitelisted": 1976,
     "unreachable": 61
   },

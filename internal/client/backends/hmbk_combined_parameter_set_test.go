@@ -21,9 +21,9 @@ import (
 // but never decomposed on the way back (or the reverse), and the optimistic
 // value is silently dropped.
 //
-// The pre-existing set guard pairs internal/parameter with the
-// internal/model/value mirror, which no production path reads; this one pairs
-// internal/parameter with the callback decoder that does.
+// The pre-existing set guard used to pair internal/parameter with the
+// internal/model/value mirror, which no production path read; that package is
+// gone (ADR 0070) and both guards now pair live paths.
 func TestHmBkCombinedParameterSetMatchesWritePath(t *testing.T) {
 	t.Parallel()
 
