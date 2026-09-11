@@ -1,16 +1,16 @@
 {
-  "generated": "f63ef977",
-  "head": "f63ef977",
+  "generated": "e152f6e2",
+  "head": "e152f6e2",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/openccu-loom-remote/main.go",
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 5625,
+    "total_exported": 5621,
     "reachable": 3511,
     "whitelisted": 1976,
-    "unreachable": 138
+    "unreachable": 134
   },
   "by_package": [
     {
@@ -30,12 +30,6 @@
       "unreachable_funcs": 4,
       "unreachable_types": 0,
       "unreachable_other": 0
-    },
-    {
-      "package": "internal/model/value",
-      "unreachable_funcs": 3,
-      "unreachable_types": 0,
-      "unreachable_other": 1
     },
     {
       "package": "internal/central/adapter",
@@ -708,34 +702,6 @@
       "file": "internal/model/optimistic/tracker.go",
       "line": 93,
       "kind": "type"
-    },
-    {
-      "package": "internal/model/value",
-      "identifier": "ConvertableParameters",
-      "file": "internal/model/value/converter.go",
-      "line": 47,
-      "kind": "var"
-    },
-    {
-      "package": "internal/model/value",
-      "identifier": "FromHomematicValue",
-      "file": "internal/model/value/converter.go",
-      "line": 96,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/value",
-      "identifier": "IsConvertableParameter",
-      "file": "internal/model/value/converter.go",
-      "line": 53,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/value",
-      "identifier": "ToHomematicValue",
-      "file": "internal/model/value/converter.go",
-      "line": 68,
-      "kind": "func"
     },
     {
       "package": "internal/north/discovery/mdns",

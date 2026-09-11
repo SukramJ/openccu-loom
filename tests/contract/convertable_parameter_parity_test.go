@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
-	"github.com/SukramJ/openccu-loom/internal/model/value"
 	"github.com/SukramJ/openccu-loom/internal/parameter"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -33,14 +32,10 @@ import (
 // into AddCombinedParameter, where ParseCombinedParameter's `default:
 // return nil, false` drops the optimistic record entirely.
 //
-// The third declaration, internal/model/value.ConvertableParameters, gates
-// nothing: a grep for value.IsConvertableParameter and
-// value.ConvertableParameters over all non-test .go files in the tree returns
-// only the declaring file itself. It is checked here because it exists and
-// would otherwise drift unobserved, not because a daemon consults it — and it
-// is the reason this guard used to prove less than it claimed: binding the
-// live write set to a test-only mirror leaves the live callback set free to
-// disagree with both.
+// There used to be a third declaration, internal/model/value, checked here
+// because it existed rather than because a daemon consulted it. ADR 0070
+// called for deleting that package and it is gone, so this guard now binds
+// the two live paths to each other and to nothing else.
 func TestConvertableParameterSetsAgree(t *testing.T) {
 	if len(parameter.ConvertableParameters) == 0 {
 		t.Fatal("parameter.ConvertableParameters is empty — every loop below would pass vacuously")
@@ -65,29 +60,10 @@ func TestConvertableParameterSetsAgree(t *testing.T) {
 		t.Errorf("combined-parameter set sizes differ: internal/client/backends has %d, internal/parameter has %d", got, want)
 	}
 
-	// The test-only model mirror, both directions.
-	for _, p := range value.ConvertableParameters {
-		if !parameter.IsConvertable(p) {
-			t.Errorf("parameter %q is in internal/model/value.ConvertableParameters but parameter.IsConvertable reports false", p)
-		}
-		if !value.IsConvertableParameter(p) {
-			t.Errorf("internal/model/value.IsConvertableParameter(%q) is false for a parameter in its own ConvertableParameters list", p)
-		}
-	}
-	for p := range parameter.ConvertableParameters {
-		if !value.IsConvertableParameter(p) {
-			t.Errorf("parameter %q is convertable per internal/parameter but missing from internal/model/value.ConvertableParameters", p)
-		}
-	}
-	if got, want := len(value.ConvertableParameters), len(parameter.ConvertableParameters); got != want {
-		t.Errorf("convertable-parameter set sizes differ: internal/model/value has %d, internal/parameter has %d", got, want)
-	}
-
-	// A non-convertable parameter must be rejected by all three, so the test
+	// A non-convertable parameter must be rejected by both, so the test
 	// cannot pass vacuously on a set that accepts everything.
 	if parameter.IsConvertable(hmenum.ParameterState) ||
-		value.IsConvertableParameter(hmenum.ParameterState) ||
 		backends.IsCombinedParameter(string(hmenum.ParameterState)) {
-		t.Errorf("STATE must not be classified convertable by any of the three declarations")
+		t.Errorf("STATE must not be classified convertable by either declaration")
 	}
 }
