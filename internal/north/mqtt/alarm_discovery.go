@@ -130,7 +130,19 @@ func BuildAlarmPanelDiscovery(base, zoneID, zoneName string, modes []hmenum.Alar
 	fields := hadiscovery.AlarmControlPanelFields{
 		CodeArmRequired:    hadiscovery.Ptr(codeArmRequired),
 		CodeDisarmRequired: hadiscovery.Ptr(codeDisarmRequired),
-		SupportedFeatures:  append(alarmpanel.SupportedFeatures(modes), alarmFeatureTrigger),
+		// Panic is the case where nobody can type. Home Assistant defaults
+		// code_trigger_required to true, so a zone that gates arming or
+		// disarming used to gate the panic affordance as well — a rule this
+		// daemon never chose and has no verb for: EffectiveCodePolicy
+		// returns arm and disarm and nothing else. Left unset, an HA default
+		// decided a safety policy on the operator's behalf.
+		//
+		// Arming and disarming keep their gates. The trade is deliberate: a
+		// mis-tap on a dashboard now sounds the alarm immediately, which is
+		// the lesser failure — the other direction is an alarm that cannot
+		// be raised by the person who needs it.
+		CodeTriggerRequired: hadiscovery.Ptr(false),
+		SupportedFeatures:   append(alarmpanel.SupportedFeatures(modes), alarmFeatureTrigger),
 	}
 	comp := hadiscovery.Component{
 		Platform:         hacatalog.PlatformAlarmControlPanel,
