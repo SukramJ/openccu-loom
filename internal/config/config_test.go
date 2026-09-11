@@ -1037,3 +1037,27 @@ func TestMQTTDiscoveryImpliesTheRawPlane(t *testing.T) {
 		}
 	})
 }
+
+// TestDiscoveryBundlesNeedsTheDiscoveryPlane: left on with discovery off the
+// flag would read as "publish bundles" while nothing publishes at all. A
+// setting that silently means nothing is worse than one that is corrected.
+func TestDiscoveryBundlesNeedsTheDiscoveryPlane(t *testing.T) {
+	t.Parallel()
+
+	cfg := Default()
+	cfg.North.MQTT.DiscoveryEnabled = false
+	cfg.North.MQTT.DiscoveryBundles = true
+	cfg.applyDefaults()
+
+	if cfg.North.MQTT.DiscoveryBundles {
+		t.Error("discovery_bundles survived with the discovery plane off")
+	}
+
+	on := Default()
+	on.North.MQTT.DiscoveryEnabled = true
+	on.North.MQTT.DiscoveryBundles = true
+	on.applyDefaults()
+	if !on.North.MQTT.DiscoveryBundles {
+		t.Error("discovery_bundles was cleared although the discovery plane is on")
+	}
+}

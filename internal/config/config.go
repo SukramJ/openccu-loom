@@ -1547,6 +1547,20 @@ type NorthMQTT struct {
 	// entities can never receive a value.
 	DiscoveryEnabled bool `yaml:"discovery_enabled" json:"discovery_enabled" cfg:"basic"`
 
+	// DiscoveryBundles publishes one retained document per device
+	// (`homeassistant/device/<node_id>/config`) instead of one retained
+	// config per entity. Requires DiscoveryEnabled.
+	//
+	// It is an operator decision and stays off by default, because turning
+	// it on migrates every retained config this daemon has on the broker and
+	// turning it back off migrates them again. Home Assistant keeps the
+	// entities across both directions — their unique ids do not change, and
+	// its registry is keyed on those rather than on the discovery topic,
+	// measured against a live instance in ADR 0070's amendment of
+	// 2026-09-10 — but neither direction is free, and neither should happen
+	// because someone upgraded.
+	DiscoveryBundles bool `yaml:"discovery_bundles" json:"discovery_bundles" cfg:"expert"`
+
 	// ProtocolVersion selects the MQTT wire dialect: "5" (default when
 	// empty) or "3.1.1" for brokers without MQTT 5.0 support. There is
 	// no silent downgrade — a v5 connect against a v3-only broker
@@ -2032,6 +2046,17 @@ func (c *Config) applyDefaults() {
 		c.North.MQTT.RawEnabled = true
 		slog.Warn("config: north.mqtt.discovery_enabled requires the raw topic plane; enabling north.mqtt.raw_enabled",
 			slog.String("field", "north.mqtt.raw_enabled"))
+	}
+	// Bundles are a shape of the discovery plane, not a plane of their own.
+	// Left on with discovery off the flag would read as "publish bundles"
+	// while nothing publishes at all, and a setting that silently means
+	// nothing is worse than one that is corrected. Same treatment as the
+	// raw/discovery pair above: corrected, not rejected, and the warning
+	// names the field the operator has to look at.
+	if c.North.MQTT.DiscoveryBundles && !c.North.MQTT.DiscoveryEnabled {
+		c.North.MQTT.DiscoveryBundles = false
+		slog.Warn("config: north.mqtt.discovery_bundles needs the discovery plane; ignoring it while north.mqtt.discovery_enabled is off",
+			slog.String("field", "north.mqtt.discovery_bundles"))
 	}
 	// The mount path becomes an http.ServeMux pattern verbatim (see
 	// mcpMountPathPattern), and ServeMux answers a malformed pattern with a
