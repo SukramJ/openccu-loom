@@ -633,6 +633,11 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		hmipCat = string(comp)
 	}
 	haDesc := applyEntityDescription(&entity, hmipCat, ev.Parameter, ev.Model, ev.descUnit(), "")
+	// The lookup above is keyed on the model's category and `comp` may have
+	// been downgraded since (a read-only switch renders as a binary_sensor),
+	// so the description can carry a device class the rendered platform does
+	// not declare. Home Assistant drops such a class in silence.
+	entity.DeviceClass = dropForeignDeviceClass(comp, entity.DeviceClass)
 	// MASTER-paramset fallback: when neither EntityDescriptionFor nor
 	// the HA integration sets an entity_category, force "config". This is a
 	// openccu-loom-MQTT UX convention so MASTER parameters land in HA's
