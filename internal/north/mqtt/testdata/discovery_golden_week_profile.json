@@ -1,0 +1,274 @@
+{
+  "week_profile/bidcos-three-profiles": {
+    "topic": "homeassistant/select/ccu-01_leq0123456/openccu-loom_ccu-01_leq0123456_4_weekprofile/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/BidCos-RF/LEQ0123456/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/BidCos-RF/LEQ0123456/4/week_profile/set",
+      "default_entity_id": "select.openccu-loom_ccu-01_leq0123456_4_weekprofile",
+      "device": {
+        "identifiers": [
+          "openccu-loom_leq0123456"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HM-CC-RT-DN",
+        "name": "Heizung Bad",
+        "serial_number": "LEQ0123456",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "name": "Week profile",
+      "options": [
+        "P1",
+        "P2",
+        "P3"
+      ],
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/BidCos-RF/LEQ0123456/4/week_profile/state",
+      "unique_id": "loom_leq0123456_4_weekprofile"
+    }
+  },
+  "week_profile/hmip-six-profiles": {
+    "topic": "homeassistant/select/ccu-01_vcu1234567/openccu-loom_ccu-01_vcu1234567_1_weekprofile/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/VCU1234567/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/VCU1234567/1/week_profile/set",
+      "default_entity_id": "select.openccu-loom_ccu-01_vcu1234567_1_weekprofile",
+      "device": {
+        "identifiers": [
+          "openccu-loom_vcu1234567"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-eTRV-2",
+        "name": "Heizung Wohnzimmer",
+        "serial_number": "VCU1234567",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "name": "Week profile",
+      "options": [
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P5",
+        "P6"
+      ],
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/VCU1234567/1/week_profile/state",
+      "unique_id": "loom_vcu1234567_1_weekprofile"
+    }
+  },
+  "week_profile/mixed-case-central": {
+    "topic": "homeassistant/select/ccu-keller_vcu1234567/openccu-loom_ccu-keller_vcu1234567_1_weekprofile/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/CCU-Keller/HmIP-RF/VCU1234567/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/CCU-Keller/HmIP-RF/VCU1234567/1/week_profile/set",
+      "default_entity_id": "select.openccu-loom_ccu-keller_vcu1234567_1_weekprofile",
+      "device": {
+        "identifiers": [
+          "openccu-loom_vcu1234567"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-eTRV-2",
+        "name": "Heizung Wohnzimmer",
+        "serial_number": "VCU1234567",
+        "via_device": "openccu-loom_central_ccu-keller"
+      },
+      "name": "Week profile",
+      "options": [
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P5",
+        "P6"
+      ],
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/CCU-Keller/HmIP-RF/VCU1234567/1/week_profile/state",
+      "unique_id": "loom_vcu1234567_1_weekprofile"
+    }
+  },
+  "week_profile/no-device-object": {
+    "topic": "homeassistant/select/ccu-01_vcu1234567/openccu-loom_ccu-01_vcu1234567_1_weekprofile/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/VCU1234567/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/VCU1234567/1/week_profile/set",
+      "default_entity_id": "select.openccu-loom_ccu-01_vcu1234567_1_weekprofile",
+      "device": {
+        "identifiers": [
+          "openccu-loom_vcu1234567"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-eTRV-2",
+        "name": "Heizung Wohnzimmer",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "name": "Week profile",
+      "options": [
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P5",
+        "P6"
+      ],
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/VCU1234567/1/week_profile/state",
+      "unique_id": "loom_vcu1234567_1_weekprofile"
+    }
+  },
+  "week_profile/second-central": {
+    "topic": "homeassistant/select/ccu-02_vcu1234567/openccu-loom_ccu-02_vcu1234567_1_weekprofile/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-02/HmIP-RF/VCU1234567/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-02/HmIP-RF/VCU1234567/1/week_profile/set",
+      "default_entity_id": "select.openccu-loom_ccu-02_vcu1234567_1_weekprofile",
+      "device": {
+        "identifiers": [
+          "openccu-loom_vcu1234567"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-eTRV-2",
+        "name": "Heizung Wohnzimmer",
+        "serial_number": "VCU1234567",
+        "via_device": "openccu-loom_central_ccu-02"
+      },
+      "name": "Week profile",
+      "options": [
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P5",
+        "P6"
+      ],
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-02/HmIP-RF/VCU1234567/1/week_profile/state",
+      "unique_id": "loom_vcu1234567_1_weekprofile"
+    }
+  },
+  "week_profile/sub-devices-enabled": {
+    "topic": "homeassistant/select/ccu-01_vcu1234567/openccu-loom_ccu-01_vcu1234567_1_weekprofile/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/VCU1234567/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/VCU1234567/1/week_profile/set",
+      "default_entity_id": "select.openccu-loom_ccu-01_vcu1234567_1_weekprofile",
+      "device": {
+        "identifiers": [
+          "openccu-loom_vcu1234567"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-eTRV-2",
+        "name": "Heizung Wohnzimmer",
+        "serial_number": "VCU1234567",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "name": "Week profile",
+      "options": [
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P5",
+        "P6"
+      ],
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/VCU1234567/1/week_profile/state",
+      "unique_id": "loom_vcu1234567_1_weekprofile"
+    }
+  }
+}
