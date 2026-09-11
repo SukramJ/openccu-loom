@@ -58,24 +58,28 @@ func alarmGoldenCases() []alarmGoldenCase {
 		// order — HA renders the buttons in the order it is given, so a
 		// reordering is visible to an operator even though no entity moves.
 		{"panel/zone-all-modes", BuildAlarmPanelDiscovery(
-			alarmGoldenBase, alarmGoldenZone, "Erdgeschoss", allModes, false, false, false)},
+			alarmGoldenBase, alarmGoldenZone, "Erdgeschoss", allModes, false, false, false,
+		)},
 		// One mode only. The feature list is derived, not stored, so a zone
 		// that can only arm away must not advertise buttons that would send
 		// a command the engine rejects.
 		{"panel/zone-single-mode", BuildAlarmPanelDiscovery(
 			alarmGoldenBase, alarmGoldenZone, "Erdgeschoss",
-			[]hmenum.AlarmMode{hmenum.AlarmModeFull}, false, false, false)},
+			[]hmenum.AlarmMode{hmenum.AlarmModeFull}, false, false, false,
+		)},
 		// Code on arm only. Asymmetric on purpose: it pins both booleans at
 		// once with different values, and it pins that the command template
 		// (which folds the entered code into the raw command JSON) appears
 		// for the arm verb. Without the template HA sends the bare action
 		// and the code never reaches loom's validator.
 		{"panel/zone-code-arm-only", BuildAlarmPanelDiscovery(
-			alarmGoldenBase, alarmGoldenZone, "Erdgeschoss", allModes, false, true, false)},
+			alarmGoldenBase, alarmGoldenZone, "Erdgeschoss", allModes, false, true, false,
+		)},
 		// Code on disarm only — the counterpart, because the template and
 		// the REMOTE_CODE sentinel hang off either verb, not off arming.
 		{"panel/zone-code-disarm-only", BuildAlarmPanelDiscovery(
-			alarmGoldenBase, alarmGoldenZone, "Erdgeschoss", allModes, false, false, true)},
+			alarmGoldenBase, alarmGoldenZone, "Erdgeschoss", allModes, false, false, true,
+		)},
 		// Identity hazard: the aggregate panel. master=true forces the
 		// topic/unique-id segment to the reserved "master" token and throws
 		// the zone id away — a real zone id is passed here precisely so the
@@ -84,18 +88,21 @@ func alarmGoldenCases() []alarmGoldenCase {
 		// is not derived from anything device-shaped: every alarm entity
 		// sits under the fixed "alarm" node, not under a device identifier.
 		{"panel/master-overrides-zone", BuildAlarmPanelDiscovery(
-			alarmGoldenBase, alarmGoldenZone, "Alarm system", allModes, true, false, false)},
+			alarmGoldenBase, alarmGoldenZone, "Alarm system", allModes, true, false, false,
+		)},
 		// The reset button. Its object id, unique_id and entity-id seed are
 		// the panel's with a "_reset_motion" suffix, so it is a second
 		// identity derived from the first: a change to PanelUniqueID moves
 		// three entities, not one.
 		{"button/zone-reset-motion", BuildAlarmMotionResetDiscovery(
-			alarmGoldenBase, alarmGoldenZone, "Erdgeschoss", alarmResetMotionNameFallback, false)},
+			alarmGoldenBase, alarmGoldenZone, "Erdgeschoss", alarmResetMotionNameFallback, false,
+		)},
 		// The latched-detector count sensor — the third identity off the
 		// same seed, and the only alarm entity that carries an
 		// entity_category, a state_class and a unit.
 		{"sensor/zone-triggered-motion", BuildAlarmTriggeredMotionDiscovery(
-			alarmGoldenBase, alarmGoldenZone, "Erdgeschoss", alarmTriggeredMotionNameFallback, false)},
+			alarmGoldenBase, alarmGoldenZone, "Erdgeschoss", alarmTriggeredMotionNameFallback, false,
+		)},
 		// Identity hazard, composed: the master override and the suffix
 		// meet here. Each of the three builders repeats the override
 		// itself, so pinning it on the panel alone would not catch a
@@ -103,9 +110,11 @@ func alarmGoldenCases() []alarmGoldenCase {
 		// while its panel is keyed on "master" is exactly the split HA
 		// reports as nothing at all.
 		{"button/master-reset-motion", BuildAlarmMotionResetDiscovery(
-			alarmGoldenBase, alarmGoldenZone, "Alarm system", alarmResetMotionNameFallback, true)},
+			alarmGoldenBase, alarmGoldenZone, "Alarm system", alarmResetMotionNameFallback, true,
+		)},
 		{"sensor/master-triggered-motion", BuildAlarmTriggeredMotionDiscovery(
-			alarmGoldenBase, alarmGoldenZone, "Alarm system", alarmTriggeredMotionNameFallback, true)},
+			alarmGoldenBase, alarmGoldenZone, "Alarm system", alarmTriggeredMotionNameFallback, true,
+		)},
 	}
 }
 
