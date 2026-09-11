@@ -1,0 +1,383 @@
+{
+  "button/bare-address-channel-name": {
+    "topic": "homeassistant/button/ccu-01_0001d3c99c1234/3_press_short/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001D3C99C1234/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/0001D3C99C1234/3/values/PRESS_SHORT/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0001d3c99c1234"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-WRC6",
+        "name": "Wandtaster Wohnzimmer",
+        "serial_number": "0001D3C99C1234",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "enabled_by_default": false,
+      "name": "ch3 Press Short",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_press": "PRESS",
+      "unique_id": "loom_0001d3c99c1234_3_press_short"
+    }
+  },
+  "button/channel-number-fallback": {
+    "topic": "homeassistant/button/ccu-01_0001d3c99c1234/2_press_long/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001D3C99C1234/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/0001D3C99C1234/2/values/PRESS_LONG/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0001d3c99c1234"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-WRC6",
+        "name": "Wandtaster Wohnzimmer",
+        "serial_number": "0001D3C99C1234",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "enabled_by_default": false,
+      "name": "ch2 Press Long",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_press": "PRESS",
+      "unique_id": "loom_0001d3c99c1234_2_press_long"
+    }
+  },
+  "button/descriptor-label": {
+    "topic": "homeassistant/button/ccu-01_0001d3c99c1234/4_press_short/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001D3C99C1234/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/0001D3C99C1234/4/values/PRESS_SHORT/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0001d3c99c1234"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-WRC6",
+        "name": "Wandtaster Wohnzimmer",
+        "serial_number": "0001D3C99C1234",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "enabled_by_default": false,
+      "name": "ch4 Kurzer Tastendruck",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_press": "PRESS",
+      "unique_id": "loom_0001d3c99c1234_4_press_short"
+    }
+  },
+  "button/label-omitted": {
+    "topic": "homeassistant/button/ccu-01_0001d3c99c1234/5_press_short/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001D3C99C1234/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/0001D3C99C1234/5/values/PRESS_SHORT/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0001d3c99c1234"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-WRC6",
+        "name": "Wandtaster Wohnzimmer",
+        "serial_number": "0001D3C99C1234",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "enabled_by_default": false,
+      "name": "ch5 Press Short",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_press": "PRESS",
+      "unique_id": "loom_0001d3c99c1234_5_press_short"
+    }
+  },
+  "button/operator-named-channel": {
+    "topic": "homeassistant/button/ccu-01_0001d3c99c1234/1_press_short/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001D3C99C1234/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/0001D3C99C1234/1/values/PRESS_SHORT/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0001d3c99c1234"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-WRC6",
+        "name": "Wandtaster Wohnzimmer",
+        "serial_number": "0001D3C99C1234",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "enabled_by_default": false,
+      "name": "Taster Wohnzimmer oben links Press Short",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_press": "PRESS",
+      "unique_id": "loom_0001d3c99c1234_1_press_short"
+    }
+  },
+  "button/reset-motion-config": {
+    "topic": "homeassistant/button/ccu-01_0001d3c99cabcd/1_reset_motion/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001D3C99CABCD/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/0001D3C99CABCD/1/values/RESET_MOTION/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0001d3c99cabcd"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-SMI",
+        "name": "Bewegungsmelder Flur",
+        "serial_number": "0001D3C99CABCD",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "enabled_by_default": false,
+      "entity_category": "config",
+      "name": "ch1 Reset Motion",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_press": "PRESS",
+      "unique_id": "loom_0001d3c99cabcd_1_reset_motion"
+    }
+  },
+  "button/serial-second-central": {
+    "topic": "homeassistant/button/ccu-02_0001d3c99c1234/1_press_short/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-02/HmIP-RF/0001D3C99C1234/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-02/HmIP-RF/0001D3C99C1234/1/values/PRESS_SHORT/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0001d3c99c1234"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-WRC6",
+        "name": "Wandtaster Wohnzimmer",
+        "serial_number": "0001D3C99C1234",
+        "via_device": "openccu-loom_central_ccu-02"
+      },
+      "enabled_by_default": false,
+      "name": "ch1 Press Short",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_press": "PRESS",
+      "unique_id": "loom_0001d3c99c1234_1_press_short"
+    }
+  },
+  "button/sub-device": {
+    "topic": "homeassistant/button/ccu-01_0001d3c99c5678/3_press_short/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001D3C99C5678/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/0001D3C99C5678/3/values/PRESS_SHORT/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0001d3c99c5678-2"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-MOD-RC8",
+        "name": "Tor Links",
+        "serial_number": "0001D3C99C5678",
+        "via_device": "openccu-loom_0001d3c99c5678"
+      },
+      "enabled_by_default": false,
+      "name": "ch3 Press Short",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_press": "PRESS",
+      "unique_id": "loom_0001d3c99c5678_3_press_short"
+    }
+  },
+  "button/virtual-remote-ccu-01": {
+    "topic": "homeassistant/button/ccu-01_hmip-rcv-1/10_press_short/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/HMIP-RCV-1/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/HMIP-RCV-1/10/values/PRESS_SHORT/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_ccu-01_hmip-rcv-1"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-RCV-50",
+        "name": "Virtuelle Fernbedienung",
+        "serial_number": "HmIP-RCV-1",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "enabled_by_default": false,
+      "name": "ch10 Press Short",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_press": "PRESS",
+      "unique_id": "loom_11a0001234_hmip_rcv_1_10_press_short"
+    }
+  },
+  "button/virtual-remote-ccu-02": {
+    "topic": "homeassistant/button/ccu-02_hmip-rcv-1/10_press_short/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-02/HmIP-RF/HMIP-RCV-1/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-02/HmIP-RF/HMIP-RCV-1/10/values/PRESS_SHORT/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_ccu-02_hmip-rcv-1"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-RCV-50",
+        "name": "Virtuelle Fernbedienung",
+        "serial_number": "HmIP-RCV-1",
+        "via_device": "openccu-loom_central_ccu-02"
+      },
+      "enabled_by_default": false,
+      "name": "ch10 Press Short",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_press": "PRESS",
+      "unique_id": "loom_11b0005678_hmip_rcv_1_10_press_short"
+    }
+  }
+}
