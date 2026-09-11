@@ -182,7 +182,8 @@ func pressButtonGoldenCases() []pressButtonGoldenCase {
 			groupNo: 2, multiGroup: true, subName: "Tor Links",
 		},
 		Device: pressGoldenParent{Device: pressGoldenDevice(
-			"0001D3C99C5678", "HmIP-MOD-RC8", "Rollladenaktor Garage")},
+			"0001D3C99C5678", "HmIP-MOD-RC8", "Rollladenaktor Garage",
+		)},
 	}
 
 	// A virtual remote. Its address is handed out identically on every CCU,
