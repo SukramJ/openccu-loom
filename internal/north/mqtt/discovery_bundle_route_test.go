@@ -6,6 +6,7 @@ package mqtt
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -166,5 +167,149 @@ func TestTheDocumentCarriesTheFrameOnce(t *testing.T) {
 	}
 	if _, dup := doc.Components["temperature"]["device"]; dup {
 		t.Error("the component repeats the device block")
+	}
+}
+
+// TestBatchingWritesEachDeviceOnce is the point of the batch. Without it the
+// boot snapshot rewrites a device's whole document once per datapoint, and
+// the document grows with every one.
+func TestBatchingWritesEachDeviceOnce(t *testing.T) {
+	b, pub := bundleBridge(t)
+	ctx := context.Background()
+
+	b.BeginBundleBatch()
+	for _, obj := range []string{"a", "b", "c", "d"} {
+		if err := b.publishDiscovery(ctx, "ccu-01", "sensor", "node", obj, bundleComponent(obj)); err != nil {
+			t.Fatalf("publishDiscovery %s: %v", obj, err)
+		}
+	}
+
+	pub.mu.Lock()
+	during := len(pub.sent)
+	pub.mu.Unlock()
+	if during != 0 {
+		t.Fatalf("%d messages published during the batch, want none", during)
+	}
+
+	if err := b.FlushBundles(ctx); err != nil {
+		t.Fatalf("FlushBundles: %v", err)
+	}
+
+	pub.mu.Lock()
+	sent := append([]publishRecord(nil), pub.sent...)
+	pub.mu.Unlock()
+
+	bundles := 0
+	for _, rec := range sent {
+		if rec.topic == "homeassistant/device/node/config" {
+			bundles++
+		}
+	}
+	if bundles != 1 {
+		t.Errorf("the document was written %d times, want once for four entities", bundles)
+	}
+
+	var doc struct {
+		Components map[string]json.RawMessage `json:"components"`
+	}
+	if err := json.Unmarshal([]byte(sent[len(sent)-1].payload), &doc); err != nil {
+		t.Fatalf("unmarshal bundle: %v", err)
+	}
+	if len(doc.Components) != 4 {
+		t.Errorf("the flushed document carries %d components, want all four", len(doc.Components))
+	}
+}
+
+// TestFlushEndsTheBatch: a runtime change after boot must reach the broker
+// when it happens, not wait for a flush nobody will call.
+func TestFlushEndsTheBatch(t *testing.T) {
+	b, pub := bundleBridge(t)
+	ctx := context.Background()
+
+	b.BeginBundleBatch()
+	if err := b.publishDiscovery(ctx, "ccu-01", "sensor", "node", "a", bundleComponent("a")); err != nil {
+		t.Fatalf("publish: %v", err)
+	}
+	if err := b.FlushBundles(ctx); err != nil {
+		t.Fatalf("flush: %v", err)
+	}
+	pub.mu.Lock()
+	afterFlush := len(pub.sent)
+	pub.mu.Unlock()
+
+	if err := b.publishDiscovery(ctx, "ccu-01", "sensor", "node", "b", bundleComponent("b")); err != nil {
+		t.Fatalf("publish after flush: %v", err)
+	}
+	pub.mu.Lock()
+	defer pub.mu.Unlock()
+	if len(pub.sent) == afterFlush {
+		t.Error("a publish after the flush was still batched")
+	}
+}
+
+// TestAFailedFlushKeepsTheNodeDirty: one device whose publish fails must not
+// abort the rest, and must not be forgotten either — a node dropped from the
+// dirty set is a device with no discovery until something else changes it.
+func TestAFailedFlushKeepsTheNodeDirty(t *testing.T) {
+	b, pub := bundleBridge(t)
+	ctx := context.Background()
+
+	b.BeginBundleBatch()
+	for _, node := range []string{"node_a", "node_b"} {
+		if err := b.publishDiscovery(ctx, "ccu-01", "sensor", node, "x", bundleComponent("x")); err != nil {
+			t.Fatalf("publish %s: %v", node, err)
+		}
+	}
+
+	pub.err = errors.New("broker down")
+	err := b.FlushBundles(ctx)
+	if err == nil {
+		t.Fatal("a failed flush reported success")
+	}
+
+	b.mu.Lock()
+	dirty := len(b.bundleDirty)
+	b.mu.Unlock()
+	if dirty != 2 {
+		t.Errorf("%d nodes still dirty, want both — a forgotten node never gets discovery", dirty)
+	}
+
+	// The broker comes back and a later flush completes the work.
+	pub.err = nil
+	b.BeginBundleBatch()
+	if err := b.FlushBundles(ctx); err != nil {
+		t.Fatalf("retry flush: %v", err)
+	}
+	pub.mu.Lock()
+	defer pub.mu.Unlock()
+	published := map[string]bool{}
+	for _, rec := range pub.sent {
+		published[rec.topic] = true
+	}
+	for _, want := range []string{"homeassistant/device/node_a/config", "homeassistant/device/node_b/config"} {
+		if !published[want] {
+			t.Errorf("%s was never published after the broker recovered", want)
+		}
+	}
+}
+
+// TestBatchIsANoOpOutsideBundleMode so the boot path can call it
+// unconditionally rather than branching on a mode it does not own.
+func TestBatchIsANoOpOutsideBundleMode(t *testing.T) {
+	b, pub := newTestBridge(t)
+	ctx := context.Background()
+
+	b.BeginBundleBatch()
+	if err := b.publishDiscovery(ctx, "ccu-01", "sensor", "node", "a", bundleComponent("a")); err != nil {
+		t.Fatalf("publish: %v", err)
+	}
+	pub.mu.Lock()
+	sent := len(pub.sent)
+	pub.mu.Unlock()
+	if sent != 1 {
+		t.Errorf("per-entity mode published %d messages, want 1 — the batch swallowed it", sent)
+	}
+	if err := b.FlushBundles(ctx); err != nil {
+		t.Errorf("FlushBundles outside bundle mode: %v", err)
 	}
 }

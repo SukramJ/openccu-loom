@@ -548,6 +548,12 @@ type Bridge struct {
 	// is the switch: every bundle path checks it rather than re-reading the
 	// config, so there is one place the mode is decided.
 	bundles *discoveryBundleStore
+	// bundleBatch suspends the per-call bundle publish, and bundleDirty
+	// names the nodes that changed while it was suspended, mapped to the
+	// central to label their counters with. Guarded by mu, like every other
+	// publish-path claim.
+	bundleBatch bool
+	bundleDirty map[string]string
 
 	// collector is the optional MqttCollector for per-bridge counters.
 	// Nil when no collector was wired in BridgeConfig.Collector.
