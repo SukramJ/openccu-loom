@@ -1,6 +1,6 @@
 {
-  "generated": "e152f6e2",
-  "head": "e152f6e2",
+  "generated": "8a4b0f18",
+  "head": "8a4b0f18",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/openccu-loom-remote/main.go",
