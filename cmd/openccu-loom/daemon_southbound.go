@@ -440,6 +440,14 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	// snapshot (and orphan sweep) rides on CentralSouthboundReadyEvent,
 	// after finishIngest applied the visibility marks. Snapshotting a
 	// mid-ingest central published its entire MASTER paramsets retained.
+	//
+	// In device-bundle mode the snapshot is batched: without it each of a
+	// device's datapoints would rewrite that device's whole document, and
+	// the document grows with every one. The batch is closed per central in
+	// the post-snapshot hook below, which also publishes what it collected.
+	if mqttBridge := d.mqttWiring.Bridge(); mqttBridge != nil {
+		mqttBridge.BeginBundleBatch()
+	}
 	d.bridge.PublishInitialSnapshot(ctx)
 
 	// Periodic unobserved-DP sweep — retries LoadValue for the
@@ -657,6 +665,19 @@ func wireRetainedOrphanSweepHook(ctx context.Context, d southboundWiringDeps, cf
 		mqttBridge := d.mqttWiring.Bridge()
 		if mqttBridge == nil {
 			return
+		}
+		// Close the bundle batch before anything else, and synchronously:
+		// the orphan sweep below compares the broker's retained configs
+		// against what this process claims, and until the flush has run
+		// the bundles are claimed by nothing. A sweep in between would
+		// read every one of them as an orphan.
+		//
+		// Outside device-bundle mode this is a no-op. It runs before the
+		// already-swept check on purpose — a second central's snapshot
+		// still has documents to flush even though the sweep is retired.
+		if err := mqttBridge.FlushBundles(ctx); err != nil {
+			logger.Warn("mqtt.bundle_flush",
+				slog.String("central", centralName), slog.String("err", err.Error()))
 		}
 		if _, already := sweptCentrals.LoadOrStore(centralName, struct{}{}); already {
 			return
