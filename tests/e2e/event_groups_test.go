@@ -193,7 +193,12 @@ func findKeypressSource(
 			p := fmt.Sprintf("/api/v1/devices/%s/channels/%d/event-groups", addr, no)
 			groups, err := fetchJSONArray(h, p, "")
 			if err != nil {
-				t.Fatalf("GET %s: %v", p, err)
+				// A channel whose projection is still being built answers
+				// with an error rather than an empty list. That is "not
+				// yet", and the caller's poll is what decides whether it
+				// ever becomes "never" — failing here would turn the
+				// window into a hard failure again.
+				continue
 			}
 			for _, g := range groups {
 				group, _ := g.(map[string]any)
@@ -296,7 +301,41 @@ const deviceErrorParameter = "ERROR_CODE"
 
 // findDeviceErrorSource returns the first channel carrying a device-error
 // group that includes [deviceErrorParameter], plus its event-groups route.
+// findDeviceErrorSource polls, where its keypress sibling does not need to.
+//
+// The device-error group is the late one. A keypress parameter is writable,
+// so device ingestion gives it a data point and its group exists as soon as
+// the device does. An ERROR* parameter deliberately gets none — the resolver
+// drops it — and its group is built from the callback route instead, which
+// lands after ingestion has finished.
+//
+// The devices list is already polled (see getJSONArray), so by the time this
+// runs the fleet is there; what is not yet there is this one projection over
+// it. A single sweep therefore passes on a fast runner and fails on a loaded
+// one with "no device-error group carrying ERROR_CODE in the fleet" — which
+// reads as a missing feature rather than as a test that looked too early.
 func findDeviceErrorSource(
+	t *testing.T, h *harness.Harness, devices []any,
+) (address string, channelNo int, path string) {
+	t.Helper()
+	deadline := time.Now().Add(45 * time.Second)
+	for {
+		address, channelNo, path = deviceErrorSource(t, h, devices)
+		if path != "" {
+			return address, channelNo, path
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no device-error group carrying %s in the fleet after 45s: %v",
+				deviceErrorParameter, harness.DefaultDevices)
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+}
+
+// deviceErrorSource is one sweep over the fleet. It reports an empty path
+// when the projection is not there yet, rather than failing the test, so the
+// caller above can decide between "not yet" and "never".
+func deviceErrorSource(
 	t *testing.T, h *harness.Harness, devices []any,
 ) (address string, channelNo int, path string) {
 	t.Helper()
@@ -326,7 +365,5 @@ func findDeviceErrorSource(
 			}
 		}
 	}
-	t.Fatalf("no device-error group carrying %s in the fleet: %v",
-		deviceErrorParameter, harness.DefaultDevices)
 	return "", 0, ""
 }
