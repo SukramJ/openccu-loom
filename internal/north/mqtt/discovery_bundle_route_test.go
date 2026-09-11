@@ -9,6 +9,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
 )
@@ -311,5 +312,99 @@ func TestBatchIsANoOpOutsideBundleMode(t *testing.T) {
 	}
 	if err := b.FlushBundles(ctx); err != nil {
 		t.Errorf("FlushBundles outside bundle mode: %v", err)
+	}
+}
+
+// TestRollbackClearsOurDocumentsBeforeAnythingIsPublished. Home Assistant's
+// refusal is symmetric: a per-entity config published while a device
+// document for the same entity is still retained is refused just as the
+// reverse is, with the same silence. Measured on a live instance, ADR 0070.
+func TestRollbackClearsOurDocumentsBeforeAnythingIsPublished(t *testing.T) {
+	const ours = "homeassistant/device/ccu-a_000a/config"
+	broker := newFilterKeyedBroker([]retainedMsg{
+		{topic: ours, payload: []byte(`{"device":{"identifiers":["x"]},"components":{}}`)},
+	})
+	bridge := NewBridge(BridgeConfig{
+		Base: "openccu-loom", CentralName: "ccu-a",
+		RawEnabled: true, HADiscoveryEnabled: true,
+	}, broker).WithSubscriber(broker)
+
+	n, err := bridge.RunBundleRollbackOnce(context.Background(), "ccu-a", 120*time.Millisecond)
+	if err != nil {
+		t.Fatalf("RunBundleRollbackOnce: %v", err)
+	}
+	broker.wg.Wait()
+	if n != 1 {
+		t.Errorf("cleared %d documents, want 1", n)
+	}
+	if !broker.evicted()[ours] {
+		t.Errorf("our own retained document survived: %q", ours)
+	}
+}
+
+// TestRollbackLeavesOtherIntegrationsAlone. A parallel Zigbee2MQTT on the
+// same broker publishes device documents of its own, and clearing one is far
+// worse than leaving ours in place.
+func TestRollbackLeavesOtherIntegrationsAlone(t *testing.T) {
+	const theirs = "homeassistant/device/0x00158d0001abcdef/config"
+	broker := newFilterKeyedBroker([]retainedMsg{
+		{topic: theirs, payload: []byte(`{"device":{"identifiers":["z"]},"components":{}}`)},
+	})
+	bridge := NewBridge(BridgeConfig{
+		Base: "openccu-loom", CentralName: "ccu-a",
+		RawEnabled: true, HADiscoveryEnabled: true,
+	}, broker).WithSubscriber(broker)
+
+	n, err := bridge.RunBundleRollbackOnce(context.Background(), "ccu-a", 120*time.Millisecond)
+	if err != nil {
+		t.Fatalf("RunBundleRollbackOnce: %v", err)
+	}
+	broker.wg.Wait()
+	if n != 0 {
+		t.Errorf("cleared %d foreign documents, want none", n)
+	}
+	if broker.evicted()[theirs] {
+		t.Errorf("cleared another integration's document: %q", theirs)
+	}
+}
+
+// TestRollbackIsSilentInBundleMode: a daemon that is publishing documents
+// must not spend its boot clearing them.
+func TestRollbackIsSilentInBundleMode(t *testing.T) {
+	broker := newFilterKeyedBroker([]retainedMsg{
+		{topic: "homeassistant/device/ccu-a_000a/config", payload: []byte(`{"x":1}`)},
+	})
+	bridge := NewBridge(BridgeConfig{
+		Base: "openccu-loom", CentralName: "ccu-a",
+		RawEnabled: true, HADiscoveryEnabled: true, HADiscoveryBundles: true,
+	}, broker).WithSubscriber(broker)
+
+	n, err := bridge.RunBundleRollbackOnce(context.Background(), "ccu-a", 120*time.Millisecond)
+	if err != nil || n != 0 {
+		t.Errorf("n=%d err=%v, want a no-op in bundle mode", n, err)
+	}
+	if len(broker.evicted()) != 0 {
+		t.Errorf("bundle mode cleared its own documents: %v", broker.evicted())
+	}
+}
+
+// TestRollbackIgnoresAnAlreadyEmptyDocument: an empty retained payload is a
+// topic the broker is already clearing, and retracting it again is a message
+// for nothing on every single boot.
+func TestRollbackIgnoresAnAlreadyEmptyDocument(t *testing.T) {
+	broker := newFilterKeyedBroker([]retainedMsg{
+		{topic: "homeassistant/device/ccu-a_000a/config", payload: nil},
+	})
+	bridge := NewBridge(BridgeConfig{
+		Base: "openccu-loom", CentralName: "ccu-a",
+		RawEnabled: true, HADiscoveryEnabled: true,
+	}, broker).WithSubscriber(broker)
+
+	n, err := bridge.RunBundleRollbackOnce(context.Background(), "ccu-a", 120*time.Millisecond)
+	if err != nil {
+		t.Fatalf("RunBundleRollbackOnce: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("cleared %d already-empty documents, want none", n)
 	}
 }

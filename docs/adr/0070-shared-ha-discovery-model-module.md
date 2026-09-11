@@ -287,6 +287,15 @@ Three consequences for step 13:
   retraction and the bundle it is absent, not merely unavailable. The two
   publishes belong together, and a crash between them leaves the operator
   without the entity until the next start republishes it.
+- **The refusal is symmetric, so the rollback needs the same care.**
+  Measured the same way on 2026-09-11: a per-entity config published while
+  the device document for the same entity is still retained is refused with
+  the same warning, the topics named the other way round. Turning
+  device-bundle mode back off is therefore not "stop publishing bundles" —
+  without retracting the document first, every per-entity config of that
+  first boot is refused and the only evidence is a log line. The round trip
+  itself is lossless: the rollback probe kept its renamed `entity_id`, its
+  custom name and its `device_id`.
 - **`migrate_discovery: true` is not a substitute.** Setting it on the
   per-entity config did not lift the conflict in this run: the bundle
   published afterwards was refused with the same warning. Whatever the flag

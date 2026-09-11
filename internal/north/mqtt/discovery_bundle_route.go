@@ -7,6 +7,10 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"sync"
+	"time"
+
+	"github.com/SukramJ/openccu-loom/internal/model/naming"
 )
 
 // newBundleStoreIf returns a store when device-bundle mode is on, and nil
@@ -140,4 +144,97 @@ func (b *Bridge) markBundleDirty(nodeID, centralName string) {
 	}
 	b.bundleDirty[nodeID] = centralName
 	b.mu.Unlock()
+}
+
+// RunBundleRollbackOnce clears the retained device documents this daemon
+// left behind, for a boot that is publishing per-entity configs again.
+//
+// It exists because Home Assistant's refusal is symmetric. Measured on a
+// live instance (ADR 0070, amendment of 2026-09-11): a per-entity config
+// published while a device document for the same entity is still retained
+// is refused with the same warning as the other direction, the topics named
+// the other way round, and the same total silence everywhere else. Turning
+// device-bundle mode back off is therefore not "stop publishing bundles" —
+// without this, every per-entity config of that first boot is refused and
+// the entities stay missing until some later boot happens to clear the
+// documents.
+//
+// It runs before the snapshot rather than with the orphan sweep, which runs
+// after it. That is the whole point: the sweep would clear the documents
+// too — it has recognised the bundle topic shape since the first slice of
+// step 13 — but only after the configs it invalidates have already been
+// refused.
+//
+// It also needs none of the sweep's machinery. The sweep decides what is an
+// orphan by comparing against what this process declared; here there is
+// nothing to compare. In per-entity mode this daemon publishes no documents
+// at all, so every document under a node id it owns is superseded by
+// definition.
+//
+// The subscription is narrow — `<prefix>/device/+/config` — so a boot with
+// nothing to roll back costs one short subscribe and not one message. That
+// is the common case and it has to stay cheap, because this runs on every
+// boot: a daemon cannot tell whether the previous run used bundles without
+// asking the broker.
+func (b *Bridge) RunBundleRollbackOnce(ctx context.Context, centralName string, window time.Duration) (int, error) {
+	if !b.cfg.HADiscoveryEnabled || b.bundles != nil {
+		return 0, nil
+	}
+	if window <= 0 {
+		window = 2 * time.Second
+	}
+	subClient, ok := b.cleanupSubscriber()
+	if !ok {
+		return 0, errCleanupClientLacksSubscribe
+	}
+	rawCentral := b.resolvedCentral(centralName)
+	if rawCentral == "" {
+		// Without a central we cannot scope the filter to our own node-id
+		// namespace, and clearing another integration's device documents —
+		// a parallel Zigbee2MQTT publishes them too — is far worse than
+		// leaving our own in place.
+		return 0, nil
+	}
+	nodePrefixes := discoveryNodePrefixes(rawCentral)
+
+	var (
+		mu      sync.Mutex
+		stale   []string
+		filter  = naming.DiscoveryTopicPrefix + discoveryBundleSegment + "/+/config"
+		handler = func(topic string, payload []byte, _ bool) {
+			// An empty retained payload is a topic the broker is already
+			// clearing. Retracting it again would be a message for nothing.
+			if len(payload) == 0 {
+				return
+			}
+			nodeID, ok := discoveryNodeIDFromTopic(topic, naming.DiscoveryTopicPrefix)
+			if !ok || !discoveryNodeIDBelongsTo(nodeID, nodePrefixes) {
+				return
+			}
+			mu.Lock()
+			stale = append(stale, topic)
+			mu.Unlock()
+		}
+	)
+
+	if err := b.snapshotRetained(ctx, subClient, filter, b.cfg.QoS.Discovery, window, handler); err != nil {
+		return 0, err
+	}
+	mu.Lock()
+	topics := append([]string(nil), stale...)
+	mu.Unlock()
+
+	cleared := 0
+	for _, topic := range topics {
+		if err := b.client.Publish(ctx, topic, nil, b.cfg.QoS.Discovery, true); err != nil {
+			b.incPublishErrors(centralName)
+			continue
+		}
+		b.mu.Lock()
+		delete(b.declared, topic)
+		delete(b.announced, topic)
+		b.mu.Unlock()
+		cleared++
+	}
+	return cleared, nil
 }

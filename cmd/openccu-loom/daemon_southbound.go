@@ -446,6 +446,20 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	// the document grows with every one. The batch is closed per central in
 	// the post-snapshot hook below, which also publishes what it collected.
 	if mqttBridge := d.mqttWiring.Bridge(); mqttBridge != nil {
+		// Before anything is published: if the previous run used device
+		// bundles and this one does not, the retained documents make Home
+		// Assistant refuse every per-entity config that follows — measured,
+		// and silent apart from a warning in its log. The orphan sweep
+		// would clear them too, but only after the damage. Costs one short
+		// subscribe and no messages when there is nothing to roll back,
+		// which is every boot that did not just change the mode.
+		n, err := mqttBridge.RunBundleRollbackOnce(ctx, "", cfg.North.MQTT.EffectiveRetainCleanupWindow())
+		switch {
+		case err != nil:
+			logger.Warn("mqtt.bundle_rollback", slog.String("err", err.Error()))
+		case n > 0:
+			logger.Info("mqtt.bundle_rollback", slog.Int("cleared", n))
+		}
 		mqttBridge.BeginBundleBatch()
 	}
 	d.bridge.PublishInitialSnapshot(ctx)
