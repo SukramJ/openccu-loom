@@ -1,0 +1,224 @@
+{
+  "notify/escaped-central": {
+    "topic": "homeassistant/notify/ccu_kueche_002a5d8989d5c3/3_notify/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/CCU_Küche/HmIP-RF/002A5D8989D5C3/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_template": "{\"id\": 1, \"text\": {{ value | tojson }}}",
+      "command_topic": "gh/CCU_Küche/HmIP-RF/002A5D8989D5C3/3/custom/text_display/set/write",
+      "device": {
+        "identifiers": [
+          "openccu-loom_002a5d8989d5c3"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-WRCD",
+        "name": "Displayschalter Flur",
+        "serial_number": "002A5D8989D5C3",
+        "via_device": "openccu-loom_central_ccu_kueche"
+      },
+      "name": null,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "unique_id": "loom_002a5d8989d5c3_3_notify"
+    }
+  },
+  "notify/no-channel-context": {
+    "topic": "homeassistant/notify/ccu-01_002a5d8989d5c3/3_notify/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/002A5D8989D5C3/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_template": "{\"id\": 1, \"text\": {{ value | tojson }}}",
+      "command_topic": "gh/ccu-01/HmIP-RF/002A5D8989D5C3/3/custom/text_display/set/write",
+      "device": {
+        "identifiers": [
+          "openccu-loom_002a5d8989d5c3"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-WRCD",
+        "name": "Displayschalter Flur",
+        "serial_number": "002A5D8989D5C3",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "name": "3",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "unique_id": "loom_002a5d8989d5c3_3_notify"
+    }
+  },
+  "notify/operator-named-channel": {
+    "topic": "homeassistant/notify/ccu-01_002a5d8989d5c3/3_notify/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/002A5D8989D5C3/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_template": "{\"id\": 1, \"text\": {{ value | tojson }}}",
+      "command_topic": "gh/ccu-01/HmIP-RF/002A5D8989D5C3/3/custom/text_display/set/write",
+      "device": {
+        "identifiers": [
+          "openccu-loom_002a5d8989d5c3"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-WRCD",
+        "name": "Displayschalter Flur",
+        "serial_number": "002A5D8989D5C3",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "name": "Küche Display",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "unique_id": "loom_002a5d8989d5c3_3_notify"
+    }
+  },
+  "notify/primary-channel": {
+    "topic": "homeassistant/notify/ccu-01_002a5d8989d5c3/3_notify/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/002A5D8989D5C3/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_template": "{\"id\": 1, \"text\": {{ value | tojson }}}",
+      "command_topic": "gh/ccu-01/HmIP-RF/002A5D8989D5C3/3/custom/text_display/set/write",
+      "device": {
+        "identifiers": [
+          "openccu-loom_002a5d8989d5c3"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-WRCD",
+        "name": "Displayschalter Flur",
+        "serial_number": "002A5D8989D5C3",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "name": null,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "unique_id": "loom_002a5d8989d5c3_3_notify"
+    }
+  },
+  "notify/second-central": {
+    "topic": "homeassistant/notify/ccu-02_002a5d8989d5c3/3_notify/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-02/HmIP-RF/002A5D8989D5C3/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_template": "{\"id\": 1, \"text\": {{ value | tojson }}}",
+      "command_topic": "gh/ccu-02/HmIP-RF/002A5D8989D5C3/3/custom/text_display/set/write",
+      "device": {
+        "identifiers": [
+          "openccu-loom_002a5d8989d5c3"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-WRCD",
+        "name": "Displayschalter Flur",
+        "serial_number": "002A5D8989D5C3",
+        "via_device": "openccu-loom_central_ccu-02"
+      },
+      "name": null,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "unique_id": "loom_002a5d8989d5c3_3_notify"
+    }
+  },
+  "notify/sub-device": {
+    "topic": "homeassistant/notify/ccu-01_002a5d8989d5c3/3_notify/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/002A5D8989D5C3/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_template": "{\"id\": 1, \"text\": {{ value | tojson }}}",
+      "command_topic": "gh/ccu-01/HmIP-RF/002A5D8989D5C3/3/custom/text_display/set/write",
+      "device": {
+        "identifiers": [
+          "openccu-loom_002a5d8989d5c3-2"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-WRCD",
+        "name": "Display Oben",
+        "serial_number": "002A5D8989D5C3",
+        "via_device": "openccu-loom_002a5d8989d5c3"
+      },
+      "name": null,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "unique_id": "loom_002a5d8989d5c3_3_notify"
+    }
+  }
+}
