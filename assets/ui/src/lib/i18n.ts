@@ -1313,6 +1313,7 @@ const EN: Catalog = {
   "config.field.north.mqtt.topic_base": "Topic prefix",
   "config.field.north.mqtt.raw_enabled": "Publish raw plane",
   "config.field.north.mqtt.discovery_enabled": "Publish HA discovery",
+  "config.field.north.mqtt.discovery_bundles": "One discovery message per device",
   "config.field.north.mqtt.protocol_version": "MQTT protocol version",
   "config.field.north.mqtt.sub_devices_enabled":
     "One HA device per channel group",
@@ -1523,6 +1524,8 @@ const EN: Catalog = {
     "Publish per-data-point state under <topic_base>/<interface>/... — the raw topic plane non-HA consumers subscribe to. Discovery needs it: switching Discovery on turns this on too, since Discovery payloads only point at raw-plane topics.",
   "config.help.north.mqtt.discovery_enabled":
     "Emit Home Assistant Discovery payloads so HA auto-registers the daemon's devices. Implies the raw plane — the payloads name its topics, so enabling this enables 'Publish raw plane' as well.",
+  "config.help.north.mqtt.discovery_bundles":
+    "Publish one retained document per device instead of one per entity. Your entities keep their IDs, history, areas and automations either way — Home Assistant keys them on the unique id, not on the topic. Switching this migrates every retained config on the broker, and switching it back migrates them again, so change it deliberately rather than in passing.",
   "config.help.north.mqtt.protocol_version":
     'MQTT wire dialect: "5" (default) or "3.1.1" for brokers without MQTT 5.0 support. No silent downgrade — a v5 connect against a v3-only broker fails with a named error.',
   "config.help.north.mqtt.sub_devices_enabled":
@@ -5295,6 +5298,7 @@ const DE: Catalog = {
   "config.field.north.mqtt.topic_base": "Topic-Präfix",
   "config.field.north.mqtt.raw_enabled": "Rohebene veröffentlichen",
   "config.field.north.mqtt.discovery_enabled": "HA-Discovery veröffentlichen",
+  "config.field.north.mqtt.discovery_bundles": "Eine Discovery-Nachricht pro Gerät",
   "config.field.north.mqtt.protocol_version": "MQTT-Protokollversion",
   "config.field.north.mqtt.sub_devices_enabled":
     "Ein HA-Gerät pro Kanal-Gruppe",
@@ -5509,6 +5513,8 @@ const DE: Catalog = {
     "Veröffentlicht pro-DataPoint-State unter <topic_base>/<interface>/… — die rohe Ebene für non-HA-Konsumenten. Discovery braucht sie: Wird Discovery eingeschaltet, wird dies mit eingeschaltet, denn Discovery-Payloads verweisen ausschließlich auf Topics der Rohebene.",
   "config.help.north.mqtt.discovery_enabled":
     "Emittiert Home-Assistant-Discovery-Payloads, sodass HA die Geräte automatisch registriert. Setzt die Rohebene voraus — die Payloads benennen deren Topics, daher wird „Rohebene veröffentlichen“ mit aktiviert.",
+  "config.help.north.mqtt.discovery_bundles":
+    "Veröffentlicht ein retained Dokument pro Gerät statt eines pro Entity. Die Entities behalten so oder so ihre IDs, Historie, Bereiche und Automationen — Home Assistant schlüsselt sie auf der unique_id, nicht auf dem Topic. Das Umschalten migriert jede retained Config auf dem Broker, das Zurückschalten erneut; also bewusst ändern, nicht nebenbei.",
   "config.help.north.mqtt.protocol_version":
     'MQTT-Dialekt: "5" (Standard) oder "3.1.1" für Broker ohne MQTT-5.0-Unterstützung. Kein stilles Downgrade — ein v5-Connect gegen einen v3-Broker schlägt mit benanntem Fehler fehl.',
   "config.help.north.mqtt.sub_devices_enabled":

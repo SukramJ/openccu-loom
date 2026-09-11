@@ -48,6 +48,7 @@
   "north.mcp.path": "string",
   "north.mqtt.broker_url": "string",
   "north.mqtt.client_id": "string",
+  "north.mqtt.discovery_bundles": "bool",
   "north.mqtt.discovery_enabled": "bool",
   "north.mqtt.enabled": "bool",
   "north.mqtt.password": "string",

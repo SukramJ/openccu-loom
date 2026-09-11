@@ -1,6 +1,6 @@
 {
-  "generated": "f43f36d8",
-  "head": "f43f36d8",
+  "generated": "4eb0b2e7",
+  "head": "4eb0b2e7",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/openccu-loom-remote/main.go",
@@ -769,7 +769,7 @@
       "package": "internal/north/mqtt",
       "identifier": "IgnoreMultipleChannelsForNameInspector",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 441,
+      "line": 451,
       "kind": "type"
     },
     {
@@ -2256,7 +2256,7 @@
       "identifier": "AuthConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1607
+      "line": 1621
     },
     {
       "package": "internal/config",
@@ -2291,7 +2291,7 @@
       "identifier": "CCUAuthConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1675
+      "line": 1689
     },
     {
       "package": "internal/config",
@@ -2312,14 +2312,14 @@
       "identifier": "CentralBehavior",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1772
+      "line": 1786
     },
     {
       "package": "internal/config",
       "identifier": "CentralConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1723
+      "line": 1737
     },
     {
       "package": "internal/config",
@@ -2347,7 +2347,7 @@
       "identifier": "Clone",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1963
+      "line": 1977
     },
     {
       "package": "internal/config",
@@ -2368,7 +2368,7 @@
       "identifier": "Default",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1943
+      "line": 1957
     },
     {
       "package": "internal/config",
@@ -2452,7 +2452,7 @@
       "identifier": "ErrNoConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1914
+      "line": 1928
     },
     {
       "package": "internal/config",
@@ -2501,7 +2501,7 @@
       "identifier": "HAIngressConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1650
+      "line": 1664
     },
     {
       "package": "internal/config",
@@ -2536,7 +2536,7 @@
       "identifier": "Load",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1918
+      "line": 1932
     },
     {
       "package": "internal/config",
@@ -2571,7 +2571,7 @@
       "identifier": "MinHubScanInterval",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 2129
+      "line": 2154
     },
     {
       "package": "internal/config",
@@ -2697,14 +2697,14 @@
       "identifier": "OIDCConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1703
+      "line": 1717
     },
     {
       "package": "internal/config",
       "identifier": "Parse",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1930
+      "line": 1944
     },
     {
       "package": "internal/config",
@@ -2844,7 +2844,7 @@
       "identifier": "VisibilityConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1894
+      "line": 1908
     },
     {
       "package": "internal/config",
@@ -5791,7 +5791,7 @@
       "identifier": "CustomDPDisplayNamer",
       "reason": "satisfied by *device.Channel and reached only through a type assertion in displayChannelName; RTA cannot follow an interface reached by assertion",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 430
+      "line": 440
     },
     {
       "package": "internal/north/mqtt",
@@ -6134,7 +6134,7 @@
       "identifier": "ValueListLabeler",
       "reason": "the event bridge asserts its labeler against this interface (b.labels.(mqtt.ValueListLabeler)) before stamping localised enum options, and the labeler the daemon wires in satisfies it; a type reached only through an interface assertion, which the analyzer's callgraph does not resolve",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 478
+      "line": 488
     },
     {
       "package": "internal/north/mqtt",

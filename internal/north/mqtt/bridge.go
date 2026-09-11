@@ -86,6 +86,16 @@ type BridgeConfig struct {
 
 	RawEnabled         bool
 	HADiscoveryEnabled bool
+	// HADiscoveryBundles publishes one retained document per device
+	// (`homeassistant/device/<node_id>/config`) instead of one per entity.
+	//
+	// Off by default, and it must stay a decision an operator makes rather
+	// than a default that arrives with an upgrade: switching it on migrates
+	// every retained config on the broker, and switching it back off is a
+	// second migration in the other direction. Home Assistant keeps the
+	// entities across both — measured, see ADR 0070's amendment of
+	// 2026-09-10 — but neither direction is free.
+	HADiscoveryBundles bool
 	QoS                QoSProfile
 	DiscoveryBuilder   DiscoveryBuilder // optional, may be nil
 
@@ -533,6 +543,12 @@ type Bridge struct {
 	// device's retained state does not linger on the broker for
 	// non-HA consumers that never see the HA-Discovery retraction.
 	rawTopics map[string][]byte
+	// bundles accumulates each node's components when
+	// [BridgeConfig.HADiscoveryBundles] is on, and is nil otherwise. The nil
+	// is the switch: every bundle path checks it rather than re-reading the
+	// config, so there is one place the mode is decided.
+	bundles *discoveryBundleStore
+
 	// collector is the optional MqttCollector for per-bridge counters.
 	// Nil when no collector was wired in BridgeConfig.Collector.
 	collector *metrics.MqttCollector
@@ -601,6 +617,7 @@ func NewBridge(cfg BridgeConfig, client Publisher) *Bridge {
 		configCache: make(map[string][]byte),
 		rawTopics:   make(map[string][]byte),
 		collector:   cfg.Collector,
+		bundles:     newBundleStoreIf(cfg.HADiscoveryEnabled && cfg.HADiscoveryBundles),
 	}
 }
 
@@ -2042,6 +2059,9 @@ func (b *Bridge) RetractRawStateForDevice(ctx context.Context, centralName, ifac
 // (clearing the retained message) and the topic leaves the `declared` set, so
 // that set keeps naming exactly the entities the bridge currently drives.
 func (b *Bridge) publishDiscovery(ctx context.Context, centralName, component, nodeID, objectID string, payload []byte) error {
+	if b.bundles != nil {
+		return b.routeToBundle(ctx, centralName, component, nodeID, objectID, payload)
+	}
 	topic := b.topics.DiscoveryConfig(component, nodeID, objectID)
 	b.mu.Lock()
 	previous, declared := b.declared[topic]

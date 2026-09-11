@@ -744,6 +744,7 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 		CentralNamesSupplier: centralNames,
 		RawEnabled:           cfg.North.MQTT.RawEnabled,
 		HADiscoveryEnabled:   cfg.North.MQTT.DiscoveryEnabled,
+		HADiscoveryBundles:   cfg.North.MQTT.DiscoveryBundles,
 		SubDevicesEnabled:    cfg.North.MQTT.SubDevicesEnabled,
 		Locale:               cfg.Locale,
 		HealthSupplier:       bridgeHealthSupplier(centralNames, startedAt),
