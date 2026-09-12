@@ -77,3 +77,54 @@ func TestEvictStateUsesDefaultCentralWhenEmpty(t *testing.T) {
 		t.Fatalf("topic = %q, want %q (default central must be resolved)", pub.sent[0].topic, wantTopic)
 	}
 }
+
+// TestEvictStateRemovesTopicFromRawIndex pins eviction as symmetric with
+// retraction.
+//
+// rawTopics means "this topic carries a retained payload we wrote". An
+// evicted topic carries nothing, so leaving its entry behind made the
+// device-removal sweep retract an already-cleared topic a second time:
+// a retained-message delete for a message that no longer exists,
+// counted as a publish and, on a broker that refuses it, as a publish
+// error. retractTopicsMatching deletes from its maps for this reason;
+// EvictState now does too.
+func TestEvictStateRemovesTopicFromRawIndex(t *testing.T) {
+	t.Parallel()
+
+	b, pub := newTestBridge(t)
+	ctx := context.Background()
+
+	// Publish through the canonical retained path so the topic enters the
+	// index the way production puts it there.
+	topic := b.dataPointStateTopic("ccu-01", "HmIP-RF", "000A", 1, "STATE")
+	if err := b.publishRawRetained(ctx, topic, []byte(`{"value":true}`)); err != nil {
+		t.Fatalf("publishRawRetained: %v", err)
+	}
+	b.mu.Lock()
+	_, indexed := b.rawTopics[topic]
+	b.mu.Unlock()
+	if !indexed {
+		t.Fatalf("precondition: %q not in rawTopics", topic)
+	}
+
+	if err := b.EvictState(ctx, "ccu-01", "HmIP-RF", "000A", 1, "STATE"); err != nil {
+		t.Fatalf("EvictState: %v", err)
+	}
+	b.mu.Lock()
+	_, stillIndexed := b.rawTopics[topic]
+	b.mu.Unlock()
+	if stillIndexed {
+		t.Fatalf("EvictState left %q in rawTopics; device removal will retract it again", topic)
+	}
+
+	// And the second retraction must not happen.
+	before := len(pub.sent)
+	if n := b.RetractRawStateForDevice(ctx, "ccu-01", "HmIP-RF", "000A"); n != 3 {
+		t.Fatalf("RetractRawStateForDevice cleared %d topics, want 3 (availability/info/diagnostics only)", n)
+	}
+	for _, s := range pub.sent[before:] {
+		if s.topic == topic {
+			t.Fatalf("evicted topic %q retracted a second time on device removal", topic)
+		}
+	}
+}

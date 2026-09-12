@@ -202,6 +202,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   six decimals in the first place. A fixture table now covers the
   precision boundary in both directions.
 
+- **An evicted data point was retracted a second time when its device
+  was removed.** `EvictState` clears a stale retained state topic but
+  left the topic in `rawTopics`, the index that tells
+  `RetractRawStateForDevice` which topics this bridge has written. The
+  entry means "this topic carries a retained payload we wrote", which an
+  evicted topic does not, so device removal issued a retained-message
+  delete for a message that no longer existed — counted as a publish,
+  and on a broker that refuses it, as a publish error.
+
+  `retractTopicsMatching` has always deleted from both of its maps for
+  exactly this reason. Eviction is now symmetric with it, for the
+  canonical topic and the legacy-alias mirror alike.
+
 ### Added
 
 - **Fixture rows for the two `DiscoverySlug` divergence classes.** The

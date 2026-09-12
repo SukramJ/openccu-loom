@@ -1624,9 +1624,19 @@ func (b *Bridge) EvictState(
 	if err := b.client.Publish(ctx, topic, []byte{}, b.cfg.QoS.State, true); err != nil {
 		return err
 	}
+	// Eviction has to be symmetric with the index that drives retraction.
+	// The topic carries nothing any more, so leaving its entry in
+	// rawTopics made [Bridge.RetractRawStateForDevice] clear an already
+	// cleared topic a second time on device removal — a retained-message
+	// delete for a message that no longer exists, counted as a publish
+	// and, on a broker that rejects it, as a publish error. The
+	// retract-side helper deletes from its maps for exactly this reason;
+	// this side now does too.
+	b.forgetRawTopic(topic)
 	if b.legacy != nil {
 		legacyTopic := b.legacy.DataPointState(address, channel, parameter)
 		_ = b.client.Publish(ctx, legacyTopic, []byte{}, b.cfg.QoS.State, true)
+		b.forgetRawTopic(legacyTopic)
 	}
 	return nil
 }
@@ -2001,6 +2011,22 @@ func (b *Bridge) rememberRawTopic(topic string) {
 	}
 	b.mu.Lock()
 	b.rawTopics[topic] = nil
+	b.mu.Unlock()
+}
+
+// forgetRawTopic drops topic from the address-scoped raw-topic index.
+//
+// The counterpart of [Bridge.rememberRawTopic], called by whoever
+// clears a retained topic outside the index-walking retraction helpers
+// ([Bridge.EvictState]). The index means "this topic carries a retained
+// payload we wrote"; a topic that has just been emptied does not, and a
+// stale entry makes the next device-removal sweep retract it again.
+func (b *Bridge) forgetRawTopic(topic string) {
+	if topic == "" {
+		return
+	}
+	b.mu.Lock()
+	delete(b.rawTopics, topic)
 	b.mu.Unlock()
 }
 
