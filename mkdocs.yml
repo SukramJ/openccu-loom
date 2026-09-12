@@ -92,7 +92,6 @@ nav:
       - Matter Parity — Host Side: matter-parity-contract.md
       - Matter Ecosystem Observations: developer/matter-ecosystem-observations.md
       - Writing a Source: contributor/source-interface.md
-      - ADR 0070 Move-Up Inventory: notes/adr0070-moveup-inventory.md
       - Architecture Decisions:
           - Overview: developer/adr-index.md
           - ADR 0001 — MIT license: adr/0001-license-mit.md
