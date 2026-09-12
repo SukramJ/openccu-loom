@@ -10,12 +10,13 @@ import (
 	"strings"
 	"testing"
 
+	hamodel "github.com/SukramJ/go-hamqtt/model"
+
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
-	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -222,7 +223,7 @@ func stampPipelineNaming(t *testing.T, dev *device.Device, number int) {
 	}
 	init.SetNameData(device.BuildDataPointName(ch, frostProtectionParameter, ""))
 	init.SetPathData(naming.NewDataPointPathData(
-		"", hmtypes.NewWireInterfaceID("", hmenum.InterfaceHmIPRF), ch.Address, ch.Number, payload.BucketValues, frostProtectionParameter,
+		"", hmtypes.NewWireInterfaceID("", hmenum.InterfaceHmIPRF), ch.Address, ch.Number, hamodel.BucketValues, frostProtectionParameter,
 	))
 	init.SetIsInMultipleChannels(ch.IsParameterInMultipleChannels(frostProtectionParameter))
 }
