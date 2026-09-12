@@ -1,0 +1,328 @@
+{
+  "update/bidcos": {
+    "topic": "homeassistant/update/ccu-01_leq0123456/loom_leq0123456_update/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/BidCos-RF/LEQ0123456/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "update.loom_leq0123456_update",
+      "device": {
+        "identifiers": [
+          "openccu-loom_leq0123456"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HM-CC-RT-DN",
+        "name": "Heizung Bad",
+        "serial_number": "LEQ0123456",
+        "sw_version": "1.4",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "device_class": "firmware",
+      "display_precision": 0,
+      "entity_category": "config",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-01/BidCos-RF/LEQ0123456/update",
+      "latest_version_template": "{{ value_json.latest_firmware }}",
+      "latest_version_topic": "gh/ccu-01/BidCos-RF/LEQ0123456/update",
+      "name": "Firmware",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/BidCos-RF/LEQ0123456/update",
+      "title": "HM-CC-RT-DN Firmware",
+      "unique_id": "loom_leq0123456_update",
+      "value_template": "{{ value_json.firmware }}"
+    }
+  },
+  "update/blank-model": {
+    "topic": "homeassistant/update/ccu-01_vcu7654321/loom_vcu7654321_update/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/VCU7654321/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "update.loom_vcu7654321_update",
+      "device": {
+        "identifiers": [
+          "openccu-loom_vcu7654321"
+        ],
+        "manufacturer": "eQ-3",
+        "name": "Unbekannt",
+        "serial_number": "VCU7654321",
+        "sw_version": "1.0.0",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "device_class": "firmware",
+      "display_precision": 0,
+      "entity_category": "config",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-01/HmIP-RF/VCU7654321/update",
+      "latest_version_template": "{{ value_json.latest_firmware }}",
+      "latest_version_topic": "gh/ccu-01/HmIP-RF/VCU7654321/update",
+      "name": "Firmware",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/VCU7654321/update",
+      "title": " Firmware",
+      "unique_id": "loom_vcu7654321_update",
+      "value_template": "{{ value_json.firmware }}"
+    }
+  },
+  "update/hmip": {
+    "topic": "homeassistant/update/ccu-01_vcu1234567/loom_vcu1234567_update/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/VCU1234567/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "update.loom_vcu1234567_update",
+      "device": {
+        "identifiers": [
+          "openccu-loom_vcu1234567"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-eTRV-2",
+        "name": "Heizung Wohnzimmer",
+        "serial_number": "VCU1234567",
+        "sw_version": "1.4.2",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "device_class": "firmware",
+      "display_precision": 0,
+      "entity_category": "config",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-01/HmIP-RF/VCU1234567/update",
+      "latest_version_template": "{{ value_json.latest_firmware }}",
+      "latest_version_topic": "gh/ccu-01/HmIP-RF/VCU1234567/update",
+      "name": "Firmware",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/VCU1234567/update",
+      "title": "HmIP-eTRV-2 Firmware",
+      "unique_id": "loom_vcu1234567_update",
+      "value_template": "{{ value_json.firmware }}"
+    }
+  },
+  "update/mixed-case-central": {
+    "topic": "homeassistant/update/ccu-keller_vcu1234567/loom_vcu1234567_update/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/CCU-Keller/HmIP-RF/VCU1234567/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "update.loom_vcu1234567_update",
+      "device": {
+        "identifiers": [
+          "openccu-loom_vcu1234567"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-eTRV-2",
+        "name": "Heizung Wohnzimmer",
+        "serial_number": "VCU1234567",
+        "sw_version": "1.4.2",
+        "via_device": "openccu-loom_central_ccu-keller"
+      },
+      "device_class": "firmware",
+      "display_precision": 0,
+      "entity_category": "config",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/CCU-Keller/HmIP-RF/VCU1234567/update",
+      "latest_version_template": "{{ value_json.latest_firmware }}",
+      "latest_version_topic": "gh/CCU-Keller/HmIP-RF/VCU1234567/update",
+      "name": "Firmware",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/CCU-Keller/HmIP-RF/VCU1234567/update",
+      "title": "HmIP-eTRV-2 Firmware",
+      "unique_id": "loom_vcu1234567_update",
+      "value_template": "{{ value_json.firmware }}"
+    }
+  },
+  "update/no-device-object": {
+    "topic": "homeassistant/update/ccu-01_vcu1234567/loom_vcu1234567_update/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/VCU1234567/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "update.loom_vcu1234567_update",
+      "device": {
+        "identifiers": [
+          "openccu-loom_vcu1234567"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-eTRV-2",
+        "name": "Heizung Wohnzimmer",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "device_class": "firmware",
+      "display_precision": 0,
+      "entity_category": "config",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-01/HmIP-RF/VCU1234567/update",
+      "latest_version_template": "{{ value_json.latest_firmware }}",
+      "latest_version_topic": "gh/ccu-01/HmIP-RF/VCU1234567/update",
+      "name": "Firmware",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/VCU1234567/update",
+      "title": "HmIP-eTRV-2 Firmware",
+      "unique_id": "loom_vcu1234567_update",
+      "value_template": "{{ value_json.firmware }}"
+    }
+  },
+  "update/second-central": {
+    "topic": "homeassistant/update/ccu-02_vcu1234567/loom_vcu1234567_update/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-02/HmIP-RF/VCU1234567/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "update.loom_vcu1234567_update",
+      "device": {
+        "identifiers": [
+          "openccu-loom_vcu1234567"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-eTRV-2",
+        "name": "Heizung Wohnzimmer",
+        "serial_number": "VCU1234567",
+        "sw_version": "1.4.2",
+        "via_device": "openccu-loom_central_ccu-02"
+      },
+      "device_class": "firmware",
+      "display_precision": 0,
+      "entity_category": "config",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-02/HmIP-RF/VCU1234567/update",
+      "latest_version_template": "{{ value_json.latest_firmware }}",
+      "latest_version_topic": "gh/ccu-02/HmIP-RF/VCU1234567/update",
+      "name": "Firmware",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-02/HmIP-RF/VCU1234567/update",
+      "title": "HmIP-eTRV-2 Firmware",
+      "unique_id": "loom_vcu1234567_update",
+      "value_template": "{{ value_json.firmware }}"
+    }
+  },
+  "update/sub-devices-enabled": {
+    "topic": "homeassistant/update/ccu-01_vcu1234567/loom_vcu1234567_update/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/VCU1234567/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "update.loom_vcu1234567_update",
+      "device": {
+        "identifiers": [
+          "openccu-loom_vcu1234567"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-eTRV-2",
+        "name": "Heizung Wohnzimmer",
+        "serial_number": "VCU1234567",
+        "sw_version": "1.4.2",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "device_class": "firmware",
+      "display_precision": 0,
+      "entity_category": "config",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-01/HmIP-RF/VCU1234567/update",
+      "latest_version_template": "{{ value_json.latest_firmware }}",
+      "latest_version_topic": "gh/ccu-01/HmIP-RF/VCU1234567/update",
+      "name": "Firmware",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/VCU1234567/update",
+      "title": "HmIP-eTRV-2 Firmware",
+      "unique_id": "loom_vcu1234567_update",
+      "value_template": "{{ value_json.firmware }}"
+    }
+  }
+}
