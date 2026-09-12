@@ -750,6 +750,10 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 		HealthSupplier:       bridgeHealthSupplier(centralNames, startedAt),
 		Collector:            collector,
 		ChannelHidden:        channelHidden,
+		// The bridge's discovery runtime logs the orphan sweep, the birth
+		// replay and the snapshot teardown — the layer whose failures are
+		// invisible from anywhere else.
+		Logger: logger,
 	}, probe).WithSubscriber(client)
 	wiring := mqtt.NewWiring(bridge, logger)
 

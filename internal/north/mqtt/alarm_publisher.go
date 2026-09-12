@@ -674,11 +674,11 @@ func (b *Bridge) RetractAlarmDiscovery(ctx context.Context, component, nodeID, o
 	if !b.cfg.HADiscoveryEnabled {
 		return nil
 	}
-	topic := b.topics.DiscoveryConfig(component, nodeID, objectID)
-	b.mu.Lock()
-	delete(b.declared, topic)
-	b.mu.Unlock()
-	return b.client.Publish(ctx, topic, nil, b.cfg.QoS.Discovery, true)
+	// Retract rather than a zero-length publish: the topic has to be
+	// cleared on the broker whatever this process declared — a retained
+	// config from a previous build is exactly the case — and the dedup
+	// entry has to go with it so RepublishDiscovery does not resurrect it.
+	return b.pub.Retract(ctx, b.topics.DiscoveryConfig(component, nodeID, objectID))
 }
 
 // PublishAlarmState publishes the retained plain HA state token for a

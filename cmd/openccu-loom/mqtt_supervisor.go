@@ -858,18 +858,19 @@ func makeMQTTSubscriberBuilder(
 			// NoOp client has no Subscriber; nothing to wire.
 			return func() {}, nil
 		}
-		// Bound RepublishDiscovery to the daemon-lifetime ctx (not the
-		// per-Start/Swap ctx) so a broker-restart-triggered republish is
-		// cancelled on shutdown but survives a broker swap — same rationale
-		// as the command subscriber below.
+		// The birth replay is deliberately not bound to a context this
+		// layer owns: the shared runtime detaches it from the delivery,
+		// because a replay that dies with the message that triggered it
+		// replays nothing. Close is the teardown, and it drains — bounded
+		// in practice, since every publish fails fast once the client is
+		// down.
 		//
-		// Both subscriber constructors start their dispatcher worker
-		// goroutines immediately, and only Close stops them — so every early
-		// return from here on closes what it already built. Without that a
-		// failed build (a broker ACL rejecting one of the command
-		// subscriptions) leaves nine goroutines running with no handle left
-		// to stop them.
-		birthSync := mqtt.NewBirthSync(sub, bridge, logger).WithLifecycleContext(lifecycleCtx)
+		// Both subscriber constructors start their worker goroutines
+		// immediately, and only Close stops them — so every early return
+		// from here on closes what it already built. Without that a failed
+		// build (a broker ACL rejecting one of the command subscriptions)
+		// leaves nine goroutines running with no handle left to stop them.
+		birthSync := mqtt.NewBirthSync(sub, bridge, logger)
 		if err := birthSync.Start(ctx); err != nil {
 			birthSync.Close()
 			return nil, fmt.Errorf("birth_sync.Start: %w", err)

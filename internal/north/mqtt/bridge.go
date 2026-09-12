@@ -4,6 +4,7 @@
 package mqtt
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -17,6 +18,7 @@ import (
 	"time"
 
 	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hapublisher "github.com/SukramJ/go-hamqtt/publisher"
 
 	"github.com/SukramJ/openccu-loom/internal/metrics"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
@@ -133,6 +135,17 @@ type BridgeConfig struct {
 	// Python py:10).
 	// Nil disables instrumentation (no-op).
 	Collector *metrics.MqttCollector
+
+	// Logger receives the diagnostics of the bridge's own discovery
+	// runtime — the orphan sweep, the birth replay and the snapshot
+	// teardown. Nil means [slog.Default].
+	//
+	// It exists because that runtime is constructed with the bridge, long
+	// before the composition root gets to hand a logger to
+	// [NewBirthSync]. Without it the one layer whose failures are
+	// invisible from anywhere else logs to a default handler the operator
+	// may not have configured.
+	Logger *slog.Logger
 
 	// HealthSupplier is invoked by [Bridge.AnnounceOnline] to compose
 	// the JSON body for the retained `<base>/bridge/health` topic.
@@ -503,25 +516,22 @@ type Bridge struct {
 	// cleanup passes fail their capability check on every boot and
 	// retained legacy topics are never evicted.
 	subscriber Subscriber
-	mu         sync.Mutex
-	declared   map[string][]byte // discovery topic → last published payload
-	// announced names every discovery topic this process has put on the
-	// wire, recorded BEFORE the publish call rather than after it.
+	// logger is [BridgeConfig.Logger], defaulted.
+	logger *slog.Logger
+	mu     sync.Mutex
+	// pub is the shared discovery publish runtime (ADR 0070). It owns what
+	// this bridge used to keep in two maps of its own: the hash-dedup gate
+	// over the last payload published per retained config topic, the claim
+	// taken BEFORE a publish reaches the broker so a concurrent orphan sweep
+	// cannot retract an entity that is being written right now, the
+	// retract-then-publish ordering Home Assistant enforces between the two
+	// discovery forms, the birth replay and the sweep itself.
 	//
-	// `declared` cannot answer "is this topic mine?" during boot: it is
-	// written only once Publish returns, i.e. after the broker has already
-	// accepted the message and fanned it out — including to the orphan
-	// sweep's own `homeassistant/#` subscription. Every config published
-	// while a sweep window is open therefore reaches the sweep as a topic
-	// nothing has declared, and the sweep retracts an entity the daemon
-	// is actively driving. Measured on one boot: 42 hub configs published,
-	// then cleared with an empty payload two seconds later, and — because
-	// the hub pass runs once per boot — gone from Home Assistant for the
-	// life of that daemon.
-	//
-	// A retraction removes the topic again, so the set keeps naming
-	// exactly the entities this process claims.
-	announced map[string]bool
+	// Everything that is this daemon's rather than the family's stays on
+	// this side: the per-central counters, the per-component validity count,
+	// the bundle batching and the ownership predicate the sweep is scoped
+	// by. See [newDiscoveryRuntime].
+	pub *hapublisher.Runtime
 	// planesDeclared marks the planes that have completed a discovery
 	// pass, so the orphan sweep can tell an orphan from an entity that
 	// simply has not been published yet.
@@ -613,18 +623,27 @@ func NewBridge(cfg BridgeConfig, client Publisher) *Bridge {
 			WithSubDevices(cfg.SubDevicesEnabled).
 			WithLocale(cfg.Locale)
 	}
-	return &Bridge{
+	logger := cfg.Logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+	b := &Bridge{
 		cfg:         cfg,
 		topics:      topics,
 		legacy:      legacy,
 		client:      client,
-		declared:    make(map[string][]byte),
-		announced:   make(map[string]bool),
+		logger:      logger,
 		configCache: make(map[string][]byte),
 		rawTopics:   make(map[string][]byte),
 		collector:   cfg.Collector,
 		bundles:     newBundleStoreIf(cfg.HADiscoveryEnabled && cfg.HADiscoveryBundles),
 	}
+	// Built last, and from the bridge itself: the runtime's transport reads
+	// `client` now and resolves the subscribe half per call, because
+	// production wires that one only afterwards through
+	// [Bridge.WithSubscriber].
+	b.pub = newDiscoveryRuntime(b, logger)
+	return b
 }
 
 // WithSubscriber wires the subscribe-capable client the boot-time
@@ -898,32 +917,19 @@ func (b *Bridge) DefaultBuilder() *DefaultDiscoveryBuilder {
 // pick them up reliably across some firmwares — a deterministic
 // re-publish closes that race.
 func (b *Bridge) RepublishDiscovery(ctx context.Context) error {
-	b.mu.Lock()
-	snapshot := make(map[string][]byte, len(b.declared))
-	maps.Copy(snapshot, b.declared)
-	b.mu.Unlock()
-	// Best-effort per topic: a breaker that is open for one entity must not
-	// abort the replay for every entity behind it, which would leave most of
-	// the fleet unavailable after a broker restart. Every failure is still
-	// reported, joined, so the caller can log the whole picture.
-	var errs []error
-	for topic, payload := range snapshot {
-		// A cancelled context is a shutdown, not a per-topic failure: stop
-		// rather than turning every remaining topic into an error.
-		if err := ctx.Err(); err != nil {
-			errs = append(errs, err)
-			break
-		}
-		if err := b.client.Publish(ctx, topic, payload, b.cfg.QoS.Discovery, true); err != nil {
-			// The replay walks the bridge-wide declared-topics snapshot,
-			// not one central's own set, so no single central can be
-			// named for this failure — the label is left blank rather
-			// than guessing.
-			b.incPublishErrors("")
-			errs = append(errs, fmt.Errorf("republish %s: %w", topic, err))
-		}
+	// Best-effort per topic, inside the runtime: a breaker that is open for
+	// one entity must not abort the replay for every entity behind it,
+	// which would leave most of the fleet unavailable after a broker
+	// restart. The runtime joins every failure so the caller can log the
+	// whole picture.
+	_, err := b.pub.Republish(ctx)
+	if err != nil {
+		// The replay walks the bridge-wide declared set, not one central's
+		// own, so no single central can be named for this failure — the
+		// label is left blank rather than guessed.
+		b.incPublishErrors("")
 	}
-	return errors.Join(errs...)
+	return err
 }
 
 // AnnounceOnline publishes the "online" LWT counterpart and a
@@ -935,7 +941,11 @@ func (b *Bridge) RepublishDiscovery(ctx context.Context) error {
 // `{"status":"online"}` payload so dashboards still see liveness.
 // The supplier is invoked synchronously — it must not block.
 func (b *Bridge) AnnounceOnline(ctx context.Context) error {
-	if err := b.client.Publish(ctx, b.topics.BridgeStatus(), []byte("online"), QoS1, true); err != nil {
+	// Through the runtime rather than by hand, so the marker, its retain
+	// flag and the topic cannot drift from the Last Will the composition
+	// root configures — [hapublisher.Runtime.Will] returns that will from
+	// the same [hapublisher.Config.StatusTopic] this publishes to.
+	if err := b.pub.AnnounceOnline(ctx); err != nil {
 		return err
 	}
 	health := map[string]any{"status": "online"}
@@ -979,7 +989,7 @@ func (b *Bridge) AnnounceOnline(ctx context.Context) error {
 // The health snapshot on `<base>/bridge/health` is left at its last value for
 // the same reason: it describes the run that just ended.
 func (b *Bridge) AnnounceOffline(ctx context.Context) error {
-	return b.client.Publish(ctx, b.topics.BridgeStatus(), []byte("offline"), QoS1, true)
+	return b.pub.AnnounceOffline(ctx)
 }
 
 // PublishState publishes a device data point's current value to the
@@ -1139,7 +1149,7 @@ func (b *Bridge) PublishSlotConfig(ctx context.Context, centralName, iface strin
 	b.mu.Lock()
 	previous, declared := b.configCache[topic]
 	b.mu.Unlock()
-	if declared && bytesEqual(previous, body) {
+	if declared && bytes.Equal(previous, body) {
 		return nil
 	}
 	if err := b.client.Publish(ctx, topic, body, b.cfg.QoS.State, true); err != nil {
@@ -1913,7 +1923,26 @@ func (b *Bridge) RetractDiscoveryForCentralDevice(ctx context.Context, centralNa
 			return false
 		}
 	}
-	return b.retractTopicsMatching(ctx, centralName, b.declared, match, b.cfg.QoS.Discovery)
+	// The declared set lives in the runtime now, so the needle runs over
+	// the topic list it reports and the retraction goes back through it:
+	// [hapublisher.Runtime.Retract] clears the broker's retained message
+	// and drops both the dedup entry and the in-flight claim, which is
+	// exactly what the local map walk used to do by hand.
+	var matched []string
+	for _, topic := range b.pub.Declared() {
+		if match(strings.ToLower(topic)) {
+			matched = append(matched, topic)
+		}
+	}
+	for _, topic := range matched {
+		// Best-effort per topic: a publish error is counted but does not
+		// abort the sweep — a boot-time orphan-cleanup pass is the
+		// backstop. Retracted one at a time so the count is per topic.
+		if err := b.pub.Retract(ctx, topic); err != nil {
+			b.incPublishErrors(centralName)
+		}
+	}
+	return len(matched)
 }
 
 // retractTopicsMatching walks m for every topic match accepts, publishes
@@ -1943,10 +1972,6 @@ func (b *Bridge) retractTopicsMatching(ctx context.Context, centralName string, 
 		if match(strings.ToLower(topic)) {
 			topics = append(topics, topic)
 			delete(m, topic)
-			// A retracted entity is no longer ours to protect: drop the
-			// claim so a later boot's orphan sweep can still reach the
-			// topic if the retraction never made it to the broker.
-			delete(b.announced, topic)
 		}
 	}
 	b.mu.Unlock()
@@ -2069,14 +2094,22 @@ func (b *Bridge) publishDiscovery(ctx context.Context, centralName, component, n
 		return b.routeToBundle(ctx, centralName, component, nodeID, objectID, payload)
 	}
 	topic := b.topics.DiscoveryConfig(component, nodeID, objectID)
-	b.mu.Lock()
-	previous, declared := b.declared[topic]
-	b.mu.Unlock()
-	// Deduplicate identical payloads — bytes.Equal would alloc
-	// nothing on a typical stable schema.
-	if declared && bytesEqual(previous, payload) {
+
+	// An empty payload goes through Retract rather than Publish. The two
+	// answer different questions: the runtime's dedup gate only retracts
+	// what this process declared, which is right for a gate, while a
+	// producer dropping an entity has to clear the topic whatever this
+	// process knows about it — the retained config it is clearing was very
+	// likely written by a previous build.
+	if len(payload) == 0 {
+		if err := b.pub.Retract(ctx, topic); err != nil {
+			b.incPublishErrors(centralName)
+			return err
+		}
+		b.incDiscoverySent(centralName)
 		return nil
 	}
+
 	// Count what Home Assistant would refuse or silently strip a key from.
 	//
 	// The payload goes out either way. Home Assistant drops an undeclared
@@ -2087,47 +2120,29 @@ func (b *Bridge) publishDiscovery(ctx context.Context, centralName, component, n
 	// otherwise invisible by construction. Advisories (what Home Assistant
 	// accepts and then rewrites) deliberately do not count.
 	//
-	// This runs once per distinct payload: the dedup gate above has already
-	// returned for a config that has not changed.
-	if len(payload) > 0 {
-		if err := ValidateDiscoveryBody(component, payload); errors.Is(err, hadiscovery.ErrInvalidBundle) {
-			b.incDiscoveryInvalid(centralName)
-		}
-	}
-	// Claim the topic BEFORE it reaches the broker. The broker fans a
-	// message out to its subscribers — the orphan sweep's own snapshot
-	// subscription included — before this call returns, so a claim taken
-	// afterwards arrives too late to keep the sweep off an entity this
-	// daemon is publishing right now. See [Bridge.announced].
-	if len(payload) > 0 {
-		b.mu.Lock()
-		b.announced[topic] = true
-		b.mu.Unlock()
-	}
-	if err := b.client.Publish(ctx, topic, payload, b.cfg.QoS.Discovery, true); err != nil {
+	// The runtime does not do this and deliberately so: which keys a
+	// platform declares is catalog knowledge, and whether a violation is
+	// worth a counter is this daemon's policy.
+	//
+	// It is gated on the runtime having actually published, which is the
+	// dedup gate this side can no longer see: a boot that re-renders nine
+	// thousand identical payloads must raise the counter once per distinct
+	// payload, not once per call.
+	//
+	// The runtime also claims the topic before the publish reaches the
+	// broker and records only what the broker accepted. All of that used
+	// to live here.
+	published, err := b.pub.Publish(ctx, topic, payload)
+	if err != nil {
 		b.incPublishErrors(centralName)
 		return err
 	}
-	// Record what the broker accepted, never what was merely attempted.
-	// The production publisher sits behind a publish-only circuit breaker,
-	// so a broker outage during the boot snapshot fails every discovery
-	// publish; caching the payload anyway would make the next identical
-	// payload hit the dedup gate above and publish nothing, leaving the
-	// entity absent from Home Assistant until the operator restarts it.
-	//
-	// An empty payload is a retraction, not a declaration: it tells every
-	// consumer the entity is gone. Keeping the topic in `declared` would
-	// leave the retracted entity in the set the orphan sweeps treat as
-	// live, and the HA-birth replay would re-publish the empty payload to
-	// a topic the broker no longer retains.
-	b.mu.Lock()
-	if len(payload) == 0 {
-		delete(b.declared, topic)
-		delete(b.announced, topic)
-	} else {
-		b.declared[topic] = payload
+	if !published {
+		return nil
 	}
-	b.mu.Unlock()
+	if err := ValidateDiscoveryBody(component, payload); errors.Is(err, hadiscovery.ErrInvalidBundle) {
+		b.incDiscoveryInvalid(centralName)
+	}
 	b.incDiscoverySent(centralName)
 	return nil
 }
@@ -2162,18 +2177,6 @@ func (b *Bridge) incPublishErrors(centralName string) {
 	if b.collector != nil {
 		b.collector.PublishErrors(centralName).Inc()
 	}
-}
-
-func bytesEqual(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }
 
 // renderStatePayload returns the canonical JSON envelope

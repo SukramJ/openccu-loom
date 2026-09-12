@@ -65,9 +65,7 @@ func TestUnscopedDiscoveryCleanupClearsOnlyAmbiguousOwnPayloads(t *testing.T) {
 	// The stale topic is in `declared` from this boot's publish; the sweep
 	// has to drop it there too, or the diff gate suppresses the corrected
 	// republish against the payload it just cleared.
-	b.mu.Lock()
-	b.declared[unscopedTopic] = []byte(`{}`)
-	b.mu.Unlock()
+	seedDeclared(t, b, unscopedTopic, []byte(`{}`))
 
 	cleared, err := b.RunUnscopedDiscoveryCleanupOnce(context.Background(), 50)
 	if err != nil {
@@ -95,10 +93,7 @@ func TestUnscopedDiscoveryCleanupClearsOnlyAmbiguousOwnPayloads(t *testing.T) {
 		}
 	}
 
-	b.mu.Lock()
-	_, stillDeclared := b.declared[unscopedTopic]
-	b.mu.Unlock()
-	if stillDeclared {
+	if isDeclared(b, unscopedTopic) {
 		t.Error("the cleared topic is still in `declared` — the snapshot's diff gate would suppress the " +
 			"corrected republish and the entity would never come back")
 	}

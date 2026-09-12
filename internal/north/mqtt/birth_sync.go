@@ -7,136 +7,83 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 )
 
-// HABirthTopic is the topic Home Assistant publishes its lifecycle
-// events on. HA emits "online" once the integration boots and
-// "offline" before the broker disconnects it. We listen on this
-// topic and re-publish every Discovery payload whenever HA comes
-// back online — retained discoveries stay in the broker but HA
-// occasionally misses them across firmware-updates / addon reloads.
+// HABirthTopic is the topic Home Assistant publishes its lifecycle events
+// on. HA emits "online" once the integration boots and "offline" before the
+// broker disconnects it. The daemon listens there and re-publishes every
+// Discovery payload whenever HA comes back online — the retained configs
+// stay in the broker, but HA does not reliably re-read them across every
+// addon reload and firmware update.
 //
 // It shares HA's Discovery root with the config topics but not their
-// grammar: this is HA's own lifecycle topic, not a `.../config` entry,
-// so it is built from the prefix rather than from
-// [naming.DiscoveryConfigTopic].
+// grammar: this is HA's own lifecycle topic, not a `.../config` entry, so it
+// is built from the prefix rather than from [naming.DiscoveryConfigTopic].
+// TestHABirthTopicMatchesRuntime pins it against the shared runtime's own
+// rendering of the same topic, which is what the subscription actually uses.
 const HABirthTopic = naming.DiscoveryTopicPrefix + "status"
 
-// birthDispatchWorkers is 1: RepublishDiscovery is idempotent and there
-// is nothing to gain from running two republishes concurrently, so a
-// single worker (trivially ordered) is the simplest correct choice.
-const birthDispatchWorkers = 1
-
-// birthDispatchQueueDepth bounds how many pending "online" events can
-// queue up behind a slow in-flight republish before Enqueue starts
-// blocking (with a logged warning) the go-mqtt read loop that delivered
-// them. HA does not emit birth events in a tight loop, so a shallow
-// queue is enough to absorb a burst without growing unbounded.
-const birthDispatchQueueDepth = 4
-
-// birthDispatchKey is the single dispatch key BirthSync uses — every
-// republish job is idempotent and there is exactly one worker, so no
-// per-message key is needed to preserve order.
-const birthDispatchKey = "republish"
-
-// BirthSync subscribes to `homeassistant/status` and re-publishes
-// every cached Discovery config on the rising edge ("online"). The
-// bridge already keeps the per-topic payload cache, so this layer
-// stays a thin event-router.
+// BirthSync subscribes to `homeassistant/status` and re-publishes every
+// declared Discovery config on the rising edge ("online").
+//
+// It is a seam now rather than an implementation. The subscription, the
+// payload check, the hand-off off the read loop and the replay itself are
+// [hapublisher.Runtime.WatchBirth]; the runtime holds the declared payloads,
+// so the layer that used to route the event to them has nothing left to
+// carry. What stays is this daemon's wiring shape: a constructor the
+// composition root calls, a Start that reports a rejected subscribe, and a
+// Close that drains.
+//
+// The dispatcher behind it changed with the move. This layer ran a
+// depth-4 queue in front of one worker; the runtime collapses a burst onto a
+// single pending job instead. Every job is a full idempotent replay, so
+// running the second after the first changes nothing — and a queue that
+// filled up would push the blocking back onto the read loop the dispatcher
+// exists to keep free.
 type BirthSync struct {
-	sub          Subscriber
-	bridge       *Bridge
-	logger       *slog.Logger
-	lifecycleCtx context.Context // bounds RepublishDiscovery to daemon lifetime
-
-	// dispatcher runs RepublishDiscovery off the go-mqtt client's
-	// synchronous read loop. Without it, handle would call a blocking
-	// QoS1 Publish per declared topic on the very goroutine that also
-	// processes the PUBACK the broker sends back — a self-deadlock on
-	// every HA online birth message. See [boundedDispatcher].
-	dispatcher *boundedDispatcher
+	sub    Subscriber
+	bridge *Bridge
+	logger *slog.Logger
 }
 
-// NewBirthSync constructs the listener. `bridge` and `sub` must
-// outlive the lifecycle of the daemon. Call [BirthSync.Close] on
-// teardown to drain the dispatcher's worker goroutine cleanly.
+// NewBirthSync constructs the listener. `bridge` and `sub` must outlive the
+// lifecycle of the daemon. Call [BirthSync.Close] on teardown to drain an
+// in-flight replay.
 func NewBirthSync(sub Subscriber, bridge *Bridge, logger *slog.Logger) *BirthSync {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &BirthSync{
-		sub:          sub,
-		bridge:       bridge,
-		logger:       logger,
-		lifecycleCtx: context.Background(),
-		dispatcher:   newBoundedDispatcher(birthDispatchWorkers, birthDispatchQueueDepth, "birth_sync", logger),
-	}
+	return &BirthSync{sub: sub, bridge: bridge, logger: logger}
 }
 
-// Close stops accepting new "online" events and blocks until any
-// in-flight or already-queued republish has finished. Safe to call on
-// a zero-value or nil *BirthSync.
+// Close stops accepting new "online" events and blocks until an in-flight or
+// queued replay has finished. Safe to call on a nil *BirthSync and safe to
+// call twice.
+//
+// Draining is the whole teardown, where this layer also used to cancel the
+// replay's context. The runtime detaches the replay from the delivery on
+// purpose — a replay that dies with the message that triggered it replays
+// nothing — so a shutdown waits it out instead. It is bounded in practice:
+// once the client is down every remaining publish fails fast.
 func (b *BirthSync) Close() {
-	if b == nil {
+	if b == nil || b.bridge == nil {
 		return
 	}
-	b.dispatcher.Close()
+	b.bridge.pub.Close()
 }
 
-// WithLifecycleContext sets the daemon-lifetime context used by the
-// republish handler so that a shutdown mid-republish is cancelled promptly
-// rather than running until broker timeout. A nil ctx is ignored.
-// Returns the receiver for call-site chaining.
-func (b *BirthSync) WithLifecycleContext(ctx context.Context) *BirthSync {
-	if ctx != nil {
-		b.lifecycleCtx = ctx
-	}
-	return b
-}
-
-// Start attaches the subscription. Returns an error when the
-// transport rejects the subscribe; otherwise the loop runs in the
-// background until `sub` reports the topic gone.
+// Start attaches the subscription. Returns an error when the transport
+// rejects the subscribe; otherwise the runtime's watch runs in the
+// background until the subscription goes away.
 func (b *BirthSync) Start(ctx context.Context) error {
 	if b.sub == nil || b.bridge == nil {
 		return errors.New("mqtt/birth_sync: subscriber or bridge missing")
 	}
-	_, err := b.sub.Subscribe(ctx, HABirthTopic, QoS1, LegacyHandler(b.handle))
-	return err
-}
-
-// handle runs on the MQTT client's synchronous read loop (the same
-// goroutine that processes every PUBACK/PINGRESP), so it must return
-// fast. Topic/payload parsing stays inline here (microseconds); the
-// actual republish — a blocking QoS1 Publish per declared discovery
-// topic, each waiting on a PUBACK only that same read loop can deliver
-// — is handed to b.dispatcher so handle can return before it runs.
-func (b *BirthSync) handle(topic string, payload []byte, _ bool) {
-	// retained is ignored here: HA publishes the `homeassistant/status`
-	// online/offline state retained, and the very first subscribe-time
-	// replay is exactly the signal we need to republish discovery.
-	state := strings.TrimSpace(string(payload))
-	if state != "online" {
-		// HA emits "offline" pre-restart; nothing to do.
-		return
+	if err := b.bridge.pub.WatchBirth(ctx); err != nil {
+		return err
 	}
-	b.dispatcher.Enqueue(birthDispatchKey, b.republish)
-}
-
-// republish runs off the read loop, on a [boundedDispatcher] worker.
-func (b *BirthSync) republish() {
-	// Derive a per-republish cancellable context from the daemon-lifetime
-	// context so a shutdown mid-republish is cancelled promptly instead of
-	// running until broker timeout on a detached background context.
-	ctx, cancel := context.WithCancel(b.lifecycleCtx)
-	defer cancel()
-	if err := b.bridge.RepublishDiscovery(ctx); err != nil {
-		b.logger.Warn("mqtt.birth_sync.republish",
-			slog.String("err", err.Error()))
-		return
-	}
-	b.logger.Info("mqtt.birth_sync.republished")
+	b.logger.Debug("mqtt.birth_sync.watching", slog.String("topic", HABirthTopic))
+	return nil
 }

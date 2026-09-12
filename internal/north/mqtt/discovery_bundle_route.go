@@ -7,8 +7,11 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strings"
 	"sync"
 	"time"
+
+	hapublisher "github.com/SukramJ/go-hamqtt/publisher"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 )
@@ -159,6 +162,18 @@ func (b *Bridge) markBundleDirty(nodeID, centralName string) {
 // the entities stay missing until some later boot happens to clear the
 // documents.
 //
+// The shared runtime builds that symmetry into
+// [hapublisher.Runtime.PublishComponent], which retracts the device
+// document before the per-entity config of the same node. It does not cover
+// this daemon, and the reason is the payload: PublishComponent renders the
+// body from a [hadiscovery.Component] through EntityJSON, while every one
+// of this daemon's 54 producers hands the publish path bytes it has already
+// marshalled — bytes pinned to the byte under
+// `testdata/discovery_golden*.json`, which HA keys entities off. Routing
+// them through PublishComponent would re-render them. So this pass stays,
+// and it is the cheaper shape anyway: one narrow subscribe for the whole
+// fleet instead of one retraction message per entity.
+//
 // It runs before the snapshot rather than with the orphan sweep, which runs
 // after it. That is the whole point: the sweep would clear the documents
 // too — it has recognised the bundle topic shape since the first slice of
@@ -200,15 +215,18 @@ func (b *Bridge) RunBundleRollbackOnce(ctx context.Context, centralName string, 
 	var (
 		mu      sync.Mutex
 		stale   []string
-		filter  = naming.DiscoveryTopicPrefix + discoveryBundleSegment + "/+/config"
+		filter  = naming.DiscoveryTopicPrefix + hapublisher.BundleSegment + "/+/config"
 		handler = func(topic string, payload []byte, _ bool) {
 			// An empty retained payload is a topic the broker is already
 			// clearing. Retracting it again would be a message for nothing.
 			if len(payload) == 0 {
 				return
 			}
-			nodeID, ok := discoveryNodeIDFromTopic(topic, naming.DiscoveryTopicPrefix)
-			if !ok || !discoveryNodeIDBelongsTo(nodeID, nodePrefixes) {
+			parsed, ok := hapublisher.ParseConfigTopic(naming.DiscoveryTopicPrefix, topic)
+			if !ok || !parsed.Bundle {
+				return
+			}
+			if !discoveryNodeIDBelongsTo(strings.ToLower(parsed.NodeID), nodePrefixes) {
 				return
 			}
 			mu.Lock()
@@ -226,14 +244,14 @@ func (b *Bridge) RunBundleRollbackOnce(ctx context.Context, centralName string, 
 
 	cleared := 0
 	for _, topic := range topics {
-		if err := b.client.Publish(ctx, topic, nil, b.cfg.QoS.Discovery, true); err != nil {
+		// Through the runtime, so the document also leaves the dedup set
+		// and the in-flight claim set: a topic cleared here must not be
+		// dedup-suppressed if this daemon ever publishes a document there
+		// again, and must not be protected from a later orphan sweep.
+		if err := b.pub.Retract(ctx, topic); err != nil {
 			b.incPublishErrors(centralName)
 			continue
 		}
-		b.mu.Lock()
-		delete(b.declared, topic)
-		delete(b.announced, topic)
-		b.mu.Unlock()
 		cleared++
 	}
 	return cleared, nil

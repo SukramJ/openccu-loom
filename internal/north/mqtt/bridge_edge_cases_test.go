@@ -81,22 +81,23 @@ func TestBirthSyncHandleOnlineRepublishes(t *testing.T) {
 		Base:               "gh",
 		HADiscoveryEnabled: true,
 	}, mp)
-	// Pre-seed bridge.declared so RepublishDiscovery emits a publish.
-	bridge.mu.Lock()
-	bridge.declared["homeassistant/switch/gh/obj1/config"] = []byte(`{"x":1}`)
-	bridge.mu.Unlock()
-
 	sub := &nopSubscriber{}
+	bridge = bridge.WithSubscriber(sub)
+	// Declared costs a real publish now: the runtime records what the
+	// broker accepted, never what was merely attempted.
+	seedDeclared(t, bridge, "homeassistant/switch/gh/obj1/config", []byte(`{"x":1}`))
+	mp.reset()
+
 	bs := NewBirthSync(sub, bridge, nil)
 	if err := bs.Start(context.Background()); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 
-	// Deliver "online" → should trigger RepublishDiscovery. handle() now
-	// enqueues the republish onto BirthSync's dispatcher instead of running
-	// it inline, so wait for the worker to finish before asserting.
+	// Deliver "online" → a replay. It runs off the read loop, so Close is
+	// what waits for it: doing it inline would self-deadlock in production
+	// on the PUBACK only that same goroutine could deliver.
 	sub.deliver(HABirthTopic, []byte("online"))
-	bs.dispatcher.flush()
+	bs.Close()
 
 	pubs := mp.publications()
 	found := false
@@ -114,13 +115,13 @@ func TestBirthSyncHandleOfflineIsNoop(t *testing.T) {
 	t.Parallel()
 	mp := &mockPublisher{}
 	bridge := NewBridge(BridgeConfig{Base: "gh", HADiscoveryEnabled: true}, mp)
-	bridge.mu.Lock()
-	bridge.declared["homeassistant/switch/gh/obj1/config"] = []byte(`{"x":1}`)
-	bridge.mu.Unlock()
-
 	sub := &nopSubscriber{}
+	bridge = bridge.WithSubscriber(sub)
+	seedDeclared(t, bridge, "homeassistant/switch/gh/obj1/config", []byte(`{"x":1}`))
+
 	bs := NewBirthSync(sub, bridge, nil)
 	_ = bs.Start(context.Background())
+	defer bs.Close()
 
 	// "offline" must not trigger republish.
 	lenBefore := len(mp.publications())
@@ -708,9 +709,7 @@ func TestRunDiscoveryOrphanCleanupOnce_OrphansEvicted(t *testing.T) {
 	}
 	b := NewBridge(BridgeConfig{Base: base, HADiscoveryEnabled: true, CentralName: centralName}, mc)
 	// Mark declaredTopic as known-live.
-	b.mu.Lock()
-	b.declared[declaredTopic] = []byte(`{}`)
-	b.mu.Unlock()
+	seedDeclared(t, b, declaredTopic, []byte(`{}`))
 
 	// The orphan has node_id "ccu_old" which starts with "ccu_" — our prefix.
 	n, err := b.RunDiscoveryOrphanCleanupOnce(context.Background(), "", 50)
@@ -1425,43 +1424,39 @@ func TestWiringPublishSysvarLogsError(t *testing.T) {
 	w.PublishSysvar(context.Background(), "ccu", fakeAddressable{state: "gh/x"}, true)
 }
 
-// ---------------------------------------------------------------------------
-// BirthSync.WithLifecycleContext: nil is a no-op; a valid ctx is stored.
-// ---------------------------------------------------------------------------
-
-func TestBirthSyncWithLifecycleContextReturnsSelf(t *testing.T) {
+// TestBirthReplayOutlivesTheDeliveryContext pins the contract that
+// replaced "the republish honours the lifecycle context", along with the
+// WithLifecycleContext seam that carried it.
+//
+// The replay is detached from the context the delivery arrived on, because
+// a replay that dies with the message that triggered it replays nothing. A
+// cancelled context on the subscription must therefore neither block the
+// delivery nor suppress the replay — teardown is [BirthSync.Close], which
+// drains.
+func TestBirthReplayOutlivesTheDeliveryContext(t *testing.T) {
 	t.Parallel()
-	bs := NewBirthSync(nil, nil, nil)
-	// WithLifecycleContext must return the receiver for call-site chaining.
-	result := bs.WithLifecycleContext(context.Background())
-	if result != bs {
-		t.Fatal("WithLifecycleContext must return the receiver")
-	}
-}
-
-func TestBirthSyncHandleRespectsLifecycleCtxCancel(t *testing.T) {
-	t.Parallel()
-	// When lifecycleCtx is cancelled before "online" is handled, the
-	// RepublishDiscovery call must receive an already-cancelled context
-	// and return promptly. This locks down that the handle() method
-	// derives its working context from lifecycleCtx, not context.Background().
 	cancelled, cancel := context.WithCancel(context.Background())
-	cancel() // pre-cancel
 
 	mp := &mockPublisher{}
-	bridge := NewBridge(BridgeConfig{Base: "gh", HADiscoveryEnabled: true}, mp)
-	bridge.mu.Lock()
-	bridge.declared["homeassistant/switch/gh/obj1/config"] = []byte(`{"x":1}`)
-	bridge.mu.Unlock()
 	sub := &nopSubscriber{}
-	bs := NewBirthSync(sub, bridge, nil).WithLifecycleContext(cancelled)
-	if err := bs.Start(context.Background()); err != nil {
+	bridge := NewBridge(BridgeConfig{Base: "gh", HADiscoveryEnabled: true}, mp).WithSubscriber(sub)
+	seedDeclared(t, bridge, "homeassistant/switch/gh/obj1/config", []byte(`{"x":1}`))
+	mp.reset()
+
+	bs := NewBirthSync(sub, bridge, nil)
+	if err := bs.Start(cancelled); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	// Delivering "online" on a pre-cancelled lifecycleCtx must not block
-	// or panic; RepublishDiscovery receives the cancelled ctx and may
-	// succeed or return ctx.Err() — either way the call returns promptly.
+	cancel()
 	sub.deliver(HABirthTopic, []byte("online"))
+	bs.Close()
+
+	for _, p := range mp.publications() {
+		if p.topic == "homeassistant/switch/gh/obj1/config" {
+			return
+		}
+	}
+	t.Fatal("the replay was suppressed by a cancelled context it must not read")
 }
 
 // ---------------------------------------------------------------------------
@@ -1470,17 +1465,18 @@ func TestBirthSyncHandleRespectsLifecycleCtxCancel(t *testing.T) {
 
 func TestBirthSyncHandleRepublishError(t *testing.T) {
 	t.Parallel()
-	b := NewBridge(BridgeConfig{Base: "gh", HADiscoveryEnabled: true}, &errPublisher{})
-	// Pre-seed declared so RepublishDiscovery attempts to publish and fails.
-	b.mu.Lock()
-	b.declared["homeassistant/switch/gh/obj1/config"] = []byte(`{"x":1}`)
-	b.mu.Unlock()
-
+	mp := &mockPublisher{}
 	sub := &nopSubscriber{}
+	b := NewBridge(BridgeConfig{Base: "gh", HADiscoveryEnabled: true}, mp).WithSubscriber(sub)
+	seedDeclared(t, b, "homeassistant/switch/gh/obj1/config", []byte(`{"x":1}`))
+	// Fail every publish from here on, so the replay attempts and fails.
+	mp.err = errCleanupClientLacksSubscribe
+
 	bs := NewBirthSync(sub, b, nil)
 	_ = bs.Start(context.Background())
-	// Must not panic.
+	// Must not panic, and must not propagate.
 	sub.deliver(HABirthTopic, []byte("online"))
+	bs.Close()
 }
 
 // ---------------------------------------------------------------------------
@@ -1838,19 +1834,34 @@ func TestBridgePublishChannelEventStateRawEnabled(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Bridge.bytesEqual edge case (both empty)
+// The dedup gate, which is the shared runtime's now.
 // ---------------------------------------------------------------------------
 
-func TestBytesEqualBothEmpty(t *testing.T) {
+// TestIdenticalDiscoveryPayloadIsNotRepublished replaces the unit test of
+// this package's own byte comparison, which the shared runtime took over
+// along with the map it compared against.
+//
+// The gate is what a boot snapshot is worth: every payload of a
+// steady-state restart is byte-identical to the retained one already on the
+// broker, and comparing them turns nine thousand writes that change nothing
+// into zero — against a Home Assistant that re-reads and re-validates each.
+func TestIdenticalDiscoveryPayloadIsNotRepublished(t *testing.T) {
 	t.Parallel()
-	if !bytesEqual(nil, nil) {
-		t.Fatal("bytesEqual(nil, nil) must be true")
+	mp := &mockPublisher{}
+	b := NewBridge(BridgeConfig{Base: "gh", HADiscoveryEnabled: true}, mp)
+	const topic = "homeassistant/switch/gh/obj1/config"
+
+	seedDeclared(t, b, topic, []byte(`{"x":1}`))
+	mp.reset()
+
+	seedDeclared(t, b, topic, []byte(`{"x":1}`))
+	if got := len(mp.publications()); got != 0 {
+		t.Fatalf("an identical payload produced %d writes, want 0", got)
 	}
-	if !bytesEqual([]byte{}, []byte{}) {
-		t.Fatal("bytesEqual(empty, empty) must be true")
-	}
-	if bytesEqual([]byte{1}, nil) {
-		t.Fatal("bytesEqual([1], nil) must be false")
+
+	seedDeclared(t, b, topic, []byte(`{"x":2}`))
+	if got := len(mp.publications()); got != 1 {
+		t.Fatalf("a changed payload produced %d writes, want 1", got)
 	}
 }
 
@@ -2882,11 +2893,10 @@ func TestRetractDiscoveryForDeviceRetractsMatchingTopics(t *testing.T) {
 		match2    = "homeassistant/sensor/ccu01_aabbccdd1122/ch2_temp/config"
 		unrelated = "homeassistant/switch/ccu01_other000000aa/ch1_state/config"
 	)
-	b.mu.Lock()
-	b.declared[match1] = []byte(`{}`)
-	b.declared[match2] = []byte(`{}`)
-	b.declared[unrelated] = []byte(`{}`)
-	b.mu.Unlock()
+	seedDeclared(t, b, match1, []byte(`{}`))
+	seedDeclared(t, b, match2, []byte(`{}`))
+	seedDeclared(t, b, unrelated, []byte(`{}`))
+	mp.reset()
 
 	retracted := b.RetractDiscoveryForDevice(context.Background(), addr)
 	if retracted != 2 {
@@ -2894,14 +2904,12 @@ func TestRetractDiscoveryForDeviceRetractsMatchingTopics(t *testing.T) {
 	}
 
 	// The two matching entries are pruned; the unrelated one survives.
-	b.mu.Lock()
-	if _, ok := b.declared[unrelated]; !ok {
+	if !isDeclared(b, unrelated) {
 		t.Fatal("unrelated device entry was incorrectly pruned")
 	}
-	if _, ok := b.declared[match1]; ok {
+	if isDeclared(b, match1) {
 		t.Fatal("device entry should have been pruned but still present")
 	}
-	b.mu.Unlock()
 
 	// Each matched topic is retracted on the broker: empty retained payload.
 	retractSeen := map[string]bool{match1: false, match2: false}
@@ -2934,17 +2942,14 @@ func TestRetractDiscoveryForDeviceEmptyAddressIsNoop(t *testing.T) {
 
 	mp := &mockPublisher{}
 	b := NewBridge(BridgeConfig{Base: "loom", HADiscoveryEnabled: true}, mp)
-	b.mu.Lock()
-	b.declared["homeassistant/switch/ccu01_aabbccdd1122/ch1_state/config"] = []byte(`{}`)
-	b.mu.Unlock()
+	seedDeclared(t, b, "homeassistant/switch/ccu01_aabbccdd1122/ch1_state/config", []byte(`{}`))
+	mp.reset()
 
 	if n := b.RetractDiscoveryForDevice(context.Background(), ""); n != 0 {
 		t.Fatalf("empty address should retract 0, got %d", n)
 	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if len(b.declared) != 1 {
-		t.Fatalf("declared should still have 1 entry, got %d", len(b.declared))
+	if got := len(b.pub.Declared()); got != 1 {
+		t.Fatalf("declared should still have 1 entry, got %d", got)
 	}
 	if len(mp.publications()) != 0 {
 		t.Fatalf("empty address must not publish anything, got %d", len(mp.publications()))
@@ -2958,9 +2963,8 @@ func TestRetractDiscoveryForDeviceDiscoveryDisabledIsNoop(t *testing.T) {
 
 	mp := &mockPublisher{}
 	b := NewBridge(BridgeConfig{Base: "loom", HADiscoveryEnabled: false}, mp)
-	b.mu.Lock()
-	b.declared["homeassistant/switch/ccu01_aabbccdd1122/ch1_state/config"] = []byte(`{}`)
-	b.mu.Unlock()
+	seedDeclared(t, b, "homeassistant/switch/ccu01_aabbccdd1122/ch1_state/config", []byte(`{}`))
+	mp.reset()
 
 	if n := b.RetractDiscoveryForDevice(context.Background(), "AABBCCDD1122"); n != 0 {
 		t.Fatalf("discovery disabled should retract 0, got %d", n)

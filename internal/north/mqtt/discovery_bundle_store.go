@@ -11,8 +11,6 @@ import (
 
 	hacatalog "github.com/SukramJ/go-ha-catalog"
 	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
-
-	"github.com/SukramJ/openccu-loom/internal/model/naming"
 )
 
 // discoveryBundleStore accumulates the components of one node so they can be
@@ -213,38 +211,6 @@ func (s *discoveryBundleStore) Bundle(nodeID string) (*hadiscovery.Bundle, bool)
 		bundle.Components[k] = hadiscovery.Component{Platform: hacatalog.Platform(node.platforms[k])}
 	}
 	return bundle, true
-}
-
-// SupersededTopics returns the per-entity config topics this node's bundle
-// replaces, in stable order.
-//
-// The migration needs them, and it needs them exactly: measured against a
-// live Home Assistant (ADR 0070, amendment of 2026-09-10), publishing a
-// bundle while a per-entity config for the same unique id is still retained
-// is refused with nothing but a log line. The per-entity topics have to be
-// retracted first, and these are they — derived from what this daemon itself
-// would have published rather than read back from the broker, so the
-// migration needs no snapshot.
-//
-// Tombstoned components are included: their retained per-entity config is
-// exactly what has to go.
-func (s *discoveryBundleStore) SupersededTopics(nodeID string) []string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	node, ok := s.nodes[nodeID]
-	if !ok {
-		return nil
-	}
-	out := make([]string, 0, len(node.platforms))
-	for objectID, platform := range node.platforms {
-		if platform == "" {
-			continue
-		}
-		out = append(out, naming.DiscoveryConfigTopic(platform, nodeID, objectID))
-	}
-	sort.Strings(out)
-	return out
 }
 
 // Nodes lists the node ids the store holds, in stable order.
