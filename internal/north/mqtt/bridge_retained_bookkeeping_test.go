@@ -215,10 +215,7 @@ func TestHubDiscoveryRetractionLeavesTheDeclaredSet(t *testing.T) {
 	if err := b.PublishHubDiscovery(ctx, item); err != nil {
 		t.Fatalf("PublishHubDiscovery: %v", err)
 	}
-	b.mu.Lock()
-	_, declared := b.declared[topic]
-	b.mu.Unlock()
-	if !declared {
+	if !isDeclared(b, topic) {
 		t.Fatalf("%q is not in the declared set after the config was published", topic)
 	}
 
@@ -230,10 +227,7 @@ func TestHubDiscoveryRetractionLeavesTheDeclaredSet(t *testing.T) {
 	if got := len(mp.publications()); got != 2 {
 		t.Fatalf("publications = %d, want 2 (the retraction was swallowed by the dedup gate)", got)
 	}
-	b.mu.Lock()
-	_, stillDeclared := b.declared[topic]
-	b.mu.Unlock()
-	if stillDeclared {
+	if isDeclared(b, topic) {
 		t.Fatalf("%q is still in the declared set after its config was retracted", topic)
 	}
 
@@ -394,9 +388,9 @@ func TestRetractionForOneCentralLeavesTheOtherCentralsTopics(t *testing.T) {
 	b.RetractDiscoveryForCentralDevice(ctx, centralA, addr)
 	b.RetractRawStateForDevice(ctx, centralA, iface, addr)
 
+	declaredA := isDeclared(b, discoveryTopics[centralA])
+	declaredB := isDeclared(b, discoveryTopics[centralB])
 	b.mu.Lock()
-	_, declaredA := b.declared[discoveryTopics[centralA]]
-	_, declaredB := b.declared[discoveryTopics[centralB]]
 	_, rawA := b.rawTopics[stateTopics[centralA]]
 	_, rawB := b.rawTopics[stateTopics[centralB]]
 	b.mu.Unlock()

@@ -10,6 +10,9 @@ import (
 
 	hacatalog "github.com/SukramJ/go-ha-catalog"
 	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hapublisher "github.com/SukramJ/go-hamqtt/publisher"
+
+	"github.com/SukramJ/openccu-loom/internal/model/naming"
 )
 
 // bundleComponent is the per-entity body a producer marshals today: the
@@ -176,6 +179,13 @@ func TestReaddingClearsTheTombstone(t *testing.T) {
 // against a live instance (ADR 0070, amendment 2026-09-10): a bundle
 // published while a per-entity config for the same unique id is still
 // retained is refused, with nothing but a log line to show for it.
+//
+// The list is derived by [hapublisher.SupersededTopics] now, from the
+// document itself rather than from a second index beside it. What this
+// pins is that the store renders a bundle the shared derivation reads the
+// same way it read the store's own: same object-id keys, same platforms,
+// and a tombstoned component included — its retained per-entity config is
+// exactly what has to go.
 func TestSupersededTopicsAreTheOnesTheMigrationMustRetractFirst(t *testing.T) {
 	t.Parallel()
 
@@ -184,11 +194,16 @@ func TestSupersededTopicsAreTheOnesTheMigrationMustRetractFirst(t *testing.T) {
 	mustPut(t, s, "loom_ccu_0001abc", "valve", "number", bundleComponent("valve"))
 	s.Remove("loom_ccu_0001abc", "valve")
 
+	bundle, ok := s.Bundle("loom_ccu_0001abc")
+	if !ok {
+		t.Fatal("store rendered no bundle")
+	}
 	want := []string{
 		"homeassistant/number/loom_ccu_0001abc/valve/config",
 		"homeassistant/sensor/loom_ccu_0001abc/temperature/config",
 	}
-	if got := s.SupersededTopics("loom_ccu_0001abc"); !reflect.DeepEqual(got, want) {
+	got := hapublisher.SupersededTopics(naming.DiscoveryTopicPrefix, bundle)
+	if !reflect.DeepEqual(got, want) {
 		t.Errorf("superseded = %v, want %v", got, want)
 	}
 }

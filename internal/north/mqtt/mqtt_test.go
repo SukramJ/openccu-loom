@@ -80,6 +80,15 @@ func (m *mockPublisher) Publish(_ context.Context, topic string, payload []byte,
 	return nil
 }
 
+// reset forgets every recorded publish, so a test can seed the bridge's
+// declared set — which now costs a real publish, the runtime records only
+// what the broker accepted — and still assert on what happens next.
+func (m *mockPublisher) reset() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.sent = nil
+}
+
 func newTestBridge(t *testing.T, opts ...func(*BridgeConfig)) (*Bridge, *mockPublisher) {
 	t.Helper()
 	cfg := BridgeConfig{

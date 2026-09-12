@@ -14,6 +14,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	hapublisher "github.com/SukramJ/go-hamqtt/publisher"
+
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
 )
@@ -708,219 +710,127 @@ func discoveryNodeIDBelongsTo(nodeID string, prefixes []string) bool {
 	return false
 }
 
-// discoveryNodeIDFromTopic extracts the node id from a retained Home
-// Assistant discovery config topic, in either of the two forms Home
-// Assistant accepts:
+// RunDiscoveryOrphanCleanupOnce clears the retained HA-Discovery configs
+// this build no longer publishes, for one central's node-id namespace.
 //
-//	<prefix>/<component>/<node_id>/<object_id>/config   one entity
-//	<prefix>/device/<node_id>/config                    one device bundle
+// Why it exists: HA-Discovery configs are retained at QoS 1, so dropping an
+// entity from the daemon's emit set leaves the broker holding the old
+// payload indefinitely. Home Assistant reads it on the next integration
+// restart and re-creates the phantom entity. Operators previously had to run
+// `script/clean-mqtt-discovery.sh` by hand.
 //
-// The sweep has to recognise both or it cannot do its job after ADR 0070
-// step 13. A bundle is three segments where the per-entity form is four, so
-// matching only the latter made every bundle invisible: never inspected,
-// never evicted, and therefore retained forever by a broker that no daemon
-// would ever claim it from again.
+// The pass itself — the snapshot window over `homeassistant/#`, the
+// comparison against what this process has claimed, the re-check of every
+// candidate immediately before its retraction — is
+// [hapublisher.Runtime.Sweep] now. What this daemon keeps is the part that
+// is Homematic: which node ids are its own, and which of its planes have
+// published enough to be judged. That becomes the ownership predicate the
+// sweep refuses to run without.
 //
-// `device` is not ambiguous with a component name. Home Assistant declares 32
-// MQTT platforms and none of them is called that — the closest are
-// `device_automation` and `device_tracker`, which produce four segments
-// anyway. The three-segment per-entity form (node id omitted, which Home
-// Assistant permits) is therefore the only other reading, and the literal
-// first segment separates them.
+// Ordering is unchanged and still load-bearing. Run it AFTER
+// [EventBridge.PublishInitialSnapshot] has populated the claim set with
+// every entity the current build still drives — anything not in there is a
+// leftover from a previous build (different MASTER-paramset gating, retired
+// profiles, removed devices, …). Run it per central, after that central's
+// snapshot: the other centrals' entities are not claimed yet and must not be
+// judged.
 //
-// Ownership is not decided here. The caller scopes the node id to this
-// daemon's namespace, which is what keeps a parallel zigbee2mqtt deployment
-// — publishing bundles of its own — untouched.
-func discoveryNodeIDFromTopic(topic, prefix string) (string, bool) {
-	if !strings.HasPrefix(topic, prefix) || !strings.HasSuffix(topic, "/config") {
-		return "", false
-	}
-	parts := strings.Split(strings.TrimPrefix(topic, prefix), "/")
-	switch {
-	case len(parts) == 4:
-		return strings.ToLower(parts[1]), true
-	case len(parts) == 3 && parts[0] == discoveryBundleSegment:
-		return strings.ToLower(parts[1]), true
-	default:
-		return "", false
-	}
-}
-
-// discoveryBundleSegment is the fixed first segment of a device bundle's
-// topic. Home Assistant spells it `device`, and it is not a platform name.
-const discoveryBundleSegment = "device"
-
-// RunDiscoveryOrphanCleanupOnce subscribes to `homeassistant/#` for a
-// short snapshot window, accumulates every retained HA-Discovery
-// config topic that targets a node_id this daemon owns, then evicts
-// the topics that are NOT in the bridge's `declared` map. Designed to
-// run AFTER [EventBridge.PublishInitialSnapshot] has populated
-// `declared` with every entity the current build still drives —
-// anything not in there is a leftover from a previous build (different
-// MASTER-paramset gating, retired profiles, removed devices, …).
+// centralName scopes the pass to one CCU's node-id namespace, exactly like
+// [Bridge.RunRawOrphanCleanupOnce]: both node-id producers
+// ([naming.PathData.DiscoveryNodeID] and [hubNodeID]) slug the central they
+// belong to, so a pass that derived the prefix from the default central
+// alone could never reach a second CCU's orphans — their retained configs
+// kept re-creating permanently unavailable phantom entities that no
+// automatic pass could remove. An empty centralName falls back to the bridge
+// default, which is the single-CCU case.
 //
-// Why this exists: HA-Discovery configs are retained at QoS1, so
-// dropping an entity from the daemon's emit set leaves the broker
-// holding the old payload indefinitely. HA reads it on the next
-// integration restart and re-creates the phantom entity. Operators
-// previously had to run `script/clean-mqtt-discovery.sh` by hand;
-// this method does the equivalent automatically once per boot, scoped
-// to the daemon's own node_id namespace so unrelated integrations
-// (e.g. a parallel zigbee2mqtt deployment) stay untouched.
-//
-// Snapshot window defaults to 2 seconds — long enough for typical
-// brokers (Mosquitto / EMQX / VerneMQ) to flush the retained QoS1
-// queue to a fresh subscriber. Best-effort: returns the number of
-// orphans evicted plus any subscribe error.
-//
-// centralName scopes the pass to one CCU's node-id namespace, exactly
-// like [Bridge.RunRawOrphanCleanupOnce]: both node-id producers
-// ([naming.PathData.DiscoveryNodeID] and [hubNodeID]) slug the central
-// they belong to, so a pass that derived the prefix from the default
-// central alone could never reach a second CCU's orphans — their
-// retained configs kept re-creating permanently unavailable phantom
-// entities that no automatic pass could remove. An empty centralName
-// falls back to the bridge default, which is the single-CCU case.
-// Run it per central, after that central's snapshot: the other
-// centrals' entities are not in `declared` yet and must not be judged.
+// Best-effort: returns the number of orphans retracted plus any subscribe
+// error.
 func (b *Bridge) RunDiscoveryOrphanCleanupOnce(ctx context.Context, centralName string, snapshotWindow time.Duration) (int, error) {
 	if !b.cfg.HADiscoveryEnabled {
 		return 0, nil
 	}
-	if snapshotWindow <= 0 {
-		snapshotWindow = 2 * time.Second
-	}
-	subClient, ok := b.cleanupSubscriber()
-	if !ok {
+	if _, ok := b.cleanupSubscriber(); !ok {
 		return 0, errCleanupClientLacksSubscribe
 	}
 	rawCentral := b.resolvedCentral(centralName)
 	if rawCentral == "" {
-		// Without a central name we cannot scope the orphan filter to
-		// our own node_id namespace; refuse rather than risk wiping
-		// another integration's discovery configs.
+		// Without a central name we cannot scope the orphan filter to our
+		// own node_id namespace; refuse rather than risk wiping another
+		// integration's discovery configs.
 		return 0, nil
 	}
-	prefix := naming.DiscoveryTopicPrefix
-	nodePrefixes := discoveryNodePrefixes(rawCentral)
 
-	var (
-		mu      sync.Mutex
-		orphans []string
-		seen    int
-	)
-	handler := func(topic string, _ []byte, _ bool) {
-		nodeID, ok := discoveryNodeIDFromTopic(topic, prefix)
-		if !ok {
-			return
-		}
-		switch {
-		case discoveryNodeIDBelongsTo(nodeID, nodePrefixes):
-			// The central's own namespace — but the hub plane inside it
-			// publishes on its own schedule, long after the device
-			// snapshot that triggers this sweep. Judging it before it has
-			// declared retracts every sysvar, program, install-mode and
-			// system entity of the previous boot; the pass runs once per
-			// boot, so whatever it deletes stays deleted until the daemon
-			// restarts. See [Bridge.MarkHubPlaneDeclared].
-			if hubPlaneNodeID(nodeID) && !b.planeDeclared(hubPlaneKey(rawCentral)) {
-				return
-			}
-		case daemonLevelNodeIDs[nodeID]:
-			// A daemon-level plane is only swept once it has declared.
-			//
-			// The sweep runs during southbound bring-up, hundreds of
-			// lines before these planes are even constructed, so at that
-			// moment nothing of theirs is in `declared` and every one of
-			// their retained configs looks like an orphan. Sweeping then
-			// deleted the security entities on every single restart, and
-			// with the domain not yet started nothing re-declared them —
-			// they vanished from the consumer along with every
-			// automation and dashboard card built on them.
-			if !b.planeDeclared(nodeID) {
-				return
-			}
-		default:
-			// Not our daemon's namespace — skip.
-			return
-		}
-		mu.Lock()
-		seen++
-		mu.Unlock()
-		// Compare against what this process claims: any retained topic
-		// the current build did not (re)publish during boot is an
-		// orphan. `announced` is consulted alongside `declared` because
-		// a config still inside its Publish call is already on the
-		// broker — and already delivered to this very subscription —
-		// while `declared` records it only afterwards. The check is
-		// lock-protected by the bridge.
-		b.mu.Lock()
-		_, declared := b.declared[topic]
-		claimed := declared || b.announced[topic]
-		b.mu.Unlock()
-		if claimed {
-			return
-		}
-		mu.Lock()
-		orphans = append(orphans, topic)
-		mu.Unlock()
+	// The runtime serialises its own snapshot windows, but this bridge runs
+	// three other passes over broad wildcards on the same subscribe client
+	// — the legacy-state scrub, the raw-plane sweep and the unscoped-id
+	// scrub, two of them on this very filter. They share the bridge's slot,
+	// so this pass takes it too: two windows on `homeassistant/#` leave the
+	// second handler installed over the first, and the first teardown
+	// unsubscribes for both.
+	if !b.acquireSweepSlot(ctx) {
+		return 0, fmt.Errorf("%w: %w", ErrSweepSlotBusy, ctx.Err())
 	}
+	defer b.releaseSweepSlot()
 
-	if err := b.snapshotRetained(ctx, subClient, prefix+"#", b.cfg.QoS.Discovery, snapshotWindow, handler); err != nil {
+	result, err := b.pub.Sweep(ctx, hapublisher.SweepRequest{
+		Owns:   b.ownsDiscoveryTopic(rawCentral),
+		Window: snapshotWindow,
+	})
+	if err != nil {
 		return 0, err
 	}
-	// Copy under the same lock the deliveries append under: the window is
-	// closed by an atomic flag, so a delivery that passed the gate a
-	// moment earlier can still be inside the append while this goroutine
-	// reads the slice.
-	// Both are read under the same lock the deliveries write under: the
-	// window is closed by an atomic flag, so a delivery that passed the
-	// gate a moment earlier can still be inside the handler while this
-	// goroutine reads.
-	mu.Lock()
-	topics := append([]string(nil), orphans...)
-	inspected := seen
-	mu.Unlock()
-	evicted := b.evictDiscoveryOrphans(ctx, topics)
 	// The pair is what makes a silent sweep diagnosable: zero inspected
-	// means the snapshot window saw none of our retained configs, which
-	// is a different fault from a window that saw them all and found
-	// nothing orphaned.
-	slog.Default().Debug("mqtt.discovery_orphan_cleanup.snapshot",
+	// means the snapshot window saw none of our retained configs, which is
+	// a different fault from a window that saw them all and found nothing
+	// orphaned.
+	b.logger.Debug("mqtt.discovery_orphan_cleanup.snapshot",
 		slog.String("central", rawCentral),
-		slog.Int("inspected", inspected),
-		slog.Int("evicted", evicted))
-	return evicted, nil
+		slog.Int("inspected", result.Inspected),
+		slog.Int("evicted", len(result.Retracted)))
+	return len(result.Retracted), nil
 }
 
-// evictDiscoveryOrphans retracts each candidate topic and reports how many
-// it actually cleared.
+// ownsDiscoveryTopic builds the ownership predicate
+// [hapublisher.Runtime.Sweep] is scoped by: the Homematic half of the orphan
+// sweep, and the only half of it this daemon still owns.
 //
-// Every topic is re-checked against the bridge's claims immediately before
-// its retraction rather than on the verdict the snapshot window produced:
-// clearing thousands of topics takes seconds, and a publisher that declared
-// one of them in the meantime has made it live again — retracting it would
-// delete an entity that exists.
-func (b *Bridge) evictDiscoveryOrphans(ctx context.Context, topics []string) int {
-	evicted := 0
-	for _, topic := range topics {
-		b.mu.Lock()
-		_, declared := b.declared[topic]
-		claimed := declared || b.announced[topic]
-		b.mu.Unlock()
-		if claimed {
-			continue
+// Three answers, and every one of them was paid for:
+//
+//   - A node id under this central's `<central-slug>_` namespace is ours,
+//     in both the canonical and the legacy spelling — see
+//     [discoveryNodePrefixes]. Anything else belongs to another central or
+//     another integration entirely; a parallel zigbee2mqtt publishes device
+//     documents that parse perfectly well and must not be touched.
+//   - …except a hub-plane node id whose plane has not declared yet. The hub
+//     publishes LAST — sysvars, programs, install-mode and the system
+//     sensors only reach the broker once the CCU's serial has resolved,
+//     well after the device snapshot that triggers this pass. Judging it
+//     early retracted every one of them, once per boot, with nothing left
+//     to re-declare them. See [Bridge.MarkHubPlaneDeclared].
+//   - A daemon-level plane ([daemonLevelNodeIDs]) carries no central prefix
+//     at all (ADR 0052), so it has to be named explicitly — and it too is
+//     only swept once it has declared. The sweep runs during southbound
+//     bring-up, hundreds of lines before those planes are constructed, and
+//     sweeping then deleted the security entities on every single restart
+//     along with every automation and dashboard card built on them.
+//
+// It is called from the transport's read loop, so it stays a map lookup and
+// two string comparisons and publishes nothing.
+func (b *Bridge) ownsDiscoveryTopic(rawCentral string) func(hapublisher.ConfigTopic) bool {
+	nodePrefixes := discoveryNodePrefixes(rawCentral)
+	hubKey := hubPlaneKey(rawCentral)
+	return func(t hapublisher.ConfigTopic) bool {
+		nodeID := strings.ToLower(t.NodeID)
+		switch {
+		case discoveryNodeIDBelongsTo(nodeID, nodePrefixes):
+			return !hubPlaneNodeID(nodeID) || b.planeDeclared(hubKey)
+		case daemonLevelNodeIDs[nodeID]:
+			return b.planeDeclared(nodeID)
+		default:
+			return false
 		}
-		_ = b.client.Publish(ctx, topic, nil, b.cfg.QoS.Discovery, true)
-		evicted++
-		// Also drop the orphan from `declared` so a subsequent publish
-		// with the same topic is not silently dedup-suppressed against
-		// the now-empty payload.
-		b.mu.Lock()
-		delete(b.declared, topic)
-		b.mu.Unlock()
 	}
-	return evicted
 }
 
 // rawCentralPrefix returns the `<base>/<central>/` prefix the raw plane
@@ -1177,13 +1087,10 @@ func (b *Bridge) RunUnscopedDiscoveryCleanupOnce(ctx context.Context, snapshotWi
 	topics := append([]string(nil), stale...)
 	mu.Unlock()
 	for _, topic := range topics {
-		_ = b.client.Publish(ctx, topic, nil, b.cfg.QoS.Discovery, true)
-		// Drop it from `declared` as well: the snapshot that follows has
-		// to republish this topic, and the diff gate would otherwise
-		// suppress it against the payload we just cleared.
-		b.mu.Lock()
-		delete(b.declared, topic)
-		b.mu.Unlock()
+		// Through the runtime, so the topic leaves the dedup set too: the
+		// snapshot that follows has to republish it, and the gate would
+		// otherwise suppress that against the payload just cleared.
+		_ = b.pub.Retract(ctx, topic)
 	}
 	return len(topics), nil
 }

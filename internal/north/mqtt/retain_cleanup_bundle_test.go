@@ -3,12 +3,23 @@
 
 package mqtt
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	hapublisher "github.com/SukramJ/go-hamqtt/publisher"
+)
 
 // TestDiscoveryNodeIDFromTopic pins both discovery topic shapes. Before the
 // bundle form was recognised, a three-segment topic was dropped on the way in
 // — so a device bundle was never inspected, never evicted, and stayed on the
 // broker for good.
+//
+// The parser is [hapublisher.ParseConfigTopic] now, and this table is what
+// holds it to the reading this daemon's ownership check depends on. The one
+// thing it does not do is fold the node id — ownership is the caller's job
+// there, and so is the case — so the fold is applied here, exactly where
+// [Bridge.ownsDiscoveryTopic] applies it.
 func TestDiscoveryNodeIDFromTopic(t *testing.T) {
 	t.Parallel()
 
@@ -70,11 +81,11 @@ func TestDiscoveryNodeIDFromTopic(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got, ok := discoveryNodeIDFromTopic(tc.topic, prefix)
+			parsed, ok := hapublisher.ParseConfigTopic(prefix, tc.topic)
 			if ok != tc.wantOK {
 				t.Fatalf("ok = %v, want %v", ok, tc.wantOK)
 			}
-			if ok && got != tc.want {
+			if got := strings.ToLower(parsed.NodeID); ok && got != tc.want {
 				t.Errorf("node id = %q, want %q", got, tc.want)
 			}
 		})

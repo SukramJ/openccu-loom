@@ -32,10 +32,9 @@ func TestSweepKeepsTheBundleItJustPublished(t *testing.T) {
 		{topic: ours, payload: []byte(`{"device":{"identifiers":["x"]},"components":{}}`)},
 	}, true)
 
-	// Claim it the way a publish does.
-	b.mu.Lock()
-	b.declared[ours] = []byte(`{"device":{"identifiers":["x"]},"components":{}}`)
-	b.mu.Unlock()
+	// Claim it the way a publish does — which, since the claim set moved
+	// into the shared runtime, means actually publishing it.
+	seedDeclared(t, b, ours, []byte(`{"device":{"identifiers":["x"]},"components":{}}`))
 
 	if _, err := b.RunDiscoveryOrphanCleanupOnce(context.Background(), "ccu-a", 120*time.Millisecond); err != nil {
 		t.Fatalf("sweep: %v", err)
@@ -62,9 +61,7 @@ func TestSweepEvictsTheEntityConfigsTheBundleReplaced(t *testing.T) {
 		{topic: retired, payload: []byte(`{"name":"Retired"}`)},
 	}, true)
 
-	b.mu.Lock()
-	b.declared[ours] = []byte(`{"device":{"identifiers":["x"]},"components":{}}`)
-	b.mu.Unlock()
+	seedDeclared(t, b, ours, []byte(`{"device":{"identifiers":["x"]},"components":{}}`))
 
 	if _, err := b.RunDiscoveryOrphanCleanupOnce(context.Background(), "ccu-a", 120*time.Millisecond); err != nil {
 		t.Fatalf("sweep: %v", err)

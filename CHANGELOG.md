@@ -36,6 +36,80 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **go-hamqtt v0.24.0 -> v0.25.0, and the publish loop ADR 0070
+  promised moves up.** The ADR said a types-only library "would leave
+  the publish loop, availability policy and orphan sweep duplicated six
+  times". v0.25.0 ships that runtime, measured from this daemon's
+  implementation, and this is the daemon giving it up.
+
+  The bridge no longer keeps `declared` and `announced`. A
+  `publisher.Runtime` holds them, and with them the hash-dedup gate,
+  the claim taken before a publish reaches the broker, the
+  retract-then-publish ordering Home Assistant enforces between the two
+  discovery forms, the birth replay and the orphan sweep. The transport
+  is `publisher/gomqtt.Split` over the breaker-wrapped publish client
+  and a late-resolved subscribe client, because `WithSubscriber` wires
+  the second half after `NewBridge` has built the first.
+
+  **Every discovery golden held byte-for-byte.** All eleven pins under
+  `internal/north/mqtt/testdata/`, none regenerated, no `-update-*`
+  flag anywhere near this change. The retract-then-publish ordering the
+  live measurements of 2026-09-10/11 established is unchanged: the
+  runtime carries the measurement in its own doc comment and aborts
+  before the bundle when a retraction fails, exactly as
+  `publishDeviceBundle` did.
+
+  Four things the library deliberately did not take, and they stay:
+  bundle batching (`BeginBundleBatch`/`FlushBundles`), which is a
+  scheduling policy keyed by central; the per-component validity
+  counter, now raised on a document the runtime reports as actually
+  published; `RunBundleRollbackOnce`; and ownership filtering by
+  central name, which became the `Owns` predicate the sweep refuses to
+  run without.
+
+  `RunBundleRollbackOnce` stays because `PublishComponent` cannot
+  reach this daemon. It renders the body from a `discovery.Component`
+  through `EntityJSON`, and all 54 producers here hand the publish path
+  bytes they marshalled themselves — the bytes the goldens pin. Routing
+  them through it would re-render them. The standalone pass is also the
+  cheaper shape: one narrow `<prefix>/device/+/config` subscribe for
+  the whole fleet instead of a retraction per entity.
+
+  Five behaviour changes came with the move, all of them fitting:
+
+  - A superseded per-entity topic is retracted **once per process**
+    rather than on every change of the document. After the first
+    retraction the broker holds nothing there; a boot that rewrote a
+    sixteen-entity device forty times used to send forty rounds of
+    them.
+  - The sweep holds its slot through the retractions, not just the
+    window, so a later pass sees the tree an earlier one left behind.
+    It still takes the bridge's own slot as well: three other passes
+    ride the same subscribe client over broad wildcards, two of them
+    on `homeassistant/#`.
+  - The birth dispatcher collapses a burst onto one pending job
+    instead of queueing four. Every job is a full idempotent replay, so
+    the second after the first changes nothing, and a full queue would
+    push the blocking back onto the read loop the dispatcher exists to
+    keep free. `BirthSync.WithLifecycleContext` is gone with it: the
+    replay is detached from the delivery by construction, and `Close`
+    drains.
+  - The will is returned as data. `Bridge.LastWill()` renders it from
+    the same status topic `AnnounceOnline` publishes to, and
+    `TestConfiguredLastWillMatchesTheBridgePolicy` pins the will the
+    composition root puts on CONNECT against it. It is a check rather
+    than the source, because CONNECT happens before a bridge exists —
+    but that gap is exactly where two reference bridges in the family
+    ended up with a will no entity references.
+  - The transport is a narrow primitive-typed interface, which is what
+    let the breaker-wrapped publisher and the raw subscriber go in as
+    two values instead of one client.
+
+  `BridgeConfig.Logger` is new: the runtime is built with the bridge,
+  long before the composition root reaches `NewBirthSync`, and the
+  orphan sweep and birth replay are the two layers whose failures are
+  invisible from anywhere else.
+
 - **ADR 0070's "three packages move up" is superseded, measured.** All 262
   exports of `internal/payload`, `internal/model/naming` and
   `internal/routingkey` were classified before anything moved, and the

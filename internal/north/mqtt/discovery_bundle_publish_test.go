@@ -6,7 +6,9 @@ package mqtt
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/metrics"
 )
@@ -113,35 +115,83 @@ func TestAnUnchangedBundleTouchesNothing(t *testing.T) {
 	}
 }
 
-// TestRetractionLeavesNoClaimBehind: an empty payload is a retraction, not a
-// declaration. A topic left in `declared` would keep a retracted entity in
-// the set the orphan sweeps treat as live, and the Home-Assistant-birth
-// replay would re-publish the empty payload to a topic the broker no longer
-// retains.
+// TestRetractionLeavesNoClaimBehind: an empty payload is a retraction, not
+// a declaration. A superseded topic left in the claim set would keep a
+// cleared entity in the set the orphan sweeps treat as live, and the
+// Home-Assistant-birth replay would re-publish the empty payload to a topic
+// the broker no longer retains.
 func TestRetractionLeavesNoClaimBehind(t *testing.T) {
-	b, _ := newTestBridge(t)
+	b, pub := newTestBridge(t)
 	superseded := "homeassistant/sensor/node/temperature/config"
-
-	b.mu.Lock()
-	b.declared[superseded] = []byte(`{"unique_id":"x"}`)
-	b.announced[superseded] = true
-	b.mu.Unlock()
+	seedDeclared(t, b, superseded, []byte(`{"unique_id":"x"}`))
 
 	store := bundleStoreWith("node", "temperature")
 	if err := b.publishDeviceBundle(context.Background(), "ccu-01", "node", store); err != nil {
 		t.Fatalf("publishDeviceBundle: %v", err)
 	}
 
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if _, still := b.declared[superseded]; still {
+	if isDeclared(b, superseded) {
 		t.Error("the superseded topic is still declared")
 	}
-	if b.announced[superseded] {
-		t.Error("the superseded topic is still announced")
-	}
-	if _, ok := b.declared["homeassistant/device/node/config"]; !ok {
+	if !isDeclared(b, "homeassistant/device/node/config") {
 		t.Error("the bundle was not recorded as declared")
+	}
+
+	// The observable half of "no claim behind": a birth replay must not
+	// write the superseded topic again.
+	pub.reset()
+	if err := b.RepublishDiscovery(context.Background()); err != nil {
+		t.Fatalf("RepublishDiscovery: %v", err)
+	}
+	for _, rec := range pub.publications() {
+		if rec.topic == superseded {
+			t.Error("the birth replay resurrected the superseded topic")
+		}
+	}
+}
+
+// TestSupersededTopicsAreRetractedOncePerProcess pins the one thing the
+// move up changed here on purpose.
+//
+// This daemon used to retract the superseded per-entity topics on every
+// change of the document. After the first retraction the broker holds
+// nothing there, so a second is a message for nothing — and a boot that
+// rewrites a sixteen-entity device forty times sent forty rounds of them.
+// The shared runtime retracts each superseded topic once per process
+// instead.
+func TestSupersededTopicsAreRetractedOncePerProcess(t *testing.T) {
+	b, pub := newTestBridge(t)
+	ctx := context.Background()
+	store := bundleStoreWith("node", "temperature")
+
+	if err := b.publishDeviceBundle(ctx, "ccu-01", "node", store); err != nil {
+		t.Fatalf("first publish: %v", err)
+	}
+	pub.reset()
+
+	// Change the document, so the dedup gate does not swallow the second
+	// publish, and publish again.
+	mustPut(t, store, "node", "humidity", "sensor", bundleComponent("humidity"))
+	if err := b.publishDeviceBundle(ctx, "ccu-01", "node", store); err != nil {
+		t.Fatalf("second publish: %v", err)
+	}
+
+	const alreadyCleared = "homeassistant/sensor/node/temperature/config"
+	for _, rec := range pub.publications() {
+		if rec.topic == alreadyCleared && rec.payload == "" {
+			t.Error("a superseded topic was retracted a second time")
+		}
+	}
+	// The new component's own per-entity topic has never been cleared, so
+	// this publish is the one that must do it.
+	var sawNew bool
+	for _, rec := range pub.publications() {
+		if rec.topic == "homeassistant/sensor/node/humidity/config" && rec.payload == "" {
+			sawNew = true
+		}
+	}
+	if !sawNew {
+		t.Error("the newly added component's per-entity config was never retracted")
 	}
 }
 
@@ -149,27 +199,111 @@ func TestRetractionLeavesNoClaimBehind(t *testing.T) {
 // to its subscribers — the orphan sweep's own snapshot subscription
 // included — before Publish returns, so a claim taken afterwards arrives too
 // late to keep the sweep off a document this daemon is publishing right now.
+//
+// The claim itself is not observable from here any more; it lives inside
+// the shared runtime. What is observable is the thing it exists for, and
+// this drives it directly: a sweep window is open, and the broker delivers
+// the bundle to it from inside the very Publish call that writes it.
 func TestBundleIsClaimedBeforeItReachesTheBroker(t *testing.T) {
-	b, pub := newTestBridge(t)
-	const topic = "homeassistant/device/node/config"
+	const (
+		nodeID = "ccu-a_000a"
+		topic  = "homeassistant/device/" + nodeID + "/config"
+	)
+	broker := newFanoutBroker()
+	b := NewBridge(BridgeConfig{
+		Base: "openccu-loom", CentralName: "ccu-a",
+		RawEnabled: true, HADiscoveryEnabled: true, HADiscoveryBundles: true,
+	}, broker).WithSubscriber(broker)
+	broker.fanout = topic
 
-	claimedDuringPublish := false
-	pub.onPublish = func(t string) {
-		if t != topic {
-			return
-		}
-		b.mu.Lock()
-		claimedDuringPublish = b.announced[topic]
-		b.mu.Unlock()
-	}
+	sweepDone := make(chan error, 1)
+	go func() {
+		_, err := b.RunDiscoveryOrphanCleanupOnce(context.Background(), "ccu-a", 300*time.Millisecond)
+		sweepDone <- err
+	}()
+	broker.waitForSubscription(t)
 
-	store := bundleStoreWith("node", "temperature")
-	if err := b.publishDeviceBundle(context.Background(), "ccu-01", "node", store); err != nil {
+	store := bundleStoreWith(nodeID, "temperature")
+	if err := b.publishDeviceBundle(context.Background(), "ccu-a", nodeID, store); err != nil {
 		t.Fatalf("publishDeviceBundle: %v", err)
 	}
-	if !claimedDuringPublish {
-		t.Error("the bundle was not claimed before it reached the broker")
+	if err := <-sweepDone; err != nil {
+		t.Fatalf("sweep: %v", err)
 	}
+
+	if broker.evicted()[topic] {
+		t.Error("a sweep running across the publish retracted the document it was writing")
+	}
+}
+
+// fanoutBroker delivers one nominated topic back to the open subscription
+// from inside the Publish call that writes it — which is what a real broker
+// does, and the reason the claim has to be taken first.
+type fanoutBroker struct {
+	mu         sync.Mutex
+	handlers   map[string]MessageHandler
+	published  []publishedMsg
+	subscribed chan struct{}
+	fanout     string
+}
+
+func newFanoutBroker() *fanoutBroker {
+	return &fanoutBroker{handlers: map[string]MessageHandler{}, subscribed: make(chan struct{}, 4)}
+}
+
+func (b *fanoutBroker) Publish(_ context.Context, topic string, payload []byte, _ QoS, retain bool, _ ...PublishOption) error {
+	b.mu.Lock()
+	b.published = append(b.published, publishedMsg{topic: topic, payload: payload, retain: retain})
+	var deliver []MessageHandler
+	if topic == b.fanout && len(payload) > 0 {
+		for _, h := range b.handlers {
+			deliver = append(deliver, h)
+		}
+	}
+	b.mu.Unlock()
+	for _, h := range deliver {
+		h(&Message{Topic: topic, Payload: payload, Retain: true})
+	}
+	return nil
+}
+
+func (b *fanoutBroker) Subscribe(_ context.Context, filter string, _ QoS, handler MessageHandler, _ ...SubscribeOption) (SubscribeResult, error) {
+	b.mu.Lock()
+	b.handlers[filter] = handler
+	b.mu.Unlock()
+	select {
+	case b.subscribed <- struct{}{}:
+	default:
+	}
+	return SubscribeResult{}, nil
+}
+
+func (b *fanoutBroker) Unsubscribe(_ context.Context, filter string) error {
+	b.mu.Lock()
+	delete(b.handlers, filter)
+	b.mu.Unlock()
+	return nil
+}
+
+func (b *fanoutBroker) waitForSubscription(t *testing.T) {
+	t.Helper()
+	select {
+	case <-b.subscribed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the sweep never opened its snapshot window")
+	}
+}
+
+func (b *fanoutBroker) evicted() map[string]bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	out := map[string]bool{}
+	for _, p := range b.published {
+		if p.retain && len(p.payload) == 0 {
+			out[p.topic] = true
+		}
+	}
+	return out
 }
 
 // TestDiscoveryDisabledPublishesNothing: the bundle path honours the same
