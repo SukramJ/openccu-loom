@@ -53,8 +53,9 @@ type fleetSnapshot struct {
 func TestFleetPayloadsSatisfyHomeAssistantsSchema(t *testing.T) {
 	snap := loadFleetSnapshot(t)
 	if len(snap.Entities) == 0 {
-		t.Fatal("the snapshot holds no entities; every assertion below would pass vacuously")
+		t.Fatal("the snapshot exists but holds no entities; every assertion below would pass vacuously")
 	}
+	t.Logf("checking %d entities captured at %s", len(snap.Entities), snap.CapturedAt)
 
 	// See the doc comment. A named set, so adding a second exception is a
 	// deliberate act with a reason beside it rather than a quiet append.
@@ -126,7 +127,13 @@ func loadFleetSnapshot(t *testing.T) fleetSnapshot {
 	path := filepath.Join("testdata", "discovery_snapshot_openccu-loom.json")
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		t.Fatalf("read %s: %v", path, err)
+		// The capture is a local artefact — gitignored, ~24 MB, written by
+		// TestDiscoverySnapshotDumpAgainstGodevccu. Skipping rather than
+		// failing is the convention its sibling tests already follow: a
+		// machine that has not produced the capture cannot say anything
+		// about it, and pretending otherwise would turn "nobody generated
+		// it" into "the fleet is broken".
+		t.Skipf("openccu-loom snapshot not available (%v); run TestDiscoverySnapshotDumpAgainstGodevccu first", err)
 	}
 	var snap fleetSnapshot
 	if err := json.Unmarshal(raw, &snap); err != nil {
