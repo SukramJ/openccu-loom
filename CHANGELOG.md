@@ -6,6 +6,62 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Pins under the four planes the runtime adoption will move, before
+  anything moves.** ADR 0070's Phase 4 layer now exists in go-hamqtt
+  v0.26.0, and a measurement of what adopting its state, command and
+  availability planes would cost found that almost nothing here would
+  notice a change. No state message was byte-pinned anywhere that runs
+  in `make test` — only key presence, plus the nine float cases #796
+  added; the two tests that would have seen a reshaped payload are
+  behind `//go:build integration` / `e2e`. Adding a fourteenth command
+  filter was invisible, because nothing asserted the set or even its
+  count. The state-versus-command disjointness sweep covered one plane
+  of six. And `published but not declared` — a plane writing into a
+  topic no entity references, which the broker accepts and Home
+  Assistant never reads — was a `t.Logf`.
+
+  Concretely at risk: the shared library's `CommandRouter` now refuses
+  every overlapping filter pair, because it was measured
+  double-dispatching one command into two handler runs against a real
+  Mosquitto. This daemon has exactly three overlapping pairs out of 78
+  — two collision classes — and both are patched by hand-maintained
+  lists: `reservedLegacyParamSegments` for the six-segment class, and
+  the bucket allow-list's `default:` drop in `handleDataPoint` for the
+  seven-segment one. Both are complete today, verified by enumeration,
+  so nothing is being double-dispatched. Nothing enforced that they
+  stay complete, and the seven-segment class had no test at all.
+
+  So: a class-B echo pair for `combined` and `schedule`, driven through
+  a double that composes BOTH fan-outs a command survives — the broker
+  sends one copy per matching subscription and the client re-matches
+  every copy against its whole local filter list, so N overlapping
+  filters cost N*N handler calls. Modelling only the second half is
+  what hid the library's own defect, whose test asserted 2 while a real
+  broker dispatched 4. An exact ordered pin of all thirteen command
+  filters with their segment counts, plus the two hand-maintained lists
+  now derived from the registered filters rather than read by eye.
+  Fourteen `PerDPState` payloads byte-pinned, topic and body together,
+  produced by driving the real publisher against real device and data
+  point fixtures — the clock injected through the event rather than
+  normalised away, so nothing is blanked and nothing is excluded from
+  the comparison. The disjointness sweep widened to all six planes,
+  including the per-datapoint plane where the traffic is and a
+  vacuity guard that it really reaches every bucket and both catch-all
+  depths. And `published but not declared` is now a failure with a
+  one-entry allow-list, itself guarded against rotting.
+
+  Twelve findings are pinned as current behaviour rather than fixed, so
+  that a later fix can be seen: most visibly that
+  `PerDPState.ModifiedAt` is assigned the same epoch as `RefreshedAt`
+  unconditionally, contradicting its own doc comment and re-stamping a
+  modification time on every poll of an unchanged value — which is also
+  the direct reason a byte dedup gate is impossible on that plane.
+
+  No published byte moves. Every existing golden holds unchanged, and
+  no `-update-*-golden` flag was passed for an existing fixture.
+
 ### Removed
 
 - **The text display's aggregate `text` entity, which nothing could ever

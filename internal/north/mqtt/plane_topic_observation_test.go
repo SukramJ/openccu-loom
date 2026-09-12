@@ -168,15 +168,54 @@ func collectDeclaredTopicsFromPayload(t *testing.T, out map[string]bool, label s
 	}
 }
 
+// carriedWithoutDeclaration names the topic shapes a plane deliberately
+// writes with no discovery config referencing them, keyed by the topic's tail
+// below the configured base (the base is free-form operator config, so the
+// key cannot carry it).
+//
+// It is an allow-list, not a switch: [planeRoundTrip] FAILS on any other
+// carried-but-undeclared topic. Keeping the list this short is the point —
+// there is exactly one shape on it today, across all five planes.
+//
+// Finding **F11** was that this direction of the comparison was a `t.Logf`.
+// A plane writing into a topic no entity references is silent in every other
+// direction too: the broker accepts the publish, Home Assistant never
+// subscribes, and nothing anywhere says so. It is this daemon's local form of
+// the shared library's `ErrNoComponentStateTopic` hazard. The reason it was a
+// log line and not an assertion was that nobody had counted how many topics
+// were in that state; the answer, measured across every plane runner, is one.
+//
+// An entry that stops being carried fails
+// [TestCarriedWithoutDeclarationExemptionsAreAllStillCarried], so the list
+// cannot rot into a blanket exemption the way an unchecked exemption list
+// does.
+var carriedWithoutDeclaration = map[string]string{
+	"bridge/health": "the daemon's own JSON health snapshot, consumed by operators and by " +
+		"the REST/SPA surface rather than by a Home Assistant entity; deliberately not discovered",
+}
+
+// carriedWithoutDeclarationReason reports whether topic is one of the
+// deliberately-undeclared shapes, matching on the tail below the base.
+func carriedWithoutDeclarationReason(topic string) (string, bool) {
+	for tail, reason := range carriedWithoutDeclaration {
+		if topic == tail || strings.HasSuffix(topic, "/"+tail) {
+			return reason, true
+		}
+	}
+	return "", false
+}
+
 // planeRoundTrip compares what a plane declared against what it really
 // carried, and is the shared body of every `*PlaneTopicsRoundTrip` guard.
 //
-// The comparison is one-directional on purpose: a declared topic nobody
-// writes and nobody subscribes is the defect — a consumer creates the
-// entity from the retained config and it stays unavailable forever, or its
-// commands vanish silently. A topic carried without a declaration is a
-// lesser problem (an operator simply gets no entity for it) and is
-// reported rather than failed on.
+// Both directions are assertions:
+//
+//   - A declared topic nobody writes and nobody subscribes is the defect a
+//     consumer sees — it creates the entity from the retained config and it
+//     stays unavailable forever, or its commands vanish silently.
+//   - A carried topic nothing declares is the defect nobody sees, which is
+//     why it used to be reported rather than failed on (finding **F11**). It
+//     now fails unless the shape is listed in [carriedWithoutDeclaration].
 //
 // byDesign names the declared topics that are deliberately carried by
 // something outside this run; an entry that is no longer needed fails, so
@@ -215,9 +254,16 @@ func planeRoundTrip(t *testing.T, label string, declared, published map[string]b
 		}
 	}
 	for _, topic := range sortedKeys(published) {
-		if !declared[topic] {
-			t.Logf("%s: published but not declared: %q (no entity is created for it)", label, topic)
+		if declared[topic] {
+			continue
 		}
+		if _, exempt := carriedWithoutDeclarationReason(topic); exempt {
+			continue
+		}
+		t.Errorf("%s: published but not declared: %q — no discovery config names this topic, so no "+
+			"entity is ever created for it and nothing anywhere reports that: the broker accepts the "+
+			"publish and Home Assistant never subscribes. Either declare it, stop writing it, or add "+
+			"its shape to carriedWithoutDeclaration with the reason", label, topic)
 	}
 }
 
