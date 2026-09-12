@@ -6,6 +6,71 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The daemon-level and hub state planes publish through go-hamqtt's
+  `publisher.StatePublisher`, and the per-datapoint plane deliberately
+  does not.** ADR 0070's runtime measurement counted eleven retained
+  state payload shapes here and found exactly two that carry a field
+  changing on every emission — `pload.PerDPState`, whose `modified_at`
+  and `refreshed_at` come off the event, and the legacy mirror, which
+  read the wall clock at publish time and has since been deleted (#799).
+  A byte dedup gate is inert against `PerDPState`, and `PerDPState` is
+  the whole per-datapoint plane. So that plane keeps its own publish
+  path, and the nine shapes without a
+  per-emission field — sysvars, program state, install mode, the three
+  hub system scores, the firmware- and add-on-update states, the alarm
+  zone tokens, the Security & Safety aggregates and the daemon's own
+  `bridge/health` snapshot — now go through one publisher with one byte
+  gate, one retained-topic index and one renderer.
+
+  The trap the measurement named, and the reason this is a `Changed`
+  entry rather than a refactor: `publisher.StateConfig.QoS` reads its
+  zero value as *unset* and resolves it to QoS 1, while this daemon's
+  state plane has always been QoS 0. Handing the configured byte over,
+  or omitting the field, would have raised the delivery guarantee of
+  every state publish on the first boot after the migration, with not
+  one payload byte different for a golden file to catch. go-hamqtt
+  v0.27.0 added `publisher.QoSAtMostOnce` precisely so that "unset" and
+  "deliberately QoS 0" stop being the same value, and the level is now
+  stated with it. `TestEveryMovedStatePublishIsAtMostOnce` reads the QoS
+  back off the transport call for all eleven moved publishes; mutating
+  the config to `QoSUnset` turns every row red.
+
+  `renderValue` was checked rather than assumed against
+  `publisher.RenderRawValue` — a sibling migration found the shared
+  renderer writing a Go bool as `true`/`false` where that bridge
+  published `1`/`0` — and the two agree byte for byte on every value
+  shape this daemon produces, floats included. Two shapes stay local:
+  a nil value keeps this daemon's own `ErrNilValue`, because callers
+  switch on it and zero bytes on a retained topic would delete the
+  entity, and a `[]byte` stays JSON-encoded rather than passed through
+  raw. Nothing here produces a `[]byte` value, so that divergence is
+  unreachable in production — and a value shape nothing produces is not
+  the place to change a published byte on the way past.
+
+  Two consequences worth stating. A retraction now routes through
+  `Evict`, because the publish path refuses empty bytes with
+  `ErrEmptyStatePayload`: a deletion has to be asked for on purpose,
+  which is the shape of the nil-sysvar defect that used to delete its
+  own entity. And the gate needs opening on a reconnect —
+  `Bridge.ResetRuntimeGates` does it from `AnnounceOnline` and from the
+  domain's boot snapshot pass, next to the availability cache that is
+  cleared there for the identical reason, because a broker that came
+  back without a persistent retained store holds none of the bytes the
+  gate remembers.
+
+  `publish_latency.go` stays. `StatePublisher.Latency()` supersedes it
+  on paper, but the probe decorates the transport and therefore times
+  all four planes, while `Latency()` sees only publishes issued through
+  the state publisher — which this step deliberately keeps the
+  per-datapoint plane out of. Swapping them would replace a whole-path
+  measurement with one blind to the plane that carries the traffic.
+
+  No published byte moves. All fourteen `PerDPState` goldens and every
+  discovery golden hold unchanged, and no `-update-*-golden` flag was
+  passed.
+
 ### Added
 
 - **Pins under the four planes the runtime adoption will move, before

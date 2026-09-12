@@ -80,6 +80,15 @@ func (m *mockPublisher) Publish(_ context.Context, topic string, payload []byte,
 	return nil
 }
 
+// recorded returns a copy of the publishes seen so far, under the lock they
+// are appended with — a test that reads the slice directly races the
+// publishers that hand their writes to a worker goroutine.
+func (m *mockPublisher) recorded() []publishRecord {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]publishRecord(nil), m.sent...)
+}
+
 // reset forgets every recorded publish, so a test can seed the bridge's
 // declared set — which now costs a real publish, the runtime records only
 // what the broker accepted — and still assert on what happens next.

@@ -708,13 +708,7 @@ func (b *Bridge) RetractAlarmDiscovery(ctx context.Context, component, nodeID, o
 // `publish_errors`. An alarm surface is the last plane whose publishes an
 // operator should have to take on trust.
 func (b *Bridge) PublishAlarmState(ctx context.Context, topic, token string) error {
-	if err := b.client.Publish(ctx, topic, []byte(token), b.cfg.QoS.State, true); err != nil {
-		b.incPublishErrors("")
-		return err
-	}
-	b.rememberRawTopic(topic)
-	b.incMessagesSent("")
-	return nil
+	return b.publishRuntimeState(ctx, "", topic, []byte(token))
 }
 
 // PublishAlarmAvailability publishes the retained per-panel availability
@@ -750,13 +744,7 @@ func (b *Bridge) PublishAlarmAvailability(ctx context.Context, topic string, onl
 // Never gated: the topics it clears are the ones discovery declares, and a
 // retraction that is skipped leaves a stale retained value behind forever.
 func (b *Bridge) RetractAlarmTopic(ctx context.Context, topic string) error {
-	if err := b.client.Publish(ctx, topic, nil, b.cfg.QoS.State, true); err != nil {
-		b.incPublishErrors("")
-		return err
-	}
-	b.forgetRawTopic(topic)
-	b.incMessagesSent("")
-	return nil
+	return b.evictRuntimeState(ctx, "", topic)
 }
 
 // PublishAlarmEvent publishes a non-retained JSON alarm event. Returns nil

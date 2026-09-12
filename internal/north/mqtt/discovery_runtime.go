@@ -54,7 +54,7 @@ func discoveryRuntimeConfig(b *Bridge, logger *slog.Logger) hapublisher.Config {
 		// `availability_mode: "all"` a single typo greys out the whole fleet
 		// with nothing on the wire naming the cause.
 		Layout: bridgeStatusLayout{base: b.topics.Base},
-		QoS:    byte(b.cfg.QoS.Discovery),
+		QoS:    runtimeQoS(b.cfg.QoS.Discovery),
 		OnResync: func(replayed int, err error) {
 			if err != nil {
 				logger.Warn("mqtt.birth_sync.republish", slog.String("err", err.Error()))

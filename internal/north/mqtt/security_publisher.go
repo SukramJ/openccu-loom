@@ -251,13 +251,7 @@ func (p *SecurityMQTTPublisher) publish(ctx context.Context, m securityMsg) {
 // PublishSecurityState publishes one retained Security & Safety
 // aggregate and records the topic in the bridge's retained-topic index.
 func (b *Bridge) PublishSecurityState(ctx context.Context, topic string, body []byte) error {
-	if err := b.client.Publish(ctx, topic, body, b.cfg.QoS.State, true); err != nil {
-		b.incPublishErrors("")
-		return err
-	}
-	b.rememberRawTopic(topic)
-	b.incMessagesSent("")
-	return nil
+	return b.publishRuntimeState(ctx, "", topic, body)
 }
 
 // PublishSecurityEvent publishes one non-retained Security & Safety
@@ -310,13 +304,7 @@ func (b *Bridge) PublishSecurityAvailability(ctx context.Context, topic string, 
 // entity no longer exists, and drops it from the retained-topic index
 // so nothing retracts an already-empty topic a second time.
 func (b *Bridge) RetractSecurityState(ctx context.Context, topic string) error {
-	if err := b.client.Publish(ctx, topic, nil, b.cfg.QoS.State, true); err != nil {
-		b.incPublishErrors("")
-		return err
-	}
-	b.forgetRawTopic(topic)
-	b.incMessagesSent("")
-	return nil
+	return b.evictRuntimeState(ctx, "", topic)
 }
 
 // enqueue queues a publish without blocking the domain's bus goroutine.

@@ -39,11 +39,11 @@ require filippo.io/nistec v0.0.4 // indirect
 require (
 	github.com/SukramJ/go-fabric v0.0.0-20260907130242-f06fc1cb3756
 	github.com/SukramJ/go-ha-catalog v0.2.1
-	github.com/SukramJ/go-hamqtt v0.26.0
+	github.com/SukramJ/go-hamqtt v0.28.0
 )
 
 require (
-	github.com/SukramJ/go-mqtt v1.4.0
+	github.com/SukramJ/go-mqtt v1.5.0
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-openapi/jsonpointer v1.0.0 // indirect
