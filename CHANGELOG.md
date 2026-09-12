@@ -8,6 +8,45 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **go-hamqtt v0.28.0 -> v0.29.0, and the inbound param decoders move
+  up.** ADR 0070's move-up measurement, step C: the four `Param*`
+  coercions are 137 lines that decode *inbound* service-call bodies and
+  touch no published string, which is what made them the first
+  non-trivial piece of `internal/payload` that is genuinely
+  daemon-agnostic. They now live in `go-hamqtt/payload` and this daemon
+  imports them back.
+
+  `ErrServiceMissingParam` and `ErrServiceInvalidParam` keep their names
+  as aliases of the shared sentinels. They are not just the decoders'
+  return values -- they are this package's error vocabulary, wrapped
+  with their own message at twenty-odd call sites across
+  `internal/model`, and matched by the custom-DP dispatcher to turn a
+  bad service call into a client error rather than an internal fault.
+  The alias moves the identity with the implementation, so an
+  `errors.Is` written against either name matches an error from either
+  side.
+
+  The asymmetry with `internal/parameter`'s CCU-side `asBool` is
+  documented rather than removed: this decoder's spelling list is exact
+  and excludes "yes"/"no" because the set Home Assistant emits is
+  knowable, while coercing a device value against a parameter
+  descriptor is a different boundary with a different set.
+
+### Fixed
+
+- **The bundle sweep's node-id guard was not load-bearing in any test.**
+  Every non-claimed row of `TestDiscoveryNodeIDFromTopic` was already
+  settled by the prefix, by `Bundle`, or by an empty node id, so a guard
+  that claimed *every* node id passed the whole table -- verified by
+  mutation. A row for a foreign device bundle now makes it decisive, and
+  the test asserts the property the production path depends on (whether
+  the sweep claims the topic) rather than the library's parse result,
+  which is its own contract and has widened once already. Claiming a
+  foreign integration's device bundle means sweeping away another
+  integration's entities.
+
+### Changed
+
 - **The device, program-role, alarm and Security & Safety availability
   planes publish through go-hamqtt's `publisher.AvailabilityPublisher`,
   and a retraction now goes out at the same QoS as the publish it

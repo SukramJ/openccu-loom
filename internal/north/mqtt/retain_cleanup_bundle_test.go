@@ -30,6 +30,12 @@ func TestDiscoveryNodeIDFromTopic(t *testing.T) {
 		want       string
 		wantOK     bool
 		wantBundle bool
+		// wantOwned is whether the bundle sweep would claim the topic —
+		// the property the production path actually depends on, composed
+		// here from the same three conditions it applies. Asserted
+		// directly because the library's parse result is its own contract
+		// and has widened once already.
+		wantOwned bool
 	}{
 		{
 			name:   "per-entity form",
@@ -40,6 +46,7 @@ func TestDiscoveryNodeIDFromTopic(t *testing.T) {
 		{
 			name:       "device bundle",
 			topic:      "homeassistant/device/loom_ccu_0001abc/config",
+			wantOwned:  true,
 			want:       "loom_ccu_0001abc",
 			wantOK:     true,
 			wantBundle: true,
@@ -47,6 +54,7 @@ func TestDiscoveryNodeIDFromTopic(t *testing.T) {
 		{
 			name:       "node id is folded, as the ownership check expects",
 			topic:      "homeassistant/device/LOOM_CCU_0001ABC/config",
+			wantOwned:  true,
 			want:       "loom_ccu_0001abc",
 			wantOK:     true,
 			wantBundle: true,
@@ -79,6 +87,23 @@ func TestDiscoveryNodeIDFromTopic(t *testing.T) {
 			wantBundle: false,
 		},
 		{
+			// The row that makes the node-id guard load-bearing. Every
+			// other non-claimed row above is already settled by the
+			// prefix, by `Bundle`, or by an empty node id — so without
+			// this one, a guard that claimed EVERY node id would pass the
+			// whole table. That is not hypothetical: mutating
+			// `discoveryNodeIDBelongsTo` to return true unconditionally
+			// was verified to pass before this row existed and to fail
+			// after it. Claiming a foreign integration's device bundle
+			// means sweeping away somebody else's entities.
+			name:       "a bundle under a foreign node id parses but is not this daemon's",
+			topic:      "homeassistant/device/zigbee2mqtt_0x00124b/config",
+			want:       "zigbee2mqtt_0x00124b",
+			wantOK:     true,
+			wantBundle: true,
+			wantOwned:  false,
+		},
+		{
 			name:   "another prefix",
 			topic:  "hass/device/loom_ccu_0001abc/config",
 			wantOK: false,
@@ -102,6 +127,11 @@ func TestDiscoveryNodeIDFromTopic(t *testing.T) {
 			}
 			if ok && parsed.Bundle != tc.wantBundle {
 				t.Errorf("bundle = %v, want %v", parsed.Bundle, tc.wantBundle)
+			}
+			owned := ok && parsed.Bundle &&
+				discoveryNodeIDBelongsTo(strings.ToLower(parsed.NodeID), []string{"loom_ccu_"})
+			if owned != tc.wantOwned {
+				t.Errorf("claimed by the bundle sweep = %v, want %v", owned, tc.wantOwned)
 			}
 		})
 	}

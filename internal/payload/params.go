@@ -4,134 +4,67 @@
 package payload
 
 import (
-	"errors"
-	"fmt"
-	"strconv"
+	hapayload "github.com/SukramJ/go-hamqtt/payload"
 )
 
 // ErrServiceMissingParam is returned by the Param* decoders when a
 // required key is absent from the service-method request body.
 // Wrapped with the offending key name for diagnostics.
-var ErrServiceMissingParam = errors.New("payload: service missing required param")
+//
+// It is an alias of [hapayload.ErrMissingParam], not a second sentinel:
+// the coercions moved into the shared module (ADR 0070's move-up
+// measurement, step C) and the error identity moved with them, so an
+// `errors.Is` written against either name matches an error produced by
+// either side. The daemon-local name stays because it is this package's
+// error vocabulary -- twenty-odd call sites across internal/model wrap
+// it with their own message, and the custom-DP dispatcher matches it to
+// turn a bad service call into a client error rather than an internal
+// fault -- and renaming those would be churn on log text for no gain.
+var ErrServiceMissingParam = hapayload.ErrMissingParam
 
 // ErrServiceInvalidParam is returned when a key is present but its
-// value cannot be coerced to the expected Go type.
-var ErrServiceInvalidParam = errors.New("payload: service param has invalid type")
+// value cannot be coerced to the expected Go type. An alias of
+// [hapayload.ErrInvalidParam]; see [ErrServiceMissingParam].
+var ErrServiceInvalidParam = hapayload.ErrInvalidParam
 
-// ParamBool decodes a required bool param. JSON numbers (1 / 0) are
-// coerced to true / false to match what HA's MQTT layer typically
-// sends through `payload_on` / `payload_off` templates; common string
-// spellings ("true" / "false" / "on" / "off") are also accepted.
+// ParamBool decodes a required bool param.
 //
-// Its truth table is deliberately narrower/wider in different ways than
-// internal/parameter's CCU-side `asBool` (case-sensitive spelling list vs.
-// case-insensitive + "yes"/"no"): the two coerce different boundaries
-// (north-bound service-call JSON here vs. CCU wire values there against a
-// parameter descriptor) and are not meant to converge — see the comment on
-// `asBool` in internal/parameter/coerce.go for the other side.
+// The implementation is [hapayload.ParamBool]. Its coercions are not
+// arbitrary and its doc comment carries the reasons: Home Assistant's
+// templating decides what Go type reaches the wire, so a `{{ value }}`
+// template sends the string "42" where the author meant a number and
+// `payload_on` sends whatever the platform's default spelling is.
+//
+// Note in particular what this decoder does NOT accept, because the
+// asymmetry is deliberate: its spelling list is exact and excludes
+// "yes"/"no", while internal/parameter's CCU-side `asBool` is
+// case-insensitive and does accept them. The two coerce different
+// boundaries -- north-bound service-call JSON here, CCU wire values
+// against a parameter descriptor there -- and are not meant to
+// converge. See the comment on `asBool` in internal/parameter/coerce.go.
 func ParamBool(params map[string]any, key string) (bool, error) {
-	raw, ok := params[key]
-	if !ok {
-		return false, fmt.Errorf("%w: %q", ErrServiceMissingParam, key)
-	}
-	switch v := raw.(type) {
-	case bool:
-		return v, nil
-	case float64:
-		return v != 0, nil
-	case int:
-		return v != 0, nil
-	case string:
-		switch v {
-		case "true", "True", "TRUE", "1", "on", "ON":
-			return true, nil
-		case "false", "False", "FALSE", "0", "off", "OFF":
-			return false, nil
-		}
-	}
-	return false, fmt.Errorf("%w: %q", ErrServiceInvalidParam, key)
+	return hapayload.ParamBool(params, key)
 }
 
-// ParamFloat64 decodes a required float64 param. JSON-decoded numbers
-// always arrive as float64; integer literals and numeric strings are
-// also accepted (lets HA's `{{ value }}` template work without an
-// explicit `| float` filter).
+// ParamFloat64 decodes a required float64 param. The implementation is
+// [hapayload.ParamFloat64], which parses a numeric string strictly, so
+// "42xyz" is an error rather than 42.
 func ParamFloat64(params map[string]any, key string) (float64, error) {
-	raw, ok := params[key]
-	if !ok {
-		return 0, fmt.Errorf("%w: %q", ErrServiceMissingParam, key)
-	}
-	switch v := raw.(type) {
-	case float64:
-		return v, nil
-	case float32:
-		return float64(v), nil
-	case int:
-		return float64(v), nil
-	case int32:
-		return float64(v), nil
-	case int64:
-		return float64(v), nil
-	case string:
-		// strconv.ParseFloat (unlike fmt.Sscanf) rejects trailing
-		// garbage such as "42xyz" instead of silently truncating it.
-		if f, err := strconv.ParseFloat(v, 64); err == nil {
-			return f, nil
-		}
-	}
-	return 0, fmt.Errorf("%w: %q", ErrServiceInvalidParam, key)
+	return hapayload.ParamFloat64(params, key)
 }
 
-// ParamInt32 decodes a required int32 param. Out-of-range integer
-// inputs (|v| > MaxInt32) produce ErrServiceInvalidParam — silent
-// truncation would surprise callers that supply 64-bit indices.
+// ParamInt32 decodes a required int32 param. The implementation is
+// [hapayload.ParamInt32], which treats an out-of-range input as an error
+// rather than truncating it -- truncation would arrive as a write to the
+// wrong thing rather than as a rejected command. Note that a fractional
+// float64 IS truncated, which the shared doc comment now says outright.
 func ParamInt32(params map[string]any, key string) (int32, error) {
-	raw, ok := params[key]
-	if !ok {
-		return 0, fmt.Errorf("%w: %q", ErrServiceMissingParam, key)
-	}
-	const maxI32, minI32 = 1<<31 - 1, -(1 << 31)
-	switch v := raw.(type) {
-	case int32:
-		return v, nil
-	case int:
-		if v > maxI32 || v < minI32 {
-			return 0, fmt.Errorf("%w: %q overflows int32", ErrServiceInvalidParam, key)
-		}
-		return int32(v), nil
-	case int64:
-		if v > maxI32 || v < minI32 {
-			return 0, fmt.Errorf("%w: %q overflows int32", ErrServiceInvalidParam, key)
-		}
-		return int32(v), nil
-	case float64:
-		if v > float64(maxI32) || v < float64(minI32) {
-			return 0, fmt.Errorf("%w: %q overflows int32", ErrServiceInvalidParam, key)
-		}
-		return int32(v), nil
-	case string:
-		// strconv.ParseInt (unlike fmt.Sscanf) rejects trailing
-		// garbage such as "42xyz" instead of silently truncating it.
-		if n, err := strconv.ParseInt(v, 10, 32); err == nil {
-			return int32(n), nil
-		}
-	}
-	return 0, fmt.Errorf("%w: %q", ErrServiceInvalidParam, key)
+	return hapayload.ParamInt32(params, key)
 }
 
-// ParamString decodes a required string param. Numeric / bool values
-// are formatted to their canonical Go string form for caller
-// convenience.
+// ParamString decodes a required string param. The implementation is
+// [hapayload.ParamString], which formats a numeric or bool value to its
+// canonical Go string form.
 func ParamString(params map[string]any, key string) (string, error) {
-	raw, ok := params[key]
-	if !ok {
-		return "", fmt.Errorf("%w: %q", ErrServiceMissingParam, key)
-	}
-	switch v := raw.(type) {
-	case string:
-		return v, nil
-	case bool, int, int32, int64, float32, float64:
-		return fmt.Sprintf("%v", v), nil
-	}
-	return "", fmt.Errorf("%w: %q", ErrServiceInvalidParam, key)
+	return hapayload.ParamString(params, key)
 }
