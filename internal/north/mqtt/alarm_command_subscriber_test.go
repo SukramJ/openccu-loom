@@ -111,14 +111,62 @@ func (f *fakeAlarmSink) snapshot() alarmSinkSnapshot {
 	}
 }
 
-// newAlarmCommandSubscriber builds a CommandSubscriber wired only with
-// sink as its AlarmSink — the CommandSink dependency stays nil since
-// none of these tests exercise the datapoint/sysvar/program plane.
-func newAlarmCommandSubscriber(t *testing.T, sink AlarmSink) *CommandSubscriber {
+// alarmCommandFilter is the route the daemon-level alarm plane registers.
+// Written out because these tests drive the plane the way a broker does —
+// one message on one subscription — rather than by calling the handler,
+// which is no longer reachable from outside the router that parses the topic
+// for it.
+const alarmCommandFilter = "gh/alarm/+/set"
+
+// alarmFixture is a started CommandSubscriber wired only with sink as its
+// AlarmSink — the CommandSink dependency stays nil since none of these tests
+// exercise the datapoint/sysvar/program plane — plus the client the messages
+// arrive on.
+type alarmFixture struct {
+	client *NoopClient
+	sub    *CommandSubscriber
+}
+
+// newAlarmCommandSubscriber builds and starts the fixture.
+func newAlarmCommandSubscriber(t *testing.T, sink AlarmSink) *alarmFixture {
 	t.Helper()
-	sub := NewCommandSubscriber(NewNoopClient(), NewTopicBuilder("gh"), nil, nil).WithAlarmSink(sink)
+	client := NewNoopClient()
+	sub := NewCommandSubscriber(client, NewTopicBuilder("gh"), nil, nil).WithAlarmSink(sink)
+	if err := sub.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
 	t.Cleanup(sub.Close)
-	return sub
+	return &alarmFixture{client: client, sub: sub}
+}
+
+// deliver pushes one live broker message onto the alarm subscription and
+// blocks until the worker that picked it up is done.
+//
+// The WaitIdle is not optional and not a tidiness measure: handlers run on
+// the router's worker pool, never on the goroutine that delivered the
+// message, so an assertion on the sink immediately after this call would be
+// a race. That is the handler-goroutine contract this plane moved onto.
+func (f *alarmFixture) deliver(t *testing.T, topic, payload string) {
+	t.Helper()
+	f.deliverAs(t, topic, payload, false)
+}
+
+// deliverRetained is the retained-replay form.
+func (f *alarmFixture) deliverRetained(t *testing.T, topic, payload string) {
+	t.Helper()
+	f.deliverAs(t, topic, payload, true)
+}
+
+func (f *alarmFixture) deliverAs(t *testing.T, topic, payload string, retained bool) {
+	t.Helper()
+	deliver := f.client.DeliverInbound
+	if retained {
+		deliver = f.client.DeliverInboundRetained
+	}
+	if !deliver(alarmCommandFilter, topic, []byte(payload)) {
+		t.Fatalf("no subscriber registered for %q — the alarm plane went silent", alarmCommandFilter)
+	}
+	f.sub.WaitIdle()
 }
 
 // --- TRIGGER -> panic ---
@@ -132,8 +180,7 @@ func TestHandleAlarmCommand_Trigger_RoutesToPanic(t *testing.T) {
 	sink := &fakeAlarmSink{}
 	sub := newAlarmCommandSubscriber(t, sink)
 
-	sub.handleAlarmCommand("gh/alarm/eg/set", []byte("TRIGGER"), false)
-	sub.WaitIdle()
+	sub.deliver(t, "gh/alarm/eg/set", "TRIGGER")
 
 	got := sink.snapshot()
 	if len(got.panicCalls) != 1 || got.panicCalls[0] != "eg" {
@@ -152,8 +199,7 @@ func TestHandleAlarmCommand_MasterTrigger_Dropped(t *testing.T) {
 	sink := &fakeAlarmSink{}
 	sub := newAlarmCommandSubscriber(t, sink)
 
-	sub.handleAlarmCommand("gh/alarm/master/set", []byte("TRIGGER"), false)
-	sub.WaitIdle()
+	sub.deliver(t, "gh/alarm/master/set", "TRIGGER")
 
 	if got := sink.snapshot(); len(got.panicCalls) != 0 {
 		t.Fatalf("panicCalls = %v, want none for master TRIGGER", got.panicCalls)
@@ -167,8 +213,7 @@ func TestHandleAlarmCommand_ArmWithCode_ParsesJSONEnvelope(t *testing.T) {
 	sink := &fakeAlarmSink{}
 	sub := newAlarmCommandSubscriber(t, sink)
 
-	sub.handleAlarmCommand("gh/alarm/eg/set", []byte(`{"action":"ARM_AWAY","code":"1234"}`), false)
-	sub.WaitIdle()
+	sub.deliver(t, "gh/alarm/eg/set", `{"action":"ARM_AWAY","code":"1234"}`)
 
 	got := sink.snapshot()
 	if len(got.armCalls) != 1 {
@@ -184,8 +229,7 @@ func TestHandleAlarmCommand_Disarm_BareStringPayloadCarriesNoCode(t *testing.T) 
 	sink := &fakeAlarmSink{}
 	sub := newAlarmCommandSubscriber(t, sink)
 
-	sub.handleAlarmCommand("gh/alarm/eg/set", []byte("DISARM"), false)
-	sub.WaitIdle()
+	sub.deliver(t, "gh/alarm/eg/set", "DISARM")
 
 	got := sink.snapshot()
 	if len(got.disarmCalls) != 1 || got.disarmCalls[0] != (fakeAlarmCodeCall{area: "eg", code: ""}) {
@@ -198,8 +242,7 @@ func TestHandleAlarmCommand_Silence(t *testing.T) {
 	sink := &fakeAlarmSink{}
 	sub := newAlarmCommandSubscriber(t, sink)
 
-	sub.handleAlarmCommand("gh/alarm/eg/set", []byte(`{"action":"SILENCE","code":"9999"}`), false)
-	sub.WaitIdle()
+	sub.deliver(t, "gh/alarm/eg/set", `{"action":"SILENCE","code":"9999"}`)
 
 	got := sink.snapshot()
 	if len(got.silenceCalls) != 1 || got.silenceCalls[0] != (fakeAlarmCodeCall{area: "eg", code: "9999"}) {
@@ -212,8 +255,7 @@ func TestHandleAlarmCommand_MasterSilence_Dropped(t *testing.T) {
 	sink := &fakeAlarmSink{}
 	sub := newAlarmCommandSubscriber(t, sink)
 
-	sub.handleAlarmCommand("gh/alarm/master/set", []byte("SILENCE"), false)
-	sub.WaitIdle()
+	sub.deliver(t, "gh/alarm/master/set", "SILENCE")
 
 	if got := sink.snapshot(); len(got.silenceCalls) != 0 {
 		t.Fatalf("silenceCalls = %+v, want none for master SILENCE", got.silenceCalls)
@@ -227,9 +269,8 @@ func TestHandleAlarmCommand_MasterArmAndMasterDisarm(t *testing.T) {
 	sink := &fakeAlarmSink{}
 	sub := newAlarmCommandSubscriber(t, sink)
 
-	sub.handleAlarmCommand("gh/alarm/master/set", []byte("ARM_NIGHT"), false)
-	sub.handleAlarmCommand("gh/alarm/master/set", []byte("DISARM"), false)
-	sub.WaitIdle()
+	sub.deliver(t, "gh/alarm/master/set", "ARM_NIGHT")
+	sub.deliver(t, "gh/alarm/master/set", "DISARM")
 
 	got := sink.snapshot()
 	if len(got.masterArmCalls) != 1 || got.masterArmCalls[0] != hmenum.AlarmModeNight {
@@ -246,13 +287,23 @@ func TestHandleAlarmCommand_MasterArmAndMasterDisarm(t *testing.T) {
 
 // --- guard rails ---
 
+// TestHandleAlarmCommand_RetainedMessage_Dropped pins that a retained
+// `/set` replay never reaches the alarm engine.
+//
+// The mechanism moved with the router adoption and the guarantee did not:
+// every handler used to open with its own `if retained { debug; return }`,
+// and the drop is now [hapublisher.CommandConfig.DeliverRetained] staying
+// off — one decision for the whole plane instead of thirteen copies of it.
+// What it keeps out is unchanged: Home Assistant never publishes a command
+// topic retained, so a retained ARM on an alarm topic is somebody's
+// `mosquitto_pub -r` left behind, and the broker replays it on every single
+// (re)subscribe.
 func TestHandleAlarmCommand_RetainedMessage_Dropped(t *testing.T) {
 	t.Parallel()
 	sink := &fakeAlarmSink{}
 	sub := newAlarmCommandSubscriber(t, sink)
 
-	sub.handleAlarmCommand("gh/alarm/eg/set", []byte("TRIGGER"), true)
-	sub.WaitIdle()
+	sub.deliverRetained(t, "gh/alarm/eg/set", "TRIGGER")
 
 	if got := sink.snapshot(); len(got.panicCalls) != 0 {
 		t.Fatalf("panicCalls = %v, want none for a retained message", got.panicCalls)
@@ -264,8 +315,7 @@ func TestHandleAlarmCommand_UnknownAction_Dropped(t *testing.T) {
 	sink := &fakeAlarmSink{}
 	sub := newAlarmCommandSubscriber(t, sink)
 
-	sub.handleAlarmCommand("gh/alarm/eg/set", []byte("BOGUS_ACTION"), false)
-	sub.WaitIdle()
+	sub.deliver(t, "gh/alarm/eg/set", "BOGUS_ACTION")
 
 	got := sink.snapshot()
 	if len(got.armCalls)+len(got.disarmCalls)+len(got.silenceCalls)+len(got.panicCalls) != 0 {
@@ -273,13 +323,23 @@ func TestHandleAlarmCommand_UnknownAction_Dropped(t *testing.T) {
 	}
 }
 
+// TestHandleAlarmCommand_MalformedTopic_Dropped pins that a topic the alarm
+// route does not claim reaches no verb.
+//
+// It used to exercise a shape re-check inside the handler — `len(parts) != 3
+// || parts[0] != "alarm"` — which is gone, because the route IS the shape
+// check now: the router resolves the topic against its filters before a
+// handler exists, and a topic matching none of them goes to
+// [hapublisher.CommandConfig.OnUnroutable] instead. The delivery is
+// therefore forced past the subscription on purpose, the way a shared
+// broker's cross-talk would arrive, and the assertion is the same one that
+// mattered: no alarm verb ran.
 func TestHandleAlarmCommand_MalformedTopic_Dropped(t *testing.T) {
 	t.Parallel()
 	sink := &fakeAlarmSink{}
 	sub := newAlarmCommandSubscriber(t, sink)
 
-	sub.handleAlarmCommand("gh/alarm/set", []byte("TRIGGER"), false) // missing the area segment
-	sub.WaitIdle()
+	sub.deliver(t, "gh/alarm/set", "TRIGGER") // missing the area segment
 
 	if got := sink.snapshot(); len(got.panicCalls) != 0 {
 		t.Fatalf("panicCalls = %v, want none for a malformed topic", got.panicCalls)
@@ -288,12 +348,16 @@ func TestHandleAlarmCommand_MalformedTopic_Dropped(t *testing.T) {
 
 func TestHandleAlarmCommand_NilSink_DroppedWithoutPanic(t *testing.T) {
 	t.Parallel()
-	sub := NewCommandSubscriber(NewNoopClient(), NewTopicBuilder("gh"), nil, nil) // no WithAlarmSink
+	client := NewNoopClient()
+	sub := NewCommandSubscriber(client, NewTopicBuilder("gh"), nil, nil) // no WithAlarmSink
+	if err := sub.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
 	t.Cleanup(sub.Close)
 
 	// Must not panic on a nil alarmSink.
-	sub.handleAlarmCommand("gh/alarm/eg/set", []byte("TRIGGER"), false)
-	sub.WaitIdle()
+	f := &alarmFixture{client: client, sub: sub}
+	f.deliver(t, "gh/alarm/eg/set", "TRIGGER")
 }
 
 func TestHandleAlarmCommand_EmptyPayload_Dropped(t *testing.T) {
@@ -301,8 +365,7 @@ func TestHandleAlarmCommand_EmptyPayload_Dropped(t *testing.T) {
 	sink := &fakeAlarmSink{}
 	sub := newAlarmCommandSubscriber(t, sink)
 
-	sub.handleAlarmCommand("gh/alarm/eg/set", []byte("  "), false)
-	sub.WaitIdle()
+	sub.deliver(t, "gh/alarm/eg/set", "  ")
 
 	got := sink.snapshot()
 	if len(got.armCalls)+len(got.disarmCalls)+len(got.silenceCalls)+len(got.panicCalls) != 0 {

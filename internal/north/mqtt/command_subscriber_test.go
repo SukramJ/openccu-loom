@@ -103,7 +103,7 @@ func TestCommandSubscriberDataPointTopic(t *testing.T) {
 	if !ok {
 		t.Fatal("subscription did not match")
 	}
-	sub.dispatcher.flush()
+	sub.WaitIdle()
 	if sink.setValues.Load() != 1 {
 		t.Fatalf("calls=%d", sink.setValues.Load())
 	}
@@ -121,7 +121,7 @@ func TestCommandSubscriberSysvarTopic(t *testing.T) {
 	_ = sub.Start(context.Background())
 	noop.DeliverInbound("openccu-loom/+/hub/sysvars/+/set",
 		"openccu-loom/ccu-01/hub/sysvars/PartyMode/set", []byte("false"))
-	sub.dispatcher.flush()
+	sub.WaitIdle()
 	if sink.setSysvars.Load() != 1 || sink.lastSysvar.name != "PartyMode" || sink.lastSysvar.value != false {
 		t.Fatalf("sysvar call: %+v", sink.lastSysvar)
 	}
@@ -136,7 +136,7 @@ func TestCommandSubscriberProgramTopic(t *testing.T) {
 	// "true" is the payload_press the HA-Discovery button declares.
 	noop.DeliverInbound("openccu-loom/+/hub/programs/+/trigger",
 		"openccu-loom/ccu-01/hub/programs/Morning/trigger", []byte("true"))
-	sub.dispatcher.flush()
+	sub.WaitIdle()
 	if sink.triggers.Load() != 1 || sink.lastProgram.id != "Morning" {
 		t.Fatalf("program: %+v", sink.lastProgram)
 	}
@@ -157,7 +157,7 @@ func TestCommandSubscriberProgramEmptyPayloadDropped(t *testing.T) {
 		noop.DeliverInbound("openccu-loom/+/hub/programs/+/trigger",
 			"openccu-loom/ccu-01/hub/programs/Morning/trigger", payload)
 	}
-	sub.dispatcher.flush()
+	sub.WaitIdle()
 	if n := sink.triggers.Load(); n != 0 {
 		t.Fatalf("empty payloads must be dropped, got %d trigger call(s)", n)
 	}
@@ -224,7 +224,7 @@ func TestCommandSubscriberCDPInvoke(t *testing.T) {
 	if !ok {
 		t.Fatal("subscription did not match")
 	}
-	sub.dispatcher.flush()
+	sub.WaitIdle()
 	if cdpSink.calls.Load() != 1 {
 		t.Fatalf("expected 1 CDP call, got %d", cdpSink.calls.Load())
 	}
@@ -281,6 +281,9 @@ func TestCommandSubscriberCDPInvokeBadPayload(t *testing.T) {
 	noop.DeliverInbound("openccu-loom/+/devices/+/cdps/+/+/invoke",
 		"openccu-loom/ccu-01/devices/0001ABCD/cdps/light_dp/turn_on/invoke",
 		[]byte("{not valid json"))
+	// The drop happens on a worker, not on the delivering goroutine, so a
+	// zero-call assertion without this barrier would pass vacuously.
+	sub.WaitIdle()
 	if cdpSink.calls.Load() != 0 {
 		t.Fatalf("expected 0 calls on bad payload, got %d", cdpSink.calls.Load())
 	}
@@ -299,6 +302,9 @@ func TestCommandSubscriberCDPInvokeNilSink(t *testing.T) {
 	noop.DeliverInbound("openccu-loom/+/devices/+/cdps/+/+/invoke",
 		"openccu-loom/ccu-01/devices/0001ABCD/cdps/light_dp/turn_on/invoke",
 		[]byte(`{}`))
+	// The drop happens on a worker, not on the delivering goroutine, so a
+	// zero-call assertion without this barrier would pass vacuously.
+	sub.WaitIdle()
 }
 
 func TestCommandSubscriberCDPInvokeEmptyPayload(t *testing.T) {
@@ -314,7 +320,7 @@ func TestCommandSubscriberCDPInvokeEmptyPayload(t *testing.T) {
 	noop.DeliverInbound("openccu-loom/+/devices/+/cdps/+/+/invoke",
 		"openccu-loom/ccu-01/devices/0001ABCD/cdps/light_dp/turn_off/invoke",
 		[]byte(""))
-	sub.dispatcher.flush()
+	sub.WaitIdle()
 	if cdpSink.calls.Load() != 1 {
 		t.Fatalf("expected 1 call on empty payload, got %d", cdpSink.calls.Load())
 	}
@@ -336,7 +342,7 @@ func TestCommandSubscriberCDPInvokeSinkError(t *testing.T) {
 	noop.DeliverInbound("openccu-loom/+/devices/+/cdps/+/+/invoke",
 		"openccu-loom/ccu-01/devices/UNKNOWN/cdps/x/turn_on/invoke",
 		[]byte(`{}`))
-	sub.dispatcher.flush()
+	sub.WaitIdle()
 	// Should not panic or block; error is swallowed.
 	if cdpSink.calls.Load() != 1 {
 		t.Fatalf("expected 1 call even on error, got %d", cdpSink.calls.Load())
@@ -431,7 +437,7 @@ func TestCommandSubscriberWeekProfileTopic(t *testing.T) {
 	if !ok {
 		t.Fatal("subscription did not match")
 	}
-	sub.dispatcher.flush()
+	sub.WaitIdle()
 	if wpSink.calls.Load() != 1 {
 		t.Fatalf("calls=%d, want 1", wpSink.calls.Load())
 	}
@@ -466,6 +472,9 @@ func TestCommandSubscriberWeekProfileMissingSink(t *testing.T) {
 	// Should not panic; subscription still matches the wildcard.
 	noop.DeliverInbound("openccu-loom/+/+/+/+/+/set",
 		"openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/week_profile/set", []byte("P3"))
+	// The drop happens on a worker, not on the delivering goroutine, so a
+	// zero-call assertion without this barrier would pass vacuously.
+	sub.WaitIdle()
 }
 
 func TestCommandSubscriberWeekProfileEmptyPayload(t *testing.T) {
@@ -480,6 +489,9 @@ func TestCommandSubscriberWeekProfileEmptyPayload(t *testing.T) {
 	}
 	noop.DeliverInbound("openccu-loom/+/+/+/+/+/set",
 		"openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/week_profile/set", []byte{})
+	// The drop happens on a worker, not on the delivering goroutine, so a
+	// zero-call assertion without this barrier would pass vacuously.
+	sub.WaitIdle()
 	if wpSink.calls.Load() != 0 {
 		t.Fatalf("calls=%d, want 0 (empty payload must be dropped)", wpSink.calls.Load())
 	}
@@ -518,7 +530,7 @@ func TestCommandSubscriberInstallModePressTopic(t *testing.T) {
 	if !ok {
 		t.Fatal("subscription did not match")
 	}
-	sub.dispatcher.flush()
+	sub.WaitIdle()
 	if imSink.calls.Load() != 1 {
 		t.Fatalf("calls=%d, want 1", imSink.calls.Load())
 	}
@@ -540,7 +552,7 @@ func TestCommandSubscriberInstallModeNumericDuration(t *testing.T) {
 	_ = sub.Start(context.Background())
 	noop.DeliverInbound("openccu-loom/+/hub/install_mode/+/set",
 		"openccu-loom/ccu-01/hub/install_mode/BidCos-RF/set", []byte("120"))
-	sub.dispatcher.flush()
+	sub.WaitIdle()
 	if imSink.calls.Load() != 1 || imSink.last.seconds != 120 || imSink.last.iface != "BidCos-RF" {
 		t.Fatalf("last=%+v", imSink.last)
 	}
@@ -555,6 +567,9 @@ func TestCommandSubscriberInstallModeMissingSink(t *testing.T) {
 	// Must not panic when the sink is unwired.
 	noop.DeliverInbound("openccu-loom/+/hub/install_mode/+/set",
 		"openccu-loom/ccu-01/hub/install_mode/HmIP-RF/set", []byte("PRESS"))
+	// The drop happens on a worker, not on the delivering goroutine, so a
+	// zero-call assertion without this barrier would pass vacuously.
+	sub.WaitIdle()
 }
 
 func TestCommandSubscriberInstallModeRetainedDrop(t *testing.T) {
@@ -564,7 +579,14 @@ func TestCommandSubscriberInstallModeRetainedDrop(t *testing.T) {
 	imSink := &fakeInstallModeSink{}
 	sub := NewCommandSubscriber(noop, topics, &fakeSink{}, nil).WithInstallModeSink(imSink)
 	_ = sub.Start(context.Background())
-	sub.handleInstallMode("openccu-loom/ccu-01/hub/install_mode/HmIP-RF/set", []byte("PRESS"), true)
+	noop.DeliverInboundRetained("openccu-loom/+/hub/install_mode/+/set",
+		"openccu-loom/ccu-01/hub/install_mode/HmIP-RF/set", []byte("PRESS"))
+	// The retained drop is the router's now ([hapublisher.CommandConfig].
+	// DeliverRetained stays off) rather than an `if retained` at the top of
+	// each handler, and it happens on the delivering goroutine — but the
+	// barrier stays, because without it a regression that let the message
+	// through would still assert zero.
+	sub.WaitIdle()
 	if imSink.calls.Load() != 0 {
 		t.Fatalf("retained press must be dropped; calls=%d", imSink.calls.Load())
 	}
@@ -589,7 +611,7 @@ func TestCommandSubscriberMasterBucketRoutes(t *testing.T) {
 	if !ok {
 		t.Fatal("subscription did not match")
 	}
-	sub.dispatcher.flush()
+	sub.WaitIdle()
 	if sink.masterValues.Load() != 1 {
 		t.Fatalf("SetMasterValue calls=%d, want 1", sink.masterValues.Load())
 	}
@@ -628,6 +650,9 @@ func TestCommandSubscriberCalculatedBucketDropped(t *testing.T) {
 	}
 	noop.DeliverInbound("openccu-loom/+/+/+/+/+/+/set",
 		"openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/calculated/SOME_PARAM/set", []byte("true"))
+	// The drop happens on a worker, not on the delivering goroutine, so a
+	// zero-call assertion without this barrier would pass vacuously.
+	sub.WaitIdle()
 	if sink.masterValues.Load() != 0 {
 		t.Fatalf("SetMasterValue must not be called for calculated bucket; got %d calls", sink.masterValues.Load())
 	}
@@ -649,7 +674,7 @@ func TestCommandSubscriberValuesBucketStillRoutes(t *testing.T) {
 	}
 	noop.DeliverInbound("openccu-loom/+/+/+/+/+/+/set",
 		"openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/values/STATE/set", []byte("true"))
-	sub.dispatcher.flush()
+	sub.WaitIdle()
 	if sink.setValues.Load() != 1 {
 		t.Fatalf("SetValue calls=%d, want 1", sink.setValues.Load())
 	}
@@ -677,9 +702,14 @@ func (s *qosRecordingSubscriber) Subscribe(ctx context.Context, filter string, q
 // TestCommandSubscriberWiresConfiguredQoS reproduces the M2 bug: every
 // inbound command Subscribe call hardcoded QoS1, so QoSProfile.Commands was
 // dead configuration. It sets a non-default QoS via WithQoS and asserts
-// every registered subscription (data-point, legacy, sysvar, program,
-// install-mode, CDP invoke, service-method, week-profile, combined-DP,
-// schedule-switch) uses it instead of the QoS1 default.
+// every registered subscription uses it instead of the QoS1 default.
+//
+// QoS 0 is the deliberate choice here and it is no longer a trivial one to
+// carry: go-hamqtt distinguishes an unset level from a stated at-most-once
+// one, because its runtime types used to read a zero byte as "unset" and
+// coerce it to 1 — which is exactly how a caller that had chosen QoS 0 got
+// QoS 1 with nothing saying so. [runtimeQoS] is the conversion that keeps the
+// statement, and this test is what would fail if it stopped.
 func TestCommandSubscriberWiresConfiguredQoS(t *testing.T) {
 	t.Parallel()
 	sub := newQoSRecordingSubscriber()
@@ -743,7 +773,7 @@ func TestCommandSubscriberProgramEnableTopic(t *testing.T) {
 			_ = sub.Start(context.Background())
 			noop.DeliverInbound("openccu-loom/+/hub/programs/+/set",
 				"openccu-loom/ccu-01/hub/programs/1234/set", []byte(tc.payload))
-			sub.dispatcher.flush()
+			sub.WaitIdle()
 
 			if !tc.applied {
 				if sink.programEnables.Load() != 0 {
@@ -807,7 +837,7 @@ func TestCommandSubscriberResolvesEscapedCentralSegment(t *testing.T) {
 			base+"/"+segment+"/HmIP-RF/0001ABCD/4/values/STATE/set", []byte("true")) {
 			t.Fatal("subscription did not match the declared command topic")
 		}
-		sub.dispatcher.flush()
+		sub.WaitIdle()
 		if sink.setValues.Load() != 1 {
 			t.Fatalf("calls=%d, want 1", sink.setValues.Load())
 		}
@@ -821,7 +851,7 @@ func TestCommandSubscriberResolvesEscapedCentralSegment(t *testing.T) {
 		noop, sink, sub := newSub()
 		noop.DeliverInbound(base+"/+/hub/sysvars/+/set",
 			base+"/"+segment+"/hub/sysvars/Anwesenheit/set", []byte("true"))
-		sub.dispatcher.flush()
+		sub.WaitIdle()
 		if sink.lastSysvar.centralName != configured {
 			t.Errorf("central = %q, want %q", sink.lastSysvar.centralName, configured)
 		}
@@ -832,7 +862,7 @@ func TestCommandSubscriberResolvesEscapedCentralSegment(t *testing.T) {
 		noop, sink, sub := newSub()
 		noop.DeliverInbound(base+"/+/hub/programs/+/trigger",
 			base+"/"+segment+"/hub/programs/1234/trigger", []byte("PRESS"))
-		sub.dispatcher.flush()
+		sub.WaitIdle()
 		if sink.lastProgram.centralName != configured {
 			t.Errorf("central = %q, want %q", sink.lastProgram.centralName, configured)
 		}
@@ -843,7 +873,7 @@ func TestCommandSubscriberResolvesEscapedCentralSegment(t *testing.T) {
 		noop, sink, sub := newSub()
 		noop.DeliverInbound(base+"/+/+/+/+/+/+/set",
 			base+"/ccu-01/HmIP-RF/0001ABCD/4/values/STATE/set", []byte("true"))
-		sub.dispatcher.flush()
+		sub.WaitIdle()
 		if sink.lastVal.centralName != "ccu-01" {
 			t.Errorf("central = %q, want %q", sink.lastVal.centralName, "ccu-01")
 		}
@@ -866,7 +896,7 @@ func TestCommandSubscriberRefusesAmbiguousCentralSegment(t *testing.T) {
 	}
 	noop.DeliverInbound(base+"/+/+/+/+/+/+/set",
 		base+"/Wohn_Zimmer/HmIP-RF/0001ABCD/4/values/STATE/set", []byte("true"))
-	sub.dispatcher.flush()
+	sub.WaitIdle()
 	if sink.setValues.Load() != 0 {
 		t.Fatalf("an ambiguous central segment was routed to a CCU anyway (calls=%d)", sink.setValues.Load())
 	}

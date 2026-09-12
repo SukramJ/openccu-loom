@@ -11,6 +11,10 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"sync"
+
+	hapublisher "github.com/SukramJ/go-hamqtt/publisher"
+	hagomqtt "github.com/SukramJ/go-hamqtt/publisher/gomqtt"
 
 	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
 
@@ -198,26 +202,26 @@ type CDPInvokePayload struct {
 	Priority string         `json:"priority"`
 }
 
-// commandDispatchWorkers bounds how many command jobs (SetValue /
-// SetMasterValue / SetSysvar / TriggerProgram / … — every one of them
-// potentially a CCU write behind the circuit breaker/retry stack) can run
-// concurrently. Kept modest: high enough that one stalled interface does
-// not stall unrelated devices, low enough to bound goroutine + CCU-request
-// fan-out from a single command burst.
-const commandDispatchWorkers = 8
-
-// commandDispatchQueueDepth bounds the per-worker backlog before Enqueue
-// starts blocking (with a logged warning) the go-mqtt read loop that
-// delivered the message. Sized for a burst of commands across many
-// data points landing on the same worker slot.
-const commandDispatchQueueDepth = 32
+// The worker count and per-worker backlog this plane runs on are the shared
+// module's [hapublisher.DefaultCommandWorkers] (8) and
+// [hapublisher.DefaultCommandQueueDepth] (32), left unstated in
+// [hapublisher.CommandConfig] so the two cannot drift. They are not
+// coincidentally the same numbers this file used to declare: the library took
+// them from here, and its doc comments cite the same reasoning — high enough
+// that one interface stalled behind the retry stack does not stall unrelated
+// devices, low enough to bound the goroutine and CCU-request fan-out one
+// command burst can produce.
 
 // CommandSubscriber wires the bridge's inbound /set and /invoke topics
-// back into the domain. It subscribes one wildcard per inbound shape —
-// data points, sysvars, programs, install mode, custom-DP invoke and
-// service methods, week profiles, combined data points, schedule
-// switches, alarm commands, add-on updates — and dispatches on the
-// topic shape (raw-plane schema; see ADR 0011):
+// back into the domain. It owns the typed sinks, the central-name
+// resolution, the payload coercion and the metrics the shared module
+// deliberately left to its consumers; the subscriptions, the routing and the
+// worker pool underneath it are [hapublisher.CommandRouter]'s.
+//
+// It registers one wildcard route per inbound shape — data points (which
+// carry the week-profile, combined-DP and schedule-switch shapes too),
+// sysvars, programs, install mode, custom-DP invoke and service methods,
+// alarm commands, add-on updates — over the raw-plane schema (ADR 0011):
 //
 //	<base>/<central>/<interface>/<device>/<channel>/<parameter>/set
 //	<base>/<central>/sysvars/<name>/set
@@ -247,57 +251,157 @@ type CommandSubscriber struct {
 	qos    QoS
 	logger *slog.Logger
 	// lifecycleCtx is the daemon-lifetime context wired via
-	// WithLifecycleContext; command handlers derive each per-command
-	// context from it so an in-flight CCU write is cancelled when the
+	// WithLifecycleContext and handed to the router as
+	// [hapublisher.CommandConfig.Lifecycle]; every command's own context
+	// derives from it, so an in-flight CCU write is cancelled when the
 	// daemon shuts down instead of running on a detached background
 	// context. Defaults to context.Background() until wired.
 	lifecycleCtx context.Context
 
-	// dispatcher runs every sink call (the downstream I/O: SetValue,
-	// SetMasterValue, InvokeCustomDP, …) off the go-mqtt client's
-	// synchronous read loop, so a CCU write that blocks for seconds behind
-	// the circuit breaker/retry stack never stalls PUBACK/PINGRESP
-	// processing on that same goroutine. Jobs are keyed by the inbound
-	// topic string, so repeated writes to the same data point never
-	// reorder while unrelated data points dispatch concurrently. See
-	// [boundedDispatcher].
-	dispatcher *boundedDispatcher
+	// routerMu guards router, which [CommandSubscriber.Start] installs and
+	// [CommandSubscriber.Close] / [CommandSubscriber.WaitIdle] read. The
+	// three are reachable from different goroutines in the supervisor: Start
+	// runs on the stack builder, Close on the teardown a broker swap
+	// triggers.
+	routerMu sync.Mutex
+	// router owns every command subscription and the worker pool each
+	// handler runs on. It replaces this file's own ten Subscribe calls and
+	// its boundedDispatcher, and it is built in
+	// [CommandSubscriber.Start] rather than in the constructor for two
+	// reasons: [hapublisher.CommandConfig] is read once, at construction, so
+	// it has to be complete — every With* setter runs between the
+	// constructor and Start — and [hapublisher.NewCommandRouter] starts no
+	// goroutines, so a subscriber that never reaches Start owns none either.
+	router *hapublisher.CommandRouter
 }
 
 // NewCommandSubscriber constructs the subscriber. Call
-// [CommandSubscriber.Close] on teardown to drain the dispatcher's worker
-// goroutines cleanly.
+// [CommandSubscriber.Close] on teardown to unsubscribe every route and
+// drain the handlers already accepted.
 func NewCommandSubscriber(sub Subscriber, topics *TopicBuilder, sink CommandSink, logger *slog.Logger) *CommandSubscriber {
 	if logger == nil {
 		logger = slog.Default()
 	}
 	return &CommandSubscriber{
 		sub: sub, topics: topics, sink: sink, qos: QoS1, logger: logger, lifecycleCtx: context.Background(),
-		dispatcher: newBoundedDispatcher(commandDispatchWorkers, commandDispatchQueueDepth, "command", logger),
 	}
 }
 
-// Close stops accepting new commands and blocks until every in-flight or
+// Close unsubscribes every command route and blocks until every in-flight or
 // already-queued command has finished running. Safe to call on a
-// zero-value or nil *CommandSubscriber.
+// zero-value or nil *CommandSubscriber, before Start, and twice.
+//
+// The context is deliberately [context.Background] and not the lifecycle
+// context: Close is a shutdown path, the lifecycle context is cancelled on
+// the way into one, and an UNSUBSCRIBE sent under a dead context fails
+// before it reaches the broker. The unsubscribes are best-effort either way
+// — the supervisor's teardown disconnects the client right after, which
+// drops every filter — so an error is a debug breadcrumb rather than a
+// failure the caller can act on. The drain is not best-effort: it is the
+// half that keeps a queued CCU write from being abandoned.
 func (c *CommandSubscriber) Close() {
 	if c == nil {
 		return
 	}
-	c.dispatcher.Close()
+	r := c.currentRouter()
+	if r == nil {
+		return
+	}
+	if err := r.Stop(context.Background()); err != nil {
+		c.logger.Debug("mqtt.command.stop", slog.String("err", err.Error()))
+	}
 }
 
-// WaitIdle blocks until every command enqueued before this call has been
-// dispatched to the sink. It is a deterministic test barrier for callers
-// that assert on a fake sink right after delivering a message (commands
-// now run off the caller's goroutine — see [CommandSubscriber.dispatcher])
-// — production code does not need it, since commands are fire-and-forget
-// by design. Safe to call on a nil *CommandSubscriber (no-op).
+// WaitIdle blocks until every command accepted before this call has run. It
+// is a deterministic test barrier for callers that assert on a fake sink
+// right after delivering a message — handlers run on the router's worker
+// pool, not on the caller's goroutine, so such an assertion is otherwise a
+// race. Production code does not need it: commands are fire-and-forget by
+// design and shutdown is [CommandSubscriber.Close]'s job. Safe to call on a
+// nil *CommandSubscriber and before Start (no-op).
 func (c *CommandSubscriber) WaitIdle() {
 	if c == nil {
 		return
 	}
-	c.dispatcher.flush()
+	if r := c.currentRouter(); r != nil {
+		r.WaitIdle()
+	}
+}
+
+// currentRouter reads the router [CommandSubscriber.Start] installed, or nil
+// before it has.
+func (c *CommandSubscriber) currentRouter() *hapublisher.CommandRouter {
+	c.routerMu.Lock()
+	defer c.routerMu.Unlock()
+	return c.router
+}
+
+// attributed reports whether the router accepted an overlapping pair of
+// command filters and therefore subscribes with MQTT 5.0 Subscription
+// Identifiers (§3.8.2.1.2).
+//
+// Unexported, like subscriptionID and checkDisjoint below: every caller is a
+// test in this package, and an exported accessor nothing in the daemon
+// reaches is dead production surface the dead-code ratchet would carry.
+//
+// It must be false here, and [CommandSubscriber.Start] refuses to put
+// anything on the wire when it is not. This plane's ten filters are pairwise
+// disjoint, so there is nothing to attribute and every subscription goes out
+// exactly as it did before the router existed — No Local, no identifier.
+//
+// The reason the mode matters rather than merely being observable:
+// attribution is MQTT 5.0 only, `north.mqtt.protocol_version: "3.1.1"` is an
+// operator-reachable config key, and the router never retries an attributed
+// route unattributed. So on an overlapping filter set that one key stops
+// being a dialect choice and becomes a refused Start — the whole command
+// plane down, at boot, with the state plane unaffected and looking healthy.
+// Disjoint filters are what keep the two independent.
+func (c *CommandSubscriber) attributed() bool {
+	r := c.currentRouter()
+	if r == nil {
+		return false
+	}
+	return r.Attributed()
+}
+
+// subscriptionID reports the MQTT 5.0 Subscription Identifier the
+// subscription for filter carries, or 0 when it carries none — which is
+// every route of this plane, because it registers no overlapping pair. See
+// [CommandSubscriber.attributed].
+func (c *CommandSubscriber) subscriptionID(filter string) uint32 {
+	r := c.currentRouter()
+	if r == nil {
+		return 0
+	}
+	return r.SubscriptionID(filter)
+}
+
+// checkDisjoint reports whether any of topics would be delivered back into
+// this daemon's own command handlers.
+//
+// It is the shared module's own predicate, which makes it the one worth
+// running: the broker has no notion of "my own message" and fans every
+// publish out to every matching subscription, including this connection's,
+// with the retain flag clear because live routing is not a retained replay.
+// A state topic that a command filter matches is therefore the daemon
+// issuing itself a command every time it reports state — which this daemon
+// shipped once, mirroring a program's state onto that program's own trigger
+// topic, so the echo ran the program on the CCU on every boot, on every hub
+// republish and once per freshly discovered program, with nothing in the
+// logs.
+//
+// MQTT 5.0's No Local closes that class for this process (the shared
+// transport sets it, and the router asks for it), but only on a v5 link:
+// `north.mqtt.protocol_version: "3.1.1"` silently ignores the option, and no
+// option says anything about a second process publishing the same tree. So
+// this stays load-bearing. Returns nil before [CommandSubscriber.Start],
+// when no route can claim anything.
+func (c *CommandSubscriber) checkDisjoint(topics ...string) error {
+	r := c.currentRouter()
+	if r == nil {
+		return nil
+	}
+	return r.CheckDisjoint(topics...)
 }
 
 // WithQoS overrides the QoS level every Subscribe call in [Start]
@@ -472,121 +576,234 @@ const (
 	segSchedule = "schedule"
 )
 
-// commandParts splits an inbound topic into the segments the command
-// plane defines, with the configured topic base removed first. A topic
-// that does not sit under the base is refused (ok=false) — the caller
-// drops it the same way it drops an unknown shape.
+// inboundOnlyPublisher is the publish half [hagomqtt.Split] insists on for a
+// plane that only reads.
 //
-// Every handler indexes these segments by position, so they have to be
-// counted from the plane, not from the topic: `topic_base` is free-form
-// operator config and may carry levels of its own ("home/loom"). Counting
-// absolute segments of the full topic shifted every index by the depth of
-// the base, which dropped every inbound command on such an installation
-// while the state plane kept publishing normally — an outage that reads
-// exactly like a broker or CCU fault.
-func (c *CommandSubscriber) commandParts(topic string) ([]string, bool) {
-	if c.topics == nil || c.topics.Base == "" {
-		return strings.Split(topic, "/"), true
-	}
-	rest, ok := strings.CutPrefix(topic, c.topics.Base+"/")
-	if !ok {
-		return nil, false
-	}
-	return strings.Split(rest, "/"), true
+// [hapublisher.CommandRouter] never publishes — it subscribes, routes and
+// unsubscribes — but the shared transport is one interface covering both
+// directions, and the honest way to supply a half this plane does not have
+// is a value that says so. The alternative, handing it the bridge's
+// publisher, would make a future publish from the command plane work by
+// accident and land on the wire through a path nothing here reviews.
+type inboundOnlyPublisher struct{}
+
+// errCommandPlaneIsInboundOnly is what a publish through the command plane's
+// transport reports. Reaching it is a programming error, not an operational
+// one.
+var errCommandPlaneIsInboundOnly = errors.New("mqtt/command: the command plane is inbound only and publishes nothing")
+
+// Publish implements [Publisher].
+func (inboundOnlyPublisher) Publish(context.Context, string, []byte, QoS, bool, ...PublishOption) error {
+	return errCommandPlaneIsInboundOnly
 }
 
-// Start attaches every command-topic subscription the bridge answers on.
-// A failure on any one of them aborts Start: a subscriber that came up
-// with a partial filter set accepts some commands and silently drops the
-// rest, which reads like a broken CCU rather than a broken subscribe.
+// commandRoute is one filter and the handler the router hands its messages
+// to.
+type commandRoute struct {
+	filter  string
+	handler hapublisher.CommandHandler
+}
+
+// routes is the exact, ordered command-filter set this plane answers on.
 //
-// The registered filters are pairwise disjoint: no topic matches two of
-// them. That is a property of the set, not a coincidence of it — the two
-// data-point filters are wildcard catch-alls at six and seven segments below
-// the base, so any sibling filter of the same length would overlap one of
-// them, and an overlap is multiplied rather than resolved on delivery (see
-// the segWeekProfile / segCombined / segSchedule block). The week-profile,
-// combined-DP and schedule-switch shapes therefore have no filter of their
-// own; [CommandSubscriber.handleDataPoint] dispatches them.
+// Order is registration order, and it is load-bearing twice over: the router
+// subscribes in it, so a broker that refuses one filter rolls back the ones
+// before it in reverse, and [hapublisher.CommandRouter.Handle] reports an
+// ambiguous pair naming the earlier filter first. It is pinned by
+// TestCommandFilterSetIsPinned.
+//
+// The set is pairwise disjoint, and that is a property of the set rather than
+// a coincidence of it. The data-point plane needs two wildcard catch-alls at
+// six and seven segments below the base, so any sibling filter of the same
+// length overlaps one of them; MQTT has no exclusion wildcard, so a narrower
+// filter cannot subtract itself from a catch-all — it only adds a second
+// matching subscription, and the broker's per-subscription copy then
+// multiplies with the client's local re-match. The week-profile, combined-DP
+// and schedule-switch shapes therefore have no filter of their own;
+// [CommandSubscriber.handleDataPoint] dispatches them off the segment the
+// filter used to carry. See the segWeekProfile / segCombined / segSchedule
+// block, and TestCommandFiltersArePairwiseDisjoint.
+func (c *CommandSubscriber) routes(base string) []commandRoute {
+	return []commandRoute{
+		// Bucket-aware data-point command topology (the canonical shape
+		// the discovery builder advertises since the Option-B migration):
+		//   <base>/<central>/<interface>/<addr>/<channel>/<bucket>/<param>/set
+		// where `<bucket>` is `values` / `master` / `calculated`. The
+		// switch / lock / select / number entities all publish here, so
+		// the subscriber MUST register the 8-segment shape — without it
+		// HA's `payload_on=true` to a Custom-DP switch arrives at the
+		// broker but never reaches the daemon.
+		//
+		// Also carries the combined-DP and schedule-switch shapes, which
+		// put a literal where the bucket sits.
+		{base + "/+/+/+/+/+/+/set", c.handleDataPoint},
+		// Legacy 7-segment shape (no bucket infix) — still emitted by
+		// some hand-built tools and by automations written against the
+		// pre-bucket topology. Keep it active so they don't break.
+		// Also carries the week-profile shape, which is the same length.
+		{base + "/+/+/+/+/+/set", c.handleDataPoint},
+		// Canonical (ADR 0011): {base}/{central}/hub/sysvars/{name}/set.
+		{base + "/+/hub/sysvars/+/set", c.handleSysvar},
+		// Canonical (ADR 0011): {base}/{central}/hub/programs/{id}/set.
+		// Activation is a separate control from execution — a deactivated
+		// program refuses to run — so it has its own topic (see
+		// hub.Program.MQTTRoles).
+		{base + "/+/hub/programs/+/set", c.handleProgramEnable},
+		{base + "/+/hub/programs/+/trigger", c.handleProgram},
+		// Per-interface install-mode activation button:
+		// {base}/{central}/hub/install_mode/{iface}/set — HA publishes the
+		// press token; the handler activates pairing on the named interface.
+		{base + "/+/hub/install_mode/+/set", c.handleInstallMode},
+		// {base}/{central}/devices/{device}/cdps/{name}/{operation}/invoke
+		{base + "/+/devices/+/cdps/+/+/invoke", c.handleCDPInvoke},
+		// Canonical ADR-0011 per-service-method form:
+		// {base}/{central}/{interface}/{address}/{channel}/custom/{kind}/set/{method}
+		{base + "/+/+/+/+/custom/+/set/+", c.handleServiceMethod},
+		// {base}/alarm/{zone}/set — the daemon-level alarm arm/disarm/silence
+		// plane. Zones are daemon-level, so the topic carries no <central>
+		// segment; the reserved <zone> "master" routes to the aggregate verbs.
+		{base + "/alarm/+/set", c.handleAlarmCommand},
+		// {base}/system/addon_update/set — the daemon-level CCU add-on
+		// self-update INSTALL command (ADR 0057). Daemon-level like the
+		// alarm plane above, so the topic carries no <central> segment.
+		{base + "/system/addon_update/set", c.handleAddonUpdateCommand},
+	}
+}
+
+// Start registers every command route with a [hapublisher.CommandRouter] and
+// puts the whole set on the wire.
+//
+// Three properties come from the router rather than from this file, and each
+// replaces something this plane used to do by hand:
+//
+//   - A failure on any one subscription aborts the start AND unsubscribes
+//     the routes already registered. Coming up with a partial filter set
+//     accepts some commands and silently ignores the rest, which from the
+//     outside is a broken CCU rather than a broken subscribe. This
+//     subscriber used to abort and leave the partial set live; the rollback
+//     is the one place the shared module deliberately did not copy it.
+//   - Handlers run on a worker pool, never on the transport's read loop.
+//     See [hapublisher.CommandHandler] for the contract and its three costs.
+//   - Retained messages never reach a handler
+//     ([hapublisher.CommandConfig.DeliverRetained] is off), so a stale
+//     `mosquitto_pub -r` on a `/set` topic is dropped once by the router
+//     instead of by the identical guard each handler used to open with.
+//
+// The filter set must stay pairwise disjoint. [hapublisher.CommandRouter.Handle]
+// would otherwise either refuse the pair outright or — on this transport,
+// which can attribute a delivery through an MQTT 5.0 Subscription Identifier
+// — accept it and switch the whole plane into attributed mode. That mode is
+// v5-only and is never retried unattributed, so it turns
+// `north.mqtt.protocol_version: "3.1.1"` from a dialect choice into a boot
+// failure of the entire command plane. Start therefore refuses to subscribe
+// anything at all in attributed mode, which makes a filter edit that
+// reintroduces an overlap fail here rather than on a downgraded broker.
 func (c *CommandSubscriber) Start(ctx context.Context) error {
 	if c.sub == nil {
 		return errors.New("mqtt/command: no subscriber")
 	}
+	// A second Start would build a second router over the same client, and
+	// both would stay live: the first one's subscriptions keep their
+	// handlers, its worker pool keeps its goroutines, and only the handle
+	// this subscriber holds is replaced — so nothing could ever stop it. The
+	// composition root builds one subscriber per stack generation and starts
+	// it once; a second call is a wiring mistake and is named as one.
+	if c.currentRouter() != nil {
+		return errors.New("mqtt/command: already started; build a new CommandSubscriber per stack generation")
+	}
 	base := c.topics.Base
-	// Bucket-aware data-point command topology (the canonical shape
-	// the discovery builder advertises since the Option-B migration):
-	//   <base>/<central>/<interface>/<addr>/<channel>/<bucket>/<param>/set
-	// where `<bucket>` is `values` / `master` / `calculated`. The
-	// switch / lock / select / number entities all publish here, so
-	// the subscriber MUST register the 8-segment shape — without it
-	// HA's `payload_on=true` to a Custom-DP switch arrives at the
-	// broker but never reaches the daemon.
-	//
-	// Also carries the combined-DP and schedule-switch shapes, which
-	// put a literal where the bucket sits.
-	if _, err := c.sub.Subscribe(ctx, base+"/+/+/+/+/+/+/set", c.qos, LegacyHandler(c.handleDataPoint)); err != nil {
-		c.incSubscribeFailures()
-		return fmt.Errorf("subscribe datapoint bucket-aware: %w", err)
+	// The base is free-form operator config (`north.mqtt.topic_base`), and a
+	// wildcard in it is not merely a bad name: every route's parsed
+	// [hapublisher.Command.Wildcards] is positional, so a `+` contributed by
+	// the base shifts every handler's reading of central, interface, address
+	// and parameter by one. That is a CCU write to the wrong parameter, not a
+	// dropped message, so it is refused before anything is registered. There
+	// is no config-side validation for this today.
+	if strings.ContainsAny(base, "+#") {
+		return fmt.Errorf("mqtt/command: topic base %q carries an MQTT wildcard (`+` or `#`): "+
+			"every command route would capture it as a wildcard level and every handler would read "+
+			"the topic one segment out of step", base)
 	}
-	// Legacy 7-segment shape (no bucket infix) — still emitted by
-	// some hand-built tools and by the legacy alias mirror on the
-	// raw plane. Keep it active so existing automations don't break.
-	// Also carries the week-profile shape, which is the same length.
-	if _, err := c.sub.Subscribe(ctx, base+"/+/+/+/+/+/set", c.qos, LegacyHandler(c.handleDataPoint)); err != nil {
-		c.incSubscribeFailures()
-		return fmt.Errorf("subscribe datapoint legacy: %w", err)
+	router := hapublisher.NewCommandRouter(
+		hagomqtt.Split(inboundOnlyPublisher{}, c.sub),
+		hapublisher.CommandConfig{
+			QoS: runtimeQoS(c.qos),
+			// The daemon-lifetime context, not Start's: on a hot-reload
+			// broker swap Start's ctx is request-scoped and dies when the
+			// reload returns, which cancelled in-flight CCU writes on a
+			// plane that was otherwise perfectly alive. This is the field
+			// [CommandSubscriber.WithLifecycleContext] exists for, and the
+			// library's own doc comment names the same defect.
+			Lifecycle:    c.lifecycleCtx,
+			OnUnroutable: c.onUnroutable,
+			Logger:       c.logger,
+		},
+	)
+	for _, rt := range c.routes(base) {
+		if err := router.Handle(rt.filter, rt.handler); err != nil {
+			return fmt.Errorf("mqtt/command: route %s: %w", rt.filter, err)
+		}
 	}
-	// Canonical (ADR 0011): {base}/{central}/hub/sysvars/{name}/set.
-	if _, err := c.sub.Subscribe(ctx, base+"/+/hub/sysvars/+/set", c.qos, LegacyHandler(c.handleSysvar)); err != nil {
-		c.incSubscribeFailures()
-		return fmt.Errorf("subscribe hub_sysvar: %w", err)
+	if router.Attributed() {
+		return fmt.Errorf("mqtt/command: the command filter set is no longer pairwise disjoint, so the "+
+			"router would subscribe with MQTT 5.0 subscription identifiers (%d filters registered): "+
+			"attribution is v5-only and is never retried unattributed, so this would make "+
+			"north.mqtt.protocol_version: \"3.1.1\" a boot failure of the whole command plane; "+
+			"register the general shape only and dispatch the narrow one from inside its handler",
+			len(router.Filters()))
 	}
-	// Canonical (ADR 0011): {base}/{central}/hub/programs/{id}/trigger.
-	// Activation is a separate control from execution — a deactivated
-	// program refuses to run — so it has its own topic (see
-	// hub.Program.MQTTRoles).
-	if _, err := c.sub.Subscribe(ctx, base+"/+/hub/programs/+/set", c.qos, LegacyHandler(c.handleProgramEnable)); err != nil {
+	c.routerMu.Lock()
+	c.router = router
+	c.routerMu.Unlock()
+	if err := router.Start(ctx); err != nil {
+		// One increment, as before: Start aborts on the first refused
+		// subscribe, so exactly one subscribe failed. The counter is
+		// unlabeled because every filter answers for every configured
+		// central at once and a broker-refused subscribe has no single
+		// central to blame.
 		c.incSubscribeFailures()
-		return fmt.Errorf("subscribe hub_program_enable: %w", err)
-	}
-	if _, err := c.sub.Subscribe(ctx, base+"/+/hub/programs/+/trigger", c.qos, LegacyHandler(c.handleProgram)); err != nil {
-		c.incSubscribeFailures()
-		return fmt.Errorf("subscribe hub_program: %w", err)
-	}
-	// Per-interface install-mode activation button:
-	// {base}/{central}/hub/install_mode/{iface}/set — HA publishes the
-	// press token; the handler activates pairing on the named interface.
-	if _, err := c.sub.Subscribe(ctx, base+"/+/hub/install_mode/+/set", c.qos, LegacyHandler(c.handleInstallMode)); err != nil {
-		c.incSubscribeFailures()
-		return fmt.Errorf("subscribe hub_install_mode: %w", err)
-	}
-	// {base}/{central}/devices/{device}/cdps/{name}/{operation}/invoke
-	// MQTT wildcards cannot span /; use +/+/+/+/+/+/+/invoke to catch all.
-	if _, err := c.sub.Subscribe(ctx, base+"/+/devices/+/cdps/+/+/invoke", c.qos, LegacyHandler(c.handleCDPInvoke)); err != nil {
-		c.incSubscribeFailures()
-		return fmt.Errorf("subscribe cdp_invoke: %w", err)
-	}
-	// Canonical ADR-0011 per-service-method form:
-	// {base}/{central}/{interface}/{address}/{channel}/custom/{kind}/set/{method}
-	if _, err := c.sub.Subscribe(ctx, base+"/+/+/+/+/custom/+/set/+", c.qos, LegacyHandler(c.handleServiceMethod)); err != nil {
-		c.incSubscribeFailures()
-		return fmt.Errorf("subscribe service_method: %w", err)
-	}
-	// {base}/alarm/{zone}/set — the daemon-level alarm arm/disarm/silence
-	// plane. Zones are daemon-level, so the topic carries no <central>
-	// segment; the reserved <zone> "master" routes to the aggregate verbs.
-	if _, err := c.sub.Subscribe(ctx, base+"/alarm/+/set", c.qos, LegacyHandler(c.handleAlarmCommand)); err != nil {
-		c.incSubscribeFailures()
-		return fmt.Errorf("subscribe alarm_command: %w", err)
-	}
-	// {base}/system/addon_update/set — the daemon-level CCU add-on
-	// self-update INSTALL command (ADR 0057). Daemon-level like the
-	// alarm plane above, so the topic carries no <central> segment.
-	if _, err := c.sub.Subscribe(ctx, base+"/system/addon_update/set", c.qos, LegacyHandler(c.handleAddonUpdateCommand)); err != nil {
-		c.incSubscribeFailures()
-		return fmt.Errorf("subscribe addon_update_command: %w", err)
+		return fmt.Errorf("mqtt/command: %w", err)
 	}
 	return nil
+}
+
+// onUnroutable is [hapublisher.CommandConfig.OnUnroutable]: a message was
+// delivered on one of this plane's subscriptions and no route claims it.
+//
+// It keeps the event name the per-handler shape checks used to emit, because
+// that is what an operator greps for. It cannot fire for a topic a route
+// matched — the route IS the shape check now, so the mismatch each handler
+// used to re-derive from segment positions is unreachable — which leaves the
+// case it is really for: traffic on a shared broker that is none of this
+// daemon's business, and a route removed while its subscription lingers.
+// Both are diagnostics, never failures.
+func (c *CommandSubscriber) onUnroutable(topic string, _ []byte) {
+	c.logger.Warn("mqtt.command.unknown_topic", slog.String("topic", topic))
+}
+
+// routeWildcards returns the levels the route's `+` positions matched, when
+// the command carries exactly want of them.
+//
+// Every handler below reads its topic positionally out of that slice, so a
+// route bound to a handler expecting a different shape would index past its
+// end — and a handler panic is not survivable here: the router runs handlers
+// on a worker pool with no recover of its own, so an out-of-range read takes
+// the daemon down instead of dropping one command. [CommandSubscriber.routes]
+// is what makes the mismatch unreachable, and the delivery tests in
+// command_subscriber_topic_base_test.go drive every row of it under two
+// bases. This is what happens if both are ever wrong at once, and a logged
+// drop is the better of the two failure modes.
+func (c *CommandSubscriber) routeWildcards(cmd hapublisher.Command, want int) ([]string, bool) {
+	if len(cmd.Wildcards) != want {
+		c.logger.Warn("mqtt.command.route_arity",
+			slog.String("topic", cmd.Topic),
+			slog.String("filter", cmd.Filter),
+			slog.Int("wildcards", len(cmd.Wildcards)),
+			slog.Int("want", want),
+			slog.String("detail", "a command route is bound to a handler that reads a different shape"))
+		return nil, false
+	}
+	return cmd.Wildcards, true
 }
 
 // incReceivedCommands increments the received_commands counter for
@@ -600,9 +817,9 @@ func (c *CommandSubscriber) incReceivedCommands(centralName string) {
 }
 
 // incSubscribeFailures increments the subscribe_failures counter when a
-// collector is wired. Unlabeled: every Subscribe call below registers
-// one wildcard filter that answers for every configured central at
-// once, so a broker-rejected subscribe has no single central to blame.
+// collector is wired. Unlabeled: every registered route is one wildcard
+// filter answering for every configured central at once, so a
+// broker-rejected subscribe has no single central to blame.
 func (c *CommandSubscriber) incSubscribeFailures() {
 	if c.collector != nil {
 		c.collector.SubscribeFailures.Inc()
@@ -613,27 +830,32 @@ func (c *CommandSubscriber) incSubscribeFailures() {
 // `<base>/<central>/<iface>/<addr>/<chan>/schedule/<key>/set` into the
 // schedule-switch sink. Payload is "true" or "false" (HA's standard
 // switch payload).
-func (c *CommandSubscriber) handleScheduleSwitch(topic string, body []byte, retained bool) {
-	if retained {
-		c.logger.Debug("mqtt.command.schedule.retained_drop", slog.String("topic", topic))
-		return
-	}
-	parts, ok := c.commandParts(topic)
-	if !ok || len(parts) != 7 || parts[4] != segSchedule || parts[6] != "set" {
-		c.logger.Warn("mqtt.command.schedule.unknown_topic", slog.String("topic", topic))
-		return
-	}
-	centralSeg, iface, deviceAddr, channelStr, key := parts[0], parts[1], parts[2], parts[3], parts[5]
-	centralName, ok := c.resolveCentral(topic, centralSeg)
+//
+// Reached only from [CommandSubscriber.handleDataPoint]'s bucket branch,
+// which has already established that the shape carries [segSchedule] where
+// the bucket sits — the schedule shape has no filter of its own, because one
+// would overlap the bucket-aware catch-all. So it does not re-check that
+// literal: a guard on a condition its only caller has just proved cannot
+// fail is a guard that tests nothing. The arity check that remains is the
+// panic bound [CommandSubscriber.routeWildcards] documents, which is a
+// different question.
+func (c *CommandSubscriber) handleScheduleSwitch(ctx context.Context, cmd hapublisher.Command) {
+	topic := cmd.Topic
+	w, ok := c.routeWildcards(cmd, 6)
 	if !ok {
 		return
 	}
-	channel, err := strconv.Atoi(channelStr)
+	centralName, ok := c.resolveCentral(topic, w[0])
+	if !ok {
+		return
+	}
+	iface, deviceAddr, key := w[1], w[2], w[5]
+	channel, err := strconv.Atoi(w[3])
 	if err != nil {
 		c.logger.Warn("mqtt.command.schedule.bad_channel", slog.String("topic", topic))
 		return
 	}
-	raw := strings.ToLower(strings.TrimSpace(string(body)))
+	raw := strings.ToLower(strings.TrimSpace(string(cmd.Payload)))
 	var enabled bool
 	switch raw {
 	case "true", "on", "1":
@@ -652,17 +874,13 @@ func (c *CommandSubscriber) handleScheduleSwitch(topic string, body []byte, reta
 			slog.String("detail", "ScheduleSwitchSink not wired"))
 		return
 	}
-	c.dispatcher.Enqueue(topic, func() {
-		ctx, cancel := context.WithCancel(c.lifecycleCtx)
-		defer cancel()
-		if err := c.schedSink.SetScheduleSwitch(ctx, centralName, iface, deviceAddr, channel, key, enabled, hmenum.CommandPriorityHigh); err != nil {
-			c.logger.Warn("mqtt.command.schedule.set",
-				slog.String("topic", topic),
-				slog.String("key", key),
-				slog.Bool("enabled", enabled),
-				slog.String("err", err.Error()))
-		}
-	})
+	if err := c.schedSink.SetScheduleSwitch(ctx, centralName, iface, deviceAddr, channel, key, enabled, hmenum.CommandPriorityHigh); err != nil {
+		c.logger.Warn("mqtt.command.schedule.set",
+			slog.String("topic", topic),
+			slog.String("key", key),
+			slog.Bool("enabled", enabled),
+			slog.String("err", err.Error()))
+	}
 }
 
 // handleWeekProfile dispatches a payload from
@@ -670,27 +888,27 @@ func (c *CommandSubscriber) handleScheduleSwitch(topic string, body []byte, reta
 // week-profile sink. The payload is the profile key ("P1".."PN") as
 // a plain string (no quotes / no JSON envelope) — the same shape HA
 // publishes for `select` entities.
-func (c *CommandSubscriber) handleWeekProfile(topic string, body []byte, retained bool) {
-	if retained {
-		c.logger.Debug("mqtt.command.wp.retained_drop", slog.String("topic", topic))
-		return
-	}
-	parts, ok := c.commandParts(topic)
-	if !ok || len(parts) != 6 || parts[4] != segWeekProfile || parts[5] != "set" {
-		c.logger.Warn("mqtt.command.wp.unknown_topic", slog.String("topic", topic))
-		return
-	}
-	centralSeg, iface, deviceAddr, channelStr := parts[0], parts[1], parts[2], parts[3]
-	centralName, ok := c.resolveCentral(topic, centralSeg)
+//
+// Reached only from [CommandSubscriber.handleDataPoint]'s six-segment
+// branch, which has already established the [segWeekProfile] literal — see
+// the note on [CommandSubscriber.handleScheduleSwitch].
+func (c *CommandSubscriber) handleWeekProfile(ctx context.Context, cmd hapublisher.Command) {
+	topic := cmd.Topic
+	w, ok := c.routeWildcards(cmd, 5)
 	if !ok {
 		return
 	}
-	channel, err := strconv.Atoi(channelStr)
+	centralName, ok := c.resolveCentral(topic, w[0])
+	if !ok {
+		return
+	}
+	iface, deviceAddr := w[1], w[2]
+	channel, err := strconv.Atoi(w[3])
 	if err != nil {
 		c.logger.Warn("mqtt.command.wp.bad_channel", slog.String("topic", topic))
 		return
 	}
-	profile := strings.TrimSpace(string(body))
+	profile := strings.TrimSpace(string(cmd.Payload))
 	if profile == "" {
 		c.logger.Warn("mqtt.command.wp.empty_payload", slog.String("topic", topic))
 		return
@@ -701,16 +919,12 @@ func (c *CommandSubscriber) handleWeekProfile(topic string, body []byte, retaine
 			slog.String("detail", "WeekProfileSink not wired; ignoring active-profile command"))
 		return
 	}
-	c.dispatcher.Enqueue(topic, func() {
-		ctx, cancel := context.WithCancel(c.lifecycleCtx)
-		defer cancel()
-		if err := c.wpSink.SetActiveProfile(ctx, centralName, iface, deviceAddr, channel, profile, hmenum.CommandPriorityHigh); err != nil {
-			c.logger.Warn("mqtt.command.wp.set_active_profile",
-				slog.String("topic", topic),
-				slog.String("profile", profile),
-				slog.String("err", err.Error()))
-		}
-	})
+	if err := c.wpSink.SetActiveProfile(ctx, centralName, iface, deviceAddr, channel, profile, hmenum.CommandPriorityHigh); err != nil {
+		c.logger.Warn("mqtt.command.wp.set_active_profile",
+			slog.String("topic", topic),
+			slog.String("profile", profile),
+			slog.String("err", err.Error()))
+	}
 }
 
 // handleCombinedDP dispatches a payload from
@@ -721,27 +935,27 @@ func (c *CommandSubscriber) handleWeekProfile(topic string, body []byte, retaine
 // shapes this carries today — "30" from a number entity, "OPEN" from a
 // select — and which of them a kind expects is the data point's to know,
 // not the transport's.
-func (c *CommandSubscriber) handleCombinedDP(topic string, body []byte, retained bool) {
-	if retained {
-		c.logger.Debug("mqtt.command.combined.retained_drop", slog.String("topic", topic))
-		return
-	}
-	parts, ok := c.commandParts(topic)
-	if !ok || len(parts) != 7 || parts[4] != segCombined || parts[6] != "set" {
-		c.logger.Warn("mqtt.command.combined.unknown_topic", slog.String("topic", topic))
-		return
-	}
-	centralSeg, iface, deviceAddr, channelStr, kind := parts[0], parts[1], parts[2], parts[3], parts[5]
-	centralName, ok := c.resolveCentral(topic, centralSeg)
+//
+// Reached only from [CommandSubscriber.handleDataPoint]'s bucket branch,
+// which has already established the [segCombined] literal — see the note on
+// [CommandSubscriber.handleScheduleSwitch].
+func (c *CommandSubscriber) handleCombinedDP(ctx context.Context, cmd hapublisher.Command) {
+	topic := cmd.Topic
+	w, ok := c.routeWildcards(cmd, 6)
 	if !ok {
 		return
 	}
-	channel, err := strconv.Atoi(channelStr)
+	centralName, ok := c.resolveCentral(topic, w[0])
+	if !ok {
+		return
+	}
+	iface, deviceAddr, kind := w[1], w[2], w[5]
+	channel, err := strconv.Atoi(w[3])
 	if err != nil {
 		c.logger.Warn("mqtt.command.combined.bad_channel", slog.String("topic", topic))
 		return
 	}
-	raw := strings.TrimSpace(string(body))
+	raw := strings.TrimSpace(string(cmd.Payload))
 	if raw == "" {
 		c.logger.Warn("mqtt.command.combined.bad_payload",
 			slog.String("topic", topic),
@@ -754,17 +968,13 @@ func (c *CommandSubscriber) handleCombinedDP(topic string, body []byte, retained
 			slog.String("detail", "CombinedDPSink not wired; ignoring combined-DP write"))
 		return
 	}
-	c.dispatcher.Enqueue(topic, func() {
-		ctx, cancel := context.WithCancel(c.lifecycleCtx)
-		defer cancel()
-		if err := c.cmbSink.SetCombinedValue(ctx, centralName, iface, deviceAddr, channel, kind, raw, hmenum.CommandPriorityHigh); err != nil {
-			c.logger.Warn("mqtt.command.combined.set",
-				slog.String("topic", topic),
-				slog.String("kind", kind),
-				slog.String("value", raw),
-				slog.String("err", err.Error()))
-		}
-	})
+	if err := c.cmbSink.SetCombinedValue(ctx, centralName, iface, deviceAddr, channel, kind, raw, hmenum.CommandPriorityHigh); err != nil {
+		c.logger.Warn("mqtt.command.combined.set",
+			slog.String("topic", topic),
+			slog.String("kind", kind),
+			slog.String("value", raw),
+			slog.String("err", err.Error()))
+	}
 }
 
 // handleServiceMethod dispatches a payload from the canonical
@@ -775,22 +985,23 @@ func (c *CommandSubscriber) handleCombinedDP(topic string, body []byte, retained
 // The MQTT payload may be a JSON object (forwarded verbatim as
 // `params`) or a scalar (wrapped under the canonical argument name
 // for `method` — see `service_method_routing.go`).
-func (c *CommandSubscriber) handleServiceMethod(topic string, raw []byte, retained bool) {
-	if retained {
-		c.logger.Debug("mqtt.command.svc.retained_drop", slog.String("topic", topic))
-		return
-	}
-	parts, ok := c.commandParts(topic)
-	if !ok || len(parts) != 8 || parts[4] != "custom" || parts[6] != "set" {
-		c.logger.Warn("mqtt.command.svc.unknown_topic", slog.String("topic", topic))
-		return
-	}
-	centralSeg, iface, deviceAddr, channelStr, method := parts[0], parts[1], parts[2], parts[3], parts[7]
-	centralName, ok := c.resolveCentral(topic, centralSeg)
+func (c *CommandSubscriber) handleServiceMethod(ctx context.Context, cmd hapublisher.Command) {
+	topic := cmd.Topic
+	w, ok := c.routeWildcards(cmd, 6)
 	if !ok {
 		return
 	}
-	channel, err := strconv.Atoi(channelStr)
+	centralName, ok := c.resolveCentral(topic, w[0])
+	if !ok {
+		return
+	}
+	// The `custom` and `set` literals and the segment count are the route's,
+	// not this handler's: the filter is
+	// `<base>/+/+/+/+/custom/+/set/+`, so a delivered message has them by
+	// construction. Wildcard 4 is the `<kind>` segment, which this shape
+	// carries for the discovery payload's benefit and the dispatch ignores.
+	iface, deviceAddr, method := w[1], w[2], w[5]
+	channel, err := strconv.Atoi(w[3])
 	if err != nil {
 		c.logger.Warn("mqtt.command.svc.bad_channel", slog.String("topic", topic))
 		return
@@ -801,79 +1012,77 @@ func (c *CommandSubscriber) handleServiceMethod(topic string, raw []byte, retain
 			slog.String("detail", "CDPInvocationSink not wired; ignoring service-method invoke"))
 		return
 	}
-	params, err := scalarPayloadToParams(method, raw, payload.GlobalScalarArgKey)
+	params, err := scalarPayloadToParams(method, cmd.Payload, payload.GlobalScalarArgKey)
 	if err != nil {
 		c.logger.Warn("mqtt.command.svc.bad_payload",
 			slog.String("topic", topic),
 			slog.String("err", err.Error()))
 		return
 	}
-	c.dispatcher.Enqueue(topic, func() {
-		ctx, cancel := context.WithCancel(c.lifecycleCtx)
-		defer cancel()
-		if err := c.cdpSink.InvokeChannelService(ctx, centralName, iface, deviceAddr, channel, method, params, hmenum.CommandPriorityHigh); err != nil {
-			c.logger.Warn("mqtt.command.svc.invoke",
-				slog.String("topic", topic),
-				slog.String("method", method),
-				slog.String("err", err.Error()))
-		}
-	})
+	if err := c.cdpSink.InvokeChannelService(ctx, centralName, iface, deviceAddr, channel, method, params, hmenum.CommandPriorityHigh); err != nil {
+		c.logger.Warn("mqtt.command.svc.invoke",
+			slog.String("topic", topic),
+			slog.String("method", method),
+			slog.String("err", err.Error()))
+	}
 }
 
-func (c *CommandSubscriber) handleDataPoint(topic string, body []byte, retained bool) {
-	if retained {
-		// Retained `*/set` replays at subscribe time would re-issue
-		// the last write to the CCU on every daemon restart. HA never
-		// publishes set-topics retained; an external publisher with
-		// retain=true is almost always a configuration mistake.
-		c.logger.Debug("mqtt.command.dp.retained_drop", slog.String("topic", topic))
-		return
-	}
-	// Two accepted shapes — both end with `/set`. Segment counts are
-	// below the base, which [CommandSubscriber.commandParts] has already
-	// stripped:
-	//
-	//   1. Bucket-aware (canonical, emitted by the discovery builder):
-	//      <central>/<iface>/<addr>/<channel>/<bucket>/<param>/set
-	//      (7 segments; `<bucket>` is `values`/`master`/`calculated`).
-	//
-	//   2. Legacy bucket-less shape, still produced by hand-built tools
-	//      and by automations written against the pre-bucket topology
-	//      (the legacy alias mirrors state only, never `/set`):
-	//      <central>/<iface>/<addr>/<channel>/<param>/set
-	//      (6 segments).
-	//
-	// The bucket-less form always routes to VALUES. In the bucket-aware
-	// form `values` routes to SetValue, `master` routes to SetMasterValue,
-	// and `calculated` is read-only and is dropped with a debug log.
-	//
-	// Three shapes of those two lengths are not data-point writes at all
-	// and are dispatched to their own handlers from here rather than from
-	// a filter of their own, because a filter of their own would overlap
-	// one of these two catch-alls and MQTT cannot express the exclusion:
-	// `week_profile` at six segments, `combined` and `schedule` at the
-	// bucket position of the seven-segment shape.
-	parts, ok := c.commandParts(topic)
-	if !ok || parts[len(parts)-1] != "set" {
-		c.logger.Warn("mqtt.command.unknown_topic", slog.String("topic", topic))
-		return
-	}
-	var centralSeg, iface, device, channelStr, parameter string
+// handleDataPoint owns both data-point command shapes and, because they are
+// wildcard catch-alls nothing can be carved out of, the three narrow shapes
+// of the same lengths.
+//
+// Two accepted data-point shapes — both end with `/set`, and both are read
+// off [hapublisher.Command.Wildcards], the levels the route's `+` positions
+// matched, rather than off a split of the topic:
+//
+//  1. Bucket-aware (canonical, emitted by the discovery builder):
+//     <central>/<iface>/<addr>/<channel>/<bucket>/<param>/set
+//     — six wildcards; `<bucket>` is `values`/`master`/`calculated`.
+//  2. Legacy bucket-less shape, still produced by hand-built tools and by
+//     automations written against the pre-bucket topology:
+//     <central>/<iface>/<addr>/<channel>/<param>/set
+//     — five wildcards.
+//
+// The bucket-less form always routes to VALUES. In the bucket-aware form
+// `values` routes to SetValue, `master` routes to SetMasterValue, and
+// `calculated` is read-only and dropped with a debug log.
+//
+// Three shapes of those two lengths are not data-point writes at all and are
+// dispatched from here rather than from a filter of their own, because a
+// filter of their own would overlap one of these two catch-alls and MQTT
+// cannot express the exclusion: `week_profile` at five wildcards, `combined`
+// and `schedule` at the bucket position of the six-wildcard shape.
+//
+// Counting wildcards rather than topic segments is what makes the reading
+// independent of the topic base. The base is free-form operator config and
+// may carry levels of its own ("home/loom"); this handler used to count
+// absolute segments, which shifted every index by the base's depth and
+// dropped every inbound command on such an installation while the state
+// plane kept publishing normally — an outage that reads exactly like a
+// broker or CCU fault. A wildcard list cannot have that bug, and
+// [CommandSubscriber.Start] refuses a base that would contribute a wildcard
+// level of its own.
+func (c *CommandSubscriber) handleDataPoint(ctx context.Context, cmd hapublisher.Command) {
+	topic := cmd.Topic
+	w := cmd.Wildcards
+	// Deliberately not routeWildcards: this handler owns two routes of
+	// different arity and discriminates on the count itself, so the `default`
+	// arm below IS the guard.
+	var parameter string
 	isMaster := false
-	switch len(parts) {
-	case 6:
-		// This filter is the only six-segment subscription on the plane,
-		// so a six-segment command shape that is not a data-point write
-		// is dispatched from here rather than owned by a sibling filter
-		// that would overlap this one — see the segWeekProfile block.
-		if parts[4] == segWeekProfile {
-			c.handleWeekProfile(topic, body, retained)
+	switch len(w) {
+	case 5:
+		// This route is the only five-wildcard subscription on the plane,
+		// so a shape of that length which is not a data-point write is
+		// dispatched from here rather than owned by a sibling filter that
+		// would overlap it — see the segWeekProfile block.
+		if w[4] == segWeekProfile {
+			c.handleWeekProfile(ctx, cmd)
 			return
 		}
-		centralSeg, iface, device, channelStr, parameter = parts[0], parts[1], parts[2], parts[3], parts[4]
-	case 7:
-		bucket := parts[4]
-		switch bucket {
+		parameter = w[4]
+	case 6:
+		switch bucket := w[4]; bucket {
 		case "values":
 			// Default VALUES write — no special flag needed.
 		case "master":
@@ -882,10 +1091,10 @@ func (c *CommandSubscriber) handleDataPoint(topic string, body []byte, retained 
 			// Not a bucket: the combined-DP shape carries its own
 			// literal where the bucket sits, and is dispatched from
 			// here for the reason the segCombined block gives.
-			c.handleCombinedDP(topic, body, retained)
+			c.handleCombinedDP(ctx, cmd)
 			return
 		case segSchedule:
-			c.handleScheduleSwitch(topic, body, retained)
+			c.handleScheduleSwitch(ctx, cmd)
 			return
 		default:
 			// `calculated` and any unknown bucket are read-only; drop
@@ -896,143 +1105,123 @@ func (c *CommandSubscriber) handleDataPoint(topic string, body []byte, retained 
 				slog.String("bucket", bucket))
 			return
 		}
-		centralSeg, iface, device, channelStr, parameter = parts[0], parts[1], parts[2], parts[3], parts[5]
+		parameter = w[5]
 	default:
+		// Unreachable through the two registered routes, which capture
+		// exactly five or six wildcards. It is kept as the failure mode for
+		// a third route bound to this handler by mistake: a silent wrong
+		// read of w[4] would be a CCU write to a parameter named after
+		// somebody else's literal.
 		c.logger.Warn("mqtt.command.unknown_topic", slog.String("topic", topic))
 		return
 	}
-	centralName, ok := c.resolveCentral(topic, centralSeg)
+	centralName, ok := c.resolveCentral(topic, w[0])
 	if !ok {
 		return
 	}
-	channel, err := strconv.Atoi(channelStr)
+	channel, err := strconv.Atoi(w[3])
 	if err != nil {
 		c.logger.Warn("mqtt.command.bad_channel", slog.String("topic", topic))
 		return
 	}
-	value := parseCommandPayload(body)
-	channelAddress := fmt.Sprintf("%s:%d", device, channel)
+	iface := w[1]
+	value := parseCommandPayload(cmd.Payload)
+	channelAddress := fmt.Sprintf("%s:%d", w[2], channel)
 	c.incReceivedCommands(centralName)
-	c.dispatcher.Enqueue(topic, func() {
-		ctx, cancel := context.WithCancel(c.lifecycleCtx)
-		defer cancel()
-		if isMaster {
-			if err := c.sink.SetMasterValue(ctx, centralName, iface, channelAddress,
-				hmenum.Parameter(parameter), value, hmenum.CommandPriorityHigh); err != nil {
-				c.logger.Warn("mqtt.command.setmasterparam",
-					slog.String("topic", topic),
-					slog.String("err", err.Error()))
-			}
-			return
-		}
-		if err := c.sink.SetValue(ctx, centralName, iface, channelAddress,
+	if isMaster {
+		if err := c.sink.SetMasterValue(ctx, centralName, iface, channelAddress,
 			hmenum.Parameter(parameter), value, hmenum.CommandPriorityHigh); err != nil {
-			c.logger.Warn("mqtt.command.setvalue",
+			c.logger.Warn("mqtt.command.setmasterparam",
 				slog.String("topic", topic),
 				slog.String("err", err.Error()))
 		}
-	})
+		return
+	}
+	if err := c.sink.SetValue(ctx, centralName, iface, channelAddress,
+		hmenum.Parameter(parameter), value, hmenum.CommandPriorityHigh); err != nil {
+		c.logger.Warn("mqtt.command.setvalue",
+			slog.String("topic", topic),
+			slog.String("err", err.Error()))
+	}
 }
 
-func (c *CommandSubscriber) handleSysvar(topic string, body []byte, retained bool) {
-	if retained {
-		c.logger.Debug("mqtt.command.sysvar.retained_drop", slog.String("topic", topic))
-		return
-	}
-	// Canonical ADR-0011: <base>/<central>/hub/sysvars/<name>/set
-	parts, ok := c.commandParts(topic)
-	if !ok || len(parts) != 5 || parts[1] != "hub" || parts[2] != "sysvars" || parts[4] != "set" {
-		return
-	}
-	centralSeg, name := parts[0], parts[3]
-	centralName, ok := c.resolveCentral(topic, centralSeg)
+// handleSysvar writes a system variable from the canonical ADR-0011 topic
+// `<base>/<central>/hub/sysvars/<name>/set`. The `hub` and `sysvars`
+// literals are the route's, so the wildcards are the central and the name.
+func (c *CommandSubscriber) handleSysvar(ctx context.Context, cmd hapublisher.Command) {
+	w, ok := c.routeWildcards(cmd, 2)
 	if !ok {
 		return
 	}
-	value := parseCommandPayload(body)
-	c.incReceivedCommands(centralName)
-	c.dispatcher.Enqueue(topic, func() {
-		ctx, cancel := context.WithCancel(c.lifecycleCtx)
-		defer cancel()
-		if err := c.sink.SetSysvar(ctx, centralName, name, value); err != nil {
-			c.logger.Warn("mqtt.command.setsysvar",
-				slog.String("topic", topic), slog.String("err", err.Error()))
-		}
-	})
-}
-
-func (c *CommandSubscriber) handleProgram(topic string, body []byte, retained bool) {
-	if retained {
-		c.logger.Debug("mqtt.command.program.retained_drop", slog.String("topic", topic))
+	centralName, ok := c.resolveCentral(cmd.Topic, w[0])
+	if !ok {
 		return
 	}
+	value := parseCommandPayload(cmd.Payload)
+	c.incReceivedCommands(centralName)
+	if err := c.sink.SetSysvar(ctx, centralName, w[1], value); err != nil {
+		c.logger.Warn("mqtt.command.setsysvar",
+			slog.String("topic", cmd.Topic), slog.String("err", err.Error()))
+	}
+}
+
+// handleProgram executes a CCU program from the canonical ADR-0011 topic
+// `<base>/<central>/hub/programs/<id>/trigger`.
+func (c *CommandSubscriber) handleProgram(ctx context.Context, cmd hapublisher.Command) {
+	topic := cmd.Topic
 	// An empty payload is not a command. It is what the retain-cleanup
 	// pass publishes to evict a parked retained message from the trigger
-	// topic — the broker forwards that eviction to this very
-	// subscription as a live (non-retained) message, and executing a CCU
-	// program because a topic was cleaned would repeat the state-mirror
-	// defect this guard exists to keep out.
-	if strings.TrimSpace(string(body)) == "" {
+	// topic — the broker forwards that eviction to this very subscription as
+	// a live (non-retained) message, so the router's retained drop does NOT
+	// catch it, and executing a CCU program because a topic was cleaned
+	// would repeat the state-mirror defect this guard exists to keep out.
+	if strings.TrimSpace(string(cmd.Payload)) == "" {
 		c.logger.Debug("mqtt.command.program.empty_drop", slog.String("topic", topic))
 		return
 	}
-	// Canonical ADR-0011: <base>/<central>/hub/programs/<id>/trigger
-	parts, ok := c.commandParts(topic)
-	if !ok || len(parts) != 5 || parts[1] != "hub" || parts[2] != "programs" || parts[4] != "trigger" {
+	w, ok := c.routeWildcards(cmd, 2)
+	if !ok {
 		return
 	}
-	centralSeg, id := parts[0], parts[3]
-	centralName, ok := c.resolveCentral(topic, centralSeg)
+	centralName, ok := c.resolveCentral(topic, w[0])
 	if !ok {
 		return
 	}
 	c.incReceivedCommands(centralName)
-	c.dispatcher.Enqueue(topic, func() {
-		ctx, cancel := context.WithCancel(c.lifecycleCtx)
-		defer cancel()
-		// Stamp the surface so the program-execute audit/log subscriber
-		// can attribute the run to the MQTT command plane.
-		ctx = hmreqctx.WithOperation(ctx, "mqtt:program-trigger")
-		if err := c.sink.TriggerProgram(ctx, centralName, id); err != nil {
-			c.logger.Warn("mqtt.command.program",
-				slog.String("topic", topic), slog.String("err", err.Error()))
-		}
-	})
+	// Stamp the surface so the program-execute audit/log subscriber
+	// can attribute the run to the MQTT command plane.
+	ctx = hmreqctx.WithOperation(ctx, "mqtt:program-trigger")
+	if err := c.sink.TriggerProgram(ctx, centralName, w[1]); err != nil {
+		c.logger.Warn("mqtt.command.program",
+			slog.String("topic", topic), slog.String("err", err.Error()))
+	}
 }
 
 // handleProgramEnable toggles a program's CCU-side activity flag from
 // `<base>/<central>/hub/programs/<id>/set`. While the flag is off the CCU
 // ignores the program's triggers and refuses a manual run, so this is the
 // control that decides whether the paired execute button does anything.
-func (c *CommandSubscriber) handleProgramEnable(topic string, body []byte, retained bool) {
-	if retained {
-		c.logger.Debug("mqtt.command.program_enable.retained_drop", slog.String("topic", topic))
-		return
-	}
-	parts, ok := c.commandParts(topic)
-	if !ok || len(parts) != 5 || parts[1] != "hub" || parts[2] != "programs" || parts[4] != "set" {
-		return
-	}
-	centralSeg, id := parts[0], parts[3]
-	centralName, ok := c.resolveCentral(topic, centralSeg)
+func (c *CommandSubscriber) handleProgramEnable(ctx context.Context, cmd hapublisher.Command) {
+	topic := cmd.Topic
+	w, ok := c.routeWildcards(cmd, 2)
 	if !ok {
 		return
 	}
-	enabled, ok := parseBoolPayload(body)
+	centralName, ok := c.resolveCentral(topic, w[0])
+	if !ok {
+		return
+	}
+	enabled, ok := parseBoolPayload(cmd.Payload)
 	if !ok {
 		c.logger.Warn("mqtt.command.program_enable.bad_payload",
-			slog.String("topic", topic), slog.String("payload", string(body)))
+			slog.String("topic", topic), slog.String("payload", string(cmd.Payload)))
 		return
 	}
 	c.incReceivedCommands(centralName)
-	c.dispatcher.Enqueue(topic, func() {
-		ctx, cancel := context.WithCancel(c.lifecycleCtx)
-		defer cancel()
-		if err := c.sink.SetProgramEnabled(ctx, centralName, id, enabled); err != nil {
-			c.logger.Warn("mqtt.command.program_enable",
-				slog.String("topic", topic), slog.String("err", err.Error()))
-		}
-	})
+	if err := c.sink.SetProgramEnabled(ctx, centralName, w[1], enabled); err != nil {
+		c.logger.Warn("mqtt.command.program_enable",
+			slog.String("topic", topic), slog.String("err", err.Error()))
+	}
 }
 
 // parseBoolPayload accepts the on/off spellings HA and hand-written
@@ -1054,22 +1243,18 @@ func parseBoolPayload(body []byte) (value, ok bool) {
 // publishes the press token ("PRESS"); the sink applies its own default
 // pairing duration. A numeric payload is honoured as the duration in
 // seconds for tools that publish one directly.
-func (c *CommandSubscriber) handleInstallMode(topic string, body []byte, retained bool) {
-	if retained {
-		c.logger.Debug("mqtt.command.install_mode.retained_drop", slog.String("topic", topic))
-		return
-	}
+func (c *CommandSubscriber) handleInstallMode(ctx context.Context, cmd hapublisher.Command) {
 	// <base>/<central>/hub/install_mode/<iface>/set
-	parts, ok := c.commandParts(topic)
-	if !ok || len(parts) != 5 || parts[1] != "hub" || parts[2] != "install_mode" || parts[4] != "set" {
-		c.logger.Warn("mqtt.command.install_mode.unknown_topic", slog.String("topic", topic))
-		return
-	}
-	centralSeg, iface := parts[0], parts[3]
-	centralName, ok := c.resolveCentral(topic, centralSeg)
+	topic := cmd.Topic
+	w, ok := c.routeWildcards(cmd, 2)
 	if !ok {
 		return
 	}
+	centralName, ok := c.resolveCentral(topic, w[0])
+	if !ok {
+		return
+	}
+	iface := w[1]
 	if c.imSink == nil {
 		c.logger.Debug("mqtt.command.install_mode.no_sink",
 			slog.String("topic", topic),
@@ -1079,22 +1264,18 @@ func (c *CommandSubscriber) handleInstallMode(topic string, body []byte, retaine
 	// "PRESS" (HA button) and empty payloads request the default
 	// duration (seconds=0 → sink default); a bare integer overrides it.
 	seconds := 0
-	if raw := strings.TrimSpace(string(body)); raw != "" && !strings.EqualFold(raw, "PRESS") {
+	if raw := strings.TrimSpace(string(cmd.Payload)); raw != "" && !strings.EqualFold(raw, "PRESS") {
 		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
 			seconds = n
 		}
 	}
 	c.incReceivedCommands(centralName)
-	c.dispatcher.Enqueue(topic, func() {
-		ctx, cancel := context.WithCancel(c.lifecycleCtx)
-		defer cancel()
-		if err := c.imSink.ActivateInstallMode(ctx, centralName, iface, seconds); err != nil {
-			c.logger.Warn("mqtt.command.install_mode.activate",
-				slog.String("topic", topic),
-				slog.String("interface", iface),
-				slog.String("err", err.Error()))
-		}
-	})
+	if err := c.imSink.ActivateInstallMode(ctx, centralName, iface, seconds); err != nil {
+		c.logger.Warn("mqtt.command.install_mode.activate",
+			slog.String("topic", topic),
+			slog.String("interface", iface),
+			slog.String("err", err.Error()))
+	}
 }
 
 // alarmCommandPayload is the JSON envelope accepted on the alarm command
@@ -1111,19 +1292,15 @@ type alarmCommandPayload struct {
 // (ARM_HOME / ARM_AWAY / … / DISARM, plus the SILENCE extension) or the
 // JSON {"action":…,"code":…} envelope. Unknown payloads are logged and
 // dropped, matching the other command handlers.
-func (c *CommandSubscriber) handleAlarmCommand(topic string, body []byte, retained bool) {
-	if retained {
-		c.logger.Debug("mqtt.command.alarm.retained_drop", slog.String("topic", topic))
+func (c *CommandSubscriber) handleAlarmCommand(ctx context.Context, cmd hapublisher.Command) {
+	// <base>/alarm/<zone>/set — one wildcard, the zone.
+	topic := cmd.Topic
+	w, ok := c.routeWildcards(cmd, 1)
+	if !ok {
 		return
 	}
-	// <base>/alarm/<zone>/set
-	parts, ok := c.commandParts(topic)
-	if !ok || len(parts) != 3 || parts[0] != "alarm" || parts[2] != "set" {
-		c.logger.Warn("mqtt.command.alarm.unknown_topic", slog.String("topic", topic))
-		return
-	}
-	zone := parts[1]
-	action, code := parseAlarmAction(body)
+	zone := w[0]
+	action, code := parseAlarmAction(cmd.Payload)
 	if action == "" {
 		c.logger.Warn("mqtt.command.alarm.empty_payload", slog.String("topic", topic))
 		return
@@ -1137,7 +1314,7 @@ func (c *CommandSubscriber) handleAlarmCommand(topic string, body []byte, retain
 	// The alarm command topic carries no <central> segment (zones are
 	// daemon-level, see [AlarmSink]) — nothing to label this increment with.
 	c.incReceivedCommands("")
-	c.dispatchAlarm(topic, zone, action, code)
+	c.dispatchAlarm(ctx, topic, zone, action, code)
 }
 
 // alarmCommandTrigger is the HA panic command routed onto the engine's
@@ -1150,69 +1327,53 @@ const alarmCommandTrigger = "TRIGGER"
 const alarmCommandResetMotion = "RESET_MOTION"
 
 // dispatchAlarm resolves the HA command string onto the alarm verb and
-// enqueues it. The reserved "master" zone routes to the aggregate verbs;
+// calls it. The reserved "master" zone routes to the aggregate verbs;
 // SILENCE and TRIGGER have no master form and are dropped for it. The
 // parsed code is threaded into the per-zone verbs and validated by the
 // sink; the master verbs stay code-free.
-func (c *CommandSubscriber) dispatchAlarm(topic, zone, action, code string) {
+func (c *CommandSubscriber) dispatchAlarm(ctx context.Context, topic, zone, action, code string) {
 	master := zone == alarmMasterZone
 	switch action {
 	case alarmpanel.HAAlarmCommandDisarm:
-		c.dispatcher.Enqueue(topic, func() {
-			ctx, cancel := context.WithCancel(c.lifecycleCtx)
-			defer cancel()
-			var err error
-			if master {
-				err = c.alarmSink.MasterDisarm(ctx)
-			} else {
-				err = c.alarmSink.Disarm(ctx, zone, code)
-			}
-			if err != nil {
-				c.logger.Warn("mqtt.command.alarm.disarm",
-					slog.String("topic", topic), slog.String("err", err.Error()))
-			}
-		})
+		var err error
+		if master {
+			err = c.alarmSink.MasterDisarm(ctx)
+		} else {
+			err = c.alarmSink.Disarm(ctx, zone, code)
+		}
+		if err != nil {
+			c.logger.Warn("mqtt.command.alarm.disarm",
+				slog.String("topic", topic), slog.String("err", err.Error()))
+		}
 	case alarmpanel.HAAlarmCommandSilence:
 		if master {
 			c.logger.Debug("mqtt.command.alarm.master_silence_unsupported", slog.String("topic", topic))
 			return
 		}
-		c.dispatcher.Enqueue(topic, func() {
-			ctx, cancel := context.WithCancel(c.lifecycleCtx)
-			defer cancel()
-			if err := c.alarmSink.Silence(ctx, zone, code); err != nil {
-				c.logger.Warn("mqtt.command.alarm.silence",
-					slog.String("topic", topic), slog.String("err", err.Error()))
-			}
-		})
+		if err := c.alarmSink.Silence(ctx, zone, code); err != nil {
+			c.logger.Warn("mqtt.command.alarm.silence",
+				slog.String("topic", topic), slog.String("err", err.Error()))
+		}
 	case alarmCommandResetMotion:
-		c.dispatcher.Enqueue(topic, func() {
-			ctx, cancel := context.WithCancel(c.lifecycleCtx)
-			defer cancel()
-			var err error
-			if master {
-				err = c.alarmSink.MasterResetMotion(ctx)
-			} else {
-				err = c.alarmSink.ResetMotion(ctx, zone)
-			}
-			if err != nil {
-				c.logger.Warn("mqtt.command.alarm.reset_motion",
-					slog.String("topic", topic), slog.String("err", err.Error()))
-			}
-		})
+		var err error
+		if master {
+			err = c.alarmSink.MasterResetMotion(ctx)
+		} else {
+			err = c.alarmSink.ResetMotion(ctx, zone)
+		}
+		if err != nil {
+			c.logger.Warn("mqtt.command.alarm.reset_motion",
+				slog.String("topic", topic), slog.String("err", err.Error()))
+		}
 	case alarmCommandTrigger:
 		if master {
 			c.logger.Debug("mqtt.command.alarm.master_trigger_unsupported", slog.String("topic", topic))
 			return
 		}
-		c.dispatcher.Enqueue(topic, func() {
-			ctx, cancel := context.WithCancel(c.lifecycleCtx)
-			defer cancel()
-			if err := c.alarmSink.Panic(ctx, zone); err != nil {
-				c.logger.Warn("mqtt.command.alarm.trigger",
-					slog.String("topic", topic), slog.String("err", err.Error()))
-			}
-		})
+		if err := c.alarmSink.Panic(ctx, zone); err != nil {
+			c.logger.Warn("mqtt.command.alarm.trigger",
+				slog.String("topic", topic), slog.String("err", err.Error()))
+		}
 	default:
 		mode, ok := alarmpanel.ArmModeForCommand(action)
 		if !ok {
@@ -1220,20 +1381,16 @@ func (c *CommandSubscriber) dispatchAlarm(topic, zone, action, code string) {
 				slog.String("topic", topic), slog.String("action", action))
 			return
 		}
-		c.dispatcher.Enqueue(topic, func() {
-			ctx, cancel := context.WithCancel(c.lifecycleCtx)
-			defer cancel()
-			var err error
-			if master {
-				err = c.alarmSink.MasterArm(ctx, mode)
-			} else {
-				err = c.alarmSink.Arm(ctx, zone, mode, code)
-			}
-			if err != nil {
-				c.logger.Warn("mqtt.command.alarm.arm",
-					slog.String("topic", topic), slog.String("mode", string(mode)), slog.String("err", err.Error()))
-			}
-		})
+		var err error
+		if master {
+			err = c.alarmSink.MasterArm(ctx, mode)
+		} else {
+			err = c.alarmSink.Arm(ctx, zone, mode, code)
+		}
+		if err != nil {
+			c.logger.Warn("mqtt.command.alarm.arm",
+				slog.String("topic", topic), slog.String("mode", string(mode)), slog.String("err", err.Error()))
+		}
 	}
 }
 
@@ -1262,12 +1419,9 @@ func parseAlarmAction(body []byte) (action, code string) {
 // [DefaultDiscoveryBuilder.BuildAddonUpdateDiscovery]) here; any
 // non-empty payload is accepted so a hand-built tool need not match
 // the exact token.
-func (c *CommandSubscriber) handleAddonUpdateCommand(topic string, body []byte, retained bool) {
-	if retained {
-		c.logger.Debug("mqtt.command.addon_update.retained_drop", slog.String("topic", topic))
-		return
-	}
-	if strings.TrimSpace(string(body)) == "" {
+func (c *CommandSubscriber) handleAddonUpdateCommand(ctx context.Context, cmd hapublisher.Command) {
+	topic := cmd.Topic
+	if strings.TrimSpace(string(cmd.Payload)) == "" {
 		c.logger.Warn("mqtt.command.addon_update.empty_payload", slog.String("topic", topic))
 		return
 	}
@@ -1281,33 +1435,29 @@ func (c *CommandSubscriber) handleAddonUpdateCommand(topic string, body []byte, 
 	// (daemon-level self-updater, see [AddonUpdateSink]) — nothing to
 	// label this increment with.
 	c.incReceivedCommands("")
-	c.dispatcher.Enqueue(topic, func() {
-		ctx, cancel := context.WithCancel(c.lifecycleCtx)
-		defer cancel()
-		if err := c.addonSink.TriggerInstall(ctx); err != nil {
-			c.logger.Warn("mqtt.command.addon_update.install",
-				slog.String("topic", topic),
-				slog.String("err", err.Error()))
-		}
-	})
+	if err := c.addonSink.TriggerInstall(ctx); err != nil {
+		c.logger.Warn("mqtt.command.addon_update.install",
+			slog.String("topic", topic),
+			slog.String("err", err.Error()))
+	}
 }
 
-func (c *CommandSubscriber) handleCDPInvoke(topic string, raw []byte, retained bool) {
-	if retained {
-		c.logger.Debug("mqtt.command.cdp.retained_drop", slog.String("topic", topic))
-		return
-	}
-	// <base>/<central>/devices/<deviceAddr>/cdps/<name>/<operation>/invoke
-	parts, ok := c.commandParts(topic)
-	if !ok || len(parts) != 7 || parts[1] != "devices" || parts[3] != "cdps" || parts[6] != "invoke" {
-		c.logger.Warn("mqtt.command.cdp.unknown_topic", slog.String("topic", topic))
-		return
-	}
-	centralSeg, deviceAddr, name, operation := parts[0], parts[2], parts[4], parts[5]
-	centralName, ok := c.resolveCentral(topic, centralSeg)
+// handleCDPInvoke dispatches a Custom-DP operation from
+// `<base>/<central>/devices/<deviceAddr>/cdps/<name>/<operation>/invoke`.
+// The `devices`, `cdps` and `invoke` literals are the route's, so the four
+// wildcards are the central, the device address, the custom-DP name and the
+// operation.
+func (c *CommandSubscriber) handleCDPInvoke(ctx context.Context, cmd hapublisher.Command) {
+	topic := cmd.Topic
+	w, ok := c.routeWildcards(cmd, 4)
 	if !ok {
 		return
 	}
+	centralName, ok := c.resolveCentral(topic, w[0])
+	if !ok {
+		return
+	}
+	deviceAddr, name, operation := w[1], w[2], w[3]
 
 	if c.cdpSink == nil {
 		c.logger.Warn("mqtt.command.cdp.no_sink",
@@ -1317,8 +1467,8 @@ func (c *CommandSubscriber) handleCDPInvoke(topic string, raw []byte, retained b
 	}
 
 	var body CDPInvokePayload
-	if len(raw) > 0 {
-		if err := json.Unmarshal(raw, &body); err != nil {
+	if len(cmd.Payload) > 0 {
+		if err := json.Unmarshal(cmd.Payload, &body); err != nil {
 			c.logger.Warn("mqtt.command.cdp.bad_payload",
 				slog.String("topic", topic),
 				slog.String("err", err.Error()))
@@ -1327,15 +1477,11 @@ func (c *CommandSubscriber) handleCDPInvoke(topic string, raw []byte, retained b
 	}
 
 	priority := parseMQTTPriority(body.Priority)
-	c.dispatcher.Enqueue(topic, func() {
-		ctx, cancel := context.WithCancel(c.lifecycleCtx)
-		defer cancel()
-		if err := c.cdpSink.InvokeCustomDP(ctx, centralName, deviceAddr, name, operation, body.Params, priority); err != nil {
-			c.logger.Warn("mqtt.command.cdp.invoke",
-				slog.String("topic", topic),
-				slog.String("err", err.Error()))
-		}
-	})
+	if err := c.cdpSink.InvokeCustomDP(ctx, centralName, deviceAddr, name, operation, body.Params, priority); err != nil {
+		c.logger.Warn("mqtt.command.cdp.invoke",
+			slog.String("topic", topic),
+			slog.String("err", err.Error()))
+	}
 }
 
 // parseMQTTPriority converts the optional priority string from the

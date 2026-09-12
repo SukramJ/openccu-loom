@@ -20,26 +20,38 @@ import (
 // at the same value.
 const disjointSweepBase = "gh"
 
-// commandFiltersAt returns the filters a real [CommandSubscriber] registers
-// at one base.
+// commandPlaneAt returns the started [CommandSubscriber] and the filters it
+// registered, at one base.
 //
 // The filters come from a real Start against a recording subscriber, never
 // from a literal list. A hand-written copy would make the sweep compare the
 // state plane against a second copy of the filter set rather than against the
 // subscriptions the daemon really holds — which is the same mistake the plane
 // round-trip guards were rewritten to avoid.
-func commandFiltersAt(t *testing.T, base string) []string {
+// commandPlaneAt returns a started [CommandSubscriber] and the filters it
+// registered.
+//
+// The subscriber itself is returned as well as its filters because the sweep
+// now asks the question twice, through two independent oracles: this
+// package's own [topicMatchesFilter] walk, and
+// [CommandSubscriber.checkDisjoint], which is the shared module's own
+// predicate over the routes the router really holds. Two answers to one
+// question is worth the duplication here — the local matcher is 15 lines
+// that could be wrong in the same direction as the code it checks, and the
+// library's is the one the daemon would run at boot.
+func commandPlaneAt(t *testing.T, base string) (sub *CommandSubscriber, filters []string) {
 	t.Helper()
 	rec := newFilterRecorder()
-	if err := NewCommandSubscriber(rec, NewTopicBuilder(base), &fakeSink{}, nil).
-		Start(context.Background()); err != nil {
+	sub = NewCommandSubscriber(rec, NewTopicBuilder(base), &fakeSink{}, nil)
+	if err := sub.Start(context.Background()); err != nil {
 		t.Fatalf("base %q: command subscriber start: %v", base, err)
 	}
-	f := rec.recorded()
-	if len(f) == 0 {
+	t.Cleanup(sub.Close)
+	filters = rec.recorded()
+	if len(filters) == 0 {
 		t.Fatalf("base %q: no command filters registered — the sweep would be vacuous", base)
 	}
-	return f
+	return sub, filters
 }
 
 // TestEveryStatePlaneIsDisjointFromCommandSubscriptions sweeps every topic
@@ -100,7 +112,7 @@ func commandFiltersAt(t *testing.T, base string) []string {
 func TestEveryStatePlaneIsDisjointFromCommandSubscriptions(t *testing.T) {
 	t.Parallel()
 
-	filters := commandFiltersAt(t, disjointSweepBase)
+	sub, filters := commandPlaneAt(t, disjointSweepBase)
 
 	planes := []struct {
 		name string
@@ -123,7 +135,8 @@ func TestEveryStatePlaneIsDisjointFromCommandSubscriptions(t *testing.T) {
 			if len(published) == 0 {
 				t.Fatalf("%s: the plane published nothing — the sweep would be vacuous", p.name)
 			}
-			for _, topic := range sortedKeys(published) {
+			topics := sortedKeys(published)
+			for _, topic := range topics {
 				for _, f := range filters {
 					if topicMatchesFilter(topic, f) {
 						t.Errorf("%s: published topic %q is matched by the daemon's own command "+
@@ -132,6 +145,15 @@ func TestEveryStatePlaneIsDisjointFromCommandSubscriptions(t *testing.T) {
 							"with nothing in the logs", p.name, topic, f)
 					}
 				}
+			}
+			// The same sweep through the shared module's own predicate, over
+			// the routes the router actually holds. It is the check a boot
+			// would run, it reports every collision rather than the first,
+			// and it cannot agree with the local matcher by construction
+			// because it does not share a line of code with it.
+			if err := sub.checkDisjoint(topics...); err != nil {
+				t.Errorf("%s: CommandRouter.CheckDisjoint rejected this plane's published topics: %v",
+					p.name, err)
 			}
 		})
 		swept++
@@ -330,9 +352,10 @@ func anyTopicContains(topics []string, sub string) bool {
 	return false
 }
 
-// segmentsBelowBase counts a topic's segments with the base removed, the same
-// way every command handler counts them. Returns -1 for a topic outside the
-// base — the legacy mirror's topics, which no command filter can reach.
+// segmentsBelowBase counts a topic's segments with the base removed, which is
+// the depth a command filter matches at — the handlers themselves read the
+// route's captured wildcard levels now and count nothing. Returns -1 for a
+// topic outside the base, which no command filter can reach.
 func segmentsBelowBase(topic, base string) int {
 	prefix := base + "/"
 	if len(topic) <= len(prefix) || topic[:len(prefix)] != prefix {
@@ -348,4 +371,37 @@ func sortedIntKeys(m map[int]bool) []int {
 	}
 	sort.Ints(out)
 	return out
+}
+
+// TestCheckDisjointReportsARealCommandTopic is the positive control on the
+// oracle the sweep above gained.
+//
+// A disjointness check that answered "fine" unconditionally would make every
+// plane in that sweep pass, which is precisely the vacuity this programme has
+// been bitten by — and a check delegated to a router that registered no
+// routes would do exactly that. So the control feeds it topics that MUST
+// collide: one per registered filter, built by substituting a plausible value
+// for each `+` level. Every one of them has to come back as an error naming
+// its filter.
+func TestCheckDisjointReportsARealCommandTopic(t *testing.T) {
+	t.Parallel()
+
+	sub, filters := commandPlaneAt(t, disjointSweepBase)
+	for _, f := range filters {
+		topic := strings.ReplaceAll(f, "+", "x")
+		err := sub.checkDisjoint(topic)
+		if err == nil {
+			t.Errorf("CheckDisjoint(%q) = nil, but that topic is matched by the registered "+
+				"filter %q — the oracle the plane sweep relies on reports nothing", topic, f)
+			continue
+		}
+		if !strings.Contains(err.Error(), f) {
+			t.Errorf("CheckDisjoint(%q) did not name the colliding filter %q: %v", topic, f, err)
+		}
+	}
+	// And a topic no filter claims must not be reported, or the oracle would
+	// fail every plane instead of passing every plane.
+	if err := sub.checkDisjoint(disjointSweepBase + "/bridge/status"); err != nil {
+		t.Errorf("CheckDisjoint reported the bridge status topic, which no command filter matches: %v", err)
+	}
 }

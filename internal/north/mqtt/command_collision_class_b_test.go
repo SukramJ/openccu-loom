@@ -155,9 +155,10 @@ func newClassBFixture(t *testing.T) *classBFixture {
 }
 
 // classBBase is the topic base every fixture in this file uses. It carries no
-// "/" of its own on purpose — [CommandSubscriber.commandParts] strips the
-// base before any handler indexes a segment, and the multi-level-base case is
-// already pinned by command_subscriber_topic_base_test.go.
+// "/" of its own on purpose — the handlers read their topic off the route's
+// captured wildcard levels, which the base cannot shift, and the
+// multi-level-base case is already pinned by
+// command_subscriber_topic_base_test.go.
 const classBBase = "openccu-loom"
 
 // TestCombinedDPCommandDoesNotAlsoIssueADataPointWrite pins collision class B

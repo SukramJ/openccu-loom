@@ -60,12 +60,22 @@ func (s *slowSink) snapshotOrder() []any {
 	return out
 }
 
-// TestCommandSubscriberHandleDataPointReturnsPromptlyWithSlowSink is the
-// test-first reproducer for the read-loop stall: handleDataPoint must
-// return well before a slow downstream SetValue call completes, because in
-// the real go-mqtt transport handleDataPoint runs on the same goroutine
-// that also processes PUBACK/PINGRESP for every other in-flight message.
-func TestCommandSubscriberHandleDataPointReturnsPromptlyWithSlowSink(t *testing.T) {
+// TestCommandSubscriberDeliveryReturnsPromptlyWithSlowSink is the
+// test-first reproducer for the read-loop stall, restated against the
+// boundary that now exists: the DELIVERY must return well before a slow
+// downstream SetValue call completes, because in the real go-mqtt transport
+// the delivery runs on the same goroutine that also processes PUBACK and
+// PINGRESP for every other in-flight message — so a handler that blocks
+// there stalls acknowledgement processing and eventually trips the
+// keep-alive watchdog into a spurious reconnect.
+//
+// It drives the client rather than the handler because the handler is no
+// longer where the hand-off happens: [hapublisher.CommandRouter] resolves
+// the route on the delivering goroutine and enqueues, and the handler runs
+// on a worker. Calling the handler directly would now measure the sink, not
+// the hand-off, and would report "prompt" no matter how long the sink
+// blocked.
+func TestCommandSubscriberDeliveryReturnsPromptlyWithSlowSink(t *testing.T) {
 	t.Parallel()
 	noop := NewNoopClient()
 	topics := NewTopicBuilder("gh")
@@ -79,17 +89,19 @@ func TestCommandSubscriberHandleDataPointReturnsPromptlyWithSlowSink(t *testing.
 	done := make(chan struct{})
 	start := time.Now()
 	go func() {
-		sub.handleDataPoint("gh/ccu/HmIP-RF/0001ABCD/1/STATE/set", []byte("true"), false)
+		if !noop.DeliverInbound("gh/+/+/+/+/+/set", "gh/ccu/HmIP-RF/0001ABCD/1/STATE/set", []byte("true")) {
+			t.Error("no subscriber registered for the data-point route")
+		}
 		close(done)
 	}()
 
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
-		t.Fatal("handleDataPoint did not return; it must dispatch SetValue off the calling goroutine")
+		t.Fatal("the delivery did not return; the handler must run off the transport's read loop")
 	}
 	if elapsed := time.Since(start); elapsed > 500*time.Millisecond {
-		t.Fatalf("handleDataPoint took %v to return while SetValue was still blocked; want near-instant return", elapsed)
+		t.Fatalf("the delivery took %v to return while SetValue was still blocked; want near-instant return", elapsed)
 	}
 
 	// The work must still eventually run: SetValue was already entered (it
@@ -100,7 +112,7 @@ func TestCommandSubscriberHandleDataPointReturnsPromptlyWithSlowSink(t *testing.
 		t.Fatal("SetValue was never called")
 	}
 	close(sink.release)
-	sub.dispatcher.flush()
+	sub.WaitIdle()
 	if got := sink.snapshotOrder(); len(got) != 1 || got[0] != true {
 		t.Fatalf("order=%v, want [true]", got)
 	}
@@ -108,8 +120,15 @@ func TestCommandSubscriberHandleDataPointReturnsPromptlyWithSlowSink(t *testing.
 
 // TestCommandSubscriberPreservesOrderPerTopic proves that a burst of writes
 // to the SAME data point (the same MQTT topic) is never reordered, even
-// though the dispatcher runs multiple workers so unrelated data points can
+// though the pool runs multiple workers so unrelated data points can
 // proceed concurrently.
+//
+// Per-topic order is the only ordering the plane has, and after the router
+// adoption it is the only one it claims: [hapublisher.CommandHandler]
+// documents order as preserved per topic and nowhere else. Two commands on
+// DIFFERENT topics may run concurrently and in either order — the same
+// guarantee this daemon's own key-hashed dispatcher gave, now stated out
+// loud by the type that provides it.
 func TestCommandSubscriberPreservesOrderPerTopic(t *testing.T) {
 	t.Parallel()
 	const n = 100
@@ -124,9 +143,11 @@ func TestCommandSubscriberPreservesOrderPerTopic(t *testing.T) {
 	// Release immediately — this test is about ordering, not blocking.
 	close(sink.release)
 	for i := range n {
-		sub.handleDataPoint("gh/ccu/HmIP-RF/0001ABCD/1/LEVEL/set", []byte(intPayload(i)), false)
+		if !noop.DeliverInbound("gh/+/+/+/+/+/set", "gh/ccu/HmIP-RF/0001ABCD/1/LEVEL/set", []byte(intPayload(i))) {
+			t.Fatal("no subscriber registered for the data-point route")
+		}
 	}
-	sub.dispatcher.flush()
+	sub.WaitIdle()
 
 	got := sink.snapshotOrder()
 	if len(got) != n {
@@ -157,6 +178,13 @@ func intPayload(i int) string {
 // TestCommandSubscriberCloseDrainsCleanly proves Close waits for an
 // in-flight command to finish (no queued write is abandoned) and that the
 // worker goroutines it owns actually exit.
+//
+// This is the third cost the handler-goroutine contract names: shutdown has
+// to be waited for, because [hapublisher.CommandRouter.Stop] drains and
+// therefore blocks on whatever a handler is currently doing. Abandoning a
+// queued write is how a daemon loses the last command of a session with
+// nothing anywhere to say so, so the blocking is the feature — the
+// assertion below deliberately fails if Close returns early.
 func TestCommandSubscriberCloseDrainsCleanly(t *testing.T) {
 	t.Parallel()
 	noop := NewNoopClient()
@@ -167,7 +195,9 @@ func TestCommandSubscriberCloseDrainsCleanly(t *testing.T) {
 		t.Fatalf("start: %v", err)
 	}
 
-	sub.handleDataPoint("gh/ccu/HmIP-RF/0001ABCD/1/STATE/set", []byte("true"), false)
+	if !noop.DeliverInbound("gh/+/+/+/+/+/set", "gh/ccu/HmIP-RF/0001ABCD/1/STATE/set", []byte("true")) {
+		t.Fatal("no subscriber registered for the data-point route")
+	}
 	select {
 	case <-sink.started:
 	case <-time.After(2 * time.Second):

@@ -703,6 +703,9 @@ func TestCommandSubscriberServiceMethodNoSink(t *testing.T) {
 
 	noop.DeliverInbound("gh/+/+/+/+/custom/+/set/+",
 		"gh/ccu/HmIP-RF/0001ABCD/1/custom/climate/set/boost", []byte("true"))
+	// The drop happens on a worker, not on the delivering goroutine, so a
+	// zero-call assertion without this barrier would pass vacuously.
+	sub.WaitIdle()
 	// Should not panic.
 }
 
@@ -718,6 +721,9 @@ func TestCommandSubscriberServiceMethodBadChannel(t *testing.T) {
 	// Channel segment "abc" is not an int → should log warn, no call.
 	noop.DeliverInbound("gh/+/+/+/+/custom/+/set/+",
 		"gh/ccu/HmIP-RF/0001ABCD/abc/custom/climate/set/boost", []byte("true"))
+	// The drop happens on a worker, not on the delivering goroutine, so a
+	// zero-call assertion without this barrier would pass vacuously.
+	sub.WaitIdle()
 	if cdpSink.calls.Load() != 0 {
 		t.Fatalf("expected 0 calls on bad channel, got %d", cdpSink.calls.Load())
 	}
@@ -732,8 +738,12 @@ func TestCommandSubscriberServiceMethodBadTopicShape(t *testing.T) {
 	sub := NewCommandSubscriber(noop, topics, sink, nil).WithCDPSink(cdpSink)
 	_ = sub.Start(context.Background())
 
-	// Dispatch a raw call to handleServiceMethod with malformed topic.
-	sub.handleServiceMethod("wrong/shape", []byte("true"), false)
+	// A topic no route claims, forced past the subscription the way a shared
+	// broker's cross-talk arrives. The per-handler shape re-check this used
+	// to exercise is gone — the route is the shape check — so what is pinned
+	// now is the router's unroutable path: no handler, no sink call.
+	noop.DeliverInbound("gh/+/+/+/+/custom/+/set/+", "wrong/shape", []byte("true"))
+	sub.WaitIdle()
 	if cdpSink.calls.Load() != 0 {
 		t.Fatalf("expected 0 calls on bad topic shape, got %d", cdpSink.calls.Load())
 	}
@@ -750,7 +760,7 @@ func TestCommandSubscriberServiceMethodSuccess(t *testing.T) {
 
 	noop.DeliverInbound("gh/+/+/+/+/custom/+/set/+",
 		"gh/ccu/HmIP-RF/0001ABCD/1/custom/climate/set/boost", []byte("true"))
-	sub.dispatcher.flush()
+	sub.WaitIdle()
 	if cdpSink.calls.Load() != 1 {
 		t.Fatalf("expected 1 call, got %d", cdpSink.calls.Load())
 	}
@@ -768,7 +778,7 @@ func TestCommandSubscriberServiceMethodSinkError(t *testing.T) {
 	// Error from sink must not panic.
 	noop.DeliverInbound("gh/+/+/+/+/custom/+/set/+",
 		"gh/ccu/HmIP-RF/0001ABCD/1/custom/climate/set/boost", []byte("true"))
-	sub.dispatcher.flush()
+	sub.WaitIdle()
 	if cdpSink.calls.Load() != 1 {
 		t.Fatalf("expected 1 call even on error, got %d", cdpSink.calls.Load())
 	}
@@ -910,6 +920,9 @@ func TestCommandSubscriberDataPointNonValuesBucketDropped(t *testing.T) {
 	// 8-segment topic with "master" bucket — must be silently dropped.
 	ok := noop.DeliverInbound("gh/+/+/+/+/+/+/set",
 		"gh/ccu/HmIP-RF/0001ABCD/1/master/TEMPERATURE_MINIMUM/set", []byte("21"))
+	// The drop happens on a worker, not on the delivering goroutine, so a
+	// zero-call assertion without this barrier would pass vacuously.
+	sub.WaitIdle()
 	if !ok {
 		t.Fatal("subscription did not match")
 	}
@@ -932,7 +945,7 @@ func TestCommandSubscriberDataPointBucketAwareValues(t *testing.T) {
 	if !ok {
 		t.Fatal("subscription did not match")
 	}
-	sub.dispatcher.flush()
+	sub.WaitIdle()
 	if sink.setValues.Load() != 1 {
 		t.Fatalf("expected 1 SetValue call; got %d", sink.setValues.Load())
 	}
@@ -952,6 +965,9 @@ func TestCommandSubscriberDataPointBadChannel(t *testing.T) {
 	// Channel segment is not an integer.
 	noop.DeliverInbound("gh/+/+/+/+/+/set",
 		"gh/ccu/HmIP-RF/0001ABCD/abc/STATE/set", []byte("true"))
+	// The drop happens on a worker, not on the delivering goroutine, so a
+	// zero-call assertion without this barrier would pass vacuously.
+	sub.WaitIdle()
 	if sink.setValues.Load() != 0 {
 		t.Fatalf("bad channel must not call SetValue; calls=%d", sink.setValues.Load())
 	}
@@ -966,8 +982,11 @@ func TestCommandSubscriberWeekProfileBadChannel(t *testing.T) {
 	sub := NewCommandSubscriber(noop, topics, sink, nil).WithWeekProfileSink(wpSink)
 	_ = sub.Start(context.Background())
 
-	// Call handler directly with a bad channel to exercise that path.
-	sub.handleWeekProfile("gh/ccu/HmIP-RF/0001ABCD/notanint/week_profile/set", []byte("P1"), false)
+	// The week-profile shape has no filter of its own; it arrives on the
+	// legacy bucket-less data-point route and is dispatched from there.
+	noop.DeliverInbound("gh/+/+/+/+/+/set",
+		"gh/ccu/HmIP-RF/0001ABCD/notanint/week_profile/set", []byte("P1"))
+	sub.WaitIdle()
 	if wpSink.calls.Load() != 0 {
 		t.Fatalf("bad channel must not reach sink; calls=%d", wpSink.calls.Load())
 	}
@@ -985,7 +1004,7 @@ func TestCommandSubscriberWeekProfileSinkError(t *testing.T) {
 	// Sink error should be logged, not propagated.
 	noop.DeliverInbound("gh/+/+/+/+/+/set",
 		"gh/ccu/HmIP-RF/0001ABCD/1/week_profile/set", []byte("P1"))
-	sub.dispatcher.flush()
+	sub.WaitIdle()
 	if errSink.calls.Load() != 1 {
 		t.Fatalf("expected 1 call, got %d", errSink.calls.Load())
 	}
@@ -1012,8 +1031,11 @@ func TestCommandSubscriberSysvarBadTopicShape(t *testing.T) {
 	sub := NewCommandSubscriber(noop, topics, sink, nil)
 	_ = sub.Start(context.Background())
 
-	// Deliver directly to handler with wrong shape.
-	sub.handleSysvar("gh/ccu/wrong/PartyMode/set/extra", []byte("true"), false)
+	// A topic the sysvar route does not claim: the shape check is the route
+	// now, so this pins the router's unroutable path rather than a
+	// re-derivation of segment positions inside the handler.
+	noop.DeliverInbound("gh/+/hub/sysvars/+/set", "gh/ccu/wrong/PartyMode/set/extra", []byte("true"))
+	sub.WaitIdle()
 	if sink.setSysvars.Load() != 0 {
 		t.Fatalf("bad topic must not call SetSysvar; calls=%d", sink.setSysvars.Load())
 	}
@@ -1029,7 +1051,7 @@ func TestCommandSubscriberSysvarSinkError(t *testing.T) {
 
 	noop.DeliverInbound("gh/+/hub/sysvars/+/set",
 		"gh/ccu/hub/sysvars/PartyMode/set", []byte("true"))
-	sub.dispatcher.flush()
+	sub.WaitIdle()
 	if sink.sysvars.Load() != 1 {
 		t.Fatalf("expected 1 SetSysvar call; got %d", sink.sysvars.Load())
 	}
@@ -1047,7 +1069,8 @@ func TestCommandSubscriberProgramBadTopicShape(t *testing.T) {
 	sub := NewCommandSubscriber(noop, topics, sink, nil)
 	_ = sub.Start(context.Background())
 
-	sub.handleProgram("gh/ccu/programs/Morning/trigger/extra", nil, false)
+	noop.DeliverInbound("gh/+/hub/programs/+/trigger", "gh/ccu/programs/Morning/trigger/extra", nil)
+	sub.WaitIdle()
 	if sink.triggers.Load() != 0 {
 		t.Fatalf("bad topic must not call TriggerProgram; calls=%d", sink.triggers.Load())
 	}
@@ -1063,7 +1086,7 @@ func TestCommandSubscriberProgramSinkError(t *testing.T) {
 
 	noop.DeliverInbound("gh/+/hub/programs/+/trigger",
 		"gh/ccu/hub/programs/Morning/trigger", []byte("true"))
-	sub.dispatcher.flush()
+	sub.WaitIdle()
 	if sink.programs.Load() != 1 {
 		t.Fatalf("expected 1 TriggerProgram call; got %d", sink.programs.Load())
 	}
@@ -1110,8 +1133,9 @@ func TestCommandSubscriberCDPInvokeBadTopicShape(t *testing.T) {
 	sub := NewCommandSubscriber(noop, topics, sink, nil).WithCDPSink(cdpSink)
 	_ = sub.Start(context.Background())
 
-	// Call directly with wrong shape.
-	sub.handleCDPInvoke("gh/ccu/wrong/invoke", []byte(`{}`), false)
+	// Wrong shape, delivered past the cdps/invoke subscription: unroutable.
+	noop.DeliverInbound("gh/+/devices/+/cdps/+/+/invoke", "gh/ccu/wrong/invoke", []byte(`{}`))
+	sub.WaitIdle()
 	if cdpSink.calls.Load() != 0 {
 		t.Fatalf("bad topic must not call InvokeCustomDP; calls=%d", cdpSink.calls.Load())
 	}
