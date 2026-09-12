@@ -51,6 +51,19 @@ func (p *SecurityMQTTPublisher) reconcile() {
 		payload: []byte("online"),
 	})
 
+	// Retractions go in before the states, because the queue discards
+	// from the end on overflow and a retraction is the one message with
+	// no next attempt: the class or zone it evacuates leaves the
+	// known-sets in the same pass, so nothing will enqueue it again. A
+	// dropped state is corrected by the next reconcile; a dropped
+	// retraction leaves a retained topic feeding an entity for something
+	// that no longer exists, for good.
+	//
+	// Evacuating first is also the order Home Assistant wants between
+	// the two discovery forms, and the two sets never overlap — a class
+	// or zone the snapshot still has is not a gone one.
+	p.retractGone(snap)
+
 	p.declareEntities(snap)
 
 	p.enqueueJSON(securityStateTopic(base, "state"), string(snap.Severity), systemAttributes(snap))
@@ -69,7 +82,6 @@ func (p *SecurityMQTTPublisher) reconcile() {
 		z := snap.Zones[slug]
 		p.enqueueJSON(securityZoneTopic(base, slug), strconv.Itoa(len(z.Sources)), zoneAttributes(z))
 	}
-	p.retractGone(snap)
 }
 
 // enqueueJSON publishes a state whose payload doubles as the attribute

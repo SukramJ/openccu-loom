@@ -307,26 +307,33 @@ func (b *Bridge) RetractSecurityState(ctx context.Context, topic string) error {
 
 // enqueue queues a publish without blocking the domain's bus goroutine.
 //
-// On overflow it drops the *oldest* queued message and keeps the new
-// one. The previous version claimed that and did the opposite: it
-// discarded the newest, and since reconcile enqueues the per-class and
-// per-zone states last, a partial drop lost exactly those — leaving the
-// aggregate state on the broker disagreeing with the class states it
-// was folded from, which is the incoherence the reconcile path exists
-// to prevent.
+// On overflow it drops the *newest* message — the one that cannot be
+// queued — which is the alarm plane's policy, and the two planes of one
+// daemon must not disagree about what a full queue means.
+//
+// Dropping the oldest was the other way round and read as the safer
+// choice, because reconcile enqueues the per-class and per-zone states
+// last and losing those leaves the aggregate state disagreeing with the
+// classes it was folded from. It is not the safer choice, because not
+// every queued message is recoverable: a state is corrected by the next
+// reconcile, while a retraction has no next attempt — the class or zone
+// it evacuates is already out of the known-sets, so nothing will ever
+// enqueue it again and the retained topic stays on the broker for good,
+// feeding an entity for something that no longer exists. Reconcile
+// therefore enqueues its retractions first and the queue discards from
+// the end, so the messages at risk are the ones a later pass repairs.
+//
+// A drop is never silent: it is logged with the topic and counted in
+// `publish_errors`, because a message that never reaches the broker is
+// a failed publish however it failed.
 func (p *SecurityMQTTPublisher) enqueue(m securityMsg) {
-	for {
-		select {
-		case p.msgCh <- m:
-			return
-		default:
-		}
-		select {
-		case dropped := <-p.msgCh:
-			p.logger.Warn("security mqtt queue full; dropped the oldest message",
-				"dropped_topic", dropped.topic, "for_topic", m.topic)
-		default:
-			// Drained by the worker in between; retry the send.
+	select {
+	case p.msgCh <- m:
+	default:
+		p.logger.Warn("security mqtt queue full; dropped the newest message",
+			"dropped_topic", m.topic, "kind", m.kind)
+		if b := p.wiring.Bridge(); b != nil {
+			b.incPublishErrors("")
 		}
 	}
 }

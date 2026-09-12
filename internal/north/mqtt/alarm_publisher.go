@@ -583,7 +583,16 @@ func (p *AlarmMQTTPublisher) enqueueEvent(zone string, pay alarmEventPayload) {
 	select {
 	case p.eventCh <- alarmEventMsg{zone: zone, body: body}:
 	default:
+		// Drop the newest, and say so in both places an operator can
+		// look: the log carries the zone, `publish_errors` carries the
+		// count. A message that never reaches the broker is a failed
+		// publish however it failed, and a drop that only ever appeared
+		// in a log line was a silent loss on any deployment scraping
+		// metrics.
 		p.logger.Warn("mqtt.alarm.event.drop", slog.String("zone", zone))
+		if b := p.wiring.Bridge(); b != nil {
+			b.incPublishErrors("")
+		}
 	}
 }
 

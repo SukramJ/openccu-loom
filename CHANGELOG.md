@@ -250,6 +250,32 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   availability marker stay distinguishable from a state at the point the
   delivery guarantee is chosen.
 
+- **The daemon's two publish queues disagreed about what a full queue
+  means, and neither loss was countable.** The alarm plane dropped the
+  newest message; the security plane dropped the oldest. Dropping the
+  oldest reads as the safer end — reconcile enqueues the per-class and
+  per-zone states last, and losing those leaves the aggregate
+  disagreeing with the classes it was folded from — but it is not,
+  because not every queued message is repeatable. A state is corrected
+  by the next reconcile. A retraction has no next attempt: the class or
+  zone it evacuates leaves the known-sets in the same pass, so nothing
+  enqueues it again and the retained topic keeps feeding an entity for
+  something that no longer exists.
+
+  Both planes now drop the newest, and reconcile enqueues its
+  retractions first so the messages at risk are the ones a later pass
+  repairs — which is also the order Home Assistant wants between the two
+  discovery forms. A drop is counted in `publish_errors` alongside its
+  log line, because a message that never reaches the broker is a failed
+  publish however it failed; on a deployment that scrapes metrics rather
+  than reading logs, the previous behaviour was a silent loss.
+
+  The measured claim that the security plane discarded "a retraction
+  enqueued early in a reconcile" was right about the harm and wrong
+  about the position: `retractGone` ran last, so what drop-the-oldest
+  actually discarded first was the availability marker. Both are now
+  moot — the order and the policy were fixed together.
+
 ### Added
 
 - **Fixture rows for the two `DiscoverySlug` divergence classes.** The
