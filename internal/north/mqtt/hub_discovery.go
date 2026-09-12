@@ -10,6 +10,7 @@ import (
 
 	hacatalog "github.com/SukramJ/go-ha-catalog"
 	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hamodel "github.com/SukramJ/go-hamqtt/model"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/payload"
@@ -26,6 +27,15 @@ import (
 //
 // All builders return the canonical (component, nodeID, objectID,
 // payload, ok) shape consumed by [Bridge.publishDiscovery].
+//
+// Every payload on this plane is rendered by the shared model's per-entity
+// discovery form (ADR 0070): a [hamodel.Device] lifted from the block the
+// plane composes, a [hamodel.Basic] entity carrying the description and its
+// bindings, and [hadiscovery.RenderComponent] for the body — which attaches
+// the device and origin blocks and omits `platform`. The builders below
+// still own every identity string (unique id, node id, object id) and every
+// topic, because Home Assistant has no migration path for any of them; see
+// [hubDiscoveryContext] and [hubTopicLayout].
 
 // DiscoveryItem packages a built HA Discovery message so it can be
 // passed as a single value (Go doesn't spread multi-return into a
@@ -193,6 +203,223 @@ func (d *DefaultDiscoveryBuilder) hubSerial(centralName string) (serial10 string
 	return s, s != ""
 }
 
+// ------------------- Shared model (ADR 0070) ----------------------
+
+// hubModelDevice lifts the `device` block this plane composes into the
+// shared model's [hamodel.Device], so the render pipeline emits the block
+// instead of a builder stamping one on afterwards.
+//
+// The identifiers keep an EMPTY namespace, which the shared model renders
+// verbatim. That is what lets the published `openccu-loom_central_<central>`
+// and `openccu-loom_<address>` spellings survive: Home Assistant keys its
+// device registry on those strings and has no migration path for them, so a
+// namespaced rendering would leave the old card behind — with its area, its
+// name override and its place in the hierarchy — and move the entities to a
+// new one, silently.
+func hubModelDevice(info *hadiscovery.DeviceInfo) *hamodel.Device {
+	if info == nil {
+		return nil
+	}
+	dev := &hamodel.Device{
+		Name:          hamodel.L(info.Name),
+		Manufacturer:  info.Manufacturer,
+		Model:         info.Model,
+		ModelID:       info.ModelID,
+		SWVersion:     info.SWVersion,
+		HWVersion:     info.HWVersion,
+		SerialNumber:  info.SerialNumber,
+		SuggestedArea: info.SuggestedArea,
+		ConfigURL:     info.ConfigurationURL,
+	}
+	for _, id := range info.Identifiers {
+		dev.Identity.IDs = append(dev.Identity.IDs, hamodel.Identifier{Value: id})
+	}
+	for _, conn := range info.Connections {
+		dev.Identity.Connections = append(dev.Identity.Connections,
+			hamodel.Connection{Type: conn[0], Value: conn[1]})
+	}
+	if info.ViaDevice != "" {
+		dev.Via = &hamodel.Identity{IDs: []hamodel.Identifier{{Value: info.ViaDevice}}}
+	}
+	return dev
+}
+
+// hubTopicLayout renders this plane's topics from the strings its builders
+// already compose, so the render pipeline produces exactly what is retained
+// on the broker rather than a second spelling of it.
+//
+// The slot arguments are unused. A hub entity names one datapoint whose
+// topic [naming] and [TopicBuilder] are the authority on; deriving it from
+// the slot again would be a second implementation of the same schema with
+// nothing keeping the two in step.
+type hubTopicLayout struct {
+	state   string
+	command string
+	// device is the second availability source a program role may declare.
+	// Empty for every other hub entity, which is gated by the bridge alone.
+	device string
+	bridge string
+}
+
+// State implements the shared model's topic layout.
+func (l hubTopicLayout) State(hamodel.Slot) string { return l.state }
+
+// Command implements the shared model's topic layout.
+func (l hubTopicLayout) Command(hamodel.Slot) string { return l.command }
+
+// Availability implements the shared model's topic layout: the per-entity
+// gate a program role declares, resolved as [hamodel.LevelDevice].
+func (l hubTopicLayout) Availability(hamodel.Slot) string { return l.device }
+
+// Bridge implements the shared model's topic layout.
+func (l hubTopicLayout) Bridge() string { return l.bridge }
+
+// hubDiscoveryContext is the render context for this plane: the standard one
+// with this daemon's identity strings substituted.
+//
+// Both are overridden because Home Assistant has no migration path for
+// either. The unique id is central-scoped by the CCU's SERIAL while the node
+// id is a slug of the central's NAME, so no single derivation produces both
+// — and the default would derive the node id from the device identifier,
+// which for a device-linked sysvar is a physical device card rather than the
+// `<central>_sysvars` segment the retained configs actually live under.
+type hubDiscoveryContext struct {
+	hadiscovery.StdContext
+
+	uniqueID string
+	nodeID   string
+}
+
+// UniqueID implements [hadiscovery.Context] with the id this daemon already
+// publishes.
+func (c hubDiscoveryContext) UniqueID(*hamodel.Device, hamodel.Entity) string { return c.uniqueID }
+
+// NodeID implements [hadiscovery.Context].
+func (c hubDiscoveryContext) NodeID(*hamodel.Device) string { return c.nodeID }
+
+// ObjectID implements [hadiscovery.Context]. This plane DOES publish an
+// entity-id seed, and the seed is the UNIQUE ID rather than the discovery
+// topic's object-id segment: `default_entity_id` has always been
+// `<component>.<unique_id>` here, and Home Assistant derives the entity id
+// from it once and will not rename afterwards. The pipeline prefixes the
+// platform itself.
+func (c hubDiscoveryContext) ObjectID(*hamodel.Device, hamodel.Entity) string { return c.uniqueID }
+
+// hubEntity is any hub entity on the shared model: a [hamodel.Basic] plus
+// the handful of keys the model does not carry.
+//
+// `optimistic`, the two json-attributes keys and the platform Fields are
+// Home Assistant vocabulary rather than model semantics, which is the case
+// [hadiscovery.Builder] exists for. `ungated` is the exception — see
+// [hubEntity.BuildDiscovery].
+type hubEntity struct {
+	hamodel.Basic
+
+	fields                 any
+	optimistic             *bool
+	jsonAttributesTopic    string
+	jsonAttributesTemplate string
+	ungated                bool
+}
+
+// BuildDiscovery implements [hadiscovery.Builder].
+func (e *hubEntity) BuildDiscovery(_ hadiscovery.Context, comp *hadiscovery.Component) error {
+	if e.fields != nil {
+		comp.Fields = e.fields
+	}
+	if e.optimistic != nil {
+		comp.Optimistic = e.optimistic
+	}
+	if e.jsonAttributesTopic != "" {
+		comp.JSONAttributesTopic = e.jsonAttributesTopic
+		comp.JSONAttributesTemplate = e.jsonAttributesTemplate
+	}
+	if e.ungated {
+		// The one hub entity that carries NO availability at all — see
+		// [DefaultDiscoveryBuilder.BuildDaemonStatusDiscovery]. The model
+		// cannot express it: [hamodel.Availability.Resolved] answers every
+		// entity with a mode, so an empty level list still projects
+		// `availability_mode: "all"` next to an absent list. Clearing both
+		// here is an escape hatch, not a platform key.
+		comp.Availability, comp.AvailabilityMode = nil, ""
+	}
+	return nil
+}
+
+// hubSlot is the coordinate of one hub datapoint.
+//
+// [hamodel.BucketUnset] because a hub datapoint has no paramset: a system
+// variable, a program or a central-wide metric is not on a channel and has
+// no configuration/runtime distinction to make. The context renders every
+// topic from [hubTopicLayout], so the slot's job is to be a stable
+// coordinate carrying the read and write modes the pipeline projects the
+// two topics from.
+func hubSlot(dev *hamodel.Device, centralName string, path ...string) hamodel.Slot {
+	slot := hamodel.S(dev.UID(), "", hamodel.BucketUnset, path...)
+	if centralName != "" {
+		slot = slot.In(centralName)
+	}
+	return slot
+}
+
+// hubBinds is the binding list for a hub entity: a state role when the
+// entity reads, a command role when Home Assistant can write it. Both name
+// the same slot — the render pipeline resolves the two roles separately, so
+// a single ReadWrite binding on one role would project only one topic.
+func hubBinds(slot hamodel.Slot, reads, writes bool) []hamodel.Binding {
+	binds := make([]hamodel.Binding, 0, 2)
+	if reads {
+		binds = append(binds, hamodel.Binding{Role: hamodel.RoleState, Mode: hamodel.Read, Slot: slot})
+	}
+	if writes {
+		binds = append(binds, hamodel.Binding{Role: hamodel.RoleCommand, Mode: hamodel.Write, Slot: slot})
+	}
+	return binds
+}
+
+// renderHubItem renders one hub entity through the shared per-entity
+// pipeline and packages it as the item the publishers take.
+//
+// [hadiscovery.RawEncoding] is not a preference: hub state topics carry the
+// bare value, not the `{"value":…}` envelope the datapoint planes publish,
+// so an entity rendered with the envelope's value template would read its
+// state through a filter that never matches and show as unknown forever.
+//
+// [hadiscovery.RenderComponent] drops the `platform` discriminator, which is
+// right for the payload — the per-entity form carries the platform in its
+// topic — but [discoveryItemFor] reads it to name that topic segment, so it
+// is restored on the component and dropped again by the flattener.
+func (d *DefaultDiscoveryBuilder) renderHubItem(
+	dev *hamodel.Device, e *hubEntity, layout hubTopicLayout, uniqueID, nodeID, objectID string,
+) DiscoveryItem {
+	if dev == nil {
+		return DiscoveryItem{}
+	}
+	ctx := hubDiscoveryContext{
+		StdContext: hadiscovery.StdContext{
+			Layout:     layout,
+			Lang:       d.Locale,
+			Enc:        hadiscovery.RawEncoding,
+			Translator: d.tr,
+		},
+		uniqueID: uniqueID,
+		nodeID:   nodeID,
+	}
+	comp, err := hadiscovery.RenderComponent(ctx, dev, e, *BuildOriginInfo())
+	if err != nil {
+		return DiscoveryItem{}
+	}
+	comp.Platform = e.Platform()
+	return discoveryItemFor(comp, nodeID, objectID)
+}
+
+// hubLayout is the topic layout every central-scoped hub entity renders
+// under: one state topic and the daemon's own LWT as the sole availability
+// source.
+func (d *DefaultDiscoveryBuilder) hubLayout(stateTopic string) hubTopicLayout {
+	return hubTopicLayout{state: stateTopic, bridge: d.TopicBuilder.BridgeStatus()}
+}
+
 // ----------------------------- Sysvar -----------------------------
 
 // BuildSysvarDiscovery emits the HA Discovery payload for one sysvar.
@@ -222,21 +449,28 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv Hu
 	if !ok {
 		return DiscoveryItem{}
 	}
+	dev := hubModelDevice(hubEntityDeviceBlock(centralName, sv.DeviceAddress, d.hubFor(centralName)))
+	if dev == nil {
+		return DiscoveryItem{}
+	}
 	var component string
 	stateTopic := naming.MQTTHubSysvarState(d.BridgeBase, centralName, sv.Name)
 	commandTopic := naming.MQTTHubSysvarCommand(d.BridgeBase, centralName, sv.Name)
 	uniqueID := sysvarUniqueID(serial10, sv)
+	objectID := safeLower(sv.Name)
 
-	comp := hadiscovery.Component{
-		Name:             displaySysvarName(sv),
-		UniqueID:         uniqueID,
-		StateTopic:       stateTopic,
-		EnabledByDefault: hadiscovery.Ptr(sv.EnabledDefault),
-		Availability:     hubAvailability(d.TopicBuilder),
-		AvailabilityMode: "all",
-		Device:           hubEntityDeviceBlock(centralName, sv.DeviceAddress, d.hubFor(centralName)),
-		Origin:           BuildOriginInfo(),
+	entity := &hubEntity{
+		Basic: hamodel.Basic{
+			EntityKey: objectID,
+			Description: hamodel.Description{
+				Name:         hamodel.L(displaySysvarName(sv)),
+				Enabled:      hamodel.Ptr(sv.EnabledDefault),
+				Availability: hamodel.BridgeOnly(),
+			},
+		},
 	}
+	desc := &entity.Description
+	writes := false
 
 	// `editable` selects the writable HA surface. The reference stack
 	// keys the component on the extended-sysvar marker alone; Writable
@@ -248,31 +482,34 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv Hu
 	case hmenum.HubValueTypeLogic, hmenum.HubValueTypeAlarm:
 		if editable {
 			component = string(HAComponentSwitch)
-			comp.CommandTopic = commandTopic
-			comp.Optimistic = hadiscovery.Ptr(false)
-			comp.Fields = hadiscovery.SwitchFields{
+			writes = true
+			entity.optimistic = hadiscovery.Ptr(false)
+			entity.fields = hadiscovery.SwitchFields{
 				PayloadOn: "true", PayloadOff: "false",
 				StateOn: "true", StateOff: "false",
 			}
 		} else {
 			component = string(HAComponentBinarySensor)
-			comp.Fields = hadiscovery.BinarySensorFields{PayloadOn: "true", PayloadOff: "false"}
+			entity.fields = hadiscovery.BinarySensorFields{PayloadOn: "true", PayloadOff: "false"}
 			if sv.ValueType == hmenum.HubValueTypeAlarm {
-				comp.DeviceClass = "problem"
+				desc.DeviceClass = "problem"
 			}
 		}
 	case hmenum.HubValueTypeList:
 		if editable && len(sv.ValueList) > 0 {
 			component = string(HAComponentSelect)
-			comp.CommandTopic = commandTopic
-			comp.Options = sv.ValueList
-			comp.Optimistic = hadiscovery.Ptr(false)
-			comp.EntityCategory = EntityCategoryConfig
+			writes = true
+			// The CCU's own value list is both the code and the label: the
+			// daemon publishes and accepts the raw tokens, so an [hamodel.Enum]
+			// without labels renders them verbatim.
+			desc.Options = &hamodel.Enum{Codes: append([]string(nil), sv.ValueList...)}
+			entity.optimistic = hadiscovery.Ptr(false)
+			desc.Category = EntityCategoryConfig
 		} else {
 			component = string(HAComponentSensor)
 			if len(sv.ValueList) > 0 {
-				comp.DeviceClass = "enum"
-				comp.Options = sv.ValueList
+				desc.DeviceClass = "enum"
+				desc.Options = &hamodel.Enum{Codes: append([]string(nil), sv.ValueList...)}
 			}
 		}
 	case hmenum.HubValueTypeString:
@@ -280,9 +517,9 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv Hu
 			// Extended string sysvars are operator-declared HA inputs —
 			// render them writable like the reference stack does.
 			component = string(HAComponentText)
-			comp.CommandTopic = commandTopic
-			comp.Optimistic = hadiscovery.Ptr(false)
-			comp.Fields = hadiscovery.TextFields{Mode: "text"}
+			writes = true
+			entity.optimistic = hadiscovery.Ptr(false)
+			entity.fields = hadiscovery.TextFields{Mode: "text"}
 		} else {
 			// HA's `text` entity caps state payloads at 255 chars and warns
 			// loudly on every overrun. CCU string sysvars (e.g.
@@ -296,18 +533,18 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv Hu
 	case hmenum.HubValueTypeNumber, hmenum.HubValueTypeFloat, hmenum.HubValueTypeInteger:
 		if editable {
 			component = string(HAComponentNumber)
-			comp.CommandTopic = commandTopic
-			comp.Optimistic = hadiscovery.Ptr(false)
+			writes = true
+			entity.optimistic = hadiscovery.Ptr(false)
 			if sv.ValueType == hmenum.HubValueTypeInteger {
-				comp.Fields = hadiscovery.NumberFields{Mode: "box"}
-				comp.Step = hadiscovery.Ptr(float64(1))
+				entity.fields = hadiscovery.NumberFields{Mode: "box"}
+				desc.Step = hamodel.Ptr(float64(1))
 			} else {
-				comp.Fields = hadiscovery.NumberFields{Mode: "auto"}
-				comp.Step = hadiscovery.Ptr(0.01)
+				entity.fields = hadiscovery.NumberFields{Mode: "auto"}
+				desc.Step = hamodel.Ptr(0.01)
 			}
 		} else {
 			component = string(HAComponentSensor)
-			comp.StateClass = hacatalog.StateClassMeasurement
+			desc.StateClass = hacatalog.StateClassMeasurement
 		}
 		// HA's `number` entity defaults to min=1, max=100 when the
 		// discovery payload omits these fields — which is what
@@ -315,20 +552,22 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv Hu
 		// for energy / sunshine counters delivering 10 ⁶+ readings.
 		// Send a wide fallback range whenever the model does not carry
 		// a declared bound; the sensor path is unaffected because HA
-		// sensors have no min/max contract.
+		// sensors have no min/max contract — and the render pipeline
+		// now enforces that, projecting `min`/`max`/`step` only onto the
+		// platforms whose schema declares them.
 		switch {
 		case sv.Min != nil:
-			comp.Min = hadiscovery.Ptr(float64(*sv.Min))
+			desc.Min = hamodel.Ptr(*sv.Min)
 		case editable:
-			comp.Min = hadiscovery.Ptr(-1e9)
+			desc.Min = hamodel.Ptr(-1e9)
 		}
 		switch {
 		case sv.Max != nil:
-			comp.Max = hadiscovery.Ptr(float64(*sv.Max))
+			desc.Max = hamodel.Ptr(*sv.Max)
 		case editable:
-			comp.Max = hadiscovery.Ptr(1e9)
+			desc.Max = hamodel.Ptr(1e9)
 		}
-		comp.UnitOfMeasure = sv.Unit
+		desc.Unit = hamodel.Unit(sv.Unit)
 	default:
 		// Unknown value-type; surface as a plain sensor so the data
 		// is at least visible — better than dropping the entity.
@@ -346,20 +585,27 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv Hu
 	// reference HA integration's hub entity-description rules.
 	if component == string(HAComponentSensor) {
 		if cls, ok := classifyAutoSysvar(sv.Name); ok {
-			comp.Name = d.tr(cls.translationKey)
-			comp.StateClass = hacatalog.StateClass(cls.stateClass)
+			// The literal name wins over the catalogue key in the shared
+			// model, so the machine token has to be cleared rather than just
+			// overridden — otherwise `svEnergyCounter_1234_ABC0123456:6`
+			// would stay the display name and the key would never be read.
+			desc.Name = hamodel.Localized{}
+			desc.NameKey = cls.translationKey
+			desc.StateClass = hacatalog.StateClass(cls.stateClass)
 			if cls.deviceClass != "" {
-				comp.DeviceClass = cls.deviceClass
+				desc.DeviceClass = hamodel.DeviceClass(cls.deviceClass)
 			}
 			if cls.unit != "" {
-				comp.UnitOfMeasure = cls.unit
+				desc.Unit = hamodel.Unit(cls.unit)
 			}
 		}
 	}
 
-	comp.Platform = hacatalog.Platform(component)
-	comp.DefaultEntityID = defaultEntityID(component, uniqueID)
-	return discoveryItemFor(comp, hubNodeID(centralName, "sysvars"), safeLower(sv.Name))
+	entity.EntityPlatform = hacatalog.Platform(component)
+	entity.Binds = hubBinds(hubSlot(dev, centralName, "sysvar", sv.Name), true, writes)
+	layout := d.hubLayout(stateTopic)
+	layout.command = commandTopic
+	return d.renderHubItem(dev, entity, layout, uniqueID, hubNodeID(centralName, "sysvars"), objectID)
 }
 
 func displaySysvarName(sv HubSysvarSpec) string {
@@ -439,31 +685,34 @@ func (d *DefaultDiscoveryBuilder) buildProgramRole(
 		displayName += " " + role.NameSuffix
 	}
 
-	availability := hubAvailability(d.TopicBuilder)
-	if role.Topics.Availability != "" {
-		// The role's own gate joins the bridge/device ones; availability_mode
-		// "all" below means every listed topic must report online.
-		availability = append(availability, hadiscovery.AvailabilityEntry{
-			Topic:               role.Topics.Availability,
-			PayloadAvailable:    "online",
-			PayloadNotAvailable: "offline",
-		})
+	dev := hubModelDevice(hubEntityDeviceBlock(centralName, p.DeviceAddress, d.hubFor(centralName)))
+	if dev == nil {
+		return DiscoveryItem{}
 	}
 
-	comp := hadiscovery.Component{
-		Platform:         hacatalog.Platform(role.Component),
-		Name:             displayName,
-		UniqueID:         uniqueID,
-		DefaultEntityID:  defaultEntityID(role.Component, uniqueID),
-		EnabledByDefault: hadiscovery.Ptr(p.EnabledDefault),
-		Availability:     availability,
-		AvailabilityMode: "all",
-		Device:           hubEntityDeviceBlock(centralName, p.DeviceAddress, d.hubFor(centralName)),
-		Origin:           BuildOriginInfo(),
+	entity := &hubEntity{
+		Basic: hamodel.Basic{
+			EntityKey:      objectID,
+			EntityPlatform: hacatalog.Platform(role.Component),
+			Description: hamodel.Description{
+				Name:         hamodel.L(displayName),
+				Enabled:      hamodel.Ptr(p.EnabledDefault),
+				Availability: hamodel.BridgeOnly(),
+			},
+		},
+	}
+	layout := d.hubLayout(role.Topics.State)
+	if role.Topics.Availability != "" {
+		// A role that declares its own gate adds it as the model's
+		// [hamodel.LevelDevice] source — the default level pair is bridge
+		// plus device, so clearing the BridgeOnly restriction is what picks
+		// both up, in that order. availability_mode stays "all", the model's
+		// default, so every listed topic must report online.
+		layout.device = role.Topics.Availability
+		entity.Description.Availability = hamodel.Availability{}
 	}
 	if role.Topics.State != "" {
-		comp.StateTopic = role.Topics.State
-		comp.Optimistic = hadiscovery.Ptr(false)
+		entity.optimistic = hadiscovery.Ptr(false)
 	}
 	// The command shape decides the platform's own keys, and the two roles a
 	// program declares are disjoint: the switch carries State plus Set, the
@@ -472,16 +721,18 @@ func (d *DefaultDiscoveryBuilder) buildProgramRole(
 	// carrying them would have had both dropped on receipt.
 	switch {
 	case role.Topics.Set != "":
-		comp.CommandTopic = role.Topics.Set
-		comp.Fields = hadiscovery.SwitchFields{
+		layout.command = role.Topics.Set
+		entity.fields = hadiscovery.SwitchFields{
 			PayloadOn: "true", PayloadOff: "false",
 			StateOn: "true", StateOff: "false",
 		}
 	case role.Topics.Trigger != "":
-		comp.CommandTopic = role.Topics.Trigger
-		comp.Fields = hadiscovery.ButtonFields{PayloadPress: "true"}
+		layout.command = role.Topics.Trigger
+		entity.fields = hadiscovery.ButtonFields{PayloadPress: "true"}
 	}
-	return discoveryItemFor(comp, hubNodeID(centralName, "programs"), objectID)
+	entity.Binds = hubBinds(hubSlot(dev, centralName, "program", p.ID, role.Component),
+		role.Topics.State != "", layout.command != "")
+	return d.renderHubItem(dev, entity, layout, uniqueID, hubNodeID(centralName, "programs"), objectID)
 }
 
 // BuildProgramDiscovery emits one HA `switch` per CCU program.
@@ -505,27 +756,33 @@ func (d *DefaultDiscoveryBuilder) BuildProgramDiscovery(centralName string, p Hu
 	if displayName == "" {
 		displayName = p.ID
 	}
-	comp := hadiscovery.Component{
-		Platform:         hacatalog.PlatformSwitch,
-		Name:             displayName,
-		UniqueID:         uniqueID,
-		DefaultEntityID:  defaultEntityID(string(HAComponentSwitch), uniqueID),
-		StateTopic:       stateTopic,
-		CommandTopic:     commandTopic,
-		Optimistic:       hadiscovery.Ptr(false),
-		EnabledByDefault: hadiscovery.Ptr(p.EnabledDefault),
-		Availability:     hubAvailability(d.TopicBuilder),
-		AvailabilityMode: "all",
-		Device:           hubEntityDeviceBlock(centralName, p.DeviceAddress, d.hubFor(centralName)),
-		Origin:           BuildOriginInfo(),
-		Fields: hadiscovery.SwitchFields{
+	dev := hubModelDevice(hubEntityDeviceBlock(centralName, p.DeviceAddress, d.hubFor(centralName)))
+	if dev == nil {
+		return DiscoveryItem{}
+	}
+	objectID := safeLower(p.ID)
+	entity := &hubEntity{
+		Basic: hamodel.Basic{
+			EntityKey:      objectID,
+			EntityPlatform: hacatalog.PlatformSwitch,
+			Description: hamodel.Description{
+				Name:         hamodel.L(displayName),
+				Enabled:      hamodel.Ptr(p.EnabledDefault),
+				Availability: hamodel.BridgeOnly(),
+			},
+			Binds: hubBinds(hubSlot(dev, centralName, "program", p.ID), true, true),
+		},
+		optimistic: hadiscovery.Ptr(false),
+		fields: hadiscovery.SwitchFields{
 			PayloadOn:  "true",
 			PayloadOff: "false",
 			StateOn:    "true",
 			StateOff:   "false",
 		},
 	}
-	return discoveryItemFor(comp, hubNodeID(centralName, "programs"), safeLower(p.ID))
+	layout := d.hubLayout(stateTopic)
+	layout.command = commandTopic
+	return d.renderHubItem(dev, entity, layout, uniqueID, hubNodeID(centralName, "programs"), objectID)
 }
 
 // ------------------- AlarmMessages / ServiceMessages -------------
@@ -541,23 +798,30 @@ func (d *DefaultDiscoveryBuilder) BuildAlarmMessagesDiscovery(centralName string
 	}
 	topic := naming.MQTTHubAlarmMessages(d.BridgeBase, centralName)
 	uniqueID := hubAggregateUniqueID(serial10, "alarm_messages")
-	comp := hadiscovery.Component{
-		Platform:               hacatalog.PlatformSensor,
-		Name:                   d.tr("discovery.alarm_messages"),
-		UniqueID:               uniqueID,
-		DefaultEntityID:        defaultEntityID(string(HAComponentSensor), uniqueID),
-		StateTopic:             topic,
-		ValueTemplate:          "{{ value_json | length }}",
-		JSONAttributesTopic:    topic,
-		JSONAttributesTemplate: `{"messages": {{ value_json | tojson }} }`,
-		StateClass:             "measurement",
-		EntityCategory:         "diagnostic",
-		Availability:           hubAvailability(d.TopicBuilder),
-		AvailabilityMode:       "all",
-		Device:                 hubDeviceBlock(centralName, d.hubFor(centralName)),
-		Origin:                 BuildOriginInfo(),
+	dev := hubModelDevice(hubDeviceBlock(centralName, d.hubFor(centralName)))
+	if dev == nil {
+		return DiscoveryItem{}
 	}
-	return discoveryItemFor(comp, hubNodeID(centralName, "messages"), "alarm")
+	entity := &hubEntity{
+		Basic: hamodel.Basic{
+			EntityKey:      "alarm_messages",
+			EntityPlatform: hacatalog.PlatformSensor,
+			Description: hamodel.Description{
+				NameKey:      "discovery.alarm_messages",
+				StateClass:   "measurement",
+				Category:     "diagnostic",
+				Availability: hamodel.BridgeOnly(),
+				// The state topic carries the message LIST, not a scalar, so
+				// the count is read out of it by template. That is a per-entity
+				// answer the context's encoding cannot give.
+				ValueTemplate: "{{ value_json | length }}",
+			},
+			Binds: hubBinds(hubSlot(dev, centralName, "alarm_messages"), true, false),
+		},
+		jsonAttributesTopic:    topic,
+		jsonAttributesTemplate: `{"messages": {{ value_json | tojson }} }`,
+	}
+	return d.renderHubItem(dev, entity, d.hubLayout(topic), uniqueID, hubNodeID(centralName, "messages"), "alarm")
 }
 
 // BuildServiceMessagesDiscovery is the maintenance-list counterpart
@@ -570,22 +834,26 @@ func (d *DefaultDiscoveryBuilder) BuildServiceMessagesDiscovery(centralName stri
 	}
 	topic := naming.MQTTHubServiceMessages(d.BridgeBase, centralName)
 	uniqueID := hubAggregateUniqueID(serial10, "service_messages")
-	comp := hadiscovery.Component{
-		Platform:               hacatalog.PlatformSensor,
-		Name:                   d.tr("discovery.service_messages"),
-		UniqueID:               uniqueID,
-		DefaultEntityID:        defaultEntityID(string(HAComponentSensor), uniqueID),
-		StateTopic:             topic,
-		ValueTemplate:          "{{ value_json | length }}",
-		JSONAttributesTopic:    topic,
-		JSONAttributesTemplate: `{"messages": {{ value_json | tojson }} }`,
-		EntityCategory:         "diagnostic",
-		Availability:           hubAvailability(d.TopicBuilder),
-		AvailabilityMode:       "all",
-		Device:                 hubDeviceBlock(centralName, d.hubFor(centralName)),
-		Origin:                 BuildOriginInfo(),
+	dev := hubModelDevice(hubDeviceBlock(centralName, d.hubFor(centralName)))
+	if dev == nil {
+		return DiscoveryItem{}
 	}
-	return discoveryItemFor(comp, hubNodeID(centralName, "messages"), "service")
+	entity := &hubEntity{
+		Basic: hamodel.Basic{
+			EntityKey:      "service_messages",
+			EntityPlatform: hacatalog.PlatformSensor,
+			Description: hamodel.Description{
+				NameKey:       "discovery.service_messages",
+				Category:      "diagnostic",
+				Availability:  hamodel.BridgeOnly(),
+				ValueTemplate: "{{ value_json | length }}",
+			},
+			Binds: hubBinds(hubSlot(dev, centralName, "service_messages"), true, false),
+		},
+		jsonAttributesTopic:    topic,
+		jsonAttributesTemplate: `{"messages": {{ value_json | tojson }} }`,
+	}
+	return d.renderHubItem(dev, entity, d.hubLayout(topic), uniqueID, hubNodeID(centralName, "messages"), "service")
 }
 
 // ------------------------- Inbox ----------------------------------
@@ -603,23 +871,27 @@ func (d *DefaultDiscoveryBuilder) BuildInboxDiscovery(centralName string) Discov
 	}
 	topic := naming.MQTTHubInbox(d.BridgeBase, centralName)
 	uniqueID := hubAggregateUniqueID(serial10, "inbox")
-	comp := hadiscovery.Component{
-		Platform:               hacatalog.PlatformSensor,
-		Name:                   d.tr("discovery.inbox"),
-		UniqueID:               uniqueID,
-		DefaultEntityID:        defaultEntityID(string(HAComponentSensor), uniqueID),
-		StateTopic:             topic,
-		ValueTemplate:          "{{ value_json | length }}",
-		JSONAttributesTopic:    topic,
-		JSONAttributesTemplate: `{"devices": {{ value_json | tojson }} }`,
-		StateClass:             "measurement",
-		Icon:                   "mdi:tray-arrow-down",
-		Availability:           hubAvailability(d.TopicBuilder),
-		AvailabilityMode:       "all",
-		Device:                 hubDeviceBlock(centralName, d.hubFor(centralName)),
-		Origin:                 BuildOriginInfo(),
+	dev := hubModelDevice(hubDeviceBlock(centralName, d.hubFor(centralName)))
+	if dev == nil {
+		return DiscoveryItem{}
 	}
-	return discoveryItemFor(comp, hubNodeID(centralName, "messages"), "inbox")
+	entity := &hubEntity{
+		Basic: hamodel.Basic{
+			EntityKey:      "inbox",
+			EntityPlatform: hacatalog.PlatformSensor,
+			Description: hamodel.Description{
+				NameKey:       "discovery.inbox",
+				StateClass:    "measurement",
+				Icon:          "mdi:tray-arrow-down",
+				Availability:  hamodel.BridgeOnly(),
+				ValueTemplate: "{{ value_json | length }}",
+			},
+			Binds: hubBinds(hubSlot(dev, centralName, "inbox"), true, false),
+		},
+		jsonAttributesTopic:    topic,
+		jsonAttributesTemplate: `{"devices": {{ value_json | tojson }} }`,
+	}
+	return d.renderHubItem(dev, entity, d.hubLayout(topic), uniqueID, hubNodeID(centralName, "messages"), "inbox")
 }
 
 // ----------------------- InstallMode ------------------------------
@@ -680,26 +952,35 @@ func (d *DefaultDiscoveryBuilder) BuildInstallModeSensorDiscovery(centralName, i
 	suffix := installModeInterfaceSuffix(iface)
 	topic := naming.MQTTHubInstallModeForInterface(d.BridgeBase, centralName, iface)
 	uniqueID := routingkey.CanonicalUniqueID(serial10, "install_mode", suffix, "")
-	comp := hadiscovery.Component{
-		Platform:         hacatalog.PlatformSensor,
-		Name:             d.trIface("discovery.install_mode_duration", installModeInterfaceLabel(iface)),
-		UniqueID:         uniqueID,
-		DefaultEntityID:  defaultEntityID(string(HAComponentSensor), uniqueID),
-		StateTopic:       topic,
-		DeviceClass:      "duration",
-		UnitOfMeasure:    "s",
-		StateClass:       "measurement",
-		EntityCategory:   "diagnostic",
-		Availability:     hubAvailability(d.TopicBuilder),
-		AvailabilityMode: "all",
-		Device:           hubDeviceBlock(centralName, d.hubFor(centralName)),
-		Origin:           BuildOriginInfo(),
-		// translation_key is the cross-stack parity marker Home Assistant
-		// declares nowhere and drops on receipt; see
-		// discoveryKeysHomeAssistantIgnores.
-		Extra: map[string]any{"translation_key": "install_mode_" + suffix},
+	dev := hubModelDevice(hubDeviceBlock(centralName, d.hubFor(centralName)))
+	if dev == nil {
+		return DiscoveryItem{}
 	}
-	return discoveryItemFor(comp, hubNodeID(centralName, "central"), "install_mode_"+suffix)
+	entity := &hubEntity{
+		Basic: hamodel.Basic{
+			EntityKey:      "install_mode_" + suffix,
+			EntityPlatform: hacatalog.PlatformSensor,
+			Description: hamodel.Description{
+				// A literal, not a catalogue key: the label carries the
+				// interface id, and the shared model's Translate takes a key
+				// and nothing else — there is no place to hand it a parameter.
+				Name:         hamodel.L(d.trIface("discovery.install_mode_duration", installModeInterfaceLabel(iface))),
+				DeviceClass:  "duration",
+				Unit:         "s",
+				StateClass:   "measurement",
+				Category:     "diagnostic",
+				Availability: hamodel.BridgeOnly(),
+				// translation_key is the cross-stack parity marker Home
+				// Assistant declares nowhere and drops on receipt; see
+				// discoveryKeysHomeAssistantIgnores. It has no typed home in
+				// the shared model for exactly that reason.
+				Extra: map[string]any{"translation_key": "install_mode_" + suffix},
+			},
+			Binds: hubBinds(hubSlot(dev, centralName, "install_mode", suffix), true, false),
+		},
+	}
+	return d.renderHubItem(dev, entity, d.hubLayout(topic), uniqueID,
+		hubNodeID(centralName, "central"), "install_mode_"+suffix)
 }
 
 // BuildInstallModeButtonDiscovery emits the HA `button` that activates
@@ -722,26 +1003,34 @@ func (d *DefaultDiscoveryBuilder) BuildInstallModeButtonDiscovery(centralName, i
 	// to "<suffix>-button"; mirror that exact shape so the loom button
 	// lines up with the reference registry (`install_mode_hmip-button`).
 	uniqueID := routingkey.CanonicalUniqueID(serial10, "install_mode", suffix+"-button", "")
-	comp := hadiscovery.Component{
-		Platform:         hacatalog.PlatformButton,
-		Name:             d.trIface("discovery.install_mode_activate", installModeInterfaceLabel(iface)),
-		UniqueID:         uniqueID,
-		DefaultEntityID:  defaultEntityID(string(HAComponentButton), uniqueID),
-		CommandTopic:     commandTopic,
-		EntityCategory:   EntityCategoryConfig,
-		Availability:     hubAvailability(d.TopicBuilder),
-		AvailabilityMode: "all",
-		Device:           hubDeviceBlock(centralName, d.hubFor(centralName)),
-		Origin:           BuildOriginInfo(),
-		Fields: hadiscovery.ButtonFields{
-			PayloadPress: "PRESS",
-		},
-		// translation_key is the cross-stack parity marker Home Assistant
-		// declares nowhere and drops on receipt; see
-		// discoveryKeysHomeAssistantIgnores.
-		Extra: map[string]any{"translation_key": "install_mode_" + suffix + "_button"},
+	dev := hubModelDevice(hubDeviceBlock(centralName, d.hubFor(centralName)))
+	if dev == nil {
+		return DiscoveryItem{}
 	}
-	return discoveryItemFor(comp, hubNodeID(centralName, "central"), "install_mode_"+suffix+"_button")
+	entity := &hubEntity{
+		Basic: hamodel.Basic{
+			EntityKey:      "install_mode_" + suffix + "_button",
+			EntityPlatform: hacatalog.PlatformButton,
+			Description: hamodel.Description{
+				Name:         hamodel.L(d.trIface("discovery.install_mode_activate", installModeInterfaceLabel(iface))),
+				Category:     EntityCategoryConfig,
+				Availability: hamodel.BridgeOnly(),
+				// translation_key is the cross-stack parity marker Home
+				// Assistant declares nowhere and drops on receipt; see
+				// discoveryKeysHomeAssistantIgnores.
+				Extra: map[string]any{"translation_key": "install_mode_" + suffix + "_button"},
+			},
+			// The button reads nothing and Home Assistant's button platform
+			// declares no `state_topic`; one writable binding is the whole
+			// entity.
+			Binds: hubBinds(hubSlot(dev, centralName, "install_mode", suffix), false, true),
+		},
+		fields: hadiscovery.ButtonFields{PayloadPress: "PRESS"},
+	}
+	layout := d.hubLayout("")
+	layout.command = commandTopic
+	return d.renderHubItem(dev, entity, layout, uniqueID,
+		hubNodeID(centralName, "central"), "install_mode_"+suffix+"_button")
 }
 
 // ---------------------- Connectivity ------------------------------
@@ -759,24 +1048,32 @@ func (d *DefaultDiscoveryBuilder) BuildConnectivityDiscovery(centralName, iface 
 	}
 	topic := naming.MQTTHubConnectivity(d.BridgeBase, centralName, iface)
 	uniqueID := hubAggregateUniqueID(serial10, "connectivity_"+safeLower(iface))
-	comp := hadiscovery.Component{
-		Platform:         hacatalog.PlatformBinarySensor,
-		Name:             d.trIface("discovery.connectivity", iface),
-		UniqueID:         uniqueID,
-		DefaultEntityID:  defaultEntityID(string(HAComponentBinarySensor), uniqueID),
-		StateTopic:       topic,
-		DeviceClass:      "connectivity",
-		EntityCategory:   "diagnostic",
-		Availability:     hubAvailability(d.TopicBuilder),
-		AvailabilityMode: "all",
-		Device:           hubDeviceBlock(centralName, d.hubFor(centralName)),
-		Origin:           BuildOriginInfo(),
-		Fields: hadiscovery.BinarySensorFields{
+	dev := hubModelDevice(hubDeviceBlock(centralName, d.hubFor(centralName)))
+	if dev == nil {
+		return DiscoveryItem{}
+	}
+	entity := &hubEntity{
+		Basic: hamodel.Basic{
+			EntityKey:      "connectivity_" + safeLower(iface),
+			EntityPlatform: hacatalog.PlatformBinarySensor,
+			Description: hamodel.Description{
+				Name:        hamodel.L(d.trIface("discovery.connectivity", iface)),
+				DeviceClass: "connectivity",
+				Category:    "diagnostic",
+				// Bridge only. This sensor's whole job is to report that an
+				// interface is down, so gating it on that interface would
+				// make it unavailable in the one situation it exists for.
+				Availability: hamodel.BridgeOnly(),
+			},
+			Binds: hubBinds(hubSlot(dev, centralName, "connectivity", iface), true, false),
+		},
+		fields: hadiscovery.BinarySensorFields{
 			PayloadOn:  "true",
 			PayloadOff: "false",
 		},
 	}
-	return discoveryItemFor(comp, hubNodeID(centralName, "connectivity"), safeLower(iface))
+	return d.renderHubItem(dev, entity, d.hubLayout(topic), uniqueID,
+		hubNodeID(centralName, "connectivity"), safeLower(iface))
 }
 
 // BuildDaemonStatusDiscovery is the HA `binary_sensor` that reports
@@ -804,23 +1101,32 @@ func (d *DefaultDiscoveryBuilder) BuildDaemonStatusDiscovery(centralName string)
 		return DiscoveryItem{}
 	}
 	uniqueID := hubAggregateUniqueID(serial10, "daemon_status")
-	comp := hadiscovery.Component{
-		Platform:         hacatalog.PlatformBinarySensor,
-		Name:             d.tr("discovery.daemon_status"),
-		UniqueID:         uniqueID,
-		DefaultEntityID:  defaultEntityID(string(HAComponentBinarySensor), uniqueID),
-		StateTopic:       d.TopicBuilder.BridgeStatus(),
-		DeviceClass:      "connectivity",
-		EntityCategory:   "diagnostic",
-		EnabledByDefault: hadiscovery.Ptr(bool(true)),
-		Device:           hubDeviceBlock(centralName, d.hubFor(centralName)),
-		Origin:           BuildOriginInfo(),
-		Fields: hadiscovery.BinarySensorFields{
+	dev := hubModelDevice(hubDeviceBlock(centralName, d.hubFor(centralName)))
+	if dev == nil {
+		return DiscoveryItem{}
+	}
+	entity := &hubEntity{
+		Basic: hamodel.Basic{
+			EntityKey:      "daemon_status",
+			EntityPlatform: hacatalog.PlatformBinarySensor,
+			Description: hamodel.Description{
+				NameKey:     "discovery.daemon_status",
+				DeviceClass: "connectivity",
+				Category:    "diagnostic",
+				Enabled:     hamodel.Ptr(true),
+			},
+			Binds: hubBinds(hubSlot(dev, centralName, "daemon_status"), true, false),
+		},
+		fields: hadiscovery.BinarySensorFields{
 			PayloadOn:  "online",
 			PayloadOff: "offline",
 		},
+		// The absence IS the feature — see this builder's doc comment. The
+		// model has no level meaning "none", so it is cleared in the builder.
+		ungated: true,
 	}
-	return discoveryItemFor(comp, hubNodeID(centralName, "system"), "daemon_status")
+	return d.renderHubItem(dev, entity, d.hubLayout(d.TopicBuilder.BridgeStatus()), uniqueID,
+		hubNodeID(centralName, "system"), "daemon_status")
 }
 
 // ----------------------- System-Health / Latency ------------------
@@ -844,28 +1150,39 @@ func (d *DefaultDiscoveryBuilder) BuildSystemHealthDiscovery(centralName string)
 	// `/system/health_score` (publisher contract unchanged).
 	uniqueID := hubAggregateUniqueID(serial10, "system_health")
 	topic := d.TopicBuilder.HubSystemHealthScore(centralName)
-	comp := hadiscovery.Component{
-		Platform:         hacatalog.PlatformSensor,
-		Name:             d.tr("discovery.system_health"),
-		UniqueID:         uniqueID,
-		DefaultEntityID:  defaultEntityID(string(HAComponentSensor), uniqueID),
-		StateTopic:       topic,
-		UnitOfMeasure:    "%",
-		StateClass:       "measurement",
-		EntityCategory:   "diagnostic",
-		Icon:             "mdi:heart-pulse",
-		Precision:        hadiscovery.Ptr(int(1)),
-		EnabledByDefault: hadiscovery.Ptr(bool(true)),
-		Availability:     hubAvailability(d.TopicBuilder),
-		AvailabilityMode: "all",
-		Device:           hubDeviceBlock(centralName, d.hubFor(centralName)),
-		Origin:           BuildOriginInfo(),
-		// translation_key is the cross-stack parity marker Home Assistant
-		// declares nowhere and drops on receipt; see
-		// discoveryKeysHomeAssistantIgnores.
-		Extra: map[string]any{"translation_key": "system_health"},
+	return d.hubMetricItem(centralName, uniqueID, "system_health", topic, hamodel.Description{
+		NameKey:      "discovery.system_health",
+		Unit:         "%",
+		StateClass:   "measurement",
+		Category:     "diagnostic",
+		Icon:         "mdi:heart-pulse",
+		Precision:    hamodel.Ptr(1),
+		Enabled:      hamodel.Ptr(true),
+		Availability: hamodel.BridgeOnly(),
+		Extra:        map[string]any{"translation_key": "system_health"},
+	})
+}
+
+// hubMetricItem renders one central-wide diagnostic sensor. The three
+// system metrics differ only in their description, so the entity, the
+// context and the node id are assembled once here rather than three times.
+func (d *DefaultDiscoveryBuilder) hubMetricItem(
+	centralName, uniqueID, key, stateTopic string, desc hamodel.Description,
+) DiscoveryItem {
+	dev := hubModelDevice(hubDeviceBlock(centralName, d.hubFor(centralName)))
+	if dev == nil {
+		return DiscoveryItem{}
 	}
-	return discoveryItemFor(comp, hubNodeID(centralName, "system"), "system_health")
+	entity := &hubEntity{
+		Basic: hamodel.Basic{
+			EntityKey:      key,
+			EntityPlatform: hacatalog.PlatformSensor,
+			Description:    desc,
+			Binds:          hubBinds(hubSlot(dev, centralName, key), true, false),
+		},
+	}
+	return d.renderHubItem(dev, entity, d.hubLayout(stateTopic), uniqueID,
+		hubNodeID(centralName, "system"), key)
 }
 
 // BuildConnectionLatencyDiscovery emits a single aggregated HA `sensor`
@@ -884,28 +1201,17 @@ func (d *DefaultDiscoveryBuilder) BuildConnectionLatencyDiscovery(centralName st
 	}
 	uniqueID := hubAggregateUniqueID(serial10, "connection_latency")
 	topic := d.TopicBuilder.HubConnectionLatency(centralName)
-	comp := hadiscovery.Component{
-		Platform:         hacatalog.PlatformSensor,
-		Name:             d.tr("discovery.connection_latency"),
-		UniqueID:         uniqueID,
-		DefaultEntityID:  defaultEntityID(string(HAComponentSensor), uniqueID),
-		StateTopic:       topic,
-		UnitOfMeasure:    "ms",
-		StateClass:       "measurement",
-		EntityCategory:   "diagnostic",
-		Icon:             "mdi:timer",
-		Precision:        hadiscovery.Ptr(int(1)),
-		EnabledByDefault: hadiscovery.Ptr(bool(true)),
-		Availability:     hubAvailability(d.TopicBuilder),
-		AvailabilityMode: "all",
-		Device:           hubDeviceBlock(centralName, d.hubFor(centralName)),
-		Origin:           BuildOriginInfo(),
-		// translation_key is the cross-stack parity marker Home Assistant
-		// declares nowhere and drops on receipt; see
-		// discoveryKeysHomeAssistantIgnores.
-		Extra: map[string]any{"translation_key": "connection_latency"},
-	}
-	return discoveryItemFor(comp, hubNodeID(centralName, "system"), "connection_latency")
+	return d.hubMetricItem(centralName, uniqueID, "connection_latency", topic, hamodel.Description{
+		NameKey:      "discovery.connection_latency",
+		Unit:         "ms",
+		StateClass:   "measurement",
+		Category:     "diagnostic",
+		Icon:         "mdi:timer",
+		Precision:    hamodel.Ptr(1),
+		Enabled:      hamodel.Ptr(true),
+		Availability: hamodel.BridgeOnly(),
+		Extra:        map[string]any{"translation_key": "connection_latency"},
+	})
 }
 
 // ----------------------- Last-Event-Age --------------------------
@@ -926,29 +1232,18 @@ func (d *DefaultDiscoveryBuilder) BuildLastEventAgeDiscovery(centralName string)
 	}
 	uniqueID := hubAggregateUniqueID(serial10, "last_event_age")
 	topic := d.TopicBuilder.HubLastEventAge(centralName)
-	comp := hadiscovery.Component{
-		Platform:         hacatalog.PlatformSensor,
-		Name:             d.tr("discovery.last_event_age"),
-		UniqueID:         uniqueID,
-		DefaultEntityID:  defaultEntityID(string(HAComponentSensor), uniqueID),
-		StateTopic:       topic,
-		DeviceClass:      "duration",
-		UnitOfMeasure:    "s",
-		StateClass:       "measurement",
-		EntityCategory:   "diagnostic",
-		Icon:             "mdi:clock-alert-outline",
-		Precision:        hadiscovery.Ptr(int(1)),
-		EnabledByDefault: hadiscovery.Ptr(bool(true)),
-		Availability:     hubAvailability(d.TopicBuilder),
-		AvailabilityMode: "all",
-		Device:           hubDeviceBlock(centralName, d.hubFor(centralName)),
-		Origin:           BuildOriginInfo(),
-		// translation_key is the cross-stack parity marker Home Assistant
-		// declares nowhere and drops on receipt; see
-		// discoveryKeysHomeAssistantIgnores.
-		Extra: map[string]any{"translation_key": "last_event_age"},
-	}
-	return discoveryItemFor(comp, hubNodeID(centralName, "system"), "last_event_age")
+	return d.hubMetricItem(centralName, uniqueID, "last_event_age", topic, hamodel.Description{
+		NameKey:      "discovery.last_event_age",
+		DeviceClass:  "duration",
+		Unit:         "s",
+		StateClass:   "measurement",
+		Category:     "diagnostic",
+		Icon:         "mdi:clock-alert-outline",
+		Precision:    hamodel.Ptr(1),
+		Enabled:      hamodel.Ptr(true),
+		Availability: hamodel.BridgeOnly(),
+		Extra:        map[string]any{"translation_key": "last_event_age"},
+	})
 }
 
 // ----------------------- System Update ---------------------------
@@ -970,31 +1265,38 @@ func (d *DefaultDiscoveryBuilder) BuildHubUpdateDiscovery(centralName string) Di
 	// rendered a "_2"-suffixed entity_id when names matched. Scope the
 	// uid/object_id to "system_update".
 	uniqueID := hubAggregateUniqueID(serial10, "system_update")
-	comp := hadiscovery.Component{
-		Platform:        hacatalog.PlatformUpdate,
-		Name:            d.tr("discovery.system_update"),
-		UniqueID:        uniqueID,
-		DefaultEntityID: defaultEntityID(string(HAComponentUpdate), uniqueID),
-		// No `value_template`: HA's MQTT update platform parses the raw
-		// state_topic payload natively against its state-payload schema
-		// (installed_version, latest_version, in_progress) when no
-		// value_template narrows it to a scalar first. `in_progress_template`
-		// is not a schema option at all — HA reads `in_progress` only from
-		// that native parse — so setting either one here left the entity
-		// showing no install-in-progress indication.
-		StateTopic:       topic,
-		EntityCategory:   "diagnostic",
-		EnabledByDefault: hadiscovery.Ptr(bool(true)),
-		Availability:     hubAvailability(d.TopicBuilder),
-		AvailabilityMode: "all",
-		Device:           hubDeviceBlock(centralName, d.hubFor(centralName)),
-		Origin:           BuildOriginInfo(),
-		Fields: hadiscovery.UpdateFields{
+	dev := hubModelDevice(hubDeviceBlock(centralName, d.hubFor(centralName)))
+	if dev == nil {
+		return DiscoveryItem{}
+	}
+	entity := &hubEntity{
+		Basic: hamodel.Basic{
+			EntityKey:      "system_update",
+			EntityPlatform: hacatalog.PlatformUpdate,
+			Description: hamodel.Description{
+				NameKey:      "discovery.system_update",
+				Category:     "diagnostic",
+				Enabled:      hamodel.Ptr(true),
+				Availability: hamodel.BridgeOnly(),
+				// No `value_template`: HA's MQTT update platform parses the
+				// raw state_topic payload natively against its state-payload
+				// schema (installed_version, latest_version, in_progress)
+				// when no value_template narrows it to a scalar first.
+				// `in_progress_template` is not a schema option at all — HA
+				// reads `in_progress` only from that native parse — so
+				// setting either one here left the entity showing no
+				// install-in-progress indication.
+				ValueTemplate: hamodel.NoValueTemplate,
+			},
+			Binds: hubBinds(hubSlot(dev, centralName, "system_update"), true, false),
+		},
+		fields: hadiscovery.UpdateFields{
 			LatestVersionTopic:    topic,
 			LatestVersionTemplate: "{{ value_json.latest_version }}",
 		},
 	}
-	return discoveryItemFor(comp, hubNodeID(centralName, "system"), "system_update")
+	return d.renderHubItem(dev, entity, d.hubLayout(topic), uniqueID,
+		hubNodeID(centralName, "system"), "system_update")
 }
 
 // ----------------------- Bridge plumbing --------------------------
