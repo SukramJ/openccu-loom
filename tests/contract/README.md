@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 463.
+Guards without a doc comment: 7 of 464.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -307,6 +307,7 @@ Guards without a doc comment: 7 of 463.
 | TestSmokeAlarmVerdictAgreesAcrossModelPackages | smoke_alarm_label_parity_test.go | TestSmokeAlarmVerdictAgreesAcrossModelPackages pins the two independent "this label means smoke" definitions against each other. |
 | TestHADiscoveryEntityBuilderCompleteness | source_completeness_test.go | TestHADiscoveryEntityBuilderCompleteness pins ADR 0010's contract: every Custom-DP type that surfaces as an HA-MQTT-Discovery entity MUST implement [payload.HADiscoveryEntityBuilder] so the bridge can dispatch through the model layer rather than fall back to the (deleted) per-builder code in `discovery_aggregate.go`. |
 | TestSourceCompletenessAcrossModelLayers | source_completeness_test.go | TestSourceCompletenessAcrossModelLayers pins ADR 0007's contract: every domain object listed in the layer-by-layer scope MUST satisfy payload.Source. |
+| TestTextDisplayDeclinesHADiscovery | source_completeness_test.go | TestTextDisplayDeclinesHADiscovery is the other half of [TestHADiscoveryEntityBuilderCompleteness]: the one custom data point that must NOT describe itself. |
 | TestSourceNoDualStatePayload | source_no_dual_source_test.go | TestSourceNoDualStatePayload pins ADR 0007's mitigation rule: a type that defines an explicit `State()` method MUST NOT also tag struct fields with `payload:"state"`. |
 | TestSPACDPOperationsMatchDispatcher | spa_cdp_operation_contract_test.go | TestSPACDPOperationsMatchDispatcher pins the SPA's CDP widget payloads against the accepted (operation, param-key) surface of the custom-DP dispatcher (internal/central/adapter/custom_dp_dispatcher.go). |
 | TestSPAE2EFixturesAreAllRouted | spa_e2e_fixture_schema_test.go | TestSPAE2EFixturesAreAllRouted asserts that every JSON file under assets/ui/tests/e2e/fixtures/ appears in fixtureRoutes (or is named in fixturesWithoutARoute with a true reason). |

@@ -128,6 +128,14 @@ func TestSourceCompletenessAcrossModelLayers(t *testing.T) {
 // can dispatch through the model layer rather than fall back to the
 // (deleted) per-builder code in `discovery_aggregate.go`.
 //
+// [textdisplay.TextDisplay] is deliberately absent, and it is the only
+// custom data point that is. A text display surfaces as a `notify` entity
+// alone — the reference stack registers no `text` entity for it and the
+// channel aggregate suppresses this source — so it has no HA entity of its
+// own to describe. Its notify companion is built on the bridge
+// (mqtt.DefaultDiscoveryBuilder.BuildTextDisplayNotify), which is where a
+// surface nobody's source owns belongs.
+//
 // Generic / calculated / hub / channel / top-level types are NOT
 // expected to surface as HA-Discovery custom-domain entities —
 // they go through the per-parameter `classifyComponent` path in
@@ -151,7 +159,6 @@ func TestHADiscoveryEntityBuilderCompleteness(t *testing.T) {
 		_ payload.HADiscoveryEntityBuilder = (*siren.SoundPlayer)(nil)
 		_ payload.HADiscoveryEntityBuilder = (*valve.Irrigation)(nil)
 		_ payload.HADiscoveryEntityBuilder = (*valve.Modulating)(nil)
-		_ payload.HADiscoveryEntityBuilder = (*textdisplay.TextDisplay)(nil)
 		_ payload.HADiscoveryEntityBuilder = (*light.Light)(nil)
 		_ payload.HADiscoveryEntityBuilder = (*light.ColorLight)(nil)
 		_ payload.HADiscoveryEntityBuilder = (*light.ColorTempLight)(nil)
@@ -162,5 +169,27 @@ func TestHADiscoveryEntityBuilderCompleteness(t *testing.T) {
 
 	if testing.Short() {
 		t.Skip()
+	}
+}
+
+// TestTextDisplayDeclinesHADiscovery is the other half of
+// [TestHADiscoveryEntityBuilderCompleteness]: the one custom data point that
+// must NOT describe itself.
+//
+// A text display surfaces as a `notify` entity alone, so it declines the
+// only way the contract offers: by implementing no builder. The channel
+// aggregate suppresses it by name as well, and the two are not redundant —
+// the aggregate's check is the bridge's guarantee about a category, this one
+// is the source's statement about itself. A mixin that later grew an
+// HADiscoveryEntity method would make this source describe a `text` entity
+// nothing publishes state for, which is the shape that reaches Home
+// Assistant as a surplus entity under a colliding `_2` suffix.
+func TestTextDisplayDeclinesHADiscovery(t *testing.T) {
+	t.Parallel()
+
+	var src any = (*textdisplay.TextDisplay)(nil)
+	if _, is := src.(payload.HADiscoveryEntityBuilder); is {
+		t.Error("textdisplay.TextDisplay implements HADiscoveryEntityBuilder — " +
+			"the aggregate would emit a surplus `text` entity beside the notify companion")
 	}
 }

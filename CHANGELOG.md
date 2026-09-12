@@ -6,6 +6,34 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Removed
+
+- **The text display's aggregate `text` entity, which nothing could ever
+  reach and nothing could ever fill.** `TextDisplay` was migrated onto
+  the shared model in #792 for consistency with the other fifteen
+  custom data points, but a HmIP-WRCD surfaces as a `notify` entity
+  alone — the reference stack's `notify.py` spawns one
+  `HmipTextDisplayNotifyEntity` per `CustomDpTextDisplay` and registers
+  no `text` entity, and the channel aggregate has suppressed this source
+  by name since #61, where the surplus entity had reached Home Assistant
+  under a colliding `_2` suffix.
+
+  Unreachable alone would not have settled it; the suppression could
+  have been a switch someone meant to flip. What settled it is that
+  there was nothing behind the switch: the entity's value template read
+  `value_json.text`, and `TextDisplay.State()` publishes the device's
+  static capability lists and no current text at all — the display is
+  write-only. An entity rendered from it would have stood permanently
+  blank.
+
+  `TextDisplay` is now the only custom data point that implements no
+  `payload.HADiscoveryEntityBuilder`, which is how a source declines.
+  `TestHADiscoveryEntityBuilderCompleteness` records the exception and a
+  new tripwire asserts it: a mixin that later grows an
+  `HADiscoveryEntity` method fails a test instead of reaching a broker.
+  The aggregate's suppression stays as the bridge's own guarantee about
+  the category.
+
 ### Changed
 
 - **Three discovery keys the per-parameter plane published and Home

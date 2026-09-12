@@ -1,14 +1,14 @@
 # Dead-Code Summary
 
-Generated: 8a4b0f18
-HEAD: 8a4b0f18
+Generated: 57d732e0
+HEAD: 57d732e0
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 5621 |
-| Reachable | 3584 |
+| Total Exported | 5628 |
+| Reachable | 3591 |
 | Whitelisted | 1976 |
 | **Unreachable** | **61** |
 

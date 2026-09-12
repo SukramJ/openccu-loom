@@ -613,6 +613,12 @@ func (d *DefaultDiscoveryBuilder) aggregateChannel(ev Event) (component, nodeID,
 	// the aggregate here keeps the loom plane from emitting a surplus `text`
 	// entity (which HA would otherwise collide with the notify under a `_2`
 	// suffix).
+	//
+	// The text-display source also declines on its own — it implements no
+	// entity builder — so on the real source this check is redundant today.
+	// It stays because the guarantee is the bridge's: a mixin that later grew
+	// an HADiscoveryEntity method would put the surplus entity back on the
+	// wire, and the `_2` collision this prevents has shipped once already.
 	if isTextDisplayEvent(ev) {
 		return "", "", "", nil, false
 	}
