@@ -287,16 +287,17 @@ func (b *Bridge) PublishSecurityEvent(ctx context.Context, topic string, body []
 // reason; the three availability topics of one daemon must not have
 // three different delivery guarantees.
 func (b *Bridge) PublishSecurityAvailability(ctx context.Context, topic string, online bool) error {
-	body := []byte("offline")
-	if online {
-		body = []byte("online")
-	}
-	if err := b.client.Publish(ctx, topic, body, QoS1, true); err != nil {
+	sent, err := b.avail.Publish(ctx, topic, online)
+	if err != nil {
 		b.incPublishErrors("")
 		return err
 	}
+	// In both indexes, for the reason spelled out on
+	// [Bridge.PublishAlarmAvailability].
 	b.rememberRawTopic(topic)
-	b.incMessagesSent("")
+	if sent {
+		b.incMessagesSent("")
+	}
 	return nil
 }
 
@@ -475,9 +476,17 @@ func (p *SecurityMQTTPublisher) base() string {
 // configs a restarted broker dropped come back through
 // [Bridge.RepublishDiscovery], which replays every config the bridge
 // published.
+// The dedup gates of the shared state and availability publishers are reset
+// first, for the same reason the known-sets are not: a broker that came back
+// without its retained store holds none of the bytes those gates remember, so
+// without the reset the reconcile below would be suppressed as unchanged and
+// rewrite nothing.
 func (p *SecurityMQTTPublisher) OnBrokerConnect() {
 	if p == nil {
 		return
+	}
+	if b := p.wiring.Bridge(); b != nil {
+		b.ResetRuntimeGates()
 	}
 	p.signalReconcile()
 }

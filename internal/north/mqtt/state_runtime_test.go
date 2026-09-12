@@ -4,6 +4,8 @@
 package mqtt
 
 import (
+	"bytes"
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -18,7 +20,10 @@ import (
 type movedStatePublish struct {
 	name  string
 	topic string
-	call  func(t *testing.T, b *Bridge) error
+	// call takes a context rather than the *testing.T it would be natural
+	// to pass: a closure whose first parameter is a *testing.T reads as a
+	// test helper to the linter, and these are table rows, not helpers.
+	call func(ctx context.Context, b *Bridge) error
 }
 
 // movedStatePlane enumerates every retained publish step 5 moved.
@@ -33,78 +38,78 @@ func movedStatePlane(base, central string) []movedStatePublish {
 		{
 			name:  "bridge health",
 			topic: base + "/bridge/health",
-			call: func(t *testing.T, b *Bridge) error {
-				return b.AnnounceOnline(t.Context())
+			call: func(ctx context.Context, b *Bridge) error {
+				return b.AnnounceOnline(ctx)
 			},
 		},
 		{
 			name:  "sysvar",
 			topic: hub + "/sysvars/party_mode/state",
-			call: func(t *testing.T, b *Bridge) error {
-				return b.PublishSysvar(t.Context(), central, testSysvar{name: "party_mode"}, 21.5)
+			call: func(ctx context.Context, b *Bridge) error {
+				return b.PublishSysvar(ctx, central, testSysvar{name: "party_mode"}, 21.5)
 			},
 		},
 		{
 			name:  "program state",
 			topic: hub + "/programs/12459/state",
-			call: func(t *testing.T, b *Bridge) error {
-				return b.PublishProgram(t.Context(), central, testProgram{id: "12459"}, true)
+			call: func(ctx context.Context, b *Bridge) error {
+				return b.PublishProgram(ctx, central, testProgram{id: "12459"}, true)
 			},
 		},
 		{
 			name:  "install mode",
 			topic: hub + "/install_mode/HmIP-RF",
-			call: func(t *testing.T, b *Bridge) error {
-				return b.PublishInstallMode(t.Context(), central, "HmIP-RF", 60)
+			call: func(ctx context.Context, b *Bridge) error {
+				return b.PublishInstallMode(ctx, central, "HmIP-RF", 60)
 			},
 		},
 		{
 			name:  "hub system health score",
 			topic: base + "/" + central + "/system/health_score",
-			call: func(t *testing.T, b *Bridge) error {
-				return b.PublishHubSystemHealthScore(t.Context(), central, 97)
+			call: func(ctx context.Context, b *Bridge) error {
+				return b.PublishHubSystemHealthScore(ctx, central, 97)
 			},
 		},
 		{
 			name:  "hub connection latency",
 			topic: base + "/" + central + "/system/latency",
-			call: func(t *testing.T, b *Bridge) error {
-				return b.PublishHubConnectionLatency(t.Context(), central, 12.5)
+			call: func(ctx context.Context, b *Bridge) error {
+				return b.PublishHubConnectionLatency(ctx, central, 12.5)
 			},
 		},
 		{
 			name:  "hub last event age",
 			topic: base + "/" + central + "/system/last_event_age",
-			call: func(t *testing.T, b *Bridge) error {
-				return b.PublishHubLastEventAge(t.Context(), central, 4)
+			call: func(ctx context.Context, b *Bridge) error {
+				return b.PublishHubLastEventAge(ctx, central, 4)
 			},
 		},
 		{
 			name:  "hub firmware update",
 			topic: hub + "/update",
-			call: func(t *testing.T, b *Bridge) error {
-				return b.PublishHubUpdate(t.Context(), central, "3.79.6", "3.81.5", false)
+			call: func(ctx context.Context, b *Bridge) error {
+				return b.PublishHubUpdate(ctx, central, "3.79.6", "3.81.5", false)
 			},
 		},
 		{
 			name:  "addon update state",
 			topic: base + "/system/addon_update/state",
-			call: func(t *testing.T, b *Bridge) error {
-				return b.PublishAddonUpdateState(t.Context(), "1.2.3", "1.2.4", false)
+			call: func(ctx context.Context, b *Bridge) error {
+				return b.PublishAddonUpdateState(ctx, "1.2.3", "1.2.4", false)
 			},
 		},
 		{
 			name:  "alarm zone state",
 			topic: base + "/alarm/erdgeschoss/state",
-			call: func(t *testing.T, b *Bridge) error {
-				return b.PublishAlarmState(t.Context(), base+"/alarm/erdgeschoss/state", "disarmed")
+			call: func(ctx context.Context, b *Bridge) error {
+				return b.PublishAlarmState(ctx, base+"/alarm/erdgeschoss/state", "disarmed")
 			},
 		},
 		{
 			name:  "security aggregate state",
 			topic: base + "/security/state",
-			call: func(t *testing.T, b *Bridge) error {
-				return b.PublishSecurityState(t.Context(), base+"/security/state", []byte(`{"state":"ok"}`))
+			call: func(ctx context.Context, b *Bridge) error {
+				return b.PublishSecurityState(ctx, base+"/security/state", []byte(`{"state":"ok"}`))
 			},
 		},
 	}
@@ -137,7 +142,7 @@ func TestEveryMovedStatePublishIsAtMostOnce(t *testing.T) {
 	seen := 0
 	for _, mv := range moved {
 		mp.reset()
-		if err := mv.call(t, b); err != nil {
+		if err := mv.call(t.Context(), b); err != nil {
 			t.Fatalf("%s: %v", mv.name, err)
 		}
 		found := false
@@ -290,7 +295,7 @@ func TestRenderValueMatchesTheSharedRenderer(t *testing.T) {
 			t.Errorf("%#v: renderValue err=%v, RenderRawValue err=%v", v, myErr, theirErr)
 			continue
 		}
-		if string(mine) != string(theirs) {
+		if !bytes.Equal(mine, theirs) {
 			t.Errorf("%#v: renderValue = %q, RenderRawValue = %q", v, mine, theirs)
 		}
 	}
@@ -313,7 +318,7 @@ func TestRenderValueMatchesTheSharedRenderer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RenderRawValue([]byte): %v", err)
 	}
-	if string(shared) == string(got) {
+	if bytes.Equal(shared, got) {
 		t.Error("the []byte divergence has gone away in the shared renderer — drop the local arm and this note")
 	}
 }

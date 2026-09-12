@@ -8,6 +8,81 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The device, program-role, alarm and Security & Safety availability
+  planes publish through go-hamqtt's `publisher.AvailabilityPublisher`,
+  and a retraction now goes out at the same QoS as the publish it
+  clears.** That is finding F5 of the runtime measurement, and it was
+  a split this daemon could not state a reason for: the three
+  availability *publishes* pinned QoS 1 by policy, while every
+  availability *retraction* — and the program-role publish — used the
+  state QoS, which is 0. `publisher.AvailabilityConfig.QoS` is
+  deliberately one field for both, so adopting the type settles the
+  question instead of leaving it open.
+
+  It is settled at QoS 1, and the reasoning is symmetric in a way the
+  old split was not. Both halves are written only on a transition, so
+  neither is repaired by the next publish the way a state is: a lost
+  `offline` leaves every entity of a dead device showing its last value
+  until something else flips the topic, which for a crash that
+  suppresses the broker's last will is never — and a lost *retraction*
+  leaves a retained `online` standing for a device that no longer
+  exists, a ghost Home Assistant reads on every restart and keeps
+  permanently available. A retraction is also the write least likely to
+  be retried, because the code that would retry it has just finished
+  deleting the thing it described. If either half deserved the weaker
+  guarantee it would be the publish. `TestEveryAvailabilityWriteIsAtLeastOnce`
+  reads the level off the transport call for all seven writes, flips and
+  retractions together.
+
+  **Finding F6, the device plane's missing index.** Only the Security &
+  Safety marker was recorded in an index (#796) and then the alarm
+  plane's (#797); a device's marker was in none, so it could be
+  retracted only by reconstructing its name in a second place and no
+  sweep path could reach it at all. The shared publisher's map is
+  simultaneously the transition gate, the topic listing, the republish
+  worklist and the ownership set of its own sweep, so publishing through
+  it is what puts the topic somewhere a sweep can walk. The retraction in
+  `RetractRawStateForDevice` now names the topic through the same
+  `topic.Layout` the publish addressed it with, which is what
+  `AvailabilityPublisher.DeviceTopic` exists for: the publishing side can
+  no longer address a string the declaring side did not name. The alarm
+  plane's availability retraction is split out of `RetractAlarmTopic`
+  into `RetractAlarmAvailability` for the same reason — the two halves
+  used to leave at different levels.
+
+  Two things deliberately did **not** move. The per-interface
+  `hub/connectivity/<iface>` topic carries `true`/`false`, not
+  `online`/`offline`: it is a connectivity *sensor*, so it stays on the
+  state plane, and folding it into an availability publisher would be a
+  category error. And the domain's own `availabilityCache` stays where
+  it is: its return value also gates the bus lifecycle announcement, and
+  it has to work with no MQTT wiring at all, neither of which the
+  library's gate can do. The library gate now sits underneath it as the
+  publish-side gate, and `Bridge.ResetRuntimeGates` opens both on a
+  reconnect next to the cache that is cleared there already.
+
+  There are four reconnect hooks in this daemon, on three different
+  objects, and all four now reset: the lifecycle's `AnnounceOnline`, the
+  domain's boot snapshot pass, and the alarm and Security & Safety
+  publishers' own `OnBrokerConnect`. A broker that came back without its
+  retained store holds none of the bytes either gate remembers, so a
+  reseed not preceded by a reset writes nothing at all —
+  `TestAlarmMQTTPublisher_BrokerConnectReseeds` is the test that says so,
+  and it fails when the reset is removed from that hook.
+
+  `AvailabilityConfig` carries no status topic of its own, so unlike
+  `publisher.New` — which #797 wired a layout into precisely so a typo in
+  the one string every entity's `availability` list references fails at
+  the composition root — the availability constructor has nothing to
+  compare. The guard is made here instead, over all three producers of
+  that string: the availability layout, the topic builder
+  `AnnounceOnline` publishes through, and the Last Will the composition
+  root configures.
+
+  No published byte and no published topic moves; what changes is the QoS
+  of the retractions and of the program-role publish, and that a repeated
+  identical availability flip no longer reaches the broker.
+
 - **The daemon-level and hub state planes publish through go-hamqtt's
   `publisher.StatePublisher`, and the per-datapoint plane deliberately
   does not.** ADR 0070's runtime measurement counted eleven retained

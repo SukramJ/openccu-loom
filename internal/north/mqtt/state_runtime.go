@@ -94,18 +94,20 @@ func newStatePublisher(b *Bridge, logger *slog.Logger) *hapublisher.StatePublish
 	)
 }
 
-// ResetRuntimeGates opens the dedup gate of the shared state publisher
-// without forgetting what it carries, so the next publish of each remembered
-// topic goes out once even when its value has not changed.
+// ResetRuntimeGates opens the dedup gates of the shared state and
+// availability publishers without forgetting what they carry, so the next
+// publish of each remembered topic goes out once even when its value has not
+// changed.
 //
-// This is the reconnect call, and it is not optional. The gate suppresses a
+// This is the reconnect call, and it is not optional. Both gates suppress a
 // repeat of the bytes the broker last accepted, which is right while the
 // broker still holds them — and wrong the moment it does not. A broker
 // restarted without a persistent retained store drops every retained state
-// while this process reconnects underneath; without this reset the gate
-// would answer "already published" for values nothing holds any more, and
-// every entity would sit blank until its value next happened to change. On
-// a sensor that reports on change alone that is forever.
+// and every availability marker while this process reconnects underneath;
+// without this reset the gates would answer "already published" for bytes
+// nothing holds any more, and every entity would sit blank, or wrongly
+// available, until its value next happened to change. On a sensor that
+// reports on change alone that is forever.
 //
 // It is called from [Bridge.AnnounceOnline], which the lifecycle runs on
 // every successful (re)connect, and again from the domain's own boot
@@ -120,6 +122,9 @@ func (b *Bridge) ResetRuntimeGates() {
 	}
 	if b.state != nil {
 		b.state.Reset()
+	}
+	if b.avail != nil {
+		b.avail.Reset()
 	}
 }
 

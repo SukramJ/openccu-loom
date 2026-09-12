@@ -530,6 +530,13 @@ type Bridge struct {
 	// per-datapoint plane deliberately does not use it — see
 	// [newStatePublisher] for why a byte gate is inert there.
 	state *hapublisher.StatePublisher
+	// avail is the shared availability publisher the device, program-role,
+	// alarm and Security & Safety planes flip through. Its `last` map is
+	// simultaneously the transition gate, the topic listing, the republish
+	// worklist and the ownership set of its own sweep — which is what
+	// finding F6 was about: before this, device availability topics were in
+	// no index at all and reachable only by reconstructing their names.
+	avail *hapublisher.AvailabilityPublisher
 	// planesDeclared marks the planes that have completed a discovery
 	// pass, so the orphan sweep can tell an orphan from an entity that
 	// simply has not been published yet.
@@ -637,6 +644,7 @@ func NewBridge(cfg BridgeConfig, client Publisher) *Bridge {
 	// [Bridge.WithSubscriber].
 	b.pub = newDiscoveryRuntime(b, logger)
 	b.state = newStatePublisher(b, logger)
+	b.avail = newAvailabilityPublisher(b, logger)
 	return b
 }
 
@@ -1202,15 +1210,18 @@ func (b *Bridge) PublishDeviceDiagnostics(ctx context.Context, centralName, ifac
 }
 
 // PublishAvailability toggles the retained availability topic.
+//
+// Through the shared availability publisher, which means the topic is
+// addressed by the slot its discovery config was declared from, the flip is
+// gated on being a transition, the marker enters an index a sweep can walk,
+// and the retraction later leaves at the same QoS. See
+// [newAvailabilityPublisher].
 func (b *Bridge) PublishAvailability(ctx context.Context, centralName, iface, address string, online bool) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
-	body := []byte("offline")
-	if online {
-		body = []byte("online")
-	}
-	return b.client.Publish(ctx, b.topics.DeviceAvailability(centralName, iface, address), body, QoS1, true)
+	_, err := b.avail.Device(ctx, deviceAvailabilitySlot(centralName, iface, address), online)
+	return err
 }
 
 // PublishEvent emits a pulse (non-retained) event on the raw plane.
@@ -1357,11 +1368,8 @@ func (b *Bridge) PublishRoleAvailability(ctx context.Context, role *pload.MQTTRo
 	if !b.cfg.RawEnabled || role.Topics.Availability == "" {
 		return nil
 	}
-	body := []byte("offline")
-	if available {
-		body = []byte("online")
-	}
-	return b.client.Publish(ctx, role.Topics.Availability, body, b.cfg.QoS.State, true)
+	_, err := b.avail.Publish(ctx, role.Topics.Availability, available)
+	return err
 }
 
 // PublishProgram emits the program's active flag on the canonical
@@ -1416,7 +1424,7 @@ func (b *Bridge) RetractProgramTopics(ctx context.Context, centralName string, p
 			if role.Topics.Availability == "" {
 				continue
 			}
-			if err := b.client.Publish(ctx, role.Topics.Availability, nil, b.cfg.QoS.State, true); err != nil {
+			if err := b.avail.Retract(ctx, role.Topics.Availability); err != nil {
 				return err
 			}
 		}
@@ -2091,8 +2099,20 @@ func (b *Bridge) RetractRawStateForDevice(ctx context.Context, centralName, ifac
 	}
 	n := b.retractTopicsMatching(ctx, centralName, b.rawTopics, match, b.cfg.QoS.State)
 	n += b.retractTopicsMatching(ctx, centralName, b.configCache, match, b.cfg.QoS.State)
+	// The availability topic leaves through the availability publisher,
+	// which retracts at the level it publishes at and drops the topic from
+	// its own index. Naming it from the same slot the publish used is what
+	// stops the retraction addressing a string the publish never wrote —
+	// finding F6's other half, where this loop reconstructed the name by
+	// hand and cleared it at the state QoS.
+	if availTopic, err := b.deviceAvailabilityTopic(centralName, iface, deviceAddress); err == nil {
+		if err := b.avail.Retract(ctx, availTopic); err != nil {
+			b.incPublishErrors(centralName)
+		} else {
+			n++
+		}
+	}
 	for _, topic := range []string{
-		b.topics.DeviceAvailability(centralName, iface, deviceAddress),
 		b.topics.DeviceInfo(centralName, iface, deviceAddress),
 		b.topics.DeviceDiagnostics(centralName, iface, deviceAddress),
 	} {
