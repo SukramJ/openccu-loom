@@ -127,7 +127,7 @@ func TestHandleWeekProfile_RetainedDropped(t *testing.T) {
 	if err := sub.Start(context.Background()); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	noop.DeliverInboundRetained("openccu-loom/+/+/+/+/week_profile/set",
+	noop.DeliverInboundRetained("openccu-loom/+/+/+/+/+/set",
 		"openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/week_profile/set", []byte("P2"))
 	if got := wp.calls.Load(); got != 0 {
 		t.Fatalf("retained week-profile set dispatched: calls=%d", got)

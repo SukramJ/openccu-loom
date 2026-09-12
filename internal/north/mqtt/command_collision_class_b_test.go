@@ -188,45 +188,46 @@ const classBBase = "openccu-loom"
 //
 // Pinned rows that are defects:
 //
-//   - **F2** — the class-B guard is a `default:` arm in the wrong handler
-//     rather than a dispatch from the right one. This test pins the OUTCOME
-//     (zero CCU writes), not the mechanism, so the step that coalesces the
-//     three overlapping filters into the two data-point handlers keeps it
-//     green.
-//   - The copy count itself. `wantCopies` is 2 because the overlap exists;
-//     the combined sink is therefore invoked FOUR times for one operator
-//     action (2 broker copies x 2 local handlers, of which one is the
-//     combined handler on each copy — see [fanoutClient]). That duplication
-//     is harmless only because a combined write is idempotent, and it is
-//     what coalescing the filters removes. When that lands, `wantCopies`
-//     drops to 1 and the sink-call count drops to 1; both are asserted
-//     exactly so the change has to be made deliberately.
+// The numbers this test pins moved once, deliberately, when the three
+// overlapping filters were coalesced into the two data-point handlers. Before
+// that the combined filter was live alongside the catch-all, so a topic
+// matched 2 subscriptions and the combined sink was invoked FOUR times for
+// one operator action (2 broker copies x 2 local handlers — see
+// [fanoutClient]), harmless only because a combined write is idempotent.
+// Now the combined shape has no filter of its own and
+// [CommandSubscriber.handleDataPoint] dispatches it from the bucket position
+// of the seven-segment branch, so exactly 1 subscription matches and the
+// sink is invoked exactly once. All three counts are asserted exactly, in
+// both directions: a re-added sibling filter fails on the match count before
+// any sink count moves, and a dispatch lost in the coalesced branch fails on
+// the sink count.
 func TestCombinedDPCommandDoesNotAlsoIssueADataPointWrite(t *testing.T) {
 	f := newClassBFixture(t)
 
 	const topic = classBBase + "/ccu-01/HmIP-RF/0001ABCD/1/combined/duration/set"
 
-	// Vacuity guard: the overlap only exists while both filters are active.
-	// Without it a topology change could turn this test into a no-op that
-	// still passes, which is the failure mode an adversarial review of the
-	// shared library found five times over.
-	if got := f.client.matchingFilters(topic); got != 2 {
-		t.Fatalf("filters matching %q = %d, want exactly 2 — "+
-			"the class-B overlap this test guards has changed shape", topic, got)
+	// Disjointness guard, and the load-bearing half of this test: one
+	// matching subscription means the broker produces one copy and the
+	// client has one handler to re-match it against, so neither fan-out can
+	// multiply. A second matching filter reinstates the N*N dispatch and
+	// fails here rather than silently doubling every combined write.
+	if got := f.client.matchingFilters(topic); got != 1 {
+		t.Fatalf("filters matching %q = %d, want exactly 1 — "+
+			"the combined shape has no filter of its own since coalescing, and a second "+
+			"matching subscription is a second dispatch of every combined write", topic, got)
 	}
 
 	copies := f.client.deliver(topic, []byte("30"), false)
 	f.sub.WaitIdle()
 
-	if copies != 2 {
-		t.Fatalf("broker copies = %d, want 2", copies)
+	if copies != 1 {
+		t.Fatalf("broker copies = %d, want 1", copies)
 	}
-	// 2 copies x 1 combined handler per copy = 2 combined dispatches, and the
-	// same message also visits handleDataPoint twice, where the bucket
-	// allow-list drops it.
-	if got := f.cmb.count(); got != 2 {
-		t.Errorf("combined-DP writes = %d, want 2 "+
-			"(2 broker copies, one combined dispatch each — the duplication the filter overlap costs)", got)
+	// 1 copy x 1 matching handler: handleDataPoint, which dispatches the
+	// combined shape from its seven-segment branch.
+	if got := f.cmb.count(); got != 1 {
+		t.Errorf("combined-DP writes = %d, want 1 "+
+			"(one broker copy, dispatched once out of handleDataPoint's bucket branch)", got)
 	}
 	if got := f.dp.setValues.Load(); got != 0 {
 		t.Errorf("CCU VALUES writes = %d, want 0 — a combined command reached the CCU as a parameter named %q", got, "duration")
@@ -261,30 +262,30 @@ func TestCombinedDPCommandDoesNotAlsoIssueADataPointWrite(t *testing.T) {
 // parse while leaving the guard intact would be invisible in the combined
 // fixture.
 //
-// Pinned rows that are defects: the same two as its combined twin —
-// **F2** (class B is guarded by a drop in the wrong handler and, until this
-// test, by nothing in the suite) and the four-invocation fan-out the overlap
-// costs. See TestCombinedDPCommandDoesNotAlsoIssueADataPointWrite for the
-// full reasoning; it is not repeated here.
+// The counts moved with its combined twin when the filters were coalesced:
+// one matching subscription, one broker copy, one schedule write. See
+// TestCombinedDPCommandDoesNotAlsoIssueADataPointWrite for the full
+// reasoning; it is not repeated here.
 func TestScheduleSwitchCommandDoesNotAlsoIssueADataPointWrite(t *testing.T) {
 	f := newClassBFixture(t)
 
 	const topic = classBBase + "/ccu-01/HmIP-RF/0001ABCD/1/schedule/1_1/set"
 
-	if got := f.client.matchingFilters(topic); got != 2 {
-		t.Fatalf("filters matching %q = %d, want exactly 2 — "+
-			"the class-B overlap this test guards has changed shape", topic, got)
+	if got := f.client.matchingFilters(topic); got != 1 {
+		t.Fatalf("filters matching %q = %d, want exactly 1 — "+
+			"the schedule shape has no filter of its own since coalescing, and a second "+
+			"matching subscription is a second dispatch of every schedule write", topic, got)
 	}
 
 	copies := f.client.deliver(topic, []byte("true"), false)
 	f.sub.WaitIdle()
 
-	if copies != 2 {
-		t.Fatalf("broker copies = %d, want 2", copies)
+	if copies != 1 {
+		t.Fatalf("broker copies = %d, want 1", copies)
 	}
-	if got := f.sched.count(); got != 2 {
-		t.Errorf("schedule-switch writes = %d, want 2 "+
-			"(2 broker copies, one schedule dispatch each — the duplication the filter overlap costs)", got)
+	if got := f.sched.count(); got != 1 {
+		t.Errorf("schedule-switch writes = %d, want 1 "+
+			"(one broker copy, dispatched once out of handleDataPoint's bucket branch)", got)
 	}
 	if got := f.dp.setValues.Load(); got != 0 {
 		t.Errorf("CCU VALUES writes = %d, want 0 — a schedule command reached the CCU as a parameter named %q", got, "1_1")
@@ -343,19 +344,23 @@ func TestClassBFanoutDoubleIsNotSingleStage(t *testing.T) {
 	}
 }
 
-// TestClassBTopicsAreNotAlsoAWeekProfileShape pins the segment arithmetic the
-// two collision classes are told apart by, which is the fact that makes
-// `reservedLegacyParamSegments` (class A, six segments) and the bucket
-// allow-list (class B, seven segments) two lists rather than one.
+// TestClassBTopicsAreNotAlsoAWeekProfileShape pins the segment arithmetic
+// that keeps the three coalesced shapes in the two branches that dispatch
+// them, and pins that each of them matches exactly one subscription.
 //
-// Finding **F3**: nothing in this repository enforced the invariant
-// `reservedLegacyParamSegments`' doc comment states — "Every literal segment
-// used in a seven-level command filter MUST be listed here". This test pins
-// the half of that invariant that is a property of the topic tree rather than
-// of the list: the class-B shapes are seven segments below the base and so
-// can never fall into the six-segment branch the class-A list guards. The
-// other half — that the list matches the filter set — is pinned by
-// TestCommandFilterSetIsPinned in command_filter_set_pin_test.go.
+// The arithmetic is what decides which branch of
+// [CommandSubscriber.handleDataPoint] a shape lands in: six segments below
+// the base go to the branch that dispatches `week_profile`, seven to the
+// branch that dispatches `combined` and `schedule` off the bucket position.
+// A class-B shape that lost a level would arrive in the six-segment branch,
+// which does not know it, and be written to the CCU as a parameter named
+// after its own literal — the defect that put `week_profile` on a reserved
+// list in the first place.
+//
+// The one-matching-filter assertion is the property that replaced that list.
+// It held for none of these three shapes before coalescing: each matched two
+// subscriptions, and the hand-maintained guards only kept the second
+// dispatch from reaching the CCU.
 func TestClassBTopicsAreNotAlsoAWeekProfileShape(t *testing.T) {
 	f := newClassBFixture(t)
 	for _, topic := range []string{
@@ -365,20 +370,21 @@ func TestClassBTopicsAreNotAlsoAWeekProfileShape(t *testing.T) {
 		rest := strings.TrimPrefix(topic, classBBase+"/")
 		if got := len(strings.Split(rest, "/")); got != 7 {
 			t.Errorf("%q is %d segments below the base, want 7 — "+
-				"a class-B shape that became six segments would fall into the branch "+
-				"`reservedLegacyParamSegments` guards, where its literal is not listed", topic, got)
+				"a class-B shape that became six segments would arrive in the six-segment "+
+				"branch, which does not dispatch it and would write its literal to the CCU "+
+				"as a parameter name", topic, got)
 		}
-		if got := f.client.matchingFilters(topic); got != 2 {
-			t.Errorf("%q matches %d filters, want 2", topic, got)
+		if got := f.client.matchingFilters(topic); got != 1 {
+			t.Errorf("%q matches %d filters, want 1", topic, got)
 		}
 	}
-	// The class-A shape for contrast: six segments, one literal, and the
-	// literal IS in the class-A list.
+	// The class-A shape for contrast: six segments, and likewise matched by
+	// exactly one subscription since its own filter was folded in.
 	wp := classBBase + "/ccu-01/HmIP-RF/0001ABCD/1/week_profile/set"
 	if got := len(strings.Split(strings.TrimPrefix(wp, classBBase+"/"), "/")); got != 6 {
 		t.Errorf("%q is %d segments below the base, want 6", wp, got)
 	}
-	if _, listed := reservedLegacyParamSegments["week_profile"]; !listed {
-		t.Error(`"week_profile" is not in reservedLegacyParamSegments — class A is unguarded`)
+	if got := f.client.matchingFilters(wp); got != 1 {
+		t.Errorf("%q matches %d filters, want 1", wp, got)
 	}
 }

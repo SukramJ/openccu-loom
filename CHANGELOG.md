@@ -121,6 +121,56 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Ten disjoint command filters instead of thirteen with three
+  overlapping pairs.** The `week_profile`, `combined` and `schedule`
+  command shapes no longer have subscriptions of their own; the two
+  data-point handlers dispatch them. Nothing on the wire moves —
+  `command_topic` is byte-identical in all 173 golden entries, and the
+  70 distinct command topics the goldens advertise still route to the
+  same sinks with the same payload grammars. Only which Go function the
+  message is handed to changes.
+
+  The three filters were the plane's only overlapping pairs, three out
+  of 78, and the overlap was not resolvable where it was being handled.
+  The data-point plane needs two wildcard catch-alls,
+  `<base>/+/+/+/+/+/set` and `<base>/+/+/+/+/+/+/set`, so any sibling
+  filter of the same length is matched by one of them, and MQTT has no
+  exclusion wildcard with which to subtract it — a narrower filter only
+  adds a second matching subscription. A broker then sends one copy per
+  matching subscription and the client re-matches every copy against
+  its whole local filter list, so the two fan-outs multiply: one
+  operator action ran four handler invocations, of which three were
+  redundant and one was an attempted CCU write to a parameter named
+  after the shape's own literal segment.
+
+  What stopped that write reaching a CCU was two hand-maintained lists
+  in two different places — `reservedLegacyParamSegments` for the
+  six-segment class and the bucket allow-list's `default:` drop for the
+  seven-segment one — both complete by inspection, both a drop in the
+  wrong handler rather than a dispatch from the right one, and only one
+  of them with any test before #798 derived them from the registered
+  filters. `reservedLegacyParamSegments` had nothing left to guard once
+  the shape it named was dispatched properly, and is deleted along with
+  the test that enforced its completeness; the bucket allow-list stays,
+  because `calculated` and unknown buckets are still read-only and
+  still dropped, but it is no longer load-bearing against a second
+  dispatch.
+
+  The property that replaced both is asserted by enumeration rather
+  than by eye: all 45 pairs of the ten registered filters are walked
+  with the same overlap predicate the shared library refuses a
+  registration on, at two topic bases, and the predicate itself is
+  table-tested against the three pairs that really did overlap so a
+  version of it that always answered "no" cannot pass the sweep. The
+  class-B echo pins #798 added keep their shape and drop their counts
+  from two matching filters and two sink invocations to one each.
+
+  This is the gate for adopting `publisher.CommandRouter`, whose
+  `Handle` refuses an overlapping pair outright: a set that fails the
+  disjointness sweep cannot be registered at all. Nothing is adopted
+  here — that is the next step, and it is now a switch-over with tests
+  behind it.
+
 - **go-hamqtt v0.25.0 -> v0.26.0, and `Config.Layout` closes the one
   string a typo takes the whole fleet down with.** The release is a
   `feat!` — `publisher.CommandRouter` did not exist before — so nothing

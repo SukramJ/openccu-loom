@@ -426,7 +426,7 @@ func TestCommandSubscriberWeekProfileTopic(t *testing.T) {
 	if err := sub.Start(context.Background()); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	ok := noop.DeliverInbound("openccu-loom/+/+/+/+/week_profile/set",
+	ok := noop.DeliverInbound("openccu-loom/+/+/+/+/+/set",
 		"openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/week_profile/set", []byte("P3"))
 	if !ok {
 		t.Fatal("subscription did not match")
@@ -464,7 +464,7 @@ func TestCommandSubscriberWeekProfileMissingSink(t *testing.T) {
 		t.Fatalf("start: %v", err)
 	}
 	// Should not panic; subscription still matches the wildcard.
-	noop.DeliverInbound("openccu-loom/+/+/+/+/week_profile/set",
+	noop.DeliverInbound("openccu-loom/+/+/+/+/+/set",
 		"openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/week_profile/set", []byte("P3"))
 }
 
@@ -478,7 +478,7 @@ func TestCommandSubscriberWeekProfileEmptyPayload(t *testing.T) {
 	if err := sub.Start(context.Background()); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	noop.DeliverInbound("openccu-loom/+/+/+/+/week_profile/set",
+	noop.DeliverInbound("openccu-loom/+/+/+/+/+/set",
 		"openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/week_profile/set", []byte{})
 	if wpSink.calls.Load() != 0 {
 		t.Fatalf("calls=%d, want 0 (empty payload must be dropped)", wpSink.calls.Load())
@@ -872,18 +872,31 @@ func TestCommandSubscriberRefusesAmbiguousCentralSegment(t *testing.T) {
 	}
 }
 
-// TestWeekProfileCommandDoesNotAlsoIssueADataPointWrite pins that a topic
-// owned by a dedicated subscription is handled by that subscription alone.
+// TestWeekProfileCommandDoesNotAlsoIssueADataPointWrite pins that a
+// week-profile command reaches the week-profile sink exactly once and issues
+// no CCU data-point write — and that it does so with only ONE subscription
+// matching the topic.
 //
-// The week-profile command topic has seven levels, which is exactly the shape
-// of the legacy bucket-less data-point filter, and a broker delivers a message
-// to EVERY matching subscription. Delivering through one named filter at a
-// time — what the other tests in this file do — cannot see that: the topic has
-// to go through the client so both handlers run, the way production does.
+// This test used to guard the opposite arrangement. The week-profile shape
+// had a filter of its own, `<base>/+/+/+/+/week_profile/set`, which is six
+// segments below the base and therefore exactly the length of the legacy
+// bucket-less data-point catch-all. A broker delivers a message to every
+// matching subscription and the client re-matches every arriving copy against
+// its whole local filter list, so the two fan-outs multiplied: picking a
+// heating profile in Home Assistant ran both handlers, and the only thing
+// stopping a CCU write to a parameter named `week_profile` — which no channel
+// has — was a hand-maintained list of reserved segments consulted by the
+// wrong handler. This test's predecessor asserted the overlap still existed,
+// with a vacuity guard demanding at least two matching filters.
 //
-// Without the guard, picking a heating profile in Home Assistant switched the
-// profile AND issued a CCU write for a parameter named `week_profile`, which
-// no channel has.
+// The shape is now coalesced: the week-profile subscription is gone and
+// [CommandSubscriber.handleDataPoint] dispatches the shape from its
+// six-segment branch. MQTT has no exclusion wildcard, so narrowing the
+// catch-all was never expressible; dispatching from inside it is what
+// removes the overlap instead of guarding its symptoms. The vacuity guard is
+// therefore inverted — exactly one filter must match — and it is the
+// load-bearing half of this test now: a re-added sibling filter brings the
+// double dispatch back and fails here before any sink count moves.
 func TestWeekProfileCommandDoesNotAlsoIssueADataPointWrite(t *testing.T) {
 	client := newEchoClient()
 	sink := &fakeSink{}
@@ -894,15 +907,16 @@ func TestWeekProfileCommandDoesNotAlsoIssueADataPointWrite(t *testing.T) {
 	}
 
 	const topic = "openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/week_profile/set"
-	// Vacuity guard: the overlap only exists while both filters are active.
 	matching := 0
 	for _, f := range client.Filters() {
 		if mqttFilterMatches(f, topic) {
 			matching++
 		}
 	}
-	if matching < 2 {
-		t.Fatalf("filters matching %q = %d, want at least 2 — the overlap this test guards is gone", topic, matching)
+	if matching != 1 {
+		t.Fatalf("filters matching %q = %d, want exactly 1 — a second matching subscription "+
+			"is a second dispatch of every week-profile command, which is the overlap "+
+			"coalescing removed", topic, matching)
 	}
 
 	if err := client.Publish(context.Background(), topic, []byte("P2"), QoS1, false); err != nil {
@@ -912,6 +926,11 @@ func TestWeekProfileCommandDoesNotAlsoIssueADataPointWrite(t *testing.T) {
 
 	if got := wpSink.calls.Load(); got != 1 {
 		t.Fatalf("week-profile writes = %d, want 1", got)
+	}
+	if got := wpSink.last.profile; got != "P2" {
+		t.Errorf("profile = %q, want %q — the discrimination now happens inside "+
+			"handleDataPoint, so a dispatch that reached the sink with the wrong segment "+
+			"would satisfy the count alone", got, "P2")
 	}
 	if got := sink.setValues.Load(); got != 0 {
 		t.Fatalf("CCU data-point writes = %d, want 0 (a bogus `week_profile` parameter reached the CCU)", got)

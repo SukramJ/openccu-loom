@@ -319,7 +319,7 @@ func TestCommandSubscriberParsesEveryShapeRelativeToTheTopicBase(t *testing.T) {
 		},
 		{
 			name:   "week profile",
-			filter: "/+/+/+/+/week_profile/set",
+			filter: "/+/+/+/+/+/set",
 			topic: func(b *TopicBuilder) string {
 				return b.WeekProfileCommand(central, iface, addr, 1)
 			},
@@ -336,7 +336,7 @@ func TestCommandSubscriberParsesEveryShapeRelativeToTheTopicBase(t *testing.T) {
 		},
 		{
 			name:   "combined data point",
-			filter: "/+/+/+/+/combined/+/set",
+			filter: "/+/+/+/+/+/+/set",
 			topic: func(b *TopicBuilder) string {
 				return b.CombinedCommand(central, iface, addr, 1, "duration")
 			},
@@ -353,7 +353,7 @@ func TestCommandSubscriberParsesEveryShapeRelativeToTheTopicBase(t *testing.T) {
 		},
 		{
 			name:   "schedule switch",
-			filter: "/+/+/+/+/schedule/+/set",
+			filter: "/+/+/+/+/+/+/set",
 			topic: func(b *TopicBuilder) string {
 				return b.ScheduleSwitchCommand(central, iface, addr, 1, "1_1")
 			},

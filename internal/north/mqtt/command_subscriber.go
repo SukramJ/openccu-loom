@@ -432,21 +432,45 @@ func (c *CommandSubscriber) WithLifecycleContext(ctx context.Context) *CommandSu
 	return c
 }
 
-// reservedLegacyParamSegments lists the segments a seven-level `.../set`
-// topic can carry that belong to another subscription rather than to a CCU
-// parameter. The legacy bucket-less data-point filter registered in
-// [CommandSubscriber.Start] is a seven-level wildcard, so it matches every
-// seven-level command topic the plane defines — and a broker fans a message
-// out to all matching subscriptions, not just the most specific one.
+// The literal segments the two data-point handlers dispatch on instead of
+// treating as a CCU parameter or bucket name.
 //
-// Every literal segment used in a seven-level command filter MUST be listed
-// here, or that topic is dispatched a second time as a data-point write to a
-// parameter that does not exist. The eight-level branch of
-// [CommandSubscriber.handleDataPoint] gets the same protection for free from
-// its bucket allow-list.
-var reservedLegacyParamSegments = map[string]struct{}{
-	"week_profile": {},
-}
+// They are constants shared by the dispatch in
+// [CommandSubscriber.handleDataPoint] and by the validation in each
+// receiving handler, because the two have to agree exactly: the dispatch
+// decides which handler a topic reaches and the handler re-checks the same
+// segment before indexing around it.
+//
+// Why these shapes have no subscription of their own: the data-point plane
+// needs two wildcard catch-alls — `<base>/+/+/+/+/+/set` (legacy,
+// bucket-less) and `<base>/+/+/+/+/+/+/set` (bucket-aware) — and every
+// command shape of the same length is therefore matched by one of them. MQTT
+// has no exclusion wildcard, so a narrower sibling filter cannot subtract
+// itself from a catch-all: it only adds a second matching subscription. A
+// broker then sends one copy per matching subscription (MQTT 3.1.1 §4.7.3 /
+// 5.0 §3.3.4) and the client re-matches every copy against its whole local
+// filter list, so the two fan-outs multiply and one operator action runs the
+// handler N times. Dispatching from inside the catch-all is the only shape
+// that resolves the overlap rather than guarding its symptoms.
+const (
+	// segWeekProfile owns `<…>/<channel>/week_profile/set`, six segments
+	// below the base — the same length as the legacy bucket-less
+	// data-point shape. Declared by
+	// [DefaultDiscoveryBuilder.BuildWeekProfileDiscovery], handled by
+	// [CommandSubscriber.handleWeekProfile].
+	segWeekProfile = "week_profile"
+	// segCombined owns `<…>/<channel>/combined/<kind>/set`, seven
+	// segments below the base, sitting where the bucket-aware shape
+	// carries its bucket. Declared by
+	// [DefaultDiscoveryBuilder.BuildCombinedTimerDiscovery], handled by
+	// [CommandSubscriber.handleCombinedDP].
+	segCombined = "combined"
+	// segSchedule owns `<…>/<channel>/schedule/<key>/set`, likewise at
+	// the bucket position. Declared by
+	// [DefaultDiscoveryBuilder.BuildScheduleSwitchDiscovery], handled by
+	// [CommandSubscriber.handleScheduleSwitch].
+	segSchedule = "schedule"
+)
 
 // commandParts splits an inbound topic into the segments the command
 // plane defines, with the configured topic base removed first. A topic
@@ -475,6 +499,15 @@ func (c *CommandSubscriber) commandParts(topic string) ([]string, bool) {
 // A failure on any one of them aborts Start: a subscriber that came up
 // with a partial filter set accepts some commands and silently drops the
 // rest, which reads like a broken CCU rather than a broken subscribe.
+//
+// The registered filters are pairwise disjoint: no topic matches two of
+// them. That is a property of the set, not a coincidence of it — the two
+// data-point filters are wildcard catch-alls at six and seven segments below
+// the base, so any sibling filter of the same length would overlap one of
+// them, and an overlap is multiplied rather than resolved on delivery (see
+// the segWeekProfile / segCombined / segSchedule block). The week-profile,
+// combined-DP and schedule-switch shapes therefore have no filter of their
+// own; [CommandSubscriber.handleDataPoint] dispatches them.
 func (c *CommandSubscriber) Start(ctx context.Context) error {
 	if c.sub == nil {
 		return errors.New("mqtt/command: no subscriber")
@@ -488,6 +521,9 @@ func (c *CommandSubscriber) Start(ctx context.Context) error {
 	// the subscriber MUST register the 8-segment shape — without it
 	// HA's `payload_on=true` to a Custom-DP switch arrives at the
 	// broker but never reaches the daemon.
+	//
+	// Also carries the combined-DP and schedule-switch shapes, which
+	// put a literal where the bucket sits.
 	if _, err := c.sub.Subscribe(ctx, base+"/+/+/+/+/+/+/set", c.qos, LegacyHandler(c.handleDataPoint)); err != nil {
 		c.incSubscribeFailures()
 		return fmt.Errorf("subscribe datapoint bucket-aware: %w", err)
@@ -495,6 +531,7 @@ func (c *CommandSubscriber) Start(ctx context.Context) error {
 	// Legacy 7-segment shape (no bucket infix) — still emitted by
 	// some hand-built tools and by the legacy alias mirror on the
 	// raw plane. Keep it active so existing automations don't break.
+	// Also carries the week-profile shape, which is the same length.
 	if _, err := c.sub.Subscribe(ctx, base+"/+/+/+/+/+/set", c.qos, LegacyHandler(c.handleDataPoint)); err != nil {
 		c.incSubscribeFailures()
 		return fmt.Errorf("subscribe datapoint legacy: %w", err)
@@ -534,27 +571,6 @@ func (c *CommandSubscriber) Start(ctx context.Context) error {
 	if _, err := c.sub.Subscribe(ctx, base+"/+/+/+/+/custom/+/set/+", c.qos, LegacyHandler(c.handleServiceMethod)); err != nil {
 		c.incSubscribeFailures()
 		return fmt.Errorf("subscribe service_method: %w", err)
-	}
-	// {base}/{central}/{interface}/{address}/{channel}/week_profile/set
-	// — the active-profile selector for climate channels (paired with
-	// the discovery built by [DefaultDiscoveryBuilder.BuildWeekProfileDiscovery]).
-	if _, err := c.sub.Subscribe(ctx, base+"/+/+/+/+/week_profile/set", c.qos, LegacyHandler(c.handleWeekProfile)); err != nil {
-		c.incSubscribeFailures()
-		return fmt.Errorf("subscribe week_profile: %w", err)
-	}
-	// {base}/{central}/{interface}/{address}/{channel}/combined/{kind}/set
-	// — combined-DP writes (Timer SetDuration etc.). Paired with the
-	// discovery built by [DefaultDiscoveryBuilder.BuildCombinedTimerDiscovery].
-	if _, err := c.sub.Subscribe(ctx, base+"/+/+/+/+/combined/+/set", c.qos, LegacyHandler(c.handleCombinedDP)); err != nil {
-		c.incSubscribeFailures()
-		return fmt.Errorf("subscribe combined_dp: %w", err)
-	}
-	// {base}/{central}/{interface}/{address}/{channel}/schedule/{key}/set
-	// — schedule-channel-switch writes (ScheduleChannelSwitch TurnOn/Off).
-	// Paired with discovery from [DefaultDiscoveryBuilder.BuildScheduleSwitchDiscovery].
-	if _, err := c.sub.Subscribe(ctx, base+"/+/+/+/+/schedule/+/set", c.qos, LegacyHandler(c.handleScheduleSwitch)); err != nil {
-		c.incSubscribeFailures()
-		return fmt.Errorf("subscribe schedule_switch: %w", err)
 	}
 	// {base}/alarm/{zone}/set — the daemon-level alarm arm/disarm/silence
 	// plane. Zones are daemon-level, so the topic carries no <central>
@@ -603,7 +619,7 @@ func (c *CommandSubscriber) handleScheduleSwitch(topic string, body []byte, reta
 		return
 	}
 	parts, ok := c.commandParts(topic)
-	if !ok || len(parts) != 7 || parts[4] != "schedule" || parts[6] != "set" {
+	if !ok || len(parts) != 7 || parts[4] != segSchedule || parts[6] != "set" {
 		c.logger.Warn("mqtt.command.schedule.unknown_topic", slog.String("topic", topic))
 		return
 	}
@@ -660,7 +676,7 @@ func (c *CommandSubscriber) handleWeekProfile(topic string, body []byte, retaine
 		return
 	}
 	parts, ok := c.commandParts(topic)
-	if !ok || len(parts) != 6 || parts[4] != "week_profile" || parts[5] != "set" {
+	if !ok || len(parts) != 6 || parts[4] != segWeekProfile || parts[5] != "set" {
 		c.logger.Warn("mqtt.command.wp.unknown_topic", slog.String("topic", topic))
 		return
 	}
@@ -711,7 +727,7 @@ func (c *CommandSubscriber) handleCombinedDP(topic string, body []byte, retained
 		return
 	}
 	parts, ok := c.commandParts(topic)
-	if !ok || len(parts) != 7 || parts[4] != "combined" || parts[6] != "set" {
+	if !ok || len(parts) != 7 || parts[4] != segCombined || parts[6] != "set" {
 		c.logger.Warn("mqtt.command.combined.unknown_topic", slog.String("topic", topic))
 		return
 	}
@@ -830,6 +846,13 @@ func (c *CommandSubscriber) handleDataPoint(topic string, body []byte, retained 
 	// The bucket-less form always routes to VALUES. In the bucket-aware
 	// form `values` routes to SetValue, `master` routes to SetMasterValue,
 	// and `calculated` is read-only and is dropped with a debug log.
+	//
+	// Three shapes of those two lengths are not data-point writes at all
+	// and are dispatched to their own handlers from here rather than from
+	// a filter of their own, because a filter of their own would overlap
+	// one of these two catch-alls and MQTT cannot express the exclusion:
+	// `week_profile` at six segments, `combined` and `schedule` at the
+	// bucket position of the seven-segment shape.
 	parts, ok := c.commandParts(topic)
 	if !ok || parts[len(parts)-1] != "set" {
 		c.logger.Warn("mqtt.command.unknown_topic", slog.String("topic", topic))
@@ -839,15 +862,12 @@ func (c *CommandSubscriber) handleDataPoint(topic string, body []byte, retained 
 	isMaster := false
 	switch len(parts) {
 	case 6:
-		// A broker delivers a message to EVERY matching subscription, and
-		// the legacy filter is the same length as the filters that own a
-		// literal segment here. Without this guard picking a heating profile
-		// wrote the profile AND issued a CCU write for a parameter named
-		// `week_profile`, which no channel has.
-		if _, reserved := reservedLegacyParamSegments[parts[4]]; reserved {
-			c.logger.Debug("mqtt.command.reserved_segment",
-				slog.String("topic", topic),
-				slog.String("segment", parts[4]))
+		// This filter is the only six-segment subscription on the plane,
+		// so a six-segment command shape that is not a data-point write
+		// is dispatched from here rather than owned by a sibling filter
+		// that would overlap this one — see the segWeekProfile block.
+		if parts[4] == segWeekProfile {
+			c.handleWeekProfile(topic, body, retained)
 			return
 		}
 		centralSeg, iface, device, channelStr, parameter = parts[0], parts[1], parts[2], parts[3], parts[4]
@@ -858,6 +878,15 @@ func (c *CommandSubscriber) handleDataPoint(topic string, body []byte, retained 
 			// Default VALUES write — no special flag needed.
 		case "master":
 			isMaster = true
+		case segCombined:
+			// Not a bucket: the combined-DP shape carries its own
+			// literal where the bucket sits, and is dispatched from
+			// here for the reason the segCombined block gives.
+			c.handleCombinedDP(topic, body, retained)
+			return
+		case segSchedule:
+			c.handleScheduleSwitch(topic, body, retained)
+			return
 		default:
 			// `calculated` and any unknown bucket are read-only; drop
 			// with a debug breadcrumb so operators can diagnose
