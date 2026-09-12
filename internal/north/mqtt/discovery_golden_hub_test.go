@@ -154,6 +154,32 @@ func hubGoldenSysvarCases(db *DefaultDiscoveryBuilder) []hubGoldenCase {
 		// commit.
 		{"sysvar/hazard-punctuation-twin-a", build(sv("Alarm: Küche", 4730, hmenum.HubValueTypeLogic))},
 		{"sysvar/hazard-punctuation-twin-b", build(sv("Alarm Küche", 4731, hmenum.HubValueTypeLogic))},
+		// The same collision, one class further out, and this pair is the
+		// gap the ADR 0070 move-up measurement found: every non-ASCII
+		// character in any of the eleven fixture files sat in a `name`, a
+		// unit or a TopicSafe-rendered bridge topic — never in an
+		// identifier — so the two rules this plane could be moved onto
+		// disagreed here with nothing to catch it.
+		//
+		// [naming.DiscoverySlug] transliterates the German set and DROPS
+		// every other accented Latin character, so "Café" slugs to "caf"
+		// and collides with a sysvar actually named "Caf". The shared
+		// `topic.Slug` transliterates it instead and yields "cafe", which
+		// does not collide. The pin records the collision as today's fact:
+		// a swap to the shared rule moves both object ids below and is a
+		// published-identity change, not a tidy-up.
+		{"sysvar/hazard-accent-twin-a", build(sv("Café Terrasse", 4740, hmenum.HubValueTypeLogic))},
+		{"sysvar/hazard-accent-twin-b", build(sv("Caf Terrasse", 4741, hmenum.HubValueTypeLogic))},
+		// The second divergence class, and the one with a real CCU name
+		// behind it — [naming.DiscoverySlug]'s own doc comment cites
+		// "Watchdog:_CCU-Jack" as its motivating example. The colon becomes
+		// a separator and meets the literal underscore that follows it;
+		// DiscoverySlug de-duplicates only the separators it generated and
+		// passes the pair through as "watchdog__ccu-jack", where
+		// `topic.Slug` collapses the run to "watchdog_ccu-jack". No fixture
+		// carried a literal double underscore in an identifier before this
+		// one, so that change shipped green.
+		{"sysvar/hazard-literal-double-underscore", build(sv("Watchdog:_CCU-Jack", 4742, hmenum.HubValueTypeLogic))},
 		// A node id that is NOT a device identifier, made visible: this
 		// sysvar's device block points at a physical device card, while its
 		// node id stays the central-scoped "ccu-01_sysvars". The two are

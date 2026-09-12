@@ -1054,6 +1054,78 @@
       "unit_of_measurement": "°C"
     }
   },
+  "sysvar/hazard-accent-twin-a": {
+    "topic": "homeassistant/binary_sensor/ccu-01_sysvars/caf_terrasse/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "binary_sensor.loom_11a0001234_sysvar_4740",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "enabled_by_default": true,
+      "name": "Café Terrasse",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_off": "false",
+      "payload_on": "true",
+      "state_topic": "gh/ccu-01/hub/sysvars/Café_Terrasse/state",
+      "unique_id": "loom_11a0001234_sysvar_4740"
+    }
+  },
+  "sysvar/hazard-accent-twin-b": {
+    "topic": "homeassistant/binary_sensor/ccu-01_sysvars/caf_terrasse/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "binary_sensor.loom_11a0001234_sysvar_4741",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "enabled_by_default": true,
+      "name": "Caf Terrasse",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_off": "false",
+      "payload_on": "true",
+      "state_topic": "gh/ccu-01/hub/sysvars/Caf_Terrasse/state",
+      "unique_id": "loom_11a0001234_sysvar_4741"
+    }
+  },
   "sysvar/hazard-linked-to-channel": {
     "topic": "homeassistant/sensor/ccu-01_sysvars/wohnzimmer_heizung_ventil/config",
     "payload": {
@@ -1142,6 +1214,42 @@
       "state_class": "measurement",
       "state_topic": "gh/ccu-01/hub/sysvars/Interner_Zähler/state",
       "unique_id": "loom_11a0001234_sysvar_4734"
+    }
+  },
+  "sysvar/hazard-literal-double-underscore": {
+    "topic": "homeassistant/binary_sensor/ccu-01_sysvars/watchdog__ccu-jack/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "binary_sensor.loom_11a0001234_sysvar_4742",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "enabled_by_default": true,
+      "name": "Watchdog:_CCU-Jack",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_off": "false",
+      "payload_on": "true",
+      "state_topic": "gh/ccu-01/hub/sysvars/Watchdog:_CCU-Jack/state",
+      "unique_id": "loom_11a0001234_sysvar_4742"
     }
   },
   "sysvar/hazard-punctuation-twin-a": {
