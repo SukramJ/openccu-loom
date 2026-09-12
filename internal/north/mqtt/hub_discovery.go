@@ -269,25 +269,18 @@ func (c hubDiscoveryContext) ObjectID(*hamodel.Device, hamodel.Entity) string { 
 // hubEntity is any hub entity on the shared model: a [hamodel.Basic] plus
 // the handful of keys the model does not carry.
 //
-// The two json-attributes keys and the platform Fields are Home Assistant
-// vocabulary rather than model semantics, which is the case
-// [hadiscovery.Builder] exists for.
+// The platform Fields are Home Assistant vocabulary rather than model
+// semantics, which is the case [hadiscovery.Builder] exists for.
 type hubEntity struct {
 	hamodel.Basic
 
-	fields                 any
-	jsonAttributesTopic    string
-	jsonAttributesTemplate string
+	fields any
 }
 
 // BuildDiscovery implements [hadiscovery.Builder].
 func (e *hubEntity) BuildDiscovery(_ hadiscovery.Context, comp *hadiscovery.Component) error {
 	if e.fields != nil {
 		comp.Fields = e.fields
-	}
-	if e.jsonAttributesTopic != "" {
-		comp.JSONAttributesTopic = e.jsonAttributesTopic
-		comp.JSONAttributesTemplate = e.jsonAttributesTemplate
 	}
 	return nil
 }
@@ -754,12 +747,12 @@ func (d *DefaultDiscoveryBuilder) BuildAlarmMessagesDiscovery(centralName string
 				// The state topic carries the message LIST, not a scalar, so
 				// the count is read out of it by template. That is a per-entity
 				// answer the context's encoding cannot give.
-				ValueTemplate: "{{ value_json | length }}",
+				ValueTemplate:          "{{ value_json | length }}",
+				JSONAttributesTopic:    topic,
+				JSONAttributesTemplate: `{"messages": {{ value_json | tojson }} }`,
 			},
 			Binds: hubBinds(hubSlot(dev, centralName, "alarm_messages"), true, false),
 		},
-		jsonAttributesTopic:    topic,
-		jsonAttributesTemplate: `{"messages": {{ value_json | tojson }} }`,
 	}
 	return d.renderHubItem(dev, entity, d.hubLayout(topic), uniqueID, hubNodeID(centralName, "messages"), "alarm")
 }
@@ -783,15 +776,15 @@ func (d *DefaultDiscoveryBuilder) BuildServiceMessagesDiscovery(centralName stri
 			EntityKey:      "service_messages",
 			EntityPlatform: hacatalog.PlatformSensor,
 			Description: hamodel.Description{
-				NameKey:       "discovery.service_messages",
-				Category:      "diagnostic",
-				Availability:  hamodel.BridgeOnly(),
-				ValueTemplate: "{{ value_json | length }}",
+				NameKey:                "discovery.service_messages",
+				Category:               "diagnostic",
+				Availability:           hamodel.BridgeOnly(),
+				ValueTemplate:          "{{ value_json | length }}",
+				JSONAttributesTopic:    topic,
+				JSONAttributesTemplate: `{"messages": {{ value_json | tojson }} }`,
 			},
 			Binds: hubBinds(hubSlot(dev, centralName, "service_messages"), true, false),
 		},
-		jsonAttributesTopic:    topic,
-		jsonAttributesTemplate: `{"messages": {{ value_json | tojson }} }`,
 	}
 	return d.renderHubItem(dev, entity, d.hubLayout(topic), uniqueID, hubNodeID(centralName, "messages"), "service")
 }
@@ -820,16 +813,16 @@ func (d *DefaultDiscoveryBuilder) BuildInboxDiscovery(centralName string) Discov
 			EntityKey:      "inbox",
 			EntityPlatform: hacatalog.PlatformSensor,
 			Description: hamodel.Description{
-				NameKey:       "discovery.inbox",
-				StateClass:    "measurement",
-				Icon:          "mdi:tray-arrow-down",
-				Availability:  hamodel.BridgeOnly(),
-				ValueTemplate: "{{ value_json | length }}",
+				NameKey:                "discovery.inbox",
+				StateClass:             "measurement",
+				Icon:                   "mdi:tray-arrow-down",
+				Availability:           hamodel.BridgeOnly(),
+				ValueTemplate:          "{{ value_json | length }}",
+				JSONAttributesTopic:    topic,
+				JSONAttributesTemplate: `{"devices": {{ value_json | tojson }} }`,
 			},
 			Binds: hubBinds(hubSlot(dev, centralName, "inbox"), true, false),
 		},
-		jsonAttributesTopic:    topic,
-		jsonAttributesTemplate: `{"devices": {{ value_json | tojson }} }`,
 	}
 	return d.renderHubItem(dev, entity, d.hubLayout(topic), uniqueID, hubNodeID(centralName, "messages"), "inbox")
 }

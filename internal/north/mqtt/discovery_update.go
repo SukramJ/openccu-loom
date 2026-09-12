@@ -59,7 +59,8 @@ const updateLatestVersionTemplate = "{{ value_json.latest_firmware }}"
 // updateJSONAttributesTemplate republishes the whole firmware document as
 // entity attributes, so an operator can inspect all four fields
 // (firmware, latest_firmware, in_progress, firmware_update_state) from the
-// entity rather than from the broker.
+// entity rather than from the broker. It is [hamodel.Description]
+// vocabulary since go-hamqtt v0.24.0.
 const updateJSONAttributesTemplate = "{{ value_json | tojson }}"
 
 // updateEntity is the per-device firmware updater on the shared model: a
@@ -83,20 +84,14 @@ type updateEntity struct {
 // BuildDiscovery implements [hadiscovery.Builder] for the keys the model
 // does not carry.
 //
-// Three of them are platform `update`'s own vocabulary —
+// All four are platform `update`'s own vocabulary —
 // latest_version_topic, latest_version_template and title — and belong in
 // the platform's typed [hadiscovery.UpdateFields] rather than in a
 // description that says what an entity is. `display_precision` is update's
 // own spelling too: the model's Precision projects to
 // `suggested_display_precision`, which this platform does not declare and
 // Home Assistant would drop in silence.
-//
-// The two json_attributes keys are typed [hadiscovery.Component] fields
-// with no home in [hamodel.Description], so a builder is the only stage
-// that can set them.
 func (e *updateEntity) BuildDiscovery(_ hadiscovery.Context, comp *hadiscovery.Component) error {
-	comp.JSONAttributesTopic = e.stateTopic
-	comp.JSONAttributesTemplate = updateJSONAttributesTemplate
 	comp.Fields = hadiscovery.UpdateFields{
 		LatestVersionTopic:    e.stateTopic,
 		LatestVersionTemplate: updateLatestVersionTemplate,
@@ -250,6 +245,11 @@ func (d *DefaultDiscoveryBuilder) BuildUpdateDiscovery(centralName string, ev Up
 				DeviceClass:   hamodel.DeviceClass(hacatalog.UpdateDeviceClassFirmware),
 				Category:      hacatalog.EntityCategoryConfig,
 				ValueTemplate: updateValueTemplate,
+				// The whole firmware document, republished as entity
+				// attributes so an operator can inspect all four fields
+				// from the entity rather than from the broker.
+				JSONAttributesTopic:    stateTopic,
+				JSONAttributesTemplate: updateJSONAttributesTemplate,
 			},
 			Binds: []hamodel.Binding{
 				{Role: hamodel.RoleState, Mode: hamodel.Read, Slot: updateSlot(dev, centralName, ev)},
