@@ -46,6 +46,239 @@
       "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value | lower }}{% endif %}"
     }
   },
+  "climate/master": {
+    "topic": "homeassistant/climate/ccu-01_00150001/1_set_point_temperature/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/00150001/availability"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/ccu-01/HmIP-RF/00150001/1/master/SET_POINT_TEMPERATURE",
+          "value_template": "{{ value_json.available | lower }}"
+        }
+      ],
+      "availability_mode": "all",
+      "device": {
+        "identifiers": [
+          "openccu-loom_00150001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-BWTH",
+        "name": "00150001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "device_class": "temperature",
+      "entity_category": "config",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-01/HmIP-RF/00150001/1/master/SET_POINT_TEMPERATURE/config",
+      "name": "Set Point Temperature",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/00150001/1/master/SET_POINT_TEMPERATURE",
+      "unique_id": "loom_00150001_1_set_point_temperature",
+      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+    }
+  },
+  "climate/values": {
+    "topic": "homeassistant/climate/ccu-01_00150001/1_set_point_temperature/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/00150001/availability"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/ccu-01/HmIP-RF/00150001/1/values/SET_POINT_TEMPERATURE",
+          "value_template": "{{ value_json.available | lower }}"
+        }
+      ],
+      "availability_mode": "all",
+      "device": {
+        "identifiers": [
+          "openccu-loom_00150001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-BWTH",
+        "name": "00150001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "device_class": "temperature",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-01/HmIP-RF/00150001/1/values/SET_POINT_TEMPERATURE/config",
+      "name": "Set Point Temperature",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/00150001/1/values/SET_POINT_TEMPERATURE",
+      "unique_id": "loom_00150001_1_set_point_temperature",
+      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+    }
+  },
+  "cover/master": {
+    "topic": "homeassistant/cover/ccu-01_000d0001/4_level/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/000D0001/availability"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/ccu-01/HmIP-RF/000D0001/4/master/LEVEL",
+          "value_template": "{{ value_json.available | lower }}"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/000D0001/4/master/LEVEL/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_000d0001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-BROLL",
+        "name": "000D0001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "device_class": "shutter",
+      "entity_category": "config",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-01/HmIP-RF/000D0001/4/master/LEVEL/config",
+      "name": "Level",
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/000D0001/4/master/LEVEL",
+      "unique_id": "loom_000d0001_4_level",
+      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+    }
+  },
+  "cover/sub-device": {
+    "topic": "homeassistant/cover/ccu-01_000a0001/4_level/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/000A0001/availability"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/ccu-01/HmIP-RF/000A0001/4/values/LEVEL",
+          "value_template": "{{ value_json.available | lower }}"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/000A0001/4/values/LEVEL/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_000a0001-2"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-BROLL",
+        "name": "Jalousie Ost",
+        "via_device": "openccu-loom_000a0001"
+      },
+      "device_class": "shutter",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-01/HmIP-RF/000A0001/4/values/LEVEL/config",
+      "name": "Level",
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/000A0001/4/values/LEVEL",
+      "unique_id": "loom_000a0001_4_level",
+      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+    }
+  },
+  "cover/values": {
+    "topic": "homeassistant/cover/ccu-01_000d0001/4_level/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/000D0001/availability"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/ccu-01/HmIP-RF/000D0001/4/values/LEVEL",
+          "value_template": "{{ value_json.available | lower }}"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/000D0001/4/values/LEVEL/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_000d0001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-BROLL",
+        "name": "000D0001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "device_class": "shutter",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-01/HmIP-RF/000D0001/4/values/LEVEL/config",
+      "name": "Level",
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/000D0001/4/values/LEVEL",
+      "unique_id": "loom_000d0001_4_level",
+      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+    }
+  },
   "event/press": {
     "topic": "homeassistant/event/ccu-01_000c0001/1_press_short/config",
     "payload": {
@@ -91,6 +324,247 @@
       },
       "state_topic": "gh/ccu-01/HmIP-RF/000C0001/1/values/PRESS_SHORT",
       "unique_id": "loom_000c0001_1_press_short"
+    }
+  },
+  "event/virtual-remote-central-scoped": {
+    "topic": "homeassistant/event/ccu-01_bidcos-rf/3_press_short/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/BidCos-RF/BIDCOS-RF/availability"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/ccu-01/BidCos-RF/BIDCOS-RF/3/values/PRESS_SHORT",
+          "value_template": "{{ value_json.available | lower }}"
+        }
+      ],
+      "availability_mode": "all",
+      "device": {
+        "identifiers": [
+          "openccu-loom_ccu-01_bidcos-rf"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HM-RCV-50",
+        "name": "BidCoS-RF",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "device_class": "button",
+      "event_types": [
+        "press_short"
+      ],
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-01/BidCos-RF/BIDCOS-RF/3/values/PRESS_SHORT/config",
+      "name": "Press Short",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/BidCos-RF/BIDCOS-RF/3/values/PRESS_SHORT",
+      "unique_id": "loom_11a0001234_bidcos_rf_3_press_short"
+    }
+  },
+  "light/master": {
+    "topic": "homeassistant/light/ccu-01_000f0001/4_level/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/000F0001/availability"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/ccu-01/HmIP-RF/000F0001/4/master/LEVEL",
+          "value_template": "{{ value_json.available | lower }}"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/000F0001/4/master/LEVEL/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_000f0001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-BSL",
+        "name": "000F0001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "entity_category": "config",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-01/HmIP-RF/000F0001/4/master/LEVEL/config",
+      "name": "Level",
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/000F0001/4/master/LEVEL",
+      "unique_id": "loom_000f0001_4_level",
+      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+    }
+  },
+  "light/values": {
+    "topic": "homeassistant/light/ccu-01_000f0001/4_level/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/000F0001/availability"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/ccu-01/HmIP-RF/000F0001/4/values/LEVEL",
+          "value_template": "{{ value_json.available | lower }}"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/000F0001/4/values/LEVEL/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_000f0001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-BSL",
+        "name": "000F0001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-01/HmIP-RF/000F0001/4/values/LEVEL/config",
+      "name": "Level",
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/000F0001/4/values/LEVEL",
+      "unique_id": "loom_000f0001_4_level",
+      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+    }
+  },
+  "lock/master": {
+    "topic": "homeassistant/lock/ccu-01_000e0001/1_lock_target_level/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/000E0001/availability"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/ccu-01/HmIP-RF/000E0001/1/master/LOCK_TARGET_LEVEL",
+          "value_template": "{{ value_json.available | lower }}"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/000E0001/1/master/LOCK_TARGET_LEVEL/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_000e0001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-DLD",
+        "name": "000E0001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "entity_category": "config",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-01/HmIP-RF/000E0001/1/master/LOCK_TARGET_LEVEL/config",
+      "name": "Lock Target Level",
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_lock": "0",
+      "payload_unlock": "1",
+      "state_locked": "0",
+      "state_topic": "gh/ccu-01/HmIP-RF/000E0001/1/master/LOCK_TARGET_LEVEL",
+      "state_unlocked": "1",
+      "unique_id": "loom_000e0001_1_lock_target_level",
+      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value | lower }}{% endif %}"
+    }
+  },
+  "lock/values": {
+    "topic": "homeassistant/lock/ccu-01_000e0001/1_lock_target_level/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/000E0001/availability"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/ccu-01/HmIP-RF/000E0001/1/values/LOCK_TARGET_LEVEL",
+          "value_template": "{{ value_json.available | lower }}"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/000E0001/1/values/LOCK_TARGET_LEVEL/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_000e0001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-DLD",
+        "name": "000E0001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-01/HmIP-RF/000E0001/1/values/LOCK_TARGET_LEVEL/config",
+      "name": "Lock Target Level",
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_lock": "0",
+      "payload_unlock": "1",
+      "state_locked": "0",
+      "state_topic": "gh/ccu-01/HmIP-RF/000E0001/1/values/LOCK_TARGET_LEVEL",
+      "state_unlocked": "1",
+      "unique_id": "loom_000e0001_1_lock_target_level",
+      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value | lower }}{% endif %}"
     }
   },
   "number/master": {
@@ -142,6 +616,216 @@
       "value_template": "{% if value_json is defined and value_json.value is not none %}{{ (value_json.value | float * 100) }}{% endif %}"
     }
   },
+  "select/action-values": {
+    "topic": "homeassistant/select/ccu-01_00120001/1_boost_mode/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/00120001/availability"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/ccu-01/HmIP-RF/00120001/1/values/BOOST_MODE",
+          "value_template": "{{ value_json.available | lower }}"
+        }
+      ],
+      "availability_mode": "all",
+      "command_template": "{{ value | upper }}",
+      "command_topic": "gh/ccu-01/HmIP-RF/00120001/1/values/BOOST_MODE/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_00120001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-eTRV-2",
+        "name": "00120001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "entity_category": "config",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-01/HmIP-RF/00120001/1/values/BOOST_MODE/config",
+      "name": "Boost Mode",
+      "optimistic": false,
+      "options": [
+        "off",
+        "on"
+      ],
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/00120001/1/values/BOOST_MODE",
+      "unique_id": "loom_00120001_1_boost_mode",
+      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value | lower }}{% endif %}"
+    }
+  },
+  "select/master": {
+    "topic": "homeassistant/select/ccu-01_00120001/1_set_point_mode/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/00120001/availability"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/ccu-01/HmIP-RF/00120001/1/master/SET_POINT_MODE",
+          "value_template": "{{ value_json.available | lower }}"
+        }
+      ],
+      "availability_mode": "all",
+      "command_template": "{{ value | upper }}",
+      "command_topic": "gh/ccu-01/HmIP-RF/00120001/1/master/SET_POINT_MODE/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_00120001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-eTRV-2",
+        "name": "00120001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "entity_category": "config",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-01/HmIP-RF/00120001/1/master/SET_POINT_MODE/config",
+      "name": "Set Point Mode",
+      "optimistic": false,
+      "options": [
+        "auto_mode",
+        "manu_mode",
+        "party_mode",
+        "boost_mode"
+      ],
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/00120001/1/master/SET_POINT_MODE",
+      "unique_id": "loom_00120001_1_set_point_mode",
+      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value | lower }}{% endif %}"
+    }
+  },
+  "select/values": {
+    "topic": "homeassistant/select/ccu-01_00120001/1_set_point_mode/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/00120001/availability"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/ccu-01/HmIP-RF/00120001/1/values/SET_POINT_MODE",
+          "value_template": "{{ value_json.available | lower }}"
+        }
+      ],
+      "availability_mode": "all",
+      "command_template": "{{ value | upper }}",
+      "command_topic": "gh/ccu-01/HmIP-RF/00120001/1/values/SET_POINT_MODE/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_00120001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-eTRV-2",
+        "name": "00120001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "entity_category": "config",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-01/HmIP-RF/00120001/1/values/SET_POINT_MODE/config",
+      "name": "Set Point Mode",
+      "optimistic": false,
+      "options": [
+        "auto_mode",
+        "manu_mode",
+        "party_mode",
+        "boost_mode"
+      ],
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/00120001/1/values/SET_POINT_MODE",
+      "unique_id": "loom_00120001_1_set_point_mode",
+      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value | lower }}{% endif %}"
+    }
+  },
+  "sensor/calculated-synthetic": {
+    "topic": "homeassistant/sensor/ccu-01_0001abcd/1_dew_point/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001ABCD/availability"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/ccu-01/HmIP-RF/0001ABCD/1/calculated/DEW_POINT",
+          "value_template": "{{ value_json.available | lower }}"
+        }
+      ],
+      "availability_mode": "all",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0001abcd"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-BWTH",
+        "name": "0001ABCD",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "device_class": "temperature",
+      "enabled_by_default": false,
+      "force_update": true,
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-01/HmIP-RF/0001ABCD/1/calculated/DEW_POINT/config",
+      "name": "Dew Point",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_class": "measurement",
+      "state_topic": "gh/ccu-01/HmIP-RF/0001ABCD/1/calculated/DEW_POINT",
+      "translation_key": "dew_point",
+      "unique_id": "loom_calculated_0001abcd_1_dew_point",
+      "unit_of_measurement": "°C",
+      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+    }
+  },
   "sensor/high-channel": {
     "topic": "homeassistant/sensor/ccu-01_0001abcd/7_humidity/config",
     "payload": {
@@ -190,6 +874,54 @@
       "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
     }
   },
+  "sensor/name-null-seed": {
+    "topic": "homeassistant/sensor/ccu-01_0001abcd/1_actual_temperature/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001ABCD/availability"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/ccu-01/HmIP-RF/0001ABCD/1/values/ACTUAL_TEMPERATURE",
+          "value_template": "{{ value_json.available | lower }}"
+        }
+      ],
+      "availability_mode": "all",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0001abcd"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-BWTH",
+        "name": "0001ABCD",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "device_class": "temperature",
+      "force_update": true,
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-01/HmIP-RF/0001ABCD/1/values/ACTUAL_TEMPERATURE/config",
+      "name": null,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_class": "measurement",
+      "state_topic": "gh/ccu-01/HmIP-RF/0001ABCD/1/values/ACTUAL_TEMPERATURE",
+      "unique_id": "loom_0001abcd_1_actual_temperature",
+      "unit_of_measurement": "°C",
+      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+    }
+  },
   "sensor/values": {
     "topic": "homeassistant/sensor/ccu-01_0001abcd/1_actual_temperature/config",
     "payload": {
@@ -235,6 +967,95 @@
       "state_topic": "gh/ccu-01/HmIP-RF/0001ABCD/1/values/ACTUAL_TEMPERATURE",
       "unique_id": "loom_0001abcd_1_actual_temperature",
       "unit_of_measurement": "°C",
+      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+    }
+  },
+  "siren/master": {
+    "topic": "homeassistant/siren/ccu-01_00110001/3_acoustic_alarm_active/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/00110001/availability"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/ccu-01/HmIP-RF/00110001/3/master/ACOUSTIC_ALARM_ACTIVE",
+          "value_template": "{{ value_json.available | lower }}"
+        }
+      ],
+      "availability_mode": "all",
+      "device": {
+        "identifiers": [
+          "openccu-loom_00110001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-ASIR",
+        "name": "00110001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "entity_category": "config",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-01/HmIP-RF/00110001/3/master/ACOUSTIC_ALARM_ACTIVE/config",
+      "name": "Acoustic Alarm Active",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/00110001/3/master/ACOUSTIC_ALARM_ACTIVE",
+      "unique_id": "loom_00110001_3_acoustic_alarm_active",
+      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+    }
+  },
+  "siren/values": {
+    "topic": "homeassistant/siren/ccu-01_00110001/3_acoustic_alarm_active/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/00110001/availability"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/ccu-01/HmIP-RF/00110001/3/values/ACOUSTIC_ALARM_ACTIVE",
+          "value_template": "{{ value_json.available | lower }}"
+        }
+      ],
+      "availability_mode": "all",
+      "device": {
+        "identifiers": [
+          "openccu-loom_00110001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-ASIR",
+        "name": "00110001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-01/HmIP-RF/00110001/3/values/ACOUSTIC_ALARM_ACTIVE/config",
+      "name": "Acoustic Alarm Active",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/00110001/3/values/ACOUSTIC_ALARM_ACTIVE",
+      "unique_id": "loom_00110001_3_acoustic_alarm_active",
       "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
     }
   },
@@ -484,6 +1305,283 @@
       "state_topic": "gh/ccu-01/HmIP-RF/AABBCCDD/1/values/STATE",
       "unique_id": "loom_aabbccdd_1_state",
       "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value | lower }}{% endif %}"
+    }
+  },
+  "text/master": {
+    "topic": "homeassistant/text/ccu-01_00130001/1_display_line/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/00130001/availability"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/ccu-01/HmIP-RF/00130001/1/master/DISPLAY_LINE",
+          "value_template": "{{ value_json.available | lower }}"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/00130001/1/master/DISPLAY_LINE/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_00130001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-WRCD",
+        "name": "00130001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "entity_category": "config",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-01/HmIP-RF/00130001/1/master/DISPLAY_LINE/config",
+      "max": 12,
+      "min": 0,
+      "mode": "text",
+      "name": "Display Line",
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/00130001/1/master/DISPLAY_LINE",
+      "unique_id": "loom_00130001_1_display_line",
+      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+    }
+  },
+  "text/values": {
+    "topic": "homeassistant/text/ccu-01_00130001/1_display_line/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/00130001/availability"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/ccu-01/HmIP-RF/00130001/1/values/DISPLAY_LINE",
+          "value_template": "{{ value_json.available | lower }}"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/00130001/1/values/DISPLAY_LINE/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_00130001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-WRCD",
+        "name": "00130001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-01/HmIP-RF/00130001/1/values/DISPLAY_LINE/config",
+      "max": 12,
+      "min": 0,
+      "mode": "text",
+      "name": "Display Line",
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/00130001/1/values/DISPLAY_LINE",
+      "unique_id": "loom_00130001_1_display_line",
+      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+    }
+  },
+  "update/master": {
+    "topic": "homeassistant/update/ccu-01_00140001/0_firmware/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/00140001/availability"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/ccu-01/HmIP-RF/00140001/0/master/FIRMWARE",
+          "value_template": "{{ value_json.available | lower }}"
+        }
+      ],
+      "availability_mode": "all",
+      "device": {
+        "identifiers": [
+          "openccu-loom_00140001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-BSM",
+        "name": "00140001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "entity_category": "config",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-01/HmIP-RF/00140001/0/master/FIRMWARE/config",
+      "name": "Firmware",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/00140001/0/master/FIRMWARE",
+      "unique_id": "loom_00140001_0_firmware",
+      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+    }
+  },
+  "update/values": {
+    "topic": "homeassistant/update/ccu-01_00140001/0_firmware/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/00140001/availability"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/ccu-01/HmIP-RF/00140001/0/values/FIRMWARE",
+          "value_template": "{{ value_json.available | lower }}"
+        }
+      ],
+      "availability_mode": "all",
+      "device": {
+        "identifiers": [
+          "openccu-loom_00140001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-BSM",
+        "name": "00140001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-01/HmIP-RF/00140001/0/values/FIRMWARE/config",
+      "name": "Firmware",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/00140001/0/values/FIRMWARE",
+      "unique_id": "loom_00140001_0_firmware",
+      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+    }
+  },
+  "valve/master": {
+    "topic": "homeassistant/valve/ccu-01_00100001/1_valve_state/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/00100001/availability"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/ccu-01/HmIP-RF/00100001/1/master/VALVE_STATE",
+          "value_template": "{{ value_json.available | lower }}"
+        }
+      ],
+      "availability_mode": "all",
+      "device": {
+        "identifiers": [
+          "openccu-loom_00100001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-FALMOT-C12",
+        "name": "00100001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "entity_category": "config",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-01/HmIP-RF/00100001/1/master/VALVE_STATE/config",
+      "name": "Valve State",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/00100001/1/master/VALVE_STATE",
+      "unique_id": "loom_00100001_1_valve_state",
+      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+    }
+  },
+  "valve/values": {
+    "topic": "homeassistant/valve/ccu-01_00100001/1_valve_state/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/00100001/availability"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/ccu-01/HmIP-RF/00100001/1/values/VALVE_STATE",
+          "value_template": "{{ value_json.available | lower }}"
+        }
+      ],
+      "availability_mode": "all",
+      "device": {
+        "identifiers": [
+          "openccu-loom_00100001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-FALMOT-C12",
+        "name": "00100001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-01/HmIP-RF/00100001/1/values/VALVE_STATE/config",
+      "name": "Valve State",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/00100001/1/values/VALVE_STATE",
+      "unique_id": "loom_00100001_1_valve_state",
+      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
     }
   }
 }

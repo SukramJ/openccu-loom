@@ -1,0 +1,1663 @@
+{
+  "aggregate/alarm-messages": {
+    "topic": "homeassistant/sensor/ccu-01_messages/alarm/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "sensor.loom_11a0001234_alarm_messages",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "entity_category": "diagnostic",
+      "json_attributes_template": "{\"messages\": {{ value_json | tojson }} }",
+      "json_attributes_topic": "gh/ccu-01/hub/alarm_messages",
+      "name": "Alarm messages",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_class": "measurement",
+      "state_topic": "gh/ccu-01/hub/alarm_messages",
+      "unique_id": "loom_11a0001234_alarm_messages",
+      "value_template": "{{ value_json | length }}"
+    }
+  },
+  "aggregate/hazard-second-central-inbox": {
+    "topic": "homeassistant/sensor/ccu-02_messages/inbox/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "sensor.loom_11b0005678_inbox",
+      "device": {
+        "identifiers": [
+          "openccu-loom_central_ccu-02"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-02",
+        "serial_number": "3014F711B0005678"
+      },
+      "icon": "mdi:tray-arrow-down",
+      "json_attributes_template": "{\"devices\": {{ value_json | tojson }} }",
+      "json_attributes_topic": "gh/ccu-02/hub/inbox",
+      "name": "Inbox",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_class": "measurement",
+      "state_topic": "gh/ccu-02/hub/inbox",
+      "unique_id": "loom_11b0005678_inbox",
+      "value_template": "{{ value_json | length }}"
+    }
+  },
+  "aggregate/inbox": {
+    "topic": "homeassistant/sensor/ccu-01_messages/inbox/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "sensor.loom_11a0001234_inbox",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "icon": "mdi:tray-arrow-down",
+      "json_attributes_template": "{\"devices\": {{ value_json | tojson }} }",
+      "json_attributes_topic": "gh/ccu-01/hub/inbox",
+      "name": "Inbox",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_class": "measurement",
+      "state_topic": "gh/ccu-01/hub/inbox",
+      "unique_id": "loom_11a0001234_inbox",
+      "value_template": "{{ value_json | length }}"
+    }
+  },
+  "aggregate/service-messages": {
+    "topic": "homeassistant/sensor/ccu-01_messages/service/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "sensor.loom_11a0001234_service_messages",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "entity_category": "diagnostic",
+      "json_attributes_template": "{\"messages\": {{ value_json | tojson }} }",
+      "json_attributes_topic": "gh/ccu-01/hub/service_messages",
+      "name": "Service messages",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/hub/service_messages",
+      "unique_id": "loom_11a0001234_service_messages",
+      "value_template": "{{ value_json | length }}"
+    }
+  },
+  "connectivity/bidcos": {
+    "topic": "homeassistant/binary_sensor/ccu-01_connectivity/bidcos-rf/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "binary_sensor.loom_11a0001234_connectivity_bidcos-rf",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "device_class": "connectivity",
+      "entity_category": "diagnostic",
+      "name": "Connectivity BidCos-RF",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_off": "false",
+      "payload_on": "true",
+      "state_topic": "gh/ccu-01/hub/connectivity/BidCos-RF",
+      "unique_id": "loom_11a0001234_connectivity_bidcos-rf"
+    }
+  },
+  "connectivity/hazard-second-central": {
+    "topic": "homeassistant/binary_sensor/ccu-02_connectivity/hmip-rf/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "binary_sensor.loom_11b0005678_connectivity_hmip-rf",
+      "device": {
+        "identifiers": [
+          "openccu-loom_central_ccu-02"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-02",
+        "serial_number": "3014F711B0005678"
+      },
+      "device_class": "connectivity",
+      "entity_category": "diagnostic",
+      "name": "Connectivity HmIP-RF",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_off": "false",
+      "payload_on": "true",
+      "state_topic": "gh/ccu-02/hub/connectivity/HmIP-RF",
+      "unique_id": "loom_11b0005678_connectivity_hmip-rf"
+    }
+  },
+  "connectivity/hmip": {
+    "topic": "homeassistant/binary_sensor/ccu-01_connectivity/hmip-rf/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "binary_sensor.loom_11a0001234_connectivity_hmip-rf",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "device_class": "connectivity",
+      "entity_category": "diagnostic",
+      "name": "Connectivity HmIP-RF",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_off": "false",
+      "payload_on": "true",
+      "state_topic": "gh/ccu-01/hub/connectivity/HmIP-RF",
+      "unique_id": "loom_11a0001234_connectivity_hmip-rf"
+    }
+  },
+  "install-mode/button-bidcos": {
+    "topic": "homeassistant/button/ccu-01_central/install_mode_bidcos_button/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/hub/install_mode/BidCos-RF/set",
+      "default_entity_id": "button.loom_11a0001234_install_mode_bidcos-button",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "entity_category": "config",
+      "name": "Activate Install Mode BidCos-RF",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_press": "PRESS",
+      "translation_key": "install_mode_bidcos_button",
+      "unique_id": "loom_11a0001234_install_mode_bidcos-button"
+    }
+  },
+  "install-mode/button-bidcos-wired": {
+    "topic": "homeassistant/button/ccu-01_central/install_mode_bidcos-wired_button/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/hub/install_mode/BidCos-Wired/set",
+      "default_entity_id": "button.loom_11a0001234_install_mode_bidcos-wired-button",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "entity_category": "config",
+      "name": "Activate Install Mode BidCos-Wired",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_press": "PRESS",
+      "translation_key": "install_mode_bidcos-wired_button",
+      "unique_id": "loom_11a0001234_install_mode_bidcos-wired-button"
+    }
+  },
+  "install-mode/button-hmip": {
+    "topic": "homeassistant/button/ccu-01_central/install_mode_hmip_button/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/hub/install_mode/HmIP-RF/set",
+      "default_entity_id": "button.loom_11a0001234_install_mode_hmip-button",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "entity_category": "config",
+      "name": "Activate Install Mode HmIP-RF",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_press": "PRESS",
+      "translation_key": "install_mode_hmip_button",
+      "unique_id": "loom_11a0001234_install_mode_hmip-button"
+    }
+  },
+  "install-mode/hazard-second-central-sensor": {
+    "topic": "homeassistant/sensor/ccu-02_central/install_mode_hmip/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "sensor.loom_11b0005678_install_mode_hmip",
+      "device": {
+        "identifiers": [
+          "openccu-loom_central_ccu-02"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-02",
+        "serial_number": "3014F711B0005678"
+      },
+      "device_class": "duration",
+      "entity_category": "diagnostic",
+      "name": "Install Mode HmIP-RF duration",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_class": "measurement",
+      "state_topic": "gh/ccu-02/hub/install_mode/HmIP-RF",
+      "translation_key": "install_mode_hmip",
+      "unique_id": "loom_11b0005678_install_mode_hmip",
+      "unit_of_measurement": "s"
+    }
+  },
+  "install-mode/sensor-bidcos": {
+    "topic": "homeassistant/sensor/ccu-01_central/install_mode_bidcos/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "sensor.loom_11a0001234_install_mode_bidcos",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "device_class": "duration",
+      "entity_category": "diagnostic",
+      "name": "Install Mode BidCos-RF duration",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_class": "measurement",
+      "state_topic": "gh/ccu-01/hub/install_mode/BidCos-RF",
+      "translation_key": "install_mode_bidcos",
+      "unique_id": "loom_11a0001234_install_mode_bidcos",
+      "unit_of_measurement": "s"
+    }
+  },
+  "install-mode/sensor-bidcos-wired": {
+    "topic": "homeassistant/sensor/ccu-01_central/install_mode_bidcos-wired/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "sensor.loom_11a0001234_install_mode_bidcos-wired",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "device_class": "duration",
+      "entity_category": "diagnostic",
+      "name": "Install Mode BidCos-Wired duration",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_class": "measurement",
+      "state_topic": "gh/ccu-01/hub/install_mode/BidCos-Wired",
+      "translation_key": "install_mode_bidcos-wired",
+      "unique_id": "loom_11a0001234_install_mode_bidcos-wired",
+      "unit_of_measurement": "s"
+    }
+  },
+  "install-mode/sensor-hmip": {
+    "topic": "homeassistant/sensor/ccu-01_central/install_mode_hmip/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "sensor.loom_11a0001234_install_mode_hmip",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "device_class": "duration",
+      "entity_category": "diagnostic",
+      "name": "Install Mode HmIP-RF duration",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_class": "measurement",
+      "state_topic": "gh/ccu-01/hub/install_mode/HmIP-RF",
+      "translation_key": "install_mode_hmip",
+      "unique_id": "loom_11a0001234_install_mode_hmip",
+      "unit_of_measurement": "s"
+    }
+  },
+  "program/hazard-second-central": {
+    "topic": "homeassistant/switch/ccu-02_programs/3721/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-02/hub/programs/3721/trigger",
+      "default_entity_id": "switch.loom_11b0005678_program_3721",
+      "device": {
+        "identifiers": [
+          "openccu-loom_central_ccu-02"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-02",
+        "serial_number": "3014F711B0005678"
+      },
+      "enabled_by_default": true,
+      "name": "Gute Nacht",
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_off": "false",
+      "payload_on": "true",
+      "state_off": "false",
+      "state_on": "true",
+      "state_topic": "gh/ccu-02/hub/programs/3721/state",
+      "unique_id": "loom_11b0005678_program_3721"
+    }
+  },
+  "program/hazard-unnamed": {
+    "topic": "homeassistant/switch/ccu-01_programs/3722/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/hub/programs/3722/trigger",
+      "default_entity_id": "switch.loom_11a0001234_program_3722",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "enabled_by_default": false,
+      "name": "3722",
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_off": "false",
+      "payload_on": "true",
+      "state_off": "false",
+      "state_on": "true",
+      "state_topic": "gh/ccu-01/hub/programs/3722/state",
+      "unique_id": "loom_11a0001234_program_3722"
+    }
+  },
+  "program/legacy-single-switch": {
+    "topic": "homeassistant/switch/ccu-01_programs/3721/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/hub/programs/3721/trigger",
+      "default_entity_id": "switch.loom_11a0001234_program_3721",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "enabled_by_default": true,
+      "name": "Gute Nacht",
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_off": "false",
+      "payload_on": "true",
+      "state_off": "false",
+      "state_on": "true",
+      "state_topic": "gh/ccu-01/hub/programs/3721/state",
+      "unique_id": "loom_11a0001234_program_3721"
+    }
+  },
+  "program/role-execute-button": {
+    "topic": "homeassistant/button/ccu-01_programs/3721_execute/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/programs/3721/execute_available"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/hub/programs/3721/trigger",
+      "default_entity_id": "button.loom_11a0001234_program_3721_execute",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "enabled_by_default": true,
+      "name": "Gute Nacht Execute",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_press": "true",
+      "unique_id": "loom_11a0001234_program_3721_execute"
+    }
+  },
+  "program/role-principal-switch": {
+    "topic": "homeassistant/switch/ccu-01_programs/3721/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/hub/programs/3721/set",
+      "default_entity_id": "switch.loom_11a0001234_program_3721",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "enabled_by_default": true,
+      "name": "Gute Nacht",
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_off": "false",
+      "payload_on": "true",
+      "state_off": "false",
+      "state_on": "true",
+      "state_topic": "gh/ccu-01/hub/programs/3721/state",
+      "unique_id": "loom_11a0001234_program_3721"
+    }
+  },
+  "system/connection-latency": {
+    "topic": "homeassistant/sensor/ccu-01_system/connection_latency/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "sensor.loom_11a0001234_connection_latency",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "enabled_by_default": true,
+      "entity_category": "diagnostic",
+      "icon": "mdi:timer",
+      "name": "Connection Latency",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_class": "measurement",
+      "state_topic": "gh/ccu-01/system/latency",
+      "suggested_display_precision": 1,
+      "translation_key": "connection_latency",
+      "unique_id": "loom_11a0001234_connection_latency",
+      "unit_of_measurement": "ms"
+    }
+  },
+  "system/daemon-status": {
+    "topic": "homeassistant/binary_sensor/ccu-01_system/daemon_status/config",
+    "payload": {
+      "default_entity_id": "binary_sensor.loom_11a0001234_daemon_status",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "device_class": "connectivity",
+      "enabled_by_default": true,
+      "entity_category": "diagnostic",
+      "name": "Daemon connection",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_off": "offline",
+      "payload_on": "online",
+      "state_topic": "gh/bridge/status",
+      "unique_id": "loom_11a0001234_daemon_status"
+    }
+  },
+  "system/hazard-second-central-health": {
+    "topic": "homeassistant/sensor/ccu-02_system/system_health/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "sensor.loom_11b0005678_system_health",
+      "device": {
+        "identifiers": [
+          "openccu-loom_central_ccu-02"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-02",
+        "serial_number": "3014F711B0005678"
+      },
+      "enabled_by_default": true,
+      "entity_category": "diagnostic",
+      "icon": "mdi:heart-pulse",
+      "name": "System Health",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_class": "measurement",
+      "state_topic": "gh/ccu-02/system/health_score",
+      "suggested_display_precision": 1,
+      "translation_key": "system_health",
+      "unique_id": "loom_11b0005678_system_health",
+      "unit_of_measurement": "%"
+    }
+  },
+  "system/health": {
+    "topic": "homeassistant/sensor/ccu-01_system/system_health/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "sensor.loom_11a0001234_system_health",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "enabled_by_default": true,
+      "entity_category": "diagnostic",
+      "icon": "mdi:heart-pulse",
+      "name": "System Health",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_class": "measurement",
+      "state_topic": "gh/ccu-01/system/health_score",
+      "suggested_display_precision": 1,
+      "translation_key": "system_health",
+      "unique_id": "loom_11a0001234_system_health",
+      "unit_of_measurement": "%"
+    }
+  },
+  "system/hub-update": {
+    "topic": "homeassistant/update/ccu-01_system/system_update/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "update.loom_11a0001234_system_update",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "enabled_by_default": true,
+      "entity_category": "diagnostic",
+      "latest_version_template": "{{ value_json.latest_version }}",
+      "latest_version_topic": "gh/ccu-01/hub/update",
+      "name": "System Update",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/hub/update",
+      "unique_id": "loom_11a0001234_system_update"
+    }
+  },
+  "system/last-event-age": {
+    "topic": "homeassistant/sensor/ccu-01_system/last_event_age/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "sensor.loom_11a0001234_last_event_age",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "device_class": "duration",
+      "enabled_by_default": true,
+      "entity_category": "diagnostic",
+      "icon": "mdi:clock-alert-outline",
+      "name": "Last Event Age",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_class": "measurement",
+      "state_topic": "gh/ccu-01/system/last_event_age",
+      "suggested_display_precision": 1,
+      "translation_key": "last_event_age",
+      "unique_id": "loom_11a0001234_last_event_age",
+      "unit_of_measurement": "s"
+    }
+  },
+  "sysvar/alarm-binary-sensor": {
+    "topic": "homeassistant/binary_sensor/ccu-01_sysvars/alarmzone/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "binary_sensor.loom_11a0001234_sysvar_4713",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "device_class": "problem",
+      "enabled_by_default": true,
+      "name": "Alarmzone",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_off": "false",
+      "payload_on": "true",
+      "state_topic": "gh/ccu-01/hub/sysvars/Alarmzone/state",
+      "unique_id": "loom_11a0001234_sysvar_4713"
+    }
+  },
+  "sysvar/auto-energy-counter": {
+    "topic": "homeassistant/sensor/ccu-01_sysvars/svenergycounter_1234_abc0123456_6/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "sensor.loom_11a0001234_sysvar_4723",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "device_class": "energy",
+      "enabled_by_default": true,
+      "name": "Energy Counter Total",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_class": "total_increasing",
+      "state_topic": "gh/ccu-01/hub/sysvars/svEnergyCounter_1234_ABC0123456:6/state",
+      "unique_id": "loom_11a0001234_sysvar_4723",
+      "unit_of_measurement": "Wh"
+    }
+  },
+  "sysvar/float-number-fallback-range": {
+    "topic": "homeassistant/number/ccu-01_sysvars/sollwert/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/hub/sysvars/Sollwert/set",
+      "default_entity_id": "number.loom_11a0001234_sysvar_4719",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "enabled_by_default": true,
+      "max": 1000000000,
+      "min": -1000000000,
+      "mode": "auto",
+      "name": "Sollwert",
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/hub/sysvars/Sollwert/state",
+      "step": 0.01,
+      "unique_id": "loom_11a0001234_sysvar_4719",
+      "unit_of_measurement": "°C"
+    }
+  },
+  "sysvar/hazard-linked-to-channel": {
+    "topic": "homeassistant/sensor/ccu-01_sysvars/wohnzimmer_heizung_ventil/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "sensor.loom_11a0001234_sysvar_4733",
+      "device": {
+        "identifiers": [
+          "openccu-loom_abc0123456:4"
+        ],
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "enabled_by_default": true,
+      "name": "Wohnzimmer Heizung Ventil",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_class": "measurement",
+      "state_topic": "gh/ccu-01/hub/sysvars/Wohnzimmer_Heizung_Ventil/state",
+      "unique_id": "loom_11a0001234_sysvar_4733"
+    }
+  },
+  "sysvar/hazard-linked-to-device": {
+    "topic": "homeassistant/sensor/ccu-01_sysvars/wohnzimmer_heizung_soll/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "sensor.loom_11a0001234_sysvar_4732",
+      "device": {
+        "identifiers": [
+          "openccu-loom_abc0123456"
+        ],
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "enabled_by_default": true,
+      "name": "Wohnzimmer Heizung Soll",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_class": "measurement",
+      "state_topic": "gh/ccu-01/hub/sysvars/Wohnzimmer_Heizung_Soll/state",
+      "unique_id": "loom_11a0001234_sysvar_4732"
+    }
+  },
+  "sysvar/hazard-linked-to-internal-device": {
+    "topic": "homeassistant/sensor/ccu-01_sysvars/interner_zaehler/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "sensor.loom_11a0001234_sysvar_4734",
+      "device": {
+        "identifiers": [
+          "openccu-loom_ccu-01_int0000001"
+        ],
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "enabled_by_default": true,
+      "name": "Interner Zähler",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_class": "measurement",
+      "state_topic": "gh/ccu-01/hub/sysvars/Interner_Zähler/state",
+      "unique_id": "loom_11a0001234_sysvar_4734"
+    }
+  },
+  "sysvar/hazard-punctuation-twin-a": {
+    "topic": "homeassistant/binary_sensor/ccu-01_sysvars/alarm_kueche/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "binary_sensor.loom_11a0001234_sysvar_4730",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "enabled_by_default": true,
+      "name": "Alarm: Küche",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_off": "false",
+      "payload_on": "true",
+      "state_topic": "gh/ccu-01/hub/sysvars/Alarm:_Küche/state",
+      "unique_id": "loom_11a0001234_sysvar_4730"
+    }
+  },
+  "sysvar/hazard-punctuation-twin-b": {
+    "topic": "homeassistant/binary_sensor/ccu-01_sysvars/alarm_kueche/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "binary_sensor.loom_11a0001234_sysvar_4731",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "enabled_by_default": true,
+      "name": "Alarm Küche",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_off": "false",
+      "payload_on": "true",
+      "state_topic": "gh/ccu-01/hub/sysvars/Alarm_Küche/state",
+      "unique_id": "loom_11a0001234_sysvar_4731"
+    }
+  },
+  "sysvar/hazard-second-central": {
+    "topic": "homeassistant/binary_sensor/ccu-02_sysvars/anwesenheit/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "binary_sensor.loom_11b0005678_sysvar_4711",
+      "device": {
+        "identifiers": [
+          "openccu-loom_central_ccu-02"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-02",
+        "serial_number": "3014F711B0005678"
+      },
+      "enabled_by_default": true,
+      "name": "Anwesenheit",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_off": "false",
+      "payload_on": "true",
+      "state_topic": "gh/ccu-02/hub/sysvars/Anwesenheit/state",
+      "unique_id": "loom_11b0005678_sysvar_4711"
+    }
+  },
+  "sysvar/hazard-unresolved-vid": {
+    "topic": "homeassistant/binary_sensor/ccu-01_sysvars/nicht_aufgeloeste_variable/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "binary_sensor.loom_11a0001234_sysvar_nicht-aufgeloste-variable",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "enabled_by_default": true,
+      "name": "Nicht aufgelöste Variable",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_off": "false",
+      "payload_on": "true",
+      "state_topic": "gh/ccu-01/hub/sysvars/Nicht_aufgelöste_Variable/state",
+      "unique_id": "loom_11a0001234_sysvar_nicht-aufgeloste-variable"
+    }
+  },
+  "sysvar/integer-number-bounded": {
+    "topic": "homeassistant/number/ccu-01_sysvars/helligkeit/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/hub/sysvars/Helligkeit/set",
+      "default_entity_id": "number.loom_11a0001234_sysvar_4720",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "enabled_by_default": true,
+      "max": 255,
+      "min": 0,
+      "mode": "box",
+      "name": "Helligkeit",
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/hub/sysvars/Helligkeit/state",
+      "step": 1,
+      "unique_id": "loom_11a0001234_sysvar_4720",
+      "unit_of_measurement": "lx"
+    }
+  },
+  "sysvar/list-extended-without-options": {
+    "topic": "homeassistant/sensor/ccu-01_sysvars/leere_liste/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "sensor.loom_11a0001234_sysvar_4716",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "enabled_by_default": true,
+      "name": "Leere Liste",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/hub/sysvars/Leere_Liste/state",
+      "unique_id": "loom_11a0001234_sysvar_4716"
+    }
+  },
+  "sysvar/list-select": {
+    "topic": "homeassistant/select/ccu-01_sysvars/betriebsart/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/hub/sysvars/Betriebsart/set",
+      "default_entity_id": "select.loom_11a0001234_sysvar_4714",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "enabled_by_default": true,
+      "entity_category": "config",
+      "name": "Betriebsart",
+      "optimistic": false,
+      "options": [
+        "Aus",
+        "Anwesend",
+        "Abwesend"
+      ],
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/hub/sysvars/Betriebsart/state",
+      "unique_id": "loom_11a0001234_sysvar_4714"
+    }
+  },
+  "sysvar/list-sensor-enum": {
+    "topic": "homeassistant/sensor/ccu-01_sysvars/betriebsart_anzeige/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "sensor.loom_11a0001234_sysvar_4715",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "device_class": "enum",
+      "enabled_by_default": true,
+      "name": "Betriebsart Anzeige",
+      "options": [
+        "Aus",
+        "Anwesend",
+        "Abwesend"
+      ],
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/hub/sysvars/Betriebsart_Anzeige/state",
+      "unique_id": "loom_11a0001234_sysvar_4715"
+    }
+  },
+  "sysvar/logic-binary-sensor": {
+    "topic": "homeassistant/binary_sensor/ccu-01_sysvars/fenster_offen/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "binary_sensor.loom_11a0001234_sysvar_4712",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "enabled_by_default": true,
+      "name": "Fenster offen",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_off": "false",
+      "payload_on": "true",
+      "state_topic": "gh/ccu-01/hub/sysvars/Fenster_offen/state",
+      "unique_id": "loom_11a0001234_sysvar_4712"
+    }
+  },
+  "sysvar/logic-switch": {
+    "topic": "homeassistant/switch/ccu-01_sysvars/anwesenheit/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/hub/sysvars/Anwesenheit/set",
+      "default_entity_id": "switch.loom_11a0001234_sysvar_4711",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "enabled_by_default": true,
+      "name": "Anwesenheit",
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_off": "false",
+      "payload_on": "true",
+      "state_off": "false",
+      "state_on": "true",
+      "state_topic": "gh/ccu-01/hub/sysvars/Anwesenheit/state",
+      "unique_id": "loom_11a0001234_sysvar_4711"
+    }
+  },
+  "sysvar/number-sensor": {
+    "topic": "homeassistant/sensor/ccu-01_sysvars/aussentemperatur/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "sensor.loom_11a0001234_sysvar_4721",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "enabled_by_default": true,
+      "name": "Außentemperatur",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_class": "measurement",
+      "state_topic": "gh/ccu-01/hub/sysvars/Aussentemperatur/state",
+      "unique_id": "loom_11a0001234_sysvar_4721",
+      "unit_of_measurement": "°C"
+    }
+  },
+  "sysvar/string-sensor": {
+    "topic": "homeassistant/sensor/ccu-01_sysvars/alleservicemeldungen/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "sensor.loom_11a0001234_sysvar_4718",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "enabled_by_default": true,
+      "name": "AlleServicemeldungen",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/hub/sysvars/AlleServicemeldungen/state",
+      "unique_id": "loom_11a0001234_sysvar_4718"
+    }
+  },
+  "sysvar/string-text": {
+    "topic": "homeassistant/text/ccu-01_sysvars/notiz/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/hub/sysvars/Notiz/set",
+      "default_entity_id": "text.loom_11a0001234_sysvar_4717",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "enabled_by_default": true,
+      "mode": "text",
+      "name": "Notiz",
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/hub/sysvars/Notiz/state",
+      "unique_id": "loom_11a0001234_sysvar_4717"
+    }
+  },
+  "sysvar/unknown-type-sensor": {
+    "topic": "homeassistant/sensor/ccu-01_sysvars/unbekannt/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "sensor.loom_11a0001234_sysvar_4722",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_central_ccu-01"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HomeMatic Central",
+        "name": "ccu-01",
+        "serial_number": "3014F711A0001234",
+        "sw_version": "3.79.6"
+      },
+      "enabled_by_default": true,
+      "name": "Unbekannt",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/hub/sysvars/Unbekannt/state",
+      "unique_id": "loom_11a0001234_sysvar_4722"
+    }
+  }
+}
