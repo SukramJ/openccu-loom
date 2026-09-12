@@ -65,19 +65,26 @@ type pinnedFilter struct {
 // [CommandSubscriber.Start] registers, with the configured base written as
 // `<base>`.
 //
-// Groups by segment count, which is the same thing as grouping by collision
-// class:
+// Groups by segment count, which is the same thing as grouping by potential
+// collision class — no filter carries `#`, so MQTT filter matching requires
+// equal segment counts and two filters of different lengths are disjoint no
+// matter what literals they carry:
 //
-//	3 segments: the two daemon-level planes (alarm, addon_update) — disjoint
-//	            from everything, literal first segment.
-//	5 segments: the four hub planes — pairwise disjoint, `hub` literal at
-//	            index 1 and a second literal at index 2.
-//	6 segments: the legacy bucket-less data-point catch-all AND
-//	            week_profile. THIS IS COLLISION CLASS A.
-//	7 segments: the bucket-aware data-point catch-all, combined, schedule,
-//	            and cdps/invoke. The first three are COLLISION CLASS B; the
-//	            invoke filter escapes it on its literal last segment.
+//	3 segments: the two daemon-level planes (alarm, addon_update) — literal
+//	            first segment.
+//	5 segments: the four hub planes — `hub` literal at index 1 and a second
+//	            literal at index 2.
+//	6 segments: the legacy bucket-less data-point catch-all, alone. It was
+//	            once paired with a `week_profile` filter of the same length,
+//	            which is the overlap coalescing removed.
+//	7 segments: the bucket-aware data-point catch-all and the cdps/invoke
+//	            filter, which escapes it on its literal last segment. The
+//	            `combined` and `schedule` filters used to sit here too.
 //	8 segments: the per-service-method filter — the only one of its length.
+//
+// The set is pairwise disjoint, which
+// TestCommandFiltersArePairwiseDisjoint asserts by enumeration rather than
+// by reading this comment.
 var pinnedCommandFilters = []pinnedFilter{
 	{"<base>/+/+/+/+/+/+/set", 7},
 	{"<base>/+/+/+/+/+/set", 6},
@@ -87,9 +94,6 @@ var pinnedCommandFilters = []pinnedFilter{
 	{"<base>/+/hub/install_mode/+/set", 5},
 	{"<base>/+/devices/+/cdps/+/+/invoke", 7},
 	{"<base>/+/+/+/+/custom/+/set/+", 8},
-	{"<base>/+/+/+/+/week_profile/set", 6},
-	{"<base>/+/+/+/+/combined/+/set", 7},
-	{"<base>/+/+/+/+/schedule/+/set", 7},
 	{"<base>/alarm/+/set", 3},
 	{"<base>/system/addon_update/set", 3},
 }
@@ -102,41 +106,28 @@ var pinnedCommandFilters = []pinnedFilter{
 // guards, so a fourteenth `Subscribe` call — or a reworded thirteenth — landed
 // silently. That is not a cosmetic gap. Two of this plane's filters are
 // unavoidable catch-alls (`+/+/+/+/+/set` and `+/+/+/+/+/+/set`), so ANY new
-// filter of six or seven segments below the base joins a collision class on
-// arrival, and the only things stopping the resulting double dispatch are two
-// hand-maintained lists in two different files:
-// `reservedLegacyParamSegments` for class A and the bucket allow-list in
-// [CommandSubscriber.handleDataPoint] for class B. Both are complete today by
-// inspection only.
+// filter of six or seven segments below the base overlaps one of them on
+// arrival, and an overlap is multiplied on delivery rather than resolved:
+// the broker sends one copy per matching subscription and the client
+// re-matches each copy against its whole local filter list, so N overlapping
+// filters cost N*N handler runs. MQTT has no exclusion wildcard, so the only
+// resolution is to register the catch-all alone and dispatch the narrow
+// shape from inside its handler.
 //
-// The invariant `reservedLegacyParamSegments`' own doc comment states —
-// "Every literal segment used in a seven-level command filter MUST be listed
-// here, or that topic is dispatched a second time as a data-point write to a
-// parameter that does not exist" — is enforced here, derived from the
-// registered filters rather than restated. "Seven-level" there counts the
-// base; this test counts below the base, so it is the six-segment group.
+// The set held three such filters when this pin was taken —
+// `<base>/+/+/+/+/week_profile/set`, `…/combined/+/set` and
+// `…/schedule/+/set` — and the only things keeping their second dispatch off
+// the CCU were two hand-maintained lists in two places:
+// `reservedLegacyParamSegments` and the bucket allow-list in
+// [CommandSubscriber.handleDataPoint]. Those three rows are gone from the
+// pin, the list is deleted, and the property that replaced both is asserted
+// by enumeration in TestCommandFiltersArePairwiseDisjoint.
 //
-// Why the whole set and not just the classes: the shared library's
-// `CommandRouter.Handle` refuses any pair of overlapping filters outright,
-// because a broker sends one copy per matching subscription and the client
-// re-matches each copy against its whole local filter list, so one message
-// runs N handlers. Adopting it requires coalescing filters 9, 10 and 11 into
-// the two data-point handlers. This pin is what makes that deletion a
-// reviewed diff of three named rows rather than a count changing from 13 to
-// 10.
-//
-// Pinned rows that are defects:
-//
-//   - Rows 9, 10 and 11 (`week_profile`, `combined`, `schedule`) each overlap
-//     a catch-all. Three of the 78 pairs overlap; the shared library refuses
-//     that shape. Pinned as current behaviour so the coalescing step has to
-//     delete them explicitly (**F3** is the reason nothing noticed, **F2**
-//     is the class-B half having no other coverage).
-//   - The ORDER is pinned including the fact that it is not grouped by class
-//     or by length. [CommandSubscriber.Start] aborts on the first refused
-//     subscribe and leaves the partial set live, so the order decides which
-//     filters survive a partial ACL denial — a property the shared library's
-//     rollback removes and this daemon still has.
+// The ORDER is pinned too, including the fact that it is not grouped by
+// length. [CommandSubscriber.Start] aborts on the first refused subscribe
+// and leaves the partial set live, so the order decides which filters
+// survive a partial ACL denial — a property the shared library's rollback
+// removes and this daemon still has.
 //
 // Not pinned here: the QoS each filter registers at (that is
 // [CommandSubscriber.WithQoS]'s contract and is covered by the subscriber's
@@ -173,8 +164,9 @@ func TestCommandFilterSetIsPinned(t *testing.T) {
 		}
 		for i := len(want); i < len(got); i++ {
 			t.Errorf("base %q: filter %d = %q is registered but not pinned — a new command filter "+
-				"joins a collision class on arrival if it is 6 or 7 segments below the base; "+
-				"add it to pinnedCommandFilters deliberately and extend the guard lists", base, i, got[i])
+				"overlaps a data-point catch-all on arrival if it is 6 or 7 segments below the "+
+				"base; add it to pinnedCommandFilters deliberately, and see "+
+				"TestCommandFiltersArePairwiseDisjoint", base, i, got[i])
 		}
 		for i := len(got); i < len(want); i++ {
 			t.Errorf("base %q: filter %d = %q is pinned but no longer registered — "+
@@ -193,7 +185,7 @@ func TestCommandFilterSetIsPinned(t *testing.T) {
 			if n := len(strings.Split(rest, "/")); n != pinnedCommandFilters[i].segs {
 				t.Errorf("base %q: filter %q has %d segments below the base, pinned %d — "+
 					"two filters can only overlap at equal length, so this moves the filter "+
-					"into or out of a collision class", base, got[i], n, pinnedCommandFilters[i].segs)
+					"into or out of reach of a catch-all", base, got[i], n, pinnedCommandFilters[i].segs)
 			}
 			if strings.Contains(rest, "#") {
 				t.Errorf("base %q: filter %q carries `#` — the whole overlap analysis on this plane "+
@@ -203,157 +195,143 @@ func TestCommandFilterSetIsPinned(t *testing.T) {
 	}
 }
 
-// TestReservedLegacyParamSegmentsCoversEverySixSegmentLiteral enforces the
-// invariant `reservedLegacyParamSegments`' doc comment states, derived from
-// the filters [CommandSubscriber.Start] really registers.
+// filtersOverlap reports whether two MQTT topic filters can both match some
+// topic.
 //
-// Finding **F3**: the list is correct today by inspection only. It has one
-// entry, `week_profile`, and one filter needs it. A fourteenth filter of six
-// segments below the base with a literal at index 4 would be dispatched a
-// second time by [CommandSubscriber.handleDataPoint]'s six-segment branch as
-// a CCU parameter write to a parameter no channel has — the exact defect that
-// put `week_profile` in the list — and nothing would fail.
+// It is the same walk the shared library's unexported
+// `publisher.filtersOverlap` performs, restated here because that is the
+// predicate `publisher.CommandRouter.Handle` refuses a registration on and
+// this test has to answer the same question about this daemon's own set
+// without importing the library. Two positions are compatible when either is
+// `+` or both are the same literal; a `#` on either side swallows the rest.
+func filtersOverlap(a, b []string) bool {
+	for {
+		switch {
+		case len(a) == 0 && len(b) == 0:
+			return true
+		case len(a) == 0:
+			return len(b) == 1 && b[0] == "#"
+		case len(b) == 0:
+			return len(a) == 1 && a[0] == "#"
+		case a[0] == "#" || b[0] == "#":
+			return true
+		case a[0] != "+" && b[0] != "+" && a[0] != b[0]:
+			return false
+		}
+		a, b = a[1:], b[1:]
+	}
+}
+
+// TestCommandFiltersArePairwiseDisjoint is the property that replaced both
+// hand-maintained collision guards: no two filters
+// [CommandSubscriber.Start] registers can both match any topic.
 //
-// The correspondence is derived, not restated: the literal set comes from
-// parsing the registered filters, so adding a filter without extending the
-// list fails here, and extending the list without a filter needing it fails
-// here too (a stale entry is a claim about the plane that is no longer true,
-// and it silently suppresses a legitimate parameter of that name).
+// It is asserted by enumerating every pair rather than by reading the filter
+// set, because the failure it guards is not visible in any one filter. Two of
+// this plane's filters are wildcard catch-alls (`+/+/+/+/+/set` and
+// `+/+/+/+/+/+/set`), so a new filter is judged only against them, and a
+// reviewer adding one legitimately — a new command shape at six or seven
+// segments below the base — has no local reason to look.
 //
-// The catch-all itself is excluded, since it is the filter the guard protects
-// rather than one the guard protects against.
+// What an overlap costs, and why nothing downstream can undo it: a broker
+// sends one copy of a message per matching subscription (MQTT 3.1.1 §4.7.3 /
+// 5.0 §3.3.4; measured on Mosquitto 2.1.2 on both versions), and go-mqtt then
+// re-matches every arriving copy against its whole local filter list and
+// calls every matching handler without correlating a copy with the
+// subscription it arrived on. The two fan-outs multiply, so N overlapping
+// filters turn one operator action into N*N handler runs, indistinguishable
+// from N*N genuine publishes. MQTT has no exclusion wildcard, so narrowing a
+// catch-all to subtract a sibling shape is inexpressible; the resolution is
+// to register the catch-all alone and dispatch the narrow shape from inside
+// its handler, which is what handleDataPoint does for `week_profile`,
+// `combined` and `schedule`.
 //
-// Pinned as a defect: that the guard is a drop in `handleDataPoint` at all.
-// The coalescing step replaces it with a dispatch to the week-profile sink
-// and deletes the list; this test goes with it.
-func TestReservedLegacyParamSegmentsCoversEverySixSegmentLiteral(t *testing.T) {
+// Until this held, three of the 78 pairs overlapped and the second dispatch
+// was kept off the CCU by `reservedLegacyParamSegments` (one entry) and by
+// the bucket allow-list's `default:` drop — two mechanisms, in two places,
+// neither derivable from the filter set and both complete by inspection
+// only.
+//
+// It is also the precondition for adopting `publisher.CommandRouter`:
+// `Handle` refuses an overlapping pair outright with `ErrAmbiguousRoutes`, so
+// a set that fails this test cannot be registered at all.
+func TestCommandFiltersArePairwiseDisjoint(t *testing.T) {
 	t.Parallel()
 
-	const base = "openccu-loom"
-	rec := newFilterRecorder()
-	if err := NewCommandSubscriber(rec, NewTopicBuilder(base), &fakeSink{}, nil).
-		Start(context.Background()); err != nil {
-		t.Fatalf("start: %v", err)
-	}
+	for _, base := range []string{"openccu-loom", "home/loom"} {
+		rec := newFilterRecorder()
+		if err := NewCommandSubscriber(rec, NewTopicBuilder(base), &fakeSink{}, nil).
+			Start(context.Background()); err != nil {
+			t.Fatalf("base %q: start: %v", base, err)
+		}
+		filters := rec.recorded()
 
-	// Every literal a six-segment filter carries, at whatever position.
-	needed := map[string]string{} // literal -> the filter that needs it
-	sixSegmentFilters := 0
-	for _, f := range rec.recorded() {
-		rest, ok := strings.CutPrefix(f, base+"/")
-		if !ok {
-			continue
+		// Vacuity guard: the enumeration is only meaningful over the real
+		// set, and a Start that registered nothing would pass trivially.
+		if len(filters) < 2 {
+			t.Fatalf("base %q: %d filters registered — nothing to enumerate", base, len(filters))
 		}
-		segs := strings.Split(rest, "/")
-		if len(segs) != 6 {
-			continue
+
+		parts := make([][]string, len(filters))
+		for i, f := range filters {
+			parts[i] = strings.Split(f, "/")
 		}
-		sixSegmentFilters++
-		// The trailing `set` is what the catch-all also ends in, so it is
-		// matched rather than shadowed; a literal there is not a collision.
-		for _, s := range segs[:len(segs)-1] {
-			if s != "+" {
-				needed[s] = f
+
+		pairs, overlaps := 0, 0
+		for i := range filters {
+			for j := i + 1; j < len(filters); j++ {
+				pairs++
+				if filtersOverlap(parts[i], parts[j]) {
+					overlaps++
+					t.Errorf("base %q: %q and %q both match some topic — one command runs "+
+						"both handlers, and a broker's per-subscription copy multiplies that "+
+						"again; register the general shape only and dispatch the narrow one "+
+						"from inside its handler", base, filters[i], filters[j])
+				}
 			}
 		}
-	}
-
-	// Vacuity guard: the class exists only while at least two six-segment
-	// filters are registered — the catch-all and something with a literal.
-	if sixSegmentFilters < 2 {
-		t.Fatalf("six-segment filters = %d, want at least 2 — collision class A is gone, "+
-			"so this test and reservedLegacyParamSegments have both outlived their purpose", sixSegmentFilters)
-	}
-	if len(needed) == 0 {
-		t.Fatal("no six-segment filter carries a literal — nothing for reservedLegacyParamSegments to guard")
-	}
-
-	for literal, filter := range needed {
-		if _, listed := reservedLegacyParamSegments[literal]; !listed {
-			t.Errorf("filter %q carries the literal %q at six segments below the base, but %q is not in "+
-				"reservedLegacyParamSegments — every topic matching that filter is ALSO dispatched by "+
-				"handleDataPoint as a CCU write to a parameter named %q, which no channel has",
-				filter, literal, literal, literal)
+		if want := len(filters) * (len(filters) - 1) / 2; pairs != want {
+			t.Errorf("base %q: enumerated %d pairs over %d filters, want %d", base, pairs, len(filters), want)
 		}
-	}
-	for literal := range reservedLegacyParamSegments {
-		if _, still := needed[literal]; !still {
-			t.Errorf("reservedLegacyParamSegments lists %q, but no six-segment filter carries it — "+
-				"a stale entry suppresses a legitimate CCU parameter of that name", literal)
+		if overlaps != 0 {
+			t.Errorf("base %q: %d of %d pairs overlap, want 0", base, overlaps, pairs)
 		}
 	}
 }
 
-// TestSevenSegmentLiteralBucketsAreRefusedByTheBucketAllowList is the class-B
-// half of the same derivation, and the counterpart of the previous test.
+// TestFiltersOverlapDetectsAnOverlap guards the guard above: an overlap
+// predicate that answered "no" unconditionally would make
+// TestCommandFiltersArePairwiseDisjoint pass over any filter set at all,
+// which is precisely the vacuity this programme has been bitten by.
 //
-// Finding **F3** again, and **F2**: class B has no list to check against —
-// its guard is the `default:` arm of a `switch` over `values` / `master`
-// inside [CommandSubscriber.handleDataPoint]. The invariant is therefore
-// stated the other way round: every literal a seven-segment `…/set` filter
-// carries at the bucket position (index 4 below the base) must NOT be one the
-// allow-list accepts, or the topic is dispatched twice — once to its own
-// handler and once as a CCU write.
-//
-// `values` and `master` are asserted as the exact accepted set rather than
-// merely "not combined, not schedule": a third accepted bucket would widen
-// the hole for any future literal-bucket filter, and the allow-list is
-// unexported with no other test naming its members.
-//
-// Pinned as a defect: the whole arrangement. The accepted set is restated
-// here because the production `switch` cannot be enumerated from a test, and
-// that restatement is itself the thing **F3** is about — it is why this test
-// asserts the DERIVED half (which literals the filters carry) rather than
-// only the restated half.
-func TestSevenSegmentLiteralBucketsAreRefusedByTheBucketAllowList(t *testing.T) {
+// The rows are the three pairs that really did overlap in this plane before
+// coalescing, plus the shapes that must NOT be called an overlap — the
+// cdps/invoke filter, which sits at seven segments alongside the bucket-aware
+// catch-all and escapes it on its literal last segment, and two filters of
+// unequal length.
+func TestFiltersOverlapDetectsAnOverlap(t *testing.T) {
 	t.Parallel()
 
-	const base = "openccu-loom"
-	// The buckets handleDataPoint's seven-segment branch accepts. Restated
-	// from the production switch, which a test cannot enumerate.
-	accepted := map[string]bool{"values": true, "master": true}
-
-	rec := newFilterRecorder()
-	if err := NewCommandSubscriber(rec, NewTopicBuilder(base), &fakeSink{}, nil).
-		Start(context.Background()); err != nil {
-		t.Fatalf("start: %v", err)
+	cases := []struct {
+		name string
+		a, b string
+		want bool
+	}{
+		{"class A: legacy catch-all x week_profile", "gh/+/+/+/+/+/set", "gh/+/+/+/+/week_profile/set", true},
+		{"class B: bucket catch-all x combined", "gh/+/+/+/+/+/+/set", "gh/+/+/+/+/combined/+/set", true},
+		{"class B: bucket catch-all x schedule", "gh/+/+/+/+/+/+/set", "gh/+/+/+/+/schedule/+/set", true},
+		{"identical filters overlap", "gh/+/+/set", "gh/+/+/set", true},
+		{"cdps/invoke escapes on its last segment", "gh/+/+/+/+/+/+/set", "gh/+/devices/+/cdps/+/+/invoke", false},
+		{"unequal length without `#`", "gh/+/+/+/+/+/set", "gh/+/+/+/+/+/+/set", false},
+		{"differing literal at the same position", "gh/+/hub/sysvars/+/set", "gh/+/hub/programs/+/set", false},
+		{"`#` swallows the rest", "gh/#", "gh/a/b/c/set", true},
 	}
-
-	literalBuckets := map[string]string{}
-	catchAll := ""
-	for _, f := range rec.recorded() {
-		rest, ok := strings.CutPrefix(f, base+"/")
-		if !ok {
-			continue
-		}
-		segs := strings.Split(rest, "/")
-		if len(segs) != 7 || segs[6] != "set" {
-			continue
-		}
-		if segs[4] == "+" {
-			catchAll = f
-			continue
-		}
-		literalBuckets[segs[4]] = f
-	}
-
-	if catchAll == "" {
-		t.Fatal("no seven-segment `…/+/set` catch-all is registered — collision class B is gone, " +
-			"so the bucket allow-list has outlived its purpose as a guard")
-	}
-	if len(literalBuckets) == 0 {
-		t.Fatal("no seven-segment filter carries a literal bucket — nothing for the allow-list to refuse")
-	}
-
-	for bucket, filter := range literalBuckets {
-		if accepted[bucket] {
-			t.Errorf("filter %q owns the bucket segment %q, and handleDataPoint's allow-list ACCEPTS %q — "+
-				"every topic matching %q is dispatched twice: once to its own handler and once as a "+
-				"CCU write to a parameter named after the next segment", filter, bucket, bucket, filter)
-		}
-	}
-	// The set itself, so a third accepted bucket is a reviewed change.
-	if len(accepted) != 2 || !accepted["values"] || !accepted["master"] {
-		t.Errorf("accepted buckets = %v, want exactly {values, master}", accepted)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := filtersOverlap(strings.Split(tc.a, "/"), strings.Split(tc.b, "/")); got != tc.want {
+				t.Errorf("filtersOverlap(%q, %q) = %v, want %v", tc.a, tc.b, got, tc.want)
+			}
+		})
 	}
 }

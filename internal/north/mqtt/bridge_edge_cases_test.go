@@ -1014,7 +1014,7 @@ func TestCommandSubscriberWeekProfileSinkError(t *testing.T) {
 	_ = sub.Start(context.Background())
 
 	// Sink error should be logged, not propagated.
-	noop.DeliverInbound("gh/+/+/+/+/week_profile/set",
+	noop.DeliverInbound("gh/+/+/+/+/+/set",
 		"gh/ccu/HmIP-RF/0001ABCD/1/week_profile/set", []byte("P1"))
 	sub.dispatcher.flush()
 	if errSink.calls.Load() != 1 {
