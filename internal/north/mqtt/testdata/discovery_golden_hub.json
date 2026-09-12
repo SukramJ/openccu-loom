@@ -7,6 +7,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -45,6 +50,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-02/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -81,6 +91,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -119,6 +134,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -265,6 +285,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -301,6 +326,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -337,6 +367,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -373,6 +408,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-02/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -409,6 +449,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -447,6 +492,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -485,6 +535,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -523,6 +578,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-02/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -561,6 +621,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -601,6 +666,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -646,6 +716,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/ccu-01/hub/programs/3721/execute_available"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -681,6 +756,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -721,6 +801,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -791,6 +876,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-02/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -829,6 +919,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -869,6 +964,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -906,6 +1006,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -947,6 +1052,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -984,6 +1094,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -1021,6 +1136,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -1062,6 +1182,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -1098,6 +1223,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -1134,6 +1264,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -1164,6 +1299,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -1194,6 +1334,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -1224,6 +1369,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -1260,6 +1410,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -1296,6 +1451,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -1332,6 +1492,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-02/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -1366,6 +1531,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -1402,6 +1572,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -1443,6 +1618,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -1477,6 +1657,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -1519,6 +1704,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -1559,6 +1749,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -1595,6 +1790,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -1635,6 +1835,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -1671,6 +1876,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -1705,6 +1915,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",
@@ -1742,6 +1957,11 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/hub/status"
         }
       ],
       "availability_mode": "all",

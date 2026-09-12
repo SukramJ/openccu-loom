@@ -220,6 +220,14 @@ type hubTopicLayout struct {
 	// Empty for every other hub entity, which is gated by the bridge alone.
 	device string
 	bridge string
+	// ccu is the per-CCU reachability gate `<base>/<central>/hub/status`,
+	// the availability source every CCU-scoped hub entity carries ALONGSIDE
+	// the bridge one. Rendered by [hubDiscoveryContext.Availability] rather
+	// than by a level, because the model's three levels are already spoken
+	// for here — bridge, and device for the program-role gate — and a hub
+	// entity's "device" is the synthetic central card, which has no
+	// reachability topic of its own to borrow.
+	ccu string
 }
 
 // State implements the shared model's topic layout.
@@ -249,6 +257,9 @@ type hubDiscoveryContext struct {
 
 	uniqueID string
 	nodeID   string
+	// ccuStatus is the per-CCU reachability gate appended to every gated
+	// hub entity's availability list. Empty suppresses the append.
+	ccuStatus string
 }
 
 // UniqueID implements [hadiscovery.Context] with the id this daemon already
@@ -257,6 +268,47 @@ func (c hubDiscoveryContext) UniqueID(*hamodel.Device, hamodel.Entity) string { 
 
 // NodeID implements [hadiscovery.Context].
 func (c hubDiscoveryContext) NodeID(*hamodel.Device) string { return c.nodeID }
+
+// Availability implements [hadiscovery.Context], appending the per-CCU
+// reachability gate to whatever the standard resolution produced.
+//
+// Home Assistant's default `availability_mode: "all"` is a conjunction over
+// the whole list, so appending is exactly the semantics wanted: an entity is
+// available when the daemon is up AND its CCU is on the bus. The existing
+// `bridge/status` entry is kept rather than replaced, because the two say
+// different things and neither implies the other — a dead daemon publishes
+// nothing about its CCUs, and a live daemon with a dead CCU says nothing
+// about itself.
+//
+// It appends rather than declaring a fourth [hamodel.AvailabilityLevel]
+// because the model's levels are resolved against a slot and a device, and a
+// hub entity's device is the synthetic central card: it has no reachability
+// topic of its own for [hamodel.LevelDevice] to render, and that level is
+// already spent on the program-role gate. The gate is a property of the
+// RENDER CONTEXT — one topic per CCU, identical for every entity of that CCU
+// — which is where it is put.
+//
+// Two cases are skipped, and both are skipped on purpose:
+//
+//   - An entity that resolved to NO availability sources at all. That is
+//     [hamodel.NoAvailability], which this plane uses for exactly one entity,
+//     the daemon-status sensor, whose whole point is to stay visible when
+//     everything else has gone quiet. Giving it a source here would undo
+//     that, and "an entity that declares no gate acquires none" is a rule
+//     that needs no per-entity list to maintain.
+//   - An entity marked [hubEntity.selfReports] — the per-interface
+//     connectivity sensors, which are the fold's own inputs.
+func (c hubDiscoveryContext) Availability(dev *hamodel.Device, e hamodel.Entity) []hadiscovery.AvailabilityEntry {
+	entries := c.StdContext.Availability(dev, e)
+	if c.ccuStatus == "" || len(entries) == 0 {
+		return entries
+	}
+	return append(entries, hadiscovery.AvailabilityEntry{
+		Topic:               c.ccuStatus,
+		PayloadAvailable:    hadiscovery.PayloadOnline,
+		PayloadNotAvailable: hadiscovery.PayloadOffline,
+	})
+}
 
 // ObjectID implements [hadiscovery.Context]. This plane DOES publish an
 // entity-id seed, and the seed is the UNIQUE ID rather than the discovery
@@ -275,6 +327,14 @@ type hubEntity struct {
 	hamodel.Basic
 
 	fields any
+	// selfReports marks an entity whose own STATE is the CCU-reachability
+	// signal the per-CCU gate is folded from. Such an entity is the one
+	// place an operator reads why a CCU went quiet, so it must not be gated
+	// on the answer it is reporting — pointing its availability at the fold
+	// makes it unavailable in exactly the situation it exists for, which is
+	// the same reasoning [DefaultDiscoveryBuilder.BuildDaemonStatusDiscovery]
+	// applies one level up, against `bridge/status`.
+	selfReports bool
 }
 
 // BuildDiscovery implements [hadiscovery.Builder].
@@ -329,6 +389,10 @@ func (d *DefaultDiscoveryBuilder) renderHubItem(
 	if dev == nil {
 		return DiscoveryItem{}
 	}
+	ccu := layout.ccu
+	if e.selfReports {
+		ccu = ""
+	}
 	ctx := hubDiscoveryContext{
 		StdContext: hadiscovery.StdContext{
 			Layout:     layout,
@@ -336,8 +400,9 @@ func (d *DefaultDiscoveryBuilder) renderHubItem(
 			Enc:        hadiscovery.RawEncoding,
 			Translator: d.tr,
 		},
-		uniqueID: uniqueID,
-		nodeID:   nodeID,
+		uniqueID:  uniqueID,
+		nodeID:    nodeID,
+		ccuStatus: ccu,
 	}
 	comp, err := hadiscovery.RenderComponent(ctx, dev, e, *BuildOriginInfo())
 	if err != nil {
@@ -349,8 +414,12 @@ func (d *DefaultDiscoveryBuilder) renderHubItem(
 // hubLayout is the topic layout every central-scoped hub entity renders
 // under: one state topic and the daemon's own LWT as the sole availability
 // source.
-func (d *DefaultDiscoveryBuilder) hubLayout(stateTopic string) hubTopicLayout {
-	return hubTopicLayout{state: stateTopic, bridge: d.TopicBuilder.BridgeStatus()}
+func (d *DefaultDiscoveryBuilder) hubLayout(centralName, stateTopic string) hubTopicLayout {
+	return hubTopicLayout{
+		state:  stateTopic,
+		bridge: d.TopicBuilder.BridgeStatus(),
+		ccu:    d.TopicBuilder.HubStatus(centralName),
+	}
 }
 
 // ----------------------------- Sysvar -----------------------------
@@ -536,7 +605,7 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv Hu
 
 	entity.EntityPlatform = hacatalog.Platform(component)
 	entity.Binds = hubBinds(hubSlot(dev, centralName, "sysvar", sv.Name), true, writes)
-	layout := d.hubLayout(stateTopic)
+	layout := d.hubLayout(centralName, stateTopic)
 	layout.command = commandTopic
 	return d.renderHubItem(dev, entity, layout, uniqueID, hubNodeID(centralName, "sysvars"), objectID)
 }
@@ -634,7 +703,7 @@ func (d *DefaultDiscoveryBuilder) buildProgramRole(
 			},
 		},
 	}
-	layout := d.hubLayout(role.Topics.State)
+	layout := d.hubLayout(centralName, role.Topics.State)
 	if role.Topics.Availability != "" {
 		// A role that declares its own gate adds it as the model's
 		// [hamodel.LevelDevice] source — the default level pair is bridge
@@ -713,7 +782,7 @@ func (d *DefaultDiscoveryBuilder) BuildProgramDiscovery(centralName string, p Hu
 			StateOff:   "false",
 		},
 	}
-	layout := d.hubLayout(stateTopic)
+	layout := d.hubLayout(centralName, stateTopic)
 	layout.command = commandTopic
 	return d.renderHubItem(dev, entity, layout, uniqueID, hubNodeID(centralName, "programs"), objectID)
 }
@@ -754,7 +823,7 @@ func (d *DefaultDiscoveryBuilder) BuildAlarmMessagesDiscovery(centralName string
 			Binds: hubBinds(hubSlot(dev, centralName, "alarm_messages"), true, false),
 		},
 	}
-	return d.renderHubItem(dev, entity, d.hubLayout(topic), uniqueID, hubNodeID(centralName, "messages"), "alarm")
+	return d.renderHubItem(dev, entity, d.hubLayout(centralName, topic), uniqueID, hubNodeID(centralName, "messages"), "alarm")
 }
 
 // BuildServiceMessagesDiscovery is the maintenance-list counterpart
@@ -786,7 +855,7 @@ func (d *DefaultDiscoveryBuilder) BuildServiceMessagesDiscovery(centralName stri
 			Binds: hubBinds(hubSlot(dev, centralName, "service_messages"), true, false),
 		},
 	}
-	return d.renderHubItem(dev, entity, d.hubLayout(topic), uniqueID, hubNodeID(centralName, "messages"), "service")
+	return d.renderHubItem(dev, entity, d.hubLayout(centralName, topic), uniqueID, hubNodeID(centralName, "messages"), "service")
 }
 
 // ------------------------- Inbox ----------------------------------
@@ -824,7 +893,7 @@ func (d *DefaultDiscoveryBuilder) BuildInboxDiscovery(centralName string) Discov
 			Binds: hubBinds(hubSlot(dev, centralName, "inbox"), true, false),
 		},
 	}
-	return d.renderHubItem(dev, entity, d.hubLayout(topic), uniqueID, hubNodeID(centralName, "messages"), "inbox")
+	return d.renderHubItem(dev, entity, d.hubLayout(centralName, topic), uniqueID, hubNodeID(centralName, "messages"), "inbox")
 }
 
 // ----------------------- InstallMode ------------------------------
@@ -910,7 +979,7 @@ func (d *DefaultDiscoveryBuilder) BuildInstallModeSensorDiscovery(centralName, i
 			Binds: hubBinds(hubSlot(dev, centralName, "install_mode", suffix), true, false),
 		},
 	}
-	return d.renderHubItem(dev, entity, d.hubLayout(topic), uniqueID,
+	return d.renderHubItem(dev, entity, d.hubLayout(centralName, topic), uniqueID,
 		hubNodeID(centralName, "central"), "install_mode_"+suffix)
 }
 
@@ -959,7 +1028,7 @@ func (d *DefaultDiscoveryBuilder) BuildInstallModeButtonDiscovery(centralName, i
 		},
 		fields: hadiscovery.ButtonFields{PayloadPress: "PRESS"},
 	}
-	layout := d.hubLayout("")
+	layout := d.hubLayout(centralName, "")
 	layout.command = commandTopic
 	return d.renderHubItem(dev, entity, layout, uniqueID,
 		hubNodeID(centralName, "central"), "install_mode_"+suffix+"_button")
@@ -993,9 +1062,11 @@ func (d *DefaultDiscoveryBuilder) BuildConnectivityDiscovery(centralName, iface 
 				NameArgs:    map[string]string{"iface": iface},
 				DeviceClass: "connectivity",
 				Category:    "diagnostic",
-				// Bridge only. This sensor's whole job is to report that an
-				// interface is down, so gating it on that interface would
-				// make it unavailable in the one situation it exists for.
+				// Bridge only, and no per-CCU gate either (see
+				// [hubEntity.selfReports] below). This sensor's whole job is
+				// to report that an interface is down, so gating it on that
+				// interface — or on the fold its own state feeds — would make
+				// it unavailable in the one situation it exists for.
 				Availability: hamodel.BridgeOnly(),
 			},
 			Binds: hubBinds(hubSlot(dev, centralName, "connectivity", iface), true, false),
@@ -1004,8 +1075,11 @@ func (d *DefaultDiscoveryBuilder) BuildConnectivityDiscovery(centralName, iface 
 			PayloadOn:  "true",
 			PayloadOff: "false",
 		},
+		// This sensor's state is an input to the per-CCU reachability fold,
+		// so it takes no availability from it — see [hubEntity.selfReports].
+		selfReports: true,
 	}
-	return d.renderHubItem(dev, entity, d.hubLayout(topic), uniqueID,
+	return d.renderHubItem(dev, entity, d.hubLayout(centralName, topic), uniqueID,
 		hubNodeID(centralName, "connectivity"), safeLower(iface))
 }
 
@@ -1061,7 +1135,7 @@ func (d *DefaultDiscoveryBuilder) BuildDaemonStatusDiscovery(centralName string)
 			PayloadOff: "offline",
 		},
 	}
-	return d.renderHubItem(dev, entity, d.hubLayout(d.TopicBuilder.BridgeStatus()), uniqueID,
+	return d.renderHubItem(dev, entity, d.hubLayout(centralName, d.TopicBuilder.BridgeStatus()), uniqueID,
 		hubNodeID(centralName, "system"), "daemon_status")
 }
 
@@ -1117,7 +1191,7 @@ func (d *DefaultDiscoveryBuilder) hubMetricItem(
 			Binds:          hubBinds(hubSlot(dev, centralName, key), true, false),
 		},
 	}
-	return d.renderHubItem(dev, entity, d.hubLayout(stateTopic), uniqueID,
+	return d.renderHubItem(dev, entity, d.hubLayout(centralName, stateTopic), uniqueID,
 		hubNodeID(centralName, "system"), key)
 }
 
@@ -1231,7 +1305,7 @@ func (d *DefaultDiscoveryBuilder) BuildHubUpdateDiscovery(centralName string) Di
 			LatestVersionTemplate: "{{ value_json.latest_version }}",
 		},
 	}
-	return d.renderHubItem(dev, entity, d.hubLayout(topic), uniqueID,
+	return d.renderHubItem(dev, entity, d.hubLayout(centralName, topic), uniqueID,
 		hubNodeID(centralName, "system"), "system_update")
 }
 

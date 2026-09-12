@@ -115,6 +115,7 @@ Go builder method: `TopicBuilder.DiscoveryConfig`.
 |---|---|
 | Bridge online/offline (LWT) | `<base>/bridge/status` |
 | Bridge health (build + boot metadata) | `<base>/bridge/health` |
+| CCU reachability gate (retained) | `<base>/<central>/hub/status` |
 | System-variable state | `<base>/<central>/hub/sysvars/<name>/state` |
 | System-variable set | `<base>/<central>/hub/sysvars/<name>/set` |
 | Program state (active flag, retained) | `<base>/<central>/hub/programs/<id>/state` |
@@ -123,6 +124,38 @@ Go builder method: `TopicBuilder.DiscoveryConfig`.
 | Program execute availability | `<base>/<central>/hub/programs/<id>/execute_available` |
 | Interface connectivity | `<base>/<central>/hub/connectivity/<iface>` |
 | System status event | `<base>/<central>/system/status` |
+
+`<base>/<central>/hub/status` carries `online` / `offline` and is the
+**per-CCU availability gate**: every CCU-scoped hub entity lists it in its
+discovery `availability` block *alongside* `<base>/bridge/status`. Home
+Assistant's default `availability_mode: "all"` is a conjunction over that
+list, so such an entity is available only while the daemon is up **and** its
+CCU is on the bus. Before this topic existed, a CCU that went unreachable
+while the daemon stayed up left every one of its sysvars, programs, system
+scores and message aggregates "available" in Home Assistant, showing whatever
+they last reported, indefinitely.
+
+The value is a fold over the CCU's interface states: `online` while **at
+least one** interface is reachable, `offline` once none is. One interface
+down is a per-interface fault, reported by the per-interface connectivity
+binary sensor above, and does not mean the CCU is gone — a CCU that is gone
+takes every interface with it. A flip is debounced: a level has to hold for
+15 s before it is written, so a flapping interface produces no retained
+traffic and no strobing entities.
+
+Two hub entities deliberately do **not** list it: the per-interface
+connectivity binary sensors, whose state is the fold's own input, and the
+"Daemon connection" sensor below. Gating either on the answer it reports
+would make it unavailable in exactly the situation it exists for.
+
+On a graceful stop the daemon writes `offline` to every per-CCU gate before
+it writes the bridge marker. It carries **no Last Will of its own** — MQTT
+allows one will per connection and the daemon's is spent on
+`<base>/bridge/status` — and needs none: the will's `bridge/status: offline`
+already makes every gated entity unavailable, because the availability list
+is a conjunction. A stale retained `online` left by a killed daemon is a
+false statement on a readable topic, not a ghost entity, and the next
+connect repairs it before that CCU's discovery configs are republished.
 
 `<base>/bridge/status` is also the state source of the "Daemon connection"
 binary sensor published for every central. That entity carries no
@@ -146,28 +179,26 @@ free functions rather than `TopicBuilder` methods: `naming.MQTTHubSysvarState`,
 
 #### Reserved `hub/` shapes — nothing publishes here
 
-These three shapes have a topic builder and no publisher. **Do not
-subscribe to them**: no daemon build has ever put a byte on any of them,
-and an availability source or a template sensor pointing at one waits
+These two shapes have a topic builder and no publisher. **Do not
+subscribe to them**: no daemon build has ever put a byte on either, and
+an availability source or a template sensor pointing at one waits
 forever.
 
 | Reserved shape | Builder | Production publishers |
 |---|---|---|
-| `<base>/<central>/hub/status` | `TopicBuilder.HubStatus` | none |
 | `<base>/<central>/hub/info` | `TopicBuilder.HubInfo` | none |
 | `<base>/<central>/hub/diagnostics` | `TopicBuilder.HubDiagnostics` | none |
 
 `hub/status` and `hub/info` were promised by this document — as "CCU
 connection status" and "CCU info snapshot" — from its first revision
-until 2026-09-12, when the promise was withdrawn rather than kept; see
-[ADR 0011's amendment of 2026-09-12](./adr/0011-mqtt-topic-and-payload-architecture.md).
-`hub/diagnostics` was never documented. The builders are kept so the
-shapes stay pinned and cannot drift if one of them does gain a
-publisher, which stays a possibility for `hub/status`: a per-CCU
-availability rollup is the missing availability source for CCU-scoped
-entities, which today reference `<base>/bridge/status` and therefore
-stay "available" while their CCU is unreachable. Adding it is new
-published traffic and belongs in its own change.
+until 2026-09-12, when both promises were withdrawn rather than kept;
+see [ADR 0011's amendment of 2026-09-12](./adr/0011-mqtt-topic-and-payload-architecture.md).
+`hub/status` was the one of the three the withdrawal named a real gap
+behind, and on 2026-09-13 it was implemented and moved into the
+published table above — the per-CCU availability gate. `hub/info` and
+`hub/diagnostics` stay reserved. `hub/diagnostics` was never documented.
+The builders are kept so the shapes stay pinned and cannot drift if one
+of them does gain a publisher.
 
 Where the same information already reaches a consumer:
 

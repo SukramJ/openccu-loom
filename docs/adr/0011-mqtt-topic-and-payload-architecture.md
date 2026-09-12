@@ -794,6 +794,137 @@ custom-DP type name in `internal/north/mqtt/` outside test fixtures"
 contract invariant — land as ordinary refactors when the
 surrounding files are touched.
 
+## Amendment (2026-09-13) — `hub/status` is published: the per-CCU availability gate
+
+The 2026-09-12 amendment above withdrew `hub/status` from the schema
+document as a reserved shape and named, in the same breath, the defect
+behind it: *every CCU-scoped hub entity takes availability from
+`bridge/status`, so an unreachable CCU leaves its entities "available"
+with stale values.* The daemon's Last Will says only whether the DAEMON
+is alive. A CCU that drops off the bus — a power cut, a pulled network
+cable, a ReGa that stopped answering — leaves every one of its sysvars,
+programs, system scores, install-mode entities and message aggregates
+looking live in Home Assistant, showing whatever they last reported, for
+as long as the daemon stays up. There is no timeout behind it.
+
+This amendment records the fix. `<base>/<central>/hub/status` is a
+published topic class as of this date, moved into the schema document's
+"Bridge / hub status" table, and
+`tests/contract/mqtt_topic_schema_producer_test.go` classifies it
+`promisePublished`. `hub/info` and `hub/diagnostics` stay reserved.
+
+### What is on the topic
+
+A retained `online` / `offline` marker per configured CCU, published
+through the shared `publisher.AvailabilityPublisher` at **QoS 1** — the
+level PR #803 pinned for every availability flip *and* every retraction,
+because an availability level is written only on a transition and is
+therefore not repaired by a later publish. A lost `offline` here is
+precisely the defect this topic exists to fix, left unfixed.
+
+### The fold: reachable means ANY interface, not ALL
+
+The value is a disjunction over the CCU's per-interface reachability
+states: `online` while at least one interface is reachable, `offline`
+once none is.
+
+The conjunction was the other candidate and is wrong here. One interface
+down is a per-interface fault with its own entity — the connectivity
+`binary_sensor` this ADR already pins at
+`<base>/<central>/hub/connectivity/<iface>` — and the ordinary shapes of
+it (a crashed CUxD, an unplugged HmIP-Wired gateway, a BidCoS radio
+module the CCU restarts by itself) leave the ReGa logic layer answering
+normally. Everything gated by this topic is ReGa-scoped, not
+interface-scoped: sysvar values, program state, the system scores, the
+message aggregates. Their values are not stale while ReGa is alive, and
+greying them out because one radio is down would hide a working CCU
+behind an unrelated fault, and would do it on a topic whose whole purpose
+is to be trusted. The disjunction reports the CCU gone exactly when it is
+gone, because a CCU that goes away takes every interface process with it
+and they flip together.
+
+An unobserved tracker folds to `online`. Nothing in the hub plane is
+published before the CCU's serial has been read off it, so "no interface
+state yet" at that point means the daemon has just demonstrated it can
+talk to the CCU. Folding it the other way would publish a retained
+`offline` and grey out every hub entity of a healthy CCU on every daemon
+start.
+
+### The debounce: a dwell, not a rate limit
+
+A folded level has to hold for **15 seconds** before it is written.
+
+The distinction matters. A rate limit would still write both ends of a
+flap, just more slowly. A dwell absorbs the flap entirely: a level that
+does not survive the window is never written at all, so an interface
+that bounces down and up inside the window puts nothing on the wire and
+Home Assistant sees nothing. Without it, a flapping CCU produces a burst
+of retained messages AND strobes every CCU-scoped entity between
+available and unavailable — worse than either steady state, because an
+operator watching the dashboard sees values blink out and return, and
+any automation with an `unavailable` trigger fires on every blink.
+
+The dwell is symmetric: recovery is debounced exactly like loss. An
+asymmetric gate that published `online` immediately would still strobe,
+because a flap alternates — every upward edge would reach the broker and
+only the downward ones would be held.
+
+The one write that is never debounced is the FIRST one for a CCU. Home
+Assistant holds an entity unavailable until every topic in its
+`availability` list has reported a payload it recognises, so the gate's
+first retained byte has to exist before the discovery configs that name
+it; debouncing it would grey out the whole hub plane for the dwell on
+every daemon start, against no previous level to flap with. The seed is
+queued ahead of every hub discovery build in `wireOneCentral`, and the
+fan-out worker is FIFO, which is what orders the byte before the configs.
+
+### Availability lists: added alongside, never instead
+
+Every CCU-scoped hub entity now lists `<base>/<central>/hub/status` in
+its discovery `availability` block **in addition to**
+`<base>/bridge/status`. Home Assistant's default `availability_mode:
+"all"` is a conjunction over that list, which is exactly the wanted
+semantics: available when the daemon is up AND the CCU is on the bus.
+The two statements are independent and neither implies the other — a
+dead daemon publishes nothing about its CCUs, and a live daemon with a
+dead CCU says nothing about itself — so replacing rather than adding
+would have traded one blind spot for another.
+
+Two hub entities deliberately do not list it, for one reason stated
+twice:
+
+- The per-interface **connectivity** sensors, whose state is the fold's
+  own input. Gating them on the fold makes them unavailable in exactly
+  the situation they exist to report.
+- The **daemon-status** sensor, which already carries no availability
+  block at all for the same reason one level up.
+
+### LWT ordering
+
+MQTT permits exactly **one** Last Will per connection, and this daemon's
+is spent on `<base>/bridge/status`. `hub/status` therefore *cannot* have
+a will of its own; that is a protocol fact, not a design choice.
+
+It needs none. Because the gate is added alongside `bridge/status` and
+the list is a conjunction, the will's `bridge/status: offline` alone is
+enough to make every CCU-scoped entity unavailable, whatever the per-CCU
+gates still say. A retained `online` that outlives a killed daemon is a
+false STATEMENT on a topic an operator can read, not a ghost entity.
+
+The daemon repairs the statement wherever it can:
+
+- **Graceful stop.** The broker discards the will of a client that
+  disconnects cleanly, so `Bridge.AnnounceOffline` is the only thing that
+  ever writes `offline`. It now writes every per-CCU gate FIRST and the
+  bridge marker second, so no instant exists in which the daemon has
+  declared itself gone while its CCU gates still claim reachability.
+- **Ungraceful death.** The will covers the entities; the next connect
+  repairs the statement, because the per-CCU seed republishes the current
+  fold before that CCU's discovery configs.
+- **A CCU removed from the fleet.** `offline` would be a claim about a
+  CCU that no longer exists, so `RetractCentral` retracts the topic
+  instead, through the same availability publisher that wrote it.
+
 ## Reference: comparable implementations
 
 - `aiohomematic2mqtt` 2026.4.0 — per-DP `device/status/<addr>/<ch>/<param>/state`

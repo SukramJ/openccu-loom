@@ -536,6 +536,10 @@ type Bridge struct {
 	// finding F6 was about: before this, device availability topics were in
 	// no index at all and reachable only by reconstructing their names.
 	avail *hapublisher.AvailabilityPublisher
+	// hubStatus debounces the per-CCU reachability gate published at
+	// `<base>/<central>/hub/status`. It holds only the levels already
+	// written, never the reachability itself — see [hubStatusGate].
+	hubStatus *hubStatusGate
 	// planesDeclared marks the planes that have completed a discovery
 	// pass, so the orphan sweep can tell an orphan from an entity that
 	// simply has not been published yet.
@@ -644,6 +648,7 @@ func NewBridge(cfg BridgeConfig, client Publisher) *Bridge {
 	b.pub = newDiscoveryRuntime(b, logger)
 	b.state = newStatePublisher(b, logger)
 	b.avail = newAvailabilityPublisher(b, logger)
+	b.hubStatus = newHubStatusGate(hubStatusDwell)
 	return b
 }
 
@@ -791,7 +796,11 @@ func (b *Bridge) AnnounceOnline(ctx context.Context) error {
 //
 // The health snapshot on `<base>/bridge/health` is left at its last value for
 // the same reason: it describes the run that just ended.
+// The per-CCU reachability gates go first, before the bridge marker — see
+// [Bridge.announceHubStatusOffline] for the ordering and why the gate needs
+// no will of its own.
 func (b *Bridge) AnnounceOffline(ctx context.Context) error {
+	b.announceHubStatusOffline(ctx)
 	return b.pub.AnnounceOffline(ctx)
 }
 
