@@ -1,14 +1,14 @@
 # Dead-Code Summary
 
-Generated: 79bd8362
-HEAD: 79bd8362
+Generated: 3ada25bc
+HEAD: 3ada25bc
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 5611 |
-| Reachable | 3577 |
+| Total Exported | 5607 |
+| Reachable | 3573 |
 | Whitelisted | 1975 |
 | **Unreachable** | **59** |
 

@@ -689,8 +689,9 @@ func (s *Sysvar) PathData() naming.PathData {
 // MQTTTopics implements [payload.MQTTAddressable] — the canonical
 // ADR-0011 sysvar topology. The model owns the topic decision; the
 // bridge is a pass-through that only fills in `base` and `central`.
-// Legacy mirror topics are a bridge-operations detail and live
-// behind LegacyAliasConfig in the north/mqtt package.
+// There is no second, mirrored topology: the legacy-alias opt-in this
+// comment used to defer to was never reachable and has been removed
+// (see ADR 0006's amendment).
 func (s *Sysvar) MQTTTopics(base, centralName string) payload.MQTTTopicSet {
 	// One read of the name for the whole topic set: a rename between the
 	// state and the command topic would otherwise publish a pair that does

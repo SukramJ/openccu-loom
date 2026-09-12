@@ -722,8 +722,10 @@ func MQTTHubProgramState(base, centralName, id string) string {
 }
 
 // MQTTHubInstallMode is the canonical install-mode countdown topic
-// `<base>/<central>/hub/install_mode`. The legacy form lives at
-// `<base>/<central>/install_mode` and is gated by LegacyAliasConfig.
+// `<base>/<central>/hub/install_mode`. It is the only form the daemon
+// publishes; the flat `<base>/<central>/install_mode` shape this comment
+// used to describe as a gated legacy alias was never published by any
+// build (see ADR 0006's amendment).
 func MQTTHubInstallMode(base, centralName string) string {
 	return fmt.Sprintf("%s/%s/hub/install_mode", strings.Trim(base, "/"), TopicSafe(centralName))
 }

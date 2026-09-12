@@ -431,12 +431,13 @@ func TestHubMQTTPublisherStartIsIdempotent(t *testing.T) {
 
 	publisher.Flush()
 	after := pub.Published()
-	// Default config publishes only the canonical ADR-0011 topic
-	// `<central>/hub/sysvars/<name>/state` — both legacy mirrors
-	// (flat `<central>/sysvars/<name>` and transitional
-	// `<central>/hub/sysvars/<name>`) are gated by
-	// LegacyAliasConfig.HubTopics (off by default). A double-
-	// subscription regression would manifest as 2+ publishes here.
+	// The publisher writes exactly one topic per sysvar change: the
+	// canonical ADR-0011 `<central>/hub/sysvars/<name>/state`. The two
+	// mirrors this comment used to name (flat `<central>/sysvars/<name>`
+	// and transitional `<central>/hub/sysvars/<name>`) were never
+	// published by any build — `LegacyAliasConfig.HubTopics` never
+	// existed as a field. A double-subscription regression would
+	// manifest as 2+ publishes here.
 	const expectedPerSubscription = 1
 	newPublishes := len(after) - prev
 	if newPublishes != expectedPerSubscription {

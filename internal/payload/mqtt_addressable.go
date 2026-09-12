@@ -49,10 +49,11 @@ func (t MQTTTopicSet) IsZero() bool {
 // `base` and `central` are bridge-runtime context (broker prefix and
 // CCU name); they live on the bridge config, not on the model.
 //
-// Legacy mirror topics are an operations-level concern (gated by
-// LegacyAliasConfig in north/mqtt) and intentionally NOT part of
-// this interface — the model exposes truth, the bridge decides how
-// many copies it ships.
+// The model exposes truth and the bridge decides how many copies it
+// ships, so a mirrored topology would be an operations-level concern
+// and not part of this interface. None exists: the legacy-alias
+// opt-in that was the standing example was never reachable and has
+// been removed (see ADR 0006's amendment).
 type MQTTAddressable interface {
 	MQTTTopics(base, centralName string) MQTTTopicSet
 }

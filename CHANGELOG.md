@@ -64,6 +64,35 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 
+- **The `LegacyAlias` topic mirror, an opt-in no operator could ever
+  take.** `internal/north/mqtt/legacy_alias.go` mirrored every per-DP
+  state and device-availability publish onto the flat
+  `{base}/device/status/{addr}/{addr}_{ch}_{param}` tree of the bridge
+  that preceded this one, behind `BridgeConfig.LegacyAlias.Enabled`.
+  That field had no YAML key, no environment override, no flag and no
+  build tag; the one production `NewBridge` call site never assigned it,
+  so it was the Go zero value `false` on every build ever produced and
+  all six `if b.legacy != nil` branches in `bridge.go` were dead. The
+  only sites that ever set it were five tests.
+
+  What settles it is not the count but the shape of what was missing.
+  ADR 0006 named this the migration path off the `hub/` topology and
+  pointed at a `LegacyAliasConfig.HubTopics` field and a
+  `HubTopicBuilder` type — neither of which ever existed in any commit;
+  the file has been byte-identical, two types and three functions, since
+  the initial release. The mirror that did exist was of the *device*
+  tree, so it could not have carried anyone across the `hub/` drop even
+  if it had been reachable. ADR 0006 and ADR 0007 both carry an
+  amendment recording that, rather than being edited as though they had
+  always said something else.
+
+  `Bridge.renderStatePayload` goes with it. It was the mirror's payload
+  renderer and the only place in the north/mqtt package that read the
+  wall clock at publish time, stamping `modified_at` from `time.Now()`
+  instead of from the event — one of the two payload shapes that would
+  defeat a byte-comparison dedup gate on the state plane. No published
+  byte moves: every removed branch was behind the nil check.
+
 - **The text display's aggregate `text` entity, which nothing could ever
   reach and nothing could ever fill.** `TextDisplay` was migrated onto
   the shared model in #792 for consistency with the other fifteen

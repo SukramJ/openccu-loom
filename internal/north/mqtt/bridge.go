@@ -22,10 +22,8 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/metrics"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
-	paramlib "github.com/SukramJ/openccu-loom/internal/parameter"
 	pload "github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
 
 // QoSProfile is the per-category default. Individual topics can
@@ -112,11 +110,6 @@ type BridgeConfig struct {
 	// friendly names for CCU-auto-generated system variables). Passed to the
 	// auto-created default discovery builder. Empty falls back to English.
 	Locale string
-
-	// LegacyAlias mirrors PublishState + PublishAvailability under
-	// The
-	// same data during migration. Disabled by default.
-	LegacyAlias LegacyAliasConfig
 
 	// Visibility, when non-nil, gates every PublishState call: if the
 	// parameter is not visible the publish is silently skipped. Nil
@@ -507,7 +500,6 @@ type ValueListLabeler interface {
 type Bridge struct {
 	cfg    BridgeConfig
 	topics *TopicBuilder
-	legacy *LegacyTopicBuilder // nil when LegacyAlias.Enabled = false
 	client Publisher
 	// subscriber is the subscribe-capable client the boot-time cleanup
 	// passes ride on. In production the publish path (`client`) is
@@ -601,10 +593,6 @@ func NewBridge(cfg BridgeConfig, client Publisher) *Bridge {
 	if cfg.QoS == (QoSProfile{}) {
 		cfg.QoS = DefaultQoS
 	}
-	var legacy *LegacyTopicBuilder
-	if cfg.LegacyAlias.Enabled {
-		legacy = NewLegacyTopicBuilder(cfg.LegacyAlias.Base)
-	}
 	topics := NewTopicBuilder(cfg.Base)
 	// Adopt the builder's normalised base as the bridge's own. cfg.Base is
 	// the operator's raw `north.mqtt.topic_base`, while every publisher goes
@@ -630,7 +618,6 @@ func NewBridge(cfg BridgeConfig, client Publisher) *Bridge {
 	b := &Bridge{
 		cfg:         cfg,
 		topics:      topics,
-		legacy:      legacy,
 		client:      client,
 		logger:      logger,
 		configCache: make(map[string][]byte),
@@ -992,16 +979,14 @@ func (b *Bridge) AnnounceOffline(ctx context.Context) error {
 	return b.pub.AnnounceOffline(ctx)
 }
 
-// PublishState publishes a device data point's current value to the
-// raw plane and — when enabled — emits the corresponding HA
-// Discovery config (idempotent per topic).
+// PublishState emits the HA Discovery config for a device data point's
+// current value (idempotent per topic).
 //
-// When LegacyAlias is enabled the same payload is mirrored under the
-// older flat topology built by [LegacyTopicBuilder]
-// (`{base}/device/status/{address}/{address}_{channel}_{parameter}`).
-// The mirror is best-effort: a publish error on the legacy topic is
-// swallowed rather than propagated, because the legacy tree is
-// secondary to the canonical PerDPState publish.
+// It publishes no state of its own. The per-parameter state publish is
+// [Bridge.PublishSlotState], which owns the canonical
+// `<addr>/<ch>/<bucket>/<param>` shape and the [pload.PerDPState]
+// envelope; the custom-DP slot publish is
+// [EventBridge.publishCustomDPState].
 func (b *Bridge) PublishState(ctx context.Context, ev Event) error {
 	// Visibility gate: skip the entire publish (raw + discovery) when the
 	// parameter is not allowed. Returns nil — a not-visible parameter is not
@@ -1017,24 +1002,6 @@ func (b *Bridge) PublishState(ctx context.Context, ev Event) error {
 	// so a hidden channel disappears from the MQTT plane too.
 	if b.cfg.ChannelHidden != nil && b.cfg.ChannelHidden(ev.Central, ev.ChannelAddress) {
 		return nil
-	}
-	// Per-parameter raw state publish lives on
-	// [EventBridge.publishSlotState] / [Bridge.PublishSlotState],
-	// which owns the canonical `<addr>/<ch>/<bucket>/<param>` shape
-	// and emits the full PerDPState envelope. PublishState here only
-	// handles the legacy-alias mirror and the HA-Discovery payload
-	// publish. The custom-DP slot publish (`<addr>/<ch>/custom/<kind>`)
-	// is owned by [EventBridge.publishCustomDPState] — not this method.
-	if b.cfg.RawEnabled && b.legacy != nil {
-		payloadBytes, err := b.renderStatePayload(ev)
-		if err != nil {
-			return err
-		}
-		legacyTopic := b.legacy.DataPointState(ev.DeviceAddress, ev.ChannelNo, ev.Parameter)
-		// Best-effort mirror — the canonical PerDPState publish via
-		// PublishSlotState is the source of truth.
-		_ = b.client.Publish(ctx, legacyTopic, payloadBytes, b.cfg.QoS.State, true)
-		b.rememberRawTopic(legacyTopic)
 	}
 	if b.cfg.HADiscoveryEnabled && b.cfg.DiscoveryBuilder != nil {
 		component, nodeID, objectID, cfgPayload, ok := b.cfg.DiscoveryBuilder.Build(ev)
@@ -1224,8 +1191,6 @@ func (b *Bridge) PublishDeviceDiagnostics(ctx context.Context, centralName, ifac
 }
 
 // PublishAvailability toggles the retained availability topic.
-// LegacyAlias mirrors the availability flag under
-// `{legacy_base}/device/availability/{address}` when enabled.
 func (b *Bridge) PublishAvailability(ctx context.Context, centralName, iface, address string, online bool) error {
 	if !b.cfg.RawEnabled {
 		return nil
@@ -1234,13 +1199,7 @@ func (b *Bridge) PublishAvailability(ctx context.Context, centralName, iface, ad
 	if online {
 		body = []byte("online")
 	}
-	if err := b.client.Publish(ctx, b.topics.DeviceAvailability(centralName, iface, address), body, QoS1, true); err != nil {
-		return err
-	}
-	if b.legacy != nil {
-		_ = b.client.Publish(ctx, b.legacy.DeviceAvailability(address), body, QoS1, true)
-	}
-	return nil
+	return b.client.Publish(ctx, b.topics.DeviceAvailability(centralName, iface, address), body, QoS1, true)
 }
 
 // PublishEvent emits a pulse (non-retained) event on the raw plane.
@@ -1633,11 +1592,6 @@ func (b *Bridge) EvictState(
 	// retract-side helper deletes from its maps for exactly this reason;
 	// this side now does too.
 	b.forgetRawTopic(topic)
-	if b.legacy != nil {
-		legacyTopic := b.legacy.DataPointState(address, channel, parameter)
-		_ = b.client.Publish(ctx, legacyTopic, []byte{}, b.cfg.QoS.State, true)
-		b.forgetRawTopic(legacyTopic)
-	}
 	return nil
 }
 
@@ -2118,18 +2072,9 @@ func (b *Bridge) RetractRawStateForDevice(ctx context.Context, centralName, ifac
 	// subtree's sysvar names were reachable the same way.
 	addr := strings.ToLower(safe(deviceAddress))
 	rawPrefix := strings.ToLower(rawCentralPrefix(b.cfg.Base, centralName))
-	var legacyPrefix string
-	if b.legacy != nil {
-		legacyPrefix = strings.ToLower(b.legacy.Base + "/device/")
-	}
 	match := func(topic string) bool {
 		if rest, ok := strings.CutPrefix(topic, rawPrefix); ok {
 			return topicSegment(rest, 1) == addr
-		}
-		if legacyPrefix != "" {
-			if rest, ok := strings.CutPrefix(topic, legacyPrefix); ok {
-				return topicSegment(rest, 1) == addr
-			}
 		}
 		return false
 	}
@@ -2145,13 +2090,6 @@ func (b *Bridge) RetractRawStateForDevice(ctx context.Context, centralName, ifac
 			continue
 		}
 		n++
-	}
-	if b.legacy != nil {
-		if err := b.client.Publish(ctx, b.legacy.DeviceAvailability(deviceAddress), nil, b.cfg.QoS.State, true); err != nil {
-			b.incPublishErrors(centralName)
-		} else {
-			n++
-		}
 	}
 	return n
 }
@@ -2248,50 +2186,6 @@ func (b *Bridge) incPublishErrors(centralName string) {
 	if b.collector != nil {
 		b.collector.PublishErrors(centralName).Inc()
 	}
-}
-
-// renderStatePayload returns the canonical JSON envelope
-// `{"value": <v>, "available": true, "modified_at": "<rfc3339>"}` for
-// the legacy-alias mirror topic. The canonical slot-state pipeline
-// uses [PublishSlotState] with the typed [pload.PerDPState] envelope.
-//
-// "available" is always true: this path runs for fresh data points
-// the daemon has just observed. The per-device-availability topic
-// carries the device-level reachability flag and is referenced as a
-// secondary availability source in the HA discovery payload.
-func (b *Bridge) renderStatePayload(ev Event) ([]byte, error) {
-	value := resolveEnumLabel(ev.Value, ev.descType(), ev.descValueList())
-	body := map[string]any{
-		"value":       value,
-		"available":   true,
-		"modified_at": time.Now().UTC().Format(time.RFC3339Nano),
-	}
-	return json.Marshal(body)
-}
-
-// ResolveEnumLabel converts an ENUM-typed wire value (an int index) into the
-// matching VALUE_LIST label. HA's MQTT discovery declares `options: [...]`
-// from the same VALUE_LIST; without the lookup the raw integer "2" reaches
-// the broker and HA logs `Ignoring invalid option received ... got '2',
-// allowed: ...`.
-//
-// Returns the original value for non-enum types or out-of-bounds indices so
-// the call is safe at the rendering boundary. Exported because the
-// EventBridge applies the same resolution in its PerDPState publish path.
-func ResolveEnumLabel(value any, wireType hmenum.ParameterType, valueList []string) any {
-	if wireType != hmenum.ParameterTypeEnum || len(valueList) == 0 {
-		return value
-	}
-	if label, ok := paramlib.EnumLabelFromWire(hmproto.ParameterData{ValueList: valueList}, value); ok {
-		return label
-	}
-	return value
-}
-
-// resolveEnumLabel is the unexported alias used internally by the
-// bridge. New callers should use [ResolveEnumLabel].
-func resolveEnumLabel(value any, wireType hmenum.ParameterType, valueList []string) any {
-	return ResolveEnumLabel(value, wireType, valueList)
 }
 
 // ErrNilValue reports that a publisher was handed a nil value where a

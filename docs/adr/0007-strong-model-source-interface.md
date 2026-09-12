@@ -453,3 +453,23 @@ without restructuring.
   log-enrichment becomes a concrete pain point. The `payload:"…"`
   tags already provide enough metadata to add a `LogAttrs()` method
   later without restructuring.
+
+## Amendment (2026-09-12) — the `LegacyAlias` precedent it cites did not exist
+
+Two places above lean on `LegacyAlias` as working, shipped plumbing: the
+topic-shape-change risk is "coordinated via the existing `LegacyAlias` plumbing
+in `BridgeConfig` — aggregated topics ship behind a config flag in the first
+release, default in the next", and the two-parallel-state-topic-plans
+consequence notes that "`LegacyAlias` already has the precedent".
+
+**There was no precedent.** `BridgeConfig.LegacyAlias` had no config key, no
+environment override and no flag; it was the Go zero value on every build, and
+the only sites that ever set it were tests. It is now deleted — ADR 0006's
+amendment of the same date carries the measurement.
+
+Neither sentence is load-bearing for this ADR's decision, which stands
+unchanged: the strong model-source interface does not depend on a
+mirror-during-migration mechanism. What changes is the mitigation. A future
+topic-shape change that wants a migration window has to build the opt-in it
+needs, with a real config key an operator can set and a test that asserts the
+key reaches the bridge — and not assume one is already there.
