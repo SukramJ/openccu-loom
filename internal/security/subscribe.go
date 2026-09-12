@@ -619,6 +619,46 @@ func groupByClass(refs []hmevent.SecuritySourceRef) map[hmenum.SecurityClass][]s
 
 // zoneSlugFallback derives a usable identifier when the stored slug has
 // not been loaded yet. It never returns the raw id.
+//
+// It disagrees with [routingkey.EffectiveSlug] and that disagreement is
+// knowingly left standing. Both answer "what identity does this zone have
+// when its stored slug is blank", and they answer it differently in two
+// places: a name that slugs to nothing resolves to "zone-"+id[:8] here and to
+// [routingkey.ZoneSlugStem] ("zone") there, and a name that collides with a
+// sibling's gets no "-2" suffix here where [routingkey.UniqueSlug] adds one.
+// [routingkey.ZoneSlugStem]'s own doc comment says it exists so "the two
+// cannot fall back to different stems and hand one zone two identities", and
+// this is the third path it does not know about.
+//
+// Which one wins: the stored value, eventually. refreshZoneSlugs derives a
+// slug through [routingkey.UniqueSlug], persists it, and overwrites the
+// in-memory value — but only for a zone that has a row in the zone store.
+// This fallback fires for a zone the store has not seeded (an engine zone
+// never created through the alarm-config REST API, or an alarm event racing
+// the boot-time refresh), and for such a zone its value is the only identity
+// there is.
+//
+// Why it is not repaired here: the slug reaches
+// `loom_security_zone_<slug>` — an entity unique_id — through
+// securityZoneEntity, and this plane also seeds `default_entity_id` from
+// that same unique_id. Home Assistant keys its entity registry on unique_id
+// and offers the MQTT integration no migration path (ADR 0068), so changing
+// the spelling orphans every zone entity on an installation that is on the
+// fallback path today, and takes its history, area and customisations with
+// it. A safe repair is not a one-line change to this function; it needs all
+// three of:
+//
+//  1. a survey of which installations are actually on the fallback path —
+//     measurable, because a zone whose slug is not in the zone store is
+//     exactly the population at risk;
+//  2. the store seeding every engine zone it learns about, so the fallback
+//     stops being reachable at all rather than being made to agree; and
+//  3. the ADR 0068 breaking-change process for whatever identities the
+//     seeding moves, since a zone that is `zone-6b1f3a90` today becomes
+//     `zone` or `erdgeschoss` under any convergent rule.
+//
+// Making the two agree without (2) would move the identity without removing
+// the second path, which is the worst of both.
 func zoneSlugFallback(name, id string) string {
 	if slug := routingkey.HubSlug(name); slug != "" {
 		return slug
