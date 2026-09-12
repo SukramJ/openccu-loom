@@ -1,0 +1,133 @@
+{
+  "calculated/float": {
+    "topic": "openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/calculated/DEW_POINT",
+    "payload": {
+      "available": true,
+      "modified_at": 1767225600.5,
+      "refreshed_at": 1767225600.5,
+      "value": 11.5
+    }
+  },
+  "master/integer": {
+    "topic": "openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/master/TEMPERATURE_MINIMUM",
+    "payload": {
+      "available": true,
+      "modified_at": 1767225600.5,
+      "refreshed_at": 1767225600.5,
+      "value": 12
+    }
+  },
+  "values/additional-information": {
+    "topic": "openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/values/OPERATING_VOLTAGE",
+    "payload": {
+      "additional_information": {
+        "Battery Qty": 2,
+        "Battery Type": "LR03"
+      },
+      "available": true,
+      "modified_at": 1767225600.5,
+      "refreshed_at": 1767225600.5,
+      "value": 2.9
+    }
+  },
+  "values/bool": {
+    "topic": "openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/values/STATE",
+    "payload": {
+      "available": true,
+      "modified_at": 1767225600.5,
+      "refreshed_at": 1767225600.5,
+      "value": true
+    }
+  },
+  "values/enum-coerced-to-label": {
+    "topic": "openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/values/WINDOW_STATE",
+    "payload": {
+      "available": true,
+      "modified_at": 1767225600.5,
+      "refreshed_at": 1767225600.5,
+      "value": "OPEN"
+    }
+  },
+  "values/f1-unchanged-value-restamps-modified-at": {
+    "topic": "openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/values/STATE",
+    "payload": {
+      "available": true,
+      "modified_at": 1767225723.2499998,
+      "refreshed_at": 1767225723.2499998,
+      "value": true
+    }
+  },
+  "values/float-fraction": {
+    "topic": "openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/values/ACTUAL_TEMPERATURE",
+    "payload": {
+      "available": true,
+      "modified_at": 1767225600.5,
+      "refreshed_at": 1767225600.5,
+      "value": 21.45
+    }
+  },
+  "values/int": {
+    "topic": "openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/values/LEVEL_INT",
+    "payload": {
+      "available": true,
+      "modified_at": 1767225600.5,
+      "refreshed_at": 1767225600.5,
+      "value": 42
+    }
+  },
+  "values/no-channel-object": {
+    "topic": "openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/values/STATE",
+    "payload": {
+      "available": true,
+      "modified_at": 1767225600.5,
+      "refreshed_at": 1767225600.5,
+      "value": true
+    }
+  },
+  "values/null": {
+    "topic": "openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/values/SMOKE_ALARM",
+    "payload": {
+      "available": true,
+      "modified_at": 1767225600.5,
+      "refreshed_at": 1767225600.5,
+      "value": null
+    }
+  },
+  "values/string": {
+    "topic": "openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/values/DIRECTION_TEXT",
+    "payload": {
+      "available": true,
+      "modified_at": 1767225600.5,
+      "refreshed_at": 1767225600.5,
+      "value": "UP"
+    }
+  },
+  "values/string-list": {
+    "topic": "openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/values/PARTY_MODE_LIST",
+    "payload": {
+      "available": true,
+      "modified_at": 1767225600.5,
+      "refreshed_at": 1767225600.5,
+      "value": [
+        "P1",
+        "P2"
+      ]
+    }
+  },
+  "values/unobserved-unavailable": {
+    "topic": "openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/values/HUMIDITY",
+    "payload": {
+      "available": false,
+      "modified_at": 1767225600.5,
+      "refreshed_at": 1767225600.5,
+      "value": 55
+    }
+  },
+  "values/zero-timestamp-elides-both": {
+    "topic": "openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/values/STATE",
+    "payload": {
+      "available": true,
+      "value": false
+    }
+  }
+}
