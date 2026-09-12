@@ -10,13 +10,14 @@ import (
 
 	hacatalog "github.com/SukramJ/go-ha-catalog"
 	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hamodel "github.com/SukramJ/go-hamqtt/model"
 
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // stubTextDisplay drives the text-display discovery + notify-companion
-// path: a Source + HADiscoveryComponentBuilder that classifies as a
+// path: a Source + [payload.HADiscoveryEntityBuilder] that classifies as a
 // text-display custom-DP and exposes a custom-DP slot for the write
 // service-method command topic.
 type stubTextDisplay struct {
@@ -24,11 +25,17 @@ type stubTextDisplay struct {
 	slot payload.TopicSlot
 }
 
-func (s *stubTextDisplay) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery.Component {
-	return hadiscovery.Component{
-		Platform:     hacatalog.PlatformText,
-		CommandTopic: ctx.ServiceMethodCommandTopic("write"),
-		Fields:       hadiscovery.TextFields{Mode: "text"},
+func (s *stubTextDisplay) HADiscoveryEntity() hamodel.Entity {
+	return &payload.CustomEntity{
+		Basic: hamodel.Basic{
+			EntityKey:      s.slot.Parameter,
+			EntityPlatform: hacatalog.PlatformText,
+			Binds: []hamodel.Binding{{
+				Role: hamodel.RoleState, Mode: hamodel.Read,
+				Slot: payload.CustomSlot(s.slot),
+			}},
+		},
+		Fields: hadiscovery.TextFields{Mode: "text"},
 	}
 }
 

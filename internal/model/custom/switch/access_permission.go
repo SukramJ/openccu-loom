@@ -9,6 +9,7 @@ import (
 
 	hacatalog "github.com/SukramJ/go-ha-catalog"
 	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hamodel "github.com/SukramJ/go-hamqtt/model"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -286,34 +287,54 @@ func (a *AccessPermission) registerServices() {
 		})
 }
 
-// HADiscoveryComponent returns the HA Switch-platform payload for a
-// per-user access permission.
+// HADiscoveryEntity describes a per-user access permission on the shared
+// model.
 //
-// Both constituent wire data points are invisible on their own — STATE
-// is suppressed on a custom-DP channel and ACCESS_AUTHORIZATION is
-// forced to no_create — so without this builder the permission has no HA
-// entity at all. State therefore reads from the custom-DP aggregate
-// topic and the command goes to [serviceAccessPermission].
-func (a *AccessPermission) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery.Component {
-	if a == nil || ctx == nil {
-		return hadiscovery.Component{}
+// Both constituent wire data points are invisible on their own — STATE is
+// suppressed on a custom-DP channel and ACCESS_AUTHORIZATION is forced to
+// no_create — so without this the permission has no HA entity at all. State
+// therefore reads from the custom-DP aggregate and the command goes to
+// [serviceAccessPermission], the one named action that carries it.
+func (a *AccessPermission) HADiscoveryEntity() hamodel.Entity {
+	if a == nil {
+		return nil
 	}
-	return hadiscovery.Component{
-		Platform:     hacatalog.PlatformSwitch,
-		CommandTopic: ctx.ServiceMethodCommandTopic(serviceAccessPermission),
-		StateTopic:   ctx.CustomDPStateTopic(),
-		// The aggregate omits is_on until STATE has been observed; the
-		// `is defined` guard keeps HA from logging a template error on the
-		// retained pre-observation payload.
-		ValueTemplate: `{% if value_json.is_on is defined %}{{ value_json.is_on | lower }}{% endif %}`,
-		// The CCU confirms the grant on STATE; HA must not flip the entity
-		// locally before that echo arrives.
-		Optimistic: hadiscovery.Ptr(false),
-		Fields: hadiscovery.SwitchFields{
-			PayloadOn:  "true",
-			PayloadOff: "false",
-			StateOn:    "true",
-			StateOff:   "false",
+	return &accessPermissionEntity{CustomEntity: payload.CustomEntity{
+		Basic: hamodel.Basic{
+			EntityKey:      a.TopicSlot().Parameter,
+			EntityPlatform: hacatalog.PlatformSwitch,
+			Description: hamodel.Description{
+				// The aggregate omits is_on until STATE has been observed; the
+				// `is defined` guard keeps HA from logging a template error on
+				// the retained pre-observation payload.
+				ValueTemplate: `{% if value_json.is_on is defined %}{{ value_json.is_on | lower }}{% endif %}`,
+				// The CCU confirms the grant on STATE; HA must not flip the
+				// entity locally before that echo arrives.
+				Optimistic: hamodel.Ptr(false),
+			},
+			Binds: []hamodel.Binding{{
+				Role: hamodel.RoleState, Mode: hamodel.Read,
+				Slot: payload.CustomSlot(a.TopicSlot()),
+			}},
 		},
+		Fields: switchFields(),
+	}}
+}
+
+// accessPermissionEntity carries the one key the model cannot: the command
+// topic is a named action, not a writable datapoint, and the render pipeline
+// only wires a method up on its own for an entity that declares exactly one.
+// Declaring [serviceAccessPermission] as the sole method would do that, but
+// this custom DP inherits the generic turn_on / turn_off methods as well.
+type accessPermissionEntity struct {
+	payload.CustomEntity
+}
+
+// BuildDiscovery implements [hadiscovery.Builder].
+func (e *accessPermissionEntity) BuildDiscovery(ctx hadiscovery.Context, comp *hadiscovery.Component) error {
+	if err := e.CustomEntity.BuildDiscovery(ctx, comp); err != nil {
+		return err
 	}
+	comp.CommandTopic = e.MethodTopic(ctx, serviceAccessPermission)
+	return nil
 }

@@ -4,57 +4,78 @@
 package lock
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 )
 
-// discoveryCtx is a minimal stub for payload.HADiscoveryContext used in
-// payload-builder smoke tests.
+// discoveryCtx is a minimal stub for [payload.HADiscoveryTopics] used in
+// entity-builder smoke tests. It returns stable, testable topic strings.
 type discoveryCtx struct{}
 
-func (discoveryCtx) CustomDPStateTopic() string { return "test/custom/state" }
-func (discoveryCtx) ServiceMethodCommandTopic(method string) string {
-	return "test/svc/" + method + "/set"
+func (discoveryCtx) CustomDPStateTopic() string   { return "test/custom/state" }
+func (discoveryCtx) CustomDPCommandTopic() string { return "test/custom/state/set" }
+
+// ServiceMethodCommandTopic is what the render context builds on its own out
+// of [discoveryCtx.CustomDPCommandTopic]; it is spelled here so an assertion
+// can name a method topic without repeating the join.
+func (c discoveryCtx) ServiceMethodCommandTopic(method string) string {
+	return c.CustomDPCommandTopic() + "/" + method
 }
 
-func (discoveryCtx) WireParameterCommandTopic(parameter string) string {
-	return "test/" + parameter + "/set"
+func (discoveryCtx) WireParameterCommandTopic(channelAddress, parameter string) string {
+	if channelAddress == "" {
+		return "test/" + parameter + "/set"
+	}
+	return "test/" + channelAddress + "/" + parameter + "/set"
 }
 
-func (discoveryCtx) WireParameterStateTopic(parameter string) string {
-	return "test/" + parameter
+func (discoveryCtx) WireParameterStateTopic(channelAddress, parameter string) string {
+	if channelAddress == "" {
+		return "test/" + parameter
+	}
+	return "test/" + channelAddress + "/" + parameter
 }
 
-func (discoveryCtx) WireParameterStateTopicOn(_, parameter string) string {
-	return discoveryCtx{}.WireParameterStateTopic(parameter)
-}
+func (discoveryCtx) DeviceAvailabilityTopic() string { return "test/availability" }
+func (discoveryCtx) BridgeStatusTopic() string       { return "test/bridge/status" }
 
-var _ payload.HADiscoveryContext = discoveryCtx{}
+// compile-time check: discoveryCtx satisfies payload.HADiscoveryTopics.
+var _ payload.HADiscoveryTopics = discoveryCtx{}
 
 func TestLockHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
 	t.Parallel()
 	var l *Lock
-	comp, body := haBody(t, l.HADiscoveryComponent(discoveryCtx{}))
+	comp, body := haEntity(t, l.HADiscoveryEntity(), discoveryCtx{})
 	if comp != "" || body != nil {
 		t.Fatalf("nil receiver: want (\"\", nil), got (%q, %v)", comp, body)
 	}
 }
 
-func TestLockHADiscoveryPayload_NilContextReturnsNil(t *testing.T) {
+// TestLockHADiscoveryPayload_WithoutTopicsStillDescribes pins what a missing transport does to
+// an entity: nothing. The entity is its description and its bindings, and it
+// is complete before any topic is resolved — a renderer with no layout simply
+// produces no topic strings.
+func TestLockHADiscoveryPayload_WithoutTopicsStillDescribes(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{SupportsOpen: true})
-	comp, body := haBody(t, r.lock.HADiscoveryComponent(nil))
-	if comp != "" || body != nil {
-		t.Fatalf("nil ctx: want (\"\", nil), got (%q, %v)", comp, body)
+	comp, body := haEntity(t, r.lock.HADiscoveryEntity(), nil)
+	if comp != "lock" {
+		t.Fatalf("component = %q, want lock", comp)
+	}
+	for key := range body {
+		if strings.HasSuffix(key, "_topic") {
+			t.Errorf("%s present with no topic layout: %v", key, body[key])
+		}
 	}
 }
 
 func TestLockHADiscoveryPayload_Component(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{SupportsOpen: true})
-	comp, body := haBody(t, r.lock.HADiscoveryComponent(discoveryCtx{}))
+	comp, body := haEntity(t, r.lock.HADiscoveryEntity(), discoveryCtx{})
 	if comp != "lock" {
 		t.Fatalf("component = %q, want %q", comp, "lock")
 	}
@@ -66,7 +87,7 @@ func TestLockHADiscoveryPayload_Component(t *testing.T) {
 func TestLockHADiscoveryPayload_RequiredKeys(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{})
-	_, body := haBody(t, r.lock.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, r.lock.HADiscoveryEntity(), discoveryCtx{})
 
 	for _, key := range []string{
 		"state_topic",
@@ -85,12 +106,12 @@ func TestLockHADiscoveryPayload_TopicValues(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{})
 	ctx := discoveryCtx{}
-	_, body := haBody(t, r.lock.HADiscoveryComponent(ctx))
+	_, body := haEntity(t, r.lock.HADiscoveryEntity(), ctx)
 
 	if v, _ := body["state_topic"].(string); v != ctx.CustomDPStateTopic() {
 		t.Errorf("state_topic = %q, want %q", v, ctx.CustomDPStateTopic())
 	}
-	wantCmd := ctx.WireParameterCommandTopic("LOCK_TARGET_LEVEL")
+	wantCmd := ctx.WireParameterCommandTopic("", "LOCK_TARGET_LEVEL")
 	if v, _ := body["command_topic"].(string); v != wantCmd {
 		t.Errorf("command_topic = %q, want %q", v, wantCmd)
 	}
@@ -103,9 +124,9 @@ func TestLockHADiscoveryPayload_KindRFUsesState(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, "HM-Sec-Key:1", KindRF, &stubWriter{}, custom.LockCapabilities{})
 	ctx := discoveryCtx{}
-	_, body := haBody(t, r.lock.HADiscoveryComponent(ctx))
+	_, body := haEntity(t, r.lock.HADiscoveryEntity(), ctx)
 
-	wantCmd := ctx.WireParameterCommandTopic("STATE")
+	wantCmd := ctx.WireParameterCommandTopic("", "STATE")
 	if v, _ := body["command_topic"].(string); v != wantCmd {
 		t.Errorf("KindRF command_topic = %q, want %q", v, wantCmd)
 	}
@@ -127,7 +148,7 @@ func TestLockHADiscoveryPayload_KindButtonUsesServiceMethod(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, "HmIP-DLD:0", KindButton, &stubWriter{}, custom.LockCapabilities{})
 	ctx := discoveryCtx{}
-	_, body := haBody(t, r.lock.HADiscoveryComponent(ctx))
+	_, body := haEntity(t, r.lock.HADiscoveryEntity(), ctx)
 
 	wantCmd := ctx.ServiceMethodCommandTopic(serviceLockCommand)
 	if v, _ := body["command_topic"].(string); v != wantCmd {
@@ -158,7 +179,7 @@ func TestLockHADiscoveryPayload_PayloadOpenOnlyForIP(t *testing.T) {
 	}
 	for _, tc := range cases {
 		r := newRig(t, "x", tc.kind, &stubWriter{}, custom.LockCapabilities{SupportsOpen: tc.supOpen})
-		_, body := haBody(t, r.lock.HADiscoveryComponent(discoveryCtx{}))
+		_, body := haEntity(t, r.lock.HADiscoveryEntity(), discoveryCtx{})
 		_, hasOpen := body["payload_open"]
 		if hasOpen != tc.wantOpen {
 			t.Errorf("kind=%d supOpen=%v: payload_open present=%v, want %v", tc.kind, tc.supOpen, hasOpen, tc.wantOpen)
@@ -174,7 +195,7 @@ func TestLockHADiscoveryPayload_PayloadOpenOnlyForIP(t *testing.T) {
 func TestLockHADiscoveryPayload_LockUnlockPayloads(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{SupportsOpen: true})
-	_, body := haBody(t, r.lock.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, r.lock.HADiscoveryEntity(), discoveryCtx{})
 
 	if v, _ := body["payload_lock"].(string); v != ipTargetLocked {
 		t.Errorf("payload_lock = %q, want %q", v, ipTargetLocked)

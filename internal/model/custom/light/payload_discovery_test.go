@@ -10,35 +10,46 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/payload"
 )
 
-// discoveryCtx is a minimal stub for payload.HADiscoveryContext used in
-// payload-builder smoke tests.
+// discoveryCtx is a minimal stub for [payload.HADiscoveryTopics] used in
+// entity-builder smoke tests. It returns stable, testable topic strings.
 type discoveryCtx struct{}
 
-func (discoveryCtx) CustomDPStateTopic() string { return "test/custom/state" }
-func (discoveryCtx) ServiceMethodCommandTopic(method string) string {
-	return "test/svc/" + method + "/set"
+func (discoveryCtx) CustomDPStateTopic() string   { return "test/custom/state" }
+func (discoveryCtx) CustomDPCommandTopic() string { return "test/custom/state/set" }
+
+// ServiceMethodCommandTopic is what the render context builds on its own out
+// of [discoveryCtx.CustomDPCommandTopic]; it is spelled here so an assertion
+// can name a method topic without repeating the join.
+func (c discoveryCtx) ServiceMethodCommandTopic(method string) string {
+	return c.CustomDPCommandTopic() + "/" + method
 }
 
-func (discoveryCtx) WireParameterCommandTopic(parameter string) string {
-	return "test/" + parameter + "/set"
+func (discoveryCtx) WireParameterCommandTopic(channelAddress, parameter string) string {
+	if channelAddress == "" {
+		return "test/" + parameter + "/set"
+	}
+	return "test/" + channelAddress + "/" + parameter + "/set"
 }
 
-func (discoveryCtx) WireParameterStateTopic(parameter string) string {
-	return "test/" + parameter
+func (discoveryCtx) WireParameterStateTopic(channelAddress, parameter string) string {
+	if channelAddress == "" {
+		return "test/" + parameter
+	}
+	return "test/" + channelAddress + "/" + parameter
 }
 
-func (discoveryCtx) WireParameterStateTopicOn(_, parameter string) string {
-	return discoveryCtx{}.WireParameterStateTopic(parameter)
-}
+func (discoveryCtx) DeviceAvailabilityTopic() string { return "test/availability" }
+func (discoveryCtx) BridgeStatusTopic() string       { return "test/bridge/status" }
 
-var _ payload.HADiscoveryContext = discoveryCtx{}
+// compile-time check: discoveryCtx satisfies payload.HADiscoveryTopics.
+var _ payload.HADiscoveryTopics = discoveryCtx{}
 
 // --- Light ---
 
 func TestLightHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
 	t.Parallel()
 	var l *Light
-	comp, body := haBody(t, l.HADiscoveryComponent(discoveryCtx{}))
+	comp, body := haEntity(t, l.HADiscoveryEntity(), discoveryCtx{})
 	if comp != "" || body != nil {
 		t.Fatalf("nil receiver: want (\"\", nil), got (%q, %v)", comp, body)
 	}
@@ -47,7 +58,7 @@ func TestLightHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
 func TestLightHADiscoveryPayload_Component(t *testing.T) {
 	t.Parallel()
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
-	comp, body := haBody(t, l.HADiscoveryComponent(discoveryCtx{}))
+	comp, body := haEntity(t, l.HADiscoveryEntity(), discoveryCtx{})
 	if comp != "light" {
 		t.Fatalf("component = %q, want %q", comp, "light")
 	}
@@ -63,7 +74,7 @@ func TestLightDimmableHASchemaJSON(t *testing.T) {
 	t.Parallel()
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
 	ctx := discoveryCtx{}
-	comp, body := haBody(t, l.HADiscoveryComponent(ctx))
+	comp, body := haEntity(t, l.HADiscoveryEntity(), ctx)
 
 	if comp != "light" {
 		t.Fatalf("component = %q, want %q", comp, "light")
@@ -107,7 +118,7 @@ func TestLightDimmableHASchemaJSON(t *testing.T) {
 func TestLightDimmableTransitionHASchemaJSON(t *testing.T) {
 	t.Parallel()
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true, Transition: true})
-	_, body := haBody(t, l.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, l.HADiscoveryEntity(), discoveryCtx{})
 	if v, _ := body["transition"].(bool); !v {
 		t.Error("transition must be true when Capabilities.Transition is set")
 	}
@@ -118,7 +129,7 @@ func TestLightDimmableTransitionHASchemaJSON(t *testing.T) {
 func TestLightDimmableNoTransitionHASchemaJSON(t *testing.T) {
 	t.Parallel()
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
-	_, body := haBody(t, l.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, l.HADiscoveryEntity(), discoveryCtx{})
 	if _, ok := body["transition"]; ok {
 		t.Error("transition must be absent when Capabilities.Transition is false")
 	}
@@ -128,7 +139,7 @@ func TestLightDimmableNoTransitionHASchemaJSON(t *testing.T) {
 func TestLightNonDimmableHASchemaJSON(t *testing.T) {
 	t.Parallel()
 	l, _ := newLightRig(t, "HM-LC-Sw:1", &stubWriter{}, custom.LightCapabilities{Dimmable: false})
-	_, body := haBody(t, l.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, l.HADiscoveryEntity(), discoveryCtx{})
 
 	if v, _ := body["schema"].(string); v != "json" {
 		t.Errorf("schema = %q, want %q", v, "json")
@@ -159,7 +170,7 @@ func TestLightNonDimmableHASchemaJSON(t *testing.T) {
 func TestColorLightHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
 	t.Parallel()
 	var l *ColorLight
-	comp, body := haBody(t, l.HADiscoveryComponent(discoveryCtx{}))
+	comp, body := haEntity(t, l.HADiscoveryEntity(), discoveryCtx{})
 	if comp != "" || body != nil {
 		t.Fatalf("nil receiver: want (\"\", nil), got (%q, %v)", comp, body)
 	}
@@ -175,7 +186,7 @@ func TestColorLightHASchemaJSON(t *testing.T) {
 		Capabilities: custom.LightCapabilities{SupportsColor: true, Dimmable: true},
 	})
 	ctx := discoveryCtx{}
-	comp, body := haBody(t, l.HADiscoveryComponent(ctx))
+	comp, body := haEntity(t, l.HADiscoveryEntity(), ctx)
 	if comp != "light" {
 		t.Fatalf("component = %q, want %q", comp, "light")
 	}
@@ -223,7 +234,7 @@ func TestColorTempLightHASchemaJSON(t *testing.T) {
 		Writer:       &stubWriter{},
 		Capabilities: custom.LightCapabilities{Dimmable: true, SupportsColorTemp: true},
 	}, 2700, 6500)
-	_, body := haBody(t, l.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, l.HADiscoveryEntity(), discoveryCtx{})
 
 	if v, _ := body["schema"].(string); v != "json" {
 		t.Errorf("schema = %q, want %q", v, "json")
@@ -266,7 +277,7 @@ func TestColorTempLightMinMaxMireds(t *testing.T) {
 		Writer:       &stubWriter{},
 		Capabilities: custom.LightCapabilities{Dimmable: true, SupportsColorTemp: true},
 	}, 2000, 6536)
-	_, body := haBody(t, l.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, l.HADiscoveryEntity(), discoveryCtx{})
 
 	minMireds := haNum(t, body, "min_mireds")
 	maxMireds := haNum(t, body, "max_mireds")
@@ -285,7 +296,7 @@ func TestColorTempLightMinMaxMireds(t *testing.T) {
 func TestColorTempLightMinMaxMireds_FallbackWhenZeroKelvin(t *testing.T) {
 	t.Parallel()
 	l := &ColorTempLight{} // zero MinKelvin/MaxKelvin
-	_, body := haBody(t, l.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, l.HADiscoveryEntity(), discoveryCtx{})
 
 	minMireds := haNum(t, body, "min_mireds")
 	maxMireds := haNum(t, body, "max_mireds")
@@ -308,7 +319,7 @@ func TestEffectLightHASchemaJSON(t *testing.T) {
 		Writer:       &colorStubWriter{},
 		Capabilities: custom.LightCapabilities{SupportsColor: true, SupportsEffects: true, Dimmable: true},
 	})
-	_, body := haBody(t, l.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, l.HADiscoveryEntity(), discoveryCtx{})
 
 	if v, _ := body["schema"].(string); v != "json" {
 		t.Errorf("schema = %q, want %q", v, "json")
@@ -348,7 +359,7 @@ func TestDRGDaliLightHASchemaJSON(t *testing.T) {
 		Writer:       &stubWriter{},
 		Capabilities: custom.LightCapabilities{Dimmable: true, SupportsColorTemp: true},
 	}, 2700, 6500)
-	_, body := haBody(t, l.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, l.HADiscoveryEntity(), discoveryCtx{})
 
 	if v, _ := body["schema"].(string); v != "json" {
 		t.Errorf("schema = %q, want %q", v, "json")
@@ -381,7 +392,7 @@ func TestRGBWLightHASchemaJSON_RGBMode(t *testing.T) {
 		Capabilities: custom.LightCapabilities{SupportsColor: true, Dimmable: true},
 	})
 	r.recordMode("RGB")
-	_, body := haBody(t, r.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, r.HADiscoveryEntity(), discoveryCtx{})
 
 	if v, _ := body["schema"].(string); v != "json" {
 		t.Errorf("schema = %q, want %q", v, "json")
@@ -408,7 +419,7 @@ func TestRGBWLightHASchemaJSON_RGBWMode(t *testing.T) {
 		Capabilities: custom.LightCapabilities{SupportsColor: true, SupportsColorTemp: true, Dimmable: true},
 	})
 	r.recordMode("RGBW")
-	_, body := haBody(t, r.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, r.HADiscoveryEntity(), discoveryCtx{})
 
 	// RGBW mode advertises hs colour only — HA colour modes are mutually
 	// exclusive and the reference has_color_temperature is TUNABLE_WHITE-only,
@@ -434,7 +445,7 @@ func TestRGBWLightHASchemaJSON_TunableWhiteMode(t *testing.T) {
 		Capabilities: custom.LightCapabilities{SupportsColorTemp: true, Dimmable: true},
 	})
 	r.recordMode("2_TUNABLE_WHITE")
-	_, body := haBody(t, r.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, r.HADiscoveryEntity(), discoveryCtx{})
 
 	modes := haStrings(t, body, "supported_color_modes")
 	if len(modes) != 1 || modes[0] != "color_temp" {
@@ -457,7 +468,7 @@ func TestRGBWLightHASchemaJSON_PWMMode(t *testing.T) {
 		Capabilities: custom.LightCapabilities{Dimmable: true},
 	})
 	r.recordMode("4_PWM")
-	_, body := haBody(t, r.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, r.HADiscoveryEntity(), discoveryCtx{})
 
 	modes := haStrings(t, body, "supported_color_modes")
 	if len(modes) != 1 || modes[0] != "brightness" {

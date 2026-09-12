@@ -1681,10 +1681,10 @@ func TestDiscoveryCtxTopicsNilSource(t *testing.T) {
 	if got := ctx.ServiceMethodCommandTopic("boost"); got != "" {
 		t.Errorf("ServiceMethodCommandTopic with nil source: got %q, want %q", got, "")
 	}
-	if got := ctx.WireParameterCommandTopic("STATE"); got == "" {
+	if got := ctx.WireParameterCommandTopic("", "STATE"); got == "" {
 		t.Error("WireParameterCommandTopic must not be empty")
 	}
-	if got := ctx.WireParameterStateTopic("STATE"); got == "" {
+	if got := ctx.WireParameterStateTopic("", "STATE"); got == "" {
 		t.Error("WireParameterStateTopic must not be empty")
 	}
 }

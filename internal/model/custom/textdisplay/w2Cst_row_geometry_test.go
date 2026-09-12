@@ -95,7 +95,7 @@ func TestW2CstHADiscoveryMaxIsTheDeviceLimit(t *testing.T) {
 	t.Parallel()
 
 	declared := w2CstDeclaredRowLength(t, w2CstWRCDDisplayDataStringMax)
-	_, body := haBody(t, New("VCU4243444:3", &stubWriter{}).HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, New("VCU4243444:3", &stubWriter{}).HADiscoveryEntity(), discoveryCtx{})
 	if _, ok := body["max"]; !ok {
 		t.Fatal("HA discovery payload carries no max — the text field would accept any length")
 	}

@@ -4,6 +4,7 @@
 package climate
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -14,48 +15,67 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
-// discoveryCtx is a minimal stub for payload.HADiscoveryContext used in
-// payload-builder smoke tests. It returns stable, testable topic strings.
+// discoveryCtx is a minimal stub for [payload.HADiscoveryTopics] used in
+// entity-builder smoke tests. It returns stable, testable topic strings.
 type discoveryCtx struct{}
 
-func (discoveryCtx) CustomDPStateTopic() string { return "test/custom/state" }
-func (discoveryCtx) ServiceMethodCommandTopic(method string) string {
-	return "test/svc/" + method + "/set"
+func (discoveryCtx) CustomDPStateTopic() string   { return "test/custom/state" }
+func (discoveryCtx) CustomDPCommandTopic() string { return "test/custom/state/set" }
+
+// ServiceMethodCommandTopic is what the render context builds on its own out
+// of [discoveryCtx.CustomDPCommandTopic]; it is spelled here so an assertion
+// can name a method topic without repeating the join.
+func (c discoveryCtx) ServiceMethodCommandTopic(method string) string {
+	return c.CustomDPCommandTopic() + "/" + method
 }
 
-func (discoveryCtx) WireParameterCommandTopic(parameter string) string {
-	return "test/" + parameter + "/set"
+func (discoveryCtx) WireParameterCommandTopic(channelAddress, parameter string) string {
+	if channelAddress == "" {
+		return "test/" + parameter + "/set"
+	}
+	return "test/" + channelAddress + "/" + parameter + "/set"
 }
 
-func (discoveryCtx) WireParameterStateTopic(parameter string) string {
-	return "test/" + parameter
-}
-
-func (discoveryCtx) WireParameterStateTopicOn(channelAddress, parameter string) string {
+func (discoveryCtx) WireParameterStateTopic(channelAddress, parameter string) string {
+	if channelAddress == "" {
+		return "test/" + parameter
+	}
 	return "test/" + channelAddress + "/" + parameter
 }
 
-// compile-time check: discoveryCtx satisfies payload.HADiscoveryContext.
-var _ payload.HADiscoveryContext = discoveryCtx{}
+func (discoveryCtx) DeviceAvailabilityTopic() string { return "test/availability" }
+func (discoveryCtx) BridgeStatusTopic() string       { return "test/bridge/status" }
+
+// compile-time check: discoveryCtx satisfies payload.HADiscoveryTopics.
+var _ payload.HADiscoveryTopics = discoveryCtx{}
 
 func TestClimateHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
 	t.Parallel()
 	var c *Climate
-	comp, body := haBody(t, c.HADiscoveryComponent(discoveryCtx{}))
+	comp, body := haEntity(t, c.HADiscoveryEntity(), discoveryCtx{})
 	if comp != "" || body != nil {
 		t.Fatalf("nil receiver: want (\"\", nil), got (%q, %v)", comp, body)
 	}
 }
 
-func TestClimateHADiscoveryPayload_NilContextReturnsNil(t *testing.T) {
+// TestClimateHADiscoveryPayload_WithoutTopicsStillDescribes pins what a missing transport does to
+// an entity: nothing. The entity is its description and its bindings, and it
+// is complete before any topic is resolved — a renderer with no layout simply
+// produces no topic strings.
+func TestClimateHADiscoveryPayload_WithoutTopicsStillDescribes(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{
 		MinTemperature: 4.5,
 		MaxTemperature: 30.5,
 	})
-	comp, body := haBody(t, r.climate.HADiscoveryComponent(nil))
-	if comp != "" || body != nil {
-		t.Fatalf("nil ctx: want (\"\", nil), got (%q, %v)", comp, body)
+	comp, body := haEntity(t, r.climate.HADiscoveryEntity(), nil)
+	if comp != "climate" {
+		t.Fatalf("component = %q, want climate", comp)
+	}
+	for key := range body {
+		if strings.HasSuffix(key, "_topic") {
+			t.Errorf("%s present with no topic layout: %v", key, body[key])
+		}
 	}
 }
 
@@ -65,7 +85,7 @@ func TestClimateHADiscoveryPayload_Component(t *testing.T) {
 		MinTemperature: 4.5,
 		MaxTemperature: 30.5,
 	})
-	comp, body := haBody(t, r.climate.HADiscoveryComponent(discoveryCtx{}))
+	comp, body := haEntity(t, r.climate.HADiscoveryEntity(), discoveryCtx{})
 	if comp != "climate" {
 		t.Fatalf("component = %q, want %q", comp, "climate")
 	}
@@ -80,7 +100,7 @@ func TestClimateHADiscoveryPayload_RequiredKeys(t *testing.T) {
 		MinTemperature: 4.5,
 		MaxTemperature: 30.5,
 	})
-	_, body := haBody(t, r.climate.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, r.climate.HADiscoveryEntity(), discoveryCtx{})
 
 	required := []string{
 		"min_temp",
@@ -107,7 +127,7 @@ func TestClimateHADiscoveryPayload_TopicValues(t *testing.T) {
 		MaxTemperature: 30.5,
 	})
 	ctx := discoveryCtx{}
-	_, body := haBody(t, r.climate.HADiscoveryComponent(ctx))
+	_, body := haEntity(t, r.climate.HADiscoveryEntity(), ctx)
 
 	// ADR 0011: derived fields use the custom-DP aggregate state topic;
 	// direct wire values reference per-DP topics.
@@ -116,11 +136,11 @@ func TestClimateHADiscoveryPayload_TopicValues(t *testing.T) {
 	}
 	// Both wire values name the channel they resolved to — for an HmIP
 	// thermostat that is the custom DP's own channel.
-	wantCurrentTemp := ctx.WireParameterStateTopicOn("HmIP-BWTH:1", "ACTUAL_TEMPERATURE")
+	wantCurrentTemp := ctx.WireParameterStateTopic("HmIP-BWTH:1", "ACTUAL_TEMPERATURE")
 	if v, _ := body["current_temperature_topic"].(string); v != wantCurrentTemp {
 		t.Errorf("body[current_temperature_topic] = %q, want per-DP topic %q", v, wantCurrentTemp)
 	}
-	wantSetpoint := ctx.WireParameterStateTopicOn("HmIP-BWTH:1", "SET_POINT_TEMPERATURE")
+	wantSetpoint := ctx.WireParameterStateTopic("HmIP-BWTH:1", "SET_POINT_TEMPERATURE")
 	if v, _ := body["temperature_state_topic"].(string); v != wantSetpoint {
 		t.Errorf("body[temperature_state_topic] = %q, want per-DP topic %q", v, wantSetpoint)
 	}
@@ -251,7 +271,7 @@ func TestClimateHADiscoveryPayload_PresetModesExcludesNone(t *testing.T) {
 		SupportsAuto:    true,
 	})
 	r.climate.OnMode(ModeAuto)
-	_, body := haBody(t, r.climate.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, r.climate.HADiscoveryEntity(), discoveryCtx{})
 
 	if _, ok := body["preset_modes"]; !ok {
 		t.Fatal("preset_modes missing — SupportsProfile=true should expose it")
@@ -326,7 +346,7 @@ func TestClimatePrecisionAbsent(t *testing.T) {
 		MaxTemperature:  30.5,
 		TemperatureStep: 0.5,
 	})
-	_, body := haBody(t, r.climate.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, r.climate.HADiscoveryEntity(), discoveryCtx{})
 
 	if _, ok := body["precision"]; ok {
 		t.Errorf("precision must be absent — HA-native integration does not set it; got %v", body["precision"])
@@ -349,7 +369,7 @@ func TestClimateOptimisticIsFalse(t *testing.T) {
 		MinTemperature: 4.5,
 		MaxTemperature: 30.5,
 	})
-	_, body := haBody(t, r.climate.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, r.climate.HADiscoveryEntity(), discoveryCtx{})
 
 	raw, ok := body["optimistic"]
 	if !ok {
@@ -373,7 +393,7 @@ func TestClimateTemperatureUnitMappedFromCapabilities(t *testing.T) {
 		MaxTemperature:  30.5,
 		TemperatureUnit: "°F",
 	})
-	_, body := haBody(t, r.climate.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, r.climate.HADiscoveryEntity(), discoveryCtx{})
 
 	v, _ := body["temperature_unit"].(string)
 	if v != "F" {
@@ -387,7 +407,7 @@ func TestClimateHADiscoveryPayload_TempBoundsAndUnit(t *testing.T) {
 		MinTemperature: 4.5,
 		MaxTemperature: 30.5,
 	})
-	_, body := haBody(t, r.climate.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, r.climate.HADiscoveryEntity(), discoveryCtx{})
 
 	// Capabilities-fallback 4.5 == _OFF_TEMPERATURE → MinTemp adds the
 	// default step (0.5) so HA's slider doesn't expose the off-state
@@ -484,7 +504,7 @@ func newIntegerHumidityClimate() *Climate {
 func TestClimateDiscoveryAdvertisesIntegerHumidity(t *testing.T) {
 	t.Parallel()
 	c := newIntegerHumidityClimate()
-	_, body := haBody(t, c.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, c.HADiscoveryEntity(), discoveryCtx{})
 	if _, ok := body["current_humidity_topic"]; !ok {
 		t.Fatal("current_humidity_topic missing for an INTEGER-typed HUMIDITY channel")
 	}
@@ -498,7 +518,7 @@ func TestClimateDiscoveryAdvertisesIntegerHumidity(t *testing.T) {
 func TestClimateDiscoveryOmitsHumidityWithoutSlot(t *testing.T) {
 	t.Parallel()
 	c := &Climate{}
-	_, body := haBody(t, c.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, c.HADiscoveryEntity(), discoveryCtx{})
 	if _, ok := body["current_humidity_topic"]; ok {
 		t.Fatal("current_humidity_topic advertised without a HUMIDITY parameter")
 	}

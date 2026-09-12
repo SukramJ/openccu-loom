@@ -13,51 +13,71 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// discoveryCtx is a minimal stub for payload.HADiscoveryContext used in
-// payload-builder smoke tests.
+// discoveryCtx is a minimal stub for [payload.HADiscoveryTopics] used in
+// entity-builder smoke tests. It returns stable, testable topic strings.
 type discoveryCtx struct{}
 
-func (discoveryCtx) CustomDPStateTopic() string { return "test/custom/state" }
-func (discoveryCtx) ServiceMethodCommandTopic(method string) string {
-	return "test/svc/" + method + "/set"
+func (discoveryCtx) CustomDPStateTopic() string   { return "test/custom/state" }
+func (discoveryCtx) CustomDPCommandTopic() string { return "test/custom/state/set" }
+
+// ServiceMethodCommandTopic is what the render context builds on its own out
+// of [discoveryCtx.CustomDPCommandTopic]; it is spelled here so an assertion
+// can name a method topic without repeating the join.
+func (c discoveryCtx) ServiceMethodCommandTopic(method string) string {
+	return c.CustomDPCommandTopic() + "/" + method
 }
 
-func (discoveryCtx) WireParameterCommandTopic(parameter string) string {
-	return "test/" + parameter + "/set"
+func (discoveryCtx) WireParameterCommandTopic(channelAddress, parameter string) string {
+	if channelAddress == "" {
+		return "test/" + parameter + "/set"
+	}
+	return "test/" + channelAddress + "/" + parameter + "/set"
 }
 
-func (discoveryCtx) WireParameterStateTopic(parameter string) string {
-	return "test/" + parameter
+func (discoveryCtx) WireParameterStateTopic(channelAddress, parameter string) string {
+	if channelAddress == "" {
+		return "test/" + parameter
+	}
+	return "test/" + channelAddress + "/" + parameter
 }
 
-func (discoveryCtx) WireParameterStateTopicOn(_, parameter string) string {
-	return discoveryCtx{}.WireParameterStateTopic(parameter)
-}
+func (discoveryCtx) DeviceAvailabilityTopic() string { return "test/availability" }
+func (discoveryCtx) BridgeStatusTopic() string       { return "test/bridge/status" }
 
-var _ payload.HADiscoveryContext = discoveryCtx{}
+// compile-time check: discoveryCtx satisfies payload.HADiscoveryTopics.
+var _ payload.HADiscoveryTopics = discoveryCtx{}
 
 func TestTextDisplayHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
 	t.Parallel()
 	var td *TextDisplay
-	comp, body := haBody(t, td.HADiscoveryComponent(discoveryCtx{}))
+	comp, body := haEntity(t, td.HADiscoveryEntity(), discoveryCtx{})
 	if comp != "" || body != nil {
 		t.Fatalf("nil receiver: want (\"\", nil), got (%q, %v)", comp, body)
 	}
 }
 
-func TestTextDisplayHADiscoveryPayload_NilContextReturnsNil(t *testing.T) {
+// TestTextDisplayHADiscoveryPayload_WithoutTopicsStillDescribes pins what a missing transport does to
+// an entity: nothing. The entity is its description and its bindings, and it
+// is complete before any topic is resolved — a renderer with no layout simply
+// produces no topic strings.
+func TestTextDisplayHADiscoveryPayload_WithoutTopicsStillDescribes(t *testing.T) {
 	t.Parallel()
 	td := New("VCU3756007:3", &stubWriter{})
-	comp, body := haBody(t, td.HADiscoveryComponent(nil))
-	if comp != "" || body != nil {
-		t.Fatalf("nil ctx: want (\"\", nil), got (%q, %v)", comp, body)
+	comp, body := haEntity(t, td.HADiscoveryEntity(), nil)
+	if comp != "text" {
+		t.Fatalf("component = %q, want text", comp)
+	}
+	for key := range body {
+		if strings.HasSuffix(key, "_topic") {
+			t.Errorf("%s present with no topic layout: %v", key, body[key])
+		}
 	}
 }
 
 func TestTextDisplayHADiscoveryPayload_Component(t *testing.T) {
 	t.Parallel()
 	td := New("VCU3756007:3", &stubWriter{})
-	comp, body := haBody(t, td.HADiscoveryComponent(discoveryCtx{}))
+	comp, body := haEntity(t, td.HADiscoveryEntity(), discoveryCtx{})
 	if comp != "text" {
 		t.Fatalf("component = %q, want %q", comp, "text")
 	}
@@ -69,7 +89,7 @@ func TestTextDisplayHADiscoveryPayload_Component(t *testing.T) {
 func TestTextDisplayHADiscoveryPayload_RequiredKeys(t *testing.T) {
 	t.Parallel()
 	td := New("VCU3756007:3", &stubWriter{})
-	_, body := haBody(t, td.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, td.HADiscoveryEntity(), discoveryCtx{})
 
 	for _, key := range []string{
 		"command_topic",
@@ -86,7 +106,7 @@ func TestTextDisplayHADiscoveryPayload_CommandTopic(t *testing.T) {
 	t.Parallel()
 	td := New("VCU3756007:3", &stubWriter{})
 	ctx := discoveryCtx{}
-	_, body := haBody(t, td.HADiscoveryComponent(ctx))
+	_, body := haEntity(t, td.HADiscoveryEntity(), ctx)
 
 	wantCmd := ctx.ServiceMethodCommandTopic("write")
 	if v, _ := body["command_topic"].(string); v != wantCmd {
@@ -97,7 +117,7 @@ func TestTextDisplayHADiscoveryPayload_CommandTopic(t *testing.T) {
 func TestTextDisplayHADiscoveryPayload_ModeAndMax(t *testing.T) {
 	t.Parallel()
 	td := New("VCU3756007:3", &stubWriter{})
-	_, body := haBody(t, td.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, td.HADiscoveryEntity(), discoveryCtx{})
 
 	if v, _ := body["mode"].(string); v != "text" {
 		t.Errorf("mode = %q, want %q", v, "text")
@@ -133,7 +153,7 @@ func TestTextDisplayHADiscoveryPayload_StateTopicPresent(t *testing.T) {
 	t.Parallel()
 	td := New("VCU3756007:3", &stubWriter{})
 	ctx := discoveryCtx{}
-	_, body := haBody(t, td.HADiscoveryComponent(ctx))
+	_, body := haEntity(t, td.HADiscoveryEntity(), ctx)
 
 	if _, ok := body["state_topic"]; !ok {
 		t.Error("missing state_topic")
@@ -151,7 +171,7 @@ func TestTextDisplayHADiscoveryPayload_StateTopicPresent(t *testing.T) {
 func TestTextDisplayHACommandCarriesRowID(t *testing.T) {
 	t.Parallel()
 	td := New("VCU3756007:3", &stubWriter{})
-	_, body := haBody(t, td.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, td.HADiscoveryEntity(), discoveryCtx{})
 
 	tmpl, ok := body["command_template"].(string)
 	if !ok {

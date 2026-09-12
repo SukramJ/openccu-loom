@@ -11,6 +11,7 @@ import (
 
 	hacatalog "github.com/SukramJ/go-ha-catalog"
 	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hamodel "github.com/SukramJ/go-hamqtt/model"
 
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/internal/payload"
@@ -21,59 +22,135 @@ import (
 // contract (ADR 0007 step 4) and the HA-Discovery payload builder
 // contract (ADR 0010).
 var (
-	_ payload.Source                      = (*Climate)(nil)
-	_ payload.HADiscoveryComponentBuilder = (*Climate)(nil)
+	_ payload.Source                   = (*Climate)(nil)
+	_ payload.HADiscoveryEntityBuilder = (*Climate)(nil)
 )
 
-// HADiscoveryComponent returns the HA Climate-platform-specific payload
-// skeleton. The bridge attaches the shared availability / device
-// origin block plus name / unique_id; the builder fills in
-// climate-specific state references and command topics.
+// The roles a climate entity binds. They are the platform's own field names:
+// a composite binds one datapoint per part of itself, and naming the parts
+// after the keys they feed is what lets [climateEntity.BuildDiscovery] resolve
+// a topic without a second table mapping roles onto keys.
+const (
+	roleCurrentTemperature = "current_temperature"
+	roleTargetTemperature  = "temperature"
+	roleCurrentHumidity    = "current_humidity"
+)
+
+// climateEntity is a thermostat on the shared model plus the HA climate
+// platform's own vocabulary.
 //
-// **ADR 0011 — per-DP topology:**
-//
-// Direct wire values (current_temperature, target_temperature,
-// current_humidity) reference the per-DP state topics with
-// `value_json.value` — each DP carries its own JSON wrapper from
-// the bridge's slot-state publish (phase 1b). HA renders fresh
-// values as soon as the matching wire DP is observed; missing DPs
-// stay unavailable per-field instead of forcing the whole climate
-// card to wait on the slowest constituent.
-//
-// Derived/synthetic fields (hvac_mode, preset_mode, action) reference
-// the custom-DP aggregate state topic and pull from the curated
-// derived-only StatePayload. The aggregate is no longer a sink for
-// every wire value — only the model-computed fields HA cannot get
-// from a single per-DP topic.
-//
-// Write side: per-service-method `…/custom/climate/set/<method>`
-// topics (ADR 0009 + ADR 0011 §"Service-method command shape").
-func (c *Climate) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery.Component {
-	if c == nil || ctx == nil {
-		return hadiscovery.Component{}
+// Climate declares no `state_topic` and no `command_topic` at all: it names a
+// topic per role — mode_state_topic, temperature_command_topic,
+// action_topic — which is exactly the case [hadiscovery.Builder] exists for.
+// The bindings carry the coordinates and this resolves them, so the topics
+// come out of the same layout every other plane renders through.
+type climateEntity struct {
+	payload.CustomEntity
+
+	// fields is the vocabulary that needs no topic: bounds, unit, and the
+	// mode and preset lists.
+	fields hadiscovery.ClimateFields
+	// presets is non-empty when the thermostat advertises a selectable
+	// profile, which is what brings the whole preset surface with it.
+	presets []string
+	// action is true when the thermostat has an activity source; see
+	// [Climate.HasActivitySource].
+	action bool
+}
+
+// BuildDiscovery implements [hadiscovery.Builder].
+func (e *climateEntity) BuildDiscovery(ctx hadiscovery.Context, comp *hadiscovery.Component) error {
+	fields := e.fields
+	aggregate := e.stateTopic(ctx, hamodel.RoleState)
+
+	// Direct wire values → per-parameter topics with `value_json.value`. Each
+	// carries its own envelope from the bridge's slot-state publish, so Home
+	// Assistant renders a fresh value as soon as the matching wire DP is
+	// observed and a missing DP stays unavailable per field instead of forcing
+	// the whole climate card to wait on the slowest constituent.
+	fields.CurrentTemperatureTopic = e.stateTopic(ctx, roleCurrentTemperature)
+	fields.CurrentTemperatureTemplate = wireValueTemplate
+	fields.TemperatureStateTopic = e.stateTopic(ctx, roleTargetTemperature)
+	fields.TemperatureStateTemplate = wireValueTemplate
+	fields.TemperatureCommandTopic = e.MethodTopic(ctx, "set_temperature")
+
+	// Derived fields → the aggregate, which carries the curated,
+	// model-computed document rather than every wire value.
+	fields.ModeStateTopic = aggregate
+	fields.ModeStateTemplate = "{{ value_json.hvac_mode }}"
+	fields.ModeCommandTopic = e.MethodTopic(ctx, "set_mode")
+
+	if len(e.presets) > 0 {
+		fields.PresetModes = e.presets
+		fields.PresetModeStateTopic = aggregate
+		fields.PresetModeValueTemplate = "{{ value_json.preset_mode }}"
+		fields.PresetModeCommandTopic = e.MethodTopic(ctx, "set_profile")
 	}
-	// Every wire-backed field names the channel + parameter it actually
-	// resolved to (see [Config.Group]); on the HmIP and classic-RF
-	// families that is the custom DP's own channel, on HM-CC-TC it is
-	// not.
-	// HA's temperature_unit field expects "C" or "F" — not the unit-with-degree-sign.
-	// c.TemperatureUnit() returns "°C" / "°F" by default; strip the leading "°".
-	haTempUnit := strings.TrimPrefix(c.TemperatureUnit(), "°")
+	if topic := e.stateTopic(ctx, roleCurrentHumidity); topic != "" {
+		fields.CurrentHumidityTopic = topic
+		fields.CurrentHumidityTemplate = wireValueTemplate
+	}
+	// The action surface is only advertised when the thermostat has an
+	// activity source. For display-only thermostats the aggregate never
+	// carries an `action` key, and HA must not subscribe an action_topic that
+	// would render as "unknown" where the reference stack shows no hvac_action
+	// at all.
+	//
+	// A peer-only source (activity wired late via
+	// [Climate.RefreshLinkPeerActivitySources]) converges on its own: the first
+	// peer push feeds OnActivity, the next channel event rebuilds this payload
+	// with the action surface included, and the bridge's diff-gated discovery
+	// cache re-publishes the changed bytes.
+	if e.action {
+		fields.ActionTopic = aggregate
+		fields.ActionTemplate = "{{ value_json.action }}"
+	}
+	comp.Fields = fields
+
+	// The json-attributes pair is [hamodel.Description] vocabulary since
+	// go-hamqtt v0.24.0, but its topic is this entity's own aggregate and only
+	// the render context can resolve a topic — so it is written here, after
+	// the projection that would otherwise have carried it.
+	comp.JSONAttributesTopic = aggregate
+	comp.JSONAttributesTemplate = climateJSONAttributesTemplate
+	return nil
+}
+
+// stateTopic resolves one bound role's state topic, or the empty string for a
+// role this thermostat does not bind — a humidity reading it has no sensor
+// for, say, whose key must then stay off the payload entirely.
+func (e *climateEntity) stateTopic(ctx hadiscovery.Context, role string) string {
+	b, ok := hamodel.Bind(e, role)
+	if !ok {
+		return ""
+	}
+	return ctx.StateTopic(b.Slot)
+}
+
+// wireValueTemplate reads the scalar out of a per-parameter state envelope.
+const wireValueTemplate = "{{ value_json.value }}"
+
+// HADiscoveryEntity describes the thermostat on the shared model.
+//
+// **ADR 0011 — per-DP topology:** every wire-backed field names the channel
+// and parameter it actually resolved to (see [Config.Group]); on the HmIP and
+// classic-RF families that is the custom DP's own channel, on HM-CC-TC it is
+// not. Derived fields (hvac_mode, preset_mode, action) come from the custom-DP
+// aggregate, which is no longer a sink for every wire value.
+//
+// Write side: the named actions of ADR 0009 + ADR 0011's
+// `…/custom/climate/set/<method>`.
+func (c *Climate) HADiscoveryEntity() hamodel.Entity {
+	if c == nil {
+		return nil
+	}
+	// HA's temperature_unit expects "C" or "F", not the unit with its degree
+	// sign; [Climate.TemperatureUnit] answers "°C" / "°F" by default.
 	fields := hadiscovery.ClimateFields{
-		TemperatureUnit: haTempUnit,
+		TemperatureUnit: strings.TrimPrefix(c.TemperatureUnit(), "°"),
 		MinTemp:         hadiscovery.Ptr(c.MinTemp()),
 		MaxTemp:         hadiscovery.Ptr(c.MaxTemp()),
 		TempStep:        hadiscovery.Ptr(c.TemperatureStep()),
-		// Direct wire values → per-DP topics with `value_json.value`.
-		CurrentTemperatureTopic:    ctx.WireParameterStateTopicOn(c.temperatureSlot.ChannelAddress, string(c.temperatureSlot.Parameter)),
-		CurrentTemperatureTemplate: "{{ value_json.value }}",
-		TemperatureStateTopic:      ctx.WireParameterStateTopicOn(c.setpointSlot.ChannelAddress, string(c.setpointSlot.Parameter)),
-		TemperatureStateTemplate:   "{{ value_json.value }}",
-		TemperatureCommandTopic:    ctx.ServiceMethodCommandTopic("set_temperature"),
-		// Derived fields → custom-DP aggregate (curated, derived-only).
-		ModeStateTopic:    ctx.CustomDPStateTopic(),
-		ModeStateTemplate: "{{ value_json.hvac_mode }}",
-		ModeCommandTopic:  ctx.ServiceMethodCommandTopic("set_mode"),
 	}
 	if modes := c.Modes(); len(modes) > 0 {
 		ms := make([]string, len(modes))
@@ -82,69 +159,68 @@ func (c *Climate) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscove
 		}
 		fields.Modes = ms
 	}
+
+	var presets []string
 	if profiles := c.Profiles(); len(profiles) > 0 {
-		ps := make([]string, 0, len(profiles))
+		presets = make([]string, 0, len(profiles))
 		for _, p := range profiles {
-			// HA's MQTT Climate schema reserves "none" as the implicit
-			// unset preset and rejects it as a selectable mode in
-			// preset_modes (`preset_modes must not include preset mode
-			// 'none'`). Domain-side `Profiles()` keeps ProfileNone for
-			// state reporting; the discovery payload must filter it.
+			// HA's MQTT Climate schema reserves "none" as the implicit unset
+			// preset and rejects it as a selectable mode in preset_modes
+			// (`preset_modes must not include preset mode 'none'`).
+			// Domain-side Profiles() keeps ProfileNone for state reporting;
+			// the discovery payload must filter it.
 			if p == ProfileNone {
 				continue
 			}
-			ps = append(ps, string(p))
+			presets = append(presets, string(p))
 		}
-		if len(ps) > 0 {
-			fields.PresetModes = ps
-			fields.PresetModeStateTopic = ctx.CustomDPStateTopic()
-			fields.PresetModeValueTemplate = "{{ value_json.preset_mode }}"
-			fields.PresetModeCommandTopic = ctx.ServiceMethodCommandTopic("set_profile")
-		}
+	}
+
+	binds := []hamodel.Binding{
+		{
+			Role: hamodel.RoleState, Mode: hamodel.Read,
+			Slot: payload.CustomSlot(c.TopicSlot()),
+		},
+		{
+			Role: roleCurrentTemperature, Mode: hamodel.Read,
+			Slot: payload.WireSlotOn(c.temperatureSlot.ChannelAddress, string(c.temperatureSlot.Parameter)),
+		},
+		{
+			Role: roleTargetTemperature, Mode: hamodel.Read,
+			Slot: payload.WireSlotOn(c.setpointSlot.ChannelAddress, string(c.setpointSlot.Parameter)),
+		},
 	}
 	if c.HasHumidity() {
-		fields.CurrentHumidityTopic = ctx.WireParameterStateTopicOn(c.humiditySlot.ChannelAddress, string(c.humiditySlot.Parameter))
-		fields.CurrentHumidityTemplate = "{{ value_json.value }}"
+		binds = append(binds, hamodel.Binding{
+			Role: roleCurrentHumidity, Mode: hamodel.Read,
+			Slot: payload.WireSlotOn(c.humiditySlot.ChannelAddress, string(c.humiditySlot.Parameter)),
+		})
 	}
-	// The action surface is only advertised when the thermostat has an
-	// activity source — see [Climate.HasActivitySource]. For display-only
-	// thermostats the aggregate state never carries an `action` key, and
-	// HA must not subscribe an action_topic that would render as
-	// "unknown" where the reference stack shows no hvac_action at all.
-	//
-	// Peer-only-source climates (activity wired late via
-	// [Climate.RefreshLinkPeerActivitySources]) converge on their own:
-	// the first peer push feeds OnActivity, the next channel event
-	// rebuilds this payload with the action surface included, and the
-	// MQTT bridge's diff-gated discovery cache re-publishes the changed
-	// bytes (retained).
-	if c.HasActivitySource() {
-		fields.ActionTopic = ctx.CustomDPStateTopic()
-		fields.ActionTemplate = "{{ value_json.action }}"
-	}
-	return hadiscovery.Component{
-		Platform: hacatalog.PlatformClimate,
-		// HA derives slider granularity from `temp_step` alone;
-		// `precision` is a HA-MQTT-only display-rounding hint that
-		// `_attr_target_temperature_step`). Emitting both produces a
-		// drift against the HA-native integration without any
-		// behavioural benefit. Dropped per
-		// optimistic=false: HA must not apply setpoint changes locally before
-		// the CCU echoes them back; wrong displayed setpoint during connection
-		// issues would mislead the user.
-		Optimistic: hadiscovery.Ptr(false),
-		// Json_attributes — surface
-		// extra_state_attributes (schedule_data, temperature_offset,
-		// optimum_start_stop, available_profiles, current_schedule_profile,
-		// device_active_profile_index, schedule_api_version, value_state,
-		// address) as HA entity state-attributes. The template filters
-		// out the keys HA already reads via dedicated state-templates
-		// (hvac_mode, preset_mode, action, state_uncertain) so the
-		// climate-entity properties don't appear duplicated under the
-		// "more attributes" section.
-		JSONAttributesTopic:    ctx.CustomDPStateTopic(),
-		JSONAttributesTemplate: climateJSONAttributesTemplate,
-		Fields:                 fields,
+
+	return &climateEntity{
+		CustomEntity: payload.CustomEntity{
+			Basic: hamodel.Basic{
+				EntityKey:      c.TopicSlot().Parameter,
+				EntityPlatform: hacatalog.PlatformClimate,
+				Description: hamodel.Description{
+					// HA derives slider granularity from `temp_step` alone;
+					// `precision` is an HA-MQTT-only display-rounding hint with
+					// no counterpart in the native integration, which uses
+					// _attr_target_temperature_step. Emitting both drifts from
+					// the native integration without any behavioural benefit.
+					//
+					// optimistic=false: HA must not apply setpoint changes
+					// locally before the CCU echoes them back; a wrong
+					// displayed setpoint during connection issues would
+					// mislead the operator.
+					Optimistic: hamodel.Ptr(false),
+				},
+				Binds: binds,
+			},
+		},
+		fields:  fields,
+		presets: presets,
+		action:  c.HasActivitySource(),
 	}
 }
 
