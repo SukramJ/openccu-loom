@@ -1,6 +1,6 @@
 {
-  "generated": "411d030f",
-  "head": "411d030f",
+  "generated": "0be297ac",
+  "head": "0be297ac",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/openccu-loom-remote/main.go",
@@ -729,7 +729,7 @@
       "package": "internal/north/mqtt",
       "identifier": "IgnoreMultipleChannelsForNameInspector",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 451,
+      "line": 464,
       "kind": "type"
     },
     {
@@ -5709,7 +5709,7 @@
       "identifier": "CustomDPDisplayNamer",
       "reason": "satisfied by *device.Channel and reached only through a type assertion in displayChannelName; RTA cannot follow an interface reached by assertion",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 440
+      "line": 453
     },
     {
       "package": "internal/north/mqtt",
@@ -5751,14 +5751,14 @@
       "identifier": "ErrCleanupNeedsSubscriber",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/retain_cleanup.go",
-      "line": 554
+      "line": 556
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "ErrSweepSlotBusy",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/retain_cleanup.go",
-      "line": 542
+      "line": 544
     },
     {
       "package": "internal/north/mqtt",
@@ -5814,21 +5814,21 @@
       "identifier": "LegacyAggregateStateMatcher",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/retain_cleanup.go",
-      "line": 163
+      "line": 165
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "LegacyDataPointStateMatcher",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/retain_cleanup.go",
-      "line": 215
+      "line": 217
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "LegacySlotStateMatcher",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/retain_cleanup.go",
-      "line": 287
+      "line": 289
     },
     {
       "package": "internal/north/mqtt",
@@ -5961,14 +5961,14 @@
       "identifier": "NewRetainCleanup",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/retain_cleanup.go",
-      "line": 54
+      "line": 56
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "ProgramTriggerMirrorMatcher",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/retain_cleanup.go",
-      "line": 329
+      "line": 331
     },
     {
       "package": "internal/north/mqtt",
@@ -6003,14 +6003,14 @@
       "identifier": "RawOrphanCandidateMatcher",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/retain_cleanup.go",
-      "line": 955
+      "line": 865
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "RetainCleanup",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/retain_cleanup.go",
-      "line": 39
+      "line": 41
     },
     {
       "package": "internal/north/mqtt",
@@ -6052,7 +6052,7 @@
       "identifier": "ValueListLabeler",
       "reason": "the event bridge asserts its labeler against this interface (b.labels.(mqtt.ValueListLabeler)) before stamping localised enum options, and the labeler the daemon wires in satisfies it; a type reached only through an interface assertion, which the analyzer's callgraph does not resolve",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 488
+      "line": 501
     },
     {
       "package": "internal/north/mqtt",
