@@ -267,3 +267,72 @@ func TestEventBridgeAnnouncesAvailabilityOfSuppressedReachabilityParameter(t *te
 		t.Fatalf("announcement = %+v, want the device announced unavailable", got)
 	}
 }
+
+// hookedClient wraps a [mqtt.NoopClient] and runs onPublish before each
+// write is recorded, so a test can interleave a second call with a
+// publish that is still in flight.
+type hookedClient struct {
+	*mqtt.NoopClient
+	onPublish func(topic string, payload []byte)
+}
+
+func (c *hookedClient) Publish(ctx context.Context, topic string, payload []byte, qos mqtt.QoS, retain bool, opts ...mqtt.PublishOption) error {
+	if c.onPublish != nil {
+		c.onPublish(topic, payload)
+	}
+	return c.NoopClient.Publish(ctx, topic, payload, qos, retain, opts...)
+}
+
+// TestOnDeviceRemovedForgetsAvailabilityAfterTheRetraction pins the
+// order between clearing the retained availability topic and clearing
+// the transition gate that describes it.
+//
+// The gate has to be cleared, or a device readopted under the same
+// address reads as "no transition" and stays unavailable for the life of
+// the daemon — that is what [TestOnDeviceRemovedForgetsAvailability]
+// covers. Clearing it *first* opens the reverse window: the CCU keeps
+// delivering values while the removal callback runs, so an inbound value
+// for the device being removed can re-seed the gate with `true` while
+// the retraction is still in flight, and the retraction then empties the
+// topic underneath it. The gate is left believing a state the broker
+// does not hold, and nothing ever publishes `online` again.
+//
+// The hook below is that interleaving, made deterministic: it fires
+// exactly when the availability retraction reaches the client.
+func TestOnDeviceRemovedForgetsAvailabilityAfterTheRetraction(t *testing.T) {
+	t.Parallel()
+
+	const addr = "AVAILGATE03"
+	reg, _ := registryWithDevice(t)
+	client := &hookedClient{NoopClient: mqtt.NewNoopClient()}
+	bridge := mqtt.NewBridge(mqtt.BridgeConfig{
+		Base: "openccu-loom", CentralName: "ccu-01", RawEnabled: true,
+	}, client)
+	eb := NewEventBridge(reg, nil, mqtt.NewWiring(bridge, nil))
+	eb.Start(context.Background())
+	t.Cleanup(eb.Stop)
+
+	ctx := context.Background()
+	eb.markAvailability(ctx, "ccu-01", "HmIP-RF", addr, true)
+
+	var once sync.Once
+	client.onPublish = func(topic string, payload []byte) {
+		if !strings.HasSuffix(topic, "/"+addr+"/availability") || len(payload) != 0 {
+			return
+		}
+		// A wire value for the device being removed, landing while the
+		// retraction is in flight.
+		once.Do(func() { eb.markAvailability(ctx, "ccu-01", "HmIP-RF", addr, true) })
+	}
+
+	eb.onDeviceRemoved(ctx, hmevent.DeviceRemovedEvent{
+		CentralName: "ccu-01",
+		InterfaceID: "HmIP-RF",
+		Address:     addr,
+	})
+	client.onPublish = nil
+
+	if !eb.markAvailability(ctx, "ccu-01", "HmIP-RF", addr, true) {
+		t.Fatal("the availability gate outlived the retraction it describes: a readopted device can never publish `online` again")
+	}
+}

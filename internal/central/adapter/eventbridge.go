@@ -631,19 +631,16 @@ func (b *EventBridge) onDeviceRemoved(ctx context.Context, e hmevent.DeviceRemov
 	// their callbacks over. Release them here or they stay installed for
 	// the life of the daemon.
 	b.releaseLiveSubsForDevice(e.CentralName, e.Address)
-	// Drop the availability transition state together with the topic it
-	// describes: RetractRawStateForDevice writes an empty retained payload
-	// to the device-availability topic, so a device that comes back under
-	// the same address must be able to publish `online` again. A stale
-	// cached `true` would classify that as "no transition" and leave every
-	// HA entity of the readopted device unavailable for the life of the
-	// daemon.
-	b.forgetAvailability(e.CentralName, e.InterfaceID, e.Address)
 	if b.mqtt == nil {
+		// No broker to retract from, but the transition state still has
+		// to go: it describes a topic this daemon will not write again
+		// for this address.
+		b.forgetAvailability(e.CentralName, e.InterfaceID, e.Address)
 		return
 	}
 	bridge := b.mqtt.Bridge()
 	if bridge == nil {
+		b.forgetAvailability(e.CentralName, e.InterfaceID, e.Address)
 		return
 	}
 	// Both retractions are scoped to the removal's own central. Device
@@ -654,6 +651,23 @@ func (b *EventBridge) onDeviceRemoved(ctx context.Context, e hmevent.DeviceRemov
 	// entities along with this one's.
 	bridge.RetractDiscoveryForCentralDevice(ctx, e.CentralName, e.Address)
 	bridge.RetractRawStateForDevice(ctx, e.CentralName, e.InterfaceID, e.Address)
+	// Drop the availability transition state AFTER the topic it describes
+	// is gone, never before.
+	//
+	// RetractRawStateForDevice writes an empty retained payload to the
+	// device-availability topic, so a device that comes back under the
+	// same address must be able to publish `online` again — a stale
+	// cached `true` classifies that as "no transition" and leaves every
+	// HA entity of the readopted device unavailable for the life of the
+	// daemon. Forgetting first opened the reverse window instead: an
+	// inbound value for the device being removed re-seeded the cache with
+	// `true` while the retraction was still in flight, and the retraction
+	// then cleared the topic underneath it. Removal events arrive on the
+	// callback path while the wire keeps delivering, so that interleaving
+	// is not hypothetical for a device the CCU is still reporting. The
+	// ordering closes it: whatever the cache picks up during the
+	// retraction is discarded with it.
+	b.forgetAvailability(e.CentralName, e.InterfaceID, e.Address)
 }
 
 // PublishInitialSnapshot walks every registered central's device

@@ -290,6 +290,26 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   distinguish. All three topics are now QoS 1, pinned by a test that
   walks every availability publisher on the bridge.
 
+- **The availability gate was cleared before the topic it describes, not
+  after.** The readopted-device defect itself is already closed: a
+  removal forgets the gate, so a device coming back under the same
+  address can publish `online` again rather than reading as "no
+  transition" forever. The order was the remaining problem. The CCU keeps
+  delivering values while a removal callback runs, so an inbound value
+  for the device being removed could re-seed the gate with `true` while
+  the retraction was still in flight; the retraction then emptied the
+  topic underneath it, and the gate was left believing a state the
+  broker does not hold — with nothing to ever publish `online` again,
+  which is the same permanent unavailability the forgetting exists to
+  prevent.
+
+  `forgetAvailability` now runs after both retractions, so whatever the
+  gate picks up during the retraction is discarded with it. The
+  no-broker and no-bridge early returns still forget, because the topic
+  they describe is one this daemon will not write again for that
+  address. A test makes the interleaving deterministic by firing a
+  `markAvailability` from inside the retraction's own publish.
+
 ### Added
 
 - **Fixture rows for the two `DiscoverySlug` divergence classes.** The
