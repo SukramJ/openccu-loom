@@ -11,10 +11,15 @@ import (
 )
 
 // filterRecorder records every Subscribe call in registration order. Order
-// matters to the pin: [CommandSubscriber.Start] aborts on the first refused
-// subscribe and leaves the partial set live, so "which filters are up" after
-// a broker ACL rejection is a function of the order, and a reordering is a
-// behaviour change even when the set is unchanged.
+// still matters to the pin, for a reason that changed with the router
+// adoption: a failed Start no longer leaves a partial set live — it
+// unsubscribes what it registered, in registration order, and
+// TestCommandStartRollsBackWhatItAlreadySubscribed pins that. What the order
+// decides now is which filters are attempted before a refusal aborts the
+// start, and the order in which an ambiguous pair is reported at
+// registration. A reordering is therefore still a behaviour change even when
+// the set is unchanged, and a set that is registered in a different order
+// than it is pinned in is a diff a reviewer should see.
 type filterRecorder struct {
 	mu      sync.Mutex
 	filters []string
@@ -124,16 +129,21 @@ var pinnedCommandFilters = []pinnedFilter{
 // by enumeration in TestCommandFiltersArePairwiseDisjoint.
 //
 // The ORDER is pinned too, including the fact that it is not grouped by
-// length. [CommandSubscriber.Start] aborts on the first refused subscribe
-// and leaves the partial set live, so the order decides which filters
-// survive a partial ACL denial — a property the shared library's rollback
-// removes and this daemon still has.
+// length. It is the order [hapublisher.CommandRouter.Start] subscribes in
+// and rolls back in, and the order [hapublisher.CommandRouter.Handle]
+// reports an ambiguous pair in. It is no longer the order that decides which
+// filters survive a partial ACL denial: none of them do, because the router
+// withdraws what it already registered — see
+// TestCommandStartRollsBackWhatItAlreadySubscribed, which is where that
+// property moved.
 //
 // Not pinned here: the QoS each filter registers at (that is
 // [CommandSubscriber.WithQoS]'s contract and is covered by the subscriber's
-// own tests), and the handler each filter is bound to — a filter/handler
+// own tests), the handler each filter is bound to — a filter/handler
 // mismatch is caught by the delivery tests in
-// command_subscriber_topic_base_test.go, which drive each filter by name.
+// command_subscriber_topic_base_test.go, which drive each filter by name —
+// and the subscribe options each one carries, which
+// TestCommandRouterStaysUnattributedAndStampsNoIdentifier owns.
 func TestCommandFilterSetIsPinned(t *testing.T) {
 	t.Parallel()
 
@@ -252,9 +262,14 @@ func filtersOverlap(a, b []string) bool {
 // neither derivable from the filter set and both complete by inspection
 // only.
 //
-// It is also the precondition for adopting `publisher.CommandRouter`:
-// `Handle` refuses an overlapping pair outright with `ErrAmbiguousRoutes`, so
-// a set that fails this test cannot be registered at all.
+// It was the precondition for adopting `publisher.CommandRouter`, and it
+// remains a second, independent oracle now that the router is in place. The
+// router's own answer is asserted by
+// TestCommandRouterStaysUnattributedAndStampsNoIdentifier, which reads
+// `Attributed()`: on this transport an overlapping pair is not refused but
+// ACCEPTED, and silently switches the whole plane onto MQTT 5.0 subscription
+// identifiers. This enumeration says the same thing without depending on the
+// library's classification of it, and it names the pair.
 func TestCommandFiltersArePairwiseDisjoint(t *testing.T) {
 	t.Parallel()
 

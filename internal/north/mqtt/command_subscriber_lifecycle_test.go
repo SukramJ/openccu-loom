@@ -93,7 +93,7 @@ func TestCommandSubscriberLifecycleContextCancelledLifecycle(t *testing.T) {
 	if !ok {
 		t.Fatal("subscription did not match topic filter")
 	}
-	sub.dispatcher.flush()
+	sub.WaitIdle()
 
 	called, ctxErr := sink.snapshot()
 	if !called {
@@ -128,7 +128,7 @@ func TestCommandSubscriberLifecycleContextLiveLifecycle(t *testing.T) {
 	if !ok {
 		t.Fatal("subscription did not match topic filter")
 	}
-	sub.dispatcher.flush()
+	sub.WaitIdle()
 
 	called, ctxErr := sink.snapshot()
 	if !called {
@@ -161,7 +161,7 @@ func TestCommandSubscriberLifecycleContextNilIgnored(t *testing.T) {
 	if !ok {
 		t.Fatal("subscription did not match topic filter")
 	}
-	sub.dispatcher.flush()
+	sub.WaitIdle()
 
 	called, ctxErr := sink.snapshot()
 	if !called {

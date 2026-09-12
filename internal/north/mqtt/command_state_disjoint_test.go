@@ -187,11 +187,20 @@ func TestHubStatePublishesAreDisjointFromCommandSubscriptions(t *testing.T) {
 	if len(published) == 0 {
 		t.Fatal("nothing published — sweep would be vacuous")
 	}
+	topics := make([]string, 0, len(published))
 	for _, p := range published {
+		topics = append(topics, p.Topic)
 		for _, f := range filters {
 			if mqttFilterMatches(f, p.Topic) {
 				t.Errorf("state-plane publish %q matches the daemon's own command subscription %q", p.Topic, f)
 			}
 		}
+	}
+	// The same question through the shared module's own predicate, over the
+	// routes the router holds rather than over the filter strings the fake
+	// recorded. Its positive control is
+	// TestCheckDisjointReportsARealCommandTopic.
+	if err := sub.checkDisjoint(topics...); err != nil {
+		t.Errorf("CommandRouter.CheckDisjoint rejected the hub plane's published topics: %v", err)
 	}
 }

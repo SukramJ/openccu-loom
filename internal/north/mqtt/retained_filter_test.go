@@ -33,7 +33,7 @@ func TestHandleDataPoint_RetainedDropped(t *testing.T) {
 	// Sanity: a non-retained replay of the same shape DOES propagate.
 	noop.DeliverInbound("openccu-loom/+/+/+/+/+/set",
 		"openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/STATE/set", []byte("true"))
-	sub.dispatcher.flush()
+	sub.WaitIdle()
 	if got := sink.setValues.Load(); got != 1 {
 		t.Fatalf("non-retained set blocked too: setValues=%d, want 1", got)
 	}
@@ -55,7 +55,7 @@ func TestHandleSysvar_RetainedDropped(t *testing.T) {
 	}
 	noop.DeliverInbound("openccu-loom/+/hub/sysvars/+/set",
 		"openccu-loom/ccu-01/hub/sysvars/Anwesenheit/set", []byte("true"))
-	sub.dispatcher.flush()
+	sub.WaitIdle()
 	if got := sink.setSysvars.Load(); got != 1 {
 		t.Fatalf("non-retained sysvar blocked: setSysvars=%d, want 1", got)
 	}
@@ -77,7 +77,7 @@ func TestHandleProgram_RetainedDropped(t *testing.T) {
 	}
 	noop.DeliverInbound("openccu-loom/+/hub/programs/+/trigger",
 		"openccu-loom/ccu-01/hub/programs/123/trigger", []byte("true"))
-	sub.dispatcher.flush()
+	sub.WaitIdle()
 	if got := sink.triggers.Load(); got != 1 {
 		t.Fatalf("non-retained trigger blocked: triggers=%d, want 1", got)
 	}
@@ -95,6 +95,9 @@ func TestHandleServiceMethod_RetainedDropped(t *testing.T) {
 	}
 	noop.DeliverInboundRetained("openccu-loom/+/+/+/+/custom/+/set/+",
 		"openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/custom/climate/set/boost", []byte("true"))
+	// The drop happens on a worker, not on the delivering goroutine, so a
+	// zero-call assertion without this barrier would pass vacuously.
+	sub.WaitIdle()
 	if got := cdp.calls.Load(); got != 0 {
 		t.Fatalf("retained service method dispatched: calls=%d", got)
 	}
@@ -112,6 +115,9 @@ func TestHandleCDPInvoke_RetainedDropped(t *testing.T) {
 	}
 	noop.DeliverInboundRetained("openccu-loom/+/devices/+/cdps/+/+/invoke",
 		"openccu-loom/ccu-01/devices/0001ABCD/cdps/climate/boost/invoke", []byte(`{}`))
+	// The drop happens on a worker, not on the delivering goroutine, so a
+	// zero-call assertion without this barrier would pass vacuously.
+	sub.WaitIdle()
 	if got := cdp.calls.Load(); got != 0 {
 		t.Fatalf("retained CDP invoke dispatched: calls=%d", got)
 	}
@@ -129,6 +135,9 @@ func TestHandleWeekProfile_RetainedDropped(t *testing.T) {
 	}
 	noop.DeliverInboundRetained("openccu-loom/+/+/+/+/+/set",
 		"openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/week_profile/set", []byte("P2"))
+	// The drop happens on a worker, not on the delivering goroutine, so a
+	// zero-call assertion without this barrier would pass vacuously.
+	sub.WaitIdle()
 	if got := wp.calls.Load(); got != 0 {
 		t.Fatalf("retained week-profile set dispatched: calls=%d", got)
 	}

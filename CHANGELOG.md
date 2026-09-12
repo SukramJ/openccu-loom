@@ -413,6 +413,114 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The command plane runs on go-hamqtt's `publisher.CommandRouter`, and
+  its handlers no longer run on the transport's read loop.** That last
+  clause is the part to weigh: it is an improvement with three
+  documented costs, and all three are real here.
+
+  go-mqtt dispatches every inbound message synchronously, on the same
+  goroutine that decodes PUBACK and PINGRESP, so a handler that blocks
+  stalls acknowledgement processing and can trip the keep-alive
+  watchdog into a spurious reconnect. Every command this daemon
+  accepts is a write to a CCU behind a circuit breaker and a retry
+  stack, so blocking for seconds is the normal case, not the edge —
+  which is why this plane already ran its sink calls on a worker pool
+  of its own. The router's pool replaces that pool and moves the
+  boundary: the whole handler runs off the read loop now, not just the
+  sink call at the end of it.
+
+  The costs, audited against every one of this daemon's thirteen
+  handler bindings. **Delivery is no longer synchronous with the
+  broker's acknowledgement** — a QoS 1 command is acked when the router
+  accepts it, before the handler runs, so a process that dies in
+  between loses that command; durable queueing is explicitly not
+  attempted, here or in the library. No sink in this daemon treated the
+  ack as "handled": every one of them is fire-and-forget with a logged
+  warning on failure, and the pre-existing worker pool had already
+  broken that coupling for the sink call. **Order holds per topic
+  only** — two commands on one topic run in arrival order on one
+  worker, commands on different topics may run concurrently. That is
+  the same guarantee the hand-rolled dispatcher gave (it hashed the
+  same key), and nothing here relies on cross-topic ordering; the
+  alarm plane comes closest, since its `master` verbs and its per-zone
+  verbs arrive on different topics, but the engine serialises its own
+  state and the two were already concurrent. **Shutdown has to be
+  waited for**, which `Close` does: it unsubscribes every route and
+  then blocks on whatever a handler is still doing.
+
+  What the library gives back. `Start` **rolls back**: a broker that
+  refuses one filter no longer leaves the nine it already granted live,
+  delivering commands into a subscriber whose start failed and whose
+  stack is being torn down — the daemon's own `Start` aborted and left
+  the partial set up, which from the outside is a CCU where some
+  buttons work and the rest do nothing. `Close` **drains** and
+  unsubscribes. `CheckDisjoint` is the shared module's own predicate
+  for the state-versus-command echo class, and the six-plane sweep now
+  asks it alongside this daemon's own matcher, with a positive control
+  so the second oracle cannot pass by answering nothing. MQTT 5.0's **No
+  Local** comes free on a v5 link, because the shared transport asks
+  for it — it closes the echo class for this process, though only on v5
+  and only for this process, so `CheckDisjoint` stays load-bearing.
+
+  `Command.Wildcards` replaces the topic arithmetic. Every handler used
+  to re-split the inbound topic and index it by position; the route's
+  captured wildcard levels are handed over already parsed, so
+  **eleven hand-rolled split sites, the twenty-five positional segment
+  reads they fed and the `commandParts` helper behind them are gone**,
+  and with them the shape of two confirmed defects —
+  one that counted absolute segments and dropped every command on an
+  installation whose `topic_base` carried a slash, one that read a
+  sibling route's literal segment as a parameter name. The reading is
+  positional, so it needs the base to contribute no wildcard level of
+  its own: `topic_base` is free-form operator config and nothing in
+  `internal/config` rejects a `+` in it, so `Start` now refuses such a
+  base outright. The old code was immune to that by accident, cutting
+  the base off as a literal prefix and silently dropping every command
+  instead.
+
+  **The plane stays on the unattributed path, deliberately.** v0.28.0
+  accepts overlapping filters when the transport can attribute a
+  delivery to its subscription, and the shared go-mqtt adapter can — so
+  the mode is decided by whether these filters overlap, not by the
+  library withholding anything. They do not overlap, since #800
+  coalesced the three shapes that did, so `Attributed()` reads false
+  and **0 of 10 subscriptions carry a Subscription Identifier**: this
+  is exactly v0.27.0's wire, No Local and nothing else. `Start` refuses
+  to subscribe at all in attributed mode, because attribution is v5
+  only and is never retried unattributed — on an overlapping set
+  `north.mqtt.protocol_version: "3.1.1"` would stop being a dialect
+  choice and become a boot failure of the whole command plane, with
+  the state plane unaffected and the deployment looking healthy. A
+  filter edit that reintroduces an overlap therefore fails here rather
+  than on a customer's downgraded broker, and the anti-vacuity half is
+  pinned too: an overlapping pair over this very transport really is
+  accepted and really does flip the mode, so the guard is armed against
+  something.
+
+  What the library deliberately did not take, and what stays: the
+  thirteen typed sinks, the `<central>` segment resolution that turns a
+  `TopicSafe`-escaped name back into the key every sink is registered
+  under, the payload coercion, and the per-central `received_commands`
+  and `subscribe_failures` counters. The daemon's own
+  `boundedDispatcher` — worker pool, per-key queues and the hashing
+  behind them — is deleted; the birth replay had already moved onto the
+  shared runtime, so the command plane was its last production caller.
+
+  No published byte moves: `command_topic` is byte-identical in all 173
+  golden entries, every pin under `internal/north/mqtt/testdata` holds,
+  and no `-update-*-golden` flag was passed.
+
+- **go-hamqtt v0.26.0 -> v0.28.0 and go-mqtt v1.4.0 -> v1.5.0**, which
+  is where the router's attribution path and `WithSubscriptionID` live.
+  The state and availability adoption landed the same bump and carries
+  its two non-command consequences — `publisher.QoS` becoming a type
+  (so a stated QoS 0 stays QoS 0 instead of being silently raised to 1,
+  which the command plane's operator-settable level now depends on) and
+  `ParseConfigTopic` claiming the node-id-less per-entity form. The
+  command subscriber converts its own level through the same
+  `runtimeQoS` that adoption introduced rather than growing a second
+  copy of it.
+
 - **Ten disjoint command filters instead of thirteen with three
   overlapping pairs.** The `week_profile`, `combined` and `schedule`
   command shapes no longer have subscriptions of their own; the two

@@ -865,11 +865,13 @@ func makeMQTTSubscriberBuilder(
 		// in practice, since every publish fails fast once the client is
 		// down.
 		//
-		// Both subscriber constructors start their worker goroutines
-		// immediately, and only Close stops them — so every early return
-		// from here on closes what it already built. Without that a failed
-		// build (a broker ACL rejecting one of the command subscriptions)
-		// leaves nine goroutines running with no handle left to stop them.
+		// Every early return from here on closes what it already built.
+		// The command plane's worker pool now belongs to its Start rather
+		// than to its constructor — the shared router starts no goroutines
+		// until then, and rolls its own subscriptions back on a refused
+		// SUBSCRIBE — but the birth replay's does not, and a Close that is
+		// cheap when there is nothing to close is the shape that survives
+		// either.
 		birthSync := mqtt.NewBirthSync(sub, bridge, logger)
 		if err := birthSync.Start(ctx); err != nil {
 			birthSync.Close()
@@ -907,7 +909,11 @@ func makeMQTTSubscriberBuilder(
 			cmdSub = cmdSub.WithAddonUpdateSink(addonSink)
 		}
 		if err := cmdSub.Start(ctx); err != nil {
-			cmdSub.Close()
+			// Close deliberately does not take this ctx. It unsubscribes
+			// every route the failed Start had put up, and an UNSUBSCRIBE
+			// sent under a context that is about to be cancelled — a
+			// reload's, on the error path — never reaches the broker.
+			cmdSub.Close() //nolint:contextcheck // teardown must outlive the caller's ctx; see Close
 			birthSync.Close()
 			return nil, fmt.Errorf("command_subscriber.Start: %w", err)
 		}
@@ -944,14 +950,20 @@ func makeMQTTSubscriberBuilder(
 		// Disconnects the client and drops every active filter, so an
 		// explicit per-subscriber unsubscribe is a no-op for them.
 		//
-		// Their dispatchers are not: each subscriber owns worker goroutines
-		// started in its constructor that exit only on Close, and every
-		// stack swap builds a fresh pair. Closing them here — after the
-		// queued republishes and commands have drained — keeps a reload from
-		// leaking nine goroutines per generation. The addon-update OnChange
-		// subscription is bound to the Updater rather than to the mqtt
-		// client, so it needs its own unsubscribe.
-		return func() {
+		// Their worker pools are not: each subscriber owns goroutines that
+		// exit only on Close, and every stack swap builds a fresh pair.
+		// Closing them here — after the queued republishes and commands have
+		// drained — keeps a reload from leaking a pool per generation. The
+		// command plane's Close additionally unsubscribes every route before
+		// it drains, which is the one thing the old hand-rolled subscriber
+		// never did. The addon-update OnChange subscription is bound to the
+		// Updater rather than to the mqtt client, so it needs its own
+		// unsubscribe.
+		// The teardown deliberately takes no context. Both Close calls
+		// unsubscribe before they drain, and an UNSUBSCRIBE sent under the
+		// context a shutdown has already cancelled never reaches the
+		// broker — see CommandSubscriber.Close.
+		return func() { //nolint:contextcheck // teardown must outlive the caller's ctx
 			if addonUnsub != nil {
 				addonUnsub()
 			}
