@@ -1326,6 +1326,13 @@ func (b *Bridge) publishChannelEventLeaf(ctx context.Context, topic, eventType s
 // owned by the sysvar model object (`<base>/<central>/hub/sysvars/
 // <name>/state`). The bridge only fills in `base` and JSON-encodes
 // the value; it never decides the topic shape.
+//
+// The publish is retained, which makes a nil value a trap: zero bytes
+// on a retained topic is MQTT's retraction, so a sysvar the CCU reports
+// as nil used to delete its own state topic and take the entity with
+// it. Such a value is refused with [ErrNilValue] instead, leaving the
+// last known reading in place; [Bridge.RetractSysvarState] is the one
+// way to clear the topic on purpose.
 func (b *Bridge) PublishSysvar(ctx context.Context, centralName string, sv pload.MQTTAddressable, value any) error {
 	if !b.cfg.RawEnabled {
 		return nil
@@ -2223,13 +2230,33 @@ func resolveEnumLabel(value any, wireType hmenum.ParameterType, valueList []stri
 	return ResolveEnumLabel(value, wireType, valueList)
 }
 
+// ErrNilValue reports that a publisher was handed a nil value where a
+// renderable one was required.
+//
+// It exists to keep an accident from performing a deliberate act. An
+// empty payload on a retained topic is MQTT's retraction, so rendering
+// nil as zero bytes made "this data point currently reads nothing"
+// indistinguishable from "delete this topic" — a sysvar whose value the
+// CCU reports as nil silently removed its own state topic, taking the
+// entity with it, instead of reporting that it has no value.
+//
+// Retraction stays reachable, deliberately and by name: the hub
+// health-score publisher writes its own empty body as an explicit
+// not-ready sentinel, and [Bridge.RetractSysvarState] clears a sysvar
+// topic when a whole central leaves. Neither goes through
+// [renderValue], so neither is affected.
+var ErrNilValue = errors.New("mqtt: nil value is not publishable")
+
 // renderValue converts a primitive Go value into the raw-plane
 // payload. Booleans, numbers, and strings map to their canonical
 // string form; complex values JSON-encode.
+//
+// A nil value is an error ([ErrNilValue]), not an empty payload — see
+// that error for why.
 func renderValue(v any) ([]byte, error) {
 	switch x := v.(type) {
 	case nil:
-		return []byte(""), nil
+		return nil, ErrNilValue
 	case bool:
 		if x {
 			return []byte("true"), nil

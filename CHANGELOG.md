@@ -168,6 +168,22 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   doc comment now states what a safe repair needs instead, and two tests pin
   the divergence so it cannot be closed quietly.
 
+- **A sysvar that reads nil deleted its own entity.** `renderValue`
+  turned a nil value into zero bytes and `PublishSysvar` wrote that
+  retained — which is MQTT's mechanism for deleting a retained message,
+  not a way of saying "no value". A system variable the CCU reports as
+  nil therefore retracted its own state topic and took the entity off
+  every consumer, silently, with the retraction indistinguishable on the
+  wire from an operator clearing the topic on purpose.
+
+  The two acts are now separate. Nil is refused at the renderer with a
+  named `ErrNilValue`, so the last known reading stays on the broker and
+  the wrapper logs the refusal; the deliberate retraction keeps both of
+  its existing paths, neither of which goes through the renderer —
+  `RetractSysvarState` for a central leaving the registry, and
+  `PublishHubSystemHealthScore`'s own empty body as the explicit
+  not-ready sentinel for a FAILED central.
+
 ### Added
 
 - **Fixture rows for the two `DiscoverySlug` divergence classes.** The
