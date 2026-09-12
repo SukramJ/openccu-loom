@@ -6,6 +6,34 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Removed
+
+- **The text display's aggregate `text` entity, which nothing could ever
+  reach and nothing could ever fill.** `TextDisplay` was migrated onto
+  the shared model in #792 for consistency with the other fifteen
+  custom data points, but a HmIP-WRCD surfaces as a `notify` entity
+  alone — the reference stack's `notify.py` spawns one
+  `HmipTextDisplayNotifyEntity` per `CustomDpTextDisplay` and registers
+  no `text` entity, and the channel aggregate has suppressed this source
+  by name since #61, where the surplus entity had reached Home Assistant
+  under a colliding `_2` suffix.
+
+  Unreachable alone would not have settled it; the suppression could
+  have been a switch someone meant to flip. What settled it is that
+  there was nothing behind the switch: the entity's value template read
+  `value_json.text`, and `TextDisplay.State()` publishes the device's
+  static capability lists and no current text at all — the display is
+  write-only. An entity rendered from it would have stood permanently
+  blank.
+
+  `TextDisplay` is now the only custom data point that implements no
+  `payload.HADiscoveryEntityBuilder`, which is how a source declines.
+  `TestHADiscoveryEntityBuilderCompleteness` records the exception and a
+  new tripwire asserts it: a mixin that later grows an
+  `HADiscoveryEntity` method fails a test instead of reaching a broker.
+  The aggregate's suppression stays as the bridge's own guarantee about
+  the category.
+
 ### Changed
 
 - **ADR 0070's "three packages move up" is superseded, measured.** All 262
@@ -78,6 +106,31 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the suite stayed green through a change that silently orphans every entity
   on any installation whose CCU names something in French, Spanish, Danish,
   Swedish or Norwegian.
+
+- **Three discovery keys the per-parameter plane published and Home
+  Assistant threw away are gone, and the golden moved to say so.** The
+  render pipeline projects a key only onto the platforms whose HA schema
+  declares it; #792 stamped four back onto three platforms so that
+  migration could stay byte-neutral. Three of the four were bytes HA
+  never kept: `state_topic` on `climate`, `value_template` on `light`
+  and on `siren`. The schemas are `extra=REMOVE_EXTRA`, so an installed
+  instance sees no difference — it stops receiving keys it was already
+  discarding with no error on the wire and no log line.
+
+  The fourth stays. `climate` DOES declare `value_template`
+  (go-ha-catalog v0.2.1, Home Assistant 2026.9.1); what it does not
+  declare is `state_topic`, and the pipeline projects the template only
+  inside the branch that projects the topic. That one key is still
+  stamped back, now for a reason the comment states.
+
+  `discovery_golden.json` is regenerated — the one place in this series
+  where that is the point rather than a warning. Six fixtures lost one
+  key each and nothing else moved. `light/values` and `light/master`
+  now pass the HA-schema validity pin and came off
+  `discoveryGoldenUnreachableShapes`; `siren` (no `command_topic`) and
+  `climate` (a `device_class` the schema does not declare) stay on it,
+  both still unreachable on this plane and both now the only reasons
+  left on the list.
 
 ### Changed
 

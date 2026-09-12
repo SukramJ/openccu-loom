@@ -450,34 +450,33 @@ func writeGolden(t *testing.T, entries map[string]goldenEntry) {
 // Home Assistant schema rejects, with the reason each is excluded from
 // [TestDiscoveryPinnedPayloadsAreValid] rather than fixed.
 //
-// All three kinds are unreachable on this plane in production, and so the
-// bodies below are latent rather than live breakage. That is why
-// they are excluded rather than reported as live breakage. Event.Category
-// on the per-parameter path is the generic wire data point's category
+// Both kinds are unreachable on this plane in production, and so the bodies
+// below are latent rather than live breakage. That is why they are excluded
+// rather than reported as live breakage. Event.Category on the per-parameter
+// path is the generic wire data point's category
 // (internal/model/generic/resolver.go's kindToCategory), which spans only
 // switch / binary_sensor / sensor / button / action / action_number /
-// action_select / number / select / text. light, siren and climate are
+// action_select / number / select / text. siren and climate are
 // custom-data-point categories: their events always carry a ChannelType
 // and leave through the channel aggregate, which builds a different body.
 //
 // The fixtures stay pinned anyway. resolveComponent does route these
-// categories here, so the branches exist and a move onto the shared model
-// must not change what they emit — but what they emit today is a body Home
-// Assistant would not accept:
+// categories here, so the branches exist and a change must not move what
+// they emit unnoticed — but what they emit today is a body Home Assistant
+// would not accept:
 //
-//   - light, siren: a `value_template` the light and siren schemas do not
-//     declare, so HA drops it silently.
 //   - siren: no `command_topic` at all. Siren falls through the
 //     per-component switch to its `default` arm, which sets none, and
 //     command_topic is required — HA would reject the config outright.
-//   - climate: `state_topic` and `device_class`, neither of which the
-//     climate schema declares.
+//   - climate: a `device_class`, which the climate schema does not declare,
+//     so HA drops it silently.
 //
-// Not fixed here on purpose: this change is a pin, and a pin that also
-// changes behaviour cannot show that behaviour did not change.
+// Both are real defects in what this plane would emit, and both are
+// unreachable, so neither is fixed here: a fix nothing can exercise is a
+// guess. `light` used to be on this list for a `value_template` the light
+// schema does not declare; that key is no longer published and the shape
+// validates, so it came off.
 var discoveryGoldenUnreachableShapes = map[string]struct{}{
-	"light/values":   {},
-	"light/master":   {},
 	"siren/values":   {},
 	"siren/master":   {},
 	"climate/values": {},

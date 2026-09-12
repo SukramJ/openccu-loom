@@ -13,8 +13,13 @@ var (
 	_ payload.Slotted  = (*TextDisplay)(nil)
 )
 
-// HAComponent reports the HA MQTT-Discovery component name. The
-// HmIP-WRCD text display surfaces as HA's `text` platform.
+// HAComponent reports the HA MQTT-Discovery component name — the platform
+// the HmIP-WRCD's state topic belongs to, which is HA's `text`.
+//
+// No `text` entity is discovered for it. The display's only Home Assistant
+// surface is the bridge's notify companion, and this source publishes no
+// discovery entity of its own; see the note on the [payload.Source]
+// assertion in payload.go.
 func (t *TextDisplay) HAComponent() string { return "text" }
 
 // TopicSlot returns the channels/<ch>/custom/text_display/ slot.

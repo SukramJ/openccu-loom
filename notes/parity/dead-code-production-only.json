@@ -1,6 +1,6 @@
 {
-  "generated": "56ea42f3",
-  "head": "56ea42f3",
+  "generated": "411d030f",
+  "head": "411d030f",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/openccu-loom-remote/main.go",
@@ -750,14 +750,14 @@
       "package": "internal/payload",
       "identifier": "DiscoveryDynamic",
       "file": "internal/payload/topology.go",
-      "line": 136,
+      "line": 134,
       "kind": "type"
     },
     {
       "package": "internal/payload",
       "identifier": "HAEntity",
       "file": "internal/payload/topology.go",
-      "line": 99,
+      "line": 97,
       "kind": "type"
     },
     {
@@ -12485,7 +12485,7 @@
       "identifier": "Bucket",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/payload/topology.go",
-      "line": 26
+      "line": 24
     },
     {
       "package": "internal/payload",
