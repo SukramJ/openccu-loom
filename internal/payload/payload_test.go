@@ -25,7 +25,7 @@ func TestForInfoKind(t *testing.T) {
 		Address: "0001ABCD", Model: "HmIP-STH",
 		Manufacturer: "eQ-3", Icon: "lamp.png",
 	}
-	got := For(&d, KindInfo)
+	got := ForWith(&d, KindInfo, Options{})
 	if len(got) != 3 {
 		t.Fatalf("expected 3 info entries, got %d: %+v", len(got), got)
 	}
@@ -51,7 +51,7 @@ func TestForUseAltNames(t *testing.T) {
 
 func TestForOmitZero(t *testing.T) {
 	d := sampleDevice{Address: "0001ABCD"}
-	got := For(&d, KindInfo)
+	got := ForWith(&d, KindInfo, Options{})
 	if _, hasModel := got["model"]; hasModel {
 		t.Fatal("zero-valued fields must be omitted")
 	}
@@ -64,21 +64,21 @@ func TestForOmitZero(t *testing.T) {
 func TestForSkipsDash(t *testing.T) {
 	d := sampleDevice{Secret: "x"}
 	for _, k := range []Kind{KindInfo, KindConfig, KindState} {
-		if len(For(&d, k)) != 0 {
+		if len(ForWith(&d, k, Options{})) != 0 {
 			t.Fatalf("payload:%s must be ignored", k)
 		}
 	}
 }
 
 func TestForNilAndNonStruct(t *testing.T) {
-	if got := For(nil, KindInfo); len(got) != 0 {
+	if got := ForWith(nil, KindInfo, Options{}); len(got) != 0 {
 		t.Fatalf("nil input: %+v", got)
 	}
 	var d *sampleDevice
-	if got := For(d, KindInfo); len(got) != 0 {
+	if got := ForWith(d, KindInfo, Options{}); len(got) != 0 {
 		t.Fatalf("nil ptr: %+v", got)
 	}
-	if got := For(42, KindInfo); len(got) != 0 {
+	if got := ForWith(42, KindInfo, Options{}); len(got) != 0 {
 		t.Fatalf("scalar input: %+v", got)
 	}
 }
@@ -93,30 +93,17 @@ type embedDerived struct {
 
 func TestForEmbeddedFields(t *testing.T) {
 	d := embedDerived{embedBase: embedBase{CentralID: "ccu-01"}, Address: "0001"}
-	got := For(&d, KindInfo)
+	got := ForWith(&d, KindInfo, Options{})
 	if got["centralid"] != "ccu-01" || got["address"] != "0001" {
 		t.Fatalf("got=%+v", got)
-	}
-}
-
-func TestMerge(t *testing.T) {
-	a := map[string]any{"a": 1, "b": 2}
-	b := map[string]any{"b": 20, "c": 3}
-	m := Merge(a, b)
-	if m["a"] != 1 || m["b"] != 20 || m["c"] != 3 {
-		t.Fatalf("merge=%+v", m)
-	}
-	// Originals untouched.
-	if a["b"] != 2 {
-		t.Fatal("source mutated")
 	}
 }
 
 func TestDescribeCached(t *testing.T) {
 	// Two calls on the same type should return the same description
 	// pointer via sync.Map.
-	_ = For(&sampleDevice{}, KindInfo)
-	_ = For(&sampleDevice{}, KindState)
+	_ = ForWith(&sampleDevice{}, KindInfo, Options{})
+	_ = ForWith(&sampleDevice{}, KindState, Options{})
 	// No assertion — passing without panic / stale-cache weirdness is
 	// the contract here.
 }

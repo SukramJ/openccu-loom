@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 8a4b0f18
-HEAD: 8a4b0f18
+Generated: 1475788d
+HEAD: 1475788d
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 5621 |
-| Reachable | 3584 |
+| Total Exported | 5622 |
+| Reachable | 3587 |
 | Whitelisted | 1976 |
-| **Unreachable** | **61** |
+| **Unreachable** | **59** |
 
 ## Top-20 Packages by Dead Code
 
@@ -31,7 +31,7 @@ HEAD: 8a4b0f18
 | internal/model/hub | 0 | 0 | 1 |
 | internal/north/mcp | 0 | 1 | 0 |
 | internal/north/mqtt | 0 | 1 | 1 |
-| internal/payload | 0 | 3 | 0 |
+| internal/payload | 0 | 1 | 0 |
 | internal/store/sqlite | 0 | 0 | 1 |
 | pkg/hmenum | 0 | 6 | 2 |
 
@@ -64,6 +64,6 @@ HEAD: 8a4b0f18
 | internal/model/hub | 0 | 0 | 1 |
 | internal/north/mcp | 0 | 1 | 0 |
 | internal/north/mqtt | 0 | 1 | 1 |
-| internal/payload | 0 | 3 | 0 |
+| internal/payload | 0 | 1 | 0 |
 | internal/store/sqlite | 0 | 0 | 1 |
 | pkg/hmenum | 0 | 6 | 2 |

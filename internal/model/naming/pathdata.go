@@ -174,26 +174,6 @@ func (p PathData) MQTTConfig(base, centralName string) string {
 	return state + "/config"
 }
 
-// MQTTChannelAggregateState returns the channel-rollup retained
-// state topic — `<base>/<central>/<iface>/<addr>/<ch>/state`. Used
-// by the bridge for the custom-DP-aggregated payload (climate / lock
-// / cover / valve / siren). Uses only Address + ChannelNo +
-// Interface; Bucket and Kind are ignored. Empty when Address is
-// missing.
-func (p PathData) MQTTChannelAggregateState(base, centralName string) string {
-	if p.Address == "" {
-		return ""
-	}
-	return fmt.Sprintf(
-		"%s/%s/%s/%s/%d/state",
-		strings.Trim(base, "/"),
-		TopicSafe(centralName),
-		TopicSafe(string(p.Interface)),
-		TopicSafe(p.Address),
-		p.ChannelNo,
-	)
-}
-
 // MQTTChannelImpulse returns the per-channel impulse-event topic
 // `<base>/<central>/<iface>/<addr>/<ch>/impulse`. Non-retained; carries
 // the same JSON envelope as [PathData.MQTTChannelEvent].

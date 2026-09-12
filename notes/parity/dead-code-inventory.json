@@ -1,16 +1,16 @@
 {
-  "generated": "8a4b0f18",
-  "head": "8a4b0f18",
+  "generated": "1475788d",
+  "head": "1475788d",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/openccu-loom-remote/main.go",
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 5621,
-    "reachable": 3584,
+    "total_exported": 5622,
+    "reachable": 3587,
     "whitelisted": 1976,
-    "unreachable": 61
+    "unreachable": 59
   },
   "by_package": [
     {
@@ -106,7 +106,7 @@
     {
       "package": "internal/payload",
       "unreachable_funcs": 0,
-      "unreachable_types": 3,
+      "unreachable_types": 1,
       "unreachable_other": 0
     },
     {
@@ -457,20 +457,6 @@
       "identifier": "IgnoreMultipleChannelsForNameInspector",
       "file": "internal/north/mqtt/bridge.go",
       "line": 451,
-      "kind": "type"
-    },
-    {
-      "package": "internal/payload",
-      "identifier": "ChannelState",
-      "file": "internal/payload/state.go",
-      "line": 385,
-      "kind": "type"
-    },
-    {
-      "package": "internal/payload",
-      "identifier": "DRGDaliLightState",
-      "file": "internal/payload/state.go",
-      "line": 125,
       "kind": "type"
     },
     {
@@ -2902,7 +2888,7 @@
       "identifier": "NewAccessPermission",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/switch/access_permission.go",
-      "line": 82
+      "line": 83
     },
     {
       "package": "internal/model/custom/switch",
@@ -5107,28 +5093,28 @@
       "identifier": "BuildAlarmMotionResetDiscovery",
       "reason": "auto-whitelist:pattern=mqtt-discovery-builder",
       "file": "internal/north/mqtt/alarm_discovery.go",
-      "line": 176
+      "line": 348
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "BuildAlarmPanelDiscovery",
       "reason": "auto-whitelist:pattern=mqtt-discovery-builder",
       "file": "internal/north/mqtt/alarm_discovery.go",
-      "line": 117
+      "line": 279
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "BuildAlarmTriggeredMotionDiscovery",
       "reason": "auto-whitelist:pattern=mqtt-discovery-builder",
       "file": "internal/north/mqtt/alarm_discovery.go",
-      "line": 216
+      "line": 389
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "BuildSecurityDiscovery",
       "reason": "auto-whitelist:pattern=mqtt-discovery-builder",
       "file": "internal/north/mqtt/security_discovery.go",
-      "line": 133
+      "line": 239
     },
     {
       "package": "internal/north/mqtt",
@@ -5142,7 +5128,7 @@
       "identifier": "CombinedEvent",
       "reason": "constructed in EventBridge.publishCombinedProjection and passed to Bridge.PublishCombinedDiscovery on every combined data point the model carries; reached only as a composite literal at that call site",
       "file": "internal/north/mqtt/discovery_combined.go",
-      "line": 24
+      "line": 26
     },
     {
       "package": "internal/north/mqtt",
@@ -11960,7 +11946,7 @@
       "identifier": "ExtraProperties",
       "reason": "ForWith type-asserts every obj against it, and *device.Device implements it to publish its mutex-guarded name; an interface reached only by assertion, which the analyzer cannot see used",
       "file": "internal/payload/payload.go",
-      "line": 59
+      "line": 51
     },
     {
       "package": "internal/payload",

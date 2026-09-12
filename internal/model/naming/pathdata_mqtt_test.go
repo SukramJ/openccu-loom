@@ -89,25 +89,6 @@ func TestNewCustomDPPathData_BucketForced(t *testing.T) {
 	}
 }
 
-// --- MQTTChannelAggregateState ---
-
-func TestMQTTChannelAggregateState(t *testing.T) {
-	t.Parallel()
-	pd := newChannelPD()
-	got := pd.MQTTChannelAggregateState(testBase, testCentral)
-	want := "openccu-loom/ccu1/HmIP-RF/VCU1234567/2/state"
-	if got != want {
-		t.Errorf("MQTTChannelAggregateState = %q, want %q", got, want)
-	}
-}
-
-func TestMQTTChannelAggregateState_EmptyAddress(t *testing.T) {
-	t.Parallel()
-	if got := EmptyPathData.MQTTChannelAggregateState(testBase, testCentral); got != "" {
-		t.Errorf("empty address must return empty, got %q", got)
-	}
-}
-
 // --- MQTTChannelEvent ---
 
 func TestMQTTChannelEvent(t *testing.T) {
