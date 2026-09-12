@@ -1,0 +1,390 @@
+{
+  "sensor/cuxd-central-scoped": {
+    "topic": "homeassistant/sensor/ccu-01_cux2801001/openccu-loom_ccu-01_cux2801001_1_schedule/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/CUxD/CUX2801001/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_ccu-01_cux2801001_schedule"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "CUxD-Switch",
+        "name": "Bewässerung CUxD Schedule",
+        "serial_number": "CUX2801001",
+        "suggested_area": "Wohnzimmer",
+        "via_device": "openccu-loom_ccu-01_cux2801001"
+      },
+      "entity_category": "diagnostic",
+      "icon": "mdi:calendar-clock",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-01/CUxD/CUX2801001/1/schedule/attrs",
+      "name": "Schedule",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/CUxD/CUX2801001/1/schedule/state",
+      "unique_id": "openccu-loom_ccu-01_cux2801001_1_schedule"
+    }
+  },
+  "sensor/cuxd-second-central": {
+    "topic": "homeassistant/sensor/ccu-02_cux2801001/openccu-loom_ccu-02_cux2801001_1_schedule/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-02/CUxD/CUX2801001/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "device": {
+        "configuration_url": "http://ccu-02.local",
+        "identifiers": [
+          "openccu-loom_ccu-02_cux2801001_schedule"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "CUxD-Switch",
+        "name": "Bewässerung CUxD Schedule",
+        "serial_number": "CUX2801001",
+        "suggested_area": "Wohnzimmer",
+        "via_device": "openccu-loom_ccu-02_cux2801001"
+      },
+      "entity_category": "diagnostic",
+      "icon": "mdi:calendar-clock",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-02/CUxD/CUX2801001/1/schedule/attrs",
+      "name": "Schedule",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-02/CUxD/CUX2801001/1/schedule/state",
+      "unique_id": "openccu-loom_ccu-02_cux2801001_1_schedule"
+    }
+  },
+  "sensor/hmip-multi-io": {
+    "topic": "homeassistant/sensor/ccu-01_0001d3c9/openccu-loom_0001d3c9_5_schedule/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001D3C9/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_0001d3c9_schedule"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-MIO16-PCB",
+        "name": "Bewässerung Garten Schedule",
+        "serial_number": "0001D3C9",
+        "suggested_area": "Wohnzimmer",
+        "via_device": "openccu-loom_0001d3c9"
+      },
+      "entity_category": "diagnostic",
+      "icon": "mdi:calendar-clock",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-01/HmIP-RF/0001D3C9/5/schedule/attrs",
+      "name": "Schedule",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/0001D3C9/5/schedule/state",
+      "unique_id": "openccu-loom_0001d3c9_5_schedule"
+    }
+  },
+  "sensor/mixed-case-central": {
+    "topic": "homeassistant/sensor/ccu-keller_cux2801001/openccu-loom_ccu-keller_cux2801001_1_schedule/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/CCU-Keller/CUxD/CUX2801001/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "device": {
+        "configuration_url": "http://ccu-keller.local",
+        "identifiers": [
+          "openccu-loom_ccu-keller_cux2801001_schedule"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "CUxD-Switch",
+        "name": "Bewässerung CUxD Schedule",
+        "serial_number": "CUX2801001",
+        "suggested_area": "Wohnzimmer",
+        "via_device": "openccu-loom_ccu-keller_cux2801001"
+      },
+      "entity_category": "diagnostic",
+      "icon": "mdi:calendar-clock",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/CCU-Keller/CUxD/CUX2801001/1/schedule/attrs",
+      "name": "Schedule",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/CCU-Keller/CUxD/CUX2801001/1/schedule/state",
+      "unique_id": "openccu-loom_ccu-keller_cux2801001_1_schedule"
+    }
+  },
+  "sensor/no-device-object": {
+    "topic": "homeassistant/sensor/ccu-01_0001d3c9/openccu-loom_0001d3c9_5_schedule/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001D3C9/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_0001d3c9_schedule"
+        ],
+        "manufacturer": "eQ-3",
+        "name": "Bewässerung Garten Schedule",
+        "via_device": "openccu-loom_0001d3c9"
+      },
+      "entity_category": "diagnostic",
+      "icon": "mdi:calendar-clock",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/ccu-01/HmIP-RF/0001D3C9/5/schedule/attrs",
+      "name": "Schedule",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/0001D3C9/5/schedule/state",
+      "unique_id": "openccu-loom_0001d3c9_5_schedule"
+    }
+  },
+  "switch/cuxd-central-scoped": {
+    "topic": "homeassistant/switch/ccu-01_cux2801001/openccu-loom_ccu-01_cux2801001_1_schedule_1_1/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/CUxD/CUX2801001/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/CUxD/CUX2801001/1/schedule/1_1/set",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_ccu-01_cux2801001_schedule"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "CUxD-Switch",
+        "name": "Bewässerung CUxD Schedule",
+        "serial_number": "CUX2801001",
+        "suggested_area": "Wohnzimmer",
+        "via_device": "openccu-loom_ccu-01_cux2801001"
+      },
+      "entity_category": "config",
+      "icon": "mdi:calendar-check",
+      "name": "Schedule channel 1",
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_off": "false",
+      "payload_on": "true",
+      "state_off": "false",
+      "state_on": "true",
+      "state_topic": "gh/ccu-01/CUxD/CUX2801001/1/schedule/1_1/state",
+      "unique_id": "openccu-loom_ccu-01_cux2801001_1_schedule_1_1"
+    }
+  },
+  "switch/no-device-object": {
+    "topic": "homeassistant/switch/ccu-01_0001d3c9/openccu-loom_0001d3c9_5_schedule_1_1/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001D3C9/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/0001D3C9/5/schedule/1_1/set",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_0001d3c9_schedule"
+        ],
+        "manufacturer": "eQ-3",
+        "name": "Bewässerung Garten Schedule",
+        "via_device": "openccu-loom_0001d3c9"
+      },
+      "entity_category": "config",
+      "icon": "mdi:calendar-check",
+      "name": "Schedule channel 1",
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_off": "false",
+      "payload_on": "true",
+      "state_off": "false",
+      "state_on": "true",
+      "state_topic": "gh/ccu-01/HmIP-RF/0001D3C9/5/schedule/1_1/state",
+      "unique_id": "openccu-loom_0001d3c9_5_schedule_1_1"
+    }
+  },
+  "switch/target-channel-1": {
+    "topic": "homeassistant/switch/ccu-01_0001d3c9/openccu-loom_0001d3c9_5_schedule_1_1/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001D3C9/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/0001D3C9/5/schedule/1_1/set",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_0001d3c9_schedule"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-MIO16-PCB",
+        "name": "Bewässerung Garten Schedule",
+        "serial_number": "0001D3C9",
+        "suggested_area": "Wohnzimmer",
+        "via_device": "openccu-loom_0001d3c9"
+      },
+      "entity_category": "config",
+      "icon": "mdi:calendar-check",
+      "name": "Schedule channel 1",
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_off": "false",
+      "payload_on": "true",
+      "state_off": "false",
+      "state_on": "true",
+      "state_topic": "gh/ccu-01/HmIP-RF/0001D3C9/5/schedule/1_1/state",
+      "unique_id": "openccu-loom_0001d3c9_5_schedule_1_1"
+    }
+  },
+  "switch/target-channel-18": {
+    "topic": "homeassistant/switch/ccu-01_0001d3c9/openccu-loom_0001d3c9_5_schedule_1_18/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001D3C9/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/0001D3C9/5/schedule/1_18/set",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_0001d3c9_schedule"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-MIO16-PCB",
+        "name": "Bewässerung Garten Schedule",
+        "serial_number": "0001D3C9",
+        "suggested_area": "Wohnzimmer",
+        "via_device": "openccu-loom_0001d3c9"
+      },
+      "entity_category": "config",
+      "icon": "mdi:calendar-check",
+      "name": "Schedule channel 18",
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_off": "false",
+      "payload_on": "true",
+      "state_off": "false",
+      "state_on": "true",
+      "state_topic": "gh/ccu-01/HmIP-RF/0001D3C9/5/schedule/1_18/state",
+      "unique_id": "openccu-loom_0001d3c9_5_schedule_1_18"
+    }
+  }
+}
