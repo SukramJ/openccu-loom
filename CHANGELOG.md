@@ -165,11 +165,36 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   class-B echo pins #798 added keep their shape and drop their counts
   from two matching filters and two sink invocations to one each.
 
-  This is the gate for adopting `publisher.CommandRouter`, whose
-  `Handle` refuses an overlapping pair outright: a set that fails the
-  disjointness sweep cannot be registered at all. Nothing is adopted
-  here — that is the next step, and it is now a switch-over with tests
-  behind it.
+  What this buys, restated for go-hamqtt v0.28.0, which landed while
+  the change was in review and moved the justification without moving
+  the work. `CommandRouter.Handle` no longer refuses every overlapping
+  pair: it accepts one when the transport can attribute a delivery to
+  its subscription (MQTT 5.0 Subscription Identifiers, which go-mqtt
+  v1.5.0 is the first release to let a caller set) and one filter of
+  the pair is strictly more specific. Measured against that real
+  `Handle`: all three of this daemon's pairs are orderable, so the
+  thirteen would have registered on an attributing transport with zero
+  refusals. Coalescing was therefore not literally required, and the
+  measurement's "gate for everything else" no longer reads true.
+
+  It is still the right shape, for three reasons that do hold. The
+  v0.28.0 path is MQTT 5 only — a Subscription Identifier does not
+  exist in 3.1.1, go-mqtt refuses one on such a link rather than
+  ignoring it, and the router then fails `Start` with
+  `ErrAttributionUnavailable` rather than downgrading, so nothing is
+  subscribed at all; `north.mqtt.protocol_version: "3.1.1"` is an
+  operator-reachable key, so on the overlapping set that setting turns
+  the whole command plane into a boot failure. Accepting even one
+  overlap stamps every route, because an unstamped copy carries no
+  identifier and is re-matched by topic — measured at 13 of 13
+  subscriptions stamped for the old set, and 0 of 10 for this one, so
+  it was never a local concession for three pairs. And disjointness is
+  a structural property checkable in a unit test with no broker and no
+  dialect, where the router's acceptance is a runtime check and the two
+  lists it replaces were invariants nothing enforced until #798.
+
+  Nothing is adopted here — that is the next step, and it is now a
+  switch-over with tests behind it, on either dialect.
 
 - **go-hamqtt v0.25.0 -> v0.26.0, and `Config.Layout` closes the one
   string a typo takes the whole fleet down with.** The release is a
