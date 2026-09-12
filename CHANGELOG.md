@@ -8,6 +8,79 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **ADR 0070's "three packages move up" is superseded, measured.** All 262
+  exports of `internal/payload`, `internal/model/naming` and
+  `internal/routingkey` were classified before anything moved, and the
+  decision is wrong on two of the three. `routingkey` does not move at all:
+  its contract points at `aiohomematic` and the Python drop-in, pinned by 40
+  golden cases and a parity script, and `HubSlug` is a `python-slugify`
+  emulation that disagrees with both candidate replacements on every
+  non-trivial input and is right to. `naming` splits at `discovery_slug.go`,
+  the only file in it with no `hm*` import; the other 1 121 lines are loom's
+  topic tree and CCU name model, which `topic.Layout` exists so they need not
+  move. `payload` splits three ways. What the decision's sentence actually
+  describes is one file move, one deletion with byte risk, and a collapse of
+  duplicate re-exports — the bulk already having happened through
+  `RenderComponent`, `hamodel.Bucket`, `topic.Safe` and `hapayload.ForWith`.
+  The ADR carries the amendment; `notes/adr0070-moveup-inventory.md` carries
+  the measurement.
+
+- **Six production-dead exports are gone and a seventh is unexported.**
+  `routingkey.PseudoAddresses` (whose doc comment claims a schema exporter
+  that enumerates the four constants individually instead), `payload.For`,
+  `payload.Merge`, `payload.ChannelState`, `payload.DRGDaliLightState` and
+  `naming.PathData.MQTTChannelAggregateState` had no reference anywhere.
+  `routingkey.EventGroupFamilyPrefix` is not dead — `EventGroupUniqueID` is
+  built from it — so it is unexported rather than removed.
+
+  `payload.Merge` goes first on purpose: it was a second implementation of
+  `hapayload.Merge` with the same name, arity and types and the opposite
+  aliasing, so the natural cleanup of deleting it and adding the import
+  compiled silently and changed behaviour. The dead-code ratchet baseline
+  drops from 134 to 129.
+
+- **The second `Bucket` alias is gone.** ADR 0070's "the two `Bucket` enums
+  become one" had landed as one type behind two aliases:
+  `internal/model/naming` and `internal/payload` both aliased
+  `hamodel.Bucket`, with five constant aliases each. `naming`'s had no
+  external reference at all and goes; `internal/payload` keeps the single
+  loom-side spelling. `naming`'s six `*PathRoot` constants are unexported in
+  the same pass — their only readers are two constructors twenty lines below
+  their own declaration.
+
+### Fixed
+
+- **Nothing about the zone double identity, on purpose, and it is now
+  written down.** `zoneSlugFallback` and `routingkey.EffectiveSlug` answer
+  the same question — what identity a zone has while its stored slug is
+  blank — and disagree: a name that slugs to nothing is `zone-<id[:8]>` on
+  one path and `zone` on the other, and neither the fallback nor its callers
+  apply the `-2` collision suffix `UniqueSlug` would. That is the third path
+  `ZoneSlugStem`'s doc comment says it exists to prevent. The stored value
+  wins eventually, but only for a zone the zone store has a row for; for an
+  engine zone never created through the alarm-config API the fallback is the
+  only identity there is. The slug reaches `loom_security_zone_<slug>`, a
+  published `unique_id` that also seeds `default_entity_id`, and Home
+  Assistant offers no migration path for either, so harmonising the spelling
+  would orphan every zone entity on an affected installation. The function's
+  doc comment now states what a safe repair needs instead, and two tests pin
+  the divergence so it cannot be closed quietly.
+
+### Added
+
+- **Fixture rows for the two `DiscoverySlug` divergence classes.** The
+  golden pins covered 68 node ids and 170 topics including German umlauts,
+  and none of the eight measured disagreements between `naming.DiscoverySlug`
+  and the shared `topic.Slug`. Three hub-plane rows close it — an accent-twin
+  pair whose object ids collide on `caf_terrasse`, and `Watchdog:_CCU-Jack`,
+  the real CCU name `DiscoverySlug`'s own doc comment cites — alongside a
+  direct pin of all eight divergences in the `naming` package. Without them
+  the suite stayed green through a change that silently orphans every entity
+  on any installation whose CCU names something in French, Spanish, Danish,
+  Swedish or Norwegian.
+
+### Changed
+
 - **The last two discovery paths render through the shared model, and
   ADR 0070's migration is complete.** The per-parameter path in
   `discovery.go` and the channel aggregate with its sixteen

@@ -433,7 +433,7 @@ The ordering principle: every step that cannot change a published byte goes
 first, so that the one step that can arrives alone, on a clean tree, with a
 migration note.
 
-### Step A — delete the dead exports (no byte risk)
+### Step A — delete the dead exports (no byte risk) — DONE
 
 Remove `routingkey.PseudoAddresses`, `routingkey.EventGroupFamilyPrefix`,
 `payload.For`, `payload.Merge`, `payload.KindConfig`, `payload.KindState`,
@@ -447,7 +447,7 @@ change.
 **Unblocks:** every later step reads a smaller surface. `payload.Merge` in
 particular must go before anyone is tempted to swap in `hapayload.Merge`.
 
-### Step B — collapse the double `Bucket` alias (no byte risk)
+### Step B — collapse the double `Bucket` alias (no byte risk) — DONE
 
 `payload.Bucket` and `naming.Bucket` both alias `hamodel.Bucket`. Point both
 packages' callers at `hamodel` and delete both aliases. Type identity makes
@@ -522,7 +522,11 @@ naive swap of `HubSlug` for `topic.Slug` fails immediately on that second pin.
   The address-family branch is well covered; the *character* handling is not.
 
 **Therefore:** before step E, add fixture rows for an accented non-German
-central name and for a name carrying `__`. Two rows. Without them the suite
+name in an identifier position and for a name carrying `__`. Done — three
+rows on the hub plane (`sysvar/hazard-accent-twin-a`, `-twin-b`,
+`sysvar/hazard-literal-double-underscore`), plus a direct pin of all eight
+divergences in `internal/model/naming/discovery_slug_divergence_test.go`. The
+original text follows. Without them the suite
 is green through a change that silently orphans every entity on any
 installation whose CCU is named in French, Spanish, Danish, Swedish or
 Norwegian, and on every installation with a CCU name containing a
@@ -544,7 +548,10 @@ cases.
 
 ## Findings
 
-Defects found while reading. None were fixed; no Go file was modified.
+Defects found while reading. None were fixed at the time of measuring; no Go
+file was modified then. The italic paragraphs were added afterwards, as steps
+A and B landed and as F2 was investigated — each says what changed and what
+deliberately did not.
 
 **F1 — `payload.Merge` and `hapayload.Merge` share a name and disagree on
 aliasing.** `internal/payload/payload.go:118` allocates a fresh map and leaves
@@ -553,6 +560,15 @@ place and returns it. Same name, same arity, same types. `payload.Merge` has
 zero external callers, so the bug is latent — but the natural cleanup (delete
 the local, import the shared) compiles silently and changes behaviour. Delete
 the local one before anyone adds the import.
+
+*Resolved by step A, in one direction only.* `payload.Merge` is deleted, so
+the name now resolves to exactly one function — and that function is the
+mutating one. The trap is no longer two same-named implementations; it is that
+`Merge(a, b)` in this repository mutates `a`, where for as long as loom had
+its own it did not. A call site carried over from anywhere that assumed the
+fresh-map behaviour is wrong on sight and compiles. Nothing relies on it today
+(there were no external callers of either), but the asymmetry is now the
+shared module's to document, not loom's to delete.
 
 **F2 — a zone slugs to two different identities depending on the code path.**
 `routingkey.ZoneSlugStem`'s doc comment says it exists so *"the two cannot
@@ -564,24 +580,70 @@ the stem `"zone"`. A zone named only with emoji is `zone-abcd1234` on one path
 and `zone` on the other, and `securityZoneTopic` builds a retained MQTT topic
 from it.
 
+*Investigated, recorded, deliberately not fixed.* Which path wins: the stored
+value, eventually, but only for a zone the zone store has a row for.
+`refreshZoneSlugs` derives through `UniqueSlug`, persists, and overwrites the
+in-memory value; it iterates store rows only, so it never reaches an engine
+zone that was not created through the alarm-config REST API — and for such a
+zone `zoneSlugFallback` is the only identity there is, permanently. Two
+`onAlarm*` handlers (lines 422 and 494) do not even call the refresh first.
+There is a second facet: the fallback has no view of a zone's siblings, so two
+zones sharing a name share one slug where `UniqueSlug` would give `x` and
+`x-2`.
+
+Why it is left standing: `securityZoneEntity` builds the key `zone_<slug>`,
+`security_discovery.go:243` turns that into the `unique_id`
+`loom_security_zone_<slug>`, and this plane's `ObjectID` returns the
+`unique_id` itself, so the slug also seeds `default_entity_id`. Home Assistant
+keys its entity registry on `unique_id` and the MQTT integration has no
+migration path (ADR 0068). Changing the spelling therefore orphans every zone
+entity on any installation currently on the fallback path, with its history,
+area and customisations. A safe repair needs three things, not a one-line
+change: a survey of the affected population (measurable — it is exactly the
+zones absent from the zone store), the store seeding every engine zone so the
+fallback stops being reachable at all rather than being made to agree, and the
+ADR 0068 process for whatever identities that seeding moves. Harmonising the
+two functions without the seeding would move the identity *and* leave the
+second path in place, which is the worst of both. Recorded on the function
+itself and pinned by
+`internal/security/zone_slug_fallback_divergence_test.go`.
+
 **F3 — `Café` and `Caf` collide into one discovery node id.**
 `naming.DiscoverySlug` drops non-German accented Latin rather than
 transliterating it, so two differently named centrals (or devices) can produce
 the same `node_id`. Known and documented on `naming.TopicSafe`; recorded here
 because it is a live collision, not only a migration obstacle, and because no
-fixture covers it.
+fixture covered it.
+
+*Fixture gap closed.* `sysvar/hazard-accent-twin-a` and `-twin-b` in
+`internal/north/mqtt/testdata/discovery_golden_hub.json` are two system
+variables named `Café Terrasse` and `Caf Terrasse`; both render to the object
+id `caf_terrasse` and therefore to one retained discovery topic. The collision
+is now a pinned fact rather than a measured one. The collision itself is still
+unfixed — fixing it is step E.
 
 **F4 — `naming.DiscoverySlug` passes a literal `__` through where
 `topic.Slug` collapses it.** Second class of the same divergence, and the
 riskier one: `Watchdog:_CCU-Jack` is cited by `DiscoverySlug`'s own doc
 comment as a real CCU name, and it slugs differently under the two functions.
 
+*Fixture gap closed.* `sysvar/hazard-literal-double-underscore` pins
+`watchdog__ccu-jack` on the hub plane, and
+`internal/model/naming/discovery_slug_divergence_test.go` pins all eight
+divergences of both classes directly against `topic.Slug`, in both directions,
+plus the four German cases where the two already agree. Step E now fails
+loudly instead of shipping green.
+
 **F5 — seven exports have no reference anywhere in the repository.**
 `routingkey.PseudoAddresses` (its doc says it exists "for the schema
 exporter", but `script/export_schemas.go:295` enumerates the four constants
 individually instead), `routingkey.EventGroupFamilyPrefix`, `payload.For`,
 `payload.Merge`, `payload.ChannelState`, `payload.DRGDaliLightState`,
-`naming.MQTTChannelAggregateState`. `payload.DRGDaliLightState` is an orphan:
+`naming.MQTTChannelAggregateState`. *Six of the seven confirmed and deleted in step A; the seventh was
+miscounted.* `routingkey.EventGroupFamilyPrefix` has no reference outside its
+own package, which is what the table above measured, but
+`canonical.go:115` builds `EventGroupUniqueID` out of it. It is unexported
+rather than removed. `payload.DRGDaliLightState` is an orphan:
 `light.DRGDaliLight` exists and is exercised by tests, but it embeds
 `ColorTempLight` and returns a `ColorTempLightState`, so the DTO declared for
 it is never constructed.
@@ -601,11 +663,22 @@ consequence *"the two `Bucket` enums become one"* has landed as one type
 behind two aliases in two packages, which is the shape the ADR was trying to
 remove.
 
+*Resolved by step B, as far as it can go.* `naming.Bucket` and its five
+constant aliases are deleted and the six `*PathRoot` constants are unexported.
+`payload.Bucket` stays as the daemon's single alias: it has 89 references
+across 28 files, two of which were off limits during this change, and the
+`hamodel.Bucket` type identity means the alias costs nothing but a name.
+
 **F8 — publishing this document under `docs/` requires a nav entry.**
 `.github/workflows/docs.yml` runs `mkdocs build --strict` and its own comment
 states that *"a page under `docs/` that is missing from the nav … fails the
 build here … Documents that should not be published belong under `notes/`,
-which mkdocs never sees."* This file was requested at `docs/notes/` and has
-been added to the nav accordingly, but by the repository's own convention a
-working measurement document of this kind belongs under `notes/` and should
-probably be moved there.
+which mkdocs never sees."* This file was first written at `docs/notes/` with a
+nav entry added accordingly, but by the repository's own convention a working
+measurement document of this kind belongs under `notes/`.
+
+*Resolved.* The file is at `notes/adr0070-moveup-inventory.md` and the nav
+entry is gone. `notes/` is the consistent choice of the two: it is what the
+workflow comment prescribes, it is where every other working document in this
+repository lives, and it means a later edit to this file can never fail
+`mkdocs build --strict`.
