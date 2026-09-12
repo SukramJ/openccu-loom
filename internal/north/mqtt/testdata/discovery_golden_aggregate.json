@@ -1,0 +1,871 @@
+{
+  "climate/thermostat": {
+    "topic": "homeassistant/climate/ccu-01_0001bwth0001/1_climate/config",
+    "payload": {
+      "action_template": "{{ value_json.action }}",
+      "action_topic": "gh/ccu-01/HmIP-RF/0001BWTH0001/1/custom/climate",
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001BWTH0001/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "current_temperature_template": "{{ value_json.value }}",
+      "current_temperature_topic": "gh/ccu-01/HmIP-RF/0001BWTH0001/1/values/ACTUAL_TEMPERATURE",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0001bwth0001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-BWTH",
+        "name": "Wandthermostat Wohnzimmer",
+        "serial_number": "0001BWTH0001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "json_attributes_template": "{\n  \"schedule_data\": {{ (value_json.schedule_data | default(none, true)) | tojson }},\n  \"temperature_offset\": {{ (value_json.temperature_offset | default(none, true)) | tojson }},\n  \"optimum_start_stop\": {{ (value_json.optimum_start_stop | default(none, true)) | tojson }},\n  \"available_profiles\": {{ (value_json.available_profiles | default(none, true)) | tojson }},\n  \"current_schedule_profile\": {{ (value_json.current_schedule_profile | default(none, true)) | tojson }},\n  \"device_active_profile_index\": {{ (value_json.device_active_profile_index | default(none, true)) | tojson }},\n  \"schedule_api_version\": {{ (value_json.schedule_api_version | default(none, true)) | tojson }},\n  \"value_state\": {{ (\"uncertain\" if value_json.state_uncertain else \"valid\") | tojson }}\n}",
+      "json_attributes_topic": "gh/ccu-01/HmIP-RF/0001BWTH0001/1/custom/climate",
+      "max_temp": 30.5,
+      "min_temp": 5,
+      "mode_command_topic": "gh/ccu-01/HmIP-RF/0001BWTH0001/1/custom/climate/set/set_mode",
+      "mode_state_template": "{{ value_json.hvac_mode }}",
+      "mode_state_topic": "gh/ccu-01/HmIP-RF/0001BWTH0001/1/custom/climate",
+      "modes": [
+        "auto",
+        "heat",
+        "off"
+      ],
+      "name": null,
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "preset_mode_command_template": "{% set m = {'boost': 'boost', 'Week program 1': 'week_program_1', 'Week program 2': 'week_program_2', 'Week program 3': 'week_program_3', 'Week program 4': 'week_program_4', 'Week program 5': 'week_program_5', 'Week program 6': 'week_program_6'} %}{{ m.get(value, value) }}",
+      "preset_mode_command_topic": "gh/ccu-01/HmIP-RF/0001BWTH0001/1/custom/climate/set/set_profile",
+      "preset_mode_state_topic": "gh/ccu-01/HmIP-RF/0001BWTH0001/1/custom/climate",
+      "preset_mode_value_template": "{% set m = {'boost': 'boost', 'week_program_1': 'Week program 1', 'week_program_2': 'Week program 2', 'week_program_3': 'Week program 3', 'week_program_4': 'Week program 4', 'week_program_5': 'Week program 5', 'week_program_6': 'Week program 6'} %}{% if value_json is defined and value_json.preset_mode is not none %}{{ m.get(value_json.preset_mode, value_json.preset_mode) }}{% endif %}",
+      "preset_modes": [
+        "boost",
+        "Week program 1",
+        "Week program 2",
+        "Week program 3",
+        "Week program 4",
+        "Week program 5",
+        "Week program 6"
+      ],
+      "temp_step": 0.5,
+      "temperature_command_topic": "gh/ccu-01/HmIP-RF/0001BWTH0001/1/custom/climate/set/set_temperature",
+      "temperature_state_template": "{{ value_json.value }}",
+      "temperature_state_topic": "gh/ccu-01/HmIP-RF/0001BWTH0001/1/values/SET_POINT_TEMPERATURE",
+      "temperature_unit": "C",
+      "unique_id": "loom_0001bwth0001_1_climate"
+    }
+  },
+  "cover/blind": {
+    "topic": "homeassistant/cover/ccu-01_0001broll001/4_cover/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001BROLL001/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/0001BROLL001/4/custom/blind/set/cover_command",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0001broll001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-BROLL",
+        "name": "Rollladen Küche",
+        "serial_number": "0001BROLL001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "device_class": "shutter",
+      "name": null,
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_close": "CLOSE",
+      "payload_open": "OPEN",
+      "payload_stop": "STOP",
+      "position_closed": 0,
+      "position_open": 100,
+      "position_template": "{{ value_json.current_position }}",
+      "position_topic": "gh/ccu-01/HmIP-RF/0001BROLL001/4/custom/blind",
+      "set_position_template": "{{ (value | float / 100) }}",
+      "set_position_topic": "gh/ccu-01/HmIP-RF/0001BROLL001/4/custom/blind/set/set_position",
+      "state_closed": "closed",
+      "state_closing": "closing",
+      "state_open": "open",
+      "state_opening": "opening",
+      "state_stopped": "stopped",
+      "state_topic": "gh/ccu-01/HmIP-RF/0001BROLL001/4/custom/blind",
+      "tilt_closed_value": 0,
+      "tilt_command_template": "{{ (value | float / 100) }}",
+      "tilt_command_topic": "gh/ccu-01/HmIP-RF/0001BROLL001/4/custom/blind/set/set_tilt",
+      "tilt_max": 100,
+      "tilt_min": 0,
+      "tilt_opened_value": 100,
+      "tilt_status_template": "{{ value_json.current_tilt_position }}",
+      "tilt_status_topic": "gh/ccu-01/HmIP-RF/0001BROLL001/4/custom/blind",
+      "unique_id": "loom_0001broll001_4_cover",
+      "value_template": "{{ value_json.state }}"
+    }
+  },
+  "cover/garage": {
+    "topic": "homeassistant/cover/ccu-01_0001modho001/1_cover/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001MODHO001/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/0001MODHO001/1/values/DOOR_COMMAND/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0001modho001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-MOD-HO",
+        "name": "Garagentor",
+        "serial_number": "0001MODHO001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "device_class": "garage",
+      "name": null,
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_close": "CLOSE",
+      "payload_open": "OPEN",
+      "payload_stop": "STOP",
+      "position_closed": 0,
+      "position_open": 100,
+      "position_template": "{{ value_json.current_position }}",
+      "position_topic": "gh/ccu-01/HmIP-RF/0001MODHO001/1/custom/garage",
+      "state_closed": "closed",
+      "state_closing": "closing",
+      "state_open": "open",
+      "state_opening": "opening",
+      "state_stopped": "stopped",
+      "state_topic": "gh/ccu-01/HmIP-RF/0001MODHO001/1/custom/garage",
+      "unique_id": "loom_0001modho001_1_cover",
+      "value_template": "{{ value_json.state }}"
+    }
+  },
+  "cover/multi-primary-ch-name": {
+    "topic": "homeassistant/cover/ccu-01_0001drbli401/10_cover/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001DRBLI401/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/0001DRBLI401/10/custom/blind/set/cover_command",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0001drbli401"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-DRBLI4",
+        "name": "Jalousieaktor Süd",
+        "serial_number": "0001DRBLI401",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "device_class": "blind",
+      "name": "ch10",
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_close": "CLOSE",
+      "payload_open": "OPEN",
+      "payload_stop": "STOP",
+      "position_closed": 0,
+      "position_open": 100,
+      "position_template": "{{ value_json.current_position }}",
+      "position_topic": "gh/ccu-01/HmIP-RF/0001DRBLI401/10/custom/blind",
+      "set_position_template": "{{ (value | float / 100) }}",
+      "set_position_topic": "gh/ccu-01/HmIP-RF/0001DRBLI401/10/custom/blind/set/set_position",
+      "state_closed": "closed",
+      "state_closing": "closing",
+      "state_open": "open",
+      "state_opening": "opening",
+      "state_stopped": "stopped",
+      "state_topic": "gh/ccu-01/HmIP-RF/0001DRBLI401/10/custom/blind",
+      "tilt_closed_value": 0,
+      "tilt_command_template": "{{ (value | float / 100) }}",
+      "tilt_command_topic": "gh/ccu-01/HmIP-RF/0001DRBLI401/10/custom/blind/set/set_tilt",
+      "tilt_max": 100,
+      "tilt_min": 0,
+      "tilt_opened_value": 100,
+      "tilt_status_template": "{{ value_json.current_tilt_position }}",
+      "tilt_status_topic": "gh/ccu-01/HmIP-RF/0001DRBLI401/10/custom/blind",
+      "unique_id": "loom_0001drbli401_10_cover",
+      "value_template": "{{ value_json.state }}"
+    }
+  },
+  "cover/sub-device-split": {
+    "topic": "homeassistant/cover/ccu-01_0001drbli401/10_cover/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001DRBLI401/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/0001DRBLI401/10/custom/blind/set/cover_command",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0001drbli401-10"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-DRBLI4",
+        "name": "Jalousieaktor Süd-10",
+        "serial_number": "0001DRBLI401",
+        "via_device": "openccu-loom_0001drbli401"
+      },
+      "device_class": "blind",
+      "name": "ch10",
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_close": "CLOSE",
+      "payload_open": "OPEN",
+      "payload_stop": "STOP",
+      "position_closed": 0,
+      "position_open": 100,
+      "position_template": "{{ value_json.current_position }}",
+      "position_topic": "gh/ccu-01/HmIP-RF/0001DRBLI401/10/custom/blind",
+      "set_position_template": "{{ (value | float / 100) }}",
+      "set_position_topic": "gh/ccu-01/HmIP-RF/0001DRBLI401/10/custom/blind/set/set_position",
+      "state_closed": "closed",
+      "state_closing": "closing",
+      "state_open": "open",
+      "state_opening": "opening",
+      "state_stopped": "stopped",
+      "state_topic": "gh/ccu-01/HmIP-RF/0001DRBLI401/10/custom/blind",
+      "tilt_closed_value": 0,
+      "tilt_command_template": "{{ (value | float / 100) }}",
+      "tilt_command_topic": "gh/ccu-01/HmIP-RF/0001DRBLI401/10/custom/blind/set/set_tilt",
+      "tilt_max": 100,
+      "tilt_min": 0,
+      "tilt_opened_value": 100,
+      "tilt_status_template": "{{ value_json.current_tilt_position }}",
+      "tilt_status_topic": "gh/ccu-01/HmIP-RF/0001DRBLI401/10/custom/blind",
+      "unique_id": "loom_0001drbli401_10_cover",
+      "value_template": "{{ value_json.state }}"
+    }
+  },
+  "event/device-error": {
+    "topic": "homeassistant/event/ccu-01_0001swdo0001/1_event_group_device_error/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001SWDO0001/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0001swdo0001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-SWDO",
+        "name": "Fenster Bad",
+        "serial_number": "0001SWDO0001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "device_class": "problem",
+      "event_types": [
+        "error",
+        "error_overheat",
+        "sensor_error"
+      ],
+      "name": "ch1 device_error",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/0001SWDO0001/1/device_error",
+      "unique_id": "loom_event_group_device_error_0001swdo0001_1"
+    }
+  },
+  "event/impulse": {
+    "topic": "homeassistant/event/ccu-01_0001srd00001/1_event_group_impulse/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001SRD00001/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0001srd00001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-SRD",
+        "name": "Regensensor",
+        "serial_number": "0001SRD00001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "event_types": [
+        "sequence_ok"
+      ],
+      "name": "ch1 impulse",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/0001SRD00001/1/impulse",
+      "unique_id": "loom_event_group_impulse_0001srd00001_1"
+    }
+  },
+  "event/keypress-bare-address-name": {
+    "topic": "homeassistant/event/ccu-01_0001brc20001/1_event_group_keypress/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001BRC20001/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0001brc20001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-BRC2",
+        "name": "Taster Wohnzimmer",
+        "serial_number": "0001BRC20001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "device_class": "button",
+      "event_types": [
+        "press_long",
+        "press_long_release",
+        "press_long_start",
+        "press_short"
+      ],
+      "name": "ch1",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/0001BRC20001/1/event",
+      "unique_id": "loom_event_group_keypress_0001brc20001_1"
+    }
+  },
+  "event/keypress-channel-number": {
+    "topic": "homeassistant/event/ccu-01_0001brc20001/1_event_group_keypress/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001BRC20001/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0001brc20001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-BRC2",
+        "name": "Taster Wohnzimmer",
+        "serial_number": "0001BRC20001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "device_class": "button",
+      "event_types": [
+        "press_long",
+        "press_long_release",
+        "press_long_start",
+        "press_short"
+      ],
+      "name": "ch1",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/0001BRC20001/1/event",
+      "unique_id": "loom_event_group_keypress_0001brc20001_1"
+    }
+  },
+  "event/keypress-doorbell": {
+    "topic": "homeassistant/event/ccu-01_0001dbb00001/1_event_group_keypress/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001DBB00001/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0001dbb00001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-DBB",
+        "name": "Klingeltaster",
+        "serial_number": "0001DBB00001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "device_class": "doorbell",
+      "event_types": [
+        "ring"
+      ],
+      "name": "ch1",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/0001DBB00001/1/event",
+      "unique_id": "loom_event_group_keypress_0001dbb00001_1"
+    }
+  },
+  "event/keypress-operator-named": {
+    "topic": "homeassistant/event/ccu-01_0001brc20001/1_event_group_keypress/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001BRC20001/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0001brc20001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-BRC2",
+        "name": "Taster Wohnzimmer",
+        "serial_number": "0001BRC20001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "device_class": "button",
+      "event_types": [
+        "press_long",
+        "press_long_release",
+        "press_long_start",
+        "press_short"
+      ],
+      "name": "Taster Wohnzimmer oben links",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/0001BRC20001/1/event",
+      "unique_id": "loom_event_group_keypress_0001brc20001_1"
+    }
+  },
+  "event/keypress-virtual-remote-ccu-01": {
+    "topic": "homeassistant/event/ccu-01_bidcos-rf/3_event_group_keypress/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/BidCos-RF/BIDCOS-RF/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "device": {
+        "identifiers": [
+          "openccu-loom_ccu-01_bidcos-rf"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HM-RCV-50",
+        "name": "Virtuelle Taste",
+        "serial_number": "BidCoS-RF",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "device_class": "button",
+      "event_types": [
+        "press_long",
+        "press_short"
+      ],
+      "name": "ch3",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/BidCos-RF/BIDCOS-RF/3/event",
+      "unique_id": "loom_event_group_keypress_11a0001234_bidcos_rf_3"
+    }
+  },
+  "event/keypress-virtual-remote-ccu-02": {
+    "topic": "homeassistant/event/ccu-02_bidcos-rf/3_event_group_keypress/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-02/BidCos-RF/BIDCOS-RF/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "device": {
+        "identifiers": [
+          "openccu-loom_ccu-02_bidcos-rf"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HM-RCV-50",
+        "name": "Virtuelle Taste",
+        "serial_number": "BidCoS-RF",
+        "via_device": "openccu-loom_central_ccu-02"
+      },
+      "device_class": "button",
+      "event_types": [
+        "press_long",
+        "press_short"
+      ],
+      "name": "ch3",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-02/BidCos-RF/BIDCOS-RF/3/event",
+      "unique_id": "loom_event_group_keypress_11b0005678_bidcos_rf_3"
+    }
+  },
+  "light/dimmer": {
+    "topic": "homeassistant/light/ccu-01_0001bdt00001/4_light/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001BDT00001/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "brightness": true,
+      "brightness_scale": 255,
+      "command_topic": "gh/ccu-01/HmIP-RF/0001BDT00001/4/custom/light/set/set_level",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0001bdt00001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-BDT",
+        "name": "Esstisch",
+        "serial_number": "0001BDT00001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "flash": false,
+      "name": null,
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "schema": "json",
+      "state_topic": "gh/ccu-01/HmIP-RF/0001BDT00001/4/custom/light",
+      "supported_color_modes": [
+        "brightness"
+      ],
+      "unique_id": "loom_0001bdt00001_4_light"
+    }
+  },
+  "lock/door-lock-drive": {
+    "topic": "homeassistant/lock/ccu-01_0001dld00001/1_lock/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001DLD00001/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/0001DLD00001/1/values/LOCK_TARGET_LEVEL/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0001dld00001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-DLD",
+        "name": "Haustür",
+        "serial_number": "0001DLD00001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "name": null,
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_lock": "LOCKED",
+      "payload_open": "OPEN",
+      "payload_unlock": "UNLOCKED",
+      "state_jammed": "JAMMED",
+      "state_locked": "LOCKED",
+      "state_locking": "LOCKING",
+      "state_topic": "gh/ccu-01/HmIP-RF/0001DLD00001/1/custom/lock",
+      "state_unlocked": "UNLOCKED",
+      "state_unlocking": "UNLOCKING",
+      "unique_id": "loom_0001dld00001_1_lock",
+      "value_template": "{{ value_json.lock_state }}"
+    }
+  },
+  "siren/alarm-siren": {
+    "topic": "homeassistant/siren/ccu-01_0001asir0001/3_siren/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001ASIR0001/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "available_tones": [
+        "OPTION_A",
+        "OPTION_B"
+      ],
+      "command_topic": "gh/ccu-01/HmIP-RF/0001ASIR0001/3/custom/siren/set/turn_on",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0001asir0001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-ASIR",
+        "name": "Sirene Diele",
+        "serial_number": "0001ASIR0001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "name": null,
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_off": "off",
+      "payload_on": "on",
+      "state_off": "off",
+      "state_on": "on",
+      "state_topic": "gh/ccu-01/HmIP-RF/0001ASIR0001/3/custom/siren",
+      "state_value_template": "{{ value_json.state }}",
+      "support_duration": true,
+      "support_volume_set": false,
+      "unique_id": "loom_0001asir0001_3_siren"
+    }
+  },
+  "switch/single-primary-name-null": {
+    "topic": "homeassistant/switch/ccu-01_0001bsm00001/4_switch/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001BSM00001/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/0001BSM00001/4/values/STATE/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0001bsm00001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-BSM",
+        "name": "Deckenlicht Flur",
+        "serial_number": "0001BSM00001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "device_class": "switch",
+      "name": null,
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_off": "false",
+      "payload_on": "true",
+      "state_off": "false",
+      "state_on": "true",
+      "state_topic": "gh/ccu-01/HmIP-RF/0001BSM00001/4/values/STATE",
+      "unique_id": "loom_0001bsm00001_4_switch",
+      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value | lower }}{% endif %}"
+    }
+  },
+  "valve/irrigation": {
+    "topic": "homeassistant/valve/ccu-01_0001wsm00001/4_valve/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001WSM00001/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/0001WSM00001/4/values/STATE/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0001wsm00001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "ELV-SH-WSM",
+        "name": "Bewässerung Beet",
+        "serial_number": "0001WSM00001",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "name": null,
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_close": "false",
+      "payload_open": "true",
+      "reports_position": false,
+      "state_closed": "closed",
+      "state_open": "open",
+      "state_topic": "gh/ccu-01/HmIP-RF/0001WSM00001/4/custom/valve_irrigation",
+      "unique_id": "loom_0001wsm00001_4_valve",
+      "value_template": "{% if value_json.is_open %}open{% else %}closed{% endif %}"
+    }
+  }
+}
