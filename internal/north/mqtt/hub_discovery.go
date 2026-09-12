@@ -905,10 +905,8 @@ func (d *DefaultDiscoveryBuilder) BuildInstallModeSensorDiscovery(centralName, i
 			EntityKey:      "install_mode_" + suffix,
 			EntityPlatform: hacatalog.PlatformSensor,
 			Description: hamodel.Description{
-				// A literal, not a catalogue key: the label carries the
-				// interface id, and the shared model's Translate takes a key
-				// and nothing else — there is no place to hand it a parameter.
-				Name:         hamodel.L(d.trIface("discovery.install_mode_duration", installModeInterfaceLabel(iface))),
+				NameKey:      "discovery.install_mode_duration",
+				NameArgs:     map[string]string{"iface": installModeInterfaceLabel(iface)},
 				DeviceClass:  "duration",
 				Unit:         "s",
 				StateClass:   "measurement",
@@ -956,7 +954,8 @@ func (d *DefaultDiscoveryBuilder) BuildInstallModeButtonDiscovery(centralName, i
 			EntityKey:      "install_mode_" + suffix + "_button",
 			EntityPlatform: hacatalog.PlatformButton,
 			Description: hamodel.Description{
-				Name:         hamodel.L(d.trIface("discovery.install_mode_activate", installModeInterfaceLabel(iface))),
+				NameKey:      "discovery.install_mode_activate",
+				NameArgs:     map[string]string{"iface": installModeInterfaceLabel(iface)},
 				Category:     EntityCategoryConfig,
 				Availability: hamodel.BridgeOnly(),
 				// translation_key is the cross-stack parity marker Home
@@ -1001,7 +1000,8 @@ func (d *DefaultDiscoveryBuilder) BuildConnectivityDiscovery(centralName, iface 
 			EntityKey:      "connectivity_" + safeLower(iface),
 			EntityPlatform: hacatalog.PlatformBinarySensor,
 			Description: hamodel.Description{
-				Name:        hamodel.L(d.trIface("discovery.connectivity", iface)),
+				NameKey:     "discovery.connectivity",
+				NameArgs:    map[string]string{"iface": iface},
 				DeviceClass: "connectivity",
 				Category:    "diagnostic",
 				// Bridge only. This sensor's whole job is to report that an

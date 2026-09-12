@@ -233,13 +233,6 @@ func (d *DefaultDiscoveryBuilder) tr(key string) string {
 	return d.Translations.T(d.Locale, key)
 }
 
-// trIface resolves key and substitutes the interface label into the `{iface}`
-// placeholder — for the per-interface entity names (install-mode, connectivity)
-// whose only variable part is the (untranslated, proper-noun) interface id.
-func (d *DefaultDiscoveryBuilder) trIface(key, iface string) string {
-	return strings.Replace(d.tr(key), "{iface}", iface, 1)
-}
-
 // WithHubInfo stores CCU metadata in the builder. Subsequent hub
 // Discovery payloads (sysvars, programs, alarm/service messages,
 // install-mode) will carry the populated device block. Returns the
