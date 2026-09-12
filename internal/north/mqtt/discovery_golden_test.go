@@ -114,7 +114,176 @@ func goldenCases() []goldenCase {
 		// A channel above zero, because the object id embeds it.
 		{"sensor/high-channel", with(base("0001ABCD", "HmIP-BWTH", 7),
 			"HUMIDITY", hmenum.DataPointCategorySensor, false, values)},
+
+		// --- The kinds the first pass never reached ----------------------
+		//
+		// Everything below is a component this plane's per-parameter path
+		// can emit and that nothing in the repository pinned: cover, lock,
+		// light, valve, siren, select, text, update, climate.
+		//
+		// Each is paired with its MASTER twin. MASTER is not a variation of
+		// the body: it moves the state, command and attribute topics into
+		// the `master/` bucket — a different retained topic for the same
+		// entity — and it stamps entity_category. Both halves therefore
+		// have to be pinned per kind, not once for the plane.
+		//
+		// Reading the two halves side by side shows something the pin
+		// records rather than changes: the discovery topic and the
+		// unique_id are identical for a MASTER and a VALUES parameter of
+		// the same name on the same channel. Only the state topic differs.
+		// Nothing today collides — the MASTER whitelist in
+		// internal/store/visibility/rules.go surfaces no parameter name
+		// that is also a VALUES parameter — but the identity does not
+		// carry the paramset, so nothing but that whitelist prevents it.
+		//
+		// Some of those twins are synthetic, and that is said here rather
+		// than left to be inferred from a diff: no CCU MASTER parameter
+		// classifies to climate, to a cover or to a siren. Those cases pin
+		// how the MASTER branch composes with that component; they do not
+		// claim to reproduce a payload a fleet produces.
+		{"cover/values", with(base("000D0001", "HmIP-BROLL", 4),
+			"LEVEL", hmenum.DataPointCategoryCover, true, values)},
+		{"cover/master", with(base("000D0001", "HmIP-BROLL", 4),
+			"LEVEL", hmenum.DataPointCategoryCover, true, master)},
+		{"lock/values", with(base("000E0001", "HmIP-DLD", 1),
+			"LOCK_TARGET_LEVEL", hmenum.DataPointCategoryLock, true, values)},
+		{"lock/master", with(base("000E0001", "HmIP-DLD", 1),
+			"LOCK_TARGET_LEVEL", hmenum.DataPointCategoryLock, true, master)},
+		{"light/values", with(base("000F0001", "HmIP-BSL", 4),
+			"LEVEL", hmenum.DataPointCategoryLight, true, values)},
+		{"light/master", with(base("000F0001", "HmIP-BSL", 4),
+			"LEVEL", hmenum.DataPointCategoryLight, true, master)},
+		{"valve/values", with(base("00100001", "HmIP-FALMOT-C12", 1),
+			"VALVE_STATE", hmenum.DataPointCategoryValve, true, values)},
+		{"valve/master", with(base("00100001", "HmIP-FALMOT-C12", 1),
+			"VALVE_STATE", hmenum.DataPointCategoryValve, true, master)},
+		{"siren/values", with(base("00110001", "HmIP-ASIR", 3),
+			"ACOUSTIC_ALARM_ACTIVE", hmenum.DataPointCategorySiren, true, values)},
+		{"siren/master", with(base("00110001", "HmIP-ASIR", 3),
+			"ACOUSTIC_ALARM_ACTIVE", hmenum.DataPointCategorySiren, true, master)},
+		// select carries a VALUE_LIST, so its two halves also pin the
+		// options list and the pair of enum templates that map an HA option
+		// back to the CCU token. Losing the list is the same edit as losing
+		// the templates, and the templates fail quietly: HA sends the
+		// lowercase option and the CCU rejects a value it never declared.
+		{"select/values", with(base("00120001", "HmIP-eTRV-2", 1),
+			"SET_POINT_MODE", hmenum.DataPointCategorySelect, true,
+			enumDesc(hmenum.ParamsetKeyValues,
+				"AUTO_MODE", "MANU_MODE", "PARTY_MODE", "BOOST_MODE"))},
+		{"select/master", with(base("00120001", "HmIP-eTRV-2", 1),
+			"SET_POINT_MODE", hmenum.DataPointCategorySelect, true,
+			enumDesc(hmenum.ParamsetKeyMaster,
+				"AUTO_MODE", "MANU_MODE", "PARTY_MODE", "BOOST_MODE"))},
+		// An action_select is the one select variant whose entity_category
+		// is forced to "config" by the category alone, on the VALUES
+		// paramset where nothing else would set it.
+		{"select/action-values", with(base("00120001", "HmIP-eTRV-2", 1),
+			"BOOST_MODE", hmenum.DataPointCategoryActionSelect, true,
+			enumDesc(hmenum.ParamsetKeyValues, "OFF", "ON"))},
+		// text pins min/max, which the text branch truncates to whole
+		// numbers before emitting.
+		{"text/values", with(base("00130001", "HmIP-WRCD", 1),
+			"DISPLAY_LINE", hmenum.DataPointCategoryText, true,
+			textDesc(hmenum.ParamsetKeyValues))},
+		{"text/master", with(base("00130001", "HmIP-WRCD", 1),
+			"DISPLAY_LINE", hmenum.DataPointCategoryText, true,
+			textDesc(hmenum.ParamsetKeyMaster))},
+		{"update/values", with(base("00140001", "HmIP-BSM", 0),
+			"FIRMWARE", hmenum.DataPointCategoryUpdate, false, values)},
+		{"update/master", with(base("00140001", "HmIP-BSM", 0),
+			"FIRMWARE", hmenum.DataPointCategoryUpdate, false, master)},
+		{"climate/values", with(base("00150001", "HmIP-BWTH", 1),
+			"SET_POINT_TEMPERATURE", hmenum.DataPointCategoryClimate, true, values)},
+		{"climate/master", with(base("00150001", "HmIP-BWTH", 1),
+			"SET_POINT_TEMPERATURE", hmenum.DataPointCategoryClimate, true, master)},
+
+		// --- Identity hazards the first pass did not carry ---------------
+		//
+		// Hazard: a synthetic data point. A calculated DP (DEW_POINT and
+		// friends) is not a wire parameter — it shares a channel and a name
+		// with one. Two things move for it at once: the state topic goes to
+		// the `calculated/` bucket, and the unique_id gains the `calculated`
+		// family marker. Drop the marker and the key collides with the real
+		// VALUES parameter of the same name; Home Assistant keeps whichever
+		// config arrived first and the other entity is never created.
+		{"sensor/calculated-synthetic", func() Event {
+			ev := with(base("0001ABCD", "HmIP-BWTH", 1),
+				"DEW_POINT", hmenum.DataPointCategorySensor, false, values)
+			ev.Calculated = true
+			return ev
+		}()},
+		// Hazard: a central-scoped address that is not CUxD. The
+		// virtual-remote buses repeat verbatim on every CCU, so their key
+		// carries the central's serial — by a different rule than the CUxD
+		// prefix, in a different branch of NeedsCentralScope. The CUxD pair
+		// above would keep passing if the virtual-remote root list were
+		// emptied.
+		{"event/virtual-remote-central-scoped", with(
+			Event{
+				Central: "ccu-01", Interface: "BidCos-RF",
+				DeviceAddress: "BidCoS-RF", Model: "HM-RCV-50", ChannelNo: 3,
+				ChannelAddress: "BidCoS-RF:3",
+			},
+			"PRESS_SHORT", hmenum.DataPointCategoryEvent, false, values,
+		)},
+		// Hazard: an absent entity-id seed. A parameter the translation
+		// catalogue marks primary publishes `name: null`, which tells Home
+		// Assistant to seed the entity id from the device name alone. An
+		// empty string, or the key going missing, both make HA derive a
+		// different id — and the entity that already exists under the old
+		// one stays behind, orphaned.
+		{"sensor/name-null-seed", with(base("0001ABCD", "HmIP-BWTH", 1),
+			"ACTUAL_TEMPERATURE", hmenum.DataPointCategorySensor, false,
+			&payload.GenericConfig{
+				Paramset: hmenum.ParamsetKeyValues, LabelOmitted: true,
+			})},
 	}
+}
+
+// enumDesc is a VALUE_LIST-carrying wire descriptor, for the select cases.
+func enumDesc(ps hmenum.ParamsetKey, list ...string) *payload.GenericConfig {
+	return &payload.GenericConfig{
+		Paramset: ps, Type: hmenum.ParameterTypeEnum, ValueList: list,
+	}
+}
+
+// textDesc is a bounded string descriptor, for the text cases. The bounds
+// are floats on the wire and whole numbers in the payload; the fractional
+// part is there so the pin covers the truncation rather than a value that
+// would survive either way.
+func textDesc(ps hmenum.ParamsetKey) *payload.GenericConfig {
+	mn, mx := 0.0, 12.5
+	return &payload.GenericConfig{
+		Paramset: ps, Type: hmenum.ParameterTypeString, Min: &mn, Max: &mx,
+	}
+}
+
+// goldenSubDeviceCases are the fixtures that need the sub-device feature
+// flag, which is set on the builder rather than on the event. They live in
+// their own slice so the main matrix keeps running through the default
+// builder and the flag cannot leak into it.
+//
+// Hazard: the node id is not the device identifier. With sub-devices on,
+// the device block re-identifies as `<parent>-<group>` and re-parents to
+// the physical device, while the discovery topic's node id stays the
+// physical device throughout. Those two are derived by different code from
+// different inputs, and a move that quietly aligned them would re-key every
+// entity on a multi-group device — every blind, every multi-channel
+// actuator on the fleet.
+func goldenSubDeviceCases() []goldenCase {
+	ev := Event{
+		Central: "ccu-01", Interface: "HmIP-RF",
+		DeviceAddress: "000A0001", Model: "HmIP-BROLL", ChannelNo: 4,
+		ChannelAddress: "000A0001:4",
+		DeviceName:     "Wohnzimmer Jalousie",
+		Parameter:      "LEVEL",
+		Category:       hmenum.DataPointCategoryCover,
+		Writable:       true,
+		Descriptor:     &payload.GenericConfig{Paramset: hmenum.ParamsetKeyValues},
+		Device:         fakeSubDeviceParent{hasSubs: true},
+		Channel:        fakeSubDeviceChannel{groupNo: 2, multiGroup: true, subName: "Jalousie Ost"},
+	}
+	return []goldenCase{{"cover/sub-device", ev}}
 }
 
 // cuxdEvent is the CUxD switch as the production builder wants it: a real
@@ -163,6 +332,19 @@ func itoa(n int) string {
 // device catalogue cannot be reconstructed here, and a pin that looked
 // complete would be worse than one that admits its scope.
 //
+// What this does NOT cover, stated plainly because the matrix reads
+// broader than it is. It pins the per-parameter path only: the channel
+// aggregates (custom data points reached through Event.ChannelType) and
+// the press/impulse/device-error event groups leave through other
+// builders and are pinned, or not, elsewhere. Entity names are pinned at
+// their untranslated fallbacks, so a locale change is out of scope. The
+// state, command and availability topics inside these bodies are pinned
+// as strings; whether anything publishes to them is the round-trip
+// guard's job. Several MASTER twins are synthetic — see the note on them
+// in goldenCases. And the entity-description and quantity tables that
+// decorate these payloads are pinned only at the values these fixtures
+// happen to reach: a rule for a model not named here is not covered.
+//
 // A diff here is a regression until someone shows otherwise. Refresh with:
 //
 //	go test ./internal/north/mqtt/ -run TestDiscoveryPayloadsArePinned -update-discovery-golden
@@ -173,9 +355,14 @@ func TestDiscoveryPayloadsArePinned(t *testing.T) {
 	db.SetHubInfoFor("ccu-01", HubInfo{Serial: "3014F711A0001234"})
 	db.SetHubInfoFor("ccu-02", HubInfo{Serial: "3014F711B0005678"})
 
+	// The sub-device fixtures need the feature flag, which lives on the
+	// builder. A second builder keeps it off the main matrix.
+	subDB := NewDefaultDiscoveryBuilder(NewTopicBuilder("gh"), "ccu-01").WithSubDevices(true)
+	subDB.SetHubInfoFor("ccu-01", HubInfo{Serial: "3014F711A0001234"})
+
 	got := map[string]goldenEntry{}
-	for _, c := range goldenCases() {
-		component, nodeID, objectID, buf, ok := db.Build(c.ev)
+	build := func(c goldenCase, b *DefaultDiscoveryBuilder) {
+		component, nodeID, objectID, buf, ok := b.Build(c.ev)
 		if !ok {
 			t.Fatalf("%s: Build returned ok=false — the fixture no longer produces an entity", c.name)
 		}
@@ -190,6 +377,12 @@ func TestDiscoveryPayloadsArePinned(t *testing.T) {
 			Topic:   NewTopicBuilder("gh").DiscoveryConfig(component, nodeID, objectID),
 			Payload: body,
 		}
+	}
+	for _, c := range goldenCases() {
+		build(c, db)
+	}
+	for _, c := range goldenSubDeviceCases() {
+		build(c, subDB)
 	}
 
 	if *updateDiscoveryGolden {
@@ -250,5 +443,84 @@ func writeGolden(t *testing.T, entries map[string]goldenEntry) {
 	}
 	if err := os.WriteFile(discoveryGoldenPath, append(raw, '\n'), 0o600); err != nil {
 		t.Fatalf("write %s: %v", discoveryGoldenPath, err)
+	}
+}
+
+// discoveryGoldenUnreachableShapes names the pinned cases whose body the
+// Home Assistant schema rejects, with the reason each is excluded from
+// [TestDiscoveryPinnedPayloadsAreValid] rather than fixed.
+//
+// All three kinds are unreachable on this plane in production, and so the
+// bodies below are latent rather than live breakage. That is why
+// they are excluded rather than reported as live breakage. Event.Category
+// on the per-parameter path is the generic wire data point's category
+// (internal/model/generic/resolver.go's kindToCategory), which spans only
+// switch / binary_sensor / sensor / button / action / action_number /
+// action_select / number / select / text. light, siren and climate are
+// custom-data-point categories: their events always carry a ChannelType
+// and leave through the channel aggregate, which builds a different body.
+//
+// The fixtures stay pinned anyway. resolveComponent does route these
+// categories here, so the branches exist and a move onto the shared model
+// must not change what they emit — but what they emit today is a body Home
+// Assistant would not accept:
+//
+//   - light, siren: a `value_template` the light and siren schemas do not
+//     declare, so HA drops it silently.
+//   - siren: no `command_topic` at all. Siren falls through the
+//     per-component switch to its `default` arm, which sets none, and
+//     command_topic is required — HA would reject the config outright.
+//   - climate: `state_topic` and `device_class`, neither of which the
+//     climate schema declares.
+//
+// Not fixed here on purpose: this change is a pin, and a pin that also
+// changes behaviour cannot show that behaviour did not change.
+var discoveryGoldenUnreachableShapes = map[string]struct{}{
+	"light/values":   {},
+	"light/master":   {},
+	"siren/values":   {},
+	"siren/master":   {},
+	"climate/values": {},
+	"climate/master": {},
+}
+
+// TestDiscoveryPinnedPayloadsAreValid reads the same fixtures back through
+// the extracted Home Assistant MQTT schema, so a payload that is pinned is
+// also a payload HA accepts. A pin on its own only says the bytes did not
+// move; it cannot say they were right to begin with, and this plane is the
+// one where most of them live.
+//
+// [discoveryGoldenUnreachableShapes] is skipped, and says why per case.
+func TestDiscoveryPinnedPayloadsAreValid(t *testing.T) {
+	db := NewDefaultDiscoveryBuilder(NewTopicBuilder("gh"), "ccu-01")
+	db.SetHubInfoFor("ccu-01", HubInfo{Serial: "3014F711A0001234"})
+	db.SetHubInfoFor("ccu-02", HubInfo{Serial: "3014F711B0005678"})
+	subDB := NewDefaultDiscoveryBuilder(NewTopicBuilder("gh"), "ccu-01").WithSubDevices(true)
+	subDB.SetHubInfoFor("ccu-01", HubInfo{Serial: "3014F711A0001234"})
+
+	check := func(c goldenCase, b *DefaultDiscoveryBuilder) {
+		component, _, _, buf, ok := b.Build(c.ev)
+		if !ok {
+			t.Fatalf("%s: Build returned ok=false", c.name)
+		}
+		err := ValidateDiscoveryBody(component, buf)
+		if _, excluded := discoveryGoldenUnreachableShapes[c.name]; excluded {
+			// Asserted, not merely skipped: if one of these ever starts
+			// validating, the exclusion has outlived its reason and the
+			// case belongs back in the checked set.
+			if err == nil {
+				t.Errorf("%s: now valid — drop it from discoveryGoldenUnreachableShapes", c.name)
+			}
+			return
+		}
+		if err != nil {
+			t.Errorf("%s: %v", c.name, err)
+		}
+	}
+	for _, c := range goldenCases() {
+		check(c, db)
+	}
+	for _, c := range goldenSubDeviceCases() {
+		check(c, subDB)
 	}
 }
