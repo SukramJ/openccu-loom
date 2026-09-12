@@ -81,7 +81,7 @@ func CanonicalUniqueID(serialSuffix, address, parameter, eventPrefix string) str
 // migrated entity and spawns a duplicate beside it.
 const CalculatedFamilyPrefix = "calculated"
 
-// EventGroupFamilyPrefix marks a device-trigger event group inside a
+// eventGroupFamilyPrefix marks a device-trigger event group inside a
 // routing key, ahead of the channel:
 //
 //	loom_event_group_<kind>_<channel>
@@ -93,7 +93,7 @@ const CalculatedFamilyPrefix = "calculated"
 // address family needs one, lives inside that channel id. Consumers key
 // their entity registry on the exact string, so the two spellings are not
 // interchangeable.
-const EventGroupFamilyPrefix = "event_group"
+const eventGroupFamilyPrefix = "event_group"
 
 // EventGroupUniqueID builds the external unique_id for a device-trigger
 // event group: the loom namespace, the family prefix, the short kind, then
@@ -112,7 +112,7 @@ func EventGroupUniqueID(centralID, channelAddress, shortKind string) string {
 	if channel == "" {
 		return ""
 	}
-	return strings.ToLower(loomNamespace + "_" + EventGroupFamilyPrefix + "_" + shortKind + "_" + channel)
+	return strings.ToLower(loomNamespace + "_" + eventGroupFamilyPrefix + "_" + shortKind + "_" + channel)
 }
 
 // CalculatedUniqueID builds the external unique_id for a calculated data

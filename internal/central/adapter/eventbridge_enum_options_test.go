@@ -15,6 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
+	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -220,7 +221,7 @@ func publishEnumDiscoveryWith(t *testing.T, values []string, labeler mqtt.Parame
 	if init, ok := dp.(namingInitializer); ok {
 		init.SetNameData(device.BuildDataPointName(ch, setPointModeParameter, ""))
 		init.SetPathData(naming.NewDataPointPathData(
-			"", hmtypes.NewWireInterfaceID("", hmenum.InterfaceHmIPRF), ch.Address, ch.Number, naming.BucketValues, setPointModeParameter,
+			"", hmtypes.NewWireInterfaceID("", hmenum.InterfaceHmIPRF), ch.Address, ch.Number, payload.BucketValues, setPointModeParameter,
 		))
 		init.SetIsInMultipleChannels(ch.IsParameterInMultipleChannels(setPointModeParameter))
 	}

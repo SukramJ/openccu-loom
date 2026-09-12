@@ -18,9 +18,9 @@ import (
 // MQTT topic paths consumers depend on.
 // Bucket says which paramset a data point belongs to. It is an alias for the
 // shared model's type rather than a second declaration of the same four
-// values: loom used to carry two of these — one here, one in
-// internal/model/naming — kept in step by a comment and bridged by a cast.
-// ADR 0070 collapses them.
+// values, and it is now the daemon's only one: internal/model/naming carried a
+// second alias of the same shared type, kept in step by a comment, until ADR
+// 0070's "the two Bucket enums become one" was finished.
 type Bucket = model.Bucket
 
 // Bucket values. The rendered string is the topic-segment name.

@@ -16,53 +16,24 @@ import (
 )
 
 // Path-root constants. They are the canonical first segment of every
-// set/state path; north-bound adapters (REST, MQTT, WS) use them to route
-// requests back to the appropriate handler family without having to inspect
-// the trailing segments.
+// set/state path, and the two constructors twenty lines below are their only
+// readers — the roots reach a north-bound adapter as the prefix of a rendered
+// SetPath / StatePath, never as constants of their own, so they are not
+// exported.
 const (
-	// SetPathRoot is the first segment for channel-bound write paths.
-	SetPathRoot = "device/set"
-	// StatePathRoot is the first segment for channel-bound read paths.
-	StatePathRoot = "device/status"
-	// VirtDevSetPathRoot replaces SetPathRoot for the VirtualDevices / CCU-Jack
+	// setPathRoot is the first segment for channel-bound write paths.
+	setPathRoot = "device/set"
+	// statePathRoot is the first segment for channel-bound read paths.
+	statePathRoot = "device/status"
+	// virtDevSetPathRoot replaces setPathRoot for the VirtualDevices / CCU-Jack
 	// interface family.
-	VirtDevSetPathRoot = "virtdev/set"
-	// VirtDevStatePathRoot is the read-side counterpart.
-	VirtDevStatePathRoot = "virtdev/status"
-	// SysvarSetPathRoot is the first segment for system-variable DPs.
-	SysvarSetPathRoot = "sysvar/set"
-	// SysvarStatePathRoot is the read-side counterpart.
-	SysvarStatePathRoot = "sysvar/status"
-)
-
-// Bucket identifies the paramset family a data point belongs to. The
-// bucket is the disambiguator between MASTER (config) and VALUES
-// (runtime state) parameters that share the same wire name on the
-// same channel — a real conflict on the CCU XML-RPC API and on the
-// north-bound MQTT topology where the older bucket-less shape
-// `<addr>/<ch>/<param>` could not distinguish the two.
-//
-// String values match the [internal/payload.Bucket] enum verbatim so
-// neither layer needs translation.
-// Bucket says which paramset a path addresses. Aliased to the shared model's
-// type — see internal/payload for why there is only one of these now.
-type Bucket = model.Bucket
-
-// Bucket constants.
-const (
-	// BucketUnset is the zero value — used by Hub/Program/Sysvar path
-	// data points that do not live on a channel and therefore have no
-	// paramset context. It renders empty and the segment disappears.
-	BucketUnset = model.BucketUnset
-	// BucketValues is the runtime VALUES paramset.
-	BucketValues = model.BucketValues
-	// BucketMaster is the operator-tunable MASTER paramset.
-	BucketMaster = model.BucketMaster
-	// BucketCalculated is the synthetic / calculated DP family.
-	BucketCalculated = model.BucketCalculated
-	// BucketCustom is the custom-DP aggregate (climate, lock, cover,
-	// …) — the model-level source-of-truth slot.
-	BucketCustom = model.BucketCustom
+	virtDevSetPathRoot = "virtdev/set"
+	// virtDevStatePathRoot is the read-side counterpart.
+	virtDevStatePathRoot = "virtdev/status"
+	// sysvarSetPathRoot is the first segment for system-variable DPs.
+	sysvarSetPathRoot = "sysvar/set"
+	// sysvarStatePathRoot is the read-side counterpart.
+	sysvarStatePathRoot = "sysvar/status"
 )
 
 // PathData is the model-layer descriptor for a single data point's
@@ -113,9 +84,9 @@ type PathData struct {
 	Interface hmtypes.WireInterfaceID
 	Address   string // upper-cased CCU device address ("" for non-channel families)
 	ChannelNo int
-	Bucket    Bucket
+	Bucket    model.Bucket
 	// Kind is the wire-parameter name (VALUES / MASTER) or the
-	// custom-DP type label ("CLIMATE", "LIGHT", …) for BucketCustom
+	// custom-DP type label ("CLIMATE", "LIGHT", …) for model.BucketCustom
 	// DPs. For non-channel families it is the program/sysvar id /
 	// hub-DP name.
 	Kind string
@@ -140,7 +111,7 @@ func (p PathData) IsZero() bool { return p.SetPath == "" && p.StatePath == "" }
 // All inputs are MQTT-safe-escaped via [TopicSafe]. Wire parameters
 // are upper-case by convention; bucket labels are lower-case.
 func (p PathData) MQTTState(base, centralName string) string {
-	if p.Address == "" || p.Kind == "" || p.Bucket == BucketUnset {
+	if p.Address == "" || p.Kind == "" || p.Bucket == model.BucketUnset {
 		return ""
 	}
 	return fmt.Sprintf(
@@ -172,26 +143,6 @@ func (p PathData) MQTTConfig(base, centralName string) string {
 		return ""
 	}
 	return state + "/config"
-}
-
-// MQTTChannelAggregateState returns the channel-rollup retained
-// state topic — `<base>/<central>/<iface>/<addr>/<ch>/state`. Used
-// by the bridge for the custom-DP-aggregated payload (climate / lock
-// / cover / valve / siren). Uses only Address + ChannelNo +
-// Interface; Bucket and Kind are ignored. Empty when Address is
-// missing.
-func (p PathData) MQTTChannelAggregateState(base, centralName string) string {
-	if p.Address == "" {
-		return ""
-	}
-	return fmt.Sprintf(
-		"%s/%s/%s/%s/%d/state",
-		strings.Trim(base, "/"),
-		TopicSafe(centralName),
-		TopicSafe(string(p.Interface)),
-		TopicSafe(p.Address),
-		p.ChannelNo,
-	)
 }
 
 // MQTTChannelImpulse returns the per-channel impulse-event topic
@@ -384,11 +335,11 @@ func (p PathData) MQTTWeekProfileCommand(base, centralName string) string {
 // `<base>/<central>/<iface>/<addr>/<ch>/custom/<kind>` for the
 // climate / cover / lock / light / siren / valve / textdisplay
 // aggregate. The PathData must have been constructed with
-// [BucketCustom] and `Kind` set to the lowercase domain label
-// (e.g. "climate"). Empty when Bucket != BucketCustom or Address /
+// [model.BucketCustom] and `Kind` set to the lowercase domain label
+// (e.g. "climate"). Empty when Bucket != model.BucketCustom or Address /
 // Kind is missing.
 func (p PathData) MQTTCustomDPState(base, centralName string) string {
-	if p.Address == "" || p.Kind == "" || p.Bucket != BucketCustom {
+	if p.Address == "" || p.Kind == "" || p.Bucket != model.BucketCustom {
 		return ""
 	}
 	return fmt.Sprintf(
@@ -533,7 +484,7 @@ func NewDevicePathData(iface hmtypes.WireInterfaceID, address string) PathData {
 // the lowercase domain label that becomes the trailing path segment
 // — e.g. "climate" for a HmIP-BWTH thermostat aggregate.
 //
-// Bucket is forced to [BucketCustom] so [MQTTCustomDPState] etc. can
+// Bucket is forced to [model.BucketCustom] so [MQTTCustomDPState] etc. can
 // guard against accidental misuse with a generic VALUES bucket.
 //
 // SetPath and StatePath stay empty — custom-DP slots are an
@@ -547,7 +498,7 @@ func NewCustomDPPathData(iface hmtypes.WireInterfaceID, address string, channelN
 		Interface: iface,
 		Address:   strings.ToUpper(address),
 		ChannelNo: channelNo,
-		Bucket:    BucketCustom,
+		Bucket:    model.BucketCustom,
 		Kind:      strings.ToLower(kind),
 	}
 }
@@ -590,7 +541,7 @@ func TopicSafe(s string) string {
 // prefix, every other interface uses the `device/` prefix. `bucket`
 // disambiguates VALUES / MASTER / CALCULATED / CUSTOM. `kind` is the
 // wire-parameter name (typical case) or the custom-DP type label
-// ("CLIMATE", "LIGHT") for BucketCustom DPs.
+// ("CLIMATE", "LIGHT") for model.BucketCustom DPs.
 //
 // `centralName` is required for that one decision and for nothing else: the
 // interface arrives as the `<central>-<interface>` wire id every producer
@@ -604,14 +555,14 @@ func TopicSafe(s string) string {
 // the same address+channel+kind combination on different paramsets
 // no longer aliases — a real conflict for parameters that exist in
 // both VALUES and MASTER on the same channel.
-func NewDataPointPathData(centralName string, iface hmtypes.WireInterfaceID, address string, channelNo int, bucket Bucket, kind string) PathData {
+func NewDataPointPathData(centralName string, iface hmtypes.WireInterfaceID, address string, channelNo int, bucket model.Bucket, kind string) PathData {
 	if address == "" || kind == "" {
 		return EmptyPathData
 	}
-	if bucket == BucketUnset {
+	if bucket == model.BucketUnset {
 		// Default to VALUES — preserves the historic single-bucket
 		// behaviour for callers that have not yet been migrated.
-		bucket = BucketValues
+		bucket = model.BucketValues
 	}
 	upperAddr := strings.ToUpper(address)
 	upperKind := strings.ToUpper(kind)
@@ -627,11 +578,11 @@ func NewDataPointPathData(centralName string, iface hmtypes.WireInterfaceID, add
 	sb.WriteString(upperKind)
 	item := sb.String()
 
-	setRoot := SetPathRoot
-	stateRoot := StatePathRoot
+	setRoot := setPathRoot
+	stateRoot := statePathRoot
 	if iface.Bare(centralName) == hmenum.InterfaceVirtualDevices {
-		setRoot = VirtDevSetPathRoot
-		stateRoot = VirtDevStatePathRoot
+		setRoot = virtDevSetPathRoot
+		stateRoot = virtDevStatePathRoot
 	}
 	return PathData{
 		SetPath:   setRoot + "/" + item,
@@ -651,8 +602,8 @@ func NewSysvarPathData(vid string) PathData {
 		return EmptyPathData
 	}
 	return PathData{
-		SetPath:   SysvarSetPathRoot + "/" + vid,
-		StatePath: SysvarStatePathRoot + "/" + vid,
+		SetPath:   sysvarSetPathRoot + "/" + vid,
+		StatePath: sysvarStatePathRoot + "/" + vid,
 		Kind:      vid,
 	}
 }

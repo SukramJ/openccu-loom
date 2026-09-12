@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/SukramJ/go-hamqtt/model"
+
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -21,15 +23,15 @@ var (
 
 func TestNewDataPointPathData_StandardInterface(t *testing.T) {
 	t.Parallel()
-	pd := NewDataPointPathData("", wireHmIPRF, "VCU1234567", 3, BucketValues, "STATE")
+	pd := NewDataPointPathData("", wireHmIPRF, "VCU1234567", 3, model.BucketValues, "STATE")
 	if pd.SetPath != "device/set/VCU1234567/3/values/STATE" {
 		t.Errorf("SetPath = %q, want %q", pd.SetPath, "device/set/VCU1234567/3/values/STATE")
 	}
 	if pd.StatePath != "device/status/VCU1234567/3/values/STATE" {
 		t.Errorf("StatePath = %q, want %q", pd.StatePath, "device/status/VCU1234567/3/values/STATE")
 	}
-	if pd.Bucket != BucketValues {
-		t.Errorf("Bucket = %q, want %q", pd.Bucket, BucketValues)
+	if pd.Bucket != model.BucketValues {
+		t.Errorf("Bucket = %q, want %q", pd.Bucket, model.BucketValues)
 	}
 	if pd.Address != "VCU1234567" || pd.ChannelNo != 3 || pd.Kind != "STATE" {
 		t.Errorf("structured fields not populated correctly: %+v", pd)
@@ -54,7 +56,7 @@ func TestNewDataPointPathData_VirtualDevicesInterface(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			iface := hmtypes.NewWireInterfaceID(tc.central, hmenum.InterfaceVirtualDevices)
-			pd := NewDataPointPathData(tc.central, iface, "INT0000001", 0, BucketValues, "PRESS_SHORT")
+			pd := NewDataPointPathData(tc.central, iface, "INT0000001", 0, model.BucketValues, "PRESS_SHORT")
 			if pd.SetPath != "virtdev/set/INT0000001/0/values/PRESS_SHORT" {
 				t.Errorf("SetPath = %q, want %q", pd.SetPath, "virtdev/set/INT0000001/0/values/PRESS_SHORT")
 			}
@@ -67,19 +69,19 @@ func TestNewDataPointPathData_VirtualDevicesInterface(t *testing.T) {
 
 func TestNewDataPointPathData_MasterBucket(t *testing.T) {
 	t.Parallel()
-	pd := NewDataPointPathData("", wireHmIPRF, "VCU1234567", 0, BucketMaster, "ARR_TIMEOUT")
+	pd := NewDataPointPathData("", wireHmIPRF, "VCU1234567", 0, model.BucketMaster, "ARR_TIMEOUT")
 	if pd.StatePath != "device/status/VCU1234567/0/master/ARR_TIMEOUT" {
 		t.Errorf("StatePath = %q, want %q", pd.StatePath, "device/status/VCU1234567/0/master/ARR_TIMEOUT")
 	}
-	if pd.Bucket != BucketMaster {
-		t.Errorf("Bucket = %q, want %q", pd.Bucket, BucketMaster)
+	if pd.Bucket != model.BucketMaster {
+		t.Errorf("Bucket = %q, want %q", pd.Bucket, model.BucketMaster)
 	}
 }
 
 func TestNewDataPointPathData_LowerCaseAddressUpper(t *testing.T) {
 	t.Parallel()
 	// Address and kind must be upper-cased on the way through.
-	pd := NewDataPointPathData("", wireBidCosRF, "abcd1234", 1, BucketValues, "level")
+	pd := NewDataPointPathData("", wireBidCosRF, "abcd1234", 1, model.BucketValues, "level")
 	if pd.SetPath != "device/set/ABCD1234/1/values/LEVEL" {
 		t.Errorf("SetPath = %q, want %q", pd.SetPath, "device/set/ABCD1234/1/values/LEVEL")
 	}
@@ -87,19 +89,19 @@ func TestNewDataPointPathData_LowerCaseAddressUpper(t *testing.T) {
 
 func TestNewDataPointPathData_EmptyInputsReturnZero(t *testing.T) {
 	t.Parallel()
-	if got := NewDataPointPathData("", wireHmIPRF, "", 0, BucketValues, "STATE"); !got.IsZero() {
+	if got := NewDataPointPathData("", wireHmIPRF, "", 0, model.BucketValues, "STATE"); !got.IsZero() {
 		t.Errorf("empty address must yield zero PathData, got %+v", got)
 	}
-	if got := NewDataPointPathData("", wireHmIPRF, "VCU1", 0, BucketValues, ""); !got.IsZero() {
+	if got := NewDataPointPathData("", wireHmIPRF, "VCU1", 0, model.BucketValues, ""); !got.IsZero() {
 		t.Errorf("empty kind must yield zero PathData, got %+v", got)
 	}
 }
 
 func TestNewDataPointPathData_EmptyBucketDefaultsToValues(t *testing.T) {
 	t.Parallel()
-	pd := NewDataPointPathData("", wireHmIPRF, "VCU1", 0, BucketUnset, "STATE")
-	if pd.Bucket != BucketValues {
-		t.Errorf("Bucket = %q, want %q (empty bucket → VALUES default)", pd.Bucket, BucketValues)
+	pd := NewDataPointPathData("", wireHmIPRF, "VCU1", 0, model.BucketUnset, "STATE")
+	if pd.Bucket != model.BucketValues {
+		t.Errorf("Bucket = %q, want %q (empty bucket → VALUES default)", pd.Bucket, model.BucketValues)
 	}
 	if pd.StatePath != "device/status/VCU1/0/values/STATE" {
 		t.Errorf("StatePath = %q, want %q", pd.StatePath, "device/status/VCU1/0/values/STATE")
@@ -108,7 +110,7 @@ func TestNewDataPointPathData_EmptyBucketDefaultsToValues(t *testing.T) {
 
 func TestPathData_MQTTState(t *testing.T) {
 	t.Parallel()
-	pd := NewDataPointPathData("", wireHmIPRF, "VCU1234567", 1, BucketValues, "STATE")
+	pd := NewDataPointPathData("", wireHmIPRF, "VCU1234567", 1, model.BucketValues, "STATE")
 	got := pd.MQTTState("openccu-loom", "ccu-1")
 	want := "openccu-loom/ccu-1/HmIP-RF/VCU1234567/1/values/STATE"
 	if got != want {
@@ -146,18 +148,18 @@ func TestNewSysvarPathData(t *testing.T) {
 
 func TestPathData_DeviceSetStateRoots(t *testing.T) {
 	t.Parallel()
-	pd := NewDataPointPathData("", wireHmIPRF, "VCU1234567", 1, BucketValues, "STATE")
-	if !strings.HasPrefix(pd.SetPath, SetPathRoot) {
-		t.Errorf("SetPath = %q, want prefix %q", pd.SetPath, SetPathRoot)
+	pd := NewDataPointPathData("", wireHmIPRF, "VCU1234567", 1, model.BucketValues, "STATE")
+	if !strings.HasPrefix(pd.SetPath, setPathRoot) {
+		t.Errorf("SetPath = %q, want prefix %q", pd.SetPath, setPathRoot)
 	}
-	if !strings.HasPrefix(pd.StatePath, StatePathRoot) {
-		t.Errorf("StatePath = %q, want prefix %q", pd.StatePath, StatePathRoot)
+	if !strings.HasPrefix(pd.StatePath, statePathRoot) {
+		t.Errorf("StatePath = %q, want prefix %q", pd.StatePath, statePathRoot)
 	}
 }
 
 func TestPathData_EmptyAddressIsZero(t *testing.T) {
 	t.Parallel()
-	pd := NewDataPointPathData("", wireHmIPRF, "", 1, BucketValues, "STATE")
+	pd := NewDataPointPathData("", wireHmIPRF, "", 1, model.BucketValues, "STATE")
 	if !pd.IsZero() {
 		t.Errorf("empty address must yield EmptyPathData, got %+v", pd)
 	}
@@ -165,7 +167,7 @@ func TestPathData_EmptyAddressIsZero(t *testing.T) {
 
 func TestPathData_EmptyKindIsZero(t *testing.T) {
 	t.Parallel()
-	pd := NewDataPointPathData("", wireHmIPRF, "VCU1234567", 1, BucketValues, "")
+	pd := NewDataPointPathData("", wireHmIPRF, "VCU1234567", 1, model.BucketValues, "")
 	if !pd.IsZero() {
 		t.Errorf("empty kind must yield EmptyPathData, got %+v", pd)
 	}

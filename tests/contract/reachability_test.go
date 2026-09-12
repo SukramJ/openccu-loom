@@ -427,7 +427,15 @@ func TestReachabilitySnapshotHasNoTestFiles(t *testing.T) {
 // reached or removed. Each replacement was checked with a probe pair — an
 // identifier read by reachable code and one read by nothing — and reports the
 // two different answers a measurement has to be able to give.
-const reachabilityUnreachableCeiling = 61
+//
+// 61 -> 59: ADR 0070's step A deleted six production-dead exports
+// (routingkey.PseudoAddresses, payload.For, payload.Merge,
+// payload.ChannelState, payload.DRGDaliLightState,
+// naming.PathData.MQTTChannelAggregateState) and unexported a seventh; step B
+// deleted the naming.Bucket alias with its five constants and unexported the
+// six *PathRoot constants. This one is a change of the tree, not of the
+// measurement.
+const reachabilityUnreachableCeiling = 59
 
 // TestReachabilitySnapshotUnreachableCountHasACeiling is the one test in this
 // file that says something about the tree rather than about the snapshot's

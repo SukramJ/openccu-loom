@@ -102,7 +102,9 @@ Scope and shape, decided up front:
 first** — before any bridge. `internal/payload`, `internal/model/naming`,
 `internal/routingkey` and the bridge mechanics (hash-dedup publish, retract,
 orphan sweep, birth sync) move up; the daemon imports them back and keeps only
-the Homematic domain.
+the Homematic domain. *(The three-package half of that sentence is superseded
+by the third amendment below: `routingkey` stays, `naming` and `payload` split,
+and the remaining work is a collapse of re-exports rather than a migration.)*
 
 ## Why
 
@@ -301,6 +303,84 @@ Three consequences for step 13:
   published afterwards was refused with the same warning. Whatever the flag
   is for, the retraction is what this daemon must rely on.
 
+## Amendment (2026-09-12) — the three-package move-up is wrong on two of three
+
+The decision above ends with a sentence that reads as three package moves:
+*"`internal/payload`, `internal/model/naming`, `internal/routingkey` and the
+bridge mechanics … move up"*. That half of the sentence is **superseded**. The
+packages were measured symbol by symbol before anything moved —
+`notes/adr0070-moveup-inventory.md`, 262 exported symbols classified, every
+"unused" claim counted — and the measurement disagrees with the decision on two
+of the three packages. None of the three moves whole.
+
+**`internal/routingkey` does not move at all.** It is on the list because it
+produces `unique_id` and `unique_id` is a Home Assistant concept, but the
+package's contract does not point at Home Assistant. It points sideways at
+`aiohomematic` and the Python HA drop-in, and it is pinned there by 40 golden
+cases under `tests/contract/testdata/routing_key/` and by
+`script/routing_key_parity.py`, which replays them through the Python
+reference. `HubSlug` is a `python-slugify` emulation: it separates with `-` and
+folds `ü` to `u` where both candidate replacements separate with `_` and expand
+it to `ue`, so the three functions disagree on every non-trivial input — and
+`HubSlug` is *right* to, because python-slugify is what the drop-in produces on
+the other side of the contract. Its address families (`INT000`, `CUX`,
+`BidCoS-RF`, `HmIP-RCV-1`) are CCU families. And `slug.go` imports
+`golang.org/x/text`, which a module whose charter is one requirement cannot
+take. Moving it up would put a Homematic interop contract inside a module five
+bridges import.
+
+**`internal/model/naming` splits at a file boundary.** `discovery_slug.go` (88
+lines, one export) is the only file in the package with no `hm*` import. The
+other 1 121 lines are `PathData` — 864 of them — and `NameData`: loom's own
+MQTT topic tree and loom's CCU name model, both resting on
+`hmtypes.WireInterfaceID` and `hmenum.InterfaceVirtualDevices`. `go-hamqtt`
+declines to own either on purpose; `topic.Layout` is an interface precisely so
+each consumer keeps its own schema. And the small half does not *move* — it is
+**deleted** in favour of `topic.Slug`, which changes published node ids and is
+therefore the last step, alone, under ADR 0068's process.
+
+**`internal/payload` splits three ways, not two.** `params.go` (137 lines, six
+exports) goes up cleanly. The 99 typed CCU DTOs in `info.go`, `state.go` and
+`descriptor.go`, the `hmenum.CommandPriority` contract that runs through
+`Source.Invoke` and `ServiceRegistry.Invoke`, `TopicSlot`, and
+`discovery_entity.go`'s adapter onto `hamodel`/`hatopic` all stay — the adapter
+is *supposed* to live down here. What is left of the generic core is already
+upstairs behind a thin wrapper.
+
+**The bulk of the move already happened, and not as a move.** All twelve
+discovery planes render through `discovery.RenderComponent`; the bucket enum is
+`hamodel.Bucket`; topic escaping is `topic.Safe`; the reflection harvest is
+`hapayload.ForWith`. What the decision's sentence actually describes, measured,
+is **one file move (`params.go`), one deletion with byte risk
+(`DiscoverySlug`), and a large collapse of duplicate re-exports.** Forty-seven
+of the 262 symbols are daemon-agnostic at all; 22 of those 47 collapse in place
+rather than move, because they are already the shared thing, re-exported.
+
+Nothing has to move *with* the three, which is the other half of the finding:
+the two packages that would be dragged — `pkg/hmenum` (3 794 lines) and
+`pkg/hmtypes` (980) — are the Homematic vocabulary this ADR says stays.
+
+Four consequences:
+
+- **The move-up sentence is replaced by a sequence.** Delete the dead exports,
+  collapse the duplicate `Bucket` alias, move `params.go`, settle
+  `MQTTAddressable` against `topic.Layout`, and only then take `DiscoverySlug`.
+  Every step that cannot change a published byte goes first, so the one that
+  can arrives alone on a clean tree.
+- **`DiscoverySlug` → `topic.Slug` needs fixtures before it needs a
+  migration note.** The golden pins cover 68 node ids and German umlauts, but
+  of the eight measured divergences between the two functions, zero appeared in
+  any fixture: `Café` → `caf` becoming `cafe`, and `watchdog__ccu-jack`
+  becoming `watchdog_ccu-jack`, both shipped green. Those rows are added ahead
+  of the step rather than with it.
+- **`UniqueSlug` / `EffectiveSlug` / `ZoneSlugStem` are the only routingkey
+  symbols that could ever go up**, and only once they take the slug function as
+  a parameter instead of calling `HubSlug`. Thirty lines, not a package move.
+- **The first amendment's conclusion is reinforced, not reopened.** The package
+  that computes the `unique_id` this daemon promised not to change keeps its
+  home for the same reason the key keeps its spelling.
+
+
 ## Revisit when
 
 - Phase 3 fails: if this daemon's layer cannot be expressed on the extracted
@@ -331,6 +411,8 @@ Three consequences for step 13:
   entity projection; unaffected
 - [ADR 0068](./0068-unique-id-stability-per-plane.md) — the identity guarantee
   this ADR knowingly breaks once
+- `notes/adr0070-moveup-inventory.md` — the symbol-level measurement of the
+  three move-up packages that this ADR's third amendment rests on
 - `notes/concepts/shared-ha-discovery-model.md` — the full design
 - Home Assistant core `2026.9.0b9-31-g76ca483aec0`:
   `homeassistant/generated/{device_classes,sensor}.json`,

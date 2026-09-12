@@ -121,11 +121,6 @@ type EffectLightState struct {
 	Effect string `json:"effect,omitempty"`
 }
 
-// DRGDaliLightState reuses ColorTempLightState without additions.
-type DRGDaliLightState struct {
-	ColorTempLightState
-}
-
 // RGBWLightState carries colour + optional kelvin, depending on the
 // active operating mode at emission time. Setters choose which fields
 // to populate; omitempty handles the absence of the unused fields.
@@ -378,11 +373,6 @@ type InterfaceClientState struct {
 }
 
 // --- Device / Channel / Generic --------------------------------------
-
-// ChannelState is the live channel state. Channel is a container —
-// no per-channel runtime state today, so the struct stays empty
-// (publishers return nil).
-type ChannelState struct{}
 
 // GenericDataPointState carries the live wire-DP state. Value is
 // emitted only after the first observed read.

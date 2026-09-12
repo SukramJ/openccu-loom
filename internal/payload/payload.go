@@ -4,8 +4,6 @@
 package payload
 
 import (
-	"maps"
-
 	hapayload "github.com/SukramJ/go-hamqtt/payload"
 )
 
@@ -21,7 +19,7 @@ const (
 	KindState  Kind = "state"
 )
 
-// Options tweak the [For] / [ForWith] extraction.
+// Options tweak the [ForWith] extraction.
 type Options struct {
 	// UseAltNames tells the extractor to prefer the tag's `alt=`
 	// override over the field's lower-cased name.
@@ -31,12 +29,6 @@ type Options struct {
 	// them, matching the Python reference implementation's default
 	// omit-zero behavior.
 	IncludeZero bool
-}
-
-// For returns the k-partitioned view of obj. Nil / non-struct inputs
-// produce an empty map.
-func For(obj any, k Kind) map[string]any {
-	return ForWith(obj, k, Options{})
 }
 
 // ExtraProperties is implemented by a type that contributes properties
@@ -60,8 +52,7 @@ type ExtraProperties interface {
 	PayloadExtra(k Kind, opts Options) map[string]any
 }
 
-// ForWith returns the k-partitioned view of obj with explicit options — [For]
-// with the defaults spelled out.
+// ForWith returns the k-partitioned view of obj with explicit options.
 //
 // The reflection walk itself lives in go-hamqtt/payload; this wrapper exists
 // to hold the two things that are loom's rather than the shared model's:
@@ -111,13 +102,4 @@ func sharedKind(k Kind) hapayload.Kind {
 	default:
 		return 0
 	}
-}
-
-// Merge combines two maps into a fresh one. The second argument wins
-// on key collisions.
-func Merge(a, b map[string]any) map[string]any {
-	out := make(map[string]any, len(a)+len(b))
-	maps.Copy(out, a)
-	maps.Copy(out, b)
-	return out
 }

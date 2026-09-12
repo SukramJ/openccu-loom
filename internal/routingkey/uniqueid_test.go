@@ -9,8 +9,7 @@ import (
 )
 
 // TestPseudoAddressConstants verifies the wire values of the four exported
-// pseudo-address constants and that PseudoAddresses lists them in the
-// documented order.
+// pseudo-address constants.
 func TestPseudoAddressConstants(t *testing.T) {
 	t.Parallel()
 
@@ -27,20 +26,6 @@ func TestPseudoAddressConstants(t *testing.T) {
 	for _, tc := range cases {
 		if tc.got != tc.want {
 			t.Errorf("%s = %q, want %q", tc.name, tc.got, tc.want)
-		}
-	}
-}
-
-func TestPseudoAddresses_SliceOrderAndLength(t *testing.T) {
-	t.Parallel()
-
-	want := []string{HubAddress, InstallModeAddress, ProgramAddress, SysvarAddress}
-	if len(PseudoAddresses) != len(want) {
-		t.Fatalf("PseudoAddresses len = %d, want %d", len(PseudoAddresses), len(want))
-	}
-	for i, w := range want {
-		if PseudoAddresses[i] != w {
-			t.Errorf("PseudoAddresses[%d] = %q, want %q", i, PseudoAddresses[i], w)
 		}
 	}
 }

@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 57d732e0
-HEAD: 57d732e0
+Generated: 411d030f
+HEAD: 411d030f
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 5628 |
-| Reachable | 3591 |
-| Whitelisted | 1976 |
-| **Unreachable** | **61** |
+| Total Exported | 5610 |
+| Reachable | 3576 |
+| Whitelisted | 1975 |
+| **Unreachable** | **59** |
 
 ## Top-20 Packages by Dead Code
 
@@ -31,7 +31,7 @@ HEAD: 57d732e0
 | internal/model/hub | 0 | 0 | 1 |
 | internal/north/mcp | 0 | 1 | 0 |
 | internal/north/mqtt | 0 | 1 | 1 |
-| internal/payload | 0 | 3 | 0 |
+| internal/payload | 0 | 1 | 0 |
 | internal/store/sqlite | 0 | 0 | 1 |
 | pkg/hmenum | 0 | 6 | 2 |
 
@@ -64,6 +64,6 @@ HEAD: 57d732e0
 | internal/model/hub | 0 | 0 | 1 |
 | internal/north/mcp | 0 | 1 | 0 |
 | internal/north/mqtt | 0 | 1 | 1 |
-| internal/payload | 0 | 3 | 0 |
+| internal/payload | 0 | 1 | 0 |
 | internal/store/sqlite | 0 | 0 | 1 |
 | pkg/hmenum | 0 | 6 | 2 |

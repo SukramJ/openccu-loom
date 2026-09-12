@@ -1,16 +1,16 @@
 {
-  "generated": "57d732e0",
-  "head": "57d732e0",
+  "generated": "411d030f",
+  "head": "411d030f",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/openccu-loom-remote/main.go",
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 5628,
-    "reachable": 3518,
-    "whitelisted": 1976,
-    "unreachable": 134
+    "total_exported": 5610,
+    "reachable": 3506,
+    "whitelisted": 1975,
+    "unreachable": 129
   },
   "by_package": [
     {
@@ -47,12 +47,6 @@
       "package": "internal/north/webhook",
       "unreachable_funcs": 2,
       "unreachable_types": 0,
-      "unreachable_other": 0
-    },
-    {
-      "package": "internal/payload",
-      "unreachable_funcs": 2,
-      "unreachable_types": 4,
       "unreachable_other": 0
     },
     {
@@ -194,10 +188,10 @@
       "unreachable_other": 1
     },
     {
-      "package": "internal/routingkey",
+      "package": "internal/payload",
       "unreachable_funcs": 0,
-      "unreachable_types": 0,
-      "unreachable_other": 1
+      "unreachable_types": 2,
+      "unreachable_other": 0
     },
     {
       "package": "internal/store/sqlite",
@@ -754,20 +748,6 @@
     },
     {
       "package": "internal/payload",
-      "identifier": "ChannelState",
-      "file": "internal/payload/state.go",
-      "line": 385,
-      "kind": "type"
-    },
-    {
-      "package": "internal/payload",
-      "identifier": "DRGDaliLightState",
-      "file": "internal/payload/state.go",
-      "line": 125,
-      "kind": "type"
-    },
-    {
-      "package": "internal/payload",
       "identifier": "DiscoveryDynamic",
       "file": "internal/payload/topology.go",
       "line": 134,
@@ -775,31 +755,10 @@
     },
     {
       "package": "internal/payload",
-      "identifier": "For",
-      "file": "internal/payload/payload.go",
-      "line": 38,
-      "kind": "func"
-    },
-    {
-      "package": "internal/payload",
       "identifier": "HAEntity",
       "file": "internal/payload/topology.go",
       "line": 97,
       "kind": "type"
-    },
-    {
-      "package": "internal/payload",
-      "identifier": "Merge",
-      "file": "internal/payload/payload.go",
-      "line": 118,
-      "kind": "func"
-    },
-    {
-      "package": "internal/routingkey",
-      "identifier": "PseudoAddresses",
-      "file": "internal/routingkey/uniqueid.go",
-      "line": 69,
-      "kind": "var"
     },
     {
       "package": "internal/store/sqlite",
@@ -4547,13 +4506,6 @@
       "reason": "auto-whitelist:pattern=hub-factory-wrapper",
       "file": "internal/model/hub/metrics.go",
       "line": 134
-    },
-    {
-      "package": "internal/model/naming",
-      "identifier": "Bucket",
-      "reason": "auto-whitelist:pattern=type-alias",
-      "file": "internal/model/naming/pathdata.go",
-      "line": 49
     },
     {
       "package": "internal/model/safety",
@@ -12561,7 +12513,7 @@
       "identifier": "ExtraProperties",
       "reason": "ForWith type-asserts every obj against it, and *device.Device implements it to publish its mutex-guarded name; an interface reached only by assertion, which the analyzer cannot see used",
       "file": "internal/payload/payload.go",
-      "line": 59
+      "line": 51
     },
     {
       "package": "internal/payload",
