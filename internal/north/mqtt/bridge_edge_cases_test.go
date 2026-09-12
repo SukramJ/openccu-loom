@@ -12,6 +12,7 @@ import (
 
 	hacatalog "github.com/SukramJ/go-ha-catalog"
 	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hamodel "github.com/SukramJ/go-hamqtt/model"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 
@@ -1623,37 +1624,35 @@ func TestLookupButtonRule(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// update discovery context methods (pure topic building, no network).
+// update topic layout methods (pure topic building, no network).
 // ---------------------------------------------------------------------------
 
-func TestUpdateDiscoveryCtxTopics(t *testing.T) {
+// TestUpdateTopicLayoutTopics pins the four strings the shared model's render
+// pipeline asks this plane for. They are the only inputs the pipeline cannot
+// derive on its own, and three of the four end up verbatim in a retained
+// discovery config.
+func TestUpdateTopicLayoutTopics(t *testing.T) {
 	t.Parallel()
-	tb := NewTopicBuilder("gh")
-	ctx := updateDiscoveryCtx{
-		topics:      tb,
-		centralName: "ccu",
-		iface:       "HmIP-RF",
-		address:     "0001ABCD",
+	d := NewDefaultDiscoveryBuilder(NewTopicBuilder("gh"), "ccu")
+	l := updateTopicLayout{
+		d:       d,
+		ev:      UpdateEvent{Interface: "HmIP-RF", DeviceAddress: "0001ABCD"},
+		central: "ccu",
 	}
 	cases := []struct {
 		name string
 		got  string
 		want string
 	}{
-		{"CustomDPStateTopic", ctx.CustomDPStateTopic(), "gh/ccu/HmIP-RF/0001ABCD/update"},
-		{"ServiceMethodCommandTopic(install)", ctx.ServiceMethodCommandTopic("install"), "gh/ccu/HmIP-RF/0001ABCD/update/set"},
+		{"State", l.State(hamodel.Slot{}), "gh/ccu/HmIP-RF/0001ABCD/update"},
+		{"Command", l.Command(hamodel.Slot{}), "gh/ccu/HmIP-RF/0001ABCD/update/set"},
+		{"Availability", l.Availability(hamodel.Slot{}), "gh/ccu/HmIP-RF/0001ABCD/availability"},
+		{"Bridge", l.Bridge(), "gh/bridge/status"},
 	}
 	for _, c := range cases {
 		if c.got != c.want {
 			t.Errorf("%s: got %q, want %q", c.name, c.got, c.want)
 		}
-	}
-	// WireParameterCommandTopic and WireParameterStateTopic must return non-empty strings.
-	if s := ctx.WireParameterCommandTopic("FIRMWARE"); s == "" {
-		t.Error("WireParameterCommandTopic must not be empty")
-	}
-	if s := ctx.WireParameterStateTopic("FIRMWARE"); s == "" {
-		t.Error("WireParameterStateTopic must not be empty")
 	}
 }
 
@@ -2634,9 +2633,11 @@ func TestResolveSwitchDeviceClassUnknownParam(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// BuildUpdateDiscovery — 9.5 % covered.
-// A minimal HADiscoveryComponentBuilder stub lets us exercise the happy path
-// and the nil-Update early-return.
+// BuildUpdateDiscovery — the two gates and the happy path.
+// A minimal HADiscoveryComponentBuilder stub stands in for the firmware
+// source. The plane renders its own payload through the shared model and
+// reads nothing off the stub: UpdateEvent.Update is what marks a device
+// updatable, so its presence is the only thing the builder asks of it.
 // ---------------------------------------------------------------------------
 
 // fakeUpdateBuilder is a minimal HADiscoveryComponentBuilder for testing.
@@ -2657,16 +2658,22 @@ func TestBuildUpdateDiscoveryNilUpdate(t *testing.T) {
 	}
 }
 
-func TestBuildUpdateDiscoveryBuilderReturnsEmpty(t *testing.T) {
+// TestBuildUpdateDiscoveryUnscopedUniqueID covers the plane's second
+// no-entity gate. An address that only becomes unique through the CCU's
+// serial — the internal INT000* pseudo-addresses among them — cannot be
+// published before that serial is known: every CCU would declare the
+// identical unique_id, and Home Assistant keeps whichever retained config
+// arrived first. Skipping is recoverable; colliding is not.
+func TestBuildUpdateDiscoveryUnscopedUniqueID(t *testing.T) {
 	t.Parallel()
 	builder := NewDefaultDiscoveryBuilder(NewTopicBuilder("gh"), "ccu")
-	// Builder returns empty component → DiscoveryItem{OK:false}.
 	item := builder.BuildUpdateDiscovery("ccu", UpdateEvent{
-		DeviceAddress: "0001ABCD",
+		DeviceAddress: "INT0000001",
+		Interface:     "HmIP-RF",
 		Update:        &fakeUpdateBuilder{},
 	})
 	if item.OK {
-		t.Fatal("expected OK=false when builder returns empty component")
+		t.Fatal("expected OK=false when the unique id cannot be scoped to a central")
 	}
 }
 
