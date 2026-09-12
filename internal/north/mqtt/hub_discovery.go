@@ -271,8 +271,7 @@ func (c hubDiscoveryContext) ObjectID(*hamodel.Device, hamodel.Entity) string { 
 //
 // `optimistic`, the two json-attributes keys and the platform Fields are
 // Home Assistant vocabulary rather than model semantics, which is the case
-// [hadiscovery.Builder] exists for. `ungated` is the exception — see
-// [hubEntity.BuildDiscovery].
+// [hadiscovery.Builder] exists for.
 type hubEntity struct {
 	hamodel.Basic
 
@@ -280,7 +279,6 @@ type hubEntity struct {
 	optimistic             *bool
 	jsonAttributesTopic    string
 	jsonAttributesTemplate string
-	ungated                bool
 }
 
 // BuildDiscovery implements [hadiscovery.Builder].
@@ -294,15 +292,6 @@ func (e *hubEntity) BuildDiscovery(_ hadiscovery.Context, comp *hadiscovery.Comp
 	if e.jsonAttributesTopic != "" {
 		comp.JSONAttributesTopic = e.jsonAttributesTopic
 		comp.JSONAttributesTemplate = e.jsonAttributesTemplate
-	}
-	if e.ungated {
-		// The one hub entity that carries NO availability at all — see
-		// [DefaultDiscoveryBuilder.BuildDaemonStatusDiscovery]. The model
-		// cannot express it: [hamodel.Availability.Resolved] answers every
-		// entity with a mode, so an empty level list still projects
-		// `availability_mode: "all"` next to an absent list. Clearing both
-		// here is an escape hatch, not a platform key.
-		comp.Availability, comp.AvailabilityMode = nil, ""
 	}
 	return nil
 }
@@ -1069,6 +1058,12 @@ func (d *DefaultDiscoveryBuilder) BuildDaemonStatusDiscovery(centralName string)
 				DeviceClass: "connectivity",
 				Category:    "diagnostic",
 				Enabled:     hamodel.Ptr(true),
+				// The absence IS the feature — see this builder's doc
+				// comment. [hamodel.NoAvailability] is the model's way to
+				// say it: [hamodel.LevelNone] suppresses the `availability`
+				// list and `availability_mode` together, where an empty
+				// level list would still resolve to the default pair.
+				Availability: hamodel.NoAvailability(),
 			},
 			Binds: hubBinds(hubSlot(dev, centralName, "daemon_status"), true, false),
 		},
@@ -1076,9 +1071,6 @@ func (d *DefaultDiscoveryBuilder) BuildDaemonStatusDiscovery(centralName string)
 			PayloadOn:  "online",
 			PayloadOff: "offline",
 		},
-		// The absence IS the feature — see this builder's doc comment. The
-		// model has no level meaning "none", so it is cleared in the builder.
-		ungated: true,
 	}
 	return d.renderHubItem(dev, entity, d.hubLayout(d.TopicBuilder.BridgeStatus()), uniqueID,
 		hubNodeID(centralName, "system"), "daemon_status")
