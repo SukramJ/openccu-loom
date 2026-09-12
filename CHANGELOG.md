@@ -6,6 +6,43 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **go-hamqtt v0.26.0 -> v0.29.0, and the inbound param decoders move
+  up.** ADR 0070's move-up measurement, step C: the four `Param*`
+  coercions are 137 lines that decode *inbound* service-call bodies and
+  say nothing about any published string, which is what made them the
+  first non-trivial piece of `internal/payload` that is genuinely
+  daemon-agnostic. They now live in `go-hamqtt/payload` and this daemon
+  imports them back.
+
+  `ErrServiceMissingParam` and `ErrServiceInvalidParam` keep their
+  names as aliases of the shared sentinels. They are not just the
+  decoders' return values -- they are this package's error vocabulary,
+  wrapped with their own message at twenty-odd call sites across
+  `internal/model`, and the alias means an `errors.Is` written against
+  either name matches an error produced by either side.
+
+  The asymmetry with `internal/parameter`'s CCU-side `asBool` is
+  documented rather than removed: this decoder's spelling list is exact
+  and excludes "yes"/"no" because the set Home Assistant emits is
+  knowable, while coercing a device value against a parameter
+  descriptor is a different boundary with a different set.
+
+### Fixed
+
+- **A configured discovery QoS of 0 would have become QoS 1, silently.**
+  The bump carries go-hamqtt v0.27.0's `publisher.QoS` type, whose zero
+  value means *unset* and resolves to QoS 1 -- because a retained
+  discovery config lost at most-once is one the daemon may never publish
+  again. This daemon's own `QoS` zero value means QoS 0, an actual
+  guarantee an operator can choose. A cast between the two would have
+  turned a configured most-once into an at-least-once on every publish,
+  with nothing on the wire or in a log saying so. `runtimeQoS` maps the
+  two vocabularies explicitly, and its test asserts the wire byte as
+  well as the constant, plus the negative control that a plain cast
+  really would be wrong.
+
 ### Added
 
 - **Pins under the four planes the runtime adoption will move, before

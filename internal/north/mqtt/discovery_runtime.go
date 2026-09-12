@@ -54,7 +54,7 @@ func discoveryRuntimeConfig(b *Bridge, logger *slog.Logger) hapublisher.Config {
 		// `availability_mode: "all"` a single typo greys out the whole fleet
 		// with nothing on the wire naming the cause.
 		Layout: bridgeStatusLayout{base: b.topics.Base},
-		QoS:    byte(b.cfg.QoS.Discovery),
+		QoS:    runtimeQoS(b.cfg.QoS.Discovery),
 		OnResync: func(replayed int, err error) {
 			if err != nil {
 				logger.Warn("mqtt.birth_sync.republish", slog.String("err", err.Error()))
@@ -163,4 +163,32 @@ func (b *Bridge) LastWill() (Will, error) {
 		return Will{}, err
 	}
 	return Will{Topic: w.Topic, Payload: w.Payload, Retain: w.Retain}, nil
+}
+
+// runtimeQoS translates this daemon's QoS into the shared runtime's.
+//
+// It is not a cast, and the difference is the whole point. In
+// [hapublisher.QoS] the zero value means "unset" and resolves to QoS 1,
+// because a retained discovery config lost at most-once is a config the
+// consumer may never publish again. This daemon's [QoS] zero value means
+// QoS 0 — an actual delivery guarantee an operator can choose. A cast
+// would turn a configured most-once into an at-least-once silently, on
+// every publish, with nothing on the wire or in a log saying so.
+//
+// go-hamqtt v0.27.0 added [hapublisher.QoSAtMostOnce] for exactly this:
+// it sits outside the wire range so "unset" and "deliberately QoS 0"
+// stop being the same value. Anything above QoS 2 cannot be produced by
+// this daemon's own type, so it is mapped to unset and left for the
+// runtime to default rather than being invented here.
+func runtimeQoS(q QoS) hapublisher.QoS {
+	switch q {
+	case QoS0:
+		return hapublisher.QoSAtMostOnce
+	case QoS1:
+		return hapublisher.QoSAtLeastOnce
+	case QoS2:
+		return hapublisher.QoSExactlyOnce
+	default:
+		return hapublisher.QoSUnset
+	}
 }

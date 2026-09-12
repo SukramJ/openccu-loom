@@ -116,3 +116,53 @@ func TestAnnounceOnlineAndTheWillAgree(t *testing.T) {
 // discoveryPrefixForTest is Home Assistant's discovery root, spelled out
 // once so the tests above do not reach for the naming package.
 const discoveryPrefixForTest = "homeassistant/"
+
+// TestRuntimeQoSDistinguishesUnsetFromMostOnce pins the one translation
+// that a cast would get wrong.
+//
+// The two types' zero values mean opposite things: [QoS]'s is QoS 0, an
+// actual guarantee an operator can choose, while [hapublisher.QoS]'s is
+// "unset" and resolves to QoS 1. A cast therefore turns a configured
+// most-once into an at-least-once — on every publish, with nothing on
+// the wire or in a log saying so. go-hamqtt v0.27.0 added
+// QoSAtMostOnce, which sits outside the wire range, so the two stop
+// being the same value.
+func TestRuntimeQoSDistinguishesUnsetFromMostOnce(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		in   QoS
+		want hapublisher.QoS
+		wire byte
+	}{
+		{"most once survives", QoS0, hapublisher.QoSAtMostOnce, 0},
+		{"at least once", QoS1, hapublisher.QoSAtLeastOnce, 1},
+		{"exactly once", QoS2, hapublisher.QoSExactlyOnce, 2},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			got := runtimeQoS(c.in)
+			if got != c.want {
+				t.Fatalf("runtimeQoS(%v) = %v, want %v", c.in, got, c.want)
+			}
+			// And the wire byte, because that is what a broker sees and
+			// what the naming of the constants deliberately hides.
+			wire, ok := got.Wire()
+			if !ok {
+				t.Fatalf("runtimeQoS(%v) produced an unresolvable QoS", c.in)
+			}
+			if wire != c.wire {
+				t.Errorf("wire byte = %d, want %d", wire, c.wire)
+			}
+		})
+	}
+
+	// The negative control: a plain cast is what this function exists to
+	// avoid, so assert it really would be wrong.
+	if cast := hapublisher.QoS(QoS0); cast != hapublisher.QoSUnset {
+		t.Errorf("hapublisher.QoS(QoS0) = %v, want QoSUnset — "+
+			"if this changed, runtimeQoS may no longer be needed", cast)
+	}
+}
