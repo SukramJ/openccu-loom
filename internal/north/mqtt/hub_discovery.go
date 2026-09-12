@@ -384,11 +384,6 @@ func hubBinds(slot hamodel.Slot, reads, writes bool) []hamodel.Binding {
 // bare value, not the `{"value":…}` envelope the datapoint planes publish,
 // so an entity rendered with the envelope's value template would read its
 // state through a filter that never matches and show as unknown forever.
-//
-// [hadiscovery.RenderComponent] drops the `platform` discriminator, which is
-// right for the payload — the per-entity form carries the platform in its
-// topic — but [discoveryItemFor] reads it to name that topic segment, so it
-// is restored on the component and dropped again by the flattener.
 func (d *DefaultDiscoveryBuilder) renderHubItem(
 	dev *hamodel.Device, e *hubEntity, layout hubTopicLayout, uniqueID, nodeID, objectID string,
 ) DiscoveryItem {
@@ -409,7 +404,6 @@ func (d *DefaultDiscoveryBuilder) renderHubItem(
 	if err != nil {
 		return DiscoveryItem{}
 	}
-	comp.Platform = e.Platform()
 	return discoveryItemFor(comp, nodeID, objectID)
 }
 
