@@ -11,6 +11,7 @@ import (
 
 	hacatalog "github.com/SukramJ/go-ha-catalog"
 	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hamodel "github.com/SukramJ/go-hamqtt/model"
 
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -20,8 +21,8 @@ import (
 // Compile-time guarantee that *Lock satisfies the universal Source
 // contract and the HA-Discovery payload builder contract (ADR 0010).
 var (
-	_ payload.Source                      = (*Lock)(nil)
-	_ payload.HADiscoveryComponentBuilder = (*Lock)(nil)
+	_ payload.Source                   = (*Lock)(nil)
+	_ payload.HADiscoveryEntityBuilder = (*Lock)(nil)
 )
 
 // Info returns identity-level fields for a Lock.
@@ -154,88 +155,113 @@ func (l *Lock) invokeLockCommand(ctx context.Context, params map[string]any, pri
 	return fmt.Errorf("%w: %s=%q", payload.ErrServiceInvalidParam, argLockCommand, raw)
 }
 
-// HADiscoveryComponent returns the HA Lock-platform-specific payload
-// skeleton. HA lock platform uses a single command_topic with
-// payload_lock / payload_unlock — not separate lock/unlock topics.
+// HADiscoveryEntity describes the lock on the shared model. HA's lock
+// platform uses a single command_topic with payload_lock / payload_unlock —
+// not separate lock and unlock topics.
 //
-// command_topic is Kind-aware: IP locks write LOCK_TARGET_LEVEL (the
-// ENUM labels [ipTargetLocked] / [ipTargetUnlocked] / [ipTargetOpen])
-// and RF locks write STATE (false/true), both real VALUES parameters
-// reachable by a wire-parameter topic. Button locks have no such
-// parameter — their slot is GLOBAL_BUTTON_LOCK in MASTER — so they use
-// the [serviceLockCommand] service-method topic instead.
-//
-// Per ADR 0010: lock/unlock multiplexing on one HA command_topic
-// → wire-parameter command topic where a real VALUES parameter carries
-// the operation, service-method topic otherwise. State reads from the
-// aggregated topic.
-func (l *Lock) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery.Component {
-	if l == nil || ctx == nil {
-		return hadiscovery.Component{}
+// The command surface is Kind-aware: IP locks write LOCK_TARGET_LEVEL (the
+// ENUM labels [ipTargetLocked] / [ipTargetUnlocked] / [ipTargetOpen]) and RF
+// locks write STATE (false/true), both real VALUES parameters a wire-parameter
+// binding reaches. Button locks have no such parameter — their slot is
+// GLOBAL_BUTTON_LOCK in MASTER — so their command travels on the
+// [serviceLockCommand] method topic instead, which is the write path that
+// reaches put_paramset. State reads from the aggregate.
+func (l *Lock) HADiscoveryEntity() hamodel.Entity {
+	if l == nil {
+		return nil
 	}
-	stateTopic := ctx.CustomDPStateTopic()
-
-	var commandTopic, payloadLock, payloadUnlock string
-	switch l.Kind {
-	case KindRF:
-		// RF locks expose a bool STATE. The advertised payloads render
-		// the same constants [Lock.sendRF] writes, so a command from Home
-		// Assistant and one from the daemon reach the CCU as the same wire
-		// value — see [rfStateLocked].
-		commandTopic = ctx.WireParameterCommandTopic(string(hmenum.ParameterState))
-		payloadLock = strconv.FormatBool(rfStateLocked)
-		payloadUnlock = strconv.FormatBool(rfStateUnlocked)
-	case KindButton:
-		// A button lock's slot is GLOBAL_BUTTON_LOCK in the MASTER
-		// paramset (see [Lock.writeButtonParam]), so no wire-parameter
-		// command topic can carry it: the VALUES setValue such a topic
-		// produces faults, and the parameter it named does not exist on
-		// the channel at all. The command travels through the service
-		// method that reaches the put_paramset write path instead.
-		commandTopic = ctx.ServiceMethodCommandTopic(serviceLockCommand)
-		payloadLock = commandTokenLock
-		payloadUnlock = commandTokenUnlock
-	default: // KindIP
-		// HmIP locks use the LOCK_TARGET_LEVEL ENUM. The advertised
-		// payloads are the same labels [Lock.sendIP] writes, so a
-		// command originating in Home Assistant and one originating in
-		// the daemon reach the CCU in the same form. Labels also make
-		// the payload independent of the VALUE_LIST order, which no
-		// code on this path can see.
-		commandTopic = ctx.WireParameterCommandTopic("LOCK_TARGET_LEVEL")
-		payloadLock = ipTargetLocked
-		payloadUnlock = ipTargetUnlocked
-	}
+	entity := &lockEntity{CustomEntity: payload.CustomEntity{
+		Basic: hamodel.Basic{
+			EntityKey:      l.TopicSlot().Parameter,
+			EntityPlatform: hacatalog.PlatformLock,
+			Description: hamodel.Description{
+				// lock_state is the HA lifecycle string the aggregate emits.
+				ValueTemplate: "{{ value_json.lock_state }}",
+				// optimistic=false — without this HA defaults to true and shows
+				// the lock as locked / unlocked before the CCU echo arrives.
+				// Critical for door locks, where a brief connection drop would
+				// otherwise leave HA showing the wrong state.
+				Optimistic: hamodel.Ptr(false),
+			},
+			Binds: []hamodel.Binding{{
+				Role: hamodel.RoleState, Mode: hamodel.Read,
+				Slot: payload.CustomSlot(l.TopicSlot()),
+			}},
+		},
+	}}
 
 	fields := hadiscovery.LockFields{
-		// HA lock: single command_topic, payload_lock/payload_unlock on it.
-		PayloadLock:   payloadLock,
-		PayloadUnlock: payloadUnlock,
-		// HA lifecycle string tokens — match what StatePayload.lock_state emits.
+		// HA lifecycle string tokens — match what StatePayload.lock_state
+		// emits.
 		StateLocked:    "LOCKED",
 		StateUnlocked:  "UNLOCKED",
 		StateJammed:    "JAMMED",
 		StateUnlocking: "UNLOCKING",
 		StateLocking:   "LOCKING",
 	}
+	switch l.Kind {
+	case KindRF:
+		// RF locks expose a bool STATE. The advertised payloads render the
+		// same constants [Lock.sendRF] writes, so a command from Home
+		// Assistant and one from the daemon reach the CCU as the same wire
+		// value — see [rfStateLocked].
+		entity.Binds = append(entity.Binds, hamodel.Binding{
+			Role: hamodel.RoleCommand, Mode: hamodel.Write,
+			Slot: payload.WireSlot(string(hmenum.ParameterState)),
+		})
+		fields.PayloadLock = strconv.FormatBool(rfStateLocked)
+		fields.PayloadUnlock = strconv.FormatBool(rfStateUnlocked)
+	case KindButton:
+		// A button lock's slot is GLOBAL_BUTTON_LOCK in the MASTER paramset
+		// (see [Lock.writeButtonParam]), so no wire-parameter binding can
+		// carry it: the VALUES setValue such a topic produces faults, and the
+		// parameter it named does not exist on the channel at all.
+		entity.method = serviceLockCommand
+		fields.PayloadLock = commandTokenLock
+		fields.PayloadUnlock = commandTokenUnlock
+	default: // KindIP
+		// HmIP locks use the LOCK_TARGET_LEVEL ENUM. The advertised payloads
+		// are the same labels [Lock.sendIP] writes, so a command originating
+		// in Home Assistant and one originating in the daemon reach the CCU in
+		// the same form. Labels also make the payload independent of the
+		// VALUE_LIST order, which no code on this path can see.
+		entity.Binds = append(entity.Binds, hamodel.Binding{
+			Role: hamodel.RoleCommand, Mode: hamodel.Write,
+			Slot: payload.WireSlot("LOCK_TARGET_LEVEL"),
+		})
+		fields.PayloadLock = ipTargetLocked
+		fields.PayloadUnlock = ipTargetUnlocked
+	}
 	// Door-opener (HmIP-DLD) — only IP locks expose the short-time unlock
-	// action, via LOCK_TARGET_LEVEL. RF/Button locks have no open action.
+	// action, via LOCK_TARGET_LEVEL. RF and button locks have no open action.
 	if l.Capabilities.SupportsOpen && l.Kind == KindIP {
 		fields.PayloadOpen = ipTargetOpen
 	}
-	return hadiscovery.Component{
-		Platform:     hacatalog.PlatformLock,
-		CommandTopic: commandTopic,
-		// State from aggregated topic — lock_state is the HA lifecycle string.
-		StateTopic:    stateTopic,
-		ValueTemplate: "{{ value_json.lock_state }}",
-		// optimistic=false — without this HA defaults to true and
-		// shows the lock as locked / unlocked before the CCU echo
-		// arrives. Critical for door locks where a brief connection
-		// drop would otherwise leave HA showing the wrong state.
-		Optimistic: hadiscovery.Ptr(false),
-		Fields:     fields,
+	entity.Fields = fields
+	return entity
+}
+
+// lockEntity is the lock's platform vocabulary plus the one command shape the
+// model cannot express: a button lock is written through a named action, and
+// the render pipeline only wires a method up on its own for an entity that
+// declares exactly one — a lock declares lock, unlock and open.
+type lockEntity struct {
+	payload.CustomEntity
+
+	// method is the named action the command topic points at, empty for a
+	// lock whose command is a wire-parameter binding.
+	method string
+}
+
+// BuildDiscovery implements [hadiscovery.Builder].
+func (e *lockEntity) BuildDiscovery(ctx hadiscovery.Context, comp *hadiscovery.Component) error {
+	if err := e.CustomEntity.BuildDiscovery(ctx, comp); err != nil {
+		return err
 	}
+	if e.method != "" {
+		comp.CommandTopic = e.MethodTopic(ctx, e.method)
+	}
+	return nil
 }
 
 // kindName maps the internal Kind enum to a wire-stable string label.

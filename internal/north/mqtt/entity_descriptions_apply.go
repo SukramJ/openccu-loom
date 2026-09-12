@@ -6,6 +6,7 @@ package mqtt
 import (
 	hacatalog "github.com/SukramJ/go-ha-catalog"
 	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hamodel "github.com/SukramJ/go-hamqtt/model"
 )
 
 // ApplyEntityDescription overlays
@@ -103,19 +104,79 @@ func setTranslationKey(comp *hadiscovery.Component, key string) {
 	comp.Extra["translation_key"] = key
 }
 
-func applyEntityDescriptionStrict(comp *hadiscovery.Component, component, parameter, model, unit, postfix string) {
-	desc := HARegistryDescriptionLookup(component, parameter, model, unit, postfix, "")
+// applyEntityDescriptionStrict overlays the HA integration's own entity
+// description onto a [hamodel.Description], authoritatively.
+//
+// When a rule matches, every HA-attribute field is set from it and any field
+// the rule leaves empty is cleared. When nothing matches, every one of those
+// fields is cleared: the HA-native integration shows no description-derived
+// attribute for a model it has no rule for, and matching that is the whole
+// point of the strict variant — without it the legacy openccu-loom table keeps
+// emitting `device_class=shutter` for cover models the HA integration never
+// classified.
+//
+// It is the description-shaped twin of [applyEntityDescription], which still
+// works on a rendered [hadiscovery.Component] for the per-parameter plane. The
+// two will collapse into one when that plane moves onto the shared model as
+// well; until then the shared half is the lookup, which is what decides
+// everything either of them writes.
+func applyEntityDescriptionStrict(desc *hamodel.Description, component, parameter, model, unit, postfix string) {
 	if desc == nil {
-		// No rule and no default → HA-native shows no description-
-		// derived attributes. Match it.
-		comp.DeviceClass = ""
-		comp.StateClass = ""
-		comp.EntityCategory = ""
-		comp.Icon = ""
-		setTranslationKey(comp, "")
-		comp.Precision = nil
-		comp.EnabledByDefault = nil
 		return
 	}
-	applyEntityDescription(comp, component, parameter, model, unit, postfix)
+	rule := HARegistryDescriptionLookup(component, parameter, model, unit, postfix, "")
+	if rule == nil {
+		desc.DeviceClass = ""
+		desc.StateClass = ""
+		desc.Category = ""
+		desc.Icon = ""
+		desc.Precision = nil
+		desc.Enabled = nil
+		setModelTranslationKey(desc, "")
+		return
+	}
+	desc.DeviceClass = hamodel.DeviceClass(rule.DeviceClass)
+	desc.StateClass = hacatalog.StateClass(rule.StateClass)
+	desc.Category = hacatalog.EntityCategory(rule.EntityCategory)
+	desc.Icon = rule.Icon
+	setModelTranslationKey(desc, rule.TranslationKey)
+	if rule.UnitOfMeasurement != "" {
+		// `unit_of_measurement` is special: an empty
+		// `native_unit_of_measurement` in the rule means HA falls back to the
+		// data point's own unit, so the builder's value survives.
+		desc.Unit = hamodel.Unit(rule.UnitOfMeasurement)
+	}
+	if rule.SuggestedDisplayPrecision != nil {
+		desc.Precision = hamodel.Ptr(*rule.SuggestedDisplayPrecision)
+	} else {
+		desc.Precision = nil
+	}
+	if rule.EnabledByDefault != nil {
+		desc.Enabled = hamodel.Ptr(*rule.EnabledByDefault)
+	} else {
+		// HA's default for enabled_by_default is true, which the
+		// MQTT-Discovery convention is to omit. Mirror that.
+		desc.Enabled = nil
+	}
+	if len(rule.Options) > 0 {
+		desc.Options = &hamodel.Enum{Codes: append([]string(nil), rule.Options...)}
+	}
+}
+
+// setModelTranslationKey writes or clears the cross-stack parity marker on a
+// description.
+//
+// It lives in Extra for the same reason its component-shaped twin does: Home
+// Assistant declares `translation_key` on no platform and drops it on receipt;
+// the daemon publishes it anyway so the parity tooling can compare against the
+// Python integration. See discoveryKeysHomeAssistantIgnores.
+func setModelTranslationKey(desc *hamodel.Description, key string) {
+	if key == "" {
+		delete(desc.Extra, "translation_key")
+		return
+	}
+	if desc.Extra == nil {
+		desc.Extra = map[string]any{}
+	}
+	desc.Extra["translation_key"] = key
 }

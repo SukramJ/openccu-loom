@@ -14,6 +14,7 @@ import (
 
 	hacatalog "github.com/SukramJ/go-ha-catalog"
 	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hamodel "github.com/SukramJ/go-hamqtt/model"
 
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -33,20 +34,20 @@ import (
 //	DRGDaliLight → *ColorTempLight → *Light → *generic.Float
 //	RGBWLight → *ColorLight → *Light → *generic.Float
 var (
-	_ payload.Source                      = (*Light)(nil)
-	_ payload.Source                      = (*ColorLight)(nil)
-	_ payload.Source                      = (*ColorTempLight)(nil)
-	_ payload.Source                      = (*FixedColorLight)(nil)
-	_ payload.Source                      = (*EffectLight)(nil)
-	_ payload.Source                      = (*DRGDaliLight)(nil)
-	_ payload.Source                      = (*RGBWLight)(nil)
-	_ payload.HADiscoveryComponentBuilder = (*Light)(nil)
-	_ payload.HADiscoveryComponentBuilder = (*ColorLight)(nil)
-	_ payload.HADiscoveryComponentBuilder = (*ColorTempLight)(nil)
-	_ payload.HADiscoveryComponentBuilder = (*FixedColorLight)(nil)
-	_ payload.HADiscoveryComponentBuilder = (*EffectLight)(nil)
-	_ payload.HADiscoveryComponentBuilder = (*DRGDaliLight)(nil)
-	_ payload.HADiscoveryComponentBuilder = (*RGBWLight)(nil)
+	_ payload.Source                   = (*Light)(nil)
+	_ payload.Source                   = (*ColorLight)(nil)
+	_ payload.Source                   = (*ColorTempLight)(nil)
+	_ payload.Source                   = (*FixedColorLight)(nil)
+	_ payload.Source                   = (*EffectLight)(nil)
+	_ payload.Source                   = (*DRGDaliLight)(nil)
+	_ payload.Source                   = (*RGBWLight)(nil)
+	_ payload.HADiscoveryEntityBuilder = (*Light)(nil)
+	_ payload.HADiscoveryEntityBuilder = (*ColorLight)(nil)
+	_ payload.HADiscoveryEntityBuilder = (*ColorTempLight)(nil)
+	_ payload.HADiscoveryEntityBuilder = (*FixedColorLight)(nil)
+	_ payload.HADiscoveryEntityBuilder = (*EffectLight)(nil)
+	_ payload.HADiscoveryEntityBuilder = (*DRGDaliLight)(nil)
+	_ payload.HADiscoveryEntityBuilder = (*RGBWLight)(nil)
 )
 
 // --- Light ---
@@ -793,54 +794,88 @@ func (r *RGBWLight) registerRGBWLightServices() {
 // effect, color_mode. StatePayload emits this shape directly — no
 // templates are needed since HA parses the JSON natively.
 
-// haBaseBody builds the common JSON-Schema discovery fields shared by
-// every light type. Callers extend the returned map before returning.
+// lightEntity is a light on the shared model plus the two things the model
+// does not carry: HA's light platform vocabulary, and a command topic that is
+// a named action rather than a writable datapoint.
 //
-// `schema: "json"` switches HA's MQTT light platform into the parser
-// at `homeassistant/components/mqtt/light/schema_json.py`, which reads
-// the state-topic JSON object directly — no `state_value_template` is
-// supported in this mode (the JSON keys `state`, `brightness`, `color`,
+// `set_level` is the only write Home Assistant needs — in JSON-schema mode one
+// command topic carries state, brightness, colour and effect together — but a
+// light declares several methods, so the render pipeline cannot pick it on its
+// own.
+type lightEntity struct {
+	payload.CustomEntity
+}
+
+// BuildDiscovery implements [hadiscovery.Builder].
+func (e *lightEntity) BuildDiscovery(ctx hadiscovery.Context, comp *hadiscovery.Component) error {
+	if err := e.CustomEntity.BuildDiscovery(ctx, comp); err != nil {
+		return err
+	}
+	comp.CommandTopic = e.MethodTopic(ctx, "set_level")
+	return nil
+}
+
+// fields returns the light's platform vocabulary. The assertion cannot fail:
+// [newLightEntity] is the only thing that sets Fields on a light, and it
+// always sets a [hadiscovery.LightJSONFields].
+func (e *lightEntity) fields() hadiscovery.LightJSONFields {
+	f, _ := e.Fields.(hadiscovery.LightJSONFields)
+	return f
+}
+
+// newLightEntity builds the shared shell every light type starts from.
+//
+// `schema: "json"` switches HA's MQTT light platform into the parser at
+// homeassistant/components/mqtt/light/schema_json.py, which reads the state
+// topic's JSON object directly — no `state_value_template` is supported in
+// this mode (the JSON keys `state`, `brightness`, `color`,
 // `color_temp`/`color_temp_kelvin`, `effect`, `color_mode` are parsed
-// natively). StatePayload emits exactly that shape.
-func haBaseComponent(stateTopic, cmdTopic string) hadiscovery.Component {
-	return hadiscovery.Component{
-		Platform:     hacatalog.PlatformLight,
-		StateTopic:   stateTopic,
-		CommandTopic: cmdTopic,
-		Optimistic:   hadiscovery.Ptr(false),
+// natively). StatePayload emits exactly that shape, which is why the
+// description declares no value template.
+func newLightEntity(slot payload.TopicSlot) *lightEntity {
+	return &lightEntity{CustomEntity: payload.CustomEntity{
+		Basic: hamodel.Basic{
+			EntityKey:      slot.Parameter,
+			EntityPlatform: hacatalog.PlatformLight,
+			Description: hamodel.Description{
+				Optimistic: hamodel.Ptr(false),
+			},
+			Binds: []hamodel.Binding{{
+				Role: hamodel.RoleState, Mode: hamodel.Read,
+				Slot: payload.CustomSlot(slot),
+			}},
+		},
 		Fields: hadiscovery.LightJSONFields{
 			Schema: "json",
 			Flash:  hadiscovery.Ptr(false),
 		},
-	}
+	}}
 }
 
-// lightFields is the type assertion every light builder needs to extend the
-// component its embedded type produced. It cannot fail: haBaseComponent is the
-// only thing that sets Fields on a light, and it always sets LightJSONFields.
-func lightFields(comp hadiscovery.Component) hadiscovery.LightJSONFields {
-	fields, _ := comp.Fields.(hadiscovery.LightJSONFields)
-	return fields
+// baseLightEntity is what a light subtype extends: the entity its embedded
+// *Light produced, or a fresh shell when that pointer is nil.
+//
+// The fallback is not defensive decoration. The predecessor recovered from an
+// empty base by starting from an empty body and still emitting its own keys,
+// and a zero-valued subtype has to behave as it always did.
+func baseLightEntity(base hamodel.Entity) *lightEntity {
+	if e, ok := base.(*lightEntity); ok {
+		return e
+	}
+	return newLightEntity(payload.TopicSlot{})
 }
 
-// HADiscoveryComponent returns the HA Light-platform-specific payload
-// skeleton for a plain dimmable or on/off Light.
+// HADiscoveryEntity describes a plain dimmable or on/off Light on the shared
+// model.
 //
-// JSON-Schema mode: single command_topic carries JSON objects with
-// "state", "brightness" fields. State topic emits StatePayload JSON
-// directly in HA's expected shape (state, brightness, color_mode).
-//
-// Supported_color_modes follows
-// logic: "brightness" for dimmable, "onoff" for non-dimmable.
-func (l *Light) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery.Component {
-	if l == nil || ctx == nil {
-		return hadiscovery.Component{}
+// supported_color_modes follows the reference logic: "brightness" for a
+// dimmable light, "onoff" otherwise.
+func (l *Light) HADiscoveryEntity() hamodel.Entity {
+	if l == nil {
+		return nil
 	}
-	stateTopic := ctx.CustomDPStateTopic()
-	cmdTopic := ctx.ServiceMethodCommandTopic("set_level")
-	comp := haBaseComponent(stateTopic, cmdTopic)
-	fields := lightFields(comp)
-
+	entity := newLightEntity(l.TopicSlot())
+	fields := entity.fields()
 	if l.Capabilities.Dimmable {
 		fields.SupportedColorModes = []string{"brightness"}
 		fields.Brightness = hadiscovery.Ptr(true)
@@ -853,77 +888,58 @@ func (l *Light) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery
 	} else {
 		fields.SupportedColorModes = []string{"onoff"}
 	}
-	comp.Fields = fields
-	return comp
+	entity.Fields = fields
+	return entity
 }
 
-// HADiscoveryComponent returns the HA Light payload for a ColorLight —
-// extends Light with HS colour.
+// HADiscoveryEntity describes a ColorLight — the light plus HS colour.
 //
-// In JSON-Schema mode HA expects the command topic to receive a JSON
-// object with "color": {"h": H, "s": S}. The single command_topic
-// handles all light operations (on/off, brightness, color).
-// supported_color_modes: ["hs"].
-func (l *ColorLight) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery.Component {
-	if l == nil || ctx == nil {
-		return hadiscovery.Component{}
+// In JSON-Schema mode HA expects the command topic to receive a JSON object
+// with "color": {"h": H, "s": S}; the single command topic handles every light
+// operation.
+func (l *ColorLight) HADiscoveryEntity() hamodel.Entity {
+	if l == nil {
+		return nil
 	}
-	comp := l.Light.HADiscoveryComponent(ctx)
-	if comp.Platform == "" {
-		// The untyped builder recovered from an empty base by starting from
-		// an empty body and still emitting its own keys; keep that, so a
-		// zero-valued light behaves as it always did.
-		comp.Platform = hacatalog.PlatformLight
-	}
+	entity := baseLightEntity(l.Light.HADiscoveryEntity())
 	if !l.SupportsColor() {
-		// No HUE / SATURATION pair and no COLOR integer: declaring the
-		// hs mode would render a colour wheel whose every command is
-		// refused, and the state payload would never carry a colour.
-		return comp
+		// No HUE / SATURATION pair and no COLOR integer: declaring the hs mode
+		// would render a colour wheel whose every command is refused, and the
+		// state payload would never carry a colour.
+		return entity
 	}
-	// Override supported_color_modes to "hs" — ColorLight adds HSV.
-	//
-	// That single key is the whole declaration. This used to also set a
+	// supported_color_modes is the whole declaration. This used to also set a
 	// bare `hs: true`, which Home Assistant's json light schema does not
-	// declare at all and therefore dropped on receipt; the picker was
-	// always driven by supported_color_modes alone.
-	fields := lightFields(comp)
+	// declare at all and therefore dropped on receipt; the picker was always
+	// driven by supported_color_modes alone.
+	fields := entity.fields()
 	fields.SupportedColorModes = []string{"hs"}
-	comp.Fields = fields
-	return comp
+	entity.Fields = fields
+	return entity
 }
 
-// HADiscoveryComponent returns the HA Light payload for a ColorTempLight —
-// extends Light with colour temperature.
+// HADiscoveryEntity describes a ColorTempLight — the light plus colour
+// temperature.
 //
-// supported_color_modes: ["color_temp"].
-// min_kelvin / max_kelvin carry the hardware limits.
-// min_mireds / max_mireds are derived from kelvin limits:
+// min_kelvin / max_kelvin carry the hardware limits. min_mireds / max_mireds
+// are derived from them (HA uses integer mireds):
 //
-//	min_mireds = 1_000_000 / MaxKelvin  (HA uses integer mireds)
+//	min_mireds = 1_000_000 / MaxKelvin
 //	max_mireds = 1_000_000 / MinKelvin
 //
-// Fallback to Python constants _MIN_MIREDS=153 / _MAX_MIREDS=500
-// when kelvin limits are zero / unknown.
-func (l *ColorTempLight) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery.Component {
-	if l == nil || ctx == nil {
-		return hadiscovery.Component{}
+// falling back to the reference constants _MIN_MIREDS=153 / _MAX_MIREDS=500
+// when a kelvin limit is zero or unknown.
+func (l *ColorTempLight) HADiscoveryEntity() hamodel.Entity {
+	if l == nil {
+		return nil
 	}
-	comp := l.Light.HADiscoveryComponent(ctx)
-	if comp.Platform == "" {
-		// The untyped builder recovered from an empty base by starting from
-		// an empty body and still emitting its own keys; keep that, so a
-		// zero-valued light behaves as it always did.
-		comp.Platform = hacatalog.PlatformLight
-	}
-	fields := lightFields(comp)
+	entity := baseLightEntity(l.Light.HADiscoveryEntity())
+	fields := entity.fields()
 	fields.SupportedColorModes = []string{"color_temp"}
 	fields.ColorTempKelvin = hadiscovery.Ptr(true)
 	fields.MinKelvin = hadiscovery.Ptr(int(l.MinKelvin))
 	fields.MaxKelvin = hadiscovery.Ptr(int(l.MaxKelvin))
 
-	// Derive mireds from kelvin hardware limits.
-	// Python fallbacks: _MIN_MIREDS=153, _MAX_MIREDS=500 (light.py:26-27).
 	const (
 		pythonMinMireds = 153
 		pythonMaxMireds = 500
@@ -938,108 +954,77 @@ func (l *ColorTempLight) HADiscoveryComponent(ctx payload.HADiscoveryContext) ha
 	}
 	fields.MinMireds = hadiscovery.Ptr(minMireds)
 	fields.MaxMireds = hadiscovery.Ptr(maxMireds)
-	comp.Fields = fields
-	return comp
+	entity.Fields = fields
+	return entity
 }
 
-// HADiscoveryComponent returns the HA Light payload for a FixedColorLight —
-// extends Light with the discrete colour slot projected onto HA's
-// `hs` color mode. HA renders a colour picker; the daemon snaps the
-// chosen hue/saturation onto the nearest discrete slot (set_color
-// service) on the way down via [HSToFixedColor].
-//
-// supported_color_modes: ["hs"]. hs:true enables the picker in
-// JSON-Schema mode.
-func (l *FixedColorLight) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery.Component {
-	if l == nil || ctx == nil {
-		return hadiscovery.Component{}
+// HADiscoveryEntity describes a FixedColorLight — the light plus the discrete
+// colour slot projected onto HA's `hs` colour mode. HA renders a colour
+// picker; the daemon snaps the chosen hue and saturation onto the nearest
+// discrete slot (the set_color method) on the way down via [HSToFixedColor].
+func (l *FixedColorLight) HADiscoveryEntity() hamodel.Entity {
+	if l == nil {
+		return nil
 	}
-	comp := l.Light.HADiscoveryComponent(ctx)
-	if comp.Platform == "" {
-		// The untyped builder recovered from an empty base by starting from
-		// an empty body and still emitting its own keys; keep that, so a
-		// zero-valued light behaves as it always did.
-		comp.Platform = hacatalog.PlatformLight
-	}
-	fields := lightFields(comp)
+	entity := baseLightEntity(l.Light.HADiscoveryEntity())
+	fields := entity.fields()
 	fields.SupportedColorModes = []string{"hs"}
-	comp.Fields = fields
-	return comp
+	entity.Fields = fields
+	return entity
 }
 
-// HADiscoveryComponent returns the HA Light payload for an EffectLight —
-// extends ColorLight with effect selection.
-//
-// supported_color_modes: ["hs"] (inherited from ColorLight).
-// effect: true enables the HA effect picker.
-func (l *EffectLight) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery.Component {
-	if l == nil || ctx == nil {
-		return hadiscovery.Component{}
+// HADiscoveryEntity describes an EffectLight — the colour light plus effect
+// selection. supported_color_modes stays ColorLight's.
+func (l *EffectLight) HADiscoveryEntity() hamodel.Entity {
+	if l == nil {
+		return nil
 	}
-	comp := l.ColorLight.HADiscoveryComponent(ctx)
-	if comp.Platform == "" {
-		// The untyped builder recovered from an empty base by starting from
-		// an empty body and still emitting its own keys; keep that, so a
-		// zero-valued light behaves as it always did.
-		comp.Platform = hacatalog.PlatformLight
-	}
+	entity := baseLightEntity(l.ColorLight.HADiscoveryEntity())
 	effects := l.Effects()
 	if len(effects) == 0 {
-		// No vocabulary, no picker. A substituted list is worse than
-		// none: Home Assistant renders the dropdown, and every entry it
-		// offers is refused on the way back because no lookup resolves
-		// it.
-		return comp
+		// No vocabulary, no picker. A substituted list is worse than none:
+		// Home Assistant renders the dropdown, and every entry it offers is
+		// refused on the way back because no lookup resolves it.
+		return entity
 	}
-	fields := lightFields(comp)
+	fields := entity.fields()
 	fields.Effect = hadiscovery.Ptr(true)
 	fields.EffectList = effects
-	comp.Fields = fields
-	return comp
+	entity.Fields = fields
+	return entity
 }
 
-// HADiscoveryComponent returns the HA Light payload for a DRGDaliLight —
-// extends ColorTempLight. DALI does not carry RGB so HS is absent.
-//
-// supported_color_modes: ["color_temp"] (inherited from ColorTempLight).
-func (l *DRGDaliLight) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery.Component {
-	if l == nil || ctx == nil {
-		return hadiscovery.Component{}
+// HADiscoveryEntity describes a DRGDaliLight, which is a ColorTempLight and
+// carries no RGB, so HS is absent.
+func (l *DRGDaliLight) HADiscoveryEntity() hamodel.Entity {
+	if l == nil {
+		return nil
 	}
-	// DRGDaliLight composes ColorTempLight which already includes colour-temp fields.
-	return l.ColorTempLight.HADiscoveryComponent(ctx)
+	return l.ColorTempLight.HADiscoveryEntity()
 }
 
-// HADiscoveryComponent returns the HA Light payload for an RGBWLight —
-// extends ColorLight with colour temperature and optional effects.
+// HADiscoveryEntity describes an RGBWLight — the colour light plus colour
+// temperature and optional effects.
 //
-// supported_color_modes follows the operating mode (HA colour modes are
-// mutually exclusive):
+// supported_color_modes follows the operating mode, because HA colour modes
+// are mutually exclusive:
 //   - RGB / RGBW mode → ["hs"]
 //   - TunableWhite    → ["color_temp"]
 //   - PWM             → ["brightness"]
 //   - unknown         → defaults to RGBW (["hs"]) via effectiveMode
-//
-// When HasColorTempColorMode() is true (TUNABLE_WHITE), color_temp_kelvin is
-// added. When HasEffects() is true, effect + effect_list are added.
-func (r *RGBWLight) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery.Component {
-	if r == nil || ctx == nil {
-		return hadiscovery.Component{}
+func (r *RGBWLight) HADiscoveryEntity() hamodel.Entity {
+	if r == nil {
+		return nil
 	}
-	comp := r.ColorLight.HADiscoveryComponent(ctx)
-	if comp.Platform == "" {
-		// The untyped builder recovered from an empty base by starting from
-		// an empty body and still emitting its own keys; keep that, so a
-		// zero-valued light behaves as it always did.
-		comp.Platform = hacatalog.PlatformLight
-	}
-	fields := lightFields(comp)
+	entity := baseLightEntity(r.ColorLight.HADiscoveryEntity())
+	fields := entity.fields()
 
 	if r.colorTempCombined {
 		// HmIP-LSC: RGBW hardware without DEVICE_OPERATION_MODE advertises hs
 		// AND colour temperature at once; HA picks the active one via
 		// color_mode. Mirrors the reference CustomDpIpRGBWColorTempLight
-		// (_compute_capabilities sets hs_color and color_temperature both true).
+		// (_compute_capabilities sets hs_color and color_temperature both
+		// true).
 		fields.SupportedColorModes = []string{"color_temp", "hs"}
 		fields.ColorTempKelvin = hadiscovery.Ptr(true)
 		fields.MinKelvin = hadiscovery.Ptr(int(r.MinKelvin))
@@ -1048,14 +1033,10 @@ func (r *RGBWLight) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadisco
 			fields.Effect = hadiscovery.Ptr(true)
 			fields.EffectList = effects
 		}
-		comp.Fields = fields
-		return comp
+		entity.Fields = fields
+		return entity
 	}
 
-	// Compute supported_color_modes from the current operating mode. HA colour
-	// modes are mutually exclusive, so RGBW advertises hs only (its KELVIN wire
-	// field is still writable, but not as an HA colour mode). Unknown defaults
-	// to RGBW via effectiveMode, mirroring the reference fallback.
 	switch r.effectiveMode() {
 	case RGBWModeRGBW, RGBWModeRGB:
 		fields.SupportedColorModes = []string{"hs"}
@@ -1075,8 +1056,8 @@ func (r *RGBWLight) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadisco
 		fields.Effect = hadiscovery.Ptr(true)
 		fields.EffectList = effects
 	}
-	comp.Fields = fields
-	return comp
+	entity.Fields = fields
+	return entity
 }
 
 // rgbwModeName returns a wire-stable string label for the operating mode.

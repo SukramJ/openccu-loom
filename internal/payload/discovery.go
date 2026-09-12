@@ -5,36 +5,21 @@ package payload
 
 import hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
 
-// HADiscoveryComponentBuilder is the optional [Source] extension that
-// custom-DP types implement when they want to drive Home Assistant's
-// MQTT auto-discovery. The bridge attaches the platform-agnostic
-// availability / device / origin block; the builder fills in the
-// platform-specific fields (state-topic templates, mode lists,
-// command-topic references, …).
+// HADiscoveryComponentBuilder is the predecessor of
+// [HADiscoveryEntityBuilder]: a source assembles the whole
+// [hadiscovery.Component] itself and the bridge stamps the frame — `name`,
+// `unique_id`, `availability`, `device`, `origin` — onto it afterwards.
 //
-// The returned component is the HA-Discovery payload skeleton. The bridge
-// overlays the shared base fields (`name`, `unique_id`, `availability`,
-// `device`, `origin`). Builders SHOULD NOT populate those.
-//
-// A type that does not implement this interface falls through to the
-// per-parameter classifyComponent path in
-// [internal/north/mqtt/discovery.go] — same as today's
-// `ev.Source == nil` fallback.
+// The channel-aggregate plane no longer uses it. What remains is the
+// device-level firmware updater, whose own plane renders through the shared
+// model and keeps this only as the marker that a device has a firmware
+// surface at all (see [internal/north/mqtt.UpdateEvent]). It goes when that
+// last implementation does.
 //
 // The keys are typed because Home Assistant's discovery schema is
 // extra=REMOVE_EXTRA: a key a platform does not declare is dropped on receipt
 // with no error on the wire and no line in any log, so a misspelled string key
-// costs a feature and leaves nothing to debug. The generated per-platform
-// Fields structs in go-hamqtt carry exactly the keys each platform accepts, so
-// the same mistake stops compiling.
-//
-// The component names its own platform — [hadiscovery.Component] has a
-// Platform field — so this returns one value where the untyped predecessor
-// returned a (component, body) pair.
-//
-// ADR 0010 introduces the contract; ADR 0009 introduces the
-// service-method command topics that builders reference; ADR 0070 step 7
-// typed it.
+// costs a feature and leaves nothing to debug.
 type HADiscoveryComponentBuilder interface {
 	HADiscoveryComponent(ctx HADiscoveryContext) hadiscovery.Component
 }

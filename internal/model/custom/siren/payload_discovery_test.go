@@ -4,41 +4,53 @@
 package siren
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 )
 
-// discoveryCtx is a minimal stub for payload.HADiscoveryContext used in
-// payload-builder smoke tests.
+// discoveryCtx is a minimal stub for [payload.HADiscoveryTopics] used in
+// entity-builder smoke tests. It returns stable, testable topic strings.
 type discoveryCtx struct{}
 
-func (discoveryCtx) CustomDPStateTopic() string { return "test/custom/state" }
-func (discoveryCtx) ServiceMethodCommandTopic(method string) string {
-	return "test/svc/" + method + "/set"
+func (discoveryCtx) CustomDPStateTopic() string   { return "test/custom/state" }
+func (discoveryCtx) CustomDPCommandTopic() string { return "test/custom/state/set" }
+
+// ServiceMethodCommandTopic is what the render context builds on its own out
+// of [discoveryCtx.CustomDPCommandTopic]; it is spelled here so an assertion
+// can name a method topic without repeating the join.
+func (c discoveryCtx) ServiceMethodCommandTopic(method string) string {
+	return c.CustomDPCommandTopic() + "/" + method
 }
 
-func (discoveryCtx) WireParameterCommandTopic(parameter string) string {
-	return "test/" + parameter + "/set"
+func (discoveryCtx) WireParameterCommandTopic(channelAddress, parameter string) string {
+	if channelAddress == "" {
+		return "test/" + parameter + "/set"
+	}
+	return "test/" + channelAddress + "/" + parameter + "/set"
 }
 
-func (discoveryCtx) WireParameterStateTopic(parameter string) string {
-	return "test/" + parameter
+func (discoveryCtx) WireParameterStateTopic(channelAddress, parameter string) string {
+	if channelAddress == "" {
+		return "test/" + parameter
+	}
+	return "test/" + channelAddress + "/" + parameter
 }
 
-func (discoveryCtx) WireParameterStateTopicOn(_, parameter string) string {
-	return discoveryCtx{}.WireParameterStateTopic(parameter)
-}
+func (discoveryCtx) DeviceAvailabilityTopic() string { return "test/availability" }
+func (discoveryCtx) BridgeStatusTopic() string       { return "test/bridge/status" }
 
-var _ payload.HADiscoveryContext = discoveryCtx{}
+// compile-time check: discoveryCtx satisfies payload.HADiscoveryTopics.
+var _ payload.HADiscoveryTopics = discoveryCtx{}
 
 // --- Siren ---
 
 func TestSirenHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
 	t.Parallel()
 	var s *Siren
-	comp, body := haBody(t, s.HADiscoveryComponent(discoveryCtx{}))
+	comp, body := haEntity(t, s.HADiscoveryEntity(), discoveryCtx{})
 	if comp != "" || body != nil {
 		t.Fatalf("nil receiver: want (\"\", nil), got (%q, %v)", comp, body)
 	}
@@ -51,7 +63,7 @@ func TestSirenHADiscoveryPayload_Component(t *testing.T) {
 		SupportsOptical:  true,
 		SupportsDuration: true,
 	})
-	comp, body := haBody(t, r.siren.HADiscoveryComponent(discoveryCtx{}))
+	comp, body := haEntity(t, r.siren.HADiscoveryEntity(), discoveryCtx{})
 	if comp != "siren" {
 		t.Fatalf("component = %q, want %q", comp, "siren")
 	}
@@ -66,7 +78,7 @@ func TestSirenHADiscoveryPayload_RequiredKeys(t *testing.T) {
 		SupportsAcoustic: true,
 	})
 	ctx := discoveryCtx{}
-	_, body := haBody(t, r.siren.HADiscoveryComponent(ctx))
+	_, body := haEntity(t, r.siren.HADiscoveryEntity(), ctx)
 
 	for _, key := range []string{
 		"state_topic",
@@ -104,14 +116,14 @@ func TestSirenSupportVolumeSetReadsCapability(t *testing.T) {
 
 	// With SupportsVolumeSet=false: must be false.
 	r := newRig(t, "HmIP-ASIR:3", &stubWriter{}, custom.SirenCapabilities{SupportsAcoustic: true, SupportsVolumeSet: false})
-	_, body := haBody(t, r.siren.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, r.siren.HADiscoveryEntity(), discoveryCtx{})
 	if v, _ := body["support_volume_set"].(bool); v {
 		t.Error("support_volume_set: got true, want false when SupportsVolumeSet=false")
 	}
 
 	// With SupportsVolumeSet=true: must be true.
 	r2 := newRig(t, "HmIP-ASIR:3", &stubWriter{}, custom.SirenCapabilities{SupportsAcoustic: true, SupportsVolumeSet: true})
-	_, body2 := haBody(t, r2.siren.HADiscoveryComponent(discoveryCtx{}))
+	_, body2 := haEntity(t, r2.siren.HADiscoveryEntity(), discoveryCtx{})
 	if v, _ := body2["support_volume_set"].(bool); !v {
 		t.Error("support_volume_set: got false, want true when SupportsVolumeSet=true")
 	}
@@ -122,7 +134,7 @@ func TestSirenSupportVolumeSetReadsCapability(t *testing.T) {
 func TestSmokeSirenHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
 	t.Parallel()
 	var s *SmokeSiren
-	comp, body := haBody(t, s.HADiscoveryComponent(discoveryCtx{}))
+	comp, body := haEntity(t, s.HADiscoveryEntity(), discoveryCtx{})
 	if comp != "" || body != nil {
 		t.Fatalf("nil receiver: want (\"\", nil), got (%q, %v)", comp, body)
 	}
@@ -140,7 +152,7 @@ func TestSmokeSirenHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
 func TestSmokeSirenHADiscoveryPayload_Component(t *testing.T) {
 	t.Parallel()
 	s := NewSmokeSiren(SmokeSirenConfig{})
-	comp, body := haBody(t, s.HADiscoveryComponent(discoveryCtx{}))
+	comp, body := haEntity(t, s.HADiscoveryEntity(), discoveryCtx{})
 	if comp != "siren" {
 		t.Fatalf("component = %q, want %q", comp, "siren")
 	}
@@ -153,7 +165,7 @@ func TestSmokeSirenHADiscoveryPayload_RequiredKeys(t *testing.T) {
 	t.Parallel()
 	s := NewSmokeSiren(SmokeSirenConfig{})
 	ctx := discoveryCtx{}
-	_, body := haBody(t, s.HADiscoveryComponent(ctx))
+	_, body := haEntity(t, s.HADiscoveryEntity(), ctx)
 
 	// state_topic uses the aggregated topic; StatePayload emits only
 	// {state}, satisfying HA's strict SIREN_PLATFORM_PAYLOAD_SCHEMA.
@@ -161,7 +173,7 @@ func TestSmokeSirenHADiscoveryPayload_RequiredKeys(t *testing.T) {
 	if v, _ := body["state_topic"].(string); v != wantState {
 		t.Errorf("state_topic = %q, want %q", v, wantState)
 	}
-	wantCmd := ctx.WireParameterCommandTopic("SMOKE_DETECTOR_COMMAND")
+	wantCmd := ctx.WireParameterCommandTopic("", "SMOKE_DETECTOR_COMMAND")
 	if v, _ := body["command_topic"].(string); v != wantCmd {
 		t.Errorf("command_topic = %q, want %q (must point at the wire param the daemon writes for turn_on/turn_off)", v, wantCmd)
 	}
@@ -180,20 +192,27 @@ func TestSmokeSirenHADiscoveryPayload_RequiredKeys(t *testing.T) {
 func TestSoundPlayerHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
 	t.Parallel()
 	var sp *SoundPlayer
-	comp, body := haBody(t, sp.HADiscoveryComponent(discoveryCtx{}))
+	comp, body := haEntity(t, sp.HADiscoveryEntity(), discoveryCtx{})
 	if comp != "" || body != nil {
 		t.Fatalf("nil receiver: want (\"\", nil), got (%q, %v)", comp, body)
 	}
 }
 
-// TestSoundPlayerHADiscoveryPayload_NilContextReturnsNil pins the nil
-// context guard on SoundPlayer.HADiscoveryPayload.
-func TestSoundPlayerHADiscoveryPayload_NilContextReturnsNil(t *testing.T) {
+// TestSoundPlayerHADiscoveryPayload_WithoutTopicsStillDescribes pins what a missing transport does to
+// an entity: nothing. The entity is its description and its bindings, and it
+// is complete before any topic is resolved — a renderer with no layout simply
+// produces no topic strings.
+func TestSoundPlayerHADiscoveryPayload_WithoutTopicsStillDescribes(t *testing.T) {
 	t.Parallel()
 	sp := NewSoundPlayer(SoundPlayerConfig{})
-	comp, body := haBody(t, sp.HADiscoveryComponent(nil))
-	if comp != "" || body != nil {
-		t.Fatalf("nil ctx: want (\"\", nil), got (%q, %v)", comp, body)
+	comp, body := haEntity(t, sp.HADiscoveryEntity(), nil)
+	if comp != "siren" {
+		t.Fatalf("component = %q, want siren", comp)
+	}
+	for key := range body {
+		if strings.HasSuffix(key, "_topic") {
+			t.Errorf("%s present with no topic layout: %v", key, body[key])
+		}
 	}
 }
 
@@ -204,7 +223,7 @@ func TestSoundPlayerHADiscoveryPayload_NilContextReturnsNil(t *testing.T) {
 func TestSoundPlayerHADiscoveryPayload_Component(t *testing.T) {
 	t.Parallel()
 	sp := NewSoundPlayer(SoundPlayerConfig{})
-	comp, body := haBody(t, sp.HADiscoveryComponent(discoveryCtx{}))
+	comp, body := haEntity(t, sp.HADiscoveryEntity(), discoveryCtx{})
 	if comp != "siren" {
 		t.Fatalf("component = %q, want %q", comp, "siren")
 	}
@@ -221,7 +240,7 @@ func TestSoundPlayerHADiscoveryPayload_RequiredKeys(t *testing.T) {
 	t.Parallel()
 	sp := NewSoundPlayer(SoundPlayerConfig{})
 	ctx := discoveryCtx{}
-	_, body := haBody(t, sp.HADiscoveryComponent(ctx))
+	_, body := haEntity(t, sp.HADiscoveryEntity(), ctx)
 
 	for _, key := range []string{
 		"state_topic",
@@ -256,7 +275,7 @@ func TestSoundPlayerHADiscoveryPayload_RequiredKeys(t *testing.T) {
 func TestSoundPlayerHADiscoveryPayload_AvailableTonesAbsentWhenNone(t *testing.T) {
 	t.Parallel()
 	sp := NewSoundPlayer(SoundPlayerConfig{}) // no channel → no soundfiles
-	_, body := haBody(t, sp.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, sp.HADiscoveryEntity(), discoveryCtx{})
 	if _, ok := body["available_tones"]; ok {
 		t.Error("available_tones must be absent when no soundfiles configured")
 	}

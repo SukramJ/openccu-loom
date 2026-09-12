@@ -9,6 +9,7 @@ import (
 
 	hacatalog "github.com/SukramJ/go-ha-catalog"
 	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hamodel "github.com/SukramJ/go-hamqtt/model"
 
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -23,10 +24,10 @@ import (
 // inherits from its embedded *generic.Float (which promotes set_value).
 // Both types register additional service methods below.
 var (
-	_ payload.Source                      = (*Irrigation)(nil)
-	_ payload.Source                      = (*Modulating)(nil)
-	_ payload.HADiscoveryComponentBuilder = (*Irrigation)(nil)
-	_ payload.HADiscoveryComponentBuilder = (*Modulating)(nil)
+	_ payload.Source                   = (*Irrigation)(nil)
+	_ payload.Source                   = (*Modulating)(nil)
+	_ payload.HADiscoveryEntityBuilder = (*Irrigation)(nil)
+	_ payload.HADiscoveryEntityBuilder = (*Modulating)(nil)
 )
 
 // --- Irrigation ---
@@ -135,40 +136,46 @@ func (v *Modulating) State() payload.StatePayload {
 	return st
 }
 
-// HADiscoveryComponent returns the HA Valve-platform-specific payload for an
-// Irrigation valve. Irrigation is a binary open/close device. The open/close
-// service methods are distinct — HA valve's command_topic however sends a
-// single topic with payload_open/payload_close. Because the two payloads
-// cannot be routed to separate service-method topics, we fall back to the
-// wire-parameter command topic for STATE (boolean). State from
-// value_json.is_open (bool).
+// HADiscoveryEntity describes an Irrigation valve on the shared model.
 //
-// Per ADR 0010: open/close multiplexing on one HA command_topic →
-// wire-parameter fallback (STATE). reports_position = false for irrigation.
-func (v *Irrigation) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery.Component {
-	if v == nil || ctx == nil {
-		return hadiscovery.Component{}
+// Irrigation is a binary open/close device. The open and close service
+// methods are distinct, but HA's valve platform sends both payloads to one
+// command_topic, so no single named action can carry them — the write goes to
+// the STATE wire parameter, which accepts exactly the two values. State comes
+// from the aggregate's is_open flag.
+func (v *Irrigation) HADiscoveryEntity() hamodel.Entity {
+	if v == nil {
+		return nil
 	}
-	stateTopic := ctx.CustomDPStateTopic()
-	return hadiscovery.Component{
-		Platform: hacatalog.PlatformValve,
-		// HA valve: command_topic with payload_open/payload_close.
-		// Uses STATE parameter (boolean) matching STATE.
-		CommandTopic: ctx.WireParameterCommandTopic("STATE"),
-		// State from aggregated topic — is_open (bool). Render
-		// HA-canonical state strings ("open" / "closed") directly via
-		// value_template; the bare `{{ value_json.is_open }}` form
-		// returns Python's `True`/`False` (capitalised) and doesn't
-		// match any state_open / state_closed permutation. HA logs
-		// `Payload received ... is not one of [open, closed,
-		// opening, closing], got: False` until the explicit branch
-		// emits a matching string.
-		StateTopic:    stateTopic,
-		ValueTemplate: "{% if value_json.is_open %}open{% else %}closed{% endif %}",
-		// device_class drives the HA icon (water-droplet) and semantic
-		// classification.
-		DeviceClass: "water",
-		Optimistic:  hadiscovery.Ptr(false),
+	return &payload.CustomEntity{
+		Basic: hamodel.Basic{
+			EntityKey:      v.TopicSlot().Parameter,
+			EntityPlatform: hacatalog.PlatformValve,
+			Description: hamodel.Description{
+				// device_class drives the HA icon (water-droplet) and semantic
+				// classification.
+				DeviceClass: "water",
+				// Render the HA-canonical state strings ("open" / "closed")
+				// directly: the bare `{{ value_json.is_open }}` form returns
+				// Python's `True`/`False` (capitalised) and matches no
+				// state_open / state_closed permutation. HA logs `Payload
+				// received … is not one of [open, closed, opening, closing],
+				// got: False` until the explicit branch emits a matching
+				// string.
+				ValueTemplate: "{% if value_json.is_open %}open{% else %}closed{% endif %}",
+				Optimistic:    hamodel.Ptr(false),
+			},
+			Binds: []hamodel.Binding{
+				{
+					Role: hamodel.RoleState, Mode: hamodel.Read,
+					Slot: payload.CustomSlot(v.TopicSlot()),
+				},
+				{
+					Role: hamodel.RoleCommand, Mode: hamodel.Write,
+					Slot: payload.WireSlot("STATE"),
+				},
+			},
+		},
 		Fields: hadiscovery.ValveFields{
 			PayloadOpen:  "true",
 			PayloadClose: "false",
@@ -180,35 +187,60 @@ func (v *Irrigation) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadisc
 	}
 }
 
-// HADiscoveryComponent returns the HA Valve-platform-specific payload
-// for a Modulating valve. set_level is a distinct service method →
-// service-method command topic. State from value_json.current_level_pct
-// (0..100). reports_position = true for modulating valves.
+// HADiscoveryEntity describes a Modulating valve on the shared model.
 //
-// Per ADR 0010: set_level is unambiguous → service-method topic.
-func (v *Modulating) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery.Component {
-	if v == nil || ctx == nil {
-		return hadiscovery.Component{}
+// set_level is a distinct service method and the valve's only write, so the
+// render pipeline wires it up as the command topic on its own — see
+// [Modulating.Methods]. State comes from the aggregate's current_level_pct
+// (0..100), which is why the valve reports position where an irrigation valve
+// does not.
+func (v *Modulating) HADiscoveryEntity() hamodel.Entity {
+	if v == nil {
+		return nil
 	}
-	stateTopic := ctx.CustomDPStateTopic()
-	return hadiscovery.Component{
-		Platform: hacatalog.PlatformValve,
-		// set_level is a 1:1 service method → service-method command topic.
-		CommandTopic:    ctx.ServiceMethodCommandTopic("set_level"),
-		CommandTemplate: "{{ (value | float / 100) }}",
-		// State from aggregated topic — current_level_pct (0..100).
-		StateTopic:    stateTopic,
-		ValueTemplate: "{{ value_json.current_level_pct }}",
-		// device_class drives the HA icon — water-droplet for
-		// irrigation valves; modulating water-flow regulators
-		// inherit the same classification.
-		DeviceClass: "water",
-		Optimistic:  hadiscovery.Ptr(false),
+	return &modulatingEntity{CustomEntity: payload.CustomEntity{
+		Basic: hamodel.Basic{
+			EntityKey:      v.TopicSlot().Parameter,
+			EntityPlatform: hacatalog.PlatformValve,
+			Description: hamodel.Description{
+				// device_class drives the HA icon — water-droplet for
+				// irrigation valves; modulating water-flow regulators inherit
+				// the same classification.
+				DeviceClass:   "water",
+				ValueTemplate: "{{ value_json.current_level_pct }}",
+				Optimistic:    hamodel.Ptr(false),
+			},
+			Binds: []hamodel.Binding{{
+				Role: hamodel.RoleState, Mode: hamodel.Read,
+				Slot: payload.CustomSlot(v.TopicSlot()),
+			}},
+		},
 		Fields: hadiscovery.ValveFields{
 			// Modulating valves report position.
 			ReportsPosition: hadiscovery.Ptr(true),
 		},
+	}}
+}
+
+// modulatingEntity carries the one key the model has no field for: HA sends a
+// 0..100 percentage and the service method takes the 0..1 fraction the CCU
+// speaks.
+type modulatingEntity struct {
+	payload.CustomEntity
+}
+
+// Methods implements [hamodel.Invoker]: set_level is the valve's single write,
+// so declaring it is what makes the render pipeline point `command_topic` at
+// its method topic instead of at a wire parameter no single value could drive.
+func (*modulatingEntity) Methods() []string { return []string{"set_level"} }
+
+// BuildDiscovery implements [hadiscovery.Builder].
+func (e *modulatingEntity) BuildDiscovery(ctx hadiscovery.Context, comp *hadiscovery.Component) error {
+	if err := e.CustomEntity.BuildDiscovery(ctx, comp); err != nil {
+		return err
 	}
+	comp.CommandTemplate = "{{ (value | float / 100) }}"
+	return nil
 }
 
 // registerModulatingServices registers the modulating valve service

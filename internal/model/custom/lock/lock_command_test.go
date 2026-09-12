@@ -50,13 +50,12 @@ func TestButtonLockHACommandReachesMasterWrite(t *testing.T) {
 	t.Parallel()
 	l, w := newMasterButtonLock(t)
 
-	_, body := haBody(t, l.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, l.HADiscoveryEntity(), discoveryCtx{})
 	topic, _ := body["command_topic"].(string)
-	method, ok := strings.CutPrefix(topic, "test/svc/")
+	method, ok := strings.CutPrefix(topic, discoveryCtx{}.CustomDPCommandTopic()+"/")
 	if !ok {
 		t.Fatalf("command_topic %q is not a service-method topic", topic)
 	}
-	method = strings.TrimSuffix(method, "/set")
 
 	// The MQTT bridge wraps a bare payload under the method's scalar-arg
 	// key before invoking, so resolve it the same way the bridge does.
@@ -89,7 +88,7 @@ func TestButtonLockHAUnlockPayloadUnlocks(t *testing.T) {
 	t.Parallel()
 	l, w := newMasterButtonLock(t)
 
-	_, body := haBody(t, l.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, l.HADiscoveryEntity(), discoveryCtx{})
 	unlockPayload, _ := body["payload_unlock"].(string)
 
 	err := l.Invoke(context.Background(), serviceLockCommand,

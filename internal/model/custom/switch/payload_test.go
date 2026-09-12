@@ -17,7 +17,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Minimal stub for payload.HADiscoveryContext
+// Minimal stub for payload.HADiscoveryTopics
 // ---------------------------------------------------------------------------
 
 type stubDiscoveryCtx struct {
@@ -27,15 +27,29 @@ type stubDiscoveryCtx struct {
 
 func (s *stubDiscoveryCtx) CustomDPStateTopic() string { return s.customStateTopic }
 
-func (s *stubDiscoveryCtx) ServiceMethodCommandTopic(method string) string { return "cmd/" + method }
+func (s *stubDiscoveryCtx) CustomDPCommandTopic() string { return "cmd" }
 
-func (s *stubDiscoveryCtx) WireParameterCommandTopic(param string) string { return "wire/cmd/" + param }
-
-func (s *stubDiscoveryCtx) WireParameterStateTopic(param string) string { return "wire/state/" + param }
-
-func (s *stubDiscoveryCtx) WireParameterStateTopicOn(_, param string) string {
-	return s.WireParameterStateTopic(param)
+// ServiceMethodCommandTopic is what the render context builds on its own out
+// of [stubDiscoveryCtx.CustomDPCommandTopic]; it is spelled here so an
+// assertion can name a method topic without repeating the join.
+func (s *stubDiscoveryCtx) ServiceMethodCommandTopic(method string) string {
+	return s.CustomDPCommandTopic() + "/" + method
 }
+
+func (s *stubDiscoveryCtx) WireParameterCommandTopic(_, param string) string {
+	return "wire/cmd/" + param
+}
+
+func (s *stubDiscoveryCtx) WireParameterStateTopic(_, param string) string {
+	return "wire/state/" + param
+}
+
+func (s *stubDiscoveryCtx) DeviceAvailabilityTopic() string { return "wire/availability" }
+
+func (s *stubDiscoveryCtx) BridgeStatusTopic() string { return "wire/bridge/status" }
+
+// compile-time check: stubDiscoveryCtx satisfies payload.HADiscoveryTopics.
+var _ payload.HADiscoveryTopics = (*stubDiscoveryCtx)(nil)
 
 func newPayloadSwitch(t *testing.T) *Switch {
 	t.Helper()
@@ -65,7 +79,7 @@ func newPayloadSwitch(t *testing.T) *Switch {
 func TestHADiscoveryPayloadComponentIsSwitch(t *testing.T) {
 	s := newPayloadSwitch(t)
 	ctx := &stubDiscoveryCtx{customStateTopic: "hm/state", aggStateTopic: "hm/agg"}
-	component, body := haBody(t, s.HADiscoveryComponent(ctx))
+	component, body := haEntity(t, s.HADiscoveryEntity(), ctx)
 	if component != "switch" {
 		t.Fatalf("expected component 'switch', got %q", component)
 	}
@@ -77,7 +91,7 @@ func TestHADiscoveryPayloadComponentIsSwitch(t *testing.T) {
 func TestHADiscoveryPayloadTopicsPopulated(t *testing.T) {
 	s := newPayloadSwitch(t)
 	ctx := &stubDiscoveryCtx{}
-	_, body := haBody(t, s.HADiscoveryComponent(ctx))
+	_, body := haEntity(t, s.HADiscoveryEntity(), ctx)
 	if _, ok := body["command_topic"]; !ok {
 		t.Error("missing command_topic")
 	}
@@ -97,17 +111,28 @@ func TestHADiscoveryPayloadTopicsPopulated(t *testing.T) {
 
 func TestHADiscoveryPayloadNilSwitchReturnsEmpty(t *testing.T) {
 	var s *Switch
-	component, body := haBody(t, s.HADiscoveryComponent(&stubDiscoveryCtx{}))
+	component, body := haEntity(t, s.HADiscoveryEntity(), &stubDiscoveryCtx{})
 	if component != "" || body != nil {
 		t.Fatalf("expected empty return from nil switch, got (%q, %v)", component, body)
 	}
 }
 
-func TestHADiscoveryPayloadNilContextReturnsEmpty(t *testing.T) {
+// TestHADiscoveryPayloadWithoutTopicsStillDescribes pins what a missing
+// transport does to an entity: nothing. The entity is the description and the
+// bindings, and it is complete before any topic is resolved — a renderer with
+// no layout simply produces no topic strings, which is what a caller that only
+// wants to inspect the description gets.
+func TestHADiscoveryPayloadWithoutTopicsStillDescribes(t *testing.T) {
 	s := newPayloadSwitch(t)
-	component, body := haBody(t, s.HADiscoveryComponent(nil))
-	if component != "" || body != nil {
-		t.Fatalf("expected empty return from nil context, got (%q, %v)", component, body)
+	component, body := haEntity(t, s.HADiscoveryEntity(), nil)
+	if component != "switch" {
+		t.Fatalf("component = %q, want switch", component)
+	}
+	if _, present := body["state_topic"]; present {
+		t.Errorf("state_topic present with no topic layout: %v", body["state_topic"])
+	}
+	if got, _ := body["payload_on"].(string); got != "true" {
+		t.Errorf("payload_on = %q, want true — the platform vocabulary needs no transport", got)
 	}
 }
 

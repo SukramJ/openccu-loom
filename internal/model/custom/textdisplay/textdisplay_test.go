@@ -322,7 +322,7 @@ func TestTextDisplaySubDataPointKeysEmptyWithoutBurstLimitWarning(t *testing.T) 
 func TestTextDisplayHADiscoveryPayloadMaxMatchesMaxRowLength(t *testing.T) {
 	t.Parallel()
 	d := New("VCU0001:3", nil)
-	_, body := haBody(t, d.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, d.HADiscoveryEntity(), discoveryCtx{})
 	if _, ok := body["max"]; !ok {
 		t.Fatal("HA Discovery payload must contain 'max'")
 	}
