@@ -45,7 +45,11 @@ func (p *SecurityMQTTPublisher) reconcile() {
 	if base == "" {
 		return
 	}
-	p.enqueue(securityMsg{topic: securityAvailabilityTopic(base), payload: []byte("online"), retained: true})
+	p.enqueue(securityMsg{
+		kind:    securityMsgAvailability,
+		topic:   securityAvailabilityTopic(base),
+		payload: []byte("online"),
+	})
 
 	p.declareEntities(snap)
 
@@ -53,9 +57,8 @@ func (p *SecurityMQTTPublisher) reconcile() {
 	p.enqueueJSON(securityStateTopic(base, "alarm"), onOff(hazardActive(snap)), hazardAttributes(snap))
 	p.enqueueJSON(securityStateTopic(base, "problem"), onOff(len(snap.Faults) > 0), faultAttributes(snap))
 	p.enqueue(securityMsg{
-		topic:    securityStateTopic(base, "health"),
-		payload:  []byte(onOff(!snap.EngineHealthy)),
-		retained: true,
+		topic:   securityStateTopic(base, "health"),
+		payload: []byte(onOff(!snap.EngineHealthy)),
 	})
 
 	for class := range snap.Classes {
@@ -87,7 +90,7 @@ func (p *SecurityMQTTPublisher) enqueueJSON(topic, state string, attrs map[strin
 		p.logger.Error("security mqtt payload not serializable", "topic", topic, "error", err)
 		return
 	}
-	p.enqueue(securityMsg{topic: topic, payload: buf, retained: true})
+	p.enqueue(securityMsg{topic: topic, payload: buf})
 }
 
 // declareEntities declares the entities the installation actually has,
@@ -237,7 +240,7 @@ func (p *SecurityMQTTPublisher) retract(ctx context.Context, b *Bridge, componen
 	}
 	// An empty retained payload evicts the state the consumer would
 	// otherwise keep showing for an entity that no longer exists.
-	p.enqueue(securityMsg{topic: stateTopic, payload: nil, retained: true})
+	p.enqueue(securityMsg{kind: securityMsgRetract, topic: stateTopic})
 }
 
 // tr8 resolves a catalogue key with a fallback, so a missing entry

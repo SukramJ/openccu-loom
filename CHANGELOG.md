@@ -232,6 +232,24 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   past `<base>/<central>/` and past `<legacy>/device/` — so the needle
   now compares that one segment and nothing else.
 
+- **The Security & Safety plane was invisible to every sweep and to
+  every metric.** Its publisher reached past `Bridge` into the raw
+  client, so its topics never entered the bridge's retained-topic index
+  and its publishes were counted by neither `messages_sent` nor
+  `publish_errors`. The plane whose entities an operator cannot watch
+  failing was the one plane whose publishes no metric could see, and a
+  retained security topic on the broker was reachable by nothing the
+  daemon owns.
+
+  Four named `Bridge` publishers now carry it — state, event,
+  availability and retraction — each recording (or forgetting) the topic
+  and incrementing the same counters the rest of the plane does, with an
+  empty `central` label because the plane is daemon-level and a hazard
+  class spans centrals. The queued message carries its kind rather than
+  having it inferred from the payload, so a retraction and an
+  availability marker stay distinguishable from a state at the point the
+  delivery guarantee is chosen.
+
 ### Added
 
 - **Fixture rows for the two `DiscoverySlug` divergence classes.** The
