@@ -2271,9 +2271,18 @@ func renderValue(v any) ([]byte, error) {
 	case int64:
 		return fmt.Appendf(nil, "%d", x), nil
 	case float32:
-		return []byte(strings.TrimRight(strings.TrimRight(fmt.Sprintf("%f", x), "0"), ".")), nil
+		// bitSize 32 so the shortest form round-trips through a
+		// float32 rather than exposing the widening artefact
+		// (float32(0.1) read as a float64 is 0.10000000149011612).
+		return []byte(strconv.FormatFloat(float64(x), 'f', -1, 32)), nil
 	case float64:
-		return []byte(strings.TrimRight(strings.TrimRight(fmt.Sprintf("%f", x), "0"), ".")), nil
+		// 'f' with precision -1 is the shortest decimal that parses
+		// back to the same float64. The previous %f-then-trim capped
+		// at six fractional digits, so a HmIP power meter reporting
+		// 0.0000001 kWh reached the broker as a flat "0" — the value
+		// was not rounded, it was erased, and no consumer could tell
+		// that from a genuine zero.
+		return []byte(strconv.FormatFloat(x, 'f', -1, 64)), nil
 	}
 	return json.Marshal(v)
 }

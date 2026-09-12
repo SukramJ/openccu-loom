@@ -75,3 +75,46 @@ func TestRenderValueRejectsNil(t *testing.T) {
 		t.Fatalf("renderValue(nil) body = %q, want nil", body)
 	}
 }
+
+// TestRenderValueFloatPrecision pins the shortest round-tripping decimal
+// form for floats.
+//
+// The renderer used to format with `%f` and trim trailing zeros, which
+// caps at six fractional digits: every value below 5e-7 was published as
+// a flat "0". That is not a rounding artefact a consumer can compensate
+// for — a genuine zero and an erased reading arrive as the same byte.
+func TestRenderValueFloatPrecision(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		in   any
+		want string
+	}{
+		// The measured case: seven decimals, six-digit %f rendered "0".
+		{"seven decimals", 0.0000001, "0.0000001"},
+		{"twelve decimals", 0.000000000001, "0.000000000001"},
+		// Beyond six digits in the middle of the fraction, too — %f
+		// rounded this to "1.234568".
+		{"more than six digits", 1.23456789, "1.23456789"},
+		// A genuine zero must stay distinguishable from an erased one.
+		{"zero", 0.0, "0"},
+		// Regressions on the forms that already worked.
+		{"trailing zeros trimmed", 3.0, "3"},
+		{"two decimals", 2.75, "2.75"},
+		{"negative", -0.125, "-0.125"},
+		// float32 renders at float32 width, not the widening artefact.
+		{"float32", float32(0.1), "0.1"},
+		{"float32 half", float32(1.5), "1.5"},
+	}
+	for _, c := range cases {
+		got, err := renderValue(c.in)
+		if err != nil {
+			t.Errorf("%s: renderValue(%v): %v", c.name, c.in, err)
+			continue
+		}
+		if string(got) != c.want {
+			t.Errorf("%s: renderValue(%v) = %q, want %q", c.name, c.in, string(got), c.want)
+		}
+	}
+}

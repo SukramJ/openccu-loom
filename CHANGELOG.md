@@ -184,6 +184,24 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `PublishHubSystemHealthScore`'s own empty body as the explicit
   not-ready sentinel for a FAILED central.
 
+- **Every value below 5e-7 was published as a flat `0`.** The raw-plane
+  value renderer formatted floats with `%f` and trimmed the trailing
+  zeros, and `%f` stops at six fractional digits. A data point reporting
+  `0.0000001` reached the broker as `0`, and a consumer had no way to
+  tell that from a genuine zero — the reading was not rounded, it was
+  erased. Six digits in the middle of a fraction went the same way:
+  `1.23456789` arrived as `1.234568`.
+
+  Floats now render through `strconv.FormatFloat(v, 'f', -1, bitSize)`,
+  the shortest decimal that parses back to the identical float, with
+  `bitSize` 32 for a `float32` so the widening artefact
+  (`float32(0.1)` as a `float64` is `0.10000000149011612`) stays off the
+  wire. No discovery golden moved: the eleven pins under
+  `internal/north/mqtt/testdata/` carry discovery configs, which this
+  renderer never touches, and none of them held a value with more than
+  six decimals in the first place. A fixture table now covers the
+  precision boundary in both directions.
+
 ### Added
 
 - **Fixture rows for the two `DiscoverySlug` divergence classes.** The
