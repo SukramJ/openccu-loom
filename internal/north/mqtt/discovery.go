@@ -4,7 +4,6 @@
 package mqtt
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -13,6 +12,7 @@ import (
 
 	hacatalog "github.com/SukramJ/go-ha-catalog"
 	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hamodel "github.com/SukramJ/go-hamqtt/model"
 
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/model/datapoint"
@@ -508,48 +508,73 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 
 	stateTopic := pd.MQTTState(d.TopicBuilder.Base, central)
 	commandTopic := pd.MQTTCommand(d.TopicBuilder.Base, central)
-	availability := []hadiscovery.AvailabilityEntry{
-		{
-			Topic:               d.TopicBuilder.BridgeStatus(),
-			PayloadAvailable:    "online",
-			PayloadNotAvailable: "offline",
-		},
-		{
-			Topic:               d.TopicBuilder.DeviceAvailability(central, ev.Interface, ev.DeviceAddress),
-			PayloadAvailable:    "online",
-			PayloadNotAvailable: "offline",
-		},
-	}
 
+	// The frame — device, origin, unique_id, name, the two topics, the
+	// availability list and the envelope's value template — is rendered by
+	// the shared model (ADR 0070) rather than assembled here. What follows
+	// the render is the decoration chain: the Quantity tables, the HA
+	// registry rules and the per-component vocabulary that reads their
+	// verdicts back, which is why they cannot run before it.
 	entityLabel, entityLabelNull := entityName(ev)
-	entity := hadiscovery.Component{
-		Platform:   hacatalog.Platform(comp),
-		Name:       entityLabel,
-		NameNull:   entityLabelNull,
-		UniqueID:   uniqueID,
-		StateTopic: stateTopic,
-		// state_topic carries the canonical PerDPState envelope
-		// (`{"value": …, "available": …, "type": …, "unit": …,
-		// "modified_at": …, "refreshed_at": …}`). HA reads the wire
-		// value via the `.value` extractor.
-		//
-		// The defined/not-none guard in valueJSONValueTemplate keeps HA
-		// from logging `'value_json' is undefined` on an empty payload
-		// and from rendering the literal "None" for an unobserved DP
-		// (which now publishes `{"value":null,"available":true}`). The
-		// entity stays available via the per-device + per-DP availability
-		// topics; its value reads "unknown" until the CCU pushes.
-		ValueTemplate:    valueJSONValueTemplate,
-		Availability:     availability,
-		AvailabilityMode: "all",
-		Device:           deviceDescriptor(ev, d.hubURLFor(ev), d.SubDevicesEnabled),
-		Origin:           BuildOriginInfo(),
+	vocab := perDatapointVocabulary(ev, comp)
+	modelEntity := &perDatapointEntity{
+		Basic: hamodel.Basic{
+			EntityKey:      objectID,
+			EntityPlatform: hacatalog.Platform(comp),
+			Description: hamodel.Description{
+				Name: hamodel.L(entityLabel),
+				// bridge + device + the DP's own `available` flag, in that
+				// order. [hamodel.LevelSelf] resolves against the state
+				// binding's envelope, which is the third entry this plane
+				// has always appended by hand.
+				Availability: hamodel.Availability{Levels: []hamodel.AvailabilityLevel{
+					hamodel.LevelBridge, hamodel.LevelDevice, hamodel.LevelSelf,
+				}},
+				// json_attributes_topic + template — exposes the per-DP config
+				// payload (min/max/value_list/unit/default/usage) as HA entity
+				// attributes for diagnostics.
+				JSONAttributesTopic: d.TopicBuilder.ParameterConfig(
+					central, ev.Interface, ev.DeviceAddress, ev.ChannelNo, bucket, ev.Parameter,
+				),
+				JSONAttributesTemplate: "{{ value_json | tojson }}",
+				ValueTemplate:          vocab.valueTemplate,
+				Optimistic:             vocab.optimistic,
+				Min:                    vocab.min,
+				Max:                    vocab.max,
+				Step:                   vocab.step,
+			},
+			Binds: perDatapointBinds(perDatapointSlot(ev, central, bucket), vocab.writable),
+		},
+		fields:          vocab.fields,
+		commandTemplate: vocab.commandTemplate,
+		nameNull:        entityLabelNull,
+		comp:            comp,
+		stateTopic:      stateTopic,
 	}
-	// json_attributes_topic + template — exposes the per-DP config payload
-	// (min/max/value_list/unit/default/usage) as HA entity attributes for
-	// diagnostics.
-	entity.JSONAttributesTopic = d.TopicBuilder.ParameterConfig(central, ev.Interface, ev.DeviceAddress, ev.ChannelNo, bucket, ev.Parameter)
-	entity.JSONAttributesTemplate = "{{ value_json | tojson }}"
+	if len(vocab.options) > 0 {
+		modelEntity.Description.Options = &hamodel.Enum{Codes: vocab.options}
+	}
+	ctx := perDatapointContext{
+		StdContext: hadiscovery.StdContext{
+			Layout: perDatapointLayout{
+				state:   stateTopic,
+				command: commandTopic,
+				device:  d.TopicBuilder.DeviceAvailability(central, ev.Interface, ev.DeviceAddress),
+				bridge:  d.TopicBuilder.BridgeStatus(),
+			},
+			Lang:       d.Locale,
+			Translator: d.tr,
+		},
+		uniqueID: uniqueID,
+		nodeID:   nodeID,
+	}
+	entity, renderErr := hadiscovery.RenderComponent(
+		ctx, modelDeviceFromInfo(deviceDescriptor(ev, d.hubURLFor(ev), d.SubDevicesEnabled)),
+		modelEntity, *BuildOriginInfo(),
+	)
+	if renderErr != nil {
+		return "", "", "", nil, false
+	}
 	// device_class — Quantity-based resolution walks the
 	// (deviceModel, parameter, unit) → Quantity → HA device_class chain.
 	// Falls back to the legacy parameter-name table when no Quantity
@@ -644,85 +669,40 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		}
 	}
 
-	switch comp {
-	case HAComponentSwitch:
-		// Writable boolean — switch carries the on/off payload contract.
-		// binary_sensor is intentionally NOT in this case-arm any more:
-		// it is read-only and `command_topic` / `state_on` / `state_off`
-		// are switch-only fields.
-		entity.CommandTopic = commandTopic
-		entity.Fields = hadiscovery.SwitchFields{
-			PayloadOn: "true", PayloadOff: "false",
-			StateOn: "true", StateOff: "false",
-		}
-		// PerDPState envelope carries the value as a JSON boolean
-		// (`{"value":true,...}`). Jinja's default rendering of a
-		// Python boolean is `True`/`False` (capitalised) — that
-		// would never match `state_on`/`state_off` ("true"/"false"),
-		// leaving every switch entity stuck in `unknown`. Pipe the
-		// scalar through `| lower` so the comparison is
-		// case-insensitive. Same defensive `value_json is defined`
-		// guard as the default template — without it HA logs
-		// `'value_json' is undefined` against an empty retained
-		// payload (eviction on unobserved DPs).
-		entity.ValueTemplate = valueJSONValueLowerTemplate
-		// optimistic=false — without an explicit value HA defaults
-		// to true and applies state changes locally before the CCU
-		// echoes them back. Critical for switches where a brief CCU
-		// outage would otherwise leave HA showing the wrong state.
-		entity.Optimistic = hadiscovery.Ptr(false)
-	case HAComponentLock:
-		// Lock component uses HA's lock-specific payload contract:
-		// `payload_lock` / `payload_unlock` on the command topic,
-		// `state_locked` / `state_unlocked` against the rendered
-		// value_template. Mirrors the custom-DP aggregated lock path
-		// (`internal/model/custom/lock/payload.go:122-129`) so the
-		// per-parameter and aggregated discovery surfaces emit the
-		// same shape (lock-shape consolidation).
-		//
-		// Wire mapping for `LOCK_TARGET_LEVEL` matches
-		// `CustomDpLock` semantics: `0.0` = locked, `1.0` = unlocked.
-		// `LOCK_STATE` is a numeric enum (0=unknown, 1=locked,
-		// 2=unlocked) that we surface verbatim — HA's `state_locked`
-		// / `state_unlocked` then match the numeric form.
-		entity.CommandTopic = commandTopic
-		entity.ValueTemplate = valueJSONValueLowerTemplate
-		entity.Optimistic = hadiscovery.Ptr(false)
-		entity.Fields = hadiscovery.LockFields{
-			PayloadLock: "0", PayloadUnlock: "1",
-			StateLocked: "0", StateUnlocked: "1",
-		}
+	// The residue of the per-component switch: everything below reads a
+	// verdict the decoration chain above produced, so it cannot move into
+	// [perDatapointVocabulary] and run before the render. Everything that
+	// can has.
+	switch comp { //nolint:exhaustive // only the components whose vocabulary depends on the chain above appear here
 	case HAComponentBinarySensor:
-		// Read-only — no command_topic / state_on / state_off.
-		//
-		// The declared payloads must be what the state plane actually
-		// renders for THIS descriptor — see [binarySensorPayloads].
-		entity.ValueTemplate = valueJSONValueLowerTemplate
-		var binaryFields hadiscovery.BinarySensorFields
-		binaryFields.PayloadOff, binaryFields.PayloadOn = binarySensorPayloads(ev)
-		// NOTE on expire_after: deliberately NOT set for
-		// binary_sensor. Door / window contacts, sabotage flags,
-		// alarm bits and similar are event-driven — they only emit
-		// when the state changes. A door that stays closed for a
-		// week sends no events, but the sensor itself is fine; an
-		// `expire_after=3600` would falsely mark it "unavailable"
-		// after an hour of inactivity. Availability is already
-		// covered by the per-device UNREACH topic the daemon
+		// NOTE on expire_after: deliberately NOT set for binary_sensor.
+		// Door / window contacts, sabotage flags, alarm bits and similar
+		// are event-driven — they only emit when the state changes. A door
+		// that stays closed for a week sends no events, but the sensor
+		// itself is fine; an `expire_after=3600` would falsely mark it
+		// "unavailable" after an hour of inactivity. Availability is
+		// already covered by the per-device UNREACH topic the daemon
 		// publishes via [EventBridge.markAvailability].
 		//
 		// force_update + off_delay are different concerns: HA's
-		// last_changed should still advance for motion/presence
-		// bursts, and the auto-reset is HA-side state-machine
-		// behaviour that doesn't claim the sensor is offline.
-		if isMotionDeviceClass(entity.DeviceClass) {
+		// last_changed should still advance for motion/presence bursts,
+		// and the auto-reset is HA-side state-machine behaviour that
+		// doesn't claim the sensor is offline.
+		//
+		// The pair is a patch rather than part of the entity's declared
+		// vocabulary because it keys on the RESOLVED device class — the
+		// Quantity chain, the registry rules and dropForeignDeviceClass
+		// all have a say in that, and all of them run after the render.
+		if binaryFields, ok := entity.Fields.(hadiscovery.BinarySensorFields); ok &&
+			isMotionDeviceClass(entity.DeviceClass) {
 			binaryFields.ForceUpdate = hadiscovery.Ptr(true)
-			// off_delay=300 → HA auto-resets the binary_sensor
-			// after five minutes without a follow-up update,
-			// motion/presence/occupancy. Without this motion
-			// sensors stay "on" forever after the first trigger.
+			// off_delay=300 → HA auto-resets the binary_sensor after five
+			// minutes without a follow-up update, motion/presence/
+			// occupancy. Without this motion sensors stay "on" forever
+			// after the first trigger.
 			binaryFields.OffDelay = hadiscovery.Ptr(300)
+			entity.Fields = binaryFields
 		}
-		entity.Fields = binaryFields
 	case HAComponentSensor:
 		// Enum-typed sensors (device_class=enum) require an `options` list —
 		// without it HA refuses the discovery. Source: paramset descriptor's
@@ -730,6 +710,10 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		// states ("CLOSED" → "closed", "IDLE_OFF" → "idle_off") so they are
 		// translatable in HA; mirror that by lowercasing the options and
 		// piping the state through the `| lower` template.
+		//
+		// Keyed on the RESOLVED device class, which is why it is here and
+		// not in the declared vocabulary: only the chain above knows whether
+		// this parameter ended up an enum.
 		if entity.DeviceClass == "enum" && len(ev.descValueList()) > 0 {
 			if labels, ok := localisedEnumOptions(ev); ok {
 				entity.Options = labels
@@ -739,43 +723,14 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 				entity.ValueTemplate = valueJSONValueLowerTemplate
 			}
 		}
-		// Apply
-		// canonical unit string regardless of CCU firmware quirks
-		// ("100%" → "%", "Lux" → "lx", "degree" → "°C", "" + ACTUAL_TEMPERATURE
-		// → "°C", …). Mirrors `BaseDataPoint._cleanup_unit`.
-		//
-		// Set-only-when-missing — preserve the unit established by
-		// the prior authoritative passes ([EntityDescriptionFor] +
-		// [applyEntityDescription]). Without this guard the
-		// Sensor branch would overwrite
-		// override (e.g. GAS_FLOW: "m³/h" rule) with the raw
-		// CleanupUnit result of the wire-descriptor unit ("m³"),
-		// producing the
-		// `device_class volume_flow_rate not valid with m³` HA
-		// MQTT-Discovery error.
-		// `BaseHmEntity` init where the wire unit is the LAST
-		// resort, not the first.
-		if entity.UnitOfMeasure == "" {
-			if cleaned := generic.CleanupUnit(hmenum.Parameter(ev.Parameter), ev.descUnit()); cleaned != "" {
-				entity.UnitOfMeasure = cleaned
-			}
-		}
-		// force_update ensures HA re-evaluates the state (advancing
-		// last_changed) even when the value has not changed — useful for
-		// periodic heartbeat-style sensors.
-		//
-		// NOTE on expire_after: deliberately NOT set. Availability is
-		// governed by the reachability model — the per-device UNREACH
-		// topic ([EventBridge.markAvailability]) plus each DP's
-		// `available` flag in the slot-state envelope — not by value
-		// freshness. Many sensors update far less than hourly (battery
-		// devices, OPERATING_VOLTAGE) and a not-yet-observed sensor
-		// publishes `{"value":null,"available":true}` and never receives
-		// a value until the CCU pushes one; an `expire_after=3600` would
-		// falsely mark all of those `unavailable` after an hour of
-		// inactivity even though the device is perfectly reachable. This
-		// mirrors the binary_sensor branch above.
-		entity.Fields = hadiscovery.SensorFields{ForceUpdate: hadiscovery.Ptr(true)}
+		// The wire unit, cleaned of the CCU's firmware quirks ("100%" → "%",
+		// "Lux" → "lx", "degree" → "°C", …) — but only where the
+		// authoritative passes above left the field empty. Without that
+		// guard the raw CleanupUnit result would overwrite a rule's own
+		// override (GAS_FLOW's "m³/h" by the descriptor's "m³"), which HA
+		// rejects as `device_class volume_flow_rate not valid with m³`.
+		// See [unitOrWireFallback].
+		entity.UnitOfMeasure = unitOrWireFallback(ev, entity.UnitOfMeasure)
 		// Apply data_point.multiplier so HA receives the same scaled
 		// value the Python reference implementation's HA integration
 		// would emit (`sensor.py:161-169`, `:201`:
@@ -783,183 +738,55 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		// Without this template Energy/Power readings would be off by
 		// the unit factor when the CCU firmware reports the raw count.
 		applyMultiplierSensor(ev, &entity, registryMultiplier(haDesc))
-	case HAComponentLight, HAComponentNumber, HAComponentCover:
-		entity.CommandTopic = commandTopic
-		entity.Optimistic = hadiscovery.Ptr(false)
-		if comp == HAComponentNumber {
-			// min/max/step and mode belong to the number platform alone; the
-			// light and cover arms of this case share only the command topic.
-			var numberFields hadiscovery.NumberFields
-			// Seed wire-descriptor min/max FIRST — applyMultiplierNumber only scales
-			// values already present in body. Without the seed, HA receives the
-			// default range (0..100, step 1) regardless of the actual CCU bounds.
-			if mn := ev.descMin(); mn != nil {
-				if entity.Min == nil {
-					entity.Min = hadiscovery.Ptr(*mn)
-				}
-			}
-			if mx := ev.descMax(); mx != nil {
-				if entity.Max == nil {
-					entity.Max = hadiscovery.Ptr(*mx)
-				}
-			}
-			// step: mirrors the Python reference implementation's
-			// `_attr_native_step = 1.0 if hmtype==INTEGER else 0.01 *
-			// multiplier` (`number.py:235`). The wire ParameterData
-			// carries Type=INTEGER for discrete parameters; default to
-			// 0.01 otherwise. The multiplier scaling below applies the
-			// `* multiplier` portion when applicable.
-			if entity.Step == nil {
-				if isIntegerParameter(ev) {
-					entity.Step = hadiscovery.Ptr(1.0)
-				} else {
-					entity.Step = hadiscovery.Ptr(0.01)
-				}
-			}
-			// Scale `min`/`max`/`step` by `data_point.multiplier`
-			// and invert the scaling on writes (`value / multiplier`).
-			// Run AFTER the seed above so the scaling actually has values
-			// to multiply.
-			applyMultiplierNumber(ev, &entity, stateTopic, commandTopic, registryMultiplier(haDesc))
-			// unit_of_measurement defaults to the Python reference
-			// implementation's `data_point.unit` when the HARegistryDescription
-			// doesn't override (`number.py:236-237`). Mirror that here so
-			// wire units like "s" / "%" / "°C" propagate to HA.
-			if entity.UnitOfMeasure == "" {
-				if cleaned := generic.CleanupUnit(hmenum.Parameter(ev.Parameter), ev.descUnit()); cleaned != "" {
-					entity.UnitOfMeasure = cleaned
-				}
-			}
-			// mode = "slider" when the range is small enough for a drag-bar to feel
-			// useful; "box" otherwise.
-			if mn, mx := ev.descMin(), ev.descMax(); mn != nil && mx != nil {
-				if numberFields.Mode == "" {
-					if (*mx - *mn) <= 1000 {
-						numberFields.Mode = "slider"
-					} else {
-						numberFields.Mode = "box"
-					}
-				}
-			}
-			if numberFields != (hadiscovery.NumberFields{}) {
-				entity.Fields = numberFields
-			}
-		}
+	case HAComponentNumber:
+		// Scale `min`/`max`/`step` by `data_point.multiplier` and invert
+		// the scaling on writes (`value / multiplier`). The bounds it
+		// scales were seeded by the declared vocabulary; the multiplier
+		// itself comes from the registry rule the chain above matched, so
+		// the scaling cannot precede the render.
+		applyMultiplierNumber(ev, &entity, registryMultiplier(haDesc))
+		// unit_of_measurement defaults to the Python reference
+		// implementation's `data_point.unit` when the HARegistryDescription
+		// doesn't override (`number.py:236-237`). Mirror that here so
+		// wire units like "s" / "%" / "°C" propagate to HA.
+		entity.UnitOfMeasure = unitOrWireFallback(ev, entity.UnitOfMeasure)
 	case HAComponentSelect:
-		entity.CommandTopic = commandTopic
-		entity.Optimistic = hadiscovery.Ptr(false)
-		// HA `select` requires `options`; without it HA rejects the discovery
-		// payload outright. Source: paramset descriptor's VALUE_LIST (e.g.
-		// `SET_POINT_MODE` → ["AUTO_MODE", "MANU_MODE", "PARTY_MODE",
-		// "BOOST_MODE"]).
-		//
-		// The reference stack lowercases select options and the current
-		// option ("MANU_MODE" → "manu_mode") so they are translatable in
-		// HA, and maps the chosen option back to its uppercase CCU token
-		// on write. Mirror that: lowercase options, `| lower` on the
-		// state template, `| upper` on the command template so the CCU
-		// receives the exact VALUE_LIST entry.
-		if vl := ev.descValueList(); len(vl) > 0 {
-			if labels, ok := localisedEnumOptions(ev); ok {
-				entity.Options = labels
-				entity.ValueTemplate, entity.CommandTemplate = enumOptionTemplates(vl, ev.descValueLabels())
-			} else {
-				entity.Options = lowercasedOptions(vl)
-				entity.ValueTemplate = valueJSONValueLowerTemplate
-				entity.CommandTemplate = "{{ value | upper }}"
-			}
-		}
 		// Action-selects (write-only enum parameters) are operator inputs;
 		// the reference stack relegates them to HA's Configuration section.
+		// Last-wins over the whole entity-category chain above, which is
+		// the reason it is applied here.
 		if ev.Category == hmenum.DataPointCategoryActionSelect {
 			entity.EntityCategory = EntityCategoryConfig
 		}
-	case HAComponentButton:
-		// payload_press="PRESS" mirrors the Python reference
-		// implementation's button.py — without it HA sends an empty
-		// string on every button press, which the CCU rejects.
-		entity.CommandTopic = commandTopic
-		entity.Fields = hadiscovery.ButtonFields{PayloadPress: "PRESS"}
-		// A button is stateless: HA's mqtt.button declares neither
-		// `state_topic` nor `value_template`, and its discovery schema
-		// is extra=REMOVE_EXTRA, so both are dropped on receipt without
-		// a word in any log. Emitting them cost nothing visible and
-		// taught anyone reading the retained payload that the button
-		// reports a state it cannot report.
-		entity.StateTopic = ""
-		entity.ValueTemplate = ""
-	case HAComponentText:
-		// HA `text` is a writable, free-form string — used for HmIP-WRCD display
-		// text and similar.
-		entity.CommandTopic = commandTopic
-		entity.Fields = hadiscovery.TextFields{Mode: "text"}
-		if mn := ev.descMin(); mn != nil {
-			entity.Min = hadiscovery.Ptr(float64(int(*mn)))
-		}
-		if mx := ev.descMax(); mx != nil {
-			entity.Max = hadiscovery.Ptr(float64(int(*mx)))
-		}
-		entity.Optimistic = hadiscovery.Ptr(false)
 	case HAComponentEvent:
-		// Press-type event entities: HA requires `event_types` listing all
-		// press variants the channel can fire. The per-parameter sub-event
-		// carries a single press type; the state topic receives
-		// `{"event_type":"press_short"}` payloads when the button fires.
-		// `device_class: button` is the canonical HA choice for key-press events.
-		//
-		// HA's mqtt.event component parses the *post-value_template*
-		// payload as JSON and reads `event_type` from it. The default
-		// `valueJSONValueTemplate` set above extracts `value_json.value`
-		// (a scalar) — that breaks JSON parsing and floods the HA log
-		// with `No valid JSON event payload detected, value after
-		// processing payload 'press_long'`. Drop value_template so HA
-		// receives the raw `{"event_type":...}` envelope.
-		entity.Fields = hadiscovery.EventFields{
-			EventTypes: MapDoorbellEventTypes(ev.Model, pressEventTypesFor(ev.Parameter)),
-		}
+		// `device_class: button` is the canonical HA choice for key-press
+		// events, and it overrides whatever the registry chain resolved —
+		// the event platform's class vocabulary is its own.
 		entity.DeviceClass = EventDeviceClassForModel(ev.Model)
-		entity.ValueTemplate = ""
-	default:
-		// Climate / valve / siren / select / button / update / text are rendered
-		// by the HADiscoveryComponentBuilder fast path in aggregateChannel and never reach this switch.
 	}
+	return discoveryItemFor(entity, nodeID, objectID).unpack()
+}
 
-	// All state topics carry the JSON envelope (ADR 0011). Patch the
-	// discovery payload so HA pulls the scalar via value_template and
-	// uses the per-DP availability flag from the same JSON document.
-	// The bridge_status + device_availability entries stay in the
-	// availability list — they cover the broker / device-gone cases
-	// the per-DP flag cannot represent.
-	//
-	// Two components are exempt. Event-type entities parse the raw JSON
-	// envelope themselves and must NOT carry a value_template. A button has
-	// no state at all — Home Assistant's mqtt.button declares neither
-	// `state_topic` nor `value_template` — so a template here is a key the
-	// discovery schema drops on receipt, silently, which is the failure mode
-	// this exemption exists to avoid. Otherwise skip the default assignment
-	// only when the per-component branch already wrote a tailored template
-	// (multiplier scaling for sensor/number).
-	if comp != HAComponentEvent && comp != HAComponentButton {
-		if entity.ValueTemplate == "" {
-			entity.ValueTemplate = jsonValueTemplate(comp)
-		}
-	}
-	entity.Availability = append(entity.Availability, hadiscovery.AvailabilityEntry{
-		Topic:               stateTopic,
-		ValueTemplate:       `{{ value_json.available | lower }}`,
-		PayloadAvailable:    "true",
-		PayloadNotAvailable: "false",
-	})
-
-	body, flatErr := flattenComponent(entity)
-	if flatErr != nil {
+// unpack restores the tuple [DefaultDiscoveryBuilder.Build] returns. The
+// item form is what the shared helpers produce; the tuple is what this
+// plane's callers have always taken, and widening that signature is a
+// change to every call site for no gain here.
+func (i DiscoveryItem) unpack() (component, nodeID, objectID string, buf []byte, ok bool) {
+	if !i.OK {
 		return "", "", "", nil, false
 	}
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return "", "", "", nil, false
+	return i.Component, i.NodeID, i.ObjectID, i.Payload, true
+}
+
+// unitOrWireFallback returns the unit already established by the
+// authoritative table passes, or the cleaned-up wire-descriptor unit when
+// they left it empty — the `BaseHmEntity` order, where the wire unit is the
+// last resort rather than the first.
+func unitOrWireFallback(ev Event, current string) string {
+	if current != "" {
+		return current
 	}
-	return string(comp), nodeID, objectID, buf, true
+	return generic.CleanupUnit(hmenum.Parameter(ev.Parameter), ev.descUnit())
 }
 
 // jsonValueTemplate returns the Jinja template HA needs to extract
@@ -1124,7 +951,7 @@ func applyMultiplierSensor(ev Event, entity *hadiscovery.Component, override *fl
 
 // applyMultiplierNumber patches the component so HA scales `min`/`max`/`step`
 // to the multiplied range and inverts the multiplier on writes.
-func applyMultiplierNumber(ev Event, entity *hadiscovery.Component, stateTopic, commandTopic string, override *float64) {
+func applyMultiplierNumber(ev Event, entity *hadiscovery.Component, override *float64) {
 	m, nontrivial := resolveMultiplier(ev, override)
 	if !nontrivial {
 		return
@@ -1149,8 +976,6 @@ func applyMultiplierNumber(ev Event, entity *hadiscovery.Component, stateTopic, 
 	if entity.Step != nil {
 		entity.Step = hadiscovery.Ptr(*entity.Step * m)
 	}
-	_ = stateTopic
-	_ = commandTopic
 }
 
 // formatMultiplier returns m rendered without trailing zeros so the
