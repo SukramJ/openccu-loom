@@ -8,6 +8,28 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The last two discovery paths render through the shared model, and
+  ADR 0070's migration is complete.** The per-parameter path in
+  `discovery.go` and the channel aggregate with its sixteen
+  custom-datapoint builders were the two that still assembled a
+  component by hand and stamped the frame on afterwards. Both now
+  build a `hamodel.Device`, a description and bindings, and let
+  `hadiscovery.RenderComponent` produce the frame.
+
+  `payload.HADiscoveryEntityBuilder` returns a `hamodel.Entity`, so
+  climate, light, lock, siren, cover, switch, valve and text-display
+  describe themselves instead of emitting a body.
+  `applyChannelFrame`, `buildCustomDPComponent` and the
+  component-shaped `applyEntityDescriptionStrict` lose their last
+  callers and are gone.
+
+  Every pin held byte-for-byte — 33 payloads on the per-parameter
+  path, 18 on the aggregate, none regenerated. The `climate/thermostat`
+  quartet and the `set_position_topic` asymmetry between a blind and a
+  garage door, the two most fragile entries, both survived unchanged.
+
+### Changed
+
 - **go-hamqtt v0.21.0 -> v0.23.0, and the escape hatches the five
   migrated planes needed are gone.** Measuring those five migrations
   produced 40 hatches, 11 of them avoidable; v0.23.0 closes the three

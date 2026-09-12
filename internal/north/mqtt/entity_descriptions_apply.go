@@ -115,11 +115,17 @@ func setTranslationKey(comp *hadiscovery.Component, key string) {
 // emitting `device_class=shutter` for cover models the HA integration never
 // classified.
 //
-// It is the description-shaped twin of [applyEntityDescription], which still
-// works on a rendered [hadiscovery.Component] for the per-parameter plane. The
-// two will collapse into one when that plane moves onto the shared model as
-// well; until then the shared half is the lookup, which is what decides
-// everything either of them writes.
+// It is the description-shaped twin of [applyEntityDescription], and the two
+// do NOT collapse now that the per-parameter plane renders through the shared
+// model as well: they differ in what a MISS means, not in shape. This variant
+// clears every HA-attribute field, because the HA-native integration shows no
+// description-derived attribute for a model it has no rule for. The other
+// keeps the legacy openccu-loom table's values and clears only the two fields
+// that would otherwise leak a default — which is why it still emits
+// `device_class=shutter` for cover models the HA integration never
+// classified, and why the aggregate plane needed a strict variant in the
+// first place. Collapsing them would move published bytes on one plane or the
+// other. What they genuinely share is the lookup, and that is not duplicated.
 func applyEntityDescriptionStrict(desc *hamodel.Description, component, parameter, model, unit, postfix string) {
 	if desc == nil {
 		return
