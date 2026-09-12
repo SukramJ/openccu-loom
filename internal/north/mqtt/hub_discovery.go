@@ -205,45 +205,6 @@ func (d *DefaultDiscoveryBuilder) hubSerial(centralName string) (serial10 string
 
 // ------------------- Shared model (ADR 0070) ----------------------
 
-// hubModelDevice lifts the `device` block this plane composes into the
-// shared model's [hamodel.Device], so the render pipeline emits the block
-// instead of a builder stamping one on afterwards.
-//
-// The identifiers keep an EMPTY namespace, which the shared model renders
-// verbatim. That is what lets the published `openccu-loom_central_<central>`
-// and `openccu-loom_<address>` spellings survive: Home Assistant keys its
-// device registry on those strings and has no migration path for them, so a
-// namespaced rendering would leave the old card behind — with its area, its
-// name override and its place in the hierarchy — and move the entities to a
-// new one, silently.
-func hubModelDevice(info *hadiscovery.DeviceInfo) *hamodel.Device {
-	if info == nil {
-		return nil
-	}
-	dev := &hamodel.Device{
-		Name:          hamodel.L(info.Name),
-		Manufacturer:  info.Manufacturer,
-		Model:         info.Model,
-		ModelID:       info.ModelID,
-		SWVersion:     info.SWVersion,
-		HWVersion:     info.HWVersion,
-		SerialNumber:  info.SerialNumber,
-		SuggestedArea: info.SuggestedArea,
-		ConfigURL:     info.ConfigurationURL,
-	}
-	for _, id := range info.Identifiers {
-		dev.Identity.IDs = append(dev.Identity.IDs, hamodel.Identifier{Value: id})
-	}
-	for _, conn := range info.Connections {
-		dev.Identity.Connections = append(dev.Identity.Connections,
-			hamodel.Connection{Type: conn[0], Value: conn[1]})
-	}
-	if info.ViaDevice != "" {
-		dev.Via = &hamodel.Identity{IDs: []hamodel.Identifier{{Value: info.ViaDevice}}}
-	}
-	return dev
-}
-
 // hubTopicLayout renders this plane's topics from the strings its builders
 // already compose, so the render pipeline produces exactly what is retained
 // on the broker rather than a second spelling of it.
@@ -443,7 +404,7 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv Hu
 	if !ok {
 		return DiscoveryItem{}
 	}
-	dev := hubModelDevice(hubEntityDeviceBlock(centralName, sv.DeviceAddress, d.hubFor(centralName)))
+	dev := modelDeviceFromInfo(hubEntityDeviceBlock(centralName, sv.DeviceAddress, d.hubFor(centralName)))
 	if dev == nil {
 		return DiscoveryItem{}
 	}
@@ -679,7 +640,7 @@ func (d *DefaultDiscoveryBuilder) buildProgramRole(
 		displayName += " " + role.NameSuffix
 	}
 
-	dev := hubModelDevice(hubEntityDeviceBlock(centralName, p.DeviceAddress, d.hubFor(centralName)))
+	dev := modelDeviceFromInfo(hubEntityDeviceBlock(centralName, p.DeviceAddress, d.hubFor(centralName)))
 	if dev == nil {
 		return DiscoveryItem{}
 	}
@@ -750,7 +711,7 @@ func (d *DefaultDiscoveryBuilder) BuildProgramDiscovery(centralName string, p Hu
 	if displayName == "" {
 		displayName = p.ID
 	}
-	dev := hubModelDevice(hubEntityDeviceBlock(centralName, p.DeviceAddress, d.hubFor(centralName)))
+	dev := modelDeviceFromInfo(hubEntityDeviceBlock(centralName, p.DeviceAddress, d.hubFor(centralName)))
 	if dev == nil {
 		return DiscoveryItem{}
 	}
@@ -792,7 +753,7 @@ func (d *DefaultDiscoveryBuilder) BuildAlarmMessagesDiscovery(centralName string
 	}
 	topic := naming.MQTTHubAlarmMessages(d.BridgeBase, centralName)
 	uniqueID := hubAggregateUniqueID(serial10, "alarm_messages")
-	dev := hubModelDevice(hubDeviceBlock(centralName, d.hubFor(centralName)))
+	dev := modelDeviceFromInfo(hubDeviceBlock(centralName, d.hubFor(centralName)))
 	if dev == nil {
 		return DiscoveryItem{}
 	}
@@ -828,7 +789,7 @@ func (d *DefaultDiscoveryBuilder) BuildServiceMessagesDiscovery(centralName stri
 	}
 	topic := naming.MQTTHubServiceMessages(d.BridgeBase, centralName)
 	uniqueID := hubAggregateUniqueID(serial10, "service_messages")
-	dev := hubModelDevice(hubDeviceBlock(centralName, d.hubFor(centralName)))
+	dev := modelDeviceFromInfo(hubDeviceBlock(centralName, d.hubFor(centralName)))
 	if dev == nil {
 		return DiscoveryItem{}
 	}
@@ -865,7 +826,7 @@ func (d *DefaultDiscoveryBuilder) BuildInboxDiscovery(centralName string) Discov
 	}
 	topic := naming.MQTTHubInbox(d.BridgeBase, centralName)
 	uniqueID := hubAggregateUniqueID(serial10, "inbox")
-	dev := hubModelDevice(hubDeviceBlock(centralName, d.hubFor(centralName)))
+	dev := modelDeviceFromInfo(hubDeviceBlock(centralName, d.hubFor(centralName)))
 	if dev == nil {
 		return DiscoveryItem{}
 	}
@@ -946,7 +907,7 @@ func (d *DefaultDiscoveryBuilder) BuildInstallModeSensorDiscovery(centralName, i
 	suffix := installModeInterfaceSuffix(iface)
 	topic := naming.MQTTHubInstallModeForInterface(d.BridgeBase, centralName, iface)
 	uniqueID := routingkey.CanonicalUniqueID(serial10, "install_mode", suffix, "")
-	dev := hubModelDevice(hubDeviceBlock(centralName, d.hubFor(centralName)))
+	dev := modelDeviceFromInfo(hubDeviceBlock(centralName, d.hubFor(centralName)))
 	if dev == nil {
 		return DiscoveryItem{}
 	}
@@ -997,7 +958,7 @@ func (d *DefaultDiscoveryBuilder) BuildInstallModeButtonDiscovery(centralName, i
 	// to "<suffix>-button"; mirror that exact shape so the loom button
 	// lines up with the reference registry (`install_mode_hmip-button`).
 	uniqueID := routingkey.CanonicalUniqueID(serial10, "install_mode", suffix+"-button", "")
-	dev := hubModelDevice(hubDeviceBlock(centralName, d.hubFor(centralName)))
+	dev := modelDeviceFromInfo(hubDeviceBlock(centralName, d.hubFor(centralName)))
 	if dev == nil {
 		return DiscoveryItem{}
 	}
@@ -1042,7 +1003,7 @@ func (d *DefaultDiscoveryBuilder) BuildConnectivityDiscovery(centralName, iface 
 	}
 	topic := naming.MQTTHubConnectivity(d.BridgeBase, centralName, iface)
 	uniqueID := hubAggregateUniqueID(serial10, "connectivity_"+safeLower(iface))
-	dev := hubModelDevice(hubDeviceBlock(centralName, d.hubFor(centralName)))
+	dev := modelDeviceFromInfo(hubDeviceBlock(centralName, d.hubFor(centralName)))
 	if dev == nil {
 		return DiscoveryItem{}
 	}
@@ -1095,7 +1056,7 @@ func (d *DefaultDiscoveryBuilder) BuildDaemonStatusDiscovery(centralName string)
 		return DiscoveryItem{}
 	}
 	uniqueID := hubAggregateUniqueID(serial10, "daemon_status")
-	dev := hubModelDevice(hubDeviceBlock(centralName, d.hubFor(centralName)))
+	dev := modelDeviceFromInfo(hubDeviceBlock(centralName, d.hubFor(centralName)))
 	if dev == nil {
 		return DiscoveryItem{}
 	}
@@ -1163,7 +1124,7 @@ func (d *DefaultDiscoveryBuilder) BuildSystemHealthDiscovery(centralName string)
 func (d *DefaultDiscoveryBuilder) hubMetricItem(
 	centralName, uniqueID, key, stateTopic string, desc hamodel.Description,
 ) DiscoveryItem {
-	dev := hubModelDevice(hubDeviceBlock(centralName, d.hubFor(centralName)))
+	dev := modelDeviceFromInfo(hubDeviceBlock(centralName, d.hubFor(centralName)))
 	if dev == nil {
 		return DiscoveryItem{}
 	}
@@ -1259,7 +1220,7 @@ func (d *DefaultDiscoveryBuilder) BuildHubUpdateDiscovery(centralName string) Di
 	// rendered a "_2"-suffixed entity_id when names matched. Scope the
 	// uid/object_id to "system_update".
 	uniqueID := hubAggregateUniqueID(serial10, "system_update")
-	dev := hubModelDevice(hubDeviceBlock(centralName, d.hubFor(centralName)))
+	dev := modelDeviceFromInfo(hubDeviceBlock(centralName, d.hubFor(centralName)))
 	if dev == nil {
 		return DiscoveryItem{}
 	}
