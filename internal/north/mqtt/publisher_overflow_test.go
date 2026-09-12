@@ -5,6 +5,7 @@ package mqtt
 
 import (
 	"log/slog"
+	"strings"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/metrics"
@@ -130,5 +131,58 @@ func TestAlarmEventDropIsCounted(t *testing.T) {
 	}
 	if got := col.PublishErrors("").Value(); got == 0 {
 		t.Error("a dropped alarm event was not counted in publish_errors")
+	}
+}
+
+// TestAvailabilityIsAlwaysQoS1 pins one delivery guarantee across every
+// availability topic this daemon writes.
+//
+// An availability marker is the one payload whose loss the next publish
+// cannot repair: it is written on a flip, so a marker dropped at QoS 0
+// leaves the entity in the state it last carried until something flips
+// it again — and for the `offline` marker a crash suppresses the
+// broker's last-will over, that is never. The device and alarm planes
+// pinned QoS 1; the security plane used the state profile, which is
+// QoS 0 in practice.
+func TestAvailabilityIsAlwaysQoS1(t *testing.T) {
+	t.Parallel()
+
+	mp := &mockPublisher{}
+	bridge := NewBridge(BridgeConfig{
+		Base: "openccu-loom", CentralName: "ccu-01",
+		RawEnabled: true,
+	}, mp)
+	// The state profile is QoS 0, which is what makes the divergence
+	// observable at all.
+	if bridge.cfg.QoS.State == QoS1 {
+		t.Fatalf("fixture: state QoS is already 1, the test cannot show the divergence")
+	}
+
+	ctx := t.Context()
+	if err := bridge.PublishSecurityAvailability(ctx, securityAvailabilityTopic("openccu-loom"), true); err != nil {
+		t.Fatalf("PublishSecurityAvailability: %v", err)
+	}
+	if err := bridge.PublishAlarmAvailability(ctx, alarmAvailabilityTopic("openccu-loom", "erdgeschoss"), true); err != nil {
+		t.Fatalf("PublishAlarmAvailability: %v", err)
+	}
+	if err := bridge.PublishAvailability(ctx, "ccu-01", "HmIP-RF", "000A", true); err != nil {
+		t.Fatalf("PublishAvailability: %v", err)
+	}
+
+	seen := 0
+	for _, rec := range mp.sent {
+		if !strings.HasSuffix(rec.topic, "/availability") {
+			continue
+		}
+		seen++
+		if rec.qos != QoS1 {
+			t.Errorf("%s published at QoS %v, want QoS 1", rec.topic, rec.qos)
+		}
+		if !rec.retain {
+			t.Errorf("%s published non-retained, want retained", rec.topic)
+		}
+	}
+	if seen != 3 {
+		t.Fatalf("observed %d availability publishes, want 3", seen)
 	}
 }

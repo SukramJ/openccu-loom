@@ -276,6 +276,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   actually discarded first was the availability marker. Both are now
   moot — the order and the policy were fixed together.
 
+- **One daemon, three availability topics, two delivery guarantees.**
+  The device and alarm planes pin QoS 1 for availability; the security
+  plane used `cfg.QoS.State`, which is QoS 0 in practice. Availability
+  is the one payload whose loss the next publish cannot repair, because
+  it is only written on a flip: a marker dropped at QoS 0 leaves the
+  entity in the state it last carried until something flips it again,
+  and for the `offline` marker written on shutdown — the one that exists
+  because an orderly stop suppresses the broker's last-will — that
+  "something" is the next start. After a crash it is never, and every
+  Security & Safety entity stays available showing frozen values, which
+  is precisely the case the second availability source exists to
+  distinguish. All three topics are now QoS 1, pinned by a test that
+  walks every availability publisher on the bridge.
+
 ### Added
 
 - **Fixture rows for the two `DiscoverySlug` divergence classes.** The

@@ -278,12 +278,26 @@ func (b *Bridge) PublishSecurityEvent(ctx context.Context, topic string, body []
 
 // PublishSecurityAvailability publishes the plane's retained
 // availability marker.
+//
+// QoS 1, not the state QoS. Availability is the one topic whose loss
+// cannot be repaired by the next publish: the plane writes it on a flip,
+// so a marker dropped at QoS 0 — which is what the state profile
+// resolves to in practice — leaves the entity in the state it last
+// carried until something flips it again. For the `offline` marker
+// written on shutdown, "something flips it again" is the next start, and
+// for a crash that suppresses the broker's last-will it is never: every
+// Security & Safety entity stays available, showing frozen values,
+// which is precisely the case this second availability source exists to
+// distinguish. [Bridge.PublishAvailability] and
+// [Bridge.PublishAlarmAvailability] already pin QoS 1 for the same
+// reason; the three availability topics of one daemon must not have
+// three different delivery guarantees.
 func (b *Bridge) PublishSecurityAvailability(ctx context.Context, topic string, online bool) error {
 	body := []byte("offline")
 	if online {
 		body = []byte("online")
 	}
-	if err := b.client.Publish(ctx, topic, body, b.cfg.QoS.State, true); err != nil {
+	if err := b.client.Publish(ctx, topic, body, QoS1, true); err != nil {
 		b.incPublishErrors("")
 		return err
 	}
