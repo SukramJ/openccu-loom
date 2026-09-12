@@ -33,6 +33,38 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     method only when rendering a device bundle, and this plane
     publishes the per-entity form, so nothing called it.
 
+- **go-hamqtt v0.23.0 -> v0.24.0, and the hub plane's own hatches go
+  the same way.** v0.24.0 was cut from what the hub-plane migration
+  measured, so each addition has a call site here:
+
+  - The daemon-status sensor reads its state off the bridge LWT topic,
+    so gating it on that topic would make it unavailable in exactly
+    the situation it exists to report. It had to clear `availability`
+    and `availability_mode` after rendering, because
+    `Availability.Resolved` answered every entity with a mode.
+    `hamodel.NoAvailability()` now says it in the description, and
+    `hubEntity.ungated` is gone.
+
+  - Install-mode and connectivity names embed an interface id, so they
+    were resolved eagerly through a local `trIface` helper and passed
+    as a literal `Name` — the catalogue key never reached the model.
+    `Context.Translate` now takes arguments and `Description.NameArgs`
+    fills the `{iface}` placeholder the catalogues already author, so
+    the three entity families move onto `NameKey` and `trIface` is
+    deleted.
+
+  - `optimistic` (six hub entities) and the `json_attributes` pair
+    (the three message aggregates plus the firmware-update plane) are
+    typed description fields now, projected onto the platforms whose
+    schema declares them. `hubEntity` is down to the platform Fields,
+    and the update plane's builder keeps only what is genuinely
+    platform `update` vocabulary — `latest_version_*`, `title`,
+    `display_precision`.
+
+  Not one published byte moves: the golden pins passed unchanged
+  through every step, which is the point of running them before and
+  after rather than regenerating them.
+
 - **A failed alarm discovery render is logged.** It was discarded,
   which made the one failure mode this plane must not have -- a
   silently missing alarm panel -- indistinguishable from a panel that
