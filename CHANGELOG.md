@@ -8,6 +8,38 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **go-hamqtt v0.21.0 -> v0.23.0, and the escape hatches the five
+  migrated planes needed are gone.** Measuring those five migrations
+  produced 40 hatches, 11 of them avoidable; v0.23.0 closes the three
+  causes and this removes what they forced:
+
+  - Three planes restamped `platform` on the component the shared
+    renderer had just cleared, because the per-entity form names its
+    topic segment from that field. `RenderComponent` now keeps it and
+    `Component.EntityJSON` drops it from the bytes, so notify,
+    press-button and week-profile encode through `EntityJSON` and the
+    alarm and add-on-update planes stop restamping. Home Assistant
+    declares `platform` on no platform and its `extra=REMOVE_EXTRA`
+    schemas drop an undeclared key with no error on the wire and no
+    log line -- the golden pins caught the key the moment the bump
+    landed, before it could reach a broker.
+
+  - Three planes each spelled out the same `hadiscovery.DeviceInfo` ->
+    `hamodel.Device` conversion under a different name. They now share
+    one `modelDeviceFromInfo`, a nil guard over the shared module's
+    `DeviceFromInfo`.
+
+  - `alarmContext.NodeID` is removed: the shared model reads that
+    method only when rendering a device bundle, and this plane
+    publishes the per-entity form, so nothing called it.
+
+- **A failed alarm discovery render is logged.** It was discarded,
+  which made the one failure mode this plane must not have -- a
+  silently missing alarm panel -- indistinguishable from a panel that
+  was never configured.
+
+### Changed
+
 - **The discovery pipeline is typed end to end.** The per-parameter
   `Build` switch, `applyEntityDescription`, its strict variant,
   `localiseClimatePresets` and the two multiplier patches all work on

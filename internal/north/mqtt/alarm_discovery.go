@@ -4,6 +4,8 @@
 package mqtt
 
 import (
+	"log/slog"
+
 	hacatalog "github.com/SukramJ/go-ha-catalog"
 	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
 	hamodel "github.com/SukramJ/go-hamqtt/model"
@@ -165,11 +167,6 @@ func (c alarmContext) Availability(_ *hamodel.Device, e hamodel.Entity) []hadisc
 // same panel, and the two derived entities hang their suffixes off it.
 func (c alarmContext) UniqueID(_ *hamodel.Device, e hamodel.Entity) string { return e.Key() }
 
-// NodeID implements [hadiscovery.Context]. Every alarm entity sits under
-// the fixed "alarm" node: zones are daemon-level, so the node is not
-// derived from anything device-shaped.
-func (c alarmContext) NodeID(_ *hamodel.Device) string { return alarmDiscoveryNodeID }
-
 // ObjectID implements [hadiscovery.Context]. The entity-id seed this plane
 // publishes is the unique id verbatim; the default seed would prefix the
 // device slug a second time and rename every entity.
@@ -233,16 +230,18 @@ func (e *alarmButtonEntity) BuildDiscovery(_ hadiscovery.Context, comp *hadiscov
 // renderAlarmItem renders one alarm entity through the shared per-entity
 // pipeline and packages it as the item the publishers take.
 //
-// [hadiscovery.RenderComponent] drops the `platform` discriminator, which
-// is right for the payload — the per-entity form carries the platform in
-// its topic — but [discoveryItemFor] reads it to name that topic segment,
-// so it is restored on the component and dropped again by the flattener.
+// A render error yields the zero item, which the callers read as "not
+// built" and skip. It is logged rather than swallowed: the only way to
+// reach it is a device with no identity or a platform the catalogue does
+// not know, both of them programming errors in this file, and a silently
+// missing alarm panel is the one failure mode this plane must not have.
 func renderAlarmItem(base string, e hamodel.Entity, objectID string) DiscoveryItem {
 	comp, err := hadiscovery.RenderComponent(newAlarmContext(base), alarmDevice(), e, *BuildOriginInfo())
 	if err != nil {
+		slog.Error("alarm discovery render failed",
+			"object_id", objectID, "platform", string(e.Platform()), "error", err)
 		return DiscoveryItem{}
 	}
-	comp.Platform = e.Platform()
 	return discoveryItemFor(comp, alarmDiscoveryNodeID, objectID)
 }
 

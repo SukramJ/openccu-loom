@@ -4,8 +4,6 @@
 package mqtt
 
 import (
-	"encoding/json"
-
 	hacatalog "github.com/SukramJ/go-ha-catalog"
 	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
 	hamodel "github.com/SukramJ/go-hamqtt/model"
@@ -153,42 +151,6 @@ func (c notifyDiscoveryContext) MethodTopic(_ *hamodel.Device, _ hamodel.Entity,
 	return c.d.discoveryContext(c.ev).ServiceMethodCommandTopic(method)
 }
 
-// notifyModelDevice lifts the device descriptor this daemon harvests into the
-// shared model's [hamodel.Device], so the render pipeline emits the device
-// block instead of a builder stamping one on afterwards.
-//
-// The identifiers keep an EMPTY namespace, which the shared model renders
-// verbatim. That is what lets the published `openccu-loom_<serial>` and
-// `openccu-loom_central_<central>` spellings survive: Home Assistant keys its
-// device registry on those strings and has no migration path for them either.
-func notifyModelDevice(info *hadiscovery.DeviceInfo) *hamodel.Device {
-	if info == nil {
-		return nil
-	}
-	dev := &hamodel.Device{
-		Name:          hamodel.L(info.Name),
-		Manufacturer:  info.Manufacturer,
-		Model:         info.Model,
-		ModelID:       info.ModelID,
-		SWVersion:     info.SWVersion,
-		HWVersion:     info.HWVersion,
-		SerialNumber:  info.SerialNumber,
-		SuggestedArea: info.SuggestedArea,
-		ConfigURL:     info.ConfigurationURL,
-	}
-	for _, id := range info.Identifiers {
-		dev.Identity.IDs = append(dev.Identity.IDs, hamodel.Identifier{Value: id})
-	}
-	for _, conn := range info.Connections {
-		dev.Identity.Connections = append(dev.Identity.Connections,
-			hamodel.Connection{Type: conn[0], Value: conn[1]})
-	}
-	if info.ViaDevice != "" {
-		dev.Via = &hamodel.Identity{IDs: []hamodel.Identifier{{Value: info.ViaDevice}}}
-	}
-	return dev
-}
-
 // BuildTextDisplayNotify emits the HA `notify` discovery payload for a
 // text-display custom-DP (HmIP-WRCD). This is the SOLE entity the
 // reference stack creates for a TEXT_DISPLAY custom-DP.
@@ -228,7 +190,7 @@ func (d *DefaultDiscoveryBuilder) BuildTextDisplayNotify(ev Event) DiscoveryItem
 	}
 	// The same device block the channel's other entities hang off, so the
 	// notify entity groups under the same HA device card as the text entity.
-	dev := notifyModelDevice(deviceDescriptor(ev, d.hubURLFor(ev), d.SubDevicesEnabled))
+	dev := modelDeviceFromInfo(deviceDescriptor(ev, d.hubURLFor(ev), d.SubDevicesEnabled))
 	if dev == nil {
 		return DiscoveryItem{}
 	}
@@ -252,7 +214,11 @@ func (d *DefaultDiscoveryBuilder) BuildTextDisplayNotify(ev Event) DiscoveryItem
 	if err != nil {
 		return DiscoveryItem{}
 	}
-	buf, err := json.Marshal(comp)
+	// EntityJSON, not json.Marshal: the component keeps its platform so the
+	// caller can name the topic segment, and Home Assistant declares the key
+	// on no platform -- its extra=REMOVE_EXTRA schemas would drop it with no
+	// error on the wire and no log line.
+	buf, err := comp.EntityJSON()
 	if err != nil {
 		return DiscoveryItem{}
 	}
