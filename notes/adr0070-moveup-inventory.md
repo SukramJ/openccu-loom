@@ -2,7 +2,7 @@
 
 - Status: measurement, not a decision
 - Date: 2026-09-12
-- Subject: [ADR 0070](docs/adr/0070-shared-ha-discovery-model-module.md), the
+- Subject: [ADR 0070](../docs/adr/0070-shared-ha-discovery-model-module.md), the
   sentence *"`internal/payload`, `internal/model/naming`,
   `internal/routingkey` and the bridge mechanics … move up"*
 
