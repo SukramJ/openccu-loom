@@ -215,6 +215,23 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   exactly this reason. Eviction is now symmetric with it, for the
   canonical topic and the legacy-alias mirror alike.
 
+- **Removing the virtual remote blanked every wireless device on the
+  CCU.** `RetractRawStateForDevice` found a removed device's retained
+  topics with `strings.Contains(topic, "/"+addr+"/")`, which matches the
+  address at any depth rather than at the one segment it is published
+  at. On a HomeMatic CCU that is not a hypothetical collision: the
+  virtual remote's device address is literally `BidCoS-RF`, the same
+  string as the interface segment every wireless device publishes under.
+  Unpairing that one pseudo device therefore cleared the retained state
+  of every real BidCos-RF device, and their entities stayed unavailable
+  until the next daemon restart republished them. The legacy mirror's
+  `<addr>_<ch>_<param>` leaf and the hub subtree's sysvar names were
+  reachable through the same needle.
+
+  Both retained topologies put the address in the same place — index 1
+  past `<base>/<central>/` and past `<legacy>/device/` — so the needle
+  now compares that one segment and nothing else.
+
 ### Added
 
 - **Fixture rows for the two `DiscoverySlug` divergence classes.** The

@@ -2000,6 +2000,29 @@ func (b *Bridge) retractTopicsMatching(ctx context.Context, centralName string, 
 	return len(topics)
 }
 
+// topicSegment returns the idx-th `/`-separated segment of topic, or ""
+// when the topic has no such segment.
+//
+// It exists so an address-scoped retraction can ask whether the address
+// occupies the position it is published at, rather than whether the
+// string appears anywhere in the topic. The two questions differ
+// wherever an address collides with another segment's spelling, and on
+// a HomeMatic CCU they do: the virtual remote's address is the
+// interface id `BidCoS-RF`.
+func topicSegment(topic string, idx int) string {
+	for range idx {
+		i := strings.IndexByte(topic, '/')
+		if i < 0 {
+			return ""
+		}
+		topic = topic[i+1:]
+	}
+	if i := strings.IndexByte(topic, '/'); i >= 0 {
+		topic = topic[:i]
+	}
+	return topic
+}
+
 // rememberRawTopic records topic in the address-scoped raw-topic index
 // used by [Bridge.RetractRawStateForDevice] to find every retained
 // per-data-point state topic a removed device declared, without
@@ -2080,20 +2103,35 @@ func (b *Bridge) RetractRawStateForDevice(ctx context.Context, centralName, ifac
 	// address regardless of central. That mirror is a single-CCU
 	// migration shim; a multi-CCU deployment already has its two CCUs
 	// overwriting each other there.
-	addr := strings.ToLower(deviceAddress)
+	//
+	// The needle matches the ONE segment the address actually occupies,
+	// not the address anywhere at any depth. Both retained topologies put
+	// it in the same place — `<base>/<central>/<iface>/<addr>/…` and
+	// `<legacy>/device/<status|availability>/<addr>/…`, index 1 past
+	// their respective prefixes — and a `strings.Contains` needle over
+	// the whole topic matched the other positions too. The virtual remote
+	// is the case that turns that into damage: its device address is
+	// literally `BidCoS-RF`, the same string as the interface segment, so
+	// removing that one pseudo device blanked every retained topic of the
+	// entire BidCos-RF interface — every real wireless device on the CCU
+	// — and the legacy mirror's `<addr>_<ch>_<param>` leaf and the hub
+	// subtree's sysvar names were reachable the same way.
+	addr := strings.ToLower(safe(deviceAddress))
 	rawPrefix := strings.ToLower(rawCentralPrefix(b.cfg.Base, centralName))
 	var legacyPrefix string
 	if b.legacy != nil {
 		legacyPrefix = strings.ToLower(b.legacy.Base + "/device/")
 	}
 	match := func(topic string) bool {
-		if !strings.Contains(topic, "/"+addr+"/") {
-			return false
+		if rest, ok := strings.CutPrefix(topic, rawPrefix); ok {
+			return topicSegment(rest, 1) == addr
 		}
-		if strings.HasPrefix(topic, rawPrefix) {
-			return true
+		if legacyPrefix != "" {
+			if rest, ok := strings.CutPrefix(topic, legacyPrefix); ok {
+				return topicSegment(rest, 1) == addr
+			}
 		}
-		return legacyPrefix != "" && strings.HasPrefix(topic, legacyPrefix)
+		return false
 	}
 	n := b.retractTopicsMatching(ctx, centralName, b.rawTopics, match, b.cfg.QoS.State)
 	n += b.retractTopicsMatching(ctx, centralName, b.configCache, match, b.cfg.QoS.State)
