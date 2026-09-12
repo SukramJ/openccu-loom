@@ -7,12 +7,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"maps"
 	"sort"
 	"strconv"
 	"strings"
 
+	hacatalog "github.com/SukramJ/go-ha-catalog"
 	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hamodel "github.com/SukramJ/go-hamqtt/model"
 
 	"github.com/SukramJ/openccu-loom/internal/model/event"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
@@ -101,6 +102,228 @@ func ChannelKindTypes(ch ChannelInspector, kind event.Kind) []string {
 // channelPressTypes is the package-internal alias used by BuildChannelEvent.
 func channelPressTypes(ch ChannelInspector) []string { return ChannelPressTypes(ch) }
 
+// channelEventEntity is a channel-level event entity on the shared model: a
+// [hamodel.Basic] with one description and a single read binding, plus the
+// announced event vocabulary.
+//
+// `event_types` is the event platform's own vocabulary — the model describes
+// what an entity is, not which strings one platform accepts as its triggers —
+// so it is written through the typed [hadiscovery.EventFields] in
+// [channelEventEntity.BuildDiscovery] rather than carried on the description.
+type channelEventEntity struct {
+	hamodel.Basic
+
+	eventTypes []string
+}
+
+// BuildDiscovery implements [hadiscovery.Builder] for `event_types`.
+func (e *channelEventEntity) BuildDiscovery(_ hadiscovery.Context, comp *hadiscovery.Component) error {
+	comp.Fields = hadiscovery.EventFields{EventTypes: e.eventTypes}
+	return nil
+}
+
+// channelEventTopicLayout renders this plane's topics through this daemon's
+// own [TopicBuilder], so the render pipeline produces exactly the strings
+// already retained on the broker rather than a second spelling of them.
+//
+// The slot arguments are unused. A channel-level event entity pins one
+// channel and one kind, and [TopicBuilder] is the authority on how this
+// daemon spells that kind's state topic — keypress, impulse and device error
+// each have their own — so the state topic is resolved once by the caller and
+// handed in. Deriving it from the slot again would be a second implementation
+// of the same schema with nothing keeping the two in step.
+type channelEventTopicLayout struct {
+	d       *DefaultDiscoveryBuilder
+	ev      Event
+	central string
+	state   string
+}
+
+// State implements the shared model's topic layout.
+func (l channelEventTopicLayout) State(hamodel.Slot) string { return l.state }
+
+// Command implements the shared model's topic layout. A channel-level event
+// entity is read-only and Home Assistant's event platform declares no
+// `command_topic`.
+func (l channelEventTopicLayout) Command(hamodel.Slot) string { return "" }
+
+// Availability implements the shared model's topic layout: the per-device
+// availability topic, which is the second of the two entries every channel
+// entity on this daemon carries.
+func (l channelEventTopicLayout) Availability(hamodel.Slot) string {
+	return l.d.TopicBuilder.DeviceAvailability(l.central, l.ev.Interface, l.ev.DeviceAddress)
+}
+
+// Bridge implements the shared model's topic layout.
+func (l channelEventTopicLayout) Bridge() string { return l.d.TopicBuilder.BridgeStatus() }
+
+// channelEventDiscoveryContext is the render context for this plane: the
+// standard one with this daemon's identity strings substituted.
+//
+// Both are overridden because Home Assistant has no migration path for either
+// — the unique id keys the entity registry, the node id is a topic segment —
+// and this plane derives them DIFFERENTLY from the same event: the unique id
+// from the routing key's event-group layout (family first, central inside the
+// channel slot), the node id from a slugged central plus the device address.
+// No single derivation could produce both.
+type channelEventDiscoveryContext struct {
+	hadiscovery.StdContext
+
+	uniqueID string
+	nodeID   string
+}
+
+// UniqueID implements [hadiscovery.Context] with the id this daemon already
+// publishes, central scoping and all. A virtual remote's address repeats
+// verbatim on every CCU, so its id carries the central's serial; a real
+// device's serial is globally unique and must NOT be scoped, or every
+// existing event entity on every fleet is re-keyed at once.
+func (c channelEventDiscoveryContext) UniqueID(*hamodel.Device, hamodel.Entity) string {
+	return c.uniqueID
+}
+
+// NodeID implements [hadiscovery.Context]. It is central-scoped and derived
+// from the PARENT device address even where the device block identifies a
+// sub-device: only half the identity moves on a sub-device split, and
+// deriving the node id from the device identity instead would re-home every
+// such entity onto a topic nothing listens on.
+func (c channelEventDiscoveryContext) NodeID(*hamodel.Device) string { return c.nodeID }
+
+// ObjectID implements [hadiscovery.Context] with the empty string, which
+// suppresses `default_entity_id`. This plane has never published an entity-id
+// seed; adding one now would rename every existing entity, and nothing
+// downstream could undo it. The object id in the discovery TOPIC is a
+// different string and is carried on the [DiscoveryItem].
+func (c channelEventDiscoveryContext) ObjectID(*hamodel.Device, hamodel.Entity) string { return "" }
+
+// channelEventModelDevice lifts the device descriptor this daemon harvests
+// into the shared model's [hamodel.Device], so the render pipeline emits the
+// device block instead of a frame stamping one on afterwards.
+//
+// The identifiers keep an EMPTY namespace, which the shared model renders
+// verbatim. That is what lets the published `openccu-loom_<address>`,
+// `openccu-loom_<address>-<group>` and `openccu-loom_central_<central>`
+// spellings survive: Home Assistant keys its device registry on those strings
+// and has no migration path for them either.
+func channelEventModelDevice(info *hadiscovery.DeviceInfo) *hamodel.Device {
+	if info == nil {
+		return nil
+	}
+	dev := &hamodel.Device{
+		Name:          hamodel.L(info.Name),
+		Manufacturer:  info.Manufacturer,
+		Model:         info.Model,
+		ModelID:       info.ModelID,
+		SWVersion:     info.SWVersion,
+		HWVersion:     info.HWVersion,
+		SerialNumber:  info.SerialNumber,
+		SuggestedArea: info.SuggestedArea,
+		ConfigURL:     info.ConfigurationURL,
+	}
+	for _, id := range info.Identifiers {
+		dev.Identity.IDs = append(dev.Identity.IDs, hamodel.Identifier{Value: id})
+	}
+	for _, conn := range info.Connections {
+		dev.Identity.Connections = append(dev.Identity.Connections,
+			hamodel.Connection{Type: conn[0], Value: conn[1]})
+	}
+	if info.ViaDevice != "" {
+		dev.Via = &hamodel.Identity{IDs: []hamodel.Identifier{{Value: info.ViaDevice}}}
+	}
+	return dev
+}
+
+// channelEventSpec is what the two entry points on this plane resolve before
+// the render: everything that differs between a keypress, an impulse and a
+// device-error entity. The render itself is identical for all three, which is
+// why it is one function rather than three.
+type channelEventSpec struct {
+	ev Event
+	// key is the entity key inside the shared model. It is the discovery
+	// object-id leaf, so the model names the entity the same way the topic
+	// and the unique id do.
+	key string
+	// name is the friendly-name fragment; Home Assistant prepends the device
+	// name itself.
+	name string
+	// stateTopic is the kind's channel-level topic, already spelled by
+	// [TopicBuilder].
+	stateTopic string
+	// deviceClass is empty where the kind has no fitting Home Assistant
+	// class, which omits the key.
+	deviceClass string
+	// types is the announced `event_types` vocabulary. Home Assistant drops
+	// an event whose type is not in this list.
+	types    []string
+	uniqueID string
+	nodeID   string
+}
+
+// renderChannelEvent renders one channel-level event entity through the
+// shared model's per-entity discovery form ([hadiscovery.RenderComponent]),
+// which attaches the device and origin blocks and omits `platform`.
+//
+// Returns ok=false when the device descriptor carries no identity or the
+// render fails — the same "produce nothing" outcome the callers already have
+// for an unscoped unique id.
+func (d *DefaultDiscoveryBuilder) renderChannelEvent(s channelEventSpec) ([]byte, bool) {
+	central := d.centralFor(s.ev)
+	dev := channelEventModelDevice(deviceDescriptor(s.ev, d.hubURLFor(s.ev), d.SubDevicesEnabled))
+	if dev == nil {
+		return nil, false
+	}
+
+	entity := &channelEventEntity{
+		Basic: hamodel.Basic{
+			EntityKey:      s.key,
+			EntityPlatform: hacatalog.PlatformEvent,
+			Description: hamodel.Description{
+				Name:        hamodel.L(s.name),
+				DeviceClass: hamodel.DeviceClass(s.deviceClass),
+				// Home Assistant's event platform requires the
+				// post-template payload to be parseable as JSON and reads
+				// `event_type` out of it itself. This daemon already
+				// publishes that envelope on the channel topic, so a
+				// template extracting the scalar would hand Home Assistant a
+				// bare string it then fails to parse — `No valid JSON event
+				// payload detected` in the log. The event platform DOES
+				// declare `value_template`, so the default envelope encoding
+				// would project one; suppress it explicitly.
+				ValueTemplate: hamodel.NoValueTemplate,
+			},
+			Binds: []hamodel.Binding{{
+				Role: hamodel.RoleState,
+				Mode: hamodel.Read,
+				Slot: hamodel.S(dev.UID(), strconv.Itoa(s.ev.ChannelNo),
+					hamodel.BucketCustom, s.key).In(central, s.ev.Interface),
+			}},
+		},
+		eventTypes: s.types,
+	}
+
+	ctx := channelEventDiscoveryContext{
+		StdContext: hadiscovery.StdContext{
+			Layout: channelEventTopicLayout{
+				d: d, ev: s.ev, central: central, state: s.stateTopic,
+			},
+			Lang:       d.Locale,
+			Translator: d.tr,
+		},
+		uniqueID: s.uniqueID,
+		nodeID:   s.nodeID,
+	}
+
+	comp, err := hadiscovery.RenderComponent(ctx, dev, entity, *BuildOriginInfo())
+	if err != nil {
+		return nil, false
+	}
+	buf, err := json.Marshal(comp)
+	if err != nil {
+		return nil, false
+	}
+	return buf, true
+}
+
 // BuildChannelEvent produces the HA-Discovery `event` payload for a
 // press channel: a single channel-level entity whose `event_types` list
 // carries every PRESS_* type the channel exposes (one event entity per
@@ -143,22 +366,17 @@ func (d *DefaultDiscoveryBuilder) BuildChannelEvent(ev Event) (component, nodeID
 	if name == "" || channelNameIsBareAddressNo(name) {
 		name = fmt.Sprintf("ch%d", ev.ChannelNo)
 	}
-	base := d.channelBaseBody(ev, name, uniqueID)
-	// HA's mqtt.event component requires the post-template payload to
-	// be parseable as JSON and reads `event_type` from it directly. A
-	// `value_template` that extracts the scalar (`{{ value_json.event_type }}`)
-	// turns the JSON envelope into a bare string that HA then fails to
-	// parse — surfacing as `No valid JSON event payload detected` in
-	// the HA log. The bridge already publishes a JSON envelope to the
-	// channel's `/event` topic, so no template is needed.
-	body := map[string]any{
-		"state_topic":  stateTopic,
-		"event_types":  toAnySlice(MapDoorbellEventTypes(ev.Model, types)),
-		"device_class": EventDeviceClassForModel(ev.Model),
-	}
-	maps.Copy(body, base)
-	out, err := json.Marshal(body)
-	if err != nil {
+	out, rendered := d.renderChannelEvent(channelEventSpec{
+		ev:          ev,
+		key:         eventGroupLeaf(kindSlug),
+		name:        name,
+		stateTopic:  stateTopic,
+		deviceClass: EventDeviceClassForModel(ev.Model),
+		types:       MapDoorbellEventTypes(ev.Model, types),
+		uniqueID:    uniqueID,
+		nodeID:      nodeID,
+	})
+	if !rendered {
 		return "", "", "", nil, false
 	}
 	return string(HAComponentEvent), nodeID, objectID, out, true
@@ -211,18 +429,24 @@ func (d *DefaultDiscoveryBuilder) BuildChannelKindEvent(ev Event, kind event.Kin
 		}
 	}
 
-	body := map[string]any{
-		"state_topic": stateTopic,
-		"event_types": toAnySlice(types),
-	}
+	// A device error is a problem signal; the keypress entity has no
+	// device_class and the impulse kind has no fitting one.
+	deviceClass := ""
 	if kind == event.KindDeviceError {
-		// A device error is a problem signal; the keypress entity has no
-		// device_class and the impulse kind has no fitting one.
-		body["device_class"] = "problem"
+		deviceClass = "problem"
 	}
-	maps.Copy(body, d.channelBaseBody(ev, name, uniqueID))
-	out, err := json.Marshal(body)
-	if err != nil {
+
+	out, rendered := d.renderChannelEvent(channelEventSpec{
+		ev:          ev,
+		key:         eventGroupLeaf(kindSlug),
+		name:        name,
+		stateTopic:  stateTopic,
+		deviceClass: deviceClass,
+		types:       types,
+		uniqueID:    uniqueID,
+		nodeID:      nodeID,
+	})
+	if !rendered {
 		return "", "", "", nil, false
 	}
 	return string(HAComponentEvent), nodeID, objectID, out, true
@@ -248,17 +472,6 @@ func channelNameIsBareAddressNo(name string) bool {
 		return false
 	}
 	return true
-}
-
-// toAnySlice converts []string to []any for JSON marshalling so that
-// `event_types` is emitted as a JSON array of strings rather than a
-// Go-specific type.
-func toAnySlice(ss []string) []any {
-	out := make([]any, len(ss))
-	for i, s := range ss {
-		out[i] = s
-	}
-	return out
 }
 
 // aggregateChannel collapses every parameter on a known custom-
@@ -597,37 +810,21 @@ func channelPathData(ev Event) naming.PathData {
 	)
 }
 
-// channelBaseBody returns the shared HA-Discovery scaffolding:
-// availability, device descriptor, origin block. Concrete builders
-// extend it with platform-specific fields.
+// applyChannelFrame stamps the five keys the bridge owns — unique_id,
+// availability, availability_mode, device, origin — plus the name onto a
+// component a model-side custom-DP builder produced.
 //
-// Per-availability-entry `payload_available`/`payload_not_available`
-// match the strings the bridge actually publishes ("online" /
-// "offline") — HA's defaults are the same but pinning them avoids a
-// surprise if the bridge contract ever changes.
-// channelBaseBody is [applyChannelFrame] rendered as a map, for the builders
-// that still assemble their payload that way. One implementation, two views —
-// so the frame cannot drift between the typed and the untyped callers while
-// the rest of the conversion runs.
-func (d *DefaultDiscoveryBuilder) channelBaseBody(ev Event, name, uniqueID string) map[string]any {
-	var comp hadiscovery.Component
-	d.applyChannelFrame(&comp, ev, name, uniqueID)
-	// Marshalled here rather than through flattenComponent: the frame carries
-	// no platform — that is the caller's — and flattenComponent refuses a
-	// component without one, because for a whole payload an absent platform
-	// means the builder declined to produce anything.
-	raw, err := json.Marshal(comp)
-	if err != nil {
-		return map[string]any{}
-	}
-	body := map[string]any{}
-	if err := json.Unmarshal(raw, &body); err != nil {
-		return map[string]any{}
-	}
-	delete(body, "platform")
-	return body
-}
-
+// It is the custom-DP aggregate's frame and nothing else's: the channel-level
+// event entities on this plane render through the shared model's own pipeline
+// ([DefaultDiscoveryBuilder.renderChannelEvent]), which derives all of this
+// from the device and the entity's description instead. This one remains
+// because the aggregate's body arrives from a builder that has not been
+// lifted onto that model yet.
+//
+// Per-availability-entry `payload_available`/`payload_not_available` match
+// the strings the bridge actually publishes ("online" / "offline") — Home
+// Assistant's defaults are the same, but pinning them avoids a surprise if
+// the bridge contract ever changes.
 func (d *DefaultDiscoveryBuilder) applyChannelFrame(comp *hadiscovery.Component, ev Event, name, uniqueID string) {
 	// Each field is applied only where the builder left it unset, which is the
 	// precedence this pipeline settled on: the builder wins, the frame fills
