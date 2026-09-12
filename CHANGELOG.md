@@ -34,6 +34,35 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   The aggregate's suppression stays as the bridge's own guarantee about
   the category.
 
+### Fixed
+
+- **The alarm plane wrote past the bridge, exactly as the Security &
+  Safety plane did before #796.** `Bridge.PublishAlarmState`,
+  `PublishAlarmAvailability` and `RetractAlarmTopic` published straight
+  to the client, so the whole alarm surface was invisible twice over.
+  Its retained state, availability and latched-detector topics never
+  entered `rawTopics`, so no orphan sweep and no device-removal
+  retraction could ever reach them — a zone deleted while the daemon
+  was down left its retained token on the broker for good, feeding a
+  Home Assistant panel for an area that no longer exists — and its
+  publishes were counted by neither `messages_sent` nor
+  `publish_errors`. The one plane an operator most needs to watch was
+  the one plane no metric could see at all.
+
+  Fixed in #796's shape rather than a second one: each publisher records
+  or forgets its topic and increments the same counters every other
+  publisher on the bridge does, and a refused publish leaves no claim
+  behind. `PublishAlarmEvent` is counted too but stays out of the index,
+  because an event is a moment and there is no retained message on the
+  topic for a sweep to find — the same split
+  `Bridge.PublishSecurityEvent` makes.
+
+  `PublishAlarmAvailability` was already pinned to QoS 1, which is what
+  #796 established everywhere: availability is the one topic whose loss
+  the next publish cannot repair, because the plane writes it only on a
+  flip. There is now a test saying so, so the pin cannot be lowered to
+  the state QoS by a future edit that reads the two as interchangeable.
+
 ### Changed
 
 - **go-hamqtt v0.25.0 -> v0.26.0, and `Config.Layout` closes the one

@@ -691,43 +691,92 @@ func (b *Bridge) RetractAlarmDiscovery(ctx context.Context, component, nodeID, o
 }
 
 // PublishAlarmState publishes the retained plain HA state token for a
-// zone (or the master panel).
+// zone (or the master panel), records the topic in the bridge's
+// retained-topic index and counts the publish.
 //
 // It is deliberately NOT gated on the raw plane: this topic is the
 // `state_topic` the zone's own discovery payload names, so silencing it
 // while discovery still declares it leaves every alarm entity in Home
 // Assistant present and permanently unknown — declared and published have
 // to stay the same set.
+//
+// The bookkeeping is the same defect the Security & Safety plane carried
+// until it was routed through named bridge publishers: this function
+// wrote straight to the client, so its retained topics never entered
+// `rawTopics` — no sweep and no device-removal retraction could reach
+// them — and its publishes appeared in neither `messages_sent` nor
+// `publish_errors`. An alarm surface is the last plane whose publishes an
+// operator should have to take on trust.
 func (b *Bridge) PublishAlarmState(ctx context.Context, topic, token string) error {
-	return b.client.Publish(ctx, topic, []byte(token), b.cfg.QoS.State, true)
+	if err := b.client.Publish(ctx, topic, []byte(token), b.cfg.QoS.State, true); err != nil {
+		b.incPublishErrors("")
+		return err
+	}
+	b.rememberRawTopic(topic)
+	b.incMessagesSent("")
+	return nil
 }
 
 // PublishAlarmAvailability publishes the retained per-panel availability
 // flag (online/offline). Not gated on the raw plane, for the same reason
 // as [Bridge.PublishAlarmState]: the discovery payload names this topic.
+//
+// QoS 1, not the state QoS, and that was already so: availability is the
+// one topic whose loss the next publish cannot repair, because the plane
+// writes it only on a flip. [Bridge.PublishAvailability] and
+// [Bridge.PublishSecurityAvailability] pin the same guarantee — the three
+// availability topics of one daemon must not have three different ones.
+//
+// It records the topic and counts the publish for the reason spelled out
+// on [Bridge.PublishAlarmState].
 func (b *Bridge) PublishAlarmAvailability(ctx context.Context, topic string, online bool) error {
 	body := []byte("offline")
 	if online {
 		body = []byte("online")
 	}
-	return b.client.Publish(ctx, topic, body, QoS1, true)
+	if err := b.client.Publish(ctx, topic, body, QoS1, true); err != nil {
+		b.incPublishErrors("")
+		return err
+	}
+	b.rememberRawTopic(topic)
+	b.incMessagesSent("")
+	return nil
 }
 
-// RetractAlarmTopic clears a retained alarm state or availability topic.
+// RetractAlarmTopic clears a retained alarm state or availability topic
+// and drops it from the bridge's retained-topic index, so nothing
+// retracts an already-empty topic a second time.
+//
 // Never gated: the topics it clears are the ones discovery declares, and a
 // retraction that is skipped leaves a stale retained value behind forever.
 func (b *Bridge) RetractAlarmTopic(ctx context.Context, topic string) error {
-	return b.client.Publish(ctx, topic, nil, b.cfg.QoS.State, true)
+	if err := b.client.Publish(ctx, topic, nil, b.cfg.QoS.State, true); err != nil {
+		b.incPublishErrors("")
+		return err
+	}
+	b.forgetRawTopic(topic)
+	b.incMessagesSent("")
+	return nil
 }
 
 // PublishAlarmEvent publishes a non-retained JSON alarm event. Returns nil
 // silently when the raw plane is disabled, matching every other raw-plane
 // publisher on [Bridge].
+//
+// Counted, but deliberately not recorded in the retained-topic index: an
+// event is a moment, not a state, so there is no retained message on the
+// topic for a sweep to find. Same split as
+// [Bridge.PublishSecurityEvent].
 func (b *Bridge) PublishAlarmEvent(ctx context.Context, topic string, body []byte) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
-	return b.client.Publish(ctx, topic, body, QoS0, false)
+	if err := b.client.Publish(ctx, topic, body, QoS0, false); err != nil {
+		b.incPublishErrors("")
+		return err
+	}
+	b.incMessagesSent("")
+	return nil
 }
 
 // publishMotionEntities publishes the reset button, the latched-detector
