@@ -8,6 +8,9 @@ import (
 	"testing"
 
 	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hamodel "github.com/SukramJ/go-hamqtt/model"
+
+	pload "github.com/SukramJ/openccu-loom/internal/payload"
 )
 
 // haBody flattens a typed discovery component into the object Home Assistant
@@ -33,4 +36,44 @@ func haBody(t *testing.T, comp hadiscovery.Component) (platform string, body map
 	}
 	delete(out, "platform")
 	return string(comp.Platform), out
+}
+
+// haTestDevice is the placeholder identity [hadiscovery.RenderComponent]
+// insists on. Nothing it carries reaches an assertion: [haEntityBody] strips
+// the frame again.
+var haTestDevice = &hamodel.Device{
+	Identity: hamodel.Identity{IDs: []hamodel.Identifier{{Value: "test"}}},
+}
+
+// haEntityBody renders a custom data point's entity the way the bridge does
+// and flattens it through [haBody], with the bridge's frame stripped off.
+//
+// A contract test asserts on what the data point itself contributes — its
+// platform, its description and its platform vocabulary. The unique id, the
+// availability list, the device block and the entity-id seed are derived by
+// the bridge from the channel event, which these tests have none of, and
+// they are pinned where they are produced: the golden payloads under
+// internal/north/mqtt/testdata.
+//
+// [hadiscovery.RawEncoding] is not a preference. A custom data point's
+// aggregate carries a curated document, not the `{"value": …}` envelope the
+// per-parameter plane publishes, so every field names its own template; the
+// envelope default would project one onto entities that publish none.
+func haEntityBody(
+	t *testing.T, e hamodel.Entity, topics pload.HADiscoveryTopics,
+) (platform string, body map[string]any) {
+	t.Helper()
+	if e == nil {
+		return "", nil
+	}
+	comp, err := hadiscovery.RenderComponent(
+		hadiscovery.StdContext{Layout: pload.SlotLayout{Topics: topics}, Enc: hadiscovery.RawEncoding},
+		haTestDevice, e, hadiscovery.Origin{},
+	)
+	if err != nil {
+		t.Fatalf("render entity: %v", err)
+	}
+	comp.Device, comp.UniqueID, comp.DefaultEntityID = nil, "", ""
+	comp.Availability, comp.AvailabilityMode = nil, ""
+	return haBody(t, comp)
 }

@@ -121,20 +121,27 @@ func (roundtripWriter) SetValue(context.Context, string, hmenum.Parameter, any, 
 // wiring. Mirrors internal/model/custom/cover/payload_discovery_test.go:discoveryCtx.
 type roundtripDiscoveryCtx struct{}
 
-func (roundtripDiscoveryCtx) CustomDPStateTopic() string { return "rt/custom/state" }
+func (roundtripDiscoveryCtx) CustomDPStateTopic() string   { return "rt/custom/state" }
+func (roundtripDiscoveryCtx) CustomDPCommandTopic() string { return "rt/svc" }
 
-func (roundtripDiscoveryCtx) ServiceMethodCommandTopic(m string) string {
-	return "rt/svc/" + m + "/set"
-}
-
-func (roundtripDiscoveryCtx) WireParameterCommandTopic(p string) string { return "rt/" + p + "/set" }
-func (roundtripDiscoveryCtx) WireParameterStateTopic(p string) string   { return "rt/" + p }
-
-func (roundtripDiscoveryCtx) WireParameterStateTopicOn(addr, p string) string {
+func (roundtripDiscoveryCtx) WireParameterStateTopic(addr, p string) string {
+	if addr == "" {
+		return "rt/" + p
+	}
 	return "rt/" + addr + "/" + p
 }
 
-var _ pload.HADiscoveryContext = roundtripDiscoveryCtx{}
+func (roundtripDiscoveryCtx) WireParameterCommandTopic(addr, p string) string {
+	if addr == "" {
+		return "rt/" + p + "/set"
+	}
+	return "rt/" + addr + "/" + p + "/set"
+}
+
+func (roundtripDiscoveryCtx) DeviceAvailabilityTopic() string { return "rt/availability" }
+func (roundtripDiscoveryCtx) BridgeStatusTopic() string       { return "rt/bridge/status" }
+
+var _ pload.HADiscoveryTopics = roundtripDiscoveryCtx{}
 
 // rtPutFloat registers a writable FLOAT wire DP on ch under parameter.
 func rtPutFloat(ch *device.Channel, address string, parameter hmenum.Parameter, w generic.Writer) {
@@ -474,7 +481,7 @@ func buildCoverBody(t *testing.T) map[string]any {
 	ch := d.AddChannel(addr, 3, "BLIND", hmenum.ParamsetKeyValues)
 	rtPutFloat(ch, addr, hmenum.ParameterLevel, w)
 	c := cover.New(cover.Config{Channel: ch, Writer: w, Capabilities: custom.CoverCapabilities{SupportsPosition: true}})
-	comp, body := haBody(t, c.HADiscoveryComponent(roundtripDiscoveryCtx{}))
+	comp, body := haEntityBody(t, c.HADiscoveryEntity(), roundtripDiscoveryCtx{})
 	if comp != "cover" {
 		t.Fatalf("cover component = %q, want cover", comp)
 	}
@@ -531,7 +538,7 @@ func buildClimateBody(t *testing.T) map[string]any {
 	rtPutFloat(ch, addr, hmenum.ParameterSetTemperature, w)
 	rtPutFloatSensor(ch, addr, hmenum.ParameterActualTemperature)
 	c := climate.New(climate.Config{Channel: ch, Writer: w, Kind: climate.KindRF})
-	comp, body := haBody(t, c.HADiscoveryComponent(roundtripDiscoveryCtx{}))
+	comp, body := haEntityBody(t, c.HADiscoveryEntity(), roundtripDiscoveryCtx{})
 	if comp != "climate" {
 		t.Fatalf("climate component = %q, want climate", comp)
 	}
@@ -584,7 +591,7 @@ func TestDiscoveryRoundTrip_Climate(t *testing.T) {
 func TestDiscoveryRoundTrip_Siren(t *testing.T) {
 	t.Parallel()
 	s := siren.New(siren.Config{Writer: roundtripWriter{}})
-	comp, body := haBody(t, s.HADiscoveryComponent(roundtripDiscoveryCtx{}))
+	comp, body := haEntityBody(t, s.HADiscoveryEntity(), roundtripDiscoveryCtx{})
 	if comp != "siren" {
 		t.Fatalf("siren component = %q, want siren", comp)
 	}
@@ -621,7 +628,7 @@ func buildIrrigationBody(t *testing.T) map[string]any {
 	if v == nil {
 		t.Fatal("valve.NewIrrigation returned nil (STATE switch not resolved)")
 	}
-	comp, body := haBody(t, v.HADiscoveryComponent(roundtripDiscoveryCtx{}))
+	comp, body := haEntityBody(t, v.HADiscoveryEntity(), roundtripDiscoveryCtx{})
 	if comp != "valve" {
 		t.Fatalf("irrigation component = %q, want valve", comp)
 	}
@@ -641,7 +648,7 @@ func buildModulatingBody(t *testing.T) map[string]any {
 	if v == nil {
 		t.Fatal("valve.NewModulating returned nil (LEVEL float not resolved)")
 	}
-	comp, body := haBody(t, v.HADiscoveryComponent(roundtripDiscoveryCtx{}))
+	comp, body := haEntityBody(t, v.HADiscoveryEntity(), roundtripDiscoveryCtx{})
 	if comp != "valve" {
 		t.Fatalf("modulating component = %q, want valve", comp)
 	}

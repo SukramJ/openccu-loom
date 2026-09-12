@@ -52,22 +52,27 @@ func (w *lockTargetLevelWriter) SetValue(_ context.Context, _ string, p hmenum.P
 // this guard reads the payload values, not the topic wiring.
 type lockTargetLevelDiscoveryCtx struct{}
 
-func (lockTargetLevelDiscoveryCtx) CustomDPStateTopic() string { return "ltl/custom/state" }
+func (lockTargetLevelDiscoveryCtx) CustomDPStateTopic() string   { return "ltl/custom/state" }
+func (lockTargetLevelDiscoveryCtx) CustomDPCommandTopic() string { return "ltl/svc" }
 
-func (lockTargetLevelDiscoveryCtx) ServiceMethodCommandTopic(m string) string {
-	return "ltl/svc/" + m + "/set"
-}
-
-func (lockTargetLevelDiscoveryCtx) WireParameterCommandTopic(p string) string {
-	return "ltl/" + p + "/set"
-}
-func (lockTargetLevelDiscoveryCtx) WireParameterStateTopic(p string) string { return "ltl/" + p }
-
-func (lockTargetLevelDiscoveryCtx) WireParameterStateTopicOn(addr, p string) string {
+func (lockTargetLevelDiscoveryCtx) WireParameterStateTopic(addr, p string) string {
+	if addr == "" {
+		return "ltl/" + p
+	}
 	return "ltl/" + addr + "/" + p
 }
 
-var _ pload.HADiscoveryContext = lockTargetLevelDiscoveryCtx{}
+func (lockTargetLevelDiscoveryCtx) WireParameterCommandTopic(addr, p string) string {
+	if addr == "" {
+		return "ltl/" + p + "/set"
+	}
+	return "ltl/" + addr + "/" + p + "/set"
+}
+
+func (lockTargetLevelDiscoveryCtx) DeviceAvailabilityTopic() string { return "ltl/availability" }
+func (lockTargetLevelDiscoveryCtx) BridgeStatusTopic() string       { return "ltl/bridge/status" }
+
+var _ pload.HADiscoveryTopics = lockTargetLevelDiscoveryCtx{}
 
 // TestLockTargetLevelDiscoveryPayloadsMatchServiceWrites crosses the
 // seam between the advertised HA payloads and the wire write: for each
@@ -86,11 +91,11 @@ func TestLockTargetLevelDiscoveryPayloadsMatchServiceWrites(t *testing.T) {
 		Capabilities: custom.LockCapabilities{SupportsOpen: true},
 	})
 
-	component, body := haBody(t, l.HADiscoveryComponent(lockTargetLevelDiscoveryCtx{}))
+	component, body := haEntityBody(t, l.HADiscoveryEntity(), lockTargetLevelDiscoveryCtx{})
 	if component != "lock" {
 		t.Fatalf("component = %q, want %q", component, "lock")
 	}
-	wantTopic := lockTargetLevelDiscoveryCtx{}.WireParameterCommandTopic(string(hmenum.ParameterLockTargetLevel))
+	wantTopic := lockTargetLevelDiscoveryCtx{}.WireParameterCommandTopic("", string(hmenum.ParameterLockTargetLevel))
 	if got := body["command_topic"]; got != wantTopic {
 		t.Fatalf("command_topic = %v, want %v — the advertised payloads only reach LOCK_TARGET_LEVEL through this topic", got, wantTopic)
 	}

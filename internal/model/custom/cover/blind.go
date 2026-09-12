@@ -104,7 +104,7 @@ type BlindConfig struct {
 	Capabilities custom.CoverCapabilities
 	Kind         BlindKind
 	// Variant selects the HA device_class for this blind. When zero
-	// (VariantShutter), [Blind.HADiscoveryComponent] substitutes
+	// (VariantShutter), [Blind.HADiscoveryEntity] substitutes
 	// VariantBlind. Set to VariantShade for HmIP-HDM.
 	Variant CoverVariant
 	// Group is the rebased channel-group schema of the profile that

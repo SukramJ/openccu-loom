@@ -441,39 +441,6 @@ func channelNameIsBareAddressNo(name string) bool {
 	return true
 }
 
-// aggregateChannel collapses every parameter on a known custom-
-// domain channel into a single HA entity (climate, cover, lock,
-// light, valve, siren). Returns (component, objectID, payload,
-// true) on a hit — the bridge uses the same dedup cache as the
-// per-parameter path, so subsequent calls for the same channel
-// (one per parameter event) deduplicate to a no-op.
-//
-// Returns ok=false when ev.Source does not implement
-// [payload.HADiscoveryComponentBuilder], the builder returns an empty
-// body, or JSON marshalling fails.
-//
-// ADR 0010: all custom-DP types implement HADiscoveryComponentBuilder.
-// The legacy buildX path has been removed.
-// buildCustomDPBody asks the event's custom DP for its discovery body.
-//
-// The custom DP returns a typed [hadiscovery.Component] whose keys the
-// compiler checked against the platform; everything downstream still works on
-// the flattened map, because the frame and the post-processors are converted
-// in their own steps.
-//
-// Flattening goes through Component's own MarshalJSON, which is what merges
-// its typed fields, its platform Fields struct and its Extra map into the one
-// object Home Assistant receives — so what the rest of the pipeline sees is
-// exactly what would go on the wire.
-func buildCustomDPComponent(ev Event, ctx payload.HADiscoveryContext) (hadiscovery.Component, bool) {
-	builder, is := ev.Source.(payload.HADiscoveryComponentBuilder)
-	if !is || builder == nil {
-		return hadiscovery.Component{}, false
-	}
-	comp := builder.HADiscoveryComponent(ctx)
-	return comp, comp.Platform != ""
-}
-
 // errNoPlatform is what a builder that declined to produce anything yields:
 // a component with no platform cannot name a topic, so it is not a payload.
 var errNoPlatform = errors.New("discovery: component has no platform")
@@ -527,90 +494,209 @@ func flattenComponent(comp hadiscovery.Component) (map[string]any, error) {
 	return out, nil
 }
 
+// aggregateTopicLayout renders a custom data point's slots through this
+// daemon's own [TopicBuilder], so the render pipeline produces exactly the
+// strings already retained on the broker rather than a second spelling of
+// them.
+//
+// It is [payload.SlotLayout] over the per-event context the model-side
+// builders already resolve their topics against, which is what keeps the
+// mapping from coordinate to topic in one place: the model names a slot, this
+// names the topic, and nothing in between spells either twice.
+func (d *DefaultDiscoveryBuilder) aggregateTopicLayout(ev Event) payload.SlotLayout {
+	return payload.SlotLayout{Topics: d.discoveryContext(ev)}
+}
+
+// aggregateDiscoveryContext is the render context for this plane: the
+// standard one with this daemon's identity strings substituted.
+//
+// The unique id and the node id are overridden because Home Assistant has no
+// migration path for either — the unique id keys the entity registry, the node
+// id is a topic segment — and this plane derives them differently from the
+// same event: the unique id from the channel address and the platform, the
+// node id from a slugged central plus the device address. No single derivation
+// produces both.
+type aggregateDiscoveryContext struct {
+	hadiscovery.StdContext
+
+	uniqueID string
+	nodeID   string
+}
+
+// UniqueID implements [hadiscovery.Context] with the id this daemon already
+// publishes, central scoping and all.
+func (c aggregateDiscoveryContext) UniqueID(*hamodel.Device, hamodel.Entity) string {
+	return c.uniqueID
+}
+
+// NodeID implements [hadiscovery.Context].
+func (c aggregateDiscoveryContext) NodeID(*hamodel.Device) string { return c.nodeID }
+
+// ObjectID implements [hadiscovery.Context] with the empty string, which
+// suppresses `default_entity_id`. This plane has never published an entity-id
+// seed; adding one now would rename every aggregate entity in the fleet, and
+// nothing downstream could undo it. The object id in the discovery TOPIC is a
+// different string and is carried on the [DiscoveryItem].
+func (c aggregateDiscoveryContext) ObjectID(*hamodel.Device, hamodel.Entity) string { return "" }
+
+// customDPEntity asks the event's custom data point to describe itself on the
+// shared model.
+//
+// Returns ok=false when the source is not a custom data point at all, or
+// declines — which is what sends the caller on to the per-parameter path.
+func customDPEntity(ev Event) (hamodel.Entity, bool) {
+	builder, is := ev.Source.(payload.HADiscoveryEntityBuilder)
+	if !is || builder == nil {
+		return nil, false
+	}
+	entity := builder.HADiscoveryEntity()
+	if entity == nil || entity.Desc() == nil {
+		return nil, false
+	}
+	return entity, entity.Platform() != ""
+}
+
+// aggregateEntityName resolves the entity's display name, empty when it has
+// none of its own.
+//
+// Having none is a statement, not a gap: `name: null` is how Home Assistant is
+// told the entity carries the device's name alone. An empty string is read as
+// "derive one" and produces the double prefix this convention exists to
+// avoid, which is why the caller nulls the key rather than leaving it blank.
+//
+// `translation_key` is a native-HA-integration concept: it resolves against
+// that integration's own translations.json, which an MQTT-discovered entity
+// has none of, so HA's MQTT schema strips the key on receipt and it never
+// affects anything. An entity left nameless alongside a translation_key that
+// would normally have supplied the display suffix therefore shows up in HA as
+// the bare device name — indistinguishable from any other single-primary
+// entity on the same device (canonical case: an HmIP-eTRV's climate and its
+// BUTTON_LOCK child lock both landing on "<device name>"). Resolving the key
+// through this daemon's own catalogue and using the result as the name is what
+// tells them apart; a key with no catalogue entry keeps the null, same as
+// before.
+func (d *DefaultDiscoveryBuilder) aggregateEntityName(ev Event, desc *hamodel.Description) string {
+	if name := displayChannelName(ev); name != "" {
+		return name
+	}
+	tk, _ := desc.Extra["translation_key"].(string)
+	if tk == "" {
+		return ""
+	}
+	nameKey := "discovery.entity_name." + tk
+	if resolved := d.tr(nameKey); resolved != nameKey {
+		return resolved
+	}
+	return ""
+}
+
+// aggregateChannel collapses every parameter on a known custom-domain channel
+// into a single HA entity (climate, cover, lock, light, valve, siren, switch).
+// Returns (component, nodeID, objectID, payload, true) on a hit — the bridge
+// uses the same dedup cache as the per-parameter path, so subsequent calls for
+// the same channel (one per parameter event) deduplicate to a no-op.
+//
+// The payload is rendered by the shared model's per-entity discovery form
+// ([hadiscovery.RenderComponent]), which attaches the device and origin blocks
+// and derives the availability list, the unique id and the topics from the
+// entity's description and bindings. The custom data point contributes what it
+// alone knows — its platform's vocabulary — and nothing else.
+//
+// Returns ok=false when ev.Source is not a custom data point, when it declines
+// to describe itself, when the device descriptor carries no identity, or when
+// the render or the encode fails.
 func (d *DefaultDiscoveryBuilder) aggregateChannel(ev Event) (component, nodeID, objectID string, buf []byte, ok bool) {
-	// Text-display custom-DPs (HmIP-WRCD) surface ONLY as a `notify`
-	// entity in the reference stack — the TEXT_DISPLAY category maps to
-	// the notify platform alone, not to a `text` entity. The notify
-	// companion is published separately via
-	// [Bridge.publishTextDisplayNotify]; suppressing the aggregate here
-	// keeps the loom plane from emitting a surplus `text` entity (which
-	// HA would otherwise collide with the notify under a `_2` suffix).
+	// Text-display custom-DPs (HmIP-WRCD) surface ONLY as a `notify` entity in
+	// the reference stack — the TEXT_DISPLAY category maps to the notify
+	// platform alone, not to a `text` entity. The notify companion is
+	// published separately via [Bridge.publishTextDisplayNotify]; suppressing
+	// the aggregate here keeps the loom plane from emitting a surplus `text`
+	// entity (which HA would otherwise collide with the notify under a `_2`
+	// suffix).
 	if isTextDisplayEvent(ev) {
 		return "", "", "", nil, false
 	}
-	built, built0K := buildCustomDPComponent(ev, d.discoveryContext(ev))
-	if !built0K {
+	entity, described := customDPEntity(ev)
+	if !described {
 		return "", "", "", nil, false
 	}
-	comp := string(built.Platform)
-	// The frame is applied while the payload is still typed — unique_id,
-	// availability, device, origin and the name — so the five keys the bridge
-	// owns cannot be misspelled either. It runs before the flattening because
-	// the post-processors below still work on keys.
-	frameUniqueID, frameScoped := d.channelUniqueID(ev, comp)
-	if !frameScoped {
+	component = string(entity.Platform())
+	uniqueID, scoped := d.channelUniqueID(ev, component)
+	if !scoped {
 		return "", "", "", nil, false
 	}
-	d.applyChannelFrame(&built, ev, displayChannelName(ev), frameUniqueID)
-	// The climate preset list leaves the domain as slugs; the ones HA
-	// cannot translate get labels here, where the catalogues are.
-	if HAComponent(comp) == HAComponentClimate {
-		d.localiseClimatePresets(&built)
+	dev := modelDeviceFromInfo(deviceDescriptor(ev, d.hubURLFor(ev), d.SubDevicesEnabled))
+	if dev == nil {
+		return "", "", "", nil, false
 	}
-	objectID = d.channelObjectID(ev, comp)
-	nodeID = discoveryNodeID(d.centralFor(ev), ev.DeviceAddress)
-	// Strict variant: when neither a rule nor a category-default matches, every
-	// HA-attribute field is stripped so an unknown model gets no
-	// `device_class` etc. (mirrors HA-native behaviour). Without this the legacy
-	// openccu-loom table would keep emitting `device_class=shutter` for models
-	// the HA integration has no cover rule for.
+
+	desc := entity.Desc()
+	// Strict variant: when neither a rule nor a category-default matches,
+	// every HA-attribute field is cleared so an unknown model gets no
+	// `device_class` etc. (mirroring HA-native behaviour). Without it the
+	// legacy openccu-loom table would keep emitting `device_class=shutter`
+	// for models the HA integration has no cover rule for.
 	//
 	// Postfix propagation: the HA integration matches Lock variants
 	// (BUTTON_LOCK, …) by `dp.data_point_name_postfix`. Pull it from the
-	// Custom-DP when available so the postfix-keyed rules in
-	// `entity_helpers/descriptions/locks.py` fire on the openccu-loom side too.
+	// custom data point when available so the postfix-keyed rules in
+	// `entity_helpers/descriptions/locks.py` fire on the openccu-loom side
+	// too.
 	postfix := ""
-	if pf, ok := ev.Source.(interface{ NamePostfix() string }); ok {
+	if pf, is := ev.Source.(interface{ NamePostfix() string }); is {
 		postfix = pf.NamePostfix()
 	}
-	applyEntityDescriptionStrict(&built, comp, "", ev.Model, ev.descUnit(), postfix)
-	// `translation_key` is a native-HA-integration concept: it resolves
-	// against that integration's own translations.json, which an
-	// MQTT-discovered entity has none of, so HA's MQTT schema strips the
-	// key on receipt and it never affects anything. An entity left with
-	// `name: null` (see applyChannelFrame) alongside a translation_key that
-	// would normally have supplied the display suffix therefore shows up
-	// in HA as the bare device name — indistinguishable from any other
-	// single-primary entity on the same device (canonical case: an
-	// HmIP-eTRV's climate and its BUTTON_LOCK child lock both landing on
-	// "<device name>"). Resolve the key through the daemon's own
-	// catalogue and use the result as the name instead; entities whose
-	// translation_key has no catalogue entry keep the untouched null,
-	// same as before.
-	if built.NameNull {
-		if tk, ok := built.Extra["translation_key"].(string); ok && tk != "" {
-			nameKey := "discovery.entity_name." + tk
-			if resolved := d.tr(nameKey); resolved != nameKey {
-				built.Name = resolved
-				built.NameNull = false
-			}
-		}
+	applyEntityDescriptionStrict(desc, component, "", ev.Model, ev.descUnit(), postfix)
+	name := d.aggregateEntityName(ev, desc)
+	desc.Name = hamodel.L(name)
+	// CDP_SECONDARY entities (mirror channels declared via the profile's
+	// `secondary_channels`) are hidden by default in HA
+	// (model/data_point.py:399). The operator can re-enable them from the
+	// device card; without this flag they show up as duplicate primary
+	// entities and pollute the dashboard.
+	if insp, is := ev.Channel.(CustomDPNamingInspector); is && insp.IsCustomDPSecondaryChannel() {
+		desc.Enabled = hamodel.Ptr(false)
 	}
-	// CDP_SECONDARY entities (mirror channels declared via the
-	// profile's `secondary_channels`) are hidden by default in HA —
-	// (model/data_point.py:399). The operator can re-enable them
-	// from the device card; without this flag they show up as
-	// duplicate primary entities and pollute the dashboard.
-	if insp, ok := ev.Channel.(CustomDPNamingInspector); ok && insp.IsCustomDPSecondaryChannel() {
-		built.EnabledByDefault = hadiscovery.Ptr(false)
+
+	nodeID = discoveryNodeID(d.centralFor(ev), ev.DeviceAddress)
+	objectID = d.channelObjectID(ev, component)
+	ctx := aggregateDiscoveryContext{
+		StdContext: hadiscovery.StdContext{
+			Layout: d.aggregateTopicLayout(ev),
+			Lang:   d.Locale,
+			// A custom data point's aggregate carries a curated document, not
+			// the `{"value": …}` envelope the per-parameter plane publishes,
+			// and every field of it names its own template. The envelope
+			// default would project one onto entities that deliberately
+			// publish none.
+			Enc:        hadiscovery.RawEncoding,
+			Translator: d.tr,
+		},
+		uniqueID: uniqueID,
+		nodeID:   nodeID,
 	}
-	body, err := flattenComponent(built)
+	comp, err := hadiscovery.RenderComponent(ctx, dev, entity, *BuildOriginInfo())
+	if err != nil {
+		return "", "", "", nil, false
+	}
+	// `name` is JSON-null when blank — that is HA's signal to render
+	// `friendly_name` = device.name alone. The model has no way to say it: an
+	// empty [hamodel.Localized] is the absence of an opinion, and the render
+	// pipeline drops the key rather than nulling it, which makes HA derive a
+	// name from the platform instead.
+	comp.NameNull = comp.Name == ""
+	// The climate preset list leaves the domain as slugs; the ones HA cannot
+	// translate get labels here, where the catalogues are.
+	if HAComponent(component) == HAComponentClimate {
+		d.localiseClimatePresets(&comp)
+	}
+	body, err := flattenComponent(comp)
 	if err != nil {
 		return "", "", "", nil, false
 	}
 	// Lists a custom data point declared localisable — siren tones, light
 	// effects — carry their labels on the event. This one stays on the
-	// flattened body: the keys it rewrites are named by the model
+	// flattened body: the keys it rewrites are named by the platform
 	// (effect_list, available_tones) and live on different platform structs,
 	// which is what makes it the one genuinely dynamic step here.
 	applySelectionLabels(body, ev.SelectionLabels)
@@ -618,23 +704,25 @@ func (d *DefaultDiscoveryBuilder) aggregateChannel(ev Event) (component, nodeID,
 	if err != nil {
 		return "", "", "", nil, false
 	}
-	return comp, nodeID, objectID, out, true
+	return component, nodeID, objectID, out, true
 }
 
 // discoveryCtx is the bridge-side implementation of
-// [payload.HADiscoveryContext]. It carries the per-event scoping
-// (central, interface, address, channel) so model-side builders can
-// request topic strings without knowing the topology.
+// [payload.HADiscoveryTopics]. It carries the per-event scoping (central,
+// interface, address, channel) so the shared model's layout can render a
+// custom data point's slots without knowing the topology.
 type discoveryCtx struct {
 	d  *DefaultDiscoveryBuilder
 	ev Event
 }
 
-// CustomDPStateTopic returns the channel's custom-DP slot state
-// topic `<addr>/<ch>/custom/<kind>`. The kind is read from the
-// event's Source via the [payload.Slotted] interface — every
-// custom-DP implements it. Empty when the source is missing or not
-// a slotted custom-DP (e.g. a per-parameter discovery event).
+var _ payload.HADiscoveryTopics = discoveryCtx{}
+
+// CustomDPStateTopic returns the channel's custom-DP slot state topic
+// `<addr>/<ch>/custom/<kind>`. The kind is read from the event's Source via
+// the [payload.Slotted] interface — every custom-DP implements it. Empty when
+// the source is missing or not a slotted custom-DP (e.g. a per-parameter
+// discovery event).
 func (c discoveryCtx) CustomDPStateTopic() string {
 	slot, ok := customDPSlotForEvent(c.ev)
 	if !ok {
@@ -676,6 +764,31 @@ func customDPSlotForEvent(ev Event) (payload.TopicSlot, bool) {
 	return slot, true
 }
 
+// CustomDPCommandTopic is the base every named action hangs off: the shared
+// context appends `/<method>` to it, which is exactly
+// [TopicBuilder.CustomDPServiceMethod]'s `…/custom/<kind>/set/<method>` shape.
+//
+// It is derived by asking that builder for a method topic and dropping the
+// method segment, rather than by appending "/set" to the state topic, so the
+// two spellings cannot drift apart.
+func (c discoveryCtx) CustomDPCommandTopic() string {
+	slot, ok := customDPSlotForEvent(c.ev)
+	if !ok {
+		return ""
+	}
+	const probe = "method"
+	full := c.d.TopicBuilder.CustomDPServiceMethod(c.d.centralFor(c.ev), c.ev.Interface, slot, probe)
+	return strings.TrimSuffix(full, "/"+probe)
+}
+
+// ServiceMethodCommandTopic is the topic Home Assistant writes to in order to
+// invoke method on this channel's custom data point.
+//
+// The aggregate plane reaches it through [discoveryCtx.CustomDPCommandTopic]
+// and the shared render context, which appends the method segment itself. It
+// stays a method of its own for the notify plane, whose entity has no custom-DP
+// binding to derive the base from — the display's `write` service is the whole
+// of what that entity addresses.
 func (c discoveryCtx) ServiceMethodCommandTopic(method string) string {
 	slot, ok := customDPSlotForEvent(c.ev)
 	if !ok {
@@ -684,32 +797,54 @@ func (c discoveryCtx) ServiceMethodCommandTopic(method string) string {
 	return c.d.TopicBuilder.CustomDPServiceMethod(c.d.centralFor(c.ev), c.ev.Interface, slot, method)
 }
 
-func (c discoveryCtx) WireParameterCommandTopic(parameter string) string {
-	return c.d.TopicBuilder.DataPointCommand(c.d.centralFor(c.ev), c.ev.Interface, c.ev.DeviceAddress, c.ev.ChannelNo, parameter)
+// WireParameterCommandTopic is the per-parameter `/set` topic. An empty
+// channelAddress means the channel this event names, which is what a slot
+// built by [payload.WireSlot] leaves unsaid.
+func (c discoveryCtx) WireParameterCommandTopic(channelAddress, parameter string) string {
+	address, channel := c.channelOf(channelAddress)
+	return c.d.TopicBuilder.DataPointCommand(
+		c.d.centralFor(c.ev), c.ev.Interface, address, channel, parameter,
+	)
 }
 
-func (c discoveryCtx) WireParameterStateTopic(parameter string) string {
-	// Canonical per-parameter state topic — same shape every consumer
-	// uses (HA value-template extractors, slot-state publishes,
-	// Legacy HA reads
-	// the PerDPState envelope `{"value": ..., "available": ...,
-	// "modified_at": ..., "type": ..., "unit": ...}` via
-	// `value_template "{{ value_json.value }}"`.
+// WireParameterStateTopic is the canonical per-parameter state topic — the
+// same shape every consumer uses. Home Assistant reads the PerDPState envelope
+// `{"value": …, "available": …, "modified_at": …, "type": …, "unit": …}`
+// through a `value_json.value` template.
+func (c discoveryCtx) WireParameterStateTopic(channelAddress, parameter string) string {
+	address, channel := c.channelOf(channelAddress)
 	return c.d.TopicBuilder.ParameterState(
-		c.d.centralFor(c.ev), c.ev.Interface, c.ev.DeviceAddress, c.ev.ChannelNo,
+		c.d.centralFor(c.ev), c.ev.Interface, address, channel,
 		payload.BucketValues, parameter,
 	)
 }
 
-func (c discoveryCtx) WireParameterStateTopicOn(channelAddress, parameter string) string {
-	deviceAddr, channelNo, ok := hmtypes.SplitChannelAddress(channelAddress)
-	if !ok {
-		return c.WireParameterStateTopic(parameter)
+// DeviceAvailabilityTopic is the owning device's retained reachability topic.
+func (c discoveryCtx) DeviceAvailabilityTopic() string {
+	return c.d.TopicBuilder.DeviceAvailability(c.d.centralFor(c.ev), c.ev.Interface, c.ev.DeviceAddress)
+}
+
+// BridgeStatusTopic is the daemon's own LWT.
+func (c discoveryCtx) BridgeStatusTopic() string { return c.d.TopicBuilder.BridgeStatus() }
+
+// channelOf resolves a `<device>:<n>` address to its parts, falling back to
+// the channel this event names.
+//
+// A custom data point may compose a field from a sibling channel — the classic
+// HM-CC-TC keeps its setpoint on the regulator channel while the thermostat is
+// materialised on the weather channel — and the per-parameter state is
+// published under the channel the parameter actually lives on. An address with
+// no parsable channel suffix is the event's own channel, which is what a slot
+// that named neither means.
+func (c discoveryCtx) channelOf(channelAddress string) (address string, channel int) {
+	if channelAddress == "" {
+		return c.ev.DeviceAddress, c.ev.ChannelNo
 	}
-	return c.d.TopicBuilder.ParameterState(
-		c.d.centralFor(c.ev), c.ev.Interface, deviceAddr, channelNo,
-		payload.BucketValues, parameter,
-	)
+	address, channel, ok := hmtypes.SplitChannelAddress(channelAddress)
+	if !ok {
+		return c.ev.DeviceAddress, c.ev.ChannelNo
+	}
+	return address, channel
 }
 
 func (d *DefaultDiscoveryBuilder) discoveryContext(ev Event) discoveryCtx {
@@ -778,67 +913,6 @@ func channelPathData(ev Event) naming.PathData {
 		ev.DeviceAddress,
 		ev.ChannelNo,
 	)
-}
-
-// applyChannelFrame stamps the five keys the bridge owns — unique_id,
-// availability, availability_mode, device, origin — plus the name onto a
-// component a model-side custom-DP builder produced.
-//
-// It is the custom-DP aggregate's frame and nothing else's: the channel-level
-// event entities on this plane render through the shared model's own pipeline
-// ([DefaultDiscoveryBuilder.renderChannelEvent]), which derives all of this
-// from the device and the entity's description instead. This one remains
-// because the aggregate's body arrives from a builder that has not been
-// lifted onto that model yet.
-//
-// Per-availability-entry `payload_available`/`payload_not_available` match
-// the strings the bridge actually publishes ("online" / "offline") — Home
-// Assistant's defaults are the same, but pinning them avoids a surprise if
-// the bridge contract ever changes.
-func (d *DefaultDiscoveryBuilder) applyChannelFrame(comp *hadiscovery.Component, ev Event, name, uniqueID string) {
-	// Each field is applied only where the builder left it unset, which is the
-	// precedence this pipeline settled on: the builder wins, the frame fills
-	// the gaps. Today the two sets are disjoint — no custom DP writes any of
-	// these — so every guard holds trivially; they are here so the rule stays
-	// the rule when one of them does.
-	if comp.UniqueID == "" {
-		comp.UniqueID = uniqueID
-	}
-	if len(comp.Availability) == 0 {
-		comp.Availability = []hadiscovery.AvailabilityEntry{
-			{
-				Topic:               d.TopicBuilder.BridgeStatus(),
-				PayloadAvailable:    "online",
-				PayloadNotAvailable: "offline",
-			},
-			{
-				Topic:               d.TopicBuilder.DeviceAvailability(d.centralFor(ev), ev.Interface, ev.DeviceAddress),
-				PayloadAvailable:    "online",
-				PayloadNotAvailable: "offline",
-			},
-		}
-	}
-	if comp.AvailabilityMode == "" {
-		comp.AvailabilityMode = "all"
-	}
-	if comp.Device == nil {
-		comp.Device = deviceDescriptor(ev, d.hubURLFor(ev), d.SubDevicesEnabled)
-	}
-	if comp.Origin == nil {
-		comp.Origin = BuildOriginInfo()
-	}
-	// `name` is JSON-null when blank — that is HA's signal to render
-	// `friendly_name` = device.name alone. An empty string is treated
-	// as "default" (entity-id derived), which produces the same
-	// double-prefix the bug we are fixing originally surfaced, and an
-	// absent key makes Home Assistant derive one from the platform.
-	if comp.Name == "" && !comp.NameNull {
-		if name == "" {
-			comp.NameNull = true
-		} else {
-			comp.Name = name
-		}
-	}
 }
 
 // displayChannelName returns the entity-name string for an aggregated

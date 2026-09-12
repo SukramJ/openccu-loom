@@ -151,7 +151,7 @@ func TestEveryAdvertisedEffectCanBeSelected(t *testing.T) {
 	t.Parallel()
 
 	el, w := newRGBWWMEffectLight(t)
-	_, body := haBody(t, el.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, el.HADiscoveryEntity(), discoveryCtx{})
 	list := haStrings(t, body, "effect_list")
 	if len(list) == 0 {
 		t.Fatal("the discovery payload advertises no effects for a device whose profile declares them")
@@ -222,7 +222,7 @@ func TestColourCommandsReachTheDevicesSingleColorParameter(t *testing.T) {
 	t.Parallel()
 
 	el, w := newRGBWWMEffectLight(t)
-	_, body := haBody(t, el.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, el.HADiscoveryEntity(), discoveryCtx{})
 	modes := haStrings(t, body, "supported_color_modes")
 	if !slices.Contains(modes, "hs") {
 		t.Fatalf("supported_color_modes = %v, want the hs mode the device can serve", modes)

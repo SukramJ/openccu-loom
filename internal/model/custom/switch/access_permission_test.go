@@ -220,7 +220,7 @@ func TestAccessPermissionIsSlottedAndDiscoverable(t *testing.T) {
 	}
 
 	ctx := &stubDiscoveryCtx{customStateTopic: "state/custom"}
-	component, body := haBody(t, ap.HADiscoveryComponent(ctx))
+	component, body := haEntity(t, ap.HADiscoveryEntity(), ctx)
 	if component != "switch" {
 		t.Fatalf("component = %q, want switch", component)
 	}
@@ -256,7 +256,7 @@ func TestAccessPermissionHACommandGrantsAndRevokes(t *testing.T) {
 			// command through.
 			state.OnEvent(tc.wantLabel == accessAuthorizationDisable)
 
-			_, body := haBody(t, ap.HADiscoveryComponent(&stubDiscoveryCtx{customStateTopic: "state/custom"}))
+			_, body := haEntity(t, ap.HADiscoveryEntity(), &stubDiscoveryCtx{customStateTopic: "state/custom"})
 			arg, _ := body[tc.bodyKey].(string)
 			err := ap.Invoke(context.Background(), serviceAccessPermission,
 				map[string]any{argAccessPermission: arg}, hmenum.CommandPriorityHigh)

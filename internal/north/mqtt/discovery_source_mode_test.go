@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	hacatalog "github.com/SukramJ/go-ha-catalog"
-	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hamodel "github.com/SukramJ/go-hamqtt/model"
 
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -43,15 +43,15 @@ func cloneMap(m map[string]any) map[string]any {
 	return out
 }
 
-// stubBuilder extends stubSource with HADiscoveryComponentBuilder so that
-// aggregateChannel takes the ADR 0010 fast path (builder dispatch) instead
-// of the deleted legacy buildX path. Tests populate component and body
-// directly; the aggregator fills in the base body fields the builder left
-// unset.
+// stubBuilder extends stubSource with [payload.HADiscoveryEntityBuilder] so
+// that aggregateChannel takes the custom-DP path instead of the per-parameter
+// one. Tests populate component and body directly; the render pipeline adds
+// the frame the entity says nothing about.
 //
-// The keys go into Component.Extra rather than a typed Fields struct on
-// purpose: these tests exercise the aggregator, and several of them feed it
-// bodies no platform would accept. Extra is the escape hatch for exactly that.
+// The keys go into the description's Extra rather than a typed Fields struct
+// on purpose: these tests exercise the aggregator, and several of them feed it
+// bodies no platform would accept. Extra is the escape hatch for exactly that,
+// and it is applied last, which is what the precedence tests here pin.
 type stubBuilder struct {
 	stubSource
 	component string
@@ -61,16 +61,19 @@ type stubBuilder struct {
 	fields any
 }
 
-func (s *stubBuilder) HADiscoveryComponent(_ payload.HADiscoveryContext) hadiscovery.Component {
+func (s *stubBuilder) HADiscoveryEntity() hamodel.Entity {
 	if s.body == nil && s.fields == nil {
-		// A builder with nothing to say produces no component, which is what
-		// the untyped form signalled with a nil body.
-		return hadiscovery.Component{}
+		// A builder with nothing to say produces no entity, which is what the
+		// untyped form signalled with a nil body.
+		return nil
 	}
-	return hadiscovery.Component{
-		Platform: hacatalog.Platform(s.component),
-		Fields:   s.fields,
-		Extra:    cloneMap(s.body),
+	return &payload.CustomEntity{
+		Basic: hamodel.Basic{
+			EntityKey:      s.component,
+			EntityPlatform: hacatalog.Platform(s.component),
+			Description:    hamodel.Description{Extra: cloneMap(s.body)},
+		},
+		Fields: s.fields,
 	}
 }
 

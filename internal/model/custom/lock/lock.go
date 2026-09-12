@@ -537,7 +537,7 @@ func (l *Lock) send(ctx context.Context, cmd command, priority hmenum.CommandPri
 //
 // These three constants are the single definition of "which
 // LOCK_TARGET_LEVEL value performs which lock operation": both
-// [Lock.sendIP] and the HA discovery payload ([Lock.HADiscoveryComponent])
+// [Lock.sendIP] and the HA discovery payload ([Lock.HADiscoveryEntity])
 // read them, so the daemon's own write and a Home-Assistant-originated
 // write carry the same token. Spelling the discovery payload as the
 // positional indices instead would restate the rule against a VALUE_LIST
@@ -552,7 +552,7 @@ const (
 // STATE parameter. Declared once because four live sites express the same
 // fact and none of them can see the others: [Lock.sendRF] writes it,
 // [Lock.LockState] reads it back, [Lock.observeCommand] stamps the optimistic
-// echo, and [Lock.HADiscoveryComponent] republishes it as the payload_lock /
+// echo, and [Lock.HADiscoveryEntity] republishes it as the payload_lock /
 // payload_unlock strings Home Assistant publishes onto the STATE command
 // topic. Any one of the four drifting alone unlocks a door the other three
 // believe is locked; tests/contract/w2Cst_lock_rf_state_parity_test.go crosses

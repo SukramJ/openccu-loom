@@ -44,8 +44,8 @@ func hmLgtCanonicalLowerTemplate(t *testing.T) string {
 func TestHmLgtSwitchValueTemplateMatchesTheCanonicalOne(t *testing.T) {
 	t.Parallel()
 
-	s := &Switch{}
-	_, body := haBody(t, s.HADiscoveryComponent(&stubDiscoveryCtx{}))
+	s := newPayloadSwitch(t)
+	_, body := haEntity(t, s.HADiscoveryEntity(), &stubDiscoveryCtx{})
 	got, ok := body["value_template"].(string)
 	if !ok {
 		t.Fatalf("switch discovery body carries no string value_template: %#v", body["value_template"])

@@ -112,7 +112,7 @@ func TestLSCHADiscoveryAdvertisesColorTempAndHs(t *testing.T) {
 	w := &colorStubWriter{}
 	r := newLSCLightRig(t, w)
 
-	_, body := haBody(t, r.HADiscoveryComponent(discoveryCtx{}))
+	_, body := haEntity(t, r.HADiscoveryEntity(), discoveryCtx{})
 	if body == nil {
 		t.Fatal("HADiscoveryPayload body must not be nil")
 	}

@@ -9,6 +9,7 @@ import (
 
 	hacatalog "github.com/SukramJ/go-ha-catalog"
 	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hamodel "github.com/SukramJ/go-hamqtt/model"
 
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -18,12 +19,12 @@ import (
 // satisfy the universal Source contract and the HA-Discovery payload
 // builder contract (ADR 0010). ADR-0007 step 5.
 var (
-	_ payload.Source                      = (*Siren)(nil)
-	_ payload.Source                      = (*SmokeSiren)(nil)
-	_ payload.Source                      = (*SoundPlayer)(nil)
-	_ payload.HADiscoveryComponentBuilder = (*Siren)(nil)
-	_ payload.HADiscoveryComponentBuilder = (*SmokeSiren)(nil)
-	_ payload.HADiscoveryComponentBuilder = (*SoundPlayer)(nil)
+	_ payload.Source                   = (*Siren)(nil)
+	_ payload.Source                   = (*SmokeSiren)(nil)
+	_ payload.Source                   = (*SoundPlayer)(nil)
+	_ payload.HADiscoveryEntityBuilder = (*Siren)(nil)
+	_ payload.HADiscoveryEntityBuilder = (*SmokeSiren)(nil)
+	_ payload.HADiscoveryEntityBuilder = (*SoundPlayer)(nil)
 )
 
 // --- Siren ---
@@ -181,21 +182,53 @@ func (s *SmokeSiren) State() payload.StatePayload {
 	return &payload.SmokeSirenState{State: state}
 }
 
-// HADiscoveryComponent returns the HA Siren-platform-specific payload
-// skeleton. HA siren platform uses a single command_topic with
-// payload_on / payload_off — both values are sent to the same topic.
+// sirenEntity is a siren on the shared model plus the one command shape the
+// model cannot express: HA's siren platform sends payload_on and payload_off
+// to one command_topic, and the sirens whose write is a named action declare
+// more than one method — so the render pipeline cannot pick it on its own.
+type sirenEntity struct {
+	payload.CustomEntity
+
+	// method is the named action the command topic points at, empty for a
+	// siren whose command is a wire-parameter binding.
+	method string
+}
+
+// BuildDiscovery implements [hadiscovery.Builder].
+func (e *sirenEntity) BuildDiscovery(ctx hadiscovery.Context, comp *hadiscovery.Component) error {
+	if err := e.CustomEntity.BuildDiscovery(ctx, comp); err != nil {
+		return err
+	}
+	if e.method != "" {
+		comp.CommandTopic = e.MethodTopic(ctx, e.method)
+	}
+	return nil
+}
+
+// sirenDescription is what every siren on this plane says about itself: it
+// confirms from the aggregate rather than assuming a command took effect.
 //
-// command_topic points at the turn_on service-method topic. HA sends
-// payload_on ("on") for activation and payload_off ("off") for
-// deactivation to that single topic. The turn_on service handler muxes
-// on params["value"] == "off" to route the off command to TurnOff,
-// avoiding a write to a non-existent STATE wire parameter that would
-// produce an XML-RPC fault on every HA command.
+// The state itself is read through the platform's own state_value_template
+// (see [hadiscovery.SirenFields]), not through the description's — HA's siren
+// schema declares both keys and reads the platform one.
+func sirenDescription() hamodel.Description {
+	return hamodel.Description{Optimistic: hamodel.Ptr(false)}
+}
+
+// HADiscoveryEntity describes the siren on the shared model. HA's siren
+// platform uses a single command_topic with payload_on / payload_off — both
+// values are sent to the same topic.
+//
+// That topic is the turn_on method's. HA sends payload_on ("on") for
+// activation and payload_off ("off") for deactivation to it, and the turn_on
+// handler muxes on params["value"] == "off" to route the off command to
+// TurnOff — which avoids a write to a non-existent STATE wire parameter that
+// would produce an XML-RPC fault on every HA command.
 //
 // Per ADR 0010: capabilities come from ConfigPayload.
-func (s *Siren) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery.Component {
-	if s == nil || ctx == nil {
-		return hadiscovery.Component{}
+func (s *Siren) HADiscoveryEntity() hamodel.Entity {
+	if s == nil {
+		return nil
 	}
 	// Capabilities from ConfigPayload.
 	cfg, _ := s.Config().(*payload.SirenConfig)
@@ -204,13 +237,13 @@ func (s *Siren) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery
 		supportDuration = cfg.SupportsDuration
 	}
 	fields := hadiscovery.SirenFields{
-		// HA siren: single command_topic; payload_on/payload_off muxed by value.
+		// HA siren: single command_topic; payload_on/payload_off muxed by
+		// value.
 		PayloadOn:  "on",
 		PayloadOff: "off",
-		// State from the channel's aggregated state topic — the
-		// StatePayload publishes the HA-compliant minimal JSON
-		// `{"state": "on"|"off"}` so HA's strict siren schema
-		// (SIREN_PLATFORM_PAYLOAD_SCHEMA) accepts it.
+		// State from the channel's aggregate — the StatePayload publishes the
+		// HA-compliant minimal JSON `{"state": "on"|"off"}` so HA's strict
+		// siren schema (SIREN_PLATFORM_PAYLOAD_SCHEMA) accepts it.
 		StateValueTemplate: "{{ value_json.state }}",
 		StateOn:            "on",
 		StateOff:           "off",
@@ -221,42 +254,56 @@ func (s *Siren) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery
 	if cfg != nil && len(cfg.AvailableTones) > 0 {
 		fields.AvailableTones = cfg.AvailableTones
 	}
-	return hadiscovery.Component{
-		Platform:     hacatalog.PlatformSiren,
-		CommandTopic: ctx.ServiceMethodCommandTopic("turn_on"),
-		StateTopic:   ctx.CustomDPStateTopic(),
-		Optimistic:   hadiscovery.Ptr(false),
-		Fields:       fields,
+	return &sirenEntity{
+		CustomEntity: payload.CustomEntity{
+			Basic: hamodel.Basic{
+				EntityKey:      s.TopicSlot().Parameter,
+				EntityPlatform: hacatalog.PlatformSiren,
+				Description:    sirenDescription(),
+				Binds: []hamodel.Binding{{
+					Role: hamodel.RoleState, Mode: hamodel.Read,
+					Slot: payload.CustomSlot(s.TopicSlot()),
+				}},
+			},
+			Fields: fields,
+		},
+		method: "turn_on",
 	}
 }
 
-// HADiscoveryComponent returns the HA Siren-platform payload for a
-// SmokeSiren. HmIP-SWSD is *not* a passive sensor — it can be
-// triggered by writing the SMOKE_DETECTOR_COMMAND parameter (mirrors
-// turn_on / turn_off via _SirenCommand.ON / OFF). HA logs `required
-// key not provided @
-// data['command_topic']` when no command_topic is emitted; the fix
-// is to point command_topic at SMOKE_DETECTOR_COMMAND and mux
-// payload_on / payload_off onto the device's wire enum values.
+// HADiscoveryEntity describes a SmokeSiren on the shared model. HmIP-SWSD is
+// *not* a passive sensor — it can be triggered by writing the
+// SMOKE_DETECTOR_COMMAND parameter (mirroring turn_on / turn_off via
+// _SirenCommand.ON / OFF). HA logs `required key not provided @
+// data['command_topic']` when no command topic is emitted, so the command
+// binds to SMOKE_DETECTOR_COMMAND and the two payloads are the device's own
+// wire enum values:
 //
-// payload_on  = INTRUSION_ALARM       (raises the alarm sound)
-// payload_off = INTRUSION_ALARM_OFF   (silences it)
+//	payload_on  = INTRUSION_ALARM       (raises the alarm sound)
+//	payload_off = INTRUSION_ALARM_OFF   (silences it)
 //
-// The value_template translates the StatePayload `is_active` boolean
-// back into the same enum so HA's two-way binding works without a
-// separate state DP.
-func (s *SmokeSiren) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery.Component {
-	if s == nil || ctx == nil {
-		return hadiscovery.Component{}
+// The state template translates the StatePayload back into HA's own tokens so
+// the two-way binding works without a separate state DP.
+func (s *SmokeSiren) HADiscoveryEntity() hamodel.Entity {
+	if s == nil {
+		return nil
 	}
-	return hadiscovery.Component{
-		Platform:     hacatalog.PlatformSiren,
-		CommandTopic: ctx.WireParameterCommandTopic("SMOKE_DETECTOR_COMMAND"),
-		// state_topic uses the aggregated topic; StatePayload emits the
-		// HA-compliant minimal `{"state": "on"|"off"}` JSON so the strict
-		// SIREN_PLATFORM_PAYLOAD_SCHEMA accepts it.
-		StateTopic: ctx.CustomDPStateTopic(),
-		Optimistic: hadiscovery.Ptr(false),
+	return &payload.CustomEntity{
+		Basic: hamodel.Basic{
+			EntityKey:      s.TopicSlot().Parameter,
+			EntityPlatform: hacatalog.PlatformSiren,
+			Description:    sirenDescription(),
+			Binds: []hamodel.Binding{
+				{
+					Role: hamodel.RoleState, Mode: hamodel.Read,
+					Slot: payload.CustomSlot(s.TopicSlot()),
+				},
+				{
+					Role: hamodel.RoleCommand, Mode: hamodel.Write,
+					Slot: payload.WireSlot("SMOKE_DETECTOR_COMMAND"),
+				},
+			},
+		},
 		Fields: hadiscovery.SirenFields{
 			PayloadOn:          "INTRUSION_ALARM",
 			PayloadOff:         "INTRUSION_ALARM_OFF",
@@ -269,22 +316,23 @@ func (s *SmokeSiren) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadisc
 	}
 }
 
-// HADiscoveryComponent returns the HA Siren-platform-specific payload
-// for a SoundPlayer. turn_on/turn_off multiplexing: command_topic points
-// at the turn_on service-method topic; payload_off ("off") is routed to
-// TurnOff inside the service handler, avoiding a write to a non-existent
-// STATE wire parameter.
-func (sp *SoundPlayer) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery.Component {
-	if sp == nil || ctx == nil {
-		return hadiscovery.Component{}
+// HADiscoveryEntity describes a SoundPlayer on the shared model. Same
+// turn_on / turn_off multiplexing as [Siren.HADiscoveryEntity]: the command
+// topic is the turn_on method's and payload_off ("off") is routed to TurnOff
+// inside the handler, avoiding a write to a non-existent STATE wire
+// parameter.
+func (sp *SoundPlayer) HADiscoveryEntity() hamodel.Entity {
+	if sp == nil {
+		return nil
 	}
 	fields := hadiscovery.SirenFields{
-		// HA siren: single command_topic; payload_on/payload_off muxed by value.
+		// HA siren: single command_topic; payload_on/payload_off muxed by
+		// value.
 		PayloadOn:  "on",
 		PayloadOff: "off",
-		// State from the aggregated topic — StatePayload emits only
-		// the HA-compliant `{"state": "on"|"off"}` keys so HA's
-		// strict siren schema validation accepts it.
+		// State from the aggregate — StatePayload emits only the
+		// HA-compliant `{"state": "on"|"off"}` keys so HA's strict siren
+		// schema validation accepts it.
 		StateValueTemplate: "{{ value_json.state }}",
 		StateOn:            "on",
 		StateOff:           "off",
@@ -295,12 +343,20 @@ func (sp *SoundPlayer) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadi
 	if cfg, _ := sp.Config().(*payload.SoundPlayerConfig); cfg != nil && len(cfg.AvailableSoundfiles) > 0 {
 		fields.AvailableTones = cfg.AvailableSoundfiles
 	}
-	return hadiscovery.Component{
-		Platform:     hacatalog.PlatformSiren,
-		CommandTopic: ctx.ServiceMethodCommandTopic("turn_on"),
-		StateTopic:   ctx.CustomDPStateTopic(),
-		Optimistic:   hadiscovery.Ptr(false),
-		Fields:       fields,
+	return &sirenEntity{
+		CustomEntity: payload.CustomEntity{
+			Basic: hamodel.Basic{
+				EntityKey:      sp.TopicSlot().Parameter,
+				EntityPlatform: hacatalog.PlatformSiren,
+				Description:    sirenDescription(),
+				Binds: []hamodel.Binding{{
+					Role: hamodel.RoleState, Mode: hamodel.Read,
+					Slot: payload.CustomSlot(sp.TopicSlot()),
+				}},
+			},
+			Fields: fields,
+		},
+		method: "turn_on",
 	}
 }
 

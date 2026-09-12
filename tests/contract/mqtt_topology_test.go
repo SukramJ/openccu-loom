@@ -119,7 +119,7 @@ func TestMQTTTopicHierarchyShape(t *testing.T) {
 // Light / Switch / Siren / Valve / TextDisplay / Blind / Garage)
 // appears anywhere under `internal/north/mqtt/` outside test
 // fixtures. The bridge must consult the declarative source surface
-// (HAEntity, Slotted, HADiscoveryComponentBuilder, DiscoveryDynamic);
+// (HAEntity, Slotted, HADiscoveryEntityBuilder, DiscoveryDynamic);
 // adding a per-domain switch/case means the abstraction is leaking.
 //
 // The check is intentionally text-based: it catches type assertions,
@@ -184,6 +184,6 @@ func TestBridgeHasNoDomainKnowledge(t *testing.T) {
 		for _, v := range violations {
 			t.Errorf("  %s", v)
 		}
-		t.Errorf("Move the domain logic into the model package; the bridge must consult HAEntity / Slotted / DiscoveryDynamic / HADiscoveryComponentBuilder generically.")
+		t.Errorf("Move the domain logic into the model package; the bridge must consult HAEntity / Slotted / DiscoveryDynamic / HADiscoveryEntityBuilder generically.")
 	}
 }

@@ -11,6 +11,7 @@ import (
 
 	hacatalog "github.com/SukramJ/go-ha-catalog"
 	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hamodel "github.com/SukramJ/go-hamqtt/model"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom/cover"
 	"github.com/SukramJ/openccu-loom/internal/payload"
@@ -354,13 +355,26 @@ func (fakePressChannel) HasParameter(name string) bool { return name == "PRESS_S
 // aggregateChannel and return zero values.
 type fakeCustomDPSource struct{ kind string }
 
-func (f fakeCustomDPSource) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscovery.Component {
-	return hadiscovery.Component{
-		Platform:     hacatalog.PlatformSwitch,
-		StateTopic:   ctx.CustomDPStateTopic(),
-		CommandTopic: ctx.ServiceMethodCommandTopic("set"),
-	}
+func (f fakeCustomDPSource) HADiscoveryEntity() hamodel.Entity {
+	return &fakeCustomDPEntity{CustomEntity: payload.CustomEntity{
+		Basic: hamodel.Basic{
+			EntityKey:      f.kind,
+			EntityPlatform: hacatalog.PlatformSwitch,
+			Binds: []hamodel.Binding{{
+				Role: hamodel.RoleState, Mode: hamodel.Read,
+				Slot: payload.CustomSlot(f.TopicSlot()),
+			}},
+		},
+	}}
 }
+
+// fakeCustomDPEntity declares the one named action the fake accepts, which is
+// what makes the render pipeline point `command_topic` at its method topic.
+type fakeCustomDPEntity struct {
+	payload.CustomEntity
+}
+
+func (fakeCustomDPEntity) Methods() []string { return []string{"set"} }
 
 func (f fakeCustomDPSource) TopicSlot() payload.TopicSlot {
 	return payload.TopicSlot{Bucket: payload.BucketCustom, Parameter: f.kind}

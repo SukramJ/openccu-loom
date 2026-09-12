@@ -54,22 +54,25 @@ func (w *recordingWriter) target() (address string, parameter hmenum.Parameter, 
 // "declared under the channel the parameter is published on".
 type bindingDiscoveryCtx struct{ channelAddress string }
 
-func (bindingDiscoveryCtx) CustomDPStateTopic() string { return "test/custom/state" }
-func (bindingDiscoveryCtx) ServiceMethodCommandTopic(method string) string {
-	return "test/svc/" + method + "/set"
+func (bindingDiscoveryCtx) CustomDPStateTopic() string   { return "test/custom/state" }
+func (bindingDiscoveryCtx) CustomDPCommandTopic() string { return "test/custom/state/set" }
+
+func (c bindingDiscoveryCtx) WireParameterCommandTopic(channelAddress, parameter string) string {
+	if channelAddress == "" {
+		channelAddress = c.channelAddress
+	}
+	return "test/" + channelAddress + "/" + parameter + "/set"
 }
 
-func (c bindingDiscoveryCtx) WireParameterCommandTopic(parameter string) string {
-	return "test/" + c.channelAddress + "/" + parameter + "/set"
-}
-
-func (c bindingDiscoveryCtx) WireParameterStateTopic(parameter string) string {
-	return "test/" + c.channelAddress + "/" + parameter
-}
-
-func (bindingDiscoveryCtx) WireParameterStateTopicOn(channelAddress, parameter string) string {
+func (c bindingDiscoveryCtx) WireParameterStateTopic(channelAddress, parameter string) string {
+	if channelAddress == "" {
+		channelAddress = c.channelAddress
+	}
 	return "test/" + channelAddress + "/" + parameter
 }
+
+func (bindingDiscoveryCtx) DeviceAvailabilityTopic() string { return "test/availability" }
+func (bindingDiscoveryCtx) BridgeStatusTopic() string       { return "test/bridge/status" }
 
 // putWireDP registers one wire data point on ch, choosing the generic
 // shape the device pipeline would resolve for the descriptor.
@@ -240,7 +243,7 @@ func TestSimpleRfThermostatDiscoveryNamesPublishedTopics(t *testing.T) {
 	_, chs := newSimpleRfThermostatDevice(t, nil)
 	c := climateOn(t, chs[1])
 
-	comp, body := haBody(t, c.HADiscoveryComponent(bindingDiscoveryCtx{channelAddress: chs[1].Address}))
+	comp, body := haEntity(t, c.HADiscoveryEntity(), bindingDiscoveryCtx{channelAddress: chs[1].Address})
 	if comp != "climate" {
 		t.Fatalf("component = %q, want climate", comp)
 	}
