@@ -269,14 +269,13 @@ func (c hubDiscoveryContext) ObjectID(*hamodel.Device, hamodel.Entity) string { 
 // hubEntity is any hub entity on the shared model: a [hamodel.Basic] plus
 // the handful of keys the model does not carry.
 //
-// `optimistic`, the two json-attributes keys and the platform Fields are
-// Home Assistant vocabulary rather than model semantics, which is the case
+// The two json-attributes keys and the platform Fields are Home Assistant
+// vocabulary rather than model semantics, which is the case
 // [hadiscovery.Builder] exists for.
 type hubEntity struct {
 	hamodel.Basic
 
 	fields                 any
-	optimistic             *bool
 	jsonAttributesTopic    string
 	jsonAttributesTemplate string
 }
@@ -285,9 +284,6 @@ type hubEntity struct {
 func (e *hubEntity) BuildDiscovery(_ hadiscovery.Context, comp *hadiscovery.Component) error {
 	if e.fields != nil {
 		comp.Fields = e.fields
-	}
-	if e.optimistic != nil {
-		comp.Optimistic = e.optimistic
 	}
 	if e.jsonAttributesTopic != "" {
 		comp.JSONAttributesTopic = e.jsonAttributesTopic
@@ -427,7 +423,7 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv Hu
 		if editable {
 			component = string(HAComponentSwitch)
 			writes = true
-			entity.optimistic = hadiscovery.Ptr(false)
+			desc.Optimistic = hamodel.Ptr(false)
 			entity.fields = hadiscovery.SwitchFields{
 				PayloadOn: "true", PayloadOff: "false",
 				StateOn: "true", StateOff: "false",
@@ -447,7 +443,7 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv Hu
 			// daemon publishes and accepts the raw tokens, so an [hamodel.Enum]
 			// without labels renders them verbatim.
 			desc.Options = &hamodel.Enum{Codes: append([]string(nil), sv.ValueList...)}
-			entity.optimistic = hadiscovery.Ptr(false)
+			desc.Optimistic = hamodel.Ptr(false)
 			desc.Category = EntityCategoryConfig
 		} else {
 			component = string(HAComponentSensor)
@@ -462,7 +458,7 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv Hu
 			// render them writable like the reference stack does.
 			component = string(HAComponentText)
 			writes = true
-			entity.optimistic = hadiscovery.Ptr(false)
+			desc.Optimistic = hamodel.Ptr(false)
 			entity.fields = hadiscovery.TextFields{Mode: "text"}
 		} else {
 			// HA's `text` entity caps state payloads at 255 chars and warns
@@ -478,7 +474,7 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv Hu
 		if editable {
 			component = string(HAComponentNumber)
 			writes = true
-			entity.optimistic = hadiscovery.Ptr(false)
+			desc.Optimistic = hamodel.Ptr(false)
 			if sv.ValueType == hmenum.HubValueTypeInteger {
 				entity.fields = hadiscovery.NumberFields{Mode: "box"}
 				desc.Step = hamodel.Ptr(float64(1))
@@ -656,7 +652,7 @@ func (d *DefaultDiscoveryBuilder) buildProgramRole(
 		entity.Description.Availability = hamodel.Availability{}
 	}
 	if role.Topics.State != "" {
-		entity.optimistic = hadiscovery.Ptr(false)
+		entity.Description.Optimistic = hamodel.Ptr(false)
 	}
 	// The command shape decides the platform's own keys, and the two roles a
 	// program declares are disjoint: the switch carries State plus Set, the
@@ -713,10 +709,10 @@ func (d *DefaultDiscoveryBuilder) BuildProgramDiscovery(centralName string, p Hu
 				Name:         hamodel.L(displayName),
 				Enabled:      hamodel.Ptr(p.EnabledDefault),
 				Availability: hamodel.BridgeOnly(),
+				Optimistic:   hamodel.Ptr(false),
 			},
 			Binds: hubBinds(hubSlot(dev, centralName, "program", p.ID), true, true),
 		},
-		optimistic: hadiscovery.Ptr(false),
 		fields: hadiscovery.SwitchFields{
 			PayloadOn:  "true",
 			PayloadOff: "false",
