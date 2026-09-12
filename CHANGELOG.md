@@ -28,6 +28,12 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   quartet and the `set_position_topic` asymmetry between a blind and a
   garage door, the two most fragile entries, both survived unchanged.
 
+  The contract guards follow: seven of them drove the old
+  `HADiscoveryComponent` directly and now render through
+  `RenderComponent`, sharing one helper instead of seven copies, and
+  the two stub contexts become `payload.HADiscoveryTopics` — the
+  six-method vocabulary the model actually needs from the transport.
+
 ### Changed
 
 - **go-hamqtt v0.21.0 -> v0.23.0, and the escape hatches the five
