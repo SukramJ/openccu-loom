@@ -38,11 +38,10 @@ func TestPayloadFormatBareIsBackwardCompatible(t *testing.T) {
 
 	for _, p := range rec.records() {
 		if strings.HasSuffix(p.topic, "/STATE") {
-			// Bare mode: the PerDPState JSON still wraps the value. The
-			// legacy bare scalar is only emitted by PublishState's
-			// renderStatePayload (legacy alias path). PublishSlotState
-			// always uses the PerDPState JSON envelope — consumers read
-			// value_json.value. Verify the JSON contains value:true.
+			// Bare mode: the PerDPState JSON still wraps the value.
+			// PublishSlotState always uses the PerDPState JSON envelope
+			// — consumers read value_json.value. Verify the JSON
+			// contains value:true.
 			if !strings.Contains(p.payload, `"value":true`) {
 				t.Fatalf("PerDPState envelope must contain value:true, got %q", p.payload)
 			}

@@ -6,7 +6,6 @@ package mqtt
 import (
 	"context"
 	"errors"
-	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -216,7 +215,7 @@ func TestWiringPublishSysvar(t *testing.T) {
 // Bridge: SetHubInfo, Topics, PayloadFormat, PublishSystemStatus,
 //         PublishDiscoveryOnly, PublishCustomDPState, PublishSlotConfig,
 //         PublishDeviceInfo, PublishDeviceDiagnostics,
-//         PublishChannelEventDiscovery, indexFromValue, renderStatePayload
+//         PublishChannelEventDiscovery, indexFromValue
 // ---------------------------------------------------------------------------
 
 func TestBridgeSetHubInfoNilBridge(t *testing.T) {
@@ -444,36 +443,6 @@ func TestBridgePublishChannelEventDiscoveryDisabled(t *testing.T) {
 	}
 	if len(mp.publications()) != 0 {
 		t.Fatal("no publishes expected when HADiscovery disabled")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// ResolveEnumLabel
-// ---------------------------------------------------------------------------
-
-func TestResolveEnumLabelNonEnum(t *testing.T) {
-	t.Parallel()
-	// Non-ENUM type → pass through unchanged.
-	got := ResolveEnumLabel(42, hmenum.ParameterTypeFloat, []string{"a", "b"})
-	if got != 42 {
-		t.Fatalf("got %v, want 42", got)
-	}
-}
-
-func TestResolveEnumLabelOutOfBounds(t *testing.T) {
-	t.Parallel()
-	got := ResolveEnumLabel(int64(5), hmenum.ParameterTypeEnum, []string{"a", "b"})
-	// Index 5 out of [a, b] → return original value.
-	if got != int64(5) {
-		t.Fatalf("got %v, want 5", got)
-	}
-}
-
-func TestResolveEnumLabelEmptyList(t *testing.T) {
-	t.Parallel()
-	got := ResolveEnumLabel(int64(0), hmenum.ParameterTypeEnum, nil)
-	if got != int64(0) {
-		t.Fatalf("got %v, want 0", got)
 	}
 }
 
@@ -1181,45 +1150,6 @@ func TestRenderValue(t *testing.T) {
 		if string(got) != c.want {
 			t.Errorf("renderValue(%v) = %q, want %q", c.in, string(got), c.want)
 		}
-	}
-}
-
-// ---------------------------------------------------------------------------
-// renderStatePayload — JSON envelope (the only supported shape)
-// ---------------------------------------------------------------------------
-
-func TestBridgeRenderStatePayloadJSON(t *testing.T) {
-	t.Parallel()
-	mp := &mockPublisher{}
-	b := NewBridge(BridgeConfig{Base: "gh", RawEnabled: true}, mp)
-	ev := Event{Parameter: "ACTUAL_TEMPERATURE", Value: float64(21.5), Descriptor: &pload.GenericConfig{Type: hmenum.ParameterTypeFloat}}
-	got, err := b.renderStatePayload(ev)
-	if err != nil {
-		t.Fatalf("renderStatePayload: %v", err)
-	}
-	if len(got) == 0 || got[0] != '{' {
-		t.Fatalf("expected JSON object, got %q", string(got))
-	}
-}
-
-func TestBridgeRenderStatePayloadEnumResolved(t *testing.T) {
-	t.Parallel()
-	mp := &mockPublisher{}
-	b := NewBridge(BridgeConfig{Base: "gh", RawEnabled: true}, mp)
-	ev := Event{
-		Parameter: "MODE",
-		Value:     int64(1),
-		Descriptor: &pload.GenericConfig{
-			Type:      hmenum.ParameterTypeEnum,
-			ValueList: []string{"idle", "heat", "cool"},
-		},
-	}
-	got, err := b.renderStatePayload(ev)
-	if err != nil {
-		t.Fatalf("renderStatePayload enum: %v", err)
-	}
-	if !strings.Contains(string(got), `"value":"heat"`) {
-		t.Fatalf("enum label not resolved into JSON: got %q", string(got))
 	}
 }
 
@@ -2801,10 +2731,8 @@ func TestLookupDeviceOnlyRulesNonEmptyParameterSkipped(t *testing.T) {
 
 func TestWiringPublishNilInterface(t *testing.T) {
 	t.Parallel()
-	// An event with an empty device address on a raw-enabled bridge
-	// will produce an empty topic and marshal-fail inside renderStatePayload
-	// only if Value is a non-marshallable type.
-	// Using a valid but empty event is sufficient to exercise the non-error path.
+	// Using a valid but minimal event is sufficient to exercise the
+	// non-error path through Wiring.Publish.
 	mp := &mockPublisher{}
 	b := NewBridge(BridgeConfig{Base: "gh", RawEnabled: true, CentralName: "ccu"}, mp)
 	w := NewWiring(b, nil)
@@ -2830,27 +2758,6 @@ func TestEventDescDefaultString(t *testing.T) {
 	got := ev.descDefault()
 	if got != "AUTO" {
 		t.Fatalf("descDefault string: got %v, want %q", got, "AUTO")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// EvictState with a LegacyAlias wired — exercises the legacy branch
-// (currently 66 % due to missing legacy path in tests).
-// ---------------------------------------------------------------------------
-
-func TestBridgeEvictStateWithLegacy(t *testing.T) {
-	t.Parallel()
-	mp := &mockPublisher{}
-	b := NewBridge(BridgeConfig{Base: "gh", RawEnabled: true, CentralName: "ccu"}, mp)
-	// Wire a legacy alias so the second publish branch fires.
-	b.legacy = NewLegacyTopicBuilder("gh-legacy")
-	if err := b.EvictState(nil, "ccu", "HmIP-RF", "0001ABCD", 1, "STATE"); err != nil { //nolint:staticcheck // nil context intentional
-		t.Fatalf("EvictState with legacy: %v", err)
-	}
-	// Expect at least 2 publishes: primary + legacy.
-	pubs := mp.publications()
-	if len(pubs) < 2 {
-		t.Fatalf("expected ≥2 publishes with legacy wired, got %d", len(pubs))
 	}
 }
 

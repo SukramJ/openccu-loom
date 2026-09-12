@@ -846,9 +846,10 @@ func localisedEnumOptions(ev Event) ([]string, bool) {
 // as "false" / "true" — the case-stable spelling of Jinja's `True`/`False`
 // that HA's uppercase `payload_on:"ON"` defaults would never match.
 //
-// An ENUM data point publishes its VALUE_LIST label instead:
-// [ResolveEnumLabel] replaces the wire index before the state topic is
-// written, so the slot carries `{"value":"OPEN"}` and the template renders
+// An ENUM data point publishes its VALUE_LIST label instead: the
+// EventBridge's PerDPState path replaces the wire index with the label
+// (`paramlib.EnumLabelFromWire`) before the state topic is written, so
+// the slot carries `{"value":"OPEN"}` and the template renders
 // "open". Declaring the boolean pair for those compares "open" against
 // "true", and HA's binary_sensor matches payload_on / payload_off by exact
 // string — on a miss it logs at INFO and returns without touching the

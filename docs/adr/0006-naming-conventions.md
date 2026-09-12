@@ -153,3 +153,62 @@ future endpoints stay consistent.
 - CDP invoke topic: `TopicBuilder.CustomDPInvoke` +
   `CommandSubscriber.handleCDPInvoke` + `CDPInvocationSink`
 - HA Discovery node: `TopicBuilder.DiscoveryConfig` (uses `b.Base`)
+
+## Amendment (2026-09-12) — the LegacyAlias opt-in was never reachable, and is gone
+
+The Migration section above tells operators that "the `hub/` topology drop
+ships with a `LegacyAliasConfig.HubTopics` opt-in (default `false`)", the
+Consequences section tells them they "must opt-in to LegacyAlias during the
+migration window or update subscriptions atomically", and the Implementation
+references point at `internal/north/mqtt/legacy_alias.go::HubTopicBuilder`.
+**All three sentences were false from the day this ADR was accepted.** They are
+withdrawn. `legacy_alias.go` is deleted, and no mirrored topology exists or
+ever did.
+
+What was measured, before deleting anything:
+
+- **`LegacyAliasConfig.HubTopics` never existed.** `git log -S "HubTopics"
+  -- internal/` returns one commit, `cd9e8ac0` ("Initial release"), and that is
+  this ADR itself — the identifier appears only in prose. The shipped struct
+  carried two fields, `Enabled` and `Base`, and never a third. `HubTopicBuilder`
+  never existed either: the file's only two types were `LegacyAliasConfig` and
+  `LegacyTopicBuilder`, from `cd9e8ac0` until deletion.
+- **The mirror it did implement was the flat *device* tree, not the `hub/`
+  one.** `LegacyTopicBuilder` rendered
+  `{base}/device/status/{addr}/{addr}_{ch}_{param}` and
+  `{base}/device/availability/{addr}`. So even the feature that existed was not
+  the migration path this ADR describes for the `hub/` topology drop, and it
+  could not have carried a single operator across it.
+- **No operator could enable it.** `BridgeConfig.LegacyAlias` was set at
+  exactly one production construction site, `cmd/openccu-loom/daemon_north.go`'s
+  `mqtt.NewBridge(mqtt.BridgeConfig{…})`, which never assigned the field. There
+  is no YAML key (`NorthMQTT` carries eleven `yaml`-tagged fields and none of
+  them is this one), no environment override, no CLI flag and no build tag.
+  `cfg.LegacyAlias.Enabled` was the Go zero value `false` on every build ever
+  produced, so `Bridge.legacy` was always `nil` and all six guarded branches in
+  `bridge.go` were dead.
+- **Only tests ever set it.** Four sites in `legacy_alias_test.go` set
+  `LegacyAlias.Enabled = true`; one in `bridge_edge_cases_test.go` assigned the
+  private `b.legacy` field directly. Nothing else in the repository, in either
+  direction.
+- **It was never announced, deprecated or scheduled.** `CHANGELOG.md` has no
+  entry mentioning it, and `git log --follow` on the file shows two commits:
+  `cd9e8ac0` ("Initial release") and `fb722716`, a license-header chore.
+
+The migration window this ADR opened therefore never opened. The `hub/`
+topology shipped without a compatibility mirror, operators updated their
+subscriptions atomically because that was the only option available to them,
+and the pre-release framing in the Migration section ("no backwards-compat
+alias") is what actually happened on the MQTT surface too.
+
+`docs/mqtt-topic-schema.md`, the operator-facing contract, never documented the
+legacy tree and needs no change. The deletion moves no published byte: the
+branches removed from `PublishState`, `PublishAvailability`, `EvictState` and
+`RetractRawStateForDevice` were all behind `if b.legacy != nil`.
+
+One thing worth keeping from the episode. The mirror's payload renderer,
+`Bridge.renderStatePayload`, was the only place in the whole north/mqtt package
+that read the wall clock at publish time, stamping `modified_at` with
+`time.Now()` rather than with the event's own timestamp. It is deleted with the
+rest, which removes one of the two payload shapes that would defeat a
+byte-comparison dedup gate on the state plane.

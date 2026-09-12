@@ -1,14 +1,14 @@
 {
-  "generated": "79bd8362",
-  "head": "79bd8362",
+  "generated": "3ada25bc",
+  "head": "3ada25bc",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/openccu-loom-remote/main.go",
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 5611,
-    "reachable": 3577,
+    "total_exported": 5607,
+    "reachable": 3573,
     "whitelisted": 1975,
     "unreachable": 59
   },
@@ -456,7 +456,7 @@
       "package": "internal/north/mqtt",
       "identifier": "IgnoreMultipleChannelsForNameInspector",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 464,
+      "line": 457,
       "kind": "type"
     },
     {
@@ -5135,7 +5135,7 @@
       "identifier": "CustomDPDisplayNamer",
       "reason": "satisfied by *device.Channel and reached only through a type assertion in displayChannelName; RTA cannot follow an interface reached by assertion",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 453
+      "line": 446
     },
     {
       "package": "internal/north/mqtt",
@@ -5478,7 +5478,7 @@
       "identifier": "ValueListLabeler",
       "reason": "the event bridge asserts its labeler against this interface (b.labels.(mqtt.ValueListLabeler)) before stamping localised enum options, and the labeler the daemon wires in satisfies it; a type reached only through an interface assertion, which the analyzer's callgraph does not resolve",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 501
+      "line": 494
     },
     {
       "package": "internal/north/mqtt",

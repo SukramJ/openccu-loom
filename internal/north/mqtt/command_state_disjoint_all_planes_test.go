@@ -51,8 +51,7 @@ func commandFiltersAt(t *testing.T, base string) []string {
 // publish calls — `PublishProgram`, `PublishRoleAvailability`,
 // `PublishSysvar`, `PublishInstallMode` — and nothing else. The per-datapoint
 // plane, where the two catch-all filters live and where nearly all the
-// traffic is, was not swept; nor were alarm, security, `addon_update` or the
-// legacy mirror.
+// traffic is, was not swept; nor were alarm, security or `addon_update`.
 //
 // Why it matters, in the words of the measurement that found the original
 // defect: a broker delivers the daemon's own publishes back to it, so any
@@ -80,7 +79,7 @@ func commandFiltersAt(t *testing.T, base string) []string {
 //     ([runSecurityPlane]).
 //  5. addon_update — the one daemon-level self-update entity
 //     ([runAddonUpdatePlane]).
-//  6. the raw per-datapoint plane and the legacy mirror — slot state, slot
+//  6. the raw per-datapoint plane — slot state, slot
 //     config, custom-DP state, device availability, device info,
 //     diagnostics, the non-retained event stream, and a retained-state
 //     eviction ([runRawDataPointPlane]). This is the plane the original
@@ -172,25 +171,21 @@ func sweepSecurityPlane(t *testing.T) *observedPlane {
 }
 
 // runRawDataPointPlane drives the raw per-datapoint plane — the one the
-// original sweep did not reach — against a recording broker, plus the legacy
-// alias mirror.
+// original sweep did not reach — against a recording broker.
 //
 // Every write is a real [Bridge] method, at both segment depths the command
 // filters care about and on every raw shape the bridge produces: the
-// bucket-aware slot state and its `/config` companion, a custom-DP state, the
-// legacy per-parameter mirror through [Bridge.PublishState], device
-// availability, device info, diagnostics, the non-retained event stream, and
-// a retained-state eviction. A retraction is included because it is a publish
-// like any other — an empty payload on a topic a filter matches is delivered
-// back and parsed by the handler exactly the same way.
+// bucket-aware slot state and its `/config` companion, a custom-DP state,
+// device availability, device info, diagnostics, the non-retained event
+// stream, and a retained-state eviction. A retraction is included because it
+// is a publish like any other — an empty payload on a topic a filter matches
+// is delivered back and parsed by the handler exactly the same way.
 //
-// The legacy alias is wired directly onto the private field, the way
-// bridge_edge_cases_test.go does it. There is no config key for it
-// (finding **F8**: `BridgeConfig.LegacyAlias.Enabled` is permanently the Go
-// zero value and no operator can set it), so the only way to sweep the
-// mirror's topics is to enable it here. It is swept rather than skipped
-// because it is still compiled into the binary and is the one plane that
-// writes under a second, operator-chosen base.
+// This runner used to wire the `LegacyAlias` mirror onto the private field
+// and sweep its second base as a seventh shape, because finding **F8** had
+// established that no config key could reach it. The mirror is gone: it was
+// unreachable in every build ever produced, and ADR 0006's amendment records
+// the measurement. There is no second base to sweep.
 func runRawDataPointPlane(t *testing.T) *observedPlane {
 	t.Helper()
 	ctx := context.Background()
@@ -200,8 +195,6 @@ func runRawDataPointPlane(t *testing.T) *observedPlane {
 		CentralName: "ccu-01",
 		RawEnabled:  true,
 	}, obs)
-	// See the note above: no config key reaches this field.
-	b.legacy = NewLegacyTopicBuilder(disjointSweepBase + "-legacy")
 
 	const (
 		central = "ccu-01"
@@ -238,9 +231,10 @@ func runRawDataPointPlane(t *testing.T) *observedPlane {
 		t.Fatalf("publish custom dp state: %v", err)
 	}
 
-	// The legacy per-parameter mirror plus the discovery-side state topic.
-	// This is the path that reads the wall clock at publish time and the one
-	// that used to be mirrored onto a command topic.
+	// [Bridge.PublishState], which after the LegacyAlias deletion puts no
+	// state of its own on the wire and only emits a discovery config. Swept
+	// anyway: it is on the per-DP path, and a future change that gives it a
+	// publish again has to pass this sweep to land.
 	if err := b.PublishState(ctx, Event{
 		Central:        central,
 		Interface:      iface,
@@ -294,7 +288,7 @@ func runRawDataPointPlane(t *testing.T) *observedPlane {
 // publishing nothing under `RawEnabled: false`, or reaching only one bucket:
 // every assertion in the sweep would pass and F4 would be half-fixed while
 // reading as fixed. So the runner's output is checked for the four bucket
-// segments the per-DP topology defines, and for the legacy mirror's own base.
+// segments the per-DP topology defines.
 func TestRawDataPointPlaneSweepReachesEveryBucket(t *testing.T) {
 	t.Parallel()
 	obs := runRawDataPointPlane(t)
@@ -305,7 +299,6 @@ func TestRawDataPointPlaneSweepReachesEveryBucket(t *testing.T) {
 	}
 	for _, want := range []string{
 		"/values/", "/master/", "/calculated/", "/custom/",
-		disjointSweepBase + "-legacy/",
 	} {
 		if !anyTopicContains(topics, want) {
 			t.Errorf("no swept topic contains %q — that shape of the raw plane is unobserved, "+
