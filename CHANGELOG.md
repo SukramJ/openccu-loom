@@ -168,6 +168,148 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   doc comment now states what a safe repair needs instead, and two tests pin
   the divergence so it cannot be closed quietly.
 
+- **A sysvar that reads nil deleted its own entity.** `renderValue`
+  turned a nil value into zero bytes and `PublishSysvar` wrote that
+  retained — which is MQTT's mechanism for deleting a retained message,
+  not a way of saying "no value". A system variable the CCU reports as
+  nil therefore retracted its own state topic and took the entity off
+  every consumer, silently, with the retraction indistinguishable on the
+  wire from an operator clearing the topic on purpose.
+
+  The two acts are now separate. Nil is refused at the renderer with a
+  named `ErrNilValue`, so the last known reading stays on the broker and
+  the wrapper logs the refusal; the deliberate retraction keeps both of
+  its existing paths, neither of which goes through the renderer —
+  `RetractSysvarState` for a central leaving the registry, and
+  `PublishHubSystemHealthScore`'s own empty body as the explicit
+  not-ready sentinel for a FAILED central.
+
+- **Every value below 5e-7 was published as a flat `0`.** The raw-plane
+  value renderer formatted floats with `%f` and trimmed the trailing
+  zeros, and `%f` stops at six fractional digits. A data point reporting
+  `0.0000001` reached the broker as `0`, and a consumer had no way to
+  tell that from a genuine zero — the reading was not rounded, it was
+  erased. Six digits in the middle of a fraction went the same way:
+  `1.23456789` arrived as `1.234568`.
+
+  Floats now render through `strconv.FormatFloat(v, 'f', -1, bitSize)`,
+  the shortest decimal that parses back to the identical float, with
+  `bitSize` 32 for a `float32` so the widening artefact
+  (`float32(0.1)` as a `float64` is `0.10000000149011612`) stays off the
+  wire. No discovery golden moved: the eleven pins under
+  `internal/north/mqtt/testdata/` carry discovery configs, which this
+  renderer never touches, and none of them held a value with more than
+  six decimals in the first place. A fixture table now covers the
+  precision boundary in both directions.
+
+- **An evicted data point was retracted a second time when its device
+  was removed.** `EvictState` clears a stale retained state topic but
+  left the topic in `rawTopics`, the index that tells
+  `RetractRawStateForDevice` which topics this bridge has written. The
+  entry means "this topic carries a retained payload we wrote", which an
+  evicted topic does not, so device removal issued a retained-message
+  delete for a message that no longer existed — counted as a publish,
+  and on a broker that refuses it, as a publish error.
+
+  `retractTopicsMatching` has always deleted from both of its maps for
+  exactly this reason. Eviction is now symmetric with it, for the
+  canonical topic and the legacy-alias mirror alike.
+
+- **Removing the virtual remote blanked every wireless device on the
+  CCU.** `RetractRawStateForDevice` found a removed device's retained
+  topics with `strings.Contains(topic, "/"+addr+"/")`, which matches the
+  address at any depth rather than at the one segment it is published
+  at. On a HomeMatic CCU that is not a hypothetical collision: the
+  virtual remote's device address is literally `BidCoS-RF`, the same
+  string as the interface segment every wireless device publishes under.
+  Unpairing that one pseudo device therefore cleared the retained state
+  of every real BidCos-RF device, and their entities stayed unavailable
+  until the next daemon restart republished them. The legacy mirror's
+  `<addr>_<ch>_<param>` leaf and the hub subtree's sysvar names were
+  reachable through the same needle.
+
+  Both retained topologies put the address in the same place — index 1
+  past `<base>/<central>/` and past `<legacy>/device/` — so the needle
+  now compares that one segment and nothing else.
+
+- **The Security & Safety plane was invisible to every sweep and to
+  every metric.** Its publisher reached past `Bridge` into the raw
+  client, so its topics never entered the bridge's retained-topic index
+  and its publishes were counted by neither `messages_sent` nor
+  `publish_errors`. The plane whose entities an operator cannot watch
+  failing was the one plane whose publishes no metric could see, and a
+  retained security topic on the broker was reachable by nothing the
+  daemon owns.
+
+  Four named `Bridge` publishers now carry it — state, event,
+  availability and retraction — each recording (or forgetting) the topic
+  and incrementing the same counters the rest of the plane does, with an
+  empty `central` label because the plane is daemon-level and a hazard
+  class spans centrals. The queued message carries its kind rather than
+  having it inferred from the payload, so a retraction and an
+  availability marker stay distinguishable from a state at the point the
+  delivery guarantee is chosen.
+
+- **The daemon's two publish queues disagreed about what a full queue
+  means, and neither loss was countable.** The alarm plane dropped the
+  newest message; the security plane dropped the oldest. Dropping the
+  oldest reads as the safer end — reconcile enqueues the per-class and
+  per-zone states last, and losing those leaves the aggregate
+  disagreeing with the classes it was folded from — but it is not,
+  because not every queued message is repeatable. A state is corrected
+  by the next reconcile. A retraction has no next attempt: the class or
+  zone it evacuates leaves the known-sets in the same pass, so nothing
+  enqueues it again and the retained topic keeps feeding an entity for
+  something that no longer exists.
+
+  Both planes now drop the newest, and reconcile enqueues its
+  retractions first so the messages at risk are the ones a later pass
+  repairs — which is also the order Home Assistant wants between the two
+  discovery forms. A drop is counted in `publish_errors` alongside its
+  log line, because a message that never reaches the broker is a failed
+  publish however it failed; on a deployment that scrapes metrics rather
+  than reading logs, the previous behaviour was a silent loss.
+
+  The measured claim that the security plane discarded "a retraction
+  enqueued early in a reconcile" was right about the harm and wrong
+  about the position: `retractGone` ran last, so what drop-the-oldest
+  actually discarded first was the availability marker. Both are now
+  moot — the order and the policy were fixed together.
+
+- **One daemon, three availability topics, two delivery guarantees.**
+  The device and alarm planes pin QoS 1 for availability; the security
+  plane used `cfg.QoS.State`, which is QoS 0 in practice. Availability
+  is the one payload whose loss the next publish cannot repair, because
+  it is only written on a flip: a marker dropped at QoS 0 leaves the
+  entity in the state it last carried until something flips it again,
+  and for the `offline` marker written on shutdown — the one that exists
+  because an orderly stop suppresses the broker's last-will — that
+  "something" is the next start. After a crash it is never, and every
+  Security & Safety entity stays available showing frozen values, which
+  is precisely the case the second availability source exists to
+  distinguish. All three topics are now QoS 1, pinned by a test that
+  walks every availability publisher on the bridge.
+
+- **The availability gate was cleared before the topic it describes, not
+  after.** The readopted-device defect itself is already closed: a
+  removal forgets the gate, so a device coming back under the same
+  address can publish `online` again rather than reading as "no
+  transition" forever. The order was the remaining problem. The CCU keeps
+  delivering values while a removal callback runs, so an inbound value
+  for the device being removed could re-seed the gate with `true` while
+  the retraction was still in flight; the retraction then emptied the
+  topic underneath it, and the gate was left believing a state the
+  broker does not hold — with nothing to ever publish `online` again,
+  which is the same permanent unavailability the forgetting exists to
+  prevent.
+
+  `forgetAvailability` now runs after both retractions, so whatever the
+  gate picks up during the retraction is discarded with it. The
+  no-broker and no-bridge early returns still forget, because the topic
+  they describe is one this daemon will not write again for that
+  address. A test makes the interleaving deterministic by firing a
+  `markAvailability` from inside the retraction's own publish.
+
 ### Added
 
 - **Fixture rows for the two `DiscoverySlug` divergence classes.** The

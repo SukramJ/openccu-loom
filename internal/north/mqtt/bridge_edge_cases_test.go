@@ -1158,7 +1158,6 @@ func TestRenderValue(t *testing.T) {
 		in   any
 		want string
 	}{
-		{nil, ""},
 		{true, "true"},
 		{false, "false"},
 		{"hello", "hello"},

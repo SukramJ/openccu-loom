@@ -28,11 +28,35 @@ type SecuritySnapshotSource interface {
 	Snapshot() security.Snapshot
 }
 
+// securityMsgKind selects which [Bridge] publisher a queued message goes
+// through.
+//
+// The kind is carried rather than inferred from the payload, because
+// "retained with an empty body" is a retraction and "retained with a
+// body" is a state, and an availability marker is neither — it has its
+// own delivery guarantee. Inferring would have made the three
+// indistinguishable at the point the guarantee is chosen.
+type securityMsgKind uint8
+
+const (
+	// securityMsgState is a retained aggregate: the plane's state,
+	// alarm, problem, health, per-class and per-zone topics.
+	securityMsgState securityMsgKind = iota
+	// securityMsgEvent is a non-retained pulse on one of the two event
+	// topics.
+	securityMsgEvent
+	// securityMsgRetract clears a retained topic whose entity no longer
+	// exists.
+	securityMsgRetract
+	// securityMsgAvailability is the plane's single availability marker.
+	securityMsgAvailability
+)
+
 // securityMsg is one queued publish.
 type securityMsg struct {
-	topic    string
-	payload  []byte
-	retained bool
+	kind    securityMsgKind
+	topic   string
+	payload []byte
 }
 
 // SecurityMQTTPublisher mirrors the Security & Safety domain onto the
@@ -157,8 +181,8 @@ func (p *SecurityMQTTPublisher) Stop() {
 	// consumer shows the card with frozen values as available — exactly
 	// the case the second source exists to distinguish.
 	if b := p.wiring.Bridge(); b != nil {
-		_ = b.client.Publish(context.Background(),
-			securityAvailabilityTopic(b.topics.Base), []byte("offline"), b.cfg.QoS.State, true)
+		_ = b.PublishSecurityAvailability(context.Background(),
+			securityAvailabilityTopic(b.topics.Base), false)
 	}
 	close(p.stopCh)
 	<-p.doneCh
@@ -180,49 +204,150 @@ func (p *SecurityMQTTPublisher) run() {
 	}
 }
 
+// publish hands one queued message to the [Bridge] publisher for its
+// kind.
+//
+// It used to reach past the bridge into the raw client. That made the
+// whole Security & Safety plane invisible to the bridge: its topics
+// never entered the retained-topic index, so no sweep and no retraction
+// could reach them, and its publishes were counted by neither
+// `messages_sent` nor `publish_errors` — the one plane whose entities
+// an operator cannot see failing was also the one plane whose publishes
+// no metric could see at all.
 func (p *SecurityMQTTPublisher) publish(ctx context.Context, m securityMsg) {
 	b := p.wiring.Bridge()
 	if b == nil {
 		return
 	}
-	// Deliberately ungated. The funnel carries the very topics the security
-	// discovery payloads name as their `state_topic`, so silencing it while
-	// discovery still declares them leaves every Security & Safety entity
-	// present in Home Assistant and permanently unknown.
-	qos := b.cfg.QoS.State
-	if !m.retained {
-		// An event is a moment, not a state: at-most-once delivery is
-		// the right trade, and a re-delivered alarm event would re-fire
-		// every automation subscribed to it.
-		qos = 0
+	var err error
+	switch m.kind {
+	case securityMsgEvent:
+		err = b.PublishSecurityEvent(ctx, m.topic, m.payload)
+	case securityMsgRetract:
+		err = b.RetractSecurityState(ctx, m.topic)
+	case securityMsgAvailability:
+		err = b.PublishSecurityAvailability(ctx, m.topic, string(m.payload) == "online")
+	case securityMsgState:
+		err = b.PublishSecurityState(ctx, m.topic, m.payload)
 	}
-	if err := b.client.Publish(ctx, m.topic, m.payload, qos, m.retained); err != nil {
+	if err != nil {
 		p.logger.Error("security mqtt publish failed", "topic", m.topic, "error", err)
 	}
 }
 
+// --- Bridge publishers for the Security & Safety plane ----------------
+//
+// None of them is gated on the raw plane. The funnel carries the very
+// topics the security discovery payloads name as their `state_topic`,
+// so silencing it while discovery still declares them would leave every
+// Security & Safety entity present in Home Assistant and permanently
+// unknown.
+//
+// The plane is daemon-level, not per-central — a hazard class spans
+// centrals rather than the other way around — so every counter
+// increment carries an empty central label rather than attributing a
+// daemon-wide plane to one CCU.
+
+// PublishSecurityState publishes one retained Security & Safety
+// aggregate and records the topic in the bridge's retained-topic index.
+func (b *Bridge) PublishSecurityState(ctx context.Context, topic string, body []byte) error {
+	if err := b.client.Publish(ctx, topic, body, b.cfg.QoS.State, true); err != nil {
+		b.incPublishErrors("")
+		return err
+	}
+	b.rememberRawTopic(topic)
+	b.incMessagesSent("")
+	return nil
+}
+
+// PublishSecurityEvent publishes one non-retained Security & Safety
+// pulse.
+//
+// QoS 0, and not recorded in the retained-topic index: an event is a
+// moment, not a state. At-most-once is the right trade — a re-delivered
+// alarm event would re-fire every automation subscribed to it — and
+// there is no retained message on the topic for a sweep to find.
+func (b *Bridge) PublishSecurityEvent(ctx context.Context, topic string, body []byte) error {
+	if err := b.client.Publish(ctx, topic, body, QoS0, false); err != nil {
+		b.incPublishErrors("")
+		return err
+	}
+	b.incMessagesSent("")
+	return nil
+}
+
+// PublishSecurityAvailability publishes the plane's retained
+// availability marker.
+//
+// QoS 1, not the state QoS. Availability is the one topic whose loss
+// cannot be repaired by the next publish: the plane writes it on a flip,
+// so a marker dropped at QoS 0 — which is what the state profile
+// resolves to in practice — leaves the entity in the state it last
+// carried until something flips it again. For the `offline` marker
+// written on shutdown, "something flips it again" is the next start, and
+// for a crash that suppresses the broker's last-will it is never: every
+// Security & Safety entity stays available, showing frozen values,
+// which is precisely the case this second availability source exists to
+// distinguish. [Bridge.PublishAvailability] and
+// [Bridge.PublishAlarmAvailability] already pin QoS 1 for the same
+// reason; the three availability topics of one daemon must not have
+// three different delivery guarantees.
+func (b *Bridge) PublishSecurityAvailability(ctx context.Context, topic string, online bool) error {
+	body := []byte("offline")
+	if online {
+		body = []byte("online")
+	}
+	if err := b.client.Publish(ctx, topic, body, QoS1, true); err != nil {
+		b.incPublishErrors("")
+		return err
+	}
+	b.rememberRawTopic(topic)
+	b.incMessagesSent("")
+	return nil
+}
+
+// RetractSecurityState clears a retained Security & Safety topic whose
+// entity no longer exists, and drops it from the retained-topic index
+// so nothing retracts an already-empty topic a second time.
+func (b *Bridge) RetractSecurityState(ctx context.Context, topic string) error {
+	if err := b.client.Publish(ctx, topic, nil, b.cfg.QoS.State, true); err != nil {
+		b.incPublishErrors("")
+		return err
+	}
+	b.forgetRawTopic(topic)
+	b.incMessagesSent("")
+	return nil
+}
+
 // enqueue queues a publish without blocking the domain's bus goroutine.
 //
-// On overflow it drops the *oldest* queued message and keeps the new
-// one. The previous version claimed that and did the opposite: it
-// discarded the newest, and since reconcile enqueues the per-class and
-// per-zone states last, a partial drop lost exactly those — leaving the
-// aggregate state on the broker disagreeing with the class states it
-// was folded from, which is the incoherence the reconcile path exists
-// to prevent.
+// On overflow it drops the *newest* message — the one that cannot be
+// queued — which is the alarm plane's policy, and the two planes of one
+// daemon must not disagree about what a full queue means.
+//
+// Dropping the oldest was the other way round and read as the safer
+// choice, because reconcile enqueues the per-class and per-zone states
+// last and losing those leaves the aggregate state disagreeing with the
+// classes it was folded from. It is not the safer choice, because not
+// every queued message is recoverable: a state is corrected by the next
+// reconcile, while a retraction has no next attempt — the class or zone
+// it evacuates is already out of the known-sets, so nothing will ever
+// enqueue it again and the retained topic stays on the broker for good,
+// feeding an entity for something that no longer exists. Reconcile
+// therefore enqueues its retractions first and the queue discards from
+// the end, so the messages at risk are the ones a later pass repairs.
+//
+// A drop is never silent: it is logged with the topic and counted in
+// `publish_errors`, because a message that never reaches the broker is
+// a failed publish however it failed.
 func (p *SecurityMQTTPublisher) enqueue(m securityMsg) {
-	for {
-		select {
-		case p.msgCh <- m:
-			return
-		default:
-		}
-		select {
-		case dropped := <-p.msgCh:
-			p.logger.Warn("security mqtt queue full; dropped the oldest message",
-				"dropped_topic", dropped.topic, "for_topic", m.topic)
-		default:
-			// Drained by the worker in between; retry the send.
+	select {
+	case p.msgCh <- m:
+	default:
+		p.logger.Warn("security mqtt queue full; dropped the newest message",
+			"dropped_topic", m.topic, "kind", m.kind)
+		if b := p.wiring.Bridge(); b != nil {
+			b.incPublishErrors("")
 		}
 	}
 }
@@ -319,7 +444,7 @@ func (p *SecurityMQTTPublisher) onNotification(e hmevent.SecurityNotificationEve
 	if e.Fault {
 		topic = "fault"
 	}
-	p.enqueue(securityMsg{topic: securityStateTopic(p.base(), topic), payload: body})
+	p.enqueue(securityMsg{kind: securityMsgEvent, topic: securityStateTopic(p.base(), topic), payload: body})
 
 	// Retainability is decided once, by the domain, according to the
 	// duress-visibility policy. The plane honours the flag rather than
@@ -332,7 +457,7 @@ func (p *SecurityMQTTPublisher) onNotification(e hmevent.SecurityNotificationEve
 	if e.Fault {
 		key = "last_fault"
 	}
-	p.enqueue(securityMsg{topic: securityStateTopic(p.base(), key), payload: body, retained: true})
+	p.enqueue(securityMsg{topic: securityStateTopic(p.base(), key), payload: body})
 }
 
 // base is the topic prefix of every security topic. It reads the topic

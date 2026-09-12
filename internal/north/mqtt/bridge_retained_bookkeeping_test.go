@@ -421,3 +421,83 @@ func TestRetractionForOneCentralLeavesTheOtherCentralsTopics(t *testing.T) {
 		t.Errorf("the surviving central's topics were cleared on the broker: %v", cleared)
 	}
 }
+
+// TestRetractRawStateMatchesTheAddressSegmentOnly pins the retraction
+// needle to the one segment the address actually occupies.
+//
+// The needle used to be `strings.Contains(topic, "/"+addr+"/")`, which
+// matches the address at any depth. On a HomeMatic CCU that is not
+// hypothetical: the virtual remote's device address is literally
+// `BidCoS-RF`, the same string as the interface segment every wireless
+// device publishes under. Removing that one pseudo device therefore
+// blanked the retained state of every real BidCos-RF device on the CCU,
+// and the entities went unavailable until the next daemon restart.
+//
+// The legacy mirror's `<addr>_<ch>_<param>` leaf and the hub subtree's
+// sysvar names were reachable the same way.
+func TestRetractRawStateMatchesTheAddressSegmentOnly(t *testing.T) {
+	t.Parallel()
+
+	const (
+		central = "ccu-01"
+		iface   = "BidCos-RF"
+		// The virtual remote: its address collides with the interface
+		// segment, case-insensitively.
+		victim = "BidCoS-RF"
+	)
+	ctx := context.Background()
+	mp := &mockPublisher{}
+	b := NewBridge(BridgeConfig{
+		Base: "loom", CentralName: central,
+		RawEnabled: true, HADiscoveryEnabled: true,
+	}, mp)
+
+	// A real wireless device on the same interface — the bystander.
+	bystander := pload.TopicSlot{Address: "VEQ0123456", Channel: 1, Bucket: pload.BucketValues, Parameter: "LEVEL"}
+	if err := b.PublishSlotState(ctx, central, iface, bystander,
+		pload.PerDPState{Value: 0.5, Available: true}); err != nil {
+		t.Fatalf("PublishSlotState(bystander): %v", err)
+	}
+	bystanderTopic := b.topics.SlotState(central, iface, bystander)
+
+	// The device being removed.
+	own := pload.TopicSlot{Address: victim, Channel: 1, Bucket: pload.BucketValues, Parameter: "PRESS_SHORT"}
+	if err := b.PublishSlotState(ctx, central, iface, own,
+		pload.PerDPState{Value: true, Available: true}); err != nil {
+		t.Fatalf("PublishSlotState(victim): %v", err)
+	}
+	ownTopic := b.topics.SlotState(central, iface, own)
+
+	// A hub sysvar whose name happens to spell the address. Same needle,
+	// same collision, different subtree.
+	sysvarTopic := naming.MQTTHubSysvarState("loom", central, victim)
+	if err := b.publishRawRetained(ctx, sysvarTopic, []byte("true")); err != nil {
+		t.Fatalf("publishRawRetained(sysvar): %v", err)
+	}
+
+	b.RetractRawStateForDevice(ctx, central, iface, victim)
+
+	b.mu.Lock()
+	_, ownSurvived := b.rawTopics[ownTopic]
+	_, bystanderSurvived := b.rawTopics[bystanderTopic]
+	_, sysvarSurvived := b.rawTopics[sysvarTopic]
+	b.mu.Unlock()
+
+	if ownSurvived {
+		t.Errorf("the removed device's own topic %q was not retracted", ownTopic)
+	}
+	if !bystanderSurvived {
+		t.Errorf("a different device's topic %q was retracted — the address matched the interface segment", bystanderTopic)
+	}
+	if !sysvarSurvived {
+		t.Errorf("hub sysvar topic %q was retracted by a device removal", sysvarTopic)
+	}
+	for _, s := range mp.sent {
+		if s.topic == bystanderTopic && s.payload == "" {
+			t.Errorf("a different device's retained state at %q was blanked on the broker", bystanderTopic)
+		}
+		if s.topic == sysvarTopic && s.payload == "" {
+			t.Errorf("hub sysvar %q was blanked on the broker by a device removal", sysvarTopic)
+		}
+	}
+}

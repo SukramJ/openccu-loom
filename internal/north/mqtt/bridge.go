@@ -1326,6 +1326,13 @@ func (b *Bridge) publishChannelEventLeaf(ctx context.Context, topic, eventType s
 // owned by the sysvar model object (`<base>/<central>/hub/sysvars/
 // <name>/state`). The bridge only fills in `base` and JSON-encodes
 // the value; it never decides the topic shape.
+//
+// The publish is retained, which makes a nil value a trap: zero bytes
+// on a retained topic is MQTT's retraction, so a sysvar the CCU reports
+// as nil used to delete its own state topic and take the entity with
+// it. Such a value is refused with [ErrNilValue] instead, leaving the
+// last known reading in place; [Bridge.RetractSysvarState] is the one
+// way to clear the topic on purpose.
 func (b *Bridge) PublishSysvar(ctx context.Context, centralName string, sv pload.MQTTAddressable, value any) error {
 	if !b.cfg.RawEnabled {
 		return nil
@@ -1617,9 +1624,19 @@ func (b *Bridge) EvictState(
 	if err := b.client.Publish(ctx, topic, []byte{}, b.cfg.QoS.State, true); err != nil {
 		return err
 	}
+	// Eviction has to be symmetric with the index that drives retraction.
+	// The topic carries nothing any more, so leaving its entry in
+	// rawTopics made [Bridge.RetractRawStateForDevice] clear an already
+	// cleared topic a second time on device removal — a retained-message
+	// delete for a message that no longer exists, counted as a publish
+	// and, on a broker that rejects it, as a publish error. The
+	// retract-side helper deletes from its maps for exactly this reason;
+	// this side now does too.
+	b.forgetRawTopic(topic)
 	if b.legacy != nil {
 		legacyTopic := b.legacy.DataPointState(address, channel, parameter)
 		_ = b.client.Publish(ctx, legacyTopic, []byte{}, b.cfg.QoS.State, true)
+		b.forgetRawTopic(legacyTopic)
 	}
 	return nil
 }
@@ -1983,6 +2000,29 @@ func (b *Bridge) retractTopicsMatching(ctx context.Context, centralName string, 
 	return len(topics)
 }
 
+// topicSegment returns the idx-th `/`-separated segment of topic, or ""
+// when the topic has no such segment.
+//
+// It exists so an address-scoped retraction can ask whether the address
+// occupies the position it is published at, rather than whether the
+// string appears anywhere in the topic. The two questions differ
+// wherever an address collides with another segment's spelling, and on
+// a HomeMatic CCU they do: the virtual remote's address is the
+// interface id `BidCoS-RF`.
+func topicSegment(topic string, idx int) string {
+	for range idx {
+		i := strings.IndexByte(topic, '/')
+		if i < 0 {
+			return ""
+		}
+		topic = topic[i+1:]
+	}
+	if i := strings.IndexByte(topic, '/'); i >= 0 {
+		topic = topic[:i]
+	}
+	return topic
+}
+
 // rememberRawTopic records topic in the address-scoped raw-topic index
 // used by [Bridge.RetractRawStateForDevice] to find every retained
 // per-data-point state topic a removed device declared, without
@@ -1994,6 +2034,22 @@ func (b *Bridge) rememberRawTopic(topic string) {
 	}
 	b.mu.Lock()
 	b.rawTopics[topic] = nil
+	b.mu.Unlock()
+}
+
+// forgetRawTopic drops topic from the address-scoped raw-topic index.
+//
+// The counterpart of [Bridge.rememberRawTopic], called by whoever
+// clears a retained topic outside the index-walking retraction helpers
+// ([Bridge.EvictState]). The index means "this topic carries a retained
+// payload we wrote"; a topic that has just been emptied does not, and a
+// stale entry makes the next device-removal sweep retract it again.
+func (b *Bridge) forgetRawTopic(topic string) {
+	if topic == "" {
+		return
+	}
+	b.mu.Lock()
+	delete(b.rawTopics, topic)
 	b.mu.Unlock()
 }
 
@@ -2047,20 +2103,35 @@ func (b *Bridge) RetractRawStateForDevice(ctx context.Context, centralName, ifac
 	// address regardless of central. That mirror is a single-CCU
 	// migration shim; a multi-CCU deployment already has its two CCUs
 	// overwriting each other there.
-	addr := strings.ToLower(deviceAddress)
+	//
+	// The needle matches the ONE segment the address actually occupies,
+	// not the address anywhere at any depth. Both retained topologies put
+	// it in the same place — `<base>/<central>/<iface>/<addr>/…` and
+	// `<legacy>/device/<status|availability>/<addr>/…`, index 1 past
+	// their respective prefixes — and a `strings.Contains` needle over
+	// the whole topic matched the other positions too. The virtual remote
+	// is the case that turns that into damage: its device address is
+	// literally `BidCoS-RF`, the same string as the interface segment, so
+	// removing that one pseudo device blanked every retained topic of the
+	// entire BidCos-RF interface — every real wireless device on the CCU
+	// — and the legacy mirror's `<addr>_<ch>_<param>` leaf and the hub
+	// subtree's sysvar names were reachable the same way.
+	addr := strings.ToLower(safe(deviceAddress))
 	rawPrefix := strings.ToLower(rawCentralPrefix(b.cfg.Base, centralName))
 	var legacyPrefix string
 	if b.legacy != nil {
 		legacyPrefix = strings.ToLower(b.legacy.Base + "/device/")
 	}
 	match := func(topic string) bool {
-		if !strings.Contains(topic, "/"+addr+"/") {
-			return false
+		if rest, ok := strings.CutPrefix(topic, rawPrefix); ok {
+			return topicSegment(rest, 1) == addr
 		}
-		if strings.HasPrefix(topic, rawPrefix) {
-			return true
+		if legacyPrefix != "" {
+			if rest, ok := strings.CutPrefix(topic, legacyPrefix); ok {
+				return topicSegment(rest, 1) == addr
+			}
 		}
-		return legacyPrefix != "" && strings.HasPrefix(topic, legacyPrefix)
+		return false
 	}
 	n := b.retractTopicsMatching(ctx, centralName, b.rawTopics, match, b.cfg.QoS.State)
 	n += b.retractTopicsMatching(ctx, centralName, b.configCache, match, b.cfg.QoS.State)
@@ -2223,13 +2294,33 @@ func resolveEnumLabel(value any, wireType hmenum.ParameterType, valueList []stri
 	return ResolveEnumLabel(value, wireType, valueList)
 }
 
+// ErrNilValue reports that a publisher was handed a nil value where a
+// renderable one was required.
+//
+// It exists to keep an accident from performing a deliberate act. An
+// empty payload on a retained topic is MQTT's retraction, so rendering
+// nil as zero bytes made "this data point currently reads nothing"
+// indistinguishable from "delete this topic" — a sysvar whose value the
+// CCU reports as nil silently removed its own state topic, taking the
+// entity with it, instead of reporting that it has no value.
+//
+// Retraction stays reachable, deliberately and by name: the hub
+// health-score publisher writes its own empty body as an explicit
+// not-ready sentinel, and [Bridge.RetractSysvarState] clears a sysvar
+// topic when a whole central leaves. Neither goes through
+// [renderValue], so neither is affected.
+var ErrNilValue = errors.New("mqtt: nil value is not publishable")
+
 // renderValue converts a primitive Go value into the raw-plane
 // payload. Booleans, numbers, and strings map to their canonical
 // string form; complex values JSON-encode.
+//
+// A nil value is an error ([ErrNilValue]), not an empty payload — see
+// that error for why.
 func renderValue(v any) ([]byte, error) {
 	switch x := v.(type) {
 	case nil:
-		return []byte(""), nil
+		return nil, ErrNilValue
 	case bool:
 		if x {
 			return []byte("true"), nil
@@ -2244,9 +2335,18 @@ func renderValue(v any) ([]byte, error) {
 	case int64:
 		return fmt.Appendf(nil, "%d", x), nil
 	case float32:
-		return []byte(strings.TrimRight(strings.TrimRight(fmt.Sprintf("%f", x), "0"), ".")), nil
+		// bitSize 32 so the shortest form round-trips through a
+		// float32 rather than exposing the widening artefact
+		// (float32(0.1) read as a float64 is 0.10000000149011612).
+		return []byte(strconv.FormatFloat(float64(x), 'f', -1, 32)), nil
 	case float64:
-		return []byte(strings.TrimRight(strings.TrimRight(fmt.Sprintf("%f", x), "0"), ".")), nil
+		// 'f' with precision -1 is the shortest decimal that parses
+		// back to the same float64. The previous %f-then-trim capped
+		// at six fractional digits, so a HmIP power meter reporting
+		// 0.0000001 kWh reached the broker as a flat "0" — the value
+		// was not rounded, it was erased, and no consumer could tell
+		// that from a genuine zero.
+		return []byte(strconv.FormatFloat(x, 'f', -1, 64)), nil
 	}
 	return json.Marshal(v)
 }
