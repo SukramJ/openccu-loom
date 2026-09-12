@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 1475788d
-HEAD: 1475788d
+Generated: 56ea42f3
+HEAD: 56ea42f3
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 5622 |
-| Reachable | 3587 |
-| Whitelisted | 1976 |
+| Total Exported | 5610 |
+| Reachable | 3576 |
+| Whitelisted | 1975 |
 | **Unreachable** | **59** |
 
 ## Top-20 Packages by Dead Code

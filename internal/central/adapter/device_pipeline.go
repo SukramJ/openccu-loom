@@ -36,6 +36,7 @@ import (
 	modevent "github.com/SukramJ/openccu-loom/internal/model/event"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
+	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -2113,9 +2114,9 @@ func (p *DevicePipeline) hydrateParamset(
 		// MQTT event.
 		if init, ok := dp.(namingInitializer); ok {
 			init.SetNameData(device.BuildDataPointName(ch, name, ""))
-			bucket := naming.BucketValues
+			bucket := payload.BucketValues
 			if key == hmenum.ParamsetKeyMaster {
-				bucket = naming.BucketMaster
+				bucket = payload.BucketMaster
 			}
 			init.SetPathData(naming.NewDataPointPathData(
 				p.unit.Name(), hmtypes.ParseWireInterfaceID(interfaceID),

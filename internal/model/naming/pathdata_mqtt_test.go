@@ -5,6 +5,8 @@ package naming
 
 import (
 	"testing"
+
+	"github.com/SukramJ/go-hamqtt/model"
 )
 
 // helpers shared by the MQTT-topic tests.
@@ -40,7 +42,7 @@ func TestNewChannelPathData_Populated(t *testing.T) {
 	if pd.Address != "VCU1234567" || pd.ChannelNo != 2 || pd.Interface != wireHmIPRF {
 		t.Errorf("unexpected fields: %+v", pd)
 	}
-	if pd.Bucket != BucketUnset || pd.Kind != "" {
+	if pd.Bucket != model.BucketUnset || pd.Kind != "" {
 		t.Errorf("bucket/kind must be empty for channel PathData, got bucket=%q kind=%q", pd.Bucket, pd.Kind)
 	}
 }
@@ -81,8 +83,8 @@ func TestNewCustomDPPathData_EmptyKind(t *testing.T) {
 func TestNewCustomDPPathData_BucketForced(t *testing.T) {
 	t.Parallel()
 	pd := newCustomPD()
-	if pd.Bucket != BucketCustom {
-		t.Errorf("Bucket = %q, want BucketCustom", pd.Bucket)
+	if pd.Bucket != model.BucketCustom {
+		t.Errorf("Bucket = %q, want model.BucketCustom", pd.Bucket)
 	}
 	if pd.Kind != "climate" {
 		t.Errorf("Kind = %q, want climate", pd.Kind)
@@ -270,8 +272,8 @@ func TestMQTTCustomDPState(t *testing.T) {
 
 func TestMQTTCustomDPState_WrongBucket(t *testing.T) {
 	t.Parallel()
-	// PathData with BucketValues — not custom — must return empty.
-	pd := NewDataPointPathData("", wireHmIPRF, "VCU1234567", 2, BucketValues, "climate")
+	// PathData with model.BucketValues — not custom — must return empty.
+	pd := NewDataPointPathData("", wireHmIPRF, "VCU1234567", 2, model.BucketValues, "climate")
 	if got := pd.MQTTCustomDPState(testBase, testCentral); got != "" {
 		t.Errorf("non-custom bucket must return empty, got %q", got)
 	}
@@ -401,7 +403,7 @@ func TestMQTTTopics_BaseSlashTrimmed(t *testing.T) {
 // central, so the sweep could match neither.
 func TestDiscoveryNodeIDSlugsTheCentralName(t *testing.T) {
 	t.Parallel()
-	pd := NewDataPointPathData("", wireHmIPRF, "0001ABCD", 1, BucketValues, "STATE")
+	pd := NewDataPointPathData("", wireHmIPRF, "0001ABCD", 1, model.BucketValues, "STATE")
 	for _, tc := range []struct{ central, want string }{
 		{"ccu-01", "ccu-01_0001abcd"},
 		{"Wohn Zimmer", "wohn_zimmer_0001abcd"},

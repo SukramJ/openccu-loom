@@ -12,6 +12,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/datapoint"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
+	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -659,7 +660,7 @@ func TestPathDataCaching(t *testing.T) {
 		t.Fatal("zero-state set/state path accessors must all return empty strings")
 	}
 
-	pd := naming.NewDataPointPathData("", hmtypes.NewWireInterfaceID("", hmenum.InterfaceHmIPRF), "VCU1234567", 3, naming.BucketValues, "STATE")
+	pd := naming.NewDataPointPathData("", hmtypes.NewWireInterfaceID("", hmenum.InterfaceHmIPRF), "VCU1234567", 3, payload.BucketValues, "STATE")
 	b.SetPathData(pd)
 
 	if got := b.PathData(); got != pd {
