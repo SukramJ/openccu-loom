@@ -100,30 +100,28 @@ type perDatapointEntity struct {
 	fields          any
 	commandTemplate string
 	nameNull        bool
-	// comp and stateTopic exist only for the restamp below.
-	comp       HAComponent
-	stateTopic string
+	// comp exists only for the restamp below.
+	comp HAComponent
 }
 
 // BuildDiscovery implements [hadiscovery.Builder].
 //
-// The restamp at the end is an escape hatch and is meant to read as one. The
-// render pipeline projects a key only onto the platforms whose Home Assistant
-// schema declares it, which is right — an undeclared key is dropped on
-// receipt with no error on the wire and no log line. Three shapes this plane
-// can emit carry such a key today: `climate` has neither `state_topic` nor
-// `value_template` in its schema, and `light` and `siren` have no
-// `value_template`. Those bytes are already retained on brokers, and this
-// change is a migration whose whole promise is that the bytes do not move, so
-// the keys are stamped back.
+// The restamp at the end is an escape hatch and is meant to read as one. It
+// covers exactly one key on exactly one platform, and only because the
+// projection rule and the Home Assistant schema disagree about it.
 //
-// They are latent rather than live: Event.Category on the per-parameter path
-// is the generic wire data point's category, which never resolves to climate,
-// light or siren — those categories always carry a ChannelType and leave
-// through the channel aggregate. The same three shapes are the ones
-// discoveryGoldenUnreachableShapes already excludes from the HA-schema
-// validity pin, with the same reasoning. Dropping the keys is a behaviour
-// change and belongs in its own commit, not in this one.
+// `climate` declares `value_template` (go-ha-catalog v0.2.1, Home Assistant
+// 2026.9.1) but declares no `state_topic` — it names a topic per role
+// instead. The render pipeline projects `value_template` only inside the
+// branch that projects `state_topic`, so a platform with the one key and not
+// the other never receives it. Home Assistant would accept and keep the key,
+// which makes dropping it a change an installed instance can see, so it is
+// stamped back rather than lost to a projection rule it does not share.
+//
+// The three keys that used to be restamped alongside it — `state_topic` on
+// climate, `value_template` on light and on siren — were the opposite case:
+// undeclared on those platforms, dropped on receipt with no error on the
+// wire and no log line, and so removed.
 func (e *perDatapointEntity) BuildDiscovery(_ hadiscovery.Context, comp *hadiscovery.Component) error {
 	if e.fields != nil {
 		comp.Fields = e.fields
@@ -133,11 +131,7 @@ func (e *perDatapointEntity) BuildDiscovery(_ hadiscovery.Context, comp *hadisco
 	}
 	comp.NameNull = e.nameNull
 
-	switch e.comp { //nolint:exhaustive // only the three schema gaps are restamped
-	case HAComponentClimate:
-		comp.StateTopic = e.stateTopic
-		comp.ValueTemplate = e.Description.ValueTemplate
-	case HAComponentLight, HAComponentSiren:
+	if e.comp == HAComponentClimate {
 		comp.ValueTemplate = e.Description.ValueTemplate
 	}
 	return nil

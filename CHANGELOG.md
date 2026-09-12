@@ -8,6 +8,31 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Three discovery keys the per-parameter plane published and Home
+  Assistant threw away are gone, and the golden moved to say so.** The
+  render pipeline projects a key only onto the platforms whose HA schema
+  declares it; #792 stamped four back onto three platforms so that
+  migration could stay byte-neutral. Three of the four were bytes HA
+  never kept: `state_topic` on `climate`, `value_template` on `light`
+  and on `siren`. The schemas are `extra=REMOVE_EXTRA`, so an installed
+  instance sees no difference — it stops receiving keys it was already
+  discarding with no error on the wire and no log line.
+
+  The fourth stays. `climate` DOES declare `value_template`
+  (go-ha-catalog v0.2.1, Home Assistant 2026.9.1); what it does not
+  declare is `state_topic`, and the pipeline projects the template only
+  inside the branch that projects the topic. That one key is still
+  stamped back, now for a reason the comment states.
+
+  `discovery_golden.json` is regenerated — the one place in this series
+  where that is the point rather than a warning. Six fixtures lost one
+  key each and nothing else moved. `light/values` and `light/master`
+  now pass the HA-schema validity pin and came off
+  `discoveryGoldenUnreachableShapes`; `siren` (no `command_topic`) and
+  `climate` (a `device_class` the schema does not declare) stay on it,
+  both still unreachable on this plane and both now the only reasons
+  left on the list.
+
 - **The last two discovery paths render through the shared model, and
   ADR 0070's migration is complete.** The per-parameter path in
   `discovery.go` and the channel aggregate with its sixteen

@@ -549,7 +549,6 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		commandTemplate: vocab.commandTemplate,
 		nameNull:        entityLabelNull,
 		comp:            comp,
-		stateTopic:      stateTopic,
 	}
 	if len(vocab.options) > 0 {
 		modelEntity.Description.Options = &hamodel.Enum{Codes: vocab.options}
