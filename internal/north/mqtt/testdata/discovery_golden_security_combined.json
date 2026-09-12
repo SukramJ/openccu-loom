@@ -1,0 +1,987 @@
+{
+  "combined/central-scoped-address": {
+    "topic": "homeassistant/number/ccu-01_int0000001/openccu-loom_ccu-01_int0000001_3_duration/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/INT0000001/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/INT0000001/3/combined/duration/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_ccu-01_int0000001"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-ASIR",
+        "name": "Systeminterner Kanal",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "entity_category": "config",
+      "max": 86400,
+      "min": 0,
+      "mode": "box",
+      "name": "Duration",
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/INT0000001/3/combined/duration",
+      "step": 1,
+      "unique_id": "openccu-loom_ccu-01_int0000001_3_duration",
+      "unit_of_measurement": "s"
+    }
+  },
+  "combined/duration-catalogue-label": {
+    "topic": "homeassistant/number/ccu-01_0001abcd/openccu-loom_0001abcd_3_duration/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001ABCD/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/0001ABCD/3/combined/duration/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0001abcd"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-ASIR",
+        "name": "Alarmsirene Flur",
+        "serial_number": "0001ABCD",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "entity_category": "config",
+      "max": 86400,
+      "min": 0,
+      "mode": "box",
+      "name": "Duration",
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/0001ABCD/3/combined/duration",
+      "step": 1,
+      "unique_id": "openccu-loom_0001abcd_3_duration",
+      "unit_of_measurement": "s"
+    }
+  },
+  "combined/duration-ccu-label": {
+    "topic": "homeassistant/number/ccu-01_0001abcd/openccu-loom_0001abcd_3_duration/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001ABCD/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/0001ABCD/3/combined/duration/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0001abcd"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-ASIR",
+        "name": "Alarmsirene Flur",
+        "serial_number": "0001ABCD",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "entity_category": "config",
+      "max": 86400,
+      "min": 0,
+      "mode": "box",
+      "name": "Zeitdauer",
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/0001ABCD/3/combined/duration",
+      "step": 1,
+      "unique_id": "openccu-loom_0001abcd_3_duration",
+      "unit_of_measurement": "s"
+    }
+  },
+  "combined/enum-select-door-mode": {
+    "topic": "homeassistant/select/ccu-01_0004door/openccu-loom_0004door_1_door_mode/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0004DOOR/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/0004DOOR/1/combined/door_mode/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0004door"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-MOD-TM",
+        "name": "Garagentor",
+        "serial_number": "0004DOOR",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "name": "Door Mode",
+      "optimistic": false,
+      "options": [
+        "CLOSED",
+        "VENTILATION_POSITION",
+        "OPEN"
+      ],
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/0004DOOR/1/combined/door_mode",
+      "unique_id": "openccu-loom_0004door_1_door_mode"
+    }
+  },
+  "combined/hs-color": {
+    "topic": "homeassistant/sensor/ccu-01_0003cafe/openccu-loom_0003cafe_1_hs_color/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0003CAFE/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0003cafe"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-BSL",
+        "name": "Stehlampe",
+        "serial_number": "0003CAFE",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "entity_category": "diagnostic",
+      "name": "HS Color",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/0003CAFE/1/combined/hs_color",
+      "unique_id": "openccu-loom_0003cafe_1_hs_color",
+      "value_template": "{{ value_json.hue }}"
+    }
+  },
+  "combined/level-combined": {
+    "topic": "homeassistant/sensor/ccu-01_0002beef/openccu-loom_0002beef_4_level_combined/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0002BEEF/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0002beef"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-BBL",
+        "name": "Jalousie Wohnzimmer",
+        "serial_number": "0002BEEF",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "entity_category": "diagnostic",
+      "name": "Level Combined",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/0002BEEF/4/combined/level_combined",
+      "unique_id": "openccu-loom_0002beef_4_level_combined",
+      "value_template": "{{ value_json.level }}"
+    }
+  },
+  "combined/no-device-object": {
+    "topic": "homeassistant/number/ccu-01_0001abcd/openccu-loom_0001abcd_3_duration/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001ABCD/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/0001ABCD/3/combined/duration/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0001abcd"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-ASIR",
+        "name": "Alarmsirene Flur",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "entity_category": "config",
+      "max": 86400,
+      "min": 0,
+      "mode": "box",
+      "name": "Duration",
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/0001ABCD/3/combined/duration",
+      "step": 1,
+      "unique_id": "openccu-loom_0001abcd_3_duration",
+      "unit_of_measurement": "s"
+    }
+  },
+  "combined/projection-sets-unique-id": {
+    "topic": "homeassistant/number/ccu-01_0001abcd/openccu-loom_0001abcd_3_duration/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001ABCD/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/0001ABCD/3/combined/duration/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0001abcd"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-ASIR",
+        "name": "Alarmsirene Flur",
+        "serial_number": "0001ABCD",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "entity_category": "config",
+      "max": 86400,
+      "min": 0,
+      "mode": "box",
+      "name": "Duration",
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/0001ABCD/3/combined/duration",
+      "step": 1,
+      "unique_id": "openccu-loom_projection_pinned",
+      "unit_of_measurement": "s"
+    }
+  },
+  "combined/second-central": {
+    "topic": "homeassistant/number/ccu-02_0001abcd/openccu-loom_0001abcd_3_duration/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-02/HmIP-RF/0001ABCD/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-02/HmIP-RF/0001ABCD/3/combined/duration/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0001abcd"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-ASIR",
+        "name": "Alarmsirene Flur",
+        "serial_number": "0001ABCD",
+        "via_device": "openccu-loom_central_ccu-02"
+      },
+      "entity_category": "config",
+      "max": 86400,
+      "min": 0,
+      "mode": "box",
+      "name": "Duration",
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-02/HmIP-RF/0001ABCD/3/combined/duration",
+      "step": 1,
+      "unique_id": "openccu-loom_0001abcd_3_duration",
+      "unit_of_measurement": "s"
+    }
+  },
+  "combined/sub-devices-enabled": {
+    "topic": "homeassistant/number/ccu-01_0001abcd/openccu-loom_0001abcd_3_duration/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/ccu-01/HmIP-RF/0001ABCD/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "command_topic": "gh/ccu-01/HmIP-RF/0001ABCD/3/combined/duration/set",
+      "device": {
+        "identifiers": [
+          "openccu-loom_0001abcd"
+        ],
+        "manufacturer": "eQ-3",
+        "model": "HmIP-ASIR",
+        "name": "Alarmsirene Flur",
+        "serial_number": "0001ABCD",
+        "via_device": "openccu-loom_central_ccu-01"
+      },
+      "entity_category": "config",
+      "max": 86400,
+      "min": 0,
+      "mode": "box",
+      "name": "Duration",
+      "optimistic": false,
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/ccu-01/HmIP-RF/0001ABCD/3/combined/duration",
+      "step": 1,
+      "unique_id": "openccu-loom_0001abcd_3_duration",
+      "unit_of_measurement": "s"
+    }
+  },
+  "security/class/battery-diagnostic": {
+    "topic": "homeassistant/binary_sensor/security/class_battery/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/security/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "binary_sensor.loom_security_class_battery",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_security"
+        ],
+        "manufacturer": "OpenCCU-Loom",
+        "model": "Security \u0026 Safety",
+        "name": "Security \u0026 Safety",
+        "sw_version": "0.77.0"
+      },
+      "device_class": "battery",
+      "entity_category": "diagnostic",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/security/class/battery",
+      "name": "Battery low",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_off": "OFF",
+      "payload_on": "ON",
+      "state_topic": "gh/security/class/battery",
+      "unique_id": "loom_security_class_battery",
+      "value_template": "{{ value_json.state }}"
+    }
+  },
+  "security/class/smoke-hazard": {
+    "topic": "homeassistant/binary_sensor/security/class_smoke/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/security/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "binary_sensor.loom_security_class_smoke",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_security"
+        ],
+        "manufacturer": "OpenCCU-Loom",
+        "model": "Security \u0026 Safety",
+        "name": "Security \u0026 Safety",
+        "sw_version": "0.77.0"
+      },
+      "device_class": "smoke",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/security/class/smoke",
+      "name": "Smoke detected",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_off": "OFF",
+      "payload_on": "ON",
+      "state_topic": "gh/security/class/smoke",
+      "unique_id": "loom_security_class_smoke",
+      "value_template": "{{ value_json.state }}"
+    }
+  },
+  "security/system/alarm": {
+    "topic": "homeassistant/binary_sensor/security/alarm/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/security/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "binary_sensor.loom_security_alarm",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_security"
+        ],
+        "manufacturer": "OpenCCU-Loom",
+        "model": "Security \u0026 Safety",
+        "name": "Security \u0026 Safety",
+        "sw_version": "0.77.0"
+      },
+      "device_class": "safety",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/security/alarm",
+      "name": "Security alarm",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_off": "OFF",
+      "payload_on": "ON",
+      "state_topic": "gh/security/alarm",
+      "unique_id": "loom_security_alarm",
+      "value_template": "{{ value_json.state }}"
+    }
+  },
+  "security/system/event": {
+    "topic": "homeassistant/event/security/event/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/security/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "event.loom_security_event",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_security"
+        ],
+        "manufacturer": "OpenCCU-Loom",
+        "model": "Security \u0026 Safety",
+        "name": "Security \u0026 Safety",
+        "sw_version": "0.77.0"
+      },
+      "event_types": [
+        "triggered",
+        "cleared",
+        "raised"
+      ],
+      "name": "Security event",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/security/event",
+      "unique_id": "loom_security_event"
+    }
+  },
+  "security/system/fault": {
+    "topic": "homeassistant/event/security/fault/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/security/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "event.loom_security_fault",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_security"
+        ],
+        "manufacturer": "OpenCCU-Loom",
+        "model": "Security \u0026 Safety",
+        "name": "Security \u0026 Safety",
+        "sw_version": "0.77.0"
+      },
+      "entity_category": "diagnostic",
+      "event_types": [
+        "triggered",
+        "cleared",
+        "raised"
+      ],
+      "name": "Security fault event",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/security/fault",
+      "unique_id": "loom_security_fault"
+    }
+  },
+  "security/system/health": {
+    "topic": "homeassistant/binary_sensor/security/health/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/security/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "binary_sensor.loom_security_health",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_security"
+        ],
+        "manufacturer": "OpenCCU-Loom",
+        "model": "Security \u0026 Safety",
+        "name": "Security \u0026 Safety",
+        "sw_version": "0.77.0"
+      },
+      "device_class": "problem",
+      "entity_category": "diagnostic",
+      "name": "Alarm engine problem",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_off": "OFF",
+      "payload_on": "ON",
+      "state_topic": "gh/security/health",
+      "unique_id": "loom_security_health"
+    }
+  },
+  "security/system/last_alarm": {
+    "topic": "homeassistant/sensor/security/last_alarm/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/security/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "sensor.loom_security_last_alarm",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_security"
+        ],
+        "manufacturer": "OpenCCU-Loom",
+        "model": "Security \u0026 Safety",
+        "name": "Security \u0026 Safety",
+        "sw_version": "0.77.0"
+      },
+      "device_class": "timestamp",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/security/last_alarm",
+      "name": "Last security alarm",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/security/last_alarm",
+      "unique_id": "loom_security_last_alarm",
+      "value_template": "{{ value_json.at | default('') }}"
+    }
+  },
+  "security/system/last_fault": {
+    "topic": "homeassistant/sensor/security/last_fault/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/security/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "sensor.loom_security_last_fault",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_security"
+        ],
+        "manufacturer": "OpenCCU-Loom",
+        "model": "Security \u0026 Safety",
+        "name": "Security \u0026 Safety",
+        "sw_version": "0.77.0"
+      },
+      "device_class": "timestamp",
+      "entity_category": "diagnostic",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/security/last_fault",
+      "name": "Last security fault",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/security/last_fault",
+      "unique_id": "loom_security_last_fault",
+      "value_template": "{{ value_json.at | default('') }}"
+    }
+  },
+  "security/system/problem": {
+    "topic": "homeassistant/binary_sensor/security/problem/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/security/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "binary_sensor.loom_security_problem",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_security"
+        ],
+        "manufacturer": "OpenCCU-Loom",
+        "model": "Security \u0026 Safety",
+        "name": "Security \u0026 Safety",
+        "sw_version": "0.77.0"
+      },
+      "device_class": "problem",
+      "entity_category": "diagnostic",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/security/problem",
+      "name": "Security problem",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "payload_off": "OFF",
+      "payload_on": "ON",
+      "state_topic": "gh/security/problem",
+      "unique_id": "loom_security_problem",
+      "value_template": "{{ value_json.state }}"
+    }
+  },
+  "security/system/state": {
+    "topic": "homeassistant/sensor/security/state/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/security/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "sensor.loom_security_state",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_security"
+        ],
+        "manufacturer": "OpenCCU-Loom",
+        "model": "Security \u0026 Safety",
+        "name": "Security \u0026 Safety",
+        "sw_version": "0.77.0"
+      },
+      "device_class": "enum",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/security/state",
+      "name": "Security state",
+      "options": [
+        "ok",
+        "info",
+        "warning",
+        "alarm",
+        "critical"
+      ],
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/security/state",
+      "unique_id": "loom_security_state",
+      "value_template": "{{ value_json.state }}"
+    }
+  },
+  "security/system/state-without-config-url": {
+    "topic": "homeassistant/sensor/security/state/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/security/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "sensor.loom_security_state",
+      "device": {
+        "identifiers": [
+          "openccu-loom_security"
+        ],
+        "manufacturer": "OpenCCU-Loom",
+        "model": "Security \u0026 Safety",
+        "name": "Security \u0026 Safety",
+        "sw_version": "0.77.0"
+      },
+      "device_class": "enum",
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/security/state",
+      "name": "Security state",
+      "options": [
+        "ok",
+        "info",
+        "warning",
+        "alarm",
+        "critical"
+      ],
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_topic": "gh/security/state",
+      "unique_id": "loom_security_state",
+      "value_template": "{{ value_json.state }}"
+    }
+  },
+  "security/zone/named": {
+    "topic": "homeassistant/sensor/security/zone_erdgeschoss-flur/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/security/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "sensor.loom_security_zone_erdgeschoss-flur",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_security"
+        ],
+        "manufacturer": "OpenCCU-Loom",
+        "model": "Security \u0026 Safety",
+        "name": "Security \u0026 Safety",
+        "sw_version": "0.77.0"
+      },
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/security/zone/erdgeschoss-flur",
+      "name": "Zone Erdgeschoss Flur",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_class": "measurement",
+      "state_topic": "gh/security/zone/erdgeschoss-flur",
+      "unique_id": "loom_security_zone_erdgeschoss-flur",
+      "value_template": "{{ value_json.state }}"
+    }
+  },
+  "security/zone/unnamed-falls-back-to-slug": {
+    "topic": "homeassistant/sensor/security/zone_erdgeschoss-flur/config",
+    "payload": {
+      "availability": [
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/bridge/status"
+        },
+        {
+          "payload_available": "online",
+          "payload_not_available": "offline",
+          "topic": "gh/security/availability"
+        }
+      ],
+      "availability_mode": "all",
+      "default_entity_id": "sensor.loom_security_zone_erdgeschoss-flur",
+      "device": {
+        "configuration_url": "http://ccu-01.local",
+        "identifiers": [
+          "openccu-loom_security"
+        ],
+        "manufacturer": "OpenCCU-Loom",
+        "model": "Security \u0026 Safety",
+        "name": "Security \u0026 Safety",
+        "sw_version": "0.77.0"
+      },
+      "json_attributes_template": "{{ value_json | tojson }}",
+      "json_attributes_topic": "gh/security/zone/erdgeschoss-flur",
+      "name": "Zone erdgeschoss-flur",
+      "origin": {
+        "name": "openccu-loom",
+        "support_url": "https://github.com/SukramJ/openccu-loom",
+        "sw_version": "dev"
+      },
+      "state_class": "measurement",
+      "state_topic": "gh/security/zone/erdgeschoss-flur",
+      "unique_id": "loom_security_zone_erdgeschoss-flur",
+      "value_template": "{{ value_json.state }}"
+    }
+  }
+}
