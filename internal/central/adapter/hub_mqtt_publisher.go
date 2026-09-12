@@ -283,6 +283,9 @@ func retractHubRawState(ctx context.Context, b *mqtt.Bridge, u *central.Unit, ce
 		_ = b.RetractSysvarState(ctx, centralName, sv)
 	}
 	_ = b.RetractHubUpdate(ctx, centralName)
+	// The per-CCU reachability gate. `offline` would be a claim about a CCU
+	// that no longer exists; the removal retracts it instead.
+	_ = b.RetractHubStatus(ctx, centralName)
 }
 
 // publish hands one hub-plane broker interaction to the fan-out worker.
@@ -372,6 +375,17 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 	if hi := hubInfoFromUnit(u); hi.Serial != "" {
 		p.publish(func() { disco.SetHubInfoFor(centralName, hi) })
 	}
+
+	// --- Per-CCU reachability gate ---
+	// Queued here, ahead of every discovery build below, because Home
+	// Assistant holds an entity unavailable until EVERY topic in its
+	// `availability` list has reported. Every CCU-scoped hub entity built
+	// below now lists `<base>/<central>/hub/status`, so a config that
+	// reached HA before the gate's first retained byte would grey the whole
+	// hub plane out until the next reachability change — which on a healthy
+	// CCU may never come. The worker is FIFO, so queueing the seed first is
+	// what orders the byte before the configs that name it.
+	p.publish(func() { p.publishCCUReachability(ctx, b, centralName, hubModel) })
 
 	// --- Programs ---
 	// Subscribe to PutProgram FIRST so programs registered between the
@@ -499,6 +513,11 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 					slog.String("interface", e.InterfaceID),
 					slog.String("err", err.Error()))
 			}
+			// Re-fold every interface into the per-CCU gate. The event's own
+			// flag is deliberately NOT the input: one interface going down
+			// is not the CCU going away, and the fold has to see the others
+			// to tell the two apart. The bridge debounces the result.
+			p.publishCCUReachability(ctx, b, centralName, hubModel)
 		})
 	}))
 
@@ -960,6 +979,58 @@ func (p *HubMQTTPublisher) republishHubEntityDiscovery(
 // whose aggregate is not wired yet is served by a stand-in of the same type
 // and gets the same topic. That fallback is the only reason an unwired
 // aggregate is not an error here.
+// publishCCUReachability folds this CCU's interface states into the per-CCU
+// availability gate and hands the result to the bridge, which debounces it.
+//
+// Both callers go through here — the seed queued ahead of the hub discovery
+// builds, and the re-fold on every ConnectivityChangedEvent — so the byte
+// that seeds the topic and the byte that updates it can never be computed by
+// two different folds.
+func (p *HubMQTTPublisher) publishCCUReachability(
+	ctx context.Context, b *mqtt.Bridge, centralName string, hubModel *hub.Hub,
+) {
+	if err := b.PublishHubReachability(ctx, centralName, ccuReachable(hubModel)); err != nil {
+		p.logger.Warn("mqtt.publish_hub_status",
+			slog.String("central", centralName),
+			slog.String("err", err.Error()))
+	}
+}
+
+// ccuReachable is the fold: is this CCU still on the bus.
+//
+// It is the DISJUNCTION over the tracked interfaces — reachable when at
+// least one of them is — and the choice is the substantive one in the
+// per-CCU availability gate, so it is stated here rather than left to the
+// reader of [hub.Connectivity.AnyReachable].
+//
+// A CCU that goes away takes every one of its interface processes with it:
+// the daemon's XML-RPC calls to all of them time out together and every
+// interface flips unreachable in the same sweep, so the disjunction reports
+// the CCU gone exactly when it is. The conjunction would report it gone
+// much sooner and wrongly — one interface down is a per-interface fault,
+// and the common shapes of it (a crashed CUxD, an unplugged HmIP wired
+// gateway, a BidCoS radio module that the CCU itself restarts) leave the
+// ReGa logic layer answering normally. Sysvars, programs, the system scores
+// and the message aggregates are ReGa-scoped, not interface-scoped: their
+// values are not stale while ReGa is alive, and greying them out because
+// one radio is down would hide a working CCU behind an unrelated fault.
+// The per-interface fault has its own entity — the connectivity
+// binary_sensor — which is where that signal belongs and is read.
+//
+// An unobserved tracker folds to REACHABLE, not to unreachable. Nothing in
+// this plane is published before the CCU's serial has been read off it, so
+// "no interface state yet" at this point means the daemon has just
+// demonstrated it can talk to the CCU and the tracker has not caught up —
+// absence of evidence, not evidence of absence. Folding it the other way
+// would publish a retained `offline` and grey out every hub entity of a
+// healthy CCU on every daemon start, until the first reachability change
+// happened to arrive.
+func ccuReachable(hubModel *hub.Hub) bool {
+	conn := connectivityTopicProvider(hubModel)
+	reachable, observed := conn.AnyReachable()
+	return !observed || reachable
+}
+
 func connectivityTopicProvider(hubModel *hub.Hub) *hub.Connectivity {
 	if hubModel != nil {
 		if conn := hubModel.ConnectivityDataPoints(); conn != nil {

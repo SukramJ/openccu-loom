@@ -154,16 +154,20 @@ var mqttDocTopicPromises = map[string]docTopicPromise{
 	"<base>/<central>/system/status": {
 		kind: promisePublished, producers: []string{"SystemStatus"},
 	},
+	// Promoted from reserved to published on 2026-09-13: the per-CCU
+	// availability gate the 2026-09-12 amendment named as the real gap
+	// behind this shape. Both halves of the promotion are here — the row
+	// moved AND HubStatus gained production call sites (the availability
+	// list every CCU-scoped hub entity declares, and the publish path).
+	"<base>/<central>/hub/status": {
+		kind: promisePublished, producers: []string{"HubStatus"},
+	},
 
 	// --- Reserved `hub/` shapes — nothing publishes here ------------------
 	// Documented as reserved after the 2026-09-12 amendment to ADR 0011.
 	// Promoting one of these to a published class means giving it a
 	// publisher AND moving its row into the table above; flipping the row
 	// alone, or adding the publisher alone, fails this test.
-	"<base>/<central>/hub/status": {
-		kind: promiseReserved, producers: []string{"HubStatus", "MQTTHubStatus"},
-		why: "a per-CCU availability rollup is a candidate, not an implementation",
-	},
 	"<base>/<central>/hub/info": {
 		kind: promiseReserved, producers: []string{"HubInfo", "MQTTHubInfo"},
 		why: "its fields are in the HA discovery device block instead",
@@ -359,7 +363,11 @@ func mqttDocTableTopics(t *testing.T, root string) []string {
 // calls satisfies perfectly: `<base>/<central>/hub/status` was promised
 // as "CCU connection status" from the document's first revision, was
 // pinned green by the doctest the whole time, and was never published by
-// any daemon build (ADR 0011, amendment 2026-09-12).
+// any daemon build (ADR 0011, amendment 2026-09-12). It is published now
+// (amendment 2026-09-13) and its row moved to promisePublished with it —
+// which is the movement this guard exists to force: the classification
+// and the call site have to move together, and flipping either alone
+// fails here.
 //
 // What it cannot do is prove bytes reach a broker; that needs a broker
 // and belongs in an integration test. A production call site of the

@@ -6,6 +6,108 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A per-CCU availability gate at `<base>/<central>/hub/status`, and
+  every CCU-scoped hub entity now takes availability from it as well as
+  from `<base>/bridge/status`.** The defect it fixes is one #804 named
+  and deliberately did not fix: the daemon's Last Will says only whether
+  the *daemon* is alive, so a CCU that drops off the bus while the daemon
+  stays up left every one of its system variables, programs, system
+  scores, install-mode entities and message aggregates "available" in
+  Home Assistant, showing whatever they last reported, indefinitely.
+  There was no timeout behind it and no entity anywhere saying why.
+
+  `hub/status` was documented as "CCU connection status" from the topic
+  schema's first revision and never carried a byte; #804 withdrew the
+  promise as a reserved shape and costed the implementation. This is the
+  implementation, and the shape's row moves back into the published
+  table with it — `tests/contract/mqtt_topic_schema_producer_test.go`
+  fails if only one of the two moves. `hub/info` and `hub/diagnostics`
+  stay reserved.
+
+  **Reachable means ANY interface, not all of them.** The value is a
+  disjunction over the CCU's per-interface reachability: `online` while
+  at least one interface answers, `offline` once none does. One
+  interface down is a per-interface fault — a crashed CUxD, an unplugged
+  wired gateway, a radio module the CCU restarts by itself — and it
+  already has its own entity, the connectivity `binary_sensor`. It says
+  nothing about whether ReGa is answering, and everything gated by this
+  topic is ReGa-scoped: sysvar values, program state, the system scores,
+  the message aggregates. The conjunction would grey all of them out for
+  a fault on an unrelated radio, hiding a working CCU. A CCU that is
+  actually gone takes every interface process with it, so the
+  disjunction reports it gone exactly when it is.
+
+  **A flip is debounced by a 15 s dwell, not rate-limited.** A level that
+  does not survive the window is never written at all, so an interface
+  that bounces down and up inside it puts nothing on the broker and Home
+  Assistant sees nothing. A rate limit would still write both ends of the
+  flap, just more slowly — and the failure that matters is not broker
+  load but an operator watching every entity of a working CCU blink out
+  and come back, with every `unavailable` automation trigger firing on
+  the blink. The dwell is symmetric, because a flap alternates: an
+  asymmetric gate that published `online` immediately would still strobe.
+  The one write never debounced is the FIRST one for a CCU — Home
+  Assistant holds an entity unavailable until every topic in its
+  `availability` list has reported, so the gate's first retained byte is
+  seeded ahead of the discovery configs that name it.
+
+  Published through `publisher.AvailabilityPublisher` at QoS 1, for the
+  reason the entry below states for every other availability write.
+
+  **The gate is added alongside `bridge/status`, never instead of it.**
+  Home Assistant's default `availability_mode: "all"` is a conjunction,
+  which is exactly the wanted semantics: available when the daemon is up
+  *and* the CCU is on the bus. The two statements are independent — a
+  dead daemon publishes nothing about its CCUs, a live daemon with a dead
+  CCU says nothing about itself — so replacing rather than adding would
+  have traded one blind spot for another. Two hub entities deliberately
+  do not list it, for one reason stated twice: the per-interface
+  connectivity sensors, whose state is the fold's own input, and the
+  daemon-status sensor, which already carries no availability block at
+  all.
+
+  **LWT ordering.** MQTT allows one Last Will per connection and this
+  daemon's is spent on `bridge/status`, so the gate cannot have one —
+  and needs none, because the conjunction means the will's
+  `bridge/status: offline` already makes every gated entity unavailable
+  whatever the gates still say. A retained `online` outliving a killed
+  daemon is a false statement on a readable topic, not a ghost entity.
+  The daemon repairs the statement where it can: a graceful stop writes
+  every per-CCU gate `offline` *before* the bridge marker, so no instant
+  exists in which the daemon has declared itself gone while a gate still
+  claims reachability; the next connect reseeds the fold before that
+  CCU's discovery configs; and a CCU removed from the fleet has the topic
+  *retracted*, because `offline` would be a claim about a CCU that no
+  longer exists.
+
+  **Discovery goldens moved, in one dimension only.** 45 of the 48
+  pinned hub payloads gained one `availability` entry.
+  `TestHubGoldenChangedOnlyInAvailability` is the proof that nothing else
+  did: it strikes `availability` out of every payload and hashes the
+  remainder against the digests those payloads had before the change, so
+  a `unique_id`, `default_entity_id`, `device` block, `state_topic`,
+  `command_topic` or platform field that moved underneath the diff fails
+  the entry it moved on. `unique_id`, `default_entity_id` and
+  `identifiers` are unchanged, which is what makes the upgrade
+  history-preserving — Home Assistant keys the entity registry on the
+  first and the device registry on the last, neither with a migration
+  path.
+
+  **What an operator sees on upgrade.** Every CCU-scoped hub entity gains
+  a second availability source in its discovery config; entity ids,
+  names, history and long-term statistics are untouched, because the
+  identity fields are. Home Assistant re-reads the republished configs on
+  connect and applies the new list immediately. For the first moments
+  after the upgrade an entity is unavailable until the gate's first
+  retained byte arrives — that byte is published ahead of the configs
+  that name it, so in practice the window is the broker round trip, not
+  the dwell. From then on a CCU that goes unreachable greys its own
+  entities out within the dwell instead of leaving them frozen at their
+  last value, and the per-interface connectivity sensor and the CCU's own
+  hub card stay readable throughout to say which CCU it was.
+
 ### Changed
 
 - **go-hamqtt v0.28.0 -> v0.29.0, and the inbound param decoders move

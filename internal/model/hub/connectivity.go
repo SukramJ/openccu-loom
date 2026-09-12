@@ -81,6 +81,34 @@ func (c *Connectivity) AllReachable() (allReachable, observed bool) {
 	return true, true
 }
 
+// AnyReachable reports whether at least one tracked interface is
+// reachable, and whether any interface state has been observed at all.
+// An unobserved tracker returns (false, false).
+//
+// It is the disjunction to [Connectivity.AllReachable]'s conjunction, and
+// the two answer different questions. AllReachable answers "is every radio
+// up", which is a fault report: one interface down is a real fault and the
+// per-interface connectivity binary_sensor is where an operator reads it.
+// AnyReachable answers "is the CCU still on the bus", which is what the
+// per-CCU availability gate needs — a CCU that has gone away takes every
+// one of its interfaces down together, while a single interface process
+// that died (a crashed CUxD, an unplugged wired gateway) leaves the ReGa
+// logic layer answering normally, so the sysvars, programs and system
+// scores it feeds are not stale and must not be greyed out.
+func (c *Connectivity) AnyReachable() (anyReachable, observed bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if !c.observed {
+		return false, false
+	}
+	for _, ok := range c.states {
+		if ok {
+			return true, true
+		}
+	}
+	return false, true
+}
+
 // List returns every tracked (interface, reachable) pair sorted by
 // interface ID. The [InterfaceReachability.Interface] field is
 // populated from the ID via type cast; callers that need a strict
