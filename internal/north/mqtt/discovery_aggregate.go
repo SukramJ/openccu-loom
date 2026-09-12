@@ -196,43 +196,6 @@ func (c channelEventDiscoveryContext) NodeID(*hamodel.Device) string { return c.
 // different string and is carried on the [DiscoveryItem].
 func (c channelEventDiscoveryContext) ObjectID(*hamodel.Device, hamodel.Entity) string { return "" }
 
-// channelEventModelDevice lifts the device descriptor this daemon harvests
-// into the shared model's [hamodel.Device], so the render pipeline emits the
-// device block instead of a frame stamping one on afterwards.
-//
-// The identifiers keep an EMPTY namespace, which the shared model renders
-// verbatim. That is what lets the published `openccu-loom_<address>`,
-// `openccu-loom_<address>-<group>` and `openccu-loom_central_<central>`
-// spellings survive: Home Assistant keys its device registry on those strings
-// and has no migration path for them either.
-func channelEventModelDevice(info *hadiscovery.DeviceInfo) *hamodel.Device {
-	if info == nil {
-		return nil
-	}
-	dev := &hamodel.Device{
-		Name:          hamodel.L(info.Name),
-		Manufacturer:  info.Manufacturer,
-		Model:         info.Model,
-		ModelID:       info.ModelID,
-		SWVersion:     info.SWVersion,
-		HWVersion:     info.HWVersion,
-		SerialNumber:  info.SerialNumber,
-		SuggestedArea: info.SuggestedArea,
-		ConfigURL:     info.ConfigurationURL,
-	}
-	for _, id := range info.Identifiers {
-		dev.Identity.IDs = append(dev.Identity.IDs, hamodel.Identifier{Value: id})
-	}
-	for _, conn := range info.Connections {
-		dev.Identity.Connections = append(dev.Identity.Connections,
-			hamodel.Connection{Type: conn[0], Value: conn[1]})
-	}
-	if info.ViaDevice != "" {
-		dev.Via = &hamodel.Identity{IDs: []hamodel.Identifier{{Value: info.ViaDevice}}}
-	}
-	return dev
-}
-
 // channelEventSpec is what the two entry points on this plane resolve before
 // the render: everything that differs between a keypress, an impulse and a
 // device-error entity. The render itself is identical for all three, which is
@@ -268,7 +231,7 @@ type channelEventSpec struct {
 // for an unscoped unique id.
 func (d *DefaultDiscoveryBuilder) renderChannelEvent(s channelEventSpec) ([]byte, bool) {
 	central := d.centralFor(s.ev)
-	dev := channelEventModelDevice(deviceDescriptor(s.ev, d.hubURLFor(s.ev), d.SubDevicesEnabled))
+	dev := modelDeviceFromInfo(deviceDescriptor(s.ev, d.hubURLFor(s.ev), d.SubDevicesEnabled))
 	if dev == nil {
 		return nil, false
 	}
@@ -317,7 +280,11 @@ func (d *DefaultDiscoveryBuilder) renderChannelEvent(s channelEventSpec) ([]byte
 	if err != nil {
 		return nil, false
 	}
-	buf, err := json.Marshal(comp)
+	// EntityJSON, not json.Marshal: the component keeps its platform so the
+	// caller can name the topic segment, and Home Assistant declares the key
+	// on no platform -- its extra=REMOVE_EXTRA schemas would drop it with no
+	// error on the wire and no log line.
+	buf, err := comp.EntityJSON()
 	if err != nil {
 		return nil, false
 	}
@@ -538,11 +505,18 @@ func discoveryItemFor(comp hadiscovery.Component, nodeID, objectID string) Disco
 
 // flattenComponent renders a typed component into the flat object Home
 // Assistant receives.
+//
+// The platform is required on the way in and absent on the way out. It is
+// the bundle discriminator, not a discovery key: the per-entity form this
+// daemon publishes names the platform in its topic, and Home Assistant
+// declares the key on no platform at all. [hadiscovery.Component.EntityJSON]
+// is what drops it; the guard stays here because a component with no
+// platform has no topic to be published to either.
 func flattenComponent(comp hadiscovery.Component) (map[string]any, error) {
 	if comp.Platform == "" {
 		return nil, errNoPlatform
 	}
-	raw, err := json.Marshal(comp)
+	raw, err := comp.EntityJSON()
 	if err != nil {
 		return nil, err
 	}
@@ -550,10 +524,6 @@ func flattenComponent(comp hadiscovery.Component) (map[string]any, error) {
 	if err := json.Unmarshal(raw, &out); err != nil {
 		return nil, err
 	}
-	// `platform` is the bundle discriminator, not a discovery key: the
-	// per-entity form this daemon publishes carries the platform in the topic
-	// and Home Assistant declares the key on no platform at all.
-	delete(out, "platform")
 	return out, nil
 }
 

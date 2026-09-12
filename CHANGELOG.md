@@ -8,6 +8,88 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **go-hamqtt v0.21.0 -> v0.23.0, and the escape hatches the five
+  migrated planes needed are gone.** Measuring those five migrations
+  produced 40 hatches, 11 of them avoidable; v0.23.0 closes the three
+  causes and this removes what they forced:
+
+  - Three planes restamped `platform` on the component the shared
+    renderer had just cleared, because the per-entity form names its
+    topic segment from that field. `RenderComponent` now keeps it and
+    `Component.EntityJSON` drops it from the bytes, so notify,
+    press-button and week-profile encode through `EntityJSON` and the
+    alarm and add-on-update planes stop restamping. Home Assistant
+    declares `platform` on no platform and its `extra=REMOVE_EXTRA`
+    schemas drop an undeclared key with no error on the wire and no
+    log line -- the golden pins caught the key the moment the bump
+    landed, before it could reach a broker.
+
+  - Three planes each spelled out the same `hadiscovery.DeviceInfo` ->
+    `hamodel.Device` conversion under a different name. They now share
+    one `modelDeviceFromInfo`, a nil guard over the shared module's
+    `DeviceFromInfo`.
+
+  - `alarmContext.NodeID` is removed: the shared model reads that
+    method only when rendering a device bundle, and this plane
+    publishes the per-entity form, so nothing called it.
+
+- **go-hamqtt v0.23.0 -> v0.24.0, and the hub plane's own hatches go
+  the same way.** v0.24.0 was cut from what the hub-plane migration
+  measured, so each addition has a call site here:
+
+  - The daemon-status sensor reads its state off the bridge LWT topic,
+    so gating it on that topic would make it unavailable in exactly
+    the situation it exists to report. It had to clear `availability`
+    and `availability_mode` after rendering, because
+    `Availability.Resolved` answered every entity with a mode.
+    `hamodel.NoAvailability()` now says it in the description, and
+    `hubEntity.ungated` is gone.
+
+  - Install-mode and connectivity names embed an interface id, so they
+    were resolved eagerly through a local `trIface` helper and passed
+    as a literal `Name` — the catalogue key never reached the model.
+    `Context.Translate` now takes arguments and `Description.NameArgs`
+    fills the `{iface}` placeholder the catalogues already author, so
+    the three entity families move onto `NameKey` and `trIface` is
+    deleted.
+
+  - `optimistic` (six hub entities) and the `json_attributes` pair
+    (the three message aggregates plus the firmware-update plane) are
+    typed description fields now, projected onto the platforms whose
+    schema declares them. `hubEntity` is down to the platform Fields,
+    and the update plane's builder keeps only what is genuinely
+    platform `update` vocabulary — `latest_version_*`, `title`,
+    `display_precision`.
+
+  Not one published byte moves: the golden pins passed unchanged
+  through every step, which is the point of running them before and
+  after rather than regenerating them.
+
+- **Every discovery plane now renders through the shared model.** The
+  five that were already migrated are joined by the hub, firmware-
+  update, channel-event, security, combined-projection, climate-preset
+  and schedule planes. What is left hand-built is the per-parameter
+  path in `discovery.go` and `aggregateChannel`, whose bodies come
+  from the custom-datapoint builders in `internal/model/custom` — each
+  is its own change with its own pin.
+
+  Consolidating them in one place is what made the duplication
+  visible: six byte-identical copies of the `DeviceInfo` ->
+  `hamodel.Device` lift, written under six names, now share
+  `modelDeviceFromInfo`; and `flattenComponent` was performing the
+  marshal-drop-remarshal that `Component.EntityJSON` does upstream, so
+  it delegates. The security and schedule planes also hand their
+  `optimistic` and `json_attributes` keys to the description rather
+  than to a builder, which the v0.24.0 bump in this same change makes
+  possible.
+
+- **A failed alarm discovery render is logged.** It was discarded,
+  which made the one failure mode this plane must not have -- a
+  silently missing alarm panel -- indistinguishable from a panel that
+  was never configured.
+
+### Changed
+
 - **The discovery pipeline is typed end to end.** The per-parameter
   `Build` switch, `applyEntityDescription`, its strict variant,
   `localiseClimatePresets` and the two multiplier patches all work on

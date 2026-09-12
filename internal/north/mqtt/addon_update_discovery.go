@@ -206,11 +206,5 @@ func (d *DefaultDiscoveryBuilder) BuildAddonUpdateDiscovery() DiscoveryItem {
 	if err != nil {
 		return DiscoveryItem{}
 	}
-	// RenderComponent clears the platform: it is the bundle's
-	// discriminator, not a discovery key. [discoveryItemFor] reads it to
-	// name the component — and drops the key again when it flattens — so
-	// restore it for that one hop rather than spelling the platform
-	// twice.
-	comp.Platform = hacatalog.PlatformUpdate
 	return discoveryItemFor(comp, addonUpdateNodeID, addonUpdateObjectID)
 }

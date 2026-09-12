@@ -10,6 +10,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 
 	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hamodel "github.com/SukramJ/go-hamqtt/model"
 )
 
 // weekProgramPresetPrefix is the domain prefix of the week-program
@@ -42,20 +43,36 @@ func (d *DefaultDiscoveryBuilder) localiseClimatePresets(comp *hadiscovery.Compo
 	if !ok || len(fields.PresetModes) == 0 {
 		return
 	}
-	raw := fields.PresetModes
-	labels := make([]string, len(raw))
-	translated := false
-	for i, slug := range raw {
-		label, did := d.presetLabel(slug)
-		labels[i] = label
-		translated = translated || did
-	}
-	if !translated {
+	vocab := d.climatePresetVocabulary(fields.PresetModes)
+	if len(vocab.Labels) == 0 {
 		return
 	}
-	fields.PresetModes = labels
-	fields.PresetModeValueTemplate, fields.PresetModeCommandTemplate = presetModeTemplates(raw, labels)
+	fields.PresetModes = vocab.Options(d.Locale)
+	fields.PresetModeValueTemplate, fields.PresetModeCommandTemplate = presetModeTemplates(vocab, d.Locale)
 	comp.Fields = fields
+}
+
+// climatePresetVocabulary lifts a preset list into the shared model's
+// [hamodel.Enum] — the one type in the model that pairs a code the device
+// speaks with the label a person reads.
+//
+// Only the presets this daemon owns get a label. An empty Labels map means
+// the whole list is Home Assistant's own vocabulary and the payload is left
+// exactly as the climate builder wrote it, which is what keeps HA's own
+// translations in play.
+func (d *DefaultDiscoveryBuilder) climatePresetVocabulary(slugs []string) *hamodel.Enum {
+	vocab := &hamodel.Enum{Codes: append([]string(nil), slugs...)}
+	for _, slug := range slugs {
+		label, translated := d.presetLabel(slug)
+		if !translated {
+			continue
+		}
+		if vocab.Labels == nil {
+			vocab.Labels = make(map[string]hamodel.Localized, len(slugs))
+		}
+		vocab.Labels[slug] = hamodel.L(label)
+	}
+	return vocab
 }
 
 // presetLabel returns the display label for one preset slug and whether
@@ -112,22 +129,28 @@ func presetModeSlugs(v any) ([]string, bool) {
 }
 
 // presetModeTemplates renders the state and command templates that map
-// between the slugs the domain speaks and the labels HA shows.
+// between the slugs the domain speaks and the labels HA shows, from the
+// [hamodel.Enum] that pairs them.
 //
 // Both fall back to the incoming value when the map misses, so a preset
 // that appears after this payload was retained still passes through
 // instead of resolving to nothing.
-func presetModeTemplates(slugs, labels []string) (valueTemplate, commandTemplate string) {
+func presetModeTemplates(vocab *hamodel.Enum, lang string) (valueTemplate, commandTemplate string) {
 	var state, command strings.Builder
 	state.WriteString(`{% set m = {`)
 	command.WriteString(`{% set m = {`)
-	for i, slug := range slugs {
+	for i, slug := range vocab.Codes {
 		if i > 0 {
 			state.WriteString(", ")
 			command.WriteString(", ")
 		}
-		state.WriteString(jinjaQuote(slug) + ": " + jinjaQuote(labels[i]))
-		command.WriteString(jinjaQuote(labels[i]) + ": " + jinjaQuote(slug))
+		// Both directions read the same [hamodel.Enum], so the two dicts
+		// cannot disagree about which label belongs to which slug. The
+		// earlier pair of index-aligned slices could, and a reorder in one
+		// of them would have renamed a preset in one direction only.
+		label := vocab.Label(slug, lang)
+		state.WriteString(jinjaQuote(slug) + ": " + jinjaQuote(label))
+		command.WriteString(jinjaQuote(label) + ": " + jinjaQuote(slug))
 	}
 	state.WriteString(`} %}{% if value_json is defined and value_json.preset_mode is not none %}` +
 		`{{ m.get(value_json.preset_mode, value_json.preset_mode) }}{% endif %}`)
