@@ -121,6 +121,129 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`docs/mqtt-topic-schema.md` promised two topics no daemon build has
+  ever published, and the guard that should have caught it was checking
+  the wrong half.** The schema document — the operator-facing MQTT
+  contract — listed `<base>/<central>/hub/status` as "CCU connection
+  status" and `<base>/<central>/hub/info` as "CCU info snapshot" from
+  its first revision. Both were fiction. `TopicBuilder.HubStatus` and
+  `.HubInfo` have zero callers in any non-test file; the
+  `naming.MQTTHubStatus` / `MQTTHubInfo` free functions they delegate to
+  have exactly one non-test caller each, the builder method itself; no
+  publish path, no subscription and no discovery payload names either
+  topic; and no file under `internal/north/mqtt/testdata/` contains the
+  literal, so not even a golden referenced them. An operator who
+  followed the document and subscribed has been receiving nothing since
+  the first release.
+
+  `tests/contract/mqtt_topic_schema_doctest_test.go` pinned
+  `TopicBuilder.HubStatus` against that very documentation row and
+  passed the whole time — necessarily, because it compares a builder's
+  output against a documented string, and a builder nobody calls renders
+  its string perfectly. The same blindness covered every other row of
+  the document.
+
+  The promise is withdrawn rather than kept, which is a wire-promise
+  change and so carries a dated amendment to
+  `docs/adr/0011-mqtt-topic-and-payload-architecture.md` instead of a
+  silently deleted table row. The two rows move into a new "Reserved
+  `hub/` shapes — nothing publishes here" section that says plainly not
+  to subscribe, together with `hub/diagnostics`, which had the same
+  builder-with-no-publisher shape and was never documented at all. The
+  section also enumerates where the same information does reach a
+  consumer: the `hub/info` fields are in the HA discovery device block,
+  per-interface reachability is `hub/connectivity/<iface>`, daemon
+  reachability is `bridge/status`, and the radio and load figures are
+  per-device data points plus the central-wide `system/health_score`,
+  `system/latency` and `system/last_event_age` topics.
+
+  **Reported, not implemented:** `hub/status` is the one of the three
+  with a real gap behind it. Every CCU-scoped hub entity takes its
+  availability from `<base>/bridge/status`, so a CCU that goes
+  unreachable while the daemon stays up leaves its entities "available"
+  with stale values. A per-CCU availability rollup is the missing
+  source, and adding it is new published traffic — a state machine for
+  which interface states fold into "the CCU is gone", a debounce, a
+  retained publish, and the availability list of every hub entity
+  re-pointed, which moves discovery goldens. It gets its own change with
+  its own note.
+
+  The builders are deliberately **not** deleted: the doctest and
+  `TestHubSystemTopicsShareTheCentralSegmentOfTheRestOfThePlane` pin the
+  shapes through them, and the dead-code ratchet never saw them anyway —
+  `script/reachability` classifies package-level members only, so no
+  method is ever classified (the inventory contains no dotted
+  identifier), and the three `naming.MQTT*` functions read as reachable
+  because RTA treats the methods calling them as live. Both baselines
+  are untouched: `summary.unreachable` stays 129 and
+  `reachabilityUnreachableCeiling` stays 59.
+
+- **The new guard checks the half a doctest cannot.**
+  `tests/contract/mqtt_topic_schema_producer_test.go` parses the schema
+  document's own tables and requires every documented shape to be
+  classified as published by a named builder — which must then have a
+  production call site — as a command topic the daemon consumes, or as
+  reserved, which must have **none**. A new row fails the suite until
+  someone classifies it, a reserved shape that quietly gains a publisher
+  fails it too, and an entry whose row disappears from the document
+  fails in the other direction.
+
+  Verified by mutation, four ways: reclassifying `hub/status` as
+  published reproduced the original defect as a failure; adding one
+  production call site of `naming.MQTTHubStatus` failed the reserved
+  half; a fabricated documentation row failed as unclassified; and
+  deleting a classified row failed as orphaned.
+
+  What it cannot prove is that bytes reach a broker — that needs a
+  broker and belongs in an integration test. A production call site of
+  the producing builder is the strongest statement available to a unit
+  test. For command topics not even that is available: the daemon
+  consumes those through `+`-wildcard filters, so no per-topic builder
+  call exists at all — `TopicBuilder.ParameterCommand` has zero
+  production callers while both of its documented `/set` shapes are
+  honoured. Those rows carry a recorded reason instead of a count, which
+  is why the guard classifies rather than simply counts.
+
+  The sweep behind the guard checked all 42 documented topic classes.
+  The two hub rows were the only unkept promises; the document is
+  otherwise a strict *subset* of what the daemon publishes, with add-on
+  update, install-mode, hub update, message-aggregate, metric,
+  week-profile, schedule and combined topics live on the wire and
+  undocumented. Documenting them is a separate change.
+
+- **Twelve doc comments in `internal/model/naming`,
+  `internal/model/hub` and `internal/north/mqtt/topics.go` asserted
+  things about their callers that the code does not support.** This is
+  the fifth run of the same defect after `ResolveEnumLabel`, and in a
+  codebase whose comments carry measurements a false one is worse than
+  none. Corrected, each against a fresh count: `hub.DataFetcher` claimed
+  "coordinators implement this" (no implementation outside a test stub,
+  and both consumers have no production caller); `Update.SetInProgress`
+  claimed a caller "outside the Update struct" (both callers are methods
+  on `Update`); `Update.SetVersionBeforeUpdate` and
+  `VersionBeforeUpdate` told a coordinator to call it before `Install`
+  (`Install` takes the snapshot itself, and a coordinator doing so would
+  overwrite it); `ServiceMessages.LatestTimestamp` named "the
+  diagnostics page" that reads it (nothing reads it, in Go or in the
+  SPA); `MetricSensorName` named `MetricHubSensor.Signature` as its
+  reader (the reader is `NewMetricHubSensor`, which caches it in the
+  field `Signature` renders, and the whole chain is test-only);
+  `naming.MQTTHubInstallMode` read as naming the shape on the wire while
+  nothing publishes it (the daemon publishes only the per-interface
+  form); `hub.InstallMode.MQTTTopics` described an adapter that
+  "aggregates remaining seconds across interfaces" (no aggregation step
+  exists, and nothing calls the method); `naming.TopicSafe` cited
+  "bridge status, hub topics" as the reason it is exported (neither is a
+  caller — `BridgeStatus` escapes nothing and the hub topics are escaped
+  inside the `MQTTHub*` functions) and said its sibling `DiscoverySlug`
+  differs "on three" cases (two classes, eight cases, per the package's
+  own divergence pin); the path-root constants placed their readers
+  "twenty lines below" (about 500); `TopicBuilder`'s type comment
+  enumerated the topics defined locally and was wrong in both
+  directions, listing `DiscoveryConfig`, which delegates, and omitting
+  ten that do not; and `safe` named four consumers of which
+  `ServiceMethodCommand` has never existed as a `TopicBuilder` method.
+
 - **The alarm plane wrote past the bridge, exactly as the Security &
   Safety plane did before #796.** `Bridge.PublishAlarmState`,
   `PublishAlarmAvailability` and `RetractAlarmTopic` published straight

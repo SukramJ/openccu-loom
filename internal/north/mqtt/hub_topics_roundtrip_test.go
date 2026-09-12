@@ -213,8 +213,11 @@ func TestHubSystemTopicsShareTheCentralSegmentOfTheRestOfThePlane(t *testing.T) 
 		central = "Haus CCÜ"
 	)
 	topics := NewTopicBuilder(base)
-	// naming.MQTTHubStatus is the plane's other producer of the per-CCU
-	// prefix; every hub topic of this CCU starts with it.
+	// naming.MQTTHubStatus derives the per-CCU prefix independently of
+	// TopicBuilder.systemTopic, which is the whole point of comparing
+	// against it rather than against a literal. It is not a *producer*:
+	// nothing publishes hub/status (ADR 0011, amendment 2026-09-12). The
+	// derivation is what this guard borrows, and it stays valid.
 	prefix := strings.TrimSuffix(naming.MQTTHubStatus(base, central), "hub/status")
 	for _, topic := range []string{
 		topics.HubSystemHealthScore(central),

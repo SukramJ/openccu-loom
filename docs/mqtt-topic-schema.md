@@ -115,8 +115,6 @@ Go builder method: `TopicBuilder.DiscoveryConfig`.
 |---|---|
 | Bridge online/offline (LWT) | `<base>/bridge/status` |
 | Bridge health (build + boot metadata) | `<base>/bridge/health` |
-| CCU connection status | `<base>/<central>/hub/status` |
-| CCU info snapshot | `<base>/<central>/hub/info` |
 | System-variable state | `<base>/<central>/hub/sysvars/<name>/state` |
 | System-variable set | `<base>/<central>/hub/sysvars/<name>/set` |
 | Program state (active flag, retained) | `<base>/<central>/hub/programs/<id>/state` |
@@ -140,11 +138,51 @@ daemon subscribes to them and never publishes there; only `state` and
 that is the shape of a retained-message eviction, not a command.
 
 Go builder methods: `TopicBuilder.BridgeStatus`, `TopicBuilder.BridgeHealth`,
-`TopicBuilder.HubStatus`, `TopicBuilder.HubInfo`, `TopicBuilder.SystemStatus`.
+`TopicBuilder.SystemStatus`.
 The sysvar/program/connectivity topics are built by `internal/model/naming`
 free functions rather than `TopicBuilder` methods: `naming.MQTTHubSysvarState`,
 `naming.MQTTHubSysvarCommand`, `naming.MQTTHubProgramTrigger`,
 `naming.MQTTHubConnectivity`.
+
+#### Reserved `hub/` shapes — nothing publishes here
+
+These three shapes have a topic builder and no publisher. **Do not
+subscribe to them**: no daemon build has ever put a byte on any of them,
+and an availability source or a template sensor pointing at one waits
+forever.
+
+| Reserved shape | Builder | Production publishers |
+|---|---|---|
+| `<base>/<central>/hub/status` | `TopicBuilder.HubStatus` | none |
+| `<base>/<central>/hub/info` | `TopicBuilder.HubInfo` | none |
+| `<base>/<central>/hub/diagnostics` | `TopicBuilder.HubDiagnostics` | none |
+
+`hub/status` and `hub/info` were promised by this document — as "CCU
+connection status" and "CCU info snapshot" — from its first revision
+until 2026-09-12, when the promise was withdrawn rather than kept; see
+[ADR 0011's amendment of 2026-09-12](./adr/0011-mqtt-topic-and-payload-architecture.md).
+`hub/diagnostics` was never documented. The builders are kept so the
+shapes stay pinned and cannot drift if one of them does gain a
+publisher, which stays a possibility for `hub/status`: a per-CCU
+availability rollup is the missing availability source for CCU-scoped
+entities, which today reference `<base>/bridge/status` and therefore
+stay "available" while their CCU is unreachable. Adding it is new
+published traffic and belongs in its own change.
+
+Where the same information already reaches a consumer:
+
+- **CCU identity and firmware** — the fields `hub/info` would have
+  carried (`model`, `sw_version`, `serial_number`, `configuration_url`)
+  are in the HA discovery *device block* of every hub entity, built by
+  `hubDeviceBlock` in `internal/north/mqtt/hub_discovery.go`.
+- **Per-interface reachability** —
+  `<base>/<central>/hub/connectivity/<iface>` above, one retained
+  entity per CCU interface.
+- **Daemon reachability** — `<base>/bridge/status`.
+- **CCU radio and load diagnostics** — per-device data points
+  (`DUTY_CYCLE`, `CARRIER_SENSE_LEVEL`, …) on their own channel topics,
+  plus the central-wide metric topics `system/health_score`,
+  `system/latency` and `system/last_event_age`.
 
 ### Alarm topics (daemon-level, no `<central>`)
 
@@ -272,7 +310,6 @@ at address `000C9709AEF157`, channel 1.
 | Actual temperature (read) | `openccu-loom/GoOtto/HmIP-RF/000C9709AEF157/1/values/ACTUAL_TEMPERATURE` |
 | Set-point temperature (write) | `openccu-loom/GoOtto/HmIP-RF/000C9709AEF157/1/values/SET_POINT_TEMPERATURE/set` |
 | Climate service method (set mode) | `openccu-loom/GoOtto/HmIP-RF/000C9709AEF157/1/custom/climate/set/set_mode` |
-| CCU online status | `openccu-loom/GoOtto/hub/status` |
 | System variable | `openccu-loom/GoOtto/hub/sysvars/Presence/state` |
 
 ---

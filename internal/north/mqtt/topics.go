@@ -20,10 +20,16 @@ import (
 // [naming.PathData] or a free function in the naming package — the
 // model layer owns every format string. The bridge layer only fills
 // in the runtime context (Base, Central) that the model has no
-// natural access to. The few topics that stay defined here
-// ([TopicBuilder.BridgeStatus], [TopicBuilder.BridgeHealth],
-// [TopicBuilder.DiscoveryConfig]) are bridge-internal operational
-// concerns with no model representation.
+// natural access to.
+//
+// The topics whose format string stays here are the bridge-internal
+// pair ([TopicBuilder.BridgeStatus], [TopicBuilder.BridgeHealth]), the
+// daemon-level add-on update pair, the central-wide `system/<metric>`
+// sensors, and the combined-DP and schedule channel topics that the
+// naming package carries no helper for yet (see
+// [TopicBuilder.CombinedState]). [TopicBuilder.DiscoveryConfig] is not
+// among them, although this comment used to list it: it delegates to
+// [naming.DiscoveryConfigTopic].
 type TopicBuilder struct {
 	Base string
 }
@@ -311,18 +317,51 @@ func (b *TopicBuilder) SystemStatus(centralName string) string {
 	return naming.MQTTSystemStatus(b.Base, centralName)
 }
 
-// HubStatus is the retained CCU connection state topic. Central-weite
-// aggregate that is not bound to a specific model object.
+// HubStatus renders the reserved per-CCU connection-state shape
+// `<base>/<central>/hub/status`.
+//
+// **Nothing publishes it.** This method has no caller outside tests, and
+// no daemon build has ever put a byte on the topic, although
+// docs/mqtt-topic-schema.md promised it as "CCU connection status" until
+// 2026-09-12. See the amendment to
+// docs/adr/0011-mqtt-topic-and-payload-architecture.md for what was
+// measured and why the promise was withdrawn rather than kept, and
+// [TopicBuilder.HubInfo] for why the three reserved builders are kept.
+//
+// The gap behind this one is real: CCU-scoped hub entities take their
+// availability from [TopicBuilder.BridgeStatus], so an unreachable CCU
+// leaves its entities "available" with stale values. A per-CCU rollup is
+// the missing source; adding it is new published traffic and needs its
+// own change.
 func (b *TopicBuilder) HubStatus(centralName string) string {
 	return naming.MQTTHubStatus(b.Base, centralName)
 }
 
-// HubInfo is the retained CCU info-snapshot topic.
+// HubInfo renders the reserved per-CCU info-snapshot shape
+// `<base>/<central>/hub/info`.
+//
+// **Nothing publishes it**, and no consumer needs it: the fields it
+// would carry (model, sw_version, serial_number, configuration_url) are
+// in the HA discovery device block that hubDeviceBlock builds. Like
+// [TopicBuilder.HubStatus] and [TopicBuilder.HubDiagnostics] the builder
+// is kept rather than deleted, so the reserved shape stays pinned by
+// tests/contract/mqtt_topic_schema_doctest_test.go and cannot drift if
+// one of the three ever does gain a publisher —
+// tests/contract/mqtt_topic_schema_producer_test.go fails if one does
+// without its schema row and ADR note moving with it.
 func (b *TopicBuilder) HubInfo(centralName string) string {
 	return naming.MQTTHubInfo(b.Base, centralName)
 }
 
-// HubDiagnostics is the retained per-CCU diagnostics topic.
+// HubDiagnostics renders the reserved per-CCU diagnostics shape
+// `<base>/<central>/hub/diagnostics`.
+//
+// **Nothing publishes it**, and unlike the other two reserved shapes it
+// was never documented either. The radio and load figures it would have
+// aggregated reach consumers as per-device data points (DUTY_CYCLE,
+// CARRIER_SENSE_LEVEL, …) plus the central-wide metric topics
+// [TopicBuilder.HubSystemHealthScore], [TopicBuilder.HubConnectionLatency]
+// and [TopicBuilder.HubLastEventAge]. See [TopicBuilder.HubInfo].
 func (b *TopicBuilder) HubDiagnostics(centralName string) string {
 	return naming.MQTTHubDiagnostics(b.Base, centralName)
 }
@@ -408,10 +447,14 @@ func (b *TopicBuilder) parameterPathData(centralName, iface, address string, cha
 	)
 }
 
-// safe is a thin wrapper kept for the bridge-internal topics
-// (BridgeStatus, BridgeHealth, DiscoveryConfig, ServiceMethodCommand)
-// that don't go through naming.PathData. Mirrors
-// [naming.TopicSafe] exactly.
+// safe is a package-local alias of [naming.TopicSafe], which it mirrors
+// exactly.
+//
+// Its sole caller is the retained-topic address matcher in bridge.go.
+// The four consumers this comment used to name were all wrong:
+// BridgeStatus and BridgeHealth escape nothing, DiscoveryConfig
+// delegates to the naming package, and no TopicBuilder method called
+// ServiceMethodCommand has ever existed.
 func safe(s string) string {
 	return naming.TopicSafe(s)
 }

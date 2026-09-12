@@ -144,7 +144,12 @@ func TranslationKeyForMetric(kind MetricKind) string {
 }
 
 // MetricSensorName returns the stable, locale-independent identifier for a
-// metric kind. It is read by [MetricHubSensor.Signature] and nothing else.
+// metric kind. Its one production reader is [NewMetricHubSensor], which
+// caches the result in [MetricHubSensor.Name] — the string
+// [MetricHubSensor.Signature] then renders. The relationship to
+// Signature is that indirection, not the direct read this comment used
+// to claim, and since no production code constructs a MetricHubSensor
+// the whole chain is reached only from tests.
 //
 // It is not the operator-visible name of these entities: MQTT discovery
 // resolves that through the i18n catalogues (keys discovery.system_health,

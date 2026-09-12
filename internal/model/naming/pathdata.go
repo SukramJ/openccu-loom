@@ -16,8 +16,8 @@ import (
 )
 
 // Path-root constants. They are the canonical first segment of every
-// set/state path, and the two constructors twenty lines below are their only
-// readers — the roots reach a north-bound adapter as the prefix of a rendered
+// set/state path, and their only readers are [NewDataPointPathData] and
+// [NewSysvarPathData] at the bottom of this file — the roots reach a north-bound adapter as the prefix of a rendered
 // SetPath / StatePath, never as constants of their own, so they are not
 // exported.
 const (
@@ -508,9 +508,14 @@ func NewCustomDPPathData(iface hmtypes.WireInterfaceID, address string, channelN
 // `/` as the separator, so topic components with interior slashes
 // would otherwise split the path incorrectly.
 //
-// Exported because adapter packages (north/mqtt) escape their own
-// non-PathData segments (bridge status, hub topics) and the same
-// rule must apply consistently.
+// Exported because the adapters escape segments the model never sees,
+// and the same rule must apply consistently: the combined-DP and
+// schedule keys, the central/iface/address prefix of the bridge-local
+// channel topics, the central segment of the `system/<metric>` sensors,
+// and the segments the retained sweep and the command subscriber
+// rebuild. Not "bridge status, hub topics", which an earlier version of
+// this comment named: BridgeStatus and BridgeHealth escape nothing, and
+// the hub topics are escaped inside the MQTTHub* functions here.
 //
 // Delegates to the shared model. That one also folds tab, newline, carriage
 // return and NUL, which this never did — strictly safer, and a device name
@@ -519,7 +524,9 @@ func NewCustomDPPathData(iface hmtypes.WireInterfaceID, address string, channelN
 //
 // Note the sibling [DiscoverySlug] is deliberately NOT delegated to
 // topic.Slug yet, although the two agree on every German case. They differ
-// on three: topic.Slug collapses a double underscore, and it transliterates
+// in two classes, eight cases over the 23-case probe in
+// discovery_slug_divergence_test.go: topic.Slug collapses a run of
+// separators that includes a literal underscore, and it transliterates
 // accented Latin characters that DiscoverySlug drops outright — "café"
 // slugs to "caf" here and "cafe" there, so "Café" and "Caf" collide today.
 // The shared behaviour is better, but adopting it moves published object
@@ -610,20 +617,28 @@ func NewSysvarPathData(vid string) PathData {
 
 // --- ADR 0011 hub-topic free functions -------------------------------
 
-// MQTTHubStatus returns the retained CCU connection-state topic
+// MQTTHubStatus returns the reserved CCU connection-state topic
 // `<base>/<central>/hub/status`.
+//
+// Its only non-test caller is `TopicBuilder.HubStatus` in
+// internal/north/mqtt, which has no production caller of its own: no
+// daemon build publishes this shape. The word "retained" this comment
+// used to carry described a retain policy no publisher implements. See the 2026-09-12 amendment to
+// docs/adr/0011-mqtt-topic-and-payload-architecture.md.
 func MQTTHubStatus(base, centralName string) string {
 	return fmt.Sprintf("%s/%s/hub/status", strings.Trim(base, "/"), TopicSafe(centralName))
 }
 
-// MQTTHubInfo returns the retained CCU info-snapshot topic
-// `<base>/<central>/hub/info`.
+// MQTTHubInfo returns the reserved CCU info-snapshot topic
+// `<base>/<central>/hub/info`. Nothing publishes it; see
+// [MQTTHubStatus].
 func MQTTHubInfo(base, centralName string) string {
 	return fmt.Sprintf("%s/%s/hub/info", strings.Trim(base, "/"), TopicSafe(centralName))
 }
 
-// MQTTHubDiagnostics returns the retained per-CCU diagnostics topic
-// `<base>/<central>/hub/diagnostics`.
+// MQTTHubDiagnostics returns the reserved per-CCU diagnostics topic
+// `<base>/<central>/hub/diagnostics`. Nothing publishes it; see
+// [MQTTHubStatus].
 func MQTTHubDiagnostics(base, centralName string) string {
 	return fmt.Sprintf("%s/%s/hub/diagnostics", strings.Trim(base, "/"), TopicSafe(centralName))
 }
@@ -722,10 +737,15 @@ func MQTTHubProgramState(base, centralName, id string) string {
 }
 
 // MQTTHubInstallMode is the canonical install-mode countdown topic
-// `<base>/<central>/hub/install_mode`. It is the only form the daemon
-// publishes; the flat `<base>/<central>/install_mode` shape this comment
-// used to describe as a gated legacy alias was never published by any
-// build (see ADR 0006's amendment).
+// `<base>/<central>/hub/install_mode`.
+//
+// Nothing publishes it. The daemon publishes only the per-interface
+// [MQTTHubInstallModeForInterface] shape; this central-wide aggregate is
+// read by [hub.InstallMode.MQTTTopics], which itself has no production
+// caller. The claim that it "is the only form the daemon publishes" was
+// true only against the flat `<base>/<central>/install_mode` shape an
+// earlier comment described as a gated legacy alias, which was never
+// published by any build either (see ADR 0006's amendment).
 func MQTTHubInstallMode(base, centralName string) string {
 	return fmt.Sprintf("%s/%s/hub/install_mode", strings.Trim(base, "/"), TopicSafe(centralName))
 }

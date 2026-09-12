@@ -123,8 +123,10 @@ func (u *Update) installMonitorFn() func() {
 }
 
 // SetInProgress sets the in-progress flag and fires update callbacks.
-// Used by progress-monitoring code outside the Update struct to
-// signal that an install has completed. Mirrors the in-progress flag
+// Both production callers are methods on [Update] itself,
+// [Update.Install] and [Update.MonitorProgress]; nothing outside the
+// struct sets the flag today, contrary to what this comment used to
+// claim. Mirrors the in-progress flag
 // Management in _monitor_update_progress
 // (hub/update.py:175-225).
 func (u *Update) SetInProgress(v bool) {
@@ -187,9 +189,10 @@ var ErrUpdateAlreadyInProgress = errors.New("update: install already in progress
 
 // VersionBeforeUpdate returns the firmware version that was current when
 // Install was last called, together with a boolean that is false when no
-// version snapshot was taken yet. Callers should call SetVersionBeforeUpdate
-// before triggering Install so the change- detection logic can diff current
-// vs. post-update versions.
+// version snapshot was taken yet. [Update.Install] takes that snapshot
+// itself, so no caller has to: the instruction to call
+// SetVersionBeforeUpdate first, which this comment used to carry, named
+// a step no code performs.
 func (u *Update) VersionBeforeUpdate() (string, bool) {
 	u.mu.RLock()
 	defer u.mu.RUnlock()
@@ -197,9 +200,13 @@ func (u *Update) VersionBeforeUpdate() (string, bool) {
 }
 
 // SetVersionBeforeUpdate stores the current firmware version as the "before"
-// snapshot. Should be called by the coordinator immediately before triggering
-// the update via Install so the post-update check can detect the version
-// change.
+// snapshot that the post-update check diffs against.
+//
+// Its only production caller is [Update.Install], which takes the
+// snapshot immediately before triggering the firmware update. No
+// coordinator calls it — one that did would overwrite the snapshot
+// Install is about to take — although this comment used to say a
+// coordinator should.
 func (u *Update) SetVersionBeforeUpdate(version string) {
 	u.mu.Lock()
 	u.versionBeforeUpdate = version

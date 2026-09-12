@@ -12,6 +12,13 @@ package contract
 // - The schema doc was updated with a new shape that has not yet been
 // implemented (spec-ahead-of-code drift).
 //
+// What a PASS here does NOT mean: that anything publishes the topic. A
+// builder nobody calls renders its documented string perfectly, which is
+// how `<base>/<central>/hub/status` stayed pinned and green while no
+// daemon build ever put a byte on it. That half is
+// TestMQTTDocumentedTopicsHaveAProducer's job
+// (mqtt_topic_schema_producer_test.go).
+//
 // Either case requires a deliberate reconciliation: fix the doc to match
 // the code, or fix the code to match the doc. Do NOT just silence the
 // failure.
@@ -180,17 +187,28 @@ func TestMQTTTopicSchemaDoc_BridgeHubTopics(t *testing.T) {
 			got:      b.BridgeHealth(),
 		},
 		{
-			// §"Bridge / hub status" row: CCU connection status
-			// §"Concrete mapping examples" / "CCU online status"
-			name:     "hub-status",
+			// §"Reserved `hub/` shapes" row — NOT a published topic.
+			// Pinned so the reserved shape cannot drift; that nothing
+			// publishes it is asserted by
+			// TestMQTTDocumentedTopicsHaveAProducer, which this test
+			// cannot see (ADR 0011, amendment 2026-09-12).
+			name:     "hub-status-reserved",
 			docTopic: "openccu-loom/GoOtto/hub/status",
 			got:      b.HubStatus(central),
 		},
 		{
-			// §"Bridge / hub status" row: CCU info snapshot
-			name:     "hub-info",
+			// §"Reserved `hub/` shapes" row — NOT a published topic.
+			name:     "hub-info-reserved",
 			docTopic: "openccu-loom/GoOtto/hub/info",
 			got:      b.HubInfo(central),
+		},
+		{
+			// §"Reserved `hub/` shapes" row — NOT a published topic, and
+			// never documented as one. It reached no pin at all before
+			// the reserved table existed.
+			name:     "hub-diagnostics-reserved",
+			docTopic: "openccu-loom/GoOtto/hub/diagnostics",
+			got:      b.HubDiagnostics(central),
 		},
 		{
 			// §"Bridge / hub status" row: System-variable state
