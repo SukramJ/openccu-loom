@@ -314,23 +314,6 @@ func TestTextDisplaySubDataPointKeysEmptyWithoutBurstLimitWarning(t *testing.T) 
 	}
 }
 
-// ─── HADiscoveryPayload max ─────────────────────────────────────────────────
-
-// TestTextDisplayHADiscoveryPayloadMaxMatchesMaxRowLength verifies that the HA
-// Discovery payload advertises the profile's own row-length limit rather than
-// a second literal.
-func TestTextDisplayHADiscoveryPayloadMaxMatchesMaxRowLength(t *testing.T) {
-	t.Parallel()
-	d := New("VCU0001:3", nil)
-	_, body := haEntity(t, d.HADiscoveryEntity(), discoveryCtx{})
-	if _, ok := body["max"]; !ok {
-		t.Fatal("HA Discovery payload must contain 'max'")
-	}
-	if maxVal := haNum(t, body, "max"); maxVal != float64(MaxRowLength) {
-		t.Fatalf("HA Discovery payload max=%v, want %d", maxVal, MaxRowLength)
-	}
-}
-
 // --- AvailableAlignments / AvailableBackgroundColors / AvailableTextColors ---
 
 func TestAvailableAlignmentsRoundTrip(t *testing.T) {

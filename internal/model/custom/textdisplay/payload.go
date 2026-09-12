@@ -7,22 +7,26 @@ import (
 	"context"
 	"fmt"
 
-	hacatalog "github.com/SukramJ/go-ha-catalog"
-	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
-	hamodel "github.com/SukramJ/go-hamqtt/model"
-
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // Compile-time guarantee that *TextDisplay satisfies the universal
-// Source contract and the HA-Discovery payload builder contract
-// (ADR 0010). ADR-0007 step 5.
-var (
-	_ payload.Source                   = (*TextDisplay)(nil)
-	_ payload.HADiscoveryEntityBuilder = (*TextDisplay)(nil)
-)
+// Source contract. ADR-0007 step 5.
+//
+// It does NOT implement [payload.HADiscoveryEntityBuilder], and it is the
+// only custom data point that does not. A text display has no Home
+// Assistant entity of its own to describe: the reference stack's notify.py
+// spawns one HmipTextDisplayNotifyEntity per CustomDpTextDisplay and
+// registers no `text` entity, so the channel aggregate suppresses this
+// source and the bridge publishes the notify companion instead
+// (DefaultDiscoveryBuilder.BuildTextDisplayNotify). There is nothing for a
+// self-description to reach: [TextDisplay.State] publishes the device's
+// static capability lists and no current text at all — the display is
+// write-only — so a `text` entity rendered from this source would read a
+// key no topic carries and stand permanently blank.
+var _ payload.Source = (*TextDisplay)(nil)
 
 // Info returns identity-level fields for a TextDisplay.
 func (t *TextDisplay) Info() payload.InfoPayload {
@@ -86,72 +90,6 @@ func stringsToAny(in []string) []any {
 		out[i] = v
 	}
 	return out
-}
-
-// haWriteCommandTemplate turns HA's bare text payload into the JSON
-// object the `write` service method takes.
-//
-// The device carries [maxDisplayID] rows behind one custom DP while HA's
-// text platform offers a single input, so the entity addresses row 1;
-// callers that need another row use the `write` service method with an
-// explicit id. `tojson` quotes and escapes the operator's input, so
-// quotes or backslashes in the text cannot break the object.
-const haWriteCommandTemplate = `{"id": 1, "text": {{ value | tojson }}}`
-
-// HADiscoveryEntity describes the text display (HmIP-WRCD) on the shared
-// model. `write` is a named action, so the command topic is its method topic;
-// state comes from the aggregate's text field with a default("") because the
-// device is write-only and has no readable text state.
-//
-// Per ADR 0010: a named action for a call that reduces to one domain
-// operation.
-func (t *TextDisplay) HADiscoveryEntity() hamodel.Entity {
-	if t == nil {
-		return nil
-	}
-	return &textDisplayEntity{CustomEntity: payload.CustomEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      t.TopicSlot().Parameter,
-			EntityPlatform: hacatalog.PlatformText,
-			Description: hamodel.Description{
-				ValueTemplate: `{{ value_json.text | default("") }}`,
-				// Max characters per row is [MaxRowLength], the HmIP-WRCD's own
-				// declared DISPLAY_DATA_STRING limit. HA enforces it on the
-				// input field, so a number above the device's limit invites the
-				// operator to type characters that cannot arrive.
-				Min: hamodel.Ptr(float64(0)),
-				Max: hamodel.Ptr(float64(MaxRowLength)),
-			},
-			Binds: []hamodel.Binding{{
-				Role: hamodel.RoleState, Mode: hamodel.Read,
-				Slot: payload.CustomSlot(t.TopicSlot()),
-			}},
-		},
-		// mode=text signals HA free-form text input (not a number).
-		Fields: hadiscovery.TextFields{Mode: "text"},
-	}}
-}
-
-// textDisplayEntity carries the two keys the model has no field for: the
-// command topic is a named action — and this display declares two, so the
-// render pipeline cannot pick one — and HA's text platform publishes the bare
-// string the operator typed, which `write` cannot take.
-type textDisplayEntity struct {
-	payload.CustomEntity
-}
-
-// BuildDiscovery implements [hadiscovery.Builder].
-func (e *textDisplayEntity) BuildDiscovery(ctx hadiscovery.Context, comp *hadiscovery.Component) error {
-	if err := e.CustomEntity.BuildDiscovery(ctx, comp); err != nil {
-		return err
-	}
-	comp.CommandTopic = e.MethodTopic(ctx, "write")
-	// `write` addresses one of the display's [maxDisplayID] rows and rejects a
-	// call without an id, so the payload is templated into the JSON object the
-	// method expects — a bare string reaches the handler as {"value": …} and
-	// can never succeed.
-	comp.CommandTemplate = haWriteCommandTemplate
-	return nil
 }
 
 // registerTextDisplayServices wires the text display write operations

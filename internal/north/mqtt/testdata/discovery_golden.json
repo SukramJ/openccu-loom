@@ -87,7 +87,6 @@
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/HmIP-RF/00150001/1/master/SET_POINT_TEMPERATURE",
       "unique_id": "loom_00150001_1_set_point_temperature",
       "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
     }
@@ -132,7 +131,6 @@
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/HmIP-RF/00150001/1/values/SET_POINT_TEMPERATURE",
       "unique_id": "loom_00150001_1_set_point_temperature",
       "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
     }
@@ -416,8 +414,7 @@
         "sw_version": "dev"
       },
       "state_topic": "gh/ccu-01/HmIP-RF/000F0001/4/master/LEVEL",
-      "unique_id": "loom_000f0001_4_level",
-      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+      "unique_id": "loom_000f0001_4_level"
     }
   },
   "light/values": {
@@ -462,8 +459,7 @@
         "sw_version": "dev"
       },
       "state_topic": "gh/ccu-01/HmIP-RF/000F0001/4/values/LEVEL",
-      "unique_id": "loom_000f0001_4_level",
-      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+      "unique_id": "loom_000f0001_4_level"
     }
   },
   "lock/master": {
@@ -1011,8 +1007,7 @@
         "sw_version": "dev"
       },
       "state_topic": "gh/ccu-01/HmIP-RF/00110001/3/master/ACOUSTIC_ALARM_ACTIVE",
-      "unique_id": "loom_00110001_3_acoustic_alarm_active",
-      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+      "unique_id": "loom_00110001_3_acoustic_alarm_active"
     }
   },
   "siren/values": {
@@ -1055,8 +1050,7 @@
         "sw_version": "dev"
       },
       "state_topic": "gh/ccu-01/HmIP-RF/00110001/3/values/ACOUSTIC_ALARM_ACTIVE",
-      "unique_id": "loom_00110001_3_acoustic_alarm_active",
-      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+      "unique_id": "loom_00110001_3_acoustic_alarm_active"
     }
   },
   "switch/cuxd-ccu-01": {

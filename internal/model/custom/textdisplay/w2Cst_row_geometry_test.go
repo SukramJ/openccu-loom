@@ -87,21 +87,3 @@ func TestW2CstRowGeometryMatchesTheDeviceDeclaration(t *testing.T) {
 			declared+1, w2CstWRCDDisplayDataStringMax)
 	}
 }
-
-// TestW2CstHADiscoveryMaxIsTheDeviceLimit checks the operator-facing half:
-// whatever [MaxRowLength] says, the number Home Assistant is told must be the
-// device's declared row length, because HA enforces it on the input field.
-func TestW2CstHADiscoveryMaxIsTheDeviceLimit(t *testing.T) {
-	t.Parallel()
-
-	declared := w2CstDeclaredRowLength(t, w2CstWRCDDisplayDataStringMax)
-	_, body := haEntity(t, New("VCU4243444:3", &stubWriter{}).HADiscoveryEntity(), discoveryCtx{})
-	if _, ok := body["max"]; !ok {
-		t.Fatal("HA discovery payload carries no max — the text field would accept any length")
-	}
-	got := haNum(t, body, "max")
-	if got != float64(declared) {
-		t.Errorf("HA discovery advertises max=%v, but the HmIP-WRCD declares %d characters per row — the operator is invited to type %v characters that cannot arrive",
-			got, declared, got)
-	}
-}

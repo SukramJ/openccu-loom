@@ -1,14 +1,14 @@
 {
-  "generated": "8a4b0f18",
-  "head": "8a4b0f18",
+  "generated": "57d732e0",
+  "head": "57d732e0",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/openccu-loom-remote/main.go",
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 5621,
-    "reachable": 3584,
+    "total_exported": 5628,
+    "reachable": 3591,
     "whitelisted": 1976,
     "unreachable": 61
   },
@@ -2902,7 +2902,7 @@
       "identifier": "NewAccessPermission",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/switch/access_permission.go",
-      "line": 82
+      "line": 83
     },
     {
       "package": "internal/model/custom/switch",
@@ -5107,28 +5107,28 @@
       "identifier": "BuildAlarmMotionResetDiscovery",
       "reason": "auto-whitelist:pattern=mqtt-discovery-builder",
       "file": "internal/north/mqtt/alarm_discovery.go",
-      "line": 176
+      "line": 348
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "BuildAlarmPanelDiscovery",
       "reason": "auto-whitelist:pattern=mqtt-discovery-builder",
       "file": "internal/north/mqtt/alarm_discovery.go",
-      "line": 117
+      "line": 279
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "BuildAlarmTriggeredMotionDiscovery",
       "reason": "auto-whitelist:pattern=mqtt-discovery-builder",
       "file": "internal/north/mqtt/alarm_discovery.go",
-      "line": 216
+      "line": 389
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "BuildSecurityDiscovery",
       "reason": "auto-whitelist:pattern=mqtt-discovery-builder",
       "file": "internal/north/mqtt/security_discovery.go",
-      "line": 133
+      "line": 239
     },
     {
       "package": "internal/north/mqtt",
@@ -5142,7 +5142,7 @@
       "identifier": "CombinedEvent",
       "reason": "constructed in EventBridge.publishCombinedProjection and passed to Bridge.PublishCombinedDiscovery on every combined data point the model carries; reached only as a composite literal at that call site",
       "file": "internal/north/mqtt/discovery_combined.go",
-      "line": 24
+      "line": 26
     },
     {
       "package": "internal/north/mqtt",
