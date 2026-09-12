@@ -5,11 +5,13 @@ package mqtt
 
 import (
 	"context"
+	"encoding/json"
 	"strconv"
 	"strings"
 
 	hacatalog "github.com/SukramJ/go-ha-catalog"
 	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+	hamodel "github.com/SukramJ/go-hamqtt/model"
 )
 
 // WeekProfileDescriptor is the narrow read-side contract on a week-profile
@@ -53,8 +55,131 @@ type WeekProfileEvent struct {
 	WP WeekProfileDescriptor
 }
 
+// weekProfileEntity is the week-profile select on the shared model: a
+// [hamodel.Basic] with one description and the two bindings the render
+// pipeline projects `state_topic` and `command_topic` from.
+//
+// It carries no capability interface and no [hadiscovery.Builder]: a select
+// whose entire platform vocabulary is `options` needs neither.
+type weekProfileEntity struct {
+	hamodel.Basic
+}
+
+// weekProfileTopicLayout renders this plane's topics through this daemon's
+// own [TopicBuilder], so the render pipeline produces exactly the strings
+// already retained on the broker rather than a second spelling of them.
+//
+// The slot arguments are unused. A week-profile entity pins one channel, and
+// [TopicBuilder] is the authority on how this daemon spells that channel's
+// week-profile state, command and availability topics; deriving them from the
+// slot again would be a second implementation of the same schema with nothing
+// keeping the two in step.
+type weekProfileTopicLayout struct {
+	d       *DefaultDiscoveryBuilder
+	ev      WeekProfileEvent
+	central string
+}
+
+// State implements the shared model's topic layout.
+func (l weekProfileTopicLayout) State(hamodel.Slot) string {
+	return l.d.TopicBuilder.WeekProfileState(l.central, l.ev.Interface, l.ev.DeviceAddress, l.ev.ChannelNo)
+}
+
+// Command implements the shared model's topic layout.
+func (l weekProfileTopicLayout) Command(hamodel.Slot) string {
+	return l.d.TopicBuilder.WeekProfileCommand(l.central, l.ev.Interface, l.ev.DeviceAddress, l.ev.ChannelNo)
+}
+
+// Availability implements the shared model's topic layout: the per-device
+// availability topic, which is the second of the two entries every channel
+// entity on this daemon carries.
+func (l weekProfileTopicLayout) Availability(hamodel.Slot) string {
+	return l.d.TopicBuilder.DeviceAvailability(l.central, l.ev.Interface, l.ev.DeviceAddress)
+}
+
+// Bridge implements the shared model's topic layout.
+func (l weekProfileTopicLayout) Bridge() string { return l.d.TopicBuilder.BridgeStatus() }
+
+// weekProfileDiscoveryContext is the render context for this plane: the
+// standard one with this daemon's three identity strings substituted.
+//
+// All three are overridden because Home Assistant has no migration path for
+// any of them, and this plane derives all three DIFFERENTLY from the same
+// event — the unique id from the channel address alone, the node id from a
+// slugged central plus the device address, the object id from the
+// descriptor's own legacy identifier with the central embedded verbatim. No
+// single derivation could produce all three.
+type weekProfileDiscoveryContext struct {
+	hadiscovery.StdContext
+
+	uniqueID string
+	nodeID   string
+	objectID string
+}
+
+// UniqueID implements [hadiscovery.Context] with the id this daemon already
+// publishes. It carries no central: a real device's address is globally
+// unique, and scoping it would re-key every week-profile entity on every
+// fleet at once.
+func (c weekProfileDiscoveryContext) UniqueID(*hamodel.Device, hamodel.Entity) string {
+	return c.uniqueID
+}
+
+// NodeID implements [hadiscovery.Context]. It is central-scoped, so the same
+// thermostat on two centrals publishes under two node ids.
+func (c weekProfileDiscoveryContext) NodeID(*hamodel.Device) string { return c.nodeID }
+
+// ObjectID implements [hadiscovery.Context]. This plane is one that DOES
+// publish an entity-id seed: `default_entity_id` is part of every
+// week-profile config, so the seed is handed to the pipeline rather than
+// suppressed. It is the same string the discovery topic's object-id segment
+// carries, and the pipeline prefixes the platform itself.
+func (c weekProfileDiscoveryContext) ObjectID(*hamodel.Device, hamodel.Entity) string {
+	return c.objectID
+}
+
+// weekProfileModelDevice lifts the device descriptor this daemon harvests
+// into the shared model's [hamodel.Device], so the render pipeline emits the
+// device block instead of a builder stamping one on afterwards.
+//
+// The identifiers keep an EMPTY namespace, which the shared model renders
+// verbatim. That is what lets the published `openccu-loom_<address>` and
+// `openccu-loom_central_<central>` spellings survive: Home Assistant keys its
+// device registry on those strings and has no migration path for them either.
+func weekProfileModelDevice(info *hadiscovery.DeviceInfo) *hamodel.Device {
+	if info == nil {
+		return nil
+	}
+	dev := &hamodel.Device{
+		Name:          hamodel.L(info.Name),
+		Manufacturer:  info.Manufacturer,
+		Model:         info.Model,
+		ModelID:       info.ModelID,
+		SWVersion:     info.SWVersion,
+		HWVersion:     info.HWVersion,
+		SerialNumber:  info.SerialNumber,
+		SuggestedArea: info.SuggestedArea,
+		ConfigURL:     info.ConfigurationURL,
+	}
+	for _, id := range info.Identifiers {
+		dev.Identity.IDs = append(dev.Identity.IDs, hamodel.Identifier{Value: id})
+	}
+	for _, conn := range info.Connections {
+		dev.Identity.Connections = append(dev.Identity.Connections,
+			hamodel.Connection{Type: conn[0], Value: conn[1]})
+	}
+	if info.ViaDevice != "" {
+		dev.Via = &hamodel.Identity{IDs: []hamodel.Identifier{{Value: info.ViaDevice}}}
+	}
+	return dev
+}
+
 // BuildWeekProfileDiscovery builds the HA Discovery `select` payload for
 // one climate channel's week-profile entity.
+//
+// The payload is rendered by the shared model's per-entity discovery form
+// ([hadiscovery.RenderComponent]), which attaches the device and origin
+// blocks and omits `platform`.
 //
 // The returned [DiscoveryItem] uses the same (component, nodeID, objectID)
 // shape as [DiscoveryItem] elsewhere — hand it to [Bridge.PublishHubDiscovery]
@@ -75,9 +200,6 @@ func (d *DefaultDiscoveryBuilder) BuildWeekProfileDiscovery(centralName string, 
 		return DiscoveryItem{}
 	}
 
-	stateTopic := d.TopicBuilder.WeekProfileState(centralName, ev.Interface, ev.DeviceAddress, ev.ChannelNo)
-	commandTopic := d.TopicBuilder.WeekProfileCommand(centralName, ev.Interface, ev.DeviceAddress, ev.ChannelNo)
-
 	// Build the canonical unique_id from the channel address and the
 	// "WEEKPROFILE" parameter. The WeekProfileEvent carries DeviceAddress and
 	// ChannelNo directly, so we compose the channel address string here.
@@ -97,7 +219,7 @@ func (d *DefaultDiscoveryBuilder) BuildWeekProfileDiscovery(centralName string, 
 
 	nodeID := discoveryNodeID(centralName, ev.DeviceAddress)
 
-	// Compose the Event-like value needed by deviceDescriptor + channelBaseBody.
+	// Compose the Event-like value needed by deviceDescriptor.
 	mockEv := Event{
 		Central:       centralName,
 		Interface:     ev.Interface,
@@ -107,38 +229,66 @@ func (d *DefaultDiscoveryBuilder) BuildWeekProfileDiscovery(centralName string, 
 		ChannelNo:     ev.ChannelNo,
 		Device:        ev.Device,
 	}
-
-	comp := hadiscovery.Component{
-		Platform:         hacatalog.PlatformSelect,
-		Name:             d.tr("discovery.week_profile"),
-		UniqueID:         uniqueID,
-		DefaultEntityID:  defaultEntityID(string(HAComponentSelect), objectID),
-		StateTopic:       stateTopic,
-		CommandTopic:     commandTopic,
-		Options:          profiles,
-		Availability:     buildWeekProfileAvailability(d, centralName, ev),
-		AvailabilityMode: "all",
-		Device:           deviceDescriptor(mockEv, d.hubURLFor(mockEv), d.SubDevicesEnabled),
-		Origin:           BuildOriginInfo(),
+	dev := weekProfileModelDevice(deviceDescriptor(mockEv, d.hubURLFor(mockEv), d.SubDevicesEnabled))
+	if dev == nil {
+		return DiscoveryItem{}
 	}
-	return discoveryItemFor(comp, nodeID, objectID)
-}
 
-// buildWeekProfileAvailability builds the two-entry availability list
-// (bridge/status + per-device availability) that mirrors every other
-// channel entity.
-func buildWeekProfileAvailability(d *DefaultDiscoveryBuilder, centralName string, ev WeekProfileEvent) []hadiscovery.AvailabilityEntry {
-	return []hadiscovery.AvailabilityEntry{
-		{
-			Topic:               d.TopicBuilder.BridgeStatus(),
-			PayloadAvailable:    "online",
-			PayloadNotAvailable: "offline",
+	// One slot, bound twice. The channel's week-profile datapoint is read on
+	// the state topic and written on the command topic, and the render
+	// pipeline resolves the two roles separately, so a single ReadWrite
+	// binding on one role would project only one of the two topics.
+	slot := hamodel.S(dev.UID(), strconv.Itoa(ev.ChannelNo), hamodel.BucketCustom, "WEEKPROFILE").
+		In(centralName, ev.Interface)
+	entity := &weekProfileEntity{
+		Basic: hamodel.Basic{
+			EntityKey:      "weekprofile",
+			EntityPlatform: hacatalog.PlatformSelect,
+			Description: hamodel.Description{
+				NameKey: "discovery.week_profile",
+				// The profile keys are their own labels: "P1".."PN" is what
+				// the CCU understands and what Home Assistant stores as the
+				// entity's state, so codes without labels render verbatim.
+				Options: &hamodel.Enum{Codes: append([]string(nil), profiles...)},
+			},
+			Binds: []hamodel.Binding{
+				{Role: hamodel.RoleState, Mode: hamodel.Read, Slot: slot},
+				{Role: hamodel.RoleCommand, Mode: hamodel.Write, Slot: slot},
+			},
 		},
-		{
-			Topic:               d.TopicBuilder.DeviceAvailability(centralName, ev.Interface, ev.DeviceAddress),
-			PayloadAvailable:    "online",
-			PayloadNotAvailable: "offline",
+	}
+
+	ctx := weekProfileDiscoveryContext{
+		StdContext: hadiscovery.StdContext{
+			Layout: weekProfileTopicLayout{d: d, ev: ev, central: centralName},
+			Lang:   d.Locale,
+			// The week-profile state topic carries the bare profile key, so
+			// there is nothing for a value template to reach into — and the
+			// select platform does accept `value_template`, so the default
+			// envelope encoding would project one matching no payload this
+			// daemon publishes.
+			Enc:        hadiscovery.RawEncoding,
+			Translator: d.tr,
 		},
+		uniqueID: uniqueID,
+		nodeID:   nodeID,
+		objectID: objectID,
+	}
+
+	comp, err := hadiscovery.RenderComponent(ctx, dev, entity, *BuildOriginInfo())
+	if err != nil {
+		return DiscoveryItem{}
+	}
+	buf, err := json.Marshal(comp)
+	if err != nil {
+		return DiscoveryItem{}
+	}
+	return DiscoveryItem{
+		Component: string(HAComponentSelect),
+		NodeID:    nodeID,
+		ObjectID:  objectID,
+		Payload:   buf,
+		OK:        true,
 	}
 }
 
