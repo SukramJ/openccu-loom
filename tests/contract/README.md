@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 464.
+Guards without a doc comment: 7 of 466.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -205,6 +205,8 @@ Guards without a doc comment: 7 of 464.
 | TestMQTTTopicSchemaDoc_CommandTopics | mqtt_topic_schema_doctest_test.go | TestMQTTTopicSchemaDoc_CommandTopics exercises the "Command (set) topics" table rows. |
 | TestMQTTTopicSchemaDoc_DiscoveryTopic | mqtt_topic_schema_doctest_test.go | TestMQTTTopicSchemaDoc_DiscoveryTopic exercises the HA Discovery config Topic, which the doc states is identical. |
 | TestMQTTTopicSchemaDoc_StateTopics | mqtt_topic_schema_doctest_test.go | TestMQTTTopicSchemaDoc_StateTopics exercises the "State topics" table and the "Concrete mapping examples" section for per-DP state. |
+| TestMQTTDocTopicTableIsFullyClassified | mqtt_topic_schema_producer_test.go | TestMQTTDocTopicTableIsFullyClassified keeps mqttDocTopicPromises and the tables of docs/mqtt-topic-schema.md in step in both directions. |
+| TestMQTTDocumentedTopicsHaveAProducer | mqtt_topic_schema_producer_test.go | TestMQTTDocumentedTopicsHaveAProducer fails when a topic class documented in docs/mqtt-topic-schema.md has no production code that produces it — and when a shape documented as reserved acquires one. |
 | TestBridgeHasNoDomainKnowledge | mqtt_topology_test.go | TestBridgeHasNoDomainKnowledge pins the ADR-0011 dumb-bridge invariant: no custom-DP domain type name (Climate / Cover / Lock / Light / Switch / Siren / Valve / TextDisplay / Blind / Garage) appears anywhere under `internal/north/mqtt/` outside test fixtures. |
 | TestMQTTTopicHierarchyShape | mqtt_topology_test.go | TestMQTTTopicHierarchyShape pins the ADR-0011 topic shape actually produced by [mqtt.TopicBuilder] — every case below calls the real builder method rather than restating its output as a literal, so a TopicBuilder change that breaks the hierarchy (a swapped segment, a method that stops delegating to the model layer) fails here instead of silently reaching HA Discovery / REST exporters / retained-state migrators. |
 | TestCentralRegistryLookupRequiresName | multi_ccu_scope_test.go | TestCentralRegistryLookupRequiresName asserts that every exported method on the central Registry either names the central it acts on or is declared name-free with a reason — so no caller can ever retrieve "the one central" without naming it (ADR 0002). |

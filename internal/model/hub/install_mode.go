@@ -155,9 +155,12 @@ func (m *InstallMode) TranslationKey() string { return "install_mode" }
 
 // MQTTTopics implements [payload.MQTTAddressable] — the canonical
 // ADR-0011 install-mode topic `<base>/<central>/hub/install_mode`.
-// InstallMode lives per-interface in the model but its broker topic
-// is central-weite; the adapter aggregates remaining seconds across
-// interfaces before publishing.
+//
+// Nothing calls it. The MQTT plane publishes one per-interface
+// countdown topic each ([naming.MQTTHubInstallModeForInterface], via
+// Bridge.PublishInstallMode), with no central-wide aggregation step
+// anywhere — the aggregation across interfaces that this comment used
+// to describe does not exist.
 func (m *InstallMode) MQTTTopics(base, centralName string) payload.MQTTTopicSet {
 	return payload.MQTTTopicSet{
 		State: naming.MQTTHubInstallMode(base, centralName),

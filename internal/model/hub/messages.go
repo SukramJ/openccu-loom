@@ -783,8 +783,13 @@ func (s *ServiceMessages) QuittableCount() int {
 
 // LatestTimestamp returns the most recent timestamp across the
 // current service-message set, or the zero value when the aggregate
-// is empty. Used by the diagnostics page that shows "last incident
-// xyz minutes ago".
+// is empty.
+//
+// No production code reads it — not a Go caller, and not a template or
+// SPA view either. This comment used to name a diagnostics page showing
+// "last incident xyz minutes ago"; no such consumer exists, and the
+// views that do show service messages derive recency from the message
+// list itself.
 func (s *ServiceMessages) LatestTimestamp() time.Time {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

@@ -664,6 +664,125 @@ discovery topics get cleared by the cleanup.
   payloads from a side-by-side `aiohomematic2mqtt` run for
   cross-stack validation.
 
+## Amendment (2026-09-12) — two hub shapes were promised and never published
+
+The topic hierarchy above lists `hub/status`, `hub/info` and
+`hub/diagnostics`, and "What gets added" names `hub/{info,diagnostics}`
+as topics this ADR pins the canonical shape of.
+`docs/mqtt-topic-schema.md` carried the first two as operator-facing
+promises — "CCU connection status" and "CCU info snapshot" — from its
+first revision. **No daemon build has ever published a byte on any of the
+three.** The two documented rows are withdrawn from the schema document,
+which now names all three as reserved shapes with no publisher; this
+entry records the withdrawal so the rows are not silently gone.
+
+What was measured, before changing anything:
+
+- **Zero production callers of the builders.** `TopicBuilder.HubStatus`,
+  `.HubInfo` and `.HubDiagnostics` have no caller in any non-test file.
+  Every call site is a test: `HubStatus` 3 and `HubInfo` 3, in
+  `internal/north/mqtt/mqtt_test.go`,
+  `internal/north/mqtt/bridge_edge_cases_test.go` and
+  `tests/contract/mqtt_topic_schema_doctest_test.go`; `HubDiagnostics` 2,
+  in the first two of those — it reached no contract pin at all, because
+  it was never documented. It has one now, alongside the other two, as a
+  reserved shape.
+- **Zero production callers of the free functions they delegate to.**
+  `naming.MQTTHubStatus`, `MQTTHubInfo` and `MQTTHubDiagnostics` are each
+  called from exactly one non-test line, `internal/north/mqtt/topics.go`
+  — the builder method itself. Their only other references are
+  `internal/model/naming/pathdata_hub_test.go` and one
+  `strings.TrimSuffix` in `hub_topics_roundtrip_test.go`, which borrows
+  `MQTTHubStatus` to derive a per-CCU prefix.
+- **Nothing on the wire, in either direction.** `grep -rn "hub/status"`
+  over the repository returned ten hits before this change: two in the
+  schema document, six in tests, two in the builder — and none in a
+  publish path. `hub/info` returned seven files and `hub/diagnostics`
+  four, all of them the builder, its unit test or the doctest. No file
+  under `internal/north/mqtt/testdata/` contains any of the three
+  literals, so
+  no discovery golden references them either — not even as a
+  `state_topic` a consumer would subscribe to and never hear from.
+- **Every documented sibling is real.** The remaining rows of the
+  schema's "Bridge / hub status" table were checked the same way and each
+  has a production producer or consumer: `bridge/status` (15 non-test
+  call sites outside `topics.go`, the LWT among them), `bridge/health`
+  (`bridge.go`'s `AnnounceOnline`), the sysvar, program, connectivity and
+  `system/status` topics (all published from `Bridge.Publish*`, driven by
+  `internal/central/adapter/hub_mqtt_publisher.go`), and the command
+  rows, which the daemon consumes through wildcard subscriptions rather
+  than by building each topic — `TopicBuilder.ParameterCommand` has no
+  production call site of its own either, and its documented
+  `values/<param>/set` and `master/<param>/set` shapes are nonetheless
+  honoured, because a `+`-wildcard filter matches them. That is why the
+  producer guard below classifies a command row separately instead of
+  demanding a call site for it. The two hub rows were the only unkept
+  promises in the document.
+
+### Why withdrawal rather than implementation
+
+Withdrawing a documented topic class is a wire-promise change, so ADR
+0068's discipline applies: a break on the MQTT plane is permitted and is
+documented rather than silent. This one is unusually cheap to take,
+because the promise was never kept — there is no retained value at the
+old topic to sweep, no discovery payload naming it, and no subscriber
+that ever received anything. An operator who followed the document and
+subscribed has been receiving nothing since the first release; the
+document now tells them why.
+
+The information each shape would have carried already reaches consumers
+by another route, enumerated in the schema document's reserved-shapes
+section: the `hub/info` fields are in the HA discovery device block that
+`hubDeviceBlock` builds, per-interface reachability is
+`hub/connectivity/<iface>`, daemon reachability is `bridge/status`, and
+the radio/load diagnostics are per-device data points plus the
+central-wide `system/health_score`, `system/latency` and
+`system/last_event_age` metric topics.
+
+`hub/status` is the one of the three with a real gap behind it, and it is
+**reported, not implemented here.** Every CCU-scoped hub entity lists
+`<base>/bridge/status` as its availability source, so a CCU that goes
+unreachable while the daemon stays up leaves its entities "available"
+with stale values. A per-CCU availability rollup is the missing source.
+It needs a state machine (which interface states fold into "the CCU is
+gone", and the debounce that keeps a reconnect from flapping the whole
+CCU's entity set), a retained publish on connect and on change, an
+`offline` value in the bridge's own LWT ordering, and the availability
+lists of every hub entity re-pointed — which moves discovery goldens.
+That is new published traffic, and it gets its own change with its own
+note.
+
+### The guard was checking the wrong half
+
+`tests/contract/mqtt_topic_schema_doctest_test.go` pinned
+`TopicBuilder.HubStatus` against the "CCU connection status" row of the
+schema document and passed for the entire life of the defect. It could
+not do otherwise: it compares a builder's output against a documented
+string, and a builder nobody calls renders its string perfectly. The
+same blindness covered every other row.
+
+The gap is closed by
+`tests/contract/mqtt_topic_schema_producer_test.go`, which parses the
+schema document's own tables and requires each documented shape to be
+classified as published by a named builder (which must then have a
+production call site), consumed as a command topic, or reserved (which
+must have none). A new row in the document fails the test until someone
+classifies it, and a reserved shape that quietly gains a publisher fails
+it too. The strongest form of the check — bytes arriving at a broker —
+needs a broker and belongs in an integration test; a production call
+site of the producing builder is the strongest statement a unit test can
+make, and it is the one that was missing.
+
+Two things stay as they are. The builders are **not deleted**: the
+doctest and the roundtrip guard pin the shapes through them, and the
+dead-code ratchet never saw them anyway — `script/reachability`
+classifies package-level members only, so no method is ever classified
+(the inventory contains no dotted identifier), and the three
+`naming.MQTT*` free functions read as reachable because RTA treats the
+methods that call them as live members of a live type. The ratchet's
+counts do not move. And `docs/adr/0006-naming-conventions.md`'s builder
+inventory is unaffected: it never listed these three.
+
 ## Status notes
 
 The declarative source surface (`TopicSlot`, `Bucket`, `HAEntity`,

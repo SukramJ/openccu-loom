@@ -225,8 +225,14 @@ type InboxAccepter interface {
 }
 
 // DataFetcher is the interface for fetching hub-level data from the
-// CCU backend. Coordinators implement this; the Hub delegates fetch
-// operations to it so the model layer stays backend-agnostic.
+// CCU backend, so the model layer stays backend-agnostic.
+//
+// No coordinator implements it today. The only implementation in the
+// repository is a test stub (sysvar_program_dp_test.go), and its two
+// consumers [Hub.FetchAlarmMessagesData] and [Hub.FetchInboxData] have
+// no production caller either — the live path fills the alarm-message
+// and inbox aggregates from the adapter instead. An earlier version of
+// this comment claimed the coordinators implement it; they do not.
 type DataFetcher interface {
 	// FetchAlarmMessages retrieves the current alarm message list.
 	FetchAlarmMessages(ctx context.Context) ([]AlarmMessage, error)
