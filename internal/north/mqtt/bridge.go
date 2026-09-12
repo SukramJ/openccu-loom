@@ -524,6 +524,19 @@ type Bridge struct {
 	// the bundle batching and the ownership predicate the sweep is scoped
 	// by. See [newDiscoveryRuntime].
 	pub *hapublisher.Runtime
+	// state is the shared state publisher the daemon-level and hub planes
+	// publish through: one byte dedup gate, one retained-topic index and one
+	// renderer, in place of thirty hand-rolled client calls. The
+	// per-datapoint plane deliberately does not use it — see
+	// [newStatePublisher] for why a byte gate is inert there.
+	state *hapublisher.StatePublisher
+	// avail is the shared availability publisher the device, program-role,
+	// alarm and Security & Safety planes flip through. Its `last` map is
+	// simultaneously the transition gate, the topic listing, the republish
+	// worklist and the ownership set of its own sweep — which is what
+	// finding F6 was about: before this, device availability topics were in
+	// no index at all and reachable only by reconstructing their names.
+	avail *hapublisher.AvailabilityPublisher
 	// planesDeclared marks the planes that have completed a discovery
 	// pass, so the orphan sweep can tell an orphan from an entity that
 	// simply has not been published yet.
@@ -630,6 +643,8 @@ func NewBridge(cfg BridgeConfig, client Publisher) *Bridge {
 	// production wires that one only afterwards through
 	// [Bridge.WithSubscriber].
 	b.pub = newDiscoveryRuntime(b, logger)
+	b.state = newStatePublisher(b, logger)
+	b.avail = newAvailabilityPublisher(b, logger)
 	return b
 }
 
@@ -932,6 +947,10 @@ func (b *Bridge) AnnounceOnline(ctx context.Context) error {
 	// flag and the topic cannot drift from the Last Will the composition
 	// root configures — [hapublisher.Runtime.Will] returns that will from
 	// the same [hapublisher.Config.StatusTopic] this publishes to.
+	// Before anything else on a (re)connect: a broker that came back
+	// without its retained store holds none of the bytes the dedup gates
+	// remember, so they must stop suppressing. See [Bridge.ResetRuntimeGates].
+	b.ResetRuntimeGates()
 	if err := b.pub.AnnounceOnline(ctx); err != nil {
 		return err
 	}
@@ -948,7 +967,7 @@ func (b *Bridge) AnnounceOnline(ctx context.Context) error {
 	if err != nil {
 		return nil //nolint:nilerr // health is best-effort
 	}
-	_ = b.client.Publish(ctx, b.topics.BridgeHealth(), body, b.cfg.QoS.State, true)
+	_ = b.publishRuntimeState(ctx, "", b.topics.BridgeHealth(), body)
 	return nil
 }
 
@@ -1191,15 +1210,18 @@ func (b *Bridge) PublishDeviceDiagnostics(ctx context.Context, centralName, ifac
 }
 
 // PublishAvailability toggles the retained availability topic.
+//
+// Through the shared availability publisher, which means the topic is
+// addressed by the slot its discovery config was declared from, the flip is
+// gated on being a transition, the marker enters an index a sweep can walk,
+// and the retraction later leaves at the same QoS. See
+// [newAvailabilityPublisher].
 func (b *Bridge) PublishAvailability(ctx context.Context, centralName, iface, address string, online bool) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
-	body := []byte("offline")
-	if online {
-		body = []byte("online")
-	}
-	return b.client.Publish(ctx, b.topics.DeviceAvailability(centralName, iface, address), body, QoS1, true)
+	_, err := b.avail.Device(ctx, deviceAvailabilitySlot(centralName, iface, address), online)
+	return err
 }
 
 // PublishEvent emits a pulse (non-retained) event on the raw plane.
@@ -1304,7 +1326,7 @@ func (b *Bridge) PublishSysvar(ctx context.Context, centralName string, sv pload
 	if err != nil {
 		return err
 	}
-	return b.client.Publish(ctx, topics.State, body, b.cfg.QoS.State, true)
+	return b.publishRuntimeState(ctx, centralName, topics.State, body)
 }
 
 // RetractSysvarState clears the retained raw-plane state topic
@@ -1323,7 +1345,7 @@ func (b *Bridge) RetractSysvarState(ctx context.Context, centralName string, sv 
 	if topics.State == "" {
 		return nil
 	}
-	return b.client.Publish(ctx, topics.State, nil, b.cfg.QoS.State, true)
+	return b.evictRuntimeState(ctx, centralName, topics.State)
 }
 
 // ProgramRoles returns a source's declared controls, resolved against the bridge's
@@ -1346,11 +1368,8 @@ func (b *Bridge) PublishRoleAvailability(ctx context.Context, role *pload.MQTTRo
 	if !b.cfg.RawEnabled || role.Topics.Availability == "" {
 		return nil
 	}
-	body := []byte("offline")
-	if available {
-		body = []byte("online")
-	}
-	return b.client.Publish(ctx, role.Topics.Availability, body, b.cfg.QoS.State, true)
+	_, err := b.avail.Publish(ctx, role.Topics.Availability, available)
+	return err
 }
 
 // PublishProgram emits the program's active flag on the canonical
@@ -1375,7 +1394,7 @@ func (b *Bridge) PublishProgram(ctx context.Context, centralName string, prog pl
 	if active {
 		body = []byte("true")
 	}
-	return b.client.Publish(ctx, topics.State, body, b.cfg.QoS.State, true)
+	return b.publishRuntimeState(ctx, centralName, topics.State, body)
 }
 
 // RetractProgramTopics clears every retained raw-plane topic
@@ -1394,7 +1413,7 @@ func (b *Bridge) RetractProgramTopics(ctx context.Context, centralName string, p
 	central := b.resolvedCentral(centralName)
 	topics := prog.MQTTTopics(b.cfg.Base, central)
 	if topics.State != "" {
-		if err := b.client.Publish(ctx, topics.State, nil, b.cfg.QoS.State, true); err != nil {
+		if err := b.evictRuntimeState(ctx, central, topics.State); err != nil {
 			return err
 		}
 	}
@@ -1405,7 +1424,7 @@ func (b *Bridge) RetractProgramTopics(ctx context.Context, centralName string, p
 			if role.Topics.Availability == "" {
 				continue
 			}
-			if err := b.client.Publish(ctx, role.Topics.Availability, nil, b.cfg.QoS.State, true); err != nil {
+			if err := b.avail.Retract(ctx, role.Topics.Availability); err != nil {
 				return err
 			}
 		}
@@ -1424,7 +1443,7 @@ func (b *Bridge) PublishInstallMode(ctx context.Context, centralName, iface stri
 	}
 	topic := naming.MQTTHubInstallModeForInterface(b.cfg.Base, b.resolvedCentral(centralName), iface)
 	body := fmt.Appendf(nil, "%d", seconds)
-	return b.client.Publish(ctx, topic, body, b.cfg.QoS.State, true)
+	return b.publishRuntimeState(ctx, centralName, topic, body)
 }
 
 // PublishAlarmMessages emits the active alarm-message list to the
@@ -1441,7 +1460,7 @@ func (b *Bridge) PublishAlarmMessages(ctx context.Context, centralName string, a
 	if err != nil {
 		return err
 	}
-	return b.client.Publish(ctx, topics.State, body, b.cfg.QoS.State, true)
+	return b.publishRuntimeState(ctx, centralName, topics.State, body)
 }
 
 // PublishServiceMessages mirrors PublishAlarmMessages for the
@@ -1458,7 +1477,7 @@ func (b *Bridge) PublishServiceMessages(ctx context.Context, centralName string,
 	if err != nil {
 		return err
 	}
-	return b.client.Publish(ctx, topics.State, body, b.cfg.QoS.State, true)
+	return b.publishRuntimeState(ctx, centralName, topics.State, body)
 }
 
 // PublishInbox emits the pending inbox-device list to the topic
@@ -1475,7 +1494,7 @@ func (b *Bridge) PublishInbox(ctx context.Context, centralName string, agg pload
 	if err != nil {
 		return err
 	}
-	return b.client.Publish(ctx, topics.State, body, b.cfg.QoS.State, true)
+	return b.publishRuntimeState(ctx, centralName, topics.State, body)
 }
 
 // ConnectivityPublisher is the contract the [hub.Connectivity]
@@ -1500,7 +1519,7 @@ func (b *Bridge) PublishConnectivity(ctx context.Context, centralName string, co
 	if connected {
 		body = []byte("true")
 	}
-	return b.client.Publish(ctx, topics.State, body, b.cfg.QoS.State, true)
+	return b.publishRuntimeState(ctx, centralName, topics.State, body)
 }
 
 // dataPointStateTopic returns the state topic for a data-point defined
@@ -1630,11 +1649,11 @@ func (b *Bridge) PublishHubSystemHealthScore(ctx context.Context, centralName st
 	// the score is unknown). Clear the retained topic with an empty payload
 	// rather than publishing a bogus "-1", so a reconnecting consumer does
 	// not resurrect the stale reading this outage invalidated.
-	var body []byte
-	if score >= 0 {
-		body = []byte(strconv.FormatFloat(score, 'f', -1, 64))
+	if score < 0 {
+		return b.evictRuntimeState(ctx, centralName, b.topics.HubSystemHealthScore(centralName))
 	}
-	return b.client.Publish(ctx, b.topics.HubSystemHealthScore(centralName), body, b.cfg.QoS.State, true)
+	body := []byte(strconv.FormatFloat(score, 'f', -1, 64))
+	return b.publishRuntimeState(ctx, centralName, b.topics.HubSystemHealthScore(centralName), body)
 }
 
 // PublishHubConnectionLatency publishes the aggregated CCU round-trip
@@ -1647,7 +1666,7 @@ func (b *Bridge) PublishHubConnectionLatency(ctx context.Context, centralName st
 		return nil
 	}
 	body := []byte(strconv.FormatFloat(latencyMs, 'f', -1, 64))
-	return b.client.Publish(ctx, b.topics.HubConnectionLatency(centralName), body, b.cfg.QoS.State, true)
+	return b.publishRuntimeState(ctx, centralName, b.topics.HubConnectionLatency(centralName), body)
 }
 
 // PublishHubLastEventAge publishes the age (seconds) of the newest
@@ -1659,7 +1678,7 @@ func (b *Bridge) PublishHubLastEventAge(ctx context.Context, centralName string,
 		return nil
 	}
 	body := []byte(strconv.FormatFloat(ageSeconds, 'f', -1, 64))
-	return b.client.Publish(ctx, b.topics.HubLastEventAge(centralName), body, b.cfg.QoS.State, true)
+	return b.publishRuntimeState(ctx, centralName, b.topics.HubLastEventAge(centralName), body)
 }
 
 // PublishHubUpdate publishes the CCU's firmware-update state to the
@@ -1684,7 +1703,7 @@ func (b *Bridge) PublishHubUpdate(ctx context.Context, centralName, installedVer
 	if err != nil {
 		return err
 	}
-	return b.client.Publish(ctx, b.topics.HubUpdate(centralName), body, b.cfg.QoS.State, true)
+	return b.publishRuntimeState(ctx, centralName, b.topics.HubUpdate(centralName), body)
 }
 
 // RetractHubUpdate clears the retained topic [Bridge.PublishHubUpdate]
@@ -1696,7 +1715,7 @@ func (b *Bridge) RetractHubUpdate(ctx context.Context, centralName string) error
 	if !b.cfg.RawEnabled {
 		return nil
 	}
-	return b.client.Publish(ctx, b.topics.HubUpdate(centralName), nil, b.cfg.QoS.State, true)
+	return b.evictRuntimeState(ctx, centralName, b.topics.HubUpdate(centralName))
 }
 
 // PublishAddonUpdateState publishes the CCU add-on self-updater's
@@ -1722,7 +1741,7 @@ func (b *Bridge) PublishAddonUpdateState(ctx context.Context, installedVersion, 
 	if err != nil {
 		return err
 	}
-	return b.client.Publish(ctx, b.topics.AddonUpdateState(), body, b.cfg.QoS.State, true)
+	return b.publishRuntimeState(ctx, "", b.topics.AddonUpdateState(), body)
 }
 
 // PublishChannelEventDiscovery publishes the HA Discovery payload for
@@ -2080,8 +2099,20 @@ func (b *Bridge) RetractRawStateForDevice(ctx context.Context, centralName, ifac
 	}
 	n := b.retractTopicsMatching(ctx, centralName, b.rawTopics, match, b.cfg.QoS.State)
 	n += b.retractTopicsMatching(ctx, centralName, b.configCache, match, b.cfg.QoS.State)
+	// The availability topic leaves through the availability publisher,
+	// which retracts at the level it publishes at and drops the topic from
+	// its own index. Naming it from the same slot the publish used is what
+	// stops the retraction addressing a string the publish never wrote —
+	// finding F6's other half, where this loop reconstructed the name by
+	// hand and cleared it at the state QoS.
+	if availTopic, err := b.deviceAvailabilityTopic(centralName, iface, deviceAddress); err == nil {
+		if err := b.avail.Retract(ctx, availTopic); err != nil {
+			b.incPublishErrors(centralName)
+		} else {
+			n++
+		}
+	}
 	for _, topic := range []string{
-		b.topics.DeviceAvailability(centralName, iface, deviceAddress),
 		b.topics.DeviceInfo(centralName, iface, deviceAddress),
 		b.topics.DeviceDiagnostics(centralName, iface, deviceAddress),
 	} {
@@ -2214,33 +2245,29 @@ var ErrNilValue = errors.New("mqtt: nil value is not publishable")
 func renderValue(v any) ([]byte, error) {
 	switch x := v.(type) {
 	case nil:
+		// This daemon's own sentinel rather than the shared
+		// [hapublisher.ErrRawNilValue], because callers switch on it: a nil
+		// value must not become zero bytes on a retained topic, which is
+		// MQTT's retraction and used to delete a nil-reporting sysvar's
+		// entity along with its state.
 		return nil, ErrNilValue
-	case bool:
-		if x {
-			return []byte("true"), nil
-		}
-		return []byte("false"), nil
-	case string:
-		return []byte(x), nil
-	case int:
-		return fmt.Appendf(nil, "%d", x), nil
-	case int32:
-		return fmt.Appendf(nil, "%d", x), nil
-	case int64:
-		return fmt.Appendf(nil, "%d", x), nil
-	case float32:
-		// bitSize 32 so the shortest form round-trips through a
-		// float32 rather than exposing the widening artefact
-		// (float32(0.1) read as a float64 is 0.10000000149011612).
-		return []byte(strconv.FormatFloat(float64(x), 'f', -1, 32)), nil
-	case float64:
-		// 'f' with precision -1 is the shortest decimal that parses
-		// back to the same float64. The previous %f-then-trim capped
-		// at six fractional digits, so a HmIP power meter reporting
-		// 0.0000001 kWh reached the broker as a flat "0" — the value
-		// was not rounded, it was erased, and no consumer could tell
-		// that from a genuine zero.
-		return []byte(strconv.FormatFloat(x, 'f', -1, 64)), nil
+	case []byte:
+		// The one shape where this daemon and the shared renderer disagree.
+		// [hapublisher.RenderRawValue] passes a []byte through as raw bytes;
+		// this has always JSON-encoded it, which is a quoted base64 string.
+		// Nothing in this daemon produces a []byte value — CCU values arrive
+		// as bool, int, float or string — so the divergence is unreachable
+		// in production, and a value shape nothing produces is not the place
+		// to change a published byte on the way past. Both halves are pinned
+		// by TestRenderValueMatchesTheSharedRenderer.
+		return json.Marshal(x)
 	}
-	return json.Marshal(v)
+	// Everything else is the shared renderer, byte for byte: bools as
+	// `true`/`false`, strings unquoted, ints in base 10, float32 at bitSize
+	// 32 so the shortest form round-trips through a float32 rather than
+	// exposing the widening artefact, float64 as the shortest decimal that
+	// parses back to the same float64 — the precision #796 established here
+	// and the reason the shared renderer departed from its own reference.
+	// Anything else falls through to JSON in both.
+	return hapublisher.RenderRawValue(v)
 }

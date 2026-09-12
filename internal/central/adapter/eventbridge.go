@@ -706,6 +706,16 @@ func (b *EventBridge) PublishInitialSnapshot(ctx context.Context) {
 	// restarts. Clearing the gate makes the snapshot authoritative again;
 	// the per-event dedupe resumes from the values this pass publishes.
 	b.availabilityCache.Clear()
+	// The shared publishers' own dedup gates need the identical treatment
+	// for the identical reason, and they are a second set of maps in a
+	// second package — so the reset is asked for explicitly rather than
+	// inferred. [mqtt.Bridge.ResetRuntimeGates] publishes nothing; it only
+	// stops this pass's writes being swallowed as unchanged.
+	if b.mqtt != nil {
+		if bridge := b.mqtt.Bridge(); bridge != nil {
+			bridge.ResetRuntimeGates()
+		}
+	}
 	for _, u := range b.registry.List() {
 		b.publishCentralSnapshot(ctx, u)
 	}

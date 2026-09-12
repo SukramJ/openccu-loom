@@ -25,10 +25,11 @@ func TestDiscoveryNodeIDFromTopic(t *testing.T) {
 
 	const prefix = "homeassistant/"
 	cases := []struct {
-		name   string
-		topic  string
-		want   string
-		wantOK bool
+		name       string
+		topic      string
+		want       string
+		wantOK     bool
+		wantBundle bool
 	}{
 		{
 			name:   "per-entity form",
@@ -37,16 +38,18 @@ func TestDiscoveryNodeIDFromTopic(t *testing.T) {
 			wantOK: true,
 		},
 		{
-			name:   "device bundle",
-			topic:  "homeassistant/device/loom_ccu_0001abc/config",
-			want:   "loom_ccu_0001abc",
-			wantOK: true,
+			name:       "device bundle",
+			topic:      "homeassistant/device/loom_ccu_0001abc/config",
+			want:       "loom_ccu_0001abc",
+			wantOK:     true,
+			wantBundle: true,
 		},
 		{
-			name:   "node id is folded, as the ownership check expects",
-			topic:  "homeassistant/device/LOOM_CCU_0001ABC/config",
-			want:   "loom_ccu_0001abc",
-			wantOK: true,
+			name:       "node id is folded, as the ownership check expects",
+			topic:      "homeassistant/device/LOOM_CCU_0001ABC/config",
+			want:       "loom_ccu_0001abc",
+			wantOK:     true,
+			wantBundle: true,
 		},
 		{
 			// device_automation and device_tracker are real platforms and
@@ -58,13 +61,22 @@ func TestDiscoveryNodeIDFromTopic(t *testing.T) {
 			wantOK: true,
 		},
 		{
-			// Home Assistant permits omitting the node id. Such a topic
-			// names no node this daemon could own, so it is not ours to
-			// judge — reading its object id as a node id would be worse
-			// than ignoring it.
-			name:   "per-entity form without a node id is not claimed",
-			topic:  "homeassistant/sensor/some_object/config",
-			wantOK: false,
+			// Home Assistant permits omitting the node id, and go-hamqtt
+			// v0.27.0 started parsing that legacy form instead of refusing
+			// it — it is a real shape on a real broker, and a snapshot that
+			// cannot name it cannot reason about it.
+			//
+			// It stays unreachable for this daemon's ownership check all the
+			// same, which is why the parse widening is safe here: the node
+			// id is empty, so `discoveryNodeIDBelongsTo` matches no prefix,
+			// and the bundle sweep additionally requires `Bundle`. Reading
+			// the object id as a node id would be the dangerous reading, and
+			// nothing does.
+			name:       "per-entity form without a node id carries no node id",
+			topic:      "homeassistant/sensor/some_object/config",
+			want:       "",
+			wantOK:     true,
+			wantBundle: false,
 		},
 		{
 			name:   "another prefix",
@@ -87,6 +99,9 @@ func TestDiscoveryNodeIDFromTopic(t *testing.T) {
 			}
 			if got := strings.ToLower(parsed.NodeID); ok && got != tc.want {
 				t.Errorf("node id = %q, want %q", got, tc.want)
+			}
+			if ok && parsed.Bundle != tc.wantBundle {
+				t.Errorf("bundle = %v, want %v", parsed.Bundle, tc.wantBundle)
 			}
 		})
 	}

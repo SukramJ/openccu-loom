@@ -368,7 +368,17 @@ func (p *AlarmMQTTPublisher) onCodesChanged(hmevent.AlarmCodesChangedEvent) {
 // initial connect may land after Start's one-shot reconcile — either
 // way every panel would render unavailable in HA until the next alarm
 // event, which a quiescent disarmed system might never produce.
+// A broker restart wipes the retained store, so the reseed has to be able
+// to rewrite bytes the broker no longer holds. The shared state and
+// availability publishers' dedup gates would otherwise answer "already
+// published" for every one of them and the reseed would write nothing at
+// all — the failure TestAlarmMQTTPublisher_BrokerConnectReseeds catches. The
+// reset publishes nothing itself; it only stops the reconcile below being
+// swallowed as unchanged.
 func (p *AlarmMQTTPublisher) OnBrokerConnect() {
+	if b := p.wiring.Bridge(); b != nil {
+		b.ResetRuntimeGates()
+	}
 	p.signalReconcile()
 }
 
@@ -534,7 +544,7 @@ func (p *AlarmMQTTPublisher) retractPanel(ctx context.Context, b *Bridge, base, 
 	}
 	_ = b.RetractAlarmTopic(ctx, alarmTriggeredMotionTopic(base, zone))
 	_ = b.RetractAlarmTopic(ctx, alarmStateTopic(base, zone))
-	_ = b.RetractAlarmTopic(ctx, alarmAvailabilityTopic(base, zone))
+	_ = b.RetractAlarmAvailability(ctx, alarmAvailabilityTopic(base, zone))
 }
 
 func (p *AlarmMQTTPublisher) publishEventMsg(msg alarmEventMsg) {
@@ -708,13 +718,7 @@ func (b *Bridge) RetractAlarmDiscovery(ctx context.Context, component, nodeID, o
 // `publish_errors`. An alarm surface is the last plane whose publishes an
 // operator should have to take on trust.
 func (b *Bridge) PublishAlarmState(ctx context.Context, topic, token string) error {
-	if err := b.client.Publish(ctx, topic, []byte(token), b.cfg.QoS.State, true); err != nil {
-		b.incPublishErrors("")
-		return err
-	}
-	b.rememberRawTopic(topic)
-	b.incMessagesSent("")
-	return nil
+	return b.publishRuntimeState(ctx, "", topic, []byte(token))
 }
 
 // PublishAlarmAvailability publishes the retained per-panel availability
@@ -730,33 +734,53 @@ func (b *Bridge) PublishAlarmState(ctx context.Context, topic, token string) err
 // It records the topic and counts the publish for the reason spelled out
 // on [Bridge.PublishAlarmState].
 func (b *Bridge) PublishAlarmAvailability(ctx context.Context, topic string, online bool) error {
-	body := []byte("offline")
-	if online {
-		body = []byte("online")
-	}
-	if err := b.client.Publish(ctx, topic, body, QoS1, true); err != nil {
+	sent, err := b.avail.Publish(ctx, topic, online)
+	if err != nil {
 		b.incPublishErrors("")
 		return err
 	}
+	// Both indexes, deliberately. The availability publisher's own map is
+	// what its retraction and its sweep walk; `rawTopics` is what this
+	// daemon's device-removal and retained-orphan passes walk, and #797 put
+	// this topic there on purpose. Dropping either would give one of the two
+	// a blind spot.
 	b.rememberRawTopic(topic)
-	b.incMessagesSent("")
+	if sent {
+		b.incMessagesSent("")
+	}
 	return nil
 }
 
-// RetractAlarmTopic clears a retained alarm state or availability topic
-// and drops it from the bridge's retained-topic index, so nothing
-// retracts an already-empty topic a second time.
+// RetractAlarmAvailability clears a retained alarm availability topic and
+// drops it from both indexes.
 //
-// Never gated: the topics it clears are the ones discovery declares, and a
-// retraction that is skipped leaves a stale retained value behind forever.
-func (b *Bridge) RetractAlarmTopic(ctx context.Context, topic string) error {
-	if err := b.client.Publish(ctx, topic, nil, b.cfg.QoS.State, true); err != nil {
+// Separate from [Bridge.RetractAlarmTopic] because the two go out at
+// different levels now, and that is finding F5: the publish pinned QoS 1
+// while the retraction used the state QoS, which is 0. A lost `offline` is
+// bad, and a lost retraction is worse — it leaves a retained `online`
+// standing for a zone that no longer exists, which Home Assistant reads on
+// every restart and keeps permanently available. Routing it through the
+// availability publisher means one stated level covers both halves and they
+// cannot drift apart again. See [newAvailabilityPublisher].
+func (b *Bridge) RetractAlarmAvailability(ctx context.Context, topic string) error {
+	if err := b.avail.Retract(ctx, topic); err != nil {
 		b.incPublishErrors("")
 		return err
 	}
 	b.forgetRawTopic(topic)
 	b.incMessagesSent("")
 	return nil
+}
+
+// RetractAlarmTopic clears a retained alarm state topic and drops it from
+// the bridge's retained-topic index, so nothing retracts an already-empty
+// topic a second time. Availability topics go through
+// [Bridge.RetractAlarmAvailability] instead.
+//
+// Never gated: the topics it clears are the ones discovery declares, and a
+// retraction that is skipped leaves a stale retained value behind forever.
+func (b *Bridge) RetractAlarmTopic(ctx context.Context, topic string) error {
+	return b.evictRuntimeState(ctx, "", topic)
 }
 
 // PublishAlarmEvent publishes a non-retained JSON alarm event. Returns nil

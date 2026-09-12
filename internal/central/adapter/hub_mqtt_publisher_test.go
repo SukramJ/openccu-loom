@@ -93,13 +93,27 @@ func TestProgramUpdateReachesMQTT(t *testing.T) {
 
 	prevCount := len(pub.Published())
 
-	// Trigger an update.
+	// An execution that leaves every retained payload byte-identical —
+	// the program is still deactivated, its execute button still usable —
+	// now reaches the broker not at all. Both planes went onto the shared
+	// runtime's dedup gates, and this is the churn they exist to remove:
+	// the same two retained messages were previously rewritten on every
+	// execution of every program, saying nothing new to anybody.
 	prog.OnExecution(true, hmenum.ProgramTriggerUser)
+	publisher.Flush()
+	if got := len(pub.Published()); got != prevCount {
+		t.Fatalf("an execution that changed no payload produced %d publishes; before=%d topics=%v",
+			got-prevCount, prevCount, publishedTopics(pub))
+	}
 
+	// A change that does move a byte still goes out, which is what keeps
+	// the assertion above from being satisfied by a publisher that has
+	// stopped publishing altogether.
+	prog.OnActive(true)
 	publisher.Flush()
 	after := pub.Published()
 	if len(after) <= prevCount {
-		t.Fatalf("no additional publish after OnExecution; before=%d after=%d topics=%v",
+		t.Fatalf("no additional publish after OnActive; before=%d after=%d topics=%v",
 			prevCount, len(after), publishedTopics(pub))
 	}
 	if !containsTopic(pub, "programs/prog-1") {
@@ -515,10 +529,19 @@ func TestProgramRegisteredAfterStartReachesMQTT(t *testing.T) {
 	}
 
 	prev := len(pub.Published())
+	// Gated, exactly as in TestProgramUpdateReachesMQTT: an execution moves
+	// no retained byte, so it reaches the broker not at all — while a real
+	// state change still does.
 	prog.OnExecution(true, hmenum.ProgramTriggerUser)
 	publisher.Flush()
+	if got := len(pub.Published()); got != prev {
+		t.Fatalf("an execution that changed no payload produced %d publishes; topics=%v",
+			got-prev, publishedTopics(pub))
+	}
+	prog.OnActive(true)
+	publisher.Flush()
 	if len(pub.Published()) <= prev {
-		t.Fatalf("execution publish missing; topics=%v", publishedTopics(pub))
+		t.Fatalf("state-change publish missing; topics=%v", publishedTopics(pub))
 	}
 }
 
