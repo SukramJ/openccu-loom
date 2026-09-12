@@ -113,29 +113,21 @@ func (c scheduleDiscoveryContext) ObjectID(*hamodel.Device, hamodel.Entity) stri
 // scheduleEntity is one schedule entity on the shared model: a
 // [hamodel.Basic] plus the keys the model does not carry.
 //
-// `optimistic`, the two json-attributes keys and the platform Fields are
-// Home Assistant vocabulary rather than model semantics, which is the case
-// [hadiscovery.Builder] exists for.
+// The platform Fields are Home Assistant vocabulary for one platform
+// rather than model semantics, which is the case [hadiscovery.Builder]
+// exists for. `optimistic` and the json-attributes pair used to live here
+// too; go-hamqtt v0.24.0 carries all three on the description, so they are
+// declared with the rest of the entity.
 type scheduleEntity struct {
 	hamodel.Basic
 
-	fields                 any
-	optimistic             *bool
-	jsonAttributesTopic    string
-	jsonAttributesTemplate string
+	fields any
 }
 
 // BuildDiscovery implements [hadiscovery.Builder].
 func (e *scheduleEntity) BuildDiscovery(_ hadiscovery.Context, comp *hadiscovery.Component) error {
 	if e.fields != nil {
 		comp.Fields = e.fields
-	}
-	if e.optimistic != nil {
-		comp.Optimistic = e.optimistic
-	}
-	if e.jsonAttributesTopic != "" {
-		comp.JSONAttributesTopic = e.jsonAttributesTopic
-		comp.JSONAttributesTemplate = e.jsonAttributesTemplate
 	}
 	return nil
 }
@@ -231,6 +223,13 @@ func (d *DefaultDiscoveryBuilder) BuildScheduleEntityDiscovery(centralName strin
 				NameKey:  scheduleLabelKey,
 				Icon:     "mdi:calendar-clock",
 				Category: EntityCategoryDiagnostic,
+				// The rich week-profile structure rides beside the count
+				// rather than as the state: Home Assistant caps a sensor's
+				// state at 255 characters and a schedule document is far
+				// longer, so the count is the state and the document is
+				// attached as attributes.
+				JSONAttributesTopic:    attrsTopic,
+				JSONAttributesTemplate: "{{ value_json | tojson }}",
 			},
 			Binds: []hamodel.Binding{
 				{
@@ -239,12 +238,6 @@ func (d *DefaultDiscoveryBuilder) BuildScheduleEntityDiscovery(centralName strin
 				},
 			},
 		},
-		// The rich week-profile structure rides beside the count rather than
-		// as the state: Home Assistant caps a sensor's state at 255
-		// characters and a schedule document is far longer, so the count is
-		// the state and the document is attached as attributes.
-		jsonAttributesTopic:    attrsTopic,
-		jsonAttributesTemplate: "{{ value_json | tojson }}",
 	}
 	layout := scheduleTopicLayout{
 		d: d, central: centralName, iface: ev.Interface, address: ev.DeviceAddress,
@@ -395,16 +388,16 @@ func (d *DefaultDiscoveryBuilder) BuildScheduleSwitchDiscovery(centralName strin
 			EntityKey:      "schedule_" + ev.Key,
 			EntityPlatform: hacatalog.PlatformSwitch,
 			Description: hamodel.Description{
-				Name:     hamodel.L(ev.Label),
-				Icon:     "mdi:calendar-check",
-				Category: EntityCategoryConfig,
+				Name:       hamodel.L(ev.Label),
+				Icon:       "mdi:calendar-check",
+				Category:   EntityCategoryConfig,
+				Optimistic: hadiscovery.Ptr(false),
 			},
 			Binds: []hamodel.Binding{
 				{Role: hamodel.RoleState, Mode: hamodel.Read, Slot: slot},
 				{Role: hamodel.RoleCommand, Mode: hamodel.Write, Slot: slot},
 			},
 		},
-		optimistic: hadiscovery.Ptr(false),
 		fields: hadiscovery.SwitchFields{
 			PayloadOn:  "true",
 			PayloadOff: "false",

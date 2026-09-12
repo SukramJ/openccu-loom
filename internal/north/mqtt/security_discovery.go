@@ -207,27 +207,22 @@ func (c securityDiscoveryContext) ObjectID(*hamodel.Device, hamodel.Entity) stri
 }
 
 // securityModelEntity is one Security & Safety entity on the shared model: a
-// [hamodel.Basic] plus the handful of keys the model does not carry.
+// [hamodel.Basic] plus the platform Fields the model does not carry.
 //
-// The platform Fields and the two json-attributes keys are Home Assistant
-// vocabulary rather than model semantics, which is the case
-// [hadiscovery.Builder] exists for.
+// Fields are Home Assistant vocabulary for one platform rather than model
+// semantics, which is the case [hadiscovery.Builder] exists for. The
+// json-attributes pair used to live here too; go-hamqtt v0.24.0 carries it
+// on the description, so it is declared with the rest of the entity.
 type securityModelEntity struct {
 	hamodel.Basic
 
-	fields                 any
-	jsonAttributesTopic    string
-	jsonAttributesTemplate string
+	fields any
 }
 
 // BuildDiscovery implements [hadiscovery.Builder].
 func (e *securityModelEntity) BuildDiscovery(_ hadiscovery.Context, comp *hadiscovery.Component) error {
 	if e.fields != nil {
 		comp.Fields = e.fields
-	}
-	if e.jsonAttributesTopic != "" {
-		comp.JSONAttributesTopic = e.jsonAttributesTopic
-		comp.JSONAttributesTemplate = e.jsonAttributesTemplate
 	}
 	return nil
 }
@@ -290,8 +285,8 @@ func BuildSecurityDiscovery(base, deviceName, configURL string, e securityEntity
 			}
 		}
 		if e.jsonAttributes {
-			entity.jsonAttributesTopic = stateTopic
-			entity.jsonAttributesTemplate = "{{ value_json | tojson }}"
+			desc.JSONAttributesTopic = stateTopic
+			desc.JSONAttributesTemplate = "{{ value_json | tojson }}"
 		}
 	}
 	if e.diagnostic {

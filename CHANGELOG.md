@@ -65,6 +65,24 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   through every step, which is the point of running them before and
   after rather than regenerating them.
 
+- **Every discovery plane now renders through the shared model.** The
+  five that were already migrated are joined by the hub, firmware-
+  update, channel-event, security, combined-projection, climate-preset
+  and schedule planes. What is left hand-built is the per-parameter
+  path in `discovery.go` and `aggregateChannel`, whose bodies come
+  from the custom-datapoint builders in `internal/model/custom` — each
+  is its own change with its own pin.
+
+  Consolidating them in one place is what made the duplication
+  visible: six byte-identical copies of the `DeviceInfo` ->
+  `hamodel.Device` lift, written under six names, now share
+  `modelDeviceFromInfo`; and `flattenComponent` was performing the
+  marshal-drop-remarshal that `Component.EntityJSON` does upstream, so
+  it delegates. The security and schedule planes also hand their
+  `optimistic` and `json_attributes` keys to the description rather
+  than to a builder, which the v0.24.0 bump in this same change makes
+  possible.
+
 - **A failed alarm discovery render is logged.** It was discarded,
   which made the one failure mode this plane must not have -- a
   silently missing alarm panel -- indistinguishable from a panel that
