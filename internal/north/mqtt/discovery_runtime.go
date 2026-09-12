@@ -7,8 +7,10 @@ import (
 	"context"
 	"log/slog"
 
+	hamodel "github.com/SukramJ/go-hamqtt/model"
 	hapublisher "github.com/SukramJ/go-hamqtt/publisher"
 	hagomqtt "github.com/SukramJ/go-hamqtt/publisher/gomqtt"
+	hatopic "github.com/SukramJ/go-hamqtt/topic"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 )
@@ -27,7 +29,15 @@ import (
 // predicate the sweep is scoped by. Those are this daemon's, and the runtime
 // takes a callback or a parameter for each rather than a guess.
 func newDiscoveryRuntime(b *Bridge, logger *slog.Logger) *hapublisher.Runtime {
-	return hapublisher.New(hagomqtt.Split(b.client, lateSubscriber{b: b}), hapublisher.Config{
+	return hapublisher.New(hagomqtt.Split(b.client, lateSubscriber{b: b}), discoveryRuntimeConfig(b, logger))
+}
+
+// discoveryRuntimeConfig is the runtime's configuration, split out from
+// [newDiscoveryRuntime] so the one invariant it carries — that the status
+// topic the runtime publishes to is the topic the declaring side renders
+// for [hamodel.LevelBridge] — is assertable without a broker.
+func discoveryRuntimeConfig(b *Bridge, logger *slog.Logger) hapublisher.Config {
+	return hapublisher.Config{
 		Prefix: naming.DiscoveryTopicPrefix,
 		// The daemon's own availability topic, in the daemon's own tree —
 		// the one the Last Will clears and every discovery payload's
@@ -36,7 +46,15 @@ func newDiscoveryRuntime(b *Bridge, logger *slog.Logger) *hapublisher.Runtime {
 		// root actually configures; TestDiscoveryRuntimeWillMatchesLWT pins
 		// the two together.
 		StatusTopic: b.topics.BridgeStatus(),
-		QoS:         byte(b.cfg.QoS.Discovery),
+		// …and the layout is what makes that literal checkable rather than
+		// free-form. [hapublisher.New] compares the two and panics at the
+		// composition root on a disagreement, which is the only place a
+		// disagreement is cheap: this is the one string every entity's
+		// availability list references, and under the default
+		// `availability_mode: "all"` a single typo greys out the whole fleet
+		// with nothing on the wire naming the cause.
+		Layout: bridgeStatusLayout{base: b.topics.Base},
+		QoS:    byte(b.cfg.QoS.Discovery),
 		OnResync: func(replayed int, err error) {
 			if err != nil {
 				logger.Warn("mqtt.birth_sync.republish", slog.String("err", err.Error()))
@@ -45,8 +63,46 @@ func newDiscoveryRuntime(b *Bridge, logger *slog.Logger) *hapublisher.Runtime {
 			logger.Info("mqtt.birth_sync.republished", slog.Int("replayed", replayed))
 		},
 		Logger: logger,
-	})
+	}
 }
+
+// bridgeStatusLayout is the [hatopic.Layout] the publisher runtime is
+// configured with. It answers exactly one question — which topic
+// [hamodel.LevelBridge] is — and takes its answer from
+// [alarmBridgeStatusTopic], the derivation the daemon-level planes' own
+// layouts ([securityTopicLayout], the alarm panel's availability list)
+// already use.
+//
+// That is the whole point of handing the runtime a layout at all. A layout
+// whose Bridge() simply returned the same string the config's StatusTopic
+// was built from could never disagree with it, so the library's guard
+// would be armed against nothing. Pointing it at the declaring side's
+// second derivation is what gives it teeth: if that derivation ever stops
+// agreeing with [TopicBuilder.BridgeStatus] — a base normalised
+// differently, a segment respelled — the daemon refuses to start instead
+// of coming up with a fleet whose availability sources nobody writes to.
+//
+// The other three methods deliberately return the empty string rather than
+// a plausible topic. This layout is not a render layout and names no state,
+// command or per-entity availability topic; the shared module's own rule is
+// that a layout answering for a coordinate it does not own is worse than a
+// compile error, because a deterministic topic nobody subscribes to looks
+// like an answer.
+type bridgeStatusLayout struct{ base string }
+
+var _ hatopic.Layout = bridgeStatusLayout{}
+
+// State implements [hatopic.Layout].
+func (bridgeStatusLayout) State(hamodel.Slot) string { return "" }
+
+// Command implements [hatopic.Layout].
+func (bridgeStatusLayout) Command(hamodel.Slot) string { return "" }
+
+// Availability implements [hatopic.Layout].
+func (bridgeStatusLayout) Availability(hamodel.Slot) string { return "" }
+
+// Bridge implements [hatopic.Layout].
+func (l bridgeStatusLayout) Bridge() string { return alarmBridgeStatusTopic(l.base) }
 
 // lateSubscriber resolves the bridge's subscribe-capable client at call time
 // rather than at construction.

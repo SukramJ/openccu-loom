@@ -1,14 +1,14 @@
 # Dead-Code Summary
 
-Generated: 0be297ac
-HEAD: 0be297ac
+Generated: 79bd8362
+HEAD: 79bd8362
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 5610 |
-| Reachable | 3576 |
+| Total Exported | 5611 |
+| Reachable | 3577 |
 | Whitelisted | 1975 |
 | **Unreachable** | **59** |
 

@@ -34,7 +34,98 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   The aggregate's suppression stays as the bridge's own guarantee about
   the category.
 
+### Fixed
+
+- **The alarm plane wrote past the bridge, exactly as the Security &
+  Safety plane did before #796.** `Bridge.PublishAlarmState`,
+  `PublishAlarmAvailability` and `RetractAlarmTopic` published straight
+  to the client, so the whole alarm surface was invisible twice over.
+  Its retained state, availability and latched-detector topics never
+  entered `rawTopics`, so no orphan sweep and no device-removal
+  retraction could ever reach them — a zone deleted while the daemon
+  was down left its retained token on the broker for good, feeding a
+  Home Assistant panel for an area that no longer exists — and its
+  publishes were counted by neither `messages_sent` nor
+  `publish_errors`. The one plane an operator most needs to watch was
+  the one plane no metric could see at all.
+
+  Fixed in #796's shape rather than a second one: each publisher records
+  or forgets its topic and increments the same counters every other
+  publisher on the bridge does, and a refused publish leaves no claim
+  behind. `PublishAlarmEvent` is counted too but stays out of the index,
+  because an event is a moment and there is no retained message on the
+  topic for a sweep to find — the same split
+  `Bridge.PublishSecurityEvent` makes.
+
+  `PublishAlarmAvailability` was already pinned to QoS 1, which is what
+  #796 established everywhere: availability is the one topic whose loss
+  the next publish cannot repair, because the plane writes it only on a
+  flip. There is now a test saying so, so the pin cannot be lowered to
+  the state QoS by a future edit that reads the two as interchangeable.
+
 ### Changed
+
+- **go-hamqtt v0.25.0 -> v0.26.0, and `Config.Layout` closes the one
+  string a typo takes the whole fleet down with.** The release is a
+  `feat!` — `publisher.CommandRouter` did not exist before — so nothing
+  here broke; the full suite was green on the bump alone, before any
+  other change, and no golden moved.
+
+  The bridge availability topic is now checkable instead of free-form.
+  #795 handed the runtime a `StatusTopic` literal and adopted
+  `Runtime.Will()` as a pinned contract, because the declaring side
+  renders that topic from a `topic.Layout` and the publishing side took
+  a string — the module structurally could not compare them. v0.26.0
+  takes the layout, derives the topic from `Layout.Bridge()` and panics
+  at the composition root on a disagreement. This is the string every
+  entity's `availability` list references, and under the default
+  `availability_mode: "all"` a single typo greys out the whole fleet
+  with nothing on the wire naming the cause.
+
+  The layout handed in is `bridgeStatusLayout`, and it points at
+  `alarmBridgeStatusTopic` rather than at the string `StatusTopic` was
+  built from. That distinction is the whole value: a layout echoing the
+  config's own derivation could never disagree with it, so the guard
+  would be armed against nothing. Pointing it at the derivation the
+  daemon-level planes' own layouts already use gives it teeth — if
+  `alarmBridgeStatusTopic` ever stops agreeing with
+  `TopicBuilder.BridgeStatus`, the daemon refuses to start rather than
+  coming up with a fleet whose availability sources nobody writes to.
+  Its other three methods return the empty string on purpose: it is not
+  a render layout, and a plausible topic nobody subscribes to looks like
+  an answer. `TestConfiguredLastWillMatchesTheBridgePolicy` stays as
+  well — CONNECT still happens before a bridge exists, so the will is
+  still configured by `buildLWTTopic` and only checked here.
+
+  `SweepRequest.Inspect` does **not** close
+  `RunUnscopedDiscoveryCleanupOnce`, and the reason turned out not to be
+  the one #795 reported. `Inspect` closes that half exactly as hoped —
+  it hands the caller the retained body, which is all the payload
+  judgement needed. What does not close is the coupling: `Inspect` fires
+  only for topics `Owns` accepted, and every owned topic the pass finds
+  unclaimed is retracted by the same pass. This scrub has to run
+  **before** `PublishInitialSnapshot`, because the retraction is what
+  makes Home Assistant forget the stale `unique_id` and the snapshot
+  that follows is what re-announces the entity under the corrected one.
+  At that point the runtime's claim set is empty, so an `Owns` wide
+  enough for `Inspect` to see anything makes the pass delete the
+  daemon's entire retained discovery fleet — the exact catastrophic
+  ordering `Runtime.Sweep`'s own doc comment warns about. Closing it
+  needs an inspect-only pass; `SweepRequest` has no such knob. The pass
+  is left alone.
+
+  `RunBundleRollbackOnce` stays for the same reason as before, verified
+  rather than assumed: v0.26.0 added no "supersede these topics once per
+  process" helper. `SupersededTopics` has been there since v0.25.0 and
+  computes its list from a `discovery.Bundle` this daemon never builds
+  in per-entity mode, and `PublishComponent`'s built-in symmetry would
+  re-render the byte-pinned payloads.
+
+  Nothing from the three new runtime planes is adopted here.
+  `StatePublisher`, `CommandRouter` and `AvailabilityPublisher` are a
+  separate measurement: the router now refuses every overlapping filter
+  pair and this daemon registers thirteen, and whether `PerDPState`'s
+  timestamps can live inside the library's `Envelope` is still open.
 
 - **go-hamqtt v0.24.0 -> v0.25.0, and the publish loop ADR 0070
   promised moves up.** The ADR said a types-only library "would leave
