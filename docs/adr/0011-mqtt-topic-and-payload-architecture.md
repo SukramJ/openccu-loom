@@ -296,6 +296,14 @@ domain-aware code paths from the bridge.
 
 ### Topic hierarchy
 
+> **The tree below is the topology as decided in 2026-04 and is no longer
+> the shipped one.** The `channels/` infix and the `/state` suffix were
+> both retired; `update/state` became `update`. See
+> [Amendment (2026-09-13) — the `channels/` topology this section describes was retired](#amendment-2026-09-13--the-channels-topology-this-section-describes-was-retired)
+> for what replaced them, and `docs/mqtt-topic-schema.md` for the shape a
+> consumer should subscribe to today. The block is kept unedited because
+> this ADR records a decision, not the current wire.
+
 ```
 <base>/                                     openccu-loom/
 ├── bridge/
@@ -477,6 +485,13 @@ displays in HA's diagnostic-entity panel; the individual DPs continue
 to be published under `channels/0/values/...` for granular subscribers.
 
 ### HA Discovery — direct topics + derived aggregate
+
+> The topic strings in the payload below carry the retired `channels/`
+> infix and `/state` suffix of the section above; the shipped discovery
+> writes `…/1/values/ACTUAL_TEMPERATURE` and `…/1/custom/climate`. The
+> *structure* of the example — several state topics per entity, direct
+> values beside the curated aggregate — is what this section decides and
+> is unchanged.
 
 A Climate discovery for our BWTH ch1 references **multiple** state
 topics — direct values straight from per-DP topics, derived values
@@ -935,6 +950,44 @@ The daemon repairs the statement wherever it can:
   device-info shape (manufacturer, model, model_id, sw_version,
   configuration_url, suggested_area, via_device) is the visual
   reference for the device card we want to mirror.
+
+## Amendment (2026-09-13) — the `channels/` topology this section describes was retired
+
+§Topic hierarchy above, and the HA Discovery example that quotes it, describe
+a topology **no daemon build publishes**. It is the most misleading kind of
+stale: this ADR is the document that owns the topic schema, so it is where
+someone goes to learn the shape, and what it shows them is the shape of the
+build before this one.
+
+Three differences, all of them on every per-DP topic:
+
+| §Topic hierarchy says | The daemon publishes |
+|---|---|
+| `<addr>/channels/<ch>/values/<param>/state` | `<addr>/<ch>/values/<param>` |
+| `<addr>/channels/<ch>/custom/<kind>/state` | `<addr>/<ch>/custom/<kind>` |
+| `<addr>/update/state` | `<addr>/update` |
+
+The `channels/` infix is gone — the channel number sits directly under the
+address — and the `/state` suffix is gone with it: the topic **is** the
+state, which is the same convention the device-scope `/availability`,
+`/info` and `/diagnostics` siblings already followed. The `set` and
+`config` companions keep their suffixes, because those name a different
+thing on the same node rather than restating what the node is.
+
+The evidence that the old shape really shipped, and that this is a
+retirement rather than a documentation error, is
+`internal/north/mqtt/retain_cleanup.go`'s `LegacySlotStateMatcher`. It
+exists for exactly one purpose: to evict the retained leftovers an operator
+who ran a previous build still has under `parts[3] == "channels"`. A sweep
+for a topology is proof the topology was on the wire.
+
+The section is not rewritten. It records what was decided in 2026-04, and
+the tree it draws is the tree that was built; a signpost now sits above it
+and above the discovery example that quotes it. The current shape lives in
+`docs/mqtt-topic-schema.md`, which is the operator-facing contract and is
+pinned against the live builder by
+`tests/contract/mqtt_topic_schema_doctest_test.go` in both directions since
+this date — see the amendment below.
 
 ## Amendment (2026-09-13) — the schema document was a strict subset of the wire
 
