@@ -10,7 +10,9 @@
 # out to be 1.2 % of the build it sits in. What this script now gates is
 # `BenchmarkDiscoveryBuildPerEntity` — the whole per-entity HA-Discovery build —
 # and it gates it on ALLOCATIONS, not nanoseconds, because the ns/op ceilings
-# below went red on an unchanged tree. Both stories are told in order further
+# below went red on an unchanged tree. The allocation axis turned out to vary
+# too, by exactly one, for a reason that is now measured and carried as
+# headroom rather than assumed away. Both stories are told in order further
 # down; the sections are dated by the order they were learned, not rewritten.
 #
 # WHY MINIMUM-OF-N, NOT MEAN OR MEDIAN
@@ -128,20 +130,113 @@ BENCHTIME="${BENCH_GATE_BENCHTIME:-300ms}"
 #
 # The fix is not more padding. It is to gate on the number that does not vary.
 #
-# ALLOCATIONS ARE THE GATE. allocs/op is a property of the code, not of the
-# machine: across all three CPUs above it was 26, 19 and 811, identical to the
-# unit, and it is identical on 32-bit ARMv7 too. It cannot flake, so its
-# ceilings are armed EXACTLY at the measured value — any regression that adds a
-# single allocation to these paths fails here, with no headroom to hide in.
-# Both mutation proofs this gate has been put through were allocation
-# regressions and both are caught unambiguously: #814's 40-extra-allocs
-# mutation showed 66 and 59, and the triple-render mutation that armed the
-# discovery ceiling showed 2434.
+# ALLOCATIONS ARE THE GATE. allocs/op is far less sensitive to the machine
+# than ns/op: across all three CPUs above it was 26, 19 and 811, identical to
+# the unit, while the timings spanned a factor of two. That is what makes it
+# the right axis. It is not, however, the *invariant* the first version of this
+# section claimed.
 #
-# A Go toolchain bump that legitimately moves an allocation count is a
-# deliberate re-arm: change the number here, and say what moved it and why in
-# the commit message. That is the same ratchet discipline the ns/op ceilings
-# carry, and it is cheap precisely because the number is deterministic.
+# THE ALLOCATION AXIS VARIES TOO — BY ONE, AND FOR A KNOWN REASON
+#
+# The claim "allocs/op cannot flake, so arm the ceiling exactly at the measured
+# value" was tested and is false. BenchmarkDiscoveryBuildPerEntity reports 811
+# or 812 allocs/op on one machine and one unchanged tree, depending only on how
+# the garbage collector is configured:
+#
+#   GOGC=off                        20/20 runs -> 811
+#   default GOGC, -benchtime=100x    1/20 runs -> 812
+#   GOGC=1,      -benchtime=3000x    9/10 runs -> 812
+#   GOMEMLIMIT=16MiB + GOGC=1        6/6  runs -> 812
+#
+# The mechanism is isolated: the build ends in a JSON marshal, and
+# encoding/json keeps its encodeState in a sync.Pool. A sync.Pool is DRAINED BY
+# THE GC. A pool hit costs 811 allocations; a pool miss costs 812, because the
+# state has to be allocated afresh. So the count is a function of GC pressure —
+# of GOGC, of GOMEMLIMIT, of how much other memory the process happens to be
+# using, and of b.N (a short run is likelier to span a GC than to amortise one
+# away). A memory-capped runner, or a leg that simply schedules a GC at a
+# different moment, moves this digit on code nobody touched. Arming at exactly
+# 811 reproduced the identical failure mode #816 was written to fix — a ratchet
+# red on an unchanged tree — with the headroom removed.
+#
+# WHY THE HEADROOM IS EXACTLY ONE ALLOCATION, AND NOT A PERCENTAGE
+#
+# Because the dynamic range of the mechanism is exactly one allocation, and
+# that is measurable rather than guessed. testing.AllocsPerOp() TRUNCATES
+# totalAllocs/N, so a partial miss rate cannot show up as a fraction: 811.9
+# reads as 811. The count therefore only reaches 812 when essentially every
+# iteration misses the pool — the saturated worst case — and no GC setting can
+# push it past the one extra object the pool holds. Every adversarial
+# configuration tried above lands in {811, 812} and nothing reached 813. So
+# 812 is not padding chosen for comfort; it is the top of the measured range of
+# the one identified non-code source of variance. A percentage headroom would
+# be worse in both directions at once: 1 % of 811 is eight allocations of slack
+# for a real regression to hide in, while 1 % of 19 rounds to nothing and
+# leaves the ForWith ceilings exactly as brittle as they are now.
+#
+# The two ForWith ceilings are NOT loosened. 26 and 19 were stable across every
+# configuration in the table above — those paths do not touch the pooled
+# encoder — so they stay armed exactly at the measured value, which is where a
+# ratchet belongs when the number really does hold.
+#
+# WHAT THE HEADROOM COSTS, STATED PLAINLY. On the discovery row the gate can
+# no longer tell a +1 regression from a pool miss — because a pool miss IS +1.
+# No ceiling on this benchmark can; that is a property of the measurement, not
+# a choice, and the alternative is not a sharper gate but a gate red on an
+# unchanged tree, which is a gate that gets switched off. The sensitivity is
+# not wholly lost: a +1 anywhere inside `payload.ForWith` is still caught
+# exactly by the TwentyField and DeviceInfo ceilings, which keep zero headroom.
+# Only a +1 landing outside ForWith and inside the rest of the discovery build
+# now needs +2 to show here.
+#
+# The mutation proofs this gate has been put through are otherwise unaffected:
+# #814's 40-extra-allocs mutation showed 66 and 59, the triple-render mutation
+# that armed the discovery ceiling showed 2434, and the one-extra-allocation
+# mutation still reds at 27 vs 26 and 20 vs 19 (it no longer reds the discovery
+# row, which is exactly the cost described above — ADR 0007 records the
+# correction).
+#
+# FAIL CLOSED: AN ABSENT MEASUREMENT IS NOT A PASS
+#
+# This is the general principle, and it is worth stating because the gate got
+# it wrong. The allocs/op column used to exist only because each benchmark
+# happened to call b.ReportAllocs(); this script did not pass -benchmem. In the
+# awk below an unset value compares as 0, and `0 > 811` is false — so deleting
+# one b.ReportAllocs(), or adding a benchmark without one, produced
+#
+#   OK BenchmarkDiscoveryBuildPerEntity: 0 allocs/op (ceiling 811)   rc=0
+#
+# a green gate that measured nothing at all. It hid well, because `make bench`
+# in the CI step immediately above this one DOES pass -benchmem, so the log
+# still printed the real 811 while the gate read an empty string. The existing
+# missing-benchmark guard keys on the ns/op line and never saw it. Both halves
+# are fixed: -benchmem is passed explicitly, and a missing allocs/op column is
+# now a hard failure rather than a zero. No gate in this script may ever treat
+# the absence of a measurement as a satisfied bound.
+#
+# RE-ARMING: WHAT CAN LEGITIMATELY MOVE THESE NUMBERS
+#
+# Moving a ceiling is a deliberate act: change the number here, and say what
+# moved it and why in the commit message. Two things can move an allocation
+# count without anyone in this repository writing a line of code, and the
+# second one is the one that can land unattended:
+#
+#   1. A Go toolchain bump. Cannot arrive by itself: go.mod carries no
+#      `toolchain` directive and CI pins the version by hand, so a bump is
+#      always somebody's reviewed commit.
+#   2. **A go-hamqtt bump — including a patch release.** This is the live
+#      unattended path. The reflection walk these benchmarks measure and the
+#      hadiscovery.RenderComponent call inside the discovery build are both
+#      upstream code, so an allocation change there lands here directly; and
+#      Dependabot auto-merge excludes only go-ha-catalog, so a go-hamqtt patch
+#      bump can merge without a human reading it. If this gate goes red on a
+#      commit that touches nothing but go.mod/go.sum, check the go-hamqtt diff
+#      FIRST — a moved count there is a real upstream change worth
+#      understanding before it is re-armed, not noise.
+#
+# Neither is a licence to bump a ceiling to whatever the tree now measures
+# without looking at why it moved. Lowering one after a real improvement is
+# still the point.
 #
 # NS/OP IS A BACKSTOP, NOT THE GATE. It stays because allocation count alone
 # cannot see a regression that burns CPU without allocating — a quadratic loop,
@@ -169,14 +264,25 @@ CEILINGS=(
     # slower EPYC 7763 leg; the latter x1.5, rounded. The ForWith share holds
     # at 1.2 % on BOTH legs (1174/95082 and 1552/123899), which is the
     # cross-CPU check that the share is a property of the code.
-    "BenchmarkDiscoveryBuildPerEntity 200000 811"
+    # allocs: 812, which is 811 + one allocation of deliberate headroom for the
+    # GC-drained sync.Pool inside encoding/json — the full measured range of
+    # that mechanism, not a percentage. See WHY THE HEADROOM IS EXACTLY ONE
+    # ALLOCATION above. Armed at 811 this ceiling went red on an unchanged tree
+    # under GOGC pressure.
+    "BenchmarkDiscoveryBuildPerEntity 200000 812"
 )
 
 BENCH_RE='^(BenchmarkPayloadBuildTwentyField|BenchmarkPayloadBuildDeviceInfo|BenchmarkDiscoveryBuildPerEntity)$'
 
 echo "bench_gate: ${RUNS} runs x ${BENCHTIME} per benchmark; the gate reads the minimum"
 
-if ! RAW="$(go test -tags=bench -run '^$' -bench "$BENCH_RE" \
+# -benchmem is passed EXPLICITLY even though every gated benchmark calls
+# b.ReportAllocs(). Relying on the benchmark to opt itself in makes the gate's
+# own measurement a property of the code under test: delete one
+# b.ReportAllocs(), or add a benchmark without one, and the allocs/op column
+# simply stops being printed. See FAIL CLOSED below for why that used to be
+# silent.
+if ! RAW="$(go test -tags=bench -run '^$' -bench "$BENCH_RE" -benchmem \
     -benchtime="$BENCHTIME" -count="$RUNS" ./tests/bench/ 2>&1)"; then
     echo "$RAW" >&2
     echo "::error::bench_gate: the benchmark run itself failed" >&2
@@ -204,10 +310,18 @@ REPORT="$(echo "$RAW" | awk -v ceilings="${CEILINGS[*]}" '
         }
         if (ns == "") next
         if (!(name in minns) || ns < minns[name]) minns[name] = ns
-        # Allocations do not vary between runs of the same code, but take the
-        # maximum rather than the minimum: if they ever DO vary, the gate must
-        # see the worst case, not flatter the code.
-        if (al != "" && (!(name in maxal) || al > maxal[name])) maxal[name] = al
+        # MINIMUM on the allocation axis too, for the same reason as ns/op.
+        # Allocation noise is one-sided in the same direction that timing noise
+        # is: the environment can only ADD allocations to a run (a GC-drained
+        # sync.Pool that has to allocate a fresh object instead of reusing one
+        # — see THE ALLOCATION AXIS VARIES below), never remove one the code
+        # actually performs. So the minimum is again the sample least polluted
+        # by the runner, and taking the maximum here would have inverted the
+        # carefully-argued statistic one line above it on the axis that is now
+        # the gate. An unset al is NOT folded in as a zero; it is recorded as a
+        # missing measurement and failed on in END.
+        if (al == "") noal[name] = 1
+        else if (!(name in minal) || al < minal[name]) minal[name] = al
         seen[name] = 1
     }
     END {
@@ -220,11 +334,14 @@ REPORT="$(echo "$RAW" | awk -v ceilings="${CEILINGS[*]}" '
                 bad = 1
                 continue
             }
-            if (maxal[name] > alceil) {
-                printf "::error::%s: %d allocs/op > ceiling %d allocs/op — the allocation gate does not flake, so this is a real regression\n", name, maxal[name], alceil
+            if ((name in noal) || !(name in minal)) {
+                printf "::error::bench_gate: %s reported no allocs/op column — the allocation gate MEASURED NOTHING and fails closed. Check that the benchmark still calls b.ReportAllocs() and that this script still passes -benchmem.\n", name
+                bad = 1
+            } else if (minal[name] > alceil) {
+                printf "::error::%s: %d allocs/op > ceiling %d allocs/op — the allocation gate does not flake on runner speed, so this is a real regression\n", name, minal[name], alceil
                 bad = 1
             } else {
-                printf "OK %s: %d allocs/op (ceiling %d allocs/op)\n", name, maxal[name], alceil
+                printf "OK %s: %d allocs/op (ceiling %d allocs/op)\n", name, minal[name], alceil
             }
             if (minns[name] > nsceil) {
                 printf "::error::%s: %.1f ns/op > ceiling %d ns/op\n", name, minns[name], nsceil

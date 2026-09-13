@@ -709,9 +709,11 @@ the check that matters: on the slower AMD EPYC 7763 leg the build came in at
 figures move by 30 %; the share does not.
 
 **The allocation ratio is the load-bearing figure, not the nanoseconds.** 19
-allocations out of 811 is a property of the code, not of the machine: it is
-identical on every run, on every runner, and on every architecture. The
-nanosecond ratio can drift with silicon; the ratio 19/811 cannot. Any argument
+allocations out of 811 is a property of the code far more than of the machine:
+it was identical on all three CI legs, whose timings spanned a factor of two.
+The nanosecond ratio drifts with silicon by 100 %; this one moves, at most, by
+the single allocation documented under *The allocation axis varies too* below,
+and not at all on architectures — which remains unmeasured. Any argument
 that a faster or slower machine changes this verdict has to explain how it
 changes that count.
 
@@ -768,8 +770,9 @@ the clock term. So a 1 000-device boot's discovery build is estimated at
 kind of work — Go allocator traffic, map inserts, string hashing — so whatever
 factor the A53 applies, it applies to both, and the 1.2 % share survives
 unchanged. The uncertainty above is entirely in the absolute figures, which is
-why the withdrawal rests on the ratio and on the 19/811 allocation count
-instead. What the ARMv7 estimate *does* say is that the **denominator** is
+why the withdrawal rests on the ratio and on the 19-of-811 allocation share
+instead (itself an amd64 measurement — see *On ARMv7 this is unmeasured*
+below). What the ARMv7 estimate *does* say is that the **denominator** is
 worth attention on that hardware: 11–34 seconds of serial discovery building
 on a 1 000-device CCU3 is a real number, and it is not `ForWith`'s.
 
@@ -795,15 +798,126 @@ The fix is not more padding, because padding a ns/op ceiling far enough to
 survive the pool is what turns a gate into decoration. The fix is to gate on
 the number that does not vary:
 
-**`allocs/op` is now the gate.** It is a property of the code rather than of
-the machine: 26, 19 and 811 on all three CPUs above, identical to the unit, and
-identical on a loaded 4-core developer laptop whose ns/op figures were three to
-five times worse. It is identical on 32-bit ARMv7 too, which is what lets this
-amendment reason about hardware it could not measure. Its ceilings are
-therefore armed **exactly** at the measured value — no headroom at all, so a
-regression that adds a single allocation fails. A Go toolchain bump that
-legitimately moves a count is a deliberate re-arm, stated in the commit message
-that moves it.
+**`allocs/op` is now the gate.** It is far less sensitive to the machine than
+`ns/op`: 26, 19 and 811 on all three CPUs above, identical to the unit, and
+identical on a loaded 4-core developer laptop whose `ns/op` figures were three
+to five times worse, while the timings on those same legs spanned a factor of
+two. That difference in sensitivity is what makes it the right axis.
+
+*On ARMv7 this is **unmeasured**.* An earlier draft of this paragraph asserted
+that the counts are identical on 32-bit ARMv7, "which is what lets this
+amendment reason about hardware it could not measure" — asserted, in the same
+amendment that labels the ARMv7 *timing* estimate unmeasured with 10x–30x
+uncertainty. Nothing in this repository can settle it: the ARM CI leg is
+compile-only and `tests/bench/` is never executed there, so there is no
+cross-architecture benchmark path. Allocation counts *are* plausibly
+architecture-independent for this kind of code — the allocation sites are the
+same source lines — but "plausible" is exactly what the timing estimate also
+was, and this ADR does not get to label one unmeasured claim and quietly
+promote the other. **Treat the ARMv7 allocation figures as unmeasured.** The
+gate's authority is the amd64 CI leg it actually runs on.
+
+### The allocation axis varies too — by one, and for a known reason
+
+This amendment's first draft went one claim further than it had measured and
+armed the ceilings **exactly** at the measured value, reasoning that
+"allocation counts do not vary with the machine, so they cannot flake". The
+premise is false, and arming on it reproduced the very failure mode this
+amendment was written to fix.
+
+`BenchmarkDiscoveryBuildPerEntity` reports 811 **or 812** allocs/op on one
+machine and one unchanged tree, as a function of nothing but garbage-collector
+configuration:
+
+| configuration | result on unchanged code |
+|---|---|
+| `GOGC=off` | 20/20 runs -> 811 |
+| default `GOGC`, `-benchtime=100x` | 1/20 runs -> **812** |
+| `GOGC=1`, `-benchtime=3000x` | 9/10 runs -> **812** |
+| `GOMEMLIMIT=16MiB` + `GOGC=1` | 6/6 runs -> **812** |
+
+The mechanism is isolated rather than inferred: the discovery build ends in a
+JSON marshal, and `encoding/json` keeps its `encodeState` in a `sync.Pool` —
+**and a `sync.Pool` is drained by the GC**. A pool hit costs 811 allocations, a
+pool miss 812. The digit is therefore a function of GC pressure: of `GOGC`, of
+`GOMEMLIMIT`, of how much other memory the process happens to hold, and of
+`b.N` (a short run is likelier to span a collection than to amortise one away).
+A memory-capped runner, or a leg that merely schedules a collection at a
+different moment, moves it on code nobody touched.
+
+**So the discovery ceiling is 812 — one allocation of headroom, and exactly
+one.** The number is derived rather than picked: `testing.AllocsPerOp()`
+truncates `totalAllocs/N`, so a partial miss rate cannot surface as a fraction
+(811.9 reads as 811), which means 812 is reached only when essentially every
+iteration misses the pool — the saturated worst case — and no GC setting can
+push the count past the single extra object the pool holds. Every adversarial
+configuration above lands in {811, 812}; none reached 813. A percentage
+headroom would have been worse in both directions at once: 1 % of 811 is eight
+allocations for a real regression to hide in, while 1 % of 19 rounds to nothing
+and leaves the `ForWith` ceilings as brittle as before.
+
+**What that headroom costs, stated plainly.** On this row the gate can no
+longer distinguish a regression of exactly +1 allocation from a pool miss,
+because a pool miss *is* +1 — no ceiling on this benchmark can, and that is a
+property of the measurement, not a choice. The alternative is not a sharper
+gate; it is a gate red on an unchanged tree, which is a gate that gets switched
+off. The sensitivity is not wholly lost: a +1 regression anywhere inside
+`payload.ForWith` is still caught exactly by the `TwentyField` and
+`DeviceInfo` rows, which keep zero headroom — see the corrected mutation proof
+below. Only a +1 that lands outside `ForWith` and inside the rest of the
+discovery build now needs +2 to show.
+
+**The two `ForWith` ceilings are not loosened.** 26 and 19 held across every
+configuration in the table above — those paths never touch the pooled encoder —
+so they stay armed exactly at the measured value, which is where a ratchet
+belongs when the number genuinely does hold. Only the ceiling whose variance
+was actually demonstrated moves.
+
+### An absent measurement is not a pass
+
+The same review found the gate passing **vacuously**. `script/bench_gate.sh`
+ran `go test -bench` without `-benchmem`; the `allocs/op` column existed only
+because each benchmark happened to call `b.ReportAllocs()`. In the gate's awk
+an unset value compares as `0`, and `0 > 811` is false — so deleting one
+`b.ReportAllocs()`, or adding a benchmark without one, produced
+
+```
+OK BenchmarkDiscoveryBuildPerEntity: 0 allocs/op (ceiling 811)   rc=0
+```
+
+a green gate measuring nothing. It hid because the `make bench` CI step
+immediately above *does* pass `-benchmem`, so the log still printed the real
+811 while the gate read an empty string, and the existing missing-benchmark
+guard keys on the `ns/op` line. Both halves are repaired: `-benchmem` is passed
+explicitly, and a missing `allocs/op` column is now a hard failure. **No
+ceiling in this repository may treat the absence of a measurement as a
+satisfied bound** — that is the general rule, and the script states it at the
+point where it was broken.
+
+The gate also now takes the **minimum** across runs on the allocation axis
+rather than the maximum. Allocation noise is one-sided in the same direction
+timing noise is — a drained pool only ever *adds* an allocation, never removes
+one the code performs — so the same argument that chose minimum-of-N for
+`ns/op` chooses it here. Taking the maximum inverted that reasoning on the
+axis that had just become the gate.
+
+### Re-arming: what can move these numbers unattended
+
+Moving a ceiling is deliberate: change the number, and say what moved it and
+why in the commit message. This ADR previously named only the Go toolchain as
+a legitimate mover, and that was the wrong list — the toolchain is the one that
+*cannot* arrive unattended, since `go.mod` carries no `toolchain` directive and
+CI pins the version by hand, so a bump is always somebody's reviewed commit.
+
+**The live unattended path is a `go-hamqtt` bump, including a patch release.**
+The reflection walk these benchmarks measure and the
+`hadiscovery.RenderComponent` call inside the discovery build are both upstream
+code, so an allocation change there lands in this gate directly — and
+Dependabot auto-merge excludes only `go-ha-catalog`, so a `go-hamqtt` patch
+bump can merge without a human reading the diff. If this gate reds on a commit
+touching nothing but `go.mod`/`go.sum`, read the `go-hamqtt` diff **first**: a
+moved count there is a real upstream change worth understanding, not noise to
+be re-armed away.
 
 **`ns/op` stays as a backstop**, because an allocation count cannot see a
 regression that burns CPU without allocating — a quadratic loop, a lock
@@ -819,7 +933,7 @@ is not headroom for adding work; the allocation ceiling above it has none.
 
 | Benchmark | allocs/op (the gate) | ns/op (backstop) |
 |---|---|---|
-| `BenchmarkDiscoveryBuildPerEntity` | **811**, exact | 200 000 |
+| `BenchmarkDiscoveryBuildPerEntity` | **812** (811 + 1, see above) | 200 000 |
 | `BenchmarkPayloadBuildTwentyField` | **26**, exact | 4 100 |
 | `BenchmarkPayloadBuildDeviceInfo` | **19**, exact | 2 400 |
 
@@ -834,9 +948,12 @@ to leave it alone, and an untouched harvest is also a discovery payload pinned
 byte-for-byte against `internal/north/mqtt/testdata/`.
 
 A reader who wants the old sentence's intent should read the discovery row
-instead: *the per-entity HA-Discovery build must not allocate more than 811
-times*. That one is measured, enforced, machine-independent, and attached to
-the operation whose cost an operator on a CCU3 would actually feel.
+instead: *the per-entity HA-Discovery build must not allocate more than 812
+times*. That one is measured, enforced, and attached to the operation whose
+cost an operator on a CCU3 would actually feel. It is *not* machine-independent
+— the section above measures the one allocation by which it is not — but its
+variance is bounded, explained, and carried as headroom instead of assumed
+away.
 
 ### Both ceilings were verified to fail
 
@@ -856,11 +973,25 @@ confirming the mutation hit the discovery build and nothing else. Reverted.
 **The allocation gate, with one single allocation.** `payload.ForWith` was
 given exactly **one** extra escaping allocation. All three ceilings went red
 together — 20 against 19, 27 against 26, 812 against 811 — which is the
-sensitivity the ns/op dimension cannot offer at any calibration. (This one was
-proved locally rather than on CI, and that is sound for this dimension
-specifically: an allocation count does not vary with the machine, which is the
-entire property being relied on. Every *timing* figure in this amendment is
-from CI.) Reverted.
+sensitivity the ns/op dimension cannot offer at any calibration. Reverted.
+
+**Corrected by the follow-up amendment.** Two of those three still hold; the
+third no longer does. With the discovery ceiling moved to 812 for the reason
+documented under *The allocation axis varies too*, `812 against 811` becomes
+`812 against 812` and that row **passes**. The mutation is still caught, and
+still caught by a ceiling with no headroom, because it was applied to
+`payload.ForWith`: `TwentyField` reds at 27 against 26 and `DeviceInfo` at 20
+against 19. What is no longer true is the claim that a single allocation
+anywhere in the discovery build fails this gate — inside `ForWith` it does,
+elsewhere in the build it now takes two. That is the price of the headroom, and
+it is stated here rather than left for the next reader to discover.
+
+The parenthetical that this proof was sound to run locally "because an
+allocation count does not vary with the machine" is also withdrawn: that is the
+premise the follow-up amendment measured and refuted. The proof itself stands —
+a +1 mutation moves every count by +1 on any machine — but it stands on the
+mutation's arithmetic, not on an invariance that does not hold. Every *timing*
+figure in this amendment is from CI.
 
 For contrast, #814's proof needed 40 extra allocations to move the ns/op gate.
 The gate now catches one.
