@@ -8,6 +8,51 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The topic-schema guard checked one direction, which is the mistake it
+  was built to fix — and the document was a strict subset of the wire.**
+  `tests/contract/mqtt_topic_schema_producer_test.go` checked doc -> code:
+  every shape `docs/mqtt-topic-schema.md` documents must be classified as
+  published, command or reserved. It never checked code -> doc, and that was
+  the larger gap. Eight topic families had publishers and no documented row
+  at all — the add-on self-update pair, per-interface install mode and its
+  `set`, the CCU firmware-update state, the three `hub/` message aggregates
+  (`alarm_messages`, `service_messages`, `inbox`), the three central-wide
+  `system/*` metrics, week-profile, schedule and combined-DP state and
+  commands — plus the device firmware-update state topic, the legacy
+  per-type pulse topic, the `/config` descriptor companions and the
+  custom-DP `invoke` shape. An external consumer reading the document had no
+  way to learn any of them exists. Twenty-five rows are documented now.
+  **No publish path changed and no published byte moves**; every documented
+  shape was already on the wire.
+
+  `TestMQTTTopicProducersAreDocumented` closes the direction generally. It
+  parses `internal/north/mqtt/topics.go` and
+  `internal/model/naming/pathdata.go`, inventories every topic-shape
+  producer they declare, and fails when one is unclassified or when an
+  inventoried shape has no row in the document. Adding a topic builder is
+  now a three-part move — the function, the inventory entry, the documented
+  row — and doing fewer than three fails. The rule it deliberately does not
+  adopt is "every builder must have a caller": that is wrong here, because
+  the daemon consumes commands through `+` wildcards, so
+  `TopicBuilder.ParameterCommand` has zero production callers while both its
+  documented `/set` shapes are honoured. It classifies; it does not count.
+
+  The producer scan's file exclusion narrowed with it. It skipped
+  `topics.go` and `pathdata.go` whole, which also discarded calls made from
+  non-producer functions in those files — ordinary production call sites,
+  and the only ones some builders have. The skip is now per enclosing
+  function: a producer delegating to a producer is still not a call site,
+  while `TopicBuilder.systemMetricTopics` calling `HubSystemHealthScore`
+  counts, because that helper is the retained-orphan sweep's enumeration of
+  the shape rather than a second spelling of it.
+
+  A new `promiseUnwired` class carries the one `/set` shape with a canonical
+  spelling and no wire behaviour at either end:
+  `<base>/<central>/<iface>/<addr>/update/set`. The HA `update` entity
+  declares no `command_topic` — flashing firmware from a possibly retained
+  broker payload is unsafe — and no subscription filter has that shape. It
+  is documented as unwired rather than left to look like a command topic.
+
 - **ADR 0070's step D is decided: the hub model keeps its own topics, and
   `payload.MQTTAddressable` stays.** The move-up measurement left the choice
   open — either the model stops returning finished topic strings and returns

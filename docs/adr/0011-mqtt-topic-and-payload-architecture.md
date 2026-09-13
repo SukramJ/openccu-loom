@@ -935,3 +935,50 @@ The daemon repairs the statement wherever it can:
   device-info shape (manufacturer, model, model_id, sw_version,
   configuration_url, suggested_area, via_device) is the visual
   reference for the device card we want to mirror.
+
+## Amendment (2026-09-13) — the schema document was a strict subset of the wire
+
+`tests/contract/mqtt_topic_schema_producer_test.go`, added the day before
+this entry, checks that every shape `docs/mqtt-topic-schema.md` documents is
+classified and produced. It checks that direction only, and the inverse gap
+was the larger one: **the document described a strict subset of what the
+daemon publishes.** Eight topic families had publishers and no documented
+row at all —
+
+- `<base>/system/addon_update/{state,set}` (ADR 0057, daemon-level),
+- `<base>/<central>/hub/install_mode/<iface>` and its `/set`,
+- `<base>/<central>/hub/update`,
+- `<base>/<central>/hub/{alarm_messages,service_messages,inbox}`,
+- `<base>/<central>/system/{health_score,latency,last_event_age}`,
+- `<base>/<central>/<iface>/<addr>/<ch>/week_profile/{state,set}`,
+- `<base>/<central>/<iface>/<addr>/<ch>/schedule/{state,attrs,<key>/state,<key>/set}`,
+- `<base>/<central>/<iface>/<addr>/<ch>/combined/<kind>` and its `/set`,
+
+plus the device firmware-update state topic, the legacy per-type pulse
+topic, the `/config` descriptor companions and the custom-DP `invoke`
+shape. An external consumer reading the document had no way to learn any of
+them exists. They are documented now; no publish path changed.
+
+The guard gained the missing direction with them.
+`TestMQTTTopicProducersAreDocumented` inventories every topic-shape producer
+in `internal/north/mqtt/topics.go` and `internal/model/naming/pathdata.go`
+by parsing those two files, and fails when a producer has no classification
+or an inventoried shape has no row in the document. Adding a topic builder
+is now a three-part move — function, inventory entry, documented row — and
+doing fewer than three fails.
+
+One rule it deliberately does **not** adopt: "every builder must have a
+caller". That rule is wrong here and the older half of the guard already
+records why — the daemon consumes commands through `+` wildcards, so
+`TopicBuilder.ParameterCommand` has zero production callers while both its
+documented `/set` shapes are honoured on the wire. The inventory classifies;
+it does not count.
+
+The producer scan's file exclusion narrowed in the same change. It used to
+skip `topics.go` and `pathdata.go` whole, which also discarded calls made
+from non-producer functions in those files — an ordinary production call
+site. It now skips per enclosing function: a producer delegating to a
+producer is still not a call site, but `TopicBuilder.systemMetricTopics`
+calling `HubSystemHealthScore` counts, because that helper is the
+retained-orphan sweep's enumeration of the shape, not a second spelling of
+it.
