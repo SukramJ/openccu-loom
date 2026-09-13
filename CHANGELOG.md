@@ -6,6 +6,29 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **ADR 0007's 500 ns/op payload-build bound is measured for the first
+  time — and it does not hold.** The ADR names a benchmark file
+  (`tests/bench/payload_build_test.go`) that did not exist, so
+  "Regressions block release per the existing benchmark gate" described a
+  gate that closed on nothing. The file now exists and drives the real
+  production function, `payload.ForWith`, on both the ADR's stated
+  workload (a 20-field tagged struct) and the daemon's actual call site
+  (`internal/north/mqtt/discovery.go` harvesting a `*device.Device` for
+  `KindInfo`). `script/bench_gate.sh` (`make bench-gate`, wired into the
+  `bench` CI job) enforces a ceiling by taking the MINIMUM ns/op across
+  seven runs — a shared runner only ever adds time, so the minimum is the
+  statistic whose noise cannot turn the gate red on an unchanged tree.
+  Measured on the CI runner: **1 343 ns/op** for the ADR's own twenty-field
+  workload (2.7x the stated bound) and **829 ns/op** for the production
+  device harvest (1.7x), at 26 and 19 allocations per call. The ceilings are
+  armed as a **ratchet at what the code measures today** — the measured
+  minimum, doubled for runner-silicon headroom — not at the ADR's number,
+  which is left standing as written. No production behaviour
+  changed, and the hot path was deliberately left alone — measuring and
+  tuning in the same change would make the measurement unreviewable.
+
 ### Fixed
 
 - **The state-plane bookkeeping split had no test**, so all three of a

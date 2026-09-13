@@ -323,6 +323,10 @@ bench: ## run benchmarks (requires -tags=bench)
 		echo "benchmarks not implemented yet (Phase 10)"; \
 	fi
 
+.PHONY: bench-gate
+bench-gate: ## enforce ADR 0007's payload-build ratchet (min-of-N ns/op vs. a ceiling)
+	@./script/bench_gate.sh
+
 # Packages whose own test suite is fast enough that mutating them is cheap:
 # gremlins re-runs the package's tests once per mutant, so the cost is
 # (mutants x baseline test time). internal/central belongs here despite its
