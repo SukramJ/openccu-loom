@@ -992,11 +992,12 @@ byte-for-byte against `internal/north/mqtt/testdata/`.
 
 A reader who wants the old sentence's intent should read the discovery row
 instead: *the per-entity HA-Discovery build must not allocate more than 812
-times*. That one is measured, enforced, and attached to the operation whose
-cost an operator on a CCU3 would actually feel. It is *not* machine-independent
-— the section above measures the one allocation by which it is not — but its
-variance is bounded, explained, and carried as headroom instead of assumed
-away.
+times on an unconstrained runner*. That one is measured, enforced, and attached
+to the operation whose cost an operator on a CCU3 would actually feel. It is
+*not* machine-independent, and the qualifier is load-bearing rather than
+decorative: the section above measures a range of at least +39 under a binding
+`GOMEMLIMIT`, which is why the gate detects that environment and reports the
+row unenforced there instead of pretending the bound covers it.
 
 ### Both ceilings were verified to fail
 
