@@ -5,8 +5,16 @@ consumers (Node-RED flows, custom dashboards, Telegraf scrapers) that
 subscribe to Homematic MQTT topics.
 
 **Source of truth for topic names:** `internal/north/mqtt/topics.go`
-(all Go methods delegate to `internal/model/naming/`). The canonical
-function signatures are cited below.
+(most methods delegate to `internal/model/naming/`; the combined-DP and
+schedule shapes are composed in `topics.go` itself, and a few hub shapes
+have no `TopicBuilder` wrapper and are cited as `naming.MQTT*` functions
+below). The canonical function signatures are cited with each table.
+
+Both directions are checked by
+`tests/contract/mqtt_topic_schema_producer_test.go`: every shape documented
+here has to be classified and produced, **and** every topic-shape producer
+in those two files has to have a row here. A builder added without a row —
+or a row without a producer — fails the contract suite.
 
 **Related decisions:** [ADR 0002 — Multi-CCU First Class](./adr/0002-multi-ccu-first-class.md),
 [ADR 0011 — MQTT Topic & Payload Architecture](./adr/0011-mqtt-topic-and-payload-architecture.md),
@@ -75,13 +83,45 @@ degenerate case with one entry under that segment.
 | Device availability | `<base>/<central>/<iface>/<addr>/availability` |
 | Device info snapshot | `<base>/<central>/<iface>/<addr>/info` |
 | Device diagnostics | `<base>/<central>/<iface>/<addr>/diagnostics` |
+| Device firmware-update state | `<base>/<central>/<iface>/<addr>/update` |
+| Per-DP descriptor companion | `<base>/<central>/<iface>/<addr>/<ch>/values/<param>/config` |
+| Custom-DP descriptor companion | `<base>/<central>/<iface>/<addr>/<ch>/custom/<kind>/config` |
+| Channel per-type pulse (legacy, not retained) | `<base>/<central>/<iface>/<addr>/<ch>/event/<type>` |
+| Combined-DP state | `<base>/<central>/<iface>/<addr>/<ch>/combined/<kind>` |
+| Week-profile select state | `<base>/<central>/<iface>/<addr>/<ch>/week_profile/state` |
+| Schedule sensor state | `<base>/<central>/<iface>/<addr>/<ch>/schedule/state` |
+| Schedule sensor attributes | `<base>/<central>/<iface>/<addr>/<ch>/schedule/attrs` |
+| Schedule channel switch state | `<base>/<central>/<iface>/<addr>/<ch>/schedule/<key>/state` |
 | Alarm zone state † | `<base>/alarm/<zone>/state` |
 | Alarm zone availability † | `<base>/alarm/<zone>/availability` |
 | Alarm zone event † (not retained) | `<base>/alarm/<zone>/event` |
 
 Go builder methods: `TopicBuilder.ParameterState`, `TopicBuilder.SlotState`,
 `TopicBuilder.DeviceAvailability`, `TopicBuilder.DeviceInfo`,
-`TopicBuilder.DeviceDiagnostics`.
+`TopicBuilder.DeviceDiagnostics`, `TopicBuilder.DeviceUpdateState`,
+`TopicBuilder.ParameterConfig`, `TopicBuilder.SlotConfig`,
+`TopicBuilder.DataPointEvent`, `TopicBuilder.CombinedState`,
+`TopicBuilder.WeekProfileState`, `TopicBuilder.ScheduleEntityState`,
+`TopicBuilder.ScheduleEntityAttrs`, `TopicBuilder.ScheduleSwitchState`.
+
+The `/config` companion row above is written for the VALUES bucket; the
+MASTER and CALCULATED buckets take the same `/config` suffix on their own
+state topic (`…/master/<param>/config`, `…/calculated/<param>/config`), and
+so does the custom-DP aggregate. See [§`/config` companion](#config-companion-descriptor)
+for the payload.
+
+`…/event/<type>` is the **legacy** per-event-type pulse topic that predates
+the three sibling channel-event topics above it. It is still published, one
+message per event type, so a subscriber written against the older shape keeps
+working; new consumers should read `…/event`, `…/impulse` and
+`…/device_error`, which are what Home Assistant discovery declares.
+
+`<base>/<central>/<iface>/<addr>/update` carries the HA `update` entity's
+JSON state (installed version, latest version, in-progress flag). It follows
+the device-scope convention of its `/availability`, `/info` and
+`/diagnostics` siblings — **no `/state` suffix**, because the topic *is* the
+state. See [Unwired command spellings](#unwired-command-spellings) for the
+`update/set` shape, which the entity does not declare and nothing subscribes.
 
 † No `<central>` segment — see [Alarm topics](#alarm-topics-daemon-level-no-central)
 below.
@@ -93,13 +133,45 @@ below.
 | Write single parameter (VALUES) | `<base>/<central>/<iface>/<addr>/<ch>/values/<param>/set` |
 | Write MASTER parameter | `<base>/<central>/<iface>/<addr>/<ch>/master/<param>/set` |
 | Custom-DP service method | `<base>/<central>/<iface>/<addr>/<ch>/custom/<kind>/set/<method>` |
+| Combined-DP write | `<base>/<central>/<iface>/<addr>/<ch>/combined/<kind>/set` |
+| Week-profile select | `<base>/<central>/<iface>/<addr>/<ch>/week_profile/set` |
+| Schedule channel switch | `<base>/<central>/<iface>/<addr>/<ch>/schedule/<key>/set` |
+| Custom-DP operation invoke | `<base>/<central>/devices/<addr>/cdps/<name>/<op>/invoke` |
+| Per-interface install mode | `<base>/<central>/hub/install_mode/<iface>/set` |
+| Add-on self-update install † | `<base>/system/addon_update/set` |
 | Alarm zone command † | `<base>/alarm/<zone>/set` |
 
-Go builder methods: `TopicBuilder.ParameterCommand`, `TopicBuilder.SlotCommand`,
-`TopicBuilder.CustomDPServiceMethod`.
+Go builder methods: `TopicBuilder.ParameterCommand`,
+`TopicBuilder.CustomDPServiceMethod`, `TopicBuilder.CombinedCommand`,
+`TopicBuilder.WeekProfileCommand`, `TopicBuilder.ScheduleSwitchCommand`,
+`TopicBuilder.CustomDPInvoke`, `TopicBuilder.AddonUpdateCommand`;
+`naming.MQTTHubInstallModeCommand`.
 
-† No `<central>` segment — see [Alarm topics](#alarm-topics-daemon-level-no-central)
-below.
+The daemon consumes every row above through `+`-wildcard filters
+(`CommandSubscriber.routes`), not through a per-topic builder call — so a
+builder here can have zero production callers while its shape is honoured
+on the wire. `TopicBuilder.ParameterCommand` is exactly that case.
+
+† No `<central>` segment. The alarm rows are explained under
+[Alarm topics](#alarm-topics-daemon-level-no-central) below; the add-on
+self-update is daemon-level for the same class of reason — the self-updater
+is a property of the daemon process, not of any one CCU (ADR 0057).
+
+#### Unwired command spellings
+
+One `/set` shape has a canonical spelling in the topic builder and no wire
+behaviour at either end: nothing publishes it and no subscription filter
+matches it. **Do not publish to it** — the message is accepted by the broker
+and read by nobody.
+
+| Unwired shape | Builder | Subscriber |
+|---|---|---|
+| `<base>/<central>/<iface>/<addr>/update/set` | `TopicBuilder.DeviceUpdateCommand` | none |
+
+The HA `update` entity declares no `command_topic`: flashing device firmware
+from an unconfirmed — possibly retained and replayed — broker payload is
+unsafe. The builder is kept so the spelling has one home if the command path
+is ever wired, and so the shape stays pinned rather than drifting.
 
 ### HA Discovery
 
@@ -123,7 +195,16 @@ Go builder method: `TopicBuilder.DiscoveryConfig`.
 | Program trigger (run once) | `<base>/<central>/hub/programs/<id>/trigger` |
 | Program execute availability | `<base>/<central>/hub/programs/<id>/execute_available` |
 | Interface connectivity | `<base>/<central>/hub/connectivity/<iface>` |
+| Per-interface install-mode countdown | `<base>/<central>/hub/install_mode/<iface>` |
+| CCU firmware-update state | `<base>/<central>/hub/update` |
+| Alarm-message aggregate | `<base>/<central>/hub/alarm_messages` |
+| Service-message aggregate | `<base>/<central>/hub/service_messages` |
+| Inbox aggregate | `<base>/<central>/hub/inbox` |
+| System health score | `<base>/<central>/system/health_score` |
+| Aggregated connection latency | `<base>/<central>/system/latency` |
+| Last-event age (seconds) | `<base>/<central>/system/last_event_age` |
 | System status event | `<base>/<central>/system/status` |
+| Add-on self-update state (daemon-level) | `<base>/system/addon_update/state` |
 
 `<base>/<central>/hub/status` carries `online` / `offline` and is the
 **per-CCU availability gate**: every CCU-scoped hub entity lists it in its
@@ -170,12 +251,35 @@ daemon subscribes to them and never publishes there; only `state` and
 (HA's discovery button publishes `true`); an empty payload is ignored —
 that is the shape of a retained-message eviction, not a command.
 
+The three `system/*` metric topics are central-wide, retained scalars — one
+health score, one aggregated connection latency, one last-event age in
+seconds — and are the topics the reserved `hub/diagnostics` shape below
+points consumers at. They sit under `system/`, not `hub/`, alongside
+`system/status`.
+
+The three `hub/` message aggregates (`alarm_messages`, `service_messages`,
+`inbox`) are retained JSON documents of the CCU's own message lists, each
+backing one Home Assistant sensor with a count state and the list in its
+attributes.
+
+`<base>/system/addon_update/state` is daemon-level and carries **no
+`<central>` segment**, like the `bridge/` pair: the CCU add-on self-updater
+(ADR 0057) is a property of the daemon process itself, not of any one CCU.
+Its `set` companion is in the command table above.
+
 Go builder methods: `TopicBuilder.BridgeStatus`, `TopicBuilder.BridgeHealth`,
-`TopicBuilder.SystemStatus`.
-The sysvar/program/connectivity topics are built by `internal/model/naming`
-free functions rather than `TopicBuilder` methods: `naming.MQTTHubSysvarState`,
-`naming.MQTTHubSysvarCommand`, `naming.MQTTHubProgramTrigger`,
-`naming.MQTTHubConnectivity`.
+`TopicBuilder.SystemStatus`, `TopicBuilder.HubStatus`,
+`TopicBuilder.HubSystemHealthScore`, `TopicBuilder.HubConnectionLatency`,
+`TopicBuilder.HubLastEventAge`, `TopicBuilder.HubUpdate`,
+`TopicBuilder.AddonUpdateState`.
+The sysvar/program/connectivity/install-mode/aggregate topics are built by
+`internal/model/naming` free functions rather than `TopicBuilder` methods:
+`naming.MQTTHubSysvarState`, `naming.MQTTHubSysvarCommand`,
+`naming.MQTTHubProgramState`, `naming.MQTTHubProgramSet`,
+`naming.MQTTHubProgramTrigger`,
+`naming.MQTTHubProgramExecuteAvailability`, `naming.MQTTHubConnectivity`,
+`naming.MQTTHubInstallModeForInterface`, `naming.MQTTHubAlarmMessages`,
+`naming.MQTTHubServiceMessages`, `naming.MQTTHubInbox`.
 
 #### Reserved `hub/` shapes — nothing publishes here
 

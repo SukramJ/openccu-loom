@@ -473,3 +473,44 @@ mirror-during-migration mechanism. What changes is the mitigation. A future
 topic-shape change that wants a migration window has to build the opt-in it
 needs, with a real config key an operator can set and a test that asserts the
 key reaches the bridge — and not assume one is already there.
+
+## Amendment (2026-09-13) — four artifacts this ADR names do not exist
+
+The decision stands; its **references** do not. Four identifiers and paths
+above name things that are not in this repository, three of them in the
+Mitigations and Trade-offs sections, which is where a reader goes to find
+out how a risk is actually held down.
+
+- **`tests/bench/payload_test.go`** (§Trade-offs, "Reflection cost … 
+  Benchmarked in"). No such file. `tests/bench/` holds
+  `aggregated_state_publish_bench_test.go`, `event_bus_bench_test.go`,
+  `reliability_bench_test.go` and `snapshot_bench_test.go`. The first is
+  the closest thing to the benchmark this line promises.
+- **`tests/bench/payload_build_test.go`** (§Mitigations, "the per-type
+  cached reflection path must stay below 500 ns/op for a 20-field struct").
+  No such file either, and no benchmark anywhere asserts that ceiling — so
+  "Regressions block release per the existing benchmark gate" describes a
+  gate that does not close on this path.
+- **`CDPDispatcher`** (§Gap 1, "keeps its own operation table parallel to
+  the model API"). No type of that name exists. The real one is
+  `CustomDPDispatcher`, in
+  `internal/central/adapter/custom_dp_dispatcher.go`. The gap it describes
+  is real; only the name is wrong.
+- **The custom `golangci-lint` analyser** (§Trade-offs and §Mitigations, "a
+  type that defines `State()` must not have struct fields tagged
+  `payload:\"state\"`"). `.golangci.yaml` configures no custom analyser and
+  no plugin. The rule did ship, as a **contract test** —
+  `tests/contract/source_no_dual_source_test.go` — which checks the same
+  property by reflection over the model types. A reader looking for a linter
+  rule finds nothing and concludes the protection is missing; it is not, it
+  is one directory over.
+
+Two references in the same sections are **correct** and worth stating so,
+because the four above cast doubt on the rest:
+`tests/contract/source_completeness_test.go` exists and does what §Mitigations
+says, and `internal/north/mqtt/discovery_aggregate.go` exists.
+
+Nothing here changes the decision. What it changes is what a reader should
+do with a named artifact in this ADR: check it. The 2026-09-12 amendment
+above withdrew this ADR's `LegacyAlias` precedent for the same reason — it
+was cited as shipped plumbing and was not.
