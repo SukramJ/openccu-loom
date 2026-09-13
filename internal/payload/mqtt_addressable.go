@@ -9,6 +9,12 @@ package payload
 //
 // The model layer fills this struct so north-bound adapters never
 // hand-roll topic strings. See [MQTTAddressable].
+//
+// It carries four kinds and not five: a `Config` field was declared here
+// for a "descriptor-companion" topic that no implementation ever filled and
+// no caller ever read. A declared-but-unwritten topic is worse than a
+// missing one, because the next builder to see it fills it and the next
+// reader never does.
 type MQTTTopicSet struct {
 	// State is the retained state topic. Empty for objects that have
 	// no state to publish.
@@ -22,10 +28,6 @@ type MQTTTopicSet struct {
 	// Empty for objects that do not expose a trigger semantic.
 	Trigger string
 
-	// Config is the descriptor-companion /config topic. Empty when
-	// the object exposes no descriptor payload separate from State.
-	Config string
-
 	// Availability is the per-object availability topic the daemon
 	// publishes online/offline on. Empty for objects whose availability
 	// is fully covered by the bridge- and device-level topics.
@@ -35,11 +37,6 @@ type MQTTTopicSet struct {
 	// while the program is deactivated, and the consumer should render
 	// that control as unavailable rather than let it fail on use.
 	Availability string
-}
-
-// IsZero reports whether the topic set is fully empty.
-func (t MQTTTopicSet) IsZero() bool {
-	return t.State == "" && t.Set == "" && t.Trigger == "" && t.Config == "" && t.Availability == ""
 }
 
 // MQTTAddressable is implemented by model objects that own their MQTT
@@ -54,6 +51,44 @@ func (t MQTTTopicSet) IsZero() bool {
 // and not part of this interface. None exists: the legacy-alias
 // opt-in that was the standing example was never reachable and has
 // been removed (see ADR 0006's amendment).
+//
+// # Why this is not a [hatopic.Layout]
+//
+// The shared module arranges the same seam the other way round: a model
+// returns a [hamodel.Slot] coordinate and a layout renders it. That
+// arrangement is right for the datapoint planes, where it is what this
+// daemon already does, and it was measured against this interface as step D
+// of ADR 0070's move-up. The decision is that this one keeps its shape, for
+// four reasons that are properties of the hub plane rather than preferences:
+//
+//   - The experiment has already run here. `hubTopicLayout` in
+//     internal/north/mqtt IS a [hatopic.Layout], the hub plane renders every
+//     config through it, and every one of its slot-taking methods ignores
+//     the slot and returns a string the builder composed. Removing this
+//     interface relocates that composition; it does not remove it.
+//   - A hub object needs four topic kinds and [hatopic.Layout] names two of
+//     them. State and Command have a home; a program's `trigger` and its
+//     per-role `execute_available` gate do not, and the shared module's own
+//     [hatopic.PulseLayout] doc rules out a fifth Layout method because it
+//     would break all six consumers at once. A slot arrangement would still
+//     need a loom-local four-kind carrier — this struct, renamed.
+//   - [hamodel.Slot] is device-shaped and a hub object is not a device.
+//     Slot.Valid needs a non-empty Address and at least one Path segment; a
+//     system variable has no device and no paramset, and
+//     `<base>/<central>/hub/alarm_messages` has no leaf at all.
+//   - The two runtime facts a hub topic needs — the broker base and the
+//     resolved central — are parameters here, so the compiler refuses a call
+//     that omits them. On a [hamodel.Slot] they live in Scope, which nothing
+//     in this daemon fills; a slot built without it renders a short topic
+//     and nothing catches it. That is measured, not hypothetical: see
+//     `deviceAvailabilitySlot` in internal/north/mqtt, which exists to inject
+//     the two segments on the way in.
+//
+// The cost of keeping it is that these four names stay in this package
+// rather than resolving upwards, and that every topic on the hub plane has
+// two spellings — the model's here and the discovery builder's in
+// hub_discovery.go. Both go through internal/model/naming, and
+// TestHubModelAndDiscoveryDeclareOneTopic pins them equal.
 type MQTTAddressable interface {
 	MQTTTopics(base, centralName string) MQTTTopicSet
 }

@@ -6,6 +6,58 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **ADR 0070's step D is decided: the hub model keeps its own topics, and
+  `payload.MQTTAddressable` stays.** The move-up measurement left the choice
+  open — either the model stops returning finished topic strings and returns
+  `hamodel.Slot` coordinates, in which case `MQTTTopicSet` and `MQTTRole`
+  disappear, or it does not and five exports stay blocked forever. It stays,
+  for four reasons that are properties of the hub plane rather than
+  preferences.
+
+  The experiment had already run here. `hubTopicLayout` in
+  `internal/north/mqtt` *is* a `hamqtt/topic.Layout`, the hub plane renders
+  every discovery config through it, and every one of its slot-taking methods
+  ignores the slot and returns a string the builder composed — deriving it
+  from the coordinate again "would be a second implementation of the same
+  schema with nothing keeping the two in step". Beyond that: `topic.Layout`
+  names two of the four topic kinds a hub object needs, and a program's
+  `trigger` and `execute_available` gate have no home in it; `hamodel.Slot`
+  requires a device address and a paramset path that a system variable does
+  not have; and the broker base and resolved central are *parameters* of
+  `MQTTTopics`, where the compiler refuses a call that omits them, but
+  `Slot.Scope` fields that nothing in this daemon fills and whose absence
+  renders a short topic silently.
+
+  Nothing published moves. All 170 pinned discovery topics and every state,
+  command and availability entry in the eleven fixtures hold byte-for-byte.
+
+- **The cost of that decision is now guarded.** Keeping the interface means
+  every hub topic has two spellings — the model's and the discovery builder's,
+  both through `internal/model/naming`.
+  `TestHubModelAndDiscoveryDeclareOneTopic` pins them byte-equal across
+  sysvars, program roles, the alarm/service/inbox aggregates and connectivity,
+  and `TestHubTopicLayoutIsACarrierNotASchema` pins the layout as a carrier of
+  strings rather than a second schema. The first closes a measured hole:
+  `TestHubPlaneTopicsRoundTrip` matches command topics against the wildcard
+  filters the subscriber registers, so a `command_topic` that drifted while
+  staying under `…/hub/sysvars/+/set` passed it green.
+
+### Removed
+
+- **`payload.MQTTTopicSet.Config`, `payload.MQTTTopicSet.IsZero`,
+  `hub.InstallMode.MQTTTopics` and `naming.MQTTHubInstallMode`.** The `Config`
+  field was a "descriptor-companion" topic that no implementation ever filled
+  and no caller ever read; `IsZero` had no caller anywhere.
+  `InstallMode.MQTTTopics` was the one `MQTTAddressable` implementation with
+  no caller — its own doc comment said so — and `naming.MQTTHubInstallMode`,
+  the central-wide `<base>/<central>/hub/install_mode` aggregate, was read by
+  nothing else. No build published that topic and the published topic schema
+  never promised it; the per-interface
+  `<base>/<central>/hub/install_mode/<iface>` shape the daemon does publish is
+  untouched.
+
 ### Added
 
 - **A per-CCU availability gate at `<base>/<central>/hub/status`, and

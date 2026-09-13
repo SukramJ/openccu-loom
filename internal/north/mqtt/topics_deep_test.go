@@ -147,16 +147,6 @@ func TestNamingHubConnectivityShape(t *testing.T) {
 	}
 }
 
-// InstallMode topic shape.
-func TestNamingHubInstallModeShape(t *testing.T) {
-	t.Parallel()
-	got := naming.MQTTHubInstallMode("openccu-loom", "c1")
-	want := "openccu-loom/c1/hub/install_mode"
-	if got != want {
-		t.Fatalf("MQTTHubInstallMode: got %q want %q", got, want)
-	}
-}
-
 // Sysvar state + /set topic.
 func TestNamingHubSysvarAndCommand(t *testing.T) {
 	t.Parallel()

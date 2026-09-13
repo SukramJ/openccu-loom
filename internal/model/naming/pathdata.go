@@ -736,20 +736,6 @@ func MQTTHubProgramState(base, centralName, id string) string {
 	)
 }
 
-// MQTTHubInstallMode is the canonical install-mode countdown topic
-// `<base>/<central>/hub/install_mode`.
-//
-// Nothing publishes it. The daemon publishes only the per-interface
-// [MQTTHubInstallModeForInterface] shape; this central-wide aggregate is
-// read by [hub.InstallMode.MQTTTopics], which itself has no production
-// caller. The claim that it "is the only form the daemon publishes" was
-// true only against the flat `<base>/<central>/install_mode` shape an
-// earlier comment described as a gated legacy alias, which was never
-// published by any build either (see ADR 0006's amendment).
-func MQTTHubInstallMode(base, centralName string) string {
-	return fmt.Sprintf("%s/%s/hub/install_mode", strings.Trim(base, "/"), TopicSafe(centralName))
-}
-
 // MQTTHubInstallModeForInterface is the per-interface install-mode
 // countdown state topic `<base>/<central>/hub/install_mode/<iface>`.
 // The reference stack exposes one remaining-seconds sensor per

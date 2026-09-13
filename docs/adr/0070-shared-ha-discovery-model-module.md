@@ -381,6 +381,98 @@ Four consequences:
   home for the same reason the key keeps its spelling.
 
 
+## Amendment (2026-09-13) — the hub model keeps its topics; `MQTTAddressable` stays
+
+The move-up sequence's step D was left open as a decision: either the hub
+model stops returning finished topic strings and returns `model.Slot`
+coordinates instead — in which case `payload.MQTTTopicSet` and
+`payload.MQTTRole` disappear and five exports resolve — or it does not, and
+they stay. **It does not.** `payload.MQTTAddressable`, `MQTTRoleAddressable`,
+`MQTTRole` and `MQTTTopicSet` are decided, not blocked.
+
+Four measurements decided it, and none of them is a preference:
+
+- **The experiment has already run on this plane.** `hubTopicLayout` in
+  `internal/north/mqtt/hub_discovery.go` *is* a `hamqtt/topic.Layout`, the hub
+  plane renders every config through `discovery.RenderComponent` with it, and
+  every one of its slot-taking methods ignores the slot and returns a string
+  the builder composed — with a doc comment saying why: deriving it from the
+  slot again "would be a second implementation of the same schema with nothing
+  keeping the two in step". The daemon adopted the shared arrangement and, at
+  the one point where it had to choose, chose finished strings. Removing
+  `MQTTAddressable` relocates that composition; it does not remove it.
+- **`topic.Layout` names two of the four topic kinds a hub object needs.**
+  State and Command have a home; a CCU program's `trigger` and its per-role
+  `execute_available` gate do not. `go-hamqtt`'s own `topic.PulseLayout` doc
+  rules out a fifth `Layout` method — it "would break every one of the six
+  consumers' layouts at once" — and a pulse is an outbound occurrence, not an
+  inbound command topic. A slot arrangement would therefore still need a
+  loom-local four-kind carrier, which is `MQTTTopicSet` renamed.
+- **`model.Slot` is device-shaped and a hub object is not a device.**
+  `Slot.Valid` requires a non-empty `Address` and at least one `Path` segment;
+  a system variable has neither a device nor a paramset, and
+  `<base>/<central>/hub/alarm_messages` has no leaf at all. Encoding this
+  plane would put the literal string `"sysvars"` in the `Address` field.
+- **The two runtime facts a hub topic needs are parameters here, and would be
+  optional there.** `MQTTTopics(base, centralName)` cannot be called without
+  the broker base and the resolved central; the compiler refuses. On a
+  `model.Slot` they live in `Scope`, which nothing in this daemon fills, and a
+  slot built without it renders a short topic that nothing catches. That is
+  measured rather than argued: `deviceAvailabilitySlot` exists in
+  `availability_runtime.go` for exactly this reason, and
+  `availabilityLayout.Availability` returns the empty string when
+  `len(s.Scope) < 2` — a silent empty on the one string that must be identical
+  on both sides of an `availability_mode: all` entity.
+
+**The runtime takeover did not need it, and it did not cost much.** Step D was
+described as "the precondition for the publisher runtime taking over
+availability and retract". The state, command and availability planes all run
+on `go-hamqtt` now and step D never happened, so that justification is spent.
+What it cost is one function: `deviceAvailabilitySlot`, six lines, injecting
+the CCU and the interface into a slot on the way in because
+`publisher.DeviceSlot` reads the coordinate off entity bindings and nothing
+here fills `Scope`. **Step D would not have repaid it.** The reason `Scope` is
+empty is not that the hub model returns strings — it is that `payload.WireSlot`
+and `payload.CustomSlot` deliberately leave the coordinate partial, because the
+bridge renders that plane for one channel event and, in `WireSlot`'s own words,
+"naming it a second time from the model would be a second derivation of the
+same fact with nothing keeping the two in step". `discovery.DeviceSlot` is
+unusable here for a reason that lives on the datapoint planes, which step D
+does not touch. The injection is the honest answer.
+
+**And the shared module has since moved the other way.** `publisher.
+ComponentStateTopic`'s doc records that deriving a state topic as
+`layout.State(slot)` "is wrong on a third of the catalog" — the renderer
+projects `state_topic` onto the 22 platforms that accept the key while a
+`Layout` answers for all 32, so on the other ten "the config carries no such
+key while the layout still hands out a plausible-looking topic", and
+publishing there is silent in every direction. `StatePublisher.Publish` takes a
+caller-supplied topic, documented as "what the state plane needs". A
+slot-returning hub model would not reach the shared publisher any more directly
+than the present one does.
+
+Three consequences:
+
+- **Five of the inventory's sixteen blocked symbols are settled**, four by
+  decision and one — `MQTTTopicSet.IsZero`, which had no caller anywhere — by
+  deletion. `MQTTTopicSet.Config` is deleted with it: a topic field no
+  implementation ever filled and no caller ever read.
+  `hub.InstallMode.MQTTTopics` and the `naming.MQTTHubInstallMode` free
+  function it was the sole reader of are deleted too — a central-wide
+  install-mode aggregate that no build publishes and no schema promises.
+- **The cost is named and guarded.** Keeping the interface means every hub
+  topic has two spellings: the model's and the discovery builder's, both
+  through `internal/model/naming`.
+  `TestHubModelAndDiscoveryDeclareOneTopic` pins them byte-equal, and
+  `TestHubTopicLayoutIsACarrierNotASchema` pins the layout as a carrier rather
+  than a second schema. `TestHubPlaneTopicsRoundTrip` did not cover the first:
+  it matches command topics against wildcard subscriptions, so a
+  `command_topic` that drifted while staying under `…/hub/sysvars/+/set`
+  passed it — verified by mutation.
+- **Step E is unaffected.** Nothing here touches `DiscoverySlug`, `HubSlug` or
+  `routingkey`, and no published byte moves.
+
+
 ## Revisit when
 
 - Phase 3 fails: if this daemon's layer cannot be expressed on the extracted

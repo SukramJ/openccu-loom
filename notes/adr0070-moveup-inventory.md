@@ -62,7 +62,10 @@ Of the 47 agnostic symbols:
   `ParamInt32`, `ParamString`, `ErrServiceMissingParam`,
   `ErrServiceInvalidParam`), `payload.EpochSeconds`,
   `naming.DiscoveryTopicPrefix`, `naming.DiscoveryConfigTopic`.
-- **16 are blocked.** Listed under "What blocks each one" below.
+- **16 are blocked.** Listed under "What blocks each one" below. *Five of
+  the sixteen have since been settled by step D: four are decided to stay
+  (`MQTTAddressable`, `MQTTRoleAddressable`, `MQTTRole`, `MQTTTopicSet`) and
+  `MQTTTopicSet.IsZero` is deleted. Eleven remain.*
 
 The 215 are not a rounding error to be argued down. 99 of `internal/payload`'s
 168 exports — every type in `info.go` (39), `state.go` (39) and
@@ -313,6 +316,15 @@ candidate. `MQTTAddressable` / `MQTTRole` / `MQTTRoleAddressable` /
 `MQTTTopicSet` (5 exports) are agnostic in shape and blocked on that
 disagreement being settled.
 
+*Settled by step D: the daemon keeps this arrangement on the hub plane, and
+the four type-level exports stay. The fifth, `MQTTTopicSet.IsZero`, had no
+caller and is deleted, as is the `MQTTTopicSet.Config` field no implementation
+ever filled. The disagreement is real and the daemon is on both sides of it
+deliberately — `SlotLayout` is the slot arrangement on the datapoint planes,
+`MQTTAddressable` is the string arrangement on the hub plane, and the reason
+is that a hub object has no device, no paramset and four topic kinds where
+`hatopic.Layout` names two. See the step D section.*
+
 ### `TopicSlot` is shaped for Homematic and `hamodel.Slot` is shaped not to be
 
 ```go
@@ -360,7 +372,7 @@ custom data point. Decided by signature, and the signature is the point.
 | `params.go` | 137 | 6 | **agnostic, moves cleanly** |
 | `payload.go` | 123 | 9 | agnostic, already shared — collapses |
 | `combined.go` | 112 | 5 | 2 agnostic constants, 3 HM by signature |
-| `mqtt_addressable.go` | 104 | 5 | agnostic shape, blocked on `topic.Layout` |
+| `mqtt_addressable.go` | 104 | 5 | agnostic shape, **decided to stay** (step D) |
 | `discovery.go` | 89 | 2 | agnostic, superseded — dies with `UpdateEvent` |
 | `source.go` | 80 | 4 | HM by signature |
 | `wrapper.go` | 54 | 2 | agnostic shape |
@@ -476,7 +488,7 @@ surface.
 `internal/payload` can live upstairs, at a cost of one release tag and one
 pin bump.
 
-### Step D — settle `MQTTAddressable` against `topic.Layout` (design, then byte risk)
+### Step D — settle `MQTTAddressable` against `topic.Layout` — DONE, and it stays
 
 Not a move. A decision about which of the two arrangements the daemon keeps.
 `SlotLayout` already implements `hatopic.Layout`; if the model stops returning
@@ -484,15 +496,98 @@ finished topic strings and returns slots instead, `MQTTTopicSet` and
 `MQTTRole` go away and the five exports resolve. If it does not, they stay
 forever and this document's "blocked" count is permanent.
 
+*Decided: they stay, and the "blocked" count is not permanent — it is wrong
+by five. Four of the five are decided rather than blocked; the fifth had no
+caller and is deleted.* The sentence above was written before anyone tried.
+Four measurements, taken afterwards:
+
+**The experiment had already run, on this exact plane.** `hubTopicLayout`
+(`internal/north/mqtt/hub_discovery.go:216`) *is* a `hatopic.Layout`. The hub
+plane renders every config through `hadiscovery.RenderComponent` with it, over
+real `hamodel.Slot`s built by `hubSlot`. And every one of its slot-taking
+methods reads:
+
+```go
+func (l hubTopicLayout) State(hamodel.Slot) string { return l.state }
+```
+
+with a doc comment stating the reason — "deriving it from the slot again would
+be a second implementation of the same schema with nothing keeping the two in
+step". So the daemon has already adopted the shared arrangement on the plane
+step D is about, and where it had to choose it chose finished strings.
+`MQTTAddressable` is the model-side half of that same choice. Deleting it
+relocates the composition; it does not remove it.
+
+**`topic.Layout` names two of the four kinds a hub object needs.** State and
+Command have a home. A CCU program's `trigger` and the per-role
+`execute_available` gate do not: `hatopic.PulseLayout` is for outbound
+occurrences, not an inbound command topic, and its own doc rules out a fifth
+`Layout` method because that "would break every one of the six consumers'
+layouts at once". A slot arrangement would still need a loom-local four-kind
+carrier — `MQTTTopicSet` with a different name.
+
+**`hamodel.Slot` is device-shaped; a hub object is not a device.**
+`Slot.Valid` needs a non-empty `Address` and at least one `Path` segment. A
+system variable has no device and no paramset;
+`<base>/<central>/hub/alarm_messages` has no leaf at all; `system/status` is
+not even under `hub/`. Encoding this plane means putting the literal
+`"sysvars"` in `Address`.
+
+**The two runtime facts are parameters here and would be optional there.**
+`MQTTTopics(base, centralName)` cannot be called without both — the compiler
+refuses. On a `hamodel.Slot` they live in `Scope`, which nothing in this
+daemon fills, and the failure is silent:
+`availabilityLayout.Availability` returns `""` when `len(s.Scope) < 2`, and
+`deviceAvailabilitySlot` exists solely to inject the CCU and the interface on
+the way in. Moving the hub plane to slots creates five more of those injection
+sites and five more silent-empty branches, on strings that must be identical
+on both sides of an `availability_mode: all` entity.
+
+**What the rejected alternative would have cost.** Seven model types'
+`MQTTTopics` rewritten as slot constructors; a real hub `Layout` implementing
+all sixteen `naming.MQTTHub*` shapes, which is the second derivation of the
+topic tree that `TestHubPlaneTopicsRoundTrip` exists to prevent; a loom-local
+four-kind carrier anyway; five new `Scope` injection sites; and the whole hub
+half of the 170 pinned topics put at risk by a schema re-derivation whose
+fixtures cover one central name and a handful of ids. Bought: four fewer
+exported names in `internal/payload`.
+
+**What step D actually delivered.** `MQTTTopicSet.IsZero` (no caller
+anywhere) and `MQTTTopicSet.Config` (never written by any implementation,
+never read by any caller) are deleted; so are `hub.InstallMode.MQTTTopics` —
+the one `MQTTAddressable` implementation with no caller, which its own doc
+comment already said — and `naming.MQTTHubInstallMode`, the central-wide
+install-mode topic it was the sole reader of, which no build publishes and no
+schema promises.
+
+**And the cost of keeping the interface is now guarded.** Keeping it means
+every hub topic has two spellings: the model's, and the discovery builder's in
+`hub_discovery.go`, which calls the `naming.MQTTHub*` functions directly rather
+than going through the model.
+`TestHubModelAndDiscoveryDeclareOneTopic` pins the two byte-equal across
+sysvar, program roles, alarm and service messages, inbox and connectivity;
+`TestHubTopicLayoutIsACarrierNotASchema` pins the layout as a carrier.
+The first closes a measured hole: under a mutation that drifts
+`(*hub.Sysvar).MQTTTopics().Set` by one segment-internal character,
+`TestHubPlaneTopicsRoundTrip` stays green, because it matches command topics
+against the wildcard filters the subscriber registers and the drifted topic is
+still under `…/hub/sysvars/+/set`.
+
 **Golden pins:** this is where they earn their keep. All 170 discovery topics
 and every `state_topic` / `command_topic` / `availability` entry inside the
 eleven fixtures are pinned text. A layout change that moved any topic by one
 character fails the suite loudly. This step is byte-risky in principle and
-well-guarded in practice.
+well-guarded in practice. *In the event, no published byte moved: the decision
+was to keep the arrangement that produces them.*
 
 **Unblocks:** nothing downstream in this document, but it is the precondition
 for the publisher runtime taking over availability and retract, which is the
-sibling half of ADR 0070's sentence.
+sibling half of ADR 0070's sentence. *That takeover has since happened —
+PRs #803, #805, #807 — without step D, so this justification is spent. What
+doing it that way cost is one six-line function, `deviceAvailabilitySlot`,
+and step D would not have repaid it: `discovery.DeviceSlot` is unusable here
+because `payload.WireSlot` and `payload.CustomSlot` leave the coordinate
+partial on the datapoint planes, which step D does not touch.*
 
 ### Step E — `DiscoverySlug` → `topic.Slug` (byte-risky; needs a migration note)
 
