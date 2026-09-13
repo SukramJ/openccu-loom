@@ -102,22 +102,64 @@ BENCHTIME="${BENCH_GATE_BENCHTIME:-300ms}"
 # doubling of the harvest cost is not a rounding error). Tighten these when the
 # pool stops varying, or when the path gets faster.
 #
-# A NOTE ON WHY THE HEADROOM IS NOT PARANOIA. These ceilings were first
-# calibrated on an AMD EPYC 9V45 leg (1 343 / 829 ns/op). The very next run, on
-# the same workflow and an unchanged tree, drew an Intel Xeon Platinum 8573C
-# and measured 1 870 / 1 167 ns/op — 40 % slower at identical code. Without the
-# 2x the gate would have gone red on a tree nobody had touched. GitHub's hosted
-# pool really is not one machine, and this is the receipt.
+# WHY THERE ARE NOW TWO CEILINGS PER BENCHMARK, AND WHICH ONE IS THE GATE
+#
+# The ns/op ceilings armed by #814 were calibrated on one CI leg and went RED
+# on an unchanged tree the third time this gate ran. Three consecutive runs of
+# identical code drew three different CPUs:
+#
+#   AMD EPYC 9V45      1343 / 829  ns/op   (the leg #814 calibrated on)
+#   Intel Xeon 8573C   1870 / 1167 ns/op   (+40 %)
+#   AMD EPYC 7763      2717 / 1578 ns/op   (+102 %, and 2717 > the 2700 ceiling)
+#
+# So GitHub's hosted pool spans a factor of two by itself, the 2x headroom over
+# its FASTEST member does not cover its slowest, and a gate calibrated that way
+# fails on code nobody touched. That is the precise failure mode this script's
+# header warns about — "a gate that flakes gets switched off", and this
+# repository has already had one switched off.
+#
+# The fix is not more padding. It is to gate on the number that does not vary.
+#
+# ALLOCATIONS ARE THE GATE. allocs/op is a property of the code, not of the
+# machine: across all three CPUs above it was 26, 19 and 811, identical to the
+# unit, and it is identical on 32-bit ARMv7 too. It cannot flake, so its
+# ceilings are armed EXACTLY at the measured value — any regression that adds a
+# single allocation to these paths fails here, with no headroom to hide in.
+# Both mutation proofs this gate has been put through were allocation
+# regressions and both are caught unambiguously: #814's 40-extra-allocs
+# mutation showed 66 and 59, and the triple-render mutation that armed the
+# discovery ceiling showed 2434.
+#
+# A Go toolchain bump that legitimately moves an allocation count is a
+# deliberate re-arm: change the number here, and say what moved it and why in
+# the commit message. That is the same ratchet discipline the ns/op ceilings
+# carry, and it is cheap precisely because the number is deterministic.
+#
+# NS/OP IS A BACKSTOP, NOT THE GATE. It stays because allocation count alone
+# cannot see a regression that burns CPU without allocating — a quadratic loop,
+# a lock convoy, a suddenly-uncached reflection walk. But it is now calibrated
+# on the SLOWEST leg observed rather than the fastest, with 1.5x on top, which
+# makes it a catastrophic-regression detector rather than a tripwire. Do not
+# read a comfortable ns/op margin as headroom for adding work: the allocation
+# ceiling above it has none.
+#
+# name  ceiling_ns_per_op  ceiling_allocs_per_op
 CEILINGS=(
-    # measured 1343 ns/op (AMD EPYC 9V45, min of 7); 1870 ns/op on a later
-    # Xeon 8573C leg, which is what the 2x headroom is for
-    "BenchmarkPayloadBuildTwentyField 2700"
-    # measured 829 ns/op (same EPYC run), 1167 ns/op on the Xeon leg
-    "BenchmarkPayloadBuildDeviceInfo 1700"
-    # measured 95 082 ns/op (Xeon 8573C). This is the one that matters: the
-    # whole per-entity discovery build, of which the two ForWith figures above
-    # are 1.2 %. See the ADR's second 2026-09-13 amendment.
-    "BenchmarkDiscoveryBuildPerEntity 190000"
+    # ADR 0007's literal workload: the per-type cached reflection path over a
+    # 20-field struct. ns: 2717 (EPYC 7763, the slowest leg seen) x1.5.
+    # allocs: exactly as measured on all three legs.
+    "BenchmarkPayloadBuildTwentyField 4100 26"
+    # The production call site: internal/north/mqtt/discovery.go harvesting a
+    # *device.Device for KindInfo. ns: 1578 (same leg) x1.5.
+    "BenchmarkPayloadBuildDeviceInfo 2400 19"
+    # The whole per-entity HA-Discovery build, of which the two above are
+    # 1.2 % of the time and 2.3 % of the allocations. THIS is the figure worth
+    # watching: at ~12 entities per device it is what turns into ~1.1 s of
+    # discovery build on a 1000-device boot, and proportionally more on the
+    # 32-bit ARMv7 CCU3 this daemon ships to. See ADR 0007's second
+    # 2026-09-13 amendment. ns: 95 082 measured on the Xeon leg; the EPYC 7763
+    # leg implies ~130 100 for the unmutated path, x1.5.
+    "BenchmarkDiscoveryBuildPerEntity 200000 811"
 )
 
 BENCH_RE='^(BenchmarkPayloadBuildTwentyField|BenchmarkPayloadBuildDeviceInfo|BenchmarkDiscoveryBuildPerEntity)$'
@@ -145,27 +187,40 @@ REPORT="$(echo "$RAW" | awk -v ceilings="${CEILINGS[*]}" '
     /ns\/op/ {
         name = $1
         sub(/-[0-9]+$/, "", name)
-        v = ""
-        for (i = 1; i <= NF; i++) if ($i == "ns/op") { v = $(i-1) + 0; break }
-        if (v == "") next
-        if (!(name in min) || v < min[name]) min[name] = v
+        ns = ""; al = ""
+        for (i = 1; i <= NF; i++) {
+            if ($i == "ns/op")     ns = $(i-1) + 0
+            if ($i == "allocs/op") al = $(i-1) + 0
+        }
+        if (ns == "") next
+        if (!(name in minns) || ns < minns[name]) minns[name] = ns
+        # Allocations do not vary between runs of the same code, but take the
+        # maximum rather than the minimum: if they ever DO vary, the gate must
+        # see the worst case, not flatter the code.
+        if (al != "" && (!(name in maxal) || al > maxal[name])) maxal[name] = al
         seen[name] = 1
     }
     END {
         n = split(ceilings, c, " ")
         bad = 0
-        for (i = 1; i <= n; i += 2) {
-            name = c[i]; ceil = c[i+1] + 0
+        for (i = 1; i <= n; i += 3) {
+            name = c[i]; nsceil = c[i+1] + 0; alceil = c[i+2] + 0
             if (!(name in seen)) {
                 printf "::error::bench_gate: %s produced no measurement\n", name
                 bad = 1
                 continue
             }
-            if (min[name] > ceil) {
-                printf "::error::%s: %.1f ns/op > ceiling %d ns/op\n", name, min[name], ceil
+            if (maxal[name] > alceil) {
+                printf "::error::%s: %d allocs/op > ceiling %d allocs/op — the allocation gate does not flake, so this is a real regression\n", name, maxal[name], alceil
                 bad = 1
             } else {
-                printf "OK %s: %.1f ns/op (ceiling %d ns/op)\n", name, min[name], ceil
+                printf "OK %s: %d allocs/op (ceiling %d allocs/op)\n", name, maxal[name], alceil
+            }
+            if (minns[name] > nsceil) {
+                printf "::error::%s: %.1f ns/op > ceiling %d ns/op\n", name, minns[name], nsceil
+                bad = 1
+            } else {
+                printf "OK %s: %.1f ns/op (ceiling %d ns/op, backstop)\n", name, minns[name], nsceil
             }
         }
         exit bad

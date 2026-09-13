@@ -33,18 +33,6 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and an untouched harvest is also a discovery payload pinned
   byte-for-byte against `internal/north/mqtt/testdata/`.
 
-  `script/bench_gate.sh` now arms a ceiling on the operation that does
-  carry the cost — `BenchmarkDiscoveryBuildPerEntity` at **190 000 ns/op**,
-  the measured minimum doubled — on the same minimum-of-seven basis as the
-  other two. The two `ForWith` ceilings stay exactly where they were armed
-  (2 700 / 1 700 ns/op): they are no longer a placeholder for an
-  optimisation that is coming, just regression protection on a path nobody
-  should spend effort on. The run that produced these figures also drew
-  different silicon from the run that armed the original ceilings — an
-  Intel Xeon 8573C against the earlier AMD EPYC 9V45, 40 % slower at
-  identical code — which is the receipt for why those ceilings carry 2x
-  headroom rather than hugging the measurement.
-
 - **A fifth phantom artifact in ADR 0007, and the strongest of the five.**
   §Decision offers `payload.PayloadAsMap` as the reflection helper that
   survived the tag-sweep retirement. Searched again for this change: there
@@ -79,6 +67,40 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   tuning in the same change would make the measurement unreviewable.
 
 ### Fixed
+
+- **ADR 0007's benchmark ratchet was flaky, and went red on a tree nobody
+  had touched.** Proving the new ceiling could fail turned up a defect in
+  the gate PR #814 armed. Three consecutive CI runs of *identical* code
+  drew three different CPUs — AMD EPYC 9V45 (1 343 / 829 ns/op), Intel
+  Xeon 8573C (+40 %), AMD EPYC 7763 (**2 717** / 1 578, +102 %) — and
+  2 717 is over the 2 700 ns/op ceiling. GitHub's hosted pool spans a
+  factor of two by itself, so 2x headroom over its *fastest* member does
+  not cover its slowest, and this repository has already had one flaky
+  gate switched off.
+
+  The fix is not more padding, which is what turns a gate into decoration.
+  **`allocs/op` is now the gate**: it is a property of the code rather
+  than the machine — 26, 19 and 811 on all three CPUs, identical to the
+  unit, and identical again on a loaded 4-core laptop whose ns/op figures
+  were three to five times worse. Its ceilings are armed **exactly** at
+  the measured value, with no headroom, so a regression adding a single
+  allocation fails. Verified: giving `payload.ForWith` exactly one extra
+  escaping allocation turned all three red together (20 vs 19, 27 vs 26,
+  812 vs 811). #814's own proof needed forty. `ns/op` stays as a
+  backstop — an allocation count cannot see a quadratic loop or a lock
+  convoy — recalibrated on the *slowest* leg observed rather than the
+  fastest, times 1.5, which makes it a catastrophic-regression detector
+  rather than a tripwire (4 100 / 2 400 / 200 000). Raising the two
+  `ForWith` ns/op ceilings is the direction a ratchet should not move;
+  the three-CPU table is the reason, and their new allocation ceilings are
+  tighter than anything #814 armed.
+
+  The new `BenchmarkDiscoveryBuildPerEntity` ceiling was verified to fail
+  on CI at the ceiling it carries: mutating `DiscoveryBuilder.Build` to
+  render the body three times took it to **390 305 ns/op and 2 434
+  allocs/op**, named by the gate, while the two `ForWith` benchmarks held
+  at 19 and 26 allocations throughout. Reverted.
+
 
 - **The state-plane bookkeeping split had no test**, so all three of a
   review's mutations survived the suite: indexing only on an accepted
