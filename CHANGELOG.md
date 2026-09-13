@@ -8,6 +8,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Three wrong numbers and one wrong citation in yesterday's deletion
+  audit.** ADR 0006's amendment cited `git log -S "HubTopics" -- internal/`
+  for a claim about a file in `docs/` — a pathspec that cannot reach it, so
+  it cannot be the command that established the claim. It also counted
+  eleven `yaml`-tagged fields on `NorthMQTT` where there are twelve, and the
+  CHANGELOG called `legacy_alias.go` "byte-identical since the initial
+  release" where the same PR's commit message records a license-header chore
+  that changed its bytes. All three are corrected in place. A wrong citation
+  in an amendment is worse than none: the next reader treats it as verified.
+
 - **ADR 0011 documented a retired topology as current, in the document that
   owns the schema.** §Topic hierarchy and the HA Discovery example that
   quotes it draw the `channels/`-infix, `/state`-suffix per-DP tree of the
@@ -479,8 +489,10 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   ADR 0006 named this the migration path off the `hub/` topology and
   pointed at a `LegacyAliasConfig.HubTopics` field and a
   `HubTopicBuilder` type — neither of which ever existed in any commit;
-  the file has been byte-identical, two types and three functions, since
-  the initial release. The mirror that did exist was of the *device*
+  the file carried the same two types and three functions from the initial
+  release to its deletion. (Its *bytes* did change once: `fb722716`, a
+  license-header chore. An earlier revision of this entry said
+  "byte-identical", which the same PR's own commit message contradicts.) The mirror that did exist was of the *device*
   tree, so it could not have carried anyone across the `hub/` drop even
   if it had been reachable. ADR 0006 and ADR 0007 both carry an
   amendment recording that, rather than being edited as though they had
