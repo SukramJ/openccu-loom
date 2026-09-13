@@ -13,15 +13,16 @@ import (
 // and the goroutine exits cleanly.
 //
 // Used by the adapter's background tasks — the auto-refresh loop, the
-// central bring-up and the event bridge — which would otherwise run as
-// bare `go func()` calls with no panic recovery.
+// central bring-up, the event bridge and the per-CCU ReGa liveness poller —
+// which would otherwise run as bare `go func()` calls with no panic
+// recovery.
 // The wrapper centralises goroutine lifetime hygiene.
 //
 // `name` identifies the goroutine in the log and should be a static
 // identifier (e.g. the function name or a job tag).
 // fn may be nil — in that case nothing happens.
 //
-// loom:reachable:reason="utility wrapper for panic-safe goroutines; called from central_bringup.go, auto_refresh.go and eventbridge.go's background tasks"
+// loom:reachable:reason="utility wrapper for panic-safe goroutines; called from central_bringup.go, auto_refresh.go, eventbridge.go's background tasks and hub_mqtt_publisher.go's ReGa liveness poller"
 func SafeGo(name string, fn func()) {
 	if fn == nil {
 		return
