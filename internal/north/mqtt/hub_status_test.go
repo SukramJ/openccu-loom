@@ -394,6 +394,48 @@ func TestRetractHubStatusClearsTheTopicAndTheLevel(t *testing.T) {
 	}
 }
 
+// TestTheShutdownCounterpartReachesAGateAReconnectReopened pins what
+// [hubStatusGate.centrals] answers with: every CCU the gate has OBSERVED a
+// level for, not every CCU whose level it has successfully written.
+//
+// The two sets differ for as long as a reconnect lasts.
+// [Bridge.ResetRuntimeGates] clears the written flag of every entry on every
+// reconnect, because the broker may have come back without the bytes — while
+// the bytes may equally still be there, which is the case a broker that only
+// dropped this daemon's socket produces. A shutdown in that window is a
+// graceful stop, so the broker discards the will, and the per-CCU counterpart
+// is the only thing that can say the CCU is no longer being reported on.
+// Filtering `centrals` on `written` skips exactly those CCUs, and every
+// CCU-scoped hub entity behind them stays `available` with its last value for
+// as long as the daemon is down — the failure the counterpart exists to
+// prevent, reintroduced on the one path where it is invisible.
+func TestTheShutdownCounterpartReachesAGateAReconnectReopened(t *testing.T) {
+	t.Parallel()
+	rec := &recordingPublisher{}
+	b := newDeepBridge(t, rec, func(c *BridgeConfig) { c.Base = "gh" })
+	ctx := context.Background()
+
+	if err := b.PublishHubReachability(ctx, "ccu-01", true); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	// A reconnect: the gate is re-opened, so nothing is recorded as written
+	// any more, while the broker may well still hold the `online`.
+	b.ResetRuntimeGates()
+
+	rec.clear()
+	b.announceHubStatusOffline(ctx)
+
+	got, ok := rec.findTopic("gh/ccu-01/hub/status")
+	if !ok {
+		t.Fatalf("the shutdown counterpart never reached a CCU whose gate a reconnect had "+
+			"re-opened, so its hub entities stay available with their last value for the whole "+
+			"downtime; got %v", rec.records())
+	}
+	if got.payload != "offline" {
+		t.Errorf("shutdown counterpart payload %q, want offline", got.payload)
+	}
+}
+
 // --- reconnect + failed-write regressions ---------------------------------
 
 // errGateWriteRefused is the broker refusing a gate write.
@@ -449,6 +491,74 @@ func TestHubStatusIsReseededAfterABrokerReconnect(t *testing.T) {
 	}
 }
 
+// gateShape reports whether a [Bridge] field is a dedup gate, and under which
+// type [NewBridge] has to register it in `b.gates`.
+//
+// It asks the pointer type as well as the field type, and that is not a
+// formality. A gate has to mutate itself to reset, so its `Reset` carries a
+// pointer receiver; a field holding such a gate BY VALUE therefore does not
+// satisfy [runtimeGate] itself, and registering it means writing `&b.field`
+// — the one extra character a developer forgets. Asking only the field type
+// made the audit blind to exactly the mistake it exists to catch: a
+// value-held gate passed it while never being reset, and after a broker
+// restart without a persistent retained store an unreset gate answers
+// "already published" for bytes nothing holds.
+//
+// Recognition is still by the `Reset()` method, i.e. by name. There is no
+// reflective handle on "this field memoizes what was last published" — a
+// bare map is the counter-example, and the reason [Bridge.configCache] needs
+// a [configCacheGate] field beside it to be visible here at all.
+func gateShape(ft reflect.Type) (reflect.Type, bool) {
+	gateIface := reflect.TypeOf((*runtimeGate)(nil)).Elem()
+	switch {
+	case ft.Implements(gateIface):
+		return ft, true
+	case reflect.PointerTo(ft).Implements(gateIface):
+		return reflect.PointerTo(ft), true
+	default:
+		return nil, false
+	}
+}
+
+// TestAValueHeldGateIsStillAGate pins [gateShape] against the shape that
+// slipped past its predecessor.
+//
+// The audit below is only structural for the gates it can recognise. It used
+// to recognise a gate as "a field whose own type has Reset()", which is true
+// of every gate the bridge happens to hold by pointer today and false of any
+// gate held by value — a one-character difference at the field declaration,
+// and a silently unreset gate in production.
+func TestAValueHeldGateIsStillAGate(t *testing.T) {
+	t.Parallel()
+	byPointer, ok := gateShape(reflect.TypeOf(&valueHeldGate{}))
+	if !ok {
+		t.Fatal("a pointer-held gate is not recognised as a gate at all")
+	}
+	if byPointer != reflect.TypeOf(&valueHeldGate{}) {
+		t.Errorf("a pointer-held gate must register as %v, got %v", reflect.TypeOf(&valueHeldGate{}), byPointer)
+	}
+	byValue, ok := gateShape(reflect.TypeOf(valueHeldGate{}))
+	if !ok {
+		t.Fatal("a gate held by value is not recognised as a gate, so a bridge field holding one " +
+			"passes the registration audit while ResetRuntimeGates never reaches it")
+	}
+	if byValue != reflect.TypeOf(&valueHeldGate{}) {
+		t.Errorf("a value-held gate must register as %v — `&b.field`, the step that gets "+
+			"forgotten — got %v", reflect.TypeOf(&valueHeldGate{}), byValue)
+	}
+	if _, ok := gateShape(reflect.TypeOf(map[string][]byte(nil))); ok {
+		t.Error("a bare map is reported as a gate; recognition is by the Reset method, and a " +
+			"map has none — which is why a map-shaped dedup cache needs a gate field beside it")
+	}
+}
+
+// valueHeldGate is a dedup gate with the receiver every gate needs — a gate
+// that cannot mutate itself cannot open — declared here so the audit's own
+// recognition rule can be stated on a type the bridge does not hold.
+type valueHeldGate struct{ open bool }
+
+func (g *valueHeldGate) Reset() { g.open = true }
+
 // TestEveryBridgeDedupGateIsRegisteredForReset is the structural half of the
 // same defect.
 //
@@ -474,20 +584,21 @@ func TestEveryBridgeDedupGateIsRegisteredForReset(t *testing.T) {
 		registered[reflect.TypeOf(g)] = true
 	}
 
-	gateIface := reflect.TypeOf((*runtimeGate)(nil)).Elem()
 	rt := reflect.TypeOf(Bridge{})
 	found := 0
 	for i := range rt.NumField() {
 		f := rt.Field(i)
-		if !f.Type.Implements(gateIface) {
+		want, isGate := gateShape(f.Type)
+		if !isGate {
 			continue
 		}
 		found++
-		if !registered[f.Type] {
+		if !registered[want] {
 			t.Errorf("Bridge.%s (%v) is a dedup gate that NewBridge never appends to b.gates, "+
 				"so ResetRuntimeGates does not reach it: after a broker restart without a "+
-				"retained store it keeps answering \"already published\" for bytes nothing holds",
-				f.Name, f.Type)
+				"retained store it keeps answering \"already published\" for bytes nothing holds "+
+				"(register it as %v)",
+				f.Name, f.Type, want)
 		}
 	}
 	if found == 0 {

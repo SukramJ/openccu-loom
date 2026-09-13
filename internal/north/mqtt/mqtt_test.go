@@ -58,6 +58,15 @@ type mockPublisher struct {
 	// can observe the bridge's state at the moment the broker would be
 	// fanning the message out to its subscribers.
 	onPublish func(topic string)
+	// afterPublish runs on the caller's goroutine once the write has been
+	// recorded and the lock released — the window a recorder cannot see. The
+	// bridge's retained-topic index insert and its counter increment happen
+	// there, after the client call and on the same goroutine, so a worker
+	// descheduled in it looks finished on the broker while the plane is not.
+	// Tests set it to make that window wide and certain instead of rare and
+	// load-dependent. The same knob [observedPlane] carries, for the fixtures
+	// built on this recorder.
+	afterPublish func()
 }
 
 type publishRecord struct {
@@ -75,8 +84,12 @@ func (m *mockPublisher) Publish(_ context.Context, topic string, payload []byte,
 		m.onPublish(topic)
 	}
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	m.sent = append(m.sent, publishRecord{topic: topic, payload: string(payload), qos: qos, retain: retain})
+	after := m.afterPublish
+	m.mu.Unlock()
+	if after != nil {
+		after()
+	}
 	return nil
 }
 
