@@ -560,9 +560,12 @@ func sweepSubscriberFor(sweep *mqtt.SweepSubscriber, fallback mqtt.Client) mqtt.
 // configured id stays empty, and the broker assigns a distinct one to each.
 //
 // Extracted from the closure in [buildMQTT] for the same reason
-// [northTCPConfig] was: so a test can READ the config this daemon really
-// dials with. TestTheSweepConnectionCarriesNoLastWill is what turns the
-// paragraph above from a comment into a checked statement.
+// [northTCPConfig] was: so the config this daemon really dials with is built
+// in one readable place. What the test reads is the ASSEMBLED value on
+// [mqttStack.sweepTCP], not this function's return — a test on the return
+// alone stays green when buildMQTT mutates the struct after calling it, which
+// is the whole hazard. TestTheSweepConnectionCarriesNoLastWill is what turns
+// the paragraph above from a comment into a checked statement.
 func sweepTCPConfig(m config.NorthMQTT, proto mqtt.ProtocolVersion, logger *slog.Logger) mqtt.TCPConfig {
 	return mqtt.TCPConfig{
 		BrokerURL:       m.BrokerURL,
