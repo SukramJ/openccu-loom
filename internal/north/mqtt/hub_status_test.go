@@ -5,6 +5,7 @@ package mqtt
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"sync"
 	"testing"
@@ -77,15 +78,32 @@ func (f *fakeDwell) armed() int {
 }
 
 // writeLog records what reached the broker, in order.
+//
+// `err` is the broker refusing the write: when it is set the level is
+// recorded as ATTEMPTED but reported as failed, which is what the gate has
+// to treat as "the broker does not hold this".
 type writeLog struct {
-	mu     sync.Mutex
-	levels []bool
+	mu       sync.Mutex
+	levels   []bool
+	attempts []bool
+	err      error
 }
 
-func (w *writeLog) write(_ context.Context, _ string, online bool) {
+func (w *writeLog) write(_ context.Context, _ string, online bool) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	w.attempts = append(w.attempts, online)
+	if w.err != nil {
+		return w.err
+	}
 	w.levels = append(w.levels, online)
+	return nil
+}
+
+func (w *writeLog) fail(err error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.err = err
 }
 
 func (w *writeLog) seen() []bool {
@@ -376,7 +394,10 @@ func TestRetractHubStatusClearsTheTopicAndTheLevel(t *testing.T) {
 	}
 }
 
-// --- reconnect regressions -------------------------------------------------
+// --- reconnect + failed-write regressions ---------------------------------
+
+// errGateWriteRefused is the broker refusing a gate write.
+var errGateWriteRefused = errors.New("test: broker refused the write")
 
 // TestHubStatusIsReseededAfterABrokerReconnect is the reconnect pin, and it
 // is the whole reason [hubStatusGate.Reset] exists.
@@ -475,5 +496,117 @@ func TestEveryBridgeDedupGateIsRegisteredForReset(t *testing.T) {
 	if len(registered) != found {
 		t.Errorf("b.gates holds %d distinct gate types but Bridge has %d gate fields",
 			len(registered), found)
+	}
+}
+
+// TestHubStatusGateDoesNotRecordALevelTheBrokerRefused pins the rule
+// go-hamqtt's own state gate states: a level is remembered only once the
+// broker has taken it.
+//
+// A gate that records first publishes the level exactly once ever. The next
+// identical observation hits the dedup and writes nothing, so a single
+// failed seed leaves this topic empty for the life of the process — and an
+// empty availability topic under `availability_mode: "all"` is a
+// permanently unavailable entity, not a degraded one.
+//
+// Falsifiability: record the level before the write instead of rolling it
+// back (`e.written, e.level = true, online` with no [hubStatusGate.settle])
+// and the retry assertion fails.
+func TestHubStatusGateDoesNotRecordALevelTheBrokerRefused(t *testing.T) {
+	t.Parallel()
+	g, _ := newFakeGate()
+	log := &writeLog{}
+	log.fail(errGateWriteRefused)
+
+	g.observe(context.Background(), "ccu-01", true, log.write)
+	if got := log.seen(); len(got) != 0 {
+		t.Fatalf("the refused write is logged as landed: %v", got)
+	}
+
+	log.fail(nil) // the broker is healthy again
+	g.observe(context.Background(), "ccu-01", true, log.write)
+
+	got := log.seen()
+	if len(got) != 1 || !got[0] {
+		t.Fatalf("after a refused seed the level was never retried; landed %v — "+
+			"the gate topic stays empty and every CCU-scoped hub entity stays unavailable", got)
+	}
+}
+
+// TestHubStatusGateDoesNotRecordAFailedDebouncedWrite is the same rule on
+// the dwell's own goroutine, which is where it actually bites.
+//
+// Production trigger: a CCU flips unreachable and arms the fifteen-second
+// dwell, capturing the hub publisher's worker context. Inside that window a
+// reconnect or a ready-driven re-wire calls Start, which Stops the previous
+// worker first and cancels that context. The dwell fires, the publish fails
+// on the cancelled context — and a gate that had already recorded `offline`
+// then treats the re-assert that follows as a no-op, leaving a retained
+// `online` on the broker for a CCU that is gone. That is exactly the defect
+// this topic was added to fix.
+//
+// Falsifiability: drop the [hubStatusGate.settle] call from
+// [hubStatusGate.fire] and the re-assert assertion fails.
+func TestHubStatusGateDoesNotRecordAFailedDebouncedWrite(t *testing.T) {
+	t.Parallel()
+	g, dwell := newFakeGate()
+	log := &writeLog{}
+	ctx := context.Background()
+
+	g.observe(ctx, "ccu-01", true, log.write)
+	g.observe(ctx, "ccu-01", false, log.write)
+	if dwell.armed() != 1 {
+		t.Fatalf("the dwell was not armed: %d", dwell.armed())
+	}
+
+	log.fail(errGateWriteRefused)
+	dwell.fireAll()
+	log.fail(nil)
+
+	// The CCU is still gone, and the next fold says so.
+	g.observe(ctx, "ccu-01", false, log.write)
+	if dwell.armed() != 1 {
+		t.Fatalf("the re-assert did not arm a new dwell (%d armed) — the gate still "+
+			"believes the failed `offline` reached the broker", dwell.armed())
+	}
+	dwell.fireAll()
+
+	got := log.seen()
+	if len(got) != 2 || !got[0] || got[1] {
+		t.Fatalf("landed %v, want [online offline] — `offline` never reached the broker "+
+			"after the failed debounced write, so the retained `online` stands for a CCU "+
+			"that is gone", got)
+	}
+}
+
+// TestHubStatusFailedSeedIsRetriedThroughTheBridge is the bridge-level
+// counterpart: the gate, the shared availability publisher and the error
+// path of [Bridge.PublishHubReachability] together.
+//
+// Falsifiability: return nil from the publish closure in
+// [Bridge.PublishHubReachability] regardless of the publisher's error, and
+// the gate records the refused level again.
+func TestHubStatusFailedSeedIsRetriedThroughTheBridge(t *testing.T) {
+	t.Parallel()
+	rec := &recordingPublisher{}
+	b := newDeepBridge(t, rec, func(c *BridgeConfig) { c.Base = "gh" })
+	ctx := context.Background()
+
+	rec.err = errGateWriteRefused
+	if err := b.PublishHubReachability(ctx, "ccu-01", true); err == nil {
+		t.Fatal("the refused seed was reported as successful")
+	}
+	rec.err = nil
+	rec.clear()
+
+	if err := b.PublishHubReachability(ctx, "ccu-01", true); err != nil {
+		t.Fatalf("retry: %v", err)
+	}
+	got, ok := rec.findTopic("gh/ccu-01/hub/status")
+	if !ok {
+		t.Fatalf("the gate topic was never written after a refused seed; got %v", rec.records())
+	}
+	if got.payload != "online" {
+		t.Errorf("payload %q, want online", got.payload)
 	}
 }

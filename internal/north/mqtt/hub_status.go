@@ -55,12 +55,16 @@ type hubStatusTimer interface{ Stop() bool }
 // already on the broker cheap: it cancels a pending opposite write and does
 // nothing else.
 //
-// That is a claim about the broker, not about this process, so a broker that
-// LOST its retained store invalidates it wholesale. [hubStatusGate.Reset] is
-// the answer: it re-opens every remembered level so the next observation of
-// it seeds the topic again. The gate is registered as one of the bridge's
-// runtime gates precisely so that reset is not something a future plane has
-// to remember to wire — see [Bridge.ResetRuntimeGates].
+// That is a claim about the broker, not about this process, so it is only
+// as good as the two things that can invalidate it. A write that FAILS
+// never becomes a remembered level ([hubStatusGate.settle] puts the entry
+// back), because a level the gate believes is retained is a level nothing
+// will ever publish again. And a broker that LOST its retained store is
+// what [hubStatusGate.Reset] is for: it re-opens every remembered level so
+// the next observation of it seeds the topic again. The gate is registered
+// as one of the bridge's runtime gates precisely so that reset is not
+// something a future plane has to remember to wire — see
+// [Bridge.ResetRuntimeGates].
 type hubStatusGate struct {
 	mu    sync.Mutex
 	dwell time.Duration
@@ -75,16 +79,22 @@ type hubStatusGate struct {
 type hubStatusEntry struct {
 	// written is false until a level has reached the broker. The first
 	// level is never debounced — see [hubStatusGate.observe]. It goes back
-	// to false when [hubStatusGate.Reset] re-opens the gate, because the
-	// broker no longer holds the level and the next observation of it must
-	// seed rather than dedup.
+	// to false when a write fails and when [hubStatusGate.Reset] re-opens
+	// the gate, and in both cases for the same reason: the broker does not
+	// hold the level, so the next observation of it must seed rather than
+	// dedup.
 	written bool
-	// level is the last level written, meaningful only once written.
+	// level is the last level the broker took, meaningful only once
+	// written.
 	level bool
 	// pending is the level the armed timer will write, meaningful only
 	// while timer is non-nil.
 	pending bool
 	timer   hubStatusTimer
+	// gen counts recorded levels, so a rollback of a failed write can tell
+	// "nothing happened since" from "a newer write already landed" and
+	// decline to clobber the latter.
+	gen uint64
 }
 
 func newHubStatusGate(dwell time.Duration) *hubStatusGate {
@@ -116,7 +126,9 @@ func newHubStatusGate(dwell time.Duration) *hubStatusGate {
 // alone rather than restarted, so a storm of identical folds cannot push
 // the write out indefinitely; the window starts at the first edge, not the
 // last.
-func (g *hubStatusGate) observe(ctx context.Context, central string, online bool, write func(context.Context, string, bool)) bool {
+// `write` reports what the broker did with the level. Only a nil error
+// records it — see [hubStatusGate.settle].
+func (g *hubStatusGate) observe(ctx context.Context, central string, online bool, write func(context.Context, string, bool) error) bool {
 	g.mu.Lock()
 	e := g.entries[central]
 	if e == nil {
@@ -127,9 +139,9 @@ func (g *hubStatusGate) observe(ctx context.Context, central string, online bool
 	switch {
 	case !e.written:
 		e.stopTimer()
-		e.written, e.level = true, online
+		undo := e.record(online)
 		g.mu.Unlock()
-		write(ctx, central, online)
+		g.settle(central, write(ctx, central, online), undo)
 		return true
 
 	case online == e.level:
@@ -158,7 +170,7 @@ func (g *hubStatusGate) observe(ctx context.Context, central string, online bool
 // goroutine from running — it can only leave the entry disagreeing with
 // what this call is about to write. Comparing against the entry's own
 // pending timer is what makes the cancellation win.
-func (g *hubStatusGate) fire(ctx context.Context, central string, online bool, write func(context.Context, string, bool)) {
+func (g *hubStatusGate) fire(ctx context.Context, central string, online bool, write func(context.Context, string, bool) error) {
 	g.mu.Lock()
 	e := g.entries[central]
 	if e == nil || e.timer == nil || e.pending != online {
@@ -166,9 +178,52 @@ func (g *hubStatusGate) fire(ctx context.Context, central string, online bool, w
 		return
 	}
 	e.timer = nil
-	e.written, e.level = true, online
+	undo := e.record(online)
 	g.mu.Unlock()
-	write(ctx, central, online)
+	g.settle(central, write(ctx, central, online), undo)
+}
+
+// record stamps a level as taken and returns the undo that puts the entry
+// back if it turns out the broker did not take it.
+//
+// The level is stamped BEFORE the write rather than after it, so that a
+// second observation of the same level arriving while this one is still in
+// flight is deduped instead of publishing the same byte twice. The undo is
+// what makes that safe: it is the "recorded only once the broker accepted
+// it" rule of go-hamqtt's own state gate, reached by rolling back rather
+// than by holding the mutex across broker I/O.
+//
+// It declines to roll back over a newer recorded level. A failed write
+// whose entry has moved on since is not the current claim about the broker
+// any more, and restoring the level it superseded would resurrect a
+// statement two writes stale.
+func (e *hubStatusEntry) record(online bool) func(*hubStatusEntry) {
+	prevWritten, prevLevel, gen := e.written, e.level, e.gen
+	e.gen++
+	e.written, e.level = true, online
+	return func(cur *hubStatusEntry) {
+		if cur != e || e.gen != gen+1 {
+			return
+		}
+		e.written, e.level = prevWritten, prevLevel
+	}
+}
+
+// settle un-records a level the broker refused.
+//
+// This is the half of the gate that a dedup cache gets wrong by default,
+// and go-hamqtt's publisher/state.go states the reason: caching a level
+// whose publish failed makes the next identical one hit the gate and
+// publish nothing, leaving the entity blank until the value changes again.
+// On THIS topic "until the value changes again" is, for a healthy CCU,
+// never — so a swallowed failure is a permanently unavailable hub plane.
+func (g *hubStatusGate) settle(central string, err error, undo func(*hubStatusEntry)) {
+	if err == nil {
+		return
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	undo(g.entries[central])
 }
 
 // Reset re-opens every remembered level without forgetting the CCUs, so the
@@ -211,9 +266,10 @@ func (g *hubStatusGate) forget(central string) {
 //
 // Observed, not written: an entry exists only because [hubStatusGate.observe]
 // created it, and the shutdown counterpart is wanted for exactly the CCUs
-// this process may have claimed reachable — including one whose level
-// [hubStatusGate.Reset] has re-opened. Filtering on `written` would skip
-// those while the broker may still hold an `online` for them.
+// this process may have claimed reachable — including one whose level was
+// rolled back by a failed write, and one whose level [hubStatusGate.Reset]
+// re-opened. Filtering on `written` would skip both while the broker may
+// still hold an `online` for them.
 func (g *hubStatusGate) centrals() []string {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -267,11 +323,13 @@ func (b *Bridge) PublishHubReachability(ctx context.Context, centralName string,
 	}
 	var seedErr error
 	synchronous := b.hubStatus.observe(ctx, b.resolvedCentral(centralName), online,
-		func(ctx context.Context, central string, online bool) {
-			if _, err := b.avail.Publish(ctx, b.hubStatusTopic(central), online); err != nil {
+		func(ctx context.Context, central string, online bool) error {
+			_, err := b.avail.Publish(ctx, b.hubStatusTopic(central), online)
+			if err != nil {
 				b.incPublishErrors(central)
 				seedErr = err
 			}
+			return err
 		})
 	if synchronous {
 		return seedErr
