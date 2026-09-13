@@ -47,6 +47,21 @@
 # separately. Lowering a ceiling after an improvement is the point; raising one
 # needs a reason in the commit message.
 #
+# AND THE ADR'S BOUND HAS SINCE BEEN WITHDRAWN AS NOT WORTH MEETING
+#
+# The ADR's second 2026-09-13 amendment measured the denominator the first one
+# lacked: `payload.ForWith` is 1.2 % of the per-entity HA-Discovery build it is
+# part of (1 174 ns/op inside 95 082 ns/op), and 2.3 % of its allocations (19
+# of 811). Closing the 500 ns/op gap entirely would buy 0.7 % of a discovery
+# build. So the two ForWith ceilings below are no longer a placeholder for an
+# optimisation that is coming; they are plain regression protection for a path
+# nobody should spend effort on, and they stay at their current values.
+#
+# BenchmarkDiscoveryBuildPerEntity is the ceiling that replaced the ADR's
+# bound, and it is the one worth watching: at ~12 entities per device it is
+# what turns into ~1.1 s of discovery build on a 1 000-device boot, and into
+# proportionally more on the 32-bit ARMv7 CCU3 this daemon ships to.
+#
 # VERIFIED TO FAIL
 #
 # Giving `payload.ForWith` 40 extra allocations per call turned this gate red
@@ -86,14 +101,26 @@ BENCHTIME="${BENCH_GATE_BENCHTIME:-300ms}"
 # covers that while still failing on any regression that actually matters (a
 # doubling of the harvest cost is not a rounding error). Tighten these when the
 # pool stops varying, or when the path gets faster.
+#
+# A NOTE ON WHY THE HEADROOM IS NOT PARANOIA. These ceilings were first
+# calibrated on an AMD EPYC 9V45 leg (1 343 / 829 ns/op). The very next run, on
+# the same workflow and an unchanged tree, drew an Intel Xeon Platinum 8573C
+# and measured 1 870 / 1 167 ns/op — 40 % slower at identical code. Without the
+# 2x the gate would have gone red on a tree nobody had touched. GitHub's hosted
+# pool really is not one machine, and this is the receipt.
 CEILINGS=(
-    # measured 1343 ns/op (AMD EPYC 9V45, min of 7)
+    # measured 1343 ns/op (AMD EPYC 9V45, min of 7); 1870 ns/op on a later
+    # Xeon 8573C leg, which is what the 2x headroom is for
     "BenchmarkPayloadBuildTwentyField 2700"
-    # measured 829 ns/op (same run)
+    # measured 829 ns/op (same EPYC run), 1167 ns/op on the Xeon leg
     "BenchmarkPayloadBuildDeviceInfo 1700"
+    # measured 95 082 ns/op (Xeon 8573C). This is the one that matters: the
+    # whole per-entity discovery build, of which the two ForWith figures above
+    # are 1.2 %. See the ADR's second 2026-09-13 amendment.
+    "BenchmarkDiscoveryBuildPerEntity 190000"
 )
 
-BENCH_RE='^(BenchmarkPayloadBuildTwentyField|BenchmarkPayloadBuildDeviceInfo)$'
+BENCH_RE='^(BenchmarkPayloadBuildTwentyField|BenchmarkPayloadBuildDeviceInfo|BenchmarkDiscoveryBuildPerEntity)$'
 
 echo "bench_gate: ${RUNS} runs x ${BENCHTIME} per benchmark; the gate reads the minimum"
 

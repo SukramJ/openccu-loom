@@ -8,6 +8,55 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **ADR 0007's 500 ns/op payload-build bound is withdrawn: it governs
+  1.2 % of the work it sits in.** The entry below measured what
+  `payload.ForWith` costs. It did not measure whether that cost matters,
+  and deferred the question. It is now answered, and the answer is no.
+  `BenchmarkDiscoveryBuildPerEntity` supplies the denominator the bound
+  never had — the complete per-entity HA-Discovery build
+  (`DefaultDiscoveryBuilder.Build`, what `Bridge.PublishDiscoveryOnly`
+  calls), which contains exactly one `payload.ForWith`. Measured on the CI
+  runner: **95 082 ns/op and 811 allocations** for the build, against
+  **1 174 ns/op and 19 allocations** for the `ForWith` inside it — **1.2 %
+  of the time and 2.3 % of the allocations.** Eliminating two thirds of
+  the call, which is what meeting the bound would mean, buys 0.7 % of a
+  discovery build. At ~12 entities per device that is 0.7 ms on a
+  50-device boot and 14 ms on a 1 000-device boot; a Home Assistant birth
+  replay costs **zero**, because `RepublishDiscovery` replays retained
+  payloads and never re-enters the builders. The allocation ratio 19/811
+  is the load-bearing figure: unlike nanoseconds it is identical on every
+  machine and every architecture, including the 32-bit ARMv7 CCU3 this
+  daemon ships to. ADR 0007 carries the full measurement, the fleet
+  arithmetic, and an explicitly-unverified ARMv7 estimate with its method
+  and its uncertainty. **Nothing on the hot path was tuned** — the
+  correct response to "this is 1.2 % of the work" is to leave it alone,
+  and an untouched harvest is also a discovery payload pinned
+  byte-for-byte against `internal/north/mqtt/testdata/`.
+
+  `script/bench_gate.sh` now arms a ceiling on the operation that does
+  carry the cost — `BenchmarkDiscoveryBuildPerEntity` at **190 000 ns/op**,
+  the measured minimum doubled — on the same minimum-of-seven basis as the
+  other two. The two `ForWith` ceilings stay exactly where they were armed
+  (2 700 / 1 700 ns/op): they are no longer a placeholder for an
+  optimisation that is coming, just regression protection on a path nobody
+  should spend effort on. The run that produced these figures also drew
+  different silicon from the run that armed the original ceilings — an
+  Intel Xeon 8573C against the earlier AMD EPYC 9V45, 40 % slower at
+  identical code — which is the receipt for why those ceilings carry 2x
+  headroom rather than hugging the measurement.
+
+- **A fifth phantom artifact in ADR 0007, and the strongest of the five.**
+  §Decision offers `payload.PayloadAsMap` as the reflection helper that
+  survived the tag-sweep retirement. Searched again for this change: there
+  is no helper of that shape **under any name** — `internal/payload`
+  exports exactly one function returning a loose map, `ForWith`, and it is
+  a cached struct-tag walk, not the JSON round-trip the ADR describes;
+  neither `internal/`, `pkg/` nor the upstream `go-hamqtt/payload` has an
+  `AsMap`-shaped helper. Unlike `CDPDispatcher`, which misnamed a real
+  `CustomDPDispatcher`, this sentence describes a mechanism that was never
+  built. The clause is withdrawn in a dated amendment, which states what
+  actually survived and where it is called from.
+
 - **ADR 0007's 500 ns/op payload-build bound is measured for the first
   time — and it does not hold.** The ADR names a benchmark file
   (`tests/bench/payload_build_test.go`) that did not exist, so
