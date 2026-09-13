@@ -1,6 +1,11 @@
 # ADR 0070 — Extract the HA discovery model into a shared module
 
-- Status: accepted
+- Status: **closed** (2026-09-14). Accepted 2026-09-09; the nine-phase
+  programme it describes is complete. The closing section — *"The programme
+  is complete"*, last before the references — carries the phase-by-phase
+  outcome, the one phase that declined its final step, the erratum on the
+  LOC table below, and the two findings the fan-out produced that belong to
+  no single repository.
 - Date: 2026-09-09
 
 Extends [ADR 0050](./0050-mqtt-transport-shared-module.md) (which drew the
@@ -8,6 +13,16 @@ transport boundary and explicitly left the discovery layer behind) and reuses
 the release pattern of [ADR 0053](./0053-go-openccu-data-module.md).
 
 Full design: `notes/concepts/shared-ha-discovery-model.md` (working document, unpublished).
+
+**What is frozen, and what is not.** *Context*, *Decision*, *Why* and
+*Consequences* are a snapshot of what was believed and decided on
+2026-09-09, and they are **left as written** — their value is that they
+record the state of knowledge at the moment the decision was taken, so a
+reader can tell a wrong prediction from a changed mind. They are therefore
+read in the future tense they use. Every correction to them lives in a
+later, dated section: the five amendments, and the closing section. Where a
+frozen claim is corrected elsewhere, this document says so at the point of
+the claim and does not edit it.
 
 ## Context
 
@@ -28,6 +43,11 @@ bridges and this daemon:
 | go-daikin2mqtt | `internal/hass` | 846 | typed structs |
 | go-unifi2mqtt | `internal/hass` | 1537 | typed structs |
 | openccu-loom | `internal/north/mqtt` | 15756 | `payload` pkg + rule table |
+
+*This table is understated, and the closing section carries the erratum with
+the measured figures: each bridge row counts one directory, while the surface
+each migration actually had to move is 1.6x to 2.3x larger. The numbers are
+left as written because five phases were planned against them.*
 
 The duplication is wider than payload assembly. Four or five near-identical
 copies each exist of: the MQTT bootstrap (the comment block above `NewBreaker`
@@ -580,6 +600,181 @@ feeds a `unique_id`, so moving it would have cost exactly what the first
 amendment withdrew.
 
 
+## Closing (2026-09-14) — the programme is complete
+
+All nine phases have shipped. This section is the outcome record: it does not
+revise the frozen sections above, it says what happened to each of their
+claims. Where a phase's own repository holds the measurement, that note is
+authoritative and is linked; nothing here is re-derived.
+
+### The phases, and what each one proved
+
+The nine-phase sequence lives in the design note
+(`notes/concepts/shared-ha-discovery-model.md`, §8.2) and never appeared in
+this ADR — which is why until now a reader could not tell from the ADR alone
+that there had been phases, let alone that they had all closed. The table is
+therefore reproduced here with its outcome column, and this is the copy a
+reader of the ADR is meant to find.
+
+| Phase | Work | Outcome |
+| ---: | --- | --- |
+| 0 | `go-ha-catalog`: two-stage extraction, first tag | Shipped. At **v0.2.1**, a `go:embed`ed data artifact with a CalVer snapshot constant, as ADR 0053 prescribes. |
+| 1 | `go-mqtt`: additive `SplitClient` + connect-retry helper | Shipped, and then some. At **v1.5.1**; still a pure transport with no domain knowledge, but no longer "exactly two additive helpers" — see the first amendment. |
+| 2 | The shared model, discovery bundle, validation, naming | Shipped as **`go-hamqtt`**, not `go-hamodel` — the name was decided against during design. At **v0.34.1**. |
+| 3 | **openccu-loom migrates** | Shipped in **v0.78.0**: 92 merged pull requests (#739–#834), most of them this migration, plus three rounds of adversarial review. The model carried the hardest consumer, which is what phase 3 existed to establish. |
+| 4 | Runtime layer (state, command, availability, sweep, birth) | Shipped, but not in the shape §3.6 drew — see *What the design got wrong* below. |
+| 5 | `go-zendure2mqtt` — the pilot | Complete through the bundle migration. Two defects found afterwards, both fixed: a process-lifetime `publisher.Runtime` that memoised a QoS 0 retraction flushed to a dying socket (measured on the fleet: **7 of 29 retractions re-sent, both documents published anyway, 22 of 29 entities would not have appeared**; fixed with `Runtime.Reset()` in `PublishOnline`), and `LegacyEntityTopics` spelled twice with nothing comparing them. No tombstones. |
+| 6 | `go-mtec2mqtt` | Complete, bundle shipped (100 components, ~50 KB on the wire). An adversarial review then found **eleven** findings, four harness-proven; the first was that the retract-then-publish ordering the whole migration rests on holds *within* a connection and breaks *across a reconnect* (measured: **retractions re-sent 0, document published true, configs still retained**). Fixed structurally, by rebuilding the runtime per connection. Tombstones deliberately not implemented, recorded as a known limitation: a withdrawn entity lingers, and lingers as *available*. |
+| 7 | `go-homeconnect2mqtt` | Complete, bundle shipped (687 per-entity configs → one document per appliance, **472 847 bytes**), tombstones implemented by broker read-back. Two reviews of the bundle work, both fixed: the read-back, and an attribution rule defeated by a **nested** sibling root — driven over the shipped catalogue, the outer instance claimed 687 of 687 of the inner one's components and deleted the **510** that were live, repeatedly. Attribution is now an exact match against a topic only one instance renders, never a prefix. |
+| 8 | `go-daikin2mqtt` | Complete, bundle shipped (264 per-entity configs → 31 documents), tombstones implemented. A review found the scheduler's compile-time node id shared between siblings, so the read-back marked a sibling's **live** switches removed and the armed sweep retracted their configs — a permanent ping-pong. Fixed by two independent closures; the same-account variant is separable by no predicate and is pinned and documented rather than fixed. The composite `climate` is this phase's proof and it held: all **14** reproduced byte for byte, seven role bindings of which **five are synthetic**, carried as ordinary `model.Slot`s with **no runtime special case**. |
+| 9 | `go-unifi2mqtt` | Complete **except the bundle**. Steps 0–5 shipped; step 6 was deliberately declined — see immediately below. |
+
+### Phase 9 declined its final step, and the reason is not a defect
+
+This is recorded exhaustively in that repository — [`notes/adr0070-phase9-measurement.md`](https://github.com/SukramJ/go-unifi2mqtt/blob/main/notes/adr0070-phase9-measurement.md),
+section *"Step 7 outcome"* — and nowhere here, where a reader of the ADR
+would look for it. In short:
+
+**Two UniFi consoles cannot be told apart.** `Site.Internal` — the API's
+`internalReference` — is `default` on every console out of the box, and it is
+the only site-scoped string the bridge has. Two consoles on one broker
+therefore publish byte-identical config topics, `unique_id`s,
+`device.identifiers`, node ids, `default_entity_id`s, state topics and
+availability topics; changing `MQTT_TOPIC` moves the availability topic and
+only the availability topic. Every candidate identity that would separate them
+re-registers entities Home Assistant has already registered — which is the
+break ADR 0068 says nobody downstream can repair, and which the first
+amendment above withdrew for this daemon on exactly the same reasoning.
+
+**The bundle makes the collision worse rather than better.** Under the
+per-entity form the collision is an overwrite entity by entity; a bundle is one
+retained topic carrying a device's entire component set, so two consoles would
+replace each other's *whole* entity set on every poll. So the decline is a
+trade, not a deferral.
+
+**It is declined with notice.** Step 6 becomes available when the bridge has an
+identity that is per console, stable across restarts and renames, known before
+the first publish, and **outside both registry keys** — it may enter the
+bundle's `node_id`, which Home Assistant keys nothing on, but not `unique_id`
+and not `device.identifiers`. The fourth property is the one every candidate so
+far has failed.
+
+That one of nine phases can decline its last step on a measurement, and say
+what would reopen it, is the fan-out rule of ADR 0050 working as intended: each
+consumer decides in its own repository, at its own pin.
+
+### Erratum — the LOC table understates every bridge row
+
+The table in *Context* (restated in *Why* as "15 756 production lines", and
+identically in the design note's §2.1) is not false: each bridge figure is
+exactly the `internal/hass` line count it claims to be. What it does not say is
+that `internal/hass` is roughly **half** the surface each migration actually had
+to move — the topic schema, the publish loop, the orphan reconcile, the birth
+and LWT wiring and the MQTT bootstrap live in `coordinator`, `bridge`,
+`process` and `main.go`. Every phase measured this independently and every
+phase found the same shape:
+
+| Repo | Recorded | Measured today | Addressable surface | Ratio |
+| --- | ---: | ---: | ---: | ---: |
+| go-zendure2mqtt | 375 | 372 | ~672 | 1.8x |
+| go-mtec2mqtt | 591 | 576 | 942 | 1.6x |
+| go-homeconnect2mqtt | 716 | 713 | 1 318 | 1.8x |
+| go-daikin2mqtt | 846 | 838 | ~1 619 | 1.9x |
+| go-unifi2mqtt | 1537 | 1528 | ~3 486 | 2.3x |
+
+Measured by brace-matched function extents, and by whole files where the whole
+file is topic or payload construction; each phase note carries its own row
+breakdown. Two separate corrections travel together here and should not be
+confused: the **ratio**, which is the substantive one, and a few lines of
+staleness in each recorded figure, all from the same class of commit dropping
+the dead `object_id` discovery key.
+
+**The loom row is not corrected, because it is on a different basis.** 15 756
+is `internal/north/mqtt` entire, not a discovery subdirectory, so the ~2x
+adjustment does not obviously apply to it and no phase measured it. Two of the
+bridge notes generalise their finding to "all six rows"; that generalisation is
+asserted for loom, not verified, and is recorded here as such.
+
+The practical consequence is the one worth carrying forward: **a plan sized off
+the package that holds the payload builder is sized off half the job**, and the
+bridge with the most dynamic entity set (unifi, 2.3x) pays the most, because
+announce, clear and reconcile grow with it.
+
+### Two findings that belong to no single repository
+
+Both were found more than once, in different repositories, by different
+reviews. Neither is about Home Assistant, MQTT or this model; they are about
+what a test has to do to be worth having, and they are written down here
+because otherwise they exist only scattered across six repositories' notes.
+
+**A value spelled twice — once in production and once in a fixture — with
+nothing comparing them.** The programme numbers its own instances and reached
+**five**: mtec's legacy availability topic (whose test forwarded a literal and
+asserted the same literal) and its birth topic built twice and diverging on a
+trailing slash; homeconnect's breaker-bypass topic and its duplicated
+`haplanePacketSize`; and zendure's `publisher.Config.LegacyEntityTopics`, where
+**deleting the field from the composition root left the entire suite green**.
+Two further near-misses were recorded as avoided rather than found, and one
+instance pre-dates the numbering. A fixture that re-states the production value
+does not compare anything; it pins the test to itself. The check that works
+compares two independently produced spellings, and a mutation of one side has
+to turn it red.
+
+**Drive the operation; asking the predicate proves nothing.** Every repository
+that only asserted its ownership predicate either missed a defect or proved
+nothing at all. The two worst defects of the programme — homeconnect's nested
+sibling (510 live components tombstoned) and daikin's scheduler ping-pong — are
+both invisible to a predicate test and both fell out of *driving the sweep*
+against a second instance's live configs. This daemon paid the same tuition
+twice, in #826 and #833, and #833's fixtures now drive the topic-keyed sweep
+against a second loom daemon rather than only against a foreign integration. It
+is also what `go-hamqtt`'s `SweepRequest.SelfClaimed` exists for: ownership
+stopped being a predicate over the payload and became a claim list, because a
+`button` or `climate` payload carries no `state_topic` and the predicate
+collapsed to a shared prefix — 39 of this daemon's 9 996 configs, 24 of 264 for
+daikin, 20 of 687 for homeconnect.
+
+### What the design got wrong, and what it did not deliver
+
+Recorded so a reader can calibrate the frozen sections rather than trust them:
+
+- **The runtime façade did not survive contact.** The design note's §3.6 draws
+  a single `Bridge` type over an `mqtt.Client`. What shipped is
+  `publisher.Runtime` plus separate `StatePublisher`, `AvailabilityPublisher`
+  and `CommandRouter`, over a narrow `Transport` interface rather than a
+  `go-mqtt` client — a smaller dependency and a seam each consumer could adopt
+  one plane at a time, which is what made the five bridge migrations
+  incremental instead of atomic. This is the one large shape change between
+  design and delivery.
+- **`hagen` and `hadiff` were never built**, and the catalog releases without
+  them; see the first amendment.
+- **The `sensorMetadataByUnit` defect is still open in this daemon.** *Why*
+  claims it is "blocked today on an import cycle that the extraction
+  dissolves". The extraction happened; the fix did not follow it.
+  `internal/north/mqtt/discovery.go` still passes `ev.descUnit()` — the raw
+  wire spelling — to `resolveSensorStateClass`, against a table keyed on
+  canonical units, so the affected sensors still publish without a
+  `state_class` and Home Assistant still keeps no long-term statistics for
+  them. It is a benefit the ADR promised and the programme did not collect.
+- **`homeassistant/` is still hardcoded here.** The shared module made the
+  prefix a parameter (`discovery.DefaultPrefix`, a constant the consumer may
+  override); this daemon still spells it as
+  `naming.DiscoveryTopicPrefix`, with no operator knob. The design note's §2.4
+  listed it as a loom weakness and it remains one.
+
+### The "Revisit when" entries, dispositioned
+
+- *Phase 3 fails* — it did not. The ADR is closed rather than superseded.
+- *A consumer that must support HA < 2024.11* — moot: the per-entity path was
+  never removed, and is in fact the default (first amendment).
+- *Home Assistant changes the device schema in a way `hadiff` cannot absorb* —
+  `hadiff` does not exist; the guard in practice is `go-ha-catalog`'s
+  regenerate-and-compare workflow plus each consumer's exact pin.
+- *The unattended release produces a bad catalog that reaches a consumer* —
+  has not happened; this one stands as written and is the only entry that
+  outlives the ADR's closure.
+
+
 ## References
 
 - [ADR 0011](./0011-mqtt-topic-and-payload-architecture.md) — declarative
@@ -600,6 +795,14 @@ amendment withdrew.
 - `notes/adr0070-moveup-inventory.md` — the symbol-level measurement of the
   three move-up packages that this ADR's third amendment rests on
 - `notes/concepts/shared-ha-discovery-model.md` — the full design
+- The five phase measurements, each authoritative for its own phase:
+  [go-zendure2mqtt `docs/adr0070-pilot-measurement.md`](https://github.com/SukramJ/go-zendure2mqtt/blob/main/docs/adr0070-pilot-measurement.md) (phase 5),
+  [go-mtec2mqtt `notes/adr0070-phase6-measurement.md`](https://github.com/SukramJ/go-mtec2mqtt/blob/main/notes/adr0070-phase6-measurement.md) (6),
+  [go-homeconnect2mqtt `notes/adr0070-phase7-measurement.md`](https://github.com/SukramJ/go-homeconnect2mqtt/blob/main/notes/adr0070-phase7-measurement.md) (7),
+  [go-daikin2mqtt `notes/adr0070-phase8-measurement.md`](https://github.com/SukramJ/go-daikin2mqtt/blob/main/notes/adr0070-phase8-measurement.md) (8),
+  [go-unifi2mqtt `notes/adr0070-phase9-measurement.md`](https://github.com/SukramJ/go-unifi2mqtt/blob/main/notes/adr0070-phase9-measurement.md) (9, including the step-6 decline)
+- [`go-hamqtt` CHANGELOG](https://github.com/SukramJ/go-hamqtt/blob/main/CHANGELOG.md) —
+  v0.34.0's guards, each one traceable to a defect a consumer measured
 - Home Assistant core `2026.9.0b9-31-g76ca483aec0`:
   `homeassistant/generated/{device_classes,sensor}.json`,
   `homeassistant/components/mqtt/{abbreviations,discovery,schemas,sensor}.py`
