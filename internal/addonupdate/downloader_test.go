@@ -122,16 +122,41 @@ func TestDownloaderDownloadAndStageNetworkError(t *testing.T) {
 	assetName := "openccu-loom-ccu-1.2.3.tar.gz"
 	checksums := hex.EncodeToString(sum[:]) + "  " + assetName + "\n"
 
-	// checksums.txt resolves fine, but the asset URL points at a server
-	// that has already been shut down.
+	// checksums.txt resolves fine; the asset URL fails at the transport
+	// layer, before a single byte of a response body exists.
+	//
+	// The failure is produced by hijacking the connection and closing it,
+	// NOT by pointing at a server that has already been shut down. A closed
+	// httptest server releases its ephemeral port, and this package runs its
+	// tests in parallel — so another test's server can bind that exact port
+	// between the Close() and this request, at which point the "unreachable"
+	// asset URL resolves, DownloadAndStage returns nil, and the test fails
+	// claiming a defect in the downloader. That is what it did on main
+	// (run 34762214823): `DownloadAndStage() error = nil, want non-nil`.
+	//
+	// A live server that hangs up mid-request keeps its port held for the
+	// duration of the test and hands the client a transport error every
+	// time, so the premise the test asserts on is the one it actually sets up.
 	checksumSrv := newDownloaderTestServer(t, payload, checksums)
-	closedSrv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
-	closedSrv.Close()
+	brokenSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			return
+		}
+		conn, _, err := hj.Hijack()
+		if err != nil {
+			return
+		}
+		// Close without writing a status line: the client sees the
+		// connection drop, which is the network error this test is about.
+		_ = conn.Close()
+	}))
+	t.Cleanup(brokenSrv.Close)
 
 	stagePath := filepath.Join(t.TempDir(), "new_addon.tar.gz")
 	d := &Downloader{HTTPClient: &http.Client{}, StagePath: stagePath}
 	info := ReleaseInfo{
-		Asset:          ReleaseAsset{Name: assetName, DownloadURL: closedSrv.URL + "/asset"},
+		Asset:          ReleaseAsset{Name: assetName, DownloadURL: brokenSrv.URL + "/asset"},
 		ChecksumsAsset: ReleaseAsset{Name: "checksums.txt", DownloadURL: checksumSrv.URL + "/checksums.txt"},
 	}
 
