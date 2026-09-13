@@ -9,7 +9,6 @@ import (
 	hamodel "github.com/SukramJ/go-hamqtt/model"
 
 	"github.com/SukramJ/openccu-loom/internal/build"
-	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -246,7 +245,7 @@ func BuildSecurityDiscovery(base, deviceName, configURL string, e securityEntity
 	// that would otherwise both declare `loom_security_<key>` — the keys are
 	// a fixed vocabulary, so the collision is unconditional and Home
 	// Assistant drops the second daemon's entities outright.
-	uniqueID := naming.ScopedDaemonUniqueID(base, "loom_security_"+e.key)
+	uniqueID := scopedDaemonIdentity(base, "loom_security_"+e.key)
 	stateTopic := e.topic
 	if stateTopic == "" {
 		stateTopic = securityStateTopic(base, e.key)

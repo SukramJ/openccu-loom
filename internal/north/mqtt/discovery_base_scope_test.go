@@ -318,9 +318,12 @@ func daemonLevelUniqueIDs(t *testing.T, base string) map[string]string {
 	}
 
 	read("alarm", BuildAlarmPanelDiscovery(base, alarmMasterZone, "Alarm", nil, true, false, false))
-	for _, e := range securitySystemEntities(func(_, fallback string) string { return fallback }) {
-		if e.key == "state" {
-			read("security", BuildSecurityDiscovery(base, "Security & Safety", "", e))
+	// Indexed rather than ranged by value: the entity struct is large enough
+	// that gocritic's rangeValCopy fires on the copy.
+	secEntities := securitySystemEntities(func(_, fallback string) string { return fallback })
+	for i := range secEntities {
+		if secEntities[i].key == "state" {
+			read("security", BuildSecurityDiscovery(base, "Security & Safety", "", secEntities[i]))
 		}
 	}
 	db := NewDefaultDiscoveryBuilder(NewTopicBuilder(base), "ccu-01")
@@ -402,8 +405,10 @@ func TestDaemonLevelUniqueIDsAreUnchangedOnTheDefaultBase(t *testing.T) {
 // the ids it publishes today whenever the operator never set a topic base.
 func TestSecurityIdentityIsUnchangedOnTheDefaultBase(t *testing.T) {
 	t.Parallel()
-	for _, e := range securitySystemEntities(func(_, fallback string) string { return fallback }) {
-		item := BuildSecurityDiscovery("openccu-loom", "Security & Safety", "", e)
+	entities := securitySystemEntities(func(_, fallback string) string { return fallback })
+	for i := range entities {
+		e := &entities[i]
+		item := BuildSecurityDiscovery("openccu-loom", "Security & Safety", "", *e)
 		if !item.OK {
 			t.Fatalf("BuildSecurityDiscovery(%q) returned OK=false", e.key)
 		}

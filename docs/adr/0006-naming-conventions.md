@@ -367,7 +367,7 @@ literals — `loom_addon_update`, `openccu-loom_alarm_<zone>`,
 topics carrying the **same** `unique_id`, which HA's MQTT integration rejects
 outright. The semantics moved from "last writer wins, and a restart repoints
 the entity at the live daemon" to "first writer wins permanently": strictly
-worse than before the scope. `naming.ScopedDaemonUniqueID` prefixes those
+worse than before the scope. `scopedDaemonIdentity` prefixes those
 three ids with the same `<base-slug>_`, under the same condition — non-default
 base only — so a single-daemon installation on the default base is untouched
 to the byte, and the re-key (which costs the entity's history, `entity_id`,

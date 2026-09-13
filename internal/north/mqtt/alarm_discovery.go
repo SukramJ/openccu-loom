@@ -11,7 +11,6 @@ import (
 	hamodel "github.com/SukramJ/go-hamqtt/model"
 
 	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
-	"github.com/SukramJ/openccu-loom/internal/model/naming"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -172,10 +171,10 @@ func (c alarmContext) Availability(_ *hamodel.Device, e hamodel.Entity) []hadisc
 // the zone names are operator-chosen and `master` is the default on both —
 // and Home Assistant rejects the second as a duplicate unique id, so the
 // second daemon's panels never appear at all. Only the daemon-level planes
-// need this; see [naming.ScopedDaemonUniqueID] for why it does not apply on
+// need this; see [scopedDaemonIdentity] for why it does not apply on
 // the default base.
 func (c alarmContext) UniqueID(_ *hamodel.Device, e hamodel.Entity) string {
-	return naming.ScopedDaemonUniqueID(c.base, e.Key())
+	return scopedDaemonIdentity(c.base, e.Key())
 }
 
 // ObjectID implements [hadiscovery.Context]. The entity-id seed this plane

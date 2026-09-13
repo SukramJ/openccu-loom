@@ -11,6 +11,7 @@ import (
 	"go/token"
 	"maps"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -372,40 +373,46 @@ func TestDaemonLevelNodeIDsCoverEveryLiteralNodeID(t *testing.T) {
 // on the broker without a single test noticing.
 func literalNodeIDConstants(t *testing.T) map[string]string {
 	t.Helper()
-	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, ".", func(fi os.FileInfo) bool {
-		return !strings.HasSuffix(fi.Name(), "_test.go")
-	}, 0)
+	entries, err := os.ReadDir(".")
 	if err != nil {
-		t.Fatalf("parse package source: %v", err)
+		t.Fatalf("read package dir: %v", err)
 	}
+	fset := token.NewFileSet()
 	out := map[string]string{}
-	for _, pkg := range pkgs {
-		for _, file := range pkg.Files {
-			for _, decl := range file.Decls {
-				gd, ok := decl.(*ast.GenDecl)
-				if !ok || gd.Tok != token.CONST {
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		// ParseFile rather than the deprecated ParseDir, which cannot see
+		// build tags; one flat package directory needs nothing more.
+		file, err := parser.ParseFile(fset, filepath.Clean(name), nil, 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", name, err)
+		}
+		for _, decl := range file.Decls {
+			gd, ok := decl.(*ast.GenDecl)
+			if !ok || gd.Tok != token.CONST {
+				continue
+			}
+			for _, spec := range gd.Specs {
+				vs, ok := spec.(*ast.ValueSpec)
+				if !ok || len(vs.Names) != 1 || len(vs.Values) != 1 {
 					continue
 				}
-				for _, spec := range gd.Specs {
-					vs, ok := spec.(*ast.ValueSpec)
-					if !ok || len(vs.Names) != 1 || len(vs.Values) != 1 {
-						continue
-					}
-					name := vs.Names[0].Name
-					if !strings.HasSuffix(name, "NodeID") {
-						continue
-					}
-					lit, ok := vs.Values[0].(*ast.BasicLit)
-					if !ok || lit.Kind != token.STRING {
-						continue
-					}
-					value, err := strconv.Unquote(lit.Value)
-					if err != nil || value == "" {
-						continue
-					}
-					out[name] = value
+				constName := vs.Names[0].Name
+				if !strings.HasSuffix(constName, "NodeID") {
+					continue
 				}
+				lit, ok := vs.Values[0].(*ast.BasicLit)
+				if !ok || lit.Kind != token.STRING {
+					continue
+				}
+				value, err := strconv.Unquote(lit.Value)
+				if err != nil || value == "" {
+					continue
+				}
+				out[constName] = value
 			}
 		}
 	}

@@ -7,8 +7,6 @@ import (
 	hacatalog "github.com/SukramJ/go-ha-catalog"
 	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
 	hamodel "github.com/SukramJ/go-hamqtt/model"
-
-	"github.com/SukramJ/openccu-loom/internal/model/naming"
 )
 
 // daemonDeviceIdentifier groups every daemon-level (not per-central)
@@ -125,7 +123,7 @@ func (c addonUpdateContext) Availability(*hamodel.Device, hamodel.Entity) []hadi
 // constant with no namespace prefix, so [hadiscovery.StdContext]'s
 // namespaced default cannot produce it.
 func (c addonUpdateContext) UniqueID(*hamodel.Device, hamodel.Entity) string {
-	return naming.ScopedDaemonUniqueID(c.topics.Base, addonUpdateUniqueID)
+	return scopedDaemonIdentity(c.topics.Base, addonUpdateUniqueID)
 }
 
 // NodeID implements [hadiscovery.Context]: the literal "daemon", not the
