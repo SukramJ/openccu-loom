@@ -1,6 +1,6 @@
 {
   "combined/central-scoped-address": {
-    "topic": "homeassistant/number/ccu-01_int0000001/openccu-loom_ccu-01_int0000001_3_duration/config",
+    "topic": "homeassistant/number/gh_ccu-01_int0000001/openccu-loom_ccu-01_int0000001_3_duration/config",
     "payload": {
       "availability": [
         {
@@ -43,7 +43,7 @@
     }
   },
   "combined/duration-catalogue-label": {
-    "topic": "homeassistant/number/ccu-01_0001abcd/openccu-loom_0001abcd_3_duration/config",
+    "topic": "homeassistant/number/gh_ccu-01_0001abcd/openccu-loom_0001abcd_3_duration/config",
     "payload": {
       "availability": [
         {
@@ -87,7 +87,7 @@
     }
   },
   "combined/duration-ccu-label": {
-    "topic": "homeassistant/number/ccu-01_0001abcd/openccu-loom_0001abcd_3_duration/config",
+    "topic": "homeassistant/number/gh_ccu-01_0001abcd/openccu-loom_0001abcd_3_duration/config",
     "payload": {
       "availability": [
         {
@@ -131,7 +131,7 @@
     }
   },
   "combined/enum-select-door-mode": {
-    "topic": "homeassistant/select/ccu-01_0004door/openccu-loom_0004door_1_door_mode/config",
+    "topic": "homeassistant/select/gh_ccu-01_0004door/openccu-loom_0004door_1_door_mode/config",
     "payload": {
       "availability": [
         {
@@ -174,7 +174,7 @@
     }
   },
   "combined/hs-color": {
-    "topic": "homeassistant/sensor/ccu-01_0003cafe/openccu-loom_0003cafe_1_hs_color/config",
+    "topic": "homeassistant/sensor/gh_ccu-01_0003cafe/openccu-loom_0003cafe_1_hs_color/config",
     "payload": {
       "availability": [
         {
@@ -212,7 +212,7 @@
     }
   },
   "combined/level-combined": {
-    "topic": "homeassistant/sensor/ccu-01_0002beef/openccu-loom_0002beef_4_level_combined/config",
+    "topic": "homeassistant/sensor/gh_ccu-01_0002beef/openccu-loom_0002beef_4_level_combined/config",
     "payload": {
       "availability": [
         {
@@ -250,7 +250,7 @@
     }
   },
   "combined/no-device-object": {
-    "topic": "homeassistant/number/ccu-01_0001abcd/openccu-loom_0001abcd_3_duration/config",
+    "topic": "homeassistant/number/gh_ccu-01_0001abcd/openccu-loom_0001abcd_3_duration/config",
     "payload": {
       "availability": [
         {
@@ -293,7 +293,7 @@
     }
   },
   "combined/projection-sets-unique-id": {
-    "topic": "homeassistant/number/ccu-01_0001abcd/openccu-loom_0001abcd_3_duration/config",
+    "topic": "homeassistant/number/gh_ccu-01_0001abcd/openccu-loom_0001abcd_3_duration/config",
     "payload": {
       "availability": [
         {
@@ -337,7 +337,7 @@
     }
   },
   "combined/second-central": {
-    "topic": "homeassistant/number/ccu-02_0001abcd/openccu-loom_0001abcd_3_duration/config",
+    "topic": "homeassistant/number/gh_ccu-02_0001abcd/openccu-loom_0001abcd_3_duration/config",
     "payload": {
       "availability": [
         {
@@ -381,7 +381,7 @@
     }
   },
   "combined/sub-devices-enabled": {
-    "topic": "homeassistant/number/ccu-01_0001abcd/openccu-loom_0001abcd_3_duration/config",
+    "topic": "homeassistant/number/gh_ccu-01_0001abcd/openccu-loom_0001abcd_3_duration/config",
     "payload": {
       "availability": [
         {
@@ -425,7 +425,7 @@
     }
   },
   "security/class/battery-diagnostic": {
-    "topic": "homeassistant/binary_sensor/security/class_battery/config",
+    "topic": "homeassistant/binary_sensor/gh_security/class_battery/config",
     "payload": {
       "availability": [
         {
@@ -469,7 +469,7 @@
     }
   },
   "security/class/smoke-hazard": {
-    "topic": "homeassistant/binary_sensor/security/class_smoke/config",
+    "topic": "homeassistant/binary_sensor/gh_security/class_smoke/config",
     "payload": {
       "availability": [
         {
@@ -512,7 +512,7 @@
     }
   },
   "security/system/alarm": {
-    "topic": "homeassistant/binary_sensor/security/alarm/config",
+    "topic": "homeassistant/binary_sensor/gh_security/alarm/config",
     "payload": {
       "availability": [
         {
@@ -555,7 +555,7 @@
     }
   },
   "security/system/event": {
-    "topic": "homeassistant/event/security/event/config",
+    "topic": "homeassistant/event/gh_security/event/config",
     "payload": {
       "availability": [
         {
@@ -597,7 +597,7 @@
     }
   },
   "security/system/fault": {
-    "topic": "homeassistant/event/security/fault/config",
+    "topic": "homeassistant/event/gh_security/fault/config",
     "payload": {
       "availability": [
         {
@@ -640,7 +640,7 @@
     }
   },
   "security/system/health": {
-    "topic": "homeassistant/binary_sensor/security/health/config",
+    "topic": "homeassistant/binary_sensor/gh_security/health/config",
     "payload": {
       "availability": [
         {
@@ -681,7 +681,7 @@
     }
   },
   "security/system/last_alarm": {
-    "topic": "homeassistant/sensor/security/last_alarm/config",
+    "topic": "homeassistant/sensor/gh_security/last_alarm/config",
     "payload": {
       "availability": [
         {
@@ -722,7 +722,7 @@
     }
   },
   "security/system/last_fault": {
-    "topic": "homeassistant/sensor/security/last_fault/config",
+    "topic": "homeassistant/sensor/gh_security/last_fault/config",
     "payload": {
       "availability": [
         {
@@ -764,7 +764,7 @@
     }
   },
   "security/system/problem": {
-    "topic": "homeassistant/binary_sensor/security/problem/config",
+    "topic": "homeassistant/binary_sensor/gh_security/problem/config",
     "payload": {
       "availability": [
         {
@@ -808,7 +808,7 @@
     }
   },
   "security/system/state": {
-    "topic": "homeassistant/sensor/security/state/config",
+    "topic": "homeassistant/sensor/gh_security/state/config",
     "payload": {
       "availability": [
         {
@@ -856,7 +856,7 @@
     }
   },
   "security/system/state-without-config-url": {
-    "topic": "homeassistant/sensor/security/state/config",
+    "topic": "homeassistant/sensor/gh_security/state/config",
     "payload": {
       "availability": [
         {
@@ -903,7 +903,7 @@
     }
   },
   "security/zone/named": {
-    "topic": "homeassistant/sensor/security/zone_erdgeschoss-flur/config",
+    "topic": "homeassistant/sensor/gh_security/zone_erdgeschoss-flur/config",
     "payload": {
       "availability": [
         {
@@ -944,7 +944,7 @@
     }
   },
   "security/zone/unnamed-falls-back-to-slug": {
-    "topic": "homeassistant/sensor/security/zone_erdgeschoss-flur/config",
+    "topic": "homeassistant/sensor/gh_security/zone_erdgeschoss-flur/config",
     "payload": {
       "availability": [
         {

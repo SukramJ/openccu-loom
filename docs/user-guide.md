@@ -231,9 +231,14 @@ Home Assistant Discovery plane (same state topics, separate config messages):
 homeassistant/<component>/<node_id>/<object_id>/config
 ```
 
-The `node_id` is `<central>_<address>` (lower-cased) — there is no
-literal `openccu-loom` segment. Embedding `central_name` keeps
-discovery IDs collision-free across CCUs.
+The `node_id` is `<central>_<address>` (lower-cased). Embedding
+`central_name` keeps discovery IDs collision-free across CCUs.
+
+If you have changed `north.mqtt.topic_base` away from its default, the node
+id additionally carries that base as a leading `<base-slug>_` segment —
+`homeassistant/binary_sensor/house_ccu-haus_000a0000000001/4_state/config`.
+That is what keeps two daemons on one broker from writing each other's
+retained configs; on the default base nothing is added.
 
 ## Troubleshooting
 

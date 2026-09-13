@@ -37,14 +37,26 @@ import (
 // cost: it is then deleted along with the availability-only claim it
 // records, in the commit that makes the change, deliberately.
 //
-// One such change has landed, and rather than delete the claim for 48
-// entries to admit a delta in two, the delta is carried explicitly. The
-// discovery-slug unification moved the `object_id` segment of exactly two
-// topics ([hubGoldenSlugUnificationTopicMoves]), and nothing else anywhere
-// — so those two entries are checked by substituting the pre-unification
-// topic back in and requiring the ORIGINAL pre-gate digest. That is a
-// stronger statement than a re-baselined digest would be: it says the
-// payload did not move AND names the one byte range of the topic that did.
+// Two such changes have landed, and rather than delete the claim for 48
+// entries to admit a delta in the topic string, each delta is carried
+// explicitly and the ORIGINAL pre-gate digests are still required. That is a
+// stronger statement than a re-baselined digest would be: it says the payload
+// did not move AND names the one byte range of the topic that did.
+//
+//  1. The discovery-slug unification moved the `object_id` segment of exactly
+//     two topics ([hubGoldenSlugUnificationTopicMoves]).
+//  2. The topic base's node-id scope moved the `node_id` segment of ALL
+//     forty-eight, by inserting `<base-slug>_` in front of it — these
+//     fixtures render at base `gh`, which is not the default, so every one
+//     of them is scoped. An exemption map of 48 entries would be a
+//     re-baseline wearing a disguise, so this one is undone by rule rather
+//     than by table: [unscopedHubTopic] strips the scope back off, and the
+//     rule is checked before it is applied (a topic that does NOT carry the
+//     scope fails rather than passing unnoticed).
+//
+// Both substitutions are reversals, not exemptions: what they put back is the
+// exact byte sequence the pre-change builder produced, so anything else that
+// moved still breaks the digest.
 var hubGoldenPreCCUGateDigests = map[string]string{
 	"aggregate/alarm-messages":                  "807cd762dc60a5ac5d8e9f86f516b858520792f2e3b9ecc6634e09303d501f88",
 	"aggregate/hazard-second-central-inbox":     "c09a19a17ffa95d927066f2e9b6203230d882be3dfdc919089d6c50d89030b26",
@@ -113,6 +125,37 @@ var hubGoldenSlugUnificationTopicMoves = map[string]string{
 	"sysvar/hazard-literal-double-underscore": "homeassistant/binary_sensor/ccu-01_sysvars/watchdog__ccu-jack/config",
 }
 
+// unscopedHubTopic removes the topic base's node-id scope from a rendered hub
+// discovery topic, returning the topic the pre-scope builder produced.
+//
+// It is the undo of [naming.ScopedDiscoveryNodeID] for exactly the base these
+// fixtures render at, and it is deliberately strict in both directions. A
+// topic whose node id does NOT start with the scope is a failure, not a
+// pass-through: that is the case where the scope silently stopped being
+// applied, which would otherwise sail through this test as "nothing moved"
+// while every one of this daemon's retained configs quietly moved back on top
+// of a sibling's. And the component and object-id segments are reassembled
+// unchanged, so a change to either still reaches the digest.
+func unscopedHubTopic(t *testing.T, name, topic string) string {
+	t.Helper()
+	const scope = hubGoldenBase + "_"
+	parts := strings.Split(topic, "/")
+	// homeassistant / <component> / <node_id> / <object_id> / config
+	if len(parts) != 5 {
+		t.Fatalf("%s: %q is not a five-segment discovery config topic", name, topic)
+	}
+	bare, ok := strings.CutPrefix(parts[2], scope)
+	if !ok {
+		t.Fatalf("%s: node id %q does not carry the %q scope of topic base %q. "+
+			"Either the base scope stopped being applied — in which case this daemon is "+
+			"writing on top of any sibling daemon's retained configs again — or the node id "+
+			"moved for some other reason this test cannot tell apart from it.",
+			name, parts[2], scope, hubGoldenBase)
+	}
+	parts[2] = bare
+	return strings.Join(parts, "/")
+}
+
 // TestHubGoldenChangedOnlyInAvailability strips `availability` from every
 // pinned hub payload and requires the remainder to hash to what it hashed to
 // before the gate was added.
@@ -131,6 +174,7 @@ func TestHubGoldenChangedOnlyInAvailability(t *testing.T) {
 			t.Errorf("%s: no pre-gate digest — a new hub entity, or a renamed one", name)
 			continue
 		}
+		entry.Topic = unscopedHubTopic(t, name, entry.Topic)
 		if was, moved := hubGoldenSlugUnificationTopicMoves[name]; moved {
 			// The slug unification moved this topic's object-id segment.
 			// Put the old segment back: if the digest then matches the

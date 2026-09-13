@@ -283,9 +283,72 @@ here rather than fixed: changing the discovery node id moves every retained
 config topic on the broker and orphans the old ones, which is a migration
 with its own ADR, not a drive-by.
 
+*(Superseded on 2026-09-13 — see the amendment below. The gap is closed and
+rule 4 now describes the implementation.)*
+
 The section is not rewritten. What the conventions were meant to achieve —
 one namespace per concern, verb-suffixed inbound topics, no hardcoded
 discovery root — still reads as the decision. The paths are corrected here,
 and `docs/mqtt-topic-schema.md` is the authority on what the daemon actually
 writes; since 2026-09-13 it is checked against the builders in both
 directions by `tests/contract/mqtt_topic_schema_producer_test.go`.
+
+## Amendment (2026-09-13) — rule 4 is implemented, and it was never the base *alone*
+
+The amendment above recorded that `DiscoveryConfig` ignored `b.Base`, called
+it "a live gap, not a documentation error", and left it. It is fixed now, in
+the same unreleased window as the discovery-slug unification, so operators
+absorb one disruption rather than two.
+
+**What the fix is.** `TopicBuilder.DiscoveryConfig` prefixes the `node_id`
+with the topic base's slug, and only when that base is not the default:
+
+```
+homeassistant/<component>/[<base-slug>_]<node_id>/<object_id>/config
+```
+
+`naming.DiscoveryBaseScope` is the rule and `naming.ScopedDiscoveryNodeID`
+joins the two halves. The bundle plane renders its topic inside `go-hamqtt`
+and never reaches the builder, so it scopes in `Bridge.routeToBundle`; the
+retained-config sweeps learn the scope through `discoveryNodePrefixes` and
+`daemonLevelNodeID`.
+
+**Rule 4's original wording was wrong about the mechanism, and stays
+withdrawn.** It said the node "derives from `BridgeConfig.Base`, not a
+hardcoded literal — `homeassistant/{component}/{base}/{objectID}/config`",
+i.e. the base *replacing* the node id. That form cannot work: `node_id` is
+also what separates one device from another within a daemon, which is Home
+Assistant's own convention and what the multi-CCU layout depends on. The base
+is a **prefix** to that, not a substitute for it. The decision rule 4 was
+reaching for — one daemon, one discovery namespace — is what is implemented;
+the path it wrote down is not.
+
+**Only a non-default base contributes.** A scope that always applied would
+move every retained config of every installation, single-daemon ones
+included, for a collision they cannot have. Setting a base is how an operator
+asks for a namespace, so it is what earns one. Two daemons that both leave the
+base at its default are not separated, deliberately: they already overwrite
+each other on every raw state topic, which the discovery plane cannot repair
+and must not disguise.
+
+**What this does not fix, stated because rule 4's "Consequences" line
+("Multi-daemon HA Discovery setups don't collide") over-promises it.** Two
+daemons against the *same* CCU still declare byte-identical `unique_id`s and
+device `identifiers` — both are keyed on the device address and the CCU
+serial, never on the base or the central name (ADR 0024 role 3). Home
+Assistant keys its entity registry on the first and its device registry on
+the second, so a single HA instance still resolves both daemons to one set of
+entities however the discovery topics are spelled. What the scope fixes is
+everything downstream of the topic: the retained-config race, and — the one
+that actually deleted entities — each daemon's orphan sweep judging the
+other's live configs against its own claim set. Ownership there is decided
+from the node id alone, because `publisher.ConfigTopic` carries no payload.
+
+**Migration.** Recorded under ADR 0068's six obligations in
+`docs/external-clients/ha-unique-id-migration.md`. It moves a `node_id` and
+nothing else: no `unique_id`, no `identifiers`, no `default_entity_id`, no
+state, command or availability topic — so unlike the slug unification in the
+same window, not even a device row is re-created. The pre-scope node ids are
+retracted by the orphan sweep through the unscoped entries
+`discoveryNodePrefixes` keeps for one release, the same pattern as
+`legacyDiscoverySlug`.

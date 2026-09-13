@@ -36,7 +36,7 @@
     }
   },
   "default": {
-    "topic": "homeassistant/update/daemon/addon_update/config",
+    "topic": "homeassistant/update/gh_daemon/addon_update/config",
     "payload": {
       "availability": [
         {
@@ -72,7 +72,7 @@
     }
   },
   "locale-de": {
-    "topic": "homeassistant/update/daemon/addon_update/config",
+    "topic": "homeassistant/update/gh_daemon/addon_update/config",
     "payload": {
       "availability": [
         {
@@ -108,7 +108,7 @@
     }
   },
   "second-central": {
-    "topic": "homeassistant/update/daemon/addon_update/config",
+    "topic": "homeassistant/update/gh_daemon/addon_update/config",
     "payload": {
       "availability": [
         {

@@ -1,6 +1,6 @@
 {
   "notify/escaped-central": {
-    "topic": "homeassistant/notify/ccu_kueche_002a5d8989d5c3/3_notify/config",
+    "topic": "homeassistant/notify/gh_ccu_kueche_002a5d8989d5c3/3_notify/config",
     "payload": {
       "availability": [
         {
@@ -37,7 +37,7 @@
     }
   },
   "notify/no-channel-context": {
-    "topic": "homeassistant/notify/ccu-01_002a5d8989d5c3/3_notify/config",
+    "topic": "homeassistant/notify/gh_ccu-01_002a5d8989d5c3/3_notify/config",
     "payload": {
       "availability": [
         {
@@ -74,7 +74,7 @@
     }
   },
   "notify/operator-named-channel": {
-    "topic": "homeassistant/notify/ccu-01_002a5d8989d5c3/3_notify/config",
+    "topic": "homeassistant/notify/gh_ccu-01_002a5d8989d5c3/3_notify/config",
     "payload": {
       "availability": [
         {
@@ -111,7 +111,7 @@
     }
   },
   "notify/primary-channel": {
-    "topic": "homeassistant/notify/ccu-01_002a5d8989d5c3/3_notify/config",
+    "topic": "homeassistant/notify/gh_ccu-01_002a5d8989d5c3/3_notify/config",
     "payload": {
       "availability": [
         {
@@ -148,7 +148,7 @@
     }
   },
   "notify/second-central": {
-    "topic": "homeassistant/notify/ccu-02_002a5d8989d5c3/3_notify/config",
+    "topic": "homeassistant/notify/gh_ccu-02_002a5d8989d5c3/3_notify/config",
     "payload": {
       "availability": [
         {
@@ -185,7 +185,7 @@
     }
   },
   "notify/sub-device": {
-    "topic": "homeassistant/notify/ccu-01_002a5d8989d5c3/3_notify/config",
+    "topic": "homeassistant/notify/gh_ccu-01_002a5d8989d5c3/3_notify/config",
     "payload": {
       "availability": [
         {

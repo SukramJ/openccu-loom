@@ -28,6 +28,34 @@ clear anything by hand.
 German names are not affected. "CCU Küche" was "ccu_kueche" before and is
 "ccu_kueche" now.
 
+Changed, and it affects you only if you set **`topic_base`** to something
+other than `openccu-loom`. If you never touched that setting, this one is a
+no-op for you and nothing on your system moves.
+
+The Home Assistant discovery topics did not use `topic_base`, although the
+whole point of that setting is to give a daemon a namespace of its own. Two
+OpenCCU-Loom daemons on one broker — even with different `topic_base` values,
+even bridging different CCUs — wrote their discovery configs to the same
+topics. They overwrote each other's, and worse, each one's automatic cleanup
+pass deleted the other's entities on every start, silently. The alarm,
+security and add-on-update entities collided this way between *any* two
+daemons, because those carry no CCU name at all.
+
+The discovery topic now carries your `topic_base` in front of the node id, so
+two daemons cannot reach each other's entities.
+
+Your entities keep everything: history, statistics, entity ids, device cards,
+areas, and every automation and dashboard card that names them. Nothing has to
+be re-applied — unlike the discovery-slug change above, not even a device card
+is re-created. The old discovery topics are cleared automatically on first
+start.
+
+One caution if you run two daemons against the same broker and only one of
+them has a custom `topic_base`: upgrade both at the same time, or give the
+second one its own `topic_base` first. For one release, the daemon with the
+custom base cleans up the old shared topics, and while a daemon on the default
+setting is still publishing to them, its entities are what gets cleaned up.
+
 ## 0.77.0
 
 Changed: the Config UI looks and behaves the same on every page. Views used to

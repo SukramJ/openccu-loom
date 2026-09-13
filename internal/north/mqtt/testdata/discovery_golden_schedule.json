@@ -1,6 +1,6 @@
 {
   "sensor/cuxd-central-scoped": {
-    "topic": "homeassistant/sensor/ccu-01_cux2801001/openccu-loom_ccu-01_cux2801001_1_schedule/config",
+    "topic": "homeassistant/sensor/gh_ccu-01_cux2801001/openccu-loom_ccu-01_cux2801001_1_schedule/config",
     "payload": {
       "availability": [
         {
@@ -42,7 +42,7 @@
     }
   },
   "sensor/cuxd-second-central": {
-    "topic": "homeassistant/sensor/ccu-02_cux2801001/openccu-loom_ccu-02_cux2801001_1_schedule/config",
+    "topic": "homeassistant/sensor/gh_ccu-02_cux2801001/openccu-loom_ccu-02_cux2801001_1_schedule/config",
     "payload": {
       "availability": [
         {
@@ -84,7 +84,7 @@
     }
   },
   "sensor/hmip-multi-io": {
-    "topic": "homeassistant/sensor/ccu-01_0001d3c9/openccu-loom_0001d3c9_5_schedule/config",
+    "topic": "homeassistant/sensor/gh_ccu-01_0001d3c9/openccu-loom_0001d3c9_5_schedule/config",
     "payload": {
       "availability": [
         {
@@ -126,7 +126,7 @@
     }
   },
   "sensor/mixed-case-central": {
-    "topic": "homeassistant/sensor/ccu-keller_cux2801001/openccu-loom_ccu-keller_cux2801001_1_schedule/config",
+    "topic": "homeassistant/sensor/gh_ccu-keller_cux2801001/openccu-loom_ccu-keller_cux2801001_1_schedule/config",
     "payload": {
       "availability": [
         {
@@ -168,7 +168,7 @@
     }
   },
   "sensor/no-device-object": {
-    "topic": "homeassistant/sensor/ccu-01_0001d3c9/openccu-loom_0001d3c9_5_schedule/config",
+    "topic": "homeassistant/sensor/gh_ccu-01_0001d3c9/openccu-loom_0001d3c9_5_schedule/config",
     "payload": {
       "availability": [
         {
@@ -207,7 +207,7 @@
     }
   },
   "switch/cuxd-central-scoped": {
-    "topic": "homeassistant/switch/ccu-01_cux2801001/openccu-loom_ccu-01_cux2801001_1_schedule_1_1/config",
+    "topic": "homeassistant/switch/gh_ccu-01_cux2801001/openccu-loom_ccu-01_cux2801001_1_schedule_1_1/config",
     "payload": {
       "availability": [
         {
@@ -253,7 +253,7 @@
     }
   },
   "switch/no-device-object": {
-    "topic": "homeassistant/switch/ccu-01_0001d3c9/openccu-loom_0001d3c9_5_schedule_1_1/config",
+    "topic": "homeassistant/switch/gh_ccu-01_0001d3c9/openccu-loom_0001d3c9_5_schedule_1_1/config",
     "payload": {
       "availability": [
         {
@@ -296,7 +296,7 @@
     }
   },
   "switch/target-channel-1": {
-    "topic": "homeassistant/switch/ccu-01_0001d3c9/openccu-loom_0001d3c9_5_schedule_1_1/config",
+    "topic": "homeassistant/switch/gh_ccu-01_0001d3c9/openccu-loom_0001d3c9_5_schedule_1_1/config",
     "payload": {
       "availability": [
         {
@@ -342,7 +342,7 @@
     }
   },
   "switch/target-channel-18": {
-    "topic": "homeassistant/switch/ccu-01_0001d3c9/openccu-loom_0001d3c9_5_schedule_1_18/config",
+    "topic": "homeassistant/switch/gh_ccu-01_0001d3c9/openccu-loom_0001d3c9_5_schedule_1_18/config",
     "payload": {
       "availability": [
         {

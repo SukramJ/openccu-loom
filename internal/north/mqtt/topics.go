@@ -29,7 +29,7 @@ import (
 // naming package carries no helper for yet (see
 // [TopicBuilder.CombinedState]). [TopicBuilder.DiscoveryConfig] is not
 // among them, although this comment used to list it: it delegates to
-// [naming.DiscoveryConfigTopic].
+// [naming.DiscoveryConfigTopic], scoping the node id by the topic base.
 type TopicBuilder struct {
 	Base string
 }
@@ -75,13 +75,34 @@ func (b *TopicBuilder) AddonUpdateCommand() string {
 	return b.Base + "/system/addon_update/set"
 }
 
+// DiscoveryNodeScope is the `<base-slug>_` prefix this daemon's discovery
+// node ids carry so a second daemon on the same broker cannot overwrite them.
+// Empty on the default topic base — see [naming.DiscoveryBaseScope] for why
+// only a base the operator changed earns a scope.
+//
+// Exported for the retained-config sweeps, which have to recognise the node
+// ids this builder writes ([discoveryNodePrefixes], [Bridge.ownsDiscoveryTopic]).
+func (b *TopicBuilder) DiscoveryNodeScope() string {
+	return naming.DiscoveryBaseScope(b.Base)
+}
+
 // DiscoveryConfig is the HA Discovery retained config topic.
 // Delegates to [naming.DiscoveryConfigTopic] — the model layer owns
 // the format string.
 //
-//	homeassistant/<component>/<node_id>/<object_id>/config
+//	homeassistant/<component>/<base-slug>_<node_id>/<object_id>/config
+//
+// The `<base-slug>_` scope is this builder's own contribution and the reason
+// the method takes a receiver at all: ADR 0006 rule 4 has always said the
+// discovery node derives from the topic base, and until this scope existed it
+// did not — two daemons under different bases wrote the same config topics.
+// It is empty on the default base, so the shape the topic-schema document
+// names is unchanged and so is every topic a default-base daemon publishes.
+// Applied HERE rather than at each of the thirteen node-id producers because
+// this is the one function all of them funnel through on the way to a topic;
+// the bundle plane is the single exception and scopes in [Bridge.routeToBundle].
 func (b *TopicBuilder) DiscoveryConfig(component, nodeID, objectID string) string {
-	return naming.DiscoveryConfigTopic(component, nodeID, objectID)
+	return naming.DiscoveryConfigTopic(component, naming.ScopedDiscoveryNodeID(b.Base, nodeID), objectID)
 }
 
 // --- Channel-bound DP topics (delegate to naming.PathData) -----------

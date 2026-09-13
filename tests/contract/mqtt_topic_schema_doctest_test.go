@@ -29,6 +29,7 @@ package contract
 // iface="HmIP-RF", device address="000C9709AEF157", channel=1.
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
@@ -267,5 +268,52 @@ func TestMQTTTopicSchemaDoc_DiscoveryTopic(t *testing.T) {
 	if got != want {
 		t.Errorf("DiscoveryConfig mismatch:\n  doc says: %q\n  builder:  %q\n  → update docs/mqtt-topic-schema.md or fix TopicBuilder",
 			want, got)
+	}
+}
+
+// TestMQTTTopicSchemaDoc_DiscoveryNodeScopeIsNotATopic holds
+// [mqtt.TopicBuilder.DiscoveryNodeScope] to the claim that lets it out of
+// docs/mqtt-topic-schema.md: it returns part of one segment, not a topic.
+//
+// The producer inventory classifies it `segmentOf: "DiscoveryConfig"`, which
+// is the one class that excuses a producer from having a documented row. That
+// excuse is only sound while what it returns genuinely cannot be published —
+// a fragment carrying a `/` would be a topic shape hiding behind the
+// classification, and the document would be a subset of the wire again, which
+// is the failure the whole guard exists to stop.
+//
+// It also pins the scope's two ends, which are the behaviour the rest of the
+// daemon depends on: empty on the default topic base (so nothing moves for an
+// installation that never set one), and a trailing `_` otherwise (so it
+// composes onto a node id as a segment prefix rather than a segment of its
+// own).
+func TestMQTTTopicSchemaDoc_DiscoveryNodeScopeIsNotATopic(t *testing.T) {
+	t.Parallel()
+
+	for _, base := range []string{"openccu-loom", "gh", "home/hm", "Büro", ""} {
+		scope := mqtt.NewTopicBuilder(base).DiscoveryNodeScope()
+		if strings.Contains(scope, "/") {
+			t.Errorf("DiscoveryNodeScope(%q) = %q, which carries a `/` — that is a topic shape, and a "+
+				"topic shape needs a row in docs/mqtt-topic-schema.md rather than the segmentOf class",
+				base, scope)
+		}
+		if scope != "" && !strings.HasSuffix(scope, "_") {
+			t.Errorf("DiscoveryNodeScope(%q) = %q, which does not end in `_` — it is prefixed onto a "+
+				"node id, so without the separator it fuses with the central slug", base, scope)
+		}
+	}
+
+	// The default base contributes nothing: this is what makes the change
+	// that introduced the scope a no-op for every installation that never set
+	// `north.mqtt.topic_base`.
+	if scope := mqtt.NewTopicBuilder("openccu-loom").DiscoveryNodeScope(); scope != "" {
+		t.Errorf("the default topic base produced scope %q; every single-daemon installation's retained "+
+			"discovery configs would move for a collision it cannot have", scope)
+	}
+	// NewTopicBuilder("") fills in the default, so an unset base is the
+	// default base and must behave identically.
+	if scope := mqtt.NewTopicBuilder("").DiscoveryNodeScope(); scope != "" {
+		t.Errorf("an empty topic base produced scope %q; NewTopicBuilder fills in the default, so it "+
+			"must reach the same answer as naming it", scope)
 	}
 }

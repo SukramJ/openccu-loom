@@ -130,6 +130,19 @@ That eliminates topic collisions when both CCUs host devices with the
 same address (which happens because HmIP-RF addresses are unique per
 CCU but not across CCUs).
 
+The examples above are for a daemon on the default `topic_base`. **Two
+daemons** — a different case from two CCUs behind one daemon — are kept
+apart by the base instead: when `north.mqtt.topic_base` is not
+`openccu-loom`, the node id carries it as a leading segment, so the first
+example becomes
+`homeassistant/binary_sensor/house_ccu-haus_000a0000000001/4_state/config`
+on a daemon with `topic_base: house`. The three daemon-level planes
+(`alarm`, `security`, `daemon`) carry no central at all and are separated
+by nothing else, so give a second daemon its own base before pointing it at
+the same broker. See
+[the HA identity migration note](../external-clients/ha-unique-id-migration.md)
+for what moves when you change the base on an existing install.
+
 ### 2.2 Subscriptions
 
 The MQTT bridge uses a **single** broker connection across all CCUs.

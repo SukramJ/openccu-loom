@@ -108,7 +108,7 @@ func TestDiscoverySlugUnificationMovedTheseFields(t *testing.T) {
 			// are retracted rather than left as permanently unavailable
 			// phantoms. The sweep can only reach them if it still recognises
 			// the pre-unification node-id prefix.
-			prefixes := discoveryNodePrefixes(c.name)
+			prefixes := discoveryNodePrefixes("", c.name)
 			if !slices.Contains(prefixes, c.nowSlug+"_") {
 				t.Errorf("discoveryNodePrefixes(%q) = %v, missing the canonical prefix %q", c.name, prefixes, c.nowSlug+"_")
 			}
