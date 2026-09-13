@@ -92,9 +92,16 @@ func TestSweepsDoNotDoubleInboundCommands(t *testing.T) {
 	conn := &sweepConnector{}
 	sweep := NewSweepSubscriber(func() (Client, Connector) { return sweepClient, conn }, nil)
 
+	// The production wiring, and the reason it is spelled out here: the
+	// bridge keeps the sweep connection in a field of its own, separate from
+	// the long-lived subscribe client, and it is that field the sweeps
+	// resolve. Handing `sweep` to WithSubscriber instead would put the sweep
+	// on its own connection by a route production does not take — the
+	// fallback for a wiring with no broker — and leave `sweepSub` nil, so
+	// nothing below would exercise the field this whole separation lives in.
 	bridge := NewBridge(BridgeConfig{
 		Base: base, CentralName: "ccu-01", RawEnabled: true,
-	}, cmdClient).WithSubscriber(sweep)
+	}, cmdClient).WithSubscriber(cmdClient).WithSweepSubscriber(sweep)
 
 	sink := &fakeSink{}
 	cs := NewCommandSubscriber(cmdClient, NewTopicBuilder(base), sink, nil)
