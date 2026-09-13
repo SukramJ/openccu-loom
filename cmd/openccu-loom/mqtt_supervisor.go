@@ -119,6 +119,9 @@ type mqttSwap struct {
 	bridge       *mqtt.Bridge
 	cancelHealth func() // nil when no probe attached
 	stopSubs     func() // nil when no subscribers attached
+	// sweep is this generation's dedicated retained-sweep connection, torn
+	// down with the rest of the stack. Nil when no broker is configured.
+	sweep *mqtt.SweepSubscriber
 	// publishLatency times this generation's broker acknowledgements. Each
 	// swap builds its own — a reading taken from the predecessor would
 	// describe a broker connection that no longer exists, which is exactly
@@ -652,6 +655,7 @@ func (s *mqttSupervisor) buildSwap(ctx context.Context, cfg *config.Config) (*mq
 		bridge:         stack.wiring.Bridge(),
 		lifecycle:      stack.lifecycle,
 		publishLatency: stack.publishLatency,
+		sweep:          stack.sweep,
 	}
 	if sw.lifecycle != nil {
 		// The supervisor's OnConnect callbacks are deliberately NOT forwarded
@@ -744,6 +748,12 @@ func (s *mqttSupervisor) teardown(ctx context.Context, sw *mqttSwap) {
 	if sw.cancelHealth != nil {
 		sw.cancelHealth()
 	}
+	// The sweep connection is its own socket and its own session, so the
+	// lifecycle below does not reach it. A generation left behind with a live
+	// sweep client would keep a second connection — and, after a failed
+	// UNSUBSCRIBE, a broad wildcard — standing against the broker for the rest
+	// of the process.
+	sw.sweep.Close(ctx)
 	if sw.lifecycle != nil {
 		stopCtx := ctx
 		if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > 5*time.Second {

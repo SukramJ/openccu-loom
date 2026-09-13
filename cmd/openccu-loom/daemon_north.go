@@ -468,6 +468,35 @@ type mqttStack struct {
 	// disabled, which the gauge registration handles rather than the
 	// probe pretending to have data.
 	publishLatency *mqtt.LatencyProbe
+	// sweep is the retained-store sweeps' own broker connection. Nil when no
+	// broker is configured (the no-op client subscribes in-process and fans
+	// nothing out). It MUST NOT be the same object as client — that identity
+	// is what doubles every inbound command for the length of a sweep window,
+	// and TestSweepsDoNotRideTheCommandClient pins it.
+	sweep *mqtt.SweepSubscriber
+}
+
+// sweepSubscriberFor returns the subscribe client the bridge's retained-store
+// sweeps ride on: the dedicated sweep connection when one was built, and the
+// shared client only in the no-broker wiring, where the recording no-op client
+// is the only subscriber there is and no broker fans anything out.
+func sweepSubscriberFor(sweep *mqtt.SweepSubscriber, fallback mqtt.Client) mqtt.Subscriber {
+	if sweep != nil {
+		return sweep
+	}
+	return fallback
+}
+
+// sweepClientID derives the sweep connection's client identifier from the
+// configured one. An empty configured id stays empty so the broker assigns a
+// distinct identifier to each connection; a configured one gets a suffix,
+// because two sessions under one identifier take each other over
+// (MQTT-3.1.4-2) and the two connections would kick each other in a loop.
+func sweepClientID(configured string) string {
+	if configured == "" {
+		return ""
+	}
+	return configured + "-sweep"
 }
 
 // scheduleWeekProfileSink adapts [adapter.SchedulesDomain] to the
@@ -665,6 +694,15 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 	}
 	var client mqtt.Client
 	var connector mqtt.Connector
+	// sweepSub is the retained-store sweeps' own broker connection, and it is
+	// deliberately not the command plane's client. See [mqtt.SweepSubscriber]
+	// for the measurement: a `<base>/#` sweep filter on the SAME client as the
+	// command filters makes the broker send one copy per matching
+	// subscription and go-mqtt re-match each copy against every filter, so
+	// every inbound command runs its handler twice for the length of the
+	// window — a doubled `PRESS_SHORT`, a doubled program trigger, a doubled
+	// alarm arm, with nothing in any log.
+	var sweepSub *mqtt.SweepSubscriber
 	if cfg.North.MQTT.BrokerURL == "" {
 		// No broker configured but enabled → fall back to the
 		// recording no-op client so developers can exercise the
@@ -702,6 +740,31 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 		})
 		client = tcp
 		connector = tcp
+		sweepCfg := cfg.North.MQTT
+		sweepLogger := logger
+		sweepProto := protoVersion
+		sweepSub = mqtt.NewSweepSubscriber(func() (mqtt.Client, mqtt.Connector) {
+			// A fresh client per connection, so a sweep that failed to
+			// unsubscribe cannot hand its stranded filter to the next one.
+			//
+			// No Will: this connection comes and goes with each sweep, and a
+			// will on it would clear the bridge's availability marker every
+			// time a sweep ended. A distinct ClientID for the same reason a
+			// swap needs one — MQTT allows one session per identifier
+			// (MQTT-3.1.4-2), so sharing the command plane's would have the
+			// two connections kick each other in a loop. An empty configured
+			// id stays empty: the broker then assigns a distinct one to each.
+			sc := mqtt.NewTCPClient(mqtt.TCPConfig{
+				BrokerURL:       sweepCfg.BrokerURL,
+				ClientID:        sweepClientID(sweepCfg.ClientID),
+				Username:        sweepCfg.Username,
+				Password:        sweepCfg.Password,
+				CleanStart:      true,
+				ProtocolVersion: sweepProto,
+				Logger:          sweepLogger,
+			})
+			return sc, sc
+		}, logger)
 	}
 
 	stack := &mqttStack{}
@@ -754,11 +817,12 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 		// replay and the snapshot teardown — the layer whose failures are
 		// invisible from anywhere else.
 		Logger: logger,
-	}, probe).WithSubscriber(client)
+	}, probe).WithSubscriber(sweepSubscriberFor(sweepSub, client))
 	wiring := mqtt.NewWiring(bridge, logger)
 
 	stack.wiring = wiring
 	stack.client = client
+	stack.sweep = sweepSub
 	if connector != nil {
 		lc := mqtt.NewLifecycle(mqtt.DefaultLifecycle(), connector)
 		lc.OnConnect(func(ctx context.Context) {
