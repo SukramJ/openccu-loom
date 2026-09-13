@@ -52,10 +52,10 @@ func TestBuildAlarmPanelDiscovery_AreaPanelShape(t *testing.T) {
 	if got, want := body["name"], "Erdgeschoss"; got != want {
 		t.Errorf("name = %v, want %v", got, want)
 	}
-	if got, want := body["unique_id"], "openccu-loom_alarm_eg"; got != want {
+	if got, want := body["unique_id"], "gh_openccu-loom_alarm_eg"; got != want {
 		t.Errorf("unique_id = %v, want %v", got, want)
 	}
-	if got, want := body["default_entity_id"], "alarm_control_panel.openccu-loom_alarm_eg"; got != want {
+	if got, want := body["default_entity_id"], "alarm_control_panel.gh_openccu-loom_alarm_eg"; got != want {
 		t.Errorf("default_entity_id = %v, want %v", got, want)
 	}
 	if _, has := body["object_id"]; has {
@@ -156,7 +156,7 @@ func TestBuildAlarmPanelDiscovery_MasterPanel(t *testing.T) {
 	if got, want := body["name"], "Alarmanlage"; got != want {
 		t.Errorf("name = %v, want %v (localized name must pass through verbatim)", got, want)
 	}
-	if got, want := body["unique_id"], "openccu-loom_alarm_master"; got != want {
+	if got, want := body["unique_id"], "gh_openccu-loom_alarm_master"; got != want {
 		t.Errorf("unique_id = %v, want %v", got, want)
 	}
 	if got, want := body["state_topic"], "gh/alarm/master/state"; got != want {

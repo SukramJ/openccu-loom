@@ -222,6 +222,83 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **BREAKING (daemon-level `unique_id`s, on a non-default `topic_base`
+  only): four defects in the discovery-scope work, the worst of which had a
+  custom-base daemon silently deleting a sibling's Home Assistant entities on
+  every boot.** All four are corrections to the entry below, in the same
+  unreleased window, so operators still absorb one disruption rather than two.
+
+  **1. The retraction hazard was inverted, and two tests pinned it as
+  correct.** The retraction-only unscoped node-id spellings made a custom-base
+  daemon *own* `<central-slug>_…`, `alarm`, `security` and `daemon` while
+  claiming none of them — so on every boot its orphan sweep retracted **all**
+  of a default-base sibling's device, hub, alarm and security configs. Home
+  Assistant deletes those entities, and a device-registry row goes with its
+  last entity; `identifiers` has no migration path, so it is not recoverable.
+  For the three daemon-level planes the node ids are fixed literals, so this
+  needed no name coincidence at all: **any** two daemons had it. The same
+  predicate feeds `Bridge.RetractDiscoveryForCentralDevice`, so it was not
+  only a boot-time pass. The previous entry called this "not a regression",
+  which was wrong — before the scope both daemons swept each other *and*
+  published into the shared namespace, so identical entities were re-declared
+  immediately; afterwards the retraction is one-directional and nothing
+  restores what it deletes.
+
+  The pre-scope spelling and a live sibling's spelling are the **same
+  string**, and `publisher.ConfigTopic` carries the node id and nothing else,
+  so the daemon cannot tell them apart at any cost. It is now an operator
+  decision: **`north.mqtt.discovery_retract_unscoped`** (expert, default
+  `false`). Off, the sweep claims only this daemon's own `<base-slug>_…`
+  namespace. On — for one start, when no default-base sibling shares the
+  broker — it also accepts the unscoped spellings and discharges ADR 0068
+  obligation 3. A one-shot persisted marker was considered and rejected: once
+  is already unrecoverable. `docs/external-clients/ha-unique-id-migration.md`
+  carries the decision table and the manual `mosquitto_pub -r -n` cleanup for
+  the other case.
+
+  **2. The add-on self-updater's node id moved with no retraction path.**
+  `daemonLevelNodeIDs` listed the alarm and security planes only, so
+  `daemon` — moved to `<base-slug>_daemon` by the scope — was recognised in
+  *neither* spelling: the pre-scope `homeassistant/update/daemon/addon_update/config`
+  was stranded on the broker permanently (a phantom "Add-on Update" entity
+  forever) and the scoped one was invisible to the sweep too. The plane is
+  registered now, and `Bridge.PublishHubDiscovery` marks it declared so the
+  sweep may act on it. The test that was supposed to guard this
+  hand-enumerated two of the three planes; it now **parses the package's own
+  source** for `const …NodeID = "<literal>"` — a node id that is a string
+  literal cannot carry a central, which is the definition of a daemon-level
+  plane — so a fourth plane cannot be forgotten the same way.
+
+  **3. Two daemons still could not coexist: the node id moved, the
+  `unique_id` did not.** The three daemon-level planes declare fixed literals
+  (`loom_addon_update`, `openccu-loom_alarm_<zone>`, `loom_security_<key>`)
+  with nothing in them that differs between two daemons. After the node-id
+  scope, two daemons wrote two **distinct** config topics carrying the **same**
+  `unique_id`, which Home Assistant's MQTT integration rejects (*"Platform
+  mqtt does not generate unique IDs"*). The semantics moved from "last writer
+  wins, and a restart repoints the entity at the live daemon" to **"first
+  writer wins permanently"**: the second daemon's alarm, security and
+  add-on-update entities never appeared at all. Those three `unique_id`s (and
+  the `default_entity_id` seeded from each) now carry the base scope —
+  **only on a non-default base**, so every installation that never set
+  `topic_base` is untouched to the byte, and the re-key is paid by exactly the
+  configurations that have the collision. It is still a re-key: on a custom
+  base those entities lose their history, statistics, `entity_id`, renames,
+  areas and automation references. Named in the migration document, with the
+  operator steps. Per-device and hub planes are unaffected — they are keyed on
+  the CCU serial or the ISE id.
+
+  **4. The scope and the central slug share a `_` separator — documented, not
+  fixed.** `topic_base: haus` with a CCU named `CCU`, and the default base
+  with a CCU named `Haus CCU`, both render `haus_ccu_<address>`.
+  Disambiguating it means changing the separator, which would move every
+  non-default-base node id a *second* time one release after the first, for a
+  collision that additionally requires the operator to have named their topic
+  base and their CCU after the same thing. The mitigation is a naming rule
+  (`topic_base` must not be a prefix of any CCU name on the broker), recorded
+  on `naming.DiscoveryBaseScope` and in the migration document; the separator
+  will be revisited only if a node-id move is needed for another reason.
+
 - **BREAKING (discovery topics only, not entity or device identity): the
   HA Discovery node id is scoped by `north.mqtt.topic_base`.** ADR 0006 rule
   4 has promised since the initial release that the discovery node "derives
@@ -261,14 +338,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   | --- | --- |
   | discovery `node_id` | yes, when `topic_base` is non-default |
   | discovery `object_id` | **no** |
-  | `unique_id` | **no** — keyed on the device address and CCU serial |
+  | `unique_id` (per-device, hub) | **no** — keyed on the device address and CCU serial |
+  | `unique_id` (alarm, security, add-on update) | yes, when `topic_base` is non-default — see the entry above |
   | device `identifiers` / `via_device` | **no** |
-  | `default_entity_id` | **no** |
+  | `default_entity_id` (alarm, security, add-on update) | follows its `unique_id` |
   | state / command / availability topics | **no** |
 
-  So nothing is lost: no entity loses its history, statistics or `entity_id`,
-  and unlike the slug unification in the same window, not even a device row
-  is re-created. **All 173 pinned discovery payloads are byte-identical** —
+  Nothing is lost on the per-device and hub planes: no entity loses its
+  history, statistics or `entity_id`, and unlike the slug unification in the
+  same window, not even a device row is re-created. The three daemon-level
+  planes are re-keyed on a non-default base and pay the entity-level cost —
+  that correction is the entry above, in the same unreleased window.
+  **The 173 pinned discovery payloads moved in two fields and no others** —
+  `unique_id` and `default_entity_id`, on the daemon-level fixtures only —
   every one of the eleven goldens moved in its `topic` field and in no other
   byte — and `TestHubGoldenChangedOnlyInAvailability` still requires the
   ORIGINAL 48 pre-gate digests rather than re-baselined ones, by stripping
@@ -276,18 +358,11 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   carrying a 48-entry exemption map, which would have been a re-baseline
   wearing a disguise.
 
-  **The pre-scope configs are retracted, not stranded** (ADR 0068 obligation
-  3). `discoveryNodePrefixes` keeps the unscoped spelling of every central
-  prefix beside the scoped one and `daemonLevelNodeID` accepts `alarm` as
-  well as `<base-slug>_alarm`; both are retraction-only, nothing publishes
-  through them, and both are deletable after one release — the same pattern
-  as `legacyDiscoverySlug`. **The one new hazard, stated because it is
-  real:** while those entries exist, a daemon on a custom base treats an
-  unscoped retained config as its own in order to retract it, and a sibling
-  still on the *default* base is publishing under exactly those node ids. Not
-  a regression — before the scope the two shared the namespace
-  unconditionally — but it is why the migration note says to upgrade such a
-  pair together. Ownership cannot be decided more precisely from a node id.
+  **The pre-scope configs** (ADR 0068 obligation 3) are retracted behind
+  `north.mqtt.discovery_retract_unscoped`, an operator opt-in that defaults to
+  off. This entry originally claimed the retraction as automatic and called
+  the resulting hazard "not a regression"; both claims were wrong, and the
+  correction is the entry above.
 
   **What this does not fix.** Two daemons against the *same* CCU still
   declare byte-identical `unique_id`s and device `identifiers`; both key on

@@ -843,11 +843,14 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 		RawEnabled:           cfg.North.MQTT.RawEnabled,
 		HADiscoveryEnabled:   cfg.North.MQTT.DiscoveryEnabled,
 		HADiscoveryBundles:   cfg.North.MQTT.DiscoveryBundles,
-		SubDevicesEnabled:    cfg.North.MQTT.SubDevicesEnabled,
-		Locale:               cfg.Locale,
-		HealthSupplier:       bridgeHealthSupplier(centralNames, startedAt),
-		Collector:            collector,
-		ChannelHidden:        channelHidden,
+		// Off unless the operator asked for it: see BridgeConfig's field
+		// doc for what it deletes when a default-base sibling is present.
+		RetractUnscopedDiscovery: cfg.North.MQTT.DiscoveryRetractUnscoped,
+		SubDevicesEnabled:        cfg.North.MQTT.SubDevicesEnabled,
+		Locale:                   cfg.Locale,
+		HealthSupplier:           bridgeHealthSupplier(centralNames, startedAt),
+		Collector:                collector,
+		ChannelHidden:            channelHidden,
 		// The bridge's discovery runtime logs the orphan sweep, the birth
 		// replay and the snapshot teardown — the layer whose failures are
 		// invisible from anywhere else.

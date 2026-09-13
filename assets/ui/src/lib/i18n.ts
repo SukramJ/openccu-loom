@@ -1314,6 +1314,8 @@ const EN: Catalog = {
   "config.field.north.mqtt.raw_enabled": "Publish raw plane",
   "config.field.north.mqtt.discovery_enabled": "Publish HA discovery",
   "config.field.north.mqtt.discovery_bundles": "One discovery message per device",
+  "config.field.north.mqtt.discovery_retract_unscoped":
+    "Clear discovery configs from before the topic base scope",
   "config.field.north.mqtt.protocol_version": "MQTT protocol version",
   "config.field.north.mqtt.sub_devices_enabled":
     "One HA device per channel group",
@@ -1524,6 +1526,8 @@ const EN: Catalog = {
     "Publish per-data-point state under <topic_base>/<interface>/... — the raw topic plane non-HA consumers subscribe to. Discovery needs it: switching Discovery on turns this on too, since Discovery payloads only point at raw-plane topics.",
   "config.help.north.mqtt.discovery_enabled":
     "Emit Home Assistant Discovery payloads so HA auto-registers the daemon's devices. Implies the raw plane — the payloads name its topics, so enabling this enables 'Publish raw plane' as well.",
+  "config.help.north.mqtt.discovery_retract_unscoped":
+    "One-time cleanup after the topic base became part of the discovery topic. Leave this OFF unless you are sure no other daemon on the DEFAULT topic base uses this broker: a leftover config looks exactly like the one such a daemon is publishing right now, so clearing it would delete that daemon's entities and device cards with no way back. If you are sure, switch it on, start once, then switch it off again.",
   "config.help.north.mqtt.discovery_bundles":
     "Publish one retained document per device instead of one per entity. Your entities keep their IDs, history, areas and automations either way — Home Assistant keys them on the unique id, not on the topic. Switching this migrates every retained config on the broker, and switching it back migrates them again, so change it deliberately rather than in passing.",
   "config.help.north.mqtt.protocol_version":
@@ -5299,6 +5303,8 @@ const DE: Catalog = {
   "config.field.north.mqtt.raw_enabled": "Rohebene veröffentlichen",
   "config.field.north.mqtt.discovery_enabled": "HA-Discovery veröffentlichen",
   "config.field.north.mqtt.discovery_bundles": "Eine Discovery-Nachricht pro Gerät",
+  "config.field.north.mqtt.discovery_retract_unscoped":
+    "Discovery-Configs von vor dem Topic-Base-Scope aufräumen",
   "config.field.north.mqtt.protocol_version": "MQTT-Protokollversion",
   "config.field.north.mqtt.sub_devices_enabled":
     "Ein HA-Gerät pro Kanal-Gruppe",
@@ -5513,6 +5519,8 @@ const DE: Catalog = {
     "Veröffentlicht pro-DataPoint-State unter <topic_base>/<interface>/… — die rohe Ebene für non-HA-Konsumenten. Discovery braucht sie: Wird Discovery eingeschaltet, wird dies mit eingeschaltet, denn Discovery-Payloads verweisen ausschließlich auf Topics der Rohebene.",
   "config.help.north.mqtt.discovery_enabled":
     "Emittiert Home-Assistant-Discovery-Payloads, sodass HA die Geräte automatisch registriert. Setzt die Rohebene voraus — die Payloads benennen deren Topics, daher wird „Rohebene veröffentlichen“ mit aktiviert.",
+  "config.help.north.mqtt.discovery_retract_unscoped":
+    "Einmalige Aufräumaktion, nachdem die Topic-Base Teil des Discovery-Topics wurde. AUS lassen, solange nicht sicher ist, dass kein anderer Daemon mit der STANDARD-Topic-Base denselben Broker nutzt: eine Altlast sieht exakt so aus wie die Config, die ein solcher Daemon gerade veröffentlicht — sie zu löschen würde dessen Entities und Gerätekarten unwiederbringlich entfernen. Wenn sicher: einschalten, einmal starten, wieder ausschalten.",
   "config.help.north.mqtt.discovery_bundles":
     "Veröffentlicht ein retained Dokument pro Gerät statt eines pro Entity. Die Entities behalten so oder so ihre IDs, Historie, Bereiche und Automationen — Home Assistant schlüsselt sie auf der unique_id, nicht auf dem Topic. Das Umschalten migriert jede retained Config auf dem Broker, das Zurückschalten erneut; also bewusst ändern, nicht nebenbei.",
   "config.help.north.mqtt.protocol_version":

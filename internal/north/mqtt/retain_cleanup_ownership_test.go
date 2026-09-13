@@ -182,7 +182,7 @@ func TestDiscoveryOrphanSweepKeepsConfigsPublishedInsideItsWindow(t *testing.T) 
 	b.MarkHubPlaneDeclared(centralName)
 
 	// A real leftover from a previous build: retained, never re-published.
-	orphan := "homeassistant/sensor/ccu_sysvars/retired/config"
+	orphan := "homeassistant/sensor/loom_ccu_sysvars/retired/config"
 	cl.seed(orphan, []byte(`{"unique_id":"loom_devccu0001_sysvar_retired"}`))
 
 	live := sysvarItem(t, b, centralName, "living_room_light")
@@ -239,8 +239,8 @@ func TestDiscoveryOrphanSweepDefersHubPlaneUntilItDeclared(t *testing.T) {
 	t.Parallel()
 
 	const centralName = "ccu"
-	hubTopic := "homeassistant/sensor/ccu_sysvars/from_last_boot/config"
-	deviceTopic := "homeassistant/sensor/ccu_vcu0000001/1_temperature/config"
+	hubTopic := "homeassistant/sensor/loom_ccu_sysvars/from_last_boot/config"
+	deviceTopic := "homeassistant/sensor/loom_ccu_vcu0000001/1_temperature/config"
 
 	cl := newBrokerClient()
 	cl.seed(hubTopic, []byte(`{"unique_id":"loom_devccu0001_sysvar_from_last_boot"}`))

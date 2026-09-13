@@ -16,7 +16,7 @@
       ],
       "availability_mode": "all",
       "command_topic": "gh/alarm/master/set",
-      "default_entity_id": "button.openccu-loom_alarm_master_reset_motion",
+      "default_entity_id": "button.gh_openccu-loom_alarm_master_reset_motion",
       "device": {
         "identifiers": [
           "openccu-loom_alarm"
@@ -32,7 +32,7 @@
         "sw_version": "dev"
       },
       "payload_press": "RESET_MOTION",
-      "unique_id": "openccu-loom_alarm_master_reset_motion"
+      "unique_id": "gh_openccu-loom_alarm_master_reset_motion"
     }
   },
   "button/zone-reset-motion": {
@@ -52,7 +52,7 @@
       ],
       "availability_mode": "all",
       "command_topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/set",
-      "default_entity_id": "button.openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33_reset_motion",
+      "default_entity_id": "button.gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33_reset_motion",
       "device": {
         "identifiers": [
           "openccu-loom_alarm"
@@ -68,7 +68,7 @@
         "sw_version": "dev"
       },
       "payload_press": "RESET_MOTION",
-      "unique_id": "openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33_reset_motion"
+      "unique_id": "gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33_reset_motion"
     }
   },
   "panel/master-overrides-zone": {
@@ -91,7 +91,7 @@
       "code_disarm_required": false,
       "code_trigger_required": false,
       "command_topic": "gh/alarm/master/set",
-      "default_entity_id": "alarm_control_panel.openccu-loom_alarm_master",
+      "default_entity_id": "alarm_control_panel.gh_openccu-loom_alarm_master",
       "device": {
         "identifiers": [
           "openccu-loom_alarm"
@@ -114,7 +114,7 @@
         "arm_custom_bypass",
         "trigger"
       ],
-      "unique_id": "openccu-loom_alarm_master"
+      "unique_id": "gh_openccu-loom_alarm_master"
     }
   },
   "panel/zone-all-modes": {
@@ -137,7 +137,7 @@
       "code_disarm_required": false,
       "code_trigger_required": false,
       "command_topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/set",
-      "default_entity_id": "alarm_control_panel.openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33",
+      "default_entity_id": "alarm_control_panel.gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33",
       "device": {
         "identifiers": [
           "openccu-loom_alarm"
@@ -160,7 +160,7 @@
         "arm_custom_bypass",
         "trigger"
       ],
-      "unique_id": "openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33"
+      "unique_id": "gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33"
     }
   },
   "panel/zone-code-arm-only": {
@@ -185,7 +185,7 @@
       "code_trigger_required": false,
       "command_template": "{\"action\":\"{{ action }}\",\"code\":\"{{ code }}\"}",
       "command_topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/set",
-      "default_entity_id": "alarm_control_panel.openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33",
+      "default_entity_id": "alarm_control_panel.gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33",
       "device": {
         "identifiers": [
           "openccu-loom_alarm"
@@ -208,7 +208,7 @@
         "arm_custom_bypass",
         "trigger"
       ],
-      "unique_id": "openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33"
+      "unique_id": "gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33"
     }
   },
   "panel/zone-code-disarm-only": {
@@ -233,7 +233,7 @@
       "code_trigger_required": false,
       "command_template": "{\"action\":\"{{ action }}\",\"code\":\"{{ code }}\"}",
       "command_topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/set",
-      "default_entity_id": "alarm_control_panel.openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33",
+      "default_entity_id": "alarm_control_panel.gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33",
       "device": {
         "identifiers": [
           "openccu-loom_alarm"
@@ -256,7 +256,7 @@
         "arm_custom_bypass",
         "trigger"
       ],
-      "unique_id": "openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33"
+      "unique_id": "gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33"
     }
   },
   "panel/zone-single-mode": {
@@ -279,7 +279,7 @@
       "code_disarm_required": false,
       "code_trigger_required": false,
       "command_topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/set",
-      "default_entity_id": "alarm_control_panel.openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33",
+      "default_entity_id": "alarm_control_panel.gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33",
       "device": {
         "identifiers": [
           "openccu-loom_alarm"
@@ -298,7 +298,7 @@
         "arm_away",
         "trigger"
       ],
-      "unique_id": "openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33"
+      "unique_id": "gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33"
     }
   },
   "sensor/master-triggered-motion": {
@@ -317,7 +317,7 @@
         }
       ],
       "availability_mode": "all",
-      "default_entity_id": "sensor.openccu-loom_alarm_master_triggered_motion",
+      "default_entity_id": "sensor.gh_openccu-loom_alarm_master_triggered_motion",
       "device": {
         "identifiers": [
           "openccu-loom_alarm"
@@ -335,7 +335,7 @@
       },
       "state_class": "measurement",
       "state_topic": "gh/alarm/master/triggered-motion",
-      "unique_id": "openccu-loom_alarm_master_triggered_motion",
+      "unique_id": "gh_openccu-loom_alarm_master_triggered_motion",
       "unit_of_measurement": "detectors"
     }
   },
@@ -355,7 +355,7 @@
         }
       ],
       "availability_mode": "all",
-      "default_entity_id": "sensor.openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33_triggered_motion",
+      "default_entity_id": "sensor.gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33_triggered_motion",
       "device": {
         "identifiers": [
           "openccu-loom_alarm"
@@ -373,7 +373,7 @@
       },
       "state_class": "measurement",
       "state_topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/triggered-motion",
-      "unique_id": "openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33_triggered_motion",
+      "unique_id": "gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33_triggered_motion",
       "unit_of_measurement": "detectors"
     }
   }

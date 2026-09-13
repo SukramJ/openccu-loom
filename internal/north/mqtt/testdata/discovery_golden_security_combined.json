@@ -440,7 +440,7 @@
         }
       ],
       "availability_mode": "all",
-      "default_entity_id": "binary_sensor.loom_security_class_battery",
+      "default_entity_id": "binary_sensor.gh_loom_security_class_battery",
       "device": {
         "configuration_url": "http://ccu-01.local",
         "identifiers": [
@@ -464,7 +464,7 @@
       "payload_off": "OFF",
       "payload_on": "ON",
       "state_topic": "gh/security/class/battery",
-      "unique_id": "loom_security_class_battery",
+      "unique_id": "gh_loom_security_class_battery",
       "value_template": "{{ value_json.state }}"
     }
   },
@@ -484,7 +484,7 @@
         }
       ],
       "availability_mode": "all",
-      "default_entity_id": "binary_sensor.loom_security_class_smoke",
+      "default_entity_id": "binary_sensor.gh_loom_security_class_smoke",
       "device": {
         "configuration_url": "http://ccu-01.local",
         "identifiers": [
@@ -507,7 +507,7 @@
       "payload_off": "OFF",
       "payload_on": "ON",
       "state_topic": "gh/security/class/smoke",
-      "unique_id": "loom_security_class_smoke",
+      "unique_id": "gh_loom_security_class_smoke",
       "value_template": "{{ value_json.state }}"
     }
   },
@@ -527,7 +527,7 @@
         }
       ],
       "availability_mode": "all",
-      "default_entity_id": "binary_sensor.loom_security_alarm",
+      "default_entity_id": "binary_sensor.gh_loom_security_alarm",
       "device": {
         "configuration_url": "http://ccu-01.local",
         "identifiers": [
@@ -550,7 +550,7 @@
       "payload_off": "OFF",
       "payload_on": "ON",
       "state_topic": "gh/security/alarm",
-      "unique_id": "loom_security_alarm",
+      "unique_id": "gh_loom_security_alarm",
       "value_template": "{{ value_json.state }}"
     }
   },
@@ -570,7 +570,7 @@
         }
       ],
       "availability_mode": "all",
-      "default_entity_id": "event.loom_security_event",
+      "default_entity_id": "event.gh_loom_security_event",
       "device": {
         "configuration_url": "http://ccu-01.local",
         "identifiers": [
@@ -593,7 +593,7 @@
         "sw_version": "dev"
       },
       "state_topic": "gh/security/event",
-      "unique_id": "loom_security_event"
+      "unique_id": "gh_loom_security_event"
     }
   },
   "security/system/fault": {
@@ -612,7 +612,7 @@
         }
       ],
       "availability_mode": "all",
-      "default_entity_id": "event.loom_security_fault",
+      "default_entity_id": "event.gh_loom_security_fault",
       "device": {
         "configuration_url": "http://ccu-01.local",
         "identifiers": [
@@ -636,7 +636,7 @@
         "sw_version": "dev"
       },
       "state_topic": "gh/security/fault",
-      "unique_id": "loom_security_fault"
+      "unique_id": "gh_loom_security_fault"
     }
   },
   "security/system/health": {
@@ -655,7 +655,7 @@
         }
       ],
       "availability_mode": "all",
-      "default_entity_id": "binary_sensor.loom_security_health",
+      "default_entity_id": "binary_sensor.gh_loom_security_health",
       "device": {
         "configuration_url": "http://ccu-01.local",
         "identifiers": [
@@ -677,7 +677,7 @@
       "payload_off": "OFF",
       "payload_on": "ON",
       "state_topic": "gh/security/health",
-      "unique_id": "loom_security_health"
+      "unique_id": "gh_loom_security_health"
     }
   },
   "security/system/last_alarm": {
@@ -696,7 +696,7 @@
         }
       ],
       "availability_mode": "all",
-      "default_entity_id": "sensor.loom_security_last_alarm",
+      "default_entity_id": "sensor.gh_loom_security_last_alarm",
       "device": {
         "configuration_url": "http://ccu-01.local",
         "identifiers": [
@@ -717,7 +717,7 @@
         "sw_version": "dev"
       },
       "state_topic": "gh/security/last_alarm",
-      "unique_id": "loom_security_last_alarm",
+      "unique_id": "gh_loom_security_last_alarm",
       "value_template": "{{ value_json.at | default('') }}"
     }
   },
@@ -737,7 +737,7 @@
         }
       ],
       "availability_mode": "all",
-      "default_entity_id": "sensor.loom_security_last_fault",
+      "default_entity_id": "sensor.gh_loom_security_last_fault",
       "device": {
         "configuration_url": "http://ccu-01.local",
         "identifiers": [
@@ -759,7 +759,7 @@
         "sw_version": "dev"
       },
       "state_topic": "gh/security/last_fault",
-      "unique_id": "loom_security_last_fault",
+      "unique_id": "gh_loom_security_last_fault",
       "value_template": "{{ value_json.at | default('') }}"
     }
   },
@@ -779,7 +779,7 @@
         }
       ],
       "availability_mode": "all",
-      "default_entity_id": "binary_sensor.loom_security_problem",
+      "default_entity_id": "binary_sensor.gh_loom_security_problem",
       "device": {
         "configuration_url": "http://ccu-01.local",
         "identifiers": [
@@ -803,7 +803,7 @@
       "payload_off": "OFF",
       "payload_on": "ON",
       "state_topic": "gh/security/problem",
-      "unique_id": "loom_security_problem",
+      "unique_id": "gh_loom_security_problem",
       "value_template": "{{ value_json.state }}"
     }
   },
@@ -823,7 +823,7 @@
         }
       ],
       "availability_mode": "all",
-      "default_entity_id": "sensor.loom_security_state",
+      "default_entity_id": "sensor.gh_loom_security_state",
       "device": {
         "configuration_url": "http://ccu-01.local",
         "identifiers": [
@@ -851,7 +851,7 @@
         "sw_version": "dev"
       },
       "state_topic": "gh/security/state",
-      "unique_id": "loom_security_state",
+      "unique_id": "gh_loom_security_state",
       "value_template": "{{ value_json.state }}"
     }
   },
@@ -871,7 +871,7 @@
         }
       ],
       "availability_mode": "all",
-      "default_entity_id": "sensor.loom_security_state",
+      "default_entity_id": "sensor.gh_loom_security_state",
       "device": {
         "identifiers": [
           "openccu-loom_security"
@@ -898,7 +898,7 @@
         "sw_version": "dev"
       },
       "state_topic": "gh/security/state",
-      "unique_id": "loom_security_state",
+      "unique_id": "gh_loom_security_state",
       "value_template": "{{ value_json.state }}"
     }
   },
@@ -918,7 +918,7 @@
         }
       ],
       "availability_mode": "all",
-      "default_entity_id": "sensor.loom_security_zone_erdgeschoss-flur",
+      "default_entity_id": "sensor.gh_loom_security_zone_erdgeschoss-flur",
       "device": {
         "configuration_url": "http://ccu-01.local",
         "identifiers": [
@@ -939,7 +939,7 @@
       },
       "state_class": "measurement",
       "state_topic": "gh/security/zone/erdgeschoss-flur",
-      "unique_id": "loom_security_zone_erdgeschoss-flur",
+      "unique_id": "gh_loom_security_zone_erdgeschoss-flur",
       "value_template": "{{ value_json.state }}"
     }
   },
@@ -959,7 +959,7 @@
         }
       ],
       "availability_mode": "all",
-      "default_entity_id": "sensor.loom_security_zone_erdgeschoss-flur",
+      "default_entity_id": "sensor.gh_loom_security_zone_erdgeschoss-flur",
       "device": {
         "configuration_url": "http://ccu-01.local",
         "identifiers": [
@@ -980,7 +980,7 @@
       },
       "state_class": "measurement",
       "state_topic": "gh/security/zone/erdgeschoss-flur",
-      "unique_id": "loom_security_zone_erdgeschoss-flur",
+      "unique_id": "gh_loom_security_zone_erdgeschoss-flur",
       "value_template": "{{ value_json.state }}"
     }
   }

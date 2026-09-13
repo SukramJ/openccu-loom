@@ -14,11 +14,14 @@ ids; affected device cards are re-created and need their area re-applied. The
 main add-on's changelog describes it in full.
 
 The daemon also starts putting its `topic_base` into the Home Assistant
-discovery topics, which affects you only if you changed that setting away from
-`openccu-loom`. It stops two daemons on one broker overwriting and deleting
-each other's entities. Nothing is lost — entities keep their history, ids and
-device cards, and the old topics are cleared automatically. The main add-on's
-changelog has the one upgrade-ordering caution that goes with it.
+discovery topics and into the identity of its alarm, Security & Safety and
+Add-on Update entities, which affects you only if you changed that setting away
+from `openccu-loom`. It stops two daemons on one broker overwriting and
+deleting each other's entities. Device and CCU entities keep their history, ids
+and device cards; those three groups are re-created and need their automations
+re-pointed. Clearing the old topics is now a setting you turn on for one start
+rather than something that happens by itself. The main add-on's changelog has
+the details and the reason.
 
 # 0.77.0
 

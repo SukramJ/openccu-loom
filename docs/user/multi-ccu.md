@@ -137,9 +137,15 @@ apart by the base instead: when `north.mqtt.topic_base` is not
 example becomes
 `homeassistant/binary_sensor/house_ccu-haus_000a0000000001/4_state/config`
 on a daemon with `topic_base: house`. The three daemon-level planes
-(`alarm`, `security`, `daemon`) carry no central at all and are separated
-by nothing else, so give a second daemon its own base before pointing it at
-the same broker. See
+(`alarm`, `security`, `daemon`) carry no central at all, so beside the node
+id their `unique_id` carries the base too — without that, two daemons declare
+one identity to Home Assistant and it keeps whichever config it saw first,
+leaving the second daemon's alarm and security entities missing entirely.
+Give a second daemon its own base before pointing it at the same broker, and
+pick one that is **not a prefix of any CCU name on the broker**: the base and
+the central slug are joined with the same `_`, so `topic_base: haus` with a
+CCU named `CCU` renders the same node id as the default base with a CCU named
+`Haus CCU`. See
 [the HA identity migration note](../external-clients/ha-unique-id-migration.md)
 for what moves when you change the base on an existing install.
 
