@@ -541,6 +541,23 @@ func (b *Bridge) snapshotRetained(
 // filter — so a shared client runs every inbound command handler twice for
 // the length of a window. See [SweepSubscriber].
 func (b *Bridge) cleanupSubscriber() (Subscriber, bool) {
+	if b.sweepSub != nil {
+		return b.sweepSub, true
+	}
+	return b.subscribeClient()
+}
+
+// subscribeClient returns the client this bridge's LONG-LIVED subscriptions
+// ride on: the [Bridge.WithSubscriber] client, or the publish client when it
+// happens to satisfy [Client].
+//
+// Kept apart from [Bridge.cleanupSubscriber] because the two want opposite
+// things from a connection. A sweep wants one that comes and goes with its
+// window and takes a stranded wildcard with it; the birth watch wants one
+// that is still there next week. Running the birth watch on the sweep
+// connection would silently end it the first time a sweep's UNSUBSCRIBE
+// failed, and Home Assistant restarts would stop replaying discovery.
+func (b *Bridge) subscribeClient() (Subscriber, bool) {
 	if b.subscriber != nil {
 		return b.subscriber, true
 	}

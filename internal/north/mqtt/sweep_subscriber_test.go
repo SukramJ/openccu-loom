@@ -274,6 +274,52 @@ func TestAFailedUnsubscribeDropsAConnectionOtherSweepsStillHold(t *testing.T) {
 	}
 }
 
+// TestTheBirthWatchDoesNotRideTheSweepConnection pins the boundary between
+// the two subscribe clients.
+//
+// Everything that subscribes through the bridge used to resolve one client,
+// so moving the sweeps onto their own connection would have taken the Home
+// Assistant birth watch with them — and that connection is torn down when a
+// window closes and dropped outright when an UNSUBSCRIBE fails. The birth
+// watch would have ended silently, and Home Assistant restarts would stop
+// replaying discovery: the exact class of defect that is invisible until
+// somebody restarts HA and half their entities do not come back.
+func TestTheBirthWatchDoesNotRideTheSweepConnection(t *testing.T) {
+	t.Parallel()
+
+	longLived := newFanoutClient()
+	sweepClient := newFanoutClient()
+	conn := &sweepConnector{}
+	sweep := NewSweepSubscriber(func() (Client, Connector) { return sweepClient, conn }, nil)
+	bridge := NewBridge(BridgeConfig{
+		Base: "gh", CentralName: "ccu-01", RawEnabled: true, HADiscoveryEnabled: true,
+	}, newFanoutClient()).WithSubscriber(longLived).WithSweepSubscriber(sweep)
+
+	if err := NewBirthSync(longLived, bridge, nil).Start(context.Background()); err != nil {
+		t.Fatalf("birth sync start: %v", err)
+	}
+	if got := sweepClient.Filters(); len(got) != 0 {
+		t.Fatalf("the birth watch landed on the sweep connection (%v) — that connection closes "+
+			"with every sweep window, so the watch would end silently and Home Assistant "+
+			"restarts would stop replaying discovery", got)
+	}
+	birth := longLived.Filters()
+	if len(birth) != 1 || birth[0] != HABirthTopic {
+		t.Fatalf("the long-lived client holds %v, want just %q", birth, HABirthTopic)
+	}
+
+	// And the sweeps still go the other way.
+	if _, err := bridge.RunRetainCleanupOnce(context.Background(), 20*time.Millisecond); err != nil {
+		t.Fatalf("retain cleanup: %v", err)
+	}
+	if connects, _ := conn.counts(); connects != 1 {
+		t.Fatalf("the sweep opened %d connections of its own, want 1", connects)
+	}
+	if got := longLived.Filters(); len(got) != 1 {
+		t.Fatalf("the sweep filter landed on the long-lived client too: %v", got)
+	}
+}
+
 // waitFor polls cond until it holds, failing the test if it never does.
 func waitFor(t *testing.T, what string, cond func() bool) {
 	t.Helper()

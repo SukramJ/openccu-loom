@@ -500,13 +500,18 @@ type Bridge struct {
 	cfg    BridgeConfig
 	topics *TopicBuilder
 	client Publisher
-	// subscriber is the subscribe-capable client the boot-time cleanup
-	// passes ride on. In production the publish path (`client`) is
+	// subscriber is the subscribe-capable client this bridge's long-lived
+	// subscriptions ride on — the Home Assistant birth watch, via
+	// [lateSubscriber]. In production the publish path (`client`) is
 	// wrapped in a publish-only circuit breaker, so the raw client must
-	// be wired separately via [Bridge.WithSubscriber] — without it both
-	// cleanup passes fail their capability check on every boot and
-	// retained legacy topics are never evicted.
+	// be wired separately via [Bridge.WithSubscriber].
 	subscriber Subscriber
+	// sweepSub is the subscribe-capable client the retained-store SWEEPS
+	// ride on, and it is deliberately a different connection from
+	// `subscriber` — see [SweepSubscriber] for the measurement. Falls back
+	// to `subscriber` when unwired (tests, and the no-broker NoopClient
+	// wiring, where nothing fans out).
+	sweepSub Subscriber
 	// logger is [BridgeConfig.Logger], defaulted.
 	logger *slog.Logger
 	mu     sync.Mutex
@@ -663,16 +668,26 @@ func NewBridge(cfg BridgeConfig, client Publisher) *Bridge {
 	return b
 }
 
-// WithSubscriber wires the subscribe-capable client the boot-time
-// cleanup passes need. Production must call this with the raw broker
-// client: the Publisher handed to [NewBridge] is a publish-only
-// circuit-breaker decorator there, so without this seam
-// [Bridge.RunRetainCleanupOnce] and
-// [Bridge.RunDiscoveryOrphanCleanupOnce] fail their capability check on
-// every boot and silently never clean anything. Returns the receiver
-// for call-site chaining.
+// WithSubscriber wires the subscribe-capable client this bridge's long-lived
+// subscriptions need — the Home Assistant birth watch. Production must call
+// this with the raw broker client: the Publisher handed to [NewBridge] is a
+// publish-only circuit-breaker decorator there, so without this seam the
+// birth watch cannot be installed at all. Returns the receiver for call-site
+// chaining.
 func (b *Bridge) WithSubscriber(s Subscriber) *Bridge {
 	b.subscriber = s
+	return b
+}
+
+// WithSweepSubscriber wires the separate connection the retained-store sweeps
+// ride on. Unwired, the sweeps fall back to [Bridge.WithSubscriber]'s client,
+// which is right for a test double and wrong against a real broker: every
+// sweep filter is a broad wildcard that overlaps the command plane's filters,
+// and two overlapping filters on one client run every inbound command handler
+// twice for the length of the window. See [SweepSubscriber]. Returns the
+// receiver for call-site chaining.
+func (b *Bridge) WithSweepSubscriber(s Subscriber) *Bridge {
+	b.sweepSub = s
 	return b
 }
 

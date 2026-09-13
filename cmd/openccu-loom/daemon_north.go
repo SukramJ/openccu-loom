@@ -835,7 +835,7 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 		// replay and the snapshot teardown — the layer whose failures are
 		// invisible from anywhere else.
 		Logger: logger,
-	}, probe).WithSubscriber(sweepSubscriberFor(sweepSub, client))
+	}, probe).WithSubscriber(client).WithSweepSubscriber(sweepSubscriberFor(sweepSub, client))
 	wiring := mqtt.NewWiring(bridge, logger)
 
 	stack.wiring = wiring
