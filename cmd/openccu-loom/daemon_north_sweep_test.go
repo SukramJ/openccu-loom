@@ -87,6 +87,15 @@ func TestTheBridgeRoutesItsSweepsThroughTheSweepConnection(t *testing.T) {
 // allowed but required. Adding one to the sweep connection therefore changed
 // nothing any test could see.
 //
+// IT READS THE ASSEMBLED CONFIG, NOT sweepTCPConfig'S RETURN. Calling the
+// builder directly was correct only for as long as [buildMQTT] used that
+// return verbatim: one `sweepTCP.Will = …` line inside buildMQTT restored the
+// whole hazard below with this test still green, which is the same one-step
+// gap its sibling TestTheBridgeRoutesItsSweepsThroughTheSweepConnection was
+// written to close on the routing half. So it reads
+// mqttStack.sweepTCP — the struct the sweep client is really constructed
+// from — and compares it against the daemon's main CONNECT.
+//
 // What it would change in production: the sweep connection comes and goes
 // with every window and is dropped outright when an UNSUBSCRIBE fails. A
 // graceful Close discards a will, which is why normal operation would never
@@ -105,7 +114,18 @@ func TestTheSweepConnectionCarriesNoLastWill(t *testing.T) {
 			"from an absent policy")
 	}
 
-	sweep := sweepTCPConfig(cfg.North.MQTT, main.ProtocolVersion, logger)
+	stack := buildMQTT(cfg, logger, nil, nil, func() []string { return nil })
+	if stack == nil {
+		t.Fatal("buildMQTT returned nil with MQTT enabled")
+	}
+	if stack.sweep == nil {
+		t.Fatal("no dedicated sweep connection was built, so there is no CONNECT to read")
+	}
+	sweep := stack.sweepTCP
+	if sweep.BrokerURL == "" {
+		t.Fatal("the assembled sweep CONNECT is zero-valued: buildMQTT no longer records the " +
+			"config its sweep client is constructed from, so this test reads nothing")
+	}
 	if sweep.Will != nil {
 		t.Errorf("the sweep connection carries a will on %q: it is torn down on every window and "+
 			"dropped on a failed UNSUBSCRIBE, so an ungraceful drop publishes that payload and "+

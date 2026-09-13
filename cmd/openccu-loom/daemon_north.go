@@ -476,6 +476,15 @@ type mqttStack struct {
 	// TestTheBridgeRoutesItsSweepsThroughTheSweepConnection pins that the
 	// bridge actually sweeps on it, which is the half that decides.
 	sweep *mqtt.SweepSubscriber
+	// sweepTCP is the CONNECT the sweep connection above is really dialled
+	// with — the struct [buildMQTT] hands to the factory, not a second copy
+	// of it. Recorded on the stack so a test can read the ASSEMBLED value:
+	// reading sweepTCPConfig's return instead is correct only for as long as
+	// buildMQTT uses that return verbatim, and one `sweepTCP.Will = …` line
+	// inside buildMQTT would restore the exact invisible hazard
+	// TestTheSweepConnectionCarriesNoLastWill exists to keep out, with the
+	// test still green. Zero when no broker is configured.
+	sweepTCP mqtt.TCPConfig
 }
 
 // northTCPConfig is the CONNECT this daemon dials the north-bound broker
@@ -782,6 +791,10 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 	// window — a doubled `PRESS_SHORT`, a doubled program trigger, a doubled
 	// alarm arm, with nothing in any log.
 	var sweepSub *mqtt.SweepSubscriber
+	// Built before the branch so the sweep connection's CONNECT can be
+	// recorded on it AT THE POINT the factory closure reads it — see
+	// mqttStack.sweepTCP.
+	stack := &mqttStack{}
 	if cfg.North.MQTT.BrokerURL == "" {
 		// No broker configured but enabled → fall back to the
 		// recording no-op client so developers can exercise the
@@ -793,16 +806,19 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 		tcp := mqtt.NewTCPClient(tcpCfg)
 		client = tcp
 		connector = tcp
-		sweepTCP := sweepTCPConfig(cfg.North.MQTT, protoVersion, logger)
+		// Assigned onto the stack, and READ BACK from the stack by the
+		// factory below, so the config a test reads there is the same struct
+		// value the sweep client is constructed from rather than a parallel
+		// copy of it.
+		stack.sweepTCP = sweepTCPConfig(cfg.North.MQTT, protoVersion, logger)
 		sweepSub = mqtt.NewSweepSubscriber(func() (mqtt.Client, mqtt.Connector) {
 			// A fresh client per connection, so a sweep that failed to
 			// unsubscribe cannot hand its stranded filter to the next one.
-			sc := mqtt.NewTCPClient(sweepTCP)
+			sc := mqtt.NewTCPClient(stack.sweepTCP)
 			return sc, sc
 		}, logger)
 	}
 
-	stack := &mqttStack{}
 	startedAt := time.Now().UTC()
 	// Circuit breaker between the bridge and the broker: during a
 	// degraded-broker phase (link up, acks missing) publishes fail
