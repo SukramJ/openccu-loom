@@ -50,10 +50,17 @@ type hubStatusTimer interface{ Stop() bool }
 //
 // It holds no reachability state of its own: the fold is computed by the
 // caller from the [hub.Connectivity] tracker that owns it, and this type
-// remembers only what has been WRITTEN, which is the state the debounce
-// reasons about. Keeping it that way is what makes the gate idempotent —
-// re-observing the level already on the broker cancels a pending opposite
-// write and does nothing else.
+// remembers only what the BROKER HAS TAKEN, which is the state the debounce
+// reasons about. Keeping it that way is what makes re-observing the level
+// already on the broker cheap: it cancels a pending opposite write and does
+// nothing else.
+//
+// That is a claim about the broker, not about this process, so a broker that
+// LOST its retained store invalidates it wholesale. [hubStatusGate.Reset] is
+// the answer: it re-opens every remembered level so the next observation of
+// it seeds the topic again. The gate is registered as one of the bridge's
+// runtime gates precisely so that reset is not something a future plane has
+// to remember to wire — see [Bridge.ResetRuntimeGates].
 type hubStatusGate struct {
 	mu    sync.Mutex
 	dwell time.Duration
@@ -67,7 +74,10 @@ type hubStatusGate struct {
 // dwell, if any.
 type hubStatusEntry struct {
 	// written is false until a level has reached the broker. The first
-	// level is never debounced — see [hubStatusGate.observe].
+	// level is never debounced — see [hubStatusGate.observe]. It goes back
+	// to false when [hubStatusGate.Reset] re-opens the gate, because the
+	// broker no longer holds the level and the next observation of it must
+	// seed rather than dedup.
 	written bool
 	// level is the last level written, meaningful only once written.
 	level bool
@@ -161,6 +171,29 @@ func (g *hubStatusGate) fire(ctx context.Context, central string, online bool, w
 	write(ctx, central, online)
 }
 
+// Reset re-opens every remembered level without forgetting the CCUs, so the
+// next observation of each one writes again even though the level has not
+// changed.
+//
+// It is the same contract as the shared state and availability publishers'
+// own Reset, and it exists for the same event: a broker restarted without a
+// persistent retained store holds none of the bytes this gate believes it
+// took. Without this, a fold that has not changed across the reconnect —
+// which for a healthy CCU is every fold — writes nothing, and every
+// CCU-scoped hub entity sits `unavailable` under `availability_mode: "all"`
+// until that CCU's reachability happens to change.
+//
+// The CCUs themselves are kept, and so is any armed dwell: a level that was
+// mid-debounce when the link dropped is still the level that should land
+// when the window elapses.
+func (g *hubStatusGate) Reset() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	for _, e := range g.entries {
+		e.written = false
+	}
+}
+
 // forget drops one CCU's written level and cancels any pending write, so a
 // re-wire of that central seeds the gate again rather than debouncing
 // against a level the broker may no longer hold.
@@ -173,16 +206,20 @@ func (g *hubStatusGate) forget(central string) {
 	}
 }
 
-// centrals returns every CCU the gate has written a level for, so the
+// centrals returns every CCU the gate has observed a level for, so the
 // shutdown path can write the counterpart without being told the fleet.
+//
+// Observed, not written: an entry exists only because [hubStatusGate.observe]
+// created it, and the shutdown counterpart is wanted for exactly the CCUs
+// this process may have claimed reachable — including one whose level
+// [hubStatusGate.Reset] has re-opened. Filtering on `written` would skip
+// those while the broker may still hold an `online` for them.
 func (g *hubStatusGate) centrals() []string {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	out := make([]string, 0, len(g.entries))
-	for name, e := range g.entries {
-		if e.written {
-			out = append(out, name)
-		}
+	for name := range g.entries {
+		out = append(out, name)
 	}
 	return out
 }

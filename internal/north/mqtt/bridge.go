@@ -537,9 +537,18 @@ type Bridge struct {
 	// no index at all and reachable only by reconstructing their names.
 	avail *hapublisher.AvailabilityPublisher
 	// hubStatus debounces the per-CCU reachability gate published at
-	// `<base>/<central>/hub/status`. It holds only the levels already
-	// written, never the reachability itself — see [hubStatusGate].
+	// `<base>/<central>/hub/status`. It holds only the levels the broker
+	// took, never the reachability itself — see [hubStatusGate].
 	hubStatus *hubStatusGate
+	// gates is every dedup gate on this bridge, as one list, so
+	// [Bridge.ResetRuntimeGates] resets all of them by construction rather
+	// than by a hand-maintained sequence of nil checks. A gate that is
+	// built here and not appended here is caught by
+	// TestEveryBridgeDedupGateIsRegisteredForReset, which reflects over
+	// this struct — the reason the list exists at all is that the fifth
+	// gate was added without any of the four reconnect hooks learning
+	// about it.
+	gates []runtimeGate
 	// planesDeclared marks the planes that have completed a discovery
 	// pass, so the orphan sweep can tell an orphan from an entity that
 	// simply has not been published yet.
@@ -649,6 +658,7 @@ func NewBridge(cfg BridgeConfig, client Publisher) *Bridge {
 	b.state = newStatePublisher(b, logger)
 	b.avail = newAvailabilityPublisher(b, logger)
 	b.hubStatus = newHubStatusGate(hubStatusDwell)
+	b.gates = []runtimeGate{b.state, b.avail, b.hubStatus}
 	return b
 }
 

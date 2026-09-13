@@ -5,6 +5,7 @@ package mqtt
 
 import (
 	"context"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -372,5 +373,107 @@ func TestRetractHubStatusClearsTheTopicAndTheLevel(t *testing.T) {
 	}
 	if len(b.hubStatus.centrals()) != 0 {
 		t.Error("the gate still remembers a level for a retracted topic")
+	}
+}
+
+// --- reconnect regressions -------------------------------------------------
+
+// TestHubStatusIsReseededAfterABrokerReconnect is the reconnect pin, and it
+// is the whole reason [hubStatusGate.Reset] exists.
+//
+// A broker restarted without a persistent retained store holds no byte on
+// this topic while the daemon stays up. Nothing rebuilds the gate on that
+// path — the bridge is only rebuilt on a config reload — so the re-seed that
+// [HubMQTTPublisher.Start] queues on every connect folds to the SAME level
+// the gate already remembers. Before the fix that wrote nothing at all,
+// while the hub discovery configs naming this topic were republished beside
+// it: every sysvar, program, system-score, message-aggregate, install-mode
+// and hub-update entity of that CCU sat `unavailable` under
+// `availability_mode: "all"`, with nothing on the wire naming the cause,
+// until that CCU's reachability changed — on a healthy CCU, never.
+//
+// Falsifiability: drop `b.hubStatus` from [NewBridge]'s gate list, or make
+// [hubStatusGate.Reset] a no-op, and the reseed assertion fails.
+func TestHubStatusIsReseededAfterABrokerReconnect(t *testing.T) {
+	t.Parallel()
+	rec := &recordingPublisher{}
+	b := newDeepBridge(t, rec, func(c *BridgeConfig) { c.Base = "gh" })
+	ctx := context.Background()
+
+	if err := b.PublishHubReachability(ctx, "ccu-01", true); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if _, ok := rec.findTopic("gh/ccu-01/hub/status"); !ok {
+		t.Fatalf("the seed never reached the broker; got %v", rec.records())
+	}
+
+	// The broker restarts and loses its retained store. The daemon's
+	// reconnect hooks run, then the hub publisher re-seeds the unchanged fold.
+	rec.clear()
+	b.ResetRuntimeGates()
+	if err := b.PublishHubReachability(ctx, "ccu-01", true); err != nil {
+		t.Fatalf("reseed: %v", err)
+	}
+
+	got, ok := rec.findTopic("gh/ccu-01/hub/status")
+	if !ok {
+		t.Fatalf("the gate was not republished after the reconnect, so the broker holds "+
+			"no byte and every CCU-scoped hub entity stays unavailable; got %v", rec.records())
+	}
+	if got.payload != "online" {
+		t.Errorf("payload %q, want online", got.payload)
+	}
+	if !got.retain {
+		t.Error("the reseed is not retained — HA reads this gate on every restart")
+	}
+}
+
+// TestEveryBridgeDedupGateIsRegisteredForReset is the structural half of the
+// same defect.
+//
+// The per-CCU reachability gate was added as a third dedup gate on the
+// bridge and none of the four call sites of [Bridge.ResetRuntimeGates]
+// learned about it, because that method named its gates one by one. It now
+// walks [Bridge.gates] instead, and this test is what makes the list
+// complete: any field of [Bridge] whose type can be reset is a gate the
+// reconnect path must reach, so a fourth one added without registration
+// fails here rather than silently in production.
+//
+// Falsifiability: remove any entry from the gate list in [NewBridge] and
+// this test names the field that is missing.
+func TestEveryBridgeDedupGateIsRegisteredForReset(t *testing.T) {
+	t.Parallel()
+	b := newDeepBridge(t, &recordingPublisher{})
+
+	registered := map[reflect.Type]bool{}
+	for i, g := range b.gates {
+		if g == nil {
+			t.Fatalf("gate %d is nil — a nil gate is a gate that is never reset", i)
+		}
+		registered[reflect.TypeOf(g)] = true
+	}
+
+	gateIface := reflect.TypeOf((*runtimeGate)(nil)).Elem()
+	rt := reflect.TypeOf(Bridge{})
+	found := 0
+	for i := range rt.NumField() {
+		f := rt.Field(i)
+		if !f.Type.Implements(gateIface) {
+			continue
+		}
+		found++
+		if !registered[f.Type] {
+			t.Errorf("Bridge.%s (%v) is a dedup gate that NewBridge never appends to b.gates, "+
+				"so ResetRuntimeGates does not reach it: after a broker restart without a "+
+				"retained store it keeps answering \"already published\" for bytes nothing holds",
+				f.Name, f.Type)
+		}
+	}
+	if found == 0 {
+		t.Fatal("no gate-shaped field found on Bridge — this guard has stopped guarding anything")
+	}
+	if len(registered) != found {
+		t.Errorf("b.gates holds %d distinct gate types but Bridge has %d gate fields",
+			len(registered), found)
 	}
 }
