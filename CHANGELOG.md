@@ -8,6 +8,24 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Four of the five MQTT topic conventions in ADR 0006 are false.** The
+  ADR names "no `hub/` namespace" as a convention while `hub/` carries most
+  of the per-CCU surface (status, sysvars, programs, connectivity, install
+  mode, update and the three message aggregates) and both example paths the
+  rule gives are wrong; it gives the device availability topic as
+  `{base}/{central}/devices/{addr}/availability` where the daemon publishes
+  the interface-keyed `{base}/{central}/{iface}/{addr}/availability`; it
+  writes the raw paramset path without its `<bucket>` segment
+  (`…/{ch}/{param}` rather than `…/{ch}/values/{param}`); and it states that
+  the HA Discovery node derives from `BridgeConfig.Base` via
+  `TopicBuilder.DiscoveryConfig`, which delegates to
+  `naming.DiscoveryConfigTopic` and never reads the receiver's base. A dated
+  amendment corrects all four. The last is a live gap rather than a
+  documentation error — two daemons bridging the same CCU under different
+  topic bases still write identical `homeassistant/.../config` topics — and
+  is **reported, not fixed**: moving the discovery node id orphans every
+  retained config on the broker and needs a migration of its own.
+
 - **Three wrong numbers and one wrong citation in yesterday's deletion
   audit.** ADR 0006's amendment cited `git log -S "HubTopics" -- internal/`
   for a claim about a file in `docs/` — a pathspec that cannot reach it, so
