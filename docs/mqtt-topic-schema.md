@@ -5,8 +5,16 @@ consumers (Node-RED flows, custom dashboards, Telegraf scrapers) that
 subscribe to Homematic MQTT topics.
 
 **Source of truth for topic names:** `internal/north/mqtt/topics.go`
-(all Go methods delegate to `internal/model/naming/`). The canonical
-function signatures are cited below.
+(most methods delegate to `internal/model/naming/`; the combined-DP and
+schedule shapes are composed in `topics.go` itself, and a few hub shapes
+have no `TopicBuilder` wrapper and are cited as `naming.MQTT*` functions
+below). The canonical function signatures are cited with each table.
+
+Both directions are checked by
+`tests/contract/mqtt_topic_schema_producer_test.go`: every shape documented
+here has to be classified and produced, **and** every topic-shape producer
+in those two files has to have a row here. A builder added without a row —
+or a row without a producer — fails the contract suite.
 
 **Related decisions:** [ADR 0002 — Multi-CCU First Class](./adr/0002-multi-ccu-first-class.md),
 [ADR 0011 — MQTT Topic & Payload Architecture](./adr/0011-mqtt-topic-and-payload-architecture.md),
