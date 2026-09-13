@@ -35,6 +35,35 @@ LDFLAGS := -s -w \
 
 GO_BUILD_FLAGS := -trimpath -ldflags="$(LDFLAGS)"
 
+# Per-package ceiling for `go test`. Passed explicitly rather than inherited
+# from Go's 10-minute default, because the default is neither argued nor
+# visible at the point of failure.
+#
+# What it is sized against — the slowest package in the module, measured:
+#
+#   cmd/openccu-loom          210 s on a GitHub ubuntu-latest runner (-race),
+#                             ~500 s on a loaded 4-core developer box (-race)
+#   internal/store/matterendpoint  101 s / internal/central/adapter  84 s (CI)
+#
+# The developer box is the binding case, not CI: at ~500 s it sat at 83 % of
+# the 600 s default, so an ordinary background load was enough to trip a suite
+# that is entirely healthy. 20 minutes is 2.4x that worst observation (5.7x the
+# CI figure) — a runner would have to be more than twice as slow as the slowest
+# machine this has ever been measured on before a passing suite goes red.
+#
+# It is deliberately finite. A wedged test does not get slower, it stops, so
+# any ceiling catches it; the only question is how much CI time it burns first.
+#
+# WHEN THIS TRIPS, DO NOT RAISE IT REFLEXIVELY. `go test` prints a full
+# goroutine dump on timeout and names whichever test happened to be *running*,
+# which is usually not the culprit — see #829, where a wedged broker shutdown
+# in a cleanup presented for weeks as "some unrelated test hangs". Read the
+# dump: a goroutine parked for minutes on a lock or a channel is a deadlock and
+# the number is not the problem. Raising the ceiling is only ever correct when
+# the dump shows every goroutine still making progress, and then the new value
+# needs the same derivation this one has.
+GO_TEST_TIMEOUT ?= 20m
+
 .PHONY: help
 help: ## show this help
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -165,16 +194,16 @@ build-all: ## build all binaries in ./cmd/* into ./bin/
 
 .PHONY: test
 test: ## run unit + contract tests
-	$(GO) test ./...
+	$(GO) test -timeout=$(GO_TEST_TIMEOUT) ./...
 
 .PHONY: race
 race: ## run unit + contract tests with -race + -count=1 (CGO=1 — test-only, prod build stays CGO=0)
-	CGO_ENABLED=1 $(GO) test -race -count=1 ./...
+	CGO_ENABLED=1 $(GO) test -race -count=1 -timeout=$(GO_TEST_TIMEOUT) ./...
 
 .PHONY: contract
 contract: ## run contract tests only
 	@if [ -d tests/contract ]; then \
-		$(GO) test ./tests/contract/...; \
+		$(GO) test -timeout=$(GO_TEST_TIMEOUT) ./tests/contract/...; \
 	else \
 		echo "contract tests not implemented yet (Phase 2+)"; \
 	fi
@@ -388,7 +417,7 @@ coverage: ## run unit + contract + integration tests with coverage profile -> $(
 	# package exercised mainly through another package's (or the integration
 	# suite's) tests is credited. Without it the per-package tier gate only
 	# sees each package's self-coverage and understates the real numbers.
-	CGO_ENABLED=1 $(GO) test -tags=integration -covermode=atomic -coverpkg=./... -coverprofile=$(COVERAGE_OUT) ./...
+	CGO_ENABLED=1 $(GO) test -tags=integration -timeout=$(GO_TEST_TIMEOUT) -covermode=atomic -coverpkg=./... -coverprofile=$(COVERAGE_OUT) ./...
 	@$(GO) tool cover -func=$(COVERAGE_OUT) | tail -1
 
 # Note: `-race` is intentionally off when combined with `-tags=integration`
@@ -399,7 +428,7 @@ coverage: ## run unit + contract + integration tests with coverage profile -> $(
 
 .PHONY: coverage-unit
 coverage-unit: ## same as coverage but unit + contract only (no integration tag) — useful in lightweight CI; runs with -race
-	CGO_ENABLED=1 $(GO) test -race -covermode=atomic -coverprofile=$(COVERAGE_OUT) ./...
+	CGO_ENABLED=1 $(GO) test -race -timeout=$(GO_TEST_TIMEOUT) -covermode=atomic -coverprofile=$(COVERAGE_OUT) ./...
 	@$(GO) tool cover -func=$(COVERAGE_OUT) | tail -1
 
 .PHONY: coverage-html
@@ -459,7 +488,7 @@ openapi-lint: ## lint assets/openapi.yaml with vacuum (advisory; ruleset in .vac
 
 .PHONY: deadlock-test
 deadlock-test: ## run tests with go-deadlock lock-order detection (syncx-migrated packages)
-	CGO_ENABLED=1 $(GO) test -tags deadlock -race -count=1 ./internal/central/coordinators/...
+	CGO_ENABLED=1 $(GO) test -tags deadlock -race -count=1 -timeout=$(GO_TEST_TIMEOUT) ./internal/central/coordinators/...
 
 .PHONY: fmt
 fmt: ## run gofumpt + goimports
@@ -485,7 +514,7 @@ reachability: ## run dead-code reachability analysis → notes/parity/dead-code-
 
 .PHONY: qa-pillars
 qa-pillars: reachability wire-compare ## run all four structural-parity pillars locally (E2E needs 'make e2e' separately)
-	$(GO) test ./tests/contract/wiring_pins/...
+	$(GO) test -timeout=$(GO_TEST_TIMEOUT) ./tests/contract/wiring_pins/...
 	@echo "All local pillars passed. Run 'make e2e' separately (requires build tag + binaries)."
 
 .PHONY: vet

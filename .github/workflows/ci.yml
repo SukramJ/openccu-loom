@@ -17,6 +17,12 @@ env:
   CGO_ENABLED: "0"
   GO_VERSION: "1.26.6"
   NODE_VERSION: "24"
+  # Per-package ceiling for every `go test` invocation in this workflow,
+  # stated rather than inherited from Go's 10-minute default. The Makefile
+  # carries the same value in GO_TEST_TIMEOUT so a local run and CI agree on
+  # when a package counts as wedged; keep the two in step. The derivation and
+  # the "what to do when it trips" rule live on the test-shard job below.
+  GO_TEST_TIMEOUT: "20m"
   # The lint tools are pinned, unlike govulncheck and go-licenses further
   # down. A new vulnerability database SHOULD turn the build red without a
   # commit — that is what the security job is for. A new lint release should
@@ -140,9 +146,45 @@ jobs:
   # tests/contract pins that the shards together cover every package exactly
   # once — a dropped package would otherwise show up as a green run for code
   # nothing executed.
+  #
+  # The per-package `-timeout` is explicit here, and this is the argument for
+  # the number. Measured under -race, slowest packages first:
+  #
+  #   cmd/openccu-loom               210 s on this runner, ~500 s on a loaded
+  #                                  4-core developer box
+  #   internal/store/matterendpoint  101 s
+  #   internal/central/adapter        84 s
+  #
+  # Without the flag Go applies a 10-minute default. On a developer machine
+  # that put the largest package at ~83 % of a hard ceiling, and crossing it
+  # does not report "slow suite": `go test` panics, dumps every goroutine, and
+  # names whichever test was *running* at that instant — which is very often a
+  # bystander. #829 is exactly that story: a wedged mochi-mqtt broker shutdown
+  # inside a cleanup presented for weeks as "this unrelated test hangs", and
+  # unrelated diffs "reproduced" it.
+  #
+  # 20 minutes is 2.4x the worst figure ever measured for the largest package
+  # (5.7x the figure on this runner), so a machine would have to be more than
+  # twice as slow as the slowest one we have measured before a healthy suite
+  # goes red. It stays finite because a wedge does not get slower, it stops:
+  # any ceiling catches it, and this one caps the cost at 20 minutes instead
+  # of the 6-hour job default.
+  #
+  # WHEN IT TRIPS, READ THE GOROUTINE DUMP BEFORE TOUCHING THIS NUMBER. A
+  # goroutine parked for minutes on a mutex or a channel is a deadlock, and no
+  # timeout value fixes it. Raising the ceiling is only correct if the dump
+  # shows every goroutine still making progress — and then the new value needs
+  # the same derivation this one has. A ceiling that is raised whenever it
+  # trips is not a gate.
+  #
+  # timeout-minutes bounds the job as a whole, because `-timeout` bounds one
+  # test binary and a shard runs ~33 of them; today the step finishes in about
+  # five minutes, so 60 leaves room for a slow runner while still failing long
+  # before the 6-hour default.
   test-shard:
     name: test shard ${{ matrix.shard }} (linux, race)
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -163,7 +205,7 @@ jobs:
             echo "::error::shard ${{ matrix.shard }} resolved to no packages"
             exit 1
           fi
-          go test -race -count=1 -covermode=atomic \
+          go test -race -count=1 -timeout="${GO_TEST_TIMEOUT}" -covermode=atomic \
             -coverprofile="coverage-shard-${{ matrix.shard }}.out" "${pkgs[@]}"
       - name: upload shard coverage
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -182,6 +224,7 @@ jobs:
   test-static:
     name: test static (linux, no race)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -196,7 +239,7 @@ jobs:
             echo "::error::no race-exempt packages resolved"
             exit 1
           fi
-          go test -count=1 -covermode=atomic \
+          go test -count=1 -timeout="${GO_TEST_TIMEOUT}" -covermode=atomic \
             -coverprofile=coverage-shard-static.out "${pkgs[@]}"
       - name: upload static coverage
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -295,7 +338,7 @@ jobs:
         run: go test -tags=integration_live -run '^$' -count=1 ./tests/integration/
       - name: go test
         shell: bash
-        run: go test -count=1 ./...
+        run: go test -count=1 -timeout="${GO_TEST_TIMEOUT}" ./...
 
   bench:
     name: bench (smoke)
