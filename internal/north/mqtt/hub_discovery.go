@@ -223,7 +223,7 @@ type hubTopicLayout struct {
 	// ccu is the per-CCU reachability gate `<base>/<central>/hub/status`,
 	// the availability source every CCU-scoped hub entity carries ALONGSIDE
 	// the bridge one. Rendered by [hubDiscoveryContext.Availability] rather
-	// than by a level, because the model's three levels are already spoken
+	// than by a level, because the levels the model resolves against a slot are already spoken
 	// for here — bridge, and device for the program-role gate — and a hub
 	// entity's "device" is the synthetic central card, which has no
 	// reachability topic of its own to borrow.
@@ -246,8 +246,9 @@ func (l hubTopicLayout) Bridge() string { return l.bridge }
 // hubDiscoveryContext is the render context for this plane: the standard one
 // with this daemon's identity strings substituted.
 //
-// Both are overridden because Home Assistant has no migration path for
-// either. The unique id is central-scoped by the CCU's SERIAL while the node
+// The unique id and the node id are overridden because Home Assistant has no
+// migration path for either; the CCU gate this context also carries is here
+// for a different reason, stated on [hubDiscoveryContext.Availability]. The unique id is central-scoped by the CCU's SERIAL while the node
 // id is a slug of the central's NAME, so no single derivation produces both
 // — and the default would derive the node id from the device identifier,
 // which for a device-linked sysvar is a physical device card rather than the
@@ -280,7 +281,7 @@ func (c hubDiscoveryContext) NodeID(*hamodel.Device) string { return c.nodeID }
 // nothing about its CCUs, and a live daemon with a dead CCU says nothing
 // about itself.
 //
-// It appends rather than declaring a fourth [hamodel.AvailabilityLevel]
+// It appends rather than declaring another [hamodel.AvailabilityLevel]
 // because the model's levels are resolved against a slot and a device, and a
 // hub entity's device is the synthetic central card: it has no reachability
 // topic of its own for [hamodel.LevelDevice] to render, and that level is
@@ -412,8 +413,11 @@ func (d *DefaultDiscoveryBuilder) renderHubItem(
 }
 
 // hubLayout is the topic layout every central-scoped hub entity renders
-// under: one state topic and the daemon's own LWT as the sole availability
-// source.
+// under: one state topic and TWO availability sources — the daemon's own
+// LWT (`bridge/status`) and the per-CCU reachability gate
+// (`<central>/hub/status`), conjoined by Home Assistant's default
+// `availability_mode: "all"`. See [hubDiscoveryContext.Availability] for why
+// the CCU gate rides the render context rather than an availability level.
 func (d *DefaultDiscoveryBuilder) hubLayout(centralName, stateTopic string) hubTopicLayout {
 	return hubTopicLayout{
 		state:  stateTopic,

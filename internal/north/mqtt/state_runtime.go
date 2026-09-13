@@ -5,6 +5,7 @@ package mqtt
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
 	hapublisher "github.com/SukramJ/go-hamqtt/publisher"
@@ -30,10 +31,16 @@ import (
 // TestEveryMovedStatePublishIsAtMostOnce reads the level back off the
 // transport call rather than trusting it.
 //
-// An unrecognised level maps to [hapublisher.QoSUnset], which the shared
-// constructors refuse with a panic naming the field — at the composition
-// root, where a bad level is cheap, rather than on a publish at a level
-// nobody chose.
+// An unrecognised level panics HERE, naming the value. Returning
+// [hapublisher.QoSUnset] for it — which this function used to do, on the
+// stated belief that the shared constructors would refuse it — is the one
+// answer that cannot work: [hapublisher.StateConfig]'s resolution applies
+// `QoS.Or(default)` BEFORE any validation, so `QoSUnset` is precisely the
+// value that never reaches a check, and it resolves to QoS 1. The default
+// arm therefore delivered the silent 0 -> 1 promotion this function exists
+// to prevent, for the one input nobody vetted. A panic at the composition
+// root, where a bad level is cheap and loud, is what the comment always
+// promised.
 func runtimeQoS(q QoS) hapublisher.QoS {
 	switch q {
 	case QoS0:
@@ -43,7 +50,7 @@ func runtimeQoS(q QoS) hapublisher.QoS {
 	case QoS2:
 		return hapublisher.QoSExactlyOnce
 	default:
-		return hapublisher.QoSUnset
+		panic(fmt.Sprintf("mqtt: unrecognised QoS level %d in BridgeConfig.QoS", int(q)))
 	}
 }
 
@@ -72,11 +79,15 @@ func runtimeQoS(q QoS) hapublisher.QoS {
 //
 // [hapublisher.StateConfig.CommandFilters] is likewise unset, and that one is
 // a gap rather than a choice: the guard needs the topic filters this daemon
-// subscribes to, and [CommandSubscriber.Start] builds them as inline literals
-// with no accessor to read them back from. The invariant is covered by tests
-// instead — TestEveryStatePlaneIsDisjointFromCommandSubscriptions sweeps all
-// six planes against the really registered filters — so what is missing is
-// the runtime half, not the guarantee.
+// subscribes to. The blocker used to be that [CommandSubscriber.Start] built
+// them as inline literals with no accessor to read them back from; that is no
+// longer true — [CommandSubscriber.routes] and [CommandRouter.Filters] both
+// hand the registered filters back, in-package — so wiring this field is now
+// a change anyone can make, and only the wiring is outstanding. Until then
+// the invariant is covered by tests —
+// TestEveryStatePlaneIsDisjointFromCommandSubscriptions sweeps all six planes
+// against the really registered filters — so what is missing is the runtime
+// half, not the guarantee.
 func newStatePublisher(b *Bridge, logger *slog.Logger) *hapublisher.StatePublisher {
 	return hapublisher.NewStatePublisher(
 		hagomqtt.Split(b.client, lateSubscriber{b: b}),
@@ -94,37 +105,56 @@ func newStatePublisher(b *Bridge, logger *slog.Logger) *hapublisher.StatePublish
 	)
 }
 
-// ResetRuntimeGates opens the dedup gates of the shared state and
-// availability publishers without forgetting what they carry, so the next
-// publish of each remembered topic goes out once even when its value has not
-// changed.
+// runtimeGate is the one thing [Bridge.ResetRuntimeGates] needs from a dedup
+// gate: the ability to stop suppressing what it remembers.
 //
-// This is the reconnect call, and it is not optional. Both gates suppress a
-// repeat of the bytes the broker last accepted, which is right while the
+// It is an interface, and the bridge holds the gates as a list, so that
+// "every gate is reset on reconnect" is a property of the construction
+// rather than of a reader remembering to extend a sequence of nil checks.
+// The shape is not theoretical: the per-CCU reachability gate was added as
+// the third gate on this bridge and none of the four call sites of this
+// method learned about it, which left every CCU-scoped hub entity
+// permanently unavailable after any broker restart that lost its retained
+// store.
+type runtimeGate interface{ Reset() }
+
+// ResetRuntimeGates opens every dedup gate on this bridge without forgetting
+// what it carries, so the next publish of each remembered topic goes out
+// once even when its value has not changed.
+//
+// This is the reconnect call, and it is not optional. Every gate suppresses
+// a repeat of the bytes the broker last accepted, which is right while the
 // broker still holds them — and wrong the moment it does not. A broker
-// restarted without a persistent retained store drops every retained state
-// and every availability marker while this process reconnects underneath;
-// without this reset the gates would answer "already published" for bytes
-// nothing holds any more, and every entity would sit blank, or wrongly
-// available, until its value next happened to change. On a sensor that
-// reports on change alone that is forever.
+// restarted without a persistent retained store drops every retained state,
+// every availability marker and every per-CCU reachability level while this
+// process reconnects underneath; without this reset the gates would answer
+// "already published" for bytes nothing holds any more, and every entity
+// would sit blank, or wrongly available, until its value next happened to
+// change. On a sensor that reports on change alone that is forever, and on
+// the per-CCU gate of a healthy CCU it is forever by construction: its fold
+// only moves when the CCU stops answering.
 //
-// It is called from [Bridge.AnnounceOnline], which the lifecycle runs on
-// every successful (re)connect, and again from the domain's own boot
-// snapshot pass next to the availability cache it clears for the identical
-// reason. Twice rather than once because the two hooks are registered on
-// different objects and their order is not fixed, and a reset is idempotent
-// and cheap: it publishes nothing, it only stops the next publish being
-// suppressed.
+// It walks [Bridge.gates] rather than naming the gates, because naming them
+// is what failed: a reset that a new plane has to be added to is a reset a
+// new plane will be forgotten by, and the failure is silent in exactly the
+// case the reset exists for. A gate built in [NewBridge] and not appended to
+// that list is caught by TestEveryBridgeDedupGateIsRegisteredForReset.
+//
+// It is called from four places: [Bridge.AnnounceOnline], which the
+// lifecycle runs on every successful (re)connect; the domain's own boot
+// snapshot pass, next to the availability cache it clears for the identical
+// reason; and the alarm and security planes' own connect hooks. More than
+// once rather than once because the hooks are registered on different
+// objects and their order is not fixed, and a reset is idempotent and cheap:
+// it publishes nothing, it only stops the next publish being suppressed.
 func (b *Bridge) ResetRuntimeGates() {
 	if b == nil {
 		return
 	}
-	if b.state != nil {
-		b.state.Reset()
-	}
-	if b.avail != nil {
-		b.avail.Reset()
+	for _, g := range b.gates {
+		if g != nil {
+			g.Reset()
+		}
 	}
 }
 

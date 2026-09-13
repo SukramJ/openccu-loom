@@ -350,7 +350,7 @@ func (b *TopicBuilder) HubStatus(centralName string) string {
 // [TopicBuilder.HubDiagnostics] the builder is kept rather than deleted,
 // so the reserved shape stays pinned by
 // tests/contract/mqtt_topic_schema_doctest_test.go and cannot drift if
-// one of the three ever does gain a publisher —
+// one of the two ever does gain a publisher —
 // tests/contract/mqtt_topic_schema_producer_test.go fails if one does
 // without its schema row and ADR note moving with it.
 func (b *TopicBuilder) HubInfo(centralName string) string {

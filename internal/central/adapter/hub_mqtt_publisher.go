@@ -372,7 +372,8 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 	// payload that already read the empty serial. (The builder's map is
 	// itself synchronised — other goroutines stamp it too — so this
 	// queueing is about ordering, not about data-race safety.)
-	if hi := hubInfoFromUnit(u); hi.Serial != "" {
+	hi := hubInfoFromUnit(u)
+	if hi.Serial != "" {
 		p.publish(func() { disco.SetHubInfoFor(centralName, hi) })
 	}
 
@@ -385,7 +386,17 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 	// hub plane out until the next reachability change — which on a healthy
 	// CCU may never come. The worker is FIFO, so queueing the seed first is
 	// what orders the byte before the configs that name it.
-	p.publish(func() { p.publishCCUReachability(ctx, b, centralName, hubModel) })
+	//
+	// Gated on the SERIAL, like every discovery build below it, and for a
+	// reason the gate's own fold depends on: an unobserved connectivity
+	// tracker folds to REACHABLE, which is only defensible once the daemon
+	// has demonstrated it can talk to this CCU. Before the serial resolves
+	// it has demonstrated nothing, so an ungated seed put a retained
+	// `online` on the broker for a CCU that is merely CONFIGURED — one that
+	// may have been unreachable since boot. There is nothing to gate at that
+	// point either: no hub entity of this central exists until the serial
+	// stamps its unique ids, and the daemon re-runs Start once it does.
+	p.queueCCUReachabilitySeed(ctx, b, centralName, hi.Serial, hubModel)
 
 	// --- Programs ---
 	// Subscribe to PutProgram FIRST so programs registered between the
@@ -979,6 +990,22 @@ func (p *HubMQTTPublisher) republishHubEntityDiscovery(
 // whose aggregate is not wired yet is served by a stand-in of the same type
 // and gets the same topic. That fallback is the only reason an unwired
 // aggregate is not an error here.
+
+// queueCCUReachabilitySeed queues the per-CCU gate's seeding write, unless
+// this central's serial has not resolved yet.
+//
+// Its own function rather than a branch in [HubMQTTPublisher.wireOneCentral]
+// because that one is already at the cognitive-complexity ceiling; the
+// reasoning for the guard is on the call site.
+func (p *HubMQTTPublisher) queueCCUReachabilitySeed(
+	ctx context.Context, b *mqtt.Bridge, centralName, serial string, hubModel *hub.Hub,
+) {
+	if serial == "" {
+		return
+	}
+	p.publish(func() { p.publishCCUReachability(ctx, b, centralName, hubModel) })
+}
+
 // publishCCUReachability folds this CCU's interface states into the per-CCU
 // availability gate and hands the result to the bridge, which debounces it.
 //
@@ -1011,15 +1038,44 @@ func (p *HubMQTTPublisher) publishCCUReachability(
 // and the common shapes of it (a crashed CUxD, an unplugged HmIP wired
 // gateway, a BidCoS radio module that the CCU itself restarts) leave the
 // ReGa logic layer answering normally. Sysvars, programs, the system scores
-// and the message aggregates are ReGa-scoped, not interface-scoped: their
-// values are not stale while ReGa is alive, and greying them out because
-// one radio is down would hide a working CCU behind an unrelated fault.
-// The per-interface fault has its own entity — the connectivity
-// binary_sensor — which is where that signal belongs and is read.
+// and the message aggregates are ReGa-scoped, not interface-scoped: greying
+// them out because one radio is down would hide a working CCU behind an
+// unrelated fault. The per-interface fault has its own entity — the
+// connectivity binary_sensor — which is where that signal belongs and is
+// read.
 //
-// An unobserved tracker folds to REACHABLE, not to unreachable. Nothing in
-// this plane is published before the CCU's serial has been read off it, so
-// "no interface state yet" at this point means the daemon has just
+// # What this gate does NOT cover
+//
+// The fold's inputs are interface reachability, and the entities it gates
+// are ReGa-scoped. Those are not the same signal, so the gate answers
+// "online" in two cases where the values behind it are stale:
+//
+//   - ReGaHss dies or hangs while `rfd`/`HMIPServer` keep serving. The
+//     XML-RPC clients stay connected, the central never goes FAILED,
+//     [coordinators.Reconciler] never emits the not-ready sweep, and every
+//     interface stays reachable — while every sysvar, program, system score
+//     and message aggregate keeps showing its last ReGa value.
+//   - The connectivity probe ERRORS. [JSONRPCConnectivityProbe] documents
+//     its own limit — `Interface.listInterfaces` measures MEMBERSHIP, not
+//     liveness — and the reconciler's error path changes no tracker entry,
+//     so a probe that cannot reach the CCU at all leaves this fold saying
+//     `online`. This half needs no firmware assumption to bite.
+//
+// What it DOES cover is the total outage: a CCU that is gone takes the
+// XML-RPC clients down with it and the not-ready sweep flips every
+// interface false, which is the case the gate was added for.
+//
+// The fix for the ReGa-only case is a second input, not a different fold:
+// this daemon already owns the right probe in `/ise/checkrega.cgi`
+// (see checkRegaPath / probeCCUReady), which answers the literal "OK" only
+// while ReGaHss is up and serving, and it is used at bring-up only. Wiring
+// it means giving it a periodic caller, a tracked per-CCU state of its own
+// and a conjunction with this fold — new published traffic on a live path,
+// so it is its own change rather than a comment correction here.
+//
+// An unobserved tracker folds to REACHABLE, not to unreachable. The seed in
+// wireOneCentral is gated on the CCU's serial having been read off it, so
+// "no interface state yet" at that point means the daemon has just
 // demonstrated it can talk to the CCU and the tracker has not caught up —
 // absence of evidence, not evidence of absence. Folding it the other way
 // would publish a retained `offline` and grey out every hub entity of a
