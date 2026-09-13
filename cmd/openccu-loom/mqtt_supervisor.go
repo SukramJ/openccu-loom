@@ -554,11 +554,35 @@ func (s *mqttSupervisor) Swap(ctx context.Context, newCfg *config.Config) error 
 	// predecessor — see [mqttSupervisor.announceConnected].
 	s.announceConnected(ctx, newSwap)
 
-	// Build new subscribers against the new client. Order matters:
-	// the new stack is already publishing, so any inbound command
-	// briefly has no listener. We accept that gap (≤ a few ms)
-	// because the alternative — running both subscriber sets in
-	// parallel — would double-deliver every inbound write.
+	// Stop the predecessor's subscribers before the new ones go on the wire.
+	//
+	// This used to be left to the teardown below, which runs AFTER the new
+	// subscriber set is built — so for the length of that build both
+	// generations held command subscriptions on their own live connections
+	// and the broker delivered every inbound write to both. The teardown-first
+	// path above is no help: it is guarded on a matching, non-empty
+	// `client_id`, and `client_id` has no default (internal/config: NorthMQTT),
+	// so the ordinary swap of a daemon that never set one took exactly this
+	// route. A doubled write is a doubled physical action — a second
+	// PRESS_SHORT, a second program run, a second alarm arm.
+	//
+	// Only the subscribers stop here, not the stack: the old client and its
+	// lifecycle stay up until the new subscriber set is live, which is what
+	// keeps a failed build a rollback rather than an outage. The cost is the
+	// same gap the comment this replaces described — a few ms in which an
+	// inbound command has no listener — and that is the right side of the
+	// trade: a dropped command is retried by whoever sent it, a doubled one is
+	// not.
+	if oldSwap != nil {
+		s.mu.Lock()
+		stopOld := oldSwap.stopSubs
+		oldSwap.stopSubs = nil
+		s.mu.Unlock()
+		if stopOld != nil {
+			stopOld()
+		}
+	}
+	// Build new subscribers against the new client.
 	if subBuilder != nil {
 		stop, sErr := subBuilder(ctx, newSwap.client, newSwap.bridge)
 		if sErr != nil {

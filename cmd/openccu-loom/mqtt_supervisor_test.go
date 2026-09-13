@@ -855,3 +855,63 @@ func TestSupervisorConnectHooksRunOnALiveContextAfterAReloadRequest(t *testing.T
 			"dead, so every later hub publish is queued for a drain loop that has exited", err)
 	}
 }
+
+// TestSwapNeverRunsTwoCommandSubscriberGenerationsAtOnce pins the ordering
+// finding 7 found inverted.
+//
+// The swap built the new subscriber set and only then tore the old stack
+// down, so both generations held command subscriptions on their own live
+// connections while the build ran — and the broker delivers an inbound write
+// to both. The teardown-first path above it is guarded on a matching,
+// NON-EMPTY `client_id`, and `client_id` has no default, so the ordinary swap
+// of a daemon that never set one took exactly the doubling route. The comment
+// in that block asserted the opposite of what the code did.
+//
+// A doubled command is a doubled physical action, so the assertion is on
+// concurrency, not on call counts: the builder records how many subscriber
+// sets are live at once and the peak has to be one.
+func TestSwapNeverRunsTwoCommandSubscriberGenerationsAtOnce(t *testing.T) {
+	t.Parallel()
+	s := newSup(t)
+	ctx := context.Background()
+
+	var mu sync.Mutex
+	live, peak := 0, 0
+	s.SetSubscriberBuilder(func(_ context.Context, _ mqtt.Client, _ *mqtt.Bridge) (func(), error) {
+		mu.Lock()
+		live++
+		if live > peak {
+			peak = live
+		}
+		mu.Unlock()
+		return func() {
+			mu.Lock()
+			live--
+			mu.Unlock()
+		}, nil
+	})
+
+	first := mqttCfg(true)
+	if first.North.MQTT.ClientID != "" {
+		t.Fatalf("client_id defaults to %q; this test exercises the no-client_id swap path and "+
+			"would silently take the teardown-first branch instead", first.North.MQTT.ClientID)
+	}
+	if err := s.Start(ctx, first); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	second := mqttCfg(true)
+	second.North.MQTT.TopicBase = "test-swapped"
+	if err := s.Swap(ctx, second); err != nil {
+		t.Fatalf("Swap: %v", err)
+	}
+	t.Cleanup(func() { s.Shutdown(context.Background()) })
+
+	mu.Lock()
+	defer mu.Unlock()
+	if peak > 1 {
+		t.Fatalf("%d subscriber generations were live at once during the swap, want at most 1 — "+
+			"both sets hold command subscriptions on their own connections, so the broker "+
+			"delivers every inbound write to both and a PRESS_SHORT, a program trigger or an "+
+			"alarm arm happens twice", peak)
+	}
+}
