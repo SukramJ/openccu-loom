@@ -1,9 +1,24 @@
 # A Shared Data Model and Home Assistant Discovery Layer for the `go-*2mqtt` Family
 
-**Status:** accepted — [ADR 0070](../../docs/adr/0070-shared-ha-discovery-model-module.md)
-**Date:** 2026-09-09
+**Status:** **closed** (2026-09-14) — accepted 2026-09-09 as [ADR 0070](../../docs/adr/0070-shared-ha-discovery-model-module.md); all nine phases have shipped.
+**Date:** 2026-09-09 (design); 2026-09-14 (closed)
 **Scope:** `go-mtec2mqtt`, `go-zendure2mqtt`, `go-homeconnect2mqtt`, `go-daikin2mqtt`, `go-unifi2mqtt`, `openccu-loom`
 **Reference implementation:** `openccu-loom` — in case of doubt, loom wins.
+
+> **Sections 1 to 9 are frozen.** They are the design as it stood on
+> 2026-09-09, before a line of the programme was written, and they are kept in
+> the tense they were written in — proposing, planning, listing open points —
+> because their value is that they record what was believed when the decision
+> was taken. **Do not read them as a description of what exists.** §10,
+> *Outcome*, records what shipped, what changed shape on the way, and how each
+> open point and each risk was settled. The one exception is noted in §10: two
+> occurrences of a module name this document itself had already decided
+> against were corrected in place.
+>
+> The per-phase outcome table, the erratum on §2.1's LOC figures, phase 9's
+> declined step and the programme's two transferable findings live in
+> [ADR 0070's closing section](../../docs/adr/0070-shared-ha-discovery-model-module.md)
+> and are deliberately not duplicated here.
 
 ---
 
@@ -563,7 +578,7 @@ constant) → `openccu-loom` (builds the lookup semantics itself).
 > **A data artifact, not a lookup framework.**
 
 Consumers get tables and constants. Resolution logic — "which device_class
-applies to this parameter" — lives in `go-hamodel` or in the bridge.
+applies to this parameter" — lives in `go-hamqtt` or in the bridge.
 
 ### 4.2 Two-stage extraction
 
@@ -861,7 +876,7 @@ Order is chosen so each step de-risks the next.
 |---|---|---|
 | 0 | `go-ha-catalog`: Stage 0 + Stage 1 extraction, first tag | No dependants yet; pure upside, usable standalone |
 | 1 | `go-mqtt`: additive `SplitClient` + connect-retry helper | Small, additive, unblocks every bridge's bootstrap |
-| 2 | `go-hamodel`: types, discovery bundle, validation, naming | Design lands while loom is still the reference impl |
+| 2 | `go-hamqtt`: types, discovery bundle, validation, naming | Design lands while loom is still the reference impl |
 | 3 | **openccu-loom migrates** — extract `payload`, `naming`, `routingkey`, bridge mechanics upward, import back | The hardest consumer proves the design *before* it is fanned out |
 | 4 | Runtime layer (state publishing, command routing, availability, orphan sweep, birth sync) | Now informed by loom's real requirements |
 | 5 | `go-zendure2mqtt` (375 LOC) as pilot | Smallest surface, catalog-driven, single device hierarchy |
@@ -910,3 +925,99 @@ These need a decision before phase 2, but not before phase 0 or 1:
 4. **Does `go-ha-catalog` vendor the extracted data or require a core
    checkout?** Proposal: vendor, following `go-openccu-data` — consumers must
    not need Python or an HA checkout.
+
+---
+
+## 10. Outcome (2026-09-14)
+
+Added when the programme closed. Sections 1 to 9 above are not edited; this
+section says what became of them. The per-phase record — what each of the nine
+phases shipped, what each review found, and the erratum on §2.1's LOC table —
+is in [ADR 0070's closing section](../../docs/adr/0070-shared-ha-discovery-model-module.md),
+which is the document a reader arrives at first.
+
+### The one in-place edit
+
+Two occurrences of `go-hamodel` (§4.1 and §8.2's phase-2 row) were corrected to
+`go-hamqtt`. They are not a record of belief: §3 of this same document already
+rejects that name in writing — *"`go-hamodel` would undersell the runtime
+half"* — so the two occurrences were an internal inconsistency on the day it
+was written, not a decision that later changed. The sentence in §3 that makes
+the choice is left exactly as it stands, `go-hamodel` and all, because that one
+*is* the record.
+
+### What shipped, and what it is called
+
+- **`go-hamqtt`** — v0.34.1. The shared model, the discovery bundle and the
+  publisher runtime, as §3 describes, with the exception below.
+- **`go-ha-catalog`** — v0.2.1. The generated Home Assistant vocabulary, as §4
+  describes.
+- **`go-mqtt`** — v1.5.1. Still a pure transport with no domain knowledge, so
+  §3.7's boundary held; but it is no longer the two helpers §3.7 lists.
+- **Two tools, not four.** `hacheck` and `hadoctor` shipped. **`hagen` and
+  `hadiff` do not exist**, so §1's "four tools", §7.2 and §7.3 describe
+  software that was never built, and §4.6's unattended release runs without the
+  `hadiff` classification it assumes. ADR 0070's first amendment (2026-09-13)
+  carries this; it is repeated here only because a reader of §7 would otherwise
+  have no way to know.
+
+### §3.6's runtime façade did not survive contact
+
+This is the one large shape change between design and delivery. §3.6 draws a
+single `Bridge` type holding an `mqtt.Client`, with registry, data plane and
+lifecycle on one object. What shipped is `publisher.Runtime` alongside separate
+`StatePublisher`, `AvailabilityPublisher` and `CommandRouter`, over a narrow
+`Transport` interface rather than a `go-mqtt` client.
+
+The reason is the fan-out, and it is worth keeping: a single façade is an
+all-or-nothing adoption, and five bridge migrations plus loom's own all
+proceeded **one plane at a time** — state, then availability, then command,
+then the sweep — each with its own measurement and its own pull request. A
+`Transport` seam also means the model does not depend on `go-mqtt` at all,
+which preserves ADR 0050's boundary more strictly than §3.6 would have.
+
+§3.5's litmus test, by contrast, held exactly as drawn: daikin's composite
+`climate` needed no runtime special case.
+
+### §8.3's risks, settled
+
+| Risk as written | Outcome |
+| --- | --- |
+| The model cannot carry loom's 15k-line layer | **Did not happen.** Phase 3 shipped as openccu-loom v0.78.0 — 92 pull requests and three rounds of adversarial review — before any bridge migrated. The sequencing decision was the right one and is the reason the other five phases were incremental. |
+| Device-only discovery excludes older HA installs | **Moot.** The per-entity path was never removed; it is in fact the shared module's default. See ADR 0070's first amendment. |
+| HA changes the discovery schema | **Untested.** The mitigation named `hadiff`, which does not exist. What guards it in practice is `go-ha-catalog`'s regenerate-and-compare workflow and each consumer's exact pin. |
+| **Composite entities (climate) do not generalise — phase 8 is the proof** | **Proved.** All **14** composite `climate` configs across daikin's twelve scenarios are reproduced **byte for byte**. Seven role bindings, of which **five are synthetic** (`hvac_mode`, `fan_mode`, `swing_mode`, `swing_h_mode`, `preset_mode`) — backed by no catalogue entry and no register — carried as ordinary `model.Slot`s on the same device, resolved by the same `Layout` as everything else. **Nothing in the model knows they are synthetic, and there is no runtime special case.** Climate did not stay a daikin-local builder. |
+| Zero-dependency rule under pressure | **Held.** `go-ha-catalog` embeds JSON; neither module took a runtime dependency. |
+| Six pinned consumers make breaking changes expensive | **Held, and it paid.** Four guards added in `go-hamqtt` v0.34.0 are additive, opt-in, and move no consumer's pinned bytes — each one exists because a consumer measured the defect it closes. One of them, `SweepRequest.SelfClaimed`, was modelled on go-unifi2mqtt's own `Claims{Published, Announced}` and is credited there by name: the fan-out feeding a design back upstream. |
+
+### §9's open points, settled
+
+§9 asks for decisions "before phase 2". Phase 2 shipped, and so did phases 3
+to 9; the section is closed.
+
+1. **Discovery prefix per bridge or global?** Settled as a parameter, not an
+   option helper: `discovery.DefaultPrefix` is the constant `homeassistant`
+   and the consumer supplies the prefix it wants. There is no
+   `WithDiscoveryPrefix`. **openccu-loom did not take the benefit** — it still
+   hardcodes `naming.DiscoveryTopicPrefix = "homeassistant/"` with no operator
+   knob, so §2.4's complaint about this daemon stands unfixed.
+2. **Envelope or bare value on state topics?** Settled as proposed.
+   `discovery.EnvelopeEncoding` is the zero value and therefore the default;
+   `RawEncoding` is the opt-out for bridges that need no per-datapoint
+   availability.
+3. **Where does the concept document live?** Already settled when written.
+4. **Does `go-ha-catalog` vendor the extracted data?** Settled as proposed: it
+   vendors. No consumer needs Python or a Home Assistant checkout.
+
+### What §2 promised and this daemon did not collect
+
+§2.4 lists loom's own weaknesses, on the premise that the extraction would
+dissolve them. Most were: the three overlapping description types, the two
+discovery interfaces with opposite precedence, the two `Bucket` enums, the
+untyped `map[string]any` bodies and the missing validator all went. Two did
+not, and are recorded in ADR 0070's closing section rather than quietly
+dropped: the hardcoded `homeassistant/` prefix above, and the
+`sensorMetadataByUnit` raw-versus-canonical unit defect, which §2.4 and ADR
+0070's *Why* both describe as blocked on an import cycle the extraction would
+dissolve. The extraction happened; the fix did not follow it, and the affected
+sensors still publish with no `state_class`.
