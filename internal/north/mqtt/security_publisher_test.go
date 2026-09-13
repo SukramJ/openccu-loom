@@ -43,7 +43,7 @@ func TestSecurityPlaneFeedsTheEntitiesItDeclares(t *testing.T) {
 	t.Cleanup(p.Stop)
 
 	events.Publish(bus, hmevent.SecurityStateChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
-	obs.settle(t)
+	obs.settle(t, p)
 
 	statePrefix := base + "/security/"
 	fed := 0

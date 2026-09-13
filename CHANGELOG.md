@@ -101,6 +101,37 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   allocs/op**, named by the gate, while the two `ForWith` benchmarks held
   at 19 and 26 allocations throughout. Reverted.
 
+- **A plane guard's wait ended on the wrong side of the publish it was
+  watching** — the flake `TestSecurityPlaneIsVisibleToTheBridge` was seen
+  as, once, under heavy load, and a class the previous fix to this file
+  did not cover. `settle` (`plane_topic_observation_test.go`) waits for
+  the fake broker to fall quiet, and the broker call is not the end of a
+  publish: `Bridge.publishRuntimeState` records the retained topic in the
+  bridge's index and increments `messages_sent` AFTER the client returns,
+  on the same worker goroutine, and a reconcile is published one message
+  at a time. Sixty milliseconds of silence therefore means "no new
+  writes", never "the plane has finished" — a worker descheduled past the
+  broker call, or between two messages of one burst, is quiet in exactly
+  the way a finished one is, and the guard then reads an index the
+  publish has not reached. Reproduced deterministically (3/3) by
+  reinstating the window as a 200 ms delay before the bookkeeping, with
+  the reported failure verbatim: `retained security topics absent from
+  the bridge's retained-topic index`. The wait is no longer a guess: both
+  asynchronous publishers (`SecurityMQTTPublisher`, `AlarmMQTTPublisher`)
+  answer an in-order barrier on their worker only once every pending
+  reconcile and every queued message has been published and bookkept, and
+  `settle` takes the plane and waits on that. The quiescence loop stays
+  as the backstop for writes a test makes outside a worker, and as the
+  earlier fix's vacuity guard. No timeout was lengthened — a longer wait
+  would only have made the same wrong question rarer, and this daemon
+  ships to 32-bit ARMv7.
+- **The sibling guards shared the weakness.** The same wait backs the
+  security, alarm, hub, device, add-on and raw plane round-trips,
+  `TestSecurityZoneTopicsCarryTheStoredSlug` and the all-planes disjoint
+  sweep; the ones driving an asynchronous publisher (four security
+  runners and the alarm runner, and through them two subtests of the
+  sweep) could all return on the head of a burst rather than the plane.
+  They now wait on the same barrier.
 
 - **The state-plane bookkeeping split had no test**, so all three of a
   review's mutations survived the suite: indexing only on an accepted

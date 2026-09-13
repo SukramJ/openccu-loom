@@ -152,8 +152,13 @@ type AlarmMQTTPublisher struct {
 	unsubs      []func()
 	reconcileCh chan struct{}
 	eventCh     chan alarmEventMsg
-	stopCh      chan struct{}
-	doneCh      chan struct{}
+	// syncCh carries barrier requests answered only once the worker has
+	// performed every reconcile and every queued event. See the note on
+	// the Security & Safety plane's own syncCh for why the worker has to
+	// state this rather than a guard inferring it from a quiet broker.
+	syncCh chan chan struct{}
+	stopCh chan struct{}
+	doneCh chan struct{}
 }
 
 // NewAlarmMQTTPublisher binds a publisher to the alarm service and the
@@ -171,6 +176,7 @@ func NewAlarmMQTTPublisher(svc *alarm.Service, wiring *Wiring, logger *slog.Logg
 		names:       map[string]string{},
 		reconcileCh: make(chan struct{}, 1),
 		eventCh:     make(chan alarmEventMsg, 64),
+		syncCh:      make(chan chan struct{}),
 		stopCh:      make(chan struct{}),
 		doneCh:      make(chan struct{}),
 	}
@@ -401,7 +407,61 @@ func (p *AlarmMQTTPublisher) run() {
 			p.reconcile()
 		case msg := <-p.eventCh:
 			p.publishEventMsg(msg)
+		case done := <-p.syncCh:
+			p.drainPending()
+			close(done)
 		}
+	}
+}
+
+// drainPending performs every unit of work already queued and returns
+// once nothing is left: pending reconciles first, because a reconcile is
+// what puts the plane's retained topics on the broker.
+func (p *AlarmMQTTPublisher) drainPending() {
+	for {
+		select {
+		case <-p.reconcileCh:
+			p.reconcile()
+			continue
+		default:
+		}
+		select {
+		case msg := <-p.eventCh:
+			p.publishEventMsg(msg)
+		default:
+			return
+		}
+	}
+}
+
+// quiesce blocks until the worker has finished every reconcile and every
+// event queued before the call, bridge-side bookkeeping included. A
+// publisher that never started has no worker and nothing pending.
+func (p *AlarmMQTTPublisher) quiesce(ctx context.Context) error {
+	if p == nil {
+		return nil
+	}
+	p.mu.Lock()
+	started := p.started
+	p.mu.Unlock()
+	if !started {
+		return nil
+	}
+	done := make(chan struct{})
+	select {
+	case p.syncCh <- done:
+	case <-p.stopCh:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	select {
+	case <-done:
+		return nil
+	case <-p.stopCh:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 
