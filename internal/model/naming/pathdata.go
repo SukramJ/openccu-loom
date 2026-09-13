@@ -617,28 +617,36 @@ func NewSysvarPathData(vid string) PathData {
 
 // --- ADR 0011 hub-topic free functions -------------------------------
 
-// MQTTHubStatus returns the reserved CCU connection-state topic
+// MQTTHubStatus returns the retained per-CCU availability gate
 // `<base>/<central>/hub/status`.
 //
-// Its only non-test caller is `TopicBuilder.HubStatus` in
-// internal/north/mqtt, which has no production caller of its own: no
-// daemon build publishes this shape. The word "retained" this comment
-// used to carry described a retain policy no publisher implements. See the 2026-09-12 amendment to
-// docs/adr/0011-mqtt-topic-and-payload-architecture.md.
+// Reached through `TopicBuilder.HubStatus` in internal/north/mqtt, which
+// the per-CCU availability publisher and the hub discovery builder both
+// call. Retained, `online` / `offline`, QoS 1.
+//
+// This comment said the opposite until 2026-09-13 — "no daemon build
+// publishes this shape" — which was true when it was written and survived
+// the change that made it false, because nothing tests a doc comment. See
+// the 2026-09-12 amendment to
+// docs/adr/0011-mqtt-topic-and-payload-architecture.md for the withdrawal
+// and the 2026-09-13 one for the implementation.
 func MQTTHubStatus(base, centralName string) string {
 	return fmt.Sprintf("%s/%s/hub/status", strings.Trim(base, "/"), TopicSafe(centralName))
 }
 
 // MQTTHubInfo returns the reserved CCU info-snapshot topic
-// `<base>/<central>/hub/info`. Nothing publishes it; see
-// [MQTTHubStatus].
+// `<base>/<central>/hub/info`. Nothing publishes it: its fields reach
+// consumers in the HA discovery device block instead. Documented as a
+// reserved shape in docs/mqtt-topic-schema.md.
 func MQTTHubInfo(base, centralName string) string {
 	return fmt.Sprintf("%s/%s/hub/info", strings.Trim(base, "/"), TopicSafe(centralName))
 }
 
 // MQTTHubDiagnostics returns the reserved per-CCU diagnostics topic
-// `<base>/<central>/hub/diagnostics`. Nothing publishes it; see
-// [MQTTHubStatus].
+// `<base>/<central>/hub/diagnostics`. Nothing publishes it: per-device
+// data points and the `<base>/<central>/system/*` metric topics carry the
+// same figures. Documented as a reserved shape in
+// docs/mqtt-topic-schema.md.
 func MQTTHubDiagnostics(base, centralName string) string {
 	return fmt.Sprintf("%s/%s/hub/diagnostics", strings.Trim(base, "/"), TopicSafe(centralName))
 }

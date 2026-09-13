@@ -8,6 +8,28 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **ADR 0011 documented a retired topology as current, in the document that
+  owns the schema.** §Topic hierarchy and the HA Discovery example that
+  quotes it draw the `channels/`-infix, `/state`-suffix per-DP tree of the
+  build before this one: `<addr>/channels/<ch>/values/<param>/state` where
+  the daemon writes `<addr>/<ch>/values/<param>`, and `<addr>/update/state`
+  where it writes `<addr>/update`. That the old shape really shipped is not
+  in doubt — `retain_cleanup.go`'s `LegacySlotStateMatcher` exists solely to
+  evict its retained leftovers, and a sweep for a topology is proof the
+  topology was on the wire. The sections are not rewritten: they record what
+  was decided in 2026-04. A dated amendment names the three differences and
+  a signpost sits above each stale block.
+
+- **The two stale doc comments the guard's file exclusion was hiding.**
+  `TopicBuilder.HubStatus` and `naming.MQTTHubStatus` both asserted that
+  **nothing publishes** `<base>/<central>/hub/status`. True when written,
+  false since the topic became the per-CCU availability gate, and the
+  version of the fact a reader was most likely to meet — assertive, on the
+  builder, and tested by nothing. Both now describe the published topic and
+  record that they said the opposite. `HubDiagnostics`' claim that it "was
+  never documented either" is corrected the same way: it is in the schema
+  document's reserved table.
+
 - **The topic-schema guard checked one direction, which is the mistake it
   was built to fix — and the document was a strict subset of the wire.**
   `tests/contract/mqtt_topic_schema_producer_test.go` checked doc -> code:
