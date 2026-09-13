@@ -48,7 +48,8 @@ type SetupService struct {
 
 	// mu serialises the first-run probe and the finalize that follows it.
 	// The probe is a live user count and finalize is an upsert behind a
-	// bcrypt hash (cost 12, hundreds of milliseconds); without the lock two
+	// bcrypt hash (auth.BcryptCost, hundreds of milliseconds in production);
+	// without the lock two
 	// concurrent first-run POSTs both pass the probe and both land — two
 	// admins, or one silently overwriting the other's password.
 	mu sync.Mutex
