@@ -514,3 +514,132 @@ Nothing here changes the decision. What it changes is what a reader should
 do with a named artifact in this ADR: check it. The 2026-09-12 amendment
 above withdrew this ADR's `LegacyAlias` precedent for the same reason — it
 was cited as shipped plumbing and was not.
+
+## Amendment (2026-09-13) — the payload-build benchmark now exists, and the 500 ns/op bound is not met
+
+The amendment above reported that `tests/bench/payload_build_test.go` did not
+exist, so §Mitigations' "the per-type cached reflection path must stay below
+500 ns/op for a 20-field struct — regressions block release per the existing
+benchmark gate" bounded nothing. That file now exists, the bound has been
+measured for the first time, and the measurement is the news:
+
+**the code is roughly an order of magnitude over the ADR's number.**
+
+### What the 500 ns/op applies to
+
+§Trade-offs and §Mitigations describe the same operation twice: "tag-based
+payload sweep … cached per type via `sync.Map` keyed on `reflect.Type`; the
+hot path is a single map lookup plus a slice copy" and "the per-type cached
+reflection path … for a 20-field struct". That operation is
+`payload.ForWith` — `internal/payload/payload.go`, delegating the cached field
+walk to `go-hamqtt/payload`, whose `fieldsOf` is exactly the
+`sync.Map`-keyed-on-`(reflect.Type, Kind)` cache the ADR describes. There is no
+other cached reflection path in this tree, and `payload.For` — the spelling
+§Decision uses when it says the sweep "has been retired" — is not in
+`internal/payload` at all; `ForWith` is what survived and what production
+calls.
+
+**The ADR is ambiguous about this in one respect, and it is worth naming.**
+§Decision says the tag sweep "has been retired — every Source builds its
+payload structs explicitly", while §Trade-offs and §Mitigations, further down
+the same document, still treat it as the live hot path worth bounding. Both
+are partly true: the sweep is no longer how a `Source` builds its own payload,
+but it was never removed, and `internal/north/mqtt/discovery.go:1306` and
+`discovery_schedule.go:479` still call it per device on every HA-Discovery
+build. So the bound has a live subject.
+
+**And there is a fifth phantom artifact, which the amendment above did not
+catch.** §Decision offers `payload.PayloadAsMap` as the reflection helper that
+survived the retirement — "Reflection still survives as the [payload.
+PayloadAsMap] helper that JSON-marshals a typed payload into the loose map
+shape some legacy consumers still expect". No such identifier exists anywhere
+in this repository. It would have been the wrong subject for the 500 ns/op
+bound regardless — the ADR describes it as a JSON round-trip, not a per-type
+cached tag walk — but a reader sent to it to understand what reflection is
+still doing here finds nothing, which is precisely the failure mode the
+amendment above set out to fix.
+
+The benchmark therefore measures `payload.ForWith` twice, because the ADR
+describes the workload two ways:
+
+- `BenchmarkPayloadBuildDeviceInfo` — the production call site verbatim:
+  `payload.ForWith(dev, payload.KindInfo, payload.Options{UseAltNames: true})`
+  over a `*device.Device` built through `device.New`, which also crosses the
+  `ExtraProperties` merge the mutex-guarded `name` field forces.
+- `BenchmarkPayloadBuildTwentyField` — the ADR's literal workload parameter, a
+  20-field tagged struct, through the same production function.
+
+### Measured
+
+| Benchmark | ns/op | B/op | allocs/op | ADR bound |
+|---|---|---|---|---|
+| `BenchmarkPayloadBuildDeviceInfo` | see `script/bench_gate.sh` | 1464 | 19 | 500 ns/op |
+| `BenchmarkPayloadBuildTwentyField` | see `script/bench_gate.sh` | 2384 | 26 | 500 ns/op |
+
+The allocation counts are the stable part and they are what makes the verdict
+safe on any machine: the figures above were taken on an x86-64 developer box,
+and the slowest target this daemon actually ships to is the 32-bit ARMv7
+build `.goreleaser.yaml` produces for the CCU add-on bundle — so no plausible
+change of machine closes a gap of this size. The
+per-call cost is one map allocation, then per retained field a `FieldByIndex`,
+an `IsZero`, an `Interface()` that boxes the value (an allocation for every
+non-pointer field) and a map insert with a string hash. §Trade-offs' picture of
+the hot path as "a single map lookup plus a slice copy" describes the *cache*
+lookup, not the call: the cache removes the reflection walk, not the boxing and
+the map build, and those are where the time is.
+
+**The ADR's number is left standing as written.** It is not quietly relaxed to
+whatever the code does — that would turn a design target into a description and
+lose the information that there is a gap. Nor was the code tuned to reach it in
+the change that first measured it; a measurement and the optimisation it
+motivates do not belong in the same commit.
+
+### Where it is now enforced
+
+- `tests/bench/payload_build_test.go` — the two benchmarks above, `//go:build
+  bench` like the rest of `tests/bench/`.
+- `script/bench_gate.sh` (`make bench-gate`) — the gate. It holds the ceilings,
+  so the benchmark file stays a measurement and the policy stays in one
+  reviewable place.
+- `.github/workflows/ci.yml`, the `bench` job — a new step after `make bench`.
+  `make bench` runs every benchmark and asserts nothing; this step is the part
+  that can go red.
+
+**The armed ceilings are a ratchet at today's measured cost, not the ADR's
+500 ns/op.** They exist so the path cannot get *worse* while the gap is open.
+Lowering one after a real improvement is the point of the ratchet; raising one
+needs a reason in the commit message that raises it.
+
+### Why minimum-of-N, and not benchstat
+
+A shared CI runner only ever adds time. Contention, a co-tenant VM, a throttled
+core and a GC pause all push a sample up; nothing pushes one below the cost the
+code actually has. The minimum across N runs is therefore the sample least
+polluted by the runner, and the only summary statistic whose noise is
+one-sided in the safe direction: noise can let a regression through a run
+(the next run catches it), but it cannot turn the gate red on an unchanged
+tree. A mean or a median drifts with runner load and would need padding so
+generous that the gate stops meaning anything.
+
+This is not a theoretical preference. On the developer machine the first
+figures were taken on, ten runs of the unchanged twenty-field benchmark spanned
+4 773 - 5 990 ns/op with the box near-idle and 32 907 - 49 634 ns/op with three
+other build jobs on it — a factor of seven between two runs of identical code.
+The minimum tracked the quiet figure in both cases. `benchstat` was the obvious alternative and is the wrong tool here:
+it compares two sets of samples for a *significant difference*, which needs a
+stored baseline from comparable hardware, and a gate whose baseline is a
+committed file becomes a gate that passes because somebody regenerated the
+file — a failure mode this repository has already shipped four times over.
+
+The remaining risk is the opposite one: a CI runner on genuinely slower
+silicon than the machine the ceiling was calibrated on. That is why the
+ceilings carry explicit headroom over the measured minimum, stated in the
+script rather than folded into a global multiplier.
+
+### The gate was verified to fail
+
+A gate that cannot fail is the defect this amendment exists to close, wearing
+a stopwatch. Before arming, `payload.ForWith` was mutated in a scratch copy to
+do measurably more work per call; `make bench-gate` went red with the
+benchmark named and both figures printed. The mutation was reverted and the
+gate returned to green on the unchanged tree.

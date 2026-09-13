@@ -308,6 +308,18 @@ jobs:
           cache: true
       - name: bench
         run: make bench
+      # `make bench` above runs every benchmark and asserts nothing — it is a
+      # compile-and-execute smoke test. This step is the part that can fail:
+      # ADR 0007 puts a ceiling on the payload-build path, and until now
+      # nothing measured it. script/bench_gate.sh runs the two payload-build
+      # benchmarks seven times each and reads the MINIMUM ns/op, because a
+      # shared runner only ever adds time — so the minimum is the sample least
+      # polluted by the runner and the only summary whose noise cannot turn
+      # the gate red on an unchanged tree. The ceilings are a ratchet at
+      # today's measured cost, not the ADR's 500 ns/op, which this code does
+      # not meet; see the ADR's 2026-09-13 amendment and the script's header.
+      - name: bench gate (ADR 0007 payload-build ratchet)
+        run: make bench-gate
 
   fuzz:
     name: fuzz (smoke 5s/target)
