@@ -627,6 +627,16 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// same way boot-time centrals do, so its serial-gated hub discovery publishes
 	// once its bring-up resolves the serial.
 	centralOrch.setHubReadyTrigger(sb.hubReadyTrigger)
+	// …and it must be ReGa-probed the same way, which the boot snapshot handed
+	// to SetRegaLivenessTargets above cannot do: an adopted CCU is in no
+	// boot-time list, so without this supplier its poller never starts, its
+	// liveness stays unknown and its gate folds `online` even while ReGaHss is
+	// hung — the exact defect the ReGa half of the gate exists to catch, left
+	// unfixed for that whole class of central. Asked per poller start, like
+	// the bridge's CentralNamesSupplier, never snapshotted.
+	if hubMQTT != nil {
+		hubMQTT.SetRegaLivenessConfigSupplier(centralOrch.centralConfigFor)
+	}
 	// The health/metrics seed runs before the adopted unit enters the shared
 	// registry — it writes unsynchronised Unit fields the serving handlers
 	// read — so it cannot ride the registry observer and keeps its own seam.
