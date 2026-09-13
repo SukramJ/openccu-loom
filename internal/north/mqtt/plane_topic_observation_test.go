@@ -57,13 +57,24 @@ func (o *observedPlane) records() []publishRecord {
 	return append([]publishRecord(nil), o.published...)
 }
 
-// settle waits until the plane stops writing.
+// settle waits until the plane has written something of its own AND stopped
+// writing.
 //
 // The publishers hand their writes to a worker goroutine so a domain's bus
 // is never blocked on the broker, which means the last state topic of a
 // reconcile can land after the call that triggered it returned. Waiting for
 // a specific topic would be circular here — the topic set is what the guard
-// is trying to observe — so this waits for quiescence instead.
+// is trying to observe — so this waits for quiescence.
+//
+// Quiescence ALONE was the defect (finding **F5**). A plane that has not
+// started yet is quiet in exactly the way a plane that has finished is, and
+// three of the five runners announce the bridge before starting their
+// publisher — so `settle` returned 60 ms in with `bridge/status` and
+// `bridge/health` recorded and the plane's own first write still pending.
+// Every guard downstream then measured an empty plane and passed. Requiring
+// one [observedPlane.planeTopics] entry is what makes "quiet" mean finished:
+// the bridge's own announce cannot satisfy it, so the wait cannot end before
+// the plane under test has spoken.
 func (o *observedPlane) settle(t *testing.T) {
 	t.Helper()
 	const (
@@ -81,10 +92,15 @@ func (o *observedPlane) settle(t *testing.T) {
 		if n != last {
 			last = n
 			stable = time.Now()
-		} else if time.Since(stable) >= quiet {
+		} else if time.Since(stable) >= quiet && len(o.planeTopics()) > 0 {
 			return
 		}
 		time.Sleep(step)
+	}
+	if len(o.planeTopics()) == 0 {
+		t.Fatalf("the plane wrote nothing of its own in %s (%d writes, all bridge-level): the "+
+			"run observed the bridge announcing itself and nothing else, so every guard built "+
+			"on it would pass while seeing none of the plane it names", deadline, last)
 	}
 	t.Fatalf("the plane never stopped publishing (%d writes in %s); the guard cannot observe a stable topic set", last, deadline)
 }
@@ -120,6 +136,59 @@ func (o *observedPlane) publishedTopics() map[string]bool {
 			continue
 		}
 		out[rec.topic] = true
+	}
+	return out
+}
+
+// bridgeAnnounceTails are the topic tails [Bridge.AnnounceOnline] writes
+// before any plane has produced anything of its own. Derived from the
+// production builder rather than spelled out, so a rename moves them here
+// too.
+//
+// They are the reason [observedPlane.planeTopics] has to exist. Three of the
+// five runners announce the bridge first, so `publishedTopics` is never empty
+// — which made every vacuity guard in this package satisfiable by a run in
+// which the plane under test contributed nothing at all. Finding **F5**: a
+// 200 ms delay at the top of `SecurityMQTTPublisher.run` left
+// TestEveryStatePlaneIsDisjointFromCommandSubscriptions and
+// TestCarriedWithoutDeclarationExemptionsAreAllStillCarried green, security
+// subtest included, and the same race showed up unmutated as a ~1-in-3 flake
+// of TestSecurityZoneTopicsCarryTheStoredSlug under load.
+var bridgeAnnounceTails = func() []string {
+	const probe = "\x00base"
+	b := NewTopicBuilder(probe)
+	out := make([]string, 0, 2)
+	for _, topic := range []string{b.BridgeStatus(), b.BridgeHealth()} {
+		out = append(out, strings.TrimPrefix(topic, probe))
+	}
+	return out
+}()
+
+// isBridgeAnnounceTopic reports whether topic is one of the bridge-level
+// announce topics every runner gets for free.
+func isBridgeAnnounceTopic(topic string) bool {
+	for _, tail := range bridgeAnnounceTails {
+		if strings.HasSuffix(topic, tail) {
+			return true
+		}
+	}
+	return false
+}
+
+// planeTopics is every topic the plane under test contributed itself: the
+// published set minus the discovery configs and minus the bridge-level
+// announce topics.
+//
+// Every vacuity guard in this package asks its question of THIS set, not of
+// `publishedTopics`. "The run wrote something" is not the question — the
+// question is whether the plane being swept wrote something.
+func (o *observedPlane) planeTopics() map[string]bool {
+	out := map[string]bool{}
+	for topic := range o.publishedTopics() {
+		if isBridgeAnnounceTopic(topic) {
+			continue
+		}
+		out[topic] = true
 	}
 	return out
 }

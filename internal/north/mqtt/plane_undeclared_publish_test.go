@@ -39,19 +39,27 @@ func TestCarriedWithoutDeclarationExemptionsAreAllStillCarried(t *testing.T) {
 
 	// Every plane, at the bases their own round-trip guards use.
 	carried := map[string]bool{}
-	for _, obs := range []*observedPlane{
-		runHubPlane(t, "openccu-loom", "ccu-01", "PartyMode", "12459"),
-		runDevicePlane(t, "gh", "ccu-01", "HmIP-RF", "0001ABCD"),
-		runAlarmPlane(t, "gh"),
-		runSecurityPlane(t, "gh"),
-		runAddonUpdatePlane(t),
+	for _, p := range []struct {
+		name string
+		obs  *observedPlane
+	}{
+		{"hub", runHubPlane(t, "openccu-loom", "ccu-01", "PartyMode", "12459")},
+		{"device", runDevicePlane(t, "gh", "ccu-01", "HmIP-RF", "0001ABCD")},
+		{"alarm", runAlarmPlane(t, "gh")},
+		{"security", runSecurityPlane(t, "gh")},
+		{"addon-update", runAddonUpdatePlane(t)},
 	} {
-		for topic := range obs.publishedTopics() {
+		// Per plane, and over the plane's OWN topics (finding **F5**): the
+		// merged `len(carried) == 0` guard this replaces was satisfied by the
+		// bridge announce alone, so four of the five runners could contribute
+		// nothing and the exemption below would still read as earned.
+		if len(p.obs.planeTopics()) == 0 {
+			t.Fatalf("%s: the plane carried nothing of its own — the exemption check would "+
+				"pass on the bridge announce alone", p.name)
+		}
+		for topic := range p.obs.publishedTopics() {
 			carried[topic] = true
 		}
-	}
-	if len(carried) == 0 {
-		t.Fatal("no plane carried anything — the exemption check would pass vacuously")
 	}
 
 	for tail, reason := range carriedWithoutDeclaration {

@@ -132,8 +132,16 @@ func TestEveryStatePlaneIsDisjointFromCommandSubscriptions(t *testing.T) {
 			t.Parallel()
 			obs := p.run(t)
 			published := obs.publishedTopics()
-			if len(published) == 0 {
-				t.Fatalf("%s: the plane published nothing — the sweep would be vacuous", p.name)
+			// Asked of the plane's OWN topics, not of everything the run
+			// recorded (finding **F5**): three of these runners announce the
+			// bridge first, so `publishedTopics` carries `bridge/status` and
+			// `bridge/health` whatever the plane does, and this guard was
+			// satisfiable by a subtest that swept nothing. Proved by
+			// mutation — a 200 ms delay at the top of
+			// `SecurityMQTTPublisher.run` left this whole sweep green.
+			if len(obs.planeTopics()) == 0 {
+				t.Fatalf("%s: the plane published nothing of its own (recorded: %v) — the sweep "+
+					"would be vacuous", p.name, sortedKeys(published))
 			}
 			topics := sortedKeys(published)
 			for _, topic := range topics {
