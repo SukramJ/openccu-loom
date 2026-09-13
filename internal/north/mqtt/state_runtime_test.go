@@ -357,6 +357,44 @@ func TestRuntimeQoSStatesEveryLevel(t *testing.T) {
 	}
 }
 
+// TestRuntimeQoSPanicsOnAnUnrecognisedLevel pins the default arm, which used
+// to do the opposite of what this function exists for.
+//
+// It returned [hapublisher.QoSUnset] on the stated belief that the shared
+// constructors refuse it with a panic naming the field. They do not:
+// [hapublisher.StateConfig]'s resolution applies `QoS.Or(default)` before any
+// validation, so `QoSUnset` is the ONE value that never reaches a check and
+// resolves to QoS 1 — the silent 0 -> 1 promotion of the whole state plane
+// that [runtimeQoS] was written to prevent, delivered for the one input
+// nobody vetted.
+//
+// Falsifiability: restore `return hapublisher.QoSUnset` in the default arm
+// and this test fails, naming the level that got promoted instead.
+func TestRuntimeQoSPanicsOnAnUnrecognisedLevel(t *testing.T) {
+	t.Parallel()
+
+	for _, bad := range []QoS{QoS(3), QoS(255)} {
+		func() {
+			defer func() {
+				r := recover()
+				if r == nil {
+					t.Errorf("runtimeQoS(%d) did not panic; an unrecognised level must fail at "+
+						"the composition root, not silently publish the state plane at QoS 1", int(bad))
+					return
+				}
+				if msg, ok := r.(string); !ok || !strings.Contains(msg, "QoS") {
+					t.Errorf("panic value %v does not name the offending field", r)
+				}
+			}()
+			got := runtimeQoS(bad)
+			if got == hapublisher.QoSUnset {
+				t.Errorf("runtimeQoS(%d) = QoSUnset, which the shared publisher resolves to "+
+					"QoS 1 before it validates anything", int(bad))
+			}
+		}()
+	}
+}
+
 // --- fixtures -------------------------------------------------------------
 
 // rawTopicTracked reports whether topic sits in the bridge's retained-topic

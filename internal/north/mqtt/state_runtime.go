@@ -5,6 +5,7 @@ package mqtt
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
 	hapublisher "github.com/SukramJ/go-hamqtt/publisher"
@@ -30,10 +31,16 @@ import (
 // TestEveryMovedStatePublishIsAtMostOnce reads the level back off the
 // transport call rather than trusting it.
 //
-// An unrecognised level maps to [hapublisher.QoSUnset], which the shared
-// constructors refuse with a panic naming the field — at the composition
-// root, where a bad level is cheap, rather than on a publish at a level
-// nobody chose.
+// An unrecognised level panics HERE, naming the value. Returning
+// [hapublisher.QoSUnset] for it — which this function used to do, on the
+// stated belief that the shared constructors would refuse it — is the one
+// answer that cannot work: [hapublisher.StateConfig]'s resolution applies
+// `QoS.Or(default)` BEFORE any validation, so `QoSUnset` is precisely the
+// value that never reaches a check, and it resolves to QoS 1. The default
+// arm therefore delivered the silent 0 -> 1 promotion this function exists
+// to prevent, for the one input nobody vetted. A panic at the composition
+// root, where a bad level is cheap and loud, is what the comment always
+// promised.
 func runtimeQoS(q QoS) hapublisher.QoS {
 	switch q {
 	case QoS0:
@@ -43,7 +50,7 @@ func runtimeQoS(q QoS) hapublisher.QoS {
 	case QoS2:
 		return hapublisher.QoSExactlyOnce
 	default:
-		return hapublisher.QoSUnset
+		panic(fmt.Sprintf("mqtt: unrecognised QoS level %d in BridgeConfig.QoS", int(q)))
 	}
 }
 
