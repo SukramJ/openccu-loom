@@ -58,10 +58,18 @@ type addonUpdateGoldenCase struct {
 //   - default: the canonical shape, same topic base as the other pins in
 //     this package so the four files read against each other.
 //   - alternate-base: every declared topic (state, latest-version,
-//     command, availability) carries the configurable base, while the
-//     discovery config topic and both identity fields must not move with
-//     it. An identity that drifted with the base would re-key every
-//     entity on any deployment that renamed its base.
+//     command, availability) carries the configurable base, and so — since
+//     the base gained a discovery node-id scope — does the discovery config
+//     topic. Both identity fields still must not move with it: an identity
+//     that drifted with the base would re-key every entity on any deployment
+//     that renamed its base, and Home Assistant has no migration for either
+//     `unique_id` or `identifiers`. The discovery TOPIC moving with the base
+//     is the opposite case and the point of the scope — this plane's node id
+//     is the bare literal `daemon`, so before the scope existed two daemons
+//     on one broker wrote the same retained config and the second silently
+//     replaced the first. This fixture renders at the DEFAULT base, so its
+//     topic is the unscoped one and the pin reads as the before/after pair
+//     against `default` directly.
 //   - second-central: the identity hazard this plane exists to get wrong.
 //     Every other builder in this package scopes its unique_id to a
 //     central's serial; this one deliberately does not, because the
@@ -185,11 +193,32 @@ func TestAddonUpdateDiscoveryPayloadsArePinned(t *testing.T) {
 }
 
 // TestAddonUpdateDiscoveryIdentityIsDaemonScoped states in one assertion
-// what the fixture matrix only implies: the entity's address and identity
-// are a property of the daemon, not of the central or the topic base the
-// daemon happens to be configured with. Pinning the four payloads would
-// catch a drift here too, but only as four diffs a reader has to compare
-// by eye.
+// what the fixture matrix only implies: the entity's identity is a property
+// of the daemon, not of the central or the topic base the daemon happens to
+// be configured with. Pinning the four payloads would catch a drift here too,
+// but only as four diffs a reader has to compare by eye.
+//
+// # The topic is the exception, and it used to be the defect
+//
+// This test asserted the discovery TOPIC alongside the two identity fields,
+// and that assertion was wrong in a way that read as a guarantee. This plane's
+// node id is the literal `daemon` with no central and, until the topic base
+// gained a node-id scope, no base either — so the topic it pinned as invariant
+// was invariant across two daemons as well. Two processes on one broker wrote
+// `homeassistant/update/daemon/addon_update/config` between them, and the
+// retained config of whichever published last was the only one that survived.
+//
+// So the claim is split rather than dropped, because the two halves pull in
+// opposite directions and both are load-bearing:
+//
+//   - `unique_id` and `default_entity_id` must NOT follow the base or the
+//     central. Home Assistant keys its entity registry on the first and seeds
+//     the entity id from the second, and it has no migration path for either;
+//     one daemon, one entity, whatever it is configured with.
+//   - the discovery topic MUST follow the base and must NOT follow the
+//     central. Following the base is what keeps two daemons apart on a shared
+//     broker; following the central would make one daemon serving N CCUs
+//     publish N update entities where there must be exactly one.
 func TestAddonUpdateDiscoveryIdentityIsDaemonScoped(t *testing.T) {
 	type identity struct{ topic, uniqueID, entityID string }
 	seen := map[string]identity{}
@@ -215,10 +244,26 @@ func TestAddonUpdateDiscoveryIdentityIsDaemonScoped(t *testing.T) {
 		t.Fatalf("default fixture has an empty identity field: %+v", ref)
 	}
 	for name, id := range seen {
-		if id != ref {
-			t.Errorf("%s: identity %+v differs from default %+v — this entity exists once per daemon, so its topic, unique_id and default_entity_id must not follow the central or the topic base",
-				name, id, ref)
+		if id.uniqueID != ref.uniqueID || id.entityID != ref.entityID {
+			t.Errorf("%s: identity {unique_id:%q default_entity_id:%q} differs from default {unique_id:%q default_entity_id:%q} — "+
+				"this entity exists once per daemon, so its identity must not follow the central or the topic base",
+				name, id.uniqueID, id.entityID, ref.uniqueID, ref.entityID)
 		}
+	}
+
+	// The central must not reach the topic: one daemon serving two CCUs
+	// publishes one update entity, not two.
+	if seen["second-central"].topic != ref.topic {
+		t.Errorf("second-central: discovery topic %q differs from default %q — a daemon serving N centrals would publish N add-on update entities",
+			seen["second-central"].topic, ref.topic)
+	}
+	// The base must reach it: this is the whole of the collision fix, and
+	// without it two daemons on one broker share this topic.
+	if got := seen["alternate-base"].topic; got == ref.topic {
+		t.Errorf("alternate-base: discovery topic %q is the same as the default base's — "+
+			"two daemons under different topic bases would write this daemon-level config "+
+			"to one topic, and the one that published last would be the only one left",
+			got)
 	}
 }
 

@@ -1,6 +1,6 @@
 {
   "button/master-reset-motion": {
-    "topic": "homeassistant/button/alarm/master_reset_motion/config",
+    "topic": "homeassistant/button/gh_alarm/master_reset_motion/config",
     "payload": {
       "availability": [
         {
@@ -36,7 +36,7 @@
     }
   },
   "button/zone-reset-motion": {
-    "topic": "homeassistant/button/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33_reset_motion/config",
+    "topic": "homeassistant/button/gh_alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33_reset_motion/config",
     "payload": {
       "availability": [
         {
@@ -72,7 +72,7 @@
     }
   },
   "panel/master-overrides-zone": {
-    "topic": "homeassistant/alarm_control_panel/alarm/master/config",
+    "topic": "homeassistant/alarm_control_panel/gh_alarm/master/config",
     "payload": {
       "availability": [
         {
@@ -118,7 +118,7 @@
     }
   },
   "panel/zone-all-modes": {
-    "topic": "homeassistant/alarm_control_panel/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/config",
+    "topic": "homeassistant/alarm_control_panel/gh_alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/config",
     "payload": {
       "availability": [
         {
@@ -164,7 +164,7 @@
     }
   },
   "panel/zone-code-arm-only": {
-    "topic": "homeassistant/alarm_control_panel/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/config",
+    "topic": "homeassistant/alarm_control_panel/gh_alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/config",
     "payload": {
       "availability": [
         {
@@ -212,7 +212,7 @@
     }
   },
   "panel/zone-code-disarm-only": {
-    "topic": "homeassistant/alarm_control_panel/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/config",
+    "topic": "homeassistant/alarm_control_panel/gh_alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/config",
     "payload": {
       "availability": [
         {
@@ -260,7 +260,7 @@
     }
   },
   "panel/zone-single-mode": {
-    "topic": "homeassistant/alarm_control_panel/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/config",
+    "topic": "homeassistant/alarm_control_panel/gh_alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/config",
     "payload": {
       "availability": [
         {
@@ -302,7 +302,7 @@
     }
   },
   "sensor/master-triggered-motion": {
-    "topic": "homeassistant/sensor/alarm/master_triggered_motion/config",
+    "topic": "homeassistant/sensor/gh_alarm/master_triggered_motion/config",
     "payload": {
       "availability": [
         {
@@ -340,7 +340,7 @@
     }
   },
   "sensor/zone-triggered-motion": {
-    "topic": "homeassistant/sensor/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33_triggered_motion/config",
+    "topic": "homeassistant/sensor/gh_alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33_triggered_motion/config",
     "payload": {
       "availability": [
         {

@@ -1,6 +1,6 @@
 {
   "update/bidcos": {
-    "topic": "homeassistant/update/ccu-01_leq0123456/loom_leq0123456_update/config",
+    "topic": "homeassistant/update/gh_ccu-01_leq0123456/loom_leq0123456_update/config",
     "payload": {
       "availability": [
         {
@@ -47,7 +47,7 @@
     }
   },
   "update/blank-model": {
-    "topic": "homeassistant/update/ccu-01_vcu7654321/loom_vcu7654321_update/config",
+    "topic": "homeassistant/update/gh_ccu-01_vcu7654321/loom_vcu7654321_update/config",
     "payload": {
       "availability": [
         {
@@ -93,7 +93,7 @@
     }
   },
   "update/hmip": {
-    "topic": "homeassistant/update/ccu-01_vcu1234567/loom_vcu1234567_update/config",
+    "topic": "homeassistant/update/gh_ccu-01_vcu1234567/loom_vcu1234567_update/config",
     "payload": {
       "availability": [
         {
@@ -140,7 +140,7 @@
     }
   },
   "update/mixed-case-central": {
-    "topic": "homeassistant/update/ccu-keller_vcu1234567/loom_vcu1234567_update/config",
+    "topic": "homeassistant/update/gh_ccu-keller_vcu1234567/loom_vcu1234567_update/config",
     "payload": {
       "availability": [
         {
@@ -187,7 +187,7 @@
     }
   },
   "update/no-device-object": {
-    "topic": "homeassistant/update/ccu-01_vcu1234567/loom_vcu1234567_update/config",
+    "topic": "homeassistant/update/gh_ccu-01_vcu1234567/loom_vcu1234567_update/config",
     "payload": {
       "availability": [
         {
@@ -232,7 +232,7 @@
     }
   },
   "update/second-central": {
-    "topic": "homeassistant/update/ccu-02_vcu1234567/loom_vcu1234567_update/config",
+    "topic": "homeassistant/update/gh_ccu-02_vcu1234567/loom_vcu1234567_update/config",
     "payload": {
       "availability": [
         {
@@ -279,7 +279,7 @@
     }
   },
   "update/sub-devices-enabled": {
-    "topic": "homeassistant/update/ccu-01_vcu1234567/loom_vcu1234567_update/config",
+    "topic": "homeassistant/update/gh_ccu-01_vcu1234567/loom_vcu1234567_update/config",
     "payload": {
       "availability": [
         {

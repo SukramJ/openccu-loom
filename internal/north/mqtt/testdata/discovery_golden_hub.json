@@ -1,6 +1,6 @@
 {
   "aggregate/alarm-messages": {
-    "topic": "homeassistant/sensor/ccu-01_messages/alarm/config",
+    "topic": "homeassistant/sensor/gh_ccu-01_messages/alarm/config",
     "payload": {
       "availability": [
         {
@@ -43,7 +43,7 @@
     }
   },
   "aggregate/hazard-second-central-inbox": {
-    "topic": "homeassistant/sensor/ccu-02_messages/inbox/config",
+    "topic": "homeassistant/sensor/gh_ccu-02_messages/inbox/config",
     "payload": {
       "availability": [
         {
@@ -84,7 +84,7 @@
     }
   },
   "aggregate/inbox": {
-    "topic": "homeassistant/sensor/ccu-01_messages/inbox/config",
+    "topic": "homeassistant/sensor/gh_ccu-01_messages/inbox/config",
     "payload": {
       "availability": [
         {
@@ -127,7 +127,7 @@
     }
   },
   "aggregate/service-messages": {
-    "topic": "homeassistant/sensor/ccu-01_messages/service/config",
+    "topic": "homeassistant/sensor/gh_ccu-01_messages/service/config",
     "payload": {
       "availability": [
         {
@@ -169,7 +169,7 @@
     }
   },
   "connectivity/bidcos": {
-    "topic": "homeassistant/binary_sensor/ccu-01_connectivity/bidcos-rf/config",
+    "topic": "homeassistant/binary_sensor/gh_ccu-01_connectivity/bidcos-rf/config",
     "payload": {
       "availability": [
         {
@@ -206,7 +206,7 @@
     }
   },
   "connectivity/hazard-second-central": {
-    "topic": "homeassistant/binary_sensor/ccu-02_connectivity/hmip-rf/config",
+    "topic": "homeassistant/binary_sensor/gh_ccu-02_connectivity/hmip-rf/config",
     "payload": {
       "availability": [
         {
@@ -241,7 +241,7 @@
     }
   },
   "connectivity/hmip": {
-    "topic": "homeassistant/binary_sensor/ccu-01_connectivity/hmip-rf/config",
+    "topic": "homeassistant/binary_sensor/gh_ccu-01_connectivity/hmip-rf/config",
     "payload": {
       "availability": [
         {
@@ -278,7 +278,7 @@
     }
   },
   "install-mode/button-bidcos": {
-    "topic": "homeassistant/button/ccu-01_central/install_mode_bidcos_button/config",
+    "topic": "homeassistant/button/gh_ccu-01_central/install_mode_bidcos_button/config",
     "payload": {
       "availability": [
         {
@@ -319,7 +319,7 @@
     }
   },
   "install-mode/button-bidcos-wired": {
-    "topic": "homeassistant/button/ccu-01_central/install_mode_bidcos-wired_button/config",
+    "topic": "homeassistant/button/gh_ccu-01_central/install_mode_bidcos-wired_button/config",
     "payload": {
       "availability": [
         {
@@ -360,7 +360,7 @@
     }
   },
   "install-mode/button-hmip": {
-    "topic": "homeassistant/button/ccu-01_central/install_mode_hmip_button/config",
+    "topic": "homeassistant/button/gh_ccu-01_central/install_mode_hmip_button/config",
     "payload": {
       "availability": [
         {
@@ -401,7 +401,7 @@
     }
   },
   "install-mode/hazard-second-central-sensor": {
-    "topic": "homeassistant/sensor/ccu-02_central/install_mode_hmip/config",
+    "topic": "homeassistant/sensor/gh_ccu-02_central/install_mode_hmip/config",
     "payload": {
       "availability": [
         {
@@ -442,7 +442,7 @@
     }
   },
   "install-mode/sensor-bidcos": {
-    "topic": "homeassistant/sensor/ccu-01_central/install_mode_bidcos/config",
+    "topic": "homeassistant/sensor/gh_ccu-01_central/install_mode_bidcos/config",
     "payload": {
       "availability": [
         {
@@ -485,7 +485,7 @@
     }
   },
   "install-mode/sensor-bidcos-wired": {
-    "topic": "homeassistant/sensor/ccu-01_central/install_mode_bidcos-wired/config",
+    "topic": "homeassistant/sensor/gh_ccu-01_central/install_mode_bidcos-wired/config",
     "payload": {
       "availability": [
         {
@@ -528,7 +528,7 @@
     }
   },
   "install-mode/sensor-hmip": {
-    "topic": "homeassistant/sensor/ccu-01_central/install_mode_hmip/config",
+    "topic": "homeassistant/sensor/gh_ccu-01_central/install_mode_hmip/config",
     "payload": {
       "availability": [
         {
@@ -571,7 +571,7 @@
     }
   },
   "program/hazard-second-central": {
-    "topic": "homeassistant/switch/ccu-02_programs/3721/config",
+    "topic": "homeassistant/switch/gh_ccu-02_programs/3721/config",
     "payload": {
       "availability": [
         {
@@ -614,7 +614,7 @@
     }
   },
   "program/hazard-unnamed": {
-    "topic": "homeassistant/switch/ccu-01_programs/3722/config",
+    "topic": "homeassistant/switch/gh_ccu-01_programs/3722/config",
     "payload": {
       "availability": [
         {
@@ -659,7 +659,7 @@
     }
   },
   "program/legacy-single-switch": {
-    "topic": "homeassistant/switch/ccu-01_programs/3721/config",
+    "topic": "homeassistant/switch/gh_ccu-01_programs/3721/config",
     "payload": {
       "availability": [
         {
@@ -704,7 +704,7 @@
     }
   },
   "program/role-execute-button": {
-    "topic": "homeassistant/button/ccu-01_programs/3721_execute/config",
+    "topic": "homeassistant/button/gh_ccu-01_programs/3721_execute/config",
     "payload": {
       "availability": [
         {
@@ -749,7 +749,7 @@
     }
   },
   "program/role-principal-switch": {
-    "topic": "homeassistant/switch/ccu-01_programs/3721/config",
+    "topic": "homeassistant/switch/gh_ccu-01_programs/3721/config",
     "payload": {
       "availability": [
         {
@@ -794,7 +794,7 @@
     }
   },
   "system/connection-latency": {
-    "topic": "homeassistant/sensor/ccu-01_system/connection_latency/config",
+    "topic": "homeassistant/sensor/gh_ccu-01_system/connection_latency/config",
     "payload": {
       "availability": [
         {
@@ -839,7 +839,7 @@
     }
   },
   "system/daemon-status": {
-    "topic": "homeassistant/binary_sensor/ccu-01_system/daemon_status/config",
+    "topic": "homeassistant/binary_sensor/gh_ccu-01_system/daemon_status/config",
     "payload": {
       "default_entity_id": "binary_sensor.loom_11a0001234_daemon_status",
       "device": {
@@ -869,7 +869,7 @@
     }
   },
   "system/hazard-second-central-health": {
-    "topic": "homeassistant/sensor/ccu-02_system/system_health/config",
+    "topic": "homeassistant/sensor/gh_ccu-02_system/system_health/config",
     "payload": {
       "availability": [
         {
@@ -912,7 +912,7 @@
     }
   },
   "system/health": {
-    "topic": "homeassistant/sensor/ccu-01_system/system_health/config",
+    "topic": "homeassistant/sensor/gh_ccu-01_system/system_health/config",
     "payload": {
       "availability": [
         {
@@ -957,7 +957,7 @@
     }
   },
   "system/hub-update": {
-    "topic": "homeassistant/update/ccu-01_system/system_update/config",
+    "topic": "homeassistant/update/gh_ccu-01_system/system_update/config",
     "payload": {
       "availability": [
         {
@@ -999,7 +999,7 @@
     }
   },
   "system/last-event-age": {
-    "topic": "homeassistant/sensor/ccu-01_system/last_event_age/config",
+    "topic": "homeassistant/sensor/gh_ccu-01_system/last_event_age/config",
     "payload": {
       "availability": [
         {
@@ -1045,7 +1045,7 @@
     }
   },
   "sysvar/alarm-binary-sensor": {
-    "topic": "homeassistant/binary_sensor/ccu-01_sysvars/alarmzone/config",
+    "topic": "homeassistant/binary_sensor/gh_ccu-01_sysvars/alarmzone/config",
     "payload": {
       "availability": [
         {
@@ -1087,7 +1087,7 @@
     }
   },
   "sysvar/auto-energy-counter": {
-    "topic": "homeassistant/sensor/ccu-01_sysvars/svenergycounter_1234_abc0123456_6/config",
+    "topic": "homeassistant/sensor/gh_ccu-01_sysvars/svenergycounter_1234_abc0123456_6/config",
     "payload": {
       "availability": [
         {
@@ -1129,7 +1129,7 @@
     }
   },
   "sysvar/float-number-fallback-range": {
-    "topic": "homeassistant/number/ccu-01_sysvars/sollwert/config",
+    "topic": "homeassistant/number/gh_ccu-01_sysvars/sollwert/config",
     "payload": {
       "availability": [
         {
@@ -1175,7 +1175,7 @@
     }
   },
   "sysvar/hazard-accent-twin-a": {
-    "topic": "homeassistant/binary_sensor/ccu-01_sysvars/cafe_terrasse/config",
+    "topic": "homeassistant/binary_sensor/gh_ccu-01_sysvars/cafe_terrasse/config",
     "payload": {
       "availability": [
         {
@@ -1216,7 +1216,7 @@
     }
   },
   "sysvar/hazard-accent-twin-b": {
-    "topic": "homeassistant/binary_sensor/ccu-01_sysvars/caf_terrasse/config",
+    "topic": "homeassistant/binary_sensor/gh_ccu-01_sysvars/caf_terrasse/config",
     "payload": {
       "availability": [
         {
@@ -1257,7 +1257,7 @@
     }
   },
   "sysvar/hazard-linked-to-channel": {
-    "topic": "homeassistant/sensor/ccu-01_sysvars/wohnzimmer_heizung_ventil/config",
+    "topic": "homeassistant/sensor/gh_ccu-01_sysvars/wohnzimmer_heizung_ventil/config",
     "payload": {
       "availability": [
         {
@@ -1292,7 +1292,7 @@
     }
   },
   "sysvar/hazard-linked-to-device": {
-    "topic": "homeassistant/sensor/ccu-01_sysvars/wohnzimmer_heizung_soll/config",
+    "topic": "homeassistant/sensor/gh_ccu-01_sysvars/wohnzimmer_heizung_soll/config",
     "payload": {
       "availability": [
         {
@@ -1327,7 +1327,7 @@
     }
   },
   "sysvar/hazard-linked-to-internal-device": {
-    "topic": "homeassistant/sensor/ccu-01_sysvars/interner_zaehler/config",
+    "topic": "homeassistant/sensor/gh_ccu-01_sysvars/interner_zaehler/config",
     "payload": {
       "availability": [
         {
@@ -1362,7 +1362,7 @@
     }
   },
   "sysvar/hazard-literal-double-underscore": {
-    "topic": "homeassistant/binary_sensor/ccu-01_sysvars/watchdog_ccu-jack/config",
+    "topic": "homeassistant/binary_sensor/gh_ccu-01_sysvars/watchdog_ccu-jack/config",
     "payload": {
       "availability": [
         {
@@ -1403,7 +1403,7 @@
     }
   },
   "sysvar/hazard-punctuation-twin-a": {
-    "topic": "homeassistant/binary_sensor/ccu-01_sysvars/alarm_kueche/config",
+    "topic": "homeassistant/binary_sensor/gh_ccu-01_sysvars/alarm_kueche/config",
     "payload": {
       "availability": [
         {
@@ -1444,7 +1444,7 @@
     }
   },
   "sysvar/hazard-punctuation-twin-b": {
-    "topic": "homeassistant/binary_sensor/ccu-01_sysvars/alarm_kueche/config",
+    "topic": "homeassistant/binary_sensor/gh_ccu-01_sysvars/alarm_kueche/config",
     "payload": {
       "availability": [
         {
@@ -1485,7 +1485,7 @@
     }
   },
   "sysvar/hazard-second-central": {
-    "topic": "homeassistant/binary_sensor/ccu-02_sysvars/anwesenheit/config",
+    "topic": "homeassistant/binary_sensor/gh_ccu-02_sysvars/anwesenheit/config",
     "payload": {
       "availability": [
         {
@@ -1524,7 +1524,7 @@
     }
   },
   "sysvar/hazard-unresolved-vid": {
-    "topic": "homeassistant/binary_sensor/ccu-01_sysvars/nicht_aufgeloeste_variable/config",
+    "topic": "homeassistant/binary_sensor/gh_ccu-01_sysvars/nicht_aufgeloeste_variable/config",
     "payload": {
       "availability": [
         {
@@ -1565,7 +1565,7 @@
     }
   },
   "sysvar/integer-number-bounded": {
-    "topic": "homeassistant/number/ccu-01_sysvars/helligkeit/config",
+    "topic": "homeassistant/number/gh_ccu-01_sysvars/helligkeit/config",
     "payload": {
       "availability": [
         {
@@ -1611,7 +1611,7 @@
     }
   },
   "sysvar/list-extended-without-options": {
-    "topic": "homeassistant/sensor/ccu-01_sysvars/leere_liste/config",
+    "topic": "homeassistant/sensor/gh_ccu-01_sysvars/leere_liste/config",
     "payload": {
       "availability": [
         {
@@ -1650,7 +1650,7 @@
     }
   },
   "sysvar/list-select": {
-    "topic": "homeassistant/select/ccu-01_sysvars/betriebsart/config",
+    "topic": "homeassistant/select/gh_ccu-01_sysvars/betriebsart/config",
     "payload": {
       "availability": [
         {
@@ -1697,7 +1697,7 @@
     }
   },
   "sysvar/list-sensor-enum": {
-    "topic": "homeassistant/sensor/ccu-01_sysvars/betriebsart_anzeige/config",
+    "topic": "homeassistant/sensor/gh_ccu-01_sysvars/betriebsart_anzeige/config",
     "payload": {
       "availability": [
         {
@@ -1742,7 +1742,7 @@
     }
   },
   "sysvar/logic-binary-sensor": {
-    "topic": "homeassistant/binary_sensor/ccu-01_sysvars/fenster_offen/config",
+    "topic": "homeassistant/binary_sensor/gh_ccu-01_sysvars/fenster_offen/config",
     "payload": {
       "availability": [
         {
@@ -1783,7 +1783,7 @@
     }
   },
   "sysvar/logic-switch": {
-    "topic": "homeassistant/switch/ccu-01_sysvars/anwesenheit/config",
+    "topic": "homeassistant/switch/gh_ccu-01_sysvars/anwesenheit/config",
     "payload": {
       "availability": [
         {
@@ -1828,7 +1828,7 @@
     }
   },
   "sysvar/number-sensor": {
-    "topic": "homeassistant/sensor/ccu-01_sysvars/aussentemperatur/config",
+    "topic": "homeassistant/sensor/gh_ccu-01_sysvars/aussentemperatur/config",
     "payload": {
       "availability": [
         {
@@ -1869,7 +1869,7 @@
     }
   },
   "sysvar/string-sensor": {
-    "topic": "homeassistant/sensor/ccu-01_sysvars/alleservicemeldungen/config",
+    "topic": "homeassistant/sensor/gh_ccu-01_sysvars/alleservicemeldungen/config",
     "payload": {
       "availability": [
         {
@@ -1908,7 +1908,7 @@
     }
   },
   "sysvar/string-text": {
-    "topic": "homeassistant/text/ccu-01_sysvars/notiz/config",
+    "topic": "homeassistant/text/gh_ccu-01_sysvars/notiz/config",
     "payload": {
       "availability": [
         {
@@ -1950,7 +1950,7 @@
     }
   },
   "sysvar/unknown-type-sensor": {
-    "topic": "homeassistant/sensor/ccu-01_sysvars/unbekannt/config",
+    "topic": "homeassistant/sensor/gh_ccu-01_sysvars/unbekannt/config",
     "payload": {
       "availability": [
         {

@@ -181,6 +181,25 @@ is ever wired, and so the shape stays pinned rather than drifting.
 
 Go builder method: `TopicBuilder.DiscoveryConfig`.
 
+`homeassistant/` is Home Assistant's own tree, shared by every integration
+and every daemon on the broker, so the `<node_id>` segment is what keeps one
+daemon's retained configs apart from another's. It is composed:
+
+```
+<node_id> = [<base-slug>_]<scope>
+```
+
+- `<base-slug>_` is `north.mqtt.topic_base` slugged, and is present **only
+  when the base is not the default** `openccu-loom`. A daemon that never set
+  a base writes the node ids it always wrote.
+- `<scope>` is `<central-slug>_<address>` for a device entity,
+  `<central-slug>_<kind>` for a hub entity, and the bare literal `alarm`,
+  `security` or `daemon` for the three daemon-level planes, which belong to
+  the process rather than to any one CCU.
+
+The base scope is built by `TopicBuilder.DiscoveryNodeScope`, which renders
+part of this segment and no topic of its own.
+
 ### Bridge / hub status
 
 | Topic class | Topic |

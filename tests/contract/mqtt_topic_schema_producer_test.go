@@ -632,10 +632,21 @@ func TestMQTTDocTopicTableIsFullyClassified(t *testing.T) {
 //     documented surface, and the document cites the builder.
 //   - alias: this producer is a convenience spelling of another producer
 //     (a fixed bucket argument, say) and adds no shape of its own.
+//   - segmentOf: this producer returns a FRAGMENT of another producer's
+//     shape — part of one segment, not a topic — so there is no row for it
+//     to have. It is the narrowest of the four and the easiest to abuse, so
+//     it carries the strictest reading: a producer classified this way must
+//     return something that cannot be published as a topic on its own. The
+//     class exists because the scan is syntactic (every exported method on
+//     *TopicBuilder that the file declares), and a builder may legitimately
+//     export a piece of a topic for the sweeps that have to recognise it
+//     again. Reaching for it when the function really does render a whole
+//     topic is how the document goes back to being a subset of the wire.
 type topicProducer struct {
 	shape      string
 	delegateOf string
 	alias      string
+	segmentOf  string
 }
 
 // mqttTopicProducers is the inventory of every exported topic-shape
@@ -651,6 +662,12 @@ var mqttTopicProducers = map[string]topicProducer{
 	"BridgeStatus":    {shape: "<base>/bridge/status"},
 	"BridgeHealth":    {shape: "<base>/bridge/health"},
 	"DiscoveryConfig": {shape: "homeassistant/<component>/<node_id>/<object_id>/config"},
+	// The `<base-slug>_` scope this daemon prefixes its discovery node ids
+	// with — part of DiscoveryConfig's `<node_id>` segment, never a topic.
+	// It is exported for the retained-config sweeps, which have to recognise
+	// the node ids DiscoveryConfig writes; the documented shape is unchanged
+	// because the scope lives inside `<node_id>` rather than beside it.
+	"DiscoveryNodeScope": {segmentOf: "DiscoveryConfig"},
 
 	"AddonUpdateState":   {shape: "<base>/system/addon_update/state"},
 	"AddonUpdateCommand": {shape: "<base>/system/addon_update/set"},
@@ -854,8 +871,25 @@ func TestMQTTTopicProducersAreDocumented(t *testing.T) {
 				t.Errorf("%s aliases %q, which is not an inventoried producer with a shape of its own.",
 					name, p.alias)
 			}
+		case p.segmentOf != "":
+			target, ok := mqttTopicProducers[p.segmentOf]
+			if !ok || target.shape == "" {
+				t.Errorf("%s is a segment of %q, which is not an inventoried producer with a shape of "+
+					"its own.", name, p.segmentOf)
+				continue
+			}
+			// The fragment must not also be claiming a row of its own: a
+			// producer that renders a whole topic belongs in `shape`, where
+			// the document is checked, not in the class that excuses it from
+			// having one. The behavioural half of the claim — that what it
+			// returns cannot be published — is pinned by
+			// [TestMQTTTopicSchemaDoc_DiscoveryNodeScopeIsNotATopic].
+			if p.shape != "" || p.delegateOf != "" || p.alias != "" {
+				t.Errorf("%s is classified as a segment of %q and also carries a shape, delegateOf or "+
+					"alias — exactly one of the four may be set.", name, p.segmentOf)
+			}
 		default:
-			t.Errorf("%s carries no shape, delegateOf or alias — say what it contributes to "+
+			t.Errorf("%s carries no shape, delegateOf, alias or segmentOf — say what it contributes to "+
 				"docs/mqtt-topic-schema.md.", name)
 		}
 	}

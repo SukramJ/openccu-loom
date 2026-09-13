@@ -691,15 +691,16 @@ var daemonLevelNodeIDs = map[string]bool{
 	securityDiscoveryNodeID: true,
 }
 
-// discoveryNodePrefixes returns every `<central>_` node-id prefix the
-// orphan sweep has to accept for one central.
+// discoveryNodePrefixes returns every `[<base-slug>_]<central-slug>_` node-id
+// prefix the orphan sweep has to accept for one central.
 //
-// Both producers — [naming.PathData.DiscoveryNodeID] for per-device
-// configs and [hubNodeID] for hub configs — slug the central name through
-// [naming.DiscoverySlug], so the canonical prefix is the first entry. The
-// rest are the spellings earlier builds put on the wire, kept so the
-// configs an older daemon retained are still reachable and can be swept
-// once:
+// Both producers — [naming.PathData.DiscoveryNodeID] for per-device configs
+// and [hubNodeID] for hub configs — slug the central name through
+// [naming.DiscoverySlug], and [TopicBuilder.DiscoveryConfig] then prefixes the
+// topic base's scope ([naming.DiscoveryBaseScope], empty on the default base).
+// The canonical prefix is that pair, and it is the first entry. The rest are
+// the spellings earlier builds put on the wire, kept so the configs an older
+// daemon retained are still reachable and can be swept once:
 //
 //   - [legacyDiscoverySlug], the rule [naming.DiscoverySlug] carried
 //     before it was unified onto the shared `topic.Slug` — it dropped
@@ -707,27 +708,60 @@ var daemonLevelNodeIDs = map[string]bool{
 //     named `Café` or `Watchdog:_CCU-Jack` published under a node id
 //     nothing in this build ever spells again;
 //   - `strings.ToLower(naming.TopicSafe(name))`, older still, for a name
-//     carrying a dot or an umlaut.
+//     carrying a dot or an umlaut;
+//   - and, when scope is non-empty, each of the three again WITHOUT it —
+//     the spelling this daemon itself wrote before the node id was scoped
+//     by the topic base. This is the retraction half of that change and
+//     nothing publishes through it; see the note below on what it costs.
+//
+// # The unscoped entries are retraction-only, and they are not free
+//
+// A daemon on a non-default base is exactly the daemon that may have a
+// sibling, and while these entries are present its sweep will judge an
+// unscoped retained config as its own — including one a sibling on the
+// DEFAULT base is publishing right now. That is not a regression: before the
+// scope existed both daemons shared the unscoped namespace and swept each
+// other unconditionally, so the entries narrow the window rather than open
+// it, and deleting them after one release closes it entirely. Ownership
+// cannot be decided any more precisely here: [hapublisher.ConfigTopic]
+// carries the node id and nothing else, so the payload's `state_topic` —
+// which would name the owning daemon's base outright — is not available to
+// the predicate. That is why they are deletable, and why the migration note
+// says to upgrade a default-base sibling first.
 //
 // Deriving the prefix by hand (`strings.ToLower(name)`) matched none of
 // them, which made the whole pass a silent no-op for every central whose
 // name is not already a slug. Duplicates are dropped, so a central whose
 // name is already a slug still yields exactly one prefix.
-func discoveryNodePrefixes(centralName string) []string {
+func discoveryNodePrefixes(scope, centralName string) []string {
 	if centralName == "" {
 		return nil
 	}
-	canonical := naming.DiscoverySlug(centralName) + "_"
-	prefixes := []string{canonical}
-	for _, legacy := range []string{
+	spellings := []string{
+		naming.DiscoverySlug(centralName) + "_",
 		legacyDiscoverySlug(centralName) + "_",
 		strings.ToLower(naming.TopicSafe(centralName)) + "_",
-	} {
-		if legacy != canonical && !slices.Contains(prefixes, legacy) {
-			prefixes = append(prefixes, legacy)
+	}
+	prefixes := make([]string, 0, 2*len(spellings))
+	for _, spelling := range spellings {
+		prefixes = appendUnique(prefixes, scope+spelling)
+	}
+	if scope != "" {
+		for _, spelling := range spellings {
+			prefixes = appendUnique(prefixes, spelling)
 		}
 	}
 	return prefixes
+}
+
+// appendUnique appends p unless it is already present. The list is three to
+// six entries long, so a linear scan is the right shape and a set would only
+// lose the ordering the canonical-first contract depends on.
+func appendUnique(prefixes []string, p string) []string {
+	if slices.Contains(prefixes, p) {
+		return prefixes
+	}
+	return append(prefixes, p)
 }
 
 // legacyDiscoverySlug is the spelling [naming.DiscoverySlug] had before it
@@ -933,19 +967,51 @@ func (b *Bridge) RunDiscoveryOrphanCleanupOnce(ctx context.Context, centralName 
 // It is called from the transport's read loop, so it stays a map lookup and
 // two string comparisons and publishes nothing.
 func (b *Bridge) ownsDiscoveryTopic(rawCentral string) func(hapublisher.ConfigTopic) bool {
-	nodePrefixes := discoveryNodePrefixes(rawCentral)
+	scope := b.topics.DiscoveryNodeScope()
+	nodePrefixes := discoveryNodePrefixes(scope, rawCentral)
 	hubKey := hubPlaneKey(rawCentral)
 	return func(t hapublisher.ConfigTopic) bool {
 		nodeID := strings.ToLower(t.NodeID)
 		switch {
 		case discoveryNodeIDBelongsTo(nodeID, nodePrefixes):
 			return !hubPlaneNodeID(nodeID) || b.planeDeclared(hubKey)
-		case daemonLevelNodeIDs[nodeID]:
-			return b.planeDeclared(nodeID)
+		case daemonLevelNodeID(scope, nodeID) != "":
+			// The plane key stays the UNSCOPED name: it is a fact about
+			// which of this process's planes has published, not about the
+			// topic it published under, and [Bridge.MarkPlaneDeclared] is
+			// called with the bare constant from the plane itself.
+			return b.planeDeclared(daemonLevelNodeID(scope, nodeID))
 		default:
 			return false
 		}
 	}
+}
+
+// daemonLevelNodeID reports which daemon-level plane nodeID names, or "" when
+// it names none.
+//
+// The daemon-level planes carry no `<central>_` segment (ADR 0052), so they
+// cannot be recognised by [discoveryNodeIDBelongsTo] and are matched by name.
+// The topic base's scope prefixes them exactly as it does every other node id
+// — `alarm` becomes `<base-slug>_alarm` — so the name has to be recovered
+// before the lookup. Both the scoped and the unscoped spelling are accepted:
+// the unscoped one is what this daemon wrote before the scope existed, and
+// without it every alarm and security config of a non-default-base daemon
+// would be stranded on the broker forever, which is the failure mode ADR
+// 0068's obligation 3 exists to prevent.
+//
+// A daemon on the default base has an empty scope, so both branches collapse
+// to the one lookup this function replaced.
+func daemonLevelNodeID(scope, nodeID string) string {
+	if scope != "" {
+		if bare, ok := strings.CutPrefix(nodeID, scope); ok && daemonLevelNodeIDs[bare] {
+			return bare
+		}
+	}
+	if daemonLevelNodeIDs[nodeID] {
+		return nodeID
+	}
+	return ""
 }
 
 // rawCentralPrefix returns the `<base>/<central>/` prefix the raw plane

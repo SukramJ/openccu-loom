@@ -1,6 +1,6 @@
 {
   "climate/thermostat": {
-    "topic": "homeassistant/climate/ccu-01_0001bwth0001/1_climate/config",
+    "topic": "homeassistant/climate/gh_ccu-01_0001bwth0001/1_climate/config",
     "payload": {
       "action_template": "{{ value_json.action }}",
       "action_topic": "gh/ccu-01/HmIP-RF/0001BWTH0001/1/custom/climate",
@@ -70,7 +70,7 @@
     }
   },
   "cover/blind": {
-    "topic": "homeassistant/cover/ccu-01_0001broll001/4_cover/config",
+    "topic": "homeassistant/cover/gh_ccu-01_0001broll001/4_cover/config",
     "payload": {
       "availability": [
         {
@@ -132,7 +132,7 @@
     }
   },
   "cover/garage": {
-    "topic": "homeassistant/cover/ccu-01_0001modho001/1_cover/config",
+    "topic": "homeassistant/cover/gh_ccu-01_0001modho001/1_cover/config",
     "payload": {
       "availability": [
         {
@@ -184,7 +184,7 @@
     }
   },
   "cover/multi-primary-ch-name": {
-    "topic": "homeassistant/cover/ccu-01_0001drbli401/10_cover/config",
+    "topic": "homeassistant/cover/gh_ccu-01_0001drbli401/10_cover/config",
     "payload": {
       "availability": [
         {
@@ -246,7 +246,7 @@
     }
   },
   "cover/sub-device-split": {
-    "topic": "homeassistant/cover/ccu-01_0001drbli401/10_cover/config",
+    "topic": "homeassistant/cover/gh_ccu-01_0001drbli401/10_cover/config",
     "payload": {
       "availability": [
         {
@@ -308,7 +308,7 @@
     }
   },
   "event/device-error": {
-    "topic": "homeassistant/event/ccu-01_0001swdo0001/1_event_group_device_error/config",
+    "topic": "homeassistant/event/gh_ccu-01_0001swdo0001/1_event_group_device_error/config",
     "payload": {
       "availability": [
         {
@@ -350,7 +350,7 @@
     }
   },
   "event/impulse": {
-    "topic": "homeassistant/event/ccu-01_0001srd00001/1_event_group_impulse/config",
+    "topic": "homeassistant/event/gh_ccu-01_0001srd00001/1_event_group_impulse/config",
     "payload": {
       "availability": [
         {
@@ -389,7 +389,7 @@
     }
   },
   "event/keypress-bare-address-name": {
-    "topic": "homeassistant/event/ccu-01_0001brc20001/1_event_group_keypress/config",
+    "topic": "homeassistant/event/gh_ccu-01_0001brc20001/1_event_group_keypress/config",
     "payload": {
       "availability": [
         {
@@ -432,7 +432,7 @@
     }
   },
   "event/keypress-channel-number": {
-    "topic": "homeassistant/event/ccu-01_0001brc20001/1_event_group_keypress/config",
+    "topic": "homeassistant/event/gh_ccu-01_0001brc20001/1_event_group_keypress/config",
     "payload": {
       "availability": [
         {
@@ -475,7 +475,7 @@
     }
   },
   "event/keypress-doorbell": {
-    "topic": "homeassistant/event/ccu-01_0001dbb00001/1_event_group_keypress/config",
+    "topic": "homeassistant/event/gh_ccu-01_0001dbb00001/1_event_group_keypress/config",
     "payload": {
       "availability": [
         {
@@ -515,7 +515,7 @@
     }
   },
   "event/keypress-operator-named": {
-    "topic": "homeassistant/event/ccu-01_0001brc20001/1_event_group_keypress/config",
+    "topic": "homeassistant/event/gh_ccu-01_0001brc20001/1_event_group_keypress/config",
     "payload": {
       "availability": [
         {
@@ -558,7 +558,7 @@
     }
   },
   "event/keypress-virtual-remote-ccu-01": {
-    "topic": "homeassistant/event/ccu-01_bidcos-rf/3_event_group_keypress/config",
+    "topic": "homeassistant/event/gh_ccu-01_bidcos-rf/3_event_group_keypress/config",
     "payload": {
       "availability": [
         {
@@ -599,7 +599,7 @@
     }
   },
   "event/keypress-virtual-remote-ccu-02": {
-    "topic": "homeassistant/event/ccu-02_bidcos-rf/3_event_group_keypress/config",
+    "topic": "homeassistant/event/gh_ccu-02_bidcos-rf/3_event_group_keypress/config",
     "payload": {
       "availability": [
         {
@@ -640,7 +640,7 @@
     }
   },
   "light/dimmer": {
-    "topic": "homeassistant/light/ccu-01_0001bdt00001/4_light/config",
+    "topic": "homeassistant/light/gh_ccu-01_0001bdt00001/4_light/config",
     "payload": {
       "availability": [
         {
@@ -685,7 +685,7 @@
     }
   },
   "lock/door-lock-drive": {
-    "topic": "homeassistant/lock/ccu-01_0001dld00001/1_lock/config",
+    "topic": "homeassistant/lock/gh_ccu-01_0001dld00001/1_lock/config",
     "payload": {
       "availability": [
         {
@@ -732,7 +732,7 @@
     }
   },
   "siren/alarm-siren": {
-    "topic": "homeassistant/siren/ccu-01_0001asir0001/3_siren/config",
+    "topic": "homeassistant/siren/gh_ccu-01_0001asir0001/3_siren/config",
     "payload": {
       "availability": [
         {
@@ -781,7 +781,7 @@
     }
   },
   "switch/single-primary-name-null": {
-    "topic": "homeassistant/switch/ccu-01_0001bsm00001/4_switch/config",
+    "topic": "homeassistant/switch/gh_ccu-01_0001bsm00001/4_switch/config",
     "payload": {
       "availability": [
         {
@@ -825,7 +825,7 @@
     }
   },
   "valve/irrigation": {
-    "topic": "homeassistant/valve/ccu-01_0001wsm00001/4_valve/config",
+    "topic": "homeassistant/valve/gh_ccu-01_0001wsm00001/4_valve/config",
     "payload": {
       "availability": [
         {

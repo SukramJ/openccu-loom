@@ -1,6 +1,6 @@
 {
   "button/bare-address-channel-name": {
-    "topic": "homeassistant/button/ccu-01_0001d3c99c1234/3_press_short/config",
+    "topic": "homeassistant/button/gh_ccu-01_0001d3c99c1234/3_press_short/config",
     "payload": {
       "availability": [
         {
@@ -38,7 +38,7 @@
     }
   },
   "button/channel-number-fallback": {
-    "topic": "homeassistant/button/ccu-01_0001d3c99c1234/2_press_long/config",
+    "topic": "homeassistant/button/gh_ccu-01_0001d3c99c1234/2_press_long/config",
     "payload": {
       "availability": [
         {
@@ -76,7 +76,7 @@
     }
   },
   "button/descriptor-label": {
-    "topic": "homeassistant/button/ccu-01_0001d3c99c1234/4_press_short/config",
+    "topic": "homeassistant/button/gh_ccu-01_0001d3c99c1234/4_press_short/config",
     "payload": {
       "availability": [
         {
@@ -114,7 +114,7 @@
     }
   },
   "button/label-omitted": {
-    "topic": "homeassistant/button/ccu-01_0001d3c99c1234/5_press_short/config",
+    "topic": "homeassistant/button/gh_ccu-01_0001d3c99c1234/5_press_short/config",
     "payload": {
       "availability": [
         {
@@ -152,7 +152,7 @@
     }
   },
   "button/operator-named-channel": {
-    "topic": "homeassistant/button/ccu-01_0001d3c99c1234/1_press_short/config",
+    "topic": "homeassistant/button/gh_ccu-01_0001d3c99c1234/1_press_short/config",
     "payload": {
       "availability": [
         {
@@ -190,7 +190,7 @@
     }
   },
   "button/reset-motion-config": {
-    "topic": "homeassistant/button/ccu-01_0001d3c99cabcd/1_reset_motion/config",
+    "topic": "homeassistant/button/gh_ccu-01_0001d3c99cabcd/1_reset_motion/config",
     "payload": {
       "availability": [
         {
@@ -229,7 +229,7 @@
     }
   },
   "button/serial-second-central": {
-    "topic": "homeassistant/button/ccu-02_0001d3c99c1234/1_press_short/config",
+    "topic": "homeassistant/button/gh_ccu-02_0001d3c99c1234/1_press_short/config",
     "payload": {
       "availability": [
         {
@@ -267,7 +267,7 @@
     }
   },
   "button/sub-device": {
-    "topic": "homeassistant/button/ccu-01_0001d3c99c5678/3_press_short/config",
+    "topic": "homeassistant/button/gh_ccu-01_0001d3c99c5678/3_press_short/config",
     "payload": {
       "availability": [
         {
@@ -305,7 +305,7 @@
     }
   },
   "button/virtual-remote-ccu-01": {
-    "topic": "homeassistant/button/ccu-01_hmip-rcv-1/10_press_short/config",
+    "topic": "homeassistant/button/gh_ccu-01_hmip-rcv-1/10_press_short/config",
     "payload": {
       "availability": [
         {
@@ -343,7 +343,7 @@
     }
   },
   "button/virtual-remote-ccu-02": {
-    "topic": "homeassistant/button/ccu-02_hmip-rcv-1/10_press_short/config",
+    "topic": "homeassistant/button/gh_ccu-02_hmip-rcv-1/10_press_short/config",
     "payload": {
       "availability": [
         {

@@ -1,6 +1,6 @@
 {
   "binary_sensor/values": {
-    "topic": "homeassistant/binary_sensor/ccu-01_000b0001/1_state/config",
+    "topic": "homeassistant/binary_sensor/gh_ccu-01_000b0001/1_state/config",
     "payload": {
       "availability": [
         {
@@ -47,7 +47,7 @@
     }
   },
   "climate/master": {
-    "topic": "homeassistant/climate/ccu-01_00150001/1_set_point_temperature/config",
+    "topic": "homeassistant/climate/gh_ccu-01_00150001/1_set_point_temperature/config",
     "payload": {
       "availability": [
         {
@@ -92,7 +92,7 @@
     }
   },
   "climate/values": {
-    "topic": "homeassistant/climate/ccu-01_00150001/1_set_point_temperature/config",
+    "topic": "homeassistant/climate/gh_ccu-01_00150001/1_set_point_temperature/config",
     "payload": {
       "availability": [
         {
@@ -136,7 +136,7 @@
     }
   },
   "cover/master": {
-    "topic": "homeassistant/cover/ccu-01_000d0001/4_level/config",
+    "topic": "homeassistant/cover/gh_ccu-01_000d0001/4_level/config",
     "payload": {
       "availability": [
         {
@@ -184,7 +184,7 @@
     }
   },
   "cover/sub-device": {
-    "topic": "homeassistant/cover/ccu-01_000a0001/4_level/config",
+    "topic": "homeassistant/cover/gh_ccu-01_000a0001/4_level/config",
     "payload": {
       "availability": [
         {
@@ -231,7 +231,7 @@
     }
   },
   "cover/values": {
-    "topic": "homeassistant/cover/ccu-01_000d0001/4_level/config",
+    "topic": "homeassistant/cover/gh_ccu-01_000d0001/4_level/config",
     "payload": {
       "availability": [
         {
@@ -278,7 +278,7 @@
     }
   },
   "event/press": {
-    "topic": "homeassistant/event/ccu-01_000c0001/1_press_short/config",
+    "topic": "homeassistant/event/gh_ccu-01_000c0001/1_press_short/config",
     "payload": {
       "availability": [
         {
@@ -325,7 +325,7 @@
     }
   },
   "event/virtual-remote-central-scoped": {
-    "topic": "homeassistant/event/ccu-01_bidcos-rf/3_press_short/config",
+    "topic": "homeassistant/event/gh_ccu-01_bidcos-rf/3_press_short/config",
     "payload": {
       "availability": [
         {
@@ -372,7 +372,7 @@
     }
   },
   "light/master": {
-    "topic": "homeassistant/light/ccu-01_000f0001/4_level/config",
+    "topic": "homeassistant/light/gh_ccu-01_000f0001/4_level/config",
     "payload": {
       "availability": [
         {
@@ -418,7 +418,7 @@
     }
   },
   "light/values": {
-    "topic": "homeassistant/light/ccu-01_000f0001/4_level/config",
+    "topic": "homeassistant/light/gh_ccu-01_000f0001/4_level/config",
     "payload": {
       "availability": [
         {
@@ -463,7 +463,7 @@
     }
   },
   "lock/master": {
-    "topic": "homeassistant/lock/ccu-01_000e0001/1_lock_target_level/config",
+    "topic": "homeassistant/lock/gh_ccu-01_000e0001/1_lock_target_level/config",
     "payload": {
       "availability": [
         {
@@ -514,7 +514,7 @@
     }
   },
   "lock/values": {
-    "topic": "homeassistant/lock/ccu-01_000e0001/1_lock_target_level/config",
+    "topic": "homeassistant/lock/gh_ccu-01_000e0001/1_lock_target_level/config",
     "payload": {
       "availability": [
         {
@@ -564,7 +564,7 @@
     }
   },
   "number/master": {
-    "topic": "homeassistant/sensor/ccu-01_0001abcd/1_level/config",
+    "topic": "homeassistant/sensor/gh_ccu-01_0001abcd/1_level/config",
     "payload": {
       "availability": [
         {
@@ -613,7 +613,7 @@
     }
   },
   "select/action-values": {
-    "topic": "homeassistant/select/ccu-01_00120001/1_boost_mode/config",
+    "topic": "homeassistant/select/gh_ccu-01_00120001/1_boost_mode/config",
     "payload": {
       "availability": [
         {
@@ -665,7 +665,7 @@
     }
   },
   "select/master": {
-    "topic": "homeassistant/select/ccu-01_00120001/1_set_point_mode/config",
+    "topic": "homeassistant/select/gh_ccu-01_00120001/1_set_point_mode/config",
     "payload": {
       "availability": [
         {
@@ -719,7 +719,7 @@
     }
   },
   "select/values": {
-    "topic": "homeassistant/select/ccu-01_00120001/1_set_point_mode/config",
+    "topic": "homeassistant/select/gh_ccu-01_00120001/1_set_point_mode/config",
     "payload": {
       "availability": [
         {
@@ -773,7 +773,7 @@
     }
   },
   "sensor/calculated-synthetic": {
-    "topic": "homeassistant/sensor/ccu-01_0001abcd/1_dew_point/config",
+    "topic": "homeassistant/sensor/gh_ccu-01_0001abcd/1_dew_point/config",
     "payload": {
       "availability": [
         {
@@ -823,7 +823,7 @@
     }
   },
   "sensor/high-channel": {
-    "topic": "homeassistant/sensor/ccu-01_0001abcd/7_humidity/config",
+    "topic": "homeassistant/sensor/gh_ccu-01_0001abcd/7_humidity/config",
     "payload": {
       "availability": [
         {
@@ -871,7 +871,7 @@
     }
   },
   "sensor/name-null-seed": {
-    "topic": "homeassistant/sensor/ccu-01_0001abcd/1_actual_temperature/config",
+    "topic": "homeassistant/sensor/gh_ccu-01_0001abcd/1_actual_temperature/config",
     "payload": {
       "availability": [
         {
@@ -919,7 +919,7 @@
     }
   },
   "sensor/values": {
-    "topic": "homeassistant/sensor/ccu-01_0001abcd/1_actual_temperature/config",
+    "topic": "homeassistant/sensor/gh_ccu-01_0001abcd/1_actual_temperature/config",
     "payload": {
       "availability": [
         {
@@ -967,7 +967,7 @@
     }
   },
   "siren/master": {
-    "topic": "homeassistant/siren/ccu-01_00110001/3_acoustic_alarm_active/config",
+    "topic": "homeassistant/siren/gh_ccu-01_00110001/3_acoustic_alarm_active/config",
     "payload": {
       "availability": [
         {
@@ -1011,7 +1011,7 @@
     }
   },
   "siren/values": {
-    "topic": "homeassistant/siren/ccu-01_00110001/3_acoustic_alarm_active/config",
+    "topic": "homeassistant/siren/gh_ccu-01_00110001/3_acoustic_alarm_active/config",
     "payload": {
       "availability": [
         {
@@ -1054,7 +1054,7 @@
     }
   },
   "switch/cuxd-ccu-01": {
-    "topic": "homeassistant/binary_sensor/ccu-01_cux2801001/1_state/config",
+    "topic": "homeassistant/binary_sensor/gh_ccu-01_cux2801001/1_state/config",
     "payload": {
       "availability": [
         {
@@ -1101,7 +1101,7 @@
     }
   },
   "switch/cuxd-ccu-02": {
-    "topic": "homeassistant/binary_sensor/ccu-02_cux2801001/1_state/config",
+    "topic": "homeassistant/binary_sensor/gh_ccu-02_cux2801001/1_state/config",
     "payload": {
       "availability": [
         {
@@ -1148,7 +1148,7 @@
     }
   },
   "switch/master": {
-    "topic": "homeassistant/switch/ccu-01_aabbccdd/1_state/config",
+    "topic": "homeassistant/switch/gh_ccu-01_aabbccdd/1_state/config",
     "payload": {
       "availability": [
         {
@@ -1200,7 +1200,7 @@
     }
   },
   "switch/serial-second-central": {
-    "topic": "homeassistant/switch/ccu-02_aabbccdd/1_state/config",
+    "topic": "homeassistant/switch/gh_ccu-02_aabbccdd/1_state/config",
     "payload": {
       "availability": [
         {
@@ -1251,7 +1251,7 @@
     }
   },
   "switch/values": {
-    "topic": "homeassistant/switch/ccu-01_aabbccdd/1_state/config",
+    "topic": "homeassistant/switch/gh_ccu-01_aabbccdd/1_state/config",
     "payload": {
       "availability": [
         {
@@ -1302,7 +1302,7 @@
     }
   },
   "text/master": {
-    "topic": "homeassistant/text/ccu-01_00130001/1_display_line/config",
+    "topic": "homeassistant/text/gh_ccu-01_00130001/1_display_line/config",
     "payload": {
       "availability": [
         {
@@ -1352,7 +1352,7 @@
     }
   },
   "text/values": {
-    "topic": "homeassistant/text/ccu-01_00130001/1_display_line/config",
+    "topic": "homeassistant/text/gh_ccu-01_00130001/1_display_line/config",
     "payload": {
       "availability": [
         {
@@ -1401,7 +1401,7 @@
     }
   },
   "update/master": {
-    "topic": "homeassistant/update/ccu-01_00140001/0_firmware/config",
+    "topic": "homeassistant/update/gh_ccu-01_00140001/0_firmware/config",
     "payload": {
       "availability": [
         {
@@ -1446,7 +1446,7 @@
     }
   },
   "update/values": {
-    "topic": "homeassistant/update/ccu-01_00140001/0_firmware/config",
+    "topic": "homeassistant/update/gh_ccu-01_00140001/0_firmware/config",
     "payload": {
       "availability": [
         {
@@ -1490,7 +1490,7 @@
     }
   },
   "valve/master": {
-    "topic": "homeassistant/valve/ccu-01_00100001/1_valve_state/config",
+    "topic": "homeassistant/valve/gh_ccu-01_00100001/1_valve_state/config",
     "payload": {
       "availability": [
         {
@@ -1535,7 +1535,7 @@
     }
   },
   "valve/values": {
-    "topic": "homeassistant/valve/ccu-01_00100001/1_valve_state/config",
+    "topic": "homeassistant/valve/gh_ccu-01_00100001/1_valve_state/config",
     "payload": {
       "availability": [
         {

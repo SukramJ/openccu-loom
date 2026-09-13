@@ -13,6 +13,13 @@ identifier — one rule instead of two, which fixes a case where "Café" and
 ids; affected device cards are re-created and need their area re-applied. The
 main add-on's changelog describes it in full.
 
+The daemon also starts putting its `topic_base` into the Home Assistant
+discovery topics, which affects you only if you changed that setting away from
+`openccu-loom`. It stops two daemons on one broker overwriting and deleting
+each other's entities. Nothing is lost — entities keep their history, ids and
+device cards, and the old topics are cleared automatically. The main add-on's
+changelog has the one upgrade-ordering caution that goes with it.
+
 # 0.77.0
 
 No changes to the proxy itself — the version follows the daemon so the two

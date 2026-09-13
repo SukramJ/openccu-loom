@@ -56,6 +56,91 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **BREAKING (discovery topics only, not entity or device identity): the
+  HA Discovery node id is scoped by `north.mqtt.topic_base`.** ADR 0006 rule
+  4 has promised since the initial release that the discovery node "derives
+  from `BridgeConfig.Base`, not a hardcoded literal", so that "non-default
+  Bases give multi-daemon installations distinct namespaces".
+  `TopicBuilder.DiscoveryConfig` never read the base at all. PR #810 found
+  this, recorded it in ADR 0006's amendment and left it; it is fixed here,
+  in the same unreleased window as the discovery-slug unification, so
+  operators absorb one disruption instead of two.
+
+  **Affects only installations with a non-default `topic_base`.** The scope
+  is empty on the default `openccu-loom`, so a daemon that never set the key
+  publishes exactly the node ids it always published and its upgrade is a
+  no-op on this plane. Setting a base is how an operator asks for a
+  namespace, so it is what earns one.
+
+  ```
+  homeassistant/<component>/[<base-slug>_]<node_id>/<object_id>/config
+  ```
+
+  **The overwrite was the visible half; the deletions were the damage.** Two
+  daemons sharing a node-id namespace did not merely race on publish, with
+  the last writer's retained config surviving. `RunDiscoveryOrphanCleanupOnce`
+  decides ownership from the **node id alone** — the sweep is handed a
+  `publisher.ConfigTopic`, which carries no payload, so the `state_topic`
+  naming the owning daemon is not available to it — so each daemon ran a pass
+  that judged the other's live configs against its own claim set and
+  retracted every one it did not itself publish, on every boot, with nothing
+  in any log. The three daemon-level planes (`alarm`, `security`, `daemon`)
+  carry no `<central>` segment at all, so they collided between *any* two
+  daemons, including two bridging different CCUs.
+
+  **What moves, and what deliberately does not.** Measured per field, and
+  pinned mechanically rather than asserted:
+
+  | Field | Moves? |
+  | --- | --- |
+  | discovery `node_id` | yes, when `topic_base` is non-default |
+  | discovery `object_id` | **no** |
+  | `unique_id` | **no** — keyed on the device address and CCU serial |
+  | device `identifiers` / `via_device` | **no** |
+  | `default_entity_id` | **no** |
+  | state / command / availability topics | **no** |
+
+  So nothing is lost: no entity loses its history, statistics or `entity_id`,
+  and unlike the slug unification in the same window, not even a device row
+  is re-created. **All 173 pinned discovery payloads are byte-identical** —
+  every one of the eleven goldens moved in its `topic` field and in no other
+  byte — and `TestHubGoldenChangedOnlyInAvailability` still requires the
+  ORIGINAL 48 pre-gate digests rather than re-baselined ones, by stripping
+  the scope back off the topic by rule (`unscopedHubTopic`) instead of
+  carrying a 48-entry exemption map, which would have been a re-baseline
+  wearing a disguise.
+
+  **The pre-scope configs are retracted, not stranded** (ADR 0068 obligation
+  3). `discoveryNodePrefixes` keeps the unscoped spelling of every central
+  prefix beside the scoped one and `daemonLevelNodeID` accepts `alarm` as
+  well as `<base-slug>_alarm`; both are retraction-only, nothing publishes
+  through them, and both are deletable after one release — the same pattern
+  as `legacyDiscoverySlug`. **The one new hazard, stated because it is
+  real:** while those entries exist, a daemon on a custom base treats an
+  unscoped retained config as its own in order to retract it, and a sibling
+  still on the *default* base is publishing under exactly those node ids. Not
+  a regression — before the scope the two shared the namespace
+  unconditionally — but it is why the migration note says to upgrade such a
+  pair together. Ownership cannot be decided more precisely from a node id.
+
+  **What this does not fix.** Two daemons against the *same* CCU still
+  declare byte-identical `unique_id`s and device `identifiers`; both key on
+  the device address and the CCU serial, never on the base or the central
+  name (ADR 0024 role 3). A single Home Assistant still resolves both daemons
+  to one set of entities however the topics are spelled. The case the base
+  was always for — two daemons, two HA instances or two brokers — is the one
+  this makes work.
+
+  Three tests that read as the guard for rule 4 guarded nothing:
+  `TestDiscoveryConfigUsesBaseAsNode`, `...CustomBase` and `...SafeBase` each
+  passed the base in as the *nodeID argument* and asserted it came back,
+  which `DiscoveryConfig` did by echoing its argument while ignoring the
+  receiver entirely. They now vary the receiver and hold the node id fixed.
+  Migration recorded under ADR 0068's six obligations in
+  `docs/external-clients/ha-unique-id-migration.md`; ADR 0006 gains a dated
+  amendment withdrawing rule 4's `{base}`-replaces-`{node_id}` path, which
+  could never have worked.
+
 - **The retained-store sweeps no longer double every inbound command.**
   The retain-cleanup and orphan sweeps installed `<base>/#` and the raw
   subtree on the *same* client the command plane subscribes on. A broker

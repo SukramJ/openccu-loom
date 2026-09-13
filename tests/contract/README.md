@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 467.
+Guards without a doc comment: 7 of 470.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -111,6 +111,8 @@ Guards without a doc comment: 7 of 467.
 | TestEveryFieldMappingNamesAParameter | device_profile_catalogue_test.go | TestEveryFieldMappingNamesAParameter asserts that every field mapping in every schema carries a non-empty wire parameter. |
 | TestEveryProfileResolvesToAChannelGroupSchema | device_profile_catalogue_test.go | TestEveryProfileResolvesToAChannelGroupSchema asserts that no profile registration carries a nil Config. |
 | TestDeviceDiagnosticsCoversEveryChannel0Parameter | diagnostics_params_channel0_set_test.go | TestDeviceDiagnosticsCoversEveryChannel0Parameter pins the retained `<addr>/diagnostics` aggregate to [hmenum.DeviceChannel0Parameters]. |
+| TestDiscoveryBaseScopeSeparatesTwoDaemons | discovery_base_scope_test.go | TestDiscoveryBaseScopeSeparatesTwoDaemons is the collision this scope exists to prevent, written as the two-daemon case rather than as a property of one builder. |
+| TestDiscoveryBaseScopeTracksTheConfigDefault | discovery_base_scope_test.go | TestDiscoveryBaseScopeTracksTheConfigDefault pins [naming.DefaultTopicBase] against the value `config.applyDefaults` actually fills in for an absent `north.mqtt.topic_base`. |
 | TestHADiscoveryIdentifiersComeFromOneBuilder | discovery_identifier_single_source_test.go | TestHADiscoveryIdentifiersComeFromOneBuilder pins that a Home Assistant identifier is composed in one place. |
 | TestDiscoveryRoundTrip_BinarySensor | discovery_roundtrip_test.go | TestDiscoveryRoundTrip_BinarySensor verifies: 1. |
 | TestDiscoveryRoundTrip_BoolCapitalisation | discovery_roundtrip_test.go | TestDiscoveryRoundTrip_BoolCapitalisation is the direct regression test for the bug cluster: Go's json.Marshal(true) produces lowercase "true", but Jinja2's default rendering of a Python bool is "True" (capitalised). |
@@ -203,6 +205,7 @@ Guards without a doc comment: 7 of 467.
 | TestEveryBridgeReachThroughIsNilGuarded | mqtt_nil_bridge_test.go | TestEveryBridgeReachThroughIsNilGuarded asserts that no production call site dereferences the result of a Wiring.Bridge() call without checking it for nil first. |
 | TestMQTTTopicSchemaDoc_BridgeHubTopics | mqtt_topic_schema_doctest_test.go | TestMQTTTopicSchemaDoc_BridgeHubTopics exercises the "Bridge / hub status" table and the concrete hub examples. |
 | TestMQTTTopicSchemaDoc_CommandTopics | mqtt_topic_schema_doctest_test.go | TestMQTTTopicSchemaDoc_CommandTopics exercises the "Command (set) topics" table rows. |
+| TestMQTTTopicSchemaDoc_DiscoveryNodeScopeIsNotATopic | mqtt_topic_schema_doctest_test.go | TestMQTTTopicSchemaDoc_DiscoveryNodeScopeIsNotATopic holds [mqtt.TopicBuilder.DiscoveryNodeScope] to the claim that lets it out of docs/mqtt-topic-schema.md: it returns part of one segment, not a topic. |
 | TestMQTTTopicSchemaDoc_DiscoveryTopic | mqtt_topic_schema_doctest_test.go | TestMQTTTopicSchemaDoc_DiscoveryTopic exercises the HA Discovery config Topic, which the doc states is identical. |
 | TestMQTTTopicSchemaDoc_StateTopics | mqtt_topic_schema_doctest_test.go | TestMQTTTopicSchemaDoc_StateTopics exercises the "State topics" table and the "Concrete mapping examples" section for per-DP state. |
 | TestMQTTDocTopicTableIsFullyClassified | mqtt_topic_schema_producer_test.go | TestMQTTDocTopicTableIsFullyClassified keeps mqttDocTopicPromises and the tables of docs/mqtt-topic-schema.md in step in both directions. |

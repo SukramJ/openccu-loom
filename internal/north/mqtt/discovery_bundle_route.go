@@ -44,6 +44,13 @@ func newBundleStoreIf(on bool) *discoveryBundleStore {
 // [Bridge.BeginBundleBatch], which is what keeps the boot snapshot from
 // writing a sixteen-entity device's document sixteen times.
 func (b *Bridge) routeToBundle(ctx context.Context, centralName, component, nodeID, objectID string, payload []byte) error {
+	// The bundle plane renders its own topic inside go-hamqtt
+	// ([hapublisher.Runtime.PublishBundle] → `BundleConfigTopic`), so it never
+	// reaches [TopicBuilder.DiscoveryConfig] and has to take the topic base's
+	// node-id scope here instead. Scoping at the door rather than at the
+	// publish call keeps the store keyed on the same string the broker sees,
+	// which is what [Bridge.rollbackBundles] matches on when it sweeps.
+	nodeID = naming.ScopedDiscoveryNodeID(b.topics.Base, nodeID)
 	if len(payload) == 0 {
 		b.bundles.Remove(nodeID, objectID)
 	} else if err := b.bundles.Put(nodeID, objectID, component, payload); err != nil {
@@ -210,7 +217,7 @@ func (b *Bridge) RunBundleRollbackOnce(ctx context.Context, centralName string, 
 		// leaving our own in place.
 		return 0, nil
 	}
-	nodePrefixes := discoveryNodePrefixes(rawCentral)
+	nodePrefixes := discoveryNodePrefixes(b.topics.DiscoveryNodeScope(), rawCentral)
 
 	var (
 		mu      sync.Mutex

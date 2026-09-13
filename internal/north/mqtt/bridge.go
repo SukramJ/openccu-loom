@@ -1735,7 +1735,7 @@ func (b *Bridge) RetractDiscoveryForCentralDevice(ctx context.Context, centralNa
 	// Both node-id spellings the sweep recognises: the canonical
 	// discovery slug and the plain topic-safe escape an earlier build
 	// wrote. A retained config under either belongs to this central.
-	if prefixes := discoveryNodePrefixes(centralName); len(prefixes) > 0 {
+	if prefixes := discoveryNodePrefixes(b.topics.DiscoveryNodeScope(), centralName); len(prefixes) > 0 {
 		match = func(topic string) bool {
 			for _, p := range prefixes {
 				if strings.Contains(topic, "/"+p+addr+"/") {
