@@ -522,16 +522,13 @@ func NewCustomDPPathData(iface hmtypes.WireInterfaceID, address string, channelN
 // containing one of those was already producing a topic no broker would
 // route sensibly.
 //
-// Note the sibling [DiscoverySlug] is deliberately NOT delegated to
-// topic.Slug yet, although the two agree on every German case. They differ
-// in two classes, eight cases over the 23-case probe in
-// discovery_slug_divergence_test.go: topic.Slug collapses a run of
-// separators that includes a literal underscore, and it transliterates
-// accented Latin characters that DiscoverySlug drops outright — "café"
-// slugs to "caf" here and "cafe" there, so "Café" and "Caf" collide today.
-// The shared behaviour is better, but adopting it moves published object
-// ids, so it belongs with the unique_id re-key (ADR 0070, phase 3 step 11)
-// where there is a migration note, not here.
+// The sibling [DiscoverySlug] now delegates too, to topic.Slug. It used to
+// carry a second implementation that dropped non-German accented Latin
+// (colliding "Café" and "Caf" into one node id) and let a literal "__"
+// through. Both were defects rather than differences, and both are fixed;
+// the change moved published node ids, object ids and device identifiers
+// for the affected names and shipped under ADR 0068's process. Nothing in
+// this package spells a discovery identifier any other way.
 func TopicSafe(s string) string {
 	return topic.Safe(s)
 }

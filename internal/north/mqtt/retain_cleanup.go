@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -661,24 +662,105 @@ var daemonLevelNodeIDs = map[string]bool{
 // orphan sweep has to accept for one central.
 //
 // Both producers — [naming.PathData.DiscoveryNodeID] for per-device
-// configs and [hubNodeID] for hub configs — now slug the central name
-// through [naming.DiscoverySlug], so the canonical prefix is the first
-// entry. The second is the spelling earlier builds put on the wire
-// (`strings.ToLower(naming.TopicSafe(name))`), kept so the configs an
-// older daemon retained under a name carrying a dot or an umlaut are
-// still reachable and can be swept once. Deriving the prefix by hand
-// (`strings.ToLower(name)`) matched neither, which made the whole pass
-// a silent no-op for every central whose name is not already a slug.
+// configs and [hubNodeID] for hub configs — slug the central name through
+// [naming.DiscoverySlug], so the canonical prefix is the first entry. The
+// rest are the spellings earlier builds put on the wire, kept so the
+// configs an older daemon retained are still reachable and can be swept
+// once:
+//
+//   - [legacyDiscoverySlug], the rule [naming.DiscoverySlug] carried
+//     before it was unified onto the shared `topic.Slug` — it dropped
+//     non-German accents and let a literal `__` through, so a central
+//     named `Café` or `Watchdog:_CCU-Jack` published under a node id
+//     nothing in this build ever spells again;
+//   - `strings.ToLower(naming.TopicSafe(name))`, older still, for a name
+//     carrying a dot or an umlaut.
+//
+// Deriving the prefix by hand (`strings.ToLower(name)`) matched none of
+// them, which made the whole pass a silent no-op for every central whose
+// name is not already a slug. Duplicates are dropped, so a central whose
+// name is already a slug still yields exactly one prefix.
 func discoveryNodePrefixes(centralName string) []string {
 	if centralName == "" {
 		return nil
 	}
 	canonical := naming.DiscoverySlug(centralName) + "_"
 	prefixes := []string{canonical}
-	if legacy := strings.ToLower(naming.TopicSafe(centralName)) + "_"; legacy != canonical {
-		prefixes = append(prefixes, legacy)
+	for _, legacy := range []string{
+		legacyDiscoverySlug(centralName) + "_",
+		strings.ToLower(naming.TopicSafe(centralName)) + "_",
+	} {
+		if legacy != canonical && !slices.Contains(prefixes, legacy) {
+			prefixes = append(prefixes, legacy)
+		}
 	}
 	return prefixes
+}
+
+// legacyDiscoverySlug is the spelling [naming.DiscoverySlug] had before it
+// was unified onto the shared `topic.Slug` rule. It exists for exactly one
+// purpose: so [discoveryNodePrefixes] still recognises the retained configs
+// a pre-unification daemon wrote, and the orphan sweep can retract them.
+//
+// That retraction is obligation 3 of ADR 0068's breaking-change process —
+// without it, a central named `Café`, `Søren` or `Watchdog:_CCU-Jack` keeps
+// a full set of permanently unavailable phantom entities under its old node
+// ids forever, because nothing else in the daemon ever spells that node id
+// again.
+//
+// It is deliberately NOT a second slug rule in use. Nothing publishes
+// through it, nothing may start to, and it can be deleted once the fleet
+// has been through one release that swept with it. It differs from the
+// shared rule in the two classes the unification fixed: non-German accented
+// Latin is dropped rather than transliterated, and a literal `__` passes
+// through rather than collapsing.
+func legacyDiscoverySlug(s string) string {
+	if s == "" {
+		return "x"
+	}
+	var out strings.Builder
+	out.Grow(len(s))
+	prevUnderscore := false
+	emit := func(r rune) {
+		out.WriteRune(r)
+		prevUnderscore = r == '_'
+	}
+	flush := func() {
+		if !prevUnderscore {
+			out.WriteByte('_')
+			prevUnderscore = true
+		}
+	}
+	for _, r := range s {
+		switch r {
+		case 'ä', 'Ä':
+			emit('a')
+			emit('e')
+		case 'ö', 'Ö':
+			emit('o')
+			emit('e')
+		case 'ü', 'Ü':
+			emit('u')
+			emit('e')
+		case 'ß':
+			emit('s')
+			emit('s')
+		default:
+			switch {
+			case r >= 'A' && r <= 'Z':
+				emit(r + ('a' - 'A'))
+			case (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_':
+				emit(r)
+			default:
+				flush()
+			}
+		}
+	}
+	res := strings.Trim(out.String(), "_")
+	if res == "" {
+		return "x"
+	}
+	return res
 }
 
 // discoveryNodeIDBelongsTo reports whether nodeID is a retained HA-Discovery
@@ -798,7 +880,7 @@ func (b *Bridge) RunDiscoveryOrphanCleanupOnce(ctx context.Context, centralName 
 // Three answers, and every one of them was paid for:
 //
 //   - A node id under this central's `<central-slug>_` namespace is ours,
-//     in both the canonical and the legacy spelling — see
+//     in the canonical spelling and in every legacy one — see
 //     [discoveryNodePrefixes]. Anything else belongs to another central or
 //     another integration entirely; a parallel zigbee2mqtt publishes device
 //     documents that parse perfectly well and must not be touched.

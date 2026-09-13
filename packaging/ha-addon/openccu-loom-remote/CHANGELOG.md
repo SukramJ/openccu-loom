@@ -4,6 +4,15 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# Unreleased
+
+No changes to the proxy itself. The daemon changes how it turns a name
+carrying a non-German accent, or a double underscore, into a Home Assistant
+identifier — one rule instead of two, which fixes a case where "Café" and
+"Caf" collapsed into a single entity. Entities keep their history and their
+ids; affected device cards are re-created and need their area re-applied. The
+main add-on's changelog describes it in full.
+
 # 0.77.0
 
 No changes to the proxy itself — the version follows the daemon so the two
