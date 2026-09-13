@@ -719,8 +719,49 @@ func startTestBroker(t *testing.T) (url string, connects *brokerConnectCounter, 
 		t.Fatalf("broker: add listener: %v", err)
 	}
 	go func() { _ = srv.Serve() }()
-	t.Cleanup(func() { _ = srv.Close() })
+	t.Cleanup(func() { closeTestBroker(t, srv) })
 	return "tcp://" + ln.Addr().String(), connects, srv
+}
+
+// testBrokerCloseTimeout bounds [closeTestBroker]. Generous enough that a
+// merely slow runner still closes cleanly, short enough that the wedge
+// described there costs one test rather than the package's timeout budget.
+const testBrokerCloseTimeout = 15 * time.Second
+
+// closeTestBroker shuts the in-process broker down without letting a wedged
+// broker hang the whole package.
+//
+// mochi-mqtt v2.7.9 recursively read-locks Clients.RWMutex on its teardown
+// path: Server.Close -> Listeners.CloseAll -> Net.Close ->
+// Server.closeListenerClients -> Clients.GetByListener takes Clients.RLock
+// (clients.go:92) and then calls Clients.Len (clients.go:78), which RLocks the
+// same mutex again. Go's sync.RWMutex forbids that — a pending writer blocks
+// new readers — so a CONNECT that is inside Server.attachClient at that moment
+// queues Clients.Delete as a writer between the two RLocks, and both goroutines
+// park forever. The supervisor tests reconnect against this broker by design,
+// which is exactly the traffic that lands a CONNECT in that window.
+//
+// Unfixed upstream as of v2.7.9, and not reachable from production code —
+// mochi is a test-only dependency. Left unguarded it presents as "whichever
+// test was running at minute ten hangs", which is how it burned the 10-minute
+// default package timeout on main more than once.
+func closeTestBroker(t *testing.T, srv *mochi.Server) {
+	t.Helper()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = srv.Close()
+	}()
+	select {
+	case <-done:
+	case <-time.After(testBrokerCloseTimeout):
+		t.Errorf("the in-process MQTT broker did not shut down within %s — "+
+			"mochi-mqtt v2.7.9 deadlocked in Server.Close (Clients.GetByListener "+
+			"read-locks Clients and then calls Clients.Len, which read-locks it "+
+			"again, behind a CONNECT's Clients.Delete writer); the close is "+
+			"abandoned so the rest of the package still runs",
+			testBrokerCloseTimeout)
+	}
 }
 
 // brokerMQTTCfg is [mqttCfg] pointed at a real broker under clientID.

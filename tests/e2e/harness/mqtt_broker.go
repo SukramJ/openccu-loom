@@ -8,6 +8,7 @@ package harness
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	mqtt "github.com/mochi-mqtt/server/v2"
 	"github.com/mochi-mqtt/server/v2/hooks/auth"
@@ -96,11 +97,35 @@ func (b *mochiBroker) URL() string {
 	return fmt.Sprintf("tcp://127.0.0.1:%d", b.port)
 }
 
+// stopTimeout bounds [mochiBroker.Stop]; see the deadlock note there.
+const stopTimeout = 15 * time.Second
+
+// Stop shuts the broker down, bounded so a wedged broker cannot hang the
+// e2e package.
+//
+// mochi-mqtt v2.7.9 recursively read-locks Clients.RWMutex on its teardown
+// path: Server.Close -> Listeners.CloseAll -> Net.Close ->
+// Server.closeListenerClients -> Clients.GetByListener takes Clients.RLock
+// (clients.go:92) and then calls Clients.Len (clients.go:78), which RLocks the
+// same mutex again. Go's sync.RWMutex forbids that — a pending writer blocks
+// new readers — so a CONNECT still inside Server.attachClient queues
+// Clients.Delete as a writer between the two RLocks and both goroutines park
+// forever. Unfixed upstream as of v2.7.9; mochi is a test-only dependency, so
+// production code cannot reach it.
 func (b *mochiBroker) Stop() error {
 	if b == nil || b.srv == nil {
 		return nil
 	}
-	return b.srv.Close()
+	done := make(chan error, 1)
+	go func() { done <- b.srv.Close() }()
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(stopTimeout):
+		return fmt.Errorf("mqtt broker: Close did not return within %s "+
+			"(mochi-mqtt v2.7.9 recursive RLock in Clients.GetByListener/Clients.Len "+
+			"behind a CONNECT's Clients.Delete); abandoning the close", stopTimeout)
+	}
 }
 
 // Subscribe routes every matching message to handler. The
