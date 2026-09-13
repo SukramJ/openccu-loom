@@ -854,9 +854,13 @@ func buildPackageSummary(items []UnreachableEntry) []PackageSummary {
 	return result
 }
 
-// writeSummaryMD schreibt das Markdown-Summary.
-func writeSummaryMD(path string, inv Inventory) error {
-	const tmplText = `# Dead-Code Summary
+// summaryTemplate renders notes/parity/dead-code-summary.md.
+//
+// Package-level rather than a const inside writeSummaryMD: the template
+// grew a "What these numbers cannot see" section, and a 100-line string
+// literal in the function body made the function itself look long to
+// funlen without any logic being added.
+const summaryTemplate = `# Dead-Code Summary
 
 Generated: {{.Generated}}
 HEAD: {{.Head}}
@@ -877,13 +881,13 @@ both have been measured on real deletions — read the counts above with them
 in mind.
 
 1. **Package-level members only — no method and no struct field is ever
-   classified.** The analyzer walks each SSA package's ` + "`Members`" + ` map, which
+   classified.** The analyzer walks each SSA package's Members map, which
    holds package-level funcs, types, vars and consts. Methods are in the
-   program's method sets, not in ` + "`Members`" + `; fields are not members at all.
-   PR #808 deleted four dead things: ` + "`payload.MQTTTopicSet.Config`" + ` (a
-   field), ` + "`payload.MQTTTopicSet.IsZero`" + ` and
-   ` + "`hub.InstallMode.MQTTTopics`" + ` (methods), and
-   ` + "`naming.MQTTHubInstallMode`" + ` (a package-level func). Total Exported moved
+   program's method sets, not in Members; fields are not members at all.
+   PR #808 deleted four dead things: payload.MQTTTopicSet.Config (a
+   field), payload.MQTTTopicSet.IsZero and
+   hub.InstallMode.MQTTTopics (methods), and
+   naming.MQTTHubInstallMode (a package-level func). Total Exported moved
    by **exactly one**, 5607 -> 5606, and Unreachable did not move at all: the
    field and the two methods were never counted in either direction. A count
    that holds steady across a deletion is not evidence that nothing dead was
@@ -891,8 +895,8 @@ in mind.
 
 2. **A flag-gated dead subtree reads as reachable.** RTA reasons about call
    edges, not values, so it cannot evaluate a config flag. PR #799 found
-   ` + "`internal/north/mqtt/legacy_alias.go`" + ` and six guarded branches in
-   ` + "`bridge.go`" + ` dead for the daemon's whole life — the gating field had no
+   internal/north/mqtt/legacy_alias.go and six guarded branches in
+   bridge.go dead for the daemon's whole life — the gating field had no
    YAML key, no environment override, no flag and no build tag, and the one
    production construction site never assigned it — while the analyzer
    counted all of it reachable, because the edges are there.
@@ -926,6 +930,8 @@ live. Each needs a different question than "is there an edge to it".
 {{- end}}
 `
 
+// writeSummaryMD schreibt das Markdown-Summary.
+func writeSummaryMD(path string, inv Inventory) error {
 	type templateData struct {
 		Generated     string
 		Head          string
@@ -959,7 +965,7 @@ live. Each needs a different question than "is there an edge to it".
 		ByPackage:     inv.ByPackage,
 	}
 
-	tmpl, err := template.New("summary").Parse(tmplText)
+	tmpl, err := template.New("summary").Parse(summaryTemplate)
 	if err != nil {
 		return fmt.Errorf("parse summary template: %w", err)
 	}
