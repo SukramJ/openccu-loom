@@ -693,7 +693,7 @@ func NewBridge(cfg BridgeConfig, client Publisher) *Bridge {
 	b.avail = newAvailabilityPublisher(b, logger)
 	b.hubStatus = newHubStatusGate(hubStatusDwell)
 	b.configGate = &configCacheGate{b: b}
-	b.gates = []runtimeGate{b.state, b.avail, b.hubStatus, b.configGate}
+	b.gates = []runtimeGate{b.pub, b.state, b.avail, b.hubStatus, b.configGate}
 	return b
 }
 
