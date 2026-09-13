@@ -6,6 +6,13 @@
 # operation is `payload.ForWith`; `tests/bench/payload_build_test.go` measures
 # it; this script is what turns that measurement into something that can fail.
 #
+# READ THIS FIRST: that bound has since been WITHDRAWN, because `ForWith` turned
+# out to be 1.2 % of the build it sits in. What this script now gates is
+# `BenchmarkDiscoveryBuildPerEntity` — the whole per-entity HA-Discovery build —
+# and it gates it on ALLOCATIONS, not nanoseconds, because the ns/op ceilings
+# below went red on an unchanged tree. Both stories are told in order further
+# down; the sections are dated by the order they were learned, not rewritten.
+#
 # WHY MINIMUM-OF-N, NOT MEAN OR MEDIAN
 #
 # A shared CI runner adds time; it never removes it. Contention, a co-tenant
@@ -55,7 +62,8 @@
 # of 811). Closing the 500 ns/op gap entirely would buy 0.7 % of a discovery
 # build. So the two ForWith ceilings below are no longer a placeholder for an
 # optimisation that is coming; they are plain regression protection for a path
-# nobody should spend effort on, and they stay at their current values.
+# nobody should spend effort on. (Their ns/op values were subsequently RAISED
+# rather than held — see the next section, which is why.)
 #
 # BenchmarkDiscoveryBuildPerEntity is the ceiling that replaced the ADR's
 # bound, and it is the one worth watching: at ~12 entities per device it is
