@@ -218,14 +218,17 @@ type CDPInvokePayload struct {
 // deliberately left to its consumers; the subscriptions, the routing and the
 // worker pool underneath it are [hapublisher.CommandRouter]'s.
 //
-// It registers one wildcard route per inbound shape — data points (which
-// carry the week-profile, combined-DP and schedule-switch shapes too),
-// sysvars, programs, install mode, custom-DP invoke and service methods,
-// alarm commands, add-on updates — over the raw-plane schema (ADR 0011):
+// It registers one wildcard route per inbound shape EXCEPT three — the
+// week-profile, combined-DP and schedule-switch shapes have no filter of
+// their own and are dispatched from inside the data-point handler, because a
+// filter of their length would overlap one of that handler's two catch-alls
+// (see [CommandSubscriber.routes]). The routes are sysvars, programs (enable
+// and trigger), install mode, custom-DP invoke, service methods, alarm
+// commands and add-on updates, over the raw-plane schema (ADR 0011):
 //
 //	<base>/<central>/<interface>/<device>/<channel>/<parameter>/set
-//	<base>/<central>/sysvars/<name>/set
-//	<base>/<central>/programs/<id>/trigger
+//	<base>/<central>/hub/sysvars/<name>/set
+//	<base>/<central>/hub/programs/<id>/trigger
 //	<base>/<central>/devices/<device>/cdps/<name>/<operation>/invoke
 type CommandSubscriber struct {
 	sub       Subscriber
@@ -273,6 +276,16 @@ type CommandSubscriber struct {
 	// constructor and Start — and [hapublisher.NewCommandRouter] starts no
 	// goroutines, so a subscriber that never reaches Start owns none either.
 	router *hapublisher.CommandRouter
+
+	// routesOverride replaces [CommandSubscriber.routes] in
+	// [CommandSubscriber.Start]. Nil in every build the daemon produces —
+	// nothing outside this package can set it — and it exists for one
+	// reason: Start's refusals (the attributed-mode one above all) are
+	// reachable only from a route set this plane must never ship, and a
+	// guard whose only proof is that the code reads correctly is the shape
+	// this programme keeps finding inert. See
+	// TestStartRefusesAnAttributedRouteSet.
+	routesOverride func(base string) []commandRoute
 }
 
 // NewCommandSubscriber constructs the subscriber. Call
@@ -297,8 +310,12 @@ func NewCommandSubscriber(sub Subscriber, topics *TopicBuilder, sink CommandSink
 // before it reaches the broker. The unsubscribes are best-effort either way
 // — the supervisor's teardown disconnects the client right after, which
 // drops every filter — so an error is a debug breadcrumb rather than a
-// failure the caller can act on. The drain is not best-effort: it is the
-// half that keeps a queued CCU write from being abandoned.
+// failure the caller can act on. The drain is not best-effort, and what it is
+// worth depends on which teardown this is: on a broker SWAP the lifecycle
+// context is still live, so draining is what keeps a queued CCU write from
+// being abandoned. On daemon stop the lifecycle context has already been
+// cancelled by the time Close runs, so every drained job is born cancelled
+// and the drain buys an orderly exit rather than a completed write.
 func (c *CommandSubscriber) Close() {
 	if c == nil {
 		return
@@ -608,8 +625,9 @@ type commandRoute struct {
 //
 // Order is registration order, and it is load-bearing twice over: the router
 // subscribes in it, so a broker that refuses one filter rolls back the ones
-// before it in reverse, and [hapublisher.CommandRouter.Handle] reports an
-// ambiguous pair naming the earlier filter first. It is pinned by
+// before it — in the same order it registered them, not in reverse — and
+// [hapublisher.CommandRouter.Handle] reports an ambiguous pair naming the
+// earlier filter first. It is pinned by
 // TestCommandFilterSetIsPinned.
 //
 // The set is pairwise disjoint, and that is a property of the set rather than
@@ -641,6 +659,15 @@ func commandFilters(base string) []string {
 		out = append(out, rt.filter)
 	}
 	return out
+}
+
+// routeSet is the route set [CommandSubscriber.Start] registers: this plane's
+// own [CommandSubscriber.routes], unless a test has installed an override.
+func (c *CommandSubscriber) routeSet(base string) []commandRoute {
+	if c.routesOverride != nil {
+		return c.routesOverride(base)
+	}
+	return c.routes(base)
 }
 
 func (c *CommandSubscriber) routes(base string) []commandRoute {
@@ -759,7 +786,7 @@ func (c *CommandSubscriber) Start(ctx context.Context) error {
 			Logger:       c.logger,
 		},
 	)
-	for _, rt := range c.routes(base) {
+	for _, rt := range c.routeSet(base) {
 		if err := router.Handle(rt.filter, rt.handler); err != nil {
 			return fmt.Errorf("mqtt/command: route %s: %w", rt.filter, err)
 		}

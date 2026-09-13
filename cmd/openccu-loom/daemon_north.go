@@ -476,6 +476,50 @@ type mqttStack struct {
 	sweep *mqtt.SweepSubscriber
 }
 
+// northTCPConfig is the CONNECT this daemon dials the north-bound broker
+// with, including its last will.
+//
+// Extracted from [buildMQTT] so the will can be READ rather than
+// reconstructed. It is built here and not by the bridge because it belongs to
+// CONNECT and the client is constructed before a bridge exists — the shape
+// that drifted in the reference family, where two bridges configure a will
+// whose topic no published entity references and a third writes its
+// availability marker inside Home Assistant's own birth tree. A test that
+// hand-rebuilds `mqtt.Will{Topic: buildLWTTopic(cfg), …}` agrees with a
+// second copy of itself and sees none of that;
+// TestConfiguredLastWillMatchesTheBridgePolicy reads this function's output.
+func northTCPConfig(cfg *config.Config, logger *slog.Logger) mqtt.TCPConfig {
+	// MQTT 5.0 is the transport default; operators pin
+	// north.mqtt.protocol_version to "3.1.1" for brokers without
+	// v5 support (no silent downgrade on the wire).
+	var protoVersion mqtt.ProtocolVersion
+	switch cfg.North.MQTT.ProtocolVersion {
+	case "", "5":
+		protoVersion = mqtt.ProtocolV50
+	case "3.1.1":
+		protoVersion = mqtt.ProtocolV311
+	default:
+		logger.Warn("mqtt.protocol_version.unknown",
+			slog.String("value", cfg.North.MQTT.ProtocolVersion),
+			slog.String("effect", "using MQTT 5.0"))
+		protoVersion = mqtt.ProtocolV50
+	}
+	return mqtt.TCPConfig{
+		BrokerURL: cfg.North.MQTT.BrokerURL,
+		ClientID:  cfg.North.MQTT.ClientID,
+		Username:  cfg.North.MQTT.Username,
+		Password:  cfg.North.MQTT.Password,
+		Will: &mqtt.Will{
+			Topic:   buildLWTTopic(cfg),
+			Payload: []byte("offline"),
+			Retain:  true,
+		},
+		CleanStart:      true,
+		ProtocolVersion: protoVersion,
+		Logger:          logger,
+	}
+}
+
 // sweepSubscriberFor returns the subscribe client the bridge's retained-store
 // sweeps ride on: the dedicated sweep connection when one was built, and the
 // shared client only in the no-broker wiring, where the recording no-op client
@@ -709,35 +753,9 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 		// wiring without a broker.
 		client = mqtt.NewNoopClient()
 	} else {
-		// MQTT 5.0 is the transport default; operators pin
-		// north.mqtt.protocol_version to "3.1.1" for brokers without
-		// v5 support (no silent downgrade on the wire).
-		var protoVersion mqtt.ProtocolVersion
-		switch cfg.North.MQTT.ProtocolVersion {
-		case "", "5":
-			protoVersion = mqtt.ProtocolV50
-		case "3.1.1":
-			protoVersion = mqtt.ProtocolV311
-		default:
-			logger.Warn("mqtt.protocol_version.unknown",
-				slog.String("value", cfg.North.MQTT.ProtocolVersion),
-				slog.String("effect", "using MQTT 5.0"))
-			protoVersion = mqtt.ProtocolV50
-		}
-		tcp := mqtt.NewTCPClient(mqtt.TCPConfig{
-			BrokerURL: cfg.North.MQTT.BrokerURL,
-			ClientID:  cfg.North.MQTT.ClientID,
-			Username:  cfg.North.MQTT.Username,
-			Password:  cfg.North.MQTT.Password,
-			Will: &mqtt.Will{
-				Topic:   buildLWTTopic(cfg),
-				Payload: []byte("offline"),
-				Retain:  true,
-			},
-			CleanStart:      true,
-			ProtocolVersion: protoVersion,
-			Logger:          logger,
-		})
+		tcpCfg := northTCPConfig(cfg, logger)
+		protoVersion := tcpCfg.ProtocolVersion
+		tcp := mqtt.NewTCPClient(tcpCfg)
 		client = tcp
 		connector = tcp
 		sweepCfg := cfg.North.MQTT
