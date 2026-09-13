@@ -623,6 +623,26 @@ type commandRoute struct {
 // [CommandSubscriber.handleDataPoint] dispatches them off the segment the
 // filter used to carry. See the segWeekProfile / segCombined / segSchedule
 // block, and TestCommandFiltersArePairwiseDisjoint.
+// commandFilters is the filter half of [CommandSubscriber.routes], as a pure
+// function of the topic base.
+//
+// It exists so the runtime guard can have the filter set before a subscriber
+// does. [hapublisher.StateConfig.CommandFilters] refuses a state publish that
+// lands inside one of this daemon's own command subscriptions, and the state
+// publisher is built with the [Bridge] — which is before the supervisor
+// builds the command subscriber for that stack generation. The routes never
+// depended on any of the subscriber's state, so reading them off a
+// zero-valued one is honest rather than a trick: what varies is the base, and
+// the base is the argument.
+func commandFilters(base string) []string {
+	routes := new(CommandSubscriber).routes(base)
+	out := make([]string, 0, len(routes))
+	for _, rt := range routes {
+		out = append(out, rt.filter)
+	}
+	return out
+}
+
 func (c *CommandSubscriber) routes(base string) []commandRoute {
 	return []commandRoute{
 		// Bucket-aware data-point command topology (the canonical shape
