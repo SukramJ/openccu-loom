@@ -564,7 +564,8 @@ type Bridge struct {
 	configCache map[string][]byte
 	// rawTopics tracks every retained per-data-point raw-plane state
 	// topic this bridge has published (canonical PerDPState + custom-DP
-	// slot state + the legacy-alias mirror). Device removal walks this
+	// slot state; the legacy-alias mirror that used to be the third
+	// producer was deleted in #799). Device removal walks this
 	// set the same way [Bridge.RetractDiscoveryForDevice] walks
 	// declared — an address-scoped needle match — so a removed
 	// device's retained state does not linger on the broker for
@@ -1862,8 +1863,8 @@ func (b *Bridge) publishRawRetained(ctx context.Context, topic string, body []by
 
 // RetractRawStateForDevice clears every retained raw-plane topic this
 // bridge has published for deviceAddress: the per-data-point state
-// topics tracked in rawTopics (canonical PerDPState, custom-DP slot
-// state, and the legacy-alias mirror), the descriptor-companion
+// topics tracked in rawTopics (canonical PerDPState and custom-DP slot
+// state), the descriptor-companion
 // `/config` topics tracked in configCache, and the device-scoped
 // availability / info / diagnostics topics computed directly from
 // (centralName, iface, deviceAddress).
@@ -1884,27 +1885,20 @@ func (b *Bridge) RetractRawStateForDevice(ctx context.Context, centralName, ifac
 	// bridge-wide, and a device address is unique per CCU but not across
 	// CCUs — the virtual remote and the BidCoS pseudo devices carry the
 	// identical address on every one of them, so an address-only needle
-	// blanked a second CCU's live retained state.
-	//
-	// The legacy-alias mirror is the one exception: its topology
-	// (`<legacy_base>/device/status/<addr>/…`) predates the central
-	// segment and cannot be scoped at all, so a removal clears it for the
-	// address regardless of central. That mirror is a single-CCU
-	// migration shim; a multi-CCU deployment already has its two CCUs
-	// overwriting each other there.
+	// blanked a second CCU's live retained state. The unscopable
+	// legacy-alias mirror that used to be the exception to this is gone
+	// (#799): every retained topic this bridge writes now carries the
+	// central segment, so the scoping has no hole left in it.
 	//
 	// The needle matches the ONE segment the address actually occupies,
-	// not the address anywhere at any depth. Both retained topologies put
-	// it in the same place — `<base>/<central>/<iface>/<addr>/…` and
-	// `<legacy>/device/<status|availability>/<addr>/…`, index 1 past
-	// their respective prefixes — and a `strings.Contains` needle over
+	// not the address anywhere at any depth: `<base>/<central>/<iface>/
+	// <addr>/…`, index 1 past the prefix. A `strings.Contains` needle over
 	// the whole topic matched the other positions too. The virtual remote
 	// is the case that turns that into damage: its device address is
 	// literally `BidCoS-RF`, the same string as the interface segment, so
 	// removing that one pseudo device blanked every retained topic of the
 	// entire BidCos-RF interface — every real wireless device on the CCU
-	// — and the legacy mirror's `<addr>_<ch>_<param>` leaf and the hub
-	// subtree's sysvar names were reachable the same way.
+	// — and the hub subtree's sysvar names were reachable the same way.
 	addr := strings.ToLower(safe(deviceAddress))
 	rawPrefix := strings.ToLower(rawCentralPrefix(b.cfg.Base, centralName))
 	match := func(topic string) bool {
