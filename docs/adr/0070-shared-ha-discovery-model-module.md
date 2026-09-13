@@ -207,6 +207,41 @@ The `sensorMetadataByUnit` raw-vs-canonical unit bug — 542 occurrences of raw
   an HA release), `hadoctor` (live broker inspection — it finds mtec's and
   homeconnect's availability defects automatically).
 
+## Amendment (2026-09-13) — three claims in the decision text are false as written
+
+Checked against the shipped modules while fixing the operator rollback
+documentation. None of these changes a decision; all three are statements of
+fact that a reader would take as current, and none of them is.
+
+- **"Device-based discovery only … No per-entity legacy path"** (decision,
+  4th bullet). `go-hamqtt` v0.34.0 ships a complete per-entity path:
+  `publisher.LegacyEntity`, `publisher.LegacyTopicFunc`, and three form
+  functions — `LegacyTopicWithNodeID`, `LegacyTopicByUniqueID`,
+  `LegacyTopicByObjectID` — selected by `Config.LegacyEntityTopics` and named
+  at boot by `Runtime.LegacyForms()`. The zero value is
+  `LegacyTopicWithNodeID` alone, i.e. the per-entity form is the *default*.
+  Nor does the headline default hold in practice: this daemon keeps
+  `north.mqtt.discovery_bundles` **off**, so it runs the per-entity form, and
+  the same is reported of the other consumers. The bullet describes an
+  intention that the shared module deliberately did not adopt.
+
+- **"`go-mqtt` gains exactly two additive helpers"** (consequences).
+  `go-mqtt` v1.5.1 exports ten `With…` option helpers across `PublishOption`
+  and `SubscribeOption`. `WithSubscriptionID` (MQTT 5.0 Subscription
+  Identifiers) arrived in v1.5.0, after this sentence was written. The
+  substantive half of the bullet — "and no domain knowledge … a pure
+  transport" — is still true and is the half that mattered; the count is not.
+
+- **"Four tools ship alongside: `hacheck`, `hagen`, `hadiff`, `hadoctor`"**
+  (consequences). `go-hamqtt` v0.34.0 ships two: `cmd/hacheck` and
+  `cmd/hadoctor`. `hagen` and `hadiff` do not exist.
+
+The fourth amendment (2026-09-10, the bundle migration measurement) is
+unaffected and remains the part of this ADR that records work actually done —
+including the rollback hazard, which as of this amendment is finally written
+somewhere an operator reads it (`docs/admin/configuration.md`,
+`north.mqtt.discovery_bundles`).
+
 ## Amendment (2026-09-10) — this daemon keeps its `unique_id`
 
 The decision above calls for a clean break: `unique_id` harmonised across the

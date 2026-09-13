@@ -5,6 +5,7 @@ package mqtt
 
 import (
 	"encoding/json"
+	"log/slog"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
@@ -176,12 +177,21 @@ func TestBuildAlarmPanelDiscovery_MasterPanel(t *testing.T) {
 }
 
 // TestBuildAlarmPanelDiscovery_MasterNameLocalizedBothLocales confirms
-// the two locales this repo ships (en, de) carry distinct display
-// strings under the "discovery.alarm_system" key that
-// [AlarmMQTTPublisher.masterName] resolves — the discovery builder
-// itself is locale-agnostic (it takes the resolved name as an
-// argument), so this test locks the localization the publisher feeds
-// it, not the builder's own logic.
+// the two locales this repo ships (en, de) carry distinct display strings
+// under the "discovery.alarm_system" key that
+// [AlarmMQTTPublisher.masterName] resolves.
+//
+// It used to claim that while proving nothing. The old body passed `want`
+// into BuildAlarmPanelDiscovery and asserted that `want` came back out — the
+// builder is locale-agnostic and takes the resolved name as an argument, so
+// the catalogues were never read. Deleting "discovery.alarm_system" from
+// both of them left it green, and the `locale` loop variable was used for
+// nothing but the failure message.
+//
+// So it now resolves the name the way the publisher does, through
+// [AlarmMQTTPublisher.masterName] and the real catalogues, and feeds *that*
+// to the builder. The literals below are the assertion; the catalogue is the
+// input.
 func TestBuildAlarmPanelDiscovery_MasterNameLocalizedBothLocales(t *testing.T) {
 	t.Parallel()
 	names := map[string]string{
@@ -189,12 +199,50 @@ func TestBuildAlarmPanelDiscovery_MasterNameLocalizedBothLocales(t *testing.T) {
 		"de": "Alarmanlage",
 	}
 	for locale, want := range names {
-		item := BuildAlarmPanelDiscovery("gh", "", want, nil, true, false, false)
+		got := alarmMasterNameForLocale(t, locale)
+		if got != want {
+			t.Errorf("locale %s: masterName() resolved %q, want %q — the catalogue entry for %s is "+
+				"missing or has moved, and the alarm panel's Home Assistant name moves with it",
+				locale, got, want, alarmMasterNameKey)
+		}
+		item := BuildAlarmPanelDiscovery("gh", "", got, nil, true, false, false)
 		body := alarmDiscoveryBody(t, item)
-		if got := body["name"]; got != want {
-			t.Errorf("locale %s: name = %v, want %v", locale, got, want)
+		if name := body["name"]; name != want {
+			t.Errorf("locale %s: published name = %v, want %v", locale, name, want)
 		}
 	}
+}
+
+// TestAlarmMasterNameFallsBackWhenTheCatalogueMisses is the branch an
+// operator can reach: a `locale` matching no shipped catalogue resolves
+// through the default one rather than rendering the raw key as the panel's
+// name. The value it lands on happens to equal alarmMasterNameFallback, which
+// is why the constant reads naturally here — but the Go literal itself is
+// only reached when catalogue construction fails, and this does not exercise
+// that path. See the note on
+// TestSecurityPlaneDeviceNameUnknownLocaleUsesTheDefaultCatalogue.
+func TestAlarmMasterNameFallsBackWhenTheCatalogueMisses(t *testing.T) {
+	t.Parallel()
+	if got := alarmMasterNameForLocale(t, "xx-unknown"); got != alarmMasterNameFallback {
+		t.Errorf("unknown locale resolved the alarm master name to %q, want the fallback %q",
+			got, alarmMasterNameFallback)
+	}
+}
+
+// alarmMasterNameForLocale resolves the alarm panel's display name through a
+// real publisher in the given locale, catalogues and all.
+func alarmMasterNameForLocale(t *testing.T, locale string) string {
+	t.Helper()
+	bridge := NewBridge(BridgeConfig{
+		Base: "gh", CentralName: "ccu-01",
+		RawEnabled: true, HADiscoveryEnabled: true, Locale: locale,
+	}, newObservedPlane())
+	p := NewAlarmMQTTPublisher(nil, NewWiring(bridge, slog.Default()), slog.Default())
+	if p.locale != locale {
+		t.Fatalf("publisher locale = %q, want %q; it is no longer taking the locale from the bridge "+
+			"config and this test is resolving against the wrong catalogue", p.locale, locale)
+	}
+	return p.masterName()
 }
 
 // TestBuildAlarmPanelDiscovery_EmptyAreaIsRejected guards against
