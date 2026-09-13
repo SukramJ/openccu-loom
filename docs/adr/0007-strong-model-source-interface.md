@@ -667,3 +667,228 @@ the same gate on the same runner returned 1 343 / 829 ns/op green. That is the
 sensitivity the doubled ceiling buys: not "any regression", but any regression
 that doubles the cost of a path the daemon runs per device on every
 HA-Discovery build.
+
+## Amendment (2026-09-13) — the 500 ns/op bound is withdrawn: it governs 1.2 % of the work it sits in
+
+The amendment above measured `payload.ForWith` for the first time and
+reported that §Mitigations' "must stay below 500 ns/op for a 20-field struct"
+is missed by 2.7x. It measured a cost. It did not measure whether that cost
+matters, and it said as much by deferring the optimisation to a separate
+change.
+
+This is that separate change, and it does not optimise anything. The
+denominator came back first, and it ends the question:
+
+**`payload.ForWith` is 1.2 % of the discovery build it is part of.** Closing
+the 500 ns/op gap completely — not improving it, *eliminating two thirds of the
+call* — would buy 0.7 % of one HA-Discovery entity build. The bound is
+withdrawn rather than defended, because a performance promise the next reader
+will optimise toward is worse than no promise at all.
+
+### The denominator
+
+`BenchmarkDiscoveryBuildPerEntity` (`tests/bench/payload_build_test.go`)
+measures `DefaultDiscoveryBuilder.Build` — the exact call
+`Bridge.PublishDiscoveryOnly` makes (`internal/north/mqtt/bridge.go:892`), and
+the one that contains exactly one `deviceDescriptor` and therefore exactly one
+`payload.ForWith`. Around that one call sit topic construction, component
+classification, `device_class` and `state_class` resolution, i18n lookups, the
+`hadiscovery.RenderComponent` model render and the JSON marshal of the ~1.3 KB
+payload that actually goes on the wire.
+
+Measured on the CI runner (`ubuntu-latest`, Intel Xeon Platinum 8573C):
+
+| Benchmark | ns/op | B/op | allocs/op | share of a build |
+|---|---|---|---|---|
+| `BenchmarkDiscoveryBuildPerEntity` (the whole build) | **95 082** | 41 199 | 811 | 100 % |
+| `BenchmarkPayloadBuildDeviceInfo` (the `ForWith` inside it) | **1 174** | 1 464 | 19 | **1.2 %** time, **2.3 %** allocations, 3.6 % bytes |
+
+The same ratio was then measured a second time on different silicon, which is
+the check that matters: on the slower AMD EPYC 7763 leg the build came in at
+**123 899 ns/op** and the harvest at **1 552 ns/op** — **1.25 %**. The absolute
+figures move by 30 %; the share does not.
+
+**The allocation ratio is the load-bearing figure, not the nanoseconds.** 19
+allocations out of 811 is a property of the code, not of the machine: it is
+identical on every run, on every runner, and on every architecture. The
+nanosecond ratio can drift with silicon; the ratio 19/811 cannot. Any argument
+that a faster or slower machine changes this verdict has to explain how it
+changes that count.
+
+### What it costs at fleet scale
+
+A full build re-enters the builders for every entity. At ~11.7 entities per
+device — the repository's own figure, from a live HA instance carrying 958 MQTT
+entities across 82 devices (`docs/adr/0070-shared-ha-discovery-model-module.md`)
+— and taking 12:
+
+| Fleet | Entities | `ForWith` total | Whole discovery build |
+|---|---|---|---|
+| 50 devices | 600 | **0.7 ms** | 57 ms |
+| 200 devices | 2 400 | **2.8 ms** | 0.23 s |
+| 1 000 devices | 12 000 | **14 ms** | 1.1 s |
+
+Fourteen milliseconds, once, on the largest fleet this daemon plausibly sees,
+spread across a boot that also has to talk to a CCU over XML-RPC. Meeting the
+ADR's bound would have removed eight of those fourteen.
+
+**And the birth-triggered republish — the case that sounded most expensive —
+costs nothing at all.** `Bridge.RepublishDiscovery`
+(`internal/north/mqtt/bridge.go:755`) replays the already-built retained
+payloads the publisher runtime holds; it does not re-enter
+`DiscoveryBuilder.Build`. A Home Assistant restart therefore makes **zero**
+`ForWith` calls, at any fleet size. The paths that do re-enter the builders are
+daemon boot, MQTT (re)connect, config reload, and a single device being added
+or renamed — the last of which is one device's worth, some 12 entities, 14 µs.
+
+The one genuinely recurring caller is the value-change path
+(`internal/central/adapter/eventbridge.go:1549`), which re-renders the
+descriptor per changed data point forever after boot. That is a steady-state
+cost, and at 1.2 µs against a 95 µs render it is the same 1.2 %.
+
+### On the hardware that ships
+
+**This was not measured on the target, and cannot be honestly claimed to have
+been.** The slowest platform the add-on bundle supports is the CCU3, `armv7l`
+(`docs/user-guide.md`), a 32-bit ARM userland on a Cortex-A53-class part at
+roughly 1.2 GHz. No such hardware was available; nothing below is a
+measurement.
+
+*Method, stated so it can be disagreed with*: the CI part is a Xeon 8573C, a
+wide out-of-order core at ~3 GHz. Against an in-order, dual-issue A53 at
+1.2 GHz the clock ratio alone is ~2.5x, and the per-clock ratio for
+allocation- and map-heavy Go — which is what both benchmarks are — is
+plausibly another 4x to 10x once the A53's far smaller caches and 32-bit
+pointer-and-64-bit-arithmetic penalties are included. **Central estimate 20x,
+plausible range 10x–30x**, uncertainty dominated by the cache term rather than
+the clock term. So a 1 000-device boot's discovery build is estimated at
+**11 s–34 s** on a CCU3, of which `ForWith` is **0.14 s–0.42 s**.
+
+*Why the estimate does not change the verdict*: both benchmarks are the same
+kind of work — Go allocator traffic, map inserts, string hashing — so whatever
+factor the A53 applies, it applies to both, and the 1.2 % share survives
+unchanged. The uncertainty above is entirely in the absolute figures, which is
+why the withdrawal rests on the ratio and on the 19/811 allocation count
+instead. What the ARMv7 estimate *does* say is that the **denominator** is
+worth attention on that hardware: 11–34 seconds of serial discovery building
+on a 1 000-device CCU3 is a real number, and it is not `ForWith`'s.
+
+### The gate that enforced the bound was itself flaky, and that is now fixed
+
+Proving the new ceiling could fail turned up a defect in the gate PR #814
+armed. Three consecutive CI runs of **identical, unmodified** code drew three
+different CPUs from GitHub's hosted pool:
+
+| Leg | `TwentyField` | `DeviceInfo` | vs. the calibration leg |
+|---|---|---|---|
+| AMD EPYC 9V45 (the leg #814 calibrated on) | 1 343 | 829 | — |
+| Intel Xeon Platinum 8573C | 1 870 | 1 167 | +40 % |
+| AMD EPYC 7763 | **2 717** | 1 578 | **+102 %** |
+
+2 717 ns/op is over #814's 2 700 ns/op ceiling. **The ratchet went red on a
+tree nobody had touched.** The pool spans a factor of two by itself, so 2x
+headroom over its *fastest* member does not cover its slowest — and this
+script's own header warns that "a gate that flakes gets switched off", which
+this repository has already had happen once.
+
+The fix is not more padding, because padding a ns/op ceiling far enough to
+survive the pool is what turns a gate into decoration. The fix is to gate on
+the number that does not vary:
+
+**`allocs/op` is now the gate.** It is a property of the code rather than of
+the machine: 26, 19 and 811 on all three CPUs above, identical to the unit, and
+identical on a loaded 4-core developer laptop whose ns/op figures were three to
+five times worse. It is identical on 32-bit ARMv7 too, which is what lets this
+amendment reason about hardware it could not measure. Its ceilings are
+therefore armed **exactly** at the measured value — no headroom at all, so a
+regression that adds a single allocation fails. A Go toolchain bump that
+legitimately moves a count is a deliberate re-arm, stated in the commit message
+that moves it.
+
+**`ns/op` stays as a backstop**, because an allocation count cannot see a
+regression that burns CPU without allocating — a quadratic loop, a lock
+convoy, a reflection walk that stops being cached. It is now calibrated on the
+*slowest* leg observed rather than the fastest, times 1.5, which makes it a
+catastrophic-regression detector rather than a tripwire. Its comfortable margin
+is not headroom for adding work; the allocation ceiling above it has none.
+
+### What replaces the bound
+
+§Mitigations' sentence is withdrawn, not relaxed. In its place,
+`script/bench_gate.sh` gates the operation that actually carries the cost:
+
+| Benchmark | allocs/op (the gate) | ns/op (backstop) |
+|---|---|---|
+| `BenchmarkDiscoveryBuildPerEntity` | **811**, exact | 200 000 |
+| `BenchmarkPayloadBuildTwentyField` | **26**, exact | 4 100 |
+| `BenchmarkPayloadBuildDeviceInfo` | **19**, exact | 2 400 |
+
+The two `ForWith` rows are no longer a placeholder for an optimisation that is
+coming — they are plain regression protection on a path nobody should now spend
+effort on. Their ns/op ceilings were **raised** from #814's 2 700 and 1 700,
+which is the direction a ratchet is not supposed to move; the reason is the
+table above, and the compensation is that their allocation ceilings are tighter
+than anything #814 armed. Nothing about `payload.ForWith` was changed by this
+amendment, deliberately: the correct response to "this is 1.2 % of the work" is
+to leave it alone, and an untouched harvest is also a discovery payload pinned
+byte-for-byte against `internal/north/mqtt/testdata/`.
+
+A reader who wants the old sentence's intent should read the discovery row
+instead: *the per-entity HA-Discovery build must not allocate more than 811
+times*. That one is measured, enforced, machine-independent, and attached to
+the operation whose cost an operator on a CCU3 would actually feel.
+
+### Both ceilings were verified to fail
+
+A gate that cannot fail is the defect this ADR's amendments keep finding. Both
+new dimensions were made to fail before being trusted.
+
+**The ns/op backstop, on CI, at the ceiling it carries.** `DiscoveryBuilder.
+Build` was mutated to render the discovery body three times — the regression
+shape a reviewer would plausibly ship by accident, a redundant re-render —
+and pushed. The `bench` job went red on an AMD EPYC 7763 leg at **390 305
+ns/op against 190 000** — the ceiling armed at the time, since recalibrated
+to 200 000, which a 390 µs render clears just as decisively — with
+allocations at **2 434 instead of 811**, while
+the two `ForWith` benchmarks held at 19 and 26 allocs/op throughout,
+confirming the mutation hit the discovery build and nothing else. Reverted.
+
+**The allocation gate, with one single allocation.** `payload.ForWith` was
+given exactly **one** extra escaping allocation. All three ceilings went red
+together — 20 against 19, 27 against 26, 812 against 811 — which is the
+sensitivity the ns/op dimension cannot offer at any calibration. (This one was
+proved locally rather than on CI, and that is sound for this dimension
+specifically: an allocation count does not vary with the machine, which is the
+entire property being relied on. Every *timing* figure in this amendment is
+from CI.) Reverted.
+
+For contrast, #814's proof needed 40 extra allocations to move the ns/op gate.
+The gate now catches one.
+
+### And the fifth phantom artifact, now corrected
+
+The amendment above recorded that §Decision's `payload.PayloadAsMap` — "[…]
+Reflection still survives as the [payload.PayloadAsMap] helper that
+JSON-marshals a typed payload into the loose map shape some legacy consumers
+(REST DTOs that predate the typed migration) still expect" — exists nowhere in
+this repository. It records the correction here.
+
+Searched again, and the finding is stronger than "wrong name": there is **no
+helper of that shape under any name**. `internal/payload` exports exactly one
+function returning a loose map, `ForWith`, and it is a cached struct-tag walk,
+not a JSON round-trip. No `AsMap`/`ToMap`-shaped helper exists in `internal/`
+or `pkg/`, and the upstream `go-hamqtt/payload` has none either. The sentence
+does not misname a real thing the way `CDPDispatcher` misnamed
+`CustomDPDispatcher`; it describes a mechanism that was never built.
+
+**So the whole clause is withdrawn.** What survives the retirement §Decision
+describes is `payload.ForWith` and nothing else, it is reached from two call
+sites (`internal/north/mqtt/discovery.go:1306` and
+`discovery_schedule.go:479`), and — per this amendment — it accounts for 1.2 %
+of the build those call sites sit in. A reader asking "what is reflection still
+doing in this daemon" now has a complete answer in one place, which is what the
+phantom sentence prevented.
+
+That is five withdrawn references across three amendments. The standing
+instruction from the 2026-09-13 amendment above applies to this document
+without exception: **check every artifact this ADR names before relying on it.**

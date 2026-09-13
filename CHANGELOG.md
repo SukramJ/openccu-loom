@@ -8,6 +8,43 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **ADR 0007's 500 ns/op payload-build bound is withdrawn: it governs
+  1.2 % of the work it sits in.** The entry below measured what
+  `payload.ForWith` costs. It did not measure whether that cost matters,
+  and deferred the question. It is now answered, and the answer is no.
+  `BenchmarkDiscoveryBuildPerEntity` supplies the denominator the bound
+  never had — the complete per-entity HA-Discovery build
+  (`DefaultDiscoveryBuilder.Build`, what `Bridge.PublishDiscoveryOnly`
+  calls), which contains exactly one `payload.ForWith`. Measured on the CI
+  runner: **95 082 ns/op and 811 allocations** for the build, against
+  **1 174 ns/op and 19 allocations** for the `ForWith` inside it — **1.2 %
+  of the time and 2.3 % of the allocations.** Eliminating two thirds of
+  the call, which is what meeting the bound would mean, buys 0.7 % of a
+  discovery build. At ~12 entities per device that is 0.7 ms on a
+  50-device boot and 14 ms on a 1 000-device boot; a Home Assistant birth
+  replay costs **zero**, because `RepublishDiscovery` replays retained
+  payloads and never re-enters the builders. The allocation ratio 19/811
+  is the load-bearing figure: unlike nanoseconds it is identical on every
+  machine and every architecture, including the 32-bit ARMv7 CCU3 this
+  daemon ships to. ADR 0007 carries the full measurement, the fleet
+  arithmetic, and an explicitly-unverified ARMv7 estimate with its method
+  and its uncertainty. **Nothing on the hot path was tuned** — the
+  correct response to "this is 1.2 % of the work" is to leave it alone,
+  and an untouched harvest is also a discovery payload pinned
+  byte-for-byte against `internal/north/mqtt/testdata/`.
+
+- **A fifth phantom artifact in ADR 0007, and the strongest of the five.**
+  §Decision offers `payload.PayloadAsMap` as the reflection helper that
+  survived the tag-sweep retirement. Searched again for this change: there
+  is no helper of that shape **under any name** — `internal/payload`
+  exports exactly one function returning a loose map, `ForWith`, and it is
+  a cached struct-tag walk, not the JSON round-trip the ADR describes;
+  neither `internal/`, `pkg/` nor the upstream `go-hamqtt/payload` has an
+  `AsMap`-shaped helper. Unlike `CDPDispatcher`, which misnamed a real
+  `CustomDPDispatcher`, this sentence describes a mechanism that was never
+  built. The clause is withdrawn in a dated amendment, which states what
+  actually survived and where it is called from.
+
 - **ADR 0007's 500 ns/op payload-build bound is measured for the first
   time — and it does not hold.** The ADR names a benchmark file
   (`tests/bench/payload_build_test.go`) that did not exist, so
@@ -30,6 +67,40 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   tuning in the same change would make the measurement unreviewable.
 
 ### Fixed
+
+- **ADR 0007's benchmark ratchet was flaky, and went red on a tree nobody
+  had touched.** Proving the new ceiling could fail turned up a defect in
+  the gate PR #814 armed. Three consecutive CI runs of *identical* code
+  drew three different CPUs — AMD EPYC 9V45 (1 343 / 829 ns/op), Intel
+  Xeon 8573C (+40 %), AMD EPYC 7763 (**2 717** / 1 578, +102 %) — and
+  2 717 is over the 2 700 ns/op ceiling. GitHub's hosted pool spans a
+  factor of two by itself, so 2x headroom over its *fastest* member does
+  not cover its slowest, and this repository has already had one flaky
+  gate switched off.
+
+  The fix is not more padding, which is what turns a gate into decoration.
+  **`allocs/op` is now the gate**: it is a property of the code rather
+  than the machine — 26, 19 and 811 on all three CPUs, identical to the
+  unit, and identical again on a loaded 4-core laptop whose ns/op figures
+  were three to five times worse. Its ceilings are armed **exactly** at
+  the measured value, with no headroom, so a regression adding a single
+  allocation fails. Verified: giving `payload.ForWith` exactly one extra
+  escaping allocation turned all three red together (20 vs 19, 27 vs 26,
+  812 vs 811). #814's own proof needed forty. `ns/op` stays as a
+  backstop — an allocation count cannot see a quadratic loop or a lock
+  convoy — recalibrated on the *slowest* leg observed rather than the
+  fastest, times 1.5, which makes it a catastrophic-regression detector
+  rather than a tripwire (4 100 / 2 400 / 200 000). Raising the two
+  `ForWith` ns/op ceilings is the direction a ratchet should not move;
+  the three-CPU table is the reason, and their new allocation ceilings are
+  tighter than anything #814 armed.
+
+  The new `BenchmarkDiscoveryBuildPerEntity` ceiling was verified to fail
+  on CI at the ceiling it carries: mutating `DiscoveryBuilder.Build` to
+  render the body three times took it to **390 305 ns/op and 2 434
+  allocs/op**, named by the gate, while the two `ForWith` benchmarks held
+  at 19 and 26 allocations throughout. Reverted.
+
 
 - **The state-plane bookkeeping split had no test**, so all three of a
   review's mutations survived the suite: indexing only on an accepted
