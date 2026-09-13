@@ -50,6 +50,25 @@ const DefaultTopicBase = "openccu-loom"
 // this, and deliberately so: they already overwrite each other on every raw
 // state topic, which is a misconfiguration the discovery plane cannot repair
 // and must not paper over.
+//
+// # Known limitation: the scope and the central slug share a separator
+//
+// The scope is joined to the node id with `_`, and the node id's own first
+// segment is the central slug, joined to the rest with `_` as well. The two
+// boundaries are therefore indistinguishable: base `haus` with a CCU named
+// `CCU` and the DEFAULT base with a CCU named `Haus CCU` both render
+// `haus_ccu_<address>`. Two such daemons on one broker would collide exactly
+// as they did before the scope existed.
+//
+// It is not fixed, and deliberately so. Disambiguating it means changing the
+// separator (or escaping `_` inside the base slug), which moves the node id
+// of every non-default-base installation a SECOND time, one release after
+// the move that introduced the scope — a second unrecoverable migration for
+// a collision that additionally requires the operator to have named their
+// topic base and their CCU after the same thing. The cheap mitigation is
+// documented instead: pick a topic base that is not a prefix of any CCU name
+// on the broker. If a node-id move is ever required for another reason, the
+// separator should be revisited in the same release rather than on its own.
 func DiscoveryBaseScope(base string) string {
 	slug := DiscoverySlug(strings.Trim(base, "/"))
 	if slug == "" || slug == "x" || slug == DefaultTopicBase {
@@ -71,4 +90,43 @@ func ScopedDiscoveryNodeID(base, nodeID string) string {
 		return ""
 	}
 	return DiscoveryBaseScope(base) + nodeID
+}
+
+// ScopedDaemonUniqueID prefixes a daemon-level Home Assistant `unique_id`
+// with [DiscoveryBaseScope] of base.
+//
+// # Why a unique id needs the scope at all, when the node id already has it
+//
+// Moving the discovery *topic* (which is what [ScopedDiscoveryNodeID] does)
+// separates two daemons on the broker. It does not separate them inside Home
+// Assistant. HA's MQTT integration keys its entity registry on `unique_id`
+// and rejects a second config that declares one it has already seen —
+// "Platform mqtt does not generate unique IDs" — so two daemons writing two
+// DISTINCT config topics that carry the SAME `unique_id` are worse off than
+// before the topics were separated: the semantics move from "last writer
+// wins, and a restart repoints the entity at the live daemon" to "first
+// writer wins permanently", and the second daemon's entities never appear.
+//
+// The three daemon-level planes (alarm, Security & Safety, add-on
+// self-update) are the ones that need this. They carry no `<central>`
+// segment (ADR 0052) and their ids are fixed literals — `loom_addon_update`,
+// `openccu-loom_alarm_<zone>`, `loom_security_<key>` — with nothing in them
+// that differs between two daemons. Every per-device and hub plane is already
+// keyed on the CCU serial or the ISE id and is left alone.
+//
+// # Why only a non-default base contributes, again
+//
+// Re-keying a `unique_id` is the one move Home Assistant has no migration
+// path for at the ENTITY level: history, long-term statistics, the entity id,
+// renames, the area and every automation that names the entity are lost.
+// Applying this unconditionally would charge that to every single-daemon
+// installation in the fleet for a collision it cannot have. A non-default
+// base is the operator saying "there is more than one of me", so it is the
+// configuration that pays — and it is exactly the configuration that is
+// broken today.
+func ScopedDaemonUniqueID(base, uniqueID string) string {
+	if uniqueID == "" {
+		return ""
+	}
+	return DiscoveryBaseScope(base) + uniqueID
 }

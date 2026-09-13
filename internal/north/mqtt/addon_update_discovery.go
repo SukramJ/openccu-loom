@@ -7,6 +7,8 @@ import (
 	hacatalog "github.com/SukramJ/go-ha-catalog"
 	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
 	hamodel "github.com/SukramJ/go-hamqtt/model"
+
+	"github.com/SukramJ/openccu-loom/internal/model/naming"
 )
 
 // daemonDeviceIdentifier groups every daemon-level (not per-central)
@@ -123,7 +125,7 @@ func (c addonUpdateContext) Availability(*hamodel.Device, hamodel.Entity) []hadi
 // constant with no namespace prefix, so [hadiscovery.StdContext]'s
 // namespaced default cannot produce it.
 func (c addonUpdateContext) UniqueID(*hamodel.Device, hamodel.Entity) string {
-	return addonUpdateUniqueID
+	return naming.ScopedDaemonUniqueID(c.topics.Base, addonUpdateUniqueID)
 }
 
 // NodeID implements [hadiscovery.Context]: the literal "daemon", not the
@@ -134,8 +136,8 @@ func (c addonUpdateContext) NodeID(*hamodel.Device) string { return addonUpdateN
 // as `update.loom_addon_update`. The seed is the unique id rather than
 // the entity key, and it must not follow the locale: Home Assistant
 // derives the entity id from it once and will not rename afterwards.
-func (c addonUpdateContext) ObjectID(*hamodel.Device, hamodel.Entity) string {
-	return addonUpdateUniqueID
+func (c addonUpdateContext) ObjectID(d *hamodel.Device, e hamodel.Entity) string {
+	return c.UniqueID(d, e)
 }
 
 // addonUpdateSlot is the coordinate of the add-on updater's datapoint.

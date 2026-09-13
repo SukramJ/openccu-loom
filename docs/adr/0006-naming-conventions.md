@@ -352,3 +352,52 @@ same window, not even a device row is re-created. The pre-scope node ids are
 retracted by the orphan sweep through the unscoped entries
 `discoveryNodePrefixes` keeps for one release, the same pattern as
 `legacyDiscoverySlug`.
+
+## Amendment (2026-09-13) — the scope needed the `unique_id` too, and its retraction is opt-in
+
+The amendment above is correct about the mechanism and wrong about two of its
+consequences. Both corrections land in the same unreleased window.
+
+**1. The daemon-level `unique_id`s carry the scope as well.** Moving the node
+id separated two daemons on the *broker* and left them unseparated inside
+*Home Assistant*. The three daemon-level planes (ADR 0052: alarm, Security &
+Safety, add-on self-update) carry no `<central>` segment and declare fixed
+literals — `loom_addon_update`, `openccu-loom_alarm_<zone>`,
+`loom_security_<key>`. Two daemons therefore wrote two **distinct** config
+topics carrying the **same** `unique_id`, which HA's MQTT integration rejects
+outright. The semantics moved from "last writer wins, and a restart repoints
+the entity at the live daemon" to "first writer wins permanently": strictly
+worse than before the scope. `naming.ScopedDaemonUniqueID` prefixes those
+three ids with the same `<base-slug>_`, under the same condition — non-default
+base only — so a single-daemon installation on the default base is untouched
+to the byte, and the re-key (which costs the entity's history, `entity_id`,
+area and automation references) is paid by exactly the configurations that
+have the collision. The per-device and hub planes are untouched: they are
+keyed on the CCU serial or the ISE id, which already differ.
+
+**2. The unscoped retraction is an operator opt-in, not a default.** The
+amendment above described the pre-scope node ids as "retracted by the orphan
+sweep through the unscoped entries `discoveryNodePrefixes` keeps for one
+release", and PR #817 called the resulting hazard "not a regression". Both
+were wrong. The unscoped spelling is not merely *similar* to a live sibling's
+— it is the identical string, and `publisher.ConfigTopic` carries the node id
+and nothing else. A custom-base daemon that claims it therefore retracts a
+**default-base** sibling's device, hub, alarm and security configs on every
+boot; HA deletes those entities and the device-registry rows that lose their
+last entity, and `identifiers` has no migration path. Before the scope both
+daemons swept *and* republished into the shared namespace, so the deletion was
+immediately undone; afterwards it is one-directional. It is now
+`north.mqtt.discovery_retract_unscoped` (expert, default `false`), turned on
+for one start when the operator knows no default-base sibling shares the
+broker. A one-shot persisted marker was considered and rejected: once is
+already unrecoverable.
+
+**3. Known limitation, recorded rather than fixed: the scope and the central
+slug share a `_`.** `topic_base: haus` with a CCU named `CCU`, and the default
+base with a CCU named `Haus CCU`, both render `haus_ccu_<address>`.
+Disambiguating it means changing the separator, which moves every
+non-default-base node id a second time one release after the first. The
+mitigation is a naming rule — a `topic_base` must not be a prefix of any CCU
+name on the broker — documented on `naming.DiscoveryBaseScope`, in
+`docs/user/multi-ccu.md` and in the migration note. Revisit only if a node-id
+move becomes necessary for another reason.

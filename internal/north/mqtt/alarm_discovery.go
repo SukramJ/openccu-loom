@@ -11,6 +11,7 @@ import (
 	hamodel "github.com/SukramJ/go-hamqtt/model"
 
 	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
+	"github.com/SukramJ/openccu-loom/internal/model/naming"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -165,12 +166,25 @@ func (c alarmContext) Availability(_ *hamodel.Device, e hamodel.Entity) []hadisc
 // UniqueID implements [hadiscovery.Context]. The entity key *is* the
 // identity: [alarmpanel.PanelUniqueID] is what internal/alarm stamps on the
 // same panel, and the two derived entities hang their suffixes off it.
-func (c alarmContext) UniqueID(_ *hamodel.Device, e hamodel.Entity) string { return e.Key() }
+//
+// On a non-default topic base the key is prefixed with that base's scope.
+// Without it two daemons declare `openccu-loom_alarm_<zone>` between them —
+// the zone names are operator-chosen and `master` is the default on both —
+// and Home Assistant rejects the second as a duplicate unique id, so the
+// second daemon's panels never appear at all. Only the daemon-level planes
+// need this; see [naming.ScopedDaemonUniqueID] for why it does not apply on
+// the default base.
+func (c alarmContext) UniqueID(_ *hamodel.Device, e hamodel.Entity) string {
+	return naming.ScopedDaemonUniqueID(c.base, e.Key())
+}
 
 // ObjectID implements [hadiscovery.Context]. The entity-id seed this plane
 // publishes is the unique id verbatim; the default seed would prefix the
-// device slug a second time and rename every entity.
-func (c alarmContext) ObjectID(_ *hamodel.Device, e hamodel.Entity) string { return e.Key() }
+// device slug a second time and rename every entity. It follows the scope
+// for the same reason, and only for the same installations.
+func (c alarmContext) ObjectID(d *hamodel.Device, e hamodel.Entity) string {
+	return c.UniqueID(d, e)
+}
 
 // alarmZoneOf reads the zone back out of an entity's bindings. Every alarm
 // entity binds at least one slot, and a slot's address is the zone.

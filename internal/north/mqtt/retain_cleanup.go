@@ -678,17 +678,27 @@ func (b *Bridge) planeDeclared(nodeID string) bool {
 }
 
 // daemonLevelNodeIDs are the discovery node ids of the planes that are
-// not scoped to a central: the alarm engine and the Security & Safety
-// domain.
+// not scoped to a central: the alarm engine, the Security & Safety domain
+// and the add-on self-updater.
 //
 // They need naming explicitly because the orphan sweep otherwise filters
 // on the `<central>_` node prefix — which these deliberately do not
 // carry (ADR 0052). Without this, a retracted zone panel or a class that
 // lost its last source would keep a retained discovery config alive in
 // every consumer forever, and no cleanup pass could ever reach it.
+//
+// The add-on self-updater was missing from this map until the base scope
+// stranded it: its node id moved from `daemon` to `<base-slug>_daemon` for
+// every non-default-base daemon, and because nothing here named it, neither
+// spelling was ever recognised — the sweep could not retract the pre-scope
+// config and could not reach the scoped one either. A hand-written list is
+// what failed, so [TestDaemonLevelNodeIDsCoverEveryLiteralNodeID] now derives
+// the expected set from the package's own node-id constants rather than
+// re-typing them.
 var daemonLevelNodeIDs = map[string]bool{
 	alarmDiscoveryNodeID:    true,
 	securityDiscoveryNodeID: true,
+	addonUpdateNodeID:       true,
 }
 
 // discoveryNodePrefixes returns every `[<base-slug>_]<central-slug>_` node-id
@@ -709,31 +719,42 @@ var daemonLevelNodeIDs = map[string]bool{
 //     nothing in this build ever spells again;
 //   - `strings.ToLower(naming.TopicSafe(name))`, older still, for a name
 //     carrying a dot or an umlaut;
-//   - and, when scope is non-empty, each of the three again WITHOUT it —
-//     the spelling this daemon itself wrote before the node id was scoped
-//     by the topic base. This is the retraction half of that change and
-//     nothing publishes through it; see the note below on what it costs.
+//   - and, when scope is non-empty AND retractUnscoped is set, each of the
+//     three again WITHOUT it — the spelling this daemon itself wrote before
+//     the node id was scoped by the topic base.
 //
-// # The unscoped entries are retraction-only, and they are not free
+// # Why the unscoped spellings are opt-in and not the default
 //
-// A daemon on a non-default base is exactly the daemon that may have a
-// sibling, and while these entries are present its sweep will judge an
-// unscoped retained config as its own — including one a sibling on the
-// DEFAULT base is publishing right now. That is not a regression: before the
-// scope existed both daemons shared the unscoped namespace and swept each
-// other unconditionally, so the entries narrow the window rather than open
-// it, and deleting them after one release closes it entirely. Ownership
-// cannot be decided any more precisely here: [hapublisher.ConfigTopic]
-// carries the node id and nothing else, so the payload's `state_topic` —
-// which would name the owning daemon's base outright — is not available to
-// the predicate. That is why they are deletable, and why the migration note
-// says to upgrade a default-base sibling first.
+// An unscoped node id is INDISTINGUISHABLE from a live sibling's. A daemon on
+// a non-default base is exactly the daemon that may have a sibling; if that
+// sibling runs on the DEFAULT base it is publishing `<central-slug>_…` right
+// now, which is byte-for-byte what this daemon wrote before the scope existed.
+// [hapublisher.ConfigTopic] carries the node id and nothing else — the
+// payload's `state_topic`, which would name the owning daemon's base outright,
+// never reaches the predicate — so no amount of care here can tell the two
+// apart. Claiming the unscoped namespace unconditionally therefore retracted
+// every device, hub, alarm and security config of a default-base sibling on
+// every boot. Home Assistant deletes those entities, and a device-registry row
+// goes with its last entity; `identifiers` has no migration path, so that is
+// not recoverable. For the alarm and security planes the node ids are fixed
+// literals, so the collision needs no name coincidence at all — ANY two
+// daemons have it.
+//
+// A one-shot marker would have made that destruction happen once instead of
+// every boot, which is not a meaningful improvement when once is already
+// unrecoverable. So the unscoped sweep is an operator decision
+// (`north.mqtt.discovery_retract_unscoped`, default off): the operator is the
+// only party that knows whether a default-base sibling exists. With it off,
+// the pre-scope configs are left retained and the migration note documents
+// the one-time manual cleanup; with it on, ADR 0068 obligation 3 is
+// discharged automatically. Either way nothing is deleted behind the
+// operator's back, and the whole branch is deletable after one release.
 //
 // Deriving the prefix by hand (`strings.ToLower(name)`) matched none of
 // them, which made the whole pass a silent no-op for every central whose
 // name is not already a slug. Duplicates are dropped, so a central whose
 // name is already a slug still yields exactly one prefix.
-func discoveryNodePrefixes(scope, centralName string) []string {
+func discoveryNodePrefixes(scope string, retractUnscoped bool, centralName string) []string {
 	if centralName == "" {
 		return nil
 	}
@@ -746,7 +767,7 @@ func discoveryNodePrefixes(scope, centralName string) []string {
 	for _, spelling := range spellings {
 		prefixes = appendUnique(prefixes, scope+spelling)
 	}
-	if scope != "" {
+	if scope != "" && retractUnscoped {
 		for _, spelling := range spellings {
 			prefixes = appendUnique(prefixes, spelling)
 		}
@@ -968,19 +989,20 @@ func (b *Bridge) RunDiscoveryOrphanCleanupOnce(ctx context.Context, centralName 
 // two string comparisons and publishes nothing.
 func (b *Bridge) ownsDiscoveryTopic(rawCentral string) func(hapublisher.ConfigTopic) bool {
 	scope := b.topics.DiscoveryNodeScope()
-	nodePrefixes := discoveryNodePrefixes(scope, rawCentral)
+	unscoped := b.retractUnscopedDiscovery()
+	nodePrefixes := discoveryNodePrefixes(scope, unscoped, rawCentral)
 	hubKey := hubPlaneKey(rawCentral)
 	return func(t hapublisher.ConfigTopic) bool {
 		nodeID := strings.ToLower(t.NodeID)
 		switch {
 		case discoveryNodeIDBelongsTo(nodeID, nodePrefixes):
 			return !hubPlaneNodeID(nodeID) || b.planeDeclared(hubKey)
-		case daemonLevelNodeID(scope, nodeID) != "":
+		case daemonLevelNodeID(scope, unscoped, nodeID) != "":
 			// The plane key stays the UNSCOPED name: it is a fact about
 			// which of this process's planes has published, not about the
 			// topic it published under, and [Bridge.MarkPlaneDeclared] is
 			// called with the bare constant from the plane itself.
-			return b.planeDeclared(daemonLevelNodeID(scope, nodeID))
+			return b.planeDeclared(daemonLevelNodeID(scope, unscoped, nodeID))
 		default:
 			return false
 		}
@@ -994,18 +1016,25 @@ func (b *Bridge) ownsDiscoveryTopic(rawCentral string) func(hapublisher.ConfigTo
 // cannot be recognised by [discoveryNodeIDBelongsTo] and are matched by name.
 // The topic base's scope prefixes them exactly as it does every other node id
 // — `alarm` becomes `<base-slug>_alarm` — so the name has to be recovered
-// before the lookup. Both the scoped and the unscoped spelling are accepted:
-// the unscoped one is what this daemon wrote before the scope existed, and
-// without it every alarm and security config of a non-default-base daemon
-// would be stranded on the broker forever, which is the failure mode ADR
-// 0068's obligation 3 exists to prevent.
+// before the lookup.
+//
+// A scoped daemon accepts the bare spelling only when retractUnscoped is set.
+// `alarm`, `security` and `daemon` are fixed literals with nothing in them
+// that differs between two daemons, so a bare one is as likely to be a live
+// sibling's as this daemon's own pre-scope config — see the note on
+// [discoveryNodePrefixes] for why that decision belongs to the operator and
+// not to this predicate.
 //
 // A daemon on the default base has an empty scope, so both branches collapse
-// to the one lookup this function replaced.
-func daemonLevelNodeID(scope, nodeID string) string {
+// to the one lookup this function replaced, and retractUnscoped is irrelevant
+// to it: the unscoped namespace is simply its own.
+func daemonLevelNodeID(scope string, retractUnscoped bool, nodeID string) string {
 	if scope != "" {
 		if bare, ok := strings.CutPrefix(nodeID, scope); ok && daemonLevelNodeIDs[bare] {
 			return bare
+		}
+		if !retractUnscoped {
+			return ""
 		}
 	}
 	if daemonLevelNodeIDs[nodeID] {

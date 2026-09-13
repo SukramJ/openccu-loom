@@ -238,7 +238,21 @@ If you have changed `north.mqtt.topic_base` away from its default, the node
 id additionally carries that base as a leading `<base-slug>_` segment —
 `homeassistant/binary_sensor/house_ccu-haus_000a0000000001/4_state/config`.
 That is what keeps two daemons on one broker from writing each other's
-retained configs; on the default base nothing is added.
+retained configs; on the default base nothing is added. On a non-default base
+the daemon-level planes (alarm, Security & Safety, add-on self-update) carry
+the base in their `unique_id` as well, because their ids are fixed literals
+that two daemons would otherwise share — Home Assistant rejects the second
+declaration of a `unique_id`, so without it the second daemon's entities never
+appear.
+
+Clearing the discovery configs written before the base was part of the node id
+is opt-in — `north.mqtt.discovery_retract_unscoped`, default `false`. An
+unscoped retained config is indistinguishable from the config a sibling daemon
+on the **default** base is publishing right now, so clearing it automatically
+would delete that daemon's entities. Turn it on for one start when no such
+sibling shares the broker; see
+[the HA identity migration note](external-clients/ha-unique-id-migration.md)
+for the manual alternative.
 
 ## Troubleshooting
 

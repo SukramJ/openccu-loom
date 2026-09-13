@@ -6,6 +6,13 @@ package mqtt
 import (
 	"context"
 	"errors"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"maps"
+	"os"
+	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -304,30 +311,105 @@ func TestRunRetainCleanupOnce_RawDisabledSkips(t *testing.T) {
 	}
 }
 
-// TestDaemonLevelNodeIDs_CoversBothPlanes locks the orphan sweep's
-// escape hatch for the two daemon-level discovery planes.
+// TestDaemonLevelNodeIDsCoverEveryLiteralNodeID locks the orphan sweep's
+// escape hatch for the daemon-level discovery planes — and locks it by
+// DERIVING the expected set from production rather than re-typing it.
 //
 // [Bridge.RunDiscoveryOrphanCleanupOnce] otherwise scopes every retained
-// discovery config to the `<central>_` node prefix; the alarm engine and
-// the Security & Safety domain deliberately do not carry that prefix
-// (ADR 0052), so without an entry here a retracted zone panel or a
-// class that lost its last source would be treated as belonging to some
-// other integration and would keep its retained discovery config alive
-// in every consumer forever — no cleanup pass could ever reach it.
+// discovery config to the `<central>_` node prefix; the daemon-level planes
+// deliberately do not carry that prefix (ADR 0052), so without an entry in
+// [daemonLevelNodeIDs] a retracted zone panel, a class that lost its last
+// source or a stranded pre-scope add-on-update config is treated as belonging
+// to some other integration and keeps its retained discovery config alive in
+// every consumer forever — no cleanup pass can reach it.
+//
+// The previous version of this check hand-enumerated two of the three planes,
+// and the third (the add-on self-updater, `daemon`) was added to the codebase
+// without anyone noticing the omission — so the hand-written list is exactly
+// what failed. The enumeration is therefore read out of the package's own
+// source: a node id that is a `const` STRING LITERAL cannot carry a central
+// name, which is the definition of a daemon-level plane. A fourth plane
+// declaring `const fooNodeID = "foo"` fails here until it is registered.
 //
 // This check lives in-package rather than in tests/contract: both
 // daemonLevelNodeIDs and the node ids it must contain are unexported, so
 // an external package cannot name them.
-func TestDaemonLevelNodeIDs_CoversBothPlanes(t *testing.T) {
+func TestDaemonLevelNodeIDsCoverEveryLiteralNodeID(t *testing.T) {
 	t.Parallel()
 	if len(daemonLevelNodeIDs) == 0 {
 		t.Fatal("daemonLevelNodeIDs is empty — the orphan sweep would treat every daemon-level discovery config as belonging to another integration")
 	}
-	for _, nodeID := range []string{alarmDiscoveryNodeID, securityDiscoveryNodeID} {
-		if !daemonLevelNodeIDs[nodeID] {
-			t.Errorf("daemonLevelNodeIDs is missing %q", nodeID)
+
+	declared := literalNodeIDConstants(t)
+	if len(declared) < 3 {
+		t.Fatalf("found %d literal node-id constants (%v); the scan is not reaching the package source, "+
+			"so this test would pass no matter which plane was forgotten", len(declared), declared)
+	}
+	for name, value := range declared {
+		if !daemonLevelNodeIDs[value] {
+			t.Errorf("%s = %q is a literal discovery node id — it carries no central segment, so it is a "+
+				"daemon-level plane — but daemonLevelNodeIDs does not contain it. Every retained config "+
+				"under that node id is invisible to the orphan sweep in both the scoped and the unscoped "+
+				"spelling, and can never be retracted", name, value)
 		}
 	}
+	// And nothing may be registered that is not one of them: an entry the
+	// package cannot spell would claim a namespace belonging to somebody else.
+	values := slices.Collect(maps.Values(declared))
+	for value := range daemonLevelNodeIDs {
+		if !slices.Contains(values, value) {
+			t.Errorf("daemonLevelNodeIDs contains %q, which no node-id constant in this package declares — "+
+				"the sweep would claim a node id this daemon never publishes", value)
+		}
+	}
+}
+
+// literalNodeIDConstants parses the package's own non-test source and returns
+// every `const <name>NodeID = "<literal>"` it declares, keyed by name.
+//
+// Parsing rather than listing is the point: a list is what let the add-on
+// self-updater's node id be introduced, moved by the base scope and stranded
+// on the broker without a single test noticing.
+func literalNodeIDConstants(t *testing.T) map[string]string {
+	t.Helper()
+	fset := token.NewFileSet()
+	pkgs, err := parser.ParseDir(fset, ".", func(fi os.FileInfo) bool {
+		return !strings.HasSuffix(fi.Name(), "_test.go")
+	}, 0)
+	if err != nil {
+		t.Fatalf("parse package source: %v", err)
+	}
+	out := map[string]string{}
+	for _, pkg := range pkgs {
+		for _, file := range pkg.Files {
+			for _, decl := range file.Decls {
+				gd, ok := decl.(*ast.GenDecl)
+				if !ok || gd.Tok != token.CONST {
+					continue
+				}
+				for _, spec := range gd.Specs {
+					vs, ok := spec.(*ast.ValueSpec)
+					if !ok || len(vs.Names) != 1 || len(vs.Values) != 1 {
+						continue
+					}
+					name := vs.Names[0].Name
+					if !strings.HasSuffix(name, "NodeID") {
+						continue
+					}
+					lit, ok := vs.Values[0].(*ast.BasicLit)
+					if !ok || lit.Kind != token.STRING {
+						continue
+					}
+					value, err := strconv.Unquote(lit.Value)
+					if err != nil || value == "" {
+						continue
+					}
+					out[name] = value
+				}
+			}
+		}
+	}
+	return out
 }
 
 // TestDaemonLevelPlaneIsNotSweptBeforeItDeclares pins the gate that

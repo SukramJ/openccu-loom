@@ -1324,6 +1324,16 @@ func (b *Bridge) PublishHubDiscovery(ctx context.Context, item DiscoveryItem) er
 	if !item.OK || !b.cfg.HADiscoveryEnabled {
 		return nil
 	}
+	// A daemon-level plane ([daemonLevelNodeIDs]) has to declare itself
+	// before the orphan sweep may touch its namespace, exactly as the alarm
+	// and security planes do from their own publishers. The add-on
+	// self-updater publishes through this one generic entry point and had no
+	// such call, so its node id was invisible to the sweep in both spellings
+	// — the scoped one it writes today and the unscoped one it wrote before
+	// the base scope existed, which is ADR 0068 obligation 3 left undone.
+	if daemonLevelNodeIDs[item.NodeID] {
+		b.MarkPlaneDeclared(item.NodeID)
+	}
 	// DiscoveryItem carries no central — most hub builders fold it into
 	// NodeID already, and the one daemon-level caller (the add-on
 	// self-update entity) has none at all — so a publish_errors

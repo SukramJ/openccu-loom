@@ -95,8 +95,27 @@ type BridgeConfig struct {
 	// entities across both — measured, see ADR 0070's amendment of
 	// 2026-09-10 — but neither direction is free.
 	HADiscoveryBundles bool
-	QoS                QoSProfile
-	DiscoveryBuilder   DiscoveryBuilder // optional, may be nil
+
+	// RetractUnscopedDiscovery lets the retained-config sweeps claim the
+	// UNSCOPED node-id namespace (`<central-slug>_…`, `alarm`, `security`,
+	// `daemon`) in addition to this daemon's own `<base-slug>_…` one.
+	//
+	// It is the migration switch for the node-id scope: a daemon that ran
+	// under a non-default topic base before the scope existed wrote its
+	// configs unscoped, and ADR 0068 obligation 3 says they must be
+	// retracted rather than left as phantom entities. It is OFF by default
+	// because an unscoped node id is indistinguishable from a live sibling's
+	// — turning it on while a default-base daemon shares the broker deletes
+	// that daemon's entities, and its device-registry rows with them. See
+	// [discoveryNodePrefixes] for the full argument.
+	//
+	// Meaningless on the default base (the unscoped namespace is already
+	// this daemon's own) and deletable once the fleet has been through one
+	// release with it.
+	RetractUnscopedDiscovery bool
+
+	QoS              QoSProfile
+	DiscoveryBuilder DiscoveryBuilder // optional, may be nil
 
 	// SubDevicesEnabled toggles the per-channel-group sub-device split
 	// in the HA discovery `device` block. When true, multi-channel-group
@@ -1713,6 +1732,16 @@ func (b *Bridge) RetractDiscoveryForDevice(ctx context.Context, deviceAddress st
 	return b.RetractDiscoveryForCentralDevice(ctx, "", deviceAddress)
 }
 
+// retractUnscopedDiscovery reports whether the sweeps may claim the unscoped
+// node-id namespace as well as this daemon's scoped one. Nil-safe so the
+// predicate builders stay usable from tests that construct a bare [Bridge].
+func (b *Bridge) retractUnscopedDiscovery() bool {
+	if b == nil {
+		return false
+	}
+	return b.cfg.RetractUnscopedDiscovery
+}
+
 // RetractDiscoveryForCentralDevice is [Bridge.RetractDiscoveryForDevice]
 // scoped to one central: it clears only the configs published under that
 // central's node-id namespace.
@@ -1735,7 +1764,7 @@ func (b *Bridge) RetractDiscoveryForCentralDevice(ctx context.Context, centralNa
 	// Both node-id spellings the sweep recognises: the canonical
 	// discovery slug and the plain topic-safe escape an earlier build
 	// wrote. A retained config under either belongs to this central.
-	if prefixes := discoveryNodePrefixes(b.topics.DiscoveryNodeScope(), centralName); len(prefixes) > 0 {
+	if prefixes := discoveryNodePrefixes(b.topics.DiscoveryNodeScope(), b.retractUnscopedDiscovery(), centralName); len(prefixes) > 0 {
 		match = func(topic string) bool {
 			for _, p := range prefixes {
 				if strings.Contains(topic, "/"+p+addr+"/") {

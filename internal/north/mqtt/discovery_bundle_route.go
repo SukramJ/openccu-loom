@@ -217,7 +217,7 @@ func (b *Bridge) RunBundleRollbackOnce(ctx context.Context, centralName string, 
 		// leaving our own in place.
 		return 0, nil
 	}
-	nodePrefixes := discoveryNodePrefixes(b.topics.DiscoveryNodeScope(), rawCentral)
+	nodePrefixes := discoveryNodePrefixes(b.topics.DiscoveryNodeScope(), b.retractUnscopedDiscovery(), rawCentral)
 
 	var (
 		mu      sync.Mutex
