@@ -44,7 +44,9 @@ func TestCCUReachableFoldsInterfacesWithTheDisjunction(t *testing.T) {
 				conn.OnState(iface, up)
 			}
 			hubModel := hub.NewHub("ccu-01").SetConnectivity(conn)
-			if got := ccuReachable(hubModel); got != tc.want {
+			// regaLivenessServing pins the OTHER half of the conjunction so
+			// this table keeps testing the interface fold alone.
+			if got := ccuReachable(hubModel, regaLivenessServing); got != tc.want {
 				t.Fatalf("ccuReachable = %v, want %v", got, tc.want)
 			}
 		})
@@ -62,7 +64,7 @@ func TestCCUReachableFoldsInterfacesWithTheDisjunction(t *testing.T) {
 // arrive — which on a stable CCU may be never.
 func TestCCUReachableTreatsAnUnobservedTrackerAsReachable(t *testing.T) {
 	t.Parallel()
-	if !ccuReachable(hub.NewHub("ccu-01").SetConnectivity(hub.NewConnectivity())) {
+	if !ccuReachable(hub.NewHub("ccu-01").SetConnectivity(hub.NewConnectivity()), regaLivenessServing) {
 		t.Fatal("an unobserved tracker folded to unreachable")
 	}
 }

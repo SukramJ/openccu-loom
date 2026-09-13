@@ -363,6 +363,11 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	var hubMQTT *adapter.HubMQTTPublisher
 	if mqttWiring != nil {
 		hubMQTT = adapter.NewHubMQTTPublisher(reg, mqttWiring, logger)
+		// The per-CCU reachability gate's ReGa half. The publisher is built
+		// from the registry and the MQTT wiring, neither of which carries a
+		// CCU's connection config, so the probe targets are handed in here —
+		// before Start, which is what launches the pollers.
+		hubMQTT.SetRegaLivenessTargets(cfg.Centrals)
 		hubMQTT.Start(ctx)
 		mqttSup.OnConnect(func(ctx context.Context) {
 			hubMQTT.Start(ctx)

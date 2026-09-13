@@ -100,6 +100,46 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the wire; its client and lifecycle stay up until the new set is live,
   so a failed build is still a rollback.
 
+### Fixed
+
+- **A hung ReGa left every sysvar, program and system score showing a stale
+  value as current.** The per-CCU availability gate at
+  `<base>/<central>/hub/status` folded interface reachability only, and the
+  entities it gates are ReGa-scoped. When ReGaHss died or hung while `rfd` /
+  `HMIPServer` kept serving, the XML-RPC clients stayed connected, the central
+  never went FAILED, `EmitNotReady` never ran, every interface stayed
+  reachable — and the gate kept saying `online` while every sysvar, program,
+  system score and message aggregate of that CCU froze on its last value,
+  indefinitely. That is the exact case the gate was added for, left uncovered
+  for its most important input.
+
+  The fold is now a **conjunction**: a CCU is reachable when *an interface
+  answers* **and** *ReGa answers*. The second half is `/ise/checkrega.cgi` —
+  the CCU's own readiness endpoint, which this daemon already used at
+  bring-up — polled every 30 s per central (the cadence of the existing
+  `check_connection` job) on its own goroutine, never on the MQTT fan-out
+  worker. Its three outcomes are deliberately distinct. An **answer** that is
+  not the literal `OK` is ReGa saying it is not serving and flips the state at
+  once. A **failure to get an answer** holds the previous conclusion until
+  three consecutive failures have accumulated, so one transient — the kind
+  that tends to hit every CCU on a shared network together — cannot flap the
+  fleet. A CCU that answers `401`/`403`/`404` has told the daemon the endpoint
+  cannot be asked on that firmware: the probe latches off for that central and
+  its liveness stays *unknown*, which folds exactly as the gate did before.
+  **Never probed** likewise folds to reachable — absence of evidence, the same
+  rule the unobserved interface tracker already got.
+
+  This also closes the half that needs no firmware assumption: when
+  `Interface.listInterfaces` **errors**, the reconciler's error path changes no
+  tracker entry and the interface fold still says `online`. A CCU that has
+  stopped answering the daemon has stopped answering its own web server too,
+  so three silent probes fold it to down.
+
+  No new debounce: both halves produce one level that goes into the existing
+  symmetric 15 s dwell in `Bridge.PublishHubReachability`, so a flap that ends
+  where it started still puts nothing on the broker. No topic and no payload
+  changed — only when `hub/status` flips.
+
 ### Changed
 
 - **The dead-code ratchet's two blind spots are written down, where the next

@@ -8,9 +8,11 @@ import (
 	"log/slog"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
+	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/internal/payload"
@@ -55,6 +57,21 @@ type HubMQTTPublisher struct {
 	// to an inline publish so a unit test can drive an internal wiring helper
 	// without a lifecycle.
 	fanout atomic.Pointer[mqttFanout]
+
+	// rega holds the per-CCU ReGa liveness conclusion that [ccuReachable]
+	// conjoins with the interface states. Created once, by the constructor,
+	// and deliberately NOT rebuilt by Start: Start runs again on every broker
+	// reconnect, and a tracker that came back empty would forget a ReGa
+	// already known to be dead — the gate's first write after a
+	// [mqtt.Bridge.ResetRuntimeGates] is exempt from the dwell, so that
+	// forgetting would immediately republish a retained `online` for a CCU
+	// whose sysvars are frozen.
+	rega *regaLivenessTracker
+
+	// regaTargets says how each central is probed, keyed by central name.
+	// Guarded by mu; written by [HubMQTTPublisher.SetRegaLivenessTargets]
+	// and read once per wiring pass.
+	regaTargets map[string]*regaLivenessTarget
 }
 
 // NewHubMQTTPublisher constructs the publisher. No subscriptions are
@@ -63,7 +80,45 @@ func NewHubMQTTPublisher(reg *central.Registry, w *mqtt.Wiring, logger *slog.Log
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &HubMQTTPublisher{registry: reg, wiring: w, logger: logger}
+	return &HubMQTTPublisher{
+		registry:    reg,
+		wiring:      w,
+		logger:      logger,
+		rega:        newRegaLivenessTracker(),
+		regaTargets: map[string]*regaLivenessTarget{},
+	}
+}
+
+// SetRegaLivenessTargets tells the publisher how to reach each central's
+// `/ise/checkrega.cgi`, which is the second input of the per-CCU
+// reachability gate. Centrals without a host are skipped; a central with no
+// target is never probed and its liveness stays unknown, which folds exactly
+// as the gate did before this signal existed.
+//
+// Separate from the constructor because the publisher is built from the
+// registry and the MQTT wiring, neither of which carries the CCU's
+// connection config. Call it before [HubMQTTPublisher.Start]; a later call
+// takes effect on the next Start.
+func (p *HubMQTTPublisher) SetRegaLivenessTargets(centrals []config.CentralConfig) {
+	targets := make(map[string]*regaLivenessTarget, len(centrals))
+	// Indexed rather than ranged by value: config.CentralConfig is a large
+	// struct and copying one per iteration is what gocritic's rangeValCopy
+	// flags.
+	for i := range centrals {
+		if t := newRegaLivenessTarget(&centrals[i]); t != nil {
+			targets[centrals[i].Name] = t
+		}
+	}
+	p.mu.Lock()
+	p.regaTargets = targets
+	p.mu.Unlock()
+}
+
+// regaTargetFor returns the probe configured for one central, or nil.
+func (p *HubMQTTPublisher) regaTargetFor(centralName string) *regaLivenessTarget {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.regaTargets[centralName]
 }
 
 // Start attaches subscriptions to every hub entity of every central and
@@ -249,6 +304,11 @@ func (p *HubMQTTPublisher) RetractCentral(u *central.Unit, connectivityInterface
 		retractHubDiscoveryItems(ctx, b, items)
 		retractHubRawState(ctx, b, u, centralName)
 	})
+	// The tracked ReGa liveness of that CCU goes with the gate topic that
+	// consumed it. Keeping it would leave a conclusion about a central
+	// nothing manages any more, and a central re-added under the same name
+	// would inherit it instead of seeding from its own first probe.
+	p.rega.forget(centralName)
 }
 
 // retractHubRawState clears the raw-plane retained state topics the
@@ -397,6 +457,15 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 	// point either: no hub entity of this central exists until the serial
 	// stamps its unique ids, and the daemon re-runs Start once it does.
 	p.queueCCUReachabilitySeed(ctx, b, centralName, hi.Serial, hubModel)
+	// The gate's SECOND input. The seed above and every re-fold below read
+	// the interface states, which are not the signal the entities behind this
+	// gate depend on: sysvars, programs, the system scores and the message
+	// aggregates all come from ReGa. A ReGaHss that dies or hangs while
+	// `rfd`/`HMIPServer` keep serving leaves every interface reachable and
+	// every one of those values frozen. The poller is what gives that case an
+	// edge to publish; it is gated on the serial for the same reason the seed
+	// is, and it feeds the SAME debounce rather than one of its own.
+	p.startRegaLivenessPoll(ctx, b, centralName, hi.Serial, hubModel)
 
 	// --- Programs ---
 	// Subscribe to PutProgram FIRST so programs registered between the
@@ -1006,6 +1075,126 @@ func (p *HubMQTTPublisher) queueCCUReachabilitySeed(
 	p.publish(func() { p.publishCCUReachability(ctx, b, centralName, hubModel) })
 }
 
+// startRegaLivenessPoll runs this central's `/ise/checkrega.cgi` probe on
+// its own goroutine and re-folds the per-CCU gate after every result.
+//
+// Three things about its shape are deliberate.
+//
+// It polls on its OWN goroutine, not on the fan-out worker: a probe is
+// blocking network I/O against a CCU that may be exactly the one that has
+// stopped answering, and the worker is the single goroutine every hub-plane
+// publish of every central queues behind.
+//
+// It re-folds and publishes after EVERY tick, not only on a state change.
+// The gate already dedups a level the broker holds — re-observing it cancels
+// a pending opposite write and does nothing else — so a steady CCU costs no
+// broker traffic, while a level whose write FAILED (the gate rolls such a
+// level back rather than remembering it) gets another chance on the next
+// tick instead of waiting for the next edge, which on a healthy CCU may
+// never come.
+//
+// It stops when the wiring generation does: the closer registered with
+// [HubMQTTPublisher.addUnsub] cancels the probe's context — aborting a GET
+// in flight — and waits for the goroutine to exit, so Stop leaves no poller
+// behind and a re-Start never runs two against the same CCU.
+func (p *HubMQTTPublisher) startRegaLivenessPoll(
+	ctx context.Context, b *mqtt.Bridge, centralName, serial string, hubModel *hub.Hub,
+) {
+	// Gated on the serial like the seed, and for the same reason: nothing of
+	// this central's hub plane exists before it resolves, so there is no gate
+	// to feed and no entity to grey out.
+	if serial == "" {
+		return
+	}
+	target := p.regaTargetFor(centralName)
+	if target == nil {
+		return
+	}
+	// The latch survives the wiring generation with the tracker: a CCU that
+	// has told the daemon this endpoint may not be asked is not asked again
+	// on the next broker reconnect either.
+	if p.rega.unsupported(centralName) {
+		return
+	}
+	interval := target.interval
+	if interval <= 0 {
+		interval = regaLivenessInterval
+	}
+	pollCtx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	p.addUnsub(func() {
+		cancel()
+		<-done
+	})
+	SafeGo("hub_mqtt.rega_liveness."+centralName, func() {
+		defer close(done)
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			if !p.pollRegaLivenessOnce(pollCtx, b, centralName, hubModel, target) {
+				return
+			}
+			select {
+			case <-pollCtx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	})
+}
+
+// pollRegaLivenessOnce performs one probe, records it and queues the
+// re-fold. It reports whether polling should continue.
+//
+// It stops for two reasons only. A cancelled context is the wiring
+// generation ending. A CCU that has latched the probe UNSUPPORTED — it
+// answered 401/403/404, so the endpoint is behind auth or absent on that
+// firmware — is told once and never asked again: repeating a question the
+// CCU has refused is load with no signal in it, and the tracker keeps that
+// CCU at unknown so its gate behaves exactly as it did before.
+func (p *HubMQTTPublisher) pollRegaLivenessOnce(
+	ctx context.Context, b *mqtt.Bridge, centralName string, hubModel *hub.Hub, target *regaLivenessTarget,
+) bool {
+	if ctx.Err() != nil {
+		return false
+	}
+	res := target.probe(ctx)
+	if ctx.Err() != nil {
+		// A probe aborted by teardown says nothing about the CCU; recording
+		// it would count a shutdown as a failed probe.
+		return false
+	}
+	before := p.rega.state(centralName)
+	after := p.rega.observe(centralName, res)
+	if after != before {
+		p.logger.Info("mqtt.rega_liveness_changed",
+			slog.String("central", centralName),
+			slog.String("from", regaLivenessStateName(before)),
+			slog.String("to", regaLivenessStateName(after)))
+	}
+	if p.rega.unsupported(centralName) {
+		p.logger.Warn("mqtt.rega_liveness_unsupported",
+			slog.String("central", centralName),
+			slog.String("probe", checkRegaPath))
+		return false
+	}
+	p.publish(func() { p.publishCCUReachability(ctx, b, centralName, hubModel) })
+	return true
+}
+
+// regaLivenessStateName renders a tracked state for the log line.
+func regaLivenessStateName(s regaLivenessState) string {
+	switch s {
+	case regaLivenessServing:
+		return "serving"
+	case regaLivenessDown:
+		return "down"
+	case regaLivenessUnknown:
+		return "unknown"
+	}
+	return "unknown"
+}
+
 // publishCCUReachability folds this CCU's interface states into the per-CCU
 // availability gate and hands the result to the bridge, which debounces it.
 //
@@ -1016,19 +1205,25 @@ func (p *HubMQTTPublisher) queueCCUReachabilitySeed(
 func (p *HubMQTTPublisher) publishCCUReachability(
 	ctx context.Context, b *mqtt.Bridge, centralName string, hubModel *hub.Hub,
 ) {
-	if err := b.PublishHubReachability(ctx, centralName, ccuReachable(hubModel)); err != nil {
+	if err := b.PublishHubReachability(ctx, centralName, ccuReachable(hubModel, p.rega.state(centralName))); err != nil {
 		p.logger.Warn("mqtt.publish_hub_status",
 			slog.String("central", centralName),
 			slog.String("err", err.Error()))
 	}
 }
 
-// ccuReachable is the fold: is this CCU still on the bus.
+// ccuReachable is the fold: is this CCU still serving the values behind its
+// hub plane.
 //
-// It is the DISJUNCTION over the tracked interfaces — reachable when at
-// least one of them is — and the choice is the substantive one in the
-// per-CCU availability gate, so it is stated here rather than left to the
-// reader of [hub.Connectivity.AnyReachable].
+// It is a CONJUNCTION of two signals that answer different halves of that
+// question:
+//
+//	an interface answers   AND   ReGa answers
+//
+// The first half is the DISJUNCTION over the tracked interfaces — reachable
+// when at least one of them is — and the choice is the substantive one, so
+// it is stated here rather than left to the reader of
+// [hub.Connectivity.AnyReachable].
 //
 // A CCU that goes away takes every one of its interface processes with it:
 // the daemon's XML-RPC calls to all of them time out together and every
@@ -1044,47 +1239,81 @@ func (p *HubMQTTPublisher) publishCCUReachability(
 // connectivity binary_sensor — which is where that signal belongs and is
 // read.
 //
-// # What this gate does NOT cover
+// # Why the interface half is not enough on its own
 //
-// The fold's inputs are interface reachability, and the entities it gates
-// are ReGa-scoped. Those are not the same signal, so the gate answers
-// "online" in two cases where the values behind it are stale:
+// The interface inputs and the gated entities are not the same signal: the
+// entities are ReGa-scoped. On interface reachability alone the gate answers
+// "online" in two cases where the values behind it are stale, and the ReGa
+// half exists for exactly those two:
 //
 //   - ReGaHss dies or hangs while `rfd`/`HMIPServer` keep serving. The
 //     XML-RPC clients stay connected, the central never goes FAILED,
 //     [coordinators.Reconciler] never emits the not-ready sweep, and every
 //     interface stays reachable — while every sysvar, program, system score
-//     and message aggregate keeps showing its last ReGa value.
+//     and message aggregate keeps showing its last ReGa value. The CCU
+//     ANSWERS `/ise/checkrega.cgi` with something other than "OK" in this
+//     state, which is a definite negative and is acted on at once.
 //   - The connectivity probe ERRORS. [JSONRPCConnectivityProbe] documents
 //     its own limit — `Interface.listInterfaces` measures MEMBERSHIP, not
 //     liveness — and the reconciler's error path changes no tracker entry,
-//     so a probe that cannot reach the CCU at all leaves this fold saying
-//     `online`. This half needs no firmware assumption to bite.
+//     so a probe that cannot reach the CCU at all leaves the interface half
+//     saying `online`. This half needs no firmware assumption to bite, and
+//     it is covered without one: a CCU that has stopped answering the
+//     daemon has stopped answering its own web server too, so the ReGa probe
+//     stops completing, and [regaLivenessFailureThreshold] consecutive
+//     silences fold to down.
 //
-// What it DOES cover is the total outage: a CCU that is gone takes the
-// XML-RPC clients down with it and the not-ready sweep flips every
-// interface false, which is the case the gate was added for.
+// What the interface half DOES cover on its own is the total outage: a CCU
+// that is gone takes the XML-RPC clients down with it and the not-ready
+// sweep flips every interface false. The conjunction keeps that.
 //
-// The fix for the ReGa-only case is a second input, not a different fold:
-// this daemon already owns the right probe in `/ise/checkrega.cgi`
-// (see checkRegaPath / probeCCUReady), which answers the literal "OK" only
-// while ReGaHss is up and serving, and it is used at bring-up only. Wiring
-// it means giving it a periodic caller, a tracked per-CCU state of its own
-// and a conjunction with this fold — new published traffic on a live path,
-// so it is its own change rather than a comment correction here.
+// # The three cases the conjunction has to answer explicitly
 //
-// An unobserved tracker folds to REACHABLE, not to unreachable. The seed in
-// wireOneCentral is gated on the CCU's serial having been read off it, so
+// NEVER RUN. A CCU with no probe result — none has happened yet, or no
+// target is configured for it, or the CCU answered that the endpoint may not
+// be asked — is [regaLivenessUnknown], and unknown folds to REACHABLE. It is
+// the same absence-of-evidence rule the unobserved interface tracker gets
+// (below) and for a stronger reason: an unknown that folded to `offline`
+// would grey out every hub entity of every CCU whose firmware does not serve
+// this CGI, on a signal that never arrived.
+//
+// ERROR AS OPPOSED TO A NEGATIVE ANSWER. They are different evidence and are
+// treated differently: an answer that is not "OK" is ReGa saying it is not
+// serving and flips the state on the spot, while a probe that does not
+// complete holds the previous conclusion until
+// [regaLivenessFailureThreshold] consecutive failures have accumulated. A
+// single transient therefore changes nothing — which matters because the
+// transients that hit one CCU (a saturated network, a DNS blip on the
+// daemon's side) tend to hit the whole fleet at once, and a fleet-wide flap
+// is the one failure mode a gate like this must not introduce.
+//
+// DISAGREEMENT. The two halves are conjoined, so either one saying "down"
+// makes the CCU unreachable, and neither can veto the other. Interfaces up
+// with ReGa down is the defect this half was added for: the values are
+// stale, and the gate must say so. Every interface down with ReGa still
+// answering is a CCU that has lost its whole radio layer, which the gate has
+// reported as unreachable since it existed; ReGa answering does not make its
+// device-derived values current.
+//
+// An unobserved interface tracker folds to REACHABLE, not to unreachable. The
+// seed in wireOneCentral is gated on the CCU's serial having been read off it, so
 // "no interface state yet" at that point means the daemon has just
 // demonstrated it can talk to the CCU and the tracker has not caught up —
 // absence of evidence, not evidence of absence. Folding it the other way
 // would publish a retained `offline` and grey out every hub entity of a
 // healthy CCU on every daemon start, until the first reachability change
 // happened to arrive.
-func ccuReachable(hubModel *hub.Hub) bool {
+//
+// The debounce is NOT here and there is not a second one for the new half:
+// both signals are folded to one level and handed to
+// [mqtt.Bridge.PublishHubReachability], whose existing symmetric dwell
+// decides what reaches the broker. A flap that ends where it started still
+// puts nothing on the wire, whichever half flapped.
+func ccuReachable(hubModel *hub.Hub, rega regaLivenessState) bool {
 	conn := connectivityTopicProvider(hubModel)
 	reachable, observed := conn.AnyReachable()
-	return !observed || reachable
+	interfacesUp := !observed || reachable
+	return interfacesUp && rega != regaLivenessDown
 }
 
 func connectivityTopicProvider(hubModel *hub.Hub) *hub.Connectivity {
