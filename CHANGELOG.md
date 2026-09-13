@@ -8,6 +8,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **ADR 0007 names four artifacts that do not exist**, three of them in
+  Trade-offs and Mitigations — where a reader goes to find out how a risk is
+  held down. `tests/bench/payload_test.go` and
+  `tests/bench/payload_build_test.go` are both absent, and with the second
+  goes the 500 ns/op ceiling its "regressions block release per the existing
+  benchmark gate" sentence claims is enforced. `CDPDispatcher` is really
+  `CustomDPDispatcher`. The custom `golangci-lint` analyser against
+  dual-sourced `State()` was never written — the rule shipped as the
+  contract test `source_no_dual_source_test.go` instead, so the protection
+  exists and the pointer does not. A dated amendment records all four, and
+  names the two references in the same sections that are correct.
+
 - **Four of the five MQTT topic conventions in ADR 0006 are false.** The
   ADR names "no `hub/` namespace" as a convention while `hub/` carries most
   of the per-CCU surface (status, sysvars, programs, connectivity, install
