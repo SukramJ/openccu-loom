@@ -167,9 +167,19 @@ ever did.
 
 What was measured, before deleting anything:
 
-- **`LegacyAliasConfig.HubTopics` never existed.** `git log -S "HubTopics"
-  -- internal/` returns one commit, `cd9e8ac0` ("Initial release"), and that is
-  this ADR itself — the identifier appears only in prose. The shipped struct
+- **`LegacyAliasConfig.HubTopics` never existed.** `git log -S "HubTopics"`,
+  unrestricted, returns four commits; the one that introduces the identifier is
+  `cd9e8ac0` ("Initial release"), and what it introduces is the **prose of this
+  ADR**, at `docs/adr/0006-naming-conventions.md`. *(Correction of 2026-09-13:
+  this bullet originally cited `git log -S "HubTopics" -- internal/` for that
+  claim. A pathspec of `internal/` cannot reach a file under `docs/`, so it
+  could not have been the command that established it. The pathspec form does
+  return `cd9e8ac0` — its match there is a comment in
+  `internal/central/adapter/hub_mqtt_publisher_test.go` mentioning the field,
+  which is a test's prose about the same non-existent thing, not the field.
+  Drop the pathspec, or use `-- docs/`, to reach the ADR. A wrong citation in
+  an amendment is worse than none, because the next reader treats it as
+  verified.)* The shipped struct
   carried two fields, `Enabled` and `Base`, and never a third. `HubTopicBuilder`
   never existed either: the file's only two types were `LegacyAliasConfig` and
   `LegacyTopicBuilder`, from `cd9e8ac0` until deletion.
@@ -182,7 +192,7 @@ What was measured, before deleting anything:
 - **No operator could enable it.** `BridgeConfig.LegacyAlias` was set at
   exactly one production construction site, `cmd/openccu-loom/daemon_north.go`'s
   `mqtt.NewBridge(mqtt.BridgeConfig{…})`, which never assigned the field. There
-  is no YAML key (`NorthMQTT` carries eleven `yaml`-tagged fields and none of
+  is no YAML key (`NorthMQTT` carries twelve `yaml`-tagged fields and none of
   them is this one), no environment override, no CLI flag and no build tag.
   `cfg.LegacyAlias.Enabled` was the Go zero value `false` on every build ever
   produced, so `Bridge.legacy` was always `nil` and all six guarded branches in
