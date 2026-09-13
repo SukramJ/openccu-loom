@@ -363,32 +363,40 @@ func TestDiscoveryOrphanSweepDrivenAgainstASiblingDaemonsConfigs(t *testing.T) {
 	// nothing in this one. Genuine orphans, and the sweep must take all three.
 	ownOrphans := map[string][]byte{
 		b.Topics().DiscoveryConfig("button", ownNode, "3_press_short"): componentDiscoveryPayload(
-			t, "button", "loom_4993d962_0001d3c99c1234_3_press_short", originName),
+			t, "button", "loom_4993d962_0001d3c99c1234_3_press_short", originName,
+		),
 		b.Topics().DiscoveryConfig("climate", ownClimateNode, "1_set_point_temperature"): componentDiscoveryPayload(
-			t, "climate", "loom_4993d962_00150001_1_set_point_temperature", originName),
+			t, "climate", "loom_4993d962_00150001_1_set_point_temperature", originName,
+		),
 		b.Topics().DiscoveryConfig("sensor", ownClimateNode, "1_actual_temperature"): componentDiscoveryPayload(
-			t, "sensor", "loom_4993d962_00150001_1_actual_temperature", originName),
+			t, "sensor", "loom_4993d962_00150001_1_actual_temperature", originName,
+		),
 	}
 	// The sibling's LIVE configs. Every one of these is an entity a real
 	// operator is looking at, and clearing it deletes it from Home Assistant
 	// with its device-registry row.
 	siblingLive := map[string][]byte{
 		b.Topics().DiscoveryConfig("button", sibNode, "3_press_short"): componentDiscoveryPayload(
-			t, "button", "loom_11a00567_0001d3c99c1234_3_press_short", originName),
+			t, "button", "loom_11a00567_0001d3c99c1234_3_press_short", originName,
+		),
 		b.Topics().DiscoveryConfig("climate", sibClimateNode, "1_set_point_temperature"): componentDiscoveryPayload(
-			t, "climate", "loom_11a00567_00150001_1_set_point_temperature", originName),
+			t, "climate", "loom_11a00567_00150001_1_set_point_temperature", originName,
+		),
 		b.Topics().DiscoveryConfig("sensor", sibClimateNode, "1_actual_temperature"): componentDiscoveryPayload(
-			t, "sensor", "loom_11a00567_00150001_1_actual_temperature", originName),
+			t, "sensor", "loom_11a00567_00150001_1_actual_temperature", originName,
+		),
 		// A device document — no top-level unique_id at all, which is the
 		// shape a payload-reading predicate is most likely to mis-handle.
-		"homeassistant/device/" + sibClimateNode + "/config": bundleDiscoveryPayload(t, originName,
+		"homeassistant/device/" + sibClimateNode + "/config": bundleDiscoveryPayload(
+			t, originName,
 			retainedBundleComponent{key: "3_press_short", platform: "button", uniqueID: "loom_11a00567_00150001_3_press_short"},
 			retainedBundleComponent{key: "1_state", platform: "switch", uniqueID: "loom_11a00567_00150001_1_state"},
 		),
 		// And a foreign integration for good measure: not the interesting
 		// case, but it must stay out of the count.
 		"homeassistant/sensor/zigbee2mqtt_0x0017/temperature/config": componentDiscoveryPayload(
-			t, "sensor", "0x0017_temperature", "zigbee2mqtt"),
+			t, "sensor", "0x0017_temperature", "zigbee2mqtt",
+		),
 	}
 	for topic, payload := range ownOrphans {
 		cl.seed(topic, payload)
