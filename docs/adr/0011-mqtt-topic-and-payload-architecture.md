@@ -298,9 +298,9 @@ domain-aware code paths from the bridge.
 
 > **The tree below is the topology as decided in 2026-04 and is no longer
 > the shipped one.** The `channels/` infix and the `/state` suffix were
-> both retired; `update/state` became `update`. See
-> [Amendment (2026-09-13) — the `channels/` topology this section describes was retired](#amendment-2026-09-13--the-channels-topology-this-section-describes-was-retired)
-> for what replaced them, and `docs/mqtt-topic-schema.md` for the shape a
+> both retired; `update/state` became `update`. See the amendment
+> **"the `channels/` topology this section describes was retired"** at the
+> end of this document for what replaced them, and `docs/mqtt-topic-schema.md` for the shape a
 > consumer should subscribe to today. The block is kept unedited because
 > this ADR records a decision, not the current wire.
 
