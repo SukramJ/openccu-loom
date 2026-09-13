@@ -165,6 +165,29 @@ the WebSocket heartbeat as `rtt_ms`. See the
 [REST & WebSocket integration guide](../integrations/rest-ws.md) for the
 frame shape.
 
+## Home Assistant shows no entities, and openccu-loom logs no error
+
+If openccu-loom reports a successful discovery publish and Home Assistant
+creates nothing, look in the **Home Assistant** log rather than this
+daemon's:
+
+```
+WARNING [homeassistant.components.mqtt.entity] Received a conflicting MQTT
+discovery message for entity sensor.…; the entity was previously discovered
+on topic homeassistant/…/config …
+```
+
+Home Assistant refuses a discovery config when the *other* discovery form
+for the same `unique_id` is still retained on the broker — a per-entity
+`homeassistant/<component>/<node_id>/<object_id>/config` against a device
+document `homeassistant/device/<node_id>/config`, or the reverse. No error
+reaches the wire and openccu-loom cannot observe it.
+
+This is what a rollback of `north.mqtt.discovery_bundles` looks like on its
+first boot. See
+[`discovery_bundles` in the configuration reference](configuration.md#discovery_bundles--and-what-turning-it-back-off-costs)
+for the two-restart sequence and for clearing the stale documents by hand.
+
 ## First run: setting the admin password
 
 **Symptom.** Fresh install — you cannot log in because no user exists.

@@ -345,6 +345,7 @@ The MQTT bridge (Home Assistant Discovery and/or raw topic planes).
 | `north.mqtt.topic_base` | string | `openccu-loom` | — | no |
 | `north.mqtt.raw_enabled` | bool | `false` | — | no |
 | `north.mqtt.discovery_enabled` | bool | `false` | — | no |
+| `north.mqtt.discovery_bundles` | bool | `false` | — | no |
 | `north.mqtt.protocol_version` | string | `"5"` | — | no |
 | `north.mqtt.sub_devices_enabled` | bool | `false` | — | no |
 | `north.mqtt.retain_cleanup_window_ms` | int | `2000` | — | no |
@@ -362,6 +363,72 @@ naming the field. Without that correction Home Assistant would show the
 full device tree with every entity stuck at `unavailable`, and nothing
 would report an error. The reverse is fine — the raw plane alone is the
 supported setup for non-Home-Assistant MQTT consumers.
+
+#### `discovery_bundles` — and what turning it back off costs
+
+`discovery_bundles` (expert; needs `discovery_enabled`) switches the
+discovery plane from one retained config per entity,
+`homeassistant/<component>/<node_id>/<object_id>/config`, to one retained
+device document per node, `homeassistant/device/<node_id>/config`. It is
+**off by default**, and the daemon ignores it while `discovery_enabled` is
+false, logging a warning that names the field.
+
+**The two forms cannot both be retained for the same `unique_id`.** Home
+Assistant refuses whichever it sees second, and the refusal is symmetric —
+measured in both directions on a live instance
+([ADR 0070](../adr/0070-shared-ha-discovery-model-module.md), amendment of
+2026-09-10). The entire signal is one line in the *Home Assistant* log:
+
+```
+WARNING [homeassistant.components.mqtt.entity] Received a conflicting MQTT
+discovery message for entity sensor.…; the entity was previously discovered
+on topic homeassistant/…/config …
+```
+
+Nothing appears on the wire, no entity is created, and openccu-loom cannot
+see any of it. Its own logs report a successful publish either way.
+
+**Turning it on** is handled for you: the daemon retracts each superseded
+per-entity config before it publishes the document.
+
+**Turning it back off** is the direction to plan for. The device documents
+from the bundle boot are still retained, and the orphan sweep that clears
+them runs *after* the snapshot that publishes the per-entity configs — that
+ordering is load-bearing for every other case the sweep handles. So on the
+first boot after the rollback, Home Assistant refuses the per-entity configs
+against the documents still in place, and the sweep retracts the documents
+immediately afterwards:
+
+```
+INFO mqtt.discovery_orphan_cleanup central=ccu-haus evicted=37
+```
+
+That line is the confirmation the documents are gone. **Restart the daemon
+once more**: the broker is clean, the per-entity configs are published
+against nothing, and the entities come back. Expect one boot with the
+affected devices missing from Home Assistant, and plan the rollback as two
+restarts rather than one.
+
+To skip that window, retract the documents before the rollback restart —
+list them, then clear each by the exact topic the listing printed:
+
+```sh
+# 1. List the device documents the bundle boot left behind.
+mosquitto_sub -h <broker> --retained-only -W 2 -v -t 'homeassistant/device/+/config'
+
+# 2. Clear each one that belongs to openccu-loom. `-r -n` publishes an
+#    empty retained payload, which is how a broker drops a retained message.
+mosquitto_pub -h <broker> -r -n -t 'homeassistant/device/<node_id>/config'
+```
+
+[`script/clean-mqtt-discovery.sh`](https://github.com/SukramJ/openccu-loom/blob/main/script/clean-mqtt-discovery.sh)
+does both discovery forms — per-entity configs and device documents —
+scoped by `origin.name` to openccu-loom, and is a dry run unless you pass
+`-y`.
+
+The round trip is lossless in both directions: Home Assistant keys its
+entity registry on `unique_id`, not on the discovery topic, so a renamed
+`entity_id`, a custom name and the `device_id` all survive.
 
 `retain_cleanup_window_ms` is how long (500–30000 ms; `0` = 2000)
 the bridge waits at boot for the broker to deliver retained messages

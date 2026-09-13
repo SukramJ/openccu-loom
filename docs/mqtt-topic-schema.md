@@ -36,7 +36,10 @@ degenerate case with one entry under that segment.
 
 > Notation: `<base>` is the configured `mqtt.topic_base` (default
 > `openccu-loom`). `<central>` is the CCU name from the daemon config
-> (e.g. `GoOtto`). `<iface>` is the interface ID (e.g. `HmIP-RF`).
+> (e.g. `GoOtto`). `<iface>` is the **wire** interface id — the CCU
+> spells it `<central>-<interface>`, so the `HmIP-RF` interface of the
+> `GoOtto` central is `GoOtto-HmIP-RF`. The bare interface token never
+> appears in this segment.
 >
 > Every name-derived segment (`<central>`, `<name>`, `<key>`, …) is
 > escaped for MQTT: a space, `+`, `#` and `/` each become `_`, so a CCU
@@ -470,9 +473,9 @@ at address `000C9709AEF157`, channel 1.
 
 | Use case | Topic |
 |---|---|
-| Actual temperature (read) | `openccu-loom/GoOtto/HmIP-RF/000C9709AEF157/1/values/ACTUAL_TEMPERATURE` |
-| Set-point temperature (write) | `openccu-loom/GoOtto/HmIP-RF/000C9709AEF157/1/values/SET_POINT_TEMPERATURE/set` |
-| Climate service method (set mode) | `openccu-loom/GoOtto/HmIP-RF/000C9709AEF157/1/custom/climate/set/set_mode` |
+| Actual temperature (read) | `openccu-loom/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/1/values/ACTUAL_TEMPERATURE` |
+| Set-point temperature (write) | `openccu-loom/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/1/values/SET_POINT_TEMPERATURE/set` |
+| Climate service method (set mode) | `openccu-loom/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/1/custom/climate/set/set_mode` |
 | System variable | `openccu-loom/GoOtto/hub/sysvars/Presence/state` |
 
 ---

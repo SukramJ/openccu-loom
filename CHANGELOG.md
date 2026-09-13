@@ -6,6 +6,102 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The documented operator rollback command cannot be executed, and the
+  doctest meant to pin it agreed with it.** `docs/user/multi-ccu.md` §2.3 is
+  where the manual sends an operator to clear a device's retained topics
+  after it moves between CCUs. The command it gave — shipped in 0.78.0 —
+  fails three ways: it publishes to a topic ending in `/#`, which MQTT
+  §4.7.0 forbids in a PUBLISH and `mosquitto_pub` rejects before it dials;
+  it passes `-n` and `-l`, which are mutually exclusive ("Only one type of
+  message can be sent at once"); and its third path segment is the bare
+  interface token `HmIP-RF` where the daemon publishes the wire interface id
+  `<central>-<interface>`, so the topic it names has never held a retained
+  message. Both errors were reproduced against the real `mosquitto_pub`.
+
+  It is replaced by a listing step (`mosquitto_sub --retained-only`) and a
+  per-topic clear, so the operator copies a topic the broker actually holds
+  rather than composing one, with `script/clean-mqtt-discovery.sh` named
+  first as the supported path. The same bare-interface error is corrected in
+  `docs/mqtt-topic-schema.md`, whose `<iface>` notation now states the wire
+  form, and in its `hub/connectivity/<iface>` row, which production feeds
+  through `WireInterfaceID(centralName, iface)` as well.
+
+  `TestMQTTTopicSchemaDoc_*` could not catch any of it. It handed
+  `iface = "HmIP-RF"` — already in wire form — to `ParseWireInterfaceID`,
+  which by contract validates nothing, so the builder rendered the bare
+  token back and the pin compared the test's own input against itself. No
+  production site makes that call. The wire id is now built from the central
+  name and the bare interface enum, the two inputs a caller has, and a new
+  guard reads `docs/mqtt-topic-schema.md` itself and requires every concrete
+  topic literal in it to be pinned. Measured: the released test and the
+  released document, byte for byte, now fail. A second guard reads the
+  fenced shell blocks under `docs/` and rejects a `mosquitto_pub` carrying a
+  wildcard topic or both `-n` and `-l`; against the 0.78.0 document it
+  reports all three defects.
+
+- **`script/clean-mqtt-discovery.sh` could not clear device bundles.** Its
+  default subscribe pattern was `homeassistant/+/+/+/config` — five levels,
+  the per-entity form. A device bundle is
+  `homeassistant/device/<node_id>/config`, four levels, and `+` matches
+  exactly one, so bundles were invisible to every phase of the script. Both
+  patterns are now subscribed in one pass; an explicit `-t` still replaces
+  both. Verified against a live mosquitto: the released script scanned one
+  of three retained configs, the fixed one clears both loom forms and leaves
+  a Zigbee2MQTT device document untouched.
+
+### Documentation
+
+- **`north.mqtt.discovery_bundles` was documented nowhere, and with it the
+  rollback hazard ADR 0070 measured.** A retained device document and a
+  per-entity config for the same `unique_id` cannot coexist: Home Assistant
+  refuses the second, symmetrically, and the entire signal is one
+  `WARNING [mqtt.entity] Received a conflicting MQTT discovery message` in
+  *its* log. Nothing reaches the wire and the daemon cannot observe it.
+  `docs/admin/configuration.md` now documents the option and what turning it
+  back off costs — the orphan sweep runs after the snapshot that publishes
+  the per-entity configs, so a rollback costs one boot with the affected
+  devices missing and self-heals on the next restart — plus the manual
+  retraction that skips that window, and the
+  `mqtt.discovery_orphan_cleanup evicted=N` line that confirms it.
+  `docs/admin/troubleshooting.md` indexes the Home Assistant warning, which
+  is the symptom an operator searches for.
+
+- **ADR 0070 carries three claims in its decision text that are false as
+  written**, added as a dated amendment; the decision itself is untouched.
+  "No per-entity legacy path" — go-hamqtt v0.34.0 ships a complete one and
+  *defaults* to it. "`go-mqtt` gains exactly two additive helpers" — it
+  exports ten, `WithSubscriptionID` having arrived in v1.5.0. "Four tools
+  ship alongside" — two do.
+
+- **`notes/adr0070-moveup-inventory.md` quoted a `naming.TopicSafe` comment
+  that no longer exists and vouched for it.** The quoted text says
+  `DiscoverySlug` "is deliberately NOT delegated to `topic.Slug` yet"; the
+  real comment says the opposite, because step E reversed it. Corrected with
+  a dated superseded-by note rather than a rewrite — it is a working
+  document, and the divergence table is still the record of why the reversal
+  was taken.
+
+### Testing
+
+- **All five bundle-mode sweep tests ran with bundles on**, so nothing drove
+  the rollback direction — which is the one ADR 0070's fourth amendment says
+  fails silently. One now does. Mutation: gating the ownership predicate on
+  `!cfg.HADiscoveryBundles` fails only the new test.
+
+- **Two untied constants in the security plane.** `"Security & Safety"` is
+  spelled in production twice and in six test files, every one of them as an
+  *input*; nothing asserted the name the publisher resolves. A new test
+  drives `reconcile` end to end in both shipped locales and asserts the
+  `device.name` on the wire. And
+  `TestBuildAlarmPanelDiscovery_MasterNameLocalizedBothLocales` was a
+  tautology — it passed its expected value into the builder and read it back
+  out, so deleting `discovery.alarm_system` *and*
+  `discovery.security_system` from both catalogues left it green. It now
+  resolves through `masterName()` and the real catalogues; both mutations
+  are red.
+
 ## [0.78.0] - 2026-09-13
 
 ### Release summary

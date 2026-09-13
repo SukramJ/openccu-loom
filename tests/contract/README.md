@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 471.
+Guards without a doc comment: 7 of 473.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -206,6 +206,7 @@ Guards without a doc comment: 7 of 471.
 | TestEveryBridgeReachThroughIsNilGuarded | mqtt_nil_bridge_test.go | TestEveryBridgeReachThroughIsNilGuarded asserts that no production call site dereferences the result of a Wiring.Bridge() call without checking it for nil first. |
 | TestMQTTTopicSchemaDoc_BridgeHubTopics | mqtt_topic_schema_doctest_test.go | TestMQTTTopicSchemaDoc_BridgeHubTopics exercises the "Bridge / hub status" table and the concrete hub examples. |
 | TestMQTTTopicSchemaDoc_CommandTopics | mqtt_topic_schema_doctest_test.go | TestMQTTTopicSchemaDoc_CommandTopics exercises the "Command (set) topics" table rows. |
+| TestMQTTTopicSchemaDoc_ConcreteExamplesAreAllPinned | mqtt_topic_schema_doctest_test.go | TestMQTTTopicSchemaDoc_ConcreteExamplesAreAllPinned closes the loop the rest of this file leaves open. |
 | TestMQTTTopicSchemaDoc_DiscoveryNodeScopeIsNotATopic | mqtt_topic_schema_doctest_test.go | TestMQTTTopicSchemaDoc_DiscoveryNodeScopeIsNotATopic holds [mqtt.TopicBuilder.DiscoveryNodeScope] to the claim that lets it out of docs/mqtt-topic-schema.md: it returns part of one segment, not a topic. |
 | TestMQTTTopicSchemaDoc_DiscoveryTopic | mqtt_topic_schema_doctest_test.go | TestMQTTTopicSchemaDoc_DiscoveryTopic exercises the HA Discovery config Topic, which the doc states is identical. |
 | TestMQTTTopicSchemaDoc_StateTopics | mqtt_topic_schema_doctest_test.go | TestMQTTTopicSchemaDoc_StateTopics exercises the "State topics" table and the "Concrete mapping examples" section for per-DP state. |
@@ -241,6 +242,7 @@ Guards without a doc comment: 7 of 471.
 | TestOpenAPIDeclaresMVPEndpoints | openapi_test.go | — (no doc comment) |
 | TestOpenAPIManagementPathsPresent | openapi_test.go | TestOpenAPIManagementPathsPresent pins the management and live-edit paths in the spec so a future router rename or refactor cannot silently drift away from the production OpenAPI validator middleware. |
 | TestOpenAPIVersion | openapi_test.go | — (no doc comment) |
+| TestOperatorMosquittoCommandsAreRunnable | operator_mosquitto_commands_test.go | TestOperatorMosquittoCommandsAreRunnable walks every Markdown file under docs/ and checks each mosquitto_pub / mosquitto_sub invocation in a fenced code block for the two errors that make it fail on execution. |
 | TestPendingDevicePhaseVocabularyIsOneVocabulary | pending_device_phase_vocabulary_test.go | TestPendingDevicePhaseVocabularyIsOneVocabulary pins the three copies of the onboarding phase vocabulary against each other. |
 | TestPingPongCallerIDDistinguishesDaemons | ping_pong_caller_id_contract_test.go | TestPingPongCallerIDDistinguishesDaemons asserts that two daemons with the same CentralName and Interface but different InitInterfaceID values produce distinct WireBoundaryID values, and that neither degenerates to the bare interface name. |
 | TestPkgDoesNotImportInternal | pkg_imports_no_internal_test.go | TestPkgDoesNotImportInternal pins what `pkg/` is for. |
