@@ -6,6 +6,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A history test could not name its own failure.**
+  `TestWireCentralRecordsACentralThatAppearedAfterWire` was seen failing
+  once under heavy concurrent load and could not be reproduced in 222
+  runs afterwards, including under deliberate disk contention. It
+  asserted the row count alone, and that cannot tell a lost event from a
+  persisted one: a final `SaveBatch` failing under I/O pressure re-queues
+  its batch and bumps `FlushErrors`, which from outside looks exactly
+  like the event never arriving. The recorder's own counters are now
+  read first, so the next sighting says which half broke instead of
+  leaving it to be guessed at.
+
 ### Added
 
 - **ADR 0007's 500 ns/op payload-build bound is withdrawn: it governs
