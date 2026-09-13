@@ -317,22 +317,26 @@ func (b *TopicBuilder) SystemStatus(centralName string) string {
 	return naming.MQTTSystemStatus(b.Base, centralName)
 }
 
-// HubStatus renders the reserved per-CCU connection-state shape
+// HubStatus renders the per-CCU availability gate
 // `<base>/<central>/hub/status`.
 //
-// **Nothing publishes it.** This method has no caller outside tests, and
-// no daemon build has ever put a byte on the topic, although
-// docs/mqtt-topic-schema.md promised it as "CCU connection status" until
-// 2026-09-12. See the amendment to
-// docs/adr/0011-mqtt-topic-and-payload-architecture.md for what was
-// measured and why the promise was withdrawn rather than kept, and
-// [TopicBuilder.HubInfo] for why the three reserved builders are kept.
+// **It is published.** A retained `online` / `offline` marker per
+// configured CCU, folded from the CCU's per-interface reachability states
+// and written through the shared availability publisher at QoS 1. Every
+// CCU-scoped hub entity lists it in its discovery `availability` block
+// alongside [TopicBuilder.BridgeStatus], so an unreachable CCU no longer
+// leaves its sysvars, programs and system scores "available" with stale
+// values.
 //
-// The gap behind this one is real: CCU-scoped hub entities take their
-// availability from [TopicBuilder.BridgeStatus], so an unreachable CCU
-// leaves its entities "available" with stale values. A per-CCU rollup is
-// the missing source; adding it is new published traffic and needs its
-// own change.
+// This comment described the opposite until 2026-09-13, and was the
+// version of the fact a reader was most likely to meet: it sat on the
+// builder, it was assertive, and nothing tested it. The shape was indeed
+// reserved and unpublished for the whole life of the daemon before that —
+// see the 2026-09-12 amendment to
+// docs/adr/0011-mqtt-topic-and-payload-architecture.md for the
+// withdrawal, and the 2026-09-13 amendment for the implementation. The
+// two shapes that are still reserved are [TopicBuilder.HubInfo] and
+// [TopicBuilder.HubDiagnostics].
 func (b *TopicBuilder) HubStatus(centralName string) string {
 	return naming.MQTTHubStatus(b.Base, centralName)
 }
@@ -343,8 +347,8 @@ func (b *TopicBuilder) HubStatus(centralName string) string {
 // **Nothing publishes it**, and no consumer needs it: the fields it
 // would carry (model, sw_version, serial_number, configuration_url) are
 // in the HA discovery device block that hubDeviceBlock builds. Like
-// [TopicBuilder.HubStatus] and [TopicBuilder.HubDiagnostics] the builder
-// is kept rather than deleted, so the reserved shape stays pinned by
+// [TopicBuilder.HubDiagnostics] the builder is kept rather than deleted,
+// so the reserved shape stays pinned by
 // tests/contract/mqtt_topic_schema_doctest_test.go and cannot drift if
 // one of the three ever does gain a publisher —
 // tests/contract/mqtt_topic_schema_producer_test.go fails if one does
@@ -356,8 +360,10 @@ func (b *TopicBuilder) HubInfo(centralName string) string {
 // HubDiagnostics renders the reserved per-CCU diagnostics shape
 // `<base>/<central>/hub/diagnostics`.
 //
-// **Nothing publishes it**, and unlike the other two reserved shapes it
-// was never documented either. The radio and load figures it would have
+// **Nothing publishes it.** It went undocumented until 2026-09-12, when
+// it was written into docs/mqtt-topic-schema.md's reserved table
+// alongside [TopicBuilder.HubInfo] rather than left unmentioned. The
+// radio and load figures it would have
 // aggregated reach consumers as per-device data points (DUTY_CYCLE,
 // CARRIER_SENSE_LEVEL, …) plus the central-wide metric topics
 // [TopicBuilder.HubSystemHealthScore], [TopicBuilder.HubConnectionLatency]

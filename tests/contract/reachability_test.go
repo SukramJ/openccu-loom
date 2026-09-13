@@ -11,6 +11,24 @@
 // is well-formed, not that the current tree matches it or that the
 // unreachable count has not grown. Regenerate and diff the snapshot by
 // hand (`make reachability`) to check the tree itself.
+//
+// Two things the snapshot itself cannot tell you, whatever its numbers say,
+// because they are limits of the analyzer that produces it (the full
+// statement is in script/reachability/main.go's package doc and is
+// reproduced in notes/parity/dead-code-summary.md):
+//
+//   - It classifies package-level members only. No method and no struct
+//     field is ever counted — reachable, whitelisted or unreachable. PR #808
+//     deleted one dead field, two dead methods and one dead package-level
+//     function; total-exported moved by exactly one and the unreachable
+//     count did not move at all.
+//   - A flag-gated dead subtree reads as reachable. RTA follows call edges
+//     and cannot evaluate a config flag, so code behind a flag that is the
+//     zero value on every build ever produced counts as live. PR #799 found
+//     an entire file in that state.
+//
+// So a stable unreachable count is not evidence that no dead code was added,
+// and a listed-as-reachable symbol is not evidence that anything reaches it.
 package contract
 
 import (

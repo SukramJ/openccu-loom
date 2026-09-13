@@ -167,9 +167,19 @@ ever did.
 
 What was measured, before deleting anything:
 
-- **`LegacyAliasConfig.HubTopics` never existed.** `git log -S "HubTopics"
-  -- internal/` returns one commit, `cd9e8ac0` ("Initial release"), and that is
-  this ADR itself — the identifier appears only in prose. The shipped struct
+- **`LegacyAliasConfig.HubTopics` never existed.** `git log -S "HubTopics"`,
+  unrestricted, returns four commits; the one that introduces the identifier is
+  `cd9e8ac0` ("Initial release"), and what it introduces is the **prose of this
+  ADR**, at `docs/adr/0006-naming-conventions.md`. *(Correction of 2026-09-13:
+  this bullet originally cited `git log -S "HubTopics" -- internal/` for that
+  claim. A pathspec of `internal/` cannot reach a file under `docs/`, so it
+  could not have been the command that established it. The pathspec form does
+  return `cd9e8ac0` — its match there is a comment in
+  `internal/central/adapter/hub_mqtt_publisher_test.go` mentioning the field,
+  which is a test's prose about the same non-existent thing, not the field.
+  Drop the pathspec, or use `-- docs/`, to reach the ADR. A wrong citation in
+  an amendment is worse than none, because the next reader treats it as
+  verified.)* The shipped struct
   carried two fields, `Enabled` and `Base`, and never a third. `HubTopicBuilder`
   never existed either: the file's only two types were `LegacyAliasConfig` and
   `LegacyTopicBuilder`, from `cd9e8ac0` until deletion.
@@ -182,7 +192,7 @@ What was measured, before deleting anything:
 - **No operator could enable it.** `BridgeConfig.LegacyAlias` was set at
   exactly one production construction site, `cmd/openccu-loom/daemon_north.go`'s
   `mqtt.NewBridge(mqtt.BridgeConfig{…})`, which never assigned the field. There
-  is no YAML key (`NorthMQTT` carries eleven `yaml`-tagged fields and none of
+  is no YAML key (`NorthMQTT` carries twelve `yaml`-tagged fields and none of
   them is this one), no environment override, no CLI flag and no build tag.
   `cfg.LegacyAlias.Enabled` was the Go zero value `false` on every build ever
   produced, so `Bridge.legacy` was always `nil` and all six guarded branches in
@@ -212,3 +222,70 @@ that read the wall clock at publish time, stamping `modified_at` with
 `time.Now()` rather than with the event's own timestamp. It is deleted with the
 rest, which removes one of the two payload shapes that would defeat a
 byte-comparison dedup gate on the state plane.
+
+## Amendment (2026-09-13) — four of the five MQTT topic conventions are false
+
+§MQTT topic conventions above lists five rules. Two hold — snake_case
+segments (3) and the inbound verb suffixes (5). The other three carry four
+claims that the daemon contradicts, and each one is the kind a reader acts
+on: they are spelled as concrete topic paths.
+
+**1. "No `hub/` namespace."** There is one, and it is where most of the
+per-CCU surface lives: `<base>/<central>/hub/status`,
+`hub/sysvars/<name>/{state,set}`,
+`hub/programs/<id>/{state,set,trigger,execute_available}`,
+`hub/connectivity/<iface>`, `hub/install_mode/<iface>` and its `/set`,
+`hub/update`, `hub/alarm_messages`, `hub/service_messages`, `hub/inbox` —
+and the two reserved shapes `hub/info` and `hub/diagnostics`. The two
+example paths this rule gives are both wrong: it is not
+`{base}/{central}/install_mode` but `{base}/{central}/hub/install_mode/{iface}`,
+and not `{base}/{central}/sysvars/{name}` but
+`{base}/{central}/hub/sysvars/{name}/state`. The rule's own justification —
+"there was no other namespace to disambiguate against" — is what stopped
+being true: `system/` sits beside it, carrying `system/status` and the three
+central-wide metric topics, and `devices/` beside that.
+
+**2a. The device availability path.** The rule gives
+`{base}/{central}/devices/{addr}/availability`. The daemon publishes
+`{base}/{central}/{iface}/{addr}/availability` — interface-keyed, the same
+prefix as `/info`, `/diagnostics`, `/update` and every channel topic. The
+`devices/` namespace is real, but it carries exactly one shape: the
+custom-DP invoke topic
+`{base}/{central}/devices/{addr}/cdps/{name}/{operation}/invoke`, which this
+rule also gives and which is correct.
+
+**2b. The raw paramset path is missing a segment.** The rule writes it as
+`{base}/{central}/{iface}/{addr}/{ch}/{param}`. Between `{ch}` and
+`{param}` sits the **paramset bucket** — `values`, `master` or
+`calculated` — so the canonical shape is
+`{base}/{central}/{iface}/{addr}/{ch}/values/{param}`. The bucket is not
+cosmetic: it is what lets the same parameter name exist in two paramsets
+without collision, and the command subscriber registers an 8-segment filter
+for the bucket-aware shape beside a 7-segment one for the bucket-less
+spelling this rule describes.
+
+**4. `DiscoveryConfig` does not use `b.Base`.** The rule says the HA
+Discovery node "derives from `BridgeConfig.Base`, not a hardcoded literal —
+`homeassistant/{component}/{base}/{objectID}/config`", and the
+implementation reference below repeats it as "`TopicBuilder.DiscoveryConfig`
+(uses `b.Base`)". It does not. The method delegates to
+`naming.DiscoveryConfigTopic(component, nodeID, objectID)` and never reads
+the receiver's base at all. The `node_id` segment is
+`<central-slug>_<address-lower>` for device entities — it distinguishes one
+*device* from another, which is HA's own convention — and a fixed literal
+for the daemon-level planes (`security`, `alarm`). The multi-daemon
+collision this rule set out to prevent is therefore **not** prevented by a
+configurable base: two daemons bridging the same CCU under different topic
+bases still write the same `homeassistant/.../config` topics.
+
+That last one is a live gap, not a documentation error, and it is recorded
+here rather than fixed: changing the discovery node id moves every retained
+config topic on the broker and orphans the old ones, which is a migration
+with its own ADR, not a drive-by.
+
+The section is not rewritten. What the conventions were meant to achieve —
+one namespace per concern, verb-suffixed inbound topics, no hardcoded
+discovery root — still reads as the decision. The paths are corrected here,
+and `docs/mqtt-topic-schema.md` is the authority on what the daemon actually
+writes; since 2026-09-13 it is checked against the builders in both
+directions by `tests/contract/mqtt_topic_schema_producer_test.go`.

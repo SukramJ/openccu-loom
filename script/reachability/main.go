@@ -13,6 +13,16 @@
 //   - notes/parity/dead-code-summary.md           — menschenlesbares Summary (Top-20 Packages, Top-50 Funcs)
 //   - notes/parity/dead-code-production-only.json — Inventory ohne Test-Roots als Entry-Points
 //
+// Two further notes/parity artefacts are NOT written by this run and NOT by
+// `make reachability`: notes/parity/dead-code-genuine.json (crosscheck.go)
+// and notes/parity/loom-reachable-audit.md (whitelist_audit.go). Both carry
+// `//go:build ignore` and have to be run by hand —
+// `go run ./script/reachability/crosscheck.go` and
+// `go run ./script/reachability/whitelist_audit.go` — so they rot silently
+// between the runs someone remembers. On 2026-09-13 they were stamped
+// 2026-06-08 and 2026-07-10; the refreshed audit found 131 annotated items
+// where the committed one listed 29.
+//
 // Flags:
 //   - -production-only: nur production-only Inventory erzeugen (kein combined run)
 //
@@ -20,6 +30,45 @@
 // werden nicht als Dead-Code gelistet. Zusätzlich greift eine automatische Whitelist für
 // Test-Files (_test.go, tests/ Verzeichnis), Mock/Fake/Stub/Dummy-Identifier und
 // script/_tools.
+//
+// # What this analyzer cannot see
+//
+// Two blind spots, both structural. Neither is fixed by regenerating the
+// inventory, and a ratchet whose limits are unwritten is a ratchet people
+// over-trust — so they are stated here, in the summary this tool writes,
+// and in tests/contract/reachability_test.go.
+//
+// 1. Package-level members only. The classification loop walks
+// `(*ssa.Package).Members`, which holds package-level funcs, types, vars and
+// consts. Methods live in the program's method sets, not in Members, and
+// struct fields are not members at all. **No method and no struct field is
+// ever classified** — neither as reachable, nor whitelisted, nor
+// unreachable. The measured consequence (PR #808): that PR deleted four
+// things, all genuinely dead — `payload.MQTTTopicSet.Config` (a field),
+// `payload.MQTTTopicSet.IsZero` and `hub.InstallMode.MQTTTopics` (methods),
+// and `naming.MQTTHubInstallMode` (a package-level func). Total-exported
+// moved by exactly one, 5607 -> 5606, and unreachable did not move at all.
+// The field and the two methods were never counted in either direction. A
+// count that holds steady across a deletion therefore says nothing about
+// whether dead code was removed.
+//
+// 2. Flag-gated subtrees read as reachable. RTA reasons about call edges,
+// not about values, so it cannot evaluate a config flag. A subtree behind
+// `if cfg.Feature.Enabled` is reachable to the analyzer even when the flag
+// is the zero value on every build ever produced. The measured consequence
+// (PR #799): `internal/north/mqtt/legacy_alias.go` and all six guarded
+// branches in bridge.go were dead for the daemon's whole life —
+// `BridgeConfig.LegacyAlias` had no YAML key, no environment override, no
+// flag and no build tag, and the one production construction site never
+// assigned it — and the analyzer counted every one of them reachable,
+// because the call edges exist.
+//
+// The two blind spots point in opposite directions, which is why neither
+// shows up as drift: the first under-counts what exists, the second
+// over-counts what is live. Answering either needs a different question
+// than "is there an edge to it" — "who calls this method" is a grep or a
+// type-checked call-graph pass, and "can this flag ever be true" is a
+// configuration-surface audit.
 package main
 
 import (
@@ -820,6 +869,37 @@ HEAD: {{.Head}}
 | Reachable | {{.Summary.Reachable}} |
 | Whitelisted | {{.Summary.Whitelisted}} |
 | **Unreachable** | **{{.Summary.Unreachable}}** |
+
+## What these numbers cannot see
+
+Two structural blind spots. Neither is fixed by regenerating this file, and
+both have been measured on real deletions — read the counts above with them
+in mind.
+
+1. **Package-level members only — no method and no struct field is ever
+   classified.** The analyzer walks each SSA package's ` + "`Members`" + ` map, which
+   holds package-level funcs, types, vars and consts. Methods are in the
+   program's method sets, not in ` + "`Members`" + `; fields are not members at all.
+   PR #808 deleted four dead things: ` + "`payload.MQTTTopicSet.Config`" + ` (a
+   field), ` + "`payload.MQTTTopicSet.IsZero`" + ` and
+   ` + "`hub.InstallMode.MQTTTopics`" + ` (methods), and
+   ` + "`naming.MQTTHubInstallMode`" + ` (a package-level func). Total Exported moved
+   by **exactly one**, 5607 -> 5606, and Unreachable did not move at all: the
+   field and the two methods were never counted in either direction. A count
+   that holds steady across a deletion is not evidence that nothing dead was
+   removed.
+
+2. **A flag-gated dead subtree reads as reachable.** RTA reasons about call
+   edges, not values, so it cannot evaluate a config flag. PR #799 found
+   ` + "`internal/north/mqtt/legacy_alias.go`" + ` and six guarded branches in
+   ` + "`bridge.go`" + ` dead for the daemon's whole life — the gating field had no
+   YAML key, no environment override, no flag and no build tag, and the one
+   production construction site never assigned it — while the analyzer
+   counted all of it reachable, because the edges are there.
+
+The two point in opposite directions, which is why neither surfaces as
+drift: the first under-counts what exists, the second over-counts what is
+live. Each needs a different question than "is there an edge to it".
 
 ## Top-20 Packages by Dead Code
 

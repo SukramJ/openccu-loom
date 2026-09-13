@@ -8,6 +8,141 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The dead-code ratchet's two blind spots are written down, where the next
+  person looks.** `notes/parity/*` is regenerated (the stamps were one merge
+  stale); no count moved, which is itself the first blind spot in action.
+  `script/reachability` classifies **package-level members only** — it walks
+  each SSA package's `Members` map, so no method and no struct field is ever
+  classified, in either direction. PR #808 deleted one dead field, two dead
+  methods and one dead package-level function: Total Exported moved by
+  exactly one and Unreachable did not move at all. A steady unreachable count
+  across a deletion is not evidence that nothing dead was removed. The second,
+  from PR #799: RTA follows call edges and cannot evaluate a config flag, so a
+  subtree behind a flag that is the zero value on every build ever produced —
+  `legacy_alias.go` and six guarded branches in `bridge.go` — counts as
+  reachable. The two point in opposite directions, which is why neither shows
+  up as drift. Stated in `script/reachability/main.go`'s package doc, in the
+  generated `notes/parity/dead-code-summary.md` (so every regeneration
+  reproduces it), and in `tests/contract/reachability_test.go`'s package doc.
+  A ratchet whose limits are unwritten is a ratchet people over-trust.
+
+  Two `notes/parity/` artefacts were much staler than the inventory, because
+  neither `make reachability` nor CI writes them: `dead-code-genuine.json`
+  (`crosscheck.go`) and `loom-reachable-audit.md` (`whitelist_audit.go`) both
+  carry `//go:build ignore` and have to be run by hand. They were stamped
+  2026-06-08 and 2026-07-10. Refreshed: the cross-check now reports 5
+  candidates and 1 genuine dead function where the committed file claimed 386
+  and 15, and the whitelist audit 131 annotated items (120 productive, 11
+  masked) where the committed one listed 29 (21 / 8). That they rot between
+  hand-runs is noted in the analyzer's package doc.
+
+- **ADR 0007 names four artifacts that do not exist**, three of them in
+  Trade-offs and Mitigations — where a reader goes to find out how a risk is
+  held down. `tests/bench/payload_test.go` and
+  `tests/bench/payload_build_test.go` are both absent, and with the second
+  goes the 500 ns/op ceiling its "regressions block release per the existing
+  benchmark gate" sentence claims is enforced. `CDPDispatcher` is really
+  `CustomDPDispatcher`. The custom `golangci-lint` analyser against
+  dual-sourced `State()` was never written — the rule shipped as the
+  contract test `source_no_dual_source_test.go` instead, so the protection
+  exists and the pointer does not. A dated amendment records all four, and
+  names the two references in the same sections that are correct.
+
+- **Four of the five MQTT topic conventions in ADR 0006 are false.** The
+  ADR names "no `hub/` namespace" as a convention while `hub/` carries most
+  of the per-CCU surface (status, sysvars, programs, connectivity, install
+  mode, update and the three message aggregates) and both example paths the
+  rule gives are wrong; it gives the device availability topic as
+  `{base}/{central}/devices/{addr}/availability` where the daemon publishes
+  the interface-keyed `{base}/{central}/{iface}/{addr}/availability`; it
+  writes the raw paramset path without its `<bucket>` segment
+  (`…/{ch}/{param}` rather than `…/{ch}/values/{param}`); and it states that
+  the HA Discovery node derives from `BridgeConfig.Base` via
+  `TopicBuilder.DiscoveryConfig`, which delegates to
+  `naming.DiscoveryConfigTopic` and never reads the receiver's base. A dated
+  amendment corrects all four. The last is a live gap rather than a
+  documentation error — two daemons bridging the same CCU under different
+  topic bases still write identical `homeassistant/.../config` topics — and
+  is **reported, not fixed**: moving the discovery node id orphans every
+  retained config on the broker and needs a migration of its own.
+
+- **Three wrong numbers and one wrong citation in yesterday's deletion
+  audit.** ADR 0006's amendment cited `git log -S "HubTopics" -- internal/`
+  for a claim about a file in `docs/` — a pathspec that cannot reach it, so
+  it cannot be the command that established the claim. It also counted
+  eleven `yaml`-tagged fields on `NorthMQTT` where there are twelve, and the
+  CHANGELOG called `legacy_alias.go` "byte-identical since the initial
+  release" where the same PR's commit message records a license-header chore
+  that changed its bytes. All three are corrected in place. A wrong citation
+  in an amendment is worse than none: the next reader treats it as verified.
+
+- **ADR 0011 documented a retired topology as current, in the document that
+  owns the schema.** §Topic hierarchy and the HA Discovery example that
+  quotes it draw the `channels/`-infix, `/state`-suffix per-DP tree of the
+  build before this one: `<addr>/channels/<ch>/values/<param>/state` where
+  the daemon writes `<addr>/<ch>/values/<param>`, and `<addr>/update/state`
+  where it writes `<addr>/update`. That the old shape really shipped is not
+  in doubt — `retain_cleanup.go`'s `LegacySlotStateMatcher` exists solely to
+  evict its retained leftovers, and a sweep for a topology is proof the
+  topology was on the wire. The sections are not rewritten: they record what
+  was decided in 2026-04. A dated amendment names the three differences and
+  a signpost sits above each stale block.
+
+- **The two stale doc comments the guard's file exclusion was hiding.**
+  `TopicBuilder.HubStatus` and `naming.MQTTHubStatus` both asserted that
+  **nothing publishes** `<base>/<central>/hub/status`. True when written,
+  false since the topic became the per-CCU availability gate, and the
+  version of the fact a reader was most likely to meet — assertive, on the
+  builder, and tested by nothing. Both now describe the published topic and
+  record that they said the opposite. `HubDiagnostics`' claim that it "was
+  never documented either" is corrected the same way: it is in the schema
+  document's reserved table.
+
+- **The topic-schema guard checked one direction, which is the mistake it
+  was built to fix — and the document was a strict subset of the wire.**
+  `tests/contract/mqtt_topic_schema_producer_test.go` checked doc -> code:
+  every shape `docs/mqtt-topic-schema.md` documents must be classified as
+  published, command or reserved. It never checked code -> doc, and that was
+  the larger gap. Eight topic families had publishers and no documented row
+  at all — the add-on self-update pair, per-interface install mode and its
+  `set`, the CCU firmware-update state, the three `hub/` message aggregates
+  (`alarm_messages`, `service_messages`, `inbox`), the three central-wide
+  `system/*` metrics, week-profile, schedule and combined-DP state and
+  commands — plus the device firmware-update state topic, the legacy
+  per-type pulse topic, the `/config` descriptor companions and the
+  custom-DP `invoke` shape. An external consumer reading the document had no
+  way to learn any of them exists. Twenty-five rows are documented now.
+  **No publish path changed and no published byte moves**; every documented
+  shape was already on the wire.
+
+  `TestMQTTTopicProducersAreDocumented` closes the direction generally. It
+  parses `internal/north/mqtt/topics.go` and
+  `internal/model/naming/pathdata.go`, inventories every topic-shape
+  producer they declare, and fails when one is unclassified or when an
+  inventoried shape has no row in the document. Adding a topic builder is
+  now a three-part move — the function, the inventory entry, the documented
+  row — and doing fewer than three fails. The rule it deliberately does not
+  adopt is "every builder must have a caller": that is wrong here, because
+  the daemon consumes commands through `+` wildcards, so
+  `TopicBuilder.ParameterCommand` has zero production callers while both its
+  documented `/set` shapes are honoured. It classifies; it does not count.
+
+  The producer scan's file exclusion narrowed with it. It skipped
+  `topics.go` and `pathdata.go` whole, which also discarded calls made from
+  non-producer functions in those files — ordinary production call sites,
+  and the only ones some builders have. The skip is now per enclosing
+  function: a producer delegating to a producer is still not a call site,
+  while `TopicBuilder.systemMetricTopics` calling `HubSystemHealthScore`
+  counts, because that helper is the retained-orphan sweep's enumeration of
+  the shape rather than a second spelling of it.
+
+  A new `promiseUnwired` class carries the one `/set` shape with a canonical
+  spelling and no wire behaviour at either end:
+  `<base>/<central>/<iface>/<addr>/update/set`. The HA `update` entity
+  declares no `command_topic` — flashing firmware from a possibly retained
+  broker payload is unsafe — and no subscription filter has that shape. It
+  is documented as unwired rather than left to look like a command topic.
+
 - **ADR 0070's step D is decided: the hub model keeps its own topics, and
   `payload.MQTTAddressable` stays.** The move-up measurement left the choice
   open — either the model stops returning finished topic strings and returns
@@ -412,8 +547,10 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   ADR 0006 named this the migration path off the `hub/` topology and
   pointed at a `LegacyAliasConfig.HubTopics` field and a
   `HubTopicBuilder` type — neither of which ever existed in any commit;
-  the file has been byte-identical, two types and three functions, since
-  the initial release. The mirror that did exist was of the *device*
+  the file carried the same two types and three functions from the initial
+  release to its deletion. (Its *bytes* did change once: `fb722716`, a
+  license-header chore. An earlier revision of this entry said
+  "byte-identical", which the same PR's own commit message contradicts.) The mirror that did exist was of the *device*
   tree, so it could not have carried anyone across the `hub/` drop even
   if it had been reachable. ADR 0006 and ADR 0007 both carry an
   amendment recording that, rather than being edited as though they had

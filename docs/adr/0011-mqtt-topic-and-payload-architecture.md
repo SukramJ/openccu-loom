@@ -296,6 +296,14 @@ domain-aware code paths from the bridge.
 
 ### Topic hierarchy
 
+> **The tree below is the topology as decided in 2026-04 and is no longer
+> the shipped one.** The `channels/` infix and the `/state` suffix were
+> both retired; `update/state` became `update`. See the amendment
+> **"the `channels/` topology this section describes was retired"** at the
+> end of this document for what replaced them, and `docs/mqtt-topic-schema.md` for the shape a
+> consumer should subscribe to today. The block is kept unedited because
+> this ADR records a decision, not the current wire.
+
 ```
 <base>/                                     openccu-loom/
 ├── bridge/
@@ -477,6 +485,13 @@ displays in HA's diagnostic-entity panel; the individual DPs continue
 to be published under `channels/0/values/...` for granular subscribers.
 
 ### HA Discovery — direct topics + derived aggregate
+
+> The topic strings in the payload below carry the retired `channels/`
+> infix and `/state` suffix of the section above; the shipped discovery
+> writes `…/1/values/ACTUAL_TEMPERATURE` and `…/1/custom/climate`. The
+> *structure* of the example — several state topics per entity, direct
+> values beside the curated aggregate — is what this section decides and
+> is unchanged.
 
 A Climate discovery for our BWTH ch1 references **multiple** state
 topics — direct values straight from per-DP topics, derived values
@@ -935,3 +950,88 @@ The daemon repairs the statement wherever it can:
   device-info shape (manufacturer, model, model_id, sw_version,
   configuration_url, suggested_area, via_device) is the visual
   reference for the device card we want to mirror.
+
+## Amendment (2026-09-13) — the `channels/` topology this section describes was retired
+
+§Topic hierarchy above, and the HA Discovery example that quotes it, describe
+a topology **no daemon build publishes**. It is the most misleading kind of
+stale: this ADR is the document that owns the topic schema, so it is where
+someone goes to learn the shape, and what it shows them is the shape of the
+build before this one.
+
+Three differences, all of them on every per-DP topic:
+
+| §Topic hierarchy says | The daemon publishes |
+|---|---|
+| `<addr>/channels/<ch>/values/<param>/state` | `<addr>/<ch>/values/<param>` |
+| `<addr>/channels/<ch>/custom/<kind>/state` | `<addr>/<ch>/custom/<kind>` |
+| `<addr>/update/state` | `<addr>/update` |
+
+The `channels/` infix is gone — the channel number sits directly under the
+address — and the `/state` suffix is gone with it: the topic **is** the
+state, which is the same convention the device-scope `/availability`,
+`/info` and `/diagnostics` siblings already followed. The `set` and
+`config` companions keep their suffixes, because those name a different
+thing on the same node rather than restating what the node is.
+
+The evidence that the old shape really shipped, and that this is a
+retirement rather than a documentation error, is
+`internal/north/mqtt/retain_cleanup.go`'s `LegacySlotStateMatcher`. It
+exists for exactly one purpose: to evict the retained leftovers an operator
+who ran a previous build still has under `parts[3] == "channels"`. A sweep
+for a topology is proof the topology was on the wire.
+
+The section is not rewritten. It records what was decided in 2026-04, and
+the tree it draws is the tree that was built; a signpost now sits above it
+and above the discovery example that quotes it. The current shape lives in
+`docs/mqtt-topic-schema.md`, which is the operator-facing contract and is
+pinned against the live builder by
+`tests/contract/mqtt_topic_schema_doctest_test.go` in both directions since
+this date — see the amendment below.
+
+## Amendment (2026-09-13) — the schema document was a strict subset of the wire
+
+`tests/contract/mqtt_topic_schema_producer_test.go`, added the day before
+this entry, checks that every shape `docs/mqtt-topic-schema.md` documents is
+classified and produced. It checks that direction only, and the inverse gap
+was the larger one: **the document described a strict subset of what the
+daemon publishes.** Eight topic families had publishers and no documented
+row at all —
+
+- `<base>/system/addon_update/{state,set}` (ADR 0057, daemon-level),
+- `<base>/<central>/hub/install_mode/<iface>` and its `/set`,
+- `<base>/<central>/hub/update`,
+- `<base>/<central>/hub/{alarm_messages,service_messages,inbox}`,
+- `<base>/<central>/system/{health_score,latency,last_event_age}`,
+- `<base>/<central>/<iface>/<addr>/<ch>/week_profile/{state,set}`,
+- `<base>/<central>/<iface>/<addr>/<ch>/schedule/{state,attrs,<key>/state,<key>/set}`,
+- `<base>/<central>/<iface>/<addr>/<ch>/combined/<kind>` and its `/set`,
+
+plus the device firmware-update state topic, the legacy per-type pulse
+topic, the `/config` descriptor companions and the custom-DP `invoke`
+shape. An external consumer reading the document had no way to learn any of
+them exists. They are documented now; no publish path changed.
+
+The guard gained the missing direction with them.
+`TestMQTTTopicProducersAreDocumented` inventories every topic-shape producer
+in `internal/north/mqtt/topics.go` and `internal/model/naming/pathdata.go`
+by parsing those two files, and fails when a producer has no classification
+or an inventoried shape has no row in the document. Adding a topic builder
+is now a three-part move — function, inventory entry, documented row — and
+doing fewer than three fails.
+
+One rule it deliberately does **not** adopt: "every builder must have a
+caller". That rule is wrong here and the older half of the guard already
+records why — the daemon consumes commands through `+` wildcards, so
+`TopicBuilder.ParameterCommand` has zero production callers while both its
+documented `/set` shapes are honoured on the wire. The inventory classifies;
+it does not count.
+
+The producer scan's file exclusion narrowed in the same change. It used to
+skip `topics.go` and `pathdata.go` whole, which also discarded calls made
+from non-producer functions in those files — an ordinary production call
+site. It now skips per enclosing function: a producer delegating to a
+producer is still not a call site, but `TopicBuilder.systemMetricTopics`
+calling `HubSystemHealthScore` counts, because that helper is the
+retained-orphan sweep's enumeration of the shape, not a second spelling of
+it.
