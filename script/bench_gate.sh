@@ -157,8 +157,10 @@ CEILINGS=(
     # watching: at ~12 entities per device it is what turns into ~1.1 s of
     # discovery build on a 1000-device boot, and proportionally more on the
     # 32-bit ARMv7 CCU3 this daemon ships to. See ADR 0007's second
-    # 2026-09-13 amendment. ns: 95 082 measured on the Xeon leg; the EPYC 7763
-    # leg implies ~130 100 for the unmutated path, x1.5.
+    # 2026-09-13 amendment. ns: 95 082 on the Xeon leg and 123 899 on the
+    # slower EPYC 7763 leg; the latter x1.5, rounded. The ForWith share holds
+    # at 1.2 % on BOTH legs (1174/95082 and 1552/123899), which is the
+    # cross-CPU check that the share is a property of the code.
     "BenchmarkDiscoveryBuildPerEntity 200000 811"
 )
 

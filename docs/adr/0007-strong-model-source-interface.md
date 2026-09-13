@@ -703,6 +703,11 @@ Measured on the CI runner (`ubuntu-latest`, Intel Xeon Platinum 8573C):
 | `BenchmarkDiscoveryBuildPerEntity` (the whole build) | **95 082** | 41 199 | 811 | 100 % |
 | `BenchmarkPayloadBuildDeviceInfo` (the `ForWith` inside it) | **1 174** | 1 464 | 19 | **1.2 %** time, **2.3 %** allocations, 3.6 % bytes |
 
+The same ratio was then measured a second time on different silicon, which is
+the check that matters: on the slower AMD EPYC 7763 leg the build came in at
+**123 899 ns/op** and the harvest at **1 552 ns/op** — **1.25 %**. The absolute
+figures move by 30 %; the share does not.
+
 **The allocation ratio is the load-bearing figure, not the nanoseconds.** 19
 allocations out of 811 is a property of the code, not of the machine: it is
 identical on every run, on every runner, and on every architecture. The
