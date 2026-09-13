@@ -15,6 +15,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
@@ -325,4 +326,45 @@ func TestBuildAuthStores_SchemeGates(t *testing.T) {
 			t.Fatal("basic must stay usable when only bearer is disabled")
 		}
 	})
+}
+
+// TestSweepsDoNotRideTheCommandClient pins the composition root's half of
+// finding 3: the retained-store sweeps get their own broker connection, and
+// the bridge's subscribe client is never the object the command subscriber is
+// built on.
+//
+// The behaviour — one handler call per inbound command while a sweep window
+// is open — is pinned in-package by TestSweepsDoNotDoubleInboundCommands,
+// which drives both fan-outs a real broker and a real client perform. What
+// this adds is the composition root: that a dedicated sweep connection is
+// built at all, that it is a different object from the client the supervisor
+// hands `NewCommandSubscriber`, and that it cannot take that client'"'"'s session
+// over through a shared identifier.
+func TestSweepsDoNotRideTheCommandClient(t *testing.T) {
+	t.Parallel()
+	cfg := &config.Config{}
+	cfg.North.MQTT.Enabled = true
+	cfg.North.MQTT.BrokerURL = "tcp://127.0.0.1:1"
+	cfg.North.MQTT.TopicBase = "openccu-loom"
+	cfg.North.MQTT.ClientID = "loom"
+
+	stack := buildMQTT(cfg, slog.Default(), nil, nil, func() []string { return nil })
+	if stack == nil {
+		t.Fatal("buildMQTT returned nil with MQTT enabled")
+	}
+	if stack.sweep == nil {
+		t.Fatal("no dedicated sweep connection was built, so the sweeps ride the command " +
+			"plane's client and every inbound command runs twice for the length of a window")
+	}
+	if mqtt.Subscriber(stack.sweep) == mqtt.Subscriber(stack.client) {
+		t.Fatal("the sweep connection and the command plane's client are the same object")
+	}
+	if id := sweepClientID(cfg.North.MQTT.ClientID); id == cfg.North.MQTT.ClientID {
+		t.Fatalf("the sweep connection reuses the command plane's client id %q — MQTT allows one "+
+			"session per identifier, so the two connections take each other over in a loop", id)
+	}
+	if id := sweepClientID(""); id != "" {
+		t.Fatalf("sweepClientID(%q) = %q, want %q: an unconfigured id must stay empty so the "+
+			"broker assigns a distinct one per connection", "", id, "")
+	}
 }

@@ -504,6 +504,15 @@ func (b *Bridge) snapshotRetained(
 		closed.Store(true)
 		// Detached from ctx on purpose: a shutdown mid-window is exactly
 		// the case where the subscription would otherwise be stranded.
+		//
+		// The error is logged and not acted on HERE because acting on it is
+		// the subscriber's job: go-mqtt keeps the local registration when an
+		// UNSUBSCRIBE fails on `ErrNotConnected` or an ack timeout, and
+		// replays it on every reconnect for the rest of the process — so a
+		// retry on this connection would be answered by the same dead link.
+		// [SweepSubscriber] drops the whole connection instead, which is
+		// what makes the next sweep start from an empty filter set. The
+		// collect gate above has already made this handler inert either way.
 		if err := subClient.Unsubscribe(context.WithoutCancel(ctx), filter); err != nil {
 			slog.Default().Warn("mqtt.retain_cleanup.unsubscribe",
 				slog.String("filter", filter), slog.String("err", err.Error()))
@@ -521,10 +530,34 @@ func (b *Bridge) snapshotRetained(
 
 // cleanupSubscriber returns the subscribe-capable client the cleanup
 // passes ride on: the explicitly wired [Bridge.WithSubscriber] client
-// (production — the publish path is a publish-only circuit-breaker
-// decorator), or the publish client itself when it happens to satisfy
-// [Client] (tests and the no-broker NoopClient wiring).
+// (production — a [SweepSubscriber] on its OWN broker connection), or the
+// publish client itself when it happens to satisfy [Client] (tests and the
+// no-broker NoopClient wiring).
+//
+// The separate connection is not an implementation detail. Every filter
+// installed here is a broad wildcard that overlaps the command plane's
+// filters, and two overlapping filters on one client make a broker send one
+// copy per matching subscription which go-mqtt then re-matches against every
+// filter — so a shared client runs every inbound command handler twice for
+// the length of a window. See [SweepSubscriber].
 func (b *Bridge) cleanupSubscriber() (Subscriber, bool) {
+	if b.sweepSub != nil {
+		return b.sweepSub, true
+	}
+	return b.subscribeClient()
+}
+
+// subscribeClient returns the client this bridge's LONG-LIVED subscriptions
+// ride on: the [Bridge.WithSubscriber] client, or the publish client when it
+// happens to satisfy [Client].
+//
+// Kept apart from [Bridge.cleanupSubscriber] because the two want opposite
+// things from a connection. A sweep wants one that comes and goes with its
+// window and takes a stranded wildcard with it; the birth watch wants one
+// that is still there next week. Running the birth watch on the sweep
+// connection would silently end it the first time a sweep's UNSUBSCRIBE
+// failed, and Home Assistant restarts would stop replaying discovery.
+func (b *Bridge) subscribeClient() (Subscriber, bool) {
 	if b.subscriber != nil {
 		return b.subscriber, true
 	}

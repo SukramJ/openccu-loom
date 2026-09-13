@@ -77,17 +77,21 @@ func runtimeQoS(q QoS) hapublisher.QoS {
 // Assistant token rather than one envelope. Setting an encoding would
 // suggest a rendering decision that nothing reads.
 //
-// [hapublisher.StateConfig.CommandFilters] is likewise unset, and that one is
-// a gap rather than a choice: the guard needs the topic filters this daemon
-// subscribes to. The blocker used to be that [CommandSubscriber.Start] built
-// them as inline literals with no accessor to read them back from; that is no
-// longer true — [CommandSubscriber.routes] and [CommandRouter.Filters] both
-// hand the registered filters back, in-package — so wiring this field is now
-// a change anyone can make, and only the wiring is outstanding. Until then
-// the invariant is covered by tests —
-// TestEveryStatePlaneIsDisjointFromCommandSubscriptions sweeps all six planes
-// against the really registered filters — so what is missing is the runtime
-// half, not the guarantee.
+// [hapublisher.StateConfig.CommandFilters] carries this daemon's own command
+// filter set, so a state publish that would land inside one of its own
+// subscriptions is refused with [hapublisher.ErrStateCommandCollision]
+// instead of being echoed back into a command handler. That is the hazard
+// this daemon actually shipped once — program state mirrored onto the
+// program's own `…/trigger` topic, running the program on the CCU on every
+// boot and every hub republish, with nothing in the logs.
+//
+// It used to be unset for want of an accessor. The filters are a pure
+// function of the topic base ([commandFilters]), which is what lets the guard
+// be armed here, with the [Bridge], rather than waiting for the supervisor to
+// build a command subscriber for this stack generation. The sweep
+// TestEveryStatePlaneIsDisjointFromCommandSubscriptions stays: it covers all
+// six planes including the per-datapoint one, which does not publish through
+// this publisher and therefore is not covered by this guard.
 func newStatePublisher(b *Bridge, logger *slog.Logger) *hapublisher.StatePublisher {
 	return hapublisher.NewStatePublisher(
 		hagomqtt.Split(b.client, lateSubscriber{b: b}),
@@ -100,7 +104,10 @@ func newStatePublisher(b *Bridge, logger *slog.Logger) *hapublisher.StatePublish
 			// default is stated for the same reason the state level is: a
 			// pulse is QoS 0 by this daemon's policy, not by omission.
 			PulseQoS: hapublisher.QoSAtMostOnce,
-			Logger:   logger,
+			// See the paragraph above: the runtime half of the
+			// state-vs-command disjointness invariant.
+			CommandFilters: commandFilters(b.cfg.Base),
+			Logger:         logger,
 		},
 	)
 }

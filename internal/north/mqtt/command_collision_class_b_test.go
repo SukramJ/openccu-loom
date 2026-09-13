@@ -5,7 +5,6 @@ package mqtt
 
 import (
 	"context"
-	"strings"
 	"sync"
 	"testing"
 )
@@ -362,30 +361,50 @@ func TestClassBFanoutDoubleIsNotSingleStage(t *testing.T) {
 // It held for none of these three shapes before coalescing: each matched two
 // subscriptions, and the hand-maintained guards only kept the second
 // dispatch from reaching the CCU.
+//
+// The arithmetic half used to count the slashes in a string literal declared
+// three lines above it, which no production code participates in: it restated
+// the fixture and could not fail. The depth now comes from the FILTER the
+// topic really matched, off [commandFilters] — so a route that changed length
+// moves the number this asserts.
 func TestClassBTopicsAreNotAlsoAWeekProfileShape(t *testing.T) {
 	f := newClassBFixture(t)
-	for _, topic := range []string{
-		classBBase + "/ccu-01/HmIP-RF/0001ABCD/1/combined/duration/set",
-		classBBase + "/ccu-01/HmIP-RF/0001ABCD/1/schedule/1_1/set",
+	for _, tc := range []struct {
+		topic string
+		depth int
+	}{
+		{classBBase + "/ccu-01/HmIP-RF/0001ABCD/1/combined/duration/set", 7},
+		{classBBase + "/ccu-01/HmIP-RF/0001ABCD/1/schedule/1_1/set", 7},
+		// The class-A shape for contrast: one level shorter, and likewise
+		// matched by exactly one subscription since its own filter was
+		// folded into the six-segment route.
+		{classBBase + "/ccu-01/HmIP-RF/0001ABCD/1/week_profile/set", 6},
 	} {
-		rest := strings.TrimPrefix(topic, classBBase+"/")
-		if got := len(strings.Split(rest, "/")); got != 7 {
-			t.Errorf("%q is %d segments below the base, want 7 — "+
-				"a class-B shape that became six segments would arrive in the six-segment "+
-				"branch, which does not dispatch it and would write its literal to the CCU "+
-				"as a parameter name", topic, got)
+		claimed := claimingFilters(classBBase, tc.topic)
+		if len(claimed) != 1 {
+			t.Errorf("%q is claimed by %v, want exactly one registered route", tc.topic, claimed)
+			continue
 		}
-		if got := f.client.matchingFilters(topic); got != 1 {
-			t.Errorf("%q matches %d filters, want 1", topic, got)
+		if got := segmentsBelowBase(claimed[0], classBBase); got != tc.depth {
+			t.Errorf("%q is routed by %q, which sits %d segments below the base, want %d — "+
+				"a class-B shape that lost a level arrives in the six-segment branch, which "+
+				"does not dispatch it and writes its literal to the CCU as a parameter name",
+				tc.topic, claimed[0], got, tc.depth)
+		}
+		if got := f.client.matchingFilters(tc.topic); got != 1 {
+			t.Errorf("%q matches %d subscriptions, want 1", tc.topic, got)
 		}
 	}
-	// The class-A shape for contrast: six segments, and likewise matched by
-	// exactly one subscription since its own filter was folded in.
-	wp := classBBase + "/ccu-01/HmIP-RF/0001ABCD/1/week_profile/set"
-	if got := len(strings.Split(strings.TrimPrefix(wp, classBBase+"/"), "/")); got != 6 {
-		t.Errorf("%q is %d segments below the base, want 6", wp, got)
+}
+
+// claimingFilters returns the registered command filters that match topic,
+// read off the production route set rather than off the fixture.
+func claimingFilters(base, topic string) []string {
+	var out []string
+	for _, f := range commandFilters(base) {
+		if topicMatchesFilter(topic, f) {
+			out = append(out, f)
+		}
 	}
-	if got := f.client.matchingFilters(wp); got != 1 {
-		t.Errorf("%q matches %d filters, want 1", wp, got)
-	}
+	return out
 }

@@ -6,6 +6,52 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The retained-store sweeps no longer double every inbound command.**
+  The retain-cleanup and orphan sweeps installed `<base>/#` and the raw
+  subtree on the *same* client the command plane subscribes on. A broker
+  sends one copy of a PUBLISH per matching subscription (MQTT 3.1.1
+  §4.7.3 / 5.0 §3.3.4) and go-mqtt re-matches every arriving copy against
+  its whole local filter list, so for the length of every sweep window
+  each inbound command invoked its handler **twice** — a doubled
+  `PRESS_SHORT`, a doubled program trigger, a doubled alarm arm, with
+  nothing in any log. The window is `north.mqtt.retain_cleanup_window_ms`
+  (2 s by default), at boot and once per configured CCU.
+
+  The sweeps now ride their own subscribe-only broker connection, opened
+  when a sweep starts and closed when it ends, with its own client
+  identifier and no last will. MQTT 5.0 Subscription Identifiers were
+  the alternative and are worse here: they are v5-only while
+  `north.mqtt.protocol_version: "3.1.1"` is an operator-reachable key,
+  and they would have to be on *every* subscription of the client — which
+  means putting the command router into attributed mode, which the
+  command plane refuses on purpose because the router never retries an
+  attributed route unattributed. No Local addresses none of it: it
+  suppresses only the echo of what this connection published, and an
+  inbound command comes from Home Assistant.
+
+- **A refused UNSUBSCRIBE no longer strands a sweep filter for the life
+  of the process.** go-mqtt returns early from `Unsubscribe` on
+  `ErrNotConnected` or an ack timeout without removing the local
+  registration, and replays every registration on each reconnect — so a
+  sweep whose teardown failed once kept `<base>/#` on the wire forever,
+  with one warn line nothing reacted to, and boot (when the window runs)
+  is exactly when links are flaky. The sweep connection is now dropped
+  when a teardown fails, so the next sweep starts from an empty filter
+  set.
+
+- **A config swap no longer runs two command-subscriber generations in
+  parallel.** The swap built the new subscriber set and only then tore
+  the old stack down, so both generations held command subscriptions on
+  their own live connections while the build ran and the broker delivered
+  every inbound write to both. The teardown-first path is guarded on a
+  matching, non-empty `client_id` — which has no default — so the
+  ordinary swap of a daemon that never set one took exactly the doubling
+  route. The predecessor's subscribers now stop before the new ones go on
+  the wire; its client and lifecycle stay up until the new set is live,
+  so a failed build is still a rollback.
+
 ### Changed
 
 - **The dead-code ratchet's two blind spots are written down, where the next
@@ -194,6 +240,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   untouched.
 
 ### Added
+
+- **The state and availability publishers now refuse a write that lands
+  inside one of this daemon's own command subscriptions**
+  (`hapublisher.StateConfig.CommandFilters` and its availability twin,
+  both previously unset for want of an accessor). This is the runtime
+  half of an invariant that until now lived only in a test sweep; the
+  sweep stays, because it also covers the per-datapoint plane, which does
+  not publish through these runtimes.
 
 - **A per-CCU availability gate at `<base>/<central>/hub/status`, and
   every CCU-scoped hub entity now takes availability from it as well as

@@ -83,6 +83,11 @@ const (
 // blocking on the broker's AckTimeout.
 var ErrCircuitOpen = gomqtt.ErrCircuitOpen
 
+// ErrAlreadyConnected is what [Connector.Connect] reports when a session is
+// already established. [SweepSubscriber] treats it as an idempotent success
+// for the same reason [Lifecycle] does.
+var ErrAlreadyConnected = gomqtt.ErrAlreadyConnected
+
 // NewBreaker wraps a Publisher in a circuit breaker.
 func NewBreaker(pub Publisher, cfg BreakerConfig) *Breaker { return gomqtt.NewBreaker(pub, cfg) }
 

@@ -109,16 +109,19 @@ func deviceAvailabilitySlot(centralName, iface, address string) hamodel.Slot {
 // one, which is also what the state plane's own QoS 0 is being kept away
 // from here.
 //
-// [hapublisher.AvailabilityConfig.CommandFilters] is unset for the same
+// [hapublisher.AvailabilityConfig.CommandFilters] is wired for the same
 // reason [hapublisher.StateConfig.CommandFilters] is — see
-// [newStatePublisher].
+// [newStatePublisher]. An availability marker inside a command filter is the
+// same self-inflicted CCU write as a state one, and the retraction path is
+// where it would be least likely to be noticed.
 func newAvailabilityPublisher(b *Bridge, logger *slog.Logger) *hapublisher.AvailabilityPublisher {
 	return hapublisher.NewAvailability(
 		hagomqtt.Split(b.client, lateSubscriber{b: b}),
 		hapublisher.AvailabilityConfig{
-			Layout: availabilityLayout{topics: b.topics},
-			QoS:    hapublisher.QoSAtLeastOnce,
-			Logger: logger,
+			Layout:         availabilityLayout{topics: b.topics},
+			QoS:            hapublisher.QoSAtLeastOnce,
+			CommandFilters: commandFilters(b.cfg.Base),
+			Logger:         logger,
 		},
 	)
 }

@@ -5,6 +5,7 @@ package main
 
 import (
 	"bytes"
+	"log/slog"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
@@ -24,10 +25,20 @@ import (
 // Assistant's own birth tree where nothing reads it. Neither defect is
 // visible from the code that contains it. This test is what makes it
 // visible here.
+//
+// It only makes it visible if it reads the will the composition root really
+// configures. It used to hand-build one — `mqtt.Will{Topic:
+// buildLWTTopic(cfg), Payload: []byte("offline"), Retain: true}` — which is
+// the same three literals the production path uses, restated. Finding 8:
+// changing the production will's topic, its payload and its Retain flag each
+// left this package green, so the test that claims to make the drift visible
+// could not see any of it. The will now comes off [northTCPConfig], the
+// TCPConfig handed to `mqtt.NewTCPClient`.
 func TestConfiguredLastWillMatchesTheBridgePolicy(t *testing.T) {
 	t.Parallel()
 	cfg := &config.Config{}
 	cfg.North.MQTT.TopicBase = "openccu-loom"
+	cfg.North.MQTT.BrokerURL = "tcp://127.0.0.1:1"
 
 	bridge := mqtt.NewBridge(mqtt.BridgeConfig{
 		Base:               cfg.North.MQTT.TopicBase,
@@ -38,11 +49,12 @@ func TestConfiguredLastWillMatchesTheBridgePolicy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LastWill: %v", err)
 	}
-	got := mqtt.Will{
-		Topic:   buildLWTTopic(cfg),
-		Payload: []byte("offline"),
-		Retain:  true,
+	will := northTCPConfig(cfg, slog.Default()).Will
+	if will == nil {
+		t.Fatal("the composition root configures no last will at all: a hard crash then leaves " +
+			"every entity available forever, showing the last value it ever saw")
 	}
+	got := *will
 	if got.Topic != want.Topic {
 		t.Fatalf("the configured will clears %q, the bridge announces on %q", got.Topic, want.Topic)
 	}

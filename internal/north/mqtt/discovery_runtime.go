@@ -113,7 +113,14 @@ func (l bridgeStatusLayout) Bridge() string { return alarmBridgeStatusTopic(l.ba
 // publish path it was handed is a publish-only circuit-breaker decorator.
 // Resolving per call also keeps the existing fallback — a publish client that
 // happens to satisfy [Client], which is how the tests and the no-broker
-// wiring reach the sweeps — in the one place that already decides it.
+// wiring reach it — in the one place that already decides it.
+//
+// It resolves [Bridge.subscribeClient] and NOT [Bridge.cleanupSubscriber]:
+// the one subscription that goes through here is the Home Assistant birth
+// watch, which has to outlive every sweep window. The sweep connection is
+// torn down when a window closes and dropped outright when an UNSUBSCRIBE
+// fails, so a birth watch on it would end silently and Home Assistant
+// restarts would stop replaying discovery.
 type lateSubscriber struct{ b *Bridge }
 
 // Subscribe implements [Subscriber].
@@ -124,7 +131,7 @@ func (s lateSubscriber) Subscribe(
 	handler MessageHandler,
 	opts ...SubscribeOption,
 ) (SubscribeResult, error) {
-	sub, ok := s.b.cleanupSubscriber()
+	sub, ok := s.b.subscribeClient()
 	if !ok {
 		return SubscribeResult{}, errCleanupClientLacksSubscribe
 	}
@@ -133,7 +140,7 @@ func (s lateSubscriber) Subscribe(
 
 // Unsubscribe implements [Subscriber].
 func (s lateSubscriber) Unsubscribe(ctx context.Context, filter string) error {
-	sub, ok := s.b.cleanupSubscriber()
+	sub, ok := s.b.subscribeClient()
 	if !ok {
 		return errCleanupClientLacksSubscribe
 	}
