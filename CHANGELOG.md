@@ -8,6 +8,31 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The state-plane bookkeeping split had no test**, so all three of a
+  review's mutations survived the suite: indexing only on an accepted
+  publish, counting a suppressed one, and the two swapped. Two of the
+  three are now killed. They fail in opposite directions -- index only
+  when the gate published and a suppressed republish drops a topic the
+  broker still holds, so the device-removal sweep that walks that index
+  never retracts it; count a suppressed publish and `messages_sent`
+  describes intent rather than traffic, which is the opposite of what an
+  operator reads it for.
+
+  The third mutation still survives, and the test says why rather than
+  being contrived to kill it: the first write for a topic is never
+  suppressed, so re-indexing on a later suppressed one is a no-op. The
+  unconditional call is defensive, and `publishRuntimeState`'s doc
+  comment justifies it with a case that cannot currently arise.
+
+  Recorded as a **suspicion, not a defect**: nothing in the package calls
+  `StatePublisher.Forget`, and `retractTopicsMatching` deletes from the
+  retained-topic index while leaving the dedup gate holding the payload
+  it just cleared. The two can therefore diverge, and an identical
+  republish would then be suppressed with nothing on the broker -- but no
+  live path was established that reaches it.
+
+### Fixed
+
 - **The retained-store sweeps no longer double every inbound command.**
   The retain-cleanup and orphan sweeps installed `<base>/#` and the raw
   subtree on the *same* client the command plane subscribes on. A broker
