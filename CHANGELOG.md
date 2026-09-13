@@ -6,6 +6,48 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.78.1] - 2026-09-13
+
+### Release summary
+
+A patch release with one job: 0.78.0 shipped a broken recovery procedure and
+a tool that could not finish the job, so an operator who turned
+`north.mqtt.discovery_bundles` on and wanted out had no working documented
+path and no working script. Both are fixed. Nothing in the daemon changes.
+
+**If you followed the rollback instructions in 0.78.0, they did not work.**
+The `mosquitto_pub` command in `docs/user/multi-ccu.md` §2.3 fails three
+ways, two of them before it dials the broker: it publishes to a topic ending
+in `/#` (MQTT §4.7.0 forbids a wildcard in a PUBLISH — `Error: Invalid
+publish topic 'a/#'`), it passes `-n` and `-l` together (`Error: Only one
+type of message can be sent at once`), and its third segment is the bare
+interface token `HmIP-RF` where the daemon publishes the wire interface id
+`<central>-<interface>`, naming a topic that has never held a retained
+message. All three were reproduced against the real `mosquitto_pub`.
+
+**The corrected procedure**: list what the broker actually holds first, then
+clear those topics — copy the topic out of the listing, do not compose it.
+
+```sh
+mosquitto_sub -h <broker> -t 'openccu-loom/#' --retained-only -v -W 2
+mosquitto_pub -h <broker> -t '<topic copied from the listing>' -r -n
+```
+
+`script/clean-mqtt-discovery.sh` is the supported path and is named first in
+the document now — and it **clears device bundles too**. Its subscribe
+pattern was `homeassistant/+/+/+/config`, five levels, the per-entity form; a
+device bundle is `homeassistant/device/<node_id>/config`, four, and `+`
+matches exactly one level, so bundles were invisible to every phase of the
+script. Both patterns are subscribed in one pass now.
+
+Also: `north.mqtt.discovery_bundles` is documented at all for the first time
+— it was documented nowhere — including the measured cost of turning it back
+off. The orphan sweep does retract the stale documents, but it runs *after*
+the snapshot that republishes the per-entity configs, so a rollback costs
+**one boot** with the affected devices missing and self-heals on the next
+restart. `docs/admin/configuration.md` describes the manual retraction that
+skips that window.
+
 ### Fixed
 
 - **The documented operator rollback command cannot be executed, and the

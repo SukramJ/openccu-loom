@@ -4,6 +4,14 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.78.1
+
+No changes to the proxy or the daemon. Documentation and tooling only: the
+rollback procedure for `north.mqtt.discovery_bundles` shipped in 0.78.0 could
+not be executed, and `script/clean-mqtt-discovery.sh` could not clear device
+bundles. Both are fixed, and the option is documented for the first time. The
+main add-on's changelog describes it in full.
+
 # 0.78.0
 
 No changes to the proxy itself. The daemon changes how it turns a name

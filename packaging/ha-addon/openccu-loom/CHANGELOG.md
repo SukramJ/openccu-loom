@@ -1,5 +1,22 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.78.1
+
+Documentation and tooling only — the daemon is unchanged. If you turned
+`north.mqtt.discovery_bundles` on and wanted to go back, 0.78.0 left you with
+no working way out: the rollback command in the manual could not be executed
+at all (it used a wildcard in a publish topic and two mutually exclusive
+flags, so `mosquitto_pub` rejected it before dialing), and
+`script/clean-mqtt-discovery.sh` — the fallback — could not see device
+bundles, because its topic filter had one level too many.
+
+Both are fixed. The manual now tells you to list the retained topics the
+broker actually holds (`mosquitto_sub --retained-only`) and clear those, and
+the script clears device bundles as well as per-entity configs. The
+`north.mqtt.discovery_bundles` option itself is documented for the first
+time, including what turning it back off costs: one boot with the affected
+devices missing, self-healing on the next restart.
+
 ## 0.78.0
 
 Changed, and it affects you only if a name on your system carries an accent
