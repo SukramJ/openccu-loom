@@ -100,7 +100,7 @@ func TestSecurityZoneTopicsCarryTheStoredSlug(t *testing.T) {
 	p.Start(bus)
 	t.Cleanup(p.Stop)
 	events.Publish(bus, hmevent.SecurityStateChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
-	obs.settle(t)
+	obs.settle(t, p)
 
 	want := base + "/security/zone/" + zoneSlug
 	published := obs.publishedTopics()

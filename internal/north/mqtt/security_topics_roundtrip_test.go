@@ -96,7 +96,7 @@ func runSecurityPlane(t *testing.T, base string) *observedPlane {
 			Retainable: true,
 		})
 	}
-	obs.settle(t)
+	obs.settle(t, p)
 	return obs
 }
 
