@@ -1,5 +1,33 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## Unreleased
+
+Changed, and it affects you only if a name on your system carries an accent
+that is not a German umlaut, or a double underscore. The daemon had two
+different rules for turning a name into a Home Assistant identifier, and they
+disagreed. There is one rule now, the shared one, and it fixes two real
+defects:
+
+- A CCU, system variable or program named "Café" produced the identifier
+  "caf" — the same identifier as one named "Caf". Two objects, one entity,
+  and nothing anywhere saying the second one existed. "Café" now becomes
+  "cafe". The same applies to Spanish, Danish, Swedish, Norwegian and French
+  accents.
+- A name like "Watchdog:_CCU-Jack" produced a double underscore that nothing
+  else in the daemon could produce. It is a single underscore now.
+
+Your entities keep their history, their statistics, their entity ids and every
+automation that names them — the entity identity does not move. What does move
+is the discovery topic and the device identifier, so on first start after the
+upgrade the affected device cards are re-created: re-apply the area and the
+name on the CCU's device card and on any BidCoS-RF, HmIP-RCV-1, INT000* or
+CUxD card, and re-point automations that target those devices rather than
+their entities. The old entities are removed automatically; you do not have to
+clear anything by hand.
+
+German names are not affected. "CCU Küche" was "ccu_kueche" before and is
+"ccu_kueche" now.
+
 ## 0.77.0
 
 Changed: the Config UI looks and behaves the same on every page. Views used to

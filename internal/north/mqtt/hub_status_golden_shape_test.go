@@ -36,6 +36,15 @@ import (
 // name — breaks this test on the entries it touches. That is the intended
 // cost: it is then deleted along with the availability-only claim it
 // records, in the commit that makes the change, deliberately.
+//
+// One such change has landed, and rather than delete the claim for 48
+// entries to admit a delta in two, the delta is carried explicitly. The
+// discovery-slug unification moved the `object_id` segment of exactly two
+// topics ([hubGoldenSlugUnificationTopicMoves]), and nothing else anywhere
+// — so those two entries are checked by substituting the pre-unification
+// topic back in and requiring the ORIGINAL pre-gate digest. That is a
+// stronger statement than a re-baselined digest would be: it says the
+// payload did not move AND names the one byte range of the topic that did.
 var hubGoldenPreCCUGateDigests = map[string]string{
 	"aggregate/alarm-messages":                  "807cd762dc60a5ac5d8e9f86f516b858520792f2e3b9ecc6634e09303d501f88",
 	"aggregate/hazard-second-central-inbox":     "c09a19a17ffa95d927066f2e9b6203230d882be3dfdc919089d6c50d89030b26",
@@ -87,6 +96,23 @@ var hubGoldenPreCCUGateDigests = map[string]string{
 	"sysvar/unknown-type-sensor":                "8ae04e35f10286a5a4d3ac067ca74b0196ed4ba4f4b6352dd7ee02975ba38d16",
 }
 
+// hubGoldenSlugUnificationTopicMoves is every pinned hub entry whose
+// discovery TOPIC moved when `naming.DiscoverySlug` was unified onto the
+// shared `topic.Slug` rule, against the topic it carried before.
+//
+// Both are hazard rows added for exactly this step, and both are a fixed
+// defect rather than drift: `Café Terrasse` used to slug to `caf_terrasse`
+// — the same object id as a sibling named `Caf Terrasse`, so two system
+// variables shared one retained config — and `Watchdog:_CCU-Jack` used to
+// keep a literal double underscore. No payload field of either entry moved,
+// and no `unique_id`, `identifiers`, `default_entity_id` or state topic
+// moved anywhere on this plane; [TestHubGoldenChangedOnlyInAvailability] is
+// what proves the second half of that sentence.
+var hubGoldenSlugUnificationTopicMoves = map[string]string{
+	"sysvar/hazard-accent-twin-a":             "homeassistant/binary_sensor/ccu-01_sysvars/caf_terrasse/config",
+	"sysvar/hazard-literal-double-underscore": "homeassistant/binary_sensor/ccu-01_sysvars/watchdog__ccu-jack/config",
+}
+
 // TestHubGoldenChangedOnlyInAvailability strips `availability` from every
 // pinned hub payload and requires the remainder to hash to what it hashed to
 // before the gate was added.
@@ -104,6 +130,20 @@ func TestHubGoldenChangedOnlyInAvailability(t *testing.T) {
 		if !ok {
 			t.Errorf("%s: no pre-gate digest — a new hub entity, or a renamed one", name)
 			continue
+		}
+		if was, moved := hubGoldenSlugUnificationTopicMoves[name]; moved {
+			// The slug unification moved this topic's object-id segment.
+			// Put the old segment back: if the digest then matches the
+			// original pre-gate one, the topic move is the whole delta and
+			// the payload is untouched — which is the claim. If the topic
+			// did NOT in fact move, `was` equals the current topic and this
+			// still holds, so the entry has to be removed from the map by
+			// hand rather than silently passing under a stale exemption.
+			if entry.Topic == was {
+				t.Errorf("%s: listed as a slug-unification topic move but the topic is still %q — "+
+					"remove it from hubGoldenSlugUnificationTopicMoves", name, was)
+			}
+			entry.Topic = was
 		}
 		if got := hubEntryDigestWithoutAvailability(t, entry); got != want {
 			t.Errorf("%s: payload changed outside `availability` (digest %s, want %s). "+

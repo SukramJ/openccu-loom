@@ -234,6 +234,159 @@ Each entry is one applied re-key, written before the release that carries it,
 per [ADR 0068](../adr/0068-unique-id-stability-per-plane.md) and
 [Breaking a Published Identity](./breaking-change-process.md).
 
+### The discovery slug is unified onto the shared rule — daemon unreleased
+
+This one moves a **`node_id`**, an **`object_id`** and a device
+**`identifiers`** value. It does **not** move a `unique_id` or a
+`default_entity_id`, and it moves no state, command or availability topic.
+That distinction is the whole of its cost, so it is stated first: no entity
+loses its history, its long-term statistics or its `entity_id`.
+
+**What changed.** The daemon carried two slug rules for the same job. The
+shared one (`go-hamqtt`'s `topic.Slug`, used by every other consumer of that
+module) and a second copy inside the daemon that disagreed with it on eight
+inputs in two classes. Both disagreements were defects in the daemon's copy:
+
+- **non-German accented Latin was dropped rather than transliterated.** A CCU
+  or a system variable named `Café` slugged to `caf` — the same identifier as
+  one named `Caf`. Two objects, one retained discovery config, and Home
+  Assistant kept whichever arrived last. The operator saw one entity where
+  they had configured two, with no warning anywhere.
+- **a literal `__` passed through.** Only *generated* underscore runs
+  collapsed. `Watchdog:_CCU-Jack` — a real CCU name, cited as the motivating
+  example in the daemon's own source for as long as the rule existed — slugged
+  to `watchdog__ccu-jack`, a spelling nothing else in the daemon could produce.
+
+**Old and new, side by side.** The affected inputs, and only these:
+
+| Name | Old slug | New slug |
+| --- | --- | --- |
+| `Café` | `caf` | `cafe` |
+| `Señor` | `se_or` | `senor` |
+| `Garçon` | `gar_on` | `garcon` |
+| `Ångström` | `ngstroem` | `angstroem` |
+| `Ærø` | `r` | `aeroe` |
+| `Søren` | `s_ren` | `soeren` |
+| `a__b` | `a__b` | `a_b` |
+| `Watchdog:_CCU-Jack` | `watchdog__ccu-jack` | `watchdog_ccu-jack` |
+
+German names are unaffected — `CCU Küche` was `ccu_kueche` before and after,
+as were `Heizung Büro`, `Außen Temperatur` and `s0_Sensoren_Hülle_EG`. So is
+any name already inside `[a-z0-9_-]`.
+
+A real example, for a CCU named `Café`:
+
+```
+old  homeassistant/switch/caf_0001d3c99c1234/1_state/config
+new  homeassistant/switch/cafe_0001d3c99c1234/1_state/config
+
+old  device.identifiers = ["openccu-loom_central_caf"]
+new  device.identifiers = ["openccu-loom_central_cafe"]
+
+unchanged  unique_id          = loom_11a0001234_0001d3c99c1234_1_state
+unchanged  default_entity_id  = (unchanged, or absent on this plane)
+unchanged  state_topic        = gh/Café/HmIP-RF/0001D3C99C1234/1/values/STATE
+```
+
+**What is lost, named.** Less than a `unique_id` re-key costs, and it is not
+nothing:
+
+- **Nothing at the entity level.** Home Assistant keys its entity registry on
+  `unique_id`, which does not move here. History, long-term statistics, the
+  `entity_id`, custom name, icon, category and every automation or dashboard
+  card naming the entity all survive. Measured, not assumed: the entity keeps
+  its registry row across a discovery-topic move — see ADR 0070's second
+  amendment, taken on a live 2026.9 instance.
+- **At the device level, the device row is replaced.** `identifiers` is the
+  device registry's key and Home Assistant has no migration for it either, so
+  the CCU's device card and the cards of its central-scoped devices
+  (`BidCoS-RF`, `BidCoS-Wir`, `HmIP-RCV-1`, the `INT000*` internals and the
+  CUxD roots) are re-created under the new identifier. **A device-level area
+  assignment, a renamed device and a device-level disable are lost**, and any
+  entity that inherited its area from the device inherits from the new,
+  unassigned one. An entity with its own explicit area keeps it.
+- **Automations that target `device_id` rather than `entity_id` break.** The
+  device id changes with the device row. Home Assistant's own guidance is to
+  target entities, and this is one of the reasons; an automation written in
+  the UI may well carry a device target without the author having chosen one.
+- **The two collided entities un-collide.** On an installation that hit the
+  `Café`/`Caf` defect, the object that was silently losing the race reappears.
+  That is the fix, and it reads as a new entity.
+
+**The orphan swept, not left behind.** `RunDiscoveryOrphanCleanupOnce`
+retracts the retained discovery configs of the old spelling on the first start
+after the upgrade, so the old entities disappear rather than lingering as
+permanently unavailable twins. The sweep was extended for this change: it now
+recognises the pre-unification node-id spelling as its own
+(`legacyDiscoverySlug` in `internal/north/mqtt/retain_cleanup.go`) alongside
+the canonical and the older `TopicSafe` one. Without that extension nothing in
+the daemon would ever spell those node ids again and every affected entity
+would keep a phantom config forever — which is the failure mode ADR 0068's
+obligation 3 exists to prevent.
+
+Where only the *object* id moved and the node id did not — a system variable
+named `Café Terrasse` on a CCU named `ccu-01` — the sweep already reached it,
+because the node id it lives under is unchanged.
+
+**How to see the blast radius before upgrading.** You are affected if, and
+only if, one of the following carries a non-German accented Latin character
+(`é è ê ë á à â å æ ø ñ ç í ì î ó ò ô ú ù û`) or a literal `__` / `:_` pair:
+
+- **your CCU's configured name** — this is the expensive one, because it moves
+  every device card of that CCU. Check `central` in the add-on configuration,
+  or read it off a topic: `mosquitto_sub -h <broker> -t '<base>/+/hub/status' -v -W 3`.
+- **a system variable or program name**, which moves only that entity's
+  discovery topic (its `unique_id` is keyed on the ISE id).
+
+The second class is also visible on the broker without knowing any names:
+a discovery topic carrying a double underscore is one that will move.
+
+```sh
+mosquitto_sub -h <broker> -t 'homeassistant/#' -v -W 3 \
+  | awk '$1 ~ /\/config$/ && $1 ~ /__/ {print $1}' \
+  | sort -u
+```
+
+The first class cannot be found that way — a dropped accent leaves no trace
+in the result — so for it, read the names: your CCU's, and any system
+variable or program whose name you know carries one.
+
+The simpler check is the first one: if your CCU name and every sysvar and
+program name is plain ASCII or German, nothing moves and the upgrade is a
+no-op on this plane. That is the overwhelmingly common case — on a typical
+German-language fleet **zero** entities are affected. On an installation with
+one affected CCU name, every entity of that CCU moves discovery topic
+(hundreds to low thousands) while every one of them keeps its registry row;
+the device rows of that CCU plus its handful of central-scoped devices
+(typically three to six) are re-created.
+
+**Operator steps.**
+
+*Before upgrading* — only if the check above says you are affected:
+
+1. Note the **area** of each affected device (the CCU card and any
+   `BidCoS-RF` / `HmIP-RCV-1` / `INT000*` / CUxD card), and any device you
+   renamed. These are what you will re-apply.
+2. Note any automation that targets one of those devices by device, rather
+   than by entity.
+3. Optionally, rename the CCU to a plain-ASCII name *before* upgrading and let
+   the pre-unification daemon's sweep handle that move under the old rule. This
+   trades one move for another and is not recommended; it is listed because it
+   is the only way to control when the move happens.
+
+*After upgrading:*
+
+1. Start the daemon once and let the first orphan sweep complete. The old
+   device cards empty out and Home Assistant removes them.
+2. Re-apply the device areas and names you noted.
+3. Re-point the device-targeted automations from step 2 at entities. Home
+   Assistant's Repairs panel and the automation editor flag an unresolvable
+   device target.
+4. Nothing else. Entity ids, history and statistics need no action.
+
+**Announced in** the root `CHANGELOG.md` and both add-on changelogs under
+`packaging/ha-addon/`.
+
 ### Channel event entities move onto the event-group layout — daemon 0.69.0
 
 **Old** — the generic channel-id helper with an `event` leaf, no family
