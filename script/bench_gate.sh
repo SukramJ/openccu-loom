@@ -20,14 +20,16 @@
 # this repository has already had a gate that flaked and was switched off, and
 # an unenforced red gate is worse than no gate at all.
 #
-# This is not a theoretical preference. On the 4-core developer machine these
-# ceilings were first taken on, ten runs of the unchanged twenty-field
-# benchmark spanned 4 773 - 5 990 ns/op with the box near-idle, and
-# 32 907 - 49 634 ns/op with three other build jobs on it: a factor of seven
-# between two runs of identical code, and a spread wide enough that any
-# average-based gate would either flake or be padded into meaninglessness. The
-# minimum tracked the quiet figure in both cases, which is the property this
-# gate needs.
+# This is not a theoretical preference. On the 4-core developer machine the
+# benchmark was written on, ten runs of the unchanged twenty-field benchmark
+# spanned 4 773 - 5 990 ns/op with the box near-idle and 32 907 - 49 634 ns/op
+# with three other build jobs on it: a factor of seven between two runs of
+# identical code, and a spread wide enough that any average-based gate would
+# either flake or be padded into meaninglessness. The minimum tracked the quiet
+# figure in both cases, which is the property this gate needs. On the CI runner
+# the ceilings below are calibrated against (ubuntu-latest, AMD EPYC 9V45) the
+# seven runs spanned 1 343 - 1 735 ns/op, so even there one sample in seven sat
+# 29 % high while the minimum held steady.
 #
 # On top of the minimum the ceilings below carry an explicit headroom factor
 # over the measured figure, so a CI runner that is simply slower silicon than
@@ -37,11 +39,13 @@
 #
 # THESE CEILINGS ARE A RATCHET, NOT THE ADR'S BOUND
 #
-# The ADR's 500 ns/op is NOT met — see the ceilings below and the ADR's
-# 2026-09-13 amendment. These numbers are armed at what the code measures
-# today so that it cannot get worse while the gap to the ADR's bound is
-# addressed separately. Lowering a ceiling after an improvement is the point;
-# raising one needs a reason in the commit message.
+# The ADR's 500 ns/op is NOT met. Measured on the CI runner these ceilings are
+# calibrated against: 1 343 ns/op for the ADR's own twenty-field workload (2.7x
+# the bound) and 829 ns/op for the production device harvest (1.7x). See the
+# ADR's 2026-09-13 amendment. The ceilings below are armed at what the code
+# measures today so that it cannot get worse while the gap is addressed
+# separately. Lowering a ceiling after an improvement is the point; raising one
+# needs a reason in the commit message.
 #
 # Usage:  script/bench_gate.sh          (or: make bench-gate)
 # Env:    BENCH_GATE_RUNS      number of independent runs (default 7)
@@ -63,9 +67,18 @@ BENCHTIME="${BENCH_GATE_BENCHTIME:-300ms}"
 # per-type cached reflection path over a 20-field struct.
 # BenchmarkPayloadBuildDeviceInfo is the production call site in
 # internal/north/mqtt/discovery.go, harvesting a *device.Device for KindInfo.
+# Each ceiling is the minimum this benchmark measured on the CI runner, doubled.
+# The 2x is headroom for runner silicon, not for noise — the minimum-of-N above
+# already handles noise. GitHub's hosted pool is not one machine, and a leg
+# scheduled on an older part can be genuinely slower at identical code; 2x
+# covers that while still failing on any regression that actually matters (a
+# doubling of the harvest cost is not a rounding error). Tighten these when the
+# pool stops varying, or when the path gets faster.
 CEILINGS=(
-    "BenchmarkPayloadBuildTwentyField 12000"
-    "BenchmarkPayloadBuildDeviceInfo 12000"
+    # measured 1343 ns/op (AMD EPYC 9V45, min of 7)
+    "BenchmarkPayloadBuildTwentyField 2700"
+    # measured 829 ns/op (same run)
+    "BenchmarkPayloadBuildDeviceInfo 1700"
 )
 
 BENCH_RE='^(BenchmarkPayloadBuildTwentyField|BenchmarkPayloadBuildDeviceInfo)$'

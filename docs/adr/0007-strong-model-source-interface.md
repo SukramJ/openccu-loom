@@ -523,7 +523,7 @@ exist, so §Mitigations' "the per-type cached reflection path must stay below
 benchmark gate" bounded nothing. That file now exists, the bound has been
 measured for the first time, and the measurement is the news:
 
-**the code is roughly an order of magnitude over the ADR's number.**
+**the ADR's own twenty-field workload costs 1 343 ns/op — 2.7x the bound.**
 
 ### What the 500 ns/op applies to
 
@@ -571,16 +571,21 @@ describes the workload two ways:
 
 ### Measured
 
-| Benchmark | ns/op | B/op | allocs/op | ADR bound |
-|---|---|---|---|---|
-| `BenchmarkPayloadBuildDeviceInfo` | see `script/bench_gate.sh` | 1464 | 19 | 500 ns/op |
-| `BenchmarkPayloadBuildTwentyField` | see `script/bench_gate.sh` | 2384 | 26 | 500 ns/op |
+Taken on the CI runner (`ubuntu-latest`, AMD EPYC 9V45), minimum of seven runs
+at `-benchtime=300ms` — the figures the gate is calibrated against:
 
-The allocation counts are the stable part and they are what makes the verdict
-safe on any machine: the figures above were taken on an x86-64 developer box,
-and the slowest target this daemon actually ships to is the 32-bit ARMv7
-build `.goreleaser.yaml` produces for the CCU add-on bundle — so no plausible
-change of machine closes a gap of this size. The
+| Benchmark | ns/op | B/op | allocs/op | ADR bound | over by |
+|---|---|---|---|---|---|
+| `BenchmarkPayloadBuildTwentyField` (the ADR's workload) | **1 343** | 2384 | 26 | 500 ns/op | **2.7x** |
+| `BenchmarkPayloadBuildDeviceInfo` (the production call site) | **829** | 1464 | 19 | 500 ns/op | **1.7x** |
+
+So the bound is missed on both readings, and missed by more on the reading the
+ADR itself states. The allocation counts are the stable part and they are what
+makes the verdict safe on any machine: the figures above are from an EPYC
+server part, and the slowest target this daemon actually ships to is the
+32-bit ARMv7 build `.goreleaser.yaml` produces for the CCU add-on bundle — so
+no plausible change of machine closes a gap of this size; a change of machine
+widens it. The
 per-call cost is one map allocation, then per retained field a `FieldByIndex`,
 an `IsZero`, an `Interface()` that boxes the value (an allocation for every
 non-pointer field) and a map insert with a string hash. §Trade-offs' picture of
@@ -600,7 +605,11 @@ motivates do not belong in the same commit.
   bench` like the rest of `tests/bench/`.
 - `script/bench_gate.sh` (`make bench-gate`) — the gate. It holds the ceilings,
   so the benchmark file stays a measurement and the policy stays in one
-  reviewable place.
+  reviewable place. Armed at 2 700 ns/op and 1 700 ns/op respectively: the
+  measured minimum, doubled. The doubling is headroom for runner silicon, not
+  for noise — the minimum-of-N below already handles noise — because GitHub's
+  hosted pool is not one machine and a leg scheduled on an older part is
+  genuinely slower at identical code.
 - `.github/workflows/ci.yml`, the `bench` job — a new step after `make bench`.
   `make bench` runs every benchmark and asserts nothing; this step is the part
   that can go red.
@@ -621,11 +630,13 @@ one-sided in the safe direction: noise can let a regression through a run
 tree. A mean or a median drifts with runner load and would need padding so
 generous that the gate stops meaning anything.
 
-This is not a theoretical preference. On the developer machine the first
-figures were taken on, ten runs of the unchanged twenty-field benchmark spanned
+This is not a theoretical preference. On the developer machine the benchmark
+was written on, ten runs of the unchanged twenty-field benchmark spanned
 4 773 - 5 990 ns/op with the box near-idle and 32 907 - 49 634 ns/op with three
 other build jobs on it — a factor of seven between two runs of identical code.
-The minimum tracked the quiet figure in both cases. `benchstat` was the obvious alternative and is the wrong tool here:
+The minimum tracked the quiet figure in both cases. Even on the dedicated CI
+runner one sample in seven came in 29 % high (1 343 - 1 735 ns/op) while the
+minimum held to within 3 %. `benchstat` was the obvious alternative and is the wrong tool here:
 it compares two sets of samples for a *significant difference*, which needs a
 stored baseline from comparable hardware, and a gate whose baseline is a
 committed file becomes a gate that passes because somebody regenerated the
@@ -640,6 +651,7 @@ script rather than folded into a global multiplier.
 
 A gate that cannot fail is the defect this amendment exists to close, wearing
 a stopwatch. Before arming, `payload.ForWith` was mutated in a scratch copy to
-do measurably more work per call; `make bench-gate` went red with the
-benchmark named and both figures printed. The mutation was reverted and the
-gate returned to green on the unchanged tree.
+allocate more per call. `make bench-gate` went red naming both benchmarks —
+roughly 1 057 000 ns/op against the then-armed 12 000 ns/op ceiling, at 819 and
+826 allocs/op instead of 19 and 26. The mutation was reverted and the same gate
+returned green on the unchanged tree.

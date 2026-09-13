@@ -20,9 +20,12 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `bench` CI job) enforces a ceiling by taking the MINIMUM ns/op across
   seven runs — a shared runner only ever adds time, so the minimum is the
   statistic whose noise cannot turn the gate red on an unchanged tree.
-  The ceilings are armed as a **ratchet at what the code measures today**,
-  not at the ADR's number: see the ADR's 2026-09-13 amendment for the
-  measured figures and the size of the gap. No production behaviour
+  Measured on the CI runner: **1 343 ns/op** for the ADR's own twenty-field
+  workload (2.7x the stated bound) and **829 ns/op** for the production
+  device harvest (1.7x), at 26 and 19 allocations per call. The ceilings are
+  armed as a **ratchet at what the code measures today** — the measured
+  minimum, doubled for runner-silicon headroom — not at the ADR's number,
+  which is left standing as written. No production behaviour
   changed, and the hot path was deliberately left alone — measuring and
   tuning in the same change would make the measurement unreviewable.
 
