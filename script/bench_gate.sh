@@ -47,6 +47,18 @@
 # separately. Lowering a ceiling after an improvement is the point; raising one
 # needs a reason in the commit message.
 #
+# VERIFIED TO FAIL
+#
+# Giving `payload.ForWith` 40 extra allocations per call turned this gate red
+# on CI at the ceilings below — 3 139 ns/op vs 2 700 and 2 444 ns/op vs 1 700,
+# at 66 and 59 allocs/op instead of 26 and 19. A 2.3x regression, caught. The
+# mutation was reverted and the same gate returned green.
+#
+# NOTE FOR LOCAL RUNS: the ceilings are calibrated for the CI runner, which is
+# server silicon. A modest or loaded developer machine will exceed them on
+# unchanged code — that is expected, and CI is the authority. Locally, compare
+# a before/after pair on the same box rather than reading the verdict.
+#
 # Usage:  script/bench_gate.sh          (or: make bench-gate)
 # Env:    BENCH_GATE_RUNS      number of independent runs (default 7)
 #         BENCH_GATE_BENCHTIME go test -benchtime value  (default 300ms)

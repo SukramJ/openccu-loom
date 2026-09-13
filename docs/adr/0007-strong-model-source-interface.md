@@ -650,8 +650,20 @@ script rather than folded into a global multiplier.
 ### The gate was verified to fail
 
 A gate that cannot fail is the defect this amendment exists to close, wearing
-a stopwatch. Before arming, `payload.ForWith` was mutated in a scratch copy to
-allocate more per call. `make bench-gate` went red naming both benchmarks —
-roughly 1 057 000 ns/op against the then-armed 12 000 ns/op ceiling, at 819 and
-826 allocs/op instead of 19 and 26. The mutation was reverted and the same gate
-returned green on the unchanged tree.
+a stopwatch. So the gate was made to fail on the machine it guards, at the
+ceilings it actually carries, before it was trusted.
+
+`payload.ForWith` was given 40 extra allocations per call and pushed as a
+throwaway commit. The `bench` job went red naming both benchmarks:
+
+```
+BenchmarkPayloadBuildTwentyField: 3139.0 ns/op > ceiling 2700 ns/op
+BenchmarkPayloadBuildDeviceInfo:  2444.0 ns/op > ceiling 1700 ns/op
+```
+
+66 allocs/op instead of 26, and 59 instead of 19 — a 2.3x regression, well
+short of the catastrophic, and the gate caught it. The commit was reverted and
+the same gate on the same runner returned 1 343 / 829 ns/op green. That is the
+sensitivity the doubled ceiling buys: not "any regression", but any regression
+that doubles the cost of a path the daemon runs per device on every
+HA-Discovery build.
