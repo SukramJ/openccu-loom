@@ -8,6 +8,34 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The dead-code ratchet's two blind spots are written down, where the next
+  person looks.** `notes/parity/*` is regenerated (the stamps were one merge
+  stale); no count moved, which is itself the first blind spot in action.
+  `script/reachability` classifies **package-level members only** — it walks
+  each SSA package's `Members` map, so no method and no struct field is ever
+  classified, in either direction. PR #808 deleted one dead field, two dead
+  methods and one dead package-level function: Total Exported moved by
+  exactly one and Unreachable did not move at all. A steady unreachable count
+  across a deletion is not evidence that nothing dead was removed. The second,
+  from PR #799: RTA follows call edges and cannot evaluate a config flag, so a
+  subtree behind a flag that is the zero value on every build ever produced —
+  `legacy_alias.go` and six guarded branches in `bridge.go` — counts as
+  reachable. The two point in opposite directions, which is why neither shows
+  up as drift. Stated in `script/reachability/main.go`'s package doc, in the
+  generated `notes/parity/dead-code-summary.md` (so every regeneration
+  reproduces it), and in `tests/contract/reachability_test.go`'s package doc.
+  A ratchet whose limits are unwritten is a ratchet people over-trust.
+
+  Two `notes/parity/` artefacts were much staler than the inventory, because
+  neither `make reachability` nor CI writes them: `dead-code-genuine.json`
+  (`crosscheck.go`) and `loom-reachable-audit.md` (`whitelist_audit.go`) both
+  carry `//go:build ignore` and have to be run by hand. They were stamped
+  2026-06-08 and 2026-07-10. Refreshed: the cross-check now reports 5
+  candidates and 1 genuine dead function where the committed file claimed 386
+  and 15, and the whitelist audit 131 annotated items (120 productive, 11
+  masked) where the committed one listed 29 (21 / 8). That they rot between
+  hand-runs is noted in the analyzer's package doc.
+
 - **ADR 0007 names four artifacts that do not exist**, three of them in
   Trade-offs and Mitigations — where a reader goes to find out how a risk is
   held down. `tests/bench/payload_test.go` and

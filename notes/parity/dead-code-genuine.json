@@ -1,113 +1,15 @@
 {
-  "generated": "2026-06-08T11:51:16Z",
-  "head": "849b1da",
-  "total_candidates": 386,
-  "false_positives": 371,
-  "genuine_dead_code": 15,
+  "generated": "2026-09-13T02:37:53Z",
+  "head": "f6cbc9aa",
+  "total_candidates": 5,
+  "false_positives": 4,
+  "genuine_dead_code": 1,
   "genuine": [
     {
-      "package": "internal/central/adapter",
-      "identifier": "BridgeCombinedDataPoint",
-      "file": "internal/central/adapter/combined_bridge.go",
-      "line": 51,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "BridgeCombinedDataPoint",
-      "file": "internal/central/adapter/combined_bridge.go",
-      "line": 51,
-      "kind": "func"
-    },
-    {
       "package": "internal/central/events",
       "identifier": "PublishSync",
       "file": "internal/central/events/bus.go",
-      "line": 274,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/events",
-      "identifier": "PublishSync",
-      "file": "internal/central/events/bus.go",
-      "line": 274,
-      "kind": "func"
-    },
-    {
-      "package": "internal/client/backends",
-      "identifier": "EncodeHMLevel",
-      "file": "internal/client/backends/combined.go",
-      "line": 183,
-      "kind": "func"
-    },
-    {
-      "package": "internal/client/backends",
-      "identifier": "EncodeHMLevel",
-      "file": "internal/client/backends/combined.go",
-      "line": 183,
-      "kind": "func"
-    },
-    {
-      "package": "internal/health",
-      "identifier": "NewConnection",
-      "file": "internal/health/connection.go",
-      "line": 70,
-      "kind": "func"
-    },
-    {
-      "package": "internal/health",
-      "identifier": "NewConnectionRegistry",
-      "file": "internal/health/connection.go",
-      "line": 311,
-      "kind": "func"
-    },
-    {
-      "package": "internal/health",
-      "identifier": "WithConnectionClock",
-      "file": "internal/health/connection.go",
-      "line": 90,
-      "kind": "func"
-    },
-    {
-      "package": "internal/health",
-      "identifier": "WithConnectionClock",
-      "file": "internal/health/connection.go",
-      "line": 90,
-      "kind": "func"
-    },
-    {
-      "package": "internal/routingkey",
-      "identifier": "GenerateChannelUniqueID",
-      "file": "internal/routingkey/uniqueid.go",
-      "line": 107,
-      "kind": "func"
-    },
-    {
-      "package": "internal/routingkey",
-      "identifier": "GenerateChannelUniqueID",
-      "file": "internal/routingkey/uniqueid.go",
-      "line": 107,
-      "kind": "func"
-    },
-    {
-      "package": "pkg/hmerr",
-      "identifier": "ExceptionToFailureReason",
-      "file": "pkg/hmerr/errors.go",
-      "line": 395,
-      "kind": "func"
-    },
-    {
-      "package": "pkg/hmerr",
-      "identifier": "ExceptionToFailureReason",
-      "file": "pkg/hmerr/errors.go",
-      "line": 395,
-      "kind": "func"
-    },
-    {
-      "package": "pkg/hmerr",
-      "identifier": "LogBoundaryError",
-      "file": "pkg/hmerr/boundary.go",
-      "line": 61,
+      "line": 337,
       "kind": "func"
     }
   ]
