@@ -294,3 +294,110 @@ func TestUnscopedDiscoveryCleanupReachesABundlesComponentIdentities(t *testing.T
 		t.Errorf("cleared %d documents, want exactly the one of ours carrying a stale component id; cleared=%v", cleared, got)
 	}
 }
+
+// TestUnscopedDiscoveryCleanupCoversEverySecondaryCentral pins that the
+// node-id scope is the union over every central this daemon serves, not the
+// default one alone.
+//
+// The per-central sweeps are handed one central and scope to it. This pass
+// has no central argument — it runs once at boot, before the snapshot — so a
+// scope built from [BridgeConfig.CentralName] alone would silently leave
+// every secondary CCU's stale identities unreachable forever, which is
+// indistinguishable from a correctly scoped sweep: both clear something and
+// report a number. Scoping is a fix that can fail closed, and failing closed
+// here means the duplicate-entity defect stays live on every CCU but the
+// first.
+func TestUnscopedDiscoveryCleanupCoversEverySecondaryCentral(t *testing.T) {
+	t.Parallel()
+
+	mc := &mockRetainClient{}
+	b := NewBridge(BridgeConfig{
+		Base:               "openccu-loom",
+		HADiscoveryEnabled: true,
+		CentralName:        "ccu-01",
+		CentralNames:       []string{"ccu-01", "ccu-02"},
+	}, mc)
+
+	primary := b.Topics().DiscoveryConfig("button", discoveryNodeID("ccu-01", "0001D3C99C1234"), "3_press_short")
+	secondary := b.Topics().DiscoveryConfig("climate", discoveryNodeID("ccu-02", "00150001"), "1_set_point_temperature")
+	mc.retained = []retainedMsg{
+		{topic: primary, payload: componentDiscoveryPayload(t, "button", "loom__0001d3c99c1234_3_press_short", originName)},
+		{topic: secondary, payload: componentDiscoveryPayload(t, "climate", "loom__00150001_1_set_point_temperature", originName)},
+	}
+
+	cleared, err := b.RunUnscopedDiscoveryCleanupOnce(context.Background(), 50)
+	if err != nil {
+		t.Fatalf("RunUnscopedDiscoveryCleanupOnce: %v", err)
+	}
+	got := clearedTopics(mc)
+	if !contains(got, secondary) {
+		t.Errorf("the second CCU's stale config %s was not reached — its ambiguous identities are unreachable "+
+			"for the life of the deployment; cleared=%v", secondary, got)
+	}
+	if !contains(got, primary) {
+		t.Errorf("the default central's stale config %s was not reached; cleared=%v", primary, got)
+	}
+	if cleared != 2 {
+		t.Errorf("cleared %d configs, want one per configured central; cleared=%v", cleared, got)
+	}
+}
+
+// TestUnscopedDiscoveryCleanupHonoursTheUnscopedOptIn pins the one half of
+// this pass where `north.mqtt.discovery_retract_unscoped` still governs.
+//
+// The node-id scope introduced by #817 means a daemon on a non-default
+// `topic_base` wrote its OWN pre-scope configs under the bare
+// `<central-slug>_` spelling — and that spelling is byte-for-byte what a
+// default-base sibling publishes live. #826's finding is that the two cannot
+// be told apart by any predicate, which is why claiming them is the
+// operator's decision and not the daemon's.
+//
+// That reasoning survives intact here and is threaded through
+// [discoveryNodePrefixes] unchanged: by default this pass declines the
+// unscoped spelling, and with the flag on it reaches it. Scoping by node id
+// is NOT a substitute for the flag, and the flag is not a substitute for
+// scoping — this test and
+// [TestUnscopedDiscoveryCleanupLeavesASiblingDaemonsConfigsAlone] are the
+// pair, and a change that satisfied one by breaking the other would be the
+// shape of both the original defect and the over-correction.
+func TestUnscopedDiscoveryCleanupHonoursTheUnscopedOptIn(t *testing.T) {
+	t.Parallel()
+
+	const central = "ccu"
+	// `homeassistant/climate/ccu_00150001/…` — what this daemon wrote before
+	// the base scope existed, and what a default-base sibling writes now.
+	preScope := "homeassistant/climate/" + discoveryNodeID(central, "00150001") + "/1_set_point_temperature/config"
+	payload := componentDiscoveryPayload(t, "climate", "loom__00150001_1_set_point_temperature", originName)
+
+	for _, tc := range []struct {
+		name     string
+		optIn    bool
+		wantGone bool
+	}{
+		{name: "default declines the ambiguous spelling", optIn: false, wantGone: false},
+		{name: "opted in reaches it", optIn: true, wantGone: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			mc := &mockRetainClient{retained: []retainedMsg{{topic: preScope, payload: payload}}}
+			b := NewBridge(BridgeConfig{
+				Base:                     "gh",
+				HADiscoveryEnabled:       true,
+				CentralName:              central,
+				RetractUnscopedDiscovery: tc.optIn,
+			}, mc)
+			if scope := b.Topics().DiscoveryNodeScope(); scope == "" {
+				t.Fatal("the fixture needs a non-default topic base; `gh` produced no node-id scope")
+			}
+
+			if _, err := b.RunUnscopedDiscoveryCleanupOnce(context.Background(), 50); err != nil {
+				t.Fatalf("RunUnscopedDiscoveryCleanupOnce: %v", err)
+			}
+			if gone := contains(clearedTopics(mc), preScope); gone != tc.wantGone {
+				t.Errorf("cleared=%t for %s with discovery_retract_unscoped=%t, want %t — off, that topic may "+
+					"be a live default-base sibling's; on, it is this daemon's own pre-scope config",
+					gone, preScope, tc.optIn, tc.wantGone)
+			}
+		})
+	}
+}
