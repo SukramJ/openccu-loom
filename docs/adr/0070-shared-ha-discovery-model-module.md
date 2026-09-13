@@ -486,6 +486,65 @@ Three consequences:
 - A consumer appears that must support HA < 2024.11, which would reopen the
   per-entity legacy path this ADR closes.
 
+## Amendment (2026-09-13) — step E landed, and it moved `identifiers`, not `unique_id`
+
+The third amendment ends by naming `DiscoverySlug`'s deletion as "the last
+step, alone, under ADR 0068's process". It has landed. What the measurement
+taken immediately before it establishes, and what the inventory could not say
+because it measured slug *outputs* rather than the fields they feed:
+
+**The eight divergent inputs reach three published fields and stop.** Traced
+per production call site — five of them — and pinned by
+`TestDiscoverySlugUnificationMovedTheseFields` and its `…LeftTheseFieldsAlone`
+counterpart in `internal/north/mqtt`:
+
+| Field | Reached | Moves |
+| --- | --- | --- |
+| discovery `node_id` | `PathData.DiscoveryNodeID`, `hubNodeID` | yes |
+| discovery `object_id` | hub sysvar / program object ids | yes |
+| device `identifiers`, `via_device` | `centralDeviceIdentifier`, `physicalDeviceIdentifier` | **yes** |
+| `unique_id` | only `installModeInterfaceSuffix` / connectivity, over the CCU interface vocabulary | no |
+| `default_entity_id` | seeded from `unique_id`, or suppressed | no |
+| state / command / availability topics | `TopicSafe`, a different rule | no |
+
+**The first amendment holds, and the third is narrower than it read.** This
+daemon keeps its `unique_id`: no `unique_id` moved, because every one of them
+is keyed on the CCU serial (`scopedUniqueID`) or the ISE id
+(`routingkey.CanonicalUniqueID` over `HubSlug`), and `HubSlug` is untouched.
+The one path from the discovery slug to a `unique_id` is the per-interface
+install-mode and connectivity suffix, and it is safe only because every CCU
+interface id (`HmIP-RF`, `BidCos-RF`, `BidCos-Wired`, `VirtualDevices`,
+`CUxD`) is ASCII with no separator run. That is now asserted rather than
+assumed — a new interface family carrying either would move a `unique_id`
+with no migration path, and the test says so.
+
+**`identifiers` is the cost, and it is a device-registry cost.** Home
+Assistant keys the device registry on `identifiers` and has no migration for
+it either, so an affected CCU's device card and its central-scoped device
+cards are re-created. Device-level area, a renamed device and any
+device-targeted automation go with them; every entity keeps its registry row,
+its history and its `entity_id`. That is a materially smaller break than a
+`unique_id` re-key, and it is still a break: it ships with the full ADR 0068
+note in `docs/external-clients/ha-unique-id-migration.md`.
+
+**The sweep needed extending, exactly as ADR 0068's "revisit when" predicted.**
+That entry anticipates "a break that also moves the discovery topic, where
+retracting the old config needs the sweep extended rather than inherited".
+This is that case. `discoveryNodePrefixes` now carries a third spelling,
+`legacyDiscoverySlug` — the pre-unification rule, kept for retraction only,
+publishing nothing, deletable after one release.
+
+**`internal/routingkey` stayed put, and the reason sharpened.** The third
+amendment argued it on its aiohomematic contract and its `golang.org/x/text`
+import. Both hold. The sharper form: unifying is about functions that answer
+the same *question*. `DiscoverySlug` and `topic.Slug` both answered "what does
+Home Assistant accept in a node id", and having two answers was the defect.
+`HubSlug` answers "what does python-slugify produce", which is a different
+question with a different right answer — and it is the one of the three that
+feeds a `unique_id`, so moving it would have cost exactly what the first
+amendment withdrew.
+
+
 ## References
 
 - [ADR 0011](./0011-mqtt-topic-and-payload-architecture.md) — declarative

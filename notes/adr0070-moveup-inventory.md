@@ -589,7 +589,7 @@ and step D would not have repaid it: `discovery.DeviceSlot` is unusable here
 because `payload.WireSlot` and `payload.CustomSlot` leave the coordinate
 partial on the datapoint planes, which step D does not touch.*
 
-### Step E — `DiscoverySlug` → `topic.Slug` (byte-risky; needs a migration note)
+### Step E — `DiscoverySlug` → `topic.Slug` (byte-risky; needs a migration note) — DONE
 
 Last, alone, and only with the ADR 0068 breaking-change process applied.
 
@@ -615,6 +615,40 @@ naive swap of `HubSlug` for `topic.Slug` fails immediately on that second pin.
 - Every device address in every fixture is plain hex or a known virtual-remote
   root (`bidcos-rf`, `hmip-rcv-1`, `cux2801001`, `int0000001`, `vcu1234567`).
   The address-family branch is well covered; the *character* handling is not.
+
+**Landed, and the blast radius came out narrower than this section
+assumed.** This section measured what the slug *outputs*; what decides the
+step is which published *fields* those outputs reach. Traced per production
+call site — there are five — the answer is: the discovery `node_id`, the
+discovery `object_id`, and the device-block `identifiers` / `via_device`. Not
+`unique_id` (keyed on the CCU serial and the ISE id, the latter through
+`HubSlug`, which did not move), not `default_entity_id` (seeded from
+`unique_id`, or suppressed), and no state, command or availability topic
+(those are `TopicSafe`). The one path from this function to a `unique_id` is
+`installModeInterfaceSuffix` / connectivity over the CCU interface vocabulary,
+which is ASCII with no separator run — now asserted rather than assumed.
+
+So the step is a break, but a device-registry one rather than an
+entity-registry one: an affected CCU's device cards are re-created and their
+areas and device-targeted automations go with them, while every entity keeps
+its registry row, its history and its `entity_id`. Full note in
+`docs/external-clients/ha-unique-id-migration.md`; ADR 0070 carries an
+amendment recording it.
+
+Regeneration touched **two (row, field) pairs across all eleven fixtures** —
+`sysvar/hazard-accent-twin-a` and `sysvar/hazard-literal-double-underscore`,
+both the `topic` key, both on the hub plane. Every payload field of every
+fixture, `unique_id` and `identifiers` included, is byte-identical. The three
+hazard rows added in preparation are what made the step visible at all; the
+eight-divergence pin was rewritten as
+`internal/model/naming/discovery_slug_unified_test.go`, asserting the unified
+contract and naming the value each of the eight used to produce.
+
+The retraction of the old spelling is `legacyDiscoverySlug` in
+`internal/north/mqtt/retain_cleanup.go`: the pre-unification rule, third entry
+in `discoveryNodePrefixes`, publishing nothing, deletable after one release.
+Without it every affected CCU would keep a phantom config per entity forever,
+because nothing else in the daemon ever spells those node ids again.
 
 **Therefore:** before step E, add fixture rows for an accented non-German
 name in an identifier position and for a name carrying `__`. Done — three
@@ -728,6 +762,12 @@ comment as a real CCU name, and it slugs differently under the two functions.
 divergences of both classes directly against `topic.Slug`, in both directions,
 plus the four German cases where the two already agree. Step E now fails
 loudly instead of shipping green.
+
+*Fixed by step E.* `Watchdog:_CCU-Jack` slugs to `watchdog_ccu-jack`. The pin
+was rewritten as `discovery_slug_unified_test.go`, which asserts the eight
+agree, carries the value each used to produce so the fix stays legible, and
+adds `TestDiscoverySlugNoLongerPassesALiteralDoubleUnderscore` over four
+separator-run shapes.
 
 **F5 — seven exports have no reference anywhere in the repository.**
 `routingkey.PseudoAddresses` (its doc says it exists "for the schema

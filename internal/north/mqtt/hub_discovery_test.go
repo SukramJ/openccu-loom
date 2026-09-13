@@ -939,15 +939,21 @@ func TestSafeLower(t *testing.T) {
 		{"s0_Sensoren_Hülle_EG", "s0_sensoren_huelle_eg"},
 		{"S0_Sensoren_Hüllschutz", "s0_sensoren_huellschutz"},
 		{"svEnergyCounter_14007_0001dbe9915be4:6", "svenergycounter_14007_0001dbe9915be4_6"},
-		// é is not a German umlaut so it collapses to '_'; the literal '_'
-		// separator following is kept, yielding a double underscore.
-		{"Café_München", "caf__muenchen"},
+		// é is transliterated like every other accented Latin character
+		// since the slug rules were unified onto the shared `topic.Slug`.
+		// It used to collapse to '_' and sit beside the literal '_' that
+		// follows, yielding "caf__muenchen" — two defects in one string:
+		// a dropped accent that collided "Café" with "Caf", and a double
+		// underscore no other code path could produce.
+		{"Café_München", "cafe_muenchen"},
 		{"ABC", "abc"},
 		{"", "x"},
 		{"!!!", "x"},
-		// Literal '_' chars pass through emit() unchanged; only consecutive
-		// flush() calls (non-allowed chars) are deduplicated.
-		{"a___b", "a___b"},
+		// A separator run collapses whether its members are literal '_' or
+		// generated from disallowed characters. The old rule de-duplicated
+		// only the generated ones and let "a___b" through verbatim.
+		{"a___b", "a_b"},
+		{"Watchdog:_CCU-Jack", "watchdog_ccu-jack"},
 		{"_a_", "a"},
 		{"Heizung Modus", "heizung_modus"},
 		{"Belüftungsanlage Stufe", "belueftungsanlage_stufe"},

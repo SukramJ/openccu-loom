@@ -1175,7 +1175,7 @@
     }
   },
   "sysvar/hazard-accent-twin-a": {
-    "topic": "homeassistant/binary_sensor/ccu-01_sysvars/caf_terrasse/config",
+    "topic": "homeassistant/binary_sensor/ccu-01_sysvars/cafe_terrasse/config",
     "payload": {
       "availability": [
         {
@@ -1362,7 +1362,7 @@
     }
   },
   "sysvar/hazard-literal-double-underscore": {
-    "topic": "homeassistant/binary_sensor/ccu-01_sysvars/watchdog__ccu-jack/config",
+    "topic": "homeassistant/binary_sensor/ccu-01_sysvars/watchdog_ccu-jack/config",
     "payload": {
       "availability": [
         {

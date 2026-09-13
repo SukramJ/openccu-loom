@@ -162,6 +162,67 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **BREAKING (discovery topics and device identifiers, not entity
+  identity): the daemon has one discovery slug rule, and it is the shared
+  one.** ADR 0070's move-up measurement, step E -- the one step the
+  measurement held back as byte-risky. `naming.DiscoverySlug` carried a
+  second implementation of a job `go-hamqtt`'s `topic.Slug` already did,
+  and the two disagreed on eight inputs in two classes. Both
+  disagreements were defects here, and both are fixed:
+
+  - **`Café` and `Caf` no longer collapse into one identifier.**
+    Non-German accented Latin was dropped rather than transliterated, so
+    two differently named CCUs, system variables or programs produced one
+    `node_id`, one retained discovery config and one entity. Home
+    Assistant kept whichever arrived last, with nothing anywhere saying a
+    second object existed. `Café` now slugs to `cafe`, and the same for
+    `Señor`, `Garçon`, `Ångström`, `Ærø` and `Søren`.
+  - **A literal `__` no longer reaches the wire.** Only *generated*
+    underscore runs collapsed, so `Watchdog:_CCU-Jack` -- a real CCU name,
+    and this function's own documented motivating example -- slugged to
+    `watchdog__ccu-jack`, a spelling nothing else in the daemon could
+    produce. It is now `watchdog_ccu-jack`.
+
+  **What moves, and what deliberately does not.** Measured per field
+  before the change and pinned by
+  `TestDiscoverySlugUnificationMovedTheseFields` /
+  `...LeftTheseFieldsAlone`:
+
+  | Field | Moves? |
+  | --- | --- |
+  | discovery `node_id` | yes, when a CCU name is affected |
+  | discovery `object_id` | yes, when a sysvar/program name is affected |
+  | device `identifiers` / `via_device` | yes, when a CCU name is affected |
+  | `unique_id` | **no** -- keyed on the CCU serial and the ISE id |
+  | `default_entity_id` | **no** -- seeded from `unique_id`, or suppressed |
+  | state / command / availability topics | **no** -- these go through `TopicSafe` |
+
+  So no entity loses its history, its long-term statistics or its
+  `entity_id`. What is lost is device-level: the CCU's device card and
+  its central-scoped device cards are re-created under the new
+  `identifiers`, and a device-level area, a renamed device and a
+  device-targeted automation go with them. German names, and any name
+  already inside `[a-z0-9_-]`, are unaffected -- on a German-language
+  fleet this is a no-op.
+
+  The retained configs of the old spelling are retracted rather than left
+  as permanently unavailable twins: the orphan sweep gained
+  `legacyDiscoverySlug`, which exists only so it can still recognise the
+  pre-unification node ids. That is ADR 0068 obligation 3; without it
+  nothing in the daemon would ever spell those node ids again. Full note,
+  with the before/after strings, the blast-radius check and the operator
+  steps, in
+  `docs/external-clients/ha-unique-id-migration.md`.
+
+  `internal/routingkey` is deliberately **not** part of this. `HubSlug`
+  looks like a third copy of the same function and is not: it is a
+  `python-slugify` emulation pinned by 40 golden cases and a Python
+  parity script, because its contract is with `aiohomematic` and the
+  Home Assistant drop-in rather than with Home Assistant's node-id
+  charset. It disagrees with the shared rule on every non-trivial input
+  and is right to. Unifying is about the functions that answer the same
+  question; that one answers a different one.
+
 - **go-hamqtt v0.28.0 -> v0.29.0, and the inbound param decoders move
   up.** ADR 0070's move-up measurement, step C: the four `Param*`
   coercions are 137 lines that decode *inbound* service-call bodies and
