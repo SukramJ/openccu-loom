@@ -28,11 +28,11 @@ var stableEvent = Event{
 // topic set the test wants. Keeps bridge tests independent from the
 // hub model package.
 type fakeAddressable struct {
-	state, set, trigger, config string
+	state, set, trigger string
 }
 
 func (f fakeAddressable) MQTTTopics(_, _ string) pload.MQTTTopicSet {
-	return pload.MQTTTopicSet{State: f.state, Set: f.set, Trigger: f.trigger, Config: f.config}
+	return pload.MQTTTopicSet{State: f.state, Set: f.set, Trigger: f.trigger}
 }
 
 // fakeConnectivityPublisher fulfills ConnectivityPublisher for tests.

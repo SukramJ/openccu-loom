@@ -118,15 +118,6 @@ func TestMQTTHubConnectivity(t *testing.T) {
 	}
 }
 
-func TestMQTTHubInstallMode(t *testing.T) {
-	t.Parallel()
-	got := MQTTHubInstallMode(testBase, testCentral)
-	want := "openccu-loom/ccu1/hub/install_mode"
-	if got != want {
-		t.Errorf("MQTTHubInstallMode = %q, want %q", got, want)
-	}
-}
-
 func TestMQTTHubInstallModeForInterface(t *testing.T) {
 	t.Parallel()
 	got := MQTTHubInstallModeForInterface(testBase, testCentral, "HmIP-RF")

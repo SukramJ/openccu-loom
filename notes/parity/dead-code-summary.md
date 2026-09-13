@@ -1,14 +1,14 @@
 # Dead-Code Summary
 
-Generated: 3ada25bc
-HEAD: 3ada25bc
+Generated: ff9eec37
+HEAD: ff9eec37
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 5607 |
-| Reachable | 3573 |
+| Total Exported | 5606 |
+| Reachable | 3572 |
 | Whitelisted | 1975 |
 | **Unreachable** | **59** |
 
