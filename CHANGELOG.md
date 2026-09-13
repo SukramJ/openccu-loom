@@ -8,6 +8,57 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Two dedup gates and one barrier were wired to the wrong thing; the
+  fixes around them were not held by anything.** An adversarial review of
+  the last sixteen changes mutated each landed fix and recorded whether
+  the suite noticed. Three did not, and two of those three were live
+  defects rather than missing tests.
+
+  - **The `/config` companions were never re-seeded after a broker
+    restart.** `Bridge.configCache` suppresses a descriptor publish whose
+    bytes the broker already holds, and `ResetRuntimeGates` did not reach
+    it — measured: one write before the reset, still zero after an
+    identical republish. A broker restarted without a persistent retained
+    store holds none of those bytes, and the payload is a static
+    descriptor projection that changes only when the device's descriptors
+    do, so "until it next changes" meant for the life of the process:
+    every data point's `/config` companion stayed empty and every reader
+    of min/max/value_list/unit read nothing. This is the defect the
+    per-CCU reachability gate fix addressed, one field below it in the
+    same struct and left live. The cache is now a registered gate
+    (`configCacheGate`), reset like the other three — opening the gate
+    without dropping the topic keys, which double as the index the orphan
+    sweep and the device-removal retraction read.
+  - **The alarm plane's settle barrier was applied to the wrong guard.**
+    `AlarmMQTTPublisher.quiesce` was added to close a flake class in which
+    a guard waits on the publish recorder and then reads bridge state the
+    worker writes after the client call returns. It was wired only to the
+    one alarm guard that does not read bridge state at all, while
+    `TestAlarmPlaneIsVisibleToTheBridge` — the guard with exactly that
+    shape — still waited on the recorder. Reinstating the 200 ms
+    production window inside `Bridge.publishRuntimeState` failed it 3 of 3
+    runs while the Security & Safety counterpart passed 3 of 3. The
+    barrier is now where it belongs.
+  - **The retained-store sweeps' own broker connection was revertible in
+    full.** Nothing asserted that the assembled bridge actually sweeps on
+    it: making the composition root resolve the sweep subscriber to the
+    command client, or dropping the wiring call altogether, left
+    `./cmd/openccu-loom` and `./internal/north/mqtt` both green. Either
+    puts `<base>/#` back on the command connection, where a broker
+    delivers one copy of every inbound command per matching subscription
+    — a doubled button press, a doubled program trigger, a doubled alarm
+    arm for the length of every sweep window, with nothing in any log.
+    Behaviour unchanged; it is now held by a test.
+
+  Three further contracts that were correct but unheld are now pinned as
+  well: the sweep connection carries no last will (a will on a connection
+  that is torn down per window would publish retained `offline` to the
+  topic every entity's availability lists), a retired generation's sweep
+  connection is disconnected, and the per-CCU shutdown counterpart reaches
+  a gate a reconnect has just re-opened. The reflective audit that checks
+  every bridge dedup gate is registered for reset now recognises a gate
+  held by value, not only one held by pointer.
+
 - **A history test could not name its own failure.**
   `TestWireCentralRecordsACentralThatAppearedAfterWire` was seen failing
   once under heavy concurrent load and could not be reproduced in 222

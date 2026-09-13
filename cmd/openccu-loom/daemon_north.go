@@ -471,8 +471,10 @@ type mqttStack struct {
 	// sweep is the retained-store sweeps' own broker connection. Nil when no
 	// broker is configured (the no-op client subscribes in-process and fans
 	// nothing out). It MUST NOT be the same object as client — that identity
-	// is what doubles every inbound command for the length of a sweep window,
-	// and TestSweepsDoNotRideTheCommandClient pins it.
+	// is what doubles every inbound command for the length of a sweep window.
+	// TestSweepsDoNotRideTheCommandClient pins that it is built and distinct;
+	// TestTheBridgeRoutesItsSweepsThroughTheSweepConnection pins that the
+	// bridge actually sweeps on it, which is the half that decides.
 	sweep *mqtt.SweepSubscriber
 }
 
@@ -529,6 +531,39 @@ func sweepSubscriberFor(sweep *mqtt.SweepSubscriber, fallback mqtt.Client) mqtt.
 		return sweep
 	}
 	return fallback
+}
+
+// sweepTCPConfig is the CONNECT the retained-store sweeps' own connection
+// dials with, and it is deliberately not [northTCPConfig].
+//
+// No Will, and that absence is the whole point. This connection comes and
+// goes with every sweep window and is dropped outright when an UNSUBSCRIBE
+// fails, so a will on it would publish the bridge's retained `offline` marker
+// to `<base>/bridge/status` on any drop the broker noticed ungracefully — a
+// broker kick, a dropped socket — and grey out every entity of every CCU
+// while the daemon runs on, publishing fine, with nothing in any log saying
+// so. A graceful [mqtt.SweepSubscriber.Close] discards a will, which is
+// exactly what makes the hazard invisible in normal operation.
+//
+// A distinct ClientID for the reason a swap needs one: MQTT allows one
+// session per identifier (MQTT-3.1.4-2), so sharing the command plane's would
+// have the two connections take each other over in a loop. An empty
+// configured id stays empty, and the broker assigns a distinct one to each.
+//
+// Extracted from the closure in [buildMQTT] for the same reason
+// [northTCPConfig] was: so a test can READ the config this daemon really
+// dials with. TestTheSweepConnectionCarriesNoLastWill is what turns the
+// paragraph above from a comment into a checked statement.
+func sweepTCPConfig(m config.NorthMQTT, proto mqtt.ProtocolVersion, logger *slog.Logger) mqtt.TCPConfig {
+	return mqtt.TCPConfig{
+		BrokerURL:       m.BrokerURL,
+		ClientID:        sweepClientID(m.ClientID),
+		Username:        m.Username,
+		Password:        m.Password,
+		CleanStart:      true,
+		ProtocolVersion: proto,
+		Logger:          logger,
+	}
 }
 
 // sweepClientID derives the sweep connection's client identifier from the
@@ -758,29 +793,11 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 		tcp := mqtt.NewTCPClient(tcpCfg)
 		client = tcp
 		connector = tcp
-		sweepCfg := cfg.North.MQTT
-		sweepLogger := logger
-		sweepProto := protoVersion
+		sweepTCP := sweepTCPConfig(cfg.North.MQTT, protoVersion, logger)
 		sweepSub = mqtt.NewSweepSubscriber(func() (mqtt.Client, mqtt.Connector) {
 			// A fresh client per connection, so a sweep that failed to
 			// unsubscribe cannot hand its stranded filter to the next one.
-			//
-			// No Will: this connection comes and goes with each sweep, and a
-			// will on it would clear the bridge's availability marker every
-			// time a sweep ended. A distinct ClientID for the same reason a
-			// swap needs one — MQTT allows one session per identifier
-			// (MQTT-3.1.4-2), so sharing the command plane's would have the
-			// two connections kick each other in a loop. An empty configured
-			// id stays empty: the broker then assigns a distinct one to each.
-			sc := mqtt.NewTCPClient(mqtt.TCPConfig{
-				BrokerURL:       sweepCfg.BrokerURL,
-				ClientID:        sweepClientID(sweepCfg.ClientID),
-				Username:        sweepCfg.Username,
-				Password:        sweepCfg.Password,
-				CleanStart:      true,
-				ProtocolVersion: sweepProto,
-				Logger:          sweepLogger,
-			})
+			sc := mqtt.NewTCPClient(sweepTCP)
 			return sc, sc
 		}, logger)
 	}

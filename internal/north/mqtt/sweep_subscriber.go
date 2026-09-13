@@ -81,6 +81,12 @@ type SweepSubscriber struct {
 // that is the entire point — and must not carry a last will: this connection
 // comes and goes with each sweep, and a will on it would publish the bridge's
 // `offline` marker every time a sweep ends.
+//
+// Both halves are checked rather than trusted to this paragraph. The daemon's
+// TestTheBridgeRoutesItsSweepsThroughTheSweepConnection reads which subscriber
+// the assembled bridge really sweeps on, and its
+// TestTheSweepConnectionCarriesNoLastWill reads the CONNECT this connection is
+// really dialled with.
 func NewSweepSubscriber(open func() (Client, Connector), logger *slog.Logger) *SweepSubscriber {
 	if logger == nil {
 		logger = slog.Default()
