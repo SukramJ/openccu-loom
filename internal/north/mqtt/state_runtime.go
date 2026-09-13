@@ -79,11 +79,15 @@ func runtimeQoS(q QoS) hapublisher.QoS {
 //
 // [hapublisher.StateConfig.CommandFilters] is likewise unset, and that one is
 // a gap rather than a choice: the guard needs the topic filters this daemon
-// subscribes to, and [CommandSubscriber.Start] builds them as inline literals
-// with no accessor to read them back from. The invariant is covered by tests
-// instead — TestEveryStatePlaneIsDisjointFromCommandSubscriptions sweeps all
-// six planes against the really registered filters — so what is missing is
-// the runtime half, not the guarantee.
+// subscribes to. The blocker used to be that [CommandSubscriber.Start] built
+// them as inline literals with no accessor to read them back from; that is no
+// longer true — [CommandSubscriber.routes] and [CommandRouter.Filters] both
+// hand the registered filters back, in-package — so wiring this field is now
+// a change anyone can make, and only the wiring is outstanding. Until then
+// the invariant is covered by tests —
+// TestEveryStatePlaneIsDisjointFromCommandSubscriptions sweeps all six planes
+// against the really registered filters — so what is missing is the runtime
+// half, not the guarantee.
 func newStatePublisher(b *Bridge, logger *slog.Logger) *hapublisher.StatePublisher {
 	return hapublisher.NewStatePublisher(
 		hagomqtt.Split(b.client, lateSubscriber{b: b}),

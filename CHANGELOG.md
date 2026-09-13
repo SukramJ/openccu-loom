@@ -358,6 +358,35 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and is right to. Unifying is about the functions that answer the same
   question; that one answers a different one.
 
+- **Doc comments in the hub plane that asserted what the code does not
+  do.** `hubLayout` still called the daemon's own LWT "the sole
+  availability source", three lines above the line that adds the per-CCU
+  gate beside it; the hub discovery context still counted "three levels"
+  and "a fourth" (there are four plus `LevelNone`) and said "Both are
+  overridden" of three things; `ResetRuntimeGates` said it is called
+  "twice rather than once" of four call sites; and #807 had inserted two
+  functions with no blank line between them, so
+  `connectivityTopicProvider`'s godoc rendered as the description of
+  `publishCCUReachability`. `StateConfig.CommandFilters` is still
+  unwired, but the stated blocker — no accessor for the registered
+  filters — is gone since #805 added `CommandSubscriber.routes` and
+  `CommandRouter.Filters`, and the comment says so.
+
+  `ccuReachable`'s comment no longer claims a guarantee its input cannot
+  give. The fold reads interface reachability while the entities it gates
+  are ReGa-scoped, so it answers `online` in two cases where the values
+  behind it are stale: ReGaHss dying or hanging while `rfd`/`HMIPServer`
+  keep serving (the XML-RPC clients stay up, the central never goes
+  FAILED, no interface ever flips), and a connectivity probe that
+  *errors* — whose path changes no tracker entry, which needs no firmware
+  assumption to bite. What the gate does cover, the total CCU outage, is
+  stated as such. The fix for the ReGa-only case is a second input rather
+  than a different fold: `/ise/checkrega.cgi`, which this daemon already
+  owns and uses at bring-up only, needs a periodic caller, per-CCU state
+  and a conjunction with this fold — new published traffic on a live
+  path, so it is its own change.
+
+
 - **go-hamqtt v0.28.0 -> v0.29.0, and the inbound param decoders move
   up.** ADR 0070's move-up measurement, step C: the four `Param*`
   coercions are 137 lines that decode *inbound* service-call bodies and
@@ -383,6 +412,68 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   descriptor is a different boundary with a different set.
 
 ### Fixed
+
+- **`hub/status` was never republished after a broker reconnect, so every
+  CCU-scoped hub entity went permanently unavailable.** The per-CCU
+  reachability gate was the third dedup gate on the bridge and
+  `Bridge.ResetRuntimeGates` — the reconnect hook that stops a gate
+  suppressing bytes the broker no longer holds — named its gates one by
+  one and did not name it. A broker restarted without a persistent
+  retained store therefore lost the gate's byte while the daemon stayed
+  up; the bridge is rebuilt only on a config reload, so the gate survived
+  believing the level was retained, the re-seed on reconnect observed an
+  unchanged fold and wrote nothing, and the hub discovery configs naming
+  the topic were republished beside it. Under
+  `availability_mode: "all"` an availability topic with no byte on it
+  is an entity that is unavailable, not one that is degraded: every
+  sysvar, program, system score, message aggregate, install-mode and
+  hub-update entity of every CCU sat `unavailable`, with nothing on the
+  wire naming the cause, until that CCU's reachability *changed* — on a
+  healthy CCU, never. That is strictly worse than the state before the
+  gate existed, which was stale-but-visible.
+
+  The reset is now structural rather than remembered. The bridge holds
+  its gates as one list and `ResetRuntimeGates` walks it, and
+  `TestEveryBridgeDedupGateIsRegisteredForReset` reflects over the bridge
+  for any field that can be reset and fails naming a gate that the
+  constructor did not register — so a fourth gate added the same way
+  fails a test instead of a fleet.
+
+- **A `hub/status` level was recorded as written before the broker had
+  taken it, and nothing retried.** The gate stamped the level and then
+  published, so a publish that failed left the gate believing the byte
+  was retained — and since the gate's whole job is to suppress the next
+  identical level, that level was then never published again. Two
+  triggers, both real: a seeding publish that fails once leaves the topic
+  empty for the life of the process; and a debounced `offline` whose
+  dwell fires just as `HubMQTTPublisher.Start` cancels the worker context
+  it captured leaves a retained `online` standing for a CCU that is gone,
+  which is the exact defect the gate was added to fix. The level is now
+  rolled back when the write fails, the rule `go-hamqtt`'s own state gate
+  states: a cached level whose publish failed makes the next identical
+  one publish nothing and leaves the entity blank until the value changes
+  again.
+
+- **The reachability gate was seeded before the CCU's serial had been
+  read off it.** An unobserved connectivity tracker folds to *reachable*,
+  and the only thing that makes that defensible is that the daemon has
+  already talked to the CCU. The seed was gated on nothing but the raw
+  plane being enabled while `wireOneCentral` runs before the serial
+  resolves, so a CCU that was merely *configured* — possibly unreachable
+  since boot — got a retained `online` written for it at startup. It is
+  now gated on the serial, like every hub discovery build beside it;
+  nothing reads the gate before then, because no hub entity of that
+  central exists until the serial stamps its unique ids.
+
+- **`runtimeQoS`'s default arm delivered the QoS promotion the function
+  exists to prevent.** It returned `publisher.QoSUnset` for an
+  unrecognised level, on the stated belief that the shared constructors
+  refuse that value with a panic naming the field. They do not:
+  `StateConfig`'s resolution applies `QoS.Or(default)` before any
+  validation, so `QoSUnset` is precisely the value that never reaches a
+  check — and it resolves to QoS 1. An unrecognised level now panics at
+  the composition root, naming the value. Latent today: nothing sets
+  `BridgeConfig.QoS` to an out-of-range level.
 
 - **The bundle sweep's node-id guard was not load-bearing in any test.**
   Every non-claimed row of `TestDiscoveryNodeIDFromTopic` was already

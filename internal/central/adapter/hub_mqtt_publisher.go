@@ -1038,15 +1038,44 @@ func (p *HubMQTTPublisher) publishCCUReachability(
 // and the common shapes of it (a crashed CUxD, an unplugged HmIP wired
 // gateway, a BidCoS radio module that the CCU itself restarts) leave the
 // ReGa logic layer answering normally. Sysvars, programs, the system scores
-// and the message aggregates are ReGa-scoped, not interface-scoped: their
-// values are not stale while ReGa is alive, and greying them out because
-// one radio is down would hide a working CCU behind an unrelated fault.
-// The per-interface fault has its own entity — the connectivity
-// binary_sensor — which is where that signal belongs and is read.
+// and the message aggregates are ReGa-scoped, not interface-scoped: greying
+// them out because one radio is down would hide a working CCU behind an
+// unrelated fault. The per-interface fault has its own entity — the
+// connectivity binary_sensor — which is where that signal belongs and is
+// read.
 //
-// An unobserved tracker folds to REACHABLE, not to unreachable. Nothing in
-// this plane is published before the CCU's serial has been read off it, so
-// "no interface state yet" at this point means the daemon has just
+// # What this gate does NOT cover
+//
+// The fold's inputs are interface reachability, and the entities it gates
+// are ReGa-scoped. Those are not the same signal, so the gate answers
+// "online" in two cases where the values behind it are stale:
+//
+//   - ReGaHss dies or hangs while `rfd`/`HMIPServer` keep serving. The
+//     XML-RPC clients stay connected, the central never goes FAILED,
+//     [coordinators.Reconciler] never emits the not-ready sweep, and every
+//     interface stays reachable — while every sysvar, program, system score
+//     and message aggregate keeps showing its last ReGa value.
+//   - The connectivity probe ERRORS. [JSONRPCConnectivityProbe] documents
+//     its own limit — `Interface.listInterfaces` measures MEMBERSHIP, not
+//     liveness — and the reconciler's error path changes no tracker entry,
+//     so a probe that cannot reach the CCU at all leaves this fold saying
+//     `online`. This half needs no firmware assumption to bite.
+//
+// What it DOES cover is the total outage: a CCU that is gone takes the
+// XML-RPC clients down with it and the not-ready sweep flips every
+// interface false, which is the case the gate was added for.
+//
+// The fix for the ReGa-only case is a second input, not a different fold:
+// this daemon already owns the right probe in `/ise/checkrega.cgi`
+// (see checkRegaPath / probeCCUReady), which answers the literal "OK" only
+// while ReGaHss is up and serving, and it is used at bring-up only. Wiring
+// it means giving it a periodic caller, a tracked per-CCU state of its own
+// and a conjunction with this fold — new published traffic on a live path,
+// so it is its own change rather than a comment correction here.
+//
+// An unobserved tracker folds to REACHABLE, not to unreachable. The seed in
+// wireOneCentral is gated on the CCU's serial having been read off it, so
+// "no interface state yet" at that point means the daemon has just
 // demonstrated it can talk to the CCU and the tracker has not caught up —
 // absence of evidence, not evidence of absence. Folding it the other way
 // would publish a retained `offline` and grey out every hub entity of a
