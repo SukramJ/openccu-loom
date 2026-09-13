@@ -119,3 +119,34 @@ func TestTheCCUGateIsSeededBeforeTheHubDiscoveryConfigsThatNameIt(t *testing.T) 
 			"arrives", firstConfig, gate)
 	}
 }
+
+// TestTheCCUGateIsNotSeededBeforeTheSerialResolves pins the other half of
+// the seed's ordering, and it is a claim about what is NOT on the wire.
+//
+// [ccuReachable] folds an unobserved connectivity tracker to REACHABLE, and
+// the only thing that makes that defensible is that the daemon has already
+// talked to this CCU — it reads the serial off it. The seed used to be
+// gated on nothing but the raw plane being enabled, and wireOneCentral runs
+// before the serial resolves, so a CCU that was merely CONFIGURED — one that
+// may have been unreachable since boot — got a retained `online` written for
+// it at startup. Nothing consumes the gate that early either: no hub entity
+// of this central exists until the serial stamps its unique ids.
+//
+// Falsifiability: drop the `hi.Serial != ""` guard from the seed in
+// wireOneCentral and this test finds the retained `online`.
+func TestTheCCUGateIsNotSeededBeforeTheSerialResolves(t *testing.T) {
+	t.Parallel()
+	_, pub, publisher := hubDiscoveryFixture(t)
+
+	publisher.Start(context.Background())
+	defer publisher.Stop()
+	publisher.Flush()
+
+	for _, p := range pub.Published() {
+		if p.Topic == "openccu-loom/ccu-01/hub/status" {
+			t.Fatalf("the reachability gate was seeded with %q before the CCU's serial was "+
+				"read off it: a configured-but-unreachable CCU is claimed reachable, and "+
+				"nothing reads the gate this early anyway", string(p.Payload))
+		}
+	}
+}

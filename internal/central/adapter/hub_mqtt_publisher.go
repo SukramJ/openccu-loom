@@ -372,7 +372,8 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 	// payload that already read the empty serial. (The builder's map is
 	// itself synchronised — other goroutines stamp it too — so this
 	// queueing is about ordering, not about data-race safety.)
-	if hi := hubInfoFromUnit(u); hi.Serial != "" {
+	hi := hubInfoFromUnit(u)
+	if hi.Serial != "" {
 		p.publish(func() { disco.SetHubInfoFor(centralName, hi) })
 	}
 
@@ -385,7 +386,17 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 	// hub plane out until the next reachability change — which on a healthy
 	// CCU may never come. The worker is FIFO, so queueing the seed first is
 	// what orders the byte before the configs that name it.
-	p.publish(func() { p.publishCCUReachability(ctx, b, centralName, hubModel) })
+	//
+	// Gated on the SERIAL, like every discovery build below it, and for a
+	// reason the gate's own fold depends on: an unobserved connectivity
+	// tracker folds to REACHABLE, which is only defensible once the daemon
+	// has demonstrated it can talk to this CCU. Before the serial resolves
+	// it has demonstrated nothing, so an ungated seed put a retained
+	// `online` on the broker for a CCU that is merely CONFIGURED — one that
+	// may have been unreachable since boot. There is nothing to gate at that
+	// point either: no hub entity of this central exists until the serial
+	// stamps its unique ids, and the daemon re-runs Start once it does.
+	p.queueCCUReachabilitySeed(ctx, b, centralName, hi.Serial, hubModel)
 
 	// --- Programs ---
 	// Subscribe to PutProgram FIRST so programs registered between the
@@ -979,6 +990,22 @@ func (p *HubMQTTPublisher) republishHubEntityDiscovery(
 // whose aggregate is not wired yet is served by a stand-in of the same type
 // and gets the same topic. That fallback is the only reason an unwired
 // aggregate is not an error here.
+
+// queueCCUReachabilitySeed queues the per-CCU gate's seeding write, unless
+// this central's serial has not resolved yet.
+//
+// Its own function rather than a branch in [HubMQTTPublisher.wireOneCentral]
+// because that one is already at the cognitive-complexity ceiling; the
+// reasoning for the guard is on the call site.
+func (p *HubMQTTPublisher) queueCCUReachabilitySeed(
+	ctx context.Context, b *mqtt.Bridge, centralName, serial string, hubModel *hub.Hub,
+) {
+	if serial == "" {
+		return
+	}
+	p.publish(func() { p.publishCCUReachability(ctx, b, centralName, hubModel) })
+}
+
 // publishCCUReachability folds this CCU's interface states into the per-CCU
 // availability gate and hands the result to the bridge, which debounces it.
 //
