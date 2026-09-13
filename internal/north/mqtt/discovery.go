@@ -367,18 +367,7 @@ func (d *DefaultDiscoveryBuilder) WithLocale(locale string) *DefaultDiscoveryBui
 // (model-driven). Drives sensor / binary_sensor / number entities
 // that are not part of an aggregate, plus VALUES paramsets on
 // channels we don't classify as a custom domain.
-// MUTATION-PROOF SCRATCH — REVERTED IN THE NEXT COMMIT.
-// Models the regression shape a reviewer would actually ship by accident: a
-// redundant re-render of the whole discovery body. Exists only to make
-// script/bench_gate.sh's new BenchmarkDiscoveryBuildPerEntity ceiling go red
-// on the machine it guards, before that ceiling is trusted.
-func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID string, buf []byte, ok bool) {
-	d.buildOnce(ev)
-	d.buildOnce(ev)
-	return d.buildOnce(ev)
-}
-
-func (d *DefaultDiscoveryBuilder) buildOnce(ev Event) (component, nodeID, objectID string, buf []byte, ok bool) { //nolint:gocognit,gocyclo,funlen // wire/dispatch table over many attribute/opcode cases
+func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID string, buf []byte, ok bool) { //nolint:gocognit,gocyclo,funlen // wire/dispatch table over many attribute/opcode cases
 	if ev.ChannelType != "" {
 		if comp, nid, oid, p, agg := d.aggregateChannel(ev); agg {
 			return comp, nid, oid, p, true
