@@ -8,6 +8,52 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The payload-keyed discovery sweep retracted a second loom daemon's
+  Home Assistant entities, and skipped device bundles entirely.**
+  `RunUnscopedDiscoveryCleanupOnce` — the boot pass that clears retained
+  configs whose `unique_id` this build can no longer address (an empty
+  CCU-serial slot, a pre-scoping CUxD address) — subscribed to the whole
+  `homeassistant/#` tree and decided ownership from `origin.name` plus the
+  shape of the id. Neither names a daemon: `originName` is a compile-time
+  constant identical in every loom build, and an empty serial slot is what
+  *every* daemon wrote before the slot was filled. Driven, a sibling
+  daemon's configs at a wholly foreign node id were retracted — and unlike
+  the node-id prefix hazard, this pass ran unconditionally rather than
+  behind `north.mqtt.discovery_retract_unscoped`. Home Assistant deletes
+  the entity the moment the config is cleared and a device-registry row
+  goes with its last entity, so the sweep's own note that the sibling
+  "republishes them correctly on its own next snapshot" was wrong twice
+  over: the republish comes only when the sibling itself restarts, and it
+  comes back stripped of every registry customisation.
+
+  The candidate set is now scoped to this daemon's own node-id namespace
+  first — `discoveryNodePrefixes` over every configured central, the same
+  rule the per-central orphan sweep and the bundle sweep already apply.
+  That costs no coverage: the premise of this pass is that the *topic* did
+  not move, so the stale payload sits on the very topic this daemon
+  publishes to. A bridge with no configured central now claims nothing
+  rather than everything. The opt-in still governs the half it was made
+  for, the unscoped node-id *spelling*, where no discriminator exists at
+  any price; it is not extended to cover a foreign central, where one does.
+
+  Second, `payloadCarriesUnscopedUniqueID` decoded a top-level `unique_id`
+  only. A device bundle has none — its ids nest under `components` — so a
+  deployment on `north.mqtt.discovery_bundles` had its per-entity configs
+  cleared while the stale document survived beside them, keeping exactly
+  the identities the pass exists to remove. Any component carrying a
+  condemned id now condemns the document, which cannot be cleared in part.
+
+  Fixtures: the ownership and retraction sets were `sensor`/`switch`/
+  `event` only — three components that all carry a `state_topic`, while
+  over the fleet golden the 39 payloads without one are all `button` (13)
+  and `climate` (26). They now cover `button`, `climate` and a
+  bundle-shaped payload, and `TestDiscoveryOrphanSweepDrivenAgainstA`
+  `SiblingDaemonsConfigs` drives the topic-keyed sweep against a second
+  loom daemon's live configs rather than a foreign integration — turning
+  this repo's structural immunity to the sibling-bridge defect (the
+  ownership predicate takes a payload-free `publisher.ConfigTopic`) from
+  an argument into a demonstration. No production behaviour changed there.
+
 - **Two dedup gates and one barrier were wired to the wrong thing; the
   fixes around them were not held by anything.** An adversarial review of
   the last sixteen changes mutated each landed fix and recorded whether

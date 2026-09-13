@@ -1251,10 +1251,50 @@ func carriesLegacyUnscopedCUxDID(uniqueID string) bool {
 // is the reason this runs before [EventBridge.PublishInitialSnapshot]
 // rather than beside the other sweeps, which run after it.
 //
-// Scope is the daemon's own payloads, identified by the origin block the
-// discovery builder writes. A second loom daemon on the same broker
-// would have its unscoped ids cleared too — they are equally ambiguous,
-// and it republishes them correctly on its own next snapshot.
+// Scope is the daemon's own node-id namespace, and within it the daemon's
+// own payloads as identified by the origin block the discovery builder
+// writes.
+//
+// # Why the origin block is not enough on its own
+//
+// [originName] is a compile-time constant — every loom daemon in existence
+// stamps the identical string — and neither marker carries a daemon identity
+// either: `loom__…` is what an empty CCU-serial slot looks like on ANY
+// daemon, and a CUxD address is synthetic and repeats across CCUs by
+// construction. So an origin-plus-marker predicate run over the whole
+// `homeassistant/#` tree claimed a SIBLING daemon's configs at a wholly
+// foreign node id, on every boot, and this comment used to call that
+// acceptable because the sibling "republishes them correctly on its own next
+// snapshot". It does not: Home Assistant deletes the entity the moment the
+// retained config is cleared, a device-registry row goes with its last
+// entity, and `identifiers` has no migration path — so even the republish
+// that does eventually come re-creates entities stripped of every registry
+// customisation, and the operator's dashboards and automations stay broken.
+// Nor is the window a boot: the sibling republishes only when IT restarts.
+//
+// So the candidate set is scoped to this daemon's own node-id namespace
+// first ([discoveryNodePrefixes] over [Bridge.cleanupCentralNames]), exactly
+// as [Bridge.ownsDiscoveryTopic] and the bundle sweep scope theirs. That
+// costs no coverage, because the whole premise of this pass is that the
+// TOPIC did not move: the stale payload sits on the very topic this daemon
+// publishes to, under a node id built from its own central. What it removes
+// is the entire foreign-node-id case.
+//
+// It is deliberately NOT put behind `north.mqtt.discovery_retract_unscoped`
+// as a whole. That flag exists for a class where no discriminator exists at
+// all — the unscoped node-id SPELLING is byte-for-byte what a default-base
+// sibling publishes live, so no predicate can tell the two apart at any
+// price. Here a discriminator does exist and is already trusted elsewhere in
+// this file. The flag still governs the half it was made for: it is threaded
+// into [discoveryNodePrefixes] below, so a non-default-base daemon reaches
+// its own pre-scope spellings only when the operator has said that no
+// default-base sibling shares the broker.
+//
+// The three daemon-level planes (`alarm`, `security`, `daemon`) fall outside
+// the candidate set: their node ids carry no `<central>_` segment, so
+// [discoveryNodeIDBelongsTo] declines them. That costs nothing — their ids
+// (`loom_addon_update`, `openccu-loom_alarm_…`, `loom_security_…`) match
+// neither marker, so the pass never had anything to do there.
 //
 // Best-effort: returns the number of configs cleared plus any subscribe
 // error.
@@ -1269,16 +1309,27 @@ func (b *Bridge) RunUnscopedDiscoveryCleanupOnce(ctx context.Context, snapshotWi
 	if !ok {
 		return 0, errCleanupClientLacksSubscribe
 	}
+	nodePrefixes := b.ownDiscoveryNodePrefixes()
+	if len(nodePrefixes) == 0 {
+		// No central to scope by. Clearing on the origin block alone is
+		// exactly how a sibling's entities were deleted; declining is the
+		// only safe half, and it matches the bundle sweep's same guard.
+		return 0, nil
+	}
 
 	var (
 		mu    sync.Mutex
 		stale []string
 	)
 	handler := func(topic string, payload []byte, _ bool) {
-		if !strings.HasPrefix(topic, naming.DiscoveryTopicPrefix) || !strings.HasSuffix(topic, "/config") {
+		if len(payload) == 0 {
 			return
 		}
-		if len(payload) == 0 {
+		parsed, ok := hapublisher.ParseConfigTopic(naming.DiscoveryTopicPrefix, topic)
+		if !ok {
+			return
+		}
+		if !discoveryNodeIDBelongsTo(strings.ToLower(parsed.NodeID), nodePrefixes) {
 			return
 		}
 		if !payloadCarriesUnscopedUniqueID(payload) {
@@ -1305,6 +1356,30 @@ func (b *Bridge) RunUnscopedDiscoveryCleanupOnce(ctx context.Context, snapshotWi
 	return len(topics), nil
 }
 
+// ownDiscoveryNodePrefixes returns every node-id prefix this daemon may
+// claim across ALL the centrals it serves — the union of
+// [discoveryNodePrefixes] over [Bridge.cleanupCentralNames].
+//
+// The per-central sweeps are handed one central and scope to it. The
+// payload-keyed sweep is a boot-level pass with no central argument, so it
+// needs the union; asking for the default central alone would leave a
+// second CCU's stale identities unreachable forever, which is the same
+// mistake [Bridge.cleanupCentralNames] documents for the raw plane.
+//
+// Returns nil when no central is configured — the callers treat that as
+// "claim nothing" rather than "claim everything".
+func (b *Bridge) ownDiscoveryNodePrefixes() []string {
+	scope := b.topics.DiscoveryNodeScope()
+	unscoped := b.retractUnscopedDiscovery()
+	var prefixes []string
+	for _, name := range b.cleanupCentralNames() {
+		for _, p := range discoveryNodePrefixes(scope, unscoped, name) {
+			prefixes = appendUnique(prefixes, p)
+		}
+	}
+	return prefixes
+}
+
 // payloadCarriesUnscopedUniqueID reports whether a retained discovery
 // config was published by this daemon with an entity id the current build
 // no longer emits for that topic: an empty serial slot, or a CUxD address
@@ -1314,12 +1389,32 @@ func (b *Bridge) RunUnscopedDiscoveryCleanupOnce(ctx context.Context, snapshotWi
 // integrations' payloads, which may legitimately use any id shape; the
 // markers identify the ones this daemon can no longer address, because a
 // second CCU would produce the identical string.
+//
+// # Both payload shapes
+//
+// A per-entity config carries `unique_id` at the top level. A device bundle
+// (`homeassistant/device/<node_id>/config`, behind `north.mqtt.
+// discovery_bundles`) carries none — its ids nest one per component under
+// `components.<key>.unique_id` — so a top-level-only decode read the bundle
+// as "no id, nothing to do" and left it retained while the pass cleared the
+// per-entity configs beside it. That is under-cleanup, and it defeats the
+// whole pass for a bundle deployment: Home Assistant keys its registry on
+// the component ids, so the stale bundle keeps the unaddressable identities
+// alive and the corrected document adds duplicates beside them.
+//
+// A bundle is one retained document and cannot be partially cleared, so ANY
+// component carrying a marker condemns it. That is the same trade the
+// per-entity path makes — the whole config goes and the snapshot that
+// follows re-announces it — applied at the document's own granularity.
 func payloadCarriesUnscopedUniqueID(payload []byte) bool {
 	var body struct {
 		UniqueID string `json:"unique_id"`
 		Origin   struct {
 			Name string `json:"name"`
 		} `json:"origin"`
+		Components map[string]struct {
+			UniqueID string `json:"unique_id"`
+		} `json:"components"`
 	}
 	if err := json.Unmarshal(payload, &body); err != nil {
 		return false
@@ -1327,8 +1422,24 @@ func payloadCarriesUnscopedUniqueID(payload []byte) bool {
 	if body.Origin.Name != originName {
 		return false
 	}
-	if strings.HasPrefix(body.UniqueID, unscopedUniqueIDMarker) {
+	if unaddressableUniqueID(body.UniqueID) {
 		return true
 	}
-	return carriesLegacyUnscopedCUxDID(body.UniqueID)
+	for _, component := range body.Components {
+		if unaddressableUniqueID(component.UniqueID) {
+			return true
+		}
+	}
+	return false
+}
+
+// unaddressableUniqueID reports whether uniqueID is one this build can no
+// longer emit: an empty CCU-serial slot, or a pre-scoping CUxD address.
+// One definition for both payload shapes, so the bundle and the per-entity
+// form cannot drift into judging the same id differently.
+func unaddressableUniqueID(uniqueID string) bool {
+	if strings.HasPrefix(uniqueID, unscopedUniqueIDMarker) {
+		return true
+	}
+	return carriesLegacyUnscopedCUxDID(uniqueID)
 }
