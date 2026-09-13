@@ -1,6 +1,6 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
-## Unreleased
+## 0.78.0
 
 Changed, and it affects you only if a name on your system carries an accent
 that is not a German umlaut, or a double underscore. The daemon had two

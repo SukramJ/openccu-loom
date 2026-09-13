@@ -4,7 +4,7 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
-# Unreleased
+# 0.78.0
 
 No changes to the proxy itself. The daemon changes how it turns a name
 carrying a non-German accent, or a double underscore, into a Home Assistant

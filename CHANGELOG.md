@@ -6,6 +6,87 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.78.0] - 2026-09-13
+
+### Release summary
+
+A large release: 92 merged pull requests (#739 - #834), most of them the
+ADR 0070 migration of the Home Assistant discovery and MQTT publish
+surface onto the shared `go-hamqtt` / `go-mqtt` model, plus the three
+rounds of adversarial review that followed it. The two headings below
+are the part that needs a decision before you upgrade; everything after
+them is detail.
+
+**What requires your attention: Home Assistant entity identity moves -
+but only if you set a custom `north.mqtt.topic_base`.** An installation
+that never touched `topic_base` (the default `openccu-loom`) is untouched
+to the byte, and nothing in this paragraph applies to it. On a custom
+base, #817 scopes the discovery node id by that base, and #826 carries
+the scope into the `unique_id` of the three daemon-level planes that had
+nothing else in them to tell two daemons apart: the **alarm** entities,
+the **Security & Safety** entities and the **Add-on Update** entity.
+Those three groups are re-created under new identifiers, so they lose
+their **history, long-term statistics, `entity_id`, renames, area
+assignment, and every automation or dashboard reference that names
+them**. Home Assistant has no migration path for a changed `unique_id` -
+this cannot be automated and cannot be undone, so plan on re-applying
+those references by hand. Per-device and per-CCU entities are keyed on
+the CCU serial and the ISE id and do **not** move.
+
+Separately, #809 settles the daemon's two disagreeing discovery-slug
+rules onto the shared one. That moves discovery topics and *device*
+identifiers for names carrying a non-German accent (`Café` and `Caf`
+previously collapsed into a single entity, with nothing saying the second
+existed) or a literal `__`; entity identity, history and `entity_id` are
+preserved, and the affected device cards need their area and name
+re-applied. A German-language fleet is a no-op.
+
+**The new expert-tier flag `north.mqtt.discovery_retract_unscoped`
+(default `false`).** The pre-scope node-id spelling and a live
+default-base sibling's spelling are the *same string*, and the discovery
+config topic carries the node id and nothing else - so the daemon cannot
+tell "my own stale config" from "another daemon's live config" at any
+price. It is therefore an operator decision rather than something the
+daemon may guess. Left `false`, the orphan sweep claims only this
+daemon's own scoped namespace, and the pre-upgrade retained configs
+remain on the broker as unavailable twins. Turned on for **exactly one
+start** - and only when you know that no default-base sibling daemon
+shares the broker - the sweep also accepts the unscoped spellings and
+clears them; turn it back off afterwards. If a sibling does share the
+broker, leave it off and clear the old topics by hand.
+`docs/external-clients/ha-unique-id-migration.md` carries the decision
+table, the before/after strings and the manual `mosquitto_pub -r -n`
+cleanup. That document, not this summary, is the one to read before this
+upgrade.
+
+**The rest, in short.** A sibling daemon's entities were being deleted by
+three independent mechanisms, and all three are now closed: the discovery
+base scope, whose retraction hazard was inverted so a custom-base daemon
+swept a default-base sibling's device, hub, alarm and security configs on
+every boot (#817, #826); the payload-keyed boot sweep, which subscribed
+to the whole `homeassistant/#` tree and decided ownership from
+`origin.name` and an empty serial slot, neither of which names a daemon
+(#833); and the add-on-update plane, whose node id had moved with no
+retraction path, stranding a permanent phantom "Add-on Update" entity
+(#826). A CCU whose ReGaHss has died or hung while `rfd` keeps answering
+now reports its system variables, programs and system scores
+**unavailable** rather than freezing them on a stale value that reads as
+current: the per-CCU availability gate is a conjunction of interface
+reachability *and* an `/ise/checkrega.cgi` liveness probe (#815), with
+three lifecycle defects around a re-adopted and a removed CCU fixed on
+top (#827). Inbound commands are no longer delivered twice for the
+length of a retain-sweep window - a doubled `PRESS_SHORT`, a doubled
+program trigger, a doubled alarm arm, none of it logged - because the
+sweeps now ride their own subscribe-only broker connection (#812). The
+CI test suite moved from 1099 s to 645 s and states its timeout instead
+of drifting toward it (#831). Beyond that: the ADR 0007 benchmark
+ratchet, which went red on unchanged code and green on no measurement at
+all, is repaired (#825); the in-process broker shutdown is bounded so an
+upstream `mochi-mqtt` deadlock cannot hang the package (#829); and the
+libraries move to go-hamqtt v0.34.0 / go-mqtt v1.5.1 (#834) - a bump on
+which this project's own reflective gate-reset ratchet caught a real
+defect.
+
 ### Fixed
 
 - **The payload-keyed discovery sweep retracted a second loom daemon's
