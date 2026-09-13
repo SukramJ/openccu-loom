@@ -136,58 +136,98 @@ BENCHTIME="${BENCH_GATE_BENCHTIME:-300ms}"
 # the right axis. It is not, however, the *invariant* the first version of this
 # section claimed.
 #
-# THE ALLOCATION AXIS VARIES TOO — BY ONE, AND FOR A KNOWN REASON
+# THE ALLOCATION AXIS VARIES TOO — BY TENS, NOT BY ONE
 #
 # The claim "allocs/op cannot flake, so arm the ceiling exactly at the measured
-# value" was tested and is false. BenchmarkDiscoveryBuildPerEntity reports 811
-# or 812 allocs/op on one machine and one unchanged tree, depending only on how
-# the garbage collector is configured:
+# value" was tested and is false, and the first correction of it was ALSO
+# wrong. Both versions are kept here because the second error is the
+# instructive one: an adversarial table that agrees with its own conclusion
+# because every row holds one variable that hides the effect.
+#
+# What #816 measured. BenchmarkDiscoveryBuildPerEntity reports 811 or 812
+# allocs/op on one machine and one unchanged tree as a function of nothing but
+# garbage-collector configuration:
 #
 #   GOGC=off                        20/20 runs -> 811
 #   default GOGC, -benchtime=100x    1/20 runs -> 812
 #   GOGC=1,      -benchtime=3000x    9/10 runs -> 812
 #   GOMEMLIMIT=16MiB + GOGC=1        6/6  runs -> 812
 #
-# The mechanism is isolated: the build ends in a JSON marshal, and
-# encoding/json keeps its encodeState in a sync.Pool. A sync.Pool is DRAINED BY
-# THE GC. A pool hit costs 811 allocations; a pool miss costs 812, because the
-# state has to be allocated afresh. So the count is a function of GC pressure —
-# of GOGC, of GOMEMLIMIT, of how much other memory the process happens to be
-# using, and of b.N (a short run is likelier to span a GC than to amortise one
-# away). A memory-capped runner, or a leg that simply schedules a GC at a
-# different moment, moves this digit on code nobody touched. Arming at exactly
-# 811 reproduced the identical failure mode #816 was written to fix — a ratchet
-# red on an unchanged tree — with the headroom removed.
+# From which it concluded that the dynamic range of non-code variance is
+# exactly one allocation, that 811 + 1 is therefore the saturated worst case,
+# and that "no GC setting can push it past the one extra object the pool
+# holds". EVERY GOMEMLIMIT ROW IN THAT TABLE ALSO PINS GOGC=1. That is the
+# flaw: GOGC=1 keeps the live heap so small that an 8-16 MiB memory limit
+# never binds, so the two rows that look like memory-limit rows are GOGC rows
+# wearing a memory limit. Take the pin off and the digit does not move by one:
 #
-# WHY THE HEADROOM IS EXACTLY ONE ALLOCATION, AND NOT A PERCENTAGE
+#   GOMEMLIMIT=8MiB  (default GOGC)  -> 820 822 830 830 830 832 836 838 838
+#   GOMEMLIMIT=8MiB  (default GOGC)  -> 844 845 845 849   (second machine)
+#   GOGC=5 GOMEMLIMIT=8MiB           -> 815 827 830 833 834 836 839 849
+#   GOMEMLIMIT=12MiB                 -> 811 811 811 811
+#   GOGC=1 GOMEMLIMIT=8MiB           -> 811/812, as the table above says
 #
-# Because the dynamic range of the mechanism is exactly one allocation, and
-# that is measurable rather than guessed. testing.AllocsPerOp() TRUNCATES
-# totalAllocs/N, so a partial miss rate cannot show up as a fraction: 811.9
-# reads as 811. The count therefore only reaches 812 when essentially every
-# iteration misses the pool — the saturated worst case — and no GC setting can
-# push it past the one extra object the pool holds. Every adversarial
-# configuration tried above lands in {811, 812} and nothing reached 813. So
-# 812 is not padding chosen for comfort; it is the top of the measured range of
-# the one identified non-code source of variance. A percentage headroom would
-# be worse in both directions at once: 1 % of 811 is eight allocations of slack
-# for a real regression to hide in, while 1 % of 19 rounds to nothing and
-# leaves the ForWith ceilings exactly as brittle as they are now.
+# End to end, on the unchanged tree, this script printed
 #
-# The two ForWith ceilings are NOT loosened. 26 and 19 were stable across every
-# configuration in the table above — those paths do not touch the pooled
-# encoder — so they stay armed exactly at the measured value, which is where a
-# ratchet belongs when the number really does hold.
+#   ::error::BenchmarkDiscoveryBuildPerEntity: 850 allocs/op > ceiling 812
+#
+# So the measured dynamic range of non-code variance is AT LEAST +39, and the
+# mechanism is not one pooled encodeState. Under a memory limit that actually
+# binds, the collector runs continuously, and every sync.Pool the build touches
+# is drained on every cycle — encoding/json's encodeState among many others,
+# per-P caches and victim caches included. The truncation argument
+# (testing.AllocsPerOp truncates totalAllocs/N, so a partial miss rate reads
+# low) is still correct and still bounds ONE pool at +1; it says nothing about
+# how many pools there are, which is the quantity that actually matters and
+# the quantity neither version of this table measured.
+#
+# WHAT 812 ACTUALLY IS, AND WHAT IT IS NOT
+#
+# 812 is what this benchmark measures on an UNCONSTRAINED runner, plus one for
+# a drained pool. It is not a worst case, it is not a saturation bound, and it
+# is not a number below which the count cannot rise on unchanged code. On a
+# runner whose Go process runs under a binding GOMEMLIMIT the true figure is
+# tens higher, and this gate is NOT calibrated for that environment.
+#
+# The number is kept anyway, because the exposure is low and known rather than
+# hoped for: GitHub's hosted runners do not set GOMEMLIMIT, and the Go runtime
+# does not read a cgroup memory limit on its own — a container cap alone
+# therefore does not change the GC's heap goal and does not move this count.
+# The one way this environment arises is that somebody sets GOGC or GOMEMLIMIT
+# in it, which is an explicit act, not a scheduling accident.
+#
+# So the environment is DETECTED rather than padded for. When GOGC or
+# GOMEMLIMIT is set in this script's environment, the allocation rows are
+# measured and printed as always but are NOT enforced: the run prints what it
+# measured, says the axis is uncalibrated here and why, and leaves the ns/op
+# backstop armed. Padding the ceiling to cover a constrained runner would mean
+# a ceiling near 900 — 90 allocations of slack for a real regression to hide
+# in, on the row this gate exists for — which is not a gate. Failing red there
+# instead would mean a gate that goes red on code nobody touched, in the one
+# environment where its own error message insists that cannot happen; this
+# repository has already had one gate switched off for exactly that, and an
+# unreliable gate that gets switched off protects nothing at all. Skipping a
+# row loudly is the only one of the three that neither lies nor hides: the
+# authority is the unconstrained CI leg, and everywhere else the reader is
+# told, in the output, that this axis did not run.
+#
+# The remaining +1 of headroom over the 811 an unconstrained runner measures is
+# for the one pool miss that a normal, unconstrained collection can cause —
+# the mechanism #816 isolated correctly, kept for the reason it was armed.
+#
+# The two ForWith ceilings are NOT loosened. 26 and 19 held across every
+# configuration in both tables above, memory-limited runs included — those
+# paths allocate a handful of objects and touch no pooled encoder — so they
+# stay armed exactly at the measured value, which is where a ratchet belongs
+# when the number genuinely does hold.
 #
 # WHAT THE HEADROOM COSTS, STATED PLAINLY. On the discovery row the gate can
 # no longer tell a +1 regression from a pool miss — because a pool miss IS +1.
 # No ceiling on this benchmark can; that is a property of the measurement, not
-# a choice, and the alternative is not a sharper gate but a gate red on an
-# unchanged tree, which is a gate that gets switched off. The sensitivity is
-# not wholly lost: a +1 anywhere inside `payload.ForWith` is still caught
-# exactly by the TwentyField and DeviceInfo ceilings, which keep zero headroom.
-# Only a +1 landing outside ForWith and inside the rest of the discovery build
-# now needs +2 to show here.
+# a choice. The sensitivity is not wholly lost: a +1 anywhere inside
+# `payload.ForWith` is still caught exactly by the TwentyField and DeviceInfo
+# ceilings, which keep zero headroom. Only a +1 landing outside ForWith and
+# inside the rest of the discovery build now needs +2 to show here.
 #
 # The mutation proofs this gate has been put through are otherwise unaffected:
 # #814's 40-extra-allocs mutation showed 66 and 59, the triple-render mutation
@@ -264,17 +304,35 @@ CEILINGS=(
     # slower EPYC 7763 leg; the latter x1.5, rounded. The ForWith share holds
     # at 1.2 % on BOTH legs (1174/95082 and 1552/123899), which is the
     # cross-CPU check that the share is a property of the code.
-    # allocs: 812, which is 811 + one allocation of deliberate headroom for the
-    # GC-drained sync.Pool inside encoding/json — the full measured range of
-    # that mechanism, not a percentage. See WHY THE HEADROOM IS EXACTLY ONE
-    # ALLOCATION above. Armed at 811 this ceiling went red on an unchanged tree
-    # under GOGC pressure.
+    # allocs: 812, which is the 811 an UNCONSTRAINED runner measures plus one
+    # allocation for a GC-drained sync.Pool. It is not a worst case: under a
+    # binding GOMEMLIMIT this benchmark reaches 850 on unchanged code, which is
+    # why this script skips the allocation rows outright when GOGC or
+    # GOMEMLIMIT is set rather than padding for them. See WHAT 812 ACTUALLY IS,
+    # AND WHAT IT IS NOT above. Armed at 811 the ceiling went red on an
+    # unchanged tree under ordinary GC pressure.
     "BenchmarkDiscoveryBuildPerEntity 200000 812"
 )
 
 BENCH_RE='^(BenchmarkPayloadBuildTwentyField|BenchmarkPayloadBuildDeviceInfo|BenchmarkDiscoveryBuildPerEntity)$'
 
 echo "bench_gate: ${RUNS} runs x ${BENCHTIME} per benchmark; the gate reads the minimum"
+
+# The allocation ceilings are calibrated for a runner whose Go process is NOT
+# under a configured memory or GC constraint, which is what CI is: GitHub's
+# hosted runners set neither variable, and the Go runtime does not read a
+# cgroup memory limit by itself. Under a GOMEMLIMIT that binds, every sync.Pool
+# the build touches is drained on every collection and BenchmarkDiscoveryBuild-
+# PerEntity measures tens of allocations more on code nobody touched (850 was
+# observed against this ceiling of 812). Enforcing there would be a red on an
+# unchanged tree; padding for it would leave ~90 allocations of slack. So the
+# rows are measured, printed, and left unenforced, loudly. See THE ALLOCATION
+# AXIS VARIES TOO above.
+GC_CONSTRAINED=""
+if [[ -n "${GOMEMLIMIT:-}" || -n "${GOGC:-}" ]]; then
+    GC_CONSTRAINED="GOGC=${GOGC:-unset} GOMEMLIMIT=${GOMEMLIMIT:-unset}"
+    echo "bench_gate: GC-constrained environment (${GC_CONSTRAINED}) — the ALLOCATION ceilings are not calibrated for it and will be reported, not enforced. The ns/op backstop stays armed."
+fi
 
 # -benchmem is passed EXPLICITLY even though every gated benchmark calls
 # b.ReportAllocs(). Relying on the benchmark to opt itself in makes the gate's
@@ -299,7 +357,7 @@ echo
 # `go test` prints
 #   BenchmarkX-4   	  123456	      789.0 ns/op	 ...
 # so the name carries a -GOMAXPROCS suffix and ns/op may be fractional.
-REPORT="$(echo "$RAW" | awk -v ceilings="${CEILINGS[*]}" '
+REPORT="$(echo "$RAW" | awk -v ceilings="${CEILINGS[*]}" -v constrained="$GC_CONSTRAINED" '
     /ns\/op/ {
         name = $1
         sub(/-[0-9]+$/, "", name)
@@ -338,8 +396,12 @@ REPORT="$(echo "$RAW" | awk -v ceilings="${CEILINGS[*]}" '
                 printf "::error::bench_gate: %s reported no allocs/op column — the allocation gate MEASURED NOTHING and fails closed. Check that the benchmark still calls b.ReportAllocs() and that this script still passes -benchmem.\n", name
                 bad = 1
             } else if (minal[name] > alceil) {
-                printf "::error::%s: %d allocs/op > ceiling %d allocs/op — the allocation gate does not flake on runner speed, so this is a real regression\n", name, minal[name], alceil
-                bad = 1
+                if (constrained != "") {
+                    printf "SKIP %s: %d allocs/op over ceiling %d, NOT ENFORCED — this environment sets %s, and under a binding memory or GC constraint every sync.Pool the build touches is drained on every collection, which adds tens of allocations to unchanged code. The ceiling is calibrated for an unconstrained runner. Re-run without those variables before reading anything into this number.\n", name, minal[name], alceil, constrained
+                } else {
+                    printf "::error::%s: %d allocs/op > ceiling %d allocs/op. BEFORE BELIEVING THIS IS A REGRESSION, CHECK: (1) is GOGC or GOMEMLIMIT set for this run, or is the process otherwise memory-constrained? a binding limit drains the pooled allocators every cycle and adds TENS of allocations to unchanged code (850 measured against this 812); (2) does the diff touch nothing but go.mod/go.sum? read the go-hamqtt diff first. This ceiling is what the benchmark measures on an unconstrained runner plus one pool miss — it is not a worst case. If neither applies, it is a real regression.\n", name, minal[name], alceil
+                    bad = 1
+                }
             } else {
                 printf "OK %s: %d allocs/op (ceiling %d allocs/op)\n", name, minal[name], alceil
             }

@@ -817,7 +817,7 @@ was, and this ADR does not get to label one unmeasured claim and quietly
 promote the other. **Treat the ARMv7 allocation figures as unmeasured.** The
 gate's authority is the amd64 CI leg it actually runs on.
 
-### The allocation axis varies too — by one, and for a known reason
+### The allocation axis varies too — by tens, and the first correction of this was also wrong
 
 This amendment's first draft went one claim further than it had measured and
 armed the ceilings **exactly** at the measured value, reasoning that
@@ -836,42 +836,85 @@ configuration:
 | `GOGC=1`, `-benchtime=3000x` | 9/10 runs -> **812** |
 | `GOMEMLIMIT=16MiB` + `GOGC=1` | 6/6 runs -> **812** |
 
-The mechanism is isolated rather than inferred: the discovery build ends in a
-JSON marshal, and `encoding/json` keeps its `encodeState` in a `sync.Pool` —
-**and a `sync.Pool` is drained by the GC**. A pool hit costs 811 allocations, a
-pool miss 812. The digit is therefore a function of GC pressure: of `GOGC`, of
-`GOMEMLIMIT`, of how much other memory the process happens to hold, and of
-`b.N` (a short run is likelier to span a collection than to amortise one away).
-A memory-capped runner, or a leg that merely schedules a collection at a
-different moment, moves it on code nobody touched.
+From that table this amendment concluded that the dynamic range of non-code
+variance is **exactly one allocation**, that 812 is therefore the saturated
+worst case, and that "no GC setting can push the count past the single extra
+object the pool holds". **That conclusion is refuted, and the table is why.**
 
-**So the discovery ceiling is 812 — one allocation of headroom, and exactly
-one.** The number is derived rather than picked: `testing.AllocsPerOp()`
-truncates `totalAllocs/N`, so a partial miss rate cannot surface as a fraction
-(811.9 reads as 811), which means 812 is reached only when essentially every
-iteration misses the pool — the saturated worst case — and no GC setting can
-push the count past the single extra object the pool holds. Every adversarial
-configuration above lands in {811, 812}; none reached 813. A percentage
-headroom would have been worse in both directions at once: 1 % of 811 is eight
-allocations for a real regression to hide in, while 1 % of 19 rounds to nothing
-and leaves the `ForWith` ceilings as brittle as before.
+**Every `GOMEMLIMIT` row above also pins `GOGC=1`.** With `GOGC=1` the heap
+goal is so small that an 8–16 MiB memory limit never binds, so the two rows
+that look like memory-limit rows are `GOGC` rows wearing a memory limit. A
+third review ran the one configuration the table lacked — a memory limit
+*without* the `GOGC` pin — on the unchanged tree:
 
-**What that headroom costs, stated plainly.** On this row the gate can no
-longer distinguish a regression of exactly +1 allocation from a pool miss,
-because a pool miss *is* +1 — no ceiling on this benchmark can, and that is a
-property of the measurement, not a choice. The alternative is not a sharper
-gate; it is a gate red on an unchanged tree, which is a gate that gets switched
-off. The sensitivity is not wholly lost: a +1 regression anywhere inside
-`payload.ForWith` is still caught exactly by the `TwentyField` and
+| configuration | result on unchanged code |
+|---|---|
+| `GOMEMLIMIT=8MiB`, default `GOGC` | 820 822 830 830 830 832 836 838 838 |
+| `GOMEMLIMIT=8MiB`, default `GOGC` (second machine) | 844 845 845 849 |
+| `GOGC=5` + `GOMEMLIMIT=8MiB` | 815 827 830 833 834 836 839 849 |
+| `GOMEMLIMIT=12MiB` | 811 811 811 811 |
+| `GOGC=1` + `GOMEMLIMIT=8MiB` | 811/812, as above |
+
+End to end, on the verbatim tree, the gate printed
+`::error::BenchmarkDiscoveryBuildPerEntity: 850 allocs/op > ceiling 812`.
+
+So the measured dynamic range of non-code variance is **at least +39**, not
++1, and the mechanism is not one pooled `encodeState`. Under a memory limit
+that actually binds the collector runs continuously and **every** `sync.Pool`
+the build touches is drained on every cycle — `encoding/json`'s among many
+others, per-P and victim caches included. The truncation argument
+(`testing.AllocsPerOp` truncates `totalAllocs/N`, so a partial miss rate reads
+low) remains correct and still bounds *one* pool at +1; it says nothing about
+how many pools there are, which is the quantity that actually matters and the
+one neither version of this table measured.
+
+**What 812 is, stated correctly.** It is what this benchmark measures on an
+**unconstrained** runner, plus one allocation for a drained pool. It is not a
+worst case, not a saturation bound, and not a figure below which the count
+cannot rise on unchanged code.
+
+**The number stays; the gate now detects the environment it is not calibrated
+for.** Practical exposure is low and known rather than hoped for: GitHub's
+hosted runners set neither variable, and the Go runtime does not read a cgroup
+memory limit by itself, so a container cap alone does not move the heap goal
+and does not move this count. The only way the constrained environment arises
+is that somebody sets `GOGC` or `GOMEMLIMIT`, which is an explicit act. So
+`script/bench_gate.sh` reads those two variables and, when either is set,
+**measures and prints the allocation rows but does not enforce them**, leaving
+the `ns/op` backstop armed.
+
+Of the three available responses that is the only one that neither lies nor
+hides. Padding the ceiling to cover a constrained runner means a ceiling near
+900 — ninety allocations of slack for a real regression to hide in, on the row
+this gate exists for. Failing red there means a gate red on code nobody
+touched, in the one environment where the gate's own error message insisted
+that could not happen; this repository has already had a gate switched off for
+exactly that, and a gate that gets switched off protects nothing. Skipping the
+row **loudly** keeps the authority where it belongs — the unconstrained CI leg
+— and tells every other reader, in the output, that the axis did not run.
+
+**The error message was part of the defect.** It read "the allocation gate
+does not flake on runner speed, so this is a real regression", which told the
+next maintainer that a red here could not be environmental at the exact moment
+it could. It now leads with what to check first: whether `GOGC`/`GOMEMLIMIT`
+are set or the process is otherwise memory-constrained, and whether the diff
+touches nothing but `go.mod`/`go.sum`.
+
+**The two `ForWith` ceilings are not loosened.** 26 and 19 held across every
+configuration in both tables, memory-limited runs included — those paths
+allocate a handful of objects and touch no pooled encoder — so they stay armed
+exactly at the measured value, which is where a ratchet belongs when the number
+genuinely does hold.
+
+**What the remaining +1 costs, stated plainly.** On this row the gate cannot
+distinguish a regression of exactly +1 allocation from a pool miss, because a
+pool miss *is* +1 — no ceiling on this benchmark can, and that is a property of
+the measurement. The sensitivity is not wholly lost: a +1 regression anywhere
+inside `payload.ForWith` is still caught exactly by the `TwentyField` and
 `DeviceInfo` rows, which keep zero headroom — see the corrected mutation proof
 below. Only a +1 that lands outside `ForWith` and inside the rest of the
 discovery build now needs +2 to show.
 
-**The two `ForWith` ceilings are not loosened.** 26 and 19 held across every
-configuration in the table above — those paths never touch the pooled encoder —
-so they stay armed exactly at the measured value, which is where a ratchet
-belongs when the number genuinely does hold. Only the ceiling whose variance
-was actually demonstrated moves.
 
 ### An absent measurement is not a pass
 
@@ -949,11 +992,12 @@ byte-for-byte against `internal/north/mqtt/testdata/`.
 
 A reader who wants the old sentence's intent should read the discovery row
 instead: *the per-entity HA-Discovery build must not allocate more than 812
-times*. That one is measured, enforced, and attached to the operation whose
-cost an operator on a CCU3 would actually feel. It is *not* machine-independent
-— the section above measures the one allocation by which it is not — but its
-variance is bounded, explained, and carried as headroom instead of assumed
-away.
+times on an unconstrained runner*. That one is measured, enforced, and attached
+to the operation whose cost an operator on a CCU3 would actually feel. It is
+*not* machine-independent, and the qualifier is load-bearing rather than
+decorative: the section above measures a range of at least +39 under a binding
+`GOMEMLIMIT`, which is why the gate detects that environment and reports the
+row unenforced there instead of pretending the bound covers it.
 
 ### Both ceilings were verified to fail
 

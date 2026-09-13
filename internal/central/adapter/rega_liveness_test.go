@@ -539,26 +539,143 @@ func TestARuntimeAdoptedCentralIsRegaProbed(t *testing.T) {
 // probed at the host it was re-adopted with, not the one it booted with —
 // and the boot snapshot still covers a central the supplier does not know,
 // so wiring the supplier can never take probing away from a boot-time CCU.
+//
+// BOTH HALVES MUST KNOW THE SAME NAME, AND AT DIFFERENT HOSTS. The first
+// version of this test gave the supplier `ccu-adopted` and the snapshot
+// `ccu-boot`, so no name was known to both and no input could tell the two
+// orders apart: it asserted only that each half answers for its own name,
+// and inverting regaTargetFor to consult the snapshot FIRST left it green.
+// A precedence test that cannot fail on its precedence is worse than none,
+// because it reads as cover. So the name here is in both halves, the two
+// halves point at two different servers, and the assertion is which server
+// the probe actually GETs — not whether a non-nil target came back.
+//
+// What the inversion costs in the field: an operator removes a CCU and
+// re-adopts it at a new address (the SPA's remove/add flow), the probe goes
+// to the OLD host, every tick is regaProbeNoAnswer, the conjoined gate folds
+// `offline`, and under Home Assistant's `availability_mode: "all"` every
+// sysvar, program, system-health, message and install-mode entity of that CCU
+// is permanently unavailable on healthy hardware.
 func TestRegaLivenessTargetsPreferTheLiveFleetOverTheBootSnapshot(t *testing.T) {
 	t.Parallel()
+
+	var bootHits, liveHits atomic.Int32
+	bootSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == checkRegaPath {
+			bootHits.Add(1)
+		}
+		_, _ = w.Write([]byte(checkRegaReadyBody))
+	}))
+	defer bootSrv.Close()
+	liveSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == checkRegaPath {
+			liveHits.Add(1)
+		}
+		_, _ = w.Write([]byte(checkRegaReadyBody))
+	}))
+	defer liveSrv.Close()
+	bootHost, bootPort := splitHostPortForTest(t, bootSrv.URL)
+	liveHost, livePort := splitHostPortForTest(t, liveSrv.URL)
+
 	_, _, publisher := hubDiscoveryFixture(t)
-	publisher.SetRegaLivenessTargets([]config.CentralConfig{{Name: "ccu-boot", Host: "boot.local"}})
+	// `ccu-boot` is in BOTH halves — it booted at one address and was
+	// re-adopted at another — and `ccu-bootonly` is in the snapshot alone.
+	publisher.SetRegaLivenessTargets([]config.CentralConfig{
+		{Name: "ccu-boot", Host: bootHost, JSONRPCPort: bootPort},
+		{Name: "ccu-bootonly", Host: bootHost, JSONRPCPort: bootPort},
+	})
 	publisher.SetRegaLivenessConfigSupplier(func(name string) (config.CentralConfig, bool) {
-		if name != "ccu-adopted" {
+		if name != "ccu-boot" {
 			return config.CentralConfig{}, false
 		}
-		return config.CentralConfig{Name: "ccu-adopted", Host: "adopted.local"}, true
+		return config.CentralConfig{Name: "ccu-boot", Host: liveHost, JSONRPCPort: livePort}, true
 	})
 
-	if publisher.regaTargetFor("ccu-adopted") == nil {
-		t.Fatal("a central the supplier knows got no probe target: a runtime-adopted CCU is " +
-			"never ReGa-probed at all")
+	ctx := context.Background()
+
+	// Direction one: the live fleet wins for a name both halves know.
+	target := publisher.regaTargetFor("ccu-boot")
+	if target == nil {
+		t.Fatal("a central both halves know got no probe target at all")
 	}
-	if publisher.regaTargetFor("ccu-boot") == nil {
+	target.probe(ctx)
+	if liveHits.Load() != 1 || bootHits.Load() != 0 {
+		t.Fatalf("a central known to both halves was probed at the BOOT address "+
+			"(boot hits=%d, live hits=%d): a CCU removed and re-adopted at a new host is "+
+			"probed at the host it no longer has, every probe is regaProbeNoAnswer, the "+
+			"conjoined gate folds `offline` and every ReGa-scoped entity of that CCU goes "+
+			"permanently unavailable on healthy hardware",
+			bootHits.Load(), liveHits.Load())
+	}
+
+	// Direction two: the snapshot still covers a name the supplier declines,
+	// and covers it with a probe that reaches the boot address — not merely
+	// with a non-nil target.
+	target = publisher.regaTargetFor("ccu-bootonly")
+	if target == nil {
 		t.Fatal("wiring the supplier took the probe away from a boot-time central")
 	}
+	target.probe(ctx)
+	if bootHits.Load() != 1 {
+		t.Fatalf("the boot snapshot's central was not probed at the boot address "+
+			"(boot hits=%d): wiring the live-fleet supplier took ReGa probing away from "+
+			"every boot-time CCU", bootHits.Load())
+	}
+	if liveHits.Load() != 1 {
+		t.Fatalf("the supplier answered for a central it reports false for (live hits=%d)",
+			liveHits.Load())
+	}
+
 	if publisher.regaTargetFor("ccu-unknown") != nil {
 		t.Fatal("a central neither half knows got a target: there is no host to build a URL from")
+	}
+}
+
+// TestALiveConfigWithNoHostDoesNotFallBackToTheBootAddress pins the one case
+// where [HubMQTTPublisher.regaTargetFor]'s doc and its code disagreed.
+//
+// The doc says the resolver returns nil when there is "no known config, or a
+// config with no host", and [HubMQTTPublisher.SetRegaLivenessConfigSupplier]
+// says an `ok` from the supplier settles the question. The code did neither
+// for one input: an `ok` carrying an empty Host yields no target from
+// [newRegaLivenessTarget], and the old body then fell through to the boot
+// snapshot — so a central the live fleet knows, and knows has no address,
+// was probed at the address it booted with. That is the wrong-address probe
+// the precedence test above exists to keep out, arriving through the branch
+// that test does not drive.
+//
+// No path is known today that produces an adopted config with an empty host,
+// so this pins a reading rather than closing a live defect: the live fleet
+// settles it, and "known, nothing to probe" is an answer.
+func TestALiveConfigWithNoHostDoesNotFallBackToTheBootAddress(t *testing.T) {
+	t.Parallel()
+
+	var bootHits atomic.Int32
+	bootSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == checkRegaPath {
+			bootHits.Add(1)
+		}
+		_, _ = w.Write([]byte(checkRegaReadyBody))
+	}))
+	defer bootSrv.Close()
+	bootHost, bootPort := splitHostPortForTest(t, bootSrv.URL)
+
+	_, _, publisher := hubDiscoveryFixture(t)
+	publisher.SetRegaLivenessTargets([]config.CentralConfig{
+		{Name: "ccu-boot", Host: bootHost, JSONRPCPort: bootPort},
+	})
+	publisher.SetRegaLivenessConfigSupplier(func(name string) (config.CentralConfig, bool) {
+		// Known to the live fleet, and known to have no address.
+		return config.CentralConfig{Name: name}, true
+	})
+
+	target := publisher.regaTargetFor("ccu-boot")
+	if target != nil {
+		target.probe(context.Background())
+		t.Fatalf("a central the live fleet answers for with no host got a probe target "+
+			"(it reached the boot address %d time(s)): the boot host is exactly the address "+
+			"the live fleet no longer names, so every probe would be regaProbeNoAnswer "+
+			"against hardware that is fine", bootHits.Load())
 	}
 }
 
