@@ -623,12 +623,21 @@ type commandRoute struct {
 
 // routes is the exact, ordered command-filter set this plane answers on.
 //
-// Order is registration order, and it is load-bearing twice over: the router
-// subscribes in it, so a broker that refuses one filter rolls back the ones
-// before it — in the same order it registered them, not in reverse — and
-// [hapublisher.CommandRouter.Handle] reports an ambiguous pair naming the
-// earlier filter first. It is pinned by
-// TestCommandFilterSetIsPinned.
+// Order here is DECLARATION order, and since go-hamqtt v0.30.0 it is no
+// longer the order anything goes out in:
+// [hapublisher.CommandRouter.Start] sorts most specific first — most literal
+// segments before fewest — and it is that order the router subscribes in,
+// rolls back in, and reports an ambiguous pair in. The order really
+// registered is pinned by TestCommandFilterSetIsPinned, which records the
+// router's order and says why the two differ.
+//
+// The sort is a no-op for this plane's behaviour, because the set is
+// pairwise disjoint and no route outranks another; it matters for a plane
+// whose filters overlap, which this one deliberately is not. So this list
+// stays grouped by topology — the two data-point catch-alls together, then
+// the hub planes, then the daemon-level planes — because that is what a
+// reader needs to see, and duplicating the router's sort here would be a
+// second copy of a rule the router owns.
 //
 // The set is pairwise disjoint, and that is a property of the set rather than
 // a coincidence of it. The data-point plane needs two wildcard catch-alls at
