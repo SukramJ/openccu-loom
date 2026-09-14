@@ -93,7 +93,7 @@ func runAlarmPlane(t *testing.T, base string) *observedPlane {
 	}
 	t.Cleanup(cs.Close)
 
-	obs.settle(t)
+	obs.settle(t, pub)
 	return obs
 }
 

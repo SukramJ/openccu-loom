@@ -5,7 +5,9 @@ package mqtt
 
 import (
 	"context"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/metrics"
 )
@@ -33,6 +35,11 @@ func TestAlarmPlaneIsVisibleToTheBridge(t *testing.T) {
 	f.waitForPublish(availTopic, func(rec publishRecord) bool { return rec.payload == "online" })
 	motionTopic := alarmTriggeredMotionTopic(f.base, "z1")
 	f.waitForPublish(motionTopic, func(rec publishRecord) bool { return rec.retain })
+
+	// The recorder saw the writes; the index is written after the client call
+	// returns, on the worker goroutine. Only the plane itself can say it is
+	// past that point — see [alarmPublisherFixture.settle].
+	f.settle()
 
 	bridge := f.pub.wiring.Bridge()
 	bridge.mu.Lock()
@@ -185,5 +192,62 @@ func TestAlarmAvailabilityIsPinnedToQoS1(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("no publish to %s observed", topic)
+	}
+}
+
+// TestTheAlarmBarrierOutlastsAWorkerStalledPastTheBrokerCall is the alarm
+// plane's counterpart to TestSettleOutlastsAWorkerStalledPastTheBrokerCall,
+// and it is the reason [AlarmMQTTPublisher.quiesce] exists in the production
+// file rather than as a poll in this one.
+//
+// A publish does not end when the broker call returns.
+// [Bridge.publishRuntimeState] records the retained topic in the bridge's
+// index and counts the message after it, on the same worker goroutine, and
+// the worker publishes a whole reconcile one message at a time. So a guard
+// that waits on the RECORDER and then reads the bridge is reading across that
+// window: a worker descheduled past the client call is silent in exactly the
+// way a finished worker is. That is the shape
+// TestAlarmPlaneIsVisibleToTheBridge had, and the flake class it belongs to —
+// a retained topic the recorder had already seen and the index had not
+// reached yet.
+//
+// The stall is injected rather than waited for: `afterPublish` holds the
+// worker past the recorder on EVERY message, which turns a rare scheduling
+// accident into the only possible interleaving. A barrier that does not
+// really wait for the worker then fails on every run.
+func TestTheAlarmBarrierOutlastsAWorkerStalledPastTheBrokerCall(t *testing.T) {
+	t.Parallel()
+	f := newAlarmPublisherFixture(t)
+	f.seedZone("z1", "Ground floor", zeroDelayFullMode())
+	// Wide enough that no amount of luck closes the window on its own.
+	f.mp.afterPublish = func() { time.Sleep(50 * time.Millisecond) }
+	f.start()
+
+	f.settle()
+
+	var retained []string
+	for _, rec := range f.mp.recorded() {
+		if strings.HasPrefix(rec.topic, f.base+"/alarm/") && rec.retain && rec.payload != "" {
+			retained = append(retained, rec.topic)
+		}
+	}
+	if len(retained) == 0 {
+		t.Fatal("the alarm plane wrote no retained topic — the fixture cannot show the bookkeeping")
+	}
+
+	bridge := f.pub.wiring.Bridge()
+	bridge.mu.Lock()
+	var missing []string
+	for _, topic := range retained {
+		if _, ok := bridge.rawTopics[topic]; !ok {
+			missing = append(missing, topic)
+		}
+	}
+	bridge.mu.Unlock()
+	if len(missing) > 0 {
+		t.Errorf("the barrier returned with %v recorded on the broker but absent from the "+
+			"bridge's retained-topic index — it ended inside the window between the client call "+
+			"and the bookkeeping, so no sweep and no retraction can reach those topics and "+
+			"nothing says so", missing)
 	}
 }

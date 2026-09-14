@@ -20,9 +20,9 @@ import (
 // Its two halves sit on opposite sides of the password KDF.
 // ReserveBasicAttempt is called by [Middleware.Resolve] immediately BEFORE
 // the verification, because the verification itself is the expensive
-// operation the throttle exists to bound — a bcrypt compare at cost 12 costs
-// hundreds of milliseconds of CPU, so a throttle downstream of it protects
-// nothing. Budget is the read-only peek [GuardBasicAuth] uses afterwards to
+// operation the throttle exists to bound — a bcrypt compare at the production
+// cost ([ProductionBcryptCost]) costs hundreds of milliseconds of CPU, so a
+// throttle downstream of it protects nothing. Budget is the read-only peek [GuardBasicAuth] uses afterwards to
 // turn a spent budget into a 429.
 type BasicAuthThrottle interface {
 	// Budget reports whether the source of r has a verification token left —

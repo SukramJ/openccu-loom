@@ -68,10 +68,34 @@ type HubMQTTPublisher struct {
 	// whose sysvars are frozen.
 	rega *regaLivenessTracker
 
-	// regaTargets says how each central is probed, keyed by central name.
-	// Guarded by mu; written by [HubMQTTPublisher.SetRegaLivenessTargets]
-	// and read once per wiring pass.
+	// regaTargets is the BOOT snapshot of how each central is probed, keyed by
+	// central name. Guarded by mu; written by
+	// [HubMQTTPublisher.SetRegaLivenessTargets] and read when a poller starts.
+	// It is the fallback, not the source of truth — see regaConfig.
 	regaTargets map[string]*regaLivenessTarget
+
+	// regaConfig resolves one central's connection config from the LIVE fleet.
+	// Guarded by mu; set by [HubMQTTPublisher.SetRegaLivenessConfigSupplier]
+	// and asked every time a poller starts, never captured into a snapshot.
+	//
+	// A CCU adopted at runtime is in no boot-time list, so a target map filled
+	// once from the boot config has no entry for it and its poller never
+	// starts at all — leaving the very defect the ReGa half exists to fix
+	// (a hung ReGaHss with `rfd` still serving, folding to `online`) unfixed
+	// for every runtime-adopted CCU. Same trap, and the same shape of fix, as
+	// [mqtt.Bridge.cleanupCentralNames]'s per-sweep supplier.
+	regaConfig func(centralName string) (config.CentralConfig, bool)
+
+	// regaPollers holds one stop closer per central whose ReGa poller is
+	// running, keyed by central name. Guarded by mu.
+	//
+	// The closers are also in unsubs, which is what Stop drains; this index
+	// exists so ONE central's poller can be stopped on its own, which is what
+	// [HubMQTTPublisher.RetractCentral] needs. A central removed at runtime
+	// never reaches Stop, and a poller that outlives its central keeps
+	// probing a decommissioned host and re-seeds a retained `online` on the
+	// gate topic that was just retracted.
+	regaPollers map[string]func()
 }
 
 // NewHubMQTTPublisher constructs the publisher. No subscriptions are
@@ -86,6 +110,7 @@ func NewHubMQTTPublisher(reg *central.Registry, w *mqtt.Wiring, logger *slog.Log
 		logger:      logger,
 		rega:        newRegaLivenessTracker(),
 		regaTargets: map[string]*regaLivenessTarget{},
+		regaPollers: map[string]func(){},
 	}
 }
 
@@ -99,6 +124,11 @@ func NewHubMQTTPublisher(reg *central.Registry, w *mqtt.Wiring, logger *slog.Log
 // registry and the MQTT wiring, neither of which carries the CCU's
 // connection config. Call it before [HubMQTTPublisher.Start]; a later call
 // takes effect on the next Start.
+//
+// It is the BOOT half only. A central adopted at runtime never reaches the
+// list this is called with, so wire
+// [HubMQTTPublisher.SetRegaLivenessConfigSupplier] as well — that one is
+// asked per poller start and is what covers the live fleet.
 func (p *HubMQTTPublisher) SetRegaLivenessTargets(centrals []config.CentralConfig) {
 	targets := make(map[string]*regaLivenessTarget, len(centrals))
 	// Indexed rather than ranged by value: config.CentralConfig is a large
@@ -114,11 +144,60 @@ func (p *HubMQTTPublisher) SetRegaLivenessTargets(centrals []config.CentralConfi
 	p.mu.Unlock()
 }
 
-// regaTargetFor returns the probe configured for one central, or nil.
+// SetRegaLivenessConfigSupplier hands the publisher a resolver for one
+// central's connection config, asked every time a ReGa poller starts.
+//
+// This is the live-fleet half of the probe target, and it is a function
+// rather than a list for the same reason [mqtt.Bridge.cleanupCentralNames]
+// takes a supplier: a CCU adopted at runtime is in no boot-time list. With
+// only the boot snapshot, [HubMQTTPublisher.regaTargetFor] returns nil for
+// such a CCU, [HubMQTTPublisher.startRegaLivenessPoll] returns before it
+// starts anything, its liveness stays [regaLivenessUnknown] forever and the
+// gate folds it `online` — so a hung ReGaHss with `rfd` still serving
+// publishes no `offline` at all for that class of central, which is the
+// exact defect the ReGa half was added to fix.
+//
+// resolve reports false for a central it does not know, and only then is the
+// boot snapshot consulted: an `ok` settles the question, including an `ok`
+// carrying a config with no host, which resolves to "known, nothing to
+// probe" rather than to the boot address. Safe to call at any time, including after
+// [HubMQTTPublisher.Start] — it takes effect on the next poller start, which
+// is what every re-Start performs.
+func (p *HubMQTTPublisher) SetRegaLivenessConfigSupplier(resolve func(centralName string) (config.CentralConfig, bool)) {
+	p.mu.Lock()
+	p.regaConfig = resolve
+	p.mu.Unlock()
+}
+
+// regaTargetFor returns the probe to run for one central, or nil when there
+// is nothing to probe (no known config, or a config with no host).
+//
+// Resolved HERE, at poller-start time, rather than read out of a map filled
+// at boot: see [HubMQTTPublisher.SetRegaLivenessConfigSupplier] for the
+// runtime-adopted central this ordering is about.
+//
+// THE LIVE FLEET SETTLES IT. An `ok` from the supplier ends the resolution
+// even when the config it answers with carries no host and therefore yields
+// no target: the answer is "this central is known, and there is nothing to
+// probe", not "ask the boot snapshot". Falling through on a hostless live
+// config would probe the BOOT host of a central the live fleet has since
+// moved — the same wrong-address probe that
+// TestRegaLivenessTargetsPreferTheLiveFleetOverTheBootSnapshot exists to
+// keep out, arriving through the one branch that test does not drive. No
+// path is known today that produces an adopted config with an empty host
+// (config validation requires one), so this is the doc and the code being
+// made to agree on the safe reading rather than a live defect being closed.
 func (p *HubMQTTPublisher) regaTargetFor(centralName string) *regaLivenessTarget {
 	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.regaTargets[centralName]
+	resolve := p.regaConfig
+	snapshot := p.regaTargets[centralName]
+	p.mu.Unlock()
+	if resolve != nil {
+		if cc, ok := resolve(centralName); ok {
+			return newRegaLivenessTarget(&cc)
+		}
+	}
+	return snapshot
 }
 
 // Start attaches subscriptions to every hub entity of every central and
@@ -158,6 +237,14 @@ func (p *HubMQTTPublisher) Stop() {
 	p.mu.Lock()
 	unsubs := p.unsubs
 	p.unsubs = nil
+	// The per-central poller index holds the same closers this teardown is
+	// about to run. Clearing it is bookkeeping, not safety: the closers are
+	// sync.Once-guarded and their `done` channel is already closed by the
+	// time Stop returns, so a RetractCentral that called a retained one would
+	// simply return at once. What the clear buys is that the map does not
+	// accumulate an entry per central per wiring generation, and that it
+	// never answers for a poller that no longer exists.
+	p.regaPollers = map[string]func(){}
 	p.mu.Unlock()
 	// Unsubscribe before stopping the worker so no source can enqueue onto a
 	// queue nobody drains any more.
@@ -167,7 +254,14 @@ func (p *HubMQTTPublisher) Stop() {
 		}
 	}
 	if f := p.fanout.Swap(nil); f != nil {
-		f.stop()
+		// stopDraining, not stop: this queue can be holding a RETRACTION, and
+		// a retraction is the one job the next Start does not re-issue — it
+		// publishes the declare instead. Start begins with Stop, and Start is
+		// what the broker's on-connect hook calls, so a reconnect landing in a
+		// removal window would otherwise discard the retract for good and
+		// leave the removed CCU's discovery configs retained forever. See
+		// TestAQueuedRetractSurvivesABrokerReconnect.
+		f.stopDraining(fanoutStopGrace)
 	}
 }
 
@@ -210,6 +304,37 @@ func (p *HubMQTTPublisher) RetractCentral(u *central.Unit, connectivityInterface
 	if p == nil || u == nil || p.wiring == nil {
 		return
 	}
+	// FIRST, and before anything is queued: end this CCU's ReGa poller and
+	// wait for it. It is the only source that keeps publishing on a timer
+	// rather than on an event, so it is the only one that can enqueue a fold
+	// AFTER the retract below and leave a retained `online` on the gate topic
+	// of a CCU that is gone. Done ahead of the bridge check too: the poller
+	// has to go even when there is nowhere to publish the retract.
+	//
+	// WHAT THE FIFO FAN-OUT DOES AND DOES NOT GUARANTEE. Stopping the poller
+	// first orders the retract after everything that poller queued, and the
+	// single FIFO worker keeps that order — WITHIN ONE WIRING GENERATION. The
+	// generation is not a given: [HubMQTTPublisher.Start] begins with
+	// [HubMQTTPublisher.Stop], and Start is what the broker supervisor's
+	// on-connect hook calls, so a reconnect landing between this enqueue and
+	// the worker's drain retires the queue the retract is sitting in. That
+	// used to discard it outright — a retract is the one job the next Start
+	// does not re-issue, since the next Start publishes the DECLARE instead —
+	// which is why Stop now drains the durable remainder before cancelling
+	// ([mqttFanout.stopDraining]). Reproduced, and pinned, by
+	// TestAQueuedRetractSurvivesABrokerReconnect.
+	//
+	// One exposure of that shape is NOT closed here and is stated rather than
+	// implied: the unit stays in the shared registry until Unit.Stop, which
+	// removeCentral runs after evictModel, so a re-wire in that window
+	// iterates the leaving central too. Its declares are suppressed by the
+	// bridge's /config dedup gate for as long as the payloads are unchanged,
+	// and its gate topic is debounced, so no re-seeded `online` could be
+	// produced in a test; the ordering that would produce one has not been
+	// built and is therefore not claimed to exist. Removing the unit from the
+	// registry before the retract is the fix if it ever is built, and it is a
+	// change to removeCentral's teardown order, not to this function.
+	p.stopRegaLivenessPoll(u.Name())
 	b := p.wiring.Bridge()
 	if b == nil {
 		// MQTT disabled at runtime keeps the Wiring alive with no bridge; a
@@ -308,6 +433,11 @@ func (p *HubMQTTPublisher) RetractCentral(u *central.Unit, connectivityInterface
 	// consumed it. Keeping it would leave a conclusion about a central
 	// nothing manages any more, and a central re-added under the same name
 	// would inherit it instead of seeding from its own first probe.
+	//
+	// Correct only because the poller for this central was stopped at the top
+	// of this function. Forgetting while a poller still runs is worse than
+	// keeping the entry: the next tick finds no entry, takes observe's seed
+	// branch, and republishes `online` over the retract that just went out.
 	p.rega.forget(centralName)
 }
 
@@ -1096,7 +1226,9 @@ func (p *HubMQTTPublisher) queueCCUReachabilitySeed(
 // It stops when the wiring generation does: the closer registered with
 // [HubMQTTPublisher.addUnsub] cancels the probe's context — aborting a GET
 // in flight — and waits for the goroutine to exit, so Stop leaves no poller
-// behind and a re-Start never runs two against the same CCU.
+// behind and a re-Start never runs two against the same CCU. The same closer
+// is indexed by central name so [HubMQTTPublisher.stopRegaLivenessPoll] can
+// end ONE poller: a central removed at runtime never reaches Stop.
 func (p *HubMQTTPublisher) startRegaLivenessPoll(
 	ctx context.Context, b *mqtt.Bridge, centralName, serial string, hubModel *hub.Hub,
 ) {
@@ -1108,6 +1240,12 @@ func (p *HubMQTTPublisher) startRegaLivenessPoll(
 	}
 	target := p.regaTargetFor(centralName)
 	if target == nil {
+		// Silence here is what hid the runtime-adopted CCU: no target, no
+		// poller, no probe, and the gate quietly folding `online` for a CCU
+		// whose ReGa may be dead. Say so once per wiring pass.
+		p.logger.Warn("mqtt.rega_liveness_no_target",
+			slog.String("central", centralName),
+			slog.String("probe", checkRegaPath))
 		return
 	}
 	// The latch survives the wiring generation with the tracker: a CCU that
@@ -1122,10 +1260,32 @@ func (p *HubMQTTPublisher) startRegaLivenessPoll(
 	}
 	pollCtx, cancel := context.WithCancel(ctx)
 	done := make(chan struct{})
-	p.addUnsub(func() {
-		cancel()
-		<-done
-	})
+	var once sync.Once
+	stop := func() {
+		once.Do(func() {
+			cancel()
+			<-done
+		})
+	}
+	// Registered twice, on purpose, and idempotent so the second call is
+	// free: unsubs is the whole wiring generation's teardown (Stop), and
+	// regaPollers is the per-central one (RetractCentral), which is the only
+	// teardown a central removed at runtime ever gets.
+	//
+	// Both registrations under ONE p.mu acquisition rather than through
+	// addUnsub and a second lock: a Stop interleaving between two acquisitions
+	// drains unsubs (firing this closer) and clears regaPollers, and the
+	// second acquisition then re-populates the fresh map with a closer that
+	// has already fired. Harmless — the closer is idempotent — but it leaves
+	// the index describing a poller that is gone, which is precisely what the
+	// index exists not to do.
+	p.mu.Lock()
+	p.unsubs = append(p.unsubs, stop)
+	if p.regaPollers == nil {
+		p.regaPollers = map[string]func(){}
+	}
+	p.regaPollers[centralName] = stop
+	p.mu.Unlock()
 	SafeGo("hub_mqtt.rega_liveness."+centralName, func() {
 		defer close(done)
 		ticker := time.NewTicker(interval)
@@ -1141,6 +1301,30 @@ func (p *HubMQTTPublisher) startRegaLivenessPoll(
 			}
 		}
 	})
+}
+
+// stopRegaLivenessPoll ends one central's ReGa poller and waits for its
+// goroutine, leaving the others running. A no-op for a central with no
+// poller, and safe to call twice.
+//
+// It exists because [HubMQTTPublisher.Stop] is not reachable for a central
+// removed at runtime: Stop is the whole wiring generation's teardown, and a
+// removal tears down one central while the daemon keeps serving the rest.
+// Without this the poller survived its own CCU — it kept GETting a
+// decommissioned host every interval for the life of the process, and each
+// tick re-folded the gate whose tracker entry the removal had just dropped,
+// so [regaLivenessTracker.observe] took its seed branch and wrote a retained
+// `online` to `<base>/<central>/hub/status` for a CCU that no longer exists.
+// The orphan sweep is scoped to registered centrals, so nothing would ever
+// reach that topic again.
+func (p *HubMQTTPublisher) stopRegaLivenessPoll(centralName string) {
+	p.mu.Lock()
+	stop := p.regaPollers[centralName]
+	delete(p.regaPollers, centralName)
+	p.mu.Unlock()
+	if stop != nil {
+		stop()
+	}
 }
 
 // pollRegaLivenessOnce performs one probe, records it and queues the
@@ -1172,13 +1356,29 @@ func (p *HubMQTTPublisher) pollRegaLivenessOnce(
 			slog.String("from", regaLivenessStateName(before)),
 			slog.String("to", regaLivenessStateName(after)))
 	}
+	// Queue the re-fold BEFORE deciding whether to keep polling, and do it on
+	// every outcome — the latch included.
+	//
+	// The latch is the one exit that CHANGES the fold on its way out:
+	// [regaLivenessTracker.observe] has just moved this CCU back to unknown,
+	// and unknown folds to reachable, but this tick is the last one, so there
+	// is no later tick to write it. Returning before the publish left a CCU
+	// whose previous verdict was `down` with a retained `offline` on
+	// `<base>/<central>/hub/status` for the rest of the process — on hardware
+	// that is healthy and answering. The field sequence is exactly the one
+	// [TestRegaLivenessLatchesOffAnEndpointTheCCURefuses] models: ReGa hangs
+	// (`down`), the CCU reboots into a firmware or reverse proxy that answers
+	// 401/403/404 (`unsupported` → unknown), and under Home Assistant's
+	// `availability_mode: "all"` every sysvar, program, system-health, message
+	// and install-mode entity of that CCU stays permanently unavailable with
+	// nothing on the wire naming the cause.
+	p.publish(func() { p.publishCCUReachability(ctx, b, centralName, hubModel) })
 	if p.rega.unsupported(centralName) {
 		p.logger.Warn("mqtt.rega_liveness_unsupported",
 			slog.String("central", centralName),
 			slog.String("probe", checkRegaPath))
 		return false
 	}
-	p.publish(func() { p.publishCCUReachability(ctx, b, centralName, hubModel) })
 	return true
 }
 

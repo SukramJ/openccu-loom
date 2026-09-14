@@ -40,6 +40,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -165,5 +166,63 @@ func BenchmarkPayloadBuildTwentyField(b *testing.B) {
 	b.StopTimer()
 	if len(sink) != 20 {
 		b.Fatalf("expected a 20-key harvest, got %d", len(sink))
+	}
+}
+
+// benchDiscoveryEvent is the per-entity discovery input the daemon builds
+// for one wire data point on a real device — the `mqtt.Event` shape
+// `EventBridge` hands `DiscoveryBuilder.Build` on every HA-Discovery
+// republish. `Device` carries the same `*device.Device` the two
+// `payload.ForWith` benchmarks above harvest, because that is what the
+// production path passes.
+func benchDiscoveryEvent() mqtt.Event {
+	return mqtt.Event{
+		Central:        "ccu",
+		Interface:      "HmIP-RF",
+		DeviceAddress:  "0001D8A9C3B2F1",
+		DeviceName:     "Wohnzimmer Thermostat",
+		Model:          "HmIP-BWTH",
+		ChannelNo:      1,
+		ChannelAddress: "0001D8A9C3B2F1:1",
+		Parameter:      "ACTUAL_TEMPERATURE",
+		Value:          21.5,
+		Category:       hmenum.DataPointCategorySensor,
+		Device:         benchDevice(),
+	}
+}
+
+// BenchmarkDiscoveryBuildPerEntity is the NEIGHBOUR measurement, and it is
+// the one that decides whether ADR 0007's 500 ns/op bound is worth anything.
+//
+// A per-call cost is not a budget until it is a fraction of something. The
+// amendment that first measured `payload.ForWith` established what one call
+// costs; it did not establish what share of the work that call is part of.
+// This benchmark supplies the denominator: the complete per-entity
+// HA-Discovery build — `DefaultDiscoveryBuilder.Build`, the exact call
+// `Bridge.PublishDiscoveryOnly` makes — which contains exactly one
+// `deviceDescriptor` and therefore exactly one `payload.ForWith`, plus topic
+// construction, component classification, device-class and state-class
+// resolution, i18n lookups, the `hadiscovery.RenderComponent` model render
+// and the JSON marshal of the ~1.3 KB payload that goes on the wire.
+//
+// Read it against `BenchmarkPayloadBuildDeviceInfo`: that benchmark's ns/op
+// over this one's is the share of a discovery build that `ForWith` actually
+// accounts for. Neither figure means anything on its own.
+func BenchmarkDiscoveryBuildPerEntity(b *testing.B) {
+	tb := mqtt.NewTopicBuilder("openccu-loom")
+	db := mqtt.NewDefaultDiscoveryBuilder(tb, "ccu")
+	ev := benchDiscoveryEvent()
+	if _, _, _, buf, ok := db.Build(ev); !ok || len(buf) == 0 {
+		b.Fatal("discovery build declined the benchmark event; the benchmark is measuring nothing")
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	var sink []byte
+	for range b.N {
+		_, _, _, sink, _ = db.Build(ev)
+	}
+	b.StopTimer()
+	if len(sink) == 0 {
+		b.Fatal("discovery build produced no payload")
 	}
 }

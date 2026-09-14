@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"slices"
 	"testing"
 
 	hapublisher "github.com/SukramJ/go-hamqtt/publisher"
@@ -19,8 +20,23 @@ import (
 // it is a hole in the guard rather than a cosmetic difference.
 //
 // The comparison is against a real [CommandSubscriber.Start] against a
-// recording subscriber, in registration order, so the two cannot agree by
-// both being copies of the same literal list.
+// recording subscriber, so the two cannot agree by both being copies of the
+// same literal list.
+//
+// It compares the two as SETS rather than as sequences, which is what this
+// guard was always about: every runtime reader of [commandFilters] asks
+// whether some topic is matched by one of them — [anyFilterMatches] here,
+// [hapublisher.StateConfig.CommandFilters] and
+// [hapublisher.AvailabilityConfig.CommandFilters] in the publishers — and a
+// membership test cannot observe order. The orders genuinely differ since
+// go-hamqtt v0.30.0: [commandFilters] reports [CommandSubscriber.routes] as
+// declared, while Start subscribes most specific first. Requiring the
+// sequences to be equal would make this test fail on a library-side sort
+// that cannot reach the property it guards, and would push the declaration
+// list into duplicating a sort the router already owns. What must not drift
+// is the MEMBERSHIP, because a filter missing from it is a hole the state
+// plane can publish through; that is what is asserted, including
+// multiplicity, so a duplicate cannot hide a missing entry.
 func TestCommandFiltersMatchTheRoutesReallyRegistered(t *testing.T) {
 	t.Parallel()
 
@@ -36,7 +52,11 @@ func TestCommandFiltersMatchTheRoutesReallyRegistered(t *testing.T) {
 	if len(registered) == 0 {
 		t.Fatal("no filters registered — the comparison would be vacuous")
 	}
-	if got := commandFilters(base); !reflect.DeepEqual(got, registered) {
+	got := commandFilters(base)
+	gotSorted, regSorted := slices.Clone(got), slices.Clone(registered)
+	slices.Sort(gotSorted)
+	slices.Sort(regSorted)
+	if !reflect.DeepEqual(gotSorted, regSorted) {
 		t.Fatalf("commandFilters(%q) = %v,\nthe subscriber registered  %v — the runtime guard "+
 			"is armed with a filter set the daemon does not actually subscribe, so a state "+
 			"publish into the difference echoes straight back into a command handler",

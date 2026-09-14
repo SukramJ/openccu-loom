@@ -6,7 +6,373 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.78.1] - 2026-09-13
+
+### Release summary
+
+A patch release with one job: 0.78.0 shipped a broken recovery procedure and
+a tool that could not finish the job, so an operator who turned
+`north.mqtt.discovery_bundles` on and wanted out had no working documented
+path and no working script. Both are fixed. Nothing in the daemon changes.
+
+**If you followed the rollback instructions in 0.78.0, they did not work.**
+The `mosquitto_pub` command in `docs/user/multi-ccu.md` §2.3 fails three
+ways, two of them before it dials the broker: it publishes to a topic ending
+in `/#` (MQTT §4.7.0 forbids a wildcard in a PUBLISH — `Error: Invalid
+publish topic 'a/#'`), it passes `-n` and `-l` together (`Error: Only one
+type of message can be sent at once`), and its third segment is the bare
+interface token `HmIP-RF` where the daemon publishes the wire interface id
+`<central>-<interface>`, naming a topic that has never held a retained
+message. All three were reproduced against the real `mosquitto_pub`.
+
+**The corrected procedure**: list what the broker actually holds first, then
+clear those topics — copy the topic out of the listing, do not compose it.
+
+```sh
+mosquitto_sub -h <broker> -t 'openccu-loom/#' --retained-only -v -W 2
+mosquitto_pub -h <broker> -t '<topic copied from the listing>' -r -n
+```
+
+`script/clean-mqtt-discovery.sh` is the supported path and is named first in
+the document now — and it **clears device bundles too**. Its subscribe
+pattern was `homeassistant/+/+/+/config`, five levels, the per-entity form; a
+device bundle is `homeassistant/device/<node_id>/config`, four, and `+`
+matches exactly one level, so bundles were invisible to every phase of the
+script. Both patterns are subscribed in one pass now.
+
+Also: `north.mqtt.discovery_bundles` is documented at all for the first time
+— it was documented nowhere — including the measured cost of turning it back
+off. The orphan sweep does retract the stale documents, but it runs *after*
+the snapshot that republishes the per-entity configs, so a rollback costs
+**one boot** with the affected devices missing and self-heals on the next
+restart. `docs/admin/configuration.md` describes the manual retraction that
+skips that window.
+
+### Fixed
+
+- **The documented operator rollback command cannot be executed, and the
+  doctest meant to pin it agreed with it.** `docs/user/multi-ccu.md` §2.3 is
+  where the manual sends an operator to clear a device's retained topics
+  after it moves between CCUs. The command it gave — shipped in 0.78.0 —
+  fails three ways: it publishes to a topic ending in `/#`, which MQTT
+  §4.7.0 forbids in a PUBLISH and `mosquitto_pub` rejects before it dials;
+  it passes `-n` and `-l`, which are mutually exclusive ("Only one type of
+  message can be sent at once"); and its third path segment is the bare
+  interface token `HmIP-RF` where the daemon publishes the wire interface id
+  `<central>-<interface>`, so the topic it names has never held a retained
+  message. Both errors were reproduced against the real `mosquitto_pub`.
+
+  It is replaced by a listing step (`mosquitto_sub --retained-only`) and a
+  per-topic clear, so the operator copies a topic the broker actually holds
+  rather than composing one, with `script/clean-mqtt-discovery.sh` named
+  first as the supported path. The same bare-interface error is corrected in
+  `docs/mqtt-topic-schema.md`, whose `<iface>` notation now states the wire
+  form, and in its `hub/connectivity/<iface>` row, which production feeds
+  through `WireInterfaceID(centralName, iface)` as well.
+
+  `TestMQTTTopicSchemaDoc_*` could not catch any of it. It handed
+  `iface = "HmIP-RF"` — already in wire form — to `ParseWireInterfaceID`,
+  which by contract validates nothing, so the builder rendered the bare
+  token back and the pin compared the test's own input against itself. No
+  production site makes that call. The wire id is now built from the central
+  name and the bare interface enum, the two inputs a caller has, and a new
+  guard reads `docs/mqtt-topic-schema.md` itself and requires every concrete
+  topic literal in it to be pinned. Measured: the released test and the
+  released document, byte for byte, now fail. A second guard reads the
+  fenced shell blocks under `docs/` and rejects a `mosquitto_pub` carrying a
+  wildcard topic or both `-n` and `-l`; against the 0.78.0 document it
+  reports all three defects.
+
+- **`script/clean-mqtt-discovery.sh` could not clear device bundles.** Its
+  default subscribe pattern was `homeassistant/+/+/+/config` — five levels,
+  the per-entity form. A device bundle is
+  `homeassistant/device/<node_id>/config`, four levels, and `+` matches
+  exactly one, so bundles were invisible to every phase of the script. Both
+  patterns are now subscribed in one pass; an explicit `-t` still replaces
+  both. Verified against a live mosquitto: the released script scanned one
+  of three retained configs, the fixed one clears both loom forms and leaves
+  a Zigbee2MQTT device document untouched.
+
+### Documentation
+
+- **`north.mqtt.discovery_bundles` was documented nowhere, and with it the
+  rollback hazard ADR 0070 measured.** A retained device document and a
+  per-entity config for the same `unique_id` cannot coexist: Home Assistant
+  refuses the second, symmetrically, and the entire signal is one
+  `WARNING [mqtt.entity] Received a conflicting MQTT discovery message` in
+  *its* log. Nothing reaches the wire and the daemon cannot observe it.
+  `docs/admin/configuration.md` now documents the option and what turning it
+  back off costs — the orphan sweep runs after the snapshot that publishes
+  the per-entity configs, so a rollback costs one boot with the affected
+  devices missing and self-heals on the next restart — plus the manual
+  retraction that skips that window, and the
+  `mqtt.discovery_orphan_cleanup evicted=N` line that confirms it.
+  `docs/admin/troubleshooting.md` indexes the Home Assistant warning, which
+  is the symptom an operator searches for.
+
+- **ADR 0070 carries three claims in its decision text that are false as
+  written**, added as a dated amendment; the decision itself is untouched.
+  "No per-entity legacy path" — go-hamqtt v0.34.0 ships a complete one and
+  *defaults* to it. "`go-mqtt` gains exactly two additive helpers" — it
+  exports ten, `WithSubscriptionID` having arrived in v1.5.0. "Four tools
+  ship alongside" — two do.
+
+- **`notes/adr0070-moveup-inventory.md` quoted a `naming.TopicSafe` comment
+  that no longer exists and vouched for it.** The quoted text says
+  `DiscoverySlug` "is deliberately NOT delegated to `topic.Slug` yet"; the
+  real comment says the opposite, because step E reversed it. Corrected with
+  a dated superseded-by note rather than a rewrite — it is a working
+  document, and the divergence table is still the record of why the reversal
+  was taken.
+
+### Testing
+
+- **All five bundle-mode sweep tests ran with bundles on**, so nothing drove
+  the rollback direction — which is the one ADR 0070's fourth amendment says
+  fails silently. One now does. Mutation: gating the ownership predicate on
+  `!cfg.HADiscoveryBundles` fails only the new test.
+
+- **Two untied constants in the security plane.** `"Security & Safety"` is
+  spelled in production twice and in six test files, every one of them as an
+  *input*; nothing asserted the name the publisher resolves. A new test
+  drives `reconcile` end to end in both shipped locales and asserts the
+  `device.name` on the wire. And
+  `TestBuildAlarmPanelDiscovery_MasterNameLocalizedBothLocales` was a
+  tautology — it passed its expected value into the builder and read it back
+  out, so deleting `discovery.alarm_system` *and*
+  `discovery.security_system` from both catalogues left it green. It now
+  resolves through `masterName()` and the real catalogues; both mutations
+  are red.
+
+## [0.78.0] - 2026-09-13
+
+### Release summary
+
+A large release: 92 merged pull requests (#739 - #834), most of them the
+ADR 0070 migration of the Home Assistant discovery and MQTT publish
+surface onto the shared `go-hamqtt` / `go-mqtt` model, plus the three
+rounds of adversarial review that followed it. The two headings below
+are the part that needs a decision before you upgrade; everything after
+them is detail.
+
+**What requires your attention: Home Assistant entity identity moves -
+but only if you set a custom `north.mqtt.topic_base`.** An installation
+that never touched `topic_base` (the default `openccu-loom`) is untouched
+to the byte, and nothing in this paragraph applies to it. On a custom
+base, #817 scopes the discovery node id by that base, and #826 carries
+the scope into the `unique_id` of the three daemon-level planes that had
+nothing else in them to tell two daemons apart: the **alarm** entities,
+the **Security & Safety** entities and the **Add-on Update** entity.
+Those three groups are re-created under new identifiers, so they lose
+their **history, long-term statistics, `entity_id`, renames, area
+assignment, and every automation or dashboard reference that names
+them**. Home Assistant has no migration path for a changed `unique_id` -
+this cannot be automated and cannot be undone, so plan on re-applying
+those references by hand. Per-device and per-CCU entities are keyed on
+the CCU serial and the ISE id and do **not** move.
+
+Separately, #809 settles the daemon's two disagreeing discovery-slug
+rules onto the shared one. That moves discovery topics and *device*
+identifiers for names carrying a non-German accent (`Café` and `Caf`
+previously collapsed into a single entity, with nothing saying the second
+existed) or a literal `__`; entity identity, history and `entity_id` are
+preserved, and the affected device cards need their area and name
+re-applied. A German-language fleet is a no-op.
+
+**The new expert-tier flag `north.mqtt.discovery_retract_unscoped`
+(default `false`).** The pre-scope node-id spelling and a live
+default-base sibling's spelling are the *same string*, and the discovery
+config topic carries the node id and nothing else - so the daemon cannot
+tell "my own stale config" from "another daemon's live config" at any
+price. It is therefore an operator decision rather than something the
+daemon may guess. Left `false`, the orphan sweep claims only this
+daemon's own scoped namespace, and the pre-upgrade retained configs
+remain on the broker as unavailable twins. Turned on for **exactly one
+start** - and only when you know that no default-base sibling daemon
+shares the broker - the sweep also accepts the unscoped spellings and
+clears them; turn it back off afterwards. If a sibling does share the
+broker, leave it off and clear the old topics by hand.
+`docs/external-clients/ha-unique-id-migration.md` carries the decision
+table, the before/after strings and the manual `mosquitto_pub -r -n`
+cleanup. That document, not this summary, is the one to read before this
+upgrade.
+
+**The rest, in short.** A sibling daemon's entities were being deleted by
+three independent mechanisms, and all three are now closed: the discovery
+base scope, whose retraction hazard was inverted so a custom-base daemon
+swept a default-base sibling's device, hub, alarm and security configs on
+every boot (#817, #826); the payload-keyed boot sweep, which subscribed
+to the whole `homeassistant/#` tree and decided ownership from
+`origin.name` and an empty serial slot, neither of which names a daemon
+(#833); and the add-on-update plane, whose node id had moved with no
+retraction path, stranding a permanent phantom "Add-on Update" entity
+(#826). A CCU whose ReGaHss has died or hung while `rfd` keeps answering
+now reports its system variables, programs and system scores
+**unavailable** rather than freezing them on a stale value that reads as
+current: the per-CCU availability gate is a conjunction of interface
+reachability *and* an `/ise/checkrega.cgi` liveness probe (#815), with
+three lifecycle defects around a re-adopted and a removed CCU fixed on
+top (#827). Inbound commands are no longer delivered twice for the
+length of a retain-sweep window - a doubled `PRESS_SHORT`, a doubled
+program trigger, a doubled alarm arm, none of it logged - because the
+sweeps now ride their own subscribe-only broker connection (#812). The
+CI test suite moved from 1099 s to 645 s and states its timeout instead
+of drifting toward it (#831). Beyond that: the ADR 0007 benchmark
+ratchet, which went red on unchanged code and green on no measurement at
+all, is repaired (#825); the in-process broker shutdown is bounded so an
+upstream `mochi-mqtt` deadlock cannot hang the package (#829); and the
+libraries move to go-hamqtt v0.34.0 / go-mqtt v1.5.1 (#834) - a bump on
+which this project's own reflective gate-reset ratchet caught a real
+defect.
+
+### Fixed
+
+- **The payload-keyed discovery sweep retracted a second loom daemon's
+  Home Assistant entities, and skipped device bundles entirely.**
+  `RunUnscopedDiscoveryCleanupOnce` — the boot pass that clears retained
+  configs whose `unique_id` this build can no longer address (an empty
+  CCU-serial slot, a pre-scoping CUxD address) — subscribed to the whole
+  `homeassistant/#` tree and decided ownership from `origin.name` plus the
+  shape of the id. Neither names a daemon: `originName` is a compile-time
+  constant identical in every loom build, and an empty serial slot is what
+  *every* daemon wrote before the slot was filled. Driven, a sibling
+  daemon's configs at a wholly foreign node id were retracted — and unlike
+  the node-id prefix hazard, this pass ran unconditionally rather than
+  behind `north.mqtt.discovery_retract_unscoped`. Home Assistant deletes
+  the entity the moment the config is cleared and a device-registry row
+  goes with its last entity, so the sweep's own note that the sibling
+  "republishes them correctly on its own next snapshot" was wrong twice
+  over: the republish comes only when the sibling itself restarts, and it
+  comes back stripped of every registry customisation.
+
+  The candidate set is now scoped to this daemon's own node-id namespace
+  first — `discoveryNodePrefixes` over every configured central, the same
+  rule the per-central orphan sweep and the bundle sweep already apply.
+  That costs no coverage: the premise of this pass is that the *topic* did
+  not move, so the stale payload sits on the very topic this daemon
+  publishes to. A bridge with no configured central now claims nothing
+  rather than everything. The opt-in still governs the half it was made
+  for, the unscoped node-id *spelling*, where no discriminator exists at
+  any price; it is not extended to cover a foreign central, where one does.
+
+  Second, `payloadCarriesUnscopedUniqueID` decoded a top-level `unique_id`
+  only. A device bundle has none — its ids nest under `components` — so a
+  deployment on `north.mqtt.discovery_bundles` had its per-entity configs
+  cleared while the stale document survived beside them, keeping exactly
+  the identities the pass exists to remove. Any component carrying a
+  condemned id now condemns the document, which cannot be cleared in part.
+
+  Fixtures: the ownership and retraction sets were `sensor`/`switch`/
+  `event` only — three components that all carry a `state_topic`, while
+  over the fleet golden the 39 payloads without one are all `button` (13)
+  and `climate` (26). They now cover `button`, `climate` and a
+  bundle-shaped payload, and `TestDiscoveryOrphanSweepDrivenAgainstA`
+  `SiblingDaemonsConfigs` drives the topic-keyed sweep against a second
+  loom daemon's live configs rather than a foreign integration — turning
+  this repo's structural immunity to the sibling-bridge defect (the
+  ownership predicate takes a payload-free `publisher.ConfigTopic`) from
+  an argument into a demonstration. No production behaviour changed there.
+
+- **Two dedup gates and one barrier were wired to the wrong thing; the
+  fixes around them were not held by anything.** An adversarial review of
+  the last sixteen changes mutated each landed fix and recorded whether
+  the suite noticed. Three did not, and two of those three were live
+  defects rather than missing tests.
+
+  - **The `/config` companions were never re-seeded after a broker
+    restart.** `Bridge.configCache` suppresses a descriptor publish whose
+    bytes the broker already holds, and `ResetRuntimeGates` did not reach
+    it — measured: one write before the reset, still zero after an
+    identical republish. A broker restarted without a persistent retained
+    store holds none of those bytes, and the payload is a static
+    descriptor projection that changes only when the device's descriptors
+    do, so "until it next changes" meant for the life of the process:
+    every data point's `/config` companion stayed empty and every reader
+    of min/max/value_list/unit read nothing. This is the defect the
+    per-CCU reachability gate fix addressed, one field below it in the
+    same struct and left live. The cache is now a registered gate
+    (`configCacheGate`), reset like the other three — opening the gate
+    without dropping the topic keys, which double as the index the orphan
+    sweep and the device-removal retraction read.
+  - **The alarm plane's settle barrier was applied to the wrong guard.**
+    `AlarmMQTTPublisher.quiesce` was added to close a flake class in which
+    a guard waits on the publish recorder and then reads bridge state the
+    worker writes after the client call returns. It was wired only to the
+    one alarm guard that does not read bridge state at all, while
+    `TestAlarmPlaneIsVisibleToTheBridge` — the guard with exactly that
+    shape — still waited on the recorder. Reinstating the 200 ms
+    production window inside `Bridge.publishRuntimeState` failed it 3 of 3
+    runs while the Security & Safety counterpart passed 3 of 3. The
+    barrier is now where it belongs.
+  - **The retained-store sweeps' own broker connection was revertible in
+    full.** Nothing asserted that the assembled bridge actually sweeps on
+    it: making the composition root resolve the sweep subscriber to the
+    command client, or dropping the wiring call altogether, left
+    `./cmd/openccu-loom` and `./internal/north/mqtt` both green. Either
+    puts `<base>/#` back on the command connection, where a broker
+    delivers one copy of every inbound command per matching subscription
+    — a doubled button press, a doubled program trigger, a doubled alarm
+    arm for the length of every sweep window, with nothing in any log.
+    Behaviour unchanged; it is now held by a test.
+
+  Three further contracts that were correct but unheld are now pinned as
+  well: the sweep connection carries no last will (a will on a connection
+  that is torn down per window would publish retained `offline` to the
+  topic every entity's availability lists), a retired generation's sweep
+  connection is disconnected, and the per-CCU shutdown counterpart reaches
+  a gate a reconnect has just re-opened. The reflective audit that checks
+  every bridge dedup gate is registered for reset now recognises a gate
+  held by value, not only one held by pointer.
+
+- **A history test could not name its own failure.**
+  `TestWireCentralRecordsACentralThatAppearedAfterWire` was seen failing
+  once under heavy concurrent load and could not be reproduced in 222
+  runs afterwards, including under deliberate disk contention. It
+  asserted the row count alone, and that cannot tell a lost event from a
+  persisted one: a final `SaveBatch` failing under I/O pressure re-queues
+  its batch and bumps `FlushErrors`, which from outside looks exactly
+  like the event never arriving. The recorder's own counters are now
+  read first, so the next sighting says which half broke instead of
+  leaving it to be guessed at.
+
 ### Added
+
+- **ADR 0007's 500 ns/op payload-build bound is withdrawn: it governs
+  1.2 % of the work it sits in.** The entry below measured what
+  `payload.ForWith` costs. It did not measure whether that cost matters,
+  and deferred the question. It is now answered, and the answer is no.
+  `BenchmarkDiscoveryBuildPerEntity` supplies the denominator the bound
+  never had — the complete per-entity HA-Discovery build
+  (`DefaultDiscoveryBuilder.Build`, what `Bridge.PublishDiscoveryOnly`
+  calls), which contains exactly one `payload.ForWith`. Measured on the CI
+  runner: **95 082 ns/op and 811 allocations** for the build, against
+  **1 174 ns/op and 19 allocations** for the `ForWith` inside it — **1.2 %
+  of the time and 2.3 % of the allocations.** Eliminating two thirds of
+  the call, which is what meeting the bound would mean, buys 0.7 % of a
+  discovery build. At ~12 entities per device that is 0.7 ms on a
+  50-device boot and 14 ms on a 1 000-device boot; a Home Assistant birth
+  replay costs **zero**, because `RepublishDiscovery` replays retained
+  payloads and never re-enters the builders. The allocation ratio 19/811
+  is the load-bearing figure: unlike nanoseconds it is identical on every
+  machine and every architecture, including the 32-bit ARMv7 CCU3 this
+  daemon ships to. ADR 0007 carries the full measurement, the fleet
+  arithmetic, and an explicitly-unverified ARMv7 estimate with its method
+  and its uncertainty. **Nothing on the hot path was tuned** — the
+  correct response to "this is 1.2 % of the work" is to leave it alone,
+  and an untouched harvest is also a discovery payload pinned
+  byte-for-byte against `internal/north/mqtt/testdata/`.
+
+- **A fifth phantom artifact in ADR 0007, and the strongest of the five.**
+  §Decision offers `payload.PayloadAsMap` as the reflection helper that
+  survived the tag-sweep retirement. Searched again for this change: there
+  is no helper of that shape **under any name** — `internal/payload`
+  exports exactly one function returning a loose map, `ForWith`, and it is
+  a cached struct-tag walk, not the JSON round-trip the ADR describes;
+  neither `internal/`, `pkg/` nor the upstream `go-hamqtt/payload` has an
+  `AsMap`-shaped helper. Unlike `CDPDispatcher`, which misnamed a real
+  `CustomDPDispatcher`, this sentence describes a mechanism that was never
+  built. The clause is withdrawn in a dated amendment, which states what
+  actually survived and where it is called from.
 
 - **ADR 0007's 500 ns/op payload-build bound is measured for the first
   time — and it does not hold.** The ADR names a benchmark file
@@ -30,6 +396,71 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   tuning in the same change would make the measurement unreviewable.
 
 ### Fixed
+
+- **ADR 0007's benchmark ratchet was flaky, and went red on a tree nobody
+  had touched.** Proving the new ceiling could fail turned up a defect in
+  the gate PR #814 armed. Three consecutive CI runs of *identical* code
+  drew three different CPUs — AMD EPYC 9V45 (1 343 / 829 ns/op), Intel
+  Xeon 8573C (+40 %), AMD EPYC 7763 (**2 717** / 1 578, +102 %) — and
+  2 717 is over the 2 700 ns/op ceiling. GitHub's hosted pool spans a
+  factor of two by itself, so 2x headroom over its *fastest* member does
+  not cover its slowest, and this repository has already had one flaky
+  gate switched off.
+
+  The fix is not more padding, which is what turns a gate into decoration.
+  **`allocs/op` is now the gate**: it is a property of the code rather
+  than the machine — 26, 19 and 811 on all three CPUs, identical to the
+  unit, and identical again on a loaded 4-core laptop whose ns/op figures
+  were three to five times worse. Its ceilings are armed **exactly** at
+  the measured value, with no headroom, so a regression adding a single
+  allocation fails. Verified: giving `payload.ForWith` exactly one extra
+  escaping allocation turned all three red together (20 vs 19, 27 vs 26,
+  812 vs 811). #814's own proof needed forty. `ns/op` stays as a
+  backstop — an allocation count cannot see a quadratic loop or a lock
+  convoy — recalibrated on the *slowest* leg observed rather than the
+  fastest, times 1.5, which makes it a catastrophic-regression detector
+  rather than a tripwire (4 100 / 2 400 / 200 000). Raising the two
+  `ForWith` ns/op ceilings is the direction a ratchet should not move;
+  the three-CPU table is the reason, and their new allocation ceilings are
+  tighter than anything #814 armed.
+
+  The new `BenchmarkDiscoveryBuildPerEntity` ceiling was verified to fail
+  on CI at the ceiling it carries: mutating `DiscoveryBuilder.Build` to
+  render the body three times took it to **390 305 ns/op and 2 434
+  allocs/op**, named by the gate, while the two `ForWith` benchmarks held
+  at 19 and 26 allocations throughout. Reverted.
+
+- **A plane guard's wait ended on the wrong side of the publish it was
+  watching** — the flake `TestSecurityPlaneIsVisibleToTheBridge` was seen
+  as, once, under heavy load, and a class the previous fix to this file
+  did not cover. `settle` (`plane_topic_observation_test.go`) waits for
+  the fake broker to fall quiet, and the broker call is not the end of a
+  publish: `Bridge.publishRuntimeState` records the retained topic in the
+  bridge's index and increments `messages_sent` AFTER the client returns,
+  on the same worker goroutine, and a reconcile is published one message
+  at a time. Sixty milliseconds of silence therefore means "no new
+  writes", never "the plane has finished" — a worker descheduled past the
+  broker call, or between two messages of one burst, is quiet in exactly
+  the way a finished one is, and the guard then reads an index the
+  publish has not reached. Reproduced deterministically (3/3) by
+  reinstating the window as a 200 ms delay before the bookkeeping, with
+  the reported failure verbatim: `retained security topics absent from
+  the bridge's retained-topic index`. The wait is no longer a guess: both
+  asynchronous publishers (`SecurityMQTTPublisher`, `AlarmMQTTPublisher`)
+  answer an in-order barrier on their worker only once every pending
+  reconcile and every queued message has been published and bookkept, and
+  `settle` takes the plane and waits on that. The quiescence loop stays
+  as the backstop for writes a test makes outside a worker, and as the
+  earlier fix's vacuity guard. No timeout was lengthened — a longer wait
+  would only have made the same wrong question rarer, and this daemon
+  ships to 32-bit ARMv7.
+- **The sibling guards shared the weakness.** The same wait backs the
+  security, alarm, hub, device, add-on and raw plane round-trips,
+  `TestSecurityZoneTopicsCarryTheStoredSlug` and the all-planes disjoint
+  sweep; the ones driving an asynchronous publisher (four security
+  runners and the alarm runner, and through them two subtests of the
+  sweep) could all return on the head of a burst rather than the plane.
+  They now wait on the same barrier.
 
 - **The state-plane bookkeeping split had no test**, so all three of a
   review's mutations survived the suite: indexing only on an accepted
@@ -55,6 +486,83 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   live path was established that reaches it.
 
 ### Fixed
+
+- **BREAKING (daemon-level `unique_id`s, on a non-default `topic_base`
+  only): four defects in the discovery-scope work, the worst of which had a
+  custom-base daemon silently deleting a sibling's Home Assistant entities on
+  every boot.** All four are corrections to the entry below, in the same
+  unreleased window, so operators still absorb one disruption rather than two.
+
+  **1. The retraction hazard was inverted, and two tests pinned it as
+  correct.** The retraction-only unscoped node-id spellings made a custom-base
+  daemon *own* `<central-slug>_…`, `alarm`, `security` and `daemon` while
+  claiming none of them — so on every boot its orphan sweep retracted **all**
+  of a default-base sibling's device, hub, alarm and security configs. Home
+  Assistant deletes those entities, and a device-registry row goes with its
+  last entity; `identifiers` has no migration path, so it is not recoverable.
+  For the three daemon-level planes the node ids are fixed literals, so this
+  needed no name coincidence at all: **any** two daemons had it. The same
+  predicate feeds `Bridge.RetractDiscoveryForCentralDevice`, so it was not
+  only a boot-time pass. The previous entry called this "not a regression",
+  which was wrong — before the scope both daemons swept each other *and*
+  published into the shared namespace, so identical entities were re-declared
+  immediately; afterwards the retraction is one-directional and nothing
+  restores what it deletes.
+
+  The pre-scope spelling and a live sibling's spelling are the **same
+  string**, and `publisher.ConfigTopic` carries the node id and nothing else,
+  so the daemon cannot tell them apart at any cost. It is now an operator
+  decision: **`north.mqtt.discovery_retract_unscoped`** (expert, default
+  `false`). Off, the sweep claims only this daemon's own `<base-slug>_…`
+  namespace. On — for one start, when no default-base sibling shares the
+  broker — it also accepts the unscoped spellings and discharges ADR 0068
+  obligation 3. A one-shot persisted marker was considered and rejected: once
+  is already unrecoverable. `docs/external-clients/ha-unique-id-migration.md`
+  carries the decision table and the manual `mosquitto_pub -r -n` cleanup for
+  the other case.
+
+  **2. The add-on self-updater's node id moved with no retraction path.**
+  `daemonLevelNodeIDs` listed the alarm and security planes only, so
+  `daemon` — moved to `<base-slug>_daemon` by the scope — was recognised in
+  *neither* spelling: the pre-scope `homeassistant/update/daemon/addon_update/config`
+  was stranded on the broker permanently (a phantom "Add-on Update" entity
+  forever) and the scoped one was invisible to the sweep too. The plane is
+  registered now, and `Bridge.PublishHubDiscovery` marks it declared so the
+  sweep may act on it. The test that was supposed to guard this
+  hand-enumerated two of the three planes; it now **parses the package's own
+  source** for `const …NodeID = "<literal>"` — a node id that is a string
+  literal cannot carry a central, which is the definition of a daemon-level
+  plane — so a fourth plane cannot be forgotten the same way.
+
+  **3. Two daemons still could not coexist: the node id moved, the
+  `unique_id` did not.** The three daemon-level planes declare fixed literals
+  (`loom_addon_update`, `openccu-loom_alarm_<zone>`, `loom_security_<key>`)
+  with nothing in them that differs between two daemons. After the node-id
+  scope, two daemons wrote two **distinct** config topics carrying the **same**
+  `unique_id`, which Home Assistant's MQTT integration rejects (*"Platform
+  mqtt does not generate unique IDs"*). The semantics moved from "last writer
+  wins, and a restart repoints the entity at the live daemon" to **"first
+  writer wins permanently"**: the second daemon's alarm, security and
+  add-on-update entities never appeared at all. Those three `unique_id`s (and
+  the `default_entity_id` seeded from each) now carry the base scope —
+  **only on a non-default base**, so every installation that never set
+  `topic_base` is untouched to the byte, and the re-key is paid by exactly the
+  configurations that have the collision. It is still a re-key: on a custom
+  base those entities lose their history, statistics, `entity_id`, renames,
+  areas and automation references. Named in the migration document, with the
+  operator steps. Per-device and hub planes are unaffected — they are keyed on
+  the CCU serial or the ISE id.
+
+  **4. The scope and the central slug share a `_` separator — documented, not
+  fixed.** `topic_base: haus` with a CCU named `CCU`, and the default base
+  with a CCU named `Haus CCU`, both render `haus_ccu_<address>`.
+  Disambiguating it means changing the separator, which would move every
+  non-default-base node id a *second* time one release after the first, for a
+  collision that additionally requires the operator to have named their topic
+  base and their CCU after the same thing. The mitigation is a naming rule
+  (`topic_base` must not be a prefix of any CCU name on the broker), recorded
+  on `naming.DiscoveryBaseScope` and in the migration document; the separator
+  will be revisited only if a node-id move is needed for another reason.
 
 - **BREAKING (discovery topics only, not entity or device identity): the
   HA Discovery node id is scoped by `north.mqtt.topic_base`.** ADR 0006 rule
@@ -95,14 +603,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   | --- | --- |
   | discovery `node_id` | yes, when `topic_base` is non-default |
   | discovery `object_id` | **no** |
-  | `unique_id` | **no** — keyed on the device address and CCU serial |
+  | `unique_id` (per-device, hub) | **no** — keyed on the device address and CCU serial |
+  | `unique_id` (alarm, security, add-on update) | yes, when `topic_base` is non-default — see the entry above |
   | device `identifiers` / `via_device` | **no** |
-  | `default_entity_id` | **no** |
+  | `default_entity_id` (alarm, security, add-on update) | follows its `unique_id` |
   | state / command / availability topics | **no** |
 
-  So nothing is lost: no entity loses its history, statistics or `entity_id`,
-  and unlike the slug unification in the same window, not even a device row
-  is re-created. **All 173 pinned discovery payloads are byte-identical** —
+  Nothing is lost on the per-device and hub planes: no entity loses its
+  history, statistics or `entity_id`, and unlike the slug unification in the
+  same window, not even a device row is re-created. The three daemon-level
+  planes are re-keyed on a non-default base and pay the entity-level cost —
+  that correction is the entry above, in the same unreleased window.
+  **The 173 pinned discovery payloads moved in two fields and no others** —
+  `unique_id` and `default_entity_id`, on the daemon-level fixtures only —
   every one of the eleven goldens moved in its `topic` field and in no other
   byte — and `TestHubGoldenChangedOnlyInAvailability` still requires the
   ORIGINAL 48 pre-gate digests rather than re-baselined ones, by stripping
@@ -110,18 +623,11 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   carrying a 48-entry exemption map, which would have been a re-baseline
   wearing a disguise.
 
-  **The pre-scope configs are retracted, not stranded** (ADR 0068 obligation
-  3). `discoveryNodePrefixes` keeps the unscoped spelling of every central
-  prefix beside the scoped one and `daemonLevelNodeID` accepts `alarm` as
-  well as `<base-slug>_alarm`; both are retraction-only, nothing publishes
-  through them, and both are deletable after one release — the same pattern
-  as `legacyDiscoverySlug`. **The one new hazard, stated because it is
-  real:** while those entries exist, a daemon on a custom base treats an
-  unscoped retained config as its own in order to retract it, and a sibling
-  still on the *default* base is publishing under exactly those node ids. Not
-  a regression — before the scope the two shared the namespace
-  unconditionally — but it is why the migration note says to upgrade such a
-  pair together. Ownership cannot be decided more precisely from a node id.
+  **The pre-scope configs** (ADR 0068 obligation 3) are retracted behind
+  `north.mqtt.discovery_retract_unscoped`, an operator opt-in that defaults to
+  off. This entry originally claimed the retraction as automatic and called
+  the resulting hazard "not a regression"; both claims were wrong, and the
+  correction is the entry above.
 
   **What this does not fix.** Two daemons against the *same* CCU still
   declare byte-identical `unique_id`s and device `identifiers`; both key on

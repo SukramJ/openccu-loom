@@ -5,8 +5,11 @@ package adapter
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -386,4 +389,394 @@ func TestStopWaitsForTheRegaPollerToLeave(t *testing.T) {
 			"wiring generation, and the next Start wires a second one against the same CCU",
 			got)
 	}
+}
+
+// TestALatchedOffProbeRefoldsTheGateBeforeItLeaves is the highest-severity
+// lifecycle defect of the ReGa half, and it is about ORDERING, not about the
+// latch.
+//
+// The latch is the poller's last tick. [regaLivenessTracker.observe] has
+// already moved the CCU back to [regaLivenessUnknown] by the time
+// [HubMQTTPublisher.pollRegaLivenessOnce] decides to stop, so the fold has
+// just changed — from `offline` to `online` — and no later tick exists to
+// write it. Returning before the re-fold left that write unwritten forever:
+// a CCU whose previous verdict was `down` kept a retained `offline` on
+// `<base>/<central>/hub/status` for the rest of the process, and under Home
+// Assistant's `availability_mode: "all"` every sysvar, program,
+// system-health, message and install-mode entity of it stayed permanently
+// unavailable — on healthy hardware that is answering, with nothing on the
+// wire naming the cause.
+//
+// The field sequence is the one
+// [TestRegaLivenessLatchesOffAnEndpointTheCCURefuses] already models:
+// ReGaHss hangs (`NotServing` → down), the CCU reboots into a firmware or a
+// reverse proxy that answers 401/403/404 (`Unsupported` → latched off, back
+// to unknown). Reverse-proxied CCUs are explicitly supported (see
+// [ccuBaseURLFor]).
+//
+// The assertion is on the BYTE, not on the latch: the pre-existing latch
+// test passes with the defect present, because the latch itself was never
+// broken. The gate here is unwritten when the latching tick arrives — the
+// state it is in after a broker reconnect re-opened it
+// ([mqtt.Bridge.ResetRuntimeGates]) or after a write failed and was rolled
+// back — so the re-fold is a seeding write and lands synchronously, without
+// the gate's fifteen-second dwell.
+//
+// Falsifiability: move the `p.publish(...)` call in pollRegaLivenessOnce
+// back below the `p.rega.unsupported` branch — the pre-fix order — and the
+// gate is never written at all.
+func TestALatchedOffProbeRefoldsTheGateBeforeItLeaves(t *testing.T) {
+	t.Parallel()
+	c, pub, publisher := hubDiscoveryFixture(t)
+	conn := hub.NewConnectivity()
+	conn.OnState("HmIP-RF", true)
+	c.HubModel.SetConnectivity(conn)
+
+	// The verdict the earlier ticks reached: ReGa answered that it is not
+	// serving, so the fold for this CCU is `offline`.
+	if got := publisher.rega.observe("ccu-01", regaProbeNotServing); got != regaLivenessDown {
+		t.Fatalf("setup: tracker is %v, want down", got)
+	}
+
+	target := &regaLivenessTarget{
+		interval: time.Hour,
+		probe:    func(context.Context) regaProbeResult { return regaProbeUnsupported },
+	}
+	b := publisher.wiring.Bridge()
+	if ok := publisher.pollRegaLivenessOnce(
+		context.Background(), b, "ccu-01", c.HubModel, target,
+	); ok {
+		t.Fatal("the poller kept going after the CCU refused the endpoint: it would ask a " +
+			"question the CCU has answered `not yours to ask`, every interval, forever")
+	}
+
+	var writes int
+	var last string
+	for _, p := range pub.Published() {
+		if p.Topic == "openccu-loom/ccu-01/hub/status" {
+			writes++
+			last = string(p.Payload)
+		}
+	}
+	if writes == 0 {
+		t.Fatalf("the latch left the gate unwritten; topics=%v — the CCU's last verdict was "+
+			"`down`, so its hub plane stays `offline` for the life of the process on "+
+			"hardware that is healthy and answering", publishedTopics(pub))
+	}
+	if last != "online" {
+		t.Fatalf("hub/status = %q after the latch, want %q: the tracker is back at unknown, "+
+			"which folds to reachable, and this tick is the last one that can say so", last, "online")
+	}
+	if got := publisher.rega.state("ccu-01"); got != regaLivenessUnknown {
+		t.Fatalf("the latch left the tracker at %v, want unknown", got)
+	}
+}
+
+// TestARuntimeAdoptedCentralIsRegaProbed is the second lifecycle defect: the
+// probe targets were a BOOT snapshot, and a CCU adopted at runtime is in no
+// boot-time list.
+//
+// With only the snapshot, [HubMQTTPublisher.regaTargetFor] returns nil for
+// such a central, [HubMQTTPublisher.startRegaLivenessPoll] returns before it
+// starts anything, its liveness stays [regaLivenessUnknown] and the gate
+// folds it `online` — so a hung ReGaHss with `rfd` still serving publishes no
+// `offline` at all for that whole class of CCU. That is the exact defect the
+// ReGa half of the gate was written to fix, left unfixed for the centrals
+// that never appear in `cfg.Centrals`.
+//
+// The fix is the shape [mqtt.Bridge.cleanupCentralNames] already documents
+// for the same trap: ask a supplier when the poller starts, rather than read
+// a snapshot taken at boot.
+//
+// Falsifiability: make regaTargetFor ignore the supplier and return
+// `p.regaTargets[centralName]` again — the pre-fix body — and the probe is
+// never performed.
+func TestARuntimeAdoptedCentralIsRegaProbed(t *testing.T) {
+	t.Parallel()
+
+	probed := make(chan struct{}, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == checkRegaPath {
+			select {
+			case probed <- struct{}{}:
+			default:
+			}
+		}
+		_, _ = w.Write([]byte(checkRegaReadyBody))
+	}))
+	defer srv.Close()
+	host, port := splitHostPortForTest(t, srv.URL)
+
+	c, _, publisher := hubDiscoveryFixture(t)
+	c.SetSystemInformation(central.SystemInfo{Serial: "3014F711A0001F0123456789"})
+	// The boot snapshot knows nothing about this central — it was adopted
+	// through POST /admin/centrals, long after cfg.Centrals was read.
+	publisher.SetRegaLivenessTargets(nil)
+	publisher.SetRegaLivenessConfigSupplier(func(name string) (config.CentralConfig, bool) {
+		if name != "ccu-01" {
+			return config.CentralConfig{}, false
+		}
+		return config.CentralConfig{Name: "ccu-01", Host: host, JSONRPCPort: port}, true
+	})
+
+	publisher.Start(context.Background())
+	defer publisher.Stop()
+
+	select {
+	case <-probed:
+	case <-time.After(10 * time.Second):
+		t.Fatalf("the runtime-adopted central was never probed at %s: its ReGa liveness stays "+
+			"unknown, so a hung ReGaHss with rfd still serving folds `online` forever",
+			checkRegaPath)
+	}
+}
+
+// TestRegaLivenessTargetsPreferTheLiveFleetOverTheBootSnapshot pins the two
+// directions of the resolution order, which is the part a future edit is
+// most likely to get wrong.
+//
+// The live config wins where it answers — an adopt-after-remove must be
+// probed at the host it was re-adopted with, not the one it booted with —
+// and the boot snapshot still covers a central the supplier does not know,
+// so wiring the supplier can never take probing away from a boot-time CCU.
+//
+// BOTH HALVES MUST KNOW THE SAME NAME, AND AT DIFFERENT HOSTS. The first
+// version of this test gave the supplier `ccu-adopted` and the snapshot
+// `ccu-boot`, so no name was known to both and no input could tell the two
+// orders apart: it asserted only that each half answers for its own name,
+// and inverting regaTargetFor to consult the snapshot FIRST left it green.
+// A precedence test that cannot fail on its precedence is worse than none,
+// because it reads as cover. So the name here is in both halves, the two
+// halves point at two different servers, and the assertion is which server
+// the probe actually GETs — not whether a non-nil target came back.
+//
+// What the inversion costs in the field: an operator removes a CCU and
+// re-adopts it at a new address (the SPA's remove/add flow), the probe goes
+// to the OLD host, every tick is regaProbeNoAnswer, the conjoined gate folds
+// `offline`, and under Home Assistant's `availability_mode: "all"` every
+// sysvar, program, system-health, message and install-mode entity of that CCU
+// is permanently unavailable on healthy hardware.
+func TestRegaLivenessTargetsPreferTheLiveFleetOverTheBootSnapshot(t *testing.T) {
+	t.Parallel()
+
+	var bootHits, liveHits atomic.Int32
+	bootSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == checkRegaPath {
+			bootHits.Add(1)
+		}
+		_, _ = w.Write([]byte(checkRegaReadyBody))
+	}))
+	defer bootSrv.Close()
+	liveSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == checkRegaPath {
+			liveHits.Add(1)
+		}
+		_, _ = w.Write([]byte(checkRegaReadyBody))
+	}))
+	defer liveSrv.Close()
+	bootHost, bootPort := splitHostPortForTest(t, bootSrv.URL)
+	liveHost, livePort := splitHostPortForTest(t, liveSrv.URL)
+
+	_, _, publisher := hubDiscoveryFixture(t)
+	// `ccu-boot` is in BOTH halves — it booted at one address and was
+	// re-adopted at another — and `ccu-bootonly` is in the snapshot alone.
+	publisher.SetRegaLivenessTargets([]config.CentralConfig{
+		{Name: "ccu-boot", Host: bootHost, JSONRPCPort: bootPort},
+		{Name: "ccu-bootonly", Host: bootHost, JSONRPCPort: bootPort},
+	})
+	publisher.SetRegaLivenessConfigSupplier(func(name string) (config.CentralConfig, bool) {
+		if name != "ccu-boot" {
+			return config.CentralConfig{}, false
+		}
+		return config.CentralConfig{Name: "ccu-boot", Host: liveHost, JSONRPCPort: livePort}, true
+	})
+
+	ctx := context.Background()
+
+	// Direction one: the live fleet wins for a name both halves know.
+	target := publisher.regaTargetFor("ccu-boot")
+	if target == nil {
+		t.Fatal("a central both halves know got no probe target at all")
+	}
+	target.probe(ctx)
+	if liveHits.Load() != 1 || bootHits.Load() != 0 {
+		t.Fatalf("a central known to both halves was probed at the BOOT address "+
+			"(boot hits=%d, live hits=%d): a CCU removed and re-adopted at a new host is "+
+			"probed at the host it no longer has, every probe is regaProbeNoAnswer, the "+
+			"conjoined gate folds `offline` and every ReGa-scoped entity of that CCU goes "+
+			"permanently unavailable on healthy hardware",
+			bootHits.Load(), liveHits.Load())
+	}
+
+	// Direction two: the snapshot still covers a name the supplier declines,
+	// and covers it with a probe that reaches the boot address — not merely
+	// with a non-nil target.
+	target = publisher.regaTargetFor("ccu-bootonly")
+	if target == nil {
+		t.Fatal("wiring the supplier took the probe away from a boot-time central")
+	}
+	target.probe(ctx)
+	if bootHits.Load() != 1 {
+		t.Fatalf("the boot snapshot's central was not probed at the boot address "+
+			"(boot hits=%d): wiring the live-fleet supplier took ReGa probing away from "+
+			"every boot-time CCU", bootHits.Load())
+	}
+	if liveHits.Load() != 1 {
+		t.Fatalf("the supplier answered for a central it reports false for (live hits=%d)",
+			liveHits.Load())
+	}
+
+	if publisher.regaTargetFor("ccu-unknown") != nil {
+		t.Fatal("a central neither half knows got a target: there is no host to build a URL from")
+	}
+}
+
+// TestALiveConfigWithNoHostDoesNotFallBackToTheBootAddress pins the one case
+// where [HubMQTTPublisher.regaTargetFor]'s doc and its code disagreed.
+//
+// The doc says the resolver returns nil when there is "no known config, or a
+// config with no host", and [HubMQTTPublisher.SetRegaLivenessConfigSupplier]
+// says an `ok` from the supplier settles the question. The code did neither
+// for one input: an `ok` carrying an empty Host yields no target from
+// [newRegaLivenessTarget], and the old body then fell through to the boot
+// snapshot — so a central the live fleet knows, and knows has no address,
+// was probed at the address it booted with. That is the wrong-address probe
+// the precedence test above exists to keep out, arriving through the branch
+// that test does not drive.
+//
+// No path is known today that produces an adopted config with an empty host,
+// so this pins a reading rather than closing a live defect: the live fleet
+// settles it, and "known, nothing to probe" is an answer.
+func TestALiveConfigWithNoHostDoesNotFallBackToTheBootAddress(t *testing.T) {
+	t.Parallel()
+
+	var bootHits atomic.Int32
+	bootSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == checkRegaPath {
+			bootHits.Add(1)
+		}
+		_, _ = w.Write([]byte(checkRegaReadyBody))
+	}))
+	defer bootSrv.Close()
+	bootHost, bootPort := splitHostPortForTest(t, bootSrv.URL)
+
+	_, _, publisher := hubDiscoveryFixture(t)
+	publisher.SetRegaLivenessTargets([]config.CentralConfig{
+		{Name: "ccu-boot", Host: bootHost, JSONRPCPort: bootPort},
+	})
+	publisher.SetRegaLivenessConfigSupplier(func(name string) (config.CentralConfig, bool) {
+		// Known to the live fleet, and known to have no address.
+		return config.CentralConfig{Name: name}, true
+	})
+
+	target := publisher.regaTargetFor("ccu-boot")
+	if target != nil {
+		target.probe(context.Background())
+		t.Fatalf("a central the live fleet answers for with no host got a probe target "+
+			"(it reached the boot address %d time(s)): the boot host is exactly the address "+
+			"the live fleet no longer names, so every probe would be regaProbeNoAnswer "+
+			"against hardware that is fine", bootHits.Load())
+	}
+}
+
+// TestRetractCentralStopsTheRegaPoller is the third lifecycle defect, and it
+// is the one that puts a WRONG byte on the wire rather than withholding a
+// right one.
+//
+// [HubMQTTPublisher.RetractCentral] forgot the CCU's tracker entry but never
+// stopped its poller: the poller's only cancellation was the
+// [HubMQTTPublisher.addUnsub] closer, drained solely by
+// [HubMQTTPublisher.Stop], which a runtime removal never calls. The orphan
+// then kept GETting the decommissioned host every interval for the life of
+// the process, and every tick re-folded the gate — with the tracker entry
+// just forgotten, [regaLivenessTracker.observe] took its seed branch and
+// [mqtt.Bridge.RetractHubStatus] had just forgotten the debounced level, so
+// the next fold SEEDED a retained `online` on the gate topic of a CCU that
+// no longer exists. The orphan sweep is scoped to registered centrals, so
+// nothing would ever reach that topic again.
+//
+// Falsifiability: drop the `p.stopRegaLivenessPoll(u.Name())` call from
+// RetractCentral and the post-retract assertions fail — both the probe count
+// and the republished `online`.
+func TestRetractCentralStopsTheRegaPoller(t *testing.T) {
+	t.Parallel()
+	c, pub, publisher := hubDiscoveryFixture(t)
+	c.SetSystemInformation(central.SystemInfo{Serial: "3014F711A0001F0123456789"})
+	conn := hub.NewConnectivity()
+	conn.OnState("HmIP-RF", true)
+	c.HubModel.SetConnectivity(conn)
+
+	var probes, inFlight atomic.Int32
+	publisher.mu.Lock()
+	publisher.regaTargets = map[string]*regaLivenessTarget{
+		"ccu-01": {
+			interval: time.Millisecond,
+			probe: func(context.Context) regaProbeResult {
+				inFlight.Add(1)
+				defer inFlight.Add(-1)
+				probes.Add(1)
+				time.Sleep(time.Millisecond)
+				return regaProbeServing
+			},
+		},
+	}
+	publisher.mu.Unlock()
+
+	publisher.Start(context.Background())
+	defer publisher.Stop()
+	deadline := time.Now().Add(10 * time.Second)
+	for probes.Load() < 2 {
+		if time.Now().After(deadline) {
+			t.Fatal("the poller never ran: the wiring pass did not start it")
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	publisher.RetractCentral(c, nil)
+	// The per-central stop WAITS for the goroutine, exactly as Stop's closer
+	// does — this package has no goroutine-leak harness, so the assertion is
+	// made here rather than left to one.
+	if got := inFlight.Load(); got != 0 {
+		t.Fatalf("RetractCentral returned with %d probe(s) still in flight: the poller "+
+			"outlived the central it was started for", got)
+	}
+	publisher.Flush()
+	afterRetract := len(pub.Published())
+	stopped := probes.Load()
+
+	// Long enough for a live one-millisecond ticker to fire many times.
+	time.Sleep(200 * time.Millisecond)
+	publisher.Flush()
+
+	if got := probes.Load(); got != stopped {
+		t.Fatalf("the poller ran %d more probe(s) after the central was removed: it keeps "+
+			"GETting a decommissioned host every interval for the life of the process",
+			got-stopped)
+	}
+	for _, p := range pub.Published()[afterRetract:] {
+		if p.Topic == "openccu-loom/ccu-01/hub/status" {
+			t.Fatalf("the orphaned poller wrote %q to the gate of a removed CCU after the "+
+				"retract; nothing ever reaches that topic again, so it stays retained forever",
+				string(p.Payload))
+		}
+	}
+}
+
+// splitHostPortForTest pulls the host and port out of an httptest server URL.
+//
+// Deliberately not via net/url: this file already uses `url` as a local
+// variable name, and importing the package would shadow it (gocritic's
+// importShadow).
+func splitHostPortForTest(t *testing.T, rawURL string) (host string, port int) {
+	t.Helper()
+	hostPort := strings.TrimPrefix(rawURL, "http://")
+	h, p, err := net.SplitHostPort(hostPort)
+	if err != nil {
+		t.Fatalf("net.SplitHostPort(%q): %v", hostPort, err)
+	}
+	n, err := strconv.Atoi(p)
+	if err != nil {
+		t.Fatalf("port of %q: %v", rawURL, err)
+	}
+	return h, n
 }

@@ -416,6 +416,40 @@ func (o *centralOrchestrator) isRegistered(name string) bool {
 	return ok
 }
 
+// centralConfigFor resolves one central's connection config from the LIVE
+// fleet: the row a runtime adopt was performed with first, then the boot
+// config. Reports false for a name that is neither.
+//
+// It is the resolver the hub publisher's ReGa liveness probe is wired with
+// (see [adapter.HubMQTTPublisher.SetRegaLivenessConfigSupplier]). The adopted
+// row is the half no snapshot can carry: it never reaches cfg.Centrals, for
+// the same reason the pin and the un_ignore patterns do not, so a consumer
+// that reads only the boot config sees a fleet the adopted CCU is not part
+// of.
+//
+// The adopted handle wins over a boot entry of the same name so an
+// adopt-after-remove of a boot-time central is probed at the host it was
+// re-adopted with, not the one it booted with.
+func (o *centralOrchestrator) centralConfigFor(name string) (config.CentralConfig, bool) {
+	if o == nil || name == "" {
+		return config.CentralConfig{}, false
+	}
+	o.mu.Lock()
+	h := o.handles[name]
+	o.mu.Unlock()
+	if h != nil {
+		return h.cc, true
+	}
+	if o.cfg != nil {
+		for i := range o.cfg.Centrals {
+			if o.cfg.Centrals[i].Name == name {
+				return o.cfg.Centrals[i], true
+			}
+		}
+	}
+	return config.CentralConfig{}, false
+}
+
 // adoptCentral brings up one central's southbound + model + scheduler-jobs
 // at runtime, wiring it identically to a boot-time central
 // (internal/central/bootstrap.go + cmd/openccu-loom/daemon.go): construct

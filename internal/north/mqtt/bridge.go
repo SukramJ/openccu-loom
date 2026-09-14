@@ -95,8 +95,27 @@ type BridgeConfig struct {
 	// entities across both — measured, see ADR 0070's amendment of
 	// 2026-09-10 — but neither direction is free.
 	HADiscoveryBundles bool
-	QoS                QoSProfile
-	DiscoveryBuilder   DiscoveryBuilder // optional, may be nil
+
+	// RetractUnscopedDiscovery lets the retained-config sweeps claim the
+	// UNSCOPED node-id namespace (`<central-slug>_…`, `alarm`, `security`,
+	// `daemon`) in addition to this daemon's own `<base-slug>_…` one.
+	//
+	// It is the migration switch for the node-id scope: a daemon that ran
+	// under a non-default topic base before the scope existed wrote its
+	// configs unscoped, and ADR 0068 obligation 3 says they must be
+	// retracted rather than left as phantom entities. It is OFF by default
+	// because an unscoped node id is indistinguishable from a live sibling's
+	// — turning it on while a default-base daemon shares the broker deletes
+	// that daemon's entities, and its device-registry rows with them. See
+	// [discoveryNodePrefixes] for the full argument.
+	//
+	// Meaningless on the default base (the unscoped namespace is already
+	// this daemon's own) and deletable once the fleet has been through one
+	// release with it.
+	RetractUnscopedDiscovery bool
+
+	QoS              QoSProfile
+	DiscoveryBuilder DiscoveryBuilder // optional, may be nil
 
 	// SubDevicesEnabled toggles the per-channel-group sub-device split
 	// in the HA discovery `device` block. When true, multi-channel-group
@@ -567,6 +586,15 @@ type Bridge struct {
 	// rebroadcasts to clients, but a bridge-side gate keeps the
 	// outbound traffic genuinely small.
 	configCache map[string][]byte
+	// configGate is the reconnect gate over configCache. It is a field of
+	// its own, rather than a line inside [Bridge.ResetRuntimeGates], so that
+	// the reflective audit in TestEveryBridgeDedupGateIsRegisteredForReset
+	// can see it: that audit walks Bridge's fields for gate-shaped types,
+	// and a bare map is not gate-shaped however it is used. configCache was
+	// the field that proved it — a dedup gate one line above rawTopics that
+	// the reconnect path did not reach, and that no structural guard could
+	// name.
+	configGate *configCacheGate
 	// rawTopics tracks every retained per-data-point raw-plane state
 	// topic this bridge has published (canonical PerDPState + custom-DP
 	// slot state; the legacy-alias mirror that used to be the third
@@ -664,7 +692,8 @@ func NewBridge(cfg BridgeConfig, client Publisher) *Bridge {
 	b.state = newStatePublisher(b, logger)
 	b.avail = newAvailabilityPublisher(b, logger)
 	b.hubStatus = newHubStatusGate(hubStatusDwell)
-	b.gates = []runtimeGate{b.state, b.avail, b.hubStatus}
+	b.configGate = &configCacheGate{b: b}
+	b.gates = []runtimeGate{b.pub, b.state, b.avail, b.hubStatus, b.configGate}
 	return b
 }
 
@@ -689,6 +718,28 @@ func (b *Bridge) WithSubscriber(s Subscriber) *Bridge {
 func (b *Bridge) WithSweepSubscriber(s Subscriber) *Bridge {
 	b.sweepSub = s
 	return b
+}
+
+// SweepSubscriber reports the subscribe-capable client this bridge's
+// retained-store sweeps would actually ride on, resolved exactly as a sweep
+// resolves it: the [Bridge.WithSweepSubscriber] connection when one is wired,
+// and the long-lived subscribe client when none is.
+//
+// It is exported because the invariant it answers is the composition root's
+// to hold and the composition root's alone: the object wired here must not be
+// the command plane's client. Nothing inside the bridge can check that — both
+// are just Subscribers from here — and nothing outside could see the answer.
+// The cost of that blind spot is measured: two overlapping wildcard filters on
+// one connection make a broker deliver one copy of every inbound command per
+// matching subscription, so every command handler runs twice for the length
+// of every sweep window. A doubled `PRESS_SHORT`, a doubled program trigger,
+// a doubled alarm arm, with nothing in any log.
+func (b *Bridge) SweepSubscriber() Subscriber {
+	if b == nil {
+		return nil
+	}
+	s, _ := b.cleanupSubscriber()
+	return s
 }
 
 // SetHubInfo updates the central-level metadata stored on the
@@ -934,6 +985,42 @@ func (b *Bridge) PublishCustomDPState(ctx context.Context, centralName, iface st
 	return nil
 }
 
+// configCacheGate is the reconnect gate over [Bridge.configCache], the byte
+// dedup cache in front of the ADR 0011 `/config` companions.
+//
+// It is a named type with a [runtimeGate] method rather than a clause inside
+// [Bridge.ResetRuntimeGates] because #811 made that method walk a registered
+// list instead of naming its gates one by one, and a gate that cannot be
+// registered is a gate the reconnect path silently keeps missing.
+// configCache was exactly that: a dedup gate one field above `rawTopics`
+// that survived every reset, so after a broker restart without a persistent
+// retained store the `/config` companions of every data point stayed empty
+// for the life of the process — the bridge answering "already published" for
+// bytes the broker no longer holds.
+type configCacheGate struct{ b *Bridge }
+
+// Reset opens the gate without forgetting which topics it carries.
+//
+// The distinction is load-bearing, and it is why this is not a `clear`.
+// configCache does double duty: the payload is the dedup memory, but the KEY
+// is the index that tells [Bridge.RunRawOrphanCleanupOnce] which `/config`
+// topics this process owns and [Bridge.RetractRawStateForDevice] which ones
+// a removed device has to take with it. Dropping the keys on every reconnect
+// would make the next orphan sweep evict every `/config` companion the
+// bridge had just republished, and leave a removed device's companions
+// behind for good. Dropping only the payload is what a reset means here: the
+// topic is still ours, the broker's copy of the bytes is no longer assumed.
+func (g *configCacheGate) Reset() {
+	if g == nil || g.b == nil {
+		return
+	}
+	g.b.mu.Lock()
+	defer g.b.mu.Unlock()
+	for topic := range g.b.configCache {
+		g.b.configCache[topic] = nil
+	}
+}
+
 // PublishSlotConfig publishes a [pload.Source.ConfigPayload] map at the
 // slot's per-DP config topic — the static-capability companion to
 // [PublishSlotState] / [PublishCustomDPState]. Carries fields like modes /
@@ -967,6 +1054,10 @@ func (b *Bridge) PublishSlotConfig(ctx context.Context, centralName, iface strin
 	b.mu.Lock()
 	previous, declared := b.configCache[topic]
 	b.mu.Unlock()
+	// A declared topic with no remembered payload is one [configCacheGate.Reset]
+	// re-opened: the key still names a topic this process owns, and `previous`
+	// is nil precisely so this comparison cannot suppress the write. `body` is
+	// never empty here — the empty-object case returned above.
 	if declared && bytes.Equal(previous, body) {
 		return nil
 	}
@@ -1713,6 +1804,16 @@ func (b *Bridge) RetractDiscoveryForDevice(ctx context.Context, deviceAddress st
 	return b.RetractDiscoveryForCentralDevice(ctx, "", deviceAddress)
 }
 
+// retractUnscopedDiscovery reports whether the sweeps may claim the unscoped
+// node-id namespace as well as this daemon's scoped one. Nil-safe so the
+// predicate builders stay usable from tests that construct a bare [Bridge].
+func (b *Bridge) retractUnscopedDiscovery() bool {
+	if b == nil {
+		return false
+	}
+	return b.cfg.RetractUnscopedDiscovery
+}
+
 // RetractDiscoveryForCentralDevice is [Bridge.RetractDiscoveryForDevice]
 // scoped to one central: it clears only the configs published under that
 // central's node-id namespace.
@@ -1735,7 +1836,7 @@ func (b *Bridge) RetractDiscoveryForCentralDevice(ctx context.Context, centralNa
 	// Both node-id spellings the sweep recognises: the canonical
 	// discovery slug and the plain topic-safe escape an earlier build
 	// wrote. A retained config under either belongs to this central.
-	if prefixes := discoveryNodePrefixes(b.topics.DiscoveryNodeScope(), centralName); len(prefixes) > 0 {
+	if prefixes := discoveryNodePrefixes(b.topics.DiscoveryNodeScope(), b.retractUnscopedDiscovery(), centralName); len(prefixes) > 0 {
 		match = func(topic string) bool {
 			for _, p := range prefixes {
 				if strings.Contains(topic, "/"+p+addr+"/") {

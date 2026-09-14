@@ -50,6 +50,7 @@
   "north.mqtt.client_id": "string",
   "north.mqtt.discovery_bundles": "bool",
   "north.mqtt.discovery_enabled": "bool",
+  "north.mqtt.discovery_retract_unscoped": "bool,omitempty",
   "north.mqtt.enabled": "bool",
   "north.mqtt.password": "string",
   "north.mqtt.protocol_version": "string,omitempty",

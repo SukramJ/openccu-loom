@@ -91,16 +91,16 @@ type pinnedFilter struct {
 // TestCommandFiltersArePairwiseDisjoint asserts by enumeration rather than
 // by reading this comment.
 var pinnedCommandFilters = []pinnedFilter{
-	{"<base>/+/+/+/+/+/+/set", 7},
-	{"<base>/+/+/+/+/+/set", 6},
+	{"<base>/system/addon_update/set", 3},
+	{"<base>/alarm/+/set", 3},
 	{"<base>/+/hub/sysvars/+/set", 5},
 	{"<base>/+/hub/programs/+/set", 5},
 	{"<base>/+/hub/programs/+/trigger", 5},
 	{"<base>/+/hub/install_mode/+/set", 5},
+	{"<base>/+/+/+/+/+/set", 6},
 	{"<base>/+/devices/+/cdps/+/+/invoke", 7},
+	{"<base>/+/+/+/+/+/+/set", 7},
 	{"<base>/+/+/+/+/custom/+/set/+", 8},
-	{"<base>/alarm/+/set", 3},
-	{"<base>/system/addon_update/set", 3},
 }
 
 // TestCommandFilterSetIsPinned pins the exact ordered set of command filters
@@ -128,14 +128,30 @@ var pinnedCommandFilters = []pinnedFilter{
 // pin, the list is deleted, and the property that replaced both is asserted
 // by enumeration in TestCommandFiltersArePairwiseDisjoint.
 //
-// The ORDER is pinned too, including the fact that it is not grouped by
-// length. It is the order [hapublisher.CommandRouter.Start] subscribes in
-// and rolls back in, and the order [hapublisher.CommandRouter.Handle]
-// reports an ambiguous pair in. It is no longer the order that decides which
-// filters survive a partial ACL denial: none of them do, because the router
-// withdraws what it already registered — see
-// TestCommandStartRollsBackWhatItAlreadySubscribed, which is where that
-// property moved.
+// The ORDER is pinned too. It is the order
+// [hapublisher.CommandRouter.Start] subscribes in and rolls back in, and the
+// order [hapublisher.CommandRouter.Handle] reports an ambiguous pair in. It
+// is no longer the order that decides which filters survive a partial ACL
+// denial: none of them do, because the router withdraws what it already
+// registered — see TestCommandStartRollsBackWhatItAlreadySubscribed, which
+// is where that property moved.
+//
+// It is also no longer THIS package's order. go-hamqtt v0.30.0 made
+// [hapublisher.CommandRouter.Start] subscribe most specific first — most
+// literal segments before fewest — to close a window in which a command
+// arriving mid-Start was dropped: the router judges a copy against the
+// registered route set, so with the general shape registered first the only
+// subscription live inside that window was the one whose copies get
+// discarded. Sorting means a copy can only arrive for an outranked route
+// once the route outranking it is already on the same connection. So this
+// pin now records the ROUTER's order, not the declaration order of
+// [CommandSubscriber.routes], and the two deliberately differ.
+//
+// For this plane the reorder is behaviour-neutral by construction: the set
+// is pairwise disjoint (TestCommandFiltersArePairwiseDisjoint), so no route
+// outranks another and there is no window here to close. It is pinned
+// anyway, because the rollback and ambiguity-report orders really did move
+// and a reviewer should see that in a diff rather than infer it.
 //
 // Not pinned here: the QoS each filter registers at (that is
 // [CommandSubscriber.WithQoS]'s contract and is covered by the subscriber's

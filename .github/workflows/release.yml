@@ -55,7 +55,7 @@ jobs:
       # themselves are gitignored.
       - name: restore spa_dist placeholder
         run: git checkout -- internal/north/ui/spa_dist/.gitkeep
-      - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
+      - uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4.3.0
       - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
       - name: log in to ghcr
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -83,6 +83,31 @@ jobs:
           if [ ! -s RELEASE_NOTES.md ]; then
             echo "No '## [${VERSION}]' section found in CHANGELOG.md" >&2
             exit 1
+          fi
+          # GitHub caps a release body at 125,000 characters and rejects
+          # the create-release call with a 422 above it — which fails the
+          # release after the tag is already pushed, the one failure mode
+          # that a re-run cannot undo. A release the size of 0.78.0 (92
+          # PRs, ~139 KB of section) exceeds it, so truncate at a line
+          # boundary and point at the full section in the repository at
+          # this tag. Every section opens with "### Release summary", so
+          # the operator-facing part always survives the cut.
+          MAX_BODY=118000
+          if [ "$(wc -c < RELEASE_NOTES.md)" -gt "$MAX_BODY" ]; then
+            head -c "$MAX_BODY" RELEASE_NOTES.md > RELEASE_NOTES.trunc
+            # Drop the last line: head -c can split it, and a multi-byte
+            # character cut mid-sequence renders as a replacement glyph.
+            sed -i '$ d' RELEASE_NOTES.trunc
+            {
+              echo
+              echo "---"
+              echo
+              echo "*These notes are truncated — GitHub caps a release body at 125,000 characters."
+              echo "The complete ${VERSION} changelog section is in"
+              echo "[CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/CHANGELOG.md).*"
+            } >> RELEASE_NOTES.trunc
+            mv RELEASE_NOTES.trunc RELEASE_NOTES.md
+            echo "Release notes truncated to ${MAX_BODY} bytes for the GitHub body limit." >&2
           fi
           echo "Release notes for ${VERSION}:" >&2
           cat RELEASE_NOTES.md >&2

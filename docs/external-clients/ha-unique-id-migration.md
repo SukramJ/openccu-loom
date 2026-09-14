@@ -313,20 +313,63 @@ nothing:
   `Café`/`Caf` defect, the object that was silently losing the race reappears.
   That is the fix, and it reads as a new entity.
 
-**The orphan swept, not left behind.** `RunDiscoveryOrphanCleanupOnce`
-retracts the retained discovery configs of the old spelling on the first start
-after the upgrade, so the old entities disappear rather than lingering as
-permanently unavailable twins. The sweep was extended for this change: it now
-recognises the pre-unification node-id spelling as its own
-(`legacyDiscoverySlug` in `internal/north/mqtt/retain_cleanup.go`) alongside
-the canonical and the older `TopicSafe` one. Without that extension nothing in
-the daemon would ever spell those node ids again and every affected entity
-would keep a phantom config forever — which is the failure mode ADR 0068's
-obligation 3 exists to prevent.
+**Retracting the pre-scope configs is opt-in, and here is why.**
+ADR 0068 obligation 3 says a break must retract what it previously published,
+so the old configs disappear instead of lingering as permanently unavailable
+twins. On this plane that obligation cannot be discharged automatically,
+because **the pre-scope spelling and a live sibling's spelling are the same
+string**. The sweep is handed a `publisher.ConfigTopic`, which carries the node
+id and nothing else — no payload, so no `state_topic` naming the owning
+daemon's base. `ccu-haus_000a0000000001`, `alarm`, `security` and `daemon` are
+what this daemon wrote before the upgrade *and* what a sibling on the
+**default** base is publishing right now, and nothing in the topic tells them
+apart.
 
-Where only the *object* id moved and the node id did not — a system variable
-named `Café Terrasse` on a CCU named `ccu-01` — the sweep already reached it,
-because the node id it lives under is unchanged.
+Claiming that namespace by default would therefore have every custom-base
+daemon retract **all** of a default-base sibling's device, hub, alarm and
+security configs on every boot. Home Assistant deletes those entities, and a
+device-registry row goes with its last entity; `identifiers` has no migration
+path, so that is not recoverable. For `alarm`, `security` and `daemon` the node
+ids are fixed literals, so this needs no name coincidence at all — **any** two
+daemons have it. Doing it once behind a persisted marker was considered and
+rejected: once is already unrecoverable.
+
+So it is an operator decision, because the operator is the only party who
+knows whether a default-base sibling exists:
+
+```yaml
+north:
+  mqtt:
+    discovery_retract_unscoped: true    # default: false
+```
+
+With it **off** (the default) the daemon only ever claims its own
+`<base-slug>_…` namespace — nothing of anyone else's is touched, and the
+pre-scope configs stay retained on the broker until you clear them. With it
+**on**, `discoveryNodePrefixes` and `daemonLevelNodeID`
+(`internal/north/mqtt/retain_cleanup.go`) also accept the unscoped spellings
+and the first sweep after start retracts them. Both are retraction-only —
+nothing publishes through them — and both are deletable after one release,
+exactly like `legacyDiscoverySlug` above.
+
+!!! tip "Which way to go"
+    **One daemon on this broker, or every daemon on its own non-default
+    base** → set `discovery_retract_unscoped: true`, start once, let the sweep
+    run, set it back to `false`. Nothing else on the broker owns the unscoped
+    node ids, so the retraction is exactly your own history.
+
+    **A sibling daemon on the default `topic_base` shares this broker** →
+    leave it `false`. Either give that daemon a non-default base of its own
+    first (then both can opt in), or clear the stale configs by hand:
+
+    ```sh
+    # list what is left under the pre-scope node ids, then retract one:
+    mosquitto_sub -h <broker> -t 'homeassistant/#' -v -W 3 \
+      | awk '$1 ~ /\/config$/ {print $1}' | sort -u
+    mosquitto_pub -h <broker> -r -n -t '<the/config/topic>'
+    ```
+
+    An empty retained publish (`-r -n`) is exactly what the sweep does.
 
 **How to see the blast radius before upgrading.** You are affected if, and
 only if, one of the following carries a non-German accented Latin character
@@ -389,18 +432,22 @@ the device rows of that CCU plus its handful of central-scoped devices
 
 ### The discovery node id is scoped by the topic base — daemon unreleased
 
-This one moves a **`node_id`** and nothing else. Not a `unique_id`, not a
-device `identifiers`, not a `default_entity_id`, and no state, command or
-availability topic. It is the cheapest kind of break this page records: no
-entity loses its history, statistics or `entity_id`, and — unlike the slug
-unification above, which ships in the same release — **not even a device row
-is re-created**, so device areas, device renames and device-targeted
-automations all survive untouched.
+This one moves a **`node_id`** on every plane, and on the three **daemon-level**
+planes (alarm, Security & Safety, add-on self-update) it also moves the
+`unique_id` and the `default_entity_id`. It moves no device `identifiers`, no
+`via_device`, and no state, command or availability topic.
 
-It also affects a much narrower population than the slug change: **only
-installations that set `north.mqtt.topic_base` to something other than
-`openccu-loom`.** If you never touched that key, nothing on this plane moves
-and you can stop reading here.
+It affects a narrow population: **only installations that set
+`north.mqtt.topic_base` to something other than `openccu-loom`.** If you never
+touched that key, nothing on this plane moves — not one byte — and you can
+stop reading here.
+
+!!! danger "If you do have a custom `topic_base`, read the two boxes below"
+    The identity move on the three daemon-level planes is not free
+    (*Why the daemon-level `unique_id`s move too*), and the retraction of the
+    pre-scope configs is **opt-in** because doing it automatically would
+    delete a sibling daemon's entities (*Retracting the pre-scope configs*).
+
 
 **What changed.** `homeassistant/` is a single tree on a single broker,
 shared by every integration and every daemon publishing into it. Everything
@@ -436,10 +483,26 @@ new  homeassistant/alarm_control_panel/house_alarm/master/config
 old  homeassistant/update/daemon/addon_update/config
 new  homeassistant/update/house_daemon/addon_update/config
 
-unchanged  unique_id          = loom_000a0000000001_4_state
+unchanged  unique_id          = loom_000a0000000001_4_state   (per-device plane)
 unchanged  device.identifiers = ["openccu-loom_000a0000000001"]
-unchanged  default_entity_id  = (unchanged)
 unchanged  state_topic        = house/ccu-haus/HmIP-RF/000A0000000001/4/values/STATE
+```
+
+The three daemon-level planes move their identity as well, because moving
+only their topic made them worse rather than better — see the next box:
+
+```
+old  unique_id = openccu-loom_alarm_master
+new  unique_id = house_openccu-loom_alarm_master
+
+old  unique_id = loom_security_state
+new  unique_id = house_loom_security_state
+
+old  unique_id = loom_addon_update
+new  unique_id = house_loom_addon_update
+
+     default_entity_id follows each of the three (it is seeded from them)
+unchanged  device.identifiers = ["openccu-loom_daemon" | "openccu-loom_security"]
 ```
 
 On the default base every one of those lines is unchanged, old and new.
@@ -467,12 +530,56 @@ unique ids rather than merged. Two daemons against one CCU feeding **two**
 HA instances (or two brokers) is the case this change makes work, and it is
 the case the base was always for.
 
-**What is lost, named.** At the entity level, nothing: Home Assistant keys
-the entity registry on `unique_id`, which does not move, and a discovery-topic
-move alone keeps the registry row — measured on a live 2026.9 instance, ADR
-0070's second amendment. At the device level, also nothing this time, because
-`identifiers` does not move either. The single cost is the transitional one
-below.
+**And one ambiguity that is documented rather than fixed.** The scope is
+joined to the node id with `_`, and the node id's own first segment — the
+central slug — is joined to the rest with `_` too, so the two boundaries are
+indistinguishable. `topic_base: haus` with a CCU named `CCU`, and the
+**default** base with a CCU named `Haus CCU`, both render
+`haus_ccu_<address>`. Two such daemons on one broker collide exactly as they
+did before the scope existed.
+
+It is not fixed on purpose. Disambiguating it means changing the separator (or
+escaping `_` inside the base slug), which would move the node id of every
+non-default-base installation a **second** time, one release after this one —
+a second migration for a collision that additionally requires the operator to
+have named their topic base and their CCU after the same thing. The mitigation
+is a naming rule instead: **pick a `topic_base` that is not a prefix of any CCU
+name on the broker.** If a node-id move is ever required for another reason,
+the separator will be revisited in that same release rather than on its own.
+
+**What is lost, named.** On the per-device and hub planes, nothing: Home
+Assistant keys the entity registry on `unique_id`, which does not move there,
+and a discovery-topic move alone keeps the registry row — measured on a live
+2026.9 instance, ADR 0070's second amendment. `identifiers` does not move
+anywhere, so no device row is re-created and device areas, device renames and
+device-targeted automations all survive untouched.
+
+!!! warning "Why the daemon-level `unique_id`s move too, and what that costs"
+    Moving only the node id of the alarm, Security & Safety and add-on-update
+    planes **made two daemons less able to coexist, not more.** Those three
+    planes carry no `<central>` segment (ADR 0052) and their ids are fixed
+    literals — `loom_addon_update`, `openccu-loom_alarm_<zone>`,
+    `loom_security_<key>` — with nothing in them that differs between two
+    daemons. Two daemons therefore wrote two **distinct** config topics
+    declaring the **same** `unique_id`, and Home Assistant's MQTT integration
+    rejects the second (*"Platform mqtt does not generate unique IDs"*). The
+    semantics went from "last writer wins, and a restart repoints the entity
+    at the live daemon" to **"first writer wins permanently"**: the second
+    daemon's alarm panels, security entities and add-on updater never appeared
+    at all, and its retained configs were re-rejected on every HA restart.
+
+    So those three `unique_id`s carry the scope as well — **and only on a
+    non-default base**, for the same reason the node id does. The cost, for an
+    installation that has a custom `topic_base` and only one daemon: the alarm
+    panels, the Security & Safety entities and the "Add-on Update" entity are
+    **re-keyed**. Each loses its history, its long-term statistics, its
+    `entity_id`, any rename, its area assignment and every automation that
+    names it. The old registry rows remain as unavailable "restored" entities
+    until you delete them (**Settings → Devices & services → Entities**,
+    filter *Restored*).
+
+    Per-device and hub entities are untouched by this: they are keyed on the
+    CCU serial or the ISE id, which already differ between two daemons.
 
 **The orphan swept, not left behind.** The sweep retracts the pre-scope
 configs on the first start after the upgrade, so the old entities disappear
@@ -526,15 +633,22 @@ Every node id in that list that does **not** already start with your
 *Before upgrading:*
 
 1. Check `topic_base` as above. If it is the default, you are done.
-2. If you run a second daemon against the same broker, read the warning
-   above and decide whether to upgrade them together.
+2. Note whether any other daemon on this broker runs on the **default** base.
+   That single fact decides `discovery_retract_unscoped` below.
+3. If you have automations that arm an alarm panel or read a Security &
+   Safety entity, note which ones — those entities are re-keyed and the
+   automations will need to be re-pointed at the new entity ids.
 
 *After upgrading:*
 
-1. Start the daemon once and let the first orphan sweep complete. The
-   pre-scope configs are retracted and the old entities disappear.
-2. Nothing else. Entity ids, history, statistics, device cards, areas and
-   automations need no action — none of their keys moved.
+1. Start the daemon. Per-device and hub entities keep their registry rows,
+   their history and their `entity_id`; nothing to do for them.
+2. The alarm, Security & Safety and add-on-update entities appear as **new**
+   entities. Re-point the automations from step 3 and delete the old rows
+   (**Settings → Devices & services → Entities**, filter *Restored*).
+3. Clear the pre-scope discovery configs: set
+   `discovery_retract_unscoped: true` for one start if no default-base sibling
+   shares the broker, otherwise clear them by hand — see the tip above.
 
 **Announced in** the root `CHANGELOG.md` and both add-on changelogs under
 `packaging/ha-addon/`.

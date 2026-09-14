@@ -287,6 +287,24 @@ func TestWireCentralRecordsACentralThatAppearedAfterWire(t *testing.T) {
 	publishValueEvent(u, "DEV009:1", "TEMPERATURE", hmenum.ParamsetKeyValues, hmtypes.FloatValue(20.5))
 	stop()
 
+	// Read the recorder's own counters before the row count, so a failure
+	// names its cause instead of leaving one to be guessed at.
+	//
+	// This test was seen failing once under heavy concurrent load and could
+	// not be reproduced in 222 runs afterwards, including under deliberate
+	// disk contention. Asserting Rows alone cannot tell a lost event from a
+	// persisted one: a final SaveBatch that fails under I/O pressure
+	// re-queues its batch and bumps FlushErrors, and from outside that is
+	// indistinguishable from the event never arriving. Dropped is the same
+	// question one queue earlier. Neither is expected here -- the store is a
+	// throwaway and the recorder sees two events -- so a non-zero value is
+	// itself the diagnosis, and the next sighting will say which half broke.
+	if m := r.Metrics(); m.FlushErrors != 0 || m.Dropped != 0 {
+		t.Errorf("recorder metrics = %+v, want no flush errors and no drops: "+
+			"a re-queued batch or a dropped event looks exactly like a lost "+
+			"subscription from the row count alone", m)
+	}
+
 	stats, err := store.Stats(ctx)
 	if err != nil {
 		t.Fatalf("Stats: %v", err)

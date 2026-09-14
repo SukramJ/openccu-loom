@@ -240,7 +240,12 @@ func BuildSecurityDiscovery(base, deviceName, configURL string, e securityEntity
 	if e.key == "" {
 		return DiscoveryItem{}
 	}
-	uniqueID := "loom_security_" + e.key
+	// The scope is empty on the default base, so an existing installation
+	// keeps the id it has. On a non-default base it separates two daemons
+	// that would otherwise both declare `loom_security_<key>` — the keys are
+	// a fixed vocabulary, so the collision is unconditional and Home
+	// Assistant drops the second daemon's entities outright.
+	uniqueID := scopedDaemonIdentity(base, "loom_security_"+e.key)
 	stateTopic := e.topic
 	if stateTopic == "" {
 		stateTopic = securityStateTopic(base, e.key)

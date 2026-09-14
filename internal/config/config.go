@@ -1561,6 +1561,26 @@ type NorthMQTT struct {
 	// because someone upgraded.
 	DiscoveryBundles bool `yaml:"discovery_bundles" json:"discovery_bundles" cfg:"expert"`
 
+	// DiscoveryRetractUnscoped lets the retained-config sweeps claim the
+	// discovery node ids this daemon published BEFORE the node id was scoped
+	// by `topic_base` (`<central>_…`, `alarm`, `security`, `daemon`) so they
+	// can be retracted. Requires DiscoveryEnabled; meaningless on the default
+	// topic_base, where that namespace is already this daemon's own.
+	//
+	// It is off by default and must stay an operator decision. A retained
+	// discovery config carries no clue to which daemon wrote it — the sweep
+	// sees the node id alone — so an unscoped one is indistinguishable from
+	// the config a SIBLING daemon on the default topic_base is publishing
+	// right now. Turning this on with such a sibling on the broker retracts
+	// every one of its device, hub, alarm and security configs; Home
+	// Assistant deletes those entities and the device-registry rows that lose
+	// their last entity, and neither has a migration path.
+	//
+	// Turn it on for one boot when you are certain no default-base daemon
+	// shares the broker, then turn it off again. See
+	// docs/external-clients/ha-unique-id-migration.md.
+	DiscoveryRetractUnscoped bool `yaml:"discovery_retract_unscoped,omitempty" json:"discovery_retract_unscoped,omitempty" cfg:"expert"`
+
 	// ProtocolVersion selects the MQTT wire dialect: "5" (default when
 	// empty) or "3.1.1" for brokers without MQTT 5.0 support. There is
 	// no silent downgrade — a v5 connect against a v3-only broker
@@ -2057,6 +2077,15 @@ func (c *Config) applyDefaults() {
 		c.North.MQTT.DiscoveryBundles = false
 		slog.Warn("config: north.mqtt.discovery_bundles needs the discovery plane; ignoring it while north.mqtt.discovery_enabled is off",
 			slog.String("field", "north.mqtt.discovery_bundles"))
+	}
+	// Same treatment for the migration switch: it only ever affects which
+	// retained discovery configs the sweep claims, so with the discovery
+	// plane off it means nothing, and a setting that silently means nothing
+	// is worse than one that is corrected out loud.
+	if c.North.MQTT.DiscoveryRetractUnscoped && !c.North.MQTT.DiscoveryEnabled {
+		c.North.MQTT.DiscoveryRetractUnscoped = false
+		slog.Warn("config: north.mqtt.discovery_retract_unscoped needs the discovery plane; ignoring it while north.mqtt.discovery_enabled is off",
+			slog.String("field", "north.mqtt.discovery_retract_unscoped"))
 	}
 	// The mount path becomes an http.ServeMux pattern verbatim (see
 	// mcpMountPathPattern), and ServeMux answers a malformed pattern with a

@@ -311,6 +311,92 @@ func TestPublishSlotConfigRepublishesAfterAFailedPublish(t *testing.T) {
 	}
 }
 
+// TestSlotConfigIsReseededAfterABrokerReconnect is the `/config` companion's
+// half of the reconnect contract, and the reason [configCacheGate] exists.
+//
+// The bridge suppresses a `/config` publish whose bytes it has already put on
+// the broker, which is right while the broker still holds them. A broker
+// restarted without a persistent retained store holds none of them, and
+// nothing rebuilds the bridge on that path — it is only rebuilt on a config
+// reload. So without a reset the cache answers "already published" for bytes
+// nothing holds, and because the payload is a static descriptor projection
+// that changes only when the device's descriptors do, "until it next changes"
+// means for the life of the process: every data point's descriptor companion
+// stays empty, and every reader of min/max/value_list/unit reads nothing.
+//
+// This is the defect #811 fixed for the per-CCU reachability gate, one field
+// below it in the same struct and left live.
+func TestSlotConfigIsReseededAfterABrokerReconnect(t *testing.T) {
+	t.Parallel()
+
+	mp := &failingPublisher{}
+	b := NewBridge(BridgeConfig{Base: "loom", RawEnabled: true, CentralName: "ccu01"}, mp)
+	ctx := context.Background()
+	slot := pload.TopicSlot{Address: "AABBCCDD1122", Channel: 1, Bucket: pload.BucketValues, Parameter: "LEVEL"}
+	cfg := pload.ConfigPayload(map[string]any{"min": 0, "max": 100})
+
+	if err := b.PublishSlotConfig(ctx, "ccu01", "HmIP-RF", slot, cfg); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	seeded := len(mp.publications())
+	if seeded != 1 {
+		t.Fatalf("the seed never reached the broker: publishes = %d, want 1", seeded)
+	}
+	// Unchanged descriptors are suppressed while the broker holds the bytes.
+	if err := b.PublishSlotConfig(ctx, "ccu01", "HmIP-RF", slot, cfg); err != nil {
+		t.Fatalf("repeat: %v", err)
+	}
+	if got := len(mp.publications()); got != seeded {
+		t.Fatalf("an identical republish wrote %d messages, want 0 — the dedup gate is not gating", got-seeded)
+	}
+
+	// The broker restarts and loses its retained store; the daemon's
+	// reconnect hooks run, and the snapshot pass re-offers the same bytes.
+	b.ResetRuntimeGates()
+	if err := b.PublishSlotConfig(ctx, "ccu01", "HmIP-RF", slot, cfg); err != nil {
+		t.Fatalf("reseed: %v", err)
+	}
+	if got := len(mp.publications()); got != seeded+1 {
+		t.Fatal("the `/config` companion was not republished after the reconnect, so the broker " +
+			"holds no descriptor bytes for this data point and no reader ever sees min/max/" +
+			"value_list/unit again for the life of the process")
+	}
+}
+
+// TestAReconnectKeepsTheConfigTopicsThisProcessOwns pins the other half of
+// that reset: it opens the gate without forgetting the topic set.
+//
+// The `/config` cache is two things at once. The payload is the dedup memory;
+// the KEY is the index that tells the raw-orphan sweep which `/config` topics
+// this process published and the device-removal path which ones to retract. A
+// reset that cleared the map would open the gate correctly and, at the next
+// sweep, evict every `/config` companion the bridge had just rewritten —
+// turning a reconnect into a fleet-wide wipe of the descriptor plane.
+func TestAReconnectKeepsTheConfigTopicsThisProcessOwns(t *testing.T) {
+	t.Parallel()
+
+	mp := &failingPublisher{}
+	b := NewBridge(BridgeConfig{Base: "loom", RawEnabled: true, CentralName: "ccu01"}, mp)
+	ctx := context.Background()
+	slot := pload.TopicSlot{Address: "AABBCCDD1122", Channel: 1, Bucket: pload.BucketValues, Parameter: "LEVEL"}
+	if err := b.PublishSlotConfig(ctx, "ccu01", "HmIP-RF", slot,
+		pload.ConfigPayload(map[string]any{"min": 0, "max": 100})); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	topic := mp.publications()[0].topic
+
+	b.ResetRuntimeGates()
+
+	b.mu.Lock()
+	_, owned := b.configCache[topic]
+	b.mu.Unlock()
+	if !owned {
+		t.Errorf("the reconnect reset dropped %q from the `/config` index: the next orphan sweep "+
+			"reads it as a topic no live model claims and evicts it, and a device removed "+
+			"afterwards leaves its descriptor companions behind for good", topic)
+	}
+}
+
 // TestRepublishDiscoveryContinuesPastAFailedTopic pins that the HA-birth
 // replay is best-effort per topic. A breaker that is open for one topic must
 // not abort the replay for every entity behind it — that would leave most of

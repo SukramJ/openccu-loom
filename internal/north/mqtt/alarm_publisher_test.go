@@ -200,6 +200,31 @@ func (f *alarmPublisherFixture) start() {
 	f.t.Cleanup(f.pub.Stop)
 }
 
+// settle blocks until the publisher's worker has finished every reconcile
+// and every event queued before the call, bridge-side bookkeeping included.
+//
+// It exists because [alarmPublisherFixture.waitForPublish] cannot answer that
+// question and never could. The recorder sees a write when the client call
+// happens; [Bridge.publishRuntimeState] enters the retained-topic index and
+// increments the counter AFTER that call returns, on the same worker
+// goroutine. A test that waits on the recorder and then reads the bridge is
+// reading across that window, and the wait is what makes it likely to be
+// closed rather than what makes it closed. The worker answers this barrier
+// only after draining every queued reconcile and every queued event, and it
+// answers in FIFO order behind them, so the answer cannot arrive early.
+//
+// The Security & Safety plane's counterpart is [observedPlane.settle], which
+// takes its planes the same way and for the same reason.
+func (f *alarmPublisherFixture) settle() {
+	f.t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := f.pub.quiesce(ctx); err != nil {
+		f.t.Fatalf("the alarm plane's worker did not finish within 5s: %v — it is still "+
+			"reconciling or publishing, so anything read from the bridge here is partial", err)
+	}
+}
+
 // zeroDelayFullMode is a single-mode zone configuration with no exit
 // or entry delay, so Arm/trigger transitions complete synchronously —
 // the tests need no fake-clock advancement to observe the resulting

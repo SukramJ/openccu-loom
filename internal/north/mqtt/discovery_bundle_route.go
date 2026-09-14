@@ -49,7 +49,7 @@ func (b *Bridge) routeToBundle(ctx context.Context, centralName, component, node
 	// reaches [TopicBuilder.DiscoveryConfig] and has to take the topic base's
 	// node-id scope here instead. Scoping at the door rather than at the
 	// publish call keeps the store keyed on the same string the broker sees,
-	// which is what [Bridge.rollbackBundles] matches on when it sweeps.
+	// which is what [Bridge.RunBundleRollbackOnce] matches on when it sweeps.
 	nodeID = naming.ScopedDiscoveryNodeID(b.topics.Base, nodeID)
 	if len(payload) == 0 {
 		b.bundles.Remove(nodeID, objectID)
@@ -217,7 +217,7 @@ func (b *Bridge) RunBundleRollbackOnce(ctx context.Context, centralName string, 
 		// leaving our own in place.
 		return 0, nil
 	}
-	nodePrefixes := discoveryNodePrefixes(b.topics.DiscoveryNodeScope(), rawCentral)
+	nodePrefixes := discoveryNodePrefixes(b.topics.DiscoveryNodeScope(), b.retractUnscopedDiscovery(), rawCentral)
 
 	var (
 		mu      sync.Mutex

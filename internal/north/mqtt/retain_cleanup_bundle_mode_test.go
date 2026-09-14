@@ -137,3 +137,52 @@ func TestSweepLeavesForeignDocumentsAlone(t *testing.T) {
 		t.Errorf("the sweep cleared another integration's document: %q", theirs)
 	}
 }
+
+// TestSweepEvictsAStaleBundleWhenBundleModeIsOff drives the direction the
+// other five tests in this file do not: every one of them runs with
+// `HADiscoveryBundles: true`, so the whole file measured the migration and
+// none of it measured the rollback.
+//
+// The rollback is the direction ADR 0070's fourth amendment singles out as
+// the one that fails silently. Home Assistant refuses the two discovery
+// forms for one `unique_id` symmetrically: with a device document still
+// retained from a bundle-mode boot, every per-entity config this build
+// publishes afterwards is refused, with a WARNING in the Home Assistant log
+// and nothing on the wire. The daemon sees a successful publish; the
+// operator sees no entities. Turning the flag back off is therefore not
+// "stop publishing bundles" — the stale document has to come down, and the
+// orphan sweep is the only thing in this daemon positioned to take it down.
+//
+// So: bundles off, a device document for one of this central's own nodes
+// still on the broker, and the per-entity configs of the current build
+// declared. The document is an orphan by the sweep's own definition — this
+// build did not publish it — and it belongs to this central, which is what
+// separates it from the Zigbee2MQTT documents the sweep must leave alone.
+func TestSweepEvictsAStaleBundleWhenBundleModeIsOff(t *testing.T) {
+	const (
+		stale   = "homeassistant/device/ccu-a_000a/config"
+		current = "homeassistant/sensor/ccu-a_000a/1_temperature/config"
+	)
+	b, broker := sweepBridge([]retainedMsg{
+		{topic: stale, payload: []byte(`{"device":{"identifiers":["x"]},"components":{}}`)},
+		{topic: current, payload: []byte(`{"name":"Temperature"}`)},
+	}, false)
+
+	// The per-entity form is what this build publishes now.
+	seedDeclared(t, b, current, []byte(`{"name":"Temperature"}`))
+
+	if _, err := b.RunDiscoveryOrphanCleanupOnce(context.Background(), "ccu-a", 120*time.Millisecond); err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	broker.wg.Wait()
+
+	got := broker.evicted()
+	if !got[stale] {
+		t.Error("the device document from a previous bundle-mode boot survived the rollback sweep; " +
+			"Home Assistant refuses every per-entity config published against it, and the only " +
+			"evidence is a line in its log")
+	}
+	if got[current] {
+		t.Errorf("the sweep retracted the per-entity config this build published: %q", current)
+	}
+}
