@@ -30,14 +30,26 @@ type observedPlane struct {
 	mu        sync.Mutex
 	published []publishRecord
 	filters   []string
+	// afterPublish runs on the caller's goroutine once the write has been
+	// recorded and the lock released, which is the shape of the window the
+	// recorder cannot see: the bridge's index insert and its counter
+	// increment happen there, after the client call, and a worker
+	// descheduled in it is quiet on the broker while the plane is not
+	// finished. Tests set it to make that window wide and certain instead
+	// of rare and load-dependent.
+	afterPublish func()
 }
 
 func newObservedPlane() *observedPlane { return &observedPlane{} }
 
 func (o *observedPlane) Publish(_ context.Context, topic string, payload []byte, qos QoS, retain bool, _ ...PublishOption) error {
 	o.mu.Lock()
-	defer o.mu.Unlock()
 	o.published = append(o.published, publishRecord{topic: topic, payload: string(payload), qos: qos, retain: retain})
+	after := o.afterPublish
+	o.mu.Unlock()
+	if after != nil {
+		after()
+	}
 	return nil
 }
 
@@ -57,14 +69,21 @@ func (o *observedPlane) records() []publishRecord {
 	return append([]publishRecord(nil), o.published...)
 }
 
-// settle waits until the plane has written something of its own AND stopped
-// writing.
+// planeQuiescer is a plane whose worker can state that it has finished,
+// rather than have a guard infer it from a quiet broker. Both async
+// publishers in this package implement it.
+type planeQuiescer interface {
+	quiesce(ctx context.Context) error
+}
+
+// settle waits until every plane handed to it has finished, and then until
+// the recorder has written something of its own AND stopped writing.
 //
 // The publishers hand their writes to a worker goroutine so a domain's bus
 // is never blocked on the broker, which means the last state topic of a
 // reconcile can land after the call that triggered it returned. Waiting for
 // a specific topic would be circular here — the topic set is what the guard
-// is trying to observe — so this waits for quiescence.
+// is trying to observe.
 //
 // Quiescence ALONE was the defect (finding **F5**). A plane that has not
 // started yet is quiet in exactly the way a plane that has finished is, and
@@ -75,13 +94,36 @@ func (o *observedPlane) records() []publishRecord {
 // one [observedPlane.planeTopics] entry is what makes "quiet" mean finished:
 // the bridge's own announce cannot satisfy it, so the wait cannot end before
 // the plane under test has spoken.
-func (o *observedPlane) settle(t *testing.T) {
+//
+// That guard fixed the vacuous direction and left the trailing one open
+// (finding **F12**). A publish does not end when the fake broker returns:
+// the bridge records the retained topic in its index and counts the message
+// after the client call, on the same worker goroutine, and a reconcile
+// pauses for no reason a recorder can see. Sixty milliseconds of silence
+// therefore still means "no new writes", never "the plane is done" — so a
+// worker descheduled anywhere past the broker call, or between two
+// messages of one burst, is indistinguishable from a finished one. Passing
+// the plane itself closes that: the worker answers the barrier only after
+// draining every reconcile and every queued message, bookkeeping included,
+// and it answers in FIFO order behind the work, so the answer cannot
+// arrive early. The quiescence loop stays as the backstop for the writes a
+// test makes outside a worker, and as finding F5's vacuity guard.
+func (o *observedPlane) settle(t *testing.T, planes ...planeQuiescer) {
 	t.Helper()
 	const (
 		quiet    = 60 * time.Millisecond
 		deadline = 5 * time.Second
 		step     = 5 * time.Millisecond
 	)
+	for _, p := range planes {
+		ctx, cancel := context.WithTimeout(context.Background(), deadline)
+		err := p.quiesce(ctx)
+		cancel()
+		if err != nil {
+			t.Fatalf("the plane worker did not finish within %s: %v — it is still "+
+				"reconciling or publishing, so any topic set read here is partial", deadline, err)
+		}
+	}
 	start := time.Now()
 	last := -1
 	stable := time.Now()

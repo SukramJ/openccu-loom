@@ -6,7 +6,8 @@
 # scopes:
 #
 #   1. Home Assistant MQTT Discovery configs under
-#      `<ha_prefix>/<component>/<node_id>/<object_id>/config`. The
+#      `<ha_prefix>/<component>/<node_id>/<object_id>/config` and
+#      device documents under `<ha_prefix>/device/<node_id>/config`. The
 #      `origin.name` payload field is used to scope the delete to
 #      openccu-loom only — other integrations on the same broker stay
 #      untouched.
@@ -43,8 +44,10 @@
 #   -P PASS           broker password       (default: unset)
 #   -d PREFIX         HA discovery prefix   (default: homeassistant)
 #   -b BASE           openccu-loom topic base (default: openccu-loom)
-#   -t TOPIC_PATTERN  override the HA-Discovery subscribe pattern.
-#                     Default `<prefix>/+/+/+/config`.
+#   -t TOPIC_PATTERN  override the HA-Discovery subscribe pattern,
+#                     replacing BOTH defaults. Default:
+#                     `<prefix>/+/+/+/config` (per-entity) and
+#                     `<prefix>/device/+/config` (device documents).
 #   -o ORIGIN_NAME    payload `origin.name` to match (default:
 #                     openccu-loom). Pass empty with `--all` to skip
 #                     payload filtering.
@@ -104,8 +107,9 @@ Options:
   -P PASS           broker password       (default: unset)
   -d PREFIX         HA discovery prefix   (default: homeassistant)
   -b BASE           openccu-loom topic base (default: openccu-loom)
-  -t TOPIC_PATTERN  override HA-Discovery subscribe pattern; default
-                    <prefix>/+/+/+/config
+  -t TOPIC_PATTERN  override HA-Discovery subscribe pattern, replacing
+                    BOTH defaults: <prefix>/+/+/+/config (per-entity)
+                    and <prefix>/device/+/config (device documents)
   -o ORIGIN_NAME    match payload origin.name (default: openccu-loom)
       --all         skip origin filter on HA-Discovery phase
       --ha-only     only clear HA-Discovery configs
@@ -249,12 +253,27 @@ if [[ -n "$BROKER_PASS" ]]; then
   auth_args+=(-P "$BROKER_PASS")
 fi
 
-if [[ -z "$TOPIC_PATTERN" ]]; then
-  # Default: every device-level HA Discovery config. The shape is
-  # `<prefix>/<component>/<node_id>/<object_id>/config` — five levels
-  # total. `+` matches a single level so we don't accidentally pick up
-  # `<prefix>/status` or other broker-level chatter.
-  TOPIC_PATTERN="${HA_PREFIX}/+/+/+/config"
+# HA Discovery has two config shapes, and a single pattern cannot cover
+# both: `+` matches exactly one level, so a per-entity pattern misses a
+# device document and vice versa.
+#
+#   per-entity  `<prefix>/<component>/<node_id>/<object_id>/config`  5 levels
+#   device doc  `<prefix>/device/<node_id>/config`                   4 levels
+#
+# Until 2026-09-13 only the five-level pattern was subscribed, so a
+# deployment that had ever run with `north.mqtt.discovery_bundles` on could
+# not clear its device documents with this script at all — and a retained
+# device document is exactly what makes Home Assistant refuse the per-entity
+# configs of a rollback boot (ADR 0070, amendment of 2026-09-10).
+#
+# `-t` may be repeated, so both are subscribed in one pass; an explicit
+# `-t` on the command line replaces both.
+HA_PATTERNS=()
+if [[ -n "$TOPIC_PATTERN" ]]; then
+  HA_PATTERNS=("$TOPIC_PATTERN")
+else
+  HA_PATTERNS=("${HA_PREFIX}/+/+/+/config" "${HA_PREFIX}/device/+/config")
+  TOPIC_PATTERN="${HA_PATTERNS[*]}"
 fi
 
 # State-topic pattern under the openccu-loom topic_base. `#` is a
@@ -313,18 +332,23 @@ for bin in mosquitto_sub mosquitto_pub; do
   fi
 done
 
-# collect_retained subscribes to the given topic pattern with
+# collect_retained subscribes to the given topic pattern(s) with
 # `--retained-only`, dumps every record as `<topic>\t<payload>` lines
 # into the named output file, and returns. Treats the `-W` timeout
 # (rc=27) as a normal exit — that's how we end the subscription
 # after a quiet window.
 collect_retained() {
-  local pattern="$1" outfile="$2" rc
+  local outfile="$1" rc
+  shift
+  local topic_args=() pattern
+  for pattern in "$@"; do
+    topic_args+=(-t "$pattern")
+  done
   set +e
   mosquitto_sub \
     -h "$BROKER_HOST" -p "$BROKER_PORT" \
     "${auth_args[@]}" \
-    -t "$pattern" \
+    "${topic_args[@]}" \
     -F '%t\t%p' \
     --retained-only \
     -W "$COLLECT_SECS" \
@@ -332,7 +356,7 @@ collect_retained() {
   rc=$?
   set -e
   if [[ $rc -ne 0 && $rc -ne 27 ]]; then
-    echo "mosquitto_sub failed for ${pattern} (rc=$rc) — check broker reachability/credentials" >&2
+    echo "mosquitto_sub failed for $* (rc=$rc) — check broker reachability/credentials" >&2
     return 1
   fi
   return 0
@@ -376,7 +400,7 @@ phase_ha_discovery() {
   topics="$(mktemp)"
   trap 'rm -f "$records" "$topics"' RETURN
 
-  if ! collect_retained "$TOPIC_PATTERN" "$records"; then
+  if ! collect_retained "$records" "${HA_PATTERNS[@]}"; then
     return 1
   fi
 
@@ -432,7 +456,7 @@ phase_state_topics() {
   topics="$(mktemp)"
   trap 'rm -f "$records" "$topics"' RETURN
 
-  if ! collect_retained "$STATE_PATTERN" "$records"; then
+  if ! collect_retained "$records" "$STATE_PATTERN"; then
     return 1
   fi
 
@@ -515,7 +539,7 @@ phase_legacy_topology() {
   topics="$(mktemp)"
   trap 'rm -f "$records" "$topics"' RETURN
 
-  if ! collect_retained "$STATE_PATTERN" "$records"; then
+  if ! collect_retained "$records" "$STATE_PATTERN"; then
     return 1
   fi
 

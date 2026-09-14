@@ -182,7 +182,7 @@ func TestDiscoveryOrphanSweepKeepsConfigsPublishedInsideItsWindow(t *testing.T) 
 	b.MarkHubPlaneDeclared(centralName)
 
 	// A real leftover from a previous build: retained, never re-published.
-	orphan := "homeassistant/sensor/ccu_sysvars/retired/config"
+	orphan := "homeassistant/sensor/loom_ccu_sysvars/retired/config"
 	cl.seed(orphan, []byte(`{"unique_id":"loom_devccu0001_sysvar_retired"}`))
 
 	live := sysvarItem(t, b, centralName, "living_room_light")
@@ -239,8 +239,8 @@ func TestDiscoveryOrphanSweepDefersHubPlaneUntilItDeclared(t *testing.T) {
 	t.Parallel()
 
 	const centralName = "ccu"
-	hubTopic := "homeassistant/sensor/ccu_sysvars/from_last_boot/config"
-	deviceTopic := "homeassistant/sensor/ccu_vcu0000001/1_temperature/config"
+	hubTopic := "homeassistant/sensor/loom_ccu_sysvars/from_last_boot/config"
+	deviceTopic := "homeassistant/sensor/loom_ccu_vcu0000001/1_temperature/config"
 
 	cl := newBrokerClient()
 	cl.seed(hubTopic, []byte(`{"unique_id":"loom_devccu0001_sysvar_from_last_boot"}`))
@@ -311,5 +311,119 @@ func TestDiscoveryOrphanSweepRetractsTheOldEventObject(t *testing.T) {
 	}
 	if retracted := cl.retractions(); !contains(retracted, oldTopic) {
 		t.Errorf("topic %q still holds its retained config; retracted=%v", oldTopic, retracted)
+	}
+}
+
+// TestDiscoveryOrphanSweepDrivenAgainstASiblingDaemonsConfigs is the
+// demonstration this repo's ownership predicate previously only had by
+// argument.
+//
+// [Bridge.ownsDiscoveryTopic] takes a [hapublisher.ConfigTopic], a type that
+// carries no payload at all — so there is no `state_topic` for an ownership
+// rule to key on, and the defect that was live in two sibling bridges (a rule
+// that collapsed to a shared namespace prefix for every payload without a
+// state topic, deleting a neighbour's *Open Door* and *Pause Program*
+// buttons) is structurally unreachable here. That is a claim about
+// construction, and the cross-repo audit's finding was that four of five
+// repositories asserted such claims against `sensor`-only fixtures and one of
+// them was wrong for a release.
+//
+// So this drives the sweep rather than asking the predicate, and it drives it
+// against a SECOND loom daemon — not merely a foreign integration, which the
+// origin block would separate anyway. The sibling's configs are made as
+// confusable as they are in the field: the same addresses, the same object
+// ids, the same discovery prefix, all three payload shapes the fixture set
+// was missing (`button` and `climate`, which carry no `state_topic`, and a
+// device document, whose ids nest under `components`). Only the central in
+// the node id differs.
+//
+// What it proves: the sweep retracts exactly this daemon's own three orphans
+// and zero of the sibling's five topics.
+func TestDiscoveryOrphanSweepDrivenAgainstASiblingDaemonsConfigs(t *testing.T) {
+	t.Parallel()
+
+	const (
+		ownCentral     = "ccu"
+		siblingCentral = "sibling-ccu"
+	)
+	cl := newBrokerClient()
+	b := NewBridge(BridgeConfig{
+		Base:               "loom",
+		HADiscoveryEnabled: true,
+		CentralName:        ownCentral,
+	}, cl)
+	b.MarkHubPlaneDeclared(ownCentral)
+
+	ownNode := discoveryNodeID(ownCentral, "0001D3C99C1234")
+	ownClimateNode := discoveryNodeID(ownCentral, "00150001")
+	sibNode := discoveryNodeID(siblingCentral, "0001D3C99C1234")
+	sibClimateNode := discoveryNodeID(siblingCentral, "00150001")
+
+	// This daemon's own leftovers: retained by a previous build, declared by
+	// nothing in this one. Genuine orphans, and the sweep must take all three.
+	ownOrphans := map[string][]byte{
+		b.Topics().DiscoveryConfig("button", ownNode, "3_press_short"): componentDiscoveryPayload(
+			t, "button", "loom_4993d962_0001d3c99c1234_3_press_short", originName,
+		),
+		b.Topics().DiscoveryConfig("climate", ownClimateNode, "1_set_point_temperature"): componentDiscoveryPayload(
+			t, "climate", "loom_4993d962_00150001_1_set_point_temperature", originName,
+		),
+		b.Topics().DiscoveryConfig("sensor", ownClimateNode, "1_actual_temperature"): componentDiscoveryPayload(
+			t, "sensor", "loom_4993d962_00150001_1_actual_temperature", originName,
+		),
+	}
+	// The sibling's LIVE configs. Every one of these is an entity a real
+	// operator is looking at, and clearing it deletes it from Home Assistant
+	// with its device-registry row.
+	siblingLive := map[string][]byte{
+		b.Topics().DiscoveryConfig("button", sibNode, "3_press_short"): componentDiscoveryPayload(
+			t, "button", "loom_11a00567_0001d3c99c1234_3_press_short", originName,
+		),
+		b.Topics().DiscoveryConfig("climate", sibClimateNode, "1_set_point_temperature"): componentDiscoveryPayload(
+			t, "climate", "loom_11a00567_00150001_1_set_point_temperature", originName,
+		),
+		b.Topics().DiscoveryConfig("sensor", sibClimateNode, "1_actual_temperature"): componentDiscoveryPayload(
+			t, "sensor", "loom_11a00567_00150001_1_actual_temperature", originName,
+		),
+		// A device document — no top-level unique_id at all, which is the
+		// shape a payload-reading predicate is most likely to mis-handle.
+		"homeassistant/device/" + sibClimateNode + "/config": bundleDiscoveryPayload(
+			t, originName,
+			retainedBundleComponent{key: "3_press_short", platform: "button", uniqueID: "loom_11a00567_00150001_3_press_short"},
+			retainedBundleComponent{key: "1_state", platform: "switch", uniqueID: "loom_11a00567_00150001_1_state"},
+		),
+		// And a foreign integration for good measure: not the interesting
+		// case, but it must stay out of the count.
+		"homeassistant/sensor/zigbee2mqtt_0x0017/temperature/config": componentDiscoveryPayload(
+			t, "sensor", "0x0017_temperature", "zigbee2mqtt",
+		),
+	}
+	for topic, payload := range ownOrphans {
+		cl.seed(topic, payload)
+	}
+	for topic, payload := range siblingLive {
+		cl.seed(topic, payload)
+	}
+
+	n, err := b.RunDiscoveryOrphanCleanupOnce(context.Background(), ownCentral, 50*time.Millisecond)
+	if err != nil {
+		t.Fatalf("RunDiscoveryOrphanCleanupOnce: %v", err)
+	}
+
+	retracted := cl.retractions()
+	for topic := range ownOrphans {
+		if !contains(retracted, topic) {
+			t.Errorf("this daemon's own orphan %s survived the sweep; retracted=%v", topic, retracted)
+		}
+	}
+	for topic := range siblingLive {
+		if contains(retracted, topic) {
+			t.Errorf("the sweep retracted %s, which belongs to a second loom daemon at a foreign central — "+
+				"Home Assistant deletes that entity and `identifiers` has no migration path; retracted=%v",
+				topic, retracted)
+		}
+	}
+	if n != len(ownOrphans) {
+		t.Errorf("evicted %d topics, want exactly this daemon's %d orphans; retracted=%v", n, len(ownOrphans), retracted)
 	}
 }

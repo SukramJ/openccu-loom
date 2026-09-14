@@ -50,6 +50,25 @@ const DefaultTopicBase = "openccu-loom"
 // this, and deliberately so: they already overwrite each other on every raw
 // state topic, which is a misconfiguration the discovery plane cannot repair
 // and must not paper over.
+//
+// # Known limitation: the scope and the central slug share a separator
+//
+// The scope is joined to the node id with `_`, and the node id's own first
+// segment is the central slug, joined to the rest with `_` as well. The two
+// boundaries are therefore indistinguishable: base `haus` with a CCU named
+// `CCU` and the DEFAULT base with a CCU named `Haus CCU` both render
+// `haus_ccu_<address>`. Two such daemons on one broker would collide exactly
+// as they did before the scope existed.
+//
+// It is not fixed, and deliberately so. Disambiguating it means changing the
+// separator (or escaping `_` inside the base slug), which moves the node id
+// of every non-default-base installation a SECOND time, one release after
+// the move that introduced the scope — a second unrecoverable migration for
+// a collision that additionally requires the operator to have named their
+// topic base and their CCU after the same thing. The cheap mitigation is
+// documented instead: pick a topic base that is not a prefix of any CCU name
+// on the broker. If a node-id move is ever required for another reason, the
+// separator should be revisited in the same release rather than on its own.
 func DiscoveryBaseScope(base string) string {
 	slug := DiscoverySlug(strings.Trim(base, "/"))
 	if slug == "" || slug == "x" || slug == DefaultTopicBase {

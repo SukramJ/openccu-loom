@@ -1,7 +1,9 @@
 # ADR 0070 move-up — symbol-level inventory
 
-- Status: measurement, not a decision
+- Status: measurement, not a decision. **Partly superseded — see the
+  superseded-by note below before relying on any section of this document.**
 - Date: 2026-09-12
+- Superseded in part: 2026-09-13
 - Subject: [ADR 0070](../docs/adr/0070-shared-ha-discovery-model-module.md), the
   sentence *"`internal/payload`, `internal/model/naming`,
   `internal/routingkey` and the bridge mechanics … move up"*
@@ -10,9 +12,35 @@ This document measures the three packages ADR 0070 names, before any of them
 moves. It is the counterpart of the measurement phase 3 got: the rendering
 half of the migration is complete — all twelve discovery planes render through
 `go-hamqtt`'s `discovery.RenderComponent` — and the move-up of the three
-packages has not started. The publisher runtime (the bridge-mechanics half of
+packages has not started. *(As of 2026-09-12. Step E has since landed; see
+the superseded-by note above.)* The publisher runtime (the bridge-mechanics half of
 the same sentence) is being built separately and is out of scope here; where
 the two halves touch, this document says so and stops.
+
+## Superseded by (2026-09-13)
+
+This is a working document and it is read as one. Two of its statements have
+since become false, and a reader who does not reach this note will take them
+as current:
+
+- **The `DiscoverySlug` section below is history, not a divergence.** It is
+  written in the present tense — "8 cases diverge", "`Café` and `Caf` collide
+  into one node id today" — and it quotes the `naming.TopicSafe` doc comment
+  as saying the sibling *"is deliberately NOT delegated to `topic.Slug`
+  yet"*, then vouches for it: *"That comment is correct."* The comment no
+  longer says that. Step E landed: `DiscoverySlug` delegates to `topic.Slug`,
+  and `internal/model/naming/pathdata.go` now reads *"The sibling
+  [DiscoverySlug] now delegates too … Both were defects rather than
+  differences, and both are fixed."* The divergence table records what the
+  two implementations used to do and why the reversal was worth its byte
+  moves; it does not describe the tree.
+- **The move-up has started.** The preamble below says *"the move-up of the
+  three packages has not started"*, while step E at the end of the same
+  document is marked `— DONE`. Both were true on 2026-09-12; only the second
+  is true now.
+
+Nothing else in this document has been re-measured, and the counts below are
+as of 2026-09-12.
 
 Every count below is measured. Where a symbol is called unused or
 single-caller, the count is shown. The `.claude/worktrees/` copy of the tree is
@@ -197,7 +225,12 @@ The nearest `go-hamqtt` shape is `model.Description.Name` plus
 four-part composition with a channel postfix. Not a counterpart; a different
 layer.
 
-### `DiscoverySlug` is the one real merge candidate, and it disagrees
+### `DiscoverySlug` is the one real merge candidate, and it disagreed
+
+> **Superseded 2026-09-13.** This section is written in the present tense
+> and describes a divergence that no longer exists: step E reversed
+> `DiscoverySlug` onto `topic.Slug`. Read the table below as the case for
+> that reversal, not as a description of the tree.
 
 `naming.DiscoverySlug` and `hamqtt/topic.Slug` answer the same question — turn
 a string into the `[A-Za-z0-9_-]` Home Assistant accepts for a node id. Over a
@@ -222,15 +255,27 @@ literal `__` through. The second class is the dangerous one because
 `Watchdog:_CCU-Jack` is a real CCU name — the `DiscoverySlug` doc comment cites
 it as its own motivating example.
 
-This divergence is already known and already written down, in the doc comment
-on `naming.TopicSafe`:
+This divergence was known and written down at the time, in the doc comment on
+`naming.TopicSafe`, which then read:
 
 > the sibling `DiscoverySlug` is deliberately NOT delegated to `topic.Slug`
 > yet … "café" slugs to "caf" here and "cafe" there, so "Café" and "Caf"
 > collide today. The shared behaviour is better, but adopting it moves
 > published object ids
 
-That comment is correct and the sequencing below keeps its conclusion.
+**That quotation is no longer in the tree, and this document used to add
+"That comment is correct" beneath it.** The comment was rewritten when step E
+landed and now says the opposite — `internal/model/naming/pathdata.go`:
+
+> The sibling [DiscoverySlug] now delegates too, to topic.Slug. … Both were
+> defects rather than differences, and both are fixed; the change moved
+> published node ids, object ids and device identifiers for the affected
+> names and shipped under ADR 0068's process.
+
+So the sequencing below did not keep the old comment's conclusion; it
+overturned it, which is what step E was for. The old quotation is left in
+place because the reasoning that followed from it is the record of why the
+reversal was taken — not because either half of it still describes the code.
 
 ### The dead re-exports
 

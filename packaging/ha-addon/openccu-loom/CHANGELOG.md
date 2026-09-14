@@ -1,6 +1,23 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
-## Unreleased
+## 0.78.1
+
+Documentation and tooling only — the daemon is unchanged. If you turned
+`north.mqtt.discovery_bundles` on and wanted to go back, 0.78.0 left you with
+no working way out: the rollback command in the manual could not be executed
+at all (it used a wildcard in a publish topic and two mutually exclusive
+flags, so `mosquitto_pub` rejected it before dialing), and
+`script/clean-mqtt-discovery.sh` — the fallback — could not see device
+bundles, because its topic filter had one level too many.
+
+Both are fixed. The manual now tells you to list the retained topics the
+broker actually holds (`mosquitto_sub --retained-only`) and clear those, and
+the script clears device bundles as well as per-entity configs. The
+`north.mqtt.discovery_bundles` option itself is documented for the first
+time, including what turning it back off costs: one boot with the affected
+devices missing, self-healing on the next restart.
+
+## 0.78.0
 
 Changed, and it affects you only if a name on your system carries an accent
 that is not a German umlaut, or a double underscore. The daemon had two
@@ -44,17 +61,31 @@ daemons, because those carry no CCU name at all.
 The discovery topic now carries your `topic_base` in front of the node id, so
 two daemons cannot reach each other's entities.
 
-Your entities keep everything: history, statistics, entity ids, device cards,
-areas, and every automation and dashboard card that names them. Nothing has to
-be re-applied — unlike the discovery-slug change above, not even a device card
-is re-created. The old discovery topics are cleared automatically on first
-start.
+Your device and CCU entities keep everything: history, statistics, entity ids,
+device cards, areas, and every automation and dashboard card that names them.
+Not even a device card is re-created.
 
-One caution if you run two daemons against the same broker and only one of
-them has a custom `topic_base`: upgrade both at the same time, or give the
-second one its own `topic_base` first. For one release, the daemon with the
-custom base cleans up the old shared topics, and while a daemon on the default
-setting is still publishing to them, its entities are what gets cleaned up.
+Three groups of entities do change, and only if you set a custom `topic_base`:
+your **alarm panels**, your **Security & Safety** entities and the **Add-on
+Update** entity. Those had one fixed name shared by every daemon, so two
+daemons declared the same identity to Home Assistant and it kept only whichever
+one it saw first — the second daemon's alarm panels simply never appeared.
+They now carry your `topic_base` too, which means Home Assistant sees them as
+new entities: they lose their history and their entity ids, and any automation
+that arms a panel or reads a security entity has to be pointed at the new one.
+The old rows stay behind as unavailable "restored" entities until you delete
+them (Settings → Devices & services → Entities, filter *Restored*).
+
+The old discovery topics are **not** cleared automatically any more, and this
+is the important caution. A leftover topic looks exactly like the topic a
+second daemon on the default `topic_base` is using right now — there is no way
+to tell them apart — so clearing them by default meant deleting that daemon's
+entities and device cards, with nothing to restore them from. If no daemon on
+the default `topic_base` shares your broker, set
+`north.mqtt.discovery_retract_unscoped: true`, start the add-on once, and set
+it back to `false`; the leftovers are cleared on that start. Otherwise leave it
+off and clear them by hand — the migration guide
+(`docs/external-clients/ha-unique-id-migration.md`) has the commands.
 
 ## 0.77.0
 

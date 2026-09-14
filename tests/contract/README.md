@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 470.
+Guards without a doc comment: 7 of 473.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -147,6 +147,7 @@ Guards without a doc comment: 7 of 470.
 | TestDeclaredSilentEventDocsClaimNoConsumers | event_subscriber_coverage_test.go | TestDeclaredSilentEventDocsClaimNoConsumers cross-checks the two truths this package keeps about an event: eventsWithoutSubscriber declares that nothing consumes it, while the catalogue's doc comment tells a reader what it is for. |
 | TestEveryEventTypeHasASubscriber | event_subscriber_coverage_test.go | TestEveryEventTypeHasASubscriber asserts that every event type the daemon defines is consumed by production code, or is declared in [eventsWithoutSubscriber] as deliberately unconsumed. |
 | TestFilenamePurity | filename_purity_test.go | TestFilenamePurity walks every .go file under internal/, pkg/, cmd/, and tests/ and fails when a filename carries an internal audit / migration-phase marker that has no place in the long-term filename vocabulary. |
+| TestGoTestTimeoutIsOneValue | go_test_timeout_single_source_test.go | TestGoTestTimeoutIsOneValue pins the per-package `go test -timeout` ceiling to a single value across the Makefile and every workflow that states it. |
 | TestEveryCustomDataPointDeclaresAnHAComponent | ha_component_non_empty_test.go | TestEveryCustomDataPointDeclaresAnHAComponent asserts no shipped profile returns the empty component that would make the ch<N> branch in Channel.HasSinglePrimaryCustomDP reachable. |
 | TestHAComponentTableCoversEverySourceImplementer | ha_component_non_empty_test.go | TestHAComponentTableCoversEverySourceImplementer re-derives the implementer set by reading internal/model/custom and compares it with the table above. |
 | TestHARegistryDescriptionRulesHaveKeys | ha_registry_description_rules_test.go | TestHARegistryDescriptionRulesHaveKeys fails when any entry has an empty Description.Key. |
@@ -205,6 +206,7 @@ Guards without a doc comment: 7 of 470.
 | TestEveryBridgeReachThroughIsNilGuarded | mqtt_nil_bridge_test.go | TestEveryBridgeReachThroughIsNilGuarded asserts that no production call site dereferences the result of a Wiring.Bridge() call without checking it for nil first. |
 | TestMQTTTopicSchemaDoc_BridgeHubTopics | mqtt_topic_schema_doctest_test.go | TestMQTTTopicSchemaDoc_BridgeHubTopics exercises the "Bridge / hub status" table and the concrete hub examples. |
 | TestMQTTTopicSchemaDoc_CommandTopics | mqtt_topic_schema_doctest_test.go | TestMQTTTopicSchemaDoc_CommandTopics exercises the "Command (set) topics" table rows. |
+| TestMQTTTopicSchemaDoc_ConcreteExamplesAreAllPinned | mqtt_topic_schema_doctest_test.go | TestMQTTTopicSchemaDoc_ConcreteExamplesAreAllPinned closes the loop the rest of this file leaves open. |
 | TestMQTTTopicSchemaDoc_DiscoveryNodeScopeIsNotATopic | mqtt_topic_schema_doctest_test.go | TestMQTTTopicSchemaDoc_DiscoveryNodeScopeIsNotATopic holds [mqtt.TopicBuilder.DiscoveryNodeScope] to the claim that lets it out of docs/mqtt-topic-schema.md: it returns part of one segment, not a topic. |
 | TestMQTTTopicSchemaDoc_DiscoveryTopic | mqtt_topic_schema_doctest_test.go | TestMQTTTopicSchemaDoc_DiscoveryTopic exercises the HA Discovery config Topic, which the doc states is identical. |
 | TestMQTTTopicSchemaDoc_StateTopics | mqtt_topic_schema_doctest_test.go | TestMQTTTopicSchemaDoc_StateTopics exercises the "State topics" table and the "Concrete mapping examples" section for per-DP state. |
@@ -240,6 +242,7 @@ Guards without a doc comment: 7 of 470.
 | TestOpenAPIDeclaresMVPEndpoints | openapi_test.go | — (no doc comment) |
 | TestOpenAPIManagementPathsPresent | openapi_test.go | TestOpenAPIManagementPathsPresent pins the management and live-edit paths in the spec so a future router rename or refactor cannot silently drift away from the production OpenAPI validator middleware. |
 | TestOpenAPIVersion | openapi_test.go | — (no doc comment) |
+| TestOperatorMosquittoCommandsAreRunnable | operator_mosquitto_commands_test.go | TestOperatorMosquittoCommandsAreRunnable walks every Markdown file under docs/ and checks each mosquitto_pub / mosquitto_sub invocation in a fenced code block for the two errors that make it fail on execution. |
 | TestPendingDevicePhaseVocabularyIsOneVocabulary | pending_device_phase_vocabulary_test.go | TestPendingDevicePhaseVocabularyIsOneVocabulary pins the three copies of the onboarding phase vocabulary against each other. |
 | TestPingPongCallerIDDistinguishesDaemons | ping_pong_caller_id_contract_test.go | TestPingPongCallerIDDistinguishesDaemons asserts that two daemons with the same CentralName and Interface but different InitInterfaceID values produce distinct WireBoundaryID values, and that neither degenerates to the bare interface name. |
 | TestPkgDoesNotImportInternal | pkg_imports_no_internal_test.go | TestPkgDoesNotImportInternal pins what `pkg/` is for. |

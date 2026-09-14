@@ -60,16 +60,14 @@ type addonUpdateGoldenCase struct {
 //   - alternate-base: every declared topic (state, latest-version,
 //     command, availability) carries the configurable base, and so — since
 //     the base gained a discovery node-id scope — does the discovery config
-//     topic. Both identity fields still must not move with it: an identity
-//     that drifted with the base would re-key every entity on any deployment
-//     that renamed its base, and Home Assistant has no migration for either
-//     `unique_id` or `identifiers`. The discovery TOPIC moving with the base
-//     is the opposite case and the point of the scope — this plane's node id
-//     is the bare literal `daemon`, so before the scope existed two daemons
-//     on one broker wrote the same retained config and the second silently
-//     replaced the first. This fixture renders at the DEFAULT base, so its
-//     topic is the unscoped one and the pin reads as the before/after pair
-//     against `default` directly.
+//     topic. The two identity fields follow it as well, but ONLY away from
+//     the default base: moving the node id separated the two daemons on the
+//     broker and left them declaring one `unique_id` between them, which
+//     Home Assistant answers by rejecting the second outright ("Platform
+//     mqtt does not generate unique IDs") — so the second daemon's entity
+//     never appeared at all. This fixture renders at the DEFAULT base, where
+//     nothing moves, so the pin reads as the before/after pair against
+//     `default` directly, in the topic AND in the identity.
 //   - second-central: the identity hazard this plane exists to get wrong.
 //     Every other builder in this package scopes its unique_id to a
 //     central's serial; this one deliberately does not, because the
@@ -194,31 +192,33 @@ func TestAddonUpdateDiscoveryPayloadsArePinned(t *testing.T) {
 
 // TestAddonUpdateDiscoveryIdentityIsDaemonScoped states in one assertion
 // what the fixture matrix only implies: the entity's identity is a property
-// of the daemon, not of the central or the topic base the daemon happens to
-// be configured with. Pinning the four payloads would catch a drift here too,
-// but only as four diffs a reader has to compare by eye.
+// of the daemon, not of the central. Pinning the four payloads would catch a
+// drift here too, but only as four diffs a reader has to compare by eye.
 //
-// # The topic is the exception, and it used to be the defect
+// # Two claims that pull in opposite directions
 //
-// This test asserted the discovery TOPIC alongside the two identity fields,
-// and that assertion was wrong in a way that read as a guarantee. This plane's
-// node id is the literal `daemon` with no central and, until the topic base
-// gained a node-id scope, no base either — so the topic it pinned as invariant
-// was invariant across two daemons as well. Two processes on one broker wrote
-// `homeassistant/update/daemon/addon_update/config` between them, and the
+// This test once asserted the discovery TOPIC invariant across every fixture,
+// which read as a guarantee and was the defect: this plane's node id is the
+// literal `daemon` with no central and, until the topic base gained a
+// node-id scope, no base either — so two processes on one broker wrote
+// `homeassistant/update/daemon/addon_update/config` between them and the
 // retained config of whichever published last was the only one that survived.
 //
-// So the claim is split rather than dropped, because the two halves pull in
-// opposite directions and both are load-bearing:
+// Moving the node id fixed the broker and broke Home Assistant. Two distinct
+// config topics carrying the SAME `unique_id` are not two entities: HA's MQTT
+// integration rejects the second as a duplicate, so the semantics went from
+// "last writer wins, and a restart repoints the entity at the live daemon" to
+// "first writer wins permanently". Both halves therefore follow the base:
 //
-//   - `unique_id` and `default_entity_id` must NOT follow the base or the
-//     central. Home Assistant keys its entity registry on the first and seeds
-//     the entity id from the second, and it has no migration path for either;
-//     one daemon, one entity, whatever it is configured with.
+//   - `unique_id` and `default_entity_id` must NOT follow the central — one
+//     daemon serving N CCUs has exactly one self-updater — but they MUST
+//     follow a non-default base, or two daemons cannot coexist in one HA.
+//     On the DEFAULT base they must not move at all: HA keys its entity
+//     registry on the first and seeds the entity id from the second, with no
+//     migration path for either, and a single-daemon installation has no
+//     collision to pay for.
 //   - the discovery topic MUST follow the base and must NOT follow the
-//     central. Following the base is what keeps two daemons apart on a shared
-//     broker; following the central would make one daemon serving N CCUs
-//     publish N update entities where there must be exactly one.
+//     central, for the same two reasons.
 func TestAddonUpdateDiscoveryIdentityIsDaemonScoped(t *testing.T) {
 	type identity struct{ topic, uniqueID, entityID string }
 	seen := map[string]identity{}
@@ -243,27 +243,48 @@ func TestAddonUpdateDiscoveryIdentityIsDaemonScoped(t *testing.T) {
 	if ref.uniqueID == "" || ref.entityID == "" || ref.topic == "" {
 		t.Fatalf("default fixture has an empty identity field: %+v", ref)
 	}
-	for name, id := range seen {
-		if id.uniqueID != ref.uniqueID || id.entityID != ref.entityID {
-			t.Errorf("%s: identity {unique_id:%q default_entity_id:%q} differs from default {unique_id:%q default_entity_id:%q} — "+
-				"this entity exists once per daemon, so its identity must not follow the central or the topic base",
-				name, id.uniqueID, id.entityID, ref.uniqueID, ref.entityID)
+
+	// Neither the central nor the locale may reach any of the three: one
+	// daemon, one self-updater, whatever it bridges and whatever it speaks.
+	for _, name := range []string{"second-central", "locale-de"} {
+		id := seen[name]
+		if id.uniqueID != ref.uniqueID || id.entityID != ref.entityID || id.topic != ref.topic {
+			t.Errorf("%s: identity {topic:%q unique_id:%q default_entity_id:%q} differs from default "+
+				"{topic:%q unique_id:%q default_entity_id:%q} — this entity exists once per daemon, so "+
+				"neither the central it bridges nor the language it speaks may reach its identity",
+				name, id.topic, id.uniqueID, id.entityID, ref.topic, ref.uniqueID, ref.entityID)
 		}
 	}
 
-	// The central must not reach the topic: one daemon serving two CCUs
-	// publishes one update entity, not two.
-	if seen["second-central"].topic != ref.topic {
-		t.Errorf("second-central: discovery topic %q differs from default %q — a daemon serving N centrals would publish N add-on update entities",
-			seen["second-central"].topic, ref.topic)
-	}
-	// The base must reach it: this is the whole of the collision fix, and
-	// without it two daemons on one broker share this topic.
-	if got := seen["alternate-base"].topic; got == ref.topic {
+	// The base must reach all three, and this is the whole of the collision
+	// fix: the topic keeps the two daemons apart on the broker, the unique id
+	// keeps them apart inside Home Assistant. Either one alone leaves the
+	// second daemon's entity missing.
+	alt := seen["alternate-base"]
+	if alt.topic == ref.topic {
 		t.Errorf("alternate-base: discovery topic %q is the same as the default base's — "+
 			"two daemons under different topic bases would write this daemon-level config "+
-			"to one topic, and the one that published last would be the only one left",
-			got)
+			"to one topic, and the one that published last would be the only one left", alt.topic)
+	}
+	if alt.uniqueID == ref.uniqueID {
+		t.Errorf("alternate-base: unique_id %q is the same as the default base's — two daemons write "+
+			"two distinct config topics declaring one unique id, and Home Assistant rejects the second. "+
+			"The second daemon's entity never appears, and its retained config is re-rejected on every "+
+			"HA restart", alt.uniqueID)
+	}
+	if alt.entityID == ref.entityID {
+		t.Errorf("alternate-base: default_entity_id %q is the same as the default base's — the entity-id "+
+			"seed must follow the unique id it is derived from", alt.entityID)
+	}
+
+	// And the default base pays nothing. `alternate-base` renders at the
+	// DEFAULT topic base, so it is the fixture that must carry the
+	// already-published spelling, unscoped: an installation that never set a
+	// topic base must see no identity move from this change at all.
+	if alt.uniqueID != addonUpdateUniqueID {
+		t.Errorf("alternate-base renders at the default topic base, so its unique_id must be the "+
+			"already-published %q; got %q. Every single-daemon installation in the fleet would lose the "+
+			"entity's history, its entity id and every automation naming it", addonUpdateUniqueID, alt.uniqueID)
 	}
 }
 

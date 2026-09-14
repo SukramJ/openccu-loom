@@ -105,8 +105,24 @@ type SecurityMQTTPublisher struct {
 	// publish the reconcile implies, so a broker that withholds its
 	// acknowledgement can never stall the domain's bus goroutine.
 	reconcileCh chan struct{}
-	stopCh      chan struct{}
-	doneCh      chan struct{}
+	// syncCh carries barrier requests: the worker answers one only after
+	// it has performed every reconcile and every publish that was already
+	// queued, so a caller holding the reply knows the plane has finished.
+	//
+	// It exists for this package's plane guards, and it is the worker —
+	// not the guard — that has to state it. A guard can only see the fake
+	// broker, and the broker call is not the end of a publish: the bridge
+	// records the retained topic in its index and counts the message
+	// AFTER the client returns. Sixty milliseconds of silence on the
+	// broker therefore means "no new writes", never "the plane is done" —
+	// a worker descheduled in that trailing window looks exactly like a
+	// worker that has finished, and the guard then reads an index the
+	// publish has not reached yet. That is not a slow test needing a
+	// longer wait; it is a question asked at a point where the answer does
+	// not exist, which no timeout makes true.
+	syncCh chan chan struct{}
+	stopCh chan struct{}
+	doneCh chan struct{}
 }
 
 // NewSecurityMQTTPublisher binds a publisher to the domain and the MQTT
@@ -125,6 +141,7 @@ func NewSecurityMQTTPublisher(src SecuritySnapshotSource, wiring *Wiring, locale
 		knownZones:   map[string]bool{},
 		msgCh:        make(chan securityMsg, 128),
 		reconcileCh:  make(chan struct{}, 1),
+		syncCh:       make(chan chan struct{}),
 		stopCh:       make(chan struct{}),
 		doneCh:       make(chan struct{}),
 	}
@@ -200,7 +217,72 @@ func (p *SecurityMQTTPublisher) run() {
 			p.reconcile()
 		case m := <-p.msgCh:
 			p.publish(ctx, m)
+		case done := <-p.syncCh:
+			p.drainPending()
+			close(done)
 		}
+	}
+}
+
+// drainPending performs every unit of work already queued and returns
+// once nothing is left: pending reconciles first, because a reconcile
+// enqueues the messages the same pass then has to publish.
+//
+// Both reads are non-blocking, so this cannot wait for work that has not
+// been requested — it finishes the backlog and returns.
+//
+// It builds its own background context exactly as [SecurityMQTTPublisher.run]
+// does: a publish belongs to the worker's lifetime, not to the caller that
+// happened to ask for the barrier.
+func (p *SecurityMQTTPublisher) drainPending() {
+	ctx := context.Background()
+	for {
+		select {
+		case <-p.reconcileCh:
+			p.reconcile()
+			continue
+		default:
+		}
+		select {
+		case m := <-p.msgCh:
+			p.publish(ctx, m)
+		default:
+			return
+		}
+	}
+}
+
+// quiesce blocks until the worker has finished every reconcile and every
+// publish queued before the call, bridge-side bookkeeping included.
+//
+// See the note on syncCh for why the plane has to say this itself. A
+// publisher that never started has no worker and nothing pending, so it
+// is already quiescent.
+func (p *SecurityMQTTPublisher) quiesce(ctx context.Context) error {
+	if p == nil {
+		return nil
+	}
+	p.mu.Lock()
+	started := p.started
+	p.mu.Unlock()
+	if !started {
+		return nil
+	}
+	done := make(chan struct{})
+	select {
+	case p.syncCh <- done:
+	case <-p.stopCh:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	select {
+	case <-done:
+		return nil
+	case <-p.stopCh:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 

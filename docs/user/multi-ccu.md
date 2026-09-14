@@ -103,15 +103,15 @@ Every MQTT topic carries `central_name` as the second path segment
 under the configured `topic_base`:
 
 ```
-<topic_base>/<central_name>/<interface>/<device>/<channel>/<bucket>/<parameter>
+<topic_base>/<central_name>/<central_name>-<interface>/<device>/<channel>/<bucket>/<parameter>
 ```
 
 A `<bucket>` segment (`values` | `master` | `calculated`) sits between
 the channel and the parameter. Examples:
 
 ```
-openccu-loom/ccu-haus/HmIP-RF/000A0000000001/4/values/STATE
-openccu-loom/ccu-garage/HmIP-RF/000A0000000099/1/values/LEVEL
+openccu-loom/ccu-haus/ccu-haus-HmIP-RF/000A0000000001/4/values/STATE
+openccu-loom/ccu-garage/ccu-garage-HmIP-RF/000A0000000099/1/values/LEVEL
 ```
 
 ### 2.1 Home Assistant Discovery
@@ -137,9 +137,15 @@ apart by the base instead: when `north.mqtt.topic_base` is not
 example becomes
 `homeassistant/binary_sensor/house_ccu-haus_000a0000000001/4_state/config`
 on a daemon with `topic_base: house`. The three daemon-level planes
-(`alarm`, `security`, `daemon`) carry no central at all and are separated
-by nothing else, so give a second daemon its own base before pointing it at
-the same broker. See
+(`alarm`, `security`, `daemon`) carry no central at all, so beside the node
+id their `unique_id` carries the base too — without that, two daemons declare
+one identity to Home Assistant and it keeps whichever config it saw first,
+leaving the second daemon's alarm and security entities missing entirely.
+Give a second daemon its own base before pointing it at the same broker, and
+pick one that is **not a prefix of any CCU name on the broker**: the base and
+the central slug are joined with the same `_`, so `topic_base: haus` with a
+CCU named `CCU` renders the same node id as the default base with a CCU named
+`Haus CCU`. See
 [the HA identity migration note](../external-clients/ha-unique-id-migration.md)
 for what moves when you change the base on an existing install.
 
@@ -160,19 +166,49 @@ When a device moves from one CCU to another (re-paired), it surfaces
 under the new `central_name`. The old topic + discovery config
 remain retained — operational cleanup pattern:
 
-```sh
-# Example: device 000A0000000001 moved from ccu-haus → ccu-garage.
-mosquitto_pub -h <broker> -t 'openccu-loom/ccu-haus/HmIP-RF/000A0000000001/#' \
-              -r -n -l < /dev/null
+The supported way is [`script/clean-mqtt-discovery.sh`](https://github.com/SukramJ/openccu-loom/blob/main/script/clean-mqtt-discovery.sh),
+which enumerates the retained topics on the broker and clears the ones
+it finds. It defaults to a dry run; `-y` executes.
 
-mosquitto_pub -h <broker> \
-  -t 'homeassistant/binary_sensor/ccu-haus_000a0000000001/4_state/config' \
-  -r -n -l < /dev/null
+```sh
+# Preview, then clear, everything openccu-loom retained on this broker.
+./script/clean-mqtt-discovery.sh -h <broker> -c /etc/openccu-loom/config.yaml
+./script/clean-mqtt-discovery.sh -h <broker> -c /etc/openccu-loom/config.yaml -y
 ```
 
+By hand, it is two steps, and the first one is not optional.
+**A retained message is cleared one topic at a time**: MQTT forbids a
+wildcard in the topic of a PUBLISH (§4.7.0), so there is no
+"clear the subtree" publish and `mosquitto_pub` rejects one outright.
+List what the broker actually holds first, then clear each topic by the
+exact string the listing printed — copy the topic, do not compose it:
+
+```sh
+# Example: device 000A0000000001 moved from ccu-haus → ccu-garage.
+# 1. List the retained topics for that device. `-W 2` ends the
+#    subscription after a two-second quiet window.
+mosquitto_sub -h <broker> --retained-only -W 2 -v \
+  -t 'openccu-loom/ccu-haus/ccu-haus-HmIP-RF/000A0000000001/#'
+
+# 2. Clear each topic the listing printed. `-r -n` publishes an empty
+#    retained payload, which is how a broker drops a retained message.
+#    `-n` and `-l` are mutually exclusive — pass only `-n`.
+mosquitto_pub -h <broker> -r -n \
+  -t 'openccu-loom/ccu-haus/ccu-haus-HmIP-RF/000A0000000001/4/values/STATE'
+
+# 3. The device's HA Discovery config, same rule.
+mosquitto_pub -h <broker> -r -n \
+  -t 'homeassistant/binary_sensor/ccu-haus_000a0000000001/4_state/config'
+```
+
+The third path segment is the **wire interface id**, `<central>-<interface>`
+— `ccu-haus-HmIP-RF`, not `HmIP-RF`. That is what the daemon publishes and
+what the listing in step 1 prints; see
+[the topic schema](../mqtt-topic-schema.md).
+
 An automatic retain-cleanup migrator at first boot is part of the
-ADR-0011 wave; until that lands the manual pattern above is the
-recommended workflow.
+ADR-0011 wave; until that lands the pattern above is the recommended
+manual workflow.
 
 ---
 

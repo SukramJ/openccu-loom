@@ -471,9 +471,20 @@ type mqttStack struct {
 	// sweep is the retained-store sweeps' own broker connection. Nil when no
 	// broker is configured (the no-op client subscribes in-process and fans
 	// nothing out). It MUST NOT be the same object as client — that identity
-	// is what doubles every inbound command for the length of a sweep window,
-	// and TestSweepsDoNotRideTheCommandClient pins it.
+	// is what doubles every inbound command for the length of a sweep window.
+	// TestSweepsDoNotRideTheCommandClient pins that it is built and distinct;
+	// TestTheBridgeRoutesItsSweepsThroughTheSweepConnection pins that the
+	// bridge actually sweeps on it, which is the half that decides.
 	sweep *mqtt.SweepSubscriber
+	// sweepTCP is the CONNECT the sweep connection above is really dialled
+	// with — the struct [buildMQTT] hands to the factory, not a second copy
+	// of it. Recorded on the stack so a test can read the ASSEMBLED value:
+	// reading sweepTCPConfig's return instead is correct only for as long as
+	// buildMQTT uses that return verbatim, and one `sweepTCP.Will = …` line
+	// inside buildMQTT would restore the exact invisible hazard
+	// TestTheSweepConnectionCarriesNoLastWill exists to keep out, with the
+	// test still green. Zero when no broker is configured.
+	sweepTCP mqtt.TCPConfig
 }
 
 // northTCPConfig is the CONNECT this daemon dials the north-bound broker
@@ -529,6 +540,42 @@ func sweepSubscriberFor(sweep *mqtt.SweepSubscriber, fallback mqtt.Client) mqtt.
 		return sweep
 	}
 	return fallback
+}
+
+// sweepTCPConfig is the CONNECT the retained-store sweeps' own connection
+// dials with, and it is deliberately not [northTCPConfig].
+//
+// No Will, and that absence is the whole point. This connection comes and
+// goes with every sweep window and is dropped outright when an UNSUBSCRIBE
+// fails, so a will on it would publish the bridge's retained `offline` marker
+// to `<base>/bridge/status` on any drop the broker noticed ungracefully — a
+// broker kick, a dropped socket — and grey out every entity of every CCU
+// while the daemon runs on, publishing fine, with nothing in any log saying
+// so. A graceful [mqtt.SweepSubscriber.Close] discards a will, which is
+// exactly what makes the hazard invisible in normal operation.
+//
+// A distinct ClientID for the reason a swap needs one: MQTT allows one
+// session per identifier (MQTT-3.1.4-2), so sharing the command plane's would
+// have the two connections take each other over in a loop. An empty
+// configured id stays empty, and the broker assigns a distinct one to each.
+//
+// Extracted from the closure in [buildMQTT] for the same reason
+// [northTCPConfig] was: so the config this daemon really dials with is built
+// in one readable place. What the test reads is the ASSEMBLED value on
+// [mqttStack.sweepTCP], not this function's return — a test on the return
+// alone stays green when buildMQTT mutates the struct after calling it, which
+// is the whole hazard. TestTheSweepConnectionCarriesNoLastWill is what turns
+// the paragraph above from a comment into a checked statement.
+func sweepTCPConfig(m config.NorthMQTT, proto mqtt.ProtocolVersion, logger *slog.Logger) mqtt.TCPConfig {
+	return mqtt.TCPConfig{
+		BrokerURL:       m.BrokerURL,
+		ClientID:        sweepClientID(m.ClientID),
+		Username:        m.Username,
+		Password:        m.Password,
+		CleanStart:      true,
+		ProtocolVersion: proto,
+		Logger:          logger,
+	}
 }
 
 // sweepClientID derives the sweep connection's client identifier from the
@@ -747,6 +794,10 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 	// window — a doubled `PRESS_SHORT`, a doubled program trigger, a doubled
 	// alarm arm, with nothing in any log.
 	var sweepSub *mqtt.SweepSubscriber
+	// Built before the branch so the sweep connection's CONNECT can be
+	// recorded on it AT THE POINT the factory closure reads it — see
+	// mqttStack.sweepTCP.
+	stack := &mqttStack{}
 	if cfg.North.MQTT.BrokerURL == "" {
 		// No broker configured but enabled → fall back to the
 		// recording no-op client so developers can exercise the
@@ -758,34 +809,19 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 		tcp := mqtt.NewTCPClient(tcpCfg)
 		client = tcp
 		connector = tcp
-		sweepCfg := cfg.North.MQTT
-		sweepLogger := logger
-		sweepProto := protoVersion
+		// Assigned onto the stack, and READ BACK from the stack by the
+		// factory below, so the config a test reads there is the same struct
+		// value the sweep client is constructed from rather than a parallel
+		// copy of it.
+		stack.sweepTCP = sweepTCPConfig(cfg.North.MQTT, protoVersion, logger)
 		sweepSub = mqtt.NewSweepSubscriber(func() (mqtt.Client, mqtt.Connector) {
 			// A fresh client per connection, so a sweep that failed to
 			// unsubscribe cannot hand its stranded filter to the next one.
-			//
-			// No Will: this connection comes and goes with each sweep, and a
-			// will on it would clear the bridge's availability marker every
-			// time a sweep ended. A distinct ClientID for the same reason a
-			// swap needs one — MQTT allows one session per identifier
-			// (MQTT-3.1.4-2), so sharing the command plane's would have the
-			// two connections kick each other in a loop. An empty configured
-			// id stays empty: the broker then assigns a distinct one to each.
-			sc := mqtt.NewTCPClient(mqtt.TCPConfig{
-				BrokerURL:       sweepCfg.BrokerURL,
-				ClientID:        sweepClientID(sweepCfg.ClientID),
-				Username:        sweepCfg.Username,
-				Password:        sweepCfg.Password,
-				CleanStart:      true,
-				ProtocolVersion: sweepProto,
-				Logger:          sweepLogger,
-			})
+			sc := mqtt.NewTCPClient(stack.sweepTCP)
 			return sc, sc
 		}, logger)
 	}
 
-	stack := &mqttStack{}
 	startedAt := time.Now().UTC()
 	// Circuit breaker between the bridge and the broker: during a
 	// degraded-broker phase (link up, acks missing) publishes fail
@@ -826,11 +862,14 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 		RawEnabled:           cfg.North.MQTT.RawEnabled,
 		HADiscoveryEnabled:   cfg.North.MQTT.DiscoveryEnabled,
 		HADiscoveryBundles:   cfg.North.MQTT.DiscoveryBundles,
-		SubDevicesEnabled:    cfg.North.MQTT.SubDevicesEnabled,
-		Locale:               cfg.Locale,
-		HealthSupplier:       bridgeHealthSupplier(centralNames, startedAt),
-		Collector:            collector,
-		ChannelHidden:        channelHidden,
+		// Off unless the operator asked for it: see BridgeConfig's field
+		// doc for what it deletes when a default-base sibling is present.
+		RetractUnscopedDiscovery: cfg.North.MQTT.DiscoveryRetractUnscoped,
+		SubDevicesEnabled:        cfg.North.MQTT.SubDevicesEnabled,
+		Locale:                   cfg.Locale,
+		HealthSupplier:           bridgeHealthSupplier(centralNames, startedAt),
+		Collector:                collector,
+		ChannelHidden:            channelHidden,
 		// The bridge's discovery runtime logs the orphan sweep, the birth
 		// replay and the snapshot teardown — the layer whose failures are
 		// invisible from anywhere else.

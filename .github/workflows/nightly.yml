@@ -11,6 +11,10 @@ permissions:
 env:
   CGO_ENABLED: "0"
   GO_VERSION: "1.26.6"
+  # Same per-package ceiling as ci.yml and the Makefile's
+  # GO_TEST_TIMEOUT. The derivation, and the rule against raising it
+  # reflexively when it trips, are documented on ci.yml's test-shard job.
+  GO_TEST_TIMEOUT: "20m"
 
 jobs:
   fuzz:
@@ -61,7 +65,7 @@ jobs:
         shell: bash
         env:
           CGO_ENABLED: "1"
-        run: go test -race -count=1 ./...
+        run: go test -race -count=1 -timeout="${GO_TEST_TIMEOUT}" ./...
 
   mutation:
     name: mutation (gremlins, core pkgs)

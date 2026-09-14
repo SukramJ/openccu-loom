@@ -45,7 +45,9 @@ var ErrUserNotFound = errors.New("sqlite: user not found")
 // the table with zero admins. Callers translate this into a 409.
 var ErrLastAdmin = errors.New("sqlite: refusing to remove the last admin")
 
-const bcryptCost = 12
+// Password hashes are generated at [auth.BcryptCost] — the same work factor
+// the in-memory store uses, so a credential keeps its strength when it moves
+// between the two.
 
 // Put creates or replaces a user. Empty username / password are
 // rejected so the table cannot accumulate sentinel rows. Returns
@@ -60,7 +62,7 @@ func (s *UserStore) Put(ctx context.Context, subject, password string, role auth
 	if password == "" {
 		return errors.New("sqlite: user password required")
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), auth.BcryptCost())
 	if err != nil {
 		return fmt.Errorf("sqlite: bcrypt: %w", err)
 	}
@@ -188,11 +190,6 @@ func (s *UserStore) Delete(ctx context.Context, subject string) error {
 	return tx.Commit()
 }
 
-// dummyBcryptHash is a pre-generated bcrypt hash compared against on the
-// unknown-user path so the login latency does not leak whether a subject
-// exists. It never matches any real password.
-var dummyBcryptHash = []byte("$2a$12$w3j05DkTLbO8bN3FgkOfxuNFDLEzElC42sZuPYO0eACSU6dKRLyFG")
-
 // AuthenticateBasic resolves credentials. Uses bcrypt.CompareHashAndPassword
 // for constant-time comparison.
 func (s *UserStore) AuthenticateBasic(ctx context.Context, username, password string) (auth.Identity, error) {
@@ -207,7 +204,9 @@ func (s *UserStore) AuthenticateBasic(ctx context.Context, username, password st
 		// Consume roughly the same wall-clock as a real bcrypt verify so an
 		// attacker cannot distinguish "no such user" from "wrong password"
 		// by measuring response latency (user enumeration via timing).
-		_ = bcrypt.CompareHashAndPassword(dummyBcryptHash, []byte(password))
+		// The dummy hash tracks the active cost, so this compare costs what a
+		// real verify costs — see [auth.DummyBcryptHash].
+		_ = bcrypt.CompareHashAndPassword(auth.DummyBcryptHash(), []byte(password))
 		return auth.Identity{}, auth.ErrUnauthenticated
 	}
 	if err != nil {

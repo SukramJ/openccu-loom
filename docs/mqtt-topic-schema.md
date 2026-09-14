@@ -36,7 +36,10 @@ degenerate case with one entry under that segment.
 
 > Notation: `<base>` is the configured `mqtt.topic_base` (default
 > `openccu-loom`). `<central>` is the CCU name from the daemon config
-> (e.g. `GoOtto`). `<iface>` is the interface ID (e.g. `HmIP-RF`).
+> (e.g. `GoOtto`). `<iface>` is the **wire** interface id — the CCU
+> spells it `<central>-<interface>`, so the `HmIP-RF` interface of the
+> `GoOtto` central is `GoOtto-HmIP-RF`. The bare interface token never
+> appears in this segment.
 >
 > Every name-derived segment (`<central>`, `<name>`, `<key>`, …) is
 > escaped for MQTT: a space, `+`, `#` and `/` each become `_`, so a CCU
@@ -235,13 +238,22 @@ while the daemon stayed up left every one of its sysvars, programs, system
 scores and message aggregates "available" in Home Assistant, showing whatever
 they last reported, indefinitely.
 
-The value is a fold over the CCU's interface states: `online` while **at
-least one** interface is reachable, `offline` once none is. One interface
-down is a per-interface fault, reported by the per-interface connectivity
-binary sensor above, and does not mean the CCU is gone — a CCU that is gone
-takes every interface with it. A flip is debounced: a level has to hold for
-15 s before it is written, so a flapping interface produces no retained
-traffic and no strobing entities.
+The value is a **conjunction of two signals**: `online` while at least one
+interface is reachable **and** ReGa answers. The first half is a disjunction
+over the CCU's interface states — one interface down is a per-interface
+fault, reported by the per-interface connectivity binary sensor above, and
+does not mean the CCU is gone, while a CCU that is gone takes every interface
+with it. The second half is a 30 s poll of the CCU's own
+`/ise/checkrega.cgi`: the entities this topic gates are ReGa-scoped, so a
+ReGaHss that dies or hangs while `rfd`/`HMIPServer` keep serving freezes
+every sysvar, program and system score while every interface still reads
+reachable. An answer that is not `OK` flips the gate at once; three
+consecutive probes that do not complete at all are needed before silence
+counts as down; a CCU that answers 401/403/404 (the CGI behind auth, or
+absent on that firmware) latches the probe off and folds as if the signal did
+not exist. A flip is debounced: a level has to hold for 15 s before it is
+written, so a flapping interface produces no retained traffic and no strobing
+entities.
 
 Two hub entities deliberately do **not** list it: the per-interface
 connectivity binary sensors, whose state is the fold's own input, and the
@@ -461,9 +473,9 @@ at address `000C9709AEF157`, channel 1.
 
 | Use case | Topic |
 |---|---|
-| Actual temperature (read) | `openccu-loom/GoOtto/HmIP-RF/000C9709AEF157/1/values/ACTUAL_TEMPERATURE` |
-| Set-point temperature (write) | `openccu-loom/GoOtto/HmIP-RF/000C9709AEF157/1/values/SET_POINT_TEMPERATURE/set` |
-| Climate service method (set mode) | `openccu-loom/GoOtto/HmIP-RF/000C9709AEF157/1/custom/climate/set/set_mode` |
+| Actual temperature (read) | `openccu-loom/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/1/values/ACTUAL_TEMPERATURE` |
+| Set-point temperature (write) | `openccu-loom/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/1/values/SET_POINT_TEMPERATURE/set` |
+| Climate service method (set mode) | `openccu-loom/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/1/custom/climate/set/set_mode` |
 | System variable | `openccu-loom/GoOtto/hub/sysvars/Presence/state` |
 
 ---

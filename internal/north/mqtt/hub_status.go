@@ -45,15 +45,17 @@ const hubStatusDwell = 15 * time.Second
 // different debounce than the daemon ships.
 type hubStatusTimer interface{ Stop() bool }
 
-// hubStatusGate folds per-interface reachability into one retained level
-// per CCU and debounces the result.
+// hubStatusGate folds one CCU's reachability into one retained level per CCU
+// and debounces the result.
 //
 // It holds no reachability state of its own: the fold is computed by the
-// caller from the [hub.Connectivity] tracker that owns it, and this type
-// remembers only what the BROKER HAS TAKEN, which is the state the debounce
-// reasons about. Keeping it that way is what makes re-observing the level
-// already on the broker cheap: it cancels a pending opposite write and does
-// nothing else.
+// caller — the adapter conjoins the [hub.Connectivity] tracker that owns the
+// per-interface states with its own ReGa liveness conclusion, so this level
+// is "an interface answers AND ReGa answers", not the interface fold alone —
+// and this type remembers only what the BROKER HAS TAKEN, which is the state
+// the debounce reasons about. Keeping it that way is what makes re-observing
+// the level already on the broker cheap: it cancels a pending opposite write
+// and does nothing else.
 //
 // That is a claim about the broker, not about this process, so it is only
 // as good as the two things that can invalidate it. A write that FAILS
@@ -304,9 +306,14 @@ func (b *Bridge) hubStatusTopic(centralName string) string {
 // PublishHubReachability folds one CCU's reachability into the retained gate
 // at `<base>/<central>/hub/status`, debounced by [hubStatusDwell].
 //
-// `online` is the caller's fold over the CCU's interface states — see
-// [hub.Connectivity.AnyReachable] for what the disjunction means and why it
-// is not the conjunction. This method owns only the debounce and the write.
+// `online` is the caller's fold over BOTH inputs of the gate: the
+// disjunction over the CCU's interface states — see
+// [hub.Connectivity.AnyReachable] for what that disjunction means and why it
+// is not a conjunction — CONJOINED with the adapter's ReGa liveness
+// conclusion, so either half saying "down" arrives here as false. This
+// method owns only the debounce and the write; the fold itself, and the
+// reasoning behind each of its three cases, lives on the adapter's
+// `ccuReachable`.
 //
 // It publishes through the shared availability publisher, at QoS 1, for the
 // reason [newAvailabilityPublisher] states: an availability level is written

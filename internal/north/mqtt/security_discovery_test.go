@@ -52,7 +52,12 @@ func TestSecuritySystemEntities_CommonShape(t *testing.T) {
 			}
 			body := securityDiscoveryBody(t, item)
 
-			wantUnique := "loom_security_" + e.key
+			// The base is "gh", a non-default one, so the daemon-level id carries
+			// its scope: two daemons on one broker would otherwise declare the
+			// same `loom_security_<key>` and Home Assistant would keep only the
+			// first. On the default base the id is unchanged — pinned by
+			// [TestSecurityIdentityIsUnchangedOnTheDefaultBase].
+			wantUnique := "gh_loom_security_" + e.key
 			if got := body["unique_id"]; got != wantUnique {
 				t.Errorf("unique_id = %v, want %v", got, wantUnique)
 			}

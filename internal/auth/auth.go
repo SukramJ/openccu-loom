@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -319,18 +320,70 @@ func (s *MemoryUserStore) Put(username, password string, role Role) {
 	s.users[CanonicalSubject(username)] = userRecord{password: password, role: role}
 }
 
-// bcryptCost matches the persistent SQLite user store
-// (internal/store/sqlite/users.go) so password-hash strength is uniform
-// across the in-memory and persistent stores.
-const bcryptCost = 12
+// ProductionBcryptCost is the work factor every password hash the shipped
+// daemon writes is generated at, here and in the persistent SQLite user store
+// (internal/store/sqlite/users.go), so hash strength is uniform across the
+// in-memory and persistent stores.
+const ProductionBcryptCost = 12
 
-// dummyBcryptHash is a pre-generated bcrypt hash used on the
-// unknown-username path in [MemoryUserStore.AuthenticateBasic] to
-// equalise response time between "no such user" and "wrong password".
-// Without a dummy compare, response time leaks user existence.
-// The hash was generated at cost 12 and is never used as a real
-// credential — the call always returns ErrUnauthenticated.
-var dummyBcryptHash = []byte("$2a$12$w3j05DkTLbO8bN3FgkOfxuNFDLEzElC42sZuPYO0eACSU6dKRLyFG")
+// testBcryptCost is the work factor used when the process is a `go test`
+// binary. See [BcryptCost] for why that distinction exists and what it is
+// safe to weaken.
+const testBcryptCost = bcrypt.MinCost
+
+// BcryptCost returns the work factor for a newly generated password hash:
+// [ProductionBcryptCost] in the shipped daemon, [testBcryptCost] under
+// `go test`.
+//
+// Cost 12 is a deliberate ~0.25 s per hash on server hardware — that is the
+// entire point of the parameter, and production must keep paying it. Under
+// the race detector it is far worse: a single cost-12 GenerateFromPassword
+// measured 17 s on a loaded 4-core box, against 53 ms at cost 4. Roughly 120
+// tests in cmd/openccu-loom boot the real composition root and seed a user,
+// so the suite was spending the bulk of its wall-clock proving, over and over,
+// that bcrypt is slow.
+//
+// What the lower cost does NOT weaken: bcrypt's cost is encoded in the hash
+// string, so CompareHashAndPassword re-derives it per hash and every
+// authentication test still exercises the identical verify path, the identical
+// hash format, and the identical success/failure semantics. What it changes is
+// only how much CPU an attacker would need to brute-force a hash that exists
+// for a few milliseconds inside a test binary.
+//
+// The gate is [testing.Testing], not a settable variable or an environment
+// variable, precisely so no deployment can reach the weaker value: it is false
+// in any binary that is not a test binary, and there is no code path that
+// lowers the cost in the daemon. TestProductionBcryptCostIsUnchanged pins the
+// production number so this indirection cannot be used to quietly weaken it.
+func BcryptCost() int {
+	if testing.Testing() {
+		return testBcryptCost
+	}
+	return ProductionBcryptCost
+}
+
+// dummyBcryptHashes holds a pre-generated bcrypt hash per work factor, used on
+// the unknown-username path in [MemoryUserStore.AuthenticateBasic] to equalise
+// response time between "no such user" and "wrong password". Without a dummy
+// compare, response time leaks user existence.
+//
+// There is one entry per cost because the equalisation is only meaningful when
+// the dummy compare costs the same as the real one, and a compare's cost comes
+// from the hash it is handed — a cost-12 dummy next to cost-4 records would
+// both invert the timing signal and reintroduce the cost this indirection
+// exists to avoid. Neither hash is ever a valid credential: the call always
+// returns ErrUnauthenticated.
+var dummyBcryptHashes = map[int][]byte{
+	ProductionBcryptCost: []byte("$2a$12$w3j05DkTLbO8bN3FgkOfxuNFDLEzElC42sZuPYO0eACSU6dKRLyFG"),
+	testBcryptCost:       []byte("$2a$04$l56Hi8sG8C4SbAPTZORHYeaVz897SRxcoenZ32.x.bMUwOByyho5G"),
+}
+
+// DummyBcryptHash returns the timing-equalisation hash matching the active
+// [BcryptCost]. Exported because the persistent user store needs the same
+// hash for the same reason, and two copies would be two things to keep in step.
+func DummyBcryptHash() []byte {
+	return dummyBcryptHashes[BcryptCost()]
+}
 
 // looksLikeBcryptHash reports whether s is a bcrypt hash string — a 60-byte
 // value with a $2a$/$2b$/$2y$ prefix. Used to decide whether a stored record
@@ -350,7 +403,7 @@ func HashPassword(password string) (string, error) {
 	if looksLikeBcryptHash(password) {
 		return password, nil
 	}
-	h, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
+	h, err := bcrypt.GenerateFromPassword([]byte(password), BcryptCost())
 	if err != nil {
 		return "", err
 	}
@@ -372,7 +425,7 @@ func (s *MemoryUserStore) AuthenticateBasic(_ context.Context, username, passwor
 		// Consume roughly the same wall-clock as a real bcrypt verify so
 		// an attacker cannot distinguish "no such user" from "wrong password"
 		// by measuring response latency.
-		_ = bcrypt.CompareHashAndPassword(dummyBcryptHash, []byte(password))
+		_ = bcrypt.CompareHashAndPassword(DummyBcryptHash(), []byte(password))
 		return Identity{}, ErrUnauthenticated
 	}
 	if looksLikeBcryptHash(rec.password) {

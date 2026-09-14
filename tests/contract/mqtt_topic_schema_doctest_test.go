@@ -26,15 +26,33 @@ package contract
 // Source: docs/mqtt-topic-schema.md §"Concrete examples" and §"Schema".
 //
 // Assumption fixture: base="openccu-loom", central="GoOtto",
-// iface="HmIP-RF", device address="000C9709AEF157", channel=1.
+// interface=hmenum.InterfaceHmIPRF, device address="000C9709AEF157",
+// channel=1.
+//
+// The `iface` argument every TopicBuilder method takes is a *wire*
+// interface id — `<central>-<interface>`. Production callers never spell
+// one: they pass `ev.Interface`, which the CCU produced and
+// [hmtypes.NewWireInterfaceID] is the constructor for. This test therefore
+// derives it from the central name and the bare interface enum, the same
+// two inputs the daemon has, rather than typing the wire form out. Typing
+// it out is what let `openccu-loom/GoOtto/HmIP-RF/…` stand in the schema
+// doc and in this test simultaneously, green, for as long as it did:
+// [hmtypes.ParseWireInterfaceID] validates nothing, so a bare token handed
+// to the builder renders a bare token back and the pin confirmed its own
+// input.
 
 import (
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/internal/payload"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // docTopicCase pairs a human-readable label, the topic string from
@@ -52,33 +70,37 @@ type docTopicCase struct {
 // and the "Concrete mapping examples" section for per-DP state.
 func TestMQTTTopicSchemaDoc_StateTopics(t *testing.T) {
 	t.Parallel()
+	runDocTopicCases(t, stateTopicCases())
+}
 
+func stateTopicCases() []docTopicCase {
 	b := mqtt.NewTopicBuilder("openccu-loom")
 	const (
 		central = "GoOtto"
-		iface   = "HmIP-RF"
 		addr    = "000C9709AEF157"
 		ch      = 1
 	)
+	// Built, not typed — see the file header.
+	iface := hmtypes.NewWireInterfaceID(central, hmenum.InterfaceHmIPRF).String()
 
 	cases := []docTopicCase{
 		{
 			// §"State topics" table row 1: Per-DP VALUES state
 			// §"Concrete mapping examples" / "Actual temperature"
 			name:     "values-state/ACTUAL_TEMPERATURE",
-			docTopic: "openccu-loom/GoOtto/HmIP-RF/000C9709AEF157/1/values/ACTUAL_TEMPERATURE",
+			docTopic: "openccu-loom/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/1/values/ACTUAL_TEMPERATURE",
 			got:      b.ParameterState(central, iface, addr, ch, payload.BucketValues, "ACTUAL_TEMPERATURE"),
 		},
 		{
 			// §"State topics" table row 2: Per-DP MASTER state
 			name:     "master-state/TEMPERATURE_MINIMUM",
-			docTopic: "openccu-loom/GoOtto/HmIP-RF/000C9709AEF157/1/master/TEMPERATURE_MINIMUM",
+			docTopic: "openccu-loom/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/1/master/TEMPERATURE_MINIMUM",
 			got:      b.ParameterState(central, iface, addr, ch, payload.BucketMaster, "TEMPERATURE_MINIMUM"),
 		},
 		{
 			// §"State topics" table row 3: Custom-DP derived state
 			name:     "custom-state/climate",
-			docTopic: "openccu-loom/GoOtto/HmIP-RF/000C9709AEF157/1/custom/climate",
+			docTopic: "openccu-loom/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/1/custom/climate",
 			got: b.SlotState(central, iface, payload.TopicSlot{
 				Address:   addr,
 				Channel:   ch,
@@ -89,90 +111,86 @@ func TestMQTTTopicSchemaDoc_StateTopics(t *testing.T) {
 		{
 			// §"State topics" table row 4: Device availability
 			name:     "device-availability",
-			docTopic: "openccu-loom/GoOtto/HmIP-RF/000C9709AEF157/availability",
+			docTopic: "openccu-loom/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/availability",
 			got:      b.DeviceAvailability(central, iface, addr),
 		},
 		{
 			// §"State topics" table row 5: Device info snapshot
 			name:     "device-info",
-			docTopic: "openccu-loom/GoOtto/HmIP-RF/000C9709AEF157/info",
+			docTopic: "openccu-loom/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/info",
 			got:      b.DeviceInfo(central, iface, addr),
 		},
 		{
 			// §"State topics" table row 6: Device diagnostics
 			name:     "device-diagnostics",
-			docTopic: "openccu-loom/GoOtto/HmIP-RF/000C9709AEF157/diagnostics",
+			docTopic: "openccu-loom/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/diagnostics",
 			got:      b.DeviceDiagnostics(central, iface, addr),
 		},
 	}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			if tc.got != tc.docTopic {
-				t.Errorf("topic mismatch for %q:\n  doc says: %q\n  builder:  %q\n  → update docs/mqtt-topic-schema.md or fix TopicBuilder",
-					tc.name, tc.docTopic, tc.got)
-			}
-		})
-	}
+	return cases
 }
 
 // TestMQTTTopicSchemaDoc_CommandTopics exercises the "Command (set) topics"
 // table rows.
 func TestMQTTTopicSchemaDoc_CommandTopics(t *testing.T) {
 	t.Parallel()
+	runDocTopicCases(t, commandTopicCases())
+}
 
+func commandTopicCases() []docTopicCase {
 	b := mqtt.NewTopicBuilder("openccu-loom")
 	const (
 		central = "GoOtto"
-		iface   = "HmIP-RF"
 		addr    = "000C9709AEF157"
 		ch      = 1
 	)
+	// Built, not typed — see the file header.
+	iface := hmtypes.NewWireInterfaceID(central, hmenum.InterfaceHmIPRF).String()
 
 	cases := []docTopicCase{
 		{
 			// §"Command topics" table row 1: Write single parameter VALUES
 			// §"Concrete mapping examples" / "Set-point temperature"
 			name:     "values-set/SET_POINT_TEMPERATURE",
-			docTopic: "openccu-loom/GoOtto/HmIP-RF/000C9709AEF157/1/values/SET_POINT_TEMPERATURE/set",
+			docTopic: "openccu-loom/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/1/values/SET_POINT_TEMPERATURE/set",
 			got:      b.ParameterCommand(central, iface, addr, ch, payload.BucketValues, "SET_POINT_TEMPERATURE"),
 		},
 		{
 			// §"Command topics" table row 2: Write MASTER parameter
 			name:     "master-set/TEMPERATURE_MINIMUM",
-			docTopic: "openccu-loom/GoOtto/HmIP-RF/000C9709AEF157/1/master/TEMPERATURE_MINIMUM/set",
+			docTopic: "openccu-loom/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/1/master/TEMPERATURE_MINIMUM/set",
 			got:      b.ParameterCommand(central, iface, addr, ch, payload.BucketMaster, "TEMPERATURE_MINIMUM"),
 		},
 		{
 			// §"Command topics" table row 3: Custom-DP service method
 			// §"Concrete mapping examples" / "Climate service method"
 			name:     "custom-service-method/climate/set_mode",
-			docTopic: "openccu-loom/GoOtto/HmIP-RF/000C9709AEF157/1/custom/climate/set/set_mode",
+			docTopic: "openccu-loom/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/1/custom/climate/set/set_mode",
 			got: b.CustomDPServiceMethod(central, iface,
 				payload.TopicSlot{Address: addr, Channel: ch, Bucket: payload.BucketCustom, Parameter: "climate"},
 				"set_mode"),
 		},
 	}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			if tc.got != tc.docTopic {
-				t.Errorf("topic mismatch for %q:\n  doc says: %q\n  builder:  %q\n  → update docs/mqtt-topic-schema.md or fix TopicBuilder",
-					tc.name, tc.docTopic, tc.got)
-			}
-		})
-	}
+	return cases
 }
 
 // TestMQTTTopicSchemaDoc_BridgeHubTopics exercises the "Bridge / hub status"
 // table and the concrete hub examples.
 func TestMQTTTopicSchemaDoc_BridgeHubTopics(t *testing.T) {
 	t.Parallel()
+	runDocTopicCases(t, bridgeHubTopicCases())
+}
 
+func bridgeHubTopicCases() []docTopicCase {
 	b := mqtt.NewTopicBuilder("openccu-loom")
 	const central = "GoOtto"
+	// The `<iface>` in the connectivity row is the same wire id as in the
+	// datapoint rows: production reaches it through
+	// `WireInterfaceID(centralName, iface)` (hub_mqtt_publisher.go) and
+	// `dp.InterfaceID`, never a bare token. Built here for the same reason.
+	iface := hmtypes.NewWireInterfaceID(central, hmenum.InterfaceHmIPRF).String()
 
 	cases := []docTopicCase{
 		{
@@ -232,9 +250,9 @@ func TestMQTTTopicSchemaDoc_BridgeHubTopics(t *testing.T) {
 		},
 		{
 			// §"Bridge / hub status" row: Interface connectivity
-			name:     "hub-connectivity/HmIP-RF",
-			docTopic: "openccu-loom/GoOtto/hub/connectivity/HmIP-RF",
-			got:      naming.MQTTHubConnectivity(b.Base, central, "HmIP-RF"),
+			name:     "hub-connectivity/GoOtto-HmIP-RF",
+			docTopic: "openccu-loom/GoOtto/hub/connectivity/GoOtto-HmIP-RF",
+			got:      naming.MQTTHubConnectivity(b.Base, central, iface),
 		},
 		{
 			// §"Bridge / hub status" row: System status event
@@ -244,15 +262,7 @@ func TestMQTTTopicSchemaDoc_BridgeHubTopics(t *testing.T) {
 		},
 	}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			if tc.got != tc.docTopic {
-				t.Errorf("topic mismatch for %q:\n  doc says: %q\n  builder:  %q\n  → update docs/mqtt-topic-schema.md or fix TopicBuilder",
-					tc.name, tc.docTopic, tc.got)
-			}
-		})
-	}
+	return cases
 }
 
 // TestMQTTTopicSchemaDoc_DiscoveryTopic exercises the HA Discovery config
@@ -315,5 +325,92 @@ func TestMQTTTopicSchemaDoc_DiscoveryNodeScopeIsNotATopic(t *testing.T) {
 	if scope := mqtt.NewTopicBuilder("").DiscoveryNodeScope(); scope != "" {
 		t.Errorf("an empty topic base produced scope %q; NewTopicBuilder fills in the default, so it "+
 			"must reach the same answer as naming it", scope)
+	}
+}
+
+// runDocTopicCases is the shared assertion for every pinned table above.
+func runDocTopicCases(t *testing.T, cases []docTopicCase) {
+	t.Helper()
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if tc.got != tc.docTopic {
+				t.Errorf("topic mismatch for %q:\n  doc says: %q\n  builder:  %q\n  → update docs/mqtt-topic-schema.md or fix TopicBuilder",
+					tc.name, tc.docTopic, tc.got)
+			}
+		})
+	}
+}
+
+// docTopicLiteralRE matches a backticked topic literal in
+// docs/mqtt-topic-schema.md: a `/`-separated string with no placeholder
+// segment. A row written against `<iface>` is a shape, not an example, and
+// the shape rows are pinned by the tables above through the fixture.
+var docTopicLiteralRE = regexp.MustCompile("`(openccu-loom/[A-Za-z0-9_./-]+)`")
+
+// TestMQTTTopicSchemaDoc_ConcreteExamplesAreAllPinned closes the loop the
+// rest of this file leaves open.
+//
+// Every other test here compares a builder call against a string typed into
+// this file. That pins the builder, and it pins nothing at all about the
+// document: the "Concrete examples" table shipped
+// `openccu-loom/GoOtto/HmIP-RF/…` — a bare interface token the daemon has
+// never published — while this file typed the same bare token into both
+// sides of its own comparison and stayed green through every release that
+// carried it. An operator copying that row got a topic with no retained
+// message on it, and the doctest meant to stop exactly that agreed with the
+// doc because it had transcribed it.
+//
+// So this test reads the document. Every concrete topic literal under the
+// default base that appears in docs/mqtt-topic-schema.md has to be a
+// docTopic some case above pins — and every one of those cases now gets its
+// `got` from the real builder, driven by the inputs a production caller has
+// (a central name and a bare interface enum) rather than by the wire string
+// the answer is made of. A literal that reaches the document without a pin
+// fails here; a pin that drifts from the builder fails above. Neither half
+// can be satisfied by transcription any more.
+func TestMQTTTopicSchemaDoc_ConcreteExamplesAreAllPinned(t *testing.T) {
+	t.Parallel()
+
+	raw, err := os.ReadFile(filepath.Join(repoRoot(t), "docs", "mqtt-topic-schema.md"))
+	if err != nil {
+		t.Fatalf("read schema doc: %v", err)
+	}
+
+	pinned := map[string]bool{}
+	for _, set := range [][]docTopicCase{stateTopicCases(), commandTopicCases(), bridgeHubTopicCases()} {
+		for _, tc := range set {
+			pinned[tc.docTopic] = true
+		}
+	}
+
+	seen := 0
+	for _, m := range docTopicLiteralRE.FindAllStringSubmatch(string(raw), -1) {
+		topic := m[1]
+		// Placeholder rows describe a shape; only fully concrete rows are
+		// examples an operator can copy.
+		if strings.ContainsAny(topic, "<>+#") {
+			continue
+		}
+		// A prefix, not a whole topic (the wildcard-subscription section).
+		if !strings.Contains(strings.TrimPrefix(topic, "openccu-loom/"), "/") {
+			continue
+		}
+		seen++
+		if !pinned[topic] {
+			t.Errorf("docs/mqtt-topic-schema.md carries the concrete topic %q, which no case in this "+
+				"file pins against the builder — an operator can copy it and the daemon may never "+
+				"publish it. Add a docTopicCase, or make the row a placeholder shape.", topic)
+		}
+	}
+
+	// Anti-vacuity: a regexp that stopped matching would pass silently. The
+	// floor is the size of the "Concrete examples" table — the rows written
+	// to be copied, and the ones the bare-interface defect shipped in. If a
+	// row is removed rather than fixed, that is a deliberate edit and this
+	// number moves with it.
+	if seen < 4 {
+		t.Errorf("only %d concrete topic literals found in docs/mqtt-topic-schema.md; the extractor has "+
+			"stopped seeing the document and this test is no longer checking anything", seen)
 	}
 }

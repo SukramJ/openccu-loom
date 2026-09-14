@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // mqttFanoutQueueDepth is the soft bound on the per-broker publish queue. A
@@ -203,13 +204,93 @@ func (f *mqttFanout) recordDrop() {
 
 // stop cancels in-flight broker I/O and waits for the worker to exit. Safe to
 // call when start was never invoked. Whatever is still queued is discarded:
-// the context it would publish under is already cancelled, and every durable
-// job is re-issued from scratch by the next Start.
+// run() returns on a cancelled context without draining, by design, because
+// every remaining publish would fail fast under that same context anyway.
+//
+// "AND EVERY DURABLE JOB IS RE-ISSUED FROM SCRATCH BY THE NEXT START" USED TO
+// STAND HERE, AND IT IS FALSE FOR ONE CLASS OF JOB. A RETRACTION is not
+// re-issued by the next Start — the next Start publishes the DECLARE instead,
+// which is the opposite write. So a generation swap landing between
+// [HubMQTTPublisher.RetractCentral]'s enqueue and the worker's drain discards
+// the retract for good, and the removed CCU's retained discovery configs and
+// gate topic stay on the broker forever (the orphan sweep is scoped to
+// REGISTERED centrals, so nothing ever reaches them again). Reproduced in
+// TestAQueuedRetractSurvivesABrokerReconnect. Callers that can be holding a
+// retraction must use [mqttFanout.stopDraining].
 func (f *mqttFanout) stop() {
 	if f.cancel != nil {
 		f.cancel()
 	}
 	f.wg.Wait()
+}
+
+// fanoutStopGrace bounds how long a generation swap waits for the durable
+// remainder of the retiring queue before it cancels anyway.
+//
+// SHORT ON PURPOSE. It covers the case that actually loses a retract — the
+// worker mid-publish against a broker that is answering, which is what a
+// reconnect implies in the first place, and which takes milliseconds — and it
+// does NOT try to outlast a broker that accepts bytes and never acknowledges.
+// A retract is unwritable to such a broker anyway, and this same teardown is
+// the daemon's shutdown path, whose contract (pinned by
+// TestHubMQTTPublisherStopCancelsInflightPublish) is that Stop returns even
+// while the worker is wedged in a publish. Half a second is a politeness
+// window, not a deadline anything relies on.
+const fanoutStopGrace = 500 * time.Millisecond
+
+// stopDraining is [mqttFanout.stop] with a bounded chance for the queued
+// DURABLE jobs to run first. Use it wherever the queue may hold a write that
+// the next generation will not re-issue — a retraction above all.
+//
+// Evictable jobs are dropped rather than waited for: they are self-healing
+// state publishes, the next Start re-issues every one of them, and waiting on
+// a backlog of them would put a full hub-plane republish in front of the
+// on-connect re-wire that triggered the swap.
+//
+// A context that is ALREADY cancelled means the parent is going away (daemon
+// shutdown), so there is nothing to drain into and no grace is spent.
+func (f *mqttFanout) stopDraining(grace time.Duration) {
+	if f.ctx == nil || f.ctx.Err() != nil {
+		f.stop()
+		return
+	}
+	f.dropEvictable()
+	// The barrier is itself durable, so an overflowing queue cannot evict it,
+	// and it runs after everything enqueued before this call.
+	done := make(chan struct{})
+	f.enqueueDurable(func() { close(done) })
+	timer := time.NewTimer(grace)
+	defer timer.Stop()
+	select {
+	case <-done:
+	case <-timer.C:
+		f.logger.Warn("mqtt.fanout.drain_timeout", slog.Duration("grace", grace))
+	case <-f.ctx.Done():
+	}
+	f.stop()
+}
+
+// dropEvictable removes every evictable job from the queue, preserving the
+// order of the durable remainder.
+func (f *mqttFanout) dropEvictable() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.evictableCount == 0 {
+		return
+	}
+	kept := f.queue[:0]
+	for _, job := range f.queue {
+		if !job.evictable {
+			kept = append(kept, job)
+		}
+	}
+	// Clear the vacated tail so dropped closures are not pinned by the
+	// backing array.
+	for i := len(kept); i < len(f.queue); i++ {
+		f.queue[i] = fanoutJob{}
+	}
+	f.queue = kept
+	f.evictableCount = 0
 }
 
 // flush blocks until every job enqueued before this call has been drained by
