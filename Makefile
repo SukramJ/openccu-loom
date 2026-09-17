@@ -68,11 +68,28 @@ GO_TEST_TIMEOUT ?= 20m
 help: ## show this help
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
+# Lint tool versions, pinned to match the GOFUMPT_VERSION /
+# GOLANGCI_LINT_VERSION set in .github/workflows/ci.yml. A local gate is only
+# usable if it reports what CI reports, so the two lists must be bumped
+# together — raise both, run `make lint`, and fix or justify whatever the new
+# release finds in the same change.
+#
+# These were on @latest here while CI was pinned, which is worse than either
+# alone: a clean `make fmt-check` locally said nothing about the gate, and
+# gofumpt is a formatter, so the two versions disagree about how to wrap
+# untouched code and CI reds on a diff that did not cause it.
+#
+# goimports, goose, govulncheck, go-licenses and gremlins stay on @latest,
+# matching ci.yml: none of them is a formatter, and for govulncheck and
+# go-licenses a floating answer is the point (see the security job).
+GOFUMPT_VERSION       ?= v0.10.0
+GOLANGCI_LINT_VERSION ?= v2.13.0
+
 .PHONY: setup
 setup: ## install developer tooling and the pre-commit hook
-	$(GO) install mvdan.cc/gofumpt@latest
+	$(GO) install mvdan.cc/gofumpt@$(GOFUMPT_VERSION)
 	$(GO) install golang.org/x/tools/cmd/goimports@latest
-	$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+	$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 	$(GO) install github.com/pressly/goose/v3/cmd/goose@latest
 	$(GO) install golang.org/x/vuln/cmd/govulncheck@latest
 	$(GO) install github.com/google/go-licenses@latest
