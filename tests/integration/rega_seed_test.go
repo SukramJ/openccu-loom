@@ -166,7 +166,7 @@ func ingestFromMock(t *testing.T, m *mockCCU) *central.Unit {
 	pipeline := adapter.NewDevicePipeline(c)
 	logger := slog.New(slog.DiscardHandler)
 	if err := pipeline.IngestFromBackend(ctx, "HmIP-RF", hmenum.InterfaceHmIPRF,
-		backend, nil, runner, logger); err != nil {
+		backend, nil, adapter.NewCCUValueSeeder(runner), logger); err != nil {
 		t.Fatalf("ingest: %v", err)
 	}
 	return c

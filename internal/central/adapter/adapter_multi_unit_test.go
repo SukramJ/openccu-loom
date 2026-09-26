@@ -13007,7 +13007,7 @@ func TestDevicePipeline_SeedValues_EmptyResponse(t *testing.T) {
 	f := buildBoost7Fixture(t)
 	p := NewDevicePipeline(f.unit)
 
-	err := p.seedValues(context.Background(), "HmIP-RF", r, slog.Default())
+	err := p.Reseed(context.Background(), "HmIP-RF", &ccuValueSeeder{runner: r}, SeedFull, slog.Default())
 	if err != nil {
 		t.Fatalf("seedValues with empty response: %v", err)
 	}
@@ -13034,7 +13034,7 @@ func TestDevicePipeline_SeedValues_WithKnownDevice(t *testing.T) {
 	f := buildBoost7Fixture(t)
 	p := NewDevicePipeline(f.unit)
 
-	err := p.seedValues(context.Background(), "HmIP-RF", r, slog.Default())
+	err := p.Reseed(context.Background(), "HmIP-RF", &ccuValueSeeder{runner: r}, SeedFull, slog.Default())
 	if err != nil {
 		t.Fatalf("seedValues with device data: %v", err)
 	}

@@ -9,16 +9,16 @@ import (
 	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/client/rega"
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // wireLoadAndRefresh installs the central.refresh_client_data handler: a
-// per-interface fetch-all-device-data sweep (the push-event-first
-// reconciliation safety net). Wired once a Rega runner exists, as part of the
+// per-interface bulk value sweep (the push-event-first reconciliation safety
+// net). Wired once the hub session offers a value seeder, as part of the
 // gated southbound bring-up.
-func wireLoadAndRefresh(unit *central.Unit, pipeline *DevicePipeline, ifaces []config.InterfaceSpec, runner *rega.Runner, logger *slog.Logger) {
-	if unit == nil || pipeline == nil || runner == nil {
+func wireLoadAndRefresh(unit *central.Unit, pipeline *DevicePipeline, ifaces []config.InterfaceSpec, seeder ValueSeeder, logger *slog.Logger) {
+	if unit == nil || pipeline == nil || seeder == nil {
 		return
 	}
 	unit.SetLoadAndRefreshFn(func(ctx context.Context) error {
@@ -28,7 +28,7 @@ func wireLoadAndRefresh(unit *central.Unit, pipeline *DevicePipeline, ifaces []c
 			if id == "" {
 				continue
 			}
-			if err := pipeline.seedValues(ctx, id, runner, logger); err != nil && firstErr == nil {
+			if err := pipeline.Reseed(ctx, hmenum.Interface(id), seeder, SeedCheap, logger); err != nil && firstErr == nil {
 				firstErr = err
 			}
 		}

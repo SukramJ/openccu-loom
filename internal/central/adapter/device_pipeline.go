@@ -5,13 +5,10 @@ package adapter
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/url"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -21,7 +18,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/registry"
 	"github.com/SukramJ/openccu-loom/internal/channelflags"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
-	"github.com/SukramJ/openccu-loom/internal/client/rega"
 	"github.com/SukramJ/openccu-loom/internal/model/calculated"
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 
@@ -618,10 +614,10 @@ func (p *DevicePipeline) ensureDevice(dd *hmproto.DeviceDescription, interfaceID
 // to populate typed data points. `writer` may be nil; data points are
 // still built but stay read-only (SetValue returns [ErrNoWriter]).
 //
-// When `runner` is non-nil, the pipeline also pulls initial values in
-// a single Rega call via `fetch_all_device_data` and seeds every
-// matching data point. Without the runner the data points exist but
-// stay unobserved until the first event arrives.
+// When `seeder` is non-nil, the pipeline also pulls the interface's current
+// values in bulk (on a CCU one ReGa call, `fetch_all_device_data`) and seeds
+// every matching data point. Without a seeder the data points exist but stay
+// unobserved until the first event arrives.
 //
 // The logger receives a debug entry per paramset-load failure so
 // the daemon keeps going when a single CCU channel mis-behaves.
@@ -631,7 +627,7 @@ func (p *DevicePipeline) IngestFromBackend(
 	iface hmenum.Interface,
 	b backends.Operations,
 	writer ValueWriter,
-	runner *rega.Runner,
+	seeder ValueSeeder,
 	logger *slog.Logger,
 ) error {
 	p.ingestMu.Lock()
@@ -690,7 +686,7 @@ func (p *DevicePipeline) IngestFromBackend(
 	if p.unit != nil && p.unit.Devices != nil {
 		_ = p.unit.Devices.CheckAndCreateDevicesFromCache(ctx)
 	}
-	return p.finishIngest(ctx, interfaceID, iface, b, writer, runner, logger)
+	return p.finishIngest(ctx, interfaceID, iface, b, writer, seeder, logger)
 }
 
 // withholdParked splits a pull's descriptions into the ones to
@@ -778,7 +774,7 @@ func (p *DevicePipeline) IngestNewDevices(
 	iface hmenum.Interface,
 	b backends.Operations,
 	writer ValueWriter,
-	runner *rega.Runner,
+	seeder ValueSeeder,
 	descs []hmproto.DeviceDescription,
 	logger *slog.Logger,
 ) ([]string, error) {
@@ -827,7 +823,7 @@ func (p *DevicePipeline) IngestNewDevices(
 		return nil, err
 	}
 	scoped := p.scopedTo(newRoots)
-	if err := scoped.finishIngest(ctx, interfaceID, iface, b, writer, runner, logger); err != nil {
+	if err := scoped.finishIngest(ctx, interfaceID, iface, b, writer, seeder, logger); err != nil {
 		return nil, err
 	}
 	addrs := make([]string, 0, len(newRoots))
@@ -851,7 +847,7 @@ func (p *DevicePipeline) finishIngest(
 	iface hmenum.Interface,
 	b backends.Operations,
 	writer ValueWriter,
-	runner *rega.Runner,
+	seeder ValueSeeder,
 	logger *slog.Logger,
 ) error {
 	if err := p.hydrateDataPoints(ctx, interfaceID, b, writer, logger); err != nil {
@@ -940,21 +936,8 @@ func (p *DevicePipeline) finishIngest(
 	// devices, etc.) keep their cached source so the UI never shows
 	// an empty surface on cold boot.
 	p.restoreValuesFromCache(ctx, interfaceID, logger)
-	if runner != nil {
-		// Pass the BARE interface name ("HmIP-RF" / "BidCos-RF") to
-		// the Rega `fetch_all_device_data` script — the CCU's
-		// `interfaces.Get(<name>)` only knows raw interface labels,
-		// NOT the openccu-loom-internal `<central>-<iface>` wire-id
-		// composite. Without this fix the script's
-		// `interfaces.Get("GoOtto-HmIP-RF")` returns null and the
-		// outer `if (oInterface)` branch never enters → empty `{}`
-		// JSON → no value seeded → every climate-internal DP
-		// (SET_POINT_MODE, ACTIVE_PROFILE, BOOST_MODE,
-		// SET_POINT_TEMPERATURE, …) stays unobserved at boot. The
-		// device-side ModelRegistry filtering inside seedValues
-		// uses the wire-id (`p.central.ModelRegistry.Get(addr)`)
-		// independently of this argument.
-		if err := p.seedValues(ctx, string(iface), runner, logger); err != nil {
+	if seeder != nil {
+		if err := p.Reseed(ctx, iface, seeder, SeedFull, logger); err != nil {
 			// Seeding is best-effort: without it points have no value
 			// but the daemon still works, so we log and move on.
 			logger.Warn("pipeline.seed.failed",
@@ -1309,44 +1292,28 @@ func (p *DevicePipeline) applyChannelOperationModeGating(interfaceID string) {
 	}
 }
 
-// seedValues runs fetch_all_device_data on the CCU and applies the
-// resulting values to the matching data points on this central. The
-// script returns a single JSON object keyed by `<iface>.<channel>.<param>`
-// (URL-encoded); every recognised key is resolved via the ModelRegistry
-// and the value is passed to [generic.DataPoint.OnWireValue] for
-// typed coercion.
-func (p *DevicePipeline) seedValues(
+// Reseed asks seeder for iface's current values and applies them to the
+// matching data points on this central through [generic.DataPoint.OnWireValue]
+// for typed coercion. Values of edge-trigger parameters are dropped: a button
+// acquires a value on its first press and keeps it forever, and seeding it
+// would mark the data point observed and hand the boot-time snapshot a
+// keypress to replay — see the edge-trigger exclusion in the values cache for
+// the same reason.
+func (p *DevicePipeline) Reseed(
 	ctx context.Context,
-	interfaceID string,
-	runner *rega.Runner,
+	iface hmenum.Interface,
+	seeder ValueSeeder,
+	depth SeedDepth,
 	logger *slog.Logger,
 ) error {
-	var values map[string]json.RawMessage
-	if err := runner.RunJSON(ctx, hmenum.RegaScriptFetchAllDeviceData,
-		map[string]string{"interface": interfaceID}, &values); err != nil {
+	values, err := seeder.SeedValues(ctx, iface, depth)
+	if err != nil {
 		return err
 	}
-	applied := 0
-	for rawKey, raw := range values {
-		key, err := url.QueryUnescape(rawKey)
-		if err != nil {
-			continue
-		}
-		parts := strings.SplitN(key, ".", 3)
-		if len(parts) != 3 {
-			continue
-		}
-		channelAddr, parameter := parts[1], parts[2]
-		// The script emits every DP that carries a valid Timestamp(), which a
-		// button acquires on its first press and keeps forever. Seeding that
-		// value would mark the data point observed and hand the boot-time
-		// snapshot a keypress to replay — see the edge-trigger exclusion in
-		// the values cache for the same reason.
-		if hmenum.IsEdgeTriggerParameter(hmenum.Parameter(parameter)) {
-			continue
-		}
-		deviceAddr := deviceAddressOf(channelAddr)
-		dev, ok := p.unit.ModelRegistry.Get(deviceAddr)
+	applied, delivered := 0, 0
+	for channelAddr, params := range values {
+		delivered += len(params)
+		dev, ok := p.unit.ModelRegistry.Get(deviceAddressOf(channelAddr))
 		if !ok {
 			continue
 		}
@@ -1354,44 +1321,23 @@ func (p *DevicePipeline) seedValues(
 		if ch == nil {
 			continue
 		}
-		dp := ch.Parameter(hmenum.Parameter(parameter))
-		if dp == nil {
-			continue
-		}
-		// Unmarshal the raw value; the script emits bare booleans,
-		// numbers, or double-quoted strings — json.Unmarshal into any
-		// handles all three without further branching.
-		var v any
-		if err := json.Unmarshal(raw, &v); err != nil {
-			continue
-		}
-		// String-valued data points are wrapped in UriEncode() by the
-		// script (fetch_all_device_data.fn) so an embedded quote or
-		// control character cannot break the surrounding JSON envelope —
-		// only booleans and numbers are emitted unencoded. That encoding
-		// survives json.Unmarshal untouched (it is just the string's
-		// content), so a string value must be decoded here the same way
-		// the key already is above; skipping it left values such as an
-		// IP_ADDRESS data point's "192.0.2.40" seeded into the model as
-		// the literal "172%2E18%2E4%2E40".
-		//
-		// Decoding goes through the package's canonical ReGa decoder, not a
-		// bare unescape: the CCU emits ISO-8859-1, so "Sp%FCle" unescapes to
-		// a raw 0xFC byte that is invalid UTF-8. The value is seeded into the
-		// live model and re-encoded by every north-bound plane, where
-		// json.Marshal replaces it with U+FFFD — irreversible corruption of a
-		// value the hub path renders correctly.
-		if s, ok := v.(string); ok {
-			v = decodeRegaField(s)
-		}
-		if setter, ok := dp.(interface{ OnWireValue(any) bool }); ok && setter.OnWireValue(v) {
-			applied++
+		for parameter, v := range params {
+			if hmenum.IsEdgeTriggerParameter(hmenum.Parameter(parameter)) {
+				continue
+			}
+			dp := ch.Parameter(hmenum.Parameter(parameter))
+			if dp == nil {
+				continue
+			}
+			if setter, ok := dp.(interface{ OnWireValue(any) bool }); ok && setter.OnWireValue(v) {
+				applied++
+			}
 		}
 	}
 	logger.Info("pipeline.seed.ok",
-		slog.String("interface", interfaceID),
+		slog.String("interface", string(iface)),
 		slog.Int("applied", applied),
-		slog.Int("delivered", len(values)))
+		slog.Int("delivered", delivered))
 	return nil
 }
 

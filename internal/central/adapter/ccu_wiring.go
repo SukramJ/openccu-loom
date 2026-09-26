@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
-	"net/http"
 	neturl "net/url"
 	"strconv"
 	"strings"
@@ -25,12 +24,9 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/client/observer"
-	"github.com/SukramJ/openccu-loom/internal/client/rega"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
 	"github.com/SukramJ/openccu-loom/internal/config"
-	"github.com/SukramJ/openccu-loom/internal/httpx"
 	"github.com/SukramJ/openccu-loom/internal/i18n"
-	"github.com/SukramJ/openccu-loom/internal/store/devicedetails"
 	"github.com/SukramJ/openccu-loom/internal/store/session"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
@@ -436,17 +432,19 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 	writer := deps.Writer
 	translations := deps.Translations
 
-	// Hub first: a failure here means the CCU is not yet serving JSON-RPC.
-	// Return before any wiring so the gate retries cleanly with no half-state.
+	// Hub first: a failure here means the system is not yet serving its
+	// metadata. Return before any wiring so the gate retries cleanly with no
+	// half-state.
 	recordCentralReadiness(unit, hmenum.ReadinessLoadingHub, 0, 0)
-	runner, hubData, hubCloser, err := WireHub(ctx, *cc, unit, logger, deps.Catalogs, cfg.Locale)
+	hub, err := profile.BringUpHub(ctx, HubBringUpInput{Cfg: cfg, CC: cc, Unit: unit, Deps: deps, Logger: logger})
 	if err != nil {
 		logger.Warn("wire.hub.failed",
 			slog.String("central", cc.Name),
 			slog.String("err", err.Error()))
 		return 0, fmt.Errorf("hub: %w", err)
 	}
-	addCloser(hubCloser)
+	addCloser(hub.Close)
+	hubData := hub.Data()
 	// Backfill the central's serial into the store now that the hub bring-up has
 	// resolved it (same canonical form SSDP discovery produces), so a central
 	// configured by host — e.g. localhost, where a host match against the
@@ -460,15 +458,13 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 	// Wire this central's own backup restorer every time it comes up
 	// successfully. Keyed by cc.Name so each central gets exactly its own
 	// restorer — a re-gate after reconnect simply refreshes the wrapped
-	// JSON-RPC session, it never lets one central's restorer answer for
-	// another's backups.
+	// session, it never lets one central's restorer answer for another's
+	// backups.
 	if deps.Backup != nil {
-		deps.Backup.SetRestorerForCentral(cc.Name, &HTTPBackupRestorer{
-			BaseURL:               ccuBaseURLFor(*cc),
-			Session:               runner.Client(),
-			InsecureSkipTLSVerify: cc.TLSInsecureSkipVerify,
-		})
-		logger.Info("wire.backup.restorer_ready", slog.String("central", cc.Name))
+		if restorer := hub.Restorer(); restorer != nil {
+			deps.Backup.SetRestorerForCentral(cc.Name, restorer)
+			logger.Info("wire.backup.restorer_ready", slog.String("central", cc.Name))
+		}
 	}
 
 	// Per-central interface→backend lookup, populated by wireInterface as each
@@ -499,17 +495,11 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 		WithValuesCacheStore(centralScopedValuesCache(deps, cc.Name), cc.Name).
 		WithChannelFlags(deps.ChannelFlags)
 
-	// JSON-RPC Caller adapter so CcuBackend can dispatch JSON-RPC-only ops.
-	var jCaller backends.Caller
-	if runner != nil {
-		jCaller = &jsonrpcCaller{client: runner.Client()}
-	}
-
 	total := len(cc.Interfaces)
 	recordCentralReadiness(unit, hmenum.ReadinessLoadingDevices, loaded, total)
 	for _, ifaceSpec := range cc.Interfaces {
 		iface := hmenum.Interface(strings.TrimSpace(ifaceSpec.Name))
-		closer, ingested, ifErr := wireInterface(ctx, *cc, iface, unit, pipeline, writer, runner, profile.Readiness(), callbackURL, cfg.Reliability, deps.MasterValues, backendsByInterface, jCaller, deps.BINRPCCallbackServer, binRPCCallbackAddr, adoptBINRPCHandlers, logger)
+		closer, ingested, ifErr := wireInterface(ctx, *cc, iface, unit, pipeline, writer, hub, profile.Readiness(), callbackURL, cfg.Reliability, deps.MasterValues, backendsByInterface, deps.BINRPCCallbackServer, binRPCCallbackAddr, adoptBINRPCHandlers, logger)
 		if ifErr != nil {
 			logger.Warn("wire.interface.failed",
 				slog.String("central", cc.Name),
@@ -538,9 +528,9 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 		recordCentralReadiness(unit, hmenum.ReadinessLoadingDevices, loaded, total)
 	}
 
-	// Periodic data-refresh handler (the fetch-all-device-data reconciliation
-	// safety net). runner is non-nil here — the hub load above succeeded.
-	wireLoadAndRefresh(unit, pipeline, cc.Interfaces, runner, logger)
+	// Periodic data-refresh handler (the bulk-value reconciliation safety
+	// net); absent when the system offers no value seeder.
+	wireLoadAndRefresh(unit, pipeline, cc.Interfaces, hub.ValueSeeder(), logger)
 
 	// Hot-plug: hand freshly announced devices (newDevices callback) to the
 	// pipeline so a device paired at runtime is materialised without a
@@ -551,26 +541,14 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 	// ListDevices anyway. Reset on teardown so a re-init generation never
 	// leaves a stale closure (old backends, old pipeline) behind.
 	if cbHandlers != nil {
-		var ddLoader *devicedetails.Loader
-		if runner != nil {
-			ddLoader = devicedetails.NewLoaderForJSONRPC(unit.DeviceDetails, runner.Client(), cc.Name, logger)
-		}
 		unit.SetDeviceIngestFn(newHotplugIngestor(
-			unit, pipeline, writer, runner, backendsByInterface.operations, ddLoader, logger,
+			unit, pipeline, writer, hub.ValueSeeder(), backendsByInterface.operations, hub.RefreshMetadata, logger,
 		))
 		addCloser(func() { unit.SetDeviceIngestFn(nil) })
 	}
 
 	// Late-binding handlers: resolve the primary client/backend at call time.
-	WireSysvarCreator(unit, writer)
-	WireBackupAndDownload(unit, writer)
-	// Durable service-message suppression: routes the hub coordinator seam
-	// and the ServiceMessages aggregate's Disable/Unsuppress path through the
-	// per-interface backend's Interface.suppressServiceMessages call.
-	WireServiceMessageSuppressor(unit, writer)
-	// Per-interface install-mode data points: one per pairing-capable radio,
-	// each writing to its own interface backend (no CCU-wide toggle exists).
-	WireInstallModeDPs(unit, writer)
+	hub.WireLate(unit, writer)
 	logger.Info("wire.sysvar_creator.ok", slog.String("central", cc.Name))
 	return loaded, nil
 }
@@ -703,13 +681,12 @@ func wireInterface(
 	unit *central.Unit,
 	pipeline *DevicePipeline,
 	writer *client.ValueWriter,
-	runner *rega.Runner,
+	hub HubSession,
 	readiness ReadinessProbe,
 	callbackURL string,
 	relCfg config.ReliabilityConfig,
 	masterValues *sqlite.MasterValuesStore,
 	backendReg *backendRegistry,
-	jsonCaller backends.Caller,
 	binrpcCallbackServer *rpcserver.BINRPCServer,
 	binrpcCallbackAddr string,
 	adoptBINRPCHandlers func(*CallbackHandlers),
@@ -724,10 +701,11 @@ func wireInterface(
 		// merely whether the client/backend wiring succeeded — a CUxD
 		// interface that exhausts every retry is wired but empty, and must
 		// not count toward the "interfaces loaded" tally.
-		return wireCUxDInterface(ctx, cc, unit, pipeline, writer, runner, readiness, relCfg, masterValues, backendReg, binrpcCallbackServer, binrpcCallbackAddr, adoptBINRPCHandlers, logger)
+		return wireCUxDInterface(ctx, cc, unit, pipeline, writer, hub, readiness, relCfg, masterValues, backendReg, binrpcCallbackServer, binrpcCallbackAddr, adoptBINRPCHandlers, logger)
 	}
 
-	url, err := interfaceURL(cc, iface)
+	transports := hub.Transports()
+	endpoint, err := transports.Endpoint(iface)
 	if err != nil {
 		return nil, false, err
 	}
@@ -742,9 +720,10 @@ func wireInterface(
 	initID := InitInterfaceID(unit.InstanceName(), cc.Name, iface)
 
 	xmlClient, err := xmlrpc.NewClient(xmlrpc.Config{
-		URL:                url,
-		Username:           cc.Username,
-		Password:           cc.Password,
+		URL:                endpoint.URL,
+		Username:           endpoint.Username,
+		Password:           endpoint.Password,
+		HTTPClient:         endpoint.HTTPClient,
 		Interface:          initID,
 		Host:               cc.Host,
 		InsecureSkipVerify: cc.TLSInsecureSkipVerify,
@@ -759,9 +738,9 @@ func wireInterface(
 	}
 
 	xmlCaller := &xmlrpcCaller{client: xmlClient}
-	announcer := newXMLRPCAnnouncer(xmlClient)
+	announcer := transports.Announcer(xmlClient, iface)
 
-	backendKind := backends.KindFor(iface)
+	backendKind := transports.BackendKind(iface)
 
 	// W5/W6: create an InterfaceClient that wraps the transport caller
 	// with the reliability stack (circuit breaker, retry, throttle,
@@ -807,13 +786,14 @@ func wireInterface(
 		Enabled:             true,
 		Logger:              logger.With(slog.String("interface", wireID)),
 		SessionRecorderHook: sessionHook,
-		// Gate the reconnect re-registration on the same boot marker that
-		// gates the initial bring-up. Without it a reconnect racing a
-		// rebooting CCU registers a second time (see [client.Config]).
-		// Bounded, unlike the boot gate: the reconnect loop retries with
-		// backoff, so a long wait here would stall the client state machine
-		// instead of letting it cycle.
-		WaitCCUReady: newReconnectReadinessGate(cc, readiness, logger),
+		// The reconnect re-registration waits on the system's readiness;
+		// see [InterfaceTransports.ReconnectGate].
+		WaitCCUReady: transports.ReconnectGate(),
+		// Stated, not defaulted: the backend kind comes from the session's
+		// transport strategy, and the client's capability profile must
+		// follow it rather than a guess from the interface name.
+		Capabilities: backends.CapabilityFor(backendKind),
+		BackendKind:  backendKind,
 		// Feeds the central's RPC + service metrics sections. See
 		// [newRPCOutcomeHook] for why the observer is resolved per call.
 		RPCOutcomeHook: newRPCOutcomeHook(unit, wireID),
@@ -840,7 +820,7 @@ func wireInterface(
 
 	backend, err := backends.FactoryWithKind(iface, backendKind, backends.FactoryInput{
 		XMLRPC:    bcaller,
-		JSONRPC:   jsonCaller,
+		JSONRPC:   transports.JSONCaller(),
 		Announcer: announcer,
 	})
 	if err != nil {
@@ -856,90 +836,9 @@ func wireInterface(
 		)
 	}
 
-	// Wire the ReGa script runner and the plain-HTTP transport into the CCU
-	// backend so the operations that need them (CreateBackupAndDownload and
-	// the group editor) are reachable in production. Both setters are no-ops
-	// on non-CCU backends; the type assertion ensures we only call them when
-	// the concrete type is *backends.CcuBackend.
-	if ccuBackend, ok := backend.(*backends.CcuBackend); ok {
-		if runner != nil {
-			ccuBackend.SetScriptRunner(runner)
-		}
-		// The ReGa com-test timestamps are offset-free CCU-local wall clock,
-		// so the backend needs the CCU's own zone to turn one into an
-		// instant. WireHub has already stamped it from the CCU's time
-		// configuration by the time any interface is wired.
-		ccuBackend.SetCCUTimezone(unit.SystemInformation().Timezone)
-		hc := jsonrpcHTTPClient(cc)
-		if hc == nil {
-			// No timeout here by design; the transport is ours either way.
-			hc = &http.Client{Transport: httpx.NewTransport()}
-		}
-		jc := runner
-		var sessionIDFn func() string
-		if jc != nil {
-			sessionIDFn = jc.Client().SessionID
-			// The backup download (cp_security.cgi) authenticates by session
-			// id and serves a login page under HTTP 200 for a stale one, so
-			// make sure the session is usable first. EnsureSession renews the
-			// live session rather than displacing it: a forced login here
-			// would abandon the session the whole central is working with and
-			// burn a slot in the CCU's small, WebUI-shared session pool on
-			// every backup.
-			rpcClient := jc.Client()
-			ccuBackend.SetSessionRenewer(func(ctx context.Context) (string, error) {
-				if err := rpcClient.EnsureSession(ctx); err != nil {
-					return "", err
-				}
-				return rpcClient.SessionID(), nil
-			})
-		}
-		ccuBackend.SetHTTPTransport(ccuBaseURLFor(cc), hc, sessionIDFn)
-
-		// Persist device / channel renames to the CCU. The hook resolves
-		// the address to its ReGa ISE-ID, then dispatches to Device.setName
-		// for a device address or Channel.setName for a channel address
-		// (one carrying a ":" channel suffix), both over JSON-RPC. Without
-		// this hook a rename would only mutate the in-memory model and be
-		// lost on the next device reload. Wired on the CCU backend because
-		// the ReGa ISE-ID lookup and setName calls require JSON-RPC.
-		renameBackend := ccuBackend
-		unit.SetRenameDeviceFn(func(ctx context.Context, address, name string) error {
-			iseID, err := renameBackend.GetIseIDByAddress(ctx, address)
-			if err != nil {
-				return fmt.Errorf("rename: resolve ise-id for %s: %w", address, err)
-			}
-			return dispatchRename(ctx, renameBackend, address, iseID, name)
-		})
-		// A device rename that carries its channels resolves the whole set
-		// in one Device.listAllDetail instead of one listing per address —
-		// the CCU has no address→ise-id method, so every resolve fetches
-		// the complete inventory.
-		unit.SetRenameDeviceBatchFn(func(ctx context.Context, rename central.DeviceRename) error {
-			addresses := make([]string, 0, len(rename.Channels)+1)
-			addresses = append(addresses, rename.Device.Address)
-			for _, ch := range rename.Channels {
-				addresses = append(addresses, ch.Address)
-			}
-			ids, err := renameBackend.GetIseIDsByAddresses(ctx, addresses)
-			if err != nil {
-				return fmt.Errorf("rename: resolve ise-ids for %s: %w", rename.Device.Address, err)
-			}
-			// The device goes first and short-circuits: renaming the
-			// channels around a device name the CCU rejected would leave
-			// the two out of step.
-			if err := dispatchRename(ctx, renameBackend, rename.Device.Address, ids[rename.Device.Address], rename.Device.Name); err != nil {
-				return err
-			}
-			var firstErr error
-			for _, ch := range rename.Channels {
-				if err := dispatchRename(ctx, renameBackend, ch.Address, ids[ch.Address], ch.Name); err != nil && firstErr == nil {
-					firstErr = err
-				}
-			}
-			return firstErr
-		})
-	}
+	// System-specific extras (script runner, HTTP transport, rename hooks)
+	// come from the hub session's transport strategy.
+	transports.ConfigureBackend(unit, iface, backend)
 
 	// Register the backend so REST / MQTT command paths can dispatch.
 	writer.Register(cc.Name, hmtypes.ParseWireInterfaceID(wireID), backend)
@@ -1005,7 +904,7 @@ func wireInterface(
 		// Resolve the CCU's TCP address from the XML-RPC URL so the
 		// TCP-probe stage can dial without knowing the per-interface port.
 		ccuTCPAddr := interfaceTCPAddr(cc, iface)
-		if parsed, parseErr := neturl.Parse(url); parseErr == nil && parsed.Host != "" {
+		if parsed, parseErr := neturl.Parse(endpoint.URL); parseErr == nil && parsed.Host != "" {
 			ccuTCPAddr = parsed.Host // already "host:port"
 		}
 		ccuTCPAddrCaptured := ccuTCPAddr
@@ -1183,7 +1082,7 @@ func wireInterface(
 	// the wiring ctx on the first attempt and a detached, teardown-bounded
 	// ctx on every background retry.
 	activate := func(activateCtx context.Context) error {
-		if err := pipeline.IngestFromBackend(activateCtx, wireID, iface, backend, writer, runner, logger); err != nil {
+		if err := pipeline.IngestFromBackend(activateCtx, wireID, iface, backend, writer, hub.ValueSeeder(), logger); err != nil {
 			return fmt.Errorf("ingest: %w", err)
 		}
 		logger.Info("wire.ingest.ok",

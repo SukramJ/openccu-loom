@@ -213,9 +213,11 @@ func TestWireInterfaceActivateRetryGatesOnCCUReadiness(t *testing.T) {
 	go func() {
 		closer, _, err := wireInterface(
 			ctx, cc, hmenum.InterfaceHmIPRF, unit, pipeline, writer,
-			nil, // runner: nil skips the ReGa fetch_all_device_data call: not needed
-			// to observe listDevices/init/deinit, and it would require
-			// faking a second (JSON-RPC) surface.
+			// A session without a ReGa runner skips the fetch_all_device_data
+			// seed and the JSON-only backend ops: not needed to observe
+			// listDevices/init/deinit, and they would require faking a second
+			// (JSON-RPC) surface.
+			newCCUHubSession(cc, unit, nil, HubData{}, nil, newCCUReadinessProbe(cc, nil), logger),
 			newCCUReadinessProbe(cc, nil),
 			callbackURL,
 			config.ReliabilityConfig{},
@@ -223,8 +225,6 @@ func TestWireInterfaceActivateRetryGatesOnCCUReadiness(t *testing.T) {
 			// newMasterPollerForInterface), so it is never
 			// dereferenced.
 			newBackendRegistry(),
-			nil, // jsonCaller: CcuBackend only needs XML-RPC for the methods
-			// this scenario exercises (listDevices, Init, Deinit).
 			nil, "", // BIN-RPC callback server/addr: unused outside the CUxD branch.
 			nil, // adoptBINRPCHandlers: only the CUxD branch registers one.
 			logger,
