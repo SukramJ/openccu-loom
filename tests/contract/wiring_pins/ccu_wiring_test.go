@@ -9,21 +9,21 @@ import (
 	"github.com/SukramJ/openccu-loom/tests/contract"
 )
 
-// TestPin_CcuBackend_SetScriptRunner_CalledInWiring pins that ccu_wiring.go
-// calls SetScriptRunner on the CcuBackend after construction. Without this
+// TestPin_CcuBackend_SetScriptRunner_CalledInWiring pins that the CCU hub
+// session (south_ccu_hub.go) calls SetScriptRunner on the CcuBackend after construction. Without this
 // call, ReGa-backed operations (GetServiceMessages via ReGa,
 // AcceptDeviceInInbox via ReGa, TriggerFirmwareUpdate via ReGa) return
 // ErrUnsupported in production.
 func TestPin_CcuBackend_SetScriptRunner_CalledInWiring(t *testing.T) {
 	contract.MustFindMethodCall(
 		t,
-		"internal/central/adapter/ccu_wiring.go",
+		"internal/central/adapter/south_ccu_hub.go",
 		"ccuBackend", "SetScriptRunner",
 	)
 }
 
 // TestPin_CcuBackend_SetHTTPTransport_CalledInWiring pins that
-// ccu_wiring.go calls SetHTTPTransport on the CcuBackend after
+// the CCU hub session (south_ccu_hub.go) calls SetHTTPTransport on the CcuBackend after
 // construction. Without this call, CreateBackupAndDownload and the group
 // editor return ErrUnsupported in production because the base URL and
 // session-ID provider are never wired. DownloadFirmware does not depend
@@ -31,13 +31,13 @@ func TestPin_CcuBackend_SetScriptRunner_CalledInWiring(t *testing.T) {
 func TestPin_CcuBackend_SetHTTPTransport_CalledInWiring(t *testing.T) {
 	contract.MustFindMethodCall(
 		t,
-		"internal/central/adapter/ccu_wiring.go",
+		"internal/central/adapter/south_ccu_hub.go",
 		"ccuBackend", "SetHTTPTransport",
 	)
 }
 
-// TestPin_CcuBackend_SetCCUTimezone_CalledInWiring pins that ccu_wiring.go
-// hands the CCU's own IANA zone to the backend after construction.
+// TestPin_CcuBackend_SetCCUTimezone_CalledInWiring pins that the CCU hub
+// session (south_ccu_hub.go) hands the CCU's own IANA zone to the backend after construction.
 //
 // Without this call the backend falls back to time.Local, and the
 // communication-test timestamps the ReGa scripts return are offset-free
@@ -49,20 +49,20 @@ func TestPin_CcuBackend_SetHTTPTransport_CalledInWiring(t *testing.T) {
 func TestPin_CcuBackend_SetCCUTimezone_CalledInWiring(t *testing.T) {
 	contract.MustFindMethodCall(
 		t,
-		"internal/central/adapter/ccu_wiring.go",
+		"internal/central/adapter/south_ccu_hub.go",
 		"ccuBackend", "SetCCUTimezone",
 	)
 }
 
 // TestPin_CcuBackend_SetRenameDeviceFn_WiredInCCUWiring pins that
-// ccu_wiring.go wires the per-central rename hook via SetRenameDeviceFn.
+// the CCU hub session (south_ccu_hub.go) wires the per-central rename hook via SetRenameDeviceFn.
 // Without this call, device and channel renames only mutate the in-memory
 // model and are lost on the next device reload — never reaching the CCU's
 // Device.setName / Channel.setName JSON-RPC surface.
 func TestPin_CcuBackend_SetRenameDeviceFn_WiredInCCUWiring(t *testing.T) {
 	contract.MustFindMethodCall(
 		t,
-		"internal/central/adapter/ccu_wiring.go",
+		"internal/central/adapter/south_ccu_hub.go",
 		"unit", "SetRenameDeviceFn",
 	)
 }
@@ -73,13 +73,13 @@ func TestPin_CcuBackend_SetRenameDeviceFn_WiredInCCUWiring(t *testing.T) {
 func TestPin_CcuBackend_GetIseIDByAddress_UsedInCCUWiring(t *testing.T) {
 	contract.MustFindMethodCall(
 		t,
-		"internal/central/adapter/ccu_wiring.go",
+		"internal/central/adapter/south_ccu_hub.go",
 		"renameBackend", "GetIseIDByAddress",
 	)
 }
 
 // TestPin_CcuBackend_SetRenameDeviceBatchFn_WiredInCCUWiring pins that
-// ccu_wiring.go wires the batched rename hook. Without it the central
+// the CCU hub session (south_ccu_hub.go) wires the batched rename hook. Without it the central
 // falls back to the per-address hook — correct, but every address makes
 // the backend fetch the CCU's whole inventory again (the CCU exposes no
 // address→ise-id method), so renaming a 13-channel device along with its
@@ -88,7 +88,7 @@ func TestPin_CcuBackend_GetIseIDByAddress_UsedInCCUWiring(t *testing.T) {
 func TestPin_CcuBackend_SetRenameDeviceBatchFn_WiredInCCUWiring(t *testing.T) {
 	contract.MustFindMethodCall(
 		t,
-		"internal/central/adapter/ccu_wiring.go",
+		"internal/central/adapter/south_ccu_hub.go",
 		"unit", "SetRenameDeviceBatchFn",
 	)
 }
@@ -100,7 +100,7 @@ func TestPin_CcuBackend_SetRenameDeviceBatchFn_WiredInCCUWiring(t *testing.T) {
 func TestPin_CcuBackend_GetIseIDsByAddresses_UsedInCCUWiring(t *testing.T) {
 	contract.MustFindMethodCall(
 		t,
-		"internal/central/adapter/ccu_wiring.go",
+		"internal/central/adapter/south_ccu_hub.go",
 		"renameBackend", "GetIseIDsByAddresses",
 	)
 }
@@ -139,5 +139,18 @@ func TestPin_FactoryInput_JSONRPCField_SetInCCUWiring(t *testing.T) {
 		t,
 		"internal/central/adapter/ccu_wiring.go",
 		"FactoryInput", "JSONRPC",
+	)
+}
+
+// TestPin_ConfigureBackend_CalledInInterfaceWiring pins the link between the
+// per-interface wiring and the CCU backend extras pinned above: wireInterface
+// hands every freshly built backend to its hub session's transport strategy.
+// Without this call the extras exist in south_ccu_hub.go and are never
+// applied — every pin above stays green while none of them runs.
+func TestPin_ConfigureBackend_CalledInInterfaceWiring(t *testing.T) {
+	contract.MustFindMethodCall(
+		t,
+		"internal/central/adapter/ccu_wiring.go",
+		"transports", "ConfigureBackend",
 	)
 }
