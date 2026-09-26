@@ -5,8 +5,10 @@ package adapter
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 
+	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -41,6 +43,22 @@ func (p *ccuProfile) Readiness() ReadinessProbe { return p.readiness }
 
 // Liveness implements [SouthProfile].
 func (p *ccuProfile) Liveness() LivenessProbe { return p.liveness }
+
+// Events implements [SouthProfile]: the CCU pushes to the daemon's shared
+// XML-RPC callback server (and, for CUxD, the BIN-RPC one).
+func (*ccuProfile) Events() EventIngress { return ccuEventIngress{} }
+
+// ccuEventIngress registers the central's route on the shared callback
+// server; the per-interface announcers then advertise it with `init`.
+type ccuEventIngress struct{}
+
+// Attach implements [EventIngress].
+func (ccuEventIngress) Attach(cc *config.CentralConfig, unit *central.Unit, deps WireDeps, logger *slog.Logger) (
+	handlers *CallbackHandlers, callbackURL, binRPCAddr string, detach func(),
+) {
+	callbackURL, binRPCAddr, handlers, detach = registerCentralCallbacks(deps, cc, unit, logger)
+	return handlers, callbackURL, binRPCAddr, detach
+}
 
 // ccuLivenessProbe polls the boot marker CGI and classifies the answer with
 // [probeRegaLiveness]: a hung ReGa is a non-OK answer, not a missing one.

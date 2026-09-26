@@ -233,3 +233,43 @@ func TestPongForUnregisteredInterfaceLeavesNoEventClock(t *testing.T) {
 		t.Fatal("a PONG for a registered interface must still stamp the event clock")
 	}
 }
+
+// TestNoteAliveStampsOnlyRegisteredClients pins the heartbeat seam an event
+// source without per-event traffic relies on: NoteAlive keeps a quiet
+// interface's callback liveness fresh, and it never stamps an interface the
+// central did not bring up (an unregistered id reports false and creates no
+// client state).
+func TestNoteAliveStampsOnlyRegisteredClients(t *testing.T) {
+	t.Parallel()
+
+	reg, _ := registryWithDevice(t)
+	c := reg.List()[0]
+	ic := pingPongClient(t, "ccu-01", "HmIP-RF")
+	if err := c.Clients.Register(&coordinators.ClientEntry{
+		InterfaceID: "HmIP-RF",
+		Interface:   hmenum.InterfaceHmIPRF,
+		Client:      ic,
+	}); err != nil {
+		t.Fatalf("register client: %v", err)
+	}
+	h := NewCallbackHandlers(c, nil)
+
+	if h.NoteAlive("BidCos-RF") {
+		t.Error("NoteAlive reported an interface the central never registered")
+	}
+	if !ic.LastCallbackAt().IsZero() {
+		t.Fatal("an unregistered interface's heartbeat stamped a registered client")
+	}
+
+	before := time.Now()
+	if !h.NoteAlive("HmIP-RF") {
+		t.Fatal("NoteAlive did not recognise the registered interface")
+	}
+	last := ic.LastCallbackAt()
+	if last.IsZero() || last.Before(before) {
+		t.Fatalf("LastCallbackAt = %v after NoteAlive at %v; the heartbeat did not stamp liveness", last, before)
+	}
+	if !ic.IsCallbackAlive() {
+		t.Fatal("IsCallbackAlive must be true right after a heartbeat")
+	}
+}

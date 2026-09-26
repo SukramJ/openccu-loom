@@ -447,13 +447,14 @@ func (m *BringUpManager) buildAndStart(cc *config.CentralConfig, unit *central.U
 	// hold it back.
 	WirePendingDevices(m.parentCtx, unit, m.deps.PendingDevices,
 		cc.Behavior.DelayNewDeviceCreationEnabled(), m.logger)
-	callbackURL, binRPCCallbackAddr, cbHandlers, deregister := registerCentralCallbacks(m.deps, cc, unit, m.logger)
+	profile := southProfileFor(cc, m.logger)
+	cbHandlers, callbackURL, binRPCCallbackAddr, deregister := profile.Events().Attach(cc, unit, m.deps, m.logger)
 	b := &centralBringUp{
 		cfg:                m.cfg,
 		cc:                 *cc,
 		unit:               unit,
 		deps:               m.deps,
-		profile:            southProfileFor(cc, m.logger),
+		profile:            profile,
 		callbackURL:        callbackURL,
 		binRPCCallbackAddr: binRPCCallbackAddr,
 		cbHandlers:         cbHandlers,

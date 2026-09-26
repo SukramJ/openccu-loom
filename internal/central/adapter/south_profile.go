@@ -38,6 +38,11 @@ type SouthProfile interface {
 	// the central's hub plane is live. Nil means "no probe": the plane folds
 	// to reachable on the interface state alone.
 	Liveness() LivenessProbe
+	// Events wires the central's inbound events. It is attached once per
+	// central, when its bring-up handle is built, and outlives every
+	// bring-up generation: the callback route (or the stream that replaces
+	// it) survives a re-init.
+	Events() EventIngress
 	// BringUpHub is the first step of every bring-up generation: identity,
 	// hub model and metadata. An error returns the central to the readiness
 	// gate before anything else is wired, so a retry starts clean.
@@ -122,6 +127,16 @@ const (
 	// SeedFull is a boot ingest, a hot-plug or a post-resync reseed.
 	SeedFull
 )
+
+// EventIngress constructs a central's [CallbackHandlers] and starts feeding
+// them. callbackURL is what the per-interface announcers advertise ("" means
+// read-through mode: nothing pushes). binRPCAddr is the BIN-RPC callback
+// address (CUxD). handlers is nil when nothing can deliver events. detach is
+// a permanent closer, nil when nothing was attached.
+type EventIngress interface {
+	Attach(cc *config.CentralConfig, unit *central.Unit, deps WireDeps, logger *slog.Logger) (
+		handlers *CallbackHandlers, callbackURL, binRPCAddr string, detach func())
+}
 
 // ReadinessProbe performs ONE readiness check. reason names why the system is
 // not ready ("checkrega.cgi answered 503", "unreachable: …") and is logged
