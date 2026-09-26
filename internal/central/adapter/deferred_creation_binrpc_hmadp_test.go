@@ -168,6 +168,7 @@ func TestHmAdpCUxDWiringAdoptsItsCallbackHandler(t *testing.T) {
 		NewDevicePipeline(c),
 		client.NewValueWriter(),
 		nil, // runner: the ReGa surface is not on the adoption path
+		newCCUReadinessProbe(cc, nil),
 		config.ReliabilityConfig{},
 		nil, // masterValues: the CUxD poller tolerates a nil store
 		newBackendRegistry(),

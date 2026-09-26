@@ -216,6 +216,7 @@ func TestWireInterfaceActivateRetryGatesOnCCUReadiness(t *testing.T) {
 			nil, // runner: nil skips the ReGa fetch_all_device_data call: not needed
 			// to observe listDevices/init/deinit, and it would require
 			// faking a second (JSON-RPC) surface.
+			newCCUReadinessProbe(cc, nil),
 			callbackURL,
 			config.ReliabilityConfig{},
 			nil, // masterValues: HmIP-RF is gated to a nil MasterPoller (see

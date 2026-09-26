@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 473.
+Guards without a doc comment: 7 of 474.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -476,6 +476,7 @@ Guards without a doc comment: 7 of 473.
 | TestWSHandlerAcceptsAllowedOrigins | wiring_pins/security_csrf_origin_test.go | TestWSHandlerAcceptsAllowedOrigins pins that ws.Handler takes an allowedOrigins parameter (the third argument). |
 | TestWSHandlerOriginCheckWiredInDaemon | wiring_pins/security_csrf_origin_test.go | TestWSHandlerOriginCheckWiredInDaemon pins that cmd/openccu-loom passes a non-nil origin list to ws.Handler via the wsAllowedOrigins helper. |
 | TestCSRFMiddlewareMountedInRouter | wiring_pins/security_csrf_test.go | TestCSRFMiddlewareMountedInRouter pins that NewRouter calls auth.CSRFMiddleware when Deps.CSRFEnabled is true. |
+| TestWireCentralsGatesOnProfileReadiness | wiring_pins/south_profile_readiness_test.go | TestWireCentralsGatesOnProfileReadiness pins that the boot bring-up built by the real composition entry point waits on the central's south-profile readiness before it touches the system. |
 | TestUnscopedDiscoveryCleanupRunsBeforeTheInitialSnapshot | wiring_pins/unscoped_discovery_cleanup_order_test.go | TestUnscopedDiscoveryCleanupRunsBeforeTheInitialSnapshot pins the one property that makes the sweep work at all: it clears retained discovery configs whose entity id carries an empty CCU-serial slot, and the snapshot is what re-announces those entities under a corrected id. |
 | TestEveryWiringSetterHasAProductionCaller | wiring_setter_callers_test.go | TestEveryWiringSetterHasAProductionCaller asserts that every method which injects a collaborator is actually called by production code. |
 | TestWSBroadcastsHaveProductionEmitter | ws_broadcast_emitter_test.go | TestWSBroadcastsHaveProductionEmitter asserts every `kind: "broadcast"` entry in assets/wsapi.json has a wiring-table entry in wsBroadcastEmitters, that the entry's files exist and contain every required token, and — where a typed Go wire constant is available — that the constant's value equals the schema's broadcast name. |

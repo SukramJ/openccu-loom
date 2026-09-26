@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -28,7 +29,7 @@ const checkRegaPath = "/ise/checkrega.cgi"
 // lighttpd is still coming up) means "still booting".
 const checkRegaReadyBody = "OK"
 
-// CCUReadinessConfig tunes [WaitForCCUReady].
+// CCUReadinessConfig tunes [WaitForCCUReady] and [waitReady].
 type CCUReadinessConfig struct {
 	// Timeout bounds the whole wait. Zero falls back to the parity default.
 	// A NEGATIVE value waits indefinitely (until ctx is cancelled) — the
@@ -37,8 +38,9 @@ type CCUReadinessConfig struct {
 	Timeout time.Duration
 	// Interval is the gap between probes. Zero falls back to the default.
 	Interval time.Duration
-	// Client overrides the HTTP client (TLS-insecure path / tests). Nil uses
-	// a short-timeout default.
+	// Client overrides the CCU probe's HTTP client (TLS-insecure path /
+	// tests). Nil uses a short-timeout default. Only [WaitForCCUReady] reads
+	// it; [waitReady] takes a probe that already owns its client.
 	Client *http.Client
 }
 
@@ -61,7 +63,18 @@ const (
 // central is never brought up half-loaded.
 //
 // Connection errors and non-OK bodies are treated identically — "keep waiting".
+// It is the CCU profile's probe driven by [waitReady]; production call sites
+// go through the central's [SouthProfile] instead.
 func WaitForCCUReady(ctx context.Context, cc config.CentralConfig, cfg CCUReadinessConfig, logger *slog.Logger) bool {
+	return waitReady(ctx, cc.Name, newCCUReadinessProbe(cc, cfg.Client), cfg, logger)
+}
+
+// waitReady drives p until it reports ready, ctx is cancelled, or the
+// configured timeout elapses, and returns true only when readiness was
+// observed. The loop — timeouts, cadence, log keys — is the same for every
+// system; the probe supplies what "ready" means. cfg.Client is ignored here:
+// the HTTP client belongs to the probe.
+func waitReady(ctx context.Context, name string, p ReadinessProbe, cfg CCUReadinessConfig, logger *slog.Logger) bool {
 	timeout := cfg.Timeout
 	unbounded := timeout < 0
 	if timeout == 0 {
@@ -71,13 +84,6 @@ func WaitForCCUReady(ctx context.Context, cc config.CentralConfig, cfg CCUReadin
 	if interval <= 0 {
 		interval = defaultCCUReadinessInterval
 	}
-	client := cfg.Client
-	if client == nil {
-		if client = jsonrpcHTTPClient(cc); client == nil {
-			client = httpx.NewClient(defaultCCUReadinessProbeTTL)
-		}
-	}
-	url := ccuBaseURLFor(cc) + checkRegaPath
 
 	// deadlineC fires when the bounded budget elapses; in unbounded mode it
 	// stays nil so the select only resolves on readiness or ctx-cancel.
@@ -89,20 +95,23 @@ func WaitForCCUReady(ctx context.Context, cc config.CentralConfig, cfg CCUReadin
 	}
 
 	for attempt := 0; ; attempt++ {
-		if probeCCUReady(ctx, client, url) {
+		ready, reason := p.Probe(ctx)
+		if ready {
 			if logger != nil && attempt > 0 {
 				logger.Info("wire.ccu_ready",
-					slog.String("central", cc.Name),
+					slog.String("central", name),
 					slog.Int("probes", attempt+1))
 			}
 			return true
 		}
 		if attempt == 0 && logger != nil {
-			// Only log the wait once, at the point we discover the CCU is not
-			// ready — a ready CCU returns on the first probe and stays quiet.
+			// Only log the wait once, at the point we discover the system is
+			// not ready — a ready system returns on the first probe and stays
+			// quiet.
 			logger.Info("wire.ccu_not_ready_waiting",
-				slog.String("central", cc.Name),
-				slog.String("probe", url),
+				slog.String("central", name),
+				slog.String("probe", p.Target()),
+				slog.String("reason", reason),
 				slog.Bool("unbounded", unbounded))
 		}
 
@@ -115,7 +124,7 @@ func WaitForCCUReady(ctx context.Context, cc config.CentralConfig, cfg CCUReadin
 			t.Stop()
 			if logger != nil {
 				logger.Warn("wire.ccu_ready_timeout",
-					slog.String("central", cc.Name),
+					slog.String("central", name),
 					slog.Duration("waited", timeout))
 			}
 			return false
@@ -124,29 +133,59 @@ func WaitForCCUReady(ctx context.Context, cc config.CentralConfig, cfg CCUReadin
 	}
 }
 
+// ccuReadinessProbe is the CCU's readiness probe: one GET of the OCCU boot
+// marker CGI, ready only on the literal body "OK".
+type ccuReadinessProbe struct {
+	client *http.Client
+	url    string
+}
+
+// newCCUReadinessProbe builds the probe for cc. A nil client selects the
+// central's JSON-RPC TLS posture, or a short-timeout default without one.
+func newCCUReadinessProbe(cc config.CentralConfig, client *http.Client) *ccuReadinessProbe {
+	if client == nil {
+		if client = jsonrpcHTTPClient(cc); client == nil {
+			client = httpx.NewClient(defaultCCUReadinessProbeTTL)
+		}
+	}
+	return &ccuReadinessProbe{client: client, url: ccuBaseURLFor(cc) + checkRegaPath}
+}
+
+// Probe implements [ReadinessProbe].
+func (p *ccuReadinessProbe) Probe(ctx context.Context) (ready bool, reason string) {
+	return probeCCUReady(ctx, p.client, p.url)
+}
+
+// Target implements [ReadinessProbe].
+func (p *ccuReadinessProbe) Target() string { return p.url }
+
 // probeCCUReady performs a single GET and reports whether the body is the
-// literal readiness marker. Any error (connection refused while lighttpd is
-// still starting, non-200, non-OK body) reports false.
-func probeCCUReady(ctx context.Context, client *http.Client, url string) bool {
+// literal readiness marker, with the reason when it is not. Any error
+// (connection refused while lighttpd is still starting, non-200, non-OK body)
+// reports false.
+func probeCCUReady(ctx context.Context, client *http.Client, url string) (ready bool, reason string) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	if err != nil {
-		return false
+		return false, "request: " + err.Error()
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return false
+		return false, "unreachable: " + err.Error()
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		// Drain a bounded amount so the connection can be reused.
 		_, _ = io.CopyN(io.Discard, resp.Body, 1<<10)
-		return false
+		return false, "checkrega.cgi answered " + strconv.Itoa(resp.StatusCode)
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 64))
 	if err != nil {
-		return false
+		return false, "read: " + err.Error()
 	}
-	return strings.TrimSpace(string(body)) == checkRegaReadyBody
+	if strings.TrimSpace(string(body)) != checkRegaReadyBody {
+		return false, "ReGa not serving yet"
+	}
+	return true, ""
 }
 
 // reconnectReadinessTimeout bounds the readiness wait a reconnect performs.
@@ -176,11 +215,11 @@ const activateReadinessProbeTimeout = 5 * time.Second
 // pushes every event twice, once per registration. Anything reacting to those
 // events runs twice as well, which is what surfaced as CCU programs executing
 // twice after a restart.
-func newReconnectReadinessGate(cc config.CentralConfig, logger *slog.Logger) func(context.Context) bool {
+func newReconnectReadinessGate(cc config.CentralConfig, probe ReadinessProbe, logger *slog.Logger) func(context.Context) bool {
 	if cc.Host == "" {
 		return nil
 	}
 	return func(ctx context.Context) bool {
-		return WaitForCCUReady(ctx, cc, CCUReadinessConfig{Timeout: reconnectReadinessTimeout}, logger)
+		return waitReady(ctx, cc.Name, probe, CCUReadinessConfig{Timeout: reconnectReadinessTimeout}, logger)
 	}
 }

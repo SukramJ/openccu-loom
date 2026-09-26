@@ -189,7 +189,7 @@ func TestProbeRegaLivenessClassifiesWhatTheCCUSaid(t *testing.T) {
 		name    string
 		status  int
 		body    string
-		want    regaProbeResult
+		want    systemProbeResult
 		closeIt bool
 	}{
 		{name: "ready", status: http.StatusOK, body: "OK\n", want: regaProbeServing},
@@ -241,7 +241,7 @@ func TestAHungRegaPublishesOfflineWhileEveryInterfaceIsUp(t *testing.T) {
 
 	cases := []struct {
 		name   string
-		result regaProbeResult
+		result systemProbeResult
 		want   string
 	}{
 		{"rega serving", regaProbeServing, "online"},
@@ -258,7 +258,7 @@ func TestAHungRegaPublishesOfflineWhileEveryInterfaceIsUp(t *testing.T) {
 
 			target := &regaLivenessTarget{
 				interval: time.Hour,
-				probe:    func(context.Context) regaProbeResult { return tc.result },
+				probe:    func(context.Context) systemProbeResult { return tc.result },
 			}
 			b := publisher.wiring.Bridge()
 			if ok := publisher.pollRegaLivenessOnce(
@@ -359,7 +359,7 @@ func TestStopWaitsForTheRegaPollerToLeave(t *testing.T) {
 	publisher.regaTargets = map[string]*regaLivenessTarget{
 		"ccu-01": {
 			interval: time.Millisecond,
-			probe: func(context.Context) regaProbeResult {
+			probe: func(context.Context) systemProbeResult {
 				inFlight.Add(1)
 				defer inFlight.Add(-1)
 				select {
@@ -440,7 +440,7 @@ func TestALatchedOffProbeRefoldsTheGateBeforeItLeaves(t *testing.T) {
 
 	target := &regaLivenessTarget{
 		interval: time.Hour,
-		probe:    func(context.Context) regaProbeResult { return regaProbeUnsupported },
+		probe:    func(context.Context) systemProbeResult { return regaProbeUnsupported },
 	}
 	b := publisher.wiring.Bridge()
 	if ok := publisher.pollRegaLivenessOnce(
@@ -711,7 +711,7 @@ func TestRetractCentralStopsTheRegaPoller(t *testing.T) {
 	publisher.regaTargets = map[string]*regaLivenessTarget{
 		"ccu-01": {
 			interval: time.Millisecond,
-			probe: func(context.Context) regaProbeResult {
+			probe: func(context.Context) systemProbeResult {
 				inFlight.Add(1)
 				defer inFlight.Add(-1)
 				probes.Add(1)

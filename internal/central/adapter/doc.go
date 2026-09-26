@@ -20,6 +20,10 @@
 //     load_refresh, central_bringup, shutdown_deinit,
 //     relevant_init, config, interfaces, stubs — assemble a Unit's
 //     coordinators and register the south-bound clients.
+//   - South profiles: south_profile, south_ccu — the per-central strategy
+//     that says where readiness, liveness and (later) events, metadata and
+//     system management come from, selected once per central from its
+//     system type.
 //   - Transport callers & callbacks: xmlrpc_caller, jsonrpc_caller,
 //     binrpc_caller, ordered_caller, rpc_recorder, callback_handlers,
 //     xmlrpc_announcer, wire_value — bridge the InterfaceClient

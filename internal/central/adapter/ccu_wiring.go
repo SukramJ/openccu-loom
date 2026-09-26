@@ -247,6 +247,7 @@ func gatedCentralBringUp(
 	cc *config.CentralConfig,
 	unit *central.Unit,
 	deps WireDeps,
+	profile SouthProfile,
 	callbackURL, binRPCCallbackAddr string,
 	cbHandlers *CallbackHandlers,
 	adoptBINRPCHandlers func(*CallbackHandlers),
@@ -256,10 +257,10 @@ func gatedCentralBringUp(
 	const reGateBackoff = 5 * time.Second
 	recordCentralWaiting(unit)
 	for {
-		if !WaitForCCUReady(ctx, *cc, CCUReadinessConfig{Timeout: -1}, logger) {
+		if !waitReady(ctx, cc.Name, profile.Readiness(), CCUReadinessConfig{Timeout: -1}, logger) {
 			return // teardown
 		}
-		if loaded, err := bringUpCentral(ctx, cfg, cc, unit, deps, callbackURL, binRPCCallbackAddr, cbHandlers, adoptBINRPCHandlers, addCloser, logger); err == nil {
+		if loaded, err := bringUpCentral(ctx, cfg, cc, unit, deps, profile, callbackURL, binRPCCallbackAddr, cbHandlers, adoptBINRPCHandlers, addCloser, logger); err == nil {
 			// Bring-up done: clear the transient "waiting for CCU" component so it
 			// does not linger and decay to UNKNOWN (which would drag the overall
 			// health verdict down forever even though the central is now healthy).
@@ -425,6 +426,7 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 	cc *config.CentralConfig,
 	unit *central.Unit,
 	deps WireDeps,
+	profile SouthProfile,
 	callbackURL, binRPCCallbackAddr string,
 	cbHandlers *CallbackHandlers,
 	adoptBINRPCHandlers func(*CallbackHandlers),
@@ -507,7 +509,7 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 	recordCentralReadiness(unit, hmenum.ReadinessLoadingDevices, loaded, total)
 	for _, ifaceSpec := range cc.Interfaces {
 		iface := hmenum.Interface(strings.TrimSpace(ifaceSpec.Name))
-		closer, ingested, ifErr := wireInterface(ctx, *cc, iface, unit, pipeline, writer, runner, callbackURL, cfg.Reliability, deps.MasterValues, backendsByInterface, jCaller, deps.BINRPCCallbackServer, binRPCCallbackAddr, adoptBINRPCHandlers, logger)
+		closer, ingested, ifErr := wireInterface(ctx, *cc, iface, unit, pipeline, writer, runner, profile.Readiness(), callbackURL, cfg.Reliability, deps.MasterValues, backendsByInterface, jCaller, deps.BINRPCCallbackServer, binRPCCallbackAddr, adoptBINRPCHandlers, logger)
 		if ifErr != nil {
 			logger.Warn("wire.interface.failed",
 				slog.String("central", cc.Name),
@@ -702,6 +704,7 @@ func wireInterface(
 	pipeline *DevicePipeline,
 	writer *client.ValueWriter,
 	runner *rega.Runner,
+	readiness ReadinessProbe,
 	callbackURL string,
 	relCfg config.ReliabilityConfig,
 	masterValues *sqlite.MasterValuesStore,
@@ -721,7 +724,7 @@ func wireInterface(
 		// merely whether the client/backend wiring succeeded — a CUxD
 		// interface that exhausts every retry is wired but empty, and must
 		// not count toward the "interfaces loaded" tally.
-		return wireCUxDInterface(ctx, cc, unit, pipeline, writer, runner, relCfg, masterValues, backendReg, binrpcCallbackServer, binrpcCallbackAddr, adoptBINRPCHandlers, logger)
+		return wireCUxDInterface(ctx, cc, unit, pipeline, writer, runner, readiness, relCfg, masterValues, backendReg, binrpcCallbackServer, binrpcCallbackAddr, adoptBINRPCHandlers, logger)
 	}
 
 	url, err := interfaceURL(cc, iface)
@@ -810,7 +813,7 @@ func wireInterface(
 		// Bounded, unlike the boot gate: the reconnect loop retries with
 		// backoff, so a long wait here would stall the client state machine
 		// instead of letting it cycle.
-		WaitCCUReady: newReconnectReadinessGate(cc, logger),
+		WaitCCUReady: newReconnectReadinessGate(cc, readiness, logger),
 		// Feeds the central's RPC + service metrics sections. See
 		// [newRPCOutcomeHook] for why the observer is resolved per call.
 		RPCOutcomeHook: newRPCOutcomeHook(unit, wireID),
@@ -993,7 +996,6 @@ func wireInterface(
 		capturedWireID := wireID
 		capturedInitID := initID
 		capturedCallbackURL := callbackURL
-		ccForRecovery := cc // captured for the readiness-gated reconnect stage
 		// Wire hub refresh into recovery so sysvar/program data is
 		// reloaded after a successful reconnect.
 		if unit.Hub != nil {
@@ -1035,7 +1037,7 @@ func wireInterface(
 				// also cut short by rctx) so a genuinely-down CCU lets the
 				// recovery pipeline report failure and back off rather than
 				// blocking this stage forever; the pipeline's own retry re-gates.
-				if !WaitForCCUReady(rctx, ccForRecovery, CCUReadinessConfig{}, logger) {
+				if !waitReady(rctx, cc.Name, readiness, CCUReadinessConfig{}, logger) {
 					return errors.New("reconnect: CCU not ready (checkrega.cgi != OK)")
 				}
 				attempts := 0
@@ -1273,7 +1275,7 @@ func wireInterface(
 			// the reconnect path, here on first bring-up. The probe is
 			// short and bounded (unlike the outer gate's unbounded wait) so
 			// a genuinely-ready CCU pays only one fast HTTP round trip.
-			if !WaitForCCUReady(activateCtx, cc, CCUReadinessConfig{Timeout: activateReadinessProbeTimeout}, logger) {
+			if !waitReady(activateCtx, cc.Name, readiness, CCUReadinessConfig{Timeout: activateReadinessProbeTimeout}, logger) {
 				return errors.New("ccu not ready for callback registration (checkrega.cgi != OK)")
 			}
 			// Pre-Init Deinit: tell the CCU to forget any registration

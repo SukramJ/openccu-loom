@@ -200,6 +200,7 @@ func TestHmAdpCUxDWiringInstallsAPerInterfaceHotplugResolver(t *testing.T) {
 		NewDevicePipeline(c),
 		client.NewValueWriter(),
 		nil, // runner: the ReGa surface is not on the resolver path
+		newCCUReadinessProbe(cc, nil),
 		config.ReliabilityConfig{},
 		nil, // masterValues: the CUxD poller tolerates a nil store
 		newBackendRegistry(),

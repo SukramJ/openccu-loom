@@ -300,7 +300,8 @@ func TestWireInterfaceReportsStaleHmIPParamsetDescriptors(t *testing.T) {
 	closer, _, err := wireInterface(
 		ctx, cc, hmenum.InterfaceHmIPRF, unit, NewDevicePipeline(unit), client.NewValueWriter(),
 		nil, // runner: the ReGa value seed needs a second (JSON-RPC) surface and no MASTER value rides it
-		"",  // callbackURL: no push registration; the sweep runs off the ingest, not off a callback
+		newCCUReadinessProbe(cc, nil),
+		"", // callbackURL: no push registration; the sweep runs off the ingest, not off a callback
 		config.ReliabilityConfig{},
 		nil, // masterValues: HmIP-RF is gated to a nil MasterPoller
 		newBackendRegistry(),

@@ -72,17 +72,17 @@ const regaLivenessProbeTimeout = 5 * time.Second
 // noise.
 const regaLivenessFailureThreshold = 3
 
-// regaProbeResult is one probe's verdict. The four cases are deliberately
+// systemProbeResult is one probe's verdict. The four cases are deliberately
 // distinct at this level rather than collapsed into a bool the way
 // [probeCCUReady] collapses them, because the gate treats them differently:
 // only one of them is evidence that ReGa is down NOW, one is evidence only
 // when it repeats, and one says the question cannot be asked at all.
-type regaProbeResult uint8
+type systemProbeResult uint8
 
 const (
 	// regaProbeServing is a 200 whose body is the literal readiness marker:
 	// ReGaHss is up and answering.
-	regaProbeServing regaProbeResult = iota
+	regaProbeServing systemProbeResult = iota
 	// regaProbeNotServing is an ANSWER that is not the marker — the CCU's
 	// web server replied, ReGa did not. This is the hung/dead-ReGa case the
 	// gate exists to catch, and it is acted on immediately.
@@ -145,7 +145,7 @@ func newRegaLivenessTracker() *regaLivenessTracker {
 
 // observe folds one probe result into the CCU's tracked state and reports
 // the state that results.
-func (t *regaLivenessTracker) observe(central string, res regaProbeResult) regaLivenessState {
+func (t *regaLivenessTracker) observe(central string, res systemProbeResult) regaLivenessState {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	e := t.entries[central]
@@ -212,23 +212,21 @@ func (t *regaLivenessTracker) forget(central string) {
 // [probeRegaLiveness] can be tested on its own against one.
 type regaLivenessTarget struct {
 	interval time.Duration
-	probe    func(context.Context) regaProbeResult
+	probe    func(context.Context) systemProbeResult
 }
 
-// newRegaLivenessTarget builds the production target for one central, or
-// nil when cc carries no host to probe (the same guard
-// [newReconnectReadinessGate] makes).
+// newRegaLivenessTarget builds the production target for one central from
+// its south profile's liveness probe, or nil when the profile has none (a
+// CCU without a host to probe — the same guard [newReconnectReadinessGate]
+// makes).
 func newRegaLivenessTarget(cc *config.CentralConfig) *regaLivenessTarget {
-	if cc.Host == "" {
+	probe := southLivenessFor(cc, nil)
+	if probe == nil {
 		return nil
 	}
-	url := ccuBaseURLFor(*cc) + checkRegaPath
-	client := regaLivenessClient(*cc)
 	return &regaLivenessTarget{
 		interval: regaLivenessInterval,
-		probe: func(ctx context.Context) regaProbeResult {
-			return probeRegaLiveness(ctx, client, url)
-		},
+		probe:    probe.Probe,
 	}
 }
 
@@ -252,7 +250,7 @@ func regaLivenessClient(cc config.CentralConfig) *http.Client {
 // another probe. Here the outcome decides whether to publish `offline` for a
 // whole CCU, and "the CCU refused to answer" must not be confused with "the
 // CCU answered that ReGa is not serving".
-func probeRegaLiveness(ctx context.Context, client *http.Client, url string) regaProbeResult {
+func probeRegaLiveness(ctx context.Context, client *http.Client, url string) systemProbeResult {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	if err != nil {
 		return regaProbeNoAnswer

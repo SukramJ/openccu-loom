@@ -42,6 +42,7 @@ func wireCUxDInterface( //nolint:funlen,gocognit // composition/wiring: long seq
 	pipeline *DevicePipeline,
 	writer *client.ValueWriter,
 	runner *rega.Runner,
+	readiness ReadinessProbe,
 	relCfg config.ReliabilityConfig,
 	masterValues *sqlite.MasterValuesStore,
 	backendReg *backendRegistry,
@@ -209,6 +210,7 @@ func wireCUxDInterface( //nolint:funlen,gocognit // composition/wiring: long seq
 		ic:          ic,
 		backend:     backend,
 		cc:          cc,
+		readiness:   readiness,
 		wireID:      wireID,
 		initID:      initID,
 		callbackURL: callbackURL,
@@ -441,6 +443,7 @@ type cuxdRecoveryTarget struct {
 	ic          *client.InterfaceClient
 	backend     backends.Operations
 	cc          config.CentralConfig
+	readiness   ReadinessProbe
 	wireID      string
 	initID      string
 	callbackURL string
@@ -477,7 +480,7 @@ func wireCUxDRecovery(unit *central.Unit, t cuxdRecoveryTarget, logger *slog.Log
 		RPCProbe:       func(ctx context.Context) error { return t.backend.Ping(ctx, t.initID) },
 		StabilityProbe: func(ctx context.Context) error { return t.backend.Ping(ctx, t.initID) },
 		Reconnect: func(rctx context.Context) error {
-			if !WaitForCCUReady(rctx, t.cc, CCUReadinessConfig{}, logger) {
+			if !waitReady(rctx, t.cc.Name, t.readiness, CCUReadinessConfig{}, logger) {
 				return errors.New("reconnect: CCU not ready (checkrega.cgi != OK)")
 			}
 			attempts := 0
