@@ -214,10 +214,26 @@ func (l *Loader) Load(ctx context.Context, directCall bool) error { //nolint:fun
 		}
 	}
 
+	// The same two lists, as a taxonomy: one flat node per room and
+	// function, keyed by its ReGa id, with a ref for every member channel.
+	staging.ApplyFlatTaxonomy(CCUFlatEnums(flatEntries(rooms), flatEntries(fns)), func(id string) (string, bool) {
+		addr, ok := iseToAddress[id]
+		return addr, ok
+	})
+
 	l.cache.ReplaceWith(staging, time.Now())
 	l.logger.Debug("devicedetails.load.done",
 		slog.String("central", l.centralName))
 	return nil
+}
+
+// flatEntries converts the Room.getAll / Subsection.getAll wire shape.
+func flatEntries(raw []rawEntry) []FlatEntry {
+	out := make([]FlatEntry, 0, len(raw))
+	for _, r := range raw {
+		out = append(out, FlatEntry{ID: r.ID, Name: r.Name, MemberIDs: r.ChannelIDs})
+	}
+	return out
 }
 
 // isKnownInterface reports whether iface is one of the CCU interface tokens

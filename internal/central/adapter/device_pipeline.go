@@ -478,6 +478,7 @@ func (p *DevicePipeline) Ingest(ctx context.Context, interfaceID string, iface h
 		// `model/device.py:1012` (Channel.ise_id via get_address_id).
 		if p.unit.DeviceDetails != nil {
 			ch.SetIseID(p.unit.DeviceDetails.GetAddressID(dd.Address))
+			ch.SetTaxonomyRefs(p.unit.DeviceDetails.Refs(dd.Address))
 		}
 		parent.PutChannel(ch)
 	}
@@ -603,6 +604,9 @@ func (p *DevicePipeline) ensureDevice(dd *hmproto.DeviceDescription, interfaceID
 	if p.translations != nil {
 		d.ModelLabel = p.translations.DeviceModelLabel(p.locale, d.Model, d.SubModel)
 		d.ModelIcon = p.translations.DeviceModelIcon(d.Model)
+	}
+	if p.unit.DeviceDetails != nil {
+		d.SetTaxonomyRefs(p.unit.DeviceDetails.DeviceRefs(dd.Address))
 	}
 	p.unit.ModelRegistry.Put(d)
 	return d

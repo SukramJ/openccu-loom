@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
+	"github.com/SukramJ/openccu-loom/internal/model/taxonomy"
 	"github.com/SukramJ/openccu-loom/internal/parameter"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
@@ -209,6 +210,22 @@ func (c *Channel) Functions() []string {
 func (c *Channel) SetFunctions(functions []string) {
 	c.mu.Lock()
 	c.functions = slices.Clone(functions)
+	c.mu.Unlock()
+}
+
+// TaxonomyRefs returns a copy of the taxonomy nodes the channel is directly
+// assigned to.
+func (c *Channel) TaxonomyRefs() []taxonomy.Ref {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return slices.Clone(c.taxonomyRefs)
+}
+
+// SetTaxonomyRefs replaces the channel's taxonomy assignments with a copy of
+// refs.
+func (c *Channel) SetTaxonomyRefs(refs []taxonomy.Ref) {
+	c.mu.Lock()
+	c.taxonomyRefs = slices.Clone(refs)
 	c.mu.Unlock()
 }
 

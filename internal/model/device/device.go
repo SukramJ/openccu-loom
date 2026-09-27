@@ -14,6 +14,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/SukramJ/openccu-loom/internal/model/taxonomy"
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -141,6 +142,10 @@ type Device struct {
 	functions    []string
 	room         string
 	function     string
+	// taxonomyRefs are the taxonomy nodes the device is assigned to — its
+	// own and its channels', in every enum — alongside the room and
+	// function names above.
+	taxonomyRefs []taxonomy.Ref
 
 	firmware     *Firmware
 	availability *Availability
@@ -311,6 +316,22 @@ func (d *Device) Function() string {
 	d.assignmentMu.RLock()
 	defer d.assignmentMu.RUnlock()
 	return d.function
+}
+
+// TaxonomyRefs returns a copy of the taxonomy nodes the device (or any of
+// its channels) is assigned to.
+func (d *Device) TaxonomyRefs() []taxonomy.Ref {
+	d.assignmentMu.RLock()
+	defer d.assignmentMu.RUnlock()
+	return slices.Clone(d.taxonomyRefs)
+}
+
+// SetTaxonomyRefs replaces the device's taxonomy assignments with a copy of
+// refs.
+func (d *Device) SetTaxonomyRefs(refs []taxonomy.Ref) {
+	d.assignmentMu.Lock()
+	d.taxonomyRefs = slices.Clone(refs)
+	d.assignmentMu.Unlock()
 }
 
 // Firmware returns the firmware tracker.

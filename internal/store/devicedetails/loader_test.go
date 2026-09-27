@@ -7,9 +7,11 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/model/taxonomy"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -644,4 +646,84 @@ func TestLoaderSkipsAReloadInsideTheCacheWindow(t *testing.T) {
 		t.Errorf("a cache %v old made %d CCU round-trip(s), want exactly 1; the gate is %v",
 			window+500*time.Millisecond, client.callCounts.details, window)
 	}
+}
+
+// TestCCUTaxonomyIsFlatAndNamesAreUnchanged pins how a CCU presents itself in
+// the taxonomy: one depth-0 node per room and function, keyed by its ReGa id,
+// a ref for every member channel (aggregated onto the device), and the
+// name-keyed readers returning exactly what they did before the taxonomy
+// existed. Two rooms sharing a name stay two nodes.
+func TestCCUTaxonomyIsFlatAndNamesAreUnchanged(t *testing.T) {
+	t.Parallel()
+	client := &fakeClient{
+		deviceDetails: []map[string]any{{
+			"address": "VCU2000001", "name": "Licht", "id": "100", "interface": "HmIP-RF",
+			"channels": []any{
+				map[string]any{"address": "VCU2000001:1", "name": "Licht Kanal 1", "id": "101"},
+				map[string]any{"address": "VCU2000001:2", "name": "Licht Kanal 2", "id": "102"},
+			},
+		}},
+		rooms: []rawEntry{
+			{ID: "50", Name: "Wohnzimmer", ChannelIDs: []string{"101"}},
+			{ID: "51", Name: "Bad", ChannelIDs: []string{"102"}},
+			{ID: "52", Name: "Bad", ChannelIDs: nil},
+			{ID: "53", Name: "", ChannelIDs: []string{"101"}},
+		},
+		functions: []rawEntry{{ID: "70", Name: "Licht", ChannelIDs: []string{"101", "102"}}},
+	}
+	cache, loader := newTestLoader(client)
+	if err := loader.Load(context.Background(), true); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	// Name readers: unchanged.
+	if got := cache.GetChannelRooms("VCU2000001:1"); len(got) != 1 || got[0] != "Wohnzimmer" {
+		t.Errorf("GetChannelRooms(:1) = %v", got)
+	}
+	if got := cache.GetDeviceRooms("VCU2000001"); len(got) != 2 || got[0] != "Bad" || got[1] != "Wohnzimmer" {
+		t.Errorf("GetDeviceRooms = %v", got)
+	}
+	if got := cache.GetFunctions("VCU2000001:2"); len(got) != 1 || got[0] != "Licht" {
+		t.Errorf("GetFunctions(:2) = %v", got)
+	}
+
+	// Taxonomy: flat, keyed by ReGa id, unnamed entries left out.
+	tax := cache.Taxonomy()
+	if tax == nil {
+		t.Fatal("no taxonomy after a CCU load")
+	}
+	var rooms []string
+	tax.Walk(taxonomy.EnumRoom, func(r taxonomy.Ref, n *taxonomy.Node, depth int) {
+		if depth != 0 {
+			t.Errorf("CCU node %s at depth %d; CCU rooms are flat", r, depth)
+		}
+		rooms = append(rooms, r.String()+"="+n.Name)
+	})
+	if want := []string{"room/50=Wohnzimmer", "room/51=Bad", "room/52=Bad"}; !slices.Equal(rooms, want) {
+		t.Errorf("room nodes = %v, want %v", rooms, want)
+	}
+	if got := tax.FindByName(taxonomy.EnumRoom, "Bad"); len(got) != 2 {
+		t.Errorf("two rooms named Bad must stay two nodes, got %v", got)
+	}
+	if tax.Enums[taxonomy.EnumFunction].Names["de"] != "Gewerke" {
+		t.Errorf("function enum names = %v", tax.Enums[taxonomy.EnumFunction].Names)
+	}
+
+	// Refs: direct on the channel, aggregated on the device.
+	ch1 := refStrings(cache.Refs("VCU2000001:1"))
+	if want := []string{"function/70", "room/50"}; !slices.Equal(ch1, want) {
+		t.Errorf("Refs(:1) = %v, want %v", ch1, want)
+	}
+	dev := refStrings(cache.DeviceRefs("VCU2000001"))
+	if want := []string{"function/70", "room/50", "room/51"}; !slices.Equal(dev, want) {
+		t.Errorf("DeviceRefs = %v, want %v", dev, want)
+	}
+}
+
+func refStrings(refs []taxonomy.Ref) []string {
+	out := make([]string, 0, len(refs))
+	for _, r := range refs {
+		out = append(out, r.String())
+	}
+	return out
 }

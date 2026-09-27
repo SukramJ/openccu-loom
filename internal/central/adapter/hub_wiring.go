@@ -326,7 +326,7 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 	// re-stamps a built model. Returning to the readiness gate costs one
 	// re-probe; an empty answer is still not a failure, so a CCU that
 	// genuinely defines no rooms comes up unaffected.
-	rooms, err := loadRoomAssignments(ctx, jc, iseToAddress)
+	rooms, roomEntries, err := loadRoomAssignments(ctx, jc, iseToAddress)
 	if err != nil {
 		//nolint:contextcheck // error path cleanup: detached logout closes the session regardless of ctx state
 		_ = jc.Logout(context.Background())
@@ -336,7 +336,7 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 		slog.String("central", cc.Name),
 		slog.Int("count", len(rooms)))
 
-	functions, err := loadFunctionAssignments(ctx, jc, iseToAddress)
+	functions, functionEntries, err := loadFunctionAssignments(ctx, jc, iseToAddress)
 	if err != nil {
 		//nolint:contextcheck // error path cleanup: detached logout closes the session regardless of ctx state
 		_ = jc.Logout(context.Background())
@@ -352,7 +352,8 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 	// (see below) keeps the cache fresh for running-daemon renames and
 	// room changes.
 	// (store/dynamic/details.py:123-141).
-	populateDeviceDetailsCache(unit.DeviceDetails, names, iseToAddress, rooms, functions)
+	populateDeviceDetailsCache(unit.DeviceDetails, names, iseToAddress, rooms, functions,
+		devicedetails.CCUFlatEnums(roomEntries, functionEntries))
 	logger.Info("hub.device_details.ok",
 		slog.String("central", cc.Name))
 
@@ -532,6 +533,7 @@ func populateDeviceDetailsCache(
 	iseToAddress IseAddressMap,
 	rooms AssignmentMap,
 	functions AssignmentMap,
+	enums []devicedetails.FlatEnum,
 ) {
 	if cache == nil {
 		return
@@ -574,6 +576,14 @@ func populateDeviceDetailsCache(
 		}
 	}
 
+	// The same rooms and functions as a flat taxonomy, keyed by ReGa id.
+	// The ISE-ID join stays here, inside the CCU adapter; readers of the
+	// taxonomy see node references only.
+	cache.ApplyFlatTaxonomy(enums, func(id string) (string, bool) {
+		addr, ok := iseToAddress[id]
+		return addr, ok
+	})
+
 	cache.MarkRefreshed(time.Now())
 }
 
@@ -614,6 +624,10 @@ func restampDeviceDetails(unit *central.Unit, logger *slog.Logger) int {
 			dev.SetFunctions(functions)
 			devChanged = true
 		}
+		if refs := unit.DeviceDetails.DeviceRefs(dev.Address); !slices.Equal(refs, dev.TaxonomyRefs()) {
+			dev.SetTaxonomyRefs(refs)
+			devChanged = true
+		}
 		for _, ch := range dev.Channels() {
 			if name := unit.DeviceDetails.GetName(ch.Address); name != "" && name != ch.Name() {
 				ch.SetName(name)
@@ -627,6 +641,11 @@ func restampDeviceDetails(unit *central.Unit, logger *slog.Logger) int {
 				ch.SetFunctions(functions)
 				devChanged = true
 			}
+			if refs := unit.DeviceDetails.Refs(ch.Address); !slices.Equal(refs, ch.TaxonomyRefs()) {
+				ch.SetTaxonomyRefs(refs)
+				devChanged = true
+			}
+
 		}
 		if !devChanged {
 			continue
@@ -723,15 +742,20 @@ type subsectionEntry struct {
 
 // loadRoomAssignments calls Room.getAll, resolves each entry's channelIds
 // into addresses via iseToAddress, and aggregates them into a single
-// AssignmentMap. Returns a non-nil empty map on a CCU with no rooms.
-func loadRoomAssignments(ctx context.Context, jc *jsonrpc.Client, iseToAddress IseAddressMap) (AssignmentMap, error) {
+// AssignmentMap. Returns a non-nil empty map on a CCU with no rooms. The raw
+// entries come back too, as the flat taxonomy nodes they are.
+func loadRoomAssignments(ctx context.Context, jc *jsonrpc.Client, iseToAddress IseAddressMap) (AssignmentMap, []devicedetails.FlatEntry, error) {
 	var rooms []roomEntry
 	if err := jc.Call(ctx, "Room.getAll", nil, &rooms); err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	entries := make([]devicedetails.FlatEntry, 0, len(rooms))
+	for _, r := range rooms {
+		entries = append(entries, devicedetails.FlatEntry{ID: r.ID, Name: r.Name, MemberIDs: r.ChannelIDs})
 	}
 	return buildAssignments(rooms, iseToAddress, func(r roomEntry) (string, []string) {
 		return r.Name, r.ChannelIDs
-	}), nil
+	}), entries, nil
 }
 
 // loadFunctionAssignments calls Subsection.getAll and aggregates the
@@ -741,14 +765,18 @@ func loadRoomAssignments(ctx context.Context, jc *jsonrpc.Client, iseToAddress I
 // "Subsection" is the CCU's internal name for what the UI labels
 // "Gewerk"
 // that vocabulary for consistency with the Python API.
-func loadFunctionAssignments(ctx context.Context, jc *jsonrpc.Client, iseToAddress IseAddressMap) (AssignmentMap, error) {
+func loadFunctionAssignments(ctx context.Context, jc *jsonrpc.Client, iseToAddress IseAddressMap) (AssignmentMap, []devicedetails.FlatEntry, error) {
 	var fns []subsectionEntry
 	if err := jc.Call(ctx, "Subsection.getAll", nil, &fns); err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	entries := make([]devicedetails.FlatEntry, 0, len(fns))
+	for _, f := range fns {
+		entries = append(entries, devicedetails.FlatEntry{ID: f.ID, Name: f.Name, MemberIDs: f.ChannelIDs})
 	}
 	return buildAssignments(fns, iseToAddress, func(s subsectionEntry) (string, []string) {
 		return s.Name, s.ChannelIDs
-	}), nil
+	}), entries, nil
 }
 
 // buildAssignments aggregates a slice of {name, channelIds} entries
