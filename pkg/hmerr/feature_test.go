@@ -63,6 +63,9 @@ func TestScopeMissingErrorMatchesItsSentinel(t *testing.T) {
 	if !errors.Is(err, ErrScopeMissing) {
 		t.Fatal("errors.Is(err, ErrScopeMissing) = false")
 	}
+	if !errors.Is(err, ErrPermissionDenied) {
+		t.Fatal("a missing scope must match ErrPermissionDenied so no layer retries it")
+	}
 	var sm *ScopeMissingError
 	if !errors.As(err, &sm) || sm.Scope != "rpc:operate" {
 		t.Fatalf("errors.As lost the scope: %+v", sm)

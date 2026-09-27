@@ -70,5 +70,10 @@ func (e *ScopeMissingError) Error() string {
 	return e.Operation + ": credential lacks scope " + e.Scope
 }
 
-// Is makes every ScopeMissingError match [ErrScopeMissing].
-func (e *ScopeMissingError) Is(target error) bool { return target == ErrScopeMissing }
+// Is makes every ScopeMissingError match [ErrScopeMissing] and
+// [ErrPermissionDenied]: a missing scope is a privilege mismatch, so every
+// layer that already treats a permission denial as final — the retrier
+// does not repeat it — treats this one the same way.
+func (e *ScopeMissingError) Is(target error) bool {
+	return target == ErrScopeMissing || target == ErrPermissionDenied
+}
