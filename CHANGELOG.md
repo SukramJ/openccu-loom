@@ -23,6 +23,68 @@ CCU; the list below is what an API client can already observe.
 - WebSocket broadcast `central.features_changed` (topic
   `central.{name}.features`) carries a central's complete feature set
   whenever it changes. WebSocket API 1.10.
+- A central can name its system: `system_type` (`ccu` — the default, also
+  for every existing central —, `openccu-lite`, `auto`), with `api_token`
+  (secret, sealed at rest like the CCU password, masked on every read) and
+  `tls_fingerprint` for openccu-lite systems, in `config.yaml`, the CCUs
+  admin API and the setup API. Rules are enforced on every write: an
+  openccu-lite central needs a token and carries no username, password,
+  port overrides or CUxD; a CCU central carries no token or fingerprint.
+  An `auto` central is accepted but not brought up by this build yet — it
+  shows as degraded with the reason. REST API 11.4.0.
+- An openccu-lite central comes up through the box's API: readiness from
+  the box's health and interface state (with the reason — box starting,
+  token rejected, token without the read tier, no interface running —
+  shown while it waits), identity from the box (serial in the same form
+  SSDP discovery uses), devices and paramsets through the XML-RPC proxy,
+  values seeded from the box's state store and paramset reads, and a
+  feature set that follows the token's scopes and is re-read every ten
+  minutes. A scope refusal is never retried and never counted as a
+  connection failure.
+- An openccu-lite central follows the box's event stream instead of an
+  XML-RPC callback: values arrive typed by their paramset description (a
+  FLOAT the stream sends as `1` is `1.0`, so no change is invented), the
+  stream's heartbeat keeps quiet interfaces alive, an interface the box
+  reports down makes its devices unavailable until it is back, a gap in
+  the stream is closed by re-reading the values, and devices the box adds
+  or removes appear and disappear without a restart.
+- An openccu-lite central takes names, rooms and functions from the box's
+  metadata store before it loads the devices, so every device appears
+  under its own name at once, and follows the store's change stream, so a
+  rename or re-assignment made on the box shows up live. A device is in
+  the room it is assigned to directly — a device in "Erdgeschoss ›
+  Wohnzimmer" is in "Wohnzimmer". Renaming a device or channel and setting
+  its rooms or functions write to the store; other assignments of the same
+  object (favourites, floors) are kept, a room name several rooms share is
+  refused with the candidates, and a concurrent edit is retried once. A
+  token without `meta:read` runs without names instead of failing.
+- An openccu-lite central can be rebooted, powered off and restarted into
+  recovery, backed up and restored, and updated, through the box's system
+  API: a backup is the box's own archive under the box's own file name
+  (encrypted when the box owner switched backup encryption on); a restore
+  is checked by the box first and an archive only the box's recovery key
+  opens is refused; the system update shows the running openccu-lite
+  version and what the box's release feed offers. Each operation checks
+  the token's scope first and refuses, naming the scope, without
+  contacting the box. Safe mode and the astro position do not exist on
+  openccu-lite and are refused.
+- An openccu-lite central shows the box's service messages (with rooms and
+  functions), the install-mode countdown, the BidCos duty cycle and each
+  interface process's reachability; suppressing a service message goes to
+  the interface process. What needs ReGa — acknowledging messages, system
+  variables, programs, the inbox — is refused with the reason, and an
+  alarm zone's system-variable mirror is refused when it is saved for a
+  central without system variables, instead of failing on every export.
+- An openccu-lite central lists the box's heating groups and group types
+  and can delete a group. Creating and editing groups, their members and
+  the member candidates are not offered yet: the member format of the
+  box's groups API is not known, and a guessed one could put devices into
+  the wrong group.
+- Logging in with a system account (`ccu` user store) works against an
+  openccu-lite central: the account is checked on the box, its level
+  (administer, configure, operate, read) maps to the admin, operator and
+  viewer roles as a CCU user level does, and the session opened for the
+  check is closed again at once.
 
 #### Fixed
 

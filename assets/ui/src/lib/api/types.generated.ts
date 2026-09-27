@@ -8901,8 +8901,19 @@ export interface components {
             serial?: string;
             /** @description Legacy single-port override applied to all interfaces when ports map is absent. */
             port?: number;
-            /** @description HTTP port for JSON-RPC and web endpoints. 0 defaults to 80 (plain) / 443 (TLS). */
+            /** @description HTTP(S) port of the system's web server — JSON-RPC and web endpoints on a CCU, the occulited API on openccu-lite. 0 defaults to 80 (plain) / 443 (TLS). */
             json_rpc_port?: number;
+            /**
+             * @description Kind of system behind the central. Empty means `ccu`, so a row written before the field existed keeps its meaning. An `openccu-lite` central needs `api_token_plain` or `api_token_env` and must not carry username, password or port overrides; a `ccu` central must not carry an API token or a fingerprint. A write that breaks a rule is refused with 400 naming the field.
+             * @enum {string}
+             */
+            system_type?: "ccu" | "openccu-lite" | "auto";
+            /** @description Environment variable name whose value is the openccu-lite API token (preferred over api_token_plain). Omitted for callers below the admin role. */
+            api_token_env?: string;
+            /** @description The openccu-lite API token, sealed at rest. Never returned in the clear: reads carry the mask `***`, and a write that sends the mask back (or omits the key, or sends null) keeps the stored token; an explicit empty string clears it. */
+            api_token_plain?: string;
+            /** @description SHA-256 (lower-case hex) of the openccu-lite system's certificate. When set, TLS trusts exactly this certificate. Requires tls. */
+            tls_fingerprint?: string;
             username?: string;
             /** @description Environment variable name whose value is the CCU password (preferred). */
             password_env?: string;
@@ -10353,8 +10364,18 @@ export interface components {
             ccu?: {
                 name: string;
                 host: string;
+                /**
+                 * @description Kind of system; empty means ccu.
+                 * @enum {string}
+                 */
+                system_type?: "ccu" | "openccu-lite" | "auto";
                 username?: string;
                 password?: string;
+                /** @description The occulited API token an openccu-lite system requires (`olt_` + 32 lower-case hex digits). */
+                api_token?: string;
+                tls?: boolean;
+                /** @description SHA-256 (lower-case hex) of an openccu-lite system's certificate to pin; requires tls. */
+                tls_fingerprint?: string;
                 interfaces: string[];
             };
             /** @description Optional MQTT broker. Omit to skip. */

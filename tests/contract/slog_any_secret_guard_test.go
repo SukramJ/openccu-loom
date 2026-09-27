@@ -121,16 +121,17 @@ func secretBearingName(expr ast.Expr) (string, bool) {
 
 // looksLikeSecretStruct classifies an identifier name as denoting a whole
 // secret-bearing struct. It matches the common names (cfg, config, creds)
-// and any name whose lowercase form ends in a config/secret/credential
-// token, so authConfig, oidcSecret, and userCredentials are all caught
-// while benign field names (Version, Host, Value) are not.
+// and any name whose lowercase form ends in a config/secret/credential/
+// password/token suffix, so authConfig, oidcSecret, userCredentials and
+// apiToken are all caught while benign field names (Version, Host, Value)
+// are not.
 func looksLikeSecretStruct(name string) bool {
 	lc := strings.ToLower(name)
 	switch lc {
 	case "cfg", "config", "creds", "secret", "secrets", "credential", "credentials":
 		return true
 	}
-	for _, suffix := range []string{"config", "secret", "secrets", "credential", "credentials", "password", "passwd"} {
+	for _, suffix := range []string{"config", "secret", "secrets", "credential", "credentials", "password", "passwd", "token"} {
 		if strings.HasSuffix(lc, suffix) {
 			return true
 		}

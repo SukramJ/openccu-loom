@@ -95,6 +95,7 @@ func (f *Fake) handleMetaStream(w http.ResponseWriter, r *http.Request) {
 	f.mu.Unlock()
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
+	dropRev := -1
 	for {
 		select {
 		case <-r.Context().Done():
@@ -104,6 +105,12 @@ func (f *Fake) handleMetaStream(w http.ResponseWriter, r *http.Request) {
 		case <-sub.kill:
 			return
 		case ev := <-sub.queue:
+			if f.deviates(DeviateMetaDropEvent) && (dropRev < 0 || dropRev == ev.Revision) {
+				// Lose every event of the first live revision, as a
+				// subscriber whose queue overflowed does.
+				dropRev = ev.Revision
+				continue
+			}
 			if err := data(mustJSON(ev)); err != nil {
 				return
 			}

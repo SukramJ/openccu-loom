@@ -96,6 +96,31 @@ func (d *CCUAuthDomain) ValidateCredentials(ctx context.Context, centralName, us
 	return loginErr
 }
 
+// Verify checks username and password against the named central's own
+// user database and returns the account's user level (8/2/1/0, or -1 on
+// failure). A system that checks both in one step (openccu-lite) has its
+// profile's account verifier installed on the central and is asked
+// through it; a CCU is checked the two-step way — a transient session
+// with the user's credentials, then the level through the privileged
+// service session. A wrong password wraps hmerr.ErrAuthFailure.
+func (d *CCUAuthDomain) Verify(ctx context.Context, centralName, username, password string) (int, error) {
+	cc, ok := d.centralConfig(ctx, centralName)
+	if !ok {
+		return -1, fmt.Errorf("%w: %q", ErrCCUAuthCentralNotFound, centralName)
+	}
+	if d.registry != nil {
+		if u, ok := d.registry.Get(cc.Name); ok && u != nil {
+			if v := u.SystemServices().Accounts; v != nil {
+				return v.Verify(ctx, username, password)
+			}
+		}
+	}
+	if err := d.ValidateCredentials(ctx, centralName, username, password); err != nil {
+		return -1, err
+	}
+	return d.UserLevel(ctx, centralName, username)
+}
+
 // UserLevel reads the CCU UserLevel (8/2/1/0, or -1 when unknown) for
 // username on the named central, via the privileged service session.
 // username must be pre-sanitised by the caller.

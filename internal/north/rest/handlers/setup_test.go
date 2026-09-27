@@ -583,3 +583,45 @@ func TestSetup_FailedCCUStepLeavesNoAdminBehind(t *testing.T) {
 		t.Fatalf("admin user persisted although finalize failed: user count = %d, want 0 so the wizard can retry", n)
 	}
 }
+
+// TestSetup_LiteCentralPersistsTokenAndIsValidated pins the first-run path
+// for an openccu-lite system: a well-formed token is persisted with the
+// system type and TLS settings, and a lite central without a token is
+// refused before anything is written.
+func TestSetup_LiteCentralPersistsTokenAndIsValidated(t *testing.T) {
+	svc := newFullSetupService(t)
+	ctx := context.Background()
+
+	refused := strings.NewReader(`{
+		"admin":  {"username":"admin","password":"password123"},
+		"locale": {"locale":"en","theme":"dark"},
+		"ccu":    {"name":"box","host":"box.local","system_type":"openccu-lite","interfaces":["HmIP-RF"]}
+	}`)
+	w := httptest.NewRecorder()
+	Setup(svc).ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/setup", refused))
+	if w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), "api_token") {
+		t.Fatalf("lite without token: got %d %s, want 422 naming api_token", w.Code, w.Body.String())
+	}
+	if _, err := svc.Centrals.Get(ctx, "box"); err == nil {
+		t.Fatal("a refused lite central was persisted")
+	}
+
+	accepted := strings.NewReader(`{
+		"admin":  {"username":"admin","password":"password123"},
+		"locale": {"locale":"en","theme":"dark"},
+		"ccu":    {"name":"box","host":"box.local","system_type":"openccu-lite","tls":true,
+		           "api_token":"olt_0123456789abcdef0123456789abcdef","interfaces":["HmIP-RF"]}
+	}`)
+	w = httptest.NewRecorder()
+	Setup(svc).ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/setup", accepted))
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("lite with token: got %d %s, want 204", w.Code, w.Body.String())
+	}
+	row, err := svc.Centrals.Get(ctx, "box")
+	if err != nil {
+		t.Fatalf("centrals.Get(box): %v", err)
+	}
+	if row.SystemType != "openccu-lite" || row.APITokenPlain != "olt_0123456789abcdef0123456789abcdef" || !row.TLS {
+		t.Errorf("persisted row = type %q token %q tls %v", row.SystemType, row.APITokenPlain, row.TLS)
+	}
+}

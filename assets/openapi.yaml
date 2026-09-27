@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 11.3.0
+  version: 11.4.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -12599,7 +12599,38 @@ components:
           type: integer
           minimum: 0
           maximum: 65535
-          description: HTTP port for JSON-RPC and web endpoints. 0 defaults to 80 (plain) / 443 (TLS).
+          description: >-
+            HTTP(S) port of the system's web server — JSON-RPC and web
+            endpoints on a CCU, the occulited API on openccu-lite. 0 defaults
+            to 80 (plain) / 443 (TLS).
+        system_type:
+          type: string
+          enum: [ccu, openccu-lite, auto]
+          description: >-
+            Kind of system behind the central. Empty means `ccu`, so a row
+            written before the field existed keeps its meaning. An
+            `openccu-lite` central needs `api_token_plain` or `api_token_env`
+            and must not carry username, password or port overrides; a `ccu`
+            central must not carry an API token or a fingerprint. A write that
+            breaks a rule is refused with 400 naming the field.
+        api_token_env:
+          type: string
+          description: >-
+            Environment variable name whose value is the openccu-lite API
+            token (preferred over api_token_plain). Omitted for callers below
+            the admin role.
+        api_token_plain:
+          type: string
+          description: >-
+            The openccu-lite API token, sealed at rest. Never returned in the
+            clear: reads carry the mask `***`, and a write that sends the mask
+            back (or omits the key, or sends null) keeps the stored token; an
+            explicit empty string clears it.
+        tls_fingerprint:
+          type: string
+          description: >-
+            SHA-256 (lower-case hex) of the openccu-lite system's certificate.
+            When set, TLS trusts exactly this certificate. Requires tls.
         username:
           type: string
         password_env:
@@ -14785,8 +14816,19 @@ components:
           properties:
             name: { type: string, minLength: 1 }
             host: { type: string, minLength: 1 }
+            system_type:
+              type: string
+              enum: [ccu, openccu-lite, auto]
+              description: Kind of system; empty means ccu.
             username: { type: string }
             password: { type: string }
+            api_token:
+              type: string
+              description: The occulited API token an openccu-lite system requires (`olt_` + 32 lower-case hex digits).
+            tls: { type: boolean }
+            tls_fingerprint:
+              type: string
+              description: SHA-256 (lower-case hex) of an openccu-lite system's certificate to pin; requires tls.
             interfaces:
               type: array
               minItems: 1

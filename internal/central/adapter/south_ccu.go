@@ -48,6 +48,12 @@ func (p *ccuProfile) Liveness() LivenessProbe { return p.liveness }
 // XML-RPC callback server (and, for CUxD, the BIN-RPC one).
 func (*ccuProfile) Events() EventIngress { return ccuEventIngress{} }
 
+// SystemServices implements [SouthProfile]: ReGa scripts and JSON-RPC
+// calls through the central's primary backend.
+func (*ccuProfile) SystemServices(unit *central.Unit, deps WireDeps) central.SystemServices {
+	return newCCUSystemServices(unit, deps.Writer)
+}
+
 // ccuEventIngress registers the central's route on the shared callback
 // server; the per-interface announcers then advertise it with `init`.
 type ccuEventIngress struct{}

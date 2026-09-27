@@ -9,7 +9,10 @@ package backends
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
+
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // ---------------------------------------------------------------------------
@@ -264,7 +267,7 @@ func TestCapabilityForDistinctProfiles(t *testing.T) {
 
 func TestKindStringNonEmpty(t *testing.T) {
 	t.Parallel()
-	kinds := []Kind{KindCCU, KindCUxD, KindHomegear}
+	kinds := []Kind{KindCCU, KindCUxD, KindHomegear, KindOpenCCULite}
 	for _, k := range kinds {
 		t.Run(k.String(), func(t *testing.T) {
 			t.Parallel()
@@ -284,6 +287,7 @@ func TestKindStringCoversAllKnownKinds(t *testing.T) {
 		{KindCCU, "ccu"},
 		{KindCUxD, "cuxd"},
 		{KindHomegear, "homegear"},
+		{KindOpenCCULite, "openccu-lite"},
 		{Kind(99), "unknown"},
 	}
 	for _, tc := range cases {
@@ -509,6 +513,7 @@ func TestEveryMVPBackendKindStringIsNonEmpty(t *testing.T) {
 		{"CCU", NewCcuBackend(&fakeCaller{}, nil, nil)},
 		{"CUxD", NewCuxdBackend(&fakeCaller{}, nil)},
 		{"Homegear", NewHomegearBackend(&fakeCaller{}, nil)},
+		{"OpenCCULite", NewLiteBackend(hmenum.InterfaceHmIPRF, &fakeCaller{}, nil)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -518,5 +523,82 @@ func TestEveryMVPBackendKindStringIsNonEmpty(t *testing.T) {
 				t.Fatalf("%s: Kind().String()=%q, want non-empty recognisable name", tc.name, s)
 			}
 		})
+	}
+}
+
+// TestOpenCCULiteCapabilityMatrix pins the full openccu-lite profile:
+// every field is stated, so an added capability cannot default silently.
+func TestOpenCCULiteCapabilityMatrix(t *testing.T) {
+	t.Parallel()
+	caps := CapabilityFor(KindOpenCCULite)
+
+	must := map[string]bool{
+		"RPCCallback":            caps.RPCCallback,
+		"PingPong":               caps.PingPong,
+		"ListDevices":            caps.ListDevices,
+		"FirmwareUpdate":         caps.FirmwareUpdate,
+		"ConfigRestore":          caps.ConfigRestore,
+		"ReplaceDevice":          caps.ReplaceDevice,
+		"SearchDevices":          caps.SearchDevices,
+		"TeamAssignment":         caps.TeamAssignment,
+		"DeleteDevice":           caps.DeleteDevice,
+		"InstallMode":            caps.InstallMode,
+		"InstallModeLocal":       caps.InstallModeLocal,
+		"LinkOperations":         caps.LinkOperations,
+		"SuppressServiceMessage": caps.SuppressServiceMessage,
+		"ValueListRead":          caps.ValueListRead,
+		"VirtualKey":             caps.VirtualKey,
+		"Metadata":               caps.Metadata,
+	}
+	mustNot := map[string]bool{
+		"ServiceMessages":         caps.ServiceMessages,
+		"GetAllPrograms":          caps.GetAllPrograms,
+		"GetAllSysvars":           caps.GetAllSysvars,
+		"CommunicationTest":       caps.CommunicationTest,
+		"AlarmMessages":           caps.AlarmMessages,
+		"Backup":                  caps.Backup,
+		"CreateSystemVariable":    caps.CreateSystemVariable,
+		"DeleteSystemVariable":    caps.DeleteSystemVariable,
+		"ExecuteProgram":          caps.ExecuteProgram,
+		"InboxDevices":            caps.InboxDevices,
+		"SetProgramState":         caps.SetProgramState,
+		"SetSystemVariable":       caps.SetSystemVariable,
+		"Functions":               caps.Functions,
+		"Rooms":                   caps.Rooms,
+		"Rename":                  caps.Rename,
+		"IseIDLookup":             caps.IseIDLookup,
+		"RequiresPeriodicRefresh": caps.RequiresPeriodicRefresh,
+	}
+	if got := len(must) + len(mustNot); got != countCapabilityFields() {
+		t.Fatalf("matrix states %d fields, Capabilities has %d", got, countCapabilityFields())
+	}
+	for name, v := range must {
+		if !v {
+			t.Errorf("KindOpenCCULite: %s must be true", name)
+		}
+	}
+	for name, v := range mustNot {
+		if v {
+			t.Errorf("KindOpenCCULite: %s must be false", name)
+		}
+	}
+}
+
+// countCapabilityFields counts the fields of [Capabilities] by reflection.
+func countCapabilityFields() int {
+	return reflect.TypeFor[Capabilities]().NumField()
+}
+
+// TestKindForNeverSelectsOpenCCULite pins that the lite kind is chosen by
+// the central's system type only: no interface id maps to it.
+func TestKindForNeverSelectsOpenCCULite(t *testing.T) {
+	t.Parallel()
+	for _, iface := range []hmenum.Interface{
+		hmenum.InterfaceHmIPRF, hmenum.InterfaceBidCosRF, hmenum.InterfaceBidCosWired,
+		hmenum.InterfaceVirtualDevices, hmenum.InterfaceCUxD,
+	} {
+		if KindFor(iface) == KindOpenCCULite {
+			t.Errorf("KindFor(%s) = KindOpenCCULite", iface)
+		}
 	}
 }

@@ -395,7 +395,10 @@ func wireCreateBackup(t *testing.T, reg *central.Registry, name string, fn func(
 	if !ok || u == nil {
 		t.Fatalf("central %q not registered", name)
 	}
-	u.SetCreateBackupFn(fn)
+	u.SetCreateBackupFn(func(ctx context.Context) (central.BackupArchive, error) {
+		data, err := fn(ctx)
+		return central.BackupArchive{Data: data}, err
+	})
 }
 
 // TestCreateBackupForCentralIsSynchronous verifies the new synchronous variant

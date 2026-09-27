@@ -17,6 +17,13 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
+// ErrNoAlarmMessageAcknowledger and ErrNoServiceMessageAcknowledger report
+// an acknowledge with no acknowledger wired: the message stays.
+var (
+	ErrNoAlarmMessageAcknowledger   = errors.New("alarm messages: no acknowledger configured")
+	ErrNoServiceMessageAcknowledger = errors.New("service messages: no acknowledger configured")
+)
+
 // AlarmMessage is one CCU alarm entry. The ID is the CCU ISE ID.
 //
 // An alarm entry has no device, channel, room or trigger: it is backed
@@ -197,7 +204,7 @@ func (a *AlarmMessages) bulkAcker() BulkMessageAcknowledger {
 func (a *AlarmMessages) Acknowledge(ctx context.Context, id string) error {
 	ack := a.acker()
 	if ack == nil {
-		return errors.New("alarm messages: no acknowledger configured")
+		return ErrNoAlarmMessageAcknowledger
 	}
 	if err := ack.AcknowledgeMessage(ctx, id); err != nil {
 		return err
@@ -480,7 +487,7 @@ func (s *ServiceMessages) bulkAcker() BulkMessageAcknowledger {
 func (s *ServiceMessages) Acknowledge(ctx context.Context, id string) error {
 	ack := s.acker()
 	if ack == nil {
-		return errors.New("service messages: no acknowledger configured")
+		return ErrNoServiceMessageAcknowledger
 	}
 	if err := ack.AcknowledgeMessage(ctx, id); err != nil {
 		return err

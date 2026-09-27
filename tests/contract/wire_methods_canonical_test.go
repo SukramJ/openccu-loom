@@ -63,6 +63,17 @@ func TestWireMethodsCanonical(t *testing.T) {
 		"getMetadata":             true,
 		"setMetadata":             true,
 		"clientServerInitialized": true, // Homegear-specific ping variant
+		// XML-RPC methods of the interface processes that the CCU's own
+		// JSON-RPC Interface.* wrappers call (occu
+		// www/api/methods/interface/*.tcl); a backend without the JSON-RPC
+		// layer calls them directly.
+		"getLinkInfo":                  true,
+		"setLinkInfo":                  true,
+		"getInstallMode":               true,
+		"setInstallModeWithWhitelist":  true,
+		"suppressServiceMessages":      true,
+		"getSuppressedServiceMessages": true,
+		"listBidcosInterfaces":         true,
 
 		// JSON-RPC — System
 		"System.getSystemInformation": true,

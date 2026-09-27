@@ -154,6 +154,22 @@ func TestFactoryWiresHomegear(t *testing.T) {
 	}
 }
 
+func TestFactoryWiresOpenCCULite(t *testing.T) {
+	b, err := FactoryWithKind(hmenum.InterfaceHmIPRF, KindOpenCCULite, FactoryInput{XMLRPC: &fakeCaller{}, JSONRPC: &fakeCaller{}})
+	if err != nil {
+		t.Fatalf("factory: %v", err)
+	}
+	if b.Kind() != KindOpenCCULite {
+		t.Fatalf("kind=%s", b.Kind())
+	}
+	if _, ok := b.(*LiteBackend); !ok {
+		t.Fatalf("backend = %T, want *LiteBackend", b)
+	}
+	if _, err := FactoryWithKind(hmenum.InterfaceHmIPRF, KindOpenCCULite, FactoryInput{JSONRPC: &fakeCaller{}}); err == nil {
+		t.Fatal("factory built a lite backend without an XML-RPC caller")
+	}
+}
+
 func TestCcuBackendReportValueUsageDispatchesXMLRPC(t *testing.T) {
 	x := &fakeCaller{reply: true}
 	b := NewCcuBackend(x, nil, nil)

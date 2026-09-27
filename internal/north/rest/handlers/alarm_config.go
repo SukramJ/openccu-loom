@@ -392,6 +392,12 @@ func PutAlarmZoneOutputs(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 			// journal remains their safety net.
 			if eligible, known := p.OutputTargetEligible(in[i].Central, in[i].ChannelAddress,
 				hmenum.AlarmOutputClass(in[i].Class)); known && !eligible {
+				if hmenum.AlarmOutputClass(in[i].Class) == hmenum.AlarmOutputClassSysvarMirror {
+					problem.Write(w, http.StatusUnprocessableEntity,
+						problem.New(problem.TypeValidation, r, "Central has no system variables",
+							"central "+in[i].Central+" offers no system variables to mirror the zone into"))
+					return
+				}
 				problem.Write(w, http.StatusUnprocessableEntity,
 					problem.New(problem.TypeValidation, r, "Output class not supported by channel",
 						in[i].ChannelAddress+" cannot back class "+in[i].Class))

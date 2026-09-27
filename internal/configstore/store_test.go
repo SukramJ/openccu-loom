@@ -991,3 +991,35 @@ func TestRestoreRedactedSecretsDropsUnbackedNull(t *testing.T) {
 		t.Errorf("password key survived without a stored value: %s", merged)
 	}
 }
+
+// TestRowToCentralConfigCarriesTheLiteFields pins the row → config mapping
+// of an openccu-lite central: system type, pin, and the token resolved from
+// its env var before the sealed value — without claiming the password came
+// from the environment.
+func TestRowToCentralConfigCarriesTheLiteFields(t *testing.T) {
+	t.Parallel()
+	row := sqlite.CentralRow{
+		Name: "box", SystemType: "openccu-lite", TLSFingerprint: "ab",
+		APITokenPlain: "olt_sealedsealedsealedsealedsealed00", APITokenEnv: "BOX_TOKEN",
+	}
+	lookup := func(key string) string {
+		if key == "BOX_TOKEN" {
+			return "olt_0123456789abcdef0123456789abcdef"
+		}
+		return ""
+	}
+	cc, usedEnv := RowToCentralConfig(row, lookup)
+	if cc.SystemType != "openccu-lite" || cc.TLSFingerprint != "ab" {
+		t.Errorf("mapped = %+v", cc)
+	}
+	if cc.APIToken != "olt_0123456789abcdef0123456789abcdef" {
+		t.Errorf("APIToken = %q, want the env value", cc.APIToken)
+	}
+	if usedEnv {
+		t.Error("usedEnv reports the password as env-sourced though only the token was")
+	}
+	cc, _ = RowToCentralConfig(row, func(string) string { return "" })
+	if cc.APIToken != row.APITokenPlain {
+		t.Errorf("unset env: APIToken = %q, want the stored value", cc.APIToken)
+	}
+}

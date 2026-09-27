@@ -5,6 +5,8 @@ package adapter
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -43,6 +45,12 @@ type SouthProfile interface {
 	// bring-up generation: the callback route (or the stream that replaces
 	// it) survives a re-init.
 	Events() EventIngress
+	// SystemServices returns the central's management ports (power, the
+	// astro position, the firmware download). They are installed once, when
+	// the central's bring-up handle is built, so a request made while the
+	// system is still booting reaches the same ports as one made later;
+	// each resolves what it needs at call time.
+	SystemServices(unit *central.Unit, deps WireDeps) central.SystemServices
 	// BringUpHub is the first step of every bring-up generation: identity,
 	// hub model and metadata. An error returns the central to the readiness
 	// gate before anything else is wired, so a retry starts clean.
@@ -98,7 +106,14 @@ type InterfaceTransports interface {
 	// ConfigureBackend applies system-specific extras to a freshly built
 	// backend (script runner, HTTP transport, rename hooks).
 	ConfigureBackend(unit *central.Unit, iface hmenum.Interface, b backends.Operations)
+	// WrapCaller wraps the raw XML-RPC caller below the reliability stack,
+	// so a system-specific error classification is seen by the retrier and
+	// the circuit breaker. The CCU returns next unchanged.
+	WrapCaller(next CallFunc) CallFunc
 }
+
+// CallFunc is one raw XML-RPC call to an interface.
+type CallFunc func(ctx context.Context, method string, args ...any) (any, error)
 
 // InterfaceEndpoint is where one interface's XML-RPC calls go.
 type InterfaceEndpoint struct {
@@ -116,6 +131,14 @@ type InterfaceEndpoint struct {
 // way.
 type ValueSeeder interface {
 	SeedValues(ctx context.Context, iface hmenum.Interface, depth SeedDepth) (map[string]map[string]any, error)
+}
+
+// generationAware is implemented by an EventIngress that needs the current
+// bring-up generation's pipeline: the lite stream reseeds values after it
+// may have missed events. bringUpCentral binds it once the pipeline exists
+// and registers the unbind as a generation closer.
+type generationAware interface {
+	BindGeneration(reseed func(ctx context.Context, iface hmenum.Interface) error) (unbind func())
 }
 
 // SeedDepth tells a seeder how much a caller is willing to pay.
@@ -155,15 +178,37 @@ type LivenessProbe interface {
 	Probe(ctx context.Context) systemProbeResult
 }
 
-// southProfileFor selects cc's south profile. Every central is a CCU until
-// the system type becomes configurable; the CCU profile reproduces the
-// behaviour the daemon has always had.
-func southProfileFor(cc *config.CentralConfig, _ *slog.Logger) SouthProfile {
-	return newCCUProfile(cc)
+// errSystemTypeNotSupported reports a system type this build cannot bring
+// up yet. The central is kept visible with a degraded startup state rather
+// than half brought up.
+var errSystemTypeNotSupported = errors.New("system type not supported by this build yet")
+
+// southProfileFor selects cc's south profile. It is the only place the
+// daemon compares a system type; everything downstream works through the
+// profile's ports.
+func southProfileFor(cc *config.CentralConfig, logger *slog.Logger) (SouthProfile, error) {
+	switch st := cc.SystemType.Normalize(); st {
+	case hmenum.SystemTypeCCU:
+		return newCCUProfile(cc), nil
+	case hmenum.SystemTypeOpenCCULite:
+		p, err := newLiteProfile(cc, logger)
+		if err != nil {
+			return nil, err
+		}
+		return p, nil
+	case hmenum.SystemTypeAuto:
+		return nil, fmt.Errorf("central %s: %s: %w", cc.Name, st, errSystemTypeNotSupported)
+	default:
+		return nil, fmt.Errorf("central %s: unknown system_type %q", cc.Name, cc.SystemType)
+	}
 }
 
 // southLivenessFor is the hub-plane liveness probe of cc's profile, or nil
-// when the profile has none.
+// when the profile has none or cannot be built.
 func southLivenessFor(cc *config.CentralConfig, logger *slog.Logger) LivenessProbe {
-	return southProfileFor(cc, logger).Liveness()
+	profile, err := southProfileFor(cc, logger)
+	if err != nil {
+		return nil
+	}
+	return profile.Liveness()
 }

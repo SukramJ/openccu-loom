@@ -372,6 +372,12 @@ func IsWireFailure(ctx context.Context, err error) bool {
 		return false
 	case isSemanticFault(err):
 		return false
+	case errors.Is(err, hmerr.ErrScopeMissing):
+		// The system answered and refused: the credential lacks a scope.
+		// The link is healthy, and only a different credential changes
+		// the answer — counting it would open the breaker over a
+		// permission and take the whole interface dark.
+		return false
 	case isCallerGone(ctx, err):
 		return false
 	case errors.Is(err, ErrThrottleQueueFull),

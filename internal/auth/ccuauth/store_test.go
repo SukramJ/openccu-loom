@@ -15,10 +15,10 @@ import (
 )
 
 // fakeAuthenticator is a test double for [ccuauth.Authenticator].
-// validateErr is returned by ValidateCredentials; levels maps usernames to
-// their CCU UserLevel; levelErr is returned by UserLevel when set.
-// validateCalls counts how often ValidateCredentials was invoked so tests
-// can verify it was not called on the guard-rejection paths.
+// validateErr is returned by Verify for the credential check; levels maps
+// usernames to their CCU UserLevel; levelErr is returned by Verify for the
+// level lookup when set. validateCalls counts how often Verify was invoked
+// so tests can verify it was not called on the guard-rejection paths.
 type fakeAuthenticator struct {
 	validateErr   error
 	levels        map[string]int
@@ -26,12 +26,11 @@ type fakeAuthenticator struct {
 	validateCalls int
 }
 
-func (f *fakeAuthenticator) ValidateCredentials(_ context.Context, _, _, _ string) error {
+func (f *fakeAuthenticator) Verify(_ context.Context, _, username, _ string) (int, error) {
 	f.validateCalls++
-	return f.validateErr
-}
-
-func (f *fakeAuthenticator) UserLevel(_ context.Context, _, username string) (int, error) {
+	if f.validateErr != nil {
+		return -1, f.validateErr
+	}
 	if f.levelErr != nil {
 		return 0, f.levelErr
 	}
@@ -141,7 +140,7 @@ func TestStore_AuthenticateBasic_EmptyCredentialsBypassAuthenticator(t *testing.
 				t.Errorf("err = %v, want ErrUnauthenticated", err)
 			}
 			if fake.validateCalls != 0 {
-				t.Errorf("ValidateCredentials called %d times, want 0", fake.validateCalls)
+				t.Errorf("Verify called %d times, want 0", fake.validateCalls)
 			}
 		})
 	}
@@ -166,7 +165,7 @@ func TestStore_AuthenticateBasic_InvalidUsernamePreventsAuthenticatorCall(t *tes
 				t.Errorf("err = %v, want ErrUnauthenticated", err)
 			}
 			if fake.validateCalls != 0 {
-				t.Errorf("ValidateCredentials called %d times, want 0", fake.validateCalls)
+				t.Errorf("Verify called %d times, want 0", fake.validateCalls)
 			}
 		})
 	}

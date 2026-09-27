@@ -12,6 +12,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -758,6 +759,9 @@ func (s *Store) layerCentrals(ctx context.Context, cfg *config.Config, srcs map[
 		if usedEnv {
 			srcs["centrals."+r.Name+".password"] = SourceEnv
 		}
+		if tokenFromEnv(*r, s.envLookup) {
+			srcs["centrals."+r.Name+".api_token"] = SourceEnv
+		}
 		out = append(out, cc)
 	}
 	cfg.Centrals = out
@@ -825,8 +829,18 @@ func RowToCentralConfig(r sqlite.CentralRow, envLookup func(string) string) (cc 
 			usedEnv = true
 		}
 	}
+	// The API token resolves exactly like the password: an env var named
+	// by the row wins over the sealed value. usedEnv keeps meaning "the
+	// password came from the environment"; see [tokenFromEnv].
+	token := r.APITokenPlain
+	if tokenFromEnv(r, envLookup) {
+		token = envLookup(r.APITokenEnv)
+	}
 	return config.CentralConfig{
 		Name:                  r.Name,
+		SystemType:            hmenum.SystemType(r.SystemType),
+		APIToken:              token,
+		TLSFingerprint:        r.TLSFingerprint,
 		Host:                  r.Host,
 		Port:                  r.Port,
 		JSONRPCPort:           r.JSONRPCPort,
@@ -840,6 +854,12 @@ func RowToCentralConfig(r sqlite.CentralRow, envLookup func(string) string) (cc 
 		Visibility:            r.Visibility,
 		Behavior:              r.Behavior,
 	}, usedEnv
+}
+
+// tokenFromEnv reports whether the row's API token comes from the
+// environment variable it names (set and non-empty).
+func tokenFromEnv(r sqlite.CentralRow, envLookup func(string) string) bool {
+	return r.APITokenEnv != "" && envLookup(r.APITokenEnv) != ""
 }
 
 // resolveEnvSecrets walks the in-memory config and overlays env-var

@@ -177,23 +177,11 @@ func (f *Fake) handleXMLRPC(w http.ResponseWriter, r *http.Request) {
 		methods = append(methods, c.method)
 	}
 	recordRPCMethods(r, methods)
-
-	// init is refused before any tier check, wherever it appears.
-	for _, c := range calls {
-		if c.method == "init" {
-			writeFault(w, -1, initRefusal)
-			return
-		}
-	}
-	for _, c := range calls {
-		tier := methodTier(c.method, c.params)
-		if !hasScope(who.scopes, tier) {
-			writeFault(w, -1, "not permitted: "+c.method+" needs "+tier)
-			return
-		}
+	if f.refuseCalls(w, who, calls) {
+		return
 	}
 	if st.down {
-		writeDown(w, iface, "marked down")
+		f.writeDown(w, iface, "marked down")
 		return
 	}
 
@@ -210,7 +198,7 @@ func (f *Fake) handleXMLRPC(w http.ResponseWriter, r *http.Request) {
 			writeFault(w, -1, local.Error())
 			return
 		}
-		writeDown(w, iface, err.Error())
+		f.writeDown(w, iface, err.Error())
 		return
 	}
 	if resp.Fault != nil {
@@ -222,6 +210,34 @@ func (f *Fake) handleXMLRPC(w http.ResponseWriter, r *http.Request) {
 		resp.Params = []xmlrpc.Value{xmlrpc.StringValue("")}
 	}
 	writeXMLRPC(w, &xmlrpc.MethodResponse{Params: resp.Params[:1]})
+}
+
+// refuseCalls answers the proxy's own refusals as faults over HTTP 200:
+// init first, wherever it appears, then the tier check of every call.
+// It reports whether it answered.
+func (f *Fake) refuseCalls(w http.ResponseWriter, who principal, calls []innerCall) bool {
+	for _, c := range calls {
+		if c.method == "init" {
+			text := initRefusal
+			if f.deviates(DeviateInitFaultText) {
+				text = "init is not supported"
+			}
+			writeFault(w, -1, text)
+			return true
+		}
+	}
+	for _, c := range calls {
+		tier := methodTier(c.method, c.params)
+		if !hasScope(who.scopes, tier) {
+			text := "not permitted: " + c.method + " needs " + tier
+			if f.deviates(DeviateTierFaultText) {
+				text = "forbidden: " + c.method + " requires " + tier
+			}
+			writeFault(w, -1, text)
+			return true
+		}
+	}
+	return false
 }
 
 // localError is a failure on the box's side of the forward (the request
@@ -357,9 +373,13 @@ func rewriteMarks(latin1 []byte) []byte {
 }
 
 // writeDown answers 503 {"error":"down"} for an interface process that
-// does not answer.
-func writeDown(w http.ResponseWriter, iface, detail string) {
-	writeError(w, http.StatusServiceUnavailable, "down",
+// does not answer ([DeviateDownErrorCode] changes the code).
+func (f *Fake) writeDown(w http.ResponseWriter, iface, detail string) {
+	code := "down"
+	if f.deviates(DeviateDownErrorCode) {
+		code = "interface-down"
+	}
+	writeError(w, http.StatusServiceUnavailable, code,
 		"the interface process does not answer: "+iface+": "+detail)
 }
 

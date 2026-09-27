@@ -168,6 +168,7 @@ type Fake struct {
 	metaHeartbeat time.Duration
 	ifaces        map[string]*ifaceState
 	calls         []Call
+	deviations    map[Deviation]bool
 
 	done      chan struct{}
 	closeOnce sync.Once
@@ -397,7 +398,7 @@ func (f *Fake) routes() http.Handler {
 		writeError(w, http.StatusNotFound, "not-found", "no such endpoint")
 	})
 	mux.HandleFunc("/", f.handleShell)
-	return f.record(f.readinessGate(lengthGate(mux)))
+	return f.record(f.readinessGate(f.lengthGate(mux)))
 }
 
 // readinessGate answers for the web server in front of occulited while
@@ -426,11 +427,13 @@ func (f *Fake) readinessGate(next http.Handler) http.Handler {
 // lengthGate answers 411 for an /api/ request with a method that
 // carries a body but no Content-Length, as the web server in front of
 // occulited does; clients send "{}" when they have nothing to send.
-func lengthGate(next http.Handler) http.Handler {
+// [DeviateLengthRequiredAlways] makes it refuse every such request.
+func (f *Fake) lengthGate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
-			if isAPIPath(r.URL.Path) && (r.ContentLength < 0 || r.Header.Get("Content-Length") == "") {
+			missing := r.ContentLength < 0 || r.Header.Get("Content-Length") == ""
+			if isAPIPath(r.URL.Path) && (missing || f.deviates(DeviateLengthRequiredAlways)) {
 				w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 				w.WriteHeader(http.StatusLengthRequired)
 				_, _ = w.Write([]byte("411 Length Required\n"))
@@ -647,7 +650,15 @@ type metaLimits struct {
 // history and no WebSocket event transport, so it does not claim them.
 // The hmip block is left out; the contract tells a client to treat its
 // absence as an older box.
-func (f *Fake) handleMetaVersion(w http.ResponseWriter, _ *http.Request) {
+func (f *Fake) handleMetaVersion(w http.ResponseWriter, r *http.Request) {
+	if f.deviates(DeviateVersionHTML) {
+		f.handleShell(w, r)
+		return
+	}
+	apis := map[string]int{"meta": 1, "rpc": 1, "system": 1, "auth": 1}
+	if f.deviates(DeviateVersionMajor) {
+		apis["rpc"] = 2
+	}
 	writeJSON(w, http.StatusOK, metaVersion{
 		API:            "meta",
 		Version:        1,
@@ -657,7 +668,7 @@ func (f *Fake) handleMetaVersion(w http.ResponseWriter, _ *http.Request) {
 		Capabilities: metaCapabilities{
 			Pairing:    !f.pairingDisabled(),
 			State:      true,
-			APIs:       map[string]int{"meta": 1, "rpc": 1, "system": 1, "auth": 1},
+			APIs:       apis,
 			Transports: []string{"sse"},
 			Limits: metaLimits{
 				StreamsPerToken: f.opts.StreamsPerSubject,

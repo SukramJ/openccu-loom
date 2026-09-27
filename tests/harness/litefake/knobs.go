@@ -152,3 +152,11 @@ func (f *Fake) SetMetaHeartbeatInterval(d time.Duration) {
 	f.metaHeartbeat = d
 	f.mu.Unlock()
 }
+
+// Sessions returns the number of open account sessions (logins not yet
+// logged out).
+func (f *Fake) Sessions() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.sessions)
+}

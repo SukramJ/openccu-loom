@@ -16,8 +16,10 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/auth"
+	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -64,6 +66,9 @@ func maskCentralRow(ctx context.Context, row sqlite.CentralRow) sqlite.CentralRo
 	if row.PasswordPlain != "" {
 		row.PasswordPlain = maskSentinel
 	}
+	if row.APITokenPlain != "" {
+		row.APITokenPlain = maskSentinel
+	}
 	if id, ok := auth.IdentityFrom(ctx); ok && !id.HasRole(auth.RoleAdmin) {
 		row.Host = ""
 		row.Serial = ""
@@ -75,6 +80,9 @@ func maskCentralRow(ctx context.Context, row sqlite.CentralRow) sqlite.CentralRo
 		row.PasswordPlain = ""
 		row.TLS = false
 		row.TLSInsecureSkipVerify = false
+		row.APITokenEnv = ""
+		row.APITokenPlain = ""
+		row.TLSFingerprint = ""
 	}
 	return row
 }
@@ -119,7 +127,7 @@ func decodeCentralRow(r *http.Request) (row sqlite.CentralRow, present map[strin
 		// encoding/json matches object keys case-insensitively, so the
 		// presence probe has to as well.
 		lk := strings.ToLower(k)
-		if lk == "password_plain" && string(v) == "null" {
+		if (lk == "password_plain" || lk == "api_token_plain") && string(v) == "null" {
 			continue
 		}
 		present[lk] = true
@@ -139,6 +147,38 @@ func writeCentralSecretRefusal(w http.ResponseWriter, r *http.Request, err error
 	}
 	problem.Write(w, http.StatusBadRequest,
 		problem.New(problem.TypeValidation, r, "Password cannot be stored", err.Error()))
+	return true
+}
+
+// writeCentralSystemRefusal validates the fields whose meaning depends on
+// the row's system type and answers 400 naming the offending field. It
+// reports whether the row may be persisted. It runs after the masked
+// secrets were restored, so the rules see the real token.
+func writeCentralSystemRefusal(w http.ResponseWriter, r *http.Request, row sqlite.CentralRow) bool {
+	cc := config.CentralConfig{
+		Name:                  row.Name,
+		SystemType:            hmenum.SystemType(row.SystemType),
+		Host:                  row.Host,
+		Port:                  row.Port,
+		Ports:                 row.Ports,
+		Username:              row.Username,
+		Password:              row.PasswordPlain,
+		Interfaces:            row.Interfaces,
+		TLS:                   row.TLS,
+		TLSInsecureSkipVerify: row.TLSInsecureSkipVerify,
+		APIToken:              row.APITokenPlain,
+		TLSFingerprint:        row.TLSFingerprint,
+	}
+	// A password named by env var counts as a credential for the lite
+	// rule that forbids username/password.
+	if row.PasswordEnv != "" && cc.Password == "" {
+		cc.Password = row.PasswordEnv
+	}
+	if err := config.ValidateCentralSystemToken(0, &cc, row.APITokenEnv != ""); err != nil {
+		problem.Write(w, http.StatusBadRequest,
+			problem.New(problem.TypeValidation, r, "Invalid central", err.Error()))
+		return false
+	}
 	return true
 }
 
@@ -213,9 +253,16 @@ func CreateCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc
 			return
 		}
 		// A fresh central has no stored credential to restore; the sentinel
-		// is not a real password, so drop it rather than persist "***".
+		// is not a real password or token, so drop it rather than persist
+		// "***".
 		if row.PasswordPlain == maskSentinel {
 			row.PasswordPlain = ""
+		}
+		if row.APITokenPlain == maskSentinel {
+			row.APITokenPlain = ""
+		}
+		if !writeCentralSystemRefusal(w, r, row) {
+			return
 		}
 		if err := svc.Put(r.Context(), row); err != nil {
 			if writeCentralSecretRefusal(w, r, err) {
@@ -293,46 +340,9 @@ func UpdateCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc
 			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Central lookup failed", err)
 			return
 		}
-		if !present["serial"] {
-			row.Serial = existing.Serial
-		}
-		if !present["port"] {
-			row.Port = existing.Port
-		}
-		if !present["json_rpc_port"] {
-			row.JSONRPCPort = existing.JSONRPCPort
-		}
-		if !present["username"] {
-			row.Username = existing.Username
-		}
-		if !present["password_env"] {
-			row.PasswordEnv = existing.PasswordEnv
-		}
-		if !present["tls"] {
-			row.TLS = existing.TLS
-		}
-		if !present["tls_insecure_skip_verify"] {
-			row.TLSInsecureSkipVerify = existing.TLSInsecureSkipVerify
-		}
-		if !present["primary_interface"] {
-			row.PrimaryInterface = existing.PrimaryInterface
-		}
-		if !present["ports"] {
-			row.Ports = existing.Ports
-		}
-		if !present["visibility"] {
-			row.Visibility = existing.Visibility
-		}
-		if !present["behavior"] {
-			row.Behavior = existing.Behavior
-		}
-		// The GET path masks password_plain to the sentinel and omits it
-		// entirely when unset; a save that echoes the sentinel back — or
-		// leaves the optional key out — means "unchanged" and must restore
-		// the stored credential rather than overwrite it. See
-		// [decodeCentralRow] for why the absent key cannot be read as "clear".
-		if !present["password_plain"] || row.PasswordPlain == maskSentinel {
-			row.PasswordPlain = existing.PasswordPlain
+		overlayOmittedCentralFields(&row, existing, present)
+		if !writeCentralSystemRefusal(w, r, row) {
+			return
 		}
 		if err := svc.Put(r.Context(), row); err != nil {
 			if writeCentralSecretRefusal(w, r, err) {
@@ -350,6 +360,68 @@ func UpdateCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc
 			})
 		}
 		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// overlayOmittedCentralFields keeps the stored value of every optional field
+// the update payload did not carry — [CentralAdminService.Put] is an
+// unconditional upsert, so an omitted key would otherwise decode to the Go
+// zero value and disappear. The masked secrets follow their own rule: the
+// mask, an absent key and null all mean "unchanged" (see [decodeCentralRow]).
+func overlayOmittedCentralFields(row *sqlite.CentralRow, existing sqlite.CentralRow, present map[string]bool) {
+	if !present["serial"] {
+		row.Serial = existing.Serial
+	}
+	if !present["port"] {
+		row.Port = existing.Port
+	}
+	if !present["json_rpc_port"] {
+		row.JSONRPCPort = existing.JSONRPCPort
+	}
+	if !present["username"] {
+		row.Username = existing.Username
+	}
+	if !present["password_env"] {
+		row.PasswordEnv = existing.PasswordEnv
+	}
+	if !present["tls"] {
+		row.TLS = existing.TLS
+	}
+	if !present["tls_insecure_skip_verify"] {
+		row.TLSInsecureSkipVerify = existing.TLSInsecureSkipVerify
+	}
+	if !present["primary_interface"] {
+		row.PrimaryInterface = existing.PrimaryInterface
+	}
+	if !present["ports"] {
+		row.Ports = existing.Ports
+	}
+	if !present["visibility"] {
+		row.Visibility = existing.Visibility
+	}
+	if !present["behavior"] {
+		row.Behavior = existing.Behavior
+	}
+	if !present["system_type"] {
+		row.SystemType = existing.SystemType
+	}
+	if !present["api_token_env"] {
+		row.APITokenEnv = existing.APITokenEnv
+	}
+	if !present["tls_fingerprint"] {
+		row.TLSFingerprint = existing.TLSFingerprint
+	}
+	// The GET path masks password_plain to the sentinel and omits it
+	// entirely when unset; a save that echoes the sentinel back — or
+	// leaves the optional key out — means "unchanged" and must restore
+	// the stored credential rather than overwrite it. See
+	// [decodeCentralRow] for why the absent key cannot be read as "clear".
+	if !present["password_plain"] || row.PasswordPlain == maskSentinel {
+		row.PasswordPlain = existing.PasswordPlain
+	}
+	// The API token follows the password's rule exactly.
+	if !present["api_token_plain"] || row.APITokenPlain == maskSentinel {
+		row.APITokenPlain = existing.APITokenPlain
 	}
 }
 

@@ -991,20 +991,20 @@ func (u *Unit) IngestDevices(ctx context.Context, interfaceID string, descriptio
 	return fn(ctx, interfaceID, descriptions)
 }
 
-// CreateBackup triggers a backup on the CCU and returns the downloaded
-// archive blob.
-func (u *Unit) CreateBackup(ctx context.Context) ([]byte, error) {
+// CreateBackup has the system create a backup and returns the downloaded
+// archive.
+func (u *Unit) CreateBackup(ctx context.Context) (BackupArchive, error) {
 	u.services.mu.RLock()
 	fn := u.services.createBackupFn
 	u.services.mu.RUnlock()
 	if fn == nil {
-		return nil, errors.New("central: CreateBackup not wired")
+		return BackupArchive{}, errors.New("central: CreateBackup not wired")
 	}
 	return fn(ctx)
 }
 
 // SetCreateBackupFn wires the backup-and-download handler.
-func (u *Unit) SetCreateBackupFn(fn func(ctx context.Context) ([]byte, error)) {
+func (u *Unit) SetCreateBackupFn(fn func(ctx context.Context) (BackupArchive, error)) {
 	u.services.mu.Lock()
 	u.services.createBackupFn = fn
 	u.services.mu.Unlock()

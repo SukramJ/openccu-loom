@@ -62,15 +62,15 @@ func TestCreateBackupUnwiredReturnsError(t *testing.T) {
 
 func TestCreateBackupCallsWiredFn(t *testing.T) {
 	c := newTestCentral(t)
-	c.SetCreateBackupFn(func(_ context.Context) ([]byte, error) {
-		return []byte("backup-data"), nil
+	c.SetCreateBackupFn(func(_ context.Context) (BackupArchive, error) {
+		return BackupArchive{Data: []byte("backup-data")}, nil
 	})
-	data, err := c.CreateBackup(context.Background())
+	archive, err := c.CreateBackup(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(data) != "backup-data" {
-		t.Fatalf("unexpected backup: %s", data)
+	if string(archive.Data) != "backup-data" {
+		t.Fatalf("unexpected backup: %s", archive.Data)
 	}
 }
 
@@ -112,7 +112,7 @@ func TestServiceWiringCompleteOnlyAfterAllWired(t *testing.T) {
 	if c.ServiceWiringComplete() {
 		t.Fatal("should not be complete with nothing wired")
 	}
-	c.SetCreateBackupFn(func(_ context.Context) ([]byte, error) { return nil, nil })
+	c.SetCreateBackupFn(func(_ context.Context) (BackupArchive, error) { return BackupArchive{}, nil })
 	c.SetRenameDeviceFn(func(_ context.Context, _, _ string) error { return nil })
 	c.SetLoadAndRefreshFn(func(_ context.Context) error { return nil })
 	if !c.ServiceWiringComplete() {

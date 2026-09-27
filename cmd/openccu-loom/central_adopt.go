@@ -1007,6 +1007,10 @@ func centralConfigNeedsRestart(prev, next sqlite.CentralRow) bool {
 		prev.PasswordPlain != next.PasswordPlain ||
 		prev.PasswordEnv != next.PasswordEnv ||
 		prev.PrimaryInterface != next.PrimaryInterface ||
+		prev.SystemType != next.SystemType ||
+		prev.APITokenPlain != next.APITokenPlain ||
+		prev.APITokenEnv != next.APITokenEnv ||
+		prev.TLSFingerprint != next.TLSFingerprint ||
 		!slices.Equal(prev.Interfaces, next.Interfaces)
 }
 

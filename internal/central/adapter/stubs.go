@@ -292,10 +292,11 @@ func (a *BackupAdapter) createAndSave(ctx context.Context, u *central.Unit, id s
 	lock.Lock()
 	defer lock.Unlock()
 
-	data, err := u.CreateBackup(ctx)
+	archive, err := u.CreateBackup(ctx)
 	if err != nil {
 		return fmt.Errorf("backup: create: %w", err)
 	}
+	data := archive.Data
 	// A system that cannot produce an archive answers with nothing; storing
 	// that as a zero-byte backup and reporting success would leave the
 	// operator with a restore point that restores nothing.
@@ -309,7 +310,14 @@ func (a *BackupAdapter) createAndSave(ctx context.Context, u *central.Unit, id s
 			slog.Int("bytes", len(data)))
 		return nil
 	}
-	if err := a.storage.Save(ctx, id, ccuArchiveName(u, time.Now()), data); err != nil {
+	// A system that names its archives (openccu-lite: a CCU-compatible
+	// name, with ".sbk.age" when the box encrypts) keeps that name; a CCU
+	// hands over bare bytes and gets the CCU's own naming scheme.
+	name := archive.FileName
+	if name == "" {
+		name = ccuArchiveName(u, time.Now())
+	}
+	if err := a.storage.Save(ctx, id, name, data); err != nil {
 		return fmt.Errorf("backup: save: %w", err)
 	}
 	return nil

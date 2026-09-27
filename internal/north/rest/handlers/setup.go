@@ -15,6 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -80,17 +81,44 @@ type setupLocale struct {
 }
 
 type setupCCU struct {
-	Name       string   `json:"name"`
-	Host       string   `json:"host"`
-	Username   string   `json:"username,omitempty"`
-	Password   string   `json:"password,omitempty"`
-	Interfaces []string `json:"interfaces"`
+	Name string `json:"name"`
+	Host string `json:"host"`
+	// SystemType is "ccu" (also the empty value), "openccu-lite" or "auto".
+	SystemType string `json:"system_type,omitempty"`
+	Username   string `json:"username,omitempty"`
+	Password   string `json:"password,omitempty"`
+	// APIToken authenticates an openccu-lite system; TLS and
+	// TLSFingerprint describe how its web server is reached.
+	APIToken       string   `json:"api_token,omitempty"`
+	TLS            bool     `json:"tls,omitempty"`
+	TLSFingerprint string   `json:"tls_fingerprint,omitempty"`
+	Interfaces     []string `json:"interfaces"`
 }
 
 type setupMQTT struct {
 	BrokerURL string `json:"broker_url"`
 	Username  string `json:"username,omitempty"`
 	Password  string `json:"password,omitempty"`
+}
+
+// centralConfig is the wizard's central as a configuration, for the rules
+// that depend on its system type.
+func (c *setupCCU) centralConfig() *config.CentralConfig {
+	ifaces := make([]config.InterfaceSpec, 0, len(c.Interfaces))
+	for _, name := range c.Interfaces {
+		ifaces = append(ifaces, config.InterfaceSpec{Name: name})
+	}
+	return &config.CentralConfig{
+		Name:           c.Name,
+		SystemType:     hmenum.SystemType(c.SystemType),
+		Host:           c.Host,
+		Username:       c.Username,
+		Password:       c.Password,
+		APIToken:       c.APIToken,
+		TLS:            c.TLS,
+		TLSFingerprint: c.TLSFingerprint,
+		Interfaces:     ifaces,
+	}
 }
 
 // minSetupPasswordLen mirrors the wizard's prior server-rendered validation.
@@ -225,6 +253,9 @@ func validateSetup(req *setupRequest) string {
 		if err := hmtypes.ValidateCentralName(req.CCU.Name); err != nil {
 			return "ccu." + err.Error()
 		}
+		if err := config.ValidateCentralSystem(0, req.CCU.centralConfig()); err != nil {
+			return "ccu: " + err.Error()
+		}
 	}
 	if req.MQTT != nil {
 		req.MQTT.BrokerURL = strings.TrimSpace(req.MQTT.BrokerURL)
@@ -300,11 +331,15 @@ func finalizeSetup(ctx context.Context, s *SetupService, req *setupRequest) erro
 			ifaces = append(ifaces, config.InterfaceSpec{Name: name})
 		}
 		row := sqlite.CentralRow{
-			Name:       req.CCU.Name,
-			Host:       req.CCU.Host,
-			Username:   req.CCU.Username,
-			Interfaces: ifaces,
-			Enabled:    true,
+			Name:           req.CCU.Name,
+			SystemType:     req.CCU.SystemType,
+			Host:           req.CCU.Host,
+			Username:       req.CCU.Username,
+			APITokenPlain:  req.CCU.APIToken,
+			TLS:            req.CCU.TLS,
+			TLSFingerprint: req.CCU.TLSFingerprint,
+			Interfaces:     ifaces,
+			Enabled:        true,
 		}
 		if req.CCU.Password != "" {
 			row.PasswordPlain = req.CCU.Password

@@ -7,21 +7,9 @@ import (
 	"context"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/client"
-	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/model/group"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
-
-// heatingGroupLister is the narrow capability a backend exposes when it
-// can read its CCU's heating-group roster. Only the CCU backend
-// implements it (it reads /etc/config/groups.gson via the
-// CCU.getHeatingGroupList JSON-RPC method); CUxD / Homegear backends do
-// not, so a request routed to one surfaces as unsupported (scoped mode)
-// or is skipped (aggregate mode).
-type heatingGroupLister interface {
-	GetHeatingGroupList(ctx context.Context) (string, error)
-}
 
 // CentralGroups pairs a central name with its parsed heating groups.
 type CentralGroups struct {
@@ -29,30 +17,28 @@ type CentralGroups struct {
 	Groups  []group.Group
 }
 
-// GroupsDomain serves the read-only heating-group surface. Reads run
-// through the target central's primary backend; the write surface
-// (create / edit / delete) is handled separately via the CCU jpages
-// proxy — see docs/adr/0055-groups-jpages-proxy.md.
+// GroupsDomain serves the heating-group surface through each central's
+// heating-group port (a CCU's jpages proxy, an openccu-lite box's groups
+// API), resolving the target central from the registry.
 type GroupsDomain struct {
 	registry *central.Registry
-	writer   *client.ValueWriter
 }
 
 // NewGroupsDomain wires the live adapter.
-func NewGroupsDomain(r *central.Registry, w *client.ValueWriter) *GroupsDomain {
-	return &GroupsDomain{registry: r, writer: w}
+func NewGroupsDomain(r *central.Registry) *GroupsDomain {
+	return &GroupsDomain{registry: r}
 }
 
 // List returns heating groups grouped per central. When centralName is
 // non-empty it scopes to that central and returns
 // [hmerr.ErrUnknownCentral] if it is not registered or
-// [backends.ErrUnsupported] if its primary backend cannot read groups.
+// backends.ErrUnsupported if its system cannot read groups.
 // When centralName is empty it aggregates across every registered
 // central, sorted by name, silently skipping centrals whose backend has
 // no group capability or whose fetch fails — an offline or non-CCU
 // central never fails the whole listing.
 func (a *GroupsDomain) List(ctx context.Context, centralName string) ([]CentralGroups, error) {
-	if a.registry == nil || a.writer == nil {
+	if a.registry == nil {
 		return nil, hmerr.ErrUnknownCentral
 	}
 	if centralName != "" {
@@ -84,22 +70,14 @@ func (a *GroupsDomain) List(ctx context.Context, centralName string) ([]CentralG
 	return out, nil
 }
 
-// groupsOf resolves the central's primary backend, fetches the raw
-// groups.gson payload, and parses it.
+// groupsOf reads the central's groups through its port and resolves each
+// member's names from the live device model.
 func (a *GroupsDomain) groupsOf(ctx context.Context, unit *central.Unit) ([]group.Group, error) {
-	_, backend, err := primaryBackendOf(unit, a.writer)
+	port, err := groupsPortOf(unit)
 	if err != nil {
 		return nil, err
 	}
-	lister, ok := backend.(heatingGroupLister)
-	if !ok {
-		return nil, backends.ErrUnsupported
-	}
-	raw, err := lister.GetHeatingGroupList(ctx)
-	if err != nil {
-		return nil, err
-	}
-	groups, err := group.ParseGroupList(raw)
+	groups, err := port.List(ctx)
 	if err != nil {
 		return nil, err
 	}

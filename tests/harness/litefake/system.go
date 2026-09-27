@@ -4,6 +4,7 @@
 package litefake
 
 import (
+	"archive/tar"
 	"bytes"
 	"encoding/json"
 	"io"
@@ -29,7 +30,32 @@ const (
 )
 
 // backupBlob is the fixed archive GET /api/system/v1/backup streams.
-var backupBlob = []byte("litefake backup archive\x00\x01\x02\x03")
+// It has the member layout of a CCU system backup (the configuration
+// archive, its signature, the firmware version), as the box serves one,
+// so the daemon's archive inspection accepts it; the member contents are
+// placeholders.
+var backupBlob = sbkBlob()
+
+func sbkBlob() []byte {
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	for _, m := range []struct{ name, body string }{
+		{"usr_local.tar.gz", "litefake configuration archive"},
+		{"signature", "litefake signature"},
+		{"firmware_version", "VERSION=" + fakeBase + "\nPRODUCT=openccu-lite\n"},
+	} {
+		if err := tw.WriteHeader(&tar.Header{Name: m.name, Mode: 0o644, Size: int64(len(m.body))}); err != nil {
+			panic(err) // invariant: writing to a bytes.Buffer cannot fail
+		}
+		if _, err := tw.Write([]byte(m.body)); err != nil {
+			panic(err) // invariant: as above
+		}
+	}
+	if err := tw.Close(); err != nil {
+		panic(err) // invariant: as above
+	}
+	return buf.Bytes()
+}
 
 // BackupBlob returns the bytes GET /api/system/v1/backup streams.
 func BackupBlob() []byte { return append([]byte(nil), backupBlob...) }
@@ -85,6 +111,35 @@ type systemState struct {
 	uploads         map[string][]byte
 	backupRuns      int
 	groups          *groupStore
+	// restoreNeedsKey makes every checked archive one only the box's
+	// recovery key opens.
+	restoreNeedsKey bool
+	backupTargets   []BackupTarget
+	applied         []string
+}
+
+// BackupTarget is one entry of /api/system/v1/backup/targets, reduced to
+// the members the daemon reads.
+type BackupTarget struct {
+	ID         string            `json:"id"`
+	Name       string            `json:"name"`
+	Kind       string            `json:"kind"`
+	Enabled    bool              `json:"enabled"`
+	State      BackupTargetState `json:"state"`
+	LastBackup *LastBackup       `json:"last_backup,omitempty"`
+}
+
+// BackupTargetState is a target's current state ("idle", "running", …).
+type BackupTargetState struct {
+	State string `json:"state"`
+}
+
+// LastBackup is the outcome of a target's newest backup run.
+type LastBackup struct {
+	At    string `json:"at"`
+	OK    bool   `json:"ok"`
+	State string `json:"state"`
+	Error string `json:"error,omitempty"`
 }
 
 func newSystemState() *systemState {
@@ -103,6 +158,7 @@ func (f *Fake) systemRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/system/v1/reboot/recovery", f.sysScope(scopePower, f.confirmed("rebooting into recovery")))
 	mux.HandleFunc("GET /api/system/v1/backup", f.sysScope(scopeBackup, f.handleBackup))
 	mux.HandleFunc("POST /api/system/v1/backup/run", f.sysScope(scopeBackup, f.handleBackupRun))
+	mux.HandleFunc("GET /api/system/v1/backup/targets", f.sysRead(f.handleBackupTargets))
 	mux.HandleFunc("POST /api/system/v1/restore/check", f.sysScope(scopePower, f.handleRestoreCheck))
 	mux.HandleFunc("POST /api/system/v1/restore/apply", f.sysScope(scopePower, f.handleRestoreApply))
 	mux.HandleFunc("GET /api/system/v1/service-messages", f.sysRead(f.handleServiceMessages))
@@ -277,6 +333,18 @@ func (f *Fake) handleBackupRun(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusAccepted, backupRunAnswer{Started: true, Instance: "run-" + strconv.Itoa(n)})
 }
 
+type backupTargetsAnswer struct {
+	Targets []BackupTarget `json:"targets"`
+}
+
+func (f *Fake) handleBackupTargets(w http.ResponseWriter, _ *http.Request) {
+	s := f.system
+	s.mu.Lock()
+	ans := backupTargetsAnswer{Targets: append([]BackupTarget{}, s.backupTargets...)}
+	s.mu.Unlock()
+	writeJSON(w, http.StatusOK, ans)
+}
+
 type restoreCheck struct {
 	OK             bool   `json:"ok"`
 	Output         string `json:"output"`
@@ -320,13 +388,17 @@ func (f *Fake) handleRestoreCheck(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	name := "upload-" + strconv.Itoa(len(s.uploads)+1) + ".sbk"
 	s.uploads[name] = data
+	needsKey := s.restoreNeedsKey
 	s.mu.Unlock()
 	writeJSON(w, http.StatusOK, restoreCheckAnswer{
 		File: name,
 		Check: restoreCheck{
 			OK: true, BackupVersion: fakeBase, RunningVersion: fakeBase,
 		},
-		Encryption: restoreEncryption{CreatedHere: bytes.Equal(data, backupBlob)},
+		Encryption: restoreEncryption{
+			Encrypted: needsKey, NeedsRecoveryKey: needsKey,
+			CreatedHere: bytes.Equal(data, backupBlob),
+		},
 	})
 }
 
@@ -352,6 +424,9 @@ func (f *Fake) handleRestoreApply(w http.ResponseWriter, r *http.Request) {
 	s := f.system
 	s.mu.Lock()
 	_, ok := s.uploads[body.File]
+	if ok {
+		s.applied = append(s.applied, body.File)
+	}
 	s.mu.Unlock()
 	if !ok {
 		writeError(w, http.StatusUnprocessableEntity, "restore-failed", "no checked upload "+body.File)
@@ -422,4 +497,26 @@ func (f *Fake) SetUpdateAvailable(a *AvailableUpdate) {
 	}
 	c := *a
 	f.system.available = &c
+}
+
+// SetRestoreNeedsRecoveryKey makes every archive the restore check sees
+// one that only the box's recovery key opens.
+func (f *Fake) SetRestoreNeedsRecoveryKey(needs bool) {
+	f.system.mu.Lock()
+	f.system.restoreNeedsKey = needs
+	f.system.mu.Unlock()
+}
+
+// SetBackupTargets replaces the backup targets /backup/targets reports.
+func (f *Fake) SetBackupTargets(targets []BackupTarget) {
+	f.system.mu.Lock()
+	f.system.backupTargets = append([]BackupTarget(nil), targets...)
+	f.system.mu.Unlock()
+}
+
+// Restores returns the file names of the archives restore/apply applied.
+func (f *Fake) Restores() []string {
+	f.system.mu.Lock()
+	defer f.system.mu.Unlock()
+	return append([]string(nil), f.system.applied...)
 }

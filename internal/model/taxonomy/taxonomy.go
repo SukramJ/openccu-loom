@@ -16,7 +16,11 @@
 // without locking.
 package taxonomy
 
-import "strings"
+import (
+	"errors"
+	"fmt"
+	"strings"
+)
 
 // EnumID names one taxonomy. It is data, not a closed set: a system may
 // define enums beyond the two every Homematic system has.
@@ -41,6 +45,49 @@ type Ref struct {
 
 // String renders the reference as "<enum>/<path>".
 func (r Ref) String() string { return string(r.Enum) + "/" + string(r.Path) }
+
+// ErrInvalidRef reports a string that is not "<enum>/<path>".
+var ErrInvalidRef = errors.New("taxonomy: invalid reference")
+
+// ParseRef reads the string form "<enum>/<path>" ("room/eg/wohnzimmer"):
+// the enum id up to the first slash, then at least one node id, none of
+// them empty.
+func ParseRef(s string) (Ref, error) {
+	enum, path, ok := strings.Cut(s, "/")
+	if !ok || enum == "" || path == "" {
+		return Ref{}, fmt.Errorf("%w: %q", ErrInvalidRef, s)
+	}
+	for seg := range strings.SplitSeq(path, "/") {
+		if seg == "" {
+			return Ref{}, fmt.Errorf("%w: %q", ErrInvalidRef, s)
+		}
+	}
+	return Ref{Enum: EnumID(enum), Path: Path(path)}, nil
+}
+
+// ErrAmbiguousName reports a display name that several nodes of one enum
+// carry, so a write addressed by name cannot tell which node is meant.
+var ErrAmbiguousName = errors.New("taxonomy: ambiguous name")
+
+// AmbiguousNameError names the nodes a display name could mean; the caller
+// retries with one of their paths. It matches [ErrAmbiguousName].
+type AmbiguousNameError struct {
+	Enum       EnumID
+	Name       string
+	Candidates []Ref
+}
+
+// Error implements error.
+func (e *AmbiguousNameError) Error() string {
+	paths := make([]string, len(e.Candidates))
+	for i, r := range e.Candidates {
+		paths[i] = r.String()
+	}
+	return fmt.Sprintf("taxonomy: %s name %q is ambiguous: %s", e.Enum, e.Name, strings.Join(paths, ", "))
+}
+
+// Is matches [ErrAmbiguousName].
+func (e *AmbiguousNameError) Is(target error) bool { return target == ErrAmbiguousName }
 
 // Parent returns the reference of the node one level up, and false for a
 // root node.

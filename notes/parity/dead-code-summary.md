@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: d880d7ca
-HEAD: d880d7ca
+Generated: 749dded8
+HEAD: 749dded8
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 5736 |
-| Reachable | 3654 |
-| Whitelisted | 2023 |
+| Total Exported | 5963 |
+| Reachable | 3851 |
+| Whitelisted | 2053 |
 | **Unreachable** | **59** |
 
 ## What these numbers cannot see

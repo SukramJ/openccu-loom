@@ -94,18 +94,26 @@ func (s *CentralsStore) openPlain(v string) (string, error) {
 // either an env-var name (preferred) or plaintext fallback.
 type CentralRow struct {
 	Name string `json:"name"`
-	Host string `json:"host"`
+	// SystemType is "ccu" (also the empty value), "openccu-lite" or "auto".
+	SystemType string `json:"system_type,omitempty"`
+	Host       string `json:"host"`
 	// Serial is the CCU's stable hardware serial, set when the central is
 	// adopted from SSDP/UPnP discovery. Empty for YAML / manually-entered
 	// rows. Used to match a discovered CCU regardless of its (mutable) host.
-	Serial                string                  `json:"serial,omitempty"`
-	Port                  int                     `json:"port,omitempty"`
-	JSONRPCPort           int                     `json:"json_rpc_port,omitempty"`
-	Username              string                  `json:"username,omitempty"`
-	PasswordEnv           string                  `json:"password_env,omitempty"`   // env var name; empty when plaintext used
-	PasswordPlain         string                  `json:"password_plain,omitempty"` // password fallback; sealed at rest when a master key exists, otherwise gated by allow_plaintext_secrets
+	Serial        string `json:"serial,omitempty"`
+	Port          int    `json:"port,omitempty"`
+	JSONRPCPort   int    `json:"json_rpc_port,omitempty"`
+	Username      string `json:"username,omitempty"`
+	PasswordEnv   string `json:"password_env,omitempty"`   // env var name; empty when plaintext used
+	PasswordPlain string `json:"password_plain,omitempty"` // password fallback; sealed at rest when a master key exists, otherwise gated by allow_plaintext_secrets
+	// APITokenEnv / APITokenPlain hold an openccu-lite central's API token
+	// the way PasswordEnv / PasswordPlain hold a CCU password: an env var
+	// name, or the value sealed at rest.
+	APITokenEnv           string                  `json:"api_token_env,omitempty"`
+	APITokenPlain         string                  `json:"api_token_plain,omitempty"`
 	TLS                   bool                    `json:"tls,omitempty"`
 	TLSInsecureSkipVerify bool                    `json:"tls_insecure_skip_verify,omitempty"`
+	TLSFingerprint        string                  `json:"tls_fingerprint,omitempty"`
 	PrimaryInterface      string                  `json:"primary_interface,omitempty"`
 	Interfaces            []config.InterfaceSpec  `json:"interfaces"`
 	Ports                 map[string]int          `json:"ports,omitempty"`
@@ -158,13 +166,18 @@ func (s *CentralsStore) Put(ctx context.Context, r CentralRow) error {
 	if err != nil {
 		return fmt.Errorf("sqlite: centrals: seal password: %w", err)
 	}
+	sealedToken, err := s.sealPlain(ctx, r.APITokenPlain)
+	if err != nil {
+		return fmt.Errorf("sqlite: centrals: seal api token: %w", err)
+	}
 	now := time.Now().UTC()
 	_, err = s.db.ExecContext(ctx,
 		`INSERT INTO centrals
 		 (name, host, serial, port, json_rpc_port, username, password_env, password_plain,
 		  tls, tls_insecure_skip_verify, primary_interface, interfaces_json,
-		  ports_json, visibility_json, behavior_json, enabled, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		  ports_json, visibility_json, behavior_json, enabled, created_at, updated_at,
+		  system_type, api_token_env, api_token_plain, tls_fingerprint)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(name) DO UPDATE SET
 		   host=excluded.host, serial=excluded.serial, port=excluded.port,
 		   json_rpc_port=excluded.json_rpc_port,
@@ -174,11 +187,14 @@ func (s *CentralsStore) Put(ctx context.Context, r CentralRow) error {
 		   primary_interface=excluded.primary_interface,
 		   interfaces_json=excluded.interfaces_json, ports_json=excluded.ports_json,
 		   visibility_json=excluded.visibility_json, behavior_json=excluded.behavior_json,
-		   enabled=excluded.enabled, updated_at=excluded.updated_at`,
+		   enabled=excluded.enabled, updated_at=excluded.updated_at,
+		   system_type=excluded.system_type, api_token_env=excluded.api_token_env,
+		   api_token_plain=excluded.api_token_plain, tls_fingerprint=excluded.tls_fingerprint`,
 		r.Name, r.Host, r.Serial, r.Port, r.JSONRPCPort, r.Username, r.PasswordEnv, sealedPlain,
 		boolToInt(r.TLS), boolToInt(r.TLSInsecureSkipVerify), r.PrimaryInterface,
 		string(ifJSON), string(portsJSON), string(visJSON), string(behJSON), boolToInt(r.Enabled),
-		now, now)
+		now, now,
+		r.SystemType, r.APITokenEnv, sealedToken, r.TLSFingerprint)
 	if err != nil {
 		return fmt.Errorf("sqlite: centrals upsert: %w", err)
 	}
@@ -252,7 +268,8 @@ func (s *CentralsStore) List(ctx context.Context) ([]CentralRow, error) {
 const selectCentralsSQL = `SELECT name, host, serial, port, json_rpc_port, username, password_env,
 		    password_plain, tls, tls_insecure_skip_verify, primary_interface,
 		    interfaces_json, ports_json, visibility_json, behavior_json, enabled,
-		    created_at, updated_at FROM centrals`
+		    created_at, updated_at, system_type, api_token_env, api_token_plain,
+		    tls_fingerprint FROM centrals`
 
 // scannable is implemented by both *sql.Row and *sql.Rows so the
 // scanner is shared between Get and List.
@@ -267,7 +284,8 @@ func (s *CentralsStore) scanRow(row scannable, r *CentralRow) error {
 	)
 	err := row.Scan(&r.Name, &r.Host, &r.Serial, &r.Port, &r.JSONRPCPort, &r.Username,
 		&r.PasswordEnv, &r.PasswordPlain, &tls, &insec, &r.PrimaryInterface,
-		&ifJSON, &portsJSON, &visJSON, &behJSON, &enabled, &r.CreatedAt, &r.UpdatedAt)
+		&ifJSON, &portsJSON, &visJSON, &behJSON, &enabled, &r.CreatedAt, &r.UpdatedAt,
+		&r.SystemType, &r.APITokenEnv, &r.APITokenPlain, &r.TLSFingerprint)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrCentralNotFound
 	}
@@ -279,6 +297,9 @@ func (s *CentralsStore) scanRow(row scannable, r *CentralRow) error {
 	r.Enabled = enabled != 0
 	if r.PasswordPlain, err = s.openPlain(r.PasswordPlain); err != nil {
 		return fmt.Errorf("sqlite: centrals: open password: %w", err)
+	}
+	if r.APITokenPlain, err = s.openPlain(r.APITokenPlain); err != nil {
+		return fmt.Errorf("sqlite: centrals: open api token: %w", err)
 	}
 	if err := json.Unmarshal([]byte(ifJSON), &r.Interfaces); err != nil {
 		return fmt.Errorf("sqlite: centrals: parse interfaces: %w", err)

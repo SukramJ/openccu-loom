@@ -940,3 +940,30 @@ func TestRemoteKeyCandidatesOrderedByCentralThenDeviceThenChannelAndStampsMetada
 		t.Errorf("Parameters = %v, want [PRESS_SHORT]", c.Parameters)
 	}
 }
+
+// TestAlarmRefusesSysvarMirrorWithoutSysvars pins that a sysvar mirror is
+// refused on a central whose system has no system variables, accepted on
+// one that has them, and passed while the central's feature set is not
+// known yet (a booting central never blocks a save).
+func TestAlarmRefusesSysvarMirrorWithoutSysvars(t *testing.T) {
+	t.Parallel()
+	reg := newCandidatesRegistry(t, "lite")
+	u, _ := reg.Get("lite")
+	s := &Service{reg: reg}
+
+	if eligible, known := s.OutputTargetEligible("lite", "", hmenum.AlarmOutputClassSysvarMirror); !eligible || known {
+		t.Errorf("unknown features: eligible=%v known=%v, want soft pass", eligible, known)
+	}
+	u.SetFeatures(central.NewFeatures(hmenum.SystemTypeOpenCCULite, map[hmenum.Feature]central.FeatureState{
+		hmenum.FeatureHubSysvars: {Reason: hmenum.FeatureReasonNotSupported},
+	}))
+	if eligible, known := s.OutputTargetEligible("lite", "", hmenum.AlarmOutputClassSysvarMirror); eligible || !known {
+		t.Errorf("no sysvars: eligible=%v known=%v, want refused", eligible, known)
+	}
+	u.SetFeatures(central.NewFeatures(hmenum.SystemTypeCCU, map[hmenum.Feature]central.FeatureState{
+		hmenum.FeatureHubSysvars: {Available: true},
+	}))
+	if eligible, known := s.OutputTargetEligible("lite", "", hmenum.AlarmOutputClassSysvarMirror); !eligible || !known {
+		t.Errorf("sysvars offered: eligible=%v known=%v, want accepted", eligible, known)
+	}
+}

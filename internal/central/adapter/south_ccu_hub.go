@@ -191,6 +191,10 @@ func (t *ccuTransports) ReconnectGate() func(context.Context) bool {
 	return newReconnectReadinessGate(t.cc, t.readiness, t.logger)
 }
 
+// WrapCaller implements [InterfaceTransports]: a CCU's faults need no
+// system-specific classification.
+func (*ccuTransports) WrapCaller(next CallFunc) CallFunc { return next }
+
 // ConfigureBackend implements [InterfaceTransports].
 func (t *ccuTransports) ConfigureBackend(unit *central.Unit, _ hmenum.Interface, b backends.Operations) {
 	// Wire the ReGa script runner and the plain-HTTP transport into the CCU

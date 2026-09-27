@@ -254,6 +254,9 @@ func (s *Service) RemoteKeyCandidates() []RemoteKeyCandidate {
 // block a config save; the runtime fault journal remains the safety
 // net for those rows). Non-device-backed classes are always eligible.
 func (s *Service) OutputTargetEligible(centralName, channelAddress string, class hmenum.AlarmOutputClass) (eligible, known bool) {
+	if class == hmenum.AlarmOutputClassSysvarMirror {
+		return s.centralOffersSysvars(centralName)
+	}
 	if !DeviceBackedOutputClass(class) {
 		return true, true
 	}
@@ -270,4 +273,21 @@ func (s *Service) OutputTargetEligible(centralName, channelAddress string, class
 		return false, true
 	}
 	return slices.Contains(cand.Classes, class), true
+}
+
+// centralOffersSysvars reports whether a sysvar mirror can work on the
+// named central: a system without system variables (openccu-lite) would
+// have every export refused, so the output is refused when it is saved.
+// A central that is unknown, or whose feature set is not known yet (still
+// booting), passes — soft validation never blocks a save on a guess.
+func (s *Service) centralOffersSysvars(centralName string) (eligible, known bool) {
+	u, ok := s.reg.Get(centralName)
+	if !ok || u == nil {
+		return true, false
+	}
+	f := u.Features()
+	if !f.Known() {
+		return true, false
+	}
+	return f.Available(hmenum.FeatureHubSysvars), true
 }

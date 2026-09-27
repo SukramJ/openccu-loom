@@ -24,15 +24,14 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
 
-// Authenticator is the CCU-side contract the store depends on.
+// Authenticator is the system-side contract the store depends on.
 // *adapter.CCUAuthDomain satisfies it in production.
 type Authenticator interface {
-	// ValidateCredentials proves (username, password) against the named
-	// central. nil = valid. An error wrapping hmerr.ErrAuthFailure means
-	// wrong credentials; any other error is a transient failure.
-	ValidateCredentials(ctx context.Context, central, username, password string) error
-	// UserLevel returns the CCU UserLevel (8/2/1/0) or -1 when unknown.
-	UserLevel(ctx context.Context, central, username string) (int, error)
+	// Verify proves (username, password) against the named central and
+	// returns the account's CCU UserLevel (8/2/1/0). An error wrapping
+	// hmerr.ErrAuthFailure means wrong credentials; any other error is a
+	// transient failure or a failed level lookup.
+	Verify(ctx context.Context, central, username, password string) (int, error)
 }
 
 // usernamePattern bounds the username to the CCU's legal character set
@@ -99,23 +98,18 @@ func (s *Store) AuthenticateBasic(ctx context.Context, username, password string
 		return auth.Identity{}, auth.ErrUnauthenticated
 	}
 
-	if err := s.authn.ValidateCredentials(ctx, s.central, username, password); err != nil {
+	level, err := s.authn.Verify(ctx, s.central, username, password)
+	if err != nil {
 		if errors.Is(err, hmerr.ErrAuthFailure) {
 			s.logger.Debug("ccu-auth: credentials rejected", slog.String("user", username))
 		} else {
-			// Transient (CCU unreachable, timeout). Treat as "not this
-			// store's user" so the chain is not short-circuited — but log
-			// the real cause so an outage is diagnosable.
+			// Transient (system unreachable, timeout) or a failed level
+			// lookup. Treat as "not this store's user" so the chain is not
+			// short-circuited — but log the real cause so an outage is
+			// diagnosable.
 			s.logger.Warn("ccu-auth: validation unavailable",
 				slog.String("user", username), slog.String("err", err.Error()))
 		}
-		return auth.Identity{}, auth.ErrUnauthenticated
-	}
-
-	level, err := s.authn.UserLevel(ctx, s.central, username)
-	if err != nil {
-		s.logger.Warn("ccu-auth: user-level lookup failed",
-			slog.String("user", username), slog.String("err", err.Error()))
 		return auth.Identity{}, auth.ErrUnauthenticated
 	}
 	if level < s.minLevel {

@@ -76,3 +76,55 @@ func TestHomegearBackendCapabilities(t *testing.T) {
 		t.Fatal("Homegear pushes — must not require periodic refresh")
 	}
 }
+
+// TestOpenCCULiteBackendCapabilities pins the openccu-lite profile: the
+// box proxies XML-RPC to the CCU's interface processes and pushes events,
+// so device, link, install-mode and service-message-suppression work is
+// available, while everything that lives in ReGa, the WebUI JSON-RPC or
+// the CCU's system scripts is not. The lite kind is never chosen from an
+// interface id.
+func TestOpenCCULiteBackendCapabilities(t *testing.T) {
+	if got := backends.KindOpenCCULite.String(); got != "openccu-lite" {
+		t.Fatalf("KindOpenCCULite.String() = %q, want openccu-lite", got)
+	}
+	caps := backends.CapabilityFor(backends.KindOpenCCULite)
+	available := map[string]bool{
+		"RPCCallback": caps.RPCCallback, "PingPong": caps.PingPong, "ListDevices": caps.ListDevices,
+		"FirmwareUpdate": caps.FirmwareUpdate, "ConfigRestore": caps.ConfigRestore,
+		"ReplaceDevice": caps.ReplaceDevice, "SearchDevices": caps.SearchDevices,
+		"TeamAssignment": caps.TeamAssignment, "DeleteDevice": caps.DeleteDevice,
+		"InstallMode": caps.InstallMode, "InstallModeLocal": caps.InstallModeLocal,
+		"LinkOperations":         caps.LinkOperations,
+		"SuppressServiceMessage": caps.SuppressServiceMessage, "ValueListRead": caps.ValueListRead,
+		"VirtualKey": caps.VirtualKey, "Metadata": caps.Metadata,
+	}
+	absent := map[string]bool{
+		"GetAllPrograms": caps.GetAllPrograms, "GetAllSysvars": caps.GetAllSysvars,
+		"CommunicationTest": caps.CommunicationTest, "AlarmMessages": caps.AlarmMessages,
+		"Backup": caps.Backup, "CreateSystemVariable": caps.CreateSystemVariable,
+		"DeleteSystemVariable": caps.DeleteSystemVariable, "ExecuteProgram": caps.ExecuteProgram,
+		"InboxDevices": caps.InboxDevices, "SetProgramState": caps.SetProgramState,
+		"SetSystemVariable": caps.SetSystemVariable, "Functions": caps.Functions,
+		"Rooms": caps.Rooms, "Rename": caps.Rename, "IseIDLookup": caps.IseIDLookup,
+		"RequiresPeriodicRefresh": caps.RequiresPeriodicRefresh,
+		"ServiceMessages":         caps.ServiceMessages,
+	}
+	for name, v := range available {
+		if !v {
+			t.Errorf("openccu-lite must advertise %s", name)
+		}
+	}
+	for name, v := range absent {
+		if v {
+			t.Errorf("openccu-lite must not advertise %s", name)
+		}
+	}
+	for _, iface := range []hmenum.Interface{
+		hmenum.InterfaceHmIPRF, hmenum.InterfaceBidCosRF, hmenum.InterfaceBidCosWired,
+		hmenum.InterfaceVirtualDevices, hmenum.InterfaceCUxD,
+	} {
+		if backends.KindFor(iface) == backends.KindOpenCCULite {
+			t.Errorf("KindFor(%s) selects openccu-lite; the kind comes from the system type only", iface)
+		}
+	}
+}

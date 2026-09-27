@@ -52,10 +52,11 @@ func buildCCUMaintenanceFixture(t *testing.T, centralName string, ops backends.O
 		t.Fatalf("Clients.Register: %v", err)
 	}
 	reg := central.NewRegistry()
+	c.SetSystemServices(newCCUSystemServices(c, w))
 	if err := reg.Register(c); err != nil {
 		t.Fatalf("reg.Register: %v", err)
 	}
-	return NewCCUMaintenanceDomain(reg, w)
+	return NewCCUMaintenanceDomain(reg)
 }
 
 func TestCCUMaintenanceRebootCCUSuccess(t *testing.T) {
@@ -108,7 +109,7 @@ func TestCCUMaintenanceRebootCCUPropagatesBackendError(t *testing.T) {
 
 func TestCCUMaintenanceRebootCCUNilRegistry(t *testing.T) {
 	t.Parallel()
-	dom := NewCCUMaintenanceDomain(nil, nil)
+	dom := NewCCUMaintenanceDomain(nil)
 	if err := dom.RebootCCU(context.Background(), "ccu-01"); !errors.Is(err, hmerr.ErrUnknownCentral) {
 		t.Fatalf("want hmerr.ErrUnknownCentral, got %v", err)
 	}
@@ -153,10 +154,11 @@ func TestCCUMaintenanceSetCCUPositionSuccessPatchesSystemInfo(t *testing.T) {
 		t.Fatalf("Clients.Register: %v", err)
 	}
 	reg := central.NewRegistry()
+	c.SetSystemServices(newCCUSystemServices(c, w))
 	if err := reg.Register(c); err != nil {
 		t.Fatalf("reg.Register: %v", err)
 	}
-	dom := NewCCUMaintenanceDomain(reg, w)
+	dom := NewCCUMaintenanceDomain(reg)
 
 	if err := dom.SetCCUPosition(context.Background(), "ccu-01", 10.222946, 53.551086); err != nil {
 		t.Fatalf("SetCCUPosition: %v", err)
@@ -214,7 +216,7 @@ func TestCCUMaintenanceSetCCUPositionPropagatesBackendError(t *testing.T) {
 
 func TestCCUMaintenanceSetCCUPositionNilRegistry(t *testing.T) {
 	t.Parallel()
-	dom := NewCCUMaintenanceDomain(nil, nil)
+	dom := NewCCUMaintenanceDomain(nil)
 	if err := dom.SetCCUPosition(context.Background(), "ccu-01", 10, 50); !errors.Is(err, hmerr.ErrUnknownCentral) {
 		t.Fatalf("want hmerr.ErrUnknownCentral, got %v", err)
 	}
@@ -305,7 +307,7 @@ func TestCCUMaintenancePoweroffCCUPropagatesBackendError(t *testing.T) {
 
 func TestCCUMaintenancePoweroffCCUNilRegistry(t *testing.T) {
 	t.Parallel()
-	dom := NewCCUMaintenanceDomain(nil, nil)
+	dom := NewCCUMaintenanceDomain(nil)
 	if err := dom.PoweroffCCU(context.Background(), "ccu-01"); !errors.Is(err, hmerr.ErrUnknownCentral) {
 		t.Fatalf("want hmerr.ErrUnknownCentral, got %v", err)
 	}
@@ -360,7 +362,7 @@ func TestCCUMaintenanceEnterSafeModePropagatesBackendError(t *testing.T) {
 
 func TestCCUMaintenanceEnterSafeModeNilRegistry(t *testing.T) {
 	t.Parallel()
-	dom := NewCCUMaintenanceDomain(nil, nil)
+	dom := NewCCUMaintenanceDomain(nil)
 	if err := dom.EnterSafeMode(context.Background(), "ccu-01"); !errors.Is(err, hmerr.ErrUnknownCentral) {
 		t.Fatalf("want hmerr.ErrUnknownCentral, got %v", err)
 	}
@@ -415,7 +417,7 @@ func TestCCUMaintenanceEnterRecoveryModePropagatesBackendError(t *testing.T) {
 
 func TestCCUMaintenanceEnterRecoveryModeNilRegistry(t *testing.T) {
 	t.Parallel()
-	dom := NewCCUMaintenanceDomain(nil, nil)
+	dom := NewCCUMaintenanceDomain(nil)
 	if err := dom.EnterRecoveryMode(context.Background(), "ccu-01"); !errors.Is(err, hmerr.ErrUnknownCentral) {
 		t.Fatalf("want hmerr.ErrUnknownCentral, got %v", err)
 	}
@@ -523,7 +525,7 @@ func TestCCUMaintenanceDownloadFirmwarePropagatesError(t *testing.T) {
 
 func TestCCUMaintenanceDownloadFirmwareNilRegistry(t *testing.T) {
 	t.Parallel()
-	dom := NewCCUMaintenanceDomain(nil, nil)
+	dom := NewCCUMaintenanceDomain(nil)
 	if err := dom.DownloadFirmware(context.Background(), "ccu-01"); !errors.Is(err, hmerr.ErrUnknownCentral) {
 		t.Fatalf("want hmerr.ErrUnknownCentral, got %v", err)
 	}
@@ -554,11 +556,12 @@ func TestCCUMaintenanceDownloadFirmwareAmbiguousWithoutCentralName(t *testing.T)
 		}); err != nil {
 			t.Fatalf("Clients.Register(%s): %v", name, err)
 		}
+		c.SetSystemServices(newCCUSystemServices(c, w))
 		if err := reg.Register(c); err != nil {
 			t.Fatalf("reg.Register(%s): %v", name, err)
 		}
 	}
-	dom := NewCCUMaintenanceDomain(reg, w)
+	dom := NewCCUMaintenanceDomain(reg)
 
 	err := dom.DownloadFirmware(context.Background(), "")
 	if !errors.Is(err, hmerr.ErrUnknownCentral) {

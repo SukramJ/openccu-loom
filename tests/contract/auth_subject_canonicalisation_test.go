@@ -33,12 +33,7 @@ type ccuAuthenticatorStub struct {
 	seenUser []string
 }
 
-func (s *ccuAuthenticatorStub) ValidateCredentials(_ context.Context, _, username, _ string) error {
-	s.seenUser = append(s.seenUser, username)
-	return nil
-}
-
-func (s *ccuAuthenticatorStub) UserLevel(_ context.Context, _, username string) (int, error) {
+func (s *ccuAuthenticatorStub) Verify(_ context.Context, _, username, _ string) (int, error) {
 	s.seenUser = append(s.seenUser, username)
 	return s.level, nil
 }

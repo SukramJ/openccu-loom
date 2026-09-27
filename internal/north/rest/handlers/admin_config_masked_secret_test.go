@@ -672,3 +672,27 @@ func TestGetConfigSection_LeavesUnsetSecretEmpty(t *testing.T) {
 		t.Errorf("unset section secret must stay empty, got %#v", v)
 	}
 }
+
+// TestMaskSecrets_MasksCentralsAPIToken pins that an openccu-lite central's
+// API token is masked on the configuration read like the CCU password: the
+// field is classified cfg:"secret", so the section editor's mask/restore
+// path covers it without a special case.
+func TestMaskSecrets_MasksCentralsAPIToken(t *testing.T) {
+	t.Parallel()
+	const token = "olt_0123456789abcdef0123456789abcdef"
+	cfg := &config.Config{Centrals: []config.CentralConfig{{
+		Name: "box", Host: "box.local", SystemType: "openccu-lite", APIToken: token,
+	}}}
+	out := maskSecrets(cfg)
+	centrals, ok := out["centrals"].([]any)
+	if !ok || len(centrals) != 1 {
+		t.Fatalf("centrals = %v", out["centrals"])
+	}
+	central, _ := centrals[0].(map[string]any)
+	if central["api_token"] != maskSentinel {
+		t.Errorf("centrals[0].api_token = %v, want the mask", central["api_token"])
+	}
+	if central["system_type"] != "openccu-lite" {
+		t.Errorf("centrals[0].system_type = %v, must pass through", central["system_type"])
+	}
+}

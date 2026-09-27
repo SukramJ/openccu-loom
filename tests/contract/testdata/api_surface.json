@@ -1,5 +1,5 @@
 {
- "api_version": "11.3.0",
+ "api_version": "11.4.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -735,6 +735,8 @@
    "ready:boolean"
   ],
   "CentralRow": [
+   "api_token_env:string",
+   "api_token_plain:string",
    "behavior:$ref:CentralBehavior",
    "created_at:string",
    "enabled:boolean",
@@ -748,7 +750,9 @@
    "ports:object",
    "primary_interface:string",
    "serial:string",
+   "system_type:string",
    "tls:boolean",
+   "tls_fingerprint:string",
    "tls_insecure_skip_verify:boolean",
    "updated_at:string",
    "username:string",

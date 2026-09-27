@@ -907,6 +907,13 @@ func TestCentralConfigNeedsRestartDetectsSouthboundFieldChanges(t *testing.T) {
 		{"password_plain", func(r sqlitestore.CentralRow) sqlitestore.CentralRow { r.PasswordPlain = "other"; return r }},
 		{"password_env", func(r sqlitestore.CentralRow) sqlitestore.CentralRow { r.PasswordEnv = "ENV"; return r }},
 		{"primary_interface", func(r sqlitestore.CentralRow) sqlitestore.CentralRow { r.PrimaryInterface = "BidCos-RF"; return r }},
+		{"system_type", func(r sqlitestore.CentralRow) sqlitestore.CentralRow { r.SystemType = "openccu-lite"; return r }},
+		{"api_token_plain", func(r sqlitestore.CentralRow) sqlitestore.CentralRow {
+			r.APITokenPlain = "olt_0123456789abcdef0123456789abcdef"
+			return r
+		}},
+		{"api_token_env", func(r sqlitestore.CentralRow) sqlitestore.CentralRow { r.APITokenEnv = "BOX_TOKEN"; return r }},
+		{"tls_fingerprint", func(r sqlitestore.CentralRow) sqlitestore.CentralRow { r.TLSFingerprint = "ab"; return r }},
 		{"interfaces", func(r sqlitestore.CentralRow) sqlitestore.CentralRow {
 			r.Interfaces = []config.InterfaceSpec{{Name: "HmIP-RF", Port: 2011}}
 			return r

@@ -283,7 +283,7 @@ func gatedCentralBringUp(
 			// reports was invisible for a whole release — the alarm
 			// sysvar mirror created its variable, never wrote a value,
 			// and reported success while doing so.
-			if unit.Hub != nil && !unit.Hub.HasSysvarValueWriter() {
+			if unit.Hub != nil && !unit.Hub.HasSysvarValueWriter() && unit.Features().Available(hmenum.FeatureHubSysvars) {
 				logger.Warn("wire.hub.sysvar_writer.missing",
 					slog.String("central", cc.Name),
 					slog.String("impact", "alarm sysvar mirror and every sysvar write will fail"))
@@ -318,6 +318,17 @@ func recordCentralWaiting(unit *central.Unit) {
 	}
 	unit.Health.RecordQuality(startupHealthComponent(unit.Name()), "waiting for CCU to become ready")
 	recordCentralReadiness(unit, hmenum.ReadinessWaitingForCCU, 0, 0)
+}
+
+// recordCentralUnsupported marks a central whose system type this build
+// cannot bring up. It uses the same startup component as the readiness wait,
+// so the operator sees the reason where a waiting central shows its state,
+// and like the wait it never turns /health into a 503.
+func recordCentralUnsupported(unit *central.Unit, err error) {
+	if unit == nil || unit.Health == nil {
+		return
+	}
+	unit.Health.RecordQuality(startupHealthComponent(unit.Name()), "not brought up: "+err.Error())
 }
 
 // resolveCentralWaiting removes the transient "waiting for CCU" component once
@@ -494,6 +505,18 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 		WithMasterValuesStore(deps.MasterValues, cc.Name).
 		WithValuesCacheStore(centralScopedValuesCache(deps, cc.Name), cc.Name).
 		WithChannelFlags(deps.ChannelFlags)
+
+	// An event source that reseeds after missed events runs its reseed
+	// through this generation's pipeline; the binding goes with it.
+	if ga, ok := profile.Events().(generationAware); ok {
+		seeder := hub.ValueSeeder()
+		addCloser(ga.BindGeneration(func(ctx context.Context, iface hmenum.Interface) error {
+			if seeder == nil {
+				return nil
+			}
+			return pipeline.Reseed(ctx, iface, seeder, SeedFull, logger)
+		}))
+	}
 
 	total := len(cc.Interfaces)
 	recordCentralReadiness(unit, hmenum.ReadinessLoadingDevices, loaded, total)
@@ -738,6 +761,7 @@ func wireInterface(
 	}
 
 	xmlCaller := &xmlrpcCaller{client: xmlClient}
+	wrappedCall := transports.WrapCaller(xmlCaller.Call)
 	announcer := transports.Announcer(xmlClient, iface)
 
 	backendKind := transports.BackendKind(iface)
@@ -751,7 +775,7 @@ func wireInterface(
 	// (backends.Caller convention). Bridge with CallerFunc so both
 	// interfaces are satisfied without duplicating the transport.
 	xmlSliceCaller := client.CallerFunc(func(ctx context.Context, method string, params []any) (any, error) {
-		return xmlCaller.Call(ctx, method, params...)
+		return wrappedCall(ctx, method, params...)
 	})
 	// Order-preserving sibling used only by the device-definition export, which
 	// must reproduce the CCU's wire member order. Same transport, different
