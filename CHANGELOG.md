@@ -48,6 +48,16 @@ CCU; the list below is what an API client can already observe.
   reports down makes its devices unavailable until it is back, a gap in
   the stream is closed by re-reading the values, and devices the box adds
   or removes appear and disappear without a restart.
+- An openccu-lite central takes names, rooms and functions from the box's
+  metadata store before it loads the devices, so every device appears
+  under its own name at once, and follows the store's change stream, so a
+  rename or re-assignment made on the box shows up live. A device is in
+  the room it is assigned to directly — a device in "Erdgeschoss ›
+  Wohnzimmer" is in "Wohnzimmer". Renaming a device or channel and setting
+  its rooms or functions write to the store; other assignments of the same
+  object (favourites, floors) are kept, a room name several rooms share is
+  refused with the candidates, and a concurrent edit is retried once. A
+  token without `meta:read` runs without names instead of failing.
 
 #### Fixed
 

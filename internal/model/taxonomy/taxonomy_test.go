@@ -4,7 +4,9 @@
 package taxonomy
 
 import (
+	"errors"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -83,4 +85,45 @@ func TestTaxonomyAncestorsAndFindByName(t *testing.T) {
 	}
 	var nilTx *Taxonomy
 	nilTx.Walk(EnumRoom, func(Ref, *Node, int) { t.Error("walked a nil taxonomy") })
+}
+
+// TestParseRefRoundTrip pins the string form a system's enum paths arrive
+// in: the enum id up to the first slash, the path after it, and nothing
+// empty in between.
+func TestParseRefRoundTrip(t *testing.T) {
+	t.Parallel()
+	for _, s := range []string{"room/eg", "room/eg/wohnzimmer", "function/licht", "floor/a-1/b"} {
+		r, err := ParseRef(s)
+		if err != nil {
+			t.Fatalf("ParseRef(%q): %v", s, err)
+		}
+		if r.String() != s {
+			t.Errorf("ParseRef(%q).String() = %q", s, r.String())
+		}
+	}
+	if r, _ := ParseRef("room/eg/wohnzimmer"); r.Enum != EnumRoom || r.Path != "eg/wohnzimmer" {
+		t.Errorf("ParseRef split = %+v, want enum room, path eg/wohnzimmer", r)
+	}
+	for _, s := range []string{"", "room", "room/", "/eg", "room//eg", "room/eg/"} {
+		if _, err := ParseRef(s); !errors.Is(err, ErrInvalidRef) {
+			t.Errorf("ParseRef(%q) err = %v, want ErrInvalidRef", s, err)
+		}
+	}
+}
+
+// TestAmbiguousNameErrorListsCandidates pins that the error both matches
+// the sentinel a caller branches on and names every candidate path.
+func TestAmbiguousNameErrorListsCandidates(t *testing.T) {
+	t.Parallel()
+	err := error(&AmbiguousNameError{Enum: EnumRoom, Name: "Küche", Candidates: []Ref{
+		{Enum: EnumRoom, Path: "eg/kueche"}, {Enum: EnumRoom, Path: "og/kueche"},
+	}})
+	if !errors.Is(err, ErrAmbiguousName) {
+		t.Error("AmbiguousNameError does not match ErrAmbiguousName")
+	}
+	for _, want := range []string{"room/eg/kueche", "room/og/kueche"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not name %s", err, want)
+		}
+	}
 }

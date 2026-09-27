@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/registry"
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/config"
@@ -287,5 +288,35 @@ func TestLiteReconcileDeletesVanishedDevices(t *testing.T) {
 	}
 	if !unit.DeviceRegistry.Has(wire, "KEEP1") {
 		t.Error("a listed device was deleted")
+	}
+}
+
+// TestLiteBringUpLoadsMetadataBeforeReturning pins the order the device
+// pipeline depends on: the hub bring-up returns with the metadata mirror
+// already loaded, so the devices ingested next carry their names from the
+// start. A mirror that loaded only in the background would publish every
+// device twice — first under its default name, then renamed.
+func TestLiteBringUpLoadsMetadataBeforeReturning(t *testing.T) {
+	t.Parallel()
+	f := startTestFake(t, litefake.Options{Meta: litefake.DefaultMeta()})
+	cc := liteCentralFor(t, f, litefake.DefaultToken)
+	p, err := newLiteProfile(cc, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatalf("newLiteProfile: %v", err)
+	}
+	unit, err := central.New(central.Config{Name: cc.Name})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	session, err := p.BringUpHub(context.Background(), HubBringUpInput{CC: cc, Unit: unit})
+	if err != nil {
+		t.Fatalf("BringUpHub: %v", err)
+	}
+	t.Cleanup(session.Close)
+	if got := unit.DeviceDetails.GetName("VCU0000321"); got != "Stehlampe" {
+		t.Errorf("name when BringUpHub returned = %q, want Stehlampe", got)
+	}
+	if got := unit.DeviceDetails.GetChannelRooms("VCU0000321:1"); !slices.Equal(got, []string{"Wohnzimmer"}) {
+		t.Errorf("channel rooms when BringUpHub returned = %v, want [Wohnzimmer]", got)
 	}
 }

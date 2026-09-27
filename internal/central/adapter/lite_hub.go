@@ -37,8 +37,9 @@ const liteSystemModel = "openccu-lite"
 var errLiteTokenRejected = errors.New("openccu-lite: the API token is not accepted (revoked or mistyped)")
 
 // BringUpHub implements [SouthProfile]: identity, what the token may do,
-// the interfaces the box runs. There is no metadata yet — names come with
-// the metadata stream — and no ReGa hub.
+// the interfaces the box runs, and the metadata mirror — loaded before the
+// devices, so names, rooms and functions are stamped at ingest, then kept
+// current from the change stream. There is no ReGa hub.
 func (p *liteProfile) BringUpHub(ctx context.Context, in HubBringUpInput) (HubSession, error) {
 	logger := in.Logger
 	if logger == nil {
@@ -52,6 +53,11 @@ func (p *liteProfile) BringUpHub(ctx context.Context, in HubBringUpInput) (HubSe
 		return nil, err
 	}
 	p.stampInterfaces(ctx, unit, logger)
+	meta := newLiteMetadata(p, unit, logger)
+	if err := meta.load(ctx); err != nil {
+		return nil, err
+	}
+	(&liteMetaWriter{client: p.client, unit: unit}).wire()
 
 	// The scope refresh closes over this generation; a re-init registers
 	// the job name again while the scheduler keeps the old one ticking, so
@@ -72,13 +78,19 @@ func (p *liteProfile) BringUpHub(ctx context.Context, in HubBringUpInput) (HubSe
 			logger.Warn("lite.scopes.scheduler_add", slog.String("central", p.cc.Name), slog.String("err", err.Error()))
 		}
 	}
+	// The stream outlives this call; the session's Close ends it.
+	meta.start(context.WithoutCancel(ctx))
 	set := &liteBackendSet{}
 	return &liteHubSession{
 		profile: p,
 		unit:    unit,
 		logger:  logger,
 		set:     set,
-		close:   func() { active.Store(false) },
+		meta:    meta,
+		close: func() {
+			active.Store(false)
+			meta.stop()
+		},
 	}, nil
 }
 
@@ -156,10 +168,12 @@ type liteHubSession struct {
 	unit    *central.Unit
 	logger  *slog.Logger
 	set     *liteBackendSet
+	meta    *liteMetadata
 	close   func()
 }
 
-// Data implements [HubSession]. Names arrive with the metadata stream.
+// Data implements [HubSession]. The pipeline reads names and assignments
+// from the DeviceDetails cache the metadata mirror fills.
 func (*liteHubSession) Data() HubData { return HubData{} }
 
 // Transports implements [HubSession].
@@ -179,8 +193,9 @@ func (s *liteHubSession) ValueSeeder() ValueSeeder {
 	return &liteValueSeeder{client: s.profile.client, unit: s.unit, centralName: s.profile.cc.Name, backends: s.set, logger: s.logger}
 }
 
-// RefreshMetadata implements [HubSession]: nothing to pull yet.
-func (*liteHubSession) RefreshMetadata(context.Context) error { return nil }
+// RefreshMetadata implements [HubSession]: the mirror re-reads the store's
+// snapshot.
+func (s *liteHubSession) RefreshMetadata(ctx context.Context) error { return s.meta.resnapshot(ctx) }
 
 // Restorer implements [HubSession]: backup restore is wired separately.
 func (*liteHubSession) Restorer() BackupRestorer { return nil }

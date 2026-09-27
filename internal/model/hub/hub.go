@@ -700,6 +700,16 @@ func (h *Hub) SetMutator(m Mutator) {
 	}
 }
 
+// SetAssignmentMutators wires only the room and function assignment
+// write paths, for a system whose other hub writes (system variables,
+// backups, the inbox) do not exist or go elsewhere.
+func (h *Hub) SetAssignmentMutators(rooms RoomMutator, functions FunctionMutator) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.RoomMutator = rooms
+	h.FunctionMutator = functions
+}
+
 func (h *Hub) sysvarMut() SysvarMutator { h.mu.RLock(); defer h.mu.RUnlock(); return h.SysvarMutator }
 
 func (h *Hub) roomMut() RoomMutator { h.mu.RLock(); defer h.mu.RUnlock(); return h.RoomMutator }

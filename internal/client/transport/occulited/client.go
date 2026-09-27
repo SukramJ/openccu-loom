@@ -374,11 +374,24 @@ const (
 	CodeUnauthenticated = "unauthenticated"
 	CodeForbidden       = "forbidden"
 	CodeTooManyStreams  = "too-many-streams"
+	// CodeRevisionConflict answers a metadata write whose If-Match
+	// revision the store has moved past (409).
+	CodeRevisionConflict = "revision-conflict"
+	// CodeUnknownObject answers a metadata read or write of an object the
+	// store does not hold (404); the store holds only named objects.
+	CodeUnknownObject = "unknown-object"
 )
 
 // ErrTooManyStreams matches the event stream's 429 too-many-streams
 // answer.
 var ErrTooManyStreams = errors.New("occulited: too many event streams for this token")
+
+// ErrRevisionConflict matches the metadata store's 409 revision-conflict:
+// the write was based on a revision the store has moved past.
+var ErrRevisionConflict = errors.New("occulited: metadata revision conflict")
+
+// ErrUnknownObject matches the metadata store's 404 unknown-object.
+var ErrUnknownObject = errors.New("occulited: unknown metadata object")
 
 // ErrProtocol reports an answer that breaks the wire contract the client
 // relies on (a stream frame, a missing ETag, an undecodable body).
@@ -422,6 +435,10 @@ func (e *APIError) Is(target error) bool {
 		return e.Status == http.StatusUnauthorized
 	case ErrTooManyStreams:
 		return e.Status == http.StatusTooManyRequests && e.Code == CodeTooManyStreams
+	case ErrRevisionConflict:
+		return e.Status == http.StatusConflict && e.Code == CodeRevisionConflict
+	case ErrUnknownObject:
+		return e.Status == http.StatusNotFound && e.Code == CodeUnknownObject
 	default:
 		return false
 	}
