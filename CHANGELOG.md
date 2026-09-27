@@ -100,7 +100,6 @@ CCU; the list below is what an API client can already observe.
   heating-groups and backups views carry a `feature:<key>` gate. A restore
   the system refuses as invalid answers `422`, an ambiguous room or
   function name `409` with the candidate paths, an unknown one `422`.
-  REST API 11.5.0.
 - Rooms, functions and whatever else a system organises its devices by are
   a taxonomy of nested nodes. Devices and channels on REST, WebSocket and
   the MQTT info payload gain a `taxonomy` array (`enum`, `path`, `name`,
@@ -114,8 +113,7 @@ CCU; the list below is what an API client can already observe.
   /taxonomy/{central}/{enum}/nodes` and the matching WebSocket commands;
   on a CCU, whose rooms and functions are flat, only root nodes of those
   two enums, and nesting or moving is refused. The room and function
-  create answers carry `path`; their `id` was always an integer and is now
-  documented as one. REST API 11.6.0, WebSocket API 1.11.
+  create answers carry `path`. WebSocket API 1.11.
 - Adding a system starts with `POST /centrals/probe`, which says what
   answers at an address — a CCU, an openccu-lite box (with its API
   versions, whether it offers pairing and its HomeMatic IP key mode) or
@@ -129,7 +127,7 @@ CCU; the list below is what an API client can already observe.
   never reaches the client. The same three are open without a session at
   `/setup/probe` and `/setup/pairing` while first-run setup is pending,
   and the setup wizard's system accepts a `port` and a `pairing_id`. SSDP
-  discovery labels an openccu-lite box (`system_type`). REST API 11.7.0.
+  discovery labels an openccu-lite box (`system_type`).
 - The web UI hides what a system cannot do instead of offering it and
   failing: a view no configured system serves (programs, system variables,
   the inbox on a fleet of openccu-lite boxes; heating groups and backups
@@ -152,6 +150,15 @@ CCU; the list below is what an API client can already observe.
   ("Ground floor › Kitchen"), and the overview and the alarm sensor
   pickers group and filter by that path, so two rooms of one name stay
   apart. A CCU's flat rooms and functions work as before.
+
+#### Changed (breaking) — REST API 12.0.0
+
+- `POST /rooms` and `POST /functions` answer `id` as an integer — what the
+  daemon always sent — and the API now documents it so; a generated client
+  that typed it as a string must be regenerated. On a system whose nodes
+  have no numeric id (openccu-lite) `id` is absent and `path` names the new
+  node. Everything else in this release is additive; the major follows the
+  contract guard's classification of this one correction.
 
 #### Fixed
 
