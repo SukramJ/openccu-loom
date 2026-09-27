@@ -47,6 +47,13 @@ type HeatingGroups interface {
 	Delete(ctx context.Context, id int) error
 }
 
+// AccountVerifier checks an account's credentials against the system's
+// own user database and reports the account's CCU user level (8 admin,
+// 2 user, 1 guest, 0 none) in the same step.
+type AccountVerifier interface {
+	Verify(ctx context.Context, username, password string) (level int, err error)
+}
+
 // SystemServices is the set of management ports of one central. A nil
 // member means nothing is installed yet (the central has not come up).
 type SystemServices struct {
@@ -54,6 +61,9 @@ type SystemServices struct {
 	Position PositionWriter
 	Firmware SystemFirmwareDownloader
 	Groups   HeatingGroups
+	// Accounts is nil for a system whose account check needs the daemon's
+	// live central configuration (a CCU); the auth domain runs that one.
+	Accounts AccountVerifier
 }
 
 // BackupArchive is a backup as the system produced it. FileName is the

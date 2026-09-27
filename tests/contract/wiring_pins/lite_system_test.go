@@ -254,3 +254,25 @@ func TestLiteBackupStatusFromTargets(t *testing.T) {
 		t.Errorf("status without system:read: err = %v, want FeatureUnavailableError naming system:read", err)
 	}
 }
+
+// TestLiteLoginDelegationThroughAuthDomain pins CCU-account login
+// delegation on a lite central: the auth domain the daemon builds reaches
+// the account verifier the lite profile installs, which checks the
+// account on the box and reports its level.
+func TestLiteLoginDelegationThroughAuthDomain(t *testing.T) {
+	fake := startFake(t, litefake.Options{Accounts: []litefake.Account{
+		{Username: "anna", Password: "pw", Level: "administer"},
+	}})
+	c := startLiteSystemCentral(t, fake, litefake.DefaultToken)
+	resolve := func(_ context.Context, name string) (config.CentralConfig, bool) {
+		return config.CentralConfig{Name: "box", SystemType: hmenum.SystemTypeOpenCCULite}, name == "box" || name == ""
+	}
+	d := adapter.NewCCUAuthDomain(c.reg, resolve, slog.New(slog.DiscardHandler))
+	level, err := d.Verify(context.Background(), "box", "anna", "pw")
+	if err != nil || level != 8 {
+		t.Fatalf("Verify = %d, %v; want level 8", level, err)
+	}
+	if _, err := d.Verify(context.Background(), "box", "anna", "wrong"); !errors.Is(err, hmerr.ErrAuthFailure) {
+		t.Errorf("wrong password: err = %v, want ErrAuthFailure", err)
+	}
+}

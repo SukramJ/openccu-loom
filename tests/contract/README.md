@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 520.
+Guards without a doc comment: 7 of 521.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -494,6 +494,7 @@ Guards without a doc comment: 7 of 520.
 | TestLiteStreamStampsLivenessOnHeartbeat | wiring_pins/lite_stream_test.go | TestLiteStreamStampsLivenessOnHeartbeat pins that a quiet interface stays alive on the stream's heartbeat alone: without it a lite interface with no device events would go stale after the callback freshness window and recovery would loop. |
 | TestLiteBackupCreateDownloadsArchive | wiring_pins/lite_system_test.go | TestLiteBackupCreateDownloadsArchive pins the backup path of a lite central end to end: the adapter the daemon builds creates a backup, which is the box's own archive stored under the box's own file name. |
 | TestLiteBackupStatusFromTargets | wiring_pins/lite_system_test.go | TestLiteBackupStatusFromTargets pins the on-box backup status the hub reports: running while a target runs, else the newest run's outcome; and a token that cannot read the targets is refused naming system:read. |
+| TestLiteLoginDelegationThroughAuthDomain | wiring_pins/lite_system_test.go | TestLiteLoginDelegationThroughAuthDomain pins CCU-account login delegation on a lite central: the auth domain the daemon builds reaches the account verifier the lite profile installs, which checks the account on the box and reports its level. |
 | TestLiteRebootNeedsPowerScope | wiring_pins/lite_system_test.go | TestLiteRebootNeedsPowerScope pins the management ports the composition root installs on a lite central: a token with the power scope reboots the box; one without it is refused with the scope named, and the request never reaches the box. |
 | TestLiteRestoreChecksThenApplies | wiring_pins/lite_system_test.go | TestLiteRestoreChecksThenApplies pins the restore path: the box checks the archive and applies the checked upload. |
 | TestLiteRestoreRefusesArchiveNeedingRecoveryKey | wiring_pins/lite_system_test.go | TestLiteRestoreRefusesArchiveNeedingRecoveryKey pins that an archive the box can open only with its recovery key is refused as invalid input and never applied. |

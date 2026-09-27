@@ -80,6 +80,11 @@ CCU; the list below is what an API client can already observe.
   the member candidates are not offered yet: the member format of the
   box's groups API is not known, and a guessed one could put devices into
   the wrong group.
+- Logging in with a system account (`ccu` user store) works against an
+  openccu-lite central: the account is checked on the box, its level
+  (administer, configure, operate, read) maps to the admin, operator and
+  viewer roles as a CCU user level does, and the session opened for the
+  check is closed again at once.
 
 #### Fixed
 
