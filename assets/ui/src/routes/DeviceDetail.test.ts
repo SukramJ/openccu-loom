@@ -1216,7 +1216,7 @@ describe("DeviceDetail — nested rooms", () => {
         taxonomy: [{ enum: "room", path: "og/kueche", name: "Küche", parent_path: "og" }],
       }),
     );
-    render(DeviceDetail, { props: { address: "0001ABCD" } });
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
     // The name alone would not say which kitchen; the path does.
     await screen.findByText("OG › Küche");
     await fireEvent.click(screen.getByLabelText("taxonomy.picker.remove"));
