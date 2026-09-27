@@ -1,6 +1,7 @@
 # openccu-lite — live verification against a real box
 
-Status: **open — no box available yet** (decided 2026-09-27: documentation
+Status: **open — no box available yet**; the open items of the whole
+openccu-lite support are listed [below](#open-items-of-the-openccu-lite-support) (decided 2026-09-27: documentation
 first; this list waits until a box is provided). Phases A–D and the docs
 (F1) are merged; everything below was only exercised against the MIT test
 double `tests/harness/litefake`.
@@ -32,7 +33,7 @@ Source of the checks: [implementation plan](../plans/openccu-lite-backend.md)
 | L-7 | `GET /api/rpc/v1/state` paging and `event_id` | — |
 | L-8 | `GET /api/system/v1/backup/targets` shape matches Appendix A §A.7 (`state.state`, `last_backup`) | — |
 | L-9 | `/api/meta/v1/version` `hmip` fields; `GET /radio/health` | — |
-| L-10 | `GET /service-messages`, `GET /system-update`, `GET /groups`, `/upnp/basic_dev.cgi` serial = SSDP serial | — |
+| L-10 | `GET /service-messages`, `GET /system-update`, `GET /groups`, `GET /groups/types`, `GET /groups/{id}` (the member fields, the form of a member id, the group id type, what `devices_to_configure` asks of the operator), `/upnp/basic_dev.cgi` serial = SSDP serial | — |
 | L-11 | `GET /ise/checkrega.cgi` answers `200 text/html` (confirms H13) | `GET /api/system/v1/health` is JSON |
 | L-12 (**write, approval + named device**) | `setValue` on the user-named actor via Loom REST; event returns on the stream; leave it in its original state | — |
 | L-13 (**write, approval**) | rename one user-named device via Loom; the box's meta store shows it; rename back | — |
@@ -50,6 +51,25 @@ covers them.
 | L-4 | the interface processes relay `PONG` for a caller they did not register | `backends.Capabilities` of `KindOpenCCULite` keeps `PingPong: true`; if L-4 fails, set it false and rely on the heartbeat (ADR 0072) |
 | L-6 | whether `getParamset(VALUES)` seeding costs radio airtime | the lite value seeder's fallback read (`internal/central/adapter/lite_values.go`) |
 | L-10 | the heating-groups member/id format of the box's groups API | lite heating-group create/update stay refused until known (`internal/central/adapter/lite_groups.go`) |
+
+## Open items of the openccu-lite support
+
+Everything else from the implementation plan is merged (phases A–D, F1).
+What is not, and why:
+
+| Item | Why open | Unblocked by | Documented in |
+|---|---|---|---|
+| Heating groups on openccu-lite: create, update, members, member candidates | The member format, the member id, the group id type and `devices_to_configure` are not in the wire contract; guessing could put devices into the wrong group. Listing and deleting work. Kept refused by decision (2026-09-27). | L-10 reads | `docs/admin/openccu-lite.md`; `internal/central/adapter/lite_groups.go` |
+| PONG relay on the event stream | Unconfirmed that the interface processes relay a PONG for a caller they did not register | L-4 | ADR 0072 |
+| Radio cost of `getParamset(VALUES)` seeding | Not measured | L-6 | `docs/caching.md` |
+| SSE unbuffered through the box's web server | Not measured | L-2 | — |
+| Encrypted backup restore (`.sbk.age`) | The daemon does not hold the box's recovery key; refused by design | — (design) | `docs/admin/backup.md` |
+| Areas keyed by room name | On a box a name several rooms share is one area assignment | — (documented limitation) | ADR 0073 |
+| Heating-group candidates show room names only | The candidates DTO carries no taxonomy; showing the path needs an API addition | API change | ADR 0073 |
+| Interface pre-selection from the probe | Planned in the plan's §7.6; the probe answer carries no interface list, so the onboarding does not pre-select | API addition (interfaces on the probe answer) | here |
+| Visual baselines for editing an openccu-lite central | The CCU form's lite edit is covered by vitest and a functional Playwright case, not by screenshots | — | here |
+| Downstream repositories | `openccu-loom-client`/`-types` and the Node-RED contrib need the new DTOs and the REST API 12.0.0 pin | their own releases | `CHANGELOG.md` |
+| Release | Version bump, both add-on changelogs and the pre-release comment-claims sweep are not done yet | the release | CLAUDE.md, implementation policy |
 
 ## Results
 
