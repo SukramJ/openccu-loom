@@ -217,8 +217,8 @@ func TestWireInterfaceActivateRetryGatesOnCCUReadiness(t *testing.T) {
 			// seed and the JSON-only backend ops: not needed to observe
 			// listDevices/init/deinit, and they would require faking a second
 			// (JSON-RPC) surface.
-			newCCUHubSession(cc, unit, nil, HubData{}, nil, newCCUReadinessProbe(cc, nil), logger),
-			newCCUReadinessProbe(cc, nil),
+			newCCUHubSession(cc, unit, nil, HubData{}, nil, newCCUReadinessProbe(cc), logger),
+			newCCUReadinessProbe(cc),
 			callbackURL,
 			config.ReliabilityConfig{},
 			nil, // masterValues: HmIP-RF is gated to a nil MasterPoller (see

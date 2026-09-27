@@ -70,7 +70,7 @@ func TestCCUHubSessionWithoutRunnerOffersNoSeederOrRestorer(t *testing.T) {
 		t.Fatalf("central.New: %v", err)
 	}
 	cc := config.CentralConfig{Name: "no-runner", Host: "ccu.example"}
-	s := newCCUHubSession(cc, unit, nil, HubData{}, nil, newCCUReadinessProbe(cc, nil), nil)
+	s := newCCUHubSession(cc, unit, nil, HubData{}, nil, newCCUReadinessProbe(cc), nil)
 	if s.ValueSeeder() != nil {
 		t.Error("ValueSeeder must be a nil interface without a runner, or the pipeline would call through it")
 	}

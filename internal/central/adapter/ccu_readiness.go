@@ -125,13 +125,12 @@ type ccuReadinessProbe struct {
 	url    string
 }
 
-// newCCUReadinessProbe builds the probe for cc. A nil client selects the
-// central's JSON-RPC TLS posture, or a short-timeout default without one.
-func newCCUReadinessProbe(cc config.CentralConfig, client *http.Client) *ccuReadinessProbe {
+// newCCUReadinessProbe builds the probe for cc over the central's JSON-RPC
+// TLS posture, or a short-timeout default without one.
+func newCCUReadinessProbe(cc config.CentralConfig) *ccuReadinessProbe {
+	client := jsonrpcHTTPClient(cc)
 	if client == nil {
-		if client = jsonrpcHTTPClient(cc); client == nil {
-			client = httpx.NewClient(defaultCCUReadinessProbeTTL)
-		}
+		client = httpx.NewClient(defaultCCUReadinessProbeTTL)
 	}
 	return &ccuReadinessProbe{client: client, url: ccuBaseURLFor(cc) + checkRegaPath}
 }

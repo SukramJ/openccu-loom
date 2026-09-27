@@ -23,7 +23,7 @@ type ccuProfile struct {
 
 // newCCUProfile builds the CCU profile for cc.
 func newCCUProfile(cc *config.CentralConfig) *ccuProfile {
-	p := &ccuProfile{readiness: newCCUReadinessProbe(*cc, nil)}
+	p := &ccuProfile{readiness: newCCUReadinessProbe(*cc)}
 	// Without a host there is nothing to poll; the hub plane then folds to
 	// reachable on the interface state alone, as it always has.
 	if cc.Host != "" {

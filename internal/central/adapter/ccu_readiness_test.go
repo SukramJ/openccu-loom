@@ -167,5 +167,5 @@ func TestCCUReadinessWait_ContextCancel(t *testing.T) {
 // waitForCCU drives the CCU readiness probe for cc through the shared wait
 // loop, the way every production gate does.
 func waitForCCU(ctx context.Context, cc config.CentralConfig, cfg CCUReadinessConfig, logger *slog.Logger) bool {
-	return waitReady(ctx, cc.Name, newCCUReadinessProbe(cc, nil), cfg, logger)
+	return waitReady(ctx, cc.Name, newCCUReadinessProbe(cc), cfg, logger)
 }
