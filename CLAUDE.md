@@ -85,9 +85,12 @@ South-bound:
 |---|---|---|
 | XML-RPC + JSON-RPC | HmIP-RF, BidCos-RF, BidCos-Wired, HmIP-Wired, VirtualDevices | HTTP (`:8120`) |
 | BIN-RPC | CUxD | raw TCP (`:8129`) |
+| occulited HTTP API (openccu-lite) | HmIP-RF, BidCos-RF, BidCos-Wired, VirtualDevices | event stream per central — no callback port |
 
-Every interface supports push callbacks. **There is no polling / JSON-RPC-only
-code path** — a deliberate divergence from aiohomematic.
+Every interface pushes — callbacks on a CCU, occulited's event stream on
+openccu-lite (a second system type, selected per central by `system_type`
+through a south profile; ADR 0071, 0072). **There is no polling /
+JSON-RPC-only code path** — a deliberate divergence from aiohomematic.
 
 ---
 

@@ -71,6 +71,7 @@ nav:
       - Authentication & Users: admin/auth.md
       - Keycloak (OIDC): admin/keycloak-oidc.md
       - Multi-CCU Operations: user/multi-ccu.md
+      - Connecting openccu-lite: admin/openccu-lite.md
       - Security: SECURITY.md
       - Backup & Restore: admin/backup.md
       - Caching & Performance: caching.md
@@ -164,6 +165,11 @@ nav:
           - ADR 0068 — What unique_id promises, per plane: adr/0068-unique-id-stability-per-plane.md
           - ADR 0069 — Master-profile surface serves link data: adr/0069-master-profile-surface-serves-link-data.md
           - ADR 0070 — Shared HA discovery model module: adr/0070-shared-ha-discovery-model-module.md
+          - ADR 0071 — South profiles: adr/0071-south-profiles.md
+          - ADR 0072 — openccu-lite event stream: adr/0072-openccu-lite-event-stream.md
+          - ADR 0073 — Backend-neutral taxonomy: adr/0073-backend-neutral-taxonomy.md
+          - ADR 0074 — Per-central features: adr/0074-per-central-features.md
+          - ADR 0075 — Token credentials: adr/0075-token-credentials.md
   - Credits: attribution.md
 
 # Only the mkdocs machinery itself is excluded. Everything else under
