@@ -12,6 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/internal/north/mcp"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -1115,5 +1116,54 @@ func TestListRoomsAndFunctions_UnknownCentralReturnsError(t *testing.T) {
 				t.Fatalf("%s: expected IsError=true for an unknown central_name", tool)
 			}
 		})
+	}
+}
+
+// fakeFeatures marks the listed (central, feature) pairs unavailable.
+type fakeFeatures map[string]hmenum.Feature
+
+func (f fakeFeatures) FeatureUnavailable(central string, k hmenum.Feature) error {
+	if f[central] != k {
+		return nil
+	}
+	return &hmerr.FeatureUnavailableError{Central: central, Feature: k, Reason: hmenum.FeatureReasonNotSupported}
+}
+
+// TestHubListToolsReportUnavailableCentrals pins that a hub list tool
+// spanning several centrals names the central that does not offer what
+// it reads, with the reason, instead of letting its empty share read as
+// "this central has none" — and still lists the other central's items.
+func TestHubListToolsReportUnavailableCentrals(t *testing.T) {
+	hAlpha := hub.NewHub("alpha")
+	hAlpha.PutSysvar(hub.NewSysvar("alpha", "SV_Alpha", "", hmenum.HubValueTypeLogic, nil))
+	hubs := newFakeHubs()
+	hubs.add("alpha", hAlpha)
+	hubs.add("box", hub.NewHub("box"))
+	deps := hubDeps(&fakeCentrals{names: []string{"alpha", "box"}}, hubs, newFakeDevices())
+	deps.Features = fakeFeatures{"box": hmenum.FeatureHubSysvars}
+	cs := connect(t, deps)
+	defer cs.Close()
+
+	res := callTool(t, cs, "list_sysvars", map[string]any{})
+	if res.IsError {
+		t.Fatalf("list_sysvars returned error: %v", res.Content)
+	}
+	var out struct {
+		Sysvars []struct {
+			Central string `json:"central"`
+		} `json:"sysvars"`
+		Unavailable []struct {
+			Central string `json:"central"`
+			Key     string `json:"key"`
+			Reason  string `json:"reason"`
+		} `json:"unavailable"`
+	}
+	unmarshalStructured(t, res, &out)
+	if len(out.Sysvars) != 1 || out.Sysvars[0].Central != "alpha" {
+		t.Errorf("sysvars = %+v, want alpha's one", out.Sysvars)
+	}
+	if len(out.Unavailable) != 1 || out.Unavailable[0].Central != "box" ||
+		out.Unavailable[0].Key != "hub.sysvars" || out.Unavailable[0].Reason != "not_supported_by_system" {
+		t.Errorf("unavailable = %+v, want box / hub.sysvars / not_supported_by_system", out.Unavailable)
 	}
 }

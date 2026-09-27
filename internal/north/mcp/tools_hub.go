@@ -5,6 +5,7 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -13,6 +14,8 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
 
 // This file holds the hub- and device-derived read tools that project the
@@ -74,6 +77,28 @@ func centralsToScan(d Deps, centralName string) ([]string, error) {
 	return []string{want}, nil
 }
 
+// unavailableEntry names a central a tool skipped because it does not
+// offer the feature the tool reads, and why — so an empty list is never
+// mistaken for "this central has none".
+type unavailableEntry struct {
+	Central string `json:"central"`
+	Key     string `json:"key"`
+	Reason  string `json:"reason"`
+	Scope   string `json:"scope,omitempty"`
+}
+
+// unavailableFor reports whether central does not offer feature k.
+func unavailableFor(d Deps, central string, k hmenum.Feature) (unavailableEntry, bool) {
+	if d.Features == nil {
+		return unavailableEntry{}, false
+	}
+	fe, ok := errors.AsType[*hmerr.FeatureUnavailableError](d.Features.FeatureUnavailable(central, k))
+	if !ok {
+		return unavailableEntry{}, false
+	}
+	return unavailableEntry{Central: central, Key: string(fe.Feature), Reason: string(fe.Reason), Scope: fe.Scope}, true
+}
+
 // rfc3339OrEmpty formats a timestamp as RFC3339, or "" for the zero value
 // so an unobserved timestamp is omitted from the projection.
 func rfc3339OrEmpty(t time.Time) string {
@@ -96,6 +121,8 @@ type programSummary struct {
 
 type listProgramsOut struct {
 	Programs []programSummary `json:"programs"`
+	// Unavailable lists the scanned centrals that do not offer this.
+	Unavailable []unavailableEntry `json:"unavailable,omitempty"`
 }
 
 func registerListPrograms(s *mcpsdk.Server, d Deps) {
@@ -109,6 +136,10 @@ func registerListPrograms(s *mcpsdk.Server, d Deps) {
 			return nil, listProgramsOut{}, err
 		}
 		for _, c := range scan {
+			if u, ok := unavailableFor(d, c, hmenum.FeatureHubPrograms); ok {
+				out.Unavailable = append(out.Unavailable, u)
+				continue
+			}
 			h := d.Hubs.HubFor(c)
 			if h == nil {
 				continue
@@ -147,6 +178,8 @@ type sysvarSummary struct {
 
 type listSysvarsOut struct {
 	Sysvars []sysvarSummary `json:"sysvars"`
+	// Unavailable lists the scanned centrals that do not offer this.
+	Unavailable []unavailableEntry `json:"unavailable,omitempty"`
 }
 
 func registerListSysvars(s *mcpsdk.Server, d Deps) {
@@ -160,6 +193,10 @@ func registerListSysvars(s *mcpsdk.Server, d Deps) {
 			return nil, listSysvarsOut{}, err
 		}
 		for _, c := range scan {
+			if u, ok := unavailableFor(d, c, hmenum.FeatureHubSysvars); ok {
+				out.Unavailable = append(out.Unavailable, u)
+				continue
+			}
 			h := d.Hubs.HubFor(c)
 			if h == nil {
 				continue
@@ -211,6 +248,8 @@ type serviceMessageSummary struct {
 
 type listServiceMessagesOut struct {
 	Messages []serviceMessageSummary `json:"messages"`
+	// Unavailable lists the scanned centrals that do not offer this.
+	Unavailable []unavailableEntry `json:"unavailable,omitempty"`
 }
 
 func registerListServiceMessages(s *mcpsdk.Server, d Deps) {
@@ -224,6 +263,10 @@ func registerListServiceMessages(s *mcpsdk.Server, d Deps) {
 			return nil, listServiceMessagesOut{}, err
 		}
 		for _, c := range scan {
+			if u, ok := unavailableFor(d, c, hmenum.FeatureHubServiceMessages); ok {
+				out.Unavailable = append(out.Unavailable, u)
+				continue
+			}
 			h := d.Hubs.HubFor(c)
 			if h == nil || h.ServiceMessages == nil {
 				continue
@@ -273,6 +316,8 @@ type alarmMessageSummary struct {
 
 type listAlarmMessagesOut struct {
 	Messages []alarmMessageSummary `json:"messages"`
+	// Unavailable lists the scanned centrals that do not offer this.
+	Unavailable []unavailableEntry `json:"unavailable,omitempty"`
 }
 
 func registerListAlarmMessages(s *mcpsdk.Server, d Deps) {
@@ -286,6 +331,10 @@ func registerListAlarmMessages(s *mcpsdk.Server, d Deps) {
 			return nil, listAlarmMessagesOut{}, err
 		}
 		for _, c := range scan {
+			if u, ok := unavailableFor(d, c, hmenum.FeatureHubAlarmMessages); ok {
+				out.Unavailable = append(out.Unavailable, u)
+				continue
+			}
 			h := d.Hubs.HubFor(c)
 			if h == nil || h.Messages == nil {
 				continue
@@ -332,6 +381,8 @@ type inboxDeviceSummary struct {
 
 type listInboxOut struct {
 	Devices []inboxDeviceSummary `json:"devices"`
+	// Unavailable lists the scanned centrals that do not offer this.
+	Unavailable []unavailableEntry `json:"unavailable,omitempty"`
 }
 
 func registerListInbox(s *mcpsdk.Server, d Deps) {
@@ -345,6 +396,10 @@ func registerListInbox(s *mcpsdk.Server, d Deps) {
 			return nil, listInboxOut{}, err
 		}
 		for _, c := range scan {
+			if u, ok := unavailableFor(d, c, hmenum.FeatureHubInbox); ok {
+				out.Unavailable = append(out.Unavailable, u)
+				continue
+			}
 			h := d.Hubs.HubFor(c)
 			if h == nil || h.Inbox == nil {
 				continue

@@ -30,6 +30,10 @@ var mcpFleetSeams = []string{
 	"Energy",
 	"Links",
 	"Schedules",
+	// Features lets the hub list tools name a central that does not offer
+	// what they read; without it an openccu-lite central's share of
+	// list_sysvars reads as "no variables" rather than "none exist there".
+	"Features",
 }
 
 // TestPin_MCPFleetSeams_WiredInDaemon pins that the daemon hands every

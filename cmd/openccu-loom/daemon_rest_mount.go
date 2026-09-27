@@ -762,6 +762,7 @@ func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, loginLim
 		Paramsets:    d.paramsetsDomain,
 		Health:       d.healthAdapter,
 		Hubs:         d.reg,
+		Features:     d.reg,
 		Audit:        d.auditRec,
 		Incidents:    d.incidents,
 		Alarm:        mcpAlarmSeam(d),
