@@ -59,6 +59,10 @@ var writeCommandRoles = map[string]auth.Role{
 	"groups.delete": auth.RoleAdmin,
 
 	// Operator-tier: every real device / config / schedule / link mutation.
+	// Taxonomy node edits mirror the operator-gated REST node routes.
+	"taxonomy.node_create":    auth.RoleOperator,
+	"taxonomy.node_update":    auth.RoleOperator,
+	"taxonomy.node_delete":    auth.RoleOperator,
 	"alarm_messages.ack":      auth.RoleOperator,
 	"alarm_messages.ack_all":  auth.RoleOperator,
 	"alarm_panel.acknowledge": auth.RoleOperator,
@@ -189,6 +193,7 @@ var readOnlyCommands = map[string]struct{}{
 	"devices.list":                {},
 	"firmware.info":               {},
 	"groups.list":                 {},
+	"taxonomy.list":               {},
 	"groups.suitable_members":     {},
 	"groups.types":                {},
 	"inbox.list":                  {},

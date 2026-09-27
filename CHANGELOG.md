@@ -100,6 +100,21 @@ CCU; the list below is what an API client can already observe.
   the system refuses as invalid answers `422`, an ambiguous room or
   function name `409` with the candidate paths, an unknown one `422`.
   REST API 11.5.0.
+- Rooms, functions and whatever else a system organises its devices by are
+  a taxonomy of nested nodes. Devices and channels on REST, WebSocket and
+  the MQTT info payload gain a `taxonomy` array (`enum`, `path`, `name`,
+  `parent_path`) next to the unchanged `rooms` and `functions` names;
+  `GET /rooms` and `GET /functions` name the nodes behind each name
+  (`refs`); `GET /taxonomy` (WebSocket `taxonomy.list`, MCP `get_taxonomy`)
+  serves every central's trees, empty nodes included. `room_paths` and
+  `function_paths` on the device and channel patch assign by node, which
+  is how one of two rooms of the same name is chosen. Nodes are created,
+  renamed, moved and deleted with `POST`/`PATCH`/`DELETE
+  /taxonomy/{central}/{enum}/nodes` and the matching WebSocket commands;
+  on a CCU, whose rooms and functions are flat, only root nodes of those
+  two enums, and nesting or moving is refused. The room and function
+  create answers carry `path`; their `id` was always an integer and is now
+  documented as one. REST API 11.6.0, WebSocket API 1.11.
 
 #### Fixed
 

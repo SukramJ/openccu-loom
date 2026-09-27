@@ -13,6 +13,7 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/taxonomy"
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
@@ -480,6 +481,15 @@ func registerGetSystemInfo(s *mcpsdk.Server, d Deps) {
 type namedGroupSummary struct {
 	Name        string `json:"name"`
 	DeviceCount int    `json:"device_count"`
+	// Paths are the taxonomy nodes carrying this name, per central — two
+	// rooms of one name on two floors are one entry with two paths.
+	Paths []groupNodePath `json:"paths,omitempty"`
+}
+
+// groupNodePath locates one taxonomy node carrying a name.
+type groupNodePath struct {
+	Central string `json:"central"`
+	Path    string `json:"path"`
 }
 
 type listRoomsOut struct {
@@ -495,16 +505,27 @@ type listFunctionsOut struct {
 // labels off a device; it receives the device value directly so the tally
 // never depends on a stable iteration order across separate Devices()
 // calls.
-func countGroups(d Deps, want string, selector func(dev *device.Device) []string) []namedGroupSummary {
+func countGroups(d Deps, want string, enum taxonomy.EnumID, selector func(dev *device.Device) []string) []namedGroupSummary {
 	if d.Devices == nil {
 		return []namedGroupSummary{}
 	}
 	want = strings.TrimSpace(want)
 	counts := map[string]int{}
 	order := []string{}
+	paths := map[string][]groupNodePath{}
+	seen := map[groupNodePath]bool{}
 	for _, dev := range d.Devices.Devices() {
-		if want != "" && d.Devices.CentralOf(dev.Address) != want {
+		central := d.Devices.CentralOf(dev.Address)
+		if want != "" && central != want {
 			continue
+		}
+		for _, a := range dev.Taxonomy() {
+			np := groupNodePath{Central: central, Path: string(a.Ref.Path)}
+			if a.Ref.Enum != enum || a.Name == "" || seen[np] {
+				continue
+			}
+			seen[np] = true
+			paths[a.Name] = append(paths[a.Name], np)
 		}
 		for _, label := range selector(dev) {
 			if label == "" {
@@ -518,7 +539,7 @@ func countGroups(d Deps, want string, selector func(dev *device.Device) []string
 	}
 	out := make([]namedGroupSummary, 0, len(order))
 	for _, name := range order {
-		out = append(out, namedGroupSummary{Name: name, DeviceCount: counts[name]})
+		out = append(out, namedGroupSummary{Name: name, DeviceCount: counts[name], Paths: paths[name]})
 	}
 	return out
 }
@@ -526,13 +547,13 @@ func countGroups(d Deps, want string, selector func(dev *device.Device) []string
 func registerListRooms(s *mcpsdk.Server, d Deps) {
 	mcpsdk.AddTool(s, &mcpsdk.Tool{
 		Name:        "list_rooms",
-		Description: "List the configured rooms with the number of devices assigned to each, optionally scoped to one central via central_name.",
+		Description: "List the configured rooms with the number of devices assigned to each and the taxonomy paths behind each name (two rooms of one name on two floors show two paths), optionally scoped to one central via central_name.",
 	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in centralScopeIn) (*mcpsdk.CallToolResult, listRoomsOut, error) {
 		want := strings.TrimSpace(in.CentralName)
 		if want != "" && !centralKnown(d, want) {
 			return nil, listRoomsOut{}, errUnknownCentral(d, want)
 		}
-		rooms := countGroups(d, want, func(dev *device.Device) []string { return dev.Rooms() })
+		rooms := countGroups(d, want, taxonomy.EnumRoom, func(dev *device.Device) []string { return dev.Rooms() })
 		return nil, listRoomsOut{Rooms: rooms}, nil
 	})
 }
@@ -546,7 +567,7 @@ func registerListFunctions(s *mcpsdk.Server, d Deps) {
 		if want != "" && !centralKnown(d, want) {
 			return nil, listFunctionsOut{}, errUnknownCentral(d, want)
 		}
-		funcs := countGroups(d, want, func(dev *device.Device) []string { return dev.Functions() })
+		funcs := countGroups(d, want, taxonomy.EnumFunction, func(dev *device.Device) []string { return dev.Functions() })
 		return nil, listFunctionsOut{Functions: funcs}, nil
 	})
 }

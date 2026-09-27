@@ -2557,6 +2557,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/taxonomy/{central}/{enum}/nodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                central: string;
+                enum: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a taxonomy node (operator)
+         * @description A node below `parent_path` needs the central's `taxonomy.tree`
+         *     feature; a CCU's rooms and functions are flat, so there only a
+         *     root node of `room` or `function` can be created.
+         */
+        post: operations["createTaxonomyNode"];
+        /**
+         * Delete a taxonomy node and its subtree (operator)
+         * @description The addresses assigned to the deleted nodes keep existing and lose the assignment.
+         */
+        delete: operations["deleteTaxonomyNode"];
+        options?: never;
+        head?: never;
+        /** Rename and/or move a taxonomy node (operator) */
+        patch: operations["updateTaxonomyNode"];
+        trace?: never;
+    };
     "/rooms": {
         parameters: {
             query?: never;
@@ -5184,15 +5214,20 @@ export interface components {
             priority?: "critical" | "high" | "default" | "low";
         };
         /**
-         * @description Response of the room / function create verbs: the id the CCU assigned
-         *     and the name it was created under. The name is echoed rather than
-         *     assumed, because the CCU normalises it.
+         * @description Response of the room / function create verbs: the id the CCU assigned,
+         *     the name it was created under, and the node's path inside its enum.
+         *     The name is echoed rather than assumed, because the CCU normalises it.
          */
         CreatedNamedResource: {
-            /** @description CCU-assigned identifier of the created object. */
-            id: string;
-            /** @description Name as the CCU stored it. */
+            /**
+             * @description The CCU's numeric object id; absent for a system without one
+             *     (openccu-lite), whose nodes are addressed by `path`.
+             */
+            id?: number;
+            /** @description Name as the system stored it. */
             name: string;
+            /** @description The node's path inside its enum (on a CCU the object id as a string). */
+            path: string;
         };
         /**
          * @description Raw LINK paramset of one channel-peer pair, as the CCU returns it —
@@ -5988,6 +6023,22 @@ export interface components {
             policies?: {
                 [key: string]: boolean;
             };
+        };
+        TaxonomyNodeCreateRequest: {
+            /** @description The parent node's path inside the enum; absent or empty for a root node. */
+            parent_path?: string;
+            name: string;
+        };
+        TaxonomyNodeCreated: {
+            /** @description The new node's path inside the enum. */
+            path: string;
+        };
+        TaxonomyNodeUpdateRequest: {
+            name?: string;
+            /** @description Move below this node; an empty string moves to the root. */
+            parent_path?: string;
+            /** @description Zero-based place among the new siblings; absent appends. */
+            position?: number;
         };
         TaxonomyResponse: {
             centrals: components["schemas"]["TaxonomyCentral"][];
@@ -10369,6 +10420,14 @@ export interface components {
              *     assignments. Unknown names are silently skipped.
              */
             functions?: string[];
+            /**
+             * @description Assign by node reference (`room/eg/kueche`) instead of by name;
+             *     wins over `rooms` when both are given. A reference names one of
+             *     two rooms that share a name. Paths come from `GET /taxonomy`.
+             */
+            room_paths?: string[];
+            /** @description As `room_paths`, for functions (`function/licht`). */
+            function_paths?: string[];
         };
         PatchDeviceRequest: {
             name?: string;
@@ -10376,6 +10435,14 @@ export interface components {
             include_channels?: boolean;
             rooms?: string[];
             functions?: string[];
+            /**
+             * @description Assign by node reference (`room/eg/kueche`) instead of by name;
+             *     wins over `rooms` when both are given. A reference names one of
+             *     two rooms that share a name. Paths come from `GET /taxonomy`.
+             */
+            room_paths?: string[];
+            /** @description As `room_paths`, for functions (`function/licht`). */
+            function_paths?: string[];
         };
         PatchSysvarRequest: {
             /** @description New name for the variable. When present and non-empty the sysvar is renamed in place (the path {name} stays the current name). Omit or leave empty to keep the name. */
@@ -14489,6 +14556,139 @@ export interface operations {
             };
             /** @description Unknown central */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createTaxonomyNode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                central: string;
+                enum: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaxonomyNodeCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyNodeCreated"];
+                };
+            };
+            /** @description Unknown central or parent */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Invalid node, or a feature the central lacks (`feature_unavailable`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteTaxonomyNode: {
+        parameters: {
+            query: {
+                /** @description The node's path inside the enum (`eg/kueche`). */
+                path: string;
+            };
+            header?: never;
+            path: {
+                central: string;
+                enum: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown central or node */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description A feature the central lacks (`feature_unavailable`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    updateTaxonomyNode: {
+        parameters: {
+            query: {
+                /** @description The node's path inside the enum (`eg/kueche`). */
+                path: string;
+            };
+            header?: never;
+            path: {
+                central: string;
+                enum: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaxonomyNodeUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown central or node */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Invalid change, or a feature the central lacks (`feature_unavailable`) */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

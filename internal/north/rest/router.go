@@ -254,6 +254,8 @@ type Deps struct {
 	// /functions (create/rename/delete). Nil disables those routes;
 	// the read-only GET /rooms + GET /functions stay available.
 	RoomFunctionAdmin handlers.RoomFunctionAdmin
+	// TaxonomyAdmin backs node CRUD at /taxonomy/{central}/{enum}/nodes.
+	TaxonomyAdmin handlers.TaxonomyNodeAdmin
 
 	// TLSCert backs the runtime certificate upload at
 	// POST /admin/tls/certificate. Nil when TLS is not enabled.
@@ -1004,6 +1006,11 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.With(op).Post("/functions", handlers.CreateFunction(d.RoomFunctionAdmin, d.AuditRecorder))
 				pr.With(op).Patch("/functions/{name}", handlers.RenameFunction(d.RoomFunctionAdmin, d.AuditRecorder))
 				pr.With(op).Delete("/functions/{name}", handlers.DeleteFunction(d.RoomFunctionAdmin, d.AuditRecorder))
+			}
+			if d.TaxonomyAdmin != nil {
+				pr.With(op).Post("/taxonomy/{central}/{enum}/nodes", handlers.CreateTaxonomyNode(d.TaxonomyAdmin, d.AuditRecorder))
+				pr.With(op).Patch("/taxonomy/{central}/{enum}/nodes", handlers.UpdateTaxonomyNode(d.TaxonomyAdmin, d.AuditRecorder))
+				pr.With(op).Delete("/taxonomy/{central}/{enum}/nodes", handlers.DeleteTaxonomyNode(d.TaxonomyAdmin, d.AuditRecorder))
 			}
 			// Area (room grouping) entity CRUD + room-assignment replace.
 			// Local SQLite writes, so operator-gated; the read-only GET

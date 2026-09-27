@@ -3628,6 +3628,101 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
+  /taxonomy/{central}/{enum}/nodes:
+    parameters:
+      - { in: path, name: central, required: true, schema: { type: string } }
+      - { in: path, name: enum, required: true, schema: { type: string } }
+    post:
+      operationId: createTaxonomyNode
+      summary: Create a taxonomy node (operator)
+      description: |
+        A node below `parent_path` needs the central's `taxonomy.tree`
+        feature; a CCU's rooms and functions are flat, so there only a
+        root node of `room` or `function` can be created.
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TaxonomyNodeCreateRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxonomyNodeCreated" }
+        "404":
+          description: Unknown central or parent
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "422":
+          description: Invalid node, or a feature the central lacks (`feature_unavailable`)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+    patch:
+      operationId: updateTaxonomyNode
+      summary: Rename and/or move a taxonomy node (operator)
+      tags: [hub]
+      parameters:
+        - in: query
+          name: path
+          required: true
+          schema: { type: string }
+          description: The node's path inside the enum (`eg/kueche`).
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TaxonomyNodeUpdateRequest" }
+      responses:
+        "204": { description: Updated }
+        "404":
+          description: Unknown central or node
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "422":
+          description: Invalid change, or a feature the central lacks (`feature_unavailable`)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+    delete:
+      operationId: deleteTaxonomyNode
+      summary: Delete a taxonomy node and its subtree (operator)
+      description: The addresses assigned to the deleted nodes keep existing and lose the assignment.
+      tags: [hub]
+      parameters:
+        - in: query
+          name: path
+          required: true
+          schema: { type: string }
+          description: The node's path inside the enum (`eg/kueche`).
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      responses:
+        "204": { description: Deleted }
+        "404":
+          description: Unknown central or node
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "422":
+          description: A feature the central lacks (`feature_unavailable`)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
   /rooms:
     get:
       operationId: listRooms
@@ -7821,17 +7916,22 @@ components:
     CreatedNamedResource:
       type: object
       description: |
-        Response of the room / function create verbs: the id the CCU assigned
-        and the name it was created under. The name is echoed rather than
-        assumed, because the CCU normalises it.
-      required: [id, name]
+        Response of the room / function create verbs: the id the CCU assigned,
+        the name it was created under, and the node's path inside its enum.
+        The name is echoed rather than assumed, because the CCU normalises it.
+      required: [name, path]
       properties:
         id:
-          type: string
-          description: CCU-assigned identifier of the created object.
+          type: integer
+          description: |
+            The CCU's numeric object id; absent for a system without one
+            (openccu-lite), whose nodes are addressed by `path`.
         name:
           type: string
-          description: Name as the CCU stored it.
+          description: Name as the system stored it.
+        path:
+          type: string
+          description: The node's path inside its enum (on a CCU the object id as a string).
     LinkParamset:
       type: object
       additionalProperties: true
@@ -8853,6 +8953,31 @@ components:
             `/config` path-level description for the canonical key
             catalogue.
           additionalProperties: { type: boolean }
+    TaxonomyNodeCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        parent_path:
+          type: string
+          description: The parent node's path inside the enum; absent or empty for a root node.
+        name: { type: string }
+    TaxonomyNodeCreated:
+      type: object
+      required: [path]
+      properties:
+        path:
+          type: string
+          description: The new node's path inside the enum.
+    TaxonomyNodeUpdateRequest:
+      type: object
+      properties:
+        name: { type: string }
+        parent_path:
+          type: string
+          description: Move below this node; an empty string moves to the root.
+        position:
+          type: integer
+          description: Zero-based place among the new siblings; absent appends.
     TaxonomyResponse:
       type: object
       required: [centrals]
@@ -14794,6 +14919,17 @@ components:
           description: |
             Replaces the channel's function (Gewerk)
             assignments. Unknown names are silently skipped.
+        room_paths:
+          type: array
+          items: { type: string }
+          description: |
+            Assign by node reference (`room/eg/kueche`) instead of by name;
+            wins over `rooms` when both are given. A reference names one of
+            two rooms that share a name. Paths come from `GET /taxonomy`.
+        function_paths:
+          type: array
+          items: { type: string }
+          description: As `room_paths`, for functions (`function/licht`).
     PatchDeviceRequest:
       type: object
       properties:
@@ -14809,6 +14945,17 @@ components:
         functions:
           type: array
           items: { type: string }
+        room_paths:
+          type: array
+          items: { type: string }
+          description: |
+            Assign by node reference (`room/eg/kueche`) instead of by name;
+            wins over `rooms` when both are given. A reference names one of
+            two rooms that share a name. Paths come from `GET /taxonomy`.
+        function_paths:
+          type: array
+          items: { type: string }
+          description: As `room_paths`, for functions (`function/licht`).
     PatchSysvarRequest:
       type: object
       properties:

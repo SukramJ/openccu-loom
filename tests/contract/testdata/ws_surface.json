@@ -1,5 +1,5 @@
 {
-  "wsapi_version": "1.10",
+  "wsapi_version": "1.11",
   "commands": {
     "addon_update.check": "",
     "addon_update.install": "",
@@ -179,6 +179,10 @@
     "sysvars.fetch": "central_name:string",
     "sysvars.list": "central_name:string?",
     "sysvars.set": "central_name:string?, name:string, value:any",
-    "sysvars.usage": "central_name:string, name:string"
+    "sysvars.usage": "central_name:string, name:string",
+    "taxonomy.list": "central:string?",
+    "taxonomy.node_create": "central:string?, enum:string, name:string, parent_path:string?",
+    "taxonomy.node_delete": "central:string?, enum:string, path:string",
+    "taxonomy.node_update": "central:string?, enum:string, name:string?, parent_path:string?, path:string, position:integer?"
   }
 }

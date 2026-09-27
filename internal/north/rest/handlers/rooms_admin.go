@@ -12,6 +12,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
+	"github.com/SukramJ/openccu-loom/internal/model/taxonomy"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 )
 
@@ -20,10 +21,10 @@ import (
 // names a central (empty = the sole configured CCU) because rooms and
 // functions are per-CCU objects.
 type RoomFunctionAdmin interface {
-	CreateRoom(ctx context.Context, central, name string) (int, error)
+	CreateRoom(ctx context.Context, central, name string) (hub.CreatedNode, error)
 	RenameRoom(ctx context.Context, central, oldName, newName string) error
 	DeleteRoom(ctx context.Context, central, name string) error
-	CreateFunction(ctx context.Context, central, name string) (int, error)
+	CreateFunction(ctx context.Context, central, name string) (hub.CreatedNode, error)
 	RenameFunction(ctx context.Context, central, oldName, newName string) error
 	DeleteFunction(ctx context.Context, central, name string) error
 }
@@ -54,6 +55,9 @@ func writeGroupError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, hub.ErrNoRoomMutator), errors.Is(err, hub.ErrNoFunctionMutator):
 		problem.Write(w, http.StatusServiceUnavailable,
 			problem.New(problem.TypeServiceUnready, r, "Room/function management unavailable", err.Error()))
+	case errors.Is(err, taxonomy.ErrAmbiguousName):
+		problem.Write(w, http.StatusConflict,
+			problem.New(problem.TypeConflict, r, "Name is ambiguous", err.Error()))
 	case errors.Is(err, hub.ErrCentralAmbiguous):
 		problem.Write(w, http.StatusBadRequest,
 			problem.New(problem.TypeValidation, r, "Central name required", err.Error()))
@@ -93,7 +97,7 @@ func CreateRoom(svc RoomFunctionAdmin, rec audit.Recorder) http.HandlerFunc {
 			return
 		}
 		groupAudit(rec, r, "create room "+body.Name)
-		JSON(w, http.StatusCreated, map[string]any{"id": id, "name": body.Name})
+		JSON(w, http.StatusCreated, createdNamedResource(id, body.Name))
 	}
 }
 
@@ -159,7 +163,7 @@ func CreateFunction(svc RoomFunctionAdmin, rec audit.Recorder) http.HandlerFunc 
 			return
 		}
 		groupAudit(rec, r, "create function "+body.Name)
-		JSON(w, http.StatusCreated, map[string]any{"id": id, "name": body.Name})
+		JSON(w, http.StatusCreated, createdNamedResource(id, body.Name))
 	}
 }
 
@@ -203,4 +207,17 @@ func DeleteFunction(svc RoomFunctionAdmin, rec audit.Recorder) http.HandlerFunc 
 		groupAudit(rec, r, "delete function "+name)
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+// CreatedNamedResource is the answer to a room or function create: the
+// CCU's numeric object id where the system has one, the name, and the
+// node's path inside its enum.
+type CreatedNamedResource struct {
+	ID   int    `json:"id,omitempty"`
+	Name string `json:"name"`
+	Path string `json:"path"`
+}
+
+func createdNamedResource(n hub.CreatedNode, name string) CreatedNamedResource {
+	return CreatedNamedResource{ID: n.LegacyID, Name: name, Path: string(n.Ref.Path)}
 }

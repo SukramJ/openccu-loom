@@ -169,6 +169,10 @@ func wireWSCommands(wsHub *ws.Hub, w wsCommandWiring) {
 		// GroupsAdmin: wired — heating-group create/edit/delete + type /
 		// suitable-member helpers (GR02). Same adapter as the REST writer.
 		GroupsAdmin: newGroupsAdapter(w.groupsDomain),
+		// Taxonomy / TaxonomyAdmin: wired — the same registry-backed source
+		// and node admin the REST /taxonomy surface serves.
+		Taxonomy:      registryTaxonomy{reg: w.registry},
+		TaxonomyAdmin: adapter.NewTaxonomyAdmin(w.registry),
 		// SessionRecorder: wired — routes recording.start/stop/status through
 		// the same shared RPC recorder domain method the REST route uses, so a
 		// WS start arms the auto-stop timer and persists the marker.

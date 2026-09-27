@@ -362,6 +362,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		Diagrams:          d.diagramSvc,
 		Areas:             d.areaSvc,
 		RoomFunctionAdmin: d.roomFunctionAdmin,
+		TaxonomyAdmin:     adapter.NewTaxonomyAdmin(d.reg),
 		TLSCert:           tlsCertSvc,
 		TokenAdmin:        d.tokenSvc,
 		CentralAdmin:      d.centSvc,

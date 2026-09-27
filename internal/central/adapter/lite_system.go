@@ -15,6 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/occulited"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
+	"github.com/SukramJ/openccu-loom/internal/model/taxonomy"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
@@ -306,13 +307,40 @@ type liteHubWriter struct {
 }
 
 var (
-	_ hub.Mutator           = (*liteHubWriter)(nil)
-	_ hub.SysvarUsageReader = (*liteHubWriter)(nil)
+	_ hub.Mutator             = (*liteHubWriter)(nil)
+	_ hub.SysvarUsageReader   = (*liteHubWriter)(nil)
+	_ hub.TaxonomyAdmin       = (*liteHubWriter)(nil)
+	_ hub.TaxonomyPathMutator = (*liteHubWriter)(nil)
 )
 
 // SetDeviceRooms implements [hub.RoomMutator].
 func (w *liteHubWriter) SetDeviceRooms(ctx context.Context, address string, rooms []string) error {
 	return w.meta.SetDeviceRooms(ctx, address, rooms)
+}
+
+// SetTaxonomyRefs implements [hub.TaxonomyPathMutator].
+func (w *liteHubWriter) SetTaxonomyRefs(ctx context.Context, address string, enum taxonomy.EnumID, refs []taxonomy.Ref) error {
+	return w.meta.SetTaxonomyRefs(ctx, address, enum, refs)
+}
+
+// CreateNode implements [hub.TaxonomyAdmin].
+func (w *liteHubWriter) CreateNode(ctx context.Context, enum taxonomy.EnumID, parent taxonomy.Path, name string) (taxonomy.Ref, error) {
+	return w.meta.CreateNode(ctx, enum, parent, name)
+}
+
+// RenameNode implements [hub.TaxonomyAdmin].
+func (w *liteHubWriter) RenameNode(ctx context.Context, r taxonomy.Ref, name string) error {
+	return w.meta.RenameNode(ctx, r, name)
+}
+
+// MoveNode implements [hub.TaxonomyAdmin].
+func (w *liteHubWriter) MoveNode(ctx context.Context, r taxonomy.Ref, parent taxonomy.Path, position *int) error {
+	return w.meta.MoveNode(ctx, r, parent, position)
+}
+
+// DeleteNode implements [hub.TaxonomyAdmin].
+func (w *liteHubWriter) DeleteNode(ctx context.Context, r taxonomy.Ref) error {
+	return w.meta.DeleteNode(ctx, r)
 }
 
 // SetDeviceFunctions implements [hub.FunctionMutator].

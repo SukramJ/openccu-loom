@@ -1,5 +1,5 @@
 {
- "version": "1.10",
+ "version": "1.11",
  "envelope": {
   "description": "Shape of every WebSocket frame the daemon emits — both command replies and broadcasts. The `payload` member is replaced per-frame; broadcast entries below name the OpenAPI schema (in assets/openapi.yaml under components.schemas) that pins its structure.",
   "fields": {
@@ -659,6 +659,60 @@
    "args": {
     "id": "integer",
     "central": "string?"
+   }
+  },
+  {
+   "category": "taxonomy",
+   "description": "Every central's taxonomy trees \u2014 rooms, functions and further enums \u2014 with each node's path, empty nodes included. Optional central narrows to one; an unknown central is not_found. Same answer as REST GET /taxonomy.",
+   "name": "taxonomy.list",
+   "args": {
+    "central": "string?"
+   },
+   "result": {
+    "centrals": "array"
+   }
+  },
+  {
+   "category": "taxonomy",
+   "description": "Create a taxonomy node below parent_path (absent or empty: a root node). A nested node needs the central's taxonomy.tree feature; a CCU's rooms and functions are flat. Returns {path}. Operator-gated.",
+   "name": "taxonomy.node_create",
+   "args": {
+    "central": "string?",
+    "enum": "string",
+    "parent_path": "string?",
+    "name": "string"
+   },
+   "result": {
+    "path": "string"
+   }
+  },
+  {
+   "category": "taxonomy",
+   "description": "Rename a taxonomy node (name) and/or move it below parent_path (empty string: the root) at position. Moving needs taxonomy.tree. Operator-gated.",
+   "name": "taxonomy.node_update",
+   "args": {
+    "central": "string?",
+    "enum": "string",
+    "path": "string",
+    "name": "string?",
+    "parent_path": "string?",
+    "position": "integer?"
+   },
+   "result": {
+    "ok": "boolean"
+   }
+  },
+  {
+   "category": "taxonomy",
+   "description": "Delete a taxonomy node and its subtree; the addresses assigned to them keep existing and lose the assignment. Operator-gated.",
+   "name": "taxonomy.node_delete",
+   "args": {
+    "central": "string?",
+    "enum": "string",
+    "path": "string"
+   },
+   "result": {
+    "ok": "boolean"
    }
   },
   {

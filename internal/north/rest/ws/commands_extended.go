@@ -291,6 +291,11 @@ type ExtendedCommandsConfig struct {
 	// groups.suitable_members read helpers. Same cmd-level adapter as the
 	// REST group-admin surface.
 	GroupsAdmin handlers.GroupsWriter
+	// Taxonomy backs taxonomy.list; TaxonomyAdmin the node commands
+	// taxonomy.node_create / node_update / node_delete. Same sources as
+	// the REST /taxonomy surface.
+	Taxonomy      handlers.TaxonomySource
+	TaxonomyAdmin handlers.TaxonomyNodeAdmin
 }
 
 // RegisterExtendedCommands wires the post-MVP command set onto router.
@@ -442,6 +447,14 @@ func registerReportCommands(router *Router, cfg ExtendedCommandsConfig) {
 		router.Register("groups.create", groupsCreateHandler(cfg.GroupsAdmin))
 		router.Register("groups.update", groupsUpdateHandler(cfg.GroupsAdmin))
 		router.Register("groups.delete", groupsDeleteHandler(cfg.GroupsAdmin))
+	}
+	if cfg.Taxonomy != nil {
+		router.Register("taxonomy.list", taxonomyListHandler(cfg.Taxonomy))
+	}
+	if cfg.TaxonomyAdmin != nil {
+		router.Register("taxonomy.node_create", taxonomyNodeCreateHandler(cfg.TaxonomyAdmin))
+		router.Register("taxonomy.node_update", taxonomyNodeUpdateHandler(cfg.TaxonomyAdmin))
+		router.Register("taxonomy.node_delete", taxonomyNodeDeleteHandler(cfg.TaxonomyAdmin))
 	}
 	if cfg.ExtendedHub != nil {
 		router.Register("service_messages.disable", serviceMessagesDisableHandler(cfg.ExtendedHub))

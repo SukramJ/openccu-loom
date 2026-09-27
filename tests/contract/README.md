@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 522.
+Guards without a doc comment: 7 of 524.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -500,6 +500,8 @@ Guards without a doc comment: 7 of 522.
 | TestLiteRestoreChecksThenApplies | wiring_pins/lite_system_test.go | TestLiteRestoreChecksThenApplies pins the restore path: the box checks the archive and applies the checked upload. |
 | TestLiteRestoreRefusesArchiveNeedingRecoveryKey | wiring_pins/lite_system_test.go | TestLiteRestoreRefusesArchiveNeedingRecoveryKey pins that an archive the box can open only with its recovery key is refused as invalid input and never applied. |
 | TestLiteSystemUpdateMapsFeed | wiring_pins/lite_system_test.go | TestLiteSystemUpdateMapsFeed pins the system-update state of a lite central: the running openccu-lite version and the release the box's feed offers reach the hub model at bring-up. |
+| TestLiteTaxonomyNodeCRUD | wiring_pins/lite_taxonomy_test.go | TestLiteTaxonomyNodeCRUD pins node editing on a lite central through the domain the REST handlers call: a node created below a parent lands in the box's tree with an id derived from its name, a rename and a move land there too, and deleting a node detaches its members instead of deleting them. |
+| TestRoomPathsWinOverRoomNames | wiring_pins/lite_taxonomy_test.go | TestRoomPathsWinOverRoomNames pins assignment by reference on a lite central: a room path names one of the two "Küche" nodes, which an assignment by name refuses as ambiguous. |
 | TestPin_ConcentrationClusters_SchemaRevision5 | wiring_pins/matter_concentration_revision_test.go | TestPin_ConcentrationClusters_SchemaRevision5 pins that the embedded matter.js HEAD schema snapshot reports revision 5 for the three concentration-measurement sub-clusters (0x040C family), mirroring matter.js HEAD concentration-measurement.element.ts:19 (default: 5). |
 | TestABridgeWithoutARingStillServesAnEmptyTrace | wiring_pins/matter_diagevent_pin_test.go | TestABridgeWithoutARingStillServesAnEmptyTrace pins the property that lets the recording points sit where they have to sit. |
 | TestAnAttachedRingIsWhatTheBridgeServes | wiring_pins/matter_diagevent_pin_test.go | TestAnAttachedRingIsWhatTheBridgeServes closes the other half: the setter has to reach the reader, or the REST surface would answer empty while the receive path recorded into a ring nobody serves. |
