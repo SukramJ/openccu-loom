@@ -68,7 +68,7 @@ func TestUpdateCentral_MaskedAPIToken_RestoresStoredToken(t *testing.T) {
 			body := strings.NewReader(`{"host":"box.local","system_type":"openccu-lite","enabled":true,"interfaces":[{"name":"HmIP-RF"}]` + tokenField + `}`)
 			req := withChiParam(httptest.NewRequest(http.MethodPut, "/admin/centrals/box", body), "name", "box")
 			w := httptest.NewRecorder()
-			UpdateCentral(svc, nil).ServeHTTP(w, req)
+			UpdateCentral(svc, nil, nil).ServeHTTP(w, req)
 			if w.Code != http.StatusNoContent {
 				t.Fatalf("PUT = %d %s", w.Code, w.Body.String())
 			}
@@ -88,7 +88,7 @@ func TestUpdateCentral_ExplicitEmptyAPIToken_ClearsIt(t *testing.T) {
 	body := strings.NewReader(`{"host":"box.local","system_type":"openccu-lite","enabled":true,"interfaces":[{"name":"HmIP-RF"}],"api_token_plain":"","api_token_env":"BOX_TOKEN"}`)
 	req := withChiParam(httptest.NewRequest(http.MethodPut, "/admin/centrals/box", body), "name", "box")
 	w := httptest.NewRecorder()
-	UpdateCentral(svc, nil).ServeHTTP(w, req)
+	UpdateCentral(svc, nil, nil).ServeHTTP(w, req)
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("PUT = %d %s", w.Code, w.Body.String())
 	}
@@ -104,7 +104,7 @@ func TestCreateCentral_MaskedAPIToken_StoresEmpty(t *testing.T) {
 	svc := &fakeCentralAdminService{}
 	body := strings.NewReader(`{"name":"box","host":"box.local","system_type":"auto","interfaces":[{"name":"HmIP-RF"}],"api_token_plain":"***"}`)
 	w := httptest.NewRecorder()
-	CreateCentral(svc, nil).ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/admin/centrals", body))
+	CreateCentral(svc, nil, nil).ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/admin/centrals", body))
 	if w.Code != http.StatusCreated {
 		t.Fatalf("POST = %d %s", w.Code, w.Body.String())
 	}
@@ -135,7 +135,7 @@ func TestCentralWriteValidatesTheSystemType(t *testing.T) {
 			t.Parallel()
 			svc := &fakeCentralAdminService{}
 			w := httptest.NewRecorder()
-			CreateCentral(svc, nil).ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/admin/centrals", strings.NewReader(tc.body)))
+			CreateCentral(svc, nil, nil).ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/admin/centrals", strings.NewReader(tc.body)))
 			if w.Code != tc.code {
 				t.Fatalf("POST = %d %s, want %d", w.Code, w.Body.String(), tc.code)
 			}

@@ -295,6 +295,10 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 	if d.authMw != nil {
 		d.authMw.BasicThrottle = loginLimiter
 	}
+	// Probe and client pairing for adding a system, shared by the admin
+	// routes and the first-run wizard. The box's administrator sees this
+	// daemon under its mDNS instance name.
+	onboarding := adapter.NewLiteOnboarding(cfg.North.Discovery.MDNS.ResolveInstanceName(), d.catalogs, cfg.Locale, logger)
 	// One reloader, two callers: the admin endpoint an operator can hit
 	// directly, and the config-section save below.
 	mqttReload := newMQTTReloadAdapter(d.mqttSup, d.reload, cfg, logger)
@@ -385,7 +389,9 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 			Sections:        d.sqSections,
 			Required:        d.noUsers,
 			FirstRunAllowed: cfg.Bootstrap.FirstRunSetupAllowed,
+			Onboarding:      onboarding,
 		},
+		Onboarding:      onboarding,
 		LoginRateLimit:  loginLimiter,
 		Backup:          d.backupAdapter,
 		BackupUpload:    d.backupAdapter,

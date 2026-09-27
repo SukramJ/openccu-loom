@@ -5,14 +5,18 @@ package adapter
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"maps"
 	"slices"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
+	"github.com/SukramJ/openccu-loom/internal/client/transport/occulited"
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -453,6 +457,9 @@ func (m *BringUpManager) buildAndStart(cc *config.CentralConfig, unit *central.U
 	WirePendingDevices(m.parentCtx, unit, m.deps.PendingDevices,
 		cc.Behavior.DelayNewDeviceCreationEnabled(), m.logger)
 	profile, err := southProfileFor(cc, m.logger)
+	if errors.Is(err, errSystemTypeUnresolved) {
+		return m.resolveThenBuild(cc, unit)
+	}
 	if err != nil {
 		// Keep the central visible as degraded, with the reason, instead of
 		// half bringing it up: the handle exists so removal and re-init work
@@ -592,4 +599,86 @@ func (m *BringUpManager) Teardown() {
 	if m.parentCancel != nil {
 		m.parentCancel()
 	}
+}
+
+// autoDetectInterval is the pause between two probes of a central whose
+// system type is `auto` while nothing identifiable answers.
+var autoDetectInterval = 3 * time.Second
+
+// resolveThenBuild brings up a central configured as `auto`: a handle
+// without a profile holds its place while a probe finds out what answers
+// at its address; the resolved type is persisted and the handle replaced
+// by one brought up as that type. The central shows as waiting, with the
+// reason, until then.
+func (m *BringUpManager) resolveThenBuild(cc *config.CentralConfig, unit *central.Unit) *centralBringUp {
+	b := &centralBringUp{cfg: m.cfg, cc: *cc, unit: unit, deps: m.deps, logger: m.logger, parentCtx: m.parentCtx}
+	parent := m.parentCtx
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, cancel := context.WithCancel(parent)
+	b.addPermanentCloser(cancel)
+	recordCentralIdentifying(unit, cc.Host)
+	resolved := *cc
+	SafeGo("auto_system_type."+cc.Name, func() {
+		st, ok := detectSystemType(ctx, &resolved, m.logger)
+		if !ok {
+			return
+		}
+		resolved.SystemType = st
+		m.logger.Info("wire.central.system_type_resolved", slog.String("central", cc.Name), slog.String("system_type", string(st)))
+		if m.deps.PersistSystemType != nil {
+			m.deps.PersistSystemType(ctx, cc.Name, st)
+		}
+		//nolint:contextcheck // the resolved central runs on the manager's context; this probe's context ends with the placeholder it replaces
+		m.replaceResolved(b, &resolved)
+	})
+	return b
+}
+
+// detectSystemType probes cc's address until it identifies the system or
+// ctx ends. The token is not sent: the peer is not known to be the box it
+// was issued by.
+func detectSystemType(ctx context.Context, cc *config.CentralConfig, logger *slog.Logger) (hmenum.SystemType, bool) {
+	for {
+		c, err := occulited.New(occulited.Config{
+			BaseURL: ccuBaseURLFor(*cc), TLSFingerprint: cc.TLSFingerprint,
+			InsecureSkipVerify: cc.TLSInsecureSkipVerify, Logger: logger, Timeout: 10 * time.Second,
+		})
+		if err != nil {
+			logger.Warn("wire.central.system_type_probe", slog.String("central", cc.Name), slog.String("err", err.Error()))
+			return "", false
+		}
+		det, err := c.Detect(ctx)
+		if st, ok := resolvedSystemType(det.Kind); ok && (err == nil || errors.Is(err, occulited.ErrUnsupportedMajor)) {
+			return st, true
+		}
+		select {
+		case <-ctx.Done():
+			return "", false
+		case <-time.After(autoDetectInterval):
+		}
+	}
+}
+
+// replaceResolved swaps the placeholder handle of an `auto` central for one
+// brought up as its resolved type — unless the placeholder was removed or
+// replaced meanwhile (the central was deleted or reconfigured).
+func (m *BringUpManager) replaceResolved(placeholder *centralBringUp, cc *config.CentralConfig) {
+	m.mu.Lock()
+	current, ok := m.byCentral[cc.Name]
+	m.mu.Unlock()
+	if !ok || current != placeholder {
+		return
+	}
+	next := m.buildAndStart(cc, placeholder.unit)
+	m.mu.Lock()
+	if m.byCentral[cc.Name] == placeholder {
+		m.byCentral[cc.Name] = next
+		m.mu.Unlock()
+		placeholder.shutdown()
+		return
+	}
+	m.mu.Unlock()
+	next.shutdown()
 }

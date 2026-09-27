@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 749dded8
-HEAD: 749dded8
+Generated: 82781ab1
+HEAD: 82781ab1
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 5963 |
-| Reachable | 3851 |
-| Whitelisted | 2053 |
+| Total Exported | 6023 |
+| Reachable | 3880 |
+| Whitelisted | 2084 |
 | **Unreachable** | **59** |
 
 ## What these numbers cannot see

@@ -1,5 +1,5 @@
 {
- "api_version": "11.6.0",
+ "api_version": "11.7.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -8,6 +8,7 @@
   "DELETE /auth/tokens/{id}": "deleteToken",
   "DELETE /backups/{id}": "deleteBackup",
   "DELETE /centrals/discovered/{serial}/ignore": "unignoreDiscoveredCentral",
+  "DELETE /centrals/pairing/{id}": "cancelCentralPairing",
   "DELETE /centrals/{name}": "deleteCentral",
   "DELETE /config/fields/{path}": "resetConfigField",
   "DELETE /config/sections/{section}": "deleteConfigSection",
@@ -24,6 +25,7 @@
   "DELETE /programs/{id}": "deleteProgram",
   "DELETE /rooms/{name}": "deleteRoom",
   "DELETE /sessions/edit": "closeEditSession",
+  "DELETE /setup/pairing/{id}": "setupCancelCentralPairing",
   "DELETE /sysvars/{name}": "deleteSysvar",
   "DELETE /taxonomy/{central}/{enum}/nodes": "deleteTaxonomyNode",
   "DELETE /users/{subject}": "deleteUser",
@@ -60,6 +62,7 @@
   "GET /centrals": "listCentrals",
   "GET /centrals/discovered": "listDiscoveredCentrals",
   "GET /centrals/discovered/ignored": "listIgnoredCentrals",
+  "GET /centrals/pairing/{id}": "getCentralPairing",
   "GET /centrals/{name}": "getCentral",
   "GET /config": "getConfig",
   "GET /config/effective": "getConfigEffective",
@@ -146,6 +149,7 @@
   "GET /security/sources": "listSecuritySources",
   "GET /service-messages": "listServiceMessages",
   "GET /service-messages/suppressed": "listSuppressedServiceMessages",
+  "GET /setup/pairing/{id}": "setupGetCentralPairing",
   "GET /setup/status": "setupStatus",
   "GET /snapshot": "getSnapshot",
   "GET /system/addon-update": "getAddonUpdate",
@@ -202,6 +206,8 @@
   "POST /backups/{id}/restore": "restoreBackup",
   "POST /centrals": "createCentral",
   "POST /centrals/discovered/{serial}/ignore": "ignoreDiscoveredCentral",
+  "POST /centrals/pairing": "startCentralPairing",
+  "POST /centrals/probe": "probeCentral",
   "POST /devices/firmware/refresh": "refreshFirmwareData",
   "POST /devices/refresh": "refreshDevices",
   "POST /devices/values:batch": "valuesBatch",
@@ -252,6 +258,8 @@
   "POST /sessions/edit/heartbeat": "heartbeatEditSession",
   "POST /sessions/edit/take-over": "forceCloseEditSession",
   "POST /setup": "setup",
+  "POST /setup/pairing": "setupStartCentralPairing",
+  "POST /setup/probe": "setupProbeCentral",
   "POST /system/addon-update/check": "checkAddonUpdate",
   "POST /system/addon-update/install": "installAddonUpdate",
   "POST /system/ccu/{central}/poweroff": "postSystemCCUPoweroff",
@@ -731,6 +739,36 @@
    "reason:string",
    "supported:boolean"
   ],
+  "CentralPairingRequest": [
+   "access:string",
+   "host:string",
+   "port:integer",
+   "tls:boolean",
+   "tls_fingerprint:string"
+  ],
+  "CentralPairingStarted": [
+   "code:string",
+   "expires_in:integer",
+   "fingerprint:string",
+   "pairing_id:string"
+  ],
+  "CentralPairingStatus": [
+   "error:string",
+   "scopes:array\u003cstring\u003e",
+   "state:string"
+  ],
+  "CentralProbeRequest": [
+   "host:string",
+   "port:integer",
+   "tls:boolean",
+   "tls_insecure_skip_verify:boolean"
+  ],
+  "CentralProbeResult": [
+   "lite:$ref:LiteProbeInfo",
+   "ready:boolean",
+   "system_type:string",
+   "tls_fingerprint:string"
+  ],
   "CentralReadinessChangedPayload": [
    "central:string",
    "interfaces_loaded:integer",
@@ -748,6 +786,7 @@
    "interfaces:array\u003c$ref:InterfaceSpec\u003e",
    "json_rpc_port:integer",
    "name:string",
+   "pairing_id:string",
    "password_env:string",
    "password_plain:string",
    "port:integer",
@@ -1093,7 +1132,8 @@
    "model:string",
    "name:string",
    "serial:string",
-   "suggested_host:string"
+   "suggested_host:string",
+   "system_type:string"
   ],
   "DownloadSystemFirmwareRequest": [
    "central:string",
@@ -1210,6 +1250,11 @@
   "GroupTypeEntry": [
    "id:string",
    "label_key:string"
+  ],
+  "HMIPKeyMode": [
+   "device_keys:integer",
+   "keyserver_mode:string",
+   "offline_pairing:boolean"
   ],
   "Health": [
    "components:array\u003cobject\u003e",
@@ -1445,6 +1490,12 @@
   ],
   "ListSystemStatusResponse": [
    "events:array\u003cobject\u003e"
+  ],
+  "LiteProbeInfo": [
+   "api_majors:object",
+   "hmip_key_mode:$ref:HMIPKeyMode",
+   "implementation:string",
+   "pairing_available:boolean"
   ],
   "LogRecord": [
    "attrs:object",

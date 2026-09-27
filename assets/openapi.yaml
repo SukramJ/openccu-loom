@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 11.6.0
+  version: 11.7.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -2032,6 +2032,104 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SetupStatusResponse"
+  /setup/probe:
+    post:
+      operationId: setupProbeCentral
+      summary: Identify the system at an address (first-run wizard)
+      description: |
+        Reads what answers at the address: a CCU, an openccu-lite box (ready,
+        or starting), or neither. Over HTTPS a certificate no trusted
+        authority signed is read under a pin of the certificate the server
+        presented, and that fingerprint is reported for the operator to
+        confirm; only the open version document is read and no credential
+        is sent. Open only while first-run setup is required, like `POST /setup`, and rate-limited like the login.
+      tags: [setup]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CentralProbeRequest" }
+      responses:
+        "200":
+          description: What answers there
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CentralProbeResult" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "502":
+          description: Nothing could be reached at the address
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+  /setup/pairing:
+    post:
+      operationId: setupStartCentralPairing
+      summary: Start client pairing with an openccu-lite box
+      description: |
+        Asks the box's administrator to approve this daemon and answers the
+        six-digit code to enter on the box. The token an approved pairing
+        yields stays in the daemon; a central created with the answer's
+        `pairing_id` takes it. Pairing never grants the backup or power
+        scopes; paste a token created on the box for those.
+      tags: [setup]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CentralPairingRequest" }
+      responses:
+        "201":
+          description: Pairing started
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CentralPairingStarted" }
+        "403":
+          description: The box does not accept a pairing request from here (switched off, or not its local network)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "502":
+          description: The box could not be reached
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+  /setup/pairing/{id}:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    get:
+      operationId: setupGetCentralPairing
+      summary: A pairing's state
+      description: "`?wait=<seconds>` long-polls the box, up to 25 s."
+      tags: [setup]
+      security: []
+      parameters:
+        - { in: query, name: wait, required: false, schema: { type: integer, minimum: 0 } }
+      responses:
+        "200":
+          description: The state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CentralPairingStatus" }
+        "404":
+          description: No such pairing
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+    delete:
+      operationId: setupCancelCentralPairing
+      summary: Withdraw a pairing
+      tags: [setup]
+      security: []
+      responses:
+        "204": { description: Withdrawn }
+        "404":
+          description: No such pairing
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
   /setup:
     post:
       operationId: setup
@@ -6546,6 +6644,116 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /centrals/probe:
+    post:
+      operationId: probeCentral
+      summary: Identify the system at an address (admin)
+      description: |
+        Reads what answers at the address: a CCU, an openccu-lite box (ready,
+        or starting), or neither. Over HTTPS a certificate no trusted
+        authority signed is read under a pin of the certificate the server
+        presented, and that fingerprint is reported for the operator to
+        confirm; only the open version document is read and no credential
+        is sent.
+      tags: [central-admin]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CentralProbeRequest" }
+      responses:
+        "200":
+          description: What answers there
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CentralProbeResult" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "502":
+          description: Nothing could be reached at the address
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+  /centrals/pairing:
+    post:
+      operationId: startCentralPairing
+      summary: Start client pairing with an openccu-lite box
+      description: |
+        Asks the box's administrator to approve this daemon and answers the
+        six-digit code to enter on the box. The token an approved pairing
+        yields stays in the daemon; a central created with the answer's
+        `pairing_id` takes it. Pairing never grants the backup or power
+        scopes; paste a token created on the box for those.
+      tags: [central-admin]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CentralPairingRequest" }
+      responses:
+        "201":
+          description: Pairing started
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CentralPairingStarted" }
+        "403":
+          description: The box does not accept a pairing request from here (switched off, or not its local network)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "502":
+          description: The box could not be reached
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+  /centrals/pairing/{id}:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    get:
+      operationId: getCentralPairing
+      summary: A pairing's state
+      description: "`?wait=<seconds>` long-polls the box, up to 25 s."
+      tags: [central-admin]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - { in: query, name: wait, required: false, schema: { type: integer, minimum: 0 } }
+      responses:
+        "200":
+          description: The state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CentralPairingStatus" }
+        "404":
+          description: No such pairing
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+    delete:
+      operationId: cancelCentralPairing
+      summary: Withdraw a pairing
+      tags: [central-admin]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      responses:
+        "204": { description: Withdrawn }
+        "404":
+          description: No such pairing
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
   /centrals/discovered:
     get:
       operationId: listDiscoveredCentrals
@@ -12843,6 +13051,88 @@ components:
             pattern names a model, a channel and a parameter, none of
             which identify a CCU.
 
+    CentralProbeRequest:
+      type: object
+      required: [host]
+      properties:
+        host: { type: string }
+        port:
+          type: integer
+          description: The web server port; 0 or absent means 80, or 443 with tls.
+        tls: { type: boolean }
+        tls_insecure_skip_verify: { type: boolean }
+    CentralProbeResult:
+      type: object
+      required: [system_type, ready]
+      properties:
+        system_type:
+          type: string
+          enum: [ccu, openccu-lite, unknown]
+        ready:
+          type: boolean
+          description: Whether the system serves its API now; an openccu-lite box that is starting is identified but not ready.
+        tls_fingerprint:
+          type: string
+          description: SHA-256 (lower-case hex) of the certificate the server presented over HTTPS, to pin.
+        lite: { $ref: "#/components/schemas/LiteProbeInfo" }
+    LiteProbeInfo:
+      type: object
+      required: [pairing_available]
+      properties:
+        implementation: { type: string }
+        api_majors:
+          type: object
+          additionalProperties: { type: integer }
+        pairing_available: { type: boolean }
+        hmip_key_mode: { $ref: "#/components/schemas/HMIPKeyMode" }
+    HMIPKeyMode:
+      type: object
+      required: [keyserver_mode, device_keys, offline_pairing]
+      description: The key-mode summary of a box's HomeMatic IP radio; it never carries a key.
+      properties:
+        keyserver_mode: { type: string }
+        device_keys: { type: integer }
+        offline_pairing: { type: boolean }
+    CentralPairingRequest:
+      type: object
+      required: [host]
+      properties:
+        host: { type: string }
+        port: { type: integer }
+        tls: { type: boolean }
+        tls_fingerprint:
+          type: string
+          description: The certificate to pin (from the probe); needed over HTTPS for a certificate no trusted authority signed.
+        access:
+          type: string
+          enum: [full, control, read]
+          description: What to ask the box's administrator for; full is the default.
+    CentralPairingStarted:
+      type: object
+      required: [pairing_id, code, expires_in]
+      properties:
+        pairing_id: { type: string }
+        code:
+          type: string
+          description: The six digits the box's administrator enters on the box.
+        fingerprint:
+          type: string
+          description: The certificate fingerprint both sides agreed on; empty over plain HTTP.
+        expires_in:
+          type: integer
+          description: Seconds the pairing request stays valid.
+    CentralPairingStatus:
+      type: object
+      required: [state]
+      properties:
+        state:
+          type: string
+          enum: [pending, approved, rejected, expired, error]
+        scopes:
+          type: array
+          items: { type: string }
+          description: The scopes an approved pairing granted.
+        error: { type: string }
     CentralRow:
       type: object
       required: [name, host, interfaces, enabled]
@@ -12910,6 +13200,13 @@ components:
           description: >-
             SHA-256 (lower-case hex) of the openccu-lite system's certificate.
             When set, TLS trusts exactly this certificate. Requires tls.
+        pairing_id:
+          type: string
+          writeOnly: true
+          description: >-
+            The id of an approved client pairing (POST /centrals/pairing). The
+            central takes that pairing's token and pinned fingerprint on the
+            server; the token never travels through the client.
         username:
           type: string
         password_env:
@@ -14686,6 +14983,10 @@ components:
             otherwise.
         manufacturer: { type: string }
         model: { type: string }
+        system_type:
+          type: string
+          enum: [ccu, openccu-lite]
+          description: How the discovered system is reached, from its UPnP description; the wizard pre-selects it.
         last_seen: { type: string, format: date-time }
         already_configured: { type: boolean }
     DownloadSystemFirmwareRequest:
@@ -15155,6 +15456,12 @@ components:
             tls_fingerprint:
               type: string
               description: SHA-256 (lower-case hex) of an openccu-lite system's certificate to pin; requires tls.
+            port:
+              type: integer
+              description: The system's web server port; 0 or absent means 80, or 443 with tls.
+            pairing_id:
+              type: string
+              description: An approved pairing (POST /setup/pairing) whose token the central takes instead of api_token.
             interfaces:
               type: array
               minItems: 1

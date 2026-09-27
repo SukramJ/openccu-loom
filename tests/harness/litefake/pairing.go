@@ -106,6 +106,9 @@ type pairingState struct {
 	requests map[string]*pairingRequest
 	history  map[string][]time.Time
 	muted    map[string]time.Time
+	// fingerprint is the SHA-256 of the API certificate with
+	// [Options.TLS]; nil over plain HTTP.
+	fingerprint []byte
 }
 
 func newPairingState(o Options) *pairingState {
@@ -337,8 +340,8 @@ func (f *Fake) handlePairingRequest(w http.ResponseWriter, r *http.Request) {
 		Nonce:     hex.EncodeToString(req.nonce),
 		ExpiresIn: int(ps.lifetime / time.Second),
 		Interval:  max(1, int(ps.interval/time.Second)),
-		// The fake serves plain HTTP, whose fingerprint is empty.
-		Fingerprint: "",
+		// Empty over plain HTTP.
+		Fingerprint: hex.EncodeToString(ps.fingerprint),
 	})
 }
 
@@ -537,7 +540,7 @@ func (f *Fake) Pairings() []PendingPairing {
 			Access: req.body.Access, State: req.state, Revealed: req.clientNon != nil,
 		}
 		if p.Revealed {
-			p.Code = PairingCode(req.nonce, req.clientNon, nil)
+			p.Code = PairingCode(req.nonce, req.clientNon, ps.fingerprint)
 		}
 		out = append(out, p)
 	}
@@ -559,7 +562,7 @@ func (f *Fake) ApprovePairing(id, code string) (string, error) {
 	if req.clientNon == nil {
 		return "", &PairingError{Status: http.StatusConflict, Code: "not-ready", Message: "the client has not revealed its nonce"}
 	}
-	if code != PairingCode(req.nonce, req.clientNon, nil) {
+	if code != PairingCode(req.nonce, req.clientNon, ps.fingerprint) {
 		req.state = pairingRejected
 		ps.muted[req.address+"\x00"+req.body.App] = time.Now().Add(pairingMute)
 		req.notify()

@@ -30,8 +30,9 @@ CCU; the list below is what an API client can already observe.
   admin API and the setup API. Rules are enforced on every write: an
   openccu-lite central needs a token and carries no username, password,
   port overrides or CUxD; a CCU central carries no token or fingerprint.
-  An `auto` central is accepted but not brought up by this build yet — it
-  shows as degraded with the reason. REST API 11.4.0.
+  An `auto` central identifies what answers at its address before it comes
+  up (shown as waiting while it does) and stores the resolved type.
+  REST API 11.4.0.
 - An openccu-lite central comes up through the box's API: readiness from
   the box's health and interface state (with the reason — box starting,
   token rejected, token without the read tier, no interface running —
@@ -115,6 +116,20 @@ CCU; the list below is what an API client can already observe.
   two enums, and nesting or moving is refused. The room and function
   create answers carry `path`; their `id` was always an integer and is now
   documented as one. REST API 11.6.0, WebSocket API 1.11.
+- Adding a system starts with `POST /centrals/probe`, which says what
+  answers at an address — a CCU, an openccu-lite box (with its API
+  versions, whether it offers pairing and its HomeMatic IP key mode) or
+  nothing known — and, over HTTPS with a certificate no authority signed,
+  the fingerprint to pin. `POST /centrals/pairing` asks an openccu-lite
+  box's administrator to approve this daemon with full, control-only or
+  read-only access and returns the six-digit code to enter on the box;
+  `GET /centrals/pairing/{id}` (long-poll with `?wait=`) follows the
+  request, `DELETE` withdraws it. A central created or updated with
+  `pairing_id` takes the token the approval yielded; the token itself
+  never reaches the client. The same three are open without a session at
+  `/setup/probe` and `/setup/pairing` while first-run setup is pending,
+  and the setup wizard's system accepts a `port` and a `pairing_id`. SSDP
+  discovery labels an openccu-lite box (`system_type`). REST API 11.7.0.
 
 #### Fixed
 

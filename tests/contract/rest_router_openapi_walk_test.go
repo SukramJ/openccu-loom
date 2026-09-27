@@ -655,6 +655,7 @@ func fullyWiredRouterDeps() rest.Deps {
 		DeviceInstallMode:       fakeDeviceInstallMode{},
 		RoomFunctionAdmin:       fakeRoomFunctionAdmin{},
 		TaxonomyAdmin:           fakeTaxonomyAdmin{},
+		Onboarding:              fakeOnboarding{},
 		RefreshDevices:          fakeRefreshDevicesService{},
 		Reloader:                fakeReloaderService{},
 		CentralLinks:            fakeCentralLinksService{},
@@ -891,3 +892,24 @@ func (fakeTaxonomyAdmin) UpdateNode(context.Context, string, string, string, *st
 }
 
 func (fakeTaxonomyAdmin) DeleteNode(context.Context, string, string, string) error { return nil }
+
+// fakeOnboarding answers every onboarding call with an empty success.
+type fakeOnboarding struct{}
+
+func (fakeOnboarding) Probe(context.Context, hmapi.CentralProbeRequest) (hmapi.CentralProbeResult, error) {
+	return hmapi.CentralProbeResult{SystemType: "unknown"}, nil
+}
+
+func (fakeOnboarding) StartPairing(context.Context, hmapi.CentralPairingRequest) (hmapi.CentralPairingStarted, error) {
+	return hmapi.CentralPairingStarted{PairingID: "p"}, nil
+}
+
+func (fakeOnboarding) PairingStatus(context.Context, string, time.Duration) (hmapi.CentralPairingStatus, error) {
+	return hmapi.CentralPairingStatus{State: "pending"}, nil
+}
+
+func (fakeOnboarding) CancelPairing(context.Context, string) error { return nil }
+
+func (fakeOnboarding) PairingToken(string) (string, string, error) { return "", "", nil }
+
+func (fakeOnboarding) ForgetPairing(string) {}

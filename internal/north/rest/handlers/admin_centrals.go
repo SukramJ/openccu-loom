@@ -108,19 +108,21 @@ func maskCentralRow(ctx context.Context, row sqlite.CentralRow) sqlite.CentralRo
 // present["password_plain"] is false for both — matching the contract the
 // config section editor implements in [restoreMaskedSecrets]; only an
 // explicit empty string clears the password.
-func decodeCentralRow(r *http.Request) (row sqlite.CentralRow, present map[string]bool, err error) {
+func decodeCentralRow(r *http.Request) (row sqlite.CentralRow, pairingID string, present map[string]bool, err error) {
 	body, err := io.ReadAll(http.MaxBytesReader(nil, r.Body, maxRequestBodyBytes))
 	if err != nil {
-		return row, nil, err
+		return row, "", nil, err
 	}
 	dec := json.NewDecoder(bytes.NewReader(body))
 	dec.DisallowUnknownFields()
-	if err := dec.Decode(&row); err != nil {
-		return row, nil, err
+	var req centralWriteRequest
+	if err := dec.Decode(&req); err != nil {
+		return row, "", nil, err
 	}
+	row, pairingID = req.CentralRow, req.PairingID
 	var keys map[string]json.RawMessage
 	if err := json.Unmarshal(body, &keys); err != nil {
-		return row, nil, err
+		return row, "", nil, err
 	}
 	present = make(map[string]bool, len(keys))
 	for k, v := range keys {
@@ -132,7 +134,37 @@ func decodeCentralRow(r *http.Request) (row sqlite.CentralRow, present map[strin
 		}
 		present[lk] = true
 	}
-	return row, present, nil
+	return row, pairingID, present, nil
+}
+
+// centralWriteRequest is a central row as a client writes it, plus the
+// write-only id of an approved pairing whose token the row takes.
+type centralWriteRequest struct {
+	sqlite.CentralRow
+	PairingID string `json:"pairing_id,omitempty"`
+}
+
+// takePairing fills the row's API token (and the pinned fingerprint) from
+// an approved pairing, reporting whether the request may go on. The token
+// is read here, on the server, and never travels through the client.
+func takePairing(w http.ResponseWriter, r *http.Request, o CentralOnboarding, id string, row *sqlite.CentralRow) bool {
+	if id == "" {
+		return true
+	}
+	if o == nil {
+		problem.Write(w, http.StatusServiceUnavailable, problem.New(problem.TypeServiceUnready, r, "Onboarding unavailable", ""))
+		return false
+	}
+	token, fp, err := o.PairingToken(id)
+	if err != nil {
+		writeOnboardingError(w, r, "Pairing not usable", err)
+		return false
+	}
+	row.APITokenPlain = token
+	if fp != "" {
+		row.TLSFingerprint = fp
+	}
+	return true
 }
 
 // writeCentralSecretRefusal answers a store refusal to persist a CCU
@@ -225,14 +257,15 @@ func GetCentral(svc CentralAdminService) http.HandlerFunc {
 
 // CreateCentral handles POST /admin/centrals. The request body is a
 // [sqlite.CentralRow] JSON object. Returns 201 on success.
-func CreateCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc {
+func CreateCentral(svc CentralAdminService, rec audit.Recorder, onboarding CentralOnboarding) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var row sqlite.CentralRow
-		if err := DecodeJSON(r, &row); err != nil {
+		var req centralWriteRequest
+		if err := DecodeJSON(r, &req); err != nil {
 			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeValidation, r, "Invalid request body", err.Error()))
 			return
 		}
+		row := req.CentralRow
 		if row.Name == "" {
 			problem.Write(w, http.StatusBadRequest,
 				problem.New(problem.TypeValidation, r, "Missing name", "central name is required"))
@@ -261,6 +294,9 @@ func CreateCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc
 		if row.APITokenPlain == maskSentinel {
 			row.APITokenPlain = ""
 		}
+		if !takePairing(w, r, onboarding, req.PairingID, &row) {
+			return
+		}
 		if !writeCentralSystemRefusal(w, r, row) {
 			return
 		}
@@ -270,6 +306,9 @@ func CreateCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc
 			}
 			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Central creation failed", err)
 			return
+		}
+		if req.PairingID != "" {
+			onboarding.ForgetPairing(req.PairingID)
 		}
 		actor := identityFromCtx(r.Context())
 		if rec != nil {
@@ -287,7 +326,7 @@ func CreateCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc
 // field the body never mentions keeps its stored value, except
 // `enabled` and `interfaces`, which the body must always supply.
 // Returns 204 on success.
-func UpdateCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc {
+func UpdateCentral(svc CentralAdminService, rec audit.Recorder, onboarding CentralOnboarding) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		name := chi.URLParam(r, "name")
 		if name == "" {
@@ -295,7 +334,7 @@ func UpdateCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc
 				problem.New(problem.TypeValidation, r, "Missing name", "name path parameter is required"))
 			return
 		}
-		row, present, err := decodeCentralRow(r)
+		row, pairingID, present, err := decodeCentralRow(r)
 		if err != nil {
 			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeValidation, r, "Invalid request body", err.Error()))
@@ -341,6 +380,9 @@ func UpdateCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc
 			return
 		}
 		overlayOmittedCentralFields(&row, existing, present)
+		if !takePairing(w, r, onboarding, pairingID, &row) {
+			return
+		}
 		if !writeCentralSystemRefusal(w, r, row) {
 			return
 		}
@@ -350,6 +392,9 @@ func UpdateCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc
 			}
 			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Central update failed", err)
 			return
+		}
+		if pairingID != "" {
+			onboarding.ForgetPairing(pairingID)
 		}
 		actor := identityFromCtx(r.Context())
 		if rec != nil {

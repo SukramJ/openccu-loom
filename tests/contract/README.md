@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 524.
+Guards without a doc comment: 7 of 527.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -488,6 +488,9 @@ Guards without a doc comment: 7 of 524.
 | TestLiteRenameWritesMetaObject | wiring_pins/lite_metadata_test.go | TestLiteRenameWritesMetaObject pins the persistent rename on a lite central: the name lands in the box's store, not only in the model. |
 | TestLiteSetRoomsAmbiguousNameIsConflict | wiring_pins/lite_metadata_test.go | TestLiteSetRoomsAmbiguousNameIsConflict pins that a room name several nodes carry is refused with the candidates, not resolved to one of them. |
 | TestLiteSetRoomsKeepsOtherEnums | wiring_pins/lite_metadata_test.go | TestLiteSetRoomsKeepsOtherEnums pins the room write: the object's room paths are replaced, every other enum's paths survive. |
+| TestAutoSystemTypeResolvesAndPersists | wiring_pins/lite_onboarding_test.go | TestAutoSystemTypeResolvesAndPersists pins `system_type: auto` through the composition entry point: a box whose API is still starting is already identified as openccu-lite, the type is persisted, and the central then comes up as a lite central once the box is ready; a system whose ReGa check answers OK is identified as a CCU. |
+| TestOnboardingRoutesAreMounted | wiring_pins/lite_onboarding_test.go | TestOnboardingRoutesAreMounted pins that the daemon hands the onboarding domain to the REST router and to the first-run setup service: without either line the probe and pairing routes, or the wizard's pairing id, silently disappear. |
+| TestPairingTokenNeverLeavesTheDaemon | wiring_pins/lite_onboarding_test.go | TestPairingTokenNeverLeavesTheDaemon pins the pairing flow end to end over the REST handlers: a pairing is started and approved on the box, a central is created naming the pairing, and it stores a token the box accepts — while no answer the client received in the whole flow carries a token. |
 | TestLiteHotplugFetchesDescriptionsForUnknownAddresses | wiring_pins/lite_stream_test.go | TestLiteHotplugFetchesDescriptionsForUnknownAddresses pins hot-plug on a lite central: the stream announces only the new device's address, and the central reads the descriptions through the proxy and materialises the device. |
 | TestLiteInterfaceDownForcesUnavailable | wiring_pins/lite_stream_test.go | TestLiteInterfaceDownForcesUnavailable pins that an interface the box reports down makes its devices unavailable — the same connection loss a CCU outage publishes — and that they come back once it is up again. |
 | TestLiteResyncTriggersReseed | wiring_pins/lite_stream_test.go | TestLiteResyncTriggersReseed pins that a window in which the stream may have missed events is reseeded: after a dropped stream whose resume position the box no longer holds, the central reads its values again through the current generation's pipeline. |

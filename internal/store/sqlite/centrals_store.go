@@ -225,6 +225,21 @@ func (s *CentralsStore) BackfillSerial(ctx context.Context, centralName, serial 
 	return n > 0, nil
 }
 
+// SetSystemType records the system type a central configured as `auto`
+// resolved to, touching no other column. It changes only a row still set
+// to auto, so an operator's explicit choice made meanwhile wins. Returns
+// true when a row was updated.
+func (s *CentralsStore) SetSystemType(ctx context.Context, centralName, systemType string) (bool, error) {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE centrals SET system_type = ?, updated_at = ? WHERE name = ? AND system_type = 'auto'`,
+		systemType, time.Now().UTC(), centralName)
+	if err != nil {
+		return false, fmt.Errorf("sqlite: centrals set system type: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
 // Delete removes a row by name.
 func (s *CentralsStore) Delete(ctx context.Context, centralName string) error {
 	res, err := s.db.ExecContext(ctx, `DELETE FROM centrals WHERE name = ?`, centralName)

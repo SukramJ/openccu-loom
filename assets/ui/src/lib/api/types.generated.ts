@@ -1376,6 +1376,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/setup/probe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Identify the system at an address (first-run wizard)
+         * @description Reads what answers at the address: a CCU, an openccu-lite box (ready,
+         *     or starting), or neither. Over HTTPS a certificate no trusted
+         *     authority signed is read under a pin of the certificate the server
+         *     presented, and that fingerprint is reported for the operator to
+         *     confirm; only the open version document is read and no credential
+         *     is sent. Open only while first-run setup is required, like `POST /setup`, and rate-limited like the login.
+         */
+        post: operations["setupProbeCentral"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/setup/pairing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start client pairing with an openccu-lite box
+         * @description Asks the box's administrator to approve this daemon and answers the
+         *     six-digit code to enter on the box. The token an approved pairing
+         *     yields stays in the daemon; a central created with the answer's
+         *     `pairing_id` takes it. Pairing never grants the backup or power
+         *     scopes; paste a token created on the box for those.
+         */
+        post: operations["setupStartCentralPairing"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/setup/pairing/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * A pairing's state
+         * @description `?wait=<seconds>` long-polls the box, up to 25 s.
+         */
+        get: operations["setupGetCentralPairing"];
+        put?: never;
+        post?: never;
+        /** Withdraw a pairing */
+        delete: operations["setupCancelCentralPairing"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/setup": {
         parameters: {
             query?: never;
@@ -4389,6 +4461,78 @@ export interface paths {
         /** Create a new central (admin) */
         post: operations["createCentral"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/centrals/probe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Identify the system at an address (admin)
+         * @description Reads what answers at the address: a CCU, an openccu-lite box (ready,
+         *     or starting), or neither. Over HTTPS a certificate no trusted
+         *     authority signed is read under a pin of the certificate the server
+         *     presented, and that fingerprint is reported for the operator to
+         *     confirm; only the open version document is read and no credential
+         *     is sent.
+         */
+        post: operations["probeCentral"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/centrals/pairing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start client pairing with an openccu-lite box
+         * @description Asks the box's administrator to approve this daemon and answers the
+         *     six-digit code to enter on the box. The token an approved pairing
+         *     yields stays in the daemon; a central created with the answer's
+         *     `pairing_id` takes it. Pairing never grants the backup or power
+         *     scopes; paste a token created on the box for those.
+         */
+        post: operations["startCentralPairing"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/centrals/pairing/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * A pairing's state
+         * @description `?wait=<seconds>` long-polls the box, up to 25 s.
+         */
+        get: operations["getCentralPairing"];
+        put?: never;
+        post?: never;
+        /** Withdraw a pairing */
+        delete: operations["cancelCentralPairing"];
         options?: never;
         head?: never;
         patch?: never;
@@ -9041,6 +9185,64 @@ export interface components {
              */
             un_ignore?: string[];
         };
+        CentralProbeRequest: {
+            host: string;
+            /** @description The web server port; 0 or absent means 80, or 443 with tls. */
+            port?: number;
+            tls?: boolean;
+            tls_insecure_skip_verify?: boolean;
+        };
+        CentralProbeResult: {
+            /** @enum {string} */
+            system_type: "ccu" | "openccu-lite" | "unknown";
+            /** @description Whether the system serves its API now; an openccu-lite box that is starting is identified but not ready. */
+            ready: boolean;
+            /** @description SHA-256 (lower-case hex) of the certificate the server presented over HTTPS, to pin. */
+            tls_fingerprint?: string;
+            lite?: components["schemas"]["LiteProbeInfo"];
+        };
+        LiteProbeInfo: {
+            implementation?: string;
+            api_majors?: {
+                [key: string]: number;
+            };
+            pairing_available: boolean;
+            hmip_key_mode?: components["schemas"]["HMIPKeyMode"];
+        };
+        /** @description The key-mode summary of a box's HomeMatic IP radio; it never carries a key. */
+        HMIPKeyMode: {
+            keyserver_mode: string;
+            device_keys: number;
+            offline_pairing: boolean;
+        };
+        CentralPairingRequest: {
+            host: string;
+            port?: number;
+            tls?: boolean;
+            /** @description The certificate to pin (from the probe); needed over HTTPS for a certificate no trusted authority signed. */
+            tls_fingerprint?: string;
+            /**
+             * @description What to ask the box's administrator for; full is the default.
+             * @enum {string}
+             */
+            access?: "full" | "control" | "read";
+        };
+        CentralPairingStarted: {
+            pairing_id: string;
+            /** @description The six digits the box's administrator enters on the box. */
+            code: string;
+            /** @description The certificate fingerprint both sides agreed on; empty over plain HTTP. */
+            fingerprint?: string;
+            /** @description Seconds the pairing request stays valid. */
+            expires_in: number;
+        };
+        CentralPairingStatus: {
+            /** @enum {string} */
+            state: "pending" | "approved" | "rejected" | "expired" | "error";
+            /** @description The scopes an approved pairing granted. */
+            scopes?: string[];
+            error?: string;
+        };
         /** @description One CCU connection record persisted in the centrals store. */
         CentralRow: {
             /**
@@ -9071,6 +9273,8 @@ export interface components {
             api_token_plain?: string;
             /** @description SHA-256 (lower-case hex) of the openccu-lite system's certificate. When set, TLS trusts exactly this certificate. Requires tls. */
             tls_fingerprint?: string;
+            /** @description The id of an approved client pairing (POST /centrals/pairing). The central takes that pairing's token and pinned fingerprint on the server; the token never travels through the client. */
+            pairing_id?: string;
             username?: string;
             /** @description Environment variable name whose value is the CCU password (preferred). */
             password_env?: string;
@@ -10275,6 +10479,11 @@ export interface components {
             suggested_host: string;
             manufacturer?: string;
             model?: string;
+            /**
+             * @description How the discovered system is reached, from its UPnP description; the wizard pre-selects it.
+             * @enum {string}
+             */
+            system_type?: "ccu" | "openccu-lite";
             /** Format: date-time */
             last_seen: string;
             already_configured: boolean;
@@ -10568,6 +10777,10 @@ export interface components {
                 tls?: boolean;
                 /** @description SHA-256 (lower-case hex) of an openccu-lite system's certificate to pin; requires tls. */
                 tls_fingerprint?: string;
+                /** @description The system's web server port; 0 or absent means 80, or 443 with tls. */
+                port?: number;
+                /** @description An approved pairing (POST /setup/pairing) whose token the central takes instead of api_token. */
+                pairing_id?: string;
                 interfaces: string[];
             };
             /** @description Optional MQTT broker. Omit to skip. */
@@ -12757,6 +12970,145 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SetupStatusResponse"];
+                };
+            };
+        };
+    };
+    setupProbeCentral: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CentralProbeRequest"];
+            };
+        };
+        responses: {
+            /** @description What answers there */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CentralProbeResult"];
+                };
+            };
+            422: components["responses"]["UnprocessableEntity"];
+            /** @description Nothing could be reached at the address */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    setupStartCentralPairing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CentralPairingRequest"];
+            };
+        };
+        responses: {
+            /** @description Pairing started */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CentralPairingStarted"];
+                };
+            };
+            /** @description The box does not accept a pairing request from here (switched off, or not its local network) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            422: components["responses"]["UnprocessableEntity"];
+            /** @description The box could not be reached */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    setupGetCentralPairing: {
+        parameters: {
+            query?: {
+                wait?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CentralPairingStatus"];
+                };
+            };
+            /** @description No such pairing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    setupCancelCentralPairing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Withdrawn */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such pairing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
@@ -17683,6 +18035,145 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             500: components["responses"]["InternalError"];
+        };
+    };
+    probeCentral: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CentralProbeRequest"];
+            };
+        };
+        responses: {
+            /** @description What answers there */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CentralProbeResult"];
+                };
+            };
+            422: components["responses"]["UnprocessableEntity"];
+            /** @description Nothing could be reached at the address */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    startCentralPairing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CentralPairingRequest"];
+            };
+        };
+        responses: {
+            /** @description Pairing started */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CentralPairingStarted"];
+                };
+            };
+            /** @description The box does not accept a pairing request from here (switched off, or not its local network) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            422: components["responses"]["UnprocessableEntity"];
+            /** @description The box could not be reached */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getCentralPairing: {
+        parameters: {
+            query?: {
+                wait?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CentralPairingStatus"];
+                };
+            };
+            /** @description No such pairing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    cancelCentralPairing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Withdrawn */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such pairing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     listDiscoveredCentrals: {
