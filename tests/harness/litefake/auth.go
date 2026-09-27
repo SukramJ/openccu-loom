@@ -4,6 +4,10 @@
 package litefake
 
 import (
+	"crypto/rand"
+	"encoding/base32"
+	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 )
@@ -109,35 +113,66 @@ func (f *Fake) lookupToken(secret string) (tokenEntry, bool) {
 	return e, ok
 }
 
+// principal is who a request acts as: an API token or an account
+// session. The scopes are the stored ones, unexpanded.
+type principal struct {
+	subject string
+	user    string
+	scopes  []string
+	session *session
+}
+
+// resolve maps a presented secret to a principal: an API token first,
+// then a session id (both arrive as a bearer credential).
+func (f *Fake) resolve(secret string) (principal, bool) {
+	if e, ok := f.lookupToken(secret); ok {
+		return principal{subject: "token:" + e.name, user: "token:" + e.name, scopes: e.scopes}, true
+	}
+	if secret == "" {
+		return principal{}, false
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	s, ok := f.sessions[secret]
+	if !ok {
+		return principal{}, false
+	}
+	return principal{
+		subject: "session:" + s.account.Username,
+		user:    s.account.Username,
+		scopes:  s.account.Scopes,
+		session: s,
+	}, true
+}
+
 // authorize runs the route check: a valid credential holding scope. On
 // failure it writes the error answer and returns false. rpcRoute
 // selects the lite-rpc rule that a ?sid= query credential is refused
 // with 400 rather than considered; a valid header credential is
-// consulted first, since the first valid credential wins.
-//
-//nolint:unparam // the route scope is per route; every lite-rpc route needs rpc:read.
-func (f *Fake) authorize(w http.ResponseWriter, r *http.Request, scope string, rpcRoute bool) (entry tokenEntry, secret string, ok bool) {
+// consulted first, since the first valid credential wins. The 403 names
+// the route's scope.
+func (f *Fake) authorize(w http.ResponseWriter, r *http.Request, scope string, rpcRoute bool) (who principal, secret string, ok bool) {
 	secret = credential(r)
-	entry, ok = f.lookupToken(secret)
+	who, ok = f.resolve(secret)
 	if !ok {
 		if rpcRoute && r.URL.Query().Has("sid") {
 			writeError(w, http.StatusBadRequest, "bad-request",
 				"credentials are not accepted in the query string here: use the Authorization header")
-			return tokenEntry{}, "", false
+			return principal{}, "", false
 		}
 		writeError(w, http.StatusUnauthorized, "unauthenticated", "login required")
-		return tokenEntry{}, "", false
+		return principal{}, "", false
 	}
-	if !hasScope(entry.scopes, scope) {
+	if !hasScope(who.scopes, scope) {
 		writeJSON(w, http.StatusForbidden, forbiddenBody{
 			Error:   "forbidden",
 			Message: "the scope " + scope + " is required",
 			Scope:   scope,
 		})
-		return tokenEntry{}, "", false
+		return principal{}, "", false
 	}
-	recordSubject(r, "token:"+entry.name)
-	return entry, secret, true
+	recordSubject(r, who.subject)
+	return who, secret, true
 }
 
 // forbiddenBody is the 403 answer; it names the missing scope.
@@ -163,20 +198,136 @@ type authStateToken struct {
 	MustChangePassword bool     `json:"must_change_password"`
 }
 
+// authStateSession is the /api/auth/v1/state answer for an account
+// session: the token fields plus the account's identity.
+type authStateSession struct {
+	authStateToken
+	Role      string `json:"role"`
+	Level     string `json:"level"`
+	AccountID string `json:"account_id"`
+	SID       string `json:"sid"`
+	Method    string `json:"method"`
+}
+
 // handleAuthState answers GET /api/auth/v1/state. It is open; with a
-// token it reports the scopes exactly as stored, implications not
+// credential it reports the scopes exactly as stored, implications not
 // expanded, so a client has to expand them itself.
 func (f *Fake) handleAuthState(w http.ResponseWriter, r *http.Request) {
 	secret := credential(r)
-	entry, ok := f.lookupToken(secret)
+	who, ok := f.resolve(secret)
 	if !ok {
 		writeJSON(w, http.StatusOK, authStateAnon{})
 		return
 	}
-	recordSubject(r, "token:"+entry.name)
-	writeJSON(w, http.StatusOK, authStateToken{
+	recordSubject(r, who.subject)
+	base := authStateToken{
 		Authenticated: true,
-		User:          "token:" + entry.name,
-		Scopes:        append([]string{}, entry.scopes...),
+		User:          who.user,
+		Scopes:        append([]string{}, who.scopes...),
+	}
+	if who.session == nil {
+		writeJSON(w, http.StatusOK, base)
+		return
+	}
+	a := who.session.account
+	base.MustChangePassword = a.MustChangePassword
+	writeJSON(w, http.StatusOK, authStateSession{
+		authStateToken: base,
+		Role:           a.Role,
+		Level:          a.Level,
+		AccountID:      a.AccountID,
+		SID:            secret,
+		Method:         "password",
 	})
+}
+
+// Account is a box user account that can log in with a password. The
+// contract states the level vocabulary but not which scopes a session
+// carries, so the test names them.
+type Account struct {
+	Username           string
+	Password           string
+	Role               string
+	Level              string // read, operate, configure or administer
+	AccountID          string
+	Scopes             []string
+	MustChangePassword bool
+}
+
+// session is one logged-in account.
+type session struct {
+	account Account
+}
+
+// newSessionID returns a 26-character base32 session id.
+func newSessionID() string {
+	var b [16]byte
+	_, _ = rand.Read(b[:])
+	return strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(b[:]))
+}
+
+// loginRequest is the body of POST /api/auth/v1/login.
+type loginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+// loginAnswer is the successful login answer.
+type loginAnswer struct {
+	SID                string `json:"sid"`
+	User               string `json:"user"`
+	Role               string `json:"role"`
+	Level              string `json:"level"`
+	AccountID          string `json:"account_id"`
+	MustChangePassword bool   `json:"must_change_password"`
+}
+
+// handleLogin answers the open POST /api/auth/v1/login.
+func (f *Fake) handleLogin(w http.ResponseWriter, r *http.Request) {
+	var req loginRequest
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "bad-request", "invalid body")
+		return
+	}
+	f.mu.Lock()
+	acct, ok := f.accounts[req.Username]
+	f.mu.Unlock()
+	if !ok || acct.Password != req.Password {
+		writeError(w, http.StatusUnauthorized, "unauthenticated", "invalid username or password")
+		return
+	}
+	sid := newSessionID()
+	f.mu.Lock()
+	f.sessions[sid] = &session{account: acct}
+	f.mu.Unlock()
+	recordSubject(r, "session:"+acct.Username)
+	writeJSON(w, http.StatusOK, loginAnswer{
+		SID:                sid,
+		User:               acct.Username,
+		Role:               acct.Role,
+		Level:              acct.Level,
+		AccountID:          acct.AccountID,
+		MustChangePassword: acct.MustChangePassword,
+	})
+}
+
+// handleLogout answers POST /api/auth/v1/logout, which needs the session
+// itself as the bearer credential.
+func (f *Fake) handleLogout(w http.ResponseWriter, r *http.Request) {
+	sid := credential(r)
+	who, ok := f.resolve(sid)
+	if !ok || who.session == nil {
+		writeError(w, http.StatusUnauthorized, "unauthenticated", "login required")
+		return
+	}
+	recordSubject(r, who.subject)
+	f.mu.Lock()
+	delete(f.sessions, sid)
+	f.mu.Unlock()
+	writeJSON(w, http.StatusOK, okAnswer{OK: true})
+}
+
+// okAnswer is a bare success answer.
+type okAnswer struct {
+	OK bool `json:"ok"`
 }

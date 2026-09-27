@@ -166,7 +166,7 @@ func (s *sseWriter) frame(id, typ string, data []byte) error {
 // snapshots, and live messages with a heartbeat until the client goes,
 // the stream is dropped, it overflows, or its token is revoked.
 func (f *Fake) handleEvents(w http.ResponseWriter, r *http.Request) {
-	entry, secret, ok := f.authorize(w, r, scopeRPCRead, true)
+	who, secret, ok := f.authorize(w, r, scopeRPCRead, true)
 	if !ok {
 		return
 	}
@@ -175,7 +175,7 @@ func (f *Fake) handleEvents(w http.ResponseWriter, r *http.Request) {
 	if !hasResume && r.URL.Query().Has("last_event_id") {
 		lastID, hasResume = r.URL.Query().Get("last_event_id"), true
 	}
-	rd, res, err := f.ring.attach("token:"+entry.name, lastID, hasResume)
+	rd, res, err := f.ring.attach(who.subject, lastID, hasResume)
 	if err != nil {
 		var lim *limitError
 		if errors.As(err, &lim) {
@@ -246,7 +246,7 @@ func (f *Fake) handleEvents(w http.ResponseWriter, r *http.Request) {
 				_ = sw.frame("", typeResync, mustJSON(resyncData{Reason: resyncOverflow}))
 				return
 			}
-			if e, ok := f.lookupToken(secret); !ok || !hasScope(e.scopes, scopeRPCRead) {
+			if p, ok := f.resolve(secret); !ok || !hasScope(p.scopes, scopeRPCRead) {
 				// Every heartbeat re-validates the credential; a revoked
 				// token ends the stream without a closing frame.
 				return

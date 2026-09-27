@@ -5,9 +5,11 @@ package litefake
 
 import (
 	"context"
+	_ "embed" // the bundled metadata fixture
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -88,6 +90,27 @@ type Options struct {
 	// StateDatapoints is the datapoint set /api/rpc/v1/state keeps. Nil
 	// means [DefaultStateDatapoints].
 	StateDatapoints []string
+	// Meta is the initial metadata store, taken over without an event
+	// (its revision becomes the store's). Nil starts an empty store at
+	// revision 0; [DefaultMeta] is the bundled fixture.
+	Meta *Document
+	// MetaHeartbeatInterval is the change-stream heartbeat period; zero
+	// means [DefaultMetaHeartbeatInterval].
+	MetaHeartbeatInterval time.Duration
+	// MetaQueue is the per-stream queue depth of the change stream and
+	// MetaLog the number of events kept for ?since= replay.
+	MetaQueue int
+	MetaLog   int
+	// Accounts are the user accounts that can log in.
+	Accounts []Account
+	// PairingDisabled switches client pairing off (403 pairing-off).
+	PairingDisabled bool
+	// PairingLifetime is how long a request stays pending, PairingKeep
+	// how much longer it answers polls, PairingPollInterval the fastest
+	// poll rate without wait.
+	PairingLifetime     time.Duration
+	PairingKeep         time.Duration
+	PairingPollInterval time.Duration
 	// Serial and Hostname feed the UPnP description.
 	Serial   string
 	Hostname string
@@ -102,8 +125,11 @@ type Call struct {
 	Path     string
 	RawQuery string
 	Status   int
-	// Subject is "token:<name>" when the request carried a valid token.
+	// Subject is "token:<name>" or "session:<user>" when the request
+	// carried a valid credential.
 	Subject string
+	// Body is the request body as the handler read it, capped at 64 KiB.
+	Body []byte
 	// RPCMethods lists the XML-RPC method names of a proxy request, the
 	// inner calls of a system.multicall included.
 	RPCMethods []string
@@ -121,21 +147,27 @@ type ifaceState struct {
 
 // Fake is a running fake openccu-lite box.
 type Fake struct {
-	opts   Options
-	logger *slog.Logger
-	v      *godevccu.VirtualCCU
-	srv    *httptest.Server
-	cb     *httptest.Server
-	start  time.Time
-	ring   *ring
-	values *valueStore
+	opts    Options
+	logger  *slog.Logger
+	v       *godevccu.VirtualCCU
+	srv     *httptest.Server
+	cb      *httptest.Server
+	start   time.Time
+	ring    *ring
+	values  *valueStore
+	meta    *metaStore
+	pairing *pairingState
+	system  *systemState
 
-	mu        sync.Mutex
-	ready     bool
-	tokens    map[string]tokenEntry
-	heartbeat time.Duration
-	ifaces    map[string]*ifaceState
-	calls     []Call
+	mu            sync.Mutex
+	ready         bool
+	tokens        map[string]tokenEntry
+	accounts      map[string]Account
+	sessions      map[string]*session
+	heartbeat     time.Duration
+	metaHeartbeat time.Duration
+	ifaces        map[string]*ifaceState
+	calls         []Call
 
 	done      chan struct{}
 	closeOnce sync.Once
@@ -181,7 +213,13 @@ func Start(ctx context.Context, opts Options) (*Fake, error) {
 		ifaces:    make(map[string]*ifaceState, len(opts.Interfaces)),
 		done:      make(chan struct{}),
 	}
+	f.meta = newMetaStore(opts.Meta, opts.MetaLog, opts.MetaQueue)
+	f.pairing = newPairingState(opts)
+	f.system = newSystemState()
+	f.metaHeartbeat = opts.MetaHeartbeatInterval
+	f.sessions = map[string]*session{}
 	f.setTokens(opts.Tokens)
+	f.SetAccounts(opts.Accounts)
 	for _, name := range opts.Interfaces {
 		addr, ok := v.InterfaceAddr(name).(*net.TCPAddr)
 		if !ok || addr == nil {
@@ -241,6 +279,24 @@ func withDefaults(o Options) Options {
 	if o.StateDatapoints == nil {
 		o.StateDatapoints = DefaultStateDatapoints()
 	}
+	if o.MetaHeartbeatInterval <= 0 {
+		o.MetaHeartbeatInterval = DefaultMetaHeartbeatInterval
+	}
+	if o.MetaQueue <= 0 {
+		o.MetaQueue = DefaultMetaQueue
+	}
+	if o.MetaLog <= 0 {
+		o.MetaLog = DefaultMetaLog
+	}
+	if o.PairingLifetime <= 0 {
+		o.PairingLifetime = DefaultPairingLifetime
+	}
+	if o.PairingKeep <= 0 {
+		o.PairingKeep = DefaultPairingKeep
+	}
+	if o.PairingPollInterval <= 0 {
+		o.PairingPollInterval = DefaultPairingPollInterval
+	}
 	if o.Serial == "" {
 		o.Serial = DefaultSerial
 	}
@@ -260,6 +316,7 @@ func (f *Fake) Close() error {
 	f.closeOnce.Do(func() {
 		close(f.done)
 		f.ring.dropStreams()
+		f.meta.dropStreams()
 		if f.srv != nil {
 			f.srv.Close()
 		}
@@ -330,12 +387,17 @@ func (f *Fake) routes() http.Handler {
 	mux.HandleFunc("GET /api/auth/v1/state", f.handleAuthState)
 	mux.HandleFunc("GET /api/system/v1/health", f.handleHealth)
 	mux.HandleFunc("GET /api/meta/v1/version", f.handleMetaVersion)
+	mux.HandleFunc("POST /api/auth/v1/login", f.handleLogin)
+	mux.HandleFunc("POST /api/auth/v1/logout", f.handleLogout)
+	f.metaRoutes(mux)
+	f.pairingRoutes(mux)
+	f.systemRoutes(mux)
 	mux.HandleFunc("GET /upnp/basic_dev.cgi", f.handleUPnP)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not-found", "no such endpoint")
 	})
 	mux.HandleFunc("/", f.handleShell)
-	return f.record(f.readinessGate(mux))
+	return f.record(f.readinessGate(lengthGate(mux)))
 }
 
 // readinessGate answers for the web server in front of occulited while
@@ -358,6 +420,24 @@ func (f *Fake) readinessGate(next http.Handler) http.Handler {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusServiceUnavailable)
 		_, _ = w.Write([]byte("occulited is not answering yet\n"))
+	})
+}
+
+// lengthGate answers 411 for an /api/ request with a method that
+// carries a body but no Content-Length, as the web server in front of
+// occulited does; clients send "{}" when they have nothing to send.
+func lengthGate(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+			if isAPIPath(r.URL.Path) && (r.ContentLength < 0 || r.Header.Get("Content-Length") == "") {
+				w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+				w.WriteHeader(http.StatusLengthRequired)
+				_, _ = w.Write([]byte("411 Length Required\n"))
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
 	})
 }
 
@@ -418,6 +498,10 @@ func (f *Fake) record(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rec := &callRecord{}
 		sw := &statusWriter{ResponseWriter: w}
+		body := &cappedBuffer{limit: 64 << 10}
+		if r.Body != nil {
+			r.Body = teeReadCloser{Reader: io.TeeReader(r.Body, body), Closer: r.Body}
+		}
 		r = r.WithContext(context.WithValue(r.Context(), callRecordKey{}, rec))
 		next.ServeHTTP(sw, r)
 		if !isAPIPath(r.URL.Path) {
@@ -432,9 +516,36 @@ func (f *Fake) record(next http.Handler) http.Handler {
 			Status:     sw.status,
 			Subject:    rec.subject,
 			RPCMethods: rec.rpcMethods,
+			Body:       body.bytes(),
 		})
 		f.mu.Unlock()
 	})
+}
+
+// cappedBuffer keeps the first limit bytes written to it.
+type cappedBuffer struct {
+	limit int
+	buf   []byte
+}
+
+func (c *cappedBuffer) Write(p []byte) (int, error) {
+	if room := c.limit - len(c.buf); room > 0 {
+		c.buf = append(c.buf, p[:min(room, len(p))]...)
+	}
+	return len(p), nil
+}
+
+func (c *cappedBuffer) bytes() []byte {
+	if len(c.buf) == 0 {
+		return nil
+	}
+	return append([]byte(nil), c.buf...)
+}
+
+// teeReadCloser records a request body while the handler reads it.
+type teeReadCloser struct {
+	io.Reader
+	io.Closer
 }
 
 // errorBody is the box's JSON error shape.
@@ -526,7 +637,7 @@ type metaLimits struct {
 }
 
 // handleMetaVersion answers the open GET /api/meta/v1/version. The
-// capabilities describe the fake itself: it serves no pairing, no
+// capabilities describe the fake itself: it serves pairing, but no
 // history and no WebSocket event transport, so it does not claim them.
 // The hmip block is left out; the contract tells a client to treat its
 // absence as an older box.
@@ -536,7 +647,9 @@ func (f *Fake) handleMetaVersion(w http.ResponseWriter, _ *http.Request) {
 		Version:        1,
 		Format:         1,
 		Implementation: "occulited " + fakeVersion,
+		Revision:       f.Meta().Revision(),
 		Capabilities: metaCapabilities{
+			Pairing:    !f.pairingDisabled(),
 			State:      true,
 			APIs:       map[string]int{"meta": 1, "rpc": 1, "system": 1, "auth": 1},
 			Transports: []string{"sse"},
@@ -562,4 +675,29 @@ func (f *Fake) closed() bool {
 	default:
 		return false
 	}
+}
+
+// metaFixture is the bundled metadata document: a room tree
+// (eg/wohnzimmer, eg/kueche, og/kueche), a function enum, and named
+// objects for devices and channels of [DefaultDevices].
+//
+//go:embed testdata/meta.json
+var metaFixture []byte
+
+// DefaultMeta returns the bundled metadata fixture as a fresh document.
+func DefaultMeta() *Document {
+	var doc Document
+	if err := json.Unmarshal(metaFixture, &doc); err != nil {
+		// The fixture is part of the package; a decode failure is a
+		// defect in it, caught by the package's own tests.
+		return &Document{Format: 1, Objects: map[string]Object{}, Enums: map[string]Enum{}}
+	}
+	return &doc
+}
+
+// pairingDisabled reports whether pairing is switched off.
+func (f *Fake) pairingDisabled() bool {
+	f.pairing.mu.Lock()
+	defer f.pairing.mu.Unlock()
+	return f.pairing.disabled
 }

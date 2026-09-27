@@ -485,3 +485,56 @@ func TestFakeRecordsAPICalls(t *testing.T) {
 		t.Errorf("rpc methods %v", rpc.RPCMethods)
 	}
 }
+
+// send performs a request with a string body (which gives it a
+// Content-Length) and extra header pairs.
+func send(t *testing.T, f *litefake.Fake, method, path, token, body string, headers ...string) (resp reply, raw []byte) {
+	t.Helper()
+	req, err := http.NewRequestWithContext(context.Background(), method, f.URL()+path, strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	for i := 0; i+1 < len(headers); i += 2 {
+		req.Header.Set(headers[i], headers[i+1])
+	}
+	r, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("%s %s: %v", method, path, err)
+	}
+	defer func() { _ = r.Body.Close() }()
+	raw, err = io.ReadAll(r.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return reply{StatusCode: r.StatusCode, Header: r.Header}, raw
+}
+
+// openRaw opens a streaming GET (for the metadata change stream).
+func openRaw(t *testing.T, f *litefake.Fake, path, token string) (*sseStream, reply) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, f.URL()+path, http.NoBody)
+	if err != nil {
+		cancel()
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := http.DefaultClient.Do(req) //nolint:bodyclose // an open stream's body is closed by sseStream.close
+	if err != nil {
+		cancel()
+		t.Fatalf("GET %s: %v", path, err)
+	}
+	rp := reply{StatusCode: resp.StatusCode, Header: resp.Header}
+	if resp.StatusCode != http.StatusOK {
+		_ = resp.Body.Close()
+		cancel()
+		return nil, rp
+	}
+	s := &sseStream{body: resp.Body, frames: make(chan frame, 256), cancel: cancel}
+	go s.read()
+	t.Cleanup(s.close)
+	return s, rp
+}

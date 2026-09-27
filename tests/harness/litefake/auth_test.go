@@ -65,3 +65,44 @@ func TestFakeEnforcesRouteScopeOnLiteRPC(t *testing.T) {
 		t.Errorf("rpc:operate implies rpc:read: %d %s", resp.StatusCode, body)
 	}
 }
+
+// TestFakeLoginSessionAndLogout pins the account path: login answers a
+// 26-character session id with the account's identity, the session
+// passes as a bearer credential with the account's scopes, auth state
+// reports the account fields, and logout ends the session.
+func TestFakeLoginSessionAndLogout(t *testing.T) {
+	f := startFake(t, litefake.Options{Accounts: []litefake.Account{{
+		Username: "admin", Password: "secret", Role: "admin", Level: "administer",
+		AccountID: "1", Scopes: []string{"rpc:read"},
+	}}})
+	if resp, raw := send(t, f, http.MethodPost, "/api/auth/v1/login", "", `{"username":"admin","password":"wrong"}`); resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("wrong password: %d %s", resp.StatusCode, raw)
+	}
+	resp, raw := send(t, f, http.MethodPost, "/api/auth/v1/login", "", `{"username":"admin","password":"secret"}`)
+	login := decode[struct {
+		SID   string `json:"sid"`
+		User  string `json:"user"`
+		Level string `json:"level"`
+	}](t, string(raw))
+	if resp.StatusCode != http.StatusOK || len(login.SID) != 26 || login.User != "admin" || login.Level != "administer" {
+		t.Fatalf("login: %d %s", resp.StatusCode, raw)
+	}
+	if resp, _ := get(t, f, "/api/rpc/v1/interfaces", login.SID); resp.StatusCode != http.StatusOK {
+		t.Errorf("session on lite-rpc: %d", resp.StatusCode)
+	}
+	if resp, _ := get(t, f, "/api/meta/v1/snapshot", login.SID); resp.StatusCode != http.StatusForbidden {
+		t.Errorf("session beyond its scopes: %d", resp.StatusCode)
+	}
+	_, raw = get(t, f, "/api/auth/v1/state", login.SID)
+	for _, want := range []string{`"role":"admin"`, `"level":"administer"`, `"account_id":"1"`, `"sid":"` + login.SID + `"`, `"scopes":["rpc:read"]`} {
+		if !strings.Contains(string(raw), want) {
+			t.Errorf("session state lacks %s: %s", want, raw)
+		}
+	}
+	if resp, _ := send(t, f, http.MethodPost, "/api/auth/v1/logout", login.SID, `{}`); resp.StatusCode != http.StatusOK {
+		t.Errorf("logout: %d", resp.StatusCode)
+	}
+	if resp, _ := get(t, f, "/api/rpc/v1/interfaces", login.SID); resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("session after logout: %d", resp.StatusCode)
+	}
+}

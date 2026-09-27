@@ -205,8 +205,9 @@ func (g *ring) attach(subject, lastEventID string, hasResume bool) (*reader, att
 //
 // A client already at (or claiming to be past) the newest position gets
 // neither a replay nor a resync. The condensed contract phrases the gap
-// case against a position called "next"; this reading never skips a
-// message silently and never resyncs a client that has seen everything.
+// case against a position called "next"; read as the newest assigned
+// seq, its literal rule is exactly this one: no message is ever skipped
+// silently, and a client that has seen everything is never resynced.
 func (g *ring) resumeLocked(lastEventID string) (replay []message, resync string) {
 	boot, seqText, ok := strings.Cut(lastEventID, "-")
 	if !ok || boot != g.bootID {

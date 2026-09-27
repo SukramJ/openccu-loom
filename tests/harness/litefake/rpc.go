@@ -143,7 +143,7 @@ func unpackCalls(call *xmlrpc.MethodCall) []innerCall {
 // forward to the interface process. An interface that is marked down or
 // does not answer yields 503 {"error":"down"}, JSON rather than a fault.
 func (f *Fake) handleXMLRPC(w http.ResponseWriter, r *http.Request) {
-	entry, _, ok := f.authorize(w, r, scopeRPCRead, true)
+	who, _, ok := f.authorize(w, r, scopeRPCRead, true)
 	if !ok {
 		return
 	}
@@ -187,7 +187,7 @@ func (f *Fake) handleXMLRPC(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, c := range calls {
 		tier := methodTier(c.method, c.params)
-		if !hasScope(entry.scopes, tier) {
+		if !hasScope(who.scopes, tier) {
 			writeFault(w, -1, "not permitted: "+c.method+" needs "+tier)
 			return
 		}

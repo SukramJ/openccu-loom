@@ -11,9 +11,9 @@ import (
 
 // SetReady switches between a box whose occulited answers and one where
 // only the web server in front of it does. Going not-ready ends every
-// open event stream, because the process behind them stopped answering;
-// the ring and the boot id are kept (use [Fake.RestartBoot] for a
-// process restart).
+// open event stream, lite-rpc and metadata alike, because the process
+// behind them stopped answering; the ring and the boot id are kept (use
+// [Fake.RestartBoot] for a process restart).
 func (f *Fake) SetReady(ready bool) {
 	f.mu.Lock()
 	was := f.ready
@@ -21,6 +21,7 @@ func (f *Fake) SetReady(ready bool) {
 	f.mu.Unlock()
 	if was && !ready {
 		f.ring.dropStreams()
+		f.meta.dropStreams()
 	}
 }
 
@@ -65,7 +66,8 @@ func (f *Fake) RestartInterface(ctx context.Context, iface string) error {
 
 // RestartBoot models an occulited restart: a new boot id, an empty
 // ring, every stream closed, /state entries turned into unconfirmed
-// values restored from disk, and the subscriber registering again with
+// values restored from disk, the metadata change log (memory only)
+// emptied while the store itself survives, and the subscriber registering again with
 // every interface process.
 func (f *Fake) RestartBoot(ctx context.Context) error {
 	if f.closed() {
@@ -73,6 +75,7 @@ func (f *Fake) RestartBoot(ctx context.Context) error {
 	}
 	f.ring.restart()
 	f.values.markRestored()
+	f.meta.restart()
 	for _, name := range f.interfaceNames() {
 		if err := f.subscribe(ctx, name); err != nil {
 			return err
@@ -124,4 +127,28 @@ func (f *Fake) OpenStreams() int { return f.ring.openStreams() }
 func (f *Fake) LastEventID() string {
 	boot, seq := f.ring.position()
 	return fmt.Sprintf("%s-%d", boot, seq)
+}
+
+// SetAccounts replaces the accounts that can log in. Existing sessions
+// stay valid.
+func (f *Fake) SetAccounts(accounts []Account) {
+	table := make(map[string]Account, len(accounts))
+	for _, a := range accounts {
+		a.Scopes = append([]string{}, a.Scopes...)
+		table[a.Username] = a
+	}
+	f.mu.Lock()
+	f.accounts = table
+	f.mu.Unlock()
+}
+
+// SetMetaHeartbeatInterval changes the change-stream heartbeat period
+// for streams opened afterwards.
+func (f *Fake) SetMetaHeartbeatInterval(d time.Duration) {
+	if d <= 0 {
+		d = DefaultMetaHeartbeatInterval
+	}
+	f.mu.Lock()
+	f.metaHeartbeat = d
+	f.mu.Unlock()
 }
