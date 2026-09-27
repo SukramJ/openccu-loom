@@ -151,9 +151,6 @@ func tlsConfig(cfg Config) (*tls.Config, error) {
 		return nil, err
 	}
 	want := hex.EncodeToString(pin)
-	// Chain verification is replaced, not skipped: VerifyConnection
-	// accepts exactly one certificate.
-	c.InsecureSkipVerify = true //nolint:gosec // the pin in VerifyConnection is the verification
 	c.VerifyConnection = func(cs tls.ConnectionState) error {
 		if len(cs.PeerCertificates) == 0 {
 			return &FingerprintError{Got: "", Want: want}
@@ -164,6 +161,10 @@ func tlsConfig(cfg Config) (*tls.Config, error) {
 		}
 		return nil
 	}
+	// Chain verification is replaced, not skipped: the stdlib's chain check
+	// is switched off only because VerifyConnection above is installed, and
+	// that accepts exactly the pinned certificate.
+	c.InsecureSkipVerify = c.VerifyConnection != nil //nolint:gosec // the pin in VerifyConnection is the verification
 	return c, nil
 }
 
