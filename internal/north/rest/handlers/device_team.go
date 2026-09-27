@@ -48,6 +48,9 @@ func GetDeviceTeamCandidates(svc DeviceTeamPort) http.HandlerFunc {
 		}
 		candidates, err := svc.TeamCandidates(r.Context(), chi.URLParam(r, "addr"), no)
 		if err != nil {
+			if problem.WriteFeatureUnavailable(w, r, err) {
+				return
+			}
 			if errors.Is(err, backends.ErrUnsupported) {
 				problem.Write(w, http.StatusUnprocessableEntity,
 					problem.New(problem.TypeValidation, r, "Team assignment not supported on this interface", ""))
@@ -92,6 +95,9 @@ func SetDeviceChannelTeam(svc DeviceTeamPort, rec audit.Recorder) http.HandlerFu
 		}
 		addr := chi.URLParam(r, "addr")
 		if err := svc.SetChannelTeam(r.Context(), addr, no, team); err != nil {
+			if problem.WriteFeatureUnavailable(w, r, err) {
+				return
+			}
 			if errors.Is(err, backends.ErrUnsupported) {
 				problem.Write(w, http.StatusUnprocessableEntity,
 					problem.New(problem.TypeValidation, r, "Team assignment not supported on this interface", ""))

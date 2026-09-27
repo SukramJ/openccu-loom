@@ -957,6 +957,9 @@ func GetSysvarUsage(idx HubIndex) http.HandlerFunc {
 		}
 		usage, err := h.SysvarUsageRemote(r.Context(), name)
 		if err != nil {
+			if problem.WriteFeatureUnavailable(w, r, err) {
+				return
+			}
 			if errors.Is(err, hub.ErrNoSysvarUsageReader) {
 				problem.Write(w, http.StatusServiceUnavailable,
 					problem.New(problem.TypeServiceUnready, r, "Sysvar usage lookup not available", ""))

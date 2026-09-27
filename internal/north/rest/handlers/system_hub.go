@@ -379,6 +379,9 @@ func validateInstallModeRequest(req InstallModeInterfaceRequest) string {
 // input the operator can fix (bad SGTIN/key, LOCAL unsupported on the
 // interface, invalid duration) answers 422, everything else 502.
 func writeInstallModeError(w http.ResponseWriter, r *http.Request, err error) {
+	if problem.WriteFeatureUnavailable(w, r, err) {
+		return
+	}
 	if errors.Is(err, hub.ErrInstallModeInvalidLocalInput) ||
 		errors.Is(err, hub.ErrLocalInstallModeUnsupported) ||
 		errors.Is(err, hub.ErrInstallModeInvalidDuration) ||

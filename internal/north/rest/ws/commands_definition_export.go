@@ -36,7 +36,7 @@ func definitionExportHandler(svc DefinitionExporter) CommandHandler {
 			if errors.Is(err, definitionexport.ErrDeviceNotFound) {
 				return nil, NewCommandError("not_found", "no device at "+args.Address)
 			}
-			return nil, NewCommandError(CommandErrorInternal, "export_definition: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "export_definition: ", err)
 		}
 		return map[string]any{
 			"model":    model,

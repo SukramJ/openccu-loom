@@ -117,6 +117,9 @@ func PostDeviceReplace(svc DeviceReplacePort, rec audit.Recorder) http.HandlerFu
 // an ineligible interface (backends.ErrUnsupported) is 422, everything
 // else is an upstream 502.
 func writeReplaceError(w http.ResponseWriter, r *http.Request, err error, title string) {
+	if problem.WriteFeatureUnavailable(w, r, err) {
+		return
+	}
 	switch {
 	case errors.Is(err, hmerr.ErrUnknownCentral):
 		problem.Write(w, http.StatusNotFound,

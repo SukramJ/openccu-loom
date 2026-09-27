@@ -943,7 +943,7 @@ func ccuCacheClearHandler(c CacheClearer) CommandHandler {
 			Device:    p.Device,
 		}
 		if err := scope.Validate(); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, err.Error())
+			return nil, commandErr(CommandErrorBadRequest, "", err)
 		}
 		report, err := c.ClearCache(ctx, scope)
 		if err != nil {
@@ -1334,7 +1334,7 @@ func decodeOrEmpty(raw json.RawMessage, into any) error {
 		return nil
 	}
 	if err := json.Unmarshal(raw, into); err != nil {
-		return NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		return commandErr(CommandErrorBadRequest, "invalid args: ", err)
 	}
 	return nil
 }

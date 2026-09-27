@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 11.4.0
+  version: 11.5.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -8274,6 +8274,7 @@ components:
             - https://openccu-loom.dev/errors/bad_request
             - https://openccu-loom.dev/errors/service_unready
             - https://openccu-loom.dev/errors/upstream_unavailable
+            - https://openccu-loom.dev/errors/feature_unavailable
         title: { type: string }
         status: { type: integer }
         detail: { type: string }
@@ -8293,6 +8294,26 @@ components:
             - bad_request
             - service_unready
             - upstream_unavailable
+            - feature_unavailable
+        feature:
+          type: object
+          required: [central, key, reason]
+          description: |
+            Set on a `feature_unavailable` problem (HTTP 422): the
+            operation needs a feature the target central does not offer
+            right now. The same key and reason appear in that central's
+            `features` map on `GET /system/ccu`.
+          properties:
+            central: { type: string }
+            key:
+              type: string
+              description: The feature key, for example `system.reboot` or `hub.sysvars`.
+            reason:
+              type: string
+              enum: [not_supported_by_system, missing_scope, not_ready]
+            scope:
+              type: string
+              description: The credential scope that would grant it, when `reason` is `missing_scope`.
         errors:
           type: array
           items:

@@ -56,6 +56,12 @@ func DecodeJSONStatus(err error) int {
 // unauthenticated or lower-privileged caller should see. 4xx
 // validation failures are unaffected — those details stay put.
 func writeServerError(w http.ResponseWriter, r *http.Request, status int, pType problem.Type, title string, err error) {
+	// A refusal naming a missing feature is the caller's answer, not a
+	// server fault: 422 with the feature, whatever status the call site
+	// would have used for an unexpected error.
+	if problem.WriteFeatureUnavailable(w, r, err) {
+		return
+	}
 	// The raw error stays out of the response body by design (see
 	// TestWriteServerErrorOmitsRawErrorFromBody — driver/path-carrying
 	// error strings must never reach a caller); operators read the full

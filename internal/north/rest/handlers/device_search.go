@@ -51,6 +51,9 @@ func PostInstallModeSearch(svc DeviceSearchPort, rec audit.Recorder) http.Handle
 		}
 		found, err := svc.SearchWiredDevices(r.Context(), body.Central, body.Interface)
 		if err != nil {
+			if problem.WriteFeatureUnavailable(w, r, err) {
+				return
+			}
 			if errors.Is(err, backends.ErrUnsupported) {
 				problem.Write(w, http.StatusUnprocessableEntity,
 					problem.New(problem.TypeValidation, r, "Device search not supported on this interface", ""))

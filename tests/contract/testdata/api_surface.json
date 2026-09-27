@@ -1,5 +1,5 @@
 {
- "api_version": "11.4.0",
+ "api_version": "11.5.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -1674,6 +1674,7 @@
    "code:string",
    "detail:string",
    "errors:array\u003cobject\u003e",
+   "feature:object",
    "instance:string",
    "status:integer",
    "title:string",

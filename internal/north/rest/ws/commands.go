@@ -232,6 +232,42 @@ type CommandHandler func(ctx context.Context, args json.RawMessage) (any, error)
 type CommandError struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
+	// Details names the missing feature of a feature_unavailable error.
+	Details *FeatureDetails `json:"details,omitempty"`
+}
+
+// FeatureDetails names the feature a feature_unavailable error is about:
+// the central, the feature key, why it is unavailable, and the credential
+// scope that would grant it when that is the reason.
+type FeatureDetails struct {
+	Central string `json:"central"`
+	Key     string `json:"key"`
+	Reason  string `json:"reason"`
+	Scope   string `json:"scope,omitempty"`
+}
+
+// featureCommandError converts a refusal naming a missing feature into
+// the feature_unavailable command error, prefixed with op.
+func featureCommandError(op string, err error) (*CommandError, bool) {
+	fe, ok := errors.AsType[*hmerr.FeatureUnavailableError](err)
+	if !ok {
+		return nil, false
+	}
+	return &CommandError{
+		Code:    CommandErrorFeatureUnavailable,
+		Message: op + err.Error(),
+		Details: &FeatureDetails{Central: fe.Central, Key: string(fe.Feature), Reason: string(fe.Reason), Scope: fe.Scope},
+	}, true
+}
+
+// commandErr builds a handler's error from a domain failure: the
+// feature_unavailable error when the failure is a refusal naming a
+// missing feature, otherwise code with prefix and the error text.
+func commandErr(code, prefix string, err error) *CommandError {
+	if ce, ok := featureCommandError(prefix, err); ok {
+		return ce
+	}
+	return NewCommandError(code, prefix+err.Error())
 }
 
 // Error implements error.
@@ -276,6 +312,11 @@ const (
 	// apart from a genuine daemon fault instead of retrying or alerting
 	// on both alike.
 	CommandErrorNotFound = "not_found"
+	// CommandErrorFeatureUnavailable is returned when the target central
+	// does not offer the operation right now — its system lacks it, its
+	// credential lacks the scope, or it is not ready. The error's details
+	// name the feature and the reason.
+	CommandErrorFeatureUnavailable = "feature_unavailable"
 )
 
 // classifyDomainErrorCode reports the CommandError code a domain-layer
@@ -296,6 +337,9 @@ func classifyDomainErrorCode(err error) string {
 // wrapDomainError classifies a domain-layer failure into a CommandError,
 // prefixed with op for log correlation.
 func wrapDomainError(op string, err error) *CommandError {
+	if ce, ok := featureCommandError(op+": ", err); ok {
+		return ce
+	}
 	return NewCommandError(classifyDomainErrorCode(err), op+": "+err.Error())
 }
 
@@ -442,22 +486,27 @@ func (r *Router) Dispatch(ctx context.Context, command string, args json.RawMess
 			r.logOutcome(ctx, command, res, time.Since(start))
 			return res
 		}
+		if ce, ok := featureCommandError("", err); ok {
+			res := Result{Error: ce}
+			r.logOutcome(ctx, command, res, time.Since(start))
+			return res
+		}
 		// Map domain-level policy rejections to structured error codes so
 		// callers can branch without string-matching.
 		if errors.Is(err, hmerr.ErrParameterHidden) {
-			res := Result{Error: NewCommandError(CommandErrorForbidden, err.Error())}
+			res := Result{Error: commandErr(CommandErrorForbidden, "", err)}
 			r.logOutcome(ctx, command, res, time.Since(start))
 			return res
 		}
 		if errors.Is(err, hmerr.ErrUnencodableString) {
-			res := Result{Error: NewCommandError(CommandErrorUnencodableString, err.Error())}
+			res := Result{Error: commandErr(CommandErrorUnencodableString, "", err)}
 			r.logOutcome(ctx, command, res, time.Since(start))
 			return res
 		}
 		if errors.Is(err, hmerr.ErrLinkParamsetNotAddressable) {
 			// The literal LINK key never reaches the CCU; the caller's
 			// request is malformed, not the upstream.
-			res := Result{Error: NewCommandError(CommandErrorBadRequest, err.Error())}
+			res := Result{Error: commandErr(CommandErrorBadRequest, "", err)}
 			r.logOutcome(ctx, command, res, time.Since(start))
 			return res
 		}

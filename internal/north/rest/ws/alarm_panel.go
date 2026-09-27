@@ -298,20 +298,20 @@ func alarmJournalHandler(q AlarmPanelQuery) CommandHandler {
 		if args.From != "" {
 			t, err := time.Parse(time.RFC3339, args.From)
 			if err != nil {
-				return nil, NewCommandError(CommandErrorBadRequest, "from: "+err.Error())
+				return nil, commandErr(CommandErrorBadRequest, "from: ", err)
 			}
 			filter.FromMS = t.UnixMilli()
 		}
 		if args.To != "" {
 			t, err := time.Parse(time.RFC3339, args.To)
 			if err != nil {
-				return nil, NewCommandError(CommandErrorBadRequest, "to: "+err.Error())
+				return nil, commandErr(CommandErrorBadRequest, "to: ", err)
 			}
 			filter.ToMS = t.UnixMilli() - 1
 		}
 		rows, err := stores.Journal.Query(ctx, filter)
 		if err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "journal query: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "journal query: ", err)
 		}
 		entries := make([]hmapi.AlarmJournalEntry, 0, len(rows))
 		for i := range rows {
@@ -475,17 +475,17 @@ func alarmEngineError(err error) *CommandError {
 	}
 	switch {
 	case errors.Is(err, engine.ErrUnknownZone):
-		return NewCommandError("not_found", err.Error())
+		return commandErr("not_found", "", err)
 	case errors.Is(err, engine.ErrInvalidCode):
 		// A missing/wrong code is a forbidden action; the message stays
 		// opaque so a prober learns nothing about which codes exist.
 		return NewCommandError(CommandErrorForbidden, "invalid_code")
 	case errors.Is(err, engine.ErrUnknownMode):
-		return NewCommandError(CommandErrorBadRequest, err.Error())
+		return commandErr(CommandErrorBadRequest, "", err)
 	case errors.Is(err, engine.ErrInvalidState), errors.Is(err, engine.ErrNoIncident):
-		return NewCommandError("conflict", err.Error())
+		return commandErr("conflict", "", err)
 	default:
-		return NewCommandError(CommandErrorInternal, err.Error())
+		return commandErr(CommandErrorInternal, "", err)
 	}
 }
 
@@ -514,7 +514,7 @@ func alarmCodesListHandler(admin AlarmCodeAdmin) CommandHandler {
 		}
 		codes, err := admin.ListCodes(ctx)
 		if err != nil {
-			return nil, NewCommandError(CommandErrorInternal, err.Error())
+			return nil, commandErr(CommandErrorInternal, "", err)
 		}
 		if codes == nil {
 			codes = []hmapi.AlarmCode{}
@@ -537,7 +537,7 @@ func alarmCodesCreateHandler(admin AlarmCodeAdmin) CommandHandler {
 		}
 		created, err := admin.CreateCode(ctx, args.Code)
 		if err != nil {
-			return nil, NewCommandError(CommandErrorInternal, err.Error())
+			return nil, commandErr(CommandErrorInternal, "", err)
 		}
 		return created, nil
 	}
@@ -560,7 +560,7 @@ func alarmCodesUpdateHandler(admin AlarmCodeAdmin) CommandHandler {
 		}
 		updated, ok, err := admin.UpdateCode(ctx, args.ID, args.Code)
 		if err != nil {
-			return nil, NewCommandError(CommandErrorInternal, err.Error())
+			return nil, commandErr(CommandErrorInternal, "", err)
 		}
 		if !ok {
 			return nil, NewCommandError("not_found", "no alarm code "+args.ID)
@@ -585,7 +585,7 @@ func alarmCodesDeleteHandler(admin AlarmCodeAdmin) CommandHandler {
 		}
 		ok, err := admin.DeleteCode(ctx, args.ID)
 		if err != nil {
-			return nil, NewCommandError(CommandErrorInternal, err.Error())
+			return nil, commandErr(CommandErrorInternal, "", err)
 		}
 		if !ok {
 			return nil, NewCommandError("not_found", "no alarm code "+args.ID)

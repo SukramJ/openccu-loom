@@ -17,6 +17,8 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
+	"github.com/SukramJ/openccu-loom/internal/model/hub"
+	"github.com/SukramJ/openccu-loom/internal/model/taxonomy"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -39,6 +41,9 @@ func DeleteDevice(admin DeviceAdmin) http.HandlerFunc {
 		reset := queryBool(r, "reset")
 		force := queryBool(r, "force")
 		if err := admin.UnpairDevice(r.Context(), chi.URLParam(r, "addr"), reset, force); err != nil {
+			if problem.WriteFeatureUnavailable(w, r, err) {
+				return
+			}
 			if errors.Is(err, backends.ErrUnsupported) {
 				problem.Write(w, http.StatusUnprocessableEntity,
 					problem.New(problem.TypeValidation, r, "Unpair not supported by this backend", ""))
@@ -115,7 +120,7 @@ func PatchDevice(admin DeviceAdmin, rec audit.Recorder) http.HandlerFunc {
 		var appliedRooms, appliedFunctions *[]string
 		if req.Rooms != nil {
 			if err := admin.SetRooms(r.Context(), addr, *req.Rooms); err != nil {
-				writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Room assignment failed", err)
+				writeAssignmentError(w, r, "Room assignment failed", err)
 				return
 			}
 			appliedRooms = req.Rooms
@@ -123,7 +128,7 @@ func PatchDevice(admin DeviceAdmin, rec audit.Recorder) http.HandlerFunc {
 		if req.Functions != nil {
 			if err := admin.SetFunctions(r.Context(), addr, *req.Functions); err != nil {
 				recordAssignment(r, rec, addr, appliedRooms, appliedFunctions, true)
-				writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Function assignment failed", err)
+				writeAssignmentError(w, r, "Function assignment failed", err)
 				return
 			}
 			appliedFunctions = req.Functions
@@ -192,12 +197,23 @@ func PatchChannel(admin DeviceAdmin, rec audit.Recorder) http.HandlerFunc {
 }
 
 // writeAssignmentError maps a room/function assignment failure: naming
-// a channel the device does not have is the caller's mistake (404),
-// everything else is an upstream failure (502).
+// a channel the device does not have is the caller's mistake (404), so is
+// a room or function name no node carries (422); a name several nodes
+// carry is a conflict whose detail lists their paths (409), so the caller
+// can pick one; everything else is an upstream failure (502).
 func writeAssignmentError(w http.ResponseWriter, r *http.Request, title string, err error) {
-	if errors.Is(err, interfaces.ErrChannelNotFound) {
+	switch {
+	case errors.Is(err, interfaces.ErrChannelNotFound):
 		problem.Write(w, http.StatusNotFound,
 			problem.New(problem.TypeNotFound, r, "Channel not found", err.Error()))
+		return
+	case errors.Is(err, taxonomy.ErrAmbiguousName):
+		problem.Write(w, http.StatusConflict,
+			problem.New(problem.TypeConflict, r, "Name is ambiguous", err.Error()))
+		return
+	case errors.Is(err, hub.ErrRoomNotFound), errors.Is(err, hub.ErrFunctionNotFound):
+		problem.Write(w, http.StatusUnprocessableEntity,
+			problem.New(problem.TypeValidation, r, "Unknown room or function", err.Error()))
 		return
 	}
 	writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, title, err)
@@ -235,6 +251,9 @@ func recordAssignment(r *http.Request, rec audit.Recorder, address string, rooms
 // [backends.ErrUnsupported] and becomes 422, every other failure (CCU
 // unreachable, ISE-ID not found) becomes 502.
 func writeRenameError(w http.ResponseWriter, r *http.Request, err error) {
+	if problem.WriteFeatureUnavailable(w, r, err) {
+		return
+	}
 	if errors.Is(err, backends.ErrUnsupported) {
 		problem.Write(w, http.StatusUnprocessableEntity,
 			problem.New(problem.TypeValidation, r, "Rename not supported by this backend", ""))

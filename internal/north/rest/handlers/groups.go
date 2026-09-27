@@ -88,6 +88,9 @@ func ListGroups(reader GroupsReader) http.HandlerFunc {
 					problem.New(problem.TypeNotFound, r, "Unknown central", central))
 				return
 			}
+			if problem.WriteFeatureUnavailable(w, r, err) {
+				return
+			}
 			if errors.Is(err, backends.ErrUnsupported) {
 				problem.Write(w, http.StatusNotFound,
 					problem.New(problem.TypeNotFound, r, "Groups not available", central))

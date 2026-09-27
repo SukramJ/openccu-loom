@@ -148,6 +148,9 @@ func TestLinkAtDevice(svc LinksService) http.HandlerFunc {
 					problem.New(problem.TypeNotFound, r, "Device not found", req.ReceiverAddress))
 				return
 			}
+			if problem.WriteFeatureUnavailable(w, r, err) {
+				return
+			}
 			if errors.Is(err, backends.ErrUnsupported) {
 				problem.Write(w, http.StatusNotImplemented,
 					problem.New(problem.TypeUnsupported, r, "Link activation not supported on this interface", ""))

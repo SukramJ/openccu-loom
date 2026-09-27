@@ -40,6 +40,9 @@ type renameGroupRequest struct {
 
 // writeGroupError maps the domain/hub sentinels to HTTP problem codes.
 func writeGroupError(w http.ResponseWriter, r *http.Request, err error) {
+	if problem.WriteFeatureUnavailable(w, r, err) {
+		return
+	}
 	switch {
 	case errors.Is(err, hub.ErrRoomExists), errors.Is(err, hub.ErrFunctionExists):
 		problem.Write(w, http.StatusConflict,
