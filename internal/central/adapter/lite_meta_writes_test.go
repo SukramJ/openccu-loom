@@ -58,6 +58,7 @@ func startEditedWriter(t *testing.T, edits int32) (*liteMetaWriter, *litefake.Fa
 	if err != nil {
 		t.Fatalf("central.New: %v", err)
 	}
+	unit.SetFeatures(liteFeatures(occulited.ExpandScopes([]string{"*"})))
 	p := &liteProfile{cc: *liteCentralFor(t, f, litefake.DefaultToken), client: client}
 	if err := newLiteMetadata(p, unit, slog.New(slog.DiscardHandler)).resnapshot(context.Background()); err != nil {
 		t.Fatalf("resnapshot: %v", err)

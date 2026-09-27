@@ -85,6 +85,21 @@ CCU; the list below is what an API client can already observe.
   (administer, configure, operate, read) maps to the admin, operator and
   viewer roles as a CCU user level does, and the session opened for the
   check is closed again at once.
+- An operation a central does not offer right now — its system has no
+  such thing, its API token lacks the scope, or it is not ready — is
+  answered with `422` and problem type `feature_unavailable`, whose
+  `feature` member names the central, the feature key, the reason and the
+  missing scope; WebSocket commands answer error code
+  `feature_unavailable` with the same `details`. MCP hub list tools name
+  such a central under `unavailable` instead of returning an empty share.
+  The Home Assistant hub plane declares alarm messages, service messages,
+  the inbox and the system update only while the central offers them, and
+  retracts them when that changes. `/info` reports `central.features.v1`
+  and `south.openccu_lite.v1`; the programs, system-variables, inbox,
+  heating-groups and backups views carry a `feature:<key>` gate. A restore
+  the system refuses as invalid answers `422`, an ambiguous room or
+  function name `409` with the candidate paths, an unknown one `422`.
+  REST API 11.5.0.
 
 #### Fixed
 

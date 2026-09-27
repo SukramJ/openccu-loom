@@ -98,6 +98,10 @@ type Options struct {
 	// godevccu CCU; BackendOpenCCULite runs litefake instead, and
 	// StartCCUNotReady then boots the box with occulited not yet up.
 	Backend Backend
+
+	// LiteScopes restricts the scopes of the API token the openccu-lite
+	// fake accepts. Nil grants every scope.
+	LiteScopes []string
 }
 
 // Harness is the test-owned facade over a running daemon sub-process.
@@ -154,7 +158,7 @@ func Start(t *testing.T, opts Options) *Harness {
 
 	south := southInputs{Host: "127.0.0.1"}
 	if opts.Backend == BackendOpenCCULite {
-		h.lite = startLiteFake(t, opts.Devices, opts.StartCCUNotReady)
+		h.lite = startLiteFake(t, opts.Devices, opts.StartCCUNotReady, opts.LiteScopes)
 		south.Host, south.JSONRPC = liteHostPort(t, h.lite)
 		south.Lite = true
 	} else {

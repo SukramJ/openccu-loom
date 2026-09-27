@@ -12,6 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/transport/occulited"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/model/taxonomy"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -51,9 +52,18 @@ func (w *liteMetaWriter) objectRef(address string) (string, error) {
 	return "", fmt.Errorf("openccu-lite metadata: %s is not a known device or channel", address)
 }
 
+// require refuses a write whose feature the token does not grant, before
+// anything reaches the box.
+func (w *liteMetaWriter) require(k hmenum.Feature) error {
+	return w.unit.Features().Require(w.unit.Name(), k, nil)
+}
+
 // rename sets one object's name; a PATCH with a name creates an object
 // the store does not hold yet.
 func (w *liteMetaWriter) rename(ctx context.Context, address, name string) error {
+	if err := w.require(hmenum.FeatureDeviceRename); err != nil {
+		return err
+	}
 	ref, err := w.objectRef(address)
 	if err != nil {
 		return err
@@ -66,6 +76,9 @@ func (w *liteMetaWriter) rename(ctx context.Context, address, name string) error
 
 // renameBatch renames a device and its channels under one store revision.
 func (w *liteMetaWriter) renameBatch(ctx context.Context, rename central.DeviceRename) error {
+	if err := w.require(hmenum.FeatureDeviceRename); err != nil {
+		return err
+	}
 	set := make(map[string]occulited.ObjectPatch, len(rename.Channels)+1)
 	for _, r := range append([]central.Rename{rename.Device}, rename.Channels...) {
 		ref, err := w.objectRef(r.Address)
@@ -105,6 +118,9 @@ const liteAssignAttempts = 2
 // the same store in between turns it into a conflict; it is retried once
 // on a fresh read, and a second conflict is returned.
 func (w *liteMetaWriter) assign(ctx context.Context, address string, enum taxonomy.EnumID, names []string, notFound error) error {
+	if err := w.require(hmenum.FeatureTaxonomyAssign); err != nil {
+		return err
+	}
 	wanted, err := w.resolve(enum, names, notFound)
 	if err != nil {
 		return err

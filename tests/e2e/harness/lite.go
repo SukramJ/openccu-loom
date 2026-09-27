@@ -38,14 +38,18 @@ func (b Backend) String() string {
 
 // startLiteFake boots litefake with the harness fleet and registers a
 // t.Cleanup that closes it.
-func startLiteFake(t *testing.T, devices []string, notReady bool) *litefake.Fake {
+func startLiteFake(t *testing.T, devices []string, notReady bool, scopes []string) *litefake.Fake {
 	t.Helper()
 	if len(devices) == 0 {
 		devices = DefaultDevices
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	f, err := litefake.Start(ctx, litefake.Options{Devices: devices, StartNotReady: notReady})
+	opts := litefake.Options{Devices: devices, StartNotReady: notReady}
+	if scopes != nil {
+		opts.Tokens = map[string][]string{litefake.DefaultToken: scopes}
+	}
+	f, err := litefake.Start(ctx, opts)
 	if err != nil {
 		t.Fatalf("litefake.Start: %v", err)
 	}
