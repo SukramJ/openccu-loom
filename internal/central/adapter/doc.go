@@ -23,8 +23,8 @@
 //   - South profiles: south_profile, south_ccu, south_ccu_hub, south_lite,
 //     lite_hub, lite_features, lite_events, lite_values, lite_metadata,
 //     lite_meta_writes, lite_system, lite_hub_refresh, lite_groups,
-//     lite_accounts, south_ccu_system, south_ccu_groups — the per-central
-//     strategy that says where readiness, liveness, the hub session,
+//     lite_accounts, lite_onboarding, south_ccu_system, south_ccu_groups —
+//     the per-central strategy that says where readiness, liveness, the hub session,
 //     per-interface transports, value seeding, metadata, system management
 //     and account checks come from, selected once per central from its
 //     system type.
@@ -43,7 +43,8 @@
 //   - Device administration: device_replace, device_search, device_team,
 //     install_mode, firmware_domain, rssi_domain — the DeviceAdminDomain
 //     surface and its siblings.
-//   - Groups & rooms: groups, groups_write, room_function_admin.
+//   - Groups & rooms: groups, groups_write, room_function_admin,
+//     taxonomy_admin.
 //   - Direct links: central_links, links, link_resolver, link_profile,
 //     link_profiles_adapter, link_param_metadata,
 //     climate_link_peer_refresh.

@@ -57,7 +57,9 @@ code is the answer.
 ## 1. Executive Summary
 
 `OpenCCU-Loom` is a **standalone daemon** that speaks to the Homematic
-CCU (XML-RPC, BIN-RPC, JSON-RPC) and exposes its devices, its
+CCU (XML-RPC, BIN-RPC, JSON-RPC) and to openccu-lite systems (the
+occulited HTTP API: an XML-RPC proxy per interface, an event stream,
+metadata, system and auth APIs; ADR 0071) and exposes their devices, their
 administration surface, and a set of daemon-level services through
 modern north-bound interfaces:
 
@@ -115,7 +117,9 @@ eQ-3 HomeMatic Software License — see ADR 0003.
 
 1. **Complete CCU coverage** across every interface: HmIP-RF (serves
    both HmIP-RF and HmIP-Wired devices), BidCos-RF, BidCos-Wired,
-   VirtualDevices, CUxD — all push-capable, no polling path.
+   VirtualDevices, CUxD — all push-capable, no polling path: via
+   `init` callbacks on a CCU, via occulited's event stream on
+   openccu-lite (ADR 0072).
 2. **Wire-compatible device semantics.** Enum strings, paramset
    normalization, and the device-profile catalogue match the
    `aiohomematic` reference so a device behaves identically on both
@@ -182,8 +186,13 @@ eQ-3 HomeMatic Software License — see ADR 0003.
   GitHub releases (ADR 0057), and the remote-ingress add-on
   (ADR 0054) proxies a daemon the operator already runs. Remote
   *access* remains the operator's own VPN / reverse-proxy problem.
-- **No CCU-Jack / pull-only path.** Every interface supports push
-  callbacks; there is no JSON-RPC-only mode.
+- **No CCU-Jack / pull-only path.** Every interface pushes — callbacks
+  on a CCU, the event stream on openccu-lite; there is no JSON-RPC-only
+  mode.
+- **No CCU-only features on openccu-lite.** A box has no ReGa: system
+  variables, programs, HM-Script, the inbox and CUxD are absent there,
+  and the daemon says so per central (ADR 0074) instead of emulating
+  them. The box's classic XML-RPC ports and `init` are not used.
 - **No Homegear depth-parity** (full). The backend abstraction exists
   and sysvars work; full programs/rooms/functions parity is a future
   milestone with no release commitment.
@@ -347,7 +356,11 @@ cross-domain communication inside the core.
   but they are not adapters — the alarm system and the history
   recorder are the two, and both are opt-in.
 - **Southbound adapter**: driven side. The `client` package
-  implements ports defined by the domain to talk to the CCU.
+  implements ports defined by the domain to talk to the CCU. Each
+  central selects a **south profile** by its system type (CCU,
+  openccu-lite; ADR 0071), which supplies readiness, events, hub
+  bring-up, liveness, features and management ports; everything
+  downstream of those sources is shared.
 - **Domain core**: pure Go. Receives `context.Context` for
   cancellation. Cross-domain communication via the typed
   `EventBus`.
@@ -389,6 +402,11 @@ CUxD is a first-class push-capable interface — OpenCCU-Loom runs its
 own native BIN-RPC stack and a BIN-RPC callback server. There is no
 MQTT workaround and no polling fallback. This is a deliberate
 divergence from aiohomematic.
+
+An openccu-lite central registers no callback route and needs no
+reachable callback port: its events arrive on one occulited event
+stream per central, which feeds the same callback handlers
+(ADR 0072).
 
 ### 4.4 Reliability layering (orthogonal)
 
@@ -769,6 +787,10 @@ Decisions settled later, each with a full ADR:
 | Q21 | Add-on update path | The CCU add-on self-updates from the project's GitHub releases where the firmware provides `/bin/install_addon`, capability-gated so no other platform grows the surface (ADR 0057) |
 | Q22 | Discovery | The daemon advertises itself over mDNS — including the configured CCUs' short serials so a client can tell instances apart (ADR 0058, a deliberate reversal of ADR 0021) — and finds CCUs over SSDP (ADR 0046) |
 | Q23 | Heating groups | Driven through the CCU's own `jpages` surface rather than a reimplementation, because no documented API exists for group mutation (ADR 0055) |
+| Q24 | A second kind of system | openccu-lite is supported through per-central south profiles selected by `system_type` (`ccu`, `openccu-lite`, `auto`), compared in one place only; its events arrive over occulited's event stream (ADR 0071, ADR 0072) |
+| Q25 | Rooms and functions that nest | A backend-neutral taxonomy of enums and nodes named by path; names stay names on every existing field, paths are additive (ADR 0073) |
+| Q26 | What a central cannot do | A per-central feature set with a reason per absent key; REST 422 `feature_unavailable`, not declared on MQTT, hidden with the reason in the SPA (ADR 0074) |
+| Q27 | Token credentials | `api_token` is a sealed, masked secret; TLS is pinned to a compared fingerprint; client pairing keeps the token in the daemon (ADR 0075) |
 
 ### 7.2 Risk register
 
@@ -792,6 +814,7 @@ Decisions settled later, each with a full ADR:
 | Matter schema drifts from matter.js HEAD | Medium | High | The extract and its generator live in the go-fabric module; this repo pins the bytes it was built against (`make sync-matter-schema`), and `TestMatterSchemaSnapshotInSync` fails the build when a dependency bump moves the schema underneath it. Parity tests fail when a hand-coded revision constant no longer matches the generated schema. Hand-coding cluster IDs / revisions / defaults is forbidden |
 | Add-on self-update bricks an installation | Low | High | Capability-gated to firmware that ships `/bin/install_addon`; SHA256 verified against the release checksums before staging, and again by the firmware installer; the daemon restarts rather than the CCU (ADR 0057) |
 | Alarm system misses a trigger or disarms silently | Low | Very high | Engine fails towards *not silently disarmed*; append-only journal for every state change; walk test as an operator-verifiable rehearsal; device-behaviour assumptions written down in `notes/reference/alarm-assumptions.md` instead of encoded silently |
+| occulited's API is pre-1.0 and may change shape | Medium | Medium | The client reads the API majors the box reports and refuses unknown ones with the reason; the wire contract is pinned by contract tests against the MIT test double (`tests/harness/litefake`), and live read-only checks against a real box precede a release |
 | A north-bound surface skips the authorization chain | Low | High | Role checks are structural (ADR 0051), mounts outside the REST router must resolve *and* require identity explicitly, and identity resolvers are first-wins so a later one cannot overwrite an established caller |
 
 ---
@@ -914,6 +937,10 @@ Coverage producers in place:
   parameter)` — the canonical identity of a value-bearing endpoint.
 - **DeviceProfile** — a set of canonical data points (e.g. light,
   cover, climate) abstracting a Homematic device's parameters.
+- **Feature** — something a central may or may not offer
+  (`hub.sysvars`, `system.reboot`, `taxonomy.tree`, …), with a reason
+  when absent: not supported by the system, missing credential scope,
+  or not ready (ADR 0074).
 - **godevccu** — pure-Go in-process CCU simulator used for
   integration tests; eliminates the Python dependency
   (`pydevccu`) at test time.
@@ -922,9 +949,19 @@ Coverage producers in place:
 - **Hub data point** — a non-device value such as a system variable
   or program — exposed by the CCU but not tied to a physical
   device.
+- **occulited** — the daemon of an openccu-lite system that serves its
+  HTTP API: the XML-RPC proxy, the event stream, metadata, system and
+  auth.
+- **openccu-lite** — a Homematic system without ReGa, reached through
+  occulited rather than a CCU's JSON-RPC and callbacks.
 - **openccu-data** — the upstream metadata bundle (translations,
   easymodes, profiles); embedded under the eQ-3 license,
   aggregated per ADR 0003.
+- **South profile** — the per-central strategy chosen by
+  `system_type` that supplies what differs between CCU and openccu-lite
+  (ADR 0071).
+- **Taxonomy** — a central's enums (rooms, functions, …) as trees of
+  nodes named by path (ADR 0073).
 - **Paramset** — a named group of parameters for a channel:
   `MASTER` (config), `VALUES` (runtime), `LINK` (peer-config),
   `SERVICE` (service messages), and the synthetic OpenCCU-Loom

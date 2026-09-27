@@ -254,6 +254,20 @@ centrals: []
 #    # not on YAML seeds. A `password_env:` line here is silently ignored.
 #    password: ""
 #    tls: false
+#
+#  # An openccu-lite system: authenticated by an API token instead of a
+#  # username and password (pairing from the SPA stores it for you), and
+#  # reached over HTTPS pinned to the box's certificate fingerprint.
+#  # `json_rpc_port` is the box's web-server port (empty: 80, or 443
+#  # with TLS). No CUxD, no per-interface ports on openccu-lite.
+#  - name: Box
+#    host: 192.168.1.20
+#    system_type: openccu-lite   # ccu (default) | openccu-lite | auto
+#    api_token: ""               # secret, sealed into the DB on first start
+#    tls: true
+#    tls_fingerprint: ""         # lower-case hex SHA-256 of the box's certificate
+#    interfaces:
+#      - HmIP-RF
 
 # ---------------------------------------------------------------------
 # Where to learn more

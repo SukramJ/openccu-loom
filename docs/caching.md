@@ -88,6 +88,36 @@ travels separately — `refreshed_at` / `modified_at` on the REST/WS payload, an
 the MQTT `expire_after` retention — so a consumer can distinguish a freshly
 pushed reading from a restored one.
 
+## openccu-lite: no ReGa bulk read, and how boot data is seeded instead
+
+An [openccu-lite](admin/openccu-lite.md) central has no ReGaHss, so the
+CCU-side boot path — the ReGa scripts that bulk-read names, rooms and
+functions in one pass — does not apply. The hub bring-up reads two
+sources instead, in this order:
+
+1. **Metadata snapshot first.** `GET /api/meta/v1/snapshot` — one call —
+   returns every object's name and taxonomy (room/function) assignment.
+   This runs *before* devices are loaded, so every device appears under
+   its own name and room at once instead of arriving nameless and being
+   restamped afterwards. The box's metadata change stream keeps this
+   mirror current for the rest of the central's life, so a rename made
+   on the box shows up live without a re-read.
+2. **Values from the state store, then a fallback paramset read.** The
+   value seeder pages through `GET /api/rpc/v1/state`, keeping only
+   entries the box itself reports `confirmed`; for a channel whose
+   VALUES description has a readable parameter the state store did not
+   deliver, it falls back to one `getParamset(VALUES)` XML-RPC read per
+   channel. The state-store read is served from the box's own cache, no
+   different from a CCU's cached reads; whether the paramset fallback
+   itself costs radio airtime on any device class has not been measured
+   against a real box and is treated as an open question rather than
+   assumed free.
+
+Live values afterwards arrive on the box's own push event stream (see
+[Connecting an openccu-lite system](admin/openccu-lite.md)), the same
+zero-radio-cost push model a CCU's `init` callback gives — an
+openccu-lite central does not fall back to polling.
+
 ## Steady-state radio load
 
 Once the daemon is ready, the only radio traffic it generates is from

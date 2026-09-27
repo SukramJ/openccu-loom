@@ -74,10 +74,85 @@ The table groups the major endpoint families. Sample paths are illustrative; the
 | Interfaces | `GET /interfaces`, `GET /interfaces/{id}`, `POST /interfaces/{id}/reconnect` | read: auth / admin reconnect |
 | System admin | `GET /system/ccu`, `POST /system/restart`, `POST /install-mode` | admin |
 | v2 CRUD | `GET\|POST /users`, `PATCH\|DELETE /users/{subject}`, `GET\|POST /centrals`, `PUT\|DELETE /centrals/{name}` | admin |
+| Onboarding | `POST /centrals/probe`, `POST\|GET\|DELETE /centrals/pairing[/{id}]`, `GET /centrals/discovered` | admin |
+| Taxonomy | `GET /taxonomy`, `POST\|PATCH\|DELETE /taxonomy/{central}/{enum}/nodes` | read: auth / write: operator |
 | Snapshot | `GET /snapshot` | authenticated |
 
 !!! note "Multi-CCU scoping"
     Device, channel, and hub resources are scoped per CCU. The `central` dimension threads through addresses and snapshot payloads. See [Multi-CCU](../user/multi-ccu.md).
+
+## Per-central features and the `feature_unavailable` problem
+
+`GET /api/v1/system/ccu` reports, per central, `system_type` (`ccu` or
+`openccu-lite`) and a `features` map keyed by feature (`hub.sysvars`,
+`device.rename`, `system.reboot`, `taxonomy.tree`, …). Every known key
+is present with `{available: bool, reason?, scope?}` — a CCU offers
+everything it always did, while what an openccu-lite central offers
+depends on its API token's scopes. The WebSocket broadcast
+`central.features_changed` (topic `central.{name}.features`) carries
+the complete set whenever it changes — a token re-paired, a scope
+revoked, or the central finishing its first bring-up. See
+[Connecting an openccu-lite system](../admin/openccu-lite.md#feature-keys-and-what-they-need)
+for the full key-to-scope table.
+
+An operation a central does not offer right now — its system has no
+such thing, its token lacks the scope, or it has not finished bring-up
+— never fails silently:
+
+- **REST** answers `422 Unprocessable Entity`,
+  `Content-Type: application/problem+json`, problem type
+  `feature_unavailable`, header `X-Problem-Code: feature_unavailable`,
+  and a `feature` member: `{central, key, reason, scope?}` — `scope` is
+  present only when `reason` is `missing_scope`.
+- **WebSocket** commands answer error code `feature_unavailable` with
+  `details` carrying the same `{central, key, reason, scope?}` shape.
+- **MCP** hub list tools (`list_sysvars`, `list_programs`, …) name such
+  a central under an `unavailable` member instead of returning an empty
+  list, so an absent feature is never mistaken for "nothing configured".
+
+## Taxonomy: rooms, functions, and other enums
+
+Rooms, functions and whatever else a system organises devices by are
+modelled as a **taxonomy** of nested nodes, backend-neutral across a
+CCU's flat rooms/functions and an openccu-lite system's nested tree.
+`DeviceSummary`, channel summaries and the MQTT `device/info` payload
+keep their unchanged `rooms`/`functions` **names** (the display name of
+each device's directly-assigned node — a device assigned to
+"Ground floor › Kitchen" is in "Kitchen") and additionally carry a
+`taxonomy` array: `[{enum, path, name, parent_path?}]`.
+
+`GET /taxonomy[?central=]` is the one surface that also shows **empty**
+nodes — `{centrals: [{central, revision, writable, tree, enums:
+[{id, names, nodes: [{id, path, name, icon?, children}]}]}]}` —
+`writable` reflects `taxonomy.edit`, `tree` reflects `taxonomy.tree`
+(false on a CCU, whose rooms/functions are flat). Node CRUD:
+`POST /taxonomy/{central}/{enum}/nodes {parent_path?, name}`,
+`PATCH .../nodes?path=... {name?, parent_path?, position?}`,
+`DELETE .../nodes?path=...` — the matching WebSocket commands are
+`taxonomy.list`, `taxonomy.node_create`, `taxonomy.node_update`,
+`taxonomy.node_delete`. Creating or moving a node below another needs
+`taxonomy.tree`; on a CCU only a root node of `room`/`function` can be
+created, and a nested `parent_path` or a move answers
+`422 feature_unavailable`.
+
+`GET /rooms` and `GET /functions` stay name-merged across centrals as
+before and additionally carry `refs: [{central, path, parent_path?}]`,
+so a client can tell two same-named rooms on different systems apart.
+`DevicePatchRequest`/`ChannelPatchRequest` gain `room_paths`/
+`function_paths`; when given, they win over `rooms`/`functions` and are
+how you pick one of two rooms that share a name. An ambiguous name
+write (a plain `rooms: ["Küche"]` matching more than one node) answers
+`409` with the candidate paths; an unknown name answers `422`.
+
+`CreatedNamedResource` (the answer to `POST /rooms` and
+`POST /functions`) carries an **integer** `id` on a CCU; on a system
+whose nodes have no numeric id (openccu-lite) `id` is absent and `path`
+names the new node instead — this is the sole breaking change in REST
+API 12.0.0 (see [`CHANGELOG.md`](https://github.com/SukramJ/openccu-loom/blob/main/CHANGELOG.md)).
+
+`ise_id` (on `DeviceSummary` and the MQTT `device/info` payload) and
+the sysvar `vid` field are CCU-only and omitted on an openccu-lite
+central, which has no ReGa object ids.
 
 ## WebSocket stream
 

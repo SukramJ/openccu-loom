@@ -756,6 +756,10 @@ centrals:
     # Hostname or IP address of the CCU.  Required.
     host: "192.168.1.10"
 
+    # Kind of system: ccu, openccu-lite, or auto (identified at start-up,
+    # then stored).  [default: ccu]
+    system_type: ccu
+
     # Legacy single-port override (all interfaces). 0 = backend default.
     # Overridden by `ports` (per-interface).  [default: 0]
     port: 0
@@ -766,8 +770,8 @@ centrals:
     #   HmIP-RF: 2010
     #   BidCos-RF: 2001
 
-    # HTTP port for JSON-RPC / top-level CCU web endpoints.
-    # 0 = backend default (80 plain / 443 TLS).  [default: 0]
+    # HTTP(S) port of the system's web server: JSON-RPC on a CCU, the
+    # occulited API on openccu-lite. 0 = 80 plain / 443 TLS.  [default: 0]
     json_rpc_port: 0
 
     # CCU credentials.
@@ -783,6 +787,13 @@ centrals:
     # trusted networks). Set only when truly necessary.
     # [default: false]
     tls_insecure_skip_verify: false
+
+    # openccu-lite only: the API token (secret — sealed at rest; pairing
+    # from the SPA stores it without it ever reaching the browser), and
+    # the lower-case hex SHA-256 of the box's certificate to pin. A CCU
+    # central carries neither.
+    # api_token: ""
+    # tls_fingerprint: ""
 
     # Primary interface for health aggregation.
     # Empty = HmIP-RF substring heuristic.  [default: ""]

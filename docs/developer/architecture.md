@@ -89,6 +89,35 @@ Two listeners run, one per protocol, shared across all centrals:
 
 Both support fixed, dynamic (`0`, OS-assigned), and range port modes. The **effective** port is re-advertised to the CCU on every `init()` and every reconnect. CUxD always speaks BIN-RPC — never treat it as JSON-RPC.
 
+## South profiles
+
+A central picks its south-bound strategy once, at construction, based on
+its `system_type`: the CCU profile (ReGa, JSON-RPC, `init` callbacks) or
+the openccu-lite profile (the box's `occulited` HTTP API — an XML-RPC
+proxy, a push event stream, a metadata store instead of ReGa). Every
+downstream consumer — the description/paramset pipeline, the callback
+handlers, the model, every north-bound adapter — is shared between the
+two; the only place a central's system type is inspected is the
+selection itself.
+
+```mermaid
+flowchart LR
+    cfg["central.system_type"] --> select["southProfileFor()"]
+    select --> ccu["CCU profile\nReGa · JSON-RPC · init callbacks"]
+    select --> lite["openccu-lite profile\nocculited HTTP API · event stream · metadata store"]
+    ccu --> shared["shared: pipeline, model, north-bound adapters"]
+    lite --> shared
+```
+
+A profile answers four questions the same way regardless of which
+central it belongs to: where **readiness** comes from, where **events**
+arrive from, which **system services** (power, backup, firmware) are
+wired, and what the **hub bring-up** step (identity, names, rooms)
+reads before devices load. What a central cannot do on its openccu-lite
+system — no ReGa, so no system variables, programs or the inbox — is
+expressed as an absent [feature](../admin/openccu-lite.md#feature-keys-and-what-they-need),
+never as a special case sprinkled through the shared code.
+
 ## Event bus
 
 Cross-domain communication inside the core runs over an internal, generic, typed, priority-aware event bus (`internal/central/events`). It has no re-entrancy: handlers subscribe with a priority and an unsubscribe handle.
