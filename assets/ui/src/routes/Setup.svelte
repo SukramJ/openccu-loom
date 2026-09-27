@@ -9,6 +9,8 @@
   import Select from "$lib/components/ui/Select.svelte";
   import Switch from "$lib/components/ui/Switch.svelte";
   import { t } from "$lib/i18n";
+  import CentralOnboarding from "$lib/components/settings/CentralOnboarding.svelte";
+  import { emptyOnboarding, liteCredential, liteReady } from "$lib/onboarding/onboarding";
 
   // The wizard keeps all accumulated state client-side and finalizes with a
   // single atomic POST /api/v1/setup. Mirrors the four steps of the former
@@ -42,6 +44,13 @@
     "CUxD",
   ];
   let ccuInterfaces = $state<string[]>([]);
+  // What the probe found at the host, and how an openccu-lite box is
+  // reached and signed in to. A box has no username, password or CUxD.
+  let ccuOnboarding = $state(emptyOnboarding());
+  const ccuIsLite = $derived(ccuOnboarding.systemType === "openccu-lite");
+  const ccuInterfaceChoices = $derived(
+    ccuIsLite ? CCU_INTERFACES.filter((i) => i !== "CUxD") : CCU_INTERFACES,
+  );
 
   // Step 4 — MQTT (optional)
   let mqttEnabled = $state(false);
@@ -88,7 +97,8 @@
     !ccuEnabled ||
       (ccuName.trim() !== "" &&
         ccuHost.trim() !== "" &&
-        ccuInterfaces.length > 0),
+        ccuInterfaces.length > 0 &&
+        (!ccuIsLite || liteReady(ccuOnboarding))),
   );
   const mqttValid = $derived(!mqttEnabled || mqttBroker.trim() !== "");
 
@@ -118,10 +128,19 @@
         payload.ccu = {
           name: ccuName.trim(),
           host: ccuHost.trim(),
-          interfaces: ccuInterfaces,
+          interfaces: ccuIsLite ? ccuInterfaces.filter((i) => i !== "CUxD") : ccuInterfaces,
         };
-        if (ccuUsername.trim()) payload.ccu.username = ccuUsername.trim();
-        if (ccuPassword) payload.ccu.password = ccuPassword;
+        if (ccuIsLite) {
+          payload.ccu.system_type = "openccu-lite";
+          if (ccuOnboarding.tls) {
+            payload.ccu.tls = true;
+            if (ccuOnboarding.tlsFingerprint) payload.ccu.tls_fingerprint = ccuOnboarding.tlsFingerprint;
+          }
+          Object.assign(payload.ccu, liteCredential(ccuOnboarding));
+        } else {
+          if (ccuUsername.trim()) payload.ccu.username = ccuUsername.trim();
+          if (ccuPassword) payload.ccu.password = ccuPassword;
+        }
       }
       if (mqttEnabled) {
         payload.mqtt = { broker_url: mqttBroker.trim() };
@@ -241,21 +260,26 @@
           <span class="mb-1 block text-sm font-medium">{t("setup.ccu.host")}</span>
           <Input type="text" placeholder="192.168.0.10" bind:value={ccuHost} />
         </label>
-        <div class="mb-3 grid grid-cols-2 gap-3">
-          <label class="block">
-            <span class="mb-1 block text-sm font-medium">{t("setup.username")}</span>
-            <Input type="text" autocomplete="off" bind:value={ccuUsername} />
-          </label>
-          <label class="block">
-            <span class="mb-1 block text-sm font-medium">{t("setup.password")}</span>
-            <Input type="password" autocomplete="off" bind:value={ccuPassword} />
-          </label>
+        <div class="mb-3">
+          <CentralOnboarding host={ccuHost} setup bind:value={ccuOnboarding} />
         </div>
+        {#if !ccuIsLite}
+          <div class="mb-3 grid grid-cols-2 gap-3">
+            <label class="block">
+              <span class="mb-1 block text-sm font-medium">{t("setup.username")}</span>
+              <Input type="text" autocomplete="off" bind:value={ccuUsername} />
+            </label>
+            <label class="block">
+              <span class="mb-1 block text-sm font-medium">{t("setup.password")}</span>
+              <Input type="password" autocomplete="off" bind:value={ccuPassword} />
+            </label>
+          </div>
+        {/if}
         <fieldset class="mb-1">
           <legend class="mb-1 text-sm font-medium">{t("setup.ccu.interfaces")}</legend>
           <p class="mb-2 text-xs text-slate-500 dark:text-slate-400">{t("setup.ccu.interfaces_hint")}</p>
           <div class="grid grid-cols-2 gap-1">
-            {#each CCU_INTERFACES as iface (iface)}
+            {#each ccuInterfaceChoices as iface (iface)}
               <label class="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
