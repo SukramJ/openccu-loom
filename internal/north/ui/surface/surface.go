@@ -73,14 +73,19 @@ const (
 	GateMatter Gate = "matter"
 	// GateHistory marks surfaces that need measurement-history recording.
 	GateHistory Gate = "history"
-	// The feature gates: a surface that needs a per-central feature is
-	// offered while at least one central offers it. On a fleet of
-	// openccu-lite systems there are no programs, system variables or
-	// inbox, and heating groups and backups depend on the token's scopes.
-	GateFeaturePrograms     Gate = "feature:hub.programs"
-	GateFeatureSysvars      Gate = "feature:hub.sysvars"
-	GateFeatureInbox        Gate = "feature:hub.inbox"
-	GateFeatureGroups       Gate = "feature:heating_groups.read"
+	// GateFeaturePrograms and the other feature gates mark a surface that
+	// needs a per-central feature; it is offered while at least one
+	// central offers it. On a fleet of openccu-lite systems there are no
+	// programs, system variables or inbox, and heating groups and backups
+	// depend on the token's scopes.
+	GateFeaturePrograms Gate = "feature:hub.programs"
+	// GateFeatureSysvars marks the system-variables view.
+	GateFeatureSysvars Gate = "feature:hub.sysvars"
+	// GateFeatureInbox marks the inbox view.
+	GateFeatureInbox Gate = "feature:hub.inbox"
+	// GateFeatureGroups marks the heating-groups view.
+	GateFeatureGroups Gate = "feature:heating_groups.read"
+	// GateFeatureBackupCreate marks the backups view.
 	GateFeatureBackupCreate Gate = "feature:system.backup.create"
 )
 
