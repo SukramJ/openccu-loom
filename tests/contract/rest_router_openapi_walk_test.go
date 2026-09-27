@@ -910,6 +910,6 @@ func (fakeOnboarding) PairingStatus(context.Context, string, time.Duration) (hma
 
 func (fakeOnboarding) CancelPairing(context.Context, string) error { return nil }
 
-func (fakeOnboarding) PairingToken(string) (string, string, error) { return "", "", nil }
+func (fakeOnboarding) PairingToken(string) (token, fingerprint string, err error) { return "", "", nil }
 
 func (fakeOnboarding) ForgetPairing(string) {}
