@@ -46,6 +46,12 @@ func FactoryWithKind(iface hmenum.Interface, kind Kind, in FactoryInput) (Operat
 		}
 		// Homegear is XML-RPC-only — JSON-RPC is not forwarded.
 		return NewHomegearBackend(in.XMLRPC, in.Announcer), nil
+	case KindOpenCCULite:
+		if in.XMLRPC == nil {
+			return nil, fmt.Errorf("backends: %s requires XML-RPC caller", iface)
+		}
+		// The box has no JSON-RPC surface; in.JSONRPC is not forwarded.
+		return NewLiteBackend(iface, in.XMLRPC, in.Announcer), nil
 	}
 	return nil, fmt.Errorf("backends: no backend for %s", iface)
 }

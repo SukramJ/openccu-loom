@@ -13,6 +13,10 @@ const (
 	KindCCU Kind = iota
 	KindCUxD
 	KindHomegear
+	// KindOpenCCULite is an openccu-lite box, reached through its
+	// authenticated XML-RPC proxy. Chosen by the central's configured
+	// system type, never derived from an interface id.
+	KindOpenCCULite
 )
 
 // String renders the kind for logs and metrics.
@@ -24,6 +28,8 @@ func (k Kind) String() string {
 		return "cuxd"
 	case KindHomegear:
 		return "homegear"
+	case KindOpenCCULite:
+		return "openccu-lite"
 	default:
 		return "unknown"
 	}
@@ -244,6 +250,33 @@ func CapabilityFor(kind Kind) Capabilities {
 			LinkOperations:       true, // getLinks/addLink/removeLink/getLinkPeers + LINK paramsets via XML-RPC
 			Metadata:             false,
 			ValueListRead:        true,
+		}
+	case KindOpenCCULite:
+		// openccu-lite proxies XML-RPC to the CCU's own interface
+		// processes and pushes events over its event stream; it has no
+		// ReGa, JSON-RPC or WebUI surface. Everything the interface
+		// processes answer is available (see LiteBackend); programs,
+		// system variables, the inbox, alarm messages, the com-test,
+		// backups, rooms, functions, renames and ReGa ids are not.
+		// ServiceMessages is false: the per-interface backend cannot list
+		// them; on a box the list comes from the system API.
+		return Capabilities{
+			RPCCallback:            true,
+			PingPong:               true,
+			ListDevices:            true,
+			FirmwareUpdate:         true,
+			ConfigRestore:          true,
+			ReplaceDevice:          true,
+			SearchDevices:          true,
+			TeamAssignment:         true,
+			DeleteDevice:           true,
+			InstallMode:            true,
+			InstallModeLocal:       true,
+			LinkOperations:         true,
+			SuppressServiceMessage: true,
+			ValueListRead:          true,
+			VirtualKey:             true,
+			Metadata:               true,
 		}
 	default:
 		return Capabilities{}

@@ -15,35 +15,42 @@ var (
 	_ Operations = (*CcuBackend)(nil)
 	_ Operations = (*CuxdBackend)(nil)
 	_ Operations = (*HomegearBackend)(nil)
+	_ Operations = (*LiteBackend)(nil)
 
 	// LifecycleOps — Kind, Capabilities, Init, Deinit, Ping.
 	_ LifecycleOps = (*CcuBackend)(nil)
 	_ LifecycleOps = (*CuxdBackend)(nil)
 	_ LifecycleOps = (*HomegearBackend)(nil)
+	_ LifecycleOps = (*LiteBackend)(nil)
 
 	// DeviceOps — enumeration, firmware, pairing, bulk data, metadata.
 	_ DeviceOps = (*CcuBackend)(nil)
 	_ DeviceOps = (*CuxdBackend)(nil)
 	_ DeviceOps = (*HomegearBackend)(nil)
+	_ DeviceOps = (*LiteBackend)(nil)
 
 	// ParamsetOps — descriptor and value read/write for MASTER/VALUES/LINK keys.
 	_ ParamsetOps = (*CcuBackend)(nil)
 	_ ParamsetOps = (*CuxdBackend)(nil)
 	_ ParamsetOps = (*HomegearBackend)(nil)
+	_ ParamsetOps = (*LiteBackend)(nil)
 
 	// ValueOps — single-parameter get/set and click-event usage counter.
 	_ ValueOps = (*CcuBackend)(nil)
 	_ ValueOps = (*CuxdBackend)(nil)
 	_ ValueOps = (*HomegearBackend)(nil)
+	_ ValueOps = (*LiteBackend)(nil)
 
 	// LinkOps — direct-link CRUD and per-link paramset access.
 	_ LinkOps = (*CcuBackend)(nil)
 	_ LinkOps = (*CuxdBackend)(nil)
 	_ LinkOps = (*HomegearBackend)(nil)
+	_ LinkOps = (*LiteBackend)(nil)
 
 	// SystemOps — install mode, service/alarm messages, rooms, functions,
 	// programs, system variables, and system update info.
 	_ SystemOps = (*CcuBackend)(nil)
 	_ SystemOps = (*CuxdBackend)(nil)
 	_ SystemOps = (*HomegearBackend)(nil)
+	_ SystemOps = (*LiteBackend)(nil)
 )
