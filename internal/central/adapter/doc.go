@@ -21,7 +21,7 @@
 //     relevant_init, config, interfaces, stubs — assemble a Unit's
 //     coordinators and register the south-bound clients.
 //   - South profiles: south_profile, south_ccu, south_ccu_hub, south_lite,
-//     lite_hub, lite_features — the per-central strategy that says where readiness, liveness, the hub
+//     lite_hub, lite_features, lite_events, lite_values — the per-central strategy that says where readiness, liveness, the hub
 //     session, per-interface transports and value seeding come from,
 //     selected once per central from its system type.
 //   - Transport callers & callbacks: xmlrpc_caller, jsonrpc_caller,

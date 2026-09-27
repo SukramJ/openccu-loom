@@ -168,6 +168,7 @@ func (s *liteHubSession) Transports() InterfaceTransports {
 		cc:        s.profile.cc,
 		client:    s.profile.client,
 		readiness: s.profile.readiness,
+		ingress:   s.profile.ingress,
 		logger:    s.logger,
 		backends:  s.set,
 	}

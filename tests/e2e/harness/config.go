@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/SukramJ/openccu-loom/tests/harness/litefake"
 )
 
 // configInputs collects every value the config template needs.
@@ -46,6 +48,11 @@ type configInputs struct {
 	// PublicURL sets north.rest.public_url. Empty omits the key, which is
 	// the default deployment.
 	PublicURL string
+	// Lite points the central at an openccu-lite box: CCUHost and
+	// CCUJSONRPC address its web port, the token authenticates, and no
+	// XML-RPC port or credentials are written — the lite validator
+	// rejects them.
+	Lite bool
 }
 
 // buildConfigYAML returns a complete openccu-loom config that wires
@@ -141,20 +148,13 @@ func buildConfigYAML(in configInputs) string {
 	fmt.Fprintf(&b, "centrals:\n")
 	fmt.Fprintf(&b, "  - name: ccu-e2e\n")
 	fmt.Fprintf(&b, "    host: %s\n", in.CCUHost)
-	fmt.Fprintf(&b, "    port: %d\n", in.CCUXMLRPC)
-	if in.CCUJSONRPC > 0 {
-		// godevccu's JSON-RPC binds to an ephemeral port; pin it so
-		// the daemon's seed pipeline (ReGa.runScript, Program.getAll,
-		// Device.listAllDetail) reaches the simulator instead of
-		// dialling the default port 80 on the host.
+	if in.Lite {
+		fmt.Fprintf(&b, "    system_type: openccu-lite\n")
+		fmt.Fprintf(&b, "    api_token: %q\n", litefake.DefaultToken)
 		fmt.Fprintf(&b, "    json_rpc_port: %d\n", in.CCUJSONRPC)
+	} else {
+		writeCCUCentral(&b, in)
 	}
-	// godevccu's CCU personality enables JSON-RPC auth with the
-	// canonical "Admin" / "" credentials (see
-	// tests/integration/godevccu.go startMockCCUOpenCCU). Without
-	// this the seed calls 401 with json-rpc -32002.
-	fmt.Fprintf(&b, "    username: Admin\n")
-	fmt.Fprintf(&b, "    password: \"\"\n")
 	fmt.Fprintf(&b, "    interfaces:\n      - HmIP-RF\n")
 	if in.CheckConnectionInterval > 0 {
 		// Express as a Go duration string (e.g. "5s") so the yaml unmarshaller
@@ -162,6 +162,24 @@ func buildConfigYAML(in configInputs) string {
 		fmt.Fprintf(&b, "    check_connection_interval: %s\n", in.CheckConnectionInterval.String())
 	}
 	return b.String()
+}
+
+// writeCCUCentral writes the godevccu-specific keys of the central.
+func writeCCUCentral(b *strings.Builder, in configInputs) {
+	fmt.Fprintf(b, "    port: %d\n", in.CCUXMLRPC)
+	if in.CCUJSONRPC > 0 {
+		// godevccu's JSON-RPC binds to an ephemeral port; pin it so
+		// the daemon's seed pipeline (ReGa.runScript, Program.getAll,
+		// Device.listAllDetail) reaches the simulator instead of
+		// dialling the default port 80 on the host.
+		fmt.Fprintf(b, "    json_rpc_port: %d\n", in.CCUJSONRPC)
+	}
+	// godevccu's CCU personality enables JSON-RPC auth with the
+	// canonical "Admin" / "" credentials (see
+	// tests/integration/godevccu.go startMockCCUOpenCCU). Without
+	// this the seed calls 401 with json-rpc -32002.
+	fmt.Fprintf(b, "    username: Admin\n")
+	fmt.Fprintf(b, "    password: \"\"\n")
 }
 
 func boolYAML(b bool) string {

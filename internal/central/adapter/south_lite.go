@@ -30,7 +30,11 @@ type liteProfile struct {
 	client    *occulited.Client
 	readiness *liteReadinessProbe
 	liveness  *liteLivenessProbe
+	ingress   *liteEventIngress
 	logger    *slog.Logger
+	// eventsOptions tunes the event stream reader (heartbeat deadline,
+	// backoff); zero fields take the client's defaults.
+	eventsOptions occulited.EventsOptions
 }
 
 // newLiteProfile builds the profile for cc. It fails only for a
@@ -49,13 +53,15 @@ func newLiteProfile(cc *config.CentralConfig, logger *slog.Logger) (*liteProfile
 	if err != nil {
 		return nil, fmt.Errorf("central %s: occulited client: %w", cc.Name, err)
 	}
-	return &liteProfile{
+	p := &liteProfile{
 		cc:        *cc,
 		client:    client,
 		readiness: &liteReadinessProbe{client: client, interfaces: configuredInterfaceNames(cc)},
 		liveness:  &liteLivenessProbe{client: client},
 		logger:    logger,
-	}, nil
+	}
+	p.ingress = &liteEventIngress{profile: p}
+	return p, nil
 }
 
 // SystemType implements [SouthProfile].
@@ -67,8 +73,10 @@ func (p *liteProfile) Readiness() ReadinessProbe { return p.readiness }
 // Liveness implements [SouthProfile].
 func (p *liteProfile) Liveness() LivenessProbe { return p.liveness }
 
-// Events implements [SouthProfile].
-func (p *liteProfile) Events() EventIngress { return &liteEventIngress{} }
+// Events implements [SouthProfile]: the same ingress for the profile's
+// whole life, because the announcers of every bring-up generation wait on
+// its stream.
+func (p *liteProfile) Events() EventIngress { return p.ingress }
 
 // liteReadinessProbe decides when an openccu-lite system serves: occulited
 // answers its health read, and at least one of the central's interfaces
@@ -146,24 +154,6 @@ func (p *liteLivenessProbe) Probe(ctx context.Context) systemProbeResult {
 	return regaProbeServing
 }
 
-// liteEventIngress wires an openccu-lite central's inbound events. The
-// handlers exist from the start so the hot-plug ingestor and the command
-// tracker have a target; the announced callback URL is empty, which runs
-// every interface in read-through mode until the event stream attaches.
-type liteEventIngress struct{}
-
-// Attach implements [EventIngress].
-func (liteEventIngress) Attach(cc *config.CentralConfig, unit *central.Unit, deps WireDeps, logger *slog.Logger) (
-	handlers *CallbackHandlers, callbackURL, binRPCAddr string, detach func(),
-) {
-	handlers = NewCallbackHandlers(unit, logger)
-	if deps.Writer != nil {
-		handlers.SetWriter(deps.Writer)
-	}
-	handlers.SetDelayNewDeviceCreation(cc.Behavior.DelayNewDeviceCreationEnabled())
-	return handlers, "", "", handlers.Stop
-}
-
 // liteTransports is the per-interface transport strategy of an
 // openccu-lite session: XML-RPC through the box's proxy with the token,
 // the lite backend, and the backends recorded for the value seeder.
@@ -171,6 +161,7 @@ type liteTransports struct {
 	cc        config.CentralConfig
 	client    *occulited.Client
 	readiness ReadinessProbe
+	ingress   *liteEventIngress
 	logger    *slog.Logger
 	backends  *liteBackendSet
 }
@@ -181,9 +172,10 @@ func (t *liteTransports) Endpoint(iface hmenum.Interface) (InterfaceEndpoint, er
 }
 
 // Announcer implements [InterfaceTransports]. The box owns the interface
-// subscriptions; announcing is a no-op until the event stream attaches.
-func (*liteTransports) Announcer(*xmlrpc.Client, hmenum.Interface) backends.Announcer {
-	return noopAnnouncer{}
+// subscriptions; announcing waits for the event stream to report the
+// interface up.
+func (t *liteTransports) Announcer(_ *xmlrpc.Client, iface hmenum.Interface) backends.Announcer {
+	return &liteAnnouncer{ingress: t.ingress, iface: iface}
 }
 
 // BackendKind implements [InterfaceTransports].
@@ -233,9 +225,3 @@ func (s *liteBackendSet) get(iface hmenum.Interface) backends.Operations {
 	defer s.mu.RUnlock()
 	return s.m[iface]
 }
-
-// noopAnnouncer announces nothing.
-type noopAnnouncer struct{}
-
-func (noopAnnouncer) Init(context.Context, string, string) error { return nil }
-func (noopAnnouncer) Deinit(context.Context, string) error       { return nil }

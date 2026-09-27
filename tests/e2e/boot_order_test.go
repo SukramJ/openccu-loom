@@ -51,9 +51,24 @@ import (
 // green. Gating the CCU restores the real order: the services start
 // against an empty registry, the devices arrive afterwards, and only a
 // subsystem that reacts to that arrival ends up with state.
+//
+// Each south-bound backend runs the whole test. An openccu-lite central
+// fills the model from a different bring-up — readiness from the box's
+// health, devices through the proxy, values from the state store — so a
+// subsystem wired to a CCU-only seam would stay empty there alone.
 func TestE2EDaemonLevelSubsystemsReportNonEmptyStateAfterBoot(t *testing.T) {
 	t.Parallel()
-	h := harness.Start(t, harness.Options{StartCCUNotReady: true, EnableMQTT: true})
+	for _, backend := range []harness.Backend{harness.BackendCCU, harness.BackendOpenCCULite} {
+		t.Run(backend.String(), func(t *testing.T) {
+			t.Parallel()
+			assertSubsystemsFillAfterBoot(t, backend)
+		})
+	}
+}
+
+func assertSubsystemsFillAfterBoot(t *testing.T, backend harness.Backend) {
+	t.Helper()
+	h := harness.Start(t, harness.Options{StartCCUNotReady: true, EnableMQTT: true, Backend: backend})
 	if err := h.REST().LoginSession(harness.AdminUser, harness.AdminPass); err != nil {
 		t.Fatalf("login: %v", err)
 	}
@@ -66,7 +81,7 @@ func TestE2EDaemonLevelSubsystemsReportNonEmptyStateAfterBoot(t *testing.T) {
 	}
 
 	// The CCU finishes booting. Everything below must follow from this.
-	h.CCU().V().SetReady(true)
+	h.SetCCUReady(true)
 
 	// The anchor runs first and separately. Every other subsystem in the
 	// table derives its state from the device model, so an empty model

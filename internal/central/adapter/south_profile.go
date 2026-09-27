@@ -127,6 +127,14 @@ type ValueSeeder interface {
 	SeedValues(ctx context.Context, iface hmenum.Interface, depth SeedDepth) (map[string]map[string]any, error)
 }
 
+// generationAware is implemented by an EventIngress that needs the current
+// bring-up generation's pipeline: the lite stream reseeds values after it
+// may have missed events. bringUpCentral binds it once the pipeline exists
+// and registers the unbind as a generation closer.
+type generationAware interface {
+	BindGeneration(reseed func(ctx context.Context, iface hmenum.Interface) error) (unbind func())
+}
+
 // SeedDepth tells a seeder how much a caller is willing to pay.
 type SeedDepth int
 

@@ -23,6 +23,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/SukramJ/openccu-loom/tests/harness/litefake"
 )
 
 // AuthMode selects which authentication backend the harness wires
@@ -91,6 +93,11 @@ type Options struct {
 	// address an operator configures behind a reverse proxy. Empty is the
 	// default deployment, where the daemon reports no Config-UI URL.
 	PublicURL string
+
+	// Backend selects the south-bound system. The zero value is the
+	// godevccu CCU; BackendOpenCCULite runs litefake instead, and
+	// StartCCUNotReady then boots the box with occulited not yet up.
+	Backend Backend
 }
 
 // Harness is the test-owned facade over a running daemon sub-process.
@@ -115,6 +122,7 @@ type Harness struct {
 	mqtt MQTTBroker
 	op   MockOP
 	ccu  *MockCCU
+	lite *litefake.Fake
 
 	// Effective listener addresses, populated before Start returns.
 	restAddr   string // 127.0.0.1:<port>
@@ -144,7 +152,16 @@ func Start(t *testing.T, opts Options) *Harness {
 
 	binPath := locateDaemonBinary(t)
 
-	h.ccu = startMockCCU(t, opts.Devices, opts.StartCCUNotReady)
+	south := southInputs{Host: "127.0.0.1"}
+	if opts.Backend == BackendOpenCCULite {
+		h.lite = startLiteFake(t, opts.Devices, opts.StartCCUNotReady)
+		south.Host, south.JSONRPC = liteHostPort(t, h.lite)
+		south.Lite = true
+	} else {
+		h.ccu = startMockCCU(t, opts.Devices, opts.StartCCUNotReady)
+		south.XMLRPC = h.ccu.v.XMLRPCAddr().(*net.TCPAddr).Port
+		south.JSONRPC = jsonrpcPort(h.ccu)
+	}
 
 	if opts.EnableMQTT {
 		h.mqtt = startMQTTBroker(t)
@@ -195,9 +212,10 @@ func Start(t *testing.T, opts Options) *Harness {
 		AuthMode:                opts.AuthMode,
 		MQTTBroker:              h.mqttBroker,
 		OIDCIssuer:              h.opIssuer,
-		CCUHost:                 "127.0.0.1",
-		CCUXMLRPC:               h.ccu.v.XMLRPCAddr().(*net.TCPAddr).Port,
-		CCUJSONRPC:              jsonrpcPort(h.ccu),
+		CCUHost:                 south.Host,
+		CCUXMLRPC:               south.XMLRPC,
+		CCUJSONRPC:              south.JSONRPC,
+		Lite:                    south.Lite,
 		CheckConnectionInterval: opts.CheckConnectionInterval,
 		PublicURL:               opts.PublicURL,
 	})
@@ -243,6 +261,15 @@ func Start(t *testing.T, opts Options) *Harness {
 	return h
 }
 
+// southInputs is where the daemon's central points: the simulated CCU's
+// ports, or the litefake box's single web port.
+type southInputs struct {
+	Host    string
+	XMLRPC  int
+	JSONRPC int
+	Lite    bool
+}
+
 // Stop signals the daemon, waits for the process to exit, and
 // dumps captured output on test failure. Idempotent.
 func (h *Harness) Stop() {
@@ -282,7 +309,8 @@ func (h *Harness) MQTT() MQTTBroker { return h.mqtt }
 func (h *Harness) OP() MockOP { return h.op }
 
 // CCU returns the godevccu mock — exposed for tests that need to
-// inject events directly (e.g. WS-push smoke).
+// inject events directly (e.g. WS-push smoke). Nil when the harness runs
+// BackendOpenCCULite; use Lite there.
 func (h *Harness) CCU() *MockCCU { return h.ccu }
 
 // RESTBase returns the daemon's REST base URL, e.g.

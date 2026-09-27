@@ -3208,3 +3208,26 @@ has a fraction above `.5`, so rounding and truncation disagree — the existing
 **Retirement condition.** If the reference ever rounds at the write boundary,
 or `DURATION_VALUE` stops being an INTEGER parameter, this entry and the guard
 go with it.
+
+## openccu-lite event stream — values are re-typed from the paramset description
+
+**Divergence.** An openccu-lite central receives device events as JSON on the
+box's SSE stream, not as XML-RPC callbacks. JSON drops the XML-RPC kind: a
+`double` 1.0 arrives as `1`, a `dateTime` and a `base64` arrive as strings.
+`typedValue` (`internal/central/adapter/lite_values.go`) rebuilds the kind
+from the parameter's VALUES description: FLOAT → double, INTEGER/ENUM →
+integer (rounded half away from zero; the box reports integral values, so
+the rounding never decides anything in practice — a write still truncates,
+see the entry above), BOOL/ACTION → boolean, STRING → string. Without a
+description (PONG, a parameter not yet hydrated) the JSON value keeps its own
+shape: an integral number that fits int32 is an integer, any other a double.
+
+**Why.** The value cache compares by kind, so an untyped FLOAT would publish
+a change on every event and flip the north-bound value type between integer
+and float. A `dateTime` or `base64` value cannot be rebuilt: the paramset
+TYPE vocabulary (`pkg/hmenum/paramset.go`: ACTION, BOOL, DUMMY, ENUM, FLOAT,
+INTEGER, STRING) has no such kind to name it, so such a value is delivered as
+the string the stream carried.
+
+**Guard.** `TestTypedValueUsesParamsetDescription`
+(`internal/central/adapter/lite_values_test.go`).

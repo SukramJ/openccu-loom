@@ -41,6 +41,13 @@ CCU; the list below is what an API client can already observe.
   feature set that follows the token's scopes and is re-read every ten
   minutes. A scope refusal is never retried and never counted as a
   connection failure.
+- An openccu-lite central follows the box's event stream instead of an
+  XML-RPC callback: values arrive typed by their paramset description (a
+  FLOAT the stream sends as `1` is `1.0`, so no change is invented), the
+  stream's heartbeat keeps quiet interfaces alive, an interface the box
+  reports down makes its devices unavailable until it is back, a gap in
+  the stream is closed by re-reading the values, and devices the box adds
+  or removes appear and disappear without a restart.
 
 #### Fixed
 

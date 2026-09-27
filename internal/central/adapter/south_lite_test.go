@@ -5,6 +5,7 @@ package adapter
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net"
 	"net/url"
@@ -14,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/central/registry"
+	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -202,5 +205,87 @@ func TestLiteValueSeederFillsOnlyWhatTheStateStoreLacks(t *testing.T) {
 	}
 	if out["DEV1:2"]["ENERGY"] != 12.5 {
 		t.Errorf("ENERGY = %v, want 12.5 from the paramset read", out["DEV1:2"]["ENERGY"])
+	}
+}
+
+// TestLiteAnnouncerBlocksUntilInterfaceUp pins the announcement that
+// replaces init on a lite interface: it waits while the stream is not live
+// or the interface is down, returns once both hold, and gives up with an
+// error when the caller's context ends first.
+func TestLiteAnnouncerBlocksUntilInterfaceUp(t *testing.T) {
+	t.Parallel()
+	s := &liteStream{up: map[hmenum.Interface]bool{}, changed: make(chan struct{})}
+	in := &liteEventIngress{stream: s}
+	a := &liteAnnouncer{ingress: in, iface: hmenum.InterfaceHmIPRF}
+
+	short, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	if err := a.Init(short, "", ""); !errors.Is(err, errLiteInterfaceNotUp) {
+		t.Fatalf("Init on a stream that is not live = %v, want errLiteInterfaceNotUp", err)
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- a.Init(context.Background(), "", "") }()
+	s.setLive(true)
+	select {
+	case err := <-done:
+		t.Fatalf("Init returned (%v) while the interface was still down", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	s.setUp(hmenum.InterfaceHmIPRF, true)
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Init = %v once live and up", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Init did not return once the interface came up")
+	}
+	if err := a.Deinit(context.Background(), ""); err != nil {
+		t.Errorf("Deinit = %v, want nil (the box owns the subscription)", err)
+	}
+}
+
+// reconcileOps lists a fixed inventory.
+type reconcileOps struct {
+	fakeOperations
+	listed []hmproto.DeviceDescription
+}
+
+func (r *reconcileOps) ListDevices(context.Context) ([]hmproto.DeviceDescription, error) {
+	return r.listed, nil
+}
+
+// TestLiteReconcileDeletesVanishedDevices pins the part of the lite
+// reconciliation a CCU re-init does not need: a device the central knows
+// but the interface no longer lists — its deleteDevices may have fallen
+// into a gap of the stream — is deleted.
+func TestLiteReconcileDeletesVanishedDevices(t *testing.T) {
+	t.Parallel()
+	_, unit := registryWithUnit(t, "box")
+	wireID := WireInterfaceID("box", hmenum.InterfaceHmIPRF)
+	wire := hmtypes.ParseWireInterfaceID(wireID)
+	for _, addr := range []string{"KEEP1", "GONE1"} {
+		unit.DeviceRegistry.Put(registry.DeviceEntry{Interface: wire, Address: addr, Model: "HmIP-X"})
+	}
+	ops := &reconcileOps{listed: []hmproto.DeviceDescription{{Address: "KEEP1", Type: "HmIP-X"}}}
+	w := clientpkg.NewValueWriter()
+	w.Register("box", wire, ops)
+	h := NewCallbackHandlers(unit, nil)
+	t.Cleanup(h.Stop)
+	s := &liteStream{
+		cc: config.CentralConfig{Name: "box"}, unit: unit, writer: w, handlers: h,
+		logger:  slog.New(slog.DiscardHandler),
+		initIDs: map[hmenum.Interface]string{hmenum.InterfaceHmIPRF: InitInterfaceID(unit.InstanceName(), "box", hmenum.InterfaceHmIPRF)},
+		wireIDs: map[hmenum.Interface]string{hmenum.InterfaceHmIPRF: wireID},
+		up:      map[hmenum.Interface]bool{}, changed: make(chan struct{}),
+	}
+	s.reconcile(context.Background(), hmenum.InterfaceHmIPRF)
+	s.wg.Wait()
+	if unit.DeviceRegistry.Has(wire, "GONE1") {
+		t.Error("a device the interface no longer lists survived the reconciliation")
+	}
+	if !unit.DeviceRegistry.Has(wire, "KEEP1") {
+		t.Error("a listed device was deleted")
 	}
 }

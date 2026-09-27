@@ -506,6 +506,18 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 		WithValuesCacheStore(centralScopedValuesCache(deps, cc.Name), cc.Name).
 		WithChannelFlags(deps.ChannelFlags)
 
+	// An event source that reseeds after missed events runs its reseed
+	// through this generation's pipeline; the binding goes with it.
+	if ga, ok := profile.Events().(generationAware); ok {
+		seeder := hub.ValueSeeder()
+		addCloser(ga.BindGeneration(func(ctx context.Context, iface hmenum.Interface) error {
+			if seeder == nil {
+				return nil
+			}
+			return pipeline.Reseed(ctx, iface, seeder, SeedFull, logger)
+		}))
+	}
+
 	total := len(cc.Interfaces)
 	recordCentralReadiness(unit, hmenum.ReadinessLoadingDevices, loaded, total)
 	for _, ifaceSpec := range cc.Interfaces {
