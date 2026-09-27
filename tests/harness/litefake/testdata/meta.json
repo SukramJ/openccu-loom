@@ -1,0 +1,52 @@
+{
+  "format": 1,
+  "revision": 1,
+  "objects": {
+    "BidCos-RF.VCU0000321": {
+      "name": "Stehlampe",
+      "enums": ["room/eg/wohnzimmer", "function/licht"],
+      "meta": {}
+    },
+    "BidCos-RF.VCU0000321:1": {
+      "name": "Stehlampe Schalter",
+      "enums": ["room/eg/wohnzimmer", "function/licht"],
+      "meta": {"loom": {"icon": "floor-lamp"}}
+    },
+    "HmIP-RF.VCU2128127": {
+      "name": "Dimmer Küche",
+      "enums": ["room/eg/kueche", "function/licht"],
+      "meta": {}
+    },
+    "HmIP-RF.VCU2128127:4": {
+      "name": "Dimmer Küche Licht",
+      "enums": ["room/eg/kueche"],
+      "meta": {}
+    },
+    "VirtualDevices.INT0000001": {
+      "name": "Heizgruppe Obergeschoss",
+      "enums": ["room/og/kueche", "function/heizung"],
+      "meta": {}
+    }
+  },
+  "enums": {
+    "room": {
+      "name": {"en": "Rooms", "de": "Räume"},
+      "tree": [
+        {"id": "eg", "name": "Erdgeschoss", "children": [
+          {"id": "wohnzimmer", "name": "Wohnzimmer", "icon": "sofa"},
+          {"id": "kueche", "name": "Küche"}
+        ]},
+        {"id": "og", "name": "Obergeschoss", "children": [
+          {"id": "kueche", "name": "Küche"}
+        ]}
+      ]
+    },
+    "function": {
+      "name": {"en": "Functions", "de": "Gewerke"},
+      "tree": [
+        {"id": "licht", "name": "Licht"},
+        {"id": "heizung", "name": "Heizung"}
+      ]
+    }
+  }
+}

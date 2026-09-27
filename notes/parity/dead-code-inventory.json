@@ -1,15 +1,15 @@
 {
-  "generated": "5a40c5e8",
-  "head": "5a40c5e8",
+  "generated": "d880d7ca",
+  "head": "d880d7ca",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/openccu-loom-remote/main.go",
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 5693,
+    "total_exported": 5736,
     "reachable": 3654,
-    "whitelisted": 1980,
+    "whitelisted": 2023,
     "unreachable": 59
   },
   "by_package": [
@@ -14355,6 +14355,307 @@
       "reason": "auto-whitelist:pattern=tests-dir",
       "file": "tests/contract/wire_snapshots/wire_helpers.go",
       "line": 45
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "Account",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/auth.go",
+      "line": 247
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "AvailableUpdate",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/system.go",
+      "line": 67
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "BackupBlob",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/system.go",
+      "line": 35
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "BackupFileName",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/system.go",
+      "line": 38
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "Call",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/fake.go",
+      "line": 122
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "DefaultDevices",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/fake.go",
+      "line": 46
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "DefaultHeartbeatInterval",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/fake.go",
+      "line": 27
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "DefaultHostname",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/fake.go",
+      "line": 34
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "DefaultInterfaces",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/fake.go",
+      "line": 39
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "DefaultMeta",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/fake.go",
+      "line": 688
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "DefaultMetaHeartbeatInterval",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/metastream.go",
+      "line": 14
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "DefaultMetaLog",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/metastream.go",
+      "line": 16
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "DefaultMetaQueue",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/metastream.go",
+      "line": 15
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "DefaultPairingKeep",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/pairing.go",
+      "line": 37
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "DefaultPairingLifetime",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/pairing.go",
+      "line": 36
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "DefaultPairingPollInterval",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/pairing.go",
+      "line": 38
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "DefaultReaderQueue",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/fake.go",
+      "line": 30
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "DefaultRingAge",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/fake.go",
+      "line": 32
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "DefaultRingEvents",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/fake.go",
+      "line": 31
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "DefaultSerial",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/fake.go",
+      "line": 33
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "DefaultStateDatapoints",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/fake.go",
+      "line": 55
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "DefaultStreamsPerSubject",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/fake.go",
+      "line": 28
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "DefaultStreamsTotal",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/fake.go",
+      "line": 29
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "DefaultToken",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/auth.go",
+      "line": 17
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "Document",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/meta.go",
+      "line": 41
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "Enum",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/meta.go",
+      "line": 58
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "Fake",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/fake.go",
+      "line": 149
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "Group",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/groups.go",
+      "line": 21
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "MetaError",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/meta.go",
+      "line": 86
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "MetaEvent",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/meta.go",
+      "line": 73
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "MetaHandle",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/meta.go",
+      "line": 1350
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "Node",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/meta.go",
+      "line": 64
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "Object",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/meta.go",
+      "line": 50
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "Options",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/fake.go",
+      "line": 66
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "PairingAccess",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/pairing.go",
+      "line": 55
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "PairingCode",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/pairing.go",
+      "line": 175
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "PairingError",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/pairing.go",
+      "line": 505
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "PairingScopes",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/pairing.go",
+      "line": 131
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "PendingPairing",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/pairing.go",
+      "line": 514
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "ServiceMessage",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/system.go",
+      "line": 42
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "StagedUpdate",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/system.go",
+      "line": 54
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "Start",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/fake.go",
+      "line": 180
+    },
+    {
+      "package": "tests/harness/litefake",
+      "identifier": "TokenName",
+      "reason": "auto-whitelist:pattern=tests-dir",
+      "file": "tests/harness/litefake/auth.go",
+      "line": 50
     },
     {
       "package": "tests/harness/mcasttest",
