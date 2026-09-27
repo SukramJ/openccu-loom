@@ -469,7 +469,11 @@ func recordRPCMethods(r *http.Request, methods []string) {
 }
 
 // statusWriter captures the status code; it forwards Flush so the SSE
-// handler can stream through it.
+// handler can stream through it. It deliberately defines no Write of its
+// own: a body written without WriteHeader is a 200 (see [statusWriter.code]),
+// and a concrete Write here would make every response body of the daemon's
+// own handlers look, to a whole-program taint analysis resolving
+// ResponseWriter.Write, as if it flowed through this test helper.
 type statusWriter struct {
 	http.ResponseWriter
 	status int
@@ -482,11 +486,13 @@ func (s *statusWriter) WriteHeader(code int) {
 	s.ResponseWriter.WriteHeader(code)
 }
 
-func (s *statusWriter) Write(b []byte) (int, error) {
+// code is the status the handler answered with; net/http sends 200 when a
+// handler writes a body (or nothing) without calling WriteHeader.
+func (s *statusWriter) code() int {
 	if s.status == 0 {
-		s.status = http.StatusOK
+		return http.StatusOK
 	}
-	return s.ResponseWriter.Write(b)
+	return s.status
 }
 
 // Unwrap lets http.ResponseController reach the underlying writer.
@@ -513,7 +519,7 @@ func (f *Fake) record(next http.Handler) http.Handler {
 			Method:     r.Method,
 			Path:       r.URL.Path,
 			RawQuery:   r.URL.RawQuery,
-			Status:     sw.status,
+			Status:     sw.code(),
 			Subject:    rec.subject,
 			RPCMethods: rec.rpcMethods,
 			Body:       body.bytes(),
