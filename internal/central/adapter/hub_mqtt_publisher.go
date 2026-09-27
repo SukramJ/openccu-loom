@@ -636,13 +636,19 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 		})
 	}))
 
+	// --- Feature-gated hub entities ---
+	// The message aggregates, the inbox and the system update exist only
+	// where the central's system offers them (openccu-lite has no alarm
+	// messages or inbox, and its service messages and update state depend
+	// on the token's scopes). Each is declared while its feature is
+	// offered and retracted when the feature goes away; a change of the
+	// central's feature set re-applies the gate.
+	p.wireHubFeatureGate(ctx, u, b, centralName, disco)
+
 	// --- AlarmMessages ---
 	// PublishAlarmMessages is on the Bridge (the Wiring wrapper is not yet
 	// generated); call through w.Bridge() so we keep the same error-
 	// suppression contract as the other Wiring helpers.
-	p.publish(func() {
-		_ = b.PublishHubDiscovery(ctx, disco.BuildAlarmMessagesDiscovery(centralName))
-	})
 	publishAlarm := func(msgs []hub.AlarmMessage) {
 		p.publish(func() {
 			if err := b.PublishAlarmMessages(ctx, centralName, hubModel.Messages, msgs); err != nil {
@@ -660,9 +666,6 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 	}))
 
 	// --- ServiceMessages ---
-	p.publish(func() {
-		_ = b.PublishHubDiscovery(ctx, disco.BuildServiceMessagesDiscovery(centralName))
-	})
 	publishSvc := func(msgs []hub.ServiceMessage) {
 		p.publish(func() {
 			if err := b.PublishServiceMessages(ctx, centralName, hubModel.ServiceMessages, msgs); err != nil {
@@ -799,9 +802,6 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 	}
 
 	// --- Inbox ---
-	p.publish(func() {
-		_ = b.PublishHubDiscovery(ctx, disco.BuildInboxDiscovery(centralName))
-	})
 	publishInbox := func(devices []hub.InboxDevice) {
 		p.publish(func() {
 			if err := b.PublishInbox(ctx, centralName, hubModel.Inbox, devices); err != nil {
@@ -819,9 +819,6 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 	}))
 
 	// --- System Update ---
-	p.publish(func() {
-		_ = b.PublishHubDiscovery(ctx, disco.BuildHubUpdateDiscovery(centralName))
-	})
 	publishUpdate := func(info hub.UpdateInfo) {
 		// Read the in-progress flag on the notifying goroutine, so the queued
 		// payload is the one the event described rather than whatever the
@@ -843,6 +840,65 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 	}))
 
 	p.declareHubPlane(u, b, centralName)
+}
+
+// gatedHubEntity is a hub-plane entity declared only while the central
+// offers its feature.
+type gatedHubEntity struct {
+	feature hmenum.Feature
+	build   func() mqtt.DiscoveryItem
+}
+
+// gatedHubEntities lists the feature-gated hub entities of a central.
+func (p *HubMQTTPublisher) gatedHubEntities(centralName string, disco *mqtt.DefaultDiscoveryBuilder) []gatedHubEntity {
+	return []gatedHubEntity{
+		{hmenum.FeatureHubAlarmMessages, func() mqtt.DiscoveryItem { return disco.BuildAlarmMessagesDiscovery(centralName) }},
+		{hmenum.FeatureHubServiceMessages, func() mqtt.DiscoveryItem { return disco.BuildServiceMessagesDiscovery(centralName) }},
+		{hmenum.FeatureHubInbox, func() mqtt.DiscoveryItem { return disco.BuildInboxDiscovery(centralName) }},
+		{hmenum.FeatureHubSystemUpdate, func() mqtt.DiscoveryItem { return disco.BuildHubUpdateDiscovery(centralName) }},
+	}
+}
+
+// hubFeatureOffered reports whether a hub entity behind k is declared. A
+// central whose feature set is not known yet (its hub bring-up has not
+// run) declares as it always did; the feature-change event corrects the
+// plane once the set is known.
+func hubFeatureOffered(u *central.Unit, k hmenum.Feature) bool {
+	f := u.Features()
+	return !f.Known() || f.Available(k)
+}
+
+// wireHubFeatureGate applies the feature gate now and on every change of
+// the central's feature set.
+func (p *HubMQTTPublisher) wireHubFeatureGate(ctx context.Context, u *central.Unit, b *mqtt.Bridge,
+	centralName string, disco *mqtt.DefaultDiscoveryBuilder,
+) {
+	gated := p.gatedHubEntities(centralName, disco)
+	p.applyHubFeatureGate(ctx, u, b, gated)
+	p.addUnsub(events.Subscribe(u.EventBus, func(e hmevent.CentralFeaturesChangedEvent) {
+		if e.CentralName != centralName {
+			return
+		}
+		p.applyHubFeatureGate(ctx, u, b, gated)
+	}))
+}
+
+// applyHubFeatureGate declares every gated entity whose feature the
+// central offers and retracts the others. Both are idempotent, so the
+// gate can be re-applied on every feature change.
+func (p *HubMQTTPublisher) applyHubFeatureGate(ctx context.Context, u *central.Unit, b *mqtt.Bridge, gated []gatedHubEntity) {
+	p.publish(func() {
+		var absent []mqtt.DiscoveryItem
+		for _, g := range gated {
+			item := g.build()
+			if hubFeatureOffered(u, g.feature) {
+				_ = b.PublishHubDiscovery(ctx, item)
+				continue
+			}
+			absent = append(absent, item)
+		}
+		retractHubDiscoveryItems(ctx, b, absent)
+	})
 }
 
 // declareHubPlane tells the retained-orphan sweep that this central's hub
