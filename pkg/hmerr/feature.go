@@ -47,3 +47,28 @@ func (e *FeatureUnavailableError) Is(target error) bool { return target == ErrFe
 
 // Unwrap exposes the legacy error, so callers branching on it keep working.
 func (e *FeatureUnavailableError) Unwrap() error { return e.Legacy }
+
+// ErrScopeMissing matches every [*ScopeMissingError] under [errors.Is].
+var ErrScopeMissing = errors.New("credential scope missing")
+
+// ScopeMissingError reports that a token-authenticated system refused an
+// operation because the daemon's credential lacks the scope it needs. The
+// system is up and the request was well formed; only a credential with the
+// scope can change the answer, so callers must not retry.
+type ScopeMissingError struct {
+	// Scope is the scope the system named ("rpc:operate", "power", …).
+	Scope string
+	// Operation is what was refused (an RPC method or an endpoint), for logs.
+	Operation string
+}
+
+// Error implements error.
+func (e *ScopeMissingError) Error() string {
+	if e.Operation == "" {
+		return "credential lacks scope " + e.Scope
+	}
+	return e.Operation + ": credential lacks scope " + e.Scope
+}
+
+// Is makes every ScopeMissingError match [ErrScopeMissing].
+func (e *ScopeMissingError) Is(target error) bool { return target == ErrScopeMissing }

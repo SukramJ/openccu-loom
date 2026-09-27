@@ -56,3 +56,21 @@ func TestFeatureUnavailableErrorNamesTheMissingScope(t *testing.T) {
 		t.Error("an error without a legacy cause must unwrap to nil")
 	}
 }
+
+func TestScopeMissingErrorMatchesItsSentinel(t *testing.T) {
+	t.Parallel()
+	err := fmt.Errorf("call: %w", &ScopeMissingError{Scope: "rpc:operate", Operation: "setValue"})
+	if !errors.Is(err, ErrScopeMissing) {
+		t.Fatal("errors.Is(err, ErrScopeMissing) = false")
+	}
+	var sm *ScopeMissingError
+	if !errors.As(err, &sm) || sm.Scope != "rpc:operate" {
+		t.Fatalf("errors.As lost the scope: %+v", sm)
+	}
+	if !strings.Contains(err.Error(), "setValue") || !strings.Contains(err.Error(), "rpc:operate") {
+		t.Errorf("Error() = %q", err.Error())
+	}
+	if errors.Is(&FeatureUnavailableError{}, ErrScopeMissing) {
+		t.Error("an unrelated refusal matched ErrScopeMissing")
+	}
+}
