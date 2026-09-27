@@ -28,8 +28,9 @@
     /** Renders the "show all candidates" toggle and binds it. */
     withShowAll?: boolean;
     showAll?: boolean;
-    roomOptions: string[];
-    funcOptions: string[];
+    /** A plain name, or a value/label pair for a nested node ("EG › Küche"). */
+    roomOptions: Array<string | { value: string; label: string }>;
+    funcOptions: Array<string | { value: string; label: string }>;
     searchPlaceholder?: string;
   }
 
@@ -47,6 +48,8 @@
   }: Props = $props();
 
   const ALL = $derived({ value: "", label: t("alarm.sensors.filter.all") });
+  const asOption = (o: string | { value: string; label: string }) =>
+    typeof o === "string" ? { value: o, label: o } : o;
 </script>
 
 <div class="mb-2 flex flex-wrap items-center gap-2">
@@ -61,13 +64,13 @@
     class="w-auto"
     bind:value={room}
     ariaLabel={t("alarm.sensors.filter.room")}
-    options={[ALL, ...roomOptions.map((r) => ({ value: r, label: r }))]}
+    options={[ALL, ...roomOptions.map(asOption)]}
   />
   <Select
     class="w-auto"
     bind:value={func}
     ariaLabel={t("alarm.sensors.filter.function")}
-    options={[ALL, ...funcOptions.map((f) => ({ value: f, label: f }))]}
+    options={[ALL, ...funcOptions.map(asOption)]}
   />
   {#if areasStore.areas.length > 0}
     <Select

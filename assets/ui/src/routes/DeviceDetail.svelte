@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { apiErrorMessage } from "$lib/features";
   import { centralStore } from "$lib/stores/centrals.svelte";
   import { onMount, untrack } from "svelte";
   import type { DeviceDetail } from "$lib/api/types";
@@ -15,6 +16,9 @@
   import HistoryChart from "$lib/components/HistoryChart.svelte";
   import RecordToggle from "$lib/components/RecordToggle.svelte";
   import RoomFunctionSelect from "$lib/components/RoomFunctionSelect.svelte";
+  import TaxonomyPicker from "$lib/components/taxonomy/TaxonomyPicker.svelte";
+  import { taxonomyStore } from "$lib/stores/taxonomy.svelte";
+  import { assignedPaths, nodeRef } from "$lib/taxonomy/tree";
   import Card from "$lib/components/ui/Card.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Input from "$lib/components/ui/Input.svelte";
@@ -248,7 +252,38 @@
 
   onMount(() => {
     void loadRoomFunctionCatalogs();
+    void taxonomyStore.refresh();
   });
+
+  // On a system whose rooms and functions nest, a name can stand for two
+  // nodes ("Küche" on two floors): assignments are picked from the tree
+  // and written by path instead.
+  const treeTaxonomy = $derived(taxonomyStore.central(detail?.central)?.tree === true);
+  const roomTree = $derived(taxonomyStore.enumOf(detail?.central, "room"));
+  const functionTree = $derived(taxonomyStore.enumOf(detail?.central, "function"));
+
+  async function assignPaths(enumId: "room" | "function", paths: string[], channelNo?: number) {
+    const refs = paths.map((p) => nodeRef(enumId, p));
+    const change = enumId === "room" ? { room_paths: refs } : { function_paths: refs };
+    try {
+      if (channelNo === undefined) await api.setDeviceTaxonomyPaths(address, change);
+      else await api.setChannelTaxonomyPaths(address, channelNo, change);
+      toastStore.success(
+        t(
+          channelNo === undefined
+            ? enumId === "room"
+              ? "device.rooms_updated"
+              : "device.functions_updated"
+            : enumId === "room"
+              ? "channel.rooms_updated"
+              : "channel.functions_updated",
+        ),
+      );
+      await load(address);
+    } catch (err) {
+      toastStore.error(apiErrorMessage(err));
+    }
+  }
 
   async function loadRoomFunctionCatalogs() {
     try {
@@ -905,32 +940,51 @@
           {/if}
         </p>
         <div class="mt-1 grid grid-cols-[auto_1fr] items-start gap-x-3 gap-y-2 text-xs text-slate-500 dark:text-slate-400">
-          <span class="pt-2 font-semibold">{t("device.rooms")}:</span>
-          <RoomFunctionSelect
-            id="device-rooms"
-            ariaLabel={t("device.rooms")}
-            selected={device.rooms ?? []}
-            options={roomOptions}
-            onChange={(next) => void updateRooms(next)}
-            onCreate={canEditNodes ? createRoomEntry : undefined}
-            disabled={!canAssign}
-            placeholder={t("roomfn.placeholder.room")}
-            createLabel={(v) => t("roomfn.create.room", { name: v })}
-            removeLabel={(n) => t("roomfn.remove_named", { name: n })}
-          />
-          <span class="pt-2 font-semibold">{t("device.functions")}:</span>
-          <RoomFunctionSelect
-            id="device-functions"
-            ariaLabel={t("device.functions")}
-            selected={device.functions ?? []}
-            options={functionOptions}
-            onChange={(next) => void updateFunctions(next)}
-            onCreate={canEditNodes ? createFunctionEntry : undefined}
-            disabled={!canAssign}
-            placeholder={t("roomfn.placeholder.function")}
-            createLabel={(v) => t("roomfn.create.function", { name: v })}
-            removeLabel={(n) => t("roomfn.remove_named", { name: n })}
-          />
+          {#if treeTaxonomy}
+            <span class="pt-2 font-semibold">{t("device.rooms")}:</span>
+            <TaxonomyPicker
+              taxonomy={roomTree}
+              selected={assignedPaths(device.taxonomy, "room")}
+              onChange={(paths) => void assignPaths("room", paths)}
+              disabled={!canAssign}
+              ariaLabel={t("device.rooms")}
+            />
+            <span class="pt-2 font-semibold">{t("device.functions")}:</span>
+            <TaxonomyPicker
+              taxonomy={functionTree}
+              selected={assignedPaths(device.taxonomy, "function")}
+              onChange={(paths) => void assignPaths("function", paths)}
+              disabled={!canAssign}
+              ariaLabel={t("device.functions")}
+            />
+          {:else}
+            <span class="pt-2 font-semibold">{t("device.rooms")}:</span>
+            <RoomFunctionSelect
+              id="device-rooms"
+              ariaLabel={t("device.rooms")}
+              selected={device.rooms ?? []}
+              options={roomOptions}
+              onChange={(next) => void updateRooms(next)}
+              onCreate={canEditNodes ? createRoomEntry : undefined}
+              disabled={!canAssign}
+              placeholder={t("roomfn.placeholder.room")}
+              createLabel={(v) => t("roomfn.create.room", { name: v })}
+              removeLabel={(n) => t("roomfn.remove_named", { name: n })}
+            />
+            <span class="pt-2 font-semibold">{t("device.functions")}:</span>
+            <RoomFunctionSelect
+              id="device-functions"
+              ariaLabel={t("device.functions")}
+              selected={device.functions ?? []}
+              options={functionOptions}
+              onChange={(next) => void updateFunctions(next)}
+              onCreate={canEditNodes ? createFunctionEntry : undefined}
+              disabled={!canAssign}
+              placeholder={t("roomfn.placeholder.function")}
+              createLabel={(v) => t("roomfn.create.function", { name: v })}
+              removeLabel={(n) => t("roomfn.remove_named", { name: n })}
+            />
+          {/if}
         </div>
       {/snippet}
       {#snippet actions()}
@@ -1210,32 +1264,51 @@
                    device level, persisted per change via
                    PATCH /devices/{addr}/channels/{no}. -->
               <div class="mb-3 grid grid-cols-[auto_1fr] items-start gap-x-3 gap-y-2 text-xs text-slate-500 dark:text-slate-400">
-                <span class="pt-2 font-semibold">{t("channel.rooms")}:</span>
-                <RoomFunctionSelect
-                  id={`ch-${ch.number}-rooms`}
-                  ariaLabel={t("channel.rooms")}
-                  selected={ch.rooms ?? []}
-                  options={roomOptions}
-                  onChange={(next) => void updateChannelRooms(ch.number, next)}
-                  onCreate={canEditNodes ? createRoomEntry : undefined}
-                  disabled={!canAssign}
-                  placeholder={t("roomfn.placeholder.room")}
-                  createLabel={(v) => t("roomfn.create.room", { name: v })}
-                  removeLabel={(n) => t("roomfn.remove_named", { name: n })}
-                />
-                <span class="pt-2 font-semibold">{t("channel.functions")}:</span>
-                <RoomFunctionSelect
-                  id={`ch-${ch.number}-functions`}
-                  ariaLabel={t("channel.functions")}
-                  selected={ch.functions ?? []}
-                  options={functionOptions}
-                  onChange={(next) => void updateChannelFunctions(ch.number, next)}
-                  onCreate={canEditNodes ? createFunctionEntry : undefined}
-                  disabled={!canAssign}
-                  placeholder={t("roomfn.placeholder.function")}
-                  createLabel={(v) => t("roomfn.create.function", { name: v })}
-                  removeLabel={(n) => t("roomfn.remove_named", { name: n })}
-                />
+                {#if treeTaxonomy}
+                  <span class="pt-2 font-semibold">{t("channel.rooms")}:</span>
+                  <TaxonomyPicker
+                    taxonomy={roomTree}
+                    selected={assignedPaths(ch.taxonomy, "room")}
+                    onChange={(paths) => void assignPaths("room", paths, ch.number)}
+                    disabled={!canAssign}
+                    ariaLabel={t("channel.rooms")}
+                  />
+                  <span class="pt-2 font-semibold">{t("channel.functions")}:</span>
+                  <TaxonomyPicker
+                    taxonomy={functionTree}
+                    selected={assignedPaths(ch.taxonomy, "function")}
+                    onChange={(paths) => void assignPaths("function", paths, ch.number)}
+                    disabled={!canAssign}
+                    ariaLabel={t("channel.functions")}
+                  />
+                {:else}
+                  <span class="pt-2 font-semibold">{t("channel.rooms")}:</span>
+                  <RoomFunctionSelect
+                    id={`ch-${ch.number}-rooms`}
+                    ariaLabel={t("channel.rooms")}
+                    selected={ch.rooms ?? []}
+                    options={roomOptions}
+                    onChange={(next) => void updateChannelRooms(ch.number, next)}
+                    onCreate={canEditNodes ? createRoomEntry : undefined}
+                    disabled={!canAssign}
+                    placeholder={t("roomfn.placeholder.room")}
+                    createLabel={(v) => t("roomfn.create.room", { name: v })}
+                    removeLabel={(n) => t("roomfn.remove_named", { name: n })}
+                  />
+                  <span class="pt-2 font-semibold">{t("channel.functions")}:</span>
+                  <RoomFunctionSelect
+                    id={`ch-${ch.number}-functions`}
+                    ariaLabel={t("channel.functions")}
+                    selected={ch.functions ?? []}
+                    options={functionOptions}
+                    onChange={(next) => void updateChannelFunctions(ch.number, next)}
+                    onCreate={canEditNodes ? createFunctionEntry : undefined}
+                    disabled={!canAssign}
+                    placeholder={t("roomfn.placeholder.function")}
+                    createLabel={(v) => t("roomfn.create.function", { name: v })}
+                    removeLabel={(n) => t("roomfn.remove_named", { name: n })}
+                  />
+                {/if}
               </div>
               {#if detail.team_supported}
                 <div class="mb-3">

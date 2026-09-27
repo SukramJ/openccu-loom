@@ -11,6 +11,9 @@
 
 import { makeTextMatcher } from "$lib/utils";
 import type { DeviceSummary } from "$lib/api/types";
+import { matchesNodeFilter, nestedAssignments, nodeFilterValue } from "$lib/taxonomy/tree";
+
+export { nodeFilterValue };
 
 export type OverviewGroupMode = "room" | "function" | "central";
 
@@ -31,6 +34,10 @@ export const defaultOverviewFilters: OverviewFilters = {
   area: "",
   search: "",
 };
+
+/** Names a nested taxonomy node by its whole path ("EG › Küche"); the
+ *  shape the taxonomy store's `enumOf` + `labelOf` answer. */
+export type PathLabel = (central: string, enumId: string, path: string) => string | undefined;
 
 /** Resolves which Area id owns a (central, room) pair — the shape
  *  `areasStore.areaIdOf` implements. Passed in rather than imported so
@@ -79,6 +86,35 @@ export function distinctRooms(devices: DeviceSummary[], central?: string): strin
 }
 
 /** Distinct, sorted function ("Gewerk") names, scoped like `distinctRooms`. */
+/**
+ * Filter options for rooms or functions: one per name, except that a
+ * nested node is its own option labelled with its path, so "Küche" on
+ * two floors are two choices.
+ */
+export function distinctNodeOptions(
+  devices: DeviceSummary[],
+  enumId: "room" | "function",
+  central?: string,
+  pathLabel?: PathLabel,
+): { value: string; label: string }[] {
+  const byValue = new Map<string, string>();
+  for (const d of devices) {
+    if (central && d.central !== central) continue;
+    const nested = nestedAssignments(d, enumId);
+    const nestedNames = new Set(nested.map((a) => a.name));
+    for (const a of nested) {
+      const c = d.central ?? "";
+      byValue.set(nodeFilterValue(c, enumId, a.path), pathLabel?.(c, enumId, a.path) ?? a.name);
+    }
+    for (const n of (enumId === "room" ? d.rooms : d.functions) ?? []) {
+      if (!nestedNames.has(n)) byValue.set(n, n);
+    }
+  }
+  return [...byValue.entries()]
+    .map(([value, label]) => ({ value, label }))
+    .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+}
+
 export function distinctFunctions(devices: DeviceSummary[], central?: string): string[] {
   const set = new Set<string>();
   for (const d of devices) {
@@ -99,8 +135,8 @@ export function filterDevices(
 ): DeviceSummary[] {
   return devices.filter((d) => {
     if (filters.central && d.central !== filters.central) return false;
-    if (filters.room && !(d.rooms ?? []).includes(filters.room)) return false;
-    if (filters.function && !(d.functions ?? []).includes(filters.function)) return false;
+    if (filters.room && !matchesNodeFilter(d, "room", filters.room)) return false;
+    if (filters.function && !matchesNodeFilter(d, "function", filters.function)) return false;
     if (filters.area) {
       const central = d.central ?? "";
       const inArea = (d.rooms ?? []).some((r) => areaIdOf?.(central, r) === filters.area);
@@ -125,11 +161,11 @@ export function filterDevices(
 export function groupDevices(
   devices: DeviceSummary[],
   mode: OverviewGroupMode,
+  pathLabel?: PathLabel,
 ): DeviceOverviewGroup[] {
   const byKey = new Map<string, DeviceOverviewGroup>();
 
-  function add(central: string, groupValue: string, device: DeviceSummary) {
-    const key = `${central}::${groupValue}`;
+  function add(central: string, groupValue: string, device: DeviceSummary, key = `${central}::${groupValue}`) {
     let group = byKey.get(key);
     if (!group) {
       group = { key, central, groupValue, devices: [] };
@@ -144,8 +180,15 @@ export function groupDevices(
       add(central, central, d);
       continue;
     }
-    const values = mode === "room" ? d.rooms : d.functions;
-    if (!values || values.length === 0) {
+    // A nested node is its own group, labelled with its path: two rooms
+    // named "Küche" on two floors never merge.
+    const nested = nestedAssignments(d, mode);
+    const nestedNames = new Set(nested.map((a) => a.name));
+    for (const a of nested) {
+      add(central, pathLabel?.(central, mode, a.path) ?? a.name, d, `${central}::@${mode}/${a.path}`);
+    }
+    const values = ((mode === "room" ? d.rooms : d.functions) ?? []).filter((v) => !nestedNames.has(v));
+    if (values.length === 0 && nested.length === 0) {
       add(central, "", d);
     } else {
       for (const v of values) add(central, v, d);
@@ -172,6 +215,7 @@ export function buildOverviewGroups(
   mode: OverviewGroupMode,
   filters: OverviewFilters,
   areaIdOf?: AreaIdOf,
+  pathLabel?: PathLabel,
 ): DeviceOverviewGroup[] {
-  return groupDevices(filterDevices(devices, filters, areaIdOf), mode);
+  return groupDevices(filterDevices(devices, filters, areaIdOf), mode, pathLabel);
 }

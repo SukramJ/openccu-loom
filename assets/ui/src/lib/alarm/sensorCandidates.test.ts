@@ -666,3 +666,28 @@ describe("sortPickerRows", () => {
     expect(rows[2]).toBe(rowC);
   });
 });
+
+describe("buildCandidates — nested rooms", () => {
+  it("narrows to the one nested room a node filter names", () => {
+    const base = {
+      interface: "HmIP-RF",
+      interface_id: "HmIP-RF",
+      model: "HmIP-SWDO",
+      available: true,
+      channels_count: 2,
+      updatable: false,
+      update_available: false,
+      master_pushes_config_pending: false,
+      has_sub_devices: false,
+      central: "box",
+      rooms: ["Küche"],
+    };
+    const devices = [
+      { ...base, address: "D1", taxonomy: [{ enum: "room", path: "eg/kueche", name: "Küche", parent_path: "eg" }] },
+      { ...base, address: "D2", taxonomy: [{ enum: "room", path: "og/kueche", name: "Küche", parent_path: "og" }] },
+    ] as unknown as Parameters<typeof buildCandidates>[0];
+    const og = buildCandidates(devices, { showAll: true, room: "@box/room/og/kueche" });
+    expect(og.map((d) => d.address)).toEqual(["D2"]);
+    expect(buildCandidates(devices, { showAll: true, room: "Küche" }).map((d) => d.address)).toEqual(["D1", "D2"]);
+  });
+});

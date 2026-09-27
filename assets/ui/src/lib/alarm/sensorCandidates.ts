@@ -1,5 +1,6 @@
 import { makeTextMatcher } from "$lib/utils";
 import type { AlarmOutputCandidate, AlarmSensorType, DeviceSummary } from "$lib/api/types";
+import { matchesNodeFilter } from "$lib/taxonomy/tree";
 
 // Add-sensor assist for AlarmSensors.svelte's device picker (docs/alarm-
 // concept.md §12.2 / §6.1): which devices are surfaced by default, and
@@ -131,8 +132,8 @@ export function buildCandidates(
   return devices
     .filter((d) => {
       if (!showAll && !isSecurityDevice(d)) return false;
-      if (room && !(d.rooms ?? []).includes(room)) return false;
-      if (func && !(d.functions ?? []).includes(func)) return false;
+      if (room && !matchesNodeFilter(d, "room", room)) return false;
+      if (func && !matchesNodeFilter(d, "function", func)) return false;
       if (area) {
         const central = d.central ?? "";
         if (!(d.rooms ?? []).some((r) => areaIdOf?.(central, r) === area)) return false;

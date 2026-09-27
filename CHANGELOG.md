@@ -138,6 +138,20 @@ CCU; the list below is what an API client can already observe.
   firmware installs, backups, message acknowledgement, renaming and room
   assignment disappear per system with the reason shown — "openccu-lite
   does not offer it" or "the API token lacks the scope power".
+- Adding a system in the setup wizard or under Settings → CCUs starts
+  with "Identify system": an openccu-lite box is asked once more over
+  HTTPS, shows its certificate fingerprint to compare, and is then paired
+  — the six-digit code to enter on the box, the live state, cancel — or
+  given a pasted API token. A box is added without username, password or
+  CUxD; editing one keeps its stored token unless a new pairing or token
+  replaces it, and names the features the token's scopes do not cover.
+- Systems that nest their rooms and functions (openccu-lite) are edited
+  as trees under Settings → Rooms & functions: create a node below
+  another, rename, move and delete it. A device's rooms and functions on
+  such a system are picked from the tree and shown with their path
+  ("Ground floor › Kitchen"), and the overview and the alarm sensor
+  pickers group and filter by that path, so two rooms of one name stay
+  apart. A CCU's flat rooms and functions work as before.
 
 #### Fixed
 

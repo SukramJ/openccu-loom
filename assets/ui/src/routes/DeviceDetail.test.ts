@@ -23,7 +23,9 @@ const {
   mockToastSuccess,
   mockToastError,
   mockToastWarn,
+  mockSetDeviceTaxonomyPaths,
 } = vi.hoisted(() => ({
+  mockSetDeviceTaxonomyPaths: vi.fn(),
   mockGetDevice: vi.fn(),
   mockGetDeviceSchedule: vi.fn(),
   mockGetPreference: vi.fn(),
@@ -67,6 +69,7 @@ vi.mock("$lib/api/client", () => ({
     testDeviceCommunication: (...args: unknown[]) => mockTestDeviceCommunication(...args),
     updateFirmware: vi.fn(),
     setDeviceRooms: vi.fn(),
+    setDeviceTaxonomyPaths: (...args: unknown[]) => mockSetDeviceTaxonomyPaths(...args),
     setDeviceFunctions: vi.fn(),
     listDataPoints: vi.fn().mockResolvedValue([]),
   },
@@ -81,6 +84,34 @@ vi.mock("$lib/api/client", () => ({
     }
   },
 }));
+
+// One openccu-lite box whose rooms nest; every other central is a flat CCU.
+vi.mock("$lib/stores/taxonomy.svelte", () => {
+  const box = {
+    central: "box",
+    revision: 1,
+    writable: true,
+    tree: true,
+    enums: [
+      {
+        id: "room",
+        nodes: [
+          { id: "eg", path: "eg", name: "EG", children: [{ id: "kueche", path: "eg/kueche", name: "Küche" }] },
+          { id: "og", path: "og", name: "OG", children: [{ id: "kueche", path: "og/kueche", name: "Küche" }] },
+        ],
+      },
+      { id: "function", nodes: [] },
+    ],
+  };
+  return {
+    taxonomyStore: {
+      refresh: vi.fn(),
+      central: (name?: string) => (name === "box" ? box : undefined),
+      enumOf: (name: string | undefined, id: string) =>
+        name === "box" ? box.enums.find((e) => e.id === id) : undefined,
+    },
+  };
+});
 
 vi.mock("$lib/i18n", () => ({
   t: (key: string) => key,
@@ -1170,5 +1201,27 @@ describe("DeviceDetail — channel table", () => {
     // nobody asked for must not raise one.
     expect(mockToastError).not.toHaveBeenCalled();
     expect(within(channelRows()[0]).getAllByText("—").length).toBeGreaterThan(0);
+  });
+});
+
+describe("DeviceDetail — nested rooms", () => {
+  it("shows a room by its path and writes the assignment by node", async () => {
+    mockListRooms.mockResolvedValue([]);
+    mockListFunctions.mockResolvedValue([]);
+    mockSetDeviceTaxonomyPaths.mockResolvedValue(undefined);
+    mockGetDevice.mockResolvedValue(
+      baseDevice({
+        central: "box",
+        rooms: ["Küche"],
+        taxonomy: [{ enum: "room", path: "og/kueche", name: "Küche", parent_path: "og" }],
+      }),
+    );
+    render(DeviceDetail, { props: { address: "0001ABCD" } });
+    // The name alone would not say which kitchen; the path does.
+    await screen.findByText("OG › Küche");
+    await fireEvent.click(screen.getByLabelText("taxonomy.picker.remove"));
+    await waitFor(() =>
+      expect(mockSetDeviceTaxonomyPaths).toHaveBeenCalledWith("0001ABCD", { room_paths: [] }),
+    );
   });
 });
