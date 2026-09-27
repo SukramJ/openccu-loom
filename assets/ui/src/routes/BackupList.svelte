@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { centralStore } from "$lib/stores/centrals.svelte";
+  import FeatureGate from "$lib/components/ui/FeatureGate.svelte";
   import { onMount } from "svelte";
   import { api, ApiError } from "$lib/api/client";
   import type { CentralRow } from "$lib/api/client";
@@ -41,7 +43,8 @@
     try {
       centrals = await api.listCentralsV2();
       if (!triggerCentral && centrals.length > 0) {
-        triggerCentral = centrals[0].name;
+        const able = centrals.find((c) => centralStore.offers(c.name, "system.backup.create"));
+        triggerCentral = (able ?? centrals[0]).name;
       }
     } catch {
       // Non-fatal: the trigger button still works unscoped, and the
@@ -50,8 +53,11 @@
     }
   }
 
+  // Only a central that can create a backup is offered as its target.
   const centralOptions = $derived(
-    centrals.map((c) => ({ value: c.name, label: c.name })),
+    centrals
+      .filter((c) => centralStore.offers(c.name, "system.backup.create"))
+      .map((c) => ({ value: c.name, label: c.name })),
   );
 
   async function load() {
@@ -275,94 +281,98 @@
       >
         {uploading ? t("backup.uploading") : t("backup.upload")}
       </Button>
-      <Button type="button" size="sm" onclick={() => void trigger()} disabled={triggering}>
-        {triggering ? t("backup.triggering") : t("backup.trigger")}
-      </Button>
+      {#if centralStore.offers(triggerCentral || undefined, "system.backup.create")}
+        <Button type="button" size="sm" onclick={() => void trigger()} disabled={triggering}>
+          {triggering ? t("backup.triggering") : t("backup.trigger")}
+        </Button>
+      {/if}
     {/snippet}
   </PageHeader>
 
-  {#if loadError}
-    <ErrorState message={loadError} onRetry={load} class="mb-4" />
-  {/if}
+  <FeatureGate feature="system.backup.create">
+    {#if loadError}
+      <ErrorState message={loadError} onRetry={load} class="mb-4" />
+    {/if}
 
-  {#if storage}
-    <div
-      class="mb-4 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs text-[var(--ha-secondary-text-color)]"
-      data-testid="backup-storage"
-    >
-      <span class="font-medium">{t("backup.storage.label")}:</span>
-      {#if storage.available}
-        <span class="font-mono break-all text-[var(--ha-primary-text-color)]">
-          {storage.dir || t("backup.storage.unknown")}
-        </span>
-        <span aria-hidden="true">·</span>
-        <span>
-          {t("backup.storage.summary", {
-            count: String(storage.count),
-            bytes: formatBytes(storage.bytes),
-          })}
-        </span>
-      {:else}
-        <span class="text-amber-700 dark:text-amber-400">{t("backup.storage.unavailable")}</span>
-      {/if}
-    </div>
-  {/if}
-
-  {#if loading}
-    <LoadingState />
-  {:else}
-    <Card class="p-4">
-      <DataTable
-        rows={backups}
-        {columns}
-        rowKey={(e) => e.id}
-        search
-        searchPlaceholder={t("common.search")}
-        persistKey="backups"
-        initialSort={{ key: "created", asc: false }}
-        emptyMessage={t("backup.empty")}
-        emptyIcon="mdi:download"
+    {#if storage}
+      <div
+        class="mb-4 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs text-[var(--ha-secondary-text-color)]"
+        data-testid="backup-storage"
       >
-        {#snippet cell(entry, col)}
-          {#if col.key === "created"}
-            <span class="font-medium">{formatDate(entry.created_at)}</span>
-          {:else if col.key === "central"}
-            <Badge variant="muted">{entry.central}</Badge>
-          {:else if col.key === "size"}
-            <span class="font-mono text-xs">{formatBytes(entry.bytes)}</span>
-          {:else if col.key === "id"}
-            <span class="font-mono text-xs text-slate-500 dark:text-slate-400">{entry.id}</span>
-          {:else if col.key === "action"}
-            <div class="flex items-center justify-end gap-2">
-              <a
-                class="text-brand-700 hover:text-brand-800 dark:text-brand-400 dark:hover:text-brand-300"
-                href={api.backupDownloadUrl(entry.id)}
-                download={entry.filename || `${entry.id}.sbk`}
-              >
-                {t("backup.download")}
-              </a>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onclick={() => void restore(entry)}
-                disabled={restoring === entry.id}
-              >
-                {restoring === entry.id ? "…" : t("common.restore")}
-              </Button>
-              <Button
-                type="button"
-                variant="outline-destructive"
-                size="sm"
-                onclick={() => void remove(entry)}
-                disabled={deleting === entry.id}
-              >
-                {deleting === entry.id ? t("backup.deleting") : t("backup.delete")}
-              </Button>
-            </div>
-          {/if}
-        {/snippet}
-      </DataTable>
-    </Card>
-  {/if}
+        <span class="font-medium">{t("backup.storage.label")}:</span>
+        {#if storage.available}
+          <span class="font-mono break-all text-[var(--ha-primary-text-color)]">
+            {storage.dir || t("backup.storage.unknown")}
+          </span>
+          <span aria-hidden="true">·</span>
+          <span>
+            {t("backup.storage.summary", {
+              count: String(storage.count),
+              bytes: formatBytes(storage.bytes),
+            })}
+          </span>
+        {:else}
+          <span class="text-amber-700 dark:text-amber-400">{t("backup.storage.unavailable")}</span>
+        {/if}
+      </div>
+    {/if}
+
+    {#if loading}
+      <LoadingState />
+    {:else}
+      <Card class="p-4">
+        <DataTable
+          rows={backups}
+          {columns}
+          rowKey={(e) => e.id}
+          search
+          searchPlaceholder={t("common.search")}
+          persistKey="backups"
+          initialSort={{ key: "created", asc: false }}
+          emptyMessage={t("backup.empty")}
+          emptyIcon="mdi:download"
+        >
+          {#snippet cell(entry, col)}
+            {#if col.key === "created"}
+              <span class="font-medium">{formatDate(entry.created_at)}</span>
+            {:else if col.key === "central"}
+              <Badge variant="muted">{entry.central}</Badge>
+            {:else if col.key === "size"}
+              <span class="font-mono text-xs">{formatBytes(entry.bytes)}</span>
+            {:else if col.key === "id"}
+              <span class="font-mono text-xs text-slate-500 dark:text-slate-400">{entry.id}</span>
+            {:else if col.key === "action"}
+              <div class="flex items-center justify-end gap-2">
+                <a
+                  class="text-brand-700 hover:text-brand-800 dark:text-brand-400 dark:hover:text-brand-300"
+                  href={api.backupDownloadUrl(entry.id)}
+                  download={entry.filename || `${entry.id}.sbk`}
+                >
+                  {t("backup.download")}
+                </a>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onclick={() => void restore(entry)}
+                  disabled={restoring === entry.id}
+                >
+                  {restoring === entry.id ? "…" : t("common.restore")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline-destructive"
+                  size="sm"
+                  onclick={() => void remove(entry)}
+                  disabled={deleting === entry.id}
+                >
+                  {deleting === entry.id ? t("backup.deleting") : t("backup.delete")}
+                </Button>
+              </div>
+            {/if}
+          {/snippet}
+        </DataTable>
+      </Card>
+    {/if}
+  </FeatureGate>
 </PageShell>

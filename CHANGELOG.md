@@ -130,6 +130,14 @@ CCU; the list below is what an API client can already observe.
   `/setup/probe` and `/setup/pairing` while first-run setup is pending,
   and the setup wizard's system accepts a `port` and a `pairing_id`. SSDP
   discovery labels an openccu-lite box (`system_type`). REST API 11.7.0.
+- The web UI hides what a system cannot do instead of offering it and
+  failing: a view no configured system serves (programs, system variables,
+  the inbox on a fleet of openccu-lite boxes; heating groups and backups
+  without the token's scope) leaves the navigation, a view some systems
+  lack names them and why, and reboot, shutdown, safe mode, location,
+  firmware installs, backups, message acknowledgement, renaming and room
+  assignment disappear per system with the reason shown — "openccu-lite
+  does not offer it" or "the API token lacks the scope power".
 
 #### Fixed
 

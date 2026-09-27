@@ -10,6 +10,7 @@
   import { matterStore } from "$lib/stores/matter.svelte";
   import { infoStore } from "$lib/stores/info.svelte";
   import { surfacesStore } from "$lib/stores/surfaces.svelte";
+  import { centralStore } from "$lib/stores/centrals.svelte";
   import { authStore } from "$lib/stores/auth.svelte";
   import {
     prefs,
@@ -107,6 +108,10 @@
       // answers "visible" for everything, so the sidebar never blanks
       // during the first paint.
       surfaceVisible: (id) => surfacesStore.visible(id),
+      // A view whose feature no central offers — programs on a fleet of
+      // openccu-lite systems — is not offered at all.
+      surfaceGate: (id) => surfacesStore.gate(id),
+      featureAvailable: (key) => centralStore.featureAvailable(key),
     }),
   );
 

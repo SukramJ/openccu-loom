@@ -1,4 +1,5 @@
 <script lang="ts">
+  import FeatureGate from "$lib/components/ui/FeatureGate.svelte";
   import { onDestroy, onMount } from "svelte";
   import { api, ApiError } from "$lib/api/client";
   import type { InboxDevice, ReplaceCandidate, GroupEntry } from "$lib/api/types";
@@ -761,108 +762,110 @@
     </div>
   {/if}
 
-  {#if loadError}
-    <ErrorState message={loadError} onRetry={load} class="mb-4" />
-  {/if}
+  <FeatureGate feature="hub.inbox">
+    {#if loadError}
+      <ErrorState message={loadError} onRetry={load} class="mb-4" />
+    {/if}
 
-  {#if loading}
-    <LoadingState />
-  {:else}
-    <Card class="p-4">
-      <DataTable
-        rows={visibleEntries}
-        {columns}
-        rowKey={(d) => (d.central ?? "") + "/" + d.address}
-        search
-        searchPlaceholder={t("common.search")}
-        persistKey="inbox"
-        initialSort={{ key: "first_seen", asc: false }}
-        emptyMessage={t("inbox.empty")}
-        emptyIcon="mdi:server"
-      >
-        {#snippet cell(d, col)}
-          {#if col.key === "address"}
-            <span class="font-mono font-semibold">{d.address}</span>
-            {#if centrals.length > 1 && d.central}
-              <Badge variant="muted">{d.central}</Badge>
+    {#if loading}
+      <LoadingState />
+    {:else}
+      <Card class="p-4">
+        <DataTable
+          rows={visibleEntries}
+          {columns}
+          rowKey={(d) => (d.central ?? "") + "/" + d.address}
+          search
+          searchPlaceholder={t("common.search")}
+          persistKey="inbox"
+          initialSort={{ key: "first_seen", asc: false }}
+          emptyMessage={t("inbox.empty")}
+          emptyIcon="mdi:server"
+        >
+          {#snippet cell(d, col)}
+            {#if col.key === "address"}
+              <span class="font-mono font-semibold">{d.address}</span>
+              {#if centrals.length > 1 && d.central}
+                <Badge variant="muted">{d.central}</Badge>
+              {/if}
+              {#if d.awaiting_release}
+                <!-- Already accepted and materialised: it can be renamed and
+                     placed right now, and only the release publishes it to
+                     Home Assistant, Matter and any webhook. -->
+                <Badge variant="success" title={t("inbox.awaiting_release_hint")}>
+                  {t("inbox.awaiting_release_badge")}
+                </Badge>
+              {:else if d.pending_creation}
+                <!-- The daemon parked this device (delay_new_device_creation):
+                     it has no data points here until it is accepted. -->
+                <Badge variant="warning" title={t("inbox.pending_creation_hint")}>
+                  {t("inbox.pending_creation_badge")}
+                </Badge>
+              {/if}
+            {:else if col.key === "model"}
+              <Badge variant="muted">{d.model}</Badge>
+              {#if d.manufacturer}
+                <span class="block text-xs text-slate-500 dark:text-slate-400">{d.manufacturer}</span>
+              {/if}
+            {:else if col.key === "serial"}
+              {#if d.serial}
+                <span class="font-mono text-xs">{d.serial}</span>
+              {:else}
+                <span class="text-slate-400 dark:text-slate-500">—</span>
+              {/if}
+            {:else if col.key === "first_seen"}
+              {#if d.first_seen}
+                <span class="text-xs text-slate-500 dark:text-slate-400">{formatTs(d.first_seen)}</span>
+              {:else}
+                <span class="text-slate-400 dark:text-slate-500">—</span>
+              {/if}
+            {:else if col.key === "actions"}
+              {#if d.awaiting_release}
+                <!-- Offering "accept" here would ask the operator to accept a
+                     device that is already accepted. The remaining step is
+                     publishing it. -->
+                <Button
+                  type="button"
+                  size="sm"
+                  onclick={() => void releaseDevice(d.address, d.central ?? "")}
+                  disabled={releasing === d.address}
+                >
+                  {releasing === d.address ? "…" : t("inbox.release")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onclick={() => (location.hash = `#/device/${encodeURIComponent(d.address)}`)}
+                >
+                  {t("inbox.configure")}
+                </Button>
+              {:else}
+                <Button
+                  type="button"
+                  size="sm"
+                  onclick={() => openAccept(d.address, d.central ?? "")}
+                  disabled={accepting === d.address}
+                >
+                  {accepting === d.address ? "…" : t("inbox.accept")}
+                </Button>
+              {/if}
+              {#if isReplaceable(d)}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onclick={() => void openReplace(d.address, d.central ?? "")}
+                >
+                  {t("inbox.replace.button")}
+                </Button>
+              {/if}
             {/if}
-            {#if d.awaiting_release}
-              <!-- Already accepted and materialised: it can be renamed and
-                   placed right now, and only the release publishes it to
-                   Home Assistant, Matter and any webhook. -->
-              <Badge variant="success" title={t("inbox.awaiting_release_hint")}>
-                {t("inbox.awaiting_release_badge")}
-              </Badge>
-            {:else if d.pending_creation}
-              <!-- The daemon parked this device (delay_new_device_creation):
-                   it has no data points here until it is accepted. -->
-              <Badge variant="warning" title={t("inbox.pending_creation_hint")}>
-                {t("inbox.pending_creation_badge")}
-              </Badge>
-            {/if}
-          {:else if col.key === "model"}
-            <Badge variant="muted">{d.model}</Badge>
-            {#if d.manufacturer}
-              <span class="block text-xs text-slate-500 dark:text-slate-400">{d.manufacturer}</span>
-            {/if}
-          {:else if col.key === "serial"}
-            {#if d.serial}
-              <span class="font-mono text-xs">{d.serial}</span>
-            {:else}
-              <span class="text-slate-400 dark:text-slate-500">—</span>
-            {/if}
-          {:else if col.key === "first_seen"}
-            {#if d.first_seen}
-              <span class="text-xs text-slate-500 dark:text-slate-400">{formatTs(d.first_seen)}</span>
-            {:else}
-              <span class="text-slate-400 dark:text-slate-500">—</span>
-            {/if}
-          {:else if col.key === "actions"}
-            {#if d.awaiting_release}
-              <!-- Offering "accept" here would ask the operator to accept a
-                   device that is already accepted. The remaining step is
-                   publishing it. -->
-              <Button
-                type="button"
-                size="sm"
-                onclick={() => void releaseDevice(d.address, d.central ?? "")}
-                disabled={releasing === d.address}
-              >
-                {releasing === d.address ? "…" : t("inbox.release")}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onclick={() => (location.hash = `#/device/${encodeURIComponent(d.address)}`)}
-              >
-                {t("inbox.configure")}
-              </Button>
-            {:else}
-              <Button
-                type="button"
-                size="sm"
-                onclick={() => openAccept(d.address, d.central ?? "")}
-                disabled={accepting === d.address}
-              >
-                {accepting === d.address ? "…" : t("inbox.accept")}
-              </Button>
-            {/if}
-            {#if isReplaceable(d)}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onclick={() => void openReplace(d.address, d.central ?? "")}
-              >
-                {t("inbox.replace.button")}
-              </Button>
-            {/if}
-          {/if}
-        {/snippet}
-      </DataTable>
-    </Card>
-  {/if}
+          {/snippet}
+        </DataTable>
+      </Card>
+    {/if}
+  </FeatureGate>
 </PageShell>
 
 {#if acceptTarget}

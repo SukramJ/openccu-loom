@@ -114,6 +114,26 @@ describe("CCUMaintenancePanel", () => {
     expect(mockToastSuccess).not.toHaveBeenCalled();
   });
 
+  it("hides an action the central does not offer and says so", async () => {
+    mockGetSystemCCUs.mockResolvedValue([
+      {
+        ...CCUS[0],
+        system_type: "openccu-lite",
+        features: {
+          "system.reboot": { available: false, reason: "missing_scope", scope: "power" },
+          "system.safe_mode": { available: false, reason: "not_supported_by_system" },
+          "system.poweroff": { available: true },
+          "system.position": { available: true },
+        },
+      },
+    ]);
+    render(CCUMaintenancePanel);
+    await screen.findByText("ccu_host.poweroff.action");
+    expect(screen.queryByText("ccu_maintenance.reboot")).toBeNull();
+    expect(screen.queryByText("ccu_host.safe_mode.action")).toBeNull();
+    expect(screen.getByText("feature.hidden_actions")).toBeTruthy();
+  });
+
   it("hides the reboot button for non-admins", async () => {
     mockIdentity.role = "viewer";
     render(CCUMaintenancePanel);

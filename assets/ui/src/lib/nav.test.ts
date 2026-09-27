@@ -125,3 +125,37 @@ describe("navSurfaceID", () => {
     expect(navSurfaceID("#/settings?tab=users")).toBe("nav.settings");
   });
 });
+
+describe("nav — feature gates", () => {
+  const gate = (id: string) =>
+    ({ "nav.programs": "feature:hub.programs", "nav.sysvars": "feature:hub.sysvars" })[id];
+
+  it("drops a view whose feature no central offers", () => {
+    const hrefs = navClusters({
+      ...ALL_GATES,
+      surfaceGate: gate,
+      featureAvailable: (key) => key !== "hub.programs",
+    }).flatMap((c) => c.items.map((i) => i.href));
+    expect(hrefs).not.toContain("#/programs");
+    expect(hrefs).toContain("#/sysvars");
+  });
+
+  it("keeps every view when no feature question can be asked", () => {
+    const hrefs = navClusters({ ...ALL_GATES, surfaceGate: gate }).flatMap((c) =>
+      c.items.map((i) => i.href),
+    );
+    expect(hrefs).toContain("#/programs");
+  });
+
+  it("applies the profile and the feature gate together", () => {
+    const hrefs = navClusters({
+      ...ALL_GATES,
+      surfaceVisible: (id) => id !== "nav.sysvars",
+      surfaceGate: gate,
+      featureAvailable: (key) => key !== "hub.programs",
+    }).flatMap((c) => c.items.map((i) => i.href));
+    expect(hrefs).not.toContain("#/programs");
+    expect(hrefs).not.toContain("#/sysvars");
+    expect(hrefs).toContain("#/devices");
+  });
+});

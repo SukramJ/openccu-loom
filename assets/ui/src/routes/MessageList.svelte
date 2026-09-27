@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { centralStore } from "$lib/stores/centrals.svelte";
   import { onMount, onDestroy } from "svelte";
   import { api, ApiError } from "$lib/api/client";
   import type {
@@ -447,7 +448,7 @@
       {#if tabCentrals.length > 1 || centralFilter}
         <Select class="w-auto" bind:value={centralFilter} options={centralOptions(tabCentrals)} />
       {/if}
-      {#if tab === "alarm" && alarmAckAllCount > 0}
+      {#if tab === "alarm" && alarmAckAllCount > 0 && centralStore.offers(centralFilter || undefined, "hub.alarm_messages")}
         <Button
           type="button"
           variant="outline"
@@ -457,7 +458,7 @@
         >
           {ackingAll ? "…" : t("messages.ack_all.button")}
         </Button>
-      {:else if tab === "service" && serviceAckAllCount > 0}
+      {:else if tab === "service" && serviceAckAllCount > 0 && centralStore.offers(centralFilter || undefined, "hub.service_messages.ack")}
         <Button
           type="button"
           variant="outline"
@@ -525,7 +526,7 @@
             {#if a.last_timestamp}
               <span class="text-xs text-slate-500 dark:text-slate-400">{formatDate(a.last_timestamp)}</span>
             {/if}
-          {:else if col.key === "actions"}
+          {:else if col.key === "actions" && centralStore.offers(a.central, "hub.alarm_messages")}
             <Button
               type="button"
               variant="outline"
@@ -612,7 +613,7 @@
             {/if}
           {:else if col.key === "actions"}
             <div class="inline-flex flex-wrap justify-end gap-1">
-              {#if s.quittable}
+              {#if s.quittable && centralStore.offers(s.central, "hub.service_messages.ack")}
                 <Button
                   type="button"
                   variant="outline"
@@ -624,16 +625,18 @@
                   {acking === s.id ? "…" : t("common.acknowledge")}
                 </Button>
               {/if}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onclick={() => void suppressService(s)}
-                disabled={suppressingId === s.id}
-                title={t("messages.suppress")}
-              >
-                {suppressingId === s.id ? "…" : t("messages.suppress")}
-              </Button>
+              {#if centralStore.offers(s.central, "hub.service_messages.suppress")}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onclick={() => void suppressService(s)}
+                  disabled={suppressingId === s.id}
+                  title={t("messages.suppress")}
+                >
+                  {suppressingId === s.id ? "…" : t("messages.suppress")}
+                </Button>
+              {/if}
             </div>
           {/if}
         {/snippet}

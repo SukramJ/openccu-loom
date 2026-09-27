@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { centralStore } from "$lib/stores/centrals.svelte";
   import { onMount, untrack } from "svelte";
   import type { DeviceDetail } from "$lib/api/types";
   import { api, ApiError } from "$lib/api/client";
@@ -145,6 +146,12 @@
       void loadHistoryDPs(no);
     }
   }
+
+  // What the device's central lets an operator change: an action it does
+  // not offer is hidden, not shown and failing.
+  const canRename = $derived(centralStore.offers(detail?.central, "device.rename"));
+  const canAssign = $derived(centralStore.offers(detail?.central, "taxonomy.assign"));
+  const canEditNodes = $derived(centralStore.offers(detail?.central, "taxonomy.edit"));
 
   // Rename / delete / firmware workflow state.
   let renaming = $state(false);
@@ -905,7 +912,8 @@
             selected={device.rooms ?? []}
             options={roomOptions}
             onChange={(next) => void updateRooms(next)}
-            onCreate={createRoomEntry}
+            onCreate={canEditNodes ? createRoomEntry : undefined}
+            disabled={!canAssign}
             placeholder={t("roomfn.placeholder.room")}
             createLabel={(v) => t("roomfn.create.room", { name: v })}
             removeLabel={(n) => t("roomfn.remove_named", { name: n })}
@@ -917,7 +925,8 @@
             selected={device.functions ?? []}
             options={functionOptions}
             onChange={(next) => void updateFunctions(next)}
-            onCreate={createFunctionEntry}
+            onCreate={canEditNodes ? createFunctionEntry : undefined}
+            disabled={!canAssign}
             placeholder={t("roomfn.placeholder.function")}
             createLabel={(v) => t("roomfn.create.function", { name: v })}
             removeLabel={(n) => t("roomfn.remove_named", { name: n })}
@@ -927,15 +936,17 @@
       {#snippet actions()}
         {@const device = detail!}
         {#if !renaming}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onclick={startRename}
-          >
-            <Icon name="mdi:pencil" size={14} />
-            {t("device.rename")}
-          </Button>
+          {#if canRename}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onclick={startRename}
+            >
+              <Icon name="mdi:pencil" size={14} />
+              {t("device.rename")}
+            </Button>
+          {/if}
           <Button
             type="button"
             variant="outline"
@@ -1181,16 +1192,18 @@
                   <span class="font-mono text-xs text-[var(--ha-secondary-text-color)]">
                     {ch.address}
                   </span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    aria-label={t("channel.rename")}
-                    title={t("channel.rename")}
-                    onclick={() => startRenameChannel(ch.number, ch.name ?? "")}
-                  >
-                    <Icon name="mdi:pencil" size={16} />
-                  </Button>
+                  {#if canRename}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      aria-label={t("channel.rename")}
+                      title={t("channel.rename")}
+                      onclick={() => startRenameChannel(ch.number, ch.name ?? "")}
+                    >
+                      <Icon name="mdi:pencil" size={16} />
+                    </Button>
+                  {/if}
                 {/if}
               </div>
               <!-- Per-channel room / function assignment. Same combobox as the
@@ -1204,7 +1217,8 @@
                   selected={ch.rooms ?? []}
                   options={roomOptions}
                   onChange={(next) => void updateChannelRooms(ch.number, next)}
-                  onCreate={createRoomEntry}
+                  onCreate={canEditNodes ? createRoomEntry : undefined}
+                  disabled={!canAssign}
                   placeholder={t("roomfn.placeholder.room")}
                   createLabel={(v) => t("roomfn.create.room", { name: v })}
                   removeLabel={(n) => t("roomfn.remove_named", { name: n })}
@@ -1216,7 +1230,8 @@
                   selected={ch.functions ?? []}
                   options={functionOptions}
                   onChange={(next) => void updateChannelFunctions(ch.number, next)}
-                  onCreate={createFunctionEntry}
+                  onCreate={canEditNodes ? createFunctionEntry : undefined}
+                  disabled={!canAssign}
                   placeholder={t("roomfn.placeholder.function")}
                   createLabel={(v) => t("roomfn.create.function", { name: v })}
                   removeLabel={(n) => t("roomfn.remove_named", { name: n })}

@@ -5,6 +5,8 @@
   behind the New / Edit / Delete controls. Admin-gated on the server.
 -->
 <script lang="ts">
+  import { centralStore } from "$lib/stores/centrals.svelte";
+  import FeatureGate from "$lib/components/ui/FeatureGate.svelte";
   import { onMount } from "svelte";
   import { api, ApiError } from "$lib/api/client";
   import type { GroupCentralEntry, GroupEntry } from "$lib/api/types";
@@ -70,7 +72,9 @@
   const createCentral = $derived(
     centralFilter || (centrals.length === 1 ? centrals[0] : ""),
   );
-  const canCreate = $derived(centrals.length > 0);
+  const canCreate = $derived(
+    centrals.length > 0 && centralStore.offers(createCentral || undefined, "heating_groups.write"),
+  );
 
   function openCreate() {
     if (!createCentral) {
@@ -146,138 +150,140 @@
     {/snippet}
   </PageHeader>
 
-  {#if loadError}
-    <ErrorState message={loadError} onRetry={load} class="mb-4" />
-  {/if}
+  <FeatureGate feature="heating_groups.read">
+    {#if loadError}
+      <ErrorState message={loadError} onRetry={load} class="mb-4" />
+    {/if}
 
-  {#if loading}
-    <LoadingState />
-  {:else if totalGroups === 0}
-    <EmptyState
-      message={t("groups.empty")}
-      description={t("groups.empty.description")}
-      icon="mdi:home-group"
-    />
-  {:else}
-    <div class="flex flex-col gap-6">
-      {#each filteredEntries as entry (entry.central)}
-        {#if entry.groups.length > 0}
-          <div class="flex flex-col gap-3">
-            {#if centrals.length > 1}
-              <h2
-                class="text-xs font-semibold uppercase tracking-wide text-[var(--ha-secondary-text-color)]"
-              >
-                {entry.central}
-              </h2>
-            {/if}
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {#each entry.groups as g (g.id)}
-                <Card class="flex flex-col gap-3 p-4">
-                  <div class="flex items-start justify-between gap-2">
-                    <h3
-                      class="min-w-0 truncate text-base font-semibold text-[var(--ha-primary-text-color)]"
-                    >
-                      {g.name}
-                    </h3>
-                    {#if g.forbid_single_operation}
-                      <Badge variant="muted">{t("groups.operate_only_via_group")}</Badge>
-                    {/if}
-                  </div>
+    {#if loading}
+      <LoadingState />
+    {:else if totalGroups === 0}
+      <EmptyState
+        message={t("groups.empty")}
+        description={t("groups.empty.description")}
+        icon="mdi:home-group"
+      />
+    {:else}
+      <div class="flex flex-col gap-6">
+        {#each filteredEntries as entry (entry.central)}
+          {#if entry.groups.length > 0}
+            <div class="flex flex-col gap-3">
+              {#if centrals.length > 1}
+                <h2
+                  class="text-xs font-semibold uppercase tracking-wide text-[var(--ha-secondary-text-color)]"
+                >
+                  {entry.central}
+                </h2>
+              {/if}
+              <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {#each entry.groups as g (g.id)}
+                  <Card class="flex flex-col gap-3 p-4">
+                    <div class="flex items-start justify-between gap-2">
+                      <h3
+                        class="min-w-0 truncate text-base font-semibold text-[var(--ha-primary-text-color)]"
+                      >
+                        {g.name}
+                      </h3>
+                      {#if g.forbid_single_operation}
+                        <Badge variant="muted">{t("groups.operate_only_via_group")}</Badge>
+                      {/if}
+                    </div>
 
-                  <dl class="kv-grid gap-x-3 gap-y-1 text-sm" style="--kv-label: 8rem">
-                    <dt class="text-[var(--ha-secondary-text-color)]">{t("groups.field.id")}</dt>
-                    <dd class="tabular-nums text-[var(--ha-primary-text-color)]">{g.id}</dd>
+                    <dl class="kv-grid gap-x-3 gap-y-1 text-sm" style="--kv-label: 8rem">
+                      <dt class="text-[var(--ha-secondary-text-color)]">{t("groups.field.id")}</dt>
+                      <dd class="tabular-nums text-[var(--ha-primary-text-color)]">{g.id}</dd>
 
-                    <dt class="text-[var(--ha-secondary-text-color)]">{t("groups.type")}</dt>
-                    <dd class="min-w-0 truncate text-[var(--ha-primary-text-color)]">
-                      {g.type_label || g.type_id}
-                    </dd>
-
-                    {#if g.group_device_name}
-                      <dt class="text-[var(--ha-secondary-text-color)]">
-                        {t("groups.field.group_device_name")}
-                      </dt>
+                      <dt class="text-[var(--ha-secondary-text-color)]">{t("groups.type")}</dt>
                       <dd class="min-w-0 truncate text-[var(--ha-primary-text-color)]">
-                        {g.group_device_name}
+                        {g.type_label || g.type_id}
                       </dd>
-                    {/if}
-                  </dl>
 
-                  <div class="flex flex-col gap-1">
-                    <span class="text-xs text-[var(--ha-secondary-text-color)]">
-                      {t("groups.members", { count: g.members.length })}
-                    </span>
-                    {#if g.members.length === 0}
+                      {#if g.group_device_name}
+                        <dt class="text-[var(--ha-secondary-text-color)]">
+                          {t("groups.field.group_device_name")}
+                        </dt>
+                        <dd class="min-w-0 truncate text-[var(--ha-primary-text-color)]">
+                          {g.group_device_name}
+                        </dd>
+                      {/if}
+                    </dl>
+
+                    <div class="flex flex-col gap-1">
                       <span class="text-xs text-[var(--ha-secondary-text-color)]">
-                        {t("groups.members.empty")}
+                        {t("groups.members", { count: g.members.length })}
                       </span>
-                    {:else}
-                      <ul class="flex flex-col gap-0.5">
-                        {#each g.members as m (m.address)}
-                          {#if m.device_name}
-                            <li
-                              class="min-w-0 truncate text-xs text-[var(--ha-primary-text-color)]"
-                            >
-                              <span class="font-medium">{m.device_name}</span>
-                              {#if m.channel_name && m.channel_name !== m.device_name}
-                                <span class="text-[var(--ha-secondary-text-color)]">
-                                  · {m.channel_name}</span
-                                >
-                              {/if}
-                              {#if m.rooms && m.rooms.length > 0}
-                                <span class="text-[var(--ha-secondary-text-color)]">
-                                  · {m.rooms.join(", ")}</span
-                                >
-                              {/if}
-                            </li>
-                          {:else}
-                            <li class="font-mono text-xs text-[var(--ha-primary-text-color)]">
-                              {m.address}
-                              {#if m.type_id}
-                                <span class="text-[var(--ha-secondary-text-color)]">
-                                  ({m.type_id})
-                                </span>
-                              {/if}
-                            </li>
-                          {/if}
-                        {/each}
-                      </ul>
-                    {/if}
-                  </div>
+                      {#if g.members.length === 0}
+                        <span class="text-xs text-[var(--ha-secondary-text-color)]">
+                          {t("groups.members.empty")}
+                        </span>
+                      {:else}
+                        <ul class="flex flex-col gap-0.5">
+                          {#each g.members as m (m.address)}
+                            {#if m.device_name}
+                              <li
+                                class="min-w-0 truncate text-xs text-[var(--ha-primary-text-color)]"
+                              >
+                                <span class="font-medium">{m.device_name}</span>
+                                {#if m.channel_name && m.channel_name !== m.device_name}
+                                  <span class="text-[var(--ha-secondary-text-color)]">
+                                    · {m.channel_name}</span
+                                  >
+                                {/if}
+                                {#if m.rooms && m.rooms.length > 0}
+                                  <span class="text-[var(--ha-secondary-text-color)]">
+                                    · {m.rooms.join(", ")}</span
+                                  >
+                                {/if}
+                              </li>
+                            {:else}
+                              <li class="font-mono text-xs text-[var(--ha-primary-text-color)]">
+                                {m.address}
+                                {#if m.type_id}
+                                  <span class="text-[var(--ha-secondary-text-color)]">
+                                    ({m.type_id})
+                                  </span>
+                                {/if}
+                              </li>
+                            {/if}
+                          {/each}
+                        </ul>
+                      {/if}
+                    </div>
 
-                  <div class="mt-auto flex justify-end gap-2 border-t border-[var(--ha-divider-color)] pt-3">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onclick={() => openEdit(entry.central, g)}
-                    >
-                      <Icon name="mdi:pencil" size={14} />
-                      {t("common.edit")}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onclick={() => void del(entry.central, g)}
-                    >
-                      <Icon name="mdi:trash-can" size={14} />
-                      {t("common.delete")}
-                    </Button>
-                  </div>
-                </Card>
-              {/each}
+                    <div class="mt-auto flex justify-end gap-2 border-t border-[var(--ha-divider-color)] pt-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onclick={() => openEdit(entry.central, g)}
+                      >
+                        <Icon name="mdi:pencil" size={14} />
+                        {t("common.edit")}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onclick={() => void del(entry.central, g)}
+                      >
+                        <Icon name="mdi:trash-can" size={14} />
+                        {t("common.delete")}
+                      </Button>
+                    </div>
+                  </Card>
+                {/each}
+              </div>
             </div>
-          </div>
-        {/if}
-      {/each}
-    </div>
-  {/if}
+          {/if}
+        {/each}
+      </div>
+    {/if}
 
-  {#if editorOpen}
-    <GroupEditor
-      central={editorCentral}
-      group={editorGroup}
-      onClose={closeEditor}
-      onSaved={onEditorSaved}
-    />
-  {/if}
+    {#if editorOpen}
+      <GroupEditor
+        central={editorCentral}
+        group={editorGroup}
+        onClose={closeEditor}
+        onSaved={onEditorSaved}
+      />
+    {/if}
+  </FeatureGate>
 </PageShell>

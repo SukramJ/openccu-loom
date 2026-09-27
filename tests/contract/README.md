@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 527.
+Guards without a doc comment: 7 of 528.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -147,6 +147,7 @@ Guards without a doc comment: 7 of 527.
 | TestEveryEventTypeHasAPublisher | event_publisher_coverage_test.go | TestEveryEventTypeHasAPublisher is the mirror image of [TestEveryEventTypeHasASubscriber]: it asserts that every event type the daemon defines is actually emitted by production code. |
 | TestDeclaredSilentEventDocsClaimNoConsumers | event_subscriber_coverage_test.go | TestDeclaredSilentEventDocsClaimNoConsumers cross-checks the two truths this package keeps about an event: eventsWithoutSubscriber declares that nothing consumes it, while the catalogue's doc comment tells a reader what it is for. |
 | TestEveryEventTypeHasASubscriber | event_subscriber_coverage_test.go | TestEveryEventTypeHasASubscriber asserts that every event type the daemon defines is consumed by production code, or is declared in [eventsWithoutSubscriber] as deliberately unconsumed. |
+| TestFeatureKeysHaveNamesInBothLocales | feature_names_i18n_test.go | TestFeatureKeysHaveNamesInBothLocales pins the SPA's wording of the per-central features: every key the daemon can report absent needs feature.name.<key> in the EN and DE catalogues of assets/ui/src/lib/i18n.ts. |
 | TestFilenamePurity | filename_purity_test.go | TestFilenamePurity walks every .go file under internal/, pkg/, cmd/, and tests/ and fails when a filename carries an internal audit / migration-phase marker that has no place in the long-term filename vocabulary. |
 | TestGoTestTimeoutIsOneValue | go_test_timeout_single_source_test.go | TestGoTestTimeoutIsOneValue pins the per-package `go test -timeout` ceiling to a single value across the Makefile and every workflow that states it. |
 | TestEveryCustomDataPointDeclaresAnHAComponent | ha_component_non_empty_test.go | TestEveryCustomDataPointDeclaresAnHAComponent asserts no shipped profile returns the empty component that would make the ch<N> branch in Channel.HasSinglePrimaryCustomDP reachable. |

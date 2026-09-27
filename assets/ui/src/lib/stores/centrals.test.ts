@@ -281,3 +281,82 @@ describe("centralStore fleet getters", () => {
     expect(centralStore.notReady).toHaveLength(0);
   });
 });
+
+describe("centralStore features", () => {
+  const lite = (name: string) => ({
+    ...makeEntry({ name }),
+    system_type: "openccu-lite",
+    features: {
+      "hub.programs": { available: false, reason: "not_supported_by_system" },
+      "system.reboot": { available: false, reason: "missing_scope", scope: "power" },
+      "hub.sysvars": { available: false, reason: "not_ready" },
+    },
+  });
+  const ccu = (name: string) => ({
+    ...makeEntry({ name }),
+    system_type: "ccu",
+    features: {
+      "hub.programs": { available: true },
+      "system.reboot": { available: true },
+    },
+  });
+
+  it("offers a feature while at least one central does", async () => {
+    getSystemCCUsMock.mockResolvedValueOnce([lite("box"), ccu("ccu1")]);
+    await centralStore.refresh();
+    expect(centralStore.featureAvailable("hub.programs")).toBe(true);
+    expect(centralStore.centralsLacking("hub.programs").map((c) => c.name)).toEqual(["box"]);
+  });
+
+  it("does not offer a feature no central offers", async () => {
+    getSystemCCUsMock.mockResolvedValueOnce([lite("box")]);
+    await centralStore.refresh();
+    expect(centralStore.featureAvailable("hub.programs")).toBe(false);
+    expect(centralStore.featureAvailable("system.reboot")).toBe(false);
+  });
+
+  it("counts a feature waiting for its system as offered, and not as lacking", async () => {
+    getSystemCCUsMock.mockResolvedValueOnce([lite("box")]);
+    await centralStore.refresh();
+    expect(centralStore.featureAvailable("hub.sysvars")).toBe(true);
+    expect(centralStore.centralsLacking("hub.sysvars")).toHaveLength(0);
+  });
+
+  it("offers everything before the fleet has loaded and for an unreported key", async () => {
+    getSystemCCUsMock.mockResolvedValueOnce([]);
+    await centralStore.refresh();
+    expect(centralStore.featureAvailable("hub.programs")).toBe(true);
+
+    getSystemCCUsMock.mockResolvedValueOnce([lite("box")]);
+    await centralStore.refresh();
+    expect(centralStore.featureAvailable("install_mode")).toBe(true);
+  });
+
+  it("answers offers per central", async () => {
+    getSystemCCUsMock.mockResolvedValueOnce([lite("box"), ccu("ccu1")]);
+    await centralStore.refresh();
+    expect(centralStore.offers("box", "system.reboot")).toBe(false);
+    expect(centralStore.offers("ccu1", "system.reboot")).toBe(true);
+    expect(centralStore.offers(undefined, "system.reboot")).toBe(true);
+    expect(centralStore.offers("box", "install_mode")).toBe(true);
+  });
+
+  it("replaces a central's features on central.features_changed", async () => {
+    getSystemCCUsMock.mockResolvedValueOnce([lite("box")]);
+    await centralStore.refresh();
+    centralStore.ensureStream();
+    expect(centralStore.offers("box", "system.reboot")).toBe(false);
+
+    capturedHandler!({
+      type: "central.features_changed",
+      payload: {
+        central: "box",
+        system_type: "openccu-lite",
+        features: { "system.reboot": { available: true } },
+      },
+    });
+    expect(centralStore.offers("box", "system.reboot")).toBe(true);
+    // The push is the complete set: a key it no longer carries is gone.
+    expect(centralStore.featureOf("box", "hub.programs")).toBeUndefined();
+  });
+});

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import FeatureGate from "$lib/components/ui/FeatureGate.svelte";
   import { onMount } from "svelte";
   import { api, ApiError } from "$lib/api/client";
   import type { ProgramEntry } from "$lib/api/types";
@@ -239,120 +240,122 @@
     {/snippet}
   </PageHeader>
 
-  {#if loadError}
-    <ErrorState message={loadError} onRetry={load} class="mb-4" />
-  {/if}
+  <FeatureGate feature="hub.programs">
+    {#if loadError}
+      <ErrorState message={loadError} onRetry={load} class="mb-4" />
+    {/if}
 
-  {#if loading}
-    <LoadingState />
-  {:else}
-    <Card class="p-4">
-      <DataTable
-        rows={filtered}
-        {columns}
-        rowKey={(p) => (p.central ?? "") + "/" + p.id}
-        search
-        searchPlaceholder={t("common.search")}
-        persistKey="programs"
-        columnFilters
-        initialSort={{ key: "name", asc: true }}
-        emptyMessage={t("programs.empty")}
-        emptyIcon="mdi:play"
-      >
-        {#snippet cell(p, col)}
-          {#if col.key === "name"}
-            <div class:opacity-60={p.active === false}>
-              <span class="font-medium">{p.name}</span>
-              {#if centrals.length > 1 && p.central}
-                <Badge variant="muted">{p.central}</Badge>
+    {#if loading}
+      <LoadingState />
+    {:else}
+      <Card class="p-4">
+        <DataTable
+          rows={filtered}
+          {columns}
+          rowKey={(p) => (p.central ?? "") + "/" + p.id}
+          search
+          searchPlaceholder={t("common.search")}
+          persistKey="programs"
+          columnFilters
+          initialSort={{ key: "name", asc: true }}
+          emptyMessage={t("programs.empty")}
+          emptyIcon="mdi:play"
+        >
+          {#snippet cell(p, col)}
+            {#if col.key === "name"}
+              <div class:opacity-60={p.active === false}>
+                <span class="font-medium">{p.name}</span>
+                {#if centrals.length > 1 && p.central}
+                  <Badge variant="muted">{p.central}</Badge>
+                {/if}
+                {#if p.description}
+                  <span class="block text-xs text-slate-500 dark:text-slate-400">{p.description}</span>
+                {/if}
+                <span class="block font-mono text-[10px] text-slate-500 dark:text-slate-400">{p.id}</span>
+              </div>
+            {:else if col.key === "status"}
+              {#if p.active === true}
+                <Badge variant="default">{t("programs.active")}</Badge>
+              {:else if p.active === false}
+                <Badge variant="muted">{t("programs.inactive")}</Badge>
+              {:else}
+                <span class="text-[var(--ha-secondary-text-color)]">—</span>
               {/if}
-              {#if p.description}
-                <span class="block text-xs text-slate-500 dark:text-slate-400">{p.description}</span>
+            {:else if col.key === "condition"}
+              {#if p.condition_summary}
+                <span
+                  class="block max-w-[22rem] truncate font-mono text-xs text-slate-600 dark:text-slate-300"
+                  title={p.condition_summary}>{p.condition_summary}</span>
+              {:else}
+                <span class="text-[var(--ha-secondary-text-color)]">—</span>
               {/if}
-              <span class="block font-mono text-[10px] text-slate-500 dark:text-slate-400">{p.id}</span>
-            </div>
-          {:else if col.key === "status"}
-            {#if p.active === true}
-              <Badge variant="default">{t("programs.active")}</Badge>
-            {:else if p.active === false}
-              <Badge variant="muted">{t("programs.inactive")}</Badge>
-            {:else}
-              <span class="text-[var(--ha-secondary-text-color)]">—</span>
-            {/if}
-          {:else if col.key === "condition"}
-            {#if p.condition_summary}
-              <span
-                class="block max-w-[22rem] truncate font-mono text-xs text-slate-600 dark:text-slate-300"
-                title={p.condition_summary}>{p.condition_summary}</span>
-            {:else}
-              <span class="text-[var(--ha-secondary-text-color)]">—</span>
-            {/if}
-          {:else if col.key === "activity"}
-            {#if p.activity_summary}
-              <span
-                class="block max-w-[22rem] truncate font-mono text-xs text-slate-600 dark:text-slate-300"
-                title={p.activity_summary}>{p.activity_summary}</span>
-            {:else}
-              <span class="text-[var(--ha-secondary-text-color)]">—</span>
-            {/if}
-          {:else if col.key === "last_executed"}
-            {#if p.last_executed}
-              <span class="text-xs text-slate-600 dark:text-slate-300" title={p.last_executed}>
-                {formatDate(p.last_executed)}
-              </span>
-            {:else}
-              <span class="text-[var(--ha-secondary-text-color)]">{t("programs.never_executed")}</span>
-            {/if}
-          {:else if col.key === "actions"}
-            <span class="inline-flex items-center justify-end gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onclick={() => void togglePin(p.id, p.name)}
-                title={favoritesStore.isPinned("program", p.id)
-                  ? t("favorites.unpin_program")
-                  : t("favorites.pin_program")}
-                aria-label={favoritesStore.isPinned("program", p.id)
-                  ? t("favorites.unpin_program")
-                  : t("favorites.pin_program")}
-              >
-                <Icon name={favoritesStore.isPinned("program", p.id) ? "mdi:star" : "mdi:star-outline"} />
-              </Button>
-              {#if p.active !== undefined}
+            {:else if col.key === "activity"}
+              {#if p.activity_summary}
+                <span
+                  class="block max-w-[22rem] truncate font-mono text-xs text-slate-600 dark:text-slate-300"
+                  title={p.activity_summary}>{p.activity_summary}</span>
+              {:else}
+                <span class="text-[var(--ha-secondary-text-color)]">—</span>
+              {/if}
+            {:else if col.key === "last_executed"}
+              {#if p.last_executed}
+                <span class="text-xs text-slate-600 dark:text-slate-300" title={p.last_executed}>
+                  {formatDate(p.last_executed)}
+                </span>
+              {:else}
+                <span class="text-[var(--ha-secondary-text-color)]">{t("programs.never_executed")}</span>
+              {/if}
+            {:else if col.key === "actions"}
+              <span class="inline-flex items-center justify-end gap-2">
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
-                  onclick={() => void toggle(p.id, p.name, p.active, p.central)}
-                  disabled={togglingId === p.id}
-                  title={t("programs.toggle.tooltip")}
+                  onclick={() => void togglePin(p.id, p.name)}
+                  title={favoritesStore.isPinned("program", p.id)
+                    ? t("favorites.unpin_program")
+                    : t("favorites.pin_program")}
+                  aria-label={favoritesStore.isPinned("program", p.id)
+                    ? t("favorites.unpin_program")
+                    : t("favorites.pin_program")}
                 >
-                  {togglingId === p.id ? "…" : p.active ? t("common.disable") : t("common.enable")}
+                  <Icon name={favoritesStore.isPinned("program", p.id) ? "mdi:star" : "mdi:star-outline"} />
                 </Button>
-              {/if}
-              <Button
-                type="button"
-                size="sm"
-                onclick={() => void execute(p.id, p.name, p.central)}
-                disabled={runningId === p.id}
-              >
-                {runningId === p.id ? t("programs.running") : t("programs.run")}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="destructive"
-                onclick={() => void remove(p.id, p.name, p.central)}
-                disabled={deletingId === p.id}
-                title={t("programs.delete.tooltip")}
-              >
-                {deletingId === p.id ? "…" : t("common.remove")}
-              </Button>
-            </span>
-          {/if}
-        {/snippet}
-      </DataTable>
-    </Card>
-  {/if}
+                {#if p.active !== undefined}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onclick={() => void toggle(p.id, p.name, p.active, p.central)}
+                    disabled={togglingId === p.id}
+                    title={t("programs.toggle.tooltip")}
+                  >
+                    {togglingId === p.id ? "…" : p.active ? t("common.disable") : t("common.enable")}
+                  </Button>
+                {/if}
+                <Button
+                  type="button"
+                  size="sm"
+                  onclick={() => void execute(p.id, p.name, p.central)}
+                  disabled={runningId === p.id}
+                >
+                  {runningId === p.id ? t("programs.running") : t("programs.run")}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="destructive"
+                  onclick={() => void remove(p.id, p.name, p.central)}
+                  disabled={deletingId === p.id}
+                  title={t("programs.delete.tooltip")}
+                >
+                  {deletingId === p.id ? "…" : t("common.remove")}
+                </Button>
+              </span>
+            {/if}
+          {/snippet}
+        </DataTable>
+      </Card>
+    {/if}
+  </FeatureGate>
 </PageShell>
