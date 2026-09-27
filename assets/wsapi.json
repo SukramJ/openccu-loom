@@ -1,5 +1,5 @@
 {
- "version": "1.9",
+ "version": "1.10",
  "envelope": {
   "description": "Shape of every WebSocket frame the daemon emits — both command replies and broadcasts. The `payload` member is replaced per-frame; broadcast entries below name the OpenAPI schema (in assets/openapi.yaml under components.schemas) that pins its structure.",
   "fields": {
@@ -241,6 +241,14 @@
    "name": "central.readiness_changed",
    "topic": "central.{name}.readiness",
    "payload": "CentralReadinessChangedPayload"
+  },
+  {
+   "category": "central",
+   "description": "Server-pushed: the set of features a central offers changed (its first bring-up resolved the system, or the daemon's credential gained or lost a scope). Carries the complete current set keyed by feature, each with available, reason and scope, so the UI shows or hides what the central can do without polling /system/ccu.",
+   "kind": "broadcast",
+   "name": "central.features_changed",
+   "topic": "central.{name}.features",
+   "payload": "CentralFeaturesChangedPayload"
   },
   {
    "category": "central",

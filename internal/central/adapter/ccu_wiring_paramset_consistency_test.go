@@ -299,12 +299,14 @@ func TestWireInterfaceReportsStaleHmIPParamsetDescriptors(t *testing.T) {
 
 	closer, _, err := wireInterface(
 		ctx, cc, hmenum.InterfaceHmIPRF, unit, NewDevicePipeline(unit), client.NewValueWriter(),
-		nil, // runner: the ReGa value seed needs a second (JSON-RPC) surface and no MASTER value rides it
-		"",  // callbackURL: no push registration; the sweep runs off the ingest, not off a callback
+		// No ReGa runner: the value seed needs a second (JSON-RPC) surface and
+		// no MASTER value rides it.
+		newCCUHubSession(cc, unit, nil, HubData{}, nil, newCCUReadinessProbe(cc), logger),
+		newCCUReadinessProbe(cc),
+		"", // callbackURL: no push registration; the sweep runs off the ingest, not off a callback
 		config.ReliabilityConfig{},
 		nil, // masterValues: HmIP-RF is gated to a nil MasterPoller
 		newBackendRegistry(),
-		nil,     // jsonCaller: every call this scenario makes is XML-RPC
 		nil, "", // BIN-RPC callback server/addr: CUxD only
 		nil, // adoptBINRPCHandlers: CUxD only
 		logger,

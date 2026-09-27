@@ -24,10 +24,13 @@ import (
 // up again mid-life without disturbing its peers — the foundation for the
 // "clear caches + re-pull" operation (ADR 0042).
 type centralBringUp struct {
-	cfg                *config.Config
-	cc                 config.CentralConfig
-	unit               *central.Unit
-	deps               WireDeps
+	cfg  *config.Config
+	cc   config.CentralConfig
+	unit *central.Unit
+	deps WireDeps
+	// profile is the central's south strategy, selected once when the
+	// handle is built; every bring-up generation reads readiness through it.
+	profile            SouthProfile
 	callbackURL        string
 	binRPCCallbackAddr string
 	// cbHandlers is the XML-RPC callback handler registered for this
@@ -125,7 +128,7 @@ func (b *centralBringUp) start() {
 	SafeGo("central_bringup."+b.cc.Name, func() {
 		defer b.wg.Done()
 		ccCopy := b.cc
-		gatedCentralBringUp(ctx, b.cfg, &ccCopy, b.unit, b.deps, b.callbackURL, b.binRPCCallbackAddr,
+		gatedCentralBringUp(ctx, b.cfg, &ccCopy, b.unit, b.deps, b.profile, b.callbackURL, b.binRPCCallbackAddr,
 			b.cbHandlers, b.adoptBINRPCHandlers, b.addCloser, b.logger)
 	})
 }
@@ -444,12 +447,14 @@ func (m *BringUpManager) buildAndStart(cc *config.CentralConfig, unit *central.U
 	// hold it back.
 	WirePendingDevices(m.parentCtx, unit, m.deps.PendingDevices,
 		cc.Behavior.DelayNewDeviceCreationEnabled(), m.logger)
-	callbackURL, binRPCCallbackAddr, cbHandlers, deregister := registerCentralCallbacks(m.deps, cc, unit, m.logger)
+	profile := southProfileFor(cc, m.logger)
+	cbHandlers, callbackURL, binRPCCallbackAddr, deregister := profile.Events().Attach(cc, unit, m.deps, m.logger)
 	b := &centralBringUp{
 		cfg:                m.cfg,
 		cc:                 *cc,
 		unit:               unit,
 		deps:               m.deps,
+		profile:            profile,
 		callbackURL:        callbackURL,
 		binRPCCallbackAddr: binRPCCallbackAddr,
 		cbHandlers:         cbHandlers,

@@ -66,6 +66,7 @@ var wsPayloadStructs = map[string]any{
 	"AlarmTriggeredPayload":              ws.AlarmTriggeredPayload{},
 	"AlarmWalkTestProgressPayload":       ws.AlarmWalkTestProgressPayload{},
 	"CentralReadinessChangedPayload":     ws.CentralReadinessChangedPayload{},
+	"CentralFeaturesChangedPayload":      ws.CentralFeaturesChangedPayload{},
 	"CentralStateChangedPayload":         ws.CentralStateChangedPayload{},
 	"CustomDataPointStateChangedPayload": ws.CustomDataPointStateChangedPayload{},
 	"DaemonStatusPayload":                ws.DaemonStatusPayload{},

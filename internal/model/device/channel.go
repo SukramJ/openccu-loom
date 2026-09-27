@@ -14,6 +14,7 @@ import (
 
 	modevent "github.com/SukramJ/openccu-loom/internal/model/event"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
+	"github.com/SukramJ/openccu-loom/internal/model/taxonomy"
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -122,6 +123,9 @@ type Channel struct {
 	rooms     []string
 	functions []string
 	iseID     int
+	// taxonomyRefs are the taxonomy nodes the channel is directly assigned
+	// to, in every enum.
+	taxonomyRefs []taxonomy.Ref
 
 	// groupNo is the channel-group number this channel belongs to. Zero means
 	// "no group". When non-zero, the master channel of the group has Number ==

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 11.2.0
+  version: 11.3.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -8577,9 +8577,25 @@ components:
         leftover:
           type: array
           items: { $ref: "#/components/schemas/SuitableMemberEntry" }
+    CentralFeatureState:
+      type: object
+      required: [available]
+      description: One feature's availability on a central.
+      properties:
+        available:
+          type: boolean
+        reason:
+          type: string
+          enum: [not_supported_by_system, missing_scope, not_ready]
+          description: Why the feature is unavailable; absent when it is available.
+        scope:
+          type: string
+          description: |
+            The credential scope that would grant the feature, when
+            `reason` is `missing_scope` (for example `power` or `backup`).
     SystemCCUEntry:
       type: object
-      required: [name, host, available, is_ha_app, configured_interfaces, readiness]
+      required: [name, host, available, is_ha_app, configured_interfaces, readiness, features]
       description: |
         One CCU as known to the daemon. `name` is the daemon-local
         identifier (config-driven, multi-CCU-safe). The other fields
@@ -8660,7 +8676,33 @@ components:
             (`POST .../recovery-mode`). True for OpenCCU
             firmware, false for a stock CCU3 and while the product is not
             yet known — so a client hides the action rather than offering
-            one that cannot work.
+            one that cannot work. Derived from the `system.recovery_mode`
+            entry of `features`.
+        system_type:
+          type: string
+          enum: [ccu, openccu-lite]
+          description: |
+            The kind of system behind the central. `ccu` is a CCU with
+            ReGaHss and the WebUI JSON-RPC (eQ-3 CCU, OpenCCU,
+            RaspberryMatic); `openccu-lite` is a system managed through the
+            occulited API. Absent until the central's first bring-up has
+            resolved it.
+        features:
+          type: object
+          description: |
+            What the central can do right now, keyed by feature
+            (`hub.sysvars`, `hub.programs`, `hub.service_messages`,
+            `system.reboot`, `system.backup.create`, `taxonomy.tree`,
+            `install_mode`, …). Every known key is present. An unavailable
+            feature carries the reason: the system has no such feature, the
+            daemon's credential lacks the scope that grants it, or the
+            central has not finished its first bring-up. A client hides an
+            unavailable action instead of offering one that fails. Pushed
+            live as the `central.features_changed` WebSocket event.
+          propertyNames:
+            type: string
+          additionalProperties:
+            $ref: '#/components/schemas/CentralFeatureState'
         ccu_interfaces:
           type: array
           description: |
@@ -11028,6 +11070,26 @@ components:
           description: "True only once southbound bring-up has latched complete (phase == ready)."
         interfaces_loaded: { type: integer, minimum: 0 }
         interfaces_total: { type: integer, minimum: 0 }
+
+    CentralFeaturesChangedPayload:
+      type: object
+      description: |
+        Payload of a `central.features_changed` broadcast. Topic pattern
+        `central.{name}.features`. Carries the central's complete current
+        feature set (the same map `/system/ccu` reports as `features`), not
+        a delta.
+      required: [central, features]
+      properties:
+        central: { type: string }
+        system_type:
+          type: string
+          enum: [ccu, openccu-lite]
+        features:
+          type: object
+          propertyNames:
+            type: string
+          additionalProperties:
+            $ref: '#/components/schemas/CentralFeatureState'
 
     SystemStatusChangedPayload:
       type: object

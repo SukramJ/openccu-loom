@@ -142,6 +142,12 @@ const (
 	// to reflect bring-up progress live, distinguishing "still initializing"
 	// from "offline".
 	EventTypeCentralReadinessChanged EventType = "central.readiness_changed"
+
+	// EventTypeCentralFeaturesChanged fires when the set of features a
+	// central offers changes: its first bring-up resolved the system, or a
+	// credential's scopes changed. North-bound surfaces re-read the central's
+	// features to show or hide what it can do.
+	EventTypeCentralFeaturesChanged EventType = "central.features_changed"
 )
 
 // ---------- Central / clients ----------
@@ -173,6 +179,17 @@ type CentralReadinessChangedEvent struct {
 
 // Type implements Event.
 func (CentralReadinessChangedEvent) Type() EventType { return EventTypeCentralReadinessChanged }
+
+// CentralFeaturesChangedEvent fires when a central's feature set changes.
+// It carries no copy of the set: subscribers read the central's current
+// features, so a late reader can never act on a stale snapshot.
+type CentralFeaturesChangedEvent struct {
+	Base
+	CentralName string
+}
+
+// Type implements Event.
+func (CentralFeaturesChangedEvent) Type() EventType { return EventTypeCentralFeaturesChanged }
 
 // CentralSouthboundReadyEvent fires once a central's southbound bring-up has
 // completed against a ready CCU (names loaded with devices). North-bound

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/model/taxonomy"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -167,5 +168,42 @@ func TestAddChannelRoomEmptyIsNoop(t *testing.T) {
 	c.AddChannelRoom("VCU001:1", "")
 	if rooms := c.GetChannelRooms("VCU001:1"); len(rooms) != 0 {
 		t.Errorf("expected 0 rooms after empty add, got %v", rooms)
+	}
+}
+
+func TestRefsFollowReplaceClearAndRemove(t *testing.T) {
+	t.Parallel()
+	src := New()
+	src.AddRef("DEV1:1", taxonomy.Root(taxonomy.EnumRoom, "1"))
+	src.AddRef("DEV1:1", taxonomy.Root(taxonomy.EnumRoom, "1")) // idempotent
+	src.AddRef("DEV1", taxonomy.Root("floor", "eg"))
+	src.SetTaxonomy(&taxonomy.Taxonomy{Revision: 7})
+
+	c := New()
+	c.ReplaceWith(src, time.Now())
+	if got := c.Refs("DEV1:1"); len(got) != 1 {
+		t.Errorf("Refs after ReplaceWith = %v", got)
+	}
+	if got := c.DeviceRefs("DEV1"); len(got) != 2 {
+		t.Errorf("DeviceRefs = %v, want the channel's and the device's own", got)
+	}
+	if c.Taxonomy() == nil || c.Taxonomy().Revision != 7 {
+		t.Error("ReplaceWith lost the taxonomy")
+	}
+
+	c.RemoveDevice("DEV1", []string{"DEV1:1"})
+	if len(c.Refs("DEV1:1")) != 0 || len(c.DeviceRefs("DEV1")) != 0 {
+		t.Error("RemoveDevice left refs behind")
+	}
+
+	c.AddRef("DEV2:1", taxonomy.Root(taxonomy.EnumRoom, "2"))
+	c.Clear()
+	if len(c.Refs("DEV2:1")) != 0 || c.Taxonomy() != nil {
+		t.Error("Clear left refs or the taxonomy behind")
+	}
+	c.AddRef("", taxonomy.Root(taxonomy.EnumRoom, "3"))
+	c.AddRef("DEV3", taxonomy.Ref{Enum: taxonomy.EnumRoom})
+	if len(c.Refs("")) != 0 || len(c.Refs("DEV3")) != 0 {
+		t.Error("an empty address or an empty path was recorded")
 	}
 }

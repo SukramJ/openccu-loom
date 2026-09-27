@@ -18,10 +18,8 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/client/observer"
-	"github.com/SukramJ/openccu-loom/internal/client/rega"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/binrpc"
 	"github.com/SukramJ/openccu-loom/internal/config"
-	"github.com/SukramJ/openccu-loom/internal/store/devicedetails"
 	"github.com/SukramJ/openccu-loom/internal/store/session"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -41,7 +39,8 @@ func wireCUxDInterface( //nolint:funlen,gocognit // composition/wiring: long seq
 	unit *central.Unit,
 	pipeline *DevicePipeline,
 	writer *client.ValueWriter,
-	runner *rega.Runner,
+	hub HubSession,
+	readiness ReadinessProbe,
 	relCfg config.ReliabilityConfig,
 	masterValues *sqlite.MasterValuesStore,
 	backendReg *backendRegistry,
@@ -209,6 +208,7 @@ func wireCUxDInterface( //nolint:funlen,gocognit // composition/wiring: long seq
 		ic:          ic,
 		backend:     backend,
 		cc:          cc,
+		readiness:   readiness,
 		wireID:      wireID,
 		initID:      initID,
 		callbackURL: callbackURL,
@@ -238,7 +238,7 @@ func wireCUxDInterface( //nolint:funlen,gocognit // composition/wiring: long seq
 	// ingest until the daemon restarts. Mirrors the XML-RPC path's retry in
 	// wireInterface.
 	activate := func(activateCtx context.Context) error {
-		if err := pipeline.IngestFromBackend(activateCtx, wireID, iface, backend, writer, runner, logger); err != nil {
+		if err := pipeline.IngestFromBackend(activateCtx, wireID, iface, backend, writer, hub.ValueSeeder(), logger); err != nil {
 			return fmt.Errorf("ingest: %w", err)
 		}
 		logger.Info("wire.ingest.ok",
@@ -250,14 +250,10 @@ func wireCUxDInterface( //nolint:funlen,gocognit // composition/wiring: long seq
 		// (and before init announces the callback), mirroring the XML-RPC
 		// path's ordering rationale in bringUpCentral.
 		if cbHandlers != nil {
-			var ddLoader *devicedetails.Loader
-			if runner != nil {
-				ddLoader = devicedetails.NewLoaderForJSONRPC(unit.DeviceDetails, runner.Client(), cc.Name, logger)
-			}
 			unit.SetDeviceIngestFn(newHotplugIngestor(
-				unit, pipeline, writer, runner,
+				unit, pipeline, writer, hub.ValueSeeder(),
 				cuxdHotplugBackendResolver(backendReg, wireID, backend),
-				ddLoader, logger,
+				hub.RefreshMetadata, logger,
 			))
 			hotplugInstalled.Store(true)
 		}
@@ -441,6 +437,7 @@ type cuxdRecoveryTarget struct {
 	ic          *client.InterfaceClient
 	backend     backends.Operations
 	cc          config.CentralConfig
+	readiness   ReadinessProbe
 	wireID      string
 	initID      string
 	callbackURL string
@@ -477,7 +474,7 @@ func wireCUxDRecovery(unit *central.Unit, t cuxdRecoveryTarget, logger *slog.Log
 		RPCProbe:       func(ctx context.Context) error { return t.backend.Ping(ctx, t.initID) },
 		StabilityProbe: func(ctx context.Context) error { return t.backend.Ping(ctx, t.initID) },
 		Reconnect: func(rctx context.Context) error {
-			if !WaitForCCUReady(rctx, t.cc, CCUReadinessConfig{}, logger) {
+			if !waitReady(rctx, t.cc.Name, t.readiness, CCUReadinessConfig{}, logger) {
 				return errors.New("reconnect: CCU not ready (checkrega.cgi != OK)")
 			}
 			attempts := 0

@@ -10,7 +10,7 @@ package adapter
 // in ccu_readiness.go.
 //
 // This drives the real wireInterface function end-to-end (a real backend
-// wired to a real xmlrpc.Client, a real WaitForCCUReady HTTP probe) rather
+// wired to a real xmlrpc.Client, a real CCU readiness HTTP probe) rather
 // than reimplementing activate()'s gate check by hand: a test that hand-rolls
 // the collaboration proves only that the pieces CAN work together, not that
 // the production ingestLoop actually consults the gate before touching the
@@ -213,17 +213,18 @@ func TestWireInterfaceActivateRetryGatesOnCCUReadiness(t *testing.T) {
 	go func() {
 		closer, _, err := wireInterface(
 			ctx, cc, hmenum.InterfaceHmIPRF, unit, pipeline, writer,
-			nil, // runner: nil skips the ReGa fetch_all_device_data call: not needed
-			// to observe listDevices/init/deinit, and it would require
-			// faking a second (JSON-RPC) surface.
+			// A session without a ReGa runner skips the fetch_all_device_data
+			// seed and the JSON-only backend ops: not needed to observe
+			// listDevices/init/deinit, and they would require faking a second
+			// (JSON-RPC) surface.
+			newCCUHubSession(cc, unit, nil, HubData{}, nil, newCCUReadinessProbe(cc), logger),
+			newCCUReadinessProbe(cc),
 			callbackURL,
 			config.ReliabilityConfig{},
 			nil, // masterValues: HmIP-RF is gated to a nil MasterPoller (see
 			// newMasterPollerForInterface), so it is never
 			// dereferenced.
 			newBackendRegistry(),
-			nil, // jsonCaller: CcuBackend only needs XML-RPC for the methods
-			// this scenario exercises (listDevices, Init, Deinit).
 			nil, "", // BIN-RPC callback server/addr: unused outside the CUxD branch.
 			nil, // adoptBINRPCHandlers: only the CUxD branch registers one.
 			logger,

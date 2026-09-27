@@ -20,6 +20,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -120,6 +121,8 @@ type suppressOps struct {
 	suppressErr   error
 	getErr        error
 	getResult     []string
+	// unsupported makes the backend report no durable suppression.
+	unsupported bool
 }
 
 type suppressOpsCall struct {
@@ -128,7 +131,7 @@ type suppressOpsCall struct {
 }
 
 func (s *suppressOps) Capabilities() backends.Capabilities {
-	return backends.Capabilities{SuppressServiceMessage: true}
+	return backends.Capabilities{SuppressServiceMessage: !s.unsupported}
 }
 
 func (s *suppressOps) SuppressServiceMessage(_ context.Context, channelAddress, parameterID string, suppress bool) error {
@@ -418,5 +421,34 @@ func TestWireServiceMessageSuppressorWiresBothSeams(t *testing.T) {
 	}
 	if len(got) != 1 || got[0] != "UNREACH" {
 		t.Errorf("got %v, want [UNREACH]", got)
+	}
+}
+
+// TestServiceMessageSuppressorRefusesUnsupported pins that a backend without
+// durable suppression is refused, not answered with success: before, the
+// suppress reported 2xx for a no-op (the service message stayed raised) and
+// the read reported "nothing suppressed" for a backend that cannot tell. The
+// refusal still matches backends.ErrUnsupported, so the REST mapping to 422
+// is unchanged.
+func TestServiceMessageSuppressorRefusesUnsupported(t *testing.T) {
+	t.Parallel()
+	sup, ops, _ := buildSuppressorFixture(t)
+	ops.unsupported = true
+
+	err := sup.SuppressServiceMessage(context.Background(), "HmIP-RF", "ABC123:1", "LOWBAT", true)
+	var fe *hmerr.FeatureUnavailableError
+	if !errors.As(err, &fe) || fe.Feature != hmenum.FeatureHubServiceMessagesMute || fe.Central != "ccu-01" {
+		t.Fatalf("SuppressServiceMessage = %v, want a hub.service_messages.suppress refusal", err)
+	}
+	if !errors.Is(err, backends.ErrUnsupported) {
+		t.Error("the refusal no longer matches backends.ErrUnsupported")
+	}
+	if len(ops.suppressCalls) != 0 {
+		t.Errorf("the backend was called %d time(s) despite reporting no support", len(ops.suppressCalls))
+	}
+
+	list, err := sup.GetSuppressedServiceMessages(context.Background(), "HmIP-RF", "ABC123:1")
+	if !errors.As(err, &fe) || list != nil {
+		t.Fatalf("GetSuppressedServiceMessages = (%v, %v), want a refusal and no list", list, err)
 	}
 }

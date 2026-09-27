@@ -72,6 +72,15 @@ type SystemCCUEntry struct {
 	// JSON-RPC method. False while the product is still unknown, so a
 	// client hides the action instead of offering one that cannot work.
 	RecoveryModeSupported bool `json:"recovery_mode_supported"`
+	// SystemType is the kind of system behind the central (`ccu`,
+	// `openccu-lite`). Empty until the central's first bring-up resolved it.
+	SystemType string `json:"system_type,omitempty"`
+	// Features reports, for every feature key, whether the central offers
+	// it right now and — when not — why: the system has no such feature,
+	// the daemon's credential lacks the scope, or the central is not ready
+	// yet. A client hides what a central cannot do instead of offering an
+	// action that fails.
+	Features map[string]CentralFeatureState `json:"features"`
 	// CCUInterfaces lists the interface adapters the CCU reports for
 	// itself — the CCU-side counterpart to ConfiguredInterfaces above.
 	// Omitted until the first successful connect round; a difference
@@ -80,6 +89,17 @@ type SystemCCUEntry struct {
 	// Readiness reports where the central is in its readiness-gated
 	// southbound bring-up (see CentralReadiness).
 	Readiness CentralReadiness `json:"readiness"`
+}
+
+// CentralFeatureState is one feature's availability on a central.
+type CentralFeatureState struct {
+	Available bool `json:"available"`
+	// Reason is `not_supported_by_system`, `missing_scope` or `not_ready`;
+	// absent when Available.
+	Reason string `json:"reason,omitempty"`
+	// Scope names the credential scope that would grant the feature, when
+	// Reason is `missing_scope`.
+	Scope string `json:"scope,omitempty"`
 }
 
 // SystemCCUInterface is one interface adapter as the CCU itself reports

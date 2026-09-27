@@ -1,5 +1,5 @@
 {
-  "wsapi_version": "1.9",
+  "wsapi_version": "1.10",
   "commands": {
     "addon_update.check": "",
     "addon_update.install": "",
@@ -49,6 +49,7 @@
     "cdp.list": "device:string?",
     "central.connectivity": "",
     "central.create_links": "address:string?, channel:string?, device_address:string?",
+    "central.features_changed": "",
     "central.info": "",
     "central.links_status": "address:string?, device_address:string?",
     "central.readiness_changed": "",

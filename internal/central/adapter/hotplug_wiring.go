@@ -10,8 +10,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
-	"github.com/SukramJ/openccu-loom/internal/client/rega"
-	"github.com/SukramJ/openccu-loom/internal/store/devicedetails"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
 
@@ -26,16 +24,17 @@ import (
 // resolveBackend maps the canonical wire interface-id to its southbound
 // backend; nil means the interface is not (yet) wired and the ingest is
 // skipped — the interface's own bring-up materialises those devices.
-// ddLoader force-refreshes the DeviceDetails cache before the ingest so
-// a hot-plugged device carries its CCU-assigned name instead of its
-// address; nil skips the refresh (the periodic loader catches up later).
+// refreshMetadata refreshes the central's names before the ingest so a
+// hot-plugged device carries its assigned name instead of its address; nil
+// skips the refresh (the periodic loader catches up later). seeder, when
+// non-nil, seeds the new devices' values.
 func newHotplugIngestor(
 	unit *central.Unit,
 	pipeline *DevicePipeline,
 	writer ValueWriter,
-	runner *rega.Runner,
+	seeder ValueSeeder,
 	resolveBackend func(interfaceID string) backends.Operations,
-	ddLoader *devicedetails.Loader,
+	refreshMetadata func(ctx context.Context) error,
 	logger *slog.Logger,
 ) func(ctx context.Context, interfaceID string, descriptions []hmproto.DeviceDescription) error {
 	return func(ctx context.Context, interfaceID string, descriptions []hmproto.DeviceDescription) error {
@@ -48,16 +47,16 @@ func newHotplugIngestor(
 			return nil
 		}
 		iface := BareInterfaceFromWireID(unit.Name(), interfaceID)
-		if ddLoader != nil {
+		if refreshMetadata != nil {
 			// Best-effort: without the refresh the device renders by
 			// address until the periodic DeviceDetails job lands.
-			if err := ddLoader.Load(ctx, true); err != nil && logger != nil {
+			if err := refreshMetadata(ctx); err != nil && logger != nil {
 				logger.Debug("hotplug.device_details.refresh_failed",
 					slog.String("interface", interfaceID),
 					slog.String("err", err.Error()))
 			}
 		}
-		newAddrs, err := pipeline.IngestNewDevices(ctx, interfaceID, iface, b, writer, runner, descriptions, logger)
+		newAddrs, err := pipeline.IngestNewDevices(ctx, interfaceID, iface, b, writer, seeder, descriptions, logger)
 		if err != nil {
 			return err
 		}

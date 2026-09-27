@@ -5751,6 +5751,20 @@ export interface components {
             assignable: components["schemas"]["SuitableMemberEntry"][];
             leftover: components["schemas"]["SuitableMemberEntry"][];
         };
+        /** @description One feature's availability on a central. */
+        CentralFeatureState: {
+            available: boolean;
+            /**
+             * @description Why the feature is unavailable; absent when it is available.
+             * @enum {string}
+             */
+            reason?: "not_supported_by_system" | "missing_scope" | "not_ready";
+            /**
+             * @description The credential scope that would grant the feature, when
+             *     `reason` is `missing_scope` (for example `power` or `backup`).
+             */
+            scope?: string;
+        };
         /**
          * @description One CCU as known to the daemon. `name` is the daemon-local
          *     identifier (config-driven, multi-CCU-safe). The other fields
@@ -5829,9 +5843,33 @@ export interface components {
              *     (`POST .../recovery-mode`). True for OpenCCU
              *     firmware, false for a stock CCU3 and while the product is not
              *     yet known — so a client hides the action rather than offering
-             *     one that cannot work.
+             *     one that cannot work. Derived from the `system.recovery_mode`
+             *     entry of `features`.
              */
             recovery_mode_supported?: boolean;
+            /**
+             * @description The kind of system behind the central. `ccu` is a CCU with
+             *     ReGaHss and the WebUI JSON-RPC (eQ-3 CCU, OpenCCU,
+             *     RaspberryMatic); `openccu-lite` is a system managed through the
+             *     occulited API. Absent until the central's first bring-up has
+             *     resolved it.
+             * @enum {string}
+             */
+            system_type?: "ccu" | "openccu-lite";
+            /**
+             * @description What the central can do right now, keyed by feature
+             *     (`hub.sysvars`, `hub.programs`, `hub.service_messages`,
+             *     `system.reboot`, `system.backup.create`, `taxonomy.tree`,
+             *     `install_mode`, …). Every known key is present. An unavailable
+             *     feature carries the reason: the system has no such feature, the
+             *     daemon's credential lacks the scope that grants it, or the
+             *     central has not finished its first bring-up. A client hides an
+             *     unavailable action instead of offering one that fails. Pushed
+             *     live as the `central.features_changed` WebSocket event.
+             */
+            features: {
+                [key: string]: components["schemas"]["CentralFeatureState"];
+            };
             /**
              * @description The interface adapters the CCU reports for itself — the
              *     CCU-side counterpart to `configured_interfaces`. Absent until
@@ -7662,6 +7700,20 @@ export interface components {
             ready: boolean;
             interfaces_loaded: number;
             interfaces_total: number;
+        };
+        /**
+         * @description Payload of a `central.features_changed` broadcast. Topic pattern
+         *     `central.{name}.features`. Carries the central's complete current
+         *     feature set (the same map `/system/ccu` reports as `features`), not
+         *     a delta.
+         */
+        CentralFeaturesChangedPayload: {
+            central: string;
+            /** @enum {string} */
+            system_type?: "ccu" | "openccu-lite";
+            features: {
+                [key: string]: components["schemas"]["CentralFeatureState"];
+            };
         };
         /**
          * @description Payload of a `system.status_changed` broadcast. Topic pattern

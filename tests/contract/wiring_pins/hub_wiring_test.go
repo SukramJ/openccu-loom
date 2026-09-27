@@ -82,16 +82,28 @@ func TestPin_SetServiceMessageReader_WiredInHubWiring(t *testing.T) {
 	)
 }
 
-// TestPin_WireServiceMessageSuppressor_CalledInCcuWiring pins that the
-// central bring-up (ccu_wiring.go) invokes WireServiceMessageSuppressor
-// after the interface clients are registered. Without this call the
-// suppressor is defined but never installed, leaving suppression
-// unwired.
+// TestPin_WireServiceMessageSuppressor_CalledInCcuWiring pins that the CCU
+// hub session's late wiring (south_ccu_hub.go) invokes
+// WireServiceMessageSuppressor. Without this call the suppressor is defined
+// but never installed, leaving suppression unwired.
 func TestPin_WireServiceMessageSuppressor_CalledInCcuWiring(t *testing.T) {
 	contract.MustFindCallerInFile(
 		t,
-		"internal/central/adapter/ccu_wiring.go",
+		"internal/central/adapter/south_ccu_hub.go",
 		"internal/central/adapter", "WireServiceMessageSuppressor",
+	)
+}
+
+// TestPin_HubSessionWireLate_CalledInBringUp pins that the central bring-up
+// runs its hub session's late wiring after the interface clients are
+// registered. The late-binding services (sysvar creator, backup, service
+// message suppression, install-mode data points) live behind that call; a
+// bring-up that drops it leaves every one of them uninstalled.
+func TestPin_HubSessionWireLate_CalledInBringUp(t *testing.T) {
+	contract.MustFindMethodCall(
+		t,
+		"internal/central/adapter/ccu_wiring.go",
+		"hub", "WireLate",
 	)
 }
 

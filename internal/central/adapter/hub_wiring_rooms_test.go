@@ -194,7 +194,7 @@ func TestLoadRoomAssignmentsViaHTTPFake(t *testing.T) {
 	})
 	jc := newJSONRPCClient(t, srv.URL)
 
-	got, err := loadRoomAssignments(context.Background(), jc, iseMap)
+	got, _, err := loadRoomAssignments(context.Background(), jc, iseMap)
 	if err != nil {
 		t.Fatalf("loadRoomAssignments: %v", err)
 	}
@@ -242,7 +242,7 @@ func TestLoadFunctionAssignmentsViaHTTPFake(t *testing.T) {
 	})
 	jc := newJSONRPCClient(t, srv.URL)
 
-	got, err := loadFunctionAssignments(context.Background(), jc, iseMap)
+	got, _, err := loadFunctionAssignments(context.Background(), jc, iseMap)
 	if err != nil {
 		t.Fatalf("loadFunctionAssignments: %v", err)
 	}

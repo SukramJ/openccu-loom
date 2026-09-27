@@ -328,3 +328,68 @@ func TestStopDrainsInFlightHotplugIngestGoroutine(t *testing.T) {
 		t.Fatal("Stop() did not return; the in-flight hot-plug ingest goroutine leaked past shutdown")
 	}
 }
+
+// TestIngestDescriptionsTakesTheNewDevicesPath pins that typed descriptions
+// handed in by an event source that fetched them itself reach the same
+// hot-plug ingestor, under the same canonical interface id, as a newDevices
+// callback carrying them inline.
+func TestIngestDescriptionsTakesTheNewDevicesPath(t *testing.T) {
+	t.Parallel()
+	c, err := central.New(central.Config{Name: "ccu-typed", InstanceName: "loom1"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	h := NewCallbackHandlers(c, nil)
+	defer h.Stop()
+	fake := newFakeHotplugIngestor()
+	c.SetDeviceIngestFn(fake.ingest)
+
+	descs := []hmproto.DeviceDescription{{Address: "TYPED001", Type: "HmIP-PS", Children: []string{"TYPED001:1"}}}
+	if err := h.IngestDescriptions(context.Background(), "loom1-ccu-typed-HmIP-RF", descs); err != nil {
+		t.Fatalf("IngestDescriptions: %v", err)
+	}
+	select {
+	case call := <-fake.calls:
+		if call.interfaceID != "ccu-typed-HmIP-RF" {
+			t.Fatalf("ingestor interfaceID = %q, want canonical %q", call.interfaceID, "ccu-typed-HmIP-RF")
+		}
+		if len(call.descriptions) != 1 || call.descriptions[0].Address != "TYPED001" {
+			t.Fatalf("ingestor descriptions = %+v, want TYPED001", call.descriptions)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("IngestDescriptions never reached the hot-plug ingestor")
+	}
+}
+
+// TestIngestDescriptionsParksWhileCreationIsDeferred pins the other branch:
+// with deferred creation on, typed descriptions wait on the inbox exactly as
+// inline ones do, and nothing is materialised until the accept.
+func TestIngestDescriptionsParksWhileCreationIsDeferred(t *testing.T) {
+	t.Parallel()
+	c, err := central.New(central.Config{Name: "ccu-typed-deferred"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	h := NewCallbackHandlers(c, nil)
+	defer h.Stop()
+	h.SetDelayNewDeviceCreation(true)
+	fake := newFakeHotplugIngestor()
+	c.SetDeviceIngestFn(fake.ingest)
+
+	descs := []hmproto.DeviceDescription{{Address: "TYPED002", Type: "HmIP-PS", Children: []string{"TYPED002:1"}}}
+	if err := h.IngestDescriptions(context.Background(), "HmIP-RF", descs); err != nil {
+		t.Fatalf("IngestDescriptions: %v", err)
+	}
+	select {
+	case call := <-fake.calls:
+		t.Fatalf("hot-plug ingestor ran while creation is deferred: %+v", call)
+	case <-time.After(200 * time.Millisecond):
+	}
+	accepted, err := AcceptPendingDevice(context.Background(), c, "TYPED002")
+	if err != nil {
+		t.Fatalf("AcceptPendingDevice: %v", err)
+	}
+	if !accepted {
+		t.Fatal("the deferred queue does not hold the typed description")
+	}
+}

@@ -279,6 +279,9 @@ func (a *BackupAdapter) runBackup(u *central.Unit, id string) {
 		slog.String("id", id))
 }
 
+// errEmptyBackupArchive is the refusal for a create that produced no bytes.
+var errEmptyBackupArchive = errors.New("backup: create: the system returned an empty archive")
+
 // createAndSave is the shared create-then-persist core used by both the
 // asynchronous [BackupAdapter.runBackup] and the synchronous
 // [BackupAdapter.CreateBackupForCentral]. It holds the per-central lock for
@@ -292,6 +295,12 @@ func (a *BackupAdapter) createAndSave(ctx context.Context, u *central.Unit, id s
 	data, err := u.CreateBackup(ctx)
 	if err != nil {
 		return fmt.Errorf("backup: create: %w", err)
+	}
+	// A system that cannot produce an archive answers with nothing; storing
+	// that as a zero-byte backup and reporting success would leave the
+	// operator with a restore point that restores nothing.
+	if len(data) == 0 {
+		return errEmptyBackupArchive
 	}
 	if a.storage == nil {
 		a.log().Warn("backup.create.no_storage",

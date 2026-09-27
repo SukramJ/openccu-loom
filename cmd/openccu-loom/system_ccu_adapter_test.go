@@ -337,3 +337,54 @@ func TestSystemCCUAdapterList_OmitsCCUInterfacesBeforeFirstConnect(t *testing.T)
 		t.Error("security flags default to true, want false before the first connect")
 	}
 }
+
+// TestSystemCCUReportsFeatures pins that /system/ccu carries the central's
+// live feature set — every key, with the reason for an absent one — and
+// derives recovery_mode_supported from it rather than from its own product
+// heuristic.
+func TestSystemCCUReportsFeatures(t *testing.T) {
+	t.Parallel()
+	reg := central.NewRegistry()
+	unit, err := central.New(central.Config{Name: "ccu-feat"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	if err := reg.Register(unit); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	a := newSystemCCUAdapter(reg, nil)
+
+	// Before the first bring-up: every key present, none available.
+	before := a.List(context.Background())[0]
+	if len(before.Features) != len(hmenum.AllFeatures()) {
+		t.Fatalf("features carries %d keys, want %d", len(before.Features), len(hmenum.AllFeatures()))
+	}
+	if s := before.Features[string(hmenum.FeatureHubSysvars)]; s.Available || s.Reason != string(hmenum.FeatureReasonNotReady) {
+		t.Errorf("hub.sysvars before bring-up = %+v, want not_ready", s)
+	}
+	if before.RecoveryModeSupported || before.SystemType != "" {
+		t.Errorf("before bring-up: recovery=%v system_type=%q, want false/empty", before.RecoveryModeSupported, before.SystemType)
+	}
+
+	unit.SetFeatures(central.NewFeatures(hmenum.SystemTypeOpenCCULite, map[hmenum.Feature]central.FeatureState{
+		hmenum.FeatureSystemRecoveryMode: {Available: true},
+		hmenum.FeatureSystemReboot:       {Reason: hmenum.FeatureReasonMissingScope, Scope: "power"},
+	}))
+	after := a.List(context.Background())[0]
+	if after.SystemType != "openccu-lite" {
+		t.Errorf("system_type = %q, want openccu-lite", after.SystemType)
+	}
+	if !after.RecoveryModeSupported {
+		t.Error("recovery_mode_supported does not follow the system.recovery_mode feature")
+	}
+	if s := after.Features[string(hmenum.FeatureSystemReboot)]; s.Available || s.Reason != "missing_scope" || s.Scope != "power" {
+		t.Errorf("system.reboot = %+v, want missing_scope/power", s)
+	}
+	raw, err := json.Marshal(after)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(raw), `"system.reboot":{"available":false,"reason":"missing_scope","scope":"power"}`) {
+		t.Errorf("wire shape of a refused feature is wrong: %s", raw)
+	}
+}

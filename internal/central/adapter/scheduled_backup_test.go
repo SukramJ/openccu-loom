@@ -693,3 +693,32 @@ func TestCreateBackupForCentralSerializesPerCentral(t *testing.T) {
 		t.Fatalf("per-central create ran with concurrency %d, want serialized (1)", got)
 	}
 }
+
+// TestBackupRejectsEmptyArchive pins that a create producing no bytes is an
+// error, not a zero-byte restore point reported as success.
+func TestBackupRejectsEmptyArchive(t *testing.T) {
+	t.Parallel()
+	reg := newRegistryWith(t, "alpha")
+	wireCreateBackup(t, reg, "alpha", func(context.Context) ([]byte, error) {
+		return nil, nil
+	})
+	dir := t.TempDir()
+	storage, err := NewFilesystemBackupStorage(dir)
+	if err != nil {
+		t.Fatalf("storage: %v", err)
+	}
+	a := NewBackupAdapter(reg).SetStorage(storage)
+
+	if _, err := a.CreateBackupForCentral(context.Background(), "alpha"); !errors.Is(err, errEmptyBackupArchive) {
+		t.Fatalf("CreateBackupForCentral = %v, want errEmptyBackupArchive", err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read storage dir: %v", err)
+	}
+	for _, e := range entries {
+		if filepath.Ext(e.Name()) == ".sbk" {
+			t.Errorf("an empty archive was stored as %s", e.Name())
+		}
+	}
+}

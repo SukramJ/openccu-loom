@@ -925,7 +925,7 @@ func TestDevicePipeline_SeedValues_DecodesURLEncodedStringValue(t *testing.T) {
 	jc := newBoost6JSONRPCClient(t, srv.URL)
 	r := newBoost6RegaRunner(t, jc)
 
-	if err := p.seedValues(context.Background(), "HmIP-RF", r, slog.Default()); err != nil {
+	if err := p.Reseed(context.Background(), "HmIP-RF", &ccuValueSeeder{runner: r}, SeedFull, slog.Default()); err != nil {
 		t.Fatalf("seedValues: %v", err)
 	}
 
@@ -980,7 +980,7 @@ func TestDevicePipeline_SeedValues_TranscodesLatin1StringValue(t *testing.T) {
 	jc := newBoost6JSONRPCClient(t, srv.URL)
 	r := newBoost6RegaRunner(t, jc)
 
-	if err := p.seedValues(context.Background(), "HmIP-RF", r, slog.Default()); err != nil {
+	if err := p.Reseed(context.Background(), "HmIP-RF", &ccuValueSeeder{runner: r}, SeedFull, slog.Default()); err != nil {
 		t.Fatalf("seedValues: %v", err)
 	}
 
@@ -1048,7 +1048,7 @@ func TestDevicePipeline_SeedValues_SkipsEdgeTriggerParameters(t *testing.T) {
 	jc := newBoost6JSONRPCClient(t, srv.URL)
 	r := newBoost6RegaRunner(t, jc)
 
-	if err := p.seedValues(context.Background(), "HmIP-RF", r, slog.Default()); err != nil {
+	if err := p.Reseed(context.Background(), "HmIP-RF", &ccuValueSeeder{runner: r}, SeedFull, slog.Default()); err != nil {
 		t.Fatalf("seedValues: %v", err)
 	}
 

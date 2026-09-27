@@ -10,6 +10,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // systemCCUAdapter walks the central registry to produce the
@@ -63,11 +64,12 @@ func (a *systemCCUAdapter) List(ctx context.Context) []handlers.SystemCCUEntry {
 		entry.AuthEnabled = si.AuthEnabled
 		entry.HTTPSRedirectEnabled = si.HTTPSRedirectEnabled
 		entry.Timezone = si.Timezone
-		// get_backend_info classifies anything that is not a stock CCU or
-		// debmatic as "OpenCCU"; recovery mode exists exactly there. An
-		// empty model means bring-up has not resolved it yet, which must
-		// read as "not offered" rather than "offered".
-		entry.RecoveryModeSupported = si.Model != "" && si.Model != "CCU"
+		// Recovery mode is one feature among the rest; the central's
+		// profile decides it (on a CCU from the product label).
+		feats := c.Features()
+		entry.RecoveryModeSupported = feats.Available(hmenum.FeatureSystemRecoveryMode)
+		entry.SystemType = string(feats.SystemType())
+		entry.Features = featureStates(feats)
 		// Only report a position the CCU actually resolved. Exact 0/0 is
 		// the zero value of an unresolved read, and reporting it as a
 		// coordinate would tell the operator their CCU sits off the coast
@@ -106,4 +108,20 @@ func interfaceNames(cc config.CentralConfig) []string {
 		names = append(names, ifc.Name)
 	}
 	return names
+}
+
+// featureStates renders every feature key of f, so a client never has to
+// guess what an absent key means.
+func featureStates(f central.Features) map[string]handlers.CentralFeatureState {
+	keys := hmenum.AllFeatures()
+	out := make(map[string]handlers.CentralFeatureState, len(keys))
+	for _, k := range keys {
+		s := f.State(k)
+		out[string(k)] = handlers.CentralFeatureState{
+			Available: s.Available,
+			Reason:    string(s.Reason),
+			Scope:     s.Scope,
+		}
+	}
+	return out
 }

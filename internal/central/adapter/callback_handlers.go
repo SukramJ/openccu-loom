@@ -234,15 +234,7 @@ func (h *CallbackHandlers) goBackground(fn func()) bool {
 func (h *CallbackHandlers) noteCallbackAndRoutePong(
 	ctx context.Context, interfaceID, channelAddress, parameter string, value xmlrpc.Value,
 ) bool {
-	var registered bool
-	if h.unit != nil && h.unit.Clients != nil {
-		if entry, ok := h.unit.Clients.Get(interfaceID); ok && entry != nil {
-			registered = true
-			if entry.Client != nil {
-				entry.Client.NotifyCallback()
-			}
-		}
-	}
+	registered := h.noteAlive(interfaceID)
 	if parameter != string(hmenum.ParameterPong) {
 		return false
 	}
@@ -253,6 +245,32 @@ func (h *CallbackHandlers) noteCallbackAndRoutePong(
 	}
 	if h.unit != nil && h.unit.Events != nil {
 		h.unit.Events.HandleRawEventNormalized(ctx, interfaceID, channelAddress, parameter, ParamValueFromWire(value))
+	}
+	return true
+}
+
+// NoteAlive stamps callback liveness on the client of interfaceID without an
+// event, for an event source whose transport carries its own heartbeat: a
+// quiet interface would otherwise look dead once the callback freshness
+// window passes. interfaceID is in the form the system echoes back (the id
+// announced at init), exactly as [CallbackHandlers.Event] receives it. It
+// reports whether the central brought that interface up; an interface it did
+// not is never stamped.
+func (h *CallbackHandlers) NoteAlive(interfaceID string) bool {
+	return h.noteAlive(h.canonicalInterfaceID(interfaceID))
+}
+
+// noteAlive is [CallbackHandlers.NoteAlive] for an already canonical id.
+func (h *CallbackHandlers) noteAlive(interfaceID string) bool {
+	if h.unit == nil || h.unit.Clients == nil {
+		return false
+	}
+	entry, ok := h.unit.Clients.Get(interfaceID)
+	if !ok || entry == nil {
+		return false
+	}
+	if entry.Client != nil {
+		entry.Client.NotifyCallback()
 	}
 	return true
 }
@@ -552,11 +570,32 @@ func (h *CallbackHandlers) NewDevices(_ context.Context, interfaceID string, des
 	for i, v := range descs {
 		raw[i] = xmlRPCValueToGo(v)
 	}
-	iface := hmtypes.ParseWireInterfaceID(interfaceID)
-	descriptions := backends.ParseDeviceDescriptions(raw)
-	if len(descriptions) == 0 {
+	h.ingestDescriptions(interfaceID, backends.ParseDeviceDescriptions(raw)) //nolint:contextcheck // the ingest outlives the callback and runs on the handlers' own context — the request ctx dies with the RPC response
+	return nil
+}
+
+// IngestDescriptions hands already typed device descriptions to the same
+// path a newDevices callback takes: parked on the inbox while deferred
+// creation is on, materialised in the background otherwise. It serves an
+// event source that learns descriptions some other way than inside the
+// callback — by fetching them for an announced address. interfaceID is in
+// the form the system echoes back, as for [CallbackHandlers.NewDevices].
+func (h *CallbackHandlers) IngestDescriptions(_ context.Context, interfaceID string, descriptions []hmproto.DeviceDescription) error {
+	interfaceID = h.canonicalInterfaceID(interfaceID)
+	if h.unit.Devices == nil {
 		return nil
 	}
+	h.ingestDescriptions(interfaceID, descriptions) //nolint:contextcheck // the ingest outlives the caller and runs on the handlers' own context
+	return nil
+}
+
+// ingestDescriptions is the shared tail of [CallbackHandlers.NewDevices] and
+// [CallbackHandlers.IngestDescriptions] for a canonical interface id.
+func (h *CallbackHandlers) ingestDescriptions(interfaceID string, descriptions []hmproto.DeviceDescription) {
+	if len(descriptions) == 0 {
+		return
+	}
+	iface := hmtypes.ParseWireInterfaceID(interfaceID)
 	if h.delayNewDeviceCreation.Load() {
 		// Defer entity creation: the device waits on the inbox surface
 		// until an operator accepts it. The inbox is only
@@ -574,7 +613,7 @@ func (h *CallbackHandlers) NewDevices(_ context.Context, interfaceID string, des
 		h.logger.Info("callback.new_devices.deferred",
 			slog.String("interface", interfaceID),
 			slog.Int("count", len(descriptions)))
-		return nil
+		return
 	}
 	h.goBackground(func() { //nolint:contextcheck // background ingest uses h.ctx — the callback ctx dies when the RPC response is written
 		bgCtx, cancel := context.WithTimeout(h.ctx, newDevicesIngestTimeout)
@@ -588,7 +627,6 @@ func (h *CallbackHandlers) NewDevices(_ context.Context, interfaceID string, des
 		// DeviceCreatedEvent — after materialisation, see doc comment.
 		h.unit.Devices.HandleNewDevices(bgCtx, iface, descriptions)
 	})
-	return nil
 }
 
 // newDevicesIngestTimeout bounds one background hot-plug materialisation.

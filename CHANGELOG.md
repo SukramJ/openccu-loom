@@ -6,6 +6,34 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### openccu-lite (in progress — do not release before the docs slice)
+
+Groundwork for running against openccu-lite systems. Nothing changes for a
+CCU; the list below is what an API client can already observe.
+
+#### Added
+
+- `GET /api/v1/system/ccu` reports, per central, `system_type` and a
+  `features` map: for every feature key (`hub.sysvars`, `hub.programs`,
+  `system.reboot`, `system.backup.create`, `taxonomy.tree`, `install_mode`,
+  …) whether the central offers it right now, and if not why
+  (`not_supported_by_system`, `missing_scope` with the scope, or
+  `not_ready`). A CCU offers everything it always did; nested rooms
+  (`taxonomy.tree`) are new and not offered by a CCU. REST API 11.3.0.
+- WebSocket broadcast `central.features_changed` (topic
+  `central.{name}.features`) carries a central's complete feature set
+  whenever it changes. WebSocket API 1.10.
+
+#### Fixed
+
+- Suppressing a service message on an interface that cannot suppress
+  durably answered success while the message stayed raised; reading the
+  suppressed list there answered "none". Both now refuse with
+  `422 Unprocessable Entity`, as other unsupported operations do. No CCU
+  interface that offers suppression is affected.
+- A backup whose creation produced no data was stored as a zero-byte archive
+  and reported as successful. It is now an error.
+
 ## [0.78.1] - 2026-09-13
 
 ### Release summary
