@@ -14451,8 +14451,8 @@ func TestBackupAdapter_TriggerBackup_AsyncSaveSucceeds(t *testing.T) {
 
 	// Wire CreateBackupFn to return a fixed payload so the async goroutine succeeds.
 	const payload = "backup-bytes"
-	c.SetCreateBackupFn(func(_ context.Context) ([]byte, error) {
-		return []byte(payload), nil
+	c.SetCreateBackupFn(func(_ context.Context) (central.BackupArchive, error) {
+		return central.BackupArchive{Data: []byte(payload)}, nil
 	})
 
 	fake := &stubBackupStorage{}

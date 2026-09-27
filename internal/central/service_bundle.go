@@ -20,7 +20,8 @@ import (
 type serviceBundle struct {
 	mu sync.RWMutex
 
-	createBackupFn func(ctx context.Context) ([]byte, error)
+	createBackupFn func(ctx context.Context) (BackupArchive, error)
+	system         SystemServices
 	renameDeviceFn func(ctx context.Context, address, name string) error
 	// renameDeviceBatchFn persists a device rename together with its
 	// channel renames in one go. Optional: without it every address is

@@ -58,6 +58,16 @@ CCU; the list below is what an API client can already observe.
   object (favourites, floors) are kept, a room name several rooms share is
   refused with the candidates, and a concurrent edit is retried once. A
   token without `meta:read` runs without names instead of failing.
+- An openccu-lite central can be rebooted, powered off and restarted into
+  recovery, backed up and restored, and updated, through the box's system
+  API: a backup is the box's own archive under the box's own file name
+  (encrypted when the box owner switched backup encryption on); a restore
+  is checked by the box first and an archive only the box's recovery key
+  opens is refused; the system update shows the running openccu-lite
+  version and what the box's release feed offers. Each operation checks
+  the token's scope first and refuses, naming the scope, without
+  contacting the box. Safe mode and the astro position do not exist on
+  openccu-lite and are refused.
 
 #### Fixed
 

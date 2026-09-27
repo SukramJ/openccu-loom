@@ -463,6 +463,7 @@ func (m *BringUpManager) buildAndStart(cc *config.CentralConfig, unit *central.U
 		recordCentralUnsupported(unit, err)
 		return &centralBringUp{cfg: m.cfg, cc: *cc, unit: unit, deps: m.deps, logger: m.logger, parentCtx: m.parentCtx}
 	}
+	unit.SetSystemServices(profile.SystemServices(unit, m.deps))
 	cbHandlers, callbackURL, binRPCCallbackAddr, deregister := profile.Events().Attach(cc, unit, m.deps, m.logger)
 	b := &centralBringUp{
 		cfg:                m.cfg,

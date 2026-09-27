@@ -45,6 +45,12 @@ type SouthProfile interface {
 	// bring-up generation: the callback route (or the stream that replaces
 	// it) survives a re-init.
 	Events() EventIngress
+	// SystemServices returns the central's management ports (power, the
+	// astro position, the firmware download). They are installed once, when
+	// the central's bring-up handle is built, so a request made while the
+	// system is still booting reaches the same ports as one made later;
+	// each resolves what it needs at call time.
+	SystemServices(unit *central.Unit, deps WireDeps) central.SystemServices
 	// BringUpHub is the first step of every bring-up generation: identity,
 	// hub model and metadata. An error returns the central to the readiness
 	// gate before anything else is wired, so a retry starts clean.

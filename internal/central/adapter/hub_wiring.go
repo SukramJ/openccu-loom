@@ -2771,12 +2771,13 @@ func WireBackupAndDownload(unit *central.Unit, writer *clientpkg.ValueWriter) {
 	if unit == nil {
 		return
 	}
-	unit.SetCreateBackupFn(func(ctx context.Context) ([]byte, error) {
+	unit.SetCreateBackupFn(func(ctx context.Context) (central.BackupArchive, error) {
 		ic, b, err := primaryBackendOf(unit, writer)
 		if err != nil {
-			return nil, err
+			return central.BackupArchive{}, err
 		}
-		return ic.CreateBackupAndDownload(ctx, b, 0, 0)
+		data, err := ic.CreateBackupAndDownload(ctx, b, 0, 0)
+		return central.BackupArchive{Data: data}, err
 	})
 }
 

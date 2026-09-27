@@ -5,191 +5,152 @@ package adapter
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/client"
-	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
 
-// ccuRebooter is the narrow capability a backend exposes when it can reboot
-// its CCU host. Only the CCU backend implements it; CUxD / Homegear backends
-// do not, so a reboot request routed to one surfaces as unsupported.
-type ccuRebooter interface {
-	RebootCCU(ctx context.Context) (bool, error)
-}
-
-// ccuPositionSetter is the narrow capability a backend exposes when it can
-// write its CCU's astro reference position. ReGa-backed only, for the same
-// reason as ccuRebooter.
-type ccuPositionSetter interface {
-	SetCCUPosition(ctx context.Context, longitude, latitude float64) error
-}
-
-// ccuHostController is the narrow capability a backend exposes when it can
-// drive its CCU host's power and boot mode. Same ReGa/JSON-RPC-only
-// constraint as ccuRebooter: CUxD and Homegear backends do not host a CCU.
-type ccuHostController interface {
-	PoweroffCCU(ctx context.Context) (bool, error)
-	EnterSafeMode(ctx context.Context) error
-	EnterRecoveryMode(ctx context.Context) error
-}
-
-// CCUMaintenanceDomain runs per-central CCU host-maintenance operations.
-// Today that is a reboot; the type is the landing place for further CCU
-// maintenance actions (each resolving the target central's primary backend
-// from the registry and dispatching there).
+// CCUMaintenanceDomain runs per-central host-maintenance operations
+// (reboot, power off, safe and recovery mode, the astro position, the
+// firmware download). It resolves the target central from the registry
+// and calls the management ports its south profile installed, so the same
+// request reaches a CCU's ReGa scripts or an openccu-lite box's system API.
 type CCUMaintenanceDomain struct {
 	registry *central.Registry
-	writer   *client.ValueWriter
 }
 
 // NewCCUMaintenanceDomain wires the live adapter.
-func NewCCUMaintenanceDomain(r *central.Registry, w *client.ValueWriter) *CCUMaintenanceDomain {
-	return &CCUMaintenanceDomain{registry: r, writer: w}
+func NewCCUMaintenanceDomain(r *central.Registry) *CCUMaintenanceDomain {
+	return &CCUMaintenanceDomain{registry: r}
 }
 
-// RebootCCU reboots the CCU behind the named central via the central's
-// primary backend (which runs the reboot_ccu ReGa script). It returns
-// [hmerr.ErrUnknownCentral] when the central is not registered and
-// [backends.ErrUnsupported] when the resolved backend cannot reboot.
-func (a *CCUMaintenanceDomain) RebootCCU(ctx context.Context, centralName string) error {
-	if a.registry == nil || a.writer == nil {
-		return hmerr.ErrUnknownCentral
+// services resolves the named central and its management ports. A central
+// that has not come up yet has none installed; that is reported with the
+// error a CCU without an interface client gave before the ports existed.
+func (a *CCUMaintenanceDomain) services(centralName string) (*central.Unit, central.SystemServices, error) {
+	if a.registry == nil {
+		return nil, central.SystemServices{}, hmerr.ErrUnknownCentral
 	}
 	unit, ok := a.registry.Get(centralName)
 	if !ok || unit == nil {
-		return hmerr.ErrUnknownCentral
+		return nil, central.SystemServices{}, hmerr.ErrUnknownCentral
 	}
-	_, backend, err := primaryBackendOf(unit, a.writer)
+	services := unit.SystemServices()
+	return unit, services, nil
+}
+
+func errNoSystemServices(unit *central.Unit) error {
+	return fmt.Errorf("%w: central %s has no system services yet", ErrSysvarCreatorNoPrimary, unit.Name())
+}
+
+// power resolves the named central's power port.
+func (a *CCUMaintenanceDomain) power(centralName string) (central.PowerControl, error) {
+	unit, s, err := a.services(centralName)
+	if err != nil {
+		return nil, err
+	}
+	if s.Power == nil {
+		return nil, errNoSystemServices(unit)
+	}
+	return s.Power, nil
+}
+
+// RebootCCU reboots the system behind the named central. It returns
+// [hmerr.ErrUnknownCentral] when the central is not registered and
+// backends.ErrUnsupported when the system cannot reboot.
+func (a *CCUMaintenanceDomain) RebootCCU(ctx context.Context, centralName string) error {
+	p, err := a.power(centralName)
 	if err != nil {
 		return err
 	}
-	rb, ok := backend.(ccuRebooter)
-	if !ok {
-		return backends.ErrUnsupported
-	}
-	_, err = rb.RebootCCU(ctx)
-	return err
+	return p.Reboot(ctx)
 }
 
-// SetCCUPosition writes the astro reference position of the CCU behind the
-// named central. It returns [hmerr.ErrUnknownCentral] when the central is
-// not registered, [backends.ErrUnsupported] when the resolved backend has
-// no ReGa path, and the runner's validation error when a coordinate is out
-// of range.
+// SetCCUPosition writes the astro reference position of the system behind
+// the named central. It returns [hmerr.ErrUnknownCentral] when the central
+// is not registered, backends.ErrUnsupported when the system has no such
+// setting, and the validation error when a coordinate is out of range.
 //
 // On success the central's cached SystemInfo is patched in place so the
 // fleet view reflects the new position without waiting for the next hub
-// wiring pass - the values are known-good, since the runner only returns
+// wiring pass - the values are known-good, since the CCU path only returns
 // nil after the CCU read them back unchanged.
 func (a *CCUMaintenanceDomain) SetCCUPosition(ctx context.Context, centralName string, longitude, latitude float64) error {
-	if a.registry == nil || a.writer == nil {
-		return hmerr.ErrUnknownCentral
-	}
-	unit, ok := a.registry.Get(centralName)
-	if !ok || unit == nil {
-		return hmerr.ErrUnknownCentral
-	}
-	_, backend, err := primaryBackendOf(unit, a.writer)
+	unit, s, err := a.services(centralName)
 	if err != nil {
 		return err
 	}
-	ps, ok := backend.(ccuPositionSetter)
-	if !ok {
-		return backends.ErrUnsupported
+	if s.Position == nil {
+		return errNoSystemServices(unit)
 	}
-	if err := ps.SetCCUPosition(ctx, longitude, latitude); err != nil {
+	if err := s.Position.SetPosition(ctx, longitude, latitude); err != nil {
 		return err
 	}
 	unit.PatchSystemPosition(longitude, latitude)
 	return nil
 }
 
-// hostControllerFor resolves the named central's primary backend and
-// narrows it to the host-control capability, folding the three lookups
-// every power action repeats.
-func (a *CCUMaintenanceDomain) hostControllerFor(centralName string) (ccuHostController, error) {
-	if a.registry == nil || a.writer == nil {
-		return nil, hmerr.ErrUnknownCentral
-	}
-	unit, ok := a.registry.Get(centralName)
-	if !ok || unit == nil {
-		return nil, hmerr.ErrUnknownCentral
-	}
-	_, backend, err := primaryBackendOf(unit, a.writer)
-	if err != nil {
-		return nil, err
-	}
-	hc, ok := backend.(ccuHostController)
-	if !ok {
-		return nil, backends.ErrUnsupported
-	}
-	return hc, nil
-}
-
-// PoweroffCCU shuts down the CCU behind the named central. Unlike a
+// PoweroffCCU shuts down the system behind the named central. Unlike a
 // reboot nothing brings it back, so the central stays in the readiness
 // gate's "waiting for CCU" state until it is powered on again.
 func (a *CCUMaintenanceDomain) PoweroffCCU(ctx context.Context, centralName string) error {
-	hc, err := a.hostControllerFor(centralName)
+	p, err := a.power(centralName)
 	if err != nil {
 		return err
 	}
-	_, err = hc.PoweroffCCU(ctx)
-	return err
+	return p.PowerOff(ctx)
 }
 
-// EnterSafeMode restarts the CCU behind the named central into safe mode,
-// where the ReGa logic layer stays down so a broken configuration can be
-// repaired.
+// EnterSafeMode restarts the system behind the named central into safe
+// mode, where the ReGa logic layer stays down so a broken configuration
+// can be repaired.
 func (a *CCUMaintenanceDomain) EnterSafeMode(ctx context.Context, centralName string) error {
-	hc, err := a.hostControllerFor(centralName)
+	p, err := a.power(centralName)
 	if err != nil {
 		return err
 	}
-	return hc.EnterSafeMode(ctx)
+	return p.EnterSafeMode(ctx)
 }
 
-// EnterRecoveryMode restarts the CCU behind the named central into its
-// recovery system. Only OpenCCU firmware implements it;
-// a stock CCU3 answers with a JSON-RPC error, which is propagated rather
-// than swallowed so the operator learns the action did nothing.
+// EnterRecoveryMode restarts the system behind the named central into its
+// recovery system. Only OpenCCU firmware and openccu-lite implement it; a
+// stock CCU3 answers with a JSON-RPC error, which is propagated rather than
+// swallowed so the operator learns the action did nothing.
 func (a *CCUMaintenanceDomain) EnterRecoveryMode(ctx context.Context, centralName string) error {
-	hc, err := a.hostControllerFor(centralName)
+	p, err := a.power(centralName)
 	if err != nil {
 		return err
 	}
-	return hc.EnterRecoveryMode(ctx)
+	return p.EnterRecoveryMode(ctx)
 }
 
-// DownloadFirmware asks the CCU behind the named central to fetch the
+// DownloadFirmware asks the system behind the named central to fetch the
 // newest firmware for itself and stage it for a later install. When
 // centralName is empty and exactly one central is registered, that central
 // is used — matching the single-CCU convenience of the other system
 // endpoints.
 //
-// There is no image parameter: the CCU resolves the download from its own
-// version and board serial, so the target is the box, not a caller's URL.
+// There is no image parameter: the system resolves the download from its
+// own version and board, so the target is the box, not a caller's URL.
 //
 // Returns [hmerr.ErrUnknownCentral] when the central cannot be resolved
-// and [backends.ErrUnsupported] when the resolved backend is not a CCU
-// (CUxD, Homegear) or has no JSON-RPC session layer; the CCU-side error is
-// propagated verbatim otherwise, including the CCU's own report that the
-// download failed.
+// and backends.ErrUnsupported when the system cannot download firmware;
+// the system's own error is propagated verbatim otherwise, including its
+// report that the download failed.
 func (a *CCUMaintenanceDomain) DownloadFirmware(ctx context.Context, centralName string) error {
-	if a.registry == nil || a.writer == nil {
+	if a.registry == nil {
 		return hmerr.ErrUnknownCentral
 	}
 	unit, err := a.resolveCentral(centralName)
 	if err != nil {
 		return err
 	}
-	_, backend, err := primaryBackendOf(unit, a.writer)
-	if err != nil {
-		return err
+	s := unit.SystemServices()
+	if s.Firmware == nil {
+		return errNoSystemServices(unit)
 	}
-	return backend.DownloadFirmware(ctx)
+	return s.Firmware.DownloadSystemFirmware(ctx)
 }
 
 // resolveCentral looks up the target central by name, defaulting to the

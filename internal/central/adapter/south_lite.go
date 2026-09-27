@@ -78,6 +78,12 @@ func (p *liteProfile) Liveness() LivenessProbe { return p.liveness }
 // its stream.
 func (p *liteProfile) Events() EventIngress { return p.ingress }
 
+// SystemServices implements [SouthProfile]: the box's system API, gated
+// on the central's feature set.
+func (p *liteProfile) SystemServices(unit *central.Unit, _ WireDeps) central.SystemServices {
+	return newLiteSystem(p, unit).services()
+}
+
 // liteReadinessProbe decides when an openccu-lite system serves: occulited
 // answers its health read, and at least one of the central's interfaces
 // runs. The reason names what is missing, in the words an operator acts on

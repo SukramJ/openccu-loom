@@ -782,7 +782,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	centralLinksDomain := adapter.NewCentralLinksDomain(reg, valueWriter)
 	definitionExportDomain := adapter.NewDefinitionExportDomain(reg)
 	deviceAdminDomain := adapter.NewDeviceAdminDomain(reg, valueWriter)
-	ccuMaintenanceDomain := adapter.NewCCUMaintenanceDomain(reg, valueWriter)
+	ccuMaintenanceDomain := adapter.NewCCUMaintenanceDomain(reg)
 	groupsDomain := adapter.NewGroupsDomain(reg, valueWriter)
 	dpWriterAdapter := adapter.NewDataPointWriterAdapter(reg, valueWriter)
 	customDPDispatcher := adapter.NewCustomDPDispatcher(reg).SetAuditRecorder(auditRec)

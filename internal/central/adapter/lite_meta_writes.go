@@ -25,14 +25,11 @@ type liteMetaWriter struct {
 	unit   *central.Unit
 }
 
-// wire installs the writer on the central: the rename hooks and the
-// hub's assignment mutators.
+// wire installs the rename hooks on the central; the room and function
+// writes reach the hub through [liteHubWriter].
 func (w *liteMetaWriter) wire() {
 	w.unit.SetRenameDeviceFn(w.rename)
 	w.unit.SetRenameDeviceBatchFn(w.renameBatch)
-	if w.unit.HubModel != nil {
-		w.unit.HubModel.SetAssignmentMutators(w, w)
-	}
 }
 
 // objectRef is the store's key for an address: "<interface>.<address>".

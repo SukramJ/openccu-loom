@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 508.
+Guards without a doc comment: 7 of 514.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -486,6 +486,12 @@ Guards without a doc comment: 7 of 508.
 | TestLiteResyncTriggersReseed | wiring_pins/lite_stream_test.go | TestLiteResyncTriggersReseed pins that a window in which the stream may have missed events is reseeded: after a dropped stream whose resume position the box no longer holds, the central reads its values again through the current generation's pipeline. |
 | TestLiteStreamEventReachesDataPoint | wiring_pins/lite_stream_test.go | TestLiteStreamEventReachesDataPoint pins the event path of a lite central: a value an interface process reports reaches the data point and is published on the central's bus, exactly as an XML-RPC callback is. |
 | TestLiteStreamStampsLivenessOnHeartbeat | wiring_pins/lite_stream_test.go | TestLiteStreamStampsLivenessOnHeartbeat pins that a quiet interface stays alive on the stream's heartbeat alone: without it a lite interface with no device events would go stale after the callback freshness window and recovery would loop. |
+| TestLiteBackupCreateDownloadsArchive | wiring_pins/lite_system_test.go | TestLiteBackupCreateDownloadsArchive pins the backup path of a lite central end to end: the adapter the daemon builds creates a backup, which is the box's own archive stored under the box's own file name. |
+| TestLiteBackupStatusFromTargets | wiring_pins/lite_system_test.go | TestLiteBackupStatusFromTargets pins the on-box backup status the hub reports: running while a target runs, else the newest run's outcome; and a token that cannot read the targets is refused naming system:read. |
+| TestLiteRebootNeedsPowerScope | wiring_pins/lite_system_test.go | TestLiteRebootNeedsPowerScope pins the management ports the composition root installs on a lite central: a token with the power scope reboots the box; one without it is refused with the scope named, and the request never reaches the box. |
+| TestLiteRestoreChecksThenApplies | wiring_pins/lite_system_test.go | TestLiteRestoreChecksThenApplies pins the restore path: the box checks the archive and applies the checked upload. |
+| TestLiteRestoreRefusesArchiveNeedingRecoveryKey | wiring_pins/lite_system_test.go | TestLiteRestoreRefusesArchiveNeedingRecoveryKey pins that an archive the box can open only with its recovery key is refused as invalid input and never applied. |
+| TestLiteSystemUpdateMapsFeed | wiring_pins/lite_system_test.go | TestLiteSystemUpdateMapsFeed pins the system-update state of a lite central: the running openccu-lite version and the release the box's feed offers reach the hub model at bring-up. |
 | TestPin_ConcentrationClusters_SchemaRevision5 | wiring_pins/matter_concentration_revision_test.go | TestPin_ConcentrationClusters_SchemaRevision5 pins that the embedded matter.js HEAD schema snapshot reports revision 5 for the three concentration-measurement sub-clusters (0x040C family), mirroring matter.js HEAD concentration-measurement.element.ts:19 (default: 5). |
 | TestABridgeWithoutARingStillServesAnEmptyTrace | wiring_pins/matter_diagevent_pin_test.go | TestABridgeWithoutARingStillServesAnEmptyTrace pins the property that lets the recording points sit where they have to sit. |
 | TestAnAttachedRingIsWhatTheBridgeServes | wiring_pins/matter_diagevent_pin_test.go | TestAnAttachedRingIsWhatTheBridgeServes closes the other half: the setter has to reach the reader, or the REST surface would answer empty while the receive path recorded into a ring nobody serves. |

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
+	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/occulited"
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
@@ -57,7 +58,17 @@ func (p *liteProfile) BringUpHub(ctx context.Context, in HubBringUpInput) (HubSe
 	if err := meta.load(ctx); err != nil {
 		return nil, err
 	}
-	(&liteMetaWriter{client: p.client, unit: unit}).wire()
+	system := newLiteSystem(p, unit)
+	metaWriter := &liteMetaWriter{client: p.client, unit: unit}
+	metaWriter.wire()
+	writer := &liteHubWriter{liteSystem: system, meta: metaWriter}
+	if unit.HubModel != nil {
+		unit.HubModel.SetMutator(writer)
+		upd := unit.HubModel.Update
+		upd.SetFirmwareUpdater(writer)
+		//nolint:contextcheck // the monitor outlives the install request by design; its own deadline bounds it
+		upd.SetInstallMonitor(func() { system.monitorInstall(upd) })
+	}
 
 	// The scope refresh closes over this generation; a re-init registers
 	// the job name again while the scheduler keeps the old one ticking, so
@@ -78,6 +89,21 @@ func (p *liteProfile) BringUpHub(ctx context.Context, in HubBringUpInput) (HubSe
 			logger.Warn("lite.scopes.scheduler_add", slog.String("central", p.cc.Name), slog.String("err", err.Error()))
 		}
 	}
+	if unit.Hub != nil {
+		unit.Hub.SetRefreshHooks(coordinators.RefreshHooks{
+			SystemUpdate: func(ctx context.Context) error {
+				if !active.Load() {
+					return nil
+				}
+				return system.refreshSystemUpdate(ctx)
+			},
+		})
+	}
+	// The first update state is read now rather than at the refresh job's
+	// first hourly tick; the box reads its release feed's cached answer.
+	if err := system.refreshSystemUpdate(ctx); err != nil {
+		logger.Warn("lite.system_update.initial_failed", slog.String("central", p.cc.Name), slog.String("err", err.Error()))
+	}
 	// The stream outlives this call; the session's Close ends it.
 	meta.start(context.WithoutCancel(ctx))
 	set := &liteBackendSet{}
@@ -87,6 +113,7 @@ func (p *liteProfile) BringUpHub(ctx context.Context, in HubBringUpInput) (HubSe
 		logger:  logger,
 		set:     set,
 		meta:    meta,
+		system:  system,
 		close: func() {
 			active.Store(false)
 			meta.stop()
@@ -169,6 +196,7 @@ type liteHubSession struct {
 	logger  *slog.Logger
 	set     *liteBackendSet
 	meta    *liteMetadata
+	system  *liteSystem
 	close   func()
 }
 
@@ -197,13 +225,16 @@ func (s *liteHubSession) ValueSeeder() ValueSeeder {
 // snapshot.
 func (s *liteHubSession) RefreshMetadata(ctx context.Context) error { return s.meta.resnapshot(ctx) }
 
-// Restorer implements [HubSession]: backup restore is wired separately.
-func (*liteHubSession) Restorer() BackupRestorer { return nil }
+// Restorer implements [HubSession]: the box checks an archive, then
+// applies it.
+func (s *liteHubSession) Restorer() BackupRestorer { return s.system }
 
 // WireLate implements [HubSession]: the per-interface install-mode data
-// points resolve their backend at call time, which is a lite backend here.
-func (*liteHubSession) WireLate(unit *central.Unit, writer *client.ValueWriter) {
+// points resolve their backend at call time, which is a lite backend here,
+// and a backup is downloaded from the box's system API.
+func (s *liteHubSession) WireLate(unit *central.Unit, writer *client.ValueWriter) {
 	WireInstallModeDPs(unit, writer)
+	unit.SetCreateBackupFn(s.system.createBackup)
 }
 
 // Close implements [HubSession].
