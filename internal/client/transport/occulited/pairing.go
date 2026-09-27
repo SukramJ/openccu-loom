@@ -47,13 +47,6 @@ type PairingAccess struct {
 	System  string `json:"system,omitempty"`  // read | configure
 }
 
-// The access presets a client offers.
-var (
-	PairingAccessFull    = PairingAccess{Devices: "administer", Names: "configure", System: "configure"}
-	PairingAccessControl = PairingAccess{Devices: "operate", Names: "read", System: "read"}
-	PairingAccessRead    = PairingAccess{Devices: "read", Names: "read", System: "read"}
-)
-
 // PairingRequest is what the client asks the box's administrator to
 // approve.
 type PairingRequest struct {

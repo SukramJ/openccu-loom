@@ -35,6 +35,7 @@ type Health struct {
 }
 
 // HealthMeta is the metadata store part of the health answer.
+// loom:reachable:reason="the type of Health.Meta, decoded with every GET /health the lite readiness probe and identity read make; a method-less struct reached through a field, which the analyzer's type heuristic cannot see used"
 type HealthMeta struct {
 	Revision  int  `json:"revision"`
 	Recovered bool `json:"recovered"`
@@ -385,30 +386,6 @@ func (c *Client) ServiceMessages(ctx context.Context) (ServiceMessages, error) {
 	return get[ServiceMessages](ctx, c, systemBase+"/service-messages", nil)
 }
 
-// RadioHealth is GET /radio/health (system:read).
-type RadioHealth struct {
-	Interfaces    []RadioInterface `json:"interfaces"`
-	Busy          bool             `json:"busy"`
-	BusyInterface string           `json:"busy_interface"`
-	Raw           json.RawMessage  `json:"-"`
-}
-
-// RadioInterface is one radio module.
-type RadioInterface struct {
-	Interface string  `json:"interface"`
-	Address   string  `json:"address"`
-	Type      string  `json:"type"`
-	Connected bool    `json:"connected"`
-	Default   bool    `json:"default"`
-	Firmware  string  `json:"firmware"`
-	DutyCycle float64 `json:"duty_cycle"`
-}
-
-// RadioHealth reads GET /radio/health.
-func (c *Client) RadioHealth(ctx context.Context) (RadioHealth, error) {
-	return getWithRaw(ctx, c, systemBase+"/radio/health", func(r *RadioHealth, raw json.RawMessage) { r.Raw = raw })
-}
-
 // ----------------------------------------------------------------------
 // Heating groups
 // ----------------------------------------------------------------------
@@ -430,6 +407,7 @@ type Group struct {
 }
 
 // DeviceToConfigure is a member device that still needs configuring.
+// loom:reachable:reason="the element type of Groups.DevicesToConfigure, decoded with every GET /groups the lite heating-group port reads; a method-less struct reached through a field, which the analyzer's type heuristic cannot see used"
 type DeviceToConfigure struct {
 	ID     string `json:"id"`
 	Serial string `json:"serial"`

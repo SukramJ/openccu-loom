@@ -42,10 +42,6 @@ func TestSystemReads(t *testing.T) {
 	if err != nil || sm.Count != 1 || sm.Messages[0].Key != "LOW_BAT" || sm.Messages[0].Since.IsZero() {
 		t.Errorf("service messages %+v %v", sm, err)
 	}
-	rh, err := c.RadioHealth(ctx)
-	if err != nil || len(rh.Interfaces) != 2 || !rh.Interfaces[0].Connected {
-		t.Errorf("radio health %+v %v", rh, err)
-	}
 }
 
 func TestSystemUpdateFlow(t *testing.T) {

@@ -79,8 +79,8 @@ func ExpandScopes(stored []string) map[string]bool {
 	return out
 }
 
-// SortedScopes renders an expanded set in a stable order, for logs.
-func SortedScopes(set map[string]bool) []string {
+// sortedScopes renders an expanded set in a stable order, for logs.
+func sortedScopes(set map[string]bool) []string {
 	out := make([]string, 0, len(set))
 	for s := range set {
 		out = append(out, s)

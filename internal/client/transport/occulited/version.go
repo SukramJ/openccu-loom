@@ -43,15 +43,15 @@ type Version struct {
 	Format         int           `json:"format"`
 	Revision       int           `json:"revision"`
 	Implementation string        `json:"implementation"`
-	HMIP           *HMIPKeyMode  `json:"hmip"`
+	HMIP           *hmipKeyMode  `json:"hmip"`
 	Capabilities   *Capabilities `json:"capabilities"`
 	// Raw is the whole answer.
 	Raw json.RawMessage `json:"-"`
 }
 
-// HMIPKeyMode is the key-mode summary of the HomeMatic IP radio; it never
+// hmipKeyMode is the key-mode summary of the HomeMatic IP radio; it never
 // carries a key. Nil on a box that predates it.
-type HMIPKeyMode struct {
+type hmipKeyMode struct {
 	KeyserverMode  string `json:"keyserver_mode"`
 	DeviceKeys     int    `json:"device_keys"`
 	OfflinePairing bool   `json:"offline_pairing"`
@@ -65,12 +65,12 @@ type Capabilities struct {
 	History    bool           `json:"history"`
 	APIs       map[string]int `json:"apis"`
 	Transports []string       `json:"transports"`
-	Limits     *Limits        `json:"limits"`
+	Limits     *streamLimits  `json:"limits"`
 	JSONDouble bool           `json:"json_double"`
 }
 
-// Limits are the stream figures the box advertises.
-type Limits struct {
+// streamLimits are the stream figures the box advertises.
+type streamLimits struct {
 	StreamsPerToken int `json:"streams_per_token"`
 	StreamsTotal    int `json:"streams_total"`
 	BufferSeconds   int `json:"buffer_seconds"`

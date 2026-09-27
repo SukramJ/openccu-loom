@@ -97,6 +97,7 @@ type HelloInterface struct {
 }
 
 // HelloBuffer is the replay ring's size.
+// loom:reachable:reason="the type of Hello.Buffer, decoded with every hello frame the lite event stream consumes; a method-less struct reached through a field, which the analyzer's type heuristic cannot see used"
 type HelloBuffer struct {
 	Seconds int `json:"seconds"`
 	Events  int `json:"events"`

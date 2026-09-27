@@ -36,8 +36,8 @@ const (
 // daemon subscription, and events arrive on the event stream instead.
 var ErrInitRefused = errors.New("occulited: init is refused remotely; use the event stream")
 
-// IsInitRefusal reports whether err carries the proxy's init refusal.
-func IsInitRefusal(err error) bool {
+// isInitRefusal reports whether err carries the proxy's init refusal.
+func isInitRefusal(err error) bool {
 	f, ok := errors.AsType[*hmerr.XMLRPCFault](err)
 	return ok && f.Code == refusalFaultCode && f.Message == InitRefusalText
 }

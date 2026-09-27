@@ -174,7 +174,7 @@ func TestLiteRPCInitIsRefusedAsFaultOver200(t *testing.T) {
 			params []xmlrpc.Value
 		}{{"init", initParams}, {"system.multicall", multicall}} {
 			_, err := x.Call(context.Background(), c.method, c.params)
-			if !occulited.IsInitRefusal(err) || !errors.Is(occulited.ClassifyFault(err), occulited.ErrInitRefused) {
+			if !errors.Is(occulited.ClassifyFault(err), occulited.ErrInitRefused) {
 				t.Errorf("%s: %v, want the init refusal", c.method, err)
 			}
 			if call := lastProxyCall(t, f); call.Status != http.StatusOK || call.RPCMethods[0] != "init" && c.method == "init" {
@@ -186,7 +186,7 @@ func TestLiteRPCInitIsRefusedAsFaultOver200(t *testing.T) {
 		f := startLiteFake(t, litefake.Options{})
 		f.Deviate(litefake.DeviateInitFaultText, true)
 		_, err := liteXMLRPC(t, f, liteHmIPRF, litefake.DefaultToken).Call(context.Background(), "init", initParams)
-		if err == nil || occulited.IsInitRefusal(err) || errors.Is(occulited.ClassifyFault(err), occulited.ErrInitRefused) {
+		if err == nil || errors.Is(occulited.ClassifyFault(err), occulited.ErrInitRefused) {
 			t.Errorf("a different fault text still classified as the init refusal: %v", err)
 		}
 	})
