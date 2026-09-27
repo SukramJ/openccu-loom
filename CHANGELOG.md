@@ -6,10 +6,39 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### openccu-lite (in progress — do not release before the docs slice)
+### Release summary
 
-Groundwork for running against openccu-lite systems. Nothing changes for a
-CCU; the list below is what an API client can already observe.
+OpenCCU-Loom now runs against **openccu-lite** systems as well as CCUs, in
+one daemon and in mixed fleets. A central names its system type — `ccu`
+(the default, and what every existing central stays), `openccu-lite`, or
+`auto` — and the daemon talks to a box through occulited's API: devices and
+paramsets through its XML-RPC proxy, events over its event stream (no
+callback port needed), names, rooms and functions from its metadata store,
+and backups, updates and power through its system API. Adding a box takes
+"Identify system" and a pairing code entered on the box; the token stays in
+the daemon.
+
+What a system cannot do is said, not faked: every central reports which
+features it offers and why not (the system has no such thing, the token
+lacks a scope, not ready yet), REST answers `422 feature_unavailable`, MQTT
+declares only what exists, and the web UI hides what a system cannot do and
+names the reason. Rooms and functions that nest are trees, told apart by
+their path.
+
+**Breaking: REST API 12.0.0.** `POST /rooms` and `POST /functions` now
+document `id` as the integer the daemon always sent (the spec said string),
+and as absent on openccu-lite, where `path` names the new node. Regenerate a
+client that typed it as a string. Everything else is additive. Follow-ups
+outside this repository: `openccu-loom-client`/`-types` and the Node-RED
+contrib need the new DTOs and the 12.0.0 pin.
+
+Nothing changes for a CCU. REST API 12.0.0, WebSocket API 1.11.
+
+Design records: ADR 0071 (south profiles), 0072 (the event stream), 0073
+(taxonomy), 0074 (per-central features), 0075 (token credentials). Operator
+guide: `docs/admin/openccu-lite.md`.
+
+### openccu-lite
 
 #### Added
 
@@ -19,10 +48,10 @@ CCU; the list below is what an API client can already observe.
   …) whether the central offers it right now, and if not why
   (`not_supported_by_system`, `missing_scope` with the scope, or
   `not_ready`). A CCU offers everything it always did; nested rooms
-  (`taxonomy.tree`) are new and not offered by a CCU. REST API 11.3.0.
+  (`taxonomy.tree`) are new and not offered by a CCU.
 - WebSocket broadcast `central.features_changed` (topic
   `central.{name}.features`) carries a central's complete feature set
-  whenever it changes. WebSocket API 1.10.
+  whenever it changes.
 - A central can name its system: `system_type` (`ccu` — the default, also
   for every existing central —, `openccu-lite`, `auto`), with `api_token`
   (secret, sealed at rest like the CCU password, masked on every read) and
@@ -32,7 +61,6 @@ CCU; the list below is what an API client can already observe.
   port overrides or CUxD; a CCU central carries no token or fingerprint.
   An `auto` central identifies what answers at its address before it comes
   up (shown as waiting while it does) and stores the resolved type.
-  REST API 11.4.0.
 - An openccu-lite central comes up through the box's API: readiness from
   the box's health and interface state (with the reason — box starting,
   token rejected, token without the read tier, no interface running —
@@ -113,7 +141,7 @@ CCU; the list below is what an API client can already observe.
   /taxonomy/{central}/{enum}/nodes` and the matching WebSocket commands;
   on a CCU, whose rooms and functions are flat, only root nodes of those
   two enums, and nesting or moving is refused. The room and function
-  create answers carry `path`. WebSocket API 1.11.
+  create answers carry `path`.
 - Adding a system starts with `POST /centrals/probe`, which says what
   answers at an address — a CCU, an openccu-lite box (with its API
   versions, whether it offers pairing and its HomeMatic IP key mode) or

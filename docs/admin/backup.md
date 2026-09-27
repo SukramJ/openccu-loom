@@ -238,6 +238,29 @@ or store that name rather than deriving one from `id`, which is a storage
 key and carries no firmware version. It is absent for archives taken
 before the field existed — fall back to `<id>.sbk`.
 
+### Backing up and restoring an openccu-lite system
+
+The same four endpoints work against an openccu-lite central, backed
+by the box's own backup API instead of the CCU's CGI:
+
+- `POST /api/v1/backups` downloads a fresh backup archive the box
+  creates on request; the archive keeps the box's own file name and is
+  served **encrypted** (`.sbk.age`) when the box owner has turned on
+  backup encryption there.
+- `POST /api/v1/backups/{id}/restore` uploads the archive to the box,
+  which checks it before applying anything. An archive that needs the
+  box's **recovery key to decrypt is refused** — this daemon does not
+  hold that key, so an encrypted `.sbk.age` archive restore is **not
+  supported**; restore it directly on the box instead. An archive the
+  box otherwise rejects (wrong hardware, corrupt) is refused the same
+  way. A restore the box accepts reboots it; the central goes through
+  its normal "waiting for the system" readiness phase and comes back
+  once the box is up again.
+- Both operations need the token scope named in
+  [Connecting an openccu-lite system](openccu-lite.md#feature-keys-and-what-they-need)
+  (`backup` to create, `power` to restore) and are refused, naming the
+  scope, without contacting the box when it is missing.
+
 ### Where the archives are stored
 
 By default in `<data_dir>/backups`. Set `backup.dir` to move them

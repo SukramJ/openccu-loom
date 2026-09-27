@@ -293,6 +293,24 @@ The three `hub/` message aggregates (`alarm_messages`, `service_messages`,
 backing one Home Assistant sensor with a count state and the list in its
 attributes.
 
+#### Feature-gated hub entities
+
+Four hub entities are **declared only while the central offers the
+feature behind them**: the alarm-message aggregate (`hub.alarm_messages`),
+the service-message aggregate (`hub.service_messages`), the inbox
+aggregate (`hub.inbox`), and the CCU firmware-update entity
+(`hub.system_update`). A CCU offers all four, so nothing changes there.
+On an openccu-lite central the alarm-message aggregate and the inbox are
+never published — the box has neither — and the service-message
+aggregate and the update entity are published only while the token
+carries `system:read`. When a central's feature set changes at runtime (a token
+re-paired, a scope revoked), the affected entity's discovery config is
+retracted through the same retained-empty-payload path an ordinary
+device removal uses — the daemon never leaves a stale discovery config
+pointing at a feature that stopped being offered. See
+[Connecting an openccu-lite system](admin/openccu-lite.md) for what
+gates each feature.
+
 `<base>/system/addon_update/state` is daemon-level and carries **no
 `<central>` segment**, like the `bridge/` pair: the CCU add-on self-updater
 (ADR 0057) is a property of the daemon process itself, not of any one CCU.

@@ -381,7 +381,43 @@ curl -s -u admin:secret -X POST http://localhost:8119/api/v1/backups \
 
 ---
 
-## 7. Related documents
+## 7. Mixed fleets: CCU and openccu-lite together
+
+A daemon can run any mix of CCUs and [openccu-lite](../admin/openccu-lite.md)
+boxes side by side; every mechanism above — `central_name` scoping, MQTT
+topic namespacing, per-central diagnostics — applies identically to both.
+What differs is what each **system** offers, not how the daemon organises
+centrals.
+
+- **Navigation hides what nothing serves.** A view backed by a feature no
+  configured system offers at all (system variables, programs, the inbox,
+  on a fleet made up entirely of openccu-lite boxes) leaves the
+  navigation. A view some systems support and others do not (heating
+  groups, backups, scope-gated system actions) stays, and a row for a
+  system that cannot serve it names the reason instead of failing:
+  "openccu-lite does not offer this" or "the API token lacks the scope
+  `power`".
+- **Per-central features, not a fleet-wide switch.** `GET /system/ccu`
+  reports each central's `system_type` and `features` independently, so a
+  CCU in the fleet keeps every action a mixed view might otherwise hide
+  because one openccu-lite box lacks it.
+- **Rooms and functions can nest per system.** A CCU's rooms/functions stay
+  the flat list they always were; an openccu-lite box's are a tree. The
+  overview, room pickers and alarm zone candidates group and filter by
+  path (`Ground floor › Kitchen`) so two same-named rooms on different
+  systems in the fleet stay distinguishable — see
+  [Taxonomy](../integrations/rest-ws.md#taxonomy-rooms-functions-and-other-enums).
+  [Areas](../adr/0056-room-areas-and-zone-naming.md)
+  stay keyed by `(central, room name)`, so on a nested system one area
+  assignment covers every node sharing that name.
+- **MQTT hub entities follow the feature, not the system type.** The four
+  feature-gated hub entities (alarm messages, service messages, inbox,
+  firmware update) are declared per central based on what it offers right
+  now — see [Feature-gated hub entities](../mqtt-topic-schema.md#feature-gated-hub-entities).
+
+---
+
+## 8. Related documents
 
 - [ADR 0002 — Multi-CCU as a first-class feature](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0002-multi-ccu-first-class.md)
 - [ADR 0011 — MQTT topic + payload architecture](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0011-mqtt-topic-and-payload-architecture.md)

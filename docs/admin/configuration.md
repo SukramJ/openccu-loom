@@ -579,6 +579,7 @@ see the [multi-CCU guide](../user/multi-ccu.md).
 | Key | Type | Default | Env | Secret? |
 |---|---|---|---|---|
 | `name` | string | — (**required**, unique) | — | no |
+| `system_type` | string | `ccu` | — | no |
 | `host` | string | — (**required**) | — | no |
 | `interfaces` | list | — (**required**, ≥1) | — | no |
 | `username` | string | — | — | no |
@@ -588,6 +589,8 @@ see the [multi-CCU guide](../user/multi-ccu.md).
 | `json_rpc_port` | int | `80`/`443` | — | no |
 | `tls` | bool | `false` | — | no |
 | `tls_insecure_skip_verify` | bool | `false` | — | no |
+| `api_token` | string | — | — | **yes** |
+| `tls_fingerprint` | string | — | — | no |
 | `primary_interface` | string | (HmIP-RF heuristic) | — | no |
 | `visibility.un_ignore` | list | — | — | no |
 | `check_connection_interval` | duration | `30s` | — | no |
@@ -633,6 +636,25 @@ a query, a fragment and a `..` segment are all rejected at config load.
 `tls_insecure_skip_verify` only against a self-signed CCU on a trusted
 network. `check_connection_interval` of `0` uses the `30s` default; a
 negative value disables the background connection check.
+
+`system_type` selects what is behind a central: `ccu` (a CCU with
+ReGaHss and the WebUI JSON-RPC — also what the empty value means, so
+every configuration written before this key existed keeps its
+meaning), `openccu-lite` (reached through the `occulited` HTTP API), or
+`auto` (probed at bring-up and then persisted, so later restarts do not
+probe again). For `openccu-lite`, `json_rpc_port` means the HTTP(S)
+port of the box's `occulited` API rather than JSON-RPC; the daemon
+authenticates with `api_token` instead of `username`/`password`, and
+`port`, `ports` and per-interface `port`/`remote_path`/`rpc_type`
+overrides have no meaning there and are rejected at config load. Set
+`tls_fingerprint` (lower-case hex SHA-256 of the box's certificate) to
+pin a self-signed openccu-lite box's certificate instead of skipping
+verification; it requires `tls: true` and is mutually exclusive with
+`tls_insecure_skip_verify`. A `ccu` central must not carry `api_token`
+or `tls_fingerprint` — see
+[Connecting an openccu-lite system](openccu-lite.md) for the full
+onboarding flow, the scopes an `api_token` needs, and what an
+openccu-lite system does not offer.
 
 Each central also carries an optional `behavior:` sub-block of expert
 per-central toggles that shape how devices and hub entities are
