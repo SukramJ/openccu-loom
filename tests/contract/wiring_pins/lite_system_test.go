@@ -15,6 +15,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
+	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/occulited"
@@ -59,6 +60,8 @@ func startLiteSystemCentral(t *testing.T, fake *litefake.Fake, token string) lit
 	if err := reg.Register(unit); err != nil {
 		t.Fatalf("Registry.Register: %v", err)
 	}
+	// The daemon installs the reconciler before any bring-up runs.
+	unit.Reconciler = &coordinators.Reconciler{CentralName: unit.Name(), Bus: unit.EventBus, HubModel: unit.HubModel, Metrics: unit.HubModel.Metrics}
 	storage, err := adapter.NewFilesystemBackupStorage(t.TempDir())
 	if err != nil {
 		t.Fatalf("NewFilesystemBackupStorage: %v", err)

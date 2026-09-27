@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 514.
+Guards without a doc comment: 7 of 519.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -474,6 +474,11 @@ Guards without a doc comment: 7 of 514.
 | TestLiteFeaturesFollowTokenScopes | wiring_pins/lite_central_test.go | TestLiteFeaturesFollowTokenScopes pins that a lite central's features follow its token: without power the reboot is absent with the scope named, and once the token is widened on the box and the scopes are read again the feature turns available with a change event. |
 | TestLiteSerialMatchesSSDPCanonicalForm | wiring_pins/lite_central_test.go | TestLiteSerialMatchesSSDPCanonicalForm pins that a lite central's serial is the box's UPnP serial reduced exactly as SSDP discovery reduces it, so a discovered box and the configured central are recognised as the same. |
 | TestLiteValueSeederReadsTheStateStore | wiring_pins/lite_central_test.go | TestLiteValueSeederReadsTheStateStore pins that a lite bring-up seeds values from the box's state store. |
+| TestLiteConnectivityFromInterfacesEndpoint | wiring_pins/lite_hub_refresh_test.go | TestLiteConnectivityFromInterfacesEndpoint pins the connectivity probe: an interface process the box reports down is unreachable after the reconcile pass. |
+| TestLiteDutyCycleFromListBidcosInterfaces | wiring_pins/lite_hub_refresh_test.go | TestLiteDutyCycleFromListBidcosInterfaces pins the duty-cycle refresh: the BidCos-RF gateway's duty cycle the interface process reports over XML-RPC — an integer, not the JSON-RPC wrapper's string — reaches the hub's per-interface snapshot. |
+| TestLiteServiceMessagesCannotBeAcknowledged | wiring_pins/lite_hub_refresh_test.go | TestLiteServiceMessagesCannotBeAcknowledged pins the refusal of an acknowledge on a lite central: the box has no acknowledge, and the refusal names why while matching the error callers branch on today. |
+| TestLiteServiceMessagesMapToHubModel | wiring_pins/lite_hub_refresh_test.go | TestLiteServiceMessagesMapToHubModel pins the service-message refresh of a lite central: the box's messages reach the hub model with the channel address, the parameter, the interface and the type the key implies. |
+| TestLiteSuppressNeedsRPCAdmin | wiring_pins/lite_hub_refresh_test.go | TestLiteSuppressNeedsRPCAdmin pins that suppressing a service message goes to the interface process, which wants the admin tier: a token without it is refused with the scope named. |
 | TestLiteMetaGapResnapshots | wiring_pins/lite_metadata_test.go | TestLiteMetaGapResnapshots pins the gap detection: when the box drops a revision from the change stream (a subscriber queue overflow), the mirror notices at the next revision and re-reads the snapshot, so the lost change still arrives. |
 | TestLiteMetadataNamesStampedAtIngest | wiring_pins/lite_metadata_test.go | TestLiteMetadataNamesStampedAtIngest pins that the box's metadata reaches the model at bring-up: the device carries its name, its room and function by the directly assigned node's display name, and the full node paths. |
 | TestLiteMetadataStreamRenamesLive | wiring_pins/lite_metadata_test.go | TestLiteMetadataStreamRenamesLive pins the change stream: a rename made on the box reaches the running model and is published as a metadata change, without a restart. |

@@ -68,6 +68,13 @@ CCU; the list below is what an API client can already observe.
   the token's scope first and refuses, naming the scope, without
   contacting the box. Safe mode and the astro position do not exist on
   openccu-lite and are refused.
+- An openccu-lite central shows the box's service messages (with rooms and
+  functions), the install-mode countdown, the BidCos duty cycle and each
+  interface process's reachability; suppressing a service message goes to
+  the interface process. What needs ReGa — acknowledging messages, system
+  variables, programs, the inbox — is refused with the reason, and an
+  alarm zone's system-variable mirror is refused when it is saved for a
+  central without system variables, instead of failing on every export.
 
 #### Fixed
 

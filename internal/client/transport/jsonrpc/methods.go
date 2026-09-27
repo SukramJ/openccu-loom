@@ -454,6 +454,15 @@ func (c *Client) ListBidcosInterfaces(ctx context.Context, iface string) ([]Bidc
 	}, &raw); err != nil {
 		return nil, err
 	}
+	return DecodeBidcosInterfaces(raw), nil
+}
+
+// DecodeBidcosInterfaces converts gateway maps keyed the way
+// Interface.listBidcosInterfaces answers (address, description, type,
+// dutyCycle, carrierSense, isConnected, isDefault). Values may be strings
+// (the JSON-RPC wrapper), JSON numbers or native integers and booleans (an
+// XML-RPC answer renamed to these keys).
+func DecodeBidcosInterfaces(raw []map[string]any) []BidcosInterface {
 	out := make([]BidcosInterface, 0, len(raw))
 	for _, m := range raw {
 		out = append(out, BidcosInterface{
@@ -466,7 +475,7 @@ func (c *Client) ListBidcosInterfaces(ctx context.Context, iface string) ([]Bidc
 			Default:      bidcosBool(m, "isDefault"),
 		})
 	}
-	return out, nil
+	return out
 }
 
 // bidcosString extracts a string value from a decoded JSON map, returning
@@ -499,6 +508,8 @@ func bidcosPercent(m map[string]any, key string) int {
 	switch v := m[key].(type) {
 	case float64:
 		return int(v)
+	case int:
+		return v
 	case json.Number:
 		if n, err := v.Int64(); err == nil {
 			return int(n)

@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/occulited"
+	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/internal/scheduler"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -58,55 +58,19 @@ func (p *liteProfile) BringUpHub(ctx context.Context, in HubBringUpInput) (HubSe
 	if err := meta.load(ctx); err != nil {
 		return nil, err
 	}
-	system := newLiteSystem(p, unit)
-	metaWriter := &liteMetaWriter{client: p.client, unit: unit}
-	metaWriter.wire()
-	writer := &liteHubWriter{liteSystem: system, meta: metaWriter}
-	if unit.HubModel != nil {
-		unit.HubModel.SetMutator(writer)
-		upd := unit.HubModel.Update
-		upd.SetFirmwareUpdater(writer)
-		//nolint:contextcheck // the monitor outlives the install request by design; its own deadline bounds it
-		upd.SetInstallMonitor(func() { system.monitorInstall(upd) })
-	}
-
-	// The scope refresh closes over this generation; a re-init registers
-	// the job name again while the scheduler keeps the old one ticking, so
-	// the closer disarms it and only the newest generation talks to the box.
+	// The session's hooks and jobs close over this generation; a re-init
+	// registers them again while the old ones may still tick, so the closer
+	// disarms them and only the newest generation talks to the box.
 	active := new(atomic.Bool)
 	active.Store(true)
-	if unit.Scheduler != nil {
-		if err := unit.Scheduler.Add(scheduler.Job{
-			Name:     "lite.scopes." + p.cc.Name,
-			Interval: liteScopeRefreshInterval,
-			Run: func(ctx context.Context) error {
-				if !active.Load() {
-					return nil
-				}
-				return p.refreshFeatures(ctx, unit)
-			},
-		}); err != nil {
-			logger.Warn("lite.scopes.scheduler_add", slog.String("central", p.cc.Name), slog.String("err", err.Error()))
-		}
-	}
-	if unit.Hub != nil {
-		unit.Hub.SetRefreshHooks(coordinators.RefreshHooks{
-			SystemUpdate: func(ctx context.Context) error {
-				if !active.Load() {
-					return nil
-				}
-				return system.refreshSystemUpdate(ctx)
-			},
-		})
-	}
-	// The first update state is read now rather than at the refresh job's
-	// first hourly tick; the box reads its release feed's cached answer.
-	if err := system.refreshSystemUpdate(ctx); err != nil {
-		logger.Warn("lite.system_update.initial_failed", slog.String("central", p.cc.Name), slog.String("err", err.Error()))
-	}
+	set := &liteBackendSet{}
+	system := newLiteSystem(p, unit)
+	//nolint:contextcheck // the install monitor it wires outlives this bring-up by design; its own deadline bounds it
+	p.wireHubWriters(unit, system)
+	p.scheduleScopeRefresh(unit, active, logger)
+	p.wireHubRefresh(ctx, in, set, system, active, logger)
 	// The stream outlives this call; the session's Close ends it.
 	meta.start(context.WithoutCancel(ctx))
-	set := &liteBackendSet{}
 	return &liteHubSession{
 		profile: p,
 		unit:    unit,
@@ -119,6 +83,81 @@ func (p *liteProfile) BringUpHub(ctx context.Context, in HubBringUpInput) (HubSe
 			meta.stop()
 		},
 	}, nil
+}
+
+// wireHubWriters installs the hub's write side: names and assignments
+// through the metadata store, backups and the system update through the
+// system API, and refusals with the reason for everything that needs ReGa.
+func (p *liteProfile) wireHubWriters(unit *central.Unit, system *liteSystem) {
+	metaWriter := &liteMetaWriter{client: p.client, unit: unit}
+	metaWriter.wire()
+	writer := &liteHubWriter{liteSystem: system, meta: metaWriter}
+	if unit.HubModel != nil {
+		unit.HubModel.SetMutator(writer)
+		upd := unit.HubModel.Update
+		upd.SetFirmwareUpdater(writer)
+		//nolint:contextcheck // the monitor outlives the install request by design; its own deadline bounds it
+		upd.SetInstallMonitor(func() { system.monitorInstall(upd) })
+		unit.HubModel.ServiceMessages.SetAcknowledgers(
+			liteAcknowledger{unit: unit, name: p.cc.Name, feature: hmenum.FeatureHubServiceMessagesAck, legacy: hub.ErrNoServiceMessageAcknowledger},
+			liteAcknowledger{unit: unit, name: p.cc.Name, feature: hmenum.FeatureHubServiceMessagesAck, legacy: hub.ErrNoServiceMessageAcknowledger},
+		)
+		unit.HubModel.Messages.SetAcknowledgers(
+			liteAcknowledger{unit: unit, name: p.cc.Name, feature: hmenum.FeatureHubAlarmMessages, legacy: hub.ErrNoAlarmMessageAcknowledger},
+			liteAcknowledger{unit: unit, name: p.cc.Name, feature: hmenum.FeatureHubAlarmMessages, legacy: hub.ErrNoAlarmMessageAcknowledger},
+		)
+	}
+	if unit.Hub != nil {
+		refusal := liteReGaRefusal{unit: unit, name: p.cc.Name}
+		unit.Hub.SetProgramExecutor(refusal)
+		unit.Hub.SetSysvarValueWriter(refusal)
+		unit.Hub.SetSysvarCreator(refusal)
+	}
+}
+
+// scheduleScopeRefresh re-reads what the token may do every ten minutes.
+func (p *liteProfile) scheduleScopeRefresh(unit *central.Unit, active *atomic.Bool, logger *slog.Logger) {
+	if unit.Scheduler == nil {
+		return
+	}
+	if err := unit.Scheduler.Add(scheduler.Job{
+		Name:     "lite.scopes." + p.cc.Name,
+		Interval: liteScopeRefreshInterval,
+		Run: func(ctx context.Context) error {
+			if !active.Load() {
+				return nil
+			}
+			return p.refreshFeatures(ctx, unit)
+		},
+	}); err != nil {
+		logger.Warn("lite.scopes.scheduler_add", slog.String("central", p.cc.Name), slog.String("err", err.Error()))
+	}
+}
+
+// wireHubRefresh installs the hub's periodic reads and the connectivity
+// probe, and reads the system-update state once now rather than at the
+// refresh job's first hourly tick.
+func (p *liteProfile) wireHubRefresh(ctx context.Context, in HubBringUpInput, set *liteBackendSet,
+	system *liteSystem, active *atomic.Bool, logger *slog.Logger,
+) {
+	unit := in.Unit
+	locale := ""
+	if in.Cfg != nil {
+		locale = in.Cfg.Locale
+	}
+	refresh := &liteHubRefresh{client: p.client, unit: unit, backends: set, catalogs: in.Deps.Catalogs, locale: locale}
+	if unit.Hub != nil {
+		unit.Hub.SetRefreshHooks(refresh.hooks(active.Load, system))
+	}
+	if unit.HubModel != nil {
+		unit.HubModel.SetConnectivity(hub.NewConnectivity())
+	}
+	if unit.Reconciler != nil {
+		unit.Reconciler.SetConnect(stampWireInterfaceIDs(liteConnectivityProbe{client: p.client}, p.cc.Name))
+	}
+	if err := system.refreshSystemUpdate(ctx); err != nil {
+		logger.Warn("lite.system_update.initial_failed", slog.String("central", p.cc.Name), slog.String("err", err.Error()))
+	}
 }
 
 // stampIdentity resolves the central's identity from the box. The serial
@@ -230,9 +269,11 @@ func (s *liteHubSession) RefreshMetadata(ctx context.Context) error { return s.m
 func (s *liteHubSession) Restorer() BackupRestorer { return s.system }
 
 // WireLate implements [HubSession]: the per-interface install-mode data
-// points resolve their backend at call time, which is a lite backend here,
-// and a backup is downloaded from the box's system API.
+// points and the service-message suppressor resolve their backend at call
+// time, which is a lite backend here, and a backup is downloaded from the
+// box's system API.
 func (s *liteHubSession) WireLate(unit *central.Unit, writer *client.ValueWriter) {
+	WireServiceMessageSuppressor(unit, writer)
 	WireInstallModeDPs(unit, writer)
 	unit.SetCreateBackupFn(s.system.createBackup)
 }
