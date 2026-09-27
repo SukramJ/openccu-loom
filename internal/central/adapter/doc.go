@@ -22,10 +22,11 @@
 //     coordinators and register the south-bound clients.
 //   - South profiles: south_profile, south_ccu, south_ccu_hub, south_lite,
 //     lite_hub, lite_features, lite_events, lite_values, lite_metadata,
-//     lite_meta_writes, lite_system, lite_hub_refresh, south_ccu_system —
-//     the per-central strategy that says where readiness, liveness, the hub
-//     session, per-interface transports, value seeding, metadata and system
-//     management come from, selected once per central from its system type.
+//     lite_meta_writes, lite_system, lite_hub_refresh, lite_groups,
+//     south_ccu_system, south_ccu_groups — the per-central strategy that
+//     says where readiness, liveness, the hub session, per-interface
+//     transports, value seeding, metadata and system management come from,
+//     selected once per central from its system type.
 //   - Transport callers & callbacks: xmlrpc_caller, jsonrpc_caller,
 //     binrpc_caller, ordered_caller, rpc_recorder, callback_handlers,
 //     xmlrpc_announcer, wire_value — bridge the InterfaceClient

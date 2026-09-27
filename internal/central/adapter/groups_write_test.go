@@ -250,7 +250,7 @@ func TestGroupsDomainCreateReturnsNewGroupAndGrowsRoster(t *testing.T) {
 	fb.draftTypes = []backends.HeatingGroupType{{ID: "hmip.heating.group", LabelKey: "lblHmip"}}
 	registerCentralWithClient(t, reg, w, "ccu-01", fb)
 
-	d := NewGroupsDomain(reg, w)
+	d := NewGroupsDomain(reg)
 	got, err := d.Create(context.Background(), "ccu-01", group.CreateInput{
 		Name:      "Kitchen",
 		TypeID:    "hmip.heating.group",
@@ -282,7 +282,7 @@ func TestGroupsDomainCreatePropagatesSaveErrorWhenGroupNeverAppears(t *testing.T
 	fb.saveErr = errors.New("save failed")
 	registerCentralWithClient(t, reg, w, "ccu-01", fb)
 
-	d := NewGroupsDomain(reg, w)
+	d := NewGroupsDomain(reg)
 	_, err := d.Create(context.Background(), "ccu-01", group.CreateInput{
 		Name: "Ghost", TypeID: "hmip.heating.group",
 	})
@@ -306,7 +306,7 @@ func TestGroupsDomainUpdateUnknownIDReturnsGroupNotFound(t *testing.T) {
 	fb := newFakeGroupWriterOps()
 	registerCentralWithClient(t, reg, w, "ccu-01", fb)
 
-	d := NewGroupsDomain(reg, w)
+	d := NewGroupsDomain(reg)
 	err := d.Update(context.Background(), "ccu-01", 999, group.UpdateInput{Name: "x"})
 	if !errors.Is(err, hmerr.ErrGroupNotFound) {
 		t.Fatalf("err = %v, want hmerr.ErrGroupNotFound", err)
@@ -323,7 +323,7 @@ func TestGroupsDomainUpdateKnownIDSucceeds(t *testing.T) {
 	fb.seed(3, "Kitchen", "hmip.heating.group")
 	registerCentralWithClient(t, reg, w, "ccu-01", fb)
 
-	d := NewGroupsDomain(reg, w)
+	d := NewGroupsDomain(reg)
 	err := d.Update(context.Background(), "ccu-01", 3, group.UpdateInput{
 		Name:      "Kitchen Renamed",
 		MemberIDs: []string{"000AAA0000001:1"},
@@ -344,7 +344,7 @@ func TestGroupsDomainDeleteUnknownIDReturnsGroupNotFound(t *testing.T) {
 	fb := newFakeGroupWriterOps()
 	registerCentralWithClient(t, reg, w, "ccu-01", fb)
 
-	d := NewGroupsDomain(reg, w)
+	d := NewGroupsDomain(reg)
 	err := d.Delete(context.Background(), "ccu-01", 999)
 	if !errors.Is(err, hmerr.ErrGroupNotFound) {
 		t.Fatalf("err = %v, want hmerr.ErrGroupNotFound", err)
@@ -361,7 +361,7 @@ func TestGroupsDomainDeleteKnownIDRemovesFromRoster(t *testing.T) {
 	fb.seed(3, "Kitchen", "hmip.heating.group")
 	registerCentralWithClient(t, reg, w, "ccu-01", fb)
 
-	d := NewGroupsDomain(reg, w)
+	d := NewGroupsDomain(reg)
 	if err := d.Delete(context.Background(), "ccu-01", 3); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
@@ -382,7 +382,7 @@ func TestGroupsDomainTypesMapsThroughDraftTypes(t *testing.T) {
 	fb.draftTypes = []backends.HeatingGroupType{{ID: "hmip.heating.group", LabelKey: "lblHmip"}}
 	registerCentralWithClient(t, reg, w, "ccu-01", fb)
 
-	d := NewGroupsDomain(reg, w)
+	d := NewGroupsDomain(reg)
 	got, err := d.Types(context.Background(), "ccu-01")
 	if err != nil {
 		t.Fatalf("Types: %v", err)
@@ -406,7 +406,7 @@ func TestGroupsDomainSuitableMembersMapsThrough(t *testing.T) {
 	}
 	registerCentralWithClient(t, reg, w, "ccu-01", fb)
 
-	d := NewGroupsDomain(reg, w)
+	d := NewGroupsDomain(reg)
 	got, err := d.SuitableMembers(context.Background(), "ccu-01", "hmip.heating.group")
 	if err != nil {
 		t.Fatalf("SuitableMembers: %v", err)
@@ -419,11 +419,11 @@ func TestGroupsDomainSuitableMembersMapsThrough(t *testing.T) {
 	}
 }
 
-// ─── writerFor ──────────────────────────────────────────────────────────
+// ─── central resolution ─────────────────────────────────────────────────
 
 // TestGroupsDomainWriterForSingleCentralResolves verifies the empty-name
-// convenience path: with exactly one registered central, writerFor("")
-// resolves it without requiring the caller to name it explicitly.
+// convenience path: with exactly one registered central, a write naming no
+// central resolves that one without requiring the caller to name it.
 func TestGroupsDomainWriterForSingleCentralResolves(t *testing.T) {
 	t.Parallel()
 	reg := central.NewRegistry()
@@ -431,16 +431,13 @@ func TestGroupsDomainWriterForSingleCentralResolves(t *testing.T) {
 	fb := newFakeGroupWriterOps()
 	registerCentralWithClient(t, reg, w, "ccu-only", fb)
 
-	d := NewGroupsDomain(reg, w)
-	got, unit, err := d.writerFor("")
+	d := NewGroupsDomain(reg)
+	got, err := d.portFor("")
 	if err != nil {
-		t.Fatalf("writerFor: %v", err)
+		t.Fatalf("portFor: %v", err)
 	}
 	if got == nil {
-		t.Fatal("writerFor returned a nil writer without an error")
-	}
-	if unit == nil {
-		t.Fatal("writerFor returned a nil unit without an error")
+		t.Fatal("portFor returned a nil port without an error")
 	}
 }
 
@@ -453,8 +450,8 @@ func TestGroupsDomainWriterForUnsupportedBackend(t *testing.T) {
 	w := clientpkg.NewValueWriter()
 	registerCentralWithClient(t, reg, w, "ccu-01", &fakeOperations{kind: backends.KindCCU})
 
-	d := NewGroupsDomain(reg, w)
-	_, _, err := d.writerFor("ccu-01")
+	d := NewGroupsDomain(reg)
+	_, err := d.Types(context.Background(), "ccu-01")
 	if !errors.Is(err, backends.ErrUnsupported) {
 		t.Fatalf("err = %v, want backends.ErrUnsupported", err)
 	}
@@ -472,7 +469,7 @@ func TestGroupsDomainCreateAppliesOperateOnly(t *testing.T) {
 	fb := newFakeGroupWriterOps()
 	registerCentralWithClient(t, reg, w, "ccu-01", fb)
 
-	d := NewGroupsDomain(reg, w)
+	d := NewGroupsDomain(reg)
 	if _, err := d.Create(context.Background(), "ccu-01", group.CreateInput{
 		Name:                  "Bad",
 		TypeID:                "hmip.heating.group",

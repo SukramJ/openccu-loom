@@ -783,7 +783,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	definitionExportDomain := adapter.NewDefinitionExportDomain(reg)
 	deviceAdminDomain := adapter.NewDeviceAdminDomain(reg, valueWriter)
 	ccuMaintenanceDomain := adapter.NewCCUMaintenanceDomain(reg)
-	groupsDomain := adapter.NewGroupsDomain(reg, valueWriter)
+	groupsDomain := adapter.NewGroupsDomain(reg)
 	dpWriterAdapter := adapter.NewDataPointWriterAdapter(reg, valueWriter)
 	customDPDispatcher := adapter.NewCustomDPDispatcher(reg).SetAuditRecorder(auditRec)
 	roomFunctionAdmin := adapter.NewRoomFunctionAdminDomain(reg)

@@ -380,6 +380,9 @@ const (
 	// CodeUnknownObject answers a metadata read or write of an object the
 	// store does not hold (404); the store holds only named objects.
 	CodeUnknownObject = "unknown-object"
+	// CodeUnknownGroup answers a heating-group read or write of a group
+	// the box does not hold (404).
+	CodeUnknownGroup = "unknown-group"
 )
 
 // ErrTooManyStreams matches the event stream's 429 too-many-streams
@@ -392,6 +395,9 @@ var ErrRevisionConflict = errors.New("occulited: metadata revision conflict")
 
 // ErrUnknownObject matches the metadata store's 404 unknown-object.
 var ErrUnknownObject = errors.New("occulited: unknown metadata object")
+
+// ErrUnknownGroup matches the system API's 404 unknown-group.
+var ErrUnknownGroup = errors.New("occulited: unknown heating group")
 
 // ErrProtocol reports an answer that breaks the wire contract the client
 // relies on (a stream frame, a missing ETag, an undecodable body).
@@ -439,6 +445,8 @@ func (e *APIError) Is(target error) bool {
 		return e.Status == http.StatusConflict && e.Code == CodeRevisionConflict
 	case ErrUnknownObject:
 		return e.Status == http.StatusNotFound && e.Code == CodeUnknownObject
+	case ErrUnknownGroup:
+		return e.Status == http.StatusNotFound && e.Code == CodeUnknownGroup
 	default:
 		return false
 	}

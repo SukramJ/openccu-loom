@@ -47,7 +47,7 @@ type ccuSystemServices struct {
 // newCCUSystemServices returns the management ports of a CCU central.
 func newCCUSystemServices(unit *central.Unit, writer *client.ValueWriter) central.SystemServices {
 	s := &ccuSystemServices{unit: unit, writer: writer}
-	return central.SystemServices{Power: s, Position: s, Firmware: s}
+	return central.SystemServices{Power: s, Position: s, Firmware: s, Groups: &ccuHeatingGroups{unit: unit, writer: writer}}
 }
 
 func (s *ccuSystemServices) backend() (backends.Operations, error) {

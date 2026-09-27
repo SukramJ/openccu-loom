@@ -75,6 +75,11 @@ CCU; the list below is what an API client can already observe.
   variables, programs, the inbox — is refused with the reason, and an
   alarm zone's system-variable mirror is refused when it is saved for a
   central without system variables, instead of failing on every export.
+- An openccu-lite central lists the box's heating groups and group types
+  and can delete a group. Creating and editing groups, their members and
+  the member candidates are not offered yet: the member format of the
+  box's groups API is not known, and a guessed one could put devices into
+  the wrong group.
 
 #### Fixed
 

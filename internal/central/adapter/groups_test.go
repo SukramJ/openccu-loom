@@ -62,6 +62,7 @@ func registerCentralWithClient(t *testing.T, reg *central.Registry, w *clientpkg
 	if backend != nil {
 		w.Register(name, "HmIP-RF", backend)
 	}
+	c.SetSystemServices(newCCUSystemServices(c, w))
 }
 
 // ─── unknown central ───────────────────────────────────────────────────────
@@ -69,8 +70,7 @@ func registerCentralWithClient(t *testing.T, reg *central.Registry, w *clientpkg
 func TestGroupsDomainList_UnknownCentral(t *testing.T) {
 	t.Parallel()
 	reg := central.NewRegistry()
-	w := clientpkg.NewValueWriter()
-	d := NewGroupsDomain(reg, w)
+	d := NewGroupsDomain(reg)
 
 	_, err := d.List(context.Background(), "nope")
 	if err == nil {
@@ -85,7 +85,7 @@ func TestGroupsDomainList_UnknownCentral(t *testing.T) {
 
 func TestGroupsDomainList_NilRegistryOrWriter(t *testing.T) {
 	t.Parallel()
-	d := NewGroupsDomain(nil, nil)
+	d := NewGroupsDomain(nil)
 	_, err := d.List(context.Background(), "")
 	if err == nil {
 		t.Fatal("expected error when registry and writer are nil")
@@ -100,7 +100,7 @@ func TestGroupsDomainList_ScopedUnsupportedBackend(t *testing.T) {
 	w := clientpkg.NewValueWriter()
 	registerCentralWithClient(t, reg, w, "ccu-01", &fakeOperations{kind: backends.KindCCU})
 
-	d := NewGroupsDomain(reg, w)
+	d := NewGroupsDomain(reg)
 	_, err := d.List(context.Background(), "ccu-01")
 	if err == nil {
 		t.Fatal("expected error for a backend without heatingGroupLister")
@@ -118,7 +118,7 @@ func TestGroupsDomainList_AggregateSkipsUnsupportedBackend(t *testing.T) {
 	w := clientpkg.NewValueWriter()
 	registerCentralWithClient(t, reg, w, "ccu-01", &fakeOperations{kind: backends.KindCCU})
 
-	d := NewGroupsDomain(reg, w)
+	d := NewGroupsDomain(reg)
 	out, err := d.List(context.Background(), "")
 	if err != nil {
 		t.Fatalf("aggregate mode must be best-effort, got error: %v", err)
@@ -143,7 +143,7 @@ func TestGroupsDomainList_ScopedHappyPath(t *testing.T) {
 	backend := &groupListerOps{fakeOperations: fakeOperations{kind: backends.KindCCU}, raw: oneGroupPayload}
 	registerCentralWithClient(t, reg, w, "ccu-01", backend)
 
-	d := NewGroupsDomain(reg, w)
+	d := NewGroupsDomain(reg)
 	out, err := d.List(context.Background(), "ccu-01")
 	if err != nil {
 		t.Fatalf("List: %v", err)
@@ -180,7 +180,7 @@ func TestGroupsDomainList_AggregateMultipleCentralsSortedByName(t *testing.T) {
 	})
 	registerCentralWithClient(t, reg, w, "ccu-a", &fakeOperations{kind: backends.KindCCU})
 
-	d := NewGroupsDomain(reg, w)
+	d := NewGroupsDomain(reg)
 	out, err := d.List(context.Background(), "")
 	if err != nil {
 		t.Fatalf("List: %v", err)
@@ -211,7 +211,7 @@ func TestGroupsDomainList_ScopedBackendFetchError(t *testing.T) {
 		fakeOperations: fakeOperations{kind: backends.KindCCU}, err: wantErr,
 	})
 
-	d := NewGroupsDomain(reg, w)
+	d := NewGroupsDomain(reg)
 	_, err := d.List(context.Background(), "ccu-01")
 	if err == nil {
 		t.Fatal("expected the backend fetch error to propagate in scoped mode")
@@ -228,7 +228,7 @@ func TestGroupsDomainList_AggregateBackendFetchErrorSwallowed(t *testing.T) {
 		fakeOperations: fakeOperations{kind: backends.KindCCU}, err: hmerr.ErrNoConnection,
 	})
 
-	d := NewGroupsDomain(reg, w)
+	d := NewGroupsDomain(reg)
 	out, err := d.List(context.Background(), "")
 	if err != nil {
 		t.Fatalf("aggregate mode must swallow per-central fetch errors, got: %v", err)

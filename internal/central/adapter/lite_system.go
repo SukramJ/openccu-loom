@@ -45,7 +45,7 @@ func (s *liteSystem) require(k hmenum.Feature, legacy error) error {
 
 // services returns the central's management ports.
 func (s *liteSystem) services() central.SystemServices {
-	return central.SystemServices{Power: s, Position: s, Firmware: s}
+	return central.SystemServices{Power: s, Position: s, Firmware: s, Groups: liteHeatingGroups{liteSystem: s}}
 }
 
 // Reboot implements [central.PowerControl].

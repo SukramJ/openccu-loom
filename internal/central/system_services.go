@@ -3,7 +3,11 @@
 
 package central
 
-import "context"
+import (
+	"context"
+
+	"github.com/SukramJ/openccu-loom/internal/model/group"
+)
 
 // The per-central system-management ports. A central's south profile
 // installs them; the north-bound maintenance paths call them without
@@ -32,12 +36,24 @@ type SystemFirmwareDownloader interface {
 	DownloadSystemFirmware(ctx context.Context) error
 }
 
+// HeatingGroups administers the system's heating groups. Group ids are
+// the system's numeric ids.
+type HeatingGroups interface {
+	List(ctx context.Context) ([]group.Group, error)
+	Types(ctx context.Context) ([]group.Type, error)
+	SuitableMembers(ctx context.Context, typeID string) (group.SuitableMembers, error)
+	Create(ctx context.Context, in group.CreateInput) (group.Group, error)
+	Update(ctx context.Context, id int, in group.UpdateInput) error
+	Delete(ctx context.Context, id int) error
+}
+
 // SystemServices is the set of management ports of one central. A nil
 // member means nothing is installed yet (the central has not come up).
 type SystemServices struct {
 	Power    PowerControl
 	Position PositionWriter
 	Firmware SystemFirmwareDownloader
+	Groups   HeatingGroups
 }
 
 // BackupArchive is a backup as the system produced it. FileName is the
