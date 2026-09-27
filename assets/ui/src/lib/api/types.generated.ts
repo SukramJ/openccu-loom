@@ -12996,6 +12996,16 @@ export interface operations {
                     "application/json": components["schemas"]["CentralProbeResult"];
                 };
             };
+            /** @description First-run onboarding disabled by bootstrap.allow_first_run_setup */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            409: components["responses"]["Conflict"];
             422: components["responses"]["UnprocessableEntity"];
             /** @description Nothing could be reached at the address */
             502: {
@@ -13006,6 +13016,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     setupStartCentralPairing: {
@@ -13039,6 +13050,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            409: components["responses"]["Conflict"];
             422: components["responses"]["UnprocessableEntity"];
             /** @description The box could not be reached */
             502: {
@@ -13049,6 +13061,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     setupGetCentralPairing: {
@@ -13073,6 +13086,15 @@ export interface operations {
                     "application/json": components["schemas"]["CentralPairingStatus"];
                 };
             };
+            /** @description First-run onboarding disabled by bootstrap.allow_first_run_setup */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             /** @description No such pairing */
             404: {
                 headers: {
@@ -13082,6 +13104,8 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     setupCancelCentralPairing: {
@@ -13102,6 +13126,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description First-run onboarding disabled by bootstrap.allow_first_run_setup */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             /** @description No such pairing */
             404: {
                 headers: {
@@ -13111,6 +13144,8 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     setup: {

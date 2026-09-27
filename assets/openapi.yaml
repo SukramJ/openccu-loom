@@ -2062,6 +2062,13 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
+        "403":
+          description: First-run onboarding disabled by bootstrap.allow_first_run_setup
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /setup/pairing:
     post:
       operationId: setupStartCentralPairing
@@ -2096,6 +2103,8 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /setup/pairing/{id}:
     parameters:
       - { in: path, name: id, required: true, schema: { type: string } }
@@ -2118,6 +2127,13 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
+        "403":
+          description: First-run onboarding disabled by bootstrap.allow_first_run_setup
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
     delete:
       operationId: setupCancelCentralPairing
       summary: Withdraw a pairing
@@ -2130,6 +2146,13 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
+        "403":
+          description: First-run onboarding disabled by bootstrap.allow_first_run_setup
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /setup:
     post:
       operationId: setup
