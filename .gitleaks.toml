@@ -15,6 +15,9 @@
 #     the TypeScript peers of the already-exempt `*_test.go` fixtures
 #   - the HmIP label-key Base32 alphabet, a fixed public character set the
 #     generic-api-key rule mis-reads as a high-entropy secret
+#   - tests/harness/litefake: the fake openccu-lite's built-in API tokens
+#     are made-up test credentials of the test double, shaped like real
+#     tokens on purpose so the production client's parsing is exercised
 #
 # Everything else — runtime/config code — stays scanned, so a genuinely
 # new secret still fails the gate.
@@ -36,6 +39,7 @@ paths = [
   '''^internal/north/matter/secure/attestation/testpaa\.go$''',
   '''^internal/north/mqtt/entity_description_rules_sensors\.go$''',
   '''^internal/north/mqtt/entity_descriptions_generated\.go$''',
+  '''^tests/harness/litefake/.*''',
 ]
 regexes = [
   # HmIP label-key Base32 alphabet (pkg/hmproto/hmip_teachin.go): a fixed
