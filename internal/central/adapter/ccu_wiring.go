@@ -320,6 +320,17 @@ func recordCentralWaiting(unit *central.Unit) {
 	recordCentralReadiness(unit, hmenum.ReadinessWaitingForCCU, 0, 0)
 }
 
+// recordCentralUnsupported marks a central whose system type this build
+// cannot bring up. It uses the same startup component as the readiness wait,
+// so the operator sees the reason where a waiting central shows its state,
+// and like the wait it never turns /health into a 503.
+func recordCentralUnsupported(unit *central.Unit, err error) {
+	if unit == nil || unit.Health == nil {
+		return
+	}
+	unit.Health.RecordQuality(startupHealthComponent(unit.Name()), "not brought up: "+err.Error())
+}
+
 // resolveCentralWaiting removes the transient "waiting for CCU" component once
 // the central's bring-up has succeeded. Without this the last DEGRADED sample
 // goes stale after the tracker's StaleAfter window and decays to UNKNOWN,

@@ -199,8 +199,11 @@ func wireREST(ctx context.Context, d restWiringDeps) restWiring {
 					JSONRPCPort:           cc.JSONRPCPort,
 					Username:              cc.Username,
 					PasswordPlain:         cc.Password, // YAML password becomes the SQLite default
+					SystemType:            string(cc.SystemType),
+					APITokenPlain:         cc.APIToken, // sealed at rest like the password
 					TLS:                   cc.TLS,
 					TLSInsecureSkipVerify: cc.TLSInsecureSkipVerify,
+					TLSFingerprint:        cc.TLSFingerprint,
 					PrimaryInterface:      cc.PrimaryInterface,
 					Interfaces:            cc.Interfaces,
 					Ports:                 cc.Ports,

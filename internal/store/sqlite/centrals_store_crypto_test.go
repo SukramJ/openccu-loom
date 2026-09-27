@@ -11,6 +11,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/secret"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // TestCentralsStoreCryptoRoundTrip wires a CentralsStore with a Cipher,
@@ -153,5 +154,63 @@ func TestCentralsStoreWithoutPolicyKeepsPlaintextFallback(t *testing.T) {
 		Enabled:       true,
 	}); err != nil {
 		t.Fatalf("Put: %v", err)
+	}
+}
+
+// TestCentralsStoreSealsTheAPIToken pins that an openccu-lite central's API
+// token is sealed at rest exactly like a CCU password, and that the new
+// columns round-trip.
+func TestCentralsStoreSealsTheAPIToken(t *testing.T) {
+	db := openTestDBExternal(t, "centrals_token.db")
+	store := sqlite.NewCentralsStore(db)
+	store.SetCipher(loadCipher(t))
+	ctx := context.Background()
+	const token = "olt_0123456789abcdef0123456789abcdef"
+	fp := strings.Repeat("ab", 32)
+	if err := store.Put(ctx, sqlite.CentralRow{
+		Name: "box", Host: "box.local", SystemType: "openccu-lite",
+		APITokenPlain: token, APITokenEnv: "BOX_TOKEN", TLSFingerprint: fp, Enabled: true,
+	}); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	var raw string
+	if err := db.QueryRowContext(ctx, `SELECT api_token_plain FROM centrals WHERE name = 'box'`).Scan(&raw); err != nil {
+		t.Fatalf("raw query: %v", err)
+	}
+	if strings.Contains(raw, token) || !strings.Contains(raw, "enc:v1:") {
+		t.Errorf("raw api_token_plain is not sealed: %q", raw)
+	}
+	got, err := store.Get(ctx, "box")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.APITokenPlain != token || got.APITokenEnv != "BOX_TOKEN" || got.SystemType != "openccu-lite" || got.TLSFingerprint != fp {
+		t.Errorf("round trip = %+v", got)
+	}
+}
+
+// TestCentralRowSystemTypeDefaultsToCCU pins the migration contract: a row
+// written before the system-type columns existed reads back with an empty
+// system type, which means ccu, and no token — the central keeps its CCU
+// behaviour without a data migration.
+func TestCentralRowSystemTypeDefaultsToCCU(t *testing.T) {
+	db := openTestDBExternal(t, "centrals_legacy.db")
+	ctx := context.Background()
+	if _, err := db.ExecContext(ctx,
+		`INSERT INTO centrals (name, host, serial, port, json_rpc_port, username, password_env, password_plain,
+		  tls, tls_insecure_skip_verify, primary_interface, interfaces_json, ports_json, visibility_json,
+		  behavior_json, enabled, created_at, updated_at)
+		 VALUES ('old', 'ccu.local', '', 0, 0, 'Admin', '', '', 0, 0, '', '[]', '{}', '{}', '{}', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`); err != nil {
+		t.Fatalf("legacy insert: %v", err)
+	}
+	got, err := sqlite.NewCentralsStore(db).Get(ctx, "old")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.SystemType != "" || got.APITokenPlain != "" || got.APITokenEnv != "" || got.TLSFingerprint != "" {
+		t.Errorf("legacy row = %+v, want empty lite columns", got)
+	}
+	if hmenum.SystemType(got.SystemType).Normalize() != hmenum.SystemTypeCCU {
+		t.Error("a legacy row's system type does not normalise to ccu")
 	}
 }

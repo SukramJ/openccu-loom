@@ -1755,23 +1755,40 @@ type OIDCConfig struct {
 // XML-RPC client. Set only against self-signed CCUs in trusted
 // networks — it short-circuits hostname + chain validation.
 type CentralConfig struct {
-	Name  string         `yaml:"name" json:"name" cfg:"basic"`
-	Host  string         `yaml:"host" json:"host" cfg:"basic"`
-	Port  int            `yaml:"port" json:"port" cfg:"expert"`
-	Ports map[string]int `yaml:"ports" json:"ports" cfg:"expert"`
-	// JSONRPCPort overrides the CCU's HTTP port for JSON-RPC and
-	// related top-level web endpoints (e.g. /api/homematic.cgi,
-	// /config/cp_security.cgi). Zero (the default) falls back to 80
-	// (plain) / 443 (TLS) — the standard CCU configuration. Useful
-	// when the CCU sits behind a non-standard reverse proxy or when
-	// running against an in-process CCU simulator that binds
-	// JSON-RPC to an OS-assigned port.
+	Name string `yaml:"name" json:"name" cfg:"basic"`
+	// SystemType is the kind of system behind the central: "ccu" (a CCU
+	// with ReGaHss and the WebUI JSON-RPC — also what the empty value
+	// means, so every configuration written before the key existed keeps
+	// its meaning), "openccu-lite" (reached only through the occulited
+	// HTTP API), or "auto" (detected at bring-up). It selects where
+	// readiness, events, names and system management come from.
+	SystemType hmenum.SystemType `yaml:"system_type,omitempty" json:"system_type,omitempty" cfg:"basic"`
+	Host       string            `yaml:"host" json:"host" cfg:"basic"`
+	Port       int               `yaml:"port" json:"port" cfg:"expert"`
+	Ports      map[string]int    `yaml:"ports" json:"ports" cfg:"expert"`
+	// JSONRPCPort overrides the HTTP(S) port of the system's web server:
+	// the JSON-RPC and related top-level endpoints on a CCU
+	// (/api/homematic.cgi, /config/cp_security.cgi), the occulited API on
+	// openccu-lite. Zero (the default) falls back to 80 (plain) / 443
+	// (TLS). Useful behind a non-standard reverse proxy or against an
+	// in-process simulator bound to an OS-assigned port.
 	JSONRPCPort           int             `yaml:"json_rpc_port" json:"json_rpc_port" cfg:"expert"`
 	Username              string          `yaml:"username" json:"username" cfg:"basic"`
 	Password              string          `yaml:"password" json:"password" cfg:"secret"`
 	Interfaces            []InterfaceSpec `yaml:"interfaces" json:"interfaces" cfg:"basic"`
 	TLS                   bool            `yaml:"tls" json:"tls" cfg:"basic"`
 	TLSInsecureSkipVerify bool            `yaml:"tls_insecure_skip_verify" json:"tls_insecure_skip_verify" cfg:"expert"`
+
+	// APIToken is the occulited API token an openccu-lite central
+	// authenticates with (`olt_` followed by 32 lower-case hex digits).
+	// Required for openccu-lite, meaningless (and rejected) for a CCU.
+	APIToken string `yaml:"api_token,omitempty" json:"api_token,omitempty" cfg:"secret"`
+	// TLSFingerprint pins an openccu-lite system's TLS certificate: the
+	// lower-case hex SHA-256 of the certificate's DER encoding. When set,
+	// the handshake succeeds exactly when the served leaf certificate has
+	// this fingerprint, whoever issued it — the usual situation for a box
+	// with a self-signed certificate on the LAN. Requires tls.
+	TLSFingerprint string `yaml:"tls_fingerprint,omitempty" json:"tls_fingerprint,omitempty" cfg:"expert"`
 
 	// PrimaryInterface pins the CCU's primary interface for the
 	// per-central health-aggregation rule (see internal/health). Empty
@@ -2252,6 +2269,9 @@ func (c *Config) Validate() error {
 				return fmt.Errorf("config: centrals[%d].ports[%q]: out of range 1-65535: %d", i, iface, port)
 			}
 		}
+		if err := ValidateCentralSystem(i, cc); err != nil {
+			return err
+		}
 	}
 	// Clamp an explicit history.retention below the hourly-rollup lag up to
 	// the floor: keeping it lower would let the purge delete raw rows before
@@ -2261,6 +2281,126 @@ func (c *Config) Validate() error {
 		h.Retention = HistoryRetentionFloor
 	}
 	return validateMQTT(&c.North.MQTT)
+}
+
+// liteAPITokenPattern is the shape of an occulited API token.
+var liteAPITokenPattern = regexp.MustCompile(`^olt_[0-9a-f]{32}$`)
+
+// liteInterfaces are the interfaces an openccu-lite system serves through
+// its XML-RPC proxy. CUxD needs ReGaHss and does not exist there.
+var liteInterfaces = map[string]bool{
+	string(hmenum.InterfaceHmIPRF):         true,
+	string(hmenum.InterfaceBidCosRF):       true,
+	string(hmenum.InterfaceBidCosWired):    true,
+	string(hmenum.InterfaceVirtualDevices): true,
+}
+
+// ValidateCentralSystem checks the fields whose meaning depends on the
+// central's system type. idx names the central in the error.
+//
+// The lite rules reject every field that would be silently ignored on the
+// occulited path, because an operator who set it expects it to do
+// something: the XML-RPC ports and paths are the proxy's, the credential is
+// the token. For a CCU the lite-only fields are rejected for the same
+// reason. The CCU rules add nothing a CCU configuration could have carried
+// before the system type existed, so no existing CCU configuration fails.
+//
+// The write paths restore a masked token before they validate, so the mask
+// never reaches this check.
+func ValidateCentralSystem(idx int, cc *CentralConfig) error {
+	return ValidateCentralSystemToken(idx, cc, false)
+}
+
+// ValidateCentralSystemToken is [ValidateCentralSystem] for a caller that
+// knows the token is supplied by an environment variable rather than
+// inline — a stored central row that names one. The token is then not
+// required inline; a token that is inline must still be well formed.
+func ValidateCentralSystemToken(idx int, cc *CentralConfig, tokenFromEnv bool) error {
+	if !cc.SystemType.Valid() {
+		return fmt.Errorf("config: centrals[%d].system_type: unknown value %q (ccu, openccu-lite or auto)", idx, cc.SystemType)
+	}
+	switch cc.SystemType.Normalize() {
+	case hmenum.SystemTypeCCU:
+		if cc.APIToken != "" {
+			return fmt.Errorf("config: centrals[%d].api_token: only an openccu-lite central uses an API token", idx)
+		}
+		if cc.TLSFingerprint != "" {
+			return fmt.Errorf("config: centrals[%d].tls_fingerprint: certificate pinning is available for openccu-lite centrals only", idx)
+		}
+		return nil
+	case hmenum.SystemTypeOpenCCULite:
+		return validateLiteCentral(idx, cc, true, tokenFromEnv)
+	case hmenum.SystemTypeAuto:
+		// Detection may land on either system: only the rules that hold for
+		// both apply, and the token — if one is set — must be well formed.
+		return validateLiteCentral(idx, cc, false, tokenFromEnv)
+	}
+	return nil
+}
+
+// validateLiteCentral applies the openccu-lite rules; strict also requires
+// the token and rejects the CCU-only fields (auto keeps them open).
+func validateLiteCentral(idx int, cc *CentralConfig, strict, tokenFromEnv bool) error {
+	switch {
+	case cc.APIToken == "" && strict && !tokenFromEnv:
+		return fmt.Errorf("config: centrals[%d].api_token: required for an openccu-lite central", idx)
+	case cc.APIToken != "" && !liteAPITokenPattern.MatchString(cc.APIToken):
+		return fmt.Errorf("config: centrals[%d].api_token: not an occulited API token (olt_ followed by 32 lower-case hex digits)", idx)
+	}
+	if cc.TLSFingerprint != "" {
+		if !cc.TLS {
+			return fmt.Errorf("config: centrals[%d].tls_fingerprint: requires tls", idx)
+		}
+		if cc.TLSInsecureSkipVerify {
+			return fmt.Errorf("config: centrals[%d].tls_fingerprint: cannot be combined with tls_insecure_skip_verify", idx)
+		}
+		if !isSHA256Hex(cc.TLSFingerprint) {
+			return fmt.Errorf("config: centrals[%d].tls_fingerprint: not a lower-case hex SHA-256 (64 digits)", idx)
+		}
+	}
+	if !strict {
+		return nil
+	}
+	if cc.Username != "" || cc.Password != "" {
+		return fmt.Errorf("config: centrals[%d].username: openccu-lite authenticates with api_token, not a username and password", idx)
+	}
+	if cc.Port != 0 {
+		return fmt.Errorf("config: centrals[%d].port: has no meaning for openccu-lite (the interfaces are reached through the system's API)", idx)
+	}
+	if len(cc.Ports) > 0 {
+		return fmt.Errorf("config: centrals[%d].ports: has no meaning for openccu-lite (the interfaces are reached through the system's API)", idx)
+	}
+	for j, spec := range cc.Interfaces {
+		name := strings.TrimSpace(spec.Name)
+		if name == string(hmenum.InterfaceCUxD) {
+			return fmt.Errorf("config: centrals[%d].interfaces[%d]: CUxD is not available on openccu-lite", idx, j)
+		}
+		if !liteInterfaces[name] {
+			return fmt.Errorf("config: centrals[%d].interfaces[%d]: %q is not an openccu-lite interface (HmIP-RF, BidCos-RF, BidCos-Wired, VirtualDevices)", idx, j, name)
+		}
+		switch {
+		case spec.Port != 0:
+			return fmt.Errorf("config: centrals[%d].interfaces[%d].port: has no meaning for openccu-lite", idx, j)
+		case spec.RemotePath != "":
+			return fmt.Errorf("config: centrals[%d].interfaces[%d].remote_path: has no meaning for openccu-lite", idx, j)
+		case spec.RPCType != "":
+			return fmt.Errorf("config: centrals[%d].interfaces[%d].rpc_type: has no meaning for openccu-lite", idx, j)
+		}
+	}
+	return nil
+}
+
+// isSHA256Hex reports whether s is 64 lower-case hex digits.
+func isSHA256Hex(s string) bool {
+	if len(s) != 64 {
+		return false
+	}
+	for _, c := range s {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 // centralHostLabel matches one DNS label. Underscores are tolerated —

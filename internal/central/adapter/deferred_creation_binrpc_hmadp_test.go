@@ -91,9 +91,11 @@ func TestHmAdpBringUpGenerationDropsStaleBINRPCHandlers(t *testing.T) {
 
 	dead, cancel := context.WithCancel(context.Background())
 	cancel()
+	cc := config.CentralConfig{Name: "ccu-binrpc-reset", Host: "127.0.0.1"}
 	h := &centralBringUp{
-		cc:        config.CentralConfig{Name: "ccu-binrpc-reset", Host: "127.0.0.1"},
+		cc:        cc,
 		unit:      c,
+		profile:   newCCUProfile(&cc),
 		parentCtx: dead,
 		logger:    slog.New(slog.DiscardHandler),
 	}

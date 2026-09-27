@@ -5,6 +5,8 @@ package adapter
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -155,15 +157,31 @@ type LivenessProbe interface {
 	Probe(ctx context.Context) systemProbeResult
 }
 
-// southProfileFor selects cc's south profile. Every central is a CCU until
-// the system type becomes configurable; the CCU profile reproduces the
-// behaviour the daemon has always had.
-func southProfileFor(cc *config.CentralConfig, _ *slog.Logger) SouthProfile {
-	return newCCUProfile(cc)
+// errSystemTypeNotSupported reports a system type this build cannot bring
+// up yet. The central is kept visible with a degraded startup state rather
+// than half brought up.
+var errSystemTypeNotSupported = errors.New("system type not supported by this build yet")
+
+// southProfileFor selects cc's south profile. It is the only place the
+// daemon compares a system type; everything downstream works through the
+// profile's ports.
+func southProfileFor(cc *config.CentralConfig, _ *slog.Logger) (SouthProfile, error) {
+	switch st := cc.SystemType.Normalize(); st {
+	case hmenum.SystemTypeCCU:
+		return newCCUProfile(cc), nil
+	case hmenum.SystemTypeOpenCCULite, hmenum.SystemTypeAuto:
+		return nil, fmt.Errorf("central %s: %s: %w", cc.Name, st, errSystemTypeNotSupported)
+	default:
+		return nil, fmt.Errorf("central %s: unknown system_type %q", cc.Name, cc.SystemType)
+	}
 }
 
 // southLivenessFor is the hub-plane liveness probe of cc's profile, or nil
-// when the profile has none.
+// when the profile has none or cannot be built.
 func southLivenessFor(cc *config.CentralConfig, logger *slog.Logger) LivenessProbe {
-	return southProfileFor(cc, logger).Liveness()
+	profile, err := southProfileFor(cc, logger)
+	if err != nil {
+		return nil
+	}
+	return profile.Liveness()
 }

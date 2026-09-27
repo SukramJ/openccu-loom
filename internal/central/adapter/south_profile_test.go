@@ -5,6 +5,8 @@ package adapter
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -82,7 +84,10 @@ func TestWaitReadyHonoursUnboundedAndBoundedTimeouts(t *testing.T) {
 func TestCCUProfileProbesTheBootMarker(t *testing.T) {
 	t.Parallel()
 	cc := &config.CentralConfig{Name: "c", Host: "ccu.example", JSONRPCPort: 8181}
-	p := southProfileFor(cc, nil)
+	p, err := southProfileFor(cc, nil)
+	if err != nil {
+		t.Fatalf("southProfileFor: %v", err)
+	}
 	if got := p.SystemType(); got != hmenum.SystemTypeCCU {
 		t.Errorf("SystemType = %q, want ccu", got)
 	}
@@ -92,8 +97,49 @@ func TestCCUProfileProbesTheBootMarker(t *testing.T) {
 	if p.Liveness() == nil {
 		t.Error("a CCU with a host must carry the hub-plane liveness probe")
 	}
-	noHost := southProfileFor(&config.CentralConfig{Name: "c"}, nil)
+	noHost, err := southProfileFor(&config.CentralConfig{Name: "c"}, nil)
+	if err != nil {
+		t.Fatalf("southProfileFor: %v", err)
+	}
 	if noHost.Liveness() != nil {
 		t.Error("a CCU without a host has nothing to poll; Liveness must be nil")
+	}
+}
+
+// TestUnsupportedSystemTypeIsVisibleAndNotBroughtUp pins what a central of a
+// system type this build cannot drive yet looks like: the profile selection
+// refuses it with errSystemTypeNotSupported, and the bring-up manager keeps
+// it registered with a degraded startup component naming the reason instead
+// of starting a half bring-up.
+func TestUnsupportedSystemTypeIsVisibleAndNotBroughtUp(t *testing.T) {
+	t.Parallel()
+	for _, st := range []hmenum.SystemType{hmenum.SystemTypeOpenCCULite, hmenum.SystemTypeAuto} {
+		cc := &config.CentralConfig{Name: "box", Host: "box.local", SystemType: st}
+		if _, err := southProfileFor(cc, nil); !errors.Is(err, errSystemTypeNotSupported) {
+			t.Fatalf("%s: southProfileFor = %v, want errSystemTypeNotSupported", st, err)
+		}
+	}
+	if _, err := southProfileFor(&config.CentralConfig{Name: "x", SystemType: "homegear"}, nil); err == nil {
+		t.Fatal("an unknown system type was accepted")
+	}
+
+	reg, unit := registryWithUnit(t, "box")
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	mgr, err := WireCentrals(ctx, &config.Config{}, reg, WireDeps{}, nil)
+	if err != nil {
+		t.Fatalf("WireCentrals: %v", err)
+	}
+	t.Cleanup(mgr.Teardown)
+	cc := config.CentralConfig{Name: "box", Host: "box.local", SystemType: hmenum.SystemTypeOpenCCULite}
+	if !mgr.AddCentral(&cc, unit) {
+		t.Fatal("AddCentral refused the central")
+	}
+	comp, ok := unit.Health.Get(startupHealthComponent("box"))
+	if !ok || !strings.Contains(comp.LastSample.Note, "not supported") {
+		t.Fatalf("startup component = %+v (present %v), want a note naming the unsupported system type", comp, ok)
+	}
+	if unit.IsSouthboundReady() {
+		t.Error("an unsupported central reported southbound ready")
 	}
 }

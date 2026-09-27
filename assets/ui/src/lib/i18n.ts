@@ -1443,7 +1443,10 @@ const EN: Catalog = {
   "config.field.centrals.name": "Name",
   "config.field.centrals.host": "Host",
   "config.field.centrals.port": "Port",
-  "config.field.centrals.json_rpc_port": "JSON-RPC port",
+  "config.field.centrals.json_rpc_port": "HTTP(S) port",
+  "config.field.centrals.system_type": "System type",
+  "config.field.centrals.api_token": "API token",
+  "config.field.centrals.tls_fingerprint": "TLS certificate fingerprint",
   "config.field.centrals.username": "Username",
   "config.field.centrals.password": "Password",
   "config.field.centrals.tls": "TLS",
@@ -1771,7 +1774,14 @@ const EN: Catalog = {
   "config.help.centrals.name": "Managed in the CCUs tab.",
   "config.help.centrals.host": "Managed in the CCUs tab.",
   "config.help.centrals.port": "Managed in the CCUs tab.",
-  "config.help.centrals.json_rpc_port": "Managed in the CCUs tab.",
+  "config.help.centrals.json_rpc_port":
+    "Port of the system's web server (JSON-RPC on a CCU, the occulited API on openccu-lite); 0 means 80 or 443. Managed in the CCUs tab.",
+  "config.help.centrals.system_type":
+    "ccu for a CCU, OpenCCU or RaspberryMatic; openccu-lite for a system managed by occulited; auto detects it on first connect. Managed in the CCUs tab.",
+  "config.help.centrals.api_token":
+    "The occulited API token (olt_…) an openccu-lite system is accessed with. Managed in the CCUs tab.",
+  "config.help.centrals.tls_fingerprint":
+    "SHA-256 of an openccu-lite system's certificate; when set, exactly this certificate is trusted. Managed in the CCUs tab.",
   "config.help.centrals.username": "Managed in the CCUs tab.",
   "config.help.centrals.password": "Managed in the CCUs tab.",
   "config.help.centrals.tls": "Managed in the CCUs tab.",
@@ -5437,7 +5447,10 @@ const DE: Catalog = {
   "config.field.centrals.name": "Name",
   "config.field.centrals.host": "Host",
   "config.field.centrals.port": "Port",
-  "config.field.centrals.json_rpc_port": "JSON-RPC-Port",
+  "config.field.centrals.json_rpc_port": "HTTP(S)-Port",
+  "config.field.centrals.system_type": "Systemtyp",
+  "config.field.centrals.api_token": "API-Token",
+  "config.field.centrals.tls_fingerprint": "TLS-Zertifikats-Fingerabdruck",
   "config.field.centrals.username": "Benutzername",
   "config.field.centrals.password": "Passwort",
   "config.field.centrals.tls": "TLS",
@@ -5764,7 +5777,14 @@ const DE: Catalog = {
   "config.help.centrals.name": "Im CCUs-Tab verwaltet.",
   "config.help.centrals.host": "Im CCUs-Tab verwaltet.",
   "config.help.centrals.port": "Im CCUs-Tab verwaltet.",
-  "config.help.centrals.json_rpc_port": "Im CCUs-Tab verwaltet.",
+  "config.help.centrals.json_rpc_port":
+    "Port des Webservers des Systems (JSON-RPC auf einer CCU, die occulited-API auf openccu-lite); 0 bedeutet 80 bzw. 443. Im CCUs-Tab verwaltet.",
+  "config.help.centrals.system_type":
+    "ccu für eine CCU, OpenCCU oder RaspberryMatic; openccu-lite für ein von occulited verwaltetes System; auto erkennt es beim ersten Verbinden. Im CCUs-Tab verwaltet.",
+  "config.help.centrals.api_token":
+    "Das occulited-API-Token (olt_…), mit dem auf ein openccu-lite-System zugegriffen wird. Im CCUs-Tab verwaltet.",
+  "config.help.centrals.tls_fingerprint":
+    "SHA-256 des Zertifikats eines openccu-lite-Systems; ist er gesetzt, wird genau diesem Zertifikat vertraut. Im CCUs-Tab verwaltet.",
   "config.help.centrals.username": "Im CCUs-Tab verwaltet.",
   "config.help.centrals.password": "Im CCUs-Tab verwaltet.",
   "config.help.centrals.tls": "Im CCUs-Tab verwaltet.",

@@ -23,6 +23,15 @@ CCU; the list below is what an API client can already observe.
 - WebSocket broadcast `central.features_changed` (topic
   `central.{name}.features`) carries a central's complete feature set
   whenever it changes. WebSocket API 1.10.
+- A central can name its system: `system_type` (`ccu` — the default, also
+  for every existing central —, `openccu-lite`, `auto`), with `api_token`
+  (secret, sealed at rest like the CCU password, masked on every read) and
+  `tls_fingerprint` for openccu-lite systems, in `config.yaml`, the CCUs
+  admin API and the setup API. Rules are enforced on every write: an
+  openccu-lite central needs a token and carries no username, password,
+  port overrides or CUxD; a CCU central carries no token or fingerprint.
+  An openccu-lite or `auto` central is accepted but not brought up by this
+  build yet — it shows as degraded with the reason. REST API 11.4.0.
 
 #### Fixed
 

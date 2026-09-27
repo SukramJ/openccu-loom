@@ -116,12 +116,17 @@ func (b *centralBringUp) start() {
 		return
 	}
 	b.mu.Lock()
-	ctx, cancel := context.WithCancel(b.parentCtx)
-	b.cancel = cancel
+	b.binCbHandlers = nil
 	b.mu.Unlock()
+	if b.profile == nil {
+		// No profile: the system type is not supported by this build, which
+		// buildAndStart already reported. There is no generation to start.
+		return
+	}
 
 	b.mu.Lock()
-	b.binCbHandlers = nil
+	ctx, cancel := context.WithCancel(b.parentCtx)
+	b.cancel = cancel
 	b.mu.Unlock()
 
 	b.wg.Add(1)
@@ -447,7 +452,17 @@ func (m *BringUpManager) buildAndStart(cc *config.CentralConfig, unit *central.U
 	// hold it back.
 	WirePendingDevices(m.parentCtx, unit, m.deps.PendingDevices,
 		cc.Behavior.DelayNewDeviceCreationEnabled(), m.logger)
-	profile := southProfileFor(cc, m.logger)
+	profile, err := southProfileFor(cc, m.logger)
+	if err != nil {
+		// Keep the central visible as degraded, with the reason, instead of
+		// half bringing it up: the handle exists so removal and re-init work
+		// as for any central, but it never starts a bring-up generation.
+		m.logger.Warn("wire.central.system_type_unsupported",
+			slog.String("central", cc.Name),
+			slog.String("err", err.Error()))
+		recordCentralUnsupported(unit, err)
+		return &centralBringUp{cfg: m.cfg, cc: *cc, unit: unit, deps: m.deps, logger: m.logger, parentCtx: m.parentCtx}
+	}
 	cbHandlers, callbackURL, binRPCCallbackAddr, deregister := profile.Events().Attach(cc, unit, m.deps, m.logger)
 	b := &centralBringUp{
 		cfg:                m.cfg,
