@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 5a40c5e8
-HEAD: 5a40c5e8
+Generated: d880d7ca
+HEAD: d880d7ca
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 5693 |
+| Total Exported | 5736 |
 | Reachable | 3654 |
-| Whitelisted | 1980 |
+| Whitelisted | 2023 |
 | **Unreachable** | **59** |
 
 ## What these numbers cannot see
