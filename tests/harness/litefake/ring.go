@@ -231,6 +231,18 @@ func (g *ring) resumeLocked(lastEventID string) (replay []message, resync string
 	return replay, ""
 }
 
+// lookup returns the held message with seq, if the ring still holds it.
+func (g *ring) lookup(seq uint64) (message, bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	for _, m := range g.msgs {
+		if m.seq == seq {
+			return m, true
+		}
+	}
+	return message{}, false
+}
+
 // detach removes a reader once its stream has ended.
 func (g *ring) detach(rd *reader) {
 	g.mu.Lock()

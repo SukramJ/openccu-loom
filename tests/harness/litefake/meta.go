@@ -871,13 +871,15 @@ type revisionAnswer struct {
 
 // writeMutation answers a mutation: the revision in the body and in
 // ETag, or 304 with an empty body and the revision only in ETag when
-// nothing changed.
-func writeMutation(w http.ResponseWriter, status, revision int, changed bool, err error) {
+// nothing changed. [DeviateMeta304WithoutETag] drops the ETag of a 304.
+func (f *Fake) writeMutation(w http.ResponseWriter, status, revision int, changed bool, err error) {
 	if err != nil {
 		writeMetaError(w, err)
 		return
 	}
-	w.Header().Set("ETag", strconv.Itoa(revision))
+	if changed || !f.deviates(DeviateMeta304WithoutETag) {
+		w.Header().Set("ETag", strconv.Itoa(revision))
+	}
 	if !changed {
 		w.Header().Set("Cache-Control", "no-store")
 		w.WriteHeader(http.StatusNotModified)
@@ -1082,7 +1084,7 @@ func (f *Fake) handleMetaObjectWrite(w http.ResponseWriter, r *http.Request) {
 	}
 	ref := r.PathValue("ref")
 	rev, changed, err := f.meta.mutate(ifMatch(r), func(tx *metaTx) error { return tx.patchObject(ref, p) })
-	writeMutation(w, http.StatusOK, rev, changed, err)
+	f.writeMutation(w, http.StatusOK, rev, changed, err)
 }
 
 func (f *Fake) handleMetaObjectDelete(w http.ResponseWriter, r *http.Request) {
@@ -1091,7 +1093,7 @@ func (f *Fake) handleMetaObjectDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	ref := r.PathValue("ref")
 	rev, changed, err := f.meta.mutate(ifMatch(r), func(tx *metaTx) error { return tx.deleteObject(ref) })
-	writeMutation(w, http.StatusOK, rev, changed, err)
+	f.writeMutation(w, http.StatusOK, rev, changed, err)
 }
 
 // handleMetaBulk applies {set: {ref: patch}, delete: [ref]} atomically
@@ -1141,7 +1143,7 @@ func (f *Fake) handleMetaBulk(w http.ResponseWriter, r *http.Request) {
 		}
 		return nil
 	})
-	writeMutation(w, http.StatusOK, rev, changed, err)
+	f.writeMutation(w, http.StatusOK, rev, changed, err)
 }
 
 type enumsAnswer struct {
@@ -1206,7 +1208,7 @@ func (f *Fake) handleMetaEnumCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rev, changed, err := f.meta.mutate(ifMatch(r), func(tx *metaTx) error { return tx.createEnum(id, name) })
-	writeMutation(w, http.StatusCreated, rev, changed, err)
+	f.writeMutation(w, http.StatusCreated, rev, changed, err)
 }
 
 func (f *Fake) handleMetaEnumPatch(w http.ResponseWriter, r *http.Request) {
@@ -1227,7 +1229,7 @@ func (f *Fake) handleMetaEnumPatch(w http.ResponseWriter, r *http.Request) {
 	}
 	id := r.PathValue("enum")
 	rev, changed, err := f.meta.mutate(ifMatch(r), func(tx *metaTx) error { return tx.patchEnum(id, name) })
-	writeMutation(w, http.StatusOK, rev, changed, err)
+	f.writeMutation(w, http.StatusOK, rev, changed, err)
 }
 
 func (f *Fake) handleMetaEnumDelete(w http.ResponseWriter, r *http.Request) {
@@ -1237,7 +1239,7 @@ func (f *Fake) handleMetaEnumDelete(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("enum")
 	detach := r.URL.Query().Get("members") == "detach"
 	rev, changed, err := f.meta.mutate(ifMatch(r), func(tx *metaTx) error { return tx.deleteEnum(id, detach) })
-	writeMutation(w, http.StatusOK, rev, changed, err)
+	f.writeMutation(w, http.StatusOK, rev, changed, err)
 }
 
 // optionalString decodes a member that may be absent, null or a string.
@@ -1290,7 +1292,7 @@ func (f *Fake) handleMetaNodeCreate(w http.ResponseWriter, r *http.Request) {
 	rev, changed, err := f.meta.mutate(ifMatch(r), func(tx *metaTx) error {
 		return tx.createNode(enum, parent, id, name, icon, position)
 	})
-	writeMutation(w, http.StatusCreated, rev, changed, err)
+	f.writeMutation(w, http.StatusCreated, rev, changed, err)
 }
 
 // handleMetaNodePatch updates a node addressed by its path relative to
@@ -1327,7 +1329,7 @@ func (f *Fake) handleMetaNodePatch(w http.ResponseWriter, r *http.Request) {
 	}
 	enum, rel := r.PathValue("enum"), r.PathValue("path")
 	rev, changed, err := f.meta.mutate(ifMatch(r), func(tx *metaTx) error { return tx.patchNode(enum, rel, p) })
-	writeMutation(w, http.StatusOK, rev, changed, err)
+	f.writeMutation(w, http.StatusOK, rev, changed, err)
 }
 
 func (f *Fake) handleMetaNodeDelete(w http.ResponseWriter, r *http.Request) {
@@ -1337,7 +1339,7 @@ func (f *Fake) handleMetaNodeDelete(w http.ResponseWriter, r *http.Request) {
 	enum, rel := r.PathValue("enum"), r.PathValue("path")
 	detach := r.URL.Query().Get("members") == "detach"
 	rev, changed, err := f.meta.mutate(ifMatch(r), func(tx *metaTx) error { return tx.deleteNode(enum, rel, detach) })
-	writeMutation(w, http.StatusOK, rev, changed, err)
+	f.writeMutation(w, http.StatusOK, rev, changed, err)
 }
 
 // ----------------------------------------------------------------------

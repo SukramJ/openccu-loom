@@ -179,7 +179,11 @@ func (f *Fake) handleEvents(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		var lim *limitError
 		if errors.As(err, &lim) {
-			writeError(w, http.StatusTooManyRequests, "too-many-streams", lim.text)
+			code := "too-many-streams"
+			if f.deviates(DeviateStreamLimitCode) {
+				code = "rate-limited"
+			}
+			writeError(w, http.StatusTooManyRequests, code, lim.text)
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "internal", err.Error())
@@ -195,30 +199,13 @@ func (f *Fake) handleEvents(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	sw := &sseWriter{w: w, rc: http.NewResponseController(w)}
 
-	if err := sw.raw(": connected\n\n"); err != nil {
-		return
-	}
 	idOf := func(seq uint64) string { return res.bootID + "-" + strconv.FormatUint(seq, 10) }
-	if err := sw.frame(idOf(res.seq), typeHello, mustJSON(f.hello(res))); err != nil {
+	resyncID := ""
+	if f.deviates(DeviateResyncWithID) {
+		resyncID = idOf(res.seq)
+	}
+	if err := f.writeOpening(r, sw, res, flt, idOf, resyncID); err != nil {
 		return
-	}
-	if res.resync != "" {
-		if err := sw.frame("", typeResync, mustJSON(resyncData{Reason: res.resync})); err != nil {
-			return
-		}
-	}
-	for _, m := range res.replay {
-		if !flt.match(m) {
-			continue
-		}
-		if err := sw.frame(idOf(m.seq), m.typ, m.data); err != nil {
-			return
-		}
-	}
-	if r.URL.Query().Get("devices") == "1" {
-		if err := f.writeDeviceSnapshots(r.Context(), sw, flt); err != nil {
-			return
-		}
 	}
 
 	f.mu.Lock()
@@ -243,7 +230,7 @@ func (f *Fake) handleEvents(w http.ResponseWriter, r *http.Request) {
 			}
 		case <-ticker.C:
 			if rd.dropped.Load() > 0 {
-				_ = sw.frame("", typeResync, mustJSON(resyncData{Reason: resyncOverflow}))
+				_ = sw.frame(resyncID, typeResync, mustJSON(resyncData{Reason: resyncOverflow}))
 				return
 			}
 			if p, ok := f.resolve(secret); !ok || !hasScope(p.scopes, scopeRPCRead) {
@@ -251,11 +238,64 @@ func (f *Fake) handleEvents(w http.ResponseWriter, r *http.Request) {
 				// token ends the stream without a closing frame.
 				return
 			}
+			if f.deviates(DeviateNoHeartbeat) {
+				continue
+			}
 			if err := sw.raw(": ping\n\n"); err != nil {
 				return
 			}
 		}
 	}
+}
+
+// writeOpening writes what a stream owes before its live part:
+// ": connected", hello, a resync or the replay, and the optional device
+// snapshots.
+func (f *Fake) writeOpening(r *http.Request, sw *sseWriter, res attachResult, flt filter, idOf func(uint64) string, resyncID string) error {
+	if err := sw.raw(": connected\n\n"); err != nil {
+		return err
+	}
+	if err := f.writeHello(sw, res, idOf); err != nil {
+		return err
+	}
+	if res.resync != "" {
+		if err := sw.frame(resyncID, typeResync, mustJSON(resyncData{Reason: res.resync})); err != nil {
+			return err
+		}
+	}
+	if f.deviates(DeviateReplayIncludesSince) && len(res.replay) > 0 {
+		if m, ok := f.ring.lookup(res.replay[0].seq - 1); ok {
+			res.replay = append([]message{m}, res.replay...)
+		}
+	}
+	for _, m := range res.replay {
+		if !flt.match(m) {
+			continue
+		}
+		if err := sw.frame(idOf(m.seq), m.typ, m.data); err != nil {
+			return err
+		}
+	}
+	if r.URL.Query().Get("devices") == "1" {
+		return f.writeDeviceSnapshots(r.Context(), sw, flt)
+	}
+	return nil
+}
+
+// writeHello writes the hello frame, honouring the deviations that
+// break its id or its place as the first frame.
+func (f *Fake) writeHello(sw *sseWriter, res attachResult, idOf func(uint64) string) error {
+	if f.deviates(DeviateEventBeforeHello) {
+		ev := eventData{Interface: "BidCos-RF", Address: "VCU0000321:1", Key: "STATE", Value: json.RawMessage("true")}
+		if err := sw.frame(idOf(res.seq), typeEvent, mustJSON(ev)); err != nil {
+			return err
+		}
+	}
+	id := idOf(res.seq)
+	if f.deviates(DeviateHelloWithoutID) {
+		id = ""
+	}
+	return sw.frame(id, typeHello, mustJSON(f.hello(res)))
 }
 
 // hello renders the hello data for an attach result.
