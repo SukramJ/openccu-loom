@@ -7,30 +7,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
+	"github.com/SukramJ/openccu-loom/internal/client/transport/occulited"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
-
-// liteInitRefusalFault is the fault string openccu-lite's XML-RPC proxy
-// answers an `init` call with, anywhere in a request (a multicall
-// included). The proxy refuses it before any tier check; the event stream
-// replaces the callback registration. The text is taken verbatim from the
-// lite-rpc contract in notes/plans/openccu-lite-backend.md (Appendix A.3).
-const liteInitRefusalFault = "init is not available remotely on openccu-lite: " +
-	"subscribe to /api/rpc/v1/events - see docs/rpc-remote.md"
-
-// liteTierFaultPrefix starts the fault string the proxy answers when the
-// token lacks the tier a method needs: `not permitted: <method> needs
-// rpc:<tier>` (Appendix A.3 of the same plan).
-const liteTierFaultPrefix = "not permitted:"
-
-// liteTierFaultScopeMarker separates the refused method from the scope
-// in a tier fault.
-const liteTierFaultScopeMarker = " needs "
 
 // LiteBackend talks to one interface process of an openccu-lite box
 // through the box's authenticated XML-RPC proxy
@@ -43,9 +26,8 @@ const liteTierFaultScopeMarker = " needs "
 // refuses with a [*hmerr.FeatureUnavailableError] that wraps
 // [ErrUnsupported], so existing [errors.Is] branches keep working.
 //
-// Every call passes through the lite fault mapping: a tier refusal
-// becomes a [*hmerr.ScopeMissingError], and the `init` refusal becomes
-// [ErrLiteInitRefused].
+// Every call passes through the lite refusal mapping (see
+// [liteFaultCaller]).
 type LiteBackend struct {
 	xml       Caller // fault-mapping wrapper around the proxy caller; nil when unwired
 	ann       Announcer
@@ -65,14 +47,18 @@ func NewLiteBackend(iface hmenum.Interface, xml Caller, ann Announcer) *LiteBack
 	return b
 }
 
-// liteFaultCaller applies [mapLiteFault] to every call it forwards, so
-// the shared wire helpers get the lite error mapping without knowing it.
+// liteFaultCaller applies [occulited.ClassifyFault] to every call it
+// forwards, so the shared wire helpers get the lite refusal mapping without
+// knowing it: a tier refusal becomes a [*hmerr.ScopeMissingError], the
+// `init` refusal wraps [occulited.ErrInitRefused] (a Loom bug if it ever
+// fires). The classification is idempotent, so a transport that already
+// classified below the reliability stack costs nothing here.
 type liteFaultCaller struct{ next Caller }
 
 // Call implements [Caller].
 func (c *liteFaultCaller) Call(ctx context.Context, method string, args ...any) (any, error) {
 	v, err := c.next.Call(ctx, method, args...)
-	return v, mapLiteFault(method, err)
+	return v, occulited.ClassifyFault(err)
 }
 
 // CallAt implements [Caller].
@@ -80,35 +66,7 @@ func (c *liteFaultCaller) CallAt(
 	ctx context.Context, priority hmenum.CommandPriority, method string, args ...any,
 ) (any, error) {
 	v, err := c.next.CallAt(ctx, priority, method, args...)
-	return v, mapLiteFault(method, err)
-}
-
-// mapLiteFault turns the two refusals the lite proxy answers as XML-RPC
-// faults into typed errors. A tier refusal is not a transport or device
-// failure: only a token with the named scope changes the answer, so it
-// becomes a [*hmerr.ScopeMissingError] (the scope parsed from the fault,
-// the operation being method). The `init` refusal means Loom sent a call
-// it must never send to a box; it is wrapped as [ErrLiteInitRefused].
-// Every other error passes through unchanged.
-func mapLiteFault(method string, err error) error {
-	if err == nil {
-		return nil
-	}
-	var fault *hmerr.XMLRPCFault
-	if !errors.As(err, &fault) {
-		return err
-	}
-	switch {
-	case fault.Message == liteInitRefusalFault:
-		return fmt.Errorf("lite %s: %w", method, ErrLiteInitRefused)
-	case strings.HasPrefix(fault.Message, liteTierFaultPrefix):
-		scope := ""
-		if i := strings.LastIndex(fault.Message, liteTierFaultScopeMarker); i >= 0 {
-			scope = strings.TrimSpace(fault.Message[i+len(liteTierFaultScopeMarker):])
-		}
-		return &hmerr.ScopeMissingError{Scope: scope, Operation: method}
-	}
-	return err
+	return v, occulited.ClassifyFault(err)
 }
 
 // liteAbsent is the refusal every operation without a lite counterpart
@@ -288,6 +246,12 @@ func (b *LiteBackend) UpdateFirmware(ctx context.Context, address string) error 
 	_, callErr := b.xml.Call(ctx, "installFirmware", address)
 	if callErr == nil {
 		return nil
+	}
+	// A refusal of the box is final: the fallback would only be refused
+	// the same way. The classified refusal keeps the fault in its chain,
+	// so it is tested before the fault.
+	if errors.Is(callErr, hmerr.ErrScopeMissing) || errors.Is(callErr, occulited.ErrInitRefused) {
+		return callErr
 	}
 	var fault *hmerr.XMLRPCFault
 	if !errors.As(callErr, &fault) {

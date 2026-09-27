@@ -113,11 +113,9 @@ func TestCCUProfileProbesTheBootMarker(t *testing.T) {
 // of starting a half bring-up.
 func TestUnsupportedSystemTypeIsVisibleAndNotBroughtUp(t *testing.T) {
 	t.Parallel()
-	for _, st := range []hmenum.SystemType{hmenum.SystemTypeOpenCCULite, hmenum.SystemTypeAuto} {
-		cc := &config.CentralConfig{Name: "box", Host: "box.local", SystemType: st}
-		if _, err := southProfileFor(cc, nil); !errors.Is(err, errSystemTypeNotSupported) {
-			t.Fatalf("%s: southProfileFor = %v, want errSystemTypeNotSupported", st, err)
-		}
+	cc := &config.CentralConfig{Name: "box", Host: "box.local", SystemType: hmenum.SystemTypeAuto}
+	if _, err := southProfileFor(cc, nil); !errors.Is(err, errSystemTypeNotSupported) {
+		t.Fatalf("auto: southProfileFor = %v, want errSystemTypeNotSupported", err)
 	}
 	if _, err := southProfileFor(&config.CentralConfig{Name: "x", SystemType: "homegear"}, nil); err == nil {
 		t.Fatal("an unknown system type was accepted")
@@ -131,8 +129,8 @@ func TestUnsupportedSystemTypeIsVisibleAndNotBroughtUp(t *testing.T) {
 		t.Fatalf("WireCentrals: %v", err)
 	}
 	t.Cleanup(mgr.Teardown)
-	cc := config.CentralConfig{Name: "box", Host: "box.local", SystemType: hmenum.SystemTypeOpenCCULite}
-	if !mgr.AddCentral(&cc, unit) {
+	auto := config.CentralConfig{Name: "box", Host: "box.local", SystemType: hmenum.SystemTypeAuto}
+	if !mgr.AddCentral(&auto, unit) {
 		t.Fatal("AddCentral refused the central")
 	}
 	comp, ok := unit.Health.Get(startupHealthComponent("box"))

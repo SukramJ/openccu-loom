@@ -30,8 +30,17 @@ CCU; the list below is what an API client can already observe.
   admin API and the setup API. Rules are enforced on every write: an
   openccu-lite central needs a token and carries no username, password,
   port overrides or CUxD; a CCU central carries no token or fingerprint.
-  An openccu-lite or `auto` central is accepted but not brought up by this
-  build yet — it shows as degraded with the reason. REST API 11.4.0.
+  An `auto` central is accepted but not brought up by this build yet — it
+  shows as degraded with the reason. REST API 11.4.0.
+- An openccu-lite central comes up through the box's API: readiness from
+  the box's health and interface state (with the reason — box starting,
+  token rejected, token without the read tier, no interface running —
+  shown while it waits), identity from the box (serial in the same form
+  SSDP discovery uses), devices and paramsets through the XML-RPC proxy,
+  values seeded from the box's state store and paramset reads, and a
+  feature set that follows the token's scopes and is re-read every ten
+  minutes. A scope refusal is never retried and never counted as a
+  connection failure.
 
 #### Fixed
 

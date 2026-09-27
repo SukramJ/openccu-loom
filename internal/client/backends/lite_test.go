@@ -11,6 +11,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/client/transport/occulited"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
@@ -388,7 +389,7 @@ func advertisedCapabilityNames(caps Capabilities) []string {
 	return out
 }
 
-// TestLiteBackendFaultMapping pins mapLiteFault on the three fault
+// TestLiteBackendFaultMapping pins the refusal mapping on the three fault
 // classes: a tier refusal, the init refusal, and an ordinary fault that
 // must pass through unchanged.
 func TestLiteBackendFaultMapping(t *testing.T) {
@@ -409,11 +410,11 @@ func TestLiteBackendFaultMapping(t *testing.T) {
 	}
 
 	initRefused := &liteScriptedCaller{errs: map[string]error{
-		"ping": &hmerr.XMLRPCFault{Code: -1, Message: liteInitRefusalFault},
+		"ping": &hmerr.XMLRPCFault{Code: -1, Message: occulited.InitRefusalText},
 	}}
 	err = NewLiteBackend(hmenum.InterfaceHmIPRF, initRefused, nil).Ping(ctx, "id")
-	if !errors.Is(err, ErrLiteInitRefused) {
-		t.Errorf("init refusal: err = %v, want ErrLiteInitRefused", err)
+	if !errors.Is(err, occulited.ErrInitRefused) {
+		t.Errorf("init refusal: err = %v, want occulited.ErrInitRefused", err)
 	}
 
 	ordinary := &hmerr.XMLRPCFault{Code: -2, Message: "Unknown instance"}
@@ -423,7 +424,7 @@ func TestLiteBackendFaultMapping(t *testing.T) {
 	if !errors.As(err, &fault) || fault != ordinary {
 		t.Errorf("ordinary fault: err = %v, want the fault unchanged", err)
 	}
-	if errors.Is(err, hmerr.ErrScopeMissing) || errors.Is(err, ErrLiteInitRefused) {
+	if errors.Is(err, hmerr.ErrScopeMissing) || errors.Is(err, occulited.ErrInitRefused) {
 		t.Errorf("ordinary fault was mapped: %v", err)
 	}
 }

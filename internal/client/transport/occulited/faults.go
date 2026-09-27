@@ -69,8 +69,10 @@ func ParseTierFault(msg string) (method, scope string, ok bool) {
 // original error stays in the chain either way. Any other error is
 // returned unchanged.
 func ClassifyFault(err error) error {
-	if err == nil {
-		return nil
+	// An error classified once already (by a layer below) is returned as it
+	// is, so a refusal is never wrapped twice.
+	if err == nil || errors.Is(err, ErrInitRefused) || errors.Is(err, hmerr.ErrScopeMissing) {
+		return err
 	}
 	// errors.AsType, not hmerr.FaultFromError: the latter synthesises a
 	// code -1 fault for any error, which would make every transport

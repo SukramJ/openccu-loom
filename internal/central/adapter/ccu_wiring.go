@@ -283,7 +283,7 @@ func gatedCentralBringUp(
 			// reports was invisible for a whole release — the alarm
 			// sysvar mirror created its variable, never wrote a value,
 			// and reported success while doing so.
-			if unit.Hub != nil && !unit.Hub.HasSysvarValueWriter() {
+			if unit.Hub != nil && !unit.Hub.HasSysvarValueWriter() && unit.Features().Available(hmenum.FeatureHubSysvars) {
 				logger.Warn("wire.hub.sysvar_writer.missing",
 					slog.String("central", cc.Name),
 					slog.String("impact", "alarm sysvar mirror and every sysvar write will fail"))
@@ -749,6 +749,7 @@ func wireInterface(
 	}
 
 	xmlCaller := &xmlrpcCaller{client: xmlClient}
+	wrappedCall := transports.WrapCaller(xmlCaller.Call)
 	announcer := transports.Announcer(xmlClient, iface)
 
 	backendKind := transports.BackendKind(iface)
@@ -762,7 +763,7 @@ func wireInterface(
 	// (backends.Caller convention). Bridge with CallerFunc so both
 	// interfaces are satisfied without duplicating the transport.
 	xmlSliceCaller := client.CallerFunc(func(ctx context.Context, method string, params []any) (any, error) {
-		return xmlCaller.Call(ctx, method, params...)
+		return wrappedCall(ctx, method, params...)
 	})
 	// Order-preserving sibling used only by the device-definition export, which
 	// must reproduce the CCU's wire member order. Same transport, different

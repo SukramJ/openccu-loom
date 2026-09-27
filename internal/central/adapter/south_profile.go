@@ -100,7 +100,14 @@ type InterfaceTransports interface {
 	// ConfigureBackend applies system-specific extras to a freshly built
 	// backend (script runner, HTTP transport, rename hooks).
 	ConfigureBackend(unit *central.Unit, iface hmenum.Interface, b backends.Operations)
+	// WrapCaller wraps the raw XML-RPC caller below the reliability stack,
+	// so a system-specific error classification is seen by the retrier and
+	// the circuit breaker. The CCU returns next unchanged.
+	WrapCaller(next CallFunc) CallFunc
 }
+
+// CallFunc is one raw XML-RPC call to an interface.
+type CallFunc func(ctx context.Context, method string, args ...any) (any, error)
 
 // InterfaceEndpoint is where one interface's XML-RPC calls go.
 type InterfaceEndpoint struct {
@@ -165,11 +172,17 @@ var errSystemTypeNotSupported = errors.New("system type not supported by this bu
 // southProfileFor selects cc's south profile. It is the only place the
 // daemon compares a system type; everything downstream works through the
 // profile's ports.
-func southProfileFor(cc *config.CentralConfig, _ *slog.Logger) (SouthProfile, error) {
+func southProfileFor(cc *config.CentralConfig, logger *slog.Logger) (SouthProfile, error) {
 	switch st := cc.SystemType.Normalize(); st {
 	case hmenum.SystemTypeCCU:
 		return newCCUProfile(cc), nil
-	case hmenum.SystemTypeOpenCCULite, hmenum.SystemTypeAuto:
+	case hmenum.SystemTypeOpenCCULite:
+		p, err := newLiteProfile(cc, logger)
+		if err != nil {
+			return nil, err
+		}
+		return p, nil
+	case hmenum.SystemTypeAuto:
 		return nil, fmt.Errorf("central %s: %s: %w", cc.Name, st, errSystemTypeNotSupported)
 	default:
 		return nil, fmt.Errorf("central %s: unknown system_type %q", cc.Name, cc.SystemType)
