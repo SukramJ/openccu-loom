@@ -59,7 +59,7 @@ Two clarifications, because both have been got wrong before:
 | [`parity/`](./parity/) | The divergence catalogue `by_design.md`, the cross-stack snapshot schemas, the reachability baselines, and — under `parity/matter/` — the matter.js schema pin plus the scenario corpus. The wire-fixture generators moved to [go-fabric](https://github.com/SukramJ/go-fabric/tree/main/notes/parity/matter) with the Matter stack. |
 | [`plans/`](./plans/) | [`roadmap.md`](./plans/roadmap.md) — the canonical forward-looking plan — plus per-item implementation plans. |
 | [`reference/`](./reference/) | Durable lookup material that is not a plan and not a concept: the CCU jpages wire contract, the CONTROL inventory, researched alarm assumptions. |
-| [`testplans/`](./testplans/) | The E2E test plan and the historical test-migration record. |
+| [`testplans/`](./testplans/) | The E2E test plan, the historical test-migration record, and live-verification plans against real systems. |
 | [`doc-backlog.md`](./doc-backlog.md) | Gaps in the *published* documentation. |
 
 Several files here are consumed by tooling, not only by readers —
