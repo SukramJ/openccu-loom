@@ -1164,7 +1164,7 @@ func wireInterface(
 		// this step and leaves the daemon in read-through mode.
 		if callbackURL != "" {
 			// Re-confirm CCU readiness immediately before Deinit/Init. The
-			// outer gate (gatedCentralBringUp → WaitForCCUReady) only runs
+			// outer gate (gatedCentralBringUp → waitReady) only runs
 			// once, before this interface's ingest loop starts; activate()
 			// itself is retried across the ingestBackoff window below (up
 			// to ~33s). A CCU that reboots again inside that window is

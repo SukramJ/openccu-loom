@@ -29,7 +29,7 @@ const checkRegaPath = "/ise/checkrega.cgi"
 // lighttpd is still coming up) means "still booting".
 const checkRegaReadyBody = "OK"
 
-// CCUReadinessConfig tunes [WaitForCCUReady] and [waitReady].
+// CCUReadinessConfig tunes [waitReady].
 type CCUReadinessConfig struct {
 	// Timeout bounds the whole wait. Zero falls back to the parity default.
 	// A NEGATIVE value waits indefinitely (until ctx is cancelled) — the
@@ -38,10 +38,6 @@ type CCUReadinessConfig struct {
 	Timeout time.Duration
 	// Interval is the gap between probes. Zero falls back to the default.
 	Interval time.Duration
-	// Client overrides the CCU probe's HTTP client (TLS-insecure path /
-	// tests). Nil uses a short-timeout default. Only [WaitForCCUReady] reads
-	// it; [waitReady] takes a probe that already owns its client.
-	Client *http.Client
 }
 
 const (
@@ -50,30 +46,10 @@ const (
 	defaultCCUReadinessProbeTTL = 5 * time.Second
 )
 
-// WaitForCCUReady blocks until the CCU answers `/ise/checkrega.cgi` with the
-// literal body "OK", ctx is cancelled, or the configured timeout elapses. It
-// returns true only when readiness was observed.
-//
-// This gates the per-central southbound bring-up (device names via JSON-RPC
-// AND the per-interface listDevices) so it runs only once ReGaHss is serving.
-// Otherwise an add-on co-started with a (re)booting CCU sees `Device.listAllDetail`
-// and `listDevices` warm up at DIFFERENT times, which surfaces as devices that
-// appear without their CCU-assigned names until a restart. The production gate
-// (gatedCentralBringUp) passes a negative timeout to wait indefinitely so a
-// central is never brought up half-loaded.
-//
-// Connection errors and non-OK bodies are treated identically — "keep waiting".
-// It is the CCU profile's probe driven by [waitReady]; production call sites
-// go through the central's [SouthProfile] instead.
-func WaitForCCUReady(ctx context.Context, cc config.CentralConfig, cfg CCUReadinessConfig, logger *slog.Logger) bool {
-	return waitReady(ctx, cc.Name, newCCUReadinessProbe(cc, cfg.Client), cfg, logger)
-}
-
 // waitReady drives p until it reports ready, ctx is cancelled, or the
 // configured timeout elapses, and returns true only when readiness was
 // observed. The loop — timeouts, cadence, log keys — is the same for every
-// system; the probe supplies what "ready" means. cfg.Client is ignored here:
-// the HTTP client belongs to the probe.
+// system; the probe supplies what "ready" means.
 func waitReady(ctx context.Context, name string, p ReadinessProbe, cfg CCUReadinessConfig, logger *slog.Logger) bool {
 	timeout := cfg.Timeout
 	unbounded := timeout < 0
@@ -135,6 +111,15 @@ func waitReady(ctx context.Context, name string, p ReadinessProbe, cfg CCUReadin
 
 // ccuReadinessProbe is the CCU's readiness probe: one GET of the OCCU boot
 // marker CGI, ready only on the literal body "OK".
+//
+// It gates the per-central southbound bring-up (device names via JSON-RPC
+// AND the per-interface listDevices) so it runs only once ReGaHss is serving.
+// Otherwise an add-on co-started with a (re)booting CCU sees
+// `Device.listAllDetail` and `listDevices` warm up at DIFFERENT times, which
+// surfaces as devices that appear without their CCU-assigned names until a
+// restart. The production gate (gatedCentralBringUp) waits indefinitely so a
+// central is never brought up half-loaded. Connection errors and non-OK
+// bodies are treated identically — "keep waiting".
 type ccuReadinessProbe struct {
 	client *http.Client
 	url    string

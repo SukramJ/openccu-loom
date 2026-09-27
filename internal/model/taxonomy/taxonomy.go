@@ -16,10 +16,7 @@
 // without locking.
 package taxonomy
 
-import (
-	"errors"
-	"strings"
-)
+import "strings"
 
 // EnumID names one taxonomy. It is data, not a closed set: a system may
 // define enums beyond the two every Homematic system has.
@@ -40,19 +37,6 @@ type Path string
 type Ref struct {
 	Enum EnumID
 	Path Path
-}
-
-// ErrInvalidRef reports a reference string without an enum or a path.
-var ErrInvalidRef = errors.New("taxonomy: invalid reference")
-
-// ParseRef parses "<enum>/<path>". The enum id is everything before the first
-// slash; the path is the rest and must name at least one node.
-func ParseRef(s string) (Ref, error) {
-	enum, path, ok := strings.Cut(s, "/")
-	if !ok || enum == "" || path == "" || strings.HasPrefix(path, "/") || strings.HasSuffix(path, "/") || strings.Contains(path, "//") {
-		return Ref{}, ErrInvalidRef
-	}
-	return Ref{Enum: EnumID(enum), Path: Path(path)}, nil
 }
 
 // String renders the reference as "<enum>/<path>".

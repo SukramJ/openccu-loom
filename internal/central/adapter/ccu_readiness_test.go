@@ -5,6 +5,7 @@ package adapter
 
 import (
 	"context"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -36,7 +37,7 @@ func ccFor(t *testing.T, serverURL string) config.CentralConfig {
 	return config.CentralConfig{Name: "t", Host: host, JSONRPCPort: port}
 }
 
-func TestWaitForCCUReady_ReadyImmediately(t *testing.T) {
+func TestCCUReadinessWait_ReadyImmediately(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != checkRegaPath {
@@ -47,14 +48,14 @@ func TestWaitForCCUReady_ReadyImmediately(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	ok := WaitForCCUReady(context.Background(), ccFor(t, srv.URL),
+	ok := waitForCCU(context.Background(), ccFor(t, srv.URL),
 		CCUReadinessConfig{Timeout: time.Second, Interval: 10 * time.Millisecond}, nil)
 	if !ok {
-		t.Fatal("WaitForCCUReady = false, want true for a CCU answering OK")
+		t.Fatal("readiness wait = false, want true for a CCU answering OK")
 	}
 }
 
-func TestWaitForCCUReady_BootingThenReady(t *testing.T) {
+func TestCCUReadinessWait_BootingThenReady(t *testing.T) {
 	t.Parallel()
 	var hits atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -67,45 +68,45 @@ func TestWaitForCCUReady_BootingThenReady(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	ok := WaitForCCUReady(context.Background(), ccFor(t, srv.URL),
+	ok := waitForCCU(context.Background(), ccFor(t, srv.URL),
 		CCUReadinessConfig{Timeout: 2 * time.Second, Interval: 5 * time.Millisecond}, nil)
 	if !ok {
-		t.Fatal("WaitForCCUReady = false, want true once the CCU flips to OK")
+		t.Fatal("readiness wait = false, want true once the CCU flips to OK")
 	}
 	if got := hits.Load(); got < 3 {
 		t.Fatalf("probed %d times, want >= 3 (should keep polling until OK)", got)
 	}
 }
 
-func TestWaitForCCUReady_TimesOutWhileBooting(t *testing.T) {
+func TestCCUReadinessWait_TimesOutWhileBooting(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("not ready")) // never OK
 	}))
 	defer srv.Close()
 
-	ok := WaitForCCUReady(context.Background(), ccFor(t, srv.URL),
+	ok := waitForCCU(context.Background(), ccFor(t, srv.URL),
 		CCUReadinessConfig{Timeout: 40 * time.Millisecond, Interval: 5 * time.Millisecond}, nil)
 	if ok {
-		t.Fatal("WaitForCCUReady = true, want false when the CCU never returns OK before timeout")
+		t.Fatal("readiness wait = true, want false when the CCU never returns OK before timeout")
 	}
 }
 
-func TestWaitForCCUReady_NonOKStatusKeepsWaiting(t *testing.T) {
+func TestCCUReadinessWait_NonOKStatusKeepsWaiting(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "internal backend exception", http.StatusServiceUnavailable)
 	}))
 	defer srv.Close()
 
-	ok := WaitForCCUReady(context.Background(), ccFor(t, srv.URL),
+	ok := waitForCCU(context.Background(), ccFor(t, srv.URL),
 		CCUReadinessConfig{Timeout: 30 * time.Millisecond, Interval: 5 * time.Millisecond}, nil)
 	if ok {
-		t.Fatal("WaitForCCUReady = true, want false while the CCU answers 503")
+		t.Fatal("readiness wait = true, want false while the CCU answers 503")
 	}
 }
 
-func TestWaitForCCUReady_UnboundedKeepsWaitingUntilReady(t *testing.T) {
+func TestCCUReadinessWait_UnboundedKeepsWaitingUntilReady(t *testing.T) {
 	t.Parallel()
 	var hits atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -119,17 +120,17 @@ func TestWaitForCCUReady_UnboundedKeepsWaitingUntilReady(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	ok := WaitForCCUReady(context.Background(), ccFor(t, srv.URL),
+	ok := waitForCCU(context.Background(), ccFor(t, srv.URL),
 		CCUReadinessConfig{Timeout: -1, Interval: 5 * time.Millisecond}, nil)
 	if !ok {
-		t.Fatal("unbounded WaitForCCUReady = false, want true once the CCU finally returns OK")
+		t.Fatal("unbounded readiness wait = false, want true once the CCU finally returns OK")
 	}
 	if got := hits.Load(); got < 6 {
 		t.Fatalf("probed %d times, want >= 6 (unbounded must keep polling)", got)
 	}
 }
 
-func TestWaitForCCUReady_UnboundedStopsOnCancel(t *testing.T) {
+func TestCCUReadinessWait_UnboundedStopsOnCancel(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("booting")) // never OK
@@ -139,14 +140,14 @@ func TestWaitForCCUReady_UnboundedStopsOnCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() { time.Sleep(30 * time.Millisecond); cancel() }()
 
-	ok := WaitForCCUReady(ctx, ccFor(t, srv.URL),
+	ok := waitForCCU(ctx, ccFor(t, srv.URL),
 		CCUReadinessConfig{Timeout: -1, Interval: 5 * time.Millisecond}, nil)
 	if ok {
-		t.Fatal("unbounded WaitForCCUReady = true, want false after ctx cancel")
+		t.Fatal("unbounded readiness wait = true, want false after ctx cancel")
 	}
 }
 
-func TestWaitForCCUReady_ContextCancel(t *testing.T) {
+func TestCCUReadinessWait_ContextCancel(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("booting"))
@@ -156,9 +157,15 @@ func TestWaitForCCUReady_ContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // already cancelled
 
-	ok := WaitForCCUReady(ctx, ccFor(t, srv.URL),
+	ok := waitForCCU(ctx, ccFor(t, srv.URL),
 		CCUReadinessConfig{Timeout: time.Minute, Interval: 5 * time.Millisecond}, nil)
 	if ok {
-		t.Fatal("WaitForCCUReady = true, want false when ctx is cancelled")
+		t.Fatal("readiness wait = true, want false when ctx is cancelled")
 	}
+}
+
+// waitForCCU drives the CCU readiness probe for cc through the shared wait
+// loop, the way every production gate does.
+func waitForCCU(ctx context.Context, cc config.CentralConfig, cfg CCUReadinessConfig, logger *slog.Logger) bool {
+	return waitReady(ctx, cc.Name, newCCUReadinessProbe(cc, nil), cfg, logger)
 }

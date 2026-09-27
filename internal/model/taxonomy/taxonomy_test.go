@@ -4,7 +4,6 @@
 package taxonomy
 
 import (
-	"errors"
 	"slices"
 	"testing"
 )
@@ -27,21 +26,18 @@ func sample() *Taxonomy {
 	}}
 }
 
-func TestParseRefRoundTrip(t *testing.T) {
+func TestRefParentAndChild(t *testing.T) {
 	t.Parallel()
-	for _, s := range []string{"room/eg", "room/eg/wohnzimmer", "function/1234", "favorite/_user7/page-2"} {
-		r, err := ParseRef(s)
-		if err != nil {
-			t.Fatalf("ParseRef(%q): %v", s, err)
-		}
-		if r.String() != s {
-			t.Errorf("round trip %q → %q", s, r.String())
-		}
+	r := Root(EnumRoom, "eg").Child("wohnzimmer")
+	if r.String() != "room/eg/wohnzimmer" {
+		t.Errorf("String = %q", r.String())
 	}
-	for _, bad := range []string{"", "room", "room/", "/eg", "room//eg", "room/eg/"} {
-		if _, err := ParseRef(bad); !errors.Is(err, ErrInvalidRef) {
-			t.Errorf("ParseRef(%q) = %v, want ErrInvalidRef", bad, err)
-		}
+	p, ok := r.Parent()
+	if !ok || p.String() != "room/eg" {
+		t.Errorf("Parent = %v, %v", p, ok)
+	}
+	if _, ok := p.Parent(); ok {
+		t.Error("a root reference has no parent")
 	}
 }
 

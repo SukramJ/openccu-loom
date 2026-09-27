@@ -10,7 +10,7 @@ package adapter
 // in ccu_readiness.go.
 //
 // This drives the real wireInterface function end-to-end (a real backend
-// wired to a real xmlrpc.Client, a real WaitForCCUReady HTTP probe) rather
+// wired to a real xmlrpc.Client, a real CCU readiness HTTP probe) rather
 // than reimplementing activate()'s gate check by hand: a test that hand-rolls
 // the collaboration proves only that the pieces CAN work together, not that
 // the production ingestLoop actually consults the gate before touching the

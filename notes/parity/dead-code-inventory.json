@@ -1,15 +1,15 @@
 {
-  "generated": "19600b2a",
-  "head": "19600b2a",
+  "generated": "5a40c5e8",
+  "head": "5a40c5e8",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/openccu-loom-remote/main.go",
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 5609,
-    "reachable": 3575,
-    "whitelisted": 1975,
+    "total_exported": 5693,
+    "reachable": 3654,
+    "whitelisted": 1980,
     "unreachable": 59
   },
   "by_package": [
@@ -127,7 +127,7 @@
       "package": "internal/auth",
       "identifier": "ErrForbidden",
       "file": "internal/auth/auth.go",
-      "line": 93,
+      "line": 94,
       "kind": "var"
     },
     {
@@ -456,7 +456,7 @@
       "package": "internal/north/mqtt",
       "identifier": "IgnoreMultipleChannelsForNameInspector",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 456,
+      "line": 475,
       "kind": "type"
     },
     {
@@ -624,6 +624,13 @@
     },
     {
       "package": "internal/auth",
+      "identifier": "DummyBcryptHash",
+      "reason": "auto-whitelist:pattern=mock-fake-stub-dummy",
+      "file": "internal/auth/auth.go",
+      "line": 384
+    },
+    {
+      "package": "internal/auth",
       "identifier": "SubjectTokenPurger",
       "reason": "optional-capability contract satisfied via type assertion in ChainedTokenStore.DeleteBySubject, which the admin user handlers call on every role change and account delete; the type name never appears in production references, which the reachability analyzer's type heuristic cannot see",
       "file": "internal/auth/chain.go",
@@ -723,9 +730,9 @@
     {
       "package": "internal/central/adapter",
       "identifier": "SafeGo",
-      "reason": "utility wrapper for panic-safe goroutines; called from central_bringup.go, auto_refresh.go and eventbridge.go's background tasks",
+      "reason": "utility wrapper for panic-safe goroutines; called from central_bringup.go, auto_refresh.go, eventbridge.go's background tasks and hub_mqtt_publisher.go's ReGa liveness poller",
       "file": "internal/central/adapter/safego.go",
-      "line": 25
+      "line": 26
     },
     {
       "package": "internal/central/adapter",
@@ -1607,7 +1614,7 @@
       "identifier": "AuthConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1621
+      "line": 1641
     },
     {
       "package": "internal/config",
@@ -1642,7 +1649,7 @@
       "identifier": "CCUAuthConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1689
+      "line": 1709
     },
     {
       "package": "internal/config",
@@ -1663,14 +1670,14 @@
       "identifier": "CentralBehavior",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1786
+      "line": 1806
     },
     {
       "package": "internal/config",
       "identifier": "CentralConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1737
+      "line": 1757
     },
     {
       "package": "internal/config",
@@ -1698,7 +1705,7 @@
       "identifier": "Clone",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1977
+      "line": 1997
     },
     {
       "package": "internal/config",
@@ -1719,7 +1726,7 @@
       "identifier": "Default",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1957
+      "line": 1977
     },
     {
       "package": "internal/config",
@@ -1803,7 +1810,7 @@
       "identifier": "ErrNoConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1928
+      "line": 1948
     },
     {
       "package": "internal/config",
@@ -1852,7 +1859,7 @@
       "identifier": "HAIngressConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1664
+      "line": 1684
     },
     {
       "package": "internal/config",
@@ -1887,7 +1894,7 @@
       "identifier": "Load",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1932
+      "line": 1952
     },
     {
       "package": "internal/config",
@@ -1922,7 +1929,7 @@
       "identifier": "MinHubScanInterval",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 2154
+      "line": 2183
     },
     {
       "package": "internal/config",
@@ -2048,14 +2055,14 @@
       "identifier": "OIDCConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1717
+      "line": 1737
     },
     {
       "package": "internal/config",
       "identifier": "Parse",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1944
+      "line": 1964
     },
     {
       "package": "internal/config",
@@ -2195,7 +2202,7 @@
       "identifier": "VisibilityConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1908
+      "line": 1928
     },
     {
       "package": "internal/config",
@@ -2930,7 +2937,7 @@
       "identifier": "ErrValidation",
       "reason": "matched by the REST PUT /value handler (internal/north/rest/handlers/devices.go) via errors.Is to map a client-side validation rejection to 400 instead of a 502 upstream failure; the reachability heuristic does not follow sentinel-var references through errors.Is",
       "file": "internal/model/device/channel_set.go",
-      "line": 51
+      "line": 52
     },
     {
       "package": "internal/model/event",
@@ -5086,21 +5093,21 @@
       "identifier": "BuildAlarmMotionResetDiscovery",
       "reason": "auto-whitelist:pattern=mqtt-discovery-builder",
       "file": "internal/north/mqtt/alarm_discovery.go",
-      "line": 348
+      "line": 361
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "BuildAlarmPanelDiscovery",
       "reason": "auto-whitelist:pattern=mqtt-discovery-builder",
       "file": "internal/north/mqtt/alarm_discovery.go",
-      "line": 279
+      "line": 292
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "BuildAlarmTriggeredMotionDiscovery",
       "reason": "auto-whitelist:pattern=mqtt-discovery-builder",
       "file": "internal/north/mqtt/alarm_discovery.go",
-      "line": 389
+      "line": 402
     },
     {
       "package": "internal/north/mqtt",
@@ -5135,7 +5142,7 @@
       "identifier": "CustomDPDisplayNamer",
       "reason": "satisfied by *device.Channel and reached only through a type assertion in displayChannelName; RTA cannot follow an interface reached by assertion",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 445
+      "line": 464
     },
     {
       "package": "internal/north/mqtt",
@@ -5429,7 +5436,7 @@
       "identifier": "RawOrphanCandidateMatcher",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/retain_cleanup.go",
-      "line": 980
+      "line": 1075
     },
     {
       "package": "internal/north/mqtt",
@@ -5478,7 +5485,7 @@
       "identifier": "ValueListLabeler",
       "reason": "the event bridge asserts its labeler against this interface (b.labels.(mqtt.ValueListLabeler)) before stamping localised enum options, and the labeler the daemon wires in satisfies it; a type reached only through an interface assertion, which the analyzer's callgraph does not resolve",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 493
+      "line": 512
     },
     {
       "package": "internal/north/mqtt",
@@ -5902,6 +5909,13 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "CentralFeatureState",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/system_ccu.go",
+      "line": 95
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "CentralLinksReport",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/rest/handlers/central_links.go",
@@ -5926,7 +5940,7 @@
       "identifier": "CentralReadiness",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/system_ccu.go",
-      "line": 96
+      "line": 116
     },
     {
       "package": "internal/north/rest/handlers",
@@ -9328,7 +9342,7 @@
       "identifier": "Setup",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/setup.go",
-      "line": 125
+      "line": 126
     },
     {
       "package": "internal/north/rest/handlers",
@@ -9342,7 +9356,7 @@
       "identifier": "SetupStatus",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/setup.go",
-      "line": 108
+      "line": 109
     },
     {
       "package": "internal/north/rest/handlers",
@@ -9503,7 +9517,7 @@
       "identifier": "SystemCCU",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/system_ccu.go",
-      "line": 107
+      "line": 127
     },
     {
       "package": "internal/north/rest/handlers",
@@ -9517,7 +9531,7 @@
       "identifier": "SystemCCUInterface",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/system_ccu.go",
-      "line": 87
+      "line": 107
     },
     {
       "package": "internal/north/rest/handlers",
@@ -10466,6 +10480,27 @@
     },
     {
       "package": "internal/north/rest/ws",
+      "identifier": "CentralFeatureStatePayload",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/payloads.go",
+      "line": 253
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "CentralFeaturesChangedPayload",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/payloads.go",
+      "line": 262
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "CentralFeaturesTopic",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/payloads.go",
+      "line": 323
+    },
+    {
+      "package": "internal/north/rest/ws",
       "identifier": "CentralHub",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_default.go",
@@ -10497,7 +10532,7 @@
       "identifier": "CentralReadinessTopic",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/payloads.go",
-      "line": 286
+      "line": 318
     },
     {
       "package": "internal/north/rest/ws",
@@ -10511,7 +10546,7 @@
       "identifier": "CentralStateTopic",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/payloads.go",
-      "line": 280
+      "line": 312
     },
     {
       "package": "internal/north/rest/ws",
@@ -10665,7 +10700,7 @@
       "identifier": "CustomDataPointTopic",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/payloads.go",
-      "line": 274
+      "line": 306
     },
     {
       "package": "internal/north/rest/ws",
@@ -10700,7 +10735,7 @@
       "identifier": "DataPointTopic",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/payloads.go",
-      "line": 267
+      "line": 299
     },
     {
       "package": "internal/north/rest/ws",
@@ -13395,14 +13430,14 @@
       "identifier": "DeviceMetadataChangedEvent",
       "reason": "published by central.Unit on a device or channel rename and consumed by the north-bound event bridge; both sides go through the generic events.Publish/Subscribe, whose type instantiation the analyzer cannot resolve",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 367
+      "line": 384
     },
     {
       "package": "pkg/hmevent",
       "identifier": "DeviceReleasedEvent",
       "reason": "published by adapter.ReleaseDevice and consumed by the MQTT event bridge and the Matter reassemble trigger; both sides go through the generic events.Publish/Subscribe, whose type instantiation the analyzer cannot resolve",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 320
+      "line": 337
     },
     {
       "package": "pkg/hmproto",
