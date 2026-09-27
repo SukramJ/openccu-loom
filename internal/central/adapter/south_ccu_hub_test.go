@@ -138,3 +138,37 @@ func TestReseedAppliesAnySeederAndFiltersEdgeTriggers(t *testing.T) {
 		t.Errorf("seeder saw depths %v, want [SeedCheap]", seeder.depths)
 	}
 }
+
+func TestFeatureTablesCoverEveryKey(t *testing.T) {
+	t.Parallel()
+	for _, model := range []string{"", "CCU", "OpenCCU"} {
+		f := ccuFeatures(model)
+		for _, k := range hmenum.AllFeatures() {
+			s := f.State(k)
+			if !s.Available && s.Reason == "" {
+				t.Errorf("CCU(%q) table: %s unavailable without a reason", model, k)
+			}
+		}
+	}
+}
+
+func TestCCUFeatureSetIsAllAvailableExceptTaxonomyTree(t *testing.T) {
+	t.Parallel()
+	f := ccuFeatures("OpenCCU")
+	if f.SystemType() != hmenum.SystemTypeCCU {
+		t.Errorf("SystemType = %q, want ccu", f.SystemType())
+	}
+	for _, k := range hmenum.AllFeatures() {
+		want := k != hmenum.FeatureTaxonomyTree
+		if got := f.Available(k); got != want {
+			t.Errorf("%s available = %v, want %v", k, got, want)
+		}
+	}
+	// Recovery mode keeps today's product rule.
+	if ccuFeatures("CCU").Available(hmenum.FeatureSystemRecoveryMode) {
+		t.Error("a stock CCU3 must not offer recovery mode")
+	}
+	if s := ccuFeatures("").State(hmenum.FeatureSystemRecoveryMode); s.Available || s.Reason != hmenum.FeatureReasonNotReady {
+		t.Errorf("unknown product: recovery = %+v, want not offered (not_ready)", s)
+	}
+}

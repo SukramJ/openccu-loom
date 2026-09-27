@@ -327,6 +327,12 @@ func (b *EventBridge) subscribeUnit(u *central.Unit) []func() {
 		events.Subscribe(bus, func(e hmevent.CentralReadinessChangedEvent) {
 			b.onCentralReadiness(u.Name(), e)
 		}),
+		// What the central can do changed (first bring-up resolved the
+		// system, or a credential's scopes changed): clients show or hide
+		// the matching actions live.
+		events.Subscribe(bus, func(e hmevent.CentralFeaturesChangedEvent) {
+			b.onCentralFeatures(u, e)
+		}),
 		// Wire-DP source-token transitions (cache → live, live →
 		// stale, stale → live) republish the same topic even though
 		// the value did not change. Without this consumers that gate
@@ -2656,6 +2662,20 @@ func (b *EventBridge) onCentralReadiness(centralName string, e hmevent.CentralRe
 		return
 	}
 	b.wsHub.PublishCentralReadinessChanged(centralName, string(e.Phase), e.Phase == hmenum.ReadinessReady, e.InterfacesLoaded, e.InterfacesTotal, e.Timestamp())
+}
+
+func (b *EventBridge) onCentralFeatures(u *central.Unit, e hmevent.CentralFeaturesChangedEvent) {
+	if b.wsHub == nil {
+		return
+	}
+	f := u.Features()
+	keys := hmenum.AllFeatures()
+	states := make(map[string]ws.CentralFeatureStatePayload, len(keys))
+	for _, k := range keys {
+		s := f.State(k)
+		states[string(k)] = ws.CentralFeatureStatePayload{Available: s.Available, Reason: string(s.Reason), Scope: s.Scope}
+	}
+	b.wsHub.PublishCentralFeaturesChanged(u.Name(), string(f.SystemType()), states, e.Timestamp())
 }
 
 // --- helpers ---

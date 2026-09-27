@@ -188,6 +188,11 @@ type Unit struct {
 	// distinguish "still initializing" from "offline", per central.
 	readiness Readiness
 
+	// featuresMu guards features below.
+	featuresMu sync.RWMutex
+	// features is what this central can do right now; see [Unit.Features].
+	features Features
+
 	// stopHooksMu guards stopHooks.
 	stopHooksMu sync.Mutex
 	// stopHooks holds teardown functions grouped by shutdown tier (see

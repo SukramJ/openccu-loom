@@ -1,5 +1,5 @@
 {
- "api_version": "11.2.0",
+ "api_version": "11.3.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -702,6 +702,16 @@
    "sysvar_markers:array\u003cstring\u003e",
    "sysvar_scan_interval:integer",
    "use_group_channel_for_cover_state:boolean"
+  ],
+  "CentralFeatureState": [
+   "available:boolean",
+   "reason:string",
+   "scope:string"
+  ],
+  "CentralFeaturesChangedPayload": [
+   "central:string",
+   "features:object",
+   "system_type:string"
   ],
   "CentralLinksChannelStatus": [
    "active:boolean",
@@ -2095,6 +2105,7 @@
    "available:boolean",
    "ccu_interfaces:array\u003cobject\u003e",
    "configured_interfaces:array\u003cstring\u003e",
+   "features:object",
    "host:string",
    "hostname:string",
    "https_redirect_enabled:boolean",
@@ -2106,6 +2117,7 @@
    "readiness:object",
    "recovery_mode_supported:boolean",
    "serial:string",
+   "system_type:string",
    "timezone:string",
    "url:string",
    "version:string"

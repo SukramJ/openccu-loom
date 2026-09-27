@@ -35,6 +35,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/scheduler"
 	"github.com/SukramJ/openccu-loom/internal/store/devicedetails"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -2812,8 +2813,24 @@ func (c *clientServiceMessageSuppressor) SuppressServiceMessage(ctx context.Cont
 	if err != nil {
 		return err
 	}
+	if !b.Capabilities().SuppressServiceMessage {
+		return c.suppressUnsupported()
+	}
 	_, err = ic.SuppressServiceMessage(ctx, b, channelAddress, parameterID, suppress)
 	return err
+}
+
+// suppressUnsupported is the refusal for a backend without durable
+// suppression. Reporting success there would tell the operator a service
+// message is muted while the system keeps raising it; the refusal wraps
+// [backends.ErrUnsupported], so callers mapping that keep their answer.
+func (c *clientServiceMessageSuppressor) suppressUnsupported() error {
+	return &hmerr.FeatureUnavailableError{
+		Central: c.unit.Name(),
+		Feature: hmenum.FeatureHubServiceMessagesMute,
+		Reason:  hmenum.FeatureReasonNotSupported,
+		Legacy:  backends.ErrUnsupported,
+	}
 }
 
 // GetSuppressedServiceMessages implements [coordinators.ServiceMessageReader]
@@ -2824,6 +2841,11 @@ func (c *clientServiceMessageSuppressor) GetSuppressedServiceMessages(ctx contex
 	ic, b, err := c.backendFor(iface)
 	if err != nil {
 		return nil, err
+	}
+	// An empty list would claim "nothing is suppressed" for a backend that
+	// cannot tell.
+	if !b.Capabilities().SuppressServiceMessage {
+		return nil, c.suppressUnsupported()
 	}
 	return ic.GetSuppressedServiceMessages(ctx, b, iface, channelAddress)
 }

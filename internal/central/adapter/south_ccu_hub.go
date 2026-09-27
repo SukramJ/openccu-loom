@@ -31,7 +31,32 @@ func (p *ccuProfile) BringUpHub(ctx context.Context, in HubBringUpInput) (HubSes
 	if err != nil {
 		return nil, err
 	}
+	// The hub bring-up has resolved the product, which is what the one
+	// model-dependent feature (recovery mode) needs.
+	in.Unit.SetFeatures(ccuFeatures(in.Unit.SystemInformation().Model))
 	return newCCUHubSession(*in.CC, in.Unit, runner, data, closer, p.readiness, in.Logger), nil
+}
+
+// ccuFeatures is what a CCU offers: everything the daemon has always done
+// against one, so no CCU code path consults a feature it would find absent.
+// Two keys are not unconditional. Rooms and functions are flat on a CCU, so
+// nested taxonomy nodes are not supported. Recovery mode exists on OpenCCU
+// firmware only: get_backend_info classifies anything that is not a stock CCU
+// or debmatic as "OpenCCU", and an empty model means the product is not
+// resolved yet, which must read as "not offered" rather than "offered".
+func ccuFeatures(model string) central.Features {
+	states := make(map[hmenum.Feature]central.FeatureState, len(hmenum.AllFeatures()))
+	for _, k := range hmenum.AllFeatures() {
+		states[k] = central.FeatureState{Available: true}
+	}
+	states[hmenum.FeatureTaxonomyTree] = central.FeatureState{Reason: hmenum.FeatureReasonNotSupported}
+	switch model {
+	case "":
+		states[hmenum.FeatureSystemRecoveryMode] = central.FeatureState{Reason: hmenum.FeatureReasonNotReady}
+	case "CCU":
+		states[hmenum.FeatureSystemRecoveryMode] = central.FeatureState{Reason: hmenum.FeatureReasonNotSupported}
+	}
+	return central.NewFeatures(hmenum.SystemTypeCCU, states)
 }
 
 // ccuHubSession is one bring-up generation of a CCU: the JSON-RPC session

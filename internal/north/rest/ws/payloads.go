@@ -249,6 +249,38 @@ func (h *Hub) PublishCentralReadinessChanged(centralName, phase string, ready bo
 	})
 }
 
+// CentralFeatureStatePayload is one feature's availability on a central.
+type CentralFeatureStatePayload struct {
+	Available bool   `json:"available"`
+	Reason    string `json:"reason,omitempty"`
+	Scope     string `json:"scope,omitempty"`
+}
+
+// CentralFeaturesChangedPayload mirrors `EventTypeCentralFeaturesChanged`. It
+// carries the complete current set, not a delta, so a client that missed an
+// earlier push is correct after the next one.
+type CentralFeaturesChangedPayload struct {
+	Central    string                                `json:"central"`
+	SystemType string                                `json:"system_type,omitempty"`
+	Features   map[string]CentralFeatureStatePayload `json:"features"`
+}
+
+// PublishCentralFeaturesChanged emits a central's current feature set, so a
+// client shows or hides what the central can do without polling
+// `/system/ccu`.
+func (h *Hub) PublishCentralFeaturesChanged(centralName, systemType string, features map[string]CentralFeatureStatePayload, when time.Time) {
+	h.Publish(Event{
+		Topic: CentralFeaturesTopic(centralName),
+		Type:  string(hmevent.EventTypeCentralFeaturesChanged),
+		When:  when,
+		Payload: CentralFeaturesChangedPayload{
+			Central:    centralName,
+			SystemType: systemType,
+			Features:   features,
+		},
+	})
+}
+
 // PublishCentralStateChanged emits a typed central-state envelope.
 func (h *Hub) PublishCentralStateChanged(centralName, oldState, newState string, when time.Time) {
 	h.Publish(Event{
@@ -285,4 +317,9 @@ func CentralStateTopic(centralName string) string {
 // event.
 func CentralReadinessTopic(centralName string) string {
 	return "central." + centralName + ".readiness"
+}
+
+// CentralFeaturesTopic returns the per-central features topic.
+func CentralFeaturesTopic(centralName string) string {
+	return "central." + centralName + ".features"
 }

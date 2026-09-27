@@ -1100,6 +1100,160 @@
       ]
     },
     {
+      "name": "Feature",
+      "values": [
+        {
+          "go_name": "FeatureConnectivity",
+          "wire_value": "connectivity"
+        },
+        {
+          "go_name": "FeatureDeviceAdmin",
+          "wire_value": "device.admin"
+        },
+        {
+          "go_name": "FeatureDeviceCommunicationTest",
+          "wire_value": "device.communication_test"
+        },
+        {
+          "go_name": "FeatureDeviceConfigure",
+          "wire_value": "device.configure"
+        },
+        {
+          "go_name": "FeatureDeviceControl",
+          "wire_value": "device.control"
+        },
+        {
+          "go_name": "FeatureDeviceFirmwareUpdate",
+          "wire_value": "device.firmware_update"
+        },
+        {
+          "go_name": "FeatureDeviceRename",
+          "wire_value": "device.rename"
+        },
+        {
+          "go_name": "FeatureHeatingGroupsRead",
+          "wire_value": "heating_groups.read"
+        },
+        {
+          "go_name": "FeatureHeatingGroupsWrite",
+          "wire_value": "heating_groups.write"
+        },
+        {
+          "go_name": "FeatureHubAlarmMessages",
+          "wire_value": "hub.alarm_messages"
+        },
+        {
+          "go_name": "FeatureHubInbox",
+          "wire_value": "hub.inbox"
+        },
+        {
+          "go_name": "FeatureHubPrograms",
+          "wire_value": "hub.programs"
+        },
+        {
+          "go_name": "FeatureHubServiceMessages",
+          "wire_value": "hub.service_messages"
+        },
+        {
+          "go_name": "FeatureHubServiceMessagesAck",
+          "wire_value": "hub.service_messages.ack"
+        },
+        {
+          "go_name": "FeatureHubServiceMessagesMute",
+          "wire_value": "hub.service_messages.suppress"
+        },
+        {
+          "go_name": "FeatureHubSystemUpdate",
+          "wire_value": "hub.system_update"
+        },
+        {
+          "go_name": "FeatureHubSystemUpdateInstall",
+          "wire_value": "hub.system_update.install"
+        },
+        {
+          "go_name": "FeatureHubSysvars",
+          "wire_value": "hub.sysvars"
+        },
+        {
+          "go_name": "FeatureInstallMode",
+          "wire_value": "install_mode"
+        },
+        {
+          "go_name": "FeatureInstallModeLocal",
+          "wire_value": "install_mode.local"
+        },
+        {
+          "go_name": "FeatureRadioDutyCycle",
+          "wire_value": "radio.duty_cycle"
+        },
+        {
+          "go_name": "FeatureSystemAuthDelegation",
+          "wire_value": "system.auth_delegation"
+        },
+        {
+          "go_name": "FeatureSystemBackupCreate",
+          "wire_value": "system.backup.create"
+        },
+        {
+          "go_name": "FeatureSystemBackupRestore",
+          "wire_value": "system.backup.restore"
+        },
+        {
+          "go_name": "FeatureSystemPosition",
+          "wire_value": "system.position"
+        },
+        {
+          "go_name": "FeatureSystemPowerOff",
+          "wire_value": "system.poweroff"
+        },
+        {
+          "go_name": "FeatureSystemReboot",
+          "wire_value": "system.reboot"
+        },
+        {
+          "go_name": "FeatureSystemRecoveryMode",
+          "wire_value": "system.recovery_mode"
+        },
+        {
+          "go_name": "FeatureSystemSafeMode",
+          "wire_value": "system.safe_mode"
+        },
+        {
+          "go_name": "FeatureTaxonomyAssign",
+          "wire_value": "taxonomy.assign"
+        },
+        {
+          "go_name": "FeatureTaxonomyEdit",
+          "wire_value": "taxonomy.edit"
+        },
+        {
+          "go_name": "FeatureTaxonomyRead",
+          "wire_value": "taxonomy.read"
+        },
+        {
+          "go_name": "FeatureTaxonomyTree",
+          "wire_value": "taxonomy.tree"
+        }
+      ]
+    },
+    {
+      "name": "FeatureReason",
+      "values": [
+        {
+          "go_name": "FeatureReasonMissingScope",
+          "wire_value": "missing_scope"
+        },
+        {
+          "go_name": "FeatureReasonNotReady",
+          "wire_value": "not_ready"
+        },
+        {
+          "go_name": "FeatureReasonNotSupported",
+          "wire_value": "not_supported_by_system"
+        }
+      ]
+    },
+    {
       "name": "Field",
       "values": [
         {
@@ -3514,6 +3668,23 @@
         {
           "go_name": "SystemEventTypeUpdateDevice",
           "wire_value": "updateDevice"
+        }
+      ]
+    },
+    {
+      "name": "SystemType",
+      "values": [
+        {
+          "go_name": "SystemTypeAuto",
+          "wire_value": "auto"
+        },
+        {
+          "go_name": "SystemTypeCCU",
+          "wire_value": "ccu"
+        },
+        {
+          "go_name": "SystemTypeOpenCCULite",
+          "wire_value": "openccu-lite"
         }
       ]
     },
