@@ -73,6 +73,15 @@ const (
 	GateMatter Gate = "matter"
 	// GateHistory marks surfaces that need measurement-history recording.
 	GateHistory Gate = "history"
+	// The feature gates: a surface that needs a per-central feature is
+	// offered while at least one central offers it. On a fleet of
+	// openccu-lite systems there are no programs, system variables or
+	// inbox, and heating groups and backups depend on the token's scopes.
+	GateFeaturePrograms     Gate = "feature:hub.programs"
+	GateFeatureSysvars      Gate = "feature:hub.sysvars"
+	GateFeatureInbox        Gate = "feature:hub.inbox"
+	GateFeatureGroups       Gate = "feature:heating_groups.read"
+	GateFeatureBackupCreate Gate = "feature:system.backup.create"
 )
 
 // Warn names a runtime condition that makes hiding a surface
@@ -191,13 +200,13 @@ var registry = []Surface{
 	{ID: "nav.favorites", Group: GroupOverview, Defaults: haOwned(), HAOwns: true},
 	{ID: "nav.alarm", Group: GroupOverview, Defaults: both(), Warn: WarnAlarmArmed},
 	{ID: "nav.security", Group: GroupOverview, Defaults: both(), Warn: WarnSecurityFaults},
-	{ID: "nav.inbox", Group: GroupOverview, Defaults: both()},
+	{ID: "nav.inbox", Group: GroupOverview, Defaults: both(), Gate: GateFeatureInbox},
 	{ID: "nav.fleet", Group: GroupOverview, Defaults: both()},
 
 	// --- navigation: automation -----------------------------------
-	{ID: "nav.programs", Group: GroupAutomation, Defaults: both()},
-	{ID: "nav.sysvars", Group: GroupAutomation, Defaults: both()},
-	{ID: "nav.groups", Group: GroupAutomation, Defaults: both()},
+	{ID: "nav.programs", Group: GroupAutomation, Defaults: both(), Gate: GateFeaturePrograms},
+	{ID: "nav.sysvars", Group: GroupAutomation, Defaults: both(), Gate: GateFeatureSysvars},
+	{ID: "nav.groups", Group: GroupAutomation, Defaults: both(), Gate: GateFeatureGroups},
 	{ID: "nav.links", Group: GroupAutomation, Defaults: both(), Opens: "device.configure.links"},
 	{ID: "nav.schedules", Group: GroupAutomation, Defaults: both(), Opens: "device.configure.schedule"},
 
@@ -215,7 +224,7 @@ var registry = []Surface{
 
 	// --- navigation: system ---------------------------------------
 	{ID: "nav.firmware", Group: GroupSystem, Defaults: both()},
-	{ID: "nav.backups", Group: GroupSystem, Defaults: both(), RoleAdmin: true},
+	{ID: "nav.backups", Group: GroupSystem, Defaults: both(), RoleAdmin: true, Gate: GateFeatureBackupCreate},
 	{ID: "nav.settings", Group: GroupSystem, Defaults: both(), Floor: FloorAlways},
 	{ID: "nav.about", Group: GroupSystem, Defaults: both(), Floor: FloorAlways},
 

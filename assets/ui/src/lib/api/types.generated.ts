@@ -5641,7 +5641,12 @@ export interface components {
             schema_digest: string;
             /**
              * @description Runtime feature set. Always-on entries:
-             *     `rest.v1`, `ws.broadcasts.v1`, `errors.problem_details.v1`.
+             *     `rest.v1`, `ws.broadcasts.v1`, `errors.problem_details.v1`,
+             *     `central.features.v1` (each central reports what it offers in
+             *     `features` on `GET /system/ccu`, and an operation a central
+             *     does not offer answers the `feature_unavailable` problem),
+             *     `south.openccu_lite.v1` (a central can be an openccu-lite
+             *     system: `system_type: openccu-lite`).
              *     Conditional entries surface only when configured:
              *     `mqtt.discovery.v1`, `mqtt.raw.v1`, `matter.bridge.v1`,
              *     `auth.oidc.v1`, `auth.ccu.v1`, `webhook.inbound.v1`,
@@ -8656,10 +8661,12 @@ export interface components {
              */
             floor?: "always" | "standalone";
             /**
-             * @description Runtime capability the surface additionally needs.
+             * @description Runtime capability the surface additionally needs. A
+             *     `feature:<key>` gate is open while at least one central
+             *     offers that feature (see `features` on `GET /system/ccu`).
              * @enum {string}
              */
-            gate?: "matter" | "history";
+            gate?: "matter" | "history" | "feature:hub.programs" | "feature:hub.sysvars" | "feature:hub.inbox" | "feature:heating_groups.read" | "feature:system.backup.create";
             /**
              * @description Condition under which hiding asks for confirmation. The
              *     client evaluates the condition; the daemon only declares it.

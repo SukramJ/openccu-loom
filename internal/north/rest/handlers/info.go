@@ -48,6 +48,14 @@ const (
 	// unchanged.
 	CapabilityCCUAuth        = "auth.ccu.v1"
 	CapabilityProblemDetails = "errors.problem_details.v1"
+	// CapabilityCentralFeatures says each central reports what it offers
+	// (the features map on /system/ccu, the central.features_changed
+	// broadcast) and an operation a central does not offer answers the
+	// feature_unavailable problem instead of a generic failure.
+	CapabilityCentralFeatures = "central.features.v1"
+	// CapabilitySouthOpenCCULite says this build can run a central against
+	// an openccu-lite system (system_type openccu-lite).
+	CapabilitySouthOpenCCULite = "south.openccu_lite.v1"
 	// CapabilitySupervisedRestart is surfaced when the daemon
 	// detects that something (systemd, Docker, k8s) will bring it
 	// back up after a clean shutdown. The SPA reads this capability
@@ -220,6 +228,8 @@ func capabilities(d CapabilityDetector) []string {
 		CapabilityREST,
 		CapabilityWSBroadcasts,
 		CapabilityProblemDetails,
+		CapabilityCentralFeatures,
+		CapabilitySouthOpenCCULite,
 	}
 	if d == nil {
 		return out
