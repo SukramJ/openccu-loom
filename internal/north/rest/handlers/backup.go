@@ -134,6 +134,9 @@ func RestoreBackup(svc BackupService) http.HandlerFunc {
 		}
 		id := chi.URLParam(r, "id")
 		jobID, err := svc.Restore(r.Context(), id)
+		if problem.WriteFeatureUnavailable(w, r, err) {
+			return
+		}
 		switch {
 		case errors.Is(err, sbk.ErrNotAnArchive), errors.Is(err, sbk.ErrIncomplete):
 			// The stored archive did not survive inspection, so nothing was
@@ -147,6 +150,13 @@ func RestoreBackup(svc BackupService) http.HandlerFunc {
 			}
 			problem.Write(w, http.StatusUnprocessableEntity,
 				problem.New(problem.TypeValidation, r, title, err.Error()))
+			return
+		case errors.Is(err, hmerr.ErrValidation):
+			// The system checked the archive and refused it (for instance
+			// one only its own recovery key opens): nothing was restored,
+			// and the reason is the caller's to act on.
+			problem.Write(w, http.StatusUnprocessableEntity,
+				problem.New(problem.TypeValidation, r, "Backup cannot be restored", err.Error()))
 			return
 		case errors.Is(err, hmerr.ErrRestoreTargetAmbiguous):
 			// Not an upstream failure: nothing was attempted. Saying so
@@ -190,6 +200,9 @@ func DeleteBackup(svc BackupService, rec audit.Recorder) http.HandlerFunc {
 		}
 		id := chi.URLParam(r, "id")
 		if err := svc.Delete(r.Context(), id); err != nil {
+			if problem.WriteFeatureUnavailable(w, r, err) {
+				return
+			}
 			if errors.Is(err, hmerr.ErrUnsupported) {
 				// No storage is a deployment state, not a fault: there is
 				// nothing to delete from, and saying "internal error" would
@@ -405,6 +418,9 @@ func UploadBackup(svc BackupUploader, rec audit.Recorder) http.HandlerFunc {
 		}
 		entry, err := svc.SaveUploaded(r.Context(), filename, data)
 		if err != nil {
+			if problem.WriteFeatureUnavailable(w, r, err) {
+				return
+			}
 			// A storage that cannot take in archives is a deployment
 			// state, not a fault: reporting it as an internal error would
 			// send the operator hunting for a bug that is not there.

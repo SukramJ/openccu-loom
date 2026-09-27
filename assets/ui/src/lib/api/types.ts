@@ -501,6 +501,10 @@ export type LinkableChannel = components["schemas"]["LinkableChannel"];
 // cross-CCU overview (Fleet.svelte).
 export type SystemCCUEntry = components["schemas"]["SystemCCUEntry"];
 
+// CentralFeatureState is one feature's availability on a central, as
+// `SystemCCUEntry.features` and the `central.features_changed` push carry it.
+export type CentralFeatureState = components["schemas"]["CentralFeatureState"];
+
 // Heating-group types re-exported from generated schema — one central's
 // roster (`GET /api/v1/groups`), read-only (GR01). Create/edit/delete
 // runs through the CCU jpages proxy and is exposed separately (ADR 0055).

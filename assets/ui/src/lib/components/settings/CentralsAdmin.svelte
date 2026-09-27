@@ -19,6 +19,10 @@
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import Select from "$lib/components/ui/Select.svelte";
   import { t } from "$lib/i18n";
+  import CentralOnboarding from "./CentralOnboarding.svelte";
+  import { emptyOnboarding, liteCredential, liteReady, type OnboardingValue } from "$lib/onboarding/onboarding";
+  import { featureName } from "$lib/features";
+  import { centralStore } from "$lib/stores/centrals.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
 
@@ -216,6 +220,34 @@
   let fInterfaces = $state<InterfaceFormRow[]>(freshInterfaceForm());
   let fBehavior = $state<BehaviorForm>(freshBehaviorForm());
   let showBehavior = $state(false);
+  // What the probe found and how an openccu-lite box is signed in to. A
+  // box carries an API token instead of username and password, has no
+  // CUxD and no per-interface ports.
+  let fOnboarding = $state<OnboardingValue>(emptyOnboarding());
+  // GET masks a stored token to "***"; the form only learns that one
+  // exists and never sends the mask back.
+  let fTokenStored = $state(false);
+  const fIsLite = $derived(fOnboarding.systemType === "openccu-lite");
+  const visibleSlots = $derived(
+    INTERFACE_CATALOGUE.map((slot, i) => ({ slot, i })).filter(
+      ({ slot }) => !(fIsLite && slot.rpcType === "binrpc"),
+    ),
+  );
+
+  // For a stored openccu-lite central: the features its token's scopes do
+  // not cover, grouped by the scope that would grant them.
+  const missingScopes = $derived.by(() => {
+    if (!isEdit || !fIsLite) return [] as { scope: string; features: string[] }[];
+    const entry = centralStore.byName(fName);
+    const byScope = new Map<string, string[]>();
+    for (const [key, f] of Object.entries(entry?.features ?? {})) {
+      if (f.available || f.reason !== "missing_scope" || !f.scope) continue;
+      byScope.set(f.scope, [...(byScope.get(f.scope) ?? []), featureName(key)]);
+    }
+    return [...byScope.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([scope, features]) => ({ scope, features }));
+  });
 
   // Derived: the catalogue names whose checkbox is currently
   // checked. Drives the "Primary interface" dropdown so operators
@@ -256,6 +288,8 @@
     // stable docker hostname for an HA add-on); fall back to the raw host.
     fHost = ccu.suggested_host || ccu.host;
     fSerial = ccu.serial;
+    fOnboarding = { ...emptyOnboarding(), systemType: ccu.system_type ?? "" };
+    fTokenStored = false;
     fEnabled = true;
     fTls = false;
     fTlsInsecure = false;
@@ -297,6 +331,8 @@
     fName = "";
     fHost = "";
     fSerial = "";
+    fOnboarding = emptyOnboarding();
+    fTokenStored = false;
     fEnabled = true;
     fTls = false;
     fTlsInsecure = false;
@@ -322,6 +358,16 @@
     fEnabled = row.enabled;
     fTls = row.tls ?? false;
     fTlsInsecure = row.tls_insecure_skip_verify ?? false;
+    fOnboarding = {
+      ...emptyOnboarding(),
+      systemType:
+        row.system_type === "openccu-lite" ? "openccu-lite" : row.system_type === "auto" ? "" : "ccu",
+      tls: row.tls ?? false,
+      tlsFingerprint: row.tls_fingerprint ?? "",
+      // A stored pin was compared when it was stored.
+      fingerprintConfirmed: true,
+    };
+    fTokenStored = !!row.api_token_plain || !!row.api_token_env;
     fUsername = row.username ?? "";
     fPassword = row.password_plain ?? "";
     passwordTouched = false;
@@ -357,7 +403,12 @@
       const row = fInterfaces[i];
       if (!row?.checked) continue;
       const slot = INTERFACE_CATALOGUE[i];
+      if (fIsLite && slot.rpcType === "binrpc") continue;
       const spec: InterfaceSpec = { name: slot.name };
+      if (fIsLite) {
+        out.push(spec);
+        continue;
+      }
       const trimmed = row.portOverride.trim();
       if (trimmed !== "") {
         const port = Number.parseInt(trimmed, 10);
@@ -388,11 +439,36 @@
       const n = Number.parseInt(jsonRpcTrimmed, 10);
       if (Number.isFinite(n) && n > 0) jsonRpcPort = n;
     }
+    if (fIsLite) {
+      return {
+        name: fName,
+        host: fHost,
+        serial: fSerial || undefined,
+        enabled: fEnabled,
+        system_type: "openccu-lite",
+        json_rpc_port: jsonRpcPort,
+        tls: fOnboarding.tls || undefined,
+        tls_fingerprint: fOnboarding.tls ? fOnboarding.tlsFingerprint || undefined : undefined,
+        // Only a typed token or an approved pairing is sent; leaving both
+        // out keeps the stored token, so the "***" mask never goes back.
+        ...(() => {
+          const c = liteCredential(fOnboarding);
+          return { api_token_plain: c.api_token, pairing_id: c.pairing_id };
+        })(),
+        api_token_env: editOriginal?.api_token_env || undefined,
+        primary_interface: fPrimaryInterface || undefined,
+        interfaces: buildInterfaces(),
+        behavior: buildBehavior(fBehavior),
+      };
+    }
     return {
       name: fName,
       host: fHost,
       serial: fSerial || undefined,
       enabled: fEnabled,
+      // An `auto` central keeps resolving itself until a probe here says
+      // what it is.
+      system_type: editOriginal?.system_type === "auto" && fOnboarding.systemType === "" ? "auto" : undefined,
       json_rpc_port: jsonRpcPort,
       tls: fTls || undefined,
       tls_insecure_skip_verify: fTlsInsecure || undefined,
@@ -435,6 +511,10 @@
   // these must not claim an unqualified "updated" success.
   function centralNeedsRestartSignal(before: CentralRow, after: CentralRow): boolean {
     return (
+      (before.system_type ?? "ccu") !== (after.system_type ?? "ccu") ||
+      (before.tls_fingerprint ?? "") !== (after.tls_fingerprint ?? "") ||
+      after.api_token_plain !== undefined ||
+      after.pairing_id !== undefined ||
       before.host !== after.host ||
       (before.json_rpc_port ?? 0) !== (after.json_rpc_port ?? 0) ||
       (before.tls ?? false) !== (after.tls ?? false) ||
@@ -460,6 +540,10 @@
     }
     if (buildInterfaces().length === 0) {
       modalError = t("centrals.error.no_interface");
+      return;
+    }
+    if (fIsLite && !liteReady(fOnboarding, fTokenStored)) {
+      modalError = t("centrals.error.lite_credential");
       return;
     }
     saving = true;
@@ -620,6 +704,9 @@
       {#snippet cell(c, col)}
         {#if col.key === "name"}
           <span class="font-medium">{c.name}</span>
+          {#if c.system_type === "openccu-lite" || c.system_type === "auto"}
+            <Badge variant="default">{t(`centrals.system_type.${c.system_type}`)}</Badge>
+          {/if}
           {#if c.interfaces.length > 0}
             <div class="mt-1 flex flex-wrap gap-1">
               {#each c.interfaces as iface (iface.name)}
@@ -711,20 +798,32 @@
               inputmode="numeric"
               pattern="[0-9]*"
               bind:value={fJsonRpcPort}
-              placeholder={fTls ? "443" : "80"}
+              placeholder={(fIsLite ? fOnboarding.tls : fTls) ? "443" : "80"}
               class="h-9 rounded border border-slate-300 px-3 text-sm dark:border-slate-700 dark:bg-slate-900"
             />
             <span class="text-xs text-[var(--ha-secondary-text-color)]"
-              >{t("centrals.field.json_rpc_port_hint")}</span
+              >{fIsLite ? t("centrals.field.lite_port_hint") : t("centrals.field.json_rpc_port_hint")}</span
             >
           </label>
         </div>
+
+        <CentralOnboarding host={fHost} port={fJsonRpcPort} bind:value={fOnboarding} tokenStored={fTokenStored} />
+        {#if missingScopes.length > 0}
+          <div class="rounded-md bg-[var(--ha-secondary-background-color)] p-3 text-xs">
+            <p class="font-medium">{t("centrals.lite.missing_scopes")}</p>
+            <ul class="mt-1 space-y-0.5">
+              {#each missingScopes as m (m.scope)}
+                <li><code>{m.scope}</code>: {m.features.join(", ")}</li>
+              {/each}
+            </ul>
+          </div>
+        {/if}
 
         <fieldset class="space-y-2 rounded border border-slate-200 p-3 dark:border-slate-700">
           <legend class="px-1 text-xs font-medium text-[var(--ha-secondary-text-color)] uppercase tracking-wide">
             {t("centrals.field.interfaces")}
           </legend>
-          {#each INTERFACE_CATALOGUE as slot, i (slot.name)}
+          {#each visibleSlots as { slot, i } (slot.name)}
             <div class="flex items-center gap-3">
               <label class="flex flex-1 items-center gap-2">
                 <input
@@ -737,6 +836,7 @@
                   ({slot.rpcType})
                 </span>
               </label>
+              {#if !fIsLite}
               <label class="flex items-center gap-2 text-xs">
                 <span class="text-[var(--ha-secondary-text-color)]">
                   {t("centrals.field.port")}
@@ -751,11 +851,14 @@
                   class="h-7 w-24 rounded border border-slate-300 px-2 text-xs disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900"
                 />
               </label>
+              {/if}
             </div>
           {/each}
-          <p class="pt-1 text-xs text-[var(--ha-secondary-text-color)]">
-            {t("centrals.field.port_hint")}
-          </p>
+          {#if !fIsLite}
+            <p class="pt-1 text-xs text-[var(--ha-secondary-text-color)]">
+              {t("centrals.field.port_hint")}
+            </p>
+          {/if}
         </fieldset>
 
         <label class="flex flex-col gap-1">
@@ -885,6 +988,7 @@
           {/if}
         </div>
 
+        {#if !fIsLite}
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label class="flex flex-col gap-1">
             <span>{t("centrals.field.username")}</span>
@@ -921,11 +1025,14 @@
           </label>
         </div>
 
+        {/if}
+
         <div class="flex flex-wrap gap-4">
           <label class="flex items-center gap-2">
             <input type="checkbox" bind:checked={fEnabled} class="h-4 w-4" />
             <span>{t("settings.enabled")}</span>
           </label>
+          {#if !fIsLite}
           <label class="flex items-center gap-2">
             <input type="checkbox" bind:checked={fTls} class="h-4 w-4" />
             <span>TLS</span>
@@ -939,13 +1046,15 @@
             />
             <span class:opacity-50={!fTls}>{t("centrals.field.tls_insecure")}</span>
           </label>
+          {/if}
         </div>
-        {#if fTls && fTlsInsecure}
+        {#if !fIsLite && fTls && fTlsInsecure}
           <p class="text-xs text-amber-700 dark:text-amber-300">
             {t("centrals.field.tls_insecure_warn")}
           </p>
         {/if}
 
+        {#if !fIsLite}
         <ExpertGate>
           <div class="space-y-3 rounded border border-slate-200 p-3 dark:border-slate-700">
             <p class="text-xs font-medium text-[var(--ha-secondary-text-color)] uppercase tracking-wide">
@@ -966,6 +1075,7 @@
             </label>
           </div>
         </ExpertGate>
+        {/if}
       </div>
 
       {#if modalError}

@@ -17,7 +17,10 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
+	"github.com/SukramJ/openccu-loom/internal/model/hub"
+	"github.com/SukramJ/openccu-loom/internal/model/taxonomy"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
@@ -39,6 +42,9 @@ func DeleteDevice(admin DeviceAdmin) http.HandlerFunc {
 		reset := queryBool(r, "reset")
 		force := queryBool(r, "force")
 		if err := admin.UnpairDevice(r.Context(), chi.URLParam(r, "addr"), reset, force); err != nil {
+			if problem.WriteFeatureUnavailable(w, r, err) {
+				return
+			}
 			if errors.Is(err, backends.ErrUnsupported) {
 				problem.Write(w, http.StatusUnprocessableEntity,
 					problem.New(problem.TypeValidation, r, "Unpair not supported by this backend", ""))
@@ -68,6 +74,11 @@ type DevicePatchRequest struct {
 	IncludeChannels *bool     `json:"include_channels,omitempty"`
 	Rooms           *[]string `json:"rooms,omitempty"`
 	Functions       *[]string `json:"functions,omitempty"`
+	// RoomPaths / FunctionPaths assign by node reference ("room/eg/kueche")
+	// and win over Rooms / Functions when both are given: a reference
+	// names one of two rooms that share a name.
+	RoomPaths     *[]string `json:"room_paths,omitempty"`
+	FunctionPaths *[]string `json:"function_paths,omitempty"`
 }
 
 // ChannelPatchRequest is the body of `PATCH /devices/{addr}/channels/{no}`.
@@ -78,6 +89,45 @@ type ChannelPatchRequest struct {
 	// the same pointer semantics as the device-level patch.
 	Rooms     *[]string `json:"rooms,omitempty"`
 	Functions *[]string `json:"functions,omitempty"`
+	// RoomPaths / FunctionPaths: as on the device-level patch.
+	RoomPaths     *[]string `json:"room_paths,omitempty"`
+	FunctionPaths *[]string `json:"function_paths,omitempty"`
+}
+
+// TaxonomyPathAssigner assigns an address — a device or a
+// "<device>:<no>" channel — to taxonomy nodes by reference.
+// *adapter.DeviceAdminDomain satisfies it.
+type TaxonomyPathAssigner interface {
+	SetTaxonomyPaths(ctx context.Context, address, enum string, paths []string) error
+}
+
+// assignment is one requested assignment of a patch: by path when paths
+// are given, else by name.
+type assignment struct {
+	names, paths *[]string
+}
+
+func (a assignment) set() bool { return a.names != nil || a.paths != nil }
+
+// applied is what the audit trail records for it.
+func (a assignment) applied() *[]string {
+	if a.paths != nil {
+		return a.paths
+	}
+	return a.names
+}
+
+// apply writes the assignment: by path through the admin's path assigner,
+// or by name through byName.
+func (a assignment) apply(ctx context.Context, admin DeviceAdmin, address, enum string, byName func(context.Context, []string) error) error {
+	if a.paths != nil {
+		pa, ok := admin.(TaxonomyPathAssigner)
+		if !ok {
+			return fmt.Errorf("%w: assignment by path is not available", hmerr.ErrValidation)
+		}
+		return pa.SetTaxonomyPaths(ctx, address, enum, *a.paths)
+	}
+	return byName(ctx, *a.names)
 }
 
 // PatchDevice applies partial updates. The MVP supports renaming
@@ -96,7 +146,9 @@ func PatchDevice(admin DeviceAdmin, rec audit.Recorder) http.HandlerFunc {
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
-		if req.Name == nil && req.Rooms == nil && req.Functions == nil {
+		rooms := assignment{names: req.Rooms, paths: req.RoomPaths}
+		functions := assignment{names: req.Functions, paths: req.FunctionPaths}
+		if req.Name == nil && !rooms.set() && !functions.set() {
 			problem.Write(w, http.StatusUnprocessableEntity,
 				problem.New(problem.TypeValidation, r, "No patchable field supplied", ""))
 			return
@@ -113,20 +165,24 @@ func PatchDevice(admin DeviceAdmin, rec audit.Recorder) http.HandlerFunc {
 		// not undo an earlier one, so the audit trail records what
 		// actually reached the CCU, not only the all-or-nothing case.
 		var appliedRooms, appliedFunctions *[]string
-		if req.Rooms != nil {
-			if err := admin.SetRooms(r.Context(), addr, *req.Rooms); err != nil {
-				writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Room assignment failed", err)
+		if rooms.set() {
+			if err := rooms.apply(r.Context(), admin, addr, "room", func(ctx context.Context, names []string) error {
+				return admin.SetRooms(ctx, addr, names)
+			}); err != nil {
+				writeAssignmentError(w, r, "Room assignment failed", err)
 				return
 			}
-			appliedRooms = req.Rooms
+			appliedRooms = rooms.applied()
 		}
-		if req.Functions != nil {
-			if err := admin.SetFunctions(r.Context(), addr, *req.Functions); err != nil {
+		if functions.set() {
+			if err := functions.apply(r.Context(), admin, addr, "function", func(ctx context.Context, names []string) error {
+				return admin.SetFunctions(ctx, addr, names)
+			}); err != nil {
 				recordAssignment(r, rec, addr, appliedRooms, appliedFunctions, true)
-				writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Function assignment failed", err)
+				writeAssignmentError(w, r, "Function assignment failed", err)
 				return
 			}
-			appliedFunctions = req.Functions
+			appliedFunctions = functions.applied()
 		}
 		recordAssignment(r, rec, addr, appliedRooms, appliedFunctions, false)
 		w.WriteHeader(http.StatusAccepted)
@@ -149,7 +205,9 @@ func PatchChannel(admin DeviceAdmin, rec audit.Recorder) http.HandlerFunc {
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
-		if req.Name == nil && req.Rooms == nil && req.Functions == nil {
+		rooms := assignment{names: req.Rooms, paths: req.RoomPaths}
+		functions := assignment{names: req.Functions, paths: req.FunctionPaths}
+		if req.Name == nil && !rooms.set() && !functions.set() {
 			problem.Write(w, http.StatusUnprocessableEntity,
 				problem.New(problem.TypeValidation, r, "No patchable field supplied", ""))
 			return
@@ -170,21 +228,26 @@ func PatchChannel(admin DeviceAdmin, rec audit.Recorder) http.HandlerFunc {
 				return
 			}
 		}
+		chAddr := addr + ":" + strconv.Itoa(no)
 		var appliedRooms, appliedFunctions *[]string
-		if req.Rooms != nil {
-			if err := admin.SetChannelRooms(r.Context(), addr, no, *req.Rooms); err != nil {
+		if rooms.set() {
+			if err := rooms.apply(r.Context(), admin, chAddr, "room", func(ctx context.Context, names []string) error {
+				return admin.SetChannelRooms(ctx, addr, no, names)
+			}); err != nil {
 				writeAssignmentError(w, r, "Room assignment failed", err)
 				return
 			}
-			appliedRooms = req.Rooms
+			appliedRooms = rooms.applied()
 		}
-		if req.Functions != nil {
-			if err := admin.SetChannelFunctions(r.Context(), addr, no, *req.Functions); err != nil {
-				recordAssignment(r, rec, addr+":"+strconv.Itoa(no), appliedRooms, appliedFunctions, true)
+		if functions.set() {
+			if err := functions.apply(r.Context(), admin, chAddr, "function", func(ctx context.Context, names []string) error {
+				return admin.SetChannelFunctions(ctx, addr, no, names)
+			}); err != nil {
+				recordAssignment(r, rec, chAddr, appliedRooms, appliedFunctions, true)
 				writeAssignmentError(w, r, "Function assignment failed", err)
 				return
 			}
-			appliedFunctions = req.Functions
+			appliedFunctions = functions.applied()
 		}
 		recordAssignment(r, rec, addr+":"+strconv.Itoa(no), appliedRooms, appliedFunctions, false)
 		w.WriteHeader(http.StatusAccepted)
@@ -192,12 +255,24 @@ func PatchChannel(admin DeviceAdmin, rec audit.Recorder) http.HandlerFunc {
 }
 
 // writeAssignmentError maps a room/function assignment failure: naming
-// a channel the device does not have is the caller's mistake (404),
-// everything else is an upstream failure (502).
+// a channel the device does not have is the caller's mistake (404), so is
+// a room or function name no node carries (422); a name several nodes
+// carry is a conflict whose detail lists their paths (409), so the caller
+// can pick one; everything else is an upstream failure (502).
 func writeAssignmentError(w http.ResponseWriter, r *http.Request, title string, err error) {
-	if errors.Is(err, interfaces.ErrChannelNotFound) {
+	switch {
+	case errors.Is(err, interfaces.ErrChannelNotFound):
 		problem.Write(w, http.StatusNotFound,
 			problem.New(problem.TypeNotFound, r, "Channel not found", err.Error()))
+		return
+	case errors.Is(err, taxonomy.ErrAmbiguousName):
+		problem.Write(w, http.StatusConflict,
+			problem.New(problem.TypeConflict, r, "Name is ambiguous", err.Error()))
+		return
+	case errors.Is(err, hub.ErrRoomNotFound), errors.Is(err, hub.ErrFunctionNotFound),
+		errors.Is(err, hmerr.ErrValidation):
+		problem.Write(w, http.StatusUnprocessableEntity,
+			problem.New(problem.TypeValidation, r, "Unknown room or function", err.Error()))
 		return
 	}
 	writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, title, err)
@@ -235,6 +310,9 @@ func recordAssignment(r *http.Request, rec audit.Recorder, address string, rooms
 // [backends.ErrUnsupported] and becomes 422, every other failure (CCU
 // unreachable, ISE-ID not found) becomes 502.
 func writeRenameError(w http.ResponseWriter, r *http.Request, err error) {
+	if problem.WriteFeatureUnavailable(w, r, err) {
+		return
+	}
 	if errors.Is(err, backends.ErrUnsupported) {
 		problem.Write(w, http.StatusUnprocessableEntity,
 			problem.New(problem.TypeValidation, r, "Rename not supported by this backend", ""))

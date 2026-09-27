@@ -13,6 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
+	"github.com/SukramJ/openccu-loom/internal/client/transport/occulited"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -178,10 +179,23 @@ type LivenessProbe interface {
 	Probe(ctx context.Context) systemProbeResult
 }
 
-// errSystemTypeNotSupported reports a system type this build cannot bring
-// up yet. The central is kept visible with a degraded startup state rather
-// than half brought up.
-var errSystemTypeNotSupported = errors.New("system type not supported by this build yet")
+// errSystemTypeUnresolved reports a central whose system type is `auto`:
+// the bring-up first finds out what answers at its address.
+var errSystemTypeUnresolved = errors.New("system type not resolved yet")
+
+// resolvedSystemType maps a detection to the system type a central is
+// brought up as; ok is false while nothing identifiable answers. A box
+// whose API is still starting is an openccu-lite box already.
+func resolvedSystemType(k occulited.DetectionKind) (hmenum.SystemType, bool) {
+	switch k {
+	case occulited.DetectLite, occulited.DetectLiteNotReady:
+		return hmenum.SystemTypeOpenCCULite, true
+	case occulited.DetectCCU:
+		return hmenum.SystemTypeCCU, true
+	case occulited.DetectUnknown:
+	}
+	return "", false
+}
 
 // southProfileFor selects cc's south profile. It is the only place the
 // daemon compares a system type; everything downstream works through the
@@ -197,7 +211,7 @@ func southProfileFor(cc *config.CentralConfig, logger *slog.Logger) (SouthProfil
 		}
 		return p, nil
 	case hmenum.SystemTypeAuto:
-		return nil, fmt.Errorf("central %s: %s: %w", cc.Name, st, errSystemTypeNotSupported)
+		return nil, fmt.Errorf("central %s: %w", cc.Name, errSystemTypeUnresolved)
 	default:
 		return nil, fmt.Errorf("central %s: unknown system_type %q", cc.Name, cc.SystemType)
 	}

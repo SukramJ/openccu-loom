@@ -147,6 +147,13 @@ type HubResolver interface {
 	HubFor(centralName string) *hub.Hub
 }
 
+// FeatureChecker reports whether a central offers a feature: nil when it
+// does, a *hmerr.FeatureUnavailableError naming the reason when not.
+// *central.Registry satisfies it.
+type FeatureChecker interface {
+	FeatureUnavailable(centralName string, k hmenum.Feature) error
+}
+
 // IncidentsReader projects the cross-central reliability incident journal —
 // the same enriched, source-tagged list the REST GET /incidents handler
 // serves. *adapter.IncidentsStoreReader satisfies it, so MCP and REST
@@ -258,6 +265,13 @@ type Deps struct {
 	Paramsets ParamsetService
 	Health    HealthReader
 	Hubs      HubResolver
+	// Taxonomy backs get_taxonomy: every central's enum trees, the same
+	// read the REST GET /taxonomy handler serves. Nil leaves the tool
+	// unregistered.
+	Taxonomy handlers.TaxonomySource
+	// Features lets the hub list tools report a central that does not
+	// offer what they read, instead of an empty list. Nil reports none.
+	Features  FeatureChecker
 	Audit     audit.Recorder
 	Incidents IncidentsReader
 	// EditLocks gates MASTER/LINK paramset writes through write_paramset

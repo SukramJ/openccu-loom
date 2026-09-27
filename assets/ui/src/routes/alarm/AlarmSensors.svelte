@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { taxonomyStore } from "$lib/stores/taxonomy.svelte";
+  import { labelOf, matchesNodeFilter, nodeFilterValue } from "$lib/taxonomy/tree";
   import { onMount } from "svelte";
   import { api, friendlyError } from "$lib/api/client";
   import { alarmPanelStore } from "$lib/stores/alarmPanel.svelte";
@@ -236,6 +238,20 @@
   function deviceOf(s: AlarmSensor): DeviceSummary | undefined {
     return deviceByAddr.get(deviceAddrOf(s.channel_address));
   }
+  // A room name several nested rooms share is offered once per node,
+  // labelled with its path; a flat room stays one choice by name.
+  const roomFilterOptions = $derived(
+    rooms.flatMap((r) => {
+      const nested = (r.refs ?? []).filter((ref) => ref.parent_path);
+      const opts = nested.map((ref) => ({
+        value: nodeFilterValue(ref.central, "room", ref.path),
+        label: labelOf(taxonomyStore.enumOf(ref.central, "room"), ref.path) ?? r.name,
+      }));
+      if (nested.length === 0 || nested.length < (r.refs ?? []).length) opts.push({ value: r.name, label: r.name });
+      return opts;
+    }),
+  );
+
   function roomsOf(s: AlarmSensor): string[] {
     return deviceOf(s)?.rooms ?? [];
   }
@@ -257,7 +273,9 @@
       const modeCount = cfgModes(s).length;
       if (assignedFilter === "assigned" && modeCount === 0) return false;
       if (assignedFilter === "unassigned" && modeCount > 0) return false;
-      if (roomFilter && !roomsOf(s).includes(roomFilter)) return false;
+      if (roomFilter && !matchesNodeFilter({ ...(deviceOf(s) ?? {}), central: s.central }, "room", roomFilter)) {
+        return false;
+      }
       if (areaFilter && !roomsOf(s).some((r) => areasStore.areaIdOf(s.central, r) === areaFilter)) {
         return false;
       }
@@ -464,6 +482,7 @@
   });
 
   onMount(() => {
+    void taxonomyStore.refresh();
     deviceStore.refresh();
     deviceStore.ensureStream();
     areasStore.ensureLoaded();
@@ -563,7 +582,7 @@
             bind:value={roomFilter}
             options={[
               { value: "", label: t("alarm.sensors.filter.all") },
-              ...rooms.map((r) => ({ value: r.name, label: r.name })),
+              ...roomFilterOptions,
             ]}
           />
         </div>

@@ -13,6 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/internal/wiring"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -397,6 +398,19 @@ func (r *Registry) HubFor(centralName string) *hub.Hub {
 		return nil
 	}
 	return c.HubModel
+}
+
+// FeatureUnavailable reports whether the named central offers feature k:
+// nil when it does or when no such central is registered, otherwise the
+// *hmerr.FeatureUnavailableError naming the reason.
+func (r *Registry) FeatureUnavailable(centralName string, k hmenum.Feature) error {
+	r.mu.RLock()
+	c, ok := r.items[centralName]
+	r.mu.RUnlock()
+	if !ok || c == nil {
+		return nil
+	}
+	return c.Features().Require(centralName, k, nil)
 }
 
 // StartAll fans out Start to every registered unit. First error

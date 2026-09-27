@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
+	"github.com/SukramJ/openccu-loom/internal/model/taxonomy"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 )
 
@@ -25,6 +26,33 @@ type RoomMutator interface {
 // (Gewerk) assignments. Implementations dispatch a Rega script.
 type FunctionMutator interface {
 	SetDeviceFunctions(ctx context.Context, deviceAddress string, functions []string) error
+}
+
+// TaxonomyPathMutator is the optional write path that assigns an address
+// to taxonomy nodes by reference rather than by name — the only way to
+// name one of two nodes that share a display name. A system with nested
+// taxonomies implements it on its room mutator; replacing an address's
+// nodes of enum keeps its other enums' assignments.
+type TaxonomyPathMutator interface {
+	SetTaxonomyRefs(ctx context.Context, address string, enum taxonomy.EnumID, refs []taxonomy.Ref) error
+}
+
+// TaxonomyAdmin is the optional write path for taxonomy *nodes* of a
+// system whose taxonomies nest (openccu-lite). Parent is a path inside
+// the enum, empty for the root; position is the zero-based place among
+// the siblings, nil to append.
+type TaxonomyAdmin interface {
+	CreateNode(ctx context.Context, enum taxonomy.EnumID, parent taxonomy.Path, name string) (taxonomy.Ref, error)
+	RenameNode(ctx context.Context, r taxonomy.Ref, name string) error
+	MoveNode(ctx context.Context, r taxonomy.Ref, parent taxonomy.Path, position *int) error
+	DeleteNode(ctx context.Context, r taxonomy.Ref) error
+}
+
+// CreatedNode is a node a create made: the CCU's numeric object id where
+// the system has one (0 otherwise), and the node's reference.
+type CreatedNode struct {
+	LegacyID int
+	Ref      taxonomy.Ref
 }
 
 // RoomAdmin is the optional CCU-side write-path for room *entity*
@@ -811,6 +839,24 @@ func (h *Hub) SetDeviceFunctionsRemote(
 		return ErrNoFunctionMutator
 	}
 	return m.SetDeviceFunctions(ctx, deviceAddress, functions)
+}
+
+// TaxonomyAdminRemote returns the wired taxonomy node admin, when the
+// system has one.
+func (h *Hub) TaxonomyAdminRemote() (TaxonomyAdmin, bool) {
+	a, ok := h.roomMut().(TaxonomyAdmin)
+	return a, ok
+}
+
+// SetTaxonomyRefsRemote assigns address to refs of enum when the wired
+// room mutator supports assignment by reference; ok is false when it
+// does not, and the caller assigns by name.
+func (h *Hub) SetTaxonomyRefsRemote(ctx context.Context, address string, enum taxonomy.EnumID, refs []taxonomy.Ref) (bool, error) {
+	m, ok := h.roomMut().(TaxonomyPathMutator)
+	if !ok {
+		return false, nil
+	}
+	return true, m.SetTaxonomyRefs(ctx, address, enum, refs)
 }
 
 // CreateRoomRemote creates a room entity on the CCU and returns its new

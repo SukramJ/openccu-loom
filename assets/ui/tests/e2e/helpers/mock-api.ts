@@ -495,6 +495,12 @@ export async function mockAllApis(page: Page): Promise<void> {
     }),
   );
 
+  // Taxonomies (GET /api/v1/taxonomy) — the fixture fleet is one CCU,
+  // whose rooms and functions are flat: nothing is edited as a tree.
+  await page.route('**/api/v1/taxonomy', (route) =>
+    route.fulfill({ json: { centrals: [{ central: 'ccu1', revision: 0, writable: true, tree: false, enums: [] }] } }),
+  );
+
   // Centrals
   await page.route('**/api/v1/centrals', (route) => {
     if (route.request().method() === 'GET') {

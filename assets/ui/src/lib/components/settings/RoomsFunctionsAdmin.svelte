@@ -17,6 +17,8 @@
   import { areasStore } from "$lib/stores/areas.svelte";
   import { deviceStore } from "$lib/stores/devices.svelte";
   import { collectRoomPairs, roomPairKey } from "$lib/areas/roomPairs";
+  import { taxonomyStore } from "$lib/stores/taxonomy.svelte";
+  import TaxonomyTreeEditor from "$lib/components/taxonomy/TaxonomyTreeEditor.svelte";
 
   let rooms = $state<RoomEntry[]>([]);
   let functions = $state<FunctionEntry[]>([]);
@@ -83,7 +85,21 @@
     // loading/error surface below.
     areasStore.refresh();
     deviceStore.refresh();
+    void taxonomyStore.refresh();
   });
+
+  // Centrals whose rooms and functions nest are edited as trees below;
+  // the flat lists above keep serving a CCU.
+  let treeCentral = $state("");
+  const treeCentrals = $derived(taxonomyStore.trees);
+  const editedTree = $derived(
+    treeCentrals.find((c) => c.central === treeCentral) ?? treeCentrals[0],
+  );
+
+  async function taxonomyChanged() {
+    await taxonomyStore.refresh();
+    await load();
+  }
 
   // --- Areas CRUD ----------------------------------------------------
   async function createArea() {
@@ -345,6 +361,31 @@
           ]}
         />
       </div>
+    {/if}
+
+    {#if editedTree}
+      <Card class="space-y-3 p-4">
+        <div class="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h3 class="text-sm font-semibold uppercase tracking-wide text-[var(--ha-secondary-text-color)]">
+              {t("taxonomy.title")}
+            </h3>
+            <p class="mt-1 text-xs text-[var(--ha-secondary-text-color)]">{t("taxonomy.subtitle")}</p>
+          </div>
+          {#if treeCentrals.length > 1}
+            <Select
+              class="w-auto"
+              value={editedTree.central}
+              ariaLabel={t("taxonomy.central")}
+              onValueChange={(v) => (treeCentral = v)}
+              options={treeCentrals.map((c) => ({ value: c.central, label: c.central }))}
+            />
+          {/if}
+        </div>
+        {#key editedTree.central}
+          <TaxonomyTreeEditor central={editedTree} onChanged={taxonomyChanged} />
+        {/key}
+      </Card>
     {/if}
 
     <div class="grid grid-cols-1 gap-4 md:grid-cols-2">

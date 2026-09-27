@@ -109,7 +109,8 @@
       "defaults": {
         "embedded": true,
         "standalone": true
-      }
+      },
+      "gate": "feature:hub.inbox"
     },
     {
       "id": "nav.fleet",
@@ -125,7 +126,8 @@
       "defaults": {
         "embedded": true,
         "standalone": true
-      }
+      },
+      "gate": "feature:hub.programs"
     },
     {
       "id": "nav.sysvars",
@@ -133,7 +135,8 @@
       "defaults": {
         "embedded": true,
         "standalone": true
-      }
+      },
+      "gate": "feature:hub.sysvars"
     },
     {
       "id": "nav.groups",
@@ -141,7 +144,8 @@
       "defaults": {
         "embedded": true,
         "standalone": true
-      }
+      },
+      "gate": "feature:heating_groups.read"
     },
     {
       "id": "nav.links",
@@ -247,7 +251,8 @@
         "embedded": true,
         "standalone": true
       },
-      "role_admin": true
+      "role_admin": true,
+      "gate": "feature:system.backup.create"
     },
     {
       "id": "nav.settings",

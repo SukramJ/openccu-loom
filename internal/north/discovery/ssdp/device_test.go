@@ -240,3 +240,36 @@ func TestIsCentralManufacturer(t *testing.T) {
 		}
 	}
 }
+
+// liteXML is the UPnP description an openccu-lite box serves:
+// manufacturer = modelName = openccu-lite, the serial in the UDN tail.
+const liteXML = `<?xml version="1.0"?>
+<root xmlns="urn:schemas-upnp-org:device-1-0">
+  <device>
+    <deviceType>urn:schemas-upnp-org:device:Basic:1</deviceType>
+    <friendlyName>box</friendlyName>
+    <manufacturer>openccu-lite</manufacturer>
+    <modelName>openccu-lite</modelName>
+    <modelDescription>openccu-lite 3014F711A0001F0123456789</modelDescription>
+    <UDN>uuid:upnp-BasicDevice-1_0-3014F711A0001F0123456789</UDN>
+  </device>
+</root>`
+
+// TestSSDPLabelsOpenCCULite pins the system type a discovered central is
+// offered with: an openccu-lite box by its UPnP manufacturer/model, a CCU
+// otherwise.
+func TestSSDPLabelsOpenCCULite(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, body, want string
+	}{
+		{"openccu-lite", liteXML, "openccu-lite"},
+		{"OpenCCU", realOpenCCUXML, "ccu"},
+		{"classic CCU3", classicCCUXML, "ccu"},
+	} {
+		got, ok := parseDeviceDescription([]byte(tc.body), "http://192.0.2.7/upnp/basic_dev.cgi")
+		if !ok || got.SystemType != tc.want {
+			t.Errorf("%s: system type = %q (ok %v), want %q", tc.name, got.SystemType, ok, tc.want)
+		}
+	}
+}

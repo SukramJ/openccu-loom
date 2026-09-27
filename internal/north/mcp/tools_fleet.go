@@ -79,6 +79,78 @@ func registerListGroups(s *mcpsdk.Server, d Deps) {
 	})
 }
 
+// --- taxonomy -------------------------------------------------------
+
+// The taxonomy is flattened: every node is listed with its path and its
+// parent's path, so the tool's schema has no recursive type (the MCP SDK
+// cannot describe one) and a reader still rebuilds the tree.
+
+type taxonomyNodeOut struct {
+	Path       string `json:"path"`
+	Name       string `json:"name"`
+	ParentPath string `json:"parent_path,omitempty"`
+	Icon       string `json:"icon,omitempty"`
+}
+
+type taxonomyEnumOut struct {
+	ID    string            `json:"id"`
+	Names map[string]string `json:"names,omitempty"`
+	Nodes []taxonomyNodeOut `json:"nodes"`
+}
+
+type taxonomyCentralOut struct {
+	Central  string            `json:"central"`
+	Revision uint64            `json:"revision"`
+	Writable bool              `json:"writable"`
+	Tree     bool              `json:"tree"`
+	Enums    []taxonomyEnumOut `json:"enums"`
+}
+
+type getTaxonomyOut struct {
+	Centrals []taxonomyCentralOut `json:"centrals"`
+}
+
+func flattenTaxonomyNodes(in []handlers.TaxonomyNode, parent string, out []taxonomyNodeOut) []taxonomyNodeOut {
+	for _, n := range in {
+		out = append(out, taxonomyNodeOut{Path: n.Path, Name: n.Name, ParentPath: parent, Icon: n.Icon})
+		out = flattenTaxonomyNodes(n.Children, n.Path, out)
+	}
+	return out
+}
+
+func registerGetTaxonomy(s *mcpsdk.Server, d Deps) {
+	mcpsdk.AddTool(s, &mcpsdk.Tool{
+		Name: "get_taxonomy",
+		Description: "Get each central's taxonomy — rooms, functions and any further enums — listing every node with its path " +
+			"and its parent's path, including nodes nothing is assigned to. A node's path (e.g. eg/kueche) tells two rooms " +
+			"of one name apart. Optionally scoped to one central via central_name.",
+	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in centralScopeIn) (*mcpsdk.CallToolResult, getTaxonomyOut, error) {
+		want := strings.TrimSpace(in.CentralName)
+		if want != "" && !centralKnown(d, want) {
+			return nil, getTaxonomyOut{}, errUnknownCentral(d, want)
+		}
+		resp, ok := handlers.BuildTaxonomyResponse(d.Taxonomy, want)
+		if !ok {
+			return nil, getTaxonomyOut{}, errUnknownCentral(d, want)
+		}
+		out := getTaxonomyOut{Centrals: make([]taxonomyCentralOut, 0, len(resp.Centrals))}
+		for _, c := range resp.Centrals {
+			co := taxonomyCentralOut{
+				Central: c.Central, Revision: c.Revision, Writable: c.Writable, Tree: c.Tree,
+				Enums: make([]taxonomyEnumOut, 0, len(c.Enums)),
+			}
+			for _, e := range c.Enums {
+				co.Enums = append(co.Enums, taxonomyEnumOut{
+					ID: e.ID, Names: e.Names,
+					Nodes: flattenTaxonomyNodes(e.Nodes, "", []taxonomyNodeOut{}),
+				})
+			}
+			out.Centrals = append(out.Centrals, co)
+		}
+		return nil, out, nil
+	})
+}
+
 // --- areas ----------------------------------------------------------
 
 type listAreasIn struct {

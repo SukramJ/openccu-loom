@@ -302,11 +302,23 @@ type DeviceInfo struct {
 	Room          string                 `json:"room,omitempty"`
 	Function      string                 `json:"function,omitempty"`
 	IseID         int                    `json:"ise_id,omitempty"`
+	Taxonomy      []TaxonomyAssignment   `json:"taxonomy,omitempty"`
 	SchemaVersion int                    `json:"schema_version,omitempty"`
 	HasSubDevices bool                   `json:"has_sub_devices"`
 	Central       string                 `json:"central,omitempty"`
 	SWVersion     string                 `json:"sw_version,omitempty"`
 	Channels      []DeviceInfoChannelRow `json:"channels,omitempty"`
+}
+
+// TaxonomyAssignment is one taxonomy node an address is directly assigned
+// to: the enum, the node's path inside it, its display name, and its
+// parent's path (empty for a root node). Rooms and functions keep
+// carrying names; this adds the node path names cannot carry.
+type TaxonomyAssignment struct {
+	Enum       string `json:"enum"`
+	Path       string `json:"path"`
+	Name       string `json:"name"`
+	ParentPath string `json:"parent_path,omitempty"`
 }
 
 // DeviceConfig captures device-level configuration data.
@@ -325,17 +337,19 @@ type DeviceState struct {
 
 // ChannelInfo is the identity payload for a single channel.
 type ChannelInfo struct {
-	Address        string   `json:"address"`
-	ChannelNo      int      `json:"channel_no"`
-	Type           string   `json:"type"`
-	Name           string   `json:"name,omitempty"`
-	Rooms          []string `json:"rooms,omitempty"`
-	Functions      []string `json:"functions,omitempty"`
-	Room           string   `json:"room,omitempty"`
-	GroupNo        int      `json:"group_no,omitempty"`
-	IsGroupMaster  bool     `json:"is_group_master,omitempty"`
-	IsInMultiGroup bool     `json:"is_in_multi_group,omitempty"`
-	SubDeviceName  string   `json:"sub_device_name,omitempty"`
+	Address   string   `json:"address"`
+	ChannelNo int      `json:"channel_no"`
+	Type      string   `json:"type"`
+	Name      string   `json:"name,omitempty"`
+	Rooms     []string `json:"rooms,omitempty"`
+	Functions []string `json:"functions,omitempty"`
+	Room      string   `json:"room,omitempty"`
+	// Taxonomy lists the nodes the channel is directly assigned to.
+	Taxonomy       []TaxonomyAssignment `json:"taxonomy,omitempty"`
+	GroupNo        int                  `json:"group_no,omitempty"`
+	IsGroupMaster  bool                 `json:"is_group_master,omitempty"`
+	IsInMultiGroup bool                 `json:"is_in_multi_group,omitempty"`
+	SubDeviceName  string               `json:"sub_device_name,omitempty"`
 }
 
 // ChannelConfig captures channel-level configuration.

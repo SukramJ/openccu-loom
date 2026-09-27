@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -106,22 +107,29 @@ func TestCCUProfileProbesTheBootMarker(t *testing.T) {
 	}
 }
 
-// TestUnsupportedSystemTypeIsVisibleAndNotBroughtUp pins what a central of a
-// system type this build cannot drive yet looks like: the profile selection
-// refuses it with errSystemTypeNotSupported, and the bring-up manager keeps
-// it registered with a degraded startup component naming the reason instead
-// of starting a half bring-up.
+// TestUnsupportedSystemTypeIsVisibleAndNotBroughtUp pins what a central
+// of a system type this build does not know looks like: the profile
+// selection refuses it, and the bring-up manager keeps it registered with
+// a degraded startup component naming the reason instead of starting a
+// half bring-up. An `auto` central whose address answers nothing
+// identifiable waits the same way, saying it is identifying the system.
 func TestUnsupportedSystemTypeIsVisibleAndNotBroughtUp(t *testing.T) {
 	t.Parallel()
-	cc := &config.CentralConfig{Name: "box", Host: "box.local", SystemType: hmenum.SystemTypeAuto}
-	if _, err := southProfileFor(cc, nil); !errors.Is(err, errSystemTypeNotSupported) {
-		t.Fatalf("auto: southProfileFor = %v, want errSystemTypeNotSupported", err)
-	}
 	if _, err := southProfileFor(&config.CentralConfig{Name: "x", SystemType: "homegear"}, nil); err == nil {
 		t.Fatal("an unknown system type was accepted")
 	}
+	if _, err := southProfileFor(&config.CentralConfig{Name: "box", SystemType: hmenum.SystemTypeAuto}, nil); !errors.Is(err, errSystemTypeUnresolved) {
+		t.Fatalf("auto: southProfileFor = %v, want errSystemTypeUnresolved", err)
+	}
 
 	reg, unit := registryWithUnit(t, "box")
+	other, err := central.New(central.Config{Name: "auto"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	if err := reg.Register(other); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	mgr, err := WireCentrals(ctx, &config.Config{}, reg, WireDeps{}, nil)
@@ -129,15 +137,25 @@ func TestUnsupportedSystemTypeIsVisibleAndNotBroughtUp(t *testing.T) {
 		t.Fatalf("WireCentrals: %v", err)
 	}
 	t.Cleanup(mgr.Teardown)
-	auto := config.CentralConfig{Name: "box", Host: "box.local", SystemType: hmenum.SystemTypeAuto}
-	if !mgr.AddCentral(&auto, unit) {
+	unknown := config.CentralConfig{Name: "box", Host: "box.local", SystemType: "homegear"}
+	if !mgr.AddCentral(&unknown, unit) {
 		t.Fatal("AddCentral refused the central")
 	}
 	comp, ok := unit.Health.Get(startupHealthComponent("box"))
-	if !ok || !strings.Contains(comp.LastSample.Note, "not supported") {
-		t.Fatalf("startup component = %+v (present %v), want a note naming the unsupported system type", comp, ok)
+	if !ok || !strings.Contains(comp.LastSample.Note, "not brought up") {
+		t.Fatalf("startup component = %+v (present %v), want a note naming why it is not brought up", comp, ok)
 	}
 	if unit.IsSouthboundReady() {
 		t.Error("an unsupported central reported southbound ready")
+	}
+
+	// 192.0.2.0/24 is TEST-NET-1: nothing answers there.
+	auto := config.CentralConfig{Name: "auto", Host: "192.0.2.1", SystemType: hmenum.SystemTypeAuto}
+	if !mgr.AddCentral(&auto, other) {
+		t.Fatal("AddCentral refused the auto central")
+	}
+	comp, ok = other.Health.Get(startupHealthComponent("auto"))
+	if !ok || !strings.Contains(comp.LastSample.Note, "identifying the system") {
+		t.Fatalf("auto startup component = %+v (present %v), want identifying", comp, ok)
 	}
 }

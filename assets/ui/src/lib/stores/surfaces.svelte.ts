@@ -146,6 +146,11 @@ function createSurfacesStore() {
     return v === undefined ? true : v;
   }
 
+  /** The capability gate the registry declares for a surface. */
+  function gate(id: string): string | undefined {
+    return byId.get(id)?.gate || undefined;
+  }
+
   /** The editor a read-only overview hands off to, when it declares one. */
   function opens(id: string): string | undefined {
     return byId.get(id)?.opens;
@@ -307,6 +312,7 @@ function createSurfacesStore() {
     },
     load,
     visible,
+    gate,
     opens,
     opensVisible,
     defaultOf,

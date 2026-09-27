@@ -9,11 +9,13 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
+	"github.com/SukramJ/openccu-loom/internal/model/taxonomy"
 )
 
 // fakeRoomFunctionAdmin is a configurable stub satisfying RoomFunctionAdmin.
@@ -28,8 +30,8 @@ type fakeRoomFunctionAdmin struct {
 	deleteFnErr   error
 }
 
-func (f *fakeRoomFunctionAdmin) CreateRoom(_ context.Context, _, _ string) (int, error) {
-	return f.createRoomID, f.createRoomErr
+func (f *fakeRoomFunctionAdmin) CreateRoom(_ context.Context, _, _ string) (hub.CreatedNode, error) {
+	return hub.CreatedNode{LegacyID: f.createRoomID, Ref: taxonomy.Root(taxonomy.EnumRoom, strconv.Itoa(f.createRoomID))}, f.createRoomErr
 }
 
 func (f *fakeRoomFunctionAdmin) RenameRoom(_ context.Context, _, _, _ string) error {
@@ -40,8 +42,8 @@ func (f *fakeRoomFunctionAdmin) DeleteRoom(_ context.Context, _, _ string) error
 	return f.deleteRoomErr
 }
 
-func (f *fakeRoomFunctionAdmin) CreateFunction(_ context.Context, _, _ string) (int, error) {
-	return f.createFnID, f.createFnErr
+func (f *fakeRoomFunctionAdmin) CreateFunction(_ context.Context, _, _ string) (hub.CreatedNode, error) {
+	return hub.CreatedNode{LegacyID: f.createFnID, Ref: taxonomy.Root(taxonomy.EnumFunction, strconv.Itoa(f.createFnID))}, f.createFnErr
 }
 
 func (f *fakeRoomFunctionAdmin) RenameFunction(_ context.Context, _, _, _ string) error {

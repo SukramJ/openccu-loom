@@ -186,10 +186,10 @@ func Fingerprint(cert *x509.Certificate) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// fingerprintFromError extracts the fingerprint of the certificate a
+// FingerprintOf extracts the fingerprint of the certificate a
 // server presented from a failed TLS handshake (an unverifiable chain or
 // a pin mismatch), so a first contact can show the operator what to pin.
-func fingerprintFromError(err error) (string, bool) {
+func FingerprintOf(err error) (string, bool) {
 	var fe *FingerprintError
 	if errors.As(err, &fe) && fe.Got != "" {
 		return fe.Got, true

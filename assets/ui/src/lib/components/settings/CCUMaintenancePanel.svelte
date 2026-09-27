@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { centralFeatureReason, featureName } from "$lib/features";
   import { onMount } from "svelte";
   import { api, ApiError } from "$lib/api/client";
   import type { SystemCCUEntry } from "$lib/api/types";
@@ -127,6 +128,25 @@
     }
   }
 
+  // An action the central does not offer is hidden, never shown and
+  // failing; the reason is named once below the row instead.
+  const hostFeatures = [
+    "system.reboot",
+    "system.safe_mode",
+    "system.poweroff",
+    "system.position",
+  ] as const;
+
+  function has(e: SystemCCUEntry, key: string): boolean {
+    return e.features?.[key]?.available !== false;
+  }
+
+  function missing(e: SystemCCUEntry): string[] {
+    return hostFeatures
+      .filter((k) => !has(e, k))
+      .map((k) => `${featureName(k)} (${centralFeatureReason(e, k)})`);
+  }
+
   async function reboot(e: SystemCCUEntry) {
     const central = e.name;
     const ok = await confirmStore.ask({
@@ -188,28 +208,32 @@
                 <Badge variant="muted">{t("ccu_maintenance.offline")}</Badge>
               {/if}
               {#if isAdmin}
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="sm"
-                  disabled={busy === e.name}
-                  onclick={() => void reboot(e)}
-                >
-                  {busy === e.name ? t("ccu_maintenance.rebooting") : t("ccu_maintenance.reboot")}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={busy === e.name}
-                  onclick={() => void hostAction(e, "safe_mode")}
-                >
-                  {t("ccu_host.safe_mode.action")}
-                </Button>
+                {#if has(e, "system.reboot")}
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    disabled={busy === e.name}
+                    onclick={() => void reboot(e)}
+                  >
+                    {busy === e.name ? t("ccu_maintenance.rebooting") : t("ccu_maintenance.reboot")}
+                  </Button>
+                {/if}
+                {#if has(e, "system.safe_mode")}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={busy === e.name}
+                    onclick={() => void hostAction(e, "safe_mode")}
+                  >
+                    {t("ccu_host.safe_mode.action")}
+                  </Button>
+                {/if}
                 <!-- Recovery lives on OpenCCU only. The
                      button is hidden rather than disabled on a stock CCU3:
                      there is nothing the operator could do to enable it. -->
-                {#if e.recovery_mode_supported}
+                {#if e.recovery_mode_supported && has(e, "system.recovery_mode")}
                   <Button
                     type="button"
                     variant="outline"
@@ -220,18 +244,25 @@
                     {t("ccu_host.recovery_mode.action")}
                   </Button>
                 {/if}
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="sm"
-                  disabled={busy === e.name}
-                  onclick={() => void hostAction(e, "poweroff")}
-                >
-                  {t("ccu_host.poweroff.action")}
-                </Button>
+                {#if has(e, "system.poweroff")}
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    disabled={busy === e.name}
+                    onclick={() => void hostAction(e, "poweroff")}
+                  >
+                    {t("ccu_host.poweroff.action")}
+                  </Button>
+                {/if}
               {/if}
             </div>
           </div>
+          {#if isAdmin && missing(e).length > 0}
+            <p class="mt-2 text-xs text-[var(--ha-secondary-text-color)]">
+              {t("feature.hidden_actions", { list: missing(e).join("; ") })}
+            </p>
+          {/if}
 
           <!-- Astro reference position. Read-only for non-admins: it moves
                every sunrise/sunset time the CCU computes. -->
@@ -244,7 +275,7 @@
                 <Badge variant="muted">{e.timezone}</Badge>
               {/if}
             </div>
-            {#if isAdmin}
+            {#if isAdmin && has(e, "system.position")}
               <div class="flex flex-wrap items-end gap-2">
                 <label class="text-xs">
                   <span class="block text-[var(--ha-secondary-text-color)]">{t("ccu_position.latitude")}</span>

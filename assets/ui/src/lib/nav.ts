@@ -74,7 +74,20 @@ export type NavGates = {
    * the Matter bridge is off.
    */
   surfaceVisible?: (id: string) => boolean;
+  /**
+   * The capability gate the surface registry declares for a view, keyed
+   * by surface id. A `feature:<key>` gate is open while
+   * `featureAvailable` says at least one central offers the feature.
+   * Omitted where no registry is at hand, where nothing is feature-gated.
+   */
+  surfaceGate?: (id: string) => string | undefined;
+  featureAvailable?: (key: string) => boolean;
 };
+
+/** The feature a `feature:<key>` surface gate names, or null. */
+export function gateFeature(gate: string | undefined): string | null {
+  return gate?.startsWith("feature:") ? gate.slice("feature:".length) : null;
+}
 
 /**
  * Cluster-grouped navigation. Order is opinionated: the top cluster
@@ -278,9 +291,20 @@ export function navClusters(gates: NavGates): NavCluster[] {
   // later is then gated automatically instead of silently escaping the
   // profile because someone forgot one more `...(gates.x ? [] : [])`.
   const allows = gates.surfaceVisible;
-  if (!allows) return clusters;
+  const { surfaceGate, featureAvailable } = gates;
+  const featureOpen = (id: string): boolean => {
+    const key = gateFeature(surfaceGate?.(id));
+    return key === null || !featureAvailable || featureAvailable(key);
+  };
+  if (!allows && !(surfaceGate && featureAvailable)) return clusters;
   return clusters
-    .map((c) => ({ ...c, items: c.items.filter((i) => allows(navSurfaceID(i.href))) }))
+    .map((c) => ({
+      ...c,
+      items: c.items.filter((i) => {
+        const id = navSurfaceID(i.href);
+        return (allows?.(id) ?? true) && featureOpen(id);
+      }),
+    }))
     .filter((c) => c.items.length > 0);
 }
 

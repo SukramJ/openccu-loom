@@ -64,7 +64,7 @@ func TestTLSPinAcceptsOnlyThePinnedCertificate(t *testing.T) {
 	if !errors.Is(err, occulited.ErrFingerprintMismatch) || !errors.As(err, &fe) || fe.Got != fp || fe.Want != wrong {
 		t.Errorf("wrong pin: %v", err)
 	}
-	if got, ok := occulited.FingerprintFromError(err); !ok || got != fp {
+	if got, ok := occulited.FingerprintOf(err); !ok || got != fp {
 		t.Errorf("FingerprintFromError(pin) %q %v", got, ok)
 	}
 
@@ -73,7 +73,7 @@ func TestTLSPinAcceptsOnlyThePinnedCertificate(t *testing.T) {
 	if err == nil {
 		t.Fatal("unknown CA accepted without a pin")
 	}
-	if got, ok := occulited.FingerprintFromError(err); !ok || got != fp {
+	if got, ok := occulited.FingerprintOf(err); !ok || got != fp {
 		t.Errorf("FingerprintFromError(unverified) %q %v", got, ok)
 	}
 

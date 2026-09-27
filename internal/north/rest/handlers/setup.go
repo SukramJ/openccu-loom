@@ -46,6 +46,9 @@ type SetupService struct {
 	// database with zero users would send the operator hunting for an
 	// account that does not exist. Nil means allowed.
 	FirstRunAllowed func() bool
+	// Onboarding resolves the wizard's pairing id to the token an approved
+	// pairing yields. Nil refuses a payload that names a pairing.
+	Onboarding CentralOnboarding
 
 	// mu serialises the first-run probe and the finalize that follows it.
 	// The probe is a live user count and finalize is an upsert behind a
@@ -93,6 +96,12 @@ type setupCCU struct {
 	TLS            bool     `json:"tls,omitempty"`
 	TLSFingerprint string   `json:"tls_fingerprint,omitempty"`
 	Interfaces     []string `json:"interfaces"`
+	// Port is the system's web server port (JSON-RPC on a CCU, the API on
+	// openccu-lite); 0 means 80, or 443 with TLS.
+	Port int `json:"port,omitempty"`
+	// PairingID names an approved client pairing whose token the central
+	// takes, on the server, instead of api_token.
+	PairingID string `json:"pairing_id,omitempty"`
 }
 
 type setupMQTT struct {
@@ -117,6 +126,7 @@ func (c *setupCCU) centralConfig() *config.CentralConfig {
 		APIToken:       c.APIToken,
 		TLS:            c.TLS,
 		TLSFingerprint: c.TLSFingerprint,
+		JSONRPCPort:    c.Port,
 		Interfaces:     ifaces,
 	}
 }
@@ -183,6 +193,21 @@ func Setup(s *SetupService) http.HandlerFunc {
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
+		if req.CCU != nil && req.CCU.PairingID != "" {
+			if s.Onboarding == nil {
+				problem.Write(w, http.StatusServiceUnavailable, problem.New(problem.TypeServiceUnready, r, "Onboarding unavailable", ""))
+				return
+			}
+			token, fp, err := s.Onboarding.PairingToken(req.CCU.PairingID)
+			if err != nil {
+				writeOnboardingError(w, r, "Pairing not usable", err)
+				return
+			}
+			req.CCU.APIToken = token
+			if fp != "" {
+				req.CCU.TLSFingerprint = fp
+			}
+		}
 		if msg := validateSetup(&req); msg != "" {
 			problem.Write(w, http.StatusUnprocessableEntity,
 				problem.New(problem.TypeValidation, r, "Invalid setup payload", msg))
@@ -199,6 +224,9 @@ func Setup(s *SetupService) http.HandlerFunc {
 			slog.ErrorContext(r.Context(), "setup.finalize.fail", slog.String("err", err.Error()))
 			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Setup finalization failed", err)
 			return
+		}
+		if req.CCU != nil && req.CCU.PairingID != "" {
+			s.Onboarding.ForgetPairing(req.CCU.PairingID)
 		}
 		slog.InfoContext(r.Context(), "setup.complete", slog.String("subject", req.Admin.Username))
 		w.WriteHeader(http.StatusNoContent)
@@ -338,6 +366,7 @@ func finalizeSetup(ctx context.Context, s *SetupService, req *setupRequest) erro
 			APITokenPlain:  req.CCU.APIToken,
 			TLS:            req.CCU.TLS,
 			TLSFingerprint: req.CCU.TLSFingerprint,
+			JSONRPCPort:    req.CCU.Port,
 			Interfaces:     ifaces,
 			Enabled:        true,
 		}

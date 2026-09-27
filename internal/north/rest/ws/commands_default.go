@@ -471,7 +471,7 @@ func devicesListHandler(q DeviceQuery) CommandHandler {
 	return func(ctx context.Context, _ json.RawMessage) (any, error) {
 		devs, err := q.ListDevices(ctx)
 		if err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "list_devices: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "list_devices: ", err)
 		}
 		return map[string]any{"devices": devs}, nil
 	}
@@ -530,7 +530,7 @@ func paramsetDescriptionHandler(q DeviceQuery) CommandHandler {
 		}
 		desc, err := q.GetParamsetDescription(ctx, args.sessionKey())
 		if err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "get_paramset_description: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "get_paramset_description: ", err)
 		}
 		return map[string]any{"descriptions": desc}, nil
 	}
@@ -547,7 +547,7 @@ func paramsetGetHandler(q DeviceQuery) CommandHandler {
 		}
 		values, err := q.GetParamset(ctx, args.sessionKey())
 		if err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "get_paramset: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "get_paramset: ", err)
 		}
 		return map[string]any{"values": values}, nil
 	}
@@ -570,9 +570,9 @@ func centralHub(q HubQuery, centralName string) (CentralHub, error) {
 	h, err := q.CentralHub(centralName)
 	if err != nil {
 		if errors.Is(err, ErrCentralRequired) || errors.Is(err, ErrCentralUnknown) {
-			return nil, NewCommandError(CommandErrorBadRequest, err.Error())
+			return nil, commandErr(CommandErrorBadRequest, "", err)
 		}
-		return nil, NewCommandError(CommandErrorInternal, "resolve_central: "+err.Error())
+		return nil, commandErr(CommandErrorInternal, "resolve_central: ", err)
 	}
 	return h, nil
 }
@@ -611,7 +611,7 @@ func programsListHandler(q HubQuery) CommandHandler {
 		}
 		progs, err := h.ListPrograms(ctx, args.IncludeInternal)
 		if err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "list_programs: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "list_programs: ", err)
 		}
 		return map[string]any{"programs": progs}, nil
 	}
@@ -670,7 +670,7 @@ func sysvarsListHandler(q HubQuery) CommandHandler {
 		}
 		vars, err := h.ListSysvars(ctx)
 		if err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "list_sysvars: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "list_sysvars: ", err)
 		}
 		return map[string]any{"sysvars": vars}, nil
 	}
@@ -710,7 +710,7 @@ func sysvarsFetchHandler(q HubQuery) CommandHandler {
 			return nil, err
 		}
 		if err := q.FetchSystemVariables(ctx, args.CentralName); err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "fetch_sysvars: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "fetch_sysvars: ", err)
 		}
 		return map[string]any{"fetched": true, "central_name": args.CentralName}, nil
 	}
@@ -732,7 +732,7 @@ func sysvarsUsageHandler(q HubQuery) CommandHandler {
 		}
 		programs, err := q.SysvarUsagePrograms(ctx, args.CentralName, args.Name)
 		if err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "sysvar_usage: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "sysvar_usage: ", err)
 		}
 		return map[string]any{"sysvar": args.Name, "central_name": args.CentralName, "programs": programs}, nil
 	}
@@ -757,7 +757,7 @@ func alarmMessagesListHandler(q HubQuery) CommandHandler {
 		}
 		msgs, err := h.ListAlarmMessages(ctx)
 		if err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "list_alarm_messages: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "list_alarm_messages: ", err)
 		}
 		return map[string]any{"messages": msgs}, nil
 	}
@@ -777,7 +777,7 @@ func alarmMessagesAckHandler(q HubQuery) CommandHandler {
 			return nil, err
 		}
 		if err := h.AcknowledgeAlarmMessage(ctx, args.ID); err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "ack_alarm: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "ack_alarm: ", err)
 		}
 		return map[string]any{"acknowledged": true, "id": args.ID}, nil
 	}
@@ -795,7 +795,7 @@ func serviceMessagesListHandler(q HubQuery) CommandHandler {
 		}
 		msgs, err := h.ListServiceMessages(ctx)
 		if err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "list_service_messages: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "list_service_messages: ", err)
 		}
 		return map[string]any{"messages": msgs}, nil
 	}
@@ -815,7 +815,7 @@ func serviceMessagesAckHandler(q HubQuery) CommandHandler {
 			return nil, err
 		}
 		if err := h.AcknowledgeServiceMessage(ctx, args.ID); err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "ack_service: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "ack_service: ", err)
 		}
 		return map[string]any{"acknowledged": true, "id": args.ID}, nil
 	}
@@ -833,7 +833,7 @@ func alarmMessagesAckAllHandler(q HubQuery) CommandHandler {
 		}
 		n, err := h.AcknowledgeAllAlarmMessages(ctx)
 		if err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "ack_all_alarm: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "ack_all_alarm: ", err)
 		}
 		return map[string]any{"acknowledged": n}, nil
 	}
@@ -851,7 +851,7 @@ func serviceMessagesAckAllHandler(q HubQuery) CommandHandler {
 		}
 		n, err := h.AcknowledgeAllServiceMessages(ctx)
 		if err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "ack_all_service: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "ack_all_service: ", err)
 		}
 		return map[string]any{"acknowledged": n}, nil
 	}
@@ -918,7 +918,7 @@ func installModeStatusHandler(q HubQuery) CommandHandler {
 		}
 		st, err := h.InstallModeStatus(ctx)
 		if err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "install_mode_status: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "install_mode_status: ", err)
 		}
 		return st, nil
 	}
@@ -946,12 +946,12 @@ func installModeEnableHandler(q HubQuery) CommandHandler {
 		ifaceID := normalizeInstallModeInterfaceID(args.InterfaceID)
 		if args.SGTIN != "" {
 			if err := h.EnableInstallModeLocal(ctx, ifaceID, args.DurationSeconds, args.SGTIN, args.Key); err != nil {
-				return nil, NewCommandError(CommandErrorInternal, "enable_install_mode_local: "+err.Error())
+				return nil, commandErr(CommandErrorInternal, "enable_install_mode_local: ", err)
 			}
 			return map[string]any{"enabled": true, "interface_id": args.InterfaceID, "duration_seconds": args.DurationSeconds, "local": true}, nil
 		}
 		if err := h.EnableInstallMode(ctx, ifaceID, args.DurationSeconds); err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "enable_install_mode: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "enable_install_mode: ", err)
 		}
 		return map[string]any{"enabled": true, "interface_id": args.InterfaceID, "duration_seconds": args.DurationSeconds}, nil
 	}
@@ -971,7 +971,7 @@ func installModeDisableHandler(q HubQuery) CommandHandler {
 			return nil, err
 		}
 		if err := h.DisableInstallMode(ctx, normalizeInstallModeInterfaceID(args.InterfaceID)); err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "disable_install_mode: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "disable_install_mode: ", err)
 		}
 		return map[string]any{"enabled": false, "interface_id": args.InterfaceID}, nil
 	}
@@ -1003,7 +1003,7 @@ func installModeSearchHandler(q HubQuery) CommandHandler {
 		}
 		found, err := q.SearchWiredDevices(ctx, args.InterfaceID, central)
 		if err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "search_devices: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "search_devices: ", err)
 		}
 		return map[string]any{"interface_id": args.InterfaceID, "found": found}, nil
 	}
@@ -1032,7 +1032,7 @@ func backupTriggerHandler(q HubQuery) CommandHandler {
 			return nil, err
 		}
 		if err := h.TriggerBackup(ctx); err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "trigger_backup: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "trigger_backup: ", err)
 		}
 		return map[string]any{"triggered": true}, nil
 	}
@@ -1056,7 +1056,7 @@ func backupsTriggerHandler(svc BackupsService) CommandHandler {
 		}
 		id, err := svc.TriggerBackupForCentral(ctx, args.CentralName)
 		if err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "trigger_backup_for_central: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "trigger_backup_for_central: ", err)
 		}
 		return map[string]any{"id": id, "central_name": args.CentralName}, nil
 	}
@@ -1074,7 +1074,7 @@ func backupStatusHandler(q HubQuery) CommandHandler {
 		}
 		st, err := h.BackupStatus(ctx)
 		if err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "backup_status: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "backup_status: ", err)
 		}
 		return st, nil
 	}
@@ -1092,7 +1092,7 @@ func firmwareInfoHandler(q HubQuery) CommandHandler {
 		}
 		info, err := h.FirmwareInfo(ctx)
 		if err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "firmware_info: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "firmware_info: ", err)
 		}
 		return info, nil
 	}
@@ -1109,7 +1109,7 @@ func firmwareUpdateHandler(q HubQuery) CommandHandler {
 			return nil, err
 		}
 		if err := h.TriggerFirmwareUpdate(ctx); err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "trigger_firmware_update: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "trigger_firmware_update: ", err)
 		}
 		return map[string]any{"triggered": true}, nil
 	}
@@ -1127,7 +1127,7 @@ func inboxListHandler(q HubQuery) CommandHandler {
 		}
 		devs, err := h.InboxDevices(ctx)
 		if err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "inbox_list: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "inbox_list: ", err)
 		}
 		return map[string]any{"devices": devs}, nil
 	}
@@ -1149,7 +1149,7 @@ func inboxAcceptHandler(q HubQuery) CommandHandler {
 			Functions:       args.Functions,
 		}
 		if err := q.AcceptInboxDevice(ctx, args.DeviceAddress, opts); err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "inbox_accept: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "inbox_accept: ", err)
 		}
 		return map[string]any{"accepted": true, "device_address": args.DeviceAddress}, nil
 	}
@@ -1191,7 +1191,7 @@ func linksListHandler(q LinkQuery) CommandHandler {
 		}
 		links, err := q.ListLinks(ctx, args.DeviceAddress)
 		if err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "list_links: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "list_links: ", err)
 		}
 		return map[string]any{"links": links}, nil
 	}
@@ -1211,7 +1211,7 @@ func linksListAllHandler(q LinkQuery) CommandHandler {
 		}
 		links, err := q.ListAllLinks(ctx, args.Central)
 		if err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "list_all_links: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "list_all_links: ", err)
 		}
 		return map[string]any{"links": links}, nil
 	}
@@ -1227,7 +1227,7 @@ func linksAddHandler(q LinkQuery) CommandHandler {
 			return nil, NewCommandError(CommandErrorBadRequest, "sender and receiver required")
 		}
 		if err := q.AddLink(ctx, args.Sender, args.Receiver, args.Name, args.Description); err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "add_link: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "add_link: ", err)
 		}
 		return map[string]any{"added": true, "sender": args.Sender, "receiver": args.Receiver}, nil
 	}
@@ -1243,7 +1243,7 @@ func linksSetInfoHandler(q LinkQuery) CommandHandler {
 			return nil, NewCommandError(CommandErrorBadRequest, "sender and receiver required")
 		}
 		if err := q.SetLinkInfo(ctx, args.Sender, args.Receiver, args.Name, args.Description); err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "set_link_info: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "set_link_info: ", err)
 		}
 		return map[string]any{"updated": true, "sender": args.Sender, "receiver": args.Receiver}, nil
 	}
@@ -1259,7 +1259,7 @@ func linksRemoveHandler(q LinkQuery) CommandHandler {
 			return nil, NewCommandError(CommandErrorBadRequest, "sender and receiver required")
 		}
 		if err := q.RemoveLink(ctx, args.Sender, args.Receiver); err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "remove_link: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "remove_link: ", err)
 		}
 		return map[string]any{"removed": true, "sender": args.Sender, "receiver": args.Receiver}, nil
 	}
@@ -1276,7 +1276,7 @@ func linksLinkableChannelsHandler(q LinkQuery) CommandHandler {
 		}
 		channels, err := q.LinkableChannels(ctx, args.DeviceAddress)
 		if err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "linkable_channels: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "linkable_channels: ", err)
 		}
 		return map[string]any{"channels": channels}, nil
 	}
@@ -1311,7 +1311,7 @@ func linksGetParamsetHandler(q LinkQuery) CommandHandler {
 		}
 		values, err := q.GetLinkParamset(ctx, args.Address, args.PeerAddress)
 		if err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "get_link_paramset: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "get_link_paramset: ", err)
 		}
 		return map[string]any{"values": values}, nil
 	}
@@ -1347,7 +1347,7 @@ func linksPutParamsetHandler(q LinkQuery, locks EditLockVerifier) CommandHandler
 			}
 		}
 		if err := q.PutLinkParamset(ctx, args.Address, args.PeerAddress, args.Parameters); err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "put_link_paramset: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "put_link_paramset: ", err)
 		}
 		return map[string]any{"success": true}, nil
 	}
@@ -1370,7 +1370,7 @@ func linksActivateParamsetHandler(q LinkQuery) CommandHandler {
 				"receiver_channel_address and sender_channel_address required")
 		}
 		if err := q.ActivateLinkParamset(ctx, args.ReceiverChannelAddress, args.SenderChannelAddress, args.LongPress); err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "activate_link_paramset: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "activate_link_paramset: ", err)
 		}
 		return map[string]any{"success": true, "long_press": args.LongPress}, nil
 	}
@@ -1448,7 +1448,7 @@ func schedulesClimateGetHandler(q ScheduleQuery) CommandHandler {
 		}
 		s, err := q.GetClimateSchedule(ctx, args.ChannelAddress)
 		if err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "get_climate_schedule: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "get_climate_schedule: ", err)
 		}
 		return map[string]any{"schedule": s}, nil
 	}
@@ -1468,7 +1468,7 @@ func schedulesClimateSetHandler(q ScheduleQuery) CommandHandler {
 		}
 		corrections, err := q.SetClimateSchedule(ctx, args.ChannelAddress, args.Profile)
 		if err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "set_climate_schedule: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "set_climate_schedule: ", err)
 		}
 		out := map[string]any{"saved": true, "channel_address": args.ChannelAddress}
 		// Only present when the stored schedule differs from the submitted one,
@@ -1493,7 +1493,7 @@ func schedulesActiveProfileSetHandler(q ScheduleQuery) CommandHandler {
 			return nil, NewCommandError(CommandErrorBadRequest, "profile_index must be 1..6")
 		}
 		if err := q.SetActiveProfile(ctx, args.ChannelAddress, args.ProfileIndex); err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "set_active_profile: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "set_active_profile: ", err)
 		}
 		return map[string]any{"saved": true, "channel_address": args.ChannelAddress, "profile_index": args.ProfileIndex}, nil
 	}
@@ -1527,7 +1527,7 @@ func schedulesDeviceGetHandler(q ScheduleQuery) CommandHandler {
 		}
 		s, err := q.GetDeviceSchedule(ctx, args.DeviceAddress)
 		if err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "get_device_schedule: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "get_device_schedule: ", err)
 		}
 		return map[string]any{"schedule": s}, nil
 	}
@@ -1547,7 +1547,7 @@ func schedulesDeviceSetHandler(q ScheduleQuery) CommandHandler {
 		}
 		corrections, err := q.SetDeviceSchedule(ctx, args.DeviceAddress, args.Profile)
 		if err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "set_device_schedule: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "set_device_schedule: ", err)
 		}
 		out := map[string]any{"saved": true, "device_address": args.DeviceAddress}
 		if len(corrections) > 0 {
@@ -1570,7 +1570,7 @@ func schedulesDeviceActiveProfileSetHandler(q ScheduleQuery) CommandHandler {
 			return nil, NewCommandError(CommandErrorBadRequest, "profile required (e.g. P1..P6)")
 		}
 		if err := q.SetDeviceActiveProfile(ctx, args.DeviceAddress, args.Profile); err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "set_device_active_profile: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "set_device_active_profile: ", err)
 		}
 		return map[string]any{"saved": true, "device_address": args.DeviceAddress, "profile": args.Profile}, nil
 	}
@@ -1603,7 +1603,7 @@ func schedulesCopyHandler(q ScheduleQuery) CommandHandler {
 			return nil, NewCommandError(CommandErrorBadRequest, "source_device_address and target_device_address required")
 		}
 		if err := q.CopySchedule(ctx, args.SourceDeviceAddress, args.TargetDeviceAddress); err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "copy_schedule: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "copy_schedule: ", err)
 		}
 		return map[string]any{
 			"copied":                true,
@@ -1626,7 +1626,7 @@ func schedulesClimateCopyProfileHandler(q ScheduleQuery) CommandHandler {
 			return nil, NewCommandError(CommandErrorBadRequest, "source_profile and target_profile must be 1..6")
 		}
 		if err := q.CopyClimateProfile(ctx, args.SourceChannelAddress, args.SourceProfile, args.TargetChannelAddress, args.TargetProfile); err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "copy_climate_profile: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "copy_climate_profile: ", err)
 		}
 		return map[string]any{
 			"copied":                 true,
@@ -1669,7 +1669,7 @@ func sessionOpenHandler(store *configui.SessionStore, backend SessionBackend) Co
 		key := args.key()
 		descs, initial, err := backend.Open(ctx, key)
 		if err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "open: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "open: ", err)
 		}
 		// Sessions are stored without typed descriptions at the WS layer (the ws
 		// layer stays decoupled from the wire protocol). The opaque descriptions
@@ -1831,7 +1831,7 @@ func sessionSaveHandler(store *configui.SessionStore, backend SessionBackend, cp
 		if cp != nil {
 			constraints, err := cp.Constraints(ctx, key)
 			if err != nil {
-				return nil, NewCommandError(CommandErrorInternal, "constraints: "+err.Error())
+				return nil, commandErr(CommandErrorInternal, "constraints: ", err)
 			}
 			if issues := s.ValidateCrossConstraints(constraints); len(issues) > 0 {
 				msgs := make([]string, 0, len(issues))
@@ -1842,7 +1842,7 @@ func sessionSaveHandler(store *configui.SessionStore, backend SessionBackend, cp
 			}
 		}
 		if err := backend.PutParamset(ctx, key, changes); err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "put_paramset: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "put_paramset: ", err)
 		}
 		// Record to the change log after a successful write.
 		if cl != nil {
@@ -1904,7 +1904,7 @@ func reloadDeviceConfigHandler(r DeviceReloader) CommandHandler {
 			return nil, NewCommandError(CommandErrorBadRequest, "device_address required")
 		}
 		if err := r.ReloadDeviceConfig(ctx, args.DeviceAddress); err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "reload_device_config: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "reload_device_config: ", err)
 		}
 		return map[string]any{"success": true, "device_address": args.DeviceAddress}, nil
 	}
@@ -1936,7 +1936,7 @@ func reloadChannelConfigHandler(r ChannelReloader) CommandHandler {
 			return nil, NewCommandError(CommandErrorBadRequest, "channel_address required")
 		}
 		if err := r.ReloadChannelConfig(ctx, channelAddress); err != nil {
-			return nil, NewCommandError(CommandErrorInternal, "reload_channel_config: "+err.Error())
+			return nil, commandErr(CommandErrorInternal, "reload_channel_config: ", err)
 		}
 		return map[string]any{"success": true, "channel_address": channelAddress}, nil
 	}

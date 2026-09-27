@@ -42,12 +42,13 @@
   import {
     buildOverviewGroups,
     distinctCentrals,
-    distinctFunctions,
-    distinctRooms,
+    distinctNodeOptions,
     type DeviceOverviewGroup,
     type OverviewGroupMode,
   } from "$lib/overview/overview-grouping";
   import { overviewPrefs as saved, persistOverviewPrefs } from "$lib/stores/overviewFilters.svelte";
+  import { taxonomyStore } from "$lib/stores/taxonomy.svelte";
+  import { labelOf } from "$lib/taxonomy/tree";
 
   // Filter/group-mode state is seeded from the persisted module store
   // and synced back to it on every change (mirrors DeviceList.svelte's
@@ -84,6 +85,7 @@
     centralStore.refresh();
     centralStore.ensureStream();
     areasStore.ensureLoaded();
+    void taxonomyStore.refresh();
     // A central finishing bring-up makes its devices fetchable; refresh
     // the moment one flips to ready so the initializing state resolves
     // into live tiles without an operator reload.
@@ -110,8 +112,16 @@
   const anyRelevantReady = $derived(
     relevantCentrals.some((c) => c.readiness.ready),
   );
-  const rooms = $derived(distinctRooms(deviceStore.items, centralFilter || undefined));
-  const functions = $derived(distinctFunctions(deviceStore.items, centralFilter || undefined));
+  // Nested rooms and functions are named by their path ("EG › Küche"), so
+  // two of one name stay two groups and two filter choices.
+  const pathLabel = (central: string, enumId: string, path: string) =>
+    labelOf(taxonomyStore.enumOf(central, enumId), path);
+  const rooms = $derived(
+    distinctNodeOptions(deviceStore.items, "room", centralFilter || undefined, pathLabel),
+  );
+  const functions = $derived(
+    distinctNodeOptions(deviceStore.items, "function", centralFilter || undefined, pathLabel),
+  );
   // Hidden entirely when no areas are defined (settings/
   // RoomsFunctionsAdmin.svelte). areasStore.areas is already sorted.
   const areas = $derived(areasStore.areas);
@@ -128,6 +138,7 @@
         search,
       },
       areasStore.areaIdOf,
+      pathLabel,
     ),
   );
 
@@ -271,7 +282,7 @@
             ariaLabel={t("overview.filter.room_title")}
             options={[
               { value: "", label: t("devicelist.all_rooms") },
-              ...rooms.map((r) => ({ value: r, label: r })),
+              ...rooms,
             ]}
           />
         {/if}
@@ -282,7 +293,7 @@
             ariaLabel={t("overview.filter.function_title")}
             options={[
               { value: "", label: t("overview.filter.all_functions") },
-              ...functions.map((f) => ({ value: f, label: f })),
+              ...functions,
             ]}
           />
         {/if}

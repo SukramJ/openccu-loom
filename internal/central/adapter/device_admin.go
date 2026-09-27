@@ -15,6 +15,8 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
+	"github.com/SukramJ/openccu-loom/internal/model/taxonomy"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -603,4 +605,79 @@ func unionChannelAssignments(dev *device.Device, pick func(*device.Channel) []st
 	}
 	sort.Strings(out)
 	return out
+}
+
+// SetTaxonomyPaths replaces the nodes of enum an address — a device or a
+// "<device>:<no>" channel — is directly assigned to with the nodes at
+// paths (full references, "room/eg/kueche"). Unlike an assignment by name
+// it can name one of two nodes that share a name. A system that assigns by
+// reference (openccu-lite) takes the references as they are; on a flat
+// system (a CCU) every name is unique, so the references resolve to names
+// and take the name path, model stamp included.
+func (a *DeviceAdminDomain) SetTaxonomyPaths(ctx context.Context, address, enum string, paths []string) error {
+	if a.registry == nil {
+		return ErrNoDeviceBackend
+	}
+	e := taxonomy.EnumID(enum)
+	if e != taxonomy.EnumRoom && e != taxonomy.EnumFunction {
+		return fmt.Errorf("%w: assignment by path supports rooms and functions, not %q", hmerr.ErrValidation, enum)
+	}
+	refs := make([]taxonomy.Ref, 0, len(paths))
+	for _, p := range paths {
+		r, err := taxonomy.ParseRef(p)
+		if err != nil || r.Enum != e {
+			return fmt.Errorf("%w: %q is not a %s path", hmerr.ErrValidation, p, enum)
+		}
+		refs = append(refs, r)
+	}
+	devAddr := hmtypes.DeviceAddress(address)
+	for _, u := range a.registry.List() {
+		dev, ok := u.ModelRegistry.Get(devAddr)
+		if !ok {
+			continue
+		}
+		if u.HubModel == nil {
+			return fmt.Errorf("%w: hub not wired for %s", ErrNoDeviceBackend, u.Name())
+		}
+		if handled, err := u.HubModel.SetTaxonomyRefsRemote(ctx, address, e, refs); handled {
+			return err
+		}
+		names, err := flatNames(u, refs)
+		if err != nil {
+			return err
+		}
+		if address == devAddr {
+			if e == taxonomy.EnumRoom {
+				return a.SetRooms(ctx, address, names)
+			}
+			return a.SetFunctions(ctx, address, names)
+		}
+		ch := dev.Channel(address)
+		if ch == nil {
+			return fmt.Errorf("%w: %s", interfaces.ErrChannelNotFound, address)
+		}
+		if e == taxonomy.EnumRoom {
+			return a.SetChannelRooms(ctx, devAddr, ch.Number, names)
+		}
+		return a.SetChannelFunctions(ctx, devAddr, ch.Number, names)
+	}
+	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, devAddr)
+}
+
+// flatNames resolves references to the display names a flat system's
+// assignment scripts are keyed by.
+func flatNames(u *central.Unit, refs []taxonomy.Ref) ([]string, error) {
+	var tax *taxonomy.Taxonomy
+	if u.DeviceDetails != nil {
+		tax = u.DeviceDetails.Taxonomy()
+	}
+	names := make([]string, 0, len(refs))
+	for _, r := range refs {
+		n, ok := tax.Node(r)
+		if !ok {
+			return nil, fmt.Errorf("%w: no node %s", hmerr.ErrValidation, r)
+		}
+		names = append(names, n.Name)
+	}
+	return names, nil
 }

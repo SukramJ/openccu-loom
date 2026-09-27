@@ -16,6 +16,19 @@ const mockToastError = vi.fn();
 // Mocks
 // ---------------------------------------------------------------------------
 
+// A fleet that offers every feature: these cases are not about feature
+// gating, and the real store would pull in the auth store.
+vi.mock("$lib/stores/centrals.svelte", () => ({
+  centralStore: {
+    items: [],
+    offers: () => true,
+    featureAvailable: () => true,
+    centralsLacking: () => [],
+    featureOf: () => undefined,
+    byName: () => undefined,
+  },
+}));
+
 vi.mock("$lib/api/client", () => ({
   api: {
     listCentralsV2: (...args: unknown[]) => mockListCentrals(...args),

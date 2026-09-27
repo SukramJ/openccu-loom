@@ -1260,3 +1260,49 @@ func TestPatchDevice_RoomsAppliedFunctionsFailed_AuditsWhatLanded(t *testing.T) 
 		t.Errorf("audit note=%q, want it marked partial", note)
 	}
 }
+
+// pathAssigningAdmin is a stubDeviceAdmin that also assigns by path.
+type pathAssigningAdmin struct {
+	stubDeviceAdmin
+	pathAddress, pathEnum string
+	paths                 []string
+}
+
+func (p *pathAssigningAdmin) SetTaxonomyPaths(_ context.Context, address, enum string, paths []string) error {
+	p.pathAddress, p.pathEnum, p.paths = address, enum, paths
+	return nil
+}
+
+// TestRoomPathsWinOverRoomNamesInPatch pins the precedence in the device
+// and channel patches: room_paths is assigned by reference and the names
+// in rooms are not written at all.
+func TestRoomPathsWinOverRoomNamesInPatch(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		what, url string
+		handler   func(*pathAssigningAdmin) http.Handler
+		address   string
+	}{
+		{"device", "/api/v1/devices/ADDR", func(a *pathAssigningAdmin) http.Handler { return PatchDevice(a, nil) }, "ADDR"},
+		{"channel", "/api/v1/devices/ADDR/channels/2", func(a *pathAssigningAdmin) http.Handler { return PatchChannel(a, nil) }, "ADDR:2"},
+	} {
+		admin := &pathAssigningAdmin{}
+		req := httptest.NewRequest(http.MethodPatch, tc.url,
+			strings.NewReader(`{"rooms":["Küche"],"room_paths":["room/og/kueche"]}`))
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("addr", "ADDR")
+		rctx.URLParams.Add("no", "2")
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+		w := httptest.NewRecorder()
+		tc.handler(admin).ServeHTTP(w, req)
+		if w.Code != http.StatusAccepted {
+			t.Fatalf("%s: status %d, body %s", tc.what, w.Code, w.Body)
+		}
+		if admin.pathAddress != tc.address || admin.pathEnum != "room" || len(admin.paths) != 1 || admin.paths[0] != "room/og/kueche" {
+			t.Errorf("%s: path assignment = %q %q %v", tc.what, admin.pathAddress, admin.pathEnum, admin.paths)
+		}
+		if admin.lastRooms != nil {
+			t.Errorf("%s: the names were written too: %v", tc.what, admin.lastRooms)
+		}
+	}
+}

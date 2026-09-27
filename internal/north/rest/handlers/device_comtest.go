@@ -67,6 +67,9 @@ func TestDeviceCommunication(svc DeviceCommunicationTestPort, rec audit.Recorder
 		ctx, cancel := comTestPollContext(r.Context())
 		defer cancel()
 		result, err := svc.TestDeviceCommunication(ctx, addr)
+		if problem.WriteFeatureUnavailable(w, r, err) {
+			return
+		}
 		switch {
 		case err == nil:
 		case errors.Is(err, backends.ErrUnsupported):

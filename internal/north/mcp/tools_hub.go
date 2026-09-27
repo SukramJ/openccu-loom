@@ -5,6 +5,7 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -12,7 +13,10 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/taxonomy"
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
 
 // This file holds the hub- and device-derived read tools that project the
@@ -74,6 +78,28 @@ func centralsToScan(d Deps, centralName string) ([]string, error) {
 	return []string{want}, nil
 }
 
+// unavailableEntry names a central a tool skipped because it does not
+// offer the feature the tool reads, and why — so an empty list is never
+// mistaken for "this central has none".
+type unavailableEntry struct {
+	Central string `json:"central"`
+	Key     string `json:"key"`
+	Reason  string `json:"reason"`
+	Scope   string `json:"scope,omitempty"`
+}
+
+// unavailableFor reports whether central does not offer feature k.
+func unavailableFor(d Deps, central string, k hmenum.Feature) (unavailableEntry, bool) {
+	if d.Features == nil {
+		return unavailableEntry{}, false
+	}
+	fe, ok := errors.AsType[*hmerr.FeatureUnavailableError](d.Features.FeatureUnavailable(central, k))
+	if !ok {
+		return unavailableEntry{}, false
+	}
+	return unavailableEntry{Central: central, Key: string(fe.Feature), Reason: string(fe.Reason), Scope: fe.Scope}, true
+}
+
 // rfc3339OrEmpty formats a timestamp as RFC3339, or "" for the zero value
 // so an unobserved timestamp is omitted from the projection.
 func rfc3339OrEmpty(t time.Time) string {
@@ -96,6 +122,8 @@ type programSummary struct {
 
 type listProgramsOut struct {
 	Programs []programSummary `json:"programs"`
+	// Unavailable lists the scanned centrals that do not offer this.
+	Unavailable []unavailableEntry `json:"unavailable,omitempty"`
 }
 
 func registerListPrograms(s *mcpsdk.Server, d Deps) {
@@ -109,6 +137,10 @@ func registerListPrograms(s *mcpsdk.Server, d Deps) {
 			return nil, listProgramsOut{}, err
 		}
 		for _, c := range scan {
+			if u, ok := unavailableFor(d, c, hmenum.FeatureHubPrograms); ok {
+				out.Unavailable = append(out.Unavailable, u)
+				continue
+			}
 			h := d.Hubs.HubFor(c)
 			if h == nil {
 				continue
@@ -147,6 +179,8 @@ type sysvarSummary struct {
 
 type listSysvarsOut struct {
 	Sysvars []sysvarSummary `json:"sysvars"`
+	// Unavailable lists the scanned centrals that do not offer this.
+	Unavailable []unavailableEntry `json:"unavailable,omitempty"`
 }
 
 func registerListSysvars(s *mcpsdk.Server, d Deps) {
@@ -160,6 +194,10 @@ func registerListSysvars(s *mcpsdk.Server, d Deps) {
 			return nil, listSysvarsOut{}, err
 		}
 		for _, c := range scan {
+			if u, ok := unavailableFor(d, c, hmenum.FeatureHubSysvars); ok {
+				out.Unavailable = append(out.Unavailable, u)
+				continue
+			}
 			h := d.Hubs.HubFor(c)
 			if h == nil {
 				continue
@@ -211,6 +249,8 @@ type serviceMessageSummary struct {
 
 type listServiceMessagesOut struct {
 	Messages []serviceMessageSummary `json:"messages"`
+	// Unavailable lists the scanned centrals that do not offer this.
+	Unavailable []unavailableEntry `json:"unavailable,omitempty"`
 }
 
 func registerListServiceMessages(s *mcpsdk.Server, d Deps) {
@@ -224,6 +264,10 @@ func registerListServiceMessages(s *mcpsdk.Server, d Deps) {
 			return nil, listServiceMessagesOut{}, err
 		}
 		for _, c := range scan {
+			if u, ok := unavailableFor(d, c, hmenum.FeatureHubServiceMessages); ok {
+				out.Unavailable = append(out.Unavailable, u)
+				continue
+			}
 			h := d.Hubs.HubFor(c)
 			if h == nil || h.ServiceMessages == nil {
 				continue
@@ -273,6 +317,8 @@ type alarmMessageSummary struct {
 
 type listAlarmMessagesOut struct {
 	Messages []alarmMessageSummary `json:"messages"`
+	// Unavailable lists the scanned centrals that do not offer this.
+	Unavailable []unavailableEntry `json:"unavailable,omitempty"`
 }
 
 func registerListAlarmMessages(s *mcpsdk.Server, d Deps) {
@@ -286,6 +332,10 @@ func registerListAlarmMessages(s *mcpsdk.Server, d Deps) {
 			return nil, listAlarmMessagesOut{}, err
 		}
 		for _, c := range scan {
+			if u, ok := unavailableFor(d, c, hmenum.FeatureHubAlarmMessages); ok {
+				out.Unavailable = append(out.Unavailable, u)
+				continue
+			}
 			h := d.Hubs.HubFor(c)
 			if h == nil || h.Messages == nil {
 				continue
@@ -332,6 +382,8 @@ type inboxDeviceSummary struct {
 
 type listInboxOut struct {
 	Devices []inboxDeviceSummary `json:"devices"`
+	// Unavailable lists the scanned centrals that do not offer this.
+	Unavailable []unavailableEntry `json:"unavailable,omitempty"`
 }
 
 func registerListInbox(s *mcpsdk.Server, d Deps) {
@@ -345,6 +397,10 @@ func registerListInbox(s *mcpsdk.Server, d Deps) {
 			return nil, listInboxOut{}, err
 		}
 		for _, c := range scan {
+			if u, ok := unavailableFor(d, c, hmenum.FeatureHubInbox); ok {
+				out.Unavailable = append(out.Unavailable, u)
+				continue
+			}
 			h := d.Hubs.HubFor(c)
 			if h == nil || h.Inbox == nil {
 				continue
@@ -425,6 +481,15 @@ func registerGetSystemInfo(s *mcpsdk.Server, d Deps) {
 type namedGroupSummary struct {
 	Name        string `json:"name"`
 	DeviceCount int    `json:"device_count"`
+	// Paths are the taxonomy nodes carrying this name, per central — two
+	// rooms of one name on two floors are one entry with two paths.
+	Paths []groupNodePath `json:"paths,omitempty"`
+}
+
+// groupNodePath locates one taxonomy node carrying a name.
+type groupNodePath struct {
+	Central string `json:"central"`
+	Path    string `json:"path"`
 }
 
 type listRoomsOut struct {
@@ -440,16 +505,27 @@ type listFunctionsOut struct {
 // labels off a device; it receives the device value directly so the tally
 // never depends on a stable iteration order across separate Devices()
 // calls.
-func countGroups(d Deps, want string, selector func(dev *device.Device) []string) []namedGroupSummary {
+func countGroups(d Deps, want string, enum taxonomy.EnumID, selector func(dev *device.Device) []string) []namedGroupSummary {
 	if d.Devices == nil {
 		return []namedGroupSummary{}
 	}
 	want = strings.TrimSpace(want)
 	counts := map[string]int{}
 	order := []string{}
+	paths := map[string][]groupNodePath{}
+	seen := map[groupNodePath]bool{}
 	for _, dev := range d.Devices.Devices() {
-		if want != "" && d.Devices.CentralOf(dev.Address) != want {
+		central := d.Devices.CentralOf(dev.Address)
+		if want != "" && central != want {
 			continue
+		}
+		for _, a := range dev.Taxonomy() {
+			np := groupNodePath{Central: central, Path: string(a.Ref.Path)}
+			if a.Ref.Enum != enum || a.Name == "" || seen[np] {
+				continue
+			}
+			seen[np] = true
+			paths[a.Name] = append(paths[a.Name], np)
 		}
 		for _, label := range selector(dev) {
 			if label == "" {
@@ -463,7 +539,7 @@ func countGroups(d Deps, want string, selector func(dev *device.Device) []string
 	}
 	out := make([]namedGroupSummary, 0, len(order))
 	for _, name := range order {
-		out = append(out, namedGroupSummary{Name: name, DeviceCount: counts[name]})
+		out = append(out, namedGroupSummary{Name: name, DeviceCount: counts[name], Paths: paths[name]})
 	}
 	return out
 }
@@ -471,13 +547,13 @@ func countGroups(d Deps, want string, selector func(dev *device.Device) []string
 func registerListRooms(s *mcpsdk.Server, d Deps) {
 	mcpsdk.AddTool(s, &mcpsdk.Tool{
 		Name:        "list_rooms",
-		Description: "List the configured rooms with the number of devices assigned to each, optionally scoped to one central via central_name.",
+		Description: "List the configured rooms with the number of devices assigned to each and the taxonomy paths behind each name (two rooms of one name on two floors show two paths), optionally scoped to one central via central_name.",
 	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in centralScopeIn) (*mcpsdk.CallToolResult, listRoomsOut, error) {
 		want := strings.TrimSpace(in.CentralName)
 		if want != "" && !centralKnown(d, want) {
 			return nil, listRoomsOut{}, errUnknownCentral(d, want)
 		}
-		rooms := countGroups(d, want, func(dev *device.Device) []string { return dev.Rooms() })
+		rooms := countGroups(d, want, taxonomy.EnumRoom, func(dev *device.Device) []string { return dev.Rooms() })
 		return nil, listRoomsOut{Rooms: rooms}, nil
 	})
 }
@@ -491,7 +567,7 @@ func registerListFunctions(s *mcpsdk.Server, d Deps) {
 		if want != "" && !centralKnown(d, want) {
 			return nil, listFunctionsOut{}, errUnknownCentral(d, want)
 		}
-		funcs := countGroups(d, want, func(dev *device.Device) []string { return dev.Functions() })
+		funcs := countGroups(d, want, taxonomy.EnumFunction, func(dev *device.Device) []string { return dev.Functions() })
 		return nil, listFunctionsOut{Functions: funcs}, nil
 	})
 }

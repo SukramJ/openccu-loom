@@ -213,19 +213,24 @@ func (c *Channel) SetFunctions(functions []string) {
 	c.mu.Unlock()
 }
 
-// TaxonomyRefs returns a copy of the taxonomy nodes the channel is directly
-// assigned to.
-func (c *Channel) TaxonomyRefs() []taxonomy.Ref {
+// Taxonomy returns a copy of the taxonomy nodes the channel is directly
+// assigned to, with their names.
+func (c *Channel) Taxonomy() []taxonomy.Assignment {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return slices.Clone(c.taxonomyRefs)
+	return slices.Clone(c.taxonomy)
 }
 
-// SetTaxonomyRefs replaces the channel's taxonomy assignments with a copy of
-// refs.
-func (c *Channel) SetTaxonomyRefs(refs []taxonomy.Ref) {
+// TaxonomyRefs returns the references of [Channel.Taxonomy].
+func (c *Channel) TaxonomyRefs() []taxonomy.Ref {
+	return taxonomy.Refs(c.Taxonomy())
+}
+
+// SetTaxonomy replaces the channel's taxonomy assignments with a copy of
+// assignments.
+func (c *Channel) SetTaxonomy(assignments []taxonomy.Assignment) {
 	c.mu.Lock()
-	c.taxonomyRefs = slices.Clone(refs)
+	c.taxonomy = slices.Clone(assignments)
 	c.mu.Unlock()
 }
 

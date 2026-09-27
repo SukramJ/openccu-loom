@@ -167,7 +167,7 @@ func TestCreateCentral_Happy(t *testing.T) {
 	body := strings.NewReader(`{"Name":"office","Host":"10.0.0.5","Enabled":true}`)
 	req := httptest.NewRequest(http.MethodPost, "/admin/centrals", body)
 	w := httptest.NewRecorder()
-	CreateCentral(svc, audit.NoopRecorder()).ServeHTTP(w, req)
+	CreateCentral(svc, audit.NoopRecorder(), nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d body=%s", w.Code, w.Body.String())
@@ -186,7 +186,7 @@ func TestCreateCentral_BadBody_Returns400(t *testing.T) {
 	svc := &fakeCentralAdminService{}
 	req := httptest.NewRequest(http.MethodPost, "/admin/centrals", strings.NewReader("NOT JSON"))
 	w := httptest.NewRecorder()
-	CreateCentral(svc, nil).ServeHTTP(w, req)
+	CreateCentral(svc, nil, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
@@ -199,7 +199,7 @@ func TestCreateCentral_MissingName_Returns400(t *testing.T) {
 	body := strings.NewReader(`{"Host":"10.0.0.5"}`)
 	req := httptest.NewRequest(http.MethodPost, "/admin/centrals", body)
 	w := httptest.NewRecorder()
-	CreateCentral(svc, nil).ServeHTTP(w, req)
+	CreateCentral(svc, nil, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 when name missing, got %d body=%s", w.Code, w.Body.String())
@@ -212,7 +212,7 @@ func TestCreateCentral_MissingHost_Returns400(t *testing.T) {
 	body := strings.NewReader(`{"Name":"office"}`)
 	req := httptest.NewRequest(http.MethodPost, "/admin/centrals", body)
 	w := httptest.NewRecorder()
-	CreateCentral(svc, nil).ServeHTTP(w, req)
+	CreateCentral(svc, nil, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 when host missing, got %d body=%s", w.Code, w.Body.String())
@@ -228,7 +228,7 @@ func TestUpdateCentral_Happy(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/admin/centrals/home", body)
 	req = withChiParam(req, "name", "home")
 	w := httptest.NewRecorder()
-	UpdateCentral(svc, audit.NoopRecorder()).ServeHTTP(w, req)
+	UpdateCentral(svc, audit.NoopRecorder(), nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d body=%s", w.Code, w.Body.String())
@@ -246,7 +246,7 @@ func TestUpdateCentral_MissingHost_Returns400(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/admin/centrals/home", body)
 	req = withChiParam(req, "name", "home")
 	w := httptest.NewRecorder()
-	UpdateCentral(svc, nil).ServeHTTP(w, req)
+	UpdateCentral(svc, nil, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
@@ -265,7 +265,7 @@ func TestUpdateCentral_MissingEnabled_Returns400AndDoesNotDisable(t *testing.T) 
 	req := httptest.NewRequest(http.MethodPut, "/admin/centrals/home", body)
 	req = withChiParam(req, "name", "home")
 	w := httptest.NewRecorder()
-	UpdateCentral(svc, nil).ServeHTTP(w, req)
+	UpdateCentral(svc, nil, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d body=%s", w.Code, w.Body.String())
@@ -291,7 +291,7 @@ func TestUpdateCentral_MissingInterfaces_Returns400AndKeepsThem(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/admin/centrals/home", body)
 	req = withChiParam(req, "name", "home")
 	w := httptest.NewRecorder()
-	UpdateCentral(svc, nil).ServeHTTP(w, req)
+	UpdateCentral(svc, nil, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d body=%s", w.Code, w.Body.String())
@@ -333,7 +333,7 @@ func TestUpdateCentral_PartialBody_PreservesOmittedFields(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/admin/centrals/home", body)
 	req = withChiParam(req, "name", "home")
 	w := httptest.NewRecorder()
-	UpdateCentral(svc, nil).ServeHTTP(w, req)
+	UpdateCentral(svc, nil, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d body=%s", w.Code, w.Body.String())
@@ -474,7 +474,7 @@ func TestUpdateCentral_MaskedPassword_RestoresStoredCredential(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/admin/centrals/home", body)
 	req = withChiParam(req, "name", "home")
 	w := httptest.NewRecorder()
-	UpdateCentral(svc, nil).ServeHTTP(w, req)
+	UpdateCentral(svc, nil, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d body=%s", w.Code, w.Body.String())
@@ -495,7 +495,7 @@ func TestUpdateCentral_RealPassword_PersistsAsIs(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/admin/centrals/home", body)
 	req = withChiParam(req, "name", "home")
 	w := httptest.NewRecorder()
-	UpdateCentral(svc, nil).ServeHTTP(w, req)
+	UpdateCentral(svc, nil, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d body=%s", w.Code, w.Body.String())
@@ -519,7 +519,7 @@ func TestUpdateCentral_AbsentPasswordKey_KeepsStoredCredential(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/admin/centrals/home", body)
 	req = withChiParam(req, "name", "home")
 	w := httptest.NewRecorder()
-	UpdateCentral(svc, nil).ServeHTTP(w, req)
+	UpdateCentral(svc, nil, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d body=%s", w.Code, w.Body.String())
@@ -541,7 +541,7 @@ func TestUpdateCentral_NullPassword_KeepsStoredCredential(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/admin/centrals/home", body)
 	req = withChiParam(req, "name", "home")
 	w := httptest.NewRecorder()
-	UpdateCentral(svc, nil).ServeHTTP(w, req)
+	UpdateCentral(svc, nil, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d body=%s", w.Code, w.Body.String())
@@ -562,7 +562,7 @@ func TestUpdateCentral_ExplicitEmptyPassword_ClearsStoredCredential(t *testing.T
 	req := httptest.NewRequest(http.MethodPut, "/admin/centrals/home", body)
 	req = withChiParam(req, "name", "home")
 	w := httptest.NewRecorder()
-	UpdateCentral(svc, nil).ServeHTTP(w, req)
+	UpdateCentral(svc, nil, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d body=%s", w.Code, w.Body.String())
@@ -580,7 +580,7 @@ func TestCreateCentral_MaskedPassword_ClearsToEmpty(t *testing.T) {
 	body := strings.NewReader(`{"Name":"office","Host":"10.0.0.5","password_plain":"***"}`)
 	req := httptest.NewRequest(http.MethodPost, "/admin/centrals", body)
 	w := httptest.NewRecorder()
-	CreateCentral(svc, nil).ServeHTTP(w, req)
+	CreateCentral(svc, nil, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d body=%s", w.Code, w.Body.String())
@@ -645,13 +645,13 @@ func TestCentralWriteRefusedForCleartextPasswordReturns400(t *testing.T) {
 		{
 			name: "create",
 			handler: func(svc CentralAdminService) http.HandlerFunc {
-				return CreateCentral(svc, nil)
+				return CreateCentral(svc, nil, nil)
 			},
 		},
 		{
 			name: "update",
 			handler: func(svc CentralAdminService) http.HandlerFunc {
-				return UpdateCentral(svc, nil)
+				return UpdateCentral(svc, nil, nil)
 			},
 		},
 	}

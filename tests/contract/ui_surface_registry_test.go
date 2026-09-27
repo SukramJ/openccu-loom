@@ -5,6 +5,7 @@ package contract
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -319,7 +320,8 @@ func TestE2ESurfaceFixtureMatchesRegistry(t *testing.T) {
 	var fixture struct {
 		Effective map[string]bool `json:"effective"`
 		Surfaces  []struct {
-			ID string `json:"id"`
+			ID   string `json:"id"`
+			Gate string `json:"gate"`
 		} `json:"surfaces"`
 	}
 	if err := json.Unmarshal(raw, &fixture); err != nil {
@@ -327,13 +329,19 @@ func TestE2ESurfaceFixtureMatchesRegistry(t *testing.T) {
 	}
 
 	inFixture := map[string]bool{}
+	gates := map[string]string{}
 	for _, s := range fixture.Surfaces {
 		inFixture[s.ID] = true
+		gates[s.ID] = s.Gate
 	}
 	var missing []string
 	for _, s := range surface.Registry() {
 		if !inFixture[string(s.ID)] {
 			missing = append(missing, string(s.ID))
+		} else if gates[string(s.ID)] != string(s.Gate) {
+			// The client applies the gates; a fixture without one lets
+			// the browser suite offer a view the daemon would not.
+			missing = append(missing, fmt.Sprintf("%s (gate %q, fixture %q)", s.ID, s.Gate, gates[string(s.ID)]))
 		}
 		if _, ok := fixture.Effective[string(s.ID)]; !ok {
 			missing = append(missing, string(s.ID)+" (effective)")

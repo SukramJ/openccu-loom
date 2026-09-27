@@ -145,8 +145,8 @@ func (d *Discoverer) scan(ctx context.Context) {
 	}
 
 	d.mu.Lock()
-	for serial, ccu := range d.found {
-		if now.Sub(ccu.LastSeen) > staleAfter {
+	for serial := range d.found {
+		if now.Sub(d.found[serial].LastSeen) > staleAfter {
 			delete(d.found, serial)
 		}
 	}
@@ -183,8 +183,8 @@ func (d *Discoverer) List() []DiscoveredCCU {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	out := make([]DiscoveredCCU, 0, len(d.found))
-	for _, ccu := range d.found {
-		out = append(out, ccu)
+	for serial := range d.found {
+		out = append(out, d.found[serial])
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Name != out[j].Name {

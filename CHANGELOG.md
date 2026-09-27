@@ -30,8 +30,9 @@ CCU; the list below is what an API client can already observe.
   admin API and the setup API. Rules are enforced on every write: an
   openccu-lite central needs a token and carries no username, password,
   port overrides or CUxD; a CCU central carries no token or fingerprint.
-  An `auto` central is accepted but not brought up by this build yet — it
-  shows as degraded with the reason. REST API 11.4.0.
+  An `auto` central identifies what answers at its address before it comes
+  up (shown as waiting while it does) and stores the resolved type.
+  REST API 11.4.0.
 - An openccu-lite central comes up through the box's API: readiness from
   the box's health and interface state (with the reason — box starting,
   token rejected, token without the read tier, no interface running —
@@ -85,6 +86,79 @@ CCU; the list below is what an API client can already observe.
   (administer, configure, operate, read) maps to the admin, operator and
   viewer roles as a CCU user level does, and the session opened for the
   check is closed again at once.
+- An operation a central does not offer right now — its system has no
+  such thing, its API token lacks the scope, or it is not ready — is
+  answered with `422` and problem type `feature_unavailable`, whose
+  `feature` member names the central, the feature key, the reason and the
+  missing scope; WebSocket commands answer error code
+  `feature_unavailable` with the same `details`. MCP hub list tools name
+  such a central under `unavailable` instead of returning an empty share.
+  The Home Assistant hub plane declares alarm messages, service messages,
+  the inbox and the system update only while the central offers them, and
+  retracts them when that changes. `/info` reports `central.features.v1`
+  and `south.openccu_lite.v1`; the programs, system-variables, inbox,
+  heating-groups and backups views carry a `feature:<key>` gate. A restore
+  the system refuses as invalid answers `422`, an ambiguous room or
+  function name `409` with the candidate paths, an unknown one `422`.
+- Rooms, functions and whatever else a system organises its devices by are
+  a taxonomy of nested nodes. Devices and channels on REST, WebSocket and
+  the MQTT info payload gain a `taxonomy` array (`enum`, `path`, `name`,
+  `parent_path`) next to the unchanged `rooms` and `functions` names;
+  `GET /rooms` and `GET /functions` name the nodes behind each name
+  (`refs`); `GET /taxonomy` (WebSocket `taxonomy.list`, MCP `get_taxonomy`)
+  serves every central's trees, empty nodes included. `room_paths` and
+  `function_paths` on the device and channel patch assign by node, which
+  is how one of two rooms of the same name is chosen. Nodes are created,
+  renamed, moved and deleted with `POST`/`PATCH`/`DELETE
+  /taxonomy/{central}/{enum}/nodes` and the matching WebSocket commands;
+  on a CCU, whose rooms and functions are flat, only root nodes of those
+  two enums, and nesting or moving is refused. The room and function
+  create answers carry `path`. WebSocket API 1.11.
+- Adding a system starts with `POST /centrals/probe`, which says what
+  answers at an address — a CCU, an openccu-lite box (with its API
+  versions, whether it offers pairing and its HomeMatic IP key mode) or
+  nothing known — and, over HTTPS with a certificate no authority signed,
+  the fingerprint to pin. `POST /centrals/pairing` asks an openccu-lite
+  box's administrator to approve this daemon with full, control-only or
+  read-only access and returns the six-digit code to enter on the box;
+  `GET /centrals/pairing/{id}` (long-poll with `?wait=`) follows the
+  request, `DELETE` withdraws it. A central created or updated with
+  `pairing_id` takes the token the approval yielded; the token itself
+  never reaches the client. The same three are open without a session at
+  `/setup/probe` and `/setup/pairing` while first-run setup is pending,
+  and the setup wizard's system accepts a `port` and a `pairing_id`. SSDP
+  discovery labels an openccu-lite box (`system_type`).
+- The web UI hides what a system cannot do instead of offering it and
+  failing: a view no configured system serves (programs, system variables,
+  the inbox on a fleet of openccu-lite boxes; heating groups and backups
+  without the token's scope) leaves the navigation, a view some systems
+  lack names them and why, and reboot, shutdown, safe mode, location,
+  firmware installs, backups, message acknowledgement, renaming and room
+  assignment disappear per system with the reason shown — "openccu-lite
+  does not offer it" or "the API token lacks the scope power".
+- Adding a system in the setup wizard or under Settings → CCUs starts
+  with "Identify system": an openccu-lite box is asked once more over
+  HTTPS, shows its certificate fingerprint to compare, and is then paired
+  — the six-digit code to enter on the box, the live state, cancel — or
+  given a pasted API token. A box is added without username, password or
+  CUxD; editing one keeps its stored token unless a new pairing or token
+  replaces it, and names the features the token's scopes do not cover.
+- Systems that nest their rooms and functions (openccu-lite) are edited
+  as trees under Settings → Rooms & functions: create a node below
+  another, rename, move and delete it. A device's rooms and functions on
+  such a system are picked from the tree and shown with their path
+  ("Ground floor › Kitchen"), and the overview and the alarm sensor
+  pickers group and filter by that path, so two rooms of one name stay
+  apart. A CCU's flat rooms and functions work as before.
+
+#### Changed (breaking) — REST API 12.0.0
+
+- `POST /rooms` and `POST /functions` answer `id` as an integer — what the
+  daemon always sent — and the API now documents it so; a generated client
+  that typed it as a string must be regenerated. On a system whose nodes
+  have no numeric id (openccu-lite) `id` is absent and `path` names the new
+  node. Everything else in this release is additive; the major follows the
+  contract guard's classification of this one correction.
 
 #### Fixed
 

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 11.4.0
+  version: 12.0.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -2032,6 +2032,127 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SetupStatusResponse"
+  /setup/probe:
+    post:
+      operationId: setupProbeCentral
+      summary: Identify the system at an address (first-run wizard)
+      description: |
+        Reads what answers at the address: a CCU, an openccu-lite box (ready,
+        or starting), or neither. Over HTTPS a certificate no trusted
+        authority signed is read under a pin of the certificate the server
+        presented, and that fingerprint is reported for the operator to
+        confirm; only the open version document is read and no credential
+        is sent. Open only while first-run setup is required, like `POST /setup`, and rate-limited like the login.
+      tags: [setup]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CentralProbeRequest" }
+      responses:
+        "200":
+          description: What answers there
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CentralProbeResult" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "502":
+          description: Nothing could be reached at the address
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "403":
+          description: First-run onboarding disabled by bootstrap.allow_first_run_setup
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /setup/pairing:
+    post:
+      operationId: setupStartCentralPairing
+      summary: Start client pairing with an openccu-lite box
+      description: |
+        Asks the box's administrator to approve this daemon and answers the
+        six-digit code to enter on the box. The token an approved pairing
+        yields stays in the daemon; a central created with the answer's
+        `pairing_id` takes it. Pairing never grants the backup or power
+        scopes; paste a token created on the box for those.
+      tags: [setup]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CentralPairingRequest" }
+      responses:
+        "201":
+          description: Pairing started
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CentralPairingStarted" }
+        "403":
+          description: The box does not accept a pairing request from here (switched off, or not its local network)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "502":
+          description: The box could not be reached
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /setup/pairing/{id}:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    get:
+      operationId: setupGetCentralPairing
+      summary: A pairing's state
+      description: "`?wait=<seconds>` long-polls the box, up to 25 s."
+      tags: [setup]
+      security: []
+      parameters:
+        - { in: query, name: wait, required: false, schema: { type: integer, minimum: 0 } }
+      responses:
+        "200":
+          description: The state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CentralPairingStatus" }
+        "404":
+          description: No such pairing
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "403":
+          description: First-run onboarding disabled by bootstrap.allow_first_run_setup
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    delete:
+      operationId: setupCancelCentralPairing
+      summary: Withdraw a pairing
+      tags: [setup]
+      security: []
+      responses:
+        "204": { description: Withdrawn }
+        "404":
+          description: No such pairing
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "403":
+          description: First-run onboarding disabled by bootstrap.allow_first_run_setup
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /setup:
     post:
       operationId: setup
@@ -3600,6 +3721,129 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/InboxDevice" }
+  /taxonomy:
+    get:
+      operationId: getTaxonomy
+      summary: Every central's taxonomy trees (rooms, functions, and other enums)
+      description: |
+        The only surface that shows nodes nothing is assigned to, so a
+        tree picker reads it rather than the device list. A CCU's
+        rooms and functions are flat enums whose node ids are the CCU's
+        object ids; an openccu-lite system nests nodes and may define
+        further enums.
+      tags: [hub]
+      parameters:
+        - in: query
+          name: central
+          required: false
+          schema: { type: string }
+          description: Restrict the answer to one central; unknown is 404.
+      responses:
+        "200":
+          description: The taxonomies
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxonomyResponse" }
+        "404":
+          description: Unknown central
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+  /taxonomy/{central}/{enum}/nodes:
+    parameters:
+      - { in: path, name: central, required: true, schema: { type: string } }
+      - { in: path, name: enum, required: true, schema: { type: string } }
+    post:
+      operationId: createTaxonomyNode
+      summary: Create a taxonomy node (operator)
+      description: |
+        A node below `parent_path` needs the central's `taxonomy.tree`
+        feature; a CCU's rooms and functions are flat, so there only a
+        root node of `room` or `function` can be created.
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TaxonomyNodeCreateRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxonomyNodeCreated" }
+        "404":
+          description: Unknown central or parent
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "422":
+          description: Invalid node, or a feature the central lacks (`feature_unavailable`)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+    patch:
+      operationId: updateTaxonomyNode
+      summary: Rename and/or move a taxonomy node (operator)
+      tags: [hub]
+      parameters:
+        - in: query
+          name: path
+          required: true
+          schema: { type: string }
+          description: The node's path inside the enum (`eg/kueche`).
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TaxonomyNodeUpdateRequest" }
+      responses:
+        "204": { description: Updated }
+        "404":
+          description: Unknown central or node
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "422":
+          description: Invalid change, or a feature the central lacks (`feature_unavailable`)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+    delete:
+      operationId: deleteTaxonomyNode
+      summary: Delete a taxonomy node and its subtree (operator)
+      description: The addresses assigned to the deleted nodes keep existing and lose the assignment.
+      tags: [hub]
+      parameters:
+        - in: query
+          name: path
+          required: true
+          schema: { type: string }
+          description: The node's path inside the enum (`eg/kueche`).
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      responses:
+        "204": { description: Deleted }
+        "404":
+          description: Unknown central or node
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "422":
+          description: A feature the central lacks (`feature_unavailable`)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
   /rooms:
     get:
       operationId: listRooms
@@ -6423,6 +6667,116 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /centrals/probe:
+    post:
+      operationId: probeCentral
+      summary: Identify the system at an address (admin)
+      description: |
+        Reads what answers at the address: a CCU, an openccu-lite box (ready,
+        or starting), or neither. Over HTTPS a certificate no trusted
+        authority signed is read under a pin of the certificate the server
+        presented, and that fingerprint is reported for the operator to
+        confirm; only the open version document is read and no credential
+        is sent.
+      tags: [central-admin]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CentralProbeRequest" }
+      responses:
+        "200":
+          description: What answers there
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CentralProbeResult" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "502":
+          description: Nothing could be reached at the address
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+  /centrals/pairing:
+    post:
+      operationId: startCentralPairing
+      summary: Start client pairing with an openccu-lite box
+      description: |
+        Asks the box's administrator to approve this daemon and answers the
+        six-digit code to enter on the box. The token an approved pairing
+        yields stays in the daemon; a central created with the answer's
+        `pairing_id` takes it. Pairing never grants the backup or power
+        scopes; paste a token created on the box for those.
+      tags: [central-admin]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CentralPairingRequest" }
+      responses:
+        "201":
+          description: Pairing started
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CentralPairingStarted" }
+        "403":
+          description: The box does not accept a pairing request from here (switched off, or not its local network)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "502":
+          description: The box could not be reached
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+  /centrals/pairing/{id}:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    get:
+      operationId: getCentralPairing
+      summary: A pairing's state
+      description: "`?wait=<seconds>` long-polls the box, up to 25 s."
+      tags: [central-admin]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - { in: query, name: wait, required: false, schema: { type: integer, minimum: 0 } }
+      responses:
+        "200":
+          description: The state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CentralPairingStatus" }
+        "404":
+          description: No such pairing
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+    delete:
+      operationId: cancelCentralPairing
+      summary: Withdraw a pairing
+      tags: [central-admin]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      responses:
+        "204": { description: Withdrawn }
+        "404":
+          description: No such pairing
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
   /centrals/discovered:
     get:
       operationId: listDiscoveredCentrals
@@ -7793,17 +8147,22 @@ components:
     CreatedNamedResource:
       type: object
       description: |
-        Response of the room / function create verbs: the id the CCU assigned
-        and the name it was created under. The name is echoed rather than
-        assumed, because the CCU normalises it.
-      required: [id, name]
+        Response of the room / function create verbs: the id the CCU assigned,
+        the name it was created under, and the node's path inside its enum.
+        The name is echoed rather than assumed, because the CCU normalises it.
+      required: [name, path]
       properties:
         id:
-          type: string
-          description: CCU-assigned identifier of the created object.
+          type: integer
+          description: |
+            The CCU's numeric object id; absent for a system without one
+            (openccu-lite), whose nodes are addressed by `path`.
         name:
           type: string
-          description: Name as the CCU stored it.
+          description: Name as the system stored it.
+        path:
+          type: string
+          description: The node's path inside its enum (on a CCU the object id as a string).
     LinkParamset:
       type: object
       additionalProperties: true
@@ -8274,6 +8633,7 @@ components:
             - https://openccu-loom.dev/errors/bad_request
             - https://openccu-loom.dev/errors/service_unready
             - https://openccu-loom.dev/errors/upstream_unavailable
+            - https://openccu-loom.dev/errors/feature_unavailable
         title: { type: string }
         status: { type: integer }
         detail: { type: string }
@@ -8293,6 +8653,26 @@ components:
             - bad_request
             - service_unready
             - upstream_unavailable
+            - feature_unavailable
+        feature:
+          type: object
+          required: [central, key, reason]
+          description: |
+            Set on a `feature_unavailable` problem (HTTP 422): the
+            operation needs a feature the target central does not offer
+            right now. The same key and reason appear in that central's
+            `features` map on `GET /system/ccu`.
+          properties:
+            central: { type: string }
+            key:
+              type: string
+              description: The feature key, for example `system.reboot` or `hub.sysvars`.
+            reason:
+              type: string
+              enum: [not_supported_by_system, missing_scope, not_ready]
+            scope:
+              type: string
+              description: The credential scope that would grant it, when `reason` is `missing_scope`.
         errors:
           type: array
           items:
@@ -8370,7 +8750,12 @@ components:
           type: array
           description: |
             Runtime feature set. Always-on entries:
-            `rest.v1`, `ws.broadcasts.v1`, `errors.problem_details.v1`.
+            `rest.v1`, `ws.broadcasts.v1`, `errors.problem_details.v1`,
+            `central.features.v1` (each central reports what it offers in
+            `features` on `GET /system/ccu`, and an operation a central
+            does not offer answers the `feature_unavailable` problem),
+            `south.openccu_lite.v1` (a central can be an openccu-lite
+            system: `system_type: openccu-lite`).
             Conditional entries surface only when configured:
             `mqtt.discovery.v1`, `mqtt.raw.v1`, `matter.bridge.v1`,
             `auth.oidc.v1`, `auth.ccu.v1`, `webhook.inbound.v1`,
@@ -8405,6 +8790,8 @@ components:
               - rest.v1
               - ws.broadcasts.v1
               - errors.problem_details.v1
+              - central.features.v1
+              - south.openccu_lite.v1
               - mqtt.discovery.v1
               - mqtt.raw.v1
               - matter.bridge.v1
@@ -8797,6 +9184,103 @@ components:
             `/config` path-level description for the canonical key
             catalogue.
           additionalProperties: { type: boolean }
+    TaxonomyNodeCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        parent_path:
+          type: string
+          description: The parent node's path inside the enum; absent or empty for a root node.
+        name: { type: string }
+    TaxonomyNodeCreated:
+      type: object
+      required: [path]
+      properties:
+        path:
+          type: string
+          description: The new node's path inside the enum.
+    TaxonomyNodeUpdateRequest:
+      type: object
+      properties:
+        name: { type: string }
+        parent_path:
+          type: string
+          description: Move below this node; an empty string moves to the root.
+        position:
+          type: integer
+          description: Zero-based place among the new siblings; absent appends.
+    TaxonomyResponse:
+      type: object
+      required: [centrals]
+      properties:
+        centrals:
+          type: array
+          items: { $ref: "#/components/schemas/TaxonomyCentral" }
+    TaxonomyCentral:
+      type: object
+      required: [central, revision, writable, tree, enums]
+      properties:
+        central: { type: string }
+        revision:
+          type: integer
+          description: The source's revision counter; 0 for a system without one (a CCU).
+        writable:
+          type: boolean
+          description: Whether nodes can be created, renamed and deleted (feature `taxonomy.edit`).
+        tree:
+          type: boolean
+          description: Whether nodes can nest (feature `taxonomy.tree`); a CCU's enums are flat.
+        enums:
+          type: array
+          items: { $ref: "#/components/schemas/TaxonomyEnum" }
+    TaxonomyEnum:
+      type: object
+      required: [id, nodes]
+      properties:
+        id:
+          type: string
+          description: The enum id, for example `room` or `function`.
+        names:
+          type: object
+          additionalProperties: { type: string }
+          description: The enum's display name per language tag.
+        nodes:
+          type: array
+          items: { $ref: "#/components/schemas/TaxonomyNode" }
+    TaxonomyNode:
+      type: object
+      required: [id, path, name]
+      properties:
+        id: { type: string }
+        path:
+          type: string
+          description: The node's path inside the enum.
+        name: { type: string }
+        icon: { type: string }
+        children:
+          type: array
+          items: { $ref: "#/components/schemas/TaxonomyNode" }
+    TaxonomyAssignment:
+      type: object
+      required: [enum, path, name]
+      description: |
+        One taxonomy node an address is directly assigned to. On a CCU
+        every enum is flat and a node's path is the CCU's object id of
+        the room or function; an openccu-lite system nests nodes
+        (`eg/wohnzimmer`).
+      properties:
+        enum:
+          type: string
+          description: The enum id, for example `room` or `function`.
+        path:
+          type: string
+          description: The node's path inside the enum, node ids joined by `/`.
+        name:
+          type: string
+          description: The node's display name.
+        parent_path:
+          type: string
+          description: The parent node's path inside the enum; absent for a root node.
     DeviceSummary:
       type: object
       required:
@@ -8873,6 +9357,16 @@ components:
           type: array
           items: { type: string }
           description: Resolved "Gewerke" (function) labels for the device.
+        taxonomy:
+          type: array
+          items: { $ref: "#/components/schemas/TaxonomyAssignment" }
+          description: |
+            Every taxonomy node the device or one of its channels is
+            directly assigned to, in every enum (rooms, functions and
+            whatever else the system defines), with the node's path.
+            `rooms` and `functions` keep carrying the names; this adds
+            what names cannot say when two nodes share one or nodes nest.
+            Omitted when the device has no assignment.
         master_pushes_config_pending:
           type: boolean
           description: |
@@ -9106,6 +9600,12 @@ components:
             map functions at channel granularity instead of folding them
             up to the device. Omitted when the channel carries no function
             assignment.
+        taxonomy:
+          type: array
+          items: { $ref: "#/components/schemas/TaxonomyAssignment" }
+          description: |
+            The taxonomy nodes the channel is directly assigned to, in
+            every enum, with their paths. Omitted when there are none.
         is_custom_dp_primary:
           type: boolean
           description: |
@@ -12262,8 +12762,18 @@ components:
           enum: [always, standalone]
         gate:
           type: string
-          description: Runtime capability the surface additionally needs.
-          enum: [matter, history]
+          description: |
+            Runtime capability the surface additionally needs. A
+            `feature:<key>` gate is open while at least one central
+            offers that feature (see `features` on `GET /system/ccu`).
+          enum:
+            - matter
+            - history
+            - feature:hub.programs
+            - feature:hub.sysvars
+            - feature:hub.inbox
+            - feature:heating_groups.read
+            - feature:system.backup.create
         warn:
           type: string
           description: |
@@ -12564,6 +13074,88 @@ components:
             pattern names a model, a channel and a parameter, none of
             which identify a CCU.
 
+    CentralProbeRequest:
+      type: object
+      required: [host]
+      properties:
+        host: { type: string }
+        port:
+          type: integer
+          description: The web server port; 0 or absent means 80, or 443 with tls.
+        tls: { type: boolean }
+        tls_insecure_skip_verify: { type: boolean }
+    CentralProbeResult:
+      type: object
+      required: [system_type, ready]
+      properties:
+        system_type:
+          type: string
+          enum: [ccu, openccu-lite, unknown]
+        ready:
+          type: boolean
+          description: Whether the system serves its API now; an openccu-lite box that is starting is identified but not ready.
+        tls_fingerprint:
+          type: string
+          description: SHA-256 (lower-case hex) of the certificate the server presented over HTTPS, to pin.
+        lite: { $ref: "#/components/schemas/LiteProbeInfo" }
+    LiteProbeInfo:
+      type: object
+      required: [pairing_available]
+      properties:
+        implementation: { type: string }
+        api_majors:
+          type: object
+          additionalProperties: { type: integer }
+        pairing_available: { type: boolean }
+        hmip_key_mode: { $ref: "#/components/schemas/HMIPKeyMode" }
+    HMIPKeyMode:
+      type: object
+      required: [keyserver_mode, device_keys, offline_pairing]
+      description: The key-mode summary of a box's HomeMatic IP radio; it never carries a key.
+      properties:
+        keyserver_mode: { type: string }
+        device_keys: { type: integer }
+        offline_pairing: { type: boolean }
+    CentralPairingRequest:
+      type: object
+      required: [host]
+      properties:
+        host: { type: string }
+        port: { type: integer }
+        tls: { type: boolean }
+        tls_fingerprint:
+          type: string
+          description: The certificate to pin (from the probe); needed over HTTPS for a certificate no trusted authority signed.
+        access:
+          type: string
+          enum: [full, control, read]
+          description: What to ask the box's administrator for; full is the default.
+    CentralPairingStarted:
+      type: object
+      required: [pairing_id, code, expires_in]
+      properties:
+        pairing_id: { type: string }
+        code:
+          type: string
+          description: The six digits the box's administrator enters on the box.
+        fingerprint:
+          type: string
+          description: The certificate fingerprint both sides agreed on; empty over plain HTTP.
+        expires_in:
+          type: integer
+          description: Seconds the pairing request stays valid.
+    CentralPairingStatus:
+      type: object
+      required: [state]
+      properties:
+        state:
+          type: string
+          enum: [pending, approved, rejected, expired, error]
+        scopes:
+          type: array
+          items: { type: string }
+          description: The scopes an approved pairing granted.
+        error: { type: string }
     CentralRow:
       type: object
       required: [name, host, interfaces, enabled]
@@ -12631,6 +13223,13 @@ components:
           description: >-
             SHA-256 (lower-case hex) of the openccu-lite system's certificate.
             When set, TLS trusts exactly this certificate. Requires tls.
+        pairing_id:
+          type: string
+          writeOnly: true
+          description: >-
+            The id of an approved client pairing (POST /centrals/pairing). The
+            central takes that pairing's token and pinned fingerprint on the
+            server; the token never travels through the client.
         username:
           type: string
         password_env:
@@ -13237,6 +13836,13 @@ components:
       properties:
         name: { type: string }
         device_count: { type: integer }
+        refs:
+          type: array
+          items: { $ref: "#/components/schemas/NodeRef" }
+          description: |
+            The taxonomy nodes carrying this name, per central. Two nodes
+            of one name (a "Küche" on two floors) are one entry with two
+            refs; omitted when no device carries a node reference.
 
     Incident:
       type: object
@@ -13376,6 +13982,17 @@ components:
         ends_at: { type: string }
         randomize: { type: boolean }
 
+    NodeRef:
+      type: object
+      required: [central, path]
+      description: One taxonomy node, located by central and path inside its enum.
+      properties:
+        central: { type: string }
+        path: { type: string }
+        parent_path:
+          type: string
+          description: The parent node's path; absent for a root node.
+
     RoomEntry:
       type: object
       required: [name, device_count]
@@ -13383,6 +14000,13 @@ components:
       properties:
         name: { type: string }
         device_count: { type: integer }
+        refs:
+          type: array
+          items: { $ref: "#/components/schemas/NodeRef" }
+          description: |
+            The taxonomy nodes carrying this name, per central. Two nodes
+            of one name (a "Küche" on two floors) are one entry with two
+            refs; omitted when no device carries a node reference.
 
     AddonUpdateStatus:
       type: object
@@ -14382,6 +15006,10 @@ components:
             otherwise.
         manufacturer: { type: string }
         model: { type: string }
+        system_type:
+          type: string
+          enum: [ccu, openccu-lite]
+          description: How the discovered system is reached, from its UPnP description; the wizard pre-selects it.
         last_seen: { type: string, format: date-time }
         already_configured: { type: boolean }
     DownloadSystemFirmwareRequest:
@@ -14615,6 +15243,17 @@ components:
           description: |
             Replaces the channel's function (Gewerk)
             assignments. Unknown names are silently skipped.
+        room_paths:
+          type: array
+          items: { type: string }
+          description: |
+            Assign by node reference (`room/eg/kueche`) instead of by name;
+            wins over `rooms` when both are given. A reference names one of
+            two rooms that share a name. Paths come from `GET /taxonomy`.
+        function_paths:
+          type: array
+          items: { type: string }
+          description: As `room_paths`, for functions (`function/licht`).
     PatchDeviceRequest:
       type: object
       properties:
@@ -14630,6 +15269,17 @@ components:
         functions:
           type: array
           items: { type: string }
+        room_paths:
+          type: array
+          items: { type: string }
+          description: |
+            Assign by node reference (`room/eg/kueche`) instead of by name;
+            wins over `rooms` when both are given. A reference names one of
+            two rooms that share a name. Paths come from `GET /taxonomy`.
+        function_paths:
+          type: array
+          items: { type: string }
+          description: As `room_paths`, for functions (`function/licht`).
     PatchSysvarRequest:
       type: object
       properties:
@@ -14829,6 +15479,12 @@ components:
             tls_fingerprint:
               type: string
               description: SHA-256 (lower-case hex) of an openccu-lite system's certificate to pin; requires tls.
+            port:
+              type: integer
+              description: The system's web server port; 0 or absent means 80, or 443 with tls.
+            pairing_id:
+              type: string
+              description: An approved pairing (POST /setup/pairing) whose token the central takes instead of api_token.
             interfaces:
               type: array
               minItems: 1

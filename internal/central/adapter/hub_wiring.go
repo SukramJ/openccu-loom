@@ -624,8 +624,8 @@ func restampDeviceDetails(unit *central.Unit, logger *slog.Logger) int {
 			dev.SetFunctions(functions)
 			devChanged = true
 		}
-		if refs := unit.DeviceDetails.DeviceRefs(dev.Address); !slices.Equal(refs, dev.TaxonomyRefs()) {
-			dev.SetTaxonomyRefs(refs)
+		if tax := unit.DeviceDetails.DeviceAssignments(dev.Address); !slices.Equal(tax, dev.Taxonomy()) {
+			dev.SetTaxonomy(tax)
 			devChanged = true
 		}
 		for _, ch := range dev.Channels() {
@@ -641,8 +641,8 @@ func restampDeviceDetails(unit *central.Unit, logger *slog.Logger) int {
 				ch.SetFunctions(functions)
 				devChanged = true
 			}
-			if refs := unit.DeviceDetails.Refs(ch.Address); !slices.Equal(refs, ch.TaxonomyRefs()) {
-				ch.SetTaxonomyRefs(refs)
+			if tax := unit.DeviceDetails.Assignments(ch.Address); !slices.Equal(tax, ch.Taxonomy()) {
+				ch.SetTaxonomy(tax)
 				devChanged = true
 			}
 

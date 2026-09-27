@@ -36,6 +36,10 @@ type DiscoveredCCU struct {
 	// an OpenCCU from a classic eQ-3 CCU.
 	Manufacturer string `json:"manufacturer"`
 	Model        string `json:"model"`
+	// SystemType is "openccu-lite" for a box whose UPnP description names
+	// openccu-lite as manufacturer or model, "ccu" otherwise; it lets the
+	// wizard pre-select how the system is reached.
+	SystemType string `json:"system_type"`
 	// Location is the full device-description URL the response pointed at.
 	Location string `json:"location,omitempty"`
 	// LastSeen is when the most recent M-SEARCH response for this CCU arrived.
@@ -103,8 +107,21 @@ func parseDeviceDescription(body []byte, locationURL string) (DiscoveredCCU, boo
 		Host:         host,
 		Manufacturer: strings.TrimSpace(d.Manufacturer),
 		Model:        strings.TrimSpace(d.ModelName),
+		SystemType:   discoveredSystemType(d.Manufacturer, d.ModelName),
 		Location:     locationURL,
 	}, true
+}
+
+// discoveredSystemType classifies a discovered central: an openccu-lite
+// box answers its UPnP description with manufacturer = model name =
+// "openccu-lite"; everything else found is a CCU.
+func discoveredSystemType(manufacturer, modelName string) string {
+	for _, v := range []string{manufacturer, modelName} {
+		if strings.EqualFold(strings.TrimSpace(v), "openccu-lite") {
+			return "openccu-lite"
+		}
+	}
+	return "ccu"
 }
 
 // isCentralManufacturer reports whether a device-description belongs to a

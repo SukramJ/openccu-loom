@@ -25,6 +25,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
 	"github.com/SukramJ/openccu-loom/internal/wiring"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // southboundWiringDeps carries the already-constructed subsystems the
@@ -119,6 +120,25 @@ func serialBackfiller(store *sqlite.CentralsStore, logger *slog.Logger) func(ctx
 			// exactly like success.
 			logger.Debug("central.serial.backfill_no_row",
 				slog.String("central", centralName), slog.String("serial", serial))
+		}
+	}
+}
+
+// systemTypePersister returns the WireDeps.PersistSystemType callback: it
+// records the type an `auto` central resolved to, so the next start brings
+// it up directly. A nil store yields a no-op; errors are logged, never
+// propagated to the bring-up.
+func systemTypePersister(store *sqlite.CentralsStore, logger *slog.Logger) func(ctx context.Context, centralName string, st hmenum.SystemType) {
+	return func(ctx context.Context, centralName string, st hmenum.SystemType) {
+		if store == nil {
+			return
+		}
+		updated, err := store.SetSystemType(ctx, centralName, string(st))
+		switch {
+		case err != nil:
+			logger.Warn("central.system_type.persist_failed", slog.String("central", centralName), slog.String("err", err.Error()))
+		case updated:
+			logger.Info("central.system_type.persisted", slog.String("central", centralName), slog.String("system_type", string(st)))
 		}
 	}
 }
@@ -272,7 +292,8 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 		ValuesCacheCentralFilter: func(centralName string) bool {
 			return cfg.Persistence.ValuesCache.ValuesCacheEnabled(centralName)
 		},
-		PersistSerial: serialBackfiller(d.sqCentrals, d.logger),
+		PersistSerial:     serialBackfiller(d.sqCentrals, d.logger),
+		PersistSystemType: systemTypePersister(d.sqCentrals, d.logger),
 	}, logger)
 	// Background flusher for the persistent VALUES cache. Runs every
 	// flush_interval (default 60 s; override via

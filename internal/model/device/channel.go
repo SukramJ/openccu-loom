@@ -123,9 +123,9 @@ type Channel struct {
 	rooms     []string
 	functions []string
 	iseID     int
-	// taxonomyRefs are the taxonomy nodes the channel is directly assigned
-	// to, in every enum.
-	taxonomyRefs []taxonomy.Ref
+	// taxonomy are the taxonomy nodes the channel is directly assigned to,
+	// in every enum, with their names.
+	taxonomy []taxonomy.Assignment
 
 	// groupNo is the channel-group number this channel belongs to. Zero means
 	// "no group". When non-zero, the master channel of the group has Number ==

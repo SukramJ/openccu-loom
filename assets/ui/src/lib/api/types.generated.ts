@@ -1376,6 +1376,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/setup/probe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Identify the system at an address (first-run wizard)
+         * @description Reads what answers at the address: a CCU, an openccu-lite box (ready,
+         *     or starting), or neither. Over HTTPS a certificate no trusted
+         *     authority signed is read under a pin of the certificate the server
+         *     presented, and that fingerprint is reported for the operator to
+         *     confirm; only the open version document is read and no credential
+         *     is sent. Open only while first-run setup is required, like `POST /setup`, and rate-limited like the login.
+         */
+        post: operations["setupProbeCentral"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/setup/pairing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start client pairing with an openccu-lite box
+         * @description Asks the box's administrator to approve this daemon and answers the
+         *     six-digit code to enter on the box. The token an approved pairing
+         *     yields stays in the daemon; a central created with the answer's
+         *     `pairing_id` takes it. Pairing never grants the backup or power
+         *     scopes; paste a token created on the box for those.
+         */
+        post: operations["setupStartCentralPairing"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/setup/pairing/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * A pairing's state
+         * @description `?wait=<seconds>` long-polls the box, up to 25 s.
+         */
+        get: operations["setupGetCentralPairing"];
+        put?: never;
+        post?: never;
+        /** Withdraw a pairing */
+        delete: operations["setupCancelCentralPairing"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/setup": {
         parameters: {
             query?: never;
@@ -2531,6 +2603,60 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/taxonomy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every central's taxonomy trees (rooms, functions, and other enums)
+         * @description The only surface that shows nodes nothing is assigned to, so a
+         *     tree picker reads it rather than the device list. A CCU's
+         *     rooms and functions are flat enums whose node ids are the CCU's
+         *     object ids; an openccu-lite system nests nodes and may define
+         *     further enums.
+         */
+        get: operations["getTaxonomy"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/taxonomy/{central}/{enum}/nodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                central: string;
+                enum: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a taxonomy node (operator)
+         * @description A node below `parent_path` needs the central's `taxonomy.tree`
+         *     feature; a CCU's rooms and functions are flat, so there only a
+         *     root node of `room` or `function` can be created.
+         */
+        post: operations["createTaxonomyNode"];
+        /**
+         * Delete a taxonomy node and its subtree (operator)
+         * @description The addresses assigned to the deleted nodes keep existing and lose the assignment.
+         */
+        delete: operations["deleteTaxonomyNode"];
+        options?: never;
+        head?: never;
+        /** Rename and/or move a taxonomy node (operator) */
+        patch: operations["updateTaxonomyNode"];
         trace?: never;
     };
     "/rooms": {
@@ -4340,6 +4466,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/centrals/probe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Identify the system at an address (admin)
+         * @description Reads what answers at the address: a CCU, an openccu-lite box (ready,
+         *     or starting), or neither. Over HTTPS a certificate no trusted
+         *     authority signed is read under a pin of the certificate the server
+         *     presented, and that fingerprint is reported for the operator to
+         *     confirm; only the open version document is read and no credential
+         *     is sent.
+         */
+        post: operations["probeCentral"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/centrals/pairing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start client pairing with an openccu-lite box
+         * @description Asks the box's administrator to approve this daemon and answers the
+         *     six-digit code to enter on the box. The token an approved pairing
+         *     yields stays in the daemon; a central created with the answer's
+         *     `pairing_id` takes it. Pairing never grants the backup or power
+         *     scopes; paste a token created on the box for those.
+         */
+        post: operations["startCentralPairing"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/centrals/pairing/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * A pairing's state
+         * @description `?wait=<seconds>` long-polls the box, up to 25 s.
+         */
+        get: operations["getCentralPairing"];
+        put?: never;
+        post?: never;
+        /** Withdraw a pairing */
+        delete: operations["cancelCentralPairing"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/centrals/discovered": {
         parameters: {
             query?: never;
@@ -5160,15 +5358,20 @@ export interface components {
             priority?: "critical" | "high" | "default" | "low";
         };
         /**
-         * @description Response of the room / function create verbs: the id the CCU assigned
-         *     and the name it was created under. The name is echoed rather than
-         *     assumed, because the CCU normalises it.
+         * @description Response of the room / function create verbs: the id the CCU assigned,
+         *     the name it was created under, and the node's path inside its enum.
+         *     The name is echoed rather than assumed, because the CCU normalises it.
          */
         CreatedNamedResource: {
-            /** @description CCU-assigned identifier of the created object. */
-            id: string;
-            /** @description Name as the CCU stored it. */
+            /**
+             * @description The CCU's numeric object id; absent for a system without one
+             *     (openccu-lite), whose nodes are addressed by `path`.
+             */
+            id?: number;
+            /** @description Name as the system stored it. */
             name: string;
+            /** @description The node's path inside its enum (on a CCU the object id as a string). */
+            path: string;
         };
         /**
          * @description Raw LINK paramset of one channel-peer pair, as the CCU returns it —
@@ -5546,7 +5749,7 @@ export interface components {
              *     resource — it is not guaranteed to resolve to a document.
              * @enum {string}
              */
-            type: "https://openccu-loom.dev/errors/validation" | "https://openccu-loom.dev/errors/not_found" | "https://openccu-loom.dev/errors/conflict" | "https://openccu-loom.dev/errors/unauthorized" | "https://openccu-loom.dev/errors/forbidden" | "https://openccu-loom.dev/errors/unsupported" | "https://openccu-loom.dev/errors/rate_limited" | "https://openccu-loom.dev/errors/internal" | "https://openccu-loom.dev/errors/bad_request" | "https://openccu-loom.dev/errors/service_unready" | "https://openccu-loom.dev/errors/upstream_unavailable";
+            type: "https://openccu-loom.dev/errors/validation" | "https://openccu-loom.dev/errors/not_found" | "https://openccu-loom.dev/errors/conflict" | "https://openccu-loom.dev/errors/unauthorized" | "https://openccu-loom.dev/errors/forbidden" | "https://openccu-loom.dev/errors/unsupported" | "https://openccu-loom.dev/errors/rate_limited" | "https://openccu-loom.dev/errors/internal" | "https://openccu-loom.dev/errors/bad_request" | "https://openccu-loom.dev/errors/service_unready" | "https://openccu-loom.dev/errors/upstream_unavailable" | "https://openccu-loom.dev/errors/feature_unavailable";
             title: string;
             status: number;
             detail?: string;
@@ -5555,7 +5758,22 @@ export interface components {
              * @description Short tag (also surfaced as the `X-Problem-Code` response header).
              * @enum {string}
              */
-            code?: "validation" | "not_found" | "conflict" | "unauthorized" | "forbidden" | "unsupported" | "rate_limited" | "internal" | "bad_request" | "service_unready" | "upstream_unavailable";
+            code?: "validation" | "not_found" | "conflict" | "unauthorized" | "forbidden" | "unsupported" | "rate_limited" | "internal" | "bad_request" | "service_unready" | "upstream_unavailable" | "feature_unavailable";
+            /**
+             * @description Set on a `feature_unavailable` problem (HTTP 422): the
+             *     operation needs a feature the target central does not offer
+             *     right now. The same key and reason appear in that central's
+             *     `features` map on `GET /system/ccu`.
+             */
+            feature?: {
+                central: string;
+                /** @description The feature key, for example `system.reboot` or `hub.sysvars`. */
+                key: string;
+                /** @enum {string} */
+                reason: "not_supported_by_system" | "missing_scope" | "not_ready";
+                /** @description The credential scope that would grant it, when `reason` is `missing_scope`. */
+                scope?: string;
+            };
             errors?: {
                 field?: string;
                 reason?: string;
@@ -5626,7 +5844,12 @@ export interface components {
             schema_digest: string;
             /**
              * @description Runtime feature set. Always-on entries:
-             *     `rest.v1`, `ws.broadcasts.v1`, `errors.problem_details.v1`.
+             *     `rest.v1`, `ws.broadcasts.v1`, `errors.problem_details.v1`,
+             *     `central.features.v1` (each central reports what it offers in
+             *     `features` on `GET /system/ccu`, and an operation a central
+             *     does not offer answers the `feature_unavailable` problem),
+             *     `south.openccu_lite.v1` (a central can be an openccu-lite
+             *     system: `system_type: openccu-lite`).
              *     Conditional entries surface only when configured:
              *     `mqtt.discovery.v1`, `mqtt.raw.v1`, `matter.bridge.v1`,
              *     `auth.oidc.v1`, `auth.ccu.v1`, `webhook.inbound.v1`,
@@ -5945,6 +6168,68 @@ export interface components {
                 [key: string]: boolean;
             };
         };
+        TaxonomyNodeCreateRequest: {
+            /** @description The parent node's path inside the enum; absent or empty for a root node. */
+            parent_path?: string;
+            name: string;
+        };
+        TaxonomyNodeCreated: {
+            /** @description The new node's path inside the enum. */
+            path: string;
+        };
+        TaxonomyNodeUpdateRequest: {
+            name?: string;
+            /** @description Move below this node; an empty string moves to the root. */
+            parent_path?: string;
+            /** @description Zero-based place among the new siblings; absent appends. */
+            position?: number;
+        };
+        TaxonomyResponse: {
+            centrals: components["schemas"]["TaxonomyCentral"][];
+        };
+        TaxonomyCentral: {
+            central: string;
+            /** @description The source's revision counter; 0 for a system without one (a CCU). */
+            revision: number;
+            /** @description Whether nodes can be created, renamed and deleted (feature `taxonomy.edit`). */
+            writable: boolean;
+            /** @description Whether nodes can nest (feature `taxonomy.tree`); a CCU's enums are flat. */
+            tree: boolean;
+            enums: components["schemas"]["TaxonomyEnum"][];
+        };
+        TaxonomyEnum: {
+            /** @description The enum id, for example `room` or `function`. */
+            id: string;
+            /** @description The enum's display name per language tag. */
+            names?: {
+                [key: string]: string;
+            };
+            nodes: components["schemas"]["TaxonomyNode"][];
+        };
+        TaxonomyNode: {
+            id: string;
+            /** @description The node's path inside the enum. */
+            path: string;
+            name: string;
+            icon?: string;
+            children?: components["schemas"]["TaxonomyNode"][];
+        };
+        /**
+         * @description One taxonomy node an address is directly assigned to. On a CCU
+         *     every enum is flat and a node's path is the CCU's object id of
+         *     the room or function; an openccu-lite system nests nodes
+         *     (`eg/wohnzimmer`).
+         */
+        TaxonomyAssignment: {
+            /** @description The enum id, for example `room` or `function`. */
+            enum: string;
+            /** @description The node's path inside the enum, node ids joined by `/`. */
+            path: string;
+            /** @description The node's display name. */
+            name: string;
+            /** @description The parent node's path inside the enum; absent for a root node. */
+            parent_path?: string;
+        };
         DeviceSummary: {
             address: string;
             /**
@@ -5998,6 +6283,15 @@ export interface components {
             rooms?: string[];
             /** @description Resolved "Gewerke" (function) labels for the device. */
             functions?: string[];
+            /**
+             * @description Every taxonomy node the device or one of its channels is
+             *     directly assigned to, in every enum (rooms, functions and
+             *     whatever else the system defines), with the node's path.
+             *     `rooms` and `functions` keep carrying the names; this adds
+             *     what names cannot say when two nodes share one or nodes nest.
+             *     Omitted when the device has no assignment.
+             */
+            taxonomy?: components["schemas"]["TaxonomyAssignment"][];
             /**
              * @description True when the device's interface delivers reliable CONFIG_PENDING
              *     events on MASTER writes (HmIP-RF, HmIP-Wired). The SPA then waits
@@ -6195,6 +6489,11 @@ export interface components {
              *     assignment.
              */
             functions?: string[];
+            /**
+             * @description The taxonomy nodes the channel is directly assigned to, in
+             *     every enum, with their paths. Omitted when there are none.
+             */
+            taxonomy?: components["schemas"]["TaxonomyAssignment"][];
             /**
              * @description True when the channel owns a Custom-DP AND is the primary
              *     (group-master) channel of its group — the daemon-derived
@@ -8641,10 +8940,12 @@ export interface components {
              */
             floor?: "always" | "standalone";
             /**
-             * @description Runtime capability the surface additionally needs.
+             * @description Runtime capability the surface additionally needs. A
+             *     `feature:<key>` gate is open while at least one central
+             *     offers that feature (see `features` on `GET /system/ccu`).
              * @enum {string}
              */
-            gate?: "matter" | "history";
+            gate?: "matter" | "history" | "feature:hub.programs" | "feature:hub.sysvars" | "feature:hub.inbox" | "feature:heating_groups.read" | "feature:system.backup.create";
             /**
              * @description Condition under which hiding asks for confirmation. The
              *     client evaluates the condition; the daemon only declares it.
@@ -8884,6 +9185,64 @@ export interface components {
              */
             un_ignore?: string[];
         };
+        CentralProbeRequest: {
+            host: string;
+            /** @description The web server port; 0 or absent means 80, or 443 with tls. */
+            port?: number;
+            tls?: boolean;
+            tls_insecure_skip_verify?: boolean;
+        };
+        CentralProbeResult: {
+            /** @enum {string} */
+            system_type: "ccu" | "openccu-lite" | "unknown";
+            /** @description Whether the system serves its API now; an openccu-lite box that is starting is identified but not ready. */
+            ready: boolean;
+            /** @description SHA-256 (lower-case hex) of the certificate the server presented over HTTPS, to pin. */
+            tls_fingerprint?: string;
+            lite?: components["schemas"]["LiteProbeInfo"];
+        };
+        LiteProbeInfo: {
+            implementation?: string;
+            api_majors?: {
+                [key: string]: number;
+            };
+            pairing_available: boolean;
+            hmip_key_mode?: components["schemas"]["HMIPKeyMode"];
+        };
+        /** @description The key-mode summary of a box's HomeMatic IP radio; it never carries a key. */
+        HMIPKeyMode: {
+            keyserver_mode: string;
+            device_keys: number;
+            offline_pairing: boolean;
+        };
+        CentralPairingRequest: {
+            host: string;
+            port?: number;
+            tls?: boolean;
+            /** @description The certificate to pin (from the probe); needed over HTTPS for a certificate no trusted authority signed. */
+            tls_fingerprint?: string;
+            /**
+             * @description What to ask the box's administrator for; full is the default.
+             * @enum {string}
+             */
+            access?: "full" | "control" | "read";
+        };
+        CentralPairingStarted: {
+            pairing_id: string;
+            /** @description The six digits the box's administrator enters on the box. */
+            code: string;
+            /** @description The certificate fingerprint both sides agreed on; empty over plain HTTP. */
+            fingerprint?: string;
+            /** @description Seconds the pairing request stays valid. */
+            expires_in: number;
+        };
+        CentralPairingStatus: {
+            /** @enum {string} */
+            state: "pending" | "approved" | "rejected" | "expired" | "error";
+            /** @description The scopes an approved pairing granted. */
+            scopes?: string[];
+            error?: string;
+        };
         /** @description One CCU connection record persisted in the centrals store. */
         CentralRow: {
             /**
@@ -8914,6 +9273,8 @@ export interface components {
             api_token_plain?: string;
             /** @description SHA-256 (lower-case hex) of the openccu-lite system's certificate. When set, TLS trusts exactly this certificate. Requires tls. */
             tls_fingerprint?: string;
+            /** @description The id of an approved client pairing (POST /centrals/pairing). The central takes that pairing's token and pinned fingerprint on the server; the token never travels through the client. */
+            pairing_id?: string;
             username?: string;
             /** @description Environment variable name whose value is the CCU password (preferred). */
             password_env?: string;
@@ -9345,6 +9706,12 @@ export interface components {
         FunctionEntry: {
             name: string;
             device_count: number;
+            /**
+             * @description The taxonomy nodes carrying this name, per central. Two nodes
+             *     of one name (a "Küche" on two floors) are one entry with two
+             *     refs; omitted when no device carries a node reference.
+             */
+            refs?: components["schemas"]["NodeRef"][];
         };
         /** @description One diagnostic entry surfaced at /incidents. */
         Incident: {
@@ -9469,10 +9836,23 @@ export interface components {
             ends_at?: string;
             randomize?: boolean;
         };
+        /** @description One taxonomy node, located by central and path inside its enum. */
+        NodeRef: {
+            central: string;
+            path: string;
+            /** @description The parent node's path; absent for a root node. */
+            parent_path?: string;
+        };
         /** @description One row in GET /api/v1/rooms. */
         RoomEntry: {
             name: string;
             device_count: number;
+            /**
+             * @description The taxonomy nodes carrying this name, per central. Two nodes
+             *     of one name (a "Küche" on two floors) are one entry with two
+             *     refs; omitted when no device carries a node reference.
+             */
+            refs?: components["schemas"]["NodeRef"][];
         };
         /** @description Self-update status of the daemon's CCU add-on package. supported is false when the platform lacks the firmware installer; every other field is then zero-valued. */
         AddonUpdateStatus: {
@@ -10099,6 +10479,11 @@ export interface components {
             suggested_host: string;
             manufacturer?: string;
             model?: string;
+            /**
+             * @description How the discovered system is reached, from its UPnP description; the wizard pre-selects it.
+             * @enum {string}
+             */
+            system_type?: "ccu" | "openccu-lite";
             /** Format: date-time */
             last_seen: string;
             already_configured: boolean;
@@ -10244,6 +10629,14 @@ export interface components {
              *     assignments. Unknown names are silently skipped.
              */
             functions?: string[];
+            /**
+             * @description Assign by node reference (`room/eg/kueche`) instead of by name;
+             *     wins over `rooms` when both are given. A reference names one of
+             *     two rooms that share a name. Paths come from `GET /taxonomy`.
+             */
+            room_paths?: string[];
+            /** @description As `room_paths`, for functions (`function/licht`). */
+            function_paths?: string[];
         };
         PatchDeviceRequest: {
             name?: string;
@@ -10251,6 +10644,14 @@ export interface components {
             include_channels?: boolean;
             rooms?: string[];
             functions?: string[];
+            /**
+             * @description Assign by node reference (`room/eg/kueche`) instead of by name;
+             *     wins over `rooms` when both are given. A reference names one of
+             *     two rooms that share a name. Paths come from `GET /taxonomy`.
+             */
+            room_paths?: string[];
+            /** @description As `room_paths`, for functions (`function/licht`). */
+            function_paths?: string[];
         };
         PatchSysvarRequest: {
             /** @description New name for the variable. When present and non-empty the sysvar is renamed in place (the path {name} stays the current name). Omit or leave empty to keep the name. */
@@ -10376,6 +10777,10 @@ export interface components {
                 tls?: boolean;
                 /** @description SHA-256 (lower-case hex) of an openccu-lite system's certificate to pin; requires tls. */
                 tls_fingerprint?: string;
+                /** @description The system's web server port; 0 or absent means 80, or 443 with tls. */
+                port?: number;
+                /** @description An approved pairing (POST /setup/pairing) whose token the central takes instead of api_token. */
+                pairing_id?: string;
                 interfaces: string[];
             };
             /** @description Optional MQTT broker. Omit to skip. */
@@ -12569,6 +12974,180 @@ export interface operations {
             };
         };
     };
+    setupProbeCentral: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CentralProbeRequest"];
+            };
+        };
+        responses: {
+            /** @description What answers there */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CentralProbeResult"];
+                };
+            };
+            /** @description First-run onboarding disabled by bootstrap.allow_first_run_setup */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+            /** @description Nothing could be reached at the address */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    setupStartCentralPairing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CentralPairingRequest"];
+            };
+        };
+        responses: {
+            /** @description Pairing started */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CentralPairingStarted"];
+                };
+            };
+            /** @description The box does not accept a pairing request from here (switched off, or not its local network) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+            /** @description The box could not be reached */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    setupGetCentralPairing: {
+        parameters: {
+            query?: {
+                wait?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CentralPairingStatus"];
+                };
+            };
+            /** @description First-run onboarding disabled by bootstrap.allow_first_run_setup */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description No such pairing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    setupCancelCentralPairing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Withdrawn */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description First-run onboarding disabled by bootstrap.allow_first_run_setup */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description No such pairing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     setup: {
         parameters: {
             query?: never;
@@ -14337,6 +14916,171 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InboxDevice"][];
+                };
+            };
+        };
+    };
+    getTaxonomy: {
+        parameters: {
+            query?: {
+                /** @description Restrict the answer to one central; unknown is 404. */
+                central?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The taxonomies */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyResponse"];
+                };
+            };
+            /** @description Unknown central */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createTaxonomyNode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                central: string;
+                enum: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaxonomyNodeCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyNodeCreated"];
+                };
+            };
+            /** @description Unknown central or parent */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Invalid node, or a feature the central lacks (`feature_unavailable`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteTaxonomyNode: {
+        parameters: {
+            query: {
+                /** @description The node's path inside the enum (`eg/kueche`). */
+                path: string;
+            };
+            header?: never;
+            path: {
+                central: string;
+                enum: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown central or node */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description A feature the central lacks (`feature_unavailable`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    updateTaxonomyNode: {
+        parameters: {
+            query: {
+                /** @description The node's path inside the enum (`eg/kueche`). */
+                path: string;
+            };
+            header?: never;
+            path: {
+                central: string;
+                enum: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaxonomyNodeUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown central or node */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Invalid change, or a feature the central lacks (`feature_unavailable`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
@@ -17326,6 +18070,145 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             500: components["responses"]["InternalError"];
+        };
+    };
+    probeCentral: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CentralProbeRequest"];
+            };
+        };
+        responses: {
+            /** @description What answers there */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CentralProbeResult"];
+                };
+            };
+            422: components["responses"]["UnprocessableEntity"];
+            /** @description Nothing could be reached at the address */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    startCentralPairing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CentralPairingRequest"];
+            };
+        };
+        responses: {
+            /** @description Pairing started */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CentralPairingStarted"];
+                };
+            };
+            /** @description The box does not accept a pairing request from here (switched off, or not its local network) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            422: components["responses"]["UnprocessableEntity"];
+            /** @description The box could not be reached */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getCentralPairing: {
+        parameters: {
+            query?: {
+                wait?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CentralPairingStatus"];
+                };
+            };
+            /** @description No such pairing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    cancelCentralPairing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Withdrawn */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such pairing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     listDiscoveredCentrals: {

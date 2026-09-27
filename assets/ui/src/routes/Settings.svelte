@@ -45,6 +45,7 @@
   import { matterStore } from "$lib/stores/matter.svelte";
   import { infoStore } from "$lib/stores/info.svelte";
   import { surfacesStore } from "$lib/stores/surfaces.svelte";
+  import { centralStore } from "$lib/stores/centrals.svelte";
   import NavViewsAdmin from "$lib/components/settings/NavViewsAdmin.svelte";
 
   // The tab named by the URL (`#/settings?tab=users`). Deep links and the
@@ -150,6 +151,8 @@
         (infoStore.info?.capabilities?.includes("history.v1") ?? false) &&
         (infoStore.info?.capabilities?.includes("diagrams.v1") ?? false),
       isAdmin: authStore.identity?.role === "admin",
+      surfaceGate: (id) => surfacesStore.gate(id),
+      featureAvailable: (key) => centralStore.featureAvailable(key),
     }),
   );
 

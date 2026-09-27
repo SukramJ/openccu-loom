@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { centralStore } from "$lib/stores/centrals.svelte";
+  import FeatureGate from "$lib/components/ui/FeatureGate.svelte";
   import { onMount } from "svelte";
   import { api, ApiError } from "$lib/api/client";
   import { onResync, subscribe } from "$lib/stores/events.svelte";
@@ -484,204 +486,208 @@
       <Button type="button" variant="outline" size="sm" onclick={() => void reload()} disabled={loading}>
         {t("common.reload")}
       </Button>
-      <Button type="button" size="sm" onclick={() => (creating = !creating)}>
-        {creating ? t("common.cancel") : t("common.new")}
-      </Button>
+      {#if centralStore.offers(centralFilter || undefined, "hub.sysvars")}
+        <Button type="button" size="sm" onclick={() => (creating = !creating)}>
+          {creating ? t("common.cancel") : t("common.new")}
+        </Button>
+      {/if}
     {/snippet}
   </PageHeader>
 
-  {#if creating}
-    <Card class="mb-4 p-4">
-      <h2 class="mb-2 text-lg font-semibold">{t("sysvars.create.title")}</h2>
-      <div class="grid grid-cols-1 gap-2 md:grid-cols-2">
-        {#if centrals.length > 1}
-          <label class="text-sm md:col-span-2">
-            <span class="block text-xs text-slate-500 dark:text-slate-400">CCU</span>
+  <FeatureGate feature="hub.sysvars">
+    {#if creating}
+      <Card class="mb-4 p-4">
+        <h2 class="mb-2 text-lg font-semibold">{t("sysvars.create.title")}</h2>
+        <div class="grid grid-cols-1 gap-2 md:grid-cols-2">
+          {#if centrals.length > 1}
+            <label class="text-sm md:col-span-2">
+              <span class="block text-xs text-slate-500 dark:text-slate-400">CCU</span>
+              <Select
+                class="w-full"
+                bind:value={createCentral}
+                ariaLabel={t("filter.central_aria")}
+                options={[
+                  { value: "", label: t("common.select_placeholder") },
+                  ...centrals.map((c) => ({ value: c, label: c })),
+                ]}
+              />
+            </label>
+          {/if}
+          <label class="text-sm">
+            <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.create.name")}</span>
+            <Input bind:value={createForm.name} />
+          </label>
+          <label class="text-sm">
+            <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.create.type")}</span>
             <Select
               class="w-full"
-              bind:value={createCentral}
-              ariaLabel={t("filter.central_aria")}
+              bind:value={createForm.value_type}
+              ariaLabel={t("sysvars.create.type")}
               options={[
-                { value: "", label: t("common.select_placeholder") },
-                ...centrals.map((c) => ({ value: c, label: c })),
+                { value: "BOOL", label: "BOOL" },
+                { value: "INTEGER", label: "INTEGER" },
+                { value: "FLOAT", label: "FLOAT" },
+                { value: "STRING", label: "STRING" },
+                { value: "ENUM", label: "ENUM" },
+                { value: "ALARM", label: "ALARM" },
               ]}
             />
           </label>
-        {/if}
-        <label class="text-sm">
-          <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.create.name")}</span>
-          <Input bind:value={createForm.name} />
-        </label>
-        <label class="text-sm">
-          <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.create.type")}</span>
-          <Select
-            class="w-full"
-            bind:value={createForm.value_type}
-            ariaLabel={t("sysvars.create.type")}
-            options={[
-              { value: "BOOL", label: "BOOL" },
-              { value: "INTEGER", label: "INTEGER" },
-              { value: "FLOAT", label: "FLOAT" },
-              { value: "STRING", label: "STRING" },
-              { value: "ENUM", label: "ENUM" },
-              { value: "ALARM", label: "ALARM" },
-            ]}
-          />
-        </label>
-        {#if createForm.value_type === "ALARM"}
-          <p class="text-xs text-slate-500 md:col-span-2 dark:text-slate-400">
-            {t("sysvars.create.alarm_hint")}
-          </p>
-        {/if}
-        {#if createForm.value_type === "BOOL" || createForm.value_type === "ALARM"}
-          <div class="grid grid-cols-2 gap-2 md:col-span-2">
-            <label class="text-sm">
-              <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.labels.value0")}</span>
-              <Input bind:value={createForm.value_name_0} placeholder="false" />
-            </label>
-            <label class="text-sm">
-              <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.labels.value1")}</span>
-              <Input bind:value={createForm.value_name_1} placeholder="true" />
-            </label>
-          </div>
-        {/if}
-        <label class="text-sm">
-          <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.create.unit")}</span>
-          <Input bind:value={createForm.unit} />
-        </label>
-        <label class="text-sm md:col-span-2">
-          <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.edit.description")}</span>
-          <Input bind:value={createDescription} />
-        </label>
-        {#if createForm.value_type === "INTEGER" || createForm.value_type === "FLOAT"}
-          <div class="grid grid-cols-2 gap-2">
-            <label class="text-sm">
-              <span class="block text-xs text-slate-500 dark:text-slate-400">{t("common.min")}</span>
-              <Input bind:value={createForm.min} />
-            </label>
-            <label class="text-sm">
-              <span class="block text-xs text-slate-500 dark:text-slate-400">{t("common.max")}</span>
-              <Input bind:value={createForm.max} />
-            </label>
-          </div>
-        {/if}
-        {#if createForm.value_type === "ENUM"}
-          <label class="text-sm md:col-span-2">
-            <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.create.values")}</span>
-            <Input bind:value={createForm.value_list} placeholder={t("sysvars.create.values_placeholder")} />
-          </label>
-        {/if}
-        <div class="text-sm md:col-span-2">
-          <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.channel.label")}</span>
-          <SysvarChannelPicker
-            value={createChannel}
-            central={createCentral || undefined}
-            onChange={(v) => (createChannel = v)}
-          />
-          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("sysvars.channel.hint")}</p>
-        </div>
-      </div>
-      <div class="mt-3 flex justify-end gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onclick={() => (creating = false)}
-        >
-          {t("common.cancel")}
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          onclick={() => void createSv()}
-          disabled={!createForm.name || savingName === "__create__"}
-        >
-          {savingName === "__create__" ? "…" : t("common.add")}
-        </Button>
-      </div>
-    </Card>
-  {/if}
-
-  {#if loadError}
-    <ErrorState message={loadError} onRetry={load} class="mb-4" />
-  {/if}
-
-  {#if loading}
-    <LoadingState />
-  {:else}
-    <Card class="p-4">
-      <DataTable
-        rows={filtered}
-        {columns}
-        rowKey={(s) => (s.central ?? "") + "/" + s.name}
-        search
-        searchPlaceholder={t("common.search")}
-        persistKey="sysvars"
-        columnFilters
-        initialSort={{ key: "name", asc: true }}
-        emptyMessage={t("sysvars.empty")}
-        emptyIcon="mdi:sliders"
-      >
-        {#snippet cell(sv, col)}
-          {#if col.key === "name"}
-            <span class="font-mono text-sm font-semibold">{sv.name}</span>
-            {#if isDirty(sv)}<Badge variant="warning">{t("common.modified")}</Badge>{/if}
-            {#if centrals.length > 1 && sv.central}<Badge variant="muted">{sv.central}</Badge>{/if}
-            {#if sv.description}
-              <span class="block text-xs text-slate-500 dark:text-slate-400">{sv.description}</span>
-            {/if}
-          {:else if col.key === "type"}
-            <Badge variant="muted">{sv.value_type}</Badge>
-            {#if sv.unit}<span class="ml-1 text-xs text-slate-500 dark:text-slate-400">{sv.unit}</span>{/if}
-          {:else if col.key === "value"}
-            {@const widget = sysvarWidget(sv)}
-            {#if widget === "switch"}
-              {@const on = Boolean(currentValue(sv))}
-              <span class="inline-flex items-center gap-2">
-                <Switch checked={on} onCheckedChange={(v) => setDraft(sv, v)} />
-                {#if sv.value_name_0 || sv.value_name_1}
-                  <span class="text-xs text-slate-500 dark:text-slate-400">
-                    {on ? (sv.value_name_1 ?? "") : (sv.value_name_0 ?? "")}
-                  </span>
-                {/if}
-              </span>
-            {:else if widget === "select"}
-              <Select
-                options={(sv.value_list ?? []).map((label, i) => ({ value: String(i), label }))}
-                value={currentValue(sv) != null ? String(currentValue(sv)) : ""}
-                onValueChange={(v) => setDraft(sv, Number(v))}
-              />
-            {:else if widget === "number"}
-              <Input
-                type="number"
-                step={sysvarNumberStep(sv.value_type)}
-                value={currentValue(sv) as number | null}
-                oninput={(e) => {
-                  const n = Number((e.target as HTMLInputElement).value);
-                  if (Number.isFinite(n)) setDraft(sv, n);
-                }}
-              />
-            {:else}
-              <Input
-                type="text"
-                value={(currentValue(sv) ?? "") as string}
-                oninput={(e) => setDraft(sv, (e.target as HTMLInputElement).value)}
-              />
-            {/if}
-          {:else if col.key === "actions"}
-            <span class="inline-flex items-center justify-end gap-1.5">
-              <Button type="button" size="sm" variant="outline" onclick={() => discardDraft(sv)} disabled={!isDirty(sv) || savingName === sv.name}>×</Button>
-              <Button type="button" size="sm" onclick={() => void save(sv)} disabled={!isDirty(sv) || savingName === sv.name}>
-                {savingName === sv.name ? "…" : t("common.save")}
-              </Button>
-              <Button type="button" size="sm" variant="outline" onclick={() => startEdit(sv)} disabled={savingName === sv.name} title={t("sysvars.edit.tooltip")}>⚙</Button>
-              <Button type="button" size="sm" variant="destructive" onclick={() => void deleteSv(sv)} disabled={savingName === sv.name} title={t("sysvars.remove.tooltip")}>×</Button>
-            </span>
+          {#if createForm.value_type === "ALARM"}
+            <p class="text-xs text-slate-500 md:col-span-2 dark:text-slate-400">
+              {t("sysvars.create.alarm_hint")}
+            </p>
           {/if}
-        {/snippet}
-      </DataTable>
-    </Card>
-  {/if}
+          {#if createForm.value_type === "BOOL" || createForm.value_type === "ALARM"}
+            <div class="grid grid-cols-2 gap-2 md:col-span-2">
+              <label class="text-sm">
+                <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.labels.value0")}</span>
+                <Input bind:value={createForm.value_name_0} placeholder="false" />
+              </label>
+              <label class="text-sm">
+                <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.labels.value1")}</span>
+                <Input bind:value={createForm.value_name_1} placeholder="true" />
+              </label>
+            </div>
+          {/if}
+          <label class="text-sm">
+            <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.create.unit")}</span>
+            <Input bind:value={createForm.unit} />
+          </label>
+          <label class="text-sm md:col-span-2">
+            <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.edit.description")}</span>
+            <Input bind:value={createDescription} />
+          </label>
+          {#if createForm.value_type === "INTEGER" || createForm.value_type === "FLOAT"}
+            <div class="grid grid-cols-2 gap-2">
+              <label class="text-sm">
+                <span class="block text-xs text-slate-500 dark:text-slate-400">{t("common.min")}</span>
+                <Input bind:value={createForm.min} />
+              </label>
+              <label class="text-sm">
+                <span class="block text-xs text-slate-500 dark:text-slate-400">{t("common.max")}</span>
+                <Input bind:value={createForm.max} />
+              </label>
+            </div>
+          {/if}
+          {#if createForm.value_type === "ENUM"}
+            <label class="text-sm md:col-span-2">
+              <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.create.values")}</span>
+              <Input bind:value={createForm.value_list} placeholder={t("sysvars.create.values_placeholder")} />
+            </label>
+          {/if}
+          <div class="text-sm md:col-span-2">
+            <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.channel.label")}</span>
+            <SysvarChannelPicker
+              value={createChannel}
+              central={createCentral || undefined}
+              onChange={(v) => (createChannel = v)}
+            />
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("sysvars.channel.hint")}</p>
+          </div>
+        </div>
+        <div class="mt-3 flex justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onclick={() => (creating = false)}
+          >
+            {t("common.cancel")}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            onclick={() => void createSv()}
+            disabled={!createForm.name || savingName === "__create__"}
+          >
+            {savingName === "__create__" ? "…" : t("common.add")}
+          </Button>
+        </div>
+      </Card>
+    {/if}
+
+    {#if loadError}
+      <ErrorState message={loadError} onRetry={load} class="mb-4" />
+    {/if}
+
+    {#if loading}
+      <LoadingState />
+    {:else}
+      <Card class="p-4">
+        <DataTable
+          rows={filtered}
+          {columns}
+          rowKey={(s) => (s.central ?? "") + "/" + s.name}
+          search
+          searchPlaceholder={t("common.search")}
+          persistKey="sysvars"
+          columnFilters
+          initialSort={{ key: "name", asc: true }}
+          emptyMessage={t("sysvars.empty")}
+          emptyIcon="mdi:sliders"
+        >
+          {#snippet cell(sv, col)}
+            {#if col.key === "name"}
+              <span class="font-mono text-sm font-semibold">{sv.name}</span>
+              {#if isDirty(sv)}<Badge variant="warning">{t("common.modified")}</Badge>{/if}
+              {#if centrals.length > 1 && sv.central}<Badge variant="muted">{sv.central}</Badge>{/if}
+              {#if sv.description}
+                <span class="block text-xs text-slate-500 dark:text-slate-400">{sv.description}</span>
+              {/if}
+            {:else if col.key === "type"}
+              <Badge variant="muted">{sv.value_type}</Badge>
+              {#if sv.unit}<span class="ml-1 text-xs text-slate-500 dark:text-slate-400">{sv.unit}</span>{/if}
+            {:else if col.key === "value"}
+              {@const widget = sysvarWidget(sv)}
+              {#if widget === "switch"}
+                {@const on = Boolean(currentValue(sv))}
+                <span class="inline-flex items-center gap-2">
+                  <Switch checked={on} onCheckedChange={(v) => setDraft(sv, v)} />
+                  {#if sv.value_name_0 || sv.value_name_1}
+                    <span class="text-xs text-slate-500 dark:text-slate-400">
+                      {on ? (sv.value_name_1 ?? "") : (sv.value_name_0 ?? "")}
+                    </span>
+                  {/if}
+                </span>
+              {:else if widget === "select"}
+                <Select
+                  options={(sv.value_list ?? []).map((label, i) => ({ value: String(i), label }))}
+                  value={currentValue(sv) != null ? String(currentValue(sv)) : ""}
+                  onValueChange={(v) => setDraft(sv, Number(v))}
+                />
+              {:else if widget === "number"}
+                <Input
+                  type="number"
+                  step={sysvarNumberStep(sv.value_type)}
+                  value={currentValue(sv) as number | null}
+                  oninput={(e) => {
+                    const n = Number((e.target as HTMLInputElement).value);
+                    if (Number.isFinite(n)) setDraft(sv, n);
+                  }}
+                />
+              {:else}
+                <Input
+                  type="text"
+                  value={(currentValue(sv) ?? "") as string}
+                  oninput={(e) => setDraft(sv, (e.target as HTMLInputElement).value)}
+                />
+              {/if}
+            {:else if col.key === "actions"}
+              <span class="inline-flex items-center justify-end gap-1.5">
+                <Button type="button" size="sm" variant="outline" onclick={() => discardDraft(sv)} disabled={!isDirty(sv) || savingName === sv.name}>×</Button>
+                <Button type="button" size="sm" onclick={() => void save(sv)} disabled={!isDirty(sv) || savingName === sv.name}>
+                  {savingName === sv.name ? "…" : t("common.save")}
+                </Button>
+                <Button type="button" size="sm" variant="outline" onclick={() => startEdit(sv)} disabled={savingName === sv.name} title={t("sysvars.edit.tooltip")}>⚙</Button>
+                <Button type="button" size="sm" variant="destructive" onclick={() => void deleteSv(sv)} disabled={savingName === sv.name} title={t("sysvars.remove.tooltip")}>×</Button>
+              </span>
+            {/if}
+          {/snippet}
+        </DataTable>
+      </Card>
+    {/if}
+  </FeatureGate>
 </PageShell>
 
 <svelte:window onkeydown={onDialogKey} />

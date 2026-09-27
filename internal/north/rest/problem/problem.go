@@ -44,7 +44,20 @@ const (
 	// Distinct from generic TypeInternal so the SPA can render a
 	// friendlier "retry in a few seconds" hint.
 	TypeUpstreamUnavailable Type = "upstream_unavailable"
+	// TypeFeatureUnavailable is the answer for an operation the target
+	// central does not offer right now: its system does not have it, its
+	// credential lacks the scope, or it is not ready. The `feature` member
+	// says which and why.
+	TypeFeatureUnavailable Type = "feature_unavailable"
 )
+
+// FeatureRef names the feature a feature_unavailable problem is about.
+type FeatureRef struct {
+	Central string `json:"central"`
+	Key     string `json:"key"`
+	Reason  string `json:"reason"`
+	Scope   string `json:"scope,omitempty"`
+}
 
 // FieldError is one entry of the `errors` extension — used for
 // validation messages.
@@ -64,6 +77,8 @@ type Details struct {
 	Instance string       `json:"instance,omitempty"`
 	Code     string       `json:"code,omitempty"`
 	Errors   []FieldError `json:"errors,omitempty"`
+	// Feature is set on a feature_unavailable problem.
+	Feature *FeatureRef `json:"feature,omitempty"`
 }
 
 // Write renders p as problem+json. Status from p.Status or from the
@@ -95,9 +110,28 @@ func New(t Type, r *http.Request, title, detail string) Details {
 	return d
 }
 
+// WriteFeatureUnavailable writes the 422 feature_unavailable problem when
+// err carries a *hmerr.FeatureUnavailableError and reports whether it
+// did. It runs before any mapping of the legacy sentinel the error wraps,
+// so a client learns which feature is missing and why rather than a bare
+// "unsupported".
+func WriteFeatureUnavailable(w http.ResponseWriter, r *http.Request, err error) bool {
+	fe, ok := errors.AsType[*hmerr.FeatureUnavailableError](err)
+	if !ok {
+		return false
+	}
+	d := New(TypeFeatureUnavailable, r, "Feature not available", fe.Error())
+	d.Feature = &FeatureRef{Central: fe.Central, Key: string(fe.Feature), Reason: string(fe.Reason), Scope: fe.Scope}
+	Write(w, http.StatusUnprocessableEntity, d)
+	return true
+}
+
 // WriteFromError is a convenience: inspects err, picks a
 // reasonable default type, and writes.
 func WriteFromError(w http.ResponseWriter, r *http.Request, err error) {
+	if WriteFeatureUnavailable(w, r, err) {
+		return
+	}
 	if errors.Is(err, ErrNotFound) {
 		Write(w, http.StatusNotFound, New(TypeNotFound, r, "Not found", err.Error()))
 		return

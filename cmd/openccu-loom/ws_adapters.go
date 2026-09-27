@@ -29,6 +29,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
+	"github.com/SukramJ/openccu-loom/internal/model/taxonomy"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 	"github.com/SukramJ/openccu-loom/internal/store/linkprofile"
@@ -168,6 +169,10 @@ func wireWSCommands(wsHub *ws.Hub, w wsCommandWiring) {
 		// GroupsAdmin: wired — heating-group create/edit/delete + type /
 		// suitable-member helpers (GR02). Same adapter as the REST writer.
 		GroupsAdmin: newGroupsAdapter(w.groupsDomain),
+		// Taxonomy / TaxonomyAdmin: wired — the same registry-backed source
+		// and node admin the REST /taxonomy surface serves.
+		Taxonomy:      registryTaxonomy{reg: w.registry},
+		TaxonomyAdmin: adapter.NewTaxonomyAdmin(w.registry),
 		// SessionRecorder: wired — routes recording.start/stop/status through
 		// the same shared RPC recorder domain method the REST route uses, so a
 		// WS start arms the auto-stop timer and persists the marker.
@@ -1002,6 +1007,7 @@ func (w *wsDeviceQuery) ListDevices(_ context.Context) ([]map[string]any, error)
 			"channels_count": len(d.Channels()),
 			"rooms":          d.Rooms(),
 			"functions":      d.Functions(),
+			"taxonomy":       wsTaxonomy(d.Taxonomy()),
 		})
 	}
 	return out, nil
@@ -1036,7 +1042,22 @@ func (w *wsDeviceQuery) GetDevice(_ context.Context, address string) (map[string
 		"channels":       channels,
 		"rooms":          d.Rooms(),
 		"functions":      d.Functions(),
+		"taxonomy":       wsTaxonomy(d.Taxonomy()),
 	}, nil
+}
+
+// wsTaxonomy projects a device's taxonomy assignments for the WS device
+// maps, in the same shape as the REST device summary.
+func wsTaxonomy(in []taxonomy.Assignment) []map[string]any {
+	out := make([]map[string]any, 0, len(in))
+	for _, a := range in {
+		m := map[string]any{"enum": string(a.Ref.Enum), "path": string(a.Ref.Path), "name": a.Name}
+		if parent, ok := a.Ref.Parent(); ok {
+			m["parent_path"] = string(parent.Path)
+		}
+		out = append(out, m)
+	}
+	return out
 }
 
 func (w *wsDeviceQuery) GetParamsetDescription(ctx context.Context, key configui.SessionKey) (map[string]any, error) {

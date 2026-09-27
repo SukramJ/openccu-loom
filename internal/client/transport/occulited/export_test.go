@@ -5,9 +5,8 @@ package occulited
 
 // Test access to unexported helpers and fixtures.
 var (
-	SortedScopes         = sortedScopes
-	FingerprintFromError = fingerprintFromError
-	IsInitRefusal        = isInitRefusal
+	SortedScopes  = sortedScopes
+	IsInitRefusal = isInitRefusal
 
 	PairingAccessControl = PairingAccess{Devices: "operate", Names: "read", System: "read"}
 	PairingAccessRead    = PairingAccess{Devices: "read", Names: "read", System: "read"}

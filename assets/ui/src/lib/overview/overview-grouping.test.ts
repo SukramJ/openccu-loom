@@ -8,9 +8,11 @@ import {
   defaultOverviewFilters,
   distinctCentrals,
   distinctFunctions,
+  distinctNodeOptions,
   distinctRooms,
   filterDevices,
   groupDevices,
+  nodeFilterValue,
 } from "./overview-grouping";
 
 function device(partial: Partial<DeviceSummary> & { address: string }): DeviceSummary {
@@ -187,5 +189,62 @@ describe("buildOverviewGroups — empty-group collapse", () => {
     // Only the Kitchen group should remain.
     expect(filtered).toHaveLength(1);
     expect(filtered[0].groupValue).toBe("Kitchen");
+  });
+});
+
+describe("nested rooms", () => {
+  // A box with a kitchen on each floor: the names collide, the paths do not.
+  const box: DeviceSummary[] = [
+    device({
+      address: "L1",
+      central: "box",
+      rooms: ["Küche"],
+      taxonomy: [{ enum: "room", path: "eg/kueche", name: "Küche", parent_path: "eg" }],
+    }),
+    device({
+      address: "L2",
+      central: "box",
+      rooms: ["Küche"],
+      taxonomy: [{ enum: "room", path: "og/kueche", name: "Küche", parent_path: "og" }],
+    }),
+    device({
+      address: "L3",
+      central: "box",
+      rooms: ["Flur"],
+      taxonomy: [{ enum: "room", path: "flur", name: "Flur" }],
+    }),
+  ];
+  const labels: Record<string, string> = { "eg/kueche": "EG › Küche", "og/kueche": "OG › Küche" };
+  const pathLabel = (_c: string, _e: string, path: string) => labels[path];
+
+  it("groups each nested node on its own, labelled with its path", () => {
+    const groups = groupDevices(box, "room", pathLabel);
+    expect(groups.map((g) => [g.groupValue, g.devices.map((d) => d.address)])).toEqual([
+      ["EG › Küche", ["L1"]],
+      ["Flur", ["L3"]],
+      ["OG › Küche", ["L2"]],
+    ]);
+  });
+
+  it("offers each nested node as its own filter and filters by it", () => {
+    const opts = distinctNodeOptions(box, "room", undefined, pathLabel);
+    expect(opts).toEqual([
+      { value: nodeFilterValue("box", "room", "eg/kueche"), label: "EG › Küche" },
+      { value: "Flur", label: "Flur" },
+      { value: nodeFilterValue("box", "room", "og/kueche"), label: "OG › Küche" },
+    ]);
+    const og = filterDevices(box, { ...defaultOverviewFilters, room: nodeFilterValue("box", "room", "og/kueche") });
+    expect(og.map((d) => d.address)).toEqual(["L2"]);
+    // The name still matches both, as it always did.
+    expect(filterDevices(box, { ...defaultOverviewFilters, room: "Küche" }).map((d) => d.address)).toEqual([
+      "L1",
+      "L2",
+    ]);
+  });
+
+  it("leaves a flat CCU grouped by name", () => {
+    expect(groupDevices(fleet, "room").map((g) => g.key)).toEqual(
+      groupDevices(fleet, "room", pathLabel).map((g) => g.key),
+    );
   });
 });

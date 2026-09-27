@@ -5,11 +5,14 @@ package litefake
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/x509"
 	_ "embed" // the bundled metadata fixture
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"log/slog"
 	"net"
 	"net/http"
@@ -116,6 +119,10 @@ type Options struct {
 	Hostname string
 	// Logger receives the simulator's and the fake's logs. Nil discards.
 	Logger *slog.Logger
+	// TLS serves the API over HTTPS with a certificate no CA signed, the
+	// way a box presents its self-signed one; pairing then reports and
+	// binds the certificate's fingerprint.
+	TLS bool
 }
 
 // Call is one API request the fake received.
@@ -237,7 +244,16 @@ func Start(ctx context.Context, opts Options) (*Fake, error) {
 	}
 
 	f.cb = httptest.NewServer(f.callbackHandler())
-	f.srv = httptest.NewServer(f.routes())
+	if opts.TLS {
+		f.srv = httptest.NewUnstartedServer(f.routes())
+		// Handshakes a client refuses on purpose stay out of the log.
+		f.srv.Config.ErrorLog = log.New(io.Discard, "", 0)
+		f.srv.StartTLS()
+		sum := sha256.Sum256(f.srv.Certificate().Raw)
+		f.pairing.fingerprint = sum[:]
+	} else {
+		f.srv = httptest.NewServer(f.routes())
+	}
 
 	for _, name := range opts.Interfaces {
 		if err := f.subscribe(ctx, name); err != nil {
@@ -331,6 +347,14 @@ func (f *Fake) Close() error {
 
 // URL is the box's base URL, e.g. "http://127.0.0.1:41234".
 func (f *Fake) URL() string { return f.srv.URL }
+
+// Certificate is the API's certificate with [Options.TLS], else nil.
+func (f *Fake) Certificate() *x509.Certificate {
+	if f.srv.TLS == nil {
+		return nil
+	}
+	return f.srv.Certificate()
+}
 
 // Client returns an HTTP client for the fake's server.
 func (f *Fake) Client() *http.Client { return f.srv.Client() }

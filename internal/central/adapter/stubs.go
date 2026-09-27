@@ -18,6 +18,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/cachereset"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
 
@@ -191,6 +192,15 @@ func (a *BackupAdapter) TriggerBackupForCentral(_ context.Context, centralName s
 	u, ok := a.registry.Get(centralName)
 	if !ok || u == nil {
 		return "", fmt.Errorf("backup: unknown central %q", centralName)
+	}
+	// The run is detached and reports failures only to the log, so a
+	// central that does not offer backups is refused here, where the caller
+	// still hears it. A central whose feature set is not known yet (still
+	// booting) is tried as before.
+	if f := u.Features(); f.Known() {
+		if err := f.Require(u.Name(), hmenum.FeatureSystemBackupCreate, nil); err != nil {
+			return "", err
+		}
 	}
 	id := a.mintBackupID(u.Name())
 	go a.runBackup(u, id) //nolint:gosec,contextcheck // G118: detached on purpose; runBackup uses its own backupRunTimeout context so the trigger context cannot cancel the backup; see #20

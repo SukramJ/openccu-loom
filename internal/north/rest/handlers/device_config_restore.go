@@ -44,6 +44,9 @@ func RestoreDeviceConfig(svc DeviceConfigRestorePort, rec audit.Recorder) http.H
 			return
 		}
 		if err := svc.RestoreDeviceConfig(r.Context(), addr); err != nil {
+			if problem.WriteFeatureUnavailable(w, r, err) {
+				return
+			}
 			if errors.Is(err, backends.ErrUnsupported) {
 				problem.Write(w, http.StatusUnprocessableEntity,
 					problem.New(problem.TypeValidation, r, "Config restore not supported on this interface", ""))

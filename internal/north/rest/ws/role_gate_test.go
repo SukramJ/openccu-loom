@@ -186,6 +186,7 @@ func TestWriteCommandRolesAreRegistered(t *testing.T) {
 		CentralLinks:         &fakeCentralLinks{},
 		SessionRecorder:      &fakeSessionRecorder{},
 		GroupsAdmin:          &stubGroupsAdmin{},
+		TaxonomyAdmin:        stubTaxonomyAdmin{},
 	})
 
 	RegisterMissingCommands(r, MissingCommandsConfig{
@@ -206,3 +207,16 @@ func TestWriteCommandRolesAreRegistered(t *testing.T) {
 		}
 	}
 }
+
+// stubTaxonomyAdmin accepts every node edit.
+type stubTaxonomyAdmin struct{}
+
+func (stubTaxonomyAdmin) CreateNode(context.Context, string, string, string, string) (string, error) {
+	return "eg", nil
+}
+
+func (stubTaxonomyAdmin) UpdateNode(context.Context, string, string, string, *string, *string, *int) error {
+	return nil
+}
+
+func (stubTaxonomyAdmin) DeleteNode(context.Context, string, string, string) error { return nil }

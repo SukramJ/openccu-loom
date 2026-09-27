@@ -198,3 +198,26 @@ func TestLiteMetadataWithoutMetaReadScopeIsAbsentNotFatal(t *testing.T) {
 		t.Errorf("taxonomy.read = %+v, want missing_scope meta:read", st)
 	}
 }
+
+// TestLiteNodeRenameReachesAssignments pins that a node renamed on the box
+// reaches the devices assigned to it: the tree change re-reads the
+// snapshot, the assignment's stamped name follows, and the room names the
+// north-bound surfaces read change with it.
+func TestLiteNodeRenameReachesAssignments(t *testing.T) {
+	fake, unit := startMetaCentral(t, litefake.Options{})
+	dev := liteDevice(t, unit, liteSwitchDevice)
+	if err := fake.Meta().RenameNode("room", "eg/wohnzimmer", "Wohnraum"); err != nil {
+		t.Fatalf("RenameNode: %v", err)
+	}
+	waitFor(t, 10*time.Second, "the renamed node on the device", func() bool {
+		for _, a := range dev.Taxonomy() {
+			if a.Ref.String() == "room/eg/wohnzimmer" && a.Name == "Wohnraum" {
+				return true
+			}
+		}
+		return false
+	})
+	if got := dev.Rooms(); !slices.Equal(got, []string{"Wohnraum"}) {
+		t.Errorf("rooms = %v, want [Wohnraum]", got)
+	}
+}

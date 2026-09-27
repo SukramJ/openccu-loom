@@ -9,9 +9,11 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
+	"github.com/SukramJ/openccu-loom/internal/model/taxonomy"
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/internal/north/mcp"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -1115,5 +1117,90 @@ func TestListRoomsAndFunctions_UnknownCentralReturnsError(t *testing.T) {
 				t.Fatalf("%s: expected IsError=true for an unknown central_name", tool)
 			}
 		})
+	}
+}
+
+// fakeFeatures marks the listed (central, feature) pairs unavailable.
+type fakeFeatures map[string]hmenum.Feature
+
+func (f fakeFeatures) FeatureUnavailable(central string, k hmenum.Feature) error {
+	if f[central] != k {
+		return nil
+	}
+	return &hmerr.FeatureUnavailableError{Central: central, Feature: k, Reason: hmenum.FeatureReasonNotSupported}
+}
+
+// TestHubListToolsReportUnavailableCentrals pins that a hub list tool
+// spanning several centrals names the central that does not offer what
+// it reads, with the reason, instead of letting its empty share read as
+// "this central has none" — and still lists the other central's items.
+func TestHubListToolsReportUnavailableCentrals(t *testing.T) {
+	hAlpha := hub.NewHub("alpha")
+	hAlpha.PutSysvar(hub.NewSysvar("alpha", "SV_Alpha", "", hmenum.HubValueTypeLogic, nil))
+	hubs := newFakeHubs()
+	hubs.add("alpha", hAlpha)
+	hubs.add("box", hub.NewHub("box"))
+	deps := hubDeps(&fakeCentrals{names: []string{"alpha", "box"}}, hubs, newFakeDevices())
+	deps.Features = fakeFeatures{"box": hmenum.FeatureHubSysvars}
+	cs := connect(t, deps)
+	defer cs.Close()
+
+	res := callTool(t, cs, "list_sysvars", map[string]any{})
+	if res.IsError {
+		t.Fatalf("list_sysvars returned error: %v", res.Content)
+	}
+	var out struct {
+		Sysvars []struct {
+			Central string `json:"central"`
+		} `json:"sysvars"`
+		Unavailable []struct {
+			Central string `json:"central"`
+			Key     string `json:"key"`
+			Reason  string `json:"reason"`
+		} `json:"unavailable"`
+	}
+	unmarshalStructured(t, res, &out)
+	if len(out.Sysvars) != 1 || out.Sysvars[0].Central != "alpha" {
+		t.Errorf("sysvars = %+v, want alpha's one", out.Sysvars)
+	}
+	if len(out.Unavailable) != 1 || out.Unavailable[0].Central != "box" ||
+		out.Unavailable[0].Key != "hub.sysvars" || out.Unavailable[0].Reason != "not_supported_by_system" {
+		t.Errorf("unavailable = %+v, want box / hub.sysvars / not_supported_by_system", out.Unavailable)
+	}
+}
+
+// TestListRoomsNamesTheNodesBehindAName pins the paths on list_rooms: two
+// rooms of one name on two floors are one entry whose paths name both.
+func TestListRoomsNamesTheNodesBehindAName(t *testing.T) {
+	devs := newFakeDevices()
+	for _, tc := range []struct{ addr, path string }{{"VCU0000001", "eg/kueche"}, {"VCU0000002", "og/kueche"}} {
+		d := device.New(device.Config{Address: tc.addr, Interface: hmenum.InterfaceHmIPRF, InterfaceID: "HmIP-RF", Model: "HmIP-BSM"})
+		d.SetRooms([]string{"Küche"})
+		d.SetTaxonomy([]taxonomy.Assignment{{Ref: taxonomy.Ref{Enum: taxonomy.EnumRoom, Path: taxonomy.Path(tc.path)}, Name: "Küche"}})
+		devs.add(d, "box")
+	}
+	cs := connect(t, hubDeps(&fakeCentrals{names: []string{"box"}}, newFakeHubs(), devs))
+	defer cs.Close()
+	res := callTool(t, cs, "list_rooms", map[string]any{})
+	var out struct {
+		Rooms []struct {
+			Name        string `json:"name"`
+			DeviceCount int    `json:"device_count"`
+			Paths       []struct {
+				Central string `json:"central"`
+				Path    string `json:"path"`
+			} `json:"paths"`
+		} `json:"rooms"`
+	}
+	unmarshalStructured(t, res, &out)
+	if len(out.Rooms) != 1 || out.Rooms[0].DeviceCount != 2 || len(out.Rooms[0].Paths) != 2 {
+		t.Fatalf("rooms = %+v, want one Küche with two paths", out.Rooms)
+	}
+	got := map[string]bool{}
+	for _, p := range out.Rooms[0].Paths {
+		got[p.Central+"/"+p.Path] = true
+	}
+	if !got["box/eg/kueche"] || !got["box/og/kueche"] {
+		t.Errorf("paths = %+v", out.Rooms[0].Paths)
 	}
 }

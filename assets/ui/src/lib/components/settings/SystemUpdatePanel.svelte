@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { centralStore } from "$lib/stores/centrals.svelte";
+  import { featureName, featureReason } from "$lib/features";
   import { onMount, onDestroy } from "svelte";
   import { api, ApiError } from "$lib/api/client";
   import type { SystemUpdateEntry } from "$lib/api/client";
@@ -28,14 +30,18 @@
   // Firmware-download form: an admin supplies an http(s) URL and the CCU
   // fetches the image onto the central so it can be staged for a later
   // install. Optional per-central target for multi-CCU deployments.
+  const INSTALL = "hub.system_update.install";
+
   let downloadUrl = $state("");
   let downloadCentral = $state("");
   let downloading = $state(false);
 
+  // Only a central that can install firmware is offered as a download
+  // target.
   const centralOptions = $derived(
     entries
       .map((e) => e.central ?? "")
-      .filter((c) => c !== "")
+      .filter((c) => c !== "" && centralStore.offers(c, INSTALL))
       .map((c) => ({ value: c, label: c })),
   );
 
@@ -189,7 +195,14 @@
               {:else if e.observed}
                 <Badge variant="muted">{t("firmware.up_to_date")}</Badge>
               {/if}
-              {#if isAdmin}
+              {#if isAdmin && !centralStore.offers(e.central, INSTALL)}
+                {@const state = centralStore.featureOf(e.central ?? "", INSTALL)}
+                <span class="text-xs text-[var(--ha-secondary-text-color)]">
+                  {t("feature.hidden_actions", {
+                    list: `${featureName(INSTALL)} (${featureReason(state, centralStore.byName(e.central ?? "")?.system_type)})`,
+                  })}
+                </span>
+              {:else if isAdmin}
                 {#if e.update_available && !e.in_progress}
                   <label class="flex items-center gap-1.5 text-xs" title={t("ccu_update.backup_first.help")}>
                     <input type="checkbox" bind:checked={backupFirst} />
@@ -220,7 +233,7 @@
     {/if}
   {/if}
 
-  {#if isAdmin}
+  {#if isAdmin && centralStore.featureAvailable(INSTALL)}
     <div class="space-y-2 border-t border-[var(--ha-divider-color)] pt-4">
       <h4 class="text-sm font-semibold">{t("firmware_download.title")}</h4>
       <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("firmware_download.subtitle")}</p>

@@ -295,6 +295,10 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 	if d.authMw != nil {
 		d.authMw.BasicThrottle = loginLimiter
 	}
+	// Probe and client pairing for adding a system, shared by the admin
+	// routes and the first-run wizard. The box's administrator sees this
+	// daemon under its mDNS instance name.
+	onboarding := adapter.NewLiteOnboarding(cfg.North.Discovery.MDNS.ResolveInstanceName(), d.catalogs, cfg.Locale, logger)
 	// One reloader, two callers: the admin endpoint an operator can hit
 	// directly, and the config-section save below.
 	mqttReload := newMQTTReloadAdapter(d.mqttSup, d.reload, cfg, logger)
@@ -322,6 +326,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		ConfigChannelMeta:       d.devicesAdapter,
 		ParameterDeterminer:     d.parameterDeterminer,
 		Hub:                     d.hubAdapter,
+		Taxonomy:                registryTaxonomy{reg: d.reg},
 		WebhookInboundEnabled:   cfg.North.Webhook.Inbound.Enabled,
 		WebhookInboundToken:     cfg.North.Webhook.Inbound.Token,
 		SysvarRefresh:           adapter.NewSysvarFetchAdapter(d.reg),
@@ -361,6 +366,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		Diagrams:          d.diagramSvc,
 		Areas:             d.areaSvc,
 		RoomFunctionAdmin: d.roomFunctionAdmin,
+		TaxonomyAdmin:     adapter.NewTaxonomyAdmin(d.reg),
 		TLSCert:           tlsCertSvc,
 		TokenAdmin:        d.tokenSvc,
 		CentralAdmin:      d.centSvc,
@@ -383,7 +389,9 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 			Sections:        d.sqSections,
 			Required:        d.noUsers,
 			FirstRunAllowed: cfg.Bootstrap.FirstRunSetupAllowed,
+			Onboarding:      onboarding,
 		},
+		Onboarding:      onboarding,
 		LoginRateLimit:  loginLimiter,
 		Backup:          d.backupAdapter,
 		BackupUpload:    d.backupAdapter,
@@ -762,6 +770,8 @@ func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, loginLim
 		Paramsets:    d.paramsetsDomain,
 		Health:       d.healthAdapter,
 		Hubs:         d.reg,
+		Features:     d.reg,
+		Taxonomy:     registryTaxonomy{reg: d.reg},
 		Audit:        d.auditRec,
 		Incidents:    d.incidents,
 		Alarm:        mcpAlarmSeam(d),

@@ -53,6 +53,11 @@ type Deps struct {
 	Config      handlers.ConfigReader
 	Devices     handlers.DeviceIndex
 	DeviceAdmin handlers.DeviceAdmin
+	// Onboarding backs the probe and client-pairing routes under
+	// /centrals and /setup. Nil leaves them unmounted.
+	Onboarding handlers.CentralOnboarding
+	// Taxonomy backs GET /taxonomy: every central's enum trees.
+	Taxonomy handlers.TaxonomySource
 	// DeviceReplacer backs the guided device-replace workflow
 	// (GET /devices/{addr}/replace-candidates + POST
 	// /devices/{addr}/replace). Nil serves those routes as 503.
@@ -252,6 +257,8 @@ type Deps struct {
 	// /functions (create/rename/delete). Nil disables those routes;
 	// the read-only GET /rooms + GET /functions stay available.
 	RoomFunctionAdmin handlers.RoomFunctionAdmin
+	// TaxonomyAdmin backs node CRUD at /taxonomy/{central}/{enum}/nodes.
+	TaxonomyAdmin handlers.TaxonomyNodeAdmin
 
 	// TLSCert backs the runtime certificate upload at
 	// POST /admin/tls/certificate. Nil when TLS is not enabled.
@@ -741,6 +748,22 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 		// wizard runs. POST /setup hard-gates itself on the first-run probe.
 		r.Get("/setup/status", handlers.SetupStatus(d.Setup))
 		r.Post("/setup", handlers.Setup(d.Setup))
+		if d.Onboarding != nil {
+			// The wizard identifies and pairs its system before any admin
+			// exists. Each route gates itself on the first-run state, and the
+			// two that start work on the network get the login's per-IP
+			// speed bump.
+			limited := func(h http.HandlerFunc) http.Handler {
+				if d.LoginRateLimit != nil {
+					return d.LoginRateLimit.Middleware()(h)
+				}
+				return h
+			}
+			r.Method(http.MethodPost, "/setup/probe", limited(handlers.SetupProbeCentral(d.Onboarding, d.Setup)))
+			r.Method(http.MethodPost, "/setup/pairing", limited(handlers.SetupStartCentralPairing(d.Onboarding, d.Setup)))
+			r.Get("/setup/pairing/{id}", handlers.SetupCentralPairingStatus(d.Onboarding, d.Setup))
+			r.Delete("/setup/pairing/{id}", handlers.SetupCancelCentralPairing(d.Onboarding, d.Setup))
+		}
 		if d.OIDC != nil {
 			// The start route is pre-auth and mints server-held state on
 			// every call, so it gets the same per-IP speed bump as the login
@@ -848,6 +871,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			if d.Devices != nil {
 				pr.Post("/devices/values:batch", handlers.ValuesBatch(d.Devices, d.Labels, d.DataPointVis))
 				pr.Get("/rooms", handlers.ListRooms(d.Devices))
+				pr.Get("/taxonomy", handlers.GetTaxonomy(d.Taxonomy))
 				pr.Get("/functions", handlers.ListFunctions(d.Devices))
 				pr.Get("/devices", handlers.ListDevices(d.Devices))
 				pr.Get("/devices/{addr}", handlers.GetDevice(d.Devices, d.Labels))
@@ -1001,6 +1025,11 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.With(op).Post("/functions", handlers.CreateFunction(d.RoomFunctionAdmin, d.AuditRecorder))
 				pr.With(op).Patch("/functions/{name}", handlers.RenameFunction(d.RoomFunctionAdmin, d.AuditRecorder))
 				pr.With(op).Delete("/functions/{name}", handlers.DeleteFunction(d.RoomFunctionAdmin, d.AuditRecorder))
+			}
+			if d.TaxonomyAdmin != nil {
+				pr.With(op).Post("/taxonomy/{central}/{enum}/nodes", handlers.CreateTaxonomyNode(d.TaxonomyAdmin, d.AuditRecorder))
+				pr.With(op).Patch("/taxonomy/{central}/{enum}/nodes", handlers.UpdateTaxonomyNode(d.TaxonomyAdmin, d.AuditRecorder))
+				pr.With(op).Delete("/taxonomy/{central}/{enum}/nodes", handlers.DeleteTaxonomyNode(d.TaxonomyAdmin, d.AuditRecorder))
 			}
 			// Area (room grouping) entity CRUD + room-assignment replace.
 			// Local SQLite writes, so operator-gated; the read-only GET
@@ -1383,8 +1412,14 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 					pr.With(admin).Delete("/centrals/discovered/{serial}/ignore", handlers.UnignoreDiscoveredCCU(d.Discovery))
 				}
 				pr.Get("/centrals/{name}", handlers.GetCentral(d.CentralAdmin))
-				pr.With(admin).Post("/centrals", handlers.CreateCentral(d.CentralAdmin, d.AuditRecorder))
-				pr.With(admin).Put("/centrals/{name}", handlers.UpdateCentral(d.CentralAdmin, d.AuditRecorder))
+				if d.Onboarding != nil {
+					pr.With(admin).Post("/centrals/probe", handlers.ProbeCentral(d.Onboarding))
+					pr.With(admin).Post("/centrals/pairing", handlers.StartCentralPairing(d.Onboarding))
+					pr.With(admin).Get("/centrals/pairing/{id}", handlers.CentralPairingStatus(d.Onboarding))
+					pr.With(admin).Delete("/centrals/pairing/{id}", handlers.CancelCentralPairing(d.Onboarding))
+				}
+				pr.With(admin).Post("/centrals", handlers.CreateCentral(d.CentralAdmin, d.AuditRecorder, d.Onboarding))
+				pr.With(admin).Put("/centrals/{name}", handlers.UpdateCentral(d.CentralAdmin, d.AuditRecorder, d.Onboarding))
 				pr.With(admin).Delete("/centrals/{name}", handlers.DeleteCentral(d.CentralAdmin, d.AuditRecorder))
 			}
 			if d.MQTTReload != nil {

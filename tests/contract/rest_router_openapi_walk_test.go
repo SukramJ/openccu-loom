@@ -29,6 +29,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/metrics"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
+	"github.com/SukramJ/openccu-loom/internal/model/taxonomy"
 	"github.com/SukramJ/openccu-loom/internal/north/discovery/ssdp"
 	"github.com/SukramJ/openccu-loom/internal/north/rest"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
@@ -269,14 +270,16 @@ func (fakeDeviceTeam) SetChannelTeam(context.Context, string, int, string) error
 
 type fakeRoomFunctionAdmin struct{}
 
-func (fakeRoomFunctionAdmin) CreateRoom(context.Context, string, string) (int, error) { return 0, nil }
+func (fakeRoomFunctionAdmin) CreateRoom(context.Context, string, string) (hub.CreatedNode, error) {
+	return hub.CreatedNode{LegacyID: 1, Ref: taxonomy.Root(taxonomy.EnumRoom, "1")}, nil
+}
 
 func (fakeRoomFunctionAdmin) RenameRoom(context.Context, string, string, string) error { return nil }
 
 func (fakeRoomFunctionAdmin) DeleteRoom(context.Context, string, string) error { return nil }
 
-func (fakeRoomFunctionAdmin) CreateFunction(context.Context, string, string) (int, error) {
-	return 0, nil
+func (fakeRoomFunctionAdmin) CreateFunction(context.Context, string, string) (hub.CreatedNode, error) {
+	return hub.CreatedNode{LegacyID: 1, Ref: taxonomy.Root(taxonomy.EnumFunction, "1")}, nil
 }
 
 func (fakeRoomFunctionAdmin) RenameFunction(context.Context, string, string, string) error {
@@ -635,6 +638,7 @@ func fullyWiredRouterDeps() rest.Deps {
 		Diagrams:                fakeDiagramConfigService{},
 		Areas:                   fakeAreaAdmin{},
 		Devices:                 fakeDeviceIndex{},
+		Taxonomy:                fakeTaxonomySource{},
 		UISchema:                fakeUISchemaService{},
 		Links:                   fakeLinksService{},
 		Schedules:               fakeScheduleService{},
@@ -650,6 +654,8 @@ func fullyWiredRouterDeps() rest.Deps {
 		FirmwareRefresher:       fakeFirmwareRefresher{},
 		DeviceInstallMode:       fakeDeviceInstallMode{},
 		RoomFunctionAdmin:       fakeRoomFunctionAdmin{},
+		TaxonomyAdmin:           fakeTaxonomyAdmin{},
+		Onboarding:              fakeOnboarding{},
 		RefreshDevices:          fakeRefreshDevicesService{},
 		Reloader:                fakeReloaderService{},
 		CentralLinks:            fakeCentralLinksService{},
@@ -866,3 +872,44 @@ func TestRESTRouterMatchesOpenAPISpec(t *testing.T) {
 			len(unmounted), strings.Join(unmounted, "\n  "))
 	}
 }
+
+// fakeTaxonomySource serves one central with an empty taxonomy.
+type fakeTaxonomySource struct{}
+
+func (fakeTaxonomySource) Taxonomies() []handlers.CentralTaxonomy {
+	return []handlers.CentralTaxonomy{{Central: "ccu-01"}}
+}
+
+// fakeTaxonomyAdmin accepts every node edit.
+type fakeTaxonomyAdmin struct{}
+
+func (fakeTaxonomyAdmin) CreateNode(context.Context, string, string, string, string) (string, error) {
+	return "eg", nil
+}
+
+func (fakeTaxonomyAdmin) UpdateNode(context.Context, string, string, string, *string, *string, *int) error {
+	return nil
+}
+
+func (fakeTaxonomyAdmin) DeleteNode(context.Context, string, string, string) error { return nil }
+
+// fakeOnboarding answers every onboarding call with an empty success.
+type fakeOnboarding struct{}
+
+func (fakeOnboarding) Probe(context.Context, hmapi.CentralProbeRequest) (hmapi.CentralProbeResult, error) {
+	return hmapi.CentralProbeResult{SystemType: "unknown"}, nil
+}
+
+func (fakeOnboarding) StartPairing(context.Context, hmapi.CentralPairingRequest) (hmapi.CentralPairingStarted, error) {
+	return hmapi.CentralPairingStarted{PairingID: "p"}, nil
+}
+
+func (fakeOnboarding) PairingStatus(context.Context, string, time.Duration) (hmapi.CentralPairingStatus, error) {
+	return hmapi.CentralPairingStatus{State: "pending"}, nil
+}
+
+func (fakeOnboarding) CancelPairing(context.Context, string) error { return nil }
+
+func (fakeOnboarding) PairingToken(string) (token, fingerprint string, err error) { return "", "", nil }
+
+func (fakeOnboarding) ForgetPairing(string) {}

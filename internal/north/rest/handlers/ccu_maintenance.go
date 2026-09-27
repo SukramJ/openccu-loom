@@ -120,6 +120,9 @@ func ccuHostActionHandler(svc CCUHostActionPort, rec audit.Recorder, act ccuHost
 			return
 		}
 		if err := act.run(svc, r.Context(), centralName); err != nil {
+			if problem.WriteFeatureUnavailable(w, r, err) {
+				return
+			}
 			switch {
 			case errors.Is(err, hmerr.ErrUnknownCentral):
 				problem.Write(w, http.StatusNotFound,
@@ -217,6 +220,9 @@ func PutCCUPosition(svc CCUPositionPort, rec audit.Recorder) http.HandlerFunc {
 			return
 		}
 		if err := svc.SetCCUPosition(r.Context(), centralName, *req.Longitude, *req.Latitude); err != nil {
+			if problem.WriteFeatureUnavailable(w, r, err) {
+				return
+			}
 			switch {
 			case errors.Is(err, hmerr.ErrUnknownCentral):
 				problem.Write(w, http.StatusNotFound,
@@ -288,6 +294,9 @@ func PostSystemFirmwareDownload(svc FirmwareDownloadPort, rec audit.Recorder) ht
 			return
 		}
 		if err := svc.DownloadFirmware(r.Context(), req.Central); err != nil {
+			if problem.WriteFeatureUnavailable(w, r, err) {
+				return
+			}
 			switch {
 			case errors.Is(err, hmerr.ErrUnknownCentral):
 				problem.Write(w, http.StatusNotFound,

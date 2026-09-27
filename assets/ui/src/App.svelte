@@ -66,6 +66,7 @@
   import { refreshRestartPending } from "$lib/stores/restartPending.svelte";
   import { startRouteStore } from "$lib/stores/startRoute.svelte";
   import { surfacesStore } from "$lib/stores/surfaces.svelte";
+  import { centralStore } from "$lib/stores/centrals.svelte";
   import { foldedRouteTarget, navSurfaceID } from "$lib/nav";
 
   // Minimal hash-based router. The Go handler serves the SPA under
@@ -201,6 +202,11 @@
       // The route guard needs the profile too, so a view the operator
       // hid must not stay reachable once it has arrived.
       void surfacesStore.load().then(redirectIfHidden);
+      // The navigation offers a feature-gated view only while some
+      // central offers the feature; the fleet's feature sets follow the
+      // event stream from here on.
+      void centralStore.refresh();
+      centralStore.ensureStream();
     });
   });
 

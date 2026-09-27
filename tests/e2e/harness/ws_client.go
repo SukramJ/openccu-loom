@@ -155,8 +155,9 @@ type CallResult struct {
 	Op    string          `json:"op"`
 	Data  json.RawMessage `json:"data,omitempty"`
 	Error *struct {
-		Code    string `json:"code"`
-		Message string `json:"message"`
+		Code    string          `json:"code"`
+		Message string          `json:"message"`
+		Details json.RawMessage `json:"details,omitempty"`
 	} `json:"error,omitempty"`
 }
 

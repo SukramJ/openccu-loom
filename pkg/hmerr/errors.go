@@ -136,6 +136,15 @@ var (
 	// id the central's roster does not carry. Mapped to 404 / Not Found.
 	ErrGroupNotFound = errors.New("group not found")
 
+	// ErrPairingNotFound signals a client-pairing id the daemon does not
+	// hold: never started, withdrawn, expired, or already taken by a
+	// central. Mapped to 404 / Not Found.
+	ErrPairingNotFound = errors.New("pairing not found")
+
+	// ErrPairingNotApproved signals a pairing whose token is asked for
+	// before the box's administrator approved it. Mapped to 409 / Conflict.
+	ErrPairingNotApproved = errors.New("pairing not approved")
+
 	// ErrNoSchedule signals that the addressed channel's MASTER paramset
 	// carries no climate-schedule parameters (no P<n>_* keys), so there is
 	// no week profile to read or write. North-bound adapters map it to a

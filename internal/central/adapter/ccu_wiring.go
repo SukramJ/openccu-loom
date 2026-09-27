@@ -157,6 +157,11 @@ type WireDeps struct {
 	// callee's concern and must not fail the bring-up.
 	PersistSerial func(ctx context.Context, centralName, serial string)
 
+	// PersistSystemType, when non-nil, records the system type a central
+	// configured as `auto` resolved to, so the next start brings it up
+	// directly. Best-effort, like PersistSerial.
+	PersistSystemType func(ctx context.Context, centralName string, systemType hmenum.SystemType)
+
 	// Descriptors, when populated, enables the persistent
 	// device-description + paramset-description caches: each central's
 	// registries are hydrated from SQLite before its bring-up starts
@@ -317,6 +322,17 @@ func recordCentralWaiting(unit *central.Unit) {
 		return
 	}
 	unit.Health.RecordQuality(startupHealthComponent(unit.Name()), "waiting for CCU to become ready")
+	recordCentralReadiness(unit, hmenum.ReadinessWaitingForCCU, 0, 0)
+}
+
+// recordCentralIdentifying marks a central configured as `auto` while its
+// system type is not known yet: waiting, like a booting CCU, with the
+// reason on the same startup component.
+func recordCentralIdentifying(unit *central.Unit, host string) {
+	if unit == nil || unit.Health == nil {
+		return
+	}
+	unit.Health.RecordQuality(startupHealthComponent(unit.Name()), "identifying the system at "+host)
 	recordCentralReadiness(unit, hmenum.ReadinessWaitingForCCU, 0, 0)
 }
 

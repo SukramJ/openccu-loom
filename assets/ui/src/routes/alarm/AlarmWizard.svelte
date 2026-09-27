@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { labelOf } from "$lib/taxonomy/tree";
+  import { taxonomyStore } from "$lib/stores/taxonomy.svelte";
+  import { distinctNodeOptions } from "$lib/overview/overview-grouping";
   import { onMount, untrack } from "svelte";
   import { api, ApiError, friendlyError } from "$lib/api/client";
   import { alarmPanelStore } from "$lib/stores/alarmPanel.svelte";
@@ -126,8 +129,12 @@
   const sensorCandidates = $derived(
     sortPickerRows(sensorCandidatesFiltered, sensorSort, sensorSortKey),
   );
-  const sensorRoomOptions = $derived(distinctValues(deviceStore.items, (d) => d.rooms));
-  const sensorFuncOptions = $derived(distinctValues(deviceStore.items, (d) => d.functions));
+  // A nested room is offered by its path, so two rooms of one name are
+  // two choices.
+  const pathLabel = (central: string, enumId: string, path: string) =>
+    labelOf(taxonomyStore.enumOf(central, enumId), path);
+  const sensorRoomOptions = $derived(distinctNodeOptions(deviceStore.items, "room", undefined, pathLabel));
+  const sensorFuncOptions = $derived(distinctNodeOptions(deviceStore.items, "function", undefined, pathLabel));
   function sensorRowId(device: DeviceSummary, channel: string, parameter: string): string {
     return `${device.central ?? ""}|${channel}|${parameter}`;
   }
@@ -330,6 +337,7 @@
   }
 
   onMount(() => {
+    void taxonomyStore.refresh();
     // Same load pattern as AlarmSensors.svelte — the sensor step needs
     // the device inventory ready by the time the operator reaches it.
     deviceStore.refresh();

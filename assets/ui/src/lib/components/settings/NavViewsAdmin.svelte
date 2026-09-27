@@ -11,6 +11,9 @@
   import { surfacesStore } from "$lib/stores/surfaces.svelte";
   import { infoStore } from "$lib/stores/info.svelte";
   import { matterStore } from "$lib/stores/matter.svelte";
+  import { centralStore } from "$lib/stores/centrals.svelte";
+  import { gateFeature } from "$lib/nav";
+  import { featureName } from "$lib/features";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { prefs } from "$lib/stores/preferences.svelte";
@@ -146,7 +149,15 @@
   function gateAvailable(s: SurfaceInfo): boolean {
     if (s.gate === "matter") return matterEnabled;
     if (s.gate === "history") return historyEnabled;
+    const feature = gateFeature(s.gate);
+    if (feature !== null) return centralStore.featureAvailable(feature);
     return true;
+  }
+
+  function gateReason(s: SurfaceInfo): string {
+    const feature = gateFeature(s.gate);
+    if (feature !== null) return t("navviews.gate.feature", { feature: featureName(feature) });
+    return t(`navviews.gate.${s.gate}`);
   }
 
   const gateOpen = gateAvailable;
@@ -546,9 +557,7 @@
                   {/if}
                   {#if !available}
                     <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                      {t("navviews.row.unavailable", {
-                        why: t(`navviews.gate.${s.gate}`),
-                      })}
+                      {t("navviews.row.unavailable", { why: gateReason(s) })}
                     </p>
                   {/if}
                   {#if s.role_admin}

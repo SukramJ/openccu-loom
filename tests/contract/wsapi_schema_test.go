@@ -85,6 +85,7 @@ type wsSchema struct {
 // introduced — the test will then enforce that every command uses only
 // known categories.
 var knownWSCategories = map[string]bool{
+	"taxonomy":       true,
 	"alarms":         true,
 	"alarm_panel":    true,
 	"backup":         true,

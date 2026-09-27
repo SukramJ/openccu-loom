@@ -62,6 +62,7 @@ type discoveredCCU struct {
 	SuggestedHost     string    `json:"suggested_host"`
 	Manufacturer      string    `json:"manufacturer,omitempty"`
 	Model             string    `json:"model,omitempty"`
+	SystemType        string    `json:"system_type"`
 	LastSeen          time.Time `json:"last_seen"`
 	AlreadyConfigured bool      `json:"already_configured"`
 }
@@ -82,7 +83,9 @@ func ListDiscoveredCCUs(d *DiscoveryDeps) http.HandlerFunc {
 			}
 		}
 		serials, hosts := configuredSets(r.Context(), d.Centrals)
-		for _, c := range d.Discoverer.List() {
+		found := d.Discoverer.List()
+		for i := range found {
+			c := &found[i]
 			if _, skip := ignored[c.Serial]; skip {
 				continue
 			}
@@ -93,6 +96,7 @@ func ListDiscoveredCCUs(d *DiscoveryDeps) http.HandlerFunc {
 				SuggestedHost:     d.suggestHost(r.Context(), c.Host),
 				Manufacturer:      c.Manufacturer,
 				Model:             c.Model,
+				SystemType:        c.SystemType,
 				LastSeen:          c.LastSeen,
 				AlreadyConfigured: isConfigured(c.Serial, c.Host, serials, hosts),
 			})
@@ -120,8 +124,9 @@ func IgnoreDiscoveredCCU(d *DiscoveryDeps) http.HandlerFunc {
 		// "ignored" management view; absence is fine (ignore still works).
 		entry := sqlite.IgnoredCCU{Serial: serial, IgnoredBy: actorSubject(r), IgnoredAt: time.Now().UTC()}
 		if d.Discoverer != nil {
-			for _, c := range d.Discoverer.List() {
-				if c.Serial == serial {
+			found := d.Discoverer.List()
+			for i := range found {
+				if c := &found[i]; c.Serial == serial {
 					entry.Name, entry.Host = c.Name, c.Host
 					break
 				}

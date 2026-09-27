@@ -267,5 +267,8 @@
   "setup.title": "Welcome to openccu-loom",
   "setup.username": "Username",
   "sidebar.cluster.bridges": "Bridges",
-  "sysvars.title": "System variables"
+  "sysvars.title": "System variables",
+  "onboarding.pairing.purpose.devices": "Read and control your Homematic devices and configure them from OpenCCU-Loom.",
+  "onboarding.pairing.purpose.names": "Show device names, rooms and functions, and let you edit them from OpenCCU-Loom.",
+  "onboarding.pairing.purpose.system": "Show system state, service messages, heating groups and updates in OpenCCU-Loom."
 }

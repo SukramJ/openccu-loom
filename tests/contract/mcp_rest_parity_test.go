@@ -292,6 +292,7 @@ func fullyWiredMCPDeps() mcp.Deps {
 		Paramsets:    mcpNoopParamsets{},
 		Health:       mcpNoopHealth{},
 		Hubs:         mcpNoopHubs{},
+		Taxonomy:     fakeTaxonomySource{},
 		Audit:        mcpParityAuditRecorder{},
 		Incidents:    fakeIncidentsReader{},
 		Alarm:        mcpParityAlarm{},

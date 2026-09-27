@@ -1,3 +1,4 @@
+import type { components } from "./types.generated";
 import type {
   ScheduleDeviceSummary,
   Area,
@@ -1923,6 +1924,89 @@ export const api = {
       method: "DELETE",
     });
   },
+  // Taxonomies: every central's trees of rooms, functions and other enums.
+  getTaxonomy() {
+    return request<TaxonomyResponse>(`/taxonomy`);
+  },
+  createTaxonomyNode(central: string, enumId: string, name: string, parentPath = "") {
+    return request<{ path: string }>(
+      `/taxonomy/${encodeURIComponent(central)}/${encodeURIComponent(enumId)}/nodes`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(parentPath ? { name, parent_path: parentPath } : { name }),
+      },
+    );
+  },
+  // `parent_path` "" moves the node to the root; absent leaves it where it is.
+  updateTaxonomyNode(
+    central: string,
+    enumId: string,
+    path: string,
+    change: { name?: string; parent_path?: string; position?: number },
+  ) {
+    return request<void>(
+      `/taxonomy/${encodeURIComponent(central)}/${encodeURIComponent(enumId)}/nodes?path=${encodeURIComponent(path)}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(change),
+      },
+    );
+  },
+  deleteTaxonomyNode(central: string, enumId: string, path: string) {
+    return request<void>(
+      `/taxonomy/${encodeURIComponent(central)}/${encodeURIComponent(enumId)}/nodes?path=${encodeURIComponent(path)}`,
+      { method: "DELETE" },
+    );
+  },
+  // Assign by node reference (`room/eg/kueche`), which names one of two
+  // nodes that share a display name.
+  setDeviceTaxonomyPaths(address: string, change: { room_paths?: string[]; function_paths?: string[] }) {
+    return request<void>(`/devices/${encodeURIComponent(address)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(change),
+    });
+  },
+  setChannelTaxonomyPaths(
+    address: string,
+    channelNo: number,
+    change: { room_paths?: string[]; function_paths?: string[] },
+  ) {
+    return request<void>(`/devices/${encodeURIComponent(address)}/channels/${channelNo}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(change),
+    });
+  },
+  // Onboarding: probe an address, pair with an openccu-lite box -----
+  // `setup` addresses the session-less first-run variants.
+  probeCentral(req: CentralProbeRequest, setup = false) {
+    return request<CentralProbeResult>(`${setup ? "/setup" : "/centrals"}/probe`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+    });
+  },
+  startCentralPairing(req: CentralPairingRequest, setup = false) {
+    return request<CentralPairingStarted>(`${setup ? "/setup" : "/centrals"}/pairing`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+    });
+  },
+  getCentralPairing(id: string, waitSeconds = 0, setup = false) {
+    const q = waitSeconds > 0 ? `?wait=${waitSeconds}` : "";
+    return request<CentralPairingStatus>(
+      `${setup ? "/setup" : "/centrals"}/pairing/${encodeURIComponent(id)}${q}`,
+    );
+  },
+  cancelCentralPairing(id: string, setup = false) {
+    return request<void>(`${setup ? "/setup" : "/centrals"}/pairing/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+  },
   // CCU discovery (SSDP/UPnP) ------------------------------------
   listDiscoveredCentrals() {
     return request<DiscoveredCCU[]>(`/centrals/discovered`);
@@ -2196,6 +2280,7 @@ export type DiscoveredCCU = {
   suggested_host: string;
   manufacturer?: string;
   model?: string;
+  system_type?: "ccu" | "openccu-lite";
   last_seen: string;
   already_configured: boolean;
 };
@@ -2228,8 +2313,14 @@ export type SetupPayload = {
   ccu?: {
     name: string;
     host: string;
+    port?: number;
+    system_type?: "ccu" | "openccu-lite" | "auto";
     username?: string;
     password?: string;
+    api_token?: string;
+    tls?: boolean;
+    tls_fingerprint?: string;
+    pairing_id?: string;
     interfaces: string[];
   };
   mqtt?: {
@@ -2315,6 +2406,17 @@ export type VisibilityConfig = {
   un_ignore?: string[];
 };
 
+export type TaxonomyResponse = components["schemas"]["TaxonomyResponse"];
+export type TaxonomyCentral = components["schemas"]["TaxonomyCentral"];
+export type TaxonomyEnum = components["schemas"]["TaxonomyEnum"];
+export type TaxonomyNode = components["schemas"]["TaxonomyNode"];
+export type TaxonomyAssignment = components["schemas"]["TaxonomyAssignment"];
+export type CentralProbeRequest = components["schemas"]["CentralProbeRequest"];
+export type CentralProbeResult = components["schemas"]["CentralProbeResult"];
+export type CentralPairingRequest = components["schemas"]["CentralPairingRequest"];
+export type CentralPairingStarted = components["schemas"]["CentralPairingStarted"];
+export type CentralPairingStatus = components["schemas"]["CentralPairingStatus"];
+
 export type CentralRow = {
   name: string;
   host: string;
@@ -2328,6 +2430,16 @@ export type CentralRow = {
   password_plain?: string;
   tls?: boolean;
   tls_insecure_skip_verify?: boolean;
+  // Kind of system; absent means "ccu". An openccu-lite central carries an
+  // API token instead of username and password.
+  system_type?: "ccu" | "openccu-lite" | "auto";
+  // Secret: GET masks a stored token to "***", which must never be sent
+  // back — omit the field to keep the stored token.
+  api_token_plain?: string;
+  api_token_env?: string;
+  tls_fingerprint?: string;
+  // Write-only: an approved pairing whose token the daemon takes.
+  pairing_id?: string;
   primary_interface?: string;
   interfaces: InterfaceSpec[];
   ports?: Record<string, number>;

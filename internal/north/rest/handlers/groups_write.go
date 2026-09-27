@@ -239,6 +239,9 @@ func groupID(w http.ResponseWriter, r *http.Request) (int, bool) {
 }
 
 func writeGroupWriteError(w http.ResponseWriter, r *http.Request, err error) {
+	if problem.WriteFeatureUnavailable(w, r, err) {
+		return
+	}
 	switch {
 	case errors.Is(err, hmerr.ErrUnknownCentral):
 		problem.Write(w, http.StatusNotFound,
