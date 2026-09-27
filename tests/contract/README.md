@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 521.
+Guards without a doc comment: 7 of 522.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -484,6 +484,7 @@ Guards without a doc comment: 7 of 521.
 | TestLiteMetadataNamesStampedAtIngest | wiring_pins/lite_metadata_test.go | TestLiteMetadataNamesStampedAtIngest pins that the box's metadata reaches the model at bring-up: the device carries its name, its room and function by the directly assigned node's display name, and the full node paths. |
 | TestLiteMetadataStreamRenamesLive | wiring_pins/lite_metadata_test.go | TestLiteMetadataStreamRenamesLive pins the change stream: a rename made on the box reaches the running model and is published as a metadata change, without a restart. |
 | TestLiteMetadataWithoutMetaReadScopeIsAbsentNotFatal | wiring_pins/lite_metadata_test.go | TestLiteMetadataWithoutMetaReadScopeIsAbsentNotFatal pins that a token without meta:read brings the central up without names, with the taxonomy feature reported missing and why. |
+| TestLiteNodeRenameReachesAssignments | wiring_pins/lite_metadata_test.go | TestLiteNodeRenameReachesAssignments pins that a node renamed on the box reaches the devices assigned to it: the tree change re-reads the snapshot, the assignment's stamped name follows, and the room names the north-bound surfaces read change with it. |
 | TestLiteRenameWritesMetaObject | wiring_pins/lite_metadata_test.go | TestLiteRenameWritesMetaObject pins the persistent rename on a lite central: the name lands in the box's store, not only in the model. |
 | TestLiteSetRoomsAmbiguousNameIsConflict | wiring_pins/lite_metadata_test.go | TestLiteSetRoomsAmbiguousNameIsConflict pins that a room name several nodes carry is refused with the candidates, not resolved to one of them. |
 | TestLiteSetRoomsKeepsOtherEnums | wiring_pins/lite_metadata_test.go | TestLiteSetRoomsKeepsOtherEnums pins the room write: the object's room paths are replaced, every other enum's paths survive. |

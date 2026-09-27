@@ -635,6 +635,7 @@ func fullyWiredRouterDeps() rest.Deps {
 		Diagrams:                fakeDiagramConfigService{},
 		Areas:                   fakeAreaAdmin{},
 		Devices:                 fakeDeviceIndex{},
+		Taxonomy:                fakeTaxonomySource{},
 		UISchema:                fakeUISchemaService{},
 		Links:                   fakeLinksService{},
 		Schedules:               fakeScheduleService{},
@@ -865,4 +866,11 @@ func TestRESTRouterMatchesOpenAPISpec(t *testing.T) {
 		t.Errorf("openapi.yaml documents %d operation(s) with no mounted router route:\n  %s",
 			len(unmounted), strings.Join(unmounted, "\n  "))
 	}
+}
+
+// fakeTaxonomySource serves one central with an empty taxonomy.
+type fakeTaxonomySource struct{}
+
+func (fakeTaxonomySource) Taxonomies() []handlers.CentralTaxonomy {
+	return []handlers.CentralTaxonomy{{Central: "ccu-01"}}
 }

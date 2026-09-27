@@ -107,6 +107,26 @@ func (r Ref) Child(id string) Ref {
 // Root returns the reference of the root node with id in enum.
 func Root(enum EnumID, id string) Ref { return Ref{Enum: enum, Path: Path(id)} }
 
+// Assignment is one node an address is directly assigned to, with the
+// node's display name as the taxonomy held it when the assignment was
+// stamped. Name is empty for a reference the taxonomy does not resolve.
+type Assignment struct {
+	Ref  Ref
+	Name string
+}
+
+// Refs returns the references of assignments.
+func Refs(assignments []Assignment) []Ref {
+	if len(assignments) == 0 {
+		return nil
+	}
+	out := make([]Ref, len(assignments))
+	for i, a := range assignments {
+		out[i] = a.Ref
+	}
+	return out
+}
+
 // Node is one entry of an enum's tree.
 type Node struct {
 	// ID is unique among its siblings and stable: renaming a node keeps it.

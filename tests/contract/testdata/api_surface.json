@@ -1,5 +1,5 @@
 {
- "api_version": "11.5.0",
+ "api_version": "11.6.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -158,6 +158,7 @@
   "GET /sysvars": "listSysvars",
   "GET /sysvars/{name}": "getSysvar",
   "GET /sysvars/{name}/usage": "getSysvarUsage",
+  "GET /taxonomy": "getTaxonomy",
   "GET /ui/surfaces": "getUISurfaces",
   "GET /users": "listUsersV2",
   "GET /visibility/unignore": "listVisibilityUnIgnore",
@@ -800,6 +801,7 @@
    "room:string",
    "rooms:array\u003cstring\u003e",
    "sub_device_name:string",
+   "taxonomy:array\u003c$ref:TaxonomyAssignment\u003e",
    "type:string",
    "type_label:string"
   ],
@@ -1049,6 +1051,7 @@
    "rooms:array\u003cstring\u003e",
    "rx_mode:$ref:RxMode",
    "sub_model:string",
+   "taxonomy:array\u003c$ref:TaxonomyAssignment\u003e",
    "team_supported:boolean",
    "updatable:boolean",
    "update_available:boolean",
@@ -1156,7 +1159,8 @@
   ],
   "FunctionEntry": [
    "device_count:integer",
-   "name:string"
+   "name:string",
+   "refs:array\u003c$ref:NodeRef\u003e"
   ],
   "GetAlarmStateResponse": [
    "zones:array\u003c$ref:AlarmZoneStatus\u003e"
@@ -1631,6 +1635,11 @@
    "listen_addr:string",
    "listening:boolean"
   ],
+  "NodeRef": [
+   "central:string",
+   "parent_path:string",
+   "path:string"
+  ],
   "OpenEditSessionRequest": [
    "key:string",
    "subject:string"
@@ -1780,7 +1789,8 @@
   ],
   "RoomEntry": [
    "device_count:integer",
-   "name:string"
+   "name:string",
+   "refs:array\u003c$ref:NodeRef\u003e"
   ],
   "RxMode": [
    "always:boolean",
@@ -2208,6 +2218,34 @@
    "channel_type:string",
    "name:string",
    "unique_id:string"
+  ],
+  "TaxonomyAssignment": [
+   "enum:string",
+   "name:string",
+   "parent_path:string",
+   "path:string"
+  ],
+  "TaxonomyCentral": [
+   "central:string",
+   "enums:array\u003c$ref:TaxonomyEnum\u003e",
+   "revision:integer",
+   "tree:boolean",
+   "writable:boolean"
+  ],
+  "TaxonomyEnum": [
+   "id:string",
+   "names:object",
+   "nodes:array\u003c$ref:TaxonomyNode\u003e"
+  ],
+  "TaxonomyNode": [
+   "children:array\u003c$ref:TaxonomyNode\u003e",
+   "icon:string",
+   "id:string",
+   "name:string",
+   "path:string"
+  ],
+  "TaxonomyResponse": [
+   "centrals:array\u003c$ref:TaxonomyCentral\u003e"
   ],
   "TeamCandidate": [
    "address:string",

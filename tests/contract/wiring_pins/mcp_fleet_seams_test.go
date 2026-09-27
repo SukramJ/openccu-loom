@@ -34,6 +34,7 @@ var mcpFleetSeams = []string{
 	// what they read; without it an openccu-lite central's share of
 	// list_sysvars reads as "no variables" rather than "none exist there".
 	"Features",
+	"Taxonomy",
 }
 
 // TestPin_MCPFleetSeams_WiredInDaemon pins that the daemon hands every

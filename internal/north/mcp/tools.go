@@ -282,6 +282,9 @@ func registerReadTools(s *mcpsdk.Server, d Deps) {
 	if d.Groups != nil {
 		registerListGroups(s, d)
 	}
+	if d.Taxonomy != nil {
+		registerGetTaxonomy(s, d)
+	}
 	if d.Areas != nil {
 		registerListAreas(s, d)
 	}

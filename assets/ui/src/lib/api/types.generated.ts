@@ -2533,6 +2533,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/taxonomy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every central's taxonomy trees (rooms, functions, and other enums)
+         * @description The only surface that shows nodes nothing is assigned to, so a
+         *     tree picker reads it rather than the device list. A CCU's
+         *     rooms and functions are flat enums whose node ids are the CCU's
+         *     object ids; an openccu-lite system nests nodes and may define
+         *     further enums.
+         */
+        get: operations["getTaxonomy"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rooms": {
         parameters: {
             query?: never;
@@ -5965,6 +5989,52 @@ export interface components {
                 [key: string]: boolean;
             };
         };
+        TaxonomyResponse: {
+            centrals: components["schemas"]["TaxonomyCentral"][];
+        };
+        TaxonomyCentral: {
+            central: string;
+            /** @description The source's revision counter; 0 for a system without one (a CCU). */
+            revision: number;
+            /** @description Whether nodes can be created, renamed and deleted (feature `taxonomy.edit`). */
+            writable: boolean;
+            /** @description Whether nodes can nest (feature `taxonomy.tree`); a CCU's enums are flat. */
+            tree: boolean;
+            enums: components["schemas"]["TaxonomyEnum"][];
+        };
+        TaxonomyEnum: {
+            /** @description The enum id, for example `room` or `function`. */
+            id: string;
+            /** @description The enum's display name per language tag. */
+            names?: {
+                [key: string]: string;
+            };
+            nodes: components["schemas"]["TaxonomyNode"][];
+        };
+        TaxonomyNode: {
+            id: string;
+            /** @description The node's path inside the enum. */
+            path: string;
+            name: string;
+            icon?: string;
+            children?: components["schemas"]["TaxonomyNode"][];
+        };
+        /**
+         * @description One taxonomy node an address is directly assigned to. On a CCU
+         *     every enum is flat and a node's path is the CCU's object id of
+         *     the room or function; an openccu-lite system nests nodes
+         *     (`eg/wohnzimmer`).
+         */
+        TaxonomyAssignment: {
+            /** @description The enum id, for example `room` or `function`. */
+            enum: string;
+            /** @description The node's path inside the enum, node ids joined by `/`. */
+            path: string;
+            /** @description The node's display name. */
+            name: string;
+            /** @description The parent node's path inside the enum; absent for a root node. */
+            parent_path?: string;
+        };
         DeviceSummary: {
             address: string;
             /**
@@ -6018,6 +6088,15 @@ export interface components {
             rooms?: string[];
             /** @description Resolved "Gewerke" (function) labels for the device. */
             functions?: string[];
+            /**
+             * @description Every taxonomy node the device or one of its channels is
+             *     directly assigned to, in every enum (rooms, functions and
+             *     whatever else the system defines), with the node's path.
+             *     `rooms` and `functions` keep carrying the names; this adds
+             *     what names cannot say when two nodes share one or nodes nest.
+             *     Omitted when the device has no assignment.
+             */
+            taxonomy?: components["schemas"]["TaxonomyAssignment"][];
             /**
              * @description True when the device's interface delivers reliable CONFIG_PENDING
              *     events on MASTER writes (HmIP-RF, HmIP-Wired). The SPA then waits
@@ -6215,6 +6294,11 @@ export interface components {
              *     assignment.
              */
             functions?: string[];
+            /**
+             * @description The taxonomy nodes the channel is directly assigned to, in
+             *     every enum, with their paths. Omitted when there are none.
+             */
+            taxonomy?: components["schemas"]["TaxonomyAssignment"][];
             /**
              * @description True when the channel owns a Custom-DP AND is the primary
              *     (group-master) channel of its group — the daemon-derived
@@ -9367,6 +9451,12 @@ export interface components {
         FunctionEntry: {
             name: string;
             device_count: number;
+            /**
+             * @description The taxonomy nodes carrying this name, per central. Two nodes
+             *     of one name (a "Küche" on two floors) are one entry with two
+             *     refs; omitted when no device carries a node reference.
+             */
+            refs?: components["schemas"]["NodeRef"][];
         };
         /** @description One diagnostic entry surfaced at /incidents. */
         Incident: {
@@ -9491,10 +9581,23 @@ export interface components {
             ends_at?: string;
             randomize?: boolean;
         };
+        /** @description One taxonomy node, located by central and path inside its enum. */
+        NodeRef: {
+            central: string;
+            path: string;
+            /** @description The parent node's path; absent for a root node. */
+            parent_path?: string;
+        };
         /** @description One row in GET /api/v1/rooms. */
         RoomEntry: {
             name: string;
             device_count: number;
+            /**
+             * @description The taxonomy nodes carrying this name, per central. Two nodes
+             *     of one name (a "Küche" on two floors) are one entry with two
+             *     refs; omitted when no device carries a node reference.
+             */
+            refs?: components["schemas"]["NodeRef"][];
         };
         /** @description Self-update status of the daemon's CCU add-on package. supported is false when the platform lacks the firmware installer; every other field is then zero-valued. */
         AddonUpdateStatus: {
@@ -14359,6 +14462,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InboxDevice"][];
+                };
+            };
+        };
+    };
+    getTaxonomy: {
+        parameters: {
+            query?: {
+                /** @description Restrict the answer to one central; unknown is 404. */
+                central?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The taxonomies */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyResponse"];
+                };
+            };
+            /** @description Unknown central */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };

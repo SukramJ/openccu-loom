@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 11.5.0
+  version: 11.6.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -3600,6 +3600,34 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/InboxDevice" }
+  /taxonomy:
+    get:
+      operationId: getTaxonomy
+      summary: Every central's taxonomy trees (rooms, functions, and other enums)
+      description: |
+        The only surface that shows nodes nothing is assigned to, so a
+        tree picker reads it rather than the device list. A CCU's
+        rooms and functions are flat enums whose node ids are the CCU's
+        object ids; an openccu-lite system nests nodes and may define
+        further enums.
+      tags: [hub]
+      parameters:
+        - in: query
+          name: central
+          required: false
+          schema: { type: string }
+          description: Restrict the answer to one central; unknown is 404.
+      responses:
+        "200":
+          description: The taxonomies
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxonomyResponse" }
+        "404":
+          description: Unknown central
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
   /rooms:
     get:
       operationId: listRooms
@@ -8825,6 +8853,78 @@ components:
             `/config` path-level description for the canonical key
             catalogue.
           additionalProperties: { type: boolean }
+    TaxonomyResponse:
+      type: object
+      required: [centrals]
+      properties:
+        centrals:
+          type: array
+          items: { $ref: "#/components/schemas/TaxonomyCentral" }
+    TaxonomyCentral:
+      type: object
+      required: [central, revision, writable, tree, enums]
+      properties:
+        central: { type: string }
+        revision:
+          type: integer
+          description: The source's revision counter; 0 for a system without one (a CCU).
+        writable:
+          type: boolean
+          description: Whether nodes can be created, renamed and deleted (feature `taxonomy.edit`).
+        tree:
+          type: boolean
+          description: Whether nodes can nest (feature `taxonomy.tree`); a CCU's enums are flat.
+        enums:
+          type: array
+          items: { $ref: "#/components/schemas/TaxonomyEnum" }
+    TaxonomyEnum:
+      type: object
+      required: [id, nodes]
+      properties:
+        id:
+          type: string
+          description: The enum id, for example `room` or `function`.
+        names:
+          type: object
+          additionalProperties: { type: string }
+          description: The enum's display name per language tag.
+        nodes:
+          type: array
+          items: { $ref: "#/components/schemas/TaxonomyNode" }
+    TaxonomyNode:
+      type: object
+      required: [id, path, name]
+      properties:
+        id: { type: string }
+        path:
+          type: string
+          description: The node's path inside the enum.
+        name: { type: string }
+        icon: { type: string }
+        children:
+          type: array
+          items: { $ref: "#/components/schemas/TaxonomyNode" }
+    TaxonomyAssignment:
+      type: object
+      required: [enum, path, name]
+      description: |
+        One taxonomy node an address is directly assigned to. On a CCU
+        every enum is flat and a node's path is the CCU's object id of
+        the room or function; an openccu-lite system nests nodes
+        (`eg/wohnzimmer`).
+      properties:
+        enum:
+          type: string
+          description: The enum id, for example `room` or `function`.
+        path:
+          type: string
+          description: The node's path inside the enum, node ids joined by `/`.
+        name:
+          type: string
+          description: The node's display name.
+        parent_path:
+          type: string
+          description: The parent node's path inside the enum; absent for a root node.
     DeviceSummary:
       type: object
       required:
@@ -8901,6 +9001,16 @@ components:
           type: array
           items: { type: string }
           description: Resolved "Gewerke" (function) labels for the device.
+        taxonomy:
+          type: array
+          items: { $ref: "#/components/schemas/TaxonomyAssignment" }
+          description: |
+            Every taxonomy node the device or one of its channels is
+            directly assigned to, in every enum (rooms, functions and
+            whatever else the system defines), with the node's path.
+            `rooms` and `functions` keep carrying the names; this adds
+            what names cannot say when two nodes share one or nodes nest.
+            Omitted when the device has no assignment.
         master_pushes_config_pending:
           type: boolean
           description: |
@@ -9134,6 +9244,12 @@ components:
             map functions at channel granularity instead of folding them
             up to the device. Omitted when the channel carries no function
             assignment.
+        taxonomy:
+          type: array
+          items: { $ref: "#/components/schemas/TaxonomyAssignment" }
+          description: |
+            The taxonomy nodes the channel is directly assigned to, in
+            every enum, with their paths. Omitted when there are none.
         is_custom_dp_primary:
           type: boolean
           description: |
@@ -13275,6 +13391,13 @@ components:
       properties:
         name: { type: string }
         device_count: { type: integer }
+        refs:
+          type: array
+          items: { $ref: "#/components/schemas/NodeRef" }
+          description: |
+            The taxonomy nodes carrying this name, per central. Two nodes
+            of one name (a "Küche" on two floors) are one entry with two
+            refs; omitted when no device carries a node reference.
 
     Incident:
       type: object
@@ -13414,6 +13537,17 @@ components:
         ends_at: { type: string }
         randomize: { type: boolean }
 
+    NodeRef:
+      type: object
+      required: [central, path]
+      description: One taxonomy node, located by central and path inside its enum.
+      properties:
+        central: { type: string }
+        path: { type: string }
+        parent_path:
+          type: string
+          description: The parent node's path; absent for a root node.
+
     RoomEntry:
       type: object
       required: [name, device_count]
@@ -13421,6 +13555,13 @@ components:
       properties:
         name: { type: string }
         device_count: { type: integer }
+        refs:
+          type: array
+          items: { $ref: "#/components/schemas/NodeRef" }
+          description: |
+            The taxonomy nodes carrying this name, per central. Two nodes
+            of one name (a "Küche" on two floors) are one entry with two
+            refs; omitted when no device carries a node reference.
 
     AddonUpdateStatus:
       type: object

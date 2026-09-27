@@ -19,6 +19,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
+	"github.com/SukramJ/openccu-loom/internal/model/taxonomy"
 	"github.com/SukramJ/openccu-loom/internal/north/filter"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/internal/parameter"
@@ -87,6 +88,11 @@ type DeviceSummary struct {
 	UpdateStatus string   `json:"update_status,omitempty"`
 	Rooms        []string `json:"rooms,omitempty"`
 	Functions    []string `json:"functions,omitempty"`
+	// Taxonomy lists every node the device or one of its channels is
+	// directly assigned to, in every enum, with the node's path — the
+	// information rooms and functions (names only) cannot carry when two
+	// nodes share a name or nodes nest.
+	Taxonomy []TaxonomyAssignment `json:"taxonomy,omitempty"`
 	// MasterPushesConfigPending is true when the device's interface
 	// delivers reliable CONFIG_PENDING events on MASTER writes — the
 	// SPA then waits for the true→false transition before refreshing
@@ -240,6 +246,9 @@ type ChannelSummary struct {
 	// channel granularity instead of folding them up to the device. Empty
 	// when the channel carries no function assignment.
 	Functions []string `json:"functions,omitempty"`
+	// Taxonomy lists the nodes the channel is directly assigned to, in
+	// every enum, with their paths.
+	Taxonomy []TaxonomyAssignment `json:"taxonomy,omitempty"`
 	// IsCustomDpPrimary is true when this channel both owns a Custom-DP and is
 	// the primary (group-master) channel of its group
 	// ([device.Channel.IsCustomDPPrimaryChannel]). It is the daemon-derived
@@ -420,6 +429,58 @@ type DataPointSummaryOps struct {
 type RoomEntry struct {
 	Name        string `json:"name"`
 	DeviceCount int    `json:"device_count"`
+	// Refs are the taxonomy nodes carrying this name, per central — two
+	// "Küche" on two floors are one entry here with two refs.
+	Refs []NodeRef `json:"refs,omitempty"`
+}
+
+// NodeRef locates one taxonomy node: its central and its path inside the
+// enum, with its parent's path (empty for a root node).
+type NodeRef struct {
+	Central    string `json:"central"`
+	Path       string `json:"path"`
+	ParentPath string `json:"parent_path,omitempty"`
+}
+
+// nameIndex aggregates the names of one enum across every device, with
+// the device count and the nodes behind each name.
+func nameIndex(idx DeviceIndex, enum taxonomy.EnumID, names func(*device.Device) []string) (counts map[string]int, refs map[string][]NodeRef) {
+	counts = map[string]int{}
+	refs = map[string][]NodeRef{}
+	seen := map[string]bool{}
+	if idx == nil {
+		return counts, refs
+	}
+	for _, d := range idx.Devices() {
+		for _, n := range names(d) {
+			counts[n]++
+		}
+		central := idx.CentralOf(d.Address)
+		for _, a := range d.Taxonomy() {
+			if a.Ref.Enum != enum || a.Name == "" {
+				continue
+			}
+			key := central + "|" + a.Ref.String()
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			r := NodeRef{Central: central, Path: string(a.Ref.Path)}
+			if parent, ok := a.Ref.Parent(); ok {
+				r.ParentPath = string(parent.Path)
+			}
+			refs[a.Name] = append(refs[a.Name], r)
+		}
+	}
+	for _, rs := range refs {
+		sort.Slice(rs, func(i, j int) bool {
+			if rs[i].Central != rs[j].Central {
+				return rs[i].Central < rs[j].Central
+			}
+			return rs[i].Path < rs[j].Path
+		})
+	}
+	return counts, refs
 }
 
 // RefreshDevicesService is the optional facade behind
@@ -451,6 +512,8 @@ func RefreshDevices(svc RefreshDevicesService) http.HandlerFunc {
 type FunctionEntry struct {
 	Name        string `json:"name"`
 	DeviceCount int    `json:"device_count"`
+	// Refs are the taxonomy nodes carrying this name, per central.
+	Refs []NodeRef `json:"refs,omitempty"`
 }
 
 // ListFunctions aggregates function (Gewerk) assignments across
@@ -458,17 +521,10 @@ type FunctionEntry struct {
 // settings overview.
 func ListFunctions(idx DeviceIndex) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
-		counts := map[string]int{}
-		if idx != nil {
-			for _, d := range idx.Devices() {
-				for _, f := range d.Functions() {
-					counts[f]++
-				}
-			}
-		}
+		counts, refs := nameIndex(idx, taxonomy.EnumFunction, (*device.Device).Functions)
 		out := make([]FunctionEntry, 0, len(counts))
 		for name, c := range counts {
-			out = append(out, FunctionEntry{Name: name, DeviceCount: c})
+			out = append(out, FunctionEntry{Name: name, DeviceCount: c, Refs: refs[name]})
 		}
 		sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 		JSON(w, http.StatusOK, out)
@@ -480,17 +536,10 @@ func ListFunctions(idx DeviceIndex) http.HandlerFunc {
 // we derive the index from the device summaries directly.
 func ListRooms(idx DeviceIndex) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
-		counts := map[string]int{}
-		if idx != nil {
-			for _, d := range idx.Devices() {
-				for _, r := range d.Rooms() {
-					counts[r]++
-				}
-			}
-		}
+		counts, refs := nameIndex(idx, taxonomy.EnumRoom, (*device.Device).Rooms)
 		out := make([]RoomEntry, 0, len(counts))
 		for name, c := range counts {
-			out = append(out, RoomEntry{Name: name, DeviceCount: c})
+			out = append(out, RoomEntry{Name: name, DeviceCount: c, Refs: refs[name]})
 		}
 		sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 		JSON(w, http.StatusOK, out)
@@ -769,6 +818,7 @@ func toChannelSummary(ch *device.Channel, labels ParameterLabeler, serialSuffix 
 	if functions := ch.Functions(); len(functions) > 0 {
 		s.Functions = functions
 	}
+	s.Taxonomy = toTaxonomyAssignments(ch.Taxonomy())
 	if groups := ch.EventGroups(); len(groups) > 0 {
 		s.EventGroups = make([]EventGroupSummary, 0, len(groups))
 		for _, g := range groups {
@@ -968,6 +1018,30 @@ func serialSuffixForChannel(idx DeviceIndex, ch *device.Channel) string {
 	return idx.SerialSuffix(idx.CentralOf(dev.Address))
 }
 
+// TaxonomyAssignment is one taxonomy node an address is directly assigned
+// to: the enum, the node's path inside it, its display name, and the path
+// of its parent (empty for a root node).
+type TaxonomyAssignment struct {
+	Enum       string `json:"enum"`
+	Path       string `json:"path"`
+	Name       string `json:"name"`
+	ParentPath string `json:"parent_path,omitempty"`
+}
+
+func toTaxonomyAssignments(in []taxonomy.Assignment) []TaxonomyAssignment {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]TaxonomyAssignment, len(in))
+	for i, a := range in {
+		out[i] = TaxonomyAssignment{Enum: string(a.Ref.Enum), Path: string(a.Ref.Path), Name: a.Name}
+		if parent, ok := a.Ref.Parent(); ok {
+			out[i].ParentPath = string(parent.Path)
+		}
+	}
+	return out
+}
+
 func toDeviceSummary(d *device.Device, centralName string, released bool) DeviceSummary {
 	return DeviceSummary{
 		Released:                   released,
@@ -990,6 +1064,7 @@ func toDeviceSummary(d *device.Device, centralName string, released bool) Device
 		UpdateStatus:               string(hmenum.DeriveDeviceUpdateStatus(d.Firmware().Info().UpdateState, d.UpdateAvailable())),
 		Rooms:                      d.Rooms(),
 		Functions:                  d.Functions(),
+		Taxonomy:                   toTaxonomyAssignments(d.Taxonomy()),
 		MasterPushesConfigPending:  hmenum.PushesConfigPendingFor(d.Interface, d.ProductGroup),
 		ConfigRestoreSupported:     d.Interface.SupportsConfigRestore(),
 		CommunicationTestSupported: d.Interface.SupportsCommunicationTest(),

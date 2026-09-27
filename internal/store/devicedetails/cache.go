@@ -130,6 +130,35 @@ func (c *Cache) DeviceRefs(deviceAddress string) []taxonomy.Ref {
 	return sortedRefs(c.deviceRefs[deviceAddress])
 }
 
+// Assignments returns the nodes address is directly assigned to with their
+// display names, sorted by reference.
+func (c *Cache) Assignments(address string) []taxonomy.Assignment {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.assignmentsLocked(sortedRefs(c.refs[address]))
+}
+
+// DeviceAssignments is [Cache.Assignments] over [Cache.DeviceRefs].
+func (c *Cache) DeviceAssignments(deviceAddress string) []taxonomy.Assignment {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.assignmentsLocked(sortedRefs(c.deviceRefs[deviceAddress]))
+}
+
+func (c *Cache) assignmentsLocked(refs []taxonomy.Ref) []taxonomy.Assignment {
+	if len(refs) == 0 {
+		return nil
+	}
+	out := make([]taxonomy.Assignment, len(refs))
+	for i, r := range refs {
+		out[i] = taxonomy.Assignment{Ref: r}
+		if n, ok := c.tax.Node(r); ok {
+			out[i].Name = n.Name
+		}
+	}
+	return out
+}
+
 func sortedRefs(set map[taxonomy.Ref]struct{}) []taxonomy.Ref {
 	if len(set) == 0 {
 		return nil

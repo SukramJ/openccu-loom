@@ -46,6 +46,7 @@ func (c *Channel) Info() payload.InfoPayload {
 		info.Functions = functions
 	}
 	info.Room = c.Room()
+	info.Taxonomy = taxonomyPayload(c.Taxonomy())
 	if groupNo := c.GroupNumber(); groupNo != 0 {
 		info.GroupNo = groupNo
 		info.IsGroupMaster = c.IsGroupMaster()

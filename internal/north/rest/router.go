@@ -53,6 +53,8 @@ type Deps struct {
 	Config      handlers.ConfigReader
 	Devices     handlers.DeviceIndex
 	DeviceAdmin handlers.DeviceAdmin
+	// Taxonomy backs GET /taxonomy: every central's enum trees.
+	Taxonomy handlers.TaxonomySource
 	// DeviceReplacer backs the guided device-replace workflow
 	// (GET /devices/{addr}/replace-candidates + POST
 	// /devices/{addr}/replace). Nil serves those routes as 503.
@@ -848,6 +850,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			if d.Devices != nil {
 				pr.Post("/devices/values:batch", handlers.ValuesBatch(d.Devices, d.Labels, d.DataPointVis))
 				pr.Get("/rooms", handlers.ListRooms(d.Devices))
+				pr.Get("/taxonomy", handlers.GetTaxonomy(d.Taxonomy))
 				pr.Get("/functions", handlers.ListFunctions(d.Devices))
 				pr.Get("/devices", handlers.ListDevices(d.Devices))
 				pr.Get("/devices/{addr}", handlers.GetDevice(d.Devices, d.Labels))

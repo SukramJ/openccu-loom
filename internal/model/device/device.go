@@ -142,10 +142,10 @@ type Device struct {
 	functions    []string
 	room         string
 	function     string
-	// taxonomyRefs are the taxonomy nodes the device is assigned to — its
-	// own and its channels', in every enum — alongside the room and
-	// function names above.
-	taxonomyRefs []taxonomy.Ref
+	// taxonomy are the taxonomy nodes the device is assigned to — its own
+	// and its channels', in every enum, with their names — alongside the
+	// room and function names above.
+	taxonomy []taxonomy.Assignment
 
 	firmware     *Firmware
 	availability *Availability
@@ -318,19 +318,24 @@ func (d *Device) Function() string {
 	return d.function
 }
 
-// TaxonomyRefs returns a copy of the taxonomy nodes the device (or any of
-// its channels) is assigned to.
-func (d *Device) TaxonomyRefs() []taxonomy.Ref {
+// Taxonomy returns a copy of the taxonomy nodes the device (or any of its
+// channels) is assigned to, with their names.
+func (d *Device) Taxonomy() []taxonomy.Assignment {
 	d.assignmentMu.RLock()
 	defer d.assignmentMu.RUnlock()
-	return slices.Clone(d.taxonomyRefs)
+	return slices.Clone(d.taxonomy)
 }
 
-// SetTaxonomyRefs replaces the device's taxonomy assignments with a copy of
-// refs.
-func (d *Device) SetTaxonomyRefs(refs []taxonomy.Ref) {
+// TaxonomyRefs returns the references of [Device.Taxonomy].
+func (d *Device) TaxonomyRefs() []taxonomy.Ref {
+	return taxonomy.Refs(d.Taxonomy())
+}
+
+// SetTaxonomy replaces the device's taxonomy assignments with a copy of
+// assignments.
+func (d *Device) SetTaxonomy(assignments []taxonomy.Assignment) {
 	d.assignmentMu.Lock()
-	d.taxonomyRefs = slices.Clone(refs)
+	d.taxonomy = slices.Clone(assignments)
 	d.assignmentMu.Unlock()
 }
 
@@ -392,9 +397,25 @@ func (d *Device) Info() payload.InfoPayload {
 		Room:          d.Room(),
 		Function:      d.Function(),
 		IseID:         d.IseID,
+		Taxonomy:      taxonomyPayload(d.Taxonomy()),
 		SchemaVersion: d.SchemaVersion,
 		HasSubDevices: d.HasSubDevices(),
 	}
+}
+
+// taxonomyPayload projects assignments onto the info payload.
+func taxonomyPayload(in []taxonomy.Assignment) []payload.TaxonomyAssignment {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]payload.TaxonomyAssignment, len(in))
+	for i, a := range in {
+		out[i] = payload.TaxonomyAssignment{Enum: string(a.Ref.Enum), Path: string(a.Ref.Path), Name: a.Name}
+		if parent, ok := a.Ref.Parent(); ok {
+			out[i].ParentPath = string(parent.Path)
+		}
+	}
+	return out
 }
 
 // Config returns the configuration-level attributes (rx_modes,

@@ -265,6 +265,10 @@ type Deps struct {
 	Paramsets ParamsetService
 	Health    HealthReader
 	Hubs      HubResolver
+	// Taxonomy backs get_taxonomy: every central's enum trees, the same
+	// read the REST GET /taxonomy handler serves. Nil leaves the tool
+	// unregistered.
+	Taxonomy handlers.TaxonomySource
 	// Features lets the hub list tools report a central that does not
 	// offer what they read, instead of an empty list. Nil reports none.
 	Features  FeatureChecker
