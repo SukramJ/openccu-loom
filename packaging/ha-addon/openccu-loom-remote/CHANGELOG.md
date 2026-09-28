@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.80.0
+
+No changes to the proxy itself. The daemon adds a Licenses page and operator
+warnings with per-user silences (REST API 12.2.0, nothing breaking). The main
+add-on's changelog describes it in full.
+
 # 0.79.0
 
 No changes to the proxy itself. The daemon can now connect to openccu-lite

@@ -57,6 +57,15 @@ Invoke the `comment-claims-sweep` skill. Fix or reword every refuted claim
 make lint && make test && make contract
 ```
 
+Two pinned artefacts carry the build version and fail on every bump. Refresh
+them, and check the diff is the version and nothing else:
+
+```sh
+go test -run TestSecurityAndCombinedDiscoveryPayloadsArePinned ./internal/north/mqtt/ -update-security-combined-golden
+go test -run TestWireFixtureCorpusMatchesHandlers ./tests/contract/ -update-wire-fixtures
+git diff internal/north/mqtt/testdata/ assets/wire-fixtures/ | grep '^[-+] '   # only sw_version / version
+```
+
 Then commit (`git commit -s`), open the PR, let CI go green, merge, and tag
 `vX.Y.Z` on the merge commit. Never tag before the add-on versions match.
 

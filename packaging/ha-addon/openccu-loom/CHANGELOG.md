@@ -1,5 +1,20 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.80.0
+
+New: a **Licenses** page lists every component the add-on ships and its
+license, and **warnings** collect what needs attention — unhealthy
+components, recent errors, service-message backlogs — in one place. Each
+user can mute a warning for 1, 7 or 90 days; it comes back early if its
+cause returns after clearing.
+
+In Home Assistant, the service-message count now keeps long-term
+statistics, and the connection latency is shown as a duration. Entity ids
+do not change.
+
+For openccu-lite systems running OpenCCU-Loom as a CCU add-on on the box
+itself: a restart from the web UI no longer leaves it stopped.
+
 ## 0.79.0
 
 New: the add-on can now connect to **openccu-lite** systems as well as to
