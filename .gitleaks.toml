@@ -39,6 +39,9 @@ paths = [
   '''^internal/north/matter/secure/attestation/testpaa\.go$''',
   '''^internal/north/mqtt/entity_description_rules_sensors\.go$''',
   '''^internal/north/mqtt/entity_descriptions_generated\.go$''',
+  # The same table after the generator was deleted and the file renamed;
+  # the old path stays for the history gitleaks also scans.
+  '''^internal/north/mqtt/entity_descriptions_table\.go$''',
   '''^tests/harness/litefake/.*''',
 ]
 regexes = [
