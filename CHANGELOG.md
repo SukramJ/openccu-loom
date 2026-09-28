@@ -6,6 +6,22 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.80.1] - 2026-09-28
+
+### Release summary
+
+A patch release for OpenCCU-Loom running as an add-on on an **openccu-lite**
+box. Updating to 0.80.0 there could leave a second daemon running as root
+beside the real one, because the box runs the add-on's start script as root
+during the install; the script now starts nothing outside the add-on's own
+unit. Downloaded archives land in the add-on's directory, the only place the
+box lets it write. The add-on's own self-update is no longer offered on
+openccu-lite (the box's Addons page carries updates), and the package now
+tells the box that its settings page takes no session in the URL — the box
+warned about handing it one as `?sid=`. Nothing changes on a CCU or in Home
+Assistant.
+
+
 ### Added
 
 - **The CCU add-on declares itself to openccu-lite.** The package now

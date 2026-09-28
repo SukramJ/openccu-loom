@@ -4,6 +4,11 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.80.1
+
+No changes to the proxy. The daemon release fixes OpenCCU-Loom running as an
+add-on directly on an openccu-lite system.
+
 # 0.80.0
 
 No changes to the proxy itself. The daemon adds a Licenses page and operator

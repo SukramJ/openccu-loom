@@ -1,5 +1,10 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.80.1
+
+Fixes for OpenCCU-Loom running as an add-on directly on an openccu-lite
+system; nothing changes for this Home Assistant add-on.
+
 ## 0.80.0
 
 New: a **Licenses** page lists every component the add-on ships and its
