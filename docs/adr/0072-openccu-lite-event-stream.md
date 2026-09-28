@@ -57,10 +57,9 @@ correlation and bus events are shared with the CCU path.
   parameter's paramset description before it reaches the model, so a FLOAT
   sent as `1` is `1.0` and no change is invented.
 - **Ping/pong** stays enabled for the lite backend kind: `ping` goes through
-  the proxy and the `PONG` comes back on the stream. Whether the interface
-  processes broadcast a PONG for a caller they did not register is not yet
-  confirmed against a real box; if they do not, the heartbeat alone carries
-  liveness (see the plan's live check L-4).
+  the proxy and the `PONG` comes back on the stream. A real box relays the
+  PONG of a caller it did not register (confirmed 2026-09-28, live check
+  L-4); HmIP-RF answers on `CENTRAL:0`, BidCos-RF on `CENTRAL`.
 
 The specification's statement becomes: **every interface pushes** — via
 `init` callbacks on a CCU, via occulited's event stream on openccu-lite.

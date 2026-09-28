@@ -12,8 +12,8 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
-	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -396,9 +396,10 @@ type Groups struct {
 	DevicesToConfigure []DeviceToConfigure `json:"devices_to_configure"`
 }
 
-// Group is one group: a virtual device on VirtualDevices.
+// Group is one group: a virtual device on VirtualDevices. The box answers
+// the id as a JSON number.
 type Group struct {
-	ID        string `json:"id"`
+	ID        int    `json:"id"`
 	Name      string `json:"name"`
 	Type      string `json:"type"`
 	TypeLabel string `json:"type_label"`
@@ -479,8 +480,8 @@ func (c *Client) GroupTypes(ctx context.Context) (GroupTypes, error) {
 }
 
 // Group reads one group; unknown-group (404) as an *APIError.
-func (c *Client) Group(ctx context.Context, id string) (GroupDetail, error) {
-	return get[GroupDetail](ctx, c, systemBase+"/groups/"+url.PathEscape(id), nil)
+func (c *Client) Group(ctx context.Context, id int) (GroupDetail, error) {
+	return get[GroupDetail](ctx, c, systemBase+"/groups/"+strconv.Itoa(id), nil)
 }
 
 // CreateGroup creates a group (system:write).
@@ -496,17 +497,17 @@ func (c *Client) CreateGroup(ctx context.Context, in GroupCreate) (GroupCreated,
 }
 
 // UpdateGroup changes a group (system:write).
-func (c *Client) UpdateGroup(ctx context.Context, id string, in GroupUpdate) (GroupDetail, error) {
+func (c *Client) UpdateGroup(ctx context.Context, id int, in GroupUpdate) (GroupDetail, error) {
 	raw, err := marshal(in)
 	if err != nil {
 		return GroupDetail{}, err
 	}
-	return call[GroupDetail](ctx, c, request{method: http.MethodPut, path: systemBase + "/groups/" + url.PathEscape(id), body: raw})
+	return call[GroupDetail](ctx, c, request{method: http.MethodPut, path: systemBase + "/groups/" + strconv.Itoa(id), body: raw})
 }
 
 // DeleteGroup removes a group (system:write).
-func (c *Client) DeleteGroup(ctx context.Context, id string) (GroupDeleted, error) {
-	return call[GroupDeleted](ctx, c, request{method: http.MethodDelete, path: systemBase + "/groups/" + url.PathEscape(id)})
+func (c *Client) DeleteGroup(ctx context.Context, id int) (GroupDeleted, error) {
+	return call[GroupDeleted](ctx, c, request{method: http.MethodDelete, path: systemBase + "/groups/" + strconv.Itoa(id)})
 }
 
 // getWithRaw reads a GET answer into T and hands its raw document to
