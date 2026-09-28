@@ -23,6 +23,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   early when its condition clears, so a re-occurrence alerts again. MCP
   gains a read-only `list_warnings` tool. REST API 12.2.0.
 
+### Changed
+
+- **Two hub entities in Home Assistant now match the reference integration.**
+  The service-message count carries `state_class: measurement`, so HA keeps
+  long-term statistics for it as it already does for the alarm-message count,
+  and the connection latency carries `device_class: duration` with the
+  `mdi:timer-outline` icon. Both come with the next discovery publish; entity
+  ids and unique ids do not change. The unused copy of the hub description
+  rules in the MQTT package is removed — the hub builders were already the
+  only source for every other hub attribute.
+
 ### Fixed
 
 - **CCU add-on on openccu-lite: "Restart" no longer leaves the daemon

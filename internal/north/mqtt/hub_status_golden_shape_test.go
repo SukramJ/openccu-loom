@@ -37,7 +37,7 @@ import (
 // cost: it is then deleted along with the availability-only claim it
 // records, in the commit that makes the change, deliberately.
 //
-// Two such changes have landed, and rather than delete the claim for 48
+// Three such changes have landed, and rather than delete the claim for 48
 // entries to admit a delta in the topic string, each delta is carried
 // explicitly and the ORIGINAL pre-gate digests are still required. That is a
 // stronger statement than a re-baselined digest would be: it says the payload
@@ -45,6 +45,7 @@ import (
 //
 //  1. The discovery-slug unification moved the `object_id` segment of exactly
 //     two topics ([hubGoldenSlugUnificationTopicMoves]).
+//
 //  2. The topic base's node-id scope moved the `node_id` segment of ALL
 //     forty-eight, by inserting `<base-slug>_` in front of it — these
 //     fixtures render at base `gh`, which is not the default, so every one
@@ -54,7 +55,11 @@ import (
 //     rule is checked before it is applied (a topic that does NOT carry the
 //     scope fails rather than passing unnoticed).
 //
-// Both substitutions are reversals, not exemptions: what they put back is the
+//  3. The alignment with the reference HA integration's hub descriptions
+//     added or changed three fields in two payloads
+//     ([hubGoldenReferenceAlignmentMoves]).
+//
+// All three substitutions are reversals, not exemptions: what they put back is the
 // exact byte sequence the pre-change builder produced, so anything else that
 // moved still breaks the digest.
 var hubGoldenPreCCUGateDigests = map[string]string{
@@ -125,6 +130,50 @@ var hubGoldenSlugUnificationTopicMoves = map[string]string{
 	"sysvar/hazard-literal-double-underscore": "homeassistant/binary_sensor/ccu-01_sysvars/watchdog__ccu-jack/config",
 }
 
+// hubFieldMove is one payload field a deliberate change moved: the value it
+// carries now and the value the pre-gate builder emitted (nil: absent).
+type hubFieldMove struct {
+	now any
+	was any
+}
+
+// hubGoldenReferenceAlignmentMoves is every payload field that moved when the
+// hub builders were aligned with the reference HA integration's hub entity
+// descriptions: the service-message count gained `state_class: measurement`,
+// and the connection latency gained `device_class: duration` and the
+// `mdi:timer-outline` icon. Like the two substitutions above it is a
+// reversal, not an exemption — each field is put back to exactly what the
+// pre-gate builder produced, so the original digest still has to match and
+// anything else that moved still breaks it.
+var hubGoldenReferenceAlignmentMoves = map[string]map[string]hubFieldMove{
+	"aggregate/service-messages": {
+		"state_class": {now: "measurement"},
+	},
+	"system/connection-latency": {
+		"device_class": {now: "duration"},
+		"icon":         {now: "mdi:timer-outline", was: "mdi:timer"},
+	},
+}
+
+// undoReferenceAlignment reverses [hubGoldenReferenceAlignmentMoves] on one
+// entry. A listed field that does not carry its new value fails: the move
+// did not happen, and the entry would otherwise pass under a stale reversal.
+func undoReferenceAlignment(t *testing.T, name string, entry goldenEntry) {
+	t.Helper()
+	for field, move := range hubGoldenReferenceAlignmentMoves[name] {
+		if got := entry.Payload[field]; got != move.now {
+			t.Errorf("%s: listed as a reference-alignment move of %q to %v, but it is %v — "+
+				"remove it from hubGoldenReferenceAlignmentMoves", name, field, move.now, got)
+			continue
+		}
+		if move.was == nil {
+			delete(entry.Payload, field)
+		} else {
+			entry.Payload[field] = move.was
+		}
+	}
+}
+
 // unscopedHubTopic removes the topic base's node-id scope from a rendered hub
 // discovery topic, returning the topic the pre-scope builder produced.
 //
@@ -189,6 +238,7 @@ func TestHubGoldenChangedOnlyInAvailability(t *testing.T) {
 			}
 			entry.Topic = was
 		}
+		undoReferenceAlignment(t, name, entry)
 		if got := hubEntryDigestWithoutAvailability(t, entry); got != want {
 			t.Errorf("%s: payload changed outside `availability` (digest %s, want %s). "+
 				"The per-CCU gate adds one availability entry and nothing else; anything "+

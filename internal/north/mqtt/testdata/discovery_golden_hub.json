@@ -163,6 +163,7 @@
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
+      "state_class": "measurement",
       "state_topic": "gh/ccu-01/hub/service_messages",
       "unique_id": "loom_11a0001234_service_messages",
       "value_template": "{{ value_json | length }}"
@@ -821,9 +822,10 @@
         "serial_number": "3014F711A0001234",
         "sw_version": "3.79.6"
       },
+      "device_class": "duration",
       "enabled_by_default": true,
       "entity_category": "diagnostic",
-      "icon": "mdi:timer",
+      "icon": "mdi:timer-outline",
       "name": "Connection Latency",
       "origin": {
         "name": "openccu-loom",

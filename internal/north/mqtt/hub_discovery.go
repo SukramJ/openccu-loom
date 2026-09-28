@@ -832,7 +832,9 @@ func (d *DefaultDiscoveryBuilder) BuildAlarmMessagesDiscovery(centralName string
 
 // BuildServiceMessagesDiscovery is the maintenance-list counterpart
 // to [BuildAlarmMessagesDiscovery]. Diagnostic category, no
-// device_class (HA shows a neutral icon).
+// device_class (HA shows a neutral icon); state_class measurement as
+// the reference HA integration's SERVICE_MESSAGES description sets it,
+// so the count feeds long-term statistics like the alarm count does.
 func (d *DefaultDiscoveryBuilder) BuildServiceMessagesDiscovery(centralName string) DiscoveryItem {
 	serial10, ok := d.hubSerial(centralName)
 	if !ok {
@@ -850,6 +852,7 @@ func (d *DefaultDiscoveryBuilder) BuildServiceMessagesDiscovery(centralName stri
 			EntityPlatform: hacatalog.PlatformSensor,
 			Description: hamodel.Description{
 				NameKey:                "discovery.service_messages",
+				StateClass:             "measurement",
 				Category:               "diagnostic",
 				Availability:           hamodel.BridgeOnly(),
 				ValueTemplate:          "{{ value_json | length }}",
@@ -868,8 +871,9 @@ func (d *DefaultDiscoveryBuilder) BuildServiceMessagesDiscovery(centralName stri
 // sensor. The state topic carries the full inbox list; a
 // value_template extracts the count. A json_attributes_topic exposes
 // the raw device list for automations that need the details.
-// Mirrors the inbox sensor in the hub model (translation_key="inbox",
-// state_class="measurement", enabled_default=True).
+// The reference HA integration's INBOX description sets only the
+// translation key; state_class measurement and the icon are this
+// plane's own, so the pending-device count feeds long-term statistics.
 func (d *DefaultDiscoveryBuilder) BuildInboxDiscovery(centralName string) DiscoveryItem {
 	serial10, ok := d.hubSerial(centralName)
 	if !ok {
@@ -1217,10 +1221,11 @@ func (d *DefaultDiscoveryBuilder) BuildConnectionLatencyDiscovery(centralName st
 	topic := d.TopicBuilder.HubConnectionLatency(centralName)
 	return d.hubMetricItem(centralName, uniqueID, "connection_latency", topic, hamodel.Description{
 		NameKey:      "discovery.connection_latency",
+		DeviceClass:  "duration",
 		Unit:         "ms",
 		StateClass:   "measurement",
 		Category:     "diagnostic",
-		Icon:         "mdi:timer",
+		Icon:         "mdi:timer-outline",
 		Precision:    hamodel.Ptr(1),
 		Enabled:      hamodel.Ptr(true),
 		Availability: hamodel.BridgeOnly(),
