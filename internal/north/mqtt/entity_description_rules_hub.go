@@ -3,12 +3,13 @@
 
 package mqtt
 
-// hubRulesMaps is a compile-time anchor that prevents the hub entity-description
-// maps from being flagged as unused while they await their consumer in the hub
-// Discovery builder (next milestone). The maps mirror the Python reference
-// implementation's hub.py and must not be silently dropped.
+// hubRulesMaps is a compile-time anchor that keeps the hub entity-description
+// maps from being flagged as unused. Nothing consumes them: the hub discovery
+// in hub_discovery.go builds its entities without these rules, so hub entities
+// carry none of the unit, device-class or state-class overrides below. The
+// maps stay as the ported rule set a consumer would apply.
 //
-//nolint:unused // anchor — hub discovery consumer pending; maps must not drop
+//nolint:unused // anchor — no consumer; the maps are the ported rule set
 var _ = [5]map[string]HARegistryDescription{
 	hubButtonRulesByName,
 	hubSensorRulesByName,

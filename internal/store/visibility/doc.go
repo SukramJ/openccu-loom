@@ -6,8 +6,7 @@
 //
 //   - a small built-in deny list (IDs, internal flags)
 //   - the device-profile registry
-//   - user overrides (future: loaded from SQLite)
-//
-// The MVP ships the built-in rules only; the override store is a hook
-// for future user-configurable overrides.
+//   - per-central un-ignore overrides (the central's
+//     `visibility.un_ignore` patterns and the visibility API), loaded
+//     through LoadUnIgnore
 package visibility
