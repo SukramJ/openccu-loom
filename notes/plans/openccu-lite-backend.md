@@ -2405,9 +2405,9 @@ Use this appendix as the contract; do not consult occulited source.
 | `GET /groups` | system:read | `{groups: [{id (**JSON number**, observed live 2026-09-28), name, type, type_label, device ("INT0000001"), ref ("VirtualDevices.INT0000001")}], devices_to_configure: [{id, serial, type}]}` |
 | `GET /groups/types` | system:read | `{types: [{id, label, assignable: [Member], leftover: [Member]}]}` (types e.g. `HomeMatic.heating`, `hmip.heating.group`); observed live: `Member` = `{id: <channel address>, serial: <the same>, type: <channel type>}` |
 | `GET /groups/{id}` | system:read | `{id, name, type, device, ref, device_name, forbid_single_operation, members, assignable, leftover, types}`; `404 unknown-group` |
-| `POST /groups {name, type, members: [id], forbid_single_operation?}` | system:write | the group + `devices_to_configure`; name 1–64 chars one line; `422 invalid` names the field |
-| `PUT /groups/{id} {name?, members?, forbid_single_operation?}` | system:write | members replace as a whole list |
-| `DELETE /groups/{id}` | system:write | `{deleted, former_members}` |
+| `POST /groups {name, type, members: [id], forbid_single_operation?}` | system:write | the group + `devices_to_configure`; name 1–64 chars one line; `422 invalid` names the field. Observed live 2026-09-28: `502 {"error":"hmipserver",…context deadline exceeded}` after 30 s **while the group was created anyway, without its member** — a failed create must be followed by a re-read |
+| `PUT /groups/{id} {name?, members?, forbid_single_operation?}` | system:write | members replace as a whole list; observed live: the same 30 s `502 hmipserver` timeout, members unchanged |
+| `DELETE /groups/{id}` | system:write | `{deleted, former_members}`; observed live: `deleted` is the deleted group's **id as a JSON number** (`{"deleted":6,"former_members":[]}`) |
 | `GET /radio/health` | system:read | `{polled, interfaces: [{interface, address, type, connected, default, firmware, duty_cycle, carrier_sense?}], answering, errors, history, busy, busy_interface}` (sampled once a minute) |
 | `GET /radio` | system:read | inventory incl. per-interface `subscribers` |
 | `GET/PUT/DELETE /radio/hmip/local-key` | system:write (even GET) | not used; the key-mode summary comes from `/api/meta/v1/version` `hmip` |

@@ -192,7 +192,7 @@ func TestGroupsCRUD(t *testing.T) {
 		t.Errorf("detail %+v %v", detail, err)
 	}
 	del, err := c.DeleteGroup(ctx, created.ID)
-	if err != nil || !del.Deleted {
+	if err != nil || del.Deleted != created.ID {
 		t.Errorf("delete %+v %v", del, err)
 	}
 	_, err = c.Group(ctx, created.ID)
@@ -242,5 +242,28 @@ func TestGroupsDecodeTheBoxShape(t *testing.T) {
 	types, err := c.GroupTypes(context.Background())
 	if err != nil || len(types.Types) != 2 || len(types.Types[1].Assignable) != 1 {
 		t.Errorf("types %+v %v", types, err)
+	}
+}
+
+// TestGroupDeleteDecodesTheBoxShape pins DELETE /groups/{id} to what a
+// real box answers (read on 2026-09-28): "deleted" is the deleted group's
+// id as a JSON number, not a flag, so a client decoding a boolean reported
+// a failure for a group the box had deleted.
+func TestGroupDeleteDecodesTheBoxShape(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete || r.URL.Path != "/api/system/v1/groups/6" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"deleted":6,"former_members":[]}`)
+	}))
+	defer srv.Close()
+	del, err := newClient(t, srv.URL, "t").DeleteGroup(context.Background(), 6)
+	if err != nil {
+		t.Fatalf("DeleteGroup: %v", err)
+	}
+	if del.Deleted != 6 {
+		t.Errorf("deleted = %v, want the group id 6", del.Deleted)
 	}
 }
