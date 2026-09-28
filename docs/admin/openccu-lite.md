@@ -173,6 +173,29 @@ reports a plain-language reason instead of just "not ready":
 A rejected token is a credential problem: re-pair, or paste a token
 that the box accepts.
 
+## Running OpenCCU-Loom on the box itself
+
+OpenCCU-Loom can also run as an add-on on the openccu-lite box, installed
+from the box's Addons page. A few things differ from a CCU:
+
+- **Open port 8119 in the box's firewall, and confirm it.** openccu-lite
+  loads a firewall change as a draft and puts the previous rules back after
+  one minute unless the change is confirmed on the page. An unconfirmed
+  rule works for that minute and then disappears.
+- **Updates come from the Addons page.** The add-on's own self-update is not
+  offered on openccu-lite; the box's catalogue carries new versions.
+- **No session in the add-on's page URL.** The add-on ships an
+  `openccu-lite.json` declaring that its settings page takes no session in
+  the URL (`ui.session_header`); the page is a landing card and reads no
+  session at all. On a version without that file (0.80.0 and earlier),
+  openccu-lite warns that the page receives your session in its URL; you can
+  switch the old session handover off for OpenCCU-Loom on the Addons page
+  without losing anything.
+- **Downloaded archives stay in the add-on's directory.** The box mounts
+  `/usr/local` read-only for add-ons apart from their own directories, so
+  archives land in the add-on's `var/backups` rather than
+  `/usr/local/sdcard/backup`.
+
 ## See also
 
 - [Configuration reference](configuration.md#centrals) — `system_type`, `api_token`, `tls_fingerprint`, `json_rpc_port`.
