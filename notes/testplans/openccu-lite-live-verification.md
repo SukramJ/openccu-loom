@@ -1,6 +1,8 @@
 # openccu-lite — live verification against a real box
 
-Status: **open — no box available yet**; the open items of the whole
+Status: **read-only checks done 2026-09-28** against a real box (occulited
+`0307f63ce04f`, release `1.0.0-dev.30`, base `3.89.11.20260919`); the writes
+(L-12 … L-15) wait for approval. The open items of the whole
 openccu-lite support are listed [below](#open-items-of-the-openccu-lite-support) (decided 2026-09-27: documentation
 first; this list waits until a box is provided). Phases A–D and the docs
 (F1) are merged; everything below was only exercised against the MIT test
@@ -59,10 +61,8 @@ What is not, and why:
 
 | Item | Why open | Unblocked by | Documented in |
 |---|---|---|---|
-| Heating groups on openccu-lite: create, update, members, member candidates | The member format, the member id, the group id type and `devices_to_configure` are not in the wire contract; guessing could put devices into the wrong group. Listing and deleting work. Kept refused by decision (2026-09-27). | L-10 reads | `docs/admin/openccu-lite.md`; `internal/central/adapter/lite_groups.go` |
-| PONG relay on the event stream | Unconfirmed that the interface processes relay a PONG for a caller they did not register | L-4 | ADR 0072 |
-| Radio cost of `getParamset(VALUES)` seeding | Not measured | L-6 | `docs/caching.md` |
-| SSE unbuffered through the box's web server | Not measured | L-2 | — |
+| Heating groups on openccu-lite: create, update, members | Group ids are JSON numbers and a candidate is `{id: <channel address>, serial, type}` (L-10); the shape of a group's `members` list and what `devices_to_configure` asks of the operator are still unobserved — the box read had no group with members. Kept refused by decision (2026-09-27). | a read of a group with members | `docs/admin/openccu-lite.md`; `internal/central/adapter/lite_groups.go` |
+| Radio cost of `getParamset(VALUES)` seeding | L-6 cannot decide it: the box reports the duty cycle in whole percent, and a full sweep stayed below that resolution | a finer measure (e.g. per-device traffic) | `docs/caching.md` |
 | Encrypted backup restore (`.sbk.age`) | The daemon does not hold the box's recovery key; refused by design | — (design) | `docs/admin/backup.md` |
 | Areas keyed by room name | On a box a name several rooms share is one area assignment | — (documented limitation) | ADR 0073 |
 | Heating-group candidates show room names only | The candidates DTO carries no taxonomy; showing the path needs an API addition | API change | ADR 0073 |
@@ -73,4 +73,20 @@ What is not, and why:
 
 ## Results
 
-_None yet._
+Read-only, 2026-09-28, box `172.18.4.39`, a token with `*` (only reads
+were sent). Every result with the control that would have come out
+differently had the claim been false.
+
+| # | Result | Negative control |
+|---|---|---|
+| L-1 | `GET /api/meta/v1/version` answers `api:"meta"`, `apis` all major 1, limits `streams_per_token 2`, `streams_total 16`, `buffer 5000 / 300 s`, `hmip` present; same over HTTP and HTTPS | the CCU (`172.18.4.29`) answers `404 text/html` — not classified lite |
+| L-2 | `: connected`, then `hello` with id first; `: ping` at 15.00 s, 30.00 s, 45.00 s, 60.01 s; events arrive at once; `X-Accel-Buffering: no` | — (timestamps would have bunched on a buffering proxy) |
+| L-3 | `listDevices` via the proxy with the token: HmIP-RF 114, BidCos-RF 66, VirtualDevices 12 entries; `text/xml; charset=utf-8` | without the token: `401 {"error":"unauthenticated"}` |
+| L-4 | `ping("loomlive-bidcos#1")` / `ping("loomlive-hmip#1")` → `CENTRAL`/`PONG` with exactly that value on the stream within 1 s. HmIP answers on address `CENTRAL:0`, BidCos on `CENTRAL`; BidCos answers `ping` with an array `[true]` — both handled (the correlator ignores the address, the backend ignores the answer value) | a second stream filtered `key=STATE` showed no PONG |
+| L-5 | snapshot `{format, revision, objects (172), enums: favorite, function, room}`; all trees one level deep on this box | — |
+| L-6 | duty cycle 7 % before, 7 % after 3 min idle, 7 % right after and 3 min after 158 `getParamset(VALUES)` calls — **not decidable** at whole-percent resolution; 4 faults (`-1 Failure`) all on one BidCos device's channels | the idle phase (stable at 7 %) — validates the baseline, not a cost below 1 % |
+| L-7 | `/state` keys `entries, total, unconfirmed, next, event_id, sweeps, datapoints`; entries carry `confirmed`, `confirmed_at`, `source` | — |
+| L-8 | `/backup/targets` `{nightly, container, kinds, encryption, hostname, needed_bytes, targets: []}` | — |
+| L-9 | `/radio/health` `{interfaces [duty_cycle …], history, feed, answering, busy, errors}`; `hmip` in `/version`: `KEYSERVER_LOCAL`, 0 device keys, offline pairing | — |
+| L-10 | `/groups`: **group ids are JSON numbers** (`"id": 4`) — the client decoded them as strings, so the heating-group list failed on a real box (fixed alongside this record); `/groups/types` candidates `{id: <channel address>, serial, type}`; `/service-messages`, `/system-update` as the contract; UPnP serial `3014F711A0001F5A4993D993` = the HmIP radio address in `/radio/health` | — |
+| L-11 | `/ise/checkrega.cgi` → `200 text/html` (the SPA shell) | `/api/system/v1/health` → JSON |
