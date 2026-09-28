@@ -271,8 +271,10 @@ func (f *Fake) handleGroupUpdate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, d)
 }
 
+// groupDeleted is the DELETE answer; a box answers the deleted group's id
+// as "deleted".
 type groupDeleted struct {
-	Deleted       bool     `json:"deleted"`
+	Deleted       int      `json:"deleted"`
 	FormerMembers []string `json:"former_members"`
 }
 
@@ -289,7 +291,7 @@ func (f *Fake) handleGroupDelete(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "unknown-group", "no such group")
 		return
 	}
-	writeJSON(w, http.StatusOK, groupDeleted{Deleted: true, FormerMembers: append([]string{}, g.Members...)})
+	writeJSON(w, http.StatusOK, groupDeleted{Deleted: g.ID, FormerMembers: append([]string{}, g.Members...)})
 }
 
 // Groups returns the groups the fake holds.

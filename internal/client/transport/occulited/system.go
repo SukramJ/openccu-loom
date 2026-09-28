@@ -465,7 +465,9 @@ type GroupCreated struct {
 
 // GroupDeleted is the DELETE /groups/{id} answer.
 type GroupDeleted struct {
-	Deleted       bool            `json:"deleted"`
+	// Deleted is the id of the deleted group; the box answers the number,
+	// not a flag.
+	Deleted       int             `json:"deleted"`
 	FormerMembers json.RawMessage `json:"former_members"`
 }
 
