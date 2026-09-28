@@ -6,6 +6,25 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.80.0] - 2026-09-28
+
+### Release summary
+
+Two additions in the Config UI and a set of fixes for openccu-lite.
+
+A **Licenses page** lists every component the build ships, with its
+license, from the SBOM embedded in release binaries. **Operator warnings**
+gather unhealthy components, recent errors and service-message backlogs into
+one list, and each user can mute a warning for 1, 7 or 90 days — until its
+cause clears. REST API 12.2.0; nothing breaking.
+
+On **openccu-lite**, the CCU add-on no longer stays down after a restart from
+the web UI: the box runs add-ons without monit, so the add-on's start script
+now keeps the daemon running itself, and stopping it reaches the daemon
+again. Two Home Assistant hub entities now match the reference integration
+(service-message count with statistics, connection latency as a duration).
+
+
 ### Added
 
 - A **Licenses page** in the Config UI: every component the build ships

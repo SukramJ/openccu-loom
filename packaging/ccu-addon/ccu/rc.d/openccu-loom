@@ -129,8 +129,8 @@ stop() {
   logger -t ${ADDON_ID} -p user.debug "Stopping"
   if pid=$(own_pid); then
     kill -TERM "${pid}" 2>/dev/null
-    # The daemon closes its listeners and flushes the database on TERM;
-    # wait for it rather than a fixed time, bounded like monit's own stop.
+    # On TERM the daemon drains its HTTP surface and closes its stores;
+    # wait for it to exit rather than a fixed time, bounded at 30 s.
     n=0
     while kill -0 "${pid}" 2>/dev/null && [ ${n} -lt 30 ]; do
       sleep 1

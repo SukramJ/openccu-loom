@@ -68,8 +68,13 @@ What is not, and why:
 | Heating-group candidates show room names only | The candidates DTO carries no taxonomy; showing the path needs an API addition | API change | ADR 0073 |
 | Interface pre-selection from the probe | Planned in the plan's §7.6; the probe answer carries no interface list, so the onboarding does not pre-select | API addition (interfaces on the probe answer) | here |
 | Visual baselines for editing an openccu-lite central | The CCU form's lite edit is covered by vitest and a functional Playwright case, not by screenshots | — | here |
-| Downstream repositories | `openccu-loom-client`/`-types` and the Node-RED contrib need the new DTOs and the REST API 12.0.0 pin | their own releases | `CHANGELOG.md` |
-| Release | Version bump, both add-on changelogs and the pre-release comment-claims sweep are not done yet | the release | CLAUDE.md, implementation policy |
+
+Done since the list was written: the release (0.79.0, tag `v0.79.0`), the
+downstream repositories (openccu-loom-client 2026.9.5 with the new DTOs,
+the exception and the event; node-red-contrib-openccu-loom 0.7.0 on API
+major 12, published to npm), and — found on the box after the migration —
+the CCU add-on's supervision and pidfile under openccu-lite's confined
+oneshot unit (#859, shipped in 0.80.0).
 
 ## Results
 
