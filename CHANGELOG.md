@@ -37,6 +37,9 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   was no longer the daemon's. The pidfile now lives in the unit's runtime
   directory, and stop and start ignore a pidfile whose process is not the
   add-on's.
+- The openccu-lite event stream's resume position now moves before a
+  message is handed to the consumer, so a consumer that reads the position
+  after receiving a message sees that message's id.
 
 ### Testing
 
