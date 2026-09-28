@@ -1,8 +1,8 @@
 # openccu-lite — live verification against a real box
 
-Status: **read-only checks done 2026-09-28** against a real box (occulited
+Status: **all checks done 2026-09-28** against a real box (occulited
 `0307f63ce04f`, release `1.0.0-dev.30`, base `3.89.11.20260919`); the writes
-(L-12 … L-15) wait for approval. The open items of the whole
+ran with the maintainer's approval on devices the maintainer named. The open items of the whole
 openccu-lite support are listed [below](#open-items-of-the-openccu-lite-support) (decided 2026-09-27: documentation
 first; this list waits until a box is provided). Phases A–D and the docs
 (F1) are merged; everything below was only exercised against the MIT test
@@ -90,3 +90,17 @@ differently had the claim been false.
 | L-9 | `/radio/health` `{interfaces [duty_cycle …], history, feed, answering, busy, errors}`; `hmip` in `/version`: `KEYSERVER_LOCAL`, 0 device keys, offline pairing | — |
 | L-10 | `/groups`: **group ids are JSON numbers** (`"id": 4`) — the client decoded them as strings, so the heating-group list failed on a real box (fixed alongside this record); `/groups/types` candidates `{id: <channel address>, serial, type}`; `/service-messages`, `/system-update` as the contract; UPnP serial `3014F711A0001F5A4993D993` = the HmIP radio address in `/radio/health` | — |
 | L-11 | `/ise/checkrega.cgi` → `200 text/html` (the SPA shell) | `/api/system/v1/health` → JSON |
+
+Writes, 2026-09-28, through a locally started OpenCCU-Loom daemon (built from
+`main` after #854) with the box as an `openccu-lite` central. The central was
+ready ~2 s after start, loaded all 13 devices with the box's names, reported
+25 of 33 features (the eight absent: no sysvars, programs, inbox, alarm
+messages, service-message acknowledge, communication test, position, safe
+mode) and logged no error.
+
+| # | Result | Control |
+|---|---|---|
+| L-12 | `PUT …/KEQ0843929/channels/1/data-points/STATE/value` true, then false (HM-LC-Sw4-DR, named by the maintainer): both `202`; the device's confirmed `STATE` event reached the box's stream ~150 ms after each write, and Loom reported the new value from it; left **off**, as found | the value read before the first write was `false` |
+| L-13 | device `00109709B1381B` renamed through Loom: the box's metadata object read back the new name at revision 4, Loom showed it; renamed back to `test234` (revision 5) | the object read before the write (revision 3, `test234`) |
+| L-14 | pairing through Loom (`access: read`): code shown, approved on the box by the maintainer; granted `rpc:read`, `meta:read`, `system:read`, `logs:read`; a central created with the `pairing_id` came up ~4 s later with 7 of 33 features, every absent one naming its scope; no answer carried the token (the stored row reads `***`); the test central was deleted afterwards. The box names the token `openccu-loom-ubuntu-remote-d` (app plus instance, cut to 28 characters) — **still on the box; to be deleted there** | — |
+| L-15 | `POST /backups` for the central: the box's archive `Kearney-3.89.11.20260919-2026-09-28-1205.sbk` (960 KiB, plain), a CCU-compatible tar (`usr_local.tar.gz`, `signature`, `signature.sha256`, `key_index`, `firmware_version`), stored under the box's own file name | — |
