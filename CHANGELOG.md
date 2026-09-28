@@ -6,6 +6,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **CCU add-on self-update on openccu-lite**: the capability probe now
+  recognises the host's `VARIANT=lite` marker in `/VERSION` and reports
+  the self-update as unsupported there — lite ships
+  `/bin/install_addon` in its read-only root for occulited's own
+  catalogue installs, but nothing on that system consumes a staged
+  archive, and a confined add-on cannot write the stage path anyway
+  (the reported `read-only file system` error). Updating OpenCCU-Loom
+  on openccu-lite is occulited's Addons page, which already carries it
+  in its catalogue.
+
 ## [0.80.0] - 2026-09-28
 
 ### Release summary

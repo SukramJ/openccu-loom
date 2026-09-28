@@ -27,7 +27,10 @@ Everything below the table's line goes only where **you** point it — see
 
 Only the CCU add-on build performs this check — on every other platform
 (binary, Docker, Home Assistant add-on) the capability probe fails and
-the section has no effect. When active, the daemon asks
+the section has no effect. On an **openccu-lite** host the probe also
+reports unsupported (the `VARIANT=lite` marker in `/VERSION`): add-on
+updates there belong to occulited's own catalogue, which downloads and
+installs releases itself. When active, the daemon asks
 `https://api.github.com/repos/SukramJ/openccu-loom/releases/latest`
 shortly after boot and then once a day whether a newer release exists
 (ADR 0057).

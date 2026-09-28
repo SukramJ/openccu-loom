@@ -35,8 +35,45 @@ func TestCapabilityProbeSupported(t *testing.T) {
 		isAddonBuild bool
 		statInfo     os.FileInfo
 		statErr      error
+		version      string
+		versionErr   error
 		want         bool
 	}{
+		{
+			// The reported field failure: loom runs as an add-on on an
+			// openccu-lite box, whose read-only root ships /bin/install_addon
+			// for occulited's own catalogue installs — but nothing there ever
+			// consumes a staged /usr/local/tmp/new_addon.tar.gz, and a
+			// confined add-on cannot even write it (EROFS). The host marks
+			// itself in /VERSION, and that marker must win over the
+			// installer's presence.
+			name:         "openccu-lite host is unsupported despite an executable installer",
+			isAddonBuild: true,
+			statInfo:     fakeFileInfo{mode: 0o755},
+			version:      "VERSION=3.89.8\nPRODUCT=ccu3\nPLATFORM=ccu3\nVARIANT=lite\n",
+			want:         false,
+		},
+		{
+			name:         "openccu-lite marker is matched per line, tolerating CRLF",
+			isAddonBuild: true,
+			statInfo:     fakeFileInfo{mode: 0o755},
+			version:      "VERSION=3.89.8\r\nVARIANT=lite\r\n",
+			want:         false,
+		},
+		{
+			name:         "a VARIANT that merely starts with lite does not match",
+			isAddonBuild: true,
+			statInfo:     fakeFileInfo{mode: 0o755},
+			version:      "VARIANT=liteish\n",
+			want:         true,
+		},
+		{
+			name:         "a missing /VERSION keeps the classic probe result",
+			isAddonBuild: true,
+			statInfo:     fakeFileInfo{mode: 0o755},
+			versionErr:   os.ErrNotExist,
+			want:         true,
+		},
 		{
 			name:         "not an addon build ignores an otherwise-valid installer",
 			isAddonBuild: false,
@@ -80,6 +117,15 @@ func TestCapabilityProbeSupported(t *testing.T) {
 					}
 					return tt.statInfo, tt.statErr
 				},
+				ReadHostVersion: func(path string) ([]byte, error) {
+					if path != HostVersionPath {
+						t.Errorf("ReadHostVersion called with %q, want %q", path, HostVersionPath)
+					}
+					if tt.versionErr != nil {
+						return nil, tt.versionErr
+					}
+					return []byte(tt.version), nil
+				},
 			}
 			if got := probe.Supported(); got != tt.want {
 				t.Errorf("Supported() = %v, want %v", got, tt.want)
@@ -101,6 +147,9 @@ func TestNewCapabilityProbeWiresRealFuncs(t *testing.T) {
 	}
 	if probe.StatInstaller == nil {
 		t.Fatal("StatInstaller is nil")
+	}
+	if probe.ReadHostVersion == nil {
+		t.Fatal("ReadHostVersion is nil")
 	}
 	_ = probe.Supported()
 }
