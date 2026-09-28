@@ -5,17 +5,36 @@
 # CCU / OpenCCU rc.d service script for OpenCCU-Loom. Started by
 # the CCU at boot via `init`, supervised by monit (see
 # etc/monit-openccu-loom.cfg), and driven from the add-on web page.
+#
+# On openccu-lite the same script runs inside a oneshot systemd unit
+# (addon-openccu-loom.service), confined to the add-on's own user, and there
+# is no monit. Two things differ there, both decided below: the pidfile
+# lives in the unit's runtime directory, and the script supervises the
+# daemon itself.
 
 ADDON_ID=openccu-loom
 ADDON_NAME="OpenCCU-Loom"
 ADDON_COPYRIGHT="(c) 2026 SukramJ"
 ADDON_WWW='<a href="https://github.com/SukramJ/openccu-loom" target="_blank">https://github.com/SukramJ/openccu-loom</a>'
 
-ADDON_DIR=/usr/local/addons/${ADDON_ID}
+# The LOOM_RC_* overrides exist for tests/contract/ccu_addon_rc_script_test.go
+# only; a CCU never sets them.
+ADDON_DIR=${LOOM_RC_ADDON_DIR:-/usr/local/addons/${ADDON_ID}}
 ETC_DIR=/usr/local/etc
 RCD_DIR=/usr/local/etc/config/rc.d
 WWW_DIR=/usr/local/etc/config/addons/www/${ADDON_ID}
-PIDFILE=/var/run/${ADDON_ID}.pid
+MONIT=${LOOM_RC_MONIT:-/usr/bin/monit}
+
+# The pidfile must be writable by the user the daemon runs as. On a CCU that
+# is root and /var/run. openccu-lite runs the add-on as its own user, for
+# whom /run is read-only, and gives the unit /run/addon-<id> instead. A
+# pidfile the script cannot write is silently never refreshed: stop then
+# signals whatever process the stale file names, and never the daemon.
+RUN_DIR=${LOOM_RC_RUN_DIR:-/var/run}
+if [ -z "${LOOM_RC_RUN_DIR}" ] && [ -d /run/addon-${ADDON_ID} ]; then
+  RUN_DIR=/run/addon-${ADDON_ID}
+fi
+PIDFILE=${RUN_DIR}/${ADDON_ID}.pid
 
 # Runtime configuration. The daemon is otherwise UI-configured — these
 # only pin the bootstrap tier (data dir, bind ports). Edit here to move a
@@ -32,10 +51,48 @@ export OPENCCU_LOOM_LOG_FORMAT=text
 # genuine NAT scenario where every CCU reaches the daemon at one address.
 # Tell the daemon it runs under a supervisor so the SPA "Restart" action
 # is enabled: a restart SIGTERMs the process, and monit (active mode, see
-# etc/monit-openccu-loom.cfg) brings it back up on the next cycle. Without
+# etc/monit-openccu-loom.cfg) brings it back up on the next cycle — or,
+# where there is no monit, the script's own loop (see supervise). Without
 # this the daemon cannot detect monit and disables restart to avoid
 # leaving itself offline.
 export OPENCCU_LOOM_SUPERVISOR=1
+
+# has_monit reports whether monit supervises the daemon. Without it nothing
+# would start the daemon again after a restart from the SPA: the openccu-lite
+# unit is a oneshot that stays "active" with the daemon gone.
+has_monit() {
+  [ -x "${MONIT}" ]
+}
+
+# supervise runs the daemon and starts it again whenever it exits, until it
+# is itself told to stop. It is the pidfile's process where there is no
+# monit; a TERM is passed on to the daemon, and the loop ends once the
+# daemon has shut down.
+supervise() {
+  child=
+  trap 'if [ -n "${child}" ]; then kill -TERM "${child}" 2>/dev/null; wait "${child}"; fi; exit 0' TERM INT
+  while :; do
+    "${ADDON_DIR}/${ADDON_ID}" run &
+    child=$!
+    wait "${child}"
+    child=
+    logger -t ${ADDON_ID} -p user.info "Daemon exited, starting it again"
+    sleep 2
+  done
+}
+
+# own_pid echoes the pidfile's PID when that process is still ours — the
+# daemon or its supervising loop, both of which name the add-on in their
+# command line. A PID the kernel has handed to another program since is
+# not signalled.
+own_pid() {
+  [ -r "${PIDFILE}" ] || return 1
+  pid=$(cat "${PIDFILE}" 2>/dev/null)
+  case "${pid}" in ''|*[!0-9]*) return 1 ;; esac
+  kill -0 "${pid}" 2>/dev/null || return 1
+  tr '\000' ' ' < /proc/${pid}/cmdline 2>/dev/null | grep -q "${ADDON_ID}" || return 1
+  echo "${pid}"
+}
 
 # resolve_backup_dir echoes where the downloaded CCU archives belong.
 #
@@ -70,8 +127,17 @@ resolve_backup_dir() {
 
 stop() {
   logger -t ${ADDON_ID} -p user.debug "Stopping"
-  start-stop-daemon -K -q -p ${PIDFILE}
-  sleep 3
+  if pid=$(own_pid); then
+    kill -TERM "${pid}" 2>/dev/null
+    # The daemon closes its listeners and flushes the database on TERM;
+    # wait for it rather than a fixed time, bounded like monit's own stop.
+    n=0
+    while kill -0 "${pid}" 2>/dev/null && [ ${n} -lt 30 ]; do
+      sleep 1
+      n=$((n + 1))
+    done
+  fi
+  rm -f "${PIDFILE}"
   logger -t ${ADDON_ID} -p user.info "Stopped"
 }
 
@@ -88,9 +154,25 @@ start() {
     logger -t ${ADDON_ID} -p user.info "No CCU backup target found, keeping archives in ${ADDON_DIR}/var/backups"
   fi
   cd ${ADDON_DIR}
-  # -b: background, -m: write the pidfile for start-stop-daemon's child.
-  start-stop-daemon -S -q -b -m -p ${PIDFILE} \
-    -x ${ADDON_DIR}/${ADDON_ID} -- run
+  if own_pid >/dev/null; then
+    logger -t ${ADDON_ID} -p user.info "Already running"
+    return 0
+  fi
+  if has_monit; then
+    # -b: background, -m: write the pidfile for start-stop-daemon's child.
+    start-stop-daemon -S -q -b -m -p ${PIDFILE} \
+      -x ${ADDON_DIR}/${ADDON_ID} -- run
+  else
+    # exec inside the subshell, not a redirection on the call: a shell
+    # keeps copies of the caller's descriptors around a redirected function
+    # call, and the loop would hold the installer's or the unit's output
+    # open for as long as it runs.
+    (
+      exec </dev/null >/dev/null 2>&1
+      supervise
+    ) &
+    echo $! > "${PIDFILE}"
+  fi
   logger -t ${ADDON_ID} -p user.info "Started"
 }
 

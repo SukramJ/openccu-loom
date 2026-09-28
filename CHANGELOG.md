@@ -23,6 +23,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   early when its condition clears, so a re-occurrence alerts again. MCP
   gains a read-only `list_warnings` tool. REST API 12.2.0.
 
+### Fixed
+
+- **CCU add-on on openccu-lite: "Restart" no longer leaves the daemon
+  down.** openccu-lite runs the add-on in a oneshot systemd unit without
+  monit, so after a restart from the web UI nothing started the daemon
+  again and the UI stayed unreachable until the service was started by
+  hand. Where there is no monit, the add-on's start script now supervises
+  the daemon itself and starts it again whenever it exits.
+- **CCU add-on on openccu-lite: stop reaches the daemon.** The pidfile lay
+  in `/var/run`, which the add-on's confined user cannot write, so a stale
+  file from the install was never replaced and stop signalled a PID that
+  was no longer the daemon's. The pidfile now lives in the unit's runtime
+  directory, and stop and start ignore a pidfile whose process is not the
+  add-on's.
+
 ### Testing
 
 - A **wire-fixture corpus** (`assets/wire-fixtures/`): recorded daemon
