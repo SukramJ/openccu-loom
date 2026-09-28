@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 540.
+Guards without a doc comment: 7 of 542.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -50,6 +50,8 @@ Guards without a doc comment: 7 of 540.
 | TestContractCatalogueIsComplete | catalogue_test.go | TestContractCatalogueIsComplete holds that tests/contract/README.md lists exactly the exported TestXxx functions that exist under tests/contract/ — no guard undocumented in the catalogue, no catalogue entry pointing at a guard that no longer exists. |
 | TestCCUAddonRegistersControlPanelEntry | ccu_addon_control_panel_entry_test.go | TestCCUAddonRegistersControlPanelEntry pins how the add-on claims its tile in the CCU's "Systemsteuerung": the platform helper by its real name, plus the underlying HomeMatic Tcl API as the fallback for firmware that predates the helper. |
 | TestCCUAddonUpdateScriptWarnsWithoutControlPanelHelper | ccu_addon_control_panel_entry_test.go | TestCCUAddonUpdateScriptWarnsWithoutControlPanelHelper verifies the miss is LOUD: on firmware that offers neither the helper nor a Tcl interpreter the install still succeeds (the daemon does not need the tile), but it says so rather than leaving the operator with a silently tile-less install — the exact failure mode that hid the wrong helper name. |
+| TestCCUAddonLiteManifestMatchesThePackage | ccu_addon_lite_manifest_test.go | TestCCUAddonLiteManifestMatchesThePackage pins the manifest to the files it describes, so a renamed add-on id, config page or tarball cannot leave the manifest pointing at something that no longer exists. |
+| TestCCUAddonLiteManifestNeedsNoSessionInTheURL | ccu_addon_lite_manifest_test.go | TestCCUAddonLiteManifestNeedsNoSessionInTheURL holds the reason the manifest sets session_header. |
 | TestCCUAddonRCScriptPassesOnlyAWritableBackupDir | ccu_addon_rc_script_test.go | TestCCUAddonRCScriptPassesOnlyAWritableBackupDir pins the backup target on openccu-lite: the unit mounts /usr/local read-only apart from the add-on's own directories, so a directory the script picks there can never take an archive. |
 | TestCCUAddonRCScriptReplacesAPidfileItCannotWrite | ccu_addon_rc_script_test.go | TestCCUAddonRCScriptReplacesAPidfileItCannotWrite pins the second half of the install incident: the root-run loop left a root-owned pidfile in the unit's runtime directory, which the add-on's user cannot overwrite. |
 | TestCCUAddonRCScriptRestartsTheDaemonWithoutMonit | ccu_addon_rc_script_test.go | TestCCUAddonRCScriptRestartsTheDaemonWithoutMonit pins what the SPA's "Restart" relies on where no monit runs (openccu-lite): the daemon SIGTERMs itself and the rc.d script must start it again. |

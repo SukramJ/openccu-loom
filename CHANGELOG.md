@@ -6,6 +6,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The CCU add-on declares itself to openccu-lite.** The package now
+  carries an `openccu-lite.json` manifest, which the box reads in place of
+  its catalogue's entry: an up-to-date description, the settings page, and
+  that the page takes no session in its URL. Without it openccu-lite handed
+  the page your session as `?sid=` and warned about it; the page never read
+  it. `docs/admin/openccu-lite.md` gains a section on running OpenCCU-Loom on
+  the box itself.
+
 ### Fixed
 
 - **CCU add-on self-update on openccu-lite**: the capability probe now
