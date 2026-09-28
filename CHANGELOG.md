@@ -6,6 +6,23 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- A **Licenses page** in the Config UI: every component the build ships
+  — Go modules and the UI's npm tree — rendered from the embedded
+  CycloneDX SBOM with license texts where the SBOM carries them, a
+  search, an SBOM download, the MIT warranty disclaimer, and links to
+  the third-party notices and the new privacy page. Release binaries
+  embed the SBOM (`GET /api/v1/sbom`); a development build answers 404
+  and the page says so.
+- **Operator warnings with per-user silences**: `GET /api/v1/warnings`
+  aggregates unhealthy health components, error-grade incidents of the
+  last 24 hours and per-central service-message backlogs into one list;
+  a warning can be muted per user for 1, 7 or 90 days
+  (`PUT|DELETE /api/v1/warnings/{id}/silence`), and a silence ends
+  early when its condition clears, so a re-occurrence alerts again. MCP
+  gains a read-only `list_warnings` tool. REST API 12.2.0.
+
 ### Testing
 
 - The REST router's public surface is pinned: a contract guard walks

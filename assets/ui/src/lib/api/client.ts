@@ -948,6 +948,21 @@ export const api = {
     if (p.until) qs.set("until", p.until);
     return `${apiBase()}/audit?${qs.toString()}`;
   },
+  // --- Software bill of materials (Licenses page) ----------------
+  // A dev build carries no SBOM and answers 404 — a property of the
+  // build, not an error the Licenses page should surface as a failure.
+  // Resolves to null in that case; re-throws ApiError for anything else.
+  async getSBOM(): Promise<unknown | null> {
+    try {
+      return await request<unknown>(`/sbom`);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) return null;
+      throw err;
+    }
+  },
+  sbomDownloadUrl(): string {
+    return `${apiBase()}/sbom?download=1`;
+  },
   // --- Per-user preferences (favorites / dashboard) -----------
   // Values are opaque JSON owned by the SPA. getPreference resolves to
   // null when the key is unset: the daemon answers 200 with a null

@@ -232,6 +232,7 @@ var registry = []Surface{
 	{ID: "nav.backups", Group: GroupSystem, Defaults: both(), RoleAdmin: true, Gate: GateFeatureBackupCreate},
 	{ID: "nav.settings", Group: GroupSystem, Defaults: both(), Floor: FloorAlways},
 	{ID: "nav.about", Group: GroupSystem, Defaults: both(), Floor: FloorAlways},
+	{ID: "nav.licenses", Group: GroupSystem, Defaults: both()},
 
 	// --- settings tabs --------------------------------------------
 	{ID: "settings.general", Group: GroupSettings, Defaults: both()},

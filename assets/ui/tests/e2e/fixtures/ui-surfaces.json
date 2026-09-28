@@ -54,7 +54,8 @@
     "settings.system": true,
     "settings.tokens": true,
     "settings.users": true,
-    "settings.visibility": true
+    "settings.visibility": true,
+    "nav.licenses": true
   },
   "centrals": 1,
   "surfaces": [
@@ -271,6 +272,14 @@
         "standalone": true
       },
       "floor": "always"
+    },
+    {
+      "id": "nav.licenses",
+      "group": "system",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      }
     },
     {
       "id": "settings.general",
