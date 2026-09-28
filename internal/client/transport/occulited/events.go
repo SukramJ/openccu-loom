@@ -347,14 +347,18 @@ func (s *Stream) connect(ctx context.Context, send func(Message) bool) (bool, er
 		}
 		for i := range items {
 			it := &items[i]
+			// The position moves before the message is handed over, so a
+			// reader that asks for it after receiving the message sees
+			// that message's id. A send that fails only does so because
+			// the stream is ending, and nothing resumes from its position.
+			if it.setPo {
+				s.setPosition(it.pos)
+			}
 			wd.pause()
 			ok := send(it.msg)
 			wd.stamp()
 			if !ok {
 				return st.helloSeen, ctx.Err()
-			}
-			if it.setPo {
-				s.setPosition(it.pos)
 			}
 		}
 	}
