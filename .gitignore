@@ -147,8 +147,12 @@ tests/integration/testdata/discovery_snapshot_aiohomematic2mqtt.json
 /reachability
 
 
-# Generated SBOM (run 'make sbom' / CI release artifact)
+# Generated SBOM (run 'make sbom' / CI release artifact). The merged
+# archive is embedded into release binaries from internal/sbom/gen/.
 /sbom.json
+/sbom-go.json
+/sbom-npm.json
+/internal/sbom/gen/sbom.cdx.json.gz
 
 # MkDocs build output
 site/
