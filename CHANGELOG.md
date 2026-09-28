@@ -32,7 +32,9 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `mdi:timer-outline` icon. Both come with the next discovery publish; entity
   ids and unique ids do not change. The unused copy of the hub description
   rules in the MQTT package is removed — the hub builders were already the
-  only source for every other hub attribute.
+  only source for every other hub attribute — and so are the 19 hub rules
+  and two hub defaults of the device description table, which no lookup
+  could reach.
 
 ### Fixed
 

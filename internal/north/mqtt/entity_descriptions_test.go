@@ -288,7 +288,7 @@ func TestEntityDescriptionLookupBasicMatches(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got := HARegistryDescriptionLookup(tc.category, tc.parameter, tc.model, tc.unit, tc.postfix, "")
+			got := HARegistryDescriptionLookup(tc.category, tc.parameter, tc.model, tc.unit, tc.postfix)
 			if got == nil {
 				t.Fatalf("HARegistryDescriptionLookup(%q,%q,…) = nil; want match", tc.category, tc.parameter)
 			}
@@ -312,10 +312,10 @@ func TestEntityDescriptionLookupBasicMatches(t *testing.T) {
 // no matching rule yields nil rather than a partial false-positive.
 func TestEntityDescriptionLookupReturnsNilOnMiss(t *testing.T) {
 	t.Parallel()
-	if got := HARegistryDescriptionLookup("sensor", "DOES_NOT_EXIST_PARAM", "", "", "", ""); got != nil {
+	if got := HARegistryDescriptionLookup("sensor", "DOES_NOT_EXIST_PARAM", "", "", ""); got != nil {
 		t.Errorf("expected nil for unknown parameter, got %+v", got)
 	}
-	if got := HARegistryDescriptionLookup("", "", "", "", "", ""); got != nil {
+	if got := HARegistryDescriptionLookup("", "", "", "", ""); got != nil {
 		t.Errorf("expected nil for empty category, got %+v", got)
 	}
 }
@@ -328,7 +328,7 @@ func TestEntityDescriptionLookupDevicePrefixMatch(t *testing.T) {
 	// override the generic fallback. We assert the lookup returns a
 	// Description (the exact key may evolve as
 	// rules; this test guards the wiring, not the data).
-	if got := HARegistryDescriptionLookup("sensor", "LEVEL", "HmIP-eTRV-2", "", "", ""); got == nil {
+	if got := HARegistryDescriptionLookup("sensor", "LEVEL", "HmIP-eTRV-2", "", ""); got == nil {
 		t.Logf("note: no rule for HmIP-eTRV-2 LEVEL — table may have changed")
 	}
 }
@@ -526,7 +526,7 @@ func TestParticulateMatterUnitsAreCanonical(t *testing.T) {
 		if d.UnitOfMeasurement != wantPM {
 			t.Errorf("%s: unit %q, want %q", param, d.UnitOfMeasurement, wantPM)
 		}
-		reg := HARegistryDescriptionLookup("sensor", param, "", "", "", "")
+		reg := HARegistryDescriptionLookup("sensor", param, "", "", "")
 		if reg == nil {
 			t.Fatalf("%s: no registry description", param)
 		}

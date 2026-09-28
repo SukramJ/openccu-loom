@@ -1,7 +1,7 @@
 # The HA entity-description table
 
 Working reference for `internal/north/mqtt/entity_descriptions_table.go` —
-the 147 rules the MQTT discovery plane uses to stamp `device_class`,
+the 128 device rules (147 before the hub rules were removed) the MQTT discovery plane uses to stamp `device_class`,
 `state_class`, `entity_category`, `icon`, `translation_key`,
 `unit_of_measurement`, `suggested_display_precision`, `enabled_by_default`,
 `options` and the per-number `multiplier` onto a discovery payload.
@@ -60,34 +60,21 @@ device rule.
 | `DAEMON_LATENCY` | `hub_sensor` | `VarNameContains: daemon_latency` | Same: a client-side measurement. The daemon's own equivalent is `HubMetricsEntry.connection_latency_ms`, served over REST. |
 | `event_doorbell` | `event_group` | `Devices: HM-Sen-DB-PCB, HmIP-DBB, HmIP-DSD-PCB` | Already implemented, from a better source. `EventDeviceClassForModel` (`entity_descriptions.go:262`) resolves the doorbell class from `ccudata.DoorbellModels()` — the full CCU model set, not three hard-coded entries — and the aggregate builder stamps it directly at `discovery_aggregate.go:129`. |
 
-## Rules that cannot fire yet
+## Hub rules removed
 
-19 of the 147 rules carry a non-empty `VarNameContains`, and every
-production call site passes `varName == ""`:
+The table used to carry 19 rules with a non-empty `VarNameContains`, all in
+the `hub_*` categories, plus defaults for `hub_button` and `hub_switch`. None
+of them could fire: every call site passed `varName == ""`, and the lookup is
+only ever asked for device data points, whose categories are never `hub_*`
+(no model code produces one).
 
-```
-discovery.go:620              applyEntityDescription(body, hmipCat, ev.Parameter, ev.Model, ev.descUnit(), "")
-discovery_press_button.go:96  applyEntityDescription(body, "button", ev.Parameter, ev.Model, "", "")
-discovery_aggregate.go:234    applyEntityDescriptionStrict(body, comp, "", ev.Model, ev.descUnit(), postfix)
-```
-
-`varNameMatches(needle, haystack)` returns `strings.Contains(haystack, needle)`
-for a non-empty needle, so with an empty haystack none of the 19 can match.
-They are not dead code — the lookup is exported and takes the parameter — but
-they describe hub entities keyed by system-variable name, and no builder
-supplies one today:
-
-`CONNECTIVITY_SENSOR`, `INSTALL_MODE_BIDCOS`, `INSTALL_MODE_BIDCOS_BUTTON`,
-`INSTALL_MODE_HMIP`, `INSTALL_MODE_HMIP_BUTTON`, `ALARM_MESSAGES`,
-`SERVICE_MESSAGES`, `INBOX`, `CONNECTION_LATENCY`, `LAST_EVENT_AGE`,
-`SYSTEM_HEALTH`, `ENERGY_COUNTER`, `ENERGY_COUNTER_FEED_IN`, `RAIN_COUNTER`,
-`RAIN_COUNTER_TODAY`, `RAIN_COUNTER_YESTERDAY`, `SUNSHINE_COUNTER`,
-`SUNSHINE_COUNTER_TODAY`, `SUNSHINE_COUNTER_YESTERDAY`.
-
-Wiring a varName through the hub-discovery builder would activate all 19 at
-once. That is a change with a visible effect on every hub entity's discovery
-payload, so it wants its own slice and its own round-trip test — not a
-side-effect of a rule edit.
+They were removed together with the `VarNameContains` criterion and the
+`varName` parameter of `HARegistryDescriptionLookup`, which existed only for
+them. Hub entities take their attributes from the builders in
+`internal/north/mqtt/hub_discovery.go`; those were compared field by field
+with the reference integration's hub descriptions when the separate
+`entity_description_rules_hub.go` copy was deleted (PR #861). The table now
+holds 128 device rules.
 
 ## The guard
 

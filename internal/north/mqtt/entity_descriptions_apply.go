@@ -52,7 +52,7 @@ func clearAuthoritativeFields(comp *hadiscovery.Component) {
 // [applyMultiplierNumber] because it needs the parameter's live value,
 // not a static body field — does not have to re-run the lookup.
 func applyEntityDescription(comp *hadiscovery.Component, component, parameter, model, unit, postfix string) *HARegistryDescription {
-	desc := HARegistryDescriptionLookup(component, parameter, model, unit, postfix, "")
+	desc := HARegistryDescriptionLookup(component, parameter, model, unit, postfix)
 	if desc == nil {
 		clearAuthoritativeFields(comp)
 		return nil
@@ -130,7 +130,7 @@ func applyEntityDescriptionStrict(desc *hamodel.Description, component, paramete
 	if desc == nil {
 		return
 	}
-	rule := HARegistryDescriptionLookup(component, parameter, model, unit, postfix, "")
+	rule := HARegistryDescriptionLookup(component, parameter, model, unit, postfix)
 	if rule == nil {
 		desc.DeviceClass = ""
 		desc.StateClass = ""

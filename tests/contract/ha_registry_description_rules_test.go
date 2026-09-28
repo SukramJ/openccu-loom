@@ -6,7 +6,7 @@ package contract
 // TestHARegistryDescriptionRulesNoDuplicates pins the invariant that the
 // HA-registry rule slice has no two entries that would produce
 // the same match for an identical (category, parameter, device, unit,
-// postfix, varName) tuple. A duplicate rule is silent dead code — the
+// postfix) tuple. A duplicate rule is silent dead code — the
 // first match wins and the second entry is never reachable.
 //
 // The test does NOT compare the registry against the hand-written
@@ -38,29 +38,27 @@ import (
 
 // TestHARegistryDescriptionRulesNoDuplicates fails when the rule slice
 // contains two or more entries that have identical (category, parameters,
-// devices, unit, postfix, varNameContains) matching criteria. Such duplicates make the second
+// devices, unit, postfix) matching criteria. Such duplicates make the second
 // entry unreachable: HARegistryDescriptionLookup returns on first match.
 func TestHARegistryDescriptionRulesNoDuplicates(t *testing.T) {
 	t.Parallel()
 
 	rules := mqtt.HARegistryDescriptionRules()
 	type matchKey struct {
-		category        string
-		parameters      string // sorted, joined
-		devices         string // sorted, joined
-		unit            string
-		postfix         string
-		varNameContains string
+		category   string
+		parameters string // sorted, joined
+		devices    string // sorted, joined
+		unit       string
+		postfix    string
 	}
 	seen := make(map[matchKey]int, len(rules)) // value = first-seen index
 	for i, r := range rules {
 		key := matchKey{
-			category:        r.Category,
-			parameters:      strings.Join(r.Parameters, ","),
-			devices:         strings.Join(r.Devices, ","),
-			unit:            r.Unit,
-			postfix:         r.Postfix,
-			varNameContains: r.VarNameContains,
+			category:   r.Category,
+			parameters: strings.Join(r.Parameters, ","),
+			devices:    strings.Join(r.Devices, ","),
+			unit:       r.Unit,
+			postfix:    r.Postfix,
 		}
 		if prev, dup := seen[key]; dup {
 			t.Errorf("haRegistryDescriptionRules: duplicate match criteria at index %d and %d: %s",

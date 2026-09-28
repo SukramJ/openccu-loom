@@ -23,7 +23,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 10
   },
   {
@@ -50,7 +49,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 10
   },
   {
@@ -77,7 +75,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 10
   },
   {
@@ -104,7 +101,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 10
   },
   {
@@ -133,7 +129,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 10
   },
   {
@@ -160,7 +155,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 10
   },
   {
@@ -191,7 +185,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 10
   },
   {
@@ -218,7 +211,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 10
   },
   {
@@ -246,7 +238,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 10
   },
   {
@@ -273,7 +264,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 10
   },
   {
@@ -300,7 +290,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 10
   },
   {
@@ -328,7 +317,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 10
   },
   {
@@ -371,7 +359,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 10
   },
   {
@@ -400,7 +387,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 10
   },
   {
@@ -427,7 +413,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 10
   },
   {
@@ -457,7 +442,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 10
   },
   {
@@ -489,7 +473,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 10
   },
   {
@@ -524,7 +507,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 10
   },
   {
@@ -554,7 +536,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 10
   },
   {
@@ -581,7 +562,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 10
   },
   {
@@ -608,7 +588,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 10
   },
   {
@@ -635,7 +614,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 10
   },
   {
@@ -662,7 +640,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 10
   },
   {
@@ -689,7 +666,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 10
   },
   {
@@ -716,7 +692,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 10
   },
   {
@@ -743,7 +718,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 10
   },
   {
@@ -774,7 +748,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 10
   },
   {
@@ -802,7 +775,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 10
   },
   {
@@ -829,7 +801,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 10
   },
   {
@@ -854,7 +825,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -879,7 +849,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -905,7 +874,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -930,7 +898,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -955,7 +922,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -981,7 +947,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -1006,7 +971,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -1031,7 +995,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -1056,7 +1019,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -1083,7 +1045,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -1108,7 +1069,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -1133,7 +1093,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -1158,7 +1117,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -1183,7 +1141,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -1208,7 +1165,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -1234,7 +1190,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -1259,7 +1214,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -1285,7 +1239,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -1313,7 +1266,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -1338,7 +1290,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -1363,7 +1314,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -1388,7 +1338,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -1413,7 +1362,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -1438,7 +1386,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -1463,7 +1410,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -1491,7 +1437,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -1517,7 +1462,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -1542,7 +1486,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -1567,7 +1510,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -1594,444 +1536,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
-    "Priority": 0
-  },
-  {
-    "Description": {
-      "Key": "CONNECTIVITY_SENSOR",
-      "DeviceClass": "connectivity",
-      "StateClass": "",
-      "EntityCategory": "",
-      "Icon": "",
-      "TranslationKey": "",
-      "UnitOfMeasurement": "",
-      "SuggestedDisplayPrecision": null,
-      "EnabledByDefault": null,
-      "Options": null,
-      "NameSource": "parameter",
-      "Multiplier": null
-    },
-    "Category": "hub_binary_sensor",
-    "Parameters": null,
-    "Devices": null,
-    "Unit": "",
-    "Postfix": "",
-    "VarNameContains": "Connectivity",
-    "Priority": 0
-  },
-  {
-    "Description": {
-      "Key": "INSTALL_MODE_BIDCOS_BUTTON",
-      "DeviceClass": "",
-      "StateClass": "",
-      "EntityCategory": "",
-      "Icon": "",
-      "TranslationKey": "install_mode_bidcos_button",
-      "UnitOfMeasurement": "",
-      "SuggestedDisplayPrecision": null,
-      "EnabledByDefault": null,
-      "Options": null,
-      "NameSource": "parameter",
-      "Multiplier": null
-    },
-    "Category": "hub_button",
-    "Parameters": null,
-    "Devices": null,
-    "Unit": "",
-    "Postfix": "",
-    "VarNameContains": "INSTALL_MODE_BIDCOS_BUTTON",
-    "Priority": 0
-  },
-  {
-    "Description": {
-      "Key": "INSTALL_MODE_HMIP_BUTTON",
-      "DeviceClass": "",
-      "StateClass": "",
-      "EntityCategory": "",
-      "Icon": "",
-      "TranslationKey": "install_mode_hmip_button",
-      "UnitOfMeasurement": "",
-      "SuggestedDisplayPrecision": null,
-      "EnabledByDefault": null,
-      "Options": null,
-      "NameSource": "parameter",
-      "Multiplier": null
-    },
-    "Category": "hub_button",
-    "Parameters": null,
-    "Devices": null,
-    "Unit": "",
-    "Postfix": "",
-    "VarNameContains": "INSTALL_MODE_HMIP_BUTTON",
-    "Priority": 0
-  },
-  {
-    "Description": {
-      "Key": "ALARM_MESSAGES",
-      "DeviceClass": "",
-      "StateClass": "measurement",
-      "EntityCategory": "",
-      "Icon": "",
-      "TranslationKey": "alarm_messages",
-      "UnitOfMeasurement": "",
-      "SuggestedDisplayPrecision": null,
-      "EnabledByDefault": null,
-      "Options": null,
-      "NameSource": "parameter",
-      "Multiplier": null
-    },
-    "Category": "hub_sensor",
-    "Parameters": null,
-    "Devices": null,
-    "Unit": "",
-    "Postfix": "",
-    "VarNameContains": "ALARM_MESSAGES",
-    "Priority": 0
-  },
-  {
-    "Description": {
-      "Key": "CONNECTION_LATENCY",
-      "DeviceClass": "duration",
-      "StateClass": "measurement",
-      "EntityCategory": "diagnostic",
-      "Icon": "mdi:timer-outline",
-      "TranslationKey": "connection_latency",
-      "UnitOfMeasurement": "ms",
-      "SuggestedDisplayPrecision": 1,
-      "EnabledByDefault": null,
-      "Options": null,
-      "NameSource": "parameter",
-      "Multiplier": null
-    },
-    "Category": "hub_sensor",
-    "Parameters": null,
-    "Devices": null,
-    "Unit": "",
-    "Postfix": "",
-    "VarNameContains": "connection_latency",
-    "Priority": 0
-  },
-  {
-    "Description": {
-      "Key": "ENERGY_COUNTER",
-      "DeviceClass": "energy",
-      "StateClass": "total_increasing",
-      "EntityCategory": "",
-      "Icon": "",
-      "TranslationKey": "energy_counter_total",
-      "UnitOfMeasurement": "Wh",
-      "SuggestedDisplayPrecision": null,
-      "EnabledByDefault": null,
-      "Options": null,
-      "NameSource": "parameter",
-      "Multiplier": null
-    },
-    "Category": "hub_sensor",
-    "Parameters": null,
-    "Devices": null,
-    "Unit": "",
-    "Postfix": "",
-    "VarNameContains": "svEnergyCounter",
-    "Priority": 0
-  },
-  {
-    "Description": {
-      "Key": "ENERGY_COUNTER_FEED_IN",
-      "DeviceClass": "energy",
-      "StateClass": "total_increasing",
-      "EntityCategory": "",
-      "Icon": "",
-      "TranslationKey": "energy_counter_feed_in_total",
-      "UnitOfMeasurement": "Wh",
-      "SuggestedDisplayPrecision": null,
-      "EnabledByDefault": null,
-      "Options": null,
-      "NameSource": "parameter",
-      "Multiplier": null
-    },
-    "Category": "hub_sensor",
-    "Parameters": null,
-    "Devices": null,
-    "Unit": "",
-    "Postfix": "",
-    "VarNameContains": "svEnergyCounterFeedIn",
-    "Priority": 0
-  },
-  {
-    "Description": {
-      "Key": "INBOX",
-      "DeviceClass": "",
-      "StateClass": "",
-      "EntityCategory": "",
-      "Icon": "",
-      "TranslationKey": "inbox",
-      "UnitOfMeasurement": "",
-      "SuggestedDisplayPrecision": null,
-      "EnabledByDefault": null,
-      "Options": null,
-      "NameSource": "parameter",
-      "Multiplier": null
-    },
-    "Category": "hub_sensor",
-    "Parameters": null,
-    "Devices": null,
-    "Unit": "",
-    "Postfix": "",
-    "VarNameContains": "inbox",
-    "Priority": 0
-  },
-  {
-    "Description": {
-      "Key": "INSTALL_MODE_BIDCOS",
-      "DeviceClass": "",
-      "StateClass": "",
-      "EntityCategory": "",
-      "Icon": "",
-      "TranslationKey": "install_mode_bidcos",
-      "UnitOfMeasurement": "",
-      "SuggestedDisplayPrecision": null,
-      "EnabledByDefault": null,
-      "Options": null,
-      "NameSource": "parameter",
-      "Multiplier": null
-    },
-    "Category": "hub_sensor",
-    "Parameters": null,
-    "Devices": null,
-    "Unit": "",
-    "Postfix": "",
-    "VarNameContains": "INSTALL_MODE_BIDCOS",
-    "Priority": 0
-  },
-  {
-    "Description": {
-      "Key": "INSTALL_MODE_HMIP",
-      "DeviceClass": "",
-      "StateClass": "",
-      "EntityCategory": "",
-      "Icon": "",
-      "TranslationKey": "install_mode_hmip",
-      "UnitOfMeasurement": "",
-      "SuggestedDisplayPrecision": null,
-      "EnabledByDefault": null,
-      "Options": null,
-      "NameSource": "parameter",
-      "Multiplier": null
-    },
-    "Category": "hub_sensor",
-    "Parameters": null,
-    "Devices": null,
-    "Unit": "",
-    "Postfix": "",
-    "VarNameContains": "INSTALL_MODE_HMIP",
-    "Priority": 0
-  },
-  {
-    "Description": {
-      "Key": "LAST_EVENT_AGE",
-      "DeviceClass": "duration",
-      "StateClass": "measurement",
-      "EntityCategory": "diagnostic",
-      "Icon": "mdi:clock-alert-outline",
-      "TranslationKey": "last_event_age",
-      "UnitOfMeasurement": "s",
-      "SuggestedDisplayPrecision": 1,
-      "EnabledByDefault": null,
-      "Options": null,
-      "NameSource": "parameter",
-      "Multiplier": null
-    },
-    "Category": "hub_sensor",
-    "Parameters": null,
-    "Devices": null,
-    "Unit": "",
-    "Postfix": "",
-    "VarNameContains": "last_event_age",
-    "Priority": 0
-  },
-  {
-    "Description": {
-      "Key": "RAIN_COUNTER",
-      "DeviceClass": "",
-      "StateClass": "total_increasing",
-      "EntityCategory": "",
-      "Icon": "",
-      "TranslationKey": "rain_counter_total",
-      "UnitOfMeasurement": "mm",
-      "SuggestedDisplayPrecision": null,
-      "EnabledByDefault": null,
-      "Options": null,
-      "NameSource": "parameter",
-      "Multiplier": null
-    },
-    "Category": "hub_sensor",
-    "Parameters": null,
-    "Devices": null,
-    "Unit": "",
-    "Postfix": "",
-    "VarNameContains": "svHmIPRainCounter",
-    "Priority": 0
-  },
-  {
-    "Description": {
-      "Key": "RAIN_COUNTER_TODAY",
-      "DeviceClass": "",
-      "StateClass": "total_increasing",
-      "EntityCategory": "",
-      "Icon": "",
-      "TranslationKey": "rain_counter_today",
-      "UnitOfMeasurement": "mm",
-      "SuggestedDisplayPrecision": null,
-      "EnabledByDefault": null,
-      "Options": null,
-      "NameSource": "parameter",
-      "Multiplier": null
-    },
-    "Category": "hub_sensor",
-    "Parameters": null,
-    "Devices": null,
-    "Unit": "",
-    "Postfix": "",
-    "VarNameContains": "svHmIPRainCounterToday",
-    "Priority": 0
-  },
-  {
-    "Description": {
-      "Key": "RAIN_COUNTER_YESTERDAY",
-      "DeviceClass": "",
-      "StateClass": "total_increasing",
-      "EntityCategory": "",
-      "Icon": "",
-      "TranslationKey": "rain_counter_yesterday",
-      "UnitOfMeasurement": "mm",
-      "SuggestedDisplayPrecision": null,
-      "EnabledByDefault": null,
-      "Options": null,
-      "NameSource": "parameter",
-      "Multiplier": null
-    },
-    "Category": "hub_sensor",
-    "Parameters": null,
-    "Devices": null,
-    "Unit": "",
-    "Postfix": "",
-    "VarNameContains": "svHmIPRainCounterYesterday",
-    "Priority": 0
-  },
-  {
-    "Description": {
-      "Key": "SERVICE_MESSAGES",
-      "DeviceClass": "",
-      "StateClass": "measurement",
-      "EntityCategory": "",
-      "Icon": "",
-      "TranslationKey": "service_messages",
-      "UnitOfMeasurement": "",
-      "SuggestedDisplayPrecision": null,
-      "EnabledByDefault": null,
-      "Options": null,
-      "NameSource": "parameter",
-      "Multiplier": null
-    },
-    "Category": "hub_sensor",
-    "Parameters": null,
-    "Devices": null,
-    "Unit": "",
-    "Postfix": "",
-    "VarNameContains": "SERVICE_MESSAGES",
-    "Priority": 0
-  },
-  {
-    "Description": {
-      "Key": "SUNSHINE_COUNTER",
-      "DeviceClass": "duration",
-      "StateClass": "total_increasing",
-      "EntityCategory": "",
-      "Icon": "",
-      "TranslationKey": "sunshine_counter_total",
-      "UnitOfMeasurement": "min",
-      "SuggestedDisplayPrecision": null,
-      "EnabledByDefault": null,
-      "Options": null,
-      "NameSource": "parameter",
-      "Multiplier": null
-    },
-    "Category": "hub_sensor",
-    "Parameters": null,
-    "Devices": null,
-    "Unit": "",
-    "Postfix": "",
-    "VarNameContains": "svHmIPSunshineCounter",
-    "Priority": 0
-  },
-  {
-    "Description": {
-      "Key": "SUNSHINE_COUNTER_TODAY",
-      "DeviceClass": "duration",
-      "StateClass": "total_increasing",
-      "EntityCategory": "",
-      "Icon": "",
-      "TranslationKey": "sunshine_counter_today",
-      "UnitOfMeasurement": "min",
-      "SuggestedDisplayPrecision": null,
-      "EnabledByDefault": null,
-      "Options": null,
-      "NameSource": "parameter",
-      "Multiplier": null
-    },
-    "Category": "hub_sensor",
-    "Parameters": null,
-    "Devices": null,
-    "Unit": "",
-    "Postfix": "",
-    "VarNameContains": "svHmIPSunshineCounterToday",
-    "Priority": 0
-  },
-  {
-    "Description": {
-      "Key": "SUNSHINE_COUNTER_YESTERDAY",
-      "DeviceClass": "duration",
-      "StateClass": "total_increasing",
-      "EntityCategory": "",
-      "Icon": "",
-      "TranslationKey": "sunshine_counter_yesterday",
-      "UnitOfMeasurement": "min",
-      "SuggestedDisplayPrecision": null,
-      "EnabledByDefault": null,
-      "Options": null,
-      "NameSource": "parameter",
-      "Multiplier": null
-    },
-    "Category": "hub_sensor",
-    "Parameters": null,
-    "Devices": null,
-    "Unit": "",
-    "Postfix": "",
-    "VarNameContains": "svHmIPSunshineCounterYesterday",
-    "Priority": 0
-  },
-  {
-    "Description": {
-      "Key": "SYSTEM_HEALTH",
-      "DeviceClass": "",
-      "StateClass": "measurement",
-      "EntityCategory": "diagnostic",
-      "Icon": "mdi:heart-pulse",
-      "TranslationKey": "system_health",
-      "UnitOfMeasurement": "%",
-      "SuggestedDisplayPrecision": 1,
-      "EnabledByDefault": null,
-      "Options": null,
-      "NameSource": "parameter",
-      "Multiplier": null
-    },
-    "Category": "hub_sensor",
-    "Parameters": null,
-    "Devices": null,
-    "Unit": "",
-    "Postfix": "",
-    "VarNameContains": "system_health",
     "Priority": 0
   },
   {
@@ -2054,7 +1558,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "BUTTON_LOCK",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2079,7 +1582,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2105,7 +1607,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2128,7 +1629,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2153,7 +1653,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2178,7 +1677,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2204,7 +1702,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2229,7 +1726,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2254,7 +1750,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2279,7 +1774,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2304,7 +1798,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2329,7 +1822,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2355,7 +1847,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2380,7 +1871,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2406,7 +1896,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2431,7 +1920,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2456,7 +1944,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2481,7 +1968,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2507,7 +1993,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2532,7 +2017,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2557,7 +2041,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2582,7 +2065,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2607,7 +2089,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2632,7 +2113,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2657,7 +2137,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2682,7 +2161,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2708,7 +2186,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2733,7 +2210,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2758,7 +2234,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2788,7 +2263,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2813,7 +2287,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2839,7 +2312,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2864,7 +2336,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2889,7 +2360,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2915,7 +2385,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2941,7 +2410,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2967,7 +2435,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -2992,7 +2459,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -3017,7 +2483,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -3042,7 +2507,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -3068,7 +2532,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -3093,7 +2556,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -3118,7 +2580,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -3143,7 +2604,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -3169,7 +2629,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -3194,7 +2653,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -3219,7 +2677,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -3244,7 +2701,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -3270,7 +2726,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -3295,7 +2750,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -3320,7 +2774,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -3345,7 +2798,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -3370,7 +2822,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -3395,7 +2846,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -3420,7 +2870,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -3445,7 +2894,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -3473,7 +2921,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -3498,7 +2945,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -3523,7 +2969,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -3548,7 +2993,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -3573,7 +3017,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -3599,7 +3042,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -3624,7 +3066,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -3649,7 +3090,6 @@
     "Devices": null,
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -3675,7 +3115,6 @@
     ],
     "Unit": "",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": 0
   },
   {
@@ -3698,7 +3137,6 @@
     "Devices": null,
     "Unit": "g/m³",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": -100
   },
   {
@@ -3721,7 +3159,6 @@
     "Devices": null,
     "Unit": "%",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": -100
   },
   {
@@ -3744,7 +3181,6 @@
     "Devices": null,
     "Unit": "bar",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": -100
   },
   {
@@ -3767,7 +3203,6 @@
     "Devices": null,
     "Unit": "°C",
     "Postfix": "",
-    "VarNameContains": "",
     "Priority": -100
   }
 ]
