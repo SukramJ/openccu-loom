@@ -6,6 +6,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Documentation
+
+- A security policy (`SECURITY.md`): supported versions, private
+  vulnerability reporting through GitHub, and where problems in the
+  systems OpenCCU-Loom talks to belong instead. A support guide
+  (`SUPPORT.md`) points help requests at the documentation and the issue
+  tracker and says what a useful report carries.
+
 ## [0.79.0] - 2026-09-28
 
 ### Release summary
