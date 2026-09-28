@@ -6,6 +6,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **CCU add-on: a start that does not happen no longer logs a backup
+  target.** When the openccu-lite installer ran the start script outside the
+  add-on's unit, the log first said "CCU archives go to
+  /usr/local/sdcard/backup" and only then that it would not start. The
+  script now decides whether to start before it resolves or logs anything
+  else.
+
 ## [0.80.1] - 2026-09-28
 
 ### Release summary

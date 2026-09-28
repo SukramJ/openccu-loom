@@ -170,6 +170,22 @@ stop() {
 
 start() {
   logger -t ${ADDON_ID} -p user.debug "Starting"
+  # Decided before anything else is resolved or logged, so a start that
+  # does not happen reports nothing it would have done.
+  #
+  # Without monit the supervising loop has to live in the add-on's unit,
+  # which stops it with the unit. Anywhere else nothing would: the
+  # installer runs this script as root in its own scope, and a loop started
+  # there survived the install and kept starting a second daemon as root.
+  # The platform starts the unit itself after an install.
+  if ! has_monit && ! in_addon_unit; then
+    logger -t ${ADDON_ID} -p user.info "No monit and not inside addon-${ADDON_ID}.service: the unit starts the daemon"
+    return 0
+  fi
+  if own_pid >/dev/null; then
+    logger -t ${ADDON_ID} -p user.info "Already running"
+    return 0
+  fi
   # Resolved per start, not once at script load: an operator can plug in a
   # USB stick or set CronBackupPath between two starts, and a restart is
   # what the SPA tells them a directory change needs anyway.
@@ -185,19 +201,6 @@ start() {
     logger -t ${ADDON_ID} -p user.info "No CCU backup target found, keeping archives in ${ADDON_DIR}/var/backups"
   fi
   cd ${ADDON_DIR}
-  # Without monit the supervising loop has to live in the add-on's unit,
-  # which stops it with the unit. Anywhere else nothing would: the
-  # installer runs this script as root in its own scope, and a loop started
-  # there survived the install and kept starting a second daemon as root.
-  # The platform starts the unit itself after an install.
-  if ! has_monit && ! in_addon_unit; then
-    logger -t ${ADDON_ID} -p user.info "No monit and not inside addon-${ADDON_ID}.service: the unit starts the daemon"
-    return 0
-  fi
-  if own_pid >/dev/null; then
-    logger -t ${ADDON_ID} -p user.info "Already running"
-    return 0
-  fi
   if has_monit; then
     # -b: background, -m: write the pidfile for start-stop-daemon's child.
     start-stop-daemon -S -q -b -m -p ${PIDFILE} \

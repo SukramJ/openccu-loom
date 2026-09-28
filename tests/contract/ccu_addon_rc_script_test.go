@@ -36,6 +36,19 @@ type rcScriptEnv struct {
 	// cronBackupPath is the stand-in for the CCU's CronBackupPath file,
 	// which names the operator's backup directory.
 	cronBackupPath string
+	// logFile collects every message the script hands to logger.
+	logFile string
+}
+
+func strconvQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
+
+func (e *rcScriptEnv) logged(t *testing.T) string {
+	t.Helper()
+	b, err := os.ReadFile(e.logFile)
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatalf("read logger output: %v", err)
+	}
+	return string(b)
 }
 
 // rcScriptUnitCgroup and rcScriptInstallCgroup are the cgroup v2 lines of
@@ -67,7 +80,9 @@ func newRCScriptEnvIn(t *testing.T, withMonit bool, cgroup string) *rcScriptEnv 
 	writeExecutable(t, filepath.Join(addonDir, "openccu-loom"), rcScriptFakeDaemon)
 
 	stubDir := t.TempDir()
-	writeExecutable(t, filepath.Join(stubDir, "logger"), updateScriptStub)
+	logFile := filepath.Join(stubDir, "logger.out")
+	writeExecutable(t, filepath.Join(stubDir, "logger"),
+		"#!/bin/sh\n# keep the message (the last argument) for assertions\nfor a; do m=$a; done\nprintf '%s\\n' \"$m\" >> "+strconvQuote(logFile)+"\n")
 	monit := filepath.Join(stubDir, "monit-absent")
 	if withMonit {
 		monit = filepath.Join(stubDir, "monit")
@@ -96,6 +111,7 @@ func newRCScriptEnvIn(t *testing.T, withMonit bool, cgroup string) *rcScriptEnv 
 		"LOOM_RC_CRON_BACKUP_PATH_FILE="+cronBackupPath,
 	)
 	e.cronBackupPath = cronBackupPath
+	e.logFile = logFile
 	t.Cleanup(func() {
 		// Whatever a failed assertion left running must not outlive the test.
 		for _, pid := range e.startedPIDs(t) {
@@ -307,11 +323,19 @@ func TestCCUAddonRCScriptStartsNoLoopOutsideTheUnit(t *testing.T) {
 	if _, err := os.Stat(outside.pidfile()); !os.IsNotExist(err) {
 		t.Fatalf("init in the installer's scope wrote a pidfile (stat err %v)", err)
 	}
+	// A start that does not happen reports nothing it would have done: the
+	// backup target is resolved and logged only for a real start.
+	if log := outside.logged(t); strings.Contains(log, "archives") {
+		t.Fatalf("init in the installer's scope logged a backup target:\n%s", log)
+	}
 
 	inside := newRCScriptEnvIn(t, false, rcScriptUnitCgroup)
 	inside.run(t, "init")
 	if n := len(inside.waitStarts(t, 1, 5*time.Second)); n != 1 {
 		t.Fatalf("init inside the unit started the daemon %d times, want 1", n)
+	}
+	if log := inside.logged(t); !strings.Contains(log, "archives") {
+		t.Fatalf("init inside the unit logged no backup target:\n%s", log)
 	}
 	inside.run(t, "stop")
 }
