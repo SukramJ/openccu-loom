@@ -4,6 +4,8 @@
 package contract
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"io"
 	"log/slog"
@@ -54,6 +56,16 @@ import (
 type fakeConfigReader struct{}
 
 func (fakeConfigReader) SanitizedConfig() handlers.ConfigSnapshot { return handlers.ConfigSnapshot{} }
+
+type fakeSBOMSource struct{}
+
+func (fakeSBOMSource) SBOMArchive() ([]byte, bool) {
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	_, _ = gz.Write([]byte(`{"bomFormat":"CycloneDX","specVersion":"1.6","components":[]}`))
+	_ = gz.Close()
+	return buf.Bytes(), true
+}
 
 type fakeSelfPasswordService struct{}
 
@@ -632,6 +644,7 @@ func fullyWiredRouterDeps() rest.Deps {
 	}
 	return rest.Deps{
 		StartedAt:               time.Now(),
+		SBOM:                    fakeSBOMSource{},
 		Config:                  fakeConfigReader{},
 		SelfPassword:            fakeSelfPasswordService{},
 		Preferences:             fakePreferencesService{},

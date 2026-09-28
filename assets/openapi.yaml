@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 12.0.0
+  version: 12.1.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -58,6 +58,40 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Info" }
+
+  /sbom:
+    get:
+      operationId: getSBOM
+      tags: [core]
+      summary: Software bill of materials of this build
+      description: |
+        The CycloneDX 1.6 SBOM the release build embeds: the Go module
+        graph of the daemon plus the npm dependency tree of the embedded
+        Config UI, with license identifiers. The web UI's Licenses page
+        renders it; `?download=1` adds a Content-Disposition so a browser
+        saves it as a file. A development build carries no SBOM and
+        answers 404 — that is a property of the build, not an error state
+        a client should retry.
+      parameters:
+        - name: download
+          in: query
+          required: false
+          schema: { type: string }
+          description: When set, the response carries a Content-Disposition attachment header.
+      responses:
+        "200":
+          description: The embedded SBOM (CycloneDX JSON).
+          content:
+            application/json:
+              schema:
+                type: object
+                description: CycloneDX 1.6 document; shape governed by the CycloneDX spec, not this contract.
+                additionalProperties: true
+        "404":
+          description: This build was produced without an SBOM.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
 
   /health:
     get:

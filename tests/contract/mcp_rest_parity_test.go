@@ -117,6 +117,13 @@ func TestMCPExemptionsAreStillReal(t *testing.T) {
 // failure list until a tool exists.
 var restDomainsWithoutMCPTools = map[string]string{
 	"auth": "credential exchange; an assistant authenticates through its own token, never by driving the login flow",
+	// The SBOM is a licence-compliance document for the Licenses page and
+	// for audit tooling that speaks CycloneDX over HTTP. It answers no
+	// operational question about devices or the daemon's state, and
+	// projecting a megabyte-scale dependency inventory through a tool
+	// result serves no assistant task; an auditor's client fetches
+	// GET /sbom with a token directly.
+	"sbom": "licence-compliance artifact, not an operational surface; CycloneDX consumers fetch the REST route directly",
 	// Not session identity — /auth/me lives in the auth domain. This one is
 	// the per-user preferences store (GET/PUT/DELETE /me/preferences/{key}),
 	// which records how one operator arranged their own UI. An assistant has

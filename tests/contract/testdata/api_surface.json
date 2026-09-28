@@ -1,5 +1,5 @@
 {
- "api_version": "12.0.0",
+ "api_version": "12.1.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -142,6 +142,7 @@
   "GET /programs": "listPrograms",
   "GET /programs/{id}": "getProgram",
   "GET /rooms": "listRooms",
+  "GET /sbom": "getSBOM",
   "GET /schedules": "listSchedules",
   "GET /security": "getSecuritySnapshot",
   "GET /security/classes/{class}": "getSecurityClass",

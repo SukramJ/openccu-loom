@@ -34,6 +34,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/rest/middleware"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 	"github.com/SukramJ/openccu-loom/internal/north/ui"
+	"github.com/SukramJ/openccu-loom/internal/sbom"
 	"github.com/SukramJ/openccu-loom/internal/security"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -399,6 +400,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		CacheReset:      d.cacheResetSvc,
 		EditSessions:    d.editSessions,
 		WSHandler:       d.wsHandler,
+		SBOM:            sbom.Embedded{},
 		AuthResolve:     d.restResolve,
 		AuthRequire:     d.authMw.Require,
 		RequireOperator: func(next http.Handler) http.Handler {
