@@ -8,6 +8,11 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Documentation
 
+- A privacy page (`docs/privacy.md`): every connection the daemon opens
+  by itself, field by field, with its switch — and the requests towards
+  the internet are pinned by a test
+  (`internal/addonupdate/outbound_test.go`), so a change to what leaves
+  the daemon is a failing test that names this page.
 - A security policy (`SECURITY.md`): supported versions, private
   vulnerability reporting through GitHub, and where problems in the
   systems OpenCCU-Loom talks to belong instead. A support guide
