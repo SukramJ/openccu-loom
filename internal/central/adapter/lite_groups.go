@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
@@ -27,9 +26,7 @@ var errLiteGroupMembers = fmt.Errorf("openccu-lite heating groups: the member fo
 
 // liteHeatingGroups is an openccu-lite central's heating-group port over
 // the box's groups API: the group list, the group types and deleting a
-// group. The ids are the box's; one that is not numeric cannot be
-// addressed through the numeric group ids the daemon uses and is reported
-// as an error rather than renumbered.
+// group. The box numbers its groups, so its ids are the daemon's.
 type liteHeatingGroups struct {
 	*liteSystem
 }
@@ -46,11 +43,7 @@ func (g liteHeatingGroups) List(ctx context.Context) ([]group.Group, error) {
 	}
 	out := make([]group.Group, 0, len(ans.Groups))
 	for _, lg := range ans.Groups {
-		id, err := strconv.Atoi(lg.ID)
-		if err != nil {
-			return nil, fmt.Errorf("openccu-lite heating group %q: the id is not numeric: %w", lg.ID, backends.ErrUnsupported)
-		}
-		out = append(out, group.Group{ID: id, Name: lg.Name, TypeID: lg.Type, TypeLabel: lg.TypeLabel})
+		out = append(out, group.Group{ID: lg.ID, Name: lg.Name, TypeID: lg.Type, TypeLabel: lg.TypeLabel})
 	}
 	return out, nil
 }
@@ -100,7 +93,7 @@ func (g liteHeatingGroups) Delete(ctx context.Context, id int) error {
 	if err := g.require(hmenum.FeatureHeatingGroupsWrite, backends.ErrUnsupported); err != nil {
 		return err
 	}
-	_, err := g.client.DeleteGroup(ctx, strconv.Itoa(id))
+	_, err := g.client.DeleteGroup(ctx, id)
 	if errors.Is(err, occulited.ErrUnknownGroup) {
 		return fmt.Errorf("%w: %d", hmerr.ErrGroupNotFound, id)
 	}

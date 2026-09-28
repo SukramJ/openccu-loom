@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"slices"
-	"strconv"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
@@ -48,10 +47,7 @@ func TestLiteGroupsCRUD(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateGroup on the box: %v", err)
 	}
-	id, err := strconv.Atoi(created.ID)
-	if err != nil {
-		t.Fatalf("the fake's group id %q is not numeric: %v", created.ID, err)
-	}
+	id := created.ID
 	listed, err := d.List(ctx, "box")
 	if err != nil {
 		t.Fatalf("List: %v", err)

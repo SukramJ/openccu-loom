@@ -174,7 +174,7 @@ func TestGroupsCRUD(t *testing.T) {
 		t.Fatalf("types %+v %v", types, err)
 	}
 	created, err := c.CreateGroup(ctx, occulited.GroupCreate{Name: "OG", Type: types.Types[1].ID, Members: []string{"VCU2128127"}})
-	if err != nil || created.ID == "" || created.Ref != "VirtualDevices."+created.Device {
+	if err != nil || created.ID == 0 || created.Ref != "VirtualDevices."+created.Device {
 		t.Fatalf("create %+v %v", created, err)
 	}
 	name := "Obergeschoss"
@@ -199,5 +199,48 @@ func TestGroupsCRUD(t *testing.T) {
 	var apiErr *occulited.APIError
 	if !errors.As(err, &apiErr) || apiErr.Code != "unknown-group" {
 		t.Errorf("deleted group: %v", err)
+	}
+}
+
+// boxGroupsAnswer is the shape a real openccu-lite box answers GET /groups
+// and GET /groups/types with (occulited 1.0.0-dev.30, read on 2026-09-28;
+// names and addresses neutralised): group ids are JSON numbers, and a
+// candidate member is an object naming a channel address.
+const boxGroupsAnswer = `{"devices_to_configure":[],"groups":[
+ {"id":4,"name":"Upstairs","type":"hmip.heating.group","type_label":"HmIP-Heizungssteuerung","device":"INT0000004","ref":"VirtualDevices.INT0000004"},
+ {"id":5,"name":"Downstairs","type":"HomeMatic.heating","type_label":"Heating_Control","device":"INT0000005","ref":"VirtualDevices.INT0000005"}]}`
+
+const boxGroupTypesAnswer = `{"types":[
+ {"id":"HomeMatic.heating","label":"Heating_Control","assignable":[],"leftover":[]},
+ {"id":"hmip.heating.group","label":"HmIP-Heizungssteuerung","assignable":[
+  {"id":"0000000000AA01:1","serial":"0000000000AA01:1","type":"SENSOR_WINDOW"}],"leftover":[]}]}`
+
+// TestGroupsDecodeTheBoxShape pins the groups answers to what a real box
+// sends. The fake answered string ids, which is why a client decoding them
+// as strings passed every test and failed against the first box.
+func TestGroupsDecodeTheBoxShape(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/system/v1/groups":
+			_, _ = io.WriteString(w, boxGroupsAnswer)
+		case "/api/system/v1/groups/types":
+			_, _ = io.WriteString(w, boxGroupTypesAnswer)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	c := newClient(t, srv.URL, "t")
+	list, err := c.Groups(context.Background())
+	if err != nil {
+		t.Fatalf("Groups: %v", err)
+	}
+	if len(list.Groups) != 2 || list.Groups[0].ID != 4 || list.Groups[1].ID != 5 || list.Groups[0].Name != "Upstairs" {
+		t.Errorf("groups %+v", list.Groups)
+	}
+	types, err := c.GroupTypes(context.Background())
+	if err != nil || len(types.Types) != 2 || len(types.Types[1].Assignable) != 1 {
+		t.Errorf("types %+v %v", types, err)
 	}
 }

@@ -6,6 +6,7 @@ package litefake_test
 import (
 	"bytes"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -143,9 +144,9 @@ func TestSystemGroupsLifecycle(t *testing.T) {
 		!strings.Contains(string(raw), `"devices_to_configure":[]`) {
 		t.Fatalf("create: %d %s", resp.StatusCode, raw)
 	}
-	id := decode[struct {
-		ID string `json:"id"`
-	}](t, string(raw)).ID
+	id := strconv.Itoa(decode[struct {
+		ID int `json:"id"`
+	}](t, string(raw)).ID)
 	if resp, raw := send(t, f, http.MethodPost, "/api/system/v1/groups", tok, `{"name":"a\nb","type":"hmip.heating.group"}`); resp.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(string(raw), `"field":"name"`) {
 		t.Errorf("two-line name: %d %s", resp.StatusCode, raw)
 	}
