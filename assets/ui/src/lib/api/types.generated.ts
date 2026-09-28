@@ -21,6 +21,85 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sbom": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Software bill of materials of this build
+         * @description The CycloneDX 1.6 SBOM the release build embeds: the Go module
+         *     graph of the daemon plus the npm dependency tree of the embedded
+         *     Config UI, with license identifiers. The web UI's Licenses page
+         *     renders it; `?download=1` adds a Content-Disposition so a browser
+         *     saves it as a file. A development build carries no SBOM and
+         *     answers 404 — that is a property of the build, not an error state
+         *     a client should retry.
+         */
+        get: operations["getSBOM"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/warnings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Operator warnings, with the caller's silences
+         * @description One server-side aggregate over the daemon's diagnostic surfaces:
+         *     unhealthy or degraded health components, error-grade incidents of
+         *     the last 24 hours (grouped per component), and per-central
+         *     service-message backlogs. `message_key` names the UI catalogue
+         *     entry that renders the row and `args` carries its interpolation
+         *     values, so the daemon stays the naming authority. Each row says
+         *     whether the CALLING user silenced it; silences of other users are
+         *     invisible here.
+         */
+        get: operations["listWarnings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/warnings/{id}/silence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The warning's stable id, e.g. `health:mqtt`. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Mute one active warning for the calling user
+         * @description The silence ends after `days`, or earlier when the warning's
+         *     condition clears — a re-occurrence must alert again. Silencing a
+         *     warning that is not currently active answers 404.
+         */
+        put: operations["silenceWarning"];
+        post?: never;
+        /** Remove the calling user's silence for one warning */
+        delete: operations["unsilenceWarning"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -5781,6 +5860,34 @@ export interface components {
                 max?: unknown;
             }[];
         };
+        WarningSilenceRequest: {
+            /**
+             * @description How long the warning stays muted for the calling user.
+             * @enum {integer}
+             */
+            days: 1 | 7 | 90;
+        };
+        Warning: {
+            /** @description Stable id, `<source>:<key>` (e.g. `health:mqtt`, `incident:xmlrpc`, `servicemsg:ccu1`). */
+            id: string;
+            /** @enum {string} */
+            severity: "warning" | "error";
+            /** @description Set when the warning belongs to one central. */
+            central?: string;
+            /** @description UI catalogue key that renders this row. */
+            message_key: string;
+            /** @description Interpolation values for `message_key`. */
+            args?: {
+                [key: string]: string;
+            };
+            /** @description Whether the CALLING user silenced this warning. */
+            silenced: boolean;
+            /** Format: date-time */
+            silenced_until?: string;
+        };
+        WarningList: {
+            items: components["schemas"]["Warning"][];
+        };
         /**
          * @description Daemon build + runtime info plus a wire-contract version and a
          *     capability list. External clients should switch on
@@ -11002,6 +11109,124 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Info"];
                 };
+            };
+        };
+    };
+    getSBOM: {
+        parameters: {
+            query?: {
+                /** @description When set, the response carries a Content-Disposition attachment header. */
+                download?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The embedded SBOM (CycloneDX JSON). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description This build was produced without an SBOM. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listWarnings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The active warnings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WarningList"];
+                };
+            };
+        };
+    };
+    silenceWarning: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The warning's stable id, e.g. `health:mqtt`. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WarningSilenceRequest"];
+            };
+        };
+        responses: {
+            /** @description Silenced. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid period or body. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description No active warning with this id. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    unsilenceWarning: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The warning's stable id, e.g. `health:mqtt`. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unsilenced (idempotent). */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

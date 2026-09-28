@@ -185,6 +185,14 @@ export async function mockAllApis(page: Page): Promise<void> {
     route.fulfill({ json: fixture('incidents.json') }),
   );
 
+  // Warnings - more specific routes FIRST
+  await page.route('**/api/v1/warnings/**', (route) =>
+    route.fulfill({ status: 204 }),
+  );
+  await page.route('**/api/v1/warnings', (route) =>
+    route.fulfill({ json: fixture('warnings.json') }),
+  );
+
   // Diagnostics - more specific routes FIRST
   await page.route('**/api/v1/diagnostics/log-levels/**', (route) =>
     route.fulfill({ status: 200 }),

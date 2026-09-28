@@ -51,6 +51,7 @@ type fixtureRoute struct {
 var fixtureRoutes = []fixtureRoute{
 	{"auth-me.json", "/auth/me", "GET"},
 	{"sbom.json", "/sbom", "GET"},
+	{"warnings.json", "/warnings", "GET"},
 	{"restart-pending.json", "/system/restart-pending", "GET"},
 	{"startup-capture.json", "/system/startup-capture", "GET"},
 	{"config-changes.json", "/system/config-changes", "GET"},

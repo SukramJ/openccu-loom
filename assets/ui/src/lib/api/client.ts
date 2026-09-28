@@ -78,6 +78,7 @@ import type {
   DiagramWriteRequest,
   SystemCCUEntry,
   UISchema,
+  Warning,
 } from "./types";
 import type {
   MatterBulkUpdateRequest,
@@ -1159,6 +1160,23 @@ export const api = {
   },
   incidents() {
     return request<Incident[] | null>(`/incidents`).then((v) => v ?? []);
+  },
+  getWarnings() {
+    return request<{ items: Warning[] }>(`/warnings`).then(
+      (v) => v.items ?? [],
+    );
+  },
+  silenceWarning(id: string, days: 1 | 7 | 90) {
+    return request<void>(`/warnings/${encodeURIComponent(id)}/silence`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ days }),
+    });
+  },
+  unsilenceWarning(id: string) {
+    return request<void>(`/warnings/${encodeURIComponent(id)}/silence`, {
+      method: "DELETE",
+    });
   },
   // --- Diagnostics --------------------------------------------
   diagnostics(anonymize: boolean = true) {

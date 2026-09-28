@@ -19,6 +19,9 @@ const {
   mockGetReliability,
   mockGetValuesCacheStats,
   mockResetValuesCache,
+  mockGetWarnings,
+  mockSilenceWarning,
+  mockUnsilenceWarning,
   mockToastSuccess,
   mockToastError,
   mockConfirmAsk,
@@ -33,6 +36,9 @@ const {
   mockGetReliability: vi.fn(),
   mockGetValuesCacheStats: vi.fn(),
   mockResetValuesCache: vi.fn(),
+  mockGetWarnings: vi.fn(),
+  mockSilenceWarning: vi.fn(),
+  mockUnsilenceWarning: vi.fn(),
   mockToastSuccess: vi.fn(),
   mockToastError: vi.fn(),
   mockConfirmAsk: vi.fn(),
@@ -50,6 +56,9 @@ vi.mock("$lib/api/client", () => ({
     getReliability: (...args: unknown[]) => mockGetReliability(...args),
     getValuesCacheStats: (...args: unknown[]) => mockGetValuesCacheStats(...args),
     resetValuesCache: (...args: unknown[]) => mockResetValuesCache(...args),
+    getWarnings: (...args: unknown[]) => mockGetWarnings(...args),
+    silenceWarning: (...args: unknown[]) => mockSilenceWarning(...args),
+    unsilenceWarning: (...args: unknown[]) => mockUnsilenceWarning(...args),
     captureDownloadURL: () => "",
     rpcRecordingDownloadUrl: () => "",
   },
@@ -103,6 +112,9 @@ beforeEach(() => {
     flush_batches: 0,
     flushed_entries: 0,
   });
+  mockGetWarnings.mockResolvedValue([]);
+  mockSilenceWarning.mockResolvedValue(undefined);
+  mockUnsilenceWarning.mockResolvedValue(undefined);
   mockConfirmAsk.mockResolvedValue(true);
 });
 
@@ -462,5 +474,122 @@ describe("Diagnostics — RPC recording poll", () => {
     await vi.advanceTimersByTimeAsync(11000);
 
     expect(mockListRpcRecordings.mock.calls.length).toBeGreaterThan(afterLoad);
+  });
+});
+
+describe("Diagnostics — warnings panel", () => {
+  it("renders an unsilenced warning with its message and silence actions", async () => {
+    mockGetWarnings.mockResolvedValue([
+      {
+        id: "health:mqtt",
+        severity: "error",
+        message_key: "warnings.health.unhealthy",
+        args: { component: "mqtt" },
+        silenced: false,
+      },
+    ]);
+    render(Diagnostics);
+
+    await waitFor(() => expect(mockGetWarnings).toHaveBeenCalled());
+    await waitFor(() => {
+      // t() is stubbed to echo the raw key for anything outside the
+      // partial catalogue, so the unresolved message_key is what renders.
+      expect(screen.getByText("warnings.health.unhealthy")).toBeInTheDocument();
+    });
+    expect(
+      screen.getByText("diagnostics.warnings.silence_days_1"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("diagnostics.warnings.silence_days_7"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("diagnostics.warnings.silence_days_90"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("diagnostics.warnings.unsilence"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("silences a warning for the chosen period, toasts and reloads the list", async () => {
+    mockGetWarnings.mockResolvedValue([
+      {
+        id: "incident:xmlrpc",
+        severity: "warning",
+        message_key: "warnings.incidents",
+        args: { component: "xmlrpc", count: "3" },
+        silenced: false,
+      },
+    ]);
+    render(Diagnostics);
+    await waitFor(() => expect(mockGetWarnings).toHaveBeenCalled());
+
+    const button = await waitFor(() => {
+      const btn = screen.getByText(
+        "diagnostics.warnings.silence_days_7",
+      ) as HTMLButtonElement;
+      expect(btn.disabled).toBe(false);
+      return btn;
+    });
+    await fireEvent.click(button);
+
+    await waitFor(() =>
+      expect(mockSilenceWarning).toHaveBeenCalledWith("incident:xmlrpc", 7),
+    );
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledTimes(1));
+    expect(mockToastError).not.toHaveBeenCalled();
+    // The list is reloaded after a successful silence.
+    expect(mockGetWarnings).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows an already-silenced warning dimmed with an unsilence action", async () => {
+    mockGetWarnings.mockResolvedValue([
+      {
+        id: "servicemsg:ccu-test",
+        severity: "warning",
+        central: "ccu-test",
+        message_key: "warnings.service_messages",
+        args: { central: "ccu-test", count: "2" },
+        silenced: true,
+        silenced_until: "2026-02-01T09:00:00Z",
+      },
+    ]);
+    render(Diagnostics);
+    await waitFor(() => expect(mockGetWarnings).toHaveBeenCalled());
+
+    const unsilenceButton = await waitFor(() => {
+      const btn = screen.getByText(
+        "diagnostics.warnings.unsilence",
+      ) as HTMLButtonElement;
+      expect(btn.disabled).toBe(false);
+      return btn;
+    });
+    expect(
+      screen.queryByText("diagnostics.warnings.silence_days_1"),
+    ).not.toBeInTheDocument();
+
+    await fireEvent.click(unsilenceButton);
+
+    await waitFor(() =>
+      expect(mockUnsilenceWarning).toHaveBeenCalledWith("servicemsg:ccu-test"),
+    );
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledTimes(1));
+    expect(mockGetWarnings).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows an error with retry when the warnings read fails", async () => {
+    mockGetWarnings.mockRejectedValueOnce(new Error("warnings read failed"));
+    render(Diagnostics);
+
+    await waitFor(() => {
+      expect(screen.getByText(/warnings read failed/)).toBeInTheDocument();
+    });
+
+    mockGetWarnings.mockResolvedValueOnce([]);
+    const retryButtons = screen.getAllByText("common.reload");
+    retryButtons[retryButtons.length - 1].dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    );
+
+    await waitFor(() => expect(mockGetWarnings).toHaveBeenCalledTimes(2));
   });
 });
