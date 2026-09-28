@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 535.
+Guards without a doc comment: 7 of 537.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -50,6 +50,8 @@ Guards without a doc comment: 7 of 535.
 | TestContractCatalogueIsComplete | catalogue_test.go | TestContractCatalogueIsComplete holds that tests/contract/README.md lists exactly the exported TestXxx functions that exist under tests/contract/ — no guard undocumented in the catalogue, no catalogue entry pointing at a guard that no longer exists. |
 | TestCCUAddonRegistersControlPanelEntry | ccu_addon_control_panel_entry_test.go | TestCCUAddonRegistersControlPanelEntry pins how the add-on claims its tile in the CCU's "Systemsteuerung": the platform helper by its real name, plus the underlying HomeMatic Tcl API as the fallback for firmware that predates the helper. |
 | TestCCUAddonUpdateScriptWarnsWithoutControlPanelHelper | ccu_addon_control_panel_entry_test.go | TestCCUAddonUpdateScriptWarnsWithoutControlPanelHelper verifies the miss is LOUD: on firmware that offers neither the helper nor a Tcl interpreter the install still succeeds (the daemon does not need the tile), but it says so rather than leaving the operator with a silently tile-less install — the exact failure mode that hid the wrong helper name. |
+| TestCCUAddonRCScriptRestartsTheDaemonWithoutMonit | ccu_addon_rc_script_test.go | TestCCUAddonRCScriptRestartsTheDaemonWithoutMonit pins what the SPA's "Restart" relies on where no monit runs (openccu-lite): the daemon SIGTERMs itself and the rc.d script must start it again. |
+| TestCCUAddonRCScriptStopIgnoresAStalePidfile | ccu_addon_rc_script_test.go | TestCCUAddonRCScriptStopIgnoresAStalePidfile pins the failure seen on openccu-lite: the pidfile was left by a root-run install and named a PID that no longer belonged to the daemon. |
 | TestCCUAddonUpdateScriptExitCodeContract | ccu_addon_update_script_test.go | TestCCUAddonUpdateScriptExitCodeContract locks the exit-code contract OpenCCU's /bin/install_addon relies on: 0 means "installed without reboot", 10 means "reboot required" and anything else means the platform identifier ($1) was rejected outright. |
 | TestCentralLinksEligibilityMatchesDeviceRule | central_links_eligibility_test.go | TestCentralLinksEligibilityMatchesDeviceRule pins the dispatching adapter to the domain rule it claims to follow. |
 | TestCentralLinksVirtualRemoteReasonNamesTheModel | central_links_eligibility_test.go | TestCentralLinksVirtualRemoteReasonNamesTheModel pins the operator-visible reason token. |
