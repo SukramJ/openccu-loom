@@ -531,6 +531,14 @@ func TestStoreMethodsHaveCentralNameAsFirstNonCtxParam(t *testing.T) {
 		// is a global time-based delete over the expiry. See ADR 0041.
 		"AuthSessionStore:DeleteSession":         "reason: auth_sessions is daemon-global (one auth realm); session id is the natural key",
 		"AuthSessionStore:DeleteExpiredSessions": "reason: auth_sessions purge is a global time-based delete across the one auth realm; central scoping would be incorrect",
+		// Warning silences are per-USER, not per-CCU: the natural key is
+		// (username, warning_id), and a warning id carries its central
+		// segment where one applies (servicemsg:<central>). DeleteExpired
+		// is a global time-based purge; DeleteOtherThan prunes one user's
+		// rows against the currently active warning set.
+		"WarningSilenceStore:Delete":          "reason: silences are keyed (username, warning_id); the central lives inside warning_id where it applies",
+		"WarningSilenceStore:DeleteExpired":   "reason: global time-based purge over per-user silences; the central lives inside warning_id where it applies",
+		"WarningSilenceStore:DeleteOtherThan": "reason: per-user prune against the active warning set; silences are keyed (username, warning_id), never by central",
 		// Measurement-history retention is a time-based purge over the one
 		// history.db file: it drops every row older than the cutoff
 		// regardless of central. Per-central scoping would be wrong — the

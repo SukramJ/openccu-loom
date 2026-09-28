@@ -37,6 +37,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/sbom"
 	"github.com/SukramJ/openccu-loom/internal/security"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/internal/warnings"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmlog"
 )
@@ -109,6 +110,9 @@ type restMountDeps struct {
 	hubAdapter          *adapter.HubAdapter
 	ifaceAdapter        *adapter.InterfacesAdapter
 	incidents           handlers.IncidentsReader
+	// warningsSvc backs GET /warnings (+ per-user silences) and the MCP
+	// list_warnings tool; the concrete type serves both narrow views.
+	warningsSvc *warnings.Aggregator
 	// alarm is the daemon-level alarm service backing the /alarm surface.
 	// It may be a nil *alarm.Service (subsystem disabled or failed to
 	// start); alarmPanelFrom converts that to a nil interface so the
@@ -401,6 +405,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		EditSessions:    d.editSessions,
 		WSHandler:       d.wsHandler,
 		SBOM:            sbom.Embedded{},
+		Warnings:        d.warningsSvc,
 		AuthResolve:     d.restResolve,
 		AuthRequire:     d.authMw.Require,
 		RequireOperator: func(next http.Handler) http.Handler {
@@ -776,6 +781,7 @@ func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, loginLim
 		Taxonomy:     registryTaxonomy{reg: d.reg},
 		Audit:        d.auditRec,
 		Incidents:    d.incidents,
+		Warnings:     d.warningsSvc,
 		Alarm:        mcpAlarmSeam(d),
 		AlarmControl: mcpAlarmControlSeam(d),
 		Security:     mcpSecuritySeam(d),

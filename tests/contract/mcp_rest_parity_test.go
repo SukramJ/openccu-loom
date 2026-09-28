@@ -19,6 +19,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/mcp"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/internal/warnings"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -302,6 +303,7 @@ func fullyWiredMCPDeps() mcp.Deps {
 		Taxonomy:     fakeTaxonomySource{},
 		Audit:        mcpParityAuditRecorder{},
 		Incidents:    fakeIncidentsReader{},
+		Warnings:     mcpParityWarnings{},
 		Alarm:        mcpParityAlarm{},
 		AlarmControl: mcpParityAlarm{},
 		Security:     mcpParitySecurity{},
@@ -319,6 +321,11 @@ func fullyWiredMCPDeps() mcp.Deps {
 		AllowWrites:  true,
 	}
 }
+
+// mcpParityWarnings satisfies the warnings read seam.
+type mcpParityWarnings struct{}
+
+func (mcpParityWarnings) Active() []warnings.Warning { return nil }
 
 // mcpParityFleet satisfies the eight fleet read seams at once. They were
 // the declared MCP/REST parity backlog until the tools landed; one type

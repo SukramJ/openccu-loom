@@ -28,6 +28,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/internal/warnings"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -162,6 +163,13 @@ type IncidentsReader interface {
 	Incidents() []hmapi.Incident
 }
 
+// WarningsSource is the narrow facade list_warnings reads —
+// *warnings.Aggregator satisfies it, so MCP and REST expose the same
+// aggregate.
+type WarningsSource interface {
+	Active() []warnings.Warning
+}
+
 // MatterStatusReader is an alias for the narrow facade GET
 // /matter/status reads through (internal/north/rest/handlers). Reusing
 // it rather than declaring a second copy keeps the two adapters
@@ -274,6 +282,10 @@ type Deps struct {
 	Features  FeatureChecker
 	Audit     audit.Recorder
 	Incidents IncidentsReader
+	// Warnings serves the operator warning aggregate (list_warnings).
+	// The tool reads the active set without per-user silences — an
+	// assistant has no silence list of its own. Nil disables the tool.
+	Warnings WarningsSource
 	// EditLocks gates MASTER/LINK paramset writes through write_paramset
 	// on holding the edit lock, exactly as the REST and WS siblings do,
 	// and backs the open_edit_session / close_edit_session tools that

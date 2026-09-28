@@ -1,5 +1,5 @@
 {
- "api_version": "12.1.0",
+ "api_version": "12.2.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -29,6 +29,7 @@
   "DELETE /sysvars/{name}": "deleteSysvar",
   "DELETE /taxonomy/{central}/{enum}/nodes": "deleteTaxonomyNode",
   "DELETE /users/{subject}": "deleteUser",
+  "DELETE /warnings/{id}/silence": "unsilenceWarning",
   "GET /admin/values-cache/stats": "getValuesCacheStats",
   "GET /alarm-messages": "listAlarmMessages",
   "GET /alarm/codes": "listAlarmCodes",
@@ -169,6 +170,7 @@
   "GET /users": "listUsersV2",
   "GET /visibility/unignore": "listVisibilityUnIgnore",
   "GET /visibility/unignore/candidates": "listVisibilityUnIgnoreCandidates",
+  "GET /warnings": "listWarnings",
   "PATCH /auth/me/password": "changeOwnPassword",
   "PATCH /devices/{addr}": "patchDevice",
   "PATCH /devices/{addr}/channels/{no}": "patchChannel",
@@ -305,7 +307,8 @@
   "PUT /system/startup-capture": "putStartupCapture",
   "PUT /sysvars/{name}": "putSysvar",
   "PUT /ui/surfaces": "putUISurfaces",
-  "PUT /visibility/unignore": "updateVisibilityUnIgnore"
+  "PUT /visibility/unignore": "updateVisibilityUnIgnore",
+  "PUT /warnings/{id}/silence": "silenceWarning"
  },
  "schemas": {
   "AcceptInboxDeviceRequest": [
@@ -2593,6 +2596,21 @@
   ],
   "VisibilityConfig": [
    "un_ignore:array\u003cstring\u003e"
+  ],
+  "Warning": [
+   "args:object",
+   "central:string",
+   "id:string",
+   "message_key:string",
+   "severity:string",
+   "silenced:boolean",
+   "silenced_until:string"
+  ],
+  "WarningList": [
+   "items:array\u003c$ref:Warning\u003e"
+  ],
+  "WarningSilenceRequest": [
+   "days:integer"
   ],
   "WebhookProgramRequest": [
    "central:string",

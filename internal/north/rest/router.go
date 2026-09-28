@@ -55,7 +55,11 @@ type Deps struct {
 	// (internal/sbom). The route mounts regardless; a nil source or a
 	// build without an embedded archive answers 404, which the Licenses
 	// page reports as "this build carries no SBOM".
-	SBOM        handlers.SBOMSource
+	SBOM handlers.SBOMSource
+	// Warnings backs the operator warning list (GET /warnings) and its
+	// per-user silences. Nil serves an empty list and refuses silences
+	// with 503.
+	Warnings    handlers.WarningsPort
 	Devices     handlers.DeviceIndex
 	DeviceAdmin handlers.DeviceAdmin
 	// Onboarding backs the probe and client-pairing routes under
@@ -835,6 +839,11 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			// build without an embedded archive, and the distinction
 			// "dev build" vs "wrong path" is carried in the problem body.
 			pr.Get("/sbom", handlers.SBOM(d.SBOM))
+			// Operator warnings + per-user silences. Mounts regardless;
+			// a nil service degrades as the field's doc comment says.
+			pr.Get("/warnings", handlers.ListWarnings(d.Warnings))
+			pr.Put("/warnings/{id}/silence", handlers.SilenceWarning(d.Warnings))
+			pr.Delete("/warnings/{id}/silence", handlers.UnsilenceWarning(d.Warnings))
 			// Device-type icon proxy. The artwork itself is not sensitive,
 			// but the route answers differently for a known and an unknown
 			// address, so serving it pre-auth turned it into an

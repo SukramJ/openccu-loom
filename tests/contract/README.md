@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 533.
+Guards without a doc comment: 7 of 534.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -537,6 +537,7 @@ Guards without a doc comment: 7 of 533.
 | TestCCUProfileAttachRegistersCallbackRoute | wiring_pins/south_profile_events_test.go | TestCCUProfileAttachRegistersCallbackRoute pins that the composition entry point attaches a CCU central's inbound events through its south profile: the per-central route on the shared XML-RPC callback server answers as soon as the central is wired (before the CCU is even ready — the route is permanent and precedes every announcement), and it is gone after the manager tears the central down. |
 | TestWireCentralsGatesOnProfileReadiness | wiring_pins/south_profile_readiness_test.go | TestWireCentralsGatesOnProfileReadiness pins that the boot bring-up built by the real composition entry point waits on the central's south-profile readiness before it touches the system. |
 | TestUnscopedDiscoveryCleanupRunsBeforeTheInitialSnapshot | wiring_pins/unscoped_discovery_cleanup_order_test.go | TestUnscopedDiscoveryCleanupRunsBeforeTheInitialSnapshot pins the one property that makes the sweep work at all: it clears retained discovery configs whose entity id carries an empty CCU-serial slot, and the snapshot is what re-announces those entities under a corrected id. |
+| TestWarningsSilenceRoundTripThroughTheRouter | wiring_pins/warnings_silence_roundtrip_test.go | TestWarningsSilenceRoundTripThroughTheRouter pins the whole collaboration the way production wires it: the warnings aggregator over a health source, the sqlite silence store, and the REST routes behind the real auth middleware. |
 | TestEveryWiringSetterHasAProductionCaller | wiring_setter_callers_test.go | TestEveryWiringSetterHasAProductionCaller asserts that every method which injects a collaborator is actually called by production code. |
 | TestWSBroadcastsHaveProductionEmitter | ws_broadcast_emitter_test.go | TestWSBroadcastsHaveProductionEmitter asserts every `kind: "broadcast"` entry in assets/wsapi.json has a wiring-table entry in wsBroadcastEmitters, that the entry's files exist and contain every required token, and — where a typed Go wire constant is available — that the constant's value equals the schema's broadcast name. |
 | TestWSCentralStateBroadcastReachesHub | ws_broadcast_roundtrip_test.go | TestWSCentralStateBroadcastReachesHub is the round-trip half of the WS broadcast contract for "central.state_changed": a real central state transition, driven through the real state machine, must produce a real entry in the hub's replay buffer — not merely a token in source text. |

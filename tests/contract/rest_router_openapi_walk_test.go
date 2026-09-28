@@ -37,6 +37,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	securitypkg "github.com/SukramJ/openccu-loom/internal/security"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/internal/warnings"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmlog"
@@ -645,6 +646,7 @@ func fullyWiredRouterDeps() rest.Deps {
 	return rest.Deps{
 		StartedAt:               time.Now(),
 		SBOM:                    fakeSBOMSource{},
+		Warnings:                warnings.New(nil, nil, nil, nil, nil),
 		Config:                  fakeConfigReader{},
 		SelfPassword:            fakeSelfPasswordService{},
 		Preferences:             fakePreferencesService{},
