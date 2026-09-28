@@ -2528,36 +2528,6 @@ func TestIsMotionDeviceClass(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// varNameMatches — 66 % covered; missing the contains-false branch.
-// ---------------------------------------------------------------------------
-
-func TestVarNameMatches(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		needle   string
-		haystack string
-		want     bool
-	}{
-		// Empty needle → always true.
-		{"", "anything", true},
-		{"", "", true},
-		// Needle found (case-insensitive).
-		{"power", "POWER", true},
-		{"POWER", "power_sensor_1", true},
-		// Needle NOT found.
-		{"temperature", "humidity_sensor", false},
-		{"xyz", "abcdef", false},
-	}
-	for _, c := range cases {
-		got := varNameMatches(c.needle, c.haystack)
-		if got != c.want {
-			t.Errorf("varNameMatches(%q, %q) = %v, want %v", c.needle, c.haystack, got, c.want)
-		}
-	}
-}
-
-// ---------------------------------------------------------------------------
 // resolveSensorDeviceClass / resolveSensorStateClass / resolveSwitchDeviceClass
 // — each at 75 %; missing the QuantityNone / ValueBehaviorNone branch.
 // ---------------------------------------------------------------------------

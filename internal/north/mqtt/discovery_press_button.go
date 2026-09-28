@@ -150,7 +150,7 @@ func (c pressButtonDiscoveryContext) ObjectID(*hamodel.Device, hamodel.Entity) s
 func describePressButtonFromRegistry(
 	desc *hamodel.Description, component, parameter, model, unit, postfix string,
 ) {
-	rule := HARegistryDescriptionLookup(component, parameter, model, unit, postfix, "")
+	rule := HARegistryDescriptionLookup(component, parameter, model, unit, postfix)
 	if rule == nil {
 		return
 	}
