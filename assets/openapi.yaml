@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 12.0.0
+  version: 12.2.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -58,6 +58,100 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Info" }
+
+  /sbom:
+    get:
+      operationId: getSBOM
+      tags: [core]
+      summary: Software bill of materials of this build
+      description: |
+        The CycloneDX 1.6 SBOM the release build embeds: the Go module
+        graph of the daemon plus the npm dependency tree of the embedded
+        Config UI, with license identifiers. The web UI's Licenses page
+        renders it; `?download=1` adds a Content-Disposition so a browser
+        saves it as a file. A development build carries no SBOM and
+        answers 404 — that is a property of the build, not an error state
+        a client should retry.
+      parameters:
+        - name: download
+          in: query
+          required: false
+          schema: { type: string }
+          description: When set, the response carries a Content-Disposition attachment header.
+      responses:
+        "200":
+          description: The embedded SBOM (CycloneDX JSON).
+          content:
+            application/json:
+              schema:
+                type: object
+                description: CycloneDX 1.6 document; shape governed by the CycloneDX spec, not this contract.
+                additionalProperties: true
+        "404":
+          description: This build was produced without an SBOM.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /warnings:
+    get:
+      operationId: listWarnings
+      tags: [core]
+      summary: Operator warnings, with the caller's silences
+      description: |
+        One server-side aggregate over the daemon's diagnostic surfaces:
+        unhealthy or degraded health components, error-grade incidents of
+        the last 24 hours (grouped per component), and per-central
+        service-message backlogs. `message_key` names the UI catalogue
+        entry that renders the row and `args` carries its interpolation
+        values, so the daemon stays the naming authority. Each row says
+        whether the CALLING user silenced it; silences of other users are
+        invisible here.
+      responses:
+        "200":
+          description: The active warnings.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WarningList" }
+
+  /warnings/{id}/silence:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+        description: The warning's stable id, e.g. `health:mqtt`.
+    put:
+      operationId: silenceWarning
+      tags: [core]
+      summary: Mute one active warning for the calling user
+      description: |
+        The silence ends after `days`, or earlier when the warning's
+        condition clears — a re-occurrence must alert again. Silencing a
+        warning that is not currently active answers 404.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WarningSilenceRequest" }
+      responses:
+        "204": { description: Silenced. }
+        "400":
+          description: Invalid period or body.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "404":
+          description: No active warning with this id.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+    delete:
+      operationId: unsilenceWarning
+      tags: [core]
+      summary: Remove the calling user's silence for one warning
+      responses:
+        "204": { description: Unsilenced (idempotent). }
 
   /health:
     get:
@@ -8682,6 +8776,49 @@ components:
               reason: { type: string }
               min: {}
               max: {}
+    WarningSilenceRequest:
+      type: object
+      required: [days]
+      properties:
+        days:
+          type: integer
+          enum: [1, 7, 90]
+          description: How long the warning stays muted for the calling user.
+
+    Warning:
+      type: object
+      required: [id, severity, message_key, silenced]
+      properties:
+        id:
+          type: string
+          description: Stable id, `<source>:<key>` (e.g. `health:mqtt`, `incident:xmlrpc`, `servicemsg:ccu1`).
+        severity:
+          type: string
+          enum: [warning, error]
+        central:
+          type: string
+          description: Set when the warning belongs to one central.
+        message_key:
+          type: string
+          description: UI catalogue key that renders this row.
+        args:
+          type: object
+          additionalProperties: { type: string }
+          description: Interpolation values for `message_key`.
+        silenced:
+          type: boolean
+          description: Whether the CALLING user silenced this warning.
+        silenced_until:
+          type: string
+          format: date-time
+    WarningList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Warning" }
+
     Info:
       type: object
       required:

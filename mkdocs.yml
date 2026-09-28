@@ -73,6 +73,7 @@ nav:
       - Multi-CCU Operations: user/multi-ccu.md
       - Connecting openccu-lite: admin/openccu-lite.md
       - Security: SECURITY.md
+      - Privacy: privacy.md
       - Backup & Restore: admin/backup.md
       - Caching & Performance: caching.md
       - Observability: admin/observability.md

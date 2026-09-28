@@ -1,0 +1,27 @@
+{
+  "items": [
+    {
+      "id": "health:mqtt",
+      "severity": "error",
+      "message_key": "warnings.health.unhealthy",
+      "args": { "component": "mqtt" },
+      "silenced": false
+    },
+    {
+      "id": "incident:xmlrpc",
+      "severity": "warning",
+      "message_key": "warnings.incidents",
+      "args": { "component": "xmlrpc", "count": "3" },
+      "silenced": false
+    },
+    {
+      "id": "servicemsg:ccu-test",
+      "severity": "warning",
+      "central": "ccu-test",
+      "message_key": "warnings.service_messages",
+      "args": { "central": "ccu-test", "count": "2" },
+      "silenced": true,
+      "silenced_until": "2026-02-01T09:00:00Z"
+    }
+  ]
+}

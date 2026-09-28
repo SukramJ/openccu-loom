@@ -4,6 +4,8 @@
 package contract
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"io"
 	"log/slog"
@@ -35,6 +37,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	securitypkg "github.com/SukramJ/openccu-loom/internal/security"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/internal/warnings"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmlog"
@@ -54,6 +57,16 @@ import (
 type fakeConfigReader struct{}
 
 func (fakeConfigReader) SanitizedConfig() handlers.ConfigSnapshot { return handlers.ConfigSnapshot{} }
+
+type fakeSBOMSource struct{}
+
+func (fakeSBOMSource) SBOMArchive() ([]byte, bool) {
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	_, _ = gz.Write([]byte(`{"bomFormat":"CycloneDX","specVersion":"1.6","components":[]}`))
+	_ = gz.Close()
+	return buf.Bytes(), true
+}
 
 type fakeSelfPasswordService struct{}
 
@@ -632,6 +645,8 @@ func fullyWiredRouterDeps() rest.Deps {
 	}
 	return rest.Deps{
 		StartedAt:               time.Now(),
+		SBOM:                    fakeSBOMSource{},
+		Warnings:                warnings.New(nil, nil, nil, nil, nil),
 		Config:                  fakeConfigReader{},
 		SelfPassword:            fakeSelfPasswordService{},
 		Preferences:             fakePreferencesService{},

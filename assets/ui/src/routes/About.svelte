@@ -227,6 +227,15 @@
           {t("about.license.text")}
         </p>
         <ul class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+          <li>
+            <a
+              href="#/licenses"
+              class="underline"
+              style="color: var(--ha-primary-color);"
+            >
+              {t("about.links.licenses")}
+            </a>
+          </li>
           {#each links as link (link.href)}
             <li>
               <a

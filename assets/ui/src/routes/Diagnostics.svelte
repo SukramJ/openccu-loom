@@ -9,6 +9,7 @@
     InterfaceInfo,
     LogLevelsResponse,
     RpcRecordingStatus,
+    Warning,
   } from "$lib/api/types";
   import type { ReliabilityRow, ValuesCacheStats } from "$lib/api/client";
   import Button from "$lib/components/ui/Button.svelte";
@@ -25,6 +26,7 @@
   import { prefs } from "$lib/stores/preferences.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
+  import { cn } from "$lib/utils";
   // `t()` reads prefs.locale reactively; date formatting reads it directly.
 
   let health = $state<HealthSnapshot | null>(null);
@@ -51,6 +53,62 @@
   let valuesCacheLoading = $state(true);
   let valuesCacheError = $state<string | null>(null);
   let valuesCacheResetting = $state(false);
+
+  // Operator warnings (health/incident/service-message summaries the
+  // operator can silence per-user). Loaded independently so a broken
+  // warnings read never blocks the rest of the page.
+  let warnings = $state<Warning[]>([]);
+  let warningsLoading = $state(true);
+  let warningsError = $state<string | null>(null);
+  let warningsBusyId = $state<string | null>(null);
+
+  async function loadWarnings() {
+    warningsLoading = true;
+    warningsError = null;
+    try {
+      warnings = await api.getWarnings();
+    } catch (err) {
+      warningsError = err instanceof ApiError ? err.message : String(err);
+    } finally {
+      warningsLoading = false;
+    }
+  }
+
+  async function silenceWarning(id: string, days: 1 | 7 | 90) {
+    warningsBusyId = id;
+    try {
+      await api.silenceWarning(id, days);
+      toastStore.success(t("diagnostics.warnings.silenced"));
+      await loadWarnings();
+    } catch (err) {
+      toastStore.error(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      warningsBusyId = null;
+    }
+  }
+
+  async function unsilenceWarning(id: string) {
+    warningsBusyId = id;
+    try {
+      await api.unsilenceWarning(id);
+      toastStore.success(t("diagnostics.warnings.unsilenced"));
+      await loadWarnings();
+    } catch (err) {
+      toastStore.error(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      warningsBusyId = null;
+    }
+  }
+
+  function warningSeverityVariant(s: string): "warning" | "danger" | "muted" {
+    if (s === "error") return "danger";
+    if (s === "warning") return "warning";
+    return "muted";
+  }
+
+  function warningMessage(w: Warning): string {
+    return t(w.message_key, w.args);
+  }
 
   async function loadReliability() {
     reliabilityLoading = true;
@@ -366,6 +424,7 @@
     void load();
     void loadReliability();
     void loadValuesCacheStats();
+    void loadWarnings();
   });
 
   // Poll RPC recording status at two rates. A running recording changes on
@@ -628,6 +687,89 @@
   {#if loadError}
     <ErrorState message={loadError} onRetry={() => void load()} />
   {/if}
+
+  <Card class="p-4">
+    <header class="mb-3 flex items-center justify-between">
+      <h2 class="text-lg font-semibold">{t("diagnostics.warnings.title")}</h2>
+      <span class="text-xs text-[var(--ha-secondary-text-color)]">{warnings.length}</span>
+    </header>
+    {#if warningsLoading}
+      <LoadingState />
+    {:else if warningsError}
+      <ErrorState message={warningsError} onRetry={() => void loadWarnings()} />
+    {:else if warnings.length === 0}
+      <p class="text-sm text-[var(--ha-secondary-text-color)]">
+        {t("diagnostics.warnings.empty")}
+      </p>
+    {:else}
+      <ul class="space-y-2">
+        {#each warnings as w (w.id)}
+          <li
+            class={cn(
+              "rounded border border-slate-200 p-2 dark:border-slate-800",
+              w.silenced && "opacity-60",
+            )}
+          >
+            <div class="flex flex-wrap items-center gap-2">
+              <Badge variant={warningSeverityVariant(w.severity)}>
+                {t(`diagnostics.warnings.severity.${w.severity}`)}
+              </Badge>
+              {#if w.central}
+                <Badge variant="muted">{w.central}</Badge>
+              {/if}
+              <span class="flex-1 text-sm">{warningMessage(w)}</span>
+              {#if w.silenced}
+                <span class="text-xs text-[var(--ha-secondary-text-color)]">
+                  {t("diagnostics.warnings.silenced_until", {
+                    date: formatDate(w.silenced_until),
+                  })}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={warningsBusyId === w.id}
+                  onclick={() => void unsilenceWarning(w.id)}
+                >
+                  {t("diagnostics.warnings.unsilence")}
+                </Button>
+              {:else}
+                <div class="flex gap-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={warningsBusyId === w.id}
+                    onclick={() => void silenceWarning(w.id, 1)}
+                  >
+                    {t("diagnostics.warnings.silence_days_1")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={warningsBusyId === w.id}
+                    onclick={() => void silenceWarning(w.id, 7)}
+                  >
+                    {t("diagnostics.warnings.silence_days_7")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={warningsBusyId === w.id}
+                    onclick={() => void silenceWarning(w.id, 90)}
+                  >
+                    {t("diagnostics.warnings.silence_days_90")}
+                  </Button>
+                </div>
+              {/if}
+            </div>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+  </Card>
 
   {#if centralScoreEntries.length > 0}
     <section class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">

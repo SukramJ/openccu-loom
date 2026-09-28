@@ -77,6 +77,12 @@ export async function mockAllApis(page: Page): Promise<void> {
     route.fulfill({ json: fixture('info.json') }),
   );
 
+  // Licenses page (#/licenses). `*` covers the `?download=1` query the
+  // download link carries.
+  await page.route('**/api/v1/sbom*', (route) =>
+    route.fulfill({ json: fixture('sbom.json') }),
+  );
+
   // Surface profiles. The navigation, the settings tab list and the
   // device-detail tabs all gate on this, so an unmocked route would let
   // every view fall back to "visible" — which is the right production
@@ -177,6 +183,14 @@ export async function mockAllApis(page: Page): Promise<void> {
   // Incidents
   await page.route('**/api/v1/incidents', (route) =>
     route.fulfill({ json: fixture('incidents.json') }),
+  );
+
+  // Warnings - more specific routes FIRST
+  await page.route('**/api/v1/warnings/**', (route) =>
+    route.fulfill({ status: 204 }),
+  );
+  await page.route('**/api/v1/warnings', (route) =>
+    route.fulfill({ json: fixture('warnings.json') }),
   );
 
   // Diagnostics - more specific routes FIRST

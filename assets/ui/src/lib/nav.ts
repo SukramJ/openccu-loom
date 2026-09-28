@@ -38,6 +38,7 @@ export type RouteKind =
   | "alarm"
   | "security"
   | "about"
+  | "licenses"
   | "unknown";
 
 /** One navigation entry. `matches` lists the route kinds it is active for. */
@@ -282,6 +283,12 @@ export function navClusters(gates: NavGates): NavCluster[] {
           icon: "mdi:information-outline",
           label: t("nav.about"),
           matches: ["about"],
+        },
+        {
+          href: "#/licenses",
+          icon: "mdi:scale-balance",
+          label: t("nav.licenses"),
+          matches: ["licenses"],
         },
       ],
     },

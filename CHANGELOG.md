@@ -6,6 +6,55 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- A **Licenses page** in the Config UI: every component the build ships
+  — Go modules and the UI's npm tree — rendered from the embedded
+  CycloneDX SBOM with license texts where the SBOM carries them, a
+  search, an SBOM download, the MIT warranty disclaimer, and links to
+  the third-party notices and the new privacy page. Release binaries
+  embed the SBOM (`GET /api/v1/sbom`); a development build answers 404
+  and the page says so.
+- **Operator warnings with per-user silences**: `GET /api/v1/warnings`
+  aggregates unhealthy health components, error-grade incidents of the
+  last 24 hours and per-central service-message backlogs into one list;
+  a warning can be muted per user for 1, 7 or 90 days
+  (`PUT|DELETE /api/v1/warnings/{id}/silence`), and a silence ends
+  early when its condition clears, so a re-occurrence alerts again. MCP
+  gains a read-only `list_warnings` tool. REST API 12.2.0.
+
+### Testing
+
+- A **wire-fixture corpus** (`assets/wire-fixtures/`): recorded daemon
+  responses — never hand-written, regenerated from the handlers with
+  `-update-wire-fixtures` — validated against `openapi.yaml` and
+  compared byte-for-byte on every test run. The files double as the
+  parser corpus for openccu-loom-client, so a payload change fails
+  loudly on both sides of the contract.
+- The REST router's public surface is pinned: a contract guard walks
+  every mounted `/api/v1` route through the production auth middleware
+  with an anonymous request — everything outside the justified public
+  list (login, OIDC, health, info, the self-gating first-run wizard)
+  must answer 401/403.
+- Four new SPA contract guards: theme tokens defined for dark must exist
+  for light (per skin), a `var(--ha-…)` consumed without a fallback must
+  be defined, raw colours in components are refused outside a justified
+  content-colour list, and user-facing i18n catalogue values must not
+  carry internal tracking codes.
+
+### Documentation
+
+- A privacy page (`docs/privacy.md`): every connection the daemon opens
+  by itself, field by field, with its switch — and the requests towards
+  the internet are pinned by a test
+  (`internal/addonupdate/outbound_test.go`), so a change to what leaves
+  the daemon is a failing test that names this page.
+- A security policy (`SECURITY.md`): supported versions, private
+  vulnerability reporting through GitHub, and where problems in the
+  systems OpenCCU-Loom talks to belong instead. A support guide
+  (`SUPPORT.md`) points help requests at the documentation and the issue
+  tracker and says what a useful report carries.
+
 ## [0.79.0] - 2026-09-28
 
 ### Release summary

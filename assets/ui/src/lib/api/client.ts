@@ -78,6 +78,7 @@ import type {
   DiagramWriteRequest,
   SystemCCUEntry,
   UISchema,
+  Warning,
 } from "./types";
 import type {
   MatterBulkUpdateRequest,
@@ -948,6 +949,21 @@ export const api = {
     if (p.until) qs.set("until", p.until);
     return `${apiBase()}/audit?${qs.toString()}`;
   },
+  // --- Software bill of materials (Licenses page) ----------------
+  // A dev build carries no SBOM and answers 404 — a property of the
+  // build, not an error the Licenses page should surface as a failure.
+  // Resolves to null in that case; re-throws ApiError for anything else.
+  async getSBOM(): Promise<unknown | null> {
+    try {
+      return await request<unknown>(`/sbom`);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) return null;
+      throw err;
+    }
+  },
+  sbomDownloadUrl(): string {
+    return `${apiBase()}/sbom?download=1`;
+  },
   // --- Per-user preferences (favorites / dashboard) -----------
   // Values are opaque JSON owned by the SPA. getPreference resolves to
   // null when the key is unset: the daemon answers 200 with a null
@@ -1144,6 +1160,23 @@ export const api = {
   },
   incidents() {
     return request<Incident[] | null>(`/incidents`).then((v) => v ?? []);
+  },
+  getWarnings() {
+    return request<{ items: Warning[] }>(`/warnings`).then(
+      (v) => v.items ?? [],
+    );
+  },
+  silenceWarning(id: string, days: 1 | 7 | 90) {
+    return request<void>(`/warnings/${encodeURIComponent(id)}/silence`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ days }),
+    });
+  },
+  unsilenceWarning(id: string) {
+    return request<void>(`/warnings/${encodeURIComponent(id)}/silence`, {
+      method: "DELETE",
+    });
   },
   // --- Diagnostics --------------------------------------------
   diagnostics(anonymize: boolean = true) {

@@ -34,6 +34,7 @@
   // would be ineffective (and warns at build time).
   import AuditLog from "./routes/AuditLog.svelte";
   import About from "./routes/About.svelte";
+  import Licenses from "./routes/Licenses.svelte";
   // Matter is the heaviest route subtree and is opt-in (the bridge
   // defaults to off), so it is code-split via dynamic import — most
   // installs never load its JS. See the {#await} in the router below.
@@ -295,6 +296,7 @@
     | { kind: "alarm"; subpath: string }
     | { kind: "security"; subpath: string }
     | { kind: "about" }
+    | { kind: "licenses" }
     | { kind: "unknown" };
 
   const route = $derived.by<Route>(() => {
@@ -327,6 +329,7 @@
     if (path === "/firmware") return { kind: "firmware" };
     if (path === "/signal") return { kind: "signal" };
     if (path === "/about") return { kind: "about" };
+    if (path === "/licenses") return { kind: "licenses" };
     if (path === "/matter" || path.startsWith("/matter/")) {
       return { kind: "matter", subpath: path.slice("/matter".length) || "" };
     }
@@ -378,6 +381,7 @@
     route.kind === "alarm" ? t("page.title.alarm") :
     route.kind === "security" ? t("page.title.security") :
     route.kind === "about" ? t("page.title.about") :
+    route.kind === "licenses" ? t("page.title.licenses") :
     t("page.title.default")
   }</title>
   {/if}
@@ -561,6 +565,8 @@
           {/await}
         {:else if route.kind === "about"}
           <About />
+        {:else if route.kind === "licenses"}
+          <Licenses />
         {:else}
           <section class="mx-auto max-w-6xl px-6 py-8">
             <h1 class="text-2xl font-semibold">{t("app.not_found")}</h1>

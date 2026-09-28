@@ -1,0 +1,8 @@
+{
+ "code": "not_found",
+ "detail": "/api/v1/nowhere",
+ "instance": "/api/v1/nowhere",
+ "status": 404,
+ "title": "Route not found",
+ "type": "https://openccu-loom.dev/errors/not_found"
+}

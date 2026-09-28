@@ -98,8 +98,11 @@ permissible because:
 - MIT explicitly allows redistribution with additional terms, as long
   as the MIT notice is preserved for the MIT-covered portion.
 - The eQ-3 license is preserved verbatim in `NOTICE`.
-- The daemon's `/api/v1/info` endpoint and the UI About page surface
-  both notices so commercial users cannot miss them.
+- The UI's About page and its Licenses page (backed by the embedded
+  SBOM at `GET /api/v1/sbom`) surface both notices so commercial users
+  cannot miss them. (This sentence originally promised the notices on
+  `/api/v1/info` as well; that endpoint never carried them, and the
+  Licenses page is where they landed.)
 
 Operators with commercial use-cases can override the embedded
 archives via `cfg.CCUData.{translations_path,easymode_path}` and

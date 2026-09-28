@@ -24,6 +24,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/discovery/ssdp"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/webhook"
+	"github.com/SukramJ/openccu-loom/internal/warnings"
 	"github.com/SukramJ/openccu-loom/internal/wiring"
 
 	// Side-effect import: aggregator package whose blank-imports
@@ -889,6 +890,16 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	noUsers := firstRunProbe(cfg, sqUsers, sqTokens, sqCentrals)
 	warnOnDormantOnboarding(ctx, cfg, sqUsers, sqTokens, sqCentrals, logger)
 
+	// Operator warnings aggregate the health tracker, the incident journal
+	// and the per-central service messages; silences persist per user in
+	// the app database (nil DB → the list still serves, silencing 503s).
+	incidentsReader := adapter.NewIncidentsStoreReader(incidentStore, reg, logger)
+	var silenceStore warnings.SilenceStore
+	if auditDB != nil {
+		silenceStore = sqlitestore.NewWarningSilenceStore(auditDB)
+	}
+	warningsSvc := warnings.New(healthAdapter, incidentsReader, hubAdapter, silenceStore, nil)
+
 	// No-op when REST is disabled. Extracted into mountRESTServer
 	// (daemon_rest_mount.go); the returned teardown folds the inline mDNS
 	// stop defer.
@@ -922,7 +933,8 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		parameterDeterminer:    adapter.NewParameterDeterminerAdapter(reg, valueWriter),
 		hubAdapter:             hubAdapter,
 		ifaceAdapter:           ifaceAdapter,
-		incidents:              adapter.NewIncidentsStoreReader(incidentStore, reg, logger),
+		incidents:              incidentsReader,
+		warningsSvc:            warningsSvc,
 		alarm:                  alarmSvc,
 		security:               securitySvc,
 		sysStatusBuf:           sysStatusBuf,

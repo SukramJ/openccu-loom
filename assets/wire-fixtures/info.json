@@ -1,0 +1,18 @@
+{
+ "addon_build": false,
+ "api_version": "12.2.0",
+ "build_date": "unknown",
+ "capabilities": [
+  "rest.v1",
+  "ws.broadcasts.v1",
+  "errors.problem_details.v1",
+  "central.features.v1",
+  "south.openccu_lite.v1"
+ ],
+ "commit": "none",
+ "config_ui_url": "",
+ "schema_digest": "sha256:471f3a9d9bfafb5ede2d84f845ce7f1bad77fce49522f0cd07953bc6b4f5811b",
+ "started_at": "\u003cvolatile\u003e",
+ "uptime": "\u003cvolatile\u003e",
+ "version": "0.79.0"
+}

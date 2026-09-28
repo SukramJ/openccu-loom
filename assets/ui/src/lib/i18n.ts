@@ -1117,6 +1117,7 @@ const EN: Catalog = {
   "nav.settings": "Settings",
   "nav.sysvars": "Variables",
   "nav.about": "About",
+  "nav.licenses": "Licenses",
   // --- About (#/about) ---
   "about.title": "About",
   "about.subtitle":
@@ -1144,6 +1145,32 @@ const EN: Catalog = {
   "about.links.releases": "Releases & changelog",
   "about.links.notices": "Third-party notices",
   "about.links.docs": "User guide",
+  "about.links.licenses": "Software licenses",
+  // --- Licenses / SBOM (#/licenses) ---
+  "licenses.title": "Licenses",
+  "licenses.subtitle":
+    "Software bill of materials for this build: every embedded Go module and npm package, with its license.",
+  "licenses.load_error": "Loading failed: {error}",
+  "licenses.product_line": "OpenCCU-Loom v{version}",
+  "licenses.field.license": "License",
+  "licenses.field.author": "Author",
+  "licenses.download": "Download SBOM",
+  "licenses.links.notices": "Third-party notices",
+  "licenses.links.privacy": "Privacy policy",
+  "licenses.disclaimer.title": "Disclaimer of Warranty",
+  "licenses.no_sbom": "This build carries no SBOM",
+  "licenses.no_sbom.description":
+    "The software bill of materials is generated for release builds only (`make sbom`). A development build does not embed one.",
+  "licenses.empty": "No components found",
+  "licenses.empty.description": "The embedded SBOM does not list any components.",
+  "licenses.search_placeholder": "Search name, version, license, author",
+  "licenses.col.name": "Name",
+  "licenses.col.version": "Version",
+  "licenses.col.license": "License",
+  "licenses.col.author": "Author / origin",
+  "licenses.links.website": "Website",
+  "licenses.links.vcs": "Source",
+  "licenses.links.distribution": "Package",
   // Guard shown when in-app navigation would discard an editor's
   // unsaved edits.
   "nav.leave_title": "Unsaved changes",
@@ -2223,6 +2250,7 @@ const EN: Catalog = {
     "CCU and daemon backups — create, download, restore.",
   "surface.desc.nav.settings": "Everything in this section.",
   "surface.desc.nav.about": "Version, build, add-on stamp and licence information.",
+  "surface.desc.nav.licenses": "Every shipped component with its license, from the build's SBOM.",
 
   "surface.desc.settings.general":
     "Locale, log level and the daemon's own identity.",
@@ -3043,6 +3071,7 @@ const EN: Catalog = {
   "page.title.logs": "Logs — OpenCCU-Loom",
   "page.title.settings": "Settings — OpenCCU-Loom",
   "page.title.about": "About — OpenCCU-Loom",
+  "page.title.licenses": "Licenses — OpenCCU-Loom",
   // --- Profile selector ---
   "profile.header": "Profile",
   "profile.detected": "active profile detected",
@@ -3748,6 +3777,21 @@ const EN: Catalog = {
   "diagnostics.values_cache.reset_confirm_body":
     "Every cached wire value is dropped. Data points read source=unobserved until live events repopulate them.",
   "diagnostics.values_cache.reset_success": "Values cache reset.",
+  "diagnostics.warnings.title": "Warnings",
+  "diagnostics.warnings.empty": "No warnings.",
+  "diagnostics.warnings.severity.warning": "Warning",
+  "diagnostics.warnings.severity.error": "Error",
+  "diagnostics.warnings.silence_days_1": "1 day",
+  "diagnostics.warnings.silence_days_7": "7 days",
+  "diagnostics.warnings.silence_days_90": "90 days",
+  "diagnostics.warnings.silenced_until": "Silenced until {date}",
+  "diagnostics.warnings.unsilence": "Unsilence",
+  "diagnostics.warnings.silenced": "Warning silenced.",
+  "diagnostics.warnings.unsilenced": "Warning unsilenced.",
+  "warnings.health.unhealthy": "{component} is unhealthy.",
+  "warnings.health.degraded": "{component} is degraded.",
+  "warnings.incidents": "{count} incidents on {component}.",
+  "warnings.service_messages": "{count} service messages for {central}.",
   "schedule.aria.weekdays": "Weekdays",
   "schedule.duration_placeholder": "e.g. 10s, 5min",
   "schedule.ramp_placeholder": "e.g. 500ms, 2s",
@@ -5227,6 +5271,7 @@ const DE: Catalog = {
   "nav.settings": "Einstellungen",
   "nav.sysvars": "Variablen",
   "nav.about": "Info",
+  "nav.licenses": "Lizenzen",
   // --- Info (#/about) ---
   "about.title": "Info",
   "about.subtitle":
@@ -5254,6 +5299,32 @@ const DE: Catalog = {
   "about.links.releases": "Releases & Changelog",
   "about.links.notices": "Third-Party-Hinweise",
   "about.links.docs": "Benutzerhandbuch",
+  "about.links.licenses": "Software-Lizenzen",
+  // --- Lizenzen / SBOM (#/licenses) ---
+  "licenses.title": "Lizenzen",
+  "licenses.subtitle":
+    "Software-Stückliste dieses Builds: jedes eingebettete Go-Modul und npm-Paket mit seiner Lizenz.",
+  "licenses.load_error": "Laden fehlgeschlagen: {error}",
+  "licenses.product_line": "OpenCCU-Loom v{version}",
+  "licenses.field.license": "Lizenz",
+  "licenses.field.author": "Autor",
+  "licenses.download": "SBOM herunterladen",
+  "licenses.links.notices": "Third-Party-Hinweise",
+  "licenses.links.privacy": "Datenschutzerklärung",
+  "licenses.disclaimer.title": "Gewährleistungsausschluss",
+  "licenses.no_sbom": "Dieser Build enthält keine SBOM",
+  "licenses.no_sbom.description":
+    "Die Software-Stückliste wird nur für Release-Builds erzeugt (`make sbom`). Ein Entwicklungs-Build bettet keine ein.",
+  "licenses.empty": "Keine Komponenten gefunden",
+  "licenses.empty.description": "Die eingebettete SBOM listet keine Komponenten auf.",
+  "licenses.search_placeholder": "Name, Version, Lizenz, Autor suchen",
+  "licenses.col.name": "Name",
+  "licenses.col.version": "Version",
+  "licenses.col.license": "Lizenz",
+  "licenses.col.author": "Autor / Herkunft",
+  "licenses.links.website": "Website",
+  "licenses.links.vcs": "Quelle",
+  "licenses.links.distribution": "Paket",
   "nav.leave_title": "Ungespeicherte Änderungen",
   "nav.leave_body":
     "Es gibt ungespeicherte Änderungen, die beim Verlassen dieser Ansicht verloren gehen. Trotzdem verlassen?",
@@ -6340,6 +6411,8 @@ const DE: Catalog = {
   "surface.desc.nav.settings": "Alles in diesem Bereich.",
   "surface.desc.nav.about":
     "Version, Build, Add-on-Stempel und Lizenzangaben.",
+  "surface.desc.nav.licenses":
+    "Jede ausgelieferte Komponente mit ihrer Lizenz, aus dem SBOM des Builds.",
 
   "surface.desc.settings.general":
     "Sprache, Loglevel und die Identität des Daemons.",
@@ -7171,6 +7244,7 @@ const DE: Catalog = {
   "page.title.logs": "Protokoll — OpenCCU-Loom",
   "page.title.settings": "Einstellungen — OpenCCU-Loom",
   "page.title.about": "Info — OpenCCU-Loom",
+  "page.title.licenses": "Lizenzen — OpenCCU-Loom",
   "profile.header": "Profil",
   "profile.detected": "aktives Profil erkannt",
   "profile.placeholder": "Profil auswählen",
@@ -7846,6 +7920,21 @@ const DE: Catalog = {
   "diagnostics.values_cache.reset_confirm_body":
     "Jeder zwischengespeicherte Wire-Wert wird gelöscht. Datenpunkte zeigen source=unobserved, bis Live-Events sie neu befüllen.",
   "diagnostics.values_cache.reset_success": "Werte-Cache zurückgesetzt.",
+  "diagnostics.warnings.title": "Warnungen",
+  "diagnostics.warnings.empty": "Keine Warnungen.",
+  "diagnostics.warnings.severity.warning": "Warnung",
+  "diagnostics.warnings.severity.error": "Fehler",
+  "diagnostics.warnings.silence_days_1": "1 Tag",
+  "diagnostics.warnings.silence_days_7": "7 Tage",
+  "diagnostics.warnings.silence_days_90": "90 Tage",
+  "diagnostics.warnings.silenced_until": "Stummgeschaltet bis {date}",
+  "diagnostics.warnings.unsilence": "Stummschaltung aufheben",
+  "diagnostics.warnings.silenced": "Warnung stummgeschaltet.",
+  "diagnostics.warnings.unsilenced": "Stummschaltung aufgehoben.",
+  "warnings.health.unhealthy": "{component} ist nicht funktionsfähig.",
+  "warnings.health.degraded": "{component} ist eingeschränkt.",
+  "warnings.incidents": "{count} Vorfälle bei {component}.",
+  "warnings.service_messages": "{count} Servicemeldungen für {central}.",
   "schedule.aria.weekdays": "Wochentage",
   "schedule.duration_placeholder": "z.B. 10s, 5min",
   "schedule.ramp_placeholder": "z.B. 500ms, 2s",

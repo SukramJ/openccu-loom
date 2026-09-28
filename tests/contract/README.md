@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 528.
+Guards without a doc comment: 7 of 535.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -291,6 +291,7 @@ Guards without a doc comment: 7 of 528.
 | TestRepetitionsLabelIsOneRuleAcrossCustomProfiles | repetitions_label_parity_test.go | TestRepetitionsLabelIsOneRuleAcrossCustomProfiles pins the two custom profiles that turn a numeric repetition count into a REPETITIONS wire label against each other. |
 | TestRESTRouteTiersMatchOpenAPIScopes | rest_authz_scope_test.go | TestRESTRouteTiersMatchOpenAPIScopes pins the two halves of the authorization contract to each other: the scope assets/openapi.yaml publishes for an operation, and the gate the chi router actually wraps that route in. |
 | TestRESTHandlersDoNotDecodePathParamsTwice | rest_path_decode_test.go | TestRESTHandlersDoNotDecodePathParamsTwice fails when a REST source file feeds a chi.URLParam value into url.PathUnescape or url.QueryUnescape. |
+| TestEveryAPIRouteRequiresAuthOrIsListedPublic | rest_router_auth_walk_test.go | TestEveryAPIRouteRequiresAuthOrIsListedPublic walks the fully-wired router with the PRODUCTION auth middleware chain (auth.Middleware's Resolve/Require/RequireRole, exactly as cmd/openccu-loom wires them) and fires one anonymous request at every mounted /api/v1 route. |
 | TestRESTRouterMatchesOpenAPISpec | rest_router_openapi_walk_test.go | TestRESTRouterMatchesOpenAPISpec walks the real chi router NewRouter assembles (every optional facade wired, so every conditionally-mounted route is present) and cross-checks it against assets/openapi.yaml in both directions: 1. |
 | TestFullyWiredRouterDepsCoversEveryDep | router_deps_coverage_test.go | TestFullyWiredRouterDepsCoversEveryDep pins that the helper every router-level contract guard builds on either fills a dep or records why it does not. |
 | TestRoutingKeyCentralScopedFamilies | routing_key_contract_test.go | TestRoutingKeyCentralScopedFamilies pins which address families carry the central discriminator in the parameter-level key. |
@@ -337,6 +338,10 @@ Guards without a doc comment: 7 of 528.
 | TestSPAE2EFixturesAreAllRouted | spa_e2e_fixture_schema_test.go | TestSPAE2EFixturesAreAllRouted asserts that every JSON file under assets/ui/tests/e2e/fixtures/ appears in fixtureRoutes (or is named in fixturesWithoutARoute with a true reason). |
 | TestSPAE2EFixturesMatchOpenAPISchema | spa_e2e_fixture_schema_test.go | TestSPAE2EFixturesMatchOpenAPISchema validates every fixture in fixtureRoutes against the OpenAPI 200 response schema for the route it answers. |
 | TestSPASecretPlaceholderMatchesHandler | spa_secret_payload_contract_test.go | TestSPASecretPlaceholderMatchesHandler pins the two halves of the masked-secret round-trip against each other. |
+| TestSPAComponentsCarryNoRawThemeColours | spa_theme_tokens_test.go | TestSPAComponentsCarryNoRawThemeColours: rule 3 — a hex colour in a .svelte file must be a var() fallback or live in a content-colour file. |
+| TestSPAConsumedThemeTokensAreDefined | spa_theme_tokens_test.go | TestSPAConsumedThemeTokensAreDefined: rule 2 — every var(--ha-…) used WITHOUT a fallback anywhere in the SPA sources must be defined on :root. |
+| TestSPAThemeTokenSetsAreConsistent | spa_theme_tokens_test.go | TestSPAThemeTokenSetsAreConsistent: rules 1 (dark ⊆ light) for both the loom and the HA skin. |
+| TestSPAUserFacingTextsCarryNoTrackingIDs | spa_user_facing_ids_test.go | TestSPAUserFacingTextsCarryNoTrackingIDs extends the doc-purity rule to the strings an operator actually reads: the EN and DE catalogue VALUES of assets/ui/src/lib/i18n.ts must not name a wave, phase, audit item or other internal tracking code. |
 | TestBaselineRefreshScriptRewritesEveryBaseline | spa_visual_regression_guard_test.go | TestBaselineRefreshScriptRewritesEveryBaseline asserts the documented refresh command passes an explicit `--update-snapshots=all`. |
 | TestScreenshotComparisonBudgetIsTightEnoughToSeeDrift | spa_visual_regression_guard_test.go | TestScreenshotComparisonBudgetIsTightEnoughToSeeDrift asserts the visual suite compares against an exact-match pixel budget. |
 | TestSpecificationInterfaceConstantsMatchCode | specification_wire_identities_test.go | — (no doc comment) |
@@ -390,6 +395,7 @@ Guards without a doc comment: 7 of 528.
 | TestWeekprofileSlotsClimateTimeRoundTrip | weekprofile_slots_climate_time_grammar_test.go | TestWeekprofileSlotsClimateTimeRoundTrip pins that the formatter and the parser are inverse over the whole legal range, marker included. |
 | TestWeekprofileSlotsEncoderCarriesEverythingTheValidatorAdmits | weekprofile_slots_slot_limit_test.go | TestWeekprofileSlotsEncoderCarriesEverythingTheValidatorAdmits pins the per-weekday slot count as one fact across two packages that used to spell it separately. |
 | TestWeekprofileSlotsWeekdaySetIsOneFact | weekprofile_slots_weekday_set_test.go | TestWeekprofileSlotsWeekdaySetIsOneFact pins the weekday set that the schedule adapter, the week-profile filter and the paramset key grammar all gate on. |
+| TestWireFixtureCorpusMatchesHandlers | wire_fixture_corpus_test.go | TestWireFixtureCorpusMatchesHandlers records every corpus operation against the fully wired router and compares the (volatile-masked) response verbatim with the committed fixture, after validating the raw response against openapi.yaml. |
 | TestWireMethodsCanonical | wire_methods_canonical_test.go | TestWireMethodsCanonical AST-walks internal/client/backends/*.go and verifies that every string-literal method name passed to *.Call(ctx, "<method>", ...) is either: 1. |
 | TestGenerateWireSnapshots | wire_snapshots/generator_test.go | — (no doc comment) |
 | TestReferenceCompare | wire_snapshots/reference_compare_test.go | TestReferenceCompare runs every Go Custom-DP setter covered by a reference wire snapshot and fails when the wire calls differ. |
@@ -532,6 +538,7 @@ Guards without a doc comment: 7 of 528.
 | TestCCUProfileAttachRegistersCallbackRoute | wiring_pins/south_profile_events_test.go | TestCCUProfileAttachRegistersCallbackRoute pins that the composition entry point attaches a CCU central's inbound events through its south profile: the per-central route on the shared XML-RPC callback server answers as soon as the central is wired (before the CCU is even ready — the route is permanent and precedes every announcement), and it is gone after the manager tears the central down. |
 | TestWireCentralsGatesOnProfileReadiness | wiring_pins/south_profile_readiness_test.go | TestWireCentralsGatesOnProfileReadiness pins that the boot bring-up built by the real composition entry point waits on the central's south-profile readiness before it touches the system. |
 | TestUnscopedDiscoveryCleanupRunsBeforeTheInitialSnapshot | wiring_pins/unscoped_discovery_cleanup_order_test.go | TestUnscopedDiscoveryCleanupRunsBeforeTheInitialSnapshot pins the one property that makes the sweep work at all: it clears retained discovery configs whose entity id carries an empty CCU-serial slot, and the snapshot is what re-announces those entities under a corrected id. |
+| TestWarningsSilenceRoundTripThroughTheRouter | wiring_pins/warnings_silence_roundtrip_test.go | TestWarningsSilenceRoundTripThroughTheRouter pins the whole collaboration the way production wires it: the warnings aggregator over a health source, the sqlite silence store, and the REST routes behind the real auth middleware. |
 | TestEveryWiringSetterHasAProductionCaller | wiring_setter_callers_test.go | TestEveryWiringSetterHasAProductionCaller asserts that every method which injects a collaborator is actually called by production code. |
 | TestWSBroadcastsHaveProductionEmitter | ws_broadcast_emitter_test.go | TestWSBroadcastsHaveProductionEmitter asserts every `kind: "broadcast"` entry in assets/wsapi.json has a wiring-table entry in wsBroadcastEmitters, that the entry's files exist and contain every required token, and — where a typed Go wire constant is available — that the constant's value equals the schema's broadcast name. |
 | TestWSCentralStateBroadcastReachesHub | ws_broadcast_roundtrip_test.go | TestWSCentralStateBroadcastReachesHub is the round-trip half of the WS broadcast contract for "central.state_changed": a real central state transition, driven through the real state machine, must produce a real entry in the hub's replay buffer — not merely a token in source text. |

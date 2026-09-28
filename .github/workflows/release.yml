@@ -55,6 +55,12 @@ jobs:
       # themselves are gitignored.
       - name: restore spa_dist placeholder
         run: git checkout -- internal/north/ui/spa_dist/.gitkeep
+      # The merged Go+npm SBOM must exist BEFORE goreleaser: release
+      # binaries embed it (internal/sbom) and GET /api/v1/sbom serves it.
+      # Both outputs are gitignored, so goreleaser's dirty check stays
+      # clean; npm ci above already provided the tree `npm sbom` reads.
+      - name: generate SBOM
+        run: make sbom
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: log in to ghcr
@@ -209,9 +215,8 @@ jobs:
           tags: |
             ghcr.io/sukramj/openccu-loom-remote-ha-amd64:${{ env.HA_VERSION }}
             ghcr.io/sukramj/openccu-loom-remote-ha-amd64:latest
-      # CycloneDX SBOM for the daemon module graph, attached to the run.
-      - name: generate SBOM
-        run: make sbom
+      # The merged CycloneDX SBOM was generated before the build (the
+      # binaries embed it); attach the plain JSON to the run as well.
       - name: upload SBOM
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

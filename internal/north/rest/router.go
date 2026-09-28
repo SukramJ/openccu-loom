@@ -47,10 +47,19 @@ import (
 //     ConfigChannelMeta (nil causes the export handler to omit model/channel_type),
 //     MatterAuditRecorder (nil silently skips the audit append).
 type Deps struct {
-	Logger      *slog.Logger
-	StartedAt   time.Time
-	Health      handlers.HealthReader
-	Config      handlers.ConfigReader
+	Logger    *slog.Logger
+	StartedAt time.Time
+	Health    handlers.HealthReader
+	Config    handlers.ConfigReader
+	// SBOM hands out the build-time software bill of materials
+	// (internal/sbom). The route mounts regardless; a nil source or a
+	// build without an embedded archive answers 404, which the Licenses
+	// page reports as "this build carries no SBOM".
+	SBOM handlers.SBOMSource
+	// Warnings backs the operator warning list (GET /warnings) and its
+	// per-user silences. Nil serves an empty list and refuses silences
+	// with 503.
+	Warnings    handlers.WarningsPort
 	Devices     handlers.DeviceIndex
 	DeviceAdmin handlers.DeviceAdmin
 	// Onboarding backs the probe and client-pairing routes under
@@ -826,6 +835,15 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			if d.Config != nil {
 				pr.Get("/config", handlers.Config(d.Config))
 			}
+			// Mounts regardless of d.SBOM: the handler answers 404 for a
+			// build without an embedded archive, and the distinction
+			// "dev build" vs "wrong path" is carried in the problem body.
+			pr.Get("/sbom", handlers.SBOM(d.SBOM))
+			// Operator warnings + per-user silences. Mounts regardless;
+			// a nil service degrades as the field's doc comment says.
+			pr.Get("/warnings", handlers.ListWarnings(d.Warnings))
+			pr.Put("/warnings/{id}/silence", handlers.SilenceWarning(d.Warnings))
+			pr.Delete("/warnings/{id}/silence", handlers.UnsilenceWarning(d.Warnings))
 			// Device-type icon proxy. The artwork itself is not sensitive,
 			// but the route answers differently for a known and an unknown
 			// address, so serving it pre-auth turned it into an

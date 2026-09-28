@@ -1,0 +1,110 @@
+{
+  "$schema": "http://cyclonedx.org/schema/bom-1.6.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:3e671687-395b-41f5-a30f-a58921a69b79",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-01-01T09:00:00Z",
+    "tools": [
+      {
+        "vendor": "CycloneDX",
+        "name": "cyclonedx-gomod",
+        "version": "v1.12.0"
+      }
+    ],
+    "component": {
+      "bom-ref": "pkg:golang/github.com/SukramJ/openccu-loom@v0.2.0?type=module",
+      "type": "application",
+      "name": "github.com/SukramJ/openccu-loom",
+      "version": "v0.2.0",
+      "licenses": [{ "license": { "id": "MIT" } }],
+      "purl": "pkg:golang/github.com/SukramJ/openccu-loom@v0.2.0?type=module",
+      "externalReferences": [
+        { "type": "vcs", "url": "https://github.com/SukramJ/openccu-loom" }
+      ]
+    }
+  },
+  "components": [
+    {
+      "bom-ref": "pkg:npm/svelte@5.16.0",
+      "type": "library",
+      "name": "svelte",
+      "version": "5.16.0",
+      "author": "Rich Harris",
+      "purl": "pkg:npm/svelte@5.16.0",
+      "licenses": [{ "license": { "id": "MIT" } }],
+      "externalReferences": [
+        { "type": "website", "url": "https://svelte.dev" },
+        { "type": "vcs", "url": "https://github.com/sveltejs/svelte.git" },
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/svelte/-/svelte-5.16.0.tgz"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:npm/type-fest@4.41.0",
+      "type": "library",
+      "name": "type-fest",
+      "version": "4.41.0",
+      "author": "Sindre Sorhus",
+      "purl": "pkg:npm/type-fest@4.41.0",
+      "licenses": [{ "expression": "(MIT OR CC0-1.0)" }],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/type-fest/-/type-fest-4.41.0.tgz"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:npm/tailwindcss@4.0.0",
+      "type": "library",
+      "name": "tailwindcss",
+      "version": "4.0.0",
+      "purl": "pkg:npm/tailwindcss@4.0.0",
+      "licenses": [{ "license": { "id": "MIT" } }],
+      "externalReferences": [
+        { "type": "website", "url": "https://tailwindcss.com" },
+        { "type": "vcs", "url": "https://github.com/tailwindlabs/tailwindcss.git" }
+      ]
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/SukramJ/go-fabric@v0.0.0-20260907130242-f06fc1cb3756?type=module",
+      "type": "library",
+      "name": "github.com/SukramJ/go-fabric",
+      "version": "v0.0.0-20260907130242-f06fc1cb3756",
+      "scope": "required",
+      "purl": "pkg:golang/github.com/SukramJ/go-fabric@v0.0.0-20260907130242-f06fc1cb3756?type=module",
+      "externalReferences": [
+        { "type": "vcs", "url": "https://github.com/SukramJ/go-fabric" }
+      ]
+    },
+    {
+      "bom-ref": "pkg:golang/modernc.org/sqlite@v1.34.0?type=module",
+      "type": "library",
+      "name": "modernc.org/sqlite",
+      "version": "v1.34.0",
+      "scope": "required",
+      "licenses": [{ "license": { "id": "BSD-3-Clause" } }],
+      "purl": "pkg:golang/modernc.org/sqlite@v1.34.0?type=module",
+      "externalReferences": [
+        { "type": "vcs", "url": "https://gitlab.com/cznic/sqlite" }
+      ]
+    },
+    {
+      "bom-ref": "pkg:golang/golang.org/x/crypto@v0.31.0?type=module",
+      "type": "library",
+      "name": "golang.org/x/crypto",
+      "version": "v0.31.0",
+      "scope": "required",
+      "licenses": [{ "license": { "id": "BSD-3-Clause" } }],
+      "purl": "pkg:golang/golang.org/x/crypto@v0.31.0?type=module",
+      "externalReferences": [
+        { "type": "vcs", "url": "https://cs.opensource.google/go/x/crypto" }
+      ]
+    }
+  ],
+  "dependencies": []
+}

@@ -358,6 +358,9 @@ export type HealthComponent = HealthSnapshot["components"][number];
 // Incident re-exported from generated schema.
 export type Incident = components["schemas"]["Incident"];
 
+// Warning re-exported from generated schema (`GET /warnings`).
+export type Warning = components["schemas"]["Warning"];
+
 // --- Diagnostics --------------------------------------------------
 
 export type LogLevelEntry = {

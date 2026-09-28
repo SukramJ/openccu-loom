@@ -78,6 +78,7 @@ import {
   RefreshCw,
   Ruler,
   Save,
+  Scale,
   Search,
   Server,
   Settings,
@@ -198,7 +199,8 @@ export type IconName =
   | "mdi:zap"
   | "mdi:shield-alert"
   | "mdi:gas-cylinder"
-  | "mdi:molecule-co";
+  | "mdi:molecule-co"
+  | "mdi:scale-balance";
 
 const REGISTRY: Record<IconName, Component> = {
   "mdi:alert": AlertCircle,
@@ -298,6 +300,7 @@ const REGISTRY: Record<IconName, Component> = {
   "mdi:shield-alert": ShieldAlert,
   "mdi:gas-cylinder": Cloud,
   "mdi:molecule-co": Cloud,
+  "mdi:scale-balance": Scale,
 };
 
 export function resolveIcon(name: IconName): Component {

@@ -229,6 +229,9 @@ func registerReadTools(s *mcpsdk.Server, d Deps) {
 	if d.Incidents != nil {
 		registerListIncidents(s, d)
 	}
+	if d.Warnings != nil {
+		registerListWarnings(s, d)
+	}
 	if d.Paramsets != nil {
 		registerReadParamset(s, d)
 		registerReadLinkParamset(s, d)

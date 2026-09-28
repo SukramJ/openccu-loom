@@ -484,8 +484,11 @@ secrets: ## scan the repo for committed secrets (gitleaks; allowlist in .gitleak
 	$(GO) run github.com/zricethezav/gitleaks/v8@latest detect --no-banner --redact -c .gitleaks.toml
 
 .PHONY: sbom
-sbom: ## generate a CycloneDX SBOM for the daemon -> sbom.json
-	$(GO) run github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@latest app -json -output sbom.json -main ./cmd/openccu-loom .
+sbom: ## generate the merged CycloneDX SBOM (Go + npm) -> sbom.json + the internal/sbom embed
+	$(GO) run github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@latest app -json -output sbom-go.json -main ./cmd/openccu-loom .
+	cd assets/ui && npm sbom --sbom-format cyclonedx > ../../sbom-npm.json
+	python3 script/merge_sbom.py sbom-go.json sbom-npm.json internal/sbom/gen/sbom.cdx.json.gz sbom.json
+	rm -f sbom-go.json sbom-npm.json
 
 .PHONY: fieldalign
 fieldalign: ## report sub-optimal struct field alignment (advisory, ~900 hits — not a gate)
