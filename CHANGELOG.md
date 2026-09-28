@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.79.0] - 2026-09-28
+
 ### Release summary
 
 OpenCCU-Loom now runs against **openccu-lite** systems as well as CCUs, in
@@ -33,6 +35,12 @@ outside this repository: `openccu-loom-client`/`-types` and the Node-RED
 contrib need the new DTOs and the 12.0.0 pin.
 
 Nothing changes for a CCU. REST API 12.0.0, WebSocket API 1.11.
+
+Verified against a real openccu-lite box (occulited 1.0.0-dev.30): reads,
+the event stream, switching a channel, a rename, pairing and a backup all ran
+end to end through the daemon. One limit remains: heating groups on a box can
+be listed and deleted, but creating or editing them waits for the box, whose
+own group save currently times out.
 
 Design records: ADR 0071 (south profiles), 0072 (the event stream), 0073
 (taxonomy), 0074 (per-central features), 0075 (token credentials). Operator

@@ -4,6 +4,13 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.79.0
+
+No changes to the proxy itself. The daemon can now connect to openccu-lite
+systems as well as to CCUs, hides what a system cannot do with the reason,
+and its REST API moves to 12.0.0 (room and function creation answers its id
+as a number). The main add-on's changelog describes it in full.
+
 # 0.78.1
 
 No changes to the proxy or the daemon. Documentation and tooling only: the

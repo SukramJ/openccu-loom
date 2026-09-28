@@ -1,5 +1,29 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.79.0
+
+New: the add-on can now connect to **openccu-lite** systems as well as to
+CCUs, and both can run side by side. Add one in Settings → CCUs (or in the
+first-run wizard) with "Identify system": the add-on recognises the box,
+shows its certificate fingerprint for you to compare, and pairs with it —
+you enter a six-digit code on the box, and the access token never leaves the
+add-on. A token created on the box can be pasted instead.
+
+What a system cannot do is hidden, with the reason, instead of offered and
+failing: a box has no system variables, programs or inbox, so those views
+disappear on a fleet of boxes, and an action the box's token does not allow
+names the missing permission. Rooms and functions that nest on a box are
+edited as trees, and two rooms of one name stay apart by their path
+("Ground floor › Kitchen").
+
+Heating groups on a box can be listed and deleted; creating and editing them
+is not offered yet, because the box's own group save currently fails.
+
+Nothing changes for a CCU. For integrations that call the REST API directly:
+the API is now version 12.0.0 — creating a room or function answers its id
+as a number (it always did; the documentation said text), and on a box
+without numeric ids the answer names the new entry's path instead.
+
 ## 0.78.1
 
 Documentation and tooling only — the daemon is unchanged. If you turned
