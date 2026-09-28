@@ -17,6 +17,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (the reported `read-only file system` error). Updating OpenCCU-Loom
   on openccu-lite is occulited's Addons page, which already carries it
   in its catalogue.
+- **CCU add-on on openccu-lite: an update no longer leaves a second daemon
+  running as root.** The box's installer runs the add-on's start script as
+  root outside the add-on's unit. 0.80.0's own supervision started its
+  restart loop there too, which survived the install and kept starting a
+  second daemon as root every few seconds beside the real one. Without
+  monit the script now starts nothing outside the add-on's unit (the box
+  starts the unit itself after an install), and it replaces a pidfile it
+  cannot overwrite.
+- **CCU add-on on openccu-lite: downloaded archives land where the add-on
+  can write.** The start script picked `/usr/local/sdcard/backup`, which the
+  box mounts read-only for add-ons, so every archive download there would
+  fail. A backup directory is now passed only when it is writable, and the
+  daemon otherwise keeps its own default.
 
 ## [0.80.0] - 2026-09-28
 
