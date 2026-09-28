@@ -20,6 +20,7 @@ import (
 // TERM, the way the real daemon does after a restart from the SPA.
 const rcScriptFakeDaemon = `#!/bin/sh
 echo $$ >> "${LOOM_RC_TEST_STARTS}"
+printf '%s\n' "${OPENCCU_LOOM_BACKUP_DIR:-<unset>}" > "${LOOM_RC_TEST_STARTS}.backupdir"
 trap 'exit 0' TERM
 while :; do sleep 0.1; done
 `
@@ -32,9 +33,25 @@ type rcScriptEnv struct {
 	runDir string
 	starts string
 	env    []string
+	// cronBackupPath is the stand-in for the CCU's CronBackupPath file,
+	// which names the operator's backup directory.
+	cronBackupPath string
 }
 
+// rcScriptUnitCgroup and rcScriptInstallCgroup are the cgroup v2 lines of
+// the add-on's own systemd unit on openccu-lite and of the scope its
+// installer runs in.
+const (
+	rcScriptUnitCgroup    = "0::/system.slice/addon-openccu-loom.service\n"
+	rcScriptInstallCgroup = "0::/system.slice/occulite-addon-6be83965.scope\n"
+)
+
 func newRCScriptEnv(t *testing.T, withMonit bool) *rcScriptEnv {
+	t.Helper()
+	return newRCScriptEnvIn(t, withMonit, rcScriptUnitCgroup)
+}
+
+func newRCScriptEnvIn(t *testing.T, withMonit bool, cgroup string) *rcScriptEnv {
 	t.Helper()
 	if runtime.GOOS != "linux" {
 		t.Skip("the rc.d script reads /proc; it only runs on Linux")
@@ -57,6 +74,12 @@ func newRCScriptEnv(t *testing.T, withMonit bool) *rcScriptEnv {
 		writeExecutable(t, monit, updateScriptStub)
 	}
 
+	cronBackupPath := filepath.Join(stubDir, "CronBackupPath")
+	cgroupFile := filepath.Join(stubDir, "cgroup")
+	if err := os.WriteFile(cgroupFile, []byte(cgroup), 0o644); err != nil {
+		t.Fatalf("write cgroup file: %v", err)
+	}
+
 	e := &rcScriptEnv{
 		script: script,
 		runDir: t.TempDir(),
@@ -69,7 +92,10 @@ func newRCScriptEnv(t *testing.T, withMonit bool) *rcScriptEnv {
 		"LOOM_RC_RUN_DIR="+e.runDir,
 		"LOOM_RC_MONIT="+monit,
 		"LOOM_RC_TEST_STARTS="+e.starts,
+		"LOOM_RC_CGROUP="+cgroupFile,
+		"LOOM_RC_CRON_BACKUP_PATH_FILE="+cronBackupPath,
 	)
+	e.cronBackupPath = cronBackupPath
 	t.Cleanup(func() {
 		// Whatever a failed assertion left running must not outlive the test.
 		for _, pid := range e.startedPIDs(t) {
@@ -262,4 +288,101 @@ func TestCCUAddonRCScriptStopIgnoresAStalePidfile(t *testing.T) {
 		t.Fatalf("init did not start the daemon over a stale pidfile (%d starts)", n)
 	}
 	e.run(t, "stop")
+}
+
+// TestCCUAddonRCScriptStartsNoLoopOutsideTheUnit pins the install path on
+// openccu-lite: the installer runs the script as root in its own scope,
+// where a supervising loop would outlive the install and keep starting a
+// second daemon as root beside the unit's. Without monit the script starts
+// nothing there; the unit is where the daemon runs. The negative control is
+// the same call inside the unit, which does start it.
+func TestCCUAddonRCScriptStartsNoLoopOutsideTheUnit(t *testing.T) {
+	t.Parallel()
+
+	outside := newRCScriptEnvIn(t, false, rcScriptInstallCgroup)
+	outside.run(t, "init")
+	if n := len(outside.waitStarts(t, 1, 3*time.Second)); n != 0 {
+		t.Fatalf("init in the installer's scope started the daemon %d times, want 0", n)
+	}
+	if _, err := os.Stat(outside.pidfile()); !os.IsNotExist(err) {
+		t.Fatalf("init in the installer's scope wrote a pidfile (stat err %v)", err)
+	}
+
+	inside := newRCScriptEnvIn(t, false, rcScriptUnitCgroup)
+	inside.run(t, "init")
+	if n := len(inside.waitStarts(t, 1, 5*time.Second)); n != 1 {
+		t.Fatalf("init inside the unit started the daemon %d times, want 1", n)
+	}
+	inside.run(t, "stop")
+}
+
+// TestCCUAddonRCScriptReplacesAPidfileItCannotWrite pins the second half of
+// the install incident: the root-run loop left a root-owned pidfile in the
+// unit's runtime directory, which the add-on's user cannot overwrite. The
+// directory is the add-on's, so start replaces the file instead of silently
+// failing to record the loop it just started.
+func TestCCUAddonRCScriptReplacesAPidfileItCannotWrite(t *testing.T) {
+	t.Parallel()
+	e := newRCScriptEnv(t, false)
+	if err := os.WriteFile(e.pidfile(), []byte("1\n"), 0o444); err != nil {
+		t.Fatalf("write read-only pidfile: %v", err)
+	}
+	e.run(t, "init")
+	starts := e.waitStarts(t, 1, 5*time.Second)
+	if len(starts) != 1 {
+		t.Fatalf("init started the daemon %d times, want 1", len(starts))
+	}
+	loop, ok := e.pidfilePID()
+	if !ok || loop == 1 {
+		t.Fatalf("pidfile still names %d (ok=%v): the read-only file was not replaced", loop, ok)
+	}
+	e.run(t, "stop")
+	if !waitGone(starts[0], 5*time.Second) {
+		t.Fatalf("stop left the daemon %d running", starts[0])
+	}
+}
+
+// TestCCUAddonRCScriptPassesOnlyAWritableBackupDir pins the backup target on
+// openccu-lite: the unit mounts /usr/local read-only apart from the add-on's
+// own directories, so a directory the script picks there can never take an
+// archive. The script passes a backup directory only when this process can
+// write it, and otherwise leaves the daemon on its own default. The negative
+// control is a writable directory, which is passed.
+func TestCCUAddonRCScriptPassesOnlyAWritableBackupDir(t *testing.T) {
+	t.Parallel()
+	if os.Geteuid() == 0 {
+		t.Skip("root writes into a read-only-permission directory; the check needs an unprivileged user")
+	}
+
+	backupDirSeen := func(t *testing.T, target string) string {
+		t.Helper()
+		e := newRCScriptEnv(t, false)
+		if err := os.WriteFile(e.cronBackupPath, []byte(target+"\n"), 0o644); err != nil {
+			t.Fatalf("write CronBackupPath: %v", err)
+		}
+		e.run(t, "init")
+		if n := len(e.waitStarts(t, 1, 5*time.Second)); n != 1 {
+			t.Fatalf("init started the daemon %d times, want 1", n)
+		}
+		b, err := os.ReadFile(e.starts + ".backupdir")
+		e.run(t, "stop")
+		if err != nil {
+			t.Fatalf("the fake daemon did not record its backup directory: %v", err)
+		}
+		return strings.TrimSpace(string(b))
+	}
+
+	writable := filepath.Join(t.TempDir(), "backup")
+	if got := backupDirSeen(t, writable); got != writable {
+		t.Fatalf("a writable backup directory reached the daemon as %q, want %q", got, writable)
+	}
+
+	readOnly := t.TempDir()
+	if err := os.Chmod(readOnly, 0o555); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(readOnly, 0o755) })
+	if got := backupDirSeen(t, filepath.Join(readOnly, "backup")); got != "<unset>" {
+		t.Fatalf("a backup directory the add-on cannot create reached the daemon as %q, want it unset", got)
+	}
 }

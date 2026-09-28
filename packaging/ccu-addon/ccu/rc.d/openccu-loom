@@ -8,9 +8,9 @@
 #
 # On openccu-lite the same script runs inside a oneshot systemd unit
 # (addon-openccu-loom.service), confined to the add-on's own user, and there
-# is no monit. Two things differ there, both decided below: the pidfile
-# lives in the unit's runtime directory, and the script supervises the
-# daemon itself.
+# is no monit. Three things differ there, all decided below: the pidfile
+# lives in the unit's runtime directory, the script supervises the daemon
+# itself, and it does so only inside that unit.
 
 ADDON_ID=openccu-loom
 ADDON_NAME="OpenCCU-Loom"
@@ -24,6 +24,8 @@ ETC_DIR=/usr/local/etc
 RCD_DIR=/usr/local/etc/config/rc.d
 WWW_DIR=/usr/local/etc/config/addons/www/${ADDON_ID}
 MONIT=${LOOM_RC_MONIT:-/usr/bin/monit}
+CGROUP_FILE=${LOOM_RC_CGROUP:-/proc/self/cgroup}
+CRON_BACKUP_PATH_FILE=${LOOM_RC_CRON_BACKUP_PATH_FILE:-/usr/local/etc/config/CronBackupPath}
 
 # The pidfile must be writable by the user the daemon runs as. On a CCU that
 # is root and /var/run. openccu-lite runs the add-on as its own user, for
@@ -62,6 +64,19 @@ export OPENCCU_LOOM_SUPERVISOR=1
 # unit is a oneshot that stays "active" with the daemon gone.
 has_monit() {
   [ -x "${MONIT}" ]
+}
+
+# in_addon_unit reports whether this process runs inside the add-on's own
+# systemd unit, read off its cgroup (cgroup v2 has the one line
+# "0::<path>"; on v1 every controller line carries the same path).
+in_addon_unit() {
+  [ -r "${CGROUP_FILE}" ] || return 1
+  while IFS=: read -r _id _ctl path; do
+    case "${path}" in
+      */addon-${ADDON_ID}.service|*/addon-${ADDON_ID}.service/*) return 0 ;;
+    esac
+  done < "${CGROUP_FILE}"
+  return 1
 }
 
 # supervise runs the daemon and starts it again whenever it exits, until it
@@ -110,8 +125,8 @@ own_pid() {
 # empty string leaves the daemon on its default, which still carries the
 # .nobackup marker those tar runs honour — degraded, not broken.
 resolve_backup_dir() {
-  if [ -s /usr/local/etc/config/CronBackupPath ]; then
-    head -n1 /usr/local/etc/config/CronBackupPath
+  if [ -s "${CRON_BACKUP_PATH_FILE}" ]; then
+    head -n1 "${CRON_BACKUP_PATH_FILE}"
     return
   fi
   if [ -e /var/status/hasUSB ] && [ -d /media/usb0 ]; then
@@ -123,6 +138,18 @@ resolve_backup_dir() {
     return
   fi
   echo ""
+}
+
+# dir_writable reports whether this process can write into dir, or create
+# it below its nearest existing parent. On openccu-lite the add-on's unit
+# mounts /usr/local read-only except for the add-on's own directories, so
+# /usr/local/sdcard exists but can never take an archive there.
+dir_writable() {
+  d=$1
+  while [ ! -d "${d}" ]; do
+    d=$(dirname "${d}")
+  done
+  [ -w "${d}" ]
 }
 
 stop() {
@@ -147,6 +174,10 @@ start() {
   # USB stick or set CronBackupPath between two starts, and a restart is
   # what the SPA tells them a directory change needs anyway.
   BACKUP_DIR=$(resolve_backup_dir)
+  if [ -n "${BACKUP_DIR}" ] && ! dir_writable "${BACKUP_DIR}"; then
+    logger -t ${ADDON_ID} -p user.info "${BACKUP_DIR} is not writable here"
+    BACKUP_DIR=""
+  fi
   if [ -n "${BACKUP_DIR}" ]; then
     export OPENCCU_LOOM_BACKUP_DIR=${BACKUP_DIR}
     logger -t ${ADDON_ID} -p user.info "CCU archives go to ${BACKUP_DIR}"
@@ -154,6 +185,15 @@ start() {
     logger -t ${ADDON_ID} -p user.info "No CCU backup target found, keeping archives in ${ADDON_DIR}/var/backups"
   fi
   cd ${ADDON_DIR}
+  # Without monit the supervising loop has to live in the add-on's unit,
+  # which stops it with the unit. Anywhere else nothing would: the
+  # installer runs this script as root in its own scope, and a loop started
+  # there survived the install and kept starting a second daemon as root.
+  # The platform starts the unit itself after an install.
+  if ! has_monit && ! in_addon_unit; then
+    logger -t ${ADDON_ID} -p user.info "No monit and not inside addon-${ADDON_ID}.service: the unit starts the daemon"
+    return 0
+  fi
   if own_pid >/dev/null; then
     logger -t ${ADDON_ID} -p user.info "Already running"
     return 0
@@ -171,6 +211,9 @@ start() {
       exec </dev/null >/dev/null 2>&1
       supervise
     ) &
+    # A pidfile another user left behind cannot be overwritten, but the
+    # runtime directory is the add-on's own, so it can be replaced.
+    rm -f "${PIDFILE}"
     echo $! > "${PIDFILE}"
   fi
   logger -t ${ADDON_ID} -p user.info "Started"

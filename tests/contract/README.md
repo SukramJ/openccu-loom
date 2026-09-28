@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 537.
+Guards without a doc comment: 7 of 540.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -50,7 +50,10 @@ Guards without a doc comment: 7 of 537.
 | TestContractCatalogueIsComplete | catalogue_test.go | TestContractCatalogueIsComplete holds that tests/contract/README.md lists exactly the exported TestXxx functions that exist under tests/contract/ — no guard undocumented in the catalogue, no catalogue entry pointing at a guard that no longer exists. |
 | TestCCUAddonRegistersControlPanelEntry | ccu_addon_control_panel_entry_test.go | TestCCUAddonRegistersControlPanelEntry pins how the add-on claims its tile in the CCU's "Systemsteuerung": the platform helper by its real name, plus the underlying HomeMatic Tcl API as the fallback for firmware that predates the helper. |
 | TestCCUAddonUpdateScriptWarnsWithoutControlPanelHelper | ccu_addon_control_panel_entry_test.go | TestCCUAddonUpdateScriptWarnsWithoutControlPanelHelper verifies the miss is LOUD: on firmware that offers neither the helper nor a Tcl interpreter the install still succeeds (the daemon does not need the tile), but it says so rather than leaving the operator with a silently tile-less install — the exact failure mode that hid the wrong helper name. |
+| TestCCUAddonRCScriptPassesOnlyAWritableBackupDir | ccu_addon_rc_script_test.go | TestCCUAddonRCScriptPassesOnlyAWritableBackupDir pins the backup target on openccu-lite: the unit mounts /usr/local read-only apart from the add-on's own directories, so a directory the script picks there can never take an archive. |
+| TestCCUAddonRCScriptReplacesAPidfileItCannotWrite | ccu_addon_rc_script_test.go | TestCCUAddonRCScriptReplacesAPidfileItCannotWrite pins the second half of the install incident: the root-run loop left a root-owned pidfile in the unit's runtime directory, which the add-on's user cannot overwrite. |
 | TestCCUAddonRCScriptRestartsTheDaemonWithoutMonit | ccu_addon_rc_script_test.go | TestCCUAddonRCScriptRestartsTheDaemonWithoutMonit pins what the SPA's "Restart" relies on where no monit runs (openccu-lite): the daemon SIGTERMs itself and the rc.d script must start it again. |
+| TestCCUAddonRCScriptStartsNoLoopOutsideTheUnit | ccu_addon_rc_script_test.go | TestCCUAddonRCScriptStartsNoLoopOutsideTheUnit pins the install path on openccu-lite: the installer runs the script as root in its own scope, where a supervising loop would outlive the install and keep starting a second daemon as root beside the unit's. |
 | TestCCUAddonRCScriptStopIgnoresAStalePidfile | ccu_addon_rc_script_test.go | TestCCUAddonRCScriptStopIgnoresAStalePidfile pins the failure seen on openccu-lite: the pidfile was left by a root-run install and named a PID that no longer belonged to the daemon. |
 | TestCCUAddonUpdateScriptExitCodeContract | ccu_addon_update_script_test.go | TestCCUAddonUpdateScriptExitCodeContract locks the exit-code contract OpenCCU's /bin/install_addon relies on: 0 means "installed without reboot", 10 means "reboot required" and anything else means the platform identifier ($1) was rejected outright. |
 | TestCentralLinksEligibilityMatchesDeviceRule | central_links_eligibility_test.go | TestCentralLinksEligibilityMatchesDeviceRule pins the dispatching adapter to the domain rule it claims to follow. |
@@ -156,7 +159,7 @@ Guards without a doc comment: 7 of 537.
 | TestHAComponentTableCoversEverySourceImplementer | ha_component_non_empty_test.go | TestHAComponentTableCoversEverySourceImplementer re-derives the implementer set by reading internal/model/custom and compares it with the table above. |
 | TestHARegistryDescriptionRulesHaveKeys | ha_registry_description_rules_test.go | TestHARegistryDescriptionRulesHaveKeys fails when any entry has an empty Description.Key. |
 | TestHARegistryDescriptionRulesMatchTheGolden | ha_registry_description_rules_test.go | TestHARegistryDescriptionRulesMatchTheGolden compares every field of every rule against the committed golden file. |
-| TestHARegistryDescriptionRulesNoDuplicates | ha_registry_description_rules_test.go | TestHARegistryDescriptionRulesNoDuplicates fails when the rule slice contains two or more entries that have identical (category, parameters, devices, unit, postfix, varNameContains) matching criteria. |
+| TestHARegistryDescriptionRulesNoDuplicates | ha_registry_description_rules_test.go | TestHARegistryDescriptionRulesNoDuplicates fails when the rule slice contains two or more entries that have identical (category, parameters, devices, unit, postfix) matching criteria. |
 | TestHmEnumClickEventsAndKeypressSourcesAgree | hmEnum_shared_vocabulary_test.go | TestHmEnumClickEventsAndKeypressSourcesAgree ties the two independent spellings of one domain fact — which wire parameters are button presses — that live on opposite sides of a package boundary. |
 | TestHmEnumRollbackReasonVocabularyIsShared | hmEnum_shared_vocabulary_test.go | TestHmEnumRollbackReasonVocabularyIsShared pins the producing side's rollback vocabulary to the one that is published. |
 | TestHmEnumStatusPairGrammarIsOneGrammar | hmEnum_shared_vocabulary_test.go | TestHmEnumStatusPairGrammarIsOneGrammar ties the two halves of one pairing rule together. |
