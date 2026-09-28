@@ -8,6 +8,11 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- The REST router's public surface is pinned: a contract guard walks
+  every mounted `/api/v1` route through the production auth middleware
+  with an anonymous request — everything outside the justified public
+  list (login, OIDC, health, info, the self-gating first-run wizard)
+  must answer 401/403.
 - Four new SPA contract guards: theme tokens defined for dark must exist
   for light (per skin), a `var(--ha-…)` consumed without a fallback must
   be defined, raw colours in components are refused outside a justified

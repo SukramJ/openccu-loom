@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 532.
+Guards without a doc comment: 7 of 533.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -291,6 +291,7 @@ Guards without a doc comment: 7 of 532.
 | TestRepetitionsLabelIsOneRuleAcrossCustomProfiles | repetitions_label_parity_test.go | TestRepetitionsLabelIsOneRuleAcrossCustomProfiles pins the two custom profiles that turn a numeric repetition count into a REPETITIONS wire label against each other. |
 | TestRESTRouteTiersMatchOpenAPIScopes | rest_authz_scope_test.go | TestRESTRouteTiersMatchOpenAPIScopes pins the two halves of the authorization contract to each other: the scope assets/openapi.yaml publishes for an operation, and the gate the chi router actually wraps that route in. |
 | TestRESTHandlersDoNotDecodePathParamsTwice | rest_path_decode_test.go | TestRESTHandlersDoNotDecodePathParamsTwice fails when a REST source file feeds a chi.URLParam value into url.PathUnescape or url.QueryUnescape. |
+| TestEveryAPIRouteRequiresAuthOrIsListedPublic | rest_router_auth_walk_test.go | TestEveryAPIRouteRequiresAuthOrIsListedPublic walks the fully-wired router with the PRODUCTION auth middleware chain (auth.Middleware's Resolve/Require/RequireRole, exactly as cmd/openccu-loom wires them) and fires one anonymous request at every mounted /api/v1 route. |
 | TestRESTRouterMatchesOpenAPISpec | rest_router_openapi_walk_test.go | TestRESTRouterMatchesOpenAPISpec walks the real chi router NewRouter assembles (every optional facade wired, so every conditionally-mounted route is present) and cross-checks it against assets/openapi.yaml in both directions: 1. |
 | TestFullyWiredRouterDepsCoversEveryDep | router_deps_coverage_test.go | TestFullyWiredRouterDepsCoversEveryDep pins that the helper every router-level contract guard builds on either fills a dep or records why it does not. |
 | TestRoutingKeyCentralScopedFamilies | routing_key_contract_test.go | TestRoutingKeyCentralScopedFamilies pins which address families carry the central discriminator in the parameter-level key. |
