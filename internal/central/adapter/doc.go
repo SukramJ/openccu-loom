@@ -32,14 +32,15 @@
 //     binrpc_caller, ordered_caller, rpc_recorder, callback_handlers,
 //     xmlrpc_announcer, wire_value — bridge the InterfaceClient
 //     transports to the domain.
-//   - CCU session & lifecycle: ccu_auth, ccu_readiness, ccu_maintenance —
-//     authenticate, wait for the boot marker, reboot.
+//   - CCU session & lifecycle: ccu_auth, ccu_readiness, ccu_maintenance,
+//     rega_liveness — authenticate, wait for the boot marker, reboot, and
+//     probe ReGa for the MQTT hub plane's liveness.
 //   - Hub surface: hub, hub_mqtt_publisher, hub_sysvar_fetch — programs,
 //     sysvars, inbox, service/alarm messages.
 //   - Device lifecycle: devices, device_admin, device_availability,
 //     device_pipeline, device_reloader, datapoint_resolver,
 //     custom_dp_dispatcher, combined_bridge, bound_writer,
-//     pending_devices, device_communication.
+//     pending_devices, pending_device_persistence, device_communication.
 //   - Device administration: device_replace, device_search, device_team,
 //     install_mode, firmware_domain, rssi_domain — the DeviceAdminDomain
 //     surface and its siblings.
@@ -49,15 +50,15 @@
 //     link_profiles_adapter, link_param_metadata,
 //     climate_link_peer_refresh.
 //   - Schedules & week profiles: schedule_enabled, schedule_io,
-//     schedule_query_adapter, schedules, week_profile_filter,
-//     week_profile_io.
+//     schedule_query_adapter, schedules, schedule_time_normalize,
+//     week_profile_filter, week_profile_io, week_profile_pointer.
 //   - UI schema & labels: uischema_adapter, uischema_groups, uischema_link,
 //     labels, valuelabels, parameter_determiner.
 //   - Export: config_export, definition_export_service,
 //     descriptor_persistence.
 //   - Values cache & sources: values_cache_evict, values_cache_flush,
 //     values_source_lifecycle, master_values_evict, channel_flags_evict,
-//     paramsets.
+//     measurement_evict, paramsets.
 //   - Reliability & background jobs: reconnector, connectivity_probe,
 //     auto_refresh, unobserved_sweep, unobserved_sweep_job,
 //     throttle_pools, safego.

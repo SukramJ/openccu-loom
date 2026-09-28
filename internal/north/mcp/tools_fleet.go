@@ -41,10 +41,10 @@ func parseRequiredRFC3339(value, field string) (time.Time, error) {
 	return t, nil
 }
 
-// This file holds the eight read tools resolving the MCP/REST parity
-// backlog declared in tests/contract/mcp_rest_parity_test.go
-// (restDomainsAwaitingMCPTools): groups, areas, interfaces, history,
-// visibility, energy, links, schedules. Each follows the same shape as
+// This file holds the fleet-wide read tools that give MCP the REST read
+// surfaces (tests/contract/mcp_rest_parity_test.go keeps the two in step):
+// groups, taxonomy, areas, interfaces, measurements, hidden parameters,
+// energy, links, schedules. Each follows the same shape as
 // the hub-derived tools in tools_hub.go — one registerX function, a
 // typed ...Out struct, and a seam that leaves the tool unregistered
 // when nil rather than answering "unavailable" for a wired absence.
