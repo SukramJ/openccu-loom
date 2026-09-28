@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 528.
+Guards without a doc comment: 7 of 532.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -337,6 +337,10 @@ Guards without a doc comment: 7 of 528.
 | TestSPAE2EFixturesAreAllRouted | spa_e2e_fixture_schema_test.go | TestSPAE2EFixturesAreAllRouted asserts that every JSON file under assets/ui/tests/e2e/fixtures/ appears in fixtureRoutes (or is named in fixturesWithoutARoute with a true reason). |
 | TestSPAE2EFixturesMatchOpenAPISchema | spa_e2e_fixture_schema_test.go | TestSPAE2EFixturesMatchOpenAPISchema validates every fixture in fixtureRoutes against the OpenAPI 200 response schema for the route it answers. |
 | TestSPASecretPlaceholderMatchesHandler | spa_secret_payload_contract_test.go | TestSPASecretPlaceholderMatchesHandler pins the two halves of the masked-secret round-trip against each other. |
+| TestSPAComponentsCarryNoRawThemeColours | spa_theme_tokens_test.go | TestSPAComponentsCarryNoRawThemeColours: rule 3 — a hex colour in a .svelte file must be a var() fallback or live in a content-colour file. |
+| TestSPAConsumedThemeTokensAreDefined | spa_theme_tokens_test.go | TestSPAConsumedThemeTokensAreDefined: rule 2 — every var(--ha-…) used WITHOUT a fallback anywhere in the SPA sources must be defined on :root. |
+| TestSPAThemeTokenSetsAreConsistent | spa_theme_tokens_test.go | TestSPAThemeTokenSetsAreConsistent: rules 1 (dark ⊆ light) for both the loom and the HA skin. |
+| TestSPAUserFacingTextsCarryNoTrackingIDs | spa_user_facing_ids_test.go | TestSPAUserFacingTextsCarryNoTrackingIDs extends the doc-purity rule to the strings an operator actually reads: the EN and DE catalogue VALUES of assets/ui/src/lib/i18n.ts must not name a wave, phase, audit item or other internal tracking code. |
 | TestBaselineRefreshScriptRewritesEveryBaseline | spa_visual_regression_guard_test.go | TestBaselineRefreshScriptRewritesEveryBaseline asserts the documented refresh command passes an explicit `--update-snapshots=all`. |
 | TestScreenshotComparisonBudgetIsTightEnoughToSeeDrift | spa_visual_regression_guard_test.go | TestScreenshotComparisonBudgetIsTightEnoughToSeeDrift asserts the visual suite compares against an exact-match pixel budget. |
 | TestSpecificationInterfaceConstantsMatchCode | specification_wire_identities_test.go | — (no doc comment) |

@@ -6,6 +6,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Testing
+
+- Four new SPA contract guards: theme tokens defined for dark must exist
+  for light (per skin), a `var(--ha-…)` consumed without a fallback must
+  be defined, raw colours in components are refused outside a justified
+  content-colour list, and user-facing i18n catalogue values must not
+  carry internal tracking codes.
+
 ### Documentation
 
 - A privacy page (`docs/privacy.md`): every connection the daemon opens
