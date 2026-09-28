@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 534.
+Guards without a doc comment: 7 of 535.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -395,6 +395,7 @@ Guards without a doc comment: 7 of 534.
 | TestWeekprofileSlotsClimateTimeRoundTrip | weekprofile_slots_climate_time_grammar_test.go | TestWeekprofileSlotsClimateTimeRoundTrip pins that the formatter and the parser are inverse over the whole legal range, marker included. |
 | TestWeekprofileSlotsEncoderCarriesEverythingTheValidatorAdmits | weekprofile_slots_slot_limit_test.go | TestWeekprofileSlotsEncoderCarriesEverythingTheValidatorAdmits pins the per-weekday slot count as one fact across two packages that used to spell it separately. |
 | TestWeekprofileSlotsWeekdaySetIsOneFact | weekprofile_slots_weekday_set_test.go | TestWeekprofileSlotsWeekdaySetIsOneFact pins the weekday set that the schedule adapter, the week-profile filter and the paramset key grammar all gate on. |
+| TestWireFixtureCorpusMatchesHandlers | wire_fixture_corpus_test.go | TestWireFixtureCorpusMatchesHandlers records every corpus operation against the fully wired router and compares the (volatile-masked) response verbatim with the committed fixture, after validating the raw response against openapi.yaml. |
 | TestWireMethodsCanonical | wire_methods_canonical_test.go | TestWireMethodsCanonical AST-walks internal/client/backends/*.go and verifies that every string-literal method name passed to *.Call(ctx, "<method>", ...) is either: 1. |
 | TestGenerateWireSnapshots | wire_snapshots/generator_test.go | — (no doc comment) |
 | TestReferenceCompare | wire_snapshots/reference_compare_test.go | TestReferenceCompare runs every Go Custom-DP setter covered by a reference wire snapshot and fails when the wire calls differ. |

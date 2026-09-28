@@ -25,6 +25,12 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- A **wire-fixture corpus** (`assets/wire-fixtures/`): recorded daemon
+  responses — never hand-written, regenerated from the handlers with
+  `-update-wire-fixtures` — validated against `openapi.yaml` and
+  compared byte-for-byte on every test run. The files double as the
+  parser corpus for openccu-loom-client, so a payload change fails
+  loudly on both sides of the contract.
 - The REST router's public surface is pinned: a contract guard walks
   every mounted `/api/v1` route through the production auth middleware
   with an anonymous request — everything outside the justified public

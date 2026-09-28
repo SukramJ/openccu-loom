@@ -1,0 +1,8 @@
+{
+ "code": "unauthorized",
+ "detail": "no valid credentials",
+ "instance": "/api/v1/warnings",
+ "status": 401,
+ "title": "Authentication required",
+ "type": "https://openccu-loom.dev/errors/unauthorized"
+}
