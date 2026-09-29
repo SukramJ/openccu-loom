@@ -12,6 +12,7 @@
   import CdpTilesPanel from "$lib/cdp/CdpTilesPanel.svelte";
   import ScheduleTab from "$lib/components/schedule/ScheduleTab.svelte";
   import MaintenanceStatusGrid from "$lib/components/device/MaintenanceStatusGrid.svelte";
+  import DeviceImage from "$lib/components/device/DeviceImage.svelte";
   import AuditLog from "./AuditLog.svelte";
   import HistoryChart from "$lib/components/HistoryChart.svelte";
   import RecordToggle from "$lib/components/RecordToggle.svelte";
@@ -916,75 +917,84 @@
       {/snippet}
       {#snippet children()}
         {@const device = detail!}
-        <p class="mt-1 text-sm flex flex-wrap items-center gap-2 text-slate-500 dark:text-slate-400">
-          <span class="font-mono">{device.model}</span>
-          {#if device.model_label && device.model_label !== device.model}
-            <span>·</span>
-            <span>{device.model_label}</span>
-          {/if}
-          <span aria-hidden="true">·</span>
-          <span>{device.interface}</span>
-          <span aria-hidden="true">·</span>
-          <span class="font-mono">{device.address}</span>
-          {#if !device.available}
-            <Badge variant="warning">{t("device.offline")}</Badge>
-          {/if}
-          {#if device.update_available}
-            <Badge variant="default">{t("device.update_available")}</Badge>
-          {/if}
-          {#if device.master_pushes_config_pending && maintenanceStore.isPending(device.address)}
-            <Badge variant="warning" class="inline-flex items-center gap-1">
-              <Icon name="mdi:calendar-clock" size={12} />
-              {t("device.config_pending")}
-            </Badge>
-          {/if}
-        </p>
-        <div class="mt-1 grid grid-cols-[auto_1fr] items-start gap-x-3 gap-y-2 text-xs text-slate-500 dark:text-slate-400">
-          {#if treeTaxonomy}
-            <span class="pt-2 font-semibold">{t("device.rooms")}:</span>
-            <TaxonomyPicker
-              taxonomy={roomTree}
-              selected={assignedPaths(device.taxonomy, "room")}
-              onChange={(paths) => void assignPaths("room", paths)}
-              disabled={!canAssign}
-              ariaLabel={t("device.rooms")}
-            />
-            <span class="pt-2 font-semibold">{t("device.functions")}:</span>
-            <TaxonomyPicker
-              taxonomy={functionTree}
-              selected={assignedPaths(device.taxonomy, "function")}
-              onChange={(paths) => void assignPaths("function", paths)}
-              disabled={!canAssign}
-              ariaLabel={t("device.functions")}
-            />
-          {:else}
-            <span class="pt-2 font-semibold">{t("device.rooms")}:</span>
-            <RoomFunctionSelect
-              id="device-rooms"
-              ariaLabel={t("device.rooms")}
-              selected={device.rooms ?? []}
-              options={roomOptions}
-              onChange={(next) => void updateRooms(next)}
-              onCreate={canEditNodes ? createRoomEntry : undefined}
-              disabled={!canAssign}
-              placeholder={t("roomfn.placeholder.room")}
-              createLabel={(v) => t("roomfn.create.room", { name: v })}
-              removeLabel={(n) => t("roomfn.remove_named", { name: n })}
-            />
-            <span class="pt-2 font-semibold">{t("device.functions")}:</span>
-            <RoomFunctionSelect
-              id="device-functions"
-              ariaLabel={t("device.functions")}
-              selected={device.functions ?? []}
-              options={functionOptions}
-              onChange={(next) => void updateFunctions(next)}
-              onCreate={canEditNodes ? createFunctionEntry : undefined}
-              disabled={!canAssign}
-              placeholder={t("roomfn.placeholder.function")}
-              createLabel={(v) => t("roomfn.create.function", { name: v })}
-              removeLabel={(n) => t("roomfn.remove_named", { name: n })}
-            />
-          {/if}
+        <div class="mt-2 flex items-start gap-4">
+          <DeviceImage
+            address={device.address}
+            model={device.model}
+            productGroup={device.product_group}
+          />
+          <div class="min-w-0">
+            <p class="mt-1 text-sm flex flex-wrap items-center gap-2 text-slate-500 dark:text-slate-400">
+              <span class="font-mono">{device.model}</span>
+              {#if device.model_label && device.model_label !== device.model}
+                <span>·</span>
+                <span>{device.model_label}</span>
+              {/if}
+              <span aria-hidden="true">·</span>
+              <span>{device.interface}</span>
+              <span aria-hidden="true">·</span>
+              <span class="font-mono">{device.address}</span>
+              {#if !device.available}
+                <Badge variant="warning">{t("device.offline")}</Badge>
+              {/if}
+              {#if device.update_available}
+                <Badge variant="default">{t("device.update_available")}</Badge>
+              {/if}
+              {#if device.master_pushes_config_pending && maintenanceStore.isPending(device.address)}
+                <Badge variant="warning" class="inline-flex items-center gap-1">
+                  <Icon name="mdi:calendar-clock" size={12} />
+                  {t("device.config_pending")}
+                </Badge>
+              {/if}
+            </p>
+            <div class="mt-1 grid grid-cols-[auto_1fr] items-start gap-x-3 gap-y-2 text-xs text-slate-500 dark:text-slate-400">
+              {#if treeTaxonomy}
+                <span class="pt-2 font-semibold">{t("device.rooms")}:</span>
+                <TaxonomyPicker
+                  taxonomy={roomTree}
+                  selected={assignedPaths(device.taxonomy, "room")}
+                  onChange={(paths) => void assignPaths("room", paths)}
+                  disabled={!canAssign}
+                  ariaLabel={t("device.rooms")}
+                />
+                <span class="pt-2 font-semibold">{t("device.functions")}:</span>
+                <TaxonomyPicker
+                  taxonomy={functionTree}
+                  selected={assignedPaths(device.taxonomy, "function")}
+                  onChange={(paths) => void assignPaths("function", paths)}
+                  disabled={!canAssign}
+                  ariaLabel={t("device.functions")}
+                />
+              {:else}
+                <span class="pt-2 font-semibold">{t("device.rooms")}:</span>
+                <RoomFunctionSelect
+                  id="device-rooms"
+                  ariaLabel={t("device.rooms")}
+                  selected={device.rooms ?? []}
+                  options={roomOptions}
+                  onChange={(next) => void updateRooms(next)}
+                  onCreate={canEditNodes ? createRoomEntry : undefined}
+                  disabled={!canAssign}
+                  placeholder={t("roomfn.placeholder.room")}
+                  createLabel={(v) => t("roomfn.create.room", { name: v })}
+                  removeLabel={(n) => t("roomfn.remove_named", { name: n })}
+                />
+                <span class="pt-2 font-semibold">{t("device.functions")}:</span>
+                <RoomFunctionSelect
+                  id="device-functions"
+                  ariaLabel={t("device.functions")}
+                  selected={device.functions ?? []}
+                  options={functionOptions}
+                  onChange={(next) => void updateFunctions(next)}
+                  onCreate={canEditNodes ? createFunctionEntry : undefined}
+                  disabled={!canAssign}
+                  placeholder={t("roomfn.placeholder.function")}
+                  createLabel={(v) => t("roomfn.create.function", { name: v })}
+                  removeLabel={(n) => t("roomfn.remove_named", { name: n })}
+                />
+              {/if}
+            </div>
+          </div>
         </div>
       {/snippet}
       {#snippet actions()}

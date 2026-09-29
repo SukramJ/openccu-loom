@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 //
-// Device → type-icon mapping for the device list. The real eQ-3 device
-// images are not embedded (ccudata only carries the icon *filename*,
-// not the bytes — the HA reference proxies them from the live CCU), so
-// we map a device to a representative Lucide glyph from the local icon
-// registry instead. Driven by the model string, which is the most
+// Device → type-glyph mapping. The real eQ-3 device picture comes from
+// GET /devices/{addr}/icon (see DeviceImage.svelte); this glyph is its
+// fallback for a device the route has no picture for, mapping a device
+// to a representative Lucide glyph from the local icon registry.
+// Driven by the model string, which is the most
 // deterministic signal; the order is significant (first match wins, so
 // the more specific contact/motion checks precede the broad switch
 // check). Falls back to a neutral cube so an unknown model still gets a

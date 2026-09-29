@@ -236,3 +236,47 @@ test.describe('Device detail — MASTER parameter write', () => {
     await expect(page.getByRole('dialog', { name: 'Review this write' })).toHaveCount(0);
   });
 });
+
+// 1×1 transparent PNG — enough for the browser to decode an image.
+const TINY_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64',
+);
+
+test.describe('Device detail — device picture', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockAllApis(page);
+    await applyDeviceMocks(page);
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        'openccu-loom.prefs.v1',
+        JSON.stringify({ theme: 'light', locale: 'en', navCollapsed: false, expertMode: false }),
+      );
+    });
+  });
+
+  test('shows the picture the icon route serves', async ({ page }) => {
+    let iconPath = '';
+    await page.route('**/api/v1/devices/*/icon', (route) => {
+      iconPath = new URL(route.request().url()).pathname;
+      return route.fulfill({ status: 200, contentType: 'image/png', body: TINY_PNG });
+    });
+
+    await page.goto(`http://localhost:5173/app/#/devices/${DEVICE_ADDRESS}`);
+    const picture = page.getByTestId('device-image');
+    await expect(picture).toHaveAttribute('data-state', 'image');
+    const img = picture.getByRole('img', { name: 'Picture of HmIP-WTH-2' });
+    await expect(img).toBeVisible();
+    await expect.poll(() => img.evaluate((el) => (el as HTMLImageElement).naturalWidth)).toBe(1);
+    expect(iconPath).toBe(`/api/v1/devices/${DEVICE_ADDRESS}/icon`);
+  });
+
+  test('falls back to the device-type glyph when the route has no picture', async ({ page }) => {
+    // mockAllApis answers the icon route with 404.
+    await page.goto(`http://localhost:5173/app/#/devices/${DEVICE_ADDRESS}`);
+    const picture = page.getByTestId('device-image');
+    await expect(picture).toHaveAttribute('data-state', 'fallback');
+    await expect(picture.locator('img')).toHaveCount(0);
+    await expect(picture.locator('svg[aria-label="Picture of HmIP-WTH-2"]')).toBeVisible();
+  });
+});
