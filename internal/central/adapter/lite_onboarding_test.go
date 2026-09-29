@@ -91,3 +91,52 @@ func TestLiteProbeOverPlainHTTP(t *testing.T) {
 		t.Errorf("probe = %+v, want a ready openccu-lite box without a fingerprint", res)
 	}
 }
+
+// TestLiteOnboardingRefusesAnAddressThatIsNotAHost pins the host rule on the
+// onboarding: the address goes into the request URL, and an unauthenticated
+// first-run wizard reaches this code. A host carrying credentials would
+// otherwise still reach the named server — "loom@" + host passes
+// JoinHostPort unchanged and becomes URL userinfo — so the negative control
+// is the plain host, which the same fake answers.
+func TestLiteOnboardingRefusesAnAddressThatIsNotAHost(t *testing.T) {
+	t.Parallel()
+	f := startTestFake(t, litefake.Options{})
+	h, port := fakeHostPort(t, f)
+	o := NewLiteOnboarding("loom-test", nil, "en", slog.New(slog.DiscardHandler))
+	ctx := context.Background()
+
+	for _, host := range []string{"loom@" + h, "http://" + h, h + "/api#", h + "?x="} {
+		if _, err := o.Probe(ctx, hmapi.CentralProbeRequest{Host: host, Port: port}); !errors.Is(err, hmerr.ErrValidation) {
+			t.Errorf("Probe(host %q) = %v, want a validation error", host, err)
+		}
+		if _, err := o.StartPairing(ctx, hmapi.CentralPairingRequest{Host: host, Port: port}); !errors.Is(err, hmerr.ErrValidation) {
+			t.Errorf("StartPairing(host %q) = %v, want a validation error", host, err)
+		}
+	}
+	for _, p := range []int{-1, 65536} {
+		if _, err := o.Probe(ctx, hmapi.CentralProbeRequest{Host: h, Port: p}); !errors.Is(err, hmerr.ErrValidation) {
+			t.Errorf("Probe(port %d) = %v, want a validation error", p, err)
+		}
+	}
+	if calls := f.Calls(); len(calls) != 0 {
+		t.Fatalf("a refused address still reached the server: %d calls, first %+v", len(calls), calls[0])
+	}
+
+	if _, err := o.Probe(ctx, hmapi.CentralProbeRequest{Host: h, Port: port}); err != nil {
+		t.Fatalf("Probe of the plain host: %v", err)
+	}
+	if len(f.Calls()) == 0 {
+		t.Fatal("the plain host reached no server — the check above measured nothing")
+	}
+}
+
+// TestLiteBaseURLTakesAnIPv6LiteralInItsURLForm covers the bracketed form
+// the host rule accepts ("[::1]"): JoinHostPort brackets on its own.
+func TestLiteBaseURLTakesAnIPv6LiteralInItsURLForm(t *testing.T) {
+	t.Parallel()
+	for _, host := range []string{"::1", "[::1]"} {
+		if got := liteBaseURL(host, 8181, false); got != "http://[::1]:8181" {
+			t.Errorf("liteBaseURL(%q) = %q", host, got)
+		}
+	}
+}

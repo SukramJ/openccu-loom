@@ -8,6 +8,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A central's host is checked wherever it arrives, not only in the config
+  file.** The config loader has always refused a `centrals[].host` that
+  carries a scheme, path, port or credentials, because the host goes into
+  every URL the daemon sends to that system. A central added or edited over
+  REST, and the address the "Identify system" and pairing steps contact, were
+  not checked: a host like `user@10.0.0.5` or `10.0.0.5/x#` reshaped the
+  request URL, and the first-run wizard reaches the identify step before any
+  login. All of them now answer `400` with the same rule, and the port must
+  lie within 1–65535. An IPv6 address in brackets (`[::1]`) now also works
+  for identifying and pairing a box.
+
 - **CCU add-on: a start that does not happen no longer logs a backup
   target.** When the openccu-lite installer ran the start script outside the
   add-on's unit, the log first said "CCU archives go to

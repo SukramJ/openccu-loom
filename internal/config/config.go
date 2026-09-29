@@ -2473,13 +2473,37 @@ func validateCentralNames(centrals []CentralConfig) error {
 // or the stricter surface will reject a host this validator accepts on
 // purpose.
 func validateCentralHost(idx int, host string) error {
+	if centralHostValid(host) {
+		return nil
+	}
+	return fmt.Errorf(
+		"config: centrals[%d].host %q: must be a bare hostname or IP address (no scheme, path, port, or credentials)",
+		idx, host,
+	)
+}
+
+// ValidateCentralHost applies the centrals[].host rule to a host that
+// arrives outside the config file: a central added or edited over REST, and
+// the address the onboarding probes and pairs with. Every one of them ends
+// up in a south-bound URL, so each entry point refuses what the config
+// loader refuses.
+func ValidateCentralHost(host string) error {
+	if centralHostValid(host) {
+		return nil
+	}
+	return fmt.Errorf("host %q: must be a bare hostname or IP address (no scheme, path, port, or credentials)", host)
+}
+
+// centralHostValid is the rule behind [validateCentralHost] and
+// [ValidateCentralHost].
+func centralHostValid(host string) bool {
 	// IP literal, bare or bracketed (IPv6 URL form).
 	candidate := host
 	if strings.HasPrefix(candidate, "[") && strings.HasSuffix(candidate, "]") {
 		candidate = candidate[1 : len(candidate)-1]
 	}
 	if net.ParseIP(candidate) != nil {
-		return nil
+		return true
 	}
 	// Hostname / FQDN (trailing dot allowed).
 	trimmed := strings.TrimSuffix(host, ".")
@@ -2492,13 +2516,10 @@ func validateCentralHost(idx int, host string) error {
 			}
 		}
 		if ok {
-			return nil
+			return true
 		}
 	}
-	return fmt.Errorf(
-		"config: centrals[%d].host %q: must be a bare hostname or IP address (no scheme, path, port, or credentials)",
-		idx, host,
-	)
+	return false
 }
 
 // validatePublicURL checks north.rest.public_url when set. Empty is
