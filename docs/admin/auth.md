@@ -125,6 +125,21 @@ north:
       bearer_enabled: true
 ```
 
+### Pairing instead of pasting
+
+A client on your local network can ask for its token itself
+(ADR 0076): it displays a six-digit code, the request appears at the
+top of **Settings → API tokens**, and you approve by **typing that
+code** — the comparison is the authentication, so a mistyped code
+rejects the request and mutes the caller for ten minutes. Only
+`viewer` and `operator` are pairable; a client that needs `admin`
+gets a manually created token. Requests expire after five minutes,
+nothing is granted without your typed code, and every decision lands
+in the audit log. Switch the surface off with
+`north.rest.auth.pairing.enabled: false` (restart required); the
+protocol details for client authors are in
+[Token Pairing](../external-clients/pairing.md).
+
 ### Managing tokens over REST
 
 All token-management endpoints are **admin-only** and live under

@@ -84,6 +84,7 @@ nav:
       - REST & WebSocket API: integrations/rest-ws.md
       - MCP Server: external-clients/mcp.md
       - External Client Wire Contract: external-clients/topic-hierarchy.md
+      - Token Pairing: external-clients/pairing.md
       - Home Assistant Drop-in: external-clients/ha-drop-in-identity-and-scoping.md
       - HA Unique-ID Migration: external-clients/ha-unique-id-migration.md
       - Breaking a Published Identity: external-clients/breaking-change-process.md
