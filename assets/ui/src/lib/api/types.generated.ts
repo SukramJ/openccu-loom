@@ -5957,7 +5957,7 @@ export interface components {
              *     resource — it is not guaranteed to resolve to a document.
              * @enum {string}
              */
-            type: "https://openccu-loom.dev/errors/validation" | "https://openccu-loom.dev/errors/not_found" | "https://openccu-loom.dev/errors/conflict" | "https://openccu-loom.dev/errors/unauthorized" | "https://openccu-loom.dev/errors/forbidden" | "https://openccu-loom.dev/errors/unsupported" | "https://openccu-loom.dev/errors/rate_limited" | "https://openccu-loom.dev/errors/internal" | "https://openccu-loom.dev/errors/bad_request" | "https://openccu-loom.dev/errors/service_unready" | "https://openccu-loom.dev/errors/upstream_unavailable" | "https://openccu-loom.dev/errors/feature_unavailable";
+            type: "https://openccu-loom.dev/errors/validation" | "https://openccu-loom.dev/errors/not_found" | "https://openccu-loom.dev/errors/conflict" | "https://openccu-loom.dev/errors/unauthorized" | "https://openccu-loom.dev/errors/forbidden" | "https://openccu-loom.dev/errors/unsupported" | "https://openccu-loom.dev/errors/rate_limited" | "https://openccu-loom.dev/errors/internal" | "https://openccu-loom.dev/errors/bad_request" | "https://openccu-loom.dev/errors/service_unready" | "https://openccu-loom.dev/errors/upstream_unavailable" | "https://openccu-loom.dev/errors/feature_unavailable" | "https://openccu-loom.dev/errors/pairing_off" | "https://openccu-loom.dev/errors/pairing_not_local" | "https://openccu-loom.dev/errors/pairing_slow_down";
             title: string;
             status: number;
             detail?: string;
@@ -5966,7 +5966,7 @@ export interface components {
              * @description Short tag (also surfaced as the `X-Problem-Code` response header).
              * @enum {string}
              */
-            code?: "validation" | "not_found" | "conflict" | "unauthorized" | "forbidden" | "unsupported" | "rate_limited" | "internal" | "bad_request" | "service_unready" | "upstream_unavailable" | "feature_unavailable";
+            code?: "validation" | "not_found" | "conflict" | "unauthorized" | "forbidden" | "unsupported" | "rate_limited" | "internal" | "bad_request" | "service_unready" | "upstream_unavailable" | "feature_unavailable" | "pairing_off" | "pairing_not_local" | "pairing_slow_down";
             /**
              * @description Set on a `feature_unavailable` problem (HTTP 422): the
              *     operation needs a feature the target central does not offer
