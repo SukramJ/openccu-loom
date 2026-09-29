@@ -58,13 +58,18 @@ puts {<!doctype html>
 # server-side href (no client heuristic). Without one, fall back to the
 # direct host:8119 heuristic resolved in the browser — right for a LAN
 # install reaching the CCU itself. cfg_url is HTML-escaped for the href.
+# The link opens a new tab: occulited's shell shows this card inside a
+# frame and treats any cross-origin navigation of that frame as the addon
+# refusing to be embedded (the embedding contract in occulited's
+# system-api documentation) — and the Config UI on its own port is always
+# another origin.
 set astyle "display:inline-block;padding:11px 22px;background:#0F766E;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;border-radius:10px;"
 if {$cfg_url ne ""} {
   set href [string map {& &amp; < &lt; > &gt; \" &quot;} $cfg_url]
 } else {
   set href "#"
 }
-puts "    <a id=\"cfg\" href=\"$href\" style=\"$astyle\">"
+puts "    <a id=\"cfg\" href=\"$href\" target=\"_blank\" rel=\"noopener\" style=\"$astyle\">"
 puts {      Open Config UI
     </a>
     <p style="margin:18px 0 0;font-size:11px;color:#94a3b8;">}

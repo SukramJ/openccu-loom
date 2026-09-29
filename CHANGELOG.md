@@ -6,6 +6,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- ccu-addon: the settings card's "Open Config UI" link opens a new tab.
+  occulited's shell shows the card inside a frame and treats any
+  cross-origin navigation of that frame as the add-on refusing to be
+  embedded — and the Config UI on its own port is always another
+  origin, so clicking the button ended in the shell's
+  refuses-to-be-embedded notice instead of the UI.
+
 ### Added
 
 - Documentation for the simulated south systems: the developer testing
