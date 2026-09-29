@@ -8,6 +8,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -180,5 +181,41 @@ func TestTLSConfig_HasGetCertificateAndMinTLS12(t *testing.T) {
 	}
 	if cfg.MinVersion != tls.VersionTLS12 {
 		t.Errorf("MinVersion=%d, want %d (TLS 1.2)", cfg.MinVersion, tls.VersionTLS12)
+	}
+}
+
+// TestLeafFingerprint_MatchesTheServedLeafDER pins the pairing anchor:
+// the fingerprint is the SHA-256 of exactly the leaf DER the listener
+// serves, so both pairing sides hash the same bytes. A reloader whose
+// pair swaps must report the new leaf, and one that never loaded
+// reports nil rather than a stale or zero hash.
+func TestLeafFingerprint_MatchesTheServedLeafDER(t *testing.T) {
+	dir := t.TempDir()
+	certPEM, keyPEM := selfSignedPEM(t)
+	certPath, keyPath := writePair(t, dir, certPEM, keyPEM)
+	r, err := NewCertReloader(certPath, keyPath, nil)
+	if err != nil {
+		t.Fatalf("NewCertReloader: %v", err)
+	}
+
+	block, _ := pem.Decode(certPEM)
+	want := sha256.Sum256(block.Bytes)
+	if got := r.LeafFingerprint(); !bytes.Equal(got, want[:]) {
+		t.Fatalf("LeafFingerprint = %x, want %x", got, want)
+	}
+
+	// A rotated pair changes the reported leaf.
+	certPEM2, keyPEM2 := selfSignedPEM(t)
+	if err := r.SaveAndReload(certPEM2, keyPEM2); err != nil {
+		t.Fatalf("SaveAndReload: %v", err)
+	}
+	block2, _ := pem.Decode(certPEM2)
+	want2 := sha256.Sum256(block2.Bytes)
+	got2 := r.LeafFingerprint()
+	if !bytes.Equal(got2, want2[:]) {
+		t.Fatalf("after rotation: LeafFingerprint = %x, want %x", got2, want2)
+	}
+	if bytes.Equal(got2, want[:]) {
+		t.Fatal("after rotation the old fingerprint is still reported")
 	}
 }
