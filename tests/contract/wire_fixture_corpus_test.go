@@ -51,7 +51,9 @@ type wireFixture struct {
 var wireFixtureCorpus = []wireFixture{
 	{
 		file: "info.json", method: http.MethodGet, path: "/info", status: 200,
-		volatile: []string{"uptime", "started_at"},
+		// version, api_version and schema_digest move with every release /
+		// contract edit and have their own guards; the corpus pins the SHAPE.
+		volatile: []string{"uptime", "started_at", "version", "api_version", "schema_digest"},
 	},
 	{file: "health.json", method: http.MethodGet, path: "/health", status: 200},
 	{file: "warnings-empty.json", method: http.MethodGet, path: "/warnings", status: 200, auth: true},

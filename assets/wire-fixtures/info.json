@@ -1,6 +1,6 @@
 {
  "addon_build": false,
- "api_version": "12.3.0",
+ "api_version": "\u003cvolatile\u003e",
  "build_date": "unknown",
  "capabilities": [
   "rest.v1",
@@ -11,8 +11,8 @@
  ],
  "commit": "none",
  "config_ui_url": "",
- "schema_digest": "sha256:095b3c9f93fb2eaf79fee913ddb053ccb9259fc399f4f681b9993bd46d008cad",
+ "schema_digest": "\u003cvolatile\u003e",
  "started_at": "\u003cvolatile\u003e",
  "uptime": "\u003cvolatile\u003e",
- "version": "0.80.1"
+ "version": "\u003cvolatile\u003e"
 }

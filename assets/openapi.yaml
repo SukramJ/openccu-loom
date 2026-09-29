@@ -8928,6 +8928,9 @@ components:
             - https://openccu-loom.dev/errors/service_unready
             - https://openccu-loom.dev/errors/upstream_unavailable
             - https://openccu-loom.dev/errors/feature_unavailable
+            - https://openccu-loom.dev/errors/pairing_off
+            - https://openccu-loom.dev/errors/pairing_not_local
+            - https://openccu-loom.dev/errors/pairing_slow_down
         title: { type: string }
         status: { type: integer }
         detail: { type: string }
@@ -8948,6 +8951,9 @@ components:
             - service_unready
             - upstream_unavailable
             - feature_unavailable
+            - pairing_off
+            - pairing_not_local
+            - pairing_slow_down
         feature:
           type: object
           required: [central, key, reason]
