@@ -727,6 +727,13 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	authMw = rw.authMw
 	restResolve = rw.authResolve
 
+	// On an openccu-lite box that minted this add-on an API token, a
+	// first boot with no centrals adopts the local box by itself
+	// (ADR 0077). Goes through the decorated admin service above, so the
+	// adoption follows the same persist-then-adopt path a REST create
+	// takes. A no-op on every other host.
+	maybeStartLiteAddonOnboarding(ctx, centralAdminSvc, logger)
+
 	// --- Adapter-Hoist ---------------------------------------- Adapters used
 	// by BOTH the WS-command router and the REST router are constructed once
 	// here so the WS hub can register its full command set even when REST is

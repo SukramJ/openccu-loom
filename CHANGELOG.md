@@ -8,6 +8,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- The add-on's API token onboards the local openccu-lite box by itself
+  (ADR 0077). On a box that minted this add-on a token (the manifest now
+  declares `api_scopes: rpc:admin, meta:write, system:write, logs:read`),
+  a first boot with no centrals adopts the local system — named after
+  the box's hostname, interfaces read from the box, no pairing step.
+  `backup` and `power` stay behind pairing, reported as `missing_scope`.
+- Centrals gain `api_token_file` (config, store, REST 12.4.0, passed
+  through by the SPA editor): a path whose file holds the openccu-lite
+  API token, read on every request — rotation-safe for occulited's
+  per-start minting and for container secret mounts, and mutually
+  exclusive with a stored token.
 - Device pictures from the embedded data snapshot. The CCU WebUI's device
   artwork (the 250 px set, `coupling/` included) now ships inside the
   binary via go-openccu-data, and `/api/v1/devices/{addr}/icon` serves

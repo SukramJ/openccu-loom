@@ -2491,6 +2491,10 @@ export type CentralRow = {
   // back — omit the field to keep the stored token.
   api_token_plain?: string;
   api_token_env?: string;
+  // A path, not a secret: the daemon reads the token from this file on
+  // every request (add-on auto-onboarding, container secrets). Editing
+  // it is a config/REST concern; the form only passes it through.
+  api_token_file?: string;
   tls_fingerprint?: string;
   // Write-only: an approved pairing whose token the daemon takes.
   pairing_id?: string;

@@ -199,6 +199,7 @@ func writeCentralSystemRefusal(w http.ResponseWriter, r *http.Request, row sqlit
 		TLS:                   row.TLS,
 		TLSInsecureSkipVerify: row.TLSInsecureSkipVerify,
 		APIToken:              row.APITokenPlain,
+		APITokenFile:          row.APITokenFile,
 		TLSFingerprint:        row.TLSFingerprint,
 	}
 	// A password named by env var counts as a credential for the lite

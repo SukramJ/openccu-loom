@@ -102,6 +102,14 @@ type Options struct {
 	// LiteScopes restricts the scopes of the API token the openccu-lite
 	// fake accepts. Nil grants every scope.
 	LiteScopes []string
+
+	// NoCentral boots the daemon with an empty central list and no
+	// simulated south system — the first-boot state the add-on
+	// auto-onboarding (ADR 0077) acts on. The test brings its own box
+	// (usually a litefake it points the onboarding at via the
+	// OPENCCU_LOOM_LITE_ADDON_* environment overrides, which the daemon
+	// child inherits from the test process).
+	NoCentral bool
 }
 
 // Harness is the test-owned facade over a running daemon sub-process.
@@ -157,7 +165,9 @@ func Start(t *testing.T, opts Options) *Harness {
 	binPath := locateDaemonBinary(t)
 
 	south := southInputs{Host: "127.0.0.1"}
-	if opts.Backend == BackendOpenCCULite {
+	if opts.NoCentral {
+		// No south system: the daemon starts with nothing configured.
+	} else if opts.Backend == BackendOpenCCULite {
 		h.lite = startLiteFake(t, opts.Devices, opts.StartCCUNotReady, opts.LiteScopes)
 		south.Host, south.JSONRPC = liteHostPort(t, h.lite)
 		south.Lite = true
@@ -220,6 +230,7 @@ func Start(t *testing.T, opts Options) *Harness {
 		CCUXMLRPC:               south.XMLRPC,
 		CCUJSONRPC:              south.JSONRPC,
 		Lite:                    south.Lite,
+		NoCentral:               opts.NoCentral,
 		CheckConnectionInterval: opts.CheckConnectionInterval,
 		PublicURL:               opts.PublicURL,
 	})

@@ -109,8 +109,12 @@ type CentralRow struct {
 	// APITokenEnv / APITokenPlain hold an openccu-lite central's API token
 	// the way PasswordEnv / PasswordPlain hold a CCU password: an env var
 	// name, or the value sealed at rest.
-	APITokenEnv           string                  `json:"api_token_env,omitempty"`
-	APITokenPlain         string                  `json:"api_token_plain,omitempty"`
+	APITokenEnv   string `json:"api_token_env,omitempty"`
+	APITokenPlain string `json:"api_token_plain,omitempty"`
+	// APITokenFile names a file the token is read from per request instead
+	// of storing it — a path, not a secret; the file's owner guards the
+	// credential (occulited writes the add-on token 0600).
+	APITokenFile          string                  `json:"api_token_file,omitempty"`
 	TLS                   bool                    `json:"tls,omitempty"`
 	TLSInsecureSkipVerify bool                    `json:"tls_insecure_skip_verify,omitempty"`
 	TLSFingerprint        string                  `json:"tls_fingerprint,omitempty"`
@@ -176,8 +180,8 @@ func (s *CentralsStore) Put(ctx context.Context, r CentralRow) error {
 		 (name, host, serial, port, json_rpc_port, username, password_env, password_plain,
 		  tls, tls_insecure_skip_verify, primary_interface, interfaces_json,
 		  ports_json, visibility_json, behavior_json, enabled, created_at, updated_at,
-		  system_type, api_token_env, api_token_plain, tls_fingerprint)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		  system_type, api_token_env, api_token_plain, tls_fingerprint, api_token_file)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(name) DO UPDATE SET
 		   host=excluded.host, serial=excluded.serial, port=excluded.port,
 		   json_rpc_port=excluded.json_rpc_port,
@@ -189,12 +193,13 @@ func (s *CentralsStore) Put(ctx context.Context, r CentralRow) error {
 		   visibility_json=excluded.visibility_json, behavior_json=excluded.behavior_json,
 		   enabled=excluded.enabled, updated_at=excluded.updated_at,
 		   system_type=excluded.system_type, api_token_env=excluded.api_token_env,
-		   api_token_plain=excluded.api_token_plain, tls_fingerprint=excluded.tls_fingerprint`,
+		   api_token_plain=excluded.api_token_plain, tls_fingerprint=excluded.tls_fingerprint,
+		   api_token_file=excluded.api_token_file`,
 		r.Name, r.Host, r.Serial, r.Port, r.JSONRPCPort, r.Username, r.PasswordEnv, sealedPlain,
 		boolToInt(r.TLS), boolToInt(r.TLSInsecureSkipVerify), r.PrimaryInterface,
 		string(ifJSON), string(portsJSON), string(visJSON), string(behJSON), boolToInt(r.Enabled),
 		now, now,
-		r.SystemType, r.APITokenEnv, sealedToken, r.TLSFingerprint)
+		r.SystemType, r.APITokenEnv, sealedToken, r.TLSFingerprint, r.APITokenFile)
 	if err != nil {
 		return fmt.Errorf("sqlite: centrals upsert: %w", err)
 	}
@@ -284,7 +289,7 @@ const selectCentralsSQL = `SELECT name, host, serial, port, json_rpc_port, usern
 		    password_plain, tls, tls_insecure_skip_verify, primary_interface,
 		    interfaces_json, ports_json, visibility_json, behavior_json, enabled,
 		    created_at, updated_at, system_type, api_token_env, api_token_plain,
-		    tls_fingerprint FROM centrals`
+		    tls_fingerprint, api_token_file FROM centrals`
 
 // scannable is implemented by both *sql.Row and *sql.Rows so the
 // scanner is shared between Get and List.
@@ -300,7 +305,7 @@ func (s *CentralsStore) scanRow(row scannable, r *CentralRow) error {
 	err := row.Scan(&r.Name, &r.Host, &r.Serial, &r.Port, &r.JSONRPCPort, &r.Username,
 		&r.PasswordEnv, &r.PasswordPlain, &tls, &insec, &r.PrimaryInterface,
 		&ifJSON, &portsJSON, &visJSON, &behJSON, &enabled, &r.CreatedAt, &r.UpdatedAt,
-		&r.SystemType, &r.APITokenEnv, &r.APITokenPlain, &r.TLSFingerprint)
+		&r.SystemType, &r.APITokenEnv, &r.APITokenPlain, &r.TLSFingerprint, &r.APITokenFile)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrCentralNotFound
 	}

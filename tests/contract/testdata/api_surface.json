@@ -1,5 +1,5 @@
 {
- "api_version": "12.3.0",
+ "api_version": "12.4.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -788,6 +788,7 @@
   ],
   "CentralRow": [
    "api_token_env:string",
+   "api_token_file:string",
    "api_token_plain:string",
    "behavior:$ref:CentralBehavior",
    "created_at:string",

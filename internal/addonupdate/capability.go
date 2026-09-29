@@ -88,6 +88,18 @@ func (p CapabilityProbe) Supported() bool {
 	return info.Mode()&0o111 != 0
 }
 
+// HostIsLiteVariant reports whether the version manifest at path carries
+// the openccu-lite marker line — the same probe the self-update veto
+// uses, offered to the composition root's add-on auto-onboarding. An
+// unreadable file is simply not a lite host.
+func HostIsLiteVariant(path string) bool {
+	manifest, err := os.ReadFile(path) //nolint:gosec // a fixed firmware path, or a test-injected one
+	if err != nil {
+		return false
+	}
+	return hasLiteVariant(manifest)
+}
+
 // hasLiteVariant reports whether the version manifest carries the exact
 // openccu-lite marker line.
 func hasLiteVariant(manifest []byte) bool {
