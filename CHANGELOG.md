@@ -6,6 +6,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Documentation for the simulated south systems: the developer testing
+  page gains a "Running against a simulated system" recipe — the
+  standalone fake openccu-lite box (godevccu `-mode lite`, full
+  embedded fleet, central YAML block) next to the simulated CCU — and
+  the openccu-lite admin page a "Trying it without a box" pointer.
+
 ### Changed
 
 - The openccu-lite test double moved to godevccu as `pkg/litefake`

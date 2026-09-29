@@ -196,6 +196,21 @@ from the box's Addons page. A few things differ from a CCU:
   archives land in the add-on's `var/backups` rather than
   `/usr/local/sdcard/backup`.
 
+## Trying it without a box
+
+The [godevccu](https://github.com/SukramJ/godevccu) simulator can play a
+complete openccu-lite box — API token, XML-RPC proxy, event stream and
+all — loaded with its full embedded device fleet:
+
+```sh
+godevccu -mode lite -lite-listen 127.0.0.1:2121
+```
+
+The startup log prints the box URL and the API token; add a central with
+`system_type: openccu-lite` pointed at it, exactly as above. The full
+recipe, including the central's YAML block, is in
+[Testing → Running against a simulated system](../developer/testing.md#running-against-a-simulated-system).
+
 ## See also
 
 - [Configuration reference](configuration.md#centrals) — `system_type`, `api_token`, `tls_fingerprint`, `json_rpc_port`.

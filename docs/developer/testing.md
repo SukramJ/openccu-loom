@@ -24,6 +24,43 @@ The test pillars OpenCCU-Loom is held to, the make target behind each, what the 
 
 `make test` runs the unit and contract pillars together; `make race` adds `-race`. Integration, e2e, bench, fuzz, chip-tool, load-test, and the SPA suites are heavier and run on their own targets.
 
+For the **openccu-lite** south path the counterpart to `godevccu` is `litefake` — godevccu's [`pkg/litefake`](https://github.com/SukramJ/godevccu/tree/main/pkg/litefake), a fake of a whole box (token auth, the XML-RPC proxy with its init refusal and method tiers, the SSE event stream, metadata, system and pairing APIs) composed over per-interface simulator listeners. The occulited transport tests, the `lite_*` contract and wiring pins, and the lite e2e runs all boot it in-process; the wire contract it implements is kept verbatim in its [`CONTRACT.md`](https://github.com/SukramJ/godevccu/blob/main/pkg/litefake/CONTRACT.md), and `tests/contract/occulited_wire_contract_test.go` pins the production client against it, deviation runs included.
+
+## Running against a simulated system
+
+Both south-bound system types can be simulated on the workstation — no hardware involved. That is useful far beyond the test suites: developing against a large device fleet, demonstrations, or pointing a daemon on another machine at a reproducible counterpart. Both recipes use the [godevccu](https://github.com/SukramJ/godevccu) CLI; `go install github.com/SukramJ/godevccu/cmd/godevccu@latest` (or `make build` in its checkout) yields the one binary.
+
+**A simulated CCU** (XML-RPC + JSON-RPC):
+
+```sh
+godevccu -mode openccu -xml-rpc-port 2001 -json-rpc-port 8080 -defaults
+```
+
+Point a central of the default `ccu` system type at it (`host`, `port: 2001`, `json_rpc_port: 8080`).
+
+**A simulated openccu-lite box**:
+
+```sh
+godevccu -mode lite -lite-listen 127.0.0.1:2121
+```
+
+serves occulited's HTTP API and, by default, loads **every device type godevccu embeds** — the startup log prints the per-interface device counts, the URL and the API token. `-lite-devices` restricts the fleet; `-lite-tokens`, `-lite-interfaces` and `-lite-tls` steer auth, topology and transport. Add a central pointed at it (a fresh `data_dir` — the YAML file is read into the config store only on first boot):
+
+```yaml
+centrals:
+  - name: litebox
+    host: 127.0.0.1
+    system_type: openccu-lite
+    api_token: "olt_0123456789abcdef0123456789abcdef" # the CLI's built-in default token
+    json_rpc_port: 2121
+    interfaces:
+      - HmIP-RF
+      - BidCos-RF
+      - VirtualDevices
+```
+
+The rest of the config file is the ordinary daemon setup from the [configuration reference](../admin/configuration.md). After bring-up the daemon carries the box's full fleet (`GET /api/v1/devices`), a value written over REST comes back as a device event on the stream, and a `setValue` sent to the box's proxy by a second client shows up in the daemon's model — the same push path a real box uses, exercised end to end.
+
 !!! note "Delegate test boilerplate"
     Production code (architecture, public API, wire decisions) belongs in the main work; the mechanical per-test work — fakes, table cases, assertions, race scaffolding — is well suited to a sub-agent. Name the file and surface, list the cases, and point at an existing test for style.
 

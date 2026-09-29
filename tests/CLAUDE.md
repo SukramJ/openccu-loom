@@ -52,6 +52,13 @@ Run the daemon against an in-process `godevccu` simulator (a pure-Go
 port of pydevccu — no Python toolchain required) and assert
 end-to-end behavior. Slow; gated behind `-tags=integration`.
 
+The openccu-lite counterpart is `litefake` — godevccu's `pkg/litefake`
+(formerly `tests/harness/litefake`): the fake box the occulited
+transport tests, the `lite_*` contract/wiring pins and the lite e2e
+runs boot in-process. Its wire contract lives verbatim next to it as
+`pkg/litefake/CONTRACT.md`; changing that contract means a godevccu
+release plus a version bump here.
+
 ## SPA browser-e2e + visual regression (`assets/ui/tests/e2e/`)
 
 Playwright drives the real SPA in a headless Chromium and locks in the
