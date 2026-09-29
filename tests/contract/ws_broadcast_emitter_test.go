@@ -336,6 +336,19 @@ var wsBroadcastEmitters = map[string]wsBroadcastEmitter{
 		Tokens:    []string{`MatterTopicEndpointAssembled = "matter.endpoint_assembled"`, "Topic:   handlers.MatterTopicEndpointAssembled", "SetOnReassembled(func(count int)"},
 		WireValue: handlers.MatterTopicEndpointAssembled,
 	},
+	"pairing.requests_changed": {
+		Files: []string{
+			"internal/north/rest/ws/pairing_events.go",
+			"cmd/openccu-loom/pairing_wiring.go",
+		},
+		Tokens: []string{
+			`broadcastPairingRequestsChanged = "pairing.requests_changed"`,
+			"func (h *Hub) PublishPairingRequestsChanged",
+			"h.Publish(Event{",
+			"hub.PublishPairingRequestsChanged(",
+		},
+		WireValue: "pairing.requests_changed",
+	},
 	"addon_update.state_changed": {
 		Files: []string{
 			"internal/north/rest/ws/addon_update_events.go",

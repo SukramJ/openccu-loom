@@ -1,5 +1,5 @@
 {
- "api_version": "12.2.0",
+ "api_version": "12.3.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -22,6 +22,7 @@
   "DELETE /incidents": "clearIncidents",
   "DELETE /matter/fabrics/{id}": "revokeMatterFabric",
   "DELETE /me/preferences/{key}": "deletePreference",
+  "DELETE /pairing/{id}": "withdrawPairing",
   "DELETE /programs/{id}": "deleteProgram",
   "DELETE /rooms/{name}": "deleteRoom",
   "DELETE /sessions/edit": "closeEditSession",
@@ -140,6 +141,8 @@
   "GET /matter/status": "matterStatus",
   "GET /me/preferences/{key}": "getPreference",
   "GET /metrics": "metrics",
+  "GET /pairing-requests": "listPairingRequests",
+  "GET /pairing/{id}": "pollPairing",
   "GET /programs": "listPrograms",
   "GET /programs/{id}": "getProgram",
   "GET /rooms": "listRooms",
@@ -250,6 +253,9 @@
   "POST /matter/factory-reset": "matterFactoryReset",
   "POST /matter/force-sync": "matterForceSync",
   "POST /matter/share": "shareMatterBridge",
+  "POST /pairing": "startPairing",
+  "POST /pairing-requests/{id}/approve": "approvePairing",
+  "POST /pairing-requests/{id}/reject": "rejectPairing",
   "POST /programs/{id}/execute": "executeProgram",
   "POST /rooms": "createRoom",
   "POST /security/faults/{id}/acknowledge": "acknowledgeSecurityFault",
@@ -1713,6 +1719,53 @@
    "reason:string",
    "sent:unknown",
    "unique_id:string"
+  ],
+  "PairingAnswer": [
+   "expires_in:integer",
+   "fingerprint:string",
+   "id:string",
+   "interval:integer",
+   "nonce:string",
+   "poll:string"
+  ],
+  "PairingApproveRequest": [
+   "code:string"
+  ],
+  "PairingAsk": [
+   "app:string",
+   "app_version:string",
+   "commit:string",
+   "instance:string",
+   "name:string",
+   "purpose:string",
+   "role:string"
+  ],
+  "PairingRequestList": [
+   "items:array\u003c$ref:PairingView\u003e"
+  ],
+  "PairingRequestsChangedPayload": [
+   "pending:integer"
+  ],
+  "PairingResult": [
+   "role:string",
+   "state:string",
+   "subject:string",
+   "token:string"
+  ],
+  "PairingView": [
+   "address:string",
+   "app:string",
+   "app_version:string",
+   "code:string",
+   "created:string",
+   "expires:string",
+   "fingerprint:string",
+   "id:string",
+   "instance:string",
+   "look_alike:boolean",
+   "name:string",
+   "purpose:string",
+   "role:string"
   ],
   "PatchChannelRequest": [
    "function_paths:array\u003cstring\u003e",

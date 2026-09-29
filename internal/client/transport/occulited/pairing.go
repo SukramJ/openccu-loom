@@ -7,7 +7,6 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -15,6 +14,8 @@ import (
 	"net/url"
 	"strconv"
 	"time"
+
+	"github.com/SukramJ/openccu-loom/internal/pairing"
 )
 
 // Pairing error codes of the box that a caller branches on.
@@ -193,14 +194,10 @@ func (c *Client) CancelPairing(ctx context.Context, p *Pairing) error {
 	return resp.Body.Close()
 }
 
-// PairingCode is the six-digit code both sides compute: the first four
-// bytes of SHA-256(nonce ‖ clientNonce ‖ fingerprint), read big-endian,
-// modulo one million, zero-padded. fingerprint is the SHA-256 of the
-// certificate DER the client saw, empty over plain HTTP.
+// PairingCode is the six-digit code both sides compute. The derivation
+// is shared with this daemon's own pairing server (internal/pairing) —
+// the two speak the same protocol, one as the asking side against an
+// occulited box, one as the answering side towards external clients.
 func PairingCode(nonce, clientNonce, fingerprint []byte) string {
-	h := sha256.New()
-	h.Write(nonce)
-	h.Write(clientNonce)
-	h.Write(fingerprint)
-	return fmt.Sprintf("%06d", binary.BigEndian.Uint32(h.Sum(nil)[:4])%1_000_000)
+	return pairing.Code(nonce, clientNonce, fingerprint)
 }

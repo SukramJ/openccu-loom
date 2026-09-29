@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 542.
+Guards without a doc comment: 7 of 543.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -447,6 +447,7 @@ Guards without a doc comment: 7 of 542.
 | TestPin_OnMDNSReannounce_WiredInDaemon | wiring_pins/chip_remove_fabric_mdns_test.go | TestPin_OnMDNSReannounce_WiredInDaemon pins that daemon.go wires an OnMDNSReannounce callback. |
 | TestPin_StartReaper_CalledInDaemon | wiring_pins/chip_session_reaper_test.go | TestPin_StartReaper_CalledInDaemon pins that daemon.go starts the session reaper via Manager.StartReaper. |
 | TestPin_SetupPIN_TrivialCodeBlacklist | wiring_pins/chip_setup_pin_validation_test.go | TestPin_SetupPIN_TrivialCodeBlacklist pins that buildPaseAdapterFromCreds calls IsValidSetupPIN before deriving the SPAKE2+ verifier. |
+| TestClientPairingRoundTripMintsAUsableToken | wiring_pins/client_pairing_roundtrip_test.go | TestClientPairingRoundTripMintsAUsableToken drives the whole ADR 0076 collaboration the way production wires it: the anonymous ask through the router, the reveal, the admin card's code, the typed approval, the one-time token hand-out — and then the effect that matters: the minted token, read back from the REAL sqlite store by the REAL auth middleware, authenticates an ordinary API request with the paired role's reach and not more. |
 | TestPin_CUxDWiring_ForwardsToRecordSession | wiring_pins/cuxd_recorder_test.go | TestPin_CUxDWiring_ForwardsToRecordSession pins that the hook actually calls the cache coordinator's RecordSession — the bridge from a CCU call to the recorder. |
 | TestPin_CUxDWiring_InstallsSessionHook | wiring_pins/cuxd_recorder_test.go | TestPin_CUxDWiring_InstallsSessionHook pins that cuxd_wiring.go sets the SessionRecorderHook field on the InterfaceClient Config. |
 | TestPin_CUxDWiring_RecordsAsBINRPC | wiring_pins/cuxd_recorder_test.go | TestPin_CUxDWiring_RecordsAsBINRPC pins that the CUxD session hook records under session.RPCTypeBIN, not RPCTypeXML. |

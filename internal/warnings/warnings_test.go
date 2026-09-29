@@ -194,6 +194,21 @@ func TestForUserPrunesExpiredSilences(t *testing.T) {
 	}
 }
 
+type fakePairing struct{ n int }
+
+func (f fakePairing) PendingCount() int { return f.n }
+
+func TestPairingSourceFeedsAWarning(t *testing.T) {
+	a := New(nil, nil, nil, nil, clock(t0)).WithPairing(fakePairing{n: 2})
+	got := a.Active()
+	if len(got) != 1 || got[0].ID != "pairing:pending" || got[0].Args["count"] != "2" || got[0].Severity != SeverityWarning {
+		t.Fatalf("got %+v", got)
+	}
+	if got := New(nil, nil, nil, nil, clock(t0)).WithPairing(fakePairing{n: 0}).Active(); len(got) != 0 {
+		t.Fatalf("zero pending produced %+v", got)
+	}
+}
+
 func TestNilSourcesContributeNothing(t *testing.T) {
 	a := New(nil, nil, nil, nil, clock(t0))
 	if got := a.Active(); len(got) != 0 {

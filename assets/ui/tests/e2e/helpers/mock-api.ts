@@ -470,6 +470,21 @@ export async function mockAllApis(page: Page): Promise<void> {
     route.fulfill({ status: 200 }),
   );
 
+  // Client token pairing (ADR 0076) — the admin card above the token list.
+  // Two pending requests by default, the second flagged look_alike so the
+  // amber compare-the-code warning has a baseline. approve/reject answer
+  // 204; a spec overrides approve with a 409 when it needs the
+  // wrong-code-rejects-the-request path.
+  await page.route('**/api/v1/pairing-requests', (route) =>
+    route.fulfill({ json: fixture('pairing-requests.json') }),
+  );
+  await page.route('**/api/v1/pairing-requests/*/approve', (route) =>
+    route.fulfill({ status: 204 }),
+  );
+  await page.route('**/api/v1/pairing-requests/*/reject', (route) =>
+    route.fulfill({ status: 204 }),
+  );
+
   // Users
   await page.route('**/api/v1/users', (route) => {
     if (route.request().method() === 'GET') {

@@ -1645,13 +1645,33 @@ type AuthConfig struct {
 	Tokens        map[string]string `yaml:"tokens" json:"tokens" cfg:"secret"` // token → role
 	OIDC          OIDCConfig        `yaml:"oidc" json:"oidc" cfg:"basic"`
 	CCU           CCUAuthConfig     `yaml:"ccu" json:"ccu" cfg:"basic"`
-	HAIngress     HAIngressConfig   `yaml:"ha_ingress" json:"ha_ingress" cfg:"basic"`
+	// Pairing gates the client token pairing (ADR 0076): an external
+	// client on the local network asks for a token, both sides derive a
+	// six-digit code, and an administrator approves by typing it in the
+	// tokens panel. Enabled by default because nothing becomes a
+	// credential without that typed approval; switch it off to remove
+	// the unauthenticated surface entirely.
+	Pairing   PairingAuthConfig `yaml:"pairing" json:"pairing" cfg:"basic"`
+	HAIngress HAIngressConfig   `yaml:"ha_ingress" json:"ha_ingress" cfg:"basic"`
 	// SessionIdleTimeout evicts a login session that has not been used
 	// within the window, even while its absolute lifetime is still
 	// running — it caps how long a stolen but unused session cookie stays
 	// usable. Zero (the default) disables the idle check, leaving only the
 	// absolute session lifetime in charge.
 	SessionIdleTimeout time.Duration `yaml:"session_idle_timeout,omitempty" json:"session_idle_timeout,omitempty" cfg:"expert"`
+}
+
+// PairingAuthConfig gates the client token pairing surface.
+type PairingAuthConfig struct {
+	// Enabled toggles the three unauthenticated pairing routes. Defaults
+	// to true; the admin card and its routes stay regardless (they just
+	// have nothing to show when this is off).
+	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty" cfg:"basic"`
+}
+
+// IsEnabled resolves the pairing gate, defaulting to enabled.
+func (p PairingAuthConfig) IsEnabled() bool {
+	return orDefault(p.Enabled, true)
 }
 
 // BasicAuthEnabled resolves the tri-state Basic gate: nil defaults to

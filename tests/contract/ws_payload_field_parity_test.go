@@ -48,7 +48,8 @@ import (
 // (AddonUpdateStatus is carried by ws.AddonUpdateStatusPayload) and the
 // schema name is what wsapi.json and the generated clients agree on.
 var wsPayloadStructs = map[string]any{
-	"AddonUpdateStatus": ws.AddonUpdateStatusPayload{},
+	"AddonUpdateStatus":             ws.AddonUpdateStatusPayload{},
+	"PairingRequestsChangedPayload": ws.PairingRequestsChangedPayload{},
 	// Two handler DTOs that double as broadcast payloads. They were
 	// recorded as holes on the grounds that they live outside the ws
 	// package — true, and irrelevant: they are exported, so reflection

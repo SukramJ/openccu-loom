@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 12.2.0
+  version: 12.3.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -89,6 +89,206 @@ paths:
                 additionalProperties: true
         "404":
           description: This build was produced without an SBOM.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /pairing:
+    post:
+      operationId: startPairing
+      tags: [auth]
+      summary: Ask for an API token via code pairing
+      security: []
+      description: |
+        Client token pairing (ADR 0076), the same protocol this daemon
+        speaks as a client against an openccu-lite box. The caller sends
+        `commit` = hex SHA-256 of a random client nonce (≥16 bytes) and
+        the role it asks for (`viewer` or `operator` — `admin` is never
+        pairable). The answer carries the server's `nonce`, a `poll`
+        secret and the SHA-256 `fingerprint` of the certificate the
+        daemon serves (empty over plain HTTP). Both sides derive the
+        six-digit code from SHA-256(nonce ‖ client_nonce ‖ fingerprint);
+        an administrator types it in the tokens panel to approve.
+        Local-network callers only; the request expires after five
+        minutes. Nothing becomes a credential without the typed code.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PairingAsk" }
+      responses:
+        "202":
+          description: The request waits for the administrator.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PairingAnswer" }
+        "400":
+          description: Invalid ask (role, commit, field shapes).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "403":
+          description: Caller is not on a local network (`pairing_not_local`).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "429":
+          description: Protocol limits (`rate_limited`) — pending cap, per-hour cap, or a recent rejection's mute.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "503":
+          description: Pairing is switched off (`pairing_off`).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /pairing/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: pollPairing
+      tags: [auth]
+      summary: Wait for the pairing decision
+      security: []
+      description: |
+        Authenticated by the request's own poll secret in
+        `Authorization: Pairing <secret>`. The first poll reveals
+        `client_nonce` (hex, matching the commitment); `wait` long-polls
+        up to 30 s. The `approved` answer carries the token exactly
+        once — the request is gone afterwards, and a plain re-poll
+        answers 404. Polling faster than the announced interval without
+        waiting answers 429 `pairing_slow_down`.
+      parameters:
+        - name: client_nonce
+          in: query
+          required: false
+          schema: { type: string }
+        - name: wait
+          in: query
+          required: false
+          schema: { type: integer }
+      responses:
+        "200":
+          description: The current state; the token exactly once on approval.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PairingResult" }
+        "401":
+          description: Not this request's poll secret.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "404":
+          description: Unknown or already-answered request.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "429":
+          description: "`pairing_slow_down`: poll at the announced interval."
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+    delete:
+      operationId: withdrawPairing
+      tags: [auth]
+      summary: Withdraw the pairing request
+      security: []
+      description: The asking client gives up, authenticated by its poll secret.
+      responses:
+        "204": { description: Withdrawn. }
+        "401":
+          description: Not this request's poll secret.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "404":
+          description: Unknown request.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /pairing-requests:
+    get:
+      operationId: listPairingRequests
+      tags: [auth]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      summary: Pending pairing requests, with their codes
+      description: |
+        The admin card behind the tokens panel: every request whose
+        client already revealed its half of the code, oldest first.
+        `look_alike` marks a second pending request from the same
+        address or app+instance — compare the code carefully. Updates
+        are announced on the `pairing.requests_changed` WS broadcast.
+      responses:
+        "200":
+          description: The pending requests.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PairingRequestList" }
+
+  /pairing-requests/{id}/approve:
+    post:
+      operationId: approvePairing
+      tags: [auth]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      summary: Approve a pairing by typing its code
+      description: |
+        The typed code IS the authentication of the approval: a wrong
+        code rejects the request and mutes its (address, app) pair for
+        ten minutes, because a mismatch means the administrator compared
+        against a different request than the one asking.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PairingApproveRequest" }
+      responses:
+        "204": { description: Approved — the client's next poll carries its token. }
+        "404":
+          description: Unknown or no-longer-pending request.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "409":
+          description: Wrong code (request now rejected), or the client has not revealed its half yet.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /pairing-requests/{id}/reject:
+    post:
+      operationId: rejectPairing
+      tags: [auth]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      summary: Reject a pairing request
+      description: Rejects and mutes the (address, app) pair for ten minutes.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Rejected. }
+        "404":
+          description: Unknown or no-longer-pending request.
           content:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
@@ -8728,6 +8928,9 @@ components:
             - https://openccu-loom.dev/errors/service_unready
             - https://openccu-loom.dev/errors/upstream_unavailable
             - https://openccu-loom.dev/errors/feature_unavailable
+            - https://openccu-loom.dev/errors/pairing_off
+            - https://openccu-loom.dev/errors/pairing_not_local
+            - https://openccu-loom.dev/errors/pairing_slow_down
         title: { type: string }
         status: { type: integer }
         detail: { type: string }
@@ -8748,6 +8951,9 @@ components:
             - service_unready
             - upstream_unavailable
             - feature_unavailable
+            - pairing_off
+            - pairing_not_local
+            - pairing_slow_down
         feature:
           type: object
           required: [central, key, reason]
@@ -8784,6 +8990,103 @@ components:
           type: integer
           enum: [1, 7, 90]
           description: How long the warning stays muted for the calling user.
+
+    PairingRequestsChangedPayload:
+      type: object
+      required: [pending]
+      description: WS broadcast `pairing.requests_changed` — only the count; details stay behind the admin-gated list.
+      properties:
+        pending: { type: integer }
+
+    PairingAsk:
+      type: object
+      required: [app, role, commit]
+      properties:
+        app:
+          type: string
+          description: Short app id (letters, digits, `. _ -`, ≤48 chars).
+        app_version: { type: string }
+        instance:
+          type: string
+          description: Which installation of the app, e.g. a hostname.
+        name:
+          type: string
+          description: Human-readable name the admin card shows; defaults to app (+ instance).
+        role:
+          type: string
+          enum: [viewer, operator]
+          description: The role the token shall carry. `admin` is never pairable.
+        purpose:
+          type: string
+          description: One sentence the administrator reads next to the request.
+        commit:
+          type: string
+          description: Hex SHA-256 of the client's random nonce (≥16 bytes), revealed with the first poll.
+    PairingAnswer:
+      type: object
+      required: [id, poll, nonce, expires_in, interval, fingerprint]
+      properties:
+        id: { type: string }
+        poll:
+          type: string
+          description: The request's own secret; sent as `Authorization Pairing <secret>` on poll and withdraw, never in a URL.
+        nonce:
+          type: string
+          description: Hex; the server's half of the code derivation.
+        expires_in: { type: integer }
+        interval:
+          type: integer
+          description: Minimum seconds between plain polls.
+        fingerprint:
+          type: string
+          description: Hex SHA-256 of the certificate DER the daemon serves; empty over plain HTTP. A client that saw a different certificate must abort — the code would authenticate the interceptor.
+    PairingResult:
+      type: object
+      required: [state]
+      properties:
+        state:
+          type: string
+          enum: [pending, approved, rejected, expired]
+        token:
+          type: string
+          description: The minted API token; present exactly once, on the poll that first sees the approval.
+        subject: { type: string }
+        role: { type: string }
+    PairingView:
+      type: object
+      required: [id, app, name, address, role, code, created, expires]
+      properties:
+        id: { type: string }
+        app: { type: string }
+        app_version: { type: string }
+        instance: { type: string }
+        name: { type: string }
+        address: { type: string }
+        role: { type: string }
+        purpose: { type: string }
+        code:
+          type: string
+          description: The six digits the asking client displays; the administrator compares and types them.
+        fingerprint: { type: string }
+        created: { type: string, format: date-time }
+        expires: { type: string, format: date-time }
+        look_alike:
+          type: boolean
+          description: Another pending request shares this one's address or app+instance — compare carefully.
+    PairingRequestList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PairingView" }
+    PairingApproveRequest:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+          description: The six digits read on the asking client.
 
     Warning:
       type: object

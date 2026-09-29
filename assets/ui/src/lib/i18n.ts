@@ -1387,6 +1387,7 @@ const EN: Catalog = {
   "config.field.north.rest.tls_key_file": "TLS private-key file",
   "config.field.north.rest.cors": "Allowed CORS origins",
   "config.field.north.rest.auth.basic_enabled": "HTTP Basic auth",
+  "config.field.north.rest.auth.pairing.enabled": "Client pairing",
   "config.field.north.rest.auth.bearer_enabled": "Bearer-token auth",
   "config.field.north.rest.auth.oidc.enabled": "OIDC enabled",
   "config.field.north.rest.auth.oidc.issuer": "OIDC issuer URL",
@@ -1660,6 +1661,8 @@ const EN: Catalog = {
     'Whitelisted browser origins for cross-origin REST calls. Empty disables CORS entirely; use ["*"] only for development.',
   "config.help.north.rest.auth.basic_enabled":
     "Accept HTTP Basic credentials on protected routes. Useful for curl + CI. Default on; set to false to reject Basic auth even when users are configured.",
+  "config.help.north.rest.auth.pairing.enabled":
+    "Lets a client on the local network ask for an API token by code pairing: you approve by typing the six-digit code it displays. Nothing is granted without that typed code. Off removes the unauthenticated pairing endpoints entirely (restart required).",
   "config.help.north.rest.auth.bearer_enabled":
     "Accept Bearer tokens via Authorization header. Use for automation. Default on; set to false to reject tokens even when they are configured.",
   "config.help.north.rest.auth.oidc.enabled":
@@ -2388,6 +2391,24 @@ const EN: Catalog = {
   "tokens.col.created": "Created",
   "tokens.col.last_seen": "Last seen",
   "tokens.col.actions": "Actions",
+  // --- Pairing requests (ADR 0076) ---
+  "pairing.title": "Pairing requests",
+  "pairing.code_label": "Code",
+  "pairing.code_placeholder": "000000",
+  "pairing.approve": "Approve",
+  "pairing.reject": "Reject",
+  "pairing.approved": "Pairing approved.",
+  "pairing.rejected": "Pairing request rejected.",
+  "pairing.wrong_code_rejected":
+    "The code did not match — the request has been rejected.",
+  "pairing.gone": "The pairing request is gone or expired.",
+  "pairing.confirm_reject_title": "Reject pairing request?",
+  "pairing.confirm_reject_body": "Reject the pairing request from {name}?",
+  "pairing.look_alike_warning":
+    "Another request looks similar — compare the code carefully.",
+  "pairing.expired": "Expired",
+  "pairing.expires_in_minutes": "Expires in {minutes} min",
+  "pairing.expires_at": "Expires {time}",
   // --- Discovery ---
   "discovery.add": "Add",
   "discovery.already_configured": "Already configured",
@@ -3792,6 +3813,7 @@ const EN: Catalog = {
   "warnings.health.degraded": "{component} is degraded.",
   "warnings.incidents": "{count} incidents on {component}.",
   "warnings.service_messages": "{count} service messages for {central}.",
+  "warnings.pairing_pending": "{count} pairing request(s) wait for your decision.",
   "schedule.aria.weekdays": "Weekdays",
   "schedule.duration_placeholder": "e.g. 10s, 5min",
   "schedule.ramp_placeholder": "e.g. 500ms, 2s",
@@ -5539,6 +5561,7 @@ const DE: Catalog = {
   "config.field.north.rest.tls_key_file": "TLS-Schlüsseldatei",
   "config.field.north.rest.cors": "Erlaubte CORS-Origins",
   "config.field.north.rest.auth.basic_enabled": "HTTP-Basic-Auth",
+  "config.field.north.rest.auth.pairing.enabled": "Client-Pairing",
   "config.field.north.rest.auth.bearer_enabled": "Bearer-Token-Auth",
   "config.field.north.rest.auth.oidc.enabled": "OIDC aktiv",
   "config.field.north.rest.auth.oidc.issuer": "OIDC-Issuer-URL",
@@ -5816,6 +5839,8 @@ const DE: Catalog = {
     'Erlaubte Browser-Origins für Cross-Origin-REST-Aufrufe. Leer = CORS aus; ["*"] nur für Entwicklung.',
   "config.help.north.rest.auth.basic_enabled":
     "Akzeptiere HTTP-Basic-Credentials auf geschützten Routen. Nützlich für curl + CI. Standard: an; false lehnt Basic-Auth auch mit konfigurierten Benutzern ab.",
+  "config.help.north.rest.auth.pairing.enabled":
+    "Erlaubt einem Client im lokalen Netz, per Code-Pairing ein API-Token anzufragen: Du bestätigst, indem du den sechsstelligen Code eintippst, den der Client anzeigt. Ohne diesen Code wird nichts vergeben. Aus entfernt die unauthentifizierten Pairing-Endpunkte vollständig (Neustart erforderlich).",
   "config.help.north.rest.auth.bearer_enabled":
     "Akzeptiere Bearer-Tokens via Authorization-Header. Für Automation. Standard: an; false lehnt Tokens auch mit konfigurierten Einträgen ab.",
   "config.help.north.rest.auth.oidc.enabled":
@@ -6555,6 +6580,24 @@ const DE: Catalog = {
   "tokens.col.created": "Erstellt",
   "tokens.col.last_seen": "Zuletzt gesehen",
   "tokens.col.actions": "Aktionen",
+  // --- Pairing-Anfragen (ADR 0076) ---
+  "pairing.title": "Pairing-Anfragen",
+  "pairing.code_label": "Code",
+  "pairing.code_placeholder": "000000",
+  "pairing.approve": "Bestätigen",
+  "pairing.reject": "Ablehnen",
+  "pairing.approved": "Pairing bestätigt.",
+  "pairing.rejected": "Pairing-Anfrage abgelehnt.",
+  "pairing.wrong_code_rejected":
+    "Der Code stimmte nicht überein — die Anfrage wurde abgelehnt.",
+  "pairing.gone": "Die Pairing-Anfrage ist nicht mehr vorhanden oder abgelaufen.",
+  "pairing.confirm_reject_title": "Pairing-Anfrage ablehnen?",
+  "pairing.confirm_reject_body": "Pairing-Anfrage von {name} ablehnen?",
+  "pairing.look_alike_warning":
+    "Eine andere Anfrage sieht ähnlich aus — vergleichen Sie den Code sorgfältig.",
+  "pairing.expired": "Abgelaufen",
+  "pairing.expires_in_minutes": "Läuft in {minutes} Min. ab",
+  "pairing.expires_at": "Läuft ab am {time}",
   // --- Entdeckung ---
   "discovery.add": "Hinzufügen",
   "discovery.already_configured": "Bereits konfiguriert",
@@ -7935,6 +7978,7 @@ const DE: Catalog = {
   "warnings.health.degraded": "{component} ist eingeschränkt.",
   "warnings.incidents": "{count} Vorfälle bei {component}.",
   "warnings.service_messages": "{count} Servicemeldungen für {central}.",
+  "warnings.pairing_pending": "{count} Pairing-Anfrage(n) warten auf Ihre Entscheidung.",
   "schedule.aria.weekdays": "Wochentage",
   "schedule.duration_placeholder": "z.B. 10s, 5min",
   "schedule.ramp_placeholder": "z.B. 500ms, 2s",

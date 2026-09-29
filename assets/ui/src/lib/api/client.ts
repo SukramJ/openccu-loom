@@ -79,6 +79,7 @@ import type {
   SystemCCUEntry,
   UISchema,
   Warning,
+  PairingView,
 } from "./types";
 import type {
   MatterBulkUpdateRequest,
@@ -1930,6 +1931,26 @@ export const api = {
       `/auth/tokens/v2/${encodeURIComponent(fingerprint)}`,
       { method: "DELETE" },
     );
+  },
+  // Client token pairing (ADR 0076) -------------------------------
+  async listPairingRequests(): Promise<PairingView[]> {
+    const r = await request<{ items: PairingView[] }>(`/pairing-requests`);
+    return r.items;
+  },
+  // The typed code IS the authentication of the approval; a wrong code
+  // rejects the request server-side (409) rather than merely failing the
+  // call, so the caller must tell the operator the request is now gone.
+  approvePairing(id: string, code: string) {
+    return request<void>(`/pairing-requests/${encodeURIComponent(id)}/approve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+    });
+  },
+  rejectPairing(id: string) {
+    return request<void>(`/pairing-requests/${encodeURIComponent(id)}/reject`, {
+      method: "POST",
+    });
   },
   // Centrals CRUD ------------------------------------------------
   listCentralsV2() {

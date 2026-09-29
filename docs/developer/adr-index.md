@@ -84,6 +84,7 @@ The table below catalogues every ADR. Each entry links to the record itself — 
 | [0073](../adr/0073-backend-neutral-taxonomy.md) | A backend-neutral taxonomy for rooms, functions and other enums | Rooms and functions are trees of nodes named by path; names stay names on every existing field, paths are additive, an ambiguous name is refused, areas stay name-keyed. The room/function create answer's `id` is corrected to the integer it always was (REST API 12.0.0). |
 | [0074](../adr/0074-per-central-features.md) | Per-central features and what "absent" means | Each central carries a feature set with a reason for every absent key (not supported, missing scope, not ready). REST answers 422 `feature_unavailable`, MQTT does not declare, the SPA hides with the reason, MCP names the central. Refusing ports wrap the legacy sentinels. |
 | [0075](../adr/0075-token-credentials.md) | Credentials for token-based systems | `api_token` is a sealed, masked secret; TLS is pinned to a compared fingerprint; client pairing keeps the approved token in the daemon, and a central takes it by pairing id — no client ever receives it. |
+| [0076](../adr/0076-client-pairing.md) | Client token pairing mirrors the occulited protocol | External clients obtain a token by commit-reveal code pairing: both sides derive six digits, the administrator approves by typing them, `admin` is never pairable, and the approved token reaches the asking client exactly once. |
 
 ## Related reading
 

@@ -28,7 +28,15 @@ var publicAPIRoutes = map[string]string{
 	"GET /api/v1/auth/oidc/start":    "OIDC entry point — the browser arrives unauthenticated by definition",
 	"GET /api/v1/auth/oidc/callback": "OIDC return leg — the code exchange is the authentication",
 	"GET /api/v1/health":             "liveness probe for load balancers and the no-JS anchor",
-	"GET /api/v1/info":               "version + API-version banner the SPA reads before login",
+	// Client token pairing (ADR 0076): the asking client has no
+	// credential yet by definition. The POST carries the protocol's own
+	// limits plus the login rate limit; poll and withdraw authenticate
+	// with the request's poll secret, and nothing becomes a credential
+	// without the code an administrator types.
+	"POST /api/v1/pairing":        "pairing ask — the client has no credential yet; approval is the typed code",
+	"GET /api/v1/pairing/{id}":    "pairing poll — authenticated by the request's own poll secret",
+	"DELETE /api/v1/pairing/{id}": "pairing withdraw — authenticated by the request's own poll secret",
+	"GET /api/v1/info":            "version + API-version banner the SPA reads before login",
 	// The first-run wizard runs before any user exists, so its routes are
 	// mounted outside the auth group and gate themselves: POST /setup
 	// hard-gates on the first-run probe and the FirstRunAllowed switch

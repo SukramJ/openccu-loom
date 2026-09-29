@@ -118,6 +118,12 @@ func TestMCPExemptionsAreStillReal(t *testing.T) {
 // failure list until a tool exists.
 var restDomainsWithoutMCPTools = map[string]string{
 	"auth": "credential exchange; an assistant authenticates through its own token, never by driving the login flow",
+	// Pairing is the credential exchange's other door: the asking side
+	// has no token yet, and the deciding side proves presence by typing
+	// a code read off another screen. Neither half is an assistant verb —
+	// an MCP client already HAS a token, or it would not be connected.
+	"pairing":          "credential issuance flow; both halves are human-presence-bound, not assistant verbs",
+	"pairing-requests": "the same flow's admin half; the typed code is the point, a tool call would bypass it",
 	// The SBOM is a licence-compliance document for the Licenses page and
 	// for audit tooling that speaks CycloneDX over HTTP. It answers no
 	// operational question about devices or the daemon's state, and

@@ -361,6 +361,11 @@ export type Incident = components["schemas"]["Incident"];
 // Warning re-exported from generated schema (`GET /warnings`).
 export type Warning = components["schemas"]["Warning"];
 
+// PairingView re-exported from generated schema (`GET /pairing-requests`) —
+// one pending client-token pairing request, with the code the admin
+// compares against what the asking client displays.
+export type PairingView = components["schemas"]["PairingView"];
+
 // --- Diagnostics --------------------------------------------------
 
 export type LogLevelEntry = {

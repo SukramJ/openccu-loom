@@ -1,0 +1,8 @@
+{
+ "expires_in": 300,
+ "fingerprint": "",
+ "id": "\u003cvolatile\u003e",
+ "interval": 2,
+ "nonce": "\u003cvolatile\u003e",
+ "poll": "\u003cvolatile\u003e"
+}

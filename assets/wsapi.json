@@ -1,5 +1,5 @@
 {
- "version": "1.11",
+ "version": "1.12",
  "envelope": {
   "description": "Shape of every WebSocket frame the daemon emits — both command replies and broadcasts. The `payload` member is replaced per-frame; broadcast entries below name the OpenAPI schema (in assets/openapi.yaml under components.schemas) that pins its structure.",
   "fields": {
@@ -1334,6 +1334,14 @@
    "name": "addon_update.state_changed",
    "topic": "system.addon_update",
    "payload": "AddonUpdateStatus"
+  },
+  {
+   "category": "system",
+   "description": "Server-pushed: the pending client-pairing list changed (a request arrived, was decided, expired or was withdrawn — ADR 0076). Carries only the pending count; the codes and request details stay behind the admin-gated GET /pairing-requests, which the tokens panel fetches on this signal.",
+   "kind": "broadcast",
+   "name": "pairing.requests_changed",
+   "topic": "system.pairing",
+   "payload": "PairingRequestsChangedPayload"
   },
   {
    "category": "system",

@@ -47,6 +47,135 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/pairing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask for an API token via code pairing
+         * @description Client token pairing (ADR 0076), the same protocol this daemon
+         *     speaks as a client against an openccu-lite box. The caller sends
+         *     `commit` = hex SHA-256 of a random client nonce (≥16 bytes) and
+         *     the role it asks for (`viewer` or `operator` — `admin` is never
+         *     pairable). The answer carries the server's `nonce`, a `poll`
+         *     secret and the SHA-256 `fingerprint` of the certificate the
+         *     daemon serves (empty over plain HTTP). Both sides derive the
+         *     six-digit code from SHA-256(nonce ‖ client_nonce ‖ fingerprint);
+         *     an administrator types it in the tokens panel to approve.
+         *     Local-network callers only; the request expires after five
+         *     minutes. Nothing becomes a credential without the typed code.
+         */
+        post: operations["startPairing"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/pairing/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Wait for the pairing decision
+         * @description Authenticated by the request's own poll secret in
+         *     `Authorization: Pairing <secret>`. The first poll reveals
+         *     `client_nonce` (hex, matching the commitment); `wait` long-polls
+         *     up to 30 s. The `approved` answer carries the token exactly
+         *     once — the request is gone afterwards, and a plain re-poll
+         *     answers 404. Polling faster than the announced interval without
+         *     waiting answers 429 `pairing_slow_down`.
+         */
+        get: operations["pollPairing"];
+        put?: never;
+        post?: never;
+        /**
+         * Withdraw the pairing request
+         * @description The asking client gives up, authenticated by its poll secret.
+         */
+        delete: operations["withdrawPairing"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/pairing-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pending pairing requests, with their codes
+         * @description The admin card behind the tokens panel: every request whose
+         *     client already revealed its half of the code, oldest first.
+         *     `look_alike` marks a second pending request from the same
+         *     address or app+instance — compare the code carefully. Updates
+         *     are announced on the `pairing.requests_changed` WS broadcast.
+         */
+        get: operations["listPairingRequests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/pairing-requests/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve a pairing by typing its code
+         * @description The typed code IS the authentication of the approval: a wrong
+         *     code rejects the request and mutes its (address, app) pair for
+         *     ten minutes, because a mismatch means the administrator compared
+         *     against a different request than the one asking.
+         */
+        post: operations["approvePairing"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/pairing-requests/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject a pairing request
+         * @description Rejects and mutes the (address, app) pair for ten minutes.
+         */
+        post: operations["rejectPairing"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/warnings": {
         parameters: {
             query?: never;
@@ -5828,7 +5957,7 @@ export interface components {
              *     resource — it is not guaranteed to resolve to a document.
              * @enum {string}
              */
-            type: "https://openccu-loom.dev/errors/validation" | "https://openccu-loom.dev/errors/not_found" | "https://openccu-loom.dev/errors/conflict" | "https://openccu-loom.dev/errors/unauthorized" | "https://openccu-loom.dev/errors/forbidden" | "https://openccu-loom.dev/errors/unsupported" | "https://openccu-loom.dev/errors/rate_limited" | "https://openccu-loom.dev/errors/internal" | "https://openccu-loom.dev/errors/bad_request" | "https://openccu-loom.dev/errors/service_unready" | "https://openccu-loom.dev/errors/upstream_unavailable" | "https://openccu-loom.dev/errors/feature_unavailable";
+            type: "https://openccu-loom.dev/errors/validation" | "https://openccu-loom.dev/errors/not_found" | "https://openccu-loom.dev/errors/conflict" | "https://openccu-loom.dev/errors/unauthorized" | "https://openccu-loom.dev/errors/forbidden" | "https://openccu-loom.dev/errors/unsupported" | "https://openccu-loom.dev/errors/rate_limited" | "https://openccu-loom.dev/errors/internal" | "https://openccu-loom.dev/errors/bad_request" | "https://openccu-loom.dev/errors/service_unready" | "https://openccu-loom.dev/errors/upstream_unavailable" | "https://openccu-loom.dev/errors/feature_unavailable" | "https://openccu-loom.dev/errors/pairing_off" | "https://openccu-loom.dev/errors/pairing_not_local" | "https://openccu-loom.dev/errors/pairing_slow_down";
             title: string;
             status: number;
             detail?: string;
@@ -5837,7 +5966,7 @@ export interface components {
              * @description Short tag (also surfaced as the `X-Problem-Code` response header).
              * @enum {string}
              */
-            code?: "validation" | "not_found" | "conflict" | "unauthorized" | "forbidden" | "unsupported" | "rate_limited" | "internal" | "bad_request" | "service_unready" | "upstream_unavailable" | "feature_unavailable";
+            code?: "validation" | "not_found" | "conflict" | "unauthorized" | "forbidden" | "unsupported" | "rate_limited" | "internal" | "bad_request" | "service_unready" | "upstream_unavailable" | "feature_unavailable" | "pairing_off" | "pairing_not_local" | "pairing_slow_down";
             /**
              * @description Set on a `feature_unavailable` problem (HTTP 422): the
              *     operation needs a feature the target central does not offer
@@ -5866,6 +5995,74 @@ export interface components {
              * @enum {integer}
              */
             days: 1 | 7 | 90;
+        };
+        /** @description WS broadcast `pairing.requests_changed` — only the count; details stay behind the admin-gated list. */
+        PairingRequestsChangedPayload: {
+            pending: number;
+        };
+        PairingAsk: {
+            /** @description Short app id (letters, digits, `. _ -`, ≤48 chars). */
+            app: string;
+            app_version?: string;
+            /** @description Which installation of the app, e.g. a hostname. */
+            instance?: string;
+            /** @description Human-readable name the admin card shows; defaults to app (+ instance). */
+            name?: string;
+            /**
+             * @description The role the token shall carry. `admin` is never pairable.
+             * @enum {string}
+             */
+            role: "viewer" | "operator";
+            /** @description One sentence the administrator reads next to the request. */
+            purpose?: string;
+            /** @description Hex SHA-256 of the client's random nonce (≥16 bytes), revealed with the first poll. */
+            commit: string;
+        };
+        PairingAnswer: {
+            id: string;
+            /** @description The request's own secret; sent as `Authorization Pairing <secret>` on poll and withdraw, never in a URL. */
+            poll: string;
+            /** @description Hex; the server's half of the code derivation. */
+            nonce: string;
+            expires_in: number;
+            /** @description Minimum seconds between plain polls. */
+            interval: number;
+            /** @description Hex SHA-256 of the certificate DER the daemon serves; empty over plain HTTP. A client that saw a different certificate must abort — the code would authenticate the interceptor. */
+            fingerprint: string;
+        };
+        PairingResult: {
+            /** @enum {string} */
+            state: "pending" | "approved" | "rejected" | "expired";
+            /** @description The minted API token; present exactly once, on the poll that first sees the approval. */
+            token?: string;
+            subject?: string;
+            role?: string;
+        };
+        PairingView: {
+            id: string;
+            app: string;
+            app_version?: string;
+            instance?: string;
+            name: string;
+            address: string;
+            role: string;
+            purpose?: string;
+            /** @description The six digits the asking client displays; the administrator compares and types them. */
+            code: string;
+            fingerprint?: string;
+            /** Format: date-time */
+            created: string;
+            /** Format: date-time */
+            expires: string;
+            /** @description Another pending request shares this one's address or app+instance — compare carefully. */
+            look_alike?: boolean;
+        };
+        PairingRequestList: {
+            items: components["schemas"]["PairingView"][];
+        };
+        PairingApproveRequest: {
+            /** @description The six digits read on the asking client. */
+            code: string;
         };
         Warning: {
             /** @description Stable id, `<source>:<key>` (e.g. `health:mqtt`, `incident:xmlrpc`, `servicemsg:ccu1`). */
@@ -11136,6 +11333,247 @@ export interface operations {
                 };
             };
             /** @description This build was produced without an SBOM. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    startPairing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PairingAsk"];
+            };
+        };
+        responses: {
+            /** @description The request waits for the administrator. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PairingAnswer"];
+                };
+            };
+            /** @description Invalid ask (role, commit, field shapes). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Caller is not on a local network (`pairing_not_local`). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Protocol limits (`rate_limited`) — pending cap, per-hour cap, or a recent rejection's mute. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Pairing is switched off (`pairing_off`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    pollPairing: {
+        parameters: {
+            query?: {
+                client_nonce?: string;
+                wait?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current state; the token exactly once on approval. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PairingResult"];
+                };
+            };
+            /** @description Not this request's poll secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unknown or already-answered request. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description `pairing_slow_down`: poll at the announced interval. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    withdrawPairing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Withdrawn. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not this request's poll secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unknown request. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listPairingRequests: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The pending requests. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PairingRequestList"];
+                };
+            };
+        };
+    };
+    approvePairing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PairingApproveRequest"];
+            };
+        };
+        responses: {
+            /** @description Approved — the client's next poll carries its token. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or no-longer-pending request. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Wrong code (request now rejected), or the client has not revealed its half yet. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    rejectPairing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rejected. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or no-longer-pending request. */
             404: {
                 headers: {
                     [name: string]: unknown;

@@ -59,7 +59,12 @@ type Deps struct {
 	// Warnings backs the operator warning list (GET /warnings) and its
 	// per-user silences. Nil serves an empty list and refuses silences
 	// with 503.
-	Warnings    handlers.WarningsPort
+	Warnings handlers.WarningsPort
+	// Pairing backs the client token pairing (ADR 0076): three
+	// unauthenticated protocol routes for the asking client, and the
+	// admin card's list/approve/reject. Nil answers the protocol routes
+	// with pairing_off and the card with an empty list.
+	Pairing     handlers.PairingService
 	Devices     handlers.DeviceIndex
 	DeviceAdmin handlers.DeviceAdmin
 	// Onboarding backs the probe and client-pairing routes under
@@ -773,6 +778,23 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			r.Get("/setup/pairing/{id}", handlers.SetupCentralPairingStatus(d.Onboarding, d.Setup))
 			r.Delete("/setup/pairing/{id}", handlers.SetupCancelCentralPairing(d.Onboarding, d.Setup))
 		}
+		// Client token pairing (ADR 0076): an external client asks
+		// unauthenticated and its request only ever becomes a credential
+		// through a code an administrator types. The POST mints
+		// server-side state, so it shares the login's per-IP speed bump;
+		// the poll and withdraw authenticate with the request's own poll
+		// secret and are throttled by the protocol itself.
+		{
+			limited := func(h http.HandlerFunc) http.Handler {
+				if d.LoginRateLimit != nil {
+					return d.LoginRateLimit.Middleware()(h)
+				}
+				return h
+			}
+			r.Method(http.MethodPost, "/pairing", limited(handlers.StartPairing(d.Pairing)))
+			r.Get("/pairing/{id}", handlers.PollPairing(d.Pairing))
+			r.Delete("/pairing/{id}", handlers.WithdrawPairing(d.Pairing))
+		}
 		if d.OIDC != nil {
 			// The start route is pre-auth and mints server-held state on
 			// every call, so it gets the same per-IP speed bump as the login
@@ -809,6 +831,11 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 		}
 
 		// Protected routes require auth when the dependency is wired.
+		// The pairing admin card: the list carries the codes to compare,
+		// so it is admin-gated like the token CRUD beneath it.
+		r.With(admin).Get("/pairing-requests", handlers.ListPairingRequests(d.Pairing))
+		r.With(admin).Post("/pairing-requests/{id}/approve", handlers.ApprovePairing(d.Pairing, d.AuditRecorder))
+		r.With(admin).Post("/pairing-requests/{id}/reject", handlers.RejectPairing(d.Pairing, d.AuditRecorder))
 		if d.Auth != nil {
 			r.With(admin).Get("/auth/users", handlers.ListUsers(d.Auth))
 			r.With(admin).Get("/auth/tokens", handlers.ListTokens(d.Auth))
