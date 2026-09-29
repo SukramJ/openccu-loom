@@ -7,12 +7,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"flag"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
@@ -38,6 +40,7 @@ type wireFixture struct {
 	status   int
 	schema   string // "" = the operation's response schema; "Problem" = components/schemas/Problem
 	auth     bool   // send a valid bearer token
+	body     string // request body for POST operations, "" for none
 	volatile []string
 }
 
@@ -54,6 +57,13 @@ var wireFixtureCorpus = []wireFixture{
 	{file: "warnings-empty.json", method: http.MethodGet, path: "/warnings", status: 200, auth: true},
 	{file: "sbom.json", method: http.MethodGet, path: "/sbom", status: 200, auth: true},
 	{file: "problem-unauthorized.json", method: http.MethodGet, path: "/warnings", status: 401, schema: "Problem"},
+	// The pairing ask (ADR 0076): openccu-loom-client's parsers eat this
+	// answer shape. id/poll/nonce are fresh randomness every run.
+	{
+		file: "pairing-answer.json", method: http.MethodPost, path: "/pairing", status: 202,
+		body:     `{"app":"corpus-client","role":"operator","purpose":"corpus","commit":"` + corpusPairingCommit + `"}`,
+		volatile: []string{"id", "poll", "nonce"},
+	},
 	{file: "problem-not-found.json", method: http.MethodGet, path: "/nowhere", status: 404, schema: "Problem"},
 }
 
@@ -65,6 +75,10 @@ func (corpusHealth) Overall() health.Status { return health.StatusHealthy }
 func (corpusHealth) Snapshot() []health.Component {
 	return []health.Component{{Name: "rest", Status: health.StatusHealthy}}
 }
+
+// corpusPairingCommit is SHA-256 of 32 0x11 bytes — a fixed, valid
+// commitment so the recorded ask is deterministic.
+const corpusPairingCommit = "02d449a31fbb267c8f352e9968a79e3e5fc95c1bbeaa502fd6454ebde5a4bedc"
 
 // wireCorpusRouter builds the same fully wired router the other walks use,
 // with the production auth chain so the corpus records real 401 bodies.
@@ -109,7 +123,12 @@ func TestWireFixtureCorpusMatchesHandlers(t *testing.T) {
 
 	for _, fx := range wireFixtureCorpus {
 		t.Run(fx.file, func(t *testing.T) {
-			req := httptest.NewRequest(fx.method, "/api/v1"+fx.path, http.NoBody)
+			var reqBody io.Reader = http.NoBody
+			if fx.body != "" {
+				reqBody = strings.NewReader(fx.body)
+			}
+			req := httptest.NewRequest(fx.method, "/api/v1"+fx.path, reqBody)
+			req.RemoteAddr = "192.168.9.9:40000"
 			if fx.auth {
 				req.Header.Set("Authorization", "Bearer corpus-token")
 			}

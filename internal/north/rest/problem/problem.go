@@ -49,6 +49,13 @@ const (
 	// credential lacks the scope, or it is not ready. The `feature` member
 	// says which and why.
 	TypeFeatureUnavailable Type = "feature_unavailable"
+	// Pairing verbs (client token pairing, ADR 0076). Distinct types so
+	// an asking client can branch without parsing prose: pairing_off and
+	// pairing_not_local end the attempt, pairing_slow_down means poll
+	// less often, plain rate_limited on a pairing route means give up.
+	TypePairingOff      Type = "pairing_off"
+	TypePairingNotLocal Type = "pairing_not_local"
+	TypePairingSlowDown Type = "pairing_slow_down"
 )
 
 // FeatureRef names the feature a feature_unavailable problem is about.

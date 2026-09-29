@@ -171,6 +171,7 @@ nav:
           - ADR 0073 — Backend-neutral taxonomy: adr/0073-backend-neutral-taxonomy.md
           - ADR 0074 — Per-central features: adr/0074-per-central-features.md
           - ADR 0075 — Token credentials: adr/0075-token-credentials.md
+          - ADR 0076 — Client pairing: adr/0076-client-pairing.md
   - Credits: attribution.md
 
 # Only the mkdocs machinery itself is excluded. Everything else under

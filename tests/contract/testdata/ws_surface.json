@@ -1,5 +1,5 @@
 {
-  "wsapi_version": "1.11",
+  "wsapi_version": "1.12",
   "commands": {
     "addon_update.check": "",
     "addon_update.install": "",
@@ -138,6 +138,7 @@
     "matter.exposable_changed": "",
     "matter.fabric_added": "",
     "matter.fabric_removed": "",
+    "pairing.requests_changed": "",
     "paramset.copy": "paramset_key:string?, source_channel_address:string, target_channel_address:string",
     "paramset.description": "central_name:string?, channel_address:string, paramset_key:string?",
     "paramset.determine": "channel_address:string, interface_id:string, parameter_id:string",

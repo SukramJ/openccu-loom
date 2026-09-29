@@ -190,6 +190,11 @@ const (
 	// the raw bearer token.
 	ActionTokenCreate Action = "token_create"
 	ActionTokenRevoke Action = "token_revoke"
+	// Pairing decisions (ADR 0076): an approval mints a token, so the
+	// entry names the app, address and role the administrator vouched
+	// for; a rejection (including a wrong typed code) is its own entry.
+	ActionPairingApprove Action = "pairing_approve"
+	ActionPairingReject  Action = "pairing_reject"
 
 	// User-management surface (Wave E). Note carries
 	// `subject=<subject> role=<role>` so the audit view can render

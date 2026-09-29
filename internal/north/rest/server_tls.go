@@ -4,6 +4,7 @@
 package rest
 
 import (
+	"crypto/sha256"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -117,6 +118,20 @@ func (r *CertReloader) GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, e
 		return c, nil
 	}
 	return nil, errors.New("tls: no certificate loaded")
+}
+
+// LeafFingerprint is the SHA-256 of the currently served leaf
+// certificate's DER, or nil when none is loaded. The pairing protocol
+// binds its six-digit code to it, so a client that saw a different
+// certificate (an interceptor's) derives a different code.
+func (r *CertReloader) LeafFingerprint() []byte {
+	r.reloadIfChanged()
+	c := r.current.Load()
+	if c == nil || len(c.Certificate) == 0 {
+		return nil
+	}
+	sum := sha256.Sum256(c.Certificate[0])
+	return sum[:]
 }
 
 // SaveAndReload validates the PEM key pair, installs it at the

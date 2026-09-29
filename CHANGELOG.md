@@ -6,6 +6,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Client token pairing** (ADR 0076): an external client on the local
+  network — openccu-loom-client above all — can now obtain an API token
+  the way this daemon itself pairs with an openccu-lite box: it asks
+  unauthenticated with a commit-reveal nonce, both sides derive the same
+  six-digit code, and an administrator approves by typing that code;
+  the approved token reaches the client exactly once. `viewer` and
+  `operator` are pairable, `admin` never is. Pending requests surface
+  live (`pairing.requests_changed` broadcast) and as a `pairing:pending`
+  operator warning; every decision lands in the audit log. Switchable
+  via `north.rest.auth.pairing.enabled` (default on, local networks
+  only, rate-limited). REST API 12.3.0, WS API 1.12.
+
 ### Fixed
 
 - **A central's host is checked wherever it arrives, not only in the config

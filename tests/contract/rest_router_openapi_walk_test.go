@@ -35,6 +35,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/discovery/ssdp"
 	"github.com/SukramJ/openccu-loom/internal/north/rest"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/internal/pairing"
 	securitypkg "github.com/SukramJ/openccu-loom/internal/security"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/internal/warnings"
@@ -57,6 +58,12 @@ import (
 type fakeConfigReader struct{}
 
 func (fakeConfigReader) SanitizedConfig() handlers.ConfigSnapshot { return handlers.ConfigSnapshot{} }
+
+type nopMinter struct{}
+
+func (nopMinter) MintPairedToken(context.Context, string, auth.Role) (token, fingerprint string, err error) {
+	return "", "", nil
+}
 
 type fakeSBOMSource struct{}
 
@@ -647,6 +654,7 @@ func fullyWiredRouterDeps() rest.Deps {
 		StartedAt:               time.Now(),
 		SBOM:                    fakeSBOMSource{},
 		Warnings:                warnings.New(nil, nil, nil, nil, nil),
+		Pairing:                 &pairing.Manager{Minter: nopMinter{}},
 		Config:                  fakeConfigReader{},
 		SelfPassword:            fakeSelfPasswordService{},
 		Preferences:             fakePreferencesService{},

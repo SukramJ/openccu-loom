@@ -620,6 +620,15 @@ func authRestartRules() []RestartRule {
 				return b.North.REST.Auth.BearerAuthEnabled() != e.North.REST.Auth.BearerAuthEnabled()
 			},
 		},
+		// The pairing gate is captured at boot (buildPairingService binds
+		// the resolved value into the manager), so a toggle takes a
+		// restart, like the scheme gates above.
+		{
+			Path: "north.rest.auth.pairing.enabled",
+			Differs: func(b, e *Config) bool {
+				return b.North.REST.Auth.Pairing.IsEnabled() != e.North.REST.Auth.Pairing.IsEnabled()
+			},
+		},
 		// The YAML-declared users and tokens are re-read into an in-memory
 		// store on every boot and kept as the login chain's secondary source
 		// (buildAuthStores / buildTokenMap in cmd/openccu-loom/daemon_north.go),

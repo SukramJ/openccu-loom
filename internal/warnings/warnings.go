@@ -72,6 +72,13 @@ type HubSource interface {
 	Hubs() []restapi.NamedHub
 }
 
+// PairingSource reports how many revealed client-pairing requests wait
+// for a decision — each one deserves the operator's attention right
+// now, because it expires in minutes.
+type PairingSource interface {
+	PendingCount() int
+}
+
 // SilenceStore persists per-user silences. The production implementation
 // is sqlite.WarningSilenceStore.
 type SilenceStore interface {
@@ -89,6 +96,7 @@ type Aggregator struct {
 	health    HealthSource
 	incidents IncidentSource
 	hubs      HubSource
+	pairing   PairingSource
 	silences  SilenceStore
 	now       func() time.Time
 }
@@ -99,6 +107,15 @@ func New(h HealthSource, inc IncidentSource, hubs HubSource, silences SilenceSto
 		now = time.Now
 	}
 	return &Aggregator{health: h, incidents: inc, hubs: hubs, silences: silences, now: now}
+}
+
+// WithPairing adds the client-pairing feed. A separate wither rather
+// than a New parameter so the aggregator's callers grow one source at a
+// time without a signature churn; the composition root chains it at
+// construction, which the wiring pin drives.
+func (a *Aggregator) WithPairing(p PairingSource) *Aggregator {
+	a.pairing = p
+	return a
 }
 
 // Active computes the current warning set, unsilenced, in stable order
@@ -172,6 +189,16 @@ func (a *Aggregator) Active() []Warning {
 					Args:       map[string]string{"central": nh.Central, "count": strconv.Itoa(n)},
 				})
 			}
+		}
+	}
+
+	if a.pairing != nil {
+		if n := a.pairing.PendingCount(); n > 0 {
+			out = append(out, Warning{
+				ID: "pairing:pending", Severity: SeverityWarning,
+				MessageKey: "warnings.pairing_pending",
+				Args:       map[string]string{"count": strconv.Itoa(n)},
+			})
 		}
 	}
 

@@ -297,6 +297,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 	// handlers — the password KDF sits inside the resolver, so a throttle
 	// that only reads the bucket afterwards never stops the work.
 	loginLimiter := middleware.NewLoginRateLimiter()
+	pairingSvc := buildPairingService(cfg, d.sqTokens, d.auditRec, tlsReloader, d.wsHub, d.warningsSvc, logger)
 	if d.authMw != nil {
 		d.authMw.BasicThrottle = loginLimiter
 	}
@@ -406,6 +407,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		WSHandler:       d.wsHandler,
 		SBOM:            sbom.Embedded{},
 		Warnings:        d.warningsSvc,
+		Pairing:         pairingSvc,
 		AuthResolve:     d.restResolve,
 		AuthRequire:     d.authMw.Require,
 		RequireOperator: func(next http.Handler) http.Handler {
