@@ -170,8 +170,9 @@ stop() {
 
 start() {
   logger -t ${ADDON_ID} -p user.debug "Starting"
-  # Decided before anything else is resolved or logged, so a start that
-  # does not happen reports nothing it would have done.
+  # Decided before anything else is resolved — only the debug "Starting"
+  # trace above precedes it — so a start that does not happen reports
+  # nothing it would have done.
   #
   # Without monit the supervising loop has to live in the add-on's unit,
   # which stops it with the unit. Anywhere else nothing would: the
