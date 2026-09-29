@@ -260,12 +260,14 @@ func (c *InterfaceClient) Reconnect( //nolint:funlen // composition/wiring: long
 		return false, err
 	}
 
-	// Success path: reset circuit breakers, clear attempt counter,
-	// and walk the state back into CONNECTED so the next outage finds
-	// a CanReconnect-friendly state. Without the explicit walk the
-	// client would sit in RECONNECTING and reject every subsequent
-	// recovery.trigger with "CanReconnect returned false".
+	// Success path: reset circuit breakers, drop the dead session's
+	// pending pings, clear the attempt counter, and walk the state back
+	// into CONNECTED so the next outage finds a CanReconnect-friendly
+	// state. Without the explicit walk the client would sit in
+	// RECONNECTING and reject every subsequent recovery.trigger with
+	// "CanReconnect returned false".
 	c.ResetCircuitBreakers()
+	c.OnSystemStatusRestored()
 	if reconnectAttempts != nil {
 		*reconnectAttempts = 0
 	}

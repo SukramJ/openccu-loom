@@ -289,6 +289,33 @@ func TestReconnectFromDisconnected(t *testing.T) {
 	}
 }
 
+// TestReconnectClearsThePingPongCache pins the success path's cache
+// hygiene through the production caller: pings left pending by the dead
+// session must not count as mismatches against the newly established
+// one. The pre-release comment-claims sweep found the clearing method
+// existed with no production caller — the cache was never cleared.
+func TestReconnectClearsThePingPongCache(t *testing.T) {
+	ic := newOrchIC(t, hmenum.InterfaceHmIPRF)
+	_ = ic.TransitionTo(hmenum.ClientStateInitialized, "", true, hmenum.FailureReasonNone)
+	_ = ic.TransitionTo(hmenum.ClientStateDisconnected, "", true, hmenum.FailureReasonNone)
+	ic.RecordPing("stale-from-the-dead-session")
+
+	b := &orchBackend{}
+	attempts := 0
+	cfg := &client.ReconnectConfig{
+		InitialDelay:  1 * time.Millisecond,
+		MaxDelay:      10 * time.Millisecond,
+		BackoffFactor: 2.0,
+	}
+	ok, err := ic.Reconnect(context.Background(), b, "id", "url", cfg, &attempts)
+	if err != nil || !ok {
+		t.Fatalf("Reconnect: ok=%v err=%v", ok, err)
+	}
+	if n := ic.PingPong().PendingCount(); n != 0 {
+		t.Fatalf("pending pings after successful reconnect = %d, want 0 — the stale session's pings pollute the new one", n)
+	}
+}
+
 func TestReconnectIncrementsAttemptsOnFailure(t *testing.T) {
 	ic := newOrchIC(t, hmenum.InterfaceHmIPRF)
 	_ = ic.TransitionTo(hmenum.ClientStateInitialized, "", true, hmenum.FailureReasonNone)

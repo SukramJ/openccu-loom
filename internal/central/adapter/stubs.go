@@ -65,7 +65,9 @@ const backupRunTimeout = 6 * time.Minute
 //
 // List / Stream / Restore consult the optional [BackupStorage] +
 // [BackupRestorer] hooks; when both are nil the adapter degrades
-// gracefully (empty list, stub stream, ErrRestoreUnsupported).
+// loudly where silence would mislead: List answers an empty list,
+// Stream fails with errStorageNotConfigured (never an empty archive),
+// and Restore fails with ErrRestoreUnsupported.
 type BackupAdapter struct {
 	registry *central.Registry
 	storage  BackupStorage

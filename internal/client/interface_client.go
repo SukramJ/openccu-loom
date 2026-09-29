@@ -1306,10 +1306,11 @@ func (c *InterfaceClient) Model() string {
 // PingPong cache clear on SystemStatus connection-restored
 // ---------------------------------------------------------------------------
 
-// OnSystemStatusRestored is called by the coordinator (or the central's
-// system-status handler) when the CCU connection for this interface has been
-// restored. It clears the PingPong cache so stale mismatch counts do not
-// pollute the newly established session.
+// OnSystemStatusRestored is called on the reconnect success path
+// ([InterfaceClient.Reconnect]) once the CCU connection for this
+// interface has been restored. It clears the PingPong cache so the dead
+// session's pending pings do not count as mismatches against the newly
+// established one.
 func (c *InterfaceClient) OnSystemStatusRestored() {
 	c.cfg.PingPong.Clear()
 	c.cfg.Logger.Debug(

@@ -1,5 +1,30 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.82.0
+
+New: **every device shows its picture.** The device artwork ships inside
+the add-on now, so the device detail page shows the product picture —
+also for an openccu-lite system, which has no CCU web UI to fetch it
+from. A model newer than the shipped set still comes from your CCU.
+
+New for OpenCCU-Loom **installed on an openccu-lite system** (this HA
+add-on is unaffected, but a co-installed box profits): the box hands the
+add-on its own API token, so a first start with no systems configured
+sets the local box up by itself — nothing to pair, nothing to paste.
+Backups and reboots still ask for a paired token. The ports the add-on
+listens on now appear as labelled switches on the box's Addons page
+instead of needing a manual firewall rule, and the Settings button
+opens the Config UI in a new tab instead of ending in the box's
+"refuses to be embedded" notice.
+
+Also new: an API token for an openccu-lite system can be read from a
+file (`api_token_file`) — it is re-read on every request, so a rotated
+token or a remounted container secret takes effect without a restart.
+
+Also fixed: after a CCU connection is re-established, ping-pong
+diagnostics start clean — pings the lost connection left unanswered no
+longer show up as mismatch warnings against the new one.
+
 ## 0.81.0
 
 New: **pair a client instead of pasting a token.** A program on your

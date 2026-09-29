@@ -415,9 +415,11 @@ type Deps struct {
 	// empty in multi-central setups where handlers resolve the central
 	// per-request.
 	CentralName string
-	// OpenAPIValidator, when non-nil, gates every request through the
-	// kin-openapi validator. Mounted right after [middleware.Logger]
-	// so the rejection path still produces a logged record. Build via
+	// OpenAPIValidator, when non-nil, gates requests through the
+	// kin-openapi validator. Mounted inside the /api/v1 subtree only —
+	// the SPA and static mounts are not described by the spec —
+	// downstream of [middleware.Logger], so the rejection path still
+	// produces a logged record. Build via
 	// [middleware.NewOpenAPIValidator] in the composition root.
 	OpenAPIValidator *middleware.OpenAPIValidator
 	// MatterFabricStore backs GET /api/v1/matter/fabrics. Nil disables
