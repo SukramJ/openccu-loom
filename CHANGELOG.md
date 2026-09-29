@@ -6,6 +6,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.81.0] - 2026-09-29
+
+### Release summary
+
+An external client can now **pair** with the daemon for its API token
+instead of pasting one: the client shows a six-digit code, the request
+appears on the tokens panel, and typing the code approves it — the same
+protocol OpenCCU-Loom itself speaks when pairing with an openccu-lite
+box, now answered from the other side.
+
 ### Added
 
 - **Client token pairing** (ADR 0076): an external client on the local

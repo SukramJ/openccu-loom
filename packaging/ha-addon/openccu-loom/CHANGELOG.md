@@ -1,5 +1,20 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.81.0
+
+New: **pair a client instead of pasting a token.** A program on your
+network (the Home Assistant backend above all) can ask this add-on for
+its own API token: it shows a six-digit code, the request appears at the
+top of Settings → API tokens, and you approve by typing that code.
+A wrong code rejects the request; nothing is ever granted without your
+typed approval, admin tokens stay manual-only, and the switch lives at
+north.rest.auth.pairing.enabled. Waiting requests also show up as a
+warning on the Diagnostics page.
+
+Also fixed: a central's address is now validated wherever you enter it
+(add/edit over the web UI included, IPv6 in brackets now accepted), not
+only in the config file.
+
 ## 0.80.1
 
 Fixes for OpenCCU-Loom running as an add-on directly on an openccu-lite
