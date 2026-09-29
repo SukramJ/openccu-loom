@@ -533,7 +533,8 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 // ENERGY_COUNTER as five parameters; Matter models the first four as
 // attributes of ONE ElectricalPowerMeasurement cluster and the fifth as
 // ElectricalEnergyMeasurement, both on a single ElectricalSensor device type
-// (0x0510, matter.js electrical-sensor.element.ts). No single member
+// (0x0510, matter.js packages/node/src/endpoints/electrical-sensor.ts).
+// No single member
 // parameter can serve as the row key, so the group gets its own — the same
 // reasoning as [ButtonGroupDPKey].
 //

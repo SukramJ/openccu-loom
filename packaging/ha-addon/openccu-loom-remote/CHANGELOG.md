@@ -4,6 +4,19 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.82.0
+
+No changes to the proxy. The daemon release embeds the device pictures
+(openccu-lite systems show them too), lets an add-on installed on an
+openccu-lite system set the local system up by itself, and turns the
+add-on's ports into switches on that system's Addons page.
+
+# 0.81.0
+
+No changes to the proxy. The daemon adds client token pairing — approve
+a six-digit code instead of pasting a token — and validates a central's
+address wherever it is entered.
+
 # 0.80.1
 
 No changes to the proxy. The daemon release fixes OpenCCU-Loom running as an
@@ -814,19 +827,6 @@ the Home Assistant sidebar (no local daemon required).
   without a second login; without a token the remote login page is
   proxied through.
 - `http://` and `https://` upstreams; `tls_insecure` flag per instance
-  for self-signed certificates.## 0.81.0
-
-New: **pair a client instead of pasting a token.** A program on your
-network (the Home Assistant backend above all) can ask this add-on for
-its own API token: it shows a six-digit code, the request appears at the
-top of Settings → API tokens, and you approve by typing that code.
-A wrong code rejects the request; nothing is ever granted without your
-typed approval, admin tokens stay manual-only, and the switch lives at
-north.rest.auth.pairing.enabled. Waiting requests also show up as a
-warning on the Diagnostics page.
-
-Also fixed: a central's address is now validated wherever you enter it
-(add/edit over the web UI included, IPv6 in brackets now accepted), not
-only in the config file.
+  for self-signed certificates.
 
 

@@ -6,6 +6,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.82.0] - 2026-09-29
+
+### Release summary
+
+An openccu-lite round. Device pictures now ship **embedded** — an
+openccu-lite system, which has no CCU web UI to proxy them from, shows
+them for the first time, and the SPA's device detail page displays
+them. An add-on installed on an openccu-lite box **onboards the local
+system by itself** with the API token the box mints for it (ADR 0077);
+its manifest declares the runtime policy, so the add-on's ports become
+labelled switches on the box's Addons page. The openccu-lite test
+double moved to godevccu and doubles as a standalone fake box
+(`godevccu -mode lite`) carrying the full embedded device fleet.
+
 ### Added
 
 - The add-on's API token onboards the local openccu-lite box by itself
@@ -49,6 +63,11 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- client: a successful reconnect now clears the interface's ping-pong
+  cache, so pings the dead session left pending no longer count as
+  mismatches against the newly established one. Found by the
+  pre-release comment-claims sweep: the clearing method existed with no
+  production caller.
 - ccu-addon: the settings card's "Open Config UI" link opens a new tab.
   occulited's shell shows the card inside a frame and treats any
   cross-origin navigation of that frame as the add-on refusing to be
