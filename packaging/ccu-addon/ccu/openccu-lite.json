@@ -13,13 +13,52 @@
     "asset": "openccu-loom-ccu-{version}.tar.gz"
   },
   "requires": {
+    "lite": "1.0.0",
     "architectures": ["armv7l", "aarch64", "x86_64"]
   },
   "ui": {
+    "icon": "www/icon.svg",
+    "icon_dark": "www/icon_dark.svg",
     "settings_url": "/addons/openccu-loom/config.cgi",
     "session_header": true
   },
   "runtime": {
-    "daemon": true
+    "daemon": true,
+    "needs": [],
+    "ports": [8119, 8120, 8129, 5540],
+    "port_info": {
+      "8119": {
+        "proto": "tcp",
+        "label": {
+          "de": "Konfigurations-UI, REST/WebSocket und MCP",
+          "en": "Config UI, REST/WebSocket and MCP"
+        }
+      },
+      "8120": {
+        "proto": "tcp",
+        "label": {
+          "de": "XML-RPC-Callback — nur nötig, wenn zusätzlich eine entfernte CCU als weitere Zentrale eingebunden ist",
+          "en": "XML-RPC callback — only needed when a remote CCU is added as another central"
+        }
+      },
+      "8129": {
+        "proto": "tcp",
+        "label": {
+          "de": "BIN-RPC-Callback (CUxD einer entfernten CCU)",
+          "en": "BIN-RPC callback (a remote CCU's CUxD)"
+        }
+      },
+      "5540": {
+        "proto": "udp",
+        "label": {
+          "de": "Matter-Bridge — nur wenn Matter aktiviert ist",
+          "en": "Matter bridge — only when Matter is enabled"
+        }
+      }
+    },
+    "note": {
+      "de": "Der Daemon spricht auf diesem System die API von occulited und braucht keinen Interface-Prozess direkt. Nach außen kontaktiert er den konfigurierten MQTT-Broker, weitere vom Betreiber eingebundene Zentralen, Matter-Controller im LAN und GitHub für die Update-Anzeige.",
+      "en": "The daemon talks to occulited's API on this system and needs no interface process directly. Outside the box it contacts the configured MQTT broker, further centrals the operator adds, Matter controllers on the LAN and GitHub for the update check."
+    }
   }
 }

@@ -178,10 +178,17 @@ that the box accepts.
 OpenCCU-Loom can also run as an add-on on the openccu-lite box, installed
 from the box's Addons page. A few things differ from a CCU:
 
-- **Open port 8119 in the box's firewall, and confirm it.** openccu-lite
-  loads a firewall change as a draft and puts the previous rules back after
-  one minute unless the change is confirmed on the page. An unconfirmed
-  rule works for that minute and then disappears.
+- **Open port 8119 on the Addons page.** The add-on's manifest declares
+  its ports, so they appear as switches under *Addon ports*: 8119
+  (Config UI, REST/WebSocket, MCP) is the one to open; 8120/8129 (the
+  XML-RPC/BIN-RPC callbacks a *remote* CCU would push to) and 5540
+  (Matter) stay closed until you use those features. An opened switch is
+  a named firewall rule owned by the add-on. mDNS needs no opening — the
+  box's own discovery rules already accept multicast to the mDNS groups.
+  On a version installed before the manifest declared ports, open 8119
+  on the Firewall page instead and **confirm it**: openccu-lite loads a
+  firewall change as a draft and puts the previous rules back after one
+  minute unless the change is confirmed on the page.
 - **Updates come from the Addons page.** The add-on's own self-update is not
   offered on openccu-lite; the box's catalogue carries new versions.
 - **No session in the add-on's page URL.** The add-on ships an
