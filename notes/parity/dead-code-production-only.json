@@ -1,15 +1,15 @@
 {
-  "generated": "c45a4254",
-  "head": "c45a4254",
+  "generated": "5a9e87c7",
+  "head": "5a9e87c7",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/openccu-loom-remote/main.go",
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 6023,
-    "reachable": 3810,
-    "whitelisted": 2084,
+    "total_exported": 6032,
+    "reachable": 3864,
+    "whitelisted": 2039,
     "unreachable": 129
   },
   "by_package": [
@@ -715,7 +715,7 @@
       "package": "internal/north/mcp",
       "identifier": "EditLockVerifier",
       "file": "internal/north/mcp/server.go",
-      "line": 115,
+      "line": 116,
       "kind": "type"
     },
     {
@@ -1166,7 +1166,7 @@
       "identifier": "NewBufferWithClock",
       "reason": "auto-whitelist:pattern=test-seam-with-clock",
       "file": "internal/audit/audit.go",
-      "line": 350
+      "line": 355
     },
     {
       "package": "internal/audit",
@@ -2272,7 +2272,7 @@
       "identifier": "CCUAuthConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1709
+      "line": 1729
     },
     {
       "package": "internal/config",
@@ -2293,21 +2293,21 @@
       "identifier": "CentralBehavior",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1823
+      "line": 1843
     },
     {
       "package": "internal/config",
       "identifier": "CentralConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1757
+      "line": 1777
     },
     {
       "package": "internal/config",
       "identifier": "CentralsModifiedInPlace",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/restart.go",
-      "line": 855
+      "line": 864
     },
     {
       "package": "internal/config",
@@ -2328,7 +2328,7 @@
       "identifier": "Clone",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 2014
+      "line": 2034
     },
     {
       "package": "internal/config",
@@ -2349,7 +2349,7 @@
       "identifier": "Default",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1994
+      "line": 2014
     },
     {
       "package": "internal/config",
@@ -2433,7 +2433,7 @@
       "identifier": "ErrNoConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1965
+      "line": 1985
     },
     {
       "package": "internal/config",
@@ -2482,7 +2482,7 @@
       "identifier": "HAIngressConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1684
+      "line": 1704
     },
     {
       "package": "internal/config",
@@ -2517,7 +2517,7 @@
       "identifier": "Load",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1969
+      "line": 1989
     },
     {
       "package": "internal/config",
@@ -2552,7 +2552,7 @@
       "identifier": "MinHubScanInterval",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 2200
+      "line": 2220
     },
     {
       "package": "internal/config",
@@ -2678,14 +2678,21 @@
       "identifier": "OIDCConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1737
+      "line": 1757
+    },
+    {
+      "package": "internal/config",
+      "identifier": "PairingAuthConfig",
+      "reason": "auto-whitelist:pattern=generic-model-helper",
+      "file": "internal/config/config.go",
+      "line": 1665
     },
     {
       "package": "internal/config",
       "identifier": "Parse",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1981
+      "line": 2001
     },
     {
       "package": "internal/config",
@@ -2741,14 +2748,14 @@
       "identifier": "RestartRequiredDiff",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/restart.go",
-      "line": 837
+      "line": 846
     },
     {
       "package": "internal/config",
       "identifier": "RestartRequiredFieldPaths",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/restart.go",
-      "line": 820
+      "line": 829
     },
     {
       "package": "internal/config",
@@ -2762,7 +2769,7 @@
       "identifier": "RestartRules",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/restart.go",
-      "line": 814
+      "line": 823
     },
     {
       "package": "internal/config",
@@ -2815,17 +2822,24 @@
     },
     {
       "package": "internal/config",
+      "identifier": "ValidateCentralHost",
+      "reason": "auto-whitelist:pattern=generic-model-helper",
+      "file": "internal/config/config.go",
+      "line": 2510
+    },
+    {
+      "package": "internal/config",
       "identifier": "ValidateCentralSystem",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 2310
+      "line": 2330
     },
     {
       "package": "internal/config",
       "identifier": "ValidateCentralSystemToken",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 2318
+      "line": 2338
     },
     {
       "package": "internal/config",
@@ -2839,7 +2853,7 @@
       "identifier": "VisibilityConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1945
+      "line": 1965
     },
     {
       "package": "internal/config",
@@ -5639,84 +5653,84 @@
       "identifier": "AddonUpdateService",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mcp/server.go",
-      "line": 176
+      "line": 184
     },
     {
       "package": "internal/north/mcp",
       "identifier": "AreaLister",
       "reason": "the declared type of Deps.Areas, filled at cmd/openccu-loom/daemon_rest_mount.go with the same area service REST receives; an interface reached only by assignment, which the analyzer's type heuristic cannot follow",
       "file": "internal/north/mcp/server.go",
-      "line": 191
+      "line": 199
     },
     {
       "package": "internal/north/mcp",
       "identifier": "BackupLister",
       "reason": "the Deps.Backups seam the composition root satisfies with *adapter.BackupAdapter; an interface reached only by assignment, which the analyzer's type heuristic cannot see used",
       "file": "internal/north/mcp/server.go",
-      "line": 254
+      "line": 262
     },
     {
       "package": "internal/north/mcp",
       "identifier": "EditLockManager",
       "reason": "the declared type of Deps.EditLocks, which the composition root fills at cmd/openccu-loom/daemon_rest_mount.go with the shared *handlers.EditSessions registry; an interface reached through its implementation, which the analyzer's type heuristic cannot follow",
       "file": "internal/north/mcp/server.go",
-      "line": 132
+      "line": 133
     },
     {
       "package": "internal/north/mcp",
       "identifier": "EnergyReader",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mcp/server.go",
-      "line": 229
+      "line": 237
     },
     {
       "package": "internal/north/mcp",
       "identifier": "GroupsReader",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mcp/server.go",
-      "line": 183
+      "line": 191
     },
     {
       "package": "internal/north/mcp",
       "identifier": "HistoryReader",
       "reason": "the declared type of Deps.History, filled at cmd/openccu-loom/daemon_rest_mount.go with the history handler adapter; an interface reached only by assignment, which the analyzer's type heuristic cannot follow",
       "file": "internal/north/mcp/server.go",
-      "line": 212
+      "line": 220
     },
     {
       "package": "internal/north/mcp",
       "identifier": "InterfaceLister",
       "reason": "the declared type of Deps.Interfaces, filled at cmd/openccu-loom/daemon_rest_mount.go with the same interface index REST receives; an interface reached only by assignment, which the analyzer's type heuristic cannot follow",
       "file": "internal/north/mcp/server.go",
-      "line": 202
+      "line": 210
     },
     {
       "package": "internal/north/mcp",
       "identifier": "LinkLister",
       "reason": "the declared type of Deps.Links, filled at cmd/openccu-loom/daemon_rest_mount.go with the links domain; an interface reached only by assignment, which the analyzer's type heuristic cannot follow",
       "file": "internal/north/mcp/server.go",
-      "line": 235
+      "line": 243
     },
     {
       "package": "internal/north/mcp",
       "identifier": "MatterStatusReader",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mcp/server.go",
-      "line": 170
+      "line": 178
     },
     {
       "package": "internal/north/mcp",
       "identifier": "ScheduleLister",
       "reason": "the declared type of Deps.Schedules, filled at cmd/openccu-loom/daemon_rest_mount.go with the schedules domain; an interface reached only by assignment, which the analyzer's type heuristic cannot follow",
       "file": "internal/north/mcp/server.go",
-      "line": 244
+      "line": 252
     },
     {
       "package": "internal/north/mcp",
       "identifier": "VisibilityLister",
       "reason": "the declared type of Deps.Visibility, filled at cmd/openccu-loom/daemon_rest_mount.go with the un-ignore store; an interface reached only by assignment, which the analyzer's type heuristic cannot follow",
       "file": "internal/north/mcp/server.go",
-      "line": 222
+      "line": 230
     },
     {
       "package": "internal/north/mqtt",
@@ -5863,14 +5877,14 @@
       "identifier": "HARegistryDescriptionLookup",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions_table.go",
-      "line": 122
+      "line": 113
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "HARegistryDescriptionRule",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions_table.go",
-      "line": 50
+      "line": 49
     },
     {
       "package": "internal/north/mqtt",
@@ -6277,6 +6291,13 @@
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/alarm.go",
       "line": 86
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "ApprovePairing",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/pairing.go",
+      "line": 182
     },
     {
       "package": "internal/north/rest/handlers",
@@ -7067,7 +7088,7 @@
       "identifier": "DeleteCentral",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/admin_centrals.go",
-      "line": 475
+      "line": 489
     },
     {
       "package": "internal/north/rest/handlers",
@@ -8618,6 +8639,13 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "ListPairingRequests",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/pairing.go",
+      "line": 165
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "ListPrograms",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
@@ -8741,6 +8769,13 @@
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/visibility.go",
       "line": 313
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "ListWarnings",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/warnings.go",
+      "line": 30
     },
     {
       "package": "internal/north/rest/handlers",
@@ -9402,6 +9437,13 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "PairingService",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/pairing.go",
+      "line": 24
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "ParameterDeterminer",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/rest/handlers/parameter_determine.go",
@@ -9441,6 +9483,13 @@
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
       "line": 633
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "PollPairing",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/pairing.go",
+      "line": 118
     },
     {
       "package": "internal/north/rest/handlers",
@@ -9829,6 +9878,13 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "RejectPairing",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/pairing.go",
+      "line": 212
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "ReleaseDevice",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/device_admin.go",
@@ -9973,6 +10029,20 @@
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/devices.go",
       "line": 148
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "SBOM",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/sbom.go",
+      "line": 31
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "SBOMSource",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/sbom.go",
+      "line": 22
     },
     {
       "package": "internal/north/rest/handlers",
@@ -10144,6 +10214,13 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "SilenceWarning",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/warnings.go",
+      "line": 62
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "SimpleScheduleEntry",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/rest/handlers/schedules.go",
@@ -10204,6 +10281,13 @@
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/centrals_onboarding.go",
       "line": 91
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "StartPairing",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/pairing.go",
+      "line": 95
     },
     {
       "package": "internal/north/rest/handlers",
@@ -10760,6 +10844,13 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "UnsilenceWarning",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/warnings.go",
+      "line": 94
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "UnsuppressRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
@@ -10777,7 +10868,7 @@
       "identifier": "UpdateCentral",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/admin_centrals.go",
-      "line": 329
+      "line": 336
     },
     {
       "package": "internal/north/rest/handlers",
@@ -10984,6 +11075,13 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "WarningsPort",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/warnings.go",
+      "line": 21
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "WebhookInboundProgram",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/webhook_inbound.go",
@@ -11023,6 +11121,13 @@
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/diagnostics_wiring.go",
       "line": 17
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "WithdrawPairing",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/pairing.go",
+      "line": 146
     },
     {
       "package": "internal/north/rest/middleware",
@@ -12059,6 +12164,13 @@
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/optimistic_rollback.go",
       "line": 44
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "PairingRequestsChangedPayload",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/pairing_events.go",
+      "line": 21
     },
     {
       "package": "internal/north/rest/ws",
@@ -15230,433 +15342,6 @@
       "reason": "auto-whitelist:pattern=tests-dir",
       "file": "tests/contract/wire_snapshots/wire_helpers.go",
       "line": 45
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "Account",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/auth.go",
-      "line": 247
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "AvailableUpdate",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/system.go",
-      "line": 93
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "BackupBlob",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/system.go",
-      "line": 61
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "BackupFileName",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/system.go",
-      "line": 64
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "BackupTarget",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/system.go",
-      "line": 123
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "BackupTargetState",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/system.go",
-      "line": 133
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "Call",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/fake.go",
-      "line": 129
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DefaultDevices",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/fake.go",
-      "line": 49
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DefaultHeartbeatInterval",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/fake.go",
-      "line": 30
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DefaultHostname",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/fake.go",
-      "line": 37
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DefaultInterfaces",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/fake.go",
-      "line": 42
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DefaultMeta",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/fake.go",
-      "line": 729
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DefaultMetaHeartbeatInterval",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/metastream.go",
-      "line": 14
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DefaultMetaLog",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/metastream.go",
-      "line": 16
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DefaultMetaQueue",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/metastream.go",
-      "line": 15
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DefaultPairingKeep",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/pairing.go",
-      "line": 37
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DefaultPairingLifetime",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/pairing.go",
-      "line": 36
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DefaultPairingPollInterval",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/pairing.go",
-      "line": 38
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DefaultReaderQueue",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/fake.go",
-      "line": 33
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DefaultRingAge",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/fake.go",
-      "line": 35
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DefaultRingEvents",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/fake.go",
-      "line": 34
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DefaultSerial",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/fake.go",
-      "line": 36
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DefaultStateDatapoints",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/fake.go",
-      "line": 58
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DefaultStreamsPerSubject",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/fake.go",
-      "line": 31
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DefaultStreamsTotal",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/fake.go",
-      "line": 32
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DefaultToken",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/auth.go",
-      "line": 17
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DeviateDownErrorCode",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/deviate.go",
-      "line": 25
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DeviateEventBeforeHello",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/deviate.go",
-      "line": 29
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DeviateHelloWithoutID",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/deviate.go",
-      "line": 27
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DeviateInitFaultText",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/deviate.go",
-      "line": 19
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DeviateLengthRequiredAlways",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/deviate.go",
-      "line": 49
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DeviateMeta304WithoutETag",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/deviate.go",
-      "line": 46
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DeviateMetaDropEvent",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/deviate.go",
-      "line": 43
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DeviateNoHeartbeat",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/deviate.go",
-      "line": 37
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DeviateReplayIncludesSince",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/deviate.go",
-      "line": 32
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DeviateResyncWithID",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/deviate.go",
-      "line": 34
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DeviateStreamLimitCode",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/deviate.go",
-      "line": 40
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DeviateTierFaultText",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/deviate.go",
-      "line": 22
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DeviateVersionHTML",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/deviate.go",
-      "line": 54
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "DeviateVersionMajor",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/deviate.go",
-      "line": 51
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "Deviation",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/deviate.go",
-      "line": 12
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "Document",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/meta.go",
-      "line": 41
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "Enum",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/meta.go",
-      "line": 58
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "Fake",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/fake.go",
-      "line": 156
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "Group",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/groups.go",
-      "line": 22
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "LastBackup",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/system.go",
-      "line": 138
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "MetaError",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/meta.go",
-      "line": 86
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "MetaEvent",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/meta.go",
-      "line": 73
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "MetaHandle",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/meta.go",
-      "line": 1352
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "Node",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/meta.go",
-      "line": 64
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "Object",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/meta.go",
-      "line": 50
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "Options",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/fake.go",
-      "line": 69
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "PairingAccess",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/pairing.go",
-      "line": 55
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "PairingCode",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/pairing.go",
-      "line": 178
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "PairingError",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/pairing.go",
-      "line": 508
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "PairingScopes",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/pairing.go",
-      "line": 134
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "PendingPairing",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/pairing.go",
-      "line": 517
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "ServiceMessage",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/system.go",
-      "line": 68
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "StagedUpdate",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/system.go",
-      "line": 80
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "Start",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/fake.go",
-      "line": 188
-    },
-    {
-      "package": "tests/harness/litefake",
-      "identifier": "TokenName",
-      "reason": "auto-whitelist:pattern=tests-dir",
-      "file": "tests/harness/litefake/auth.go",
-      "line": 50
     },
     {
       "package": "tests/harness/mcasttest",

@@ -6,6 +6,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- The openccu-lite test double moved to godevccu as `pkg/litefake`
+  (ADR 0071 amendment). The fake box can now also run standalone —
+  godevccu CLI `-mode lite` — carrying godevccu's full embedded device
+  fleet, so integration runs against a large fleet work over the lite
+  API the same way they always did over XML-RPC. Loom's unit, contract
+  and e2e suites consume the fake from the godevccu module; the
+  condensed wire contract travels with it as `pkg/litefake/CONTRACT.md`.
+
 ## [0.81.0] - 2026-09-29
 
 ### Release summary

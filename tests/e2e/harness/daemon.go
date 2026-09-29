@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/tests/harness/litefake"
+	"github.com/SukramJ/godevccu/pkg/litefake"
 )
 
 // AuthMode selects which authentication backend the harness wires

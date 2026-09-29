@@ -14,15 +14,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/godevccu/pkg/litefake"
+
 	"github.com/SukramJ/openccu-loom/internal/client/transport/occulited"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
-	"github.com/SukramJ/openccu-loom/tests/harness/litefake"
 )
 
 // The openccu-lite wire contract, pinned against the production client
 // (internal/client/transport/occulited) driving the MIT fake box
-// (tests/harness/litefake). Every fact comes from the condensed contract
+// (godevccu's pkg/litefake). Every fact comes from the condensed contract
 // in notes/plans/openccu-lite-backend.md, Appendix A. Each test also runs
 // with the fake deviating from the pinned fact and asserts that the
 // client notices; without that run a green test would only prove that

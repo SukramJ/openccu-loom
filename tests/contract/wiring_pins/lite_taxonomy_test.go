@@ -9,10 +9,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/godevccu/pkg/litefake"
+
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/model/taxonomy"
-	"github.com/SukramJ/openccu-loom/tests/harness/litefake"
 )
 
 // findNode walks a litefake enum tree for path.

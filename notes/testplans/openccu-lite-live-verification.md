@@ -6,7 +6,7 @@ ran with the maintainer's approval on devices the maintainer named. The open ite
 openccu-lite support are listed [below](#open-items-of-the-openccu-lite-support) (decided 2026-09-27: documentation
 first; this list waits until a box is provided). Phases A–D and the docs
 (F1) are merged; everything below was only exercised against the MIT test
-double `tests/harness/litefake`.
+double `tests/harness/litefake` (since 2026-09-29: godevccu's `pkg/litefake`).
 
 Source of the checks: [implementation plan](../plans/openccu-lite-backend.md)
 §9 Phase F / F2.

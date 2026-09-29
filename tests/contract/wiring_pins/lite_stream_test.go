@@ -9,11 +9,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/godevccu/pkg/litefake"
+
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
-	"github.com/SukramJ/openccu-loom/tests/harness/litefake"
 )
 
 const liteSwitchChannel = "VCU0000321:1" // the fake's HM-LC-Sw1-Pl on BidCos-RF

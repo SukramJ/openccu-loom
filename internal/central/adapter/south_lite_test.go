@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/godevccu/pkg/litefake"
+
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/registry"
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
@@ -23,7 +25,6 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
-	"github.com/SukramJ/openccu-loom/tests/harness/litefake"
 )
 
 func startTestFake(t *testing.T, opts litefake.Options) *litefake.Fake {
