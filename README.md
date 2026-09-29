@@ -9,11 +9,12 @@
 # OpenCCU-Loom
 
 **OpenCCU-Loom** is a standalone Go daemon that talks to Homematic and
-HomematicIP CCUs (CCU2, CCU3, OpenCCU, OpenCCU) over XML-RPC,
-BIN-RPC and JSON-RPC — and exposes them through MQTT, a REST +
-WebSocket API, a web Config UI, a native Matter bridge and an MCP
-server. It runs several CCUs at once, administers them (pairing,
-firmware, links, programs, system variables, groups), records
+HomematicIP centrals — CCUs (CCU2, CCU3, OpenCCU/RaspberryMatic) over
+XML-RPC, BIN-RPC and JSON-RPC, and **openccu-lite** boxes over
+occulited's HTTP API and event stream — and exposes them through MQTT,
+a REST + WebSocket API, a web Config UI, a native Matter bridge and an
+MCP server. It runs several centrals at once, administers them
+(pairing, firmware, links, programs, system variables, groups), records
 measurement history, and ships a complete local alarm system.
 
 Single static binary, no CGo, no cloud, no Home Assistant required —
@@ -61,6 +62,12 @@ Matter, and two ready-made add-ons.
 - **Push everywhere, no polling** — XML-RPC + JSON-RPC for HmIP-RF,
   BidCos-RF, BidCos-Wired, HmIP-Wired and VirtualDevices; **native
   BIN-RPC** for CUxD, including our own BIN-RPC callback server.
+- **openccu-lite as a supported system type** — a box without ReGa is
+  a first-class central (`system_type: openccu-lite`): API-token auth
+  with client pairing and TLS fingerprint pinning, events on
+  occulited's SSE stream instead of a callback port, and absent CCU
+  features reported with a reason instead of failing silently.
+  → [`docs/admin/openccu-lite.md`](./docs/admin/openccu-lite.md)
 - **Hot-plug** — newly paired devices appear without a restart;
   readiness-gated bring-up waits for a co-booting CCU instead of
   serving half a device tree.

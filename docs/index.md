@@ -4,10 +4,12 @@
 MQTT, a REST + WebSocket API, a web Config UI, and Matter.**
 
 OpenCCU-Loom talks to Homematic / HomematicIP CCUs (CCU2, CCU3,
-OpenCCU) over XML-RPC, BIN-RPC, and JSON-RPC, and exposes them
-on the north side to standard protocols — so you can use your devices
-from MQTT, REST/WebSocket clients, a browser, or a Matter controller
-without running Home Assistant.
+OpenCCU) over XML-RPC, BIN-RPC, and JSON-RPC — and to
+[openccu-lite](admin/openccu-lite.md) boxes over occulited's HTTP API
+and event stream — and exposes them on the north side to standard
+protocols, so you can use your devices from MQTT, REST/WebSocket
+clients, a browser, or a Matter controller without running Home
+Assistant.
 
 It is a Go port of the Python library
 [`aiohomematic`](https://github.com/SukramJ/aiohomematic) that adds the
@@ -28,7 +30,8 @@ access on their own.
   diagnostics.
 - **Matter** — a native-Go Matter bridge (opt-in) so your CCU devices
   appear in Apple Home, Google Home, and Alexa.
-- **Multi-CCU** — one daemon, many CCUs, first-class from day one.
+- **Multi-CCU** — one daemon, many centrals, first-class from day one —
+  full CCUs and [openccu-lite](admin/openccu-lite.md) boxes side by side.
 
 ## Single static binary
 

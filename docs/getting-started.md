@@ -92,7 +92,8 @@ On the CCU / OpenCCU add-on the default is CCU-delegated login:
 you sign in with your existing CCU account instead of creating a
 separate account. See [Authentication](admin/auth.md).
 
-From the SPA's **Settings** tab you can add CCUs and configure MQTT,
+From the SPA's **Settings** tab you can add centrals — full CCUs and
+[openccu-lite boxes](admin/openccu-lite.md) alike — and configure MQTT,
 Matter, REST auth, and more. Settings are persisted to the SQLite
 database at `<data_dir>/openccu-loom.db`.
 
