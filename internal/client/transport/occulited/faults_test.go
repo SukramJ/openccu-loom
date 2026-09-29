@@ -9,10 +9,11 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/SukramJ/godevccu/pkg/litefake"
+
 	"github.com/SukramJ/openccu-loom/internal/client/transport/occulited"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
-	"github.com/SukramJ/openccu-loom/tests/harness/litefake"
 )
 
 func TestParseTierFault(t *testing.T) {

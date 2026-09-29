@@ -9,12 +9,13 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/SukramJ/godevccu/pkg/litefake"
+
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/occulited"
 	"github.com/SukramJ/openccu-loom/internal/model/group"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
-	"github.com/SukramJ/openccu-loom/tests/harness/litefake"
 )
 
 // TestLiteGroupsCRUD pins the heating-group port a lite central installs,

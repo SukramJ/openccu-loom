@@ -13,10 +13,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/godevccu/pkg/litefake"
+
 	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
-	"github.com/SukramJ/openccu-loom/tests/harness/litefake"
 )
 
 // liteReadOnlyToken is a token that carries rpc:read and nothing else.

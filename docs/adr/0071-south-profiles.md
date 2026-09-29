@@ -66,6 +66,12 @@ systems, and nothing else.
   double `tests/harness/litefake` is our own MIT code written from the same
   documentation. Comments cite occulited's documentation by name, never a
   source path.
+- **Amendment (2026-09-29).** The test double moved to godevccu as
+  `pkg/litefake`, so it can also run as a standalone fake box (godevccu CLI
+  `-mode lite`) carrying the full embedded device fleet. The provenance
+  travels with it: the condensed wire contract is kept verbatim in godevccu's
+  `pkg/litefake/CONTRACT.md`, and the package remains MIT code written from
+  that contract alone.
 
 ## Alternatives considered
 

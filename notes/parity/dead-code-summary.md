@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: c45a4254
-HEAD: c45a4254
+Generated: 5a9e87c7
+HEAD: 5a9e87c7
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 6023 |
-| Reachable | 3880 |
-| Whitelisted | 2084 |
+| Total Exported | 6032 |
+| Reachable | 3934 |
+| Whitelisted | 2039 |
 | **Unreachable** | **59** |
 
 ## What these numbers cannot see

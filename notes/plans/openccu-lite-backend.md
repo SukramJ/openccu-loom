@@ -17,6 +17,10 @@ How to read this document:
   condensed in [Appendix A](#appendix-a--the-occulited-wire-contract-condensed). That appendix is the
   only occulited material you may use: you may not read, copy or port occulited source (see §1.5).
 - The rules in [`CLAUDE.md`](../../CLAUDE.md) apply in full. §12 distils the ones this work trips over.
+- **Moved 2026-09-29**: the test double this plan builds under `tests/harness/litefake` now lives in
+  godevccu as `pkg/litefake` (standalone fake box via godevccu CLI `-mode lite`); Appendix A is kept
+  verbatim there as `pkg/litefake/CONTRACT.md`. Path mentions of `tests/harness/litefake` below are
+  historical.
 
 ---
 

@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/godevccu/pkg/litefake"
+
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
@@ -22,7 +24,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
-	"github.com/SukramJ/openccu-loom/tests/harness/litefake"
 )
 
 // liteSystemCentral is a lite central wired through WireCentrals together

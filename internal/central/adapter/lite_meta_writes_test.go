@@ -16,9 +16,10 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/SukramJ/godevccu/pkg/litefake"
+
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/occulited"
-	"github.com/SukramJ/openccu-loom/tests/harness/litefake"
 )
 
 // concurrentEditor sits in front of the fake and edits the store right

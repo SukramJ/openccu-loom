@@ -10,13 +10,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/godevccu/pkg/litefake"
+
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/occulited"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
-	"github.com/SukramJ/openccu-loom/tests/harness/litefake"
 )
 
 const liteDimmer = "VCU2128127" // the fake's HmIP-BSM on HmIP-RF

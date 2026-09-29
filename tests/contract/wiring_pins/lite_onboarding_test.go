@@ -19,6 +19,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/SukramJ/godevccu/pkg/litefake"
+
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
@@ -30,7 +32,6 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/tests/contract"
-	"github.com/SukramJ/openccu-loom/tests/harness/litefake"
 )
 
 // TestOnboardingRoutesAreMounted pins that the daemon hands the onboarding

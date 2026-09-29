@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/godevccu/pkg/litefake"
+
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
@@ -22,7 +24,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
-	"github.com/SukramJ/openccu-loom/tests/harness/litefake"
 )
 
 // startLiteCentral brings one openccu-lite central up against fake through

@@ -17,7 +17,9 @@
 #     generic-api-key rule mis-reads as a high-entropy secret
 #   - tests/harness/litefake: the fake openccu-lite's built-in API tokens
 #     are made-up test credentials of the test double, shaped like real
-#     tokens on purpose so the production client's parsing is exercised
+#     tokens on purpose so the production client's parsing is exercised.
+#     The double moved to godevccu (pkg/litefake); the old path stays for
+#     the history gitleaks also scans
 #
 # Everything else — runtime/config code — stays scanned, so a genuinely
 # new secret still fails the gate.

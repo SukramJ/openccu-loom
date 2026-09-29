@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/tests/harness/litefake"
+	"github.com/SukramJ/godevccu/pkg/litefake"
 )
 
 // Backend selects the south-bound system the harness daemon talks to.

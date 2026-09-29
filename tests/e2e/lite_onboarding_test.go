@@ -18,8 +18,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/godevccu/pkg/litefake"
+
 	"github.com/SukramJ/openccu-loom/tests/e2e/harness"
-	"github.com/SukramJ/openccu-loom/tests/harness/litefake"
 )
 
 const pairedCentral = "paired-e2e"

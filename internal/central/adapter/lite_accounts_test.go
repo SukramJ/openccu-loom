@@ -15,12 +15,13 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/SukramJ/godevccu/pkg/litefake"
+
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/occulited"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
-	"github.com/SukramJ/openccu-loom/tests/harness/litefake"
 )
 
 func liteAccountsFake(t *testing.T) (*litefake.Fake, liteAccountVerifier) {

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/tests/harness/litefake"
+	"github.com/SukramJ/godevccu/pkg/litefake"
 )
 
 // configInputs collects every value the config template needs.
