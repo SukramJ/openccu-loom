@@ -30,7 +30,7 @@ require (
 
 require github.com/rogpeppe/go-internal v1.16.0
 
-require github.com/SukramJ/go-openccu-data v0.1.4
+require github.com/SukramJ/go-openccu-data v0.2.0
 
 require golang.org/x/term v0.46.0
 
@@ -71,5 +71,3 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
 )
-
-replace github.com/SukramJ/go-openccu-data => ../go-openccu-data
