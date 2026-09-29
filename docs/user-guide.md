@@ -141,10 +141,12 @@ centrals:
     interfaces: [HmIP-RF, BidCos-RF]
 ```
 
-This is enough to boot and reach the first-run setup. MQTT, Matter,
-REST auth, OIDC, and everything else are configured from the UI (or
-seeded once via the full config). For the annotated reference of every
-key, see:
+This is enough to boot and reach the first-run setup. An
+[openccu-lite box](admin/openccu-lite.md) is added the same way with
+`system_type: openccu-lite` and an API token instead of CCU
+credentials. MQTT, Matter, REST auth, OIDC, and everything else are
+configured from the UI (or seeded once via the full config). For the
+annotated reference of every key, see:
 
 - **[Configuration reference](admin/configuration.md)** — every option,
   grouped by area.

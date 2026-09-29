@@ -11,6 +11,8 @@ A **CCU** is your Homematic central unit — the box (or piece of software) that
 
 OpenCCU-Loom can talk to **more than one CCU at the same time**. Each configured CCU is given a **name** in the configuration (the `name` field of a CCU entry). This name — often called the `central_name` — is the stable label that identifies one CCU everywhere: in the web UI, in MQTT topics, and in the REST API. Pick a name once and keep it; renaming it changes how that CCU is addressed throughout the system.
 
+A central does not have to be a full CCU: OpenCCU-Loom also supports **openccu-lite** — a CCU firmware without ReGaHss, fronted by the daemon `occulited` — as a second system type (`system_type: openccu-lite`). Such a box authenticates by API token, delivers events on a stream instead of a callback port, and reports the CCU features it does not have with a reason instead of failing silently. See [Connecting openccu-lite](../admin/openccu-lite.md).
+
 For details on running several CCUs at once, see the [Multi-CCU guide](multi-ccu.md).
 
 ## Devices, Channels, and Data Points

@@ -13,6 +13,11 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   standalone fake openccu-lite box (godevccu `-mode lite`, full
   embedded fleet, central YAML block) next to the simulated CCU — and
   the openccu-lite admin page a "Trying it without a box" pointer.
+- openccu-lite is named as a supported system type at the front doors:
+  the README's intro and CCU-connectivity list, the docs landing page,
+  Getting Started, the user guide's config example and the Concepts
+  page all say it and link the admin guide — previously only the
+  deeper pages did.
 
 ### Changed
 
