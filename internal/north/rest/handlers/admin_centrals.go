@@ -285,6 +285,13 @@ func CreateCentral(svc CentralAdminService, rec audit.Recorder, onboarding Centr
 				problem.New(problem.TypeValidation, r, "Missing host", "central host is required"))
 			return
 		}
+		// The host goes into every south-bound URL of the central; the
+		// config loader applies the same rule to centrals[].host.
+		if err := config.ValidateCentralHost(row.Host); err != nil {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeValidation, r, "Invalid host", err.Error()))
+			return
+		}
 		// A fresh central has no stored credential to restore; the sentinel
 		// is not a real password or token, so drop it rather than persist
 		// "***".
@@ -351,6 +358,13 @@ func UpdateCentral(svc CentralAdminService, rec audit.Recorder, onboarding Centr
 		if row.Host == "" {
 			problem.Write(w, http.StatusBadRequest,
 				problem.New(problem.TypeValidation, r, "Missing host", "central host is required"))
+			return
+		}
+		// The host goes into every south-bound URL of the central; the
+		// config loader applies the same rule to centrals[].host.
+		if err := config.ValidateCentralHost(row.Host); err != nil {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeValidation, r, "Invalid host", err.Error()))
 			return
 		}
 		// Unlike the optional fields below, `enabled` and `interfaces` have no

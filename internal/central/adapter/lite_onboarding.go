@@ -12,11 +12,13 @@ import (
 	"log/slog"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/build"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/occulited"
+	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -82,7 +84,28 @@ func liteBaseURL(host string, port int, tls bool) string {
 	if port <= 0 {
 		port = def
 	}
+	// JoinHostPort brackets an IPv6 literal itself; one given in its URL
+	// form ("[::1]", which the host rule accepts) would end up bracketed
+	// twice.
+	host = strings.TrimSuffix(strings.TrimPrefix(host, "["), "]")
 	return scheme + "://" + net.JoinHostPort(host, strconv.Itoa(port))
+}
+
+// validateLiteAddress applies the centrals[].host rule and the TCP port
+// range to an address the onboarding is about to contact. The host goes
+// into the request URL, so a scheme, path, fragment or credentials in it
+// would reshape that URL rather than name a system.
+func validateLiteAddress(host string, port int) error {
+	if host == "" {
+		return fmt.Errorf("%w: host is required", hmerr.ErrValidation)
+	}
+	if err := config.ValidateCentralHost(host); err != nil {
+		return fmt.Errorf("%w: %w", hmerr.ErrValidation, err)
+	}
+	if port < 0 || port > 65535 {
+		return fmt.Errorf("%w: port %d is out of range", hmerr.ErrValidation, port)
+	}
+	return nil
 }
 
 // Probe identifies the system at an address. Over HTTPS a certificate no
@@ -92,8 +115,8 @@ func liteBaseURL(host string, port int, tls bool) string {
 // confirms by pinning it. Nothing but that open document is requested and
 // no credential is sent.
 func (o *LiteOnboarding) Probe(ctx context.Context, in hmapi.CentralProbeRequest) (hmapi.CentralProbeResult, error) {
-	if in.Host == "" {
-		return hmapi.CentralProbeResult{}, fmt.Errorf("%w: host is required", hmerr.ErrValidation)
+	if err := validateLiteAddress(in.Host, in.Port); err != nil {
+		return hmapi.CentralProbeResult{}, err
 	}
 	cfg := occulited.Config{
 		BaseURL: liteBaseURL(in.Host, in.Port, in.TLS), InsecureSkipVerify: in.TLSInsecureSkipVerify,
@@ -145,8 +168,8 @@ func detectOnce(ctx context.Context, cfg occulited.Config) (occulited.Detection,
 // StartPairing asks the box's administrator to approve this daemon. The
 // answer carries the code the administrator enters on the box.
 func (o *LiteOnboarding) StartPairing(ctx context.Context, in hmapi.CentralPairingRequest) (hmapi.CentralPairingStarted, error) {
-	if in.Host == "" {
-		return hmapi.CentralPairingStarted{}, fmt.Errorf("%w: host is required", hmerr.ErrValidation)
+	if err := validateLiteAddress(in.Host, in.Port); err != nil {
+		return hmapi.CentralPairingStarted{}, err
 	}
 	accessName := in.Access
 	if accessName == "" {

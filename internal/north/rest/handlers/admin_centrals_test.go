@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -219,6 +220,24 @@ func TestCreateCentral_MissingHost_Returns400(t *testing.T) {
 	}
 }
 
+// TestCreateCentral_URLShapedHost_Returns400 pins the host rule on the REST
+// write path: the host goes into every south-bound URL of the central, and
+// the config loader already refuses these shapes for centrals[].host.
+func TestCreateCentral_URLShapedHost_Returns400(t *testing.T) {
+	t.Parallel()
+	for _, host := range []string{"http://10.0.0.5", "10.0.0.5/rpc#", "loom@10.0.0.5", "10.0.0.5:2001"} {
+		svc := &fakeCentralAdminService{}
+		body := strings.NewReader(`{"Name":"office","Host":` + strconv.Quote(host) + `}`)
+		req := httptest.NewRequest(http.MethodPost, "/admin/centrals", body)
+		w := httptest.NewRecorder()
+		CreateCentral(svc, nil, nil).ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "Invalid host") {
+			t.Errorf("host %q: got %d body=%s, want 400 Invalid host", host, w.Code, w.Body.String())
+		}
+	}
+}
+
 // --- UpdateCentral ---
 
 func TestUpdateCentral_Happy(t *testing.T) {
@@ -250,6 +269,26 @@ func TestUpdateCentral_MissingHost_Returns400(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+// TestUpdateCentral_URLShapedHost_Returns400AndKeepsTheHost is the edit
+// twin of the create check; the stored row must stay as it was.
+func TestUpdateCentral_URLShapedHost_Returns400AndKeepsTheHost(t *testing.T) {
+	t.Parallel()
+	svc := newFakeCentralSvc()
+	before := svc.centrals["home"].Host
+	body := strings.NewReader(`{"Host":"loom@192.168.1.99","Enabled":true,"Interfaces":[]}`)
+	req := httptest.NewRequest(http.MethodPut, "/admin/centrals/home", body)
+	req = withChiParam(req, "name", "home")
+	w := httptest.NewRecorder()
+	UpdateCentral(svc, nil, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "Invalid host") {
+		t.Fatalf("got %d body=%s, want 400 Invalid host", w.Code, w.Body.String())
+	}
+	if got := svc.centrals["home"].Host; got != before {
+		t.Errorf("host changed to %q on a refused update", got)
 	}
 }
 
