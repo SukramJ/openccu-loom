@@ -9,6 +9,13 @@ import { render, cleanup, waitFor, screen } from "@testing-library/svelte";
 const mockListTokensV2 = vi.fn();
 const mockCreateTokenV2 = vi.fn();
 const mockDeleteTokenV2 = vi.fn();
+// The card renders PairingRequests above the token list (see
+// TokensAdmin.svelte), which mounts pairingRequestsStore — it needs its
+// own api + WS-pump mocks or the real store throws while this file is
+// exercised.
+const mockListPairingRequests = vi.fn();
+const mockApprovePairing = vi.fn();
+const mockRejectPairing = vi.fn();
 const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
 const mockConfirmAsk = vi.fn();
@@ -22,6 +29,9 @@ vi.mock("$lib/api/client", () => ({
     listTokensV2: (...args: unknown[]) => mockListTokensV2(...args),
     createTokenV2: (...args: unknown[]) => mockCreateTokenV2(...args),
     deleteTokenV2: (...args: unknown[]) => mockDeleteTokenV2(...args),
+    listPairingRequests: (...args: unknown[]) => mockListPairingRequests(...args),
+    approvePairing: (...args: unknown[]) => mockApprovePairing(...args),
+    rejectPairing: (...args: unknown[]) => mockRejectPairing(...args),
   },
   ApiError: class ApiError extends Error {
     public readonly status: number;
@@ -32,6 +42,11 @@ vi.mock("$lib/api/client", () => ({
       this.body = body;
     }
   },
+  friendlyError: (err: unknown) => (err instanceof Error ? err.message : String(err)),
+}));
+
+vi.mock("$lib/stores/events.svelte", () => ({
+  subscribe: () => () => {},
 }));
 
 vi.mock("$lib/stores/toast.svelte", () => ({
@@ -60,6 +75,7 @@ vi.mock("$lib/i18n", () => ({
 // ---------------------------------------------------------------------------
 
 import TokensAdmin from "./TokensAdmin.svelte";
+import { pairingRequestsStore } from "$lib/stores/pairingRequests.svelte";
 
 const TOKENS = [
   {
@@ -73,11 +89,13 @@ const TOKENS = [
 beforeEach(() => {
   vi.clearAllMocks();
   mockListTokensV2.mockResolvedValue(TOKENS);
+  mockListPairingRequests.mockResolvedValue([]);
   mockConfirmAsk.mockResolvedValue(false);
 });
 
 afterEach(() => {
   cleanup();
+  pairingRequestsStore.close();
 });
 
 // ---------------------------------------------------------------------------

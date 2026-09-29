@@ -1,0 +1,33 @@
+{
+  "items": [
+    {
+      "id": "pair-1",
+      "app": "Home Assistant",
+      "app_version": "2026.1.0",
+      "instance": "hass-core",
+      "name": "Home Assistant bridge",
+      "address": "192.0.2.50",
+      "role": "operator",
+      "purpose": "MQTT discovery",
+      "code": "482913",
+      "fingerprint": "…pair1",
+      "created": "2026-01-01T08:57:00Z",
+      "expires": "2026-01-01T09:07:00Z"
+    },
+    {
+      "id": "pair-2",
+      "app": "Home Assistant",
+      "app_version": "2026.1.0",
+      "instance": "hass-core-2",
+      "name": "Home Assistant bridge (second box)",
+      "address": "192.0.2.51",
+      "role": "viewer",
+      "purpose": "MQTT discovery",
+      "code": "119274",
+      "fingerprint": "…pair2",
+      "created": "2026-01-01T08:58:00Z",
+      "expires": "2026-01-01T09:08:00Z",
+      "look_alike": true
+    }
+  ]
+}

@@ -131,6 +131,122 @@ test.describe('Settings — access administration', () => {
     await expect(page.locator('[data-testid="token-value"]')).toBeVisible({ timeout: 5000 });
     await expect(page.locator('[data-testid="token-value"]')).toContainText('secret-token-abc123');
   });
+
+  // ---------------------------------------------------------------------
+  // Pairing requests (ADR 0076) — the admin card above the token list.
+  // ---------------------------------------------------------------------
+
+  test('pairing card renders pending requests with the look-alike warning', async ({ page }) => {
+    await page.goto(TOKENS_TAB);
+    await page.waitForSelector('#main');
+    await page.waitForTimeout(500);
+
+    await expect(page.getByText('Home Assistant bridge', { exact: true })).toBeVisible();
+    await expect(
+      page.getByText('Home Assistant bridge (second box)', { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText('Another request looks similar — compare the code carefully.'),
+    ).toBeVisible();
+  });
+
+  test('approve is disabled until six digits are typed', async ({ page }) => {
+    await page.goto(TOKENS_TAB);
+    await page.waitForSelector('#main');
+    await page.waitForTimeout(500);
+
+    const row = page.getByTestId('pairing-request-pair-1');
+    const approveButton = row.getByRole('button', { name: 'Approve' });
+    await expect(approveButton).toBeDisabled();
+
+    const codeInput = row.getByPlaceholder('000000');
+    await codeInput.fill('482913');
+    await expect(approveButton).toBeEnabled();
+  });
+
+  test('approving with the correct code refreshes the list', async ({ page }) => {
+    await page.route('**/api/v1/pairing-requests', (route) =>
+      route.request().method() === 'GET'
+        ? route.fulfill({
+            json: {
+              items: [
+                {
+                  id: 'pair-1',
+                  app: 'Home Assistant',
+                  name: 'Home Assistant bridge',
+                  address: '192.0.2.50',
+                  role: 'operator',
+                  code: '482913',
+                  created: '2026-01-01T08:57:00Z',
+                  expires: '2026-01-01T09:07:00Z',
+                },
+              ],
+            },
+          })
+        : route.continue(),
+    );
+
+    await page.goto(TOKENS_TAB);
+    await page.waitForSelector('#main');
+    await page.waitForTimeout(500);
+
+    const row = page.getByTestId('pairing-request-pair-1');
+    await row.getByPlaceholder('000000').fill('482913');
+
+    // The next GET answers empty — the card collapses once the approved
+    // request drops out of the pending list.
+    await page.route('**/api/v1/pairing-requests', (route) =>
+      route.fulfill({ json: { items: [] } }),
+    );
+
+    await row.getByRole('button', { name: 'Approve' }).click();
+
+    await expect(
+      page.getByRole('alert').filter({ hasText: 'Pairing approved.' }),
+    ).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('Home Assistant bridge', { exact: true })).toHaveCount(0);
+  });
+
+  test('a wrong code rejects the request and tells the operator so', async ({ page }) => {
+    await page.route('**/api/v1/pairing-requests/*/approve', (route) =>
+      route.fulfill({
+        status: 409,
+        contentType: 'application/problem+json',
+        body: JSON.stringify({ title: 'wrong code', detail: 'code did not match' }),
+      }),
+    );
+
+    await page.goto(TOKENS_TAB);
+    await page.waitForSelector('#main');
+    await page.waitForTimeout(500);
+
+    const row = page.getByTestId('pairing-request-pair-1');
+    await row.getByPlaceholder('000000').fill('000000');
+    await row.getByRole('button', { name: 'Approve' }).click();
+
+    await expect(
+      page
+        .getByRole('alert')
+        .filter({ hasText: 'The code did not match — the request has been rejected.' }),
+    ).toBeVisible({ timeout: 5000 });
+  });
+
+  test('reject opens a non-destructive confirm dialog', async ({ page }) => {
+    await page.goto(TOKENS_TAB);
+    await page.waitForSelector('#main');
+    await page.waitForTimeout(500);
+
+    const row = page.getByTestId('pairing-request-pair-1');
+    await row.getByRole('button', { name: 'Reject' }).click();
+
+    const dialog = page.getByRole('dialog', { name: 'Reject pairing request?' });
+    await expect(dialog).toBeVisible({ timeout: 5000 });
+    await dialog.getByRole('button', { name: 'Reject', exact: true }).click();
+
+    await expect(
+      page.getByRole('alert').filter({ hasText: 'Pairing request rejected.' }),
+    ).toBeVisible({ timeout: 5000 });
+  });
 });
 
 // ---------------------------------------------------------------------------

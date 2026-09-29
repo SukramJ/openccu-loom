@@ -11,6 +11,7 @@
   import DataTable from "$lib/components/ui/DataTable.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
+  import PairingRequests from "./PairingRequests.svelte";
   import { t } from "$lib/i18n";
   import { prefs } from "$lib/stores/preferences.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
@@ -167,6 +168,8 @@
 </script>
 
 <div class="space-y-4">
+  <PairingRequests />
+
   <div class="flex items-center justify-between gap-2">
     <h3 class="text-sm font-semibold tracking-wide text-[var(--ha-secondary-text-color)] uppercase">
       {t("settings.tokens")}
