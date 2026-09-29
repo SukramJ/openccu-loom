@@ -27,6 +27,10 @@ power off, recovery mode, backup and restore, firmware updates, service
 messages, install mode, duty cycle, heating groups (list and delete) —
 is available wherever the API token carries the scope for it.
 
+Device pictures work too, even though the box has no WebUI to serve
+them: the daemon ships the CCU's device artwork in its embedded data
+snapshot and serves it from there.
+
 ## What is absent, and why
 
 openccu-lite has no ReGaHss and no script interpreter, so a handful of

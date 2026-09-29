@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/ccudata"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/config"
@@ -34,11 +35,10 @@ const maxIconBytes = 1 << 20 // 1 MiB
 // prevents path traversal into other CCU web-server directories.
 var safeIconName = regexp.MustCompile(`^[\w\-./]+\.png$`)
 
-// deviceIconProxy resolves a device address to its CCU and proxies the
-// model-icon image, caching the bytes (icons are effectively static).
-// The real eQ-3 images are not embedded locally — ccudata carries only
-// the filename — so we fetch them from the CCU that owns the device,
-// the same source the HA integration proxies.
+// deviceIconProxy resolves a device address to its model-icon image.
+// The embedded data snapshot is consulted first (see [ccudata.DeviceImage]);
+// only a filename the snapshot does not carry is proxied from the CCU
+// that owns the device, caching the bytes (icons are effectively static).
 type deviceIconProxy struct {
 	// locate maps a device address to its icon filename and central name.
 	locate   func(address string) (filename, centralName string, ok bool)
@@ -139,6 +139,15 @@ func (p *deviceIconProxy) Icon(ctx context.Context, address string) (data []byte
 	filename, centralName, known := p.locate(address)
 	if !known {
 		return nil, "", false
+	}
+	// Embedded snapshot first. openccu-lite has no WebUI, so the upstream
+	// path 404s there for every device; the snapshot is a byte-identical
+	// copy of the WebUI's image tree and costs no network round trip. The
+	// CCU stays the source for a filename newer than the snapshot — a
+	// firmware that ships a device the embedded data predates. An embed
+	// hit needs no cache entry: the bytes already live in the binary.
+	if data, ok := ccudata.DeviceImage(filename); ok {
+		return data, "image/png", true
 	}
 	p.mu.RLock()
 	c, cached := p.cache[address]

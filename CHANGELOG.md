@@ -8,6 +8,13 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Device pictures from the embedded data snapshot. The CCU WebUI's device
+  artwork (the 250 px set, `coupling/` included) now ships inside the
+  binary via go-openccu-data, and `/api/v1/devices/{addr}/icon` serves
+  it from there first; only a picture the snapshot does not know is
+  still fetched from the CCU. openccu-lite boxes, which have no WebUI,
+  get device pictures for the first time. The device detail page shows
+  the picture, falling back to the device-type glyph when there is none.
 - ccu-addon: the openccu-lite manifest declares the add-on's runtime
   policy. The ports (8119 Config UI/REST/WS/MCP, 8120/8129 remote-CCU
   callbacks, 5540 Matter) become labelled switches under *Addon ports*

@@ -10,20 +10,20 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// DeviceIconProxy fetches a device's type-icon image from the owning
-// CCU. ok is false when the device, its central, or the upstream image
-// is unavailable; the caller then answers 404 and the SPA falls back to
-// a generic glyph.
+// DeviceIconProxy returns a device's type-icon image — from the embedded
+// data snapshot, or else from the owning CCU. ok is false when the
+// device or its image is unavailable; the caller then answers 404 and
+// the SPA falls back to a generic glyph.
 type DeviceIconProxy interface {
 	Icon(ctx context.Context, address string) (data []byte, contentType string, ok bool)
 }
 
-// GetDeviceIcon proxies the device-type icon PNG the CCU serves under
-// /config/img/devices/250/<file>. The route is intentionally
-// unauthenticated — it exposes only non-sensitive device model artwork
-// and must resolve from an <img> tag regardless of the auth scheme in
-// use; the equivalent device-icon proxy in the reference integration is
-// unauthenticated for the same reason.
+// GetDeviceIcon serves the device-type icon PNG — the artwork the CCU
+// WebUI shows from /config/img/devices/250/<file>. The route is mounted
+// behind authentication: the image is not sensitive, but a 200 versus a
+// 404 would tell an anonymous caller whether an address exists. The SPA
+// renders it from an <img> tag, which carries the same-origin session
+// cookie; a bearer-only client fetches the image itself.
 func GetDeviceIcon(proxy DeviceIconProxy) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if proxy == nil {
