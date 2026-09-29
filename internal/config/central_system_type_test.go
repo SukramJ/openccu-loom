@@ -45,6 +45,7 @@ func TestLiteCentralValidation(t *testing.T) {
 		{"lite without token", "    system_type: openccu-lite\n    interfaces: [HmIP-RF]\n", "api_token: required"},
 		{"lite token file alone", "    system_type: openccu-lite\n    api_token_file: /run/occulite/addon-tokens/openccu-loom.api\n    interfaces: [HmIP-RF]\n", ""},
 		{"lite token and file", "    system_type: openccu-lite\n    api_token: " + liteToken + "\n    api_token_file: /run/x.api\n    interfaces: [HmIP-RF]\n", "cannot be combined with api_token"},
+		{"lite relative token file", "    system_type: openccu-lite\n    api_token_file: run/x.api\n    interfaces: [HmIP-RF]\n", "an absolute path is required"},
 		{"ccu with token file", "    system_type: ccu\n    api_token_file: /run/x.api\n    interfaces: [HmIP-RF]\n", "only an openccu-lite central uses an API token"},
 		{"lite malformed token", "    system_type: openccu-lite\n    api_token: olt_XYZ\n    interfaces: [HmIP-RF]\n", "api_token: not an occulited API token"},
 		{"lite upper-case token", "    system_type: openccu-lite\n    api_token: OLT_0123456789ABCDEF0123456789ABCDEF\n    interfaces: [HmIP-RF]\n", "api_token: not an occulited API token"},

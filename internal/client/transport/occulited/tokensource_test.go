@@ -59,6 +59,49 @@ func TestFileTokenFollowsRotation(t *testing.T) {
 	}
 }
 
+// TestFileTokenRefusesNonTokenContent pins the exfiltration guard: a
+// path pointed at a file that does not hold an occulited token fails
+// the request — its content never leaves the process as a bearer
+// header, and the error names the file, never the content.
+func TestFileTokenRefusesNonTokenContent(t *testing.T) {
+	t.Parallel()
+
+	called := false
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true }))
+	defer srv.Close()
+
+	path := filepath.Join(t.TempDir(), "not-a-token")
+	const secret = "root:x:0:0:root:/root:/bin/sh"
+	if err := os.WriteFile(path, []byte(secret+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c, err := New(Config{BaseURL: srv.URL, TokenSource: FileToken(path)})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	_, err = c.Health(context.Background())
+	if err == nil || !strings.Contains(err.Error(), path) {
+		t.Errorf("want an error naming %s, got %v", path, err)
+	}
+	if err != nil && strings.Contains(err.Error(), secret) {
+		t.Errorf("the error quotes the file's content: %v", err)
+	}
+	if called {
+		t.Error("the request reached the server despite non-token content")
+	}
+}
+
+// TestFileTokenRequiresAnAbsolutePath pins that a relative path is
+// refused outright — it would resolve against the daemon's working
+// directory, wherever that happens to be.
+func TestFileTokenRequiresAnAbsolutePath(t *testing.T) {
+	t.Parallel()
+	_, err := FileToken("relative/addon.api")()
+	if err == nil || !strings.Contains(err.Error(), "absolute path") {
+		t.Errorf("want an absolute-path refusal, got %v", err)
+	}
+}
+
 // TestFileTokenReadFailureFailsTheRequest pins that a vanished token
 // file surfaces as a request error naming the file, never as a silent
 // unauthenticated call.

@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -2374,6 +2375,8 @@ func validateLiteCentral(idx int, cc *CentralConfig, strict, tokenFromEnv bool) 
 	switch {
 	case cc.APIToken != "" && cc.APITokenFile != "":
 		return fmt.Errorf("config: centrals[%d].api_token_file: cannot be combined with api_token — one credential source per central", idx)
+	case cc.APITokenFile != "" && !filepath.IsAbs(cc.APITokenFile):
+		return fmt.Errorf("config: centrals[%d].api_token_file: an absolute path is required", idx)
 	case cc.APIToken == "" && cc.APITokenFile == "" && strict && !tokenFromEnv:
 		return fmt.Errorf("config: centrals[%d].api_token: required for an openccu-lite central (or name api_token_file)", idx)
 	case cc.APIToken != "" && !liteAPITokenPattern.MatchString(cc.APIToken):
