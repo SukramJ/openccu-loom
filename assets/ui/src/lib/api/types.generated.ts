@@ -9567,7 +9567,7 @@ export interface components {
             /** @description HTTP(S) port of the system's web server — JSON-RPC and web endpoints on a CCU, the occulited API on openccu-lite. 0 defaults to 80 (plain) / 443 (TLS). */
             json_rpc_port?: number;
             /**
-             * @description Kind of system behind the central. Empty means `ccu`, so a row written before the field existed keeps its meaning. An `openccu-lite` central needs `api_token_plain` or `api_token_env` and must not carry username, password or port overrides; a `ccu` central must not carry an API token or a fingerprint. A write that breaks a rule is refused with 400 naming the field.
+             * @description Kind of system behind the central. Empty means `ccu`, so a row written before the field existed keeps its meaning. An `openccu-lite` central needs `api_token_plain`, `api_token_env` or `api_token_file` and must not carry username, password or port overrides; a `ccu` central must not carry an API token or a fingerprint. A write that breaks a rule is refused with 400 naming the field.
              * @enum {string}
              */
             system_type?: "ccu" | "openccu-lite" | "auto";
@@ -9575,6 +9575,8 @@ export interface components {
             api_token_env?: string;
             /** @description The openccu-lite API token, sealed at rest. Never returned in the clear: reads carry the mask `***`, and a write that sends the mask back (or omits the key, or sends null) keeps the stored token; an explicit empty string clears it. */
             api_token_plain?: string;
+            /** @description Path of a file holding the openccu-lite API token instead of storing it: the token is read per request, so a rotated file — occulited mints an add-on's token anew at every start, a container may remount a secret — takes effect without a restart. A path, not a secret, so it is returned in the clear. Mutually exclusive with a stored token. */
+            api_token_file?: string;
             /** @description SHA-256 (lower-case hex) of the openccu-lite system's certificate. When set, TLS trusts exactly this certificate. Requires tls. */
             tls_fingerprint?: string;
             /** @description The id of an approved client pairing (POST /centrals/pairing). The central takes that pairing's token and pinned fingerprint on the server; the token never travels through the client. */

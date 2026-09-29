@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -1803,6 +1804,13 @@ type CentralConfig struct {
 	// authenticates with (`olt_` followed by 32 lower-case hex digits).
 	// Required for openccu-lite, meaningless (and rejected) for a CCU.
 	APIToken string `yaml:"api_token,omitempty" json:"api_token,omitempty" cfg:"secret"`
+	// APITokenFile names a file holding the API token instead of storing
+	// it: the token is read per request, so a rotated file — occulited
+	// mints an add-on's token anew at every start, and a container may
+	// remount a secret — takes effect without a restart. Mutually
+	// exclusive with api_token; the file's content is the token plus an
+	// optional trailing newline.
+	APITokenFile string `yaml:"api_token_file,omitempty" json:"api_token_file,omitempty" cfg:"expert"`
 	// TLSFingerprint pins an openccu-lite system's TLS certificate: the
 	// lower-case hex SHA-256 of the certificate's DER encoding. When set,
 	// the handshake succeeds exactly when the served leaf certificate has
@@ -2344,6 +2352,9 @@ func ValidateCentralSystemToken(idx int, cc *CentralConfig, tokenFromEnv bool) e
 		if cc.APIToken != "" {
 			return fmt.Errorf("config: centrals[%d].api_token: only an openccu-lite central uses an API token", idx)
 		}
+		if cc.APITokenFile != "" {
+			return fmt.Errorf("config: centrals[%d].api_token_file: only an openccu-lite central uses an API token", idx)
+		}
 		if cc.TLSFingerprint != "" {
 			return fmt.Errorf("config: centrals[%d].tls_fingerprint: certificate pinning is available for openccu-lite centrals only", idx)
 		}
@@ -2362,8 +2373,12 @@ func ValidateCentralSystemToken(idx int, cc *CentralConfig, tokenFromEnv bool) e
 // the token and rejects the CCU-only fields (auto keeps them open).
 func validateLiteCentral(idx int, cc *CentralConfig, strict, tokenFromEnv bool) error {
 	switch {
-	case cc.APIToken == "" && strict && !tokenFromEnv:
-		return fmt.Errorf("config: centrals[%d].api_token: required for an openccu-lite central", idx)
+	case cc.APIToken != "" && cc.APITokenFile != "":
+		return fmt.Errorf("config: centrals[%d].api_token_file: cannot be combined with api_token — one credential source per central", idx)
+	case cc.APITokenFile != "" && !filepath.IsAbs(cc.APITokenFile):
+		return fmt.Errorf("config: centrals[%d].api_token_file: an absolute path is required", idx)
+	case cc.APIToken == "" && cc.APITokenFile == "" && strict && !tokenFromEnv:
+		return fmt.Errorf("config: centrals[%d].api_token: required for an openccu-lite central (or name api_token_file)", idx)
 	case cc.APIToken != "" && !liteAPITokenPattern.MatchString(cc.APIToken):
 		return fmt.Errorf("config: centrals[%d].api_token: not an occulited API token (olt_ followed by 32 lower-case hex digits)", idx)
 	}

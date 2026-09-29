@@ -840,6 +840,7 @@ func RowToCentralConfig(r sqlite.CentralRow, envLookup func(string) string) (cc 
 		Name:                  r.Name,
 		SystemType:            hmenum.SystemType(r.SystemType),
 		APIToken:              token,
+		APITokenFile:          r.APITokenFile,
 		TLSFingerprint:        r.TLSFingerprint,
 		Host:                  r.Host,
 		Port:                  r.Port,

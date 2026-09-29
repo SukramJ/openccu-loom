@@ -367,7 +367,7 @@
       // A stored pin was compared when it was stored.
       fingerprintConfirmed: true,
     };
-    fTokenStored = !!row.api_token_plain || !!row.api_token_env;
+    fTokenStored = !!row.api_token_plain || !!row.api_token_env || !!row.api_token_file;
     fUsername = row.username ?? "";
     fPassword = row.password_plain ?? "";
     passwordTouched = false;
@@ -456,6 +456,10 @@
           return { api_token_plain: c.api_token, pairing_id: c.pairing_id };
         })(),
         api_token_env: editOriginal?.api_token_env || undefined,
+        // A file-sourced token (the add-on auto-onboarding, a container
+        // secret) is a stored fact this form never edits: pass it
+        // through, or a save here would strip the central's credential.
+        api_token_file: editOriginal?.api_token_file || undefined,
         primary_interface: fPrimaryInterface || undefined,
         interfaces: buildInterfaces(),
         behavior: buildBehavior(fBehavior),
@@ -808,6 +812,12 @@
         </div>
 
         <CentralOnboarding host={fHost} port={fJsonRpcPort} bind:value={fOnboarding} tokenStored={fTokenStored} />
+        {#if editOriginal?.api_token_file}
+          <p class="text-xs text-[var(--secondary-text-color)]">
+            {t("centrals.lite.token_from_file")}
+            <code>{editOriginal.api_token_file}</code>
+          </p>
+        {/if}
         {#if missingScopes.length > 0}
           <div class="rounded-md bg-[var(--ha-secondary-background-color)] p-3 text-xs">
             <p class="font-medium">{t("centrals.lite.missing_scopes")}</p>

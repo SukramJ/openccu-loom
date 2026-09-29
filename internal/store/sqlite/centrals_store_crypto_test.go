@@ -169,7 +169,9 @@ func TestCentralsStoreSealsTheAPIToken(t *testing.T) {
 	fp := strings.Repeat("ab", 32)
 	if err := store.Put(ctx, sqlite.CentralRow{
 		Name: "box", Host: "box.local", SystemType: "openccu-lite",
-		APITokenPlain: token, APITokenEnv: "BOX_TOKEN", TLSFingerprint: fp, Enabled: true,
+		APITokenPlain: token, APITokenEnv: "BOX_TOKEN",
+		APITokenFile:   "/run/occulite/addon-tokens/openccu-loom.api",
+		TLSFingerprint: fp, Enabled: true,
 	}); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -186,6 +188,9 @@ func TestCentralsStoreSealsTheAPIToken(t *testing.T) {
 	}
 	if got.APITokenPlain != token || got.APITokenEnv != "BOX_TOKEN" || got.SystemType != "openccu-lite" || got.TLSFingerprint != fp {
 		t.Errorf("round trip = %+v", got)
+	}
+	if got.APITokenFile != "/run/occulite/addon-tokens/openccu-loom.api" {
+		t.Errorf("api_token_file did not round-trip: %q", got.APITokenFile)
 	}
 }
 

@@ -43,13 +43,20 @@ func newLiteProfile(cc *config.CentralConfig, logger *slog.Logger) (*liteProfile
 	if logger == nil {
 		logger = slog.Default()
 	}
-	client, err := occulited.New(occulited.Config{
+	cfg := occulited.Config{
 		BaseURL:            ccuBaseURLFor(*cc),
 		Token:              cc.APIToken,
 		TLSFingerprint:     cc.TLSFingerprint,
 		InsecureSkipVerify: cc.TLSInsecureSkipVerify,
 		Logger:             logger.With(slog.String("central", cc.Name)),
-	})
+	}
+	if cc.APITokenFile != "" {
+		// Read per request: occulited mints an add-on's token anew at
+		// every start, so a copied value would go stale the moment the
+		// box's daemon restarts underneath a running loom.
+		cfg.TokenSource = occulited.FileToken(cc.APITokenFile)
+	}
+	client, err := occulited.New(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("central %s: occulited client: %w", cc.Name, err)
 	}

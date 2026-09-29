@@ -201,6 +201,7 @@ func wireREST(ctx context.Context, d restWiringDeps) restWiring {
 					PasswordPlain:         cc.Password, // YAML password becomes the SQLite default
 					SystemType:            string(cc.SystemType),
 					APITokenPlain:         cc.APIToken, // sealed at rest like the password
+					APITokenFile:          cc.APITokenFile,
 					TLS:                   cc.TLS,
 					TLSInsecureSkipVerify: cc.TLSInsecureSkipVerify,
 					TLSFingerprint:        cc.TLSFingerprint,

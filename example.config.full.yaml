@@ -793,6 +793,11 @@ centrals:
     # the lower-case hex SHA-256 of the box's certificate to pin. A CCU
     # central carries neither.
     # api_token: ""
+    # api_token_file: ""   # path of a file holding the token, read per
+    #                      # request (rotation-safe: occulited mints the
+    #                      # add-on token anew at every start, a container
+    #                      # may remount a secret). Mutually exclusive
+    #                      # with api_token.
     # tls_fingerprint: ""
 
     # Primary interface for health aggregation.

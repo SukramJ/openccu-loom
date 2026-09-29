@@ -25,6 +25,7 @@
   "runtime": {
     "daemon": true,
     "needs": [],
+    "api_scopes": ["rpc:admin", "meta:write", "system:write", "logs:read"],
     "ports": [8119, 8120, 8129, 5540],
     "port_info": {
       "8119": {
@@ -57,8 +58,8 @@
       }
     },
     "note": {
-      "de": "Der Daemon spricht auf diesem System die API von occulited und braucht keinen Interface-Prozess direkt. Nach außen kontaktiert er den konfigurierten MQTT-Broker, weitere vom Betreiber eingebundene Zentralen, Matter-Controller im LAN und GitHub für die Update-Anzeige.",
-      "en": "The daemon talks to occulited's API on this system and needs no interface process directly. Outside the box it contacts the configured MQTT broker, further centrals the operator adds, Matter controllers on the LAN and GitHub for the update check."
+      "de": "Der Daemon spricht auf diesem System die API von occulited und braucht keinen Interface-Prozess direkt; mit dem API-Token dieser Zusatzsoftware richtet er das lokale System beim ersten Start selbst ein (Backup und Neustart brauchen weiterhin ein gepairtes Token). Nach außen kontaktiert er den konfigurierten MQTT-Broker, weitere vom Betreiber eingebundene Zentralen, Matter-Controller im LAN und GitHub für die Update-Anzeige.",
+      "en": "The daemon talks to occulited's API on this system and needs no interface process directly; with this add-on's API token it sets the local system up by itself on first start (backup and reboot still need a paired token). Outside the box it contacts the configured MQTT broker, further centrals the operator adds, Matter controllers on the LAN and GitHub for the update check."
     }
   }
 }

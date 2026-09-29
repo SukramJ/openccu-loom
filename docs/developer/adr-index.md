@@ -85,6 +85,7 @@ The table below catalogues every ADR. Each entry links to the record itself — 
 | [0074](../adr/0074-per-central-features.md) | Per-central features and what "absent" means | Each central carries a feature set with a reason for every absent key (not supported, missing scope, not ready). REST answers 422 `feature_unavailable`, MQTT does not declare, the SPA hides with the reason, MCP names the central. Refusing ports wrap the legacy sentinels. |
 | [0075](../adr/0075-token-credentials.md) | Credentials for token-based systems | `api_token` is a sealed, masked secret; TLS is pinned to a compared fingerprint; client pairing keeps the approved token in the daemon, and a central takes it by pairing id — no client ever receives it. |
 | [0076](../adr/0076-client-pairing.md) | Client token pairing mirrors the occulited protocol | External clients obtain a token by commit-reveal code pairing: both sides derive six digits, the administrator approves by typing them, `admin` is never pairable, and the approved token reaches the asking client exactly once. |
+| [0077](../adr/0077-lite-addon-token-onboarding.md) | The add-on token onboards the local openccu-lite box | On a box that minted this add-on an API token, a first boot with no centrals adopts the local system by itself: the token is read from the file per request (rotation-safe `api_token_file`), the hostname and interfaces come from the box, and pairing remains only for `backup`/`power` and remote clients. |
 
 ## Related reading
 

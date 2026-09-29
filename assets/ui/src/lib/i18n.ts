@@ -1474,6 +1474,7 @@ const EN: Catalog = {
   "config.field.centrals.json_rpc_port": "HTTP(S) port",
   "config.field.centrals.system_type": "System type",
   "config.field.centrals.api_token": "API token",
+  "config.field.centrals.api_token_file": "API token file",
   "config.field.centrals.tls_fingerprint": "TLS certificate fingerprint",
   "config.field.centrals.username": "Username",
   "config.field.centrals.password": "Password",
@@ -1810,6 +1811,8 @@ const EN: Catalog = {
     "ccu for a CCU, OpenCCU or RaspberryMatic; openccu-lite for a system managed by occulited; auto detects it on first connect. Managed in the CCUs tab.",
   "config.help.centrals.api_token":
     "The occulited API token (olt_…) an openccu-lite system is accessed with. Managed in the CCUs tab.",
+  "config.help.centrals.api_token_file":
+    "Path of a file holding the API token, read on every request — rotation-safe for the add-on token occulited mints at each start, and for container secret mounts. Mutually exclusive with a stored token.",
   "config.help.centrals.tls_fingerprint":
     "SHA-256 of an openccu-lite system's certificate; when set, exactly this certificate is trusted. Managed in the CCUs tab.",
   "config.help.centrals.username": "Managed in the CCUs tab.",
@@ -2187,6 +2190,8 @@ const EN: Catalog = {
   "centrals.system_type.auto": "identifying",
   "centrals.field.lite_port_hint": "Port of the box's web server; empty means 80, or 443 with HTTPS.",
   "centrals.lite.missing_scopes": "The API token's scopes do not cover:",
+  "centrals.lite.token_from_file":
+    "The API token is read from a file on every request (rotation-safe), so there is nothing to paste here:",
   "taxonomy.title": "Nested rooms and functions",
   "taxonomy.subtitle": "Systems that nest their rooms and functions, such as openccu-lite, are edited as trees.",
   "taxonomy.central": "System",
@@ -5654,6 +5659,7 @@ const DE: Catalog = {
   "config.field.centrals.json_rpc_port": "HTTP(S)-Port",
   "config.field.centrals.system_type": "Systemtyp",
   "config.field.centrals.api_token": "API-Token",
+  "config.field.centrals.api_token_file": "API-Token-Datei",
   "config.field.centrals.tls_fingerprint": "TLS-Zertifikats-Fingerabdruck",
   "config.field.centrals.username": "Benutzername",
   "config.field.centrals.password": "Passwort",
@@ -5989,6 +5995,8 @@ const DE: Catalog = {
     "ccu für eine CCU, OpenCCU oder RaspberryMatic; openccu-lite für ein von occulited verwaltetes System; auto erkennt es beim ersten Verbinden. Im CCUs-Tab verwaltet.",
   "config.help.centrals.api_token":
     "Das occulited-API-Token (olt_…), mit dem auf ein openccu-lite-System zugegriffen wird. Im CCUs-Tab verwaltet.",
+  "config.help.centrals.api_token_file":
+    "Pfad einer Datei mit dem API-Token, bei jedem Zugriff gelesen — rotationssicher für das Addon-Token, das occulited bei jedem Start neu erzeugt, und für Container-Secret-Mounts. Schließt ein gespeichertes Token aus.",
   "config.help.centrals.tls_fingerprint":
     "SHA-256 des Zertifikats eines openccu-lite-Systems; ist er gesetzt, wird genau diesem Zertifikat vertraut. Im CCUs-Tab verwaltet.",
   "config.help.centrals.username": "Im CCUs-Tab verwaltet.",
@@ -6373,6 +6381,8 @@ const DE: Catalog = {
   "centrals.system_type.auto": "wird erkannt",
   "centrals.field.lite_port_hint": "Port des Webservers der Box; leer bedeutet 80, mit HTTPS 443.",
   "centrals.lite.missing_scopes": "Die Scopes des API-Tokens decken nicht ab:",
+  "centrals.lite.token_from_file":
+    "Das API-Token wird bei jedem Zugriff aus einer Datei gelesen (rotationssicher); hier ist nichts einzutragen:",
   "taxonomy.title": "Verschachtelte Räume und Gewerke",
   "taxonomy.subtitle": "Systeme, die Räume und Gewerke verschachteln, wie openccu-lite, werden als Baum bearbeitet.",
   "taxonomy.central": "System",

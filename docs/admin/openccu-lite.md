@@ -182,6 +182,20 @@ that the box accepts.
 OpenCCU-Loom can also run as an add-on on the openccu-lite box, installed
 from the box's Addons page. A few things differ from a CCU:
 
+- **The local box onboards itself.** The box mints the add-on an API
+  token at every start (the manifest's declared scopes:
+  `rpc:admin`, `meta:write`, `system:write`, `logs:read`), and a first
+  boot with no centrals configured adopts the local system with it —
+  named after the box's hostname, no pairing step, no token to paste.
+  The token is read from its file on every request, so the rotation at
+  each occulited start needs nothing from you (the central's
+  `api_token_file` field; also useful for container secret mounts).
+  `backup` and `power` are never part of an add-on token: pair with the
+  box when you want backups or reboots from Loom, exactly as the
+  feature table's `missing_scope` reasons say. Deleting the
+  auto-onboarded central sticks for as long as any central exists; an
+  empty list on the box re-onboards at the next start (ADR 0077).
+
 - **Open port 8119 on the Addons page.** The add-on's manifest declares
   its ports, so they appear as switches under *Addon ports*: 8119
   (Config UI, REST/WebSocket, MCP) is the one to open; 8120/8129 (the

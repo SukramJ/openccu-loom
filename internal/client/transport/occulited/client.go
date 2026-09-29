@@ -18,6 +18,9 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -47,6 +50,12 @@ type Config struct {
 	// Token is the API token ("olt_…") sent as a bearer credential. An
 	// empty token sends no credential (open endpoints, detection).
 	Token string
+	// TokenSource yields the bearer credential per request and wins over
+	// Token when set. A file-backed source (see [FileToken]) follows
+	// occulited's rotation — the box mints an addon's token anew at every
+	// occulited start — without any reconnect or retry logic: the next
+	// request simply carries the fresh credential.
+	TokenSource TokenSource
 	// TLSFingerprint pins the server certificate: the hex SHA-256 of the
 	// leaf certificate's DER, colons and case ignored. When set, the
 	// certificate chain is not verified against a CA; only the pin is.
@@ -112,12 +121,16 @@ func New(cfg Config) (*Client, error) {
 	streamT := httpx.NewTransport()
 	streamT.TLSClientConfig = tlsCfg.Clone()
 	streamT.ResponseHeaderTimeout = streamHeaderTimeout
+	source := cfg.TokenSource
+	if source == nil {
+		source = StaticToken(cfg.Token)
+	}
 	return &Client{
 		base:   base,
 		cfg:    cfg,
 		logger: logger,
-		calls:  &http.Client{Timeout: timeout, Transport: NewTransport(callT, cfg.Token)},
-		stream: &http.Client{Transport: NewTransport(streamT, cfg.Token)},
+		calls:  &http.Client{Timeout: timeout, Transport: NewTransport(callT, source)},
+		stream: &http.Client{Transport: NewTransport(streamT, source)},
 	}, nil
 }
 
@@ -245,13 +258,52 @@ func (c *Client) endpoint(escapedPath string, q url.Values) string {
 // Returning the refusal from RoundTrip is what makes a caller that only
 // sees transport errors, the XML-RPC client above all, classify a
 // stopped interface process as a connection failure.
-func NewTransport(next http.RoundTripper, token string) http.RoundTripper {
-	return &roundTripper{next: next, token: token}
+func NewTransport(next http.RoundTripper, source TokenSource) http.RoundTripper {
+	return &roundTripper{next: next, source: source}
+}
+
+// TokenSource yields the current API token; "" sends no credential.
+type TokenSource func() (string, error)
+
+// StaticToken returns a TokenSource that always yields token.
+func StaticToken(token string) TokenSource {
+	return func() (string, error) { return token, nil }
+}
+
+// fileTokenShape is the exact shape occulited mints (olt_ followed by
+// 32 lower-case hex digits). Enforcing it on the file's content keeps a
+// misdirected path from ever leaking arbitrary file contents as a
+// bearer header: only a genuine occulited token leaves the process.
+var fileTokenShape = regexp.MustCompile(`^olt_[0-9a-f]{32}$`)
+
+// FileToken returns a TokenSource that reads path at every call,
+// trimming surrounding whitespace (occulited writes the secret with a
+// trailing newline). Reading per request is what makes rotation safe:
+// the file lives on a tmpfs and the box replaces it whenever occulited
+// mints anew. The path must be absolute and the content must be an
+// occulited API token; anything else fails the request naming the file
+// — never quoting its content.
+func FileToken(path string) TokenSource {
+	clean := filepath.Clean(path)
+	return func() (string, error) {
+		if !filepath.IsAbs(clean) {
+			return "", fmt.Errorf("occulited: token file %s: an absolute path is required", clean)
+		}
+		raw, err := os.ReadFile(clean) //nolint:gosec // an admin-configured absolute path; the content is shape-checked below
+		if err != nil {
+			return "", fmt.Errorf("occulited: token file %s: %w", clean, err)
+		}
+		token := strings.TrimSpace(string(raw))
+		if !fileTokenShape.MatchString(token) {
+			return "", fmt.Errorf("occulited: token file %s does not hold an occulited API token (olt_ followed by 32 lower-case hex digits)", clean)
+		}
+		return token, nil
+	}
 }
 
 type roundTripper struct {
-	next  http.RoundTripper
-	token string
+	next   http.RoundTripper
+	source TokenSource
 }
 
 type noAuthKey struct{}
@@ -267,8 +319,14 @@ func withoutCredential(ctx context.Context) context.Context {
 func (t *roundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	out := req.Clone(req.Context())
 	skip, _ := out.Context().Value(noAuthKey{}).(bool)
-	if t.token != "" && !skip && out.Header.Get("Authorization") == "" {
-		out.Header.Set("Authorization", "Bearer "+t.token)
+	if !skip && out.Header.Get("Authorization") == "" {
+		token, err := t.source()
+		if err != nil {
+			return nil, err
+		}
+		if token != "" {
+			out.Header.Set("Authorization", "Bearer "+token)
+		}
 	}
 	if err := ensureBody(out); err != nil {
 		return nil, err

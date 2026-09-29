@@ -37,10 +37,11 @@ type liteManifest struct {
 		SessionHeader bool   `json:"session_header"`
 	} `json:"ui"`
 	Runtime struct {
-		Daemon   bool      `json:"daemon"`
-		Needs    *[]string `json:"needs"`
-		Ports    []int     `json:"ports"`
-		PortInfo map[string]struct {
+		Daemon    bool      `json:"daemon"`
+		Needs     *[]string `json:"needs"`
+		APIScopes []string  `json:"api_scopes"`
+		Ports     []int     `json:"ports"`
+		PortInfo  map[string]struct {
 			Proto string            `json:"proto"`
 			Label map[string]string `json:"label"`
 		} `json:"port_info"`
@@ -193,6 +194,23 @@ func TestCCUAddonLiteManifestDeclaresRuntimePolicy(t *testing.T) {
 	for _, lang := range []string{"de", "en"} {
 		if strings.TrimSpace(m.Runtime.Note[lang]) == "" {
 			t.Errorf("runtime.note misses %s", lang)
+		}
+	}
+
+	// The add-on auto-onboarding (ADR 0077) reads the token occulited
+	// mints from these scopes; a dropped declaration removes the token
+	// file at the next update and the local central loses its
+	// credential. backup and power stay out — occulited never grants
+	// them to an add-on token, and declaring one is logged as refused.
+	wantScopes := []string{"logs:read", "meta:write", "rpc:admin", "system:write"}
+	gotScopes := append([]string(nil), m.Runtime.APIScopes...)
+	sort.Strings(gotScopes)
+	if strings.Join(gotScopes, ",") != strings.Join(wantScopes, ",") {
+		t.Errorf("runtime.api_scopes = %v, want %v", gotScopes, wantScopes)
+	}
+	for _, s := range m.Runtime.APIScopes {
+		if s == "backup" || s == "power" || s == "auth:admin" || s == "*" {
+			t.Errorf("runtime.api_scopes declares %q, which occulited never grants an add-on", s)
 		}
 	}
 

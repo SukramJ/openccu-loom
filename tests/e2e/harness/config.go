@@ -53,6 +53,9 @@ type configInputs struct {
 	// XML-RPC port or credentials are written — the lite validator
 	// rejects them.
 	Lite bool
+	// NoCentral writes an empty central list: the first-boot state the
+	// add-on auto-onboarding acts on.
+	NoCentral bool
 }
 
 // buildConfigYAML returns a complete openccu-loom config that wires
@@ -145,6 +148,10 @@ func buildConfigYAML(in configInputs) string {
 	// port-pinned parallel daemon startups.
 	fmt.Fprintf(&b, "  discovery:\n    mdns:\n      enabled: false\n    ssdp:\n      enabled: false\n")
 	fmt.Fprintf(&b, "%s", mqttBlock)
+	if in.NoCentral {
+		fmt.Fprintf(&b, "centrals: []\n")
+		return b.String()
+	}
 	fmt.Fprintf(&b, "centrals:\n")
 	fmt.Fprintf(&b, "  - name: ccu-e2e\n")
 	fmt.Fprintf(&b, "    host: %s\n", in.CCUHost)
