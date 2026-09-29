@@ -8,8 +8,8 @@ github.com/SukramJ/go-hamqtt v0.34.1 h1:FLDHVYM16br7tASVw05wOf5amfpEYxnqNrmbW0sy
 github.com/SukramJ/go-hamqtt v0.34.1/go.mod h1:X9NObZM7WTlmqzEz6PHXqj2AA93bFiEg+QQdWOC2wT8=
 github.com/SukramJ/go-mqtt v1.5.1 h1:6T+kb17i6WrVvGfIY4IR9MS1qqh8AOxXbMBJ9zxKBHE=
 github.com/SukramJ/go-mqtt v1.5.1/go.mod h1:VYpxzNQSbOiPO1xtW0nrL6uSYtjf58hGkYGJ6ebjxXA=
-github.com/SukramJ/go-openccu-data v0.1.4 h1:Z+oIPWQgq7Z/gpR7LXU7HC3b+AWzrdsYVt+csm0uCpI=
-github.com/SukramJ/go-openccu-data v0.1.4/go.mod h1:hDzB2WgqBuex/oNyfkCwB6mRKeJ2+TZDA8iSMkyPznQ=
+github.com/SukramJ/go-openccu-data v0.2.0 h1:MFANiQ7vfJhWA3W7uMko5HD/R2Z5gAngU7niOijaxMA=
+github.com/SukramJ/go-openccu-data v0.2.0/go.mod h1:hDzB2WgqBuex/oNyfkCwB6mRKeJ2+TZDA8iSMkyPznQ=
 github.com/SukramJ/godevccu v0.3.0 h1:dd8gp55OyMKyRAUg9E7lupxyYPsm0w7YfQ88eWxb5Cw=
 github.com/SukramJ/godevccu v0.3.0/go.mod h1:/DUyYtwh4Bp8leJE3/ms9cwiuzCW6K2eurL83wIssLY=
 github.com/cenkalti/backoff v2.2.1+incompatible h1:tNowT99t7UNflLxfYYSlKYsBpXdEet03Pg2g16Swow4=

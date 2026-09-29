@@ -2548,6 +2548,7 @@ const EN: Catalog = {
   "device.no_channels": "This device has no channels.",
   "device.all_devices": "All devices",
   "device.offline": "offline",
+  "device.image_alt": "Picture of {model}",
   "device.update_available": "update available",
   "device.firmware_update": "Update firmware",
   "device.firmware_update.tooltip":
@@ -6737,6 +6738,7 @@ const DE: Catalog = {
   "device.no_channels": "Dieses Gerät hat keine Kanäle.",
   "device.all_devices": "Alle Geräte",
   "device.offline": "offline",
+  "device.image_alt": "Bild von {model}",
   "device.update_available": "Update verfügbar",
   "device.firmware_update": "Firmware aktualisieren",
   "device.firmware_update.tooltip":

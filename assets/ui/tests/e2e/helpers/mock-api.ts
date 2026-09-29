@@ -119,8 +119,9 @@ export async function mockAllApis(page: Page): Promise<void> {
       : route.fulfill({ status: 404, json: { detail: `no device ${address}` } });
   });
   // Device icon. The daemon answers 404 for a device it has no image for,
-  // and the device card falls back to its category glyph on the img error —
-  // which is the state every baseline shows.
+  // and the device detail header (DeviceImage) falls back to its device-type
+  // glyph on the img error — which is the state every baseline shows. A 404
+  // keeps screenshots independent of any real device artwork.
   await page.route('**/api/v1/devices/*/icon', (route) =>
     route.fulfill({ status: 404, json: { detail: 'no icon' } }),
   );

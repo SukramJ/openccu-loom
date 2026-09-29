@@ -81,7 +81,7 @@ the same ports. There is no `if lite` anywhere outside the one selection functio
 | Communication test, CCU astro position, safe mode, service-message acknowledge | No endpoint on lite (Appendix A §A.9) | Absent with reason. |
 | eQ-3 UDP-43439 discovery | Loom has never implemented it (`grep 43439` finds nothing); SSDP already finds lite boxes (§7.7) | SSDP lists the box and labels it `openccu-lite`. |
 | Running the real occulited in CI | GPL-3.0 binary; dev mode has no working lite-rpc (Appendix A §A.10). Needs a separate user decision (CLAUDE.md: copyleft → stop and discuss) | Our own MIT fake gates PRs (§8). |
-| Device pictures from the box | occulited serves no `/config/img/...` pictures (a `.png` path that does not exist is a 404, Appendix A §A.1) | The icon proxy already degrades on non-200 (`cmd/openccu-loom/device_icon_proxy.go:202-204`); the SPA shows its fallback. |
+| Device pictures from the box | occulited serves no `/config/img/...` pictures (a `.png` path that does not exist is a 404, Appendix A §A.1) | Superseded: the pictures now come from the embedded openccu-data snapshot (`ccudata.DeviceImage`), and the CCU is only asked for a filename the snapshot lacks, so lite shows them too. The earlier claim that "the SPA shows its fallback" was wrong — the SPA did not request the icon route at all until the device detail view started rendering it with a glyph fallback. |
 | Area (ADR 0056) keys by tree path | Areas stay keyed by `(central, room name)`; on lite the tree itself is the grouping | Documented limitation (§5.6). |
 
 ### 1.3 Success criteria (each one is a test or a named check)

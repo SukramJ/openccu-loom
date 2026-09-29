@@ -5,10 +5,13 @@ package contract
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -24,12 +27,25 @@ type liteManifest struct {
 		Asset  string `json:"asset"`
 	} `json:"release"`
 	Requires struct {
+		Lite          string   `json:"lite"`
 		Architectures []string `json:"architectures"`
 	} `json:"requires"`
 	UI struct {
+		Icon          string `json:"icon"`
+		IconDark      string `json:"icon_dark"`
 		SettingsURL   string `json:"settings_url"`
 		SessionHeader bool   `json:"session_header"`
 	} `json:"ui"`
+	Runtime struct {
+		Daemon   bool      `json:"daemon"`
+		Needs    *[]string `json:"needs"`
+		Ports    []int     `json:"ports"`
+		PortInfo map[string]struct {
+			Proto string            `json:"proto"`
+			Label map[string]string `json:"label"`
+		} `json:"port_info"`
+		Note map[string]string `json:"note"`
+	} `json:"runtime"`
 }
 
 func readCCUAddonFile(t *testing.T, rel string) string {
@@ -100,6 +116,94 @@ func TestCCUAddonLiteManifestMatchesThePackage(t *testing.T) {
 	sort.Strings(got)
 	if strings.Join(got, ",") != strings.Join(arches, ",") {
 		t.Errorf("requires.architectures = %v, the update script installs for %v", got, arches)
+	}
+}
+
+// TestCCUAddonLiteManifestDeclaresRuntimePolicy pins the manifest's runtime
+// declarations. openccu-lite applies a manifest as declared and a release
+// that declares less than its predecessor loses what it dropped at the next
+// update — a silently removed port closes its firewall switch at once. So
+// the declared set is pinned here: the UI port (cross-checked against the
+// rc.d listen address), the two callback ports a remote CCU would push to,
+// and the Matter bridge port; every port carries a bilingual label, needs
+// is declared empty (the daemon talks to occulited, never to an interface
+// process, so its unit starts right after the network), and the note and
+// the icons the Addons page shows exist. mDNS 5353 is deliberately absent:
+// the box's always-on discovery firewall rules already accept multicast to
+// the mDNS groups, and a declared port would add a closed-by-default
+// switch standard mDNS never needs.
+func TestCCUAddonLiteManifestDeclaresRuntimePolicy(t *testing.T) {
+	t.Parallel()
+
+	var m liteManifest
+	if err := json.Unmarshal([]byte(readCCUAddonFile(t, "openccu-lite.json")), &m); err != nil {
+		t.Fatalf("openccu-lite.json: %v", err)
+	}
+
+	if !m.Runtime.Daemon {
+		t.Error("runtime.daemon is not set: a dead daemon then shows as Completed instead of Exited")
+	}
+	if m.Runtime.Needs == nil {
+		t.Error("runtime.needs is undeclared: the unit then waits for rfd and hmipserver, which the daemon never talks to")
+	} else if len(*m.Runtime.Needs) != 0 {
+		t.Errorf("runtime.needs = %v, want [] — the daemon talks to occulited's API only", *m.Runtime.Needs)
+	}
+	if m.Requires.Lite == "" {
+		t.Error("requires.lite is empty: older systems get no compatibility hint")
+	}
+
+	rc := readCCUAddonFile(t, "rc.d/openccu-loom")
+	listen := regexp.MustCompile(`(?m)^export OPENCCU_LOOM_REST_LISTEN=:(\d+)$`).FindStringSubmatch(rc)
+	if listen == nil {
+		t.Fatal("rc.d/openccu-loom exports no OPENCCU_LOOM_REST_LISTEN")
+	}
+	uiPort, err := strconv.Atoi(listen[1])
+	if err != nil {
+		t.Fatalf("rc.d listen port %q: %v", listen[1], err)
+	}
+
+	wantPorts := []int{uiPort, 8120, 8129, 5540}
+	gotPorts := append([]int(nil), m.Runtime.Ports...)
+	sort.Ints(wantPorts)
+	sort.Ints(gotPorts)
+	if fmt.Sprint(gotPorts) != fmt.Sprint(wantPorts) {
+		t.Errorf("runtime.ports = %v, want %v (UI port from rc.d, XML-RPC and BIN-RPC callbacks, Matter)", gotPorts, wantPorts)
+	}
+	for _, p := range m.Runtime.Ports {
+		info, ok := m.Runtime.PortInfo[strconv.Itoa(p)]
+		if !ok {
+			t.Errorf("port %d has no port_info entry", p)
+			continue
+		}
+		if info.Proto != "tcp" && info.Proto != "udp" {
+			t.Errorf("port %d: proto = %q", p, info.Proto)
+		}
+		for _, lang := range []string{"de", "en"} {
+			if strings.TrimSpace(info.Label[lang]) == "" {
+				t.Errorf("port %d: label misses %s", p, lang)
+			}
+		}
+	}
+	for key := range m.Runtime.PortInfo {
+		p, err := strconv.Atoi(key)
+		if err != nil || !slices.Contains(m.Runtime.Ports, p) {
+			t.Errorf("port_info %q names no declared port — openccu-lite refuses such a manifest", key)
+		}
+	}
+	for _, lang := range []string{"de", "en"} {
+		if strings.TrimSpace(m.Runtime.Note[lang]) == "" {
+			t.Errorf("runtime.note misses %s", lang)
+		}
+	}
+
+	for field, rel := range map[string]string{"ui.icon": m.UI.Icon, "ui.icon_dark": m.UI.IconDark} {
+		if rel == "" {
+			t.Errorf("%s is empty: the Addons page and the menu then show no mark", field)
+			continue
+		}
+		if _, err := os.Stat(filepath.Join("..", "..", "packaging", "ccu-addon", "ccu", rel)); err != nil {
+			t.Errorf("%s = %q: not in the package (%v)", field, rel, err)
+		}
 	}
 }
 

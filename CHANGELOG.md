@@ -8,6 +8,23 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Device pictures from the embedded data snapshot. The CCU WebUI's device
+  artwork (the 250 px set, `coupling/` included) now ships inside the
+  binary via go-openccu-data, and `/api/v1/devices/{addr}/icon` serves
+  it from there first; only a picture the snapshot does not know is
+  still fetched from the CCU. openccu-lite boxes, which have no WebUI,
+  get device pictures for the first time. The device detail page shows
+  the picture, falling back to the device-type glyph when there is none.
+- ccu-addon: the openccu-lite manifest declares the add-on's runtime
+  policy. The ports (8119 Config UI/REST/WS/MCP, 8120/8129 remote-CCU
+  callbacks, 5540 Matter) become labelled switches under *Addon ports*
+  instead of a manual firewall rule with a one-minute confirm window;
+  `needs: []` starts the unit right after the network instead of
+  waiting for interface processes the daemon never talks to;
+  `requires.lite`, a bilingual runtime note and the loom mark as
+  icon/icon_dark round it off. Pinned by
+  `TestCCUAddonLiteManifestDeclaresRuntimePolicy`, validated against
+  occulited's manifest schema.
 - Documentation for the simulated south systems: the developer testing
   page gains a "Running against a simulated system" recipe — the
   standalone fake openccu-lite box (godevccu `-mode lite`, full
@@ -18,6 +35,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Getting Started, the user guide's config example and the Concepts
   page all say it and link the admin guide — previously only the
   deeper pages did.
+
+### Fixed
+
+- ccu-addon: the settings card's "Open Config UI" link opens a new tab.
+  occulited's shell shows the card inside a frame and treats any
+  cross-origin navigation of that frame as the add-on refusing to be
+  embedded — and the Config UI on its own port is always another
+  origin, so clicking the button ended in the shell's
+  refuses-to-be-embedded notice instead of the UI.
 
 ### Changed
 

@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/ccudata"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/config"
 )
@@ -529,5 +530,91 @@ func TestDeviceIconProxy_Icon_MissExpires_RefetchesAfterOutage(t *testing.T) {
 	data, _, ok := proxy.Icon(context.Background(), "AABB0001")
 	if !ok || string(data) != "PNGDATA" {
 		t.Fatalf("after the outage: expected the icon to be served again, got ok=%v data=%q", ok, data)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// deviceIconProxy.Icon — embedded snapshot
+// ---------------------------------------------------------------------------
+
+// deadCentral returns the config of a central whose web server is gone:
+// the address was bound once and then closed, so any upstream dial fails.
+func deadCentral(t *testing.T) config.CentralConfig {
+	t.Helper()
+	srv := httptest.NewServer(http.NotFoundHandler())
+	host, port := splitHostPort(t, srv.URL)
+	srv.Close()
+	return config.CentralConfig{Name: "ccu", Host: host, JSONRPCPort: port, TLS: false}
+}
+
+// countingResolver wraps resolverFromCentrals and counts lookups, so a
+// test can prove the upstream path was never entered.
+func countingResolver(calls *atomic.Int32, centrals ...config.CentralConfig) adapter.CentralConfigResolver {
+	inner := resolverFromCentrals(centrals...)
+	return func(ctx context.Context, name string) (config.CentralConfig, bool) {
+		calls.Add(1)
+		return inner(ctx, name)
+	}
+}
+
+// iconForModel resolves a model to its icon filename the way the device
+// pipeline does (ccudata.Translations.DeviceModelIcon on the embedded
+// translations), so the test exercises a real device_icons entry.
+func iconForModel(t *testing.T, model string) string {
+	t.Helper()
+	tr, err := ccudata.LoadTranslationsEmbedded()
+	if err != nil {
+		t.Fatalf("LoadTranslationsEmbedded: %v", err)
+	}
+	name := tr.DeviceModelIcon(model)
+	if name == "" {
+		t.Fatalf("no device_icons entry for model %q", model)
+	}
+	return name
+}
+
+// TestDeviceIconProxy_Icon_EmbeddedWithoutUpstream pins the embed-first
+// order: a device whose model has a device_icons entry is served from the
+// binary even when its CCU's web server is unreachable — the openccu-lite
+// case, which has no WebUI at all.
+func TestDeviceIconProxy_Icon_EmbeddedWithoutUpstream(t *testing.T) {
+	t.Parallel()
+	assertEmbeddedIcon(t, "HmIP-SWDO", "118_hmip-swdo.png")
+}
+
+// TestDeviceIconProxy_Icon_EmbeddedCouplingSubdirectory covers the
+// device_icons entries that point below coupling/.
+func TestDeviceIconProxy_Icon_EmbeddedCouplingSubdirectory(t *testing.T) {
+	t.Parallel()
+	assertEmbeddedIcon(t, "VIR-LG-DIM", "coupling/hm-coupling-dim.png")
+}
+
+func assertEmbeddedIcon(t *testing.T, model, wantFile string) {
+	t.Helper()
+	filename := iconForModel(t, model)
+	if filename != wantFile {
+		t.Fatalf("DeviceModelIcon(%q) = %q, want %q", model, filename, wantFile)
+	}
+	want, ok := ccudata.DeviceImage(filename)
+	if !ok {
+		t.Fatalf("ccudata.DeviceImage(%q): not embedded", filename)
+	}
+
+	var resolves atomic.Int32
+	locate := func(_ string) (string, string, bool) { return filename, "ccu", true }
+	proxy := newDeviceIconProxyWith(locate, countingResolver(&resolves, deadCentral(t)))
+
+	data, ct, ok := proxy.Icon(context.Background(), "AABB0001")
+	if !ok {
+		t.Fatalf("Icon for %s (%s) with an unreachable CCU: ok=false, want the embedded image", model, filename)
+	}
+	if !bytes.Equal(data, want) {
+		t.Errorf("Icon for %s: bytes differ from the embedded %s", model, filename)
+	}
+	if ct != "image/png" {
+		t.Errorf("contentType = %q, want image/png", ct)
+	}
+	if n := resolves.Load(); n != 0 {
+		t.Errorf("central config resolved %d times, want 0 (embed hit must not reach the upstream path)", n)
 	}
 }
