@@ -551,9 +551,20 @@ export interface paths {
          *     (`config.session.*` WS commands) when you need transactional
          *     rollback across multiple writes.
          *
-         *     The CCU does not return per-parameter status on success; the
-         *     202 response carries no body. On failure the daemon surfaces
-         *     the upstream error as 502 problem+json with `code: upstream_unavailable`.
+         *     The CCU does not return per-parameter status on success, and an
+         *     interface process may answer ok to a configuration write and
+         *     still drop, clamp or coerce values it does not apply. For
+         *     MASTER writes the daemon therefore re-reads the stored paramset
+         *     after the write and answers 200 with a `ParamsetWriteResult`
+         *     naming every parameter whose stored value differs from the sent
+         *     one — an empty `readback_divergences` with no `readback_error`
+         *     is the only trustworthy "everything was applied as sent".
+         *     VALUES writes are control writes; they answer 202 with no body
+         *     and their effect is observed through the event stream. On
+         *     failure the daemon surfaces the upstream error as 502
+         *     problem+json with `code: upstream_unavailable`; a value the
+         *     daemon itself rejects (unknown parameter, type, range,
+         *     VALUE_LIST) is 400 `validation_error` and never reaches the CCU.
          *
          *     `LINK` is accepted in the path only for reads. A write keyed with
          *     the literal `LINK` is refused with 400 `validation_error`: a LINK
@@ -577,6 +588,72 @@ export interface paths {
          */
         put: operations["putParamset"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/{addr}/paramsets/{key}/apply-targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Channels a MASTER paramset may be applied to
+         * @description Lists every channel of the same central whose MASTER paramset
+         *     description is identical to this channel's — compared on the full
+         *     wire description the daemon holds in its paramset-description
+         *     store, not on channel type or device model. Two channels of the
+         *     same channel type routinely carry different MASTER parameter
+         *     sets across device types and firmware versions, and a value
+         *     written to a channel whose description does not carry it corrupts
+         *     that channel's configuration store; description identity is the
+         *     only safe eligibility test. Only `MASTER` is supported; any other
+         *     key answers 400.
+         */
+        get: operations["getParamsetApplyTargets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/{addr}/paramsets/{key}/apply-to": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply MASTER values to several description-identical channels
+         * @description Writes the given MASTER values to each listed target channel,
+         *     one channel at a time. Every target is re-checked immediately
+         *     before its write: its stored MASTER description must still be
+         *     identical to the source channel's, and the values are validated
+         *     against that description exactly as a single-channel write is —
+         *     a target that fails either check is refused with a reason and
+         *     the remaining targets still proceed. Each applied target
+         *     carries the same post-write read-back report as a single
+         *     MASTER write. With `dry_run` no write is performed and each
+         *     target reports what would happen.
+         *
+         *     Only `MASTER` is supported; any other key answers 400. The
+         *     caller must hold the edit lock of the SOURCE channel
+         *     (`channel:{addr}:MASTER`) and present its token via
+         *     `X-Edit-Token`; targets are not individually locked — the
+         *     description-identity gate plus per-target validation is what
+         *     makes the batch safe, and the write is refused per target, never
+         *     partially applied within one channel.
+         */
+        post: operations["applyParamsetToChannels"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2123,6 +2200,110 @@ export interface paths {
          *     action.
          */
         post: operations["restoreDeviceConfig"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/{addr}/config/repair": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rebuild a device's stored MASTER configuration (admin-only)
+         * @description Repairs a device whose stored channel configuration has drifted
+         *     from what its own paramset descriptions allow — values of the
+         *     wrong type, values outside their range, or entries the
+         *     description does not carry at all. Per channel the daemon reads
+         *     the live paramset description and the live stored MASTER
+         *     paramset, then builds a full valid MASTER write from their
+         *     intersection: non-writable entries are dropped, invalid values
+         *     are replaced by the nearest valid one (each replacement is
+         *     reported as a correction), and the result is written back as one
+         *     complete paramset for that channel. A channel whose stored
+         *     values already match its description is reported `clean` and not
+         *     written — the full rewrite costs radio time and is only the
+         *     recovery for a drifted store.
+         *
+         *     A stored entry whose name the description does not carry cannot
+         *     be repaired this way: it lives in the interface process's own
+         *     configuration store and no paramset write removes it. Such
+         *     channels are reported with status `foreign_parameters` and the
+         *     offending names; the full rewrite of the valid parameters is
+         *     still attempted, but the channel may keep rejecting writes until
+         *     the device is deleted and paired again.
+         *
+         *     `dry_run: true` (the default) performs every read and reports
+         *     what would be written without touching the device. The write
+         *     phase proceeds channel by channel; one failing channel does not
+         *     stop the rest.
+         *
+         *     This is an administrative maintenance action: it requires the
+         *     admin scope, intentionally takes no per-channel edit locks, and
+         *     bypasses the parameter-visibility gate — it rewrites the
+         *     channel's own stored configuration and introduces no new values
+         *     beyond the reported corrections. Do not run it while the
+         *     device's configuration is being edited.
+         */
+        post: operations["repairDeviceConfig"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/{addr}/config/cache-clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Drop the interface process's cached device configuration (admin-only)
+         * @description Asks the interface process to forget its cached configuration for
+         *     the device, so the next configuration read or transfer rebuilds
+         *     it. Implemented by the BidCos interface daemons only (BidCos-RF
+         *     and BidCos-Wired); every other interface answers 422. Consult
+         *     `DeviceSummary.config_cache_clear_supported` before offering the
+         *     action.
+         */
+        post: operations["clearDeviceConfigCache"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/{addr}/rf-interface": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Assign a BidCos-RF device to an RF interface (admin-only)
+         * @description Pins the device to the named BidCos-RF interface, or allows the
+         *     daemon to move it dynamically. The call maps 1:1 to the BidCos-RF
+         *     daemon's `setBidcosInterface(device_address, interface_address,
+         *     roaming)`: `interface_address` is the serial of one of the
+         *     central's RF interfaces (as listed by `listBidcosInterfaces` and
+         *     the matrix's `interfaces`), and `roaming: true` permits the
+         *     daemon to re-assign the device by signal strength on its own.
+         *     BidCos-RF devices only; every other interface answers 422.
+         */
+        post: operations["assignRFInterface"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3677,6 +3858,46 @@ export interface paths {
          * @description Read-only snapshot of per-device RF reception strength (RSSI_DEVICE / RSSI_PEER), battery state, and reachability, read from the device model's maintenance channel (so it works for HmIP and BidCos alike), across every central. Only devices that report an RSSI reading are listed. Exposes the same data as the `ccu.get_rssi_info` WebSocket command.
          */
         get: operations["getDiagnosticsRSSI"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/diagnostics/rssi/matrix": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pairwise BidCos-RF reception matrix (admin-only)
+         * @description The BidCos-RF daemon's pairwise reception matrix, read live via the XML-RPC `rssiInfo` method of every BidCos-RF interface across every central. For each device the partners it exchanges frames with are listed with both directions in dBm: `rx_dbm` is the strength at which the device hears the partner, `tx_dbm` the strength at which the partner hears the device. A direction the daemon has no information for is null (the wire encodes it as 65536). Gateways (the CCU's own RF interfaces) appear as partners like any device, which is what makes the matrix the basis for interface assignment. HmIP carries no pairwise matrix — its per-device values are on `GET /diagnostics/rssi`.
+         */
+        get: operations["getDiagnosticsRSSIMatrix"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/diagnostics/rssi/receiver-proposal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Best-interface proposal per BidCos-RF device (admin-only)
+         * @description A dry run over the current pairwise reception matrix: for every BidCos-RF device it names the interface that hears the device best, compares it against the currently assigned interface, and proposes a switch only when the best interface is at least `margin_db` stronger — sample-to-sample noise otherwise produces flapping proposals. Nothing is written; applying a proposal is one `POST /devices/{addr}/rf-interface` per confirmed device.
+         */
+        get: operations["getReceiverProposal"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5589,6 +5810,160 @@ export interface components {
         LinkParamset: {
             [key: string]: unknown;
         };
+        RSSIMatrixResponse: {
+            items: components["schemas"]["RSSIMatrixCentral"][];
+        };
+        /** @description Pairwise BidCos-RF reception matrix of one central's RF interface. A central whose matrix read failed is still listed, with `error` set and empty lists — one unreachable CCU must not blank the others' data. */
+        RSSIMatrixCentral: {
+            central: string;
+            interface_id: string;
+            /** @description Set when this central's matrix read failed. */
+            error?: string;
+            /** @description The central's RF interfaces (matrix partners that are gateways). */
+            interfaces?: components["schemas"]["RSSIMatrixInterface"][];
+            devices: components["schemas"]["RSSIMatrixDevice"][];
+        };
+        RSSIMatrixInterface: {
+            address: string;
+            description?: string;
+            connected?: boolean;
+            default?: boolean;
+            duty_cycle?: number;
+        };
+        RSSIMatrixDevice: {
+            address: string;
+            /** @description Display name when the device is in the model. */
+            name?: string;
+            partners: components["schemas"]["RSSIMatrixPartner"][];
+        };
+        RSSIMatrixPartner: {
+            address: string;
+            /** @description Strength at which the device hears this partner; null when unknown. */
+            rx_dbm?: number | null;
+            /** @description Strength at which this partner hears the device; null when unknown. */
+            tx_dbm?: number | null;
+        };
+        ReceiverProposalResponse: {
+            items: components["schemas"]["ReceiverProposal"][];
+        };
+        /** @description Best-interface verdict for one BidCos-RF device. */
+        ReceiverProposal: {
+            /** @description Device address. */
+            address: string;
+            name?: string;
+            central?: string;
+            /** @description Serial of the assigned RF interface. */
+            current_interface?: string;
+            /** @description Serial of the interface that hears the device best. */
+            best_interface?: string;
+            /** @description Strength at which the assigned interface hears the device. */
+            current_rx_dbm?: number | null;
+            best_rx_dbm?: number | null;
+            /** @description Dynamic assignment is enabled for the device. */
+            roaming?: boolean;
+            /**
+             * @description switch — the best interface is at least margin_db stronger than the assigned one; keep — the assigned interface is (within the margin) the best; marginal — a stronger interface exists but under the margin; unheard — no interface reports a reading for the device; unmeasured — the matrix carries no row for the device; roaming — dynamic assignment is on, no proposal is made.
+             * @enum {string}
+             */
+            verdict: "switch" | "keep" | "marginal" | "unheard" | "unmeasured" | "roaming";
+        };
+        RFInterfaceAssignRequest: {
+            /** @description Serial of the RF interface to assign. */
+            interface_address: string;
+            /** @description Allow dynamic re-assignment by signal strength. */
+            roaming: boolean;
+        };
+        ConfigRepairRequest: {
+            /** @default true */
+            dry_run: boolean;
+            /** @description Restrict the repair to these channel addresses; every channel of the device otherwise. */
+            channels?: string[];
+        };
+        ConfigRepairResponse: {
+            items: components["schemas"]["ConfigRepairOutcome"][];
+        };
+        /** @description Outcome of repairing one channel's stored MASTER configuration. */
+        ConfigRepairOutcome: {
+            /** @description Channel address. */
+            channel: string;
+            /**
+             * @description clean — stored values already match the description, nothing written; repaired — a full valid MASTER was written; would_repair — dry run, a write would correct the listed values; foreign_parameters — the stored paramset carries entries the description does not know (listed in `foreign`); the rewrite of the valid parameters was still attempted, but no paramset write can remove the foreign entries; failed — a read or the write failed, see `error`.
+             * @enum {string}
+             */
+            status: "clean" | "repaired" | "would_repair" | "foreign_parameters" | "failed";
+            /** @description Values the rewrite replaces, with the stored and the corrected value. */
+            corrections?: components["schemas"]["ConfigRepairCorrection"][];
+            /** @description Stored parameter names the description does not carry. */
+            foreign?: string[];
+            error?: string;
+            result?: components["schemas"]["ParamsetWriteResult"];
+        };
+        ConfigRepairCorrection: {
+            parameter: string;
+            stored?: unknown;
+            corrected?: unknown;
+            reason?: string;
+        };
+        ParamsetApplyTargetsResponse: {
+            items: components["schemas"]["ParamsetApplyTarget"][];
+        };
+        /** @description One channel eligible for a MASTER multi-apply. */
+        ParamsetApplyTarget: {
+            /** @description Channel address. */
+            address: string;
+            /** @description Channel display name. */
+            name?: string;
+            device_address?: string;
+            device_name?: string;
+            device_model?: string;
+            interface_id?: string;
+        };
+        ParamsetApplyRequest: {
+            /** @description MASTER parameter values to apply, as in a single-channel PUT. */
+            values: {
+                [key: string]: unknown;
+            };
+            /** @description Target channel addresses. */
+            targets: string[];
+            /** @default false */
+            dry_run: boolean;
+        };
+        ParamsetApplyResponse: {
+            items: components["schemas"]["ParamsetApplyOutcome"][];
+        };
+        /** @description Outcome of applying MASTER values to one target channel. */
+        ParamsetApplyOutcome: {
+            /** @description Target channel address. */
+            address: string;
+            /**
+             * @description applied — written, see result; would_apply — dry run passed every gate; refused — the description-identity gate or the per-target validation rejected the target before any write; failed — the write itself failed upstream.
+             * @enum {string}
+             */
+            status: "applied" | "would_apply" | "refused" | "failed";
+            /** @description Why the target was refused or the write failed. */
+            reason?: string;
+            result?: components["schemas"]["ParamsetWriteResult"];
+        };
+        /**
+         * @description Post-write acknowledgement of a MASTER or LINK paramset write.
+         *     An interface process may answer ok to a configuration write and
+         *     still drop, clamp or coerce values it does not apply, so the
+         *     daemon re-reads the stored paramset after the write and compares
+         *     it against what was sent. Mirrors `hmapi.ParamsetWriteResult`.
+         */
+        ParamsetWriteResult: {
+            /** @description Parameter names sent to the CCU, sorted. */
+            written: string[];
+            /** @description Every parameter whose stored value after the write differs from the sent value. Empty (with no readback_error) means every sent value is stored as sent. */
+            readback_divergences: {
+                parameter: string;
+                sent?: unknown;
+                /** @description null when the parameter is absent from the stored paramset. */
+                stored?: unknown;
+            }[];
+            /** @description Set when the post-write read failed; the divergences are unknown in that case, not empty. */
+            readback_error?: string;
+        };
         /**
          * @description Rendering contract for one channel's configuration form — the shape
          *     `GET /devices/{addr}/channels/{no}/ui-schema` answers with. Mirrors
@@ -6610,6 +6985,13 @@ export interface components {
              *     it. False for BidCos-Wired, CUxD and VirtualDevices.
              */
             config_restore_supported?: boolean;
+            /**
+             * @description True when the device's interface daemon implements
+             *     `clearConfigCache` (the BidCos daemons: BidCos-RF and
+             *     BidCos-Wired). The SPA gates the "clear config cache" action on
+             *     it. False for HmIP-*, CUxD and VirtualDevices.
+             */
+            config_cache_clear_supported?: boolean;
             /**
              * @description True when the device's interface can run the CCU's per-device
              *     communication test (radio interfaces). The SPA gates the "test"
@@ -12178,7 +12560,16 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Accepted (atomic write dispatched to CCU) */
+            /** @description MASTER write applied; body reports the post-write read-back comparison of sent vs stored values. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParamsetWriteResult"];
+                };
+            };
+            /** @description Accepted (VALUES control write dispatched to CCU; no read-back) */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -12189,6 +12580,66 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             423: components["responses"]["Locked"];
             502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getParamsetApplyTargets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: components["parameters"]["Address"];
+                key: "MASTER";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Eligible target channels (the source channel is not listed) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParamsetApplyTargetsResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    applyParamsetToChannels: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Edit-lock token of the source channel (`channel:{addr}:MASTER`). */
+                "X-Edit-Token"?: string;
+            };
+            path: {
+                addr: components["parameters"]["Address"];
+                key: "MASTER";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParamsetApplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Per-target outcome, in request order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParamsetApplyResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            423: components["responses"]["Locked"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };
@@ -14431,6 +14882,89 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    repairDeviceConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ConfigRepairRequest"];
+            };
+        };
+        responses: {
+            /** @description Per-channel repair outcome */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigRepairResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    clearDeviceConfigCache: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cache cleared */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            422: components["responses"]["UnprocessableEntity"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    assignRFInterface: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RFInterfaceAssignRequest"];
+            };
+        };
+        responses: {
+            /** @description Assignment written */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     testDeviceCommunication: {
         parameters: {
             query?: never;
@@ -15455,12 +15989,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Scheduled */
-            202: {
+            /** @description Write applied; body reports the post-write read-back comparison of sent vs stored values (see `ParamsetWriteResult`). */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ParamsetWriteResult"];
+                };
             };
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
@@ -17110,6 +17646,51 @@ export interface operations {
                     "application/json": components["schemas"]["GetDiagnosticsRSSIResponse"];
                 };
             };
+        };
+    };
+    getDiagnosticsRSSIMatrix: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pairwise reception matrix per central */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RSSIMatrixResponse"];
+                };
+            };
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getReceiverProposal: {
+        parameters: {
+            query?: {
+                /** @description Minimum dB advantage before a switch is proposed. */
+                margin_db?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-device verdicts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReceiverProposalResponse"];
+                };
+            };
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     getDiagnosticsReliability: {

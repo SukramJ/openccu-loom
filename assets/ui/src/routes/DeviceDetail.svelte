@@ -12,6 +12,8 @@
   import CdpTilesPanel from "$lib/cdp/CdpTilesPanel.svelte";
   import ScheduleTab from "$lib/components/schedule/ScheduleTab.svelte";
   import MaintenanceStatusGrid from "$lib/components/device/MaintenanceStatusGrid.svelte";
+  import ConfigRepairDialog from "$lib/components/device/ConfigRepairDialog.svelte";
+  import { authStore } from "$lib/stores/auth.svelte";
   import DeviceImage from "$lib/components/device/DeviceImage.svelte";
   import AuditLog from "./AuditLog.svelte";
   import HistoryChart from "$lib/components/HistoryChart.svelte";
@@ -174,6 +176,12 @@
   let deleting = $state(false);
   let updatingFw = $state(false);
   let restoringConfig = $state(false);
+  // Configuration repair and config-cache clear are admin-only maintenance
+  // actions on the daemon side; the buttons follow the same role so a
+  // non-admin is not offered an action that can only answer 403.
+  const isAdmin = $derived(authStore.identity?.role === "admin");
+  let repairOpen = $state(false);
+  let clearingCache = $state(false);
   let testingComm = $state(false);
   let commTestResult = $state<import("$lib/api/types").CommunicationTestResult | null>(null);
   let exportingDef = $state(false);
@@ -243,6 +251,7 @@
       renaming = false;
       renameChannelNo = null;
       deleteDialogOpen = false;
+      repairOpen = false;
       commTestResult = null;
       historyChannelNo = null;
       historyParameter = null;
@@ -597,6 +606,30 @@
     }
   }
 
+  async function onClearConfigCache() {
+    if (!detail) return;
+    const ok = await confirmStore.ask({
+      title: t("device.clear_config_cache"),
+      body: t("device.confirm_clear_config_cache_body", {
+        name: detail.name || detail.address,
+      }),
+      confirmLabel: t("device.clear_config_cache"),
+    });
+    if (!ok) return;
+    clearingCache = true;
+    try {
+      await api.clearDeviceConfigCache(address);
+      toastStore.success(t("device.clear_config_cache_done"));
+    } catch (err) {
+      toastStore.error(
+        t("device.clear_config_cache_failed"),
+        err instanceof Error ? err.message : String(err),
+      );
+    } finally {
+      clearingCache = false;
+    }
+  }
+
   async function onTestCommunication() {
     if (!detail) return;
     testingComm = true;
@@ -941,7 +974,11 @@
                 <Badge variant="default">{t("device.update_available")}</Badge>
               {/if}
               {#if device.master_pushes_config_pending && maintenanceStore.isPending(device.address)}
-                <Badge variant="warning" class="inline-flex items-center gap-1">
+                <Badge
+                  variant="warning"
+                  class="inline-flex items-center gap-1"
+                  title={t("device.config_pending.hint_reliable")}
+                >
                   <Icon name="mdi:calendar-clock" size={12} />
                   {t("device.config_pending")}
                 </Badge>
@@ -1059,6 +1096,31 @@
               {restoringConfig ? "…" : t("device.restore_config")}
             </Button>
           {/if}
+          {#if isAdmin}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onclick={() => (repairOpen = true)}
+              title={t("device.repair_config.tooltip")}
+            >
+              <Icon name="mdi:cog" size={14} />
+              {t("device.repair_config")}
+            </Button>
+          {/if}
+          {#if isAdmin && device.config_cache_clear_supported}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onclick={() => void onClearConfigCache()}
+              disabled={clearingCache}
+              title={t("device.clear_config_cache.tooltip")}
+            >
+              <Icon name="mdi:refresh" size={14} />
+              {clearingCache ? "…" : t("device.clear_config_cache")}
+            </Button>
+          {/if}
           {#if device.communication_test_supported}
             <Button
               type="button"
@@ -1124,7 +1186,10 @@
              actor widgets, orphan ChannelControl fallbacks, and the
              dense status stripe for read-only sensor channels. -->
         <div class="space-y-4">
-          <MaintenanceStatusGrid address={detail.address} />
+          <MaintenanceStatusGrid
+            address={detail.address}
+            pushesConfigPending={detail.master_pushes_config_pending}
+          />
           <CdpTilesPanel {detail} />
         </div>
       {:else if topTab === "configure"}
@@ -1421,6 +1486,15 @@
       {/if}
     {:else}
       <EmptyState message={t("device.no_channels")} />
+    {/if}
+
+    {#if isAdmin}
+      <ConfigRepairDialog
+        open={repairOpen}
+        address={detail.address}
+        name={detail.name || detail.address}
+        onClose={() => (repairOpen = false)}
+      />
     {/if}
 
     <!-- Remove-device options dialog. Follows the shared ConfirmDialog

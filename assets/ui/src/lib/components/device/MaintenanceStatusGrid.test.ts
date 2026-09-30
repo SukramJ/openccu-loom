@@ -69,3 +69,33 @@ describe("MaintenanceStatusGrid — duty-cycle rows", () => {
     expect(labels).toContain("device.maintenance.duty_cycle_level:");
   });
 });
+
+// A set CONFIG_PENDING means different things per interface: on HmIP (which
+// pushes it reliably) a flag that stays set is a transfer not getting
+// through, on BidCos it is the normal wake-up queue of a battery device.
+describe("MaintenanceStatusGrid — CONFIG_PENDING explanation", () => {
+  function hint(): string | null {
+    return document.querySelector('[data-testid="config-pending-hint"]')?.textContent?.trim() ?? null;
+  }
+
+  it("points at repair on an interface that pushes CONFIG_PENDING", async () => {
+    mockListDataPoints.mockResolvedValue([{ parameter: "CONFIG_PENDING", value: true }]);
+    render(MaintenanceStatusGrid, { props: { address: "HMIP1", pushesConfigPending: true } });
+    await waitFor(() => expect(hint()).toBe("device.config_pending.hint_reliable"));
+  });
+
+  it("explains the wake-up queue elsewhere", async () => {
+    mockListDataPoints.mockResolvedValue([{ parameter: "CONFIG_PENDING", value: true }]);
+    render(MaintenanceStatusGrid, { props: { address: "BIDCOS1", pushesConfigPending: false } });
+    await waitFor(() => expect(hint()).toBe("device.config_pending.hint_queued"));
+  });
+
+  it("says nothing while CONFIG_PENDING is clear", async () => {
+    mockListDataPoints.mockResolvedValue([{ parameter: "CONFIG_PENDING", value: false }]);
+    const { container } = render(MaintenanceStatusGrid, {
+      props: { address: "HMIP1", pushesConfigPending: true },
+    });
+    await waitFor(() => expect(container.textContent).toContain("device.maintenance.config_pending"));
+    expect(hint()).toBeNull();
+  });
+});

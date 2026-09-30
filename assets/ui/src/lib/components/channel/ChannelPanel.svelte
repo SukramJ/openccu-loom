@@ -10,7 +10,8 @@
 
 <script lang="ts">
   import { untrack } from "svelte";
-  import type { UISchema } from "$lib/api/types";
+  import type { ParamsetWriteResult, UISchema } from "$lib/api/types";
+  import ApplyToChannelsDialog from "./ApplyToChannelsDialog.svelte";
   import { api, ApiError, friendlyError } from "$lib/api/client";
   import ParameterGrid from "./ParameterGrid.svelte";
   import Button from "$lib/components/ui/Button.svelte";
@@ -24,6 +25,7 @@
   import {
     buildPreview,
     readBackDiff,
+    readBackFromReport,
     type PreviewEntry,
     type ReadBackEntry,
   } from "$lib/channel/write-preview";
@@ -636,6 +638,24 @@
     void performSave();
   }
 
+  // MASTER multi-apply. Offered only while the panel holds unsaved MASTER
+  // edits and an edit token: the apply endpoint is gated on the SOURCE
+  // channel's lock, and without dirty values there is nothing to apply.
+  // The dialog carries the dirty values only — the same set a Save sends.
+  let applyOpen = $state(false);
+  const canApplyToOthers = $derived(
+    paramset === "MASTER" &&
+      dirtyNames.length > 0 &&
+      !!lockSession?.token &&
+      !lockedByOther &&
+      !lockLost,
+  );
+  const applyValues = $derived.by(() => {
+    const out: Record<string, unknown> = {};
+    for (const name of dirtyNames) out[name] = values[name];
+    return out;
+  });
+
   function confirmPreview() {
     previewOpen = false;
     void performSave();
@@ -659,6 +679,10 @@
     const sent: Record<string, unknown> = {};
     for (const name of dirtyNames) sent[name] = values[name];
     readBack = [];
+    // The daemon's post-write read-back report (MASTER / LINK only). When
+    // it carries divergences it is the primary source; the client-side
+    // comparison below is the fallback.
+    let report: ParamsetWriteResult | undefined;
     try {
       if (paramset === "MASTER") {
         // MASTER writes must go through putParamset: the CCU applies
@@ -667,12 +691,12 @@
         // enforces the edit lock, so we present the held token.
         const batch: Record<string, unknown> = {};
         for (const name of dirtyNames) batch[name] = values[name];
-        await api.putParamset(channelAddress, "MASTER", batch, lockSession?.token);
+        report = await api.putParamset(channelAddress, "MASTER", batch, lockSession?.token);
       } else if (paramset === "LINK") {
         if (!peer) throw new Error("LINK save requires a peer address");
         const batch: Record<string, unknown> = {};
         for (const name of dirtyNames) batch[name] = values[name];
-        await api.putLinkParamset(channelAddress, peer, batch, lockSession?.token);
+        report = await api.putLinkParamset(channelAddress, peer, batch, lockSession?.token);
       } else {
         for (const name of dirtyNames) {
           await api.setValue(address, channel, name, values[name]);
@@ -688,8 +712,20 @@
       // against CCU firmware 3.89.8, its docs/config-pending.md — an external
       // measurement). A success toast on top of either is a lie the operator
       // has no way to catch, so the reloaded values are compared against what
-      // went out.
-      readBack = readBackDiff(schema, sent, serverValues);
+      // went out. The daemon reads the paramset back itself straight after
+      // the write; its report wins whenever it carries one. A report whose
+      // own read failed says nothing about divergences, so the reload
+      // comparison stands in for it and the failure is surfaced.
+      const serverReport =
+        report && Array.isArray(report.readback_divergences) && !report.readback_error
+          ? report
+          : null;
+      readBack = serverReport
+        ? readBackFromReport(schema, serverReport.readback_divergences)
+        : readBackDiff(schema, sent, serverValues);
+      if (report?.readback_error) {
+        toastStore.warn(t("channel.readback.error_title"), report.readback_error);
+      }
       if (readBack.length > 0) {
         toastStore.warn(
           t("channel.readback.title"),
@@ -1306,6 +1342,18 @@
         <span class="mr-auto text-xs text-[var(--ha-secondary-text-color)]">
           {t("channel.unsaved")}
         </span>
+        {#if canApplyToOthers}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onclick={() => (applyOpen = true)}
+            disabled={saving || hasErrors}
+            title={t("channel.apply.tooltip")}
+          >
+            {t("channel.apply.open")}
+          </Button>
+        {/if}
         <Button type="button" variant="outline" size="sm" onclick={reset} disabled={saving}>
           {t("common.reset")}
         </Button>
@@ -1324,4 +1372,14 @@
   onCancel={() => (previewOpen = false)}
   onConfirm={confirmPreview}
 />
+
+{#if canApplyToOthers || applyOpen}
+  <ApplyToChannelsDialog
+    open={applyOpen}
+    {channelAddress}
+    values={applyValues}
+    editToken={lockSession?.token}
+    onClose={() => (applyOpen = false)}
+  />
+{/if}
 </div>

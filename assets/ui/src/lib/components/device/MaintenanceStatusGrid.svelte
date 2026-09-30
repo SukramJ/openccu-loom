@@ -24,13 +24,22 @@
 
   type Props = {
     address: string;
+    /**
+     * The device's interface pushes CONFIG_PENDING reliably (HmIP). It
+     * decides what a set CONFIG_PENDING means: on those interfaces a flag
+     * that stays set is a transfer that is not getting through — possibly
+     * a broken stored configuration — while elsewhere (BidCos) it is the
+     * normal queue for a battery device waiting for its next wake-up.
+     */
+    pushesConfigPending?: boolean;
   };
 
-  let { address }: Props = $props();
+  let { address, pushesConfigPending = false }: Props = $props();
 
   type DPMap = Record<string, unknown>;
 
   let values = $state<DPMap>({});
+  const configPendingSet = $derived(Boolean(values.CONFIG_PENDING));
   let loading = $state(true);
   let error = $state<string | null>(null);
 
@@ -244,6 +253,13 @@
         </div>
       {/each}
     </div>
+    {#if configPendingSet}
+      <p class="mt-3 text-xs text-[var(--ha-secondary-text-color)]" data-testid="config-pending-hint">
+        {pushesConfigPending
+          ? t("device.config_pending.hint_reliable")
+          : t("device.config_pending.hint_queued")}
+      </p>
+    {/if}
   </Card>
 {:else if error}
   <ErrorState message={error} onRetry={load} />

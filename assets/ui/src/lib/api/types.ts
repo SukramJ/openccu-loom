@@ -687,3 +687,31 @@ export type SecurityFaultReason = SecurityFault["reason"];
 // gates the whole card on the `addon_self_update` info capability rather
 // than on this field, so the two must never disagree in practice.
 export type AddonUpdateStatus = components["schemas"]["AddonUpdateStatus"];
+
+// Post-write read-back report of a configuration paramset write
+// (PUT .../paramsets/MASTER, PUT .../link-ps/{peer}): the parameters sent
+// and every one the device stored differently. `readback_error` set means
+// the divergences are unknown, not empty.
+export type ParamsetWriteResult = components["schemas"]["ParamsetWriteResult"];
+export type ReadbackDivergence =
+  ParamsetWriteResult["readback_divergences"][number];
+
+// MASTER multi-apply: channels with an identical MASTER description, and
+// the per-target outcome of a (dry-run) apply.
+export type ParamsetApplyTarget = components["schemas"]["ParamsetApplyTarget"];
+export type ParamsetApplyOutcome =
+  components["schemas"]["ParamsetApplyOutcome"];
+
+// Configuration repair: per-channel outcome with its corrections.
+export type ConfigRepairOutcome = components["schemas"]["ConfigRepairOutcome"];
+export type ConfigRepairCorrection =
+  components["schemas"]["ConfigRepairCorrection"];
+
+// BidCos-RF pairwise reception matrix (GET /diagnostics/rssi/matrix) and
+// the best-receiver proposal computed from it.
+export type RSSIMatrixCentral = components["schemas"]["RSSIMatrixCentral"];
+export type RSSIMatrixDevice = components["schemas"]["RSSIMatrixDevice"];
+export type RSSIMatrixPartner = components["schemas"]["RSSIMatrixPartner"];
+export type RSSIMatrixInterface = components["schemas"]["RSSIMatrixInterface"];
+export type ReceiverProposal = components["schemas"]["ReceiverProposal"];
+export type ReceiverVerdict = ReceiverProposal["verdict"];

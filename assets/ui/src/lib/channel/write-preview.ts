@@ -104,6 +104,50 @@ export function readBackDiff(
   return out;
 }
 
+/**
+ * The daemon's own read-back report, in the same shape as readBackDiff.
+ *
+ * The server compares against the paramset it read straight after the
+ * write, so it is the primary source; readBackDiff stays as the fallback
+ * for a response without a report (VALUES writes, a failed server read).
+ * Entries follow the schema's order; a divergent parameter the schema does
+ * not render still gets an entry, labelled by its name, because a value the
+ * device did not keep is worth reporting even when the form hides it.
+ */
+export function readBackFromReport(
+  schema: Pick<UISchema, "parameters"> | null | undefined,
+  divergences: readonly { parameter: string; sent?: unknown; stored?: unknown }[],
+): ReadBackEntry[] {
+  const byName = new Map(divergences.map((d) => [d.parameter, d]));
+  const out: ReadBackEntry[] = [];
+  for (const param of schema?.parameters ?? []) {
+    const d = byName.get(param.name);
+    if (!d) continue;
+    byName.delete(param.name);
+    out.push({
+      name: param.name,
+      label: labelOf(param),
+      sent: formatDisplayValue(param, d.sent),
+      got: formatDisplayValue(param, d.stored),
+    });
+  }
+  for (const d of byName.values()) {
+    out.push({
+      name: d.parameter,
+      label: d.parameter,
+      sent: rawValue(d.sent),
+      got: rawValue(d.stored),
+    });
+  }
+  return out;
+}
+
+/** Display form of a wire value the schema cannot format (no parameter description). */
+export function rawValue(v: unknown): string {
+  if (v == null || v === "") return "—";
+  return typeof v === "string" ? v : JSON.stringify(v);
+}
+
 function sameValue(a: unknown, b: unknown): boolean {
   if (a === b) return true;
   const na = Number(a);
