@@ -125,6 +125,17 @@ vi.mock("$lib/stores/toast.svelte", () => ({
   },
 }));
 
+// The admin-only maintenance actions (restore / repair / cache clear) follow
+// the signed-in role. Tests default to an admin and flip the role per case.
+const authState = vi.hoisted(() => ({ role: "admin" }));
+vi.mock("$lib/stores/auth.svelte", () => ({
+  authStore: {
+    get identity() {
+      return { subject: "tester", role: authState.role };
+    },
+  },
+}));
+
 vi.mock("$lib/stores/confirm.svelte", () => ({
   confirmStore: { ask: vi.fn().mockResolvedValue(false) },
 }));
@@ -165,6 +176,7 @@ function baseDevice(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  authState.role = "admin";
   mockGetPreference.mockResolvedValue([]);
   mockPutPreference.mockResolvedValue(undefined);
   mockGetDeviceSchedule.mockRejectedValue(
@@ -382,6 +394,39 @@ describe("DeviceDetail — restore device config", () => {
         screen.getByRole("button", { name: "device.restore_config" }),
       ).toBeInTheDocument();
     });
+  });
+
+  // The restore route is admin-only on the daemon; a non-admin must not be
+  // offered an action that can only answer 403, even on a supported device.
+  it("hides the restore-config button from a non-admin", async () => {
+    authState.role = "user";
+    mockGetDevice.mockResolvedValue(
+      baseDevice({ config_restore_supported: true, config_cache_clear_supported: true }),
+    );
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Wohnzimmer Thermostat").length).toBeGreaterThan(0);
+    });
+    for (const name of [
+      "device.restore_config",
+      "device.repair_config",
+      "device.clear_config_cache",
+    ]) {
+      expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
+    }
+  });
+
+  it("offers repair to an admin and cache clear only where supported", async () => {
+    mockGetDevice.mockResolvedValue(baseDevice({ config_cache_clear_supported: false }));
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "device.repair_config" })).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByRole("button", { name: "device.clear_config_cache" }),
+    ).not.toBeInTheDocument();
   });
 
   it("confirms, calls the restore API, and shows a success toast", async () => {

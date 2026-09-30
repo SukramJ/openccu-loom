@@ -1,5 +1,5 @@
 import { test, expect, type Page } from './helpers/fixtures';
-import { mockAllApis } from './helpers/mock-api';
+import { mockAllApis, addStylesForStableScreenshots } from './helpers/mock-api';
 
 // A representative HmIP wall thermostat. Fixture shape mirrors
 // doc-screenshots.spec.ts's applyDeviceMocks() — a MASTER-paramset FLOAT
@@ -234,6 +234,128 @@ test.describe('Device detail — MASTER parameter write', () => {
     await expect.poll(() => putBody).not.toBeNull();
     expect(putBody).toMatchObject({ TEMPERATURE_OFFSET: 2.5 });
     await expect(page.getByRole('dialog', { name: 'Review this write' })).toHaveCount(0);
+  });
+});
+
+function seedPrefs(page: Page, theme: 'light' | 'dark') {
+  return page.addInitScript((th) => {
+    localStorage.setItem(
+      'openccu-loom.prefs.v1',
+      JSON.stringify({ theme: th, locale: 'en', navCollapsed: false, expertMode: false }),
+    );
+  }, theme);
+}
+
+// Configuration repair (mock-api configRepairOutcomes): the dry run reports
+// a clean :0, a drifted :1 with two corrections and a :2 carrying an entry
+// its description does not know.
+async function openRepair(page: Page) {
+  await page.goto(`http://localhost:5173/app/#/devices/${DEVICE_ADDRESS}`);
+  await page.waitForSelector('#main');
+  await page.getByRole('button', { name: 'Repair config' }).click();
+  const dialog = page.getByRole('dialog', { name: /Repair configuration of/ });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText('above maximum 3.5')).toBeVisible();
+  return dialog;
+}
+
+// MASTER multi-apply (mock-api MASTER_APPLY_TARGETS): two sibling
+// thermostats, the second of which the apply mock refuses.
+async function openApply(page: Page) {
+  await page.goto(`http://localhost:5173/app/#/devices/${DEVICE_ADDRESS}`);
+  await page.waitForSelector('#main');
+  await page.getByRole('tab', { name: 'Configure' }).click();
+  await page.waitForSelector('text=Temperature offset');
+  const input = page.locator('input[type="number"]').first();
+  await input.fill('1.5');
+  await input.blur();
+  await page.getByRole('button', { name: 'Apply to identical channels…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Apply to identical channels' });
+  await expect(dialog.getByText('Bedroom Thermostat').first()).toBeVisible();
+  return dialog;
+}
+
+async function checkAndApply(dialog: ReturnType<Page['getByRole']>) {
+  await dialog.getByRole('checkbox', { name: 'Select Bedroom Thermostat' }).check();
+  await dialog.getByRole('checkbox', { name: 'Select Office Thermostat' }).check();
+  await dialog.getByRole('button', { name: 'Check', exact: true }).click();
+  await expect(dialog.getByText(/MASTER description differs/)).toBeVisible();
+  await dialog.getByRole('button', { name: 'Apply to 1' }).click();
+  await expect(dialog.getByText('Applied', { exact: true })).toBeVisible();
+}
+
+for (const theme of ['light', 'dark'] as const) {
+  test.describe(`Device detail — device admin dialogs (${theme})`, () => {
+    test.beforeEach(async ({ page }) => {
+      await mockAllApis(page);
+      await applyDeviceMocks(page);
+      await seedPrefs(page, theme);
+    });
+
+    test(`repair dry-run report ${theme}`, async ({ page }) => {
+      await openRepair(page);
+      await page.waitForTimeout(500);
+      await addStylesForStableScreenshots(page);
+      await expect(page).toHaveScreenshot(`config-repair-${theme}.png`);
+    });
+
+    test(`apply-to-channels outcomes ${theme}`, async ({ page }) => {
+      const dialog = await openApply(page);
+      await checkAndApply(dialog);
+      await page.waitForTimeout(500);
+      await addStylesForStableScreenshots(page);
+      await expect(page).toHaveScreenshot(`apply-to-channels-${theme}.png`);
+    });
+  });
+}
+
+test.describe('Device detail — configuration repair and multi-apply', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockAllApis(page);
+    await applyDeviceMocks(page);
+    await seedPrefs(page, 'light');
+  });
+
+  test('repair runs the dry run first and writes only the channels it flagged', async ({
+    page,
+  }) => {
+    const bodies: unknown[] = [];
+    await page.route('**/api/v1/devices/*/config/repair', async (route) => {
+      bodies.push(route.request().postDataJSON());
+      await route.fallback();
+    });
+    const dialog = await openRepair(page);
+    await expect(dialog.getByText('LEGACY_TEMP_MODE', { exact: false })).toBeVisible();
+    expect(bodies).toEqual([{ dry_run: true }]);
+
+    await dialog.getByRole('button', { name: 'Repair 2 channels' }).click();
+    await expect(dialog.getByText('Repaired', { exact: true })).toBeVisible();
+    expect(bodies[1]).toEqual({
+      dry_run: false,
+      channels: [`${DEVICE_ADDRESS}:1`, `${DEVICE_ADDRESS}:2`],
+    });
+    await expect(page.getByText('Configuration repaired.')).toBeVisible();
+  });
+
+  test('multi-apply checks first and writes only the targets the check cleared', async ({
+    page,
+  }) => {
+    const calls: { body: { targets: string[]; dry_run: boolean }; token?: string }[] = [];
+    await page.route('**/api/v1/devices/*/paramsets/MASTER/apply-to', async (route) => {
+      calls.push({
+        body: route.request().postDataJSON(),
+        token: route.request().headers()['x-edit-token'],
+      });
+      await route.fallback();
+    });
+    const dialog = await openApply(page);
+    await checkAndApply(dialog);
+    expect(calls.map((c) => [c.body.dry_run, c.body.targets])).toEqual([
+      [true, ['0001D3C99B4E30:1', '0001D3C99B4E31:1']],
+      [false, ['0001D3C99B4E30:1']],
+    ]);
+    expect(calls.every((c) => c.token === EDIT_TOKEN)).toBe(true);
+    await expect(dialog.getByText(/sent 1\.5, device kept 1/)).toBeVisible();
   });
 });
 

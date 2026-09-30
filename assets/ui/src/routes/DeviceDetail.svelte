@@ -176,8 +176,8 @@
   let deleting = $state(false);
   let updatingFw = $state(false);
   let restoringConfig = $state(false);
-  // Configuration repair and config-cache clear are admin-only maintenance
-  // actions on the daemon side; the buttons follow the same role so a
+  // Configuration restore, repair and config-cache clear are admin-only
+  // maintenance actions on the daemon side; the buttons follow the same role so a
   // non-admin is not offered an action that can only answer 403.
   const isAdmin = $derived(authStore.identity?.role === "admin");
   let repairOpen = $state(false);
@@ -1083,7 +1083,7 @@
               {updatingFw ? "…" : t("device.firmware_update")}
             </Button>
           {/if}
-          {#if device.config_restore_supported}
+          {#if isAdmin && device.config_restore_supported}
             <Button
               type="button"
               variant="outline"
