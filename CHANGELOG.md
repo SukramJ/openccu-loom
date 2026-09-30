@@ -57,6 +57,11 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **REST `PUT /devices/{addr}/link-ps/{peer}` answers 200 with the
+  read-back report instead of the bodyless 202** — the reason for the
+  APIVersion major bump to 13.0.0. A client that only checks for a
+  2xx keeps working; one that matched the literal 202 must read the
+  report (which is the feature).
 - **WS `links.put_paramset` returns the write report.** The command's
   result changed from `{success: true}` to
   `{written, readback_divergences, readback_error?}` (wsapi 1.13) —

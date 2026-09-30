@@ -648,10 +648,13 @@ export interface paths {
          *     Only `MASTER` is supported; any other key answers 400. The
          *     caller must hold the edit lock of the SOURCE channel
          *     (`channel:{addr}:MASTER`) and present its token via
-         *     `X-Edit-Token`; targets are not individually locked — the
-         *     description-identity gate plus per-target validation is what
-         *     makes the batch safe, and the write is refused per target, never
-         *     partially applied within one channel.
+         *     `X-Edit-Token`. The batch acquires no target locks, but a target
+         *     whose own MASTER edit lock is currently held by an open edit
+         *     session is refused — writing under it would clobber that
+         *     editor's staged values. The description-identity gate plus
+         *     per-target validation is what makes the batch safe, and the
+         *     write is refused per target, never partially applied within one
+         *     channel.
          */
         post: operations["applyParamsetToChannels"];
         delete?: never;
@@ -2194,8 +2197,10 @@ export interface paths {
          *     a device factory reset. The transfer runs asynchronously on the
          *     radio (watch the device's CONFIG_PENDING state for progress), so
          *     the endpoint returns 202 once the request was accepted. Supported
-         *     on HmIP-RF and BidCos-RF only; other interfaces (BidCos-Wired,
-         *     CUxD, VirtualDevices) answer 422. Consult
+         *     on BidCos-RF only: the HmIP process lists the method but answers
+         *     every call for its devices with a generic fault (measured live),
+         *     and BidCos-Wired, CUxD and VirtualDevices do not expose it — all
+         *     of them answer 422. Consult
          *     `DeviceSummary.config_restore_supported` before offering the
          *     action.
          */
@@ -6980,9 +6985,11 @@ export interface components {
              */
             master_pushes_config_pending: boolean;
             /**
-             * @description True when the device's interface exposes `restoreConfigToDevice`
-             *     (HmIP-RF, BidCos-RF). The SPA gates the "restore config" action on
-             *     it. False for BidCos-Wired, CUxD and VirtualDevices.
+             * @description True when the device's interface daemon implements
+             *     `restoreConfigToDevice` (BidCos-RF only — the HmIP process
+             *     lists the method but answers every call for its devices with a
+             *     generic fault, measured live). The SPA gates the "restore
+             *     config" action on it.
              */
             config_restore_supported?: boolean;
             /**
@@ -12606,6 +12613,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };
@@ -12640,6 +12648,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
             423: components["responses"]["Locked"];
+            502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };
@@ -17666,6 +17675,7 @@ export interface operations {
                     "application/json": components["schemas"]["RSSIMatrixResponse"];
                 };
             };
+            502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };
@@ -17690,6 +17700,8 @@ export interface operations {
                     "application/json": components["schemas"]["ReceiverProposalResponse"];
                 };
             };
+            400: components["responses"]["BadRequest"];
+            502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };
