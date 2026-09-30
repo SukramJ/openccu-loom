@@ -151,6 +151,12 @@ type DeviceAdmin interface {
 	// BidCos-Wired); other interfaces answer with an unsupported-class
 	// error the handler maps to 422.
 	ClearConfigCache(ctx context.Context, address string) error
+	// AssignRFInterface pins a BidCos-RF device to the RF interface with
+	// the given serial, or — with roaming true — permits the daemon to
+	// re-assign the device by signal strength on its own
+	// (`setBidcosInterface`). BidCos-RF only; other interfaces answer
+	// with an unsupported-class error the handler maps to 422.
+	AssignRFInterface(ctx context.Context, address, interfaceAddress string, roaming bool) error
 	// InterfaceDutyCycle returns the transmit duty cycle in percent
 	// (0..100) of the radio interface the device identified by address is
 	// paired to, sourced from the per-interface BidCos utilisation poll.
@@ -281,6 +287,82 @@ type ParamsetService interface {
 	// PutLinkParamset behaves like PutParamset for a LINK paramset: the
 	// report is always non-nil on success.
 	PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) (*ParamsetWriteReport, error)
+}
+
+// RSSIMatrixService backs `GET /diagnostics/rssi/matrix` and
+// `GET /diagnostics/rssi/receiver-proposal`: the BidCos-RF daemon's
+// pairwise reception matrix (`rssiInfo`) and the best-interface dry run
+// derived from it. HmIP interfaces carry no pairwise matrix and do not
+// appear here.
+type RSSIMatrixService interface {
+	// RSSIMatrix reads the pairwise matrix live from every BidCos-RF
+	// interface of every central.
+	RSSIMatrix(ctx context.Context) ([]RSSIMatrixCentral, error)
+	// ReceiverProposal derives one verdict per BidCos-RF device from the
+	// current matrix. marginDB is the minimum advantage in dB before a
+	// switch is proposed; values below zero use the default.
+	ReceiverProposal(ctx context.Context, marginDB int) ([]ReceiverProposal, error)
+}
+
+// RSSIMatrixCentral is the pairwise matrix of one central's BidCos-RF
+// interface. A central whose matrix read failed is still listed with
+// Error set and empty lists — one unreachable CCU must not blank the
+// others' data.
+type RSSIMatrixCentral struct {
+	Central     string
+	InterfaceID string
+	Interfaces  []RSSIMatrixInterface
+	Devices     []RSSIMatrixDevice
+	Error       string
+}
+
+// RSSIMatrixInterface is one of the central's RF gateways.
+type RSSIMatrixInterface struct {
+	Address     string
+	Description string
+	Connected   bool
+	Default     bool
+	DutyCycle   int
+}
+
+// RSSIMatrixDevice is one device row of the matrix.
+type RSSIMatrixDevice struct {
+	Address  string
+	Name     string // display name when the device is in the model
+	Partners []RSSIMatrixPartner
+}
+
+// RSSIMatrixPartner is one reception pair. RxDBm is the strength at which
+// the device hears the partner, TxDBm the strength at which the partner
+// hears the device; nil when the daemon has no information (65536 on the
+// wire).
+type RSSIMatrixPartner struct {
+	Address string
+	RxDBm   *int
+	TxDBm   *int
+}
+
+// Receiver-proposal verdicts.
+const (
+	ReceiverSwitch     = "switch"
+	ReceiverKeep       = "keep"
+	ReceiverMarginal   = "marginal"
+	ReceiverUnheard    = "unheard"
+	ReceiverUnmeasured = "unmeasured"
+	ReceiverRoaming    = "roaming"
+)
+
+// ReceiverProposal is the best-interface verdict for one BidCos-RF device.
+type ReceiverProposal struct {
+	Address          string
+	Name             string
+	Central          string
+	CurrentInterface string
+	BestInterface    string
+	CurrentRxDBm     *int
+	BestRxDBm        *int
+	Roaming          bool
+	Verdict          string // one of the Receiver* constants
 }
 
 // DeviceConfigRepairService backs `POST /devices/{addr}/config/repair`:

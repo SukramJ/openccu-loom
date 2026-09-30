@@ -1,5 +1,5 @@
 {
- "api_version": "12.7.0",
+ "api_version": "12.8.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -110,6 +110,8 @@
   "GET /diagnostics/rpc-recording": "listRpcRecordings",
   "GET /diagnostics/rpc-recording/{central}/download": "downloadRpcRecording",
   "GET /diagnostics/rssi": "getDiagnosticsRSSI",
+  "GET /diagnostics/rssi/matrix": "getDiagnosticsRSSIMatrix",
+  "GET /diagnostics/rssi/receiver-proposal": "getReceiverProposal",
   "GET /diagnostics/wiring": "getDiagnosticsWiring",
   "GET /diagrams": "listDiagrams",
   "GET /diagrams/{id}": "getDiagram",
@@ -237,6 +239,7 @@
   "POST /devices/{addr}/release": "releaseDevice",
   "POST /devices/{addr}/reload": "reloadDevice",
   "POST /devices/{addr}/replace": "replaceDevice",
+  "POST /devices/{addr}/rf-interface": "assignRFInterface",
   "POST /devices/{addr}/schedule/active-profile": "setDeviceActiveProfile",
   "POST /devices/{addr}/schedules/copy": "copyDeviceSchedule",
   "POST /devices/{addr}/test": "testDeviceCommunication",
@@ -1910,12 +1913,57 @@
    "updated_at:string",
    "version:integer"
   ],
+  "RFInterfaceAssignRequest": [
+   "interface_address:string",
+   "roaming:boolean"
+  ],
   "RPCRecordingStatus": [
    "active:boolean",
    "central:string",
    "ends_at:string",
    "entries:integer",
    "randomize:boolean"
+  ],
+  "RSSIMatrixCentral": [
+   "central:string",
+   "devices:array\u003c$ref:RSSIMatrixDevice\u003e",
+   "error:string",
+   "interface_id:string",
+   "interfaces:array\u003c$ref:RSSIMatrixInterface\u003e"
+  ],
+  "RSSIMatrixDevice": [
+   "address:string",
+   "name:string",
+   "partners:array\u003c$ref:RSSIMatrixPartner\u003e"
+  ],
+  "RSSIMatrixInterface": [
+   "address:string",
+   "connected:boolean",
+   "default:boolean",
+   "description:string",
+   "duty_cycle:integer"
+  ],
+  "RSSIMatrixPartner": [
+   "address:string",
+   "rx_dbm:integer",
+   "tx_dbm:integer"
+  ],
+  "RSSIMatrixResponse": [
+   "items:array\u003c$ref:RSSIMatrixCentral\u003e"
+  ],
+  "ReceiverProposal": [
+   "address:string",
+   "best_interface:string",
+   "best_rx_dbm:integer",
+   "central:string",
+   "current_interface:string",
+   "current_rx_dbm:integer",
+   "name:string",
+   "roaming:boolean",
+   "verdict:string"
+  ],
+  "ReceiverProposalResponse": [
+   "items:array\u003c$ref:ReceiverProposal\u003e"
   ],
   "RecordingState": [
    "record:boolean",

@@ -748,6 +748,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		paramsetApplyDomain = adapter.NewParamsetApplyDomain(reg, si.descriptorStores.Paramsets, paramsetsDomain)
 	}
 	configRepairDomain := adapter.NewConfigRepairDomain(reg, valueWriter, auditRec)
+	rssiMatrixDomain := adapter.NewRSSIMatrixDomain(reg, valueWriter)
 	schedulesDomain := adapter.NewSchedulesDomain(reg, valueWriter).SetAuditRecorder(auditRec)
 	// Shared RPC session recorder: one instance backs both the WS
 	// recording.start/stop/status commands and the REST
@@ -947,6 +948,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		paramsetsDomain:        paramsetsDomain,
 		paramsetApplyDomain:    paramsetApplyDomain,
 		configRepairDomain:     configRepairDomain,
+		rssiMatrixDomain:       rssiMatrixDomain,
 		parameterDeterminer:    adapter.NewParameterDeterminerAdapter(reg, valueWriter),
 		hubAdapter:             hubAdapter,
 		ifaceAdapter:           ifaceAdapter,

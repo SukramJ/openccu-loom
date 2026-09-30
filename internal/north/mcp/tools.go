@@ -243,6 +243,10 @@ func registerReadTools(s *mcpsdk.Server, d Deps) {
 	if d.Health != nil {
 		registerGetHealth(s, d)
 	}
+	if d.RSSIMatrix != nil {
+		registerGetRSSIMatrix(s, d)
+		registerGetReceiverProposal(s, d)
+	}
 	if d.Alarm != nil {
 		registerListAlarmZones(s, d)
 		registerListTriggeredMotion(s, d)
@@ -693,6 +697,9 @@ func registerWriteTools(s *mcpsdk.Server, d Deps) {
 	}
 	if d.ConfigCache != nil {
 		registerClearDeviceConfigCache(s, d)
+	}
+	if d.RFInterface != nil {
+		registerAssignRFInterface(s, d)
 	}
 	if d.EditLocks != nil {
 		registerOpenEditSession(s, d)

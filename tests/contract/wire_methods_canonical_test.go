@@ -47,6 +47,8 @@ func TestWireMethodsCanonical(t *testing.T) {
 		"updateFirmware":          true,
 		"restoreConfigToDevice":   true,
 		"clearConfigCache":        true, // rfd and hs485d only (XmlRpcMethodClearConfigCache)
+		"rssiInfo":                true, // rfd only (XmlRpcMethodRSSIInfo)
+		"setBidcosInterface":      true, // rfd only (XmlRpcMethodSetBidcosInterface)
 		"listReplaceableDevices":  true,
 		"replaceDevice":           true,
 		"searchDevices":           true,

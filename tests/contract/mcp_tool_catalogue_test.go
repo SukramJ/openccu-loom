@@ -38,6 +38,9 @@ func TestMCPWriteToolsGatedByAllowWrites(t *testing.T) {
 		"list_alarm_zones", "list_triggered_motion", "get_security_status",
 		// MASTER multi-apply eligibility (gated on ParamsetApply).
 		"list_paramset_apply_targets",
+		// BidCos-RF reception matrix and gateway dry run (gated on
+		// RSSIMatrix).
+		"get_rssi_matrix", "get_receiver_proposal",
 	}
 	// arm_alarm_zone / disarm_alarm_zone / reset_motion are gated on
 	// AlarmControl + AllowWrites, exactly like the other write tools — the
@@ -53,6 +56,8 @@ func TestMCPWriteToolsGatedByAllowWrites(t *testing.T) {
 		// Device-configuration maintenance (gated on ConfigRepair /
 		// ConfigCache).
 		"repair_device_config", "clear_device_config_cache",
+		// BidCos-RF gateway assignment (gated on RFInterface).
+		"assign_rf_interface",
 	}
 
 	fullDeps := func(allowWrites bool) mcp.Deps {
@@ -64,6 +69,8 @@ func TestMCPWriteToolsGatedByAllowWrites(t *testing.T) {
 			ParamsetApply: mcpNoopParamsetApply{},
 			ConfigRepair:  mcpNoopConfigRepair{},
 			ConfigCache:   mcpNoopConfigCache{},
+			RSSIMatrix:    mcpNoopRSSIMatrix{},
+			RFInterface:   mcpNoopRFInterface{},
 			Health:        mcpNoopHealth{},
 			Hubs:          mcpNoopHubs{},
 			Alarm:         mcpParityAlarm{},
@@ -117,7 +124,7 @@ func TestMCPToolNamingTaxonomy(t *testing.T) {
 	t.Parallel()
 
 	allowedVerbs := []string{
-		"list", "get", "read", "set", "write", "trigger", "arm", "disarm", "reset", "apply", "repair", "clear",
+		"list", "get", "read", "set", "write", "trigger", "arm", "disarm", "reset", "apply", "repair", "clear", "assign",
 	}
 
 	names := mcpToolNames(t, mcp.Deps{
@@ -128,6 +135,8 @@ func TestMCPToolNamingTaxonomy(t *testing.T) {
 		ParamsetApply: mcpNoopParamsetApply{},
 		ConfigRepair:  mcpNoopConfigRepair{},
 		ConfigCache:   mcpNoopConfigCache{},
+		RSSIMatrix:    mcpNoopRSSIMatrix{},
+		RFInterface:   mcpNoopRFInterface{},
 		Health:        mcpNoopHealth{},
 		Hubs:          mcpNoopHubs{},
 		Alarm:         mcpParityAlarm{},
@@ -242,6 +251,20 @@ func (mcpNoopConfigRepair) RepairDeviceConfig(
 type mcpNoopConfigCache struct{}
 
 func (mcpNoopConfigCache) ClearConfigCache(context.Context, string) error { return nil }
+
+type mcpNoopRSSIMatrix struct{}
+
+func (mcpNoopRSSIMatrix) RSSIMatrix(context.Context) ([]interfaces.RSSIMatrixCentral, error) {
+	return nil, nil
+}
+
+func (mcpNoopRSSIMatrix) ReceiverProposal(context.Context, int) ([]interfaces.ReceiverProposal, error) {
+	return nil, nil
+}
+
+type mcpNoopRFInterface struct{}
+
+func (mcpNoopRFInterface) AssignRFInterface(context.Context, string, string, bool) error { return nil }
 
 type mcpNoopHealth struct{}
 

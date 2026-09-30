@@ -158,6 +158,18 @@ func (b *HomegearBackend) ClearConfigCache(_ context.Context, _ string) error {
 	return ErrUnsupported
 }
 
+// RSSIInfo implements Operations. Homegear has no CCU-style pairwise
+// reception matrix; always returns [ErrUnsupported].
+func (b *HomegearBackend) RSSIInfo(_ context.Context) (map[string]map[string][2]int, error) {
+	return nil, ErrUnsupported
+}
+
+// SetBidcosInterface implements Operations. Homegear has no CCU-style RF
+// gateway assignment; always returns [ErrUnsupported].
+func (b *HomegearBackend) SetBidcosInterface(_ context.Context, _, _ string, _ bool) error {
+	return ErrUnsupported
+}
+
 // SearchDevices implements Operations. Homegear has no wired-bus scan;
 // always returns [ErrUnsupported].
 func (b *HomegearBackend) SearchDevices(_ context.Context) (int, error) {

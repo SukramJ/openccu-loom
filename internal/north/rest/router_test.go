@@ -82,6 +82,9 @@ func (f *fakeAdmin) SetChannelFunctions(_ context.Context, _ string, _ int, _ []
 
 func (f *fakeAdmin) RestoreDeviceConfig(_ context.Context, _ string) error { return nil }
 func (f *fakeAdmin) ClearConfigCache(_ context.Context, _ string) error    { return nil }
+func (f *fakeAdmin) AssignRFInterface(_ context.Context, _, _ string, _ bool) error {
+	return nil
+}
 
 type fakeIncidents struct{ items []handlers.Incident }
 
@@ -356,6 +359,9 @@ func (fakeDeviceAdmin) SetChannelFunctions(_ context.Context, _ string, _ int, _
 
 func (fakeDeviceAdmin) RestoreDeviceConfig(_ context.Context, _ string) error { return nil }
 func (fakeDeviceAdmin) ClearConfigCache(_ context.Context, _ string) error    { return nil }
+func (fakeDeviceAdmin) AssignRFInterface(_ context.Context, _, _ string, _ bool) error {
+	return nil
+}
 
 // fakeSystemCCUReader is a minimal SystemCCUReader for router-level
 // integration tests; the daemon adapter is exercised elsewhere.

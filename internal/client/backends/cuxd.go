@@ -121,6 +121,18 @@ func (b *CuxdBackend) ClearConfigCache(context.Context, string) error {
 	return ErrUnsupported
 }
 
+// RSSIInfo implements Operations. CUxD has no radio reception matrix;
+// always returns [ErrUnsupported].
+func (b *CuxdBackend) RSSIInfo(context.Context) (map[string]map[string][2]int, error) {
+	return nil, ErrUnsupported
+}
+
+// SetBidcosInterface implements Operations. CUxD has no RF gateways;
+// always returns [ErrUnsupported].
+func (b *CuxdBackend) SetBidcosInterface(context.Context, string, string, bool) error {
+	return ErrUnsupported
+}
+
 // SearchDevices implements Operations. CUxD has no wired bus; always
 // returns [ErrUnsupported].
 func (b *CuxdBackend) SearchDevices(context.Context) (int, error) {

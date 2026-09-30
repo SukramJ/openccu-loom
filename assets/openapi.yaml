@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 12.7.0
+  version: 12.8.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -3205,6 +3205,38 @@ paths:
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/rf-interface:
+    post:
+      operationId: assignRFInterface
+      summary: Assign a BidCos-RF device to an RF interface (admin-only)
+      description: |
+        Pins the device to the named BidCos-RF interface, or allows the
+        daemon to move it dynamically. The call maps 1:1 to the BidCos-RF
+        daemon's `setBidcosInterface(device_address, interface_address,
+        roaming)`: `interface_address` is the serial of one of the
+        central's RF interfaces (as listed by `listBidcosInterfaces` and
+        the matrix's `interfaces`), and `roaming: true` permits the
+        daemon to re-assign the device by signal strength on its own.
+        BidCos-RF devices only; every other interface answers 422.
+      tags: [devices]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RFInterfaceAssignRequest" }
+      responses:
+        "204": { description: Assignment written }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/test:
     post:
       operationId: testDeviceCommunication
@@ -5681,6 +5713,64 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GetDiagnosticsRSSIResponse"
+  /diagnostics/rssi/matrix:
+    get:
+      operationId: getDiagnosticsRSSIMatrix
+      summary: Pairwise BidCos-RF reception matrix (admin-only)
+      description: >
+        The BidCos-RF daemon's pairwise reception matrix, read live via the
+        XML-RPC `rssiInfo` method of every BidCos-RF interface across every
+        central. For each device the partners it exchanges frames with are
+        listed with both directions in dBm: `rx_dbm` is the strength at
+        which the device hears the partner, `tx_dbm` the strength at which
+        the partner hears the device. A direction the daemon has no
+        information for is null (the wire encodes it as 65536). Gateways
+        (the CCU's own RF interfaces) appear as partners like any device,
+        which is what makes the matrix the basis for interface assignment.
+        HmIP carries no pairwise matrix — its per-device values are on
+        `GET /diagnostics/rssi`.
+      tags: [diagnostics]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      responses:
+        "200":
+          description: Pairwise reception matrix per central
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RSSIMatrixResponse" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /diagnostics/rssi/receiver-proposal:
+    get:
+      operationId: getReceiverProposal
+      summary: Best-interface proposal per BidCos-RF device (admin-only)
+      description: >
+        A dry run over the current pairwise reception matrix: for every
+        BidCos-RF device it names the interface that hears the device
+        best, compares it against the currently assigned interface, and
+        proposes a switch only when the best interface is at least
+        `margin_db` stronger — sample-to-sample noise otherwise produces
+        flapping proposals. Nothing is written; applying a proposal is
+        one `POST /devices/{addr}/rf-interface` per confirmed device.
+      tags: [diagnostics]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - name: margin_db
+          in: query
+          required: false
+          schema: { type: integer, default: 6, minimum: 0, maximum: 30 }
+          description: Minimum dB advantage before a switch is proposed.
+      responses:
+        "200":
+          description: Per-device verdicts
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReceiverProposalResponse" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /diagnostics/reliability:
     get:
       operationId: getDiagnosticsReliability
@@ -8658,6 +8748,106 @@ components:
         Raw LINK paramset of one channel-peer pair, as the CCU returns it —
         a flat parameter-name to value map with no fixed key set, which is
         why it declares `additionalProperties` rather than named fields.
+    RSSIMatrixResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/RSSIMatrixCentral" }
+    RSSIMatrixCentral:
+      type: object
+      required: [central, interface_id, devices]
+      description: >-
+        Pairwise BidCos-RF reception matrix of one central's RF interface.
+        A central whose matrix read failed is still listed, with `error`
+        set and empty lists — one unreachable CCU must not blank the
+        others' data.
+      properties:
+        central: { type: string }
+        interface_id: { type: string }
+        error:
+          type: string
+          description: Set when this central's matrix read failed.
+        interfaces:
+          type: array
+          description: The central's RF interfaces (matrix partners that are gateways).
+          items: { $ref: "#/components/schemas/RSSIMatrixInterface" }
+        devices:
+          type: array
+          items: { $ref: "#/components/schemas/RSSIMatrixDevice" }
+    RSSIMatrixInterface:
+      type: object
+      required: [address]
+      properties:
+        address: { type: string }
+        description: { type: string }
+        connected: { type: boolean }
+        default: { type: boolean }
+        duty_cycle: { type: integer }
+    RSSIMatrixDevice:
+      type: object
+      required: [address, partners]
+      properties:
+        address: { type: string }
+        name: { type: string, description: Display name when the device is in the model. }
+        partners:
+          type: array
+          items: { $ref: "#/components/schemas/RSSIMatrixPartner" }
+    RSSIMatrixPartner:
+      type: object
+      required: [address]
+      properties:
+        address: { type: string }
+        rx_dbm:
+          type: integer
+          nullable: true
+          description: Strength at which the device hears this partner; null when unknown.
+        tx_dbm:
+          type: integer
+          nullable: true
+          description: Strength at which this partner hears the device; null when unknown.
+    ReceiverProposalResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ReceiverProposal" }
+    ReceiverProposal:
+      type: object
+      required: [address, verdict]
+      description: Best-interface verdict for one BidCos-RF device.
+      properties:
+        address: { type: string, description: Device address. }
+        name: { type: string }
+        central: { type: string }
+        current_interface: { type: string, description: Serial of the assigned RF interface. }
+        best_interface: { type: string, description: Serial of the interface that hears the device best. }
+        current_rx_dbm: { type: integer, nullable: true, description: Strength at which the assigned interface hears the device. }
+        best_rx_dbm: { type: integer, nullable: true }
+        roaming: { type: boolean, description: Dynamic assignment is enabled for the device. }
+        verdict:
+          type: string
+          enum: [switch, keep, marginal, unheard, unmeasured, roaming]
+          description: >-
+            switch — the best interface is at least margin_db stronger
+            than the assigned one; keep — the assigned interface is
+            (within the margin) the best; marginal — a stronger interface
+            exists but under the margin; unheard — no interface reports a
+            reading for the device; unmeasured — the matrix carries no
+            row for the device; roaming — dynamic assignment is on, no
+            proposal is made.
+    RFInterfaceAssignRequest:
+      type: object
+      required: [interface_address, roaming]
+      properties:
+        interface_address:
+          type: string
+          description: Serial of the RF interface to assign.
+        roaming:
+          type: boolean
+          description: Allow dynamic re-assignment by signal strength.
     ConfigRepairRequest:
       type: object
       properties:

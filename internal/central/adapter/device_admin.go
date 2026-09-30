@@ -16,6 +16,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/model/taxonomy"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -428,6 +429,34 @@ func (a *DeviceAdminDomain) ClearConfigCache(ctx context.Context, address string
 			return fmt.Errorf("%w: %s/%s", ErrNoDeviceBackend, u.Name(), dev.InterfaceID)
 		}
 		return backend.ClearConfigCache(ctx, address)
+	}
+	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
+}
+
+// AssignRFInterface pins a BidCos-RF device to the RF gateway with serial
+// interfaceAddress via `setBidcosInterface` (XML-RPC), or — with roaming
+// true — lets the BidCos-RF daemon re-assign the device by signal strength
+// on its own. Gateway assignment exists only on BidCos-RF: HmIP routes
+// through its access points without a per-device assignment, and the wired
+// buses have no radio gateways, so devices on any other interface answer
+// [backends.ErrUnsupported] before a wire call is made.
+func (a *DeviceAdminDomain) AssignRFInterface(ctx context.Context, address, interfaceAddress string, roaming bool) error {
+	if a.registry == nil || a.writer == nil {
+		return ErrNoDeviceBackend
+	}
+	for _, u := range a.registry.List() {
+		dev, ok := u.ModelRegistry.Get(address)
+		if !ok {
+			continue
+		}
+		if dev.Interface != hmenum.InterfaceBidCosRF {
+			return fmt.Errorf("assign rf interface: interface %s: %w", dev.Interface, backends.ErrUnsupported)
+		}
+		backend, ok := a.writer.Backend(u.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
+		if !ok {
+			return fmt.Errorf("%w: %s/%s", ErrNoDeviceBackend, u.Name(), dev.InterfaceID)
+		}
+		return backend.SetBidcosInterface(ctx, address, interfaceAddress, roaming)
 	}
 	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
 }

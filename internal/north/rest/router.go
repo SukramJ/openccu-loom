@@ -21,6 +21,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/middleware"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // Deps bundles every collaborator the REST router needs.
@@ -546,6 +547,11 @@ type Deps struct {
 	// RSSIInfo backs `GET /diagnostics/rssi` — the CCU's pairwise RF
 	// reception matrix. Read-only; nil disables the endpoint.
 	RSSIInfo handlers.RSSIMatrixService
+	// RSSIMatrix backs `GET /diagnostics/rssi/matrix` and
+	// `GET /diagnostics/rssi/receiver-proposal` — the BidCos-RF daemon's
+	// pairwise reception matrix read live, and the best-gateway dry run
+	// derived from it. Read-only; nil disables both endpoints.
+	RSSIMatrix interfaces.RSSIMatrixService
 	// AuditRecorder is the daemon-wide audit sink the diagnostics
 	// endpoints append override / capture events to. Same buffer as
 	// [Deps.MatterAuditRecorder] in production wiring; the separate
@@ -1051,6 +1057,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.With(op).Post("/devices/{addr}/firmware/update", handlers.UpdateDeviceFirmware(d.DeviceAdmin))
 				pr.With(admin).Post("/devices/{addr}/config/restore", handlers.RestoreDeviceConfig(d.DeviceAdmin, d.AuditRecorder))
 				pr.With(admin).Post("/devices/{addr}/config/cache-clear", handlers.ClearDeviceConfigCache(d.DeviceAdmin, d.AuditRecorder))
+				pr.With(admin).Post("/devices/{addr}/rf-interface", handlers.AssignRFInterface(d.DeviceAdmin, d.AuditRecorder))
 				pr.With(admin).Post("/devices/{addr}/config/repair", handlers.RepairDeviceConfig(d.ConfigRepair))
 			}
 			if d.DeviceReplacer != nil {
@@ -1242,6 +1249,10 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			}
 			if d.RSSIInfo != nil {
 				pr.With(admin).Get("/diagnostics/rssi", handlers.DiagnosticsRSSI(d.RSSIInfo))
+			}
+			if d.RSSIMatrix != nil {
+				pr.With(admin).Get("/diagnostics/rssi/matrix", handlers.DiagnosticsRSSIMatrix(d.RSSIMatrix))
+				pr.With(admin).Get("/diagnostics/rssi/receiver-proposal", handlers.ReceiverProposalHandler(d.RSSIMatrix))
 			}
 			// Mounted unconditionally: an empty list is the answer this
 			// endpoint exists to be able to give (ADR 0065), so a nil

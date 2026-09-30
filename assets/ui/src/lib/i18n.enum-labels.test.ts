@@ -143,6 +143,7 @@ const AUDIT_ACTIONS = [
   "device_communication_test",
   "device_config_restore",
   "device_config_cache_clear",
+  "device_rf_interface_assign",
   "device_install_mode",
   "device_replace",
   "device_search",

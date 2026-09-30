@@ -172,6 +172,14 @@ func (*stubBackend) ClearConfigCache(context.Context, string) error {
 	return backends.ErrUnsupported
 }
 
+func (*stubBackend) RSSIInfo(context.Context) (map[string]map[string][2]int, error) {
+	return nil, backends.ErrUnsupported
+}
+
+func (*stubBackend) SetBidcosInterface(context.Context, string, string, bool) error {
+	return backends.ErrUnsupported
+}
+
 func (*stubBackend) ListReplaceableDevices(context.Context, string) ([]hmproto.DeviceDescription, error) {
 	return nil, backends.ErrUnsupported
 }

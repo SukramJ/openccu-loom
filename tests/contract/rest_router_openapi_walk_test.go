@@ -256,6 +256,9 @@ func (fakeDeviceAdmin) SetChannelFunctions(context.Context, string, int, []strin
 
 func (fakeDeviceAdmin) RestoreDeviceConfig(context.Context, string) error { return nil }
 func (fakeDeviceAdmin) ClearConfigCache(context.Context, string) error    { return nil }
+func (fakeDeviceAdmin) AssignRFInterface(context.Context, string, string, bool) error {
+	return nil
+}
 
 type fakeDeviceInstallMode struct{}
 
@@ -377,6 +380,16 @@ func (fakeIntrospectService) TapEventBus(context.Context, string, []string, func
 type fakeRSSIService struct{}
 
 func (fakeRSSIService) RSSIInfo(context.Context) (map[string]any, error) { return nil, nil }
+
+type fakeRSSIMatrixService struct{}
+
+func (fakeRSSIMatrixService) RSSIMatrix(context.Context) ([]interfaces.RSSIMatrixCentral, error) {
+	return nil, nil
+}
+
+func (fakeRSSIMatrixService) ReceiverProposal(context.Context, int) ([]interfaces.ReceiverProposal, error) {
+	return nil, nil
+}
 
 type fakeStartupCaptureService struct{}
 
@@ -709,6 +722,7 @@ func fullyWiredRouterDeps() rest.Deps {
 		LogFeed:                 fakeLogFeedService{},
 		Introspect:              fakeIntrospectService{},
 		RSSIInfo:                fakeRSSIService{},
+		RSSIMatrix:              fakeRSSIMatrixService{},
 		StartupCapture:          fakeStartupCaptureService{},
 		EnableRestartEndpoint:   true,
 		Capture:                 fakeCaptureService{},

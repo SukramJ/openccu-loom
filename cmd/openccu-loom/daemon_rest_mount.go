@@ -108,6 +108,7 @@ type restMountDeps struct {
 	// unavailable; the apply routes then answer 503.
 	paramsetApplyDomain *adapter.ParamsetApplyDomain
 	configRepairDomain  *adapter.ConfigRepairDomain
+	rssiMatrixDomain    *adapter.RSSIMatrixDomain
 	// parameterDeterminer backs POST .../paramsets/{key}/determine (the
 	// MASTER editor's "Determine" button). Shares the registry-resolved
 	// backend path with the WS `paramset.determine` command.
@@ -335,6 +336,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		Paramsets:               d.paramsetsDomain,
 		ParamsetApply:           paramsetApplyServiceOrNil(d.paramsetApplyDomain),
 		ConfigRepair:            d.configRepairDomain,
+		RSSIMatrix:              d.rssiMatrixDomain,
 		ConfigExport:            adapter.NewConfigExportDomain(d.reg, d.paramsetsDomain),
 		ConfigChannelMeta:       d.devicesAdapter,
 		ParameterDeterminer:     d.parameterDeterminer,
@@ -798,6 +800,8 @@ func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, loginLim
 		ParamsetApply: paramsetApplyServiceOrNil(d.paramsetApplyDomain),
 		ConfigRepair:  d.configRepairDomain,
 		ConfigCache:   d.deviceAdminDomain,
+		RSSIMatrix:    d.rssiMatrixDomain,
+		RFInterface:   d.deviceAdminDomain,
 		Health:        d.healthAdapter,
 		Hubs:          d.reg,
 		Features:      d.reg,

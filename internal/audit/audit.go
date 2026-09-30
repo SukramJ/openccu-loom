@@ -64,6 +64,12 @@ const (
 	// Entry's DeviceAddress carries the target.
 	ActionDeviceConfigCacheClear Action = "device_config_cache_clear"
 
+	// ActionDeviceRFInterfaceAssign records assigning a BidCos-RF device
+	// to an RF gateway (`setBidcosInterface`), or enabling roaming for it.
+	// The Entry's DeviceAddress carries the target; Note names the
+	// gateway serial and the roaming flag.
+	ActionDeviceRFInterfaceAssign Action = "device_rf_interface_assign"
+
 	// ActionDeviceReplace records a guided device replacement: the
 	// Entry's DeviceAddress carries the old (replaced, now unpaired)
 	// device; the Note the new device address.

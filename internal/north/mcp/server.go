@@ -289,6 +289,15 @@ type Deps struct {
 	// configuration-cache clear the REST config/cache-clear route serves.
 	// Nil leaves the tool unregistered.
 	ConfigCache ConfigCacheClearer
+	// RSSIMatrix backs get_rssi_matrix and get_receiver_proposal — the
+	// BidCos-RF pairwise reception matrix and the best-gateway dry run
+	// the REST diagnostics/rssi/matrix and receiver-proposal routes
+	// serve. Nil leaves both tools unregistered.
+	RSSIMatrix interfaces.RSSIMatrixService
+	// RFInterface backs assign_rf_interface — the BidCos-RF gateway
+	// assignment the REST devices/{addr}/rf-interface route serves. Nil
+	// leaves the tool unregistered.
+	RFInterface RFInterfaceAssigner
 	Health      HealthReader
 	Hubs        HubResolver
 	// Taxonomy backs get_taxonomy: every central's enum trees, the same

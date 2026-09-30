@@ -125,6 +125,11 @@ func (s *stubDeviceAdmin) ClearConfigCache(_ context.Context, addr string) error
 	return s.clearCacheErr
 }
 
+func (s *stubDeviceAdmin) AssignRFInterface(_ context.Context, addr, _ string, _ bool) error {
+	s.lastAddress = addr
+	return nil
+}
+
 func TestDeleteDevice_HappyPath(t *testing.T) {
 	t.Parallel()
 	admin := &stubDeviceAdmin{}

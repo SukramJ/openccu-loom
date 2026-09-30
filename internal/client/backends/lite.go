@@ -281,6 +281,30 @@ func (b *LiteBackend) ClearConfigCache(ctx context.Context, address string) erro
 	return err
 }
 
+// RSSIInfo implements Operations via XML-RPC `rssiInfo()`. Only the
+// BidCos-RF interface process answers it.
+func (b *LiteBackend) RSSIInfo(ctx context.Context) (map[string]map[string][2]int, error) {
+	if b.xml == nil {
+		return nil, ErrNotWired
+	}
+	raw, err := b.xml.Call(ctx, "rssiInfo")
+	if err != nil {
+		return nil, err
+	}
+	return decodeRSSIInfo(raw, "lite")
+}
+
+// SetBidcosInterface implements Operations via XML-RPC
+// `setBidcosInterface(device_address, interface_address, roaming)`. Only
+// the BidCos-RF interface process answers it.
+func (b *LiteBackend) SetBidcosInterface(ctx context.Context, deviceAddress, interfaceAddress string, roaming bool) error {
+	if b.xml == nil {
+		return ErrNotWired
+	}
+	_, err := b.xml.Call(ctx, "setBidcosInterface", deviceAddress, interfaceAddress, roaming)
+	return err
+}
+
 // ListReplaceableDevices implements Operations via XML-RPC
 // `listReplaceableDevices(newAddress)`.
 func (b *LiteBackend) ListReplaceableDevices(ctx context.Context, newDeviceAddress string) ([]hmproto.DeviceDescription, error) {

@@ -138,6 +138,14 @@ func (*fakeOperations) ClearConfigCache(context.Context, string) error {
 	return backends.ErrUnsupported
 }
 
+func (*fakeOperations) RSSIInfo(context.Context) (map[string]map[string][2]int, error) {
+	return nil, backends.ErrUnsupported
+}
+
+func (*fakeOperations) SetBidcosInterface(context.Context, string, string, bool) error {
+	return backends.ErrUnsupported
+}
+
 func (*fakeOperations) ListReplaceableDevices(context.Context, string) ([]hmproto.DeviceDescription, error) {
 	return nil, backends.ErrUnsupported
 }
