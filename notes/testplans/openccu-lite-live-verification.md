@@ -57,12 +57,21 @@ covers them.
 ## Open items of the openccu-lite support
 
 Everything else from the implementation plan is merged (phases A–D, F1).
+Resolved 2026-09-30 (Kearney, real box, loom 0.82.0): the **radio cost of
+`getParamset(VALUES)` seeding** is bounded by dose amplification — where
+L-6's single sweep stayed below the whole-percent duty-cycle resolution,
+three consecutive full sweeps over all 56 HmIP-RF channels (168 reads
+through the proxy, three times a boot seed) left `listBidcosInterfaces`
+`DUTY_CYCLE` unchanged at 6 %. The interface process answers VALUES reads
+from its device mirror; a single boot seed therefore costs well under one
+percent of duty cycle. HmIP-RF only; BidCos-RF not measured separately.
+Recorded in `docs/caching.md`.
+
 What is not, and why:
 
 | Item | Why open | Unblocked by | Documented in |
 |---|---|---|---|
 | Heating groups on openccu-lite: create, update, members | Group ids are JSON numbers and a candidate is `{id: <channel address>, serial, type}` (L-10). Writing members fails **on the box itself**: `POST`/`PUT /groups` answer `502 hmipserver … context deadline exceeded` after 30 s (occulited's call to the HMIPServer group save times out), and the create still leaves an empty group behind (G-1). So the shape of a group's `members` list and the meaning of `devices_to_configure` stay unobserved. Kept refused. | a box whose group save succeeds (an openccu-lite fix, to be reported upstream) | `docs/admin/openccu-lite.md`; `internal/central/adapter/lite_groups.go` |
-| Radio cost of `getParamset(VALUES)` seeding | L-6 cannot decide it: the box reports the duty cycle in whole percent, and a full sweep stayed below that resolution | a finer measure (e.g. per-device traffic) | `docs/caching.md` |
 | Encrypted backup restore (`.sbk.age`) | The daemon does not hold the box's recovery key; refused by design | — (design) | `docs/admin/backup.md` |
 | Areas keyed by room name | On a box a name several rooms share is one area assignment | — (documented limitation) | ADR 0073 |
 | Heating-group candidates show room names only | The candidates DTO carries no taxonomy; showing the path needs an API addition | API change | ADR 0073 |
