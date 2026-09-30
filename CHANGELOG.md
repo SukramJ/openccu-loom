@@ -62,7 +62,10 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   openccu-lite central this silently untyped every subsequent event of
   the affected device (a FLOAT arriving as `1` became an integer). The
   background refresh now rehydrates the affected channels' paramset
-  descriptions as well.
+  descriptions as well, and the periodic client-data refresh self-heals
+  what a failed or cut-short reload left behind: every channel that
+  declares MASTER or VALUES but holds neither gets its paramset
+  descriptions re-pulled before the value reseed.
 - **A recovered CCU connection reseeds device values.** The recovery
   pipeline's DATA_LOADING stage only reloaded hub data (system
   variables, programs); device values and reachability kept their

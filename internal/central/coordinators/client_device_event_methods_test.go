@@ -149,8 +149,14 @@ func TestIdentifyDevicesMissingParamsets(t *testing.T) {
 	dc, _, _, descs, psets := newDCFull(t)
 	iface := wireKey(hmenum.InterfaceHmIPRF)
 
-	descs.Put(iface, channel("ADDR001:0", "ADDR001", "MODEL"))
-	descs.Put(iface, channel("ADDR001:1", "ADDR001", "MODEL"))
+	// Only channels whose description declares MASTER or VALUES count as
+	// missing — an undeclared channel is never reported (see the method doc).
+	withPS := func(d hmproto.DeviceDescription) hmproto.DeviceDescription {
+		d.Paramsets = []string{"MASTER", "VALUES"}
+		return d
+	}
+	descs.Put(iface, withPS(channel("ADDR001:0", "ADDR001", "MODEL")))
+	descs.Put(iface, withPS(channel("ADDR001:1", "ADDR001", "MODEL")))
 	// Put a VALUES paramset for :0 only — :1 has neither.
 	psets.Put(iface, "ADDR001:0", hmenum.ParamsetKeyValues, hmproto.Paramset{})
 
