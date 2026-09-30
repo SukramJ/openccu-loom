@@ -374,7 +374,7 @@ func registerGetDevice(s *mcpsdk.Server, d Deps) {
 	})
 }
 
-// callerHasRole reports whether the identity the mount's resolve chain
+// callerIsAdmin reports whether the identity the mount's resolve chain
 // attached to the session context may act as want.
 //
 // The mount gates the whole tool set at a single role — viewer, or
@@ -383,14 +383,14 @@ func registerGetDevice(s *mcpsdk.Server, d Deps) {
 // need. A tool whose REST twin is mounted With(admin) re-checks here so
 // both surfaces draw the same boundary; everything else keeps trusting
 // the mount.
-func callerHasRole(ctx context.Context, want auth.Role) bool {
+func callerIsAdmin(ctx context.Context) bool {
 	id, ok := auth.IdentityFrom(ctx)
-	return ok && id.HasRole(want)
+	return ok && id.HasRole(auth.RoleAdmin)
 }
 
 // callerSubject is the actor an audit row records for a write driven
 // through this surface: the identity the mount's resolve chain attached
-// to the request, the same one [callerHasRole] judges. Without it the
+// to the request, the same one [callerIsAdmin] judges. Without it the
 // change-log answers "who changed this?" with an empty cell for every
 // assistant-driven write, which is the one question the log exists for.
 // Empty only when no identity was resolved — a tool set mounted without
@@ -412,7 +412,7 @@ func registerListAudit(s *mcpsdk.Server, d Deps) {
 		// operator changed which credential-bearing section, which device
 		// parameters were written and the notes attached to both. A viewer
 		// identity must not read it here either.
-		if !callerHasRole(ctx, auth.RoleAdmin) {
+		if !callerIsAdmin(ctx) {
 			return nil, listAuditOut{}, errors.New("the configuration change-log is admin-only")
 		}
 		limit := in.Limit

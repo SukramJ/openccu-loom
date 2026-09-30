@@ -13,7 +13,6 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
-	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -88,7 +87,7 @@ func registerRepairDeviceConfig(s *mcpsdk.Server, d Deps) {
 			"full paramset. dry_run defaults to true (report only). Stored entries the description does not carry are " +
 			"reported as foreign; no write removes them. Requires an admin identity.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in repairDeviceConfigIn) (*mcpsdk.CallToolResult, repairDeviceConfigOut, error) {
-		if !callerHasRole(ctx, auth.RoleAdmin) {
+		if !callerIsAdmin(ctx) {
 			return nil, repairDeviceConfigOut{}, errors.New("config repair is admin-only")
 		}
 		address := strings.TrimSpace(in.Address)
@@ -141,7 +140,7 @@ func registerClearDeviceConfigCache(s *mcpsdk.Server, d Deps) {
 		Description: "Make the device's interface process forget its cached configuration so the next configuration " +
 			"read or transfer rebuilds it. BidCos-RF and BidCos-Wired devices only. Requires an admin identity.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in clearDeviceConfigCacheIn) (*mcpsdk.CallToolResult, clearDeviceConfigCacheOut, error) {
-		if !callerHasRole(ctx, auth.RoleAdmin) {
+		if !callerIsAdmin(ctx) {
 			return nil, clearDeviceConfigCacheOut{}, errors.New("clearing the config cache is admin-only")
 		}
 		address := strings.TrimSpace(in.Address)

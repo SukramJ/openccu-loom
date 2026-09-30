@@ -14,7 +14,6 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
-	"github.com/SukramJ/openccu-loom/internal/auth"
 )
 
 // RFInterfaceAssigner assigns a BidCos-RF device to an RF gateway — the
@@ -107,7 +106,7 @@ func registerGetRSSIMatrix(s *mcpsdk.Server, d Deps) {
 			"unknown. The central's RF gateways appear as partners and are listed under interfaces. HmIP has no " +
 			"pairwise matrix. Requires an admin identity.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in getRSSIMatrixIn) (*mcpsdk.CallToolResult, getRSSIMatrixOut, error) {
-		if !callerHasRole(ctx, auth.RoleAdmin) {
+		if !callerIsAdmin(ctx) {
 			return nil, getRSSIMatrixOut{}, errors.New("the RSSI matrix is admin-only")
 		}
 		central := strings.TrimSpace(in.CentralName)
@@ -156,7 +155,7 @@ func registerGetReceiverProposal(s *mcpsdk.Server, d Deps) {
 			"best compared with the assigned one. A switch is proposed only when the best gateway is at least " +
 			"margin_db (default 6) stronger. Nothing is written. Requires an admin identity.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in getReceiverProposalIn) (*mcpsdk.CallToolResult, getReceiverProposalOut, error) {
-		if !callerHasRole(ctx, auth.RoleAdmin) {
+		if !callerIsAdmin(ctx) {
 			return nil, getReceiverProposalOut{}, errors.New("the receiver proposal is admin-only")
 		}
 		margin := -1 // the service default
@@ -191,7 +190,7 @@ func registerAssignRFInterface(s *mcpsdk.Server, d Deps) {
 		Description: "Pin a BidCos-RF device to the RF gateway with the given serial, or with roaming true let the " +
 			"BidCos-RF daemon re-assign it by signal strength. BidCos-RF devices only. Requires an admin identity.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in assignRFInterfaceIn) (*mcpsdk.CallToolResult, assignRFInterfaceOut, error) {
-		if !callerHasRole(ctx, auth.RoleAdmin) {
+		if !callerIsAdmin(ctx) {
 			return nil, assignRFInterfaceOut{}, errors.New("assigning an RF interface is admin-only")
 		}
 		address := strings.TrimSpace(in.Address)

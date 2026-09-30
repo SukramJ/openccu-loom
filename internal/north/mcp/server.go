@@ -13,7 +13,7 @@
 // unauthenticated, which is why the wrapper and not the listener is
 // named here. That mount gates the whole tool set at a single role, so
 // the few tools whose REST twin is mounted With(admin) re-check the
-// caller's role on the resolved identity themselves (callerHasRole).
+// caller's role on the resolved identity themselves (callerIsAdmin).
 package mcp
 
 import (
@@ -414,7 +414,7 @@ func NewServer(d Deps) *mcpsdk.Server {
 // Authorization is per request. The mount wraps this handler in the daemon's
 // identity-resolve and role-gate middleware, so a tool handler's context is
 // the calling request's context and the tools that re-check a role
-// (callerHasRole) judge the caller. A retained session would instead hand
+// (callerIsAdmin) judge the caller. A retained session would instead hand
 // every later call the context captured when the session was opened: an
 // identity that has since been demoted, or that belongs to whoever first used
 // the session id, would keep its old privileges for the session's lifetime.
