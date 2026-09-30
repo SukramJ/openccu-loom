@@ -320,24 +320,32 @@ func (p *ParamsetsDomain) recordParamsetWrite(ctx context.Context, channelAddres
 // [anyMapToParamValues]; this is the branch for channels the model does not
 // hold.
 //
-// The function is a best-effort guard: if the descriptor lookup fails (e.g.
-// the CCU is temporarily unreachable) the values pass through unchanged so
-// the backend error path handles the failure instead.
+// The check is strict, and it has to be: the interface processes do not
+// validate writes themselves. One family persists configuration entries it
+// cannot apply — including parameters the channel does not have, which then
+// sit in the channel's config store and poison it permanently — while the
+// other silently drops or clamps whatever it does not understand. So nothing
+// unvalidated and nothing outside the channel's own description may reach the
+// wire: a parameter the description does not carry is rejected as a
+// validation failure, and a write that cannot be checked because the
+// description itself is unavailable is refused rather than sent. That refusal
+// wraps the fetch error but not [hmerr.ErrValidation] — it is an upstream
+// failure, not a mistake in the request.
 func coerceParamsetValues(ctx context.Context, b interface {
 	GetParamsetDescription(ctx context.Context, address string, key hmenum.ParamsetKey) (map[string]hmproto.ParameterData, error)
 }, address string, key hmenum.ParamsetKey, values map[string]any,
 ) (map[string]any, error) {
 	descs, err := b.GetParamsetDescription(ctx, address, key)
 	if err != nil {
-		// Descriptor unavailable — skip validation so the backend error path handles the failure.
-		return values, nil //nolint:nilerr // intentional soft-path: descriptor fetch failure is non-fatal
+		return nil, fmt.Errorf("paramsets: paramset description unavailable for %s/%s, refusing unvalidated write: %w",
+			address, key, err)
 	}
 	out := make(map[string]any, len(values))
 	var errs []error
 	for name, rawVal := range values {
 		desc, ok := descs[name]
 		if !ok {
-			out[name] = rawVal
+			errs = append(errs, fmt.Errorf("paramsets: %s: parameter not in paramset description", name))
 			continue
 		}
 		// Coerce, not NewParamValue: the descriptor is right here, and a

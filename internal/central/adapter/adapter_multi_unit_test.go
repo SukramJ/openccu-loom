@@ -419,7 +419,9 @@ func buildParamsetBoost10Fixture(t *testing.T) *ParamsetsDomain {
 		Type:    "HmIP-eTRV-3",
 	})
 
-	fake := &fakeOperations{kind: backends.KindCCU}
+	descs := describe(hmenum.ParameterTypeFloat, "SET_POINT_TEMPERATURE")
+	descs["TEMPERATUREFALL_MODUS"] = describe(hmenum.ParameterTypeInteger, "TEMPERATUREFALL_MODUS")["TEMPERATUREFALL_MODUS"]
+	fake := describedOps{Operations: &fakeOperations{kind: backends.KindCCU}, descs: descs}
 	w := client.NewValueWriter()
 	w.Register("ccu-ps10", "HmIP-RF", fake)
 
@@ -923,7 +925,10 @@ func TestParamsetsDomain_PutLinkParamset_HappyPath_WithChannel(t *testing.T) {
 		Type:    "HmIP-KEY4",
 	})
 
-	fake := &fakeOperations{kind: backends.KindCCU}
+	fake := describedOps{
+		Operations: &fakeOperations{kind: backends.KindCCU},
+		descs:      describe(hmenum.ParameterTypeInteger, "SHORT_ACTION_TYPE"),
+	}
 	w := client.NewValueWriter()
 	w.Register("ccu-pl11", "HmIP-RF", fake)
 
@@ -3882,9 +3887,9 @@ func TestPutParamset_LegacyBackendError(t *testing.T) {
 	c.ModelRegistry.Put(dev)
 
 	putError := errors.New("backend: put failed")
-	fake := &configFakeOperations{
-		kind:   backends.KindCCU,
-		putErr: putError,
+	fake := describedOps{
+		Operations: &configFakeOperations{kind: backends.KindCCU, putErr: putError},
+		descs:      describe(hmenum.ParameterTypeBool, "STATE"),
 	}
 	w := client.NewValueWriter()
 	w.Register("ccu-b20-pp3", "HmIP-RF", fake)
@@ -4032,8 +4037,12 @@ func TestPutLinkParamset_BackendError(t *testing.T) {
 
 	putLinkErr := errors.New("put link error")
 	fakeFull2 := &fullFakeLinkOps2{
-		paramsetFakeOps: paramsetFakeOps{},
-		linkPutErr:      putLinkErr,
+		paramsetFakeOps: paramsetFakeOps{
+			getParamsetDescriptionFn: func(context.Context, string, hmenum.ParamsetKey) (map[string]hmproto.ParameterData, error) {
+				return describe(hmenum.ParameterTypeBool, "STATE"), nil
+			},
+		},
+		linkPutErr: putLinkErr,
 	}
 	w := client.NewValueWriter()
 	w.Register("ccu-b20-plp2", "HmIP-RF", fakeFull2)
@@ -12892,6 +12901,10 @@ func buildBoost7Fixture(t *testing.T) *boost7Fixture {
 func TestParamsetsDomain_PutLinkParamset_HappyPath(t *testing.T) {
 	t.Parallel()
 	f := buildBoost7Fixture(t)
+	f.writer.Register("ccu-boost7", "HmIP-RF", describedOps{
+		Operations: &fakeOperations{kind: backends.KindCCU},
+		descs:      describe(hmenum.ParameterTypeInteger, "COND_VALUE_TRUE"),
+	})
 	p := NewParamsetsDomain(f.reg, f.writer)
 	err := p.PutLinkParamset(context.Background(), "DEV002:1", "PEER001:1", map[string]any{"COND_VALUE_TRUE": 1})
 	if err != nil {

@@ -637,6 +637,9 @@ func TestPutParamsetFallsBackToBackendWhenNoChannel(t *testing.T) {
 			putCalled = true
 			return nil
 		},
+		getParamsetDescriptionFn: func(context.Context, string, hmenum.ParamsetKey) (map[string]hmproto.ParameterData, error) {
+			return describe(hmenum.ParameterTypeFloat, string(hmenum.ParameterLevel)), nil
+		},
 	}
 	w := client.NewValueWriter()
 	w.Register("ccu-01", "HmIP-RF", fakeOps)

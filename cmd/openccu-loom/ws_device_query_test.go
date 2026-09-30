@@ -33,6 +33,19 @@ func (b *scopedBackendStub) GetParamset(_ context.Context, _ string, _ hmenum.Pa
 	return map[string]any{"CENTRAL": b.label}, nil
 }
 
+// GetParamsetDescription declares the parameter the test writes: the strict
+// paramsets domain refuses any write it cannot check against a description.
+func (b *scopedBackendStub) GetParamsetDescription(
+	_ context.Context, _ string, _ hmenum.ParamsetKey,
+) (map[string]hmproto.ParameterData, error) {
+	return map[string]hmproto.ParameterData{
+		"FOO": {
+			Type:       hmenum.ParameterTypeInteger,
+			Operations: hmenum.OperationsRead | hmenum.OperationsWrite,
+		},
+	}, nil
+}
+
 func (b *scopedBackendStub) PutParamset(_ context.Context, _ string, _ hmenum.ParamsetKey, _ map[string]any, _ hmenum.CommandPriority, _ hmenum.CommandRxMode) error {
 	b.putCalled = true
 	return nil

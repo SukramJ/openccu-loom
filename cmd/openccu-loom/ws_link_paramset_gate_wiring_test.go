@@ -15,6 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
+	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
 
 // linkGateFakeBackend records whether PutLinkParamset actually reached the
@@ -27,6 +28,20 @@ type linkGateFakeBackend struct {
 func (b *linkGateFakeBackend) PutLinkParamset(_ context.Context, _, _ string, _ map[string]any) error {
 	b.putCalled = true
 	return nil
+}
+
+// GetParamsetDescription declares the LINK parameter the test writes: the
+// strict paramsets domain refuses any write it cannot check against a
+// description.
+func (b *linkGateFakeBackend) GetParamsetDescription(
+	_ context.Context, _ string, _ hmenum.ParamsetKey,
+) (map[string]hmproto.ParameterData, error) {
+	return map[string]hmproto.ParameterData{
+		"SHORT_JT_ON": {
+			Type:       hmenum.ParameterTypeInteger,
+			Operations: hmenum.OperationsRead | hmenum.OperationsWrite,
+		},
+	}, nil
 }
 
 // TestWSLinkQueryPutLinkParamset_RefusesIgnoredModel_ReachesBackendOtherwise

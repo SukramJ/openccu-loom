@@ -134,11 +134,32 @@ func PutParamset(svc ParamsetService, locks *EditSessions) http.HandlerFunc {
 				writeChannelLocked(w, r)
 				return
 			}
+			if writeParamsetValidationRejection(w, r, err) {
+				return
+			}
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Paramset write failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
 	}
+}
+
+// writeParamsetValidationRejection maps a client-side value rejection —
+// surfaced by the strict descriptor validation in the paramsets domain or by
+// the model's Set/SetMany gate — to 400 with `code: validation_error`. These
+// errors mean the request itself was wrong and no RPC reached the CCU, so a
+// 502 upstream answer would mislead the caller. Returns true when the error
+// was one of them and the response has been written.
+func writeParamsetValidationRejection(w http.ResponseWriter, r *http.Request, err error) bool {
+	if errors.Is(err, hmerr.ErrValidation) ||
+		errors.Is(err, device.ErrValidation) ||
+		errors.Is(err, device.ErrUnknownParameter) ||
+		errors.Is(err, device.ErrParameterNotWritable) {
+		problem.Write(w, http.StatusBadRequest,
+			problem.New(problem.TypeValidation, r, "Paramset value rejected", err.Error()))
+		return true
+	}
+	return false
 }
 
 // GetLinkParamset serves GET /devices/{addr}/link-ps/{peer}.
@@ -207,6 +228,9 @@ func PutLinkParamset(svc ParamsetService, locks *EditSessions) http.HandlerFunc 
 				// payload, not an upstream failure.
 				problem.Write(w, http.StatusBadRequest,
 					problem.New(problem.TypeValidation, r, "Unencodable string", err.Error()))
+				return
+			}
+			if writeParamsetValidationRejection(w, r, err) {
 				return
 			}
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Link paramset write failed", err)

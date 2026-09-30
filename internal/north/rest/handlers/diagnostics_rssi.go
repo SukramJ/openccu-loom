@@ -14,15 +14,17 @@ import (
 // same implementation (adapter.RSSIInfoDomain) also backs the
 // `ccu.get_rssi_info` WS command.
 type RSSIMatrixService interface {
-	// RSSIInfo returns { "devices": [...] } — the CCU's pairwise RF
-	// reception matrix across every central and RF interface.
+	// RSSIInfo returns { "devices": [...] } — per-device reception data
+	// from the device model, across every central.
 	RSSIInfo(ctx context.Context) (map[string]any, error)
 }
 
-// DiagnosticsRSSI serves GET /diagnostics/rssi — the CCU's pairwise RF
-// reception matrix (device ↔ communication-partner RSSI pairs) read from the
-// XML-RPC `rssiInfo` method, with the 65536 "no data" sentinel normalised to
-// null. Read-only; safe on a live CCU.
+// DiagnosticsRSSI serves GET /diagnostics/rssi — per-device reception data
+// read from the in-memory device model's maintenance channel: RSSI_DEVICE and
+// RSSI_PEER (dBm), battery level and low-battery state, and reachability, for
+// every device that reports an RSSI reading, across all centrals. A reading
+// the model does not hold is null. No CCU round-trip, so it works for HmIP and
+// BidCos alike and is safe on a live CCU.
 func DiagnosticsRSSI(svc RSSIMatrixService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if svc == nil {
