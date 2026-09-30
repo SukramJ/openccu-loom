@@ -712,7 +712,6 @@ func (h *CallbackHandlers) UpdateDevice(ctx context.Context, interfaceID, addres
 		return nil
 	}
 	iface := hmtypes.ParseWireInterfaceID(interfaceID)
-	h.unit.Devices.InvalidateFirmwareCache(iface, address)
 	if h.writer == nil {
 		return nil
 	}
@@ -726,6 +725,10 @@ func (h *CallbackHandlers) UpdateDevice(ctx context.Context, interfaceID, addres
 	h.goBackground(func() { //nolint:contextcheck // background refresh uses h.ctx, not the caller's ctx which may be short-lived
 		bgCtx, cancel := context.WithTimeout(h.ctx, deviceRefreshTimeout)
 		defer cancel()
+		// Invalidate only once a backend exists to re-pull: without one,
+		// stale metadata still types the device's values, while an eviction
+		// with no follow-up leaves a hole until the daemon restarts.
+		h.unit.Devices.InvalidateFirmwareCache(iface, address)
 		if err := h.unit.Devices.RefreshDeviceDescriptionsAndCreateMissingDevices(bgCtx, fetcher, iface); err != nil {
 			h.logger.Warn("callback.update_device.refresh_failed",
 				slog.String("interface", interfaceID),
@@ -822,9 +825,10 @@ func (h *CallbackHandlers) ReaddedDevice(_ context.Context, interfaceID string, 
 
 // deviceRefreshTimeout bounds one callback-triggered background refresh:
 // one listDevices plus three getParamsetDescription reads (VALUES, MASTER,
-// LINK) per address of every affected device. The bound only reaps a hung
-// CCU connection; a multi-channel device on a slow link needs well over the
-// few seconds a description refresh alone takes.
+// LINK) per address of every affected device. A very large re-pair batch
+// can still outgrow it; addresses behind the cut are repaired by the
+// periodic client-data refresh, which reloads missing paramset
+// descriptions (see wireLoadAndRefresh).
 const deviceRefreshTimeout = 2 * time.Minute
 
 // reloadDeviceParamsets re-pulls the paramset descriptions of one device

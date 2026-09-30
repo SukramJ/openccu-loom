@@ -1997,10 +1997,17 @@ func (c *DeviceCoordinator) RefreshDeviceDescriptions(
 	return nil
 }
 
-// IdentifyDevicesMissingParamsets scans the device registry for iface and
-// returns the addresses of devices that have no MASTER or VALUES paramset
-// entries in the paramset registry. These are devices that were created from
-// cache or a partial pull and still need a full paramset fetch.
+// IdentifyDevicesMissingParamsets scans the description registry for iface
+// and returns the channel addresses that still need a paramset-description
+// fetch: channels whose own description declares MASTER or VALUES in its
+// PARAMSETS list while the paramset registry holds neither. These are
+// channels created from cache or a partial pull, or whose descriptions were
+// evicted and never re-pulled.
+//
+// A channel that declares neither MASTER nor VALUES is never reported: no
+// fetch can produce an entry for it, so reporting it would make every
+// periodic caller refetch it forever. Root (device) addresses are not
+// considered.
 func (c *DeviceCoordinator) IdentifyDevicesMissingParamsets(iface hmtypes.WireInterfaceID) []string {
 	allDescs := c.descs.All(iface)
 	var missing []string
@@ -2008,6 +2015,10 @@ func (c *DeviceCoordinator) IdentifyDevicesMissingParamsets(iface hmtypes.WireIn
 		d := allDescs[i]
 		// Only check channel addresses (colon-separated), not top-level devices.
 		if !strings.Contains(d.Address, ":") {
+			continue
+		}
+		if !slices.Contains(d.Paramsets, string(hmenum.ParamsetKeyMaster)) &&
+			!slices.Contains(d.Paramsets, string(hmenum.ParamsetKeyValues)) {
 			continue
 		}
 		_, hasMaster := c.paramsets.Get(iface, d.Address, hmenum.ParamsetKeyMaster)

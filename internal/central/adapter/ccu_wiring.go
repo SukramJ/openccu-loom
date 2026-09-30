@@ -569,7 +569,10 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 
 	// Periodic data-refresh handler (the bulk-value reconciliation safety
 	// net); absent when the system offers no value seeder.
-	wireLoadAndRefresh(unit, pipeline, cc.Interfaces, hub.ValueSeeder(), logger)
+	wireLoadAndRefresh(unit, pipeline, cc.Interfaces, hub.ValueSeeder(), func(iface hmenum.Interface) (backends.Operations, bool) {
+		b := backendsByInterface.operations(WireInterfaceID(cc.Name, iface))
+		return b, b != nil
+	}, logger)
 
 	// Hot-plug: hand freshly announced devices (newDevices callback) to the
 	// pipeline so a device paired at runtime is materialised without a
