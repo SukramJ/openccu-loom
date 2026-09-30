@@ -171,3 +171,40 @@ describe("authStore.expire", () => {
     expect(shutdownMock).not.toHaveBeenCalled();
   });
 });
+
+describe("authStore — box-shell session (scheme occulite)", () => {
+  it("counts as signed in like a session login, without a deadline", async () => {
+    meMock.mockResolvedValueOnce({
+      subject: "boxadmin",
+      role: "admin",
+      scheme: "occulite",
+    });
+    await authStore.probe();
+    expect(authStore.authenticated).toBe(true);
+    expect(authStore.identity?.subject).toBe("boxadmin");
+    expect(authStore.expiresAt).toBeNull();
+    expect(authStore.expiringSoon).toBe(false);
+  });
+
+  it("marks the identity as box-owned and withholds logout", async () => {
+    meMock.mockResolvedValueOnce({
+      subject: "boxadmin",
+      role: "admin",
+      scheme: "occulite",
+    });
+    await authStore.probe();
+    expect(authStore.boxShellSession).toBe(true);
+    expect(authStore.canLogout).toBe(false);
+  });
+
+  it("keeps logout for a session login", async () => {
+    meMock.mockResolvedValueOnce({
+      subject: "admin",
+      role: "admin",
+      scheme: "session",
+    });
+    await authStore.probe();
+    expect(authStore.boxShellSession).toBe(false);
+    expect(authStore.canLogout).toBe(true);
+  });
+});

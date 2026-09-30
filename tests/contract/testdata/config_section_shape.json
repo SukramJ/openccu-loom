@@ -69,6 +69,7 @@
   "north.rest.auth.ha_ingress.enabled": "*bool,omitempty",
   "north.rest.auth.ha_ingress.role": "string",
   "north.rest.auth.ha_ingress.trusted_proxy_cidr": "string",
+  "north.rest.auth.occulite_sso.enabled": "*bool,omitempty",
   "north.rest.auth.oidc.client_id": "string",
   "north.rest.auth.oidc.client_secret": "string",
   "north.rest.auth.oidc.enabled": "bool",

@@ -1654,6 +1654,9 @@ type AuthConfig struct {
 	// the unauthenticated surface entirely.
 	Pairing   PairingAuthConfig `yaml:"pairing" json:"pairing" cfg:"basic"`
 	HAIngress HAIngressConfig   `yaml:"ha_ingress" json:"ha_ingress" cfg:"basic"`
+	// OcculiteSSO accepts the openccu-lite box-shell session as a daemon
+	// identity over the lite ingress (ADR 0079).
+	OcculiteSSO OcculiteSSOConfig `yaml:"occulite_sso" json:"occulite_sso" cfg:"basic"`
 	// SessionIdleTimeout evicts a login session that has not been used
 	// within the window, even while its absolute lifetime is still
 	// running — it caps how long a stolen but unused session cookie stays
@@ -1720,6 +1723,25 @@ type HAIngressConfig struct {
 	// Role is the Loom role granted to a trusted Ingress request: "admin"
 	// (default), "operator" or "viewer".
 	Role string `yaml:"role" json:"role" cfg:"expert"`
+}
+
+// OcculiteSSOConfig opts into box-shell single sign-on: the openccu-lite gate
+// hands every request it passes to the add-on the operator's box session id
+// in the X-Occulite-Session header, and the daemon accepts it as an identity
+// once the onboarded local box confirms the session. The header alone
+// authenticates nothing — the daemon's own port is reachable without the
+// gate, so every value is verified against the box before use, and a box
+// "admin" maps to the admin role, a box "user" to operator; any other
+// outcome leaves the request to the normal login. A genuine Bearer token,
+// session or Basic credential always wins over the SSO identity.
+type OcculiteSSOConfig struct {
+	// Enabled is tri-state: nil defaults to whether the daemon runs as the
+	// openccu-lite add-on — ON there (where the gate exists), OFF in any other
+	// build. An explicit true/false overrides. Resolved by the composition
+	// root (it depends on the add-on stamp, which config must not import).
+	// Even when ON the resolver is inert without an onboarded local box to
+	// verify against.
+	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty" cfg:"basic"`
 }
 
 // CCUAuthConfig delegates login to a CCU's own user database (see

@@ -8,6 +8,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Box-shell single sign-on over the lite ingress (ADR 0079).** On an
+  openccu-lite box the operator who opened the daemon's UI through the
+  box shell is signed in already: the gate's `X-Occulite-Session` is
+  treated as a claim and live-verified against the box
+  (`GET /api/auth/v1/state`) before it authenticates anything — never
+  trusted by perimeter. Box `admin` maps to the daemon's admin role,
+  box `user` to operator, everything else stays unauthenticated; the
+  audit subject is `occulite:<user>`, the `/auth/me` scheme is
+  `occulite`, and the SPA skips its login and hides the logout for
+  such a session (the box's logout is the one that ends it). Real
+  daemon credentials always win; the resolver only answers when
+  nothing else did. Enabled by default exactly where the gate exists
+  (the lite add-on stamp; `north.rest.auth.occulite_sso.enabled`
+  overrides), inert everywhere else.
+
 - **Post-write read-back on configuration writes.** An interface
   process may answer ok to a MASTER or LINK paramset write and still
   drop, clamp or coerce values it does not apply. The daemon now

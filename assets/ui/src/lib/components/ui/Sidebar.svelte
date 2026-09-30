@@ -241,8 +241,18 @@
     style="border-color: var(--ha-divider-color);"
   >
     {#if expanded && identitySubject}
-      <p class="mb-2 truncate px-1 text-xs" style="color: var(--ha-secondary-text-color);">
+      <p
+        class="mb-2 truncate px-1 text-xs"
+        style="color: var(--ha-secondary-text-color);"
+        title={authStore.boxShellSession ? t("auth.box_shell.signed_in_help") : undefined}
+        data-testid="sidebar-identity"
+      >
         {identitySubject}
+        {#if authStore.boxShellSession}
+          <span class="block truncate" data-testid="sidebar-box-shell">
+            {t("auth.box_shell.signed_in")}
+          </span>
+        {/if}
       </p>
     {/if}
     <div class="flex flex-wrap items-center gap-1">
@@ -274,15 +284,19 @@
       >
         <span class="text-xs font-semibold">?</span>
       </button>
-      <button
-        type="button"
-        class="inline-flex items-center justify-center rounded-md p-2.5 hover:bg-black/5 dark:hover:bg-white/5"
-        title={t("nav.logout")}
-        aria-label={t("nav.logout")}
-        onclick={onLogout}
-      >
-        <Icon name="mdi:logout" size={16} />
-      </button>
+      <!-- A box-shell session (scheme occulite) belongs to the openccu-lite
+           box: the daemon cannot end it, so no logout is offered. -->
+      {#if authStore.canLogout}
+        <button
+          type="button"
+          class="inline-flex items-center justify-center rounded-md p-2.5 hover:bg-black/5 dark:hover:bg-white/5"
+          title={t("nav.logout")}
+          aria-label={t("nav.logout")}
+          onclick={onLogout}
+        >
+          <Icon name="mdi:logout" size={16} />
+        </button>
+      {/if}
     </div>
     {#if expanded && infoStore.info}
       <a

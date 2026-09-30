@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -175,5 +177,99 @@ func TestPairingAbortsOnAFingerprintMismatch(t *testing.T) {
 	})
 	if !errors.Is(err, occulited.ErrPairingFingerprintMismatch) {
 		t.Fatalf("StartPairing = %v, want ErrPairingFingerprintMismatch", err)
+	}
+}
+
+// authStateServer answers GET /api/auth/v1/state the way the box does:
+// authenticated with a role for the one known session, unauthenticated
+// for anything else. Every Authorization header it sees is recorded.
+func authStateServer(t *testing.T, session string, seen *[]string) *httptest.Server {
+	t.Helper()
+	var mu sync.Mutex
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		*seen = append(*seen, r.Header.Get("Authorization"))
+		mu.Unlock()
+		if r.URL.Path != "/api/auth/v1/state" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if r.Header.Get("Authorization") == "Bearer "+session {
+			_, _ = w.Write([]byte(`{"authenticated":true,"user":"alice","role":"admin"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"authenticated":false}`))
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// TestAuthStateOfCarriesOnlyTheForeignCredential verifies a box session
+// through a client that holds its own token: the box sees exactly the
+// session as the bearer, never the client's token, and the role is decoded.
+func TestAuthStateOfCarriesOnlyTheForeignCredential(t *testing.T) {
+	t.Parallel()
+	const (
+		session = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+		own     = "olt_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	)
+	var seen []string
+	srv := authStateServer(t, session, &seen)
+	c := newClient(t, srv.URL, own)
+
+	st, err := c.AuthStateOf(context.Background(), session)
+	if err != nil {
+		t.Fatalf("AuthStateOf: %v", err)
+	}
+	if !st.Authenticated || st.User != "alice" || st.Role != "admin" {
+		t.Fatalf("state = %+v, want authenticated alice with role admin", st)
+	}
+	if want := []string{"Bearer " + session}; !slices.Equal(seen, want) {
+		t.Fatalf("Authorization headers = %v, want %v", seen, want)
+	}
+
+	// The override is per request: the client's own call still carries
+	// its own token afterwards.
+	if _, err := c.AuthState(context.Background()); err != nil {
+		t.Fatalf("AuthState: %v", err)
+	}
+	if got := seen[len(seen)-1]; got != "Bearer "+own {
+		t.Fatalf("own call carried %q, want the client's token", got)
+	}
+}
+
+// TestAuthStateOfInvalidCredentialIsUnauthenticated: the route is open, so
+// an unknown session reads as not authenticated rather than as an error.
+func TestAuthStateOfInvalidCredentialIsUnauthenticated(t *testing.T) {
+	t.Parallel()
+	var seen []string
+	srv := authStateServer(t, "ABCDEFGHIJKLMNOPQRSTUVWXYZ", &seen)
+	st, err := newClient(t, srv.URL, "").AuthStateOf(context.Background(), "ZZZZZZZZZZZZZZZZZZZZZZZZZZ")
+	if err != nil {
+		t.Fatalf("AuthStateOf: %v", err)
+	}
+	if st.Authenticated || st.Role != "" {
+		t.Fatalf("state = %+v, want unauthenticated", st)
+	}
+}
+
+// TestAuthStateOfPropagatesATransportError: an unreachable box is an
+// error, and the error never quotes the credential.
+func TestAuthStateOfPropagatesATransportError(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	closedURL := srv.URL
+	srv.Close()
+	const session = "QRSTUVWXYZ234567ABCDEFGHIJ"
+	_, err := newClient(t, closedURL, "").AuthStateOf(context.Background(), session)
+	if err == nil {
+		t.Fatal("AuthStateOf against a closed server succeeded")
+	}
+	if !errors.Is(err, hmerr.ErrNoConnection) {
+		t.Errorf("error = %v, want ErrNoConnection", err)
+	}
+	if strings.Contains(err.Error(), session) {
+		t.Errorf("error quotes the credential: %v", err)
 	}
 }

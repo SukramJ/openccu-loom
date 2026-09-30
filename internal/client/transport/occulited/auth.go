@@ -101,12 +101,28 @@ type AuthState struct {
 	// Scopes is the credential's stored list, implications not expanded.
 	Scopes             []string `json:"scopes"`
 	MustChangePassword bool     `json:"must_change_password"`
+	// Role is the account role behind an interactive session ("admin",
+	// "user"); empty for an API token.
+	Role string `json:"role"`
 }
 
 // AuthState reads the auth state of the client's credential. The route is
 // open: an invalid token answers with Authenticated false rather than 401.
 func (c *Client) AuthState(ctx context.Context) (AuthState, error) {
 	return get[AuthState](ctx, c, "/api/auth/v1/state", nil)
+}
+
+// AuthStateOf reads the auth state of a foreign credential — typically a
+// box session id a browser presented — instead of the client's own. The
+// credential rides this one request only: it replaces the client's token
+// rather than accompanying it, and it is never stored, logged, or quoted
+// in an error. The route is open: an invalid credential answers with
+// Authenticated false rather than an error.
+func (c *Client) AuthStateOf(ctx context.Context, credential string) (AuthState, error) {
+	return call[AuthState](withoutCredential(ctx), c, request{
+		method: http.MethodGet, path: "/api/auth/v1/state",
+		header: http.Header{"Authorization": {"Bearer " + credential}},
+	})
 }
 
 // Granted returns what the credential may do: the expanded scope set, or

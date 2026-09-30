@@ -63,6 +63,13 @@
     </p>
   </header>
 
+  {#if authStore.boxShellSession}
+    <!-- The box-shell identity is the openccu-lite box's own account: the
+         daemon has no password for it to change, so the form stays away. -->
+    <p class="text-xs text-[var(--ha-secondary-text-color)]" data-testid="password-box-shell">
+      {t("auth.box_shell.signed_in_help")}
+    </p>
+  {:else}
   <form class="max-w-sm space-y-3" onsubmit={submit}>
     <label class="block text-xs">
       <span class="mb-1 block text-[var(--ha-secondary-text-color)]"
@@ -111,4 +118,5 @@
       {t("account.password.submit")}
     </Button>
   </form>
+  {/if}
 </Card>

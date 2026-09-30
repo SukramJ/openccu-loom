@@ -197,6 +197,20 @@ function createAuthStore() {
     get authenticated() {
       return identity !== null;
     },
+    /**
+     * Whether the identity came from the openccu-lite box shell's session
+     * (scheme `occulite`, ADR 0079). The box owns that session's lifetime:
+     * the daemon has no logout for it — a daemon-side logout would bounce
+     * straight back in on the next request — and cannot change the box
+     * account, so the SPA shows the user read-only and offers no logout.
+     */
+    get boxShellSession() {
+      return identity?.scheme === "occulite";
+    },
+    /** Whether the SPA may offer the logout action for this identity. */
+    get canLogout() {
+      return identity !== null && identity.scheme !== "occulite";
+    },
     /** The credential's deadline, or null when it has no server-side expiry. */
     get expiresAt() {
       return expiresAt;
