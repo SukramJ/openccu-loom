@@ -532,7 +532,11 @@ func (b *LiteBackend) TestDevice(context.Context, string, float64, float64) (hma
 }
 
 // GetAllDeviceData implements Operations. The bulk value read is a ReGa
-// script; value seeding on a box reads the lite state endpoint instead.
+// script; a box has none, so the lite value seeder replaces it in two
+// stages (adapter.liteValueSeeder): the box's state store first — one or
+// two cheap calls for the datapoints it keeps — then, for a full seed, a
+// getParamset(VALUES) through the proxy for every channel with a
+// readable parameter the store did not deliver.
 // No feature key: an internal operation with no north-bound surface.
 func (b *LiteBackend) GetAllDeviceData(context.Context) (map[string]map[string]any, error) {
 	return nil, ErrUnsupported
