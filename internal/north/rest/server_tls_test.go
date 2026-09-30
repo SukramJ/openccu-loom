@@ -219,3 +219,26 @@ func TestLeafFingerprint_MatchesTheServedLeafDER(t *testing.T) {
 		t.Fatal("after rotation the old fingerprint is still reported")
 	}
 }
+
+// TestNewCertReloader_CombinedPEM_OneFileForBoth pins the box-certificate
+// path: a CCU and an openccu-lite system keep certificate and key in ONE
+// combined file (/etc/config/server.pem), and the documented way to reuse
+// it is naming that file as both tls_cert_file and tls_key_file. Go's
+// pair loader picks the CERTIFICATE blocks from the first argument and
+// the PRIVATE KEY block from the second, so one file serves both roles.
+func TestNewCertReloader_CombinedPEM_OneFileForBoth(t *testing.T) {
+	t.Parallel()
+	certPEM, keyPEM := selfSignedPEM(t)
+	combined := filepath.Join(t.TempDir(), "server.pem")
+	if err := os.WriteFile(combined, append(append([]byte{}, keyPEM...), certPEM...), 0o600); err != nil {
+		t.Fatalf("write combined pem: %v", err)
+	}
+	r, err := NewCertReloader(combined, combined, nil)
+	if err != nil {
+		t.Fatalf("NewCertReloader with a combined PEM: %v", err)
+	}
+	got, err := r.GetCertificate(nil)
+	if err != nil || got == nil || len(got.Certificate) == 0 {
+		t.Fatalf("GetCertificate: cert=%v err=%v", got, err)
+	}
+}

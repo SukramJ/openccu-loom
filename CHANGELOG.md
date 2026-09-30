@@ -6,6 +6,22 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- On an openccu-lite box the Config UI is served through the box's own
+  web server (ADR 0078): the add-on ships a validated lighttpd
+  fragment, the box proxies `/addons/loom/` to the daemon with the
+  prefix stripped — TLS with the operator's certificate, the shell's
+  navigation entry and the WebSocket event stream included — and port
+  8119 can stay closed for everyone who only uses this path.
+  CCU3/OpenCCU offer no firmware include point; ingress there is a
+  documented non-goal.
+- The box certificate can be reused on the direct port: setting
+  `north.rest.tls_cert_file` and `tls_key_file` both to the combined
+  `/etc/config/server.pem` now works (the pair loader accepts one file
+  for both roles, pinned by a test) and is documented for CCU and
+  openccu-lite — opt-in, so existing plain-HTTP clients keep working.
+
 ## [0.82.0] - 2026-09-29
 
 ### Release summary
