@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -171,6 +172,17 @@ func TestOcculiteSSOPassthroughDefersOnEveryNonConfirmingAnswer(t *testing.T) {
 		{"unauthenticated", &fakeOcculiteVerifier{sess: OcculiteSession{User: "alice", Role: "admin"}}},
 		{"role viewer", &fakeOcculiteVerifier{sess: OcculiteSession{Authenticated: true, User: "alice", Role: "viewer"}}},
 		{"role empty", &fakeOcculiteVerifier{sess: OcculiteSession{Authenticated: true, User: "alice"}}},
+		// An auth-off box confirms any bearer as admin; a public-mode box
+		// substitutes its kiosk principal. Neither answer is about the id.
+		{"auth off admin", &fakeOcculiteVerifier{sess: OcculiteSession{Authenticated: true, User: "admin", Role: "admin", AuthOff: true}}},
+		{"public user", &fakeOcculiteVerifier{sess: OcculiteSession{Authenticated: true, User: "public", Role: "user", Public: true}}},
+		{"user empty", &fakeOcculiteVerifier{sess: OcculiteSession{Authenticated: true, Role: "admin"}}},
+		{"user 65 bytes", &fakeOcculiteVerifier{sess: OcculiteSession{Authenticated: true, User: strings.Repeat("a", 65), Role: "admin"}}},
+		{"user with equals", &fakeOcculiteVerifier{sess: OcculiteSession{Authenticated: true, User: "a=b", Role: "admin"}}},
+		{"user with colon", &fakeOcculiteVerifier{sess: OcculiteSession{Authenticated: true, User: "a:b", Role: "admin"}}},
+		{"user with quote", &fakeOcculiteVerifier{sess: OcculiteSession{Authenticated: true, User: `a"b`, Role: "admin"}}},
+		{"user with control char", &fakeOcculiteVerifier{sess: OcculiteSession{Authenticated: true, User: "a\nb", Role: "admin"}}},
+		{"user non-ascii", &fakeOcculiteVerifier{sess: OcculiteSession{Authenticated: true, User: "b\u00fcro", Role: "admin"}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -217,6 +229,17 @@ func TestOcculiteSSOPassthroughMapsTheBoxRole(t *testing.T) {
 				t.Errorf("verifier calls = %d, want 1 (positive cache)", n)
 			}
 		})
+	}
+}
+
+// TestOcculiteUserShapeAcceptsTheBoundary: the shape check is not so tight
+// that it refuses ordinary names; 64 bytes and an inner space pass.
+func TestOcculiteUserShapeAcceptsTheBoundary(t *testing.T) {
+	t.Parallel()
+	for _, u := range []string{"alice", "Alice Smith", strings.Repeat("a", 64), "a.b-c_d@e"} {
+		if !isOcculiteUser(u) {
+			t.Errorf("isOcculiteUser(%q) = false, want true", u)
+		}
 	}
 }
 

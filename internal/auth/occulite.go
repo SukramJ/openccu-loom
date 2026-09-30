@@ -31,6 +31,33 @@ type OcculiteSession struct {
 	Authenticated bool
 	User          string
 	Role          string // the box's role words: "admin", "user"
+	// AuthOff reports a box whose authentication is switched off: it then
+	// confirms every bearer as an admin, whatever the presented id.
+	AuthOff bool
+	// Public reports that the box substituted its public (kiosk) principal
+	// for a session it does not know.
+	Public bool
+}
+
+// Confirms reports whether the answer vouches for the presented session
+// id: authenticated, with a role the fixed mapping knows and a user of
+// acceptable shape, and neither an auth-off nor a public-principal answer
+// (those are not about the presented id at all). It is the one predicate
+// both the request resolver and a socket's periodic re-verification apply.
+func (s OcculiteSession) Confirms() bool {
+	if s.AuthOff || s.Public || !s.Authenticated {
+		return false
+	}
+	if _, mapped := occuliteRole(s.Role); !mapped {
+		return false
+	}
+	return isOcculiteUser(s.User)
+}
+
+// MappedRole returns the daemon role the box's role word maps to, and
+// false for a word the fixed mapping does not know.
+func (s OcculiteSession) MappedRole() (Role, bool) {
+	return occuliteRole(s.Role)
 }
 
 // OcculiteSSOTrust carries the resolved policy for [OcculiteSSOPassthrough].
@@ -66,6 +93,9 @@ const (
 	occuliteSubjectPrefix = "occulite:"
 	// occuliteLogPrefixLen is how much of a session id a log line may show.
 	occuliteLogPrefixLen = 4
+	// occuliteUserMaxLen bounds the box user folded into the subject, so a
+	// hostile answer cannot bloat audit rows and logs.
+	occuliteUserMaxLen = 64
 )
 
 // occuliteEntry is one cached verification outcome. ok false is a negative
@@ -106,7 +136,10 @@ func newOcculiteSSO(t OcculiteSSOTrust, logger *slog.Logger, now func() time.Tim
 //   - no identity is already on the context (real credentials win), and
 //   - X-Occulite-Session holds a well-formed box session id, and
 //   - the box confirms the session as authenticated, with a role the fixed
-//     mapping knows (box "admin" → admin, box "user" → operator).
+//     mapping knows (box "admin" → admin, box "user" → operator), and
+//   - the answer is about the presented id: neither auth-off nor the
+//     public principal, and
+//   - the box user has a sane shape (see [isOcculiteUser]).
 //
 // The identity carries no expiry: the box owns the session's lifetime, and
 // the verification cache bounds how long a revoked session keeps working.
@@ -158,8 +191,26 @@ func (s *occuliteSSO) resolve(ctx context.Context, sid string) (Identity, bool) 
 		s.store(sid, occuliteEntry{}, occuliteNegativeTTL)
 		return Identity{}, false
 	}
+	// An auth-off box confirms every bearer as admin, and a public-mode box
+	// answers an unknown session with its kiosk principal. Either answer is
+	// not about the presented id, so it confirms nothing: honouring it would
+	// turn any well-formed header on the directly reachable port into a
+	// privileged identity.
+	if sess.AuthOff || sess.Public {
+		s.store(sid, occuliteEntry{}, occuliteNegativeTTL)
+		return Identity{}, false
+	}
 	role, mapped := occuliteRole(sess.Role)
 	if !sess.Authenticated || !mapped {
+		s.store(sid, occuliteEntry{}, occuliteNegativeTTL)
+		return Identity{}, false
+	}
+	if !isOcculiteUser(sess.User) {
+		// The value itself stays out of the log: it is box-supplied and
+		// already failed the shape check.
+		s.logger.DebugContext(ctx, "auth.occulite.verify_failed",
+			slog.String("session_prefix", sid[:occuliteLogPrefixLen]),
+			slog.String("error", "box user has an unacceptable shape"))
 		s.store(sid, occuliteEntry{}, occuliteNegativeTTL)
 		return Identity{}, false
 	}
@@ -226,6 +277,29 @@ func isOcculiteSessionID(v string) bool {
 	for i := range len(v) {
 		c := v[i]
 		if (c < 'A' || c > 'Z') && (c < '2' || c > '7') {
+			return false
+		}
+	}
+	return true
+}
+
+// isOcculiteUser reports whether a box-supplied user name is safe to fold
+// into an identity subject. It fails closed: non-empty, at most
+// occuliteUserMaxLen bytes, printable ASCII or space, and none of the
+// characters that structure subjects, log lines and key=value records
+// ('=', ':', '"'). A box that answers otherwise is not trusted to name
+// anyone.
+func isOcculiteUser(v string) bool {
+	if v == "" || len(v) > occuliteUserMaxLen {
+		return false
+	}
+	for i := range len(v) {
+		c := v[i]
+		if c < 0x20 || c > 0x7E {
+			return false
+		}
+		switch c {
+		case '=', ':', '"':
 			return false
 		}
 	}

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -271,5 +272,78 @@ func TestAuthStateOfPropagatesATransportError(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), session) {
 		t.Errorf("error quotes the credential: %v", err)
+	}
+}
+
+// TestAuthStateDecodesTheNonSessionMarkers: an auth-off box and a
+// public-mode box mark their answer; both markers must survive decoding,
+// because the SSO resolver refuses exactly those answers.
+func TestAuthStateDecodesTheNonSessionMarkers(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, body          string
+		wantOff, wantPublic bool
+	}{
+		{"auth off", `{"authenticated":true,"user":"admin","role":"admin","auth_off":true}`, true, false},
+		{"public", `{"authenticated":true,"user":"public","role":"user","public":true}`, false, true},
+		{"session", `{"authenticated":true,"user":"alice","role":"admin"}`, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			t.Cleanup(srv.Close)
+			st, err := newClient(t, srv.URL, "").AuthStateOf(context.Background(), "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+			if err != nil {
+				t.Fatalf("AuthStateOf: %v", err)
+			}
+			if st.AuthOff != tc.wantOff || st.Public != tc.wantPublic {
+				t.Fatalf("state = %+v, want auth_off=%v public=%v", st, tc.wantOff, tc.wantPublic)
+			}
+		})
+	}
+}
+
+// TestAnswerBodyIsCapped: a success answer of exactly the cap decodes; one
+// byte more is a protocol error naming the limit, never a silent truncation.
+func TestAnswerBodyIsCapped(t *testing.T) {
+	t.Parallel()
+	answer := func(size int) string {
+		const head, tail = `{"user":"`, `"}`
+		return head + strings.Repeat("a", size-len(head)-len(tail)) + tail
+	}
+	for _, tc := range []struct {
+		name    string
+		size    int
+		wantErr bool
+	}{
+		{"at the cap", occulited.AnswerBodyLimit, false},
+		{"one byte over", occulited.AnswerBodyLimit + 1, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			body := answer(tc.size)
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte(body))
+			}))
+			t.Cleanup(srv.Close)
+			st, err := newClient(t, srv.URL, "").AuthState(context.Background())
+			if !tc.wantErr {
+				if err != nil {
+					t.Fatalf("AuthState: %v", err)
+				}
+				if len(st.User) != tc.size-len(`{"user":""}`) {
+					t.Fatalf("user length = %d, want the whole answer decoded", len(st.User))
+				}
+				return
+			}
+			if !errors.Is(err, occulited.ErrProtocol) {
+				t.Fatalf("error = %v, want ErrProtocol", err)
+			}
+			if !strings.Contains(err.Error(), strconv.Itoa(occulited.AnswerBodyLimit)) {
+				t.Fatalf("error %q does not name the limit", err)
+			}
+		})
 	}
 }

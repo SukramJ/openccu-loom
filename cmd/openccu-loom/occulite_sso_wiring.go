@@ -89,5 +89,43 @@ func (v occuliteSessionVerifier) VerifySession(ctx context.Context, sessionID st
 		Authenticated: st.Authenticated,
 		User:          st.User,
 		Role:          st.Role,
+		AuthOff:       st.AuthOff,
+		Public:        st.Public,
 	}, nil
+}
+
+// occuliteRevalidateErrorLog names the one log event of the revalidator.
+const occuliteRevalidateErrorLog = "auth.occulite_sso.revalidate_failed — keeping the socket"
+
+// occuliteRevalidator builds the WebSocket re-verification for box-shell
+// sessions from the same trust the request resolver uses, or nil when the
+// trust is inert (the socket watch then never asks). It answers false only
+// on a definite refusal: the session no longer confirms (the predicate is
+// [auth.OcculiteSession.Confirms], the resolver's own), or it now maps to a
+// role other than the one the socket holds — a demotion on the box must end
+// an admin socket rather than leave it commanding. A verification error
+// answers true: the box is on the loopback, and closing every box-shell
+// socket on one hiccup would make the daemon's availability hinge on it,
+// while a real logout is still caught on the next tick.
+func occuliteRevalidator(t auth.OcculiteSSOTrust, logger *slog.Logger) func(ctx context.Context, sessionID string, role auth.Role) bool {
+	if !t.Enabled || t.Verifier == nil {
+		return nil
+	}
+	if logger == nil {
+		logger = slog.Default()
+	}
+	v := t.Verifier
+	return func(ctx context.Context, sessionID string, role auth.Role) bool {
+		sess, err := v.VerifySession(ctx, sessionID)
+		if err != nil {
+			// The session id stays out of the line: it is a live credential.
+			logger.DebugContext(ctx, occuliteRevalidateErrorLog, slog.String("error", err.Error()))
+			return true
+		}
+		if !sess.Confirms() {
+			return false
+		}
+		mapped, _ := sess.MappedRole()
+		return mapped == role
+	}
 }

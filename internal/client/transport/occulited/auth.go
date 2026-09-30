@@ -96,6 +96,9 @@ type AuthState struct {
 	// AuthOff reports a box whose authentication is switched off: every
 	// request is allowed and Scopes is empty.
 	AuthOff bool `json:"auth_off"`
+	// Public reports that the box answered with its public (kiosk)
+	// principal in place of a session it does not know.
+	Public bool `json:"public"`
 	// User is "token:<name>" for an API token.
 	User string `json:"user"`
 	// Scopes is the credential's stored list, implications not expanded.

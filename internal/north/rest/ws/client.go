@@ -41,6 +41,15 @@ const maxTopicsPerClient = 1024
 // pingInterval is the server-side heartbeat cadence (§16.3: 30s).
 const pingInterval = 30 * time.Second
 
+// occuliteRevalidateInterval is how often an occulite-authenticated socket
+// asks the box whether its session still authenticates. It matches the
+// resolver's positive-cache window, so a box logout ends the socket within
+// the same bound it ends REST access.
+const occuliteRevalidateInterval = 60 * time.Second
+
+// occuliteRevalidateTimeout bounds one re-verification round trip.
+const occuliteRevalidateTimeout = 5 * time.Second
+
 // readTimeout is the deadline for each frame read — the client must
 // respond to server pings within this window.
 const readTimeout = 60 * time.Second
@@ -72,6 +81,18 @@ type client struct {
 	mu       sync.RWMutex
 	topics   []string
 	identity auth.Identity
+
+	// occuliteSID is the box-shell session id an occulite-authenticated
+	// upgrade presented, kept so [client.watchCredentialExpiry] can ask the
+	// box whether it still authenticates. It is a live credential: it must
+	// never reach a log line, an error, or any serialised form of the
+	// client. Written once at the upgrade, before the watch starts.
+	occuliteSID string
+	// occuliteRevalidate re-verifies occuliteSID against the role the
+	// socket holds; nil disables the check.
+	occuliteRevalidate func(ctx context.Context, sessionID string, role auth.Role) bool
+	// occuliteInterval is the re-verification cadence.
+	occuliteInterval time.Duration
 	// classify, when set via a subscribe frame's `classify:true`, keeps
 	// the quasi-static category / data_point_type fields on value-changed
 	// payloads this client receives. Default off so the high-frequency
@@ -494,9 +515,29 @@ func (c *client) SetIdentity(id auth.Identity) {
 // released when the connection closes. An identity with no deadline is
 // re-checked every [pingInterval] rather than watched, so a later in-band
 // reauth to an expiring token is picked up too.
+//
+// A box-shell (occulite) identity carries no deadline of its own: the box
+// owns the session's lifetime. When a revalidator is wired the same loop
+// asks the box once at the upgrade and then every occuliteInterval, and closes the connection once the
+// box stops confirming the session with the socket's role, exactly as an
+// expired credential is closed. The scheme is checked on every tick, so an in-band reauth to a
+// token ends the box checks.
 func (c *client) watchCredentialExpiry() {
 	timer := time.NewTimer(pingInterval)
 	defer timer.Stop()
+	var revalidateTick <-chan time.Time
+	if c.occuliteRevalidate != nil && c.occuliteSID != "" {
+		ticker := time.NewTicker(c.occuliteInterval)
+		defer ticker.Stop()
+		revalidateTick = ticker.C
+		// The identity may come from the resolver's cache, minted before a
+		// logout the box has since recorded; asking once up front closes
+		// that window instead of leaving it open for a whole interval.
+		if !c.occuliteSessionHolds() {
+			c.closeRevokedOcculite()
+			return
+		}
+	}
 	for {
 		wait := pingInterval
 		if id := c.Identity(); !id.ExpiresAt.IsZero() {
@@ -514,8 +555,39 @@ func (c *client) watchCredentialExpiry() {
 		case <-c.closed:
 			return
 		case <-timer.C:
+		case <-revalidateTick:
+			if !c.occuliteSessionHolds() {
+				c.closeRevokedOcculite()
+				return
+			}
 		}
 	}
+}
+
+// closeRevokedOcculite ends a connection whose box-shell session the box no
+// longer confirms, the same way an expired credential is ended. The log
+// line names the subject, never the session id.
+func (c *client) closeRevokedOcculite() {
+	id := c.Identity()
+	c.logger.Info("ws.credential.revoked",
+		slog.String("subject", id.Subject),
+		slog.String("scheme", string(id.Scheme)))
+	c.close()
+}
+
+// occuliteSessionHolds asks the box whether the connection's box-shell
+// session still authenticates with the role the socket holds — a demotion
+// on the box must not leave an admin socket behind. A connection whose
+// identity is no longer an occulite one (an in-band reauth replaced it) is
+// not the box's to end.
+func (c *client) occuliteSessionHolds() bool {
+	id := c.Identity()
+	if id.Scheme != auth.SchemeOcculite {
+		return true
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), occuliteRevalidateTimeout)
+	defer cancel()
+	return c.occuliteRevalidate(ctx, c.occuliteSID, id.Role)
 }
 
 // Identity returns the current connection identity (zero-value when

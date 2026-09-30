@@ -5,16 +5,44 @@ package ws
 
 import (
 	"bufio"
+	"context"
 	"crypto/sha1" //nolint:gosec // required by RFC 6455 handshake; see #20
 	"encoding/base64"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/middleware"
 )
+
+// HandlerOption configures an optional collaborator of [Handler].
+type HandlerOption func(*handlerConfig)
+
+// handlerConfig collects the optional collaborators of [Handler].
+type handlerConfig struct {
+	occuliteRevalidate func(ctx context.Context, sessionID string, role auth.Role) bool
+	occuliteInterval   time.Duration
+}
+
+// WithOcculiteRevalidate makes every connection authenticated through a
+// box-shell session (ADR 0079) re-ask the box periodically, closing the
+// socket once fn answers false. fn is handed the role the socket holds, so a
+// session the box has since demoted can be refused too. Such an identity carries no expiry, and
+// nothing else re-resolves an established socket, so without it a session
+// logged out on the box would keep its command plane for as long as the TCP
+// connection lives.
+//
+// fn answers one question: does the session still authenticate, with that
+// role? It owns
+// the policy for inconclusive answers — a transport hiccup should read as
+// true, because closing on it would make availability hinge on the box's
+// loopback. A nil fn leaves connections unchecked.
+func WithOcculiteRevalidate(fn func(ctx context.Context, sessionID string, role auth.Role) bool) HandlerOption {
+	return func(hc *handlerConfig) { hc.occuliteRevalidate = fn }
+}
 
 // handshakeMagic is the RFC 6455 accept-token constant.
 const handshakeMagic = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
@@ -41,9 +69,13 @@ const handshakeMagic = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 // carrying a non-empty Bearer token are exempt for the same reason; Basic
 // credentials are not, because a browser replays them ambiently. Pass nil
 // or an empty slice to skip the check entirely.
-func Handler(hub *Hub, logger *slog.Logger, allowedOrigins []string) http.Handler {
+func Handler(hub *Hub, logger *slog.Logger, allowedOrigins []string, opts ...HandlerOption) http.Handler {
 	if logger == nil {
 		logger = slog.Default()
+	}
+	hc := handlerConfig{occuliteInterval: occuliteRevalidateInterval}
+	for _, o := range opts {
+		o(&hc)
 	}
 	originSet := make(map[string]struct{}, len(allowedOrigins))
 	for _, o := range allowedOrigins {
@@ -150,6 +182,13 @@ func Handler(hub *Hub, logger *slog.Logger, allowedOrigins []string) http.Handle
 		// replaces the identity without a reconnect.
 		if id, ok := auth.IdentityFrom(r.Context()); ok {
 			c.SetIdentity(id)
+			// A box-shell identity is only as good as the box's session; keep
+			// the id so the watch can ask again (see [WithOcculiteRevalidate]).
+			if id.Scheme == auth.SchemeOcculite && hc.occuliteRevalidate != nil {
+				c.occuliteSID = r.Header.Get(auth.OcculiteSessionHeader)
+				c.occuliteRevalidate = hc.occuliteRevalidate
+				c.occuliteInterval = hc.occuliteInterval
+			}
 		}
 		hub.register(c)
 		defer hub.deregister(c)
