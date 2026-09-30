@@ -11,6 +11,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -108,7 +109,8 @@ func PutParamset(svc ParamsetService, locks *EditSessions) http.HandlerFunc {
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
-		if err := svc.PutParamset(r.Context(), addr, key, values); err != nil {
+		report, err := svc.PutParamset(r.Context(), addr, key, values)
+		if err != nil {
 			if errors.Is(err, hmerr.ErrParameterHidden) {
 				problem.Write(w, http.StatusForbidden,
 					problem.New(problem.TypeForbidden, r, "Parameter hidden", err.Error()))
@@ -134,11 +136,58 @@ func PutParamset(svc ParamsetService, locks *EditSessions) http.HandlerFunc {
 				writeChannelLocked(w, r)
 				return
 			}
+			if writeParamsetValidationRejection(w, r, err) {
+				return
+			}
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Paramset write failed", err)
 			return
 		}
-		w.WriteHeader(http.StatusAccepted)
+		// A VALUES write is a control write and carries no report; a
+		// configuration write answers with its read-back comparison.
+		if report == nil {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		JSON(w, http.StatusOK, paramsetWriteResult(report))
 	}
+}
+
+// paramsetWriteResult maps the domain write report onto the wire DTO. Both
+// lists are rendered as arrays, never null, so an empty divergence list reads
+// unambiguously as "compared, nothing diverged".
+func paramsetWriteResult(report *interfaces.ParamsetWriteReport) hmapi.ParamsetWriteResult {
+	out := hmapi.ParamsetWriteResult{
+		Written:             []string{},
+		ReadbackDivergences: []hmapi.ParamsetDivergence{},
+	}
+	if report == nil {
+		return out
+	}
+	out.Written = append(out.Written, report.Written...)
+	for _, d := range report.Divergences {
+		out.ReadbackDivergences = append(out.ReadbackDivergences,
+			hmapi.ParamsetDivergence{Parameter: d.Parameter, Sent: d.Sent, Stored: d.Stored})
+	}
+	out.ReadbackError = report.ReadbackError
+	return out
+}
+
+// writeParamsetValidationRejection maps a client-side value rejection —
+// surfaced by the strict descriptor validation in the paramsets domain or by
+// the model's Set/SetMany gate — to 400 with `code: validation_error`. These
+// errors mean the request itself was wrong and no RPC reached the CCU, so a
+// 502 upstream answer would mislead the caller. Returns true when the error
+// was one of them and the response has been written.
+func writeParamsetValidationRejection(w http.ResponseWriter, r *http.Request, err error) bool {
+	if errors.Is(err, hmerr.ErrValidation) ||
+		errors.Is(err, device.ErrValidation) ||
+		errors.Is(err, device.ErrUnknownParameter) ||
+		errors.Is(err, device.ErrParameterNotWritable) {
+		problem.Write(w, http.StatusBadRequest,
+			problem.New(problem.TypeValidation, r, "Paramset value rejected", err.Error()))
+		return true
+	}
+	return false
 }
 
 // GetLinkParamset serves GET /devices/{addr}/link-ps/{peer}.
@@ -195,7 +244,8 @@ func PutLinkParamset(svc ParamsetService, locks *EditSessions) http.HandlerFunc 
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
-		if err := svc.PutLinkParamset(r.Context(), addr, peer, values); err != nil {
+		report, err := svc.PutLinkParamset(r.Context(), addr, peer, values)
+		if err != nil {
 			if errors.Is(err, hmerr.ErrParameterHidden) {
 				problem.Write(w, http.StatusForbidden,
 					problem.New(problem.TypeForbidden, r, "Parameter hidden", err.Error()))
@@ -209,21 +259,16 @@ func PutLinkParamset(svc ParamsetService, locks *EditSessions) http.HandlerFunc 
 					problem.New(problem.TypeValidation, r, "Unencodable string", err.Error()))
 				return
 			}
+			if writeParamsetValidationRejection(w, r, err) {
+				return
+			}
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Link paramset write failed", err)
 			return
 		}
-		w.WriteHeader(http.StatusAccepted)
+		JSON(w, http.StatusOK, paramsetWriteResult(report))
 	}
 }
 
 func parseParamsetKey(s string) (hmenum.ParamsetKey, bool) {
-	switch s {
-	case string(hmenum.ParamsetKeyValues):
-		return hmenum.ParamsetKeyValues, true
-	case string(hmenum.ParamsetKeyMaster):
-		return hmenum.ParamsetKeyMaster, true
-	case string(hmenum.ParamsetKeyLink):
-		return hmenum.ParamsetKeyLink, true
-	}
-	return "", false
+	return hmenum.ParseParamsetKey(s)
 }

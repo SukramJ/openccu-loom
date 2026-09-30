@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 546.
+Guards without a doc comment: 7 of 547.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -175,6 +175,7 @@ Guards without a doc comment: 7 of 546.
 | TestCategoryToTypeCovers | hmenum_constants_test.go | TestCategoryToTypeCovers ensures every real DataPointCategory maps to a DataPointType. |
 | TestCommandPriorityCriticalIsZero | hmenum_constants_test.go | TestCommandPriorityCriticalIsZero enforces CLAUDE.md §Critical Rules. |
 | TestCommunicationTestClassification | hmenum_constants_test.go | TestCommunicationTestClassification pins the exact set of interfaces on which the CCU's per-device communication/function test can run: HmIP-RF, BidCos-RF, and BidCos-Wired reach real devices over radio/bus. |
+| TestConfigCacheClearClassification | hmenum_constants_test.go | TestConfigCacheClearClassification pins the exact set of interfaces whose daemon exposes `clearConfigCache`: BidCos-RF and BidCos-Wired (rfd / hs485d). |
 | TestConfigRestoreClassification | hmenum_constants_test.go | TestConfigRestoreClassification pins the exact set of interfaces that expose `restoreConfigToDevice`: HmIP-RF and BidCos-RF, because rfd and HMIPServer implement the method while hs485d (BidCos-Wired) does not. |
 | TestDataPointCategoryClassificationIsExhaustive | hmenum_constants_test.go | TestDataPointCategoryClassificationIsExhaustive drives [hmenum.ValidateStartup] from the enum itself. |
 | TestDeviceSearchClassification | hmenum_constants_test.go | TestDeviceSearchClassification pins InterfacesSupportingDeviceSearch to exactly {BidCos-Wired}: only hs485d implements the wired-bus scan `searchDevices`. |

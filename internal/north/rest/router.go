@@ -21,6 +21,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/middleware"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // Deps bundles every collaborator the REST router needs.
@@ -109,6 +110,16 @@ type Deps struct {
 	Reloader  handlers.ReloaderService
 	DPWriter  handlers.DataPointWriter
 	Paramsets handlers.ParamsetService
+	// ParamsetApply backs GET /devices/{addr}/paramsets/{key}/apply-targets
+	// and POST /devices/{addr}/paramsets/{key}/apply-to — applying one
+	// channel's MASTER values to description-identical channels. Nil keeps
+	// both routes mounted (beside the paramset routes) answering 503.
+	ParamsetApply handlers.ParamsetApplyService
+	// ConfigRepair backs POST /devices/{addr}/config/repair — rebuilding a
+	// device's stored MASTER configuration from its own paramset
+	// descriptions. The route is mounted with the device-admin routes; nil
+	// keeps it mounted answering 503.
+	ConfigRepair handlers.DeviceConfigRepairService
 	// ParameterDeterminer backs
 	// POST /devices/{addr}/channels/{no}/paramsets/{key}/determine — the
 	// MASTER editor's "Determine" button, which reads one parameter's live
@@ -536,6 +547,11 @@ type Deps struct {
 	// RSSIInfo backs `GET /diagnostics/rssi` — the CCU's pairwise RF
 	// reception matrix. Read-only; nil disables the endpoint.
 	RSSIInfo handlers.RSSIMatrixService
+	// RSSIMatrix backs `GET /diagnostics/rssi/matrix` and
+	// `GET /diagnostics/rssi/receiver-proposal` — the BidCos-RF daemon's
+	// pairwise reception matrix read live, and the best-gateway dry run
+	// derived from it. Read-only; nil disables both endpoints.
+	RSSIMatrix interfaces.RSSIMatrixService
 	// AuditRecorder is the daemon-wide audit sink the diagnostics
 	// endpoints append override / capture events to. Same buffer as
 	// [Deps.MatterAuditRecorder] in production wiring; the separate
@@ -1040,7 +1056,13 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.With(op).Post("/devices/{addr}/release", handlers.ReleaseDevice(d.DeviceAdmin))
 				pr.With(op).Post("/devices/{addr}/firmware/update", handlers.UpdateDeviceFirmware(d.DeviceAdmin))
 				pr.With(admin).Post("/devices/{addr}/config/restore", handlers.RestoreDeviceConfig(d.DeviceAdmin, d.AuditRecorder))
+				pr.With(admin).Post("/devices/{addr}/config/cache-clear", handlers.ClearDeviceConfigCache(d.DeviceAdmin, d.AuditRecorder))
+				pr.With(admin).Post("/devices/{addr}/rf-interface", handlers.AssignRFInterface(d.DeviceAdmin, d.AuditRecorder))
 			}
+			// Mounted on its own dep, not DeviceAdmin: the handler answers
+			// 503 for a nil service, and gating it on an unrelated facade
+			// would silently drop the route when only DeviceAdmin is absent.
+			pr.With(admin).Post("/devices/{addr}/config/repair", handlers.RepairDeviceConfig(d.ConfigRepair))
 			if d.DeviceReplacer != nil {
 				pr.Get("/devices/{addr}/replace-candidates", handlers.GetDeviceReplaceCandidates(d.DeviceReplacer))
 				pr.With(admin).Post("/devices/{addr}/replace", handlers.PostDeviceReplace(d.DeviceReplacer, d.AuditRecorder))
@@ -1231,6 +1253,10 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			if d.RSSIInfo != nil {
 				pr.With(admin).Get("/diagnostics/rssi", handlers.DiagnosticsRSSI(d.RSSIInfo))
 			}
+			if d.RSSIMatrix != nil {
+				pr.With(admin).Get("/diagnostics/rssi/matrix", handlers.DiagnosticsRSSIMatrix(d.RSSIMatrix))
+				pr.With(admin).Get("/diagnostics/rssi/receiver-proposal", handlers.ReceiverProposalHandler(d.RSSIMatrix))
+			}
 			// Mounted unconditionally: an empty list is the answer this
 			// endpoint exists to be able to give (ADR 0065), so a nil
 			// reader must not turn into a 404 that reads as "this daemon
@@ -1345,6 +1371,8 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			if d.Paramsets != nil {
 				pr.Get("/devices/{addr}/paramsets/{key}", handlers.GetParamset(d.Paramsets))
 				pr.With(op).Put("/devices/{addr}/paramsets/{key}", handlers.PutParamset(d.Paramsets, d.EditSessions))
+				pr.Get("/devices/{addr}/paramsets/{key}/apply-targets", handlers.GetParamsetApplyTargets(d.ParamsetApply))
+				pr.With(op).Post("/devices/{addr}/paramsets/{key}/apply-to", handlers.ApplyParamsetToChannels(d.ParamsetApply, d.EditSessions))
 				pr.Get("/devices/{addr}/link-ps/{peer}", handlers.GetLinkParamset(d.Paramsets))
 				pr.With(op).Put("/devices/{addr}/link-ps/{peer}", handlers.PutLinkParamset(d.Paramsets, d.EditSessions))
 			}

@@ -8,6 +8,79 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Post-write read-back on configuration writes.** An interface
+  process may answer ok to a MASTER or LINK paramset write and still
+  drop, clamp or coerce values it does not apply. The daemon now
+  re-reads the stored paramset after every configuration write and
+  reports the sent-vs-stored comparison on every surface: REST answers
+  `200` with a `ParamsetWriteResult` (written names, divergences,
+  read-back error), the WS `paramset.put` and `links.put_paramset`
+  results carry `readback_divergences`, and the MCP write tools include
+  the report. VALUES control writes are unchanged (`202`).
+- **MASTER multi-apply with a description-identity gate.** One
+  channel's MASTER values can be applied to other channels — but only
+  to channels whose full stored paramset description is identical to
+  the source's, re-checked immediately before each write
+  (`GET …/paramsets/MASTER/apply-targets`,
+  `POST …/paramsets/MASTER/apply-to`, MCP
+  `apply_paramset_to_channels`). Channel-type equality does not imply
+  the same parameter set, and a value written to a channel whose
+  description does not carry it corrupts that channel's configuration
+  store permanently.
+- **Configuration repair.** `POST /devices/{addr}/config/repair`
+  (dry-run by default; MCP `repair_device_config`) rebuilds a device's
+  stored MASTER configuration from its own paramset descriptions:
+  invalid values are replaced by the nearest valid one, foreign
+  entries the description does not carry are reported (no paramset
+  write can remove them), and the valid full set is written back per
+  channel with a read-back report. `POST /devices/{addr}/config/cache-clear`
+  exposes the BidCos daemons' `clearConfigCache`
+  (`DeviceSummary.config_cache_clear_supported` gates the action).
+- **BidCos-RF radio management.** `GET /diagnostics/rssi/matrix`
+  serves the BidCos-RF daemon's pairwise reception matrix (both
+  directions in dBm per device/partner pair);
+  `GET /diagnostics/rssi/receiver-proposal` derives a best-interface
+  verdict per device with a configurable noise margin (default 6 dB);
+  `POST /devices/{addr}/rf-interface` assigns a device to an RF
+  gateway or enables roaming (`setBidcosInterface`). MCP:
+  `get_rssi_matrix`, `get_receiver_proposal`, `assign_rf_interface`.
+
+### Fixed
+
+- **"Restore config" is no longer offered on HmIP devices.**
+  `restoreConfigToDevice` is implemented by the BidCos-RF daemon only;
+  the HmIP process lists the method but answers every call for its
+  devices with a generic fault — measured live against an openccu-lite
+  box. `DeviceSummary.config_restore_supported` is now true for
+  BidCos-RF only, so the SPA button and the REST 422 gate agree with
+  what the CCU actually does.
+
+### Changed
+
+- **REST `PUT /devices/{addr}/link-ps/{peer}` answers 200 with the
+  read-back report instead of the bodyless 202** — the reason for the
+  APIVersion major bump to 13.0.0. A client that only checks for a
+  2xx keeps working; one that matched the literal 202 must read the
+  report (which is the feature).
+- **WS `links.put_paramset` returns the write report.** The command's
+  result changed from `{success: true}` to
+  `{written, readback_divergences, readback_error?}` (wsapi 1.13) —
+  an external WS client reading `.success` must switch to the new
+  fields; the SPA uses REST and is unaffected.
+- **Configuration writes are strict.** A paramset write carrying a
+  parameter the channel's own description does not know, or a write
+  whose description cannot be fetched, is refused before it reaches
+  the CCU (REST: `400 validation_error` / `502`). The interface
+  processes do not validate configuration writes themselves — one
+  family persists entries it cannot apply, permanently poisoning the
+  channel's configuration store, the other silently drops or clamps
+  them. Caller-supplied paramset keys are now parsed strictly against
+  MASTER/VALUES/LINK on every surface before any RPC — the BidCos-RF
+  daemon reads an unrecognised key as a peer address and answers
+  LINK defaults instead of a fault — and list-shaped wire answers
+  tolerate the daemons' empty-string-for-empty-array quirk. Details
+  and provenance: `notes/reference/interface-process-write-semantics.md`.
+
 - On an openccu-lite box the Config UI is served through the box's own
   web server (ADR 0078): the add-on ships a validated lighttpd
   fragment, the box proxies `/addons/loom/` to the daemon with the

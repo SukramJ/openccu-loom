@@ -132,19 +132,20 @@ func TestConfigRestoreClassification(t *testing.T) {
 	t.Parallel()
 
 	wantTrue := []hmenum.Interface{
-		hmenum.InterfaceHmIPRF,
 		hmenum.InterfaceBidCosRF,
 	}
 	wantFalse := []hmenum.Interface{
+		hmenum.InterfaceHmIPRF,
 		hmenum.InterfaceBidCosWired,
 		hmenum.InterfaceVirtualDevices,
 		hmenum.InterfaceCUxD,
 	}
 
-	// Exactly the two radios whose CCU-side process (rfd / HMIPServer)
-	// implements restoreConfigToDevice.
-	if got := len(hmenum.InterfacesSupportingConfigRestore); got != 2 {
-		t.Fatalf("InterfacesSupportingConfigRestore len=%d, want 2", got)
+	// Exactly the one interface whose CCU-side process implements
+	// restoreConfigToDevice: rfd. The HmIP process lists the method but
+	// answers a generic fault for its devices (measured live).
+	if got := len(hmenum.InterfacesSupportingConfigRestore); got != 1 {
+		t.Fatalf("InterfacesSupportingConfigRestore len=%d, want 1", got)
 	}
 
 	for _, iface := range wantTrue {
@@ -162,6 +163,46 @@ func TestConfigRestoreClassification(t *testing.T) {
 		}
 		if iface.SupportsConfigRestore() {
 			t.Errorf("%s.SupportsConfigRestore() = true, want false", iface)
+		}
+	}
+}
+
+// TestConfigCacheClearClassification pins the exact set of interfaces whose
+// daemon exposes `clearConfigCache`: BidCos-RF and BidCos-Wired (rfd /
+// hs485d). HMIPServer (HmIP-RF) does not implement it for its devices, and
+// CUxD / VirtualDevices keep no configuration cache.
+func TestConfigCacheClearClassification(t *testing.T) {
+	t.Parallel()
+
+	wantTrue := []hmenum.Interface{
+		hmenum.InterfaceBidCosRF,
+		hmenum.InterfaceBidCosWired,
+	}
+	wantFalse := []hmenum.Interface{
+		hmenum.InterfaceHmIPRF,
+		hmenum.InterfaceVirtualDevices,
+		hmenum.InterfaceCUxD,
+	}
+
+	if got := len(hmenum.InterfacesSupportingConfigCacheClear); got != 2 {
+		t.Fatalf("InterfacesSupportingConfigCacheClear len=%d, want 2", got)
+	}
+
+	for _, iface := range wantTrue {
+		if _, ok := hmenum.InterfacesSupportingConfigCacheClear[iface]; !ok {
+			t.Errorf("%s missing from InterfacesSupportingConfigCacheClear", iface)
+		}
+		if !iface.SupportsConfigCacheClear() {
+			t.Errorf("%s.SupportsConfigCacheClear() = false, want true", iface)
+		}
+	}
+
+	for _, iface := range wantFalse {
+		if _, ok := hmenum.InterfacesSupportingConfigCacheClear[iface]; ok {
+			t.Errorf("%s must not be in InterfacesSupportingConfigCacheClear", iface)
+		}
+		if iface.SupportsConfigCacheClear() {
+			t.Errorf("%s.SupportsConfigCacheClear() = true, want false", iface)
 		}
 	}
 }

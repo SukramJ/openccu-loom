@@ -740,6 +740,15 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// disabled (e.g. UI-only deployments or dev-loopback).
 	linksDomain := adapter.NewLinksDomain(reg, valueWriter, translations).SetAuditRecorder(auditRec)
 	paramsetsDomain := adapter.NewParamsetsDomain(reg, valueWriter).SetAuditRecorder(auditRec).SetVisibilityGate(visReg)
+	// Multi-apply needs the stored paramset descriptions for its
+	// description-identity gate; without the store the routes stay
+	// mounted and answer 503 (RouterDeps.ParamsetApply stays nil).
+	var paramsetApplyDomain *adapter.ParamsetApplyDomain
+	if si.descriptorStores.Paramsets != nil {
+		paramsetApplyDomain = adapter.NewParamsetApplyDomain(reg, si.descriptorStores.Paramsets, paramsetsDomain)
+	}
+	configRepairDomain := adapter.NewConfigRepairDomain(reg, valueWriter, auditRec)
+	rssiMatrixDomain := adapter.NewRSSIMatrixDomain(reg, valueWriter)
 	schedulesDomain := adapter.NewSchedulesDomain(reg, valueWriter).SetAuditRecorder(auditRec)
 	// Shared RPC session recorder: one instance backs both the WS
 	// recording.start/stop/status commands and the REST
@@ -937,6 +946,9 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		dpWriterAdapter:        dpWriterAdapter,
 		customDPDispatcher:     customDPDispatcher,
 		paramsetsDomain:        paramsetsDomain,
+		paramsetApplyDomain:    paramsetApplyDomain,
+		configRepairDomain:     configRepairDomain,
+		rssiMatrixDomain:       rssiMatrixDomain,
 		parameterDeterminer:    adapter.NewParameterDeterminerAdapter(reg, valueWriter),
 		hubAdapter:             hubAdapter,
 		ifaceAdapter:           ifaceAdapter,

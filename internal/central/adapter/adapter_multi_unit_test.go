@@ -419,7 +419,9 @@ func buildParamsetBoost10Fixture(t *testing.T) *ParamsetsDomain {
 		Type:    "HmIP-eTRV-3",
 	})
 
-	fake := &fakeOperations{kind: backends.KindCCU}
+	descs := describe(hmenum.ParameterTypeFloat, "SET_POINT_TEMPERATURE")
+	descs["TEMPERATUREFALL_MODUS"] = describe(hmenum.ParameterTypeInteger, "TEMPERATUREFALL_MODUS")["TEMPERATUREFALL_MODUS"]
+	fake := describedOps{Operations: &fakeOperations{kind: backends.KindCCU}, descs: descs}
 	w := client.NewValueWriter()
 	w.Register("ccu-ps10", "HmIP-RF", fake)
 
@@ -431,7 +433,7 @@ func TestParamsetsDomain_PutParamset_Values_CallsRefreshAfterPut(t *testing.T) {
 	p := buildParamsetBoost10Fixture(t)
 	// Use device address (no ":N") → resolveChannel returns nil → legacy backend path.
 	// This exercises the legacy direct backend path AND refreshAfterPutOn.
-	err := p.PutParamset(context.Background(), "DEV021", hmenum.ParamsetKeyValues,
+	_, err := p.PutParamset(context.Background(), "DEV021", hmenum.ParamsetKeyValues,
 		map[string]any{"SET_POINT_TEMPERATURE": 21.0})
 	if err != nil {
 		t.Fatalf("PutParamset: %v", err)
@@ -441,7 +443,7 @@ func TestParamsetsDomain_PutParamset_Values_CallsRefreshAfterPut(t *testing.T) {
 func TestParamsetsDomain_PutParamset_Master_CallsRefreshAfterPut(t *testing.T) {
 	t.Parallel()
 	p := buildParamsetBoost10Fixture(t)
-	err := p.PutParamset(context.Background(), "DEV021", hmenum.ParamsetKeyMaster,
+	_, err := p.PutParamset(context.Background(), "DEV021", hmenum.ParamsetKeyMaster,
 		map[string]any{"TEMPERATUREFALL_MODUS": 0})
 	if err != nil {
 		t.Fatalf("PutParamset MASTER: %v", err)
@@ -923,12 +925,15 @@ func TestParamsetsDomain_PutLinkParamset_HappyPath_WithChannel(t *testing.T) {
 		Type:    "HmIP-KEY4",
 	})
 
-	fake := &fakeOperations{kind: backends.KindCCU}
+	fake := describedOps{
+		Operations: &fakeOperations{kind: backends.KindCCU},
+		descs:      describe(hmenum.ParameterTypeInteger, "SHORT_ACTION_TYPE"),
+	}
 	w := client.NewValueWriter()
 	w.Register("ccu-pl11", "HmIP-RF", fake)
 
 	p := NewParamsetsDomain(reg, w)
-	err = p.PutLinkParamset(context.Background(), "DEV061:1", "PEER001:1",
+	_, err = p.PutLinkParamset(context.Background(), "DEV061:1", "PEER001:1",
 		map[string]any{"SHORT_ACTION_TYPE": 0})
 	if err != nil {
 		t.Fatalf("PutLinkParamset: %v", err)
@@ -1690,7 +1695,7 @@ func TestMQTTCommandSink_TriggerProgram_UnknownProgram(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// refreshAfterPutOn — nil registry short-circuit
+// post-write refresh (GetParamset + applyStoredValuesOn) — nil registry short-circuit
 // ---------------------------------------------------------------------------
 
 func TestRefreshAfterPut_NilRegistry_NoPanic(t *testing.T) {
@@ -1701,7 +1706,10 @@ func TestRefreshAfterPut_NilRegistry_NoPanic(t *testing.T) {
 		paramsetData: map[string]any{"STATE": true},
 	}
 	// Must return without panicking.
-	p.refreshAfterPutOn(context.Background(), "", fake, "DEV:1", hmenum.ParamsetKeyValues)
+	current, getErr := fake.GetParamset(context.Background(), "DEV:1", hmenum.ParamsetKeyValues)
+	if getErr == nil {
+		p.applyStoredValuesOn("", "DEV:1", hmenum.ParamsetKeyValues, current)
+	}
 }
 
 func TestRefreshAfterPut_BackendError_NoPanic(t *testing.T) {
@@ -1715,12 +1723,16 @@ func TestRefreshAfterPut_BackendError_NoPanic(t *testing.T) {
 		t.Fatalf("reg.Register: %v", err)
 	}
 	p := NewParamsetsDomain(reg, nil)
-	// Backend returns an error on GetParamset — refreshAfterPutOn must not panic.
-	fakeFail := &configFakeOperations{
+	// Backend returns an error on GetParamset — the refresh is skipped
+	// without touching the model.
+	fake := &configFakeOperations{
 		kind:        backends.KindCCU,
 		paramsetErr: errTestSentinel,
 	}
-	p.refreshAfterPutOn(context.Background(), "", fakeFail, "DEV:1", hmenum.ParamsetKeyValues)
+	current, getErr := fake.GetParamset(context.Background(), "DEV:1", hmenum.ParamsetKeyValues)
+	if getErr == nil {
+		p.applyStoredValuesOn("", "DEV:1", hmenum.ParamsetKeyValues, current)
+	}
 }
 
 func TestRefreshAfterPut_DeviceNotInRegistry_NoPanic(t *testing.T) {
@@ -1739,7 +1751,10 @@ func TestRefreshAfterPut_DeviceNotInRegistry_NoPanic(t *testing.T) {
 		paramsetData: map[string]any{"STATE": true},
 	}
 	// Device "NOTFOUND" is not in the registry — must not panic.
-	p.refreshAfterPutOn(context.Background(), "", fake, "NOTFOUND:1", hmenum.ParamsetKeyValues)
+	current, getErr := fake.GetParamset(context.Background(), "NOTFOUND:1", hmenum.ParamsetKeyValues)
+	if getErr == nil {
+		p.applyStoredValuesOn("", "NOTFOUND:1", hmenum.ParamsetKeyValues, current)
+	}
 }
 
 // errTestSentinel is a reusable sentinel error for these tests.
@@ -2370,8 +2385,11 @@ func TestRefreshAfterPut_WithChannelHasNoDataPoints(t *testing.T) {
 	t.Parallel()
 	// Channel is found but has no DPs — inner dp loop exits cleanly.
 	p, fake, chAddr := buildRefreshAfterPutFixture(t)
-	// Call refreshAfterPutOn directly — must not panic.
-	p.refreshAfterPutOn(context.Background(), "", fake, chAddr, hmenum.ParamsetKeyValues)
+	// Drive the post-write refresh directly — must not panic.
+	current, getErr := fake.GetParamset(context.Background(), chAddr, hmenum.ParamsetKeyValues)
+	if getErr == nil {
+		p.applyStoredValuesOn("", chAddr, hmenum.ParamsetKeyValues, current)
+	}
 }
 
 func TestRefreshAfterPut_WithGetParamsetSuccess(t *testing.T) {
@@ -2379,7 +2397,10 @@ func TestRefreshAfterPut_WithGetParamsetSuccess(t *testing.T) {
 	p, fake, chAddr := buildRefreshAfterPutFixture(t)
 	// Ensure the GetParamset returns some data so we enter the channel loop.
 	fake.paramsetData = map[string]any{"STATE": false, "POWER": 1.2}
-	p.refreshAfterPutOn(context.Background(), "", fake, chAddr, hmenum.ParamsetKeyValues)
+	current, getErr := fake.GetParamset(context.Background(), chAddr, hmenum.ParamsetKeyValues)
+	if getErr == nil {
+		p.applyStoredValuesOn("", chAddr, hmenum.ParamsetKeyValues, current)
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -3658,7 +3679,7 @@ func TestPutParamset_ConvertValuesError(t *testing.T) {
 
 	p := NewParamsetsDomain(reg, w)
 	// Pass a struct value that cannot be converted.
-	err = p.PutParamset(context.Background(), "PP1DEV01B19:1", hmenum.ParamsetKeyValues,
+	_, err = p.PutParamset(context.Background(), "PP1DEV01B19:1", hmenum.ParamsetKeyValues,
 		map[string]any{"VALID": true, "INVALID": struct{}{}})
 	if err == nil {
 		t.Error("expected error for unconvertible param value")
@@ -3689,9 +3710,12 @@ func TestRefreshAfterPut_OnWireValueCalled(t *testing.T) {
 	w.Register("ccu-b19-rap1", "HmIP-RF", fake)
 
 	p := NewParamsetsDomain(reg, w)
-	// refreshAfterPutOn will find the channel (which has a LEVEL DP), get paramset,
-	// then call dp.OnWireValue(0.7) → setter.OnWireValue path covered.
-	p.refreshAfterPutOn(context.Background(), "", fake, "RAP1DEV01B19:1", hmenum.ParamsetKeyValues)
+	// The refresh finds the channel (which has a LEVEL DP), reads the
+	// paramset and calls dp.OnWireValue(0.7) → setter.OnWireValue path.
+	current, getErr := fake.GetParamset(context.Background(), "RAP1DEV01B19:1", hmenum.ParamsetKeyValues)
+	if getErr == nil {
+		p.applyStoredValuesOn("", "RAP1DEV01B19:1", hmenum.ParamsetKeyValues, current)
+	}
 	// Must not panic.
 }
 
@@ -3847,7 +3871,7 @@ func TestPutParamset_SetManyError(t *testing.T) {
 
 	p := NewParamsetsDomain(reg, w)
 	// SET_POINT_TEMPERATURE not on the channel — SetMany returns error.
-	err = p.PutParamset(context.Background(), "PP2DEV01B20:1", hmenum.ParamsetKeyValues,
+	_, err = p.PutParamset(context.Background(), "PP2DEV01B20:1", hmenum.ParamsetKeyValues,
 		map[string]any{string(hmenum.ParameterSetPointTemperature): 21.5})
 	if err == nil {
 		t.Error("expected error for parameter not on channel")
@@ -3882,9 +3906,9 @@ func TestPutParamset_LegacyBackendError(t *testing.T) {
 	c.ModelRegistry.Put(dev)
 
 	putError := errors.New("backend: put failed")
-	fake := &configFakeOperations{
-		kind:   backends.KindCCU,
-		putErr: putError,
+	fake := describedOps{
+		Operations: &configFakeOperations{kind: backends.KindCCU, putErr: putError},
+		descs:      describe(hmenum.ParameterTypeBool, "STATE"),
 	}
 	w := client.NewValueWriter()
 	w.Register("ccu-b20-pp3", "HmIP-RF", fake)
@@ -3892,7 +3916,7 @@ func TestPutParamset_LegacyBackendError(t *testing.T) {
 	p := NewParamsetsDomain(reg, w)
 	// resolveChannel returns nil (no channel); falls through to legacy backend path.
 	// Backend PutParamset returns putError.
-	err = p.PutParamset(context.Background(), "PP3DEV01B20:1", hmenum.ParamsetKeyValues,
+	_, err = p.PutParamset(context.Background(), "PP3DEV01B20:1", hmenum.ParamsetKeyValues,
 		map[string]any{"STATE": true})
 	if !errors.Is(err, putError) {
 		t.Errorf("expected putError, got %v", err)
@@ -4002,7 +4026,7 @@ func TestPutLinkParamset_VisibilityGateRejects(t *testing.T) {
 	w.Register("ccu-b20-plp1", "HmIP-RF", fake)
 
 	p := NewParamsetsDomain(reg, w).SetVisibilityGate(rejectAllGate{})
-	err := p.PutLinkParamset(context.Background(), "PLPDEV01B20:1", "PEER:1",
+	_, err := p.PutLinkParamset(context.Background(), "PLPDEV01B20:1", "PEER:1",
 		map[string]any{"LINK_PARAM": true})
 	if !errors.Is(err, hmerr.ErrParameterHidden) {
 		t.Errorf("expected ErrParameterHidden, got %v", err)
@@ -4032,14 +4056,18 @@ func TestPutLinkParamset_BackendError(t *testing.T) {
 
 	putLinkErr := errors.New("put link error")
 	fakeFull2 := &fullFakeLinkOps2{
-		paramsetFakeOps: paramsetFakeOps{},
-		linkPutErr:      putLinkErr,
+		paramsetFakeOps: paramsetFakeOps{
+			getParamsetDescriptionFn: func(context.Context, string, hmenum.ParamsetKey) (map[string]hmproto.ParameterData, error) {
+				return describe(hmenum.ParameterTypeBool, "STATE"), nil
+			},
+		},
+		linkPutErr: putLinkErr,
 	}
 	w := client.NewValueWriter()
 	w.Register("ccu-b20-plp2", "HmIP-RF", fakeFull2)
 
 	p := NewParamsetsDomain(reg, w)
-	err := p.PutLinkParamset(context.Background(), "PLPDEV02B20:1", "PEER:1",
+	_, err := p.PutLinkParamset(context.Background(), "PLPDEV02B20:1", "PEER:1",
 		map[string]any{"STATE": true})
 	if !errors.Is(err, putLinkErr) {
 		t.Errorf("expected putLinkErr, got %v", err)
@@ -10512,7 +10540,7 @@ func TestBackupAdapter_Stream_NilStorage_ReturnsErr(t *testing.T) {
 func TestParamsetsDomain_PutLinkParamset_NilRegistry_ReturnsErr(t *testing.T) {
 	t.Parallel()
 	p := &ParamsetsDomain{registry: nil, writer: nil}
-	err := p.PutLinkParamset(context.Background(), "DEV001:1", "PEER001:1", map[string]any{"K": "V"})
+	_, err := p.PutLinkParamset(context.Background(), "DEV001:1", "PEER001:1", map[string]any{"K": "V"})
 	if err == nil {
 		t.Error("expected error for nil registry in PutLinkParamset")
 	}
@@ -12892,8 +12920,12 @@ func buildBoost7Fixture(t *testing.T) *boost7Fixture {
 func TestParamsetsDomain_PutLinkParamset_HappyPath(t *testing.T) {
 	t.Parallel()
 	f := buildBoost7Fixture(t)
+	f.writer.Register("ccu-boost7", "HmIP-RF", describedOps{
+		Operations: &fakeOperations{kind: backends.KindCCU},
+		descs:      describe(hmenum.ParameterTypeInteger, "COND_VALUE_TRUE"),
+	})
 	p := NewParamsetsDomain(f.reg, f.writer)
-	err := p.PutLinkParamset(context.Background(), "DEV002:1", "PEER001:1", map[string]any{"COND_VALUE_TRUE": 1})
+	_, err := p.PutLinkParamset(context.Background(), "DEV002:1", "PEER001:1", map[string]any{"COND_VALUE_TRUE": 1})
 	if err != nil {
 		t.Fatalf("PutLinkParamset: %v", err)
 	}
@@ -13154,6 +13186,18 @@ func (*configFakeOperations) SetInstallModeLocal(context.Context, int, string, s
 }
 
 func (*configFakeOperations) RestoreConfigToDevice(context.Context, string) error {
+	return backends.ErrUnsupported
+}
+
+func (*configFakeOperations) ClearConfigCache(context.Context, string) error {
+	return backends.ErrUnsupported
+}
+
+func (*configFakeOperations) RSSIInfo(context.Context) (map[string]map[string][2]int, error) {
+	return nil, backends.ErrUnsupported
+}
+
+func (*configFakeOperations) SetBidcosInterface(context.Context, string, string, bool) error {
 	return backends.ErrUnsupported
 }
 

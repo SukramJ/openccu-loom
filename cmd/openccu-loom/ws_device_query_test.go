@@ -33,6 +33,19 @@ func (b *scopedBackendStub) GetParamset(_ context.Context, _ string, _ hmenum.Pa
 	return map[string]any{"CENTRAL": b.label}, nil
 }
 
+// GetParamsetDescription declares the parameter the test writes: the strict
+// paramsets domain refuses any write it cannot check against a description.
+func (b *scopedBackendStub) GetParamsetDescription(
+	_ context.Context, _ string, _ hmenum.ParamsetKey,
+) (map[string]hmproto.ParameterData, error) {
+	return map[string]hmproto.ParameterData{
+		"FOO": {
+			Type:       hmenum.ParameterTypeInteger,
+			Operations: hmenum.OperationsRead | hmenum.OperationsWrite,
+		},
+	}, nil
+}
+
 func (b *scopedBackendStub) PutParamset(_ context.Context, _ string, _ hmenum.ParamsetKey, _ map[string]any, _ hmenum.CommandPriority, _ hmenum.CommandRxMode) error {
 	b.putCalled = true
 	return nil
@@ -82,7 +95,7 @@ func TestWSConfigSession_ReadsAndWritesTheScopedCentral(t *testing.T) {
 		t.Fatalf("session scoped to ccu-b read %v, want ccu-b's backend", got["CENTRAL"])
 	}
 
-	if err := pw.PutParamset(context.Background(), keyB, map[string]any{"FOO": 1}); err != nil {
+	if _, err := pw.PutParamset(context.Background(), keyB, map[string]any{"FOO": 1}); err != nil {
 		t.Fatalf("PutParamset: %v", err)
 	}
 	if !backendB.putCalled {
@@ -176,7 +189,7 @@ func TestWSConfigSessionScopedSaveKeepsTheDomainGuarantees(t *testing.T) {
 	}
 	keyB := configui.SessionKey{CentralName: "ccu-b", ChannelAddress: channel, ParamsetKey: hmenum.ParamsetKeyMaster}
 
-	if err := pw.PutParamset(context.Background(), keyB, map[string]any{"DBL_PRESS_TIME": float64(7)}); err != nil {
+	if _, err := pw.PutParamset(context.Background(), keyB, map[string]any{"DBL_PRESS_TIME": float64(7)}); err != nil {
 		t.Fatalf("PutParamset: %v", err)
 	}
 	if backendA.putCalled {

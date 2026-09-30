@@ -14,6 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
 
@@ -81,18 +82,6 @@ func assertLinkParamsetCoerced(t *testing.T, got map[string]any) {
 	}
 }
 
-// assertLinkParamsetUnchanged checks that every value the fake backend's
-// PutLinkParamset received is still float64 — the soft-fail passthrough
-// when the descriptor fetch itself fails.
-func assertLinkParamsetUnchanged(t *testing.T, got map[string]any) {
-	t.Helper()
-	for name := range linkParamsetTestValues() {
-		if k := reflect.TypeOf(got[name]).Kind(); k != reflect.Float64 {
-			t.Errorf("%s: got kind %v, want Float64 (unchanged)", name, k)
-		}
-	}
-}
-
 // linkCoercionFakeBackend is a minimal backends.Operations stub recording
 // what PutLinkParamset receives, with GetParamsetDescription answering
 // either the fixed descriptor set above or a forced error.
@@ -101,6 +90,11 @@ type linkCoercionFakeBackend struct {
 	descErr   error
 	putValues map[string]any
 	putCalled bool
+
+	// stored / storedErr answer GetLinkParamset, so a test can model an
+	// interface process that stores something other than what was sent.
+	stored    map[string]any
+	storedErr error
 }
 
 func (b *linkCoercionFakeBackend) GetParamsetDescription(
@@ -126,6 +120,12 @@ func (b *linkCoercionFakeBackend) PutLinkParamset(
 func (b *linkCoercionFakeBackend) GetLinkParamset(
 	_ context.Context, _, _ string,
 ) (map[string]any, error) {
+	if b.storedErr != nil {
+		return nil, b.storedErr
+	}
+	if b.stored != nil {
+		return b.stored, nil
+	}
 	return map[string]any{}, nil
 }
 
@@ -167,7 +167,7 @@ func TestParamsetsDomainPutLinkParamsetCoercesValues(t *testing.T) {
 	reg, w := buildLinkCoercionFixture(t, be)
 	domain := NewParamsetsDomain(reg, w)
 
-	if err := domain.PutLinkParamset(
+	if _, err := domain.PutLinkParamset(
 		context.Background(), "LNK0001:4", "PEER0001:1", linkParamsetTestValues(),
 	); err != nil {
 		t.Fatalf("PutLinkParamset: %v", err)
@@ -178,21 +178,25 @@ func TestParamsetsDomainPutLinkParamsetCoercesValues(t *testing.T) {
 	assertLinkParamsetCoerced(t, be.putValues)
 }
 
-// A3: when the descriptor fetch fails, values reach the backend unchanged
-// — the soft-fail path coerceParamsetValues already implements.
-func TestPutLinkParamsetPassesThroughUnchangedOnDescriptorError(t *testing.T) {
+// A3: when the descriptor fetch fails, the write is refused — nothing
+// unvalidated reaches the backend, and the refusal is an upstream failure
+// rather than a validation error.
+func TestPutLinkParamsetRefusedOnDescriptorError(t *testing.T) {
 	t.Parallel()
 	be := &linkCoercionFakeBackend{descErr: errors.New("ccu unreachable")}
 	reg, w := buildLinkCoercionFixture(t, be)
 	domain := NewParamsetsDomain(reg, w)
 
-	if err := domain.PutLinkParamset(
+	_, err := domain.PutLinkParamset(
 		context.Background(), "LNK0001:4", "PEER0001:1", linkParamsetTestValues(),
-	); err != nil {
-		t.Fatalf("PutLinkParamset: %v", err)
+	)
+	if err == nil {
+		t.Fatal("PutLinkParamset succeeded, want a refusal")
 	}
-	if !be.putCalled {
-		t.Fatal("backend PutLinkParamset was not called")
+	if errors.Is(err, hmerr.ErrValidation) {
+		t.Errorf("refusal wraps ErrValidation, want an upstream error: %v", err)
 	}
-	assertLinkParamsetUnchanged(t, be.putValues)
+	if be.putCalled {
+		t.Fatalf("backend PutLinkParamset was called with %v, want no write", be.putValues)
+	}
 }

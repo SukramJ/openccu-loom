@@ -68,6 +68,10 @@ const (
 	DeleteFlagForce = 2
 )
 
+// RSSINoInformation is the value the BidCos-RF daemon's `rssiInfo` answer
+// carries for a direction in which it has no reception reading.
+const RSSINoInformation = 65536
+
 // DeviceOps covers device enumeration, discovery helpers, firmware
 // management, pairing lifecycle, and bulk device-data retrieval.
 type DeviceOps interface {
@@ -89,6 +93,36 @@ type DeviceOps interface {
 	// (CUxD, Homegear); the caller additionally gates on the interface
 	// (only rfd / HMIPServer expose the method).
 	RestoreConfigToDevice(ctx context.Context, address string) error
+
+	// ClearConfigCache asks the interface process to discard its cached
+	// configuration of the device so the next configuration read or
+	// transfer rebuilds it. Maps to the XML-RPC
+	// `clearConfigCache(address)` call. Returns [ErrUnsupported] on
+	// backends without the method (CUxD, Homegear); the caller
+	// additionally gates on the interface (only rfd / hs485d expose it).
+	ClearConfigCache(ctx context.Context, address string) error
+
+	// RSSIInfo reads the BidCos-RF daemon's pairwise reception matrix via
+	// the XML-RPC `rssiInfo()` call (no arguments). The answer is keyed by
+	// device serial, then by partner serial; for entry [A][B], index 0 is
+	// the strength in dBm at which A hears B and index 1 the strength at
+	// which B hears A. The daemon's own RF gateways appear as partners
+	// like any device. The daemon's "no information" marker
+	// ([RSSINoInformation]) is passed through unchanged — interpreting it
+	// is the caller's job. Only the BidCos-RF daemon implements the
+	// method: backends without it (CUxD, Homegear) return
+	// [ErrUnsupported]; the caller routes the call to the BidCos-RF
+	// interface's backend.
+	RSSIInfo(ctx context.Context) (map[string]map[string][2]int, error)
+
+	// SetBidcosInterface assigns a BidCos-RF device to the RF gateway
+	// with serial interfaceAddress via the XML-RPC
+	// `setBidcosInterface(device_address, interface_address, roaming)`
+	// call. With roaming true the daemon may re-assign the device by
+	// signal strength on its own. Only the BidCos-RF daemon implements
+	// the method: backends without it (CUxD, Homegear) return
+	// [ErrUnsupported]; the caller gates on the device's interface.
+	SetBidcosInterface(ctx context.Context, deviceAddress, interfaceAddress string, roaming bool) error
 
 	// ListReplaceableDevices returns the already-paired devices the new
 	// device (newDeviceAddress) may replace — the interface daemon

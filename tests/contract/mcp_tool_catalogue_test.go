@@ -16,6 +16,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/north/mcp"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // TestMCPWriteToolsGatedByAllowWrites pins ADR 0025's central invariant:
@@ -35,6 +36,11 @@ func TestMCPWriteToolsGatedByAllowWrites(t *testing.T) {
 		"list_alarm_messages", "list_inbox", "get_system_info",
 		// Alarm / Security & Safety read tools (gated on Alarm / Security).
 		"list_alarm_zones", "list_triggered_motion", "get_security_status",
+		// MASTER multi-apply eligibility (gated on ParamsetApply).
+		"list_paramset_apply_targets",
+		// BidCos-RF reception matrix and gateway dry run (gated on
+		// RSSIMatrix).
+		"get_rssi_matrix", "get_receiver_proposal",
 	}
 	// arm_alarm_zone / disarm_alarm_zone / reset_motion are gated on
 	// AlarmControl + AllowWrites, exactly like the other write tools — the
@@ -46,20 +52,31 @@ func TestMCPWriteToolsGatedByAllowWrites(t *testing.T) {
 	writeTools := []string{
 		"set_datapoint", "write_paramset", "trigger_program",
 		"arm_alarm_zone", "disarm_alarm_zone", "reset_motion",
+		"apply_paramset_to_channels",
+		// Device-configuration maintenance (gated on ConfigRepair /
+		// ConfigCache).
+		"repair_device_config", "clear_device_config_cache",
+		// BidCos-RF gateway assignment (gated on RFInterface).
+		"assign_rf_interface",
 	}
 
 	fullDeps := func(allowWrites bool) mcp.Deps {
 		return mcp.Deps{
-			Centrals:     emptyCentrals{},
-			Devices:      emptyDevices{},
-			Writer:       mcpNoopWriter{},
-			Paramsets:    mcpNoopParamsets{},
-			Health:       mcpNoopHealth{},
-			Hubs:         mcpNoopHubs{},
-			Alarm:        mcpParityAlarm{},
-			AlarmControl: mcpParityAlarm{},
-			Security:     mcpParitySecurity{},
-			AllowWrites:  allowWrites,
+			Centrals:      emptyCentrals{},
+			Devices:       emptyDevices{},
+			Writer:        mcpNoopWriter{},
+			Paramsets:     mcpNoopParamsets{},
+			ParamsetApply: mcpNoopParamsetApply{},
+			ConfigRepair:  mcpNoopConfigRepair{},
+			ConfigCache:   mcpNoopConfigCache{},
+			RSSIMatrix:    mcpNoopRSSIMatrix{},
+			RFInterface:   mcpNoopRFInterface{},
+			Health:        mcpNoopHealth{},
+			Hubs:          mcpNoopHubs{},
+			Alarm:         mcpParityAlarm{},
+			AlarmControl:  mcpParityAlarm{},
+			Security:      mcpParitySecurity{},
+			AllowWrites:   allowWrites,
 		}
 	}
 
@@ -106,19 +123,26 @@ func TestMCPWriteToolsGatedByAllowWrites(t *testing.T) {
 func TestMCPToolNamingTaxonomy(t *testing.T) {
 	t.Parallel()
 
-	allowedVerbs := []string{"list", "get", "read", "set", "write", "trigger", "arm", "disarm", "reset"}
+	allowedVerbs := []string{
+		"list", "get", "read", "set", "write", "trigger", "arm", "disarm", "reset", "apply", "repair", "clear", "assign",
+	}
 
 	names := mcpToolNames(t, mcp.Deps{
-		Centrals:     emptyCentrals{},
-		Devices:      emptyDevices{},
-		Writer:       mcpNoopWriter{},
-		Paramsets:    mcpNoopParamsets{},
-		Health:       mcpNoopHealth{},
-		Hubs:         mcpNoopHubs{},
-		Alarm:        mcpParityAlarm{},
-		AlarmControl: mcpParityAlarm{},
-		Security:     mcpParitySecurity{},
-		AllowWrites:  true,
+		Centrals:      emptyCentrals{},
+		Devices:       emptyDevices{},
+		Writer:        mcpNoopWriter{},
+		Paramsets:     mcpNoopParamsets{},
+		ParamsetApply: mcpNoopParamsetApply{},
+		ConfigRepair:  mcpNoopConfigRepair{},
+		ConfigCache:   mcpNoopConfigCache{},
+		RSSIMatrix:    mcpNoopRSSIMatrix{},
+		RFInterface:   mcpNoopRFInterface{},
+		Health:        mcpNoopHealth{},
+		Hubs:          mcpNoopHubs{},
+		Alarm:         mcpParityAlarm{},
+		AlarmControl:  mcpParityAlarm{},
+		Security:      mcpParitySecurity{},
+		AllowWrites:   true,
 	})
 	if len(names) == 0 {
 		t.Fatal("no tools advertised")
@@ -192,17 +216,55 @@ func (mcpNoopParamsets) GetParamset(context.Context, string, hmenum.ParamsetKey)
 	return nil, nil
 }
 
-func (mcpNoopParamsets) PutParamset(context.Context, string, hmenum.ParamsetKey, map[string]any) error {
-	return nil
+func (mcpNoopParamsets) PutParamset(context.Context, string, hmenum.ParamsetKey, map[string]any) (*interfaces.ParamsetWriteReport, error) {
+	return nil, nil
 }
 
 func (mcpNoopParamsets) GetLinkParamset(context.Context, string, string) (map[string]any, error) {
 	return nil, nil
 }
 
-func (mcpNoopParamsets) PutLinkParamset(context.Context, string, string, map[string]any) error {
-	return nil
+func (mcpNoopParamsets) PutLinkParamset(context.Context, string, string, map[string]any) (*interfaces.ParamsetWriteReport, error) {
+	return &interfaces.ParamsetWriteReport{}, nil
 }
+
+type mcpNoopParamsetApply struct{}
+
+func (mcpNoopParamsetApply) ApplyTargets(context.Context, string) ([]interfaces.ParamsetApplyTarget, error) {
+	return nil, nil
+}
+
+func (mcpNoopParamsetApply) ApplyToChannels(
+	context.Context, string, map[string]any, []string, bool,
+) ([]interfaces.ParamsetApplyOutcome, error) {
+	return nil, nil
+}
+
+type mcpNoopConfigRepair struct{}
+
+func (mcpNoopConfigRepair) RepairDeviceConfig(
+	context.Context, string, []string, bool,
+) ([]interfaces.ConfigRepairOutcome, error) {
+	return nil, nil
+}
+
+type mcpNoopConfigCache struct{}
+
+func (mcpNoopConfigCache) ClearConfigCache(context.Context, string) error { return nil }
+
+type mcpNoopRSSIMatrix struct{}
+
+func (mcpNoopRSSIMatrix) RSSIMatrix(context.Context) ([]interfaces.RSSIMatrixCentral, error) {
+	return nil, nil
+}
+
+func (mcpNoopRSSIMatrix) ReceiverProposal(context.Context, int) ([]interfaces.ReceiverProposal, error) {
+	return nil, nil
+}
+
+type mcpNoopRFInterface struct{}
+
+func (mcpNoopRFInterface) AssignRFInterface(context.Context, string, string, bool) error { return nil }
 
 type mcpNoopHealth struct{}
 

@@ -68,6 +68,12 @@ import type {
   ProgramEntry,
   LogRecord,
   RSSIMatrix,
+  RSSIMatrixCentral,
+  ReceiverProposal,
+  ParamsetWriteResult,
+  ParamsetApplyTarget,
+  ParamsetApplyOutcome,
+  ConfigRepairOutcome,
   RpcRecordingStatus,
   ServiceMessage,
   HubDataPoints,
@@ -518,7 +524,9 @@ export const api = {
     // the write carries the X-Edit-Token header. Omitting it yields 423.
     editToken?: string,
   ) {
-    return request<void>(
+    // 200 carries the post-write read-back report. A daemon without the
+    // report answers with an empty body, which resolves to undefined.
+    return request<ParamsetWriteResult | undefined>(
       `/devices/${encodeURIComponent(channelAddress)}/link-ps/${encodeURIComponent(peer)}`,
       {
         method: "PUT",
@@ -550,7 +558,9 @@ export const api = {
     // writes ignore it. Omitting it on MASTER yields 423 Locked.
     editToken?: string,
   ) {
-    return request<void>(
+    // A MASTER write answers 200 with the post-write read-back report; a
+    // VALUES write answers 202 with no body, which resolves to undefined.
+    return request<ParamsetWriteResult | undefined>(
       `/devices/${encodeURIComponent(channelAddress)}/paramsets/${paramset}`,
       {
         method: "PUT",
@@ -558,6 +568,36 @@ export const api = {
         body: JSON.stringify(values),
       },
     );
+  },
+  // Channels whose MASTER description is identical to this channel's —
+  // the only channels a MASTER multi-apply may target.
+  async getParamsetApplyTargets(
+    channelAddress: string,
+  ): Promise<ParamsetApplyTarget[]> {
+    const r = await request<{ items: ParamsetApplyTarget[] }>(
+      `/devices/${encodeURIComponent(channelAddress)}/paramsets/MASTER/apply-targets`,
+    );
+    return r.items;
+  },
+  // Apply MASTER values to several description-identical channels. The
+  // edit token is the SOURCE channel's; `dryRun` reports what each target
+  // would do without writing. Outcomes come back in request order.
+  async applyParamsetToChannels(
+    channelAddress: string,
+    values: Record<string, unknown>,
+    targets: string[],
+    dryRun: boolean,
+    editToken?: string,
+  ): Promise<ParamsetApplyOutcome[]> {
+    const r = await request<{ items: ParamsetApplyOutcome[] }>(
+      `/devices/${encodeURIComponent(channelAddress)}/paramsets/MASTER/apply-to`,
+      {
+        method: "POST",
+        headers: editLockHeaders(editToken),
+        body: JSON.stringify({ values, targets, dry_run: dryRun }),
+      },
+    );
+    return r.items;
   },
   // Raw paramset read (unfiltered by the visibility store). Used to
   // surface configuration parameters the UISchema builder hides by
@@ -1187,6 +1227,23 @@ export const api = {
   rssiInfo() {
     return request<RSSIMatrix>(`/diagnostics/rssi`);
   },
+  // BidCos-RF pairwise reception matrix, one entry per central. A central
+  // whose read failed is still listed, with `error` set.
+  async rssiMatrix(): Promise<RSSIMatrixCentral[]> {
+    const r = await request<{ items: RSSIMatrixCentral[] }>(
+      `/diagnostics/rssi/matrix`,
+    );
+    return r.items;
+  },
+  // Best-interface verdict per BidCos-RF device; a switch is proposed only
+  // when the best interface is at least `marginDb` stronger. Writes nothing.
+  async receiverProposal(marginDb: number): Promise<ReceiverProposal[]> {
+    const qs = new URLSearchParams({ margin_db: String(marginDb) });
+    const r = await request<{ items: ReceiverProposal[] }>(
+      `/diagnostics/rssi/receiver-proposal?${qs.toString()}`,
+    );
+    return r.items;
+  },
   listLogLevels() {
     return request<LogLevelsResponse>(`/diagnostics/log-levels`);
   },
@@ -1527,6 +1584,45 @@ export const api = {
     return request<void>(
       `/devices/${encodeURIComponent(address)}/config/restore`,
       { method: "POST" },
+    );
+  },
+  // Rebuild a device's stored MASTER configuration from its descriptions
+  // (admin-only). `dryRun` reads and reports without writing.
+  async repairDeviceConfig(
+    address: string,
+    dryRun: boolean,
+    channels?: string[],
+  ): Promise<ConfigRepairOutcome[]> {
+    const body: { dry_run: boolean; channels?: string[] } = { dry_run: dryRun };
+    if (channels && channels.length > 0) body.channels = channels;
+    const r = await request<{ items: ConfigRepairOutcome[] }>(
+      `/devices/${encodeURIComponent(address)}/config/repair`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
+    return r.items;
+  },
+  // Drop the BidCos interface process's cached configuration for the
+  // device (admin-only; gate on DeviceSummary.config_cache_clear_supported).
+  clearDeviceConfigCache(address: string) {
+    return request<void>(
+      `/devices/${encodeURIComponent(address)}/config/cache-clear`,
+      { method: "POST" },
+    );
+  },
+  // Pin a BidCos-RF device to one RF interface (admin-only). `roaming`
+  // lets the daemon re-assign it by signal strength on its own.
+  assignRFInterface(address: string, interfaceAddress: string, roaming: boolean) {
+    return request<void>(
+      `/devices/${encodeURIComponent(address)}/rf-interface`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ interface_address: interfaceAddress, roaming }),
+      },
     );
   },
   // Run the CCU's per-device communication / function test (radio test

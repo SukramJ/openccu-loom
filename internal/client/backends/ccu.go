@@ -277,6 +277,44 @@ func (b *CcuBackend) RestoreConfigToDevice(ctx context.Context, address string) 
 	return err
 }
 
+// ClearConfigCache discards the interface process's cached configuration
+// of the device via the XML-RPC `clearConfigCache(address)` call. rfd
+// (BidCos-RF) and hs485d (BidCos-Wired) implement it; the per-interface
+// support gate lives in the adapter.
+func (b *CcuBackend) ClearConfigCache(ctx context.Context, address string) error {
+	if b.xml == nil {
+		return ErrUnsupported
+	}
+	_, err := b.xml.Call(ctx, "clearConfigCache", address)
+	return err
+}
+
+// RSSIInfo reads the pairwise reception matrix via the XML-RPC
+// `rssiInfo()` call. Only the BidCos-RF daemon registers the method; the
+// caller routes the call to the BidCos-RF interface's backend.
+func (b *CcuBackend) RSSIInfo(ctx context.Context) (map[string]map[string][2]int, error) {
+	if b.xml == nil {
+		return nil, ErrUnsupported
+	}
+	raw, err := b.xml.Call(ctx, "rssiInfo")
+	if err != nil {
+		return nil, err
+	}
+	return decodeRSSIInfo(raw, "ccu")
+}
+
+// SetBidcosInterface assigns the device to an RF gateway via the XML-RPC
+// `setBidcosInterface(device_address, interface_address, roaming)` call.
+// Only the BidCos-RF daemon registers the method; the per-interface
+// support gate lives in the adapter.
+func (b *CcuBackend) SetBidcosInterface(ctx context.Context, deviceAddress, interfaceAddress string, roaming bool) error {
+	if b.xml == nil {
+		return ErrUnsupported
+	}
+	_, err := b.xml.Call(ctx, "setBidcosInterface", deviceAddress, interfaceAddress, roaming)
+	return err
+}
+
 // ListReplaceableDevices returns the devices the new device may replace
 // via the XML-RPC `listReplaceableDevices(newDeviceAddress)` call
 // (rfd / hs485d). The per-interface support gate lives in the adapter.
@@ -746,6 +784,61 @@ func toSliceOfMaps(raw any, method string) ([]map[string]any, error) {
 		}
 	}
 	return out, nil
+}
+
+// decodeRSSIInfo narrows the `rssiInfo` answer — a struct keyed by device
+// serial whose values are structs keyed by partner serial, each holding a
+// two-element integer array — into its typed form. The "no information"
+// marker is kept as-is. A partner entry that is not a two-element numeric
+// array is skipped rather than failing the whole matrix: one unreadable
+// pair must not hide every other reading. A top-level or per-device value
+// of the wrong shape is a protocol mismatch and fails the call.
+func decodeRSSIInfo(raw any, backend string) (map[string]map[string][2]int, error) {
+	if raw == nil {
+		return map[string]map[string][2]int{}, nil
+	}
+	top, ok := raw.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("%s.RSSIInfo: unexpected type %T", backend, raw)
+	}
+	out := make(map[string]map[string][2]int, len(top))
+	for device, v := range top {
+		partners, ok := v.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("%s.RSSIInfo: device %s: unexpected type %T", backend, device, v)
+		}
+		row := make(map[string][2]int, len(partners))
+		for partner, pv := range partners {
+			pair, ok := pv.([]any)
+			if !ok || len(pair) != 2 {
+				continue
+			}
+			first, ok0 := rssiInt(pair[0])
+			second, ok1 := rssiInt(pair[1])
+			if !ok0 || !ok1 {
+				continue
+			}
+			row[partner] = [2]int{first, second}
+		}
+		out[device] = row
+	}
+	return out, nil
+}
+
+// rssiInt narrows one decoded XML-RPC integer; the transports hand
+// integers back in several Go widths.
+func rssiInt(v any) (int, bool) {
+	switch x := v.(type) {
+	case int:
+		return x, true
+	case int32:
+		return int(x), true
+	case int64:
+		return int(x), true
+	case float64:
+		return int(x), true
+	}
+	return 0, false
 }
 
 // asString is a defensive narrowing used by the link decoder. The

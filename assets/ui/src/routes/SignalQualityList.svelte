@@ -11,6 +11,7 @@
   import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import Select from "$lib/components/ui/Select.svelte";
   import PageShell from "$lib/components/ui/PageShell.svelte";
+  import RSSIMatrixSection from "$lib/components/signal/RSSIMatrixSection.svelte";
   import { t } from "$lib/i18n";
   import { loadLS, saveLS } from "$lib/utils";
 
@@ -154,4 +155,8 @@
       {/snippet}
     </DataTable>
   {/if}
+
+  <!-- BidCos-RF pairwise matrix + best-receiver proposal. Renders nothing
+       unless a central reports matrix data (admin-only, BidCos only). -->
+  <RSSIMatrixSection {centralFilter} />
 </PageShell>

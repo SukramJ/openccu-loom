@@ -122,6 +122,24 @@ func (s *EditSessions) Verify(key, token string) bool {
 	return ok && cur.Token == token && cur.Expires.After(now)
 }
 
+// Held reports whether any live lock currently holds `key`, without
+// refreshing it. Batch writers (the MASTER multi-apply) use it to refuse
+// a target whose configuration is being edited: the batch holds only the
+// SOURCE channel's lock, and writing a target under someone's open edit
+// session would clobber their staged values. A nil registry holds
+// nothing.
+func (s *EditSessions) Held(key string) bool {
+	if s == nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now()
+	s.prune(now)
+	cur, ok := s.locks[key]
+	return ok && cur.Expires.After(now)
+}
+
 // Close drops the lock if `token` matches.
 func (s *EditSessions) Close(key, token string) bool {
 	s.mu.Lock()

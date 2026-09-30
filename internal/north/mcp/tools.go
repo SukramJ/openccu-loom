@@ -20,6 +20,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // deviceSummary is the per-device projection shared by the device tools.
@@ -172,15 +173,17 @@ func resolveDataPoint(devices DeviceLister, channelAddress, parameterName string
 // single-string signature has no way to carry, so LINK reads and writes go
 // through their own tools (read_link_paramset, write_link_paramset) and
 // LINK edit-lock keys are built by [editLockKey] instead of this parser.
+//
+// Case and surrounding whitespace are normalised first so a lower-case
+// spelling from an agent still resolves; the normalised string then goes
+// through the strict [hmenum.ParseParamsetKey], so nothing but a wire key
+// is ever forwarded.
 func parseParamsetKey(s string) (hmenum.ParamsetKey, bool) {
-	switch strings.ToUpper(strings.TrimSpace(s)) {
-	case "MASTER":
-		return hmenum.ParamsetKeyMaster, true
-	case "VALUES":
-		return hmenum.ParamsetKeyValues, true
-	default:
+	key, ok := hmenum.ParseParamsetKey(strings.ToUpper(strings.TrimSpace(s)))
+	if !ok || key == hmenum.ParamsetKeyLink {
 		return "", false
 	}
+	return key, true
 }
 
 // editLockKey builds the edit-lock registry key for a MASTER or LINK edit
@@ -236,8 +239,15 @@ func registerReadTools(s *mcpsdk.Server, d Deps) {
 		registerReadParamset(s, d)
 		registerReadLinkParamset(s, d)
 	}
+	if d.ParamsetApply != nil && d.Devices != nil {
+		registerListParamsetApplyTargets(s, d)
+	}
 	if d.Health != nil {
 		registerGetHealth(s, d)
+	}
+	if d.RSSIMatrix != nil {
+		registerGetRSSIMatrix(s, d)
+		registerGetReceiverProposal(s, d)
 	}
 	if d.Alarm != nil {
 		registerListAlarmZones(s, d)
@@ -364,7 +374,7 @@ func registerGetDevice(s *mcpsdk.Server, d Deps) {
 	})
 }
 
-// callerHasRole reports whether the identity the mount's resolve chain
+// callerIsAdmin reports whether the identity the mount's resolve chain
 // attached to the session context may act as want.
 //
 // The mount gates the whole tool set at a single role — viewer, or
@@ -373,14 +383,14 @@ func registerGetDevice(s *mcpsdk.Server, d Deps) {
 // need. A tool whose REST twin is mounted With(admin) re-checks here so
 // both surfaces draw the same boundary; everything else keeps trusting
 // the mount.
-func callerHasRole(ctx context.Context, want auth.Role) bool {
+func callerIsAdmin(ctx context.Context) bool {
 	id, ok := auth.IdentityFrom(ctx)
-	return ok && id.HasRole(want)
+	return ok && id.HasRole(auth.RoleAdmin)
 }
 
 // callerSubject is the actor an audit row records for a write driven
 // through this surface: the identity the mount's resolve chain attached
-// to the request, the same one [callerHasRole] judges. Without it the
+// to the request, the same one [callerIsAdmin] judges. Without it the
 // change-log answers "who changed this?" with an empty cell for every
 // assistant-driven write, which is the one question the log exists for.
 // Empty only when no identity was resolved — a tool set mounted without
@@ -402,7 +412,7 @@ func registerListAudit(s *mcpsdk.Server, d Deps) {
 		// operator changed which credential-bearing section, which device
 		// parameters were written and the notes attached to both. A viewer
 		// identity must not read it here either.
-		if !callerHasRole(ctx, auth.RoleAdmin) {
+		if !callerIsAdmin(ctx) {
 			return nil, listAuditOut{}, errors.New("the configuration change-log is admin-only")
 		}
 		limit := in.Limit
@@ -568,6 +578,44 @@ type writeParamsetIn struct {
 
 type writeParamsetOut struct {
 	OK bool `json:"ok"`
+	// Report is absent for a VALUES write, which is not read back.
+	Report *paramsetWriteReportOut `json:"report,omitempty" jsonschema:"post-write read-back of a MASTER write: what was sent and where the stored value differs"`
+}
+
+// paramsetWriteReportOut is the read-back comparison of a configuration
+// write. An interface process may answer ok and still drop, clamp or coerce
+// a value, so an assistant must see the divergences rather than a bare ok.
+type paramsetWriteReportOut struct {
+	Written             []string                `json:"written" jsonschema:"parameter names sent to the CCU, sorted"`
+	ReadbackDivergences []paramsetDivergenceOut `json:"readback_divergences" jsonschema:"parameters whose stored value after the write differs from the sent one; empty means every value is stored as sent"`
+	ReadbackError       string                  `json:"readback_error,omitempty" jsonschema:"set when the post-write read failed; the divergences are then unknown, not empty"`
+}
+
+// paramsetDivergenceOut names one parameter stored differently than sent.
+type paramsetDivergenceOut struct {
+	Parameter string `json:"parameter"`
+	// Sent and Stored are paramset values whose type depends on the
+	// parameter (bool, number, string, list), hence any.
+	Sent any `json:"sent"`
+	// Stored is null when the parameter is absent from the stored paramset.
+	Stored any `json:"stored"`
+}
+
+// writeReportOut maps the domain report onto the tool output; nil stays nil.
+func writeReportOut(report *interfaces.ParamsetWriteReport) *paramsetWriteReportOut {
+	if report == nil {
+		return nil
+	}
+	out := &paramsetWriteReportOut{
+		Written:             append([]string{}, report.Written...),
+		ReadbackDivergences: make([]paramsetDivergenceOut, 0, len(report.Divergences)),
+		ReadbackError:       report.ReadbackError,
+	}
+	for _, d := range report.Divergences {
+		out.ReadbackDivergences = append(out.ReadbackDivergences,
+			paramsetDivergenceOut{Parameter: d.Parameter, Sent: d.Sent, Stored: d.Stored})
+	}
+	return out
 }
 
 type writeLinkParamsetIn struct {
@@ -583,7 +631,8 @@ type writeLinkParamsetIn struct {
 }
 
 type writeLinkParamsetOut struct {
-	OK bool `json:"ok"`
+	OK     bool                    `json:"ok"`
+	Report *paramsetWriteReportOut `json:"report,omitempty" jsonschema:"post-write read-back of the LINK write: what was sent and where the stored value differs"`
 }
 
 type openEditSessionIn struct {
@@ -641,6 +690,18 @@ func registerWriteTools(s *mcpsdk.Server, d Deps) {
 	if d.Paramsets != nil {
 		registerWriteParamset(s, d)
 		registerWriteLinkParamset(s, d)
+	}
+	if d.ParamsetApply != nil && d.Devices != nil {
+		registerApplyParamsetToChannels(s, d)
+	}
+	if d.ConfigRepair != nil {
+		registerRepairDeviceConfig(s, d)
+	}
+	if d.ConfigCache != nil {
+		registerClearDeviceConfigCache(s, d)
+	}
+	if d.RFInterface != nil {
+		registerAssignRFInterface(s, d)
 	}
 	if d.EditLocks != nil {
 		registerOpenEditSession(s, d)
@@ -765,10 +826,11 @@ func registerWriteParamset(s *mcpsdk.Server, d Deps) {
 		// write and an operator's write are indistinguishable afterwards,
 		// and "who changed this" is the first question asked about one.
 		ctx = hmreqctx.WithOperation(ctx, "mcp:paramset-write")
-		if err := d.Paramsets.PutParamset(ctx, address, key, in.Values); err != nil {
+		report, err := d.Paramsets.PutParamset(ctx, address, key, in.Values)
+		if err != nil {
 			return nil, writeParamsetOut{}, fmt.Errorf("write paramset: %w", err)
 		}
-		return nil, writeParamsetOut{OK: true}, nil
+		return nil, writeParamsetOut{OK: true, Report: writeReportOut(report)}, nil
 	})
 }
 
@@ -813,10 +875,11 @@ func registerWriteLinkParamset(s *mcpsdk.Server, d Deps) {
 			}
 		}
 		ctx = hmreqctx.WithOperation(ctx, "mcp:link-paramset-write")
-		if err := d.Paramsets.PutLinkParamset(ctx, receiver, sender, in.Values); err != nil {
+		report, err := d.Paramsets.PutLinkParamset(ctx, receiver, sender, in.Values)
+		if err != nil {
 			return nil, writeLinkParamsetOut{}, fmt.Errorf("write link paramset: %w", err)
 		}
-		return nil, writeLinkParamsetOut{OK: true}, nil
+		return nil, writeLinkParamsetOut{OK: true, Report: writeReportOut(report)}, nil
 	})
 }
 

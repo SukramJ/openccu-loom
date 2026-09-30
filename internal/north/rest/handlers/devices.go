@@ -103,10 +103,16 @@ type DeviceSummary struct {
 	MasterPushesConfigPending bool `json:"master_pushes_config_pending"`
 
 	// ConfigRestoreSupported is true when the device's interface
-	// exposes `restoreConfigToDevice` (HmIP-RF, BidCos-RF). The SPA
-	// gates the "restore config" action on it so the button never
-	// shows for a device that cannot serve the write.
+	// daemon implements `restoreConfigToDevice` (BidCos-RF only — the
+	// HmIP process lists the method but faults every call for its
+	// devices). The SPA gates the "restore config" action on it so the
+	// button never shows for a device that cannot serve the write.
 	ConfigRestoreSupported bool `json:"config_restore_supported"`
+
+	// ConfigCacheClearSupported is true when the device's interface
+	// process exposes `clearConfigCache` (BidCos-RF, BidCos-Wired). The
+	// SPA gates the "clear config cache" action on it.
+	ConfigCacheClearSupported bool `json:"config_cache_clear_supported"`
 
 	// CommunicationTestSupported is true when the device's interface can
 	// run the CCU's per-device communication test (radio interfaces).
@@ -1067,6 +1073,7 @@ func toDeviceSummary(d *device.Device, centralName string, released bool) Device
 		Taxonomy:                   toTaxonomyAssignments(d.Taxonomy()),
 		MasterPushesConfigPending:  hmenum.PushesConfigPendingFor(d.Interface, d.ProductGroup),
 		ConfigRestoreSupported:     d.Interface.SupportsConfigRestore(),
+		ConfigCacheClearSupported:  d.Interface.SupportsConfigCacheClear(),
 		CommunicationTestSupported: d.Interface.SupportsCommunicationTest(),
 		TeamSupported:              d.Interface.SupportsTeams(),
 		HasSubDevices:              d.HasSubDevices(),

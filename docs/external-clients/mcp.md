@@ -106,7 +106,7 @@ curl -s -H "Authorization: Bearer $TOKEN" http://host:8119/info \
 
 ## 2. The tool surface
 
-Thirty-nine tools, in two tiers: 31 read tools + 8 write tools. **Read
+Fifty tools, in two tiers: 37 read tools + 13 write tools. **Read
 tools** are always registered (each gated on its backing subsystem
 being wired). **Write tools** are registered only when
 `allow_writes: true` — and that flag includes arming and disarming the
@@ -133,6 +133,7 @@ device, or the call is rejected (ADR 0002, multi-CCU safety).
 | `list_channels` | `address` (device-level) | The device's channels (address, number, type, name, room, data-point count). Use it to discover channel addresses (`<device>:<n>`) before `read_paramset`. |
 | `get_device_schedule` | `address` (device-level) | The device's weekly schedule (week profile) per channel: schedule type (`climate`/`default`), active/available profiles, entry counts, schedule-enabled state. |
 | `read_paramset` | `address` (channel, e.g. `ABC:1`), `key` (`MASTER` or `VALUES`) | The parameter→value map. `MASTER` = configuration, `VALUES` = current state. |
+| `read_link_paramset` | `receiver_channel_address`, `sender_channel_address` | The parameter→value map of the `LINK` paramset one direct link carries between the two channels. `LINK` has no fixed key string — the CCU addresses it by the peer channel — so the tool takes the channel pair instead of a `key`. |
 | `list_rooms` | `central_name?` | Configured rooms with the device count for each. |
 | `list_functions` | `central_name?` | Configured functions (Gewerke) with the device count for each. |
 | `list_programs` | `central_name?` | CCU automation programs (id, name, last-execution state). The `id` is what `trigger_program` takes; internal `Tmp_*` programs are omitted. |
@@ -142,6 +143,7 @@ device, or the call is rejected (ADR 0002, multi-CCU safety).
 | `list_inbox` | `central_name?` | Devices in the inbox — newly detected, not yet accepted into the configuration. |
 | `list_audit` | `limit?` (default 50, max 1000) | Recent config change-log, newest first (who changed what, when). |
 | `list_incidents` | `central_name?`, `limit?` (default 50, max 1000) | Recent reliability incident journal (circuit-breaker trips, ping/pong mismatches, retry exhaustion), newest first. Registered only when the daemon's `Incidents` dependency is wired. |
+| `list_warnings` | — | The active operator warnings: unhealthy or degraded health components, error-grade incidents of the last 24 h grouped per component, and per-central service-message backlogs, errors first. Each carries `id`, `severity`, `central`, `message_key` and `args`. The same aggregate the Config UI's Status card shows, without per-user silences. Registered only when the warnings aggregator is wired. |
 | `get_health` | — | Overall daemon status + per-component status (CCU connectivity, subsystems). |
 | `get_system_info` | `central_name?` | Daemon version, plus per-central program/sysvar counts and CCU firmware-update state. |
 | `list_alarm_zones` | — | Every alarm zone with its arm state, active countdown and the number of latched motion detectors. The `id` is what `arm_alarm_zone` / `disarm_alarm_zone` take. Registered only when the alarm domain is wired. |
@@ -151,6 +153,7 @@ device, or the call is rejected (ADR 0002, multi-CCU safety).
 | `list_backups` | `central_name?` | Locally-stored CCU backup archives (id, owning central, size, creation time, download filename). Registered only when the backup store is wired. |
 | `get_addon_update_status` | — | The CCU add-on self-updater's status: current/available version, whether an update is available, and whether a download or install is currently running. Registered only when the add-on self-updater is wired. |
 | `list_groups` | `central_name?` | CCU heating groups (roster and members) per central. Registered only when the groups reader is wired. |
+| `get_taxonomy` | `central_name?` | Each central's taxonomy — rooms, functions and any further enums — listing every node with its `path` and `parent_path`, including nodes nothing is assigned to. A node's path (e.g. `eg/kueche`) tells two rooms of one name apart. Registered only when the taxonomy reader is wired. |
 | `list_areas` | `central_name?` | Operator-defined areas (room groupings one level above the CCU's flat room list) with their assigned rooms; `central_name` scopes which rooms show. Registered only when the area store is wired. |
 | `list_interfaces` | — | Configured CCU interfaces with connectivity state (connected, duty cycle, carrier sense). Read-only: reconnecting an interface actuates the radio link and is deliberately not exposed, the same argument that keeps `install-mode` off the surface. Registered only when the interface index is wired. |
 | `get_measurements` | `central`, `interface_id`, `channel`, `parameter`, `from`, `to` (all required), `buckets?` (default 200, max 2000) | A data point's recorded measurement history, server-bucketed into evenly spaced points over the given window. There is no default window — a caller must name one. Registered only when the history service is wired. |
@@ -158,6 +161,9 @@ device, or the call is rejected (ADR 0002, multi-CCU safety).
 | `get_energy` | `central` (required), `from`, `to` (required), `group?` (`hour`/`day`/`month`, default `day`), `device?` | Per-device power/energy aggregation over the given window; omit `device` for every energy device on the central. Registered only when the energy service is wired. |
 | `list_links` | `central_name?` | Direct device-to-device links across every configured central. Registered only when the links service is wired. |
 | `list_schedules` | — | Every device across the fleet that carries a week schedule, with its schedule kind (`week_profile` or `climate`). Registered only when the schedule service is wired. |
+| `list_paramset_apply_targets` | `central_name`, `source_channel` (both required) | The channels the source channel's `MASTER` configuration can be applied to: every channel of the same central and interface whose stored `MASTER` paramset description is identical to the source's (the source itself is not listed). Channel type or device model equality is not enough. Each target carries address, name, device address/name/model and interface id. Registered only when the paramset-apply service is wired. |
+| `get_rssi_matrix` | `central_name?` | The BidCos-RF pairwise reception matrix, read live per central: per device, each partner it exchanges frames with, with `rx_dbm` (device hears partner) and `tx_dbm` (partner hears device), `null` when unknown. The central's RF gateways appear as partners and are listed under `interfaces`; a central whose matrix could not be read carries an `error` and empty rows. HmIP has no pairwise matrix. Requires an admin identity. Registered only when the RSSI-matrix service is wired. |
+| `get_receiver_proposal` | `central_name?`, `margin_db?` (0–30, default 6) | A dry run over the reception matrix: per BidCos-RF device, the RF gateway that hears it best compared with the assigned one, with a `verdict` of `switch`, `keep`, `marginal`, `unheard`, `unmeasured` or `roaming`. A switch is proposed only when the best gateway is at least `margin_db` stronger. Nothing is written. Requires an admin identity. Registered only when the RSSI-matrix service is wired. |
 
 The central-spanning read tools (`central_name?`) span every configured
 central when `central_name` is omitted, or scope to the named one when
@@ -168,7 +174,12 @@ set — the same multi-CCU rule the rest of the surface follows.
 | Tool | Arguments | Effect |
 | --- | --- | --- |
 | `set_datapoint` | `central_name`, `address` (channel), `parameter` (e.g. `STATE`, `LEVEL`), `value` | Writes a value to a device data point. Recorded to the audit log with a `via mcp` note. |
-| `write_paramset` | `central_name`, `address` (channel), `key` (`MASTER`/`VALUES`), `values` (map), `edit_token?` | Writes a paramset. Recorded to the audit log. A `MASTER` write requires `edit_token` from `open_edit_session` — see the note below. |
+| `write_paramset` | `central_name`, `address` (channel), `key` (`MASTER`/`VALUES`), `values` (map), `edit_token?` | Writes a paramset. Recorded to the audit log. A `MASTER` write requires `edit_token` from `open_edit_session` — see the note below. Returns `ok` plus, for a `MASTER` write, a read-back `report` — see the note below. |
+| `write_link_paramset` | `central_name`, `receiver_channel_address`, `sender_channel_address`, `values` (map), `edit_token?` | Writes the `LINK` paramset of one channel pair. The named central must own the receiver channel. A configuration write: it requires the per-pair edit lock (`open_edit_session` with `key: "LINK"` and `peer_address` set to the sender). Returns `ok` plus the read-back `report` — see the note below. |
+| `apply_paramset_to_channels` | `central_name`, `source_channel`, `values` (map), `targets` (channel addresses), `dry_run?`, `edit_token` | Applies `MASTER` values to several channels whose stored `MASTER` description is identical to the source channel's (`list_paramset_apply_targets` names the eligible ones). Each target is re-checked and validated before its own write; a refused or failed target never stops the rest. Needs the **source** channel's `MASTER` edit lock. Returns one outcome per target, in request order: `status` is `applied`, `would_apply` (dry run), `refused` (a gate rejected the target before any write) or `failed`, with a `reason` and, for an applied target, the read-back `result`. Registered only when the paramset-apply service is wired. |
+| `repair_device_config` | `address` (device-level), `central_name?`, `channels?`, `dry_run?` (default `true`) | Rebuilds a device's stored `MASTER` configuration from its own paramset descriptions: invalid stored values are clamped, coerced or replaced by the description `DEFAULT`, and each channel is rewritten as one full paramset. Omitting `dry_run` only reports. Per channel it returns a `status` (`clean`, `repaired`, `would_repair`, `foreign_parameters`, `failed`), the `corrections` (`parameter`, `stored`, `corrected`, `reason`), the `foreign` parameters the description does not carry — no write removes them — and, after a rewrite, the read-back `result`. Requires an admin identity. Registered only when the config-repair service is wired. |
+| `clear_device_config_cache` | `address` (device-level), `central_name?` | Makes the device's interface process forget its cached configuration, so the next configuration read or transfer rebuilds it. BidCos-RF and BidCos-Wired devices only. Recorded to the audit log. Requires an admin identity. Registered only when the config-cache clearer is wired. |
+| `assign_rf_interface` | `address` (BidCos-RF device), `interface_address` (gateway serial), `roaming?`, `central_name?` | Pins a BidCos-RF device to the RF gateway with the given serial, or with `roaming: true` lets the BidCos-RF daemon re-assign it by signal strength. `get_receiver_proposal` suggests candidates. Recorded to the audit log. Requires an admin identity. Registered only when the RF-interface assigner is wired. |
 | `open_edit_session` | `address` (channel), `key` (`MASTER`) | Acquires the per-channel edit lock a `MASTER` `write_paramset` call needs. Returns `token` (pass as `edit_token`) and `expires`. Fails when another session already holds the lock. Registered only when the daemon's edit-lock registry is wired. |
 | `close_edit_session` | `address` (channel), `key` (`MASTER`), `edit_token` | Releases a lock `open_edit_session` opened. Registered only when the daemon's edit-lock registry is wired. |
 | `trigger_program` | `central_name`, `program_id` (CCU ISE object id) | Runs a CCU automation program. Recorded to the audit log. |
@@ -197,6 +208,23 @@ Notes:
   `token` as `write_paramset`'s `edit_token`, and call
   `close_edit_session` when done (or let the lock expire on its own).
   `VALUES` writes are ungated and need no token.
+  `apply_paramset_to_channels` holds the same gate on its source channel.
+- A configuration write is read back after it lands, because an interface
+  process may answer ok and still drop, clamp or coerce a value.
+  `write_paramset` (for `MASTER`) and `write_link_paramset` return that
+  comparison as `report`: `written` (the parameter names sent, sorted),
+  `readback_divergences` (each `parameter` whose stored value differs, with
+  `sent` and `stored`; `stored` is `null` when the parameter is missing from
+  the stored paramset) and `readback_error` (set when the read-back itself
+  failed — the divergences are then unknown, not empty). An empty
+  `readback_divergences` means every value is stored as sent. A `VALUES`
+  write is not read back and carries no `report`. The same shape appears as
+  `result` in the outcomes of `apply_paramset_to_channels` and
+  `repair_device_config`.
+- `central_name` is optional on the device-level admin tools
+  (`repair_device_config`, `clear_device_config_cache`,
+  `assign_rf_interface`) because the device resolves its own central; when
+  it is given it must match the owning central, or the call is rejected.
 - Channel addresses use the `<device>:<channel>` form (e.g.
   `0001D3C99C1234:4`). Device-level addresses (no `:channel`) are used
   by `get_device`.

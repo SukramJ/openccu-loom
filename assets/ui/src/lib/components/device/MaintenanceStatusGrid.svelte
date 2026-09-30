@@ -24,13 +24,22 @@
 
   type Props = {
     address: string;
+    /**
+     * The device's interface pushes CONFIG_PENDING reliably (HmIP). It
+     * decides what a set CONFIG_PENDING means: on those interfaces a flag
+     * that stays set is a transfer that is not getting through — possibly
+     * a broken stored configuration — while elsewhere (BidCos) it is the
+     * normal queue for a battery device waiting for its next wake-up.
+     */
+    pushesConfigPending?: boolean;
   };
 
-  let { address }: Props = $props();
+  let { address, pushesConfigPending = false }: Props = $props();
 
   type DPMap = Record<string, unknown>;
 
   let values = $state<DPMap>({});
+  const configPendingSet = $derived(Boolean(values.CONFIG_PENDING));
   let loading = $state(true);
   let error = $state<string | null>(null);
 
@@ -71,9 +80,10 @@
       // typed without weakening the public envelope.
       const p = env.payload as DataPointChangedEvent;
       // Match against the device's :0 channel only — we never want
-      // to surface, e.g., a level event from channel 3 here.
-      if (!p.channel_address?.endsWith(":0")) return;
-      if (!p.channel_address.startsWith(address)) return;
+      // to surface, e.g., a level event from channel 3 here. Exact match:
+      // a prefix test would also accept a sibling device whose address
+      // extends this one ("ABC1" vs "ABC12:0").
+      if (p.channel_address !== `${address}:0`) return;
       values = { ...values, [p.parameter]: p.value };
     });
   });
@@ -244,6 +254,13 @@
         </div>
       {/each}
     </div>
+    {#if configPendingSet}
+      <p class="mt-3 text-xs text-[var(--ha-secondary-text-color)]" data-testid="config-pending-hint">
+        {pushesConfigPending
+          ? t("device.config_pending.hint_reliable")
+          : t("device.config_pending.hint_queued")}
+      </p>
+    {/if}
   </Card>
 {:else if error}
   <ErrorState message={error} onRetry={load} />

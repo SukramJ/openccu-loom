@@ -10,6 +10,135 @@ function fixture(name: string): unknown {
   return JSON.parse(readFileSync(join(fixturesDir, name), 'utf-8'));
 }
 
+// --- Device-admin fixtures (radio management, repair, multi-apply) ------
+
+/** Channels offered as MASTER multi-apply targets, for any source channel. */
+export const MASTER_APPLY_TARGETS = [
+  {
+    address: '0001D3C99B4E30:1',
+    name: 'Bedroom Thermostat',
+    device_address: '0001D3C99B4E30',
+    device_name: 'Bedroom Thermostat',
+    device_model: 'HmIP-WTH-2',
+    interface_id: 'ccu1-HmIP-RF',
+  },
+  {
+    address: '0001D3C99B4E31:1',
+    name: 'Office Thermostat',
+    device_address: '0001D3C99B4E31',
+    device_name: 'Office Thermostat',
+    device_model: 'HmIP-WTH-2',
+    interface_id: 'ccu1-HmIP-RF',
+  },
+];
+/** The target the apply mock refuses, so a refusal reason renders. */
+export const MASTER_APPLY_REFUSED = '0001D3C99B4E31:1';
+
+function configRepairOutcomes(
+  address: string,
+  req: { dry_run: boolean; channels?: string[] },
+): unknown[] {
+  const drifted = [
+    { parameter: 'TEMPERATURE_OFFSET', stored: 7, corrected: 3.5, reason: 'above maximum 3.5' },
+    { parameter: 'BOOST_TIME_PERIOD', stored: 'x', corrected: 5, reason: 'wrong type, expected INTEGER' },
+  ];
+  const all = req.dry_run
+    ? [
+        { channel: `${address}:0`, status: 'clean' },
+        { channel: `${address}:1`, status: 'would_repair', corrections: drifted },
+        { channel: `${address}:2`, status: 'foreign_parameters', foreign: ['LEGACY_TEMP_MODE'] },
+      ]
+    : [
+        {
+          channel: `${address}:1`,
+          status: 'repaired',
+          corrections: drifted,
+          result: { written: ['BOOST_TIME_PERIOD', 'TEMPERATURE_OFFSET'], readback_divergences: [] },
+        },
+        {
+          channel: `${address}:2`,
+          status: 'foreign_parameters',
+          foreign: ['LEGACY_TEMP_MODE'],
+          result: { written: ['BOOST_TIME_PERIOD'], readback_divergences: [] },
+        },
+      ];
+  const only = req.channels && req.channels.length > 0 ? new Set(req.channels) : null;
+  return only ? all.filter((o) => only.has((o as { channel: string }).channel)) : all;
+}
+
+const RSSI_MATRIX = [
+  {
+    central: 'ccu',
+    interface_id: 'BidCos-RF',
+    interfaces: [
+      { address: 'NEQ1000001', description: 'CCU built-in radio', connected: true, default: true, duty_cycle: 4 },
+      { address: 'NEQ1000002', description: 'LAN gateway Garage', connected: true, default: false, duty_cycle: 2 },
+    ],
+    devices: [
+      {
+        address: 'OEQ0123456',
+        name: 'Living Room Switch',
+        partners: [
+          { address: 'NEQ1000001', rx_dbm: -86, tx_dbm: -88 },
+          { address: 'NEQ1000002', rx_dbm: -64, tx_dbm: -66 },
+          { address: 'OEQ0222222', rx_dbm: -79, tx_dbm: null },
+        ],
+      },
+      {
+        address: 'OEQ0222222',
+        name: 'Garage Blind',
+        partners: [
+          { address: 'NEQ1000001', rx_dbm: -58, tx_dbm: -60 },
+          { address: 'NEQ1000002', rx_dbm: -61, tx_dbm: -63 },
+        ],
+      },
+    ],
+  },
+];
+
+const RECEIVER_PROPOSAL = [
+  {
+    address: 'OEQ0123456',
+    name: 'Living Room Switch',
+    central: 'ccu',
+    current_interface: 'NEQ1000001',
+    best_interface: 'NEQ1000002',
+    current_rx_dbm: -86,
+    best_rx_dbm: -64,
+    roaming: false,
+    verdict: 'switch',
+  },
+  {
+    address: 'OEQ0222222',
+    name: 'Garage Blind',
+    central: 'ccu',
+    current_interface: 'NEQ1000001',
+    best_interface: 'NEQ1000001',
+    current_rx_dbm: -58,
+    best_rx_dbm: -58,
+    roaming: false,
+    verdict: 'keep',
+  },
+  {
+    address: 'OEQ0333333',
+    name: 'Porch Motion',
+    central: 'ccu',
+    current_interface: 'NEQ1000001',
+    best_interface: 'NEQ1000002',
+    current_rx_dbm: -74,
+    best_rx_dbm: -71,
+    roaming: false,
+    verdict: 'marginal',
+  },
+  {
+    address: 'OEQ0444444',
+    name: 'Cellar Contact',
+    central: 'ccu',
+    roaming: true,
+    verdict: 'roaming',
+  },
+];
+
 export async function mockAllApis(page: Page): Promise<void> {
   // Freeze the wall clock before the first navigation. Several views render
   // a formatted timestamp into the page (the device list shows its last
@@ -130,6 +259,71 @@ export async function mockAllApis(page: Page): Promise<void> {
   await page.route('**/api/v1/devices/*/channels', (route) => route.fulfill({ json: [] }));
   await page.route('**/api/v1/devices/*/cdps', (route) => route.fulfill({ json: [] }));
   await page.route('**/api/v1/devices/*/paramsets/**', (route) => route.fulfill({ json: {} }));
+  // A MASTER write answers 200 with the post-write read-back report. The
+  // mock reports every sent value as stored, so a save shows the plain
+  // success path unless a test overrides this route.
+  await page.route('**/api/v1/devices/*/paramsets/MASTER', (route) => {
+    if (route.request().method() !== 'PUT') return route.fulfill({ json: {} });
+    const body = (route.request().postDataJSON() ?? {}) as Record<string, unknown>;
+    return route.fulfill({
+      json: { written: Object.keys(body).sort(), readback_divergences: [] },
+    });
+  });
+  // MASTER multi-apply: two description-identical siblings of whichever
+  // channel asks. The first passes every gate; the second is refused, so
+  // both outcome shapes render.
+  await page.route('**/api/v1/devices/*/paramsets/MASTER/apply-targets', (route) =>
+    route.fulfill({ json: { items: MASTER_APPLY_TARGETS } }),
+  );
+  await page.route('**/api/v1/devices/*/paramsets/MASTER/apply-to', (route) => {
+    const req = route.request().postDataJSON() as {
+      values: Record<string, unknown>;
+      targets: string[];
+      dry_run: boolean;
+    };
+    const items = req.targets.map((address) => {
+      if (address === MASTER_APPLY_REFUSED) {
+        return {
+          address,
+          status: 'refused',
+          reason: 'MASTER description differs from the source channel (firmware 1.6.2)',
+        };
+      }
+      if (req.dry_run) return { address, status: 'would_apply' };
+      const written = Object.keys(req.values).sort();
+      return {
+        address,
+        status: 'applied',
+        result: {
+          written,
+          // One divergence so the read-back row renders: the device rounds
+          // the first value to its own step.
+          readback_divergences: written.length
+            ? [{ parameter: written[0], sent: req.values[written[0]], stored: 1 }]
+            : [],
+        },
+      };
+    });
+    return route.fulfill({ json: { items } });
+  });
+  // Configuration repair: a clean maintenance channel, one channel with
+  // drifted values, one carrying an entry its description does not know.
+  await page.route('**/api/v1/devices/*/config/repair', (route) => {
+    const address = decodeURIComponent(
+      new URL(route.request().url()).pathname.split('/').slice(-3)[0],
+    );
+    const req = (route.request().postDataJSON() ?? { dry_run: true }) as {
+      dry_run: boolean;
+      channels?: string[];
+    };
+    return route.fulfill({ json: { items: configRepairOutcomes(address, req) } });
+  });
+  await page.route('**/api/v1/devices/*/config/cache-clear', (route) =>
+    route.fulfill({ status: 204, body: '' }),
+  );
+  await page.route('**/api/v1/devices/*/rf-interface', (route) =>
+    route.fulfill({ status: 204, body: '' }),
+  );
 
   // Sysvars. The trailing `*` covers the `page`/`per_page` query the list
   // call carries (api/client.ts listSysvars) — without it the request misses
@@ -251,6 +445,15 @@ export async function mockAllApis(page: Page): Promise<void> {
         ],
       },
     }),
+  );
+  // BidCos-RF pairwise matrix and the best-receiver proposal built from it.
+  // The devices are the BidCos entry of the RSSI list above plus a second
+  // actuator, heard by the CCU's own radio and one LAN gateway.
+  await page.route('**/api/v1/diagnostics/rssi/matrix', (route) =>
+    route.fulfill({ json: { items: RSSI_MATRIX } }),
+  );
+  await page.route('**/api/v1/diagnostics/rssi/receiver-proposal*', (route) =>
+    route.fulfill({ json: { items: RECEIVER_PROPOSAL } }),
   );
   await page.route(/\/api\/v1\/diagnostics(\?.*)?$/, (route) =>
     route.fulfill({ json: fixture('diagnostics.json') }),

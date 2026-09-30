@@ -22,6 +22,29 @@ const (
 // String returns the wire representation.
 func (k ParamsetKey) String() string { return string(k) }
 
+// ParseParamsetKey maps a caller-supplied string onto one of the three
+// paramset keys a CCU interface accepts on the wire — MASTER, VALUES and
+// LINK — and reports false for anything else, including lower-case
+// spellings and the synthetic compartments.
+//
+// The match is strict on purpose. The BidCos-RF daemon interprets an
+// unrecognised paramset key in a getParamset/getParamsetDescription call
+// as a PEER ADDRESS and answers with LINK-paramset defaults instead of a
+// fault, so a free-form key string must never reach the wire: a typo would
+// come back as a plausible but entirely unrelated paramset.
+func ParseParamsetKey(s string) (ParamsetKey, bool) {
+	switch s {
+	case string(ParamsetKeyMaster):
+		return ParamsetKeyMaster, true
+	case string(ParamsetKeyValues):
+		return ParamsetKeyValues, true
+	case string(ParamsetKeyLink):
+		return ParamsetKeyLink, true
+	default:
+		return "", false
+	}
+}
+
 // ParameterType is the CCU-level data type of a parameter.
 type ParameterType string
 

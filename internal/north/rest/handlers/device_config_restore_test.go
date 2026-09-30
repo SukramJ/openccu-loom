@@ -111,3 +111,63 @@ func TestRestoreDeviceConfig_MissingAddr_Returns400(t *testing.T) {
 		t.Errorf("domain layer must not be called on a missing address, got lastAddress=%q", svc.lastAddress)
 	}
 }
+
+// TestClearDeviceConfigCache_HappyPath_Returns204AndRecordsAudit verifies a
+// successful cache clear answers 204 and records one audit row whose note
+// tells it apart from a config re-transmit.
+func TestClearDeviceConfigCache_HappyPath_Returns204AndRecordsAudit(t *testing.T) {
+	t.Parallel()
+	svc := &stubDeviceAdmin{}
+	rec := &captureRecorder{}
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "0001ABCD"}))
+	w := httptest.NewRecorder()
+	ClearDeviceConfigCache(svc, rec).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d body=%s", w.Code, w.Body.String())
+	}
+	if svc.lastAddress != "0001ABCD" {
+		t.Fatalf("expected lastAddress=0001ABCD, got %q", svc.lastAddress)
+	}
+	if len(rec.entries) != 1 {
+		t.Fatalf("expected exactly 1 audit entry, got %d: %+v", len(rec.entries), rec.entries)
+	}
+	if e := rec.entries[0]; e.DeviceAddress != "0001ABCD" || e.Action != audit.ActionDeviceConfigCacheClear {
+		t.Errorf("audit entry=%+v, want device 0001ABCD with the cache-clear action", e)
+	}
+}
+
+// TestClearDeviceConfigCache_ErrorMapping verifies the status mapping:
+// unsupported interface 422, upstream fault 502, unwired 503, missing
+// address 400 — none of them audited.
+func TestClearDeviceConfigCache_ErrorMapping(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		svc  DeviceConfigCachePort
+		addr string
+		want int
+	}{
+		{"unsupported", &stubDeviceAdmin{clearCacheErr: backends.ErrUnsupported}, "0001ABCD", http.StatusUnprocessableEntity},
+		{"upstream", &stubDeviceAdmin{clearCacheErr: errors.New("CCU unreachable")}, "0001ABCD", http.StatusBadGateway},
+		{"unwired", nil, "0001ABCD", http.StatusServiceUnavailable},
+		{"missing addr", &stubDeviceAdmin{}, "", http.StatusBadRequest},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			rec := &captureRecorder{}
+			req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+			req = req.WithContext(chiContext(req, map[string]string{"addr": tc.addr}))
+			w := httptest.NewRecorder()
+			ClearDeviceConfigCache(tc.svc, rec).ServeHTTP(w, req)
+			if w.Code != tc.want {
+				t.Fatalf("expected %d, got %d body=%s", tc.want, w.Code, w.Body.String())
+			}
+			if len(rec.entries) != 0 {
+				t.Errorf("a failed clear was audited: %+v", rec.entries)
+			}
+		})
+	}
+}

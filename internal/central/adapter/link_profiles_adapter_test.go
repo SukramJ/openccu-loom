@@ -12,6 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/store/linkprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // TestLinkProfilesAdapter_NilStore verifies that GetLinkProfiles returns nil
@@ -125,12 +126,14 @@ func (f *fakeLinkParamsetReadWriter) GetLinkParamset(_ context.Context, _, _ str
 	return f.getValues, nil
 }
 
-func (f *fakeLinkParamsetReadWriter) PutLinkParamset(_ context.Context, channelAddress, peerAddress string, values map[string]any) error {
+func (f *fakeLinkParamsetReadWriter) PutLinkParamset(
+	_ context.Context, channelAddress, peerAddress string, values map[string]any,
+) (*interfaces.ParamsetWriteReport, error) {
 	f.putCalled = true
 	f.putChannel = channelAddress
 	f.putPeer = peerAddress
 	f.putValues = values
-	return nil
+	return &interfaces.ParamsetWriteReport{}, nil
 }
 
 // TestLinkProfilesAdapter_ApplyLinkProfile_ValueSetAndPair is the bite proof

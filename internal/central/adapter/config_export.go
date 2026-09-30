@@ -74,7 +74,8 @@ func (c *ConfigExportDomain) WriteParamset(
 	if err != nil {
 		return err
 	}
-	return c.paramsets.PutParamset(ctx, channelAddress, key, values)
+	_, err = c.paramsets.PutParamset(ctx, channelAddress, key, values)
+	return err
 }
 
 // resolve validates the paramset key and the central scope. An empty

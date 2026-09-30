@@ -255,6 +255,10 @@ func (fakeDeviceAdmin) SetChannelFunctions(context.Context, string, int, []strin
 }
 
 func (fakeDeviceAdmin) RestoreDeviceConfig(context.Context, string) error { return nil }
+func (fakeDeviceAdmin) ClearConfigCache(context.Context, string) error    { return nil }
+func (fakeDeviceAdmin) AssignRFInterface(context.Context, string, string, bool) error {
+	return nil
+}
 
 type fakeDeviceInstallMode struct{}
 
@@ -377,6 +381,16 @@ type fakeRSSIService struct{}
 
 func (fakeRSSIService) RSSIInfo(context.Context) (map[string]any, error) { return nil, nil }
 
+type fakeRSSIMatrixService struct{}
+
+func (fakeRSSIMatrixService) RSSIMatrix(context.Context) ([]interfaces.RSSIMatrixCentral, error) {
+	return nil, nil
+}
+
+func (fakeRSSIMatrixService) ReceiverProposal(context.Context, int) ([]interfaces.ReceiverProposal, error) {
+	return nil, nil
+}
+
 type fakeStartupCaptureService struct{}
 
 func (fakeStartupCaptureService) Load() (diagnostics.StartupCaptureConfig, error) {
@@ -453,16 +467,32 @@ func (fakeParamsetService) GetParamset(context.Context, string, hmenum.ParamsetK
 	return nil, nil
 }
 
-func (fakeParamsetService) PutParamset(context.Context, string, hmenum.ParamsetKey, map[string]any) error {
-	return nil
+func (fakeParamsetService) PutParamset(context.Context, string, hmenum.ParamsetKey, map[string]any) (*interfaces.ParamsetWriteReport, error) {
+	return nil, nil
 }
 
 func (fakeParamsetService) GetLinkParamset(context.Context, string, string) (map[string]any, error) {
 	return nil, nil
 }
 
-func (fakeParamsetService) PutLinkParamset(context.Context, string, string, map[string]any) error {
-	return nil
+func (fakeParamsetService) PutLinkParamset(context.Context, string, string, map[string]any) (*interfaces.ParamsetWriteReport, error) {
+	return &interfaces.ParamsetWriteReport{}, nil
+}
+
+type fakeParamsetApplyService struct{}
+
+func (fakeParamsetApplyService) ApplyTargets(context.Context, string) ([]interfaces.ParamsetApplyTarget, error) {
+	return nil, nil
+}
+
+func (fakeParamsetApplyService) ApplyToChannels(context.Context, string, map[string]any, []string, bool) ([]interfaces.ParamsetApplyOutcome, error) {
+	return nil, nil
+}
+
+type fakeConfigRepairService struct{}
+
+func (fakeConfigRepairService) RepairDeviceConfig(context.Context, string, []string, bool) ([]interfaces.ConfigRepairOutcome, error) {
+	return nil, nil
 }
 
 type fakeParameterDeterminer struct{}
@@ -692,6 +722,7 @@ func fullyWiredRouterDeps() rest.Deps {
 		LogFeed:                 fakeLogFeedService{},
 		Introspect:              fakeIntrospectService{},
 		RSSIInfo:                fakeRSSIService{},
+		RSSIMatrix:              fakeRSSIMatrixService{},
 		StartupCapture:          fakeStartupCaptureService{},
 		EnableRestartEndpoint:   true,
 		Capture:                 fakeCaptureService{},
@@ -701,6 +732,8 @@ func fullyWiredRouterDeps() rest.Deps {
 		DeviceLookup:            fakeDeviceLookup{},
 		Backup:                  fakeBackupService{},
 		Paramsets:               fakeParamsetService{},
+		ParamsetApply:           fakeParamsetApplyService{},
+		ConfigRepair:            fakeConfigRepairService{},
 		ParameterDeterminer:     fakeParameterDeterminer{},
 		Hub:                     fakeHubIndex{h: hub.NewHub("test")},
 		SysvarRefresh:           fakeSysvarRefreshService{},

@@ -22,6 +22,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/north/mcp"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // ─── fakes ───────────────────────────────────────────────────────────────────
@@ -37,6 +38,10 @@ type fakeParamsets struct {
 	// pin the exact pair a call reaches the domain with.
 	linkStore    map[string]map[string]any
 	putLinkCalls []putLinkParamsetCall
+
+	// putReport / putLinkReport are what the writes answer with.
+	putReport     *interfaces.ParamsetWriteReport
+	putLinkReport *interfaces.ParamsetWriteReport
 }
 
 type putParamsetCall struct {
@@ -67,12 +72,14 @@ func (f *fakeParamsets) GetParamset(_ context.Context, address string, key hmenu
 	return v, nil
 }
 
-func (f *fakeParamsets) PutParamset(_ context.Context, address string, key hmenum.ParamsetKey, values map[string]any) error {
+func (f *fakeParamsets) PutParamset(
+	_ context.Context, address string, key hmenum.ParamsetKey, values map[string]any,
+) (*interfaces.ParamsetWriteReport, error) {
 	if f.err != nil {
-		return f.err
+		return nil, f.err
 	}
 	f.putCalls = append(f.putCalls, putParamsetCall{address: address, key: key, values: values})
-	return nil
+	return f.putReport, nil
 }
 
 func (f *fakeParamsets) GetLinkParamset(_ context.Context, channelAddress, peerAddress string) (map[string]any, error) {
@@ -82,12 +89,14 @@ func (f *fakeParamsets) GetLinkParamset(_ context.Context, channelAddress, peerA
 	return f.linkStore[channelAddress+"|"+peerAddress], nil
 }
 
-func (f *fakeParamsets) PutLinkParamset(_ context.Context, channelAddress, peerAddress string, values map[string]any) error {
+func (f *fakeParamsets) PutLinkParamset(
+	_ context.Context, channelAddress, peerAddress string, values map[string]any,
+) (*interfaces.ParamsetWriteReport, error) {
 	if f.err != nil {
-		return f.err
+		return nil, f.err
 	}
 	f.putLinkCalls = append(f.putLinkCalls, putLinkParamsetCall{channelAddress: channelAddress, peerAddress: peerAddress, values: values})
-	return nil
+	return f.putLinkReport, nil
 }
 
 // fakeHealth is a minimal in-memory implementation of mcp.HealthReader.

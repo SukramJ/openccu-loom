@@ -18,6 +18,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // stubParamsetService is an inline stub for ParamsetService.
@@ -33,24 +34,44 @@ type stubParamsetService struct {
 	// assert the service was never reached when a write is rejected.
 	putCalls     int
 	putLinkCalls int
+
+	// putReport overrides the report a MASTER write answers with; nil
+	// yields an empty report, as the domain does for a clean write.
+	putReport *interfaces.ParamsetWriteReport
 }
 
 func (s *stubParamsetService) GetParamset(_ context.Context, _ string, _ hmenum.ParamsetKey) (map[string]any, error) {
 	return s.getResult, s.getErr
 }
 
-func (s *stubParamsetService) PutParamset(_ context.Context, _ string, _ hmenum.ParamsetKey, _ map[string]any) error {
+// PutParamset mirrors the domain contract: VALUES answers a nil report,
+// every configuration write a non-nil one.
+func (s *stubParamsetService) PutParamset(
+	_ context.Context, _ string, key hmenum.ParamsetKey, _ map[string]any,
+) (*interfaces.ParamsetWriteReport, error) {
 	s.putCalls++
-	return s.putErr
+	if s.putErr != nil {
+		return nil, s.putErr
+	}
+	if key == hmenum.ParamsetKeyValues {
+		return nil, nil
+	}
+	if s.putReport != nil {
+		return s.putReport, nil
+	}
+	return &interfaces.ParamsetWriteReport{}, nil
 }
 
 func (s *stubParamsetService) GetLinkParamset(_ context.Context, _, _ string) (map[string]any, error) {
 	return s.getLinkResult, s.getLinkErr
 }
 
-func (s *stubParamsetService) PutLinkParamset(_ context.Context, _, _ string, _ map[string]any) error {
+func (s *stubParamsetService) PutLinkParamset(_ context.Context, _, _ string, _ map[string]any) (*interfaces.ParamsetWriteReport, error) {
 	s.putLinkCalls++
-	return s.putLinkErr
+	if s.putLinkErr != nil {
+		return nil, s.putLinkErr
+	}
+	return &interfaces.ParamsetWriteReport{}, nil
 }
 
 func TestGetParamset_HappyPath(t *testing.T) {
@@ -178,8 +199,8 @@ func TestPutLinkParamset_HappyPath(t *testing.T) {
 	w := httptest.NewRecorder()
 	PutLinkParamset(svc, nil).ServeHTTP(w, req)
 
-	if w.Code != http.StatusAccepted {
-		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
 	}
 }
 
@@ -329,7 +350,7 @@ func TestPutLinkParamset_ServiceError_Returns502(t *testing.T) {
 	}
 }
 
-func TestPutLinkParamset_HappyPath_Returns202(t *testing.T) {
+func TestPutLinkParamset_HappyPath_Returns200WithWriteResult(t *testing.T) {
 	t.Parallel()
 	svc := &stubParamsetService{}
 	req := httptest.NewRequest(http.MethodPut, "/link-paramsets/peer", strings.NewReader(`{"KEY":"value"}`))
@@ -338,8 +359,86 @@ func TestPutLinkParamset_HappyPath_Returns202(t *testing.T) {
 	w := httptest.NewRecorder()
 	PutLinkParamset(svc, nil).ServeHTTP(w, req)
 
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var body map[string]json.RawMessage
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v body=%s", err, w.Body.String())
+	}
+	if got := string(body["readback_divergences"]); got != "[]" {
+		t.Fatalf("readback_divergences = %s, want []", got)
+	}
+}
+
+// TestPutParamset_Master_Returns200WithWriteResult pins the MASTER answer
+// shape: 200 with the read-back report, divergences carried through, and an
+// empty divergence list rendered as [] rather than null — a null would read
+// as "not compared" to a client.
+func TestPutParamset_Master_Returns200WithWriteResult(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name   string
+		report *interfaces.ParamsetWriteReport
+		want   string
+	}{
+		{
+			name:   "clean write",
+			report: &interfaces.ParamsetWriteReport{Written: []string{"CTRL_MODE"}},
+			want:   `{"written":["CTRL_MODE"],"readback_divergences":[]}`,
+		},
+		{
+			name: "clamped value",
+			report: &interfaces.ParamsetWriteReport{
+				Written:     []string{"TEMP_MAX"},
+				Divergences: []interfaces.ParamsetDivergence{{Parameter: "TEMP_MAX", Sent: 40.0, Stored: 30.5}},
+			},
+			want: `{"written":["TEMP_MAX"],"readback_divergences":[{"parameter":"TEMP_MAX","sent":40,"stored":30.5}]}`,
+		},
+		{
+			name: "read-back failed",
+			report: &interfaces.ParamsetWriteReport{
+				Written:       []string{"CTRL_MODE"},
+				ReadbackError: "ccu unreachable",
+			},
+			want: `{"written":["CTRL_MODE"],"readback_divergences":[],"readback_error":"ccu unreachable"}`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			svc := &stubParamsetService{putReport: tc.report}
+			req := httptest.NewRequest(http.MethodPut, "/", strings.NewReader(`{"CTRL_MODE": 1}`))
+			req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001:1", "key": "MASTER"}))
+			w := httptest.NewRecorder()
+			PutParamset(svc, nil).ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+			}
+			if got := strings.TrimSpace(w.Body.String()); got != tc.want {
+				t.Fatalf("body\n got: %s\nwant: %s", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestPutParamset_Values_Returns202EmptyBody pins that a VALUES control
+// write keeps its bodiless 202: it is not read back and has no report.
+func TestPutParamset_Values_Returns202EmptyBody(t *testing.T) {
+	t.Parallel()
+	svc := &stubParamsetService{}
+	req := httptest.NewRequest(http.MethodPut, "/", strings.NewReader(`{"LEVEL": 0.5}`))
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001:1", "key": "VALUES"}))
+	w := httptest.NewRecorder()
+	PutParamset(svc, nil).ServeHTTP(w, req)
+
 	if w.Code != http.StatusAccepted {
 		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if w.Body.Len() != 0 {
+		t.Fatalf("expected an empty body, got %q", w.Body.String())
 	}
 }
 
@@ -401,7 +500,7 @@ func TestPutParamset_MasterWrongToken_Returns423(t *testing.T) {
 	}
 }
 
-func TestPutParamset_MasterHeldToken_Returns202(t *testing.T) {
+func TestPutParamset_MasterHeldToken_Returns200(t *testing.T) {
 	t.Parallel()
 	locks := NewEditSessions()
 	lock, ok := locks.Open("channel:DEV001:1:MASTER", "test")
@@ -416,8 +515,8 @@ func TestPutParamset_MasterHeldToken_Returns202(t *testing.T) {
 	w := httptest.NewRecorder()
 	PutParamset(svc, locks).ServeHTTP(w, req)
 
-	if w.Code != http.StatusAccepted {
-		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
 	}
 	if svc.putCalls != 1 {
 		t.Fatalf("expected service to be called once, got %d calls", svc.putCalls)
@@ -465,7 +564,7 @@ func TestPutLinkParamset_NoToken_Returns423(t *testing.T) {
 	}
 }
 
-func TestPutLinkParamset_HeldToken_Returns202(t *testing.T) {
+func TestPutLinkParamset_HeldToken_Returns200(t *testing.T) {
 	t.Parallel()
 	locks := NewEditSessions()
 	lock, ok := locks.Open("channel:DEV001:1:LINK:DEV002:1", "test")
@@ -480,8 +579,8 @@ func TestPutLinkParamset_HeldToken_Returns202(t *testing.T) {
 	w := httptest.NewRecorder()
 	PutLinkParamset(svc, locks).ServeHTTP(w, req)
 
-	if w.Code != http.StatusAccepted {
-		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
 	}
 	if svc.putLinkCalls != 1 {
 		t.Fatalf("expected service to be called once, got %d calls", svc.putLinkCalls)

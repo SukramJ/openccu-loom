@@ -13,7 +13,7 @@
 // unauthenticated, which is why the wrapper and not the listener is
 // named here. That mount gates the whole tool set at a single role, so
 // the few tools whose REST twin is mounted With(admin) re-check the
-// caller's role on the resolved identity themselves (callerHasRole).
+// caller's role on the resolved identity themselves (callerIsAdmin).
 package mcp
 
 import (
@@ -31,6 +31,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/warnings"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // CentralLister enumerates the configured CCUs — the scoping dimension
@@ -81,14 +82,16 @@ type ValueWriter interface {
 // existing Deps.Paramsets seam.
 type ParamsetService interface {
 	GetParamset(ctx context.Context, address string, key hmenum.ParamsetKey) (map[string]any, error)
-	PutParamset(ctx context.Context, address string, key hmenum.ParamsetKey, values map[string]any) error
+	// PutParamset returns a nil report for VALUES and the post-write
+	// read-back comparison for MASTER.
+	PutParamset(ctx context.Context, address string, key hmenum.ParamsetKey, values map[string]any) (*interfaces.ParamsetWriteReport, error)
 	// GetLinkParamset reads the LINK paramset on channelAddress keyed by
 	// peerAddress. Unlike MASTER/VALUES, LINK has no fixed key string —
 	// the CCU addresses it by the peer channel — so the pair is explicit.
 	GetLinkParamset(ctx context.Context, channelAddress, peerAddress string) (map[string]any, error)
 	// PutLinkParamset writes values to the LINK paramset on channelAddress
-	// keyed by peerAddress.
-	PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) error
+	// keyed by peerAddress, and reports the post-write read-back comparison.
+	PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) (*interfaces.ParamsetWriteReport, error)
 }
 
 // HealthReader exposes the daemon's component-health view (CCU
@@ -139,6 +142,11 @@ type EditLockManager interface {
 	// holder. Returns false when the key is unheld or token does not
 	// match — same semantics as [handlers.EditSessions.Close].
 	Close(key, token string) bool
+	// Held reports whether any live session currently holds key — same
+	// semantics as [handlers.EditSessions.Held]. The multi-apply tool
+	// refuses targets whose MASTER lock is held so a batch never writes
+	// under someone's open edit session.
+	Held(key string) bool
 }
 
 // HubResolver resolves a central's hub model by name — the seam the
@@ -271,8 +279,32 @@ type Deps struct {
 	Devices   DeviceLister
 	Writer    ValueWriter
 	Paramsets ParamsetService
-	Health    HealthReader
-	Hubs      HubResolver
+	// ParamsetApply backs list_paramset_apply_targets and the gated
+	// apply_paramset_to_channels: applying one channel's MASTER values to
+	// the channels whose stored MASTER description is identical — the same
+	// domain service the REST apply-targets / apply-to routes call. Nil
+	// leaves both tools unregistered.
+	ParamsetApply interfaces.ParamsetApplyService
+	// ConfigRepair backs repair_device_config — rebuilding a device's
+	// stored MASTER configuration from its own descriptions, the same
+	// domain service the REST config/repair route calls. Nil leaves the
+	// tool unregistered.
+	ConfigRepair interfaces.DeviceConfigRepairService
+	// ConfigCache backs clear_device_config_cache — the BidCos
+	// configuration-cache clear the REST config/cache-clear route serves.
+	// Nil leaves the tool unregistered.
+	ConfigCache ConfigCacheClearer
+	// RSSIMatrix backs get_rssi_matrix and get_receiver_proposal — the
+	// BidCos-RF pairwise reception matrix and the best-gateway dry run
+	// the REST diagnostics/rssi/matrix and receiver-proposal routes
+	// serve. Nil leaves both tools unregistered.
+	RSSIMatrix interfaces.RSSIMatrixService
+	// RFInterface backs assign_rf_interface — the BidCos-RF gateway
+	// assignment the REST devices/{addr}/rf-interface route serves. Nil
+	// leaves the tool unregistered.
+	RFInterface RFInterfaceAssigner
+	Health      HealthReader
+	Hubs        HubResolver
 	// Taxonomy backs get_taxonomy: every central's enum trees, the same
 	// read the REST GET /taxonomy handler serves. Nil leaves the tool
 	// unregistered.
@@ -382,7 +414,7 @@ func NewServer(d Deps) *mcpsdk.Server {
 // Authorization is per request. The mount wraps this handler in the daemon's
 // identity-resolve and role-gate middleware, so a tool handler's context is
 // the calling request's context and the tools that re-check a role
-// (callerHasRole) judge the caller. A retained session would instead hand
+// (callerIsAdmin) judge the caller. A retained session would instead hand
 // every later call the context captured when the session was opened: an
 // identity that has since been demoted, or that belongs to whoever first used
 // the session id, would keep its old privileges for the session's lifetime.

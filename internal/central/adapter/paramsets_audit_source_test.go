@@ -40,7 +40,7 @@ func TestPutParamsetRecordsTheCallingSurface(t *testing.T) {
 	p := buildParamsetBoost10Fixture(t).SetAuditRecorder(rec)
 
 	ctx := hmreqctx.WithOperation(t.Context(), "mcp:paramset-write")
-	if err := p.PutParamset(ctx, "DEV021", hmenum.ParamsetKeyValues,
+	if _, err := p.PutParamset(ctx, "DEV021", hmenum.ParamsetKeyValues,
 		map[string]any{"SET_POINT_TEMPERATURE": 21.0}); err != nil {
 		t.Fatalf("PutParamset: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestPutParamsetRecordsWithoutARequestScope(t *testing.T) {
 	rec := &recordingAuditRecorder{}
 	p := buildParamsetBoost10Fixture(t).SetAuditRecorder(rec)
 
-	if err := p.PutParamset(t.Context(), "DEV021", hmenum.ParamsetKeyValues,
+	if _, err := p.PutParamset(t.Context(), "DEV021", hmenum.ParamsetKeyValues,
 		map[string]any{"SET_POINT_TEMPERATURE": 21.0}); err != nil {
 		t.Fatalf("PutParamset: %v", err)
 	}

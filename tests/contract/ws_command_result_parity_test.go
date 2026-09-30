@@ -116,7 +116,6 @@ var wsCommandsAwaitingResultShape = map[string]string{
 	"links.linkable_channels":             "",
 	"links.list":                          "",
 	"links.list_all":                      "",
-	"links.put_paramset":                  "",
 	"links.remove":                        "",
 	"links.set_info":                      "",
 	"paramset.description":                "",

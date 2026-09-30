@@ -15,6 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
+	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
 
 // linkGateFakeBackend records whether PutLinkParamset actually reached the
@@ -27,6 +28,20 @@ type linkGateFakeBackend struct {
 func (b *linkGateFakeBackend) PutLinkParamset(_ context.Context, _, _ string, _ map[string]any) error {
 	b.putCalled = true
 	return nil
+}
+
+// GetParamsetDescription declares the LINK parameter the test writes: the
+// strict paramsets domain refuses any write it cannot check against a
+// description.
+func (b *linkGateFakeBackend) GetParamsetDescription(
+	_ context.Context, _ string, _ hmenum.ParamsetKey,
+) (map[string]hmproto.ParameterData, error) {
+	return map[string]hmproto.ParameterData{
+		"SHORT_JT_ON": {
+			Type:       hmenum.ParameterTypeInteger,
+			Operations: hmenum.OperationsRead | hmenum.OperationsWrite,
+		},
+	}, nil
 }
 
 // TestWSLinkQueryPutLinkParamset_RefusesIgnoredModel_ReachesBackendOtherwise
@@ -90,7 +105,7 @@ func TestWSLinkQueryPutLinkParamset_RefusesIgnoredModel_ReachesBackendOtherwise(
 
 	// Arm 1: channel whose device model is ignored — refused, backend
 	// never reached.
-	err = q.PutLinkParamset(context.Background(), "GATEHIDDEN:4", "PEER:1", map[string]any{"SHORT_JT_ON": 1})
+	_, err = q.PutLinkParamset(context.Background(), "GATEHIDDEN:4", "PEER:1", map[string]any{"SHORT_JT_ON": 1})
 	if !errors.Is(err, hmerr.ErrParameterHidden) {
 		t.Fatalf("ignored model: want ErrParameterHidden, got %v", err)
 	}
@@ -100,7 +115,7 @@ func TestWSLinkQueryPutLinkParamset_RefusesIgnoredModel_ReachesBackendOtherwise(
 
 	// Arm 2: same construction, a channel of a model that is not
 	// ignored — the write reaches the backend.
-	if err := q.PutLinkParamset(context.Background(), "GATEALLOWED:4", "PEER:1", map[string]any{"SHORT_JT_ON": 1}); err != nil {
+	if _, err := q.PutLinkParamset(context.Background(), "GATEALLOWED:4", "PEER:1", map[string]any{"SHORT_JT_ON": 1}); err != nil {
 		t.Fatalf("allowed model: PutLinkParamset: %v", err)
 	}
 	if !be.putCalled {

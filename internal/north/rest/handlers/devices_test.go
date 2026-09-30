@@ -151,9 +151,10 @@ func TestGetDevice_HappyPath(t *testing.T) {
 
 // TestGetDevice_ConfigRestoreSupportedReflectsInterface verifies
 // DeviceSummary.ConfigRestoreSupported (JSON: config_restore_supported)
-// mirrors hmenum.Interface.SupportsConfigRestore(): true for HmIP-RF and
-// BidCos-RF (rfd / HMIPServer implement restoreConfigToDevice), false for
-// BidCos-Wired (hs485d does not).
+// mirrors hmenum.Interface.SupportsConfigRestore(): true for BidCos-RF
+// only — the HmIP process lists restoreConfigToDevice but faults every
+// call for its devices (measured live) — and false for BidCos-Wired
+// (hs485d does not expose it).
 func TestGetDevice_ConfigRestoreSupportedReflectsInterface(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -161,7 +162,7 @@ func TestGetDevice_ConfigRestoreSupportedReflectsInterface(t *testing.T) {
 		iface hmenum.Interface
 		want  bool
 	}{
-		{"HmIP-RF", hmenum.InterfaceHmIPRF, true},
+		{"HmIP-RF", hmenum.InterfaceHmIPRF, false},
 		{"BidCos-RF", hmenum.InterfaceBidCosRF, true},
 		{"BidCos-Wired", hmenum.InterfaceBidCosWired, false},
 	}
@@ -190,6 +191,59 @@ func TestGetDevice_ConfigRestoreSupportedReflectsInterface(t *testing.T) {
 			}
 			if body.ConfigRestoreSupported != tc.want {
 				t.Errorf("%s: config_restore_supported=%v, want %v", tc.iface, body.ConfigRestoreSupported, tc.want)
+			}
+		})
+	}
+}
+
+// TestGetDevice_ConfigCacheClearSupportedReflectsInterface verifies
+// DeviceSummary.ConfigCacheClearSupported (JSON:
+// config_cache_clear_supported) mirrors
+// hmenum.Interface.SupportsConfigCacheClear(): true for BidCos-RF and
+// BidCos-Wired (rfd / hs485d implement clearConfigCache), false for HmIP-RF,
+// VirtualDevices and CUxD.
+func TestGetDevice_ConfigCacheClearSupportedReflectsInterface(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		iface hmenum.Interface
+		want  bool
+	}{
+		{"HmIP-RF", hmenum.InterfaceHmIPRF, false},
+		{"BidCos-RF", hmenum.InterfaceBidCosRF, true},
+		{"BidCos-Wired", hmenum.InterfaceBidCosWired, true},
+		{"VirtualDevices", hmenum.InterfaceVirtualDevices, false},
+		{"CUxD", hmenum.InterfaceCUxD, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			d := device.New(device.Config{
+				Address:     "0001ABCD",
+				Model:       "HM-LC-Sw1-FM",
+				Interface:   tc.iface,
+				InterfaceID: string(tc.iface),
+				Name:        "Test Device",
+			})
+			idx := &stubDeviceIndex{devices: map[string]*device.Device{"0001ABCD": d}}
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/devices/0001ABCD", http.NoBody)
+			req = req.WithContext(chiContext(req, map[string]string{"addr": "0001ABCD"}))
+			w := httptest.NewRecorder()
+			GetDevice(idx, nil).ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+			}
+			var raw map[string]any
+			if err := json.Unmarshal(w.Body.Bytes(), &raw); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			got, present := raw["config_cache_clear_supported"].(bool)
+			if !present {
+				t.Fatalf("%s: config_cache_clear_supported missing from body: %s", tc.iface, w.Body.String())
+			}
+			if got != tc.want {
+				t.Errorf("%s: config_cache_clear_supported=%v, want %v", tc.iface, got, tc.want)
 			}
 		})
 	}

@@ -40,6 +40,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/warnings"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmlog"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // restMountDeps bundles every live subsystem the REST router needs. The fields
@@ -103,6 +104,11 @@ type restMountDeps struct {
 	dpWriterAdapter    *adapter.DataPointWriterAdapter
 	customDPDispatcher *adapter.CustomDPDispatcher
 	paramsetsDomain    *adapter.ParamsetsDomain
+	// paramsetApplyDomain is nil when the paramset-description store is
+	// unavailable; the apply routes then answer 503.
+	paramsetApplyDomain *adapter.ParamsetApplyDomain
+	configRepairDomain  *adapter.ConfigRepairDomain
+	rssiMatrixDomain    *adapter.RSSIMatrixDomain
 	// parameterDeterminer backs POST .../paramsets/{key}/determine (the
 	// MASTER editor's "Determine" button). Shares the registry-resolved
 	// backend path with the WS `paramset.determine` command.
@@ -328,6 +334,9 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		DPWriter:                d.dpWriterAdapter,
 		CustomDPWriter:          d.customDPDispatcher,
 		Paramsets:               d.paramsetsDomain,
+		ParamsetApply:           paramsetApplyServiceOrNil(d.paramsetApplyDomain),
+		ConfigRepair:            d.configRepairDomain,
+		RSSIMatrix:              d.rssiMatrixDomain,
 		ConfigExport:            adapter.NewConfigExportDomain(d.reg, d.paramsetsDomain),
 		ConfigChannelMeta:       d.devicesAdapter,
 		ParameterDeterminer:     d.parameterDeterminer,
@@ -644,6 +653,17 @@ func firmwareRefresherFrom(d *adapter.FirmwareDomain) handlers.FirmwareRefresher
 	return d
 }
 
+// paramsetApplyServiceOrNil converts the concrete multi-apply domain into
+// the shared service port, returning a genuinely nil interface for a nil
+// pointer so the apply routes answer 503 instead of dispatching into a
+// non-nil interface that wraps a nil pointer and panics.
+func paramsetApplyServiceOrNil(d *adapter.ParamsetApplyDomain) interfaces.ParamsetApplyService {
+	if d == nil {
+		return nil
+	}
+	return d
+}
+
 // alarmPanelFrom converts the concrete alarm service into the handler
 // facade, returning a genuinely nil interface when the service is a nil
 // pointer so the router leaves the /alarm routes unmounted (a non-nil
@@ -773,20 +793,25 @@ func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, loginLim
 	// credentialed or not, is rejected with 401 (the MCP mount sits
 	// outside the REST router's own middleware stack).
 	mcpInner := d.authMw.RequireRole(mcpRole, mcp.Handler(mcp.Deps{
-		Centrals:     d.reg,
-		Devices:      d.devicesAdapter,
-		Writer:       d.dpWriterAdapter,
-		Paramsets:    d.paramsetsDomain,
-		Health:       d.healthAdapter,
-		Hubs:         d.reg,
-		Features:     d.reg,
-		Taxonomy:     registryTaxonomy{reg: d.reg},
-		Audit:        d.auditRec,
-		Incidents:    d.incidents,
-		Warnings:     d.warningsSvc,
-		Alarm:        mcpAlarmSeam(d),
-		AlarmControl: mcpAlarmControlSeam(d),
-		Security:     mcpSecuritySeam(d),
+		Centrals:      d.reg,
+		Devices:       d.devicesAdapter,
+		Writer:        d.dpWriterAdapter,
+		Paramsets:     d.paramsetsDomain,
+		ParamsetApply: paramsetApplyServiceOrNil(d.paramsetApplyDomain),
+		ConfigRepair:  d.configRepairDomain,
+		ConfigCache:   d.deviceAdminDomain,
+		RSSIMatrix:    d.rssiMatrixDomain,
+		RFInterface:   d.deviceAdminDomain,
+		Health:        d.healthAdapter,
+		Hubs:          d.reg,
+		Features:      d.reg,
+		Taxonomy:      registryTaxonomy{reg: d.reg},
+		Audit:         d.auditRec,
+		Incidents:     d.incidents,
+		Warnings:      d.warningsSvc,
+		Alarm:         mcpAlarmSeam(d),
+		AlarmControl:  mcpAlarmControlSeam(d),
+		Security:      mcpSecuritySeam(d),
 		// The shared edit-lock registry REST and WS gate MASTER/LINK writes
 		// on, so an assistant's write_paramset obeys the same lock a human
 		// editor's open session holds.

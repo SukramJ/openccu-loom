@@ -245,3 +245,54 @@ describe("ChannelPanel — read-back", () => {
     expect(mockToastWarn).not.toHaveBeenCalled();
   });
 });
+
+describe("ChannelPanel — server read-back report", () => {
+  async function saveThroughPreview() {
+    await renderAndDirty("42");
+    await waitFor(() => expect(buttons("channel.preview.write").length).toBe(1));
+    await fireEvent.click(buttons("channel.preview.write")[0]);
+    await waitFor(() => expect(mockPutParamset).toHaveBeenCalled());
+  }
+
+  // The daemon reads the paramset back straight after the write; its report
+  // is the primary source, even where the later reload happens to agree.
+  it("warns from the server's divergences when the reload looks clean", async () => {
+    mockUiSchema.mockResolvedValueOnce(masterSchema(5)).mockResolvedValue(masterSchema(42));
+    mockPutParamset.mockResolvedValue({
+      written: ["TEMPERATURE_OFFSET"],
+      readback_divergences: [{ parameter: "TEMPERATURE_OFFSET", sent: 42, stored: 30 }],
+    });
+    await saveThroughPreview();
+    await waitFor(() => {
+      expect(mockToastWarn).toHaveBeenCalledWith("channel.readback.title", "channel.readback.body");
+    });
+  });
+
+  it("trusts an empty server report over a diverging reload", async () => {
+    mockUiSchema.mockResolvedValueOnce(masterSchema(5)).mockResolvedValue(masterSchema(30));
+    mockPutParamset.mockResolvedValue({ written: ["TEMPERATURE_OFFSET"], readback_divergences: [] });
+    await saveThroughPreview();
+    await waitFor(() => expect(mockUiSchema).toHaveBeenCalledTimes(2));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(mockToastWarn).not.toHaveBeenCalled();
+  });
+
+  // A failed server read says nothing about divergences: it is surfaced, and
+  // the reload comparison stands in for the report.
+  it("surfaces readback_error and falls back to the reload comparison", async () => {
+    mockUiSchema.mockResolvedValueOnce(masterSchema(5)).mockResolvedValue(masterSchema(30));
+    mockPutParamset.mockResolvedValue({
+      written: ["TEMPERATURE_OFFSET"],
+      readback_divergences: [],
+      readback_error: "getParamset timed out",
+    });
+    await saveThroughPreview();
+    await waitFor(() => {
+      expect(mockToastWarn).toHaveBeenCalledWith(
+        "channel.readback.error_title",
+        "getParamset timed out",
+      );
+      expect(mockToastWarn).toHaveBeenCalledWith("channel.readback.title", "channel.readback.body");
+    });
+  });
+});

@@ -18,6 +18,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // --- system.health ---
@@ -1348,6 +1349,7 @@ type stubLinks struct {
 	putParamsetPeer    string
 	putParamsetValues  map[string]any
 	putParamsetErr     error
+	putParamsetReport  *interfaces.ParamsetWriteReport
 	activateReceiver   string
 	activateSender     string
 	activateLong       bool
@@ -1396,11 +1398,19 @@ func (l *stubLinks) GetLinkParamset(_ context.Context, _, _ string) (map[string]
 	return l.linkParamsetValues, l.linkParamsetErr
 }
 
-func (l *stubLinks) PutLinkParamset(_ context.Context, addr, peer string, values map[string]any) error {
+func (l *stubLinks) PutLinkParamset(
+	_ context.Context, addr, peer string, values map[string]any,
+) (*interfaces.ParamsetWriteReport, error) {
 	l.putParamsetAddr = addr
 	l.putParamsetPeer = peer
 	l.putParamsetValues = values
-	return l.putParamsetErr
+	if l.putParamsetErr != nil {
+		return nil, l.putParamsetErr
+	}
+	if l.putParamsetReport != nil {
+		return l.putParamsetReport, nil
+	}
+	return &interfaces.ParamsetWriteReport{}, nil
 }
 
 func (l *stubLinks) ActivateLinkParamset(_ context.Context, receiver, sender string, longPress bool) error {
@@ -1687,14 +1697,62 @@ func TestWSLinksPutParamset(t *testing.T) {
 		t.Fatalf("unexpected error: %+v", res.Error)
 	}
 	data, ok := res.Data.(map[string]any)
-	if !ok || data["success"] != true {
-		t.Fatalf("expected success=true, got %+v", res.Data)
+	if !ok || data["written"] != 1 {
+		t.Fatalf("expected written=1, got %+v", res.Data)
+	}
+	if divs, ok := data["readback_divergences"].([]hmapi.ParamsetDivergence); !ok || len(divs) != 0 {
+		t.Fatalf("expected an empty readback_divergences list, got %#v", data["readback_divergences"])
+	}
+	if _, present := data["readback_error"]; present {
+		t.Fatalf("readback_error must be omitted when the read-back succeeded, got %+v", data)
 	}
 	if links.putParamsetAddr != "0001ABCD:1" {
 		t.Fatalf("addr: got %q want %q", links.putParamsetAddr, "0001ABCD:1")
 	}
 	if links.putParamsetPeer != "0002EFGH:1" {
 		t.Fatalf("peer: got %q want %q", links.putParamsetPeer, "0002EFGH:1")
+	}
+}
+
+// TestWSLinksPutParamset_ReportsReadback pins that links.put_paramset
+// carries the read-back report of the domain write: the divergence and the
+// read-back error reach the caller in the shape wsapi.json declares.
+func TestWSLinksPutParamset_ReportsReadback(t *testing.T) {
+	t.Parallel()
+	links := &stubLinks{putParamsetReport: &interfaces.ParamsetWriteReport{
+		Written:       []string{"SHORT_ON_TIME"},
+		Divergences:   []interfaces.ParamsetDivergence{{Parameter: "SHORT_ON_TIME", Sent: 900.0, Stored: 111600.0}},
+		ReadbackError: "",
+	}}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Links: links})
+
+	args, _ := json.Marshal(map[string]any{
+		"address":      "0001ABCD:1",
+		"peer_address": "0002EFGH:1",
+		"parameters":   map[string]any{"SHORT_ON_TIME": 900.0},
+	})
+	res := r.Dispatch(opCtx(), "links.put_paramset", args)
+	if res.Error != nil {
+		t.Fatalf("unexpected error: %+v", res.Error)
+	}
+	raw, err := json.Marshal(res.Data)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	const want = `{"readback_divergences":[{"parameter":"SHORT_ON_TIME","sent":900,"stored":111600}],"written":1}`
+	if string(raw) != want {
+		t.Fatalf("result\n got: %s\nwant: %s", raw, want)
+	}
+
+	links.putParamsetReport = &interfaces.ParamsetWriteReport{Written: []string{"SHORT_ON_TIME"}, ReadbackError: "read failed"}
+	res = r.Dispatch(opCtx(), "links.put_paramset", args)
+	if res.Error != nil {
+		t.Fatalf("unexpected error: %+v", res.Error)
+	}
+	data, _ := res.Data.(map[string]any)
+	if data["readback_error"] != "read failed" {
+		t.Fatalf("readback_error = %v, want %q", data["readback_error"], "read failed")
 	}
 }
 

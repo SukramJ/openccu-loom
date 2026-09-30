@@ -90,7 +90,7 @@ func TestWSLinkQuery_PutLinkParamset_NonNilParamsets_Errors(t *testing.T) {
 	reg := buildTestRegistry(t, "ccu-01")
 	paramsets := adapter.NewParamsetsDomain(reg, nil)
 	q := &wsLinkQuery{registry: reg, paramsets: paramsets}
-	err := q.PutLinkParamset(context.Background(), "A:0", "B:0", nil)
+	_, err := q.PutLinkParamset(context.Background(), "A:0", "B:0", nil)
 	if err == nil {
 		t.Fatal("expected error for unknown device")
 	}
@@ -139,7 +139,7 @@ func TestWSParamsetWriter_PutParamset_NonNilDomain_DefaultKey(t *testing.T) {
 	reg := buildTestRegistry(t, "ccu-01")
 	domain := adapter.NewParamsetsDomain(reg, nil)
 	w := &wsParamsetWriter{domain: domain}
-	err := w.PutParamset(context.Background(), configui.SessionKey{
+	_, err := w.PutParamset(context.Background(), configui.SessionKey{
 		ChannelAddress: "ANY:1",
 		ParamsetKey:    "",
 	}, map[string]any{"LEVEL": 1.0})

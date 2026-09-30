@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // HealthSnapshotProvider is the minimal contract the `system.health`
@@ -110,8 +112,9 @@ type LinkQuery interface {
 	GetLinkParamset(ctx context.Context, channelAddress, peerAddress string) (map[string]any, error)
 	// PutLinkParamset writes values to the LINK paramset on channelAddress
 	// keyed by peerAddress. Mirrors Python `ws_put_link_paramset`
-	// (websocket_api.py:1387, `config/put_link_paramset`).
-	PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) error
+	// (websocket_api.py:1387, `config/put_link_paramset`). The report
+	// carries the post-write read-back comparison and is non-nil on success.
+	PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) (*interfaces.ParamsetWriteReport, error)
 	// ActivateLinkParamset triggers the receiver's LINK-paramset behaviour
 	// for the given sender (short/long keypress) — the CCU's "test link"
 	// probe. It physically actuates the receiver.
@@ -507,16 +510,32 @@ type paramsetArgs struct {
 	ParamsetKey    string `json:"paramset_key"`
 }
 
-func (a paramsetArgs) sessionKey() configui.SessionKey {
-	psKey := hmenum.ParamsetKey(a.ParamsetKey)
-	if psKey == "" {
-		psKey = hmenum.ParamsetKeyMaster
+// paramsetKeyOrMaster resolves an optional paramset_key argument. An
+// omitted key keeps meaning MASTER; any other value must be one of the three
+// wire keys, because an unrecognised key forwarded to the CCU is not refused
+// there but silently misread (see [hmenum.ParseParamsetKey]).
+func paramsetKeyOrMaster(s string) (hmenum.ParamsetKey, error) {
+	if s == "" {
+		return hmenum.ParamsetKeyMaster, nil
+	}
+	key, ok := hmenum.ParseParamsetKey(s)
+	if !ok {
+		return "", NewCommandError(CommandErrorBadRequest,
+			fmt.Sprintf("paramset_key must be MASTER, VALUES or LINK, got %q", s))
+	}
+	return key, nil
+}
+
+func (a paramsetArgs) sessionKey() (configui.SessionKey, error) {
+	psKey, err := paramsetKeyOrMaster(a.ParamsetKey)
+	if err != nil {
+		return configui.SessionKey{}, err
 	}
 	return configui.SessionKey{
 		CentralName:    a.CentralName,
 		ChannelAddress: a.ChannelAddress,
 		ParamsetKey:    psKey,
-	}
+	}, nil
 }
 
 func paramsetDescriptionHandler(q DeviceQuery) CommandHandler {
@@ -528,7 +547,11 @@ func paramsetDescriptionHandler(q DeviceQuery) CommandHandler {
 		if args.ChannelAddress == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "channel_address required")
 		}
-		desc, err := q.GetParamsetDescription(ctx, args.sessionKey())
+		key, err := args.sessionKey()
+		if err != nil {
+			return nil, err
+		}
+		desc, err := q.GetParamsetDescription(ctx, key)
 		if err != nil {
 			return nil, commandErr(CommandErrorInternal, "get_paramset_description: ", err)
 		}
@@ -545,7 +568,11 @@ func paramsetGetHandler(q DeviceQuery) CommandHandler {
 		if args.ChannelAddress == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "channel_address required")
 		}
-		values, err := q.GetParamset(ctx, args.sessionKey())
+		key, err := args.sessionKey()
+		if err != nil {
+			return nil, err
+		}
+		values, err := q.GetParamset(ctx, key)
 		if err != nil {
 			return nil, commandErr(CommandErrorInternal, "get_paramset: ", err)
 		}
@@ -1320,7 +1347,8 @@ func linksGetParamsetHandler(q LinkQuery) CommandHandler {
 // linksPutParamsetHandler implements `links.put_paramset`.
 // Mirrors Python `ws_put_link_paramset` (websocket_api.py:1387).
 // Input: {address, peer_address, parameters}.
-// Output: {success: true}.
+// Output: {written, readback_divergences, readback_error?} — the same
+// shape `paramset.put` answers for MASTER.
 func linksPutParamsetHandler(q LinkQuery, locks EditLockVerifier) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args linkPutParamsetArgs
@@ -1346,10 +1374,17 @@ func linksPutParamsetHandler(q LinkQuery, locks EditLockVerifier) CommandHandler
 					"edit lock required for LINK write; open an edit session for "+key+" and pass edit_token")
 			}
 		}
-		if err := q.PutLinkParamset(ctx, args.Address, args.PeerAddress, args.Parameters); err != nil {
+		report, err := q.PutLinkParamset(ctx, args.Address, args.PeerAddress, args.Parameters)
+		if err != nil {
 			return nil, commandErr(CommandErrorInternal, "put_link_paramset: ", err)
 		}
-		return map[string]any{"success": true}, nil
+		if report == nil {
+			// An empty report would read as "compared, nothing diverged".
+			// A missing report means the comparison never happened — say
+			// so instead of fabricating a full acknowledgement.
+			report = &interfaces.ParamsetWriteReport{ReadbackError: "write path returned no read-back report"}
+		}
+		return withWriteReport(map[string]any{"written": len(args.Parameters)}, report), nil
 	}
 }
 
@@ -1645,16 +1680,16 @@ type sessionOpenArgs struct {
 	ParamsetKey    string `json:"paramset_key"`
 }
 
-func (a sessionOpenArgs) key() configui.SessionKey {
-	psKey := hmenum.ParamsetKey(a.ParamsetKey)
-	if psKey == "" {
-		psKey = hmenum.ParamsetKeyMaster
+func (a sessionOpenArgs) key() (configui.SessionKey, error) {
+	psKey, err := paramsetKeyOrMaster(a.ParamsetKey)
+	if err != nil {
+		return configui.SessionKey{}, err
 	}
 	return configui.SessionKey{
 		CentralName:    a.CentralName,
 		ChannelAddress: a.ChannelAddress,
 		ParamsetKey:    psKey,
-	}
+	}, nil
 }
 
 func sessionOpenHandler(store *configui.SessionStore, backend SessionBackend) CommandHandler {
@@ -1666,7 +1701,10 @@ func sessionOpenHandler(store *configui.SessionStore, backend SessionBackend) Co
 		if args.ChannelAddress == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "channel_address required")
 		}
-		key := args.key()
+		key, err := args.key()
+		if err != nil {
+			return nil, err
+		}
 		descs, initial, err := backend.Open(ctx, key)
 		if err != nil {
 			return nil, commandErr(CommandErrorInternal, "open: ", err)
@@ -1696,16 +1734,16 @@ type sessionMutateArgs struct {
 	Value          any    `json:"value,omitempty"`
 }
 
-func (a sessionMutateArgs) key() configui.SessionKey {
-	psKey := hmenum.ParamsetKey(a.ParamsetKey)
-	if psKey == "" {
-		psKey = hmenum.ParamsetKeyMaster
+func (a sessionMutateArgs) key() (configui.SessionKey, error) {
+	psKey, err := paramsetKeyOrMaster(a.ParamsetKey)
+	if err != nil {
+		return configui.SessionKey{}, err
 	}
 	return configui.SessionKey{
 		CentralName:    a.CentralName,
 		ChannelAddress: a.ChannelAddress,
 		ParamsetKey:    psKey,
-	}
+	}, nil
 }
 
 func sessionSetHandler(store *configui.SessionStore) CommandHandler {
@@ -1725,7 +1763,11 @@ func sessionSetHandler(store *configui.SessionStore) CommandHandler {
 		case []any, map[string]any:
 			return nil, NewCommandError(CommandErrorBadRequest, "value must be a scalar")
 		}
-		s := store.Get(args.key())
+		key, err := args.key()
+		if err != nil {
+			return nil, err
+		}
+		s := store.Get(key)
 		if s == nil {
 			return nil, NewCommandError(CommandErrorBadRequest, "no open session for key")
 		}
@@ -1740,7 +1782,11 @@ func sessionStackHandler(store *configui.SessionStore, undo bool) CommandHandler
 		if err := decodeOrEmpty(raw, &args); err != nil {
 			return nil, err
 		}
-		s := store.Get(args.key())
+		key, err := args.key()
+		if err != nil {
+			return nil, err
+		}
+		s := store.Get(key)
 		if s == nil {
 			return nil, NewCommandError(CommandErrorBadRequest, "no open session for key")
 		}
@@ -1762,7 +1808,10 @@ func sessionDiscardHandler(store *configui.SessionStore) CommandHandler {
 		if err := decodeOrEmpty(raw, &args); err != nil {
 			return nil, err
 		}
-		key := args.key()
+		key, err := args.key()
+		if err != nil {
+			return nil, err
+		}
 		s := store.Get(key)
 		if s == nil {
 			return nil, NewCommandError(CommandErrorBadRequest, "no open session for key")
@@ -1779,7 +1828,11 @@ func sessionChangesHandler(store *configui.SessionStore) CommandHandler {
 		if err := decodeOrEmpty(raw, &args); err != nil {
 			return nil, err
 		}
-		s := store.Get(args.key())
+		key, err := args.key()
+		if err != nil {
+			return nil, err
+		}
+		s := store.Get(key)
 		if s == nil {
 			return nil, NewCommandError(CommandErrorBadRequest, "no open session for key")
 		}
@@ -1810,7 +1863,10 @@ func sessionSaveHandler(store *configui.SessionStore, backend SessionBackend, cp
 		if err := decodeOrEmpty(raw, &args); err != nil {
 			return nil, err
 		}
-		key := args.key()
+		key, err := args.key()
+		if err != nil {
+			return nil, err
+		}
 		s := store.Get(key)
 		if s == nil {
 			return nil, NewCommandError(CommandErrorBadRequest, "no open session for key")

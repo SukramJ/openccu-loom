@@ -134,6 +134,18 @@ func (b *countingBackend) RestoreConfigToDevice(context.Context, string) error {
 	return backends.ErrUnsupported
 }
 
+func (b *countingBackend) ClearConfigCache(context.Context, string) error {
+	return backends.ErrUnsupported
+}
+
+func (*countingBackend) RSSIInfo(context.Context) (map[string]map[string][2]int, error) {
+	return nil, backends.ErrUnsupported
+}
+
+func (*countingBackend) SetBidcosInterface(context.Context, string, string, bool) error {
+	return backends.ErrUnsupported
+}
+
 func (b *countingBackend) ListReplaceableDevices(context.Context, string) ([]hmproto.DeviceDescription, error) {
 	return nil, backends.ErrUnsupported
 }

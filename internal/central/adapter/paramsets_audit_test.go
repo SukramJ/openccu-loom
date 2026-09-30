@@ -45,7 +45,7 @@ func TestParamsetWriteAuditReportsTheDeviceLevelAsSuch(t *testing.T) {
 	rec := &recordingAuditRecorder{}
 	p.SetAuditRecorder(rec)
 
-	if err := p.PutParamset(context.Background(), "0001ABCD", hmenum.ParamsetKeyMaster,
+	if _, err := p.PutParamset(context.Background(), "0001ABCD", hmenum.ParamsetKeyMaster,
 		map[string]any{string(hmenum.ParameterLevel): 0.4}); err != nil {
 		t.Fatalf("PutParamset MASTER (device level): %v", err)
 	}
@@ -68,7 +68,7 @@ func TestParamsetWriteAuditReportsTheChannelNumber(t *testing.T) {
 	rec := &recordingAuditRecorder{}
 	p.SetAuditRecorder(rec)
 
-	if err := p.PutParamset(context.Background(), "0001ABCD:1", hmenum.ParamsetKeyMaster,
+	if _, err := p.PutParamset(context.Background(), "0001ABCD:1", hmenum.ParamsetKeyMaster,
 		map[string]any{string(hmenum.ParameterLevel): 0.4}); err != nil {
 		t.Fatalf("PutParamset MASTER (channel): %v", err)
 	}

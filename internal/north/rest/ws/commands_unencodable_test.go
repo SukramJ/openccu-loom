@@ -11,6 +11,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // unencodableParamsetWriter rejects every write the way the south-bound
@@ -18,8 +19,10 @@ import (
 // represent.
 type unencodableParamsetWriter struct{}
 
-func (unencodableParamsetWriter) PutParamset(_ context.Context, _ configui.SessionKey, _ map[string]any) error {
-	return fmt.Errorf("parameter %q: %w", "NAME", hmerr.ErrUnencodableString)
+func (unencodableParamsetWriter) PutParamset(
+	_ context.Context, _ configui.SessionKey, _ map[string]any,
+) (*interfaces.ParamsetWriteReport, error) {
+	return nil, fmt.Errorf("parameter %q: %w", "NAME", hmerr.ErrUnencodableString)
 }
 
 // TestParamsetPutUnencodableStringReturnsTypedCode pins that an
