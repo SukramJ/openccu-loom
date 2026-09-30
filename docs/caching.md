@@ -108,10 +108,14 @@ sources instead, in this order:
    VALUES description has a readable parameter the state store did not
    deliver, it falls back to one `getParamset(VALUES)` XML-RPC read per
    channel. The state-store read is served from the box's own cache, no
-   different from a CCU's cached reads; whether the paramset fallback
-   itself costs radio airtime on any device class has not been measured
-   against a real box and is treated as an open question rather than
-   assumed free.
+   different from a CCU's cached reads. The paramset fallback costs no
+   measurable radio airtime either: on a real box, three consecutive
+   full sweeps over every HmIP-RF channel (168 reads, three times a
+   boot seed's dose) left the interface's reported `DUTY_CYCLE`
+   unchanged — the interface process answers VALUES reads from its own
+   device mirror, so a single boot seed stays well below one percent of
+   duty cycle. Measured 2026-09-30 on HmIP-RF; BidCos-RF was not
+   measured separately.
 
 Live values afterwards arrive on the box's own push event stream (see
 [Connecting an openccu-lite system](admin/openccu-lite.md)), the same
