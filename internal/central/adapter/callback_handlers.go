@@ -695,12 +695,12 @@ func (h *CallbackHandlers) dropDevice(ctx context.Context, iface hmtypes.WireInt
 
 // UpdateDevice handles a firmware-update notification (hint=0) or a link
 // partner change (hint=1) from the CCU. For hint=0 the firmware cache is
-// invalidated and a background refresh is scheduled to pull fresh device
-// descriptions; the paramset registry is only invalidated, not re-fetched —
-// a caller that needs a fresh MASTER schema for the affected channels still
-// has to run [coordinators.DeviceCoordinator.ReloadChannelConfig]. hint=1 is
-// a no-op beyond logging — link-peer changes are small and reconciled on the
-// next scheduled sweep.
+// invalidated and a background refresh re-pulls the device descriptions and
+// then the paramset descriptions of the device and its channels — the
+// invalidation drops both, and without the paramset half the device's values
+// could not be typed until the daemon restarts. hint=1 is a no-op beyond
+// logging — link-peer changes are small and reconciled on the next scheduled
+// sweep.
 func (h *CallbackHandlers) UpdateDevice(ctx context.Context, interfaceID, address string, hint int) error {
 	interfaceID = h.canonicalInterfaceID(interfaceID)
 	h.logger.Info("callback.update_device",
@@ -724,14 +724,16 @@ func (h *CallbackHandlers) UpdateDevice(ctx context.Context, interfaceID, addres
 	}
 	fetcher := &callbackDescFetcher{ops: b}
 	h.goBackground(func() { //nolint:contextcheck // background refresh uses h.ctx, not the caller's ctx which may be short-lived
-		bgCtx, cancel := context.WithTimeout(h.ctx, 30*time.Second)
+		bgCtx, cancel := context.WithTimeout(h.ctx, deviceRefreshTimeout)
 		defer cancel()
 		if err := h.unit.Devices.RefreshDeviceDescriptionsAndCreateMissingDevices(bgCtx, fetcher, iface); err != nil {
 			h.logger.Warn("callback.update_device.refresh_failed",
 				slog.String("interface", interfaceID),
 				slog.String("address", address),
 				slog.String("err", err.Error()))
+			return
 		}
+		h.reloadDeviceParamsets(bgCtx, b, iface, "callback.update_device", address)
 	})
 	return nil
 }
@@ -757,7 +759,7 @@ func (h *CallbackHandlers) ReplaceDevice(ctx context.Context, interfaceID, oldAd
 	fetcher := &callbackDescFetcher{ops: b}
 	iface := hmtypes.ParseWireInterfaceID(interfaceID)
 	h.goBackground(func() { //nolint:contextcheck // background refresh uses h.ctx, not the caller's ctx which may be short-lived
-		bgCtx, cancel := context.WithTimeout(h.ctx, 30*time.Second)
+		bgCtx, cancel := context.WithTimeout(h.ctx, deviceRefreshTimeout)
 		defer cancel()
 		if err := h.unit.Devices.ReplaceDevice(bgCtx, fetcher, iface, oldAddress, newAddress); err != nil {
 			h.logger.Warn("callback.replace_device.failed",
@@ -765,14 +767,18 @@ func (h *CallbackHandlers) ReplaceDevice(ctx context.Context, interfaceID, oldAd
 				slog.String("old", oldAddress),
 				slog.String("new", newAddress),
 				slog.String("err", err.Error()))
+			return
 		}
+		// The replacement's descriptions come from listDevices; its
+		// paramset descriptions are read here, per channel.
+		h.reloadDeviceParamsets(bgCtx, b, iface, "callback.replace_device", newAddress)
 	})
 	return nil
 }
 
 // ReaddedDevice handles devices that re-pair via install mode. The cache
-// is invalidated for each address and fresh descriptions are fetched in a
-// background goroutine.
+// is invalidated for each address, and a background goroutine re-pulls the
+// device descriptions and then each device's paramset descriptions.
 func (h *CallbackHandlers) ReaddedDevice(_ context.Context, interfaceID string, addresses []string) error {
 	interfaceID = h.canonicalInterfaceID(interfaceID)
 	h.logger.Info("callback.readded_device",
@@ -790,7 +796,7 @@ func (h *CallbackHandlers) ReaddedDevice(_ context.Context, interfaceID string, 
 	fetcher := &callbackDescFetcher{ops: b}
 	iface := hmtypes.ParseWireInterfaceID(interfaceID)
 	h.goBackground(func() { //nolint:contextcheck // background refresh uses h.ctx, not the caller's ctx which may be short-lived
-		bgCtx, cancel := context.WithTimeout(h.ctx, 30*time.Second)
+		bgCtx, cancel := context.WithTimeout(h.ctx, deviceRefreshTimeout)
 		defer cancel()
 		for _, addr := range addresses {
 			h.unit.Devices.InvalidateFirmwareCache(iface, addr)
@@ -798,15 +804,41 @@ func (h *CallbackHandlers) ReaddedDevice(_ context.Context, interfaceID string, 
 		// One listDevices covers every re-paired address on this interface —
 		// the refresh is address-independent (it re-pulls the whole interface
 		// inventory), so calling it once per address repeated the same
-		// full-interface fetch K times inside the shared 30 s budget.
+		// full-interface fetch K times inside the shared budget.
 		if err := h.unit.Devices.RefreshDeviceDescriptionsAndCreateMissingDevices(bgCtx, fetcher, iface); err != nil {
 			h.logger.Warn("callback.readded_device.refresh_failed",
 				slog.String("interface", interfaceID),
 				slog.Int("count", len(addresses)),
 				slog.String("err", err.Error()))
+			return
+		}
+		// The paramset descriptions are per device, unlike the inventory.
+		for _, addr := range addresses {
+			h.reloadDeviceParamsets(bgCtx, b, iface, "callback.readded_device", addr)
 		}
 	})
 	return nil
+}
+
+// deviceRefreshTimeout bounds one callback-triggered background refresh:
+// one listDevices plus three getParamsetDescription reads (VALUES, MASTER,
+// LINK) per address of every affected device. The bound only reaps a hung
+// CCU connection; a multi-channel device on a slow link needs well over the
+// few seconds a description refresh alone takes.
+const deviceRefreshTimeout = 2 * time.Minute
+
+// reloadDeviceParamsets re-pulls the paramset descriptions of one device
+// after its descriptions were refreshed, and logs a failure under logPrefix.
+func (h *CallbackHandlers) reloadDeviceParamsets(
+	ctx context.Context, fetcher coordinators.ChannelParamsetFetcher,
+	iface hmtypes.WireInterfaceID, logPrefix, address string,
+) {
+	if err := h.unit.Devices.ReloadDeviceParamsets(ctx, fetcher, iface, address); err != nil {
+		h.logger.Warn(logPrefix+".paramset_reload_failed",
+			slog.String("interface", string(iface)),
+			slog.String("address", address),
+			slog.String("err", err.Error()))
+	}
 }
 
 // callbackDescFetcher wraps a [backends.Operations] as a

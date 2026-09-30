@@ -46,7 +46,7 @@ daemon's database carries a recent values snapshot.
 
 | Situation | What boot looks like |
 |---|---|
-| **Warm CCU + values cache present** (normal) | Device list, descriptors, and MASTER paramsets load from caches; values restore from SQLite. Effectively zero radio reads to reach a ready state. |
+| **Warm CCU + values cache present** (normal) | Values restore from SQLite. The device list, descriptors and paramsets are still re-pulled live from the CCU at boot — cheap RPC reads answered from the CCU's own database; the persisted copies only serve early readers until that pull lands. Effectively zero radio reads to reach a ready state. |
 | **Warm CCU + no cache** (fresh install or wiped `data_dir`) | The daemon fills the cache from push events and a bounded bootstrap read pass. Most of those reads are served from the CCU's own value database; DutyCycle ticks up but stays modest on a healthy CCU. The next restart is a warm start. |
 | **Cold CCU just rebooted** | The CCU re-polls its devices over the radio to rebuild its own state — that DutyCycle activity is CCU work, not daemon-induced. Expect a spike for several minutes after a CCU reboot. |
 | **Cold CCU + no daemon cache** (worst case) | Both sides are cold, so the daemon's bootstrap reads hit devices that the CCU also has no value for. **Avoid this** — if you wipe `data_dir`, wait until the CCU has been up at least a minute before starting the daemon. |

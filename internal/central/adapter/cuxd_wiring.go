@@ -213,6 +213,8 @@ func wireCUxDInterface( //nolint:funlen,gocognit // composition/wiring: long seq
 		initID:      initID,
 		callbackURL: callbackURL,
 		cuxdAddr:    addr,
+		pipeline:    pipeline,
+		seeder:      hub.ValueSeeder(),
 	}, logger)
 
 	poller := newMasterPollerForInterface(iface, unit, backend, masterValues, wireID, cc.Name, logger) //nolint:contextcheck // poller callback uses context.Background(); outlives the wiring ctx by design
@@ -442,6 +444,10 @@ type cuxdRecoveryTarget struct {
 	initID      string
 	callbackURL string
 	cuxdAddr    string
+	// pipeline and seeder drive the post-reconnect value reseed; a nil
+	// seeder skips it.
+	pipeline *DevicePipeline
+	seeder   ValueSeeder
 }
 
 // wireCUxDRecovery installs the recovery pipeline for a CUxD interface.
@@ -487,7 +493,9 @@ func wireCUxDRecovery(unit *central.Unit, t cuxdRecoveryTarget, logger *slog.Log
 			}
 			return nil
 		},
-		LoadData: unit.Recovery.RefreshHubDataAfterRecovery(),
+		// Hub data first, then a full value reseed of CUxD: no event reached
+		// the daemon while the CCU was down.
+		LoadData: newRecoveryLoadData(unit.Recovery.RefreshHubDataAfterRecovery(), t.pipeline, hmenum.InterfaceCUxD, t.seeder, logger),
 	}))
 	unit.Recovery.SetLogger(logger)
 	unit.Recovery.Subscribe() //nolint:contextcheck // Subscribe starts a background goroutine; it has no ctx parameter by design

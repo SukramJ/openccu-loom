@@ -989,7 +989,9 @@ func wireInterface(
 				}
 				return nil
 			},
-			LoadData: unit.Recovery.RefreshHubDataAfterRecovery(),
+			// Hub data first, then a full value reseed of this interface: no
+			// event reached the daemon while the CCU was down.
+			LoadData: newRecoveryLoadData(unit.Recovery.RefreshHubDataAfterRecovery(), pipeline, iface, hub.ValueSeeder(), logger),
 		}
 		unit.Recovery.WithPipelineFor(capturedWireID, coordinators.DefaultRecoveryPipeline(deps))
 		// Wire the daemon logger so recovery.trigger / recovery.started /
