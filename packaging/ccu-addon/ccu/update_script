@@ -69,6 +69,10 @@ cp -af addon/${ADDON_BIN} ${ADDON_DIR}/${ADDON_ID}
 chmod 755 ${ADDON_DIR}/${ADDON_ID}
 cp -af addon/VERSION ${ADDON_DIR}/VERSION 2>/dev/null || true
 cp -af addon/assets ${ADDON_DIR}/ 2>/dev/null || true
+# The openccu-lite web-server drop-in: occulited reads it from the
+# add-on's own etc/, validates it and installs a root-owned copy. The
+# CCU3/OpenCCU firmware never looks at it.
+cp -af addon/etc ${ADDON_DIR}/ 2>/dev/null || true
 cp -af rc.d/* ${RCD_DIR}/
 cp -af www/* ${WWW_DIR}/
 cp -af etc/* ${ETC_DIR}/

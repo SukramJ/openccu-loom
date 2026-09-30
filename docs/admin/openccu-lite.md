@@ -196,7 +196,24 @@ from the box's Addons page. A few things differ from a CCU:
   auto-onboarded central sticks for as long as any central exists; an
   empty list on the box re-onboards at the next start (ADR 0077).
 
-- **Open port 8119 on the Addons page.** The add-on's manifest declares
+- **The Config UI is served through the box's web server.** The add-on
+  ships a validated lighttpd fragment (ADR 0078): the box proxies
+  `https://<box>/addons/loom/` to the daemon on the loopback — TLS and
+  the certificate you configured on the box included, the WebSocket
+  event stream included — and the box shell lists the UI in its
+  navigation. Nothing to open in the firewall for this path; port 8119
+  is only needed for direct access from other machines (a Home
+  Assistant backend, MQTT-less REST clients).
+- **Reusing the box's certificate on the direct port** (optional): both
+  a CCU and an openccu-lite box keep their web-server certificate in
+  one combined file, `/etc/config/server.pem`, which the add-on may
+  read. Set `north.rest.tls_cert_file` **and** `tls_key_file` both to
+  that path and the daemon serves HTTPS on 8119 with the same
+  certificate; a rotation (ACME renewals included) is picked up on the
+  next connection, and on openccu-lite an ACME renewal restarts the
+  add-on anyway. This stays opt-in — switching 8119 to HTTPS breaks
+  clients that talk `http://` to it today.
+- **Open port 8119 on the Addons page** (only for direct access). The add-on's manifest declares
   its ports, so they appear as switches under *Addon ports*: 8119
   (Config UI, REST/WebSocket, MCP) is the one to open; 8120/8129 (the
   XML-RPC/BIN-RPC callbacks a *remote* CCU would push to) and 5540

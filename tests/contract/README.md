@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 545.
+Guards without a doc comment: 7 of 546.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -51,6 +51,7 @@ Guards without a doc comment: 7 of 545.
 | TestCCUAddonConfigCardOpensUIInNewTab | ccu_addon_config_card_test.go | TestCCUAddonConfigCardOpensUIInNewTab pins that the settings landing card's "Open Config UI" link leaves the embedding frame. |
 | TestCCUAddonRegistersControlPanelEntry | ccu_addon_control_panel_entry_test.go | TestCCUAddonRegistersControlPanelEntry pins how the add-on claims its tile in the CCU's "Systemsteuerung": the platform helper by its real name, plus the underlying HomeMatic Tcl API as the fallback for firmware that predates the helper. |
 | TestCCUAddonUpdateScriptWarnsWithoutControlPanelHelper | ccu_addon_control_panel_entry_test.go | TestCCUAddonUpdateScriptWarnsWithoutControlPanelHelper verifies the miss is LOUD: on firmware that offers neither the helper nor a Tcl interpreter the install still succeeds (the daemon does not need the tile), but it says so rather than leaving the operator with a silently tile-less install — the exact failure mode that hid the wrong helper name. |
+| TestCCUAddonLighttpdDropinProxiesTheDaemon | ccu_addon_lighttpd_dropin_test.go | TestCCUAddonLighttpdDropinProxiesTheDaemon pins the openccu-lite web-server drop-in (ADR 0078). |
 | TestCCUAddonLiteManifestDeclaresRuntimePolicy | ccu_addon_lite_manifest_test.go | TestCCUAddonLiteManifestDeclaresRuntimePolicy pins the manifest's runtime declarations. |
 | TestCCUAddonLiteManifestMatchesThePackage | ccu_addon_lite_manifest_test.go | TestCCUAddonLiteManifestMatchesThePackage pins the manifest to the files it describes, so a renamed add-on id, config page or tarball cannot leave the manifest pointing at something that no longer exists. |
 | TestCCUAddonLiteManifestNeedsNoSessionInTheURL | ccu_addon_lite_manifest_test.go | TestCCUAddonLiteManifestNeedsNoSessionInTheURL holds the reason the manifest sets session_header. |
