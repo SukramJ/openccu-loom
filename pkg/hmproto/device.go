@@ -88,9 +88,10 @@ type DeviceDescription struct {
 	TeamTag string `json:"TEAM_TAG,omitempty"`
 	Serial  string `json:"SERIAL,omitempty"`
 
-	// Interface is the interface ID the CCU reports. Some older CCU
-	// versions omit the field; our normaliser sets it to the dispatching
-	// interface when reading descriptions fresh.
+	// Interface is the interface the CCU reports for the device. On
+	// BidCos-RF it carries the serial of the RF gateway the device is
+	// assigned to; some older CCU versions omit the field, and the
+	// normaliser only trims it — an absent value stays absent.
 	Interface string `json:"INTERFACE,omitempty"`
 
 	// Version is a per-device schema version bumped by the CCU when

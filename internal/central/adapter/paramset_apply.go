@@ -129,6 +129,25 @@ func (p *ParamsetApplyDomain) applyOne(
 	if _, err := coerceAgainstDescriptions(rec.Paramset, values); err != nil {
 		return refused(err.Error())
 	}
+	// Run the visibility gate in the dry run too, so a dry run predicts
+	// exactly what the live write will do — the write path checks it
+	// again, but a dry run that skips it would answer would_apply for a
+	// value the write then refuses.
+	if err := p.paramsets.checkVisibilityOn(src.central, target, hmenum.ParamsetKeyMaster, values); err != nil {
+		return refused(err.Error())
+	}
+	// A modelled target is written through Channel.SetMany, which accepts
+	// only parameters the model holds a MASTER data point for — a subset
+	// of the stored description (profile-owned slots and filtered
+	// parameters are deliberately absent). Predict that gate here, so the
+	// dry run never promises a write SetMany would refuse.
+	if ch := p.paramsets.resolveChannelOn(src.central, target); ch != nil {
+		for name := range values {
+			if channelParameterFor(ch, hmenum.ParamsetKeyMaster, hmenum.Parameter(name)) == nil {
+				return refused(fmt.Sprintf("parameter %s is not writable on this channel's model paramset", name))
+			}
+		}
+	}
 	if dryRun {
 		return interfaces.ParamsetApplyOutcome{Address: target, Status: interfaces.ApplyWouldApply}
 	}
@@ -147,9 +166,11 @@ func (p *ParamsetApplyDomain) applyOne(
 // The set matches the rejections the REST write surface answers 400 for.
 func isWriteRejection(err error) bool {
 	return errors.Is(err, hmerr.ErrValidation) ||
+		errors.Is(err, hmerr.ErrParameterHidden) ||
 		errors.Is(err, device.ErrValidation) ||
 		errors.Is(err, device.ErrUnknownParameter) ||
-		errors.Is(err, device.ErrParameterNotWritable)
+		errors.Is(err, device.ErrParameterNotWritable) ||
+		errors.Is(err, device.ErrChannelOperationLocked)
 }
 
 // sameDescription is the eligibility gate: deep equality of two parsed stored

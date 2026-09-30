@@ -1,5 +1,5 @@
 {
- "version": "1.12",
+ "version": "1.13",
  "envelope": {
   "description": "Shape of every WebSocket frame the daemon emits — both command replies and broadcasts. The `payload` member is replaced per-frame; broadcast entries below name the OpenAPI schema (in assets/openapi.yaml under components.schemas) that pins its structure.",
   "fields": {
@@ -19,8 +19,8 @@
   "description": "The daemon sends a `{\"op\":\"ping\",\"echo\":\"<token>\"}` frame every ping_interval_seconds. Clients MUST respond with `{\"op\":\"pong\"}` within read_timeout_seconds or the connection is closed. Clients behind NAT or mobile-data proxies that drop idle connections faster than read_timeout_seconds should additionally issue their own `{\"op\":\"pong\"}` frames pre-emptively — the daemon accepts unsolicited pongs.",
   "ping_interval_seconds": 30,
   "read_timeout_seconds": 60,
-  "echo": "Opaque token on every server `ping`. A client that copies it verbatim into its `pong` (`{\"op\":\"pong\",\"echo\":\"<token>\"}`) lets the daemon time the round-trip against its own clock alone; the two ends need no clock agreement. Echoing is OPTIONAL \u2014 a bare `{\"op\":\"pong\"}` is still a valid heartbeat, it just cannot be timed. Never parse the token; its encoding is not part of this contract.",
-  "rtt_ms": "Round-trip time in milliseconds of the PREVIOUS heartbeat on this connection, carried on the next `ping`. Lets a client display its own latency to the daemon without measuring anything itself. Absent on the first ping and whenever the preceding pong carried no echo. This is the client\u2192daemon distance only \u2014 it says nothing about the daemon\u2192CCU path, which the `connection_latency_ms` hub metric reports separately."
+  "echo": "Opaque token on every server `ping`. A client that copies it verbatim into its `pong` (`{\"op\":\"pong\",\"echo\":\"<token>\"}`) lets the daemon time the round-trip against its own clock alone; the two ends need no clock agreement. Echoing is OPTIONAL — a bare `{\"op\":\"pong\"}` is still a valid heartbeat, it just cannot be timed. Never parse the token; its encoding is not part of this contract.",
+  "rtt_ms": "Round-trip time in milliseconds of the PREVIOUS heartbeat on this connection, carried on the next `ping`. Lets a client display its own latency to the daemon without measuring anything itself. Absent on the first ping and whenever the preceding pong carried no echo. This is the client→daemon distance only — it says nothing about the daemon→CCU path, which the `connection_latency_ms` hub metric reports separately."
  },
  "reauth": {
   "description": "Client → server: `{op:\"reauth\", token:\"<bearer token>\"}` swaps the credential behind an established connection without a reconnect. A socket resolves its identity once, at the upgrade, and the daemon closes it the instant that credential's deadline passes — so a long-lived client must refill before the deadline rather than discover the rotation through a 401. On success the daemon answers `{op:\"reauth_ok\"}`, carrying `expires_at` (RFC3339, UTC) when the new credential has a server-side deadline and omitting it when it has none. On failure — no token store wired, empty token, unknown or expired token — it answers `{op:\"reauth_failed\"}` and closes the connection; the client reconnects with fresh credentials. The same deadline is readable over REST as the `expires_at` field of GET /auth/me.",
@@ -41,12 +41,22 @@
  "optional_deployment_providers": {
   "description": "Every command listed here is always present in `system.commands` and always dispatchable, but its domain provider is wired only when the deployment supplies it; when unwired, the command answers `{code:\"not_implemented\"}` instead of running. Check `system.commands` at runtime rather than assuming every catalogued command is functional in a given daemon build.",
   "commands": [
-   "change_history.list", "change_history.clear",
-   "central.info", "central.connectivity", "central.system_health", "central.reconcile",
-   "ccu.throttle_stats", "ccu.device_statistics",
-   "incidents.list", "incidents.get", "incidents.clear",
-   "service_messages.disable", "service_messages.suppressed", "service_messages.unsuppress",
-   "paramset.form_schema", "paramset.copy"
+   "change_history.list",
+   "change_history.clear",
+   "central.info",
+   "central.connectivity",
+   "central.system_health",
+   "central.reconcile",
+   "ccu.throttle_stats",
+   "ccu.device_statistics",
+   "incidents.list",
+   "incidents.get",
+   "incidents.clear",
+   "service_messages.disable",
+   "service_messages.suppressed",
+   "service_messages.unsuppress",
+   "paramset.form_schema",
+   "paramset.copy"
   ]
  },
  "commands": [
@@ -663,7 +673,7 @@
   },
   {
    "category": "taxonomy",
-   "description": "Every central's taxonomy trees \u2014 rooms, functions and further enums \u2014 with each node's path, empty nodes included. Optional central narrows to one; an unknown central is not_found. Same answer as REST GET /taxonomy.",
+   "description": "Every central's taxonomy trees — rooms, functions and further enums — with each node's path, empty nodes included. Optional central narrows to one; an unknown central is not_found. Same answer as REST GET /taxonomy.",
    "name": "taxonomy.list",
    "args": {
     "central": "string?"

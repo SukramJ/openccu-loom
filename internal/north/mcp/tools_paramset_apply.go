@@ -14,6 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 type listParamsetApplyTargetsIn struct {
@@ -129,20 +130,46 @@ func registerApplyParamsetToChannels(s *mcpsdk.Server, d Deps) {
 				)
 			}
 		}
+		// Refuse targets whose MASTER edit lock is currently held —
+		// mirroring the REST route: the batch holds only the source lock,
+		// and writing under someone's open edit session would clobber
+		// their staged values. Refused targets keep their position.
 		targets := make([]string, 0, len(in.Targets))
-		for _, t := range in.Targets {
-			targets = append(targets, strings.TrimSpace(t))
+		locked := make(map[string]bool, len(in.Targets))
+		for _, raw := range in.Targets {
+			t := strings.TrimSpace(raw)
+			if d.EditLocks != nil && d.EditLocks.Held("channel:"+t+":"+string(hmenum.ParamsetKeyMaster)) {
+				locked[t] = true
+				continue
+			}
+			targets = append(targets, t)
 		}
 		ctx = hmreqctx.WithOperation(ctx, "mcp:paramset-apply")
-		outcomes, err := d.ParamsetApply.ApplyToChannels(ctx, source, in.Values, targets, in.DryRun)
-		if err != nil {
-			return nil, applyParamsetToChannelsOut{}, fmt.Errorf("apply paramset: %w", err)
+		var outcomes []interfaces.ParamsetApplyOutcome
+		if len(targets) > 0 {
+			var err error
+			outcomes, err = d.ParamsetApply.ApplyToChannels(ctx, source, in.Values, targets, in.DryRun)
+			if err != nil {
+				return nil, applyParamsetToChannelsOut{}, fmt.Errorf("apply paramset: %w", err)
+			}
 		}
-		out := applyParamsetToChannelsOut{Outcomes: make([]paramsetApplyOutcomeOut, 0, len(outcomes))}
+		byAddress := make(map[string]paramsetApplyOutcomeOut, len(outcomes))
 		for _, o := range outcomes {
-			out.Outcomes = append(out.Outcomes, paramsetApplyOutcomeOut{
+			byAddress[o.Address] = paramsetApplyOutcomeOut{
 				Address: o.Address, Status: o.Status, Reason: o.Reason, Result: writeReportOut(o.Result),
-			})
+			}
+		}
+		out := applyParamsetToChannelsOut{Outcomes: make([]paramsetApplyOutcomeOut, 0, len(in.Targets))}
+		for _, raw := range in.Targets {
+			t := strings.TrimSpace(raw)
+			if locked[t] {
+				out.Outcomes = append(out.Outcomes, paramsetApplyOutcomeOut{
+					Address: t, Status: interfaces.ApplyRefused,
+					Reason: "target channel has an open edit session",
+				})
+				continue
+			}
+			out.Outcomes = append(out.Outcomes, byAddress[t])
 		}
 		return nil, out, nil
 	})

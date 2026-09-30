@@ -142,6 +142,11 @@ type EditLockManager interface {
 	// holder. Returns false when the key is unheld or token does not
 	// match — same semantics as [handlers.EditSessions.Close].
 	Close(key, token string) bool
+	// Held reports whether any live session currently holds key — same
+	// semantics as [handlers.EditSessions.Held]. The multi-apply tool
+	// refuses targets whose MASTER lock is held so a batch never writes
+	// under someone's open edit session.
+	Held(key string) bool
 }
 
 // HubResolver resolves a central's hub model by name — the seam the

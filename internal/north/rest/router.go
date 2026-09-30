@@ -1058,8 +1058,11 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.With(admin).Post("/devices/{addr}/config/restore", handlers.RestoreDeviceConfig(d.DeviceAdmin, d.AuditRecorder))
 				pr.With(admin).Post("/devices/{addr}/config/cache-clear", handlers.ClearDeviceConfigCache(d.DeviceAdmin, d.AuditRecorder))
 				pr.With(admin).Post("/devices/{addr}/rf-interface", handlers.AssignRFInterface(d.DeviceAdmin, d.AuditRecorder))
-				pr.With(admin).Post("/devices/{addr}/config/repair", handlers.RepairDeviceConfig(d.ConfigRepair))
 			}
+			// Mounted on its own dep, not DeviceAdmin: the handler answers
+			// 503 for a nil service, and gating it on an unrelated facade
+			// would silently drop the route when only DeviceAdmin is absent.
+			pr.With(admin).Post("/devices/{addr}/config/repair", handlers.RepairDeviceConfig(d.ConfigRepair))
 			if d.DeviceReplacer != nil {
 				pr.Get("/devices/{addr}/replace-candidates", handlers.GetDeviceReplaceCandidates(d.DeviceReplacer))
 				pr.With(admin).Post("/devices/{addr}/replace", handlers.PostDeviceReplace(d.DeviceReplacer, d.AuditRecorder))

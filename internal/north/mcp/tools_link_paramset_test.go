@@ -37,6 +37,10 @@ func (f *fakeEditLocksExact) Close(string, string) bool {
 	return false
 }
 
+func (f *fakeEditLocksExact) Held(string) bool {
+	return false
+}
+
 // TestWriteParamset_RefusesLinkKey is guard G1. write_paramset must refuse
 // key LINK without ever reaching the paramset domain (neither PutParamset
 // nor PutLinkParamset), and the refusal must not be a blanket "everything

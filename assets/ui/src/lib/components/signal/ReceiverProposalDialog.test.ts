@@ -101,6 +101,43 @@ describe("ReceiverProposalDialog", () => {
     expect(mockToast.warn).toHaveBeenCalled();
   });
 
+  // The same device address on two centrals is two rows: unticking one must
+  // not untick the other, and applying must assign each exactly once.
+  it("keeps same-address rows of different centrals apart", async () => {
+    mockProposal.mockResolvedValue([
+      { address: "DUP", name: "Dup A", central: "ccu-a", best_interface: "IF-A2", verdict: "switch" },
+      { address: "DUP", name: "Dup B", central: "ccu-b", best_interface: "IF-B2", verdict: "switch" },
+    ]);
+    mockAssign.mockResolvedValue(undefined);
+    await renderOpen();
+    expect(ticks().length).toBe(2);
+    const dupB = ticks().find((b) => b.getAttribute("aria-label")?.includes("Dup B"))!;
+    await fireEvent.click(dupB);
+    const dupA = ticks().find((b) => b.getAttribute("aria-label")?.includes("Dup A"))!;
+    expect(dupA.checked).toBe(true);
+    expect(dupB.checked).toBe(false);
+    await fireEvent.click(applyButton());
+    await waitFor(() => expect(mockAssign).toHaveBeenCalledTimes(1));
+    expect(mockAssign).toHaveBeenCalledWith("DUP", "IF-A2", false);
+  });
+
+  it("reports a ticked switch row without a best interface as failed", async () => {
+    mockProposal.mockResolvedValue([
+      { address: "NB1", name: "No best", central: "ccu", verdict: "switch" },
+    ]);
+    await renderOpen();
+    await fireEvent.click(applyButton());
+    await waitFor(() => {
+      const results = Array.from(document.querySelectorAll('[data-testid="proposal-result"]')).map(
+        (el) => el.textContent?.trim(),
+      );
+      expect(results).toEqual(["signal.proposal.no_best_interface"]);
+    });
+    expect(mockAssign).not.toHaveBeenCalled();
+    expect(mockToast.success).not.toHaveBeenCalled();
+    expect(mockToast.warn).toHaveBeenCalled();
+  });
+
   it("skips a row the operator unticked", async () => {
     mockAssign.mockResolvedValue(undefined);
     await renderOpen();

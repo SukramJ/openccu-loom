@@ -942,6 +942,7 @@ paths:
               schema: { $ref: "#/components/schemas/ParamsetApplyTargetsResponse" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/paramsets/{key}/apply-to:
     post:
@@ -963,10 +964,13 @@ paths:
         Only `MASTER` is supported; any other key answers 400. The
         caller must hold the edit lock of the SOURCE channel
         (`channel:{addr}:MASTER`) and present its token via
-        `X-Edit-Token`; targets are not individually locked — the
-        description-identity gate plus per-target validation is what
-        makes the batch safe, and the write is refused per target, never
-        partially applied within one channel.
+        `X-Edit-Token`. The batch acquires no target locks, but a target
+        whose own MASTER edit lock is currently held by an open edit
+        session is refused — writing under it would clobber that
+        editor's staged values. The description-identity gate plus
+        per-target validation is what makes the batch safe, and the
+        write is refused per target, never partially applied within one
+        channel.
       security:
         - basicAuth: []
         - bearerAuth: []
@@ -996,6 +1000,7 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "423": { $ref: "#/components/responses/Locked" }
+        "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
   /groups:
@@ -5740,6 +5745,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/RSSIMatrixResponse" }
+        "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /diagnostics/rssi/receiver-proposal:
     get:
@@ -5770,6 +5776,8 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ReceiverProposalResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /diagnostics/reliability:
     get:

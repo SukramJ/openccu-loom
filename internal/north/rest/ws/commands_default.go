@@ -1379,7 +1379,10 @@ func linksPutParamsetHandler(q LinkQuery, locks EditLockVerifier) CommandHandler
 			return nil, commandErr(CommandErrorInternal, "put_link_paramset: ", err)
 		}
 		if report == nil {
-			report = &interfaces.ParamsetWriteReport{}
+			// An empty report would read as "compared, nothing diverged".
+			// A missing report means the comparison never happened — say
+			// so instead of fabricating a full acknowledgement.
+			report = &interfaces.ParamsetWriteReport{ReadbackError: "write path returned no read-back report"}
 		}
 		return withWriteReport(map[string]any{"written": len(args.Parameters)}, report), nil
 	}

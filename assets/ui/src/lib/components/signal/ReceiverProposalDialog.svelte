@@ -36,6 +36,12 @@
   let proposals = $state<ReceiverProposal[]>([]);
   let loading = $state(false);
   let loadError = $state<string | null>(null);
+  // `ticked` and `rowResult` are keyed by the same row key the table uses:
+  // an address alone is not unique across centrals, and aliasing two rows
+  // would tick both with one click and assign twice.
+  function keyOf(p: ReceiverProposal): string {
+    return (p.central ?? "") + "/" + p.address;
+  }
   let ticked = $state<Set<string>>(new Set());
   let applying = $state(false);
   // Per-row result of the apply step: "ok" or the error text.
@@ -45,7 +51,7 @@
     centralFilter ? proposals.filter((p) => p.central === centralFilter) : proposals,
   );
   const tickedRows = $derived(
-    shown.filter((p) => p.verdict === "switch" && ticked.has(p.address) && !rowResult[p.address]?.ok),
+    shown.filter((p) => p.verdict === "switch" && ticked.has(keyOf(p)) && !rowResult[keyOf(p)]?.ok),
   );
 
   function marginValue(): number {
@@ -61,7 +67,7 @@
     try {
       const items = await api.receiverProposal(marginValue());
       proposals = items;
-      ticked = new Set(items.filter((p) => p.verdict === "switch").map((p) => p.address));
+      ticked = new Set(items.filter((p) => p.verdict === "switch").map(keyOf));
     } catch (err) {
       proposals = [];
       ticked = new Set();
@@ -82,10 +88,10 @@
     });
   });
 
-  function toggle(address: string, on: boolean) {
+  function toggle(key: string, on: boolean) {
     const next = new Set(ticked);
-    if (on) next.add(address);
-    else next.delete(address);
+    if (on) next.add(key);
+    else next.delete(key);
     ticked = next;
   }
 
@@ -96,15 +102,25 @@
     let ok = 0;
     let failed = 0;
     for (const p of rows) {
-      if (!p.best_interface) continue;
+      const key = keyOf(p);
+      // A switch verdict without a named interface cannot be applied; it
+      // counts as failed with its own row message rather than vanishing.
+      if (!p.best_interface) {
+        rowResult = {
+          ...rowResult,
+          [key]: { ok: false, message: t("signal.proposal.no_best_interface") },
+        };
+        failed++;
+        continue;
+      }
       try {
         await api.assignRFInterface(p.address, p.best_interface, false);
-        rowResult = { ...rowResult, [p.address]: { ok: true } };
+        rowResult = { ...rowResult, [key]: { ok: true } };
         ok++;
       } catch (err) {
         rowResult = {
           ...rowResult,
-          [p.address]: { ok: false, message: friendlyError(err, t) },
+          [key]: { ok: false, message: friendlyError(err, t) },
         };
         failed++;
       }
@@ -174,7 +190,7 @@
     <DataTable
       rows={shown}
       {columns}
-      rowKey={(p) => (p.central ?? "") + "/" + p.address}
+      rowKey={keyOf}
       initialSort={{ key: "verdict", asc: false }}
       emptyMessage={t("signal.proposal.empty")}
       emptyIcon="mdi:signal"
@@ -185,18 +201,18 @@
             <input
               type="checkbox"
               class="h-4 w-4 rounded border-[var(--ha-divider-color)]"
-              checked={ticked.has(p.address)}
-              disabled={applying || !!rowResult[p.address]?.ok}
+              checked={ticked.has(keyOf(p))}
+              disabled={applying || !!rowResult[keyOf(p)]?.ok}
               aria-label={t("signal.proposal.select", { name: p.name || p.address })}
               data-testid="proposal-tick"
-              onchange={(e) => toggle(p.address, (e.currentTarget as HTMLInputElement).checked)}
+              onchange={(e) => toggle(keyOf(p), (e.currentTarget as HTMLInputElement).checked)}
             />
           {/if}
         {:else if col.key === "device"}
           <span class="font-medium">{p.name || p.address}</span>
           <span class="block font-mono text-xs text-[var(--ha-secondary-text-color)]">{p.address}</span>
-          {#if rowResult[p.address]}
-            {@const r = rowResult[p.address]}
+          {#if rowResult[keyOf(p)]}
+            {@const r = rowResult[keyOf(p)]}
             <span
               class={r.ok
                 ? "block text-xs text-[var(--ha-success-color)]"

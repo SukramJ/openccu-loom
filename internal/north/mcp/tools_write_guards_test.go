@@ -159,6 +159,8 @@ func (f *fakeEditLocks) Open(key, subject string) (handlers.EditLock, bool) {
 	return f.openResult, f.openOK
 }
 
+func (f *fakeEditLocks) Held(string) bool { return false }
+
 func (f *fakeEditLocks) Close(key, token string) bool {
 	f.closeKey = key
 	f.closeToken = token

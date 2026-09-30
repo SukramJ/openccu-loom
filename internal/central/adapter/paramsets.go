@@ -229,7 +229,10 @@ func (p *ParamsetsDomain) PutParamsetOn(
 		// Route through the model: Channel.SetMany validates + dispatches.
 		paramValues, convErr := anyMapToParamValues(ch, key, values)
 		if convErr != nil {
-			return nil, fmt.Errorf("paramsets: convert values: %w", convErr)
+			// A value the model's descriptor cannot coerce is the caller's
+			// mistake, not an upstream failure — classify it so REST
+			// answers 400 and the apply batch reports a refusal.
+			return nil, fmt.Errorf("%w: paramsets: convert values: %w", hmerr.ErrValidation, convErr)
 		}
 		opts := device.SetOptions{
 			Validate:   true,
@@ -296,6 +299,12 @@ func paramsetWriteReport(
 		sentVal := sent[name]
 		storedRaw, ok := stored[name]
 		if !ok {
+			// A write-only parameter never appears in the read-back; its
+			// absence is unverifiable, not a divergence — reporting it
+			// would flag every write of such a parameter forever.
+			if desc, has := descs[name]; has && !desc.IsReadable() {
+				continue
+			}
 			report.Divergences = append(report.Divergences,
 				interfaces.ParamsetDivergence{Parameter: name, Sent: sentVal, Stored: nil})
 			continue

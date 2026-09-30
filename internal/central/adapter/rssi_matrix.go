@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"slices"
 	"sort"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/jsonrpc"
+	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -93,12 +95,17 @@ func (d *RSSIMatrixDomain) readMatrices(ctx context.Context) ([]centralMatrix, e
 		// poll makes; the wire takes the bare interface name.
 		if lister, ok := backend.(bidcosGatewayLister); ok {
 			raw, err := lister.ListBidcosInterfaces(ctx, string(hmenum.InterfaceBidCosRF))
-			if err != nil {
+			switch {
+			case err == nil:
+				cm.gateways = jsonrpc.DecodeBidcosInterfaces(raw)
+			case errors.Is(err, backends.ErrUnsupported) || errors.Is(err, backends.ErrNotWired):
+				// A backend without the gateway listing still delivered a
+				// matrix; an empty gateway list must not discard it.
+			default:
 				cm.err = fmt.Errorf("list gateways: %w", err)
 				out = append(out, cm)
 				continue
 			}
-			cm.gateways = jsonrpc.DecodeBidcosInterfaces(raw)
 		}
 		cm.matrix = matrix
 		out = append(out, cm)
@@ -267,10 +274,14 @@ func receiverVerdict(
 	if hasRow {
 		for _, g := range gateways {
 			pair, ok := row[g]
-			if !ok || pair[1] == backends.RSSINoInformation {
+			if !ok {
 				continue
 			}
-			rx := pair[1]
+			rp := rssiReading(pair[1])
+			if rp == nil {
+				continue
+			}
+			rx := *rp
 			if g == current {
 				res.currentRx = &rx
 			}
@@ -296,11 +307,26 @@ func receiverVerdict(
 	return res
 }
 
-// rssiReading maps one matrix value to the service shape: nil for the
-// daemon's no-information marker, the dBm value otherwise.
+// rssiReading maps one matrix value to the service shape. The daemon's
+// no-information marker (65536) is nil, and every other value passes
+// through the shared RSSI normalisation: the BidCos-RF daemon fills the
+// matrix with the negated unsigned frame byte, so a strong signal
+// arrives re-wrapped below -128 (a true -66 dBm as -190) and a frame
+// byte of zero arrives as 0 — [generic.FixRSSI] folds the wrapped band
+// back into dBm and rejects the markers. A rejected reading is nil, so
+// neither the matrix display nor the best-gateway ranking ever compares
+// raw wire encodings.
 func rssiReading(v int) *int {
 	if v == backends.RSSINoInformation {
 		return nil
 	}
-	return &v
+	if v < math.MinInt32 || v > math.MaxInt32 {
+		return nil
+	}
+	fixed, ok := generic.FixRSSI(int32(v)) //nolint:gosec // bounds-checked above
+	if !ok {
+		return nil
+	}
+	f := int(fixed)
+	return &f
 }

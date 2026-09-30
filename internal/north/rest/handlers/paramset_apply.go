@@ -106,9 +106,10 @@ func GetParamsetApplyTargets(svc ParamsetApplyService) http.HandlerFunc {
 }
 
 // ApplyParamsetToChannels serves POST /devices/{addr}/paramsets/{key}/apply-to.
-// The caller holds the SOURCE channel's MASTER edit lock; the targets are not
-// locked individually — the per-target description-identity gate and
-// validation are what make the batch safe. `locks` may be nil only in tests.
+// The caller holds the SOURCE channel's MASTER edit lock; the batch does not
+// acquire target locks, but a target whose MASTER lock is currently held by
+// an open edit session is refused — writing under it would clobber that
+// editor's staged values. `locks` may be nil only in tests.
 func ApplyParamsetToChannels(svc ParamsetApplyService, locks *EditSessions) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if svc == nil {
@@ -133,13 +134,43 @@ func ApplyParamsetToChannels(svc ParamsetApplyService, locks *EditSessions) http
 				problem.New(problem.TypeBadRequest, r, "values and targets are required", "both must be non-empty"))
 			return
 		}
-		outcomes, err := svc.ApplyToChannels(r.Context(), addr, req.Values, req.Targets, req.DryRun)
-		if err != nil {
-			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Paramset apply failed", err)
-			return
+		// Refuse targets whose MASTER edit lock is held: the batch holds
+		// only the source lock, and writing a channel under someone's
+		// open edit session would clobber their staged values. Refused
+		// targets keep their request position; the rest go to the service.
+		lockedOutcome := make(map[string]bool, len(req.Targets))
+		serviceTargets := make([]string, 0, len(req.Targets))
+		for _, t := range req.Targets {
+			if locks.Held("channel:" + t + ":" + string(hmenum.ParamsetKeyMaster)) {
+				lockedOutcome[t] = true
+				continue
+			}
+			serviceTargets = append(serviceTargets, t)
 		}
-		resp := paramsetApplyResponse{Items: make([]paramsetApplyOutcome, 0, len(outcomes))}
+		var outcomes []interfaces.ParamsetApplyOutcome
+		if len(serviceTargets) > 0 {
+			var err error
+			outcomes, err = svc.ApplyToChannels(r.Context(), addr, req.Values, serviceTargets, req.DryRun)
+			if err != nil {
+				writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Paramset apply failed", err)
+				return
+			}
+		}
+		byAddress := make(map[string]interfaces.ParamsetApplyOutcome, len(outcomes))
 		for _, o := range outcomes {
+			byAddress[o.Address] = o
+		}
+		resp := paramsetApplyResponse{Items: make([]paramsetApplyOutcome, 0, len(req.Targets))}
+		for _, t := range req.Targets {
+			if lockedOutcome[t] {
+				resp.Items = append(resp.Items, paramsetApplyOutcome{
+					Address: t,
+					Status:  interfaces.ApplyRefused,
+					Reason:  "target channel has an open edit session",
+				})
+				continue
+			}
+			o := byAddress[t]
 			item := paramsetApplyOutcome{Address: o.Address, Status: o.Status, Reason: o.Reason}
 			if o.Result != nil {
 				result := paramsetWriteResult(o.Result)

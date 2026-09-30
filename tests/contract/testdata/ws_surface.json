@@ -1,5 +1,5 @@
 {
-  "wsapi_version": "1.12",
+  "wsapi_version": "1.13",
   "commands": {
     "addon_update.check": "",
     "addon_update.install": "",

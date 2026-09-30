@@ -80,9 +80,10 @@
       // typed without weakening the public envelope.
       const p = env.payload as DataPointChangedEvent;
       // Match against the device's :0 channel only — we never want
-      // to surface, e.g., a level event from channel 3 here.
-      if (!p.channel_address?.endsWith(":0")) return;
-      if (!p.channel_address.startsWith(address)) return;
+      // to surface, e.g., a level event from channel 3 here. Exact match:
+      // a prefix test would also accept a sibling device whose address
+      // extends this one ("ABC1" vs "ABC12:0").
+      if (p.channel_address !== `${address}:0`) return;
       values = { ...values, [p.parameter]: p.value };
     });
   });
