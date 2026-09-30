@@ -58,11 +58,26 @@ a second origin next to the box UI.
 
 ## Alternatives considered
 
-- **Ingress on CCU3/OpenCCU too.** The firmware ships no include point
-  for add-on web-server fragments (`/etc/lighttpd` is read-only
-  firmware, no `/usr/local` include exists in either tree). Rejected as
-  a non-goal; the direct port with optional certificate reuse is the
-  CCU story.
+- **Ingress on CCU3/OpenCCU too.** The mechanism exists there as well:
+  lighttpd reads `include "/etc/config/lighttpd/*.conf"` from the
+  persistent user partition
+  ([OpenCCU `overlay/base/etc/lighttpd/lighttpd.conf`](https://github.com/OpenCCU/OpenCCU/blob/master/buildroot-external/overlay/base/etc/lighttpd/lighttpd.conf)),
+  the community add-on handbook documents proxying an add-on's HTTP
+  server behind `/addons/<name>/` that way
+  ([ccu-addon-howto](https://github.com/homematic-community/ccu-addon-howto)),
+  and RedMatic-class add-ons have shipped such rules on both firmwares
+  for years. Rejected anyway: that include is **unvalidated** — no
+  directive allowlist, no root-owned copy, any add-on may inject
+  arbitrary lighttpd configuration into the shared web server, so this
+  daemon's fragment would be one more tenant of an unguarded
+  configuration space rather than a gated one like occulited's. And it
+  carries **no session gate**: the CCU's lighttpd forwards a client's
+  headers untouched, so nothing comparable to `X-Occulite-Session`
+  exists to build on, and authentication behind such a proxy would
+  remain the daemon's own login — which the direct port already
+  provides. The CCU story stays the direct port with optional
+  certificate reuse; revisit if the firmware ever grows a validated
+  include or a session gate.
 - **Serving under the prefix without stripping** (the Node-RED pattern,
   which mounts at a sub-path). The daemon and SPA already master the
   stripped-prefix model for HA-Ingress; a second mounting mode would
