@@ -747,6 +747,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	if si.descriptorStores.Paramsets != nil {
 		paramsetApplyDomain = adapter.NewParamsetApplyDomain(reg, si.descriptorStores.Paramsets, paramsetsDomain)
 	}
+	configRepairDomain := adapter.NewConfigRepairDomain(reg, valueWriter, auditRec)
 	schedulesDomain := adapter.NewSchedulesDomain(reg, valueWriter).SetAuditRecorder(auditRec)
 	// Shared RPC session recorder: one instance backs both the WS
 	// recording.start/stop/status commands and the REST
@@ -945,6 +946,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		customDPDispatcher:     customDPDispatcher,
 		paramsetsDomain:        paramsetsDomain,
 		paramsetApplyDomain:    paramsetApplyDomain,
+		configRepairDomain:     configRepairDomain,
 		parameterDeterminer:    adapter.NewParameterDeterminerAdapter(reg, valueWriter),
 		hubAdapter:             hubAdapter,
 		ifaceAdapter:           ifaceAdapter,

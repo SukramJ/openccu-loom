@@ -311,6 +311,68 @@ func TestHomegearBackendRestoreConfigToDeviceUnsupported(t *testing.T) {
 	}
 }
 
+// TestCcuBackendClearConfigCacheDispatchesXMLRPC verifies the wire call is
+// exactly `clearConfigCache(address)` — the method rfd (BidCos-RF) and
+// hs485d (BidCos-Wired) register.
+func TestCcuBackendClearConfigCacheDispatchesXMLRPC(t *testing.T) {
+	t.Parallel()
+	x := &fakeCaller{reply: nil}
+	b := NewCcuBackend(x, nil, nil)
+	if err := b.ClearConfigCache(context.Background(), "0001ABCD"); err != nil {
+		t.Fatalf("ClearConfigCache: %v", err)
+	}
+	got, _ := x.lastArg.Load().([]any)
+	if len(got) != 2 {
+		t.Fatalf("expected method+args call, got %v", got)
+	}
+	if method, _ := got[0].(string); method != "clearConfigCache" {
+		t.Fatalf("method=%s, want clearConfigCache", method)
+	}
+	args, _ := got[1].([]any)
+	if len(args) != 1 || args[0] != "0001ABCD" {
+		t.Fatalf("args=%v, want [0001ABCD]", args)
+	}
+}
+
+// TestCcuBackendClearConfigCachePropagatesFault verifies an XML-RPC fault
+// from the interface process reaches the caller rather than being
+// swallowed.
+func TestCcuBackendClearConfigCachePropagatesFault(t *testing.T) {
+	t.Parallel()
+	fault := &hmerr.XMLRPCFault{Code: -1, Message: "unknown device"}
+	x := &fakeCaller{err: fault}
+	b := NewCcuBackend(x, nil, nil)
+	err := b.ClearConfigCache(context.Background(), "0001ABCD")
+	var got *hmerr.XMLRPCFault
+	if !errors.As(err, &got) || got.Code != -1 {
+		t.Fatalf("expected *hmerr.XMLRPCFault{Code: -1}, got %v", err)
+	}
+}
+
+func TestCcuBackendClearConfigCacheWithoutXMLRPCErrors(t *testing.T) {
+	t.Parallel()
+	b := NewCcuBackend(nil, nil, nil)
+	if err := b.ClearConfigCache(context.Background(), "0001ABCD"); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("expected ErrUnsupported, got %v", err)
+	}
+}
+
+func TestCuxdBackendClearConfigCacheUnsupported(t *testing.T) {
+	t.Parallel()
+	b := NewCuxdBackend(&fakeCaller{}, nil)
+	if err := b.ClearConfigCache(context.Background(), "CUX0001"); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("expected ErrUnsupported, got %v", err)
+	}
+}
+
+func TestHomegearBackendClearConfigCacheUnsupported(t *testing.T) {
+	t.Parallel()
+	b := NewHomegearBackend(&fakeCaller{}, nil)
+	if err := b.ClearConfigCache(context.Background(), "ABCD1234"); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("expected ErrUnsupported, got %v", err)
+	}
+}
+
 // TestCcuBackendListReplaceableDevicesDispatchesXMLRPC verifies the wire
 // call is exactly `listReplaceableDevices(newAddress)` and that a returned
 // device row decodes correctly.

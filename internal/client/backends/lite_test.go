@@ -458,6 +458,25 @@ func TestLiteBackendUpdateFirmwareFallsBackOnFault(t *testing.T) {
 	}
 }
 
+// TestLiteBackendClearConfigCacheDispatchesXMLRPC pins the lite path to the
+// same `clearConfigCache(address)` wire call the CCU backend makes, and
+// its unwired form to ErrNotWired.
+func TestLiteBackendClearConfigCacheDispatchesXMLRPC(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	c := &liteScriptedCaller{}
+	if err := NewLiteBackend(hmenum.InterfaceBidCosRF, c, nil).ClearConfigCache(ctx, "A"); err != nil {
+		t.Fatalf("ClearConfigCache: %v", err)
+	}
+	got := c.recorded()
+	if len(got) != 1 || got[0].method != "clearConfigCache" || len(got[0].args) != 1 || got[0].args[0] != "A" {
+		t.Fatalf("calls = %+v, want one clearConfigCache(A)", got)
+	}
+	if err := NewLiteBackend(hmenum.InterfaceBidCosRF, nil, nil).ClearConfigCache(ctx, "A"); !errors.Is(err, ErrNotWired) {
+		t.Fatalf("unwired err = %v, want ErrNotWired", err)
+	}
+}
+
 // TestLiteBackendInitDeinitDelegateToAnnouncer pins Init/Deinit to the
 // announcer and their nil-safety.
 func TestLiteBackendInitDeinitDelegateToAnnouncer(t *testing.T) {

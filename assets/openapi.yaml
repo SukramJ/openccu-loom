@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 12.6.0
+  version: 12.7.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -3117,6 +3117,90 @@ paths:
           description: |
             Restore dispatched; the configuration transfer continues
             asynchronously (watch CONFIG_PENDING).
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/config/repair:
+    post:
+      operationId: repairDeviceConfig
+      summary: Rebuild a device's stored MASTER configuration (admin-only)
+      description: |
+        Repairs a device whose stored channel configuration has drifted
+        from what its own paramset descriptions allow — values of the
+        wrong type, values outside their range, or entries the
+        description does not carry at all. Per channel the daemon reads
+        the live paramset description and the live stored MASTER
+        paramset, then builds a full valid MASTER write from their
+        intersection: non-writable entries are dropped, invalid values
+        are replaced by the nearest valid one (each replacement is
+        reported as a correction), and the result is written back as one
+        complete paramset for that channel. A channel whose stored
+        values already match its description is reported `clean` and not
+        written — the full rewrite costs radio time and is only the
+        recovery for a drifted store.
+
+        A stored entry whose name the description does not carry cannot
+        be repaired this way: it lives in the interface process's own
+        configuration store and no paramset write removes it. Such
+        channels are reported with status `foreign_parameters` and the
+        offending names; the full rewrite of the valid parameters is
+        still attempted, but the channel may keep rejecting writes until
+        the device is deleted and paired again.
+
+        `dry_run: true` (the default) performs every read and reports
+        what would be written without touching the device. The write
+        phase proceeds channel by channel; one failing channel does not
+        stop the rest.
+
+        This is an administrative maintenance action: it requires the
+        admin scope, intentionally takes no per-channel edit locks, and
+        bypasses the parameter-visibility gate — it rewrites the
+        channel's own stored configuration and introduces no new values
+        beyond the reported corrections. Do not run it while the
+        device's configuration is being edited.
+      tags: [devices]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConfigRepairRequest" }
+      responses:
+        "200":
+          description: Per-channel repair outcome
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConfigRepairResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/config/cache-clear:
+    post:
+      operationId: clearDeviceConfigCache
+      summary: Drop the interface process's cached device configuration (admin-only)
+      description: |
+        Asks the interface process to forget its cached configuration for
+        the device, so the next configuration read or transfer rebuilds
+        it. Implemented by the BidCos interface daemons only (BidCos-RF
+        and BidCos-Wired); every other interface answers 422. Consult
+        `DeviceSummary.config_cache_clear_supported` before offering the
+        action.
+      tags: [devices]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Cache cleared }
         "400": { $ref: "#/components/responses/BadRequest" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
@@ -8574,6 +8658,62 @@ components:
         Raw LINK paramset of one channel-peer pair, as the CCU returns it —
         a flat parameter-name to value map with no fixed key set, which is
         why it declares `additionalProperties` rather than named fields.
+    ConfigRepairRequest:
+      type: object
+      properties:
+        dry_run:
+          type: boolean
+          default: true
+        channels:
+          type: array
+          items: { type: string }
+          description: >-
+            Restrict the repair to these channel addresses; every channel
+            of the device otherwise.
+    ConfigRepairResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ConfigRepairOutcome" }
+    ConfigRepairOutcome:
+      type: object
+      required: [channel, status]
+      description: Outcome of repairing one channel's stored MASTER configuration.
+      properties:
+        channel: { type: string, description: Channel address. }
+        status:
+          type: string
+          enum: [clean, repaired, would_repair, foreign_parameters, failed]
+          description: >-
+            clean — stored values already match the description, nothing
+            written; repaired — a full valid MASTER was written;
+            would_repair — dry run, a write would correct the listed
+            values; foreign_parameters — the stored paramset carries
+            entries the description does not know (listed in `foreign`);
+            the rewrite of the valid parameters was still attempted, but
+            no paramset write can remove the foreign entries; failed — a
+            read or the write failed, see `error`.
+        corrections:
+          type: array
+          description: Values the rewrite replaces, with the stored and the corrected value.
+          items: { $ref: "#/components/schemas/ConfigRepairCorrection" }
+        foreign:
+          type: array
+          items: { type: string }
+          description: Stored parameter names the description does not carry.
+        error: { type: string }
+        result:
+          $ref: "#/components/schemas/ParamsetWriteResult"
+    ConfigRepairCorrection:
+      type: object
+      required: [parameter]
+      properties:
+        parameter: { type: string }
+        stored: {}
+        corrected: {}
+        reason: { type: string }
     ParamsetApplyTargetsResponse:
       type: object
       required: [items]
@@ -10024,6 +10164,13 @@ components:
             True when the device's interface exposes `restoreConfigToDevice`
             (HmIP-RF, BidCos-RF). The SPA gates the "restore config" action on
             it. False for BidCos-Wired, CUxD and VirtualDevices.
+        config_cache_clear_supported:
+          type: boolean
+          description: |
+            True when the device's interface daemon implements
+            `clearConfigCache` (the BidCos daemons: BidCos-RF and
+            BidCos-Wired). The SPA gates the "clear config cache" action on
+            it. False for HmIP-*, CUxD and VirtualDevices.
         communication_test_supported:
           type: boolean
           description: |

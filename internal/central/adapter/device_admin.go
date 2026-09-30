@@ -406,6 +406,32 @@ func (a *DeviceAdminDomain) RestoreDeviceConfig(ctx context.Context, address str
 	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
 }
 
+// ClearConfigCache asks the device's interface process to discard its
+// cached configuration via `clearConfigCache` (XML-RPC), so the next
+// configuration read or transfer rebuilds it. Only rfd (BidCos-RF) and
+// hs485d (BidCos-Wired) expose the method; devices on any other interface
+// answer [backends.ErrUnsupported] before a wire call is made.
+func (a *DeviceAdminDomain) ClearConfigCache(ctx context.Context, address string) error {
+	if a.registry == nil || a.writer == nil {
+		return ErrNoDeviceBackend
+	}
+	for _, u := range a.registry.List() {
+		dev, ok := u.ModelRegistry.Get(address)
+		if !ok {
+			continue
+		}
+		if !dev.Interface.SupportsConfigCacheClear() {
+			return fmt.Errorf("clear config cache: interface %s: %w", dev.Interface, backends.ErrUnsupported)
+		}
+		backend, ok := a.writer.Backend(u.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
+		if !ok {
+			return fmt.Errorf("%w: %s/%s", ErrNoDeviceBackend, u.Name(), dev.InterfaceID)
+		}
+		return backend.ClearConfigCache(ctx, address)
+	}
+	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
+}
+
 // InterfaceDutyCycle returns the transmit duty cycle in percent (0..100)
 // of the radio interface the device is paired to, read from the owning
 // central's per-interface BidCos utilisation cache (populated by the

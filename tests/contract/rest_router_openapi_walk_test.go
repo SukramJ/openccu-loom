@@ -255,6 +255,7 @@ func (fakeDeviceAdmin) SetChannelFunctions(context.Context, string, int, []strin
 }
 
 func (fakeDeviceAdmin) RestoreDeviceConfig(context.Context, string) error { return nil }
+func (fakeDeviceAdmin) ClearConfigCache(context.Context, string) error    { return nil }
 
 type fakeDeviceInstallMode struct{}
 
@@ -472,6 +473,12 @@ func (fakeParamsetApplyService) ApplyTargets(context.Context, string) ([]interfa
 }
 
 func (fakeParamsetApplyService) ApplyToChannels(context.Context, string, map[string]any, []string, bool) ([]interfaces.ParamsetApplyOutcome, error) {
+	return nil, nil
+}
+
+type fakeConfigRepairService struct{}
+
+func (fakeConfigRepairService) RepairDeviceConfig(context.Context, string, []string, bool) ([]interfaces.ConfigRepairOutcome, error) {
 	return nil, nil
 }
 
@@ -712,6 +719,7 @@ func fullyWiredRouterDeps() rest.Deps {
 		Backup:                  fakeBackupService{},
 		Paramsets:               fakeParamsetService{},
 		ParamsetApply:           fakeParamsetApplyService{},
+		ConfigRepair:            fakeConfigRepairService{},
 		ParameterDeterminer:     fakeParameterDeterminer{},
 		Hub:                     fakeHubIndex{h: hub.NewHub("test")},
 		SysvarRefresh:           fakeSysvarRefreshService{},

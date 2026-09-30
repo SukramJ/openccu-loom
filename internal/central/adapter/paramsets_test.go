@@ -151,6 +151,10 @@ func (*paramsetFakeOps) RestoreConfigToDevice(context.Context, string) error {
 	return backends.ErrUnsupported
 }
 
+func (*paramsetFakeOps) ClearConfigCache(context.Context, string) error {
+	return backends.ErrUnsupported
+}
+
 func (*paramsetFakeOps) ListReplaceableDevices(context.Context, string) ([]hmproto.DeviceDescription, error) {
 	return nil, backends.ErrUnsupported
 }

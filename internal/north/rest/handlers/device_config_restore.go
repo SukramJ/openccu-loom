@@ -66,3 +66,52 @@ func RestoreDeviceConfig(svc DeviceConfigRestorePort, rec audit.Recorder) http.H
 		w.WriteHeader(http.StatusAccepted)
 	}
 }
+
+// DeviceConfigCachePort discards the interface process's cached
+// configuration of a device. *adapter.DeviceAdminDomain satisfies it; the
+// call resolves the owning backend by address and issues
+// `clearConfigCache`.
+type DeviceConfigCachePort interface {
+	ClearConfigCache(ctx context.Context, address string) error
+}
+
+// ClearDeviceConfigCache serves `POST /devices/{addr}/config/cache-clear`:
+// it asks the BidCos interface process to forget its cached configuration
+// of the device so the next configuration read or transfer rebuilds it.
+// The call completes synchronously, so success answers 204. Interfaces
+// without the method (HmIP-RF, CUxD, VirtualDevices) answer 422.
+func ClearDeviceConfigCache(svc DeviceConfigCachePort, rec audit.Recorder) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if svc == nil {
+			problem.Write(w, http.StatusServiceUnavailable,
+				problem.New(problem.TypeServiceUnready, r, "device config-cache clear unwired", ""))
+			return
+		}
+		addr := chi.URLParam(r, "addr")
+		if addr == "" {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeValidation, r, "Missing address", "addr path parameter is required"))
+			return
+		}
+		if err := svc.ClearConfigCache(r.Context(), addr); err != nil {
+			if problem.WriteFeatureUnavailable(w, r, err) {
+				return
+			}
+			if errors.Is(err, backends.ErrUnsupported) {
+				problem.Write(w, http.StatusUnprocessableEntity,
+					problem.New(problem.TypeValidation, r, "Config cache clear not supported on this interface", ""))
+				return
+			}
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Config cache clear failed", err)
+			return
+		}
+		if rec != nil {
+			rec.Record(audit.Entry{
+				User:          identityFromCtx(r.Context()),
+				Action:        audit.ActionDeviceConfigCacheClear,
+				DeviceAddress: addr,
+			})
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}

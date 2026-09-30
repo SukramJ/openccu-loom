@@ -58,6 +58,12 @@ const (
 	// Entry's DeviceAddress carries the target.
 	ActionDeviceConfigRestore Action = "device_config_restore"
 
+	// ActionDeviceConfigCacheClear records dropping the interface
+	// process's cached configuration for a device (`clearConfigCache`),
+	// so the next configuration read or transfer rebuilds it. The
+	// Entry's DeviceAddress carries the target.
+	ActionDeviceConfigCacheClear Action = "device_config_cache_clear"
+
 	// ActionDeviceReplace records a guided device replacement: the
 	// Entry's DeviceAddress carries the old (replaced, now unpaired)
 	// device; the Note the new device address.

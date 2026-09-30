@@ -280,8 +280,17 @@ type Deps struct {
 	// domain service the REST apply-targets / apply-to routes call. Nil
 	// leaves both tools unregistered.
 	ParamsetApply interfaces.ParamsetApplyService
-	Health        HealthReader
-	Hubs          HubResolver
+	// ConfigRepair backs repair_device_config — rebuilding a device's
+	// stored MASTER configuration from its own descriptions, the same
+	// domain service the REST config/repair route calls. Nil leaves the
+	// tool unregistered.
+	ConfigRepair interfaces.DeviceConfigRepairService
+	// ConfigCache backs clear_device_config_cache — the BidCos
+	// configuration-cache clear the REST config/cache-clear route serves.
+	// Nil leaves the tool unregistered.
+	ConfigCache ConfigCacheClearer
+	Health      HealthReader
+	Hubs        HubResolver
 	// Taxonomy backs get_taxonomy: every central's enum trees, the same
 	// read the REST GET /taxonomy handler serves. Nil leaves the tool
 	// unregistered.

@@ -277,6 +277,18 @@ func (b *CcuBackend) RestoreConfigToDevice(ctx context.Context, address string) 
 	return err
 }
 
+// ClearConfigCache discards the interface process's cached configuration
+// of the device via the XML-RPC `clearConfigCache(address)` call. rfd
+// (BidCos-RF) and hs485d (BidCos-Wired) implement it; the per-interface
+// support gate lives in the adapter.
+func (b *CcuBackend) ClearConfigCache(ctx context.Context, address string) error {
+	if b.xml == nil {
+		return ErrUnsupported
+	}
+	_, err := b.xml.Call(ctx, "clearConfigCache", address)
+	return err
+}
+
 // ListReplaceableDevices returns the devices the new device may replace
 // via the XML-RPC `listReplaceableDevices(newDeviceAddress)` call
 // (rfd / hs485d). The per-interface support gate lives in the adapter.

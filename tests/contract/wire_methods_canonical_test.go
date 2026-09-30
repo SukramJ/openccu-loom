@@ -46,6 +46,7 @@ func TestWireMethodsCanonical(t *testing.T) {
 		"installFirmware":         true,
 		"updateFirmware":          true,
 		"restoreConfigToDevice":   true,
+		"clearConfigCache":        true, // rfd and hs485d only (XmlRpcMethodClearConfigCache)
 		"listReplaceableDevices":  true,
 		"replaceDevice":           true,
 		"searchDevices":           true,

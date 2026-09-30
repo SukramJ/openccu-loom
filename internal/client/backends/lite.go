@@ -271,6 +271,16 @@ func (b *LiteBackend) RestoreConfigToDevice(ctx context.Context, address string)
 	return err
 }
 
+// ClearConfigCache implements Operations via XML-RPC
+// `clearConfigCache(address)`.
+func (b *LiteBackend) ClearConfigCache(ctx context.Context, address string) error {
+	if b.xml == nil {
+		return ErrNotWired
+	}
+	_, err := b.xml.Call(ctx, "clearConfigCache", address)
+	return err
+}
+
 // ListReplaceableDevices implements Operations via XML-RPC
 // `listReplaceableDevices(newAddress)`.
 func (b *LiteBackend) ListReplaceableDevices(ctx context.Context, newDeviceAddress string) ([]hmproto.DeviceDescription, error) {

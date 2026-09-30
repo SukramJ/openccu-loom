@@ -50,6 +50,9 @@ func TestMCPWriteToolsGatedByAllowWrites(t *testing.T) {
 		"set_datapoint", "write_paramset", "trigger_program",
 		"arm_alarm_zone", "disarm_alarm_zone", "reset_motion",
 		"apply_paramset_to_channels",
+		// Device-configuration maintenance (gated on ConfigRepair /
+		// ConfigCache).
+		"repair_device_config", "clear_device_config_cache",
 	}
 
 	fullDeps := func(allowWrites bool) mcp.Deps {
@@ -59,6 +62,8 @@ func TestMCPWriteToolsGatedByAllowWrites(t *testing.T) {
 			Writer:        mcpNoopWriter{},
 			Paramsets:     mcpNoopParamsets{},
 			ParamsetApply: mcpNoopParamsetApply{},
+			ConfigRepair:  mcpNoopConfigRepair{},
+			ConfigCache:   mcpNoopConfigCache{},
 			Health:        mcpNoopHealth{},
 			Hubs:          mcpNoopHubs{},
 			Alarm:         mcpParityAlarm{},
@@ -111,7 +116,9 @@ func TestMCPWriteToolsGatedByAllowWrites(t *testing.T) {
 func TestMCPToolNamingTaxonomy(t *testing.T) {
 	t.Parallel()
 
-	allowedVerbs := []string{"list", "get", "read", "set", "write", "trigger", "arm", "disarm", "reset", "apply"}
+	allowedVerbs := []string{
+		"list", "get", "read", "set", "write", "trigger", "arm", "disarm", "reset", "apply", "repair", "clear",
+	}
 
 	names := mcpToolNames(t, mcp.Deps{
 		Centrals:      emptyCentrals{},
@@ -119,6 +126,8 @@ func TestMCPToolNamingTaxonomy(t *testing.T) {
 		Writer:        mcpNoopWriter{},
 		Paramsets:     mcpNoopParamsets{},
 		ParamsetApply: mcpNoopParamsetApply{},
+		ConfigRepair:  mcpNoopConfigRepair{},
+		ConfigCache:   mcpNoopConfigCache{},
 		Health:        mcpNoopHealth{},
 		Hubs:          mcpNoopHubs{},
 		Alarm:         mcpParityAlarm{},
@@ -221,6 +230,18 @@ func (mcpNoopParamsetApply) ApplyToChannels(
 ) ([]interfaces.ParamsetApplyOutcome, error) {
 	return nil, nil
 }
+
+type mcpNoopConfigRepair struct{}
+
+func (mcpNoopConfigRepair) RepairDeviceConfig(
+	context.Context, string, []string, bool,
+) ([]interfaces.ConfigRepairOutcome, error) {
+	return nil, nil
+}
+
+type mcpNoopConfigCache struct{}
+
+func (mcpNoopConfigCache) ClearConfigCache(context.Context, string) error { return nil }
 
 type mcpNoopHealth struct{}
 

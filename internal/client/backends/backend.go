@@ -90,6 +90,14 @@ type DeviceOps interface {
 	// (only rfd / HMIPServer expose the method).
 	RestoreConfigToDevice(ctx context.Context, address string) error
 
+	// ClearConfigCache asks the interface process to discard its cached
+	// configuration of the device so the next configuration read or
+	// transfer rebuilds it. Maps to the XML-RPC
+	// `clearConfigCache(address)` call. Returns [ErrUnsupported] on
+	// backends without the method (CUxD, Homegear); the caller
+	// additionally gates on the interface (only rfd / hs485d expose it).
+	ClearConfigCache(ctx context.Context, address string) error
+
 	// ListReplaceableDevices returns the already-paired devices the new
 	// device (newDeviceAddress) may replace — the interface daemon
 	// computes type / channel compatibility. Maps to the XML-RPC

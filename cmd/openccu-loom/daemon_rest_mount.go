@@ -107,6 +107,7 @@ type restMountDeps struct {
 	// paramsetApplyDomain is nil when the paramset-description store is
 	// unavailable; the apply routes then answer 503.
 	paramsetApplyDomain *adapter.ParamsetApplyDomain
+	configRepairDomain  *adapter.ConfigRepairDomain
 	// parameterDeterminer backs POST .../paramsets/{key}/determine (the
 	// MASTER editor's "Determine" button). Shares the registry-resolved
 	// backend path with the WS `paramset.determine` command.
@@ -333,6 +334,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		CustomDPWriter:          d.customDPDispatcher,
 		Paramsets:               d.paramsetsDomain,
 		ParamsetApply:           paramsetApplyServiceOrNil(d.paramsetApplyDomain),
+		ConfigRepair:            d.configRepairDomain,
 		ConfigExport:            adapter.NewConfigExportDomain(d.reg, d.paramsetsDomain),
 		ConfigChannelMeta:       d.devicesAdapter,
 		ParameterDeterminer:     d.parameterDeterminer,
@@ -794,6 +796,8 @@ func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, loginLim
 		Writer:        d.dpWriterAdapter,
 		Paramsets:     d.paramsetsDomain,
 		ParamsetApply: paramsetApplyServiceOrNil(d.paramsetApplyDomain),
+		ConfigRepair:  d.configRepairDomain,
+		ConfigCache:   d.deviceAdminDomain,
 		Health:        d.healthAdapter,
 		Hubs:          d.reg,
 		Features:      d.reg,

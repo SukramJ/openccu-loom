@@ -1,5 +1,5 @@
 {
- "api_version": "12.6.0",
+ "api_version": "12.7.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -226,6 +226,8 @@
   "POST /devices/{addr}/channels/{no}/reload": "reloadChannel",
   "POST /devices/{addr}/channels/{no}/schedule/active-profile": "setChannelActiveProfile",
   "POST /devices/{addr}/channels/{no}/week_profile/copy": "copyClimateProfile",
+  "POST /devices/{addr}/config/cache-clear": "clearDeviceConfigCache",
+  "POST /devices/{addr}/config/repair": "repairDeviceConfig",
   "POST /devices/{addr}/config/restore": "restoreDeviceConfig",
   "POST /devices/{addr}/firmware/update": "updateFirmware",
   "POST /devices/{addr}/install-mode": "deviceInstallMode",
@@ -879,6 +881,27 @@
    "started_at:string",
    "timed_out:boolean"
   ],
+  "ConfigRepairCorrection": [
+   "corrected:unknown",
+   "parameter:string",
+   "reason:string",
+   "stored:unknown"
+  ],
+  "ConfigRepairOutcome": [
+   "channel:string",
+   "corrections:array\u003c$ref:ConfigRepairCorrection\u003e",
+   "error:string",
+   "foreign:array\u003cstring\u003e",
+   "result:$ref:ParamsetWriteResult",
+   "status:string"
+  ],
+  "ConfigRepairRequest": [
+   "channels:array\u003cstring\u003e",
+   "dry_run:boolean"
+  ],
+  "ConfigRepairResponse": [
+   "items:array\u003c$ref:ConfigRepairOutcome\u003e"
+  ],
   "ConfigSnapshot": [
    "callback_ports:object",
    "centrals:array\u003cobject\u003e",
@@ -1090,6 +1113,7 @@
    "central:string",
    "channels_count:integer",
    "communication_test_supported:boolean",
+   "config_cache_clear_supported:boolean",
    "config_restore_supported:boolean",
    "firmware:$ref:DeviceFirmware",
    "functions:array\u003cstring\u003e",

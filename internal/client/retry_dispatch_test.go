@@ -134,6 +134,10 @@ func (b *countingBackend) RestoreConfigToDevice(context.Context, string) error {
 	return backends.ErrUnsupported
 }
 
+func (b *countingBackend) ClearConfigCache(context.Context, string) error {
+	return backends.ErrUnsupported
+}
+
 func (b *countingBackend) ListReplaceableDevices(context.Context, string) ([]hmproto.DeviceDescription, error) {
 	return nil, backends.ErrUnsupported
 }

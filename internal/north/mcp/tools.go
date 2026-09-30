@@ -688,6 +688,12 @@ func registerWriteTools(s *mcpsdk.Server, d Deps) {
 	if d.ParamsetApply != nil && d.Devices != nil {
 		registerApplyParamsetToChannels(s, d)
 	}
+	if d.ConfigRepair != nil {
+		registerRepairDeviceConfig(s, d)
+	}
+	if d.ConfigCache != nil {
+		registerClearDeviceConfigCache(s, d)
+	}
 	if d.EditLocks != nil {
 		registerOpenEditSession(s, d)
 		registerCloseEditSession(s, d)

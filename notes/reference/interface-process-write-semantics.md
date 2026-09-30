@@ -91,14 +91,20 @@ devices, so the repair flow offers them on BidCos interfaces only.
   the `clearConfigCache`/`restoreConfigToDevice` implementations named
   above.
 - The persistence-of-rejected-writes behaviour (1), the silent-discard
-  behaviour (2) and the peer-address key quirk are **defensive
-  assumptions about live firmware behaviour**: they have not been
-  reproduced by this repository's own instrumentation against hardware.
-  They are treated as true because the cost asymmetry is extreme — if (1)
-  is true and the daemon guesses wrong once, a customer channel is
-  permanently unwritable. Reproducing them requires deliberate
-  fault-injection writes against lab hardware and must never be run
-  against a production CCU.
+  behaviour (2), the peer-address key quirk, ENUM being accepted in both
+  forms while reads return the index, FLOAT-as-`<int>` being silently
+  ignored by `rfd`, and the two CONFIG_PENDING semantics are **measured
+  on hardware** — CCU firmware 3.89.8, both interface-process families,
+  with a repeatable provocation script — in the Homematic Manager
+  project's lab study:
+  <https://github.com/hobbyquaker/homematic-manager/blob/master/docs/config-pending.md>.
+  That study also measured the recovery this note's repair flow
+  implements (a valid full MASTER rewrite of the affected channel) and
+  that `clearConfigCache` / `restoreConfigToDevice` answer a generic
+  fault on the HmIP process. This repository has not re-measured those
+  provocations itself: doing so requires deliberate fault-injection
+  writes against lab hardware — one of them permanently poisons a
+  channel — and must never be run against a production CCU.
 
 The fault-code catalogue itself, with per-family wording and retryability,
 lives in `pkg/hmerr/errors.go` (`XMLRPCFaultCode`).

@@ -75,6 +75,16 @@ func (i Interface) SupportsConfigRestore() bool {
 	return ok
 }
 
+// SupportsConfigCacheClear reports whether the interface process's cached
+// configuration of a device can be discarded via `clearConfigCache`. True
+// for BidCos-RF and BidCos-Wired (rfd / hs485d); false for HmIP-RF, whose
+// process does not implement the method for its devices, and for CUxD and
+// VirtualDevices.
+func (i Interface) SupportsConfigCacheClear() bool {
+	_, ok := InterfacesSupportingConfigCacheClear[i]
+	return ok
+}
+
 // SupportsReplace reports whether a paired device on this interface can
 // be swapped for a new one via `replaceDevice`. True for BidCos-RF and
 // BidCos-Wired (rfd / hs485d); false for HmIP-* (HMIPServer throws
@@ -201,6 +211,15 @@ var (
 	InterfacesSupportingConfigRestore = map[Interface]struct{}{
 		InterfaceBidCosRF: {},
 		InterfaceHmIPRF:   {},
+	}
+
+	// InterfacesSupportingConfigCacheClear lists the interfaces whose
+	// daemon exposes `clearConfigCache`. rfd (BidCos-RF) and hs485d
+	// (BidCos-Wired) implement it; HMIPServer (HmIP-RF) does not for its
+	// devices, and CUxD / VirtualDevices keep no such cache.
+	InterfacesSupportingConfigCacheClear = map[Interface]struct{}{
+		InterfaceBidCosRF:    {},
+		InterfaceBidCosWired: {},
 	}
 
 	// InterfacesSupportingReplace lists the interfaces whose daemon

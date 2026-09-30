@@ -115,6 +115,12 @@ func (b *CuxdBackend) RestoreConfigToDevice(context.Context, string) error {
 	return ErrUnsupported
 }
 
+// ClearConfigCache implements Operations. CUxD keeps no configuration
+// cache to discard; always returns [ErrUnsupported].
+func (b *CuxdBackend) ClearConfigCache(context.Context, string) error {
+	return ErrUnsupported
+}
+
 // SearchDevices implements Operations. CUxD has no wired bus; always
 // returns [ErrUnsupported].
 func (b *CuxdBackend) SearchDevices(context.Context) (int, error) {

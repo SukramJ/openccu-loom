@@ -145,6 +145,12 @@ type DeviceAdmin interface {
 	// BidCos-RF only; other interfaces answer with a
 	// [backends.ErrUnsupported]-class error the handler maps to 422.
 	RestoreDeviceConfig(ctx context.Context, address string) error
+	// ClearConfigCache asks the device's interface process to forget its
+	// cached configuration so the next configuration read or transfer
+	// rebuilds it. Implemented by the BidCos daemons only (BidCos-RF,
+	// BidCos-Wired); other interfaces answer with an unsupported-class
+	// error the handler maps to 422.
+	ClearConfigCache(ctx context.Context, address string) error
 	// InterfaceDutyCycle returns the transmit duty cycle in percent
 	// (0..100) of the radio interface the device identified by address is
 	// paired to, sourced from the per-interface BidCos utilisation poll.
@@ -275,6 +281,50 @@ type ParamsetService interface {
 	// PutLinkParamset behaves like PutParamset for a LINK paramset: the
 	// report is always non-nil on success.
 	PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) (*ParamsetWriteReport, error)
+}
+
+// DeviceConfigRepairService backs `POST /devices/{addr}/config/repair`:
+// rebuilding a device's stored MASTER configuration from its own paramset
+// descriptions. Per channel the implementation reads the live description
+// and the live stored MASTER paramset, replaces invalid stored values with
+// the nearest valid ones, and writes the result back as one full paramset —
+// the recovery for a configuration store that holds values the description
+// no longer allows. A stored entry the description does not carry cannot be
+// removed by any paramset write and is reported as foreign.
+type DeviceConfigRepairService interface {
+	// RepairDeviceConfig repairs the named channels (every MASTER-bearing
+	// channel of the device when channels is empty). With dryRun every
+	// read happens but nothing is written. One outcome per channel; a
+	// failing channel never stops the rest.
+	RepairDeviceConfig(ctx context.Context, deviceAddress string, channels []string, dryRun bool) ([]ConfigRepairOutcome, error)
+}
+
+// Config-repair outcome states.
+const (
+	RepairClean             = "clean"
+	RepairRepaired          = "repaired"
+	RepairWouldRepair       = "would_repair"
+	RepairForeignParameters = "foreign_parameters"
+	RepairFailed            = "failed"
+)
+
+// ConfigRepairOutcome is the result of repairing one channel's stored
+// MASTER configuration.
+type ConfigRepairOutcome struct {
+	Channel     string
+	Status      string // one of the Repair* constants
+	Corrections []ConfigRepairCorrection
+	Foreign     []string // stored parameter names the description does not carry
+	Error       string
+	Result      *ParamsetWriteReport // read-back of the rewrite, when one was performed
+}
+
+// ConfigRepairCorrection names one stored value the rewrite replaces.
+type ConfigRepairCorrection struct {
+	Parameter string
+	Stored    any
+	Corrected any
+	Reason    string
 }
 
 // ParamsetApplyService backs `GET /devices/{addr}/paramsets/MASTER/apply-targets`

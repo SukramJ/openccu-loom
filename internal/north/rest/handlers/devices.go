@@ -108,6 +108,11 @@ type DeviceSummary struct {
 	// shows for a device that cannot serve the write.
 	ConfigRestoreSupported bool `json:"config_restore_supported"`
 
+	// ConfigCacheClearSupported is true when the device's interface
+	// process exposes `clearConfigCache` (BidCos-RF, BidCos-Wired). The
+	// SPA gates the "clear config cache" action on it.
+	ConfigCacheClearSupported bool `json:"config_cache_clear_supported"`
+
 	// CommunicationTestSupported is true when the device's interface can
 	// run the CCU's per-device communication test (radio interfaces).
 	// The SPA gates the "test" action on it.
@@ -1067,6 +1072,7 @@ func toDeviceSummary(d *device.Device, centralName string, released bool) Device
 		Taxonomy:                   toTaxonomyAssignments(d.Taxonomy()),
 		MasterPushesConfigPending:  hmenum.PushesConfigPendingFor(d.Interface, d.ProductGroup),
 		ConfigRestoreSupported:     d.Interface.SupportsConfigRestore(),
+		ConfigCacheClearSupported:  d.Interface.SupportsConfigCacheClear(),
 		CommunicationTestSupported: d.Interface.SupportsCommunicationTest(),
 		TeamSupported:              d.Interface.SupportsTeams(),
 		HasSubDevices:              d.HasSubDevices(),

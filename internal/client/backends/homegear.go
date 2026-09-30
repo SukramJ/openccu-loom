@@ -152,6 +152,12 @@ func (b *HomegearBackend) RestoreConfigToDevice(_ context.Context, _ string) err
 	return ErrUnsupported
 }
 
+// ClearConfigCache implements Operations. Homegear has no CCU-style
+// configuration cache method; always returns [ErrUnsupported].
+func (b *HomegearBackend) ClearConfigCache(_ context.Context, _ string) error {
+	return ErrUnsupported
+}
+
 // SearchDevices implements Operations. Homegear has no wired-bus scan;
 // always returns [ErrUnsupported].
 func (b *HomegearBackend) SearchDevices(_ context.Context) (int, error) {

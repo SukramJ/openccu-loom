@@ -114,6 +114,11 @@ type Deps struct {
 	// channel's MASTER values to description-identical channels. Nil keeps
 	// both routes mounted (beside the paramset routes) answering 503.
 	ParamsetApply handlers.ParamsetApplyService
+	// ConfigRepair backs POST /devices/{addr}/config/repair — rebuilding a
+	// device's stored MASTER configuration from its own paramset
+	// descriptions. The route is mounted with the device-admin routes; nil
+	// keeps it mounted answering 503.
+	ConfigRepair handlers.DeviceConfigRepairService
 	// ParameterDeterminer backs
 	// POST /devices/{addr}/channels/{no}/paramsets/{key}/determine — the
 	// MASTER editor's "Determine" button, which reads one parameter's live
@@ -1045,6 +1050,8 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.With(op).Post("/devices/{addr}/release", handlers.ReleaseDevice(d.DeviceAdmin))
 				pr.With(op).Post("/devices/{addr}/firmware/update", handlers.UpdateDeviceFirmware(d.DeviceAdmin))
 				pr.With(admin).Post("/devices/{addr}/config/restore", handlers.RestoreDeviceConfig(d.DeviceAdmin, d.AuditRecorder))
+				pr.With(admin).Post("/devices/{addr}/config/cache-clear", handlers.ClearDeviceConfigCache(d.DeviceAdmin, d.AuditRecorder))
+				pr.With(admin).Post("/devices/{addr}/config/repair", handlers.RepairDeviceConfig(d.ConfigRepair))
 			}
 			if d.DeviceReplacer != nil {
 				pr.Get("/devices/{addr}/replace-candidates", handlers.GetDeviceReplaceCandidates(d.DeviceReplacer))
