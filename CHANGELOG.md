@@ -54,6 +54,22 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   box. `DeviceSummary.config_restore_supported` is now true for
   BidCos-RF only, so the SPA button and the REST 422 gate agree with
   what the CCU actually does.
+- **Paramset descriptions are re-fetched after firmware updates and
+  re-pairing.** The `updateDevice`, `readdedDevice` and `replaceDevice`
+  callbacks invalidate every channel's paramset descriptions but the
+  follow-up refresh only restored the device descriptions, leaving the
+  paramset registry empty until the next daemon restart. On an
+  openccu-lite central this silently untyped every subsequent event of
+  the affected device (a FLOAT arriving as `1` became an integer). The
+  background refresh now rehydrates the affected channels' paramset
+  descriptions as well.
+- **A recovered CCU connection reseeds device values.** The recovery
+  pipeline's DATA_LOADING stage only reloaded hub data (system
+  variables, programs); device values and reachability kept their
+  pre-outage state until the next event or the five-minute sweep. The
+  stage now also runs a full value reseed for the recovered interface,
+  best-effort like the hub refresh — matching what the openccu-lite
+  path already did on reconnect.
 
 ### Changed
 

@@ -1144,6 +1144,67 @@ func (c *DeviceCoordinator) ReloadChannelConfig(
 	return nil
 }
 
+// ReloadDeviceParamsets re-pulls the paramset descriptions of a device's root
+// address and every one of its channels, as currently listed in the
+// description registry, via [DeviceCoordinator.ReloadChannelConfig].
+//
+// It is the second half of a device-description refresh that followed
+// [DeviceCoordinator.InvalidateFirmwareCache] or a replacement: the refresh
+// restores the descriptions from listDevices, but nothing else re-reads the
+// paramset descriptions it dropped, and without them the device's values can
+// no longer be typed until the daemon restarts. Call it after the description
+// refresh so the channel list is the fresh one.
+//
+// The device TYPE for the paramset patches comes from the root description.
+// A failing channel is logged and skipped; only a device whose every address
+// failed — or that is not described at all — returns an error.
+func (c *DeviceCoordinator) ReloadDeviceParamsets(
+	ctx context.Context,
+	fetcher ChannelParamsetFetcher,
+	iface hmtypes.WireInterfaceID,
+	deviceAddress string,
+) error {
+	if fetcher == nil {
+		return errors.New("device_coordinator: reload_device_paramsets: fetcher is nil")
+	}
+	if deviceAddress == "" {
+		return errors.New("device_coordinator: reload_device_paramsets: empty device address")
+	}
+	var (
+		addresses   []string
+		deviceModel string
+	)
+	allDescs := c.descs.All(iface)
+	for i := range allDescs {
+		d := allDescs[i]
+		if d.Address == deviceAddress {
+			deviceModel = d.Type
+			addresses = append(addresses, d.Address)
+			continue
+		}
+		if d.Parent == deviceAddress {
+			addresses = append(addresses, d.Address)
+		}
+	}
+	if len(addresses) == 0 {
+		return fmt.Errorf("device_coordinator: reload_device_paramsets: no descriptions for %s on %s", deviceAddress, iface)
+	}
+	var errs []error
+	for _, addr := range addresses {
+		if err := c.ReloadChannelConfig(ctx, fetcher, iface, addr, deviceModel); err != nil {
+			c.logger.Warn("device_coordinator.reload_device_paramsets.channel_failed",
+				slog.String("interface", string(iface)),
+				slog.String("address", addr),
+				slog.String("err", err.Error()))
+			errs = append(errs, err)
+		}
+	}
+	if len(errs) == len(addresses) {
+		return fmt.Errorf("device_coordinator: reload_device_paramsets: every address of %s failed: %w", deviceAddress, errors.Join(errs...))
+	}
+	return nil
+}
+
 // PendingDevice identifies one device parked in the deferred-creation
 // queue: announced over a newDevices callback while
 // `delay_new_device_creation` is enabled, waiting for an operator to
@@ -1886,12 +1947,13 @@ func (c *DeviceCoordinator) ReplaceDevice(
 }
 
 // InvalidateFirmwareCache evicts all cached descriptions and paramset data
-// for deviceAddress after a successful firmware update, ensuring the daemon
-// will re-pull fresh metadata on the next access rather than serving stale
-// pre-update data.
+// for deviceAddress, so stale pre-update metadata is not served.
 //
-// Called by the adapter layer when a firmware update completes
-// (DeviceFirmwareStateChanged event with To == DeviceFirmwareStateUpToDate).
+// Its callers are the updateDevice (hint=0) and readdedDevice callback
+// handlers in the adapter layer. Eviction alone leaves the device without
+// metadata: those handlers follow it with
+// [DeviceCoordinator.RefreshDeviceDescriptionsAndCreateMissingDevices] and
+// [DeviceCoordinator.ReloadDeviceParamsets] to re-pull both halves.
 func (c *DeviceCoordinator) InvalidateFirmwareCache(iface hmtypes.WireInterfaceID, deviceAddress string) {
 	allDescs := c.descs.All(iface)
 	for i := range allDescs {
