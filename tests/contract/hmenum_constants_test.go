@@ -132,19 +132,20 @@ func TestConfigRestoreClassification(t *testing.T) {
 	t.Parallel()
 
 	wantTrue := []hmenum.Interface{
-		hmenum.InterfaceHmIPRF,
 		hmenum.InterfaceBidCosRF,
 	}
 	wantFalse := []hmenum.Interface{
+		hmenum.InterfaceHmIPRF,
 		hmenum.InterfaceBidCosWired,
 		hmenum.InterfaceVirtualDevices,
 		hmenum.InterfaceCUxD,
 	}
 
-	// Exactly the two radios whose CCU-side process (rfd / HMIPServer)
-	// implements restoreConfigToDevice.
-	if got := len(hmenum.InterfacesSupportingConfigRestore); got != 2 {
-		t.Fatalf("InterfacesSupportingConfigRestore len=%d, want 2", got)
+	// Exactly the one interface whose CCU-side process implements
+	// restoreConfigToDevice: rfd. The HmIP process lists the method but
+	// answers a generic fault for its devices (measured live).
+	if got := len(hmenum.InterfacesSupportingConfigRestore); got != 1 {
+		t.Fatalf("InterfacesSupportingConfigRestore len=%d, want 1", got)
 	}
 
 	for _, iface := range wantTrue {

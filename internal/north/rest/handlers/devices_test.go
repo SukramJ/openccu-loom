@@ -151,9 +151,10 @@ func TestGetDevice_HappyPath(t *testing.T) {
 
 // TestGetDevice_ConfigRestoreSupportedReflectsInterface verifies
 // DeviceSummary.ConfigRestoreSupported (JSON: config_restore_supported)
-// mirrors hmenum.Interface.SupportsConfigRestore(): true for HmIP-RF and
-// BidCos-RF (rfd / HMIPServer implement restoreConfigToDevice), false for
-// BidCos-Wired (hs485d does not).
+// mirrors hmenum.Interface.SupportsConfigRestore(): true for BidCos-RF
+// only — the HmIP process lists restoreConfigToDevice but faults every
+// call for its devices (measured live) — and false for BidCos-Wired
+// (hs485d does not expose it).
 func TestGetDevice_ConfigRestoreSupportedReflectsInterface(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -161,7 +162,7 @@ func TestGetDevice_ConfigRestoreSupportedReflectsInterface(t *testing.T) {
 		iface hmenum.Interface
 		want  bool
 	}{
-		{"HmIP-RF", hmenum.InterfaceHmIPRF, true},
+		{"HmIP-RF", hmenum.InterfaceHmIPRF, false},
 		{"BidCos-RF", hmenum.InterfaceBidCosRF, true},
 		{"BidCos-Wired", hmenum.InterfaceBidCosWired, false},
 	}

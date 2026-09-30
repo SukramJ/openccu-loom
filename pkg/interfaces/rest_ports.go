@@ -141,8 +141,9 @@ type DeviceAdmin interface {
 	UpdateFirmware(ctx context.Context, address string) error
 	// RestoreDeviceConfig re-transmits the centrally stored
 	// configuration (all channels' MASTER paramsets + link peerings) to
-	// the device after a factory reset. Supported on HmIP-RF and
-	// BidCos-RF only; other interfaces answer with a
+	// the device after a factory reset. Supported on BidCos-RF only —
+	// the HmIP process lists the method but answers a generic fault for
+	// its devices (measured live); every other interface answers with a
 	// [backends.ErrUnsupported]-class error the handler maps to 422.
 	RestoreDeviceConfig(ctx context.Context, address string) error
 	// ClearConfigCache asks the device's interface process to forget its

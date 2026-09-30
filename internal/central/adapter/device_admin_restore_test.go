@@ -70,14 +70,18 @@ func buildRestoreFixture(
 
 // TestRestoreDeviceConfigHmIPRFCallsBackend verifies a HmIP-RF device (the
 // HMIPServer wire method) reaches the backend's RestoreConfigToDevice.
-func TestRestoreDeviceConfigHmIPRFCallsBackend(t *testing.T) {
+func TestRestoreDeviceConfigHmIPRFIsRefused(t *testing.T) {
 	t.Parallel()
+	// The HmIP process lists restoreConfigToDevice but answers a generic
+	// fault for its devices (measured live), so the gate refuses before
+	// any wire call.
 	domain, fake := buildRestoreFixture(t, hmenum.InterfaceHmIPRF, nil)
 
-	if err := domain.RestoreDeviceConfig(context.Background(), "0001ABCD"); err != nil {
-		t.Fatalf("RestoreDeviceConfig: %v", err)
+	err := domain.RestoreDeviceConfig(context.Background(), "0001ABCD")
+	if !errors.Is(err, backends.ErrUnsupported) {
+		t.Fatalf("want ErrUnsupported for HmIP-RF, got %v", err)
 	}
-	if len(fake.restoreCalls) != 1 || fake.restoreCalls[0] != "0001ABCD" {
+	if len(fake.restoreCalls) != 0 {
 		t.Errorf("restoreCalls=%v, want [0001ABCD]", fake.restoreCalls)
 	}
 }
@@ -165,7 +169,7 @@ func TestRestoreDeviceConfigNilRegistryOrWriterReturnsErrNoDeviceBackend(t *test
 func TestRestoreDeviceConfigPropagatesBackendError(t *testing.T) {
 	t.Parallel()
 	wantErr := errors.New("boom")
-	domain, fake := buildRestoreFixture(t, hmenum.InterfaceHmIPRF, wantErr)
+	domain, fake := buildRestoreFixture(t, hmenum.InterfaceBidCosRF, wantErr)
 
 	err := domain.RestoreDeviceConfig(context.Background(), "0001ABCD")
 	if !errors.Is(err, wantErr) {

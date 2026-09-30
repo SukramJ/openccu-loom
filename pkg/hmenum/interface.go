@@ -67,9 +67,11 @@ func (i Interface) SupportsInstallMode() bool {
 
 // SupportsConfigRestore reports whether the stored configuration can be
 // re-transmitted to a device on this interface via
-// `restoreConfigToDevice`. True for HmIP-RF and BidCos-RF (rfd /
-// HMIPServer); false for BidCos-Wired, CUxD and VirtualDevices, which
-// do not expose the method.
+// `restoreConfigToDevice`. True for BidCos-RF only: rfd implements the
+// method, while the HmIP process lists it but answers every call for
+// its devices with `-1 Generic error` — measured live against an
+// openccu-lite box's HmIP service. BidCos-Wired, CUxD and
+// VirtualDevices do not expose it either.
 func (i Interface) SupportsConfigRestore() bool {
 	_, ok := InterfacesSupportingConfigRestore[i]
 	return ok
@@ -204,13 +206,13 @@ var (
 	}
 
 	// InterfacesSupportingConfigRestore lists the interfaces whose
-	// daemon exposes `restoreConfigToDevice`. rfd (BidCos-RF) and
-	// HMIPServer (HmIP-RF) implement it; hs485d (BidCos-Wired) and CUxD
-	// do not. HmIP-Wired has no own interface — it rides the HmIP-RF
-	// service and is covered transitively.
+	// daemon implements `restoreConfigToDevice`: rfd (BidCos-RF) only.
+	// The HmIP process lists the method but answers every call for its
+	// devices with `-1 Generic error` (measured live), so offering the
+	// action there produced nothing but a guaranteed upstream failure;
+	// hs485d (BidCos-Wired) and CUxD do not expose it at all.
 	InterfacesSupportingConfigRestore = map[Interface]struct{}{
 		InterfaceBidCosRF: {},
-		InterfaceHmIPRF:   {},
 	}
 
 	// InterfacesSupportingConfigCacheClear lists the interfaces whose

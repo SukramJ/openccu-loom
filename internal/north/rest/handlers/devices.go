@@ -103,9 +103,10 @@ type DeviceSummary struct {
 	MasterPushesConfigPending bool `json:"master_pushes_config_pending"`
 
 	// ConfigRestoreSupported is true when the device's interface
-	// exposes `restoreConfigToDevice` (HmIP-RF, BidCos-RF). The SPA
-	// gates the "restore config" action on it so the button never
-	// shows for a device that cannot serve the write.
+	// daemon implements `restoreConfigToDevice` (BidCos-RF only — the
+	// HmIP process lists the method but faults every call for its
+	// devices). The SPA gates the "restore config" action on it so the
+	// button never shows for a device that cannot serve the write.
 	ConfigRestoreSupported bool `json:"config_restore_supported"`
 
 	// ConfigCacheClearSupported is true when the device's interface

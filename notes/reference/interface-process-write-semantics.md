@@ -85,6 +85,18 @@ devices, so the repair flow offers them on BidCos interfaces only.
 - Measured in this repository's own tests: the strict-write behaviour, the
   read-back comparison, ENUM/FLOAT encoding, ISO-8859-1 framing (unit and
   contract tests next to the named files).
+- Measured by this repository live against an openccu-lite box (rfd and
+  the HmIP process reached through the box's RPC proxy): the full write
+  path end to end — MASTER writes with empty-divergence read-back on both
+  families, a real FLOAT change and revert on a sleeping battery BidCos
+  device (rfd stores immediately, the immediate read-back reads the
+  store: **no false divergence**), multi-apply with the description
+  identity gate across two device types whose stored descriptions are
+  byte-identical, `clearConfigCache` (accepted by rfd, 422-gated on
+  HmIP), `setBidcosInterface` (accepted by rfd), the pairwise `rssiInfo`
+  matrix with mirrored direction tuples, and `restoreConfigToDevice`
+  answering `-1 Generic error` on the HmIP process — the reason the
+  restore action is BidCos-RF-only.
 - Read from the CCU firmware sources: the `rssiInfo` response shape and
   tuple direction (`src/rfd/RFManager.cpp`, `GetRSSIInfo`),
   `setBidcosInterface` argument order (`src/rfd/XmlRpcMethods.cpp`), and

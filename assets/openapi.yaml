@@ -3106,8 +3106,10 @@ paths:
         a device factory reset. The transfer runs asynchronously on the
         radio (watch the device's CONFIG_PENDING state for progress), so
         the endpoint returns 202 once the request was accepted. Supported
-        on HmIP-RF and BidCos-RF only; other interfaces (BidCos-Wired,
-        CUxD, VirtualDevices) answer 422. Consult
+        on BidCos-RF only: the HmIP process lists the method but answers
+        every call for its devices with a generic fault (measured live),
+        and BidCos-Wired, CUxD and VirtualDevices do not expose it — all
+        of them answer 422. Consult
         `DeviceSummary.config_restore_supported` before offering the
         action.
       tags: [devices]
@@ -10359,9 +10361,11 @@ components:
         config_restore_supported:
           type: boolean
           description: |
-            True when the device's interface exposes `restoreConfigToDevice`
-            (HmIP-RF, BidCos-RF). The SPA gates the "restore config" action on
-            it. False for BidCos-Wired, CUxD and VirtualDevices.
+            True when the device's interface daemon implements
+            `restoreConfigToDevice` (BidCos-RF only — the HmIP process
+            lists the method but answers every call for its devices with a
+            generic fault, measured live). The SPA gates the "restore
+            config" action on it.
         config_cache_clear_supported:
           type: boolean
           description: |

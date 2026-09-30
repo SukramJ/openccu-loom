@@ -45,8 +45,23 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   gateway or enables roaming (`setBidcosInterface`). MCP:
   `get_rssi_matrix`, `get_receiver_proposal`, `assign_rf_interface`.
 
+### Fixed
+
+- **"Restore config" is no longer offered on HmIP devices.**
+  `restoreConfigToDevice` is implemented by the BidCos-RF daemon only;
+  the HmIP process lists the method but answers every call for its
+  devices with a generic fault — measured live against an openccu-lite
+  box. `DeviceSummary.config_restore_supported` is now true for
+  BidCos-RF only, so the SPA button and the REST 422 gate agree with
+  what the CCU actually does.
+
 ### Changed
 
+- **WS `links.put_paramset` returns the write report.** The command's
+  result changed from `{success: true}` to
+  `{written, readback_divergences, readback_error?}` (wsapi 1.13) —
+  an external WS client reading `.success` must switch to the new
+  fields; the SPA uses REST and is unaffected.
 - **Configuration writes are strict.** A paramset write carrying a
   parameter the channel's own description does not know, or a write
   whose description cannot be fetched, is refused before it reaches
