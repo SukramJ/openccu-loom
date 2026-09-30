@@ -812,7 +812,11 @@ func paramsetPutHandler(w ParamsetWriter, locks EditLockVerifier) CommandHandler
 		if len(p.Values) == 0 {
 			return nil, NewCommandError(CommandErrorBadRequest, "values must not be empty")
 		}
-		psKey := hmenum.ParamsetKey(p.Paramset)
+		psKey, ok := hmenum.ParseParamsetKey(p.Paramset)
+		if !ok {
+			return nil, NewCommandError(CommandErrorBadRequest,
+				fmt.Sprintf("paramset_key must be MASTER or VALUES, got %q", p.Paramset))
+		}
 		// LINK is not writable here, and never was. A LINK paramset belongs
 		// to a channel PAIR, so its values are addressed by the partner
 		// channel; this command carries no partner, so the key reached the
@@ -1163,13 +1167,22 @@ func paramsetCopyHandler(r ParamsetReader, w ParamsetWriter, locks EditLockVerif
 		if p.ParamsetKey == "" {
 			p.ParamsetKey = string(hmenum.ParamsetKeyMaster)
 		}
+		// Both ends are addressed with the same key, so one check covers the
+		// source read and the target write. LINK is refused alongside
+		// unrecognised keys: a LINK paramset is addressed by a peer channel
+		// this command does not carry.
+		psKey, ok := hmenum.ParseParamsetKey(p.ParamsetKey)
+		if !ok || psKey == hmenum.ParamsetKeyLink {
+			return nil, NewCommandError(CommandErrorBadRequest,
+				fmt.Sprintf("paramset_key must be MASTER or VALUES, got %q", p.ParamsetKey))
+		}
 		// A copy lands a MASTER paramset on the target exactly like
 		// `paramset.put` does, so it passes the same strict gate: without
 		// the token holding the target channel's lock the copy is refused
 		// before the source is even read, and an open editor's session
 		// cannot be clobbered by an imported snapshot. VALUES copies are
 		// device control and stay ungated.
-		if locks != nil && hmenum.ParamsetKey(p.ParamsetKey) == hmenum.ParamsetKeyMaster {
+		if locks != nil && psKey == hmenum.ParamsetKeyMaster {
 			if !locks.Verify("channel:"+p.TargetChannel+":"+p.ParamsetKey, p.EditToken) {
 				return nil, NewCommandError(CommandErrorLocked,
 					"edit lock required for "+p.ParamsetKey+" copy; open an edit session on the target channel and pass edit_token")
@@ -1177,7 +1190,7 @@ func paramsetCopyHandler(r ParamsetReader, w ParamsetWriter, locks EditLockVerif
 		}
 		srcKey := configui.SessionKey{
 			ChannelAddress: p.SourceChannel,
-			ParamsetKey:    hmenum.ParamsetKey(p.ParamsetKey),
+			ParamsetKey:    psKey,
 		}
 		values, err := r.GetParamset(ctx, srcKey)
 		if err != nil {
@@ -1188,7 +1201,7 @@ func paramsetCopyHandler(r ParamsetReader, w ParamsetWriter, locks EditLockVerif
 		}
 		dstKey := configui.SessionKey{
 			ChannelAddress: p.TargetChannel,
-			ParamsetKey:    hmenum.ParamsetKey(p.ParamsetKey),
+			ParamsetKey:    psKey,
 		}
 		if _, err := w.PutParamset(ctx, dstKey, values); err != nil {
 			return nil, fmt.Errorf("paramset.copy: write target: %w", err)

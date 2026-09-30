@@ -54,7 +54,12 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   processes do not validate configuration writes themselves — one
   family persists entries it cannot apply, permanently poisoning the
   channel's configuration store, the other silently drops or clamps
-  them. Details and provenance: `notes/reference/interface-process-write-semantics.md`.
+  them. Caller-supplied paramset keys are now parsed strictly against
+  MASTER/VALUES/LINK on every surface before any RPC — the BidCos-RF
+  daemon reads an unrecognised key as a peer address and answers
+  LINK defaults instead of a fault — and list-shaped wire answers
+  tolerate the daemons' empty-string-for-empty-array quirk. Details
+  and provenance: `notes/reference/interface-process-write-semantics.md`.
 
 - On an openccu-lite box the Config UI is served through the box's own
   web server (ADR 0078): the add-on ships a validated lighttpd

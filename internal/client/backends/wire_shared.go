@@ -22,6 +22,26 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
 
+// asWireList narrows a decoded list-shaped RPC answer to []any.
+//
+// The BidCos daemons answer the empty string "" where an empty array is
+// meant on some list-shaped methods, so a string-typed "" is read as an
+// empty list here. Only the empty string is tolerated: any other scalar,
+// including a non-empty string, stays a shape error, and struct-shaped
+// answers never pass through this helper. ok is false for every shape that
+// is not a list.
+func asWireList(raw any) (list []any, ok bool) {
+	switch v := raw.(type) {
+	case []any:
+		return v, true
+	case string:
+		if v == "" {
+			return []any{}, true
+		}
+	}
+	return nil, false
+}
+
 // listDevicesViaCaller implements the ListDevices wire call shared by
 // every backend. prefix names the backend in error messages ("ccu",
 // "cuxd", "homegear").
@@ -33,7 +53,7 @@ func listDevicesViaCaller(ctx context.Context, caller Caller, prefix string) ([]
 	if err != nil {
 		return nil, err
 	}
-	list, ok := raw.([]any)
+	list, ok := asWireList(raw)
 	if !ok {
 		return nil, fmt.Errorf("%s.ListDevices: unexpected type %T", prefix, raw)
 	}
@@ -73,7 +93,7 @@ func listStructArrayViaCaller(ctx context.Context, caller Caller, prefix, method
 	if err != nil {
 		return nil, err
 	}
-	list, ok := raw.([]any)
+	list, ok := asWireList(raw)
 	if !ok {
 		return nil, fmt.Errorf("%s.%s: unexpected type %T", prefix, method, raw)
 	}
@@ -205,7 +225,7 @@ func getLinksViaCaller(ctx context.Context, caller Caller, prefix, channelAddres
 	if err != nil {
 		return nil, err
 	}
-	list, ok := raw.([]any)
+	list, ok := asWireList(raw)
 	if !ok {
 		return nil, fmt.Errorf("%s.GetLinks: unexpected type %T", prefix, raw)
 	}
@@ -242,7 +262,7 @@ func getLinkPeersViaCaller(ctx context.Context, caller Caller, prefix, channelAd
 	if err != nil {
 		return nil, err
 	}
-	list, ok := raw.([]any)
+	list, ok := asWireList(raw)
 	if !ok {
 		return nil, fmt.Errorf("%s.GetLinkPeers: unexpected type %T", prefix, raw)
 	}

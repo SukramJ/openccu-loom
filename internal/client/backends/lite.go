@@ -539,6 +539,11 @@ func (b *LiteBackend) ListBidcosInterfaces(ctx context.Context, _ string) ([]map
 	if err != nil {
 		return nil, err
 	}
+	// The interface daemon answers here directly, so its empty-string
+	// spelling of an empty list is normalised before the shape check.
+	if list, ok := asWireList(raw); ok {
+		raw = list
+	}
 	gateways, err := toSliceOfMaps(raw, "ListBidcosInterfaces")
 	if err != nil {
 		return nil, err

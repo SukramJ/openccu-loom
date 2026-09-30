@@ -270,13 +270,5 @@ func PutLinkParamset(svc ParamsetService, locks *EditSessions) http.HandlerFunc 
 }
 
 func parseParamsetKey(s string) (hmenum.ParamsetKey, bool) {
-	switch s {
-	case string(hmenum.ParamsetKeyValues):
-		return hmenum.ParamsetKeyValues, true
-	case string(hmenum.ParamsetKeyMaster):
-		return hmenum.ParamsetKeyMaster, true
-	case string(hmenum.ParamsetKeyLink):
-		return hmenum.ParamsetKeyLink, true
-	}
-	return "", false
+	return hmenum.ParseParamsetKey(s)
 }

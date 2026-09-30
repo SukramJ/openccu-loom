@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -509,16 +510,32 @@ type paramsetArgs struct {
 	ParamsetKey    string `json:"paramset_key"`
 }
 
-func (a paramsetArgs) sessionKey() configui.SessionKey {
-	psKey := hmenum.ParamsetKey(a.ParamsetKey)
-	if psKey == "" {
-		psKey = hmenum.ParamsetKeyMaster
+// paramsetKeyOrMaster resolves an optional paramset_key argument. An
+// omitted key keeps meaning MASTER; any other value must be one of the three
+// wire keys, because an unrecognised key forwarded to the CCU is not refused
+// there but silently misread (see [hmenum.ParseParamsetKey]).
+func paramsetKeyOrMaster(s string) (hmenum.ParamsetKey, error) {
+	if s == "" {
+		return hmenum.ParamsetKeyMaster, nil
+	}
+	key, ok := hmenum.ParseParamsetKey(s)
+	if !ok {
+		return "", NewCommandError(CommandErrorBadRequest,
+			fmt.Sprintf("paramset_key must be MASTER, VALUES or LINK, got %q", s))
+	}
+	return key, nil
+}
+
+func (a paramsetArgs) sessionKey() (configui.SessionKey, error) {
+	psKey, err := paramsetKeyOrMaster(a.ParamsetKey)
+	if err != nil {
+		return configui.SessionKey{}, err
 	}
 	return configui.SessionKey{
 		CentralName:    a.CentralName,
 		ChannelAddress: a.ChannelAddress,
 		ParamsetKey:    psKey,
-	}
+	}, nil
 }
 
 func paramsetDescriptionHandler(q DeviceQuery) CommandHandler {
@@ -530,7 +547,11 @@ func paramsetDescriptionHandler(q DeviceQuery) CommandHandler {
 		if args.ChannelAddress == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "channel_address required")
 		}
-		desc, err := q.GetParamsetDescription(ctx, args.sessionKey())
+		key, err := args.sessionKey()
+		if err != nil {
+			return nil, err
+		}
+		desc, err := q.GetParamsetDescription(ctx, key)
 		if err != nil {
 			return nil, commandErr(CommandErrorInternal, "get_paramset_description: ", err)
 		}
@@ -547,7 +568,11 @@ func paramsetGetHandler(q DeviceQuery) CommandHandler {
 		if args.ChannelAddress == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "channel_address required")
 		}
-		values, err := q.GetParamset(ctx, args.sessionKey())
+		key, err := args.sessionKey()
+		if err != nil {
+			return nil, err
+		}
+		values, err := q.GetParamset(ctx, key)
 		if err != nil {
 			return nil, commandErr(CommandErrorInternal, "get_paramset: ", err)
 		}
@@ -1652,16 +1677,16 @@ type sessionOpenArgs struct {
 	ParamsetKey    string `json:"paramset_key"`
 }
 
-func (a sessionOpenArgs) key() configui.SessionKey {
-	psKey := hmenum.ParamsetKey(a.ParamsetKey)
-	if psKey == "" {
-		psKey = hmenum.ParamsetKeyMaster
+func (a sessionOpenArgs) key() (configui.SessionKey, error) {
+	psKey, err := paramsetKeyOrMaster(a.ParamsetKey)
+	if err != nil {
+		return configui.SessionKey{}, err
 	}
 	return configui.SessionKey{
 		CentralName:    a.CentralName,
 		ChannelAddress: a.ChannelAddress,
 		ParamsetKey:    psKey,
-	}
+	}, nil
 }
 
 func sessionOpenHandler(store *configui.SessionStore, backend SessionBackend) CommandHandler {
@@ -1673,7 +1698,10 @@ func sessionOpenHandler(store *configui.SessionStore, backend SessionBackend) Co
 		if args.ChannelAddress == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "channel_address required")
 		}
-		key := args.key()
+		key, err := args.key()
+		if err != nil {
+			return nil, err
+		}
 		descs, initial, err := backend.Open(ctx, key)
 		if err != nil {
 			return nil, commandErr(CommandErrorInternal, "open: ", err)
@@ -1703,16 +1731,16 @@ type sessionMutateArgs struct {
 	Value          any    `json:"value,omitempty"`
 }
 
-func (a sessionMutateArgs) key() configui.SessionKey {
-	psKey := hmenum.ParamsetKey(a.ParamsetKey)
-	if psKey == "" {
-		psKey = hmenum.ParamsetKeyMaster
+func (a sessionMutateArgs) key() (configui.SessionKey, error) {
+	psKey, err := paramsetKeyOrMaster(a.ParamsetKey)
+	if err != nil {
+		return configui.SessionKey{}, err
 	}
 	return configui.SessionKey{
 		CentralName:    a.CentralName,
 		ChannelAddress: a.ChannelAddress,
 		ParamsetKey:    psKey,
-	}
+	}, nil
 }
 
 func sessionSetHandler(store *configui.SessionStore) CommandHandler {
@@ -1732,7 +1760,11 @@ func sessionSetHandler(store *configui.SessionStore) CommandHandler {
 		case []any, map[string]any:
 			return nil, NewCommandError(CommandErrorBadRequest, "value must be a scalar")
 		}
-		s := store.Get(args.key())
+		key, err := args.key()
+		if err != nil {
+			return nil, err
+		}
+		s := store.Get(key)
 		if s == nil {
 			return nil, NewCommandError(CommandErrorBadRequest, "no open session for key")
 		}
@@ -1747,7 +1779,11 @@ func sessionStackHandler(store *configui.SessionStore, undo bool) CommandHandler
 		if err := decodeOrEmpty(raw, &args); err != nil {
 			return nil, err
 		}
-		s := store.Get(args.key())
+		key, err := args.key()
+		if err != nil {
+			return nil, err
+		}
+		s := store.Get(key)
 		if s == nil {
 			return nil, NewCommandError(CommandErrorBadRequest, "no open session for key")
 		}
@@ -1769,7 +1805,10 @@ func sessionDiscardHandler(store *configui.SessionStore) CommandHandler {
 		if err := decodeOrEmpty(raw, &args); err != nil {
 			return nil, err
 		}
-		key := args.key()
+		key, err := args.key()
+		if err != nil {
+			return nil, err
+		}
 		s := store.Get(key)
 		if s == nil {
 			return nil, NewCommandError(CommandErrorBadRequest, "no open session for key")
@@ -1786,7 +1825,11 @@ func sessionChangesHandler(store *configui.SessionStore) CommandHandler {
 		if err := decodeOrEmpty(raw, &args); err != nil {
 			return nil, err
 		}
-		s := store.Get(args.key())
+		key, err := args.key()
+		if err != nil {
+			return nil, err
+		}
+		s := store.Get(key)
 		if s == nil {
 			return nil, NewCommandError(CommandErrorBadRequest, "no open session for key")
 		}
@@ -1817,7 +1860,10 @@ func sessionSaveHandler(store *configui.SessionStore, backend SessionBackend, cp
 		if err := decodeOrEmpty(raw, &args); err != nil {
 			return nil, err
 		}
-		key := args.key()
+		key, err := args.key()
+		if err != nil {
+			return nil, err
+		}
 		s := store.Get(key)
 		if s == nil {
 			return nil, NewCommandError(CommandErrorBadRequest, "no open session for key")

@@ -173,15 +173,17 @@ func resolveDataPoint(devices DeviceLister, channelAddress, parameterName string
 // single-string signature has no way to carry, so LINK reads and writes go
 // through their own tools (read_link_paramset, write_link_paramset) and
 // LINK edit-lock keys are built by [editLockKey] instead of this parser.
+//
+// Case and surrounding whitespace are normalised first so a lower-case
+// spelling from an agent still resolves; the normalised string then goes
+// through the strict [hmenum.ParseParamsetKey], so nothing but a wire key
+// is ever forwarded.
 func parseParamsetKey(s string) (hmenum.ParamsetKey, bool) {
-	switch strings.ToUpper(strings.TrimSpace(s)) {
-	case "MASTER":
-		return hmenum.ParamsetKeyMaster, true
-	case "VALUES":
-		return hmenum.ParamsetKeyValues, true
-	default:
+	key, ok := hmenum.ParseParamsetKey(strings.ToUpper(strings.TrimSpace(s)))
+	if !ok || key == hmenum.ParamsetKeyLink {
 		return "", false
 	}
+	return key, true
 }
 
 // editLockKey builds the edit-lock registry key for a MASTER or LINK edit
