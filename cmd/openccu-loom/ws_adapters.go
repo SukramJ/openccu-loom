@@ -416,9 +416,11 @@ func (w *wsLinkQuery) GetLinkParamset(ctx context.Context, channelAddress, peerA
 }
 
 // PutLinkParamset bridges to ParamsetsDomain, the single LINK paramset path.
-func (w *wsLinkQuery) PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) error {
+func (w *wsLinkQuery) PutLinkParamset(
+	ctx context.Context, channelAddress, peerAddress string, values map[string]any,
+) (*interfaces.ParamsetWriteReport, error) {
 	if w.paramsets == nil {
-		return errors.New("ws: paramsets domain not wired")
+		return nil, errors.New("ws: paramsets domain not wired")
 	}
 	return w.paramsets.PutLinkParamset(ctx, channelAddress, peerAddress, values)
 }
@@ -1121,9 +1123,11 @@ type wsParamsetWriter struct {
 	domain *adapter.ParamsetsDomain
 }
 
-func (w *wsParamsetWriter) PutParamset(ctx context.Context, key configui.SessionKey, values map[string]any) error {
+func (w *wsParamsetWriter) PutParamset(
+	ctx context.Context, key configui.SessionKey, values map[string]any,
+) (*interfaces.ParamsetWriteReport, error) {
 	if w.domain == nil {
-		return errors.New("ws: paramsets domain not wired")
+		return nil, errors.New("ws: paramsets domain not wired")
 	}
 	psKey := key.ParamsetKey
 	if psKey == "" {
@@ -1174,7 +1178,8 @@ func (b *wsSessionBackend) PutParamset(ctx context.Context, key configui.Session
 	if b.paramsets == nil {
 		return errors.New("ws: session backend: paramsets not wired")
 	}
-	return b.paramsets.PutParamset(ctx, key, values)
+	_, err := b.paramsets.PutParamset(ctx, key, values)
+	return err
 }
 
 // ── wsDeviceWriter ───────────────────────────────────────────────────────────

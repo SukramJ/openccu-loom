@@ -17,6 +17,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // DeviceWriter is the mutating surface the daemon exposes for
@@ -71,8 +72,30 @@ type DeviceWriter interface {
 // — the session-based path is `config.session.*`. ParamsetWriter is
 // for direct, non-transactional writes (e.g. one-off sysadmin
 // operations).
+//
+// The report is nil for a VALUES write and carries the post-write
+// read-back comparison for MASTER.
 type ParamsetWriter interface {
-	PutParamset(ctx context.Context, key configui.SessionKey, values map[string]any) error
+	PutParamset(ctx context.Context, key configui.SessionKey, values map[string]any) (*interfaces.ParamsetWriteReport, error)
+}
+
+// withWriteReport adds the read-back half of a paramset write report to a
+// command result. A nil report (a VALUES write) adds nothing. The
+// divergence list is always present for a non-nil report, so a caller can
+// tell "compared, nothing diverged" (an empty list) from "not compared".
+func withWriteReport(result map[string]any, report *interfaces.ParamsetWriteReport) map[string]any {
+	if report == nil {
+		return result
+	}
+	divergences := make([]hmapi.ParamsetDivergence, 0, len(report.Divergences))
+	for _, d := range report.Divergences {
+		divergences = append(divergences, hmapi.ParamsetDivergence{Parameter: d.Parameter, Sent: d.Sent, Stored: d.Stored})
+	}
+	result["readback_divergences"] = divergences
+	if report.ReadbackError != "" {
+		result["readback_error"] = report.ReadbackError
+	}
+	return result
 }
 
 // ParamsetReader reads a paramset's current values. Used together with
@@ -808,10 +831,11 @@ func paramsetPutHandler(w ParamsetWriter, locks EditLockVerifier) CommandHandler
 			}
 		}
 		key := configui.SessionKey{ChannelAddress: p.Channel, ParamsetKey: psKey}
-		if err := w.PutParamset(ctx, key, p.Values); err != nil {
+		report, err := w.PutParamset(ctx, key, p.Values)
+		if err != nil {
 			return nil, fmt.Errorf("paramset.put: %w", err)
 		}
-		return map[string]any{"written": len(p.Values)}, nil
+		return withWriteReport(map[string]any{"written": len(p.Values)}, report), nil
 	}
 }
 
@@ -1166,7 +1190,7 @@ func paramsetCopyHandler(r ParamsetReader, w ParamsetWriter, locks EditLockVerif
 			ChannelAddress: p.TargetChannel,
 			ParamsetKey:    hmenum.ParamsetKey(p.ParamsetKey),
 		}
-		if err := w.PutParamset(ctx, dstKey, values); err != nil {
+		if _, err := w.PutParamset(ctx, dstKey, values); err != nil {
 			return nil, fmt.Errorf("paramset.copy: write target: %w", err)
 		}
 		return map[string]any{

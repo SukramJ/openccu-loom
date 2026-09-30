@@ -27,6 +27,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/store/linkprofile"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // LinkParamsetReader reads the LINK paramset of one (channel, peer)
@@ -46,8 +47,13 @@ type LinkParamsetReader interface {
 // paramsets collaborator to this interface at call time.
 // loom:reachable:reason="the target of the type assertion in ApplyLinkProfile that narrows the reader port to its write half; an interface reached only through an assertion, which the analyzer's type heuristic cannot see used"
 type LinkParamsetWriter interface {
-	PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) error
+	PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) (*interfaces.ParamsetWriteReport, error)
 }
+
+// The paramsets domain is the writer production hands to the adapter, and
+// the writer is found by a type assertion — pin the method shape so a
+// signature drift fails the build instead of the first profile apply.
+var _ LinkParamsetWriter = (*ParamsetsDomain)(nil)
 
 // LinkProfilesAdapter implements ws.LinkProfilesProvider.
 //
@@ -160,7 +166,7 @@ func (a *LinkProfilesAdapter) ApplyLinkProfile(
 			profileID, receiverType, senderType, linkprofile.ErrUnsupported)
 	}
 	values := profile.ApplyValues()
-	if err := writer.PutLinkParamset(ctx, receiverChannelAddr, senderChannelAddr, values); err != nil {
+	if _, err := writer.PutLinkParamset(ctx, receiverChannelAddr, senderChannelAddr, values); err != nil {
 		return 0, fmt.Errorf("link profiles: apply: %w", err)
 	}
 	return len(values), nil

@@ -20,6 +20,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // deviceSummary is the per-device projection shared by the device tools.
@@ -568,6 +569,44 @@ type writeParamsetIn struct {
 
 type writeParamsetOut struct {
 	OK bool `json:"ok"`
+	// Report is absent for a VALUES write, which is not read back.
+	Report *paramsetWriteReportOut `json:"report,omitempty" jsonschema:"post-write read-back of a MASTER write: what was sent and where the stored value differs"`
+}
+
+// paramsetWriteReportOut is the read-back comparison of a configuration
+// write. An interface process may answer ok and still drop, clamp or coerce
+// a value, so an assistant must see the divergences rather than a bare ok.
+type paramsetWriteReportOut struct {
+	Written             []string                `json:"written" jsonschema:"parameter names sent to the CCU, sorted"`
+	ReadbackDivergences []paramsetDivergenceOut `json:"readback_divergences" jsonschema:"parameters whose stored value after the write differs from the sent one; empty means every value is stored as sent"`
+	ReadbackError       string                  `json:"readback_error,omitempty" jsonschema:"set when the post-write read failed; the divergences are then unknown, not empty"`
+}
+
+// paramsetDivergenceOut names one parameter stored differently than sent.
+type paramsetDivergenceOut struct {
+	Parameter string `json:"parameter"`
+	// Sent and Stored are paramset values whose type depends on the
+	// parameter (bool, number, string, list), hence any.
+	Sent any `json:"sent"`
+	// Stored is null when the parameter is absent from the stored paramset.
+	Stored any `json:"stored"`
+}
+
+// writeReportOut maps the domain report onto the tool output; nil stays nil.
+func writeReportOut(report *interfaces.ParamsetWriteReport) *paramsetWriteReportOut {
+	if report == nil {
+		return nil
+	}
+	out := &paramsetWriteReportOut{
+		Written:             append([]string{}, report.Written...),
+		ReadbackDivergences: make([]paramsetDivergenceOut, 0, len(report.Divergences)),
+		ReadbackError:       report.ReadbackError,
+	}
+	for _, d := range report.Divergences {
+		out.ReadbackDivergences = append(out.ReadbackDivergences,
+			paramsetDivergenceOut{Parameter: d.Parameter, Sent: d.Sent, Stored: d.Stored})
+	}
+	return out
 }
 
 type writeLinkParamsetIn struct {
@@ -583,7 +622,8 @@ type writeLinkParamsetIn struct {
 }
 
 type writeLinkParamsetOut struct {
-	OK bool `json:"ok"`
+	OK     bool                    `json:"ok"`
+	Report *paramsetWriteReportOut `json:"report,omitempty" jsonschema:"post-write read-back of the LINK write: what was sent and where the stored value differs"`
 }
 
 type openEditSessionIn struct {
@@ -765,10 +805,11 @@ func registerWriteParamset(s *mcpsdk.Server, d Deps) {
 		// write and an operator's write are indistinguishable afterwards,
 		// and "who changed this" is the first question asked about one.
 		ctx = hmreqctx.WithOperation(ctx, "mcp:paramset-write")
-		if err := d.Paramsets.PutParamset(ctx, address, key, in.Values); err != nil {
+		report, err := d.Paramsets.PutParamset(ctx, address, key, in.Values)
+		if err != nil {
 			return nil, writeParamsetOut{}, fmt.Errorf("write paramset: %w", err)
 		}
-		return nil, writeParamsetOut{OK: true}, nil
+		return nil, writeParamsetOut{OK: true, Report: writeReportOut(report)}, nil
 	})
 }
 
@@ -813,10 +854,11 @@ func registerWriteLinkParamset(s *mcpsdk.Server, d Deps) {
 			}
 		}
 		ctx = hmreqctx.WithOperation(ctx, "mcp:link-paramset-write")
-		if err := d.Paramsets.PutLinkParamset(ctx, receiver, sender, in.Values); err != nil {
+		report, err := d.Paramsets.PutLinkParamset(ctx, receiver, sender, in.Values)
+		if err != nil {
 			return nil, writeLinkParamsetOut{}, fmt.Errorf("write link paramset: %w", err)
 		}
-		return nil, writeLinkParamsetOut{OK: true}, nil
+		return nil, writeLinkParamsetOut{OK: true, Report: writeReportOut(report)}, nil
 	})
 }
 

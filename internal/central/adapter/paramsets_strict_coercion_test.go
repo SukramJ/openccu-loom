@@ -172,10 +172,12 @@ func TestParamsetWritesAreStrictAgainstTheDescription(t *testing.T) {
 	}
 
 	writeMaster := func(d *ParamsetsDomain, v map[string]any) error {
-		return d.PutParamsetOn(context.Background(), "", strictTestChannel, hmenum.ParamsetKeyMaster, v)
+		_, err := d.PutParamsetOn(context.Background(), "", strictTestChannel, hmenum.ParamsetKeyMaster, v)
+		return err
 	}
 	writeLink := func(d *ParamsetsDomain, v map[string]any) error {
-		return d.PutLinkParamset(context.Background(), strictTestChannel, strictTestPeer, v)
+		_, err := d.PutLinkParamset(context.Background(), strictTestChannel, strictTestPeer, v)
+		return err
 	}
 
 	cases := []struct {

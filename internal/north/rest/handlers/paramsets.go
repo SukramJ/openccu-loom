@@ -11,6 +11,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -108,7 +109,8 @@ func PutParamset(svc ParamsetService, locks *EditSessions) http.HandlerFunc {
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
-		if err := svc.PutParamset(r.Context(), addr, key, values); err != nil {
+		report, err := svc.PutParamset(r.Context(), addr, key, values)
+		if err != nil {
 			if errors.Is(err, hmerr.ErrParameterHidden) {
 				problem.Write(w, http.StatusForbidden,
 					problem.New(problem.TypeForbidden, r, "Parameter hidden", err.Error()))
@@ -140,8 +142,34 @@ func PutParamset(svc ParamsetService, locks *EditSessions) http.HandlerFunc {
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Paramset write failed", err)
 			return
 		}
-		w.WriteHeader(http.StatusAccepted)
+		// A VALUES write is a control write and carries no report; a
+		// configuration write answers with its read-back comparison.
+		if report == nil {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		JSON(w, http.StatusOK, paramsetWriteResult(report))
 	}
+}
+
+// paramsetWriteResult maps the domain write report onto the wire DTO. Both
+// lists are rendered as arrays, never null, so an empty divergence list reads
+// unambiguously as "compared, nothing diverged".
+func paramsetWriteResult(report *interfaces.ParamsetWriteReport) hmapi.ParamsetWriteResult {
+	out := hmapi.ParamsetWriteResult{
+		Written:             []string{},
+		ReadbackDivergences: []hmapi.ParamsetDivergence{},
+	}
+	if report == nil {
+		return out
+	}
+	out.Written = append(out.Written, report.Written...)
+	for _, d := range report.Divergences {
+		out.ReadbackDivergences = append(out.ReadbackDivergences,
+			hmapi.ParamsetDivergence{Parameter: d.Parameter, Sent: d.Sent, Stored: d.Stored})
+	}
+	out.ReadbackError = report.ReadbackError
+	return out
 }
 
 // writeParamsetValidationRejection maps a client-side value rejection —
@@ -216,7 +244,8 @@ func PutLinkParamset(svc ParamsetService, locks *EditSessions) http.HandlerFunc 
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
-		if err := svc.PutLinkParamset(r.Context(), addr, peer, values); err != nil {
+		report, err := svc.PutLinkParamset(r.Context(), addr, peer, values)
+		if err != nil {
 			if errors.Is(err, hmerr.ErrParameterHidden) {
 				problem.Write(w, http.StatusForbidden,
 					problem.New(problem.TypeForbidden, r, "Parameter hidden", err.Error()))
@@ -236,7 +265,7 @@ func PutLinkParamset(svc ParamsetService, locks *EditSessions) http.HandlerFunc 
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Link paramset write failed", err)
 			return
 		}
-		w.WriteHeader(http.StatusAccepted)
+		JSON(w, http.StatusOK, paramsetWriteResult(report))
 	}
 }
 

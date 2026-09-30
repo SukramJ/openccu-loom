@@ -31,6 +31,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/warnings"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // CentralLister enumerates the configured CCUs — the scoping dimension
@@ -81,14 +82,16 @@ type ValueWriter interface {
 // existing Deps.Paramsets seam.
 type ParamsetService interface {
 	GetParamset(ctx context.Context, address string, key hmenum.ParamsetKey) (map[string]any, error)
-	PutParamset(ctx context.Context, address string, key hmenum.ParamsetKey, values map[string]any) error
+	// PutParamset returns a nil report for VALUES and the post-write
+	// read-back comparison for MASTER.
+	PutParamset(ctx context.Context, address string, key hmenum.ParamsetKey, values map[string]any) (*interfaces.ParamsetWriteReport, error)
 	// GetLinkParamset reads the LINK paramset on channelAddress keyed by
 	// peerAddress. Unlike MASTER/VALUES, LINK has no fixed key string —
 	// the CCU addresses it by the peer channel — so the pair is explicit.
 	GetLinkParamset(ctx context.Context, channelAddress, peerAddress string) (map[string]any, error)
 	// PutLinkParamset writes values to the LINK paramset on channelAddress
-	// keyed by peerAddress.
-	PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) error
+	// keyed by peerAddress, and reports the post-write read-back comparison.
+	PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) (*interfaces.ParamsetWriteReport, error)
 }
 
 // HealthReader exposes the daemon's component-health view (CCU

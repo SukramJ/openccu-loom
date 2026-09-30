@@ -16,6 +16,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/north/mcp"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // TestMCPWriteToolsGatedByAllowWrites pins ADR 0025's central invariant:
@@ -192,16 +193,16 @@ func (mcpNoopParamsets) GetParamset(context.Context, string, hmenum.ParamsetKey)
 	return nil, nil
 }
 
-func (mcpNoopParamsets) PutParamset(context.Context, string, hmenum.ParamsetKey, map[string]any) error {
-	return nil
+func (mcpNoopParamsets) PutParamset(context.Context, string, hmenum.ParamsetKey, map[string]any) (*interfaces.ParamsetWriteReport, error) {
+	return nil, nil
 }
 
 func (mcpNoopParamsets) GetLinkParamset(context.Context, string, string) (map[string]any, error) {
 	return nil, nil
 }
 
-func (mcpNoopParamsets) PutLinkParamset(context.Context, string, string, map[string]any) error {
-	return nil
+func (mcpNoopParamsets) PutLinkParamset(context.Context, string, string, map[string]any) (*interfaces.ParamsetWriteReport, error) {
+	return &interfaces.ParamsetWriteReport{}, nil
 }
 
 type mcpNoopHealth struct{}

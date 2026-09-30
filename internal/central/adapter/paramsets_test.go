@@ -505,7 +505,7 @@ func TestPutParamsetRoutesViaChannelSetMany(t *testing.T) {
 	domain, chw, _ := buildParamsetFixture(t)
 
 	values := map[string]any{string(hmenum.ParameterLevel): float64(0.8)}
-	if err := domain.PutParamset(context.Background(), "0001ABCD:1", hmenum.ParamsetKeyValues, values); err != nil {
+	if _, err := domain.PutParamset(context.Background(), "0001ABCD:1", hmenum.ParamsetKeyValues, values); err != nil {
 		t.Fatalf("PutParamset: %v", err)
 	}
 	// Channel has only one parameter (LEVEL) — collector dispatches via
@@ -528,7 +528,7 @@ func TestPutParamsetAcceptsWholeNumberForFloatParameter(t *testing.T) {
 	domain, chw, _ := buildParamsetFixture(t)
 
 	values := map[string]any{string(hmenum.ParameterLevel): float64(1)}
-	if err := domain.PutParamset(context.Background(), "0001ABCD:1", hmenum.ParamsetKeyMaster, values); err != nil {
+	if _, err := domain.PutParamset(context.Background(), "0001ABCD:1", hmenum.ParamsetKeyMaster, values); err != nil {
 		t.Fatalf("PutParamset with a whole-number FLOAT value: %v", err)
 	}
 	if chw.putCallCount() != 1 {
@@ -545,7 +545,7 @@ func TestPutParamsetStillRejectsOutOfRangeFloat(t *testing.T) {
 
 	// MASTER LEVEL is declared 0.0..1.0 — 5 is a whole number AND out of range.
 	values := map[string]any{string(hmenum.ParameterLevel): float64(5)}
-	if err := domain.PutParamset(context.Background(), "0001ABCD:1", hmenum.ParamsetKeyMaster, values); err == nil {
+	if _, err := domain.PutParamset(context.Background(), "0001ABCD:1", hmenum.ParamsetKeyMaster, values); err == nil {
 		t.Fatal("PutParamset must reject a value above MAX")
 	}
 	if chw.putCallCount() != 0 {
@@ -600,7 +600,7 @@ func TestPutParamsetRoutesManyViaChannelPutParamset(t *testing.T) {
 		string(hmenum.ParameterLevel):  float64(0.8),
 		string(hmenum.ParameterLevel2): float64(0.4),
 	}
-	if err := domain.PutParamset(context.Background(), "0001ABCD:1", hmenum.ParamsetKeyValues, values); err != nil {
+	if _, err := domain.PutParamset(context.Background(), "0001ABCD:1", hmenum.ParamsetKeyValues, values); err != nil {
 		t.Fatalf("PutParamset: %v", err)
 	}
 	// Two params → PutParamset on the channel writer.
@@ -646,7 +646,7 @@ func TestPutParamsetFallsBackToBackendWhenNoChannel(t *testing.T) {
 	domain := NewParamsetsDomain(reg, w)
 
 	values := map[string]any{string(hmenum.ParameterLevel): float64(0.5)}
-	if err := domain.PutParamset(context.Background(), "0001ABCD:1", hmenum.ParamsetKeyValues, values); err != nil {
+	if _, err := domain.PutParamset(context.Background(), "0001ABCD:1", hmenum.ParamsetKeyValues, values); err != nil {
 		t.Fatalf("PutParamset: %v", err)
 	}
 	if !putCalled {
@@ -676,7 +676,7 @@ func TestPutParamsetRefusesTheLiteralLinkKey(t *testing.T) {
 	}
 
 	values := map[string]any{string(hmenum.ParameterLevel): float64(0.5)}
-	err := domain.PutParamset(context.Background(), "0001ABCD:1", hmenum.ParamsetKeyLink, values)
+	_, err := domain.PutParamset(context.Background(), "0001ABCD:1", hmenum.ParamsetKeyLink, values)
 	if !errors.Is(err, ErrLinkParamsetNotAddressable) {
 		t.Fatalf("PutParamset(LINK): got %v, want ErrLinkParamsetNotAddressable", err)
 	}
@@ -705,7 +705,7 @@ func TestPutParamsetVisibilityGateFiresBeforeChannelSetMany(t *testing.T) {
 	domain.SetVisibilityGate(gate)
 
 	values := map[string]any{string(hmenum.ParameterLevel): float64(0.8)}
-	err := domain.PutParamset(context.Background(), "0001ABCD:1", hmenum.ParamsetKeyValues, values)
+	_, err := domain.PutParamset(context.Background(), "0001ABCD:1", hmenum.ParamsetKeyValues, values)
 	if !errors.Is(err, hmerr.ErrParameterHidden) {
 		t.Fatalf("want ErrParameterHidden, got %v", err)
 	}
@@ -748,7 +748,7 @@ func TestParamsetsDomainGetLinkParamsetNilRegistry(t *testing.T) {
 func TestParamsetsDomainPutLinkParamsetNilRegistry(t *testing.T) {
 	t.Parallel()
 	p := NewParamsetsDomain(nil, nil)
-	err := p.PutLinkParamset(context.Background(), "DEV:1", "DEV2:1", map[string]any{"PARAM": 1})
+	_, err := p.PutLinkParamset(context.Background(), "DEV:1", "DEV2:1", map[string]any{"PARAM": 1})
 	if err == nil {
 		t.Fatal("expected error for nil registry")
 	}
@@ -787,7 +787,7 @@ func TestParamsetsDomainGetParamsetNilRegistry(t *testing.T) {
 func TestParamsetsDomainPutParamsetNilRegistry(t *testing.T) {
 	t.Parallel()
 	p := NewParamsetsDomain(nil, nil)
-	err := p.PutParamset(context.Background(), "DEV:1", hmenum.ParamsetKeyValues, map[string]any{"PARAM": true})
+	_, err := p.PutParamset(context.Background(), "DEV:1", hmenum.ParamsetKeyValues, map[string]any{"PARAM": true})
 	if err == nil {
 		t.Fatal("expected error for nil registry")
 	}

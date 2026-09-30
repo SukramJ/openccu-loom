@@ -15,6 +15,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // ─── stubs ────────────────────────────────────────────────────────────────────
@@ -37,15 +38,17 @@ func (s *stubParamsetReaderWriter) GetParamset(_ context.Context, _ configui.Ses
 	return s.readValues, nil
 }
 
-func (s *stubParamsetReaderWriter) PutParamset(_ context.Context, key configui.SessionKey, values map[string]any) error {
+func (s *stubParamsetReaderWriter) PutParamset(
+	_ context.Context, key configui.SessionKey, values map[string]any,
+) (*interfaces.ParamsetWriteReport, error) {
 	if s.writeErr != nil {
-		return s.writeErr
+		return nil, s.writeErr
 	}
 	s.writeCalls = append(s.writeCalls, struct {
 		Key    configui.SessionKey
 		Values map[string]any
 	}{Key: key, Values: values})
-	return nil
+	return nil, nil
 }
 
 // ─── helpers ─────────────────────────────────────────────────────────────────

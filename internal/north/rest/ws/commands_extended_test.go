@@ -16,6 +16,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 type stubDevices struct {
@@ -151,6 +152,7 @@ func (s *stubDevices) SetChannelTeam(_ context.Context, deviceAddr string, chann
 type stubParamsetWriter struct {
 	calls        []paramsetCall
 	hiddenParams map[string]struct{} // parameters that return ErrParameterHidden
+	report       *interfaces.ParamsetWriteReport
 }
 
 type paramsetCall struct {
@@ -158,14 +160,16 @@ type paramsetCall struct {
 	values map[string]any
 }
 
-func (s *stubParamsetWriter) PutParamset(_ context.Context, key configui.SessionKey, values map[string]any) error {
+func (s *stubParamsetWriter) PutParamset(
+	_ context.Context, key configui.SessionKey, values map[string]any,
+) (*interfaces.ParamsetWriteReport, error) {
 	for name := range values {
 		if _, hidden := s.hiddenParams[name]; hidden {
-			return fmt.Errorf("parameter %q: %w", name, hmerr.ErrParameterHidden)
+			return nil, fmt.Errorf("parameter %q: %w", name, hmerr.ErrParameterHidden)
 		}
 	}
 	s.calls = append(s.calls, paramsetCall{key: key, values: values})
-	return nil
+	return s.report, nil
 }
 
 type stubChangeHistory struct {
@@ -640,6 +644,70 @@ func TestExtendedParamsetPut(t *testing.T) {
 		"paramset_key":    "VALUES",
 		"values":          map[string]any{},
 	}, "values must not be empty")
+}
+
+// TestExtendedParamsetPut_ReadbackFields pins the paramset.put result shape
+// wsapi.json declares: `written` stays the count, a MASTER write adds its
+// read-back divergences (an empty list when nothing diverged) and the
+// read-back error, and a VALUES write — which carries no report — adds
+// neither.
+func TestExtendedParamsetPut_ReadbackFields(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	master := json.RawMessage(`{"channel_address":"ABC0001:1","paramset_key":"MASTER","values":{"TEMP_MAX":40}}`)
+
+	t.Run("divergence", func(t *testing.T) {
+		t.Parallel()
+		pw := &stubParamsetWriter{report: &interfaces.ParamsetWriteReport{
+			Written:     []string{"TEMP_MAX"},
+			Divergences: []interfaces.ParamsetDivergence{{Parameter: "TEMP_MAX", Sent: 40.0, Stored: 30.5}},
+		}}
+		out, err := paramsetPutHandler(pw, nil)(ctx, master)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		raw, _ := json.Marshal(out)
+		const want = `{"readback_divergences":[{"parameter":"TEMP_MAX","sent":40,"stored":30.5}],"written":1}`
+		if string(raw) != want {
+			t.Fatalf("result\n got: %s\nwant: %s", raw, want)
+		}
+	})
+	t.Run("clean write renders an empty list", func(t *testing.T) {
+		t.Parallel()
+		pw := &stubParamsetWriter{report: &interfaces.ParamsetWriteReport{Written: []string{"TEMP_MAX"}}}
+		out, err := paramsetPutHandler(pw, nil)(ctx, master)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		raw, _ := json.Marshal(out)
+		if string(raw) != `{"readback_divergences":[],"written":1}` {
+			t.Fatalf("result = %s", raw)
+		}
+	})
+	t.Run("read-back error", func(t *testing.T) {
+		t.Parallel()
+		pw := &stubParamsetWriter{report: &interfaces.ParamsetWriteReport{Written: []string{"TEMP_MAX"}, ReadbackError: "timeout"}}
+		out, err := paramsetPutHandler(pw, nil)(ctx, master)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if m, _ := out.(map[string]any); m["readback_error"] != "timeout" {
+			t.Fatalf("readback_error missing: %+v", out)
+		}
+	})
+	t.Run("values write adds nothing", func(t *testing.T) {
+		t.Parallel()
+		pw := &stubParamsetWriter{}
+		out, err := paramsetPutHandler(pw, nil)(ctx,
+			json.RawMessage(`{"channel_address":"ABC0001:1","paramset_key":"VALUES","values":{"STATE":true}}`))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		raw, _ := json.Marshal(out)
+		if string(raw) != `{"written":1}` {
+			t.Fatalf("result = %s, want {\"written\":1}", raw)
+		}
+	})
 }
 
 func TestExtendedChangeHistoryList(t *testing.T) {

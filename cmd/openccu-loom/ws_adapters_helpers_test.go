@@ -233,7 +233,7 @@ func TestWSLinkQuery_NilDomain_GetLinkParamset_Errors(t *testing.T) {
 func TestWSLinkQuery_NilDomain_PutLinkParamset_Errors(t *testing.T) {
 	t.Parallel()
 	q := &wsLinkQuery{domain: nil, registry: nil}
-	err := q.PutLinkParamset(nil, "A:0", "B:0", nil) //nolint:staticcheck // nil ctx is intentional to exercise nil-guard path without a real context
+	_, err := q.PutLinkParamset(nil, "A:0", "B:0", nil) //nolint:staticcheck // nil ctx is intentional to exercise nil-guard path without a real context
 	if err == nil {
 		t.Fatal("expected error when domain is nil")
 	}
@@ -261,7 +261,7 @@ func TestWSParamsetWriter_NilDomain_Errors(t *testing.T) {
 	t.Parallel()
 	w := &wsParamsetWriter{domain: nil}
 	key := configui.SessionKey{ChannelAddress: "A:0"}
-	err := w.PutParamset(nil, key, nil) //nolint:staticcheck // nil ctx is intentional to exercise nil-guard path without a real context
+	_, err := w.PutParamset(nil, key, nil) //nolint:staticcheck // nil ctx is intentional to exercise nil-guard path without a real context
 	if err == nil {
 		t.Fatal("expected error when domain is nil")
 	}

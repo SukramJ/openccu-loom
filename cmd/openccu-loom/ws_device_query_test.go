@@ -95,7 +95,7 @@ func TestWSConfigSession_ReadsAndWritesTheScopedCentral(t *testing.T) {
 		t.Fatalf("session scoped to ccu-b read %v, want ccu-b's backend", got["CENTRAL"])
 	}
 
-	if err := pw.PutParamset(context.Background(), keyB, map[string]any{"FOO": 1}); err != nil {
+	if _, err := pw.PutParamset(context.Background(), keyB, map[string]any{"FOO": 1}); err != nil {
 		t.Fatalf("PutParamset: %v", err)
 	}
 	if !backendB.putCalled {
@@ -189,7 +189,7 @@ func TestWSConfigSessionScopedSaveKeepsTheDomainGuarantees(t *testing.T) {
 	}
 	keyB := configui.SessionKey{CentralName: "ccu-b", ChannelAddress: channel, ParamsetKey: hmenum.ParamsetKeyMaster}
 
-	if err := pw.PutParamset(context.Background(), keyB, map[string]any{"DBL_PRESS_TIME": float64(7)}); err != nil {
+	if _, err := pw.PutParamset(context.Background(), keyB, map[string]any{"DBL_PRESS_TIME": float64(7)}); err != nil {
 		t.Fatalf("PutParamset: %v", err)
 	}
 	if backendA.putCalled {

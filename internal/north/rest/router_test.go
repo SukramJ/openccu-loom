@@ -290,16 +290,16 @@ func (fakeParamsetService) GetParamset(_ context.Context, _ string, _ hmenum.Par
 	return map[string]any{}, nil
 }
 
-func (fakeParamsetService) PutParamset(_ context.Context, _ string, _ hmenum.ParamsetKey, _ map[string]any) error {
-	return nil
+func (fakeParamsetService) PutParamset(_ context.Context, _ string, _ hmenum.ParamsetKey, _ map[string]any) (*interfaces.ParamsetWriteReport, error) {
+	return nil, nil
 }
 
 func (fakeParamsetService) GetLinkParamset(_ context.Context, _, _ string) (map[string]any, error) {
 	return map[string]any{}, nil
 }
 
-func (fakeParamsetService) PutLinkParamset(_ context.Context, _, _ string, _ map[string]any) error {
-	return nil
+func (fakeParamsetService) PutLinkParamset(_ context.Context, _, _ string, _ map[string]any) (*interfaces.ParamsetWriteReport, error) {
+	return &interfaces.ParamsetWriteReport{}, nil
 }
 
 type fakeParameterDeterminerService struct{}

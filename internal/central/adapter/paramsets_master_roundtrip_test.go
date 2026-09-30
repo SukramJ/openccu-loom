@@ -180,7 +180,7 @@ func TestMasterParamsetWriteSavesAndReachesBothPushPlanes(t *testing.T) {
 
 	// The save the config surface issues: JSON-decoded numbers, one parameter
 	// inside the MASTER data-point whitelist and one outside it.
-	if err := domain.PutParamset(
+	if _, err := domain.PutParamset(
 		context.Background(), chanAddr, hmenum.ParamsetKeyMaster,
 		map[string]any{declared: float64(3), undeclared: float64(42)},
 	); err != nil {

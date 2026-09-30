@@ -90,6 +90,11 @@ type linkCoercionFakeBackend struct {
 	descErr   error
 	putValues map[string]any
 	putCalled bool
+
+	// stored / storedErr answer GetLinkParamset, so a test can model an
+	// interface process that stores something other than what was sent.
+	stored    map[string]any
+	storedErr error
 }
 
 func (b *linkCoercionFakeBackend) GetParamsetDescription(
@@ -115,6 +120,12 @@ func (b *linkCoercionFakeBackend) PutLinkParamset(
 func (b *linkCoercionFakeBackend) GetLinkParamset(
 	_ context.Context, _, _ string,
 ) (map[string]any, error) {
+	if b.storedErr != nil {
+		return nil, b.storedErr
+	}
+	if b.stored != nil {
+		return b.stored, nil
+	}
 	return map[string]any{}, nil
 }
 
@@ -156,7 +167,7 @@ func TestParamsetsDomainPutLinkParamsetCoercesValues(t *testing.T) {
 	reg, w := buildLinkCoercionFixture(t, be)
 	domain := NewParamsetsDomain(reg, w)
 
-	if err := domain.PutLinkParamset(
+	if _, err := domain.PutLinkParamset(
 		context.Background(), "LNK0001:4", "PEER0001:1", linkParamsetTestValues(),
 	); err != nil {
 		t.Fatalf("PutLinkParamset: %v", err)
@@ -176,7 +187,7 @@ func TestPutLinkParamsetRefusedOnDescriptorError(t *testing.T) {
 	reg, w := buildLinkCoercionFixture(t, be)
 	domain := NewParamsetsDomain(reg, w)
 
-	err := domain.PutLinkParamset(
+	_, err := domain.PutLinkParamset(
 		context.Background(), "LNK0001:4", "PEER0001:1", linkParamsetTestValues(),
 	)
 	if err == nil {

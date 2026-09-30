@@ -266,9 +266,35 @@ type ParameterLabeler interface {
 // free of ambiguity.
 type ParamsetService interface {
 	GetParamset(ctx context.Context, address string, key hmenum.ParamsetKey) (map[string]any, error)
-	PutParamset(ctx context.Context, address string, key hmenum.ParamsetKey, values map[string]any) error
+	// PutParamset writes the values and, for MASTER, re-reads the stored
+	// paramset and reports where it differs from what was sent. VALUES
+	// writes return a nil report: they are control writes whose effect is
+	// observed through the event stream, not a configuration to verify.
+	PutParamset(ctx context.Context, address string, key hmenum.ParamsetKey, values map[string]any) (*ParamsetWriteReport, error)
 	GetLinkParamset(ctx context.Context, channelAddress, peerAddress string) (map[string]any, error)
-	PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) error
+	// PutLinkParamset behaves like PutParamset for a LINK paramset: the
+	// report is always non-nil on success.
+	PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) (*ParamsetWriteReport, error)
+}
+
+// ParamsetDivergence names one parameter whose stored value after a
+// configuration write differs from the value that was sent.
+type ParamsetDivergence struct {
+	Parameter string
+	Sent      any
+	Stored    any // nil when the parameter is absent from the stored paramset
+}
+
+// ParamsetWriteReport is the post-write acknowledgement of a MASTER or LINK
+// paramset write. An interface process may answer ok to a configuration
+// write and still drop, clamp or coerce values it does not apply, so the
+// only trustworthy acknowledgement is re-reading the stored paramset after
+// the write and comparing it against what was sent. An empty Divergences
+// list on a nil ReadbackError means every sent value is stored as sent.
+type ParamsetWriteReport struct {
+	Written       []string             // parameter names sent to the CCU, sorted
+	Divergences   []ParamsetDivergence // sent != stored after the write
+	ReadbackError string               // non-empty when the post-write read failed; divergences unknown
 }
 
 // ParameterDeterminer backs `POST /devices/{addr}/channels/{no}/paramsets/{key}/determine`.

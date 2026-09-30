@@ -8,6 +8,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"slices"
+	"sort"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -19,6 +22,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // VisibilityGate decides whether a parameter is visible and therefore
@@ -169,7 +173,9 @@ func (p *ParamsetsDomain) GetParamsetOn(
 // When the channel is not found in the model registry (diagnostic
 // tooling, unknown address), the call falls through to a direct backend
 // round-trip.
-func (p *ParamsetsDomain) PutParamset(ctx context.Context, deviceAddress string, key hmenum.ParamsetKey, values map[string]any) error {
+func (p *ParamsetsDomain) PutParamset(
+	ctx context.Context, deviceAddress string, key hmenum.ParamsetKey, values map[string]any,
+) (*interfaces.ParamsetWriteReport, error) {
 	return p.PutParamsetOn(ctx, "", deviceAddress, key, values)
 }
 
@@ -181,33 +187,49 @@ func (p *ParamsetsDomain) PutParamset(ctx context.Context, deviceAddress string,
 // post-write model refresh and the audit row apply to the multi-CCU case too.
 // Writing straight to the scoped backend instead skips all four, and the audit
 // row is missing exactly where "which CCU did this change land on" matters.
+//
+// Every write is followed by exactly one read of the stored paramset, which
+// refreshes the model. For a configuration write (anything but VALUES) the
+// same read also feeds the write report: an interface process may answer ok
+// and still drop, clamp or coerce a value, so the read-back comparison is the
+// only acknowledgement that the configuration landed as sent. The read is
+// sound because the wire call has completed when SetMany or PutParamset
+// returns — neither queues. A VALUES write returns a nil report: it is a
+// control write whose effect arrives through the event stream, not a
+// configuration to verify.
 func (p *ParamsetsDomain) PutParamsetOn(
 	ctx context.Context, centralName, deviceAddress string, key hmenum.ParamsetKey, values map[string]any,
-) error {
+) (*interfaces.ParamsetWriteReport, error) {
 	// A LINK-keyed write is unaddressable and, on some channels, harmful —
 	// see [ErrLinkParamsetNotAddressable]. Refuse before anything is read,
 	// locked or audited.
 	if key == hmenum.ParamsetKeyLink {
-		return fmt.Errorf("%w: use the per-peer link route for %s",
+		return nil, fmt.Errorf("%w: use the per-peer link route for %s",
 			ErrLinkParamsetNotAddressable, deviceAddress)
 	}
 	// VisibilityGate runs first — before the channel is touched.
 	if err := p.checkVisibilityOn(centralName, deviceAddress, key, values); err != nil {
-		return err
+		return nil, err
 	}
 	b, err := p.resolveOn(centralName, deviceAddress)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// Capture before-state for the audit log (best-effort).
 	before, _ := b.GetParamset(ctx, deviceAddress, key)
 
+	// sent holds the normalised value of every parameter that went out on
+	// the wire; descs the descriptor each one was normalised against.
+	var (
+		sent  map[string]any
+		descs map[string]hmproto.ParameterData
+	)
 	ch := p.resolveChannelOn(centralName, deviceAddress)
 	if ch != nil {
 		// Route through the model: Channel.SetMany validates + dispatches.
 		paramValues, convErr := anyMapToParamValues(ch, key, values)
 		if convErr != nil {
-			return fmt.Errorf("paramsets: convert values: %w", convErr)
+			return nil, fmt.Errorf("paramsets: convert values: %w", convErr)
 		}
 		opts := device.SetOptions{
 			Validate:   true,
@@ -216,24 +238,119 @@ func (p *ParamsetsDomain) PutParamsetOn(
 			Source:     "rest:paramset.put",
 		}
 		if err := ch.SetMany(ctx, key, paramValues, opts); err != nil {
-			return err
+			return nil, err
+		}
+		sent = make(map[string]any, len(paramValues))
+		descs = make(map[string]hmproto.ParameterData, len(paramValues))
+		for name, pv := range paramValues {
+			sent[string(name)] = pv.Unwrap()
+			if dp := channelParameterFor(ch, key, name); dp != nil {
+				descs[string(name)] = dp.ParameterData()
+			}
 		}
 	} else {
 		// No channel in model — coerce against the descriptor and validate
 		// min/max before the direct backend call, so invalid values are
 		// rejected early with a clear error instead of a CCU-side XML-RPC
 		// fault, and a whole-number INTEGER does not travel as <double>.
-		wire, validErr := coerceParamsetValues(ctx, b, deviceAddress, key, values)
+		wire, fetched, validErr := coerceParamsetValuesWithDescriptions(ctx, b, deviceAddress, key, values)
 		if validErr != nil {
-			return validErr
+			return nil, validErr
 		}
 		if err := b.PutParamset(ctx, deviceAddress, key, wire, hmenum.CommandPriorityLow, hmenum.CommandRxModeUnset); err != nil {
-			return err
+			return nil, err
+		}
+		sent, descs = wire, fetched
+	}
+	stored, readErr := b.GetParamset(ctx, deviceAddress, key)
+	if readErr == nil {
+		p.applyStoredValuesOn(centralName, deviceAddress, key, stored)
+	}
+	var report *interfaces.ParamsetWriteReport
+	if key != hmenum.ParamsetKeyValues {
+		report = paramsetWriteReport(sent, descs, stored, readErr)
+	}
+	p.recordParamsetWrite(ctx, deviceAddress, string(key), before, values)
+	return report, nil
+}
+
+// paramsetWriteReport compares what a configuration write sent against the
+// paramset read back after it. Both sides are normalised through the
+// parameter's descriptor where one is known, so a stored INTEGER 5 and a sent
+// 5 compare equal whatever numeric type the transport decoded. A stored value
+// the descriptor cannot coerce is itself a divergence and is reported raw.
+func paramsetWriteReport(
+	sent map[string]any, descs map[string]hmproto.ParameterData, stored map[string]any, readErr error,
+) *interfaces.ParamsetWriteReport {
+	names := make([]string, 0, len(sent))
+	for name := range sent {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	report := &interfaces.ParamsetWriteReport{Written: names, Divergences: []interfaces.ParamsetDivergence{}}
+	if readErr != nil {
+		report.ReadbackError = readErr.Error()
+		return report
+	}
+	for _, name := range names {
+		sentVal := sent[name]
+		storedRaw, ok := stored[name]
+		if !ok {
+			report.Divergences = append(report.Divergences,
+				interfaces.ParamsetDivergence{Parameter: name, Sent: sentVal, Stored: nil})
+			continue
+		}
+		sentNorm, storedNorm, normErr := normalisePair(descs, name, sentVal, storedRaw)
+		if normErr != nil || !paramValuesEqual(sentNorm, storedNorm) {
+			report.Divergences = append(report.Divergences,
+				interfaces.ParamsetDivergence{Parameter: name, Sent: sentVal, Stored: storedRaw})
 		}
 	}
-	p.refreshAfterPutOn(ctx, centralName, b, deviceAddress, key)
-	p.recordParamsetWrite(ctx, deviceAddress, string(key), before, values)
-	return nil
+	return report
+}
+
+// normalisePair brings a sent and a stored value into one comparable form.
+// With a descriptor both go through [parameter.Coerce]; without one the
+// descriptor-blind [hmtypes.NewParamValue] is the best available common form.
+// An error means one side could not be normalised.
+func normalisePair(
+	descs map[string]hmproto.ParameterData, name string, sentVal, storedRaw any,
+) (sentNorm, storedNorm any, err error) {
+	convert := hmtypes.NewParamValue
+	if desc, ok := descs[name]; ok {
+		convert = func(v any) (hmtypes.ParamValue, error) { return parameter.Coerce(desc, v) }
+	}
+	sentPV, err := convert(sentVal)
+	if err != nil {
+		return nil, nil, err
+	}
+	storedPV, err := convert(storedRaw)
+	if err != nil {
+		return nil, nil, err
+	}
+	return sentPV.Unwrap(), storedPV.Unwrap(), nil
+}
+
+// paramValueEpsilon absorbs the rounding a FLOAT picks up on its way through
+// the transport encoders; a clamp or a coercion moves a value by far more.
+const paramValueEpsilon = 1e-9
+
+// paramValuesEqual compares two unwrapped [hmtypes.ParamValue] payloads.
+// Floats compare within [paramValueEpsilon], lists element-wise, and every
+// other scalar by value on its concrete type, so an int never equals a float.
+func paramValuesEqual(a, b any) bool {
+	switch av := a.(type) {
+	case float64:
+		bv, ok := b.(float64)
+		return ok && math.Abs(av-bv) <= paramValueEpsilon
+	case []string:
+		bv, ok := b.([]string)
+		return ok && slices.Equal(av, bv)
+	case nil, bool, int, string:
+		return a == b
+	default:
+		return false
+	}
 }
 
 // auditChanges renders a paramset write as audit rows, recording the
@@ -306,11 +423,17 @@ func (p *ParamsetsDomain) recordParamsetWrite(ctx context.Context, channelAddres
 	})
 }
 
-// coerceParamsetValues fetches the paramset descriptor from the backend,
-// coerces every supplied value into the descriptor's type and checks it
-// against its min/max range. It returns the map that goes on the wire. Any
-// parameter that fails validation is collected into a combined error so the
-// caller receives the full rejection list in one shot.
+// paramsetDescriber is the backend slice
+// [coerceParamsetValuesWithDescriptions] needs.
+type paramsetDescriber interface {
+	GetParamsetDescription(ctx context.Context, address string, key hmenum.ParamsetKey) (map[string]hmproto.ParameterData, error)
+}
+
+// coerceParamsetValuesWithDescriptions fetches the paramset descriptor from
+// the backend, coerces every supplied value into the descriptor's type and
+// checks it against its min/max range. It returns the map that goes on the
+// wire. Any parameter that fails validation is collected into a combined
+// error so the caller receives the full rejection list in one shot.
 //
 // The coerced map is what the caller must send, not the input: the values
 // arrive as decoded JSON, where a number is always a float64, and the XML-RPC
@@ -331,13 +454,16 @@ func (p *ParamsetsDomain) recordParamsetWrite(ctx context.Context, channelAddres
 // description itself is unavailable is refused rather than sent. That refusal
 // wraps the fetch error but not [hmerr.ErrValidation] — it is an upstream
 // failure, not a mistake in the request.
-func coerceParamsetValues(ctx context.Context, b interface {
-	GetParamsetDescription(ctx context.Context, address string, key hmenum.ParamsetKey) (map[string]hmproto.ParameterData, error)
-}, address string, key hmenum.ParamsetKey, values map[string]any,
-) (map[string]any, error) {
+//
+// It also hands back the fetched descriptions, so a caller comparing the
+// post-write read-back normalises against the same descriptors without a
+// second fetch.
+func coerceParamsetValuesWithDescriptions(
+	ctx context.Context, b paramsetDescriber, address string, key hmenum.ParamsetKey, values map[string]any,
+) (wire map[string]any, descriptions map[string]hmproto.ParameterData, err error) {
 	descs, err := b.GetParamsetDescription(ctx, address, key)
 	if err != nil {
-		return nil, fmt.Errorf("paramsets: paramset description unavailable for %s/%s, refusing unvalidated write: %w",
+		return nil, nil, fmt.Errorf("paramsets: paramset description unavailable for %s/%s, refusing unvalidated write: %w",
 			address, key, err)
 	}
 	out := make(map[string]any, len(values))
@@ -363,9 +489,9 @@ func coerceParamsetValues(ctx context.Context, b interface {
 		out[name] = pv.Unwrap()
 	}
 	if len(errs) == 0 {
-		return out, nil
+		return out, descs, nil
 	}
-	return nil, fmt.Errorf("%w: %w", hmerr.ErrValidation, errors.Join(errs...))
+	return nil, nil, fmt.Errorf("%w: %w", hmerr.ErrValidation, errors.Join(errs...))
 }
 
 // channelNumberOf parses "DEV:N" → N. Returns 0 when the channel is
@@ -404,6 +530,17 @@ func (p *ParamsetsDomain) refreshAfterPutOn(
 	}
 	current, err := b.GetParamset(ctx, channelAddress, key)
 	if err != nil {
+		return
+	}
+	p.applyStoredValuesOn(centralName, channelAddress, key, current)
+}
+
+// applyStoredValuesOn forwards a freshly read paramset through [OnWireValue]
+// to the owning channel's data points, scoped to one central.
+func (p *ParamsetsDomain) applyStoredValuesOn(
+	centralName, channelAddress string, key hmenum.ParamsetKey, current map[string]any,
+) {
+	if p.registry == nil {
 		return
 	}
 	deviceAddr := deviceAddressOf(channelAddress)
@@ -476,37 +613,36 @@ func (p *ParamsetsDomain) GetLinkFormSchema(
 
 // PutLinkParamset writes a LINK paramset atomically.
 //
-// Like [PutParamset] we re-fetch after the write so data points (if
-// any) see the authoritative state. Unlike MASTER/VALUES, LINK is
-// not cached on the channel, so the refresh only keeps downstream
-// re-reads consistent.
+// Like [PutParamset] we re-read after the write. LINK is not cached on
+// the channel, so the read does not refresh the model; it flushes any
+// cache the CCU keeps and is the read-back the write report compares
+// against — the report is always non-nil on success.
 //
 // When a VisibilityGate is configured, each parameter is checked
 // against it before the write is forwarded.
 func (p *ParamsetsDomain) PutLinkParamset(
 	ctx context.Context, channelAddress, peerAddress string, values map[string]any,
-) error {
+) (*interfaces.ParamsetWriteReport, error) {
 	if err := p.checkVisibility(channelAddress, hmenum.ParamsetKeyLink, values); err != nil {
-		return err
+		return nil, err
 	}
 	b, err := p.resolve(channelAddress)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	before, _ := b.GetLinkParamset(ctx, channelAddress, peerAddress)
 	// Coerce against the LINK descriptor for the same reason as the
 	// MASTER/VALUES path in [coerceParamsetValues]: a decoded-JSON number is
 	// always float64, and the XML-RPC encoder maps that straight to <double>.
-	wire, validErr := coerceParamsetValues(ctx, b, channelAddress, hmenum.ParamsetKeyLink, values)
+	wire, descs, validErr := coerceParamsetValuesWithDescriptions(ctx, b, channelAddress, hmenum.ParamsetKeyLink, values)
 	if validErr != nil {
-		return validErr
+		return nil, validErr
 	}
 	if err := b.PutLinkParamset(ctx, channelAddress, peerAddress, wire); err != nil {
-		return err
+		return nil, err
 	}
-	// Touch the LINK paramset once to flush any caches the CCU may
-	// be keeping; best effort.
-	_, _ = b.GetLinkParamset(ctx, channelAddress, peerAddress)
+	stored, readErr := b.GetLinkParamset(ctx, channelAddress, peerAddress)
+	report := paramsetWriteReport(wire, descs, stored, readErr)
 	if p.audit != nil {
 		changes := auditChanges(before, values)
 		// See recordParamsetWrite: the canonical parser reports the
@@ -520,7 +656,7 @@ func (p *ParamsetsDomain) PutLinkParamset(
 			Changes:       changes,
 		})
 	}
-	return nil
+	return report, nil
 }
 
 // gateDecidesWrites reports whether the VisibilityGate is the authority on

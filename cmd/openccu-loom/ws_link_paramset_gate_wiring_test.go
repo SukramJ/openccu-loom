@@ -105,7 +105,7 @@ func TestWSLinkQueryPutLinkParamset_RefusesIgnoredModel_ReachesBackendOtherwise(
 
 	// Arm 1: channel whose device model is ignored — refused, backend
 	// never reached.
-	err = q.PutLinkParamset(context.Background(), "GATEHIDDEN:4", "PEER:1", map[string]any{"SHORT_JT_ON": 1})
+	_, err = q.PutLinkParamset(context.Background(), "GATEHIDDEN:4", "PEER:1", map[string]any{"SHORT_JT_ON": 1})
 	if !errors.Is(err, hmerr.ErrParameterHidden) {
 		t.Fatalf("ignored model: want ErrParameterHidden, got %v", err)
 	}
@@ -115,7 +115,7 @@ func TestWSLinkQueryPutLinkParamset_RefusesIgnoredModel_ReachesBackendOtherwise(
 
 	// Arm 2: same construction, a channel of a model that is not
 	// ignored — the write reaches the backend.
-	if err := q.PutLinkParamset(context.Background(), "GATEALLOWED:4", "PEER:1", map[string]any{"SHORT_JT_ON": 1}); err != nil {
+	if _, err := q.PutLinkParamset(context.Background(), "GATEALLOWED:4", "PEER:1", map[string]any{"SHORT_JT_ON": 1}); err != nil {
 		t.Fatalf("allowed model: PutLinkParamset: %v", err)
 	}
 	if !be.putCalled {

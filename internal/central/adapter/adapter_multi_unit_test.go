@@ -433,7 +433,7 @@ func TestParamsetsDomain_PutParamset_Values_CallsRefreshAfterPut(t *testing.T) {
 	p := buildParamsetBoost10Fixture(t)
 	// Use device address (no ":N") → resolveChannel returns nil → legacy backend path.
 	// This exercises the legacy direct backend path AND refreshAfterPutOn.
-	err := p.PutParamset(context.Background(), "DEV021", hmenum.ParamsetKeyValues,
+	_, err := p.PutParamset(context.Background(), "DEV021", hmenum.ParamsetKeyValues,
 		map[string]any{"SET_POINT_TEMPERATURE": 21.0})
 	if err != nil {
 		t.Fatalf("PutParamset: %v", err)
@@ -443,7 +443,7 @@ func TestParamsetsDomain_PutParamset_Values_CallsRefreshAfterPut(t *testing.T) {
 func TestParamsetsDomain_PutParamset_Master_CallsRefreshAfterPut(t *testing.T) {
 	t.Parallel()
 	p := buildParamsetBoost10Fixture(t)
-	err := p.PutParamset(context.Background(), "DEV021", hmenum.ParamsetKeyMaster,
+	_, err := p.PutParamset(context.Background(), "DEV021", hmenum.ParamsetKeyMaster,
 		map[string]any{"TEMPERATUREFALL_MODUS": 0})
 	if err != nil {
 		t.Fatalf("PutParamset MASTER: %v", err)
@@ -933,7 +933,7 @@ func TestParamsetsDomain_PutLinkParamset_HappyPath_WithChannel(t *testing.T) {
 	w.Register("ccu-pl11", "HmIP-RF", fake)
 
 	p := NewParamsetsDomain(reg, w)
-	err = p.PutLinkParamset(context.Background(), "DEV061:1", "PEER001:1",
+	_, err = p.PutLinkParamset(context.Background(), "DEV061:1", "PEER001:1",
 		map[string]any{"SHORT_ACTION_TYPE": 0})
 	if err != nil {
 		t.Fatalf("PutLinkParamset: %v", err)
@@ -3663,7 +3663,7 @@ func TestPutParamset_ConvertValuesError(t *testing.T) {
 
 	p := NewParamsetsDomain(reg, w)
 	// Pass a struct value that cannot be converted.
-	err = p.PutParamset(context.Background(), "PP1DEV01B19:1", hmenum.ParamsetKeyValues,
+	_, err = p.PutParamset(context.Background(), "PP1DEV01B19:1", hmenum.ParamsetKeyValues,
 		map[string]any{"VALID": true, "INVALID": struct{}{}})
 	if err == nil {
 		t.Error("expected error for unconvertible param value")
@@ -3852,7 +3852,7 @@ func TestPutParamset_SetManyError(t *testing.T) {
 
 	p := NewParamsetsDomain(reg, w)
 	// SET_POINT_TEMPERATURE not on the channel — SetMany returns error.
-	err = p.PutParamset(context.Background(), "PP2DEV01B20:1", hmenum.ParamsetKeyValues,
+	_, err = p.PutParamset(context.Background(), "PP2DEV01B20:1", hmenum.ParamsetKeyValues,
 		map[string]any{string(hmenum.ParameterSetPointTemperature): 21.5})
 	if err == nil {
 		t.Error("expected error for parameter not on channel")
@@ -3897,7 +3897,7 @@ func TestPutParamset_LegacyBackendError(t *testing.T) {
 	p := NewParamsetsDomain(reg, w)
 	// resolveChannel returns nil (no channel); falls through to legacy backend path.
 	// Backend PutParamset returns putError.
-	err = p.PutParamset(context.Background(), "PP3DEV01B20:1", hmenum.ParamsetKeyValues,
+	_, err = p.PutParamset(context.Background(), "PP3DEV01B20:1", hmenum.ParamsetKeyValues,
 		map[string]any{"STATE": true})
 	if !errors.Is(err, putError) {
 		t.Errorf("expected putError, got %v", err)
@@ -4007,7 +4007,7 @@ func TestPutLinkParamset_VisibilityGateRejects(t *testing.T) {
 	w.Register("ccu-b20-plp1", "HmIP-RF", fake)
 
 	p := NewParamsetsDomain(reg, w).SetVisibilityGate(rejectAllGate{})
-	err := p.PutLinkParamset(context.Background(), "PLPDEV01B20:1", "PEER:1",
+	_, err := p.PutLinkParamset(context.Background(), "PLPDEV01B20:1", "PEER:1",
 		map[string]any{"LINK_PARAM": true})
 	if !errors.Is(err, hmerr.ErrParameterHidden) {
 		t.Errorf("expected ErrParameterHidden, got %v", err)
@@ -4048,7 +4048,7 @@ func TestPutLinkParamset_BackendError(t *testing.T) {
 	w.Register("ccu-b20-plp2", "HmIP-RF", fakeFull2)
 
 	p := NewParamsetsDomain(reg, w)
-	err := p.PutLinkParamset(context.Background(), "PLPDEV02B20:1", "PEER:1",
+	_, err := p.PutLinkParamset(context.Background(), "PLPDEV02B20:1", "PEER:1",
 		map[string]any{"STATE": true})
 	if !errors.Is(err, putLinkErr) {
 		t.Errorf("expected putLinkErr, got %v", err)
@@ -10521,7 +10521,7 @@ func TestBackupAdapter_Stream_NilStorage_ReturnsErr(t *testing.T) {
 func TestParamsetsDomain_PutLinkParamset_NilRegistry_ReturnsErr(t *testing.T) {
 	t.Parallel()
 	p := &ParamsetsDomain{registry: nil, writer: nil}
-	err := p.PutLinkParamset(context.Background(), "DEV001:1", "PEER001:1", map[string]any{"K": "V"})
+	_, err := p.PutLinkParamset(context.Background(), "DEV001:1", "PEER001:1", map[string]any{"K": "V"})
 	if err == nil {
 		t.Error("expected error for nil registry in PutLinkParamset")
 	}
@@ -12906,7 +12906,7 @@ func TestParamsetsDomain_PutLinkParamset_HappyPath(t *testing.T) {
 		descs:      describe(hmenum.ParameterTypeInteger, "COND_VALUE_TRUE"),
 	})
 	p := NewParamsetsDomain(f.reg, f.writer)
-	err := p.PutLinkParamset(context.Background(), "DEV002:1", "PEER001:1", map[string]any{"COND_VALUE_TRUE": 1})
+	_, err := p.PutLinkParamset(context.Background(), "DEV002:1", "PEER001:1", map[string]any{"COND_VALUE_TRUE": 1})
 	if err != nil {
 		t.Fatalf("PutLinkParamset: %v", err)
 	}

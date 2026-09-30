@@ -16,6 +16,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // HealthSnapshotProvider is the minimal contract the `system.health`
@@ -110,8 +111,9 @@ type LinkQuery interface {
 	GetLinkParamset(ctx context.Context, channelAddress, peerAddress string) (map[string]any, error)
 	// PutLinkParamset writes values to the LINK paramset on channelAddress
 	// keyed by peerAddress. Mirrors Python `ws_put_link_paramset`
-	// (websocket_api.py:1387, `config/put_link_paramset`).
-	PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) error
+	// (websocket_api.py:1387, `config/put_link_paramset`). The report
+	// carries the post-write read-back comparison and is non-nil on success.
+	PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) (*interfaces.ParamsetWriteReport, error)
 	// ActivateLinkParamset triggers the receiver's LINK-paramset behaviour
 	// for the given sender (short/long keypress) — the CCU's "test link"
 	// probe. It physically actuates the receiver.
@@ -1320,7 +1322,8 @@ func linksGetParamsetHandler(q LinkQuery) CommandHandler {
 // linksPutParamsetHandler implements `links.put_paramset`.
 // Mirrors Python `ws_put_link_paramset` (websocket_api.py:1387).
 // Input: {address, peer_address, parameters}.
-// Output: {success: true}.
+// Output: {written, readback_divergences, readback_error?} — the same
+// shape `paramset.put` answers for MASTER.
 func linksPutParamsetHandler(q LinkQuery, locks EditLockVerifier) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args linkPutParamsetArgs
@@ -1346,10 +1349,14 @@ func linksPutParamsetHandler(q LinkQuery, locks EditLockVerifier) CommandHandler
 					"edit lock required for LINK write; open an edit session for "+key+" and pass edit_token")
 			}
 		}
-		if err := q.PutLinkParamset(ctx, args.Address, args.PeerAddress, args.Parameters); err != nil {
+		report, err := q.PutLinkParamset(ctx, args.Address, args.PeerAddress, args.Parameters)
+		if err != nil {
 			return nil, commandErr(CommandErrorInternal, "put_link_paramset: ", err)
 		}
-		return map[string]any{"success": true}, nil
+		if report == nil {
+			report = &interfaces.ParamsetWriteReport{}
+		}
+		return withWriteReport(map[string]any{"written": len(args.Parameters)}, report), nil
 	}
 }
 
