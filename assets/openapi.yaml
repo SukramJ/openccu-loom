@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 12.5.0
+  version: 12.6.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -910,6 +910,92 @@ paths:
           $ref: "#/components/responses/Locked"
         "502":
           $ref: "#/components/responses/BadGateway"
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /devices/{addr}/paramsets/{key}/apply-targets:
+    get:
+      operationId: getParamsetApplyTargets
+      tags: [paramsets]
+      summary: Channels a MASTER paramset may be applied to
+      description: |
+        Lists every channel of the same central whose MASTER paramset
+        description is identical to this channel's — compared on the full
+        wire description the daemon holds in its paramset-description
+        store, not on channel type or device model. Two channels of the
+        same channel type routinely carry different MASTER parameter
+        sets across device types and firmware versions, and a value
+        written to a channel whose description does not carry it corrupts
+        that channel's configuration store; description identity is the
+        only safe eligibility test. Only `MASTER` is supported; any other
+        key answers 400.
+      parameters:
+        - $ref: "#/components/parameters/Address"
+        - name: key
+          in: path
+          required: true
+          schema: { type: string, enum: [MASTER] }
+      responses:
+        "200":
+          description: Eligible target channels (the source channel is not listed)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ParamsetApplyTargetsResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/paramsets/{key}/apply-to:
+    post:
+      operationId: applyParamsetToChannels
+      tags: [paramsets]
+      summary: Apply MASTER values to several description-identical channels
+      description: |
+        Writes the given MASTER values to each listed target channel,
+        one channel at a time. Every target is re-checked immediately
+        before its write: its stored MASTER description must still be
+        identical to the source channel's, and the values are validated
+        against that description exactly as a single-channel write is —
+        a target that fails either check is refused with a reason and
+        the remaining targets still proceed. Each applied target
+        carries the same post-write read-back report as a single
+        MASTER write. With `dry_run` no write is performed and each
+        target reports what would happen.
+
+        Only `MASTER` is supported; any other key answers 400. The
+        caller must hold the edit lock of the SOURCE channel
+        (`channel:{addr}:MASTER`) and present its token via
+        `X-Edit-Token`; targets are not individually locked — the
+        description-identity gate plus per-target validation is what
+        makes the batch safe, and the write is refused per target, never
+        partially applied within one channel.
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - $ref: "#/components/parameters/Address"
+        - name: key
+          in: path
+          required: true
+          schema: { type: string, enum: [MASTER] }
+        - name: X-Edit-Token
+          in: header
+          required: false
+          schema: { type: string }
+          description: Edit-lock token of the source channel (`channel:{addr}:MASTER`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ParamsetApplyRequest" }
+      responses:
+        "200":
+          description: Per-target outcome, in request order
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ParamsetApplyResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "423": { $ref: "#/components/responses/Locked" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
   /groups:
@@ -8488,6 +8574,66 @@ components:
         Raw LINK paramset of one channel-peer pair, as the CCU returns it —
         a flat parameter-name to value map with no fixed key set, which is
         why it declares `additionalProperties` rather than named fields.
+    ParamsetApplyTargetsResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ParamsetApplyTarget" }
+    ParamsetApplyTarget:
+      type: object
+      required: [address]
+      description: One channel eligible for a MASTER multi-apply.
+      properties:
+        address: { type: string, description: Channel address. }
+        name: { type: string, description: Channel display name. }
+        device_address: { type: string }
+        device_name: { type: string }
+        device_model: { type: string }
+        interface_id: { type: string }
+    ParamsetApplyRequest:
+      type: object
+      required: [values, targets]
+      properties:
+        values:
+          type: object
+          additionalProperties: true
+          description: MASTER parameter values to apply, as in a single-channel PUT.
+        targets:
+          type: array
+          minItems: 1
+          items: { type: string }
+          description: Target channel addresses.
+        dry_run:
+          type: boolean
+          default: false
+    ParamsetApplyResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ParamsetApplyOutcome" }
+    ParamsetApplyOutcome:
+      type: object
+      required: [address, status]
+      description: Outcome of applying MASTER values to one target channel.
+      properties:
+        address: { type: string, description: Target channel address. }
+        status:
+          type: string
+          enum: [applied, would_apply, refused, failed]
+          description: >-
+            applied — written, see result; would_apply — dry run passed
+            every gate; refused — the description-identity gate or the
+            per-target validation rejected the target before any write;
+            failed — the write itself failed upstream.
+        reason:
+          type: string
+          description: Why the target was refused or the write failed.
+        result:
+          $ref: "#/components/schemas/ParamsetWriteResult"
     ParamsetWriteResult:
       type: object
       required: [written, readback_divergences]

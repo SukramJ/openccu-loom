@@ -465,6 +465,16 @@ func (fakeParamsetService) PutLinkParamset(context.Context, string, string, map[
 	return &interfaces.ParamsetWriteReport{}, nil
 }
 
+type fakeParamsetApplyService struct{}
+
+func (fakeParamsetApplyService) ApplyTargets(context.Context, string) ([]interfaces.ParamsetApplyTarget, error) {
+	return nil, nil
+}
+
+func (fakeParamsetApplyService) ApplyToChannels(context.Context, string, map[string]any, []string, bool) ([]interfaces.ParamsetApplyOutcome, error) {
+	return nil, nil
+}
+
 type fakeParameterDeterminer struct{}
 
 func (fakeParameterDeterminer) DetermineParameter(context.Context, string, string, string) (any, error) {
@@ -701,6 +711,7 @@ func fullyWiredRouterDeps() rest.Deps {
 		DeviceLookup:            fakeDeviceLookup{},
 		Backup:                  fakeBackupService{},
 		Paramsets:               fakeParamsetService{},
+		ParamsetApply:           fakeParamsetApplyService{},
 		ParameterDeterminer:     fakeParameterDeterminer{},
 		Hub:                     fakeHubIndex{h: hub.NewHub("test")},
 		SysvarRefresh:           fakeSysvarRefreshService{},

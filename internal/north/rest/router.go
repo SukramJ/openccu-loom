@@ -109,6 +109,11 @@ type Deps struct {
 	Reloader  handlers.ReloaderService
 	DPWriter  handlers.DataPointWriter
 	Paramsets handlers.ParamsetService
+	// ParamsetApply backs GET /devices/{addr}/paramsets/{key}/apply-targets
+	// and POST /devices/{addr}/paramsets/{key}/apply-to — applying one
+	// channel's MASTER values to description-identical channels. Nil keeps
+	// both routes mounted (beside the paramset routes) answering 503.
+	ParamsetApply handlers.ParamsetApplyService
 	// ParameterDeterminer backs
 	// POST /devices/{addr}/channels/{no}/paramsets/{key}/determine — the
 	// MASTER editor's "Determine" button, which reads one parameter's live
@@ -1345,6 +1350,8 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			if d.Paramsets != nil {
 				pr.Get("/devices/{addr}/paramsets/{key}", handlers.GetParamset(d.Paramsets))
 				pr.With(op).Put("/devices/{addr}/paramsets/{key}", handlers.PutParamset(d.Paramsets, d.EditSessions))
+				pr.Get("/devices/{addr}/paramsets/{key}/apply-targets", handlers.GetParamsetApplyTargets(d.ParamsetApply))
+				pr.With(op).Post("/devices/{addr}/paramsets/{key}/apply-to", handlers.ApplyParamsetToChannels(d.ParamsetApply, d.EditSessions))
 				pr.Get("/devices/{addr}/link-ps/{peer}", handlers.GetLinkParamset(d.Paramsets))
 				pr.With(op).Put("/devices/{addr}/link-ps/{peer}", handlers.PutLinkParamset(d.Paramsets, d.EditSessions))
 			}

@@ -274,8 +274,14 @@ type Deps struct {
 	Devices   DeviceLister
 	Writer    ValueWriter
 	Paramsets ParamsetService
-	Health    HealthReader
-	Hubs      HubResolver
+	// ParamsetApply backs list_paramset_apply_targets and the gated
+	// apply_paramset_to_channels: applying one channel's MASTER values to
+	// the channels whose stored MASTER description is identical — the same
+	// domain service the REST apply-targets / apply-to routes call. Nil
+	// leaves both tools unregistered.
+	ParamsetApply interfaces.ParamsetApplyService
+	Health        HealthReader
+	Hubs          HubResolver
 	// Taxonomy backs get_taxonomy: every central's enum trees, the same
 	// read the REST GET /taxonomy handler serves. Nil leaves the tool
 	// unregistered.

@@ -1,5 +1,5 @@
 {
- "api_version": "12.5.0",
+ "api_version": "12.6.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -94,6 +94,7 @@
   "GET /devices/{addr}/link-ps/{peer}": "getLinkParamset",
   "GET /devices/{addr}/links": "listLinks",
   "GET /devices/{addr}/paramsets/{key}": "getParamset",
+  "GET /devices/{addr}/paramsets/{key}/apply-targets": "getParamsetApplyTargets",
   "GET /devices/{addr}/replace-candidates": "listDeviceReplaceCandidates",
   "GET /devices/{addr}/schedule": "getDeviceSchedule",
   "GET /diagnostics": "diagnosticsDump",
@@ -230,6 +231,7 @@
   "POST /devices/{addr}/install-mode": "deviceInstallMode",
   "POST /devices/{addr}/links": "addLink",
   "POST /devices/{addr}/links/test": "testLinkAtDevice",
+  "POST /devices/{addr}/paramsets/{key}/apply-to": "applyParamsetToChannels",
   "POST /devices/{addr}/release": "releaseDevice",
   "POST /devices/{addr}/reload": "reloadDevice",
   "POST /devices/{addr}/replace": "replaceDevice",
@@ -1767,6 +1769,31 @@
    "name:string",
    "purpose:string",
    "role:string"
+  ],
+  "ParamsetApplyOutcome": [
+   "address:string",
+   "reason:string",
+   "result:$ref:ParamsetWriteResult",
+   "status:string"
+  ],
+  "ParamsetApplyRequest": [
+   "dry_run:boolean",
+   "targets:array\u003cstring\u003e",
+   "values:object"
+  ],
+  "ParamsetApplyResponse": [
+   "items:array\u003c$ref:ParamsetApplyOutcome\u003e"
+  ],
+  "ParamsetApplyTarget": [
+   "address:string",
+   "device_address:string",
+   "device_model:string",
+   "device_name:string",
+   "interface_id:string",
+   "name:string"
+  ],
+  "ParamsetApplyTargetsResponse": [
+   "items:array\u003c$ref:ParamsetApplyTarget\u003e"
   ],
   "ParamsetWriteResult": [
    "readback_divergences:array\u003cobject\u003e",

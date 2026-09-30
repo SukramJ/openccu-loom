@@ -277,6 +277,54 @@ type ParamsetService interface {
 	PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) (*ParamsetWriteReport, error)
 }
 
+// ParamsetApplyService backs `GET /devices/{addr}/paramsets/MASTER/apply-targets`
+// and `POST /devices/{addr}/paramsets/MASTER/apply-to`: applying one
+// channel's MASTER values to other channels. Eligibility is description
+// identity — a target qualifies only while its stored MASTER paramset
+// description is identical to the source channel's, because channel type or
+// device model equality does not imply the same parameter set, and a value
+// written to a channel whose description does not carry it corrupts that
+// channel's configuration store. MASTER only.
+type ParamsetApplyService interface {
+	// ApplyTargets lists the channels of the source channel's central whose
+	// MASTER description is identical to the source's. The source itself is
+	// not listed.
+	ApplyTargets(ctx context.Context, sourceChannel string) ([]ParamsetApplyTarget, error)
+	// ApplyToChannels writes values to each target in order, re-checking
+	// description identity per target immediately before its write. One
+	// outcome per target, in request order; a refused or failed target
+	// never stops the rest. With dryRun no write is performed.
+	ApplyToChannels(ctx context.Context, sourceChannel string, values map[string]any, targets []string, dryRun bool) ([]ParamsetApplyOutcome, error)
+}
+
+// ParamsetApplyTarget is one channel eligible for a MASTER multi-apply.
+type ParamsetApplyTarget struct {
+	Address       string
+	Name          string
+	DeviceAddress string
+	DeviceName    string
+	DeviceModel   string
+	InterfaceID   string
+}
+
+// Multi-apply outcome states. `ApplyRefused` means a gate rejected the
+// target before any write; `ApplyFailed` means the write itself failed.
+const (
+	ApplyApplied    = "applied"
+	ApplyWouldApply = "would_apply"
+	ApplyRefused    = "refused"
+	ApplyFailed     = "failed"
+)
+
+// ParamsetApplyOutcome is the result of applying MASTER values to one
+// target channel.
+type ParamsetApplyOutcome struct {
+	Address string
+	Status  string // one of the Apply* constants
+	Reason  string // why the target was refused or the write failed
+	Result  *ParamsetWriteReport
+}
+
 // ParamsetDivergence names one parameter whose stored value after a
 // configuration write differs from the value that was sent.
 type ParamsetDivergence struct {

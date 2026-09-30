@@ -36,6 +36,8 @@ func TestMCPWriteToolsGatedByAllowWrites(t *testing.T) {
 		"list_alarm_messages", "list_inbox", "get_system_info",
 		// Alarm / Security & Safety read tools (gated on Alarm / Security).
 		"list_alarm_zones", "list_triggered_motion", "get_security_status",
+		// MASTER multi-apply eligibility (gated on ParamsetApply).
+		"list_paramset_apply_targets",
 	}
 	// arm_alarm_zone / disarm_alarm_zone / reset_motion are gated on
 	// AlarmControl + AllowWrites, exactly like the other write tools — the
@@ -47,20 +49,22 @@ func TestMCPWriteToolsGatedByAllowWrites(t *testing.T) {
 	writeTools := []string{
 		"set_datapoint", "write_paramset", "trigger_program",
 		"arm_alarm_zone", "disarm_alarm_zone", "reset_motion",
+		"apply_paramset_to_channels",
 	}
 
 	fullDeps := func(allowWrites bool) mcp.Deps {
 		return mcp.Deps{
-			Centrals:     emptyCentrals{},
-			Devices:      emptyDevices{},
-			Writer:       mcpNoopWriter{},
-			Paramsets:    mcpNoopParamsets{},
-			Health:       mcpNoopHealth{},
-			Hubs:         mcpNoopHubs{},
-			Alarm:        mcpParityAlarm{},
-			AlarmControl: mcpParityAlarm{},
-			Security:     mcpParitySecurity{},
-			AllowWrites:  allowWrites,
+			Centrals:      emptyCentrals{},
+			Devices:       emptyDevices{},
+			Writer:        mcpNoopWriter{},
+			Paramsets:     mcpNoopParamsets{},
+			ParamsetApply: mcpNoopParamsetApply{},
+			Health:        mcpNoopHealth{},
+			Hubs:          mcpNoopHubs{},
+			Alarm:         mcpParityAlarm{},
+			AlarmControl:  mcpParityAlarm{},
+			Security:      mcpParitySecurity{},
+			AllowWrites:   allowWrites,
 		}
 	}
 
@@ -107,19 +111,20 @@ func TestMCPWriteToolsGatedByAllowWrites(t *testing.T) {
 func TestMCPToolNamingTaxonomy(t *testing.T) {
 	t.Parallel()
 
-	allowedVerbs := []string{"list", "get", "read", "set", "write", "trigger", "arm", "disarm", "reset"}
+	allowedVerbs := []string{"list", "get", "read", "set", "write", "trigger", "arm", "disarm", "reset", "apply"}
 
 	names := mcpToolNames(t, mcp.Deps{
-		Centrals:     emptyCentrals{},
-		Devices:      emptyDevices{},
-		Writer:       mcpNoopWriter{},
-		Paramsets:    mcpNoopParamsets{},
-		Health:       mcpNoopHealth{},
-		Hubs:         mcpNoopHubs{},
-		Alarm:        mcpParityAlarm{},
-		AlarmControl: mcpParityAlarm{},
-		Security:     mcpParitySecurity{},
-		AllowWrites:  true,
+		Centrals:      emptyCentrals{},
+		Devices:       emptyDevices{},
+		Writer:        mcpNoopWriter{},
+		Paramsets:     mcpNoopParamsets{},
+		ParamsetApply: mcpNoopParamsetApply{},
+		Health:        mcpNoopHealth{},
+		Hubs:          mcpNoopHubs{},
+		Alarm:         mcpParityAlarm{},
+		AlarmControl:  mcpParityAlarm{},
+		Security:      mcpParitySecurity{},
+		AllowWrites:   true,
 	})
 	if len(names) == 0 {
 		t.Fatal("no tools advertised")
@@ -203,6 +208,18 @@ func (mcpNoopParamsets) GetLinkParamset(context.Context, string, string) (map[st
 
 func (mcpNoopParamsets) PutLinkParamset(context.Context, string, string, map[string]any) (*interfaces.ParamsetWriteReport, error) {
 	return &interfaces.ParamsetWriteReport{}, nil
+}
+
+type mcpNoopParamsetApply struct{}
+
+func (mcpNoopParamsetApply) ApplyTargets(context.Context, string) ([]interfaces.ParamsetApplyTarget, error) {
+	return nil, nil
+}
+
+func (mcpNoopParamsetApply) ApplyToChannels(
+	context.Context, string, map[string]any, []string, bool,
+) ([]interfaces.ParamsetApplyOutcome, error) {
+	return nil, nil
 }
 
 type mcpNoopHealth struct{}

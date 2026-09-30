@@ -237,6 +237,9 @@ func registerReadTools(s *mcpsdk.Server, d Deps) {
 		registerReadParamset(s, d)
 		registerReadLinkParamset(s, d)
 	}
+	if d.ParamsetApply != nil && d.Devices != nil {
+		registerListParamsetApplyTargets(s, d)
+	}
 	if d.Health != nil {
 		registerGetHealth(s, d)
 	}
@@ -681,6 +684,9 @@ func registerWriteTools(s *mcpsdk.Server, d Deps) {
 	if d.Paramsets != nil {
 		registerWriteParamset(s, d)
 		registerWriteLinkParamset(s, d)
+	}
+	if d.ParamsetApply != nil && d.Devices != nil {
+		registerApplyParamsetToChannels(s, d)
 	}
 	if d.EditLocks != nil {
 		registerOpenEditSession(s, d)

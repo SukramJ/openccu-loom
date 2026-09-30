@@ -466,6 +466,22 @@ func coerceParamsetValuesWithDescriptions(
 		return nil, nil, fmt.Errorf("paramsets: paramset description unavailable for %s/%s, refusing unvalidated write: %w",
 			address, key, err)
 	}
+	out, err := coerceAgainstDescriptions(descs, values)
+	if err != nil {
+		return nil, nil, err
+	}
+	return out, descs, nil
+}
+
+// coerceAgainstDescriptions is the coercion and validation loop of
+// [coerceParamsetValuesWithDescriptions] over an already-fetched description.
+// It is shared with the multi-channel apply path, which validates against the
+// stored description of each target, so the two cannot drift apart: a value
+// the single-channel write refuses is refused there too. The error wraps
+// [hmerr.ErrValidation] and carries every rejected parameter.
+func coerceAgainstDescriptions(
+	descs map[string]hmproto.ParameterData, values map[string]any,
+) (map[string]any, error) {
 	out := make(map[string]any, len(values))
 	var errs []error
 	for name, rawVal := range values {
@@ -489,9 +505,9 @@ func coerceParamsetValuesWithDescriptions(
 		out[name] = pv.Unwrap()
 	}
 	if len(errs) == 0 {
-		return out, descs, nil
+		return out, nil
 	}
-	return nil, nil, fmt.Errorf("%w: %w", hmerr.ErrValidation, errors.Join(errs...))
+	return nil, fmt.Errorf("%w: %w", hmerr.ErrValidation, errors.Join(errs...))
 }
 
 // channelNumberOf parses "DEV:N" → N. Returns 0 when the channel is
