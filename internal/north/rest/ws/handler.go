@@ -193,7 +193,7 @@ func Handler(hub *Hub, logger *slog.Logger, allowedOrigins []string, opts ...Han
 		hub.register(c)
 		defer hub.deregister(c)
 
-		go c.watchCredentialExpiry()
+		go c.watchCredentialExpiry() //nolint:contextcheck // the watch outlives the hijacked upgrade request; the connection's lifetime is the closed channel, and each revalidation probe bounds itself
 
 		done := make(chan struct{})
 		go func() {

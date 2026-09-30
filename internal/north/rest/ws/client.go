@@ -585,7 +585,11 @@ func (c *client) occuliteSessionHolds() bool {
 	if id.Scheme != auth.SchemeOcculite {
 		return true
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), occuliteRevalidateTimeout)
+	// The watch goroutine outlives the upgrade request (the connection is
+	// hijacked, so the request context ends with the handler); the
+	// connection's own lifetime is the closed channel, and each probe
+	// bounds itself.
+	ctx, cancel := context.WithTimeout(context.Background(), occuliteRevalidateTimeout) //nolint:contextcheck // see above: no live parent context exists here
 	defer cancel()
 	return c.occuliteRevalidate(ctx, c.occuliteSID, id.Role)
 }
