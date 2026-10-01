@@ -60,14 +60,26 @@ type SnapshotChannelEntry struct {
 // self-routable line by line.
 type snapshotChannelLine struct {
 	DeviceAddress string `json:"device_address"`
-	ChannelSummary
+	*ChannelSummary
 }
 
 // snapshotDataPointLine is the NDJSON `kind:"data_point"` shape: a data
 // point summary stamped with its parent channel address.
 type snapshotDataPointLine struct {
 	ChannelAddress string `json:"channel_address"`
-	DataPointSummary
+	*DataPointSummary
+}
+
+// snapshotLine is one NDJSON line. Data precedes Kind because the stream
+// was first written as map[string]any, whose keys encoding/json sorts —
+// the struct reproduces those bytes. The encoder is always handed a
+// pointer, and Data holds pointers into the envelope: since Go 1.27,
+// encoding/json runs on the v2 engine, which copies every value it cannot
+// address into a fresh allocation, and doing that per line made a large
+// stream allocate roughly a third more.
+type snapshotLine struct {
+	Data any    `json:"data"`
+	Kind string `json:"kind"`
 }
 
 // SnapshotDeps bundles the indices Snapshot pulls from. Every field
@@ -257,8 +269,10 @@ func writeSnapshotNDJSON(w http.ResponseWriter, env SnapshotEnvelope) {
 	enc := json.NewEncoder(w)
 	flusher, _ := w.(http.Flusher)
 
+	line := &snapshotLine{}
 	emit := func(kind string, data any) {
-		_ = enc.Encode(map[string]any{"kind": kind, "data": data})
+		line.Kind, line.Data = kind, data
+		_ = enc.Encode(line)
 		if flusher != nil {
 			flusher.Flush()
 		}
@@ -266,10 +280,10 @@ func writeSnapshotNDJSON(w http.ResponseWriter, env SnapshotEnvelope) {
 
 	emit("meta", map[string]any{"generated_at": env.GeneratedAt})
 	for i := range env.Interfaces {
-		emit("interface", env.Interfaces[i])
+		emit("interface", &env.Interfaces[i])
 	}
 	for i := range env.Devices {
-		emit("device", env.Devices[i])
+		emit("device", &env.Devices[i])
 	}
 	// Nested channels / data points (only present when the caller opted
 	// in via ?include=). Each line carries the parent coordinate so a
@@ -278,29 +292,29 @@ func writeSnapshotNDJSON(w http.ResponseWriter, env SnapshotEnvelope) {
 		dc := &env.DeviceChannels[i]
 		for j := range dc.Channels {
 			ch := &dc.Channels[j]
-			emit("channel", snapshotChannelLine{
+			emit("channel", &snapshotChannelLine{
 				DeviceAddress:  dc.DeviceAddress,
-				ChannelSummary: ch.ChannelSummary,
+				ChannelSummary: &ch.ChannelSummary,
 			})
 			for k := range ch.DataPoints {
-				emit("data_point", snapshotDataPointLine{
+				emit("data_point", &snapshotDataPointLine{
 					ChannelAddress:   ch.Address,
-					DataPointSummary: ch.DataPoints[k],
+					DataPointSummary: &ch.DataPoints[k],
 				})
 			}
 		}
 	}
 	for i := range env.Rooms {
-		emit("room", env.Rooms[i])
+		emit("room", &env.Rooms[i])
 	}
 	for i := range env.Functions {
-		emit("function", env.Functions[i])
+		emit("function", &env.Functions[i])
 	}
 	for i := range env.Programs {
-		emit("program", env.Programs[i])
+		emit("program", &env.Programs[i])
 	}
 	for i := range env.Sysvars {
-		emit("sysvar", env.Sysvars[i])
+		emit("sysvar", &env.Sysvars[i])
 	}
 }
 
