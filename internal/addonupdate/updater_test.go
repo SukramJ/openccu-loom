@@ -18,8 +18,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/SukramJ/openccu-loom/internal/clock"
 )
 
 // discardLogger returns a *slog.Logger that writes nowhere, keeping test
@@ -157,12 +155,9 @@ func (r *recordingRunner) callCount() int {
 // srv plus run, so tests get free integration coverage of the whole
 // Check -> Install pipeline instead of stubbing the state machine's
 // collaborators.
-func newUpdaterForTest(t *testing.T, srv *updaterFakeServer, supported bool, currentVersion string, clk clock.Clock, run Runner) *Updater {
+func newUpdaterForTest(t *testing.T, srv *updaterFakeServer, supported bool, currentVersion string, run Runner) *Updater {
 	t.Helper()
 	stagePath := filepath.Join(t.TempDir(), "staged.tar.gz")
-	if clk == nil {
-		clk = clock.NewFake(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
-	}
 	return NewUpdater(Deps{
 		Capability: CapabilityProbe{
 			IsAddonBuild: func() bool { return supported },
@@ -173,7 +168,6 @@ func newUpdaterForTest(t *testing.T, srv *updaterFakeServer, supported bool, cur
 		Checker:        &Checker{HTTPClient: &http.Client{}, BaseURL: srv.url},
 		Downloader:     &Downloader{HTTPClient: &http.Client{}, StagePath: stagePath},
 		Installer:      &Installer{InstallerPath: "/bin/install_addon", TarballPath: stagePath, Run: run},
-		Clock:          clk,
 		CurrentVersion: currentVersion,
 		Logger:         discardLogger(),
 	})
@@ -182,7 +176,7 @@ func newUpdaterForTest(t *testing.T, srv *updaterFakeServer, supported bool, cur
 // waitForState polls u.Status().State until it matches want, bounded by a
 // generous real-time timeout. This is test-harness synchronization for a
 // genuinely concurrent state transition (a background Check/Install
-// goroutine), not a substitute for the fake-clock-driven synchronization
+// goroutine), not a substitute for the synctest-driven synchronization
 // periodic_test.go uses for timer semantics.
 func waitForState(t *testing.T, u *Updater, want State) {
 	t.Helper()
@@ -216,7 +210,7 @@ func TestUpdaterUnsupportedPlatform(t *testing.T) {
 	t.Parallel()
 
 	srv := newUpdaterFakeServer(t, "2.0.0", []byte("payload"))
-	u := newUpdaterForTest(t, srv, false, "1.0.0", nil, (&recordingRunner{}).run)
+	u := newUpdaterForTest(t, srv, false, "1.0.0", (&recordingRunner{}).run)
 
 	if u.Status().Supported {
 		t.Fatal("Supported = true, want false")
@@ -233,13 +227,13 @@ func TestUpdaterCheckSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := newUpdaterFakeServer(t, "2.0.0", []byte("payload"))
-	fakeNow := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
-	clk := clock.NewFake(fakeNow)
-	u := newUpdaterForTest(t, srv, true, "1.0.0", clk, (&recordingRunner{}).run)
+	u := newUpdaterForTest(t, srv, true, "1.0.0", (&recordingRunner{}).run)
 
+	before := time.Now()
 	if err := u.Check(context.Background()); err != nil {
 		t.Fatalf("Check() error = %v", err)
 	}
+	after := time.Now()
 	st := u.Status()
 	if st.LatestVersion != "2.0.0" {
 		t.Errorf("LatestVersion = %q, want 2.0.0", st.LatestVersion)
@@ -250,8 +244,8 @@ func TestUpdaterCheckSuccess(t *testing.T) {
 	if st.State != StateIdle {
 		t.Errorf("State = %v, want StateIdle", st.State)
 	}
-	if !st.LastCheck.Equal(fakeNow) {
-		t.Errorf("LastCheck = %v, want %v", st.LastCheck, fakeNow)
+	if st.LastCheck.Before(before) || st.LastCheck.After(after) {
+		t.Errorf("LastCheck = %v, want within [%v, %v]", st.LastCheck, before, after)
 	}
 	if st.ReleaseURL == "" {
 		t.Error("ReleaseURL is empty")
@@ -265,7 +259,7 @@ func TestUpdaterCheckAlreadyNewest(t *testing.T) {
 	t.Parallel()
 
 	srv := newUpdaterFakeServer(t, "1.0.0", []byte("payload"))
-	u := newUpdaterForTest(t, srv, true, "1.0.0", nil, (&recordingRunner{}).run)
+	u := newUpdaterForTest(t, srv, true, "1.0.0", (&recordingRunner{}).run)
 
 	if err := u.Check(context.Background()); err != nil {
 		t.Fatalf("Check() error = %v", err)
@@ -280,7 +274,7 @@ func TestUpdaterCheckFailure(t *testing.T) {
 
 	srv := newUpdaterFakeServer(t, "2.0.0", []byte("payload"))
 	srv.setFailRelease(true)
-	u := newUpdaterForTest(t, srv, true, "1.0.0", nil, (&recordingRunner{}).run)
+	u := newUpdaterForTest(t, srv, true, "1.0.0", (&recordingRunner{}).run)
 
 	err := u.Check(context.Background())
 	if err == nil {
@@ -299,7 +293,7 @@ func TestUpdaterInstallWithoutPriorCheck(t *testing.T) {
 	t.Parallel()
 
 	srv := newUpdaterFakeServer(t, "2.0.0", []byte("payload"))
-	u := newUpdaterForTest(t, srv, true, "1.0.0", nil, (&recordingRunner{}).run)
+	u := newUpdaterForTest(t, srv, true, "1.0.0", (&recordingRunner{}).run)
 
 	if err := u.Install(context.Background()); !errors.Is(err, ErrNoUpdateAvailable) {
 		t.Errorf("Install() error = %v, want ErrNoUpdateAvailable", err)
@@ -310,7 +304,7 @@ func TestUpdaterInstallAfterCheckFindsNoUpdate(t *testing.T) {
 	t.Parallel()
 
 	srv := newUpdaterFakeServer(t, "1.0.0", []byte("payload"))
-	u := newUpdaterForTest(t, srv, true, "1.0.0", nil, (&recordingRunner{}).run)
+	u := newUpdaterForTest(t, srv, true, "1.0.0", (&recordingRunner{}).run)
 
 	if err := u.Check(context.Background()); err != nil {
 		t.Fatalf("Check() error = %v", err)
@@ -325,7 +319,7 @@ func TestUpdaterCheckThenInstallHappyPath(t *testing.T) {
 
 	srv := newUpdaterFakeServer(t, "2.0.0", []byte("addon tarball bytes"))
 	runner := &recordingRunner{}
-	u := newUpdaterForTest(t, srv, true, "1.0.0", nil, runner.run)
+	u := newUpdaterForTest(t, srv, true, "1.0.0", runner.run)
 
 	if err := u.Check(context.Background()); err != nil {
 		t.Fatalf("Check() error = %v", err)
@@ -348,7 +342,7 @@ func TestUpdaterInstallDownloadFailure(t *testing.T) {
 	t.Parallel()
 
 	srv := newUpdaterFakeServer(t, "2.0.0", []byte("payload"))
-	u := newUpdaterForTest(t, srv, true, "1.0.0", nil, (&recordingRunner{}).run)
+	u := newUpdaterForTest(t, srv, true, "1.0.0", (&recordingRunner{}).run)
 
 	if err := u.Check(context.Background()); err != nil {
 		t.Fatalf("Check() error = %v", err)
@@ -372,7 +366,7 @@ func TestUpdaterInstallInstallerFailure(t *testing.T) {
 	srv := newUpdaterFakeServer(t, "2.0.0", []byte("payload"))
 	wantErr := errors.New("addonupdate test: installer exec failed")
 	runner := &recordingRunner{err: wantErr}
-	u := newUpdaterForTest(t, srv, true, "1.0.0", nil, runner.run)
+	u := newUpdaterForTest(t, srv, true, "1.0.0", runner.run)
 
 	if err := u.Check(context.Background()); err != nil {
 		t.Fatalf("Check() error = %v", err)
@@ -390,7 +384,7 @@ func TestUpdaterCheckBusyWhileChecking(t *testing.T) {
 	t.Parallel()
 
 	srv := newUpdaterFakeServer(t, "2.0.0", []byte("payload"))
-	u := newUpdaterForTest(t, srv, true, "1.0.0", nil, (&recordingRunner{}).run)
+	u := newUpdaterForTest(t, srv, true, "1.0.0", (&recordingRunner{}).run)
 
 	gate := make(chan struct{})
 	srv.setReleaseGate(gate)
@@ -413,7 +407,7 @@ func TestUpdaterInstallBusyWhileChecking(t *testing.T) {
 	t.Parallel()
 
 	srv := newUpdaterFakeServer(t, "2.0.0", []byte("payload"))
-	u := newUpdaterForTest(t, srv, true, "1.0.0", nil, (&recordingRunner{}).run)
+	u := newUpdaterForTest(t, srv, true, "1.0.0", (&recordingRunner{}).run)
 
 	// Establish UpdateAvailable=true via an unblocked check first.
 	if err := u.Check(context.Background()); err != nil {
@@ -440,7 +434,7 @@ func TestUpdaterCheckBusyWhileInstalling(t *testing.T) {
 	t.Parallel()
 
 	srv := newUpdaterFakeServer(t, "2.0.0", []byte("payload"))
-	u := newUpdaterForTest(t, srv, true, "1.0.0", nil, (&recordingRunner{}).run)
+	u := newUpdaterForTest(t, srv, true, "1.0.0", (&recordingRunner{}).run)
 
 	if err := u.Check(context.Background()); err != nil {
 		t.Fatalf("Check() error = %v", err)
@@ -467,7 +461,7 @@ func TestUpdaterInstallAsync(t *testing.T) {
 
 	srv := newUpdaterFakeServer(t, "2.0.0", []byte("payload"))
 	runner := &recordingRunner{}
-	u := newUpdaterForTest(t, srv, true, "1.0.0", nil, runner.run)
+	u := newUpdaterForTest(t, srv, true, "1.0.0", runner.run)
 
 	if err := u.Check(context.Background()); err != nil {
 		t.Fatalf("Check() error = %v", err)
@@ -487,7 +481,7 @@ func TestUpdaterOnChange(t *testing.T) {
 	t.Parallel()
 
 	srv := newUpdaterFakeServer(t, "2.0.0", []byte("payload"))
-	u := newUpdaterForTest(t, srv, true, "1.0.0", nil, (&recordingRunner{}).run)
+	u := newUpdaterForTest(t, srv, true, "1.0.0", (&recordingRunner{}).run)
 
 	var calls1, calls2 int
 	var last1 Status
@@ -527,7 +521,7 @@ func TestUpdaterCurrentVersionOverride(t *testing.T) {
 
 	const override = "9.9.9-custom"
 	srv := newUpdaterFakeServer(t, "2.0.0", []byte("payload"))
-	u := newUpdaterForTest(t, srv, true, override, nil, (&recordingRunner{}).run)
+	u := newUpdaterForTest(t, srv, true, override, (&recordingRunner{}).run)
 
 	if got := u.Status().CurrentVersion; got != override {
 		t.Errorf("CurrentVersion = %q, want %q", got, override)

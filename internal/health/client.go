@@ -16,8 +16,8 @@ import (
 // [Tracker.SetRecoveryFlag], [Tracker.RecordReconnectAttempt],
 // [Tracker.ResetReconnects], plus the existing [Tracker.Record] flow.
 //
-// Time fields use the Go-native [time.Time] returned by the injected
-// clock; Go's runtime carries a monotonic reading on every `Time` value
+// Time fields use the Go-native [time.Time] returned by
+// [time.Now]; Go's runtime carries a monotonic reading on every `Time` value
 // it produces from `Now()`, so [time.Since] / [time.Time.Sub] are
 // DST-safe out of the box (no separate `*_monotonic` shadow field
 // needed).

@@ -9,7 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
+	"testing/synctest"
 )
 
 // P0-4: PersistedRecorder layers durable persistence on top of the
@@ -69,55 +69,60 @@ func TestPersistedRecorderTimestampsZeroEntries(t *testing.T) {
 
 func TestAsyncSinkDeliversAndCloses(t *testing.T) {
 	t.Parallel()
-	var got atomic.Int32
-	// Buffered with capacity 1 so the sink's send always succeeds even when
-	// the background goroutine fires before the test's select is reached.
-	// Without the buffer the non-blocking send falls through to `default`
-	// and silently drops the signal, causing intermittent CI failures when
-	// the scheduler happens to run the goroutine ahead of the test goroutine.
-	done := make(chan struct{}, 1)
-	sink := func(_ context.Context, _ Entry) error {
-		got.Add(1)
-		select {
-		case done <- struct{}{}:
-		default:
+	synctest.Test(t, func(t *testing.T) {
+		var got atomic.Int32
+		// Buffered with capacity 1 so the sink's send always succeeds even when
+		// the background goroutine fires before the test's select is reached.
+		// Without the buffer the non-blocking send falls through to `default`
+		// and silently drops the signal, causing intermittent CI failures when
+		// the scheduler happens to run the goroutine ahead of the test goroutine.
+		done := make(chan struct{}, 1)
+		sink := func(_ context.Context, _ Entry) error {
+			got.Add(1)
+			select {
+			case done <- struct{}{}:
+			default:
+			}
+			return nil
 		}
-		return nil
-	}
-	enqueue, closer := AsyncSink(sink, 4, nil)
-	defer closer()
-	if err := enqueue(context.Background(), Entry{Action: ActionParamsetWrite}); err != nil {
-		t.Fatalf("enqueue err=%v", err)
-	}
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Fatal("async sink did not deliver in time")
-	}
-	if got.Load() != 1 {
-		t.Fatalf("delivered=%d", got.Load())
-	}
+		enqueue, closer := AsyncSink(sink, 4, nil)
+		defer closer()
+		if err := enqueue(context.Background(), Entry{Action: ActionParamsetWrite}); err != nil {
+			t.Fatalf("enqueue err=%v", err)
+		}
+		synctest.Wait()
+		select {
+		case <-done:
+		default:
+			t.Fatal("async sink did not deliver")
+		}
+		if got.Load() != 1 {
+			t.Fatalf("delivered=%d", got.Load())
+		}
+	})
 }
 
 func TestAsyncSinkDropsWhenSaturated(t *testing.T) {
 	t.Parallel()
-	hold := make(chan struct{})
-	sink := func(_ context.Context, _ Entry) error {
-		<-hold
-		return nil
-	}
-	enqueue, closer := AsyncSink(sink, 1, nil)
-	defer closer()
-	defer close(hold)
-
-	// 1 fits in the queue, the worker grabs it and blocks on hold; the
-	// next enqueue now occupies the queue slot. Subsequent calls are
-	// dropped without error.
-	for range 10 {
-		if err := enqueue(context.Background(), Entry{Action: ActionParamsetWrite}); err != nil {
-			t.Fatalf("enqueue err=%v", err)
+	synctest.Test(t, func(t *testing.T) {
+		hold := make(chan struct{})
+		sink := func(_ context.Context, _ Entry) error {
+			<-hold
+			return nil
 		}
-	}
+		enqueue, closer := AsyncSink(sink, 1, nil)
+		defer closer()
+		defer close(hold)
+
+		// 1 fits in the queue, the worker grabs it and blocks on hold; the
+		// next enqueue now occupies the queue slot. Subsequent calls are
+		// dropped without error.
+		for range 10 {
+			if err := enqueue(context.Background(), Entry{Action: ActionParamsetWrite}); err != nil {
+				t.Fatalf("enqueue err=%v", err)
+			}
+		}
+	})
 }
 
 // TestAsyncSinkCloserWaitsForInFlightSink guards the same join
@@ -128,45 +133,49 @@ func TestAsyncSinkDropsWhenSaturated(t *testing.T) {
 // closer() returns can race an in-flight sink() invocation.
 func TestAsyncSinkCloserWaitsForInFlightSink(t *testing.T) {
 	t.Parallel()
-	started := make(chan struct{})
-	release := make(chan struct{})
-	var done atomic.Bool
-	sink := func(_ context.Context, _ Entry) error {
-		close(started)
-		<-release
-		done.Store(true)
-		return nil
-	}
-	enqueue, closer := AsyncSink(sink, 4, nil)
-	if err := enqueue(context.Background(), Entry{Action: ActionParamsetWrite}); err != nil {
-		t.Fatalf("enqueue err=%v", err)
-	}
-	<-started // the worker goroutine now runs sink(), blocked on release.
+	synctest.Test(t, func(t *testing.T) {
+		started := make(chan struct{})
+		release := make(chan struct{})
+		var done atomic.Bool
+		sink := func(_ context.Context, _ Entry) error {
+			close(started)
+			<-release
+			done.Store(true)
+			return nil
+		}
+		enqueue, closer := AsyncSink(sink, 4, nil)
+		if err := enqueue(context.Background(), Entry{Action: ActionParamsetWrite}); err != nil {
+			t.Fatalf("enqueue err=%v", err)
+		}
+		<-started // the worker goroutine now runs sink(), blocked on release.
 
-	closerReturned := make(chan struct{})
-	go func() {
-		closer()
-		close(closerReturned)
-	}()
+		closerReturned := make(chan struct{})
+		go func() {
+			closer()
+			close(closerReturned)
+		}()
 
-	// closer() must not return while the sink call it is racing against
-	// is still in flight.
-	select {
-	case <-closerReturned:
-		t.Fatal("closer returned before the in-flight sink call completed")
-	case <-time.After(50 * time.Millisecond):
-	}
+		// closer() must not return while the sink call it is racing against
+		// is still in flight.
+		synctest.Wait()
+		select {
+		case <-closerReturned:
+			t.Fatal("closer returned before the in-flight sink call completed")
+		default:
+		}
 
-	close(release) // let the blocked sink call finish.
+		close(release) // let the blocked sink call finish.
 
-	select {
-	case <-closerReturned:
-	case <-time.After(time.Second):
-		t.Fatal("closer did not return after the sink call completed")
-	}
-	if !done.Load() {
-		t.Fatal("expected the sink call to have completed before closer returned")
-	}
+		synctest.Wait()
+		select {
+		case <-closerReturned:
+		default:
+			t.Fatal("closer did not return after the sink call completed")
+		}
+		if !done.Load() {
+			t.Fatal("expected the sink call to have completed before closer returned")
+		}
+	})
 }
 
 func TestAsyncSinkNilSinkReturnsNil(t *testing.T) {
