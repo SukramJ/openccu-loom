@@ -11,8 +11,6 @@ package audit
 import (
 	"sync"
 	"time"
-
-	"github.com/SukramJ/openccu-loom/internal/clock"
 )
 
 // Action is the kind of change being recorded. Stable strings so the
@@ -348,32 +346,19 @@ type Buffer struct {
 	mu      sync.RWMutex
 	entries []Entry
 	cap     int
-	clk     clock.Clock
 	// seq is the highest [Entry.ID] this buffer has handed out or seen.
 	// Guarded by mu — Record already takes the write lock to push, so no
 	// separate atomic is needed.
 	seq int64
 }
 
-// NewBuffer returns a buffer with the given capacity (>= 1) using the
-// real wall clock. Use [NewBufferWithClock] when timestamps need to be
-// deterministic for tests.
+// NewBuffer returns a buffer with the given capacity (>= 1). Entries
+// without a timestamp are stamped with the current time.
 func NewBuffer(capacity int) *Buffer {
-	return NewBufferWithClock(capacity, clock.New())
-}
-
-// NewBufferWithClock returns a buffer that takes its timestamps from
-// clk. Pass a [clock.Fake] in tests so audit timestamps are stable
-// against wall-clock drift; in production use [NewBuffer]. A nil clk
-// falls back to [clock.New].
-func NewBufferWithClock(capacity int, clk clock.Clock) *Buffer {
 	if capacity < 1 {
 		capacity = 500
 	}
-	if clk == nil {
-		clk = clock.New()
-	}
-	return &Buffer{cap: capacity, clk: clk}
+	return &Buffer{cap: capacity}
 }
 
 // Record stores e. The newest entry is at index 0; older entries are
@@ -387,7 +372,7 @@ func NewBufferWithClock(capacity int, clk clock.Clock) *Buffer {
 // past it so a later live entry cannot reuse a replayed ID.
 func (b *Buffer) Record(e Entry) {
 	if e.Timestamp.IsZero() {
-		e.Timestamp = b.clk.Now().UTC()
+		e.Timestamp = time.Now().UTC()
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()

@@ -7,7 +7,7 @@ import (
 	"context"
 	"net/http"
 	"testing"
-	"time"
+	"testing/synctest"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
@@ -33,7 +33,6 @@ func securityOutboundFixture(t *testing.T, ft *fakeTransport) (*Outbound, *event
 		reg, cfg, nil,
 		WithHTTPClient(&http.Client{Transport: ft}),
 		WithBackoff(instantBackoff()),
-		WithClock(fixedClock),
 	)
 	o.SetSecurityBus(bus)
 	if err := o.Start(context.Background()); err != nil {
@@ -67,52 +66,54 @@ func faultSource() hmevent.SecuritySourceRef {
 // tell a repeat of one standing fault from a second, independent one.
 func TestOutboundFaultAcknowledgeIsDistinguishableFromRaise(t *testing.T) {
 	t.Parallel()
-	ft := &fakeTransport{}
-	_, bus := securityOutboundFixture(t, ft)
+	synctest.Test(t, func(t *testing.T) {
+		ft := &fakeTransport{}
+		_, bus := securityOutboundFixture(t, ft)
 
-	const faultID = "fault-smoke-1"
-	src := faultSource()
+		const faultID = "fault-smoke-1"
+		src := faultSource()
 
-	bus.Publish(hmevent.SecurityFaultChangedEvent{
-		Base: hmevent.NewBaseAt(fixedNow), FaultID: faultID,
-		Class: hmenum.SecurityClassSmoke, Reason: hmenum.SecurityFaultReasonUnreachable,
-		Severity: hmenum.SecuritySeverityCritical, Source: src,
-		Open: true, SinceMS: fixedNow.UnixMilli(), OpenCount: 1,
+		bus.Publish(hmevent.SecurityFaultChangedEvent{
+			Base: hmevent.NewBaseAt(fixedNow), FaultID: faultID,
+			Class: hmenum.SecurityClassSmoke, Reason: hmenum.SecurityFaultReasonUnreachable,
+			Severity: hmenum.SecuritySeverityCritical, Source: src,
+			Open: true, SinceMS: fixedNow.UnixMilli(), OpenCount: 1,
+		})
+		waitForCount(t, ft, 1)
+
+		bus.Publish(hmevent.SecurityFaultChangedEvent{
+			Base: hmevent.NewBaseAt(fixedNow), FaultID: faultID,
+			Class: hmenum.SecurityClassSmoke, Reason: hmenum.SecurityFaultReasonUnreachable,
+			Severity: hmenum.SecuritySeverityCritical, Source: src,
+			Open: true, Acknowledged: true, SinceMS: fixedNow.UnixMilli(), OpenCount: 1,
+		})
+		waitForCount(t, ft, 2)
+
+		_, raised := alarmEnvelope(t, ft.get(0))
+		_, acked := alarmEnvelope(t, ft.get(1))
+
+		if raised["fault_id"] != faultID || acked["fault_id"] != faultID {
+			t.Errorf("fault_id = %v / %v, want %q on both", raised["fault_id"], acked["fault_id"], faultID)
+		}
+		if raised["cause"] != "raised" {
+			t.Errorf("raise cause = %v, want %q", raised["cause"], "raised")
+		}
+		if acked["cause"] != "acknowledged" {
+			t.Errorf("acknowledge cause = %v, want %q (an acknowledgement is not a fresh raise)", acked["cause"], "acknowledged")
+		}
+		if _, present := raised["acknowledged"]; present {
+			t.Errorf("raise carries acknowledged = %v, want the flag absent", raised["acknowledged"])
+		}
+		if acked["acknowledged"] != true {
+			t.Errorf("acknowledge acknowledged = %v, want true", acked["acknowledged"])
+		}
+		if raised["open_count"] != float64(1) {
+			t.Errorf("raise open_count = %v, want 1", raised["open_count"])
+		}
+		if _, present := raised["entry_id"]; present {
+			t.Errorf("raise carries entry_id = %v, but entry_id is a journal entry id everywhere else", raised["entry_id"])
+		}
 	})
-	waitForCount(t, ft, 1, 2*time.Second)
-
-	bus.Publish(hmevent.SecurityFaultChangedEvent{
-		Base: hmevent.NewBaseAt(fixedNow), FaultID: faultID,
-		Class: hmenum.SecurityClassSmoke, Reason: hmenum.SecurityFaultReasonUnreachable,
-		Severity: hmenum.SecuritySeverityCritical, Source: src,
-		Open: true, Acknowledged: true, SinceMS: fixedNow.UnixMilli(), OpenCount: 1,
-	})
-	waitForCount(t, ft, 2, 2*time.Second)
-
-	_, raised := alarmEnvelope(t, ft.get(0))
-	_, acked := alarmEnvelope(t, ft.get(1))
-
-	if raised["fault_id"] != faultID || acked["fault_id"] != faultID {
-		t.Errorf("fault_id = %v / %v, want %q on both", raised["fault_id"], acked["fault_id"], faultID)
-	}
-	if raised["cause"] != "raised" {
-		t.Errorf("raise cause = %v, want %q", raised["cause"], "raised")
-	}
-	if acked["cause"] != "acknowledged" {
-		t.Errorf("acknowledge cause = %v, want %q (an acknowledgement is not a fresh raise)", acked["cause"], "acknowledged")
-	}
-	if _, present := raised["acknowledged"]; present {
-		t.Errorf("raise carries acknowledged = %v, want the flag absent", raised["acknowledged"])
-	}
-	if acked["acknowledged"] != true {
-		t.Errorf("acknowledge acknowledged = %v, want true", acked["acknowledged"])
-	}
-	if raised["open_count"] != float64(1) {
-		t.Errorf("raise open_count = %v, want 1", raised["open_count"])
-	}
-	if _, present := raised["entry_id"]; present {
-		t.Errorf("raise carries entry_id = %v, but entry_id is a journal entry id everywhere else", raised["entry_id"])
-	}
 }
 
 // TestOutboundFaultClearedCarriesZeroOpenCount pins the clear
@@ -121,27 +122,29 @@ func TestOutboundFaultAcknowledgeIsDistinguishableFromRaise(t *testing.T) {
 // "none standing" to be said, not merely implied by an absent field.
 func TestOutboundFaultClearedCarriesZeroOpenCount(t *testing.T) {
 	t.Parallel()
-	ft := &fakeTransport{}
-	_, bus := securityOutboundFixture(t, ft)
+	synctest.Test(t, func(t *testing.T) {
+		ft := &fakeTransport{}
+		_, bus := securityOutboundFixture(t, ft)
 
-	bus.Publish(hmevent.SecurityFaultChangedEvent{
-		Base: hmevent.NewBaseAt(fixedNow), Class: hmenum.SecurityClassSmoke,
-		Reason: hmenum.SecurityFaultReasonUnreachable, Source: faultSource(),
-		Open: false, OpenCount: 0,
+		bus.Publish(hmevent.SecurityFaultChangedEvent{
+			Base: hmevent.NewBaseAt(fixedNow), Class: hmenum.SecurityClassSmoke,
+			Reason: hmenum.SecurityFaultReasonUnreachable, Source: faultSource(),
+			Open: false, OpenCount: 0,
+		})
+		waitForCount(t, ft, 1)
+
+		env, cleared := alarmEnvelope(t, ft.get(0))
+		if env.Event != string(hmevent.EventTypeSecurityFaultChanged) {
+			t.Errorf("event = %q, want %q", env.Event, hmevent.EventTypeSecurityFaultChanged)
+		}
+		if cleared["cause"] != "cleared" {
+			t.Errorf("cause = %v, want %q", cleared["cause"], "cleared")
+		}
+		if cleared["open_count"] != float64(0) {
+			t.Errorf("open_count = %v, want an explicit 0", cleared["open_count"])
+		}
+		if cleared["note"] != string(hmenum.SecurityFaultReasonUnreachable) {
+			t.Errorf("note = %v, want %q", cleared["note"], hmenum.SecurityFaultReasonUnreachable)
+		}
 	})
-	waitForCount(t, ft, 1, 2*time.Second)
-
-	env, cleared := alarmEnvelope(t, ft.get(0))
-	if env.Event != string(hmevent.EventTypeSecurityFaultChanged) {
-		t.Errorf("event = %q, want %q", env.Event, hmevent.EventTypeSecurityFaultChanged)
-	}
-	if cleared["cause"] != "cleared" {
-		t.Errorf("cause = %v, want %q", cleared["cause"], "cleared")
-	}
-	if cleared["open_count"] != float64(0) {
-		t.Errorf("open_count = %v, want an explicit 0", cleared["open_count"])
-	}
-	if cleared["note"] != string(hmenum.SecurityFaultReasonUnreachable) {
-		t.Errorf("note = %v, want %q", cleared["note"], hmenum.SecurityFaultReasonUnreachable)
-	}
 }

@@ -55,8 +55,7 @@ type Outbound struct {
 	logger *slog.Logger
 	client *http.Client
 
-	// now and backoff are injectable seams for tests.
-	now     func() time.Time
+	// backoff is an injectable seam for tests.
 	backoff []time.Duration
 
 	eventAllow   map[string]struct{} // empty => all event types
@@ -106,9 +105,6 @@ func WithHTTPClient(c *http.Client) Option { return func(o *Outbound) { o.client
 // WithBackoff overrides the retry schedule (tests use near-zero delays).
 func WithBackoff(b []time.Duration) Option { return func(o *Outbound) { o.backoff = b } }
 
-// WithClock overrides the timestamp source.
-func WithClock(now func() time.Time) Option { return func(o *Outbound) { o.now = now } }
-
 // NewOutbound builds the bridge from reg and cfg. It does not start any
 // goroutine — call Start for that.
 func NewOutbound(reg *central.Registry, cfg config.NorthWebhook, logger *slog.Logger, opts ...Option) *Outbound {
@@ -120,7 +116,6 @@ func NewOutbound(reg *central.Registry, cfg config.NorthWebhook, logger *slog.Lo
 		cfg:          cfg,
 		logger:       logger,
 		client:       httpx.NewClient(cfg.Timeout()),
-		now:          time.Now,
 		backoff:      defaultBackoff,
 		eventAllow:   toSet(cfg.Events),
 		centralAllow: toSet(cfg.Centrals),
@@ -448,7 +443,7 @@ func (o *Outbound) onDataPoint(centralName string, e hmevent.DataPointValueChang
 		Address:   e.Key.ChannelAddress,
 		Parameter: e.Key.Parameter,
 		Value:     marshalValue(e.NewValue.Unwrap()),
-		TS:        o.now().UTC().Format(time.RFC3339),
+		TS:        time.Now().UTC().Format(time.RFC3339),
 	}
 	if !e.OldValue.IsNone() {
 		env.Previous = marshalValue(e.OldValue.Unwrap())
@@ -469,7 +464,7 @@ func (o *Outbound) onSystemStatus(centralName string, e hmevent.SystemStatusChan
 		Component: e.Component,
 		Healthy:   &healthy,
 		Reason:    e.Reason,
-		TS:        o.now().UTC().Format(time.RFC3339),
+		TS:        time.Now().UTC().Format(time.RFC3339),
 	}
 	o.enqueue(env)
 }
@@ -487,7 +482,7 @@ func (o *Outbound) onIncident(centralName string, e hmevent.IncidentRecordedEven
 		Severity:     string(e.Severity),
 		Message:      e.Message,
 		Details:      e.Details,
-		TS:           o.now().UTC().Format(time.RFC3339),
+		TS:           time.Now().UTC().Format(time.RFC3339),
 	}
 	o.enqueue(env)
 }
@@ -578,7 +573,7 @@ func (o *Outbound) enqueueAlarm(eventType string, pay alarmPayload) {
 		Schema: schemaVersion,
 		Event:  eventType,
 		Alarm:  detail,
-		TS:     o.now().UTC().Format(time.RFC3339),
+		TS:     time.Now().UTC().Format(time.RFC3339),
 	})
 }
 

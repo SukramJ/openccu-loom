@@ -9,8 +9,6 @@ import (
 	"math/rand/v2"
 	"sync"
 	"time"
-
-	"github.com/SukramJ/openccu-loom/internal/clock"
 )
 
 // ADR 0057 §4 cadence defaults: a delayed boot check (so a co-booting
@@ -50,9 +48,6 @@ type PeriodicChecker struct {
 	// CheckTimeout bounds a single check. Zero uses
 	// [DefaultCheckTimeout]; negative disables the bound.
 	CheckTimeout time.Duration
-	// Clock is the time source for delays/timers. Nil uses the real
-	// wall clock.
-	Clock clock.Clock
 	// Jitter returns a value in [-1, 1] scaling JitterMax on each
 	// cycle. Nil uses a math/rand/v2-backed uniform source. Injectable
 	// so tests can pin the offset instead of asserting a range.
@@ -102,13 +97,6 @@ func (p *PeriodicChecker) Stop() {
 	}
 }
 
-func (p *PeriodicChecker) clock() clock.Clock {
-	if p.Clock != nil {
-		return p.Clock
-	}
-	return clock.New()
-}
-
 func (p *PeriodicChecker) jitterFunc() func() float64 {
 	if p.Jitter != nil {
 		return p.Jitter
@@ -138,19 +126,17 @@ func (p *PeriodicChecker) logger() *slog.Logger {
 }
 
 func (p *PeriodicChecker) run(ctx context.Context) {
-	clk := p.clock()
-
 	bootDelay := p.BootDelay
 	if bootDelay == 0 {
 		bootDelay = DefaultBootDelay
 	}
 	if bootDelay > 0 {
-		timer := clk.NewTimer(bootDelay)
+		timer := time.NewTimer(bootDelay)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
 			return
-		case <-timer.C():
+		case <-timer.C:
 			p.checkOnce(ctx)
 		}
 	}
@@ -160,12 +146,12 @@ func (p *PeriodicChecker) run(ctx context.Context) {
 	}
 	for {
 		d := jitteredInterval(p.Interval, p.jitterMax(), p.jitterFunc())
-		timer := clk.NewTimer(d)
+		timer := time.NewTimer(d)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
 			return
-		case <-timer.C():
+		case <-timer.C:
 			p.checkOnce(ctx)
 		}
 	}

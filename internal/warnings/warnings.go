@@ -98,15 +98,11 @@ type Aggregator struct {
 	hubs      HubSource
 	pairing   PairingSource
 	silences  SilenceStore
-	now       func() time.Time
 }
 
-// New wires an Aggregator. now defaults to time.Now when nil.
-func New(h HealthSource, inc IncidentSource, hubs HubSource, silences SilenceStore, now func() time.Time) *Aggregator {
-	if now == nil {
-		now = time.Now
-	}
-	return &Aggregator{health: h, incidents: inc, hubs: hubs, silences: silences, now: now}
+// New wires an Aggregator.
+func New(h HealthSource, inc IncidentSource, hubs HubSource, silences SilenceStore) *Aggregator {
+	return &Aggregator{health: h, incidents: inc, hubs: hubs, silences: silences}
 }
 
 // WithPairing adds the client-pairing feed. A separate wither rather
@@ -121,7 +117,7 @@ func (a *Aggregator) WithPairing(p PairingSource) *Aggregator {
 // Active computes the current warning set, unsilenced, in stable order
 // (errors first, then by ID).
 func (a *Aggregator) Active() []Warning {
-	now := a.now()
+	now := time.Now()
 	var out []Warning
 
 	if a.health != nil {
@@ -218,7 +214,7 @@ func (a *Aggregator) ForUser(ctx context.Context, username string) ([]Warning, e
 	if a.silences == nil || username == "" {
 		return active, nil
 	}
-	now := a.now()
+	now := time.Now()
 	if err := a.silences.DeleteExpired(ctx, now); err != nil {
 		return nil, fmt.Errorf("warnings: prune expired silences: %w", err)
 	}
@@ -265,7 +261,7 @@ func (a *Aggregator) SilenceWarning(ctx context.Context, username, warningID str
 	}
 	for _, w := range a.Active() {
 		if w.ID == warningID {
-			now := a.now()
+			now := time.Now()
 			return a.silences.Set(ctx, username, warningID, now.Add(time.Duration(days)*24*time.Hour), now)
 		}
 	}

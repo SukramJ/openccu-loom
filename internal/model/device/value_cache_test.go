@@ -9,6 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -169,12 +170,6 @@ func makeMasterFloatDP(channelAddr, paramName string) *generic.Float {
 	})
 }
 
-// advancedClock returns a clock function that adds delta to a fixed base time.
-func advancedClock(base time.Time, delta time.Duration) func() time.Time {
-	advanced := base.Add(delta)
-	return func() time.Time { return advanced }
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Cluster A — Cache primitives (no LoadValue)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -207,80 +202,74 @@ func TestValueCacheHitMissBasic(t *testing.T) {
 
 func TestValueCacheSentinelExpiresAfterTTL(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		c := newValueCache()
+		dpk := makeDPKey("iface", "ADDR:1", hmenum.ParamsetKeyValues, "LEVEL")
 
-	c := newValueCache()
-	dpk := makeDPKey("iface", "ADDR:1", hmenum.ParamsetKeyValues, "LEVEL")
+		c.put(dpk, nil, false) // sentinel
 
-	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	c.clock = func() time.Time { return base }
+		// Before expiry: hit.
+		v, obs, hit := c.get(dpk)
+		if !hit {
+			t.Fatal("sentinel within TTL must hit")
+		}
+		if obs {
+			t.Fatal("sentinel must have observed=false")
+		}
+		if v != nil {
+			t.Fatalf("sentinel value must be nil, got %v", v)
+		}
 
-	c.put(dpk, nil, false) // sentinel
+		// Advance past sentinelCacheTTL (5 minutes).
+		time.Sleep(sentinelCacheTTL + time.Second)
 
-	// Before expiry: hit.
-	v, obs, hit := c.get(dpk)
-	if !hit {
-		t.Fatal("sentinel within TTL must hit")
-	}
-	if obs {
-		t.Fatal("sentinel must have observed=false")
-	}
-	if v != nil {
-		t.Fatalf("sentinel value must be nil, got %v", v)
-	}
-
-	// Advance past sentinelCacheTTL (5 minutes).
-	c.clock = advancedClock(base, sentinelCacheTTL+time.Second)
-
-	_, _, hit2 := c.get(dpk)
-	if hit2 {
-		t.Fatal("sentinel past TTL must miss")
-	}
+		_, _, hit2 := c.get(dpk)
+		if hit2 {
+			t.Fatal("sentinel past TTL must miss")
+		}
+	})
 }
 
 func TestValueCacheMasterEntryExpiresAfterTTL(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		c := newValueCache()
+		dpk := makeDPKey("iface", "ADDR:1", hmenum.ParamsetKeyMaster, "TRANSMIT_TRY_MAX")
 
-	c := newValueCache()
-	dpk := makeDPKey("iface", "ADDR:1", hmenum.ParamsetKeyMaster, "TRANSMIT_TRY_MAX")
+		c.put(dpk, 10, true)
 
-	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	c.clock = func() time.Time { return base }
+		// Before expiry.
+		_, _, hit := c.get(dpk)
+		if !hit {
+			t.Fatal("MASTER entry within 30min TTL must hit")
+		}
 
-	c.put(dpk, 10, true)
+		// Advance past masterCacheTTL (30 minutes).
+		time.Sleep(masterCacheTTL + time.Second)
 
-	// Before expiry.
-	_, _, hit := c.get(dpk)
-	if !hit {
-		t.Fatal("MASTER entry within 30min TTL must hit")
-	}
-
-	// Advance past masterCacheTTL (30 minutes).
-	c.clock = advancedClock(base, masterCacheTTL+time.Second)
-
-	_, _, hit2 := c.get(dpk)
-	if hit2 {
-		t.Fatal("MASTER entry past 30min TTL must miss")
-	}
+		_, _, hit2 := c.get(dpk)
+		if hit2 {
+			t.Fatal("MASTER entry past 30min TTL must miss")
+		}
+	})
 }
 
 func TestValueCacheValuesEntryNeverExpires(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		c := newValueCache()
+		dpk := makeDPKey("iface", "ADDR:1", hmenum.ParamsetKeyValues, "STATE")
 
-	c := newValueCache()
-	dpk := makeDPKey("iface", "ADDR:1", hmenum.ParamsetKeyValues, "STATE")
+		c.put(dpk, true, true)
 
-	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	c.clock = func() time.Time { return base }
+		// Advance by 24 hours — TTL=0 means never expires.
+		time.Sleep(24 * time.Hour)
 
-	c.put(dpk, true, true)
-
-	// Advance by 24 hours — TTL=0 means never expires.
-	c.clock = advancedClock(base, 24*time.Hour)
-
-	_, _, hit := c.get(dpk)
-	if !hit {
-		t.Fatal("VALUES entry with TTL=0 must never expire")
-	}
+		_, _, hit := c.get(dpk)
+		if !hit {
+			t.Fatal("VALUES entry with TTL=0 must never expire")
+		}
+	})
 }
 
 func TestValueCacheInvalidateRemovesEntry(t *testing.T) {
@@ -543,58 +532,53 @@ func TestLoadValueValuesParamsetErrorCachesSentinel(t *testing.T) {
 
 func TestLoadValueSingleflightDeduplicatesConcurrentLoads(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		d := makeTestDevice()
+		fake := newFakeLoader()
 
-	d := makeTestDevice()
-	fake := newFakeLoader()
+		const channelAddr = "AABBCCDD:1"
+		const param = hmenum.Parameter("LEVEL")
 
-	const channelAddr = "AABBCCDD:1"
-	const param = hmenum.Parameter("LEVEL")
+		// blockCh blocks GetParamset until we release it (VALUES path uses GetParamset).
+		blockCh := make(chan struct{})
+		fake.blockCh = blockCh
+		fake.setGetParamset(channelAddr, hmenum.ParamsetKeyValues, map[string]any{string(param): 99.0}, nil)
+		d.SetValueLoader(fake)
 
-	// blockCh blocks GetParamset until we release it (VALUES path uses GetParamset).
-	blockCh := make(chan struct{})
-	fake.blockCh = blockCh
-	fake.setGetParamset(channelAddr, hmenum.ParamsetKeyValues, map[string]any{string(param): 99.0}, nil)
-	d.SetValueLoader(fake)
+		dpk := makeDPKey("HmIP-RF", channelAddr, hmenum.ParamsetKeyValues, string(param))
 
-	dpk := makeDPKey("HmIP-RF", channelAddr, hmenum.ParamsetKeyValues, string(param))
+		const n = 50
+		results := make([]any, n)
+		var wg sync.WaitGroup
+		wg.Add(n)
 
-	const n = 50
-	results := make([]any, n)
-	var wg sync.WaitGroup
-	wg.Add(n)
-
-	// Ensure all goroutines are blocked inside singleflight before releasing.
-	var started atomic.Int32
-	for i := range n {
-		go func(idx int) {
-			defer wg.Done()
-			started.Add(1)
-			v, _, _ := d.LoadValue(context.Background(), dpk, hmenum.CallSourceHMInit, false)
-			results[idx] = v
-		}(i)
-	}
-
-	// Wait until all goroutines have incremented the started counter, then
-	// give them a moment to enter singleflight.Do before unblocking.
-	for started.Load() < n {
-		time.Sleep(time.Millisecond)
-	}
-	time.Sleep(5 * time.Millisecond)
-
-	close(blockCh) // release the single loader call
-	wg.Wait()
-
-	// GetParamset must have been called exactly once — singleflight deduplicated all 50 goroutines.
-	if calls := fake.getParamsetCalls.Load(); calls != 1 {
-		t.Fatalf("GetParamset must be called exactly once under singleflight, got %d", calls)
-	}
-
-	// Every goroutine must have gotten 99.0.
-	for i, v := range results {
-		if v != 99.0 {
-			t.Fatalf("goroutine %d got %v, want 99.0", i, v)
+		for i := range n {
+			go func(idx int) {
+				defer wg.Done()
+				v, _, _ := d.LoadValue(context.Background(), dpk, hmenum.CallSourceHMInit, false)
+				results[idx] = v
+			}(i)
 		}
-	}
+
+		// Wait until every goroutine is durably blocked — one on the loader,
+		// the rest on the singleflight call — before unblocking.
+		synctest.Wait()
+
+		close(blockCh) // release the single loader call
+		wg.Wait()
+
+		// GetParamset must have been called exactly once — singleflight deduplicated all 50 goroutines.
+		if calls := fake.getParamsetCalls.Load(); calls != 1 {
+			t.Fatalf("GetParamset must be called exactly once under singleflight, got %d", calls)
+		}
+
+		// Every goroutine must have gotten 99.0.
+		for i, v := range results {
+			if v != 99.0 {
+				t.Fatalf("goroutine %d got %v, want 99.0", i, v)
+			}
+		}
+	})
 }
 
 func TestLoadValueSingleflightSeparatesByChannel(t *testing.T) {
@@ -635,58 +619,60 @@ func TestLoadValueSingleflightSeparatesByChannel(t *testing.T) {
 
 func TestLoadValueMasterBatchSingleflightCoalescesAcrossParameters(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		d := makeTestDevice()
+		fake := newFakeLoader()
 
-	d := makeTestDevice()
-	fake := newFakeLoader()
+		const channelAddr = "AABBCCDD:1"
 
-	const channelAddr = "AABBCCDD:1"
+		// Block GetParamset so both goroutines enter singleflight before first completes.
+		blockCh := make(chan struct{})
+		fake.getParamsetFn = func(address string, _ hmenum.ParamsetKey) (map[string]any, error) {
+			<-blockCh
+			return map[string]any{"PARAM_A": 10.0, "PARAM_B": 20.0}, nil
+		}
+		d.SetValueLoader(fake)
 
-	// Block GetParamset so both goroutines enter singleflight before first completes.
-	blockCh := make(chan struct{})
-	fake.getParamsetFn = func(address string, _ hmenum.ParamsetKey) (map[string]any, error) {
-		<-blockCh
-		return map[string]any{"PARAM_A": 10.0, "PARAM_B": 20.0}, nil
-	}
-	d.SetValueLoader(fake)
+		dpkA := makeDPKey("HmIP-RF", channelAddr, hmenum.ParamsetKeyMaster, "PARAM_A")
+		dpkB := makeDPKey("HmIP-RF", channelAddr, hmenum.ParamsetKeyMaster, "PARAM_B")
 
-	dpkA := makeDPKey("HmIP-RF", channelAddr, hmenum.ParamsetKeyMaster, "PARAM_A")
-	dpkB := makeDPKey("HmIP-RF", channelAddr, hmenum.ParamsetKeyMaster, "PARAM_B")
+		var wg sync.WaitGroup
+		wg.Add(2)
 
-	var wg sync.WaitGroup
-	wg.Add(2)
+		var errA, errB error
+		var valA, valB any
 
-	var errA, errB error
-	var valA, valB any
+		go func() {
+			defer wg.Done()
+			valA, _, errA = d.LoadValue(context.Background(), dpkA, hmenum.CallSourceHMInit, false)
+		}()
+		go func() {
+			defer wg.Done()
+			valB, _, errB = d.LoadValue(context.Background(), dpkB, hmenum.CallSourceHMInit, false)
+		}()
 
-	go func() {
-		defer wg.Done()
-		valA, _, errA = d.LoadValue(context.Background(), dpkA, hmenum.CallSourceHMInit, false)
-	}()
-	go func() {
-		defer wg.Done()
-		valB, _, errB = d.LoadValue(context.Background(), dpkB, hmenum.CallSourceHMInit, false)
-	}()
+		// Wait until both goroutines are blocked inside singleflight.Do
+		// before releasing.
+		synctest.Wait()
+		close(blockCh)
+		wg.Wait()
 
-	// Give goroutines time to enter singleflight.Do before releasing.
-	time.Sleep(10 * time.Millisecond)
-	close(blockCh)
-	wg.Wait()
+		if errA != nil || errB != nil {
+			t.Fatalf("unexpected errors: A=%v B=%v", errA, errB)
+		}
 
-	if errA != nil || errB != nil {
-		t.Fatalf("unexpected errors: A=%v B=%v", errA, errB)
-	}
+		// GetParamset called exactly once — singleflight coalesced both.
+		if calls := fake.getParamsetCalls.Load(); calls != 1 {
+			t.Fatalf("GetParamset must be called exactly once, got %d", calls)
+		}
 
-	// GetParamset called exactly once — singleflight coalesced both.
-	if calls := fake.getParamsetCalls.Load(); calls != 1 {
-		t.Fatalf("GetParamset must be called exactly once, got %d", calls)
-	}
-
-	if valA != 10.0 {
-		t.Fatalf("PARAM_A: got %v, want 10.0", valA)
-	}
-	if valB != 20.0 {
-		t.Fatalf("PARAM_B: got %v, want 20.0", valB)
-	}
+		if valA != 10.0 {
+			t.Fatalf("PARAM_A: got %v, want 10.0", valA)
+		}
+		if valB != 20.0 {
+			t.Fatalf("PARAM_B: got %v, want 20.0", valB)
+		}
+	})
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

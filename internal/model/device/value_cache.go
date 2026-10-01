@@ -81,22 +81,12 @@ type valueCache struct {
 	entries map[hmtypes.DataPointKey]cacheEntry
 
 	sf singleflight.Group
-
-	// clock is overridden by tests; nil falls back to time.Now.
-	clock func() time.Time
 }
 
 func newValueCache() *valueCache {
 	return &valueCache{
 		entries: make(map[hmtypes.DataPointKey]cacheEntry),
 	}
-}
-
-func (c *valueCache) now() time.Time {
-	if c.clock != nil {
-		return c.clock()
-	}
-	return time.Now()
 }
 
 // ttlFor returns the appropriate TTL for the given paramset key.
@@ -120,7 +110,7 @@ func (c *valueCache) get(dpk hmtypes.DataPointKey) (value any, observed, hit boo
 	if !ok {
 		return nil, false, false
 	}
-	if !e.fresh(c.now(), ttlFor(dpk.ParamsetKey, e.observed)) {
+	if !e.fresh(time.Now(), ttlFor(dpk.ParamsetKey, e.observed)) {
 		return nil, false, false
 	}
 	return e.value, e.observed, true
@@ -133,7 +123,7 @@ func (c *valueCache) put(dpk hmtypes.DataPointKey, value any, observed bool) {
 	c.entries[dpk] = cacheEntry{
 		value:     value,
 		observed:  observed,
-		writtenAt: c.now(),
+		writtenAt: time.Now(),
 	}
 	c.mu.Unlock()
 }

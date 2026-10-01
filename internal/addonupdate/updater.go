@@ -7,9 +7,9 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/build"
-	"github.com/SukramJ/openccu-loom/internal/clock"
 )
 
 // Deps bundles [NewUpdater]'s dependencies. Only Capability is
@@ -21,7 +21,6 @@ type Deps struct {
 	Checker    *Checker
 	Downloader *Downloader
 	Installer  *Installer
-	Clock      clock.Clock
 	Logger     *slog.Logger
 	// CurrentVersion overrides build.Version — the running daemon's
 	// version to compare releases against. Empty uses build.Version.
@@ -42,7 +41,6 @@ type Updater struct {
 	checker        *Checker
 	downloader     *Downloader
 	installer      *Installer
-	clk            clock.Clock
 	logger         *slog.Logger
 	currentVersion string
 	lifecycleCtx   context.Context
@@ -72,10 +70,6 @@ func NewUpdater(deps Deps) *Updater {
 	if installer == nil {
 		installer = NewInstaller()
 	}
-	clk := deps.Clock
-	if clk == nil {
-		clk = clock.New()
-	}
 	logger := deps.Logger
 	if logger == nil {
 		logger = slog.Default()
@@ -92,7 +86,6 @@ func NewUpdater(deps Deps) *Updater {
 		checker:        checker,
 		downloader:     downloader,
 		installer:      installer,
-		clk:            clk,
 		logger:         logger,
 		currentVersion: currentVersion,
 		lifecycleCtx:   lifecycleCtx,
@@ -231,7 +224,7 @@ func (u *Updater) Check(ctx context.Context) error {
 	u.mu.Lock()
 	u.lastRelease = info
 	u.mu.Unlock()
-	now := u.clk.Now()
+	now := time.Now()
 	current := u.currentVersion
 	u.transition(func(s *Status) {
 		s.State = StateIdle

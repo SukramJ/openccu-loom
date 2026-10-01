@@ -10,19 +10,15 @@ package health
 
 import (
 	"testing"
+	"testing/synctest"
 	"time"
-
-	"github.com/SukramJ/openccu-loom/internal/clock"
 )
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-var parityT0 = time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
-
-func newParityTracker(opts ...Option) (*Tracker, *clock.Fake) {
-	clk := clock.NewFake(parityT0)
-	opts = append([]Option{WithClock(clk), WithStaleAfter(0)}, opts...)
-	return NewTracker(opts...), clk
+func newParityTracker(opts ...Option) *Tracker {
+	opts = append([]Option{WithStaleAfter(0)}, opts...)
+	return NewTracker(opts...)
 }
 
 // driveUnhealthy transitions name from HEALTHY → DEGRADED → UNHEALTHY by
@@ -39,7 +35,7 @@ func driveUnhealthy(t *Tracker, name string) {
 // StatusUnknown and Score == 0 before any component has been recorded.
 func TestParityInitialStateUnknown(t *testing.T) {
 	t.Parallel()
-	tr, _ := newParityTracker()
+	tr := newParityTracker()
 
 	if got := tr.Overall(); got != StatusUnknown {
 		t.Errorf("Overall() = %s, want unknown", got)
@@ -58,7 +54,7 @@ func TestParityInitialStateUnknown(t *testing.T) {
 // bad states and verifies the monotone decrease in Score.
 func TestParityScoreDegradationCurve(t *testing.T) {
 	t.Parallel()
-	tr, _ := newParityTracker()
+	tr := newParityTracker()
 
 	// all healthy → 1.0
 	tr.Record("a", Sample{Healthy: true})
@@ -105,7 +101,7 @@ func TestParityScoreDegradationCurve(t *testing.T) {
 // sample records the component as HEALTHY.
 func TestParityRecordHealthyTransitionsToHealthy(t *testing.T) {
 	t.Parallel()
-	tr, _ := newParityTracker()
+	tr := newParityTracker()
 	tr.Record("x", Sample{Healthy: true, Note: "ok"})
 	c, ok := tr.Get("x")
 	if !ok {
@@ -123,7 +119,7 @@ func TestParityRecordHealthyTransitionsToHealthy(t *testing.T) {
 // one unhealthy sample after a healthy run yields DEGRADED (not UNHEALTHY).
 func TestParityRecordSingleFailureAfterHealthyDegrades(t *testing.T) {
 	t.Parallel()
-	tr, _ := newParityTracker()
+	tr := newParityTracker()
 	tr.Record("x", Sample{Healthy: true})
 	tr.Record("x", Sample{Healthy: false})
 	c, _ := tr.Get("x")
@@ -136,7 +132,7 @@ func TestParityRecordSingleFailureAfterHealthyDegrades(t *testing.T) {
 // consecutive unhealthy sample escalates from DEGRADED to UNHEALTHY.
 func TestParityRecordTwoConsecutiveFailuresEscalates(t *testing.T) {
 	t.Parallel()
-	tr, _ := newParityTracker()
+	tr := newParityTracker()
 	tr.Record("x", Sample{Healthy: true})
 	tr.Record("x", Sample{Healthy: false})
 	tr.Record("x", Sample{Healthy: false})
@@ -150,7 +146,7 @@ func TestParityRecordTwoConsecutiveFailuresEscalates(t *testing.T) {
 // following unhealthy transitions back to HEALTHY.
 func TestParityRecordSuccessAfterFailureRecovers(t *testing.T) {
 	t.Parallel()
-	tr, _ := newParityTracker()
+	tr := newParityTracker()
 	driveUnhealthy(tr, "x")
 	c, _ := tr.Get("x")
 	if c.Status != StatusUnhealthy {
@@ -169,26 +165,27 @@ func TestParityRecordSuccessAfterFailureRecovers(t *testing.T) {
 // older than StaleAfter decays to StatusUnknown on Get and Snapshot.
 func TestParityStaleDecayToUnknown(t *testing.T) {
 	t.Parallel()
-	clk := clock.NewFake(parityT0)
-	tr := NewTracker(WithClock(clk), WithStaleAfter(30*time.Second))
+	synctest.Test(t, func(t *testing.T) {
+		tr := NewTracker(WithStaleAfter(30 * time.Second))
 
-	tr.Record("s", Sample{Healthy: true, Timestamp: clk.Now()})
-	c, _ := tr.Get("s")
-	if c.Status != StatusHealthy {
-		t.Fatalf("before stale: status=%s want healthy", c.Status)
-	}
+		tr.Record("s", Sample{Healthy: true, Timestamp: time.Now()})
+		c, _ := tr.Get("s")
+		if c.Status != StatusHealthy {
+			t.Fatalf("before stale: status=%s want healthy", c.Status)
+		}
 
-	// Advance past stale threshold.
-	clk.Advance(31 * time.Second)
-	c, _ = tr.Get("s")
-	if c.Status != StatusUnknown {
-		t.Fatalf("after stale: status=%s want unknown", c.Status)
-	}
+		// Advance past stale threshold.
+		time.Sleep(31 * time.Second)
+		c, _ = tr.Get("s")
+		if c.Status != StatusUnknown {
+			t.Fatalf("after stale: status=%s want unknown", c.Status)
+		}
 
-	// Overall should also degrade.
-	if tr.Overall() != StatusUnknown {
-		t.Errorf("Overall() = %s, want unknown when stale", tr.Overall())
-	}
+		// Overall should also degrade.
+		if tr.Overall() != StatusUnknown {
+			t.Errorf("Overall() = %s, want unknown when stale", tr.Overall())
+		}
+	})
 }
 
 // TestParityStickySampleNeverDecaysToUnknown is the regression guard for a
@@ -201,25 +198,26 @@ func TestParityStaleDecayToUnknown(t *testing.T) {
 // interface gone silent, say) still decay normally.
 func TestParityStickySampleNeverDecaysToUnknown(t *testing.T) {
 	t.Parallel()
-	clk := clock.NewFake(parityT0)
-	tr := NewTracker(WithClock(clk), WithStaleAfter(30*time.Second))
+	synctest.Test(t, func(t *testing.T) {
+		tr := NewTracker(WithStaleAfter(30 * time.Second))
 
-	tr.Record("config.overlay", Sample{Healthy: true, Timestamp: clk.Now(), Sticky: true})
-	tr.Record("live-interface", Sample{Healthy: true, Timestamp: clk.Now()})
+		tr.Record("config.overlay", Sample{Healthy: true, Timestamp: time.Now(), Sticky: true})
+		tr.Record("live-interface", Sample{Healthy: true, Timestamp: time.Now()})
 
-	clk.Advance(31 * time.Second)
+		time.Sleep(31 * time.Second)
 
-	sticky, _ := tr.Get("config.overlay")
-	if sticky.Status != StatusHealthy {
-		t.Errorf("sticky component decayed: status=%s, want healthy", sticky.Status)
-	}
-	live, _ := tr.Get("live-interface")
-	if live.Status != StatusUnknown {
-		t.Errorf("non-sticky component did not decay: status=%s, want unknown (staleness must still work for live components)", live.Status)
-	}
-	if tr.Overall() != StatusUnknown {
-		t.Errorf("Overall() = %s, want unknown — the live component's decay must still degrade the aggregate", tr.Overall())
-	}
+		sticky, _ := tr.Get("config.overlay")
+		if sticky.Status != StatusHealthy {
+			t.Errorf("sticky component decayed: status=%s, want healthy", sticky.Status)
+		}
+		live, _ := tr.Get("live-interface")
+		if live.Status != StatusUnknown {
+			t.Errorf("non-sticky component did not decay: status=%s, want unknown (staleness must still work for live components)", live.Status)
+		}
+		if tr.Overall() != StatusUnknown {
+			t.Errorf("Overall() = %s, want unknown — the live component's decay must still degrade the aggregate", tr.Overall())
+		}
+	})
 }
 
 // TestParityHealthyDaemonStaysHealthyPastStaleWindowWhenBootComponentsAreSticky
@@ -231,21 +229,22 @@ func TestParityStickySampleNeverDecaysToUnknown(t *testing.T) {
 // after every boot regardless of live health.
 func TestParityHealthyDaemonStaysHealthyPastStaleWindowWhenBootComponentsAreSticky(t *testing.T) {
 	t.Parallel()
-	clk := clock.NewFake(parityT0)
-	tr := NewTracker(WithClock(clk), WithStaleAfter(30*time.Second))
+	synctest.Test(t, func(t *testing.T) {
+		tr := NewTracker(WithStaleAfter(30 * time.Second))
 
-	tr.Record("config.overlay", Sample{Healthy: true, Timestamp: clk.Now(), Sticky: true})
-	tr.Record("config.secrets", Sample{Healthy: true, Timestamp: clk.Now(), Sticky: true})
-	tr.Record("central.ccu-01", Sample{Healthy: true, Timestamp: clk.Now()})
+		tr.Record("config.overlay", Sample{Healthy: true, Timestamp: time.Now(), Sticky: true})
+		tr.Record("config.secrets", Sample{Healthy: true, Timestamp: time.Now(), Sticky: true})
+		tr.Record("central.ccu-01", Sample{Healthy: true, Timestamp: time.Now()})
 
-	clk.Advance(31 * time.Second)
-	// The live component keeps getting refreshed, as a real interface probe
-	// would every few seconds.
-	tr.Record("central.ccu-01", Sample{Healthy: true, Timestamp: clk.Now()})
+		time.Sleep(31 * time.Second)
+		// The live component keeps getting refreshed, as a real interface probe
+		// would every few seconds.
+		tr.Record("central.ccu-01", Sample{Healthy: true, Timestamp: time.Now()})
 
-	if got := tr.Overall(); got != StatusHealthy {
-		t.Errorf("Overall() = %s, want healthy — a genuinely healthy daemon must not report unknown once boot-only components age past the stale window", got)
-	}
+		if got := tr.Overall(); got != StatusHealthy {
+			t.Errorf("Overall() = %s, want healthy — a genuinely healthy daemon must not report unknown once boot-only components age past the stale window", got)
+		}
+	})
 }
 
 // ── 6. Multi-interface score aggregation (Multi-CCU) ─────────────────────────
@@ -255,7 +254,7 @@ func TestParityHealthyDaemonStaysHealthyPastStaleWindowWhenBootComponentsAreStic
 // their contributions.
 func TestParityMultiInterfaceScoreAggregation(t *testing.T) {
 	t.Parallel()
-	tr, _ := newParityTracker()
+	tr := newParityTracker()
 
 	// xmlrpc → healthy (1.0)
 	tr.Record("xmlrpc", Sample{Healthy: true})
@@ -284,23 +283,24 @@ func TestParityMultiInterfaceScoreAggregation(t *testing.T) {
 // ignores samples outside the window and counts only fresh ones.
 func TestParityWindowedScoreOnlyCountsRecentSamples(t *testing.T) {
 	t.Parallel()
-	clk := clock.NewFake(parityT0)
-	tr := NewTracker(WithClock(clk), WithStaleAfter(0), WithHistorySize(100))
+	synctest.Test(t, func(t *testing.T) {
+		tr := NewTracker(WithStaleAfter(0), WithHistorySize(100))
 
-	// Three old failures (5 min ago) — will be outside the 2 min window.
-	old := parityT0.Add(-5 * time.Minute)
-	for range 3 {
-		tr.Record("w", Sample{Healthy: false, Timestamp: old})
-	}
-	// Two recent successes.
-	tr.Record("w", Sample{Healthy: true, Timestamp: clk.Now()})
-	tr.Record("w", Sample{Healthy: true, Timestamp: clk.Now()})
+		// Three old failures (5 min ago) — will be outside the 2 min window.
+		old := time.Now().Add(-5 * time.Minute)
+		for range 3 {
+			tr.Record("w", Sample{Healthy: false, Timestamp: old})
+		}
+		// Two recent successes.
+		tr.Record("w", Sample{Healthy: true, Timestamp: time.Now()})
+		tr.Record("w", Sample{Healthy: true, Timestamp: time.Now()})
 
-	score := tr.WindowedScore("w", 2*time.Minute)
-	// Only the 2 recent successes are inside the window → 2/2 = 1.0
-	if score != 1.0 {
-		t.Errorf("WindowedScore() = %f, want 1.0 (only recent samples counted)", score)
-	}
+		score := tr.WindowedScore("w", 2*time.Minute)
+		// Only the 2 recent successes are inside the window → 2/2 = 1.0
+		if score != 1.0 {
+			t.Errorf("WindowedScore() = %f, want 1.0 (only recent samples counted)", score)
+		}
+	})
 }
 
 // ── 8. MetricsHealthSummary ───────────────────────────────────────────────────
@@ -309,7 +309,7 @@ func TestParityWindowedScoreOnlyCountsRecentSamples(t *testing.T) {
 // counts healthy/degraded/failed components and computes OverallScore.
 func TestParityMetricsHealthSummary(t *testing.T) {
 	t.Parallel()
-	tr, _ := newParityTracker()
+	tr := newParityTracker()
 
 	// h1 → healthy
 	tr.Record("h1", Sample{Healthy: true})

@@ -331,7 +331,7 @@ func New(cfg Config) (*Unit, error) {
 		// adapter installs one via [Unit.SetLinkResolver]
 		// once the client coordinator has at least one InterfaceClient.
 		Link:           coordinators.NewLinkCoordinator(nil),
-		Scheduler:      scheduler.New(logger, nil),
+		Scheduler:      scheduler.New(logger),
 		Health:         health.NewTracker(),
 		DeviceDetails:  devicedetails.New(),
 		MetricsClients: clientpkg.NewMetricsClientProvider(cfg.Name),

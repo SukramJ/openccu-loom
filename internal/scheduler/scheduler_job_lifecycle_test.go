@@ -21,9 +21,8 @@ import (
 	"errors"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
-
-	"github.com/SukramJ/openccu-loom/internal/clock"
 )
 
 // ---------------------------------------------------------------------------
@@ -48,7 +47,7 @@ func TestJobIntervalIsPositive(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			s := New(nil, nil)
+			s := New(nil)
 			err := s.Add(Job{
 				Name:     "j",
 				Interval: tc.interval,
@@ -69,7 +68,7 @@ func TestJobIntervalIsPositive(t *testing.T) {
 func TestJobNameRequired(t *testing.T) {
 	t.Parallel()
 
-	s := New(nil, nil)
+	s := New(nil)
 	err := s.Add(Job{
 		Name:     "",
 		Interval: time.Second,
@@ -85,7 +84,7 @@ func TestJobNameRequired(t *testing.T) {
 func TestJobRunFuncRequired(t *testing.T) {
 	t.Parallel()
 
-	s := New(nil, nil)
+	s := New(nil)
 	err := s.Add(Job{
 		Name:     "j",
 		Interval: time.Second,
@@ -104,34 +103,31 @@ func TestJobRunFuncRequired(t *testing.T) {
 // registered jobs to become active (i.e. they start executing).
 func TestSchedulerStartActivates(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		s := New(nil)
+		var ran atomic.Bool
+		_ = s.Add(Job{
+			Name:       "activate",
+			Interval:   time.Minute,
+			RunOnStart: true,
+			Run: func(context.Context) error {
+				ran.Store(true)
+				return nil
+			},
+		})
 
-	s := New(nil, nil)
-	var ran atomic.Bool
-	_ = s.Add(Job{
-		Name:       "activate",
-		Interval:   time.Minute,
-		RunOnStart: true,
-		Run: func(context.Context) error {
-			ran.Store(true)
-			return nil
-		},
-	})
+		ctx := t.Context()
 
-	ctx := t.Context()
-
-	if err := s.Start(ctx); err != nil {
-		t.Fatal(err)
-	}
-	defer s.Stop()
-
-	deadline := time.After(500 * time.Millisecond)
-	for !ran.Load() {
-		select {
-		case <-deadline:
-			t.Fatal("job did not run after Start")
-		case <-time.After(2 * time.Millisecond):
+		if err := s.Start(ctx); err != nil {
+			t.Fatal(err)
 		}
-	}
+		defer s.Stop()
+
+		synctest.Wait()
+		if !ran.Load() {
+			t.Fatal("job did not run after Start")
+		}
+	})
 }
 
 // TestSchedulerStartWhenAlreadyRunning verifies that a second
@@ -139,7 +135,7 @@ func TestSchedulerStartActivates(t *testing.T) {
 func TestSchedulerStartWhenAlreadyRunning(t *testing.T) {
 	t.Parallel()
 
-	s := New(nil, nil)
+	s := New(nil)
 	_ = s.Add(Job{
 		Name:     "j",
 		Interval: time.Minute,
@@ -162,37 +158,36 @@ func TestSchedulerStartWhenAlreadyRunning(t *testing.T) {
 // scheduler no longer executes jobs.
 func TestSchedulerStopDeactivates(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		s := New(nil)
 
-	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
-	fake := clock.NewFake(now)
-	s := New(nil, fake)
+		var calls atomic.Int64
+		_ = s.Add(Job{
+			Name:     "count",
+			Interval: 100 * time.Millisecond,
+			Run:      func(context.Context) error { calls.Add(1); return nil },
+		})
 
-	var calls atomic.Int64
-	_ = s.Add(Job{
-		Name:     "count",
-		Interval: 100 * time.Millisecond,
-		Run:      func(context.Context) error { calls.Add(1); return nil },
+		ctx := t.Context()
+
+		if err := s.Start(ctx); err != nil {
+			t.Fatal(err)
+		}
+
+		// Fire one tick deterministically, then stop.
+		synctest.Sleep(100 * time.Millisecond)
+
+		s.Stop()
+		snapshot := calls.Load()
+
+		// Advancing after Stop must not produce new calls — Stop has joined
+		// the run goroutine, so nothing is left to receive a timer fire.
+		time.Sleep(500 * time.Millisecond)
+
+		if calls.Load() != snapshot {
+			t.Errorf("calls changed after Stop: before=%d after=%d", snapshot, calls.Load())
+		}
 	})
-
-	ctx := t.Context()
-
-	if err := s.Start(ctx); err != nil {
-		t.Fatal(err)
-	}
-
-	// Fire one tick deterministically, then stop.
-	advanceTick(t, fake, 100*time.Millisecond)
-
-	s.Stop()
-	snapshot := calls.Load()
-
-	// Advancing after Stop must not produce new calls — Stop has joined
-	// the run goroutine, so nothing is left to receive a timer fire.
-	fake.Advance(500 * time.Millisecond)
-
-	if calls.Load() != snapshot {
-		t.Errorf("calls changed after Stop: before=%d after=%d", snapshot, calls.Load())
-	}
 }
 
 // TestSchedulerStopWhenNotRunning verifies that calling Stop on a
@@ -200,7 +195,7 @@ func TestSchedulerStopDeactivates(t *testing.T) {
 func TestSchedulerStopWhenNotRunning(t *testing.T) {
 	t.Parallel()
 
-	s := New(nil, nil)
+	s := New(nil)
 	// Must not panic.
 	s.Stop()
 }
@@ -213,70 +208,68 @@ func TestSchedulerStopWhenNotRunning(t *testing.T) {
 // the scheduler keeps scheduling subsequent ticks after each execution.
 func TestJobExecutesAndContinues(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		s := New(nil)
 
-	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
-	fake := clock.NewFake(now)
-	s := New(nil, fake)
+		const ticks = 3
+		var count atomic.Int64
+		_ = s.Add(Job{
+			Name:     "exec",
+			Interval: 50 * time.Millisecond,
+			Run:      func(context.Context) error { count.Add(1); return nil },
+		})
 
-	const ticks = 3
-	var count atomic.Int64
-	_ = s.Add(Job{
-		Name:     "exec",
-		Interval: 50 * time.Millisecond,
-		Run:      func(context.Context) error { count.Add(1); return nil },
+		ctx := t.Context()
+
+		if err := s.Start(ctx); err != nil {
+			t.Fatal(err)
+		}
+		defer s.Stop()
+
+		for range ticks {
+			synctest.Sleep(50 * time.Millisecond)
+		}
+
+		if got := count.Load(); got != ticks {
+			t.Errorf("expected %d executions, got %d", ticks, got)
+		}
 	})
-
-	ctx := t.Context()
-
-	if err := s.Start(ctx); err != nil {
-		t.Fatal(err)
-	}
-	defer s.Stop()
-
-	for range ticks {
-		advanceTick(t, fake, 50*time.Millisecond)
-	}
-
-	if got := count.Load(); got != ticks {
-		t.Errorf("expected %d executions, got %d", ticks, got)
-	}
 }
 
 // TestJobErrorDoesNotStopScheduling verifies that a job returning
 // an error does not prevent subsequent ticks from firing.
 func TestJobErrorDoesNotStopScheduling(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		s := New(nil)
 
-	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
-	fake := clock.NewFake(now)
-	s := New(nil, fake)
+		boom := errors.New("task failed")
+		var calls atomic.Int64
+		_ = s.Add(Job{
+			Name:     "fail",
+			Interval: 50 * time.Millisecond,
+			Run: func(context.Context) error {
+				calls.Add(1)
+				return boom
+			},
+		})
 
-	boom := errors.New("task failed")
-	var calls atomic.Int64
-	_ = s.Add(Job{
-		Name:     "fail",
-		Interval: 50 * time.Millisecond,
-		Run: func(context.Context) error {
-			calls.Add(1)
-			return boom
-		},
+		ctx := t.Context()
+
+		if err := s.Start(ctx); err != nil {
+			t.Fatal(err)
+		}
+		defer s.Stop()
+
+		const ticks = 4
+		for range ticks {
+			synctest.Sleep(50 * time.Millisecond)
+		}
+
+		if got := calls.Load(); got < ticks {
+			t.Errorf("scheduler stopped after error: got %d calls, want >= %d", got, ticks)
+		}
 	})
-
-	ctx := t.Context()
-
-	if err := s.Start(ctx); err != nil {
-		t.Fatal(err)
-	}
-	defer s.Stop()
-
-	const ticks = 4
-	for range ticks {
-		advanceTick(t, fake, 50*time.Millisecond)
-	}
-
-	if got := calls.Load(); got < ticks {
-		t.Errorf("scheduler stopped after error: got %d calls, want >= %d", got, ticks)
-	}
 }
 
 // ---------------------------------------------------------------------------
@@ -288,80 +281,78 @@ func TestJobErrorDoesNotStopScheduling(t *testing.T) {
 // across multiple ticks.
 func TestMultipleJobsIndependentSchedules(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		s := New(nil)
 
-	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
-	fake := clock.NewFake(now)
-	s := New(nil, fake)
+		var count1, count2 atomic.Int64
+		_ = s.Add(Job{
+			Name:     "job1",
+			Interval: 50 * time.Millisecond,
+			Run:      func(context.Context) error { count1.Add(1); return nil },
+		})
+		_ = s.Add(Job{
+			Name:     "job2",
+			Interval: 50 * time.Millisecond,
+			Run:      func(context.Context) error { count2.Add(1); return nil },
+		})
 
-	var count1, count2 atomic.Int64
-	_ = s.Add(Job{
-		Name:     "job1",
-		Interval: 50 * time.Millisecond,
-		Run:      func(context.Context) error { count1.Add(1); return nil },
+		ctx := t.Context()
+
+		if err := s.Start(ctx); err != nil {
+			t.Fatal(err)
+		}
+		defer s.Stop()
+
+		const ticks = 3
+		for range ticks {
+			synctest.Sleep(50 * time.Millisecond)
+		}
+		s.Stop()
+
+		if got := count1.Load(); got != ticks {
+			t.Errorf("job1: expected %d calls, got %d", ticks, got)
+		}
+		if got := count2.Load(); got != ticks {
+			t.Errorf("job2: expected %d calls, got %d", ticks, got)
+		}
 	})
-	_ = s.Add(Job{
-		Name:     "job2",
-		Interval: 50 * time.Millisecond,
-		Run:      func(context.Context) error { count2.Add(1); return nil },
-	})
-
-	ctx := t.Context()
-
-	if err := s.Start(ctx); err != nil {
-		t.Fatal(err)
-	}
-	defer s.Stop()
-
-	const ticks = 3
-	for range ticks {
-		waitForPending(t, fake, 2)
-		fake.Advance(50 * time.Millisecond)
-	}
-	waitForPending(t, fake, 2)
-	s.Stop()
-
-	if got := count1.Load(); got != ticks {
-		t.Errorf("job1: expected %d calls, got %d", ticks, got)
-	}
-	if got := count2.Load(); got != ticks {
-		t.Errorf("job2: expected %d calls, got %d", ticks, got)
-	}
 }
 
 // TestMultipleJobsRunOnStart verifies that each job fires its
 // RunOnStart invocation independently.
 func TestMultipleJobsRunOnStart(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		s := New(nil)
 
-	s := New(nil, nil)
-
-	const n = 3
-	counters := make([]atomic.Int64, n)
-	for i := range n {
-		idx := i
-		_ = s.Add(Job{
-			Name:       "ros" + string(rune('a'+idx)),
-			Interval:   time.Minute,
-			RunOnStart: true,
-			Run:        func(context.Context) error { counters[idx].Add(1); return nil },
-		})
-	}
-
-	ctx := t.Context()
-
-	if err := s.Start(ctx); err != nil {
-		t.Fatal(err)
-	}
-
-	// Allow all RunOnStart invocations to complete.
-	time.Sleep(50 * time.Millisecond)
-	s.Stop()
-
-	for i := range n {
-		if got := counters[i].Load(); got != 1 {
-			t.Errorf("job %d: expected 1 RunOnStart call, got %d", i, got)
+		const n = 3
+		counters := make([]atomic.Int64, n)
+		for i := range n {
+			idx := i
+			_ = s.Add(Job{
+				Name:       "ros" + string(rune('a'+idx)),
+				Interval:   time.Minute,
+				RunOnStart: true,
+				Run:        func(context.Context) error { counters[idx].Add(1); return nil },
+			})
 		}
-	}
+
+		ctx := t.Context()
+
+		if err := s.Start(ctx); err != nil {
+			t.Fatal(err)
+		}
+
+		// Allow all RunOnStart invocations to complete.
+		synctest.Wait()
+		s.Stop()
+
+		for i := range n {
+			if got := counters[i].Load(); got != 1 {
+				t.Errorf("job %d: expected 1 RunOnStart call, got %d", i, got)
+			}
+		}
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -388,57 +379,57 @@ func TestHooksTableDriven(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
+			synctest.Test(t, func(t *testing.T) {
+				s := New(nil)
 
-			now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
-			fake := clock.NewFake(now)
-			s := New(nil, fake)
+				startCh := make(chan string, 1)
+				completeCh := make(chan bool, 1)
 
-			startCh := make(chan string, 1)
-			completeCh := make(chan bool, 1)
+				_ = s.Add(Job{
+					Name:       "hooks." + c.name,
+					Interval:   100 * time.Millisecond,
+					RunOnStart: true,
+					OnStart: func(name string) {
+						select {
+						case startCh <- name:
+						default:
+						}
+					},
+					OnComplete: func(_ string, _ int64, success bool, _ error) {
+						select {
+						case completeCh <- success:
+						default:
+						}
+					},
+					Run: func(context.Context) error { return c.jobErr },
+				})
 
-			_ = s.Add(Job{
-				Name:       "hooks." + c.name,
-				Interval:   100 * time.Millisecond,
-				RunOnStart: true,
-				OnStart: func(name string) {
-					select {
-					case startCh <- name:
-					default:
+				ctx := t.Context()
+
+				if err := s.Start(ctx); err != nil {
+					t.Fatal(err)
+				}
+				defer s.Stop()
+
+				synctest.Wait()
+				select {
+				case name := <-startCh:
+					if name != "hooks."+c.name {
+						t.Errorf("OnStart: got %q, want %q", name, "hooks."+c.name)
 					}
-				},
-				OnComplete: func(_ string, _ int64, success bool, _ error) {
-					select {
-					case completeCh <- success:
-					default:
+				default:
+					t.Fatal("OnStart was not called")
+				}
+
+				select {
+				case ok := <-completeCh:
+					if ok != c.wantOK {
+						t.Errorf("OnComplete success=%v, want %v", ok, c.wantOK)
 					}
-				},
-				Run: func(context.Context) error { return c.jobErr },
+				default:
+					t.Fatal("OnComplete was not called")
+				}
 			})
-
-			ctx := t.Context()
-
-			if err := s.Start(ctx); err != nil {
-				t.Fatal(err)
-			}
-			defer s.Stop()
-
-			select {
-			case name := <-startCh:
-				if name != "hooks."+c.name {
-					t.Errorf("OnStart: got %q, want %q", name, "hooks."+c.name)
-				}
-			case <-time.After(500 * time.Millisecond):
-				t.Fatal("OnStart was not called")
-			}
-
-			select {
-			case ok := <-completeCh:
-				if ok != c.wantOK {
-					t.Errorf("OnComplete success=%v, want %v", ok, c.wantOK)
-				}
-			case <-time.After(500 * time.Millisecond):
-				t.Fatal("OnComplete was not called")
-			}
 		})
 	}
 }
@@ -452,7 +443,7 @@ func TestHooksTableDriven(t *testing.T) {
 func TestJobsSnapshotBeforeStart(t *testing.T) {
 	t.Parallel()
 
-	s := New(nil, nil)
+	s := New(nil)
 	jobs := []Job{
 		{Name: "a", Interval: time.Second, Run: func(context.Context) error { return nil }},
 		{Name: "b", Interval: 2 * time.Second, Run: func(context.Context) error { return nil }},
@@ -481,34 +472,35 @@ func TestJobsSnapshotBeforeStart(t *testing.T) {
 // and that the newly registered job runs on the live context.
 func TestAddAfterStartLaunchesImmediately(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		s := New(nil)
+		_ = s.Add(Job{
+			Name:     "seed",
+			Interval: time.Minute,
+			Run:      func(context.Context) error { return nil },
+		})
 
-	s := New(nil, nil)
-	_ = s.Add(Job{
-		Name:     "seed",
-		Interval: time.Minute,
-		Run:      func(context.Context) error { return nil },
+		ctx := t.Context()
+
+		if err := s.Start(ctx); err != nil {
+			t.Fatal(err)
+		}
+		defer s.Stop()
+
+		var n atomic.Int32
+		err := s.Add(Job{
+			Name:       "late",
+			Interval:   10 * time.Millisecond,
+			RunOnStart: true,
+			Run:        func(context.Context) error { n.Add(1); return nil },
+		})
+		if err != nil {
+			t.Errorf("Add after Start returned unexpected error: %v", err)
+		}
+		synctest.Wait()
+		s.Stop()
+		if n.Load() < 1 {
+			t.Errorf("late job ran %d times, want ≥ 1", n.Load())
+		}
 	})
-
-	ctx := t.Context()
-
-	if err := s.Start(ctx); err != nil {
-		t.Fatal(err)
-	}
-	defer s.Stop()
-
-	var n atomic.Int32
-	err := s.Add(Job{
-		Name:       "late",
-		Interval:   10 * time.Millisecond,
-		RunOnStart: true,
-		Run:        func(context.Context) error { n.Add(1); return nil },
-	})
-	if err != nil {
-		t.Errorf("Add after Start returned unexpected error: %v", err)
-	}
-	time.Sleep(50 * time.Millisecond)
-	s.Stop()
-	if n.Load() < 1 {
-		t.Errorf("late job ran %d times, want ≥ 1", n.Load())
-	}
 }

@@ -7,9 +7,9 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/internal/metrics"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
@@ -85,16 +85,18 @@ func TestRecordSQLiteOpenFailureHealthTripsCriticalUnavailable(t *testing.T) {
 // health.DefaultStaleAfter elapses — trading a wrong "healthy" for an
 // equally wrong "unknown" is not the fix.
 func TestRecordSQLiteOpenFailureHealthStaysUnhealthyPastStaleWindow(t *testing.T) {
-	clk := clock.NewFake(time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC))
-	tracker := health.NewTracker(health.WithClock(clk), health.WithStaleAfter(90*time.Second))
-	recordSQLiteOpenFailureHealth(tracker, errors.New("disk full"))
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		tracker := health.NewTracker(health.WithStaleAfter(90 * time.Second))
+		recordSQLiteOpenFailureHealth(tracker, errors.New("disk full"))
 
-	clk.Advance(91 * time.Second)
+		time.Sleep(91 * time.Second)
 
-	comp, ok := tracker.Get(sqlitestore.StoreComponentName)
-	if !ok || comp.Status != health.StatusUnhealthy {
-		t.Errorf("component=%+v ok=%v, want unhealthy (not decayed to unknown)", comp, ok)
-	}
+		comp, ok := tracker.Get(sqlitestore.StoreComponentName)
+		if !ok || comp.Status != health.StatusUnhealthy {
+			t.Errorf("component=%+v ok=%v, want unhealthy (not decayed to unknown)", comp, ok)
+		}
+	})
 }
 
 func TestRecordSQLiteOpenFailureHealthNilTracker(t *testing.T) {

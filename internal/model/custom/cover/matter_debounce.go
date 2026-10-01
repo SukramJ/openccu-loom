@@ -75,12 +75,6 @@ func (a goToAxis) String() string {
 type goToDebouncer struct {
 	mu    sync.Mutex
 	slots [goToAxisCount]goToSlot
-
-	// now and afterFunc are test seams; nil selects the real clock and
-	// time.AfterFunc. An afterFunc implementation must not invoke the
-	// callback synchronously — schedule holds the mutex while arming.
-	now       func() time.Time
-	afterFunc func(time.Duration, func()) *time.Timer
 }
 
 // goToSlot is the pending-command state of one axis. gen invalidates
@@ -109,9 +103,6 @@ func (d *goToDebouncer) schedule(axis goToAxis, write func()) {
 	slot := &d.slots[axis]
 
 	now := time.Now()
-	if d.now != nil {
-		now = d.now()
-	}
 	delay := goToDebounceGestureStart
 	if !slot.lastCmd.IsZero() && now.Sub(slot.lastCmd) <= goToGestureGap {
 		delay = goToDebounceActiveDrag
@@ -124,12 +115,8 @@ func (d *goToDebouncer) schedule(axis goToAxis, write func()) {
 	slot.gen++
 	slot.write = write
 
-	after := time.AfterFunc
-	if d.afterFunc != nil {
-		after = d.afterFunc
-	}
 	gen := slot.gen
-	slot.timer = after(delay, func() {
+	slot.timer = time.AfterFunc(delay, func() {
 		d.fire(axis, gen)
 	})
 }

@@ -18,7 +18,7 @@
 // transition. [PeriodicChecker] drives the boot-delayed, jittered
 // recurring check cadence.
 //
-// Every I/O seam (HTTP client, filesystem stat, process spawn, wall
-// clock) is injectable so the package is fully testable without a real
+// Every I/O seam (HTTP client, filesystem stat, process spawn) is
+// injectable so the package is fully testable without a real
 // CCU, network, or firmware installer.
 package addonupdate

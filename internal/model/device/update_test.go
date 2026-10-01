@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -51,29 +52,31 @@ func TestUpdateNilForNonUpdatable(t *testing.T) {
 }
 
 func TestUpdateAttachAndStart(t *testing.T) {
-	d := newTestDevice(t)
-	upd := &stubUpdater{}
-	refresh := &stubRefresher{}
-	d.AttachUpdate(upd, refresh)
+	synctest.Test(t, func(t *testing.T) {
+		d := newTestDevice(t)
+		upd := &stubUpdater{}
+		refresh := &stubRefresher{}
+		d.AttachUpdate(upd, refresh)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancel()
+		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		defer cancel()
 
-	done, err := d.Update().Start(ctx, []time.Duration{10 * time.Millisecond, 10 * time.Millisecond})
-	if err != nil {
-		t.Fatalf("start: %v", err)
-	}
-	select {
-	case <-done:
-	case <-time.After(200 * time.Millisecond):
-		t.Fatal("refresh worker never finished")
-	}
-	if upd.called.Load() != 1 {
-		t.Fatalf("updater called=%d", upd.called.Load())
-	}
-	if refresh.called.Load() != 2 {
-		t.Fatalf("refresher called=%d", refresh.called.Load())
-	}
+		done, err := d.Update().Start(ctx, []time.Duration{10 * time.Millisecond, 10 * time.Millisecond})
+		if err != nil {
+			t.Fatalf("start: %v", err)
+		}
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Fatal("refresh worker never finished")
+		}
+		if upd.called.Load() != 1 {
+			t.Fatalf("updater called=%d", upd.called.Load())
+		}
+		if refresh.called.Load() != 2 {
+			t.Fatalf("refresher called=%d", refresh.called.Load())
+		}
+	})
 }
 
 // TestUpdateStartLogsRefreshFirmwareDataError verifies that an error
@@ -82,38 +85,40 @@ func TestUpdateAttachAndStart(t *testing.T) {
 //
 // Intentionally NOT t.Parallel(): the test mutates slog.Default() globally.
 func TestUpdateStartLogsRefreshFirmwareDataError(t *testing.T) {
-	var buf bytes.Buffer
-	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn})
-	logger := slog.New(handler)
-	old := slog.Default()
-	slog.SetDefault(logger)
-	defer slog.SetDefault(old)
+	synctest.Test(t, func(t *testing.T) {
+		var buf bytes.Buffer
+		handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn})
+		logger := slog.New(handler)
+		old := slog.Default()
+		slog.SetDefault(logger)
+		defer slog.SetDefault(old)
 
-	d := newTestDevice(t)
-	boom := errors.New("refresh boom")
-	refresh := &stubRefresher{err: boom}
-	d.AttachUpdate(&stubUpdater{}, refresh)
+		d := newTestDevice(t)
+		boom := errors.New("refresh boom")
+		refresh := &stubRefresher{err: boom}
+		d.AttachUpdate(&stubUpdater{}, refresh)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancel()
+		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		defer cancel()
 
-	done, err := d.Update().Start(ctx, []time.Duration{10 * time.Millisecond})
-	if err != nil {
-		t.Fatalf("start: %v", err)
-	}
-	select {
-	case <-done:
-	case <-time.After(200 * time.Millisecond):
-		t.Fatal("refresh worker never finished")
-	}
+		done, err := d.Update().Start(ctx, []time.Duration{10 * time.Millisecond})
+		if err != nil {
+			t.Fatalf("start: %v", err)
+		}
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Fatal("refresh worker never finished")
+		}
 
-	logOutput := buf.String()
-	if !strings.Contains(logOutput, "refresh boom") {
-		t.Errorf("slog output missing the refresher error: %q", logOutput)
-	}
-	if !strings.Contains(logOutput, d.Address) {
-		t.Errorf("slog output missing the device address: %q", logOutput)
-	}
+		logOutput := buf.String()
+		if !strings.Contains(logOutput, "refresh boom") {
+			t.Errorf("slog output missing the refresher error: %q", logOutput)
+		}
+		if !strings.Contains(logOutput, d.Address) {
+			t.Errorf("slog output missing the device address: %q", logOutput)
+		}
+	})
 }
 
 func TestUpdateStartWithoutUpdaterErrs(t *testing.T) {

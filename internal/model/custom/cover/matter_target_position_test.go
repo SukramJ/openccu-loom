@@ -8,6 +8,7 @@ import (
 	"errors"
 	"slices"
 	"testing"
+	"testing/synctest"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -209,44 +210,47 @@ func (failingWriter) SetValue(context.Context, string, hmenum.Parameter, any, hm
 // it. That is the moment Current and Target diverge.
 func TestCoverTargetPosition_GoToLiftPercentage_TracksIndependentlyOfCurrent(t *testing.T) {
 	t.Parallel()
-	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
-	c.OnLevel(0.4) // CCU-confirmed baseline: HM 0.4 → Matter 6000.
-	srv := c.MatterClusterServers()[0]
+	synctest.Test(t, func(t *testing.T) {
+		defer drainOptimisticRollbacks()
+		c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
+		c.OnLevel(0.4) // CCU-confirmed baseline: HM 0.4 → Matter 6000.
+		srv := c.MatterClusterServers()[0]
 
-	if v, ok := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths); !ok || v.(uint16) != 6000 {
-		t.Fatalf("baseline TargetPositionLift = (%v, %v), want (6000, true) — must mirror current", v, ok)
-	}
+		if v, ok := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths); !ok || v.(uint16) != 6000 {
+			t.Fatalf("baseline TargetPositionLift = (%v, %v), want (6000, true) — must mirror current", v, ok)
+		}
 
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000)); err != nil {
-		t.Fatalf("GoToLiftPercentage(3000): %v", err)
-	}
-	target, ok := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths)
-	if !ok || target.(uint16) != 3000 {
-		t.Fatalf("TargetPositionLift after GoToLift = (%v, %v), want (3000, true)", target, ok)
-	}
-	// Once the debounced CCU write fires, Cover's optimistic write means
-	// Current mirrors the new target too — both attributes agree.
-	flushGoToWrites(&c.matterGoTo)
-	current, ok := srv.MatterRead(matterAttrCurrentPositionLiftPercent100ths)
-	if !ok || current.(uint16) != 3000 {
-		t.Fatalf("CurrentPositionLift after deferred GoToLift write = (%v, %v), want (3000, true) (optimistic mirror)", current, ok)
-	}
+		if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000)); err != nil {
+			t.Fatalf("GoToLiftPercentage(3000): %v", err)
+		}
+		target, ok := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths)
+		if !ok || target.(uint16) != 3000 {
+			t.Fatalf("TargetPositionLift after GoToLift = (%v, %v), want (3000, true)", target, ok)
+		}
+		// Once the debounced CCU write fires, Cover's optimistic write means
+		// Current mirrors the new target too — both attributes agree.
+		settleGoToWrites()
+		current, ok := srv.MatterRead(matterAttrCurrentPositionLiftPercent100ths)
+		if !ok || current.(uint16) != 3000 {
+			t.Fatalf("CurrentPositionLift after deferred GoToLift write = (%v, %v), want (3000, true) (optimistic mirror)", current, ok)
+		}
 
-	// A mismatching CCU-confirmed echo (mid-motion telemetry) replaces the
-	// optimistic guess on Position() but must not touch the stored Matter
-	// target — this is the divergence the fix exists to preserve.
-	c.OnLevel(0.55) // HM 0.55 → Matter 4500, distinct from the 3000 target.
-	current2, ok := srv.MatterRead(matterAttrCurrentPositionLiftPercent100ths)
-	if !ok || current2.(uint16) != 4500 {
-		t.Fatalf("CurrentPositionLift after mismatching echo = (%v, %v), want (4500, true)", current2, ok)
-	}
-	target2, ok := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths)
-	if !ok || target2.(uint16) != 3000 {
-		t.Fatalf("TargetPositionLift after mismatching echo = (%v, %v), want (3000, true) — unaffected by Position()", target2, ok)
-	}
-	if current2.(uint16) == target2.(uint16) {
-		t.Fatalf("expected Current(%d) != Target(%d) after the mismatching echo", current2, target2)
-	}
+		// A mismatching CCU-confirmed echo (mid-motion telemetry) replaces the
+		// optimistic guess on Position() but must not touch the stored Matter
+		// target — this is the divergence the fix exists to preserve.
+		c.OnLevel(0.55) // HM 0.55 → Matter 4500, distinct from the 3000 target.
+		current2, ok := srv.MatterRead(matterAttrCurrentPositionLiftPercent100ths)
+		if !ok || current2.(uint16) != 4500 {
+			t.Fatalf("CurrentPositionLift after mismatching echo = (%v, %v), want (4500, true)", current2, ok)
+		}
+		target2, ok := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths)
+		if !ok || target2.(uint16) != 3000 {
+			t.Fatalf("TargetPositionLift after mismatching echo = (%v, %v), want (3000, true) — unaffected by Position()", target2, ok)
+		}
+		if current2.(uint16) == target2.(uint16) {
+			t.Fatalf("expected Current(%d) != Target(%d) after the mismatching echo", current2, target2)
+		}
+	})
 }
 
 // TestCoverTargetPosition_UpOrOpenAndDownOrClose_SetExtremes verifies
@@ -285,48 +289,54 @@ func TestCoverTargetPosition_StopMotionClearsTarget(t *testing.T) {
 
 	t.Run("SupportsStop", func(t *testing.T) {
 		t.Parallel()
-		w := &stubWriter{}
-		c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{SupportsStop: true})
-		c.OnLevel(0.4)
-		srv := c.MatterClusterServers()[0]
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000)); err != nil {
-			t.Fatalf("GoToLift: %v", err)
-		}
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdStopMotion, nil); err != nil {
-			t.Fatalf("StopMotion: %v", err)
-		}
-		if w.last != true {
-			t.Fatalf("STOP parameter not written, last=%v", w.last)
-		}
-		current, _ := srv.MatterRead(matterAttrCurrentPositionLiftPercent100ths)
-		target, _ := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths)
-		if current.(uint16) != target.(uint16) {
-			t.Fatalf("after Stop: current=%v target=%v, want equal (mirror)", current, target)
-		}
+		synctest.Test(t, func(t *testing.T) {
+			defer drainOptimisticRollbacks()
+			w := &stubWriter{}
+			c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{SupportsStop: true})
+			c.OnLevel(0.4)
+			srv := c.MatterClusterServers()[0]
+			if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000)); err != nil {
+				t.Fatalf("GoToLift: %v", err)
+			}
+			if _, err := srv.MatterInvoke(context.Background(), matterCmdStopMotion, nil); err != nil {
+				t.Fatalf("StopMotion: %v", err)
+			}
+			if w.last != true {
+				t.Fatalf("STOP parameter not written, last=%v", w.last)
+			}
+			current, _ := srv.MatterRead(matterAttrCurrentPositionLiftPercent100ths)
+			target, _ := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths)
+			if current.(uint16) != target.(uint16) {
+				t.Fatalf("after Stop: current=%v target=%v, want equal (mirror)", current, target)
+			}
+		})
 	})
 
 	t.Run("NoSupportsStop_SilentNoOpStillClears", func(t *testing.T) {
 		t.Parallel()
-		w := &stubWriter{}
-		c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{}) // SupportsStop defaults false
-		c.OnLevel(0.4)
-		srv := c.MatterClusterServers()[0]
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000)); err != nil {
-			t.Fatalf("GoToLift: %v", err)
-		}
-		wireAfterGoToLift := w.last
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdStopMotion, nil); err != nil {
-			t.Fatalf("StopMotion: %v", err)
-		}
-		// Cover.Stop is a no-op without SupportsStop — no new wire write.
-		if w.last != wireAfterGoToLift {
-			t.Fatalf("STOP unexpectedly reached the wire: last=%v, want unchanged %v", w.last, wireAfterGoToLift)
-		}
-		current, _ := srv.MatterRead(matterAttrCurrentPositionLiftPercent100ths)
-		target, _ := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths)
-		if current.(uint16) != target.(uint16) {
-			t.Fatalf("after silent Stop: current=%v target=%v, want equal (mirror) — clear() still ran", current, target)
-		}
+		synctest.Test(t, func(t *testing.T) {
+			defer drainOptimisticRollbacks()
+			w := &stubWriter{}
+			c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{}) // SupportsStop defaults false
+			c.OnLevel(0.4)
+			srv := c.MatterClusterServers()[0]
+			if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000)); err != nil {
+				t.Fatalf("GoToLift: %v", err)
+			}
+			wireAfterGoToLift := w.last
+			if _, err := srv.MatterInvoke(context.Background(), matterCmdStopMotion, nil); err != nil {
+				t.Fatalf("StopMotion: %v", err)
+			}
+			// Cover.Stop is a no-op without SupportsStop — no new wire write.
+			if w.last != wireAfterGoToLift {
+				t.Fatalf("STOP unexpectedly reached the wire: last=%v, want unchanged %v", w.last, wireAfterGoToLift)
+			}
+			current, _ := srv.MatterRead(matterAttrCurrentPositionLiftPercent100ths)
+			target, _ := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths)
+			if current.(uint16) != target.(uint16) {
+				t.Fatalf("after silent Stop: current=%v target=%v, want equal (mirror) — clear() still ran", current, target)
+			}
+		})
 	})
 }
 
@@ -340,23 +350,26 @@ func TestCoverTargetPosition_StopMotionClearsTarget(t *testing.T) {
 // runs as a detached worker (WindowCoveringServer.ts:574-589, :379-383).
 func TestCoverTargetPosition_DeferredWriteFailureKeepsCommandedTarget(t *testing.T) {
 	t.Parallel()
-	c, _, _ := newRig(t, "HmIP-BROLL:3", failingWriter{}, custom.CoverCapabilities{})
-	c.OnLevel(0.4)
-	srv := c.MatterClusterServers()[0]
+	synctest.Test(t, func(t *testing.T) {
+		defer drainOptimisticRollbacks()
+		c, _, _ := newRig(t, "HmIP-BROLL:3", failingWriter{}, custom.CoverCapabilities{})
+		c.OnLevel(0.4)
+		srv := c.MatterClusterServers()[0]
 
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000)); err != nil {
-		t.Fatalf("MatterInvoke err=%v, want acceptance before the deferred write", err)
-	}
-	flushGoToWrites(&c.matterGoTo) // deferred write fails and is logged
+		if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000)); err != nil {
+			t.Fatalf("MatterInvoke err=%v, want acceptance before the deferred write", err)
+		}
+		settleGoToWrites() // deferred write fails and is logged
 
-	current, ok := srv.MatterRead(matterAttrCurrentPositionLiftPercent100ths)
-	if !ok || current.(uint16) != 6000 {
-		t.Fatalf("CurrentPositionLift after failed deferred write = (%v, %v), want (6000, true) — unchanged", current, ok)
-	}
-	target, ok := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths)
-	if !ok || target.(uint16) != 3000 {
-		t.Fatalf("TargetPositionLift after failed deferred write = (%v, %v), want (3000, true) — commanded value kept", target, ok)
-	}
+		current, ok := srv.MatterRead(matterAttrCurrentPositionLiftPercent100ths)
+		if !ok || current.(uint16) != 6000 {
+			t.Fatalf("CurrentPositionLift after failed deferred write = (%v, %v), want (6000, true) — unchanged", current, ok)
+		}
+		target, ok := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths)
+		if !ok || target.(uint16) != 3000 {
+			t.Fatalf("TargetPositionLift after failed deferred write = (%v, %v), want (3000, true) — commanded value kept", target, ok)
+		}
+	})
 }
 
 // TestBlindTargetPosition_GoToLiftAndTilt_TrackAxesIndependently is the
@@ -368,38 +381,41 @@ func TestCoverTargetPosition_DeferredWriteFailureKeepsCommandedTarget(t *testing
 // extra CCU echo required.
 func TestBlindTargetPosition_GoToLiftAndTilt_TrackAxesIndependently(t *testing.T) {
 	t.Parallel()
-	b := newBlindRig(t, "VCU3560967:1", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
-	b.OnLevel(0.4)        // Matter lift 6000.
-	b.level2.OnEvent(0.6) // Matter tilt 4000.
-	srv := b.MatterClusterServers()[0]
+	synctest.Test(t, func(t *testing.T) {
+		defer drainOptimisticRollbacks()
+		b := newBlindRig(t, "VCU3560967:1", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
+		b.OnLevel(0.4)        // Matter lift 6000.
+		b.level2.OnEvent(0.6) // Matter tilt 4000.
+		srv := b.MatterClusterServers()[0]
 
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000)); err != nil {
-		t.Fatalf("GoToLiftPercentage: %v", err)
-	}
-	if v, ok := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths); !ok || v.(uint16) != 3000 {
-		t.Fatalf("TargetPositionLift = (%v, %v), want (3000, true)", v, ok)
-	}
-	if v, ok := srv.MatterRead(matterAttrCurrentPositionLiftPercent100ths); !ok || v.(uint16) != 6000 {
-		t.Fatalf("CurrentPositionLift = (%v, %v), want (6000, true) — sendCombined does not update LEVEL", v, ok)
-	}
-	// Tilt axis is untouched by a lift-only command.
-	if v, ok := srv.MatterRead(matterAttrTargetPositionTiltPercent100ths); !ok || v.(uint16) != 4000 {
-		t.Fatalf("TargetPositionTilt = (%v, %v), want (4000, true) — still mirroring current", v, ok)
-	}
+		if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000)); err != nil {
+			t.Fatalf("GoToLiftPercentage: %v", err)
+		}
+		if v, ok := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths); !ok || v.(uint16) != 3000 {
+			t.Fatalf("TargetPositionLift = (%v, %v), want (3000, true)", v, ok)
+		}
+		if v, ok := srv.MatterRead(matterAttrCurrentPositionLiftPercent100ths); !ok || v.(uint16) != 6000 {
+			t.Fatalf("CurrentPositionLift = (%v, %v), want (6000, true) — sendCombined does not update LEVEL", v, ok)
+		}
+		// Tilt axis is untouched by a lift-only command.
+		if v, ok := srv.MatterRead(matterAttrTargetPositionTiltPercent100ths); !ok || v.(uint16) != 4000 {
+			t.Fatalf("TargetPositionTilt = (%v, %v), want (4000, true) — still mirroring current", v, ok)
+		}
 
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToTiltPercentage, uint16(2500)); err != nil {
-		t.Fatalf("GoToTiltPercentage: %v", err)
-	}
-	if v, ok := srv.MatterRead(matterAttrTargetPositionTiltPercent100ths); !ok || v.(uint16) != 2500 {
-		t.Fatalf("TargetPositionTilt = (%v, %v), want (2500, true)", v, ok)
-	}
-	if v, ok := srv.MatterRead(matterAttrCurrentPositionTiltPercent100ths); !ok || v.(uint16) != 4000 {
-		t.Fatalf("CurrentPositionTilt = (%v, %v), want (4000, true) — unchanged", v, ok)
-	}
-	// The earlier lift target must survive an unrelated tilt command.
-	if v, ok := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths); !ok || v.(uint16) != 3000 {
-		t.Fatalf("TargetPositionLift after GoToTilt = (%v, %v), want (3000, true) — unaffected", v, ok)
-	}
+		if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToTiltPercentage, uint16(2500)); err != nil {
+			t.Fatalf("GoToTiltPercentage: %v", err)
+		}
+		if v, ok := srv.MatterRead(matterAttrTargetPositionTiltPercent100ths); !ok || v.(uint16) != 2500 {
+			t.Fatalf("TargetPositionTilt = (%v, %v), want (2500, true)", v, ok)
+		}
+		if v, ok := srv.MatterRead(matterAttrCurrentPositionTiltPercent100ths); !ok || v.(uint16) != 4000 {
+			t.Fatalf("CurrentPositionTilt = (%v, %v), want (4000, true) — unchanged", v, ok)
+		}
+		// The earlier lift target must survive an unrelated tilt command.
+		if v, ok := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths); !ok || v.(uint16) != 3000 {
+			t.Fatalf("TargetPositionLift after GoToTilt = (%v, %v), want (3000, true) — unaffected", v, ok)
+		}
+	})
 }
 
 // TestBlindTargetPosition_UpOrOpenAndDownOrClose_SetBothAxes verifies
@@ -436,31 +452,34 @@ func TestBlindTargetPosition_UpOrOpenAndDownOrClose_SetBothAxes(t *testing.T) {
 // Current attributes (WindowCoveringServer.ts:490-493).
 func TestBlindTargetPosition_StopMotionClearsBothAxes(t *testing.T) {
 	t.Parallel()
-	b := newBlindRig(t, "VCU3560967:1", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true, SupportsStop: true}, BlindKindHM)
-	b.OnLevel(0.4)
-	b.level2.OnEvent(0.6)
-	srv := b.MatterClusterServers()[0]
+	synctest.Test(t, func(t *testing.T) {
+		defer drainOptimisticRollbacks()
+		b := newBlindRig(t, "VCU3560967:1", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true, SupportsStop: true}, BlindKindHM)
+		b.OnLevel(0.4)
+		b.level2.OnEvent(0.6)
+		srv := b.MatterClusterServers()[0]
 
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000)); err != nil {
-		t.Fatalf("GoToLiftPercentage: %v", err)
-	}
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToTiltPercentage, uint16(2500)); err != nil {
-		t.Fatalf("GoToTiltPercentage: %v", err)
-	}
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdStopMotion, nil); err != nil {
-		t.Fatalf("StopMotion: %v", err)
-	}
+		if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000)); err != nil {
+			t.Fatalf("GoToLiftPercentage: %v", err)
+		}
+		if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToTiltPercentage, uint16(2500)); err != nil {
+			t.Fatalf("GoToTiltPercentage: %v", err)
+		}
+		if _, err := srv.MatterInvoke(context.Background(), matterCmdStopMotion, nil); err != nil {
+			t.Fatalf("StopMotion: %v", err)
+		}
 
-	liftCur, _ := srv.MatterRead(matterAttrCurrentPositionLiftPercent100ths)
-	liftTgt, _ := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths)
-	if liftCur.(uint16) != liftTgt.(uint16) {
-		t.Fatalf("after Stop: lift current=%v target=%v, want equal (mirror)", liftCur, liftTgt)
-	}
-	tiltCur, _ := srv.MatterRead(matterAttrCurrentPositionTiltPercent100ths)
-	tiltTgt, _ := srv.MatterRead(matterAttrTargetPositionTiltPercent100ths)
-	if tiltCur.(uint16) != tiltTgt.(uint16) {
-		t.Fatalf("after Stop: tilt current=%v target=%v, want equal (mirror)", tiltCur, tiltTgt)
-	}
+		liftCur, _ := srv.MatterRead(matterAttrCurrentPositionLiftPercent100ths)
+		liftTgt, _ := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths)
+		if liftCur.(uint16) != liftTgt.(uint16) {
+			t.Fatalf("after Stop: lift current=%v target=%v, want equal (mirror)", liftCur, liftTgt)
+		}
+		tiltCur, _ := srv.MatterRead(matterAttrCurrentPositionTiltPercent100ths)
+		tiltTgt, _ := srv.MatterRead(matterAttrTargetPositionTiltPercent100ths)
+		if tiltCur.(uint16) != tiltTgt.(uint16) {
+			t.Fatalf("after Stop: tilt current=%v target=%v, want equal (mirror)", tiltCur, tiltTgt)
+		}
+	})
 }
 
 // --- Inferred target on externally initiated movement ---
@@ -517,9 +536,6 @@ func newDirectionRig(t *testing.T, dirParam hmenum.Parameter, caps custom.CoverC
 	})
 	ch.Put(dir)
 	c := New(Config{Channel: ch, Writer: &stubWriter{}, Capabilities: caps})
-	// Deferred GoTo*Percentage writes fire only via flushGoToWrites so
-	// tests stay deterministic.
-	neuterGoToTimers(&c.matterGoTo)
 	return c, dir, level
 }
 
@@ -576,32 +592,38 @@ func TestCoverInferredTarget_CommandedTargetAheadPreserved(t *testing.T) {
 
 	t.Run("Opening", func(t *testing.T) {
 		t.Parallel()
-		c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
-		srv := c.MatterClusterServers()[0]
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000)); err != nil {
-			t.Fatalf("GoToLiftPercentage: %v", err)
-		}
-		c.OnLevel(0.2) // CCU echo: Matter 8000 — commanded 3000 is ahead when opening.
-		c.OnDirection(DirectionUp)
+		synctest.Test(t, func(t *testing.T) {
+			defer drainOptimisticRollbacks()
+			c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
+			srv := c.MatterClusterServers()[0]
+			if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000)); err != nil {
+				t.Fatalf("GoToLiftPercentage: %v", err)
+			}
+			c.OnLevel(0.2) // CCU echo: Matter 8000 — commanded 3000 is ahead when opening.
+			c.OnDirection(DirectionUp)
 
-		if v := readTargetLift(t, srv); v.(uint16) != 3000 {
-			t.Fatalf("TargetPositionLift = %v, want 3000 (ahead of current 8000 while opening)", v)
-		}
+			if v := readTargetLift(t, srv); v.(uint16) != 3000 {
+				t.Fatalf("TargetPositionLift = %v, want 3000 (ahead of current 8000 while opening)", v)
+			}
+		})
 	})
 
 	t.Run("Closing", func(t *testing.T) {
 		t.Parallel()
-		c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
-		srv := c.MatterClusterServers()[0]
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(8000)); err != nil {
-			t.Fatalf("GoToLiftPercentage: %v", err)
-		}
-		c.OnLevel(0.8) // CCU echo: Matter 2000 — commanded 8000 is ahead when closing.
-		c.OnDirection(DirectionDown)
+		synctest.Test(t, func(t *testing.T) {
+			defer drainOptimisticRollbacks()
+			c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
+			srv := c.MatterClusterServers()[0]
+			if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(8000)); err != nil {
+				t.Fatalf("GoToLiftPercentage: %v", err)
+			}
+			c.OnLevel(0.8) // CCU echo: Matter 2000 — commanded 8000 is ahead when closing.
+			c.OnDirection(DirectionDown)
 
-		if v := readTargetLift(t, srv); v.(uint16) != 8000 {
-			t.Fatalf("TargetPositionLift = %v, want 8000 (ahead of current 2000 while closing)", v)
-		}
+			if v := readTargetLift(t, srv); v.(uint16) != 8000 {
+				t.Fatalf("TargetPositionLift = %v, want 8000 (ahead of current 2000 while closing)", v)
+			}
+		})
 	})
 }
 
@@ -631,27 +653,30 @@ func TestCoverInferredTarget_ExternalMovementWithoutCommandTargetsLimit(t *testi
 // CurrentPosition, including subsequent position echoes.
 func TestCoverInferredTarget_MotionStopSnapsTargetToCurrent(t *testing.T) {
 	t.Parallel()
-	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
-	srv := c.MatterClusterServers()[0]
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000)); err != nil {
-		t.Fatalf("GoToLiftPercentage: %v", err)
-	}
-	c.OnLevel(0.2) // CCU echo: Matter 8000.
-	c.OnDirection(DirectionUp)
-	if v := readTargetLift(t, srv); v.(uint16) != 3000 {
-		t.Fatalf("TargetPositionLift while moving = %v, want commanded 3000", v)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		defer drainOptimisticRollbacks()
+		c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
+		srv := c.MatterClusterServers()[0]
+		if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000)); err != nil {
+			t.Fatalf("GoToLiftPercentage: %v", err)
+		}
+		c.OnLevel(0.2) // CCU echo: Matter 8000.
+		c.OnDirection(DirectionUp)
+		if v := readTargetLift(t, srv); v.(uint16) != 3000 {
+			t.Fatalf("TargetPositionLift while moving = %v, want commanded 3000", v)
+		}
 
-	c.OnDirection(DirectionNone) // motion stopped without StopMotion command
-	if v := readTargetLift(t, srv); v.(uint16) != 8000 {
-		t.Fatalf("TargetPositionLift after stop = %v, want 8000 (mirror current)", v)
-	}
-	// The commanded target is gone, not just shadowed: a later position
-	// echo moves the mirrored target with it.
-	c.OnLevel(0.4) // Matter 6000.
-	if v := readTargetLift(t, srv); v.(uint16) != 6000 {
-		t.Fatalf("TargetPositionLift after later echo = %v, want 6000 (still mirroring)", v)
-	}
+		c.OnDirection(DirectionNone) // motion stopped without StopMotion command
+		if v := readTargetLift(t, srv); v.(uint16) != 8000 {
+			t.Fatalf("TargetPositionLift after stop = %v, want 8000 (mirror current)", v)
+		}
+		// The commanded target is gone, not just shadowed: a later position
+		// echo moves the mirrored target with it.
+		c.OnLevel(0.4) // Matter 6000.
+		if v := readTargetLift(t, srv); v.(uint16) != 6000 {
+			t.Fatalf("TargetPositionLift after later echo = %v, want 6000 (still mirroring)", v)
+		}
+	})
 }
 
 // TestCoverInferredTarget_UnobservedPositionReportsDirectionLimit: with
@@ -707,30 +732,33 @@ func TestCoverInferredTarget_InvertedControlFollowsDomainMotion(t *testing.T) {
 // motor drives both axes in one motion.
 func TestBlindInferredTarget_LiftInferredTiltCommandedUntilStop(t *testing.T) {
 	t.Parallel()
-	b := newBlindRig(t, "VCU3560967:1", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
-	b.OnLevel(0.5)        // Matter lift 5000.
-	b.level2.OnEvent(0.6) // Matter tilt 4000.
-	srv := b.MatterClusterServers()[0]
+	synctest.Test(t, func(t *testing.T) {
+		defer drainOptimisticRollbacks()
+		b := newBlindRig(t, "VCU3560967:1", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
+		b.OnLevel(0.5)        // Matter lift 5000.
+		b.level2.OnEvent(0.6) // Matter tilt 4000.
+		srv := b.MatterClusterServers()[0]
 
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToTiltPercentage, uint16(2500)); err != nil {
-		t.Fatalf("GoToTiltPercentage: %v", err)
-	}
-	b.OnDirection(DirectionDown) // external lift movement
+		if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToTiltPercentage, uint16(2500)); err != nil {
+			t.Fatalf("GoToTiltPercentage: %v", err)
+		}
+		b.OnDirection(DirectionDown) // external lift movement
 
-	if v := readTargetLift(t, srv); v.(uint16) != matterCoverPctMax {
-		t.Fatalf("TargetPositionLift while closing = %v, want 10000 (inferred)", v)
-	}
-	if v, ok := srv.MatterRead(matterAttrTargetPositionTiltPercent100ths); !ok || v.(uint16) != 2500 {
-		t.Fatalf("TargetPositionTilt while moving = (%v, %v), want commanded 2500", v, ok)
-	}
+		if v := readTargetLift(t, srv); v.(uint16) != matterCoverPctMax {
+			t.Fatalf("TargetPositionLift while closing = %v, want 10000 (inferred)", v)
+		}
+		if v, ok := srv.MatterRead(matterAttrTargetPositionTiltPercent100ths); !ok || v.(uint16) != 2500 {
+			t.Fatalf("TargetPositionTilt while moving = (%v, %v), want commanded 2500", v, ok)
+		}
 
-	b.OnDirection(DirectionNone) // stop snaps both axes
-	if v := readTargetLift(t, srv); v.(uint16) != 5000 {
-		t.Fatalf("TargetPositionLift after stop = %v, want 5000 (mirror current)", v)
-	}
-	if v, ok := srv.MatterRead(matterAttrTargetPositionTiltPercent100ths); !ok || v.(uint16) != 4000 {
-		t.Fatalf("TargetPositionTilt after stop = (%v, %v), want 4000 (mirror current)", v, ok)
-	}
+		b.OnDirection(DirectionNone) // stop snaps both axes
+		if v := readTargetLift(t, srv); v.(uint16) != 5000 {
+			t.Fatalf("TargetPositionLift after stop = %v, want 5000 (mirror current)", v)
+		}
+		if v, ok := srv.MatterRead(matterAttrTargetPositionTiltPercent100ths); !ok || v.(uint16) != 4000 {
+			t.Fatalf("TargetPositionTilt after stop = (%v, %v), want 4000 (mirror current)", v, ok)
+		}
+	})
 }
 
 // --- Change notifier: motion parameter wired ---
