@@ -1220,15 +1220,24 @@ func TestAddonUpdateCommands(t *testing.T) {
 		}
 	})
 
-	t.Run("nil updater leaves commands unregistered", func(t *testing.T) {
+	t.Run("nil updater stubs the commands", func(t *testing.T) {
+		// wsapi.json lists addon_update.* under optional_deployment_providers,
+		// whose contract is: declared commands stay dispatchable and answer
+		// not_implemented when the deployment does not wire the provider.
+		// Leaving them unregistered made them indistinguishable from a typo
+		// (unknown_command) — the e2e WS command walker now fails on that.
 		t.Parallel()
 		router := NewRouter()
 		RegisterExtendedCommands(router, ExtendedCommandsConfig{})
-		if router.Has("addon_update.check") {
-			t.Error("addon_update.check must stay unregistered without an updater")
-		}
-		if router.Has("addon_update.install") {
-			t.Error("addon_update.install must stay unregistered without an updater")
+		for _, cmd := range []string{"addon_update.check", "addon_update.install"} {
+			res := router.Dispatch(opCtx(), cmd, nil)
+			if res.Error == nil {
+				t.Errorf("%s: expected a stub error without an updater, got a result", cmd)
+				continue
+			}
+			if res.Error.Code != CommandErrorNotImplemented {
+				t.Errorf("%s: code=%q, want %q (stub, not unregistered)", cmd, res.Error.Code, CommandErrorNotImplemented)
+			}
 		}
 	})
 }

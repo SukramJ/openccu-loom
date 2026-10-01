@@ -438,6 +438,12 @@ func registerReportCommands(router *Router, cfg ExtendedCommandsConfig) {
 		// (ADR 0057); results stream via addon_update.state_changed.
 		router.Register("addon_update.check", addonUpdateCheckHandler(cfg.AddonUpdater))
 		router.Register("addon_update.install", addonUpdateInstallHandler(cfg.AddonUpdater))
+	} else {
+		// Outside the CCU add-on there is nothing to self-update; the
+		// commands stay registered as stubs so a declared command never
+		// reads as a misspelled one.
+		router.Register("addon_update.check", stubHandler("ws: addon_update.check: add-on updater not available in this deployment"))
+		router.Register("addon_update.install", stubHandler("ws: addon_update.install: add-on updater not available in this deployment"))
 	}
 	if cfg.IncidentClearer != nil {
 		// incidents.clear — clear the incident store.

@@ -90,6 +90,19 @@ the box shell is signed in already (ADR 0078, ADR 0079).
 
 ### Fixed
 
+- **WS `addon_update.check` / `addon_update.install` answer
+  `not_implemented` instead of `unknown_command`** outside the CCU
+  add-on, matching the catalogue contract every other
+  optional-provider command already follows. The e2e WS command walker
+  now enforces declared-equals-registered for the whole command plane
+  (`unknown_command` and `rate_limited` are no longer acceptable
+  answers), which is how this gap surfaced.
+- **An MCP-triggered program run no longer writes two audit rows.** The
+  `trigger_program` tool recorded its own entry on top of the one the
+  program-execute subscriber writes for every route, so each run read
+  as if it had run twice — the exact ambiguity the audit record exists
+  to resolve. The subscriber's row (source `mcp:program-trigger`) is
+  the single record now.
 - **A configuration save refused with 423 now locks the channel editor.**
   When the edit lock lapses mid-save (heartbeat missed or taken over),
   the SPA now flags the lock as lost — further saves are blocked and

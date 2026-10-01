@@ -971,18 +971,15 @@ func registerTriggerProgram(s *mcpsdk.Server, d Deps) {
 			return nil, triggerProgramOut{}, fmt.Errorf("program %q not found on central %q", programID, central)
 		}
 		// Stamp the surface so the program-execute audit/log subscriber
-		// can attribute the run to the MCP server.
+		// can attribute the run to the MCP server. That subscriber
+		// (cmd/openccu-loom/program_execute_audit.go) is the ONE audit and
+		// log writer for program runs on every route — REST, WS, MQTT and
+		// this tool alike — so no entry is recorded here: a second row made
+		// every MCP-triggered run read as if it had run twice, which is
+		// precisely the question the audit record exists to answer.
 		ctx = hmreqctx.WithOperation(ctx, "mcp:program-trigger")
 		if err := prog.Execute(ctx); err != nil {
 			return nil, triggerProgramOut{}, fmt.Errorf("execute program: %w", err)
-		}
-		if d.Audit != nil {
-			d.Audit.Record(audit.Entry{
-				Timestamp: time.Now().UTC(),
-				User:      callerSubject(ctx),
-				Action:    audit.ActionProgramExecute,
-				Note:      "program=" + programID + " via mcp",
-			})
 		}
 		return nil, triggerProgramOut{OK: true}, nil
 	})
