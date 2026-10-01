@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -42,7 +41,6 @@ type SessionStore struct {
 	// are exercised by paramset diffing — the store, not the session, owns
 	// its own lifecycle bookkeeping.
 	openedAt map[SessionKey]time.Time
-	clk      clock.Clock
 }
 
 // NewSessionStore returns an empty store.
@@ -50,7 +48,6 @@ func NewSessionStore() *SessionStore {
 	return &SessionStore{
 		sessions: make(map[SessionKey]*Session),
 		openedAt: make(map[SessionKey]time.Time),
-		clk:      clock.New(),
 	}
 }
 
@@ -76,7 +73,7 @@ func (s *SessionStore) Put(key SessionKey, session *Session) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	now := s.clk.Now()
+	now := time.Now()
 	s.sweepLocked(now)
 	s.sessions[key] = session
 	s.openedAt[key] = now

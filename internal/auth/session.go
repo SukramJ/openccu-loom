@@ -62,7 +62,6 @@ type SessionStore struct {
 	// how long a stolen-but-idle cookie stays usable. Zero disables the
 	// idle check (absolute TTL only), preserving the historical behaviour.
 	IdleTTL time.Duration
-	now     func() time.Time
 	mu      sync.RWMutex
 	items   map[string]*Session
 	persist SessionPersistence
@@ -87,7 +86,7 @@ func NewSessionStore() *SessionStore {
 // NewSessionStoreWithOptions is [NewSessionStore] with the tunables of opts
 // applied.
 func NewSessionStoreWithOptions(opts SessionStoreOptions) *SessionStore {
-	return &SessionStore{TTL: SessionTTL, IdleTTL: opts.IdleTTL, now: time.Now, items: make(map[string]*Session)}
+	return &SessionStore{TTL: SessionTTL, IdleTTL: opts.IdleTTL, items: make(map[string]*Session)}
 }
 
 // NewPersistentSessionStoreWithOptions constructs a save-through session
@@ -100,7 +99,6 @@ func NewPersistentSessionStoreWithOptions(persist SessionPersistence, logger *sl
 	s := &SessionStore{
 		TTL:     SessionTTL,
 		IdleTTL: opts.IdleTTL,
-		now:     time.Now,
 		items:   make(map[string]*Session),
 		persist: persist,
 		logger:  logger,
@@ -109,7 +107,7 @@ func NewPersistentSessionStoreWithOptions(persist SessionPersistence, logger *sl
 		// Boot-time hydration runs once during composition-root wiring,
 		// which has no request ctx to thread; a fresh background context
 		// is correct here.
-		active, err := persist.LoadActiveSessions(context.Background(), s.now())
+		active, err := persist.LoadActiveSessions(context.Background(), time.Now())
 		if err != nil {
 			return nil, err
 		}
@@ -120,7 +118,7 @@ func NewPersistentSessionStoreWithOptions(persist SessionPersistence, logger *sl
 		// which defeats the persistence entirely. Hydration time is the
 		// honest seed; the absolute Expires window still bounds the
 		// session.
-		hydratedAt := s.now()
+		hydratedAt := time.Now()
 		for _, sess := range active {
 			if sess.lastSeen.IsZero() {
 				sess.lastSeen = hydratedAt
@@ -154,7 +152,7 @@ func (s *SessionStore) Issue(id Identity) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	now := s.now()
+	now := time.Now()
 	session := &Session{ID: raw, Identity: id, Created: now, Expires: now.Add(s.TTL), lastSeen: now}
 	s.mu.Lock()
 	s.items[raw] = session
@@ -169,7 +167,7 @@ func (s *SessionStore) Issue(id Identity) (*Session, error) {
 // absolute expiry, or idle beyond IdleTTL. Evicted sessions are removed
 // on read; a live one has its idle clock refreshed.
 func (s *SessionStore) Lookup(sid string) *Session {
-	now := s.now()
+	now := time.Now()
 	s.mu.Lock()
 	sess, ok := s.items[sid]
 	if !ok {
@@ -251,7 +249,7 @@ func (s *SessionStore) revokeBySubject(subject, keepSID string) int {
 // returning the number of rows the persistence reported deleted. It is
 // safe with no persistence (memory is still swept; the count is 0).
 func (s *SessionStore) PurgeExpired(ctx context.Context) (int, error) {
-	now := s.now()
+	now := time.Now()
 	s.mu.Lock()
 	for id, sess := range s.items {
 		if now.After(sess.Expires) {

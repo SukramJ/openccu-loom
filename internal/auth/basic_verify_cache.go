@@ -50,7 +50,6 @@ type VerifiedBasicCache struct {
 
 	mu   sync.Mutex
 	seen map[[sha256.Size]byte]time.Time
-	now  func() time.Time
 }
 
 // NewVerifiedBasicCache returns a cache with the package defaults. It returns
@@ -66,7 +65,6 @@ func NewVerifiedBasicCache() *VerifiedBasicCache {
 		max:  verifiedBasicMax,
 		key:  key,
 		seen: make(map[[sha256.Size]byte]time.Time, 8),
-		now:  time.Now,
 	}
 }
 
@@ -82,7 +80,7 @@ func (c *VerifiedBasicCache) Verify(subject, storedHash, password string, verify
 		return verify()
 	}
 	key := c.entryKey(subject, storedHash, password)
-	now := c.now()
+	now := time.Now()
 	c.mu.Lock()
 	expires, hit := c.seen[key]
 	c.mu.Unlock()

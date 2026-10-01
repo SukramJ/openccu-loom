@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
@@ -159,9 +160,6 @@ func TestNewOIDCDeps_InitialisesStateMap(t *testing.T) {
 	if d.states == nil {
 		t.Fatal("states map must be initialised so putState does not nil-deref")
 	}
-	if d.now == nil {
-		t.Fatal("clock must be installed so consumeState's TTL check works")
-	}
 }
 
 // --- putState / consumeState round-trip ---
@@ -202,15 +200,21 @@ func TestOIDCDeps_ConsumeState_Unknown(t *testing.T) {
 
 func TestOIDCDeps_ConsumeState_ExpiredAfterTTL(t *testing.T) {
 	t.Parallel()
-	d := NewOIDCDeps(nil, nil, nil)
-	fakeNow := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
-	d.now = func() time.Time { return fakeNow }
-	key, _ := d.putState("v", "n")
-	// Advance the clock past oidcStateTTL.
-	d.now = func() time.Time { return fakeNow.Add(oidcStateTTL + time.Second) }
-	if _, _, ok := d.consumeState(key); ok {
-		t.Fatal("expired state must not match")
-	}
+	synctest.Test(t, func(t *testing.T) {
+		d := NewOIDCDeps(nil, nil, nil)
+		atTTL, _ := d.putState("v1", "n1")
+		pastTTL, _ := d.putState("v2", "n2")
+		// A state is consumed on its first match, so each side of the
+		// boundary gets its own.
+		time.Sleep(oidcStateTTL)
+		if _, _, ok := d.consumeState(atTTL); !ok {
+			t.Fatal("state must still match at exactly oidcStateTTL")
+		}
+		time.Sleep(time.Nanosecond)
+		if _, _, ok := d.consumeState(pastTTL); ok {
+			t.Fatal("expired state must not match")
+		}
+	})
 }
 
 // --- oidcRedirectError ---
@@ -422,28 +426,28 @@ func TestOIDCCallback_MismatchedStateCookie_RedirectsBadState(t *testing.T) {
 // unbounded in the map.
 func TestOIDCDeps_PutState_SweepsExpiredEntries(t *testing.T) {
 	t.Parallel()
-	d := NewOIDCDeps(nil, nil, nil)
-	fakeNow := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
-	d.now = func() time.Time { return fakeNow }
+	synctest.Test(t, func(t *testing.T) {
+		d := NewOIDCDeps(nil, nil, nil)
 
-	firstKey, err := d.putState("v1", "n1")
-	if err != nil {
-		t.Fatalf("putState: %v", err)
-	}
+		firstKey, err := d.putState("v1", "n1")
+		if err != nil {
+			t.Fatalf("putState: %v", err)
+		}
 
-	// Advance the clock past the TTL and insert a second state; this must
-	// trigger the sweep that removes the first (now-expired) entry.
-	d.now = func() time.Time { return fakeNow.Add(oidcStateTTL + time.Second) }
-	if _, err := d.putState("v2", "n2"); err != nil {
-		t.Fatalf("putState: %v", err)
-	}
+		// Advance the clock past the TTL and insert a second state; this must
+		// trigger the sweep that removes the first (now-expired) entry.
+		time.Sleep(oidcStateTTL + time.Second)
+		if _, err := d.putState("v2", "n2"); err != nil {
+			t.Fatalf("putState: %v", err)
+		}
 
-	d.mu.Lock()
-	_, stillThere := d.states[firstKey]
-	d.mu.Unlock()
-	if stillThere {
-		t.Fatal("expired state must be swept on the next putState insert")
-	}
+		d.mu.Lock()
+		_, stillThere := d.states[firstKey]
+		d.mu.Unlock()
+		if stillThere {
+			t.Fatal("expired state must be swept on the next putState insert")
+		}
+	})
 }
 
 // TestOIDCDeps_PutState_IsBoundedIndependentlyOfTheTTL pins the ceiling on
@@ -454,31 +458,33 @@ func TestOIDCDeps_PutState_SweepsExpiredEntries(t *testing.T) {
 // is dropped instead, because a real login completes in seconds.
 func TestOIDCDeps_PutState_IsBoundedIndependentlyOfTheTTL(t *testing.T) {
 	t.Parallel()
-	d := NewOIDCDeps(nil, nil, nil)
-	fakeNow := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
-	d.now = func() time.Time { return fakeNow }
+	synctest.Test(t, func(t *testing.T) {
+		d := NewOIDCDeps(nil, nil, nil)
 
-	var newest string
-	for i := range maxOIDCStates + 500 {
-		// Advance well inside the TTL so nothing is reclaimed by the sweep.
-		d.now = func() time.Time { return fakeNow.Add(time.Duration(i) * time.Millisecond) }
-		key, err := d.putState("v", "n")
-		if err != nil {
-			t.Fatalf("putState %d: %v", i, err)
+		var newest string
+		for i := range maxOIDCStates + 500 {
+			// Advance well inside the TTL so nothing is reclaimed by the sweep.
+			if i > 0 {
+				time.Sleep(time.Millisecond)
+			}
+			key, err := d.putState("v", "n")
+			if err != nil {
+				t.Fatalf("putState %d: %v", i, err)
+			}
+			newest = key
 		}
-		newest = key
-	}
 
-	d.mu.Lock()
-	n := len(d.states)
-	d.mu.Unlock()
-	if n > maxOIDCStates {
-		t.Fatalf("states=%d, want at most %d", n, maxOIDCStates)
-	}
-	// A flow started at the cap must still be completable.
-	if _, _, ok := d.consumeState(newest); !ok {
-		t.Error("the most recent flow was dropped instead of the oldest")
-	}
+		d.mu.Lock()
+		n := len(d.states)
+		d.mu.Unlock()
+		if n > maxOIDCStates {
+			t.Fatalf("states=%d, want at most %d", n, maxOIDCStates)
+		}
+		// A flow started at the cap must still be completable.
+		if _, _, ok := d.consumeState(newest); !ok {
+			t.Error("the most recent flow was dropped instead of the oldest")
+		}
+	})
 }
 
 // TestOIDCStart_UndiscoverableProvider_Returns503 pins the behaviour when
