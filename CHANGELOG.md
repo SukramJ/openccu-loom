@@ -14,6 +14,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   unaffected for operators. Developers: rebuild `golangci-lint` and
   `gofumpt` with the new toolchain (`go install …`, as CI does) — a
   binary built with 1.26 refuses a module that targets 1.27.
+- **The streamed snapshot (`GET /snapshot`, NDJSON) needs a third less
+  memory.** Go 1.27 runs `encoding/json` on its new v2 engine, which
+  copies every value it cannot address; the stream handed each line to
+  the encoder as a fresh map holding copies, so on 1.27 it allocated 30 %
+  more than before. Each line is now a typed record pointing into the
+  snapshot: against the Go 1.26 build the stream takes the same time with
+  33 % less memory and 31 % fewer allocations. The bytes on the wire are
+  unchanged, pinned by a byte-for-byte test.
 
 ## [0.83.0] - 2026-10-01
 
