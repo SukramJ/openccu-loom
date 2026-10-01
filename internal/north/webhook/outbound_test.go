@@ -475,42 +475,51 @@ func TestOutboundExhaustedRetriesIncrementFailed(t *testing.T) {
 }
 
 func TestOutboundStopUnsubscribesAndBlocksNewDeliveries(t *testing.T) {
+	// Not in a synctest bubble on purpose: a Stop that deadlocks on a mutex
+	// is not durably blocked, so the bubble clock would never advance and
+	// the 2s guard below could not fire.
 	t.Parallel()
-	synctest.Test(t, func(t *testing.T) {
-		u := makeCentral(t, "ccuA")
-		reg := makeRegistry(t, u)
-		ft := &fakeTransport{}
-		cfg := config.NorthWebhook{
-			Enabled: true,
-			URL:     "http://hook.test",
-		}
-		o := NewOutbound(
-			reg, cfg, nil,
-			WithHTTPClient(&http.Client{Transport: ft}),
-			WithBackoff(instantBackoff()),
-		)
-		if err := o.Start(context.Background()); err != nil {
-			t.Fatalf("Start: %v", err)
-		}
+	u := makeCentral(t, "ccuA")
+	reg := makeRegistry(t, u)
+	ft := &fakeTransport{}
+	cfg := config.NorthWebhook{
+		Enabled: true,
+		URL:     "http://hook.test",
+	}
+	o := NewOutbound(
+		reg, cfg, nil,
+		WithHTTPClient(&http.Client{Transport: ft}),
+		WithBackoff(instantBackoff()),
+	)
+	if err := o.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
 
-		// Stop must return without hanging: a deadlock inside it leaves every
-		// goroutine in the bubble durably blocked, which synctest reports as a
-		// failure instead of waiting out a timeout.
-		if err := o.Stop(context.Background()); err != nil {
+	// Stop must return without hanging.
+	stopCtx, stopCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer stopCancel()
+	stopped := make(chan error, 1)
+	go func() { stopped <- o.Stop(stopCtx) }()
+
+	select {
+	case err := <-stopped:
+		if err != nil {
 			t.Errorf("Stop returned error: %v", err)
 		}
+	case <-stopCtx.Done():
+		t.Fatal("Stop did not return within 2s — possible deadlock")
+	}
 
-		before := ft.count()
+	before := ft.count()
 
-		// Publish after Stop — should never be delivered.
-		u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "STATE",
-			hmtypes.BoolValue(true), hmtypes.NoneValue()))
-		synctest.Wait()
+	// Publish after Stop — should never be delivered.
+	u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "STATE",
+		hmtypes.BoolValue(true), hmtypes.NoneValue()))
+	time.Sleep(200 * time.Millisecond)
 
-		if ft.count() != before {
-			t.Errorf("got %d POST(s) after Stop, expected no change from %d", ft.count(), before)
-		}
-	})
+	if ft.count() != before {
+		t.Errorf("got %d POST(s) after Stop, expected no change from %d", ft.count(), before)
+	}
 }
 
 func TestOutboundDisabledIsNoop(t *testing.T) {
