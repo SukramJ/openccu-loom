@@ -33,7 +33,7 @@ codecs, against real handlers, with no shortcut into internal types.
 - **CI hermeticity**: zero external dependencies (no Docker, no real
   CCU, no internet) — runs on `ubuntu-latest`, `macos-latest`, and
   `windows-latest`.
-- **Determinism**: time is controlled via `internal/clock`; no
+- **Determinism**: time is controlled via `testing/synctest`; no
   `time.Sleep` in test bodies; goroutine-leak detection on every test.
 - **Wallclock budget**: < 2 min on a clean GitHub-hosted runner.
 
@@ -42,7 +42,7 @@ codecs, against real handlers, with no shortcut into internal types.
 - Performance / latency SLA verification → `tests/bench/`.
 - Cross-stack model parity vs. aiohomematic → `make snapshot`.
 - Reliability timing windows (backoff, jitter envelopes) → unit tests
-  with `internal/clock` fakes.
+  in `testing/synctest` bubbles.
 - Coordinator lock semantics → race-flagged unit tests.
 - Pixel-level UI snapshots → run locally; not part of CI.
 

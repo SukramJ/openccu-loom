@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 46d3294e
-HEAD: 46d3294e
+Generated: 693a8c0c
+HEAD: 693a8c0c
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 6097 |
-| Reachable | 3994 |
-| Whitelisted | 2047 |
+| Total Exported | 6084 |
+| Reachable | 3989 |
+| Whitelisted | 2039 |
 | **Unreachable** | **56** |
 
 ## What these numbers cannot see
@@ -70,7 +70,7 @@ live. Each needs a different question than "is there an edge to it".
 
 | Package | Identifier | File | Line |
 |---|---|---|---|
-| internal/model/optimistic | New | internal/model/optimistic/tracker.go | 112 |
+| internal/model/optimistic | New | internal/model/optimistic/tracker.go | 107 |
 | pkg/hmlog | ForSubsystem | pkg/hmlog/factory.go | 131 |
 
 ## Full By-Package Breakdown
