@@ -329,7 +329,7 @@ func (t *Tracker) applyStaleLocked(c Component) Component {
 	if c.LastSample.Timestamp.IsZero() {
 		return c
 	}
-	if time.Now().Sub(c.LastSample.Timestamp) > t.staleAfter {
+	if time.Since(c.LastSample.Timestamp) > t.staleAfter {
 		c.Status = StatusUnknown
 	}
 	return c
@@ -969,7 +969,7 @@ func (t *Tracker) ClientScore(name string) float64 {
 	last := t.lastEventReceivedLocked(name)
 	age := time.Hour // treat "never seen an event" as fully decayed
 	if !last.IsZero() {
-		age = time.Now().Sub(last)
+		age = time.Since(last)
 	}
 	activity := clientScoreActivity(age)
 	return composeClientScore(state, circuit, activity)
