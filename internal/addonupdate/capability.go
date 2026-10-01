@@ -103,7 +103,7 @@ func HostIsLiteVariant(path string) bool {
 // hasLiteVariant reports whether the version manifest carries the exact
 // openccu-lite marker line.
 func hasLiteVariant(manifest []byte) bool {
-	for _, line := range bytes.Split(manifest, []byte("\n")) {
+	for line := range bytes.SplitSeq(manifest, []byte("\n")) {
 		if bytes.Equal(bytes.TrimSpace(line), liteVariantLine) {
 			return true
 		}

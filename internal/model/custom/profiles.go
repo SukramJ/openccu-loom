@@ -15,10 +15,6 @@ package custom
 
 import "github.com/SukramJ/openccu-loom/pkg/hmenum"
 
-// intPtr returns a pointer to v. The profile literals use it to
-// avoid the awkward `var x = 1; ... &x` pattern at every call site.
-func intPtr(v int) *int { return &v }
-
 // RegisterProfiles installs the whole device-profile catalogue onto r.
 // Called from [DefaultRegistry] at init() time.
 func RegisterProfiles(r *Registry) { //nolint:funlen // one registration literal per device: the catalogue is data, and splitting it would only move the data around
@@ -300,7 +296,7 @@ func RegisterProfiles(r *Registry) { //nolint:funlen // one registration literal
 		ProductGroup:      hmenum.ProductGroupHM,
 		Category:          hmenum.DataPointCategoryClimate,
 		Channels:          []ChannelRoleAssignment{{Channel: 1, Role: ChannelRolePrimary}},
-		ScheduleChannelNo: intPtr(999),
+		ScheduleChannelNo: new(999),
 		Extended:          nil,
 		Config:            ProfileConfigs[hmenum.DeviceProfile("RfThermostatGroup")],
 	})
@@ -721,7 +717,7 @@ func RegisterProfiles(r *Registry) { //nolint:funlen // one registration literal
 		ProductGroup:      hmenum.ProductGroupHM,
 		Category:          hmenum.DataPointCategoryClimate,
 		Channels:          []ChannelRoleAssignment{{Channel: 2, Role: ChannelRolePrimary}},
-		ScheduleChannelNo: intPtr(999),
+		ScheduleChannelNo: new(999),
 		Extended:          nil,
 		Config:            ProfileConfigs[hmenum.DeviceProfile("RfThermostat")],
 	})
@@ -821,7 +817,7 @@ func RegisterProfiles(r *Registry) { //nolint:funlen // one registration literal
 		ProductGroup:      hmenum.ProductGroupHmIP,
 		Category:          hmenum.DataPointCategoryClimate,
 		Channels:          []ChannelRoleAssignment{{Channel: 1, Role: ChannelRolePrimary}},
-		ScheduleChannelNo: intPtr(1),
+		ScheduleChannelNo: new(1),
 		Extended:          nil,
 		Config:            ProfileConfigs[hmenum.DeviceProfile("IPThermostat")],
 	})
@@ -851,7 +847,7 @@ func RegisterProfiles(r *Registry) { //nolint:funlen // one registration literal
 		ProductGroup:      hmenum.ProductGroupHmIP,
 		Category:          hmenum.DataPointCategoryLock,
 		Channels:          []ChannelRoleAssignment{{Channel: 1, Role: ChannelRolePrimary}},
-		ScheduleChannelNo: intPtr(10),
+		ScheduleChannelNo: new(10),
 		Extended: &ExtendedDeviceConfig{
 			FixedChannelFields: nil,
 			AdditionalDataPoints: map[int][]hmenum.Parameter{
@@ -888,7 +884,7 @@ func RegisterProfiles(r *Registry) { //nolint:funlen // one registration literal
 		ProductGroup:      hmenum.ProductGroupHmIP,
 		Category:          hmenum.DataPointCategoryLock,
 		Channels:          []ChannelRoleAssignment{{Channel: 12, Role: ChannelRolePrimary}},
-		ScheduleChannelNo: intPtr(14),
+		ScheduleChannelNo: new(14),
 		Extended: &ExtendedDeviceConfig{
 			FixedChannelFields: nil,
 			AdditionalDataPoints: map[int][]hmenum.Parameter{
@@ -992,7 +988,7 @@ func RegisterProfiles(r *Registry) { //nolint:funlen // one registration literal
 		ProductGroup:      hmenum.ProductGroupHmIP,
 		Category:          hmenum.DataPointCategoryClimate,
 		Channels:          []ChannelRoleAssignment{{Channel: 1, Role: ChannelRolePrimary}},
-		ScheduleChannelNo: intPtr(1),
+		ScheduleChannelNo: new(1),
 		Extended:          nil,
 		Config:            ProfileConfigs[hmenum.DeviceProfile("IPThermostat")],
 	})
@@ -1102,7 +1098,7 @@ func RegisterProfiles(r *Registry) { //nolint:funlen // one registration literal
 		ProductGroup:      hmenum.ProductGroupHmIP,
 		Category:          hmenum.DataPointCategoryClimate,
 		Channels:          []ChannelRoleAssignment{{Channel: 1, Role: ChannelRolePrimary}},
-		ScheduleChannelNo: intPtr(1),
+		ScheduleChannelNo: new(1),
 		Extended:          nil,
 		Config:            ProfileConfigs[hmenum.DeviceProfile("IPThermostatGroup")],
 	})
@@ -1301,7 +1297,7 @@ func RegisterProfiles(r *Registry) { //nolint:funlen // one registration literal
 		ProductGroup:      hmenum.ProductGroupHmIP,
 		Category:          hmenum.DataPointCategoryClimate,
 		Channels:          []ChannelRoleAssignment{{Channel: 1, Role: ChannelRolePrimary}},
-		ScheduleChannelNo: intPtr(1),
+		ScheduleChannelNo: new(1),
 		Extended:          nil,
 		Config:            ProfileConfigs[hmenum.DeviceProfile("IPThermostat")],
 	})
@@ -1321,7 +1317,7 @@ func RegisterProfiles(r *Registry) { //nolint:funlen // one registration literal
 		ProductGroup:      hmenum.ProductGroupHmIP,
 		Category:          hmenum.DataPointCategoryLight,
 		Channels:          []ChannelRoleAssignment{{Channel: 7, Role: ChannelRolePrimary}},
-		ScheduleChannelNo: intPtr(10),
+		ScheduleChannelNo: new(10),
 		Extended: &ExtendedDeviceConfig{
 			FixedChannelFields: nil,
 			AdditionalDataPoints: map[int][]hmenum.Parameter{
@@ -1362,7 +1358,7 @@ func RegisterProfiles(r *Registry) { //nolint:funlen // one registration literal
 		ProductGroup:      hmenum.ProductGroupHmIP,
 		Category:          hmenum.DataPointCategoryClimate,
 		Channels:          []ChannelRoleAssignment{{Channel: 8, Role: ChannelRolePrimary}},
-		ScheduleChannelNo: intPtr(1),
+		ScheduleChannelNo: new(1),
 		Extended:          nil,
 		Config:            ProfileConfigs[hmenum.DeviceProfile("IPThermostat")],
 	})
@@ -1452,7 +1448,7 @@ func RegisterProfiles(r *Registry) { //nolint:funlen // one registration literal
 		ProductGroup:      hmenum.ProductGroupHmIP,
 		Category:          hmenum.DataPointCategoryClimate,
 		Channels:          []ChannelRoleAssignment{{Channel: 1, Role: ChannelRolePrimary}},
-		ScheduleChannelNo: intPtr(1),
+		ScheduleChannelNo: new(1),
 		Extended:          nil,
 		Config:            ProfileConfigs[hmenum.DeviceProfile("IPThermostat")],
 	})
@@ -1522,7 +1518,7 @@ func RegisterProfiles(r *Registry) { //nolint:funlen // one registration literal
 		ProductGroup:      hmenum.ProductGroupHmIP,
 		Category:          hmenum.DataPointCategoryClimate,
 		Channels:          []ChannelRoleAssignment{{Channel: 1, Role: ChannelRolePrimary}},
-		ScheduleChannelNo: intPtr(1),
+		ScheduleChannelNo: new(1),
 		Extended:          nil,
 		Config:            ProfileConfigs[hmenum.DeviceProfile("IPThermostat")],
 	})
@@ -1532,7 +1528,7 @@ func RegisterProfiles(r *Registry) { //nolint:funlen // one registration literal
 		ProductGroup:      hmenum.ProductGroupHmIP,
 		Category:          hmenum.DataPointCategoryClimate,
 		Channels:          []ChannelRoleAssignment{{Channel: 1, Role: ChannelRolePrimary}},
-		ScheduleChannelNo: intPtr(1),
+		ScheduleChannelNo: new(1),
 		Extended:          nil,
 		Config:            ProfileConfigs[hmenum.DeviceProfile("IPThermostat")],
 	})
@@ -1552,7 +1548,7 @@ func RegisterProfiles(r *Registry) { //nolint:funlen // one registration literal
 		ProductGroup:      hmenum.ProductGroupHmIP,
 		Category:          hmenum.DataPointCategoryClimate,
 		Channels:          []ChannelRoleAssignment{{Channel: 1, Role: ChannelRolePrimary}},
-		ScheduleChannelNo: intPtr(1),
+		ScheduleChannelNo: new(1),
 		Extended:          nil,
 		Config:            ProfileConfigs[hmenum.DeviceProfile("IPThermostat")],
 	})

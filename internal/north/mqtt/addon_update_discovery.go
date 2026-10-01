@@ -152,40 +152,36 @@ func addonUpdateSlot() hamodel.Slot {
 // renders under.
 func (d *DefaultDiscoveryBuilder) buildAddonUpdateEntity() (*addonUpdateEntity, addonUpdateContext) {
 	ent := &addonUpdateEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      addonUpdateObjectID,
-			EntityPlatform: hacatalog.PlatformUpdate,
-			Description: hamodel.Description{
-				NameKey:  "discovery.addon_update",
-				Category: hacatalog.EntityCategoryDiagnostic,
-				Enabled:  hamodel.Ptr(true),
-				// Bridge only, mode `all`: the daemon's LWT is the sole
-				// source gating this entity — there is no device
-				// reachability behind a synthetic daemon card to add.
-				Availability: hamodel.BridgeOnly(),
-				// No `value_template`: HA's MQTT update platform parses the
-				// raw state_topic payload natively against its state-payload
-				// schema (installed_version, latest_version, in_progress)
-				// when no value_template narrows it to a scalar first.
-				// `in_progress_template` is not a schema option at all — HA
-				// reads `in_progress` only from that native parse — so
-				// setting either one here left the entity showing no
-				// install-in-progress indication.
-				ValueTemplate: hamodel.NoValueTemplate,
-			},
-			Binds: []hamodel.Binding{
-				{Role: hamodel.RoleState, Slot: addonUpdateSlot(), Mode: hamodel.Read},
-				{Role: hamodel.RoleCommand, Slot: addonUpdateSlot(), Mode: hamodel.Write},
-			},
+		EntityKey:      addonUpdateObjectID,
+		EntityPlatform: hacatalog.PlatformUpdate,
+		Description: hamodel.Description{
+			NameKey:  "discovery.addon_update",
+			Category: hacatalog.EntityCategoryDiagnostic,
+			Enabled:  new(true),
+			// Bridge only, mode `all`: the daemon's LWT is the sole
+			// source gating this entity — there is no device
+			// reachability behind a synthetic daemon card to add.
+			Availability: hamodel.BridgeOnly(),
+			// No `value_template`: HA's MQTT update platform parses the
+			// raw state_topic payload natively against its state-payload
+			// schema (installed_version, latest_version, in_progress)
+			// when no value_template narrows it to a scalar first.
+			// `in_progress_template` is not a schema option at all — HA
+			// reads `in_progress` only from that native parse — so
+			// setting either one here left the entity showing no
+			// install-in-progress indication.
+			ValueTemplate: hamodel.NoValueTemplate,
+		},
+		Binds: []hamodel.Binding{
+			{Role: hamodel.RoleState, Slot: addonUpdateSlot(), Mode: hamodel.Read},
+			{Role: hamodel.RoleCommand, Slot: addonUpdateSlot(), Mode: hamodel.Write},
 		},
 		latestVersionTopic: d.TopicBuilder.AddonUpdateState(),
 	}
 	ctx := addonUpdateContext{
-		StdContext: hadiscovery.StdContext{
-			Lang:       d.Locale,
-			Translator: d.tr,
-		},
-		topics: d.TopicBuilder,
+		Lang:       d.Locale,
+		Translator: d.tr,
+		topics:     d.TopicBuilder,
 	}
 	return ent, ctx
 }

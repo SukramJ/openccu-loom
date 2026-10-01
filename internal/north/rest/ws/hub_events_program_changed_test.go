@@ -23,8 +23,8 @@ func TestHubEventsSubscriberProgramChanged(t *testing.T) {
 	h := NewHub()
 	reg, cu := hubEventsRegistry(t)
 	cu.HubModel.PutProgram(&hub.Program{
-		HubDataPoint: hub.HubDataPoint{Name: "Lights Off"},
-		ID:           "P1",
+		Name: "Lights Off",
+		ID:   "P1",
 	})
 
 	sub := NewHubEventsSubscriber(reg, h)
@@ -67,8 +67,8 @@ func TestHubEventsSubscriberProgramChangedActive(t *testing.T) {
 	h := NewHub()
 	reg, cu := hubEventsRegistry(t)
 	cu.HubModel.PutProgram(&hub.Program{
-		HubDataPoint: hub.HubDataPoint{Name: "Lights Off"},
-		ID:           "P1",
+		Name: "Lights Off",
+		ID:   "P1",
 	})
 
 	sub := NewHubEventsSubscriber(reg, h)

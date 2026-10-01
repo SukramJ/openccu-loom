@@ -90,7 +90,7 @@ func TestTheCCUGateIsSeededBeforeTheHubDiscoveryConfigsThatNameIt(t *testing.T) 
 		Version: "3.79.6",
 		Serial:  "3014F711A0001F0123456789",
 	})
-	sv := &hub.Sysvar{HubDataPoint: hub.HubDataPoint{Name: "Anwesenheit"}, ValueType: hmenum.HubValueTypeLogic}
+	sv := &hub.Sysvar{Name: "Anwesenheit", ValueType: hmenum.HubValueTypeLogic}
 	sv.OnValue(hmtypes.BoolValue(true))
 	c.HubModel.PutSysvar(sv)
 

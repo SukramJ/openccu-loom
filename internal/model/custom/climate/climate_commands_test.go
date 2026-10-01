@@ -450,9 +450,7 @@ func TestSetModeIPToleratesConcurrentProfileEvents(t *testing.T) {
 
 	stop := make(chan struct{})
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for {
 			select {
 			case <-stop:
@@ -462,7 +460,7 @@ func TestSetModeIPToleratesConcurrentProfileEvents(t *testing.T) {
 				r.climate.OnProfile(ProfileNone)
 			}
 		}
-	}()
+	})
 
 	modes := []Mode{ModeHeat, ModeAuto}
 	for i := range 5000 {

@@ -46,9 +46,9 @@ func (f *fakeUsageMutator) SysvarUsagePrograms(context.Context, string) ([]hub.S
 func hubWithUsage(t *testing.T, programs []hub.SysvarUsage) *testHubIndex {
 	t.Helper()
 	h := hub.NewHub("test-ccu")
-	h.PutSysvar(&hub.Sysvar{HubDataPoint: hub.HubDataPoint{Name: "Alarm"}, ValueType: hmenum.HubValueTypeLogic})
+	h.PutSysvar(&hub.Sysvar{Name: "Alarm", ValueType: hmenum.HubValueTypeLogic})
 	// A program known to the hub registry drives the enrichment branch.
-	h.PutProgram(&hub.Program{HubDataPoint: hub.HubDataPoint{Name: "Morning Routine"}, ID: "P1"})
+	h.PutProgram(&hub.Program{Name: "Morning Routine", ID: "P1"})
 	h.SetMutator(&fakeUsageMutator{programs: programs})
 	return &testHubIndex{h: h}
 }
@@ -100,7 +100,7 @@ func TestGetSysvarUsage_NoReader_Returns503(t *testing.T) {
 	t.Parallel()
 	// A hub with a sysvar but no mutator/reader wired.
 	h := hub.NewHub("test-ccu")
-	h.PutSysvar(&hub.Sysvar{HubDataPoint: hub.HubDataPoint{Name: "Alarm"}, ValueType: hmenum.HubValueTypeLogic})
+	h.PutSysvar(&hub.Sysvar{Name: "Alarm", ValueType: hmenum.HubValueTypeLogic})
 	idx := &testHubIndex{h: h}
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sysvars/Alarm/usage", http.NoBody)
 	req = req.WithContext(chiContext(req, map[string]string{"name": "Alarm"}))

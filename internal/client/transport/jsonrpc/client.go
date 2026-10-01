@@ -455,8 +455,7 @@ func (c *Client) Login(ctx context.Context) error {
 		// many sessions"), never as an empty result. Both must engage the
 		// backoff: retrying at full speed against a CCU whose pool is full
 		// is what keeps it full.
-		var jerr *hmerr.JSONRPCError
-		if errors.As(err, &jerr) {
+		if jerr, ok := errors.AsType[*hmerr.JSONRPCError](err); ok {
 			attempt := c.noteLoginFailure()
 			c.logger.Warn("jsonrpc login rejected by CCU",
 				slog.String("host", c.host),

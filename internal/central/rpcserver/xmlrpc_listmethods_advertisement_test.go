@@ -5,6 +5,7 @@ package rpcserver
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
@@ -44,10 +45,8 @@ func TestCallbackListMethodsAdvertisesReplaceDevice(t *testing.T) {
 		}
 		names = append(names, s)
 	}
-	for _, n := range names {
-		if n == "replaceDevice" {
-			return
-		}
+	if slices.Contains(names, "replaceDevice") {
+		return
 	}
 	t.Fatalf("system.listMethods does not advertise replaceDevice; advertised: %v", names)
 }

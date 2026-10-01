@@ -156,8 +156,7 @@ func (v *OpenAPIValidator) Middleware() func(http.Handler) http.Handler {
 			if !streaming && r.Body != nil && r.ContentLength != 0 {
 				buf, readErr := io.ReadAll(http.MaxBytesReader(w, r.Body, openAPIBodyLimit))
 				if readErr != nil {
-					var mbe *http.MaxBytesError
-					if errors.As(readErr, &mbe) {
+					if _, ok := errors.AsType[*http.MaxBytesError](readErr); ok {
 						problem.Write(w, http.StatusRequestEntityTooLarge,
 							problem.New(problem.TypeValidation, r, "Request body too large", readErr.Error()))
 						return

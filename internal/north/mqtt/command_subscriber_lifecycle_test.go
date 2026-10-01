@@ -110,8 +110,7 @@ func TestCommandSubscriberLifecycleContextCancelledLifecycle(t *testing.T) {
 func TestCommandSubscriberLifecycleContextLiveLifecycle(t *testing.T) {
 	t.Parallel()
 
-	lifecycleCtx, cancel := context.WithCancel(context.Background())
-	defer cancel() // only cancelled after the test completes
+	lifecycleCtx := t.Context() // only cancelled after the test completes
 
 	noop := NewNoopClient()
 	topics := NewTopicBuilder("openccu-loom")

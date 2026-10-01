@@ -204,38 +204,34 @@ func (d *DefaultDiscoveryBuilder) BuildWeekProfileDiscovery(centralName string, 
 	slot := hamodel.S(dev.UID(), strconv.Itoa(ev.ChannelNo), hamodel.BucketCustom, "WEEKPROFILE").
 		In(centralName, ev.Interface)
 	entity := &weekProfileEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      "weekprofile",
-			EntityPlatform: hacatalog.PlatformSelect,
-			Description: hamodel.Description{
-				NameKey: "discovery.week_profile",
-				// The profile keys are their own labels: "P1".."PN" is what
-				// the CCU understands and what Home Assistant stores as the
-				// entity's state, so codes without labels render verbatim.
-				Options: &hamodel.Enum{Codes: append([]string(nil), profiles...)},
-			},
-			Binds: []hamodel.Binding{
-				{Role: hamodel.RoleState, Mode: hamodel.Read, Slot: slot},
-				{Role: hamodel.RoleCommand, Mode: hamodel.Write, Slot: slot},
-			},
+		EntityKey:      "weekprofile",
+		EntityPlatform: hacatalog.PlatformSelect,
+		Description: hamodel.Description{
+			NameKey: "discovery.week_profile",
+			// The profile keys are their own labels: "P1".."PN" is what
+			// the CCU understands and what Home Assistant stores as the
+			// entity's state, so codes without labels render verbatim.
+			Options: &hamodel.Enum{Codes: append([]string(nil), profiles...)},
+		},
+		Binds: []hamodel.Binding{
+			{Role: hamodel.RoleState, Mode: hamodel.Read, Slot: slot},
+			{Role: hamodel.RoleCommand, Mode: hamodel.Write, Slot: slot},
 		},
 	}
 
 	ctx := weekProfileDiscoveryContext{
-		StdContext: hadiscovery.StdContext{
-			Layout: weekProfileTopicLayout{d: d, ev: ev, central: centralName},
-			Lang:   d.Locale,
-			// The week-profile state topic carries the bare profile key, so
-			// there is nothing for a value template to reach into — and the
-			// select platform does accept `value_template`, so the default
-			// envelope encoding would project one matching no payload this
-			// daemon publishes.
-			Enc:        hadiscovery.RawEncoding,
-			Translator: d.tr,
-		},
-		uniqueID: uniqueID,
-		nodeID:   nodeID,
-		objectID: objectID,
+		Layout: weekProfileTopicLayout{d: d, ev: ev, central: centralName},
+		Lang:   d.Locale,
+		// The week-profile state topic carries the bare profile key, so
+		// there is nothing for a value template to reach into — and the
+		// select platform does accept `value_template`, so the default
+		// envelope encoding would project one matching no payload this
+		// daemon publishes.
+		Enc:        hadiscovery.RawEncoding,
+		Translator: d.tr,
+		uniqueID:   uniqueID,
+		nodeID:     nodeID,
+		objectID:   objectID,
 	}
 
 	comp, err := hadiscovery.RenderComponent(ctx, dev, entity, *BuildOriginInfo())

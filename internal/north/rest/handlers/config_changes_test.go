@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -46,13 +47,7 @@ func TestGetConfigChanges_TwoFields_Returns200(t *testing.T) {
 	}
 	wantPaths := []string{"north.mqtt.broker_url", "locale"}
 	for _, want := range wantPaths {
-		found := false
-		for _, got := range resp.Fields {
-			if got == want {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(resp.Fields, want)
 		if !found {
 			t.Errorf("expected path %q in response fields, got %v", want, resp.Fields)
 		}

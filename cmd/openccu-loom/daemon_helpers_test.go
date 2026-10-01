@@ -291,13 +291,7 @@ func TestCallbackAllowlistIncludesLoopbackAndCentralIPLiteral(t *testing.T) {
 		t.Fatalf("allowlist = %v, want exactly %v", got, want)
 	}
 	for _, w := range want {
-		found := false
-		for _, g := range got {
-			if g == w {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(got, w)
 		if !found {
 			t.Errorf("allowlist %v is missing expected prefix %v", got, w)
 		}
@@ -323,13 +317,7 @@ func TestCallbackAllowlistWithoutCentralsStillIncludesLoopback(t *testing.T) {
 		t.Fatalf("allowlist = %v, want exactly %v", got, want)
 	}
 	for _, w := range want {
-		found := false
-		for _, g := range got {
-			if g == w {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(got, w)
 		if !found {
 			t.Errorf("allowlist %v is missing expected prefix %v", got, w)
 		}

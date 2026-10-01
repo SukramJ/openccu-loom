@@ -10,6 +10,7 @@ import (
 	"context"
 	"net"
 	"net/netip"
+	"slices"
 	"strings"
 )
 
@@ -71,10 +72,8 @@ func (h *HostSuggester) Suggest(ctx context.Context, rawHost string) string {
 	if err != nil {
 		return host // already a hostname — nothing to improve
 	}
-	for _, local := range h.LocalIPs {
-		if local == ip {
-			return "localhost"
-		}
+	if slices.Contains(h.LocalIPs, ip) {
+		return "localhost"
 	}
 	if h.Supervised && dockerCIDR.Contains(ip.Unmap()) {
 		if name := h.reverseName(ctx, host); name != "" {

@@ -155,8 +155,7 @@ func TestPeriodicCheckerBootDelay(t *testing.T) {
 		Logger:    discardLogger(),
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	p.Start(ctx)
 	defer p.Stop()
 
@@ -185,8 +184,7 @@ func TestPeriodicCheckerRecurringInterval(t *testing.T) {
 		Logger:    discardLogger(),
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	p.Start(ctx)
 	defer p.Stop()
 
@@ -218,8 +216,7 @@ func TestPeriodicCheckerNoRecurringWhenIntervalDisabled(t *testing.T) {
 		Logger:    discardLogger(),
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	p.Start(ctx)
 	defer p.Stop()
 
@@ -253,8 +250,7 @@ func TestPeriodicCheckerDisabledEntirely(t *testing.T) {
 		Logger:    discardLogger(),
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	p.Start(ctx)
 	defer p.Stop()
 
@@ -316,8 +312,7 @@ func TestPeriodicCheckerStartTwiceIsNoOp(t *testing.T) {
 		Logger:    discardLogger(),
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	p.Start(ctx)
 	p.Start(ctx) // must be a no-op: only one goroutine should ever run
@@ -391,8 +386,7 @@ func TestPeriodicCheckerSurvivesAStalledCheck(t *testing.T) {
 		Logger:       discardLogger(),
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	p.Start(ctx)
 	defer p.Stop()
 

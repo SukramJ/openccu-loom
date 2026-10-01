@@ -4,6 +4,7 @@
 package handlers
 
 import (
+	"slices"
 	"testing"
 
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
@@ -35,13 +36,7 @@ func TestEnergyFoldHandlesEveryQueriedParameter(t *testing.T) {
 		}
 	}
 	for p := range folded {
-		found := false
-		for _, q := range queried {
-			if q == p {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(queried, p)
 		if !found {
 			t.Errorf("the fold handles %q but the store never queries it — dead branch", p)
 		}

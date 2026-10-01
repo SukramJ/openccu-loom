@@ -12,7 +12,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strconv"
 	"testing"
 
@@ -442,7 +442,7 @@ func sortedClusterIDs(servers []contract.ClusterServer) []string {
 		seen[id] = struct{}{}
 		ids = append(ids, id)
 	}
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	slices.Sort(ids)
 	out := make([]string, 0, len(ids))
 	for _, id := range ids {
 		out = append(out, hexID(id))

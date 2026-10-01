@@ -177,18 +177,16 @@ func (d *DefaultDiscoveryBuilder) BuildCombinedDiscovery(centralName string, ev 
 		},
 	}
 	ctx := combinedDiscoveryContext{
-		StdContext: hadiscovery.StdContext{
-			Layout: combinedTopicLayout{d: d, ev: ev, central: centralName},
-			Lang:   d.Locale,
-			// A combined state topic carries the projection's own JSON
-			// document, read by the template the projection wrote, not the
-			// `{"value":…}` envelope the datapoint planes publish — so the
-			// frame must contribute no value template of its own.
-			Enc:        hadiscovery.RawEncoding,
-			Translator: d.tr,
-		},
-		uniqueID: objectID,
-		nodeID:   nodeID,
+		Layout: combinedTopicLayout{d: d, ev: ev, central: centralName},
+		Lang:   d.Locale,
+		// A combined state topic carries the projection's own JSON
+		// document, read by the template the projection wrote, not the
+		// `{"value":…}` envelope the datapoint planes publish — so the
+		// frame must contribute no value template of its own.
+		Enc:        hadiscovery.RawEncoding,
+		Translator: d.tr,
+		uniqueID:   objectID,
+		nodeID:     nodeID,
 	}
 	frame, err := hadiscovery.RenderComponent(ctx, dev, frameEntity, *BuildOriginInfo())
 	if err != nil {

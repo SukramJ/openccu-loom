@@ -142,10 +142,7 @@ func (s *AuditStore) Query(ctx context.Context, q audit.Query) ([]audit.Entry, e
 	if limit <= 0 || limit > maxAuditListRows {
 		limit = maxAuditListRows
 	}
-	offset := q.Offset
-	if offset < 0 {
-		offset = 0
-	}
+	offset := max(q.Offset, 0)
 
 	var (
 		where []string

@@ -10,6 +10,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -390,8 +391,6 @@ func writeOKResult(w io.Writer, jsonOut bool, fields map[string]any) error {
 	}
 	out := make(map[string]any, len(fields)+1)
 	out["status"] = "ok"
-	for k, v := range fields {
-		out[k] = v
-	}
+	maps.Copy(out, fields)
 	return writeJSON(w, out)
 }

@@ -40,6 +40,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -294,8 +295,7 @@ func TestWireInterfaceReportsStaleHmIPParamsetDescriptors(t *testing.T) {
 	logs := &syncBuffer{}
 	logger := slog.New(slog.NewJSONHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	closer, _, err := wireInterface(
 		ctx, cc, hmenum.InterfaceHmIPRF, unit, NewDevicePipeline(unit), client.NewValueWriter(),
@@ -336,11 +336,8 @@ func TestWireInterfaceReportsStaleHmIPParamsetDescriptors(t *testing.T) {
 	// values; with the channels resolved under the wrong key it would report
 	// nothing simply because it looked at nothing.
 	var sawChannel bool
-	for _, addr := range ccu.readsOfMasterValues() {
-		if addr == staleChannelAddress {
-			sawChannel = true
-			break
-		}
+	if slices.Contains(ccu.readsOfMasterValues(), staleChannelAddress) {
+		sawChannel = true
 	}
 	if !sawChannel {
 		t.Errorf("the CCU was never asked for the MASTER values of %q; the sweep compared nothing",

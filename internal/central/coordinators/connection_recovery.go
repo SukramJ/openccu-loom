@@ -651,11 +651,9 @@ func (c *ConnectionRecoveryCoordinator) Subscribe() {
 	c.unsubscribers = append(c.unsubscribers, unsub1, unsub2, unsub3, unsub4)
 	c.subMu.Unlock()
 
-	c.recoveryWG.Add(1)
-	go func() {
-		defer c.recoveryWG.Done()
+	c.recoveryWG.Go(func() {
 		c.heartbeatLoop()
-	}()
+	})
 }
 
 // Stop releases all subscriptions registered by [Subscribe]. After Stop

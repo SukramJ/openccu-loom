@@ -29,7 +29,7 @@ func neuterGoToTimers(d *goToDebouncer) {
 // flushGoToWrites synchronously runs every pending deferred write, as
 // if the debounce delays had elapsed.
 func flushGoToWrites(d *goToDebouncer) {
-	for axis := goToAxis(0); axis < goToAxisCount; axis++ {
+	for axis := range goToAxisCount {
 		d.mu.Lock()
 		slot := &d.slots[axis]
 		slot.gen++

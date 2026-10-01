@@ -85,7 +85,7 @@ var binarySensorRulesByDeviceAndParam = map[devParam]HARegistryDescription{
 	// HM-Sec-Win — working/motion flag; disabled by default (diagnostic)
 	{"HM-Sec-Win", "WORKING"}: {
 		Key:              "WORKING",
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 
 	// HmIP-SRH — rotary handle, WINDOW_OPEN → window
@@ -136,7 +136,7 @@ var binarySensorRulesByParam = map[string]HARegistryDescription{
 	"EMERGENCY_OPERATION": {
 		Key:              "EMERGENCY_OPERATION",
 		DeviceClass:      "safety",
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 
 	// Problem sensors (diagnostic)
@@ -144,19 +144,19 @@ var binarySensorRulesByParam = map[string]HARegistryDescription{
 		Key:              "BLOCKED",
 		DeviceClass:      "problem",
 		EntityCategory:   EntityCategoryDiagnostic,
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 	"BLOCKED_TEMPORARY": {
 		Key:              "BLOCKED",
 		DeviceClass:      "problem",
 		EntityCategory:   EntityCategoryDiagnostic,
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 	"BURST_LIMIT_WARNING": {
 		Key:              "BURST_LIMIT_WARNING",
 		DeviceClass:      "problem",
 		EntityCategory:   EntityCategoryDiagnostic,
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 	// DUTYCYCLE and DUTY_CYCLE share a key; diagnostic with icon
 	"DUTYCYCLE": {
@@ -164,26 +164,26 @@ var binarySensorRulesByParam = map[string]HARegistryDescription{
 		DeviceClass:      "problem",
 		EntityCategory:   EntityCategoryDiagnostic,
 		Icon:             "mdi:radio-tower",
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 	"DUTY_CYCLE": {
 		Key:              "DUTY_CYCLE",
 		DeviceClass:      "problem",
 		EntityCategory:   EntityCategoryDiagnostic,
 		Icon:             "mdi:radio-tower",
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 	// DEW_POINT_ALARM: problem, disabled
 	"DEW_POINT_ALARM": {
 		Key:              "DEW_POINT_ALARM",
 		DeviceClass:      "problem",
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 	// ERROR_JAMMED: problem, disabled
 	"ERROR_JAMMED": {
 		Key:              "ERROR_JAMMED",
 		DeviceClass:      "problem",
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 
 	// Battery (diagnostic, enabled — battery state is important)
@@ -260,37 +260,37 @@ var binarySensorRulesByParam = map[string]HARegistryDescription{
 		Key:              "SABOTAGE",
 		DeviceClass:      "tamper",
 		EntityCategory:   EntityCategoryDiagnostic,
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 	"SABOTAGE_STICKY": {
 		Key:              "SABOTAGE",
 		DeviceClass:      "tamper",
 		EntityCategory:   EntityCategoryDiagnostic,
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 	"SABOTAGE_ACCELERATION": {
 		Key:              "SABOTAGE",
 		DeviceClass:      "tamper",
 		EntityCategory:   EntityCategoryDiagnostic,
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 	"SABOTAGE_BATTERY": {
 		Key:              "SABOTAGE",
 		DeviceClass:      "tamper",
 		EntityCategory:   EntityCategoryDiagnostic,
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 	"SABOTAGE_MAGNETIC_FIELD": {
 		Key:              "SABOTAGE",
 		DeviceClass:      "tamper",
 		EntityCategory:   EntityCategoryDiagnostic,
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 	"SABOTAGE_VERTICAL": {
 		Key:              "SABOTAGE",
 		DeviceClass:      "tamper",
 		EntityCategory:   EntityCategoryDiagnostic,
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 
 	// Window

@@ -130,7 +130,7 @@ func TestChirp_SuppressedWhileZoneActivationInFlight(t *testing.T) {
 // chirp instead of writing a siren tone.
 func TestChirp_MP3OutputPlaysSoundfileInsteadOfSiren(t *testing.T) {
 	h := newHarness(t)
-	h.seedOutputs(outputRow("chirpMp3", hmenum.AlarmOutputClassChirp, OutputConfig{SoundfileIndex: 5, Volume: ptrFloat64(0.7)}))
+	h.seedOutputs(outputRow("chirpMp3", hmenum.AlarmOutputClassChirp, OutputConfig{SoundfileIndex: 5, Volume: new(0.7)}))
 
 	if err := h.mgr.Chirp(h.ctx, "eg", engine.ChirpRequest{Kind: engine.ChirpArmSquawk}); err != nil {
 		t.Fatalf("Chirp: %v", err)

@@ -415,8 +415,8 @@ func TestHubEventsSubscriberProgramUniqueIDResolvable(t *testing.T) {
 
 	// Register the program in the central's hub model so the name can be resolved.
 	cu.HubModel.PutProgram(&hub.Program{
-		HubDataPoint: hub.HubDataPoint{Name: "Lights Off"},
-		ID:           "P1",
+		Name: "Lights Off",
+		ID:   "P1",
 	})
 
 	sub := NewHubEventsSubscriber(reg, h)

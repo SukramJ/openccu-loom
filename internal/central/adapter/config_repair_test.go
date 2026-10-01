@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"slices"
 	"strings"
 	"sync"
@@ -61,9 +62,7 @@ func (b *repairBackend) ops() *paramsetFakeOps {
 			b.mu.Lock()
 			defer b.mu.Unlock()
 			out := map[string]any{}
-			for k, v := range b.stored[address] {
-				out[k] = v
-			}
+			maps.Copy(out, b.stored[address])
 			return out, nil
 		},
 		putParamsetFn: func(_ context.Context, address string, _ hmenum.ParamsetKey, values map[string]any) error {
@@ -73,9 +72,7 @@ func (b *repairBackend) ops() *paramsetFakeOps {
 			if b.putErr != nil {
 				return b.putErr
 			}
-			for k, v := range values {
-				b.stored[address][k] = v
-			}
+			maps.Copy(b.stored[address], values)
 			return nil
 		},
 	}

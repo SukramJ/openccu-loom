@@ -5,6 +5,7 @@ package alarm
 
 import (
 	"context"
+	"slices"
 	"sort"
 	"sync"
 
@@ -130,7 +131,7 @@ func (s *Service) modesForZone(ctx context.Context, zoneID string) []hmenum.Alar
 	for m := range cfg.Modes {
 		modes = append(modes, m)
 	}
-	sort.Slice(modes, func(i, j int) bool { return modes[i] < modes[j] })
+	slices.Sort(modes)
 	return modes
 }
 

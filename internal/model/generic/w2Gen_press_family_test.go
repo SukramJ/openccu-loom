@@ -4,7 +4,7 @@
 package generic
 
 import (
-	"sort"
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -37,7 +37,7 @@ func TestW2GenPressFamilyHasOneDefinition(t *testing.T) {
 		candidates = append(candidates, p)
 	}
 	candidates = append(candidates, hmenum.ParameterLevel, hmenum.ParameterState)
-	sort.Slice(candidates, func(i, j int) bool { return candidates[i] < candidates[j] })
+	slices.Sort(candidates)
 
 	pressCount, longCount := 0, 0
 	for _, p := range candidates {

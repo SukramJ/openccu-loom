@@ -395,15 +395,13 @@ func (d *DefaultDiscoveryBuilder) renderHubItem(
 		ccu = ""
 	}
 	ctx := hubDiscoveryContext{
-		StdContext: hadiscovery.StdContext{
-			Layout:     layout,
-			Lang:       d.Locale,
-			Enc:        hadiscovery.RawEncoding,
-			Translator: d.tr,
-		},
-		uniqueID:  uniqueID,
-		nodeID:    nodeID,
-		ccuStatus: ccu,
+		Layout:     layout,
+		Lang:       d.Locale,
+		Enc:        hadiscovery.RawEncoding,
+		Translator: d.tr,
+		uniqueID:   uniqueID,
+		nodeID:     nodeID,
+		ccuStatus:  ccu,
 	}
 	comp, err := hadiscovery.RenderComponent(ctx, dev, e, *BuildOriginInfo())
 	if err != nil {
@@ -466,13 +464,11 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv Hu
 	objectID := safeLower(sv.Name)
 
 	entity := &hubEntity{
-		Basic: hamodel.Basic{
-			EntityKey: objectID,
-			Description: hamodel.Description{
-				Name:         hamodel.L(displaySysvarName(sv)),
-				Enabled:      hamodel.Ptr(sv.EnabledDefault),
-				Availability: hamodel.BridgeOnly(),
-			},
+		EntityKey: objectID,
+		Description: hamodel.Description{
+			Name:         hamodel.L(displaySysvarName(sv)),
+			Enabled:      new(sv.EnabledDefault),
+			Availability: hamodel.BridgeOnly(),
 		},
 	}
 	desc := &entity.Description
@@ -489,7 +485,7 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv Hu
 		if editable {
 			component = string(HAComponentSwitch)
 			writes = true
-			desc.Optimistic = hamodel.Ptr(false)
+			desc.Optimistic = new(false)
 			entity.fields = hadiscovery.SwitchFields{
 				PayloadOn: "true", PayloadOff: "false",
 				StateOn: "true", StateOff: "false",
@@ -509,7 +505,7 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv Hu
 			// daemon publishes and accepts the raw tokens, so an [hamodel.Enum]
 			// without labels renders them verbatim.
 			desc.Options = &hamodel.Enum{Codes: append([]string(nil), sv.ValueList...)}
-			desc.Optimistic = hamodel.Ptr(false)
+			desc.Optimistic = new(false)
 			desc.Category = EntityCategoryConfig
 		} else {
 			component = string(HAComponentSensor)
@@ -524,7 +520,7 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv Hu
 			// render them writable like the reference stack does.
 			component = string(HAComponentText)
 			writes = true
-			desc.Optimistic = hamodel.Ptr(false)
+			desc.Optimistic = new(false)
 			entity.fields = hadiscovery.TextFields{Mode: "text"}
 		} else {
 			// HA's `text` entity caps state payloads at 255 chars and warns
@@ -540,13 +536,13 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv Hu
 		if editable {
 			component = string(HAComponentNumber)
 			writes = true
-			desc.Optimistic = hamodel.Ptr(false)
+			desc.Optimistic = new(false)
 			if sv.ValueType == hmenum.HubValueTypeInteger {
 				entity.fields = hadiscovery.NumberFields{Mode: "box"}
-				desc.Step = hamodel.Ptr(float64(1))
+				desc.Step = new(float64(1))
 			} else {
 				entity.fields = hadiscovery.NumberFields{Mode: "auto"}
-				desc.Step = hamodel.Ptr(0.01)
+				desc.Step = new(0.01)
 			}
 		} else {
 			component = string(HAComponentSensor)
@@ -563,15 +559,15 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv Hu
 		// platforms whose schema declares them.
 		switch {
 		case sv.Min != nil:
-			desc.Min = hamodel.Ptr(*sv.Min)
+			desc.Min = new(*sv.Min)
 		case editable:
-			desc.Min = hamodel.Ptr(-1e9)
+			desc.Min = new(-1e9)
 		}
 		switch {
 		case sv.Max != nil:
-			desc.Max = hamodel.Ptr(*sv.Max)
+			desc.Max = new(*sv.Max)
 		case editable:
-			desc.Max = hamodel.Ptr(1e9)
+			desc.Max = new(1e9)
 		}
 		desc.Unit = hamodel.Unit(sv.Unit)
 	default:
@@ -697,14 +693,12 @@ func (d *DefaultDiscoveryBuilder) buildProgramRole(
 	}
 
 	entity := &hubEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      objectID,
-			EntityPlatform: hacatalog.Platform(role.Component),
-			Description: hamodel.Description{
-				Name:         hamodel.L(displayName),
-				Enabled:      hamodel.Ptr(p.EnabledDefault),
-				Availability: hamodel.BridgeOnly(),
-			},
+		EntityKey:      objectID,
+		EntityPlatform: hacatalog.Platform(role.Component),
+		Description: hamodel.Description{
+			Name:         hamodel.L(displayName),
+			Enabled:      new(p.EnabledDefault),
+			Availability: hamodel.BridgeOnly(),
 		},
 	}
 	layout := d.hubLayout(centralName, role.Topics.State)
@@ -718,7 +712,7 @@ func (d *DefaultDiscoveryBuilder) buildProgramRole(
 		entity.Description.Availability = hamodel.Availability{}
 	}
 	if role.Topics.State != "" {
-		entity.Description.Optimistic = hamodel.Ptr(false)
+		entity.Description.Optimistic = new(false)
 	}
 	// The command shape decides the platform's own keys, and the two roles a
 	// program declares are disjoint: the switch carries State plus Set, the
@@ -768,17 +762,15 @@ func (d *DefaultDiscoveryBuilder) BuildProgramDiscovery(centralName string, p Hu
 	}
 	objectID := safeLower(p.ID)
 	entity := &hubEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      objectID,
-			EntityPlatform: hacatalog.PlatformSwitch,
-			Description: hamodel.Description{
-				Name:         hamodel.L(displayName),
-				Enabled:      hamodel.Ptr(p.EnabledDefault),
-				Availability: hamodel.BridgeOnly(),
-				Optimistic:   hamodel.Ptr(false),
-			},
-			Binds: hubBinds(hubSlot(dev, centralName, "program", p.ID), true, true),
+		EntityKey:      objectID,
+		EntityPlatform: hacatalog.PlatformSwitch,
+		Description: hamodel.Description{
+			Name:         hamodel.L(displayName),
+			Enabled:      new(p.EnabledDefault),
+			Availability: hamodel.BridgeOnly(),
+			Optimistic:   new(false),
 		},
+		Binds: hubBinds(hubSlot(dev, centralName, "program", p.ID), true, true),
 		fields: hadiscovery.SwitchFields{
 			PayloadOn:  "true",
 			PayloadOff: "false",
@@ -809,23 +801,21 @@ func (d *DefaultDiscoveryBuilder) BuildAlarmMessagesDiscovery(centralName string
 		return DiscoveryItem{}
 	}
 	entity := &hubEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      "alarm_messages",
-			EntityPlatform: hacatalog.PlatformSensor,
-			Description: hamodel.Description{
-				NameKey:      "discovery.alarm_messages",
-				StateClass:   "measurement",
-				Category:     "diagnostic",
-				Availability: hamodel.BridgeOnly(),
-				// The state topic carries the message LIST, not a scalar, so
-				// the count is read out of it by template. That is a per-entity
-				// answer the context's encoding cannot give.
-				ValueTemplate:          "{{ value_json | length }}",
-				JSONAttributesTopic:    topic,
-				JSONAttributesTemplate: `{"messages": {{ value_json | tojson }} }`,
-			},
-			Binds: hubBinds(hubSlot(dev, centralName, "alarm_messages"), true, false),
+		EntityKey:      "alarm_messages",
+		EntityPlatform: hacatalog.PlatformSensor,
+		Description: hamodel.Description{
+			NameKey:      "discovery.alarm_messages",
+			StateClass:   "measurement",
+			Category:     "diagnostic",
+			Availability: hamodel.BridgeOnly(),
+			// The state topic carries the message LIST, not a scalar, so
+			// the count is read out of it by template. That is a per-entity
+			// answer the context's encoding cannot give.
+			ValueTemplate:          "{{ value_json | length }}",
+			JSONAttributesTopic:    topic,
+			JSONAttributesTemplate: `{"messages": {{ value_json | tojson }} }`,
 		},
+		Binds: hubBinds(hubSlot(dev, centralName, "alarm_messages"), true, false),
 	}
 	return d.renderHubItem(dev, entity, d.hubLayout(centralName, topic), uniqueID, hubNodeID(centralName, "messages"), "alarm")
 }
@@ -847,20 +837,18 @@ func (d *DefaultDiscoveryBuilder) BuildServiceMessagesDiscovery(centralName stri
 		return DiscoveryItem{}
 	}
 	entity := &hubEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      "service_messages",
-			EntityPlatform: hacatalog.PlatformSensor,
-			Description: hamodel.Description{
-				NameKey:                "discovery.service_messages",
-				StateClass:             "measurement",
-				Category:               "diagnostic",
-				Availability:           hamodel.BridgeOnly(),
-				ValueTemplate:          "{{ value_json | length }}",
-				JSONAttributesTopic:    topic,
-				JSONAttributesTemplate: `{"messages": {{ value_json | tojson }} }`,
-			},
-			Binds: hubBinds(hubSlot(dev, centralName, "service_messages"), true, false),
+		EntityKey:      "service_messages",
+		EntityPlatform: hacatalog.PlatformSensor,
+		Description: hamodel.Description{
+			NameKey:                "discovery.service_messages",
+			StateClass:             "measurement",
+			Category:               "diagnostic",
+			Availability:           hamodel.BridgeOnly(),
+			ValueTemplate:          "{{ value_json | length }}",
+			JSONAttributesTopic:    topic,
+			JSONAttributesTemplate: `{"messages": {{ value_json | tojson }} }`,
 		},
+		Binds: hubBinds(hubSlot(dev, centralName, "service_messages"), true, false),
 	}
 	return d.renderHubItem(dev, entity, d.hubLayout(centralName, topic), uniqueID, hubNodeID(centralName, "messages"), "service")
 }
@@ -886,20 +874,18 @@ func (d *DefaultDiscoveryBuilder) BuildInboxDiscovery(centralName string) Discov
 		return DiscoveryItem{}
 	}
 	entity := &hubEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      "inbox",
-			EntityPlatform: hacatalog.PlatformSensor,
-			Description: hamodel.Description{
-				NameKey:                "discovery.inbox",
-				StateClass:             "measurement",
-				Icon:                   "mdi:tray-arrow-down",
-				Availability:           hamodel.BridgeOnly(),
-				ValueTemplate:          "{{ value_json | length }}",
-				JSONAttributesTopic:    topic,
-				JSONAttributesTemplate: `{"devices": {{ value_json | tojson }} }`,
-			},
-			Binds: hubBinds(hubSlot(dev, centralName, "inbox"), true, false),
+		EntityKey:      "inbox",
+		EntityPlatform: hacatalog.PlatformSensor,
+		Description: hamodel.Description{
+			NameKey:                "discovery.inbox",
+			StateClass:             "measurement",
+			Icon:                   "mdi:tray-arrow-down",
+			Availability:           hamodel.BridgeOnly(),
+			ValueTemplate:          "{{ value_json | length }}",
+			JSONAttributesTopic:    topic,
+			JSONAttributesTemplate: `{"devices": {{ value_json | tojson }} }`,
 		},
+		Binds: hubBinds(hubSlot(dev, centralName, "inbox"), true, false),
 	}
 	return d.renderHubItem(dev, entity, d.hubLayout(centralName, topic), uniqueID, hubNodeID(centralName, "messages"), "inbox")
 }
@@ -967,25 +953,23 @@ func (d *DefaultDiscoveryBuilder) BuildInstallModeSensorDiscovery(centralName, i
 		return DiscoveryItem{}
 	}
 	entity := &hubEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      "install_mode_" + suffix,
-			EntityPlatform: hacatalog.PlatformSensor,
-			Description: hamodel.Description{
-				NameKey:      "discovery.install_mode_duration",
-				NameArgs:     map[string]string{"iface": installModeInterfaceLabel(iface)},
-				DeviceClass:  "duration",
-				Unit:         "s",
-				StateClass:   "measurement",
-				Category:     "diagnostic",
-				Availability: hamodel.BridgeOnly(),
-				// translation_key is the cross-stack parity marker Home
-				// Assistant declares nowhere and drops on receipt; see
-				// discoveryKeysHomeAssistantIgnores. It has no typed home in
-				// the shared model for exactly that reason.
-				Extra: map[string]any{"translation_key": "install_mode_" + suffix},
-			},
-			Binds: hubBinds(hubSlot(dev, centralName, "install_mode", suffix), true, false),
+		EntityKey:      "install_mode_" + suffix,
+		EntityPlatform: hacatalog.PlatformSensor,
+		Description: hamodel.Description{
+			NameKey:      "discovery.install_mode_duration",
+			NameArgs:     map[string]string{"iface": installModeInterfaceLabel(iface)},
+			DeviceClass:  "duration",
+			Unit:         "s",
+			StateClass:   "measurement",
+			Category:     "diagnostic",
+			Availability: hamodel.BridgeOnly(),
+			// translation_key is the cross-stack parity marker Home
+			// Assistant declares nowhere and drops on receipt; see
+			// discoveryKeysHomeAssistantIgnores. It has no typed home in
+			// the shared model for exactly that reason.
+			Extra: map[string]any{"translation_key": "install_mode_" + suffix},
 		},
+		Binds: hubBinds(hubSlot(dev, centralName, "install_mode", suffix), true, false),
 	}
 	return d.renderHubItem(dev, entity, d.hubLayout(centralName, topic), uniqueID,
 		hubNodeID(centralName, "central"), "install_mode_"+suffix)
@@ -1016,24 +1000,22 @@ func (d *DefaultDiscoveryBuilder) BuildInstallModeButtonDiscovery(centralName, i
 		return DiscoveryItem{}
 	}
 	entity := &hubEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      "install_mode_" + suffix + "_button",
-			EntityPlatform: hacatalog.PlatformButton,
-			Description: hamodel.Description{
-				NameKey:      "discovery.install_mode_activate",
-				NameArgs:     map[string]string{"iface": installModeInterfaceLabel(iface)},
-				Category:     EntityCategoryConfig,
-				Availability: hamodel.BridgeOnly(),
-				// translation_key is the cross-stack parity marker Home
-				// Assistant declares nowhere and drops on receipt; see
-				// discoveryKeysHomeAssistantIgnores.
-				Extra: map[string]any{"translation_key": "install_mode_" + suffix + "_button"},
-			},
-			// The button reads nothing and Home Assistant's button platform
-			// declares no `state_topic`; one writable binding is the whole
-			// entity.
-			Binds: hubBinds(hubSlot(dev, centralName, "install_mode", suffix), false, true),
+		EntityKey:      "install_mode_" + suffix + "_button",
+		EntityPlatform: hacatalog.PlatformButton,
+		Description: hamodel.Description{
+			NameKey:      "discovery.install_mode_activate",
+			NameArgs:     map[string]string{"iface": installModeInterfaceLabel(iface)},
+			Category:     EntityCategoryConfig,
+			Availability: hamodel.BridgeOnly(),
+			// translation_key is the cross-stack parity marker Home
+			// Assistant declares nowhere and drops on receipt; see
+			// discoveryKeysHomeAssistantIgnores.
+			Extra: map[string]any{"translation_key": "install_mode_" + suffix + "_button"},
 		},
+		// The button reads nothing and Home Assistant's button platform
+		// declares no `state_topic`; one writable binding is the whole
+		// entity.
+		Binds:  hubBinds(hubSlot(dev, centralName, "install_mode", suffix), false, true),
 		fields: hadiscovery.ButtonFields{PayloadPress: "PRESS"},
 	}
 	layout := d.hubLayout(centralName, "")
@@ -1062,23 +1044,21 @@ func (d *DefaultDiscoveryBuilder) BuildConnectivityDiscovery(centralName, iface 
 		return DiscoveryItem{}
 	}
 	entity := &hubEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      "connectivity_" + safeLower(iface),
-			EntityPlatform: hacatalog.PlatformBinarySensor,
-			Description: hamodel.Description{
-				NameKey:     "discovery.connectivity",
-				NameArgs:    map[string]string{"iface": iface},
-				DeviceClass: "connectivity",
-				Category:    "diagnostic",
-				// Bridge only, and no per-CCU gate either (see
-				// [hubEntity.selfReports] below). This sensor's whole job is
-				// to report that an interface is down, so gating it on that
-				// interface — or on the fold its own state feeds — would make
-				// it unavailable in the one situation it exists for.
-				Availability: hamodel.BridgeOnly(),
-			},
-			Binds: hubBinds(hubSlot(dev, centralName, "connectivity", iface), true, false),
+		EntityKey:      "connectivity_" + safeLower(iface),
+		EntityPlatform: hacatalog.PlatformBinarySensor,
+		Description: hamodel.Description{
+			NameKey:     "discovery.connectivity",
+			NameArgs:    map[string]string{"iface": iface},
+			DeviceClass: "connectivity",
+			Category:    "diagnostic",
+			// Bridge only, and no per-CCU gate either (see
+			// [hubEntity.selfReports] below). This sensor's whole job is
+			// to report that an interface is down, so gating it on that
+			// interface — or on the fold its own state feeds — would make
+			// it unavailable in the one situation it exists for.
+			Availability: hamodel.BridgeOnly(),
 		},
+		Binds: hubBinds(hubSlot(dev, centralName, "connectivity", iface), true, false),
 		fields: hadiscovery.BinarySensorFields{
 			PayloadOn:  "true",
 			PayloadOff: "false",
@@ -1121,23 +1101,21 @@ func (d *DefaultDiscoveryBuilder) BuildDaemonStatusDiscovery(centralName string)
 		return DiscoveryItem{}
 	}
 	entity := &hubEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      "daemon_status",
-			EntityPlatform: hacatalog.PlatformBinarySensor,
-			Description: hamodel.Description{
-				NameKey:     "discovery.daemon_status",
-				DeviceClass: "connectivity",
-				Category:    "diagnostic",
-				Enabled:     hamodel.Ptr(true),
-				// The absence IS the feature — see this builder's doc
-				// comment. [hamodel.NoAvailability] is the model's way to
-				// say it: [hamodel.LevelNone] suppresses the `availability`
-				// list and `availability_mode` together, where an empty
-				// level list would still resolve to the default pair.
-				Availability: hamodel.NoAvailability(),
-			},
-			Binds: hubBinds(hubSlot(dev, centralName, "daemon_status"), true, false),
+		EntityKey:      "daemon_status",
+		EntityPlatform: hacatalog.PlatformBinarySensor,
+		Description: hamodel.Description{
+			NameKey:     "discovery.daemon_status",
+			DeviceClass: "connectivity",
+			Category:    "diagnostic",
+			Enabled:     new(true),
+			// The absence IS the feature — see this builder's doc
+			// comment. [hamodel.NoAvailability] is the model's way to
+			// say it: [hamodel.LevelNone] suppresses the `availability`
+			// list and `availability_mode` together, where an empty
+			// level list would still resolve to the default pair.
+			Availability: hamodel.NoAvailability(),
 		},
+		Binds: hubBinds(hubSlot(dev, centralName, "daemon_status"), true, false),
 		fields: hadiscovery.BinarySensorFields{
 			PayloadOn:  "online",
 			PayloadOff: "offline",
@@ -1174,8 +1152,8 @@ func (d *DefaultDiscoveryBuilder) BuildSystemHealthDiscovery(centralName string)
 		StateClass:   "measurement",
 		Category:     "diagnostic",
 		Icon:         "mdi:heart-pulse",
-		Precision:    hamodel.Ptr(1),
-		Enabled:      hamodel.Ptr(true),
+		Precision:    new(1),
+		Enabled:      new(true),
 		Availability: hamodel.BridgeOnly(),
 		Extra:        map[string]any{"translation_key": "system_health"},
 	})
@@ -1192,12 +1170,10 @@ func (d *DefaultDiscoveryBuilder) hubMetricItem(
 		return DiscoveryItem{}
 	}
 	entity := &hubEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      key,
-			EntityPlatform: hacatalog.PlatformSensor,
-			Description:    desc,
-			Binds:          hubBinds(hubSlot(dev, centralName, key), true, false),
-		},
+		EntityKey:      key,
+		EntityPlatform: hacatalog.PlatformSensor,
+		Description:    desc,
+		Binds:          hubBinds(hubSlot(dev, centralName, key), true, false),
 	}
 	return d.renderHubItem(dev, entity, d.hubLayout(centralName, stateTopic), uniqueID,
 		hubNodeID(centralName, "system"), key)
@@ -1226,8 +1202,8 @@ func (d *DefaultDiscoveryBuilder) BuildConnectionLatencyDiscovery(centralName st
 		StateClass:   "measurement",
 		Category:     "diagnostic",
 		Icon:         "mdi:timer-outline",
-		Precision:    hamodel.Ptr(1),
-		Enabled:      hamodel.Ptr(true),
+		Precision:    new(1),
+		Enabled:      new(true),
 		Availability: hamodel.BridgeOnly(),
 		Extra:        map[string]any{"translation_key": "connection_latency"},
 	})
@@ -1258,8 +1234,8 @@ func (d *DefaultDiscoveryBuilder) BuildLastEventAgeDiscovery(centralName string)
 		StateClass:   "measurement",
 		Category:     "diagnostic",
 		Icon:         "mdi:clock-alert-outline",
-		Precision:    hamodel.Ptr(1),
-		Enabled:      hamodel.Ptr(true),
+		Precision:    new(1),
+		Enabled:      new(true),
 		Availability: hamodel.BridgeOnly(),
 		Extra:        map[string]any{"translation_key": "last_event_age"},
 	})
@@ -1289,26 +1265,24 @@ func (d *DefaultDiscoveryBuilder) BuildHubUpdateDiscovery(centralName string) Di
 		return DiscoveryItem{}
 	}
 	entity := &hubEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      "system_update",
-			EntityPlatform: hacatalog.PlatformUpdate,
-			Description: hamodel.Description{
-				NameKey:      "discovery.system_update",
-				Category:     "diagnostic",
-				Enabled:      hamodel.Ptr(true),
-				Availability: hamodel.BridgeOnly(),
-				// No `value_template`: HA's MQTT update platform parses the
-				// raw state_topic payload natively against its state-payload
-				// schema (installed_version, latest_version, in_progress)
-				// when no value_template narrows it to a scalar first.
-				// `in_progress_template` is not a schema option at all — HA
-				// reads `in_progress` only from that native parse — so
-				// setting either one here left the entity showing no
-				// install-in-progress indication.
-				ValueTemplate: hamodel.NoValueTemplate,
-			},
-			Binds: hubBinds(hubSlot(dev, centralName, "system_update"), true, false),
+		EntityKey:      "system_update",
+		EntityPlatform: hacatalog.PlatformUpdate,
+		Description: hamodel.Description{
+			NameKey:      "discovery.system_update",
+			Category:     "diagnostic",
+			Enabled:      new(true),
+			Availability: hamodel.BridgeOnly(),
+			// No `value_template`: HA's MQTT update platform parses the
+			// raw state_topic payload natively against its state-payload
+			// schema (installed_version, latest_version, in_progress)
+			// when no value_template narrows it to a scalar first.
+			// `in_progress_template` is not a schema option at all — HA
+			// reads `in_progress` only from that native parse — so
+			// setting either one here left the entity showing no
+			// install-in-progress indication.
+			ValueTemplate: hamodel.NoValueTemplate,
 		},
+		Binds: hubBinds(hubSlot(dev, centralName, "system_update"), true, false),
 		fields: hadiscovery.UpdateFields{
 			LatestVersionTopic:    topic,
 			LatestVersionTemplate: "{{ value_json.latest_version }}",

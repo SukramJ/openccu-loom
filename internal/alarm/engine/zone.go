@@ -5,6 +5,7 @@ package engine
 
 import (
 	"encoding/json"
+	"maps"
 	"sort"
 	"time"
 
@@ -352,9 +353,7 @@ func (a *zone) snapshot(now time.Time) ZoneSnapshot {
 	}
 	if len(a.readiness) > 0 {
 		snap.Readiness = make(map[hmenum.AlarmMode]hmevent.AlarmModeReadiness, len(a.readiness))
-		for m, r := range a.readiness {
-			snap.Readiness[m] = r
-		}
+		maps.Copy(snap.Readiness, a.readiness)
 	}
 	return snap
 }

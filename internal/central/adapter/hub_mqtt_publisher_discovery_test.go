@@ -6,6 +6,7 @@ package adapter
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -104,7 +105,7 @@ func TestHubDiscoveryUsesSerialFromCentralSystemInfo(t *testing.T) {
 	// device block is the synthetic central hub card (hubDeviceBlock), i.e. the
 	// payload that NAMES openccu-loom_central_ccu-01 and cures the "unknown
 	// device" parent.
-	sv := &hub.Sysvar{HubDataPoint: hub.HubDataPoint{Name: "Anwesenheit"}, ValueType: hmenum.HubValueTypeLogic}
+	sv := &hub.Sysvar{Name: "Anwesenheit", ValueType: hmenum.HubValueTypeLogic}
 	c.HubModel.PutSysvar(sv)
 
 	publisher.Start(context.Background())
@@ -153,7 +154,7 @@ func TestHubDiscoveryPublishedAfterSerialResolvesLate(t *testing.T) {
 	t.Parallel()
 	c, pub, publisher := hubDiscoveryFixture(t)
 
-	sv := &hub.Sysvar{HubDataPoint: hub.HubDataPoint{Name: "Anwesenheit"}, ValueType: hmenum.HubValueTypeLogic}
+	sv := &hub.Sysvar{Name: "Anwesenheit", ValueType: hmenum.HubValueTypeLogic}
 	c.HubModel.PutSysvar(sv)
 
 	// Boot-time Start with an unresolved serial: hub discovery is gated off.
@@ -229,13 +230,7 @@ func TestConnectivityDiscoveryStateTopicIsPublished(t *testing.T) {
 	})
 	publisher.Flush()
 
-	found := false
-	for _, topic := range publishedTopics(pub) {
-		if topic == stateTopic {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(publishedTopics(pub), stateTopic)
 	if !found {
 		t.Fatalf("declared state_topic %q is never published; topics=%v", stateTopic, publishedTopics(pub))
 	}
@@ -267,7 +262,7 @@ func TestRemovedProgramDiscoveryIsRetracted(t *testing.T) {
 		Serial:  "3014F711A0001F0123456789",
 	})
 
-	prog := &hub.Program{HubDataPoint: hub.HubDataPoint{Name: "Abend"}, ID: "prog-9"}
+	prog := &hub.Program{Name: "Abend", ID: "prog-9"}
 	prog.OnActive(false)
 	c.HubModel.PutProgram(prog)
 
@@ -324,8 +319,8 @@ func TestRetractCentralClearsEveryHubDiscoveryConfig(t *testing.T) {
 
 	// A sysvar, a program and a registered interface exercise the per-entity
 	// hub-discovery planes on top of the always-declared central-wide singletons.
-	c.HubModel.PutSysvar(&hub.Sysvar{HubDataPoint: hub.HubDataPoint{Name: "Anwesenheit"}, ValueType: hmenum.HubValueTypeLogic})
-	prog := &hub.Program{HubDataPoint: hub.HubDataPoint{Name: "Abend"}, ID: "prog-9"}
+	c.HubModel.PutSysvar(&hub.Sysvar{Name: "Anwesenheit", ValueType: hmenum.HubValueTypeLogic})
+	prog := &hub.Program{Name: "Abend", ID: "prog-9"}
 	prog.OnActive(false)
 	c.HubModel.PutProgram(prog)
 	if err := c.Clients.Register(&coordinators.ClientEntry{

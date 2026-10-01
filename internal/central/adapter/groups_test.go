@@ -140,7 +140,7 @@ func TestGroupsDomainList_ScopedHappyPath(t *testing.T) {
 	t.Parallel()
 	reg := central.NewRegistry()
 	w := clientpkg.NewValueWriter()
-	backend := &groupListerOps{fakeOperations: fakeOperations{kind: backends.KindCCU}, raw: oneGroupPayload}
+	backend := &groupListerOps{kind: backends.KindCCU, raw: oneGroupPayload}
 	registerCentralWithClient(t, reg, w, "ccu-01", backend)
 
 	d := NewGroupsDomain(reg)
@@ -176,7 +176,7 @@ func TestGroupsDomainList_AggregateMultipleCentralsSortedByName(t *testing.T) {
 	// Register "ccu-b" first and "ccu-a" second — the registry must still
 	// return them in name order per registry.List()'s own contract.
 	registerCentralWithClient(t, reg, w, "ccu-b", &groupListerOps{
-		fakeOperations: fakeOperations{kind: backends.KindCCU}, raw: oneGroupPayload,
+		kind: backends.KindCCU, raw: oneGroupPayload,
 	})
 	registerCentralWithClient(t, reg, w, "ccu-a", &fakeOperations{kind: backends.KindCCU})
 
@@ -208,7 +208,7 @@ func TestGroupsDomainList_ScopedBackendFetchError(t *testing.T) {
 	w := clientpkg.NewValueWriter()
 	wantErr := hmerr.ErrNoConnection
 	registerCentralWithClient(t, reg, w, "ccu-01", &groupListerOps{
-		fakeOperations: fakeOperations{kind: backends.KindCCU}, err: wantErr,
+		kind: backends.KindCCU, err: wantErr,
 	})
 
 	d := NewGroupsDomain(reg)
@@ -225,7 +225,7 @@ func TestGroupsDomainList_AggregateBackendFetchErrorSwallowed(t *testing.T) {
 	reg := central.NewRegistry()
 	w := clientpkg.NewValueWriter()
 	registerCentralWithClient(t, reg, w, "ccu-01", &groupListerOps{
-		fakeOperations: fakeOperations{kind: backends.KindCCU}, err: hmerr.ErrNoConnection,
+		kind: backends.KindCCU, err: hmerr.ErrNoConnection,
 	})
 
 	d := NewGroupsDomain(reg)

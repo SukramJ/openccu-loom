@@ -186,11 +186,9 @@ func TestBackendCallerCriticalWriteDoesNotAttachToLowPriorityLeader(t *testing.T
 	defer cancel()
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		_, _ = bc.CallAt(ctx, hmenum.CommandPriorityLow, "setValue", addr, param, false)
-	}()
+	})
 
 	select {
 	case <-leaderInFlight:
@@ -198,11 +196,9 @@ func TestBackendCallerCriticalWriteDoesNotAttachToLowPriorityLeader(t *testing.T
 		t.Fatal("low-priority leader never reached the transport")
 	}
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		_, _ = bc.CallAt(ctx, hmenum.CommandPriorityCritical, "setValue", addr, param, false)
-	}()
+	})
 	wg.Wait()
 
 	if n := arrived.Load(); n != 2 {

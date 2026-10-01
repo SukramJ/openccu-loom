@@ -1274,8 +1274,7 @@ func ParseTimeBaseFactor(d string) (base, factor int, ok bool) {
 	}
 	// Coarsest base first: timeBaseTable is ordered by ascending
 	// granularity, so walk it backwards.
-	for i := len(timeBaseTable) - 1; i >= 0; i-- {
-		row := timeBaseTable[i]
+	for _, row := range slices.Backward(timeBaseTable) {
 		if total100ms%row.in100ms != 0 {
 			continue
 		}
@@ -1307,8 +1306,8 @@ func durationIn100ms(d string) (total100ms int, ok bool) {
 	// three-letter suffix wins, and "ms" before "m"/"s".
 	unit, numStr := "s", d
 	for _, u := range []string{"min", "ms", "h", "m", "s"} {
-		if strings.HasSuffix(d, u) {
-			unit, numStr = u, strings.TrimSuffix(d, u)
+		if before, ok0 := strings.CutSuffix(d, u); ok0 {
+			unit, numStr = u, before
 			break
 		}
 	}

@@ -92,7 +92,7 @@ type embedDerived struct {
 }
 
 func TestForEmbeddedFields(t *testing.T) {
-	d := embedDerived{embedBase: embedBase{CentralID: "ccu-01"}, Address: "0001"}
+	d := embedDerived{CentralID: "ccu-01", Address: "0001"}
 	got := ForWith(&d, KindInfo, Options{})
 	if got["centralid"] != "ccu-01" || got["address"] != "0001" {
 		t.Fatalf("got=%+v", got)

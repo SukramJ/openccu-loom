@@ -162,8 +162,7 @@ func TestBINRPCServerServe_FatalAcceptErrorUnbindsListener(t *testing.T) {
 	ln := newScriptedListener(scriptedStep{err: fatal})
 	srv := newBINRPCServerOn(ln, nil, 50*time.Millisecond, nil)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	done := make(chan error, 1)
 	go func() { done <- srv.Serve(ctx) }()
 

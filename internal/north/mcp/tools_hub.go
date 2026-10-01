@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -42,12 +43,7 @@ func centralKnown(d Deps, centralName string) bool {
 	if centralName == "" || d.Centrals == nil {
 		return true
 	}
-	for _, c := range d.Centrals.Names() {
-		if c == centralName {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(d.Centrals.Names(), centralName)
 }
 
 // errUnknownCentral reports centralName against the configured centrals,

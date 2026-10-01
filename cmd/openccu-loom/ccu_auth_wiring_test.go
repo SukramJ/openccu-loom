@@ -191,11 +191,9 @@ func TestLoginChainWithCCU_WithCCU_UnknownUserDenied(t *testing.T) {
 
 // ── ccuAuthEnabled ────────────────────────────────────────────────────────────
 
-func ptrBool(b bool) *bool { return &b }
-
 func TestCCUAuthEnabled_ExplicitTrue(t *testing.T) {
 	t.Parallel()
-	cc := config.CCUAuthConfig{Enabled: ptrBool(true)}
+	cc := config.CCUAuthConfig{Enabled: new(true)}
 	if !ccuAuthEnabled(cc) {
 		t.Error("expected true when Enabled=&true")
 	}
@@ -203,7 +201,7 @@ func TestCCUAuthEnabled_ExplicitTrue(t *testing.T) {
 
 func TestCCUAuthEnabled_ExplicitFalse(t *testing.T) {
 	t.Parallel()
-	cc := config.CCUAuthConfig{Enabled: ptrBool(false)}
+	cc := config.CCUAuthConfig{Enabled: new(false)}
 	if ccuAuthEnabled(cc) {
 		t.Error("expected false when Enabled=&false")
 	}
@@ -230,7 +228,7 @@ func TestCCUAuthPrimary_NilDefaultsToTrue(t *testing.T) {
 
 func TestCCUAuthPrimary_ExplicitFalse(t *testing.T) {
 	t.Parallel()
-	cc := config.CCUAuthConfig{Primary: ptrBool(false)}
+	cc := config.CCUAuthConfig{Primary: new(false)}
 	if ccuAuthPrimary(cc) {
 		t.Error("expected false when Primary=&false")
 	}
@@ -238,7 +236,7 @@ func TestCCUAuthPrimary_ExplicitFalse(t *testing.T) {
 
 func TestCCUAuthPrimary_ExplicitTrue(t *testing.T) {
 	t.Parallel()
-	cc := config.CCUAuthConfig{Primary: ptrBool(true)}
+	cc := config.CCUAuthConfig{Primary: new(true)}
 	if !ccuAuthPrimary(cc) {
 		t.Error("expected true when Primary=&true")
 	}

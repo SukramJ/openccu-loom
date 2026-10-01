@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"sort"
 	"strings"
@@ -82,9 +83,7 @@ type streamLimits struct {
 func (v *Version) Majors() map[string]int {
 	out := map[string]int{"meta": 1, "rpc": 1, "system": 1, "auth": 1}
 	if v.Capabilities != nil {
-		for k, n := range v.Capabilities.APIs {
-			out[k] = n
-		}
+		maps.Copy(out, v.Capabilities.APIs)
 	}
 	return out
 }
@@ -250,8 +249,7 @@ func (c *Client) detectCCU(ctx context.Context, fp string) (Detection, error) {
 	}
 	resp, err := c.calls.Do(req)
 	if err != nil {
-		var apiErr *APIError
-		if errors.As(err, &apiErr) {
+		if _, ok := errors.AsType[*APIError](err); ok {
 			return Detection{Kind: DetectUnknown, TLSFingerprint: fp}, nil
 		}
 		return Detection{}, fmt.Errorf("occulited: detect: %w: %w", hmerr.ErrNoConnection, err)

@@ -37,7 +37,7 @@ func TestBuildIngressTrustTriState(t *testing.T) {
 
 	t.Run("supervised + explicit false → inert", func(t *testing.T) {
 		t.Setenv("OPENCCU_LOOM_SUPERVISOR", "1")
-		got := buildIngressTrust(cfgWith(ptrBool(false)), logger)
+		got := buildIngressTrust(cfgWith(new(false)), logger)
 		if got.Enabled || got.TrustedCIDR != nil {
 			t.Fatalf("want inert trust, got %+v", got)
 		}
@@ -53,7 +53,7 @@ func TestBuildIngressTrustTriState(t *testing.T) {
 
 	t.Run("explicit true but not supervised → inert middleware", func(t *testing.T) {
 		t.Setenv("OPENCCU_LOOM_SUPERVISOR", "0")
-		got := buildIngressTrust(cfgWith(ptrBool(true)), logger)
+		got := buildIngressTrust(cfgWith(new(true)), logger)
 		// enabled is honoured, but Supervised is false so the middleware no-ops.
 		if got.Supervised {
 			t.Fatalf("Supervised must be false when not supervised, got %+v", got)

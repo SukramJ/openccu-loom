@@ -713,7 +713,7 @@ func buildTwoCentralHubQuery(t *testing.T) *wsHubQuery {
 		if err != nil {
 			t.Fatalf("central.New(%s): %v", name, err)
 		}
-		cu.HubModel.PutSysvar(&hub.Sysvar{HubDataPoint: hub.HubDataPoint{Name: name + "-var"}})
+		cu.HubModel.PutSysvar(&hub.Sysvar{Name: name + "-var"})
 		if err := reg.Register(cu); err != nil {
 			t.Fatalf("reg.Register(%s): %v", name, err)
 		}

@@ -252,15 +252,13 @@ func BuildSecurityDiscovery(base, deviceName, configURL string, e securityEntity
 	}
 
 	entity := &securityModelEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      e.key,
-			EntityPlatform: hacatalog.Platform(e.component),
-			Description: hamodel.Description{
-				Name: hamodel.L(e.name),
-			},
-			Binds: []hamodel.Binding{
-				{Role: hamodel.RoleState, Mode: hamodel.Read, Slot: securitySlot(e.key)},
-			},
+		EntityKey:      e.key,
+		EntityPlatform: hacatalog.Platform(e.component),
+		Description: hamodel.Description{
+			Name: hamodel.L(e.name),
+		},
+		Binds: []hamodel.Binding{
+			{Role: hamodel.RoleState, Mode: hamodel.Read, Slot: securitySlot(e.key)},
 		},
 	}
 	desc := &entity.Description
@@ -298,19 +296,17 @@ func BuildSecurityDiscovery(base, deviceName, configURL string, e securityEntity
 		desc.Category = EntityCategoryDiagnostic
 	}
 	if !e.enabledByDefault {
-		desc.Enabled = hamodel.Ptr(false)
+		desc.Enabled = new(false)
 	}
 
 	ctx := securityDiscoveryContext{
-		StdContext: hadiscovery.StdContext{
-			Layout: securityTopicLayout{base: base, state: stateTopic},
-			// The security state topics carry a bare token or a JSON document
-			// read by the entity's own template, not the `{"value":…}`
-			// envelope the datapoint planes publish, so an entity rendered
-			// with the envelope's value template would read its state through
-			// a filter that never matches and show as unknown forever.
-			Enc: hadiscovery.RawEncoding,
-		},
+		Layout: securityTopicLayout{base: base, state: stateTopic},
+		// The security state topics carry a bare token or a JSON document
+		// read by the entity's own template, not the `{"value":…}`
+		// envelope the datapoint planes publish, so an entity rendered
+		// with the envelope's value template would read its state through
+		// a filter that never matches and show as unknown forever.
+		Enc:      hadiscovery.RawEncoding,
 		uniqueID: uniqueID,
 	}
 	comp, err := hadiscovery.RenderComponent(ctx, securityDevice(deviceName, configURL), entity, *BuildOriginInfo())

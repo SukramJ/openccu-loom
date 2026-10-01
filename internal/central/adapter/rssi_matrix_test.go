@@ -49,8 +49,6 @@ func (f *rssiMatrixOperations) SetBidcosInterface(_ context.Context, dev, gw str
 	return f.assignErr
 }
 
-func intp(v int) *int { return &v }
-
 // buildRSSIMatrixFixture registers one central "ccu-01" with a BidCos-RF
 // backend under the production wire id, two gateways GW1 (default) and
 // GW2, and the given model devices with their description INTERFACE /
@@ -289,14 +287,14 @@ func TestReceiverProposalVerdictTable(t *testing.T) {
 		curRx   *int
 		bestRx  *int
 	}{
-		{"ROAM", interfaces.ReceiverRoaming, "GW2", intp(-90), intp(-50)},
+		{"ROAM", interfaces.ReceiverRoaming, "GW2", new(-90), new(-50)},
 		{"NONE", interfaces.ReceiverUnmeasured, "", nil, nil},
 		{"DEAF", interfaces.ReceiverUnheard, "", nil, nil},
-		{"KEEP", interfaces.ReceiverKeep, "GW1", intp(-55), intp(-55)},
-		{"TIE", interfaces.ReceiverKeep, "GW1", intp(-60), intp(-60)},
-		{"EDGE", interfaces.ReceiverSwitch, "GW2", intp(-70), intp(-64)},
-		{"NEAR", interfaces.ReceiverMarginal, "GW2", intp(-70), intp(-65)},
-		{"LOST", interfaces.ReceiverSwitch, "GW2", nil, intp(-95)},
+		{"KEEP", interfaces.ReceiverKeep, "GW1", new(-55), new(-55)},
+		{"TIE", interfaces.ReceiverKeep, "GW1", new(-60), new(-60)},
+		{"EDGE", interfaces.ReceiverSwitch, "GW2", new(-70), new(-64)},
+		{"NEAR", interfaces.ReceiverMarginal, "GW2", new(-70), new(-65)},
+		{"LOST", interfaces.ReceiverSwitch, "GW2", nil, new(-95)},
 	}
 	if len(got) != len(cases) {
 		t.Fatalf("proposals = %d, want %d: %+v", len(got), len(cases), got)

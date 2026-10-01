@@ -30,9 +30,7 @@ func TestUpdateMetadataSerialisesWithNameReaders(t *testing.T) {
 	p := hub.NewProgram("race-central", "4711", "program0", "", false, nil)
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for i := range 500 {
 			// A fresh writer every round: the refresh replaces the
 			// execution backend in place while commands run against it.
@@ -42,11 +40,9 @@ func TestUpdateMetadataSerialisesWithNameReaders(t *testing.T) {
 			// rewrite UpdateMetadata guards for Name/IsInternal.
 			p.SetEnabledDefault(i%3 == 0)
 		}
-	}()
+	})
 	for range 4 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for range 500 {
 				_ = p.LegacyName()
 				_ = p.Signature()
@@ -62,7 +58,7 @@ func TestUpdateMetadataSerialisesWithNameReaders(t *testing.T) {
 				// The command path reads the writer the refresh swaps.
 				_ = p.Execute(context.Background())
 			}
-		}()
+		})
 	}
 	wg.Wait()
 

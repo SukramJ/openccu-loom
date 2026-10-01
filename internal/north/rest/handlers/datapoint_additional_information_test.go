@@ -29,8 +29,8 @@ func TestDataPointSummaryCarriesAdditionalInformation(t *testing.T) {
 
 	want := map[string]any{"Battery Type": "LR03", "Battery Qty": 2}
 	dp := &dpWithAdditionalInfo{
-		minimalDP: minimalDP{param: hmenum.ParameterState},
-		info:      want,
+		param: hmenum.ParameterState,
+		info:  want,
 	}
 
 	ch := &device.Channel{Type: "SWITCH"}
@@ -85,8 +85,8 @@ func TestDataPointSummaryAdditionalInformationOmittedWhenEmpty(t *testing.T) {
 	t.Parallel()
 
 	dp := &dpWithAdditionalInfo{
-		minimalDP: minimalDP{param: hmenum.ParameterState},
-		info:      map[string]any{}, // empty map
+		param: hmenum.ParameterState,
+		info:  map[string]any{}, // empty map
 	}
 	ch := &device.Channel{Type: "SWITCH"}
 	s := toDataPointSummary(dp, nil, ch, "")

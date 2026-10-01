@@ -229,7 +229,7 @@ func w2CliGoFieldForJSONKey(st *ast.StructType, key string) string {
 		if err != nil {
 			continue
 		}
-		for _, part := range strings.Split(tag, " ") {
+		for part := range strings.SplitSeq(tag, " ") {
 			if !strings.HasPrefix(part, `json:"`) {
 				continue
 			}

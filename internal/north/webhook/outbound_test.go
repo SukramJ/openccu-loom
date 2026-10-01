@@ -576,9 +576,7 @@ func TestOutboundEnqueueRacingStopDropsInsteadOfPanicking(t *testing.T) {
 		var wg sync.WaitGroup
 		stop := make(chan struct{})
 		for range publishers {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				defer func() {
 					if r := recover(); r != nil {
 						panics <- r
@@ -592,7 +590,7 @@ func TestOutboundEnqueueRacingStopDropsInsteadOfPanicking(t *testing.T) {
 					}
 					o.enqueue(envelope{Schema: schemaVersion, Event: "test", TS: "now"})
 				}
-			}()
+			})
 		}
 		// Let the publishers saturate the queue, then stop underneath them;
 		// they keep going for a moment after Stop returns, which is the

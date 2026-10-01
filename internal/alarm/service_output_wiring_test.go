@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -286,12 +287,7 @@ func (w *recordingCommandWriter) values() []string {
 }
 
 func (w *recordingCommandWriter) sawValue(want string) bool {
-	for _, v := range w.values() {
-		if v == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(w.values(), want)
 }
 
 // addSmokeSounder puts an HmIP-SWSD-class smoke detector into the

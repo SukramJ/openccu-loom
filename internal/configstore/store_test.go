@@ -601,10 +601,6 @@ func (e *errSectionLoader) List(_ context.Context) ([]sqlite.SectionRow, error) 
 	return nil, e.err
 }
 
-// boolPtr is a small helper used by tests that need to construct *bool
-// values inline. Reuse this whenever a *bool field must be checked.
-func boolPtr(b bool) *bool { return &b }
-
 // TestStoreEffectiveAppliesSectionCCUAuth verifies that a
 // north.rest.auth.ccu row in the section loader is applied to
 // cfg.North.REST.Auth.CCU and attributed to SourceDB — the persistence
@@ -614,8 +610,8 @@ func TestStoreEffectiveAppliesSectionCCUAuth(t *testing.T) {
 	sl := newFakeSectionLoader()
 
 	ccuAuth := config.CCUAuthConfig{
-		Enabled:      boolPtr(true),
-		Primary:      boolPtr(false),
+		Enabled:      new(true),
+		Primary:      new(false),
 		Central:      "ccu1",
 		MinUserLevel: 2,
 		RoleMapping:  map[string]string{"8": "admin"},

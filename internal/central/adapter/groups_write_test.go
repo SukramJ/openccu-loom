@@ -89,8 +89,8 @@ type fakeGroupWriterOps struct {
 
 func newFakeGroupWriterOps() *fakeGroupWriterOps {
 	return &fakeGroupWriterOps{
-		fakeOperations: fakeOperations{kind: backends.KindCCU},
-		nextID:         100,
+		kind:   backends.KindCCU,
+		nextID: 100,
 	}
 }
 

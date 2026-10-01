@@ -270,8 +270,7 @@ func TestArmWithLatchedMotionStillBlocks(t *testing.T) {
 	h.eng.HandleSensorEvent(h.ctx, "motion", true)
 
 	_, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"})
-	var notReady *engine.NotReadyError
-	if !errors.As(err, &notReady) {
+	if _, ok := errors.AsType[*engine.NotReadyError](err); !ok {
 		t.Fatalf("arm error = %v, want NotReadyError", err)
 	}
 	waitForWrites(t, reset, 1)
@@ -309,8 +308,7 @@ func TestArmResetDoesNotOverrideBlockers(t *testing.T) {
 	h.eng.HandleSensorEvent(h.ctx, "window", true)
 
 	_, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"})
-	var notReady *engine.NotReadyError
-	if !errors.As(err, &notReady) {
+	if _, ok := errors.AsType[*engine.NotReadyError](err); !ok {
 		t.Fatalf("arm error = %v, want NotReadyError — the reset must not clear the blocker", err)
 	}
 	// The reset still went out: the point is that it does not pre-empt

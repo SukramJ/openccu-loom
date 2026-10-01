@@ -122,8 +122,6 @@ func TestNorthMatter_SectionPutWithStringPasscode(t *testing.T) {
 	}
 }
 
-func ptrBool(b bool) *bool { return &b }
-
 // TestNorthMatter_TimeSyncEnabled verifies the tri-state logic of
 // NorthMatter.TimeSyncEnabled: nil (unset) and explicit false both
 // yield false; only an explicit true yields true.
@@ -136,8 +134,8 @@ func TestNorthMatter_TimeSyncEnabled(t *testing.T) {
 		want bool
 	}{
 		{"nil pointer — default off", NorthMatter{EnableTimeSync: nil}, false},
-		{"explicit false", NorthMatter{EnableTimeSync: ptrBool(false)}, false},
-		{"explicit true", NorthMatter{EnableTimeSync: ptrBool(true)}, true},
+		{"explicit false", NorthMatter{EnableTimeSync: new(false)}, false},
+		{"explicit true", NorthMatter{EnableTimeSync: new(true)}, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

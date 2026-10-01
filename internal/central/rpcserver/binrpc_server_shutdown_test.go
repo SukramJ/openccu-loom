@@ -36,9 +36,7 @@ func TestTrackConnOrdersAgainstShutdown(t *testing.T) {
 		var dialers sync.WaitGroup
 		start := make(chan struct{})
 		for range 8 {
-			dialers.Add(1)
-			go func() {
-				defer dialers.Done()
+			dialers.Go(func() {
 				<-start
 				conn, err := net.Dial("tcp", addr)
 				if err != nil {
@@ -47,7 +45,7 @@ func TestTrackConnOrdersAgainstShutdown(t *testing.T) {
 					return
 				}
 				_ = conn.Close()
-			}()
+			})
 		}
 		closed := make(chan struct{})
 		go func() {

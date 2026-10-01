@@ -815,7 +815,7 @@ type ReplaceCandidate struct {
 type CommunicationTestResult struct {
 	Passed      bool      `json:"passed"`
 	StartedAt   time.Time `json:"started_at"`
-	CompletedAt time.Time `json:"completed_at,omitempty"`
+	CompletedAt time.Time `json:"completed_at"`
 	DurationMs  int64     `json:"duration_ms"`
 	TimedOut    bool      `json:"timed_out"`
 }

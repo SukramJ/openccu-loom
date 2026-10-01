@@ -37,11 +37,11 @@ func TestRetractCentralClearsRawPlaneHubState(t *testing.T) {
 		Serial:  "3014F711A0001F0123456789",
 	})
 
-	sv := &hub.Sysvar{HubDataPoint: hub.HubDataPoint{Name: "Anwesenheit"}, ValueType: hmenum.HubValueTypeLogic}
+	sv := &hub.Sysvar{Name: "Anwesenheit", ValueType: hmenum.HubValueTypeLogic}
 	sv.OnValue(hmtypes.BoolValue(true))
 	c.HubModel.PutSysvar(sv)
 
-	prog := &hub.Program{HubDataPoint: hub.HubDataPoint{Name: "Abend"}, ID: "prog-9"}
+	prog := &hub.Program{Name: "Abend", ID: "prog-9"}
 	prog.OnActive(false)
 	c.HubModel.PutProgram(prog)
 

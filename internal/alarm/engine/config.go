@@ -6,6 +6,7 @@ package engine
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -50,14 +51,14 @@ type ZoneConfig struct {
 	Blockers BlockerPolicies `json:"blockers"`
 	// CodePolicy decides when arm/disarm/silence require an alarm code
 	// (notes/concepts/alarm-concept.md §11).
-	CodePolicy CodePolicy `json:"code_policy,omitempty"`
+	CodePolicy CodePolicy `json:"code_policy"`
 	// HazardOutputs is the always-on hazard-class output policy
 	// (notes/concepts/alarm-concept.md §6.1/§7). The zero value is loud.
-	HazardOutputs OutputPolicy `json:"hazard_outputs,omitempty"`
+	HazardOutputs OutputPolicy `json:"hazard_outputs"`
 	// PanicOutputs is the always-on panic-class output policy. The zero
 	// value is loud; a silent panic (per-sensor PanicSilent or an
 	// explicit silent PanicTrigger) forces Silent for that activation.
-	PanicOutputs OutputPolicy `json:"panic_outputs,omitempty"`
+	PanicOutputs OutputPolicy `json:"panic_outputs"`
 	// Schedules lists daily arm schedules and reminders for the zone
 	// (notes/concepts/alarm-concept.md §15 row 19). The schedule service computes
 	// each entry's next fire time and recomputes every chain on Reload.
@@ -160,7 +161,7 @@ type ModeConfig struct {
 	MaxRetriggerCycles int `json:"max_retrigger_cycles,omitempty"`
 	// Outputs is the mode's output policy (notes/concepts/alarm-concept.md §7):
 	// loud/silent, indoor/outdoor split, smoke sounders, chirps.
-	Outputs OutputPolicy `json:"outputs,omitempty"`
+	Outputs OutputPolicy `json:"outputs"`
 }
 
 // OutputPolicy selects which output classes a mode drives
@@ -338,12 +339,7 @@ func AlwaysOnViolated(sensorType hmenum.AlarmSensorType, cfg SensorConfig) bool 
 
 // InMode reports whether the sensor participates in mode.
 func (c SensorConfig) InMode(mode hmenum.AlarmMode) bool {
-	for _, m := range c.Modes {
-		if m == mode {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(c.Modes, mode)
 }
 
 // ParseZoneConfig decodes an alarm_zones.config_json document.

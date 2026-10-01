@@ -36,8 +36,6 @@ func (s *stubRSSIMatrix) ReceiverProposal(_ context.Context, margin int) ([]inte
 	return s.proposals, s.err
 }
 
-func hp(v int) *int { return &v }
-
 // TestDiagnosticsRSSIMatrix_Shape verifies the wire body: items per
 // central, snake_case keys, and a missing reading as an explicit null.
 func TestDiagnosticsRSSIMatrix_Shape(t *testing.T) {
@@ -48,7 +46,7 @@ func TestDiagnosticsRSSIMatrix_Shape(t *testing.T) {
 		Interfaces:  []interfaces.RSSIMatrixInterface{{Address: "GW1", Description: "CCU", Connected: true, Default: true, DutyCycle: 4}},
 		Devices: []interfaces.RSSIMatrixDevice{{
 			Address: "DEV", Name: "Flur",
-			Partners: []interfaces.RSSIMatrixPartner{{Address: "GW1", RxDBm: hp(-60), TxDBm: nil}},
+			Partners: []interfaces.RSSIMatrixPartner{{Address: "GW1", RxDBm: new(-60), TxDBm: nil}},
 		}},
 	}, {
 		Central:     "ccu-02",
@@ -119,7 +117,7 @@ func TestReceiverProposalHandler_ShapeAndDefaultMargin(t *testing.T) {
 	t.Parallel()
 	svc := &stubRSSIMatrix{proposals: []interfaces.ReceiverProposal{{
 		Address: "DEV", Name: "Flur", Central: "ccu-01", CurrentInterface: "GW1", BestInterface: "GW2",
-		CurrentRxDBm: nil, BestRxDBm: hp(-70), Verdict: interfaces.ReceiverSwitch,
+		CurrentRxDBm: nil, BestRxDBm: new(-70), Verdict: interfaces.ReceiverSwitch,
 	}}}
 	w := httptest.NewRecorder()
 	ReceiverProposalHandler(svc).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", http.NoBody))

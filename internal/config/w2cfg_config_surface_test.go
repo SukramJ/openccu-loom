@@ -44,8 +44,8 @@ func TestW2CfgEveryYAMLTaggedTypeIsReachableFromAConfigTier(t *testing.T) {
 	}
 
 	reachable := map[string]bool{}
-	w2CfgCollectTypes(reflect.TypeOf(Config{}), reachable)
-	w2CfgCollectTypes(reflect.TypeOf(BootstrapConfig{}), reachable)
+	w2CfgCollectTypes(reflect.TypeFor[Config](), reachable)
+	w2CfgCollectTypes(reflect.TypeFor[BootstrapConfig](), reachable)
 	if !reachable["CentralConfig"] {
 		t.Fatal("the reflective walk did not reach CentralConfig — it is not walking the config tree")
 	}
@@ -116,7 +116,7 @@ func w2CfgCollectTypes(rt reflect.Type, seen map[string]bool) {
 	if rt.Name() != "" {
 		seen[rt.Name()] = true
 	}
-	for i := range rt.NumField() {
-		w2CfgCollectTypes(rt.Field(i).Type, seen)
+	for field := range rt.Fields() {
+		w2CfgCollectTypes(field.Type, seen)
 	}
 }

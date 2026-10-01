@@ -41,11 +41,9 @@ func TestCloseDoesNotUnderflowInFlight(t *testing.T) {
 	var wg sync.WaitGroup
 	errs := make(chan error, queued)
 	for range queued {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			errs <- tt.Acquire(context.Background(), hmenum.CommandPriorityLow)
-		}()
+		})
 	}
 
 	// Wait until both goroutines have parked in the waiter heap.

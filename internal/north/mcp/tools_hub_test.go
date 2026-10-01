@@ -848,8 +848,8 @@ func TestGetDeviceSchedule_DeviceWithoutSchedule(t *testing.T) {
 		t.Fatalf("get_device_schedule returned error: %v", res.Content)
 	}
 	var out struct {
-		Found    bool          `json:"found"`
-		Channels []interface{} `json:"channels"`
+		Found    bool  `json:"found"`
+		Channels []any `json:"channels"`
 	}
 	unmarshalStructured(t, res, &out)
 	if !out.Found {

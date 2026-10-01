@@ -4,6 +4,8 @@
 package payload
 
 import (
+	"maps"
+
 	hapayload "github.com/SukramJ/go-hamqtt/payload"
 )
 
@@ -81,9 +83,7 @@ func ForWith(obj any, k Kind, opts Options) map[string]any {
 		IncludeZero: opts.IncludeZero,
 	})
 	if ep, ok := obj.(ExtraProperties); ok {
-		for name, val := range ep.PayloadExtra(k, opts) {
-			out[name] = val
-		}
+		maps.Copy(out, ep.PayloadExtra(k, opts))
 	}
 	return out
 }

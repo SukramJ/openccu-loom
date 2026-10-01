@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -152,8 +153,8 @@ func liteBackendOn(t *testing.T, f *litefake.Fake, iface hmenum.Interface, token
 func lastProxyCall(t *testing.T, f *litefake.Fake, iface hmenum.Interface, method string) *xmlrpc.MethodCall {
 	t.Helper()
 	calls := f.Calls()
-	for i := len(calls) - 1; i >= 0; i-- {
-		c := calls[i]
+	for i := range slices.Backward(calls) {
+		c := &calls[i]
 		if c.Path != "/api/rpc/v1/xmlrpc/"+string(iface) || len(c.RPCMethods) != 1 || c.RPCMethods[0] != method {
 			continue
 		}

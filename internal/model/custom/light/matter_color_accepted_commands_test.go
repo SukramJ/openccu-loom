@@ -5,6 +5,7 @@ package light
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/go-fabric/cluster/wire"
@@ -16,12 +17,7 @@ import (
 // contains reports whether id is present in cmds — a terse helper for the
 // MatterAcceptedCommands assertions below.
 func contains(cmds []uint32, id uint32) bool {
-	for _, c := range cmds {
-		if c == id {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(cmds, id)
 }
 
 // TestCTColorServerAcceptedCommandsIncludeMoveStepStop locks the

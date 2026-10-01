@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/configstore"
@@ -81,13 +82,7 @@ func TestGetConfigSchema_IncludesMCP(t *testing.T) {
 		t.Fatalf("unmarshal schema: %v", err)
 	}
 
-	hasSection := false
-	for _, s := range schema.Sections {
-		if s == string(configstore.SectionMCP) {
-			hasSection = true
-			break
-		}
-	}
+	hasSection := slices.Contains(schema.Sections, string(configstore.SectionMCP))
 	if !hasSection {
 		t.Fatalf("schema sections missing north.mcp: %v", schema.Sections)
 	}
@@ -211,13 +206,7 @@ func TestGetConfigSchema_IncludesCCUAuth(t *testing.T) {
 		t.Fatalf("unmarshal schema: %v", err)
 	}
 
-	hasSection := false
-	for _, s := range schema.Sections {
-		if s == string(configstore.SectionCCUAuth) {
-			hasSection = true
-			break
-		}
-	}
+	hasSection := slices.Contains(schema.Sections, string(configstore.SectionCCUAuth))
 	if !hasSection {
 		t.Fatalf("schema sections missing north.rest.auth.ccu: %v", schema.Sections)
 	}

@@ -70,12 +70,12 @@ func applyEntityDescription(comp *hadiscovery.Component, component, parameter, m
 		comp.UnitOfMeasure = desc.UnitOfMeasurement
 	}
 	if desc.SuggestedDisplayPrecision != nil {
-		comp.Precision = hadiscovery.Ptr(*desc.SuggestedDisplayPrecision)
+		comp.Precision = new(*desc.SuggestedDisplayPrecision)
 	} else {
 		comp.Precision = nil
 	}
 	if desc.EnabledByDefault != nil {
-		comp.EnabledByDefault = hadiscovery.Ptr(*desc.EnabledByDefault)
+		comp.EnabledByDefault = new(*desc.EnabledByDefault)
 	} else {
 		// HA's default for enabled_by_default is true, which the
 		// MQTT-Discovery convention is to omit. Mirror that.
@@ -153,12 +153,12 @@ func applyEntityDescriptionStrict(desc *hamodel.Description, component, paramete
 		desc.Unit = hamodel.Unit(rule.UnitOfMeasurement)
 	}
 	if rule.SuggestedDisplayPrecision != nil {
-		desc.Precision = hamodel.Ptr(*rule.SuggestedDisplayPrecision)
+		desc.Precision = new(*rule.SuggestedDisplayPrecision)
 	} else {
 		desc.Precision = nil
 	}
 	if rule.EnabledByDefault != nil {
-		desc.Enabled = hamodel.Ptr(*rule.EnabledByDefault)
+		desc.Enabled = new(*rule.EnabledByDefault)
 	} else {
 		// HA's default for enabled_by_default is true, which the
 		// MQTT-Discovery convention is to omit. Mirror that.

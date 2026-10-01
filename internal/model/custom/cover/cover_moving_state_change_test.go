@@ -42,9 +42,7 @@ func TestCoverCommandWhileMovingIsNotDropped(t *testing.T) {
 
 	// The same for the position axis and for Blind, which delegates to Cover.
 	w.last = nil
-	if !c.IsStateChangeArgs(StateChangeArgs{Position: ptrFloat(1.0)}) {
+	if !c.IsStateChangeArgs(StateChangeArgs{Position: new(1.0)}) {
 		t.Fatal("IsStateChangeArgs(position=current) while moving must report a change")
 	}
 }
-
-func ptrFloat(v float64) *float64 { return &v }

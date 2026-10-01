@@ -136,8 +136,6 @@ func codePolicyZoneConfig(reqArm bool, reqDisarm *bool, reqSilence map[string]bo
 	return cfg
 }
 
-func boolPtr(b bool) *bool { return &b }
-
 // mustJournalEntry returns the first recorded entry with event, or fails.
 func mustJournalEntry(t *testing.T, j *fakeJournal, event string) engine.JournalEntry {
 	t.Helper()
@@ -191,7 +189,7 @@ func TestCodePolicy_ArmOnlyRequiresACodeWhenConfigured(t *testing.T) {
 
 	t.Run("RequireArm off: code-free arm succeeds", func(t *testing.T) {
 		h := newHarness(t)
-		h.seedZone("eg", "Erdgeschoss", codePolicyZoneConfig(false, boolPtr(false), nil))
+		h.seedZone("eg", "Erdgeschoss", codePolicyZoneConfig(false, new(false), nil))
 		h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull}})
 		h.startWithValidator(v)
 
@@ -202,7 +200,7 @@ func TestCodePolicy_ArmOnlyRequiresACodeWhenConfigured(t *testing.T) {
 
 	t.Run("RequireArm on: code-free arm is refused, a valid code succeeds", func(t *testing.T) {
 		h := newHarness(t)
-		h.seedZone("eg", "Erdgeschoss", codePolicyZoneConfig(true, boolPtr(false), nil))
+		h.seedZone("eg", "Erdgeschoss", codePolicyZoneConfig(true, new(false), nil))
 		h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull}})
 		h.startWithValidator(v)
 
@@ -217,7 +215,7 @@ func TestCodePolicy_ArmOnlyRequiresACodeWhenConfigured(t *testing.T) {
 
 func TestCodePolicy_SilenceIsPerSourcePolicy(t *testing.T) {
 	h := newHarness(t)
-	h.seedZone("eg", "Erdgeschoss", codePolicyZoneConfig(false, boolPtr(false), map[string]bool{"mqtt": true}))
+	h.seedZone("eg", "Erdgeschoss", codePolicyZoneConfig(false, new(false), map[string]bool{"mqtt": true}))
 	h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull}})
 	v := newFakeCodeValidator(map[string]codeResult{"1234": {identity: "Alice"}})
 	h.startWithValidator(v)
@@ -236,7 +234,7 @@ func TestCodePolicy_SilenceIsPerSourcePolicy(t *testing.T) {
 
 func TestCodePolicy_OperatorSourceBypassesTheRequirementWithoutConsultingTheValidator(t *testing.T) {
 	h := newHarness(t)
-	h.seedZone("eg", "Erdgeschoss", codePolicyZoneConfig(true, boolPtr(true), map[string]bool{"rest-operator": true}))
+	h.seedZone("eg", "Erdgeschoss", codePolicyZoneConfig(true, new(true), map[string]bool{"rest-operator": true}))
 	h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull}})
 	v := newFakeCodeValidator(nil)
 	h.startWithValidator(v)
@@ -487,7 +485,7 @@ func TestCodePolicy_KeypadSourceBypassesArmCodeRequirement(t *testing.T) {
 
 	t.Run("keypad arm without a code succeeds without consulting the validator", func(t *testing.T) {
 		h := newHarness(t)
-		h.seedZone("eg", "Erdgeschoss", codePolicyZoneConfig(true, boolPtr(false), nil))
+		h.seedZone("eg", "Erdgeschoss", codePolicyZoneConfig(true, new(false), nil))
 		h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull}})
 		h.startWithValidator(v)
 
@@ -501,7 +499,7 @@ func TestCodePolicy_KeypadSourceBypassesArmCodeRequirement(t *testing.T) {
 
 	t.Run("mqtt arm without a code is refused", func(t *testing.T) {
 		h := newHarness(t)
-		h.seedZone("eg", "Erdgeschoss", codePolicyZoneConfig(true, boolPtr(false), nil))
+		h.seedZone("eg", "Erdgeschoss", codePolicyZoneConfig(true, new(false), nil))
 		h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull}})
 		h.startWithValidator(v)
 
@@ -513,7 +511,7 @@ func TestCodePolicy_KeypadSourceBypassesArmCodeRequirement(t *testing.T) {
 
 func TestCodePolicy_NilValidatorDisablesEveryPolicy(t *testing.T) {
 	h := newHarness(t)
-	h.seedZone("eg", "Erdgeschoss", codePolicyZoneConfig(true, boolPtr(true), map[string]bool{"mqtt": true}))
+	h.seedZone("eg", "Erdgeschoss", codePolicyZoneConfig(true, new(true), map[string]bool{"mqtt": true}))
 	h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull}})
 	h.start() // no Validator wired
 

@@ -139,12 +139,10 @@ func (s *SmokeSiren) Info() payload.InfoPayload {
 		return nil
 	}
 	return &payload.SmokeSirenInfo{
-		SirenInfo: payload.SirenInfo{
-			Address:  s.Address,
-			Key:      s.key.String(),
-			Category: "siren",
-		},
-		Kind: "smoke",
+		Address:  s.Address,
+		Key:      s.key.String(),
+		Category: "siren",
+		Kind:     "smoke",
 	}
 }
 
@@ -212,7 +210,7 @@ func (e *sirenEntity) BuildDiscovery(ctx hadiscovery.Context, comp *hadiscovery.
 // (see [hadiscovery.SirenFields]), not through the description's — HA's siren
 // schema declares both keys and reads the platform one.
 func sirenDescription() hamodel.Description {
-	return hamodel.Description{Optimistic: hamodel.Ptr(false)}
+	return hamodel.Description{Optimistic: new(false)}
 }
 
 // HADiscoveryEntity describes the siren on the shared model. HA's siren
@@ -247,26 +245,22 @@ func (s *Siren) HADiscoveryEntity() hamodel.Entity {
 		StateValueTemplate: "{{ value_json.state }}",
 		StateOn:            "on",
 		StateOff:           "off",
-		SupportDuration:    hadiscovery.Ptr(supportDuration),
+		SupportDuration:    new(supportDuration),
 		// SupportsVolumeSet from the capability struct, not a constant.
-		SupportVolumeSet: hadiscovery.Ptr(s.Capabilities.SupportsVolumeSet),
+		SupportVolumeSet: new(s.Capabilities.SupportsVolumeSet),
 	}
 	if cfg != nil && len(cfg.AvailableTones) > 0 {
 		fields.AvailableTones = cfg.AvailableTones
 	}
 	return &sirenEntity{
-		CustomEntity: payload.CustomEntity{
-			Basic: hamodel.Basic{
-				EntityKey:      s.TopicSlot().Parameter,
-				EntityPlatform: hacatalog.PlatformSiren,
-				Description:    sirenDescription(),
-				Binds: []hamodel.Binding{{
-					Role: hamodel.RoleState, Mode: hamodel.Read,
-					Slot: payload.CustomSlot(s.TopicSlot()),
-				}},
-			},
-			Fields: fields,
-		},
+		EntityKey:      s.TopicSlot().Parameter,
+		EntityPlatform: hacatalog.PlatformSiren,
+		Description:    sirenDescription(),
+		Binds: []hamodel.Binding{{
+			Role: hamodel.RoleState, Mode: hamodel.Read,
+			Slot: payload.CustomSlot(s.TopicSlot()),
+		}},
+		Fields: fields,
 		method: "turn_on",
 	}
 }
@@ -289,19 +283,17 @@ func (s *SmokeSiren) HADiscoveryEntity() hamodel.Entity {
 		return nil
 	}
 	return &payload.CustomEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      s.TopicSlot().Parameter,
-			EntityPlatform: hacatalog.PlatformSiren,
-			Description:    sirenDescription(),
-			Binds: []hamodel.Binding{
-				{
-					Role: hamodel.RoleState, Mode: hamodel.Read,
-					Slot: payload.CustomSlot(s.TopicSlot()),
-				},
-				{
-					Role: hamodel.RoleCommand, Mode: hamodel.Write,
-					Slot: payload.WireSlot("SMOKE_DETECTOR_COMMAND"),
-				},
+		EntityKey:      s.TopicSlot().Parameter,
+		EntityPlatform: hacatalog.PlatformSiren,
+		Description:    sirenDescription(),
+		Binds: []hamodel.Binding{
+			{
+				Role: hamodel.RoleState, Mode: hamodel.Read,
+				Slot: payload.CustomSlot(s.TopicSlot()),
+			},
+			{
+				Role: hamodel.RoleCommand, Mode: hamodel.Write,
+				Slot: payload.WireSlot("SMOKE_DETECTOR_COMMAND"),
 			},
 		},
 		Fields: hadiscovery.SirenFields{
@@ -310,8 +302,8 @@ func (s *SmokeSiren) HADiscoveryEntity() hamodel.Entity {
 			StateValueTemplate: "{{ value_json.state }}",
 			StateOn:            "on",
 			StateOff:           "off",
-			SupportDuration:    hadiscovery.Ptr(false),
-			SupportVolumeSet:   hadiscovery.Ptr(false),
+			SupportDuration:    new(false),
+			SupportVolumeSet:   new(false),
 		},
 	}
 }
@@ -336,26 +328,22 @@ func (sp *SoundPlayer) HADiscoveryEntity() hamodel.Entity {
 		StateValueTemplate: "{{ value_json.state }}",
 		StateOn:            "on",
 		StateOff:           "off",
-		SupportDuration:    hadiscovery.Ptr(true),
-		SupportVolumeSet:   hadiscovery.Ptr(false),
+		SupportDuration:    new(true),
+		SupportVolumeSet:   new(false),
 	}
 	// Available soundfiles as tones when present.
 	if cfg, _ := sp.Config().(*payload.SoundPlayerConfig); cfg != nil && len(cfg.AvailableSoundfiles) > 0 {
 		fields.AvailableTones = cfg.AvailableSoundfiles
 	}
 	return &sirenEntity{
-		CustomEntity: payload.CustomEntity{
-			Basic: hamodel.Basic{
-				EntityKey:      sp.TopicSlot().Parameter,
-				EntityPlatform: hacatalog.PlatformSiren,
-				Description:    sirenDescription(),
-				Binds: []hamodel.Binding{{
-					Role: hamodel.RoleState, Mode: hamodel.Read,
-					Slot: payload.CustomSlot(sp.TopicSlot()),
-				}},
-			},
-			Fields: fields,
-		},
+		EntityKey:      sp.TopicSlot().Parameter,
+		EntityPlatform: hacatalog.PlatformSiren,
+		Description:    sirenDescription(),
+		Binds: []hamodel.Binding{{
+			Role: hamodel.RoleState, Mode: hamodel.Read,
+			Slot: payload.CustomSlot(sp.TopicSlot()),
+		}},
+		Fields: fields,
 		method: "turn_on",
 	}
 }
@@ -379,12 +367,10 @@ func (sp *SoundPlayer) Info() payload.InfoPayload {
 		return nil
 	}
 	return &payload.SoundPlayerInfo{
-		SirenInfo: payload.SirenInfo{
-			Address:  sp.Address,
-			Key:      sp.key.String(),
-			Category: "siren",
-		},
-		Kind: "sound_player",
+		Address:  sp.Address,
+		Key:      sp.key.String(),
+		Category: "siren",
+		Kind:     "sound_player",
 	}
 }
 
@@ -394,11 +380,9 @@ func (sp *SoundPlayer) Config() payload.ConfigPayload {
 		return nil
 	}
 	out := &payload.SoundPlayerConfig{
-		SirenConfig: payload.SirenConfig{
-			SupportsAcoustic: sp.Capabilities.SupportsAcoustic,
-			SupportsOptical:  sp.Capabilities.SupportsOptical,
-			SupportsDuration: sp.Capabilities.SupportsDuration,
-		},
+		SupportsAcoustic: sp.Capabilities.SupportsAcoustic,
+		SupportsOptical:  sp.Capabilities.SupportsOptical,
+		SupportsDuration: sp.Capabilities.SupportsDuration,
 	}
 	if sf := sp.AvailableSoundfiles(); len(sf) > 0 {
 		out.AvailableSoundfiles = sf

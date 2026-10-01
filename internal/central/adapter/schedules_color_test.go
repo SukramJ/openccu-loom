@@ -12,8 +12,6 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 )
 
-func ptrInt(v int) *int { return &v }
-
 const (
 	wpColorType  = "_WP_HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_TYPE"
 	wpColorValue = "_WP_HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_VALUE"
@@ -63,8 +61,8 @@ func TestSerializeSimpleSchedule_ColorGluedToSlot(t *testing.T) {
 			Weekdays:   []string{"MONDAY"},
 			Time:       "07:30",
 			Level:      1.0,
-			ColorType:  ptrInt(2),
-			ColorValue: ptrInt(524288),
+			ColorType:  new(2),
+			ColorValue: new(524288),
 		},
 		{
 			SlotNo:   6,
@@ -96,8 +94,8 @@ func TestSerializeSimpleSchedule_ColorZeroEmitted(t *testing.T) {
 		Weekdays:   []string{"MONDAY"},
 		Time:       "06:00",
 		Level:      1.0,
-		ColorType:  ptrInt(0),
-		ColorValue: ptrInt(0),
+		ColorType:  new(0),
+		ColorValue: new(0),
 	}}, schedule.SimpleMaxSlot, nil, weekprofile.AstroOffsetLimits{})
 	if err != nil {
 		t.Fatalf("serialize: %v", err)

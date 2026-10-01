@@ -160,14 +160,12 @@ func (d *DefaultDiscoveryBuilder) renderScheduleItem(
 		return DiscoveryItem{}
 	}
 	ctx := scheduleDiscoveryContext{
-		StdContext: hadiscovery.StdContext{
-			Layout:     layout,
-			Lang:       d.Locale,
-			Enc:        hadiscovery.RawEncoding,
-			Translator: d.tr,
-		},
-		uniqueID: uniqueID,
-		nodeID:   nodeID,
+		Layout:     layout,
+		Lang:       d.Locale,
+		Enc:        hadiscovery.RawEncoding,
+		Translator: d.tr,
+		uniqueID:   uniqueID,
+		nodeID:     nodeID,
 	}
 	comp, err := hadiscovery.RenderComponent(ctx, dev, e, *BuildOriginInfo())
 	if err != nil {
@@ -216,26 +214,24 @@ func (d *DefaultDiscoveryBuilder) BuildScheduleEntityDiscovery(centralName strin
 	}
 
 	entity := &scheduleEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      "schedule",
-			EntityPlatform: hacatalog.PlatformSensor,
-			Description: hamodel.Description{
-				NameKey:  scheduleLabelKey,
-				Icon:     "mdi:calendar-clock",
-				Category: EntityCategoryDiagnostic,
-				// The rich week-profile structure rides beside the count
-				// rather than as the state: Home Assistant caps a sensor's
-				// state at 255 characters and a schedule document is far
-				// longer, so the count is the state and the document is
-				// attached as attributes.
-				JSONAttributesTopic:    attrsTopic,
-				JSONAttributesTemplate: "{{ value_json | tojson }}",
-			},
-			Binds: []hamodel.Binding{
-				{
-					Role: hamodel.RoleState, Mode: hamodel.Read,
-					Slot: scheduleSlot(dev, centralName, ev.Interface, ev.ChannelNo, "schedule"),
-				},
+		EntityKey:      "schedule",
+		EntityPlatform: hacatalog.PlatformSensor,
+		Description: hamodel.Description{
+			NameKey:  scheduleLabelKey,
+			Icon:     "mdi:calendar-clock",
+			Category: EntityCategoryDiagnostic,
+			// The rich week-profile structure rides beside the count
+			// rather than as the state: Home Assistant caps a sensor's
+			// state at 255 characters and a schedule document is far
+			// longer, so the count is the state and the document is
+			// attached as attributes.
+			JSONAttributesTopic:    attrsTopic,
+			JSONAttributesTemplate: "{{ value_json | tojson }}",
+		},
+		Binds: []hamodel.Binding{
+			{
+				Role: hamodel.RoleState, Mode: hamodel.Read,
+				Slot: scheduleSlot(dev, centralName, ev.Interface, ev.ChannelNo, "schedule"),
 			},
 		},
 	}
@@ -384,19 +380,17 @@ func (d *DefaultDiscoveryBuilder) BuildScheduleSwitchDiscovery(centralName strin
 	// project only one of the two topics.
 	slot := scheduleSlot(dev, centralName, ev.Interface, ev.ScheduleChannelNo, "schedule", ev.Key)
 	entity := &scheduleEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      "schedule_" + ev.Key,
-			EntityPlatform: hacatalog.PlatformSwitch,
-			Description: hamodel.Description{
-				Name:       hamodel.L(ev.Label),
-				Icon:       "mdi:calendar-check",
-				Category:   EntityCategoryConfig,
-				Optimistic: hadiscovery.Ptr(false),
-			},
-			Binds: []hamodel.Binding{
-				{Role: hamodel.RoleState, Mode: hamodel.Read, Slot: slot},
-				{Role: hamodel.RoleCommand, Mode: hamodel.Write, Slot: slot},
-			},
+		EntityKey:      "schedule_" + ev.Key,
+		EntityPlatform: hacatalog.PlatformSwitch,
+		Description: hamodel.Description{
+			Name:       hamodel.L(ev.Label),
+			Icon:       "mdi:calendar-check",
+			Category:   EntityCategoryConfig,
+			Optimistic: new(false),
+		},
+		Binds: []hamodel.Binding{
+			{Role: hamodel.RoleState, Mode: hamodel.Read, Slot: slot},
+			{Role: hamodel.RoleCommand, Mode: hamodel.Write, Slot: slot},
 		},
 		fields: hadiscovery.SwitchFields{
 			PayloadOn:  "true",

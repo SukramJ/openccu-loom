@@ -285,10 +285,6 @@ func newIncident(id int64, mode hmenum.AlarmMode) sqlitestore.AlarmIncident {
 	return sqlitestore.AlarmIncident{ID: id, ZoneID: "eg", Mode: mode}
 }
 
-// ptrFloat64 returns a pointer to v (dimmer-level / volume fields are
-// *float64 so a nil selects the device's own default).
-func ptrFloat64(v float64) *float64 { return &v }
-
 // noPolicy is the zero-value OutputPolicy: no silence, no outdoor
 // exclusion, smoke sounders off, no chirps enabled.
 var noPolicy = engine.OutputPolicy{}

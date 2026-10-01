@@ -241,8 +241,7 @@ func (r *scheduleRunner) fire(ctx context.Context, e scheduleEntry) {
 	if err == nil {
 		return
 	}
-	var nre *engine.NotReadyError
-	if errors.As(err, &nre) {
+	if nre, ok := errors.AsType[*engine.NotReadyError](err); ok {
 		r.journal(ctx, e.zoneID, hmenum.AlarmJournalClassFault, "failed_to_arm", map[string]any{
 			"mode": string(e.sched.Mode), "blockers": nre.Blockers,
 		})

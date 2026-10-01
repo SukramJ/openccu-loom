@@ -725,8 +725,7 @@ func (s *alarmMQTTSink) emitArmFailure(zoneID, zoneName string, mode hmenum.Alar
 		return
 	}
 	var blockers []hmevent.AlarmBlockerDetail
-	var nre *engine.NotReadyError
-	if errors.As(cause, &nre) {
+	if nre, ok := errors.AsType[*engine.NotReadyError](cause); ok {
 		blockers = nre.Details
 	}
 	hook(zoneID, zoneName, mode, blockers)

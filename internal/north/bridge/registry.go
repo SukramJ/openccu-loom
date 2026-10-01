@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
 	"sync"
 )
 
@@ -136,8 +137,8 @@ func (r *Registry) stopStarted(ctx context.Context) {
 	}
 	r.mu.Unlock()
 
-	for i := len(order) - 1; i >= 0; i-- {
-		s := order[i].svc
+	for _, o := range slices.Backward(order) {
+		s := o.svc
 		if err := s.Stop(ctx); err != nil {
 			r.logger.Warn("north bridge stop failed",
 				slog.String("service", s.Name()),

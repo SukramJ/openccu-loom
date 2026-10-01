@@ -363,10 +363,7 @@ func (m *Manager) acousticBudget(ctx context.Context, incident sqlitestore.Alarm
 			acc = time.Duration(fresh.AcousticMS) * time.Millisecond
 		}
 	}
-	remaining := m.maxPerIncident - acc
-	if remaining < 0 {
-		remaining = 0
-	}
+	remaining := max(m.maxPerIncident-acc, 0)
 	return remaining
 }
 

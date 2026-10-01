@@ -5,6 +5,7 @@ package mqtt
 
 import (
 	"encoding/json"
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/event"
@@ -20,12 +21,7 @@ type listingChannel struct {
 }
 
 func (l *listingChannel) HasParameter(name string) bool {
-	for _, n := range l.names {
-		if n == name {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(l.names, name)
 }
 
 func (l *listingChannel) ParameterNames() []string { return l.names }

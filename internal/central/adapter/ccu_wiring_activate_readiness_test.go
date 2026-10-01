@@ -18,7 +18,6 @@ package adapter
 // the XML-RPC `listDevices` / `init` calls wireInterface issues.
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -202,8 +201,7 @@ func TestWireInterfaceActivateRetryGatesOnCCUReadiness(t *testing.T) {
 
 	const callbackURL = "http://127.0.0.1:9/RPC2/ccu-activate-gate"
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	type wireResult struct {
 		closer func()

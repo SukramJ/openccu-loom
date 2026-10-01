@@ -6,6 +6,7 @@ package light
 import (
 	"context"
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -170,9 +171,9 @@ func (w *recordingWriter) SetValue(
 }
 
 func (w *recordingWriter) lastFor(p hmenum.Parameter, address string) (any, bool) {
-	for i := len(w.calls) - 1; i >= 0; i-- {
-		if w.calls[i].param == p && w.calls[i].address == address {
-			return w.calls[i].value, true
+	for _, v := range slices.Backward(w.calls) {
+		if v.param == p && v.address == address {
+			return v.value, true
 		}
 	}
 	return nil, false

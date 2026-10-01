@@ -67,7 +67,7 @@ func resolveDevices(flagValue string) []string {
 		return nil
 	default:
 		out := make([]string, 0)
-		for _, name := range strings.Split(trimmed, ",") {
+		for name := range strings.SplitSeq(trimmed, ",") {
 			if name = strings.TrimSpace(name); name != "" {
 				out = append(out, name)
 			}

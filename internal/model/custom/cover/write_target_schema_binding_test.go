@@ -5,6 +5,7 @@ package cover_test
 
 import (
 	"context"
+	"slices"
 	"sync"
 	"testing"
 
@@ -40,12 +41,7 @@ func (r *paramRecorder) PutParamset(
 func (r *paramRecorder) wrote(parameter hmenum.Parameter) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	for _, p := range r.params {
-		if p == parameter {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(r.params, parameter)
 }
 
 // newSchemaBoundCoverChannel builds a single-channel cover carrying LEVEL,

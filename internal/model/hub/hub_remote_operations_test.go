@@ -110,7 +110,7 @@ func (e *errSysvarWriter) SetSysvar(_ context.Context, _ string, _ any) error { 
 
 func TestHubRemoveSysvar(t *testing.T) {
 	h := NewHub("ccu")
-	h.PutSysvar(&Sysvar{HubDataPoint: HubDataPoint{Name: "Foo"}})
+	h.PutSysvar(&Sysvar{Name: "Foo"})
 	if !h.RemoveSysvar("Foo") {
 		t.Fatal("expected true on first remove")
 	}
@@ -209,7 +209,7 @@ func TestHubDeleteSysvarRemote_ok(t *testing.T) {
 	h := NewHub("ccu")
 	mut := &stubSysvarMutator{}
 	h.SysvarMutator = mut
-	h.PutSysvar(&Sysvar{HubDataPoint: HubDataPoint{Name: "DelMe"}})
+	h.PutSysvar(&Sysvar{Name: "DelMe"})
 	if err := h.DeleteSysvarRemote(context.Background(), "DelMe"); err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +225,7 @@ func TestHubDeleteSysvarRemote_propagatesError(t *testing.T) {
 	h := NewHub("ccu")
 	sentinel := errors.New("rega error")
 	h.SysvarMutator = &stubSysvarMutator{deleteErr: sentinel}
-	h.PutSysvar(&Sysvar{HubDataPoint: HubDataPoint{Name: "X"}})
+	h.PutSysvar(&Sysvar{Name: "X"})
 	if err := h.DeleteSysvarRemote(context.Background(), "X"); !errors.Is(err, sentinel) {
 		t.Fatalf("want sentinel, got %v", err)
 	}
@@ -260,7 +260,7 @@ func TestHubUpdateSysvarRemote_renamesCacheKey(t *testing.T) {
 	h := NewHub("ccu")
 	mut := &stubSysvarMutator{}
 	h.SysvarMutator = mut
-	h.PutSysvar(&Sysvar{HubDataPoint: HubDataPoint{Name: "Old"}})
+	h.PutSysvar(&Sysvar{Name: "Old"})
 	if err := h.UpdateSysvarRemote(context.Background(), SysvarUpdateSpec{Name: "Old", NewName: "New"}); err != nil {
 		t.Fatal(err)
 	}
@@ -284,7 +284,7 @@ func TestHubUpdateSysvarRemote_renameSkippedOnError(t *testing.T) {
 	h := NewHub("ccu")
 	sentinel := errors.New("rega error")
 	h.SysvarMutator = &stubSysvarMutator{updateErr: sentinel}
-	h.PutSysvar(&Sysvar{HubDataPoint: HubDataPoint{Name: "Old"}})
+	h.PutSysvar(&Sysvar{Name: "Old"})
 	if err := h.UpdateSysvarRemote(context.Background(), SysvarUpdateSpec{Name: "Old", NewName: "New"}); !errors.Is(err, sentinel) {
 		t.Fatalf("want sentinel, got %v", err)
 	}
@@ -356,7 +356,7 @@ func TestHubRenameSysvar(t *testing.T) {
 			h := NewHub("ccu")
 			var original *Sysvar
 			for _, n := range tc.seed {
-				sv := &Sysvar{HubDataPoint: HubDataPoint{Name: n}}
+				sv := &Sysvar{Name: n}
 				h.PutSysvar(sv)
 				if n == tc.oldName {
 					original = sv
@@ -557,7 +557,7 @@ func TestProgramConcurrentExecution(t *testing.T) {
 // ─── Sysvar ─────────────────────────────────────────────────────────────────
 
 func TestSysvarToWireAllKinds(t *testing.T) {
-	s := &Sysvar{HubDataPoint: HubDataPoint{Name: "sv"}, Writer: &stubSysvar{}}
+	s := &Sysvar{Name: "sv", Writer: &stubSysvar{}}
 
 	cases := []struct {
 		v    hmtypes.ParamValue
@@ -586,7 +586,7 @@ func TestSysvarToWireAllKinds(t *testing.T) {
 }
 
 func TestSysvarOnUpdateUnsubscribe(t *testing.T) {
-	s := &Sysvar{HubDataPoint: HubDataPoint{Name: "sv"}, Writer: &stubSysvar{}}
+	s := &Sysvar{Name: "sv", Writer: &stubSysvar{}}
 	var count atomic.Int32
 	unsub := s.OnUpdate(func(_, _ hmtypes.ParamValue) { count.Add(1) })
 	s.OnValue(hmtypes.IntValue(1))
@@ -600,14 +600,14 @@ func TestSysvarOnUpdateUnsubscribe(t *testing.T) {
 
 func TestSysvarSet_writerError(t *testing.T) {
 	sentinel := errors.New("rega")
-	s := &Sysvar{HubDataPoint: HubDataPoint{Name: "sv"}, Writer: &errSysvarWriter{err: sentinel}}
+	s := &Sysvar{Name: "sv", Writer: &errSysvarWriter{err: sentinel}}
 	if !errors.Is(s.Set(context.Background(), hmtypes.IntValue(1)), sentinel) {
 		t.Fatal("expected writer error")
 	}
 }
 
 func TestSysvarConcurrentOnValue(t *testing.T) {
-	s := &Sysvar{HubDataPoint: HubDataPoint{Name: "sv"}, Writer: &stubSysvar{}}
+	s := &Sysvar{Name: "sv", Writer: &stubSysvar{}}
 	var wg sync.WaitGroup
 	for i := range 20 {
 		wg.Go(func() {

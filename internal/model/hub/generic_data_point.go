@@ -143,8 +143,8 @@ func (h *HubDataPoint) DeviceAddress() string {
 	if ch == "" {
 		return ""
 	}
-	if i := strings.IndexByte(ch, ':'); i >= 0 {
-		return ch[:i]
+	if before, _, ok := strings.Cut(ch, ":"); ok {
+		return before
 	}
 	return ch
 }

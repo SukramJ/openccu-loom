@@ -53,12 +53,12 @@ func modeParityCalls() []discoveryCall {
 	return []discoveryCall{
 		{"ccu-a", "sensor", "ccu-a_000a", "1_temperature", body("ccu-a_000a", "1_temperature", hadiscovery.Component{
 			Name: "Temperature", StateTopic: "loom/ccu-a/000A/1/values/ACTUAL_TEMPERATURE",
-			UnitOfMeasure: "°C", DeviceClass: "temperature", Precision: hadiscovery.Ptr(1),
+			UnitOfMeasure: "°C", DeviceClass: "temperature", Precision: new(1),
 		})},
 		{"ccu-a", "number", "ccu-a_000a", "1_level", body("ccu-a_000a", "1_level", hadiscovery.Component{
 			Name: "Level", StateTopic: "loom/ccu-a/000A/1/values/LEVEL",
 			CommandTopic: "loom/ccu-a/000A/1/values/LEVEL/set",
-			Min:          hadiscovery.Ptr(0.0), Max: hadiscovery.Ptr(100.0),
+			Min:          new(0.0), Max: new(100.0),
 			Extra: map[string]any{"translation_key": "pipe_level"},
 		})},
 		{"ccu-a", "binary_sensor", "ccu-a_000a", "0_unreach", body("ccu-a_000a", "0_unreach", hadiscovery.Component{

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -136,10 +137,8 @@ func (h *intentsHarness) journalEvents() []string {
 
 func (h *intentsHarness) wantJournalEvent(event string) {
 	h.t.Helper()
-	for _, e := range h.journalEvents() {
-		if e == event {
-			return
-		}
+	if slices.Contains(h.journalEvents(), event) {
+		return
 	}
 	h.t.Fatalf("missing %q journal entry; got %v", event, h.journalEvents())
 }

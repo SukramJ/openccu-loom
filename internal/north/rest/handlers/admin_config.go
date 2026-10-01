@@ -551,7 +551,7 @@ func lookupDeepAny(m map[string]any, path string) (any, bool) {
 // when any segment is missing or not an object.
 func getDeepAny(m map[string]any, path string) any {
 	var cur any = m
-	for _, part := range strings.Split(path, ".") {
+	for part := range strings.SplitSeq(path, ".") {
 		mm, ok := cur.(map[string]any)
 		if !ok {
 			return nil

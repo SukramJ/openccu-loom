@@ -509,7 +509,7 @@ func TestHubStatusIsReseededAfterABrokerReconnect(t *testing.T) {
 // bare map is the counter-example, and the reason [Bridge.configCache] needs
 // a [configCacheGate] field beside it to be visible here at all.
 func gateShape(ft reflect.Type) (reflect.Type, bool) {
-	gateIface := reflect.TypeOf((*runtimeGate)(nil)).Elem()
+	gateIface := reflect.TypeFor[runtimeGate]()
 	switch {
 	case ft.Implements(gateIface):
 		return ft, true
@@ -530,23 +530,23 @@ func gateShape(ft reflect.Type) (reflect.Type, bool) {
 // and a silently unreset gate in production.
 func TestAValueHeldGateIsStillAGate(t *testing.T) {
 	t.Parallel()
-	byPointer, ok := gateShape(reflect.TypeOf(&valueHeldGate{}))
+	byPointer, ok := gateShape(reflect.TypeFor[*valueHeldGate]())
 	if !ok {
 		t.Fatal("a pointer-held gate is not recognised as a gate at all")
 	}
-	if byPointer != reflect.TypeOf(&valueHeldGate{}) {
-		t.Errorf("a pointer-held gate must register as %v, got %v", reflect.TypeOf(&valueHeldGate{}), byPointer)
+	if byPointer != reflect.TypeFor[*valueHeldGate]() {
+		t.Errorf("a pointer-held gate must register as %v, got %v", reflect.TypeFor[*valueHeldGate](), byPointer)
 	}
-	byValue, ok := gateShape(reflect.TypeOf(valueHeldGate{}))
+	byValue, ok := gateShape(reflect.TypeFor[valueHeldGate]())
 	if !ok {
 		t.Fatal("a gate held by value is not recognised as a gate, so a bridge field holding one " +
 			"passes the registration audit while ResetRuntimeGates never reaches it")
 	}
-	if byValue != reflect.TypeOf(&valueHeldGate{}) {
+	if byValue != reflect.TypeFor[*valueHeldGate]() {
 		t.Errorf("a value-held gate must register as %v — `&b.field`, the step that gets "+
-			"forgotten — got %v", reflect.TypeOf(&valueHeldGate{}), byValue)
+			"forgotten — got %v", reflect.TypeFor[*valueHeldGate](), byValue)
 	}
-	if _, ok := gateShape(reflect.TypeOf(map[string][]byte(nil))); ok {
+	if _, ok := gateShape(reflect.TypeFor[map[string][]byte]()); ok {
 		t.Error("a bare map is reported as a gate; recognition is by the Reset method, and a " +
 			"map has none — which is why a map-shaped dedup cache needs a gate field beside it")
 	}
@@ -584,10 +584,9 @@ func TestEveryBridgeDedupGateIsRegisteredForReset(t *testing.T) {
 		registered[reflect.TypeOf(g)] = true
 	}
 
-	rt := reflect.TypeOf(Bridge{})
+	rt := reflect.TypeFor[Bridge]()
 	found := 0
-	for i := range rt.NumField() {
-		f := rt.Field(i)
+	for f := range rt.Fields() {
 		want, isGate := gateShape(f.Type)
 		if !isGate {
 			continue

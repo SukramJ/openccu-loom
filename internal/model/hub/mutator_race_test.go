@@ -36,25 +36,21 @@ func TestHubMutatorConcurrentSetAndRead(t *testing.T) {
 
 	var wg sync.WaitGroup
 	// Writer: repeatedly (re)wire the mutators, as the retry path does.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for range 1000 {
 			h.SetMutator(m)
 		}
-	}()
+	})
 	// Readers: the production remote-operation methods snapshot the mutator.
 	for range 4 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for range 1000 {
 				_ = h.TriggerBackupRemote(ctx)
 				_ = h.CreateSysvarRemote(ctx, SysvarCreateSpec{Name: "x", ValueType: "FLOAT", Min: "0", Max: "1"})
 				_ = h.SetDeviceRoomsRemote(ctx, "ABC:1", nil)
 				_ = h.AcceptInboxDeviceRemote(ctx, "ABC")
 			}
-		}()
+		})
 	}
 	wg.Wait()
 }

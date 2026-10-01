@@ -963,12 +963,7 @@ func markerMatch(desc string, markers []hmenum.DescriptionMarker) bool {
 // loom hide 38 of 40 programs on an install whose marker list contained
 // INTERNAL, because the CCU classifies most user programs as internal.
 func hasInternalMarker(markers []hmenum.DescriptionMarker) bool {
-	for _, m := range markers {
-		if m == hmenum.DescriptionMarkerInternal {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(markers, hmenum.DescriptionMarkerInternal)
 }
 
 func hubEnabledDefault(isInternal bool, desc string, markers []hmenum.DescriptionMarker) bool {
@@ -976,12 +971,7 @@ func hubEnabledDefault(isInternal bool, desc string, markers []hmenum.Descriptio
 		return false
 	}
 	if isInternal {
-		for _, m := range markers {
-			if m == hmenum.DescriptionMarkerInternal {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(markers, hmenum.DescriptionMarkerInternal)
 	}
 	return markerMatch(desc, markers)
 }
@@ -1451,8 +1441,8 @@ func channelRegistered(reg *registry.ModelRegistry, address string) bool {
 		return false
 	}
 	deviceAddr := address
-	if i := strings.IndexByte(address, ':'); i >= 0 {
-		deviceAddr = address[:i]
+	if before, _, ok0 := strings.Cut(address, ":"); ok0 {
+		deviceAddr = before
 	}
 	d, ok := reg.Get(deviceAddr)
 	if !ok || d == nil {
@@ -1643,8 +1633,8 @@ func interfaceForChannel(unit *central.Unit, channelAddress string) string {
 		return ""
 	}
 	deviceAddr := channelAddress
-	if i := strings.IndexByte(channelAddress, ':'); i >= 0 {
-		deviceAddr = channelAddress[:i]
+	if before, _, ok := strings.Cut(channelAddress, ":"); ok {
+		deviceAddr = before
 	}
 	if d, ok := unit.ModelRegistry.Get(deviceAddr); ok && d != nil {
 		return string(d.Interface)

@@ -82,8 +82,8 @@ func TestHubPublisherDeclaresItsPlaneToTheOrphanSweep(t *testing.T) {
 	// hub payload, so the plane declares nothing before it lands.
 	c.SetSystemInformation(central.SystemInfo{Serial: "3014F711A0001F0123456789"})
 	c.HubModel.PutSysvar(&hub.Sysvar{
-		HubDataPoint: hub.HubDataPoint{Name: "Anwesenheit"},
-		ValueType:    hmenum.HubValueTypeLogic,
+		Name:      "Anwesenheit",
+		ValueType: hmenum.HubValueTypeLogic,
 	})
 
 	leftover := "homeassistant/sensor/ccu-01_sysvars/from_last_boot/config"

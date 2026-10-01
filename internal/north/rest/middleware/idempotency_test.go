@@ -374,15 +374,13 @@ func TestIdempotency_ConcurrentSameKeyRejectsInFlightDuplicate(t *testing.T) {
 
 	var wg sync.WaitGroup
 	statuses := make([]int, 2)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		req := httptest.NewRequest(http.MethodPost, "/api/devices", http.NoBody)
 		req.Header.Set("Idempotency-Key", "key-inflight")
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 		statuses[0] = rec.Code
-	}()
+	})
 
 	<-entered // first request is now blocked inside the handler
 

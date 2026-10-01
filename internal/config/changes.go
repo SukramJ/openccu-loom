@@ -85,7 +85,7 @@ func configTree(c *Config) (map[string]any, error) {
 // segment is missing.
 func valueAtPath(tree map[string]any, dotted string) any {
 	var cur any = tree
-	for _, part := range strings.Split(dotted, ".") {
+	for part := range strings.SplitSeq(dotted, ".") {
 		m, ok := cur.(map[string]any)
 		if !ok {
 			return nil

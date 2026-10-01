@@ -218,8 +218,8 @@ func anonymiseAddress(address, vcu string) string {
 
 // deviceOf returns the device portion of a channel address (before ":").
 func deviceOf(address string) string {
-	if i := strings.Index(address, addressSeparator); i >= 0 {
-		return address[:i]
+	if before, _, ok := strings.Cut(address, addressSeparator); ok {
+		return before
 	}
 	return address
 }

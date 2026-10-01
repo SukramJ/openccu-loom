@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -377,12 +378,7 @@ func (f *fakeSessionPersist) saveCallCount() int {
 func (f *fakeSessionPersist) deleteCallsFor(id string) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	for _, d := range f.deleteCalls {
-		if d == id {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(f.deleteCalls, id)
 }
 
 func (f *fakeSessionPersist) purgeWasCalled() bool {

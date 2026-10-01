@@ -498,10 +498,7 @@ func alarmCountdown(snap engine.ZoneSnapshot) *hmapi.AlarmCountdown {
 	// whenever a sensor carries a per-sensor override: the engine arms
 	// ModeConfig.entryDelay(sensor), the config says EntryDelaySeconds, and
 	// the progress bar drawn from the difference runs at the wrong rate.
-	total := durationSeconds(snap.TimerTotal)
-	if total < remaining {
-		total = remaining
-	}
+	total := max(durationSeconds(snap.TimerTotal), remaining)
 	return &hmapi.AlarmCountdown{Kind: kind, RemainingS: remaining, TotalS: total}
 }
 

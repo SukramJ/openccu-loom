@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -349,7 +350,7 @@ func hydrateAuditBuffer(ctx context.Context, buf *audit.Buffer, store *sqlitesto
 		logger.Warn("audit.buffer.hydrate", slog.String("err", err.Error()))
 		return
 	}
-	for i := len(entries) - 1; i >= 0; i-- {
+	for i := range slices.Backward(entries) {
 		buf.Record(entries[i])
 	}
 	if len(entries) > 0 {

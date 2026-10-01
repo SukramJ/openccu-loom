@@ -88,8 +88,7 @@ func (b Backoff) withDefaults() Backoff {
 // failures-th consecutive failure (1-based).
 func (b Backoff) Delay(err error, failures int) time.Duration {
 	b = b.withDefaults()
-	var apiErr *APIError
-	if errors.As(err, &apiErr) {
+	if apiErr, ok := errors.AsType[*APIError](err); ok {
 		switch {
 		case apiErr.Status == http.StatusUnauthorized || apiErr.Status == http.StatusForbidden:
 			return b.Unauthorized
@@ -178,8 +177,7 @@ func (c *Client) openStream(ctx context.Context, path string, q map[string][]str
 	req.Header.Set("Accept", "text/event-stream")
 	resp, err := c.stream.Do(req)
 	if err != nil {
-		var apiErr *APIError
-		if errors.As(err, &apiErr) {
+		if apiErr, ok := errors.AsType[*APIError](err); ok {
 			return nil, apiErr
 		}
 		return nil, fmt.Errorf("occulited: GET %s: %w: %w", path, hmerr.ErrNoConnection, err)

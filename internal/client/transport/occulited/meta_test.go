@@ -229,8 +229,7 @@ func TestMetaStreamDeliversChangesAndResumes(t *testing.T) {
 
 	// A reader starting at a revision the (restarted) box no longer
 	// retains gets a resync.
-	ctx2, cancel2 := context.WithCancel(context.Background())
-	defer cancel2()
+	ctx2 := t.Context()
 	old := 1
 	s2 := c.MetaEvents(ctx2, occulited.MetaStreamOptions{Since: &old, Backoff: fastBackoff()})
 	rs := waitMeta(t, s2, occulited.MetaResync)
@@ -242,8 +241,7 @@ func TestMetaStreamDeliversChangesAndResumes(t *testing.T) {
 func TestMetaStreamHeartbeatTimeout(t *testing.T) {
 	f, c := metaFake(t)
 	f.SetMetaHeartbeatInterval(time.Hour)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	s := c.MetaEvents(ctx, occulited.MetaStreamOptions{HeartbeatTimeout: 150 * time.Millisecond, Backoff: fastBackoff()})
 	m := waitMeta(t, s, occulited.MetaClosed)
 	if !errors.Is(m.Err, occulited.ErrHeartbeatTimeout) {

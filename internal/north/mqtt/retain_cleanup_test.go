@@ -1123,9 +1123,7 @@ func (b *filterKeyedBroker) Subscribe(_ context.Context, filter string, _ QoS, h
 	copy(msgs, b.retained)
 	b.mu.Unlock()
 
-	b.wg.Add(1)
-	go func() {
-		defer b.wg.Done()
+	b.wg.Go(func() {
 		time.Sleep(20 * time.Millisecond)
 		for _, msg := range msgs {
 			b.mu.Lock()
@@ -1136,7 +1134,7 @@ func (b *filterKeyedBroker) Subscribe(_ context.Context, filter string, _ QoS, h
 			}
 			h(&Message{Topic: msg.topic, Payload: msg.payload, Retain: true})
 		}
-	}()
+	})
 	return SubscribeResult{}, nil
 }
 
@@ -1189,13 +1187,11 @@ func TestConcurrentDiscoveryOrphanSweepsDoNotTruncateEachOther(t *testing.T) {
 	counts := make([]int, 2)
 	errs := make([]error, 2)
 	for i, central := range []string{"ccu-a", "ccu-b"} {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			counts[i], errs[i] = bridge.RunDiscoveryOrphanCleanupOnce(
 				context.Background(), central, 120*time.Millisecond,
 			)
-		}()
+		})
 	}
 	wg.Wait()
 	broker.wg.Wait()

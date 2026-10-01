@@ -34,8 +34,8 @@ var w2HubBannedAggregateMethods = []string{"Counter", "AdditionalInformationInde
 // neither carries an HA presentation shape the daemon never publishes.
 func TestW2HubMessageAggregatesExposeNoHATemplateShapes(t *testing.T) {
 	types := []reflect.Type{
-		reflect.TypeOf(&AlarmMessages{}),
-		reflect.TypeOf(&ServiceMessages{}),
+		reflect.TypeFor[*AlarmMessages](),
+		reflect.TypeFor[*ServiceMessages](),
 	}
 	for _, rt := range types {
 		for _, banned := range w2HubBannedAggregateMethods {

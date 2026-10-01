@@ -128,8 +128,7 @@ func (p *liteReadinessProbe) Target() string {
 
 // liteRefusalReason turns an occulited answer into a readiness reason.
 func liteRefusalReason(err error) string {
-	var apiErr *occulited.APIError
-	if errors.As(err, &apiErr) {
+	if apiErr, ok := errors.AsType[*occulited.APIError](err); ok {
 		switch {
 		case apiErr.Status == http.StatusServiceUnavailable && apiErr.Code == occulited.CodeStarting:
 			return "occulited starting (503)"

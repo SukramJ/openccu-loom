@@ -285,9 +285,7 @@ func TestBasicAuthBudgetGatesThePasswordVerification(t *testing.T) {
 	var throttled atomic.Int64
 	var wg sync.WaitGroup
 	for range attempts {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, rig.server.URL+"/api/v1/info", http.NoBody)
 			req.SetBasicAuth("alice", "wrong-password")
 			resp, err := rig.server.Client().Do(req)
@@ -298,7 +296,7 @@ func TestBasicAuthBudgetGatesThePasswordVerification(t *testing.T) {
 			if resp.StatusCode == http.StatusTooManyRequests {
 				throttled.Add(1)
 			}
-		}()
+		})
 	}
 	wg.Wait()
 

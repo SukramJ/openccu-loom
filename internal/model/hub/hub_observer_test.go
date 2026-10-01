@@ -27,7 +27,7 @@ func TestOnSysvarRegistered_FiresOnPutSysvar(t *testing.T) {
 		got = append(got, s)
 	})
 
-	sv := &Sysvar{HubDataPoint: HubDataPoint{Name: "Presence"}, ValueType: hmenum.HubValueTypeLogic}
+	sv := &Sysvar{Name: "Presence", ValueType: hmenum.HubValueTypeLogic}
 	h.PutSysvar(sv)
 
 	mu.Lock()
@@ -40,7 +40,7 @@ func TestOnSysvarRegistered_FiresOnPutSysvar(t *testing.T) {
 func TestOnSysvarRegistered_NotRetroactive(t *testing.T) {
 	t.Parallel()
 	h := NewHub("c")
-	h.PutSysvar(&Sysvar{HubDataPoint: HubDataPoint{Name: "early"}})
+	h.PutSysvar(&Sysvar{Name: "early"})
 
 	var fired atomic.Int32
 	h.OnSysvarRegistered(func(*Sysvar) { fired.Add(1) })
@@ -48,7 +48,7 @@ func TestOnSysvarRegistered_NotRetroactive(t *testing.T) {
 		t.Fatalf("retroactive fire: count=%d", v)
 	}
 
-	h.PutSysvar(&Sysvar{HubDataPoint: HubDataPoint{Name: "late"}})
+	h.PutSysvar(&Sysvar{Name: "late"})
 	if v := fired.Load(); v != 1 {
 		t.Fatalf("post-register count=%d, want 1", v)
 	}
@@ -59,12 +59,12 @@ func TestOnSysvarRegistered_UnsubscribeStopsFiring(t *testing.T) {
 	h := NewHub("c")
 	var fired atomic.Int32
 	unsub := h.OnSysvarRegistered(func(*Sysvar) { fired.Add(1) })
-	h.PutSysvar(&Sysvar{HubDataPoint: HubDataPoint{Name: "a"}})
+	h.PutSysvar(&Sysvar{Name: "a"})
 	unsub()
-	h.PutSysvar(&Sysvar{HubDataPoint: HubDataPoint{Name: "b"}})
+	h.PutSysvar(&Sysvar{Name: "b"})
 	// Double-unsub is a no-op.
 	unsub()
-	h.PutSysvar(&Sysvar{HubDataPoint: HubDataPoint{Name: "c"}})
+	h.PutSysvar(&Sysvar{Name: "c"})
 	if v := fired.Load(); v != 1 {
 		t.Fatalf("count=%d after unsubscribe, want 1", v)
 	}
@@ -78,7 +78,7 @@ func TestOnSysvarRegistered_NilCallbackIsNoOp(t *testing.T) {
 		t.Fatal("unsub must not be nil even for nil callback")
 	}
 	unsub() // no panic
-	h.PutSysvar(&Sysvar{HubDataPoint: HubDataPoint{Name: "x"}})
+	h.PutSysvar(&Sysvar{Name: "x"})
 }
 
 func TestOnSysvarRegistered_PutSysvarReplacingExistingFires(t *testing.T) {
@@ -88,8 +88,8 @@ func TestOnSysvarRegistered_PutSysvarReplacingExistingFires(t *testing.T) {
 	h := NewHub("c")
 	var got []*Sysvar
 	h.OnSysvarRegistered(func(s *Sysvar) { got = append(got, s) })
-	first := &Sysvar{HubDataPoint: HubDataPoint{Name: "X"}}
-	second := &Sysvar{HubDataPoint: HubDataPoint{Name: "X"}}
+	first := &Sysvar{Name: "X"}
+	second := &Sysvar{Name: "X"}
 	h.PutSysvar(first)
 	h.PutSysvar(second)
 	if len(got) != 2 || got[0] != first || got[1] != second {
@@ -103,7 +103,7 @@ func TestOnProgramRegistered_FiresOnPutProgram(t *testing.T) {
 	var got []*Program
 	h.OnProgramRegistered(func(p *Program) { got = append(got, p) })
 
-	prog := &Program{ID: "P1", HubDataPoint: HubDataPoint{Name: "Morning"}}
+	prog := &Program{ID: "P1", Name: "Morning"}
 	h.PutProgram(prog)
 	if len(got) != 1 || got[0] != prog {
 		t.Fatalf("observer got %v, want [%p]", got, prog)
@@ -129,7 +129,7 @@ func TestPutSysvar_IgnoresNilAndEmptyName(t *testing.T) {
 	var fired atomic.Int32
 	h.OnSysvarRegistered(func(*Sysvar) { fired.Add(1) })
 	h.PutSysvar(nil)
-	h.PutSysvar(&Sysvar{HubDataPoint: HubDataPoint{Name: ""}})
+	h.PutSysvar(&Sysvar{Name: ""})
 	if v := fired.Load(); v != 0 {
 		t.Fatalf("observer fired for invalid input: count=%d", v)
 	}

@@ -59,8 +59,6 @@ func newHubGoldenBuilder() *DefaultDiscoveryBuilder {
 	return db
 }
 
-func hubGoldenFloat(v float64) *float64 { return &v }
-
 // hubGoldenSysvarCases pins the sysvar builder, whose component selection is
 // a two-axis switch — the CCU value type crossed with the extended-and-
 // writable marker — plus two post-processing passes (the auto-counter
@@ -119,7 +117,7 @@ func hubGoldenSysvarCases(db *DefaultDiscoveryBuilder) []hubGoldenCase {
 		// (mode box, step 1) and the branch where the declared min/max win.
 		{"sysvar/integer-number-bounded", func() DiscoveryItem {
 			s := extended(sv("Helligkeit", 4720, hmenum.HubValueTypeInteger))
-			s.Min, s.Max, s.Unit = hubGoldenFloat(0), hubGoldenFloat(255), "lx"
+			s.Min, s.Max, s.Unit = new(float64(0)), new(float64(255)), "lx"
 			return build(s)
 		}()},
 		{"sysvar/number-sensor", func() DiscoveryItem {

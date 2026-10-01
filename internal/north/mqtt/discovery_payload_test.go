@@ -557,8 +557,8 @@ func newFakeMultiplierChannel(params []string, multipliers map[string]float64) *
 		pm[p] = struct{}{}
 	}
 	return &fakeMultiplierChannel{
-		fakeChannelInspector: fakeChannelInspector{params: pm},
-		multipliers:          multipliers,
+		params:      pm,
+		multipliers: multipliers,
 	}
 }
 
@@ -1345,9 +1345,9 @@ func TestSensorEnumOptions_H029(t *testing.T) {
 	t.Parallel()
 
 	channel := &fakeEnumChannel{
-		fakeChannelInspector: fakeChannelInspector{params: map[string]struct{}{
+		params: map[string]struct{}{
 			"ENUM_PARAM": {},
-		}},
+		},
 		valueList: []string{"A", "B", "C"},
 	}
 

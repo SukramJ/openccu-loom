@@ -3,7 +3,11 @@
 
 package alarmpanel
 
-import "github.com/SukramJ/openccu-loom/pkg/hmenum"
+import (
+	"slices"
+
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+)
 
 // HA alarm_control_panel state tokens. These are the plain strings the
 // retained `<base>/alarm/<zone>/state` topic carries and that Home
@@ -139,12 +143,7 @@ func MasterStateToken(tokens []string) string {
 		return HAAlarmStateDisarmed
 	}
 	has := func(want string) bool {
-		for _, t := range tokens {
-			if t == want {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(tokens, want)
 	}
 	switch {
 	case has(HAAlarmStateTriggered):
