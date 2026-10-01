@@ -51,7 +51,6 @@ type LiteOnboarding struct {
 
 	mu       sync.Mutex
 	sessions map[string]*liteSession
-	now      func() time.Time
 }
 
 type liteSession struct {
@@ -72,7 +71,7 @@ func NewLiteOnboarding(instance string, catalogs *i18n.Catalogs, locale string, 
 	}
 	return &LiteOnboarding{
 		instance: instance, catalogs: catalogs, locale: locale, logger: logger,
-		sessions: map[string]*liteSession{}, now: time.Now,
+		sessions: map[string]*liteSession{},
 	}
 }
 
@@ -198,7 +197,7 @@ func (o *LiteOnboarding) StartPairing(ctx context.Context, in hmapi.CentralPairi
 	}
 	o.mu.Lock()
 	o.purgeLocked()
-	o.sessions[id] = &liteSession{client: client, pairing: p, fingerprint: p.Fingerprint, created: o.now(), state: "pending"}
+	o.sessions[id] = &liteSession{client: client, pairing: p, fingerprint: p.Fingerprint, created: time.Now(), state: "pending"}
 	o.mu.Unlock()
 	return hmapi.CentralPairingStarted{
 		PairingID: id, Code: p.Code, Fingerprint: p.Fingerprint, ExpiresIn: int(p.ExpiresIn / time.Second),
@@ -287,7 +286,7 @@ func (o *LiteOnboarding) ForgetPairing(id string) {
 
 // purgeLocked drops sessions older than the TTL. Callers hold o.mu.
 func (o *LiteOnboarding) purgeLocked() {
-	cutoff := o.now().Add(-liteSessionTTL)
+	cutoff := time.Now().Add(-liteSessionTTL)
 	for id, s := range o.sessions {
 		if s.created.Before(cutoff) {
 			delete(o.sessions, id)
