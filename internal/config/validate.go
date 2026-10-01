@@ -123,7 +123,7 @@ func validateWebhook(w *NorthWebhook) error {
 // The check only runs while the adapter is enabled: while disabled the path
 // is never handed to ServeMux (see mountMCP), so a stale or legacy-format
 // value left over in an unused section must not abort startup. Without this
-// gate, upgrading past the mount-path syntax tightened by ADR 0025 could
+// gate, upgrading past a release that tightened the mount-path rules could
 // fail every subsequent boot for an operator who never turned MCP on.
 func validateMCP(m *NorthMCP) error {
 	if !m.Enabled || m.Path == "" {

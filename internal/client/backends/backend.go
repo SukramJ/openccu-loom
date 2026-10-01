@@ -91,7 +91,7 @@ type DeviceOps interface {
 	// continues asynchronously (CONFIG_PENDING). Returns
 	// [ErrUnsupported] on backends without [Capabilities.ConfigRestore]
 	// (CUxD, Homegear); the caller additionally gates on the interface
-	// (only rfd / HMIPServer expose the method).
+	// (only BidCos-RF serves the method; see hmenum.Interface.SupportsConfigRestore).
 	RestoreConfigToDevice(ctx context.Context, address string) error
 
 	// ClearConfigCache asks the interface process to discard its cached
@@ -224,13 +224,13 @@ type DeviceOps interface {
 	// [Capabilities.IseIDLookup] is false.
 	GetIseIDByAddress(ctx context.Context, address string) (int, error)
 
-	// GetMetadata reads a metadata blob attached to a device. On Homegear this
-	// maps to the XML-RPC `getMetadata(address, dataID)` call; device names are
-	// stored under dataID "NAME". Other backends return [ErrUnsupported].
+	// GetMetadata reads a metadata blob attached to a device. It maps to
+	// the XML-RPC `getMetadata(address, dataID)` call (Homegear, CCU and lite);
+	// device names are stored under dataID "NAME". CUxD returns [ErrUnsupported].
 	GetMetadata(ctx context.Context, address, dataID string) (any, error)
 
-	// SetMetadata writes a metadata blob for a device. Only supported on
-	// Homegear; other backends return [ErrUnsupported].
+	// SetMetadata writes a metadata blob for a device. Maps to the XML-RPC
+	// `setMetadata` call on Homegear, CCU and lite; CUxD returns [ErrUnsupported].
 	SetMetadata(ctx context.Context, address, dataID string, value any) error
 
 	// TriggerFirmwareUpdate triggers a CCU firmware update. Returns
@@ -241,7 +241,7 @@ type DeviceOps interface {
 	// itself and stage it for a later install. It takes no target: the
 	// CCU derives the image from its own version and board serial, so
 	// there is no caller-supplied URL to pass. Backends that cannot
-	// reach that call (CUxD, Homegear, CCU-Jack) return [ErrUnsupported].
+	// reach that call (CUxD, Homegear) return [ErrUnsupported].
 	DownloadFirmware(ctx context.Context) error
 
 	// CreateBackupAndDownload obtains a CCU config archive. maxWaitTime

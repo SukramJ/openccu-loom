@@ -1,6 +1,6 @@
 # ADR 0079 — Box-shell single sign-on over the lite ingress
 
-- **Status**: proposed
+- **Status**: accepted (2026-10-01)
 - **Related**: [ADR 0078 — lite webserver ingress](./0078-lite-webserver-ingress.md),
   [ADR 0044 — single port + HA-Ingress auth](./0044-single-port-onboarding-and-ha-ingress-auth.md),
   [ADR 0077 — add-on token onboarding](./0077-lite-addon-token-onboarding.md),
@@ -74,9 +74,12 @@ a **claim**, never as proof.
 - **Verification is cached per session id for 60 seconds** — the
   contract's own advice ("cache the answer briefly, if at all") — with
   a short negative cache so a dead session cannot hammer the box.
-  WebSocket upgrades carry the header and are verified at upgrade; a
-  session revoked on the box ends at the next HTTP request or
-  reconnect, the same window a revoked daemon session has today.
+  WebSocket upgrades carry the header and are verified at upgrade; an
+  established socket then re-verifies against the box every 60 seconds
+  (role compared too, so a demotion closes it), so a session revoked on
+  the box ends the live event stream within one verification interval —
+  a transient verify error keeps the socket, because availability must
+  not hinge on the box's loopback.
 - **The chain order stays first-wins, SSO last.** A request carrying a
   daemon session cookie, bearer token or Basic credentials is resolved
   by the existing pipeline first; the SSO resolver only answers when

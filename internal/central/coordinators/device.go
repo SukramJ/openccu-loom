@@ -749,9 +749,9 @@ func (c *DeviceCoordinator) ingestDescriptions(
 // address may arrive with entirely new channel addresses that were never
 // stored in the cache.
 //
-// Unlike CheckForNewDeviceAddresses (which checks the top-level device
-// registry), this method checks the description cache directly so both
-// device-level and channel-level addresses are covered.
+// Like CheckForNewDeviceAddresses, this method checks the description
+// cache directly, so both device-level and channel-level addresses are
+// covered.
 func (c *DeviceCoordinator) IdentifyMissingDeviceDescriptions(iface hmtypes.WireInterfaceID, descs []hmproto.DeviceDescription) []hmproto.DeviceDescription {
 	all := c.descs.All(iface)
 	known := make(map[string]struct{}, len(all))
@@ -768,8 +768,8 @@ func (c *DeviceCoordinator) IdentifyMissingDeviceDescriptions(iface hmtypes.Wire
 }
 
 // CheckForNewDeviceAddresses compares a fresh wire-side `listDevices`
-// snapshot against the in-memory registry and returns addresses that the CCU
-// reports but the registry has not yet seen.
+// snapshot against the in-memory description cache and returns addresses that the CCU
+// reports but the cache has not yet seen.
 //
 // The returned slice contains both top-level device addresses and child
 // channel addresses. Order matches the wire snapshot.
@@ -908,12 +908,15 @@ func (c *DeviceCoordinator) HandleDeleteDevices(_ context.Context, iface hmtypes
 // announced: a DeviceCreatedEvent is published only for addresses the model
 // resolves.
 //
-// Concurrency: c.mu serialises this method against itself and against
-// [HandleNewDevices] — the two production entry points that turn a
-// known-but-not-yet-materialised address into a device-registry entry (this
-// method for the cache-based restart path, HandleNewDevices for the live
-// `newDevices` callback). It does NOT cover every device-mutation method on
-// this coordinator: applyPull/[InitialPull]/[RefreshAfterPair],
+// Concurrency: c.mu serialises this method against itself and the other
+// c.mu holders on this coordinator. [HandleNewDevices] — the live
+// `newDevices` entry point that also turns a known-but-not-yet-materialised
+// address into a device-registry entry — takes no c.mu at all: the adapter's
+// ingest pipeline serialises its own runs (including the call into this
+// method) behind ingestMu, but the callback path invokes HandleNewDevices
+// after releasing that lock, so the two entry points can overlap. c.mu also
+// does NOT cover every device-mutation method on this coordinator:
+// applyPull/[InitialPull]/[RefreshAfterPair],
 // [HandleDeleteDevices], [RefreshDeviceDescriptionsAndCreateMissingDevices],
 // [ReplaceDevice], [ReaddDevice] and [RefreshFirmwareData] all read/write the
 // same [registry.DeviceRegistry] / [registry.DeviceDescriptionRegistry]
@@ -1078,7 +1081,7 @@ type ChannelParamsetFetcher interface {
 
 // channelReloadParamsetKeys lists the paramset descriptions re-pulled for a
 // channel reload. Mirrors the channel-config refresh in
-// model/device.py:1448 (reload_channel_config → on_config_changed →
+// model/device.py (reload_channel_config → on_config_changed →
 // _reload_paramset_descriptions): VALUES, MASTER and LINK.
 var channelReloadParamsetKeys = []hmenum.ParamsetKey{
 	hmenum.ParamsetKeyValues,
@@ -1088,8 +1091,8 @@ var channelReloadParamsetKeys = []hmenum.ParamsetKey{
 
 // ReloadChannelConfig re-pulls the paramset descriptions (VALUES, MASTER,
 // LINK) for a single channel from the CCU, re-stores them in the paramset
-// registry (applying device-type patches), and re-reads the channel's
-// current MASTER values. It mirrors model/device.py:1448
+// registry (applying device-type patches). It reads descriptions only, no
+// MASTER values. It mirrors model/device.py
 // (Channel.reload_channel_config → on_config_changed), scoped to one
 // channel instead of a whole device.
 //
@@ -1098,8 +1101,8 @@ var channelReloadParamsetKeys = []hmenum.ParamsetKey{
 //
 // A missing paramset on the channel (e.g. a channel without a LINK set) is
 // logged and skipped, not treated as a fatal error — only a wholesale fetch
-// failure aborts. MASTER values are read after the descriptions so the
-// caller's subsequent data-point refresh sees fresh values.
+// failure aborts. MASTER values are not read here; the caller's data-point
+// refresh path owns that.
 func (c *DeviceCoordinator) ReloadChannelConfig(
 	ctx context.Context,
 	fetcher ChannelParamsetFetcher,
@@ -1730,7 +1733,8 @@ func (c *DeviceCoordinator) ReaddDevice(
 // RefreshDeviceLinkPeers to re-fetch link peer addresses from the CCU
 // for each channel of a device.
 //
-// The InterfaceClient implements this via its GetLinkPeers method.
+// Production wires it through the adapter's backendLinkPeerFetcher
+// (central/adapter/device_reloader.go), which adapts a backend's GetLinkPeers.
 type LinkPeerFetcher interface {
 	// GetLinkPeers returns the peer channel addresses linked to
 	// channelAddress on the given interface. Returns an empty slice
@@ -1740,8 +1744,8 @@ type LinkPeerFetcher interface {
 
 // RefreshDeviceLinkPeers re-fetches the link peer addresses for every channel
 // of the given device and publishes a [hmevent.LinkPeerChangedEvent] for each
-// channel that has at least one peer. This is triggered by the CCU's
-// `updateDevice` callback with hint=LINKS (link partner change).
+// channel that has at least one peer. It is called from the device
+// reload path (central/adapter/device_reloader.go).
 //
 // Non-fatal errors (CCU unreachable for one channel) are logged and skipped
 // so a single bad channel does not abort the whole refresh.
@@ -2036,7 +2040,7 @@ func (c *DeviceCoordinator) IdentifyDevicesMissingParamsets(iface hmtypes.WireIn
 // [DeviceCoordinator.SetDeviceNameOverrideChecker].
 type DeviceNameOverrideChecker interface {
 	// GetNameOverride returns (name, true) when an override exists for
-	// deviceAddress. (""، false) when no override is configured.
+	// deviceAddress, ("", false) when no override is configured.
 	GetNameOverride(deviceAddress string) (string, bool)
 }
 
@@ -2055,9 +2059,13 @@ func (c *DeviceCoordinator) SetDeviceNameOverrideChecker(ch DeviceNameOverrideCh
 // and, if so, invokes the rename callback so the operator-assigned name is
 // applied immediately when the device first appears.
 //
-// Called by the device-lifecycle path when a [hmevent.DeviceCreatedEvent]
-// arrives for a new device. The rename callback is wired by the adapter
-// layer and typically calls the domain model's rename path.
+// It has no production caller yet: the operator name-override feature is
+// not wired (see the ratchet entry in
+// tests/contract/wiring_setter_callers_test.go and the corresponding
+// notes/parity/by_design.md row).
+// A future device-lifecycle subscriber would invoke it when a
+// [hmevent.DeviceCreatedEvent] arrives and hand it the adapter layer's
+// rename callback.
 func (c *DeviceCoordinator) RenameNewDeviceFromOverride(iface hmtypes.WireInterfaceID, deviceAddress string, renameCallback func(address, name string)) {
 	c.mu.Lock()
 	ch := c.nameOverrideChecker

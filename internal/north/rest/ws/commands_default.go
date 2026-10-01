@@ -108,11 +108,11 @@ type LinkQuery interface {
 	LinkableChannels(ctx context.Context, deviceAddress string) ([]map[string]any, error)
 	// GetLinkParamset reads the LINK paramset on channelAddress keyed by
 	// peerAddress. Mirrors Python `ws_get_link_paramset`
-	// (websocket_api.py:1313, `config/get_link_paramset`).
+	// (websocket_api.py, `config/get_link_paramset`).
 	GetLinkParamset(ctx context.Context, channelAddress, peerAddress string) (map[string]any, error)
 	// PutLinkParamset writes values to the LINK paramset on channelAddress
 	// keyed by peerAddress. Mirrors Python `ws_put_link_paramset`
-	// (websocket_api.py:1387, `config/put_link_paramset`). The report
+	// (websocket_api.py, `config/put_link_paramset`). The report
 	// carries the post-write read-back comparison and is non-nil on success.
 	PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) (*interfaces.ParamsetWriteReport, error)
 	// ActivateLinkParamset triggers the receiver's LINK-paramset behaviour
@@ -128,8 +128,9 @@ type ScheduleQuery interface {
 	GetClimateSchedule(ctx context.Context, channelAddress string) (map[string]any, error)
 	// SetClimateSchedule writes a climate week-program back.
 	SetClimateSchedule(ctx context.Context, channelAddress string, profile map[string]any) ([]hmapi.ClimateTimeCorrection, error)
-	// SetActiveProfile selects which P1..P3 profile is currently
-	// active for a thermostat channel.
+	// SetActiveProfile selects which profile (index 1..6, the
+	// range weekprofile.ValidProfileIndex accepts) is currently active for a
+	// thermostat channel.
 	SetActiveProfile(ctx context.Context, channelAddress string, profileIndex int) error
 
 	// GetDeviceSchedule resolves the schedule channel of deviceAddress (climate
@@ -295,8 +296,8 @@ type BackupsService interface {
 // and `ccu.reload_device_config`. Both Python commands call
 // `device.reload_device_config()` which re-pulls the device's parameter
 // descriptions from the CCU and recreates any missing channels/DPs.
-// Mirrors Python `ws_reload_device_config` (websocket_api.py:1735) and
-// `ws_panel_reload_device_config` (websocket_api.py:2285).
+// Mirrors Python `ws_reload_device_config` (websocket_api.py) and
+// `ws_panel_reload_device_config` (websocket_api.py).
 type DeviceReloader interface {
 	// ReloadDeviceConfig re-fetches the device description and recreates
 	// missing devices/channels from the CCU. Corresponds to
@@ -307,13 +308,14 @@ type DeviceReloader interface {
 
 // ChannelReloader is the write surface for `config.reload_channel_config`
 // and `ccu.reload_channel_config`. Both commands re-pull a single channel's
-// paramset descriptions (VALUES/MASTER/LINK) and MASTER values from the CCU,
-// then re-materialise the channel's data points.
-// Mirrors Channel.reload_channel_config (model/device.py:1448 →
+// paramset descriptions (VALUES/MASTER/LINK) from the CCU and re-materialise
+// missing data points; MASTER values reach the data points through the
+// channel's own master-refresh path, not through this call.
+// Mirrors Channel.reload_channel_config (model/device.py →
 // on_config_changed).
 type ChannelReloader interface {
-	// ReloadChannelConfig re-pulls the channel's paramset descriptions and
-	// MASTER values and refreshes the channel's data points. channelAddress
+	// ReloadChannelConfig re-pulls the channel's paramset descriptions
+	// and creates whatever data points the model is missing. channelAddress
 	// is the "DDDDDDDDDD:n" form.
 	ReloadChannelConfig(ctx context.Context, channelAddress string) error
 }
@@ -360,7 +362,7 @@ type DefaultCommandsConfig struct {
 }
 
 // RegisterDefaultCommands wires the openccu-loom-default command set
-// onto router. The set is small and safe to register at boot:
+// onto router. The set is safe to register at boot. Core members:
 //
 //	system.health — health snapshot + overall status + score
 //	system.commands — list of registered commands (introspection)
@@ -368,6 +370,12 @@ type DefaultCommandsConfig struct {
 //	paramset.description — paramset descriptors
 //	paramset.get — current paramset values
 //	config.session.open / set / undo / redo / save / discard / changes
+//
+// Further families register from their own config fields: the hub-backed
+// programs.*, sysvars.*, alarm_messages.*, service_messages.*,
+// install_mode.*, backup.*, firmware.* and inbox.* commands, links.*,
+// schedules.*, backups.trigger, devices.export_definition and the
+// device / channel config-reload commands.
 //
 // Components depend on the corresponding cfg field; passing a nil
 // component skips its commands entirely.
@@ -431,18 +439,18 @@ func RegisterDefaultCommands(router *Router, cfg DefaultCommandsConfig) {
 	if cfg.DeviceReloader != nil {
 		// config.reload_device_config — re-pull device description
 		// from the CCU and recreate missing channels/DPs. Mirrors Python
-		// `ws_reload_device_config` (websocket_api.py:1735).
+		// `ws_reload_device_config` (websocket_api.py).
 		router.Register("config.reload_device_config", reloadDeviceConfigHandler(cfg.DeviceReloader))
 		// ccu.reload_device_config — panel variant with the same
 		// domain action. Mirrors Python `ws_panel_reload_device_config`
-		// (websocket_api.py:2285).
+		// (websocket_api.py).
 		router.Register("ccu.reload_device_config", reloadDeviceConfigHandler(cfg.DeviceReloader))
 	}
 
 	if cfg.ChannelReloader != nil {
 		// config.reload_channel_config — re-pull one channel's paramset
 		// descriptions + MASTER values and refresh its data points.
-		// Mirrors Channel.reload_channel_config (model/device.py:1448).
+		// Mirrors Channel.reload_channel_config (model/device.py).
 		router.Register("config.reload_channel_config", reloadChannelConfigHandler(cfg.ChannelReloader))
 		// ccu.reload_channel_config — panel variant with the same domain
 		// action.
@@ -1324,7 +1332,7 @@ type linkPutParamsetArgs struct {
 }
 
 // linksGetParamsetHandler implements `links.get_paramset`.
-// Mirrors Python `ws_get_link_paramset` (websocket_api.py:1313).
+// Mirrors Python `ws_get_link_paramset` (websocket_api.py).
 // Input: {address, peer_address}.
 // Output: {values: {...}}.
 func linksGetParamsetHandler(q LinkQuery) CommandHandler {
@@ -1345,7 +1353,7 @@ func linksGetParamsetHandler(q LinkQuery) CommandHandler {
 }
 
 // linksPutParamsetHandler implements `links.put_paramset`.
-// Mirrors Python `ws_put_link_paramset` (websocket_api.py:1387).
+// Mirrors Python `ws_put_link_paramset` (websocket_api.py).
 // Input: {address, peer_address, parameters}.
 // Output: {written, readback_divergences, readback_error?} — the same
 // shape `paramset.put` answers for MASTER.
@@ -1427,10 +1435,6 @@ type scheduleActiveProfileArgs struct {
 	ProfileIndex   int    `json:"profile_index"`
 }
 
-// registerScheduleCommands wires the schedules.* command family onto
-// router. Extracted from RegisterDefaultCommands to keep that function
-// within the statement-count budget.
-
 // registerHubCommands wires every hub-backed command family
 // (programs, sysvars, messages, install mode, backup, firmware, inbox).
 // Split out of RegisterDefaultCommands to keep that function within the
@@ -1461,6 +1465,9 @@ func registerHubCommands(router *Router, q HubQuery) {
 	router.Register("inbox.accept", inboxAcceptHandler(q))
 }
 
+// registerScheduleCommands wires the schedules.* command family onto
+// router. Extracted from RegisterDefaultCommands to keep that function
+// within the statement-count budget.
 func registerScheduleCommands(router *Router, q ScheduleQuery) {
 	router.Register("schedules.climate.get", schedulesClimateGetHandler(q))
 	router.Register("schedules.climate.set", schedulesClimateSetHandler(q))
@@ -1943,8 +1950,8 @@ func sessionStateMap(s *configui.Session) map[string]any {
 // `ccu.reload_device_config` (both share the same domain action).
 // Re-pulls the device description from the CCU and recreates missing
 // channels and data points.
-// Mirrors Python `ws_reload_device_config` (websocket_api.py:1735) and
-// `ws_panel_reload_device_config` (websocket_api.py:2285) — L-7002.
+// Mirrors Python `ws_reload_device_config` (websocket_api.py) and
+// `ws_panel_reload_device_config` (websocket_api.py).
 //
 // Request: { "device_address": str }
 // Response: { "success": true, "device_address": str }
@@ -1970,7 +1977,7 @@ func reloadDeviceConfigHandler(r DeviceReloader) CommandHandler {
 // `ccu.reload_channel_config` (both share the same domain action). Re-pulls a
 // single channel's paramset descriptions (VALUES/MASTER/LINK) and MASTER
 // values from the CCU, then refreshes the channel's data points.
-// Mirrors Channel.reload_channel_config (model/device.py:1448 →
+// Mirrors Channel.reload_channel_config (model/device.py →
 // on_config_changed).
 //
 // Request: { "channel_address": str } (alias: { "address": str })

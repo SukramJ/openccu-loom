@@ -266,9 +266,10 @@ var (
 
 	// InterfacesPushingConfigPending lists the interfaces that emit
 	// reliable CONFIG_PENDING events on a MASTER write. HmIP devices
-	// Do; BidCos devices do not (
-	// post-write polling pass in interface_client.py:964-971, citing
-	// "CONFIG_PENDING unreliable" in model/device.py:856).
+	// do; BidCos devices do not (the Python reference polls the master
+	// values after a write — interface_client.py, _poll_master_values —
+	// and device.py, reload_device_config, documents "CONFIG_PENDING
+	// unreliable" for BidCos).
 	// VirtualDevices and CUxD are synchronous and don't participate
 	// in the CONFIG_PENDING flow either.
 	//

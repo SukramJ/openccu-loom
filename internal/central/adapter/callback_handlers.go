@@ -32,10 +32,10 @@ import (
 // every incoming CCU callback into the central's registry and notifies the
 // matching data point via [generic.DataPoint.OnWireValue].
 //
-// NewDevices / DeleteDevices / UpdateDevice / ReplaceDevice ReaddedDevice are
-// handled minimally: they log the event and touch the registry where cheap. A
-// full hot-plug story (rebuilding device profiles on the fly) is outside the
-// current scope and can be added without changing this file's public surface.
+// NewDevices / DeleteDevices / UpdateDevice / ReplaceDevice / ReaddedDevice
+// drive the device hot-plug path: new devices are ingested into the model and
+// changed ones have their descriptions and paramsets re-pulled from the CCU
+// (see the per-callback handlers below for the exact steps).
 //
 // Background goroutines (e.g. self-reload tasks spawned by
 // [scheduleSelfReload]) are tracked with a [sync.WaitGroup] so [Stop] can

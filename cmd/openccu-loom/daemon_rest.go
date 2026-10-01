@@ -124,7 +124,7 @@ func seedLegacyAuthFromConfig(
 }
 
 // wireREST performs the REST wiring phase of the composition root: it
-// builds the server group, starts the SQLite health probe, runs the
+// starts the SQLite health probe, runs the
 // idempotent one-shot seeds for the users and centrals tables, layers
 // the SQLite stores on top of the in-memory auth stores, wires the REST
 // status metrics into the health tracker, and assembles the REST auth
@@ -313,11 +313,11 @@ func wireREST(ctx context.Context, d restWiringDeps) restWiring {
 		restAuth.LoginUsers = loginChainWithCCU(d.sqUsers, d.users, ccuStore, ccuPrimary)
 	}
 
-	// Wave-C admin services backed by the SQLite stores opened
-	// above. Each handler-side interface (ConfigAdminService /
-	// UserAdminService / TokenAdminService / CentralAdminService)
-	// is satisfied directly by the corresponding *sqlite.Store —
-	// no extra adapter required.
+	// Admin services backed by the SQLite stores opened above. The user,
+	// token and central interfaces (UserAdminService / TokenAdminService /
+	// CentralAdminService) are satisfied directly by the corresponding
+	// *sqlite.Store; ConfigAdminService goes through configAdminAdapter,
+	// which layers the section store over the config store.
 	var (
 		configAdminSvc  handlers.ConfigAdminService
 		userAdminSvc    handlers.UserAdminService

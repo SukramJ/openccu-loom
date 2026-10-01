@@ -153,10 +153,11 @@ func ListIncidents(reader IncidentsReader) http.HandlerFunc {
 }
 
 // IncidentsClearer is the write contract for DELETE /incidents. Clears
-// every registered central's incident rows; shares the domain call with
-// the WS `incidents.clear` command ([ws.IncidentClearer] in
-// internal/north/rest/ws). *adapter.IncidentsStoreReader satisfies it
-// directly alongside [IncidentsReader].
+// every registered central's incident rows. It mirrors the WS-side
+// ws.IncidentClearer contract, but that command is a dormant stub in
+// this daemon (notes/parity/by_design.md "ws-rest-split") — REST is the
+// live path. *adapter.IncidentsStoreReader satisfies it directly
+// alongside [IncidentsReader].
 type IncidentsClearer interface {
 	ClearIncidents(ctx context.Context) error
 }

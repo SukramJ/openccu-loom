@@ -112,7 +112,7 @@ type WireDeps struct {
 	//
 	// nil disables the gate (all parameters pass through) — used in
 	// tests and tooling that drive [WireCentrals] without a daemon
-	// composition ( E.13).
+	// composition.
 	Visibility *visibility.Registry
 
 	// MasterValues, when non-nil, is installed on every per-central
@@ -806,8 +806,7 @@ func wireInterface(
 	// PutParamset call traces to the CacheCoordinator recorder.
 	// The hook is nil-safe on both ends: the IC skips the call
 	// when nil and CacheCoordinator.RecordSession is a no-op when
-	// no session recorder is wired. Closes the Item-2 gap in
-	// (RecordSession-Wiring).
+	// no session recorder is wired.
 	var sessionHook func(rpcType, method string, params, response any)
 	if unit.Cache != nil {
 		cache := unit.Cache
@@ -1004,7 +1003,7 @@ func wireInterface(
 		unit.Recovery.Subscribe() //nolint:contextcheck // Subscribe starts a background goroutine; it has no ctx parameter by design
 	}
 
-	// Per-interface connection probe — pings the CCU every 30 s so the
+	// Per-interface connection probe — pings the CCU every [connectionCheckerInterval] so the
 	// circuit breaker advances OPEN → HALF_OPEN → CLOSED on its own
 	// schedule. Without this loop the breaker only refreshes when an
 	// unrelated code path happens to call Do(), which on a quiet daemon
@@ -1019,7 +1018,7 @@ func wireInterface(
 	probeIC := ic
 	probeBus := unit.EventBus
 	probeUnit := unit
-	//nolint:contextcheck // probe goroutine must outlive the wiring ctx (60s timeout); daemon-lifetime background context is intentional
+	//nolint:contextcheck // probe goroutine must outlive the wiring ctx; daemon-lifetime background context is intentional
 	probeCtx, probeCancel := context.WithCancel(context.Background())
 	go func() {
 		ticker := time.NewTicker(connectionCheckerInterval)
@@ -1117,15 +1116,14 @@ func wireInterface(
 	// callback so the CCU pushes live events. Without this the domain stays
 	// empty and every `/api/v1/devices` call returns nothing.
 	//
-	// Wrapped in activate() so a boot-time failure can be retried in the
-	// background instead of leaving the interface empty. An add-on that
+	// Wrapped in activate() so a boot-time failure can be retried
+	// (runXMLRPCActivation) instead of leaving the interface empty. An add-on that
 	// co-starts with the CCU commonly sees the backend answer http 503 /
 	// 401 while ReGaHss and the per-interface RPC service warm up; the first
 	// listDevices then fails. Without a retry the interface only recovers if
 	// an unrelated recovery cycle happens to fire — or never, if the CCU's
 	// ping stays responsive while listDevices is still 503. activateCtx is
-	// the wiring ctx on the first attempt and a detached, teardown-bounded
-	// ctx on every background retry.
+	// the wiring ctx, decorated per attempt by ingestAttemptContext.
 	activate := func(activateCtx context.Context) error {
 		if err := pipeline.IngestFromBackend(activateCtx, wireID, iface, backend, writer, hub.ValueSeeder(), logger); err != nil {
 			return fmt.Errorf("ingest: %w", err)
@@ -1158,7 +1156,7 @@ func wireInterface(
 				}
 			}
 			if len(deviceAddrs) > 0 {
-				//nolint:contextcheck // consistency check runs asynchronously and must outlive the wiring ctx (60s timeout)
+				//nolint:contextcheck // consistency check runs asynchronously and must outlive the wiring ctx
 				unit.Devices.ScheduleParamsetConsistencyCheck(
 					context.Background(), iface, hmtypes.ParseWireInterfaceID(wireID), deviceAddrs, backend,
 					func(inconsistencies []coordinators.ParamsetInconsistency) {
@@ -1225,7 +1223,7 @@ func wireInterface(
 			// Pre-Init Deinit: tell the CCU to forget any registration
 			// previously made for this callback URL before we install
 			// the fresh one. Mirrors the recovery pipeline's
-			// ReinitProxy (interface_client.go:653) two-step sequence.
+			// InterfaceClient.ReinitProxy two-step sequence.
 			// A previous daemon-run that died without invoking the
 			// shutdown closer (SIGKILL, panic, host reboot, pair-test
 			// restart) leaves a dangling registration on the CCU; the
@@ -1306,7 +1304,7 @@ func wireInterface(
 			// daemon's life: every gated hub job (programs, sysvars, inbox,
 			// service messages, firmware, metrics) returned without
 			// running, the central was evaluated DEGRADED/FAILED and
-			// check_connection published ConnectionLost every 30 s — the
+			// check_connection published ConnectionLost on every probe tick — the
 			// opposite of the "still works, just without push events" this
 			// path promises.
 			logger.Warn("wire.init.skipped_no_callback",

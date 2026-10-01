@@ -420,7 +420,7 @@ func HashPassword(password string) (string, error) {
 // back to a constant-time equality check. Both comparison paths are timing-safe.
 //
 // When the username is not registered a dummy bcrypt compare is performed
-// against [dummyBcryptHash] so the response time is indistinguishable from
+// against [DummyBcryptHash] so the response time is indistinguishable from
 // the wrong-password path, preventing user-enumeration via timing analysis.
 func (s *MemoryUserStore) AuthenticateBasic(_ context.Context, username, password string) (Identity, error) {
 	subject := CanonicalSubject(username)

@@ -1973,7 +1973,7 @@ export const api = {
     return request<ReliabilityRow[]>(`/diagnostics/reliability${qs}`);
   },
   // Persistent VALUES-cache statistics (row count, byte size, cumulative
-  // restore/cast/gc/flush counters since process start). See ADR 0018.
+  // restore/cast/gc/flush counters since process start). See ADR 0019.
   getValuesCacheStats() {
     return request<ValuesCacheStats>(`/admin/values-cache/stats`);
   },

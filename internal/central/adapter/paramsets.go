@@ -635,7 +635,7 @@ func (p *ParamsetsDomain) PutLinkParamset(
 	}
 	before, _ := b.GetLinkParamset(ctx, channelAddress, peerAddress)
 	// Coerce against the LINK descriptor for the same reason as the
-	// MASTER/VALUES path in [coerceParamsetValues]: a decoded-JSON number is
+	// MASTER/VALUES path in [coerceParamsetValuesWithDescriptions]: a decoded-JSON number is
 	// always float64, and the XML-RPC encoder maps that straight to <double>.
 	wire, descs, validErr := coerceParamsetValuesWithDescriptions(ctx, b, channelAddress, hmenum.ParamsetKeyLink, values)
 	if validErr != nil {
@@ -689,7 +689,7 @@ func (p *ParamsetsDomain) PutLinkParamset(
 // the operator's save with "parameter is hidden and may not be written".
 // Which parameters may be written is decided by the descriptor instead — the
 // WRITE bit and the value bounds, enforced by [device.Channel.SetMany] on the
-// model path and by [coerceParamsetValues] on the backend path.
+// model path and by [coerceParamsetValuesWithDescriptions] on the backend path.
 func gateDecidesWrites(key hmenum.ParamsetKey) bool {
 	return key != hmenum.ParamsetKeyMaster
 }
@@ -740,8 +740,9 @@ func (p *ParamsetsDomain) checkVisibilityOn(
 // It exists so a read surface can offer exactly what the write surface
 // accepts. The configuration export is the case that needs it: handing
 // out a snapshot containing hidden parameters produces a file that
-// cannot be imported again, because [ParamsetsDomain.PutParamset]
-// rejects the whole write on the first hidden name.
+// cannot be imported again, because for a VALUES paramset
+// [ParamsetsDomain.PutParamset] rejects the whole write on the first hidden
+// name.
 //
 // It therefore has to answer the same question the write gate asks — see
 // [gateDecidesWrites]. A MASTER paramset passes through untouched: the write

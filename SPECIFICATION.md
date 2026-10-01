@@ -770,7 +770,7 @@ an ADR.
 | Q9 | HA Add-on packaging | Delivered post-0.1.0 — Home Assistant add-on (amd64/aarch64/armv7) built on the HA base image (s6-overlay + bashio), with Ingress (sidebar panel) + direct port, packaged from `packaging/ha-addon/`; the repo doubles as a HA add-on repository (root `repository.yaml`). Release build toggled by `BUILD_HA_ADDON` |
 | Q10 | OpenCCU Add-on | Delivered post-0.1.0 — CCU/OpenCCU add-on (amd64/arm64/armv7) packaged from `packaging/ccu-addon/` and attached to each release (ADR 0012 channel) |
 | Q11 | Multi-CCU | Supported from 0.1.0 (ADR 0002) |
-| Q12 | Hot-reload | Logging (level, format) and CORS via file-watcher; **entire `north.mqtt` section is hot-swappable** (broker URL, credentials, topic base, discovery toggles) — applied automatically on file-watcher pickup or on demand via `POST /admin/mqtt/reload`. Structural CCU/Callback/REST listen changes still need restart |
+| Q12 | Hot-reload | **Entire `north.mqtt` section is hot-swappable** (broker URL, credentials, topic base, discovery toggles) — applied automatically on file-watcher pickup or on demand via `POST /admin/mqtt/reload`. Logging and CORS are restart-required like every other field `internal/config/restart.go` names (runtime log-level control lives on the diagnostics endpoint instead); structural CCU/Callback/REST listen changes need restart |
 | Q13 | CUxD transport | Native BIN-RPC + BIN-RPC callback server. No MQTT workaround. |
 | Q14 | OpenAPI default | Validation **on** by default in 0.1.0; the daemon refuses requests that don't match `assets/openapi.yaml`. Spec is authoritative for the REST surface. |
 | Q15 | Audit durability | `audit.NewDurableSink` with bounded queue + typed `ErrAuditOverflow` is the default. Silent drops are not allowed. |

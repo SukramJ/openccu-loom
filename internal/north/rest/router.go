@@ -39,7 +39,7 @@ import (
 //     Used where the OpenAPI spec documents the endpoint as always-present
 //     but optionally wired. Examples: MatterStatusReader (GET /matter/status),
 //     ConfigExport (GET and POST /config/export|import),
-//     SystemStatus (GET /system/status).
+//     ChannelFlags (PUT .../channels/{no}/flags).
 //
 //  3. Nil → silent no-op / fallback. The field modifies cross-cutting
 //     behaviour rather than gating a route. A nil value activates a safe
@@ -75,7 +75,7 @@ type Deps struct {
 	Taxonomy handlers.TaxonomySource
 	// DeviceReplacer backs the guided device-replace workflow
 	// (GET /devices/{addr}/replace-candidates + POST
-	// /devices/{addr}/replace). Nil serves those routes as 503.
+	// /devices/{addr}/replace). Nil leaves those routes unmounted.
 	DeviceReplacer handlers.DeviceReplacePort
 	// FirmwareRefresher backs POST /devices/firmware/refresh (force
 	// re-read of per-device firmware data from every CCU). Nil leaves
@@ -88,11 +88,11 @@ type Deps struct {
 	// /install-mode/search. Nil serves the route as 503.
 	InstallModeSearch handlers.DeviceSearchPort
 	// DeviceCommunicationTest runs the per-device communication test at
-	// POST /devices/{addr}/test. Nil serves the route as 503.
+	// POST /devices/{addr}/test. Nil leaves the route unmounted.
 	DeviceCommunicationTest handlers.DeviceCommunicationTestPort
 	// DeviceTeam backs channel team assignment
 	// (GET .../channels/{no}/team-candidates + PUT .../channels/{no}/team).
-	// Nil serves those routes as 503.
+	// Nil leaves those routes unmounted.
 	DeviceTeam handlers.DeviceTeamPort
 	// DeviceIcons proxies device-type icon images from the CCU for the
 	// device list. Optional — nil answers 404 (SPA uses a glyph).
@@ -144,10 +144,12 @@ type Deps struct {
 	Interfaces    handlers.InterfaceIndex
 	Incidents     handlers.IncidentsReader
 	// IncidentsAdmin backs DELETE /incidents, the bulk clear across every
-	// registered central. Operator-gated, matching the WS
-	// `incidents.clear` role it shares its domain call with — the name is
-	// historical and does not mean admin-only. Nil disables the route
-	// (404).
+	// registered central. Admin-gated, following the published contract
+	// (assets/openapi.yaml declares the route `openIdConnect: [admin]` —
+	// see the mount site below). The WS `incidents.clear` command is a
+	// dormant not_implemented stub in this daemon
+	// (notes/parity/by_design.md "ws-rest-split"). Nil disables the
+	// route (404).
 	IncidentsAdmin handlers.IncidentsClearer
 	// Alarm backs the /alarm surface (the alarm-panel engine + output
 	// drivers + config stores). Nil leaves every /alarm route unmounted
@@ -186,7 +188,7 @@ type Deps struct {
 	Schedules handlers.ScheduleService
 	// SystemStatus backs GET /api/v1/system/status — a bounded ring
 	// buffer of recent SystemStatusChangedEvents. Nil disables the
-	// endpoint (returns 503). Wire via
+	// endpoint (the route is not mounted). Wire via
 	// [handlers.SystemStatusBuffer.Subscribe] after the event bus is
 	// live.
 	SystemStatus handlers.SystemStatusReader
@@ -202,7 +204,7 @@ type Deps struct {
 	// ChannelFlags + ChannelFlagsOverlay back the per-channel operator
 	// override endpoints (G12): GET/PUT
 	// /api/v1/devices/{addr}/channels/{no}/flags. Both nil when there is no
-	// durable DB (the routes are then not mounted).
+	// durable DB; the routes stay mounted and PUT answers 503.
 	ChannelFlags        handlers.ChannelFlagsWriter
 	ChannelFlagsOverlay *channelflags.Overlay
 	// Energy feeds the energy view's per-device power/energy breakdown:
@@ -210,13 +212,13 @@ type Deps struct {
 	// disabled (the same feature flag /history depends on).
 	Energy handlers.EnergyService
 	// Auth exposes login/logout/me endpoints at /api/v1/auth so the
-	// SPA can authenticate without the HTMX pages. Nil disables the
-	// endpoints (they 503 on request).
+	// SPA can authenticate without the HTMX pages. Nil leaves the
+	// endpoints unmounted.
 	Auth *handlers.AuthDeps
 
 	// ConfigAdmin backs the live-edit config endpoints
 	// (`GET /config/schema`, `GET|PUT|DELETE /config/{section}`).
-	// Nil disables all of them with 503.
+	// Nil leaves all of them unmounted; only GET /config/schema stays.
 	ConfigAdmin handlers.ConfigAdminService
 	// SectionApplier hands a saved section to the subsystem it configures
 	// so the change takes effect without a restart. Nil means every save
@@ -315,10 +317,11 @@ type Deps struct {
 	// cross-origin requests would need CORS gymnastics. Mounting here
 	// keeps the auth boundary simple.
 	SPAHandler http.Handler
-	// Bootstrap serves the server-rendered HTMX bootstrap surface (login,
-	// first-run /setup wizard, /about, OIDC HTMX flow) on the SAME listener
-	// as the SPA, so the whole onboarding works through one port / HA Ingress
-	// (ADR 0044). Nil disables those routes. Folded in from the former
+	// Bootstrap serves the minimal server-rendered diagnostic surface
+	// (/about, the no-JS /health and /ui assets) on the SAME listener as the
+	// SPA, so SPA-down diagnosis works through one port / HA Ingress
+	// (ADR 0044). Login, onboarding and OIDC live in the SPA. Nil disables
+	// those routes. Folded in from the former
 	// stand-alone :8081 UI listener.
 	Bootstrap http.Handler
 	// Setup backs the first-run onboarding endpoints
@@ -407,11 +410,14 @@ type Deps struct {
 	// allowed to perform (paramset writes, link CRUD, schedule edits,
 	// sysvar writes, device pairing / install mode, firmware update).
 	// Nil falls back to AuthRequire (any authenticated user); when
-	// AuthRequire is also nil the shim fails closed (401).
+	// AuthRequire is also nil the wrap is a pass-through that exists
+	// only for tests — production refuses to mount such a router via
+	// [Deps.AssertAuthWired] (called from the composition root).
 	RequireOperator func(http.Handler) http.Handler
 	// RequireAdmin gates dangerous operations (delete device, backup
 	// trigger, cache clear, interface reconnect, user/token/central CRUD).
-	// Nil falls back to AuthRequire; when that is also nil it fails closed.
+	// Nil falls back to AuthRequire; when that is also nil the same
+	// test-only pass-through and [Deps.AssertAuthWired] rule applies.
 	RequireAdmin func(http.Handler) http.Handler
 	CORS         *middleware.CORSConfig
 	Idempotent   bool
@@ -514,7 +520,7 @@ type Deps struct {
 	// LogLevels backs the diagnostics log-levels endpoint trio
 	// (`GET|PUT|DELETE /api/v1/diagnostics/log-levels`). Wire with the
 	// daemon's [*hmlog.LevelRegistry]. Nil disables the endpoints
-	// (returns 503).
+	// (not mounted).
 	LogLevels handlers.LogLevelsService
 	// HealthExtras complements [Deps.Health] with the numeric Score
 	// and the IsAvailable/IsDegraded/IsFailed flags used by the
@@ -524,7 +530,7 @@ type Deps struct {
 	HealthExtras handlers.HealthExtras
 	// Capture backs the `/diagnostics/capture/*` endpoints. Wire with
 	// the daemon's [*diagnostics.Manager]. Nil disables the endpoints
-	// (returns 503).
+	// (not mounted).
 	Capture handlers.CaptureService
 	// LogFeed backs the log-viewer endpoints (`/diagnostics/logs` backfill/
 	// download + `/diagnostics/logs/stream` SSE tail). Nil disables them.
@@ -544,8 +550,9 @@ type Deps struct {
 	// running daemon declared as it wired them (ADR 0065).
 	// *central.Registry satisfies it through Manifest().
 	WiringManifest handlers.WiringManifestReader
-	// RSSIInfo backs `GET /diagnostics/rssi` — the CCU's pairwise RF
-	// reception matrix. Read-only; nil disables the endpoint.
+	// RSSIInfo backs `GET /diagnostics/rssi` — per-device RSSI_DEVICE /
+	// RSSI_PEER readings from the in-memory device model (the pairwise
+	// matrix is [Deps.RSSIMatrix]). Read-only; nil disables the endpoint.
 	RSSIInfo handlers.RSSIMatrixService
 	// RSSIMatrix backs `GET /diagnostics/rssi/matrix` and
 	// `GET /diagnostics/rssi/receiver-proposal` — the BidCos-RF daemon's
@@ -1012,19 +1019,18 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.With(op).Post("/devices/{addr}/channels/{no}/schedule/active-profile",
 					handlers.PostActiveProfile(d.Schedules))
 				// Device-level convenience routes resolve the schedule
-				// Channel automatically (mirrors 's
-				// _resolve_climate_schedule_channel).
+				// Channel automatically.
 				pr.Get("/devices/{addr}/schedule",
 					handlers.GetScheduleAuto(d.Schedules))
 				pr.With(op).Put("/devices/{addr}/schedule",
 					handlers.PutScheduleAuto(d.Schedules))
 				pr.With(op).Post("/devices/{addr}/schedule/active-profile",
 					handlers.PostActiveProfileAuto(d.Schedules))
-				// Copy the whole device schedule to another device
-				// (channels auto-resolved on both sides).
 				// Fleet-wide schedule overview — the counterpart to
 				// GET /links. Read-only, so no operator gate.
 				pr.Get("/schedules", handlers.ListSchedules(d.Schedules))
+				// Copy the whole device schedule to another device
+				// (channels auto-resolved on both sides).
 				pr.With(op).Post("/devices/{addr}/schedules/copy",
 					handlers.PostCopySchedule(d.Schedules))
 				// Copy a single climate profile from the source channel /
@@ -1521,7 +1527,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 // server-sent-event log tail, which writes for as long as an operator keeps
 // the Logs view open, the NDJSON event-bus tap, which streams for the
 // window the caller asked for (up to five minutes), and the NDJSON fleet
-// snapshot (`?ndjson=1`), which flushes one line per interface / device /
+// snapshot (selected by `Accept: application/x-ndjson`), which flushes one line per interface / device /
 // channel / data point / room / function / program / sysvar and can run
 // well past the router-wide deadline for a large multi-CCU fleet on a
 // slow or throttled connection (mobile, HA Ingress). The exemption is

@@ -42,8 +42,11 @@ type OcculiteSession struct {
 // Confirms reports whether the answer vouches for the presented session
 // id: authenticated, with a role the fixed mapping knows and a user of
 // acceptable shape, and neither an auth-off nor a public-principal answer
-// (those are not about the presented id at all). It is the one predicate
-// both the request resolver and a socket's periodic re-verification apply.
+// (those are not about the presented id at all). It is the predicate the
+// socket revalidator applies; the request resolver applies the same three
+// checks inline in [occuliteSSO.resolve] (it needs per-branch
+// logging and negative caching between them). The two sites must stay in
+// lockstep — weakening one leaves the other as the only fence.
 func (s OcculiteSession) Confirms() bool {
 	if s.AuthOff || s.Public || !s.Authenticated {
 		return false

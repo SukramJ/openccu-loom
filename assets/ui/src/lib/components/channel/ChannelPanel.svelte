@@ -66,11 +66,11 @@
     channel: number;
     /**
      * "VALUES" renders the runtime state (STATE, LEVEL, …) and writes
-     * changes individually via `PUT .../data_points/{param}/value`.
+     * changes individually via `PUT .../data-points/{param}/value`.
      * "MASTER" renders channel configuration and writes the whole set
      * as a batch via `PUT .../paramsets/MASTER`.
      * "LINK" renders the per-peer direct-link configuration and
-     * writes as a batch via `PUT .../link-paramsets/{peer}`. The
+     * writes as a batch via `PUT .../link-ps/{peer}`. The
      * `peer` prop must be set for LINK; ignored otherwise.
      */
     paramset: "VALUES" | "MASTER" | "LINK";
@@ -739,11 +739,13 @@
       if (!wakeupShown) toastStore.success(t("channel.saved_short"));
       banner = null;
     } catch (err) {
-      // 423 Locked: our edit lock lapsed (heartbeat missed, taken over,
-      // or never acquired). Clear it so the "locked by other" recovery
-      // banner shows, and prompt the user to re-open the session.
+      // 423 Locked: our edit lock lapsed mid-save (heartbeat missed or
+      // taken over). Drop the dead session and flag the loss — lockLost
+      // blocks further saves and shows its banner; retrying blind would
+      // clobber whoever holds the lock now.
       if (err instanceof ApiError && err.status === 423) {
         lockSession = null;
+        lockLost = true;
         toastStore.error(t("channel.save_failed"), t("channel.lock_lost"));
       } else {
         toastStore.error(t("channel.save_failed"), friendlyError(err, t));

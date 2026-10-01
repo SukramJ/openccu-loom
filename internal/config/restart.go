@@ -467,8 +467,9 @@ func restSecurityRestartRules() []RestartRule {
 	}
 }
 
-// discoveryRestartRules covers the LAN-discovery surfaces (ADR 0021). The mDNS
-// advertiser and the SSDP scan loop are each started once during bring-up with
+// discoveryRestartRules covers the LAN-discovery surfaces (ADR 0021 for mDNS,
+// ADR 0046 for SSDP). The mDNS advertiser and the SSDP scan loop are each
+// started once during bring-up with
 // their parameters captured then, so a later edit leaves the daemon advertising
 // (or scanning) exactly as before — the opposite of what an operator who just
 // switched LAN visibility off expects.

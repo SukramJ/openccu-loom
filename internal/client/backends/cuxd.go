@@ -34,8 +34,8 @@ func (b *CuxdBackend) Capabilities() Capabilities { return CapabilityFor(KindCUx
 // capability set; no probing is required.
 func (b *CuxdBackend) Initialize(_ context.Context) error { return nil }
 
-// Init / Deinit / Ping / ListDevices follow the same BIN-RPC shape
-// as the CCU backend.
+// Init implements [Operations]. Like Deinit, Ping and ListDevices below it
+// follows the same BIN-RPC shape as the CCU backend.
 func (b *CuxdBackend) Init(ctx context.Context, interfaceID, callbackURL string) error {
 	if b.ann == nil {
 		return nil

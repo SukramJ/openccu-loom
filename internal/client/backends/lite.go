@@ -24,7 +24,8 @@ import (
 // where the interface process offers one (install mode, link info,
 // service-message suppression, gateway list), and every other operation
 // refuses with a [*hmerr.FeatureUnavailableError] that wraps
-// [ErrUnsupported], so existing [errors.Is] branches keep working.
+// [ErrUnsupported] (a few internal-only operations return plain
+// [ErrUnsupported]), so existing [errors.Is] branches keep working.
 //
 // Every call passes through the lite refusal mapping (see
 // [liteFaultCaller]).

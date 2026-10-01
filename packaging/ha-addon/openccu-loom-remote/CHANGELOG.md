@@ -4,6 +4,14 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.83.0
+
+No changes to the proxy. The daemon release adds the device
+administration suite (strict configuration writes with read-back
+reports, multi-apply, config repair, BidCos-RF radio management) and —
+on openccu-lite boxes — serves the Config UI through the box's own web
+server with box-login single sign-on.
+
 # 0.82.0
 
 No changes to the proxy. The daemon release embeds the device pictures

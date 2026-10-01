@@ -650,17 +650,17 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	ifaceAdapter := adapter.NewInterfacesAdapter(reg, reconnector)
 	configAdapter := adapter.NewConfigAdapter(cfg, reg)
 	// Report the ports the callback listeners actually bound — not the
-	// configured value, which a dynamic-port mode (callback.port_range,
-	// bin_port: 0) never equals — so GET /api/v1/config reflects what the
-	// CCU was actually told to push to.
+	// configured value, which differs when the XML-RPC listener picks a
+	// port from callback.port_range — so GET /api/v1/config reflects what
+	// the CCU was actually told to push to.
 	configAdapter.SetEffectiveCallbackPorts(callbackPort, binRPCPort)
 	healthAdapter := adapter.NewHealthAdapter(reg, healthTracker)
 
-	// Auth stores — a minimal in-memory state fed from cfg.Users.
-	// The SQLite-backed stores (Wave B) are added below as the
-	// primary authentication source when persistence is available;
-	// the Memory store remains as the secondary fallback so
-	// YAML-pinned legacy users keep working.
+	// Auth stores — a minimal in-memory state fed from
+	// cfg.North.REST.Auth.Users. The SQLite-backed stores are added below as
+	// the primary authentication source when persistence is available; the
+	// Memory store remains as the secondary fallback so YAML-pinned legacy
+	// users keep working.
 	// Build the in-memory auth stores (users/tokens/sessions) + the chained
 	// token/session resolvers. Extracted into buildAuthStores
 	// (daemon_north.go). The SQLite-backed stores are layered on top inside
@@ -892,10 +892,10 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 
 	// --- REST --------------------------------------------------
 	// Build + mount the REST router/server (and optional mDNS advertiser).
-	// Build the server-rendered HTMX bootstrap surface (login / first-run
-	// setup / about / OIDC) once and fold it onto the REST listener instead of
-	// a separate :8081 server (ADR 0044), so onboarding works through one port
-	// / HA Ingress. noUsers drives the first-run SPA→/setup redirect.
+	// Build the server-rendered bootstrap surface (/health, /about — login,
+	// OIDC and first-run setup live in the SPA, ADR 0045) once and fold it onto
+	// the REST listener instead of a separate :8081 server (ADR 0044), so it
+	// works through one port / HA Ingress.
 	bootstrapRouter := buildBootstrapRouter(cfg, logger, uiMountDeps{
 		healthAdapter: healthAdapter,
 		catalogs:      catalogs,
@@ -1008,7 +1008,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// The browser-facing bootstrap surface is folded into the REST server
 	// above (ADR 0044) — there is no separate UI listener.
 
-	// Registration-completeness observation point (ADR 0047 §7): every
+	// Registration-completeness observation point (ADR 0047 decision 6): every
 	// north-bound surface is now registered (MQTT + webhook above, Matter and
 	// REST during their wiring). The guard test inspects the registry here to
 	// pin that no surface is hand-wired past the registry and that the

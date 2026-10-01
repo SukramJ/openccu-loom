@@ -47,9 +47,10 @@ func NewConfigExportDomain(r *central.Registry, p *ParamsetsDomain) *ConfigExpor
 // ReadParamset fetches the named paramset of channelAddress on
 // centralName, restricted to the parameters the write side would accept.
 //
-// The filter is what makes the snapshot importable: PutParamset rejects
-// the whole write on the first hidden parameter, so an unfiltered export
-// produces a file the import endpoint can only ever refuse.
+// The filter is what makes the snapshot importable: for a VALUES paramset
+// PutParamset rejects the whole write on the first hidden parameter, so an
+// unfiltered export produces a file the import endpoint can only ever refuse.
+// MASTER is not gated by visibility (see [gateDecidesWrites]).
 func (c *ConfigExportDomain) ReadParamset(
 	ctx context.Context, centralName, channelAddress, paramsetKey string,
 ) (map[string]any, error) {

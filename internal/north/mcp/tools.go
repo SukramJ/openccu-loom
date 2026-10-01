@@ -288,8 +288,8 @@ func registerReadTools(s *mcpsdk.Server, d Deps) {
 	if d.AddonUpdate != nil {
 		registerGetAddonUpdateStatus(s, d)
 	}
-	// The MCP/REST parity backlog tools (tests/contract/mcp_rest_parity_test.go
-	// restDomainsAwaitingMCPTools): groups, areas, interfaces, history,
+	// The REST-parity tools (tests/contract/mcp_rest_parity_test.go keeps
+	// restDomainsAwaitingMCPTools empty): groups, areas, interfaces, history,
 	// visibility, energy, links, schedules. Each projects a single narrow
 	// REST facade; a nil seam leaves its tool unregistered.
 	if d.Groups != nil {
@@ -884,11 +884,13 @@ func registerWriteLinkParamset(s *mcpsdk.Server, d Deps) {
 }
 
 // editLockSubject is the fixed identity open_edit_session records on
-// the lock it opens. REST/WS sessions record the caller's authenticated
-// subject; MCP write tools have no per-call human identity of their
-// own (the mount authenticates the transport, not each tool call — see
-// the package doc comment), so every MCP-opened lock is attributed to
-// this constant rather than left blank or fabricated.
+// the lock it opens. The REST route records the subject string the
+// client sends in the request body (advisory, for the "locked by"
+// banner — the route itself sits behind the operator gate); MCP write
+// tools have no per-call human identity of their own (the mount
+// authenticates the transport, not each tool call — see the package
+// doc comment), so every MCP-opened lock is attributed to this
+// constant rather than left blank or fabricated.
 const editLockSubject = "mcp"
 
 // registerOpenEditSession implements `open_edit_session`, the MCP-side

@@ -6,6 +6,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.83.0] - 2026-10-01
+
+### Release summary
+
+A device-administration round. Configuration writes are strict now and
+every one reports back what the interface process actually stored; one
+channel's MASTER values can be applied to identical channels; a repair
+command rebuilds a device's stored configuration from its own
+descriptions; BidCos-RF gains a reception matrix, receiver proposals
+and RF-gateway assignment. On an openccu-lite box the Config UI is
+served through the box's own web server, and whoever opened it through
+the box shell is signed in already (ADR 0078, ADR 0079).
+
 ### Added
 
 - **Box-shell single sign-on over the lite ingress (ADR 0079).** On an
@@ -21,7 +34,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   daemon credentials always win; the resolver only answers when
   nothing else did. Enabled by default exactly where the gate exists
   (the lite add-on stamp; `north.rest.auth.occulite_sso.enabled`
-  overrides), inert everywhere else.
+  overrides), inert everywhere else. REST APIVersion 13.1.0 (the
+  `occulite` scheme on `/auth/me`), nothing breaking.
 
 - **Post-write read-back on configuration writes.** An interface
   process may answer ok to a MASTER or LINK paramset write and still
@@ -59,9 +73,28 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `POST /devices/{addr}/rf-interface` assigns a device to an RF
   gateway or enables roaming (`setBidcosInterface`). MCP:
   `get_rssi_matrix`, `get_receiver_proposal`, `assign_rf_interface`.
+- **The Config UI is served through the box's own web server on an
+  openccu-lite box (ADR 0078).** The add-on ships a validated lighttpd
+  fragment, the box proxies `/addons/loom/` to the daemon with the
+  prefix stripped — TLS with the operator's certificate, the shell's
+  navigation entry and the WebSocket event stream included — and port
+  8119 can stay closed for everyone who only uses this path.
+  CCU3/OpenCCU ingress is a documented non-goal: their lighttpd
+  include (`/etc/config/lighttpd/*.conf`) is unvalidated and carries
+  no session gate, unlike occulited's (ADR 0078).
+- **The box certificate can be reused on the direct port**: setting
+  `north.rest.tls_cert_file` and `tls_key_file` both to the combined
+  `/etc/config/server.pem` now works (the pair loader accepts one file
+  for both roles, pinned by a test) and is documented for CCU and
+  openccu-lite — opt-in, so existing plain-HTTP clients keep working.
 
 ### Fixed
 
+- **A configuration save refused with 423 now locks the channel editor.**
+  When the edit lock lapses mid-save (heartbeat missed or taken over),
+  the SPA now flags the lock as lost — further saves are blocked and
+  the lock-lost banner explains the state. Before, only a toast
+  appeared and an immediate retry could clobber the lock's new holder.
 - **"Restore config" is no longer offered on HmIP devices.**
   `restoreConfigToDevice` is implemented by the BidCos-RF daemon only;
   the HmIP process lists the method but answers every call for its
@@ -114,21 +147,6 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   LINK defaults instead of a fault — and list-shaped wire answers
   tolerate the daemons' empty-string-for-empty-array quirk. Details
   and provenance: `notes/reference/interface-process-write-semantics.md`.
-
-- On an openccu-lite box the Config UI is served through the box's own
-  web server (ADR 0078): the add-on ships a validated lighttpd
-  fragment, the box proxies `/addons/loom/` to the daemon with the
-  prefix stripped — TLS with the operator's certificate, the shell's
-  navigation entry and the WebSocket event stream included — and port
-  8119 can stay closed for everyone who only uses this path.
-  CCU3/OpenCCU ingress is a documented non-goal: their lighttpd
-  include (`/etc/config/lighttpd/*.conf`) is unvalidated and carries
-  no session gate, unlike occulited's (ADR 0078).
-- The box certificate can be reused on the direct port: setting
-  `north.rest.tls_cert_file` and `tls_key_file` both to the combined
-  `/etc/config/server.pem` now works (the pair loader accepts one file
-  for both roles, pinned by a test) and is documented for CCU and
-  openccu-lite — opt-in, so existing plain-HTTP clients keep working.
 
 ## [0.82.0] - 2026-09-29
 

@@ -119,7 +119,7 @@ func PutParamset(svc ParamsetService, locks *EditSessions) http.HandlerFunc {
 			if errors.Is(err, hmerr.ErrLinkParamsetNotAddressable) {
 				// Refused before any RPC: the literal key would reach the
 				// CCU as a peer address. The addressable route is
-				// PUT /devices/{addr}/paramsets/link/{peer}.
+				// PUT /devices/{addr}/link-ps/{peer}.
 				problem.Write(w, http.StatusBadRequest,
 					problem.New(problem.TypeValidation, r, "LINK is not a writable paramset key", err.Error()))
 				return
