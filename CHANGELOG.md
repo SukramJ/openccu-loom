@@ -6,6 +6,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Built with Go 1.27.1** (was 1.26.6): `go.mod`, the Docker builder
+  image and every CI workflow. Building from source now needs Go 1.27 or
+  newer; release binaries, the Docker image and the add-ons are
+  unaffected for operators. Developers: rebuild `golangci-lint` and
+  `gofumpt` with the new toolchain (`go install …`, as CI does) — a
+  binary built with 1.26 refuses a module that targets 1.27.
+
 ## [0.83.0] - 2026-10-01
 
 ### Release summary

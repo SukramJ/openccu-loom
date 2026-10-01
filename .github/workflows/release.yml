@@ -12,7 +12,7 @@ permissions:
 
 env:
   CGO_ENABLED: "0"
-  GO_VERSION: "1.26.6"
+  GO_VERSION: "1.27.1"
   NODE_VERSION: "24"
   # Toggle the CCU/OpenCCU add-on packaging + upload. Set to
   # "false" to skip it for a release (or override per repo via the

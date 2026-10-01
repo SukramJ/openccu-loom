@@ -98,7 +98,7 @@ func resolveSenderType(doc profileDoc, raw string) string {
 // actually exists in the archive — may differ from the caller's
 // senderType when the resolution chain aliased or normalised it).
 // Empty result when no alias can be resolved against the archive.
-func filterProfileDocBySender(raw json.RawMessage, senderType string) (json.RawMessage, []profileDef, string, error) {
+func filterProfileDocBySender(raw json.RawMessage, senderType string) (narrowed json.RawMessage, profiles []profileDef, resolvedKey string, err error) {
 	if len(raw) == 0 || senderType == "" {
 		return nil, nil, "", nil
 	}

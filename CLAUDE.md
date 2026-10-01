@@ -65,7 +65,7 @@ independently. The two projects coexist — aiohomematic powers the Home
 Assistant integration, OpenCCU-Loom serves users who want MQTT / REST / UI /
 Matter access without HA.
 
-- **Language**: Go 1.26+ · module `github.com/SukramJ/openccu-loom`
+- **Language**: Go 1.27+ · module `github.com/SukramJ/openccu-loom`
 - **License**: MIT (source); the binary aggregates openccu-data extracts under
   the eQ-3 HomeMatic Software License (non-commercial) — ADR 0003.
 - **Deployment**: one static binary (`CGO_ENABLED=0`) + Docker
@@ -309,7 +309,7 @@ English-only.
 
 ## Development Environment
 
-Go 1.26+, `golangci-lint` **v2** (a v1 binary rejects this repo's config),
+Go 1.27+, `golangci-lint` **v2** (a v1 binary rejects this repo's config),
 `gofumpt`, `goreleaser`, Docker + buildx, `goose`. Python 3.14+ is needed only
 for the cross-stack snapshot scripts under `script/` — build, tests and the
 integration simulator are pure Go.

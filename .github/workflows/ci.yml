@@ -15,7 +15,7 @@ concurrency:
 
 env:
   CGO_ENABLED: "0"
-  GO_VERSION: "1.26.6"
+  GO_VERSION: "1.27.1"
   NODE_VERSION: "24"
   # Per-package ceiling for every `go test` invocation in this workflow,
   # stated rather than inherited from Go's 10-minute default. The Makefile
@@ -59,7 +59,7 @@ jobs:
             exit 1
           fi
       # Install golangci-lint v2 from source with the Go toolchain set up
-      # above (1.26), same pattern as the gofumpt step. The prebuilt
+      # above (1.27), same pattern as the gofumpt step. The prebuilt
       # binary ships built with an older Go and refuses to run against a
       # module targeting a newer Go; and golangci-lint-action@v6 installs
       # a v1 binary that rejects this repo's v2 config (version/formatters/

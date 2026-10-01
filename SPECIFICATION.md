@@ -251,7 +251,7 @@ parity remains out of scope.
 These are **non-negotiable**. Anything that requires changing one of
 them needs an ADR.
 
-- **Language**: Go 1.26+. No support for older toolchains.
+- **Language**: Go 1.27+. No support for older toolchains.
 - **CGo OFF.** `CGO_ENABLED=0` at all times. If CGo seems necessary
   (crypto, native SQLite, Matter SDK), open an ADR first.
 - **License of dependencies**: MIT / Apache-2.0 / BSD only. GPL /
