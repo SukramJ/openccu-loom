@@ -6,9 +6,8 @@ package audit
 import (
 	"context"
 	"testing"
+	"testing/synctest"
 	"time"
-
-	"github.com/SukramJ/openccu-loom/internal/clock"
 )
 
 // TestNoopRecorderList exercises the List method on noopRecorder (0% before).
@@ -27,78 +26,55 @@ func TestNoopRecorderRecord(t *testing.T) {
 	// No panic = pass.
 }
 
-// TestNewBufferWithClockNilFallsBackToReal verifies nil clock → real clock.
-func TestNewBufferWithClockNilFallsBackToReal(t *testing.T) {
-	b := NewBufferWithClock(5, nil)
-	if b == nil {
-		t.Fatal("NewBufferWithClock(5, nil) should not return nil")
-	}
-	// A Record call should not panic.
-	b.Record(Entry{Action: ActionLinkAdd, DeviceAddress: "X"})
+// TestBufferStampsEntriesWithTheCurrentTime verifies that an entry
+// recorded without a timestamp is stamped with the time of the call.
+func TestBufferStampsEntriesWithTheCurrentTime(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		b := NewBuffer(5)
+		b.Record(Entry{Action: ActionParamsetWrite})
+		entries := b.List(1)
+		if len(entries) != 1 {
+			t.Fatalf("expected 1 entry, got %d", len(entries))
+		}
+		if !entries[0].Timestamp.Equal(time.Now()) {
+			t.Fatalf("timestamp mismatch: %v vs %v", entries[0].Timestamp, time.Now())
+		}
+	})
 }
 
-// TestNewBufferWithClockFake exercises the fake-clock path and verifies
-// that the buffer stamps entries with the fake clock's current time.
-func TestNewBufferWithClockFake(t *testing.T) {
-	fake := clock.NewFake(time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC))
-	b := NewBufferWithClock(5, fake)
-	b.Record(Entry{Action: ActionParamsetWrite})
-	entries := b.List(1)
-	if len(entries) != 1 {
-		t.Fatalf("expected 1 entry, got %d", len(entries))
-	}
-	if !entries[0].Timestamp.Equal(fake.Now()) {
-		t.Fatalf("timestamp mismatch: %v vs %v", entries[0].Timestamp, fake.Now())
-	}
+// TestChangeLogStampsEntriesWithTheCurrentTime verifies that an entry
+// added without a timestamp is stamped with the time of the call.
+func TestChangeLogStampsEntriesWithTheCurrentTime(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		cl := NewChangeLogCapped(5)
+		added := cl.Add("sess1", ChangeEntry{ChannelAddress: "ABC:1"})
+		if added.Timestamp.IsZero() {
+			t.Fatal("Add should stamp the timestamp")
+		}
+		if !added.Timestamp.Equal(time.Now()) {
+			t.Fatalf("timestamp mismatch: %v vs %v", added.Timestamp, time.Now())
+		}
+	})
 }
 
-// TestNewChangeLogCappedWithClockNilFallback verifies nil clock is accepted.
-func TestNewChangeLogCappedWithClockNilFallback(t *testing.T) {
-	cl := NewChangeLogCappedWithClock(10, nil)
-	if cl == nil {
-		t.Fatal("NewChangeLogCappedWithClock should not return nil")
-	}
-}
-
-// TestNewChangeLogCappedWithClockFake exercises the fake-clock seam.
-func TestNewChangeLogCappedWithClockFake(t *testing.T) {
-	fake := clock.NewFake(time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC))
-	cl := NewChangeLogCappedWithClock(5, fake)
-	if cl == nil {
-		t.Fatal("NewChangeLogCappedWithClock(fake) should not return nil")
-	}
-	added := cl.Add("sess1", ChangeEntry{ChannelAddress: "ABC:1"})
-	if added.Timestamp.IsZero() {
-		t.Fatal("Add should stamp the timestamp")
-	}
-	if !added.Timestamp.Equal(fake.Now()) {
-		t.Fatalf("timestamp mismatch: %v vs %v", added.Timestamp, fake.Now())
-	}
-}
-
-// TestNewPersistedRecorderWithClockNil exercises the nil-clock fallback.
-func TestNewPersistedRecorderWithClockNil(t *testing.T) {
-	buf := NewBuffer(5)
-	r := NewPersistedRecorderWithClock(buf, nil, nil, nil)
-	if r == nil {
-		t.Fatal("NewPersistedRecorderWithClock should not return nil")
-	}
-	r.Record(Entry{Action: ActionParamsetWrite})
-}
-
-// TestNewPersistedRecorderWithClockFake exercises the fake-clock path.
-func TestNewPersistedRecorderWithClockFake(t *testing.T) {
-	fake := clock.NewFake(time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC))
-	buf := NewBuffer(5)
-	r := NewPersistedRecorderWithClock(buf, nil, nil, fake)
-	r.Record(Entry{Action: ActionLinkAdd})
-	entries := r.List(0)
-	if len(entries) != 1 {
-		t.Fatalf("entries = %d, want 1", len(entries))
-	}
-	if !entries[0].Timestamp.Equal(fake.Now()) {
-		t.Fatalf("timestamp mismatch: %v", entries[0].Timestamp)
-	}
+// TestPersistedRecorderStampsEntriesWithTheCurrentTime verifies that an
+// entry recorded without a timestamp is stamped with the time of the call.
+func TestPersistedRecorderStampsEntriesWithTheCurrentTime(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		buf := NewBuffer(5)
+		r := NewPersistedRecorder(buf, nil, nil)
+		r.Record(Entry{Action: ActionLinkAdd})
+		entries := r.List(0)
+		if len(entries) != 1 {
+			t.Fatalf("entries = %d, want 1", len(entries))
+		}
+		if !entries[0].Timestamp.Equal(time.Now()) {
+			t.Fatalf("timestamp mismatch: %v", entries[0].Timestamp)
+		}
+	})
 }
 
 // TestDurableSinkStatsNonNilAfterNewDurableSink verifies DurableSinkStats fields

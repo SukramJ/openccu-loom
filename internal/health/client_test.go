@@ -5,9 +5,9 @@ package health_test
 
 import (
 	"testing"
+	"testing/synctest"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/internal/health"
 )
 
@@ -17,73 +17,75 @@ import (
 // LastSuccessfulRequest, resets ConsecutiveFailures to zero, and leaves
 // LastFailedRequest unchanged.
 func TestRecordRequest_Success(t *testing.T) {
-	t0 := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
-	fc := clock.NewFake(t0)
-	tr := health.NewTracker(health.WithClock(fc), health.WithStaleAfter(0))
+	synctest.Test(t, func(t *testing.T) {
+		t0 := time.Now()
+		tr := health.NewTracker(health.WithStaleAfter(0))
 
-	// Seed some failures first so we can verify the reset.
-	tr.RecordRequest("iface", false)
-	tr.RecordRequest("iface", false)
+		// Seed some failures first so we can verify the reset.
+		tr.RecordRequest("iface", false)
+		tr.RecordRequest("iface", false)
 
-	fc.Set(t0.Add(1 * time.Second))
-	tr.RecordRequest("iface", true)
+		time.Sleep(time.Until(t0.Add(1 * time.Second)))
+		tr.RecordRequest("iface", true)
 
-	detail, ok := tr.ClientDetail("iface")
-	if !ok {
-		t.Fatal("ClientDetail returned false for registered interface")
-	}
-	if detail.LastSuccessfulRequest.IsZero() {
-		t.Error("LastSuccessfulRequest is zero after success")
-	}
-	if detail.ConsecutiveFailures != 0 {
-		t.Errorf("ConsecutiveFailures = %d, want 0 after success", detail.ConsecutiveFailures)
-	}
-	// LastFailedRequest must not advance on a success call.
-	if detail.LastFailedRequest.IsZero() {
-		// We recorded two failures above; it should have been set.
-		t.Error("LastFailedRequest is zero — prior failures were not captured")
-	}
-	if !detail.LastSuccessfulRequest.After(detail.LastFailedRequest) {
-		t.Errorf("LastSuccessfulRequest (%v) should be after LastFailedRequest (%v)",
-			detail.LastSuccessfulRequest, detail.LastFailedRequest)
-	}
+		detail, ok := tr.ClientDetail("iface")
+		if !ok {
+			t.Fatal("ClientDetail returned false for registered interface")
+		}
+		if detail.LastSuccessfulRequest.IsZero() {
+			t.Error("LastSuccessfulRequest is zero after success")
+		}
+		if detail.ConsecutiveFailures != 0 {
+			t.Errorf("ConsecutiveFailures = %d, want 0 after success", detail.ConsecutiveFailures)
+		}
+		// LastFailedRequest must not advance on a success call.
+		if detail.LastFailedRequest.IsZero() {
+			// We recorded two failures above; it should have been set.
+			t.Error("LastFailedRequest is zero — prior failures were not captured")
+		}
+		if !detail.LastSuccessfulRequest.After(detail.LastFailedRequest) {
+			t.Errorf("LastSuccessfulRequest (%v) should be after LastFailedRequest (%v)",
+				detail.LastSuccessfulRequest, detail.LastFailedRequest)
+		}
+	})
 }
 
 // TestRecordRequest_Failure verifies that consecutive failures increment
 // ConsecutiveFailures correctly and set LastFailedRequest while leaving
 // LastSuccessfulRequest unchanged.
 func TestRecordRequest_Failure(t *testing.T) {
-	t0 := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
-	fc := clock.NewFake(t0)
-	tr := health.NewTracker(health.WithClock(fc), health.WithStaleAfter(0))
+	synctest.Test(t, func(t *testing.T) {
+		t0 := time.Now()
+		tr := health.NewTracker(health.WithStaleAfter(0))
 
-	// Record one success first so LastSuccessfulRequest is set.
-	tr.RecordRequest("iface", true)
-	successAt := fc.Now()
+		// Record one success first so LastSuccessfulRequest is set.
+		tr.RecordRequest("iface", true)
+		successAt := time.Now()
 
-	// Three consecutive failures.
-	fc.Set(t0.Add(1 * time.Second))
-	tr.RecordRequest("iface", false)
-	fc.Set(t0.Add(2 * time.Second))
-	tr.RecordRequest("iface", false)
-	fc.Set(t0.Add(3 * time.Second))
-	tr.RecordRequest("iface", false)
+		// Three consecutive failures.
+		time.Sleep(time.Until(t0.Add(1 * time.Second)))
+		tr.RecordRequest("iface", false)
+		time.Sleep(time.Until(t0.Add(2 * time.Second)))
+		tr.RecordRequest("iface", false)
+		time.Sleep(time.Until(t0.Add(3 * time.Second)))
+		tr.RecordRequest("iface", false)
 
-	detail, ok := tr.ClientDetail("iface")
-	if !ok {
-		t.Fatal("ClientDetail returned false")
-	}
-	if detail.ConsecutiveFailures != 3 {
-		t.Errorf("ConsecutiveFailures = %d, want 3", detail.ConsecutiveFailures)
-	}
-	if detail.LastFailedRequest.IsZero() {
-		t.Error("LastFailedRequest is zero after three failures")
-	}
-	// LastSuccessfulRequest must not have changed.
-	if !detail.LastSuccessfulRequest.Equal(successAt) {
-		t.Errorf("LastSuccessfulRequest changed: got %v, want %v",
-			detail.LastSuccessfulRequest, successAt)
-	}
+		detail, ok := tr.ClientDetail("iface")
+		if !ok {
+			t.Fatal("ClientDetail returned false")
+		}
+		if detail.ConsecutiveFailures != 3 {
+			t.Errorf("ConsecutiveFailures = %d, want 3", detail.ConsecutiveFailures)
+		}
+		if detail.LastFailedRequest.IsZero() {
+			t.Error("LastFailedRequest is zero after three failures")
+		}
+		// LastSuccessfulRequest must not have changed.
+		if !detail.LastSuccessfulRequest.Equal(successAt) {
+			t.Errorf("LastSuccessfulRequest changed: got %v, want %v",
+				detail.LastSuccessfulRequest, successAt)
+		}
+	})
 }
 
 // TestRecordRequest_EmptyName verifies that passing an empty name is a
@@ -191,24 +193,25 @@ func TestRecordReconnectAttempt_ClientHealth(t *testing.T) {
 // RecordEventReceived the LastEventReceived field in ClientDetail is
 // non-zero.
 func TestClientDetail_LastEventReceived(t *testing.T) {
-	t0 := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
-	fc := clock.NewFake(t0)
-	tr := health.NewTracker(health.WithClock(fc), health.WithStaleAfter(0))
+	synctest.Test(t, func(t *testing.T) {
+		t0 := time.Now()
+		tr := health.NewTracker(health.WithStaleAfter(0))
 
-	// Register client first, then record event.
-	tr.RecordRequest("iface", true)
-	tr.RecordEventReceived("iface")
+		// Register client first, then record event.
+		tr.RecordRequest("iface", true)
+		tr.RecordEventReceived("iface")
 
-	detail, ok := tr.ClientDetail("iface")
-	if !ok {
-		t.Fatal("ClientDetail returned false")
-	}
-	if detail.LastEventReceived.IsZero() {
-		t.Error("LastEventReceived is zero after RecordEventReceived")
-	}
-	if !detail.LastEventReceived.Equal(t0) {
-		t.Errorf("LastEventReceived = %v, want %v", detail.LastEventReceived, t0)
-	}
+		detail, ok := tr.ClientDetail("iface")
+		if !ok {
+			t.Fatal("ClientDetail returned false")
+		}
+		if detail.LastEventReceived.IsZero() {
+			t.Error("LastEventReceived is zero after RecordEventReceived")
+		}
+		if !detail.LastEventReceived.Equal(t0) {
+			t.Errorf("LastEventReceived = %v, want %v", detail.LastEventReceived, t0)
+		}
+	})
 }
 
 // --- ClientScore ---
@@ -224,20 +227,21 @@ func TestClientScore_Unknown(t *testing.T) {
 // TestClientScore_HealthyWithRecentEvent verifies that a healthy
 // component with a recent event-received sample scores above 0.95.
 func TestClientScore_HealthyWithRecentEvent(t *testing.T) {
-	t0 := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
-	fc := clock.NewFake(t0)
-	tr := health.NewTracker(health.WithClock(fc), health.WithStaleAfter(0))
+	synctest.Test(t, func(t *testing.T) {
+		t0 := time.Now()
+		tr := health.NewTracker(health.WithStaleAfter(0))
 
-	tr.Record("iface", health.Sample{Healthy: true, Note: "breaker closed"})
-	tr.RecordEventReceived("iface")
+		tr.Record("iface", health.Sample{Healthy: true, Note: "breaker closed"})
+		tr.RecordEventReceived("iface")
 
-	// Advance only a few seconds — event is fresh (< 60 s).
-	fc.Set(t0.Add(5 * time.Second))
+		// Advance only a few seconds — event is fresh (< 60 s).
+		time.Sleep(time.Until(t0.Add(5 * time.Second)))
 
-	got := tr.ClientScore("iface")
-	if got <= 0.95 {
-		t.Errorf("ClientScore(healthy + recent event) = %v, want > 0.95", got)
-	}
+		got := tr.ClientScore("iface")
+		if got <= 0.95 {
+			t.Errorf("ClientScore(healthy + recent event) = %v, want > 0.95", got)
+		}
+	})
 }
 
 // TestClientScore_BreakerOpenLowersScore verifies that an open breaker
@@ -249,81 +253,82 @@ func TestClientScore_HealthyWithRecentEvent(t *testing.T) {
 // called before Record("breaker open") so it seeds the activity history
 // without overwriting LastSample.
 func TestClientScore_BreakerOpenLowersScore(t *testing.T) {
-	t0 := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
-	fc := clock.NewFake(t0)
-	tr := health.NewTracker(health.WithClock(fc), health.WithStaleAfter(0))
+	synctest.Test(t, func(t *testing.T) {
+		t0 := time.Now()
+		tr := health.NewTracker(health.WithStaleAfter(0))
 
-	// Baseline: event first, then breaker-closed note as LastSample.
-	tr.RecordEventReceived("baseline")
-	tr.Record("baseline", health.Sample{Healthy: true, Note: "breaker closed"})
-	fc.Set(t0.Add(5 * time.Second))
-	baseline := tr.ClientScore("baseline")
+		// Baseline: event first, then breaker-closed note as LastSample.
+		tr.RecordEventReceived("baseline")
+		tr.Record("baseline", health.Sample{Healthy: true, Note: "breaker closed"})
+		time.Sleep(time.Until(t0.Add(5 * time.Second)))
+		baseline := tr.ClientScore("baseline")
 
-	// Breaker-open variant: event first, then breaker-open note as LastSample.
-	t1 := time.Date(2026, 1, 1, 13, 0, 0, 0, time.UTC)
-	fc2 := clock.NewFake(t1)
-	tr2 := health.NewTracker(health.WithClock(fc2), health.WithStaleAfter(0))
-	tr2.RecordEventReceived("iface")
-	tr2.Record("iface", health.Sample{Healthy: true, Note: "breaker open"})
-	fc2.Set(t1.Add(5 * time.Second))
-	got := tr2.ClientScore("iface")
+		// Breaker-open variant: event first, then breaker-open note as LastSample.
+		t1 := time.Now()
+		tr2 := health.NewTracker(health.WithStaleAfter(0))
+		tr2.RecordEventReceived("iface")
+		tr2.Record("iface", health.Sample{Healthy: true, Note: "breaker open"})
+		time.Sleep(time.Until(t1.Add(5 * time.Second)))
+		got := tr2.ClientScore("iface")
 
-	if got >= baseline {
-		t.Errorf("open breaker score %v should be lower than closed breaker baseline %v", got, baseline)
-	}
-	if got > 0.7 {
-		t.Errorf("open breaker score = %v, want <= 0.7 (circuit pillar contributes 0)", got)
-	}
+		if got >= baseline {
+			t.Errorf("open breaker score %v should be lower than closed breaker baseline %v", got, baseline)
+		}
+		if got > 0.7 {
+			t.Errorf("open breaker score = %v, want <= 0.7 (circuit pillar contributes 0)", got)
+		}
+	})
 }
 
 // TestClientScore_Degraded verifies that a degraded state yields a
 // score below 0.5.
 func TestClientScore_Degraded(t *testing.T) {
-	t0 := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
-	fc := clock.NewFake(t0)
-	tr := health.NewTracker(health.WithClock(fc), health.WithStaleAfter(0))
+	synctest.Test(t, func(t *testing.T) {
+		t0 := time.Now()
+		tr := health.NewTracker(health.WithStaleAfter(0))
 
-	// One healthy then one failure → DEGRADED.
-	tr.Record("iface", health.Sample{Healthy: true})
-	tr.Record("iface", health.Sample{Healthy: false})
-	// Record a recent event so activity is full.
-	tr.RecordEventReceived("iface")
-	fc.Set(t0.Add(5 * time.Second))
+		// One healthy then one failure → DEGRADED.
+		tr.Record("iface", health.Sample{Healthy: true})
+		tr.Record("iface", health.Sample{Healthy: false})
+		// Record a recent event so activity is full.
+		tr.RecordEventReceived("iface")
+		time.Sleep(time.Until(t0.Add(5 * time.Second)))
 
-	got := tr.ClientScore("iface")
-	// State pillar for DEGRADED = 0.5 → 0.4*0.5 + 0.3*1.0 + 0.3*1.0 = 0.20 + 0.30 + 0.30 = 0.80
-	// Wait — degraded reduces the state contribution but the other pillars can compensate.
-	// The test asks for score < 1.0 when compared against a fully-healthy equivalent.
-	// More importantly: score < the fully-healthy equivalent (which approaches 1.0).
-	if got >= 1.0 {
-		t.Errorf("degraded state score = %v, expected < 1.0", got)
-	}
-	// State = 0.5, circuit = 1.0 (no note), activity = 1.0 → 0.4*0.5 + 0.3 + 0.3 = 0.80
-	// Confirm the formula is in the expected range.
-	const want = 0.80
-	const epsilon = 0.01
-	if got < want-epsilon || got > want+epsilon {
-		t.Errorf("degraded score = %v, want ~%v", got, want)
-	}
+		got := tr.ClientScore("iface")
+		// State pillar for DEGRADED = 0.5 → 0.4*0.5 + 0.3*1.0 + 0.3*1.0 = 0.20 + 0.30 + 0.30 = 0.80
+		// Wait — degraded reduces the state contribution but the other pillars can compensate.
+		// The test asks for score < 1.0 when compared against a fully-healthy equivalent.
+		// More importantly: score < the fully-healthy equivalent (which approaches 1.0).
+		if got >= 1.0 {
+			t.Errorf("degraded state score = %v, expected < 1.0", got)
+		}
+		// State = 0.5, circuit = 1.0 (no note), activity = 1.0 → 0.4*0.5 + 0.3 + 0.3 = 0.80
+		// Confirm the formula is in the expected range.
+		const want = 0.80
+		const epsilon = 0.01
+		if got < want-epsilon || got > want+epsilon {
+			t.Errorf("degraded score = %v, want ~%v", got, want)
+		}
+	})
 }
 
 // TestClientScore_StaleEvents verifies that without any RecordEventReceived
 // call the activity pillar is 0 and the score is reduced accordingly.
 func TestClientScore_StaleEvents(t *testing.T) {
-	t0 := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
-	fc := clock.NewFake(t0)
-	tr := health.NewTracker(health.WithClock(fc), health.WithStaleAfter(0))
+	synctest.Test(t, func(t *testing.T) {
+		tr := health.NewTracker(health.WithStaleAfter(0))
 
-	tr.Record("iface", health.Sample{Healthy: true, Note: "breaker closed"})
-	// No RecordEventReceived — age treated as 1 h → activity = 0.0.
+		tr.Record("iface", health.Sample{Healthy: true, Note: "breaker closed"})
+		// No RecordEventReceived — age treated as 1 h → activity = 0.0.
 
-	got := tr.ClientScore("iface")
-	// state=1.0, circuit=1.0, activity=0.0 → 0.4*1.0 + 0.3*1.0 + 0.3*0.0 = 0.70
-	const want = 0.70
-	const epsilon = 0.01
-	if got < want-epsilon || got > want+epsilon {
-		t.Errorf("no event score = %v, want ~%v (activity pillar = 0)", got, want)
-	}
+		got := tr.ClientScore("iface")
+		// state=1.0, circuit=1.0, activity=0.0 → 0.4*1.0 + 0.3*1.0 + 0.3*0.0 = 0.70
+		const want = 0.70
+		const epsilon = 0.01
+		if got < want-epsilon || got > want+epsilon {
+			t.Errorf("no event score = %v, want ~%v (activity pillar = 0)", got, want)
+		}
+	})
 }
 
 // --- PrimaryClientHealthy ---

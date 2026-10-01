@@ -24,7 +24,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -101,7 +100,6 @@ type Tracker struct {
 	reconnectAttempts map[string]int // per-component reconnect counter
 	clients           map[string]*ClientHealth
 	primaryInterface  string
-	clk               clock.Clock
 	historySize       int
 	staleAfter        time.Duration
 
@@ -126,16 +124,6 @@ type GaugeFunc func() float64
 
 // Option configures a [Tracker] at construction time.
 type Option func(*Tracker)
-
-// WithClock injects a [clock.Clock] — primarily for tests.
-func WithClock(c clock.Clock) Option {
-	return func(t *Tracker) {
-		if c == nil {
-			c = clock.New()
-		}
-		t.clk = c
-	}
-}
 
 // WithHistorySize overrides the per-component ring buffer size. Pass
 // a positive value; non-positive arguments fall back to
@@ -168,7 +156,6 @@ func NewTracker(opts ...Option) *Tracker {
 		reconnectAttempts: make(map[string]int),
 		clients:           make(map[string]*ClientHealth),
 		gauges:            make(map[string]GaugeFunc),
-		clk:               clock.New(),
 		historySize:       DefaultHistorySize,
 		staleAfter:        DefaultStaleAfter,
 	}
@@ -238,7 +225,7 @@ func (t *Tracker) RecordUnhealthy(name string, sample Sample) {
 // whether the first unhealthy sample after a healthy run is held at DEGRADED.
 func (t *Tracker) record(name string, sample Sample, damp bool) {
 	if sample.Timestamp.IsZero() {
-		sample.Timestamp = t.clk.Now()
+		sample.Timestamp = time.Now()
 	}
 	t.mu.Lock()
 	prev, known := t.components[name]
@@ -283,7 +270,7 @@ func statusFromSample(s Sample) Status {
 // history sample are still recorded so the signal stays visible in diagnostics
 // and decays to [StatusUnknown] once stale.
 func (t *Tracker) RecordQuality(name, note string) {
-	sample := Sample{Healthy: false, Note: note, Timestamp: t.clk.Now()}
+	sample := Sample{Healthy: false, Note: note, Timestamp: time.Now()}
 	t.mu.Lock()
 	t.components[name] = Component{Name: name, Status: StatusDegraded, LastSample: sample}
 	hist := t.history[name]
@@ -342,7 +329,7 @@ func (t *Tracker) applyStaleLocked(c Component) Component {
 	if c.LastSample.Timestamp.IsZero() {
 		return c
 	}
-	if t.clk.Now().Sub(c.LastSample.Timestamp) > t.staleAfter {
+	if time.Now().Sub(c.LastSample.Timestamp) > t.staleAfter {
 		c.Status = StatusUnknown
 	}
 	return c
@@ -668,7 +655,7 @@ func (t *Tracker) CanReceiveEvents(name string, freshness time.Duration) bool {
 	if len(src) == 0 {
 		return false
 	}
-	cutoff := t.clk.Now().Add(-freshness)
+	cutoff := time.Now().Add(-freshness)
 	for _, s := range slices.Backward(src) {
 		if s.Timestamp.Before(cutoff) {
 			return false
@@ -730,8 +717,7 @@ func (t *Tracker) History(name string, limit int) []Sample {
 // distinguish "no data" from "all unhealthy" should check
 // [Tracker.History] separately.
 //
-// The window is a sliding view computed against the injected clock,
-// so [WithClock] gives tests a deterministic anchor.
+// The window is a sliding view computed against the current time.
 func (t *Tracker) WindowedScore(name string, window time.Duration) float64 {
 	if window <= 0 {
 		return 0
@@ -742,7 +728,7 @@ func (t *Tracker) WindowedScore(name string, window time.Duration) float64 {
 	if len(src) == 0 {
 		return 0
 	}
-	cutoff := t.clk.Now().Add(-window)
+	cutoff := time.Now().Add(-window)
 	healthy, total := 0, 0
 	for _, s := range src {
 		if s.Timestamp.Before(cutoff) {
@@ -820,7 +806,7 @@ func (t *Tracker) MetricsHealthSummary() MetricsHealthSummaryView {
 func (t *Tracker) RecordEventReceived(name string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	now := t.clk.Now()
+	now := time.Now()
 	sample := Sample{Healthy: true, Note: "event-received", NoteKey: NoteKeyFor("event-received"), Timestamp: now}
 	// We only update the last-event note without flipping the status — the
 	// component may be degraded or unhealthy for other reasons and we do
@@ -879,7 +865,7 @@ func (t *Tracker) RecordRequest(name string, success bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	c := t.clientLocked(name)
-	now := t.clk.Now()
+	now := time.Now()
 	if success {
 		c.LastSuccessfulRequest = now
 		c.ConsecutiveFailures = 0
@@ -983,7 +969,7 @@ func (t *Tracker) ClientScore(name string) float64 {
 	last := t.lastEventReceivedLocked(name)
 	age := time.Hour // treat "never seen an event" as fully decayed
 	if !last.IsZero() {
-		age = t.clk.Now().Sub(last)
+		age = time.Now().Sub(last)
 	}
 	activity := clientScoreActivity(age)
 	return composeClientScore(state, circuit, activity)
@@ -1079,7 +1065,7 @@ func (t *Tracker) OverallWindowedScore(window time.Duration) float64 {
 	if len(t.history) == 0 {
 		return 0
 	}
-	cutoff := t.clk.Now().Add(-window)
+	cutoff := time.Now().Add(-window)
 	totalScore := 0.0
 	contributing := 0
 	for _, src := range t.history {

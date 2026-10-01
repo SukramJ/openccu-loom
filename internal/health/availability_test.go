@@ -5,9 +5,9 @@ package health_test
 
 import (
 	"testing"
+	"testing/synctest"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/internal/health"
 )
 
@@ -132,74 +132,72 @@ func TestCanReceiveEvents_UnknownComponent(t *testing.T) {
 // TestCanReceiveEvents_RecentEvent verifies that a sample recorded within
 // the freshness window is detected.
 func TestCanReceiveEvents_RecentEvent(t *testing.T) {
-	t0 := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
-	fc := clock.NewFake(t0)
-	tr := health.NewTracker(health.WithClock(fc), health.WithStaleAfter(0))
+	synctest.Test(t, func(t *testing.T) {
+		tr := health.NewTracker(health.WithStaleAfter(0))
 
-	tr.RecordEventReceived("HmIP-RF")
+		tr.RecordEventReceived("HmIP-RF")
 
-	if !tr.CanReceiveEvents("HmIP-RF", time.Minute) {
-		t.Error("recent event: CanReceiveEvents() = false, want true")
-	}
+		if !tr.CanReceiveEvents("HmIP-RF", time.Minute) {
+			t.Error("recent event: CanReceiveEvents() = false, want true")
+		}
+	})
 }
 
 // TestCanReceiveEvents_StaleEvent verifies that a sample older than the
 // freshness window is rejected.
 func TestCanReceiveEvents_StaleEvent(t *testing.T) {
-	t0 := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
-	fc := clock.NewFake(t0)
-	tr := health.NewTracker(health.WithClock(fc), health.WithStaleAfter(0))
+	synctest.Test(t, func(t *testing.T) {
+		tr := health.NewTracker(health.WithStaleAfter(0))
 
-	tr.RecordEventReceived("HmIP-RF")
-	fc.Set(t0.Add(10 * time.Minute))
+		tr.RecordEventReceived("HmIP-RF")
+		time.Sleep(10 * time.Minute)
 
-	if tr.CanReceiveEvents("HmIP-RF", 5*time.Minute) {
-		t.Error("stale event (10 min ago, freshness 5 min): CanReceiveEvents() = true, want false")
-	}
+		if tr.CanReceiveEvents("HmIP-RF", 5*time.Minute) {
+			t.Error("stale event (10 min ago, freshness 5 min): CanReceiveEvents() = true, want false")
+		}
+	})
 }
 
 // TestCanReceiveEvents_FreshnessZeroUsesDefault verifies that freshness <= 0
 // falls back to DefaultEventFreshness (5 minutes).
 func TestCanReceiveEvents_FreshnessZeroUsesDefault(t *testing.T) {
-	t0 := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
-	fc := clock.NewFake(t0)
-	tr := health.NewTracker(health.WithClock(fc), health.WithStaleAfter(0))
+	synctest.Test(t, func(t *testing.T) {
+		tr := health.NewTracker(health.WithStaleAfter(0))
 
-	tr.RecordEventReceived("iface")
+		tr.RecordEventReceived("iface")
 
-	// At t0+10min: older than DefaultEventFreshness (5min) → false.
-	fc.Set(t0.Add(10 * time.Minute))
-	if tr.CanReceiveEvents("iface", 0) {
-		t.Error("t0+10min, freshness=0: CanReceiveEvents() = true, want false (default 5min)")
-	}
+		// After 10min: older than DefaultEventFreshness (5min) → false.
+		time.Sleep(10 * time.Minute)
+		if tr.CanReceiveEvents("iface", 0) {
+			t.Error("10min, freshness=0: CanReceiveEvents() = true, want false (default 5min)")
+		}
 
-	// New tracker at a fresh t0; advance only 2 min → within default 5 min → true.
-	t1 := time.Date(2026, 1, 1, 13, 0, 0, 0, time.UTC)
-	fc2 := clock.NewFake(t1)
-	tr2 := health.NewTracker(health.WithClock(fc2), health.WithStaleAfter(0))
-	tr2.RecordEventReceived("iface")
-	fc2.Set(t1.Add(2 * time.Minute))
-	if !tr2.CanReceiveEvents("iface", 0) {
-		t.Error("t1+2min, freshness=0: CanReceiveEvents() = false, want true (default 5min)")
-	}
+		// New tracker; advance only 2 min → within default 5 min → true.
+		tr2 := health.NewTracker(health.WithStaleAfter(0))
+		tr2.RecordEventReceived("iface")
+		time.Sleep(2 * time.Minute)
+		if !tr2.CanReceiveEvents("iface", 0) {
+			t.Error("2min, freshness=0: CanReceiveEvents() = false, want true (default 5min)")
+		}
+	})
 }
 
 // TestCanReceiveEvents_HealthySampleAfterUnhealthy verifies that a
 // RecordEventReceived after an unhealthy sample still returns true —
 // the most-recent event-received sample is what matters for freshness.
 func TestCanReceiveEvents_HealthySampleAfterUnhealthy(t *testing.T) {
-	t0 := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
-	fc := clock.NewFake(t0)
-	tr := health.NewTracker(health.WithClock(fc), health.WithStaleAfter(0))
+	synctest.Test(t, func(t *testing.T) {
+		tr := health.NewTracker(health.WithStaleAfter(0))
 
-	// First record an unhealthy sample with a different note.
-	tr.Record("conn", health.Sample{Healthy: false, Note: "timeout"})
-	// Then record a fresh event-received.
-	tr.RecordEventReceived("conn")
+		// First record an unhealthy sample with a different note.
+		tr.Record("conn", health.Sample{Healthy: false, Note: "timeout"})
+		// Then record a fresh event-received.
+		tr.RecordEventReceived("conn")
 
-	if !tr.CanReceiveEvents("conn", time.Minute) {
-		t.Error("event-received after unhealthy: CanReceiveEvents() = false, want true")
-	}
+		if !tr.CanReceiveEvents("conn", time.Minute) {
+			t.Error("event-received after unhealthy: CanReceiveEvents() = false, want true")
+		}
+	})
 }
 
 // TestDefaultHistorySize asserts the constant is 200.

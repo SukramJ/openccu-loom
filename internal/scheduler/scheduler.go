@@ -16,8 +16,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/SukramJ/openccu-loom/internal/clock"
 )
 
 // JobFunc is the signature every scheduled job satisfies.
@@ -55,7 +53,6 @@ type Job struct {
 // Scheduler owns a set of periodic jobs and a shared context.
 type Scheduler struct {
 	logger *slog.Logger
-	clk    clock.Clock
 
 	mu       sync.Mutex
 	jobs     []Job
@@ -123,16 +120,12 @@ func (s *Scheduler) recordFailure(name string) {
 }
 
 // New returns a fresh scheduler. logger may be nil (falls back to
-// slog.Default). clk may be nil (falls back to the real wall clock).
-// Pass [clock.NewFake] in tests for deterministic tick control.
-func New(logger *slog.Logger, clk clock.Clock) *Scheduler {
+// slog.Default).
+func New(logger *slog.Logger) *Scheduler {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	if clk == nil {
-		clk = clock.New()
-	}
-	return &Scheduler{logger: logger, clk: clk}
+	return &Scheduler{logger: logger}
 }
 
 // Add registers a job. When called before Start the job is queued and launched
@@ -257,12 +250,12 @@ func (s *Scheduler) runJob(ctx context.Context, j Job) {
 	}
 
 	for {
-		timer := s.clk.NewTimer(j.Interval)
+		timer := time.NewTimer(j.Interval)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
 			return
-		case <-timer.C():
+		case <-timer.C:
 			s.invoke(ctx, j)
 		}
 	}
