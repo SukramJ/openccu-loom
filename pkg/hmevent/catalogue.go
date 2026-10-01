@@ -333,7 +333,6 @@ func (DeviceCreatedEvent) Type() EventType { return EventTypeDeviceCreated }
 // so no value event carries it, and the device was created long before —
 // without this the MQTT discovery, the Matter endpoint set and the
 // outbound webhook would keep withholding it until a daemon restart.
-// loom:reachable:reason="published by adapter.ReleaseDevice and consumed by the MQTT event bridge and the Matter reassemble trigger; both sides go through the generic events.Publish/Subscribe, whose type instantiation the analyzer cannot resolve"
 type DeviceReleasedEvent struct {
 	Base
 	CentralName string
@@ -380,7 +379,6 @@ func (DeviceRemovedEvent) Type() EventType { return EventTypeDeviceRemoved }
 // address (never a channel address) — a channel-level change still
 // republishes the whole device, because MQTT/Matter materialise a device's
 // name/area as one unit.
-// loom:reachable:reason="published by central.Unit on a device or channel rename and consumed by the north-bound event bridge; both sides go through the generic events.Publish/Subscribe, whose type instantiation the analyzer cannot resolve"
 type DeviceMetadataChangedEvent struct {
 	Base
 	CentralName string

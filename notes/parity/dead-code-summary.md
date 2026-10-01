@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 5a9e87c7
-HEAD: 5a9e87c7
+Generated: 46d3294e
+HEAD: 46d3294e
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 6032 |
-| Reachable | 3934 |
-| Whitelisted | 2039 |
-| **Unreachable** | **59** |
+| Total Exported | 6097 |
+| Reachable | 3994 |
+| Whitelisted | 2047 |
+| **Unreachable** | **56** |
 
 ## What these numbers cannot see
 
@@ -47,11 +47,11 @@ live. Each needs a different question than "is there an edge to it".
 
 | Package | Funcs | Types | Other |
 |---|---|---|---|
-| internal/central/events | 3 | 1 | 0 |
 | internal/model/optimistic | 1 | 3 | 0 |
 | pkg/hmlog | 1 | 0 | 0 |
 | internal/auth | 0 | 0 | 1 |
 | internal/central/adapter | 0 | 3 | 0 |
+| internal/central/events | 0 | 1 | 0 |
 | internal/client/backends | 0 | 6 | 0 |
 | internal/model/custom | 0 | 3 | 0 |
 | internal/model/custom/climate | 0 | 1 | 3 |
@@ -70,9 +70,6 @@ live. Each needs a different question than "is there an edge to it".
 
 | Package | Identifier | File | Line |
 |---|---|---|---|
-| internal/central/events | Publish | internal/central/events/bus.go | 244 |
-| internal/central/events | PublishSync | internal/central/events/bus.go | 337 |
-| internal/central/events | Subscribe | internal/central/events/bus.go | 174 |
 | internal/model/optimistic | New | internal/model/optimistic/tracker.go | 112 |
 | pkg/hmlog | ForSubsystem | pkg/hmlog/factory.go | 131 |
 
@@ -80,11 +77,11 @@ live. Each needs a different question than "is there an edge to it".
 
 | Package | Funcs | Types | Other |
 |---|---|---|---|
-| internal/central/events | 3 | 1 | 0 |
 | internal/model/optimistic | 1 | 3 | 0 |
 | pkg/hmlog | 1 | 0 | 0 |
 | internal/auth | 0 | 0 | 1 |
 | internal/central/adapter | 0 | 3 | 0 |
+| internal/central/events | 0 | 1 | 0 |
 | internal/client/backends | 0 | 6 | 0 |
 | internal/model/custom | 0 | 3 | 0 |
 | internal/model/custom/climate | 0 | 1 | 3 |

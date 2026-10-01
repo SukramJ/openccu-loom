@@ -453,7 +453,14 @@ func TestReachabilitySnapshotHasNoTestFiles(t *testing.T) {
 // deleted the naming.Bucket alias with its five constants and unexported the
 // six *PathRoot constants. This one is a change of the tree, not of the
 // measurement.
-const reachabilityUnreachableCeiling = 59
+//
+// 59 -> 56: the event bus moved from the free generic functions
+// events.Subscribe / Publish / PublishSync to generic methods on *events.Bus.
+// The three functions were listed as unreachable although every publish and
+// subscribe in the daemon went through them; with them deleted, the
+// reachable and whitelisted counts are unchanged.
+// A change of the tree.
+const reachabilityUnreachableCeiling = 56
 
 // TestReachabilitySnapshotUnreachableCountHasACeiling is the one test in this
 // file that says something about the tree rather than about the snapshot's
