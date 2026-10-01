@@ -35,7 +35,6 @@ func newOpenCircuit(t *testing.T) *CircuitBreaker {
 		FailureThreshold: 1,
 		ResetTimeout:     10 * time.Minute, // never auto-transition during test
 		HalfOpenSuccess:  1,
-		Clock:            func() time.Time { return time.Unix(0, 0) },
 	})
 	forceOpen(t, cb)
 	return cb
@@ -224,7 +223,6 @@ func TestCircuitTotalRequestsCountsRejected(t *testing.T) {
 	cb := NewCircuit(CircuitConfig{
 		FailureThreshold: 1,
 		ResetTimeout:     10 * time.Minute,
-		Clock:            func() time.Time { return time.Unix(0, 0) },
 	})
 	// Trip to OPEN (1 non-bypassed call).
 	_ = cb.Do(context.Background(), "setValue", func(_ context.Context) error { return errors.New("x") })

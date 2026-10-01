@@ -7,14 +7,15 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
-// hmCliScheduleProbe runs one retry chain against a recording clock and
-// returns the backoff delays the retrier asked for, in order.
+// hmCliScheduleProbe runs one retry chain inside a synctest bubble and
+// returns the backoff waits the retrier slept, in order.
 type hmCliScheduleProbe struct {
 	name   string
 	run    func(r *Retrier, fn func(ctx context.Context, attempt int) error) error
@@ -47,56 +48,57 @@ func TestHmCliRetryScheduleIsTheSameForDoAndDoForKey(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			probes := []*hmCliScheduleProbe{
-				{
-					name: "Do",
-					run: func(r *Retrier, fn func(ctx context.Context, attempt int) error) error {
-						return r.Do(context.Background(), fn)
+			synctest.Test(t, func(t *testing.T) {
+				probes := []*hmCliScheduleProbe{
+					{
+						name: "Do",
+						run: func(r *Retrier, fn func(ctx context.Context, attempt int) error) error {
+							return r.Do(context.Background(), fn)
+						},
 					},
-				},
-				{
-					name: "DoForKey",
-					run: func(r *Retrier, fn func(ctx context.Context, attempt int) error) error {
-						key := hmtypes.DataPointKey{
-							InterfaceID:    "central-HmIP-RF",
-							ChannelAddress: "VCU0000123:1",
-							ParamsetKey:    "VALUES",
-							Parameter:      "LEVEL",
-						}
-						return r.DoForKey(context.Background(), key, fn)
+					{
+						name: "DoForKey",
+						run: func(r *Retrier, fn func(ctx context.Context, attempt int) error) error {
+							key := hmtypes.DataPointKey{
+								InterfaceID:    "central-HmIP-RF",
+								ChannelAddress: "VCU0000123:1",
+								ParamsetKey:    "VALUES",
+								Parameter:      "LEVEL",
+							}
+							return r.DoForKey(context.Background(), key, fn)
+						},
 					},
-				},
-			}
+				}
 
-			for _, p := range probes {
-				clk := newRecordingClock()
-				r := NewRetrier(RetryConfig{
-					MaxAttempts: 4,
-					Initial:     100 * time.Millisecond,
-					Max:         10 * time.Second,
-					Multiplier:  2,
-					Jitter:      -1, // negative disables jitter; the schedule itself is under test
-					Clock:       clk,
-				})
-				err := p.run(r, func(context.Context, int) error { return tc.fail })
-				if err == nil {
-					t.Fatalf("%s: retry chain succeeded, want the injected failure", p.name)
+				for _, p := range probes {
+					clk := &attemptRecorder{}
+					r := NewRetrier(RetryConfig{
+						MaxAttempts: 4,
+						Initial:     100 * time.Millisecond,
+						Max:         10 * time.Second,
+						Multiplier:  2,
+						Jitter:      -1, // negative disables jitter; the schedule itself is under test
+					})
+					err := p.run(r, clk.fail(tc.fail))
+					if err == nil {
+						t.Fatalf("%s: retry chain succeeded, want the injected failure", p.name)
+					}
+					p.delays = clk.Delays()
+					if len(p.delays) == 0 {
+						t.Fatalf("%s: no backoff delay recorded — the probe measured nothing", p.name)
+					}
 				}
-				p.delays = clk.Delays()
-				if len(p.delays) == 0 {
-					t.Fatalf("%s: no backoff delay recorded — the probe measured nothing", p.name)
-				}
-			}
 
-			got, want := probes[1].delays, probes[0].delays
-			if len(got) != len(want) {
-				t.Fatalf("DoForKey took %d backoff waits, Do took %d (%v vs %v) — the two entry points are on different retry policies", len(got), len(want), got, want)
-			}
-			for i := range want {
-				if got[i] != want[i] {
-					t.Errorf("backoff wait %d: DoForKey = %s, Do = %s — the two entry points are on different retry policies", i+1, got[i], want[i])
+				got, want := probes[1].delays, probes[0].delays
+				if len(got) != len(want) {
+					t.Fatalf("DoForKey took %d backoff waits, Do took %d (%v vs %v) — the two entry points are on different retry policies", len(got), len(want), got, want)
 				}
-			}
+				for i := range want {
+					if got[i] != want[i] {
+						t.Errorf("backoff wait %d: DoForKey = %s, Do = %s — the two entry points are on different retry policies", i+1, got[i], want[i])
+					}
+				}
+			})
 		})
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -30,59 +31,64 @@ func parkedRetrier() *Retrier {
 }
 
 func TestRetrierCancelKeyCountsCancelledRetriesOnce(t *testing.T) {
-	r := parkedRetrier()
-	key := retryKey("LEVEL")
+	synctest.Test(t, func(t *testing.T) {
+		r := parkedRetrier()
+		key := retryKey("LEVEL")
 
-	attempted := make(chan struct{}, 1)
-	done := make(chan error, 1)
-	go func() {
-		done <- r.DoForKey(context.Background(), key, func(_ context.Context, _ int) error {
-			attempted <- struct{}{}
-			return errors.New("transient")
-		})
-	}()
-
-	<-attempted // first attempt ran → the chain is registered and parking in backoff
-	r.CancelKey(key)
-
-	select {
-	case err := <-done:
-		if !errors.Is(err, ErrRetrySuperseded) {
-			t.Fatalf("DoForKey returned %v, want ErrRetrySuperseded", err)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("CancelKey did not unblock the parked chain")
-	}
-
-	if got := r.Snapshot().CancelledRetries; got != 1 {
-		t.Fatalf("CancelledRetries = %d, want exactly 1 (a cancellation must not be double-counted)", got)
-	}
-}
-
-func TestRetrierCancelInterfaceCountsEachChainOnce(t *testing.T) {
-	r := parkedRetrier()
-	keys := []hmtypes.DataPointKey{retryKey("LEVEL"), retryKey("STATE")}
-
-	attempted := make(chan struct{}, len(keys))
-	var wg sync.WaitGroup
-	for _, k := range keys {
-		wg.Go(func() {
-			_ = r.DoForKey(context.Background(), k, func(_ context.Context, _ int) error {
+		attempted := make(chan struct{}, 1)
+		done := make(chan error, 1)
+		go func() {
+			done <- r.DoForKey(context.Background(), key, func(_ context.Context, _ int) error {
 				attempted <- struct{}{}
 				return errors.New("transient")
 			})
-		})
-	}
-	for range keys {
-		<-attempted
-	}
+		}()
 
-	if cancelled := r.CancelInterface(); cancelled != len(keys) {
-		t.Fatalf("CancelInterface returned %d, want %d", cancelled, len(keys))
-	}
-	wg.Wait()
+		<-attempted // first attempt ran → the chain is registered and parking in backoff
+		r.CancelKey(key)
 
-	if got := r.Snapshot().CancelledRetries; got != int64(len(keys)) {
-		t.Fatalf("CancelledRetries = %d, want exactly %d (one per cancelled chain, no double-count)", got, len(keys))
-	}
+		synctest.Wait()
+		select {
+		case err := <-done:
+			if !errors.Is(err, ErrRetrySuperseded) {
+				t.Fatalf("DoForKey returned %v, want ErrRetrySuperseded", err)
+			}
+		default:
+			t.Fatal("CancelKey did not unblock the parked chain")
+		}
+
+		if got := r.Snapshot().CancelledRetries; got != 1 {
+			t.Fatalf("CancelledRetries = %d, want exactly 1 (a cancellation must not be double-counted)", got)
+		}
+	})
+}
+
+func TestRetrierCancelInterfaceCountsEachChainOnce(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		r := parkedRetrier()
+		keys := []hmtypes.DataPointKey{retryKey("LEVEL"), retryKey("STATE")}
+
+		attempted := make(chan struct{}, len(keys))
+		var wg sync.WaitGroup
+		for _, k := range keys {
+			wg.Go(func() {
+				_ = r.DoForKey(context.Background(), k, func(_ context.Context, _ int) error {
+					attempted <- struct{}{}
+					return errors.New("transient")
+				})
+			})
+		}
+		for range keys {
+			<-attempted
+		}
+
+		if cancelled := r.CancelInterface(); cancelled != len(keys) {
+			t.Fatalf("CancelInterface returned %d, want %d", cancelled, len(keys))
+		}
+		wg.Wait()
+
+		if got := r.Snapshot().CancelledRetries; got != int64(len(keys)) {
+			t.Fatalf("CancelledRetries = %d, want exactly %d (one per cancelled chain, no double-count)", got, len(keys))
+		}
+	})
 }

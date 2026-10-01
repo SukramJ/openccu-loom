@@ -8,6 +8,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -27,61 +28,62 @@ import (
 // callback.
 func TestCallerCancellationDoesNotTripTheBreaker(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		const queued = 5
+		c := NewCircuit(CircuitConfig{FailureThreshold: queued, ResetTimeout: time.Hour})
+		throttle := NewThrottle(ThrottleConfig{MaxInFlight: 1, MaxQueueDepth: queued})
+		t.Cleanup(throttle.Close)
+		retrier := NewRetrier(RetryConfig{MaxAttempts: 3, Initial: time.Millisecond})
 
-	const queued = 5
-	c := NewCircuit(CircuitConfig{FailureThreshold: queued, ResetTimeout: time.Hour})
-	throttle := NewThrottle(ThrottleConfig{MaxInFlight: 1, MaxQueueDepth: queued})
-	t.Cleanup(throttle.Close)
-	retrier := NewRetrier(RetryConfig{MaxAttempts: 3, Initial: time.Millisecond})
+		ctx, cancel := context.WithCancel(context.Background())
+		holding := make(chan struct{})
+		var holdOnce sync.Once
 
-	ctx, cancel := context.WithCancel(context.Background())
-	holding := make(chan struct{})
-	var holdOnce sync.Once
-
-	// The production nesting: the breaker wraps the retrier, the retrier
-	// takes a throttle permit per attempt, and the wire call happens under
-	// that permit.
-	call := func() error {
-		return c.DoWithPriority(ctx, "getParamset", hmenum.CommandPriorityLow, func(ctx context.Context) error {
-			return retrier.Do(ctx, func(ctx context.Context, _ int) error {
-				if err := throttle.Acquire(ctx, hmenum.CommandPriorityLow); err != nil {
-					return err
-				}
-				defer throttle.Release()
-				// Whoever wins the single permit keeps it until the
-				// context dies, which is what parks the others.
-				holdOnce.Do(func() { close(holding) })
-				<-ctx.Done()
-				return ctx.Err()
+		// The production nesting: the breaker wraps the retrier, the retrier
+		// takes a throttle permit per attempt, and the wire call happens under
+		// that permit.
+		call := func() error {
+			return c.DoWithPriority(ctx, "getParamset", hmenum.CommandPriorityLow, func(ctx context.Context) error {
+				return retrier.Do(ctx, func(ctx context.Context, _ int) error {
+					if err := throttle.Acquire(ctx, hmenum.CommandPriorityLow); err != nil {
+						return err
+					}
+					defer throttle.Release()
+					// Whoever wins the single permit keeps it until the
+					// context dies, which is what parks the others.
+					holdOnce.Do(func() { close(holding) })
+					<-ctx.Done()
+					return ctx.Err()
+				})
 			})
-		})
-	}
-
-	var wg sync.WaitGroup
-	errs := make([]error, queued)
-	for i := range queued {
-		wg.Go(func() {
-			errs[i] = call()
-		})
-	}
-
-	<-holding
-	waitForThrottleWaiters(t, throttle, queued-1)
-	cancel()
-	wg.Wait()
-
-	for i, err := range errs {
-		if err == nil {
-			t.Fatalf("call %d returned nil, want the caller's cancellation", i)
 		}
-		if errors.Is(err, hmerr.ErrCircuitBreakerOpen) {
-			t.Fatalf("call %d was shed by the breaker: %v", i, err)
+
+		var wg sync.WaitGroup
+		errs := make([]error, queued)
+		for i := range queued {
+			wg.Go(func() {
+				errs[i] = call()
+			})
 		}
-	}
-	if got := c.State(); got != hmenum.CircuitStateClosed {
-		t.Fatalf("state = %v after %d cancelled calls, want CLOSED — no call reached the CCU",
-			got, queued)
-	}
+
+		<-holding
+		waitForThrottleWaiters(t, throttle, queued-1)
+		cancel()
+		wg.Wait()
+
+		for i, err := range errs {
+			if err == nil {
+				t.Fatalf("call %d returned nil, want the caller's cancellation", i)
+			}
+			if errors.Is(err, hmerr.ErrCircuitBreakerOpen) {
+				t.Fatalf("call %d was shed by the breaker: %v", i, err)
+			}
+		}
+		if got := c.State(); got != hmenum.CircuitStateClosed {
+			t.Fatalf("state = %v after %d cancelled calls, want CLOSED — no call reached the CCU",
+				got, queued)
+		}
+	})
 }
 
 // TestThrottleBackpressureDoesNotTripTheBreaker pins the same rule for the
@@ -118,35 +120,32 @@ func TestThrottleBackpressureDoesNotTripTheBreaker(t *testing.T) {
 // react to it even though the error is a context error.
 func TestTransportDeadlineStillTripsTheBreaker(t *testing.T) {
 	t.Parallel()
-
-	c := NewCircuit(CircuitConfig{FailureThreshold: 2, ResetTimeout: time.Hour})
-	for range 2 {
-		err := c.Do(context.Background(), "getParamset", func(ctx context.Context) error {
-			attempt, cancel := context.WithTimeout(ctx, time.Millisecond)
-			defer cancel()
-			<-attempt.Done()
-			return attempt.Err()
-		})
-		if !errors.Is(err, context.DeadlineExceeded) {
-			t.Fatalf("err = %v, want the transport deadline", err)
+	synctest.Test(t, func(t *testing.T) {
+		c := NewCircuit(CircuitConfig{FailureThreshold: 2, ResetTimeout: time.Hour})
+		for range 2 {
+			err := c.Do(context.Background(), "getParamset", func(ctx context.Context) error {
+				attempt, cancel := context.WithTimeout(ctx, time.Millisecond)
+				defer cancel()
+				<-attempt.Done()
+				return attempt.Err()
+			})
+			if !errors.Is(err, context.DeadlineExceeded) {
+				t.Fatalf("err = %v, want the transport deadline", err)
+			}
 		}
-	}
-	if got := c.State(); got != hmenum.CircuitStateOpen {
-		t.Fatalf("state = %v, want OPEN — a CCU that never answers is a wire failure", got)
-	}
+		if got := c.State(); got != hmenum.CircuitStateOpen {
+			t.Fatalf("state = %v, want OPEN — a CCU that never answers is a wire failure", got)
+		}
+	})
 }
 
 // waitForThrottleWaiters blocks until want callers are parked in the
 // throttle queue, so the cancellation lands on a real backlog rather than
-// on a race.
+// on a race. It must be called inside a synctest bubble.
 func waitForThrottleWaiters(t *testing.T, throttle *CommandThrottle, want int) {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		if throttle.Waiting() >= want {
-			return
-		}
-		time.Sleep(time.Millisecond)
+	synctest.Wait()
+	if got := throttle.Waiting(); got < want {
+		t.Fatalf("throttle queue depth = %d, want %d parked callers", got, want)
 	}
-	t.Fatalf("throttle queue depth = %d, want %d parked callers", throttle.Waiting(), want)
 }

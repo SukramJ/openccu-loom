@@ -14,9 +14,8 @@ package reliability
 import (
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
-
-	"github.com/SukramJ/openccu-loom/internal/clock"
 )
 
 // ─── HasConnectionIssue ───────────────────────────────────────────────
@@ -114,11 +113,9 @@ func TestPingPongAllowedDeltaDefault(t *testing.T) {
 // removes both from their tables.
 func TestRetryReconcilePongMatchesLatePing(t *testing.T) {
 	t.Parallel()
-	fake := clock.NewFake(time.Now())
 	tr := NewPingPongTracker(PingPongConfig{
 		PendingTTL: time.Minute,
 		UnknownTTL: time.Minute,
-		Clock:      fake,
 	})
 
 	// The PONG arrives first (unknown), then the PING.
@@ -165,28 +162,28 @@ func TestRetryReconcilePongTokenNotPending(t *testing.T) {
 // side-effect (mirrors Python _cleanup_tracker call at start of _retry_reconcile_pong).
 func TestRetryReconcilePongEvictsExpiredEntries(t *testing.T) {
 	t.Parallel()
-	fake := clock.NewFake(time.Now())
-	const ttl = 50 * time.Millisecond
-	tr := NewPingPongTracker(PingPongConfig{
-		PendingTTL: ttl,
-		UnknownTTL: ttl,
-		Clock:      fake,
+	synctest.Test(t, func(t *testing.T) {
+		const ttl = 50 * time.Millisecond
+		tr := NewPingPongTracker(PingPongConfig{
+			PendingTTL: ttl,
+			UnknownTTL: ttl,
+		})
+
+		tr.RecordPing("stale-p")
+		tr.RecordPong("stale-u") // → unknown
+
+		synctest.Sleep(ttl + time.Millisecond)
+
+		// Trigger retry for a different token — should still evict stale entries.
+		tr.RetryReconcilePong("nonexistent-token")
+
+		if tr.PendingCount() != 0 {
+			t.Errorf("PendingCount=%d after retry eviction, want 0", tr.PendingCount())
+		}
+		if tr.UnknownCount() != 0 {
+			t.Errorf("UnknownCount=%d after retry eviction, want 0", tr.UnknownCount())
+		}
 	})
-
-	tr.RecordPing("stale-p")
-	tr.RecordPong("stale-u") // → unknown
-
-	fake.Advance(ttl + time.Millisecond)
-
-	// Trigger retry for a different token — should still evict stale entries.
-	tr.RetryReconcilePong("nonexistent-token")
-
-	if tr.PendingCount() != 0 {
-		t.Errorf("PendingCount=%d after retry eviction, want 0", tr.PendingCount())
-	}
-	if tr.UnknownCount() != 0 {
-		t.Errorf("UnknownCount=%d after retry eviction, want 0", tr.UnknownCount())
-	}
 }
 
 // ─── ScheduleUnknownPongRetry ─────────────────────────────────────────

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/client/reliability"
@@ -26,37 +27,36 @@ import (
 
 func TestCircuitBreakerNeedsTwoSuccessesToClose(t *testing.T) {
 	t.Parallel()
-	now := time.Now()
-	clock := func() time.Time { return now }
-	cb := reliability.NewCircuit(reliability.CircuitConfig{
-		FailureThreshold: 1,
-		ResetTimeout:     time.Millisecond,
-		Clock:            clock,
+	synctest.Test(t, func(t *testing.T) {
+		cb := reliability.NewCircuit(reliability.CircuitConfig{
+			FailureThreshold: 1,
+			ResetTimeout:     time.Millisecond,
+		})
+
+		// One failure trips the breaker into OPEN.
+		_ = cb.Do(context.Background(), "setValue", func(_ context.Context) error { return errors.New("boom") })
+		if cb.State() != hmenum.CircuitStateOpen {
+			t.Fatalf("breaker did not open: %s", cb.State())
+		}
+
+		// After the reset timeout we transition to HALF_OPEN on the next
+		// call. One success there must NOT yet close the breaker.
+		synctest.Sleep(2 * time.Millisecond)
+		if err := cb.Do(context.Background(), "setValue", func(_ context.Context) error { return nil }); err != nil {
+			t.Fatalf("first half-open success returned err=%v", err)
+		}
+		if got := cb.State(); got == hmenum.CircuitStateClosed {
+			t.Fatalf("breaker closed after only ONE success, want HALF_OPEN; got %s", got)
+		}
+
+		// The second consecutive success closes it.
+		if err := cb.Do(context.Background(), "setValue", func(_ context.Context) error { return nil }); err != nil {
+			t.Fatalf("second success returned err=%v", err)
+		}
+		if got := cb.State(); got != hmenum.CircuitStateClosed {
+			t.Fatalf("breaker did not close after two successes: %s", got)
+		}
 	})
-
-	// One failure trips the breaker into OPEN.
-	_ = cb.Do(context.Background(), "setValue", func(_ context.Context) error { return errors.New("boom") })
-	if cb.State() != hmenum.CircuitStateOpen {
-		t.Fatalf("breaker did not open: %s", cb.State())
-	}
-
-	// After the reset timeout we transition to HALF_OPEN on the next
-	// call. One success there must NOT yet close the breaker.
-	now = now.Add(2 * time.Millisecond)
-	if err := cb.Do(context.Background(), "setValue", func(_ context.Context) error { return nil }); err != nil {
-		t.Fatalf("first half-open success returned err=%v", err)
-	}
-	if got := cb.State(); got == hmenum.CircuitStateClosed {
-		t.Fatalf("breaker closed after only ONE success, want HALF_OPEN; got %s", got)
-	}
-
-	// The second consecutive success closes it.
-	if err := cb.Do(context.Background(), "setValue", func(_ context.Context) error { return nil }); err != nil {
-		t.Fatalf("second success returned err=%v", err)
-	}
-	if got := cb.State(); got != hmenum.CircuitStateClosed {
-		t.Fatalf("breaker did not close after two successes: %s", got)
-	}
 }
 
 // TestXMLRPCFaultCodeValues pins the wire-level CCU fault codes the
@@ -164,19 +164,18 @@ func TestConfigSchemaCommandRetryInitialDelayDefaultMatchesReliabilityStack(t *t
 
 func TestCircuitBreakerHalfOpenFailReopens(t *testing.T) {
 	t.Parallel()
-	now := time.Now()
-	clock := func() time.Time { return now }
-	cb := reliability.NewCircuit(reliability.CircuitConfig{
-		FailureThreshold: 1,
-		ResetTimeout:     time.Millisecond,
-		Clock:            clock,
+	synctest.Test(t, func(t *testing.T) {
+		cb := reliability.NewCircuit(reliability.CircuitConfig{
+			FailureThreshold: 1,
+			ResetTimeout:     time.Millisecond,
+		})
+		_ = cb.Do(context.Background(), "setValue", func(_ context.Context) error { return errors.New("boom") })
+		synctest.Sleep(2 * time.Millisecond)
+		// HALF_OPEN reached on the next call; a failure there must
+		// re-open the breaker, not close it.
+		_ = cb.Do(context.Background(), "setValue", func(_ context.Context) error { return errors.New("still down") })
+		if got := cb.State(); got != hmenum.CircuitStateOpen {
+			t.Fatalf("breaker must re-open after HALF_OPEN failure: %s", got)
+		}
 	})
-	_ = cb.Do(context.Background(), "setValue", func(_ context.Context) error { return errors.New("boom") })
-	now = now.Add(2 * time.Millisecond)
-	// HALF_OPEN reached on the next call; a failure there must
-	// re-open the breaker, not close it.
-	_ = cb.Do(context.Background(), "setValue", func(_ context.Context) error { return errors.New("still down") })
-	if got := cb.State(); got != hmenum.CircuitStateOpen {
-		t.Fatalf("breaker must re-open after HALF_OPEN failure: %s", got)
-	}
 }

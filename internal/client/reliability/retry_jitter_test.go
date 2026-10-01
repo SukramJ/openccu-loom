@@ -7,7 +7,7 @@ package reliability
 // accidentally produce a negative sleep duration (retry jitter ±20 % on
 // small backoffs < 100 ms must never go negative). All tests operate directly
 // on the unexported applyJitter / nextDelay helpers (package-internal test
-// file). The monotonicity test drives Retrier.Do via a recordingClock that
+// file). The monotonicity test drives Retrier.Do via an attemptRecorder that
 // captures each NewTimer duration without blocking.
 
 import (
@@ -16,9 +16,8 @@ import (
 	"math/rand/v2"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
-
-	"github.com/SukramJ/openccu-loom/internal/clock"
 )
 
 // deterministicRng returns a seeded *rand.Rand for reproducible iteration.
@@ -152,39 +151,37 @@ func TestRetryJitterDistributionIsRoughlyUniform(t *testing.T) {
 
 // TestRetryBackoffMonotonicWithoutJitter verifies that when Jitter = 0 the
 // delays passed to the clock do not decrease across successive retry
-// attempts. Uses recordingClock (see below) to capture delays without
-// sleeping real time.
+// attempts. Uses attemptRecorder (see below) inside a synctest bubble to
+// capture the waits without sleeping real time.
 func TestRetryBackoffMonotonicWithoutJitter(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		rec := &attemptRecorder{}
+		r := NewRetrier(RetryConfig{
+			MaxAttempts: 5,
+			Initial:     10 * time.Millisecond,
+			Max:         200 * time.Millisecond,
+			Multiplier:  2,
+			Jitter:      -1, // explicit "no jitter" for deterministic timing
+		})
 
-	rec := newRecordingClock()
-	r := NewRetrier(RetryConfig{
-		MaxAttempts: 5,
-		Initial:     10 * time.Millisecond,
-		Max:         200 * time.Millisecond,
-		Multiplier:  2,
-		Jitter:      -1, // explicit "no jitter" for deterministic timing
-		Clock:       rec,
-	})
-
-	err := r.Do(context.Background(), func(_ context.Context, _ int) error {
-		return errors.New("transient")
-	})
-	if err == nil {
-		t.Fatal("expected exhaustion error, got nil")
-	}
-
-	delays := rec.Delays()
-	if len(delays) == 0 {
-		t.Fatal("no delays captured — recordingClock not exercised")
-	}
-	// With Jitter=0 and Multiplier=2 the sequence is 10ms, 20ms, 40ms, 80ms.
-	for i := 1; i < len(delays); i++ {
-		if delays[i] < delays[i-1] {
-			t.Errorf("delay[%d]=%v < delay[%d]=%v — backoff regressed without jitter",
-				i, delays[i], i-1, delays[i-1])
+		err := r.Do(context.Background(), rec.fail(errors.New("transient")))
+		if err == nil {
+			t.Fatal("expected exhaustion error, got nil")
 		}
-	}
+
+		delays := rec.Delays()
+		if len(delays) == 0 {
+			t.Fatal("no delays captured — the retrier made no second attempt")
+		}
+		// With Jitter=0 and Multiplier=2 the sequence is 10ms, 20ms, 40ms, 80ms.
+		for i := 1; i < len(delays); i++ {
+			if delays[i] < delays[i-1] {
+				t.Errorf("delay[%d]=%v < delay[%d]=%v — backoff regressed without jitter",
+					i, delays[i], i-1, delays[i-1])
+			}
+		}
+	})
 }
 
 // TestRetryBackoffAtZeroBackoffNoJitterApplied tests the edge case where
@@ -268,76 +265,35 @@ func TestRetryJitterFallbackClampsToBaseNotZero(t *testing.T) {
 	}
 }
 
-// ── recordingClock ────────────────────────────────────────────────────────────
+// ── attemptRecorder ───────────────────────────────────────────────────────────
 //
-// recordingClock implements clock.Clock. Every NewTimer(d) call appends d
-// to an internal slice, then immediately fires the timer so the retrier never
-// blocks real time. Now() advances by d on each NewTimer call so the retrier
-// sees a plausible wall-clock progression.
+// attemptRecorder records the bubble time of every attempt a Retrier makes,
+// so a test can derive the backoff waits the Retrier actually slept. It must
+// be used inside a synctest bubble, where those waits cost no real time.
 
-type recordingClock struct {
-	mu     sync.Mutex
-	now    time.Time
-	delays []time.Duration
+type attemptRecorder struct {
+	mu sync.Mutex
+	at []time.Time
 }
 
-func newRecordingClock() *recordingClock {
-	return &recordingClock{
-		now: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+// fail returns a retry operation that stamps the attempt time and fails
+// with err.
+func (r *attemptRecorder) fail(err error) func(context.Context, int) error {
+	return func(context.Context, int) error {
+		r.mu.Lock()
+		r.at = append(r.at, time.Now())
+		r.mu.Unlock()
+		return err
 	}
 }
 
-// Delays returns a snapshot of the captured timer durations in order.
-func (c *recordingClock) Delays() []time.Duration {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	out := make([]time.Duration, len(c.delays))
-	copy(out, c.delays)
+// Delays returns the gaps between successive recorded attempts, in order.
+func (r *attemptRecorder) Delays() []time.Duration {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []time.Duration
+	for i := 1; i < len(r.at); i++ {
+		out = append(out, r.at[i].Sub(r.at[i-1]))
+	}
 	return out
 }
-
-// Now implements clock.Clock.
-func (c *recordingClock) Now() time.Time {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.now
-}
-
-// NewTimer implements clock.Clock. The returned timer fires immediately
-// (buffered channel) so Retrier.Do never parks on a real timer.
-func (c *recordingClock) NewTimer(d time.Duration) clock.Timer {
-	c.mu.Lock()
-	c.delays = append(c.delays, d)
-	c.now = c.now.Add(d)
-	c.mu.Unlock()
-	return &instantTimer{d: d}
-}
-
-// Sleep implements clock.Clock.
-func (c *recordingClock) Sleep(d time.Duration) {
-	c.mu.Lock()
-	c.now = c.now.Add(d)
-	c.mu.Unlock()
-}
-
-// After implements clock.Clock.
-func (c *recordingClock) After(d time.Duration) <-chan time.Time {
-	return c.NewTimer(d).C()
-}
-
-// instantTimer is a clock.Timer that fires immediately.
-type instantTimer struct {
-	d    time.Duration
-	once sync.Once
-	ch   chan time.Time
-}
-
-func (t *instantTimer) C() <-chan time.Time {
-	t.once.Do(func() {
-		t.ch = make(chan time.Time, 1)
-		t.ch <- time.Now()
-	})
-	return t.ch
-}
-
-func (t *instantTimer) Stop() bool { return false }

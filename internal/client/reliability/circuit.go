@@ -68,9 +68,6 @@ type CircuitConfig struct {
 	// HalfOpenSuccess is how many consecutive successes in HALF_OPEN
 	// are required to close the breaker.
 	HalfOpenSuccess int
-
-	// Clock overrides the wall clock for tests.
-	Clock func() time.Time
 }
 
 // defaultCircuitConfig fills in a reasonable baseline. Values come
@@ -81,7 +78,6 @@ func defaultCircuitConfig() CircuitConfig {
 		FailureThreshold: hmreliability.CircuitFailureThreshold,
 		ResetTimeout:     hmreliability.CircuitResetTimeout,
 		HalfOpenSuccess:  hmreliability.CircuitHalfOpenSuccess,
-		Clock:            time.Now,
 	}
 }
 
@@ -140,9 +136,6 @@ func NewCircuit(cfg CircuitConfig) *CircuitBreaker {
 	}
 	if cfg.HalfOpenSuccess > 0 {
 		base.HalfOpenSuccess = cfg.HalfOpenSuccess
-	}
-	if cfg.Clock != nil {
-		base.Clock = cfg.Clock
 	}
 	return &CircuitBreaker{
 		cfg:   base,
@@ -317,10 +310,10 @@ func (c *CircuitBreaker) record(ctx context.Context, err error) {
 		c.consecutiveErr++
 		if c.state == hmenum.CircuitStateHalfOpen {
 			c.state = hmenum.CircuitStateOpen
-			c.openedAt = c.cfg.Clock()
+			c.openedAt = time.Now()
 		} else if c.state == hmenum.CircuitStateClosed && c.consecutiveErr >= c.cfg.FailureThreshold {
 			c.state = hmenum.CircuitStateOpen
-			c.openedAt = c.cfg.Clock()
+			c.openedAt = time.Now()
 		}
 	}
 	to := c.state
@@ -470,7 +463,7 @@ func (c *CircuitBreaker) refreshLocked() (hmenum.CircuitState, stateNotice) {
 	if c.state != hmenum.CircuitStateOpen {
 		return c.state, stateNotice{}
 	}
-	if c.cfg.Clock().Sub(c.openedAt) >= c.cfg.ResetTimeout {
+	if time.Since(c.openedAt) >= c.cfg.ResetTimeout {
 		from := c.state
 		c.state = hmenum.CircuitStateHalfOpen
 		return c.state, stateNotice{from: from, to: c.state, listeners: c.snapshotListenersLocked()}

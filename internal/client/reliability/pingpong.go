@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmreliability"
 )
@@ -35,10 +34,6 @@ type PingPongConfig struct {
 	// JournalSize bounds the in-memory journal of recent ping/pong
 	// events kept for diagnostics. Zero disables the journal.
 	JournalSize int
-
-	// Clock overrides the wall clock. Nil falls back to the real wall
-	// clock via [clock.New]. Mirrors the pattern used by [ThrottleConfig].
-	Clock clock.Clock
 }
 
 // PingPongTracker correlates outbound PINGs with inbound PONGs.
@@ -51,7 +46,6 @@ type PingPongConfig struct {
 // anomalies.
 type PingPongTracker struct {
 	cfg PingPongConfig
-	clk clock.Clock
 
 	mu      sync.Mutex
 	pending map[string]time.Time
@@ -123,13 +117,8 @@ func NewPingPongTracker(cfg PingPongConfig) *PingPongTracker {
 	if cfg.MaxEntries <= 0 {
 		cfg.MaxEntries = 100
 	}
-	clk := cfg.Clock
-	if clk == nil {
-		clk = clock.New()
-	}
 	t := &PingPongTracker{
 		cfg:     cfg,
-		clk:     clk,
 		pending: make(map[string]time.Time),
 		unknown: make(map[string]time.Time),
 	}
@@ -241,7 +230,7 @@ func (t *PingPongTracker) RecordPing(id string) {
 		return
 	}
 	t.mu.Lock()
-	now := t.clk.Now()
+	now := time.Now()
 	t.pending[id] = now
 	t.totalSent++
 	t.appendJournalLocked(JournalEntry{When: now, Kind: JournalEventSent, ID: id})
@@ -265,7 +254,7 @@ func (t *PingPongTracker) RecordPing(id string) {
 // return zero.
 func (t *PingPongTracker) RecordPong(id string) (matched bool, rtt time.Duration) {
 	t.mu.Lock()
-	now := t.clk.Now()
+	now := time.Now()
 	t.totalRecv++
 	var (
 		publishHook     = t.onPublish
@@ -326,7 +315,7 @@ type Mismatch struct {
 // (after dropping the lock) so the caller's incident-recording stays
 // outside the critical section.
 func (t *PingPongTracker) Sweep() []Mismatch {
-	now := t.clk.Now()
+	now := time.Now()
 	t.mu.Lock()
 
 	var out []Mismatch
@@ -470,7 +459,7 @@ func (t *PingPongTracker) AllowedDelta() int {
 // publish events. If the token is not in pending, it remains in unknown until
 // TTL expiry.
 func (t *PingPongTracker) RetryReconcilePong(token string) {
-	now := t.clk.Now()
+	now := time.Now()
 	t.mu.Lock()
 
 	// Evict expired entries from both tables before reconciling.
@@ -605,6 +594,6 @@ func (t *PingPongTracker) enforceCap(m map[string]time.Time, kind JournalEventKi
 		}
 		entries[i], entries[oldestIdx] = entries[oldestIdx], entries[i]
 		delete(m, entries[i].id)
-		t.appendJournalLocked(JournalEntry{When: t.clk.Now(), Kind: kind, ID: entries[i].id})
+		t.appendJournalLocked(JournalEntry{When: time.Now(), Kind: kind, ID: entries[i].id})
 	}
 }

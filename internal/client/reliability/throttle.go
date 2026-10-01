@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmreliability"
 )
@@ -76,10 +75,6 @@ type ThrottleConfig struct {
 	// daemon OOMs. The cap converts that failure mode into a fail-fast
 	// error path that the caller's [Retrier] handles with backoff.
 	MaxQueueDepth int
-
-	// Clock is the time source for the burst-window pruning + the
-	// wait timer. Nil falls back to the real wall clock.
-	Clock clock.Clock
 }
 
 // CommandThrottle is a priority-aware semaphore: at most MaxInFlight
@@ -107,7 +102,6 @@ type CommandThrottle struct {
 	waiters  waiterHeap
 	closed   bool
 	nextSeq  uint64
-	clk      clock.Clock
 
 	burstThreshold int
 	burstWindow    time.Duration
@@ -146,13 +140,8 @@ func NewThrottle(cfg ThrottleConfig) *CommandThrottle {
 	if capacity <= 0 {
 		capacity = 1
 	}
-	clk := cfg.Clock
-	if clk == nil {
-		clk = clock.New()
-	}
 	t := &CommandThrottle{
 		capacity:          capacity,
-		clk:               clk,
 		closeCh:           make(chan struct{}),
 		interCommandDelay: cfg.InterCommandDelay,
 		maxQueueDepth:     cfg.MaxQueueDepth,
@@ -347,7 +336,7 @@ func (t *CommandThrottle) waitForBurstSlot(ctx context.Context, prio hmenum.Comm
 			t.mu.Unlock()
 			return nil
 		}
-		now := t.clk.Now()
+		now := time.Now()
 		t.pruneBurstLocked(now)
 		if len(t.burstSamples) < t.burstThreshold {
 			t.mu.Unlock()
@@ -372,9 +361,9 @@ func (t *CommandThrottle) waitForBurstSlot(ctx context.Context, prio hmenum.Comm
 			}
 			t.mu.Unlock()
 		}
-		timer := t.clk.NewTimer(wait)
+		timer := time.NewTimer(wait)
 		select {
-		case <-timer.C():
+		case <-timer.C:
 		case <-t.closeCh:
 			timer.Stop()
 			t.mu.Lock()
@@ -405,7 +394,7 @@ func (t *CommandThrottle) waitForCommandDelay(ctx context.Context, prio hmenum.C
 			t.mu.Unlock()
 			return ErrThrottleClosed
 		}
-		now := t.clk.Now()
+		now := time.Now()
 		elapsed := now.Sub(t.lastCommandAt)
 		if elapsed >= t.interCommandDelay || t.lastCommandAt.IsZero() {
 			t.mu.Unlock()
@@ -421,9 +410,9 @@ func (t *CommandThrottle) waitForCommandDelay(ctx context.Context, prio hmenum.C
 			t.mu.Unlock()
 		}
 
-		timer := t.clk.NewTimer(remain)
+		timer := time.NewTimer(remain)
 		select {
-		case <-timer.C():
+		case <-timer.C:
 			// Re-check in the next iteration.
 		case <-t.closeCh:
 			timer.Stop()
@@ -442,7 +431,7 @@ func (t *CommandThrottle) recordBurstLocked(prio hmenum.CommandPriority) {
 	if prio == hmenum.CommandPriorityCritical {
 		return
 	}
-	now := t.clk.Now()
+	now := time.Now()
 	t.lastCommandAt = now
 	if t.burstThreshold == 0 {
 		return

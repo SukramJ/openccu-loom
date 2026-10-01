@@ -11,8 +11,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
@@ -270,52 +270,33 @@ func TestGetParamsetDescriptionOnDemandUnsupported(t *testing.T) {
 
 func TestMetricsCircuitStateHalfOpen(t *testing.T) {
 	t.Parallel()
-	// To reach HALF_OPEN we inject a clock that reports a time far in the
-	// future after the circuit has been tripped OPEN.
-	now := time.Now()
-	clk := &advanceable{t: now}
+	synctest.Test(t, func(t *testing.T) {
+		// To reach HALF_OPEN the bubble clock is advanced past the reset
+		// timeout after the circuit has been tripped OPEN.
+		cb := reliability.NewCircuit(reliability.CircuitConfig{
+			FailureThreshold: 1,
+			ResetTimeout:     time.Second,
+		})
+		ic, _ := New(Config{
+			CentralName: "ccu",
+			Interface:   hmenum.InterfaceHmIPRF,
+			Caller:      CallerFunc(func(_ context.Context, _ string, _ []any) (any, error) { return nil, nil }),
+			Circuit:     cb,
+		})
+		defer ic.Close()
 
-	cb := reliability.NewCircuit(reliability.CircuitConfig{
-		FailureThreshold: 1,
-		ResetTimeout:     time.Second,
-		Clock:            clk.Now,
+		// Trip the circuit open.
+		cb.RecordFailure()
+		if got := ic.MetricsCircuitState(); got != 1 {
+			t.Fatalf("want open (1), got %d", got)
+		}
+
+		// Advance the clock past the reset timeout → next State() call returns HALF_OPEN.
+		synctest.Sleep(2 * time.Second)
+		if got := ic.MetricsCircuitState(); got != 2 {
+			t.Errorf("MetricsCircuitState()=%d, want 2 (half-open)", got)
+		}
 	})
-	ic, _ := New(Config{
-		CentralName: "ccu",
-		Interface:   hmenum.InterfaceHmIPRF,
-		Caller:      CallerFunc(func(_ context.Context, _ string, _ []any) (any, error) { return nil, nil }),
-		Circuit:     cb,
-	})
-	defer ic.Close()
-
-	// Trip the circuit open.
-	cb.RecordFailure()
-	if got := ic.MetricsCircuitState(); got != 1 {
-		t.Fatalf("want open (1), got %d", got)
-	}
-
-	// Advance the clock past the reset timeout → next State() call returns HALF_OPEN.
-	clk.Advance(2 * time.Second)
-	if got := ic.MetricsCircuitState(); got != 2 {
-		t.Errorf("MetricsCircuitState()=%d, want 2 (half-open)", got)
-	}
-}
-
-type advanceable struct {
-	mu sync.Mutex
-	t  time.Time
-}
-
-func (a *advanceable) Now() time.Time {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.t
-}
-
-func (a *advanceable) Advance(d time.Duration) {
-	a.mu.Lock()
-	a.t = a.t.Add(d)
-	a.mu.Unlock()
 }
 
 // ---------------------------------------------------------------------------

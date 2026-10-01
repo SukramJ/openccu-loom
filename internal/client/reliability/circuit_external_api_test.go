@@ -13,6 +13,7 @@ import (
 	"errors"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -26,7 +27,6 @@ func TestRecordFailure_TripsBreaker(t *testing.T) {
 	c := NewCircuit(CircuitConfig{
 		FailureThreshold: 1,
 		ResetTimeout:     time.Hour,
-		Clock:            time.Now,
 	})
 
 	c.RecordFailure()
@@ -40,35 +40,33 @@ func TestRecordFailure_TripsBreaker(t *testing.T) {
 
 func TestRecordSuccess_ClosesBreakerFromHalfOpen(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		c := NewCircuit(CircuitConfig{
+			FailureThreshold: 1,
+			ResetTimeout:     time.Second,
+			HalfOpenSuccess:  1,
+		})
 
-	tick := time.Unix(0, 0)
-	clock := func() time.Time { return tick }
-	c := NewCircuit(CircuitConfig{
-		FailureThreshold: 1,
-		ResetTimeout:     time.Second,
-		HalfOpenSuccess:  1,
-		Clock:            clock,
+		// Trip.
+		c.RecordFailure()
+		if c.State() != hmenum.CircuitStateOpen {
+			t.Fatalf("expected OPEN, got %s", c.State())
+		}
+
+		// Advance past ResetTimeout so the next refresh flips to HALF_OPEN.
+		synctest.Sleep(2 * time.Second)
+		// A State() call triggers refreshLocked which moves to HALF_OPEN.
+		if c.State() != hmenum.CircuitStateHalfOpen {
+			t.Fatalf("expected HALF_OPEN, got %s", c.State())
+		}
+
+		// Record success — with HalfOpenSuccess=1 the breaker closes.
+		c.RecordSuccess()
+
+		if c.State() != hmenum.CircuitStateClosed {
+			t.Errorf("RecordSuccess should close from HALF_OPEN: state=%s", c.State())
+		}
 	})
-
-	// Trip.
-	c.RecordFailure()
-	if c.State() != hmenum.CircuitStateOpen {
-		t.Fatalf("expected OPEN, got %s", c.State())
-	}
-
-	// Advance past ResetTimeout so the next refresh flips to HALF_OPEN.
-	tick = tick.Add(2 * time.Second)
-	// A State() call triggers refreshLocked which moves to HALF_OPEN.
-	if c.State() != hmenum.CircuitStateHalfOpen {
-		t.Fatalf("expected HALF_OPEN, got %s", c.State())
-	}
-
-	// Record success — with HalfOpenSuccess=1 the breaker closes.
-	c.RecordSuccess()
-
-	if c.State() != hmenum.CircuitStateClosed {
-		t.Errorf("RecordSuccess should close from HALF_OPEN: state=%s", c.State())
-	}
 }
 
 // --- RecordRejection ---
@@ -79,7 +77,6 @@ func TestRecordRejection_IncrementsCounter(t *testing.T) {
 	c := NewCircuit(CircuitConfig{
 		FailureThreshold: 5,
 		ResetTimeout:     time.Hour,
-		Clock:            time.Now,
 	})
 
 	before := c.TotalRequests()
@@ -103,7 +100,6 @@ func TestLastFailureTime_ZeroBeforeAnyFailure(t *testing.T) {
 	c := NewCircuit(CircuitConfig{
 		FailureThreshold: 5,
 		ResetTimeout:     time.Hour,
-		Clock:            time.Now,
 	})
 
 	if !c.LastFailureTime().IsZero() {
@@ -113,20 +109,20 @@ func TestLastFailureTime_ZeroBeforeAnyFailure(t *testing.T) {
 
 func TestLastFailureTime_SetAfterFailure(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		now := time.Now()
+		c := NewCircuit(CircuitConfig{
+			FailureThreshold: 1,
+			ResetTimeout:     time.Hour,
+		})
 
-	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
-	c := NewCircuit(CircuitConfig{
-		FailureThreshold: 1,
-		ResetTimeout:     time.Hour,
-		Clock:            func() time.Time { return now },
+		c.RecordFailure()
+
+		got := c.LastFailureTime()
+		if !got.Equal(now) {
+			t.Errorf("LastFailureTime = %v, want %v", got, now)
+		}
 	})
-
-	c.RecordFailure()
-
-	got := c.LastFailureTime()
-	if !got.Equal(now) {
-		t.Errorf("LastFailureTime = %v, want %v", got, now)
-	}
 }
 
 // --- AddOnStateChange ---
@@ -137,7 +133,6 @@ func TestAddOnStateChange_FiresOnTrip(t *testing.T) {
 	c := NewCircuit(CircuitConfig{
 		FailureThreshold: 1,
 		ResetTimeout:     time.Hour,
-		Clock:            time.Now,
 	})
 
 	var fired atomic.Int32
@@ -160,7 +155,6 @@ func TestAddOnStateChange_NilListenerIsIgnored(t *testing.T) {
 	c := NewCircuit(CircuitConfig{
 		FailureThreshold: 1,
 		ResetTimeout:     time.Hour,
-		Clock:            time.Now,
 	})
 
 	// Must not panic.
@@ -174,7 +168,6 @@ func TestAddOnStateChange_MultipleListeners(t *testing.T) {
 	c := NewCircuit(CircuitConfig{
 		FailureThreshold: 1,
 		ResetTimeout:     time.Hour,
-		Clock:            time.Now,
 	})
 
 	var count atomic.Int32
@@ -200,7 +193,6 @@ func TestReset_FromOpenClosesBreakerAndFiresCallback(t *testing.T) {
 	c := NewCircuit(CircuitConfig{
 		FailureThreshold: 1,
 		ResetTimeout:     time.Hour,
-		Clock:            time.Now,
 	})
 
 	var fired atomic.Int32
@@ -253,7 +245,6 @@ func TestAddOnStateChange_CoexistsWithOnStateChange(t *testing.T) {
 	c := NewCircuit(CircuitConfig{
 		FailureThreshold: 1,
 		ResetTimeout:     time.Hour,
-		Clock:            time.Now,
 	})
 
 	var primary, secondary atomic.Int32
@@ -275,11 +266,9 @@ func TestAddOnStateChange_CoexistsWithOnStateChange(t *testing.T) {
 func TestDo_BypassOpAlwaysExecutesRegardlessOfState(t *testing.T) {
 	t.Parallel()
 
-	tick := time.Unix(0, 0)
 	c := NewCircuit(CircuitConfig{
 		FailureThreshold: 1,
 		ResetTimeout:     time.Hour,
-		Clock:            func() time.Time { return tick },
 	})
 
 	// Trip.

@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmreliability"
@@ -76,11 +75,6 @@ type RetryConfig struct {
 	// with [WireRetryIncidents] to route failures into the persistent
 	// incident store. Nil disables incident recording (default).
 	IncidentSink IncidentSink
-
-	// Clock is the time source for backoff sleeps + deadline
-	// computation. Nil falls back to the real wall clock; tests
-	// inject [clock.Fake] for deterministic timing assertions.
-	Clock clock.Clock
 }
 
 // RecoveryWaiter is the optional hook a [Retrier] uses to short-circuit
@@ -211,9 +205,6 @@ func NewRetrier(cfg RetryConfig) *Retrier {
 	if cfg.TransmissionPendingDelay <= 0 {
 		cfg.TransmissionPendingDelay = defaultTransmissionPendingDelay
 	}
-	if cfg.Clock == nil {
-		cfg.Clock = clock.New()
-	}
 	return &Retrier{
 		cfg:     cfg,
 		active:  make(map[hmtypes.DataPointKey]chan struct{}),
@@ -306,7 +297,7 @@ func (r *Retrier) Do(ctx context.Context, fn func(ctx context.Context, attempt i
 			r.mu.Lock()
 			r.metrics.RecoveryWaits++
 			r.mu.Unlock()
-			deadline := r.cfg.Clock.Now().Add(r.recoveryDeadline(wait))
+			deadline := time.Now().Add(r.recoveryDeadline(wait))
 			r.cfg.RecoveryWaiter.WaitForRecovery(ctx, deadline)
 			if ctx.Err() != nil {
 				return err
@@ -315,12 +306,12 @@ func (r *Retrier) Do(ctx context.Context, fn func(ctx context.Context, attempt i
 			// remaining timer slice — the recovery signal is a
 			// stronger condition than the schedule.
 		} else {
-			timer := r.cfg.Clock.NewTimer(wait)
+			timer := time.NewTimer(wait)
 			select {
 			case <-ctx.Done():
 				timer.Stop()
 				return err
-			case <-timer.C():
+			case <-timer.C:
 			}
 		}
 		delay = r.advanceSchedule(err, delay)
@@ -594,7 +585,7 @@ func (r *Retrier) DoForKey(ctx context.Context, key hmtypes.DataPointKey, fn fun
 			r.mu.Lock()
 			r.metrics.RecoveryWaits++
 			r.mu.Unlock()
-			deadline := r.cfg.Clock.Now().Add(r.recoveryDeadline(wait))
+			deadline := time.Now().Add(r.recoveryDeadline(wait))
 			r.cfg.RecoveryWaiter.WaitForRecovery(ctx, deadline)
 			if ctx.Err() != nil {
 				return err
@@ -602,7 +593,7 @@ func (r *Retrier) DoForKey(ctx context.Context, key hmtypes.DataPointKey, fn fun
 			delay = r.advanceSchedule(err, delay)
 			continue
 		}
-		timer := r.cfg.Clock.NewTimer(wait)
+		timer := time.NewTimer(wait)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
@@ -612,7 +603,7 @@ func (r *Retrier) DoForKey(ctx context.Context, key hmtypes.DataPointKey, fn fun
 			// Counted by the cancelling caller, not here (see the loop-top
 			// <-cancel case above) — avoids double-counting CancelledRetries.
 			return ErrRetrySuperseded
-		case <-timer.C():
+		case <-timer.C:
 		}
 		delay = r.advanceSchedule(err, delay)
 	}

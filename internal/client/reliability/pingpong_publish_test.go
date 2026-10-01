@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -23,7 +22,6 @@ func TestPingPongPublishHookFiresAboveThreshold(t *testing.T) {
 		PendingTTL:        time.Minute,
 		UnknownTTL:        time.Minute,
 		MismatchThreshold: 3,
-		Clock:             clock.NewFake(time.Now()),
 	})
 
 	var (
