@@ -16,8 +16,7 @@ import (
 	"net/http"
 	"runtime/debug"
 	"time"
-
-	"github.com/google/uuid"
+	"uuid"
 
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 )
@@ -35,7 +34,7 @@ func RequestID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := r.Header.Get("X-Request-ID")
 		if id == "" {
-			id = uuid.NewString()
+			id = uuid.New().String()
 		}
 		ctx := context.WithValue(r.Context(), keyRequestID, id)
 		w.Header().Set("X-Request-ID", id)

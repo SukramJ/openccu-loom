@@ -23,8 +23,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/google/uuid"
+	"uuid"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
@@ -686,7 +685,7 @@ func (o *Outbound) post(d delivery) (retry bool, err error) {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-OpenCCU-Event", d.event)
-	req.Header.Set("X-OpenCCU-Delivery", uuid.NewString())
+	req.Header.Set("X-OpenCCU-Delivery", uuid.New().String())
 	if o.cfg.Secret != "" {
 		req.Header.Set("X-OpenCCU-Signature", sign(o.cfg.Secret, d.body))
 	}

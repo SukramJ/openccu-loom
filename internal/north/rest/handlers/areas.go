@@ -7,9 +7,9 @@ import (
 	"context"
 	"net/http"
 	"time"
+	"uuid"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
@@ -113,7 +113,7 @@ func CreateArea(svc AreaAdmin, rec audit.Recorder) http.HandlerFunc {
 		}
 		now := time.Now().UnixMilli()
 		row := sqlitestore.AreaRow{
-			ID:          uuid.NewString(),
+			ID:          uuid.New().String(),
 			Name:        in.Name,
 			Position:    in.Position,
 			CreatedAtMS: now,
