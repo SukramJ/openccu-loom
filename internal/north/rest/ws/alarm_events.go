@@ -144,16 +144,16 @@ func (s *AlarmPanelSubscriber) Start() {
 	}
 	s.unsubs = append(
 		s.unsubs,
-		events.Subscribe(s.bus, s.onStateChanged),
-		events.Subscribe(s.bus, s.onCountdown),
-		events.Subscribe(s.bus, s.onReadinessChanged),
-		events.Subscribe(s.bus, s.onTriggered),
-		events.Subscribe(s.bus, s.onNotification),
-		events.Subscribe(s.bus, s.onJournalAppended),
-		events.Subscribe(s.bus, s.onWalkTest),
-		events.Subscribe(s.bus, s.onHealthChanged),
-		events.Subscribe(s.bus, s.onPanelChanged),
-		events.Subscribe(s.bus, s.onReminder),
+		s.bus.Subscribe(s.onStateChanged),
+		s.bus.Subscribe(s.onCountdown),
+		s.bus.Subscribe(s.onReadinessChanged),
+		s.bus.Subscribe(s.onTriggered),
+		s.bus.Subscribe(s.onNotification),
+		s.bus.Subscribe(s.onJournalAppended),
+		s.bus.Subscribe(s.onWalkTest),
+		s.bus.Subscribe(s.onHealthChanged),
+		s.bus.Subscribe(s.onPanelChanged),
+		s.bus.Subscribe(s.onReminder),
 	)
 }
 

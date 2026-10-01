@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/internal/wiring"
@@ -282,10 +281,10 @@ func (f *ValuesCacheFlusher) StartCentral(u *central.Unit) func() {
 	}
 	f.tracker.Register(name)
 	bus := u.EventBus
-	unsubVal := events.Subscribe(bus, func(e hmevent.DataPointValueChangedEvent) {
+	unsubVal := bus.Subscribe(func(e hmevent.DataPointValueChangedEvent) {
 		f.tracker.Mark(name, e.Key.ChannelAddress, e.Key.Parameter)
 	})
-	unsubSrc := events.Subscribe(bus, func(e hmevent.DataPointSourceChangedEvent) {
+	unsubSrc := bus.Subscribe(func(e hmevent.DataPointSourceChangedEvent) {
 		f.tracker.Mark(name, e.ChannelAddress, e.Parameter)
 	})
 	var once sync.Once

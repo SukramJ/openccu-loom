@@ -6,7 +6,6 @@ package adapter
 import (
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -25,7 +24,7 @@ func TestWireDeviceAvailabilityForcesUnavailableOnDisconnect(t *testing.T) {
 	closer := WireDeviceAvailability(c)
 	defer closer()
 
-	events.Publish(c.EventBus, hmevent.ClientStateChangedEvent{
+	c.EventBus.Publish(hmevent.ClientStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		InterfaceID: "HmIP-RF",
 		To:          hmenum.ClientStateDisconnected,
@@ -51,7 +50,7 @@ func TestWireDeviceAvailabilityClearsOnReconnect(t *testing.T) {
 	closer := WireDeviceAvailability(c)
 	defer closer()
 
-	events.Publish(c.EventBus, hmevent.ClientStateChangedEvent{
+	c.EventBus.Publish(hmevent.ClientStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		InterfaceID: "HmIP-RF",
 		To:          hmenum.ClientStateConnected,
@@ -77,7 +76,7 @@ func TestWireDeviceAvailabilityScopedToInterface(t *testing.T) {
 	closer := WireDeviceAvailability(c)
 	defer closer()
 
-	events.Publish(c.EventBus, hmevent.ClientStateChangedEvent{
+	c.EventBus.Publish(hmevent.ClientStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		InterfaceID: "HmIP-RF",
 		To:          hmenum.ClientStateFailed,
@@ -102,7 +101,7 @@ func TestWireDeviceAvailabilityCloserUnsubscribes(t *testing.T) {
 	closer := WireDeviceAvailability(c)
 	closer()
 
-	events.Publish(c.EventBus, hmevent.ClientStateChangedEvent{
+	c.EventBus.Publish(hmevent.ClientStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		InterfaceID: "HmIP-RF",
 		To:          hmenum.ClientStateFailed,

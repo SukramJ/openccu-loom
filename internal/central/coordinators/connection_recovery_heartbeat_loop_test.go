@@ -53,7 +53,7 @@ func TestHeartbeatLoopEmitsEventForExhaustedInterface(t *testing.T) {
 
 	// Watch for HeartbeatTimerFiredEvent containing "HmIP-RF".
 	var fired atomic.Bool
-	events.Subscribe(bus, func(e hmevent.HeartbeatTimerFiredEvent) {
+	bus.Subscribe(func(e hmevent.HeartbeatTimerFiredEvent) {
 		if e.CentralName != "hbl-central" {
 			return
 		}
@@ -85,7 +85,7 @@ func TestHeartbeatLoopSilentWhenNoExhaustedInterfaces(t *testing.T) {
 	defer c.Stop()
 
 	var count atomic.Int32
-	events.Subscribe(bus, func(e hmevent.HeartbeatTimerFiredEvent) {
+	bus.Subscribe(func(e hmevent.HeartbeatTimerFiredEvent) {
 		if e.CentralName == "hbl-quiet" {
 			count.Add(1)
 		}
@@ -118,7 +118,7 @@ func TestHeartbeatLoopSilentWhenCapDisabled(t *testing.T) {
 	defer c.Stop()
 
 	var count atomic.Int32
-	events.Subscribe(bus, func(e hmevent.HeartbeatTimerFiredEvent) {
+	bus.Subscribe(func(e hmevent.HeartbeatTimerFiredEvent) {
 		if e.CentralName == "hbl-nocap" {
 			count.Add(1)
 		}
@@ -149,7 +149,7 @@ func TestHeartbeatLoopStopsAfterStop(t *testing.T) {
 
 	// Wait for at least one heartbeat event to confirm the loop is running.
 	var count atomic.Int32
-	events.Subscribe(bus, func(e hmevent.HeartbeatTimerFiredEvent) {
+	bus.Subscribe(func(e hmevent.HeartbeatTimerFiredEvent) {
 		if e.CentralName == "hbl-stop" {
 			count.Add(1)
 		}

@@ -220,13 +220,13 @@ func (o *Outbound) Start(_ context.Context) error {
 // teardown (the live-adopt path) can detach exactly what it attached.
 func (o *Outbound) centralSubscriptions(bus *events.Bus, name string) []func() {
 	return []func(){
-		events.Subscribe(bus, func(e hmevent.DataPointValueChangedEvent) {
+		bus.Subscribe(func(e hmevent.DataPointValueChangedEvent) {
 			o.onDataPoint(name, e)
 		}),
-		events.Subscribe(bus, func(e hmevent.SystemStatusChangedEvent) {
+		bus.Subscribe(func(e hmevent.SystemStatusChangedEvent) {
 			o.onSystemStatus(name, e)
 		}),
-		events.Subscribe(bus, func(e hmevent.IncidentRecordedEvent) {
+		bus.Subscribe(func(e hmevent.IncidentRecordedEvent) {
 			o.onIncident(name, e)
 		}),
 	}
@@ -271,13 +271,13 @@ func (o *Outbound) AttachCentral(u *central.Unit) func() {
 func (o *Outbound) subscribeAlarm(bus *events.Bus) {
 	o.unsubs = append(
 		o.unsubs,
-		events.Subscribe(bus, o.onAlarmStateChanged),
-		events.Subscribe(bus, o.onAlarmTriggered),
-		events.Subscribe(bus, o.onAlarmNotification),
-		events.Subscribe(bus, o.onAlarmJournalAppended),
-		events.Subscribe(bus, o.onAlarmHealthChanged),
-		events.Subscribe(bus, o.onAlarmReminder),
-		events.Subscribe(bus, o.onAlarmDuress),
+		bus.Subscribe(o.onAlarmStateChanged),
+		bus.Subscribe(o.onAlarmTriggered),
+		bus.Subscribe(o.onAlarmNotification),
+		bus.Subscribe(o.onAlarmJournalAppended),
+		bus.Subscribe(o.onAlarmHealthChanged),
+		bus.Subscribe(o.onAlarmReminder),
+		bus.Subscribe(o.onAlarmDuress),
 	)
 }
 
@@ -290,8 +290,8 @@ func (o *Outbound) subscribeAlarm(bus *events.Bus) {
 func (o *Outbound) subscribeSecurity(bus *events.Bus) {
 	o.unsubs = append(
 		o.unsubs,
-		events.Subscribe(bus, o.onSecurityNotification),
-		events.Subscribe(bus, o.onSecurityFaultChanged),
+		bus.Subscribe(o.onSecurityNotification),
+		bus.Subscribe(o.onSecurityFaultChanged),
 	)
 }
 

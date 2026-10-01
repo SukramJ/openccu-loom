@@ -159,7 +159,7 @@ func TestSecurityDiscoveryRetriesConfigsTheBrokerRefused(t *testing.T) {
 	// The broker recovers without dropping the connection, so nothing
 	// resets the publisher — only the next reconcile can repair this.
 	pub.accept()
-	events.Publish(bus, hmevent.SecurityClassChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
+	bus.Publish(hmevent.SecurityClassChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
 
 	// Wait on the declaration, not only on the publishes. The reconcile
 	// marks the plane declared *after* its last publish, so the counts
@@ -184,7 +184,7 @@ func TestSecurityDiscoveryRetriesConfigsTheBrokerRefused(t *testing.T) {
 	// A further reconcile must not re-publish the unchanged configs —
 	// the bridge's payload dedup carries that, and losing it would put a
 	// full discovery pass on every security event.
-	events.Publish(bus, hmevent.SecurityClassChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
+	bus.Publish(hmevent.SecurityClassChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
 	pub.quiesce(t)
 	if n := pub.count(classConfig); n != 1 {
 		t.Fatalf("unchanged class config re-published %d times, want 1", n)
@@ -210,7 +210,7 @@ func TestSecurityZoneDiscoveryFollowsARename(t *testing.T) {
 	t.Cleanup(p.Stop)
 
 	src.rename("cellar", "Basement")
-	events.Publish(bus, hmevent.SecurityZoneChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
+	bus.Publish(hmevent.SecurityZoneChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
 	awaitSecurity(t, "the renamed zone config", func() bool {
 		pub.mu.Lock()
 		defer pub.mu.Unlock()
@@ -307,7 +307,7 @@ func TestSecurityPlaneDoesNotDeclareBeforeTheIndexIsBuilt(t *testing.T) {
 	// The domain finishes building its index and publishes state, which
 	// drives the reconcile that declares for real.
 	src.set(smokeClassSnapshot())
-	events.Publish(bus, hmevent.SecurityStateChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
+	bus.Publish(hmevent.SecurityStateChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
 	awaitSecurity(t, "the plane to declare", func() bool {
 		return bridge.planeDeclared(securityDiscoveryNodeID)
 	})
@@ -351,7 +351,7 @@ func TestSecurityPlaneDeclaresWhenTheInstallationIsGenuinelyEmpty(t *testing.T) 
 
 	// The domain finished its start: index built, state announced — and
 	// the installation really has neither a class nor a zone.
-	events.Publish(bus, hmevent.SecurityStateChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
+	bus.Publish(hmevent.SecurityStateChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
 	awaitSecurity(t, "the plane to declare", func() bool {
 		return bridge.planeDeclared(securityDiscoveryNodeID)
 	})

@@ -31,7 +31,6 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -113,7 +112,7 @@ func TestProductionLoad(t *testing.T) {
 	// does — this is the fan-out plane the SPA/WS clients consume. Each
 	// PUT optimistically rolls a value-changed event, so the subscriber
 	// sees load proportional to the write workload.
-	unsub := events.Subscribe(h.central.EventBus, func(_ hmevent.DataPointValueChangedEvent) {
+	unsub := h.central.EventBus.Subscribe(func(_ hmevent.DataPointValueChangedEvent) {
 		wsEvents.Add(1)
 	})
 	defer unsub()
@@ -431,7 +430,7 @@ func runPushCallbackWorker(ctx context.Context, h *harness, delay time.Duration,
 			ChannelAddress: tgt.deviceAddr + ":" + strconv.Itoa(tgt.channelNo),
 			Parameter:      string(tgt.parameter),
 		}
-		events.Publish(h.central.EventBus, hmevent.DataPointValueChangedEvent{
+		h.central.EventBus.Publish(hmevent.DataPointValueChangedEvent{
 			Base:     hmevent.NewBase(),
 			Key:      key,
 			NewValue: hmtypes.BoolValue(toggle),

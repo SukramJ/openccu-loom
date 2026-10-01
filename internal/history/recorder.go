@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/internal/wiring"
@@ -247,7 +246,7 @@ func (r *Recorder) WireCentral(unit *central.Unit) func() {
 		return nil
 	}
 	u := unit
-	return events.Subscribe(u.EventBus, func(e hmevent.DataPointValueChangedEvent) {
+	return u.EventBus.Subscribe(func(e hmevent.DataPointValueChangedEvent) {
 		r.onValueChanged(u, e)
 	})
 }

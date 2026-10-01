@@ -1092,7 +1092,7 @@ internal/alarm/
 └── wiring.go      — bus subscriptions, registry iteration, health hooks
 ```
 
-- **Inputs**: `events.Subscribe` on `DataPointValueChangedEvent`,
+- **Inputs**: `Bus.Subscribe` on `DataPointValueChangedEvent`,
   `DeviceTriggerEvent` (keys), `SysvarChangedEvent` (mirror intents),
   `ConnectivityChangedEvent` / `ClientStateChangedEvent` (degradation),
   with `WithKey` filters for cheap per-central scoping.

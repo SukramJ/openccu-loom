@@ -93,7 +93,7 @@ func TestEventBridgeSlowBrokerDoesNotStallOtherCentralDispatch(t *testing.T) {
 	defer eb.Stop() // cancels the fan-out context, unblocking the stuck worker
 
 	// Central A: the worker dequeues this and blocks in slow.Publish.
-	events.Publish(busA, stateChangeOn(addrA))
+	busA.Publish(stateChangeOn(addrA))
 	select {
 	case <-slow.entered:
 	case <-time.After(2 * time.Second):
@@ -103,7 +103,7 @@ func TestEventBridgeSlowBrokerDoesNotStallOtherCentralDispatch(t *testing.T) {
 	// Central B: its bus dispatch must not block behind the stuck worker.
 	done := make(chan struct{})
 	go func() {
-		events.Publish(busB, stateChangeOn(addrB))
+		busB.Publish(stateChangeOn(addrB))
 		close(done)
 	}()
 	select {
@@ -129,7 +129,7 @@ func TestEventBridgeSlowBrokerOverflowDropsAndCounts(t *testing.T) {
 	bus := reg.List()[0].EventBus
 
 	// First event: the worker dequeues it and blocks in the broker.
-	events.Publish(bus, stateChangeOn(d.Address))
+	bus.Publish(stateChangeOn(d.Address))
 	select {
 	case <-slow.entered:
 	case <-time.After(2 * time.Second):
@@ -139,7 +139,7 @@ func TestEventBridgeSlowBrokerOverflowDropsAndCounts(t *testing.T) {
 	// Flood the queue past its capacity. Every publish must return without
 	// blocking; the overflow is dropped (oldest first) and counted.
 	for range mqttFanoutQueueDepth + 50 {
-		events.Publish(bus, stateChangeOn(d.Address))
+		bus.Publish(stateChangeOn(d.Address))
 	}
 
 	if dropped := eb.FanoutDropped(); dropped == 0 {
@@ -166,7 +166,7 @@ func TestEventBridgeStartIsIdempotent(t *testing.T) {
 		t.Fatalf("value-changed handlers after double Start: got %d, want 1", got)
 	}
 
-	events.Publish(bus, stateChangeOn(d.Address))
+	bus.Publish(stateChangeOn(d.Address))
 	eb.Flush()
 
 	if got := nonAvailabilityPublishes(pub.Published()); len(got) != 1 {
@@ -200,7 +200,7 @@ func TestEventBridgeSlowBrokerDoesNotStallSnapshotDispatch(t *testing.T) {
 	bus := reg.List()[0].EventBus
 	dispatched := make(chan struct{})
 	go func() {
-		events.Publish(bus, hmevent.CentralSouthboundReadyEvent{
+		bus.Publish(hmevent.CentralSouthboundReadyEvent{
 			Base:        hmevent.NewBase(),
 			CentralName: "ccu-01",
 		})

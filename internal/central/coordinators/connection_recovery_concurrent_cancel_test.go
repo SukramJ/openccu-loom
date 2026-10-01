@@ -319,7 +319,7 @@ func TestHeartbeatTriggerIsIdempotentWhileActiveRecovery(t *testing.T) {
 	defer c.Stop()
 
 	// Trigger an initial recovery via ConnectionLostEvent.
-	events.Publish(bus, hmevent.ConnectionLostEvent{
+	bus.Publish(hmevent.ConnectionLostEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "hb-guard",
 		InterfaceID: "HmIP-RF",
@@ -334,7 +334,7 @@ func TestHeartbeatTriggerIsIdempotentWhileActiveRecovery(t *testing.T) {
 
 	// Now fire a HeartbeatTimerFiredEvent while the first recovery is still active.
 	// This must be silently dropped (alreadyActive guard in triggerRecovery).
-	events.Publish(bus, hmevent.HeartbeatTimerFiredEvent{
+	bus.Publish(hmevent.HeartbeatTimerFiredEvent{
 		Base:         hmevent.NewBase(),
 		CentralName:  "hb-guard",
 		InterfaceIDs: []string{"HmIP-RF"},
@@ -391,7 +391,7 @@ func TestHeartbeatTriggerStartsRecoveryAfterPreviousCompleted(t *testing.T) {
 	laneIdle := func() bool { return !c.InRecoveryFor("CUxD") }
 
 	// Fire a ConnectionLostEvent to kick off the first recovery.
-	events.Publish(bus, hmevent.ConnectionLostEvent{
+	bus.Publish(hmevent.ConnectionLostEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "hb-new",
 		InterfaceID: "CUxD",
@@ -405,7 +405,7 @@ func TestHeartbeatTriggerStartsRecoveryAfterPreviousCompleted(t *testing.T) {
 	// Now fire a HeartbeatTimerFiredEvent — this simulates the CCU heartbeat
 	// Retry that
 	// FAILED state. In Go the coordinator accepts it unconditionally.
-	events.Publish(bus, hmevent.HeartbeatTimerFiredEvent{
+	bus.Publish(hmevent.HeartbeatTimerFiredEvent{
 		Base:         hmevent.NewBase(),
 		CentralName:  "hb-new",
 		InterfaceIDs: []string{"CUxD"},
@@ -440,7 +440,7 @@ func TestHeartbeatIgnoredAfterStop(t *testing.T) {
 	// Stop before any event arrives.
 	c.Stop()
 
-	events.Publish(bus, hmevent.HeartbeatTimerFiredEvent{
+	bus.Publish(hmevent.HeartbeatTimerFiredEvent{
 		Base:         hmevent.NewBase(),
 		CentralName:  "hb-stop",
 		InterfaceIDs: []string{"HmIP-RF"},
@@ -487,7 +487,7 @@ func TestHeartbeatRevivesExhaustedInterface(t *testing.T) {
 	laneIdle := func() bool { return !c.InRecoveryFor("HmIP-RF") }
 
 	// Two failing attempts exhaust the lane.
-	events.Publish(bus, hmevent.ConnectionLostEvent{
+	bus.Publish(hmevent.ConnectionLostEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "hb-revive",
 		InterfaceID: "HmIP-RF",
@@ -495,7 +495,7 @@ func TestHeartbeatRevivesExhaustedInterface(t *testing.T) {
 	if !waitFor(t, func() bool { return runCount.Load() >= 1 && laneIdle() }, eventWaitTimeout) {
 		t.Fatal("first attempt did not run")
 	}
-	events.Publish(bus, hmevent.ConnectionLostEvent{
+	bus.Publish(hmevent.ConnectionLostEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "hb-revive",
 		InterfaceID: "HmIP-RF",
@@ -507,7 +507,7 @@ func TestHeartbeatRevivesExhaustedInterface(t *testing.T) {
 	// Lane is now exhausted. A vanilla ConnectionLostEvent would be
 	// rejected by the exhausted-guard. The heartbeat path must lift
 	// the cap by one so the next run lands.
-	events.Publish(bus, hmevent.HeartbeatTimerFiredEvent{
+	bus.Publish(hmevent.HeartbeatTimerFiredEvent{
 		Base:         hmevent.NewBase(),
 		CentralName:  "hb-revive",
 		InterfaceIDs: []string{"HmIP-RF"},
@@ -552,7 +552,7 @@ func TestHeartbeatDoesNotResetProgressOnHealthyLane(t *testing.T) {
 	laneIdle := func() bool { return !c.InRecoveryFor("HmIP-RF") }
 
 	// One failing attempt — attempts[iid] = 1.
-	events.Publish(bus, hmevent.ConnectionLostEvent{
+	bus.Publish(hmevent.ConnectionLostEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "hb-floor",
 		InterfaceID: "HmIP-RF",
@@ -562,7 +562,7 @@ func TestHeartbeatDoesNotResetProgressOnHealthyLane(t *testing.T) {
 	}
 
 	// Heartbeat fires for a non-exhausted lane.
-	events.Publish(bus, hmevent.HeartbeatTimerFiredEvent{
+	bus.Publish(hmevent.HeartbeatTimerFiredEvent{
 		Base:         hmevent.NewBase(),
 		CentralName:  "hb-floor",
 		InterfaceIDs: []string{"HmIP-RF"},
@@ -581,7 +581,7 @@ func TestHeartbeatDoesNotResetProgressOnHealthyLane(t *testing.T) {
 	// recovery for the same lane is still in-flight (the duplicate guard,
 	// see TestSubscribeSkipsDuplicateRecovery), so back-to-back publishes
 	// would race and collapse into a single run.
-	events.Publish(bus, hmevent.ConnectionLostEvent{
+	bus.Publish(hmevent.ConnectionLostEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "hb-floor",
 		InterfaceID: "HmIP-RF",
@@ -589,7 +589,7 @@ func TestHeartbeatDoesNotResetProgressOnHealthyLane(t *testing.T) {
 	if !waitFor(t, func() bool { return runCount.Load() >= 3 && laneIdle() }, eventWaitTimeout) {
 		t.Fatalf("third attempt did not run, got %d", runCount.Load())
 	}
-	events.Publish(bus, hmevent.ConnectionLostEvent{
+	bus.Publish(hmevent.ConnectionLostEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "hb-floor",
 		InterfaceID: "HmIP-RF",
@@ -599,7 +599,7 @@ func TestHeartbeatDoesNotResetProgressOnHealthyLane(t *testing.T) {
 	}
 
 	// A vanilla ConnectionLostEvent now must NOT run — lane is exhausted.
-	events.Publish(bus, hmevent.ConnectionLostEvent{
+	bus.Publish(hmevent.ConnectionLostEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "hb-floor",
 		InterfaceID: "HmIP-RF",

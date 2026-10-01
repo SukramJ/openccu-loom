@@ -3290,7 +3290,7 @@ func subscribeMatterReadyTrigger(bus *events.Bus, trigger func()) func() {
 	if bus == nil || trigger == nil {
 		return nil
 	}
-	return events.Subscribe(bus, func(hmevent.CentralSouthboundReadyEvent) {
+	return bus.Subscribe(func(hmevent.CentralSouthboundReadyEvent) {
 		trigger()
 	})
 }
@@ -3316,19 +3316,19 @@ func subscribeMatterDeviceLifecycleTrigger(u *central.Unit, trigger func()) []fu
 		}
 	}
 	return []func(){
-		events.Subscribe(u.EventBus, func(hmevent.DeviceCreatedEvent) { fire() }),
-		events.Subscribe(u.EventBus, func(hmevent.DeviceRemovedEvent) { fire() }),
+		u.EventBus.Subscribe(func(hmevent.DeviceCreatedEvent) { fire() }),
+		u.EventBus.Subscribe(func(hmevent.DeviceRemovedEvent) { fire() }),
 		// A rename is a topology change too, even though the set of devices is
 		// unchanged: the accessory's NodeLabel is built from the device's name,
 		// so without this a device renamed in the CCU WebUI keeps its old name
 		// in Apple Home and Google Home until the daemon restarts. MQTT and the
 		// WebSocket already learn about it from the same event.
-		events.Subscribe(u.EventBus, func(hmevent.DeviceMetadataChangedEvent) { fire() }),
+		u.EventBus.Subscribe(func(hmevent.DeviceMetadataChangedEvent) { fire() }),
 		// A release adds a device to the bridged set without changing the
 		// model: it was materialised long ago and only the wizard's last
 		// step made it publishable. Without this it reaches no controller
 		// until the daemon restarts.
-		events.Subscribe(u.EventBus, func(hmevent.DeviceReleasedEvent) { fire() }),
+		u.EventBus.Subscribe(func(hmevent.DeviceReleasedEvent) { fire() }),
 	}
 }
 
@@ -3449,7 +3449,7 @@ func wireMatterCentralReadinessForUnit(readiness *matterCentralReadiness, u *cen
 	if readiness == nil || u == nil || u.EventBus == nil {
 		return nil
 	}
-	unsub := events.Subscribe(u.EventBus, func(e hmevent.CentralSouthboundReadyEvent) {
+	unsub := u.EventBus.Subscribe(func(e hmevent.CentralSouthboundReadyEvent) {
 		readiness.markReady(e.CentralName)
 	})
 	if u.IsSouthboundReady() {
@@ -3533,7 +3533,7 @@ func wireMatterDeviceReachableForward(u *central.Unit, notify func(centralName, 
 		return nil
 	}
 	cName := u.Name()
-	return events.Subscribe(u.EventBus, func(e hmevent.DeviceLifecycleEvent) {
+	return u.EventBus.Subscribe(func(e hmevent.DeviceLifecycleEvent) {
 		if e.Subtype != hmenum.DeviceLifecycleSubtypeAvailabilityChanged {
 			return
 		}

@@ -15,7 +15,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/clock"
 	sirencdp "github.com/SukramJ/openccu-loom/internal/model/custom/siren"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -150,7 +149,7 @@ func TestNotificationOutputReachesTheBusWithoutBlockingTheEngine(t *testing.T) {
 	})
 
 	got := make(chan hmevent.AlarmNotificationEvent, 4)
-	unsub := events.Subscribe(svc.Bus(), func(e hmevent.AlarmNotificationEvent) {
+	unsub := svc.Bus().Subscribe(func(e hmevent.AlarmNotificationEvent) {
 		select {
 		case got <- e:
 		default:
@@ -339,7 +338,7 @@ func TestFailedOutputCommandPublishesAlarmHealthOnTheBus(t *testing.T) {
 	})
 
 	got := make(chan hmevent.AlarmHealthChangedEvent, 4)
-	unsub := events.Subscribe(svc.Bus(), func(e hmevent.AlarmHealthChangedEvent) {
+	unsub := svc.Bus().Subscribe(func(e hmevent.AlarmHealthChangedEvent) {
 		select {
 		case got <- e:
 		default:

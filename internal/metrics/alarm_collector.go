@@ -38,7 +38,7 @@ type AlarmCollector struct {
 // unsubscribes all four handlers; callers fold it into daemon
 // teardown. bus is expected to outlive the collector; stop is safe to
 // call at most once effectively (repeated calls are a no-op, mirroring
-// [events.Subscribe]'s unsubscribe closures).
+// [events.Bus.Subscribe]'s unsubscribe closures).
 func NewAlarmCollector(reg *Registry, bus *events.Bus) (collector *AlarmCollector, stop func()) {
 	c := &AlarmCollector{
 		Triggered:         reg.Counter("alarm_triggered_total", "Total alarm areas that entered the triggered state."),
@@ -47,16 +47,16 @@ func NewAlarmCollector(reg *Registry, bus *events.Bus) (collector *AlarmCollecto
 		HealthTransitions: reg.Counter("alarm_health_transitions_total", "Total alarm-subsystem health verdict transitions."),
 	}
 
-	unsubTriggered := events.Subscribe(bus, func(hmevent.AlarmTriggeredEvent) {
+	unsubTriggered := bus.Subscribe(func(hmevent.AlarmTriggeredEvent) {
 		c.Triggered.Inc()
 	})
-	unsubState := events.Subscribe(bus, func(hmevent.AlarmStateChangedEvent) {
+	unsubState := bus.Subscribe(func(hmevent.AlarmStateChangedEvent) {
 		c.StateChanges.Inc()
 	})
-	unsubJournal := events.Subscribe(bus, func(hmevent.AlarmJournalAppendedEvent) {
+	unsubJournal := bus.Subscribe(func(hmevent.AlarmJournalAppendedEvent) {
 		c.JournalEntries.Inc()
 	})
-	unsubHealth := events.Subscribe(bus, func(hmevent.AlarmHealthChangedEvent) {
+	unsubHealth := bus.Subscribe(func(hmevent.AlarmHealthChangedEvent) {
 		c.HealthTransitions.Inc()
 	})
 

@@ -389,7 +389,7 @@ func TestRecordConnectivityProbeDrivesTheStateMachine(t *testing.T) {
 		mu   sync.Mutex
 		seen []hmevent.ClientStateChangedEvent
 	)
-	unsub := events.Subscribe(bus, func(e hmevent.ClientStateChangedEvent) {
+	unsub := bus.Subscribe(func(e hmevent.ClientStateChangedEvent) {
 		mu.Lock()
 		defer mu.Unlock()
 		seen = append(seen, e)

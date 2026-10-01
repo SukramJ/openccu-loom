@@ -94,23 +94,23 @@ func TestPublishFromHandlerNeverDeadlocks(t *testing.T) {
 	var crossTypeCount atomic.Int32
 	var loopCount atomic.Int32
 
-	Subscribe(b, func(raceEvtA) {
+	b.Subscribe(func(raceEvtA) {
 		n := loopCount.Add(1)
 		if n < 5 {
 			// Same-type re-entrant publish — must be deferred, not recursive.
-			Publish(b, raceEvtA{Base: hmevent.NewBase()})
+			b.Publish(raceEvtA{Base: hmevent.NewBase()})
 		}
 		// Cross-type re-entrant publish — must be deferred every time.
-		Publish(b, raceEvtB{Base: hmevent.NewBase()})
+		b.Publish(raceEvtB{Base: hmevent.NewBase()})
 	})
 
-	Subscribe(b, func(raceEvtB) {
+	b.Subscribe(func(raceEvtB) {
 		crossTypeCount.Add(1)
 	})
 
 	done := make(chan struct{})
 	go func() {
-		Publish(b, raceEvtA{Base: hmevent.NewBase()})
+		b.Publish(raceEvtA{Base: hmevent.NewBase()})
 		close(done)
 	}()
 
@@ -149,7 +149,7 @@ func TestRecursivePublishLoopBoundedByCounter(t *testing.T) {
 	var maxObservedNesting atomic.Int32
 	var currentDepth atomic.Int32
 
-	Subscribe(b, func(raceEvtA) {
+	b.Subscribe(func(raceEvtA) {
 		// Record entry depth.
 		depth := currentDepth.Add(1)
 		if depth > maxObservedNesting.Load() {
@@ -157,14 +157,14 @@ func TestRecursivePublishLoopBoundedByCounter(t *testing.T) {
 		}
 		n := dispatchCount.Add(1)
 		if n < limit {
-			Publish(b, raceEvtA{Base: hmevent.NewBase()})
+			b.Publish(raceEvtA{Base: hmevent.NewBase()})
 		}
 		currentDepth.Add(-1)
 	})
 
 	done := make(chan struct{})
 	go func() {
-		Publish(b, raceEvtA{Base: hmevent.NewBase()})
+		b.Publish(raceEvtA{Base: hmevent.NewBase()})
 		close(done)
 	}()
 
@@ -190,7 +190,7 @@ func TestConcurrentPublishersFanOut(t *testing.T) {
 	b := NewBus()
 	var counter atomic.Int64
 
-	Subscribe(b, func(raceEvtFanout) {
+	b.Subscribe(func(raceEvtFanout) {
 		counter.Add(1)
 	})
 
@@ -205,7 +205,7 @@ func TestConcurrentPublishersFanOut(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for range perGoroutine {
-				Publish(b, raceEvtFanout{Base: hmevent.NewBase()})
+				b.Publish(raceEvtFanout{Base: hmevent.NewBase()})
 			}
 		}()
 	}
@@ -237,19 +237,19 @@ func TestUnsubscribeDuringPublishIsSafe(t *testing.T) {
 		var aCount atomic.Int32
 
 		var unsubA func()
-		unsubA = Subscribe(b, func(raceEvtUnsub) {
+		unsubA = b.Subscribe(func(raceEvtUnsub) {
 			aCount.Add(1)
 			unsubA() // unsubscribe self mid-dispatch
 		})
 
 		// First publish: A is in the snapshot, so it fires and unsubscribes itself.
-		Publish(b, raceEvtUnsub{Base: hmevent.NewBase()})
+		b.Publish(raceEvtUnsub{Base: hmevent.NewBase()})
 		if got := aCount.Load(); got != 1 {
 			t.Errorf("after first publish: aCount=%d, want 1 (snapshot already taken)", got)
 		}
 
 		// Second publish: A is gone, must not fire.
-		Publish(b, raceEvtUnsub{Base: hmevent.NewBase()})
+		b.Publish(raceEvtUnsub{Base: hmevent.NewBase()})
 		if got := aCount.Load(); got != 1 {
 			t.Errorf("after second publish: aCount=%d, want 1 (A must be gone)", got)
 		}
@@ -261,17 +261,17 @@ func TestUnsubscribeDuringPublishIsSafe(t *testing.T) {
 		b := NewBus()
 		var aCount, bCount atomic.Int32
 
-		unsubA := Subscribe(b, func(raceEvtUnsub) {
+		unsubA := b.Subscribe(func(raceEvtUnsub) {
 			aCount.Add(1)
 		})
 
-		Subscribe(b, func(raceEvtUnsub) {
+		b.Subscribe(func(raceEvtUnsub) {
 			bCount.Add(1)
 			unsubA() // B unsubscribes A
 		})
 
 		// First publish: both A and B are in the snapshot.
-		Publish(b, raceEvtUnsub{Base: hmevent.NewBase()})
+		b.Publish(raceEvtUnsub{Base: hmevent.NewBase()})
 		if got := aCount.Load(); got != 1 {
 			t.Errorf("after first publish: aCount=%d, want 1", got)
 		}
@@ -280,7 +280,7 @@ func TestUnsubscribeDuringPublishIsSafe(t *testing.T) {
 		}
 
 		// Second publish: A is removed, B remains.
-		Publish(b, raceEvtUnsub{Base: hmevent.NewBase()})
+		b.Publish(raceEvtUnsub{Base: hmevent.NewBase()})
 		if got := aCount.Load(); got != 1 {
 			t.Errorf("after second publish: aCount=%d, want 1 (A must not fire again)", got)
 		}
@@ -302,21 +302,21 @@ func TestSubscribeDuringPublishDoesNotJoinCurrentDispatch(t *testing.T) {
 	b := NewBus()
 	var newHandlerCount atomic.Int32
 
-	Subscribe(b, func(raceEvtNewSub) {
+	b.Subscribe(func(raceEvtNewSub) {
 		// Subscribe a new handler while dispatch of raceEvtNewSub is in progress.
-		Subscribe(b, func(raceEvtNewSub) {
+		b.Subscribe(func(raceEvtNewSub) {
 			newHandlerCount.Add(1)
 		})
 	})
 
 	// First publish: N is registered during dispatch but must NOT receive E1.
-	Publish(b, raceEvtNewSub{Base: hmevent.NewBase()})
+	b.Publish(raceEvtNewSub{Base: hmevent.NewBase()})
 	if got := newHandlerCount.Load(); got != 0 {
 		t.Errorf("after first publish: newHandlerCount=%d, want 0 (N must not join current dispatch)", got)
 	}
 
 	// Second publish: N is now registered and must receive it.
-	Publish(b, raceEvtNewSub{Base: hmevent.NewBase()})
+	b.Publish(raceEvtNewSub{Base: hmevent.NewBase()})
 	if got := newHandlerCount.Load(); got != 1 {
 		t.Errorf("after second publish: newHandlerCount=%d, want 1", got)
 	}
@@ -331,7 +331,7 @@ func TestUnsubscribeIdempotentUnderConcurrentCalls(t *testing.T) {
 	t.Parallel()
 
 	b := NewBus()
-	unsub := Subscribe(b, func(raceEvtUnsub) {})
+	unsub := b.Subscribe(func(raceEvtUnsub) {})
 
 	var wg sync.WaitGroup
 	const concurrency = 100
@@ -368,9 +368,9 @@ func TestHighPriorityHandlerSeesEventBeforeLowPriority(t *testing.T) {
 		mu.Unlock()
 	}
 
-	Subscribe(b, func(raceEvtPrio) { record("low") }, WithPriority(PriorityLow))
-	Subscribe(b, func(raceEvtPrio) { record("normal") }, WithPriority(PriorityNormal))
-	Subscribe(b, func(raceEvtPrio) { record("high") }, WithPriority(PriorityHigh))
+	b.Subscribe(func(raceEvtPrio) { record("low") }, WithPriority(PriorityLow))
+	b.Subscribe(func(raceEvtPrio) { record("normal") }, WithPriority(PriorityNormal))
+	b.Subscribe(func(raceEvtPrio) { record("high") }, WithPriority(PriorityHigh))
 
 	const rounds = 5
 	for range rounds {
@@ -378,7 +378,7 @@ func TestHighPriorityHandlerSeesEventBeforeLowPriority(t *testing.T) {
 		order = order[:0]
 		mu.Unlock()
 
-		Publish(b, raceEvtPrio{Base: hmevent.NewBase()})
+		b.Publish(raceEvtPrio{Base: hmevent.NewBase()})
 
 		mu.Lock()
 		got := slices.Clone(order)
@@ -405,13 +405,13 @@ func TestNoLockHeldWhileHandlerRuns(t *testing.T) {
 
 	done := make(chan struct{})
 
-	Subscribe(b, func(raceEvtLock) {
+	b.Subscribe(func(raceEvtLock) {
 		// This call acquires b.mu internally; it must not deadlock.
 		_ = b.HandlerCount(typ)
 		close(done)
 	})
 
-	go Publish(b, raceEvtLock{Base: hmevent.NewBase()})
+	go b.Publish(raceEvtLock{Base: hmevent.NewBase()})
 
 	awaitOrFatal(t, done, time.Second, "HandlerCount inside handler deadlocked — b.mu held during handler execution")
 }
@@ -434,7 +434,7 @@ func TestDeferredPublishesPreserveCausalOrder(t *testing.T) {
 
 	// Payload handler records arrival order.
 	var seq atomic.Int32
-	Subscribe(b, func(raceEvtDeferred) {
+	b.Subscribe(func(raceEvtDeferred) {
 		n := int(seq.Add(1))
 		mu.Lock()
 		received = append(received, n)
@@ -445,17 +445,17 @@ func TestDeferredPublishesPreserveCausalOrder(t *testing.T) {
 	// the 1st, 2nd, 3rd deferred dispatch. We attach the ordinal via
 	// closing over a counter in the trigger handler.
 	var ordinal atomic.Int32
-	Subscribe(b, func(raceEvtB) {
+	b.Subscribe(func(raceEvtB) {
 		// From inside handler on B, publish three A's sequentially.
 		// All three land in the deferred queue.
 		for range 3 {
 			ord := int(ordinal.Add(1))
 			_ = ord
-			Publish(b, raceEvtDeferred{Base: hmevent.NewBase()})
+			b.Publish(raceEvtDeferred{Base: hmevent.NewBase()})
 		}
 	})
 
-	Publish(b, raceEvtB{Base: hmevent.NewBase()})
+	b.Publish(raceEvtB{Base: hmevent.NewBase()})
 
 	mu.Lock()
 	got := slices.Clone(received)
@@ -492,7 +492,7 @@ func TestConcurrentSubscribeAndPublishWithoutRace(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for range iterations {
-				unsub := Subscribe(b, func(raceEvtConcSub) {}, WithName("transient"))
+				unsub := b.Subscribe(func(raceEvtConcSub) {}, WithName("transient"))
 				unsub()
 			}
 		}()
@@ -504,7 +504,7 @@ func TestConcurrentSubscribeAndPublishWithoutRace(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for range iterations {
-				Publish(b, raceEvtConcSub{Base: hmevent.NewBase()})
+				b.Publish(raceEvtConcSub{Base: hmevent.NewBase()})
 			}
 		}()
 	}

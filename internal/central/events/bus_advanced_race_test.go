@@ -90,30 +90,30 @@ func TestCrossPriorityReentrantOrdering(t *testing.T) {
 
 	// PriorityCritical alpha handler: publishes advEvtBeta (deferred) and
 	// tracks re-entry depth via alphaRunning.
-	Subscribe(b, func(advEvtAlpha) {
+	b.Subscribe(func(advEvtAlpha) {
 		alphaCalls.Add(1)
 		alphaRunning.Store(true)
 		if int(alphaCalls.Load()) <= maxCycles {
 			// Deferred — must not run until this handler returns.
-			Publish(b, advEvtBeta{Base: hmevent.NewBase()})
+			b.Publish(advEvtBeta{Base: hmevent.NewBase()})
 		}
 		alphaRunning.Store(false)
 	}, WithPriority(PriorityCritical), WithName("alpha-critical"))
 
 	// PriorityLow beta handler: publishes advEvtAlpha back (deferred).
-	Subscribe(b, func(advEvtBeta) {
+	b.Subscribe(func(advEvtBeta) {
 		if alphaRunning.Load() {
 			betaFiredWhileAlphaRunning.Store(true)
 		}
 		betaCalls.Add(1)
 		if int(betaCalls.Load()) < maxCycles {
-			Publish(b, advEvtAlpha{Base: hmevent.NewBase()})
+			b.Publish(advEvtAlpha{Base: hmevent.NewBase()})
 		}
 	}, WithPriority(PriorityLow), WithName("beta-low"))
 
 	done := make(chan struct{})
 	go func() {
-		Publish(b, advEvtAlpha{Base: hmevent.NewBase()})
+		b.Publish(advEvtAlpha{Base: hmevent.NewBase()})
 		close(done)
 	}()
 
@@ -146,9 +146,9 @@ func TestCrossPriorityReentrantOrdering(t *testing.T) {
 
 	// Bus must still be usable after the chain drains.
 	var afterCall atomic.Bool
-	unsub := Subscribe(b, func(advEvtGamma) { afterCall.Store(true) })
+	unsub := b.Subscribe(func(advEvtGamma) { afterCall.Store(true) })
 	defer unsub()
-	Publish(b, advEvtGamma{Base: hmevent.NewBase()})
+	b.Publish(advEvtGamma{Base: hmevent.NewBase()})
 	if !afterCall.Load() {
 		t.Error("bus not usable after cross-priority reentrant chain")
 	}
@@ -176,8 +176,8 @@ func TestSelfUnsubscribeInDeferredDispatch(t *testing.T) {
 	var unsubBeta func()
 
 	// Outer handler: publishes advEvtBeta from within its own frame (deferred).
-	Subscribe(b, func(advEvtAlpha) {
-		Publish(b, advEvtBeta{Base: hmevent.NewBase()})
+	b.Subscribe(func(advEvtAlpha) {
+		b.Publish(advEvtBeta{Base: hmevent.NewBase()})
 	}, WithName("alpha-trigger"))
 
 	// Beta handler: self-unsubscribes during its deferred execution.
@@ -185,7 +185,7 @@ func TestSelfUnsubscribeInDeferredDispatch(t *testing.T) {
 	// handler is still called for the in-flight deferred event. The
 	// unsubscribe removes it from the live list, so subsequent publishes
 	// must not reach it.
-	unsubBeta = Subscribe(b, func(advEvtBeta) {
+	unsubBeta = b.Subscribe(func(advEvtBeta) {
 		betaCount.Add(1)
 		unsubBeta() // self-unsubscribe mid-deferred-dispatch
 	}, WithName("beta-self-unsub"))
@@ -194,7 +194,7 @@ func TestSelfUnsubscribeInDeferredDispatch(t *testing.T) {
 	// Must complete without deadlock.
 	done := make(chan struct{})
 	go func() {
-		Publish(b, advEvtAlpha{Base: hmevent.NewBase()})
+		b.Publish(advEvtAlpha{Base: hmevent.NewBase()})
 		close(done)
 	}()
 
@@ -210,7 +210,7 @@ func TestSelfUnsubscribeInDeferredDispatch(t *testing.T) {
 	}
 
 	// A direct publish of advEvtBeta must not reach the now-unsubscribed handler.
-	Publish(b, advEvtBeta{Base: hmevent.NewBase()})
+	b.Publish(advEvtBeta{Base: hmevent.NewBase()})
 	if got := betaCount.Load(); got != 1 {
 		t.Errorf("betaCount=%d after second publish, want 1 (self-unsub must prevent re-fire)", got)
 	}
@@ -240,17 +240,17 @@ func TestClearDuringDispatchThenResubscribe(t *testing.T) {
 	var firstCount, secondCount, newCount atomic.Int32
 
 	// First handler: ClearAllSubscriptions while dispatch is in progress.
-	Subscribe(b, func(advEvtGamma) {
+	b.Subscribe(func(advEvtGamma) {
 		firstCount.Add(1)
 		b.ClearAllSubscriptions()
 	}, WithPriority(PriorityHigh), WithName("clear-handler"))
 
 	// Second handler (same event, lower priority): fires in the same dispatch
 	// snapshot despite the clear above. Registers a new handler from its frame.
-	Subscribe(b, func(advEvtGamma) {
+	b.Subscribe(func(advEvtGamma) {
 		secondCount.Add(1)
 		// Subscribe a new handler from inside the handler frame.
-		Subscribe(b, func(advEvtGamma) {
+		b.Subscribe(func(advEvtGamma) {
 			newCount.Add(1)
 		}, WithName("new-after-clear"))
 	}, WithPriority(PriorityNormal), WithName("resubscribe-handler"))
@@ -258,7 +258,7 @@ func TestClearDuringDispatchThenResubscribe(t *testing.T) {
 	// First Publish — both original handlers fire (snapshot predates clear).
 	done := make(chan struct{})
 	go func() {
-		Publish(b, advEvtGamma{Base: hmevent.NewBase()})
+		b.Publish(advEvtGamma{Base: hmevent.NewBase()})
 		close(done)
 	}()
 	select {
@@ -280,7 +280,7 @@ func TestClearDuringDispatchThenResubscribe(t *testing.T) {
 	}
 
 	// Second Publish — only the new handler is registered (the originals were cleared).
-	Publish(b, advEvtGamma{Base: hmevent.NewBase()})
+	b.Publish(advEvtGamma{Base: hmevent.NewBase()})
 
 	if got := firstCount.Load(); got != 1 {
 		t.Errorf("firstCount=%d after second publish, want 1 (cleared handler must not fire)", got)
@@ -320,33 +320,33 @@ func TestPanicCascadeUnderDeferredDispatch(t *testing.T) {
 	var deltaPanicCount, alphaPanicCount atomic.Int32
 
 	// advEvtDelta: critical panicker + publishes advEvtAlpha (deferred).
-	Subscribe(b, func(advEvtDelta) {
+	b.Subscribe(func(advEvtDelta) {
 		deltaPanicCount.Add(1)
 		// Publish advEvtAlpha — deferred because we are inside a handler frame.
-		Publish(b, advEvtAlpha{Base: hmevent.NewBase()})
+		b.Publish(advEvtAlpha{Base: hmevent.NewBase()})
 		panic("delta critical panic")
 	}, WithPriority(PriorityCritical), WithName("delta-critical-panic"))
 
 	// advEvtDelta: low-priority normal handler — must fire despite panic above.
-	Subscribe(b, func(advEvtDelta) {
+	b.Subscribe(func(advEvtDelta) {
 		deltaLowCount.Add(1)
 	}, WithPriority(PriorityLow), WithName("delta-low"))
 
 	// advEvtAlpha: critical panicker in the deferred frame.
-	Subscribe(b, func(advEvtAlpha) {
+	b.Subscribe(func(advEvtAlpha) {
 		alphaPanicCount.Add(1)
 		panic("alpha deferred panic")
 	}, WithPriority(PriorityCritical), WithName("alpha-critical-panic"))
 
 	// advEvtAlpha: low-priority normal handler — must fire despite the upstream panic.
-	Subscribe(b, func(advEvtAlpha) {
+	b.Subscribe(func(advEvtAlpha) {
 		alphaLowCount.Add(1)
 	}, WithPriority(PriorityLow), WithName("alpha-low"))
 
 	// Trigger the whole cascade.
 	done := make(chan struct{})
 	go func() {
-		Publish(b, advEvtDelta{Base: hmevent.NewBase()})
+		b.Publish(advEvtDelta{Base: hmevent.NewBase()})
 		close(done)
 	}()
 
@@ -375,9 +375,9 @@ func TestPanicCascadeUnderDeferredDispatch(t *testing.T) {
 
 	// Bus must remain usable after the cascade.
 	var afterCount atomic.Int32
-	unsub := Subscribe(b, func(advEvtBeta) { afterCount.Add(1) })
+	unsub := b.Subscribe(func(advEvtBeta) { afterCount.Add(1) })
 	defer unsub()
-	Publish(b, advEvtBeta{Base: hmevent.NewBase()})
+	b.Publish(advEvtBeta{Base: hmevent.NewBase()})
 	if got := afterCount.Load(); got != 1 {
 		t.Errorf("bus unusable after panic cascade: afterCount=%d, want 1", got)
 	}

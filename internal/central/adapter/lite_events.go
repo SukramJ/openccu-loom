@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/occulited"
@@ -258,7 +257,7 @@ func (s *liteStream) onInterface(ctx context.Context, c *occulited.InterfaceChan
 		// failed pings, and the one forced device unavailability hangs off.
 		s.markDisconnected(iface)
 		if s.unit.EventBus != nil {
-			events.Publish(s.unit.EventBus, hmevent.ConnectionLostEvent{
+			s.unit.EventBus.Publish(hmevent.ConnectionLostEvent{
 				Base:        hmevent.NewBase(),
 				CentralName: s.cc.Name,
 				InterfaceID: s.wireIDs[iface],

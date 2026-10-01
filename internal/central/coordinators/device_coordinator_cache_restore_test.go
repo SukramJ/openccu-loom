@@ -18,7 +18,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/central/registry"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
@@ -125,7 +124,7 @@ func TestCheckAndCreateDevicesFromCacheIsIdempotent(t *testing.T) {
 	t.Parallel()
 	dc, bus, devs, descs, _ := newDCFull(t)
 	var count atomic.Int32
-	events.Subscribe(bus, func(_ hmevent.DeviceCreatedEvent) { count.Add(1) })
+	bus.Subscribe(func(_ hmevent.DeviceCreatedEvent) { count.Add(1) })
 
 	descs.Put(wireKey(hmenum.InterfaceHmIPRF), hmproto.DeviceDescription{
 		Address: "BB",
@@ -153,7 +152,7 @@ func TestCheckAndCreateDevicesFromCacheEmptyRegistryIsNoop(t *testing.T) {
 	t.Parallel()
 	dc, bus, devs, _, _ := newDCFull(t)
 	var count atomic.Int32
-	events.Subscribe(bus, func(_ hmevent.DeviceCreatedEvent) { count.Add(1) })
+	bus.Subscribe(func(_ hmevent.DeviceCreatedEvent) { count.Add(1) })
 
 	if err := dc.CheckAndCreateDevicesFromCache(context.Background()); err != nil {
 		t.Fatal(err)
@@ -165,7 +164,7 @@ func TestCheckAndCreateDevicesFromCacheEmptyRegistryIsNoop(t *testing.T) {
 
 // TestCheckAndCreateDevicesFromCacheSubscriberCallingBackDoesNotDeadlock pins
 // the invariant that the DeviceCreatedEvent fired for a cache-restored device
-// is published after c.mu is released. events.Publish dispatches every
+// is published after c.mu is released. Bus.Publish dispatches every
 // handler synchronously on the calling goroutine, so a subscriber that calls
 // back into the coordinator (as RenameNewDeviceFromOverride does for real
 // callers reacting to device creation) must not block on the same mutex
@@ -179,7 +178,7 @@ func TestCheckAndCreateDevicesFromCacheSubscriberCallingBackDoesNotDeadlock(t *t
 		Type:    "HmIP-X",
 	})
 
-	events.Subscribe(bus, func(_ hmevent.DeviceCreatedEvent) {
+	bus.Subscribe(func(_ hmevent.DeviceCreatedEvent) {
 		dc.RenameNewDeviceFromOverride(wireKey(hmenum.InterfaceHmIPRF), "AA", func(string, string) {})
 	})
 
@@ -652,7 +651,7 @@ func TestHandleAcceptedDevicesPublishesOutsideTheCoordinatorLock(t *testing.T) {
 	dc, bus, _, _, _ := newDCFull(t)
 
 	var reentered atomic.Bool
-	unsub := events.Subscribe(bus, func(hmevent.DeviceCreatedEvent) {
+	unsub := bus.Subscribe(func(hmevent.DeviceCreatedEvent) {
 		// A read that takes the coordinator's own lock.
 		dc.StoreDelayedDeviceDescriptions(context.Background(), wireKey(hmenum.InterfaceHmIPRF), nil)
 		reentered.Store(true)

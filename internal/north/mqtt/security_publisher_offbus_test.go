@@ -75,7 +75,7 @@ func TestSecurityPublisherKeepsDiscoveryOffTheBusGoroutine(t *testing.T) {
 	defer close(plane.gate)
 
 	// Let the first pass through unblocked so the plane is declared.
-	events.Publish(bus, hmevent.SecurityStateChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
+	bus.Publish(hmevent.SecurityStateChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
 	time.Sleep(150 * time.Millisecond)
 
 	// A renamed zone changes the zone's discovery payload, so the next
@@ -86,7 +86,7 @@ func TestSecurityPublisherKeepsDiscoveryOffTheBusGoroutine(t *testing.T) {
 	done := make(chan time.Duration, 1)
 	go func() {
 		start := time.Now()
-		events.Publish(bus, hmevent.SecurityZoneChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
+		bus.Publish(hmevent.SecurityZoneChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
 		done <- time.Since(start)
 	}()
 

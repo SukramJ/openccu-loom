@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	switchcdp "github.com/SukramJ/openccu-loom/internal/model/custom/switch"
@@ -141,7 +140,7 @@ func TestReconcileActsOnASirenThatWasAlreadySoundingWhenTheModelArrived(t *testi
 	// and the central announces that its southbound model is there.
 	writer := newRecordingSwitchWriter()
 	addSoundingSwitch(t, unit, ifaceID, devAddress, chAddress, writer)
-	events.Publish(unit.EventBus, hmevent.CentralSouthboundReadyEvent{CentralName: centralName})
+	unit.EventBus.Publish(hmevent.CentralSouthboundReadyEvent{CentralName: centralName})
 
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {

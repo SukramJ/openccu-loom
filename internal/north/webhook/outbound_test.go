@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -167,7 +166,7 @@ func TestOutboundSignsDataPointDelivery(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = o.Stop(context.Background()) })
 
-	events.Publish(u.EventBus, datapointEvent("HmIP-RF", "ABC:1", "STATE",
+	u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "STATE",
 		hmtypes.BoolValue(true), hmtypes.BoolValue(false)))
 
 	waitForCount(t, ft, 1, 2*time.Second)
@@ -242,7 +241,7 @@ func TestOutboundNoSecretOmitsSignatureHeader(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = o.Stop(context.Background()) })
 
-	events.Publish(u.EventBus, datapointEvent("HmIP-RF", "ABC:1", "STATE",
+	u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "STATE",
 		hmtypes.BoolValue(true), hmtypes.NoneValue()))
 
 	waitForCount(t, ft, 1, 2*time.Second)
@@ -275,7 +274,7 @@ func TestOutboundEventTypeFilterDropsUnwantedTypes(t *testing.T) {
 	t.Cleanup(func() { _ = o.Stop(context.Background()) })
 
 	// Publish a SystemStatus event first, then a datapoint.
-	events.Publish(u.EventBus, hmevent.SystemStatusChangedEvent{
+	u.EventBus.Publish(hmevent.SystemStatusChangedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "ccuA",
 		Component:   "central",
@@ -283,7 +282,7 @@ func TestOutboundEventTypeFilterDropsUnwantedTypes(t *testing.T) {
 		Reason:      "down",
 		InterfaceID: "HmIP-RF",
 	})
-	events.Publish(u.EventBus, datapointEvent("HmIP-RF", "ABC:1", "STATE",
+	u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "STATE",
 		hmtypes.BoolValue(true), hmtypes.NoneValue()))
 
 	// Wait for the one allowed delivery.
@@ -324,9 +323,9 @@ func TestOutboundCentralFilterIsolatesPerCentral(t *testing.T) {
 	t.Cleanup(func() { _ = o.Stop(context.Background()) })
 
 	// Publish identical events on both buses.
-	events.Publish(uB.EventBus, datapointEvent("HmIP-RF", "XYZ:1", "STATE",
+	uB.EventBus.Publish(datapointEvent("HmIP-RF", "XYZ:1", "STATE",
 		hmtypes.BoolValue(false), hmtypes.NoneValue()))
-	events.Publish(uA.EventBus, datapointEvent("HmIP-RF", "XYZ:1", "STATE",
+	uA.EventBus.Publish(datapointEvent("HmIP-RF", "XYZ:1", "STATE",
 		hmtypes.BoolValue(true), hmtypes.NoneValue()))
 
 	// Expect exactly one delivery (ccuA only).
@@ -368,10 +367,10 @@ func TestOutboundParameterGlobFiltersDataPoints(t *testing.T) {
 	t.Cleanup(func() { _ = o.Stop(context.Background()) })
 
 	// Dropped: no TEMPERATURE in name.
-	events.Publish(u.EventBus, datapointEvent("HmIP-RF", "ABC:1", "STATE",
+	u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "STATE",
 		hmtypes.BoolValue(true), hmtypes.NoneValue()))
 	// Delivered: matches glob.
-	events.Publish(u.EventBus, datapointEvent("HmIP-RF", "ABC:1", "ACTUAL_TEMPERATURE",
+	u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "ACTUAL_TEMPERATURE",
 		hmtypes.FloatValue(21.5), hmtypes.NoneValue()))
 
 	waitForCount(t, ft, 1, 2*time.Second)
@@ -409,7 +408,7 @@ func TestOutboundRetryThenSuccess(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = o.Stop(context.Background()) })
 
-	events.Publish(u.EventBus, datapointEvent("HmIP-RF", "ABC:1", "STATE",
+	u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "STATE",
 		hmtypes.BoolValue(true), hmtypes.NoneValue()))
 
 	// Expect 3 transport calls: 2 failures + 1 success.
@@ -445,7 +444,7 @@ func TestOutboundExhaustedRetriesIncrementFailed(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = o.Stop(context.Background()) })
 
-	events.Publish(u.EventBus, datapointEvent("HmIP-RF", "ABC:1", "STATE",
+	u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "STATE",
 		hmtypes.BoolValue(true), hmtypes.NoneValue()))
 
 	// instantBackoff has 2 entries => 3 total attempts.
@@ -497,7 +496,7 @@ func TestOutboundStopUnsubscribesAndBlocksNewDeliveries(t *testing.T) {
 	before := ft.count()
 
 	// Publish after Stop — should never be delivered.
-	events.Publish(u.EventBus, datapointEvent("HmIP-RF", "ABC:1", "STATE",
+	u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "STATE",
 		hmtypes.BoolValue(true), hmtypes.NoneValue()))
 	time.Sleep(200 * time.Millisecond)
 
@@ -526,7 +525,7 @@ func TestOutboundDisabledIsNoop(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = o.Stop(context.Background()) })
 
-	events.Publish(u.EventBus, datapointEvent("HmIP-RF", "ABC:1", "STATE",
+	u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "STATE",
 		hmtypes.BoolValue(true), hmtypes.NoneValue()))
 	time.Sleep(200 * time.Millisecond)
 

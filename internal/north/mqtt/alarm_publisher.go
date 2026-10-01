@@ -13,7 +13,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -215,14 +214,14 @@ func (p *AlarmMQTTPublisher) Start() {
 
 	p.unsubs = append(
 		p.unsubs,
-		events.Subscribe(bus, p.onStateChanged),
-		events.Subscribe(bus, p.onTriggered),
-		events.Subscribe(bus, p.onNotification),
-		events.Subscribe(bus, p.onJournalAppended),
-		events.Subscribe(bus, p.onReadinessChanged),
-		events.Subscribe(bus, p.onHealthChanged),
-		events.Subscribe(bus, p.onPanelChanged),
-		events.Subscribe(bus, p.onCodesChanged),
+		bus.Subscribe(p.onStateChanged),
+		bus.Subscribe(p.onTriggered),
+		bus.Subscribe(p.onNotification),
+		bus.Subscribe(p.onJournalAppended),
+		bus.Subscribe(p.onReadinessChanged),
+		bus.Subscribe(p.onHealthChanged),
+		bus.Subscribe(p.onPanelChanged),
+		bus.Subscribe(p.onCodesChanged),
 	)
 	go p.run()
 	p.signalReconcile()

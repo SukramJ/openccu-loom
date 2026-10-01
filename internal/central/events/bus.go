@@ -4,12 +4,12 @@
 // Package events implements the daemon's in-process typed event bus.
 //
 // Handlers are registered per concrete event type — the generic
-// [Subscribe] function gives compile-time type safety with no runtime
+// [Bus.Subscribe] method gives compile-time type safety with no runtime
 // reflection. Publishing is synchronous by default; handlers run on the
 // publisher's goroutine in priority order (higher priority first, FIFO
 // within the same priority).
 //
-// The bus refuses re-entrant [Publish] calls from within a handler:
+// The bus refuses re-entrant [Bus.Publish] calls from within a handler:
 // events emitted from a handler are buffered and flushed after the
 // current dispatch completes. That guarantees handler execution order
 // stays causal and prevents infinite recursion loops through cross-
@@ -165,13 +165,13 @@ func NewBus() *Bus {
 	}
 }
 
-// Subscribe registers a handler for events of type T and returns an
+// Subscribe registers a handler on b for events of type T and returns an
 // unsubscribe closure. Calling the closure is idempotent.
 //
 // Use [WithKey] to install an event-key filter so the handler fires
 // only when the event's [hmevent.Event.Key] matches the configured
 // key.
-func Subscribe[T hmevent.Event](b *Bus, fn func(T), opts ...HandlerOption) func() {
+func (b *Bus) Subscribe[T hmevent.Event](fn func(T), opts ...HandlerOption) func() {
 	options := handlerOptions{priority: PriorityNormal}
 	for _, o := range opts {
 		o(&options)
@@ -238,10 +238,10 @@ func Subscribe[T hmevent.Event](b *Bus, fn func(T), opts ...HandlerOption) func(
 	}
 }
 
-// Publish dispatches e to every subscribed handler. Re-entrant publishes
+// Publish dispatches e to every handler subscribed on b. Re-entrant publishes
 // (calls made from within a handler) are buffered and run once the
 // outer dispatch completes.
-func Publish[T hmevent.Event](b *Bus, e T) {
+func (b *Bus) Publish[T hmevent.Event](e T) {
 	if b.dispatch.TryLock() {
 		// Record which goroutine owns the dispatch so a self-unsubscribing
 		// handler can skip the barrier wait (see the unsubscribe closure).
@@ -319,14 +319,14 @@ func (b *Bus) DeferredDepth() int {
 	return len(b.deferred)
 }
 
-// PublishSync is an explicit alias of [Publish]. It exists purely for
+// PublishSync is an explicit alias of [Bus.Publish]. It exists purely for
 // API parity with the reference stack's separate publish_sync entry
-// point and carries no stronger delivery guarantee than [Publish].
+// point and carries no stronger delivery guarantee than [Bus.Publish].
 //
 // loom:reachable:reason="API-parity alias retained for callers that mirror the reference publish_sync entry point"
 //
 // It is NOT guaranteed to be synchronous: in the uncontended case
-// [Publish] dispatches every handler on the caller's goroutine before
+// [Bus.Publish] dispatches every handler on the caller's goroutine before
 // returning, but when another goroutine already holds the dispatch lock
 // (or the caller is inside a handler), the event is buffered and drained
 // by the active dispatcher — so handlers may run after this call returns.
@@ -334,8 +334,8 @@ func (b *Bus) DeferredDepth() int {
 // side effects; if you need that, dispatch on the same goroutine that
 // will read the result. There is no production caller that depends on a
 // synchronous-drain contract here.
-func PublishSync[T hmevent.Event](b *Bus, e T) {
-	Publish(b, e)
+func (b *Bus) PublishSync[T hmevent.Event](e T) {
+	b.Publish(e)
 }
 
 // dispatchNow runs every handler for e in priority-ordered turn.
@@ -461,10 +461,10 @@ func (b *Bus) callHandler(h *registered, e hmevent.Event) {
 // releases b.dispatch. Handlers that publish further re-entrant events cause
 // the queue to grow — we drain it iteratively rather than recursively.
 //
-// The caller MUST hold b.dispatch (acquired via the TryLock in [Publish]).
+// The caller MUST hold b.dispatch (acquired via the TryLock in [Bus.Publish]).
 // The release happens here, while b.mu is held and the queue is observed
 // empty, so it is serialised against the slow-path take-over TryLock in
-// [Publish] (also under b.mu). That mutual exclusion is what closes the
+// [Bus.Publish] (also under b.mu). That mutual exclusion is what closes the
 // handoff race: an event enqueued concurrently is either seen by the
 // empty-check below (drained in the next iteration) or lands after the
 // release, where the enqueuer's own TryLock succeeds and drains it.

@@ -6,7 +6,6 @@ package central
 import (
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -35,13 +34,13 @@ func TestNewWiresHubModelNotifiers(t *testing.T) {
 	}
 
 	var programChanges []hmevent.ProgramChangedEvent
-	unsubProg := events.Subscribe(u.EventBus, func(e hmevent.ProgramChangedEvent) {
+	unsubProg := u.EventBus.Subscribe(func(e hmevent.ProgramChangedEvent) {
 		programChanges = append(programChanges, e)
 	})
 	defer unsubProg()
 
 	var sysvarChanges []hmevent.SysvarChangedEvent
-	unsubSv := events.Subscribe(u.EventBus, func(e hmevent.SysvarChangedEvent) {
+	unsubSv := u.EventBus.Subscribe(func(e hmevent.SysvarChangedEvent) {
 		sysvarChanges = append(sysvarChanges, e)
 	})
 	defer unsubSv()

@@ -10,7 +10,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -31,7 +30,7 @@ func TestWireHealthClientStateChanged(t *testing.T) {
 	closer := WireHealth(c)
 	defer closer()
 
-	events.Publish(c.EventBus, hmevent.ClientStateChangedEvent{
+	c.EventBus.Publish(hmevent.ClientStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		InterfaceID: "HmIP-RF",
 		To:          hmenum.ClientStateConnected,
@@ -42,7 +41,7 @@ func TestWireHealthClientStateChanged(t *testing.T) {
 		t.Fatalf("connected → healthy, got %+v ok=%v", got, ok)
 	}
 
-	events.Publish(c.EventBus, hmevent.ClientStateChangedEvent{
+	c.EventBus.Publish(hmevent.ClientStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		InterfaceID: "HmIP-RF",
 		To:          hmenum.ClientStateFailed,
@@ -58,7 +57,7 @@ func TestWireHealthCircuitBreaker(t *testing.T) {
 	closer := WireHealth(c)
 	defer closer()
 
-	events.Publish(c.EventBus, hmevent.CircuitBreakerStateChangedEvent{
+	c.EventBus.Publish(hmevent.CircuitBreakerStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		InterfaceID: "BidCos-RF",
 		From:        hmenum.CircuitStateClosed,
@@ -69,7 +68,7 @@ func TestWireHealthCircuitBreaker(t *testing.T) {
 		t.Fatalf("breaker open → unhealthy, got %s", got.Status)
 	}
 
-	events.Publish(c.EventBus, hmevent.CircuitBreakerStateChangedEvent{
+	c.EventBus.Publish(hmevent.CircuitBreakerStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		InterfaceID: "BidCos-RF",
 		From:        hmenum.CircuitStateOpen,
@@ -90,7 +89,7 @@ func TestWireHealthRecoveryCompleted(t *testing.T) {
 	closer := WireHealth(c)
 	defer closer()
 
-	events.Publish(c.EventBus, hmevent.RecoveryCompletedEvent{
+	c.EventBus.Publish(hmevent.RecoveryCompletedEvent{
 		Base:        hmevent.NewBase(),
 		InterfaceID: "HmIP-RF",
 		Result:      hmenum.RecoveryResultSuccess,
@@ -100,7 +99,7 @@ func TestWireHealthRecoveryCompleted(t *testing.T) {
 		t.Fatalf("recovery success → healthy sample, got %+v", got.LastSample)
 	}
 
-	events.Publish(c.EventBus, hmevent.RecoveryCompletedEvent{
+	c.EventBus.Publish(hmevent.RecoveryCompletedEvent{
 		Base:        hmevent.NewBase(),
 		InterfaceID: "HmIP-RF",
 		Result:      hmenum.RecoveryResultFailed,
@@ -116,7 +115,7 @@ func TestWireHealthCloserUnsubscribes(t *testing.T) {
 	closer := WireHealth(c)
 	closer()
 
-	events.Publish(c.EventBus, hmevent.ConnectionLostEvent{
+	c.EventBus.Publish(hmevent.ConnectionLostEvent{
 		Base:        hmevent.NewBase(),
 		InterfaceID: "ghost",
 		Reason:      hmenum.FailureReasonNetwork,
@@ -134,7 +133,7 @@ func TestWireHealthPublishesEventOnChange(t *testing.T) {
 	c := newCentralForHealthTest(t)
 
 	var healthEventCount atomic.Int32
-	unsub := events.Subscribe(c.EventBus, func(e hmevent.ConnectionHealthChangedEvent) {
+	unsub := c.EventBus.Subscribe(func(e hmevent.ConnectionHealthChangedEvent) {
 		if e.CentralName == "test" && e.InterfaceID == "HmIP-RF" {
 			healthEventCount.Add(1)
 		}
@@ -144,7 +143,7 @@ func TestWireHealthPublishesEventOnChange(t *testing.T) {
 	closer := WireHealth(c)
 	defer closer()
 
-	events.Publish(c.EventBus, hmevent.ClientStateChangedEvent{
+	c.EventBus.Publish(hmevent.ClientStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		InterfaceID: "HmIP-RF",
 		To:          hmenum.ClientStateConnected,

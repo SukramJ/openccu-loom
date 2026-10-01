@@ -9,7 +9,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/central/registry"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -57,7 +56,7 @@ func TestEventForwardsToBus(t *testing.T) {
 	var fired atomic.Int32
 	var gotKey hmtypes.DataPointKey
 	var gotNew hmtypes.ParamValue
-	unsub := events.Subscribe(c.EventBus, func(e hmevent.DataPointValueChangedEvent) {
+	unsub := c.EventBus.Subscribe(func(e hmevent.DataPointValueChangedEvent) {
 		fired.Add(1)
 		gotKey = e.Key
 		gotNew = e.NewValue
@@ -98,7 +97,7 @@ func TestEventForwardsToBusNoDoubleFireOnSameValue(t *testing.T) {
 	c := reg.List()[0]
 
 	var count atomic.Int32
-	unsub := events.Subscribe(c.EventBus, func(_ hmevent.DataPointValueChangedEvent) {
+	unsub := c.EventBus.Subscribe(func(_ hmevent.DataPointValueChangedEvent) {
 		count.Add(1)
 	})
 	defer unsub()
@@ -346,7 +345,7 @@ func TestCallbackHandlersErrorPublishesSystemStatus(t *testing.T) {
 	}
 	var gotEvent hmevent.SystemStatusChangedEvent
 	var fired int
-	unsub := events.Subscribe(c.EventBus, func(e hmevent.SystemStatusChangedEvent) {
+	unsub := c.EventBus.Subscribe(func(e hmevent.SystemStatusChangedEvent) {
 		gotEvent = e
 		fired++
 	})
@@ -380,7 +379,7 @@ func TestCallbackHandlersErrorBoundsUntrustedStrings(t *testing.T) {
 		t.Fatalf("central.New: %v", err)
 	}
 	var got hmevent.SystemStatusChangedEvent
-	unsub := events.Subscribe(c.EventBus, func(e hmevent.SystemStatusChangedEvent) { got = e })
+	unsub := c.EventBus.Subscribe(func(e hmevent.SystemStatusChangedEvent) { got = e })
 	defer unsub()
 
 	huge := strings.Repeat("A", 100_000)

@@ -509,12 +509,12 @@ func TestSubscribeTwoInterfacesFailConcurrentlyViaEvents(t *testing.T) {
 	c.Subscribe()
 	defer c.Stop()
 
-	events.Publish(bus, hmevent.ConnectionLostEvent{
+	bus.Publish(hmevent.ConnectionLostEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "c-multiif",
 		InterfaceID: "HmIP-RF",
 	})
-	events.Publish(bus, hmevent.ConnectionLostEvent{
+	bus.Publish(hmevent.ConnectionLostEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "c-multiif",
 		InterfaceID: "BidCos-RF",
@@ -573,7 +573,7 @@ func TestSubscribeCentralStateFailed_TriggersAllInterfaces(t *testing.T) {
 	c.Subscribe()
 	defer c.Stop()
 
-	events.Publish(bus, hmevent.CentralStateChangedEvent{
+	bus.Publish(hmevent.CentralStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "c-statefail",
 		To:          hmenum.CentralStateFailed,
@@ -617,7 +617,7 @@ func TestSubscribeCentralStateFailedIgnoresOtherCentral(t *testing.T) {
 	c.Subscribe()
 	defer c.Stop()
 
-	events.Publish(bus, hmevent.CentralStateChangedEvent{
+	bus.Publish(hmevent.CentralStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "c-other", // different central
 		To:          hmenum.CentralStateFailed,
@@ -646,7 +646,7 @@ func TestSubscribeCentralStateRunningDoesNotTriggerRecovery(t *testing.T) {
 	c.Subscribe()
 	defer c.Stop()
 
-	events.Publish(bus, hmevent.CentralStateChangedEvent{
+	bus.Publish(hmevent.CentralStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "c-running",
 		To:          hmenum.CentralStateRunning,

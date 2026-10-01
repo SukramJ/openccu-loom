@@ -207,7 +207,7 @@ func TestHandleRawEventFirstObservationOldValueIsNone(t *testing.T) {
 	ec, bus, _ := newTestEC(t)
 
 	var received []hmevent.DataPointValueChangedEvent
-	events.Subscribe(bus, func(e hmevent.DataPointValueChangedEvent) {
+	bus.Subscribe(func(e hmevent.DataPointValueChangedEvent) {
 		received = append(received, e)
 	})
 
@@ -233,7 +233,7 @@ func TestHandleRawEventNilWireValueMapsToNone(t *testing.T) {
 	ec, bus, cache := newTestEC(t)
 
 	var received []hmevent.DataPointValueChangedEvent
-	events.Subscribe(bus, func(e hmevent.DataPointValueChangedEvent) {
+	bus.Subscribe(func(e hmevent.DataPointValueChangedEvent) {
 		received = append(received, e)
 	})
 
@@ -491,7 +491,7 @@ func TestHandleRawEventNormalizedPONGNotDispatchedAsDataPoint(t *testing.T) {
 	ec.SetCentralName("ccu-01")
 
 	var fired atomic.Int32
-	unsub := events.Subscribe(bus, func(_ hmevent.DataPointValueChangedEvent) {
+	unsub := bus.Subscribe(func(_ hmevent.DataPointValueChangedEvent) {
 		fired.Add(1)
 	})
 	defer unsub()

@@ -11,7 +11,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
@@ -49,7 +48,7 @@ func TestSeamEffect_HubReadyRestart_FiresWhenACentralBecomesReady(t *testing.T) 
 		}
 	})
 
-	events.Publish(unit.EventBus, hmevent.CentralSouthboundReadyEvent{CentralName: "ready-central"})
+	unit.EventBus.Publish(hmevent.CentralSouthboundReadyEvent{CentralName: "ready-central"})
 
 	// The trigger debounces a burst of staggered multi-CCU bring-ups, so
 	// the wait has to outlast that window; polling rather than sleeping

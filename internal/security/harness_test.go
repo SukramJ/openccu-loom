@@ -69,7 +69,7 @@ func newTestService(t *testing.T, mut ...func(*Deps)) (*Service, *Stores, *clock
 func collectFaultEvents(t *testing.T, svc *Service) *[]hmevent.SecurityFaultChangedEvent {
 	t.Helper()
 	var got []hmevent.SecurityFaultChangedEvent
-	unsub := events.Subscribe(svc.Bus(), func(e hmevent.SecurityFaultChangedEvent) {
+	unsub := svc.Bus().Subscribe(func(e hmevent.SecurityFaultChangedEvent) {
 		got = append(got, e)
 	})
 	t.Cleanup(unsub)

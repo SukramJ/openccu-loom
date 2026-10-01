@@ -38,12 +38,12 @@ func TestPanicReadingEventIdentityDoesNotWedgeTheBus(t *testing.T) {
 
 	b := NewBus()
 	var delivered atomic.Int32
-	unsub := Subscribe(b, func(advEvtGamma) { delivered.Add(1) })
+	unsub := b.Subscribe(func(advEvtGamma) { delivered.Add(1) })
 
-	Publish(b, panickingEvent{Base: hmevent.NewBase()})
+	b.Publish(panickingEvent{Base: hmevent.NewBase()})
 
 	// The bus must still deliver.
-	Publish(b, advEvtGamma{Base: hmevent.NewBase()})
+	b.Publish(advEvtGamma{Base: hmevent.NewBase()})
 	if got := delivered.Load(); got != 1 {
 		t.Fatalf("deliveries after a panicking event = %d, want 1 — the bus is wedged", got)
 	}

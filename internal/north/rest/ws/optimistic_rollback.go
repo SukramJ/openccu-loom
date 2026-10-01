@@ -5,7 +5,6 @@ package ws
 
 import (
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -87,7 +86,7 @@ func (s *OptimisticRollbackSubscriber) StartCentral(u *central.Unit) func() {
 	centralName := u.Name()
 	hub := s.hub
 	reg := s.reg
-	return events.Subscribe(bus, func(e hmevent.DataPointOptimisticRolledBackEvent) {
+	return bus.Subscribe(func(e hmevent.DataPointOptimisticRolledBackEvent) {
 		channel, _ := e.Key.ChannelNo()
 		hub.Publish(Event{
 			Topic: DataPointTopic(e.Key.DeviceAddress(), channel, e.Key.Parameter),

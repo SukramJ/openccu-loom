@@ -10,7 +10,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/safety"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -69,23 +68,23 @@ func (s *Service) attachUnit(u *central.Unit) {
 	}
 	name := u.Name()
 	unsubs := []func(){
-		events.Subscribe(u.EventBus, func(e hmevent.DataPointValueChangedEvent) {
+		u.EventBus.Subscribe(func(e hmevent.DataPointValueChangedEvent) {
 			s.onDataPoint(name, e)
 		}),
-		events.Subscribe(u.EventBus, func(e hmevent.ConnectivityChangedEvent) {
+		u.EventBus.Subscribe(func(e hmevent.ConnectivityChangedEvent) {
 			s.onConnectivity(name, e)
 		}),
-		events.Subscribe(u.EventBus, func(e hmevent.SysvarChangedEvent) {
+		u.EventBus.Subscribe(func(e hmevent.SysvarChangedEvent) {
 			s.sysvarMirror.onInbound(name, e)
 		}),
 		// Device lifecycle: a device that leaves the model sends no
 		// UNREACH — it sends nothing ever again — so nothing else in this
 		// domain would ever notice that an enrolled sensor stopped
 		// existing.
-		events.Subscribe(u.EventBus, func(e hmevent.DeviceRemovedEvent) {
+		u.EventBus.Subscribe(func(e hmevent.DeviceRemovedEvent) {
 			s.onDeviceLifecycle(name, e.Address)
 		}),
-		events.Subscribe(u.EventBus, func(e hmevent.DeviceCreatedEvent) {
+		u.EventBus.Subscribe(func(e hmevent.DeviceCreatedEvent) {
 			s.onDeviceLifecycle(name, e.Address)
 		}),
 		// The southbound bring-up is readiness-gated, so the device
@@ -99,7 +98,7 @@ func (s *Service) attachUnit(u *central.Unit) {
 		// already-ready case: both callers of attachUnit reconcile
 		// immediately afterwards, which is what covers a central whose
 		// event fired before this subscription existed.
-		events.Subscribe(u.EventBus, func(_ hmevent.CentralSouthboundReadyEvent) {
+		u.EventBus.Subscribe(func(_ hmevent.CentralSouthboundReadyEvent) {
 			ctx := context.Background()
 			s.reconcile(ctx)
 			s.engine.ReevaluateSensors(ctx)

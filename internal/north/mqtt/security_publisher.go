@@ -163,11 +163,11 @@ func (p *SecurityMQTTPublisher) Start(bus *events.Bus) {
 	}
 	p.started = true
 	p.unsubs = []func(){
-		events.Subscribe(bus, p.onStateChanged),
-		events.Subscribe(bus, p.onClassChanged),
-		events.Subscribe(bus, p.onZoneChanged),
-		events.Subscribe(bus, p.onFaultChanged),
-		events.Subscribe(bus, p.onNotification),
+		bus.Subscribe(p.onStateChanged),
+		bus.Subscribe(p.onClassChanged),
+		bus.Subscribe(p.onZoneChanged),
+		bus.Subscribe(p.onFaultChanged),
+		bus.Subscribe(p.onNotification),
 	}
 	p.mu.Unlock()
 

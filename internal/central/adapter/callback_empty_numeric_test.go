@@ -8,7 +8,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -49,7 +48,7 @@ func TestEvent_EmptyStringForIntegerIsSilentlyAbsorbed(t *testing.T) {
 	c := reg.List()[0]
 
 	var fired atomic.Int32
-	unsub := events.Subscribe(c.EventBus, func(_ hmevent.DataPointValueChangedEvent) {
+	unsub := c.EventBus.Subscribe(func(_ hmevent.DataPointValueChangedEvent) {
 		fired.Add(1)
 	})
 	defer unsub()

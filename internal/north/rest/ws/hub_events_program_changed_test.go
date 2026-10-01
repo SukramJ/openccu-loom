@@ -6,7 +6,6 @@ package ws
 import (
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -31,7 +30,7 @@ func TestHubEventsSubscriberProgramChanged(t *testing.T) {
 	sub.Start()
 	t.Cleanup(sub.Stop)
 
-	events.Publish(cu.EventBus, hmevent.ProgramChangedEvent{
+	cu.EventBus.Publish(hmevent.ProgramChangedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "home",
 		ProgramID:   "P1",
@@ -75,7 +74,7 @@ func TestHubEventsSubscriberProgramChangedActive(t *testing.T) {
 	sub.Start()
 	t.Cleanup(sub.Stop)
 
-	events.Publish(cu.EventBus, hmevent.ProgramChangedEvent{
+	cu.EventBus.Publish(hmevent.ProgramChangedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "home",
 		ProgramID:   "P1",

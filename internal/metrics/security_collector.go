@@ -45,9 +45,9 @@ func NewSecurityCollector(reg *Registry, bus *events.Bus) (collector *SecurityCo
 		return c, func() {}
 	}
 	unsubs := []func(){
-		events.Subscribe(bus, c.onNotification),
-		events.Subscribe(bus, c.onFaultChanged),
-		events.Subscribe(bus, c.onStateChanged),
+		bus.Subscribe(c.onNotification),
+		bus.Subscribe(c.onFaultChanged),
+		bus.Subscribe(c.onStateChanged),
 	}
 	return c, func() {
 		for _, u := range unsubs {

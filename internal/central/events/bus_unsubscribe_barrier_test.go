@@ -40,13 +40,13 @@ func TestUnsubscribeWaitsForInflightHandler(t *testing.T) {
 	started := make(chan struct{})
 	release := make(chan struct{})
 
-	unsub := Subscribe(bus, func(_ barrierEvt) {
+	unsub := bus.Subscribe(func(_ barrierEvt) {
 		close(started)
 		<-release
 		resource = 42
 	})
 
-	go Publish(bus, barrierEvt{Base: hmevent.NewBase()})
+	go bus.Publish(barrierEvt{Base: hmevent.NewBase()})
 
 	<-started // the handler is now mid-flight, blocked on release
 
@@ -78,18 +78,18 @@ func TestUnsubscribedHandlerDetachedMidPassDoesNotFire(t *testing.T) {
 
 	// High-priority blocker runs first and holds the dispatch open, so the
 	// target handler is captured in the snapshot but not yet invoked.
-	unsubBlocker := Subscribe(bus, func(_ barrierBlockerEvt) {
+	unsubBlocker := bus.Subscribe(func(_ barrierBlockerEvt) {
 		close(blockerIn)
 		<-blockerRelease
 	}, WithPriority(PriorityHigh))
 	defer unsubBlocker()
 
 	var targetCalls atomic.Int32
-	unsubTarget := Subscribe(bus, func(_ barrierBlockerEvt) {
+	unsubTarget := bus.Subscribe(func(_ barrierBlockerEvt) {
 		targetCalls.Add(1)
 	})
 
-	go Publish(bus, barrierBlockerEvt{Base: hmevent.NewBase()})
+	go bus.Publish(barrierBlockerEvt{Base: hmevent.NewBase()})
 
 	<-blockerIn // dispatch is inside the blocker; target is snapshotted + in-flight
 

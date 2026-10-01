@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -100,7 +99,7 @@ func TestWireValuesCacheEviction_DeletesDeviceAKeepsDeviceB(t *testing.T) {
 	t.Cleanup(evictor.Stop)
 
 	// Publish removal for device A only.
-	events.Publish(unit.EventBus, hmevent.DeviceRemovedEvent{
+	unit.EventBus.Publish(hmevent.DeviceRemovedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: centralName,
 		InterfaceID: ifaceID,
@@ -147,7 +146,7 @@ func TestWireValuesCacheEviction_StopUnsubscribes(t *testing.T) {
 	evictor.Stop() // unsubscribe before any publish
 
 	// Publish removal — the handler must no longer be active.
-	events.Publish(unit.EventBus, hmevent.DeviceRemovedEvent{
+	unit.EventBus.Publish(hmevent.DeviceRemovedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: centralName,
 		InterfaceID: ifaceID,

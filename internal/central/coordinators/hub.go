@@ -188,7 +188,7 @@ func (h *HubCoordinator) UpdateSysvar(_ context.Context, snap SysvarSnapshot) {
 func (h *HubCoordinator) NotifySysvarChanged(
 	name string, old, next hmtypes.ParamValue, valueType hmenum.HubValueType,
 ) {
-	events.Publish(h.bus, hmevent.SysvarChangedEvent{
+	h.bus.Publish(hmevent.SysvarChangedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: h.centralName,
 		Name:        name,
@@ -233,7 +233,7 @@ func (h *HubCoordinator) NotifyProgramExecuted(ctx context.Context, programID st
 	if rc, ok := hmreqctx.FromContext(ctx); ok {
 		source = rc.Operation
 	}
-	events.Publish(h.bus, hmevent.ProgramExecutedEvent{
+	h.bus.Publish(hmevent.ProgramExecutedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: h.centralName,
 		ProgramID:   programID,
@@ -245,7 +245,7 @@ func (h *HubCoordinator) NotifyProgramExecuted(ctx context.Context, programID st
 
 // NotifyProgramActiveChanged publishes a [hmevent.ProgramChangedEvent].
 func (h *HubCoordinator) NotifyProgramActiveChanged(programID string, active bool) {
-	events.Publish(h.bus, hmevent.ProgramChangedEvent{
+	h.bus.Publish(hmevent.ProgramChangedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: h.centralName,
 		ProgramID:   programID,
@@ -1038,7 +1038,7 @@ func (h *HubCoordinator) PublishInstallModeRefreshed() {
 		if !changed {
 			continue
 		}
-		events.Publish(h.bus, hmevent.InstallModeChangedEvent{
+		h.bus.Publish(hmevent.InstallModeChangedEvent{
 			Base:        hmevent.NewBase(),
 			CentralName: h.centralName,
 			InterfaceID: dp.InterfaceID,

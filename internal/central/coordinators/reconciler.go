@@ -227,14 +227,14 @@ func (r *Reconciler) reconcileConnectivity(ctx context.Context) error {
 			continue
 		}
 		if r.Bus != nil {
-			events.Publish(r.Bus, hmevent.ConnectivityChangedEvent{
+			r.Bus.Publish(hmevent.ConnectivityChangedEvent{
 				Base:        hmevent.NewBase(),
 				CentralName: r.CentralName,
 				InterfaceID: p.InterfaceID,
 				Reachable:   p.Reachable,
 				LatencyMs:   p.LatencyMs,
 			})
-			events.Publish(r.Bus, hmevent.DriftCorrectedEvent{
+			r.Bus.Publish(hmevent.DriftCorrectedEvent{
 				Base:        hmevent.NewBase(),
 				CentralName: r.CentralName,
 				Component:   "connectivity",
@@ -307,13 +307,13 @@ func (r *Reconciler) reconcileVanishedInterfaces(conn *hub.Connectivity, probed 
 		if r.Bus == nil {
 			continue
 		}
-		events.Publish(r.Bus, hmevent.ConnectivityChangedEvent{
+		r.Bus.Publish(hmevent.ConnectivityChangedEvent{
 			Base:        hmevent.NewBase(),
 			CentralName: r.CentralName,
 			InterfaceID: id,
 			Reachable:   false,
 		})
-		events.Publish(r.Bus, hmevent.DriftCorrectedEvent{
+		r.Bus.Publish(hmevent.DriftCorrectedEvent{
 			Base:        hmevent.NewBase(),
 			CentralName: r.CentralName,
 			Component:   "connectivity",
@@ -340,7 +340,7 @@ func (r *Reconciler) reconcileUnobservedDataPoints(ctx context.Context) {
 		return
 	}
 	if r.Bus != nil {
-		events.Publish(r.Bus, hmevent.DriftCorrectedEvent{
+		r.Bus.Publish(hmevent.DriftCorrectedEvent{
 			Base:        hmevent.NewBase(),
 			CentralName: r.CentralName,
 			Component:   "unobserved_data_points",
@@ -394,7 +394,7 @@ func (r *Reconciler) emitNotReadyHealth() {
 		return
 	}
 	if r.Metrics.Observe(hub.MetricSystemHealth, hub.MetricSystemHealthUnknown) && r.Bus != nil {
-		events.Publish(r.Bus, hmevent.DriftCorrectedEvent{
+		r.Bus.Publish(hmevent.DriftCorrectedEvent{
 			Base:        hmevent.NewBase(),
 			CentralName: r.CentralName,
 			Component:   "system_health",
@@ -414,7 +414,7 @@ func (r *Reconciler) emitNotReadyConnectivity() {
 		}
 		conn.OnStateWithInterface(entry.InterfaceID, entry.ResolvedInterface(), false)
 		if r.Bus != nil {
-			events.Publish(r.Bus, hmevent.ConnectivityChangedEvent{
+			r.Bus.Publish(hmevent.ConnectivityChangedEvent{
 				Base:        hmevent.NewBase(),
 				CentralName: r.CentralName,
 				InterfaceID: entry.InterfaceID,
@@ -442,7 +442,7 @@ func (r *Reconciler) reconcileSystemHealth(ctx context.Context) error {
 	}
 	r.Metrics.Observe(hub.MetricSystemHealth, float64(score))
 	if r.Bus != nil {
-		events.Publish(r.Bus, hmevent.DriftCorrectedEvent{
+		r.Bus.Publish(hmevent.DriftCorrectedEvent{
 			Base:        hmevent.NewBase(),
 			CentralName: r.CentralName,
 			Component:   "system_health",

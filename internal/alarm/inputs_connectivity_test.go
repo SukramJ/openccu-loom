@@ -15,7 +15,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
@@ -54,7 +53,7 @@ func TestOnConnectivityDegradesTheSensorsOfTheLostInterface(t *testing.T) {
 	svc, unit := armedConnectivityService(t)
 
 	// One radio goes away. Only the sensors behind it degrade.
-	events.Publish(unit.EventBus, hmevent.ConnectivityChangedEvent{
+	unit.EventBus.Publish(hmevent.ConnectivityChangedEvent{
 		Base: hmevent.NewBase(), CentralName: connectivityTestCentral,
 		InterfaceID: central.WireInterfaceID(connectivityTestCentral, hmenum.InterfaceBidCosRF), Reachable: false,
 	})
@@ -63,7 +62,7 @@ func TestOnConnectivityDegradesTheSensorsOfTheLostInterface(t *testing.T) {
 
 	// The second radio follows: every enrolled interface of the central
 	// is now down, which is the central-loss escalation.
-	events.Publish(unit.EventBus, hmevent.ConnectivityChangedEvent{
+	unit.EventBus.Publish(hmevent.ConnectivityChangedEvent{
 		Base: hmevent.NewBase(), CentralName: connectivityTestCentral,
 		InterfaceID: central.WireInterfaceID(connectivityTestCentral, hmenum.InterfaceHmIPRF), Reachable: false,
 	})
@@ -149,7 +148,7 @@ func TestPartialInterfaceRecoveryKeepsTheStillDownRadioDegraded(t *testing.T) {
 
 	svc, unit := armedConnectivityService(t)
 	report := func(iface hmenum.Interface, reachable bool) {
-		events.Publish(unit.EventBus, hmevent.ConnectivityChangedEvent{
+		unit.EventBus.Publish(hmevent.ConnectivityChangedEvent{
 			Base: hmevent.NewBase(), CentralName: connectivityTestCentral,
 			InterfaceID: central.WireInterfaceID(connectivityTestCentral, iface), Reachable: reachable,
 		})

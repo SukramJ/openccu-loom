@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
@@ -58,7 +57,7 @@ func TestReleaseReachesTheLifecyclePlane(t *testing.T) {
 	sub.Start()
 	t.Cleanup(sub.Stop)
 
-	events.Publish(cu.EventBus, hmevent.DeviceReleasedEvent{
+	cu.EventBus.Publish(hmevent.DeviceReleasedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "test-ccu",
 		InterfaceID: "HmIP-RF",
@@ -100,7 +99,7 @@ func TestCreatedFrameCarriesTheReleaseState(t *testing.T) {
 	// A device that never entered the onboarding wizard. Absence of a hold
 	// means released, which is what every device on an existing
 	// installation looks like — so an existing consumer needs no filter.
-	events.Publish(cu.EventBus, hmevent.DeviceCreatedEvent{
+	cu.EventBus.Publish(hmevent.DeviceCreatedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "test-ccu",
 		InterfaceID: "HmIP-RF",

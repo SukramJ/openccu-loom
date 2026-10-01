@@ -5,7 +5,6 @@ package adapter
 
 import (
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -69,7 +68,7 @@ func (f *EventSourceFeed) StartCentral(u *central.Unit) func() {
 	if f == nil || u == nil || u.EventBus == nil {
 		return nil
 	}
-	return events.Subscribe(u.EventBus, func(e hmevent.DeviceTriggerEvent) {
+	return u.EventBus.Subscribe(func(e hmevent.DeviceTriggerEvent) {
 		q := u.QueryFacade()
 		if q == nil {
 			return

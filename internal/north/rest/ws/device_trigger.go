@@ -7,7 +7,6 @@ import (
 	"strconv"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -94,7 +93,7 @@ func (s *DeviceTriggerSubscriber) StartCentral(u *central.Unit) func() {
 	}
 	hub := s.hub
 	reg := s.reg
-	return events.Subscribe(bus, func(e hmevent.DeviceTriggerEvent) {
+	return bus.Subscribe(func(e hmevent.DeviceTriggerEvent) {
 		channelAddr := e.DeviceAddress + ":" + strconv.Itoa(e.ChannelNo)
 		hub.Publish(Event{
 			Topic: DeviceTriggerTopic(e.DeviceAddress, e.ChannelNo),

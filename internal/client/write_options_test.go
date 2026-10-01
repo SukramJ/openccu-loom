@@ -292,7 +292,7 @@ func TestSetValueWithOptions_WaitForCallbackHonoured(t *testing.T) {
 		time.Sleep(25 * time.Millisecond)
 		dpk, _ := hmtypes.NewDataPointKey("HmIP-RF", "VCU0001:1", hmenum.ParamsetKeyValues, "STATE")
 		newVal, _ := hmtypes.NewParamValue(true)
-		events.Publish(bus, hmevent.DataPointValueChangedEvent{
+		bus.Publish(hmevent.DataPointValueChangedEvent{
 			Base:     hmevent.NewBase(),
 			Key:      dpk,
 			NewValue: newVal,
@@ -370,7 +370,7 @@ func TestPutParamsetWithOptions_WaitForCallbackAcrossKeys(t *testing.T) {
 		} {
 			dpk, _ := hmtypes.NewDataPointKey("HmIP-RF", "VCU0001:4", hmenum.ParamsetKeyValues, p.Param)
 			pv, _ := hmtypes.NewParamValue(p.Value)
-			events.Publish(bus, hmevent.DataPointValueChangedEvent{
+			bus.Publish(hmevent.DataPointValueChangedEvent{
 				Base:     hmevent.NewBase(),
 				Key:      dpk,
 				NewValue: pv,

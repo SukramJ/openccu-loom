@@ -158,7 +158,7 @@ func NewService(deps Deps) (*Service, error) {
 		if inner != nil {
 			inner(healthy, note)
 		}
-		events.Publish(s.bus, hmevent.AlarmHealthChangedEvent{
+		s.bus.Publish(hmevent.AlarmHealthChangedEvent{
 			Base: hmevent.NewBaseAt(s.clk.Now()), Healthy: healthy, Note: note,
 		})
 	}
@@ -264,7 +264,7 @@ func (s *Service) Codes() *codes.Facade { return s.codes }
 // refresh runs on the caller (a management write, never the engine
 // sink), so the store reads it needs are safe here.
 func (s *Service) NotifyCodesChanged() {
-	events.Publish(s.bus, hmevent.AlarmCodesChangedEvent{Base: hmevent.NewBaseAt(s.clk.Now())})
+	s.bus.Publish(hmevent.AlarmCodesChangedEvent{Base: hmevent.NewBaseAt(s.clk.Now())})
 	s.refreshPanelCodePolicies(context.Background())
 }
 
@@ -567,7 +567,7 @@ func (s *Service) DetachCentral(name string) {
 	}
 }
 
-// publish fans an alarm event onto the alarm bus. events.Publish is
+// publish fans an alarm event onto the alarm bus. Bus.Publish is
 // generic over the concrete type, so the sink dispatches explicitly.
 // notifyOutputFired publishes one notification output's fire signal
 // on the alarm bus (outputs.NotificationSink); MQTT, webhook, and WS
@@ -587,7 +587,7 @@ func (s *Service) notifyOutputFired(n outputs.Notification) {
 	// label on the list left exactly those notifications unlabelled and
 	// indistinguishable from an intrusion alert.
 	cause := incidentCauseKind(n.Incident.CauseJSON)
-	events.Publish(s.bus, hmevent.AlarmNotificationEvent{
+	s.bus.Publish(hmevent.AlarmNotificationEvent{
 		Base:       hmevent.NewBaseAt(s.clk.Now()),
 		ZoneID:     n.Row.ZoneID,
 		ZoneName:   n.ZoneName,
@@ -605,7 +605,7 @@ func (s *Service) notifyOutputFired(n outputs.Notification) {
 func (s *Service) publish(e hmevent.Event) {
 	switch ev := e.(type) {
 	case hmevent.AlarmStateChangedEvent:
-		events.Publish(s.bus, ev)
+		s.bus.Publish(ev)
 		if s.sysvarMirror != nil {
 			s.sysvarMirror.onStateChanged(ev)
 		}
@@ -613,22 +613,22 @@ func (s *Service) publish(e hmevent.Event) {
 			s.onPanelStateEvent(ev)
 		}
 	case hmevent.AlarmTriggeredEvent:
-		events.Publish(s.bus, ev)
+		s.bus.Publish(ev)
 	case hmevent.AlarmReadinessChangedEvent:
-		events.Publish(s.bus, ev)
+		s.bus.Publish(ev)
 	case hmevent.AlarmJournalAppendedEvent:
-		events.Publish(s.bus, ev)
+		s.bus.Publish(ev)
 	case hmevent.AlarmCountdownEvent:
-		events.Publish(s.bus, ev)
+		s.bus.Publish(ev)
 	case hmevent.AlarmWalkTestEvent:
-		events.Publish(s.bus, ev)
+		s.bus.Publish(ev)
 	case hmevent.AlarmHealthChangedEvent:
-		events.Publish(s.bus, ev)
+		s.bus.Publish(ev)
 		if s.panels != nil {
 			s.onPanelHealthEvent(ev)
 		}
 	case hmevent.AlarmPanelChangedEvent:
-		events.Publish(s.bus, ev)
+		s.bus.Publish(ev)
 	case hmevent.AlarmDuressEvent:
 		// Never omit this case again. A duress code entered under
 		// coercion reached the default branch and was logged instead of
@@ -636,11 +636,11 @@ func (s *Service) publish(e hmevent.Event) {
 		// hidden journal row and nothing else — on every surface, at
 		// every configured visibility level. The visibility policy sits
 		// downstream of here and could not compensate.
-		events.Publish(s.bus, ev)
+		s.bus.Publish(ev)
 	case hmevent.AlarmReminderEvent:
 		// Same omission, second event: a schedule reminder never left
 		// the sink either.
-		events.Publish(s.bus, ev)
+		s.bus.Publish(ev)
 	default:
 		// Reaching this branch means a producer emits an event type this
 		// fan-out does not know, and every consumer of it is silently

@@ -64,7 +64,7 @@ func TestSettleOutlastsAWorkerStalledPastTheBrokerCall(t *testing.T) {
 	p.Start(bus)
 	t.Cleanup(p.Stop)
 
-	events.Publish(bus, hmevent.SecurityStateChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
+	bus.Publish(hmevent.SecurityStateChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
 	obs.settle(t, p)
 
 	// The whole reconcile has to be there, not its first message. The

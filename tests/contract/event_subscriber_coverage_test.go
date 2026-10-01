@@ -70,7 +70,7 @@ var eventsWithoutSubscriber = map[string]string{
 // [eventsWithoutSubscriber] as deliberately unconsumed.
 //
 // It exists because publishing into silence is invisible. The bus has no
-// wildcard subscription — events.Subscribe[T] is the only way in — so an
+// wildcard subscription — Bus.Subscribe[T] is the only way in — so an
 // event with no subscriber reaches nothing at all, and every test around
 // it still passes: the producer's test asserts it published, and the
 // would-be consumer's test builds its own bus and publishes onto it
@@ -96,7 +96,7 @@ func TestEveryEventTypeHasASubscriber(t *testing.T) {
 	}
 	subscribed := subscribedEventTypes(t, pkgs)
 	if len(subscribed) == 0 {
-		t.Fatal("no events.Subscribe calls resolved; the walk is broken and this test would pass vacuously")
+		t.Fatal("no Bus.Subscribe calls resolved; the walk is broken and this test would pass vacuously")
 	}
 
 	for _, name := range sortedKeys(defined) {
@@ -202,7 +202,7 @@ func definedEventTypes(t *testing.T, pkgs []*packages.Package) map[string]bool {
 
 // subscribedEventTypes maps an event type name onto the packages that
 // subscribe to it, resolving the handler argument of every
-// events.Subscribe call through the type checker.
+// Bus.Subscribe call through the type checker.
 func subscribedEventTypes(t *testing.T, pkgs []*packages.Package) map[string]map[string]bool {
 	t.Helper()
 	out := map[string]map[string]bool{}
@@ -213,7 +213,7 @@ func subscribedEventTypes(t *testing.T, pkgs []*packages.Package) map[string]map
 		for _, file := range p.Syntax {
 			ast.Inspect(file, func(n ast.Node) bool {
 				call, ok := n.(*ast.CallExpr)
-				if !ok || !isEventsSubscribe(call.Fun) || len(call.Args) < 2 {
+				if !ok || busMethodOf(p, call, "Subscribe") == nil || len(call.Args) < 1 {
 					return true
 				}
 				name := handlerEventType(p, call)
@@ -231,28 +231,67 @@ func subscribedEventTypes(t *testing.T, pkgs []*packages.Package) map[string]map
 	return out
 }
 
-// isEventsSubscribe reports whether fun denotes events.Subscribe, with
-// or without an explicit type argument.
-func isEventsSubscribe(fun ast.Expr) bool {
+// eventsPkgPath is the package that declares the event bus.
+const eventsPkgPath = modulePath + "/internal/central/events"
+
+// busMethodOf resolves the callee of call through the type checker and
+// returns it when it is one of the named methods of *events.Bus, or nil
+// otherwise. The bus API is a set of generic methods, so the callee is
+// recognised by its resolved object and receiver type — never by the
+// method name alone, which other types (calculated data points, MQTT
+// clients) declare too. An explicit type argument
+// (bus.Subscribe[T](fn)) is unwrapped first.
+func busMethodOf(p *packages.Package, call *ast.CallExpr, names ...string) *types.Func {
+	fun := ast.Unparen(call.Fun)
 	switch f := fun.(type) {
 	case *ast.IndexExpr:
-		return isEventsSubscribe(f.X)
+		fun = ast.Unparen(f.X)
 	case *ast.IndexListExpr:
-		return isEventsSubscribe(f.X)
-	case *ast.SelectorExpr:
-		id, ok := f.X.(*ast.Ident)
-		return ok && id.Name == "events" && f.Sel.Name == "Subscribe"
+		fun = ast.Unparen(f.X)
 	}
-	return false
+	sel, ok := fun.(*ast.SelectorExpr)
+	if !ok {
+		return nil
+	}
+	fn, _ := p.TypesInfo.Uses[sel.Sel].(*types.Func)
+	if fn == nil || !isBusMethod(fn) {
+		return nil
+	}
+	fn = fn.Origin()
+	for _, n := range names {
+		if fn.Name() == n {
+			return fn
+		}
+	}
+	return nil
 }
 
-// handlerEventType resolves the concrete hmevent type a Subscribe call
-// binds, by reading the type of its handler argument. Subscribe's
-// signature is func(*Bus, func(T), ...HandlerOption), so T is the sole
+// isBusMethod reports whether fn is a method declared on *events.Bus.
+func isBusMethod(fn *types.Func) bool {
+	fn = fn.Origin()
+	sig, ok := fn.Type().(*types.Signature)
+	if !ok || sig.Recv() == nil {
+		return false
+	}
+	ptr, ok := sig.Recv().Type().(*types.Pointer)
+	if !ok {
+		return false
+	}
+	named, ok := ptr.Elem().(*types.Named)
+	if !ok {
+		return false
+	}
+	obj := named.Obj()
+	return obj.Name() == "Bus" && obj.Pkg() != nil && obj.Pkg().Path() == eventsPkgPath
+}
+
+// handlerEventType resolves the concrete hmevent type a Bus.Subscribe call
+// binds, by reading the type of its handler argument. The method's
+// signature is func(func(T), ...HandlerOption), so T is the sole
 // parameter of the handler's type — whatever syntactic form the argument
 // takes: a literal, a method value, or a plain function name.
 func handlerEventType(p *packages.Package, call *ast.CallExpr) string {
-	tv, ok := p.TypesInfo.Types[call.Args[1]]
+	tv, ok := p.TypesInfo.Types[call.Args[0]]
 	if !ok || tv.Type == nil {
 		return ""
 	}

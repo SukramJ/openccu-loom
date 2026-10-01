@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -107,7 +106,7 @@ func TestMetricHubSensors_LatencyDiscoveryPublishedOnConnectivity(t *testing.T) 
 	defer publisher.Stop()
 	publisher.Flush()
 
-	events.Publish(c.EventBus, hmevent.ConnectivityChangedEvent{
+	c.EventBus.Publish(hmevent.ConnectivityChangedEvent{
 		Base:        hmevent.NewBaseAt(time.Now()),
 		CentralName: "ccu-01",
 		InterfaceID: "HmIP-RF",

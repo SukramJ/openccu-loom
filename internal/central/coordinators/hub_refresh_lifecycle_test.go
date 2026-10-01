@@ -139,7 +139,7 @@ func TestHubFullProgramLifecycle(t *testing.T) {
 
 	// Track ProgramExecutedEvent.
 	var execEvents []hmevent.ProgramExecutedEvent
-	unsub := events.Subscribe(bus, func(e hmevent.ProgramExecutedEvent) {
+	unsub := bus.Subscribe(func(e hmevent.ProgramExecutedEvent) {
 		execEvents = append(execEvents, e)
 	})
 	defer unsub()

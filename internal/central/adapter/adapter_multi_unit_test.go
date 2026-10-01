@@ -2438,7 +2438,7 @@ func TestWireHealth_ClientStateChanged_Connected(t *testing.T) {
 	closer := WireHealth(c)
 	defer closer()
 
-	events.Publish(c.EventBus, hmevent.ClientStateChangedEvent{
+	c.EventBus.Publish(hmevent.ClientStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		InterfaceID: "HmIP-RF",
 		To:          hmenum.ClientStateConnected,
@@ -2452,7 +2452,7 @@ func TestWireHealth_ClientStateChanged_Reconnecting(t *testing.T) {
 	closer := WireHealth(c)
 	defer closer()
 
-	events.Publish(c.EventBus, hmevent.ClientStateChangedEvent{
+	c.EventBus.Publish(hmevent.ClientStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		InterfaceID: "HmIP-RF",
 		To:          hmenum.ClientStateReconnecting,
@@ -2466,7 +2466,7 @@ func TestWireHealth_ClientStateChanged_Failed(t *testing.T) {
 	closer := WireHealth(c)
 	defer closer()
 
-	events.Publish(c.EventBus, hmevent.ClientStateChangedEvent{
+	c.EventBus.Publish(hmevent.ClientStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		InterfaceID: "HmIP-RF",
 		To:          hmenum.ClientStateFailed,
@@ -2480,7 +2480,7 @@ func TestWireHealth_ClientStateChanged_Stopped(t *testing.T) {
 	closer := WireHealth(c)
 	defer closer()
 
-	events.Publish(c.EventBus, hmevent.ClientStateChangedEvent{
+	c.EventBus.Publish(hmevent.ClientStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		InterfaceID: "HmIP-RF",
 		To:          hmenum.ClientStateStopped,
@@ -2494,7 +2494,7 @@ func TestWireHealth_ClientStateChanged_Disconnected(t *testing.T) {
 	closer := WireHealth(c)
 	defer closer()
 
-	events.Publish(c.EventBus, hmevent.ClientStateChangedEvent{
+	c.EventBus.Publish(hmevent.ClientStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		InterfaceID: "HmIP-RF",
 		To:          hmenum.ClientStateDisconnected,
@@ -2508,7 +2508,7 @@ func TestWireHealth_ConnectionLost(t *testing.T) {
 	closer := WireHealth(c)
 	defer closer()
 
-	events.Publish(c.EventBus, hmevent.ConnectionLostEvent{
+	c.EventBus.Publish(hmevent.ConnectionLostEvent{
 		Base:        hmevent.NewBase(),
 		InterfaceID: "HmIP-RF",
 		Reason:      hmenum.FailureReasonTimeout,
@@ -2522,7 +2522,7 @@ func TestWireHealth_CircuitBreakerClosed(t *testing.T) {
 	closer := WireHealth(c)
 	defer closer()
 
-	events.Publish(c.EventBus, hmevent.CircuitBreakerStateChangedEvent{
+	c.EventBus.Publish(hmevent.CircuitBreakerStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		InterfaceID: "HmIP-RF",
 		To:          hmenum.CircuitStateClosed,
@@ -2536,7 +2536,7 @@ func TestWireHealth_CircuitBreakerHalfOpen(t *testing.T) {
 	closer := WireHealth(c)
 	defer closer()
 
-	events.Publish(c.EventBus, hmevent.CircuitBreakerStateChangedEvent{
+	c.EventBus.Publish(hmevent.CircuitBreakerStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		InterfaceID: "HmIP-RF",
 		To:          hmenum.CircuitStateHalfOpen,
@@ -2550,7 +2550,7 @@ func TestWireHealth_CircuitBreakerOpen(t *testing.T) {
 	closer := WireHealth(c)
 	defer closer()
 
-	events.Publish(c.EventBus, hmevent.CircuitBreakerStateChangedEvent{
+	c.EventBus.Publish(hmevent.CircuitBreakerStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		InterfaceID: "HmIP-RF",
 		To:          hmenum.CircuitStateOpen,
@@ -2564,7 +2564,7 @@ func TestWireHealth_RecoveryStarted(t *testing.T) {
 	closer := WireHealth(c)
 	defer closer()
 
-	events.Publish(c.EventBus, hmevent.RecoveryStartedEvent{
+	c.EventBus.Publish(hmevent.RecoveryStartedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "ccu-wh10",
 		InterfaceID: "HmIP-RF",
@@ -2578,7 +2578,7 @@ func TestWireHealth_RecoveryCompleted_Success(t *testing.T) {
 	closer := WireHealth(c)
 	defer closer()
 
-	events.Publish(c.EventBus, hmevent.RecoveryCompletedEvent{
+	c.EventBus.Publish(hmevent.RecoveryCompletedEvent{
 		Base:        hmevent.NewBase(),
 		InterfaceID: "HmIP-RF",
 		Result:      hmenum.RecoveryResultSuccess,
@@ -2592,7 +2592,7 @@ func TestWireHealth_RecoveryCompleted_Failure(t *testing.T) {
 	closer := WireHealth(c)
 	defer closer()
 
-	events.Publish(c.EventBus, hmevent.RecoveryCompletedEvent{
+	c.EventBus.Publish(hmevent.RecoveryCompletedEvent{
 		Base:        hmevent.NewBase(),
 		InterfaceID: "HmIP-RF",
 		Result:      hmenum.RecoveryResultFailed,
@@ -2606,7 +2606,7 @@ func TestWireHealth_RecoveryFailed(t *testing.T) {
 	closer := WireHealth(c)
 	defer closer()
 
-	events.Publish(c.EventBus, hmevent.RecoveryFailedEvent{
+	c.EventBus.Publish(hmevent.RecoveryFailedEvent{
 		Base:        hmevent.NewBase(),
 		InterfaceID: "HmIP-RF",
 		Reason:      hmenum.FailureReasonTimeout,
@@ -2622,7 +2622,7 @@ func TestWireHealth_PingPongMismatch(t *testing.T) {
 	defer closer()
 
 	mismatch := func() {
-		events.Publish(c.EventBus, hmevent.PingPongMismatchEvent{
+		c.EventBus.Publish(hmevent.PingPongMismatchEvent{
 			Base:         hmevent.NewBase(),
 			InterfaceID:  "HmIP-RF",
 			MismatchType: hmenum.PingPongMismatchUnknown,
@@ -2661,7 +2661,7 @@ func TestWireHealth_DataPointValueReceived_MatchingCentral(t *testing.T) {
 	closer := WireHealth(c)
 	defer closer()
 
-	events.Publish(c.EventBus, hmevent.DataPointValueReceivedEvent{
+	c.EventBus.Publish(hmevent.DataPointValueReceivedEvent{
 		Base:           hmevent.NewBase(),
 		CentralName:    "ccu-wh15",
 		InterfaceID:    "HmIP-RF",
@@ -2678,7 +2678,7 @@ func TestWireHealth_DataPointValueReceived_DifferentCentral(t *testing.T) {
 	defer closer()
 
 	// CentralName doesn't match — early return in the handler.
-	events.Publish(c.EventBus, hmevent.DataPointValueReceivedEvent{
+	c.EventBus.Publish(hmevent.DataPointValueReceivedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "other-central",
 		InterfaceID: "HmIP-RF",
@@ -2693,7 +2693,7 @@ func TestWireHealth_DataPointValueReceived_EmptyInterfaceID(t *testing.T) {
 	defer closer()
 
 	// InterfaceID is empty — falls back to ChannelAddress.
-	events.Publish(c.EventBus, hmevent.DataPointValueReceivedEvent{
+	c.EventBus.Publish(hmevent.DataPointValueReceivedEvent{
 		Base:           hmevent.NewBase(),
 		CentralName:    "ccu-wh17",
 		InterfaceID:    "",
@@ -9398,7 +9398,7 @@ func TestNewMasterPollerForInterface_OnErrorLoggerPath(t *testing.T) {
 
 // b34FloatSensor is a calculated.Sensor whose OnUpdate callback accepts float64.
 // When register is called, the callback is invoked immediately with a valid
-// float64 so bridgeCalculatedSensorToBus → publish → events.Publish is reached.
+// float64 so bridgeCalculatedSensorToBus → publish → Bus.Publish is reached.
 type b34FloatSensor struct {
 	fn func(old, next float64)
 }
@@ -9418,13 +9418,13 @@ func (s *b34FloatSensor) OnUpdate(fn func(old, next float64)) func() {
 }
 
 // TestBridgeCalculatedSensorToBus_Float64OnUpdate exercises the
-// float64-OnUpdate case (lines 736-737) and the events.Publish path (721-731).
+// float64-OnUpdate case (lines 736-737) and the Bus.Publish path (721-731).
 func TestBridgeCalculatedSensorToBus_Float64OnUpdate(t *testing.T) {
 	t.Parallel()
 	bus := events.NewBus()
 	sensor := &b34FloatSensor{}
 	// Must not panic; triggers publish(21.5) → NewParamValue succeeds →
-	// events.Publish fires.
+	// Bus.Publish fires.
 	bridgeCalculatedSensorToBus(bus, "ccu-b34", "HmIP-RF", "DEV:1", sensor, slog.Default())
 }
 
@@ -10653,7 +10653,7 @@ func TestWireHealth_EmptyInterfaceIDComponent(t *testing.T) {
 
 	// Fire a ClientStateChangedEvent with empty InterfaceID → record("", ...) →
 	// component("") → `if interfaceID == "" { return "unknown" }`.
-	events.Publish(c.EventBus, hmevent.ClientStateChangedEvent{
+	c.EventBus.Publish(hmevent.ClientStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		InterfaceID: "", // empty → "unknown" branch
 		To:          hmenum.ClientStateConnected,
@@ -10681,7 +10681,7 @@ func TestWireHealth_RecoveryStartedDifferentCentral(t *testing.T) {
 
 	// Fire a RecoveryStartedEvent with a DIFFERENT CentralName → the subscriber
 	// at line 151-156 returns early without recording a reconnect attempt.
-	events.Publish(c.EventBus, hmevent.RecoveryStartedEvent{
+	c.EventBus.Publish(hmevent.RecoveryStartedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "DIFFERENT-CCU", // != "ccu-b40-recovery-match"
 		InterfaceID: "HmIP-RF",
@@ -11241,7 +11241,7 @@ func TestWireDeviceAvailability_ClientMarkAllDevicesForced(t *testing.T) {
 	defer closer()
 
 	// Fire a ClientStateChangedEvent with Disconnected → apply() calls MarkAllDevicesForced.
-	events.Publish(c.EventBus, hmevent.ClientStateChangedEvent{
+	c.EventBus.Publish(hmevent.ClientStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		InterfaceID: "HmIP-RF",
 		To:          hmenum.ClientStateDisconnected,
@@ -11500,7 +11500,7 @@ func TestClimateLinkPeerRefresh_NilChannelFromResolver(t *testing.T) {
 
 	// Fire LinkPeerChangedEvent with an address whose device does NOT exist →
 	// resolveChannel returns nil → refreshForChannel(nil, peers) → line 73 fires.
-	events.Publish(c.EventBus, hmevent.LinkPeerChangedEvent{
+	c.EventBus.Publish(hmevent.LinkPeerChangedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "ccu-b47-clim-nil-ch",
 		Address:     "NOTEXIST:1",
@@ -11538,7 +11538,7 @@ func TestClimateLinkPeerRefresh_NonClimateCustomDP(t *testing.T) {
 	// Fire event with the known channel address → resolveChannel finds it →
 	// refreshForChannel(ch, peers) → cdp = ch.CustomDataPoint() != nil →
 	// type assertion to *climate.Climate fails → line 81 fires.
-	events.Publish(c.EventBus, hmevent.LinkPeerChangedEvent{
+	c.EventBus.Publish(hmevent.LinkPeerChangedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "ccu-b47-clim-noclim",
 		Address:     "B47NOCLIM01:1",

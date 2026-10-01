@@ -16,7 +16,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
@@ -214,7 +213,7 @@ func TestValuesCache_LifecycleTransitions_ConnectionLostThenRecovered(t *testing
 		mu          sync.Mutex
 		transitions []transition
 	)
-	unsubChange := events.Subscribe(c.EventBus, func(e hmevent.DataPointSourceChangedEvent) {
+	unsubChange := c.EventBus.Subscribe(func(e hmevent.DataPointSourceChangedEvent) {
 		mu.Lock()
 		transitions = append(transitions, transition{e.OldSource, e.NewSource})
 		mu.Unlock()
@@ -222,7 +221,7 @@ func TestValuesCache_LifecycleTransitions_ConnectionLostThenRecovered(t *testing
 	defer unsubChange()
 
 	// ── ConnectionLostEvent → stale ───────────────────────────────────────────
-	events.Publish(c.EventBus, hmevent.ConnectionLostEvent{
+	c.EventBus.Publish(hmevent.ConnectionLostEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: centralName,
 		InterfaceID: "HmIP-RF",
@@ -247,7 +246,7 @@ func TestValuesCache_LifecycleTransitions_ConnectionLostThenRecovered(t *testing
 	}
 
 	// ── RecoveryCompletedEvent → live ─────────────────────────────────────────
-	events.Publish(c.EventBus, hmevent.RecoveryCompletedEvent{
+	c.EventBus.Publish(hmevent.RecoveryCompletedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: centralName,
 		InterfaceID: "HmIP-RF",

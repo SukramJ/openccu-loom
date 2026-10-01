@@ -83,9 +83,9 @@ func runSecurityPlane(t *testing.T, base string) *observedPlane {
 	p.Start(bus)
 	t.Cleanup(p.Stop)
 
-	events.Publish(bus, hmevent.SecurityStateChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
+	bus.Publish(hmevent.SecurityStateChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
 	for _, fault := range []bool{false, true} {
-		events.Publish(bus, hmevent.SecurityNotificationEvent{
+		bus.Publish(hmevent.SecurityNotificationEvent{
 			Base:       hmevent.NewBaseAt(time.Now()),
 			Class:      hmenum.SecurityClassSmoke,
 			Severity:   hmenum.SecuritySeverityCritical,

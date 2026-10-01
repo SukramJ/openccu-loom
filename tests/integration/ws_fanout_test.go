@@ -12,7 +12,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	switchdev "github.com/SukramJ/openccu-loom/internal/model/custom/switch"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -31,9 +30,9 @@ import (
 // only the MQTT-side publish. The WebSocket side had no equivalent
 // end-to-end check — every existing WS assertion either called an
 // unexported EventBridge method directly (bypassing the
-// events.Subscribe wiring set up by EventBridge.Start) or asserted a
+// Bus.Subscribe wiring set up by EventBridge.Start) or asserted a
 // different broadcast family. The tests below publish through the
-// same public events.Publish surface production code uses and assert
+// same public Bus.Publish surface production code uses and assert
 // the resulting *ws.Hub broadcast, covering the two highest-frequency
 // broadcasts declared in assets/wsapi.json: "datapoint.value_changed"
 // and "custom_data_point.state_changed".
@@ -85,7 +84,7 @@ func TestDataPointValueChangedFansOutToWSHub(t *testing.T) {
 	bridge.Start(context.Background())
 	defer bridge.Stop()
 
-	events.Publish(c.EventBus, hmevent.DataPointValueChangedEvent{
+	c.EventBus.Publish(hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBaseAt(time.Now()),
 		Key: hmtypes.DataPointKey{
 			ChannelAddress: d.Address + ":1",
@@ -135,7 +134,7 @@ func TestDataPointValueChangedFansOutToWSHub(t *testing.T) {
 // the existing coverage in internal/central/adapter/
 // eventbridge_cdp_channel_group_test.go (which calls the unexported
 // EventBridge.onValueChangedKind directly), this drives the change
-// through the real event bus so the events.Subscribe wiring set up by
+// through the real event bus so the Bus.Subscribe wiring set up by
 // EventBridge.Start is itself under test.
 func TestCustomDataPointStateChangedFansOutToWSHub(t *testing.T) {
 	c, err := central.New(central.Config{Name: "ccu-01"})
@@ -184,7 +183,7 @@ func TestCustomDataPointStateChangedFansOutToWSHub(t *testing.T) {
 	// observes an is_on:true snapshot.
 	stateDP.OnEvent(true)
 
-	events.Publish(c.EventBus, hmevent.DataPointValueChangedEvent{
+	c.EventBus.Publish(hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBaseAt(time.Now()),
 		Key: hmtypes.DataPointKey{
 			ChannelAddress: chAddr,

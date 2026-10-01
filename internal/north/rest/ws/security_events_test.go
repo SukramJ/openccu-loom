@@ -70,7 +70,7 @@ var securityFanoutCases = []struct {
 	{
 		eventType: hmevent.EventTypeSecurityStateChanged,
 		publish: func(bus *events.Bus) {
-			events.Publish(bus, hmevent.SecurityStateChangedEvent{
+			bus.Publish(hmevent.SecurityStateChangedEvent{
 				Base: hmevent.NewBase(),
 				To:   hmenum.SecuritySeverityAlarm,
 			})
@@ -81,7 +81,7 @@ var securityFanoutCases = []struct {
 	{
 		eventType: hmevent.EventTypeSecurityClassChanged,
 		publish: func(bus *events.Bus) {
-			events.Publish(bus, hmevent.SecurityClassChangedEvent{
+			bus.Publish(hmevent.SecurityClassChangedEvent{
 				Base:  hmevent.NewBase(),
 				Class: hmenum.SecurityClassSmoke,
 			})
@@ -92,7 +92,7 @@ var securityFanoutCases = []struct {
 	{
 		eventType: hmevent.EventTypeSecurityZoneChanged,
 		publish: func(bus *events.Bus) {
-			events.Publish(bus, hmevent.SecurityZoneChangedEvent{
+			bus.Publish(hmevent.SecurityZoneChangedEvent{
 				Base:   hmevent.NewBase(),
 				ZoneID: "z1",
 			})
@@ -103,7 +103,7 @@ var securityFanoutCases = []struct {
 	{
 		eventType: hmevent.EventTypeSecurityFaultChanged,
 		publish: func(bus *events.Bus) {
-			events.Publish(bus, hmevent.SecurityFaultChangedEvent{
+			bus.Publish(hmevent.SecurityFaultChangedEvent{
 				Base:    hmevent.NewBase(),
 				FaultID: "f1",
 			})
@@ -114,7 +114,7 @@ var securityFanoutCases = []struct {
 	{
 		eventType: hmevent.EventTypeSecurityNotification,
 		publish: func(bus *events.Bus) {
-			events.Publish(bus, hmevent.SecurityNotificationEvent{
+			bus.Publish(hmevent.SecurityNotificationEvent{
 				Base:       hmevent.NewBase(),
 				Class:      hmenum.SecurityClassSmoke,
 				Retainable: true,
@@ -181,7 +181,7 @@ func TestSecuritySubscriberStateChanged(t *testing.T) {
 	t.Parallel()
 	h, bus := newSecuritySubscriberFixture(t)
 
-	events.Publish(bus, hmevent.SecurityStateChangedEvent{
+	bus.Publish(hmevent.SecurityStateChangedEvent{
 		Base:          hmevent.NewBase(),
 		From:          hmenum.SecuritySeverityOK,
 		To:            hmenum.SecuritySeverityAlarm,
@@ -212,7 +212,7 @@ func TestSecuritySubscriberClassChanged(t *testing.T) {
 	t.Parallel()
 	h, bus := newSecuritySubscriberFixture(t)
 
-	events.Publish(bus, hmevent.SecurityClassChangedEvent{
+	bus.Publish(hmevent.SecurityClassChangedEvent{
 		Base:     hmevent.NewBase(),
 		Class:    hmenum.SecurityClassSmoke,
 		Active:   true,
@@ -255,7 +255,7 @@ func TestSecuritySubscriberClassChangedOmitsUnsetSince(t *testing.T) {
 	t.Parallel()
 	h, bus := newSecuritySubscriberFixture(t)
 
-	events.Publish(bus, hmevent.SecurityClassChangedEvent{
+	bus.Publish(hmevent.SecurityClassChangedEvent{
 		Base:   hmevent.NewBase(),
 		Class:  hmenum.SecurityClassWater,
 		Active: false,
@@ -278,7 +278,7 @@ func TestSecuritySubscriberZoneChanged(t *testing.T) {
 	t.Parallel()
 	h, bus := newSecuritySubscriberFixture(t)
 
-	events.Publish(bus, hmevent.SecurityZoneChangedEvent{
+	bus.Publish(hmevent.SecurityZoneChangedEvent{
 		Base:     hmevent.NewBase(),
 		ZoneID:   "z1",
 		ZoneSlug: "erdgeschoss",
@@ -315,7 +315,7 @@ func TestSecuritySubscriberFaultChanged(t *testing.T) {
 	t.Parallel()
 	h, bus := newSecuritySubscriberFixture(t)
 
-	events.Publish(bus, hmevent.SecurityFaultChangedEvent{
+	bus.Publish(hmevent.SecurityFaultChangedEvent{
 		Base:         hmevent.NewBase(),
 		FaultID:      "fault-1",
 		Class:        hmenum.SecurityClassBattery,
@@ -357,7 +357,7 @@ func TestSecuritySubscriberNotification(t *testing.T) {
 	t.Parallel()
 	h, bus := newSecuritySubscriberFixture(t)
 
-	events.Publish(bus, hmevent.SecurityNotificationEvent{
+	bus.Publish(hmevent.SecurityNotificationEvent{
 		Base:       hmevent.NewBase(),
 		Class:      hmenum.SecurityClassSmoke,
 		Severity:   hmenum.SecuritySeverityAlarm,
@@ -416,7 +416,7 @@ func TestSecuritySubscriberDropsNonRetainableNotification(t *testing.T) {
 	t.Parallel()
 	h, bus := newSecuritySubscriberFixture(t)
 
-	events.Publish(bus, hmevent.SecurityNotificationEvent{
+	bus.Publish(hmevent.SecurityNotificationEvent{
 		Base:       hmevent.NewBase(),
 		Class:      hmenum.SecurityClassPanic,
 		Severity:   hmenum.SecuritySeverityCritical,
@@ -427,7 +427,7 @@ func TestSecuritySubscriberDropsNonRetainableNotification(t *testing.T) {
 	// A retainable report published afterwards proves the plane is
 	// alive: without it a silently broken subscriber would pass this
 	// test for the wrong reason.
-	events.Publish(bus, hmevent.SecurityNotificationEvent{
+	bus.Publish(hmevent.SecurityNotificationEvent{
 		Base:       hmevent.NewBase(),
 		Class:      hmenum.SecurityClassSmoke,
 		Severity:   hmenum.SecuritySeverityAlarm,

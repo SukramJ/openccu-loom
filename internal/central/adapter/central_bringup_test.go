@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/central/registry"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -655,7 +654,7 @@ func TestCentralBringUp_ClearModelStillAnnouncesRemoval(t *testing.T) {
 
 	var mu sync.Mutex
 	var seen []hmevent.DeviceRemovedEvent
-	unsub := events.Subscribe(unit.EventBus, func(e hmevent.DeviceRemovedEvent) {
+	unsub := unit.EventBus.Subscribe(func(e hmevent.DeviceRemovedEvent) {
 		mu.Lock()
 		seen = append(seen, e)
 		mu.Unlock()

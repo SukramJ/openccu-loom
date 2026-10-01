@@ -10,7 +10,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/reliability"
 	"github.com/SukramJ/openccu-loom/internal/clock"
@@ -69,7 +68,7 @@ func TestWirePingPongBusPublishesEventOnThresholdCrossing(t *testing.T) {
 	ic := newTestInterfaceClient(t, centralName, ifaceID, threshold)
 
 	var got []hmevent.PingPongMismatchEvent
-	unsub := events.Subscribe(c.EventBus, func(e hmevent.PingPongMismatchEvent) {
+	unsub := c.EventBus.Subscribe(func(e hmevent.PingPongMismatchEvent) {
 		got = append(got, e)
 	})
 	defer unsub()
@@ -83,7 +82,7 @@ func TestWirePingPongBusPublishesEventOnThresholdCrossing(t *testing.T) {
 		ic.RecordPing("ping-" + string(rune('a'+i)))
 	}
 
-	// Give the synchronous event bus a scheduler tick — events.Publish
+	// Give the synchronous event bus a scheduler tick — Bus.Publish
 	// is synchronous in the test bus implementation; a short sleep is
 	// not needed, but we allow one round-trip to be safe.
 	if len(got) == 0 {

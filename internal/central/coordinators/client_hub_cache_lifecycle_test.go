@@ -166,7 +166,7 @@ func TestPublishBackendParameterEventEmits(t *testing.T) {
 	ec.SetCentralName("c-test")
 
 	var got []hmevent.RPCParameterReceivedEvent
-	events.Subscribe(bus, func(e hmevent.RPCParameterReceivedEvent) {
+	bus.Subscribe(func(e hmevent.RPCParameterReceivedEvent) {
 		got = append(got, e)
 	})
 
@@ -194,7 +194,7 @@ func TestPublishBackendParameterEventEmptyInterfaceIsNoop(t *testing.T) {
 	ec := NewEventCoordinator(bus, cache, nil)
 
 	var count atomic.Int32
-	events.Subscribe(bus, func(_ hmevent.RPCParameterReceivedEvent) { count.Add(1) })
+	bus.Subscribe(func(_ hmevent.RPCParameterReceivedEvent) { count.Add(1) })
 	ec.PublishBackendParameterEvent("", "DEV:1", "LEVEL", "1")
 
 	if count.Load() != 0 {
@@ -210,7 +210,7 @@ func TestPublishDeviceTriggerEventEmits(t *testing.T) {
 	ec.SetCentralName("c-trig")
 
 	var got []hmevent.DeviceTriggerEvent
-	events.Subscribe(bus, func(e hmevent.DeviceTriggerEvent) {
+	bus.Subscribe(func(e hmevent.DeviceTriggerEvent) {
 		got = append(got, e)
 	})
 
@@ -268,7 +268,7 @@ func TestPublishSystemEventEmits(t *testing.T) {
 	ec := NewEventCoordinator(bus, cache, nil)
 
 	var got []hmevent.SystemStatusChangedEvent
-	events.Subscribe(bus, func(e hmevent.SystemStatusChangedEvent) {
+	bus.Subscribe(func(e hmevent.SystemStatusChangedEvent) {
 		got = append(got, e)
 	})
 
@@ -299,7 +299,7 @@ func TestAddDataPointSubscriptionReceivesEvents(t *testing.T) {
 	defer unsub()
 
 	// Publish directly on the bus to simulate a cache update.
-	events.Publish(bus, hmevent.DataPointValueChangedEvent{
+	bus.Publish(hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBase(),
 		Key: hmtypes.DataPointKey{
 			InterfaceID:    "HmIP-RF",
@@ -328,7 +328,7 @@ func TestAddDataPointSubscriptionUnsubscribeStopsDelivery(t *testing.T) {
 
 	// Unsubscribe before publishing.
 	unsub()
-	events.Publish(bus, hmevent.DataPointValueChangedEvent{
+	bus.Publish(hmevent.DataPointValueChangedEvent{
 		Base:     hmevent.NewBase(),
 		NewValue: hmtypes.IntValue(1),
 	})
@@ -657,7 +657,7 @@ func TestCacheSubscribeToBusEvictsOnDeviceRemoved(t *testing.T) {
 		t.Fatalf("Len=%d, want 3 before removal", c.Len())
 	}
 
-	events.Publish(bus, hmevent.DeviceRemovedEvent{
+	bus.Publish(hmevent.DeviceRemovedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "c",
 		InterfaceID: "iface",
@@ -685,7 +685,7 @@ func TestCacheSubscribeToBusMarkssDirtyOnDataFetchCompleted(t *testing.T) {
 	c.SubscribeToBus(bus)
 	defer c.UnsubscribeAll()
 
-	events.Publish(bus, hmevent.DataFetchCompletedEvent{
+	bus.Publish(hmevent.DataFetchCompletedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "c",
 		InterfaceID: "iface",
@@ -712,7 +712,7 @@ func TestCacheUnsubscribeAllStopsDelivery(t *testing.T) {
 	c.UnsubscribeAll()
 
 	// After unsubscribe, DeviceRemovedEvent must not evict.
-	events.Publish(bus, hmevent.DeviceRemovedEvent{
+	bus.Publish(hmevent.DeviceRemovedEvent{
 		Base:    hmevent.NewBase(),
 		Address: "DEV003",
 	})

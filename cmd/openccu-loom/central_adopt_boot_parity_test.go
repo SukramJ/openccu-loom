@@ -26,7 +26,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/internal/scheduler"
@@ -144,7 +143,7 @@ func TestAdoptedCentralIsWiredLikeABootTimeCentral(t *testing.T) {
 
 	// The program-execute audit: the record that distinguishes a duplicate
 	// run the daemon sent from one the CCU produced on its own.
-	events.Publish(unit.EventBus, hmevent.ProgramExecutedEvent{
+	unit.EventBus.Publish(hmevent.ProgramExecutedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: adopted,
 		ProgramID:   "4711",

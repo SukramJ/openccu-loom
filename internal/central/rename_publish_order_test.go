@@ -9,7 +9,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -44,7 +43,7 @@ func TestRenameDeviceWithChannelsPublishesAfterTheChannelsAreRenamed(t *testing.
 		mu       sync.Mutex
 		observed [][]string
 	)
-	unsubscribe := events.Subscribe(c.EventBus, func(_ hmevent.DeviceMetadataChangedEvent) {
+	unsubscribe := c.EventBus.Subscribe(func(_ hmevent.DeviceMetadataChangedEvent) {
 		// Snapshot the channel names as they are at publish time — that
 		// is exactly what the discovery re-snapshot reads.
 		names := make([]string, 0, 3)

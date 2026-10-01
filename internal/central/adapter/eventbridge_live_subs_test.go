@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -230,7 +229,7 @@ func TestRemovedDeviceReleasesItsLiveSubscriptions(t *testing.T) {
 // publishDeviceRemoved announces a device removal on the central's own bus,
 // the way the device coordinator does.
 func publishDeviceRemoved(u *central.Unit, address string) {
-	events.Publish(u.EventBus, hmevent.DeviceRemovedEvent{
+	u.EventBus.Publish(hmevent.DeviceRemovedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: u.Name(),
 		InterfaceID: "HmIP-RF",

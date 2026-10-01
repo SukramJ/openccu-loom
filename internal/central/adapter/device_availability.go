@@ -5,7 +5,6 @@ package adapter
 
 import (
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -45,7 +44,7 @@ func WireDeviceAvailability(unit *central.Unit) func() {
 			}
 			changed := d.SetForcedAvailability(mode)
 			if changed {
-				events.Publish(bus, hmevent.DeviceLifecycleEvent{
+				bus.Publish(hmevent.DeviceLifecycleEvent{
 					Base:        hmevent.NewBase(),
 					CentralName: centralName,
 					InterfaceID: interfaceID,
@@ -64,7 +63,7 @@ func WireDeviceAvailability(unit *central.Unit) func() {
 		}
 	}
 
-	unsub := events.Subscribe(bus, func(e hmevent.ClientStateChangedEvent) {
+	unsub := bus.Subscribe(func(e hmevent.ClientStateChangedEvent) {
 		switch e.To { //nolint:exhaustive // Created/Initializing/Initialized/Stopping are transient — no override needed
 		case hmenum.ClientStateConnected:
 			// Connection (re-)established: lift the forced override and

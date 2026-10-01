@@ -67,16 +67,16 @@ func TestPanicInHandlerIsolation(t *testing.T) {
 
 	// panicking handler — registered first so it runs before the working one
 	// (PriorityHigh > PriorityNormal).
-	Subscribe(b, func(concEvtPanic) {
+	b.Subscribe(func(concEvtPanic) {
 		panic("deliberate test panic")
 	}, WithPriority(PriorityHigh), WithName("panicker"))
 
-	Subscribe(b, func(concEvtPanic) {
+	b.Subscribe(func(concEvtPanic) {
 		workingCount.Add(1)
 	}, WithPriority(PriorityNormal), WithName("worker"))
 
 	// Publish must NOT propagate the panic; the bus recovers it internally.
-	Publish(b, concEvtPanic{Base: hmevent.NewBase()})
+	b.Publish(concEvtPanic{Base: hmevent.NewBase()})
 
 	// Recovery is mandatory: working handler must have been called.
 	if got := workingCount.Load(); got != 1 {
@@ -101,11 +101,11 @@ func TestMultiCCUBusIsolation(t *testing.T) {
 
 	var countA, countB atomic.Int32
 
-	Subscribe(busA, func(concEvtIsolA) { countA.Add(1) })
-	Subscribe(busB, func(concEvtIsolA) { countB.Add(1) })
+	busA.Subscribe(func(concEvtIsolA) { countA.Add(1) })
+	busB.Subscribe(func(concEvtIsolA) { countB.Add(1) })
 
 	// Publish only on busA.
-	Publish(busA, concEvtIsolA{Base: hmevent.NewBase()})
+	busA.Publish(concEvtIsolA{Base: hmevent.NewBase()})
 
 	if got := countA.Load(); got != 1 {
 		t.Errorf("busA handler: countA=%d, want 1", got)
@@ -116,7 +116,7 @@ func TestMultiCCUBusIsolation(t *testing.T) {
 
 	// Publish only on busB.
 	countA.Store(0)
-	Publish(busB, concEvtIsolA{Base: hmevent.NewBase()})
+	busB.Publish(concEvtIsolA{Base: hmevent.NewBase()})
 	if got := countA.Load(); got != 0 {
 		t.Errorf("busA cross-talk after busB publish: countA=%d, want 0", got)
 	}
@@ -137,15 +137,15 @@ func TestMultiCCUBusIsolationDifferentTypes(t *testing.T) {
 
 	var aCntA, aCntB, bCntA, bCntB atomic.Int32
 
-	Subscribe(busA, func(concEvtIsolA) { aCntA.Add(1) })
-	Subscribe(busA, func(concEvtIsolB) { bCntA.Add(1) })
-	Subscribe(busB, func(concEvtIsolA) { aCntB.Add(1) })
-	Subscribe(busB, func(concEvtIsolB) { bCntB.Add(1) })
+	busA.Subscribe(func(concEvtIsolA) { aCntA.Add(1) })
+	busA.Subscribe(func(concEvtIsolB) { bCntA.Add(1) })
+	busB.Subscribe(func(concEvtIsolA) { aCntB.Add(1) })
+	busB.Subscribe(func(concEvtIsolB) { bCntB.Add(1) })
 
-	Publish(busA, concEvtIsolA{Base: hmevent.NewBase()})
-	Publish(busA, concEvtIsolB{Base: hmevent.NewBase()})
-	Publish(busB, concEvtIsolA{Base: hmevent.NewBase()})
-	Publish(busB, concEvtIsolB{Base: hmevent.NewBase()})
+	busA.Publish(concEvtIsolA{Base: hmevent.NewBase()})
+	busA.Publish(concEvtIsolB{Base: hmevent.NewBase()})
+	busB.Publish(concEvtIsolA{Base: hmevent.NewBase()})
+	busB.Publish(concEvtIsolB{Base: hmevent.NewBase()})
 
 	// Each bus must have received exactly its own events.
 	if got := aCntA.Load(); got != 1 {
@@ -175,9 +175,9 @@ func TestEventStatsCountSurvivesUnsubscription(t *testing.T) {
 	b := NewBus()
 
 	// Subscribe, publish 3 times, then unsubscribe.
-	unsub := Subscribe(b, func(concEvtStats) {})
+	unsub := b.Subscribe(func(concEvtStats) {})
 	for range 3 {
-		Publish(b, concEvtStats{Base: hmevent.NewBase()})
+		b.Publish(concEvtStats{Base: hmevent.NewBase()})
 	}
 	if before := b.EventStats()[string(concEvtStats{}.Type())]; before != 3 {
 		t.Fatalf("before unsub: EventStats=%d, want 3", before)
@@ -187,7 +187,7 @@ func TestEventStatsCountSurvivesUnsubscription(t *testing.T) {
 
 	// Publish 2 more with no subscribers.
 	for range 2 {
-		Publish(b, concEvtStats{Base: hmevent.NewBase()})
+		b.Publish(concEvtStats{Base: hmevent.NewBase()})
 	}
 
 	// Total must be 5 — counter survives unsubscription and no-subscriber publishes.
@@ -229,11 +229,11 @@ func TestPriorityNormalIsZeroValue(t *testing.T) {
 	}
 
 	// Register "implicit" first (no WithPriority → defaults to PriorityNormal).
-	Subscribe(b, func(concEvtPrio) { record("implicit") })
+	b.Subscribe(func(concEvtPrio) { record("implicit") })
 	// Register "explicit" second (WithPriority(PriorityNormal) == WithPriority(0)).
-	Subscribe(b, func(concEvtPrio) { record("explicit") }, WithPriority(PriorityNormal))
+	b.Subscribe(func(concEvtPrio) { record("explicit") }, WithPriority(PriorityNormal))
 
-	Publish(b, concEvtPrio{Base: hmevent.NewBase()})
+	b.Publish(concEvtPrio{Base: hmevent.NewBase()})
 
 	mu.Lock()
 	got := append([]string(nil), order...)

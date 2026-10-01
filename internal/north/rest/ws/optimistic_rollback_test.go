@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -75,7 +74,7 @@ func TestOptimisticRollbackSubscriberEndToEnd(t *testing.T) {
 	sent := hmtypes.FloatValue(0.75)
 	present := hmtypes.FloatValue(0.0)
 
-	events.Publish(cu.EventBus, hmevent.DataPointOptimisticRolledBackEvent{
+	cu.EventBus.Publish(hmevent.DataPointOptimisticRolledBackEvent{
 		Base:    hmevent.NewBase(),
 		Key:     key,
 		Reason:  hmenum.RollbackReasonTimeout,
@@ -142,7 +141,7 @@ func TestOptimisticRollbackUniqueIDNormalDevice(t *testing.T) {
 		t.Fatalf("NewDataPointKey: %v", err)
 	}
 
-	events.Publish(cu.EventBus, hmevent.DataPointOptimisticRolledBackEvent{
+	cu.EventBus.Publish(hmevent.DataPointOptimisticRolledBackEvent{
 		Base:    hmevent.NewBase(),
 		Key:     key,
 		Reason:  hmenum.RollbackReasonTimeout,

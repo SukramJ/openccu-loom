@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/reliability"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -69,7 +68,7 @@ func TestWireClientReliability_CircuitTripPublishesEventAndIncident(t *testing.T
 	unit.Cache.SetIncidentRecorder(rec)
 
 	got := make(chan hmevent.CircuitBreakerStateChangedEvent, 8)
-	unsub := events.Subscribe(unit.EventBus, func(e hmevent.CircuitBreakerStateChangedEvent) {
+	unsub := unit.EventBus.Subscribe(func(e hmevent.CircuitBreakerStateChangedEvent) {
 		got <- e
 	})
 	defer unsub()

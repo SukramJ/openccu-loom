@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/security"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -59,7 +58,7 @@ func (s *Service) applyFault(parent context.Context, src *indexedSource, active 
 		open := len(s.agg.faults)
 		snap := s.agg.snapshot()
 		s.mu.Unlock()
-		events.Publish(s.bus, hmevent.SecurityFaultChangedEvent{
+		s.bus.Publish(hmevent.SecurityFaultChangedEvent{
 			Base: hmevent.NewBaseAt(now), Class: src.class, Reason: reason,
 			Source: src.ref, Open: false, OpenCount: open,
 		})
@@ -110,7 +109,7 @@ func (s *Service) applyFault(parent context.Context, src *indexedSource, active 
 	snap := s.agg.snapshot()
 	s.mu.Unlock()
 
-	events.Publish(s.bus, hmevent.SecurityFaultChangedEvent{
+	s.bus.Publish(hmevent.SecurityFaultChangedEvent{
 		Base: hmevent.NewBaseAt(now), FaultID: f.ID, Class: f.Class, Reason: f.Reason,
 		Severity: f.Severity, Source: f.Source, Open: true,
 		SinceMS: f.SinceMS, OpenCount: open,
@@ -152,7 +151,7 @@ func (s *Service) clearOrphanedFault(parent context.Context, f *security.Fault) 
 	open := len(s.agg.faults)
 	snap := s.agg.snapshot()
 	s.mu.Unlock()
-	events.Publish(s.bus, hmevent.SecurityFaultChangedEvent{
+	s.bus.Publish(hmevent.SecurityFaultChangedEvent{
 		Base: hmevent.NewBaseAt(now), Class: f.Class, Reason: f.Reason,
 		Source: f.Source, Open: false, OpenCount: open,
 	})
@@ -180,7 +179,7 @@ func (s *Service) AcknowledgeFault(ctx context.Context, id, by string) (bool, er
 	// stands" on the one transition that proves one does.
 	open := len(s.agg.faults)
 	s.mu.Unlock()
-	events.Publish(s.bus, hmevent.SecurityFaultChangedEvent{
+	s.bus.Publish(hmevent.SecurityFaultChangedEvent{
 		Base: hmevent.NewBaseAt(s.clk.Now()), FaultID: id, Class: f.Class,
 		Reason: f.Reason, Severity: f.Severity, Source: f.Source,
 		Open: true, Acknowledged: true, SinceMS: f.SinceMS, OpenCount: open,
@@ -207,7 +206,7 @@ func (s *Service) notify(in reportInput, isFault bool) {
 		}
 		s.mu.Unlock()
 	}
-	events.Publish(s.bus, hmevent.SecurityNotificationEvent{
+	s.bus.Publish(hmevent.SecurityNotificationEvent{
 		Base:       hmevent.NewBaseAt(s.clk.Now()),
 		Class:      n.Class,
 		Severity:   n.Severity,

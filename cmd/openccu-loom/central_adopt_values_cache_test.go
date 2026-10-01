@@ -10,7 +10,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -84,7 +83,7 @@ func TestAdoptedCentralValuesArePersistedByThePeriodicFlush(t *testing.T) {
 	})
 	state.OnWireValue(true)
 	ch.Put(state)
-	events.Publish(unit.EventBus, hmevent.DataPointValueChangedEvent{
+	unit.EventBus.Publish(hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBase(), Key: key, NewValue: hmtypes.BoolValue(true),
 	})
 

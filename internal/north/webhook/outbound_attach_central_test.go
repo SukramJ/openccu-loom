@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -42,7 +41,7 @@ func TestDeliversForACentralRegisteredAfterStart(t *testing.T) {
 		t.Fatalf("reg.Register: %v", err)
 	}
 
-	events.Publish(late.EventBus, datapointEvent("late-HmIP-RF", "ABC:1", "STATE",
+	late.EventBus.Publish(datapointEvent("late-HmIP-RF", "ABC:1", "STATE",
 		hmtypes.BoolValue(false), hmtypes.NoneValue()))
 	waitForCount(t, ft, 1, 2*time.Second)
 
@@ -52,7 +51,7 @@ func TestDeliversForACentralRegisteredAfterStart(t *testing.T) {
 		t.Fatal("Unregister reported the central was not present")
 	}
 	before := ft.count()
-	events.Publish(late.EventBus, datapointEvent("late-HmIP-RF", "ABC:1", "STATE",
+	late.EventBus.Publish(datapointEvent("late-HmIP-RF", "ABC:1", "STATE",
 		hmtypes.BoolValue(true), hmtypes.NoneValue()))
 	time.Sleep(100 * time.Millisecond)
 	if after := ft.count(); after != before {

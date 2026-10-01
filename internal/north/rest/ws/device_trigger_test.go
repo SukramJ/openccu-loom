@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -78,7 +77,7 @@ func TestDeviceTriggerSubscriberEndToEnd(t *testing.T) {
 
 	// Publish a DeviceTriggerEvent on the central's bus.
 	val := hmtypes.BoolValue(true)
-	events.Publish(cu.EventBus, hmevent.DeviceTriggerEvent{
+	cu.EventBus.Publish(hmevent.DeviceTriggerEvent{
 		CentralName:   "test-ccu",
 		InterfaceID:   "HmIP-RF",
 		DeviceAddress: "DEV001",
@@ -148,7 +147,7 @@ func TestDeviceTriggerSubscriberVirtualRemoteUniqueID(t *testing.T) {
 	t.Cleanup(sub.Stop)
 
 	val := hmtypes.BoolValue(false)
-	events.Publish(cu.EventBus, hmevent.DeviceTriggerEvent{
+	cu.EventBus.Publish(hmevent.DeviceTriggerEvent{
 		CentralName:   "test-ccu",
 		InterfaceID:   "BidCoS-RF",
 		DeviceAddress: "BidCoS-RF",

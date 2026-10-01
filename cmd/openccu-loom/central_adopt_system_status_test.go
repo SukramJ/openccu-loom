@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
@@ -24,7 +23,7 @@ const probeStatusReason = "test probe: callback timeout"
 // publishSystemStatusOn fires one degraded-interface event on the central's
 // own bus, the way the client reliability stack does.
 func publishSystemStatusOn(u *central.Unit, iface string) {
-	events.Publish(u.EventBus, hmevent.SystemStatusChangedEvent{
+	u.EventBus.Publish(hmevent.SystemStatusChangedEvent{
 		CentralName: u.Name(),
 		Component:   "interface",
 		Healthy:     false,
@@ -37,7 +36,7 @@ func publishSystemStatusOn(u *central.Unit, iface string) {
 // returns the count.
 //
 // The MQTT fan-out hands the job off to a worker goroutine, so counting right
-// after events.Publish asserts on an instant the publish path has not reached
+// after Bus.Publish asserts on an instant the publish path has not reached
 // yet — the assertion passed or failed depending on scheduling. Only the
 // positive direction can wait; "want 0" is asserted after a short settle
 // instead, since no amount of waiting proves an absence.

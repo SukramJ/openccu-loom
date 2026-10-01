@@ -14,7 +14,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/central/rpcserver"
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
@@ -894,7 +893,7 @@ func (h *CallbackHandlers) Error(ctx context.Context, interfaceID string, errorC
 	centralName := h.unit.Name()
 	bus := h.unit.EventBus
 	if bus != nil {
-		events.Publish(bus, hmevent.SystemStatusChangedEvent{
+		bus.Publish(hmevent.SystemStatusChangedEvent{
 			Base:        hmevent.NewBase(),
 			CentralName: centralName,
 			Component:   "rpc-server:" + interfaceID,

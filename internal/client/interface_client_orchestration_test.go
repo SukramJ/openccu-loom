@@ -870,7 +870,7 @@ func TestReconnectFailureReasonNamesTheCause(t *testing.T) {
 				mu     sync.Mutex
 				failed []hmevent.ClientStateChangedEvent
 			)
-			unsub := events.Subscribe(bus, func(ev hmevent.ClientStateChangedEvent) {
+			unsub := bus.Subscribe(func(ev hmevent.ClientStateChangedEvent) {
 				if ev.To != hmenum.ClientStateDisconnected {
 					return
 				}

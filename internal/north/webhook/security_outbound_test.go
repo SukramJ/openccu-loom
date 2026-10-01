@@ -73,7 +73,7 @@ func TestOutboundFaultAcknowledgeIsDistinguishableFromRaise(t *testing.T) {
 	const faultID = "fault-smoke-1"
 	src := faultSource()
 
-	events.Publish(bus, hmevent.SecurityFaultChangedEvent{
+	bus.Publish(hmevent.SecurityFaultChangedEvent{
 		Base: hmevent.NewBaseAt(fixedNow), FaultID: faultID,
 		Class: hmenum.SecurityClassSmoke, Reason: hmenum.SecurityFaultReasonUnreachable,
 		Severity: hmenum.SecuritySeverityCritical, Source: src,
@@ -81,7 +81,7 @@ func TestOutboundFaultAcknowledgeIsDistinguishableFromRaise(t *testing.T) {
 	})
 	waitForCount(t, ft, 1, 2*time.Second)
 
-	events.Publish(bus, hmevent.SecurityFaultChangedEvent{
+	bus.Publish(hmevent.SecurityFaultChangedEvent{
 		Base: hmevent.NewBaseAt(fixedNow), FaultID: faultID,
 		Class: hmenum.SecurityClassSmoke, Reason: hmenum.SecurityFaultReasonUnreachable,
 		Severity: hmenum.SecuritySeverityCritical, Source: src,
@@ -124,7 +124,7 @@ func TestOutboundFaultClearedCarriesZeroOpenCount(t *testing.T) {
 	ft := &fakeTransport{}
 	_, bus := securityOutboundFixture(t, ft)
 
-	events.Publish(bus, hmevent.SecurityFaultChangedEvent{
+	bus.Publish(hmevent.SecurityFaultChangedEvent{
 		Base: hmevent.NewBaseAt(fixedNow), Class: hmenum.SecurityClassSmoke,
 		Reason: hmenum.SecurityFaultReasonUnreachable, Source: faultSource(),
 		Open: false, OpenCount: 0,

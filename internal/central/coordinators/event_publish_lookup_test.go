@@ -144,7 +144,7 @@ func TestEventAddDataPointSubscriptionReceivesEvent(t *testing.T) {
 
 	// Publish a DataPointValueChangedEvent directly via the bus to simulate
 	// what HandleRawEvent would do.
-	events.Publish(bus, hmevent.DataPointValueChangedEvent{
+	bus.Publish(hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBase(),
 		Key: hmtypes.DataPointKey{
 			InterfaceID:    "BidCos-RF",
@@ -171,7 +171,7 @@ func TestEventPublishBackendParameterEvent(t *testing.T) {
 	ec.SetCentralName("ccu1")
 
 	var received []hmevent.RPCParameterReceivedEvent
-	events.Subscribe(bus, func(e hmevent.RPCParameterReceivedEvent) {
+	bus.Subscribe(func(e hmevent.RPCParameterReceivedEvent) {
 		received = append(received, e)
 	})
 
@@ -200,7 +200,7 @@ func TestEventPublishBackendParameterEventEmptyIfaceIsNoop(t *testing.T) {
 	ec, bus, _ := newTestEC(t)
 
 	var count atomic.Int32
-	events.Subscribe(bus, func(_ hmevent.RPCParameterReceivedEvent) { count.Add(1) })
+	bus.Subscribe(func(_ hmevent.RPCParameterReceivedEvent) { count.Add(1) })
 
 	ec.PublishBackendParameterEvent("", "VCU0000001:1", "STATE", "true")
 
@@ -219,7 +219,7 @@ func TestEventPublishDeviceTriggerEvent(t *testing.T) {
 	ec.SetCentralName("ccu1")
 
 	var received []hmevent.DeviceTriggerEvent
-	events.Subscribe(bus, func(e hmevent.DeviceTriggerEvent) {
+	bus.Subscribe(func(e hmevent.DeviceTriggerEvent) {
 		received = append(received, e)
 	})
 
@@ -272,7 +272,7 @@ func TestEventPublishDeviceTriggerEventEmptyIfaceIsNoop(t *testing.T) {
 	ec, bus, _ := newTestEC(t)
 
 	var count atomic.Int32
-	events.Subscribe(bus, func(_ hmevent.DeviceTriggerEvent) { count.Add(1) })
+	bus.Subscribe(func(_ hmevent.DeviceTriggerEvent) { count.Add(1) })
 
 	ec.PublishDeviceTriggerEvent(context.Background(), "", "ADDR", 0, hmenum.DeviceTriggerEventTypeKeypress, "P", hmtypes.NoneValue())
 
@@ -290,7 +290,7 @@ func TestEventPublishSystemEvent(t *testing.T) {
 	ec, bus, _ := newTestEC(t)
 
 	var received []hmevent.SystemStatusChangedEvent
-	events.Subscribe(bus, func(e hmevent.SystemStatusChangedEvent) {
+	bus.Subscribe(func(e hmevent.SystemStatusChangedEvent) {
 		received = append(received, e)
 	})
 
@@ -331,7 +331,7 @@ func TestEventPublishSystemEventFillsBaseIfEmpty(t *testing.T) {
 	ec, bus, _ := newTestEC(t)
 
 	var received []hmevent.SystemStatusChangedEvent
-	events.Subscribe(bus, func(e hmevent.SystemStatusChangedEvent) {
+	bus.Subscribe(func(e hmevent.SystemStatusChangedEvent) {
 		received = append(received, e)
 	})
 
@@ -381,7 +381,7 @@ func TestAddDataPointSubscriptionForKeyFiltersCorrectly(t *testing.T) {
 	})
 
 	// Publish an event matching only keyA.
-	events.Publish(bus, hmevent.DataPointValueChangedEvent{
+	bus.Publish(hmevent.DataPointValueChangedEvent{
 		Base:     hmevent.NewBase(),
 		Key:      keyA,
 		OldValue: hmtypes.NoneValue(),
@@ -396,7 +396,7 @@ func TestAddDataPointSubscriptionForKeyFiltersCorrectly(t *testing.T) {
 	}
 
 	// Now publish an event matching only keyB.
-	events.Publish(bus, hmevent.DataPointValueChangedEvent{
+	bus.Publish(hmevent.DataPointValueChangedEvent{
 		Base:     hmevent.NewBase(),
 		Key:      keyB,
 		OldValue: hmtypes.NoneValue(),
@@ -484,7 +484,7 @@ func TestAddDataPointSubscriptionForKeyZeroIsWildcard(t *testing.T) {
 		{InterfaceID: "BidCos-RF", ChannelAddress: "VCU0002:1", ParamsetKey: hmenum.ParamsetKeyValues, Parameter: "LEVEL"},
 	}
 	for _, k := range keys {
-		events.Publish(bus, hmevent.DataPointValueChangedEvent{
+		bus.Publish(hmevent.DataPointValueChangedEvent{
 			Base:     hmevent.NewBase(),
 			Key:      k,
 			OldValue: hmtypes.NoneValue(),

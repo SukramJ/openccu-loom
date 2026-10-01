@@ -81,7 +81,7 @@ func TestEventCoordinatorConfigPendingFiresHookOnTrueToFalse(t *testing.T) {
 func TestEventCoordinatorPublishesOnChange(t *testing.T) {
 	bus := events.NewBus()
 	var n atomic.Int32
-	events.Subscribe(bus, func(e hmevent.DataPointValueChangedEvent) {
+	bus.Subscribe(func(e hmevent.DataPointValueChangedEvent) {
 		n.Add(1)
 		_ = e
 	})
@@ -164,8 +164,8 @@ func TestEventCoordinatorTracksLastEventPerInterface(t *testing.T) {
 func TestDeviceCoordinatorRegistersAndRemoves(t *testing.T) {
 	bus := events.NewBus()
 	var created, removed atomic.Int32
-	events.Subscribe(bus, func(e hmevent.DeviceCreatedEvent) { created.Add(1) })
-	events.Subscribe(bus, func(e hmevent.DeviceRemovedEvent) { removed.Add(1) })
+	bus.Subscribe(func(e hmevent.DeviceCreatedEvent) { created.Add(1) })
+	bus.Subscribe(func(e hmevent.DeviceRemovedEvent) { removed.Add(1) })
 
 	devs := registry.NewDeviceRegistry()
 	descs := registry.NewDeviceDescriptionRegistry()
@@ -191,7 +191,7 @@ func TestDeviceCoordinatorRegistersAndRemoves(t *testing.T) {
 func TestHubCoordinatorSysvarUpdate(t *testing.T) {
 	bus := events.NewBus()
 	var n atomic.Int32
-	events.Subscribe(bus, func(e hmevent.SysvarChangedEvent) { n.Add(1) })
+	bus.Subscribe(func(e hmevent.SysvarChangedEvent) { n.Add(1) })
 	h := NewHubCoordinator("main", bus)
 	h.UpdateSysvar(context.Background(), SysvarSnapshot{Name: "X", Value: hmtypes.IntValue(1), ValueType: hmenum.HubValueTypeInteger})
 	if n.Load() != 1 {
@@ -213,8 +213,8 @@ func TestHubCoordinatorSysvarUpdate(t *testing.T) {
 func TestConnectionRecoveryHappyPath(t *testing.T) {
 	bus := events.NewBus()
 	var started, completed atomic.Int32
-	events.Subscribe(bus, func(e hmevent.RecoveryStartedEvent) { started.Add(1) })
-	events.Subscribe(bus, func(e hmevent.RecoveryCompletedEvent) { completed.Add(1) })
+	bus.Subscribe(func(e hmevent.RecoveryStartedEvent) { started.Add(1) })
+	bus.Subscribe(func(e hmevent.RecoveryCompletedEvent) { completed.Add(1) })
 
 	rc := NewConnectionRecoveryCoordinator("main", bus)
 	pipeline := []Pipeline{
@@ -234,7 +234,7 @@ func TestConnectionRecoveryHappyPath(t *testing.T) {
 func TestConnectionRecoveryStopsOnError(t *testing.T) {
 	bus := events.NewBus()
 	var failed atomic.Int32
-	events.Subscribe(bus, func(e hmevent.RecoveryFailedEvent) { failed.Add(1) })
+	bus.Subscribe(func(e hmevent.RecoveryFailedEvent) { failed.Add(1) })
 	rc := NewConnectionRecoveryCoordinator("main", bus)
 	pipeline := []Pipeline{
 		{Stage: hmenum.RecoveryStageTCPChecking, Run: func(context.Context) error { return context.Canceled }},

@@ -44,7 +44,7 @@ func TestSecurityPlaneIsVisibleToTheBridge(t *testing.T) {
 	p.Start(bus)
 	t.Cleanup(p.Stop)
 
-	events.Publish(bus, hmevent.SecurityStateChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
+	bus.Publish(hmevent.SecurityStateChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
 	obs.settle(t, p)
 
 	// Every retained topic the plane wrote must be in the index.

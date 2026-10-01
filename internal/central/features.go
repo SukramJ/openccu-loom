@@ -6,7 +6,6 @@ package central
 import (
 	"maps"
 
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -106,7 +105,7 @@ func (u *Unit) SetFeatures(f Features) {
 	u.features = f
 	u.featuresMu.Unlock()
 	if changed && u.EventBus != nil {
-		events.Publish(u.EventBus, hmevent.CentralFeaturesChangedEvent{
+		u.EventBus.Publish(hmevent.CentralFeaturesChangedEvent{
 			Base:        hmevent.NewBase(),
 			CentralName: u.Name(),
 		})

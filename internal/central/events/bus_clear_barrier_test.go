@@ -30,14 +30,14 @@ func TestClearWaitsForInFlightHandlers(t *testing.T) {
 	entered := make(chan struct{})
 	release := make(chan struct{})
 
-	Subscribe(b, func(advEvtGamma) {
+	b.Subscribe(func(advEvtGamma) {
 		running.Store(true)
 		close(entered)
 		<-release
 		finished.Store(true)
 	}, WithName("slow-handler"))
 
-	go Publish(b, advEvtGamma{Base: hmevent.NewBase()})
+	go b.Publish(advEvtGamma{Base: hmevent.NewBase()})
 
 	select {
 	case <-entered:
@@ -82,18 +82,18 @@ func TestClearMarksHandlersDeadForTheRunningSnapshot(t *testing.T) {
 	release := make(chan struct{})
 	var lateCalls atomic.Int32
 
-	Subscribe(b, func(advEvtGamma) {
+	b.Subscribe(func(advEvtGamma) {
 		close(entered)
 		<-release
 	}, WithPriority(PriorityHigh), WithName("first"))
 
-	Subscribe(b, func(advEvtGamma) {
+	b.Subscribe(func(advEvtGamma) {
 		lateCalls.Add(1)
 	}, WithPriority(PriorityNormal), WithName("second"))
 
 	done := make(chan struct{})
 	go func() {
-		Publish(b, advEvtGamma{Base: hmevent.NewBase()})
+		b.Publish(advEvtGamma{Base: hmevent.NewBase()})
 		close(done)
 	}()
 

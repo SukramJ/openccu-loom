@@ -117,7 +117,7 @@ func TestWireDataPointLifecycle_WeekProfilePublisher(t *testing.T) {
 
 	// Subscribe to WeekProfileChangedEvent before wiring.
 	received := make(chan hmevent.WeekProfileChangedEvent, 1)
-	unsub := events.Subscribe(bus, func(e hmevent.WeekProfileChangedEvent) {
+	unsub := bus.Subscribe(func(e hmevent.WeekProfileChangedEvent) {
 		received <- e
 	})
 	defer unsub()

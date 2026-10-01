@@ -13,7 +13,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/alarm"
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -232,7 +231,7 @@ func newSafetyActivationFixture(t *testing.T) *safetyActivationFixture {
 // the callback server does. Dispatch is synchronous, so both domains
 // have folded the value in by the time it returns.
 func (f *safetyActivationFixture) publish(index int) {
-	events.Publish(f.unit.EventBus, hmevent.DataPointValueChangedEvent{
+	f.unit.EventBus.Publish(hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBase(),
 		Key: hmtypes.DataPointKey{
 			InterfaceID:    safetyActivationIface,

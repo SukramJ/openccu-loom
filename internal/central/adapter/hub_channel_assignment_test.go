@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -45,7 +44,7 @@ func TestAssignHubChannelsSysvarDeviceIseIDMatch(t *testing.T) {
 
 	var fired int
 	var gotCentral string
-	unsub := events.Subscribe(c.EventBus, func(e hmevent.HubChannelsAssignedEvent) {
+	unsub := c.EventBus.Subscribe(func(e hmevent.HubChannelsAssignedEvent) {
 		fired++
 		gotCentral = e.CentralName
 	})
@@ -79,7 +78,7 @@ func TestAssignHubChannelsSysvarNoMatch(t *testing.T) {
 	c.HubModel.PutSysvar(sv)
 
 	var fired int
-	unsub := events.Subscribe(c.EventBus, func(hmevent.HubChannelsAssignedEvent) {
+	unsub := c.EventBus.Subscribe(func(hmevent.HubChannelsAssignedEvent) {
 		fired++
 	})
 	defer unsub()
@@ -105,7 +104,7 @@ func TestAssignHubChannelsProgramDeviceIseIDMatch(t *testing.T) {
 	c.HubModel.PutProgram(prog)
 
 	var fired int
-	unsub := events.Subscribe(c.EventBus, func(hmevent.HubChannelsAssignedEvent) {
+	unsub := c.EventBus.Subscribe(func(hmevent.HubChannelsAssignedEvent) {
 		fired++
 	})
 	defer unsub()
@@ -135,7 +134,7 @@ func TestAssignHubChannelsIdempotent(t *testing.T) {
 	c.HubModel.PutSysvar(sv)
 
 	var fired int
-	unsub := events.Subscribe(c.EventBus, func(hmevent.HubChannelsAssignedEvent) {
+	unsub := c.EventBus.Subscribe(func(hmevent.HubChannelsAssignedEvent) {
 		fired++
 	})
 	defer unsub()
@@ -169,7 +168,7 @@ func TestAssignHubChannelsClearsOnDeviceRemoval(t *testing.T) {
 	c.HubModel.PutSysvar(sv)
 
 	var fired int
-	unsub := events.Subscribe(c.EventBus, func(hmevent.HubChannelsAssignedEvent) {
+	unsub := c.EventBus.Subscribe(func(hmevent.HubChannelsAssignedEvent) {
 		fired++
 	})
 	defer unsub()
@@ -233,7 +232,7 @@ func TestAssignHubChannelsExplicitAssignmentWins(t *testing.T) {
 	c.HubModel.PutSysvar(sv)
 
 	var fired int
-	unsub := events.Subscribe(c.EventBus, func(hmevent.HubChannelsAssignedEvent) {
+	unsub := c.EventBus.Subscribe(func(hmevent.HubChannelsAssignedEvent) {
 		fired++
 	})
 	defer unsub()
@@ -264,7 +263,7 @@ func TestAssignHubChannelsExplicitUnresolvableFallsBackToName(t *testing.T) {
 	c.HubModel.PutSysvar(sv)
 
 	var fired int
-	unsub := events.Subscribe(c.EventBus, func(hmevent.HubChannelsAssignedEvent) {
+	unsub := c.EventBus.Subscribe(func(hmevent.HubChannelsAssignedEvent) {
 		fired++
 	})
 	defer unsub()
@@ -298,7 +297,7 @@ func TestAssignHubChannelsExplicitChangeRepublishes(t *testing.T) {
 	c.HubModel.PutSysvar(sv)
 
 	var fired int
-	unsub := events.Subscribe(c.EventBus, func(hmevent.HubChannelsAssignedEvent) {
+	unsub := c.EventBus.Subscribe(func(hmevent.HubChannelsAssignedEvent) {
 		fired++
 	})
 	defer unsub()

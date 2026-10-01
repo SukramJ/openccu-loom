@@ -32,7 +32,7 @@ func TestPublishInstallModeRefreshedChangeDetection(t *testing.T) {
 	h.SetHubModel(m)
 
 	var published int
-	unsub := events.Subscribe(bus, func(hmevent.InstallModeChangedEvent) { published++ })
+	unsub := bus.Subscribe(func(hmevent.InstallModeChangedEvent) { published++ })
 	defer unsub()
 
 	h.PublishInstallModeRefreshed()

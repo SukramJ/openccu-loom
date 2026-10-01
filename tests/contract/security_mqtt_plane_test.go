@@ -255,7 +255,7 @@ func TestSecurityPlane_EventTopicsNeverRetained(t *testing.T) {
 	// this event carried a different one: ids and counts, no text. While
 	// both wrote here, every automation reading `subject` or `fault_id`
 	// found its field on half the messages.
-	events.Publish(bus, hmevent.SecurityFaultChangedEvent{
+	bus.Publish(hmevent.SecurityFaultChangedEvent{
 		Base:     hmevent.NewBase(),
 		FaultID:  "f1",
 		Class:    hmenum.SecurityClassTechnical,
@@ -274,7 +274,7 @@ func TestSecurityPlane_EventTopicsNeverRetained(t *testing.T) {
 			"consumer field intermittent", securityPlaneBase+"/security/fault", rec.payload)
 	}
 
-	events.Publish(bus, hmevent.SecurityNotificationEvent{
+	bus.Publish(hmevent.SecurityNotificationEvent{
 		Base:     hmevent.NewBase(),
 		Class:    hmenum.SecurityClassTechnical,
 		Severity: hmenum.SecuritySeverityInfo,
@@ -295,7 +295,7 @@ func TestSecurityPlane_EventTopicsNeverRetained(t *testing.T) {
 		t.Errorf("security/fault publish has QoS %v, want QoS0", faultRec.qos)
 	}
 
-	events.Publish(bus, hmevent.SecurityNotificationEvent{
+	bus.Publish(hmevent.SecurityNotificationEvent{
 		Base:       hmevent.NewBase(),
 		Class:      hmenum.SecurityClassIntrusion,
 		Severity:   hmenum.SecuritySeverityAlarm,

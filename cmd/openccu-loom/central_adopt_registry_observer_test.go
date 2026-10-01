@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -36,7 +35,7 @@ func TestAdoptCentralAttachesRegistryObserversBeforeTheUnitStarts(t *testing.T) 
 	var mu sync.Mutex
 	var seen int
 	remove := reg.OnRegister(func(u *central.Unit) func() {
-		return events.Subscribe(u.EventBus, func(hmevent.SystemStatusChangedEvent) {
+		return u.EventBus.Subscribe(func(hmevent.SystemStatusChangedEvent) {
 			mu.Lock()
 			seen++
 			mu.Unlock()
@@ -70,7 +69,7 @@ func TestAdoptCentralAttachesRegistryObserversBeforeTheUnitStarts(t *testing.T) 
 	afterRemove := seen
 	mu.Unlock()
 
-	events.Publish(unit.EventBus, hmevent.SystemStatusChangedEvent{CentralName: "adopted"})
+	unit.EventBus.Publish(hmevent.SystemStatusChangedEvent{CentralName: "adopted"})
 	mu.Lock()
 	defer mu.Unlock()
 	if seen != afterRemove {

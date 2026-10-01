@@ -14,7 +14,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/alarm/codes"
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
@@ -248,7 +247,7 @@ func TestNotifyCodesChanged_RepublishesOnlyFlippedPanels(t *testing.T) {
 	}
 
 	var received []hmevent.AlarmPanelChangedEvent
-	unsub := events.Subscribe(h.svc.Bus(), func(e hmevent.AlarmPanelChangedEvent) {
+	unsub := h.svc.Bus().Subscribe(func(e hmevent.AlarmPanelChangedEvent) {
 		received = append(received, e)
 	})
 	defer unsub()

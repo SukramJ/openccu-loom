@@ -73,7 +73,7 @@ func TestOutboundForwardsAlarmStateChanged(t *testing.T) {
 	ft := &fakeTransport{}
 	_, bus := alarmOutboundFixture(t, ft)
 
-	events.Publish(bus, hmevent.AlarmStateChangedEvent{
+	bus.Publish(hmevent.AlarmStateChangedEvent{
 		Base: hmevent.NewBaseAt(fixedNow), ZoneID: "eg", ZoneName: "Erdgeschoss",
 		From: hmenum.AlarmZoneStateDisarmed, To: hmenum.AlarmZoneStateArmed,
 		Mode: hmenum.AlarmModeFull, ChangedBy: "op1", Source: "rest-operator",
@@ -106,7 +106,7 @@ func TestOutboundForwardsAlarmTriggered(t *testing.T) {
 	ft := &fakeTransport{}
 	_, bus := alarmOutboundFixture(t, ft)
 
-	events.Publish(bus, hmevent.AlarmTriggeredEvent{
+	bus.Publish(hmevent.AlarmTriggeredEvent{
 		Base: hmevent.NewBaseAt(fixedNow), ZoneID: "eg", ZoneName: "Erdgeschoss",
 		IncidentID: 42, SensorID: "window", SensorName: "Window", Cause: "sensor", Mode: hmenum.AlarmModeFull,
 	})
@@ -135,7 +135,7 @@ func TestOutboundForwardsAlarmDuress(t *testing.T) {
 	ft := &fakeTransport{}
 	_, bus := alarmOutboundFixture(t, ft)
 
-	events.Publish(bus, hmevent.AlarmDuressEvent{
+	bus.Publish(hmevent.AlarmDuressEvent{
 		Base: hmevent.NewBaseAt(fixedNow), ZoneID: "eg", ZoneName: "Erdgeschoss",
 		Verb: "disarm", By: "Under Duress", Source: "mqtt", IncidentID: 7,
 	})
@@ -163,7 +163,7 @@ func TestOutboundForwardsAlarmReminder(t *testing.T) {
 	ft := &fakeTransport{}
 	_, bus := alarmOutboundFixture(t, ft)
 
-	events.Publish(bus, hmevent.AlarmReminderEvent{
+	bus.Publish(hmevent.AlarmReminderEvent{
 		Base: hmevent.NewBaseAt(fixedNow), ZoneID: "eg", ZoneName: "Erdgeschoss", Mode: hmenum.AlarmModeFull,
 	})
 	waitForCount(t, ft, 1, 2*time.Second)
@@ -187,7 +187,7 @@ func TestOutboundForwardsAlarmNotification(t *testing.T) {
 	ft := &fakeTransport{}
 	_, bus := alarmOutboundFixture(t, ft)
 
-	events.Publish(bus, hmevent.AlarmNotificationEvent{
+	bus.Publish(hmevent.AlarmNotificationEvent{
 		Base: hmevent.NewBaseAt(fixedNow), ZoneID: "eg", ZoneName: "Erdgeschoss",
 		OutputID: "notify1", OutputName: "Doorbell", IncidentID: 9, Mode: hmenum.AlarmModeFull,
 		MQTT: true, Webhook: true,
@@ -219,7 +219,7 @@ func TestOutboundSkipsAlarmNotificationWhenWebhookDisabled(t *testing.T) {
 	ft := &fakeTransport{}
 	_, bus := alarmOutboundFixture(t, ft)
 
-	events.Publish(bus, hmevent.AlarmNotificationEvent{
+	bus.Publish(hmevent.AlarmNotificationEvent{
 		Base: hmevent.NewBaseAt(fixedNow), ZoneID: "eg", ZoneName: "Erdgeschoss",
 		OutputID: "notify1", OutputName: "Doorbell", IncidentID: 9, Mode: hmenum.AlarmModeFull,
 		MQTT: true, Webhook: false,
@@ -251,8 +251,8 @@ func TestOutboundAlarmEventTypeFilterAppliesToAlarmPlane(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = o.Stop(context.Background()) })
 
-	events.Publish(bus, hmevent.AlarmStateChangedEvent{Base: hmevent.NewBaseAt(fixedNow), ZoneID: "eg"})
-	events.Publish(bus, hmevent.AlarmTriggeredEvent{Base: hmevent.NewBaseAt(fixedNow), ZoneID: "eg"})
+	bus.Publish(hmevent.AlarmStateChangedEvent{Base: hmevent.NewBaseAt(fixedNow), ZoneID: "eg"})
+	bus.Publish(hmevent.AlarmTriggeredEvent{Base: hmevent.NewBaseAt(fixedNow), ZoneID: "eg"})
 	waitForCount(t, ft, 1, 2*time.Second)
 
 	// Give a filtered-out delivery a moment it could have arrived in.
@@ -276,7 +276,7 @@ func TestOutboundStopUnsubscribesAlarmBus(t *testing.T) {
 	if err := o.Stop(context.Background()); err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
-	events.Publish(bus, hmevent.AlarmStateChangedEvent{Base: hmevent.NewBaseAt(fixedNow), ZoneID: "eg"})
+	bus.Publish(hmevent.AlarmStateChangedEvent{Base: hmevent.NewBaseAt(fixedNow), ZoneID: "eg"})
 
 	time.Sleep(50 * time.Millisecond)
 	if ft.count() != 0 {

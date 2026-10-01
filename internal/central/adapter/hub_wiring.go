@@ -22,7 +22,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/central/registry"
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
@@ -1423,7 +1422,7 @@ func assignHubChannels(unit *central.Unit, logger *slog.Logger) {
 		// affected hub-entity discovery so linked entities move to the right
 		// device card. A single per-central event is enough — consumers
 		// re-read the current links from the hub model.
-		events.Publish(unit.EventBus, hmevent.HubChannelsAssignedEvent{
+		unit.EventBus.Publish(hmevent.HubChannelsAssignedEvent{
 			Base:        hmevent.NewBase(),
 			CentralName: unit.Name(),
 		})

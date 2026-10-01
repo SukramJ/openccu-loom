@@ -181,7 +181,7 @@ func TestParityDefaultPipelineStageOrder(t *testing.T) {
 
 	var mu sync.Mutex
 	var gotStages []hmenum.RecoveryStage
-	unsub := events.Subscribe(bus, func(e hmevent.RecoveryStageChangedEvent) {
+	unsub := bus.Subscribe(func(e hmevent.RecoveryStageChangedEvent) {
 		if e.CentralName != "parity-stages" {
 			return
 		}
@@ -264,7 +264,7 @@ func TestParityCBStateChangedHalfOpenDoesNotTrigger(t *testing.T) {
 	c.Subscribe()
 	defer c.Stop()
 
-	events.Publish(bus, hmevent.CircuitBreakerStateChangedEvent{
+	bus.Publish(hmevent.CircuitBreakerStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "parity-cb",
 		InterfaceID: "HmIP-RF",
@@ -293,7 +293,7 @@ func TestParityCBStateChangedOpenTriggers(t *testing.T) {
 	c.Subscribe()
 	defer c.Stop()
 
-	events.Publish(bus, hmevent.CircuitBreakerStateChangedEvent{
+	bus.Publish(hmevent.CircuitBreakerStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "parity-cb2",
 		InterfaceID: "HmIP-RF",
@@ -322,7 +322,7 @@ func TestParityConnectionLostSubscriptionWiring(t *testing.T) {
 	armInterfaces(c, "BidCos-RF")
 	c.Subscribe()
 
-	events.Publish(bus, hmevent.ConnectionLostEvent{
+	bus.Publish(hmevent.ConnectionLostEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "parity-lost",
 		InterfaceID: "BidCos-RF",
@@ -334,7 +334,7 @@ func TestParityConnectionLostSubscriptionWiring(t *testing.T) {
 	// Stop — further events must be ignored.
 	c.Stop()
 	before := count.Load()
-	events.Publish(bus, hmevent.ConnectionLostEvent{
+	bus.Publish(hmevent.ConnectionLostEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "parity-lost",
 		InterfaceID: "BidCos-RF",
@@ -359,7 +359,7 @@ func TestParityHeartbeatTimerFiresPerInterfaceRecovery(t *testing.T) {
 	started := map[string]int{}
 
 	// Collect RecoveryStartedEvent to know which interfaces began recovery.
-	events.Subscribe(bus, func(e hmevent.RecoveryStartedEvent) {
+	bus.Subscribe(func(e hmevent.RecoveryStartedEvent) {
 		if e.CentralName != "parity-hb" {
 			return
 		}
@@ -376,7 +376,7 @@ func TestParityHeartbeatTimerFiresPerInterfaceRecovery(t *testing.T) {
 	c.Subscribe()
 	defer c.Stop()
 
-	events.Publish(bus, hmevent.HeartbeatTimerFiredEvent{
+	bus.Publish(hmevent.HeartbeatTimerFiredEvent{
 		Base:         hmevent.NewBase(),
 		CentralName:  "parity-hb",
 		InterfaceIDs: []string{"HmIP-RF", "BidCos-RF", "BidCos-Wired"},

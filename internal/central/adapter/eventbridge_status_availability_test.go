@@ -15,7 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -164,7 +163,7 @@ func TestEventBus_StatusPairEvent_OverflowRepublishesUnavailable(t *testing.T) {
 	eb.Start(context.Background())
 	defer eb.Stop()
 
-	events.Publish(reg.List()[0].EventBus, hmevent.DataPointValueChangedEvent{
+	reg.List()[0].EventBus.Publish(hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBaseAt(time.Now()),
 		Key: hmtypes.DataPointKey{
 			InterfaceID:    "HmIP-RF",

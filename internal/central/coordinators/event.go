@@ -190,7 +190,7 @@ func (c *EventCoordinator) HandleRawEvent(
 	c.mu.RLock()
 	cn := c.centralName
 	c.mu.RUnlock()
-	events.Publish(c.bus, hmevent.DataPointValueReceivedEvent{
+	c.bus.Publish(hmevent.DataPointValueReceivedEvent{
 		Base:           hmevent.NewBase(),
 		CentralName:    cn,
 		InterfaceID:    interfaceID,
@@ -218,7 +218,7 @@ func (c *EventCoordinator) HandleRawEvent(
 	} else {
 		oldVal = hmtypes.NoneValue()
 	}
-	events.Publish(c.bus, hmevent.DataPointValueChangedEvent{
+	c.bus.Publish(hmevent.DataPointValueChangedEvent{
 		Base:     hmevent.NewBase(),
 		Key:      key,
 		OldValue: oldVal,
@@ -254,7 +254,7 @@ func (c *EventCoordinator) PublishBackendParameterEvent(
 	c.mu.RLock()
 	cn := c.centralName
 	c.mu.RUnlock()
-	events.Publish(c.bus, hmevent.RPCParameterReceivedEvent{
+	c.bus.Publish(hmevent.RPCParameterReceivedEvent{
 		Base:           hmevent.NewBase(),
 		CentralName:    cn,
 		InterfaceID:    interfaceID,
@@ -326,7 +326,7 @@ func (c *EventCoordinator) PublishDeviceTriggerEvent(
 	cn := c.centralName
 	c.mu.RUnlock()
 	c.MarkEvent(interfaceID, time.Time{})
-	events.Publish(c.bus, hmevent.DeviceTriggerEvent{
+	c.bus.Publish(hmevent.DeviceTriggerEvent{
 		Base:          hmevent.NewBase(),
 		CentralName:   cn,
 		InterfaceID:   interfaceID,
@@ -351,7 +351,7 @@ func (c *EventCoordinator) PublishSystemEvent(
 	if ev.Base == (hmevent.Base{}) {
 		ev.Base = hmevent.NewBase()
 	}
-	events.Publish(c.bus, ev)
+	c.bus.Publish(ev)
 }
 
 // AddDataPointSubscription registers a callback that is called for every
@@ -384,7 +384,7 @@ func (c *EventCoordinator) AddDataPointSubscriptionForKey(dpk hmtypes.DataPointK
 			}
 		}
 	}
-	unsub := events.Subscribe(c.bus, handler)
+	unsub := c.bus.Subscribe(handler)
 	c.mu.Lock()
 	c.dpUnsubs = append(c.dpUnsubs, unsub)
 	c.mu.Unlock()
@@ -436,7 +436,7 @@ func (c *EventCoordinator) EmitDevicesDelayedEvent(interfaceID string, deviceAdd
 	cn := c.centralName
 	c.mu.RUnlock()
 	for _, addr := range deviceAddresses {
-		events.Publish(c.bus, hmevent.DeviceLifecycleEvent{
+		c.bus.Publish(hmevent.DeviceLifecycleEvent{
 			Base:        hmevent.NewBase(),
 			CentralName: cn,
 			InterfaceID: interfaceID,
@@ -515,7 +515,7 @@ func (c *EventCoordinator) EmitDeviceRemovedEvent(interfaceID, address string) {
 	c.mu.RLock()
 	cn := c.centralName
 	c.mu.RUnlock()
-	events.Publish(c.bus, hmevent.DeviceRemovedEvent{
+	c.bus.Publish(hmevent.DeviceRemovedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: cn,
 		InterfaceID: interfaceID,

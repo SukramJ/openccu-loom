@@ -21,7 +21,7 @@ import (
 func TestReconcilerInvokesUnobservedSweepWhenConfigured(t *testing.T) {
 	bus := events.NewBus()
 	var drifts []hmevent.DriftCorrectedEvent
-	defer events.Subscribe(bus, func(e hmevent.DriftCorrectedEvent) { drifts = append(drifts, e) })()
+	defer bus.Subscribe(func(e hmevent.DriftCorrectedEvent) { drifts = append(drifts, e) })()
 
 	called := 0
 	r := &coordinators.Reconciler{
@@ -53,7 +53,7 @@ func TestReconcilerInvokesUnobservedSweepWhenConfigured(t *testing.T) {
 func TestReconcilerOmitsDriftWhenSweepLoadedZero(t *testing.T) {
 	bus := events.NewBus()
 	var drifts []hmevent.DriftCorrectedEvent
-	defer events.Subscribe(bus, func(e hmevent.DriftCorrectedEvent) { drifts = append(drifts, e) })()
+	defer bus.Subscribe(func(e hmevent.DriftCorrectedEvent) { drifts = append(drifts, e) })()
 
 	r := &coordinators.Reconciler{
 		CentralName: "ccu1",
@@ -88,8 +88,8 @@ func TestReconcilerEmitsDriftOnConnectivityFlip(t *testing.T) {
 
 	var connChanged []hmevent.ConnectivityChangedEvent
 	var drifts []hmevent.DriftCorrectedEvent
-	defer events.Subscribe(bus, func(e hmevent.ConnectivityChangedEvent) { connChanged = append(connChanged, e) })()
-	defer events.Subscribe(bus, func(e hmevent.DriftCorrectedEvent) { drifts = append(drifts, e) })()
+	defer bus.Subscribe(func(e hmevent.ConnectivityChangedEvent) { connChanged = append(connChanged, e) })()
+	defer bus.Subscribe(func(e hmevent.DriftCorrectedEvent) { drifts = append(drifts, e) })()
 
 	r := &coordinators.Reconciler{
 		CentralName:  "ccu1",
@@ -130,7 +130,7 @@ func TestReconcilerResolvesConnectivityWiredAfterRegistration(t *testing.T) {
 	h := hub.NewHub("ccu1")
 
 	var connChanged []hmevent.ConnectivityChangedEvent
-	defer events.Subscribe(bus, func(e hmevent.ConnectivityChangedEvent) { connChanged = append(connChanged, e) })()
+	defer bus.Subscribe(func(e hmevent.ConnectivityChangedEvent) { connChanged = append(connChanged, e) })()
 
 	// Built while h.ConnectivityDataPoints() is still nil.
 	r := &coordinators.Reconciler{
@@ -166,7 +166,7 @@ func TestReconcilerNoEventWhenStateMatches(t *testing.T) {
 	connectivity.OnState("HmIP-RF", true)
 
 	var drifts []hmevent.DriftCorrectedEvent
-	defer events.Subscribe(bus, func(e hmevent.DriftCorrectedEvent) { drifts = append(drifts, e) })()
+	defer bus.Subscribe(func(e hmevent.DriftCorrectedEvent) { drifts = append(drifts, e) })()
 
 	r := &coordinators.Reconciler{
 		Connectivity: connectivity,
@@ -189,7 +189,7 @@ func TestReconcilerSystemHealthDrift(t *testing.T) {
 	metrics.Observe(hub.MetricSystemHealth, 95)
 
 	var drifts []hmevent.DriftCorrectedEvent
-	defer events.Subscribe(bus, func(e hmevent.DriftCorrectedEvent) { drifts = append(drifts, e) })()
+	defer bus.Subscribe(func(e hmevent.DriftCorrectedEvent) { drifts = append(drifts, e) })()
 
 	r := &coordinators.Reconciler{
 		Metrics: metrics,
@@ -246,7 +246,7 @@ func TestReconcilerEmitNotReadyDemotesStalePositiveHealth(t *testing.T) {
 	metrics.Observe(hub.MetricSystemHealth, 100) // was fully healthy while operational
 
 	var drifts []hmevent.DriftCorrectedEvent
-	defer events.Subscribe(bus, func(e hmevent.DriftCorrectedEvent) { drifts = append(drifts, e) })()
+	defer bus.Subscribe(func(e hmevent.DriftCorrectedEvent) { drifts = append(drifts, e) })()
 
 	r := &coordinators.Reconciler{CentralName: "ccu1", Bus: bus, Metrics: metrics}
 	if err := r.EmitNotReady(context.Background()); err != nil {
@@ -286,7 +286,7 @@ func TestReconcilerEmitNotReadyMarksInterfacesUnreachable(t *testing.T) {
 	conn.OnState("ccu1-BidCos-RF", true)
 
 	var down []hmevent.ConnectivityChangedEvent
-	defer events.Subscribe(bus, func(e hmevent.ConnectivityChangedEvent) { down = append(down, e) })()
+	defer bus.Subscribe(func(e hmevent.ConnectivityChangedEvent) { down = append(down, e) })()
 
 	r := &coordinators.Reconciler{CentralName: "ccu1", Bus: bus, Connectivity: conn}
 	if err := r.EmitNotReady(context.Background()); err != nil {
@@ -373,7 +373,7 @@ func TestReconcilerConnectivityFollowsTheProbeMembership(t *testing.T) {
 	bus := events.NewBus()
 	connectivity := hub.NewConnectivity()
 	var seen []reach
-	defer events.Subscribe(bus, func(e hmevent.ConnectivityChangedEvent) {
+	defer bus.Subscribe(func(e hmevent.ConnectivityChangedEvent) {
 		seen = append(seen, reach{e.InterfaceID, e.Reachable})
 	})()
 

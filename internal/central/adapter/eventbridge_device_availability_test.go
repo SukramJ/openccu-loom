@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/north/filter"
@@ -57,7 +56,7 @@ func collectAvailabilityEvents(t *testing.T, u *central.Unit) func() []hmevent.D
 		mu  sync.Mutex
 		got []hmevent.DeviceLifecycleEvent
 	)
-	unsub := events.Subscribe(u.EventBus, func(e hmevent.DeviceLifecycleEvent) {
+	unsub := u.EventBus.Subscribe(func(e hmevent.DeviceLifecycleEvent) {
 		if e.Subtype != hmenum.DeviceLifecycleSubtypeAvailabilityChanged {
 			return
 		}
@@ -101,7 +100,7 @@ func TestEventBridgeAnnouncesAvailabilityTransition(t *testing.T) {
 
 			publishUnreach := func(v bool) {
 				dp.OnEvent(v)
-				events.Publish(u.EventBus, hmevent.DataPointValueChangedEvent{
+				u.EventBus.Publish(hmevent.DataPointValueChangedEvent{
 					Base: hmevent.NewBase(),
 					Key: hmtypes.DataPointKey{
 						InterfaceID:    "HmIP-RF",
@@ -251,7 +250,7 @@ func TestEventBridgeAnnouncesAvailabilityOfSuppressedReachabilityParameter(t *te
 	read := collectAvailabilityEvents(t, u)
 
 	dp.OnEvent(true)
-	events.Publish(u.EventBus, hmevent.DataPointValueChangedEvent{
+	u.EventBus.Publish(hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBase(),
 		Key: hmtypes.DataPointKey{
 			InterfaceID:    "HmIP-RF",

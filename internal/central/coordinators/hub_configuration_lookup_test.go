@@ -225,7 +225,7 @@ func TestHubCoordinatorPublishInstallModeRefreshedPublishesEvent(t *testing.T) {
 	h.SetHubModel(m)
 
 	var published int
-	unsub := events.Subscribe(bus, func(hmevent.InstallModeChangedEvent) { published++ })
+	unsub := bus.Subscribe(func(hmevent.InstallModeChangedEvent) { published++ })
 	defer unsub()
 
 	h.PublishInstallModeRefreshed()
@@ -249,7 +249,7 @@ func TestHubCoordinatorPublishInstallModeRefreshedSkipsUnchangedSteadyState(t *t
 	h.SetHubModel(m)
 
 	var published int
-	unsub := events.Subscribe(bus, func(hmevent.InstallModeChangedEvent) { published++ })
+	unsub := bus.Subscribe(func(hmevent.InstallModeChangedEvent) { published++ })
 	defer unsub()
 
 	// Three consecutive refreshes with install mode off the whole time

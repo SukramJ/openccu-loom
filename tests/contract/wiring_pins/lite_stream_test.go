@@ -12,7 +12,6 @@ import (
 	"github.com/SukramJ/godevccu/pkg/litefake"
 
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -40,7 +39,7 @@ func TestLiteStreamEventReachesDataPoint(t *testing.T) {
 	waitLiteReady(t, unit)
 
 	published := make(chan hmevent.DataPointValueChangedEvent, 16)
-	unsub := events.Subscribe(unit.EventBus, func(e hmevent.DataPointValueChangedEvent) {
+	unsub := unit.EventBus.Subscribe(func(e hmevent.DataPointValueChangedEvent) {
 		if e.Key.ChannelAddress == liteSwitchChannel && e.Key.Parameter == string(hmenum.ParameterState) {
 			published <- e
 		}

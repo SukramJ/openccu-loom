@@ -37,7 +37,7 @@ func TestProgramNotifiersReachScanRegisteredPrograms(t *testing.T) {
 	m.PutProgram(late)
 
 	var changed []hmevent.ProgramChangedEvent
-	unsub := events.Subscribe(bus, func(e hmevent.ProgramChangedEvent) {
+	unsub := bus.Subscribe(func(e hmevent.ProgramChangedEvent) {
 		changed = append(changed, e)
 	})
 	defer unsub()
@@ -67,7 +67,7 @@ func TestProgramNotifiersReachScanRegisteredPrograms(t *testing.T) {
 		t.Fatal("ExecuteNotifier must be wired for scan-registered programs")
 	}
 	var executed []hmevent.ProgramExecutedEvent
-	unsubExec := events.Subscribe(bus, func(e hmevent.ProgramExecutedEvent) {
+	unsubExec := bus.Subscribe(func(e hmevent.ProgramExecutedEvent) {
 		executed = append(executed, e)
 	})
 	defer unsubExec()
@@ -91,7 +91,7 @@ func TestSetHubModelDetachesPreviousProgramHook(t *testing.T) {
 	hc.SetHubModel(second)
 
 	var changed []hmevent.ProgramChangedEvent
-	unsub := events.Subscribe(bus, func(e hmevent.ProgramChangedEvent) {
+	unsub := bus.Subscribe(func(e hmevent.ProgramChangedEvent) {
 		changed = append(changed, e)
 	})
 	defer unsub()
@@ -133,7 +133,7 @@ func TestSysvarNotifiersReachScanRegisteredSysvars(t *testing.T) {
 	m.PutSysvar(late)
 
 	var changed []hmevent.SysvarChangedEvent
-	unsub := events.Subscribe(bus, func(e hmevent.SysvarChangedEvent) {
+	unsub := bus.Subscribe(func(e hmevent.SysvarChangedEvent) {
 		changed = append(changed, e)
 	})
 	defer unsub()

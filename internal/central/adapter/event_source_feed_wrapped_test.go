@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	modevent "github.com/SukramJ/openccu-loom/internal/model/event"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -68,7 +67,7 @@ func TestEventSourceFeedFiresAWrappedSource(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewParamValue: %v", err)
 	}
-	events.Publish(u.EventBus, hmevent.DeviceTriggerEvent{
+	u.EventBus.Publish(hmevent.DeviceTriggerEvent{
 		CentralName:   "ccu-evfeed",
 		InterfaceID:   "HmIP-RF",
 		DeviceAddress: "0001EVFD",

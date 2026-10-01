@@ -57,7 +57,7 @@ func securityPlaneDeviceName(t *testing.T, locale string) string {
 	p.Start(bus)
 	t.Cleanup(p.Stop)
 
-	events.Publish(bus, hmevent.SecurityStateChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
+	bus.Publish(hmevent.SecurityStateChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
 	obs.settle(t, p)
 
 	names := map[string]bool{}

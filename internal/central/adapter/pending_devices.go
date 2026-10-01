@@ -8,7 +8,6 @@ import (
 	"fmt"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -137,7 +136,7 @@ func ReleaseDevice(ctx context.Context, u *central.Unit, address string) bool {
 	if !u.Devices.ReleaseDevice(ctx, iface, address) {
 		return false
 	}
-	events.Publish(u.EventBus, hmevent.DeviceReleasedEvent{
+	u.EventBus.Publish(hmevent.DeviceReleasedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: u.Name(),
 		InterfaceID: d.InterfaceID,
