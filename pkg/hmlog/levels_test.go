@@ -168,7 +168,8 @@ func TestLevelRegistry_PathNormalisation_EmptyPathIgnored(t *testing.T) {
 }
 
 // --------------------------------------------------------------------------
-// TTL / expiry (deterministic via the synctest clock)
+// TTL / expiry (deterministic via the synctest clock; each pair pins one
+// side of the boundary: active 1ns before the TTL, gone at exactly the TTL)
 // --------------------------------------------------------------------------
 
 func TestLevelRegistry_TTL_ResolveBeforeExpiry(t *testing.T) {
@@ -177,7 +178,7 @@ func TestLevelRegistry_TTL_ResolveBeforeExpiry(t *testing.T) {
 
 		reg.Set("a.b", slog.LevelDebug, 100*time.Millisecond)
 
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(100*time.Millisecond - time.Nanosecond)
 		got := reg.Resolve("a.b")
 		if got != slog.LevelDebug {
 			t.Errorf("before expiry: got %v, want Debug", got)
@@ -191,7 +192,7 @@ func TestLevelRegistry_TTL_ResolveAfterExpiry(t *testing.T) {
 
 		reg.Set("a.b", slog.LevelDebug, 100*time.Millisecond)
 
-		time.Sleep(200 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 		got := reg.Resolve("a.b")
 		if got != slog.LevelInfo {
 			t.Errorf("after expiry: got %v, want Info (default)", got)
@@ -205,7 +206,7 @@ func TestLevelRegistry_TTL_SnapshotBeforeExpiry(t *testing.T) {
 
 		reg.Set("a.b", slog.LevelDebug, 100*time.Millisecond)
 
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(100*time.Millisecond - time.Nanosecond)
 		snaps := reg.Snapshot()
 		if len(snaps) != 1 {
 			t.Errorf("Snapshot before expiry: want 1 entry, got %d", len(snaps))
@@ -219,7 +220,7 @@ func TestLevelRegistry_TTL_SnapshotAfterExpiry(t *testing.T) {
 
 		reg.Set("a.b", slog.LevelDebug, 100*time.Millisecond)
 
-		time.Sleep(200 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 		snaps := reg.Snapshot()
 		if len(snaps) != 0 {
 			t.Errorf("Snapshot after expiry: want 0 entries, got %d", len(snaps))
@@ -233,7 +234,7 @@ func TestLevelRegistry_Sweep_RemovesExpired(t *testing.T) {
 
 		reg.Set("a.b", slog.LevelDebug, 100*time.Millisecond)
 
-		time.Sleep(200 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 		removed := reg.Sweep()
 		if removed != 1 {
 			t.Errorf("Sweep after expiry: want 1 removed, got %d", removed)
@@ -247,7 +248,7 @@ func TestLevelRegistry_Sweep_NothingRemovedBeforeExpiry(t *testing.T) {
 
 		reg.Set("a.b", slog.LevelDebug, 100*time.Millisecond)
 
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(100*time.Millisecond - time.Nanosecond)
 		removed := reg.Sweep()
 		if removed != 0 {
 			t.Errorf("Sweep before expiry: want 0 removed, got %d", removed)

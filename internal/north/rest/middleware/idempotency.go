@@ -204,7 +204,7 @@ func (c *idempotencyCache) reserve(id string) (idempotentEntry, cacheState) {
 		if e.pending {
 			return idempotentEntry{}, cacheStatePending
 		}
-		if time.Now().Sub(e.at) <= IdempotencyTTL {
+		if time.Since(e.at) <= IdempotencyTTL {
 			return e, cacheStateHit
 		}
 		delete(c.items, id)

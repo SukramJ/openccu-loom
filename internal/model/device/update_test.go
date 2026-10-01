@@ -65,7 +65,11 @@ func TestUpdateAttachAndStart(t *testing.T) {
 		if err != nil {
 			t.Fatalf("start: %v", err)
 		}
-		<-done
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Fatal("refresh worker never finished")
+		}
 		if upd.called.Load() != 1 {
 			t.Fatalf("updater called=%d", upd.called.Load())
 		}
@@ -101,7 +105,11 @@ func TestUpdateStartLogsRefreshFirmwareDataError(t *testing.T) {
 		if err != nil {
 			t.Fatalf("start: %v", err)
 		}
-		<-done
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Fatal("refresh worker never finished")
+		}
 
 		logOutput := buf.String()
 		if !strings.Contains(logOutput, "refresh boom") {
