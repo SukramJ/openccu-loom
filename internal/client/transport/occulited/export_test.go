@@ -8,6 +8,8 @@ var (
 	SortedScopes  = sortedScopes
 	IsInitRefusal = isInitRefusal
 
+	AnswerBodyLimit = answerBodyLimit
+
 	PairingAccessControl = PairingAccess{Devices: "operate", Names: "read", System: "read"}
 	PairingAccessRead    = PairingAccess{Devices: "read", Names: "read", System: "read"}
 )

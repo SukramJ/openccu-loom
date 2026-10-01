@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 13.0.0
+  version: 13.1.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -11732,17 +11732,22 @@ components:
         role: { type: string, enum: [admin, operator, viewer] }
         scheme:
           type: string
-          enum: [basic, bearer, session, oidc, ingress]
+          enum: [basic, bearer, session, oidc, ingress, occulite]
           description: >-
             How the request authenticated. `ingress` is the Home
-            Assistant Ingress passthrough the add-on deployment uses.
+            Assistant Ingress passthrough the add-on deployment uses;
+            `occulite` is the box-shell single sign-on over the
+            openccu-lite ingress (ADR 0079) — the gate's session,
+            live-verified against the box. The SPA reads it to skip
+            its own login and hide the logout action.
         expires_at:
           type: string
           format: date-time
           description: >-
             The instant the credential behind this identity stops being
             accepted, in UTC. Absent means the credential has no
-            server-side expiry — a `basic`, `ingress` or unbounded
+            server-side expiry — a `basic`, `ingress`, `occulite` (the
+            box owns that session's lifetime) or unbounded
             `bearer` identity. It is the deadline a long-lived consumer
             needs: a WebSocket captures its identity at the upgrade and
             is closed when this instant passes, so a client that reads

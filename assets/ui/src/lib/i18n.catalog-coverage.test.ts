@@ -128,6 +128,18 @@ describe("i18n catalogue coverage", () => {
     }
   });
 
+  // Sidebar.svelte / ChangePasswordCard.svelte's box-shell (scheme
+  // occulite) identity line and its explanation.
+  it("resolves the box-shell sign-in keys in both locales", () => {
+    for (const key of [
+      "auth.box_shell.signed_in",
+      "auth.box_shell.signed_in_help",
+    ]) {
+      expect(de.has(key), `${key} missing in de`).toBe(true);
+      expect(en.has(key), `${key} missing in en`).toBe(true);
+    }
+  });
+
   // Every user-visible string ships in both locales (CLAUDE.md, SPA
   // operating concept). A key added to one catalogue only degrades to the
   // other language on screen instead of failing anywhere, so nothing but

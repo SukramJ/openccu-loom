@@ -1151,6 +1151,9 @@ const EN: Catalog = {
   "favorites.kind.device": "Device",
   "favorites.kind.sysvar": "System variable",
   "nav.logout": "Logout",
+  "auth.box_shell.signed_in": "Signed in through the box shell",
+  "auth.box_shell.signed_in_help":
+    "Signed in through the box shell: this is the openccu-lite box's own account. The box owns the session — sign out or change the password there.",
   "nav.messages": "Messages",
   "nav.programs": "Programs",
   "nav.settings": "Settings",
@@ -1462,6 +1465,8 @@ const EN: Catalog = {
   "config.field.north.rest.auth.ha_ingress.trusted_proxy_cidr":
     "Trusted proxy CIDR",
   "config.field.north.rest.auth.ha_ingress.role": "Granted role",
+  "config.field.north.rest.auth.occulite_sso": "Box-shell single sign-on",
+  "config.field.north.rest.auth.occulite_sso.enabled": "Box-shell single sign-on",
   "config.field.north.rest.auth.session_idle_timeout":
     "Session idle timeout",
   "config.field.north.rest.openapi_spec_path": "OpenAPI spec path",
@@ -1769,6 +1774,10 @@ const EN: Catalog = {
     "Network the Ingress request's real peer must come from. Empty uses the HA Supervisor default 172.30.32.0/23. X-Forwarded-For is never trusted.",
   "config.help.north.rest.auth.ha_ingress.role":
     'Loom role granted to a trusted Ingress request: "admin" (default), "operator" or "viewer".',
+  "config.help.north.rest.auth.occulite_sso":
+    "Accept the openccu-lite box shell's session as a Loom sign-in, so an operator signed in to the box needs no second login.",
+  "config.help.north.rest.auth.occulite_sso.enabled":
+    "Trust the openccu-lite box shell's session: a request the box gate passes on signs in as the box user (box admin = admin, box user = operator) — no login. Accepted only beside an openccu-lite box; every session is live-verified against the box, the header alone authenticates nothing. Default (unset) = on in the openccu-lite add-on, off in any other build; set On/Off to override. Real tokens/sessions still win. Restart required.",
   "config.help.north.rest.auth.session_idle_timeout":
     "Log a session out after this much inactivity, even while its absolute lifetime is still running (e.g. 30m, 2h). 0 disables the idle check and leaves only the absolute session lifetime in charge.",
   "config.help.north.rest.openapi_spec_path":
@@ -5422,6 +5431,9 @@ const DE: Catalog = {
   "nav.links": "Direktverknüpfungen",
   "nav.schedules": "Zeitprogramme",
   "nav.logout": "Abmelden",
+  "auth.box_shell.signed_in": "Angemeldet über die Box-Shell",
+  "auth.box_shell.signed_in_help":
+    "Angemeldet über die Box-Shell: dies ist das Konto der openccu-lite-Box. Die Sitzung gehört der Box — Abmelden oder Passwort ändern erfolgt dort.",
   "nav.messages": "Meldungen",
   "nav.programs": "Programme",
   "nav.settings": "Einstellungen",
@@ -5732,6 +5744,8 @@ const DE: Catalog = {
   "config.field.north.rest.auth.ha_ingress.trusted_proxy_cidr":
     "Vertrauenswürdiges Proxy-CIDR",
   "config.field.north.rest.auth.ha_ingress.role": "Gewährte Rolle",
+  "config.field.north.rest.auth.occulite_sso": "Box-Shell-Single-Sign-on",
+  "config.field.north.rest.auth.occulite_sso.enabled": "Box-Shell-Single-Sign-on",
   "config.field.north.rest.auth.session_idle_timeout":
     "Sitzungs-Leerlauf-Timeout",
   "config.field.north.rest.openapi_spec_path": "OpenAPI-Spec-Pfad",
@@ -6042,6 +6056,10 @@ const DE: Catalog = {
     "Netz, aus dem der echte Peer der Ingress-Anfrage stammen muss. Leer nutzt den HA-Supervisor-Standard 172.30.32.0/23. X-Forwarded-For wird nie vertraut.",
   "config.help.north.rest.auth.ha_ingress.role":
     'Loom-Rolle für eine vertrauenswürdige Ingress-Anfrage: "admin" (Standard), "operator" oder "viewer".',
+  "config.help.north.rest.auth.occulite_sso":
+    "Die Sitzung der openccu-lite-Box-Shell als Loom-Anmeldung akzeptieren, damit ein an der Box angemeldeter Bediener kein zweites Login braucht.",
+  "config.help.north.rest.auth.occulite_sso.enabled":
+    "Der Sitzung der openccu-lite-Box-Shell vertrauen: eine vom Box-Gate weitergereichte Anfrage meldet sich als Box-Benutzer an (Box-Admin = admin, Box-Benutzer = operator) — ohne Login. Nur neben einer openccu-lite-Box akzeptiert; jede Sitzung wird live gegen die Box geprüft, der Header allein authentifiziert nichts. Standard (nicht gesetzt) = an im openccu-lite-Add-on, aus in jedem anderen Build; An/Aus überschreibt. Echte Tokens/Sessions gewinnen weiterhin. Neustart erforderlich.",
   "config.help.north.rest.auth.session_idle_timeout":
     "Meldet eine Sitzung nach dieser Zeit ohne Aktivität ab, auch wenn ihre absolute Lebensdauer noch läuft (z. B. 30m, 2h). 0 deaktiviert die Leerlaufprüfung; dann gilt nur die absolute Lebensdauer.",
   "config.help.north.rest.openapi_spec_path":

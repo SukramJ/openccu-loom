@@ -8119,13 +8119,13 @@ export interface components {
             /** @enum {string} */
             role: "admin" | "operator" | "viewer";
             /**
-             * @description How the request authenticated. `ingress` is the Home Assistant Ingress passthrough the add-on deployment uses.
+             * @description How the request authenticated. `ingress` is the Home Assistant Ingress passthrough the add-on deployment uses; `occulite` is the box-shell single sign-on over the openccu-lite ingress (ADR 0079) — the gate's session, live-verified against the box. The SPA reads it to skip its own login and hide the logout action.
              * @enum {string}
              */
-            scheme?: "basic" | "bearer" | "session" | "oidc" | "ingress";
+            scheme?: "basic" | "bearer" | "session" | "oidc" | "ingress" | "occulite";
             /**
              * Format: date-time
-             * @description The instant the credential behind this identity stops being accepted, in UTC. Absent means the credential has no server-side expiry — a `basic`, `ingress` or unbounded `bearer` identity. It is the deadline a long-lived consumer needs: a WebSocket captures its identity at the upgrade and is closed when this instant passes, so a client that reads it can refill its credential through the in-band `{op:"reauth"}` frame instead of discovering the rotation through a 401.
+             * @description The instant the credential behind this identity stops being accepted, in UTC. Absent means the credential has no server-side expiry — a `basic`, `ingress`, `occulite` (the box owns that session's lifetime) or unbounded `bearer` identity. It is the deadline a long-lived consumer needs: a WebSocket captures its identity at the upgrade and is closed when this instant passes, so a client that reads it can refill its credential through the in-band `{op:"reauth"}` frame instead of discovering the rotation through a 401.
              */
             expires_at?: string;
         };

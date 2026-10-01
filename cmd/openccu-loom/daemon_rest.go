@@ -256,8 +256,13 @@ func wireREST(ctx context.Context, d restWiringDeps) restWiring {
 	// no way to authenticate at all, which is exactly the boot the
 	// operator needs the UI for.
 	ingressMW := auth.IngressPassthrough(buildIngressTrust(cfg, logger), logger)
+	// The box-shell SSO passthrough (ADR 0079) sits innermost next to the
+	// HA Ingress one: both are fallbacks that only ever inject when no
+	// credential resolved, and their stamps (supervised HA add-on vs the
+	// openccu-lite add-on) are mutually exclusive deployments.
+	occuliteMW := auth.OcculiteSSOPassthrough(buildOcculiteSSOTrust(cfg, logger), logger)
 	restResolve := func(next http.Handler) http.Handler {
-		return baseResolve(ingressMW(next))
+		return baseResolve(ingressMW(occuliteMW(next)))
 	}
 
 	// REST status metrics — 5xx/4xx counters surfaced as health

@@ -604,6 +604,16 @@ func authRestartRules() []RestartRule {
 				return !reflect.DeepEqual(b.North.REST.Auth.HAIngress, e.North.REST.Auth.HAIngress)
 			},
 		},
+		// The box-shell SSO resolver is wired once at boot as well.
+		{
+			Path: "north.rest.auth.occulite_sso",
+			Fields: []string{
+				"north.rest.auth.occulite_sso.enabled",
+			},
+			Differs: func(b, e *Config) bool {
+				return !reflect.DeepEqual(b.North.REST.Auth.OcculiteSSO, e.North.REST.Auth.OcculiteSSO)
+			},
+		},
 		// The Basic/Bearer scheme gates decide at boot which credential stores
 		// are wired into the auth middleware, so toggling either takes effect
 		// only after a restart. Compare the resolved tri-state so unset →

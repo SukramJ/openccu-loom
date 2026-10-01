@@ -83,7 +83,12 @@ a **claim**, never as proof.
   every earlier resolver deferred, and defers itself otherwise —
   preserving the resolver contract the auth core guards. An operator
   with a local session keeps it; nothing about tokens, MCP mounts or
-  the REST role gates changes.
+  the REST role gates changes. One consequence, shared with the
+  HA-Ingress fallback: a request presenting an *invalid* daemon
+  credential is not answered 401 at the resolver stage — behind the
+  gate the box session then authenticates it, attributed to the box
+  user. Revoking a daemon token therefore never revokes what the box
+  session grants anyway.
 - **The SPA follows the identity's origin.** An identity resolved from
   the box session is marked with its provider; the SPA then skips the
   login form, shows the box user read-only, and hides the logout

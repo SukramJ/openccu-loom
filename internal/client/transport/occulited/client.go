@@ -41,6 +41,10 @@ const (
 	streamHeaderTimeout = 15 * time.Second
 	// errorBodyLimit caps how much of an error answer is read.
 	errorBodyLimit = 64 << 10
+	// answerBodyLimit caps a success answer. Every JSON answer is
+	// buffered whole before decoding, so without a cap a misbehaving or
+	// compromised box could make the daemon allocate without bound.
+	answerBodyLimit = 16 << 20
 )
 
 // Config configures a [Client].
@@ -626,9 +630,15 @@ func call[T any](ctx context.Context, c *Client, r request) (T, error) {
 // decodeBody decodes a JSON answer body into T (see [call] for T).
 func decodeBody[T any](resp *http.Response, r request) (T, error) {
 	var out T
-	raw, err := io.ReadAll(resp.Body)
+	// One byte past the cap tells a truncated answer from one that ends
+	// exactly at it; decoding a truncated document would only surface as
+	// a confusing syntax error.
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, answerBodyLimit+1))
 	if err != nil {
 		return out, fmt.Errorf("occulited: %s %s: read answer: %w: %w", r.method, r.path, hmerr.ErrNoConnection, err)
+	}
+	if len(raw) > answerBodyLimit {
+		return out, fmt.Errorf("occulited: %s %s: %w: answer exceeds the %d-byte limit", r.method, r.path, ErrProtocol, answerBodyLimit)
 	}
 	if err := json.Unmarshal(raw, &out); err != nil {
 		return out, fmt.Errorf("occulited: %s %s: %w: decode answer: %w", r.method, r.path, ErrProtocol, err)

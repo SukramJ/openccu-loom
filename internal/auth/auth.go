@@ -29,6 +29,9 @@ const (
 	SchemeSession Scheme = "session" // session-cookie auth, set by the local login flow
 	SchemeOIDC    Scheme = "oidc"    // session-cookie auth for a principal an external provider vouched for
 	SchemeIngress Scheme = "ingress" // HA Ingress auth passthrough (ADR 0044)
+	// SchemeOcculite is a box-shell session accepted over the lite ingress,
+	// after live verification of the session against the box (ADR 0079).
+	SchemeOcculite Scheme = "occulite"
 )
 
 // Federated reports whether the scheme identifies a principal an external
@@ -36,8 +39,9 @@ const (
 // owns. Subject-keyed controls over local accounts must not reach a
 // federated principal: an external login name that folds to the same string
 // as a local account belongs to a different person, and the daemon holds no
-// authority over their credentials.
-func (s Scheme) Federated() bool { return s == SchemeOIDC }
+// authority over their credentials. A box-shell session is federated in
+// exactly this sense: the box vouches for its user.
+func (s Scheme) Federated() bool { return s == SchemeOIDC || s == SchemeOcculite }
 
 // Role is the coarse-grained permission level.
 type Role string

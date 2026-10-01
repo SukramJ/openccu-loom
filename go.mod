@@ -3,7 +3,7 @@ module github.com/SukramJ/openccu-loom
 go 1.26.6
 
 require (
-	github.com/SukramJ/godevccu v0.3.0
+	github.com/SukramJ/godevccu v0.4.0
 	github.com/getkin/kin-openapi v0.149.0
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/google/uuid v1.6.0

@@ -153,7 +153,12 @@ func wireSharedInfrastructure(
 	if n := cfg.North.REST.WS.ReplayCapacity; n > 0 {
 		si.wsHub.SetReplayCapacity(n)
 	}
-	si.wsHandler = ws.Handler(si.wsHub, logger, wsAllowedOrigins(cfg))
+	// A box-shell (ADR 0079) socket carries no expiry of its own, so the
+	// handler re-asks the box periodically. The trust is resolved from the
+	// same config and host stamp as the REST resolver's; its decision lines
+	// are logged there, so this second resolution stays quiet.
+	si.wsHandler = ws.Handler(si.wsHub, logger, wsAllowedOrigins(cfg),
+		ws.WithOcculiteRevalidate(occuliteRevalidator(buildOcculiteSSOTrust(cfg, slog.New(slog.DiscardHandler)), logger)))
 	// WS subscriber-count gauge so the diagnostics dump shows how
 	// many SPA clients are currently subscribed for live updates.
 	// Registered against every central's tracker because the WS hub

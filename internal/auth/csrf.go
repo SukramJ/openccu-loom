@@ -166,6 +166,13 @@ func csrfExempt(r *http.Request, s Scheme) bool {
 		// Both ride the browser-ambient session cookie, whichever authority
 		// minted the identity — the double-submit defence applies to both.
 		return false
+	case SchemeOcculite:
+		// The box's gate attaches the session header to every request its
+		// session cookie authorizes, a cross-site-initiated one included, so
+		// the credential is browser-ambient exactly like a session cookie.
+		// Unlike SchemeIngress its trust is not anchored per request in the
+		// network path — the double-submit defence applies.
+		return false
 	}
 	return false
 }

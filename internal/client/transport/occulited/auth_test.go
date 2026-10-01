@@ -9,6 +9,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strconv"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -175,5 +178,172 @@ func TestPairingAbortsOnAFingerprintMismatch(t *testing.T) {
 	})
 	if !errors.Is(err, occulited.ErrPairingFingerprintMismatch) {
 		t.Fatalf("StartPairing = %v, want ErrPairingFingerprintMismatch", err)
+	}
+}
+
+// authStateServer answers GET /api/auth/v1/state the way the box does:
+// authenticated with a role for the one known session, unauthenticated
+// for anything else. Every Authorization header it sees is recorded.
+func authStateServer(t *testing.T, session string, seen *[]string) *httptest.Server {
+	t.Helper()
+	var mu sync.Mutex
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		*seen = append(*seen, r.Header.Get("Authorization"))
+		mu.Unlock()
+		if r.URL.Path != "/api/auth/v1/state" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if r.Header.Get("Authorization") == "Bearer "+session {
+			_, _ = w.Write([]byte(`{"authenticated":true,"user":"alice","role":"admin"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"authenticated":false}`))
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// TestAuthStateOfCarriesOnlyTheForeignCredential verifies a box session
+// through a client that holds its own token: the box sees exactly the
+// session as the bearer, never the client's token, and the role is decoded.
+func TestAuthStateOfCarriesOnlyTheForeignCredential(t *testing.T) {
+	t.Parallel()
+	const (
+		session = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+		own     = "olt_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	)
+	var seen []string
+	srv := authStateServer(t, session, &seen)
+	c := newClient(t, srv.URL, own)
+
+	st, err := c.AuthStateOf(context.Background(), session)
+	if err != nil {
+		t.Fatalf("AuthStateOf: %v", err)
+	}
+	if !st.Authenticated || st.User != "alice" || st.Role != "admin" {
+		t.Fatalf("state = %+v, want authenticated alice with role admin", st)
+	}
+	if want := []string{"Bearer " + session}; !slices.Equal(seen, want) {
+		t.Fatalf("Authorization headers = %v, want %v", seen, want)
+	}
+
+	// The override is per request: the client's own call still carries
+	// its own token afterwards.
+	if _, err := c.AuthState(context.Background()); err != nil {
+		t.Fatalf("AuthState: %v", err)
+	}
+	if got := seen[len(seen)-1]; got != "Bearer "+own {
+		t.Fatalf("own call carried %q, want the client's token", got)
+	}
+}
+
+// TestAuthStateOfInvalidCredentialIsUnauthenticated: the route is open, so
+// an unknown session reads as not authenticated rather than as an error.
+func TestAuthStateOfInvalidCredentialIsUnauthenticated(t *testing.T) {
+	t.Parallel()
+	var seen []string
+	srv := authStateServer(t, "ABCDEFGHIJKLMNOPQRSTUVWXYZ", &seen)
+	st, err := newClient(t, srv.URL, "").AuthStateOf(context.Background(), "ZZZZZZZZZZZZZZZZZZZZZZZZZZ")
+	if err != nil {
+		t.Fatalf("AuthStateOf: %v", err)
+	}
+	if st.Authenticated || st.Role != "" {
+		t.Fatalf("state = %+v, want unauthenticated", st)
+	}
+}
+
+// TestAuthStateOfPropagatesATransportError: an unreachable box is an
+// error, and the error never quotes the credential.
+func TestAuthStateOfPropagatesATransportError(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	closedURL := srv.URL
+	srv.Close()
+	const session = "QRSTUVWXYZ234567ABCDEFGHIJ"
+	_, err := newClient(t, closedURL, "").AuthStateOf(context.Background(), session)
+	if err == nil {
+		t.Fatal("AuthStateOf against a closed server succeeded")
+	}
+	if !errors.Is(err, hmerr.ErrNoConnection) {
+		t.Errorf("error = %v, want ErrNoConnection", err)
+	}
+	if strings.Contains(err.Error(), session) {
+		t.Errorf("error quotes the credential: %v", err)
+	}
+}
+
+// TestAuthStateDecodesTheNonSessionMarkers: an auth-off box and a
+// public-mode box mark their answer; both markers must survive decoding,
+// because the SSO resolver refuses exactly those answers.
+func TestAuthStateDecodesTheNonSessionMarkers(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, body          string
+		wantOff, wantPublic bool
+	}{
+		{"auth off", `{"authenticated":true,"user":"admin","role":"admin","auth_off":true}`, true, false},
+		{"public", `{"authenticated":true,"user":"public","role":"user","public":true}`, false, true},
+		{"session", `{"authenticated":true,"user":"alice","role":"admin"}`, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			t.Cleanup(srv.Close)
+			st, err := newClient(t, srv.URL, "").AuthStateOf(context.Background(), "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+			if err != nil {
+				t.Fatalf("AuthStateOf: %v", err)
+			}
+			if st.AuthOff != tc.wantOff || st.Public != tc.wantPublic {
+				t.Fatalf("state = %+v, want auth_off=%v public=%v", st, tc.wantOff, tc.wantPublic)
+			}
+		})
+	}
+}
+
+// TestAnswerBodyIsCapped: a success answer of exactly the cap decodes; one
+// byte more is a protocol error naming the limit, never a silent truncation.
+func TestAnswerBodyIsCapped(t *testing.T) {
+	t.Parallel()
+	answer := func(size int) string {
+		const head, tail = `{"user":"`, `"}`
+		return head + strings.Repeat("a", size-len(head)-len(tail)) + tail
+	}
+	for _, tc := range []struct {
+		name    string
+		size    int
+		wantErr bool
+	}{
+		{"at the cap", occulited.AnswerBodyLimit, false},
+		{"one byte over", occulited.AnswerBodyLimit + 1, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			body := answer(tc.size)
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte(body))
+			}))
+			t.Cleanup(srv.Close)
+			st, err := newClient(t, srv.URL, "").AuthState(context.Background())
+			if !tc.wantErr {
+				if err != nil {
+					t.Fatalf("AuthState: %v", err)
+				}
+				if len(st.User) != tc.size-len(`{"user":""}`) {
+					t.Fatalf("user length = %d, want the whole answer decoded", len(st.User))
+				}
+				return
+			}
+			if !errors.Is(err, occulited.ErrProtocol) {
+				t.Fatalf("error = %v, want ErrProtocol", err)
+			}
+			if !strings.Contains(err.Error(), strconv.Itoa(occulited.AnswerBodyLimit)) {
+				t.Fatalf("error %q does not name the limit", err)
+			}
+		})
 	}
 }
