@@ -96,3 +96,20 @@ func BenchmarkPublishStateWithSource(b *testing.B) {
 		_ = br.PublishState(ctx, ev)
 	}
 }
+
+// BenchmarkPublishSlotState is the per-data-point state publish every value
+// event reaches: one PerDPState wrapper encoded and handed to the broker.
+func BenchmarkPublishSlotState(b *testing.B) {
+	br := mqtt.NewBridge(mqtt.BridgeConfig{
+		Base:        "gh",
+		CentralName: "ccu",
+		RawEnabled:  true,
+	}, benchPublisher{})
+	slot := payload.TopicSlot{Address: "000C9709AEF157", Channel: 1, Bucket: payload.BucketValues, Parameter: "ACTUAL_TEMPERATURE"}
+	state := payload.PerDPState{Value: 21.5, Available: true, ModifiedAt: 1759350000.123, RefreshedAt: 1759350001.456}
+	ctx := context.Background()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = br.PublishSlotState(ctx, "ccu", "HmIP-RF", slot, state)
+	}
+}

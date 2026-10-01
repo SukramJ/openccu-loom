@@ -1083,7 +1083,9 @@ func (b *Bridge) PublishSlotState(ctx context.Context, centralName, iface string
 	if centralName == "" {
 		centralName = b.cfg.CentralName
 	}
-	body, err := json.Marshal(state)
+	// A pointer lets the encoder read the wrapper in place; handed over by
+	// value it is copied first, on every data-point event.
+	body, err := json.Marshal(&state)
 	if err != nil {
 		return err
 	}
