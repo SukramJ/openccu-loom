@@ -11,6 +11,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central/events"
@@ -436,36 +437,44 @@ func armInterfaces(c *ConnectionRecoveryCoordinator, interfaceIDs ...string) {
 func TestTriggerBeforeArmIsDropped(t *testing.T) {
 	t.Parallel()
 
-	bus := events.NewBus()
-	c := NewConnectionRecoveryCoordinatorWithLimit("c-gate", bus, 0)
+	// The trigger path is synchronous up to the goroutine that starts a run, so
+	// synctest.Wait is the exact settle point: once every goroutine in the bubble
+	// is blocked or finished, a trigger that was not gated would already have
+	// counted. No wall-clock window is needed to observe "nothing happened".
+	synctest.Test(t, func(t *testing.T) {
+		bus := events.NewBus()
+		c := NewConnectionRecoveryCoordinatorWithLimit("c-gate", bus, 0)
 
-	var count atomic.Int32
-	c.WithDefaultPipeline(atomicPipeline(&count))
-	c.Subscribe()
-	defer c.Stop()
+		var count atomic.Int32
+		c.WithDefaultPipeline(atomicPipeline(&count))
+		c.Subscribe()
+		defer c.Stop()
 
-	bus.Publish(hmevent.ConnectionLostEvent{
-		Base:        hmevent.NewBase(),
-		CentralName: "c-gate",
-		InterfaceID: "HmIP-RF",
+		bus.Publish(hmevent.ConnectionLostEvent{
+			Base:        hmevent.NewBase(),
+			CentralName: "c-gate",
+			InterfaceID: "HmIP-RF",
+		})
+
+		// Negative control for the assertion below: the same event on an armed
+		// interface must start a run, so "count stayed 0" measures the gate and
+		// not a coordinator that never runs anything.
+		synctest.Wait()
+		if n := count.Load(); n > 0 {
+			t.Fatalf("recovery ran for an interface whose bring-up has not reported (count=%d)", n)
+		}
+
+		c.ArmInterface("HmIP-RF")
+		bus.Publish(hmevent.ConnectionLostEvent{
+			Base:        hmevent.NewBase(),
+			CentralName: "c-gate",
+			InterfaceID: "HmIP-RF",
+		})
+		synctest.Wait()
+		if n := count.Load(); n < 1 {
+			t.Fatalf("recovery did not start after ArmInterface (count=%d)", n)
+		}
 	})
-
-	// Negative control for the assertion below: the same event on an armed
-	// interface must start a run, so "count stayed 0" measures the gate and
-	// not a coordinator that never runs anything.
-	if waitFor(t, func() bool { return count.Load() > 0 }, shortNegativeWait) {
-		t.Fatalf("recovery ran for an interface whose bring-up has not reported (count=%d)", count.Load())
-	}
-
-	c.ArmInterface("HmIP-RF")
-	bus.Publish(hmevent.ConnectionLostEvent{
-		Base:        hmevent.NewBase(),
-		CentralName: "c-gate",
-		InterfaceID: "HmIP-RF",
-	})
-	if !waitFor(t, func() bool { return count.Load() >= 1 }, eventWaitTimeout) {
-		t.Fatalf("recovery did not start after ArmInterface (count=%d)", count.Load())
-	}
 }
 
 // TestTriggerBeforeArmIsDroppedOnEveryLane pins the gate at triggerRecovery
@@ -475,39 +484,40 @@ func TestTriggerBeforeArmIsDropped(t *testing.T) {
 func TestTriggerBeforeArmIsDroppedOnEveryLane(t *testing.T) {
 	t.Parallel()
 
-	bus := events.NewBus()
-	c := NewConnectionRecoveryCoordinatorWithLimit("c-lanes", bus, 0)
+	// The trigger path is synchronous up to the goroutine that starts a run, so
+	// synctest.Wait is the exact settle point: once every goroutine in the bubble
+	// is blocked or finished, a trigger that was not gated would already have
+	// counted. No wall-clock window is needed to observe "nothing happened".
+	synctest.Test(t, func(t *testing.T) {
+		bus := events.NewBus()
+		c := NewConnectionRecoveryCoordinatorWithLimit("c-lanes", bus, 0)
 
-	var count atomic.Int32
-	c.WithDefaultPipeline(atomicPipeline(&count))
-	c.Subscribe()
-	defer c.Stop()
+		var count atomic.Int32
+		c.WithDefaultPipeline(atomicPipeline(&count))
+		c.Subscribe()
+		defer c.Stop()
 
-	bus.Publish(hmevent.CircuitBreakerStateChangedEvent{
-		Base:        hmevent.NewBase(),
-		CentralName: "c-lanes",
-		InterfaceID: "HmIP-RF",
-		From:        hmenum.CircuitStateClosed,
-		To:          hmenum.CircuitStateOpen,
-	})
-	bus.Publish(hmevent.HeartbeatTimerFiredEvent{
-		Base:         hmevent.NewBase(),
-		CentralName:  "c-lanes",
-		InterfaceIDs: []string{"HmIP-RF"},
-	})
-	bus.Publish(hmevent.CentralStateChangedEvent{
-		Base:        hmevent.NewBase(),
-		CentralName: "c-lanes",
-		To:          hmenum.CentralStateFailed,
-	})
+		bus.Publish(hmevent.CircuitBreakerStateChangedEvent{
+			Base:        hmevent.NewBase(),
+			CentralName: "c-lanes",
+			InterfaceID: "HmIP-RF",
+			From:        hmenum.CircuitStateClosed,
+			To:          hmenum.CircuitStateOpen,
+		})
+		bus.Publish(hmevent.HeartbeatTimerFiredEvent{
+			Base:         hmevent.NewBase(),
+			CentralName:  "c-lanes",
+			InterfaceIDs: []string{"HmIP-RF"},
+		})
+		bus.Publish(hmevent.CentralStateChangedEvent{
+			Base:        hmevent.NewBase(),
+			CentralName: "c-lanes",
+			To:          hmenum.CentralStateFailed,
+		})
 
-	if waitFor(t, func() bool { return count.Load() > 0 }, shortNegativeWait) {
-		t.Fatalf("a lane started recovery before the bring-up reported (count=%d)", count.Load())
-	}
+		synctest.Wait()
+		if n := count.Load(); n > 0 {
+			t.Fatalf("a lane started recovery before the bring-up reported (count=%d)", n)
+		}
+	})
 }
-
-// shortNegativeWait is how long the gate tests wait for something that must
-// not happen. Long enough that an ungated trigger — which starts its run in a
-// goroutine the publish returns from immediately — is observed, short enough
-// that the suite does not pay a full eventWaitTimeout per negative case.
-const shortNegativeWait = 750 * time.Millisecond

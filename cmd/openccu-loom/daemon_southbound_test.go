@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
@@ -85,49 +86,52 @@ func TestRetainedOrphanSweepsArmWhenTheBrokerConnectsLate(t *testing.T) {
 // first real bridge must consume them exactly once.
 func TestBootRetainCleanupsRunOnTheFirstLiveBridge(t *testing.T) {
 	t.Parallel()
+	// The scrub windows are timers on the bubble's fake clock, and the broker is
+	// the in-memory NoopClient, so nothing here waits on a socket or the wall clock.
+	synctest.Test(t, func(t *testing.T) {
+		ctx := context.Background()
+		cfg := config.Default()
+		cfg.North.MQTT.TopicBase = "test"
+		cfg.North.MQTT.RetainCleanupWindowMs = 500
+		cleanups := newBootRetainCleanups(cfg, slog.New(slog.DiscardHandler))
 
-	ctx := context.Background()
-	cfg := config.Default()
-	cfg.North.MQTT.TopicBase = "test"
-	cfg.North.MQTT.RetainCleanupWindowMs = 500
-	cleanups := newBootRetainCleanups(cfg, slog.New(slog.DiscardHandler))
+		// The broker was down when the boot path reached the scrubs.
+		cleanups.run(ctx, nil)
 
-	// The broker was down when the boot path reached the scrubs.
-	cleanups.run(ctx, nil)
+		client := mqtt.NewNoopClient()
+		bridge := mqtt.NewBridge(mqtt.BridgeConfig{
+			Base:               "test",
+			CentralName:        "ccu",
+			RawEnabled:         true,
+			HADiscoveryEnabled: true,
+		}, client).WithSubscriber(client)
 
-	client := mqtt.NewNoopClient()
-	bridge := mqtt.NewBridge(mqtt.BridgeConfig{
-		Base:               "test",
-		CentralName:        "ccu",
-		RawEnabled:         true,
-		HADiscoveryEnabled: true,
-	}, client).WithSubscriber(client)
-
-	// A retired retained topic the broker replays into the scrub's window.
-	const retired = "test/ccu/hub/programs/42/trigger"
-	fed := make(chan struct{})
-	go func() {
-		defer close(fed)
-		deadline := time.Now().Add(10 * time.Second)
-		for time.Now().Before(deadline) {
-			if client.DeliverInbound("test/#", retired, []byte("true")) {
-				return
+		// A retired retained topic the broker replays into the scrub's window.
+		const retired = "test/ccu/hub/programs/42/trigger"
+		fed := make(chan struct{})
+		go func() {
+			defer close(fed)
+			deadline := time.Now().Add(10 * time.Second)
+			for time.Now().Before(deadline) {
+				if client.DeliverInbound("test/#", retired, []byte("true")) {
+					return
+				}
+				time.Sleep(5 * time.Millisecond)
 			}
-			time.Sleep(5 * time.Millisecond)
+		}()
+		cleanups.run(ctx, bridge)
+		<-fed
+
+		if !evicted(client, retired) {
+			t.Fatal("the retired retained topic was not evicted; the boot scrubs never ran against the recovered bridge")
 		}
-	}()
-	cleanups.run(ctx, bridge)
-	<-fed
 
-	if !evicted(client, retired) {
-		t.Fatal("the retired retained topic was not evicted; the boot scrubs never ran against the recovered bridge")
-	}
-
-	before := len(client.Published())
-	cleanups.run(ctx, bridge)
-	if got := len(client.Published()); got != before {
-		t.Errorf("a second run published %d more messages, want 0: the scrubs are once-per-process", got-before)
-	}
+		before := len(client.Published())
+		cleanups.run(ctx, bridge)
+		if got := len(client.Published()); got != before {
+			t.Errorf("a second run published %d more messages, want 0: the scrubs are once-per-process", got-before)
+		}
+	})
 }
 
 // fakeRetainScrubber stands in for the MQTT bridge so the busy-slot retry

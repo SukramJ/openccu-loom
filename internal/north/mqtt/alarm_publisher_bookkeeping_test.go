@@ -7,6 +7,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/metrics"
@@ -217,37 +218,41 @@ func TestAlarmAvailabilityIsPinnedToQoS1(t *testing.T) {
 // really wait for the worker then fails on every run.
 func TestTheAlarmBarrierOutlastsAWorkerStalledPastTheBrokerCall(t *testing.T) {
 	t.Parallel()
-	f := newAlarmPublisherFixture(t)
-	f.seedZone("z1", "Ground floor", zeroDelayFullMode())
-	// Wide enough that no amount of luck closes the window on its own.
-	f.mp.afterPublish = func() { time.Sleep(50 * time.Millisecond) }
-	f.start()
+	// The injected stall runs on the bubble's fake clock, so the barrier is
+	// measured against it without spending it.
+	synctest.Test(t, func(t *testing.T) {
+		f := newAlarmPublisherFixture(t)
+		f.seedZone("z1", "Ground floor", zeroDelayFullMode())
+		// Wide enough that no amount of luck closes the window on its own.
+		f.mp.afterPublish = func() { time.Sleep(50 * time.Millisecond) }
+		f.start()
 
-	f.settle()
+		f.settle()
 
-	var retained []string
-	for _, rec := range f.mp.recorded() {
-		if strings.HasPrefix(rec.topic, f.base+"/alarm/") && rec.retain && rec.payload != "" {
-			retained = append(retained, rec.topic)
+		var retained []string
+		for _, rec := range f.mp.recorded() {
+			if strings.HasPrefix(rec.topic, f.base+"/alarm/") && rec.retain && rec.payload != "" {
+				retained = append(retained, rec.topic)
+			}
 		}
-	}
-	if len(retained) == 0 {
-		t.Fatal("the alarm plane wrote no retained topic — the fixture cannot show the bookkeeping")
-	}
-
-	bridge := f.pub.wiring.Bridge()
-	bridge.mu.Lock()
-	var missing []string
-	for _, topic := range retained {
-		if _, ok := bridge.rawTopics[topic]; !ok {
-			missing = append(missing, topic)
+		if len(retained) == 0 {
+			t.Fatal("the alarm plane wrote no retained topic — the fixture cannot show the bookkeeping")
 		}
-	}
-	bridge.mu.Unlock()
-	if len(missing) > 0 {
-		t.Errorf("the barrier returned with %v recorded on the broker but absent from the "+
-			"bridge's retained-topic index — it ended inside the window between the client call "+
-			"and the bookkeeping, so no sweep and no retraction can reach those topics and "+
-			"nothing says so", missing)
-	}
+
+		bridge := f.pub.wiring.Bridge()
+		bridge.mu.Lock()
+		var missing []string
+		for _, topic := range retained {
+			if _, ok := bridge.rawTopics[topic]; !ok {
+				missing = append(missing, topic)
+			}
+		}
+		bridge.mu.Unlock()
+		if len(missing) > 0 {
+			t.Errorf("the barrier returned with %v recorded on the broker but absent from the "+
+				"bridge's retained-topic index — it ended inside the window between the client call "+
+				"and the bookkeeping, so no sweep and no retraction can reach those topics and "+
+				"nothing says so", missing)
+		}
+	})
 }

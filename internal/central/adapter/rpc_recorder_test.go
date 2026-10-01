@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -278,28 +279,39 @@ func TestEffectiveDuration_AboveCapClamps(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // TestRPCRecorderAdapter_AutoStop verifies that a 1-second recording is
-// automatically stopped after the timer fires. This is the only timing-
-// sensitive test; it uses a tight 1.2-second window.
+// automatically stopped when its timer fires, and not before. It runs on a
+// synctest bubble, so the timer advances a fake clock and both sides of the
+// one-second window are pinned exactly.
 func TestRPCRecorderAdapter_AutoStop(t *testing.T) {
-	// Not run in parallel: it sleeps.
-	dir := t.TempDir()
-	reg, _ := buildRecorderRegistry(t, "OttoGo")
-	a := NewRPCRecorderAdapter(reg, dir)
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		dir := t.TempDir()
+		reg, _ := buildRecorderRegistry(t, "OttoGo")
+		a := NewRPCRecorderAdapter(reg, dir)
+		markerPath := filepath.Join(dir, "active_rpc_recording.json")
 
-	a.Start(nil, 1, false) // 1-second duration
+		a.Start(nil, 1, false) // 1-second duration
 
-	// Wait long enough for the auto-stop timer to fire.
-	time.Sleep(1200 * time.Millisecond)
+		// One nanosecond short of the deadline the recording is still live
+		// and its marker is still on disk.
+		synctest.Sleep(time.Second - time.Nanosecond)
+		if statuses := a.Status(); len(statuses) != 1 || !statuses[0].Active {
+			t.Errorf("expected Active=true before the auto-stop deadline, got %+v", statuses)
+		}
+		if _, err := os.Stat(markerPath); err != nil {
+			t.Errorf("marker file should still exist before the auto-stop deadline: %v", err)
+		}
 
-	statuses := a.Status()
-	if len(statuses) != 1 || statuses[0].Active {
-		t.Errorf("expected Active=false after auto-stop, got %+v", statuses)
-	}
-	// Marker file must be gone after auto-stop.
-	markerPath := filepath.Join(dir, "active_rpc_recording.json")
-	if _, err := os.Stat(markerPath); !os.IsNotExist(err) {
-		t.Error("marker file should be removed by auto-stop timer")
-	}
+		// At the deadline the timer fires and stops the recording.
+		synctest.Sleep(time.Nanosecond)
+		statuses := a.Status()
+		if len(statuses) != 1 || statuses[0].Active {
+			t.Errorf("expected Active=false after auto-stop, got %+v", statuses)
+		}
+		if _, err := os.Stat(markerPath); !os.IsNotExist(err) {
+			t.Error("marker file should be removed by auto-stop timer")
+		}
+	})
 }
 
 // ---------------------------------------------------------------------------
