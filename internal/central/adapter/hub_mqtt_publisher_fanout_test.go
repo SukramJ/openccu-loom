@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -266,29 +267,50 @@ func TestHubMQTTPublisherPreservesPayloadOrder(t *testing.T) {
 // contract: Stop returns even while the worker is blocked in a broker publish,
 // because it cancels the context that publish runs under. Without it a daemon
 // shutdown would hang behind a half-open broker.
+//
+// Stop first gives the durable remainder of the queue [fanoutStopGrace] to
+// drain, and only then cancels. The test runs on a synctest bubble so that
+// grace is spent on the fake clock, and it pins both sides of it: Stop is
+// still waiting one nanosecond before the grace has elapsed and has returned
+// at the instant it has.
 func TestHubMQTTPublisherStopCancelsInflightPublish(t *testing.T) {
 	t.Parallel()
-	gate := newGatedPublisher("/hub/connectivity/")
-	c, publisher := hubFanoutFixture(t, gate)
+	synctest.Test(t, func(t *testing.T) {
+		gate := newGatedPublisher("/hub/connectivity/")
+		c, publisher := hubFanoutFixture(t, gate)
 
-	publisher.Start(context.Background())
-	go c.EventBus.Publish(connectivityEvent("HmIP-RF", true))
-	select {
-	case <-gate.entered:
-	case <-time.After(2 * time.Second):
-		t.Fatal("fan-out worker never reached the connectivity publish")
-	}
+		publisher.Start(context.Background())
+		go c.EventBus.Publish(connectivityEvent("HmIP-RF", true))
+		synctest.Wait()
+		select {
+		case <-gate.entered:
+		default:
+			t.Fatal("fan-out worker never reached the connectivity publish")
+		}
 
-	stopped := make(chan struct{})
-	go func() {
-		publisher.Stop()
-		close(stopped)
-	}()
-	select {
-	case <-stopped:
-	case <-time.After(2 * time.Second):
-		t.Fatal("Stop hung behind an in-flight broker publish")
-	}
+		stopped := make(chan struct{})
+		go func() {
+			publisher.Stop()
+			close(stopped)
+		}()
+
+		// The worker is wedged in the gated publish, so the queued barrier
+		// cannot run and Stop keeps waiting out its grace period.
+		synctest.Sleep(fanoutStopGrace - time.Nanosecond)
+		select {
+		case <-stopped:
+			t.Fatal("Stop returned before the drain grace elapsed")
+		default:
+		}
+
+		// At the end of the grace Stop cancels the in-flight publish.
+		synctest.Sleep(time.Nanosecond)
+		select {
+		case <-stopped:
+		default:
+			t.Fatal("Stop hung behind an in-flight broker publish")
+		}
+	})
 }
 
 // TestHubMQTTPublisherStopLeavesNoGoroutine pins that no worker outlives the

@@ -6,6 +6,7 @@ package adapter
 import (
 	"context"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -60,42 +61,47 @@ func sweepRetainedConfig(t *testing.T, b *mqtt.Bridge, pub *mqtt.NoopClient, cen
 func TestHubPublisherDeclaresItsPlaneToTheOrphanSweep(t *testing.T) {
 	t.Parallel()
 
-	const centralName = "ccu-01"
-	c, err := central.New(central.Config{Name: centralName})
-	if err != nil {
-		t.Fatalf("central.New: %v", err)
-	}
-	reg := central.NewRegistry()
-	if err := reg.Register(c); err != nil {
-		t.Fatalf("reg.Register: %v", err)
-	}
-	pub := mqtt.NewNoopClient()
-	bridge := mqtt.NewBridge(mqtt.BridgeConfig{
-		Base:               "openccu-loom",
-		CentralName:        centralName,
-		RawEnabled:         true,
-		HADiscoveryEnabled: true,
-	}, pub)
-	publisher := NewHubMQTTPublisher(reg, mqtt.NewWiring(bridge, nil), nil)
+	// Both sweeps hold a 300 ms snapshot window open; on the bubble's fake
+	// clock those windows elapse instantly. The broker is the in-memory
+	// NoopClient, so nothing here touches a socket.
+	synctest.Test(t, func(t *testing.T) {
+		const centralName = "ccu-01"
+		c, err := central.New(central.Config{Name: centralName})
+		if err != nil {
+			t.Fatalf("central.New: %v", err)
+		}
+		reg := central.NewRegistry()
+		if err := reg.Register(c); err != nil {
+			t.Fatalf("reg.Register: %v", err)
+		}
+		pub := mqtt.NewNoopClient()
+		bridge := mqtt.NewBridge(mqtt.BridgeConfig{
+			Base:               "openccu-loom",
+			CentralName:        centralName,
+			RawEnabled:         true,
+			HADiscoveryEnabled: true,
+		}, pub)
+		publisher := NewHubMQTTPublisher(reg, mqtt.NewWiring(bridge, nil), nil)
 
-	// The serial resolves during the readiness-gated bring-up; it gates every
-	// hub payload, so the plane declares nothing before it lands.
-	c.SetSystemInformation(central.SystemInfo{Serial: "3014F711A0001F0123456789"})
-	c.HubModel.PutSysvar(&hub.Sysvar{
-		Name:      "Anwesenheit",
-		ValueType: hmenum.HubValueTypeLogic,
+		// The serial resolves during the readiness-gated bring-up; it gates every
+		// hub payload, so the plane declares nothing before it lands.
+		c.SetSystemInformation(central.SystemInfo{Serial: "3014F711A0001F0123456789"})
+		c.HubModel.PutSysvar(&hub.Sysvar{
+			Name:      "Anwesenheit",
+			ValueType: hmenum.HubValueTypeLogic,
+		})
+
+		leftover := "homeassistant/sensor/ccu-01_sysvars/from_last_boot/config"
+		if sweepRetainedConfig(t, bridge, pub, centralName, leftover) {
+			t.Errorf("the sweep retracted %s before the hub publisher ran", leftover)
+		}
+
+		publisher.Start(context.Background())
+		defer publisher.Stop()
+		publisher.Flush()
+
+		if !sweepRetainedConfig(t, bridge, pub, centralName, leftover) {
+			t.Errorf("after the hub publisher's pass the sweep still refuses to evict %s, so hub orphans can never be cleaned", leftover)
+		}
 	})
-
-	leftover := "homeassistant/sensor/ccu-01_sysvars/from_last_boot/config"
-	if sweepRetainedConfig(t, bridge, pub, centralName, leftover) {
-		t.Errorf("the sweep retracted %s before the hub publisher ran", leftover)
-	}
-
-	publisher.Start(context.Background())
-	defer publisher.Stop()
-	publisher.Flush()
-
-	if !sweepRetainedConfig(t, bridge, pub, centralName, leftover) {
-		t.Errorf("after the hub publisher's pass the sweep still refuses to evict %s, so hub orphans can never be cleaned", leftover)
-	}
 }

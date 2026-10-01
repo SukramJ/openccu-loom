@@ -5,7 +5,9 @@ package security
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -26,49 +28,48 @@ import (
 // length of every reconnect.
 func TestHotPlugRebuildCoalescesAReconnectBurst(t *testing.T) {
 	t.Parallel()
-	reg := central.NewRegistry()
-	svc, _ := newTestService(t, func(d *Deps) { d.Registry = reg })
+	synctest.Test(t, func(t *testing.T) {
+		reg := central.NewRegistry()
+		svc, _ := newTestService(t, func(d *Deps) { d.Registry = reg })
 
-	unit, err := central.New(central.Config{Name: "ccu"})
-	if err != nil {
-		t.Fatalf("central.New: %v", err)
-	}
-	if err := reg.Register(unit); err != nil {
-		t.Fatalf("register central: %v", err)
-	}
-	unit.MarkSouthboundReady()
+		unit, err := central.New(central.Config{Name: "ccu"})
+		if err != nil {
+			t.Fatalf("central.New: %v", err)
+		}
+		if err := reg.Register(unit); err != nil {
+			t.Fatalf("register central: %v", err)
+		}
+		unit.MarkSouthboundReady()
 
-	ctx := context.Background()
-	if err := svc.Start(ctx); err != nil {
-		t.Fatalf("Start: %v", err)
-	}
-	t.Cleanup(func() { _ = svc.Stop(ctx) })
+		ctx := context.Background()
+		if err := svc.Start(ctx); err != nil {
+			t.Fatalf("Start: %v", err)
+		}
+		t.Cleanup(func() { _ = svc.Stop(ctx) })
 
-	// Count rebuilds by their published result — the rebuild is the only
-	// producer of a state event in this test.
-	rebuilds := make(chan struct{}, 64)
-	unsub := svc.Bus().Subscribe(func(hmevent.SecurityStateChangedEvent) {
-		select {
-		case rebuilds <- struct{}{}:
-		default:
+		// Count rebuilds by their published result — the rebuild is the only
+		// producer of a state event in this test.
+		var rebuilds atomic.Int32
+		unsub := svc.Bus().Subscribe(func(hmevent.SecurityStateChangedEvent) {
+			rebuilds.Add(1)
+		})
+		t.Cleanup(unsub)
+
+		const announced = 40
+		for range announced {
+			unit.EventBus.Publish(hmevent.DeviceCreatedEvent{Base: hmevent.NewBase()})
+		}
+
+		// Nothing rebuilds inside the debounce window...
+		synctest.Sleep(indexRebuildDebounce - time.Nanosecond)
+		if n := rebuilds.Load(); n != 0 {
+			t.Fatalf("%d index rebuilds before the debounce window elapsed, want 0", n)
+		}
+		// ...the burst coalesces into exactly one rebuild once it has, and
+		// no further rebuild follows.
+		synctest.Sleep(4 * indexRebuildDebounce)
+		if n := rebuilds.Load(); n != 1 {
+			t.Fatalf("%d announcements produced %d index rebuilds, want 1", announced, n)
 		}
 	})
-	t.Cleanup(unsub)
-
-	const announced = 40
-	for range announced {
-		unit.EventBus.Publish(hmevent.DeviceCreatedEvent{Base: hmevent.NewBase()})
-	}
-
-	select {
-	case <-rebuilds:
-	case <-time.After(5 * time.Second):
-		t.Fatal("the announcement burst produced no index rebuild at all")
-	}
-	// Give any further rebuild time to arrive before counting.
-	time.Sleep(4 * indexRebuildDebounce)
-	extra := len(rebuilds)
-	if extra != 0 {
-		t.Fatalf("%d announcements produced %d index rebuilds, want 1", announced, extra+1)
-	}
 }
