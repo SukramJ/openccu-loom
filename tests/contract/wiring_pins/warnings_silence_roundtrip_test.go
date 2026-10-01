@@ -36,7 +36,7 @@ func TestWarningsSilenceRoundTripThroughTheRouter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc := warnings.New(pinnedHealth{}, nil, nil, sqlite.NewWarningSilenceStore(db), nil)
+	svc := warnings.New(pinnedHealth{}, nil, nil, sqlite.NewWarningSilenceStore(db))
 
 	tokens := auth.NewMemoryTokenStore(map[string]auth.Identity{
 		"tok-markus": {Subject: "markus", Scheme: auth.SchemeBearer, Role: auth.RoleAdmin},

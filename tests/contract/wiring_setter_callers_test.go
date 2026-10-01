@@ -41,9 +41,6 @@ var wiringSettersWithoutCaller = map[string]string{
 	"github.com/SukramJ/openccu-loom/internal/client.InterfaceClient.SetClearJSONRPCSessionHook": "the JSON-RPC client invalidates its own session in transport/jsonrpc/client.go; nothing ever invokes the hook this stores either, so both ends of the path are dead",
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile.Profile.SetPublishHook":          "the profile-change push flows through Profile.OnChange, which the event bridge subscribes to; this is an unused parallel API",
 
-	// Verified: the seam is a test-only affordance and says so.
-	"github.com/SukramJ/openccu-loom/pkg/hmlog.LevelRegistry.SetNowFunc": "documented as a test clock; production keeps the time.Now default NewLevelRegistry installs",
-
 	// Verified: fluent With* setters (isWiringVerb now covers them too),
 	// each with its own doc comment naming the reason the daemon leaves
 	// it nil and the alternate path that already does the job.

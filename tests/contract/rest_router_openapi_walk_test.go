@@ -683,7 +683,7 @@ func fullyWiredRouterDeps() rest.Deps {
 	return rest.Deps{
 		StartedAt:               time.Now(),
 		SBOM:                    fakeSBOMSource{},
-		Warnings:                warnings.New(nil, nil, nil, nil, nil),
+		Warnings:                warnings.New(nil, nil, nil, nil),
 		Pairing:                 &pairing.Manager{Minter: nopMinter{}},
 		Config:                  fakeConfigReader{},
 		SelfPassword:            fakeSelfPasswordService{},

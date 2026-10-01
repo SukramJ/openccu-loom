@@ -6,6 +6,7 @@ package cover
 import (
 	"context"
 	"testing"
+	"testing/synctest"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 )
@@ -33,17 +34,20 @@ func TestParityMatterJS_CoverDataVersionBumpsOnInvoke(t *testing.T) {
 // GoToLiftPercentage invoke increments MatterDataVersion.
 func TestParityMatterJS_CoverDataVersionBumpsOnGoToLift(t *testing.T) {
 	t.Parallel()
-	w := &stubWriter{}
-	c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{})
-	before := c.MatterDataVersion()
+	synctest.Test(t, func(t *testing.T) {
+		defer drainOptimisticRollbacks()
+		w := &stubWriter{}
+		c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{})
+		before := c.MatterDataVersion()
 
-	srv := c.MatterClusterServers()[0]
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(5000)); err != nil {
-		t.Fatalf("MatterInvoke(GoToLift): %v", err)
-	}
-	if after := c.MatterDataVersion(); after <= before {
-		t.Fatalf("MatterDataVersion did not bump after GoToLift: before=%d after=%d", before, after)
-	}
+		srv := c.MatterClusterServers()[0]
+		if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(5000)); err != nil {
+			t.Fatalf("MatterInvoke(GoToLift): %v", err)
+		}
+		if after := c.MatterDataVersion(); after <= before {
+			t.Fatalf("MatterDataVersion did not bump after GoToLift: before=%d after=%d", before, after)
+		}
+	})
 }
 
 // TestParityMatterJS_CoverDataVersionMonotonicallyRises verifies that
@@ -88,17 +92,20 @@ func TestParityMatterJS_CoverDataVersionStableOnRead(t *testing.T) {
 // Cover.MatterDataVersion via the shared embedded Cover.dataVersion.
 func TestParityMatterJS_BlindDataVersionBumpsOnInvoke(t *testing.T) {
 	t.Parallel()
-	w := &putWriter{}
-	b := newBlindRig(t, "VCU3560967:1", w, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
-	before := b.MatterDataVersion()
+	synctest.Test(t, func(t *testing.T) {
+		defer drainOptimisticRollbacks()
+		w := &putWriter{}
+		b := newBlindRig(t, "VCU3560967:1", w, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
+		before := b.MatterDataVersion()
 
-	srv := b.MatterClusterServers()[0]
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToTiltPercentage, uint16(2500)); err != nil {
-		t.Fatalf("MatterInvoke(GoToTilt): %v", err)
-	}
-	if after := b.MatterDataVersion(); after <= before {
-		t.Fatalf("MatterDataVersion did not bump after blind invoke: before=%d after=%d", before, after)
-	}
+		srv := b.MatterClusterServers()[0]
+		if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToTiltPercentage, uint16(2500)); err != nil {
+			t.Fatalf("MatterInvoke(GoToTilt): %v", err)
+		}
+		if after := b.MatterDataVersion(); after <= before {
+			t.Fatalf("MatterDataVersion did not bump after blind invoke: before=%d after=%d", before, after)
+		}
+	})
 }
 
 // TestParityMatterJS_BlindDataVersionStableOnRead verifies that

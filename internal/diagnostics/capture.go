@@ -174,7 +174,6 @@ type Manager struct {
 	mu       sync.Mutex
 	tee      Tee
 	levels   LevelRegistry
-	now      func() time.Time
 	active   *Capture
 	archived []*Capture
 	// expiry fires [Manager.Sweep] when the running capture's window
@@ -190,7 +189,6 @@ func NewManager(tee Tee, levels LevelRegistry, opts ...ManagerOption) *Manager {
 	m := &Manager{
 		tee:    tee,
 		levels: levels,
-		now:    time.Now,
 	}
 	for _, opt := range opts {
 		opt(m)
@@ -200,17 +198,6 @@ func NewManager(tee Tee, levels LevelRegistry, opts ...ManagerOption) *Manager {
 
 // ManagerOption customises a Manager at construction time.
 type ManagerOption func(*Manager)
-
-// WithClock injects the time source. Tests pass a closure over a
-// mutable variable to advance time deterministically; the default is
-// time.Now. A nil clock keeps the default.
-func WithClock(now func() time.Time) ManagerOption {
-	return func(m *Manager) {
-		if now != nil {
-			m.now = now
-		}
-	}
-}
 
 // Start launches a new capture. Returns the summary so callers can
 // echo the ID + ETA back to the operator immediately.
@@ -244,7 +231,7 @@ func (m *Manager) Start(opts StartOptions) (Summary, error) {
 	// triggers that should never produce raw archives).
 	anonymise := opts.Anonymise || opts.Triggered == ""
 	sink := hmlog.NewCaptureSink(opts.BufferBytes, anonymise)
-	now := m.now()
+	now := time.Now()
 	capture := &Capture{
 		ID:         id,
 		Anonymised: anonymise,
@@ -274,8 +261,8 @@ func (m *Manager) Start(opts StartOptions) (Summary, error) {
 	// stops runs for the daemon's whole life: the log tee stays
 	// attached, the archive the operator asked for is never built, and
 	// every later Start answers 409. The timer only pokes Sweep, which
-	// re-checks EndsAt against the injected clock, so a test clock stays
-	// authoritative.
+	// re-checks EndsAt against the current time, so a timer that fires
+	// early or late never finalises a capture ahead of its window.
 	m.expiry = time.AfterFunc(duration, m.Sweep)
 	return capture.summary(), nil
 }
@@ -309,7 +296,7 @@ func (m *Manager) Sweep() {
 
 // sweepLocked is [Manager.Sweep] with the lock already held.
 func (m *Manager) sweepLocked() {
-	now := m.now()
+	now := time.Now()
 	if m.active != nil && m.active.Status == StatusRunning && !m.active.EndsAt.IsZero() && !m.active.EndsAt.After(now) {
 		m.finaliseLocked(m.active, StatusExpired)
 	}
@@ -324,7 +311,7 @@ func (m *Manager) sweepLocked() {
 
 func (m *Manager) finaliseLocked(c *Capture, status Status) {
 	c.Status = status
-	c.StoppedAt = m.now()
+	c.StoppedAt = time.Now()
 	if m.expiry != nil {
 		m.expiry.Stop()
 		m.expiry = nil
@@ -344,7 +331,7 @@ func (m *Manager) finaliseLocked(c *Capture, status Status) {
 			c.archive = archive
 		}
 	}
-	c.expiryAt = m.now().Add(ArchiveRetention)
+	c.expiryAt = time.Now().Add(ArchiveRetention)
 	// Move into the archived ring and trim.
 	m.archived = append(m.archived, c)
 	if len(m.archived) > MaxArchivedCaptures {

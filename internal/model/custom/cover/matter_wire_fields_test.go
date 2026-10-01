@@ -6,6 +6,7 @@ package cover
 import (
 	"context"
 	"testing"
+	"testing/synctest"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 )
@@ -19,16 +20,19 @@ import (
 // uint16 or a string-keyed map, so every real Apple/Google
 // "blind to N %" reached the server as an error.
 func TestGoToLiftPercentageWireFields(t *testing.T) {
-	w := &stubWriter{}
-	c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{})
-	srv := c.MatterClusterServers()[0]
+	synctest.Test(t, func(t *testing.T) {
+		defer drainOptimisticRollbacks()
+		w := &stubWriter{}
+		c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{})
+		srv := c.MatterClusterServers()[0]
 
-	fields := map[uint8]any{0: uint64(7500)} // Matter 7500 = "75 % closed"
-	if _, err := srv.MatterInvoke(context.Background(), 0x05, fields); err != nil {
-		t.Fatalf("GoToLiftPercentage wire-shape err: %v", err)
-	}
-	flushGoToWrites(&c.matterGoTo)
-	if w.last.(float64) != 0.25 {
-		t.Fatalf("Matter 7500 → HM %v, want 0.25", w.last)
-	}
+		fields := map[uint8]any{0: uint64(7500)} // Matter 7500 = "75 % closed"
+		if _, err := srv.MatterInvoke(context.Background(), 0x05, fields); err != nil {
+			t.Fatalf("GoToLiftPercentage wire-shape err: %v", err)
+		}
+		settleGoToWrites()
+		if w.last.(float64) != 0.25 {
+			t.Fatalf("Matter 7500 → HM %v, want 0.25", w.last)
+		}
+	})
 }

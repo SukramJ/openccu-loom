@@ -86,9 +86,6 @@ func newBlindRig(t *testing.T, address string, w Writer, caps custom.CoverCapabi
 	ch.Put(level)
 	ch.Put(level2)
 	b := NewBlind(BlindConfig{Channel: ch, Writer: w, Capabilities: caps, Kind: kind})
-	// Deferred GoTo*Percentage writes fire only via flushGoToWrites so
-	// tests stay deterministic.
-	neuterGoToTimers(&b.matterGoTo)
 	return b
 }
 

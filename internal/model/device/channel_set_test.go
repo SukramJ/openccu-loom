@@ -10,6 +10,7 @@ import (
 	"maps"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -791,54 +792,64 @@ func TestSetOptionsZeroValueDefaults(t *testing.T) {
 
 // ---------- MasterRefreshHook -----------------------------------------
 
+// drainOptimisticRollbacks advances the bubble clock past the optimistic
+// rollback timeout so the rollback goroutines a successful write arms
+// exit before the synctest bubble returns.
+func drainOptimisticRollbacks() {
+	time.Sleep(generic.OptimisticDefaultTimeout + time.Second)
+}
+
 // TestMasterRefreshHookFiredOnMasterSet verifies that a successful
 // Channel.Set with ParamsetKeyMaster fires the installed hook.
 func TestMasterRefreshHookFiredOnMasterSet(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		w := &fakeChannelWriter{}
+		ch := newTestChannel(t, w)
+		dp := newWritableMasterFloatDP(testChannelAddr, hmenum.Parameter("SHORT_ON_TIME"), w)
+		ch.PutMaster(dp)
 
-	w := &fakeChannelWriter{}
-	ch := newTestChannel(t, w)
-	dp := newWritableMasterFloatDP(testChannelAddr, hmenum.Parameter("SHORT_ON_TIME"), w)
-	ch.PutMaster(dp)
+		var (
+			hookMu    sync.Mutex
+			hookAddr  string
+			hookKey   hmenum.ParamsetKey
+			hookFired bool
+			done      = make(chan struct{})
+		)
+		ch.SetMasterRefreshHook(func(addr string, key hmenum.ParamsetKey) {
+			hookMu.Lock()
+			hookAddr = addr
+			hookKey = key
+			hookFired = true
+			hookMu.Unlock()
+			close(done)
+		})
 
-	var (
-		hookMu    sync.Mutex
-		hookAddr  string
-		hookKey   hmenum.ParamsetKey
-		hookFired bool
-		done      = make(chan struct{})
-	)
-	ch.SetMasterRefreshHook(func(addr string, key hmenum.ParamsetKey) {
+		if err := ch.Set(context.Background(), hmenum.ParamsetKeyMaster,
+			hmenum.Parameter("SHORT_ON_TIME"), hmtypes.FloatValue(1.0), SetOptions{}); err != nil {
+			t.Fatalf("Set: %v", err)
+		}
+
+		synctest.Wait()
+		select {
+		case <-done:
+		default:
+			t.Fatal("hook was not fired after Set(MASTER)")
+		}
+
 		hookMu.Lock()
-		hookAddr = addr
-		hookKey = key
-		hookFired = true
-		hookMu.Unlock()
-		close(done)
+		defer hookMu.Unlock()
+		if !hookFired {
+			t.Fatal("hook was not invoked")
+		}
+		if hookAddr != testChannelAddr {
+			t.Errorf("hook addr=%q, want %q", hookAddr, testChannelAddr)
+		}
+		if hookKey != hmenum.ParamsetKeyMaster {
+			t.Errorf("hook key=%q, want MASTER", hookKey)
+		}
+		drainOptimisticRollbacks()
 	})
-
-	if err := ch.Set(context.Background(), hmenum.ParamsetKeyMaster,
-		hmenum.Parameter("SHORT_ON_TIME"), hmtypes.FloatValue(1.0), SetOptions{}); err != nil {
-		t.Fatalf("Set: %v", err)
-	}
-
-	select {
-	case <-done:
-	case <-timeoutCh(t, 2):
-		t.Fatal("hook was not fired within 2 seconds")
-	}
-
-	hookMu.Lock()
-	defer hookMu.Unlock()
-	if !hookFired {
-		t.Fatal("hook was not invoked")
-	}
-	if hookAddr != testChannelAddr {
-		t.Errorf("hook addr=%q, want %q", hookAddr, testChannelAddr)
-	}
-	if hookKey != hmenum.ParamsetKeyMaster {
-		t.Errorf("hook key=%q, want MASTER", hookKey)
-	}
 }
 
 // TestMasterRefreshHookNotFiredOnValuesSet verifies that the hook is NOT
@@ -846,31 +857,34 @@ func TestMasterRefreshHookFiredOnMasterSet(t *testing.T) {
 // a poll).
 func TestMasterRefreshHookNotFiredOnValuesSet(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		w := &fakeChannelWriter{}
+		ch := newTestChannel(t, w)
+		dp := newWritableFloatDP(testChannelAddr, hmenum.ParameterLevel, w)
+		ch.Put(dp)
 
-	w := &fakeChannelWriter{}
-	ch := newTestChannel(t, w)
-	dp := newWritableFloatDP(testChannelAddr, hmenum.ParameterLevel, w)
-	ch.Put(dp)
+		fired := make(chan struct{}, 1)
+		ch.SetMasterRefreshHook(func(_ string, _ hmenum.ParamsetKey) {
+			select {
+			case fired <- struct{}{}:
+			default:
+			}
+		})
 
-	fired := make(chan struct{}, 1)
-	ch.SetMasterRefreshHook(func(_ string, _ hmenum.ParamsetKey) {
-		select {
-		case fired <- struct{}{}:
-		default:
+		if err := ch.Set(context.Background(), hmenum.ParamsetKeyValues,
+			hmenum.ParameterLevel, hmtypes.FloatValue(0.5), SetOptions{}); err != nil {
+			t.Fatalf("Set: %v", err)
 		}
+		// Let any spurious hook goroutine run, then assert silence.
+		synctest.Wait()
+		select {
+		case <-fired:
+			t.Fatal("hook must NOT fire for VALUES writes")
+		default:
+			// expected: no signal
+		}
+		drainOptimisticRollbacks()
 	})
-
-	if err := ch.Set(context.Background(), hmenum.ParamsetKeyValues,
-		hmenum.ParameterLevel, hmtypes.FloatValue(0.5), SetOptions{}); err != nil {
-		t.Fatalf("Set: %v", err)
-	}
-	// Give any spurious goroutine a chance to fire, then assert silence.
-	select {
-	case <-fired:
-		t.Fatal("hook must NOT fire for VALUES writes")
-	case <-timeoutCh(t, 0):
-		// expected: no signal within the short window
-	}
 }
 
 // TestSetMasterDispatchesThroughPutParamset pins that Channel.Set honours the
@@ -944,76 +958,66 @@ func TestSetValuesStillDispatchesThroughSetValue(t *testing.T) {
 // ParamsetKeyMaster also fires the hook after a successful PutParamset.
 func TestMasterRefreshHookFiredOnMasterSetMany(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		w := &fakeChannelWriter{}
+		ch := newTestChannel(t, w)
+		dp := newWritableMasterFloatDP(testChannelAddr, hmenum.Parameter("SHORT_ON_TIME"), w)
+		ch.PutMaster(dp)
 
-	w := &fakeChannelWriter{}
-	ch := newTestChannel(t, w)
-	dp := newWritableMasterFloatDP(testChannelAddr, hmenum.Parameter("SHORT_ON_TIME"), w)
-	ch.PutMaster(dp)
+		done := make(chan struct{})
+		ch.SetMasterRefreshHook(func(_ string, _ hmenum.ParamsetKey) {
+			close(done)
+		})
 
-	done := make(chan struct{})
-	ch.SetMasterRefreshHook(func(_ string, _ hmenum.ParamsetKey) {
-		close(done)
+		values := map[hmenum.Parameter]hmtypes.ParamValue{
+			hmenum.Parameter("SHORT_ON_TIME"): hmtypes.FloatValue(2.0),
+		}
+		if err := ch.SetMany(context.Background(), hmenum.ParamsetKeyMaster, values, SetOptions{}); err != nil {
+			t.Fatalf("SetMany: %v", err)
+		}
+
+		synctest.Wait()
+		select {
+		case <-done:
+		default:
+			t.Fatal("hook was not fired after SetMany(MASTER)")
+		}
+		drainOptimisticRollbacks()
 	})
-
-	values := map[hmenum.Parameter]hmtypes.ParamValue{
-		hmenum.Parameter("SHORT_ON_TIME"): hmtypes.FloatValue(2.0),
-	}
-	if err := ch.SetMany(context.Background(), hmenum.ParamsetKeyMaster, values, SetOptions{}); err != nil {
-		t.Fatalf("SetMany: %v", err)
-	}
-
-	select {
-	case <-done:
-	case <-timeoutCh(t, 2):
-		t.Fatal("hook was not fired within 2 seconds after SetMany(MASTER)")
-	}
 }
 
 // TestMasterRefreshHookNotFiredOnWriteError verifies that the hook is NOT
 // invoked when the writer returns an error.
 func TestMasterRefreshHookNotFiredOnWriteError(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		// The MASTER write dispatches through PutParamset, so the failure has to
+		// be injected there — failSet would never be reached.
+		w := &fakeChannelWriter{failPut: errors.New("wire error")}
+		ch := newTestChannel(t, w)
+		dp := newWritableMasterFloatDP(testChannelAddr, hmenum.Parameter("SHORT_ON_TIME"), w)
+		ch.PutMaster(dp)
 
-	// The MASTER write dispatches through PutParamset, so the failure has to
-	// be injected there — failSet would never be reached.
-	w := &fakeChannelWriter{failPut: errors.New("wire error")}
-	ch := newTestChannel(t, w)
-	dp := newWritableMasterFloatDP(testChannelAddr, hmenum.Parameter("SHORT_ON_TIME"), w)
-	ch.PutMaster(dp)
+		fired := make(chan struct{}, 1)
+		ch.SetMasterRefreshHook(func(_ string, _ hmenum.ParamsetKey) {
+			select {
+			case fired <- struct{}{}:
+			default:
+			}
+		})
 
-	fired := make(chan struct{}, 1)
-	ch.SetMasterRefreshHook(func(_ string, _ hmenum.ParamsetKey) {
+		_ = ch.Set(context.Background(), hmenum.ParamsetKeyMaster,
+			hmenum.Parameter("SHORT_ON_TIME"), hmtypes.FloatValue(1.0), SetOptions{})
+
+		synctest.Wait()
 		select {
-		case fired <- struct{}{}:
+		case <-fired:
+			t.Fatal("hook must NOT fire when the writer returns an error")
 		default:
+			// expected
 		}
+		drainOptimisticRollbacks()
 	})
-
-	_ = ch.Set(context.Background(), hmenum.ParamsetKeyMaster,
-		hmenum.Parameter("SHORT_ON_TIME"), hmtypes.FloatValue(1.0), SetOptions{})
-
-	select {
-	case <-fired:
-		t.Fatal("hook must NOT fire when the writer returns an error")
-	case <-timeoutCh(t, 0):
-		// expected
-	}
-}
-
-// timeoutCh returns a channel that closes after `seconds` seconds.
-// When seconds == 0, it uses a short 50 ms window for "should not fire" tests.
-func timeoutCh(t *testing.T, seconds int) <-chan struct{} {
-	t.Helper()
-	ch := make(chan struct{})
-	d := 50 * time.Millisecond
-	if seconds > 0 {
-		d = time.Duration(seconds) * time.Second
-	}
-	go func() {
-		time.Sleep(d)
-		close(ch)
-	}()
-	return ch
 }
 
 // ─── Forced-sensor writability gate ──────────────────────────────────

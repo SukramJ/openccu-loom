@@ -11,6 +11,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
@@ -228,55 +229,53 @@ func TestIdempotency_SameKeyDifferentPathsAreDistinct(t *testing.T) {
 
 func TestIdempotency_TTLEviction(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		cache := newIdempotencyCache()
 
-	// Directly manipulate the cache's clock to simulate TTL expiry.
-	now := time.Now()
-	cache := newIdempotencyCache()
-	cache.now = func() time.Time { return now }
+		var calls atomic.Int32
+		inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			calls.Add(1)
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"id":"xyz"}`))
+		})
 
-	var calls atomic.Int32
-	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls.Add(1)
-		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(`{"id":"xyz"}`))
+		// Build a middleware that shares the test cache instead of
+		// Idempotency()'s private one.
+		handler := idempotencyMiddleware(cache)(inner)
+
+		// First request at time T.
+		req1 := httptest.NewRequest(http.MethodPost, "/api/devices", http.NoBody)
+		req1.Header.Set("Idempotency-Key", "key-ttl")
+		handler.ServeHTTP(httptest.NewRecorder(), req1)
+
+		// Second request: still within TTL → cached.
+		req2 := httptest.NewRequest(http.MethodPost, "/api/devices", http.NoBody)
+		req2.Header.Set("Idempotency-Key", "key-ttl")
+		rec2 := httptest.NewRecorder()
+		handler.ServeHTTP(rec2, req2)
+		if rec2.Header().Get("Idempotent-Replay") != "true" {
+			t.Error("expected cached hit within TTL")
+		}
+		if calls.Load() != 1 {
+			t.Errorf("expected 1 call within TTL, got %d", calls.Load())
+		}
+
+		// Advance the clock beyond TTL.
+		time.Sleep(IdempotencyTTL + time.Second)
+
+		// Third request: TTL expired → handler must be called again.
+		req3 := httptest.NewRequest(http.MethodPost, "/api/devices", http.NoBody)
+		req3.Header.Set("Idempotency-Key", "key-ttl")
+		rec3 := httptest.NewRecorder()
+		handler.ServeHTTP(rec3, req3)
+
+		if rec3.Header().Get("Idempotent-Replay") == "true" {
+			t.Error("expected cache miss after TTL expiry")
+		}
+		if calls.Load() != 2 {
+			t.Errorf("expected 2 total calls after TTL expiry, got %d", calls.Load())
+		}
 	})
-
-	// Build a middleware that shares the test cache (and its
-	// controllable clock) instead of Idempotency()'s private one.
-	handler := idempotencyMiddleware(cache)(inner)
-
-	// First request at time T.
-	req1 := httptest.NewRequest(http.MethodPost, "/api/devices", http.NoBody)
-	req1.Header.Set("Idempotency-Key", "key-ttl")
-	handler.ServeHTTP(httptest.NewRecorder(), req1)
-
-	// Second request: still within TTL → cached.
-	req2 := httptest.NewRequest(http.MethodPost, "/api/devices", http.NoBody)
-	req2.Header.Set("Idempotency-Key", "key-ttl")
-	rec2 := httptest.NewRecorder()
-	handler.ServeHTTP(rec2, req2)
-	if rec2.Header().Get("Idempotent-Replay") != "true" {
-		t.Error("expected cached hit within TTL")
-	}
-	if calls.Load() != 1 {
-		t.Errorf("expected 1 call within TTL, got %d", calls.Load())
-	}
-
-	// Advance clock beyond TTL.
-	cache.now = func() time.Time { return now.Add(IdempotencyTTL + time.Second) }
-
-	// Third request: TTL expired → handler must be called again.
-	req3 := httptest.NewRequest(http.MethodPost, "/api/devices", http.NoBody)
-	req3.Header.Set("Idempotency-Key", "key-ttl")
-	rec3 := httptest.NewRecorder()
-	handler.ServeHTTP(rec3, req3)
-
-	if rec3.Header().Get("Idempotent-Replay") == "true" {
-		t.Error("expected cache miss after TTL expiry")
-	}
-	if calls.Load() != 2 {
-		t.Errorf("expected 2 total calls after TTL expiry, got %d", calls.Load())
-	}
 }
 
 func TestIdempotency_FirstReplyNotTaggedAsReplay(t *testing.T) {
@@ -456,30 +455,29 @@ func idempotencyKeyRequest(key string) *http.Request {
 // response body stayed live for the life of the process.
 func TestIdempotency_ExpiredEntriesAreReclaimed(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		cache := newIdempotencyCache()
+		handler := idempotencyMiddleware(cache)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"id":"xyz"}`))
+		}))
 
-	now := time.Now()
-	cache := newIdempotencyCache()
-	cache.now = func() time.Time { return now }
-	handler := idempotencyMiddleware(cache)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(`{"id":"xyz"}`))
-	}))
+		for i := range idempotencyCacheCap {
+			handler.ServeHTTP(httptest.NewRecorder(), idempotencyKeyRequest("key-"+strconv.Itoa(i)))
+		}
+		if got := len(cache.items); got != idempotencyCacheCap {
+			t.Fatalf("cache size = %d, want %d before any entry expires", got, idempotencyCacheCap)
+		}
 
-	for i := range idempotencyCacheCap {
-		handler.ServeHTTP(httptest.NewRecorder(), idempotencyKeyRequest("key-"+strconv.Itoa(i)))
-	}
-	if got := len(cache.items); got != idempotencyCacheCap {
-		t.Fatalf("cache size = %d, want %d before any entry expires", got, idempotencyCacheCap)
-	}
+		// Everything cached so far is now unreplayable; the next key must
+		// reclaim rather than grow the table.
+		time.Sleep(IdempotencyTTL + time.Second)
+		handler.ServeHTTP(httptest.NewRecorder(), idempotencyKeyRequest("key-after-ttl"))
 
-	// Everything cached so far is now unreplayable; the next key must
-	// reclaim rather than grow the table.
-	cache.now = func() time.Time { return now.Add(IdempotencyTTL + time.Second) }
-	handler.ServeHTTP(httptest.NewRecorder(), idempotencyKeyRequest("key-after-ttl"))
-
-	if got := len(cache.items); got != 1 {
-		t.Fatalf("cache size = %d, want 1 after the expired entries were reclaimed", got)
-	}
+		if got := len(cache.items); got != 1 {
+			t.Fatalf("cache size = %d, want 1 after the expired entries were reclaimed", got)
+		}
+	})
 }
 
 // TestIdempotency_FullCacheRunsUncached pins the flood case where every
@@ -488,9 +486,7 @@ func TestIdempotency_ExpiredEntriesAreReclaimed(t *testing.T) {
 func TestIdempotency_FullCacheRunsUncached(t *testing.T) {
 	t.Parallel()
 
-	now := time.Now()
 	cache := newIdempotencyCache()
-	cache.now = func() time.Time { return now }
 	var calls atomic.Int32
 	handler := idempotencyMiddleware(cache)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
