@@ -26,11 +26,6 @@ import (
 // EffectiveCodePolicy resolution production wires seedPanels and
 // refreshPanelCodePolicies through (notes/concepts/alarm-concept.md §11/§13.3).
 
-// panelsTestStart is the harness wall-clock origin, kept after the
-// engine's clock-plausibility epoch, mirroring intents_test.go's
-// convention.
-var panelsTestStart = time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC)
-
 // panelsHarness bundles a real SQLite-backed alarm.Service for driving
 // seedPanels / refreshPanelCodePolicies against real zone configs and
 // real PIN-code rows through the codes facade.

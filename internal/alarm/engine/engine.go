@@ -1621,7 +1621,7 @@ func (e *Engine) startTicks(a *zone, timerKind string) {
 			if !ok || aa.tickSeq != seq || aa.timerKind != timerKind || aa.timerCancel == nil {
 				return
 			}
-			remaining := aa.timerDeadline.Sub(time.Now())
+			remaining := time.Until(aa.timerDeadline)
 			if remaining <= 0 {
 				return
 			}

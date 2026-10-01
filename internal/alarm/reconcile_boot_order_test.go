@@ -23,10 +23,6 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
-// reconcileBootStart is the created-at stamp of seeded rows, past the engine's
-// clock-plausibility epoch, as the other alarm harnesses do.
-var reconcileBootStart = time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC)
-
 // recordingSwitchWriter records what reaches the wire.
 type recordingSwitchWriter struct {
 	mu    chan struct{}

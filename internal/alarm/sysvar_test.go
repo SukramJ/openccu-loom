@@ -31,10 +31,6 @@ import (
 // intents_test.go's convention of driving the router's unexported
 // entry points directly through the harness.
 
-// sysvarTestStart is the harness wall-clock origin, kept after the
-// engine's clock-plausibility epoch (intents_test.go's convention).
-var sysvarTestStart = time.Date(2026, 7, 17, 12, 0, 0, 0, time.UTC)
-
 // fakeSysvarWrite records one SetSysvar call.
 type fakeSysvarWrite struct {
 	name  string
