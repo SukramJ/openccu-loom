@@ -196,7 +196,7 @@ func (u *Update) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscover
 			LatestVersionTopic:    stateTopic,
 			LatestVersionTemplate: "{{ value_json.latest_firmware }}",
 			Title:                 model + " Firmware",
-			DisplayPrecision:      hadiscovery.Ptr(0),
+			DisplayPrecision:      new(0),
 		},
 	}
 }

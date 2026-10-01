@@ -61,7 +61,7 @@ func TestHmAdpToggleReachesTheBINRPCCallbackHandler(t *testing.T) {
 		m.byCentral = map[string]*centralBringUp{"ccu-binrpc-toggle": h}
 		cfg := &config.Config{Centrals: []config.CentralConfig{{
 			Name:     "ccu-binrpc-toggle",
-			Behavior: config.CentralBehavior{DelayNewDeviceCreation: boolPtr(want)},
+			Behavior: config.CentralBehavior{DelayNewDeviceCreation: new(want)},
 		}}}
 		if n := m.ApplyDeferredCreationBehavior(context.Background(), cfg); n != 1 {
 			t.Fatalf("want=%v: applied to %d central(s), want 1", want, n)

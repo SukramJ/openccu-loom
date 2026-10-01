@@ -3,6 +3,8 @@
 
 package safety
 
+import "slices"
+
 // ActivationResolution reports how [ActiveFromRaw] reached its verdict.
 //
 // The two non-applied outcomes are kept apart because they call for
@@ -121,10 +123,5 @@ func normalizeActive(raw any) (active, known bool) {
 
 // containsLabel reports whether want is one of list's entries.
 func containsLabel(list []string, want string) bool {
-	for _, v := range list {
-		if v == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(list, want)
 }

@@ -148,39 +148,37 @@ func (v *Irrigation) HADiscoveryEntity() hamodel.Entity {
 		return nil
 	}
 	return &payload.CustomEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      v.TopicSlot().Parameter,
-			EntityPlatform: hacatalog.PlatformValve,
-			Description: hamodel.Description{
-				// device_class drives the HA icon (water-droplet) and semantic
-				// classification.
-				DeviceClass: "water",
-				// Render the HA-canonical state strings ("open" / "closed")
-				// directly: the bare `{{ value_json.is_open }}` form returns
-				// Python's `True`/`False` (capitalised) and matches no
-				// state_open / state_closed permutation. HA logs `Payload
-				// received … is not one of [open, closed, opening, closing],
-				// got: False` until the explicit branch emits a matching
-				// string.
-				ValueTemplate: "{% if value_json.is_open %}open{% else %}closed{% endif %}",
-				Optimistic:    hamodel.Ptr(false),
+		EntityKey:      v.TopicSlot().Parameter,
+		EntityPlatform: hacatalog.PlatformValve,
+		Description: hamodel.Description{
+			// device_class drives the HA icon (water-droplet) and semantic
+			// classification.
+			DeviceClass: "water",
+			// Render the HA-canonical state strings ("open" / "closed")
+			// directly: the bare `{{ value_json.is_open }}` form returns
+			// Python's `True`/`False` (capitalised) and matches no
+			// state_open / state_closed permutation. HA logs `Payload
+			// received … is not one of [open, closed, opening, closing],
+			// got: False` until the explicit branch emits a matching
+			// string.
+			ValueTemplate: "{% if value_json.is_open %}open{% else %}closed{% endif %}",
+			Optimistic:    new(false),
+		},
+		Binds: []hamodel.Binding{
+			{
+				Role: hamodel.RoleState, Mode: hamodel.Read,
+				Slot: payload.CustomSlot(v.TopicSlot()),
 			},
-			Binds: []hamodel.Binding{
-				{
-					Role: hamodel.RoleState, Mode: hamodel.Read,
-					Slot: payload.CustomSlot(v.TopicSlot()),
-				},
-				{
-					Role: hamodel.RoleCommand, Mode: hamodel.Write,
-					Slot: payload.WireSlot("STATE"),
-				},
+			{
+				Role: hamodel.RoleCommand, Mode: hamodel.Write,
+				Slot: payload.WireSlot("STATE"),
 			},
 		},
 		Fields: hadiscovery.ValveFields{
 			PayloadOpen:  "true",
 			PayloadClose: "false",
 			// Irrigation is binary — no position reporting.
-			ReportsPosition: hadiscovery.Ptr(false),
+			ReportsPosition: new(false),
 			StateOpen:       "open",
 			StateClosed:     "closed",
 		},
@@ -198,28 +196,26 @@ func (v *Modulating) HADiscoveryEntity() hamodel.Entity {
 	if v == nil {
 		return nil
 	}
-	return &modulatingEntity{CustomEntity: payload.CustomEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      v.TopicSlot().Parameter,
-			EntityPlatform: hacatalog.PlatformValve,
-			Description: hamodel.Description{
-				// device_class drives the HA icon — water-droplet for
-				// irrigation valves; modulating water-flow regulators inherit
-				// the same classification.
-				DeviceClass:   "water",
-				ValueTemplate: "{{ value_json.current_level_pct }}",
-				Optimistic:    hamodel.Ptr(false),
-			},
-			Binds: []hamodel.Binding{{
-				Role: hamodel.RoleState, Mode: hamodel.Read,
-				Slot: payload.CustomSlot(v.TopicSlot()),
-			}},
+	return &modulatingEntity{
+		EntityKey:      v.TopicSlot().Parameter,
+		EntityPlatform: hacatalog.PlatformValve,
+		Description: hamodel.Description{
+			// device_class drives the HA icon — water-droplet for
+			// irrigation valves; modulating water-flow regulators inherit
+			// the same classification.
+			DeviceClass:   "water",
+			ValueTemplate: "{{ value_json.current_level_pct }}",
+			Optimistic:    new(false),
 		},
+		Binds: []hamodel.Binding{{
+			Role: hamodel.RoleState, Mode: hamodel.Read,
+			Slot: payload.CustomSlot(v.TopicSlot()),
+		}},
 		Fields: hadiscovery.ValveFields{
 			// Modulating valves report position.
-			ReportsPosition: hadiscovery.Ptr(true),
+			ReportsPosition: new(true),
 		},
-	}}
+	}
 }
 
 // modulatingEntity carries the one key the model has no field for: HA sends a

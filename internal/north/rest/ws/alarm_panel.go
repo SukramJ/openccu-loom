@@ -465,8 +465,7 @@ func alarmWalkTestDTO(wt engine.WalkTestStatus) hmapi.AlarmWalkTestStatus {
 // not_found, unknown mode → bad_request, wrong state / no incident →
 // conflict, and a refused arm → not_ready with the blocking sensor ids.
 func alarmEngineError(err error) *CommandError {
-	var nr *engine.NotReadyError
-	if errors.As(err, &nr) {
+	if nr, ok := errors.AsType[*engine.NotReadyError](err); ok {
 		msg := "not ready to arm"
 		if len(nr.Blockers) > 0 {
 			msg += ": blocked by " + strings.Join(nr.Blockers, ", ")

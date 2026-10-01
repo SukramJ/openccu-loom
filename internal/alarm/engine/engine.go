@@ -1954,8 +1954,7 @@ func (e *Engine) onAutoRearmElapsed(ctx context.Context, a *zone) {
 	}
 	_, err := e.beginArm(ctx, a, ArmRequest{Mode: mode, By: "engine", Source: "engine:auto_rearm"}, mcfg)
 	if err != nil {
-		var nr *NotReadyError
-		if errors.As(err, &nr) {
+		if nr, ok := errors.AsType[*NotReadyError](err); ok {
 			e.journalEntry(ctx, a, JournalEntry{
 				Class: hmenum.AlarmJournalClassFault, Event: "failed_to_arm",
 				Actor: "engine", Source: "engine:auto_rearm",
@@ -1981,10 +1980,7 @@ func (e *Engine) persist(ctx context.Context, a *zone) {
 	now := e.clk.Now()
 	var timers []persistedTimer
 	if a.timerCancel != nil {
-		remaining := a.timerDeadline.Sub(now)
-		if remaining < 0 {
-			remaining = 0
-		}
+		remaining := max(a.timerDeadline.Sub(now), 0)
 		timers = append(timers, persistedTimer{
 			Kind:          a.timerKind,
 			DeadlineMS:    unixMS(a.timerDeadline),
@@ -1994,10 +1990,7 @@ func (e *Engine) persist(ctx context.Context, a *zone) {
 		})
 	}
 	if a.autoRearmCancel != nil {
-		remaining := a.autoRearmDeadline.Sub(now)
-		if remaining < 0 {
-			remaining = 0
-		}
+		remaining := max(a.autoRearmDeadline.Sub(now), 0)
 		timers = append(timers, persistedTimer{
 			Kind:          TimerKindAutoRearm,
 			DeadlineMS:    unixMS(a.autoRearmDeadline),

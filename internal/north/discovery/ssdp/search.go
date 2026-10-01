@@ -93,12 +93,12 @@ func locationHeader(resp []byte) string {
 	sc := bufio.NewScanner(bytes.NewReader(resp))
 	for sc.Scan() {
 		line := sc.Text()
-		idx := strings.IndexByte(line, ':')
-		if idx < 0 {
+		before, after, ok := strings.Cut(line, ":")
+		if !ok {
 			continue
 		}
-		if strings.EqualFold(strings.TrimSpace(line[:idx]), "location") {
-			return strings.TrimSpace(line[idx+1:])
+		if strings.EqualFold(strings.TrimSpace(before), "location") {
+			return strings.TrimSpace(after)
 		}
 	}
 	return ""

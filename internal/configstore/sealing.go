@@ -146,8 +146,7 @@ func collectSecretPaths(rt reflect.Type, prefix []string, inSecret bool, out *[]
 	if rt.Kind() != reflect.Struct {
 		return
 	}
-	for i := range rt.NumField() {
-		f := rt.Field(i)
+	for f := range rt.Fields() {
 		if !f.IsExported() {
 			continue
 		}

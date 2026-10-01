@@ -237,43 +237,39 @@ func (d *DefaultDiscoveryBuilder) renderChannelEvent(s channelEventSpec) ([]byte
 	}
 
 	entity := &channelEventEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      s.key,
-			EntityPlatform: hacatalog.PlatformEvent,
-			Description: hamodel.Description{
-				Name:        hamodel.L(s.name),
-				DeviceClass: hamodel.DeviceClass(s.deviceClass),
-				// Home Assistant's event platform requires the
-				// post-template payload to be parseable as JSON and reads
-				// `event_type` out of it itself. This daemon already
-				// publishes that envelope on the channel topic, so a
-				// template extracting the scalar would hand Home Assistant a
-				// bare string it then fails to parse — `No valid JSON event
-				// payload detected` in the log. The event platform DOES
-				// declare `value_template`, so the default envelope encoding
-				// would project one; suppress it explicitly.
-				ValueTemplate: hamodel.NoValueTemplate,
-			},
-			Binds: []hamodel.Binding{{
-				Role: hamodel.RoleState,
-				Mode: hamodel.Read,
-				Slot: hamodel.S(dev.UID(), strconv.Itoa(s.ev.ChannelNo),
-					hamodel.BucketCustom, s.key).In(central, s.ev.Interface),
-			}},
+		EntityKey:      s.key,
+		EntityPlatform: hacatalog.PlatformEvent,
+		Description: hamodel.Description{
+			Name:        hamodel.L(s.name),
+			DeviceClass: hamodel.DeviceClass(s.deviceClass),
+			// Home Assistant's event platform requires the
+			// post-template payload to be parseable as JSON and reads
+			// `event_type` out of it itself. This daemon already
+			// publishes that envelope on the channel topic, so a
+			// template extracting the scalar would hand Home Assistant a
+			// bare string it then fails to parse — `No valid JSON event
+			// payload detected` in the log. The event platform DOES
+			// declare `value_template`, so the default envelope encoding
+			// would project one; suppress it explicitly.
+			ValueTemplate: hamodel.NoValueTemplate,
 		},
+		Binds: []hamodel.Binding{{
+			Role: hamodel.RoleState,
+			Mode: hamodel.Read,
+			Slot: hamodel.S(dev.UID(), strconv.Itoa(s.ev.ChannelNo),
+				hamodel.BucketCustom, s.key).In(central, s.ev.Interface),
+		}},
 		eventTypes: s.types,
 	}
 
 	ctx := channelEventDiscoveryContext{
-		StdContext: hadiscovery.StdContext{
-			Layout: channelEventTopicLayout{
-				d: d, ev: s.ev, central: central, state: s.stateTopic,
-			},
-			Lang:       d.Locale,
-			Translator: d.tr,
+		Layout: channelEventTopicLayout{
+			d: d, ev: s.ev, central: central, state: s.stateTopic,
 		},
-		uniqueID: s.uniqueID,
-		nodeID:   s.nodeID,
+		Lang:       d.Locale,
+		Translator: d.tr,
+		uniqueID:   s.uniqueID,
+		nodeID:     s.nodeID,
 	}
 
 	comp, err := hadiscovery.RenderComponent(ctx, dev, entity, *BuildOriginInfo())
@@ -661,25 +657,23 @@ func (d *DefaultDiscoveryBuilder) aggregateChannel(ev Event) (component, nodeID,
 	// device card; without this flag they show up as duplicate primary
 	// entities and pollute the dashboard.
 	if insp, is := ev.Channel.(CustomDPNamingInspector); is && insp.IsCustomDPSecondaryChannel() {
-		desc.Enabled = hamodel.Ptr(false)
+		desc.Enabled = new(false)
 	}
 
 	nodeID = discoveryNodeID(d.centralFor(ev), ev.DeviceAddress)
 	objectID = d.channelObjectID(ev, component)
 	ctx := aggregateDiscoveryContext{
-		StdContext: hadiscovery.StdContext{
-			Layout: d.aggregateTopicLayout(ev),
-			Lang:   d.Locale,
-			// A custom data point's aggregate carries a curated document, not
-			// the `{"value": …}` envelope the per-parameter plane publishes,
-			// and every field of it names its own template. The envelope
-			// default would project one onto entities that deliberately
-			// publish none.
-			Enc:        hadiscovery.RawEncoding,
-			Translator: d.tr,
-		},
-		uniqueID: uniqueID,
-		nodeID:   nodeID,
+		Layout: d.aggregateTopicLayout(ev),
+		Lang:   d.Locale,
+		// A custom data point's aggregate carries a curated document, not
+		// the `{"value": …}` envelope the per-parameter plane publishes,
+		// and every field of it names its own template. The envelope
+		// default would project one onto entities that deliberately
+		// publish none.
+		Enc:        hadiscovery.RawEncoding,
+		Translator: d.tr,
+		uniqueID:   uniqueID,
+		nodeID:     nodeID,
 	}
 	comp, err := hadiscovery.RenderComponent(ctx, dev, entity, *BuildOriginInfo())
 	if err != nil {

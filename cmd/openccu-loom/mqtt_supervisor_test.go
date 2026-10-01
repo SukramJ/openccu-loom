@@ -451,16 +451,14 @@ func TestSupervisorConcurrentSwapsRetireEveryStackButTheLiveOne(t *testing.T) {
 	)
 	var wg sync.WaitGroup
 	for range swappers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for range rounds {
 				if err := s.Swap(ctx, mqttCfg(true)); err != nil {
 					t.Errorf("Swap: %v", err)
 					return
 				}
 			}
-		}()
+		})
 	}
 	wg.Wait()
 

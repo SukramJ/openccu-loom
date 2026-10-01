@@ -91,7 +91,7 @@ func firstRunGateConfig(t *testing.T) *config.Config {
 	// the double-submit guard is covered by its own tests.
 	cfg.North.REST.CSRFEnabled = new(false)
 	cfg.North.UI.Enabled = new(false)
-	cfg.North.REST.Auth.CCU.Enabled = ptrBool(false)
+	cfg.North.REST.Auth.CCU.Enabled = new(false)
 	cfg.Callback.Port = 0
 	cfg.Callback.BinPort = 0
 	cfg.Centrals = nil

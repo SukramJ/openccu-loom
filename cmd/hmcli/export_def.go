@@ -118,13 +118,13 @@ func cmdExportDef(args []string, stdout, stderr io.Writer) error {
 // `Content-Disposition: attachment; filename="X.zip"` header, or "".
 func filenameFromDisposition(header string) string {
 	const marker = `filename="`
-	i := strings.Index(header, marker)
-	if i < 0 {
+	_, after, ok := strings.Cut(header, marker)
+	if !ok {
 		return ""
 	}
-	rest := header[i+len(marker):]
-	if j := strings.IndexByte(rest, '"'); j >= 0 {
-		return rest[:j]
+	rest := after
+	if before, _, ok := strings.Cut(rest, "\""); ok {
+		return before
 	}
 	return ""
 }

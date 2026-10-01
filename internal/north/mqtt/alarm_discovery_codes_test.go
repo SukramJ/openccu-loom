@@ -87,11 +87,6 @@ func TestBuildAlarmPanelDiscovery_MasterPanelHonorsCodePolicyToo(t *testing.T) {
 	}
 }
 
-// boolPtr returns a pointer to b, for building an explicit
-// engine.CodePolicy.RequireDisarm value (as opposed to the nil
-// default).
-func boolPtr(b bool) *bool { return &b }
-
 // TestAlarmMQTTPublisher_AreaCodePolicyEffectiveRequirement covers the
 // review-fix regression in [AlarmMQTTPublisher.zoneCodePolicy]: the
 // discovery flags advertised for an zone must reflect BOTH halves of
@@ -133,21 +128,21 @@ func TestAlarmMQTTPublisher_AreaCodePolicyEffectiveRequirement(t *testing.T) {
 		},
 		{
 			name:          "explicit_require_disarm_false_with_pin_stays_false",
-			requireDisarm: boolPtr(false),
+			requireDisarm: new(false),
 			codes:         []seedCode{{id: "c1", enabled: true}},
 			wantDisarmReq: false,
 		},
 		{
 			name:          "require_arm_with_pin_requires_arm_code",
 			requireArm:    true,
-			requireDisarm: boolPtr(false),
+			requireDisarm: new(false),
 			codes:         []seedCode{{id: "c1", enabled: true}},
 			wantArmReq:    true,
 		},
 		{
 			name:          "require_arm_without_pin_stays_false",
 			requireArm:    true,
-			requireDisarm: boolPtr(false),
+			requireDisarm: new(false),
 			codes:         nil,
 			wantArmReq:    false,
 		},

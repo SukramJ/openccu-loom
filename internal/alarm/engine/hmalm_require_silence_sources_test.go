@@ -55,7 +55,7 @@ func TestRequireSilenceGatesOnlyAnonymousSources(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.source, func(t *testing.T) {
 			h := newHarness(t)
-			h.seedZone("eg", "Erdgeschoss", codePolicyZoneConfig(false, boolPtr(false), gateAll))
+			h.seedZone("eg", "Erdgeschoss", codePolicyZoneConfig(false, new(false), gateAll))
 			h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{
 				Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull},
 			})

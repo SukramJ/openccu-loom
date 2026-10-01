@@ -6,6 +6,7 @@ package harness
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -333,12 +334,7 @@ func ServerListIDs(out string) []uint32 {
 // HasCluster returns true when the parsed ServerList output
 // contains the given cluster id.
 func HasCluster(ids []uint32, cluster uint32) bool {
-	for _, id := range ids {
-		if id == cluster {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(ids, cluster)
 }
 
 // ServerListIDsPerEndpoint parses wildcard-endpoint server-list
@@ -396,16 +392,16 @@ func ServerListIDsPerEndpoint(out string) map[uint16][]uint32 {
 // matches to a single attribute's value-block, avoiding accidental
 // cross-attribute matches when chip-tool prints multiple lists.
 func extractBlockAfter(out, marker string) string {
-	idx := strings.Index(out, marker)
-	if idx < 0 {
+	_, after, ok := strings.Cut(out, marker)
+	if !ok {
 		return ""
 	}
-	tail := out[idx+len(marker):]
-	end := strings.Index(tail, "\n\n")
-	if end < 0 {
+	tail := after
+	before0, _, ok0 := strings.Cut(tail, "\n\n")
+	if !ok0 {
 		return tail
 	}
-	return tail[:end]
+	return before0
 }
 
 // HexUint parses chip-tool's "0xAB" / "0xABCD" hex literals into a

@@ -176,10 +176,7 @@ func (s *Select) CurrentMode() uint8 {
 // modeInRange reports whether idx addresses a VALUE_LIST entry that is also
 // representable as a Matter mode (uint8, and within the projected list).
 func (s *Select) modeInRange(idx int32) bool {
-	n := len(s.Descriptor.ValueList)
-	if n > matterSelectMaxModes {
-		n = matterSelectMaxModes
-	}
+	n := min(len(s.Descriptor.ValueList), matterSelectMaxModes)
 	return idx >= 0 && int(idx) < n
 }
 

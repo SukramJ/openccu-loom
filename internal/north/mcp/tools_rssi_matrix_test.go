@@ -56,8 +56,6 @@ func rssiDeps(m *fakeRSSIMatrixTool, a *fakeRFAssigner, rec audit.Recorder) mcp.
 	}
 }
 
-func ip(v int) *int { return &v }
-
 // TestRSSIMatrixToolsProjectAndFilter pins the matrix and proposal
 // projections, the central filter, and the default margin reaching the
 // service as "use the default".
@@ -65,7 +63,7 @@ func TestRSSIMatrixToolsProjectAndFilter(t *testing.T) {
 	m := &fakeRSSIMatrixTool{
 		centrals: []interfaces.RSSIMatrixCentral{
 			{Central: "ccu1", InterfaceID: "ccu1-BidCos-RF", Devices: []interfaces.RSSIMatrixDevice{{
-				Address: "DEV", Partners: []interfaces.RSSIMatrixPartner{{Address: "GW1", RxDBm: ip(-60)}},
+				Address: "DEV", Partners: []interfaces.RSSIMatrixPartner{{Address: "GW1", RxDBm: new(-60)}},
 			}}},
 			{Central: "ccu2", InterfaceID: "ccu2-BidCos-RF"},
 		},

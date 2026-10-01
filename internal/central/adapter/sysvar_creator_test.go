@@ -81,7 +81,7 @@ func buildSysvarCreatorFixture(t *testing.T) (
 		t.Fatalf("central.New: %v", err)
 	}
 
-	ops = &sysvarOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+	ops = &sysvarOps{kind: backends.KindCCU}
 	w := clientpkg.NewValueWriter()
 	w.Register("ccu-01", "HmIP-RF", ops)
 

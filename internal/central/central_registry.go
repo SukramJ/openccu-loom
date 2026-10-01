@@ -204,8 +204,8 @@ func (r *Registry) removeObserver(entry *centralObserver) {
 		} else {
 			r.unwires[name] = kept
 		}
-		for i := len(run) - 1; i >= 0; i-- {
-			run[i]()
+		for _, r := range slices.Backward(run) {
+			r()
 		}
 	}
 }
@@ -360,8 +360,8 @@ func (r *Registry) Unregister(name string) bool {
 
 	attached := r.unwires[name]
 	delete(r.unwires, name)
-	for i := len(attached) - 1; i >= 0; i-- {
-		attached[i].unwire()
+	for _, a := range slices.Backward(attached) {
+		a.unwire()
 	}
 	return true
 }

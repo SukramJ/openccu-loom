@@ -7,6 +7,7 @@ import (
 	"context"
 	"log/slog"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -55,12 +56,7 @@ func (w *recordingSwitchWriter) SetValue(
 func (w *recordingSwitchWriter) sawStop() bool {
 	w.mu <- struct{}{}
 	defer func() { <-w.mu }()
-	for _, c := range w.calls {
-		if c == "off" {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(w.calls, "off")
 }
 
 // TestReconcileActsOnASirenThatWasAlreadySoundingWhenTheModelArrived

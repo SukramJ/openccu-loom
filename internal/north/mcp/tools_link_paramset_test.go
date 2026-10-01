@@ -11,6 +11,7 @@
 package mcp_test
 
 import (
+	"maps"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/mcp"
@@ -187,9 +188,7 @@ func TestWriteLinkParamset_LockGrammar(t *testing.T) {
 		defer cs.Close()
 
 		withToken := map[string]any{}
-		for k, v := range args {
-			withToken[k] = v
-		}
+		maps.Copy(withToken, args)
 		withToken["edit_token"] = "tok-1"
 
 		res := callTool(t, cs, "write_link_paramset", withToken)
@@ -218,9 +217,7 @@ func TestWriteLinkParamset_LockGrammar(t *testing.T) {
 		defer cs.Close()
 
 		withToken := map[string]any{}
-		for k, v := range args {
-			withToken[k] = v
-		}
+		maps.Copy(withToken, args)
 		withToken["edit_token"] = "tok-1"
 
 		res := callTool(t, cs, "write_link_paramset", withToken)

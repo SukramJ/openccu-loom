@@ -74,7 +74,7 @@ func TestTurningTheToggleOffAppliesWithoutARestart(t *testing.T) {
 
 	off := &config.Config{Centrals: []config.CentralConfig{{
 		Name:     "ccu-toggle-live",
-		Behavior: config.CentralBehavior{DelayNewDeviceCreation: boolPtr(false)},
+		Behavior: config.CentralBehavior{DelayNewDeviceCreation: new(false)},
 	}}}
 	if n := m.ApplyDeferredCreationBehavior(context.Background(), off); n != 1 {
 		t.Fatalf("applied to %d central(s), want 1", n)
@@ -102,7 +102,7 @@ func TestTurningTheToggleOnDoesNotReleaseAnything(t *testing.T) {
 
 	on := &config.Config{Centrals: []config.CentralConfig{{
 		Name:     "ccu-toggle-live",
-		Behavior: config.CentralBehavior{DelayNewDeviceCreation: boolPtr(true)},
+		Behavior: config.CentralBehavior{DelayNewDeviceCreation: new(true)},
 	}}}
 	if n := m.ApplyDeferredCreationBehavior(context.Background(), on); n != 0 {
 		t.Errorf("applied to %d central(s) on an unchanged setting, want 0", n)
@@ -111,5 +111,3 @@ func TestTurningTheToggleOnDoesNotReleaseAnything(t *testing.T) {
 		t.Error("an unchanged toggle released a held device")
 	}
 }
-
-func boolPtr(b bool) *bool { return &b }

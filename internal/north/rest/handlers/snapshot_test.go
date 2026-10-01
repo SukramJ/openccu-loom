@@ -66,7 +66,7 @@ func TestSnapshot_WithDevicesAndHub_Returns200(t *testing.T) {
 	idx := &stubDeviceIndex{devices: map[string]*device.Device{"0001ABCD": d}}
 
 	h := hub.NewHub("ccu01")
-	h.PutProgram(&hub.Program{HubDataPoint: hub.HubDataPoint{Name: "Morning"}, ID: "P1"})
+	h.PutProgram(&hub.Program{Name: "Morning", ID: "P1"})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/snapshot", http.NoBody)
 	w := httptest.NewRecorder()
@@ -197,8 +197,8 @@ func TestSnapshot_AnonymisePrograms(t *testing.T) {
 	t.Parallel()
 	h := hub.NewHub("ccu01")
 	h.PutProgram(&hub.Program{
-		HubDataPoint: hub.HubDataPoint{Name: "My Secret Program", Description: "secret info"},
-		ID:           "P1",
+		Name: "My Secret Program", Description: "secret info",
+		ID: "P1",
 	})
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/snapshot?anonymize=1", http.NoBody)
 	w := httptest.NewRecorder()

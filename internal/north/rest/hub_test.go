@@ -111,8 +111,8 @@ func newHubRouter(t *testing.T) *hubHarness {
 	h := hub.NewHub("ccu-01")
 	pw := &fakeProgramWriter{}
 	sw := &fakeSysvarWriter{}
-	h.PutProgram(&hub.Program{HubDataPoint: hub.HubDataPoint{Name: "Morning"}, ID: "P1", Writer: pw})
-	h.PutSysvar(&hub.Sysvar{HubDataPoint: hub.HubDataPoint{Name: "PartyMode"}, ValueType: hmenum.HubValueTypeLogic, Writer: sw})
+	h.PutProgram(&hub.Program{Name: "Morning", ID: "P1", Writer: pw})
+	h.PutSysvar(&hub.Sysvar{Name: "PartyMode", ValueType: hmenum.HubValueTypeLogic, Writer: sw})
 
 	iface := &fakeInterfaceIndex{states: map[string]handlers.InterfaceState{
 		"HmIP-RF": {ID: "HmIP-RF", Name: "HmIP radio", Connected: true, Interface: "HmIP-RF"},

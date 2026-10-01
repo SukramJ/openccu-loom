@@ -371,10 +371,7 @@ func (s *MeasurementStore) QueryBuckets(
 		return nil, "", errors.New("measurements.QueryBuckets: to must be after from")
 	}
 	// Bucket width in ms, at least 1 so very short ranges still group.
-	width := (toMs - fromMs) / int64(buckets)
-	if width < 1 {
-		width = 1
-	}
+	width := max((toMs-fromMs)/int64(buckets), 1)
 	key := seriesKey{centralName, interfaceID, channelAddress, parameter}
 
 	tier, err := s.pickHistoryTier(ctx, key, width, fromMs, toMs)
@@ -914,13 +911,7 @@ func foldTierBuckets(src []tierBucket, fromMs, width int64, buckets int) []Measu
 		if b.count == 0 {
 			continue
 		}
-		idx := (b.bucketTS - fromMs) / width
-		if idx < 0 {
-			idx = 0
-		}
-		if idx > maxIdx {
-			idx = maxIdx
-		}
+		idx := min(max((b.bucketTS-fromMs)/width, 0), maxIdx)
 		a, ok := byIdx[idx]
 		if !ok {
 			byIdx[idx] = &acc{sum: b.sum, minV: b.minV, maxV: b.maxV, count: b.count, weightedSum: b.weightedSum, weightMs: b.weightMs}

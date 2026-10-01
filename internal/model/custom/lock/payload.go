@@ -170,25 +170,23 @@ func (l *Lock) HADiscoveryEntity() hamodel.Entity {
 	if l == nil {
 		return nil
 	}
-	entity := &lockEntity{CustomEntity: payload.CustomEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      l.TopicSlot().Parameter,
-			EntityPlatform: hacatalog.PlatformLock,
-			Description: hamodel.Description{
-				// lock_state is the HA lifecycle string the aggregate emits.
-				ValueTemplate: "{{ value_json.lock_state }}",
-				// optimistic=false — without this HA defaults to true and shows
-				// the lock as locked / unlocked before the CCU echo arrives.
-				// Critical for door locks, where a brief connection drop would
-				// otherwise leave HA showing the wrong state.
-				Optimistic: hamodel.Ptr(false),
-			},
-			Binds: []hamodel.Binding{{
-				Role: hamodel.RoleState, Mode: hamodel.Read,
-				Slot: payload.CustomSlot(l.TopicSlot()),
-			}},
+	entity := &lockEntity{
+		EntityKey:      l.TopicSlot().Parameter,
+		EntityPlatform: hacatalog.PlatformLock,
+		Description: hamodel.Description{
+			// lock_state is the HA lifecycle string the aggregate emits.
+			ValueTemplate: "{{ value_json.lock_state }}",
+			// optimistic=false — without this HA defaults to true and shows
+			// the lock as locked / unlocked before the CCU echo arrives.
+			// Critical for door locks, where a brief connection drop would
+			// otherwise leave HA showing the wrong state.
+			Optimistic: new(false),
 		},
-	}}
+		Binds: []hamodel.Binding{{
+			Role: hamodel.RoleState, Mode: hamodel.Read,
+			Slot: payload.CustomSlot(l.TopicSlot()),
+		}},
+	}
 
 	fields := hadiscovery.LockFields{
 		// HA lifecycle string tokens — match what StatePayload.lock_state

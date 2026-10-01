@@ -107,7 +107,7 @@ func TestW2PkgCaptureAnonymiseDocMatchesTheEncoder(t *testing.T) {
 func w2PkgDocComments(t *testing.T, src string) string {
 	t.Helper()
 	var b strings.Builder
-	for _, line := range strings.Split(src, "\n") {
+	for line := range strings.SplitSeq(src, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if !strings.HasPrefix(trimmed, "//") {
 			continue

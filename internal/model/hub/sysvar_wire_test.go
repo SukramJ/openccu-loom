@@ -19,9 +19,9 @@ import (
 
 func sysvarOfType(vt hmenum.HubValueType, valueList ...string) *Sysvar {
 	return &Sysvar{
-		HubDataPoint: HubDataPoint{Name: "sv"},
-		ValueType:    vt,
-		ValueList:    valueList,
+		Name:      "sv",
+		ValueType: vt,
+		ValueList: valueList,
 	}
 }
 
@@ -250,10 +250,10 @@ func TestSysvarSetDeliversTypedWireValues(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			w := &capturingSysvarWriter{}
 			s := &Sysvar{
-				HubDataPoint: HubDataPoint{Name: "sv"},
-				ValueType:    tc.valueType,
-				ValueList:    tc.valueList,
-				Writer:       w,
+				Name:      "sv",
+				ValueType: tc.valueType,
+				ValueList: tc.valueList,
+				Writer:    w,
 			}
 			if err := s.Set(context.Background(), tc.in); err != nil {
 				t.Fatalf("Set: %v", err)

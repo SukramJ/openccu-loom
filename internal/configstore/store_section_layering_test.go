@@ -29,7 +29,7 @@ func TestRESTSectionRowOmitsNestedSections(t *testing.T) {
 
 	cfg := config.Default()
 	cfg.North.REST.PublicURL = "https://loom.example"
-	cfg.North.REST.Auth.HAIngress.Enabled = boolPtr(true)
+	cfg.North.REST.Auth.HAIngress.Enabled = new(true)
 	cfg.North.REST.Auth.HAIngress.Role = "admin"
 	cfg.North.REST.Auth.CCU.Central = "ccu1"
 	cfg.North.REST.Auth.OIDC.Issuer = "https://idp.example"
@@ -63,7 +63,7 @@ func TestNestedSectionFieldResetSurvivesEffectiveRebuild(t *testing.T) {
 
 	// First boot seeds every section from a YAML config with the passthrough on.
 	seeded := config.Default()
-	seeded.North.REST.Auth.HAIngress.Enabled = boolPtr(true)
+	seeded.North.REST.Auth.HAIngress.Enabled = new(true)
 	s := New(defaultBootstrap(), sl, nil)
 	if _, err := s.SeedSectionsFromConfig(ctx, seeded, "yaml"); err != nil {
 		t.Fatalf("seed: %v", err)
@@ -129,7 +129,7 @@ func TestNestedSectionRowsStillCarryTheirOwnValues(t *testing.T) {
 	ctx := context.Background()
 	sl := newFakeSectionLoader()
 	seeded := config.Default()
-	seeded.North.REST.Auth.HAIngress.Enabled = boolPtr(true)
+	seeded.North.REST.Auth.HAIngress.Enabled = new(true)
 	seeded.North.REST.Auth.HAIngress.Role = "operator"
 	seeded.North.REST.Auth.CCU.Central = "ccu1"
 	seeded.North.REST.Auth.OIDC.Issuer = "https://idp.example"

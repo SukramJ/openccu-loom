@@ -162,7 +162,7 @@ func buildSuppressorFixture(t *testing.T) (
 	if err != nil {
 		t.Fatalf("central.New: %v", err)
 	}
-	ops := &suppressOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+	ops := &suppressOps{kind: backends.KindCCU}
 	w := clientpkg.NewValueWriter()
 	wireID := WireInterfaceID("ccu-01", hmenum.InterfaceHmIPRF)
 	w.Register("ccu-01", hmtypes.ParseWireInterfaceID(wireID), ops)
@@ -378,7 +378,7 @@ func TestWireServiceMessageSuppressorWiresBothSeams(t *testing.T) {
 	if err != nil {
 		t.Fatalf("central.New: %v", err)
 	}
-	ops := &suppressOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+	ops := &suppressOps{kind: backends.KindCCU}
 	w := clientpkg.NewValueWriter()
 	wireID := WireInterfaceID("ccu-07", hmenum.InterfaceHmIPRF)
 	w.Register("ccu-07", hmtypes.ParseWireInterfaceID(wireID), ops)

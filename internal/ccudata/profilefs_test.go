@@ -100,8 +100,7 @@ func TestProfilesFSOpen(t *testing.T) {
 			if !errors.Is(err, tc.wantErr) {
 				t.Errorf("Open(%q) error = %v, want %v", tc.path, err, tc.wantErr)
 			}
-			var pathErr *fs.PathError
-			if !errors.As(err, &pathErr) {
+			if _, ok := errors.AsType[*fs.PathError](err); !ok {
 				t.Errorf("Open(%q) error should be a *fs.PathError, got %T", tc.path, err)
 			}
 		})

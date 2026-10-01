@@ -6,6 +6,7 @@ package warnings
 import (
 	"context"
 	"errors"
+	"maps"
 	"testing"
 	"time"
 
@@ -35,9 +36,7 @@ func newMemSilences() *memSilences { return &memSilences{rows: map[string]map[st
 
 func (m *memSilences) Silences(_ context.Context, user string) (map[string]time.Time, error) {
 	out := map[string]time.Time{}
-	for id, until := range m.rows[user] {
-		out[id] = until
-	}
+	maps.Copy(out, m.rows[user])
 	return out, nil
 }
 

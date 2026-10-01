@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -42,11 +43,9 @@ func TestCentralBringUp_ConcurrentReinitIsSerialized(t *testing.T) {
 
 	var wg sync.WaitGroup
 	for range 24 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			b.reinit(context.Background())
-		}()
+		})
 	}
 	wg.Wait()
 	b.shutdown() // must not panic / leave the handle inconsistent
@@ -356,12 +355,7 @@ func TestBringUpManager_TeardownRunsAllHandlesAndParentCancel(t *testing.T) {
 
 	// All per-gen and permanent closers must have fired.
 	contains := func(s string) bool {
-		for _, v := range got {
-			if v == s {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(got, s)
 	}
 	for _, name := range []string{"first", "second"} {
 		if !contains(name + ".gen") {
@@ -439,9 +433,7 @@ func TestBringUpManager_TeardownSnapshotsHandlesUnderLock(t *testing.T) {
 	stop := make(chan struct{})
 	var wg sync.WaitGroup
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for i := 0; ; i++ {
 			select {
 			case <-stop:
@@ -452,16 +444,14 @@ func TestBringUpManager_TeardownSnapshotsHandlesUnderLock(t *testing.T) {
 			m.add(&centralBringUp{logger: slog.Default(), cc: config.CentralConfig{Name: name}})
 			m.RemoveCentral(name)
 		}
-	}()
+	})
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for range 500 {
 			m.Teardown()
 		}
 		close(stop)
-	}()
+	})
 
 	wg.Wait()
 }

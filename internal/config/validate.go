@@ -268,7 +268,7 @@ func validateAlarmSeconds(a *AlarmConfig) error {
 }
 
 // durationType is the reflect type every duration leaf carries.
-var durationType = reflect.TypeOf(time.Duration(0))
+var durationType = reflect.TypeFor[time.Duration]()
 
 // durationsWhereNegativeIsMeaningful lists the duration leaves for which a
 // negative value is a documented instruction rather than a mistake. Each

@@ -517,8 +517,8 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 	// before Unit.Stop.
 	var undo []func()
 	rollback := func() {
-		for i := len(undo) - 1; i >= 0; i-- {
-			undo[i]()
+		for _, u := range slices.Backward(undo) {
+			u()
 		}
 	}
 	undo = append(undo, func() { //nolint:contextcheck // Unit.Stop takes no ctx parameter; shutdown always runs to completion regardless of the caller's ctx

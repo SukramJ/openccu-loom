@@ -427,8 +427,8 @@ func (e *coverEntity) BuildDiscovery(ctx hadiscovery.Context, comp *hadiscovery.
 		comp.CommandTopic = e.MethodTopic(ctx, e.method)
 	}
 	if e.position {
-		fields.PositionOpen = hadiscovery.Ptr(100)
-		fields.PositionClosed = hadiscovery.Ptr(0)
+		fields.PositionOpen = new(100)
+		fields.PositionClosed = new(0)
 		fields.PositionTopic = comp.StateTopic
 		fields.PositionTemplate = "{{ value_json.current_position }}"
 	}
@@ -443,10 +443,10 @@ func (e *coverEntity) BuildDiscovery(ctx hadiscovery.Context, comp *hadiscovery.
 		fields.TiltStatusTemplate = "{{ value_json.current_tilt_position }}"
 		fields.TiltCommandTopic = e.MethodTopic(ctx, "set_tilt")
 		fields.TiltCommandTemplate = "{{ (value | float / 100) }}"
-		fields.TiltMin = hadiscovery.Ptr(0)
-		fields.TiltMax = hadiscovery.Ptr(100)
-		fields.TiltOpenedValue = hadiscovery.Ptr(100)
-		fields.TiltClosedValue = hadiscovery.Ptr(0)
+		fields.TiltMin = new(0)
+		fields.TiltMax = new(100)
+		fields.TiltOpenedValue = new(100)
+		fields.TiltClosedValue = new(0)
 	}
 	comp.Fields = fields
 	return nil
@@ -485,21 +485,17 @@ func (c *Cover) HADiscoveryEntity() hamodel.Entity {
 	fields.PayloadClose = commandTokenClose
 	fields.PayloadStop = commandTokenStop
 	return &coverEntity{
-		CustomEntity: payload.CustomEntity{
-			Basic: hamodel.Basic{
-				EntityKey:      c.TopicSlot().Parameter,
-				EntityPlatform: hacatalog.PlatformCover,
-				Description: hamodel.Description{
-					DeviceClass:   hamodel.DeviceClass(VariantString(c.Variant)),
-					ValueTemplate: "{{ value_json.state }}",
-					Optimistic:    hamodel.Ptr(false),
-				},
-				Binds: []hamodel.Binding{{
-					Role: hamodel.RoleState, Mode: hamodel.Read,
-					Slot: payload.CustomSlot(c.TopicSlot()),
-				}},
-			},
+		EntityKey:      c.TopicSlot().Parameter,
+		EntityPlatform: hacatalog.PlatformCover,
+		Description: hamodel.Description{
+			DeviceClass:   hamodel.DeviceClass(VariantString(c.Variant)),
+			ValueTemplate: "{{ value_json.state }}",
+			Optimistic:    new(false),
 		},
+		Binds: []hamodel.Binding{{
+			Role: hamodel.RoleState, Mode: hamodel.Read,
+			Slot: payload.CustomSlot(c.TopicSlot()),
+		}},
 		fields:      fields,
 		method:      serviceCoverCommand,
 		position:    c.Capabilities.SupportsPosition,
@@ -552,25 +548,21 @@ func (g *Garage) HADiscoveryEntity() hamodel.Entity {
 	fields.PayloadClose = "CLOSE"
 	fields.PayloadStop = "STOP"
 	return &coverEntity{
-		CustomEntity: payload.CustomEntity{
-			Basic: hamodel.Basic{
-				EntityKey:      g.TopicSlot().Parameter,
-				EntityPlatform: hacatalog.PlatformCover,
-				Description: hamodel.Description{
-					DeviceClass:   "garage",
-					ValueTemplate: "{{ value_json.state }}",
-					Optimistic:    hamodel.Ptr(false),
-				},
-				Binds: []hamodel.Binding{
-					{
-						Role: hamodel.RoleState, Mode: hamodel.Read,
-						Slot: payload.CustomSlot(g.TopicSlot()),
-					},
-					{
-						Role: hamodel.RoleCommand, Mode: hamodel.Write,
-						Slot: payload.WireSlot("DOOR_COMMAND"),
-					},
-				},
+		EntityKey:      g.TopicSlot().Parameter,
+		EntityPlatform: hacatalog.PlatformCover,
+		Description: hamodel.Description{
+			DeviceClass:   "garage",
+			ValueTemplate: "{{ value_json.state }}",
+			Optimistic:    new(false),
+		},
+		Binds: []hamodel.Binding{
+			{
+				Role: hamodel.RoleState, Mode: hamodel.Read,
+				Slot: payload.CustomSlot(g.TopicSlot()),
+			},
+			{
+				Role: hamodel.RoleCommand, Mode: hamodel.Write,
+				Slot: payload.WireSlot("DOOR_COMMAND"),
 			},
 		},
 		fields: fields,

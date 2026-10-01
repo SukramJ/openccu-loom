@@ -719,7 +719,7 @@ func TestCentralWriteRefusedForCleartextPasswordReturns400(t *testing.T) {
 func centralRowRequest(t *testing.T, h http.HandlerFunc, target string, id *auth.Identity) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, target, http.NoBody)
-	if name := strings.TrimPrefix(target, "/api/v1/centrals/"); name != target {
+	if name, ok := strings.CutPrefix(target, "/api/v1/centrals/"); ok {
 		req = withChiParam(req, "name", name)
 	}
 	if id != nil {

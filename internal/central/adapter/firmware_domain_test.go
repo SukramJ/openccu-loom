@@ -51,8 +51,8 @@ func TestWriterDescFetcherListDevices_HappyPath(t *testing.T) {
 		{Address: "0002ABCD", Type: "HmIP-PSM"},
 	}
 	fake := &listRecordingOps{
-		fakeOperations: fakeOperations{kind: backends.KindCCU},
-		returnDesc:     want,
+		kind:       backends.KindCCU,
+		returnDesc: want,
 	}
 	w := clientpkg.NewValueWriter()
 	w.Register("ccu-01", "HmIP-RF", fake)
@@ -124,7 +124,7 @@ func buildFirmwareDomainFixture(t *testing.T) (*FirmwareDomain, *listRecordingOp
 	})
 
 	fake := &listRecordingOps{
-		fakeOperations: fakeOperations{kind: backends.KindCCU},
+		kind: backends.KindCCU,
 		returnDesc: []hmproto.DeviceDescription{
 			{Address: "0002ABCD", Type: "HmIP-PSM", Children: []string{"0002ABCD:0"}},
 		},
@@ -279,7 +279,7 @@ func TestRefreshCentralFirmwareDataByState_StateGateShortCircuits(t *testing.T) 
 	// the outer per-interface loop actually runs.
 	c.DescRegistry.Put(wireHmIPRF, hmproto.DeviceDescription{Address: "0006ABCD"})
 
-	fake := &listRecordingOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+	fake := &listRecordingOps{kind: backends.KindCCU}
 	w := clientpkg.NewValueWriter()
 	w.Register("ccu-bystate-gate", "HmIP-RF", fake)
 
@@ -430,7 +430,7 @@ func TestRefreshCentralFirmwareDataByStateReachesBackendOnNamedCentral(t *testin
 	}))
 	c.DescRegistry.Put(hmtypes.ParseWireInterfaceID(wireID), hmproto.DeviceDescription{Address: "000BABCD"})
 
-	fake := &listRecordingOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+	fake := &listRecordingOps{kind: backends.KindCCU}
 	w := clientpkg.NewValueWriter()
 	w.Register(c.Name(), hmtypes.ParseWireInterfaceID(wireID), fake)
 

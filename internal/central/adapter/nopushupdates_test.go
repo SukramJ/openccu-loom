@@ -40,35 +40,33 @@ func (n *noPushFakeOps) Capabilities() backends.Capabilities {
 // SINGLE_EXECUTION bool in MASTER, and returns empty value maps.
 func newNoPushHydratingBackend() *noPushFakeOps {
 	return &noPushFakeOps{
-		paramsetFakeOps: paramsetFakeOps{
-			listDevicesFn: func(_ context.Context) ([]hmproto.DeviceDescription, error) {
-				return []hmproto.DeviceDescription{
-					{Address: "NPUSH001", Type: "HmIP-STH"},
-					{Address: "NPUSH001:1", Parent: "NPUSH001", Type: "LEVEL"},
+		listDevicesFn: func(_ context.Context) ([]hmproto.DeviceDescription, error) {
+			return []hmproto.DeviceDescription{
+				{Address: "NPUSH001", Type: "HmIP-STH"},
+				{Address: "NPUSH001:1", Parent: "NPUSH001", Type: "LEVEL"},
+			}, nil
+		},
+		getParamsetDescriptionFn: func(_ context.Context, _ string, key hmenum.ParamsetKey) (map[string]hmproto.ParameterData, error) {
+			switch key { //nolint:exhaustive // only the paramset keys relevant to this test fixture
+			case hmenum.ParamsetKeyValues:
+				return map[string]hmproto.ParameterData{
+					string(hmenum.ParameterLevel): {
+						Type:       hmenum.ParameterTypeFloat,
+						Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
+					},
 				}, nil
-			},
-			getParamsetDescriptionFn: func(_ context.Context, _ string, key hmenum.ParamsetKey) (map[string]hmproto.ParameterData, error) {
-				switch key { //nolint:exhaustive // only the paramset keys relevant to this test fixture
-				case hmenum.ParamsetKeyValues:
-					return map[string]hmproto.ParameterData{
-						string(hmenum.ParameterLevel): {
-							Type:       hmenum.ParameterTypeFloat,
-							Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
-						},
-					}, nil
-				case hmenum.ParamsetKeyMaster:
-					return map[string]hmproto.ParameterData{
-						"ARR_TIMEOUT": {
-							Type:       hmenum.ParameterTypeFloat,
-							Operations: hmenum.OperationsRead | hmenum.OperationsWrite,
-						},
-					}, nil
-				}
-				return nil, nil
-			},
-			getParamsetFn: func(_ context.Context, _ string, _ hmenum.ParamsetKey) (map[string]any, error) {
-				return map[string]any{}, nil
-			},
+			case hmenum.ParamsetKeyMaster:
+				return map[string]hmproto.ParameterData{
+					"ARR_TIMEOUT": {
+						Type:       hmenum.ParameterTypeFloat,
+						Operations: hmenum.OperationsRead | hmenum.OperationsWrite,
+					},
+				}, nil
+			}
+			return nil, nil
+		},
+		getParamsetFn: func(_ context.Context, _ string, _ hmenum.ParamsetKey) (map[string]any, error) {
+			return map[string]any{}, nil
 		},
 	}
 }

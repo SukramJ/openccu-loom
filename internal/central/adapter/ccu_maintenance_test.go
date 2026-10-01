@@ -61,7 +61,7 @@ func buildCCUMaintenanceFixture(t *testing.T, centralName string, ops backends.O
 
 func TestCCUMaintenanceRebootCCUSuccess(t *testing.T) {
 	t.Parallel()
-	ops := &rebootOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+	ops := &rebootOps{kind: backends.KindCCU}
 	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
 	if err := dom.RebootCCU(context.Background(), "ccu-01"); err != nil {
 		t.Fatalf("RebootCCU: %v", err)
@@ -73,7 +73,7 @@ func TestCCUMaintenanceRebootCCUSuccess(t *testing.T) {
 
 func TestCCUMaintenanceRebootCCUUnknownCentral(t *testing.T) {
 	t.Parallel()
-	ops := &rebootOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+	ops := &rebootOps{kind: backends.KindCCU}
 	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
 	err := dom.RebootCCU(context.Background(), "does-not-exist")
 	if !errors.Is(err, hmerr.ErrUnknownCentral) {
@@ -98,8 +98,8 @@ func TestCCUMaintenanceRebootCCUUnsupportedBackend(t *testing.T) {
 func TestCCUMaintenanceRebootCCUPropagatesBackendError(t *testing.T) {
 	t.Parallel()
 	ops := &rebootOps{
-		fakeOperations: fakeOperations{kind: backends.KindCCU},
-		rebootErr:      errors.New("ccu unreachable"),
+		kind:      backends.KindCCU,
+		rebootErr: errors.New("ccu unreachable"),
 	}
 	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
 	if err := dom.RebootCCU(context.Background(), "ccu-01"); err == nil {
@@ -135,7 +135,7 @@ func (p *positionOps) SetCCUPosition(_ context.Context, longitude, latitude floa
 
 func TestCCUMaintenanceSetCCUPositionSuccessPatchesSystemInfo(t *testing.T) {
 	t.Parallel()
-	ops := &positionOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+	ops := &positionOps{kind: backends.KindCCU}
 	c, err := central.New(central.Config{Name: "ccu-01"})
 	if err != nil {
 		t.Fatalf("central.New: %v", err)
@@ -179,7 +179,7 @@ func TestCCUMaintenanceSetCCUPositionSuccessPatchesSystemInfo(t *testing.T) {
 
 func TestCCUMaintenanceSetCCUPositionUnknownCentral(t *testing.T) {
 	t.Parallel()
-	ops := &positionOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+	ops := &positionOps{kind: backends.KindCCU}
 	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
 	err := dom.SetCCUPosition(context.Background(), "does-not-exist", 10, 50)
 	if !errors.Is(err, hmerr.ErrUnknownCentral) {
@@ -204,8 +204,8 @@ func TestCCUMaintenanceSetCCUPositionUnsupportedBackend(t *testing.T) {
 func TestCCUMaintenanceSetCCUPositionPropagatesBackendError(t *testing.T) {
 	t.Parallel()
 	ops := &positionOps{
-		fakeOperations: fakeOperations{kind: backends.KindCCU},
-		setErr:         hmerr.ErrValidation,
+		kind:   backends.KindCCU,
+		setErr: hmerr.ErrValidation,
 	}
 	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
 	err := dom.SetCCUPosition(context.Background(), "ccu-01", 200, 50)
@@ -259,7 +259,7 @@ func (h *hostControlOps) EnterRecoveryMode(_ context.Context) error {
 
 func TestCCUMaintenancePoweroffCCUSuccess(t *testing.T) {
 	t.Parallel()
-	ops := &hostControlOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+	ops := &hostControlOps{kind: backends.KindCCU}
 	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
 	if err := dom.PoweroffCCU(context.Background(), "ccu-01"); err != nil {
 		t.Fatalf("PoweroffCCU: %v", err)
@@ -271,7 +271,7 @@ func TestCCUMaintenancePoweroffCCUSuccess(t *testing.T) {
 
 func TestCCUMaintenancePoweroffCCUUnknownCentral(t *testing.T) {
 	t.Parallel()
-	ops := &hostControlOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+	ops := &hostControlOps{kind: backends.KindCCU}
 	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
 	err := dom.PoweroffCCU(context.Background(), "does-not-exist")
 	if !errors.Is(err, hmerr.ErrUnknownCentral) {
@@ -296,8 +296,8 @@ func TestCCUMaintenancePoweroffCCUUnsupportedBackend(t *testing.T) {
 func TestCCUMaintenancePoweroffCCUPropagatesBackendError(t *testing.T) {
 	t.Parallel()
 	ops := &hostControlOps{
-		fakeOperations: fakeOperations{kind: backends.KindCCU},
-		poweroffErr:    errors.New("ccu unreachable"),
+		kind:        backends.KindCCU,
+		poweroffErr: errors.New("ccu unreachable"),
 	}
 	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
 	if err := dom.PoweroffCCU(context.Background(), "ccu-01"); err == nil {
@@ -315,7 +315,7 @@ func TestCCUMaintenancePoweroffCCUNilRegistry(t *testing.T) {
 
 func TestCCUMaintenanceEnterSafeModeSuccess(t *testing.T) {
 	t.Parallel()
-	ops := &hostControlOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+	ops := &hostControlOps{kind: backends.KindCCU}
 	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
 	if err := dom.EnterSafeMode(context.Background(), "ccu-01"); err != nil {
 		t.Fatalf("EnterSafeMode: %v", err)
@@ -327,7 +327,7 @@ func TestCCUMaintenanceEnterSafeModeSuccess(t *testing.T) {
 
 func TestCCUMaintenanceEnterSafeModeUnknownCentral(t *testing.T) {
 	t.Parallel()
-	ops := &hostControlOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+	ops := &hostControlOps{kind: backends.KindCCU}
 	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
 	err := dom.EnterSafeMode(context.Background(), "does-not-exist")
 	if !errors.Is(err, hmerr.ErrUnknownCentral) {
@@ -351,8 +351,8 @@ func TestCCUMaintenanceEnterSafeModeUnsupportedBackend(t *testing.T) {
 func TestCCUMaintenanceEnterSafeModePropagatesBackendError(t *testing.T) {
 	t.Parallel()
 	ops := &hostControlOps{
-		fakeOperations: fakeOperations{kind: backends.KindCCU},
-		safeModeErr:    errors.New("ccu rejected safe mode"),
+		kind:        backends.KindCCU,
+		safeModeErr: errors.New("ccu rejected safe mode"),
 	}
 	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
 	if err := dom.EnterSafeMode(context.Background(), "ccu-01"); err == nil {
@@ -370,7 +370,7 @@ func TestCCUMaintenanceEnterSafeModeNilRegistry(t *testing.T) {
 
 func TestCCUMaintenanceEnterRecoveryModeSuccess(t *testing.T) {
 	t.Parallel()
-	ops := &hostControlOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+	ops := &hostControlOps{kind: backends.KindCCU}
 	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
 	if err := dom.EnterRecoveryMode(context.Background(), "ccu-01"); err != nil {
 		t.Fatalf("EnterRecoveryMode: %v", err)
@@ -382,7 +382,7 @@ func TestCCUMaintenanceEnterRecoveryModeSuccess(t *testing.T) {
 
 func TestCCUMaintenanceEnterRecoveryModeUnknownCentral(t *testing.T) {
 	t.Parallel()
-	ops := &hostControlOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+	ops := &hostControlOps{kind: backends.KindCCU}
 	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
 	err := dom.EnterRecoveryMode(context.Background(), "does-not-exist")
 	if !errors.Is(err, hmerr.ErrUnknownCentral) {
@@ -406,7 +406,7 @@ func TestCCUMaintenanceEnterRecoveryModeUnsupportedBackend(t *testing.T) {
 func TestCCUMaintenanceEnterRecoveryModePropagatesBackendError(t *testing.T) {
 	t.Parallel()
 	ops := &hostControlOps{
-		fakeOperations:  fakeOperations{kind: backends.KindCCU},
+		kind:            backends.KindCCU,
 		recoveryModeErr: errors.New("ccu unreachable"),
 	}
 	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
@@ -431,7 +431,7 @@ func TestCCUMaintenanceEnterRecoveryModeNilRegistry(t *testing.T) {
 // each action were only ever tested in isolation.
 func TestCCUMaintenanceHostActionsDoNotCrossWire(t *testing.T) {
 	t.Parallel()
-	ops := &hostControlOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+	ops := &hostControlOps{kind: backends.KindCCU}
 	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
 
 	if err := dom.PoweroffCCU(context.Background(), "ccu-01"); err != nil {
@@ -475,7 +475,7 @@ func (d *downloadOps) DownloadFirmware(context.Context) error {
 
 func TestCCUMaintenanceDownloadFirmwareSuccess(t *testing.T) {
 	t.Parallel()
-	ops := &downloadOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+	ops := &downloadOps{kind: backends.KindCCU}
 	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
 	if err := dom.DownloadFirmware(context.Background(), "ccu-01"); err != nil {
 		t.Fatalf("DownloadFirmware: %v", err)
@@ -487,7 +487,7 @@ func TestCCUMaintenanceDownloadFirmwareSuccess(t *testing.T) {
 
 func TestCCUMaintenanceDownloadFirmwareSingleCentralDefault(t *testing.T) {
 	t.Parallel()
-	ops := &downloadOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+	ops := &downloadOps{kind: backends.KindCCU}
 	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
 	// Empty central resolves to the sole registered central.
 	if err := dom.DownloadFirmware(context.Background(), ""); err != nil {
@@ -500,7 +500,7 @@ func TestCCUMaintenanceDownloadFirmwareSingleCentralDefault(t *testing.T) {
 
 func TestCCUMaintenanceDownloadFirmwareUnknownCentral(t *testing.T) {
 	t.Parallel()
-	ops := &downloadOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+	ops := &downloadOps{kind: backends.KindCCU}
 	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
 	err := dom.DownloadFirmware(context.Background(), "nope")
 	if !errors.Is(err, hmerr.ErrUnknownCentral) {
@@ -514,8 +514,8 @@ func TestCCUMaintenanceDownloadFirmwareUnknownCentral(t *testing.T) {
 func TestCCUMaintenanceDownloadFirmwarePropagatesError(t *testing.T) {
 	t.Parallel()
 	ops := &downloadOps{
-		fakeOperations: fakeOperations{kind: backends.KindCCU},
-		downloadErr:    errors.New("ccu unreachable"),
+		kind:        backends.KindCCU,
+		downloadErr: errors.New("ccu unreachable"),
 	}
 	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
 	if err := dom.DownloadFirmware(context.Background(), "ccu-01"); err == nil {
@@ -545,7 +545,7 @@ func TestCCUMaintenanceDownloadFirmwareAmbiguousWithoutCentralName(t *testing.T)
 		if err != nil {
 			t.Fatalf("central.New(%s): %v", name, err)
 		}
-		ops := &downloadOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+		ops := &downloadOps{kind: backends.KindCCU}
 		opsByCentral[name] = ops
 		w.Register(name, "HmIP-RF", ops)
 		ic := newTestInterfaceClient(t, name, "HmIP-RF", 5)

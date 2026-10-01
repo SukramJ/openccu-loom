@@ -682,7 +682,7 @@ func TestICGetAllProgramsFilteredNoMarkersReturnsAll(t *testing.T) {
 	t.Parallel()
 	ic := newOrchIC(t, orchIface)
 	b := &filterBackend{
-		orchBackend: orchBackend{caps: backends.Capabilities{GetAllPrograms: true}},
+		caps: backends.Capabilities{GetAllPrograms: true},
 		programs: []map[string]any{
 			{"id": "1", "description": "morning routine"},
 			{"id": "2", "description": "evening lights"},
@@ -701,7 +701,7 @@ func TestICGetAllProgramsFilteredWithMarkerFilters(t *testing.T) {
 	t.Parallel()
 	ic := newOrchIC(t, orchIface)
 	b := &filterBackend{
-		orchBackend: orchBackend{caps: backends.Capabilities{GetAllPrograms: true}},
+		caps: backends.Capabilities{GetAllPrograms: true},
 		programs: []map[string]any{
 			{"id": "1", "description": "HAHM morning routine"},
 			{"id": "2", "description": "evening lights"},

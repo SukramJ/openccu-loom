@@ -71,7 +71,7 @@ type getDeviceIn struct {
 
 type getDeviceOut struct {
 	Found  bool          `json:"found"`
-	Device deviceSummary `json:"device,omitempty"`
+	Device deviceSummary `json:"device"`
 }
 
 type listAuditIn struct {

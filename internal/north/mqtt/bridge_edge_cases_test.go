@@ -2707,7 +2707,7 @@ func TestLookupDeviceOnlyRulesNonEmptyParameterSkipped(t *testing.T) {
 	t.Parallel()
 	// Entries with non-empty parameter must be skipped by the device-only walk.
 	m := map[devParam]HARegistryDescription{
-		{devicePrefix: "HmIP", parameter: "STATE"}: {EnabledByDefault: entityBoolPtr(true)},
+		{devicePrefix: "HmIP", parameter: "STATE"}: {EnabledByDefault: new(true)},
 	}
 	_, ok := lookupDeviceOnlyRules(m, "HmIP-PSM")
 	if ok {

@@ -233,7 +233,7 @@ func perDatapointVocabulary(ev Event, comp HAComponent) perDatapointDeclaration 
 		// and applies state changes locally before the CCU echoes them back.
 		// Critical for switches, where a brief CCU outage would otherwise
 		// leave HA showing the wrong state.
-		decl.optimistic = hadiscovery.Ptr(false)
+		decl.optimistic = new(false)
 	case HAComponentLock:
 		// Lock uses HA's lock-specific payload contract: `payload_lock` /
 		// `payload_unlock` on the command topic, `state_locked` /
@@ -245,7 +245,7 @@ func perDatapointVocabulary(ev Event, comp HAComponent) perDatapointDeclaration 
 		// semantics: `0.0` = locked, `1.0` = unlocked. `LOCK_STATE` is a
 		// numeric enum (0=unknown, 1=locked, 2=unlocked) surfaced verbatim.
 		decl.writable = true
-		decl.optimistic = hadiscovery.Ptr(false)
+		decl.optimistic = new(false)
 		decl.fields = hadiscovery.LockFields{
 			PayloadLock: "0", PayloadUnlock: "1",
 			StateLocked: "0", StateUnlocked: "1",
@@ -272,13 +272,13 @@ func perDatapointVocabulary(ev Event, comp HAComponent) perDatapointDeclaration 
 		// the CCU pushes one; an `expire_after=3600` would falsely mark all
 		// of those `unavailable` after an hour of inactivity even though the
 		// device is perfectly reachable. This mirrors the binary_sensor case.
-		decl.fields = hadiscovery.SensorFields{ForceUpdate: hadiscovery.Ptr(true)}
+		decl.fields = hadiscovery.SensorFields{ForceUpdate: new(true)}
 	case HAComponentLight, HAComponentCover:
 		decl.writable = true
-		decl.optimistic = hadiscovery.Ptr(false)
+		decl.optimistic = new(false)
 	case HAComponentNumber:
 		decl.writable = true
-		decl.optimistic = hadiscovery.Ptr(false)
+		decl.optimistic = new(false)
 		// Seed the wire-descriptor bounds here — [applyMultiplierNumber] only
 		// scales values already present. Without the seed HA receives the
 		// default range (0..100, step 1) regardless of the actual CCU bounds.
@@ -289,9 +289,9 @@ func perDatapointVocabulary(ev Event, comp HAComponent) perDatapointDeclaration 
 		// discrete parameters; default to 0.01 otherwise. The multiplier
 		// scaling applies the `* multiplier` portion afterwards.
 		if isIntegerParameter(ev) {
-			decl.step = hadiscovery.Ptr(1.0)
+			decl.step = new(1.0)
 		} else {
-			decl.step = hadiscovery.Ptr(0.01)
+			decl.step = new(0.01)
 		}
 		// mode = "slider" when the range is small enough for a drag-bar to
 		// feel useful; "box" otherwise. No bounds means no mode, and with no
@@ -305,7 +305,7 @@ func perDatapointVocabulary(ev Event, comp HAComponent) perDatapointDeclaration 
 		}
 	case HAComponentSelect:
 		decl.writable = true
-		decl.optimistic = hadiscovery.Ptr(false)
+		decl.optimistic = new(false)
 		// HA `select` requires `options`; without it HA rejects the discovery
 		// payload outright. Source: paramset descriptor's VALUE_LIST (e.g.
 		// `SET_POINT_MODE` → ["AUTO_MODE", "MANU_MODE", "PARTY_MODE",
@@ -343,13 +343,13 @@ func perDatapointVocabulary(ev Event, comp HAComponent) perDatapointDeclaration 
 		// fractional part of a wire descriptor is truncated rather than
 		// rounded.
 		decl.writable = true
-		decl.optimistic = hadiscovery.Ptr(false)
+		decl.optimistic = new(false)
 		decl.fields = hadiscovery.TextFields{Mode: "text"}
 		if mn := ev.descMin(); mn != nil {
-			decl.min = hadiscovery.Ptr(float64(int(*mn)))
+			decl.min = new(float64(int(*mn)))
 		}
 		if mx := ev.descMax(); mx != nil {
-			decl.max = hadiscovery.Ptr(float64(int(*mx)))
+			decl.max = new(float64(int(*mx)))
 		}
 	case HAComponentEvent:
 		// Press-type event entities: HA requires `event_types` listing all

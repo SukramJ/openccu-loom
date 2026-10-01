@@ -5,6 +5,7 @@ package adapter
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 
@@ -127,9 +128,9 @@ func discoveryConfigTopics(pub *mqtt.NoopClient, needle string) []string {
 // empty payload, which is how a retained topic is cleared.
 func lastPayloadEmpty(pub *mqtt.NoopClient, topic string) bool {
 	all := pub.Published()
-	for i := len(all) - 1; i >= 0; i-- {
-		if all[i].Topic == topic {
-			return len(all[i].Payload) == 0
+	for _, a := range slices.Backward(all) {
+		if a.Topic == topic {
+			return len(a.Payload) == 0
 		}
 	}
 	return false

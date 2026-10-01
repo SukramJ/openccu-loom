@@ -66,12 +66,12 @@ func (t *Timer) HACombinedDiscovery(ctx payload.CombinedDiscoveryContext) hadisc
 		Platform:       hacatalog.PlatformNumber,
 		Name:           t.discoveryLabel(ctx),
 		CommandTopic:   ctx.CombinedCommandTopic(),
-		Min:            hadiscovery.Ptr(float64(0)),
-		Max:            hadiscovery.Ptr(float64(timerMaxSeconds)),
-		Step:           hadiscovery.Ptr(float64(1)),
+		Min:            new(float64(0)),
+		Max:            new(float64(timerMaxSeconds)),
+		Step:           new(float64(1)),
 		UnitOfMeasure:  "s",
 		EntityCategory: payload.CombinedEntityCategoryConfig,
-		Optimistic:     hadiscovery.Ptr(false),
+		Optimistic:     new(false),
 		Fields:         hadiscovery.NumberFields{Mode: "box"},
 	}
 }

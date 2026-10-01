@@ -601,8 +601,7 @@ func (c *Client) send(ctx context.Context, hc *http.Client, r request) (*http.Re
 	}
 	resp, err := hc.Do(req)
 	if err != nil {
-		var apiErr *APIError
-		if errors.As(err, &apiErr) {
+		if apiErr, ok := errors.AsType[*APIError](err); ok {
 			return nil, apiErr
 		}
 		return nil, fmt.Errorf("occulited: %s %s: %w: %w", r.method, req.URL.Path, hmerr.ErrNoConnection, err)

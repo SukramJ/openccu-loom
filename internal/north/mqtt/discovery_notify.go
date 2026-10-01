@@ -195,20 +195,18 @@ func (d *DefaultDiscoveryBuilder) BuildTextDisplayNotify(ev Event) DiscoveryItem
 		return DiscoveryItem{}
 	}
 	entity := &textDisplayNotifyEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      textDisplayNotifyKey,
-			EntityPlatform: hacatalog.PlatformNotify,
-			Description: hamodel.Description{
-				Name: hamodel.L(displayChannelName(ev)),
-			},
+		EntityKey:      textDisplayNotifyKey,
+		EntityPlatform: hacatalog.PlatformNotify,
+		Description: hamodel.Description{
+			Name: hamodel.L(displayChannelName(ev)),
 		},
 	}
 	ctx := notifyDiscoveryContext{
-		StdContext: hadiscovery.StdContext{Layout: notifyTopicLayout{d: d, ev: ev}},
-		d:          d,
-		ev:         ev,
-		uniqueID:   uniqueID,
-		nodeID:     nodeID,
+		Layout:   notifyTopicLayout{d: d, ev: ev},
+		d:        d,
+		ev:       ev,
+		uniqueID: uniqueID,
+		nodeID:   nodeID,
 	}
 	comp, err := hadiscovery.RenderComponent(ctx, dev, entity, *BuildOriginInfo())
 	if err != nil {

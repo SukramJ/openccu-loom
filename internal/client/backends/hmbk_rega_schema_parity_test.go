@@ -91,8 +91,8 @@ func TestHmBkRegaBackedOperationsMatchTheRunnerSchemas(t *testing.T) {
 func hmBkJSONTags(v any) []string {
 	rt := reflect.TypeOf(v)
 	out := make([]string, 0, rt.NumField())
-	for i := range rt.NumField() {
-		tag := rt.Field(i).Tag.Get("json")
+	for field := range rt.Fields() {
+		tag := field.Tag.Get("json")
 		if tag == "" || tag == "-" {
 			continue
 		}

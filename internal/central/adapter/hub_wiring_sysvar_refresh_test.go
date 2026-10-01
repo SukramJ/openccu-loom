@@ -58,9 +58,7 @@ func TestPruneRemovedSysvarsReadsTheNameUnderTheDataPointLock(t *testing.T) {
 	}
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for i := range 200 {
 			if i%2 == 0 {
 				h.RenameSysvar("Urlaub", "Ferien")
@@ -68,7 +66,7 @@ func TestPruneRemovedSysvarsReadsTheNameUnderTheDataPointLock(t *testing.T) {
 				h.RenameSysvar("Ferien", "Urlaub")
 			}
 		}
-	}()
+	})
 	for range 200 {
 		pruneRemovedSysvars(h, fresh)
 	}

@@ -59,20 +59,16 @@ func TestSysvarMetadataConcurrentRefreshAndRead(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// Writer: the hub scan rewrites the whole descriptor on every pass.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for i := range 3000 {
 			sv.ApplyMeta(metas[i%len(metas)])
 		}
-	}()
+	})
 
 	// Readers: the north-bound surfaces and typed wrappers that read the
 	// descriptor while the refresh rewrites it.
 	for range 4 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for range 3000 {
 				m := sv.Meta()
 				_ = m.Unit + m.Description + m.ValueName0 + m.ValueName1
@@ -89,7 +85,7 @@ func TestSysvarMetadataConcurrentRefreshAndRead(t *testing.T) {
 				// which snapshots ValueType and ValueList under the same lock.
 				_ = sv.Set(ctx, hmtypes.IntValue(1))
 			}
-		}()
+		})
 	}
 	wg.Wait()
 }
@@ -122,23 +118,19 @@ func TestSysvarNameConcurrentRenameAndErrorFormatting(t *testing.T) {
 
 	// Writer: an operator renames the sysvar on the CCU, rewriting the name
 	// in place on every pass.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for i := range 3000 {
 			sv.SetName("RenamedVar" + strconv.Itoa(i%7))
 		}
-	}()
+	})
 
 	// Readers: trip every error-formatting site that interpolates the name.
 	for range 4 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for range 3000 {
 				_ = sv.Set(ctx, hmtypes.ParamValue{Kind: hmtypes.ValueKindNone})
 			}
-		}()
+		})
 	}
 	wg.Wait()
 }

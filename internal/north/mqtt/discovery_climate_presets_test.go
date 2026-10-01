@@ -165,8 +165,8 @@ func TestBuildTranslatesWeekProgramPresets(t *testing.T) {
 	src := &stubBuilder{
 		component: "climate",
 		fields: hadiscovery.ClimateFields{
-			MinTemp:                 hadiscovery.Ptr(5.0),
-			MaxTemp:                 hadiscovery.Ptr(30.5),
+			MinTemp:                 new(5.0),
+			MaxTemp:                 new(30.5),
 			PresetModes:             []string{"boost", "week_program_1"},
 			PresetModeStateTopic:    "gh/ccu-01/HmIP-RF/0001ABCD/1/custom",
 			PresetModeValueTemplate: "{{ value_json.preset_mode }}",

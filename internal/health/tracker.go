@@ -670,7 +670,6 @@ func (t *Tracker) CanReceiveEvents(name string, freshness time.Duration) bool {
 	}
 	cutoff := t.clk.Now().Add(-freshness)
 	for _, s := range slices.Backward(src) {
-
 		if s.Timestamp.Before(cutoff) {
 			return false
 		}

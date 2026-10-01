@@ -49,9 +49,9 @@ func addLinkCentral(
 	c.ModelRegistry.Put(dev)
 
 	fake := &fakeOpsWithLinks{
-		fakeOperations: fakeOperations{kind: backends.KindCCU},
-		links:          links,
-		linksErr:       linksErr,
+		kind:     backends.KindCCU,
+		links:    links,
+		linksErr: linksErr,
 	}
 	w.Register(name, hmtypes.ParseWireInterfaceID(ifaceID), fake)
 }

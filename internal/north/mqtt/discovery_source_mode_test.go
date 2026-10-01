@@ -68,12 +68,10 @@ func (s *stubBuilder) HADiscoveryEntity() hamodel.Entity {
 		return nil
 	}
 	return &payload.CustomEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      s.component,
-			EntityPlatform: hacatalog.Platform(s.component),
-			Description:    hamodel.Description{Extra: cloneMap(s.body)},
-		},
-		Fields: s.fields,
+		EntityKey:      s.component,
+		EntityPlatform: hacatalog.Platform(s.component),
+		Description:    hamodel.Description{Extra: cloneMap(s.body)},
+		Fields:         s.fields,
 	}
 }
 

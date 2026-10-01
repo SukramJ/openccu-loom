@@ -40,12 +40,12 @@ var numberRulesByDeviceAndParam = map[devParam]HARegistryDescription{
 	{"HmIP-eTRV", "LEVEL"}: {
 		Key:               "LEVEL",
 		UnitOfMeasurement: "%",
-		EnabledByDefault:  entityBoolPtr(false),
+		EnabledByDefault:  new(false),
 	},
 	{"HmIP-HEATING", "LEVEL"}: {
 		Key:               "LEVEL",
 		UnitOfMeasurement: "%",
-		EnabledByDefault:  entityBoolPtr(false),
+		EnabledByDefault:  new(false),
 	},
 }
 
@@ -73,32 +73,32 @@ var numberRulesByParam = map[string]HARegistryDescription{
 	"ON_TIME": {
 		Key:              "ON_TIME",
 		EntityCategory:   "config",
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 	"ON_TIME_VALUE": {
 		Key:              "ON_TIME_VALUE",
 		EntityCategory:   "config",
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 	"RAMP_TIME": {
 		Key:              "RAMP_TIME",
 		EntityCategory:   "config",
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 	"RAMP_TIME_VALUE": {
 		Key:              "RAMP_TIME_VALUE",
 		EntityCategory:   "config",
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 	"BOOST_TIME_PERIOD": {
 		Key:              "BOOST_TIME_PERIOD",
 		EntityCategory:   "config",
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 	"PARTY_TIME_PERIOD": {
 		Key:              "PARTY_TIME_PERIOD",
 		EntityCategory:   "config",
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 }
 
@@ -138,36 +138,36 @@ var switchRulesByParam = map[string]HARegistryDescription{
 		Key:              "SCHEDULE_SWITCH",
 		DeviceClass:      "switch",
 		EntityCategory:   EntityCategoryConfig,
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 	"INHIBIT": {
 		Key:              "INHIBIT",
 		DeviceClass:      "switch",
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 	"MOTION_DETECTION_ACTIVE": {
 		Key:              "MOTION_DETECTION_ACTIVE",
 		DeviceClass:      "switch",
 		EntityCategory:   EntityCategoryConfig,
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 	"PRESENCE_DETECTION_ACTIVE": {
 		Key:              "MOTION_DETECTION_ACTIVE",
 		DeviceClass:      "switch",
 		EntityCategory:   EntityCategoryConfig,
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 	"AUTO_RELOCK_STATE": {
 		Key:              "AUTO_RELOCK_STATE",
 		DeviceClass:      "switch",
 		EntityCategory:   EntityCategoryConfig,
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 	"PERMISSION_STATE": {
 		Key:              "PERMISSION_STATE",
 		DeviceClass:      "switch",
 		EntityCategory:   EntityCategoryConfig,
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 }
 
@@ -219,7 +219,7 @@ var lockRulesByParam = map[string]HARegistryDescription{
 	"BUTTON_LOCK": {
 		Key:              "BUTTON_LOCK",
 		EntityCategory:   EntityCategoryConfig,
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 }
 
@@ -233,7 +233,7 @@ var lockRulesByParam = map[string]HARegistryDescription{
 // Source rule:
 //   - HmIP-SWSD → disabled (smoke-detector siren; only activate on alarm)
 var sirenRulesByDeviceAndParam = map[devParam]HARegistryDescription{
-	{"HmIP-SWSD", ""}: {Key: "SWSD", EnabledByDefault: entityBoolPtr(false)},
+	{"HmIP-SWSD", ""}: {Key: "SWSD", EnabledByDefault: new(false)},
 }
 
 // ---------------------------------------------------------------------------
@@ -274,20 +274,20 @@ var buttonRulesByParam = map[string]HARegistryDescription{
 	"RESET_MOTION": {
 		Key:              "RESET_MOTION",
 		EntityCategory:   EntityCategoryConfig,
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 	"RESET_PRESENCE": {
 		Key:              "RESET_PRESENCE",
 		EntityCategory:   EntityCategoryConfig,
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 	"PRESS_LONG": {
 		Key:              "PRESS_LONG",
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 	"PRESS_SHORT": {
 		Key:              "PRESS_SHORT",
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 }
 
@@ -304,6 +304,6 @@ var selectRulesByParam = map[string]HARegistryDescription{
 	"HEATING_COOLING": {
 		Key:              "HEATING_COOLING",
 		EntityCategory:   EntityCategoryConfig,
-		EnabledByDefault: entityBoolPtr(false),
+		EnabledByDefault: new(false),
 	},
 }

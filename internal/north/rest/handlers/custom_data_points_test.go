@@ -592,15 +592,13 @@ func addNamedCustomDP(d *device.Device, addr string, no, groupNo int, component,
 	ch := d.AddChannel(chAddr, no, "SWITCH", hmenum.ParamsetKeyValues)
 	ch.AssignGroupNumber(groupNo)
 	ch.SetCustomDataPoint(&stubNamedCustomDP{
-		stubCustomDP: stubCustomDP{
-			key: hmtypes.DataPointKey{
-				ChannelAddress: chAddr,
-				ParamsetKey:    hmenum.ParamsetKeyValues,
-				Parameter:      "STATE",
-			},
-			category: hmenum.DataPointCategorySwitch,
-			state:    map[string]any{"on": false},
+		key: hmtypes.DataPointKey{
+			ChannelAddress: chAddr,
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      "STATE",
 		},
+		category:    hmenum.DataPointCategorySwitch,
+		state:       map[string]any{"on": false},
 		haComponent: component,
 		postfix:     postfix,
 	})

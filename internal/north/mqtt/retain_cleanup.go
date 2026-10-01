@@ -872,12 +872,7 @@ func discoveryNodeIDBelongsTo(nodeID string, prefixes []string) bool {
 		return false
 	}
 	segment := nodeID[:i+1] // "<central-slug>_", the exact segment to match
-	for _, p := range prefixes {
-		if segment == p {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(prefixes, segment)
 }
 
 // RunDiscoveryOrphanCleanupOnce clears the retained HA-Discovery configs

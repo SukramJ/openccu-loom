@@ -61,8 +61,8 @@ func (t *testHubIndex) Released(string) bool { return true }
 func newTestHubWithProgram(t *testing.T) (*testHubIndex, *hub.Hub) {
 	t.Helper()
 	h := hub.NewHub("test-ccu")
-	h.PutProgram(&hub.Program{HubDataPoint: hub.HubDataPoint{Name: "Morning Routine"}, ID: "P1"})
-	h.PutSysvar(&hub.Sysvar{HubDataPoint: hub.HubDataPoint{Name: "Alarm"}, ValueType: hmenum.HubValueTypeLogic})
+	h.PutProgram(&hub.Program{Name: "Morning Routine", ID: "P1"})
+	h.PutSysvar(&hub.Sysvar{Name: "Alarm", ValueType: hmenum.HubValueTypeLogic})
 	return &testHubIndex{h: h}, h
 }
 
@@ -2215,7 +2215,7 @@ func TestDeleteSysvar_MutatorError_Returns502(t *testing.T) {
 func TestDeleteSysvar_HappyPath_Returns202(t *testing.T) {
 	t.Parallel()
 	h := hub.NewHub("test-ccu")
-	h.PutSysvar(&hub.Sysvar{HubDataPoint: hub.HubDataPoint{Name: "ToDelete"}})
+	h.PutSysvar(&hub.Sysvar{Name: "ToDelete"})
 	h.SysvarMutator = &errSysvarMutator{err: nil}
 	idx := &testHubIndex{h: h}
 	req := httptest.NewRequest(http.MethodDelete, "/", http.NoBody)

@@ -308,8 +308,8 @@ func buildLinksWithDataFixture(t *testing.T, links []hmproto.LinkDescription) *L
 	})
 
 	fake := &fakeOpsWithLinks{
-		fakeOperations: fakeOperations{kind: backends.KindCCU},
-		links:          links,
+		kind:  backends.KindCCU,
+		links: links,
 	}
 	w := client.NewValueWriter()
 	w.Register("ccu-links10", "HmIP-RF", fake)
@@ -4056,10 +4056,8 @@ func TestPutLinkParamset_BackendError(t *testing.T) {
 
 	putLinkErr := errors.New("put link error")
 	fakeFull2 := &fullFakeLinkOps2{
-		paramsetFakeOps: paramsetFakeOps{
-			getParamsetDescriptionFn: func(context.Context, string, hmenum.ParamsetKey) (map[string]hmproto.ParameterData, error) {
-				return describe(hmenum.ParameterTypeBool, "STATE"), nil
-			},
+		getParamsetDescriptionFn: func(context.Context, string, hmenum.ParamsetKey) (map[string]hmproto.ParameterData, error) {
+			return describe(hmenum.ParameterTypeBool, "STATE"), nil
 		},
 		linkPutErr: putLinkErr,
 	}
@@ -4705,25 +4703,23 @@ func TestSeedMasterValuesB23_GetParamsetError(t *testing.T) {
 	}
 	masterErr := errors.New("getparamset error")
 	b := &errGetParamsetOps{
-		paramsetFakeOps: paramsetFakeOps{
-			listDevicesFn: func(_ context.Context) ([]hmproto.DeviceDescription, error) {
-				return []hmproto.DeviceDescription{
-					{Address: "SM1DEV01B23", Type: "HmIP-STH"},
-					{Address: "SM1DEV01B23:1", Parent: "SM1DEV01B23", Type: "THERMOSTAT"},
+		listDevicesFn: func(_ context.Context) ([]hmproto.DeviceDescription, error) {
+			return []hmproto.DeviceDescription{
+				{Address: "SM1DEV01B23", Type: "HmIP-STH"},
+				{Address: "SM1DEV01B23:1", Parent: "SM1DEV01B23", Type: "THERMOSTAT"},
+			}, nil
+		},
+		getParamsetDescriptionFn: func(_ context.Context, address string, key hmenum.ParamsetKey) (map[string]hmproto.ParameterData, error) {
+			// Provide a MASTER param so seedMasterValues is reached.
+			if address == "SM1DEV01B23:1" && key == hmenum.ParamsetKeyMaster {
+				return map[string]hmproto.ParameterData{
+					"MASTER_VAL": {
+						Type:       hmenum.ParameterTypeFloat,
+						Operations: hmenum.OperationsRead | hmenum.OperationsWrite,
+					},
 				}, nil
-			},
-			getParamsetDescriptionFn: func(_ context.Context, address string, key hmenum.ParamsetKey) (map[string]hmproto.ParameterData, error) {
-				// Provide a MASTER param so seedMasterValues is reached.
-				if address == "SM1DEV01B23:1" && key == hmenum.ParamsetKeyMaster {
-					return map[string]hmproto.ParameterData{
-						"MASTER_VAL": {
-							Type:       hmenum.ParameterTypeFloat,
-							Operations: hmenum.OperationsRead | hmenum.OperationsWrite,
-						},
-					}, nil
-				}
-				return nil, nil
-			},
+			}
+			return nil, nil
 		},
 		masterErr: masterErr,
 	}
@@ -4950,24 +4946,22 @@ func TestSeedMasterValues_NilLogger_GetParamsetError(t *testing.T) {
 	}
 	masterErr := errors.New("getparamset error")
 	b := &errGetParamsetOps{
-		paramsetFakeOps: paramsetFakeOps{
-			listDevicesFn: func(_ context.Context) ([]hmproto.DeviceDescription, error) {
-				return []hmproto.DeviceDescription{
-					{Address: "SM2DEV01B23", Type: "HmIP-STH"},
-					{Address: "SM2DEV01B23:1", Parent: "SM2DEV01B23", Type: "THERMOSTAT"},
+		listDevicesFn: func(_ context.Context) ([]hmproto.DeviceDescription, error) {
+			return []hmproto.DeviceDescription{
+				{Address: "SM2DEV01B23", Type: "HmIP-STH"},
+				{Address: "SM2DEV01B23:1", Parent: "SM2DEV01B23", Type: "THERMOSTAT"},
+			}, nil
+		},
+		getParamsetDescriptionFn: func(_ context.Context, address string, key hmenum.ParamsetKey) (map[string]hmproto.ParameterData, error) {
+			if address == "SM2DEV01B23:1" && key == hmenum.ParamsetKeyMaster {
+				return map[string]hmproto.ParameterData{
+					"MASTER_VAL2": {
+						Type:       hmenum.ParameterTypeFloat,
+						Operations: hmenum.OperationsRead | hmenum.OperationsWrite,
+					},
 				}, nil
-			},
-			getParamsetDescriptionFn: func(_ context.Context, address string, key hmenum.ParamsetKey) (map[string]hmproto.ParameterData, error) {
-				if address == "SM2DEV01B23:1" && key == hmenum.ParamsetKeyMaster {
-					return map[string]hmproto.ParameterData{
-						"MASTER_VAL2": {
-							Type:       hmenum.ParameterTypeFloat,
-							Operations: hmenum.OperationsRead | hmenum.OperationsWrite,
-						},
-					}, nil
-				}
-				return nil, nil
-			},
+			}
+			return nil, nil
 		},
 		masterErr: masterErr,
 	}
@@ -6517,11 +6511,9 @@ func TestSetScheduleEnabled_SetValueError(t *testing.T) {
 	t.Parallel()
 	setErr := errors.New("set value fail")
 	b := &b27SetValueOps{
-		paramsetFakeOps: paramsetFakeOps{
-			getParamsetFn: func(_ context.Context, _ string, _ hmenum.ParamsetKey) (map[string]any, error) {
-				// Return schedule params so FindScheduleChannel path 1 hits.
-				return simpleScheduleValues(), nil
-			},
+		getParamsetFn: func(_ context.Context, _ string, _ hmenum.ParamsetKey) (map[string]any, error) {
+			// Return schedule params so FindScheduleChannel path 1 hits.
+			return simpleScheduleValues(), nil
 		},
 		setValueErr: setErr,
 	}

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"math"
 	"regexp"
 	"sort"
@@ -108,9 +109,7 @@ func (r *Runner) RunLists(
 	lists map[string][]string,
 ) (string, error) {
 	merged := make(map[string]string, len(params)+len(lists))
-	for k, v := range params {
-		merged[k] = v
-	}
+	maps.Copy(merged, params)
 	listKeys := make(map[string]bool, len(lists))
 	for k, elems := range lists {
 		for _, e := range elems {

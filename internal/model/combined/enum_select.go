@@ -340,7 +340,7 @@ func (e *EnumSelect) HACombinedDiscovery(ctx payload.CombinedDiscoveryContext) h
 		Name:         ctx.Translate(e.labelKey),
 		CommandTopic: ctx.CombinedCommandTopic(),
 		Options:      e.Modes(),
-		Optimistic:   hadiscovery.Ptr(false),
+		Optimistic:   new(false),
 	}
 }
 

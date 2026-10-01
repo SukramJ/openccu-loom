@@ -54,16 +54,16 @@ func (f *fakeServiceWithHealth) Healthy() (ok bool, detail string) {
 // newHealthy returns a fakeServiceWithHealth that reports healthy.
 func newHealthy(name string, log *[]string) *fakeServiceWithHealth {
 	return &fakeServiceWithHealth{
-		fakeService: fakeService{name: name, log: log},
-		result:      healthResult{ok: true},
+		name: name, log: log,
+		result: healthResult{ok: true},
 	}
 }
 
 // newUnhealthy returns a fakeServiceWithHealth that reports unhealthy.
 func newUnhealthy(name, reason string, log *[]string) *fakeServiceWithHealth {
 	return &fakeServiceWithHealth{
-		fakeService: fakeService{name: name, log: log},
-		result:      healthResult{ok: false, detail: reason},
+		name: name, log: log,
+		result: healthResult{ok: false, detail: reason},
 	}
 }
 

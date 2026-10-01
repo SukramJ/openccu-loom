@@ -67,8 +67,7 @@ func startOnboardFixture(t *testing.T) (*sqlitestore.CentralsStore, *litefake.Fa
 // rather than assumed.
 func TestLiteAddonOnboardingAdoptsTheLocalBox(t *testing.T) {
 	store, fake := startOnboardFixture(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	maybeStartLiteAddonOnboarding(ctx, store, slog.New(slog.DiscardHandler))
 
@@ -122,8 +121,7 @@ func TestLiteAddonOnboardingAdoptsTheLocalBox(t *testing.T) {
 // operator's deletion of the auto-central is never fought.
 func TestLiteAddonOnboardingRespectsConfiguredCentrals(t *testing.T) {
 	store, _ := startOnboardFixture(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	existing := sqlitestore.CentralRow{Name: "mine", Host: "192.0.2.9", Enabled: true}
 	if err := store.Put(ctx, existing); err != nil {

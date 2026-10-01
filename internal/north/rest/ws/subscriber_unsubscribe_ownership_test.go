@@ -230,21 +230,17 @@ func TestSubscriberRegistrationRunsConcurrentlyWithStop(t *testing.T) {
 			const adopts = 8
 			var wg sync.WaitGroup
 			for i := range adopts {
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
+				wg.Go(func() {
 					unit, err := central.New(central.Config{Name: "adopted-" + string(rune('a'+i))})
 					if err != nil {
 						return
 					}
 					_ = reg.Register(unit)
-				}()
+				})
 			}
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				sub.stop()
-			}()
+			})
 			wg.Wait()
 		})
 	}

@@ -172,7 +172,7 @@ func (d *Downloader) download(ctx context.Context, url string, dst io.Writer) er
 // "<hash>  <filename>" per line, an optional leading "*" on the
 // filename marking binary mode — and returns the hash for filename.
 func findChecksumLine(content, filename string) (string, error) {
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue

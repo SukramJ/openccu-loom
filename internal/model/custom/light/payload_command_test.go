@@ -5,6 +5,7 @@ package light
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -38,9 +39,9 @@ func findCall(t *testing.T, w *colorStubWriter, p hmenum.Parameter) any {
 	t.Helper()
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	for i := len(w.calls) - 1; i >= 0; i-- {
-		if w.calls[i].param == p {
-			return w.calls[i].value
+	for _, v := range slices.Backward(w.calls) {
+		if v.param == p {
+			return v.value
 		}
 	}
 	t.Fatalf("no wire write for %s (calls=%+v)", p, w.calls)

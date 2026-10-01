@@ -133,8 +133,8 @@ type alarmContext struct {
 // show as unknown forever.
 func newAlarmContext(base string) alarmContext {
 	return alarmContext{
-		StdContext: hadiscovery.StdContext{Enc: hadiscovery.RawEncoding},
-		base:       base,
+		Enc:  hadiscovery.RawEncoding,
+		base: base,
 	}
 }
 
@@ -303,18 +303,16 @@ func BuildAlarmPanelDiscovery(base, zoneID, zoneName string, modes []hmenum.Alar
 	// is one rename away from two entities for one zone.
 	uniqueID := alarmpanel.PanelUniqueID(zone)
 	entity := &alarmPanelEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      uniqueID,
-			EntityPlatform: hacatalog.PlatformAlarmControlPanel,
-			Description:    hamodel.Description{Name: hamodel.L(zoneName)},
-			Binds: []hamodel.Binding{
-				{Role: hamodel.RoleState, Slot: alarmSlot(zone, alarmSlotState), Mode: hamodel.Read},
-				{Role: hamodel.RoleCommand, Slot: alarmSlot(zone, alarmSlotCommand), Mode: hamodel.Write},
-			},
+		EntityKey:      uniqueID,
+		EntityPlatform: hacatalog.PlatformAlarmControlPanel,
+		Description:    hamodel.Description{Name: hamodel.L(zoneName)},
+		Binds: []hamodel.Binding{
+			{Role: hamodel.RoleState, Slot: alarmSlot(zone, alarmSlotState), Mode: hamodel.Read},
+			{Role: hamodel.RoleCommand, Slot: alarmSlot(zone, alarmSlotCommand), Mode: hamodel.Write},
 		},
 		fields: hadiscovery.AlarmControlPanelFields{
-			CodeArmRequired:    hadiscovery.Ptr(codeArmRequired),
-			CodeDisarmRequired: hadiscovery.Ptr(codeDisarmRequired),
+			CodeArmRequired:    new(codeArmRequired),
+			CodeDisarmRequired: new(codeDisarmRequired),
 			// Panic is the case where nobody can type. Home Assistant defaults
 			// code_trigger_required to true, so a zone that gates arming or
 			// disarming used to gate the panic affordance as well — a rule this
@@ -326,7 +324,7 @@ func BuildAlarmPanelDiscovery(base, zoneID, zoneName string, modes []hmenum.Alar
 			// mis-tap on a dashboard now sounds the alarm immediately, which is
 			// the lesser failure — the other direction is an alarm that cannot
 			// be raised by the person who needs it.
-			CodeTriggerRequired: hadiscovery.Ptr(false),
+			CodeTriggerRequired: new(false),
 			SupportedFeatures:   append(alarmpanel.SupportedFeatures(modes), alarmFeatureTrigger),
 		},
 	}
@@ -368,25 +366,23 @@ func BuildAlarmMotionResetDiscovery(base, zoneID, zoneName, label string, master
 	}
 	uniqueID := alarmpanel.PanelUniqueID(zone) + "_reset_motion"
 	entity := &alarmButtonEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      uniqueID,
-			EntityPlatform: hacatalog.PlatformButton,
-			Description: hamodel.Description{
-				Name: hamodel.L(zoneName + " — " + label),
-				Icon: "mdi:motion-sensor-off",
-				// No Category on purpose. Home Assistant files `config`
-				// entities away in a collapsed section of the device page and
-				// keeps them out of dashboards and the entity picker's default
-				// view — right for a knob that tunes behaviour, wrong for
-				// something an operator presses during an incident. This is a
-				// control belonging to the panel's main purpose, like the panel
-				// entity itself, which carries no category either. The
-				// latched-detector count next to it stays `diagnostic`; that one
-				// really is a readout.
-			},
-			Binds: []hamodel.Binding{
-				{Role: hamodel.RoleCommand, Slot: alarmSlot(zone, alarmSlotCommand), Mode: hamodel.Write},
-			},
+		EntityKey:      uniqueID,
+		EntityPlatform: hacatalog.PlatformButton,
+		Description: hamodel.Description{
+			Name: hamodel.L(zoneName + " — " + label),
+			Icon: "mdi:motion-sensor-off",
+			// No Category on purpose. Home Assistant files `config`
+			// entities away in a collapsed section of the device page and
+			// keeps them out of dashboards and the entity picker's default
+			// view — right for a knob that tunes behaviour, wrong for
+			// something an operator presses during an incident. This is a
+			// control belonging to the panel's main purpose, like the panel
+			// entity itself, which carries no category either. The
+			// latched-detector count next to it stays `diagnostic`; that one
+			// really is a readout.
+		},
+		Binds: []hamodel.Binding{
+			{Role: hamodel.RoleCommand, Slot: alarmSlot(zone, alarmSlotCommand), Mode: hamodel.Write},
 		},
 		fields: hadiscovery.ButtonFields{PayloadPress: alarmCommandResetMotion},
 	}

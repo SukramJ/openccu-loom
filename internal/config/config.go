@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net"
 	"net/url"
 	"os"
@@ -1526,9 +1527,7 @@ func (n NorthUI) SurfaceOverrides(profile string) map[string]SurfaceState {
 		return map[string]SurfaceState{}
 	}
 	out := make(map[string]SurfaceState, len(n.Profiles[profile]))
-	for id, state := range n.Profiles[profile] {
-		out[id] = state
-	}
+	maps.Copy(out, n.Profiles[profile])
 	return out
 }
 
@@ -2569,7 +2568,7 @@ func centralHostValid(host string) bool {
 	trimmed := strings.TrimSuffix(host, ".")
 	if trimmed != "" && len(host) <= 253 {
 		ok := true
-		for _, label := range strings.Split(trimmed, ".") {
+		for label := range strings.SplitSeq(trimmed, ".") {
 			if !centralHostLabel.MatchString(label) {
 				ok = false
 				break

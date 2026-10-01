@@ -50,7 +50,7 @@ func TestLinksDomain_ActivateLink(t *testing.T) {
 	dev.AddChannel("RCV:3", 3, "SWITCH", hmenum.ParamsetKeyValues)
 	c.ModelRegistry.Put(dev)
 
-	be := &activateCapturingBackend{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+	be := &activateCapturingBackend{kind: backends.KindCCU}
 	w := client.NewValueWriter()
 	w.Register("ccu-al", "HmIP-RF", be)
 	spy := &spyAudit{}

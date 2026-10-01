@@ -391,13 +391,11 @@ func TestConcurrentColdStartOpensSingleSession(t *testing.T) {
 
 	var wg sync.WaitGroup
 	for range 12 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			if err := c.Call(ctx, "Interface.listInterfaces", nil, nil); err != nil {
 				t.Errorf("concurrent call: %v", err)
 			}
-		}()
+		})
 	}
 	wg.Wait()
 

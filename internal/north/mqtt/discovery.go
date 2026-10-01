@@ -518,33 +518,31 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 	entityLabel, entityLabelNull := entityName(ev)
 	vocab := perDatapointVocabulary(ev, comp)
 	modelEntity := &perDatapointEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      objectID,
-			EntityPlatform: hacatalog.Platform(comp),
-			Description: hamodel.Description{
-				Name: hamodel.L(entityLabel),
-				// bridge + device + the DP's own `available` flag, in that
-				// order. [hamodel.LevelSelf] resolves against the state
-				// binding's envelope, which is the third entry this plane
-				// has always appended by hand.
-				Availability: hamodel.Availability{Levels: []hamodel.AvailabilityLevel{
-					hamodel.LevelBridge, hamodel.LevelDevice, hamodel.LevelSelf,
-				}},
-				// json_attributes_topic + template — exposes the per-DP config
-				// payload (min/max/value_list/unit/default/usage) as HA entity
-				// attributes for diagnostics.
-				JSONAttributesTopic: d.TopicBuilder.ParameterConfig(
-					central, ev.Interface, ev.DeviceAddress, ev.ChannelNo, bucket, ev.Parameter,
-				),
-				JSONAttributesTemplate: "{{ value_json | tojson }}",
-				ValueTemplate:          vocab.valueTemplate,
-				Optimistic:             vocab.optimistic,
-				Min:                    vocab.min,
-				Max:                    vocab.max,
-				Step:                   vocab.step,
-			},
-			Binds: perDatapointBinds(perDatapointSlot(ev, central, bucket), vocab.writable),
+		EntityKey:      objectID,
+		EntityPlatform: hacatalog.Platform(comp),
+		Description: hamodel.Description{
+			Name: hamodel.L(entityLabel),
+			// bridge + device + the DP's own `available` flag, in that
+			// order. [hamodel.LevelSelf] resolves against the state
+			// binding's envelope, which is the third entry this plane
+			// has always appended by hand.
+			Availability: hamodel.Availability{Levels: []hamodel.AvailabilityLevel{
+				hamodel.LevelBridge, hamodel.LevelDevice, hamodel.LevelSelf,
+			}},
+			// json_attributes_topic + template — exposes the per-DP config
+			// payload (min/max/value_list/unit/default/usage) as HA entity
+			// attributes for diagnostics.
+			JSONAttributesTopic: d.TopicBuilder.ParameterConfig(
+				central, ev.Interface, ev.DeviceAddress, ev.ChannelNo, bucket, ev.Parameter,
+			),
+			JSONAttributesTemplate: "{{ value_json | tojson }}",
+			ValueTemplate:          vocab.valueTemplate,
+			Optimistic:             vocab.optimistic,
+			Min:                    vocab.min,
+			Max:                    vocab.max,
+			Step:                   vocab.step,
 		},
+		Binds:           perDatapointBinds(perDatapointSlot(ev, central, bucket), vocab.writable),
 		fields:          vocab.fields,
 		commandTemplate: vocab.commandTemplate,
 		nameNull:        entityLabelNull,
@@ -554,18 +552,16 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		modelEntity.Description.Options = &hamodel.Enum{Codes: vocab.options}
 	}
 	ctx := perDatapointContext{
-		StdContext: hadiscovery.StdContext{
-			Layout: perDatapointLayout{
-				state:   stateTopic,
-				command: commandTopic,
-				device:  d.TopicBuilder.DeviceAvailability(central, ev.Interface, ev.DeviceAddress),
-				bridge:  d.TopicBuilder.BridgeStatus(),
-			},
-			Lang:       d.Locale,
-			Translator: d.tr,
+		Layout: perDatapointLayout{
+			state:   stateTopic,
+			command: commandTopic,
+			device:  d.TopicBuilder.DeviceAvailability(central, ev.Interface, ev.DeviceAddress),
+			bridge:  d.TopicBuilder.BridgeStatus(),
 		},
-		uniqueID: uniqueID,
-		nodeID:   nodeID,
+		Lang:       d.Locale,
+		Translator: d.tr,
+		uniqueID:   uniqueID,
+		nodeID:     nodeID,
 	}
 	entity, renderErr := hadiscovery.RenderComponent(
 		ctx, modelDeviceFromInfo(deviceDescriptor(ev, d.hubURLFor(ev), d.SubDevicesEnabled)),
@@ -618,13 +614,13 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 			entity.EntityCategory = hacatalog.EntityCategory(desc.EntityCategory)
 		}
 		if desc.EnabledByDefault != nil {
-			entity.EnabledByDefault = hadiscovery.Ptr(*desc.EnabledByDefault)
+			entity.EnabledByDefault = new(*desc.EnabledByDefault)
 		}
 		if desc.Icon != "" {
 			entity.Icon = desc.Icon
 		}
 		if desc.SuggestedDisplayPrecision != nil {
-			entity.Precision = hadiscovery.Ptr(*desc.SuggestedDisplayPrecision)
+			entity.Precision = new(*desc.SuggestedDisplayPrecision)
 		}
 		if desc.UnitOfMeasurement != "" {
 			entity.UnitOfMeasure = desc.UnitOfMeasurement
@@ -694,12 +690,12 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		// all have a say in that, and all of them run after the render.
 		if binaryFields, ok := entity.Fields.(hadiscovery.BinarySensorFields); ok &&
 			isMotionDeviceClass(entity.DeviceClass) {
-			binaryFields.ForceUpdate = hadiscovery.Ptr(true)
+			binaryFields.ForceUpdate = new(true)
 			// off_delay=300 → HA auto-resets the binary_sensor after five
 			// minutes without a follow-up update, motion/presence/
 			// occupancy. Without this motion sensors stay "on" forever
 			// after the first trigger.
-			binaryFields.OffDelay = hadiscovery.Ptr(300)
+			binaryFields.OffDelay = new(300)
 			entity.Fields = binaryFields
 		}
 	case HAComponentSensor:
@@ -968,13 +964,13 @@ func applyMultiplierNumber(ev Event, entity *hadiscovery.Component, override *fl
 	// Bounds — multiply min/max/step if the component already carries them
 	// (number-bound population is descriptor-driven).
 	if entity.Min != nil {
-		entity.Min = hadiscovery.Ptr(*entity.Min * m)
+		entity.Min = new(*entity.Min * m)
 	}
 	if entity.Max != nil {
-		entity.Max = hadiscovery.Ptr(*entity.Max * m)
+		entity.Max = new(*entity.Max * m)
 	}
 	if entity.Step != nil {
-		entity.Step = hadiscovery.Ptr(*entity.Step * m)
+		entity.Step = new(*entity.Step * m)
 	}
 }
 

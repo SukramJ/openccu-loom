@@ -71,10 +71,7 @@ type fakeConfiguredLister struct {
 }
 
 func (f *fakeConfiguredLister) List(_ context.Context) ([]sqlite.CentralRow, error) {
-	n := len(f.hosts)
-	if len(f.serials) > n {
-		n = len(f.serials)
-	}
+	n := max(len(f.serials), len(f.hosts))
 	rows := make([]sqlite.CentralRow, 0, n)
 	for i := range n {
 		row := sqlite.CentralRow{}

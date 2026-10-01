@@ -106,7 +106,7 @@ func TestProgramWithoutWriterErrs(t *testing.T) {
 
 func TestSysvarSetAndObserve(t *testing.T) {
 	w := &stubSysvar{}
-	s := &Sysvar{HubDataPoint: HubDataPoint{Name: "X"}, Writer: w, ValueType: hmenum.HubValueTypeInteger}
+	s := &Sysvar{Name: "X", Writer: w, ValueType: hmenum.HubValueTypeInteger}
 	if err := s.Set(context.Background(), hmtypes.IntValue(5)); err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +121,7 @@ func TestSysvarSetAndObserve(t *testing.T) {
 }
 
 func TestSysvarOnValueFiresOnChangeOnly(t *testing.T) {
-	s := &Sysvar{HubDataPoint: HubDataPoint{Name: "X"}, Writer: &stubSysvar{}}
+	s := &Sysvar{Name: "X", Writer: &stubSysvar{}}
 	var n int
 	s.OnUpdate(func(_, _ hmtypes.ParamValue) { n++ })
 	s.OnValue(hmtypes.IntValue(1))
@@ -133,7 +133,7 @@ func TestSysvarOnValueFiresOnChangeOnly(t *testing.T) {
 }
 
 func TestSysvarNoneValueRejected(t *testing.T) {
-	s := &Sysvar{HubDataPoint: HubDataPoint{Name: "X"}, Writer: &stubSysvar{}}
+	s := &Sysvar{Name: "X", Writer: &stubSysvar{}}
 	if err := s.Set(context.Background(), hmtypes.NoneValue()); err == nil {
 		t.Fatal("expected error")
 	}
@@ -145,13 +145,13 @@ func TestSysvarMetaFields(t *testing.T) {
 	minVal := hmtypes.FloatValue(0.0)
 	maxVal := hmtypes.FloatValue(100.0)
 	s := &Sysvar{
-		HubDataPoint: HubDataPoint{Name: "Y"},
-		Writer:       &stubSysvar{},
-		ValueType:    hmenum.HubValueTypeFloat,
-		Min:          &minVal,
-		Max:          &maxVal,
-		Vid:          42,
-		IsExtended:   true,
+		Name:       "Y",
+		Writer:     &stubSysvar{},
+		ValueType:  hmenum.HubValueTypeFloat,
+		Min:        &minVal,
+		Max:        &maxVal,
+		Vid:        42,
+		IsExtended: true,
 	}
 	if s.Min == nil || s.Min.Float != 0.0 {
 		t.Fatalf("Min unexpected: %v", s.Min)
@@ -168,7 +168,7 @@ func TestSysvarMetaFields(t *testing.T) {
 }
 
 func TestSysvarPreviousValueAbsentBeforeSecondObservation(t *testing.T) {
-	s := &Sysvar{HubDataPoint: HubDataPoint{Name: "Z"}, Writer: &stubSysvar{}}
+	s := &Sysvar{Name: "Z", Writer: &stubSysvar{}}
 	_, ok := s.PreviousValue()
 	if ok {
 		t.Fatal("PreviousValue must be absent before any OnValue call")
@@ -181,7 +181,7 @@ func TestSysvarPreviousValueAbsentBeforeSecondObservation(t *testing.T) {
 }
 
 func TestSysvarPreviousValueAfterSecondObservation(t *testing.T) {
-	s := &Sysvar{HubDataPoint: HubDataPoint{Name: "Z"}, Writer: &stubSysvar{}}
+	s := &Sysvar{Name: "Z", Writer: &stubSysvar{}}
 	s.OnValue(hmtypes.IntValue(7))
 	s.OnValue(hmtypes.IntValue(9))
 	prev, ok := s.PreviousValue()
@@ -353,7 +353,7 @@ func TestUpdateDedupesEqualSnapshots(t *testing.T) {
 
 func TestProgramOnRemovedFiresFromHubRemove(t *testing.T) {
 	h := NewHub("test")
-	prog := &Program{HubDataPoint: HubDataPoint{Name: "x"}, ID: "P1"}
+	prog := &Program{Name: "x", ID: "P1"}
 	h.PutProgram(prog)
 	var fired int
 	prog.OnRemoved(func() { fired++ })
@@ -489,17 +489,13 @@ func TestRenameSysvarSerialisesWithNameReaders(t *testing.T) {
 	h.PutSysvar(sv)
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for i := range 500 {
 			h.RenameSysvar(sysvarNameAt(i), sysvarNameAt(i+1))
 		}
-	}()
+	})
 	for range 4 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for range 500 {
 				_ = sv.LegacyName()
 				_ = sv.Signature()
@@ -513,7 +509,7 @@ func TestRenameSysvarSerialisesWithNameReaders(t *testing.T) {
 				_ = h.Sysvars()
 				sv.OnValue(hmtypes.FloatValue(1))
 			}
-		}()
+		})
 	}
 	wg.Wait()
 

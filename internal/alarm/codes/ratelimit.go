@@ -90,9 +90,9 @@ func lockoutDuration(step int) time.Duration {
 	if step > rateLimitMaxDoublings {
 		step = rateLimitMaxDoublings
 	}
-	d := rateLimitBaseLockout << uint(step) //nolint:gosec // G115: step is bounded above
-	if d > rateLimitMaxLockout {
-		d = rateLimitMaxLockout
-	}
+	d := min(
+		//nolint:gosec // G115: step is bounded above
+		rateLimitBaseLockout<<uint(step), rateLimitMaxLockout,
+	)
 	return d
 }

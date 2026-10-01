@@ -6,7 +6,7 @@ package generic
 import (
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/go-fabric/cluster/onoff"
@@ -194,7 +194,7 @@ func TestW2GenParityMatterJSGenericOnOffAdvertisedSets(t *testing.T) {
 				out = append(out, el.ID)
 			}
 		}
-		sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+		slices.Sort(out)
 		return out
 	}
 
@@ -210,7 +210,7 @@ func TestW2GenParityMatterJSGenericOnOffAdvertisedSets(t *testing.T) {
 
 func w2GenSorted(in []uint32) []uint32 {
 	out := append([]uint32(nil), in...)
-	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	slices.Sort(out)
 	return out
 }
 

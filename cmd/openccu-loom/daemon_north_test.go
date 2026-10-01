@@ -75,7 +75,7 @@ func TestFirstRunNeedsSetup(t *testing.T) {
 			localUserCount: 0,
 			mutate: func(c *config.Config) {
 				c.North.REST.Auth.Tokens = map[string]string{"s3cr3t": "admin"}
-				c.North.REST.Auth.BearerEnabled = ptrBool(false)
+				c.North.REST.Auth.BearerEnabled = new(false)
 			},
 			want: false,
 		},
@@ -84,7 +84,7 @@ func TestFirstRunNeedsSetup(t *testing.T) {
 			localUserCount:  0,
 			persistedTokens: true,
 			mutate: func(c *config.Config) {
-				c.North.REST.Auth.BearerEnabled = ptrBool(false)
+				c.North.REST.Auth.BearerEnabled = new(false)
 			},
 			want: false,
 		},
@@ -95,7 +95,7 @@ func TestFirstRunNeedsSetup(t *testing.T) {
 			localUserCount:  1,
 			persistedTokens: true,
 			mutate: func(c *config.Config) {
-				c.North.REST.Auth.BearerEnabled = ptrBool(false)
+				c.North.REST.Auth.BearerEnabled = new(false)
 			},
 			want: false,
 		},
@@ -104,7 +104,7 @@ func TestFirstRunNeedsSetup(t *testing.T) {
 			localUserCount: 0,
 			hasCentral:     true,
 			mutate: func(c *config.Config) {
-				c.North.REST.Auth.CCU.Enabled = ptrBool(true)
+				c.North.REST.Auth.CCU.Enabled = new(true)
 			},
 			want: false,
 		},
@@ -117,7 +117,7 @@ func TestFirstRunNeedsSetup(t *testing.T) {
 			localUserCount: 0,
 			hasCentral:     false,
 			mutate: func(c *config.Config) {
-				c.North.REST.Auth.CCU.Enabled = ptrBool(true)
+				c.North.REST.Auth.CCU.Enabled = new(true)
 			},
 			want: true,
 		},
@@ -139,7 +139,7 @@ func TestFirstRunNeedsSetup(t *testing.T) {
 			name:           "CCU auth explicitly disabled, nothing else",
 			localUserCount: 0,
 			mutate: func(c *config.Config) {
-				c.North.REST.Auth.CCU.Enabled = ptrBool(false)
+				c.North.REST.Auth.CCU.Enabled = new(false)
 			},
 			want: true,
 		},
@@ -150,7 +150,7 @@ func TestFirstRunNeedsSetup(t *testing.T) {
 			name:           "onboarding closed by bootstrap.allow_first_run_setup",
 			localUserCount: 0,
 			mutate: func(c *config.Config) {
-				c.Bootstrap.AllowFirstRunSetup = ptrBool(false)
+				c.Bootstrap.AllowFirstRunSetup = new(false)
 			},
 			want: false,
 		},
@@ -193,7 +193,7 @@ func TestFirstRunProbeClosesSetupOnceATokenExists(t *testing.T) {
 	sqUsers := sqlitestore.NewUserStore(db)
 	sqTokens := sqlitestore.NewTokenStore(db)
 	cfg := config.Default()
-	cfg.North.REST.Auth.CCU.Enabled = ptrBool(false)
+	cfg.North.REST.Auth.CCU.Enabled = new(false)
 
 	probe := firstRunProbe(cfg, sqUsers, sqTokens, nil)
 	if !probe(ctx) {
@@ -229,8 +229,8 @@ func TestDormantBearerSchemeIsLoggedInsteadOfOpeningSetup(t *testing.T) {
 	t.Cleanup(func() { _ = db.Close() })
 
 	cfg := config.Default()
-	cfg.North.REST.Auth.CCU.Enabled = ptrBool(false)
-	cfg.North.REST.Auth.BearerEnabled = ptrBool(false)
+	cfg.North.REST.Auth.CCU.Enabled = new(false)
+	cfg.North.REST.Auth.BearerEnabled = new(false)
 	cfg.North.REST.Auth.Tokens = map[string]string{"s3cr3t": "admin"}
 
 	src := authSources{}
@@ -249,7 +249,7 @@ func TestDormantBearerSchemeIsLoggedInsteadOfOpeningSetup(t *testing.T) {
 	// With the scheme on, the same configuration is an ordinary token-only
 	// deployment and must stay silent.
 	buf.Reset()
-	cfg.North.REST.Auth.BearerEnabled = ptrBool(true)
+	cfg.North.REST.Auth.BearerEnabled = new(true)
 	warnOnDormantOnboarding(ctx, cfg, sqlitestore.NewUserStore(db), sqlitestore.NewTokenStore(db), nil, logger)
 	if buf.Len() != 0 {
 		t.Errorf("a working token-only deployment logged %q, want nothing", buf.String())

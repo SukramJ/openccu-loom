@@ -9,8 +9,6 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-func boolPtr(b bool) *bool { return &b }
-
 func TestCentralBehaviorScanAndFirmwareDefaults(t *testing.T) {
 	t.Parallel()
 	var b CentralBehavior // all nil → defaults
@@ -91,8 +89,8 @@ func TestCentralBehaviorAccessorsDefaultTrue(t *testing.T) {
 func TestCentralBehaviorAccessorsRespectExplicitValues(t *testing.T) {
 	t.Parallel()
 	b := CentralBehavior{
-		LightLastBrightness:          boolPtr(false),
-		UseGroupChannelForCoverState: boolPtr(false),
+		LightLastBrightness:          new(false),
+		UseGroupChannelForCoverState: new(false),
 	}
 	if b.LightLastBrightnessEnabled() {
 		t.Error("explicit false must disable light last-brightness")
@@ -102,8 +100,8 @@ func TestCentralBehaviorAccessorsRespectExplicitValues(t *testing.T) {
 	}
 
 	b = CentralBehavior{
-		LightLastBrightness:          boolPtr(true),
-		UseGroupChannelForCoverState: boolPtr(true),
+		LightLastBrightness:          new(true),
+		UseGroupChannelForCoverState: new(true),
 	}
 	if !b.LightLastBrightnessEnabled() || !b.UseGroupChannelForCoverStateEnabled() {
 		t.Error("explicit true must enable both")

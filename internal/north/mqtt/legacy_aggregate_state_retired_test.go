@@ -32,7 +32,7 @@ func TestNoTopicBuilderMethodProducesLegacyAggregateStateShape(t *testing.T) {
 		"custom": {Bucket: payload.BucketCustom, Address: "0001ABCD", Channel: 1, Parameter: "switch"},
 	}
 
-	slotType := reflect.TypeOf(payload.TopicSlot{})
+	slotType := reflect.TypeFor[payload.TopicSlot]()
 	rv := reflect.ValueOf(tb)
 	rt := rv.Type()
 

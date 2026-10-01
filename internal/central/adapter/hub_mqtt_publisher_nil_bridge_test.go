@@ -64,7 +64,7 @@ func TestHubMQTTPublisherStartRecoversWhenTheBrokerReturns(t *testing.T) {
 	_, c, pub, publisher := hubMQTTFixture(t)
 	wiring := publisher.wiring
 
-	prog := &hub.Program{HubDataPoint: hub.HubDataPoint{Name: "Abend"}, ID: "prog-1"}
+	prog := &hub.Program{Name: "Abend", ID: "prog-1"}
 	prog.OnActive(false)
 	c.HubModel.PutProgram(prog)
 

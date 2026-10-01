@@ -299,26 +299,24 @@ func (a *AccessPermission) HADiscoveryEntity() hamodel.Entity {
 	if a == nil {
 		return nil
 	}
-	return &accessPermissionEntity{CustomEntity: payload.CustomEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      a.TopicSlot().Parameter,
-			EntityPlatform: hacatalog.PlatformSwitch,
-			Description: hamodel.Description{
-				// The aggregate omits is_on until STATE has been observed; the
-				// `is defined` guard keeps HA from logging a template error on
-				// the retained pre-observation payload.
-				ValueTemplate: `{% if value_json.is_on is defined %}{{ value_json.is_on | lower }}{% endif %}`,
-				// The CCU confirms the grant on STATE; HA must not flip the
-				// entity locally before that echo arrives.
-				Optimistic: hamodel.Ptr(false),
-			},
-			Binds: []hamodel.Binding{{
-				Role: hamodel.RoleState, Mode: hamodel.Read,
-				Slot: payload.CustomSlot(a.TopicSlot()),
-			}},
+	return &accessPermissionEntity{
+		EntityKey:      a.TopicSlot().Parameter,
+		EntityPlatform: hacatalog.PlatformSwitch,
+		Description: hamodel.Description{
+			// The aggregate omits is_on until STATE has been observed; the
+			// `is defined` guard keeps HA from logging a template error on
+			// the retained pre-observation payload.
+			ValueTemplate: `{% if value_json.is_on is defined %}{{ value_json.is_on | lower }}{% endif %}`,
+			// The CCU confirms the grant on STATE; HA must not flip the
+			// entity locally before that echo arrives.
+			Optimistic: new(false),
 		},
+		Binds: []hamodel.Binding{{
+			Role: hamodel.RoleState, Mode: hamodel.Read,
+			Slot: payload.CustomSlot(a.TopicSlot()),
+		}},
 		Fields: switchFields(),
-	}}
+	}
 }
 
 // accessPermissionEntity carries the one key the model cannot: the command

@@ -265,10 +265,8 @@ func TestDevicesGetCallsCorrectEndpoint(t *testing.T) {
 		"/api/v1/devices/DEV001": func(w http.ResponseWriter, r *http.Request) {
 			gotPath = r.URL.Path
 			writeJSON200(w, deviceDetail{
-				deviceSummary: deviceSummary{
-					Address: "DEV001", Model: "HmIP-PS", Name: "Socket",
-					Interface: "HmIP-RF", Available: true,
-				},
+				Address: "DEV001", Model: "HmIP-PS", Name: "Socket",
+				Interface: "HmIP-RF", Available: true,
 			})
 		},
 	})
@@ -286,10 +284,8 @@ func TestDevicesGetPrintsDeviceFields(t *testing.T) {
 	ts := newDevicesServer(t, map[string]http.HandlerFunc{
 		"/api/v1/devices/ABC123": func(w http.ResponseWriter, _ *http.Request) {
 			writeJSON200(w, deviceDetail{
-				deviceSummary: deviceSummary{
-					Address: "ABC123", Model: "HmIP-PSM", Name: "PowerSocket",
-					Interface: "HmIP-RF", Central: "main-ccu", Available: true,
-				},
+				Address: "ABC123", Model: "HmIP-PSM", Name: "PowerSocket",
+				Interface: "HmIP-RF", Central: "main-ccu", Available: true,
 				Channels: []channelSummary{
 					{Number: 0, Address: "ABC123:0", Type: "MAINTENANCE", Name: "CH0"},
 					{Number: 1, Address: "ABC123:1", Type: "SWITCH", Name: "CH1"},
@@ -323,7 +319,7 @@ func TestDevicesGetJSONFlagEmitsRawJSON(t *testing.T) {
 	ts := newDevicesServer(t, map[string]http.HandlerFunc{
 		"/api/v1/devices/XYZ": func(w http.ResponseWriter, _ *http.Request) {
 			writeJSON200(w, deviceDetail{
-				deviceSummary: deviceSummary{Address: "XYZ", Model: "HmIP-PS", Name: "N", Interface: "HmIP-RF"},
+				Address: "XYZ", Model: "HmIP-PS", Name: "N", Interface: "HmIP-RF",
 			})
 		},
 	})

@@ -5,6 +5,7 @@ package lock_test
 
 import (
 	"context"
+	"slices"
 	"sync"
 	"testing"
 
@@ -38,12 +39,7 @@ func (r *lockParamRecorder) PutParamset(
 func (r *lockParamRecorder) wrote(parameter hmenum.Parameter) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	for _, p := range r.params {
-		if p == parameter {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(r.params, parameter)
 }
 
 // TestIPLockCommandFollowsTheProfileSchema pins the HmIP lock command to the

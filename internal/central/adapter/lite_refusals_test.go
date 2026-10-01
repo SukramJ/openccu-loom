@@ -7,7 +7,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"sort"
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -62,7 +62,7 @@ func TestLiteFeatureTableMatchesRefusingPorts(t *testing.T) {
 			absent = append(absent, k)
 		}
 	}
-	sort.Slice(absent, func(i, j int) bool { return absent[i] < absent[j] })
+	slices.Sort(absent)
 	for _, k := range absent {
 		call, ok := calls[k]
 		if !ok {

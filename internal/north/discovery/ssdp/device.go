@@ -150,8 +150,8 @@ func isCentralManufacturer(manufacturer, modelName, friendlyName string) bool {
 // the manufacturer, then a generic "CCU".
 func centralName(friendlyName, manufacturer string) string {
 	name := strings.TrimSpace(friendlyName)
-	if i := strings.Index(name, " - "); i >= 0 {
-		if tail := strings.TrimSpace(name[i+3:]); tail != "" {
+	if _, after, ok := strings.Cut(name, " - "); ok {
+		if tail := strings.TrimSpace(after); tail != "" {
 			return tail
 		}
 	}

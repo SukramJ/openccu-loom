@@ -97,8 +97,8 @@ func (a *GroupsDomain) Delete(ctx context.Context, centralName string, groupID i
 // deviceOf strips a channel suffix, yielding the parent device address used
 // as the Interface.setMetadata objectId.
 func deviceOf(memberAddress string) string {
-	if i := strings.IndexByte(memberAddress, ':'); i >= 0 {
-		return memberAddress[:i]
+	if before, _, ok := strings.Cut(memberAddress, ":"); ok {
+		return before
 	}
 	return memberAddress
 }

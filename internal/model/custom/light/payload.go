@@ -595,7 +595,7 @@ func (l *EffectLight) State() payload.StatePayload {
 	}
 	base, _ := l.ColorLight.State().(*payload.ColorLightState)
 	if base == nil {
-		base = &payload.ColorLightState{LightState: payload.LightState{State: "OFF"}}
+		base = &payload.ColorLightState{State: "OFF"}
 	}
 	out := &payload.EffectLightState{ColorLightState: *base}
 	if _, label, ok := l.Effect(); ok {
@@ -710,7 +710,7 @@ func (r *RGBWLight) State() payload.StatePayload {
 	}
 	base, _ := r.ColorLight.State().(*payload.ColorLightState)
 	if base == nil {
-		base = &payload.ColorLightState{LightState: payload.LightState{State: "OFF"}}
+		base = &payload.ColorLightState{State: "OFF"}
 	}
 	out := &payload.RGBWLightState{LightState: base.LightState}
 	if r.colorTempCombined {
@@ -833,23 +833,21 @@ func (e *lightEntity) fields() hadiscovery.LightJSONFields {
 // natively). StatePayload emits exactly that shape, which is why the
 // description declares no value template.
 func newLightEntity(slot payload.TopicSlot) *lightEntity {
-	return &lightEntity{CustomEntity: payload.CustomEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      slot.Parameter,
-			EntityPlatform: hacatalog.PlatformLight,
-			Description: hamodel.Description{
-				Optimistic: hamodel.Ptr(false),
-			},
-			Binds: []hamodel.Binding{{
-				Role: hamodel.RoleState, Mode: hamodel.Read,
-				Slot: payload.CustomSlot(slot),
-			}},
+	return &lightEntity{
+		EntityKey:      slot.Parameter,
+		EntityPlatform: hacatalog.PlatformLight,
+		Description: hamodel.Description{
+			Optimistic: new(false),
 		},
+		Binds: []hamodel.Binding{{
+			Role: hamodel.RoleState, Mode: hamodel.Read,
+			Slot: payload.CustomSlot(slot),
+		}},
 		Fields: hadiscovery.LightJSONFields{
 			Schema: "json",
-			Flash:  hadiscovery.Ptr(false),
+			Flash:  new(false),
 		},
-	}}
+	}
 }
 
 // baseLightEntity is what a light subtype extends: the entity its embedded
@@ -878,12 +876,12 @@ func (l *Light) HADiscoveryEntity() hamodel.Entity {
 	fields := entity.fields()
 	if l.Capabilities.Dimmable {
 		fields.SupportedColorModes = []string{"brightness"}
-		fields.Brightness = hadiscovery.Ptr(true)
+		fields.Brightness = new(true)
 		// HA JSON-Schema brightness scale is 0-255 — StatePayload pre-scales
 		// the raw 0..1 LEVEL float to that range.
-		fields.BrightnessScale = hadiscovery.Ptr(255)
+		fields.BrightnessScale = new(255)
 		if l.Capabilities.Transition {
-			fields.Transition = hadiscovery.Ptr(true)
+			fields.Transition = new(true)
 		}
 	} else {
 		fields.SupportedColorModes = []string{"onoff"}
@@ -936,9 +934,9 @@ func (l *ColorTempLight) HADiscoveryEntity() hamodel.Entity {
 	entity := baseLightEntity(l.Light.HADiscoveryEntity())
 	fields := entity.fields()
 	fields.SupportedColorModes = []string{"color_temp"}
-	fields.ColorTempKelvin = hadiscovery.Ptr(true)
-	fields.MinKelvin = hadiscovery.Ptr(int(l.MinKelvin))
-	fields.MaxKelvin = hadiscovery.Ptr(int(l.MaxKelvin))
+	fields.ColorTempKelvin = new(true)
+	fields.MinKelvin = new(int(l.MinKelvin))
+	fields.MaxKelvin = new(int(l.MaxKelvin))
 
 	const (
 		pythonMinMireds = 153
@@ -952,8 +950,8 @@ func (l *ColorTempLight) HADiscoveryEntity() hamodel.Entity {
 	if l.MinKelvin > 0 {
 		maxMireds = int(1e6 / float64(l.MinKelvin))
 	}
-	fields.MinMireds = hadiscovery.Ptr(minMireds)
-	fields.MaxMireds = hadiscovery.Ptr(maxMireds)
+	fields.MinMireds = new(minMireds)
+	fields.MaxMireds = new(maxMireds)
 	entity.Fields = fields
 	return entity
 }
@@ -988,7 +986,7 @@ func (l *EffectLight) HADiscoveryEntity() hamodel.Entity {
 		return entity
 	}
 	fields := entity.fields()
-	fields.Effect = hadiscovery.Ptr(true)
+	fields.Effect = new(true)
 	fields.EffectList = effects
 	entity.Fields = fields
 	return entity
@@ -1026,11 +1024,11 @@ func (r *RGBWLight) HADiscoveryEntity() hamodel.Entity {
 		// (_compute_capabilities sets hs_color and color_temperature both
 		// true).
 		fields.SupportedColorModes = []string{"color_temp", "hs"}
-		fields.ColorTempKelvin = hadiscovery.Ptr(true)
-		fields.MinKelvin = hadiscovery.Ptr(int(r.MinKelvin))
-		fields.MaxKelvin = hadiscovery.Ptr(int(r.MaxKelvin))
+		fields.ColorTempKelvin = new(true)
+		fields.MinKelvin = new(int(r.MinKelvin))
+		fields.MaxKelvin = new(int(r.MaxKelvin))
 		if effects := r.Effects(); len(effects) > 0 {
-			fields.Effect = hadiscovery.Ptr(true)
+			fields.Effect = new(true)
 			fields.EffectList = effects
 		}
 		entity.Fields = fields
@@ -1048,12 +1046,12 @@ func (r *RGBWLight) HADiscoveryEntity() hamodel.Entity {
 	}
 
 	if r.HasColorTempColorMode() {
-		fields.ColorTempKelvin = hadiscovery.Ptr(true)
-		fields.MinKelvin = hadiscovery.Ptr(int(r.MinKelvin))
-		fields.MaxKelvin = hadiscovery.Ptr(int(r.MaxKelvin))
+		fields.ColorTempKelvin = new(true)
+		fields.MinKelvin = new(int(r.MinKelvin))
+		fields.MaxKelvin = new(int(r.MaxKelvin))
 	}
 	if effects := r.Effects(); len(effects) > 0 {
-		fields.Effect = hadiscovery.Ptr(true)
+		fields.Effect = new(true)
 		fields.EffectList = effects
 	}
 	entity.Fields = fields

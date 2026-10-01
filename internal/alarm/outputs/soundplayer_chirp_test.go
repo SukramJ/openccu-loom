@@ -78,7 +78,7 @@ func TestStopAll_SoundPlayerChirpIsNotAPhantomFailure(t *testing.T) {
 // of failing on the siren port.
 func TestTestFire_SoundPlayerChirpPlaysTheSoundfile(t *testing.T) {
 	h := newHarness(t)
-	sound := h.seedSoundOnlyChirp("mp3", OutputConfig{SoundfileIndex: 3, Volume: ptrFloat64(0.4)})
+	sound := h.seedSoundOnlyChirp("mp3", OutputConfig{SoundfileIndex: 3, Volume: new(0.4)})
 
 	if err := h.mgr.TestFire(h.ctx, "mp3", false); err != nil {
 		t.Fatalf("TestFire: %v", err)

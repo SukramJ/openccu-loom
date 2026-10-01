@@ -96,7 +96,7 @@ func (e *updateEntity) BuildDiscovery(_ hadiscovery.Context, comp *hadiscovery.C
 		LatestVersionTopic:    e.stateTopic,
 		LatestVersionTemplate: updateLatestVersionTemplate,
 		Title:                 e.title,
-		DisplayPrecision:      hadiscovery.Ptr(0),
+		DisplayPrecision:      new(0),
 	}
 	return nil
 }
@@ -232,28 +232,26 @@ func (d *DefaultDiscoveryBuilder) BuildUpdateDiscovery(centralName string, ev Up
 
 	stateTopic := d.TopicBuilder.DeviceUpdateState(centralName, ev.Interface, ev.DeviceAddress)
 	entity := &updateEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      updateEntityKey,
-			EntityPlatform: hacatalog.PlatformUpdate,
-			Description: hamodel.Description{
-				// HA composes entity_id as `<device-slug>_<entity-name-slug>`,
-				// so the entity `name` must NOT contain the device name again
-				// (otherwise the slug stutters into
-				// "update.alarmsirene_fl_alarmsirene_fl_firmware"). Keep the
-				// name relative to the device and let HA prefix.
-				NameKey:       "discovery.firmware",
-				DeviceClass:   hamodel.DeviceClass(hacatalog.UpdateDeviceClassFirmware),
-				Category:      hacatalog.EntityCategoryConfig,
-				ValueTemplate: updateValueTemplate,
-				// The whole firmware document, republished as entity
-				// attributes so an operator can inspect all four fields
-				// from the entity rather than from the broker.
-				JSONAttributesTopic:    stateTopic,
-				JSONAttributesTemplate: updateJSONAttributesTemplate,
-			},
-			Binds: []hamodel.Binding{
-				{Role: hamodel.RoleState, Mode: hamodel.Read, Slot: updateSlot(dev, centralName, ev)},
-			},
+		EntityKey:      updateEntityKey,
+		EntityPlatform: hacatalog.PlatformUpdate,
+		Description: hamodel.Description{
+			// HA composes entity_id as `<device-slug>_<entity-name-slug>`,
+			// so the entity `name` must NOT contain the device name again
+			// (otherwise the slug stutters into
+			// "update.alarmsirene_fl_alarmsirene_fl_firmware"). Keep the
+			// name relative to the device and let HA prefix.
+			NameKey:       "discovery.firmware",
+			DeviceClass:   hamodel.DeviceClass(hacatalog.UpdateDeviceClassFirmware),
+			Category:      hacatalog.EntityCategoryConfig,
+			ValueTemplate: updateValueTemplate,
+			// The whole firmware document, republished as entity
+			// attributes so an operator can inspect all four fields
+			// from the entity rather than from the broker.
+			JSONAttributesTopic:    stateTopic,
+			JSONAttributesTemplate: updateJSONAttributesTemplate,
+		},
+		Binds: []hamodel.Binding{
+			{Role: hamodel.RoleState, Mode: hamodel.Read, Slot: updateSlot(dev, centralName, ev)},
 		},
 		stateTopic: stateTopic,
 		// The title is the model string, not a translated label: it names
@@ -263,18 +261,16 @@ func (d *DefaultDiscoveryBuilder) BuildUpdateDiscovery(centralName string, ev Up
 	}
 
 	ctx := updateDiscoveryContext{
-		StdContext: hadiscovery.StdContext{
-			Layout: updateTopicLayout{d: d, ev: ev, central: centralName},
-			Lang:   d.Locale,
-			// The description's own template wins over the encoding, so
-			// this only decides what an unset one would have produced. It
-			// is set for the same reason it is set on the other planes:
-			// this daemon's state topics carry no envelope.
-			Enc:        hadiscovery.RawEncoding,
-			Translator: d.tr,
-		},
-		uniqueID: uniqueID,
-		nodeID:   nodeID,
+		Layout: updateTopicLayout{d: d, ev: ev, central: centralName},
+		Lang:   d.Locale,
+		// The description's own template wins over the encoding, so
+		// this only decides what an unset one would have produced. It
+		// is set for the same reason it is set on the other planes:
+		// this daemon's state topics carry no envelope.
+		Enc:        hadiscovery.RawEncoding,
+		Translator: d.tr,
+		uniqueID:   uniqueID,
+		nodeID:     nodeID,
 	}
 
 	comp, err := hadiscovery.RenderComponent(ctx, dev, entity, *BuildOriginInfo())

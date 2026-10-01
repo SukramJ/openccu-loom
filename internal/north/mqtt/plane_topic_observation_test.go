@@ -245,7 +245,7 @@ func (o *observedPlane) subscribedFilters() []string {
 // isDiscoveryConfigTopic reports whether topic is an HA Discovery config
 // topic, using the model layer's own format rather than a literal prefix.
 func isDiscoveryConfigTopic(topic string) bool {
-	prefix := strings.SplitN(naming.DiscoveryConfigTopic("c", "n", "o"), "/", 2)[0]
+	prefix, _, _ := strings.Cut(naming.DiscoveryConfigTopic("c", "n", "o"), "/")
 	return strings.HasPrefix(topic, prefix+"/") && strings.HasSuffix(topic, "/config")
 }
 

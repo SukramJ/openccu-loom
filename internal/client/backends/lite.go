@@ -254,8 +254,7 @@ func (b *LiteBackend) UpdateFirmware(ctx context.Context, address string) error 
 	if errors.Is(callErr, hmerr.ErrScopeMissing) || errors.Is(callErr, occulited.ErrInitRefused) {
 		return callErr
 	}
-	var fault *hmerr.XMLRPCFault
-	if !errors.As(callErr, &fault) {
+	if _, ok := errors.AsType[*hmerr.XMLRPCFault](callErr); !ok {
 		return callErr
 	}
 	_, err := b.xml.Call(ctx, "updateFirmware", address)

@@ -164,10 +164,10 @@ func describePressButtonFromRegistry(
 		desc.Unit = hamodel.Unit(rule.UnitOfMeasurement)
 	}
 	if rule.SuggestedDisplayPrecision != nil {
-		desc.Precision = hadiscovery.Ptr(*rule.SuggestedDisplayPrecision)
+		desc.Precision = new(*rule.SuggestedDisplayPrecision)
 	}
 	if rule.EnabledByDefault != nil {
-		desc.Enabled = hadiscovery.Ptr(*rule.EnabledByDefault)
+		desc.Enabled = new(*rule.EnabledByDefault)
 	}
 	if len(rule.Options) > 0 {
 		desc.Options = &hamodel.Enum{Codes: append([]string(nil), rule.Options...)}
@@ -230,25 +230,21 @@ func (d *DefaultDiscoveryBuilder) BuildPressButton(ev Event) DiscoveryItem {
 	}
 
 	entity := &pressButtonEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      strings.ToLower(ev.Parameter),
-			EntityPlatform: hacatalog.PlatformButton,
-			Description:    hamodel.Description{Name: hamodel.L(pressButtonName(ev))},
-			Binds: []hamodel.Binding{{
-				Role: hamodel.RoleCommand,
-				Mode: hamodel.Write,
-				Slot: hamodel.S(dev.UID(), strconv.Itoa(ev.ChannelNo),
-					hamodel.BucketValues, ev.Parameter).In(central, ev.Interface),
-			}},
-		},
+		EntityKey:      strings.ToLower(ev.Parameter),
+		EntityPlatform: hacatalog.PlatformButton,
+		Description:    hamodel.Description{Name: hamodel.L(pressButtonName(ev))},
+		Binds: []hamodel.Binding{{
+			Role: hamodel.RoleCommand,
+			Mode: hamodel.Write,
+			Slot: hamodel.S(dev.UID(), strconv.Itoa(ev.ChannelNo),
+				hamodel.BucketValues, ev.Parameter).In(central, ev.Interface),
+		}},
 	}
 	describePressButtonFromRegistry(&entity.Description,
 		string(HAComponentButton), ev.Parameter, ev.Model, "", "")
 
 	ctx := pressButtonDiscoveryContext{
-		StdContext: hadiscovery.StdContext{
-			Layout: pressButtonTopicLayout{d: d, ev: ev, pd: pd, central: central},
-		},
+		Layout:   pressButtonTopicLayout{d: d, ev: ev, pd: pd, central: central},
 		uniqueID: uniqueID,
 		nodeID:   nodeID,
 	}

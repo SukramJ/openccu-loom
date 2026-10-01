@@ -38,61 +38,61 @@ var sensorRulesByDeviceAndParam = map[devParam]HARegistryDescription{
 	// -------------------------------------------------------------------------
 	// temperature.py — ACTUAL_TEMPERATURE as diagnostic on switch devices
 	// -------------------------------------------------------------------------
-	{"ELV-SH-BS", "ACTUAL_TEMPERATURE"}:    {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: entityBoolPtr(false)},
-	{"HmIP-BB", "ACTUAL_TEMPERATURE"}:      {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: entityBoolPtr(false)},
-	{"HmIP-BD", "ACTUAL_TEMPERATURE"}:      {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: entityBoolPtr(false)},
-	{"HmIP-BR", "ACTUAL_TEMPERATURE"}:      {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: entityBoolPtr(false)},
-	{"HmIP-BS", "ACTUAL_TEMPERATURE"}:      {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: entityBoolPtr(false)},
-	{"HmIP-DR", "ACTUAL_TEMPERATURE"}:      {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: entityBoolPtr(false)},
-	{"HmIP-FB", "ACTUAL_TEMPERATURE"}:      {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: entityBoolPtr(false)},
-	{"HmIP-FD", "ACTUAL_TEMPERATURE"}:      {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: entityBoolPtr(false)},
-	{"HmIP-FR", "ACTUAL_TEMPERATURE"}:      {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: entityBoolPtr(false)},
-	{"HmIP-FS", "ACTUAL_TEMPERATURE"}:      {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: entityBoolPtr(false)},
-	{"HmIP-MOD-OC8", "ACTUAL_TEMPERATURE"}: {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: entityBoolPtr(false)},
-	{"HmIP-PCB", "ACTUAL_TEMPERATURE"}:     {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: entityBoolPtr(false)},
-	{"HmIP-PD", "ACTUAL_TEMPERATURE"}:      {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: entityBoolPtr(false)},
-	{"HmIP-PS", "ACTUAL_TEMPERATURE"}:      {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: entityBoolPtr(false)},
-	{"HmIP-USB", "ACTUAL_TEMPERATURE"}:     {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: entityBoolPtr(false)},
-	{"HmIPW-DR", "ACTUAL_TEMPERATURE"}:     {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: entityBoolPtr(false)},
-	{"HmIPW-FIO", "ACTUAL_TEMPERATURE"}:    {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: entityBoolPtr(false)},
+	{"ELV-SH-BS", "ACTUAL_TEMPERATURE"}:    {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: new(false)},
+	{"HmIP-BB", "ACTUAL_TEMPERATURE"}:      {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: new(false)},
+	{"HmIP-BD", "ACTUAL_TEMPERATURE"}:      {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: new(false)},
+	{"HmIP-BR", "ACTUAL_TEMPERATURE"}:      {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: new(false)},
+	{"HmIP-BS", "ACTUAL_TEMPERATURE"}:      {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: new(false)},
+	{"HmIP-DR", "ACTUAL_TEMPERATURE"}:      {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: new(false)},
+	{"HmIP-FB", "ACTUAL_TEMPERATURE"}:      {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: new(false)},
+	{"HmIP-FD", "ACTUAL_TEMPERATURE"}:      {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: new(false)},
+	{"HmIP-FR", "ACTUAL_TEMPERATURE"}:      {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: new(false)},
+	{"HmIP-FS", "ACTUAL_TEMPERATURE"}:      {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: new(false)},
+	{"HmIP-MOD-OC8", "ACTUAL_TEMPERATURE"}: {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: new(false)},
+	{"HmIP-PCB", "ACTUAL_TEMPERATURE"}:     {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: new(false)},
+	{"HmIP-PD", "ACTUAL_TEMPERATURE"}:      {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: new(false)},
+	{"HmIP-PS", "ACTUAL_TEMPERATURE"}:      {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: new(false)},
+	{"HmIP-USB", "ACTUAL_TEMPERATURE"}:     {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: new(false)},
+	{"HmIPW-DR", "ACTUAL_TEMPERATURE"}:     {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: new(false)},
+	{"HmIPW-FIO", "ACTUAL_TEMPERATURE"}:    {Key: "ACTUAL_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: new(false)},
 
 	// -------------------------------------------------------------------------
 	// level.py — LEVEL on thermostat/valve devices (pipe_level)
 	// -------------------------------------------------------------------------
-	{"HmIP-eTRV", "LEVEL"}:        {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: entityBoolPtr(false)},
-	{"HmIP-HEATING", "LEVEL"}:     {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: entityBoolPtr(false)},
-	{"HmIP-FALMOT-C12", "LEVEL"}:  {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: entityBoolPtr(false)},
-	{"HmIPW-FALMOT-C12", "LEVEL"}: {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: entityBoolPtr(false)},
+	{"HmIP-eTRV", "LEVEL"}:        {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: new(false)},
+	{"HmIP-HEATING", "LEVEL"}:     {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: new(false)},
+	{"HmIP-FALMOT-C12", "LEVEL"}:  {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: new(false)},
+	{"HmIPW-FALMOT-C12", "LEVEL"}: {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: new(false)},
 
 	// level.py — LEVEL on cover/shutter devices (cover_level)
-	{"HmIP-BROLL", "LEVEL"}:  {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: entityBoolPtr(false)},
-	{"HmIP-FROLL", "LEVEL"}:  {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: entityBoolPtr(false)},
-	{"HmIP-BBL", "LEVEL"}:    {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: entityBoolPtr(false)},
-	{"HmIP-DRBLI4", "LEVEL"}: {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: entityBoolPtr(false)},
-	{"HmIPW-DRBL4", "LEVEL"}: {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: entityBoolPtr(false)},
-	{"HmIP-FBL", "LEVEL"}:    {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: entityBoolPtr(false)},
+	{"HmIP-BROLL", "LEVEL"}:  {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: new(false)},
+	{"HmIP-FROLL", "LEVEL"}:  {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: new(false)},
+	{"HmIP-BBL", "LEVEL"}:    {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: new(false)},
+	{"HmIP-DRBLI4", "LEVEL"}: {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: new(false)},
+	{"HmIPW-DRBL4", "LEVEL"}: {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: new(false)},
+	{"HmIP-FBL", "LEVEL"}:    {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: new(false)},
 
 	// level.py — LEVEL on light/dimmer devices (light_level)
-	{"HmIP-BSL", "LEVEL"}:     {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: entityBoolPtr(false)},
-	{"HmIP-BDT", "LEVEL"}:     {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: entityBoolPtr(false)},
-	{"HmIP-DRDI3", "LEVEL"}:   {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: entityBoolPtr(false)},
-	{"HmIP-FDT", "LEVEL"}:     {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: entityBoolPtr(false)},
-	{"HmIPW-PDT", "LEVEL"}:    {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: entityBoolPtr(false)},
-	{"HmIP-RGBW", "LEVEL"}:    {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: entityBoolPtr(false)},
-	{"HmIP-SCTH230", "LEVEL"}: {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: entityBoolPtr(false)},
-	{"HmIPW-DRD3", "LEVEL"}:   {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: entityBoolPtr(false)},
-	{"HmIPW-WRC6", "LEVEL"}:   {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: entityBoolPtr(false)},
+	{"HmIP-BSL", "LEVEL"}:     {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: new(false)},
+	{"HmIP-BDT", "LEVEL"}:     {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: new(false)},
+	{"HmIP-DRDI3", "LEVEL"}:   {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: new(false)},
+	{"HmIP-FDT", "LEVEL"}:     {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: new(false)},
+	{"HmIPW-PDT", "LEVEL"}:    {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: new(false)},
+	{"HmIP-RGBW", "LEVEL"}:    {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: new(false)},
+	{"HmIP-SCTH230", "LEVEL"}: {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: new(false)},
+	{"HmIPW-DRD3", "LEVEL"}:   {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: new(false)},
+	{"HmIPW-WRC6", "LEVEL"}:   {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: new(false)},
 
 	// level.py — LEVEL_2 (tilt) on blind devices (cover_tilt)
-	{"HmIP-BBL", "LEVEL_2"}:    {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: entityBoolPtr(false)},
-	{"HmIP-DRBLI4", "LEVEL_2"}: {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: entityBoolPtr(false)},
-	{"HmIPW-DRBL4", "LEVEL_2"}: {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: entityBoolPtr(false)},
-	{"HmIP-FBL", "LEVEL_2"}:    {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: entityBoolPtr(false)},
+	{"HmIP-BBL", "LEVEL_2"}:    {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: new(false)},
+	{"HmIP-DRBLI4", "LEVEL_2"}: {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: new(false)},
+	{"HmIPW-DRBL4", "LEVEL_2"}: {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: new(false)},
+	{"HmIP-FBL", "LEVEL_2"}:    {Key: "LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EnabledByDefault: new(false)},
 
 	// level.py — COLOR on RGB/light devices (hidden; surfaced via Light entity)
-	{"HmIP-BSL", "COLOR"}:   {Key: "COLOR", EnabledByDefault: entityBoolPtr(false)},
-	{"HmIP-RGBW", "COLOR"}:  {Key: "COLOR", EnabledByDefault: entityBoolPtr(false)},
-	{"HmIPW-WRC6", "COLOR"}: {Key: "COLOR", EnabledByDefault: entityBoolPtr(false)},
+	{"HmIP-BSL", "COLOR"}:   {Key: "COLOR", EnabledByDefault: new(false)},
+	{"HmIP-RGBW", "COLOR"}:  {Key: "COLOR", EnabledByDefault: new(false)},
+	{"HmIPW-WRC6", "COLOR"}: {Key: "COLOR", EnabledByDefault: new(false)},
 
 	// level.py — VALVE_STATE on HM-CC-RT-DN and HM-CC-VD (pipe_level)
 	{"HM-CC-RT-DN", "VALVE_STATE"}: {Key: "VALVE_STATE", StateClass: "measurement", UnitOfMeasurement: "%"},
@@ -130,7 +130,7 @@ var sensorRulesByDeviceAndParam = map[devParam]HARegistryDescription{
 
 	// misc.py — HmIP-SWSD TIME_OF_OPERATION
 	// Python: multiplier=1/86400 to convert seconds→days; multiplier omitted here.
-	{"HmIP-SWSD", "TIME_OF_OPERATION"}: {Key: "TIME_OF_OPERATION", DeviceClass: "duration", StateClass: "total_increasing", UnitOfMeasurement: "d", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: entityBoolPtr(false)},
+	{"HmIP-SWSD", "TIME_OF_OPERATION"}: {Key: "TIME_OF_OPERATION", DeviceClass: "duration", StateClass: "total_increasing", UnitOfMeasurement: "d", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: new(false)},
 }
 
 // sensorRulesByParam holds generic per-parameter HARegistryDescription
@@ -170,10 +170,10 @@ var sensorRulesByParam = map[string]HARegistryDescription{
 	"ACTUAL_HUMIDITY": {Key: "HUMIDITY", DeviceClass: "humidity", StateClass: "measurement", UnitOfMeasurement: "%"},
 
 	// Vapor concentration (absolute humidity, disabled by default)
-	"VAPOR_CONCENTRATION": {Key: "VAPOR_CONCENTRATION", DeviceClass: "absolute_humidity", StateClass: "measurement", UnitOfMeasurement: "g/m³", EnabledByDefault: entityBoolPtr(false)},
+	"VAPOR_CONCENTRATION": {Key: "VAPOR_CONCENTRATION", DeviceClass: "absolute_humidity", StateClass: "measurement", UnitOfMeasurement: "g/m³", EnabledByDefault: new(false)},
 
 	// Enthalpy (no device_class, custom icon, disabled by default)
-	"ENTHALPY": {Key: "ENTHALPY", StateClass: "measurement", UnitOfMeasurement: "kJ/kg", Icon: "mdi:fire", EnabledByDefault: entityBoolPtr(false)},
+	"ENTHALPY": {Key: "ENTHALPY", StateClass: "measurement", UnitOfMeasurement: "kJ/kg", Icon: "mdi:fire", EnabledByDefault: new(false)},
 
 	// PM1 mass concentration (µg/m³)
 	"MASS_CONCENTRATION_PM_1":             {Key: "MASS_CONCENTRATION_PM_1", DeviceClass: "pm1", StateClass: "measurement", UnitOfMeasurement: unitMicrogramsPerM3},
@@ -209,11 +209,11 @@ var sensorRulesByParam = map[string]HARegistryDescription{
 	// -------------------------------------------------------------------------
 
 	// Operating voltage / battery state (V, diagnostic, disabled by default)
-	"BATTERY_STATE":     {Key: "OPERATING_VOLTAGE", DeviceClass: "voltage", StateClass: "measurement", UnitOfMeasurement: "V", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: entityBoolPtr(false), SuggestedDisplayPrecision: entityIntPtr(1)},
-	"OPERATING_VOLTAGE": {Key: "OPERATING_VOLTAGE", DeviceClass: "voltage", StateClass: "measurement", UnitOfMeasurement: "V", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: entityBoolPtr(false), SuggestedDisplayPrecision: entityIntPtr(1)},
+	"BATTERY_STATE":     {Key: "OPERATING_VOLTAGE", DeviceClass: "voltage", StateClass: "measurement", UnitOfMeasurement: "V", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: new(false), SuggestedDisplayPrecision: new(1)},
+	"OPERATING_VOLTAGE": {Key: "OPERATING_VOLTAGE", DeviceClass: "voltage", StateClass: "measurement", UnitOfMeasurement: "V", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: new(false), SuggestedDisplayPrecision: new(1)},
 
 	// Operating voltage level (%, diagnostic, disabled by default)
-	"OPERATING_VOLTAGE_LEVEL": {Key: "OPERATING_VOLTAGE_LEVEL", DeviceClass: "battery", StateClass: "measurement", UnitOfMeasurement: "%", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: entityBoolPtr(false)},
+	"OPERATING_VOLTAGE_LEVEL": {Key: "OPERATING_VOLTAGE_LEVEL", DeviceClass: "battery", StateClass: "measurement", UnitOfMeasurement: "%", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: new(false)},
 
 	// -------------------------------------------------------------------------
 	// energy.py
@@ -247,7 +247,7 @@ var sensorRulesByParam = map[string]HARegistryDescription{
 	"GAS_VOLUME": {Key: "GAS_VOLUME", DeviceClass: "gas", StateClass: "total_increasing", UnitOfMeasurement: "m³"},
 
 	// Water sensors
-	"WATER_FLOW":              {Key: "WATER_FLOW", DeviceClass: "volume_flow_rate", StateClass: "measurement", UnitOfMeasurement: "L/min", SuggestedDisplayPrecision: entityIntPtr(1)},
+	"WATER_FLOW":              {Key: "WATER_FLOW", DeviceClass: "volume_flow_rate", StateClass: "measurement", UnitOfMeasurement: "L/min", SuggestedDisplayPrecision: new(1)},
 	"WATER_VOLUME":            {Key: "WATER_VOLUME", DeviceClass: "water", StateClass: "total_increasing", UnitOfMeasurement: "L"},
 	"WATER_VOLUME_SINCE_OPEN": {Key: "WATER_VOLUME_SINCE_OPEN", DeviceClass: "water", StateClass: "total", UnitOfMeasurement: "L"},
 
@@ -282,8 +282,8 @@ var sensorRulesByParam = map[string]HARegistryDescription{
 	// -------------------------------------------------------------------------
 
 	// RSSI signal strength (dBm, diagnostic, disabled by default)
-	"RSSI_DEVICE": {Key: "RSSI", DeviceClass: "signal_strength", StateClass: "measurement", UnitOfMeasurement: "dBm", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: entityBoolPtr(false)},
-	"RSSI_PEER":   {Key: "RSSI", DeviceClass: "signal_strength", StateClass: "measurement", UnitOfMeasurement: "dBm", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: entityBoolPtr(false)},
+	"RSSI_DEVICE": {Key: "RSSI", DeviceClass: "signal_strength", StateClass: "measurement", UnitOfMeasurement: "dBm", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: new(false)},
+	"RSSI_PEER":   {Key: "RSSI", DeviceClass: "signal_strength", StateClass: "measurement", UnitOfMeasurement: "dBm", EntityCategory: EntityCategoryDiagnostic, EnabledByDefault: new(false)},
 
 	// Carrier sense level (%, diagnostic, enabled by default per Python enabled_default=True)
 	"CARRIER_SENSE_LEVEL": {Key: "CARRIER_SENSE_LEVEL", StateClass: "measurement", UnitOfMeasurement: "%", EntityCategory: EntityCategoryDiagnostic, Icon: "mdi:radio-tower"},
@@ -308,7 +308,7 @@ var sensorRulesByParam = map[string]HARegistryDescription{
 	"LOCK_STATE": {Key: "LOCK_STATE", DeviceClass: "enum"},
 
 	// Lock state reason (enum, disabled by default)
-	"LOCK_STATE_REASON": {Key: "LOCK_STATE_REASON", DeviceClass: "enum", EnabledByDefault: entityBoolPtr(false)},
+	"LOCK_STATE_REASON": {Key: "LOCK_STATE_REASON", DeviceClass: "enum", EnabledByDefault: new(false)},
 
 	// Smoke detector alarm status (enum)
 	"SMOKE_DETECTOR_ALARM_STATUS": {Key: "SMOKE_DETECTOR_ALARM_STATUS", DeviceClass: "enum"},
@@ -325,15 +325,15 @@ var sensorRulesByParam = map[string]HARegistryDescription{
 	"TEMPERATURE":        {Key: "TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C"},
 
 	// Dew point (disabled by default)
-	"DEWPOINT":  {Key: "DEW_POINT", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EnabledByDefault: entityBoolPtr(false)},
-	"DEW_POINT": {Key: "DEW_POINT", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EnabledByDefault: entityBoolPtr(false)},
+	"DEWPOINT":  {Key: "DEW_POINT", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EnabledByDefault: new(false)},
+	"DEW_POINT": {Key: "DEW_POINT", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EnabledByDefault: new(false)},
 
 	// Dew point spread (Kelvin, disabled by default)
-	"DEW_POINT_SPREAD": {Key: "DEW_POINT_SPREAD", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "K", EnabledByDefault: entityBoolPtr(false)},
+	"DEW_POINT_SPREAD": {Key: "DEW_POINT_SPREAD", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "K", EnabledByDefault: new(false)},
 
 	// Apparent temperature / frost point (disabled by default)
-	"APPARENT_TEMPERATURE": {Key: "APPARENT_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EnabledByDefault: entityBoolPtr(false)},
-	"FROST_POINT":          {Key: "APPARENT_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EnabledByDefault: entityBoolPtr(false)},
+	"APPARENT_TEMPERATURE": {Key: "APPARENT_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EnabledByDefault: new(false)},
+	"FROST_POINT":          {Key: "APPARENT_TEMPERATURE", DeviceClass: "temperature", StateClass: "measurement", UnitOfMeasurement: "°C", EnabledByDefault: new(false)},
 
 	// -------------------------------------------------------------------------
 	// weather.py

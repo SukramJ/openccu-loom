@@ -148,9 +148,9 @@ func (c *Climate) HADiscoveryEntity() hamodel.Entity {
 	// sign; [Climate.TemperatureUnit] answers "°C" / "°F" by default.
 	fields := hadiscovery.ClimateFields{
 		TemperatureUnit: strings.TrimPrefix(c.TemperatureUnit(), "°"),
-		MinTemp:         hadiscovery.Ptr(c.MinTemp()),
-		MaxTemp:         hadiscovery.Ptr(c.MaxTemp()),
-		TempStep:        hadiscovery.Ptr(c.TemperatureStep()),
+		MinTemp:         new(c.MinTemp()),
+		MaxTemp:         new(c.MaxTemp()),
+		TempStep:        new(c.TemperatureStep()),
 	}
 	if modes := c.Modes(); len(modes) > 0 {
 		ms := make([]string, len(modes))
@@ -198,26 +198,22 @@ func (c *Climate) HADiscoveryEntity() hamodel.Entity {
 	}
 
 	return &climateEntity{
-		CustomEntity: payload.CustomEntity{
-			Basic: hamodel.Basic{
-				EntityKey:      c.TopicSlot().Parameter,
-				EntityPlatform: hacatalog.PlatformClimate,
-				Description: hamodel.Description{
-					// HA derives slider granularity from `temp_step` alone;
-					// `precision` is an HA-MQTT-only display-rounding hint with
-					// no counterpart in the native integration, which uses
-					// _attr_target_temperature_step. Emitting both drifts from
-					// the native integration without any behavioural benefit.
-					//
-					// optimistic=false: HA must not apply setpoint changes
-					// locally before the CCU echoes them back; a wrong
-					// displayed setpoint during connection issues would
-					// mislead the operator.
-					Optimistic: hamodel.Ptr(false),
-				},
-				Binds: binds,
-			},
+		EntityKey:      c.TopicSlot().Parameter,
+		EntityPlatform: hacatalog.PlatformClimate,
+		Description: hamodel.Description{
+			// HA derives slider granularity from `temp_step` alone;
+			// `precision` is an HA-MQTT-only display-rounding hint with
+			// no counterpart in the native integration, which uses
+			// _attr_target_temperature_step. Emitting both drifts from
+			// the native integration without any behavioural benefit.
+			//
+			// optimistic=false: HA must not apply setpoint changes
+			// locally before the CCU echoes them back; a wrong
+			// displayed setpoint during connection issues would
+			// mislead the operator.
+			Optimistic: new(false),
 		},
+		Binds:   binds,
 		fields:  fields,
 		presets: presets,
 		action:  c.HasActivitySource(),

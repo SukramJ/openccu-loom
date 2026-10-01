@@ -1637,25 +1637,21 @@ func TestBackupAdapterRestorerWiringIsConcurrencySafe(t *testing.T) {
 	var wg sync.WaitGroup
 	start := make(chan struct{})
 	for _, name := range names {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			<-start
 			for range 50 {
 				a.SetRestorerForCentral(name, concurrentRestorer{jobID: name + "-job"})
 			}
-		}()
+		})
 	}
 	for range 4 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			<-start
 			for range 50 {
 				_, _ = a.Restore(context.Background(), idAlpha)
 				_ = a.RestorerForCentral("beta")
 			}
-		}()
+		})
 	}
 	close(start)
 	wg.Wait()

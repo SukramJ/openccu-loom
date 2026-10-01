@@ -56,8 +56,7 @@ func TestCallbackMetricsReachTheCentralsAggregator(t *testing.T) {
 	// the observer) to every central.
 	seedCentralHealthAndMetrics(reg, cfg, nil, logger)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	cb, teardown := wireXMLRPCCallback(ctx, cfg, nil, newCallbackMetrics(reg), logger)
 	defer teardown()
 	if cb.srv == nil {

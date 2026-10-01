@@ -127,16 +127,14 @@ func TestHeartbeatEditSession_ConcurrentRequestsForOneLock(t *testing.T) {
 
 	var wg sync.WaitGroup
 	for range 8 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(b))
 			w := httptest.NewRecorder()
 			h.ServeHTTP(w, req)
 			if w.Code != http.StatusOK {
 				t.Errorf("heartbeat status = %d, want 200 body=%s", w.Code, w.Body.String())
 			}
-		}()
+		})
 	}
 	wg.Wait()
 }

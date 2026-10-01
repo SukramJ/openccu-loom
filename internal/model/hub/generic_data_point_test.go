@@ -55,8 +55,8 @@ func TestHubDataPointSignature(t *testing.T) {
 // satisfy the HubDataPointer interface so north-bound adapters can use
 // a single []HubDataPointer slice to iterate both types.
 func TestHubDataPointerPolymorphism(t *testing.T) {
-	sv := &Sysvar{HubDataPoint: HubDataPoint{Name: "Presence"}, ValueType: hmenum.HubValueTypeLogic}
-	pg := &Program{HubDataPoint: HubDataPoint{Name: "Evening"}, ID: "p1"}
+	sv := &Sysvar{Name: "Presence", ValueType: hmenum.HubValueTypeLogic}
+	pg := &Program{Name: "Evening", ID: "p1"}
 
 	// Both must satisfy the interface at compile time (checked by
 	// the variable assignments below) and at runtime.
@@ -78,7 +78,7 @@ func TestHubDataPointerPolymorphism(t *testing.T) {
 // The HubDataPoint.StateUncertain flag
 // GenericSysvarDataPoint.write_value(state_uncertain = False).
 func TestSysvarStateUncertainClearedOnValue(t *testing.T) {
-	sv := &Sysvar{HubDataPoint: HubDataPoint{Name: "sv"}}
+	sv := &Sysvar{Name: "sv"}
 	if !sv.StateUncertain() {
 		t.Fatal("fresh Sysvar must be state_uncertain=true")
 	}
@@ -92,7 +92,7 @@ func TestSysvarStateUncertainClearedOnValue(t *testing.T) {
 // OnExecution clears the HubDataPoint.StateUncertain flag, matching
 // Update_data semantics.
 func TestProgramStateUncertainClearedOnExecution(t *testing.T) {
-	pg := &Program{HubDataPoint: HubDataPoint{Name: "prog"}, ID: "p1"}
+	pg := &Program{Name: "prog", ID: "p1"}
 	if !pg.StateUncertain() {
 		t.Fatal("fresh Program must be state_uncertain=true")
 	}
@@ -126,14 +126,14 @@ func TestHubDataPointConcurrentMarkCertainUncertain(t *testing.T) {
 // TestHubDataPointFieldsPromoted verifies that embedding promotes
 // Name and Description to direct field access on Sysvar and Program.
 func TestHubDataPointFieldsPromoted(t *testing.T) {
-	sv := &Sysvar{HubDataPoint: HubDataPoint{Name: "MyVar", Description: "a variable"}}
+	sv := &Sysvar{Name: "MyVar", Description: "a variable"}
 	if sv.Name != "MyVar" {
 		t.Fatalf("sv.Name = %q, want MyVar", sv.Name)
 	}
 	if sv.Description != "a variable" {
 		t.Fatalf("sv.Description = %q, want 'a variable'", sv.Description)
 	}
-	pg := &Program{HubDataPoint: HubDataPoint{Name: "MyProg", Description: "a program"}, ID: "p1"}
+	pg := &Program{Name: "MyProg", Description: "a program", ID: "p1"}
 	if pg.Name != "MyProg" {
 		t.Fatalf("pg.Name = %q, want MyProg", pg.Name)
 	}
@@ -145,11 +145,11 @@ func TestHubDataPointFieldsPromoted(t *testing.T) {
 // TestHubDataPointEnabledDefault verifies that the EnabledDefault field is
 // promoted and settable from both types.
 func TestHubDataPointEnabledDefault(t *testing.T) {
-	sv := &Sysvar{HubDataPoint: HubDataPoint{Name: "sv", EnabledDefault: true}}
+	sv := &Sysvar{Name: "sv", EnabledDefault: true}
 	if !sv.EnabledDefault {
 		t.Fatal("EnabledDefault should be true on Sysvar")
 	}
-	pg := &Program{HubDataPoint: HubDataPoint{Name: "pg", EnabledDefault: false}, ID: "p1"}
+	pg := &Program{Name: "pg", EnabledDefault: false, ID: "p1"}
 	if pg.EnabledDefault {
 		t.Fatal("EnabledDefault should be false on Program")
 	}

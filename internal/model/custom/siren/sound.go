@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -198,12 +199,7 @@ func (sp *SoundPlayer) offersSoundfile(label string) bool {
 	if sp == nil || label == "" {
 		return false
 	}
-	for _, v := range sp.availableSF {
-		if v == label {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(sp.availableSF, label)
 }
 
 // soundfileIndexFor resolves a numbered SOUNDFILE label back to its file

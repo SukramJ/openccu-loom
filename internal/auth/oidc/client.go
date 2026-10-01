@@ -13,6 +13,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -312,12 +313,7 @@ func (a *Audience) UnmarshalJSON(b []byte) error {
 
 // contains reports whether want is one of the audiences.
 func (a Audience) contains(want string) bool {
-	for _, v := range a {
-		if v == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(a, want)
 }
 
 // idTokenLeeway absorbs small clock differences between the daemon
@@ -459,7 +455,7 @@ func claimStrings(raw map[string]any, path string) []string {
 		return nil
 	}
 	var cur any = raw
-	for _, p := range strings.Split(path, ".") {
+	for p := range strings.SplitSeq(path, ".") {
 		m, ok := cur.(map[string]any)
 		if !ok {
 			return nil

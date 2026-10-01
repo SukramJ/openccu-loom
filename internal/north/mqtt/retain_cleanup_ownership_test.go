@@ -5,6 +5,7 @@ package mqtt
 
 import (
 	"context"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -129,12 +130,7 @@ func (c *brokerClient) retractions() []string {
 }
 
 func contains(list []string, want string) bool {
-	for _, got := range list {
-		if got == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(list, want)
 }
 
 // sysvarItem builds a real hub sysvar discovery item for centralName

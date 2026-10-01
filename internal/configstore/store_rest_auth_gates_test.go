@@ -82,8 +82,8 @@ func TestRESTSectionRowNeverCarriesTheRemovedSessionGate(t *testing.T) {
 	const retired = "session_enabled"
 
 	cfg := config.Default()
-	cfg.North.REST.Auth.BasicEnabled = boolPtr(false)
-	cfg.North.REST.Auth.BearerEnabled = boolPtr(true)
+	cfg.North.REST.Auth.BasicEnabled = new(false)
+	cfg.North.REST.Auth.BearerEnabled = new(true)
 	raw, ok, err := marshalSection(SectionREST, cfg)
 	if !ok || err != nil {
 		t.Fatalf("marshalSection: ok=%v err=%v", ok, err)
@@ -94,13 +94,13 @@ func TestRESTSectionRowNeverCarriesTheRemovedSessionGate(t *testing.T) {
 
 	// The struct itself, not just one marshal of it: a field added anywhere
 	// under AuthConfig with that json name would re-enter the payload.
-	rt := reflect.TypeOf(config.AuthConfig{})
-	for i := range rt.NumField() {
-		key, _, _ := strings.Cut(rt.Field(i).Tag.Get("json"), ",")
+	rt := reflect.TypeFor[config.AuthConfig]()
+	for field := range rt.Fields() {
+		key, _, _ := strings.Cut(field.Tag.Get("json"), ",")
 		if key == retired {
 			t.Errorf("config.AuthConfig.%s reuses the retired json key %q; "+
 				"migrations/038_config_sections_auth_gates.sql keys on its absence",
-				rt.Field(i).Name, retired)
+				field.Name, retired)
 		}
 	}
 }

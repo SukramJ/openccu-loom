@@ -257,8 +257,7 @@ func (b *CcuBackend) UpdateFirmware(ctx context.Context, address string) error {
 	if callErr == nil {
 		return nil
 	}
-	var fault *hmerr.XMLRPCFault
-	if !errors.As(callErr, &fault) {
+	if _, ok := errors.AsType[*hmerr.XMLRPCFault](callErr); !ok {
 		return callErr
 	}
 	_, err := b.xml.Call(ctx, "updateFirmware", address)

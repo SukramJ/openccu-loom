@@ -191,7 +191,7 @@ func (d *goToDebouncer) cancel(axis goToAxis) {
 // unsubscribe path so a detached cover (channel teardown, central
 // shutdown) never fires a timer that writes to the CCU afterwards.
 func (d *goToDebouncer) cancelAll() {
-	for axis := goToAxis(0); axis < goToAxisCount; axis++ {
+	for axis := range goToAxisCount {
 		d.cancel(axis)
 	}
 }

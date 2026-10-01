@@ -143,9 +143,9 @@ func buildReloaderFixture(
 	c.ModelRegistry.Put(dev)
 
 	fake := &listDevicesOps{
-		fakeOperations: fakeOperations{kind: backends.KindCCU},
-		returnDescs:    descs,
-		returnErr:      backendErr,
+		kind:        backends.KindCCU,
+		returnDescs: descs,
+		returnErr:   backendErr,
 	}
 	w := clientpkg.NewValueWriter()
 	w.Register("ccu-01", reloaderWireID, fake)
@@ -190,7 +190,7 @@ func TestReloadDeviceConfigFetchesSingleDeviceDescription(t *testing.T) {
 
 	children := []string{"0001ABCD:0", "0001ABCD:1"}
 	fake := &getDescOps{
-		fakeOperations: fakeOperations{kind: backends.KindCCU},
+		kind: backends.KindCCU,
 		descByAddr: map[string]map[string]any{
 			"0001ABCD":   rawDeviceMap("0001ABCD", "HmIP-STH", children),
 			"0001ABCD:0": rawChannelMap("0001ABCD:0", "0001ABCD"),
@@ -233,7 +233,7 @@ func TestReloadDeviceConfigPartialChannelErrorSkipped(t *testing.T) {
 
 	children := []string{"0001ABCD:0", "0001ABCD:1"}
 	fake := &getDescOps{
-		fakeOperations: fakeOperations{kind: backends.KindCCU},
+		kind: backends.KindCCU,
 		descByAddr: map[string]map[string]any{
 			"0001ABCD":   rawDeviceMap("0001ABCD", "HmIP-STH", children),
 			"0001ABCD:0": rawChannelMap("0001ABCD:0", "0001ABCD"),
@@ -413,8 +413,8 @@ func TestBackendLinkPeerFetcher_ForwardsChannelAddress(t *testing.T) {
 
 	want := []string{"0009ZZZZ:1", "0009ZZZZ:2"}
 	fake := &linkPeerRecordingOps{
-		fakeOperations: fakeOperations{kind: backends.KindCCU},
-		returnPeers:    want,
+		kind:        backends.KindCCU,
+		returnPeers: want,
 	}
 	fetcher := &backendLinkPeerFetcher{ops: fake}
 
@@ -440,8 +440,8 @@ func TestBackendLinkPeerFetcher_IgnoresIfaceArg(t *testing.T) {
 	// address to the backend (iface is dropped because the backend is
 	// already interface-scoped).
 	fake := &linkPeerRecordingOps{
-		fakeOperations: fakeOperations{kind: backends.KindCCU},
-		returnPeers:    []string{"PEER:1"},
+		kind:        backends.KindCCU,
+		returnPeers: []string{"PEER:1"},
 	}
 	fetcher := &backendLinkPeerFetcher{ops: fake}
 
@@ -482,7 +482,7 @@ func TestReloadDeviceConfigInvokesLinkPeerRefresh(t *testing.T) {
 
 	children := []string{"0001ABCD:0", "0001ABCD:1"}
 	fake := &reloadWithLinkPeerOps{
-		fakeOperations: fakeOperations{kind: backends.KindCCU},
+		kind: backends.KindCCU,
 		descByAddr: map[string]map[string]any{
 			"0001ABCD":   rawDeviceMap("0001ABCD", "HmIP-STH", children),
 			"0001ABCD:0": rawChannelMap("0001ABCD:0", "0001ABCD"),

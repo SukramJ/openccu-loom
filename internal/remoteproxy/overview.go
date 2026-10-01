@@ -125,7 +125,7 @@ func (l locale) StatusLabel(key string) string {
 // everything else falls back to English.
 func localeFor(r *http.Request) locale {
 	accept := strings.ToLower(r.Header.Get("Accept-Language"))
-	for _, part := range strings.Split(accept, ",") {
+	for part := range strings.SplitSeq(accept, ",") {
 		tag := strings.TrimSpace(strings.SplitN(part, ";", 2)[0])
 		switch {
 		case tag == "de" || strings.HasPrefix(tag, "de-"):

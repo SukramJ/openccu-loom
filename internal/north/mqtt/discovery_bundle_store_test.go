@@ -296,7 +296,7 @@ func TestTheComponentBodyIsTheOneTheEntityFormPublished(t *testing.T) {
 		StateTopic:    "loom/ccu/0001abc/1/values/ACTUAL_TEMPERATURE",
 		UnitOfMeasure: "°C",
 		DeviceClass:   "temperature",
-		Precision:     hadiscovery.Ptr(1),
+		Precision:     new(1),
 		Device: &hadiscovery.DeviceInfo{
 			Identifiers: []string{"openccu-loom_ccu_0001abc"},
 			Name:        "Thermostat",

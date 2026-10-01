@@ -39,19 +39,19 @@ func TestRunSerializesConcurrentInvocationsPerInterface(t *testing.T) {
 	c := NewConnectionRecoveryCoordinatorWithLimit("serialize-same-iface", events.NewBus(), 0)
 
 	const n = 8
-	var inFlight int32
-	var maxObserved int32
+	var inFlight atomic.Int32
+	var maxObserved atomic.Int32
 
 	pipeline := []Pipeline{{
 		Stage: hmenum.RecoveryStageReconnecting,
 		Run: func(_ context.Context) error {
-			cur := atomic.AddInt32(&inFlight, 1)
+			cur := inFlight.Add(1)
 			for {
-				prev := atomic.LoadInt32(&maxObserved)
+				prev := maxObserved.Load()
 				if cur <= prev {
 					break
 				}
-				if atomic.CompareAndSwapInt32(&maxObserved, prev, cur) {
+				if maxObserved.CompareAndSwap(prev, cur) {
 					break
 				}
 			}
@@ -59,21 +59,21 @@ func TestRunSerializesConcurrentInvocationsPerInterface(t *testing.T) {
 			// second concurrent waiter ample time to also enter the stage
 			// before we decrement.
 			time.Sleep(5 * time.Millisecond)
-			atomic.AddInt32(&inFlight, -1)
+			inFlight.Add(-1)
 			return nil
 		},
 	}}
 
 	var (
 		wg        sync.WaitGroup
-		completed int32
+		completed atomic.Int32
 	)
 	wg.Add(n)
 	for range n {
 		go func() {
 			defer wg.Done()
 			if c.Run(context.Background(), "HmIP-RF", pipeline) == hmenum.RecoveryResultSuccess {
-				atomic.AddInt32(&completed, 1)
+				completed.Add(1)
 			}
 		}()
 	}
@@ -86,10 +86,10 @@ func TestRunSerializesConcurrentInvocationsPerInterface(t *testing.T) {
 		t.Fatal("goroutines did not finish in time — possible goroutine leak or deadlock")
 	}
 
-	if got := atomic.LoadInt32(&maxObserved); got != 1 {
+	if got := maxObserved.Load(); got != 1 {
 		t.Errorf("max observed pipeline concurrency = %d, want 1 (concurrent Run calls for the same interface must be serialized)", got)
 	}
-	if got := atomic.LoadInt32(&completed); got != n {
+	if got := completed.Load(); got != n {
 		t.Errorf("completed invocations = %d, want %d (all Run calls must return Success)", got, n)
 	}
 

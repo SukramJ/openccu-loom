@@ -338,8 +338,6 @@ func TestRestartRequiredDiff_MultipleChanges(t *testing.T) {
 	}
 }
 
-func ptrBoolConfig(b bool) *bool { return &b }
-
 // TestRestartRequiredDiff_CCUAuth verifies that a change in the CCU-auth
 // block surfaces "north.rest.auth.ccu" in the diff.
 func TestRestartRequiredDiff_CCUAuth(t *testing.T) {
@@ -349,7 +347,7 @@ func TestRestartRequiredDiff_CCUAuth(t *testing.T) {
 		t.Parallel()
 		boot := baseConfig()
 		eff := clone(boot)
-		eff.North.REST.Auth.CCU.Enabled = ptrBoolConfig(true)
+		eff.North.REST.Auth.CCU.Enabled = new(true)
 
 		got := RestartRequiredDiff(boot, eff)
 		if !slices.Contains(got, "north.rest.auth.ccu") {
@@ -360,9 +358,9 @@ func TestRestartRequiredDiff_CCUAuth(t *testing.T) {
 	t.Run("primary_pointer_changes", func(t *testing.T) {
 		t.Parallel()
 		boot := baseConfig()
-		boot.North.REST.Auth.CCU.Primary = ptrBoolConfig(true)
+		boot.North.REST.Auth.CCU.Primary = new(true)
 		eff := clone(boot)
-		eff.North.REST.Auth.CCU.Primary = ptrBoolConfig(false)
+		eff.North.REST.Auth.CCU.Primary = new(false)
 
 		got := RestartRequiredDiff(boot, eff)
 		if !slices.Contains(got, "north.rest.auth.ccu") {

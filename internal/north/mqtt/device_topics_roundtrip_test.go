@@ -356,16 +356,14 @@ func (fakePressChannel) HasParameter(name string) bool { return name == "PRESS_S
 type fakeCustomDPSource struct{ kind string }
 
 func (f fakeCustomDPSource) HADiscoveryEntity() hamodel.Entity {
-	return &fakeCustomDPEntity{CustomEntity: payload.CustomEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      f.kind,
-			EntityPlatform: hacatalog.PlatformSwitch,
-			Binds: []hamodel.Binding{{
-				Role: hamodel.RoleState, Mode: hamodel.Read,
-				Slot: payload.CustomSlot(f.TopicSlot()),
-			}},
-		},
-	}}
+	return &fakeCustomDPEntity{
+		EntityKey:      f.kind,
+		EntityPlatform: hacatalog.PlatformSwitch,
+		Binds: []hamodel.Binding{{
+			Role: hamodel.RoleState, Mode: hamodel.Read,
+			Slot: payload.CustomSlot(f.TopicSlot()),
+		}},
+	}
 }
 
 // fakeCustomDPEntity declares the one named action the fake accepts, which is

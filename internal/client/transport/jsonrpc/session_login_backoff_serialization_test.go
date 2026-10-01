@@ -45,11 +45,9 @@ func TestLoginBackoffDoesNotSerializeConcurrentCalls(t *testing.T) {
 	var wg sync.WaitGroup
 	start := time.Now()
 	for range callers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			_ = c.Call(context.Background(), "System.getVersion", nil, nil)
-		}()
+		})
 	}
 	wg.Wait()
 	elapsed := time.Since(start)

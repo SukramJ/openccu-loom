@@ -4,6 +4,7 @@
 package engine_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
@@ -27,12 +28,7 @@ func chirpKinds(o *fakeOutputs) []engine.ChirpKind {
 
 // hasChirp reports whether o recorded at least one chirp of kind.
 func hasChirp(o *fakeOutputs, kind engine.ChirpKind) bool {
-	for _, k := range chirpKinds(o) {
-		if k == kind {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(chirpKinds(o), kind)
 }
 
 func TestChime_FiresOnActivationWhileDisarmed(t *testing.T) {

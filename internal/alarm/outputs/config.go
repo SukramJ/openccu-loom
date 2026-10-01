@@ -6,6 +6,7 @@ package outputs
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -99,12 +100,7 @@ func (c OutputConfig) InMode(mode hmenum.AlarmMode) bool {
 	if len(c.Modes) == 0 {
 		return true
 	}
-	for _, m := range c.Modes {
-		if m == mode {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(c.Modes, mode)
 }
 
 // ParseOutputConfig decodes an alarm_outputs.config_json document.

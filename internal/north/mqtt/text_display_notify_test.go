@@ -27,14 +27,12 @@ type stubTextDisplay struct {
 
 func (s *stubTextDisplay) HADiscoveryEntity() hamodel.Entity {
 	return &payload.CustomEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      s.slot.Parameter,
-			EntityPlatform: hacatalog.PlatformText,
-			Binds: []hamodel.Binding{{
-				Role: hamodel.RoleState, Mode: hamodel.Read,
-				Slot: payload.CustomSlot(s.slot),
-			}},
-		},
+		EntityKey:      s.slot.Parameter,
+		EntityPlatform: hacatalog.PlatformText,
+		Binds: []hamodel.Binding{{
+			Role: hamodel.RoleState, Mode: hamodel.Read,
+			Slot: payload.CustomSlot(s.slot),
+		}},
 		Fields: hadiscovery.TextFields{Mode: "text"},
 	}
 }

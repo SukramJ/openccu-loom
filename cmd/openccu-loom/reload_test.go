@@ -214,8 +214,7 @@ north:
 	if err != nil {
 		t.Fatalf("NewWatcher: %v", err)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	go func() { _ = w.Run(ctx) }()
 
 	const after = "data_dir: " + "%s" + `

@@ -6,6 +6,7 @@ package coordinators
 import (
 	"context"
 	"errors"
+	"maps"
 	"sync"
 
 	"github.com/SukramJ/openccu-loom/internal/central/events"
@@ -380,9 +381,7 @@ func (h *HubCoordinator) SetBidcosInterfaces(m map[string]BidcosInterfaceInfo) {
 		return
 	}
 	next := make(map[string]BidcosInterfaceInfo, len(m))
-	for k, v := range m {
-		next[k] = v
-	}
+	maps.Copy(next, m)
 	h.bidcos = next
 }
 

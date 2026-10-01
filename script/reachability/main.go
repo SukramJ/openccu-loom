@@ -1113,8 +1113,8 @@ func (idx *referenceIndex) markType(t types.Type, seen map[types.Type]bool) { //
 	switch u := t.(type) {
 	case *types.Named:
 		idx.namedTypes[types.TypeString(u, nil)] = true
-		for i := range u.TypeArgs().Len() {
-			idx.markType(u.TypeArgs().At(i), seen)
+		for t := range u.TypeArgs().Types() {
+			idx.markType(t, seen)
 		}
 	case *types.Alias:
 		idx.markType(types.Unalias(u), seen)
@@ -1130,15 +1130,15 @@ func (idx *referenceIndex) markType(t types.Type, seen map[types.Type]bool) { //
 		idx.markType(u.Key(), seen)
 		idx.markType(u.Elem(), seen)
 	case *types.Tuple:
-		for i := range u.Len() {
-			idx.markType(u.At(i).Type(), seen)
+		for v := range u.Variables() {
+			idx.markType(v.Type(), seen)
 		}
 	case *types.Signature:
 		idx.markType(u.Params(), seen)
 		idx.markType(u.Results(), seen)
 	case *types.Struct:
-		for i := range u.NumFields() {
-			idx.markType(u.Field(i).Type(), seen)
+		for field := range u.Fields() {
+			idx.markType(field.Type(), seen)
 		}
 	}
 }

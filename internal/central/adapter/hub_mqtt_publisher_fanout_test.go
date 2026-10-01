@@ -166,8 +166,8 @@ func TestHubMQTTPublisherPreservesPublishOrder(t *testing.T) {
 	c, publisher := hubFanoutFixture(t, gate)
 
 	sv := &hub.Sysvar{
-		HubDataPoint: hub.HubDataPoint{Name: "Counter"},
-		ValueType:    hmenum.HubValueTypeInteger,
+		Name:      "Counter",
+		ValueType: hmenum.HubValueTypeInteger,
 	}
 	sv.OnValue(hmtypes.IntValue(0))
 	c.HubModel.PutSysvar(sv)
@@ -223,8 +223,8 @@ func TestHubMQTTPublisherPreservesPayloadOrder(t *testing.T) {
 	c, publisher := hubFanoutFixture(t, pub)
 
 	sv := &hub.Sysvar{
-		HubDataPoint: hub.HubDataPoint{Name: "Counter"},
-		ValueType:    hmenum.HubValueTypeInteger,
+		Name:      "Counter",
+		ValueType: hmenum.HubValueTypeInteger,
 	}
 	sv.OnValue(hmtypes.IntValue(0))
 	c.HubModel.PutSysvar(sv)
@@ -304,7 +304,7 @@ func TestHubMQTTPublisherStopLeavesNoGoroutine(t *testing.T) {
 	pub := mqtt.NewNoopClient()
 	c, publisher := hubFanoutFixture(t, pub)
 
-	sv := &hub.Sysvar{HubDataPoint: hub.HubDataPoint{Name: "Anwesenheit"}, ValueType: hmenum.HubValueTypeLogic}
+	sv := &hub.Sysvar{Name: "Anwesenheit", ValueType: hmenum.HubValueTypeLogic}
 	sv.OnValue(hmtypes.BoolValue(true))
 	c.HubModel.PutSysvar(sv)
 
@@ -354,13 +354,11 @@ func TestHubMQTTPublisherConnectivityDedupIsWorkerOwned(t *testing.T) {
 	ifaces := []string{"HmIP-RF", "BidCos-RF", "BidCos-Wired", "CUxD"}
 	var wg sync.WaitGroup
 	for _, iface := range ifaces {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for i := range 25 {
 				events.Publish(c.EventBus, connectivityEvent(iface, i%2 == 0))
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	publisher.Flush()

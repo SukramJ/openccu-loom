@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
 	"sync"
 	"time"
 
@@ -243,8 +244,8 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	// once so they run in the same LIFO order as the original code.
 	var teardowns []func()
 	teardown = func() {
-		for i := len(teardowns) - 1; i >= 0; i-- {
-			teardowns[i]()
+		for _, teardown := range slices.Backward(teardowns) {
+			teardown()
 		}
 	}
 

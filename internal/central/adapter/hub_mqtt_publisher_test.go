@@ -78,7 +78,7 @@ func TestProgramUpdateReachesMQTT(t *testing.T) {
 	reg, c, pub, publisher := hubMQTTFixture(t)
 	_ = reg
 
-	prog := &hub.Program{HubDataPoint: hub.HubDataPoint{Name: "Abend"}, ID: "prog-1", Writer: nil}
+	prog := &hub.Program{Name: "Abend", ID: "prog-1", Writer: nil}
 	prog.OnActive(false)
 	c.HubModel.PutProgram(prog)
 
@@ -128,7 +128,7 @@ func TestProgramInitialStatePushedAtStart(t *testing.T) {
 	t.Parallel()
 	_, c, pub, publisher := hubMQTTFixture(t)
 
-	prog := &hub.Program{HubDataPoint: hub.HubDataPoint{Name: "Morgen"}, ID: "prog-2"}
+	prog := &hub.Program{Name: "Morgen", ID: "prog-2"}
 	prog.OnActive(true)
 	c.HubModel.PutProgram(prog)
 
@@ -151,7 +151,7 @@ func TestSysvarUpdateReachesMQTT(t *testing.T) {
 	t.Parallel()
 	_, c, pub, publisher := hubMQTTFixture(t)
 
-	sv := &hub.Sysvar{HubDataPoint: hub.HubDataPoint{Name: "Anwesenheit"}, ValueType: hmenum.HubValueTypeLogic}
+	sv := &hub.Sysvar{Name: "Anwesenheit", ValueType: hmenum.HubValueTypeLogic}
 	sv.OnValue(hmtypes.BoolValue(true))
 	c.HubModel.PutSysvar(sv)
 
@@ -185,7 +185,7 @@ func TestSysvarInitialStateNotPushedWhenUnobserved(t *testing.T) {
 	_, c, pub, publisher := hubMQTTFixture(t)
 
 	// Sysvar with no value observed yet.
-	sv := &hub.Sysvar{HubDataPoint: hub.HubDataPoint{Name: "Unbeobachtet"}, ValueType: hmenum.HubValueTypeLogic}
+	sv := &hub.Sysvar{Name: "Unbeobachtet", ValueType: hmenum.HubValueTypeLogic}
 	c.HubModel.PutSysvar(sv)
 
 	publisher.Start(context.Background())
@@ -401,7 +401,7 @@ func TestHubMQTTPublisherStopReleasesSubscriptions(t *testing.T) {
 	t.Parallel()
 	_, c, pub, publisher := hubMQTTFixture(t)
 
-	sv := &hub.Sysvar{HubDataPoint: hub.HubDataPoint{Name: "StopTest"}, ValueType: hmenum.HubValueTypeLogic}
+	sv := &hub.Sysvar{Name: "StopTest", ValueType: hmenum.HubValueTypeLogic}
 	sv.OnValue(hmtypes.BoolValue(true))
 	c.HubModel.PutSysvar(sv)
 
@@ -427,7 +427,7 @@ func TestHubMQTTPublisherStartIsIdempotent(t *testing.T) {
 	t.Parallel()
 	_, c, pub, publisher := hubMQTTFixture(t)
 
-	sv := &hub.Sysvar{HubDataPoint: hub.HubDataPoint{Name: "IdempotentTest"}, ValueType: hmenum.HubValueTypeLogic}
+	sv := &hub.Sysvar{Name: "IdempotentTest", ValueType: hmenum.HubValueTypeLogic}
 	sv.OnValue(hmtypes.BoolValue(false))
 	c.HubModel.PutSysvar(sv)
 
@@ -490,7 +490,7 @@ func TestSysvarRegisteredAfterStartReachesMQTT(t *testing.T) {
 	}
 
 	// Now register a sysvar — observer must fire wireOneSysvar.
-	sv := &hub.Sysvar{HubDataPoint: hub.HubDataPoint{Name: "Presence"}, ValueType: hmenum.HubValueTypeLogic}
+	sv := &hub.Sysvar{Name: "Presence", ValueType: hmenum.HubValueTypeLogic}
 	sv.OnValue(hmtypes.BoolValue(true))
 	c.HubModel.PutSysvar(sv)
 	publisher.Flush()
@@ -519,7 +519,7 @@ func TestProgramRegisteredAfterStartReachesMQTT(t *testing.T) {
 	defer publisher.Stop()
 	publisher.Flush()
 
-	prog := &hub.Program{HubDataPoint: hub.HubDataPoint{Name: "Abend"}, ID: "late-prg"}
+	prog := &hub.Program{Name: "Abend", ID: "late-prg"}
 	prog.OnActive(false)
 	c.HubModel.PutProgram(prog)
 	publisher.Flush()
@@ -558,8 +558,8 @@ func TestStopReleasesObserver(t *testing.T) {
 
 	preCount := len(pub.Published())
 	c.HubModel.PutSysvar(&hub.Sysvar{
-		HubDataPoint: hub.HubDataPoint{Name: "PostStop"},
-		ValueType:    hmenum.HubValueTypeLogic,
+		Name:      "PostStop",
+		ValueType: hmenum.HubValueTypeLogic,
 	})
 	if len(pub.Published()) != preCount {
 		t.Fatalf("publish fired after Stop; topics=%v", publishedTopics(pub))
@@ -574,12 +574,12 @@ func TestMQTTDiscoveryFiltersInternalPrograms(t *testing.T) {
 	_, c, pub, publisher := hubMQTTFixture(t)
 
 	// Regular program — must appear in discovery.
-	regular := &hub.Program{HubDataPoint: hub.HubDataPoint{Name: "Abend"}, ID: "regular-prg"}
+	regular := &hub.Program{Name: "Abend", ID: "regular-prg"}
 	regular.OnActive(false)
 	c.HubModel.PutProgram(regular)
 
 	// Internal program — must NOT appear in discovery.
-	internal := &hub.Program{HubDataPoint: hub.HubDataPoint{Name: "Tmp_Internal"}, ID: "internal-prg", IsInternal: true}
+	internal := &hub.Program{Name: "Tmp_Internal", ID: "internal-prg", IsInternal: true}
 	internal.OnActive(false)
 	c.HubModel.PutProgram(internal)
 
@@ -602,7 +602,7 @@ func TestMQTTDiscoveryFilterDoesNotSuppressUpdatesForInternalPrograms(t *testing
 	t.Parallel()
 	_, c, pub, publisher := hubMQTTFixture(t)
 
-	internal := &hub.Program{HubDataPoint: hub.HubDataPoint{Name: "Tmp_Intl"}, ID: "tmp-prg", IsInternal: true}
+	internal := &hub.Program{Name: "Tmp_Intl", ID: "tmp-prg", IsInternal: true}
 	internal.OnActive(false)
 	c.HubModel.PutProgram(internal)
 

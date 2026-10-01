@@ -122,7 +122,7 @@ func TestMDNSTXTCCUsKey(t *testing.T) {
 	if v == "" || strings.HasSuffix(v, ",") || strings.Contains(v, ",,") {
 		t.Errorf("truncated value malformed: %q", v)
 	}
-	for _, sn := range strings.Split(v, ",") {
+	for sn := range strings.SplitSeq(v, ",") {
 		if len(sn) != 10 {
 			t.Errorf("partial serial %q survived truncation", sn)
 		}

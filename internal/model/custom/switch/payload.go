@@ -85,23 +85,21 @@ func (s *Switch) HADiscoveryEntity() hamodel.Entity {
 	// one of the two topics.
 	slot := payload.WireSlot(string(hmenum.ParameterState))
 	return &payload.CustomEntity{
-		Basic: hamodel.Basic{
-			EntityKey:      s.TopicSlot().Parameter,
-			EntityPlatform: hacatalog.PlatformSwitch,
-			Description: hamodel.Description{
-				ValueTemplate: switchValueTemplate,
-				// Explicit false prevents HA MQTT Switch from applying
-				// optimistic local state updates before the CCU confirms the
-				// command via the state topic. Without it, HA defaults to
-				// optimistic=true when a command_topic is present, causing the
-				// entity to flip locally even if the CCU rejects or delays the
-				// write.
-				Optimistic: hamodel.Ptr(false),
-			},
-			Binds: []hamodel.Binding{
-				{Role: hamodel.RoleState, Mode: hamodel.Read, Slot: slot},
-				{Role: hamodel.RoleCommand, Mode: hamodel.Write, Slot: slot},
-			},
+		EntityKey:      s.TopicSlot().Parameter,
+		EntityPlatform: hacatalog.PlatformSwitch,
+		Description: hamodel.Description{
+			ValueTemplate: switchValueTemplate,
+			// Explicit false prevents HA MQTT Switch from applying
+			// optimistic local state updates before the CCU confirms the
+			// command via the state topic. Without it, HA defaults to
+			// optimistic=true when a command_topic is present, causing the
+			// entity to flip locally even if the CCU rejects or delays the
+			// write.
+			Optimistic: new(false),
+		},
+		Binds: []hamodel.Binding{
+			{Role: hamodel.RoleState, Mode: hamodel.Read, Slot: slot},
+			{Role: hamodel.RoleCommand, Mode: hamodel.Write, Slot: slot},
 		},
 		Fields: switchFields(),
 	}

@@ -2107,9 +2107,7 @@ func (c *DeviceCoordinator) ScheduleParamsetConsistencyCheck(
 	if checker == nil || len(deviceAddresses) == 0 {
 		return
 	}
-	c.wg.Add(1)
-	go func() {
-		defer c.wg.Done()
+	c.wg.Go(func() {
 		defer func() {
 			if r := recover(); r != nil {
 				c.logger.Error("ScheduleParamsetConsistencyCheck: goroutine panicked",
@@ -2127,5 +2125,5 @@ func (c *DeviceCoordinator) ScheduleParamsetConsistencyCheck(
 		if onResult != nil && len(inconsistencies) > 0 {
 			onResult(inconsistencies)
 		}
-	}()
+	})
 }

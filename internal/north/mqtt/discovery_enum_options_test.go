@@ -121,17 +121,17 @@ func TestLocalisedEnumOptionsRejectsUnusableLabelSets(t *testing.T) {
 // renderer honours for these templates.
 func renderJinjaMap(t *testing.T, template, input string) string {
 	t.Helper()
-	open := strings.Index(template, "{")
+	found := strings.Contains(template, "{")
 	start := strings.Index(template, "{% set m = {")
-	if start != 0 || open < 0 {
+	if start != 0 || !found {
 		t.Fatalf("template does not start with the map assignment: %q", template)
 	}
 	body := template[len("{% set m = {"):]
-	end := strings.Index(body, "} %}")
-	if end < 0 {
+	before0, _, ok0 := strings.Cut(body, "} %}")
+	if !ok0 {
 		t.Fatalf("template map is unterminated: %q", template)
 	}
-	mapping := parseJinjaPairs(t, body[:end])
+	mapping := parseJinjaPairs(t, before0)
 	if v, ok := mapping[input]; ok {
 		return v
 	}

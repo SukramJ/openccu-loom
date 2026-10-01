@@ -12,8 +12,8 @@ func TestHubRegistersPrograms(t *testing.T) {
 	if h.CentralName != "ccu-01" {
 		t.Fatalf("central name: %s", h.CentralName)
 	}
-	h.PutProgram(&Program{HubDataPoint: HubDataPoint{Name: "One"}, ID: "P1"})
-	h.PutProgram(&Program{HubDataPoint: HubDataPoint{Name: "Two"}, ID: "P2"})
+	h.PutProgram(&Program{Name: "One", ID: "P1"})
+	h.PutProgram(&Program{Name: "Two", ID: "P2"})
 	h.PutProgram(nil)              // ignored
 	h.PutProgram(&Program{ID: ""}) // ignored
 
@@ -37,10 +37,10 @@ func TestHubRegistersPrograms(t *testing.T) {
 
 func TestHubRegistersSysvars(t *testing.T) {
 	h := NewHub("ccu-01")
-	h.PutSysvar(&Sysvar{HubDataPoint: HubDataPoint{Name: "Alpha"}})
-	h.PutSysvar(&Sysvar{HubDataPoint: HubDataPoint{Name: "Beta"}})
+	h.PutSysvar(&Sysvar{Name: "Alpha"})
+	h.PutSysvar(&Sysvar{Name: "Beta"})
 	h.PutSysvar(nil)
-	h.PutSysvar(&Sysvar{HubDataPoint: HubDataPoint{Name: ""}})
+	h.PutSysvar(&Sysvar{Name: ""})
 
 	if _, ok := h.Sysvar("Alpha"); !ok {
 		t.Fatal("Alpha missing")

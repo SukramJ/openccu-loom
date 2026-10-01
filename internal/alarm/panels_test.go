@@ -154,10 +154,6 @@ func (h *panelsHarness) panel(zoneID string) alarmpanel.Panel {
 	return alarmpanel.Panel{}
 }
 
-// boolPtr returns a pointer to b, used to set CodePolicy.RequireDisarm
-// explicitly away from its nil ("required once a code exists") default.
-func boolPtr(b bool) *bool { return &b }
-
 // --- seedPanels: per-zone code-policy derivation ---
 
 // TestSeedPanels_CodePolicyFlagsFollowPINCodeExistence verifies
@@ -205,7 +201,7 @@ func TestSeedPanels_MasterPanelUnionsCodePolicyAcrossZones(t *testing.T) {
 	h.seedZone("eg", "Erdgeschoss", engine.CodePolicy{RequireArm: true})
 	// "og" opts out of the disarm default explicitly, so it carries no
 	// requirement regardless of any PIN code that exists elsewhere.
-	h.seedZone("og", "Obergeschoss", engine.CodePolicy{RequireDisarm: boolPtr(false)})
+	h.seedZone("og", "Obergeschoss", engine.CodePolicy{RequireDisarm: new(false)})
 	h.seedPINCode("c1", "Markus", "1234", true, []string{"eg"})
 	h.start()
 

@@ -60,7 +60,7 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannel:                  0,
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               []int{1, 2},
-			StateChannelOffset:              intPtr(-1),
+			StateChannelOffset:              new(-1),
 			AllowUndefinedGenericDataPoints: false,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldCombinedParameter: Bare(hmenum.ParameterCombinedParameter),
@@ -112,7 +112,7 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannel:                  0,
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               []int{1, 2},
-			StateChannelOffset:              intPtr(-1),
+			StateChannelOffset:              new(-1),
 			AllowUndefinedGenericDataPoints: false,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldLevel:         Bare(hmenum.ParameterLevel),
@@ -135,7 +135,7 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannel:                  0,
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               []int{1, 2},
-			StateChannelOffset:              intPtr(-1),
+			StateChannelOffset:              new(-1),
 			AllowUndefinedGenericDataPoints: false,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldColor:          Bare(hmenum.ParameterColor),
@@ -423,7 +423,7 @@ var ProfileConfigs = map[hmenum.DeviceProfile]*ProfileConfig{
 			PrimaryChannel:                  0,
 			PrimaryChannelSet:               true,
 			SecondaryChannels:               []int{1, 2},
-			StateChannelOffset:              intPtr(-1),
+			StateChannelOffset:              new(-1),
 			AllowUndefinedGenericDataPoints: false,
 			Fields: map[hmenum.Field]FieldValue{
 				hmenum.FieldOnTimeValue: Bare(hmenum.ParameterOnTime),
