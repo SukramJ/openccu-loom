@@ -46,6 +46,11 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   socket until the scan window closed (about three seconds) even after it
   was told to stop, so every shutdown and every restart of the discovery
   sat out the rest of that window. A stop now ends the scan at once.
+- **The openccu-lite metadata stream reports a change's revision as soon
+  as it hands the change over.** It used to record the revision only after
+  delivering the event, so a reader that took the event and immediately
+  asked for the current revision could still get the previous one — or
+  none at all on a fresh stream — and resume from the wrong point.
 
 ## [0.83.0] - 2026-10-01
 

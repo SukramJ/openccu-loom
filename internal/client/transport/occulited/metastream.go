@@ -176,14 +176,16 @@ func (s *MetaStream) connect(ctx context.Context, send func(MetaMessage) bool) (
 			return true, err
 		}
 		for _, m := range msgs {
+			// Advance before delivering: a consumer that reads the event and
+			// then asks for Revision must already see it.
+			if m.Event != nil {
+				s.advance(m.Event.Revision, m.Kind == MetaResync)
+			}
 			wd.pause()
 			ok := send(m)
 			wd.stamp()
 			if !ok {
 				return true, ctx.Err()
-			}
-			if m.Event != nil {
-				s.advance(m.Event.Revision, m.Kind == MetaResync)
 			}
 		}
 	}
