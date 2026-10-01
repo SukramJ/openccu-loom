@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -80,23 +81,27 @@ func (f *fakeTransport) get(i int) recorded {
 
 // ---- wait helper ----
 
-func waitForCount(t *testing.T, ft *fakeTransport, n int, timeout time.Duration) {
+// retryWindow comfortably covers every backoff sleep in instantBackoff,
+// jitter included, so a delivery that retries has finished once it has
+// elapsed on the bubble's clock.
+const retryWindow = 100 * time.Millisecond
+
+// waitForCount lets the bubble settle — every delivery that needs no timer
+// to fire has happened once all goroutines are durably blocked — and then
+// requires at least n recorded requests.
+func waitForCount(t *testing.T, ft *fakeTransport, n int) {
 	t.Helper()
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if ft.count() >= n {
-			return
-		}
-		time.Sleep(5 * time.Millisecond)
+	synctest.Wait()
+	if got := ft.count(); got < n {
+		t.Fatalf("expected %d request(s) once the bubble settled; got %d", n, got)
 	}
-	t.Fatalf("timed out after %v waiting for %d request(s); got %d", timeout, n, ft.count())
 }
 
 // ---- shared helpers ----
 
+// fixedNow stamps the events the alarm and security tests publish; the
+// bridge's own envelope timestamp comes from the bubble's clock.
 var fixedNow = time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
-
-func fixedClock() time.Time { return fixedNow }
 
 func instantBackoff() []time.Duration {
 	return []time.Duration{time.Millisecond, time.Millisecond}
@@ -146,392 +151,396 @@ func datapointEvent(interfaceID, channelAddr, parameter string, newVal, oldVal h
 
 func TestOutboundSignsDataPointDelivery(t *testing.T) {
 	t.Parallel()
-	u := makeCentral(t, "ccuA")
-	reg := makeRegistry(t, u)
-	ft := &fakeTransport{}
-	cfg := config.NorthWebhook{
-		Enabled: true,
-		URL:     "http://hook.test",
-		Secret:  "topsecret",
-	}
-	o := NewOutbound(
-		reg, cfg, nil,
-		WithHTTPClient(&http.Client{Transport: ft}),
-		WithBackoff(instantBackoff()),
-		WithClock(fixedClock),
-	)
+	synctest.Test(t, func(t *testing.T) {
+		u := makeCentral(t, "ccuA")
+		reg := makeRegistry(t, u)
+		ft := &fakeTransport{}
+		cfg := config.NorthWebhook{
+			Enabled: true,
+			URL:     "http://hook.test",
+			Secret:  "topsecret",
+		}
+		o := NewOutbound(
+			reg, cfg, nil,
+			WithHTTPClient(&http.Client{Transport: ft}),
+			WithBackoff(instantBackoff()),
+		)
 
-	if err := o.Start(context.Background()); err != nil {
-		t.Fatalf("Start: %v", err)
-	}
-	t.Cleanup(func() { _ = o.Stop(context.Background()) })
+		if err := o.Start(context.Background()); err != nil {
+			t.Fatalf("Start: %v", err)
+		}
+		t.Cleanup(func() { _ = o.Stop(context.Background()) })
 
-	u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "STATE",
-		hmtypes.BoolValue(true), hmtypes.BoolValue(false)))
+		u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "STATE",
+			hmtypes.BoolValue(true), hmtypes.BoolValue(false)))
 
-	waitForCount(t, ft, 1, 2*time.Second)
+		waitForCount(t, ft, 1)
 
-	if ft.count() != 1 {
-		t.Fatalf("expected 1 POST, got %d", ft.count())
-	}
-	r := ft.get(0)
+		if ft.count() != 1 {
+			t.Fatalf("expected 1 POST, got %d", ft.count())
+		}
+		r := ft.get(0)
 
-	if r.method != http.MethodPost {
-		t.Errorf("method = %q, want POST", r.method)
-	}
-	if got := r.header.Get("X-OpenCCU-Event"); got != string(hmevent.EventTypeDataPointValueChanged) {
-		t.Errorf("X-OpenCCU-Event = %q, want %q", got, hmevent.EventTypeDataPointValueChanged)
-	}
-	if got := r.header.Get("X-OpenCCU-Delivery"); got == "" {
-		t.Error("X-OpenCCU-Delivery header absent")
-	}
-	if got := r.header.Get("Content-Type"); got != "application/json" {
-		t.Errorf("Content-Type = %q, want application/json", got)
-	}
-	wantSig := computeHMAC("topsecret", r.body)
-	if got := r.header.Get("X-OpenCCU-Signature"); got != wantSig {
-		t.Errorf("X-OpenCCU-Signature = %q, want %q", got, wantSig)
-	}
+		if r.method != http.MethodPost {
+			t.Errorf("method = %q, want POST", r.method)
+		}
+		if got := r.header.Get("X-OpenCCU-Event"); got != string(hmevent.EventTypeDataPointValueChanged) {
+			t.Errorf("X-OpenCCU-Event = %q, want %q", got, hmevent.EventTypeDataPointValueChanged)
+		}
+		if got := r.header.Get("X-OpenCCU-Delivery"); got == "" {
+			t.Error("X-OpenCCU-Delivery header absent")
+		}
+		if got := r.header.Get("Content-Type"); got != "application/json" {
+			t.Errorf("Content-Type = %q, want application/json", got)
+		}
+		wantSig := computeHMAC("topsecret", r.body)
+		if got := r.header.Get("X-OpenCCU-Signature"); got != wantSig {
+			t.Errorf("X-OpenCCU-Signature = %q, want %q", got, wantSig)
+		}
 
-	var env envelope
-	if err := json.Unmarshal(r.body, &env); err != nil {
-		t.Fatalf("unmarshal body: %v", err)
-	}
-	if env.Schema != schemaVersion {
-		t.Errorf("schema = %q, want %q", env.Schema, schemaVersion)
-	}
-	if env.Event != string(hmevent.EventTypeDataPointValueChanged) {
-		t.Errorf("event = %q, want %q", env.Event, hmevent.EventTypeDataPointValueChanged)
-	}
-	if env.Central != "ccuA" {
-		t.Errorf("central = %q, want ccuA", env.Central)
-	}
-	if env.Parameter != "STATE" {
-		t.Errorf("parameter = %q, want STATE", env.Parameter)
-	}
+		var env envelope
+		if err := json.Unmarshal(r.body, &env); err != nil {
+			t.Fatalf("unmarshal body: %v", err)
+		}
+		if env.Schema != schemaVersion {
+			t.Errorf("schema = %q, want %q", env.Schema, schemaVersion)
+		}
+		if env.Event != string(hmevent.EventTypeDataPointValueChanged) {
+			t.Errorf("event = %q, want %q", env.Event, hmevent.EventTypeDataPointValueChanged)
+		}
+		if env.Central != "ccuA" {
+			t.Errorf("central = %q, want ccuA", env.Central)
+		}
+		if env.Parameter != "STATE" {
+			t.Errorf("parameter = %q, want STATE", env.Parameter)
+		}
+		// The bubble's clock stands still while the delivery runs, so the
+		// envelope stamp is exactly the bubble's current second.
+		if want := time.Now().UTC().Format(time.RFC3339); env.TS != want {
+			t.Errorf("ts = %q, want %q", env.TS, want)
+		}
 
-	var val bool
-	if err := json.Unmarshal(env.Value, &val); err != nil || !val {
-		t.Errorf("value = %s, want true", env.Value)
-	}
-	var prev bool
-	if err := json.Unmarshal(env.Previous, &prev); err != nil || prev {
-		t.Errorf("previous = %s, want false", env.Previous)
-	}
+		var val bool
+		if err := json.Unmarshal(env.Value, &val); err != nil || !val {
+			t.Errorf("value = %s, want true", env.Value)
+		}
+		var prev bool
+		if err := json.Unmarshal(env.Previous, &prev); err != nil || prev {
+			t.Errorf("previous = %s, want false", env.Previous)
+		}
+	})
 }
 
 func TestOutboundNoSecretOmitsSignatureHeader(t *testing.T) {
 	t.Parallel()
-	u := makeCentral(t, "ccuA")
-	reg := makeRegistry(t, u)
-	ft := &fakeTransport{}
-	cfg := config.NorthWebhook{
-		Enabled: true,
-		URL:     "http://hook.test",
-		Secret:  "",
-	}
-	o := NewOutbound(
-		reg, cfg, nil,
-		WithHTTPClient(&http.Client{Transport: ft}),
-		WithBackoff(instantBackoff()),
-		WithClock(fixedClock),
-	)
-	if err := o.Start(context.Background()); err != nil {
-		t.Fatalf("Start: %v", err)
-	}
-	t.Cleanup(func() { _ = o.Stop(context.Background()) })
+	synctest.Test(t, func(t *testing.T) {
+		u := makeCentral(t, "ccuA")
+		reg := makeRegistry(t, u)
+		ft := &fakeTransport{}
+		cfg := config.NorthWebhook{
+			Enabled: true,
+			URL:     "http://hook.test",
+			Secret:  "",
+		}
+		o := NewOutbound(
+			reg, cfg, nil,
+			WithHTTPClient(&http.Client{Transport: ft}),
+			WithBackoff(instantBackoff()),
+		)
+		if err := o.Start(context.Background()); err != nil {
+			t.Fatalf("Start: %v", err)
+		}
+		t.Cleanup(func() { _ = o.Stop(context.Background()) })
 
-	u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "STATE",
-		hmtypes.BoolValue(true), hmtypes.NoneValue()))
+		u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "STATE",
+			hmtypes.BoolValue(true), hmtypes.NoneValue()))
 
-	waitForCount(t, ft, 1, 2*time.Second)
+		waitForCount(t, ft, 1)
 
-	r := ft.get(0)
-	if got := r.header.Get("X-OpenCCU-Signature"); got != "" {
-		t.Errorf("X-OpenCCU-Signature should be absent without secret, got %q", got)
-	}
+		r := ft.get(0)
+		if got := r.header.Get("X-OpenCCU-Signature"); got != "" {
+			t.Errorf("X-OpenCCU-Signature should be absent without secret, got %q", got)
+		}
+	})
 }
 
 func TestOutboundEventTypeFilterDropsUnwantedTypes(t *testing.T) {
 	t.Parallel()
-	u := makeCentral(t, "ccuA")
-	reg := makeRegistry(t, u)
-	ft := &fakeTransport{}
-	cfg := config.NorthWebhook{
-		Enabled: true,
-		URL:     "http://hook.test",
-		Events:  []string{string(hmevent.EventTypeDataPointValueChanged)},
-	}
-	o := NewOutbound(
-		reg, cfg, nil,
-		WithHTTPClient(&http.Client{Transport: ft}),
-		WithBackoff(instantBackoff()),
-		WithClock(fixedClock),
-	)
-	if err := o.Start(context.Background()); err != nil {
-		t.Fatalf("Start: %v", err)
-	}
-	t.Cleanup(func() { _ = o.Stop(context.Background()) })
+	synctest.Test(t, func(t *testing.T) {
+		u := makeCentral(t, "ccuA")
+		reg := makeRegistry(t, u)
+		ft := &fakeTransport{}
+		cfg := config.NorthWebhook{
+			Enabled: true,
+			URL:     "http://hook.test",
+			Events:  []string{string(hmevent.EventTypeDataPointValueChanged)},
+		}
+		o := NewOutbound(
+			reg, cfg, nil,
+			WithHTTPClient(&http.Client{Transport: ft}),
+			WithBackoff(instantBackoff()),
+		)
+		if err := o.Start(context.Background()); err != nil {
+			t.Fatalf("Start: %v", err)
+		}
+		t.Cleanup(func() { _ = o.Stop(context.Background()) })
 
-	// Publish a SystemStatus event first, then a datapoint.
-	u.EventBus.Publish(hmevent.SystemStatusChangedEvent{
-		Base:        hmevent.NewBase(),
-		CentralName: "ccuA",
-		Component:   "central",
-		Healthy:     false,
-		Reason:      "down",
-		InterfaceID: "HmIP-RF",
+		// Publish a SystemStatus event first, then a datapoint.
+		u.EventBus.Publish(hmevent.SystemStatusChangedEvent{
+			Base:        hmevent.NewBase(),
+			CentralName: "ccuA",
+			Component:   "central",
+			Healthy:     false,
+			Reason:      "down",
+			InterfaceID: "HmIP-RF",
+		})
+		u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "STATE",
+			hmtypes.BoolValue(true), hmtypes.NoneValue()))
+
+		// Wait for the one allowed delivery.
+		waitForCount(t, ft, 1)
+
+		// Give a short window to catch any spurious extra delivery.
+		synctest.Wait()
+
+		if ft.count() != 1 {
+			t.Fatalf("expected 1 delivery, got %d", ft.count())
+		}
+		r := ft.get(0)
+		if got := r.header.Get("X-OpenCCU-Event"); got != string(hmevent.EventTypeDataPointValueChanged) {
+			t.Errorf("X-OpenCCU-Event = %q, want datapoint.value_changed", got)
+		}
 	})
-	u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "STATE",
-		hmtypes.BoolValue(true), hmtypes.NoneValue()))
-
-	// Wait for the one allowed delivery.
-	waitForCount(t, ft, 1, 2*time.Second)
-
-	// Give a short window to catch any spurious extra delivery.
-	time.Sleep(100 * time.Millisecond)
-
-	if ft.count() != 1 {
-		t.Fatalf("expected 1 delivery, got %d", ft.count())
-	}
-	r := ft.get(0)
-	if got := r.header.Get("X-OpenCCU-Event"); got != string(hmevent.EventTypeDataPointValueChanged) {
-		t.Errorf("X-OpenCCU-Event = %q, want datapoint.value_changed", got)
-	}
 }
 
 func TestOutboundCentralFilterIsolatesPerCentral(t *testing.T) {
 	t.Parallel()
-	uA := makeCentral(t, "ccuA")
-	uB := makeCentral(t, "ccuB")
-	reg := makeRegistry(t, uA, uB)
-	ft := &fakeTransport{}
-	cfg := config.NorthWebhook{
-		Enabled:  true,
-		URL:      "http://hook.test",
-		Centrals: []string{"ccuA"},
-	}
-	o := NewOutbound(
-		reg, cfg, nil,
-		WithHTTPClient(&http.Client{Transport: ft}),
-		WithBackoff(instantBackoff()),
-		WithClock(fixedClock),
-	)
-	if err := o.Start(context.Background()); err != nil {
-		t.Fatalf("Start: %v", err)
-	}
-	t.Cleanup(func() { _ = o.Stop(context.Background()) })
+	synctest.Test(t, func(t *testing.T) {
+		uA := makeCentral(t, "ccuA")
+		uB := makeCentral(t, "ccuB")
+		reg := makeRegistry(t, uA, uB)
+		ft := &fakeTransport{}
+		cfg := config.NorthWebhook{
+			Enabled:  true,
+			URL:      "http://hook.test",
+			Centrals: []string{"ccuA"},
+		}
+		o := NewOutbound(
+			reg, cfg, nil,
+			WithHTTPClient(&http.Client{Transport: ft}),
+			WithBackoff(instantBackoff()),
+		)
+		if err := o.Start(context.Background()); err != nil {
+			t.Fatalf("Start: %v", err)
+		}
+		t.Cleanup(func() { _ = o.Stop(context.Background()) })
 
-	// Publish identical events on both buses.
-	uB.EventBus.Publish(datapointEvent("HmIP-RF", "XYZ:1", "STATE",
-		hmtypes.BoolValue(false), hmtypes.NoneValue()))
-	uA.EventBus.Publish(datapointEvent("HmIP-RF", "XYZ:1", "STATE",
-		hmtypes.BoolValue(true), hmtypes.NoneValue()))
+		// Publish identical events on both buses.
+		uB.EventBus.Publish(datapointEvent("HmIP-RF", "XYZ:1", "STATE",
+			hmtypes.BoolValue(false), hmtypes.NoneValue()))
+		uA.EventBus.Publish(datapointEvent("HmIP-RF", "XYZ:1", "STATE",
+			hmtypes.BoolValue(true), hmtypes.NoneValue()))
 
-	// Expect exactly one delivery (ccuA only).
-	waitForCount(t, ft, 1, 2*time.Second)
-	time.Sleep(100 * time.Millisecond)
+		// Expect exactly one delivery (ccuA only).
+		waitForCount(t, ft, 1)
+		synctest.Wait()
 
-	if ft.count() != 1 {
-		t.Fatalf("expected 1 delivery (ccuA only), got %d", ft.count())
-	}
+		if ft.count() != 1 {
+			t.Fatalf("expected 1 delivery (ccuA only), got %d", ft.count())
+		}
 
-	var env envelope
-	if err := json.Unmarshal(ft.get(0).body, &env); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if env.Central != "ccuA" {
-		t.Errorf("central = %q, want ccuA", env.Central)
-	}
+		var env envelope
+		if err := json.Unmarshal(ft.get(0).body, &env); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if env.Central != "ccuA" {
+			t.Errorf("central = %q, want ccuA", env.Central)
+		}
+	})
 }
 
 func TestOutboundParameterGlobFiltersDataPoints(t *testing.T) {
 	t.Parallel()
-	u := makeCentral(t, "ccuA")
-	reg := makeRegistry(t, u)
-	ft := &fakeTransport{}
-	cfg := config.NorthWebhook{
-		Enabled:       true,
-		URL:           "http://hook.test",
-		ParameterGlob: "*TEMPERATURE*",
-	}
-	o := NewOutbound(
-		reg, cfg, nil,
-		WithHTTPClient(&http.Client{Transport: ft}),
-		WithBackoff(instantBackoff()),
-		WithClock(fixedClock),
-	)
-	if err := o.Start(context.Background()); err != nil {
-		t.Fatalf("Start: %v", err)
-	}
-	t.Cleanup(func() { _ = o.Stop(context.Background()) })
+	synctest.Test(t, func(t *testing.T) {
+		u := makeCentral(t, "ccuA")
+		reg := makeRegistry(t, u)
+		ft := &fakeTransport{}
+		cfg := config.NorthWebhook{
+			Enabled:       true,
+			URL:           "http://hook.test",
+			ParameterGlob: "*TEMPERATURE*",
+		}
+		o := NewOutbound(
+			reg, cfg, nil,
+			WithHTTPClient(&http.Client{Transport: ft}),
+			WithBackoff(instantBackoff()),
+		)
+		if err := o.Start(context.Background()); err != nil {
+			t.Fatalf("Start: %v", err)
+		}
+		t.Cleanup(func() { _ = o.Stop(context.Background()) })
 
-	// Dropped: no TEMPERATURE in name.
-	u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "STATE",
-		hmtypes.BoolValue(true), hmtypes.NoneValue()))
-	// Delivered: matches glob.
-	u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "ACTUAL_TEMPERATURE",
-		hmtypes.FloatValue(21.5), hmtypes.NoneValue()))
+		// Dropped: no TEMPERATURE in name.
+		u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "STATE",
+			hmtypes.BoolValue(true), hmtypes.NoneValue()))
+		// Delivered: matches glob.
+		u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "ACTUAL_TEMPERATURE",
+			hmtypes.FloatValue(21.5), hmtypes.NoneValue()))
 
-	waitForCount(t, ft, 1, 2*time.Second)
-	time.Sleep(100 * time.Millisecond)
+		waitForCount(t, ft, 1)
+		synctest.Wait()
 
-	if ft.count() != 1 {
-		t.Fatalf("expected 1 delivery, got %d", ft.count())
-	}
-	var env envelope
-	if err := json.Unmarshal(ft.get(0).body, &env); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if env.Parameter != "ACTUAL_TEMPERATURE" {
-		t.Errorf("parameter = %q, want ACTUAL_TEMPERATURE", env.Parameter)
-	}
+		if ft.count() != 1 {
+			t.Fatalf("expected 1 delivery, got %d", ft.count())
+		}
+		var env envelope
+		if err := json.Unmarshal(ft.get(0).body, &env); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if env.Parameter != "ACTUAL_TEMPERATURE" {
+			t.Errorf("parameter = %q, want ACTUAL_TEMPERATURE", env.Parameter)
+		}
+	})
 }
 
 func TestOutboundRetryThenSuccess(t *testing.T) {
 	t.Parallel()
-	u := makeCentral(t, "ccuA")
-	reg := makeRegistry(t, u)
-	ft := &fakeTransport{responses: []int{500, 500, 200}}
-	cfg := config.NorthWebhook{
-		Enabled: true,
-		URL:     "http://hook.test",
-	}
-	o := NewOutbound(
-		reg, cfg, nil,
-		WithHTTPClient(&http.Client{Transport: ft}),
-		WithBackoff(instantBackoff()),
-		WithClock(fixedClock),
-	)
-	if err := o.Start(context.Background()); err != nil {
-		t.Fatalf("Start: %v", err)
-	}
-	t.Cleanup(func() { _ = o.Stop(context.Background()) })
+	synctest.Test(t, func(t *testing.T) {
+		u := makeCentral(t, "ccuA")
+		reg := makeRegistry(t, u)
+		ft := &fakeTransport{responses: []int{500, 500, 200}}
+		cfg := config.NorthWebhook{
+			Enabled: true,
+			URL:     "http://hook.test",
+		}
+		o := NewOutbound(
+			reg, cfg, nil,
+			WithHTTPClient(&http.Client{Transport: ft}),
+			WithBackoff(instantBackoff()),
+		)
+		if err := o.Start(context.Background()); err != nil {
+			t.Fatalf("Start: %v", err)
+		}
+		t.Cleanup(func() { _ = o.Stop(context.Background()) })
 
-	u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "STATE",
-		hmtypes.BoolValue(true), hmtypes.NoneValue()))
+		u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "STATE",
+			hmtypes.BoolValue(true), hmtypes.NoneValue()))
 
-	// Expect 3 transport calls: 2 failures + 1 success.
-	waitForCount(t, ft, 3, 2*time.Second)
-	time.Sleep(50 * time.Millisecond)
+		// Expect 3 transport calls: 2 failures + 1 success.
+		synctest.Sleep(retryWindow)
 
-	if ft.count() != 3 {
-		t.Fatalf("expected 3 transport calls, got %d", ft.count())
-	}
-	if o.Failed() != 0 {
-		t.Errorf("Failed() = %d, want 0 (third attempt succeeded)", o.Failed())
-	}
+		if ft.count() != 3 {
+			t.Fatalf("expected 3 transport calls, got %d", ft.count())
+		}
+		if o.Failed() != 0 {
+			t.Errorf("Failed() = %d, want 0 (third attempt succeeded)", o.Failed())
+		}
+	})
 }
 
 func TestOutboundExhaustedRetriesIncrementFailed(t *testing.T) {
 	t.Parallel()
-	u := makeCentral(t, "ccuA")
-	reg := makeRegistry(t, u)
-	// Always 500: 2 retries in backoff => 3 total attempts, all fail.
-	ft := &fakeTransport{responses: []int{500}}
-	cfg := config.NorthWebhook{
-		Enabled: true,
-		URL:     "http://hook.test",
-	}
-	o := NewOutbound(
-		reg, cfg, nil,
-		WithHTTPClient(&http.Client{Transport: ft}),
-		WithBackoff(instantBackoff()),
-		WithClock(fixedClock),
-	)
-	if err := o.Start(context.Background()); err != nil {
-		t.Fatalf("Start: %v", err)
-	}
-	t.Cleanup(func() { _ = o.Stop(context.Background()) })
+	synctest.Test(t, func(t *testing.T) {
+		u := makeCentral(t, "ccuA")
+		reg := makeRegistry(t, u)
+		// Always 500: 2 retries in backoff => 3 total attempts, all fail.
+		ft := &fakeTransport{responses: []int{500}}
+		cfg := config.NorthWebhook{
+			Enabled: true,
+			URL:     "http://hook.test",
+		}
+		o := NewOutbound(
+			reg, cfg, nil,
+			WithHTTPClient(&http.Client{Transport: ft}),
+			WithBackoff(instantBackoff()),
+		)
+		if err := o.Start(context.Background()); err != nil {
+			t.Fatalf("Start: %v", err)
+		}
+		t.Cleanup(func() { _ = o.Stop(context.Background()) })
 
-	u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "STATE",
-		hmtypes.BoolValue(true), hmtypes.NoneValue()))
+		u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "STATE",
+			hmtypes.BoolValue(true), hmtypes.NoneValue()))
 
-	// instantBackoff has 2 entries => 3 total attempts.
-	waitForCount(t, ft, 3, 2*time.Second)
-	time.Sleep(50 * time.Millisecond)
+		// instantBackoff has 2 entries => 3 total attempts.
+		synctest.Sleep(retryWindow)
 
-	if ft.count() != 3 {
-		t.Fatalf("expected 3 transport calls, got %d", ft.count())
-	}
-	if o.Failed() != 1 {
-		t.Errorf("Failed() = %d, want 1", o.Failed())
-	}
+		if ft.count() != 3 {
+			t.Fatalf("expected 3 transport calls, got %d", ft.count())
+		}
+		if o.Failed() != 1 {
+			t.Errorf("Failed() = %d, want 1", o.Failed())
+		}
+	})
 }
 
 func TestOutboundStopUnsubscribesAndBlocksNewDeliveries(t *testing.T) {
 	t.Parallel()
-	u := makeCentral(t, "ccuA")
-	reg := makeRegistry(t, u)
-	ft := &fakeTransport{}
-	cfg := config.NorthWebhook{
-		Enabled: true,
-		URL:     "http://hook.test",
-	}
-	o := NewOutbound(
-		reg, cfg, nil,
-		WithHTTPClient(&http.Client{Transport: ft}),
-		WithBackoff(instantBackoff()),
-		WithClock(fixedClock),
-	)
-	if err := o.Start(context.Background()); err != nil {
-		t.Fatalf("Start: %v", err)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		u := makeCentral(t, "ccuA")
+		reg := makeRegistry(t, u)
+		ft := &fakeTransport{}
+		cfg := config.NorthWebhook{
+			Enabled: true,
+			URL:     "http://hook.test",
+		}
+		o := NewOutbound(
+			reg, cfg, nil,
+			WithHTTPClient(&http.Client{Transport: ft}),
+			WithBackoff(instantBackoff()),
+		)
+		if err := o.Start(context.Background()); err != nil {
+			t.Fatalf("Start: %v", err)
+		}
 
-	// Stop must return without hanging.
-	stopCtx, stopCancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer stopCancel()
-	stopped := make(chan error, 1)
-	go func() { stopped <- o.Stop(stopCtx) }()
-
-	select {
-	case err := <-stopped:
-		if err != nil {
+		// Stop must return without hanging: a deadlock inside it leaves every
+		// goroutine in the bubble durably blocked, which synctest reports as a
+		// failure instead of waiting out a timeout.
+		if err := o.Stop(context.Background()); err != nil {
 			t.Errorf("Stop returned error: %v", err)
 		}
-	case <-stopCtx.Done():
-		t.Fatal("Stop did not return within 2s — possible deadlock")
-	}
 
-	before := ft.count()
+		before := ft.count()
 
-	// Publish after Stop — should never be delivered.
-	u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "STATE",
-		hmtypes.BoolValue(true), hmtypes.NoneValue()))
-	time.Sleep(200 * time.Millisecond)
+		// Publish after Stop — should never be delivered.
+		u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "STATE",
+			hmtypes.BoolValue(true), hmtypes.NoneValue()))
+		synctest.Wait()
 
-	if ft.count() != before {
-		t.Errorf("got %d POST(s) after Stop, expected no change from %d", ft.count(), before)
-	}
+		if ft.count() != before {
+			t.Errorf("got %d POST(s) after Stop, expected no change from %d", ft.count(), before)
+		}
+	})
 }
 
 func TestOutboundDisabledIsNoop(t *testing.T) {
 	t.Parallel()
-	u := makeCentral(t, "ccuA")
-	reg := makeRegistry(t, u)
-	ft := &fakeTransport{}
-	cfg := config.NorthWebhook{
-		Enabled: false,
-		URL:     "http://hook.test",
-	}
-	o := NewOutbound(
-		reg, cfg, nil,
-		WithHTTPClient(&http.Client{Transport: ft}),
-		WithBackoff(instantBackoff()),
-		WithClock(fixedClock),
-	)
-	if err := o.Start(context.Background()); err != nil {
-		t.Fatalf("Start returned error for disabled bridge: %v", err)
-	}
-	t.Cleanup(func() { _ = o.Stop(context.Background()) })
+	synctest.Test(t, func(t *testing.T) {
+		u := makeCentral(t, "ccuA")
+		reg := makeRegistry(t, u)
+		ft := &fakeTransport{}
+		cfg := config.NorthWebhook{
+			Enabled: false,
+			URL:     "http://hook.test",
+		}
+		o := NewOutbound(
+			reg, cfg, nil,
+			WithHTTPClient(&http.Client{Transport: ft}),
+			WithBackoff(instantBackoff()),
+		)
+		if err := o.Start(context.Background()); err != nil {
+			t.Fatalf("Start returned error for disabled bridge: %v", err)
+		}
+		t.Cleanup(func() { _ = o.Stop(context.Background()) })
 
-	u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "STATE",
-		hmtypes.BoolValue(true), hmtypes.NoneValue()))
-	time.Sleep(200 * time.Millisecond)
+		u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "STATE",
+			hmtypes.BoolValue(true), hmtypes.NoneValue()))
+		synctest.Wait()
 
-	if ft.count() != 0 {
-		t.Errorf("expected 0 POSTs for disabled bridge, got %d", ft.count())
-	}
+		if ft.count() != 0 {
+			t.Errorf("expected 0 POSTs for disabled bridge, got %d", ft.count())
+		}
+	})
 }
 
 // TestOutboundEnqueueRacingStopDropsInsteadOfPanicking pins the lifecycle
@@ -549,6 +558,10 @@ func TestOutboundDisabledIsNoop(t *testing.T) {
 // The deterministic half is the assertion below it — after Stop, an enqueue
 // must be a no-op rather than a panic — which fails on any build that lets
 // the send escape the mutex.
+//
+// This test deliberately stays outside a synctest bubble: the publishers spin
+// without ever blocking, so a bubble would never go idle and the fake clock
+// would never advance past the sleeps that interleave Stop with them.
 func TestOutboundEnqueueRacingStopDropsInsteadOfPanicking(t *testing.T) {
 	t.Parallel()
 	const (
@@ -566,7 +579,6 @@ func TestOutboundEnqueueRacingStopDropsInsteadOfPanicking(t *testing.T) {
 			reg, cfg, nil,
 			WithHTTPClient(&http.Client{Transport: ft}),
 			WithBackoff(instantBackoff()),
-			WithClock(fixedClock),
 		)
 		if err := o.Start(context.Background()); err != nil {
 			t.Fatalf("Start: %v", err)

@@ -32,7 +32,6 @@ type Discoverer struct {
 	interval time.Duration
 	logger   *slog.Logger
 	http     *http.Client
-	now      func() time.Time
 	// sourceIPs / search are the probe seams. Both default to the real
 	// network path; a test replaces them because the scan loop is otherwise
 	// only observable against a live LAN segment.
@@ -58,7 +57,6 @@ func New(interval time.Duration, logger *slog.Logger) *Discoverer {
 		interval:  interval,
 		logger:    logger,
 		http:      httpx.NewClient(fetchTimeout),
-		now:       time.Now,
 		sourceIPs: multicastSourceIPs,
 		search:    searchFrom,
 		found:     make(map[string]DiscoveredCCU),
@@ -129,7 +127,7 @@ func (d *Discoverer) scan(ctx context.Context) {
 		}
 	}
 
-	now := d.now()
+	now := time.Now()
 	for loc := range locations {
 		if ctx.Err() != nil {
 			return

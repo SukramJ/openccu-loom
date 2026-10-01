@@ -7,7 +7,7 @@ import (
 	"context"
 	"net/http"
 	"testing"
-	"time"
+	"testing/synctest"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/config"
@@ -22,41 +22,42 @@ import (
 // Nothing failed and nothing logged.
 func TestDeliversForACentralRegisteredAfterStart(t *testing.T) {
 	t.Parallel()
-	reg := central.NewRegistry()
-	ft := &fakeTransport{}
-	o := NewOutbound(
-		reg, config.NorthWebhook{Enabled: true, URL: "http://hook.test"}, nil,
-		WithHTTPClient(&http.Client{Transport: ft}),
-		WithBackoff(instantBackoff()),
-		WithClock(fixedClock),
-	)
-	if err := o.Start(context.Background()); err != nil {
-		t.Fatalf("Start: %v", err)
-	}
-	t.Cleanup(func() { _ = o.Stop(context.Background()) })
+	synctest.Test(t, func(t *testing.T) {
+		reg := central.NewRegistry()
+		ft := &fakeTransport{}
+		o := NewOutbound(
+			reg, config.NorthWebhook{Enabled: true, URL: "http://hook.test"}, nil,
+			WithHTTPClient(&http.Client{Transport: ft}),
+			WithBackoff(instantBackoff()),
+		)
+		if err := o.Start(context.Background()); err != nil {
+			t.Fatalf("Start: %v", err)
+		}
+		t.Cleanup(func() { _ = o.Stop(context.Background()) })
 
-	// The central appears only now — after Start ran against an empty registry.
-	late := makeCentral(t, "late")
-	if err := reg.Register(late); err != nil {
-		t.Fatalf("reg.Register: %v", err)
-	}
+		// The central appears only now — after Start ran against an empty registry.
+		late := makeCentral(t, "late")
+		if err := reg.Register(late); err != nil {
+			t.Fatalf("reg.Register: %v", err)
+		}
 
-	late.EventBus.Publish(datapointEvent("late-HmIP-RF", "ABC:1", "STATE",
-		hmtypes.BoolValue(false), hmtypes.NoneValue()))
-	waitForCount(t, ft, 1, 2*time.Second)
+		late.EventBus.Publish(datapointEvent("late-HmIP-RF", "ABC:1", "STATE",
+			hmtypes.BoolValue(false), hmtypes.NoneValue()))
+		waitForCount(t, ft, 1)
 
-	// Leaving the registry must stop delivery again, or a removed CCU keeps
-	// POSTing.
-	if !reg.Unregister("late") {
-		t.Fatal("Unregister reported the central was not present")
-	}
-	before := ft.count()
-	late.EventBus.Publish(datapointEvent("late-HmIP-RF", "ABC:1", "STATE",
-		hmtypes.BoolValue(true), hmtypes.NoneValue()))
-	time.Sleep(100 * time.Millisecond)
-	if after := ft.count(); after != before {
-		t.Errorf("deliveries after Unregister = %d, want %d", after, before)
-	}
+		// Leaving the registry must stop delivery again, or a removed CCU keeps
+		// POSTing.
+		if !reg.Unregister("late") {
+			t.Fatal("Unregister reported the central was not present")
+		}
+		before := ft.count()
+		late.EventBus.Publish(datapointEvent("late-HmIP-RF", "ABC:1", "STATE",
+			hmtypes.BoolValue(true), hmtypes.NoneValue()))
+		synctest.Wait()
+		if after := ft.count(); after != before {
+			t.Errorf("deliveries after Unregister = %d, want %d", after, before)
+		}
+	})
 }
 
 // TestAttachCentralRespectsTheCentralAllowList verifies the runtime-attach path
@@ -64,26 +65,27 @@ func TestDeliversForACentralRegisteredAfterStart(t *testing.T) {
 // CCU the operator excluded must stay excluded however it joined.
 func TestAttachCentralRespectsTheCentralAllowList(t *testing.T) {
 	t.Parallel()
-	reg := central.NewRegistry()
-	o := NewOutbound(
-		reg,
-		config.NorthWebhook{Enabled: true, URL: "http://hook.test", Centrals: []string{"wanted"}},
-		nil,
-		WithHTTPClient(&http.Client{Transport: &fakeTransport{}}),
-		WithBackoff(instantBackoff()),
-		WithClock(fixedClock),
-	)
-	if err := o.Start(context.Background()); err != nil {
-		t.Fatalf("Start: %v", err)
-	}
-	t.Cleanup(func() { _ = o.Stop(context.Background()) })
+	synctest.Test(t, func(t *testing.T) {
+		reg := central.NewRegistry()
+		o := NewOutbound(
+			reg,
+			config.NorthWebhook{Enabled: true, URL: "http://hook.test", Centrals: []string{"wanted"}},
+			nil,
+			WithHTTPClient(&http.Client{Transport: &fakeTransport{}}),
+			WithBackoff(instantBackoff()),
+		)
+		if err := o.Start(context.Background()); err != nil {
+			t.Fatalf("Start: %v", err)
+		}
+		t.Cleanup(func() { _ = o.Stop(context.Background()) })
 
-	if detach := o.AttachCentral(makeCentral(t, "unwanted")); detach != nil {
-		t.Error("AttachCentral subscribed a central outside the allow-list")
-	}
-	if detach := o.AttachCentral(makeCentral(t, "wanted")); detach == nil {
-		t.Error("AttachCentral skipped an allow-listed central")
-	}
+		if detach := o.AttachCentral(makeCentral(t, "unwanted")); detach != nil {
+			t.Error("AttachCentral subscribed a central outside the allow-list")
+		}
+		if detach := o.AttachCentral(makeCentral(t, "wanted")); detach == nil {
+			t.Error("AttachCentral skipped an allow-listed central")
+		}
+	})
 }
 
 // TestAttachCentralBeforeStartIsANoop pins that the observer cannot subscribe

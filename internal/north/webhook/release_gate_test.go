@@ -7,7 +7,7 @@ import (
 	"context"
 	"net/http"
 	"testing"
-	"time"
+	"testing/synctest"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
@@ -23,55 +23,56 @@ import (
 // the operator has not finished naming it for.
 func TestOutboundWithholdsUnreleasedDevices(t *testing.T) {
 	t.Parallel()
-	u := makeCentral(t, "ccuHold")
-	reg := makeRegistry(t, u)
+	synctest.Test(t, func(t *testing.T) {
+		u := makeCentral(t, "ccuHold")
+		reg := makeRegistry(t, u)
 
-	iface := hmtypes.ParseWireInterfaceID("HmIP-RF")
-	// ABC is held by the wizard; DEF never entered it, which is what
-	// every device on an existing installation looks like.
-	u.Devices.StoreDelayedDeviceDescriptions(context.Background(), iface, heldDescs())
-	_ = u.Devices.TakeDelayedDeviceDescriptions(context.Background(), iface, "ABC")
+		iface := hmtypes.ParseWireInterfaceID("HmIP-RF")
+		// ABC is held by the wizard; DEF never entered it, which is what
+		// every device on an existing installation looks like.
+		u.Devices.StoreDelayedDeviceDescriptions(context.Background(), iface, heldDescs())
+		_ = u.Devices.TakeDelayedDeviceDescriptions(context.Background(), iface, "ABC")
 
-	ft := &fakeTransport{}
-	o := NewOutbound(
-		reg,
-		config.NorthWebhook{Enabled: true, URL: "http://hook.test"},
-		nil,
-		WithHTTPClient(&http.Client{Transport: ft}),
-		WithBackoff(instantBackoff()),
-		WithClock(fixedClock),
-	)
-	if err := o.Start(context.Background()); err != nil {
-		t.Fatalf("Start: %v", err)
-	}
-	t.Cleanup(func() { _ = o.Stop(context.Background()) })
+		ft := &fakeTransport{}
+		o := NewOutbound(
+			reg,
+			config.NorthWebhook{Enabled: true, URL: "http://hook.test"},
+			nil,
+			WithHTTPClient(&http.Client{Transport: ft}),
+			WithBackoff(instantBackoff()),
+		)
+		if err := o.Start(context.Background()); err != nil {
+			t.Fatalf("Start: %v", err)
+		}
+		t.Cleanup(func() { _ = o.Stop(context.Background()) })
 
-	// The released device gets through.
-	u.EventBus.Publish(datapointEvent("HmIP-RF", "DEF:1", "STATE",
-		hmtypes.BoolValue(true), hmtypes.BoolValue(false)))
-	waitForCount(t, ft, 1, 2*time.Second)
+		// The released device gets through.
+		u.EventBus.Publish(datapointEvent("HmIP-RF", "DEF:1", "STATE",
+			hmtypes.BoolValue(true), hmtypes.BoolValue(false)))
+		waitForCount(t, ft, 1)
 
-	// The withheld one must not, even though its event rides the same bus
-	// on the same interface with the same shape.
-	u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "STATE",
-		hmtypes.BoolValue(true), hmtypes.BoolValue(false)))
-	time.Sleep(250 * time.Millisecond)
-	if n := ft.count(); n != 1 {
-		t.Fatalf("delivered %d POST(s), want 1 — the withheld device reached the downstream system", n)
-	}
+		// The withheld one must not, even though its event rides the same bus
+		// on the same interface with the same shape.
+		u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "STATE",
+			hmtypes.BoolValue(true), hmtypes.BoolValue(false)))
+		synctest.Wait()
+		if n := ft.count(); n != 1 {
+			t.Fatalf("delivered %d POST(s), want 1 — the withheld device reached the downstream system", n)
+		}
 
-	// Negative control: after the release the same event must arrive.
-	// Without this half the test would pass on a gate that drops
-	// everything.
-	if !u.Devices.ReleaseDevice(context.Background(), iface, "ABC") {
-		t.Fatal("ReleaseDevice reported nothing to release")
-	}
-	u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "STATE",
-		hmtypes.BoolValue(false), hmtypes.BoolValue(true)))
-	waitForCount(t, ft, 2, 2*time.Second)
-	if n := ft.count(); n != 2 {
-		t.Errorf("delivered %d POST(s) after the release, want 2", n)
-	}
+		// Negative control: after the release the same event must arrive.
+		// Without this half the test would pass on a gate that drops
+		// everything.
+		if !u.Devices.ReleaseDevice(context.Background(), iface, "ABC") {
+			t.Fatal("ReleaseDevice reported nothing to release")
+		}
+		u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "STATE",
+			hmtypes.BoolValue(false), hmtypes.BoolValue(true)))
+		waitForCount(t, ft, 2)
+		if n := ft.count(); n != 2 {
+			t.Errorf("delivered %d POST(s) after the release, want 2", n)
+		}
+	})
 }
 
 // heldDescs is one device the wizard holds plus one it never saw.
