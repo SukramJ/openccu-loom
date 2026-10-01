@@ -20,18 +20,10 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/alarm/codes"
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
-
-// alarmPublisherFixtureStart is the fixture wall-clock origin, kept
-// after the engine's clock-plausibility epoch (see
-// internal/north/rest/handlers/alarm_fixture_test.go's identical
-// convention) so persisted state behaves the way it would in
-// production.
-var alarmPublisherFixtureStart = time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
 
 // alarmPublisherFixtureCentral is the fixed central name fixture
 // sensors resolve under. No central is ever registered, so sensor
@@ -89,7 +81,6 @@ func newAlarmFixtureService(t *testing.T) *alarm.Service {
 		Settings: alarm.Settings{Enabled: true},
 		Registry: central.NewRegistry(),
 		Stores:   alarm.NewStores(db),
-		Clock:    clock.NewFake(alarmPublisherFixtureStart),
 		Logger:   slog.Default(),
 	})
 	if err != nil {
@@ -226,7 +217,7 @@ func (f *alarmPublisherFixture) settle() {
 
 // zeroDelayFullMode is a single-mode zone configuration with no exit
 // or entry delay, so Arm/trigger transitions complete synchronously —
-// the tests need no fake-clock advancement to observe the resulting
+// the tests need no clock advancement to observe the resulting
 // state.
 func zeroDelayFullMode() engine.ZoneConfig {
 	return engine.ZoneConfig{

@@ -15,14 +15,13 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
-// deviceLifecycleStart keeps the fake clock past the engine's
+// deviceLifecycleStart is the created-at stamp of seeded rows, past the engine's
 // clock-plausibility epoch, as the other alarm harnesses do.
 var deviceLifecycleStart = time.Date(2026, 7, 20, 12, 0, 0, 0, time.UTC)
 
@@ -189,7 +188,6 @@ func deviceLifecycleService(t *testing.T) (*Service, *central.Unit) {
 		Settings: Settings{Enabled: true},
 		Registry: reg,
 		Stores:   stores,
-		Clock:    clock.NewFake(deviceLifecycleStart),
 		Logger:   slog.New(slog.DiscardHandler),
 	})
 	if err != nil {

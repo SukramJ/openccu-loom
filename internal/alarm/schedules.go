@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -56,9 +55,8 @@ type scheduleRunnerDeps struct {
 	// nil Publish disables the event (journaling still happens).
 	Publish func(hmevent.Event)
 	// Scheduler backs the daily-time chains. Defaults to a
-	// clock-backed TimerScheduler when nil.
+	// real-timer TimerScheduler when nil.
 	Scheduler engine.TimerScheduler
-	Clock     clock.Clock
 	Logger    *slog.Logger
 	// ArmFailure is the FAILED_TO_ARM notification hook the AutoArm
 	// path calls in addition to the journal fault, when a *NotReadyError
@@ -95,14 +93,11 @@ type scheduleRunner struct {
 // cheap and side-effect free; start() loads the zone configs and
 // begins chaining.
 func newScheduleRunner(deps scheduleRunnerDeps) *scheduleRunner {
-	if deps.Clock == nil {
-		deps.Clock = clock.New()
-	}
 	if deps.Logger == nil {
 		deps.Logger = slog.Default()
 	}
 	if deps.Scheduler == nil {
-		deps.Scheduler = engine.NewClockScheduler(deps.Clock)
+		deps.Scheduler = engine.NewTimerScheduler()
 	}
 	return &scheduleRunner{deps: deps}
 }
@@ -186,7 +181,7 @@ func (r *scheduleRunner) chainAt(idx int, gen uint64, e scheduleEntry) {
 	}
 	var arm func()
 	arm = func() {
-		now := r.deps.Clock.Now()
+		now := time.Now()
 		d := nextFire(now, hour, minute, e.sched.Days).Sub(now)
 		cancel := r.deps.Scheduler.Schedule(d, func() {
 			r.fire(context.Background(), e)
@@ -231,7 +226,7 @@ func (r *scheduleRunner) fire(ctx context.Context, e scheduleEntry) {
 			"mode": string(e.sched.Mode),
 		})
 		r.publish(hmevent.AlarmReminderEvent{
-			Base: hmevent.NewBaseAt(r.deps.Clock.Now()), ZoneID: e.zoneID, ZoneName: e.zoneName, Mode: e.sched.Mode,
+			Base: hmevent.NewBaseAt(time.Now()), ZoneID: e.zoneID, ZoneName: e.zoneName, Mode: e.sched.Mode,
 		})
 		return
 	}

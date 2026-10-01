@@ -5,6 +5,7 @@ package engine_test
 
 import (
 	"testing"
+	"testing/synctest"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -27,35 +28,37 @@ type persistedCause struct {
 // list drops, and the report can then no longer say which data point
 // fired.
 func TestIncidentCauseCarriesTheFiringDataPointIdentity(t *testing.T) {
-	h := newHarness(t)
-	h.seedStandardZone()
-	h.seedSensor("hazard-1", "eg", hmenum.AlarmSensorTypeHazard, engine.SensorConfig{AlwaysOn: true})
-	h.start()
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedStandardZone()
+		h.seedSensor("hazard-1", "eg", hmenum.AlarmSensorTypeHazard, engine.SensorConfig{AlwaysOn: true})
+		h.start()
 
-	h.eng.HandleSensorEvent(h.ctx, "hazard-1", true)
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+		h.eng.HandleSensorEvent(h.ctx, "hazard-1", true)
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 
-	inc, ok := h.openIncident("eg")
-	if !ok {
-		t.Fatal("expected an open incident")
-	}
-	var cause persistedCause
-	if err := jsonUnmarshal(inc.CauseJSON, &cause); err != nil {
-		t.Fatalf("unmarshal cause: %v", err)
-	}
-	if cause.SensorID != "hazard-1" {
-		t.Errorf("sensor_id = %q, want hazard-1", cause.SensorID)
-	}
-	if cause.Central != "ccu-test" {
-		t.Errorf("central = %q, want ccu-test", cause.Central)
-	}
-	if cause.InterfaceID != "HmIP-RF" {
-		t.Errorf("interface_id = %q, want HmIP-RF", cause.InterfaceID)
-	}
-	if cause.ChannelAddress != "hazard-1:1" {
-		t.Errorf("channel_address = %q, want hazard-1:1", cause.ChannelAddress)
-	}
-	if cause.Parameter != "STATE" {
-		t.Errorf("parameter = %q, want STATE", cause.Parameter)
-	}
+		inc, ok := h.openIncident("eg")
+		if !ok {
+			t.Fatal("expected an open incident")
+		}
+		var cause persistedCause
+		if err := jsonUnmarshal(inc.CauseJSON, &cause); err != nil {
+			t.Fatalf("unmarshal cause: %v", err)
+		}
+		if cause.SensorID != "hazard-1" {
+			t.Errorf("sensor_id = %q, want hazard-1", cause.SensorID)
+		}
+		if cause.Central != "ccu-test" {
+			t.Errorf("central = %q, want ccu-test", cause.Central)
+		}
+		if cause.InterfaceID != "HmIP-RF" {
+			t.Errorf("interface_id = %q, want HmIP-RF", cause.InterfaceID)
+		}
+		if cause.ChannelAddress != "hazard-1:1" {
+			t.Errorf("channel_address = %q, want hazard-1:1", cause.ChannelAddress)
+		}
+		if cause.Parameter != "STATE" {
+			t.Errorf("parameter = %q, want STATE", cause.Parameter)
+		}
+	})
 }

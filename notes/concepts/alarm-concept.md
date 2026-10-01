@@ -409,8 +409,9 @@ Rules:
 - Every transition is journaled, audited (with identity), and published as
   a bus event + WS broadcast + MQTT state/event message.
 
-Timer implementation note: all countdowns run on the injected `clock.Clock`
-seam. Persistence stores a redundant tuple per timer — wall-clock deadline,
+Timer implementation note: all countdowns run on runtime timers behind the
+engine's `TimerScheduler` port; tests drive them in `testing/synctest`
+bubbles. Persistence stores a redundant tuple per timer — wall-clock deadline,
 remaining duration, persist-time wall timestamp, boot counter — so restarts
 can restore or expire them deterministically *and* detect implausible
 clocks (§10.2).
@@ -1085,7 +1086,7 @@ Hexagonal placement — the engine is domain core, adapters stay thin:
 ```
 internal/alarm/
 ├── engine/        — per-zone state machines, readiness, incidents,
-│                    timers (clock.Clock)
+│                    timers (TimerScheduler)
 ├── outputs/       — output drivers (siren, light, chirp, sysvar, notify)
 ├── codes/         — domain facade: hashing, rate limiting, lockout
 ├── journal/       — domain facade: journal semantics, retention policy
@@ -1205,7 +1206,7 @@ internal/alarm/
   - alarm MQTT discovery payloads validate against the HA
     `alarm_control_panel` schema;
   - WS/REST surface parity for arm/disarm/silence.
-- **Engine unit tests** with `clock.Fake`: full state-machine matrix
+- **Engine unit tests** in `testing/synctest` bubbles: full state-machine matrix
   (delays, force/bypass, cross-zoning, swinger, hold time), the complete
   restart-restore table from §10.2 (including elapsed-trigger-deadline,
   silenced-incident, restart-loop-breaker, and implausible-clock rows),

@@ -11,10 +11,8 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
-	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
@@ -483,7 +481,6 @@ func alarmFwService(t *testing.T, reg *central.Registry) *Service {
 		Settings: Settings{Enabled: true},
 		Registry: reg,
 		Stores:   NewStores(db),
-		Clock:    clock.NewFake(time.Date(2026, 7, 14, 12, 0, 0, 0, time.UTC)),
 		Logger:   slog.New(slog.DiscardHandler),
 	})
 	if err != nil {

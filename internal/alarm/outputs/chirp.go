@@ -40,7 +40,7 @@ func (m *Manager) Chirp(ctx context.Context, zoneID string, req engine.ChirpRequ
 	if isTick(req.Kind) && !tickDue(req.Remaining) {
 		return nil
 	}
-	now := m.clk.Now()
+	now := time.Now()
 	for _, inst := range instances {
 		if inst.row.Class != hmenum.AlarmOutputClassChirp {
 			continue

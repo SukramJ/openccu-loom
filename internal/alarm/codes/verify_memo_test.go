@@ -7,16 +7,12 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
-
-// memoTestNow keeps the fake clock past the validity-window epoch the
-// other facade tests use.
-var memoTestNow = time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)
 
 // TestRepeatedWrongCodeDoesNotDeriveEveryHashAgain pins the per-attempt
 // cost of a wrong code.
@@ -31,6 +27,10 @@ var memoTestNow = time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)
 // The two attempts use different sources so the rate limiter cannot be
 // the reason the second one is cheap: a lockout short-circuits before the
 // hashing and would make this pass with no memo at all.
+//
+// This test measures real CPU time and so must not run in a synctest
+// bubble: a bubble's clock does not move during computation, so both
+// attempts would measure zero and the comparison would always pass.
 func TestRepeatedWrongCodeDoesNotDeriveEveryHashAgain(t *testing.T) {
 	t.Parallel()
 
@@ -39,7 +39,7 @@ func TestRepeatedWrongCodeDoesNotDeriveEveryHashAgain(t *testing.T) {
 		pinRow(t, "c2", "Ben", "2222", false, Perms{Disarm: true}, nil),
 		pinRow(t, "c3", "Cara", "3333", false, Perms{Disarm: true}, nil),
 	}}
-	f := New(Deps{Store: store, Journal: &fakeJournal{}, Clock: clock.NewFake(memoTestNow)})
+	f := New(Deps{Store: store, Journal: &fakeJournal{}})
 	ctx := context.Background()
 
 	first := timeValidate(ctx, t, f, "eg", "9999", "mqtt")
@@ -63,55 +63,56 @@ func TestRepeatedWrongCodeDoesNotDeriveEveryHashAgain(t *testing.T) {
 // code working — the one failure this cache must not be capable of.
 func TestMemoizedCodeStopsAuthenticatingOnceItIsRevoked(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		row := pinRow(t, "c1", "Anna", "1111", false, Perms{Disarm: true}, nil)
+		store := &fakeStore{rows: []sqlitestore.AlarmCodeRow{row}}
+		f := New(Deps{Store: store, Journal: &fakeJournal{}})
+		ctx := context.Background()
 
-	row := pinRow(t, "c1", "Anna", "1111", false, Perms{Disarm: true}, nil)
-	store := &fakeStore{rows: []sqlitestore.AlarmCodeRow{row}}
-	f := New(Deps{Store: store, Journal: &fakeJournal{}, Clock: clock.NewFake(memoTestNow)})
-	ctx := context.Background()
+		// Resolved once, so the memo holds it.
+		identity, _, err := f.Validate(ctx, "eg", "disarm", "1111", "mqtt")
+		if err != nil {
+			t.Fatalf("first validate: %v", err)
+		}
+		if identity != "Anna" {
+			t.Fatalf("identity = %q, want Anna", identity)
+		}
 
-	// Resolved once, so the memo holds it.
-	identity, _, err := f.Validate(ctx, "eg", "disarm", "1111", "mqtt")
-	if err != nil {
-		t.Fatalf("first validate: %v", err)
-	}
-	if identity != "Anna" {
-		t.Fatalf("identity = %q, want Anna", identity)
-	}
+		for _, tc := range []struct {
+			name  string
+			apply func(r *sqlitestore.AlarmCodeRow)
+		}{
+			{name: "disabled", apply: func(r *sqlitestore.AlarmCodeRow) { r.Enabled = false }},
+			{name: "pin changed", apply: func(r *sqlitestore.AlarmCodeRow) {
+				hash, herr := HashPIN("4242")
+				if herr != nil {
+					t.Fatalf("HashPIN: %v", herr)
+				}
+				r.Hash = hash
+			}},
+			{name: "validity expired", apply: func(r *sqlitestore.AlarmCodeRow) {
+				r.ValidUntilMS = time.Now().Add(-time.Hour).UnixMilli()
+			}},
+		} {
+			revoked := row
+			tc.apply(&revoked)
+			store.mu.Lock()
+			store.rows = []sqlitestore.AlarmCodeRow{revoked}
+			store.mu.Unlock()
 
-	for _, tc := range []struct {
-		name  string
-		apply func(r *sqlitestore.AlarmCodeRow)
-	}{
-		{name: "disabled", apply: func(r *sqlitestore.AlarmCodeRow) { r.Enabled = false }},
-		{name: "pin changed", apply: func(r *sqlitestore.AlarmCodeRow) {
-			hash, herr := HashPIN("4242")
-			if herr != nil {
-				t.Fatalf("HashPIN: %v", herr)
+			if _, _, err := f.Validate(ctx, "eg", "disarm", "1111", "mqtt"); !errors.Is(err, engine.ErrInvalidCode) {
+				t.Fatalf("%s: validate error = %v, want ErrInvalidCode — a revoked code must not be "+
+					"accepted from a remembered verification", tc.name, err)
 			}
-			r.Hash = hash
-		}},
-		{name: "validity expired", apply: func(r *sqlitestore.AlarmCodeRow) {
-			r.ValidUntilMS = memoTestNow.Add(-time.Hour).UnixMilli()
-		}},
-	} {
-		revoked := row
-		tc.apply(&revoked)
-		store.mu.Lock()
-		store.rows = []sqlitestore.AlarmCodeRow{revoked}
-		store.mu.Unlock()
-
-		if _, _, err := f.Validate(ctx, "eg", "disarm", "1111", "mqtt"); !errors.Is(err, engine.ErrInvalidCode) {
-			t.Fatalf("%s: validate error = %v, want ErrInvalidCode — a revoked code must not be "+
-				"accepted from a remembered verification", tc.name, err)
+			// Restore for the next case and re-prime the memo.
+			store.mu.Lock()
+			store.rows = []sqlitestore.AlarmCodeRow{row}
+			store.mu.Unlock()
+			if _, _, err := f.Validate(ctx, "eg", "disarm", "1111", "operator:tester"); err != nil {
+				t.Fatalf("%s: restoring the row must make the code work again: %v", tc.name, err)
+			}
 		}
-		// Restore for the next case and re-prime the memo.
-		store.mu.Lock()
-		store.rows = []sqlitestore.AlarmCodeRow{row}
-		store.mu.Unlock()
-		if _, _, err := f.Validate(ctx, "eg", "disarm", "1111", "operator:tester"); err != nil {
-			t.Fatalf("%s: restoring the row must make the code work again: %v", tc.name, err)
-		}
-	}
+	})
 }
 
 // timeValidate runs one Validate against a wrong code and returns how

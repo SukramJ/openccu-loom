@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -31,21 +30,16 @@ type Store interface {
 // It implements the engine's Journal port.
 type Journal struct {
 	store   Store
-	clk     clock.Clock
 	publish func(hmevent.Event)
 	log     *slog.Logger
 }
 
-// New constructs the facade. publish may be nil (no event fan-out);
-// clk nil selects the wall clock.
-func New(store Store, clk clock.Clock, publish func(hmevent.Event), logger *slog.Logger) *Journal {
-	if clk == nil {
-		clk = clock.New()
-	}
+// New constructs the facade. publish may be nil (no event fan-out).
+func New(store Store, publish func(hmevent.Event), logger *slog.Logger) *Journal {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Journal{store: store, clk: clk, publish: publish, log: logger}
+	return &Journal{store: store, publish: publish, log: logger}
 }
 
 // Append implements engine.Journal: it stamps the entry, serializes
@@ -60,7 +54,7 @@ func (j *Journal) Append(ctx context.Context, e engine.JournalEntry) (int64, err
 			j.log.Error("alarm journal details not serializable", "event", e.Event, "error", err)
 		}
 	}
-	now := j.clk.Now()
+	now := time.Now()
 	id, err := j.store.Append(ctx, sqlitestore.AlarmJournalEntry{
 		TsMS:        now.UnixMilli(),
 		ZoneID:      e.ZoneID,
@@ -93,6 +87,6 @@ func (j *Journal) Append(ctx context.Context, e engine.JournalEntry) (int64, err
 // Purge deletes entries older than maxAge and returns the number of
 // deleted rows. This is the privileged retention path.
 func (j *Journal) Purge(ctx context.Context, maxAge time.Duration) (int64, error) {
-	cutoff := j.clk.Now().Add(-maxAge).UnixMilli()
+	cutoff := time.Now().Add(-maxAge).UnixMilli()
 	return j.store.PurgeBefore(ctx, cutoff)
 }

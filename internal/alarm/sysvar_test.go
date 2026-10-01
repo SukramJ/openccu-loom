@@ -17,7 +17,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/alarm/outputs"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -31,10 +30,6 @@ import (
 // south-bound sysvar write/create hooks are faked, mirroring
 // intents_test.go's convention of driving the router's unexported
 // entry points directly through the harness.
-
-// sysvarTestStart is the harness wall-clock origin, kept after the
-// engine's clock-plausibility epoch (intents_test.go's convention).
-var sysvarTestStart = time.Date(2026, 7, 17, 12, 0, 0, 0, time.UTC)
 
 // fakeSysvarWrite records one SetSysvar call.
 type fakeSysvarWrite struct {
@@ -144,7 +139,6 @@ func (f *flakySysvarCreator) callCount() int {
 type sysvarHarness struct {
 	t   *testing.T
 	ctx context.Context
-	clk *clock.Fake
 	reg *central.Registry
 	svc *Service
 }
@@ -159,18 +153,16 @@ func newSysvarHarness(t *testing.T) *sysvarHarness {
 	t.Cleanup(func() { _ = db.Close() })
 
 	reg := central.NewRegistry()
-	clk := clock.NewFake(sysvarTestStart)
 	svc, err := NewService(Deps{
 		Settings: Settings{Enabled: true},
 		Registry: reg,
 		Stores:   NewStores(db),
-		Clock:    clk,
 		Logger:   slog.New(slog.DiscardHandler),
 	})
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
-	return &sysvarHarness{t: t, ctx: context.Background(), clk: clk, reg: reg, svc: svc}
+	return &sysvarHarness{t: t, ctx: context.Background(), reg: reg, svc: svc}
 }
 
 // wireCentral registers a real *central.Unit under name with a faked
@@ -208,7 +200,7 @@ func (h *sysvarHarness) seedZone(id, name string) {
 	if err != nil {
 		h.t.Fatalf("marshal zone config: %v", err)
 	}
-	now := h.clk.Now().UnixMilli()
+	now := time.Now().UnixMilli()
 	if err := h.svc.Stores().Zones.Upsert(h.ctx, sqlitestore.AlarmZoneRow{
 		ID: id, Name: name, ConfigJSON: string(b), CreatedAtMS: now, UpdatedAtMS: now,
 	}); err != nil {
@@ -224,7 +216,7 @@ func (h *sysvarHarness) seedOutput(id, zoneID, centralName string, cfg outputs.O
 	if err != nil {
 		h.t.Fatalf("marshal mirror config: %v", err)
 	}
-	now := h.clk.Now().UnixMilli()
+	now := time.Now().UnixMilli()
 	if err := h.svc.Stores().Outputs.Upsert(h.ctx, sqlitestore.AlarmOutputRow{
 		ID: id, ZoneID: zoneID, Class: hmenum.AlarmOutputClassSysvarMirror,
 		CentralName: centralName, Name: id, ConfigJSON: string(b),
@@ -243,7 +235,7 @@ func (h *sysvarHarness) seedSensor(id, zoneID, centralName string) {
 	if err != nil {
 		h.t.Fatalf("marshal sensor config: %v", err)
 	}
-	now := h.clk.Now().UnixMilli()
+	now := time.Now().UnixMilli()
 	if err := h.svc.Stores().Sensors.Upsert(h.ctx, sqlitestore.AlarmSensorRow{
 		ID: id, ZoneID: zoneID, CentralName: centralName,
 		InterfaceID:    central.WireInterfaceID(centralName, hmenum.InterfaceHmIPRF),

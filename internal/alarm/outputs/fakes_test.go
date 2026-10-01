@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	sirencdp "github.com/SukramJ/openccu-loom/internal/model/custom/siren"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -640,19 +639,17 @@ type manualTimer struct {
 
 // manualScheduler is a deterministic engine.TimerScheduler: callbacks
 // run inline, in deadline order, only when run() is called. Paired
-// with clock.Fake this gives fully deterministic timer assertions —
+// with the bubble clock this gives fully deterministic timer assertions —
 // mirrors the manualScheduler pattern in
 // internal/alarm/engine/harness_test.go.
 type manualScheduler struct {
-	clk *clock.Fake
-
 	mu     sync.Mutex
 	nextID int
 	timers map[int]*manualTimer
 }
 
-func newManualScheduler(clk *clock.Fake) *manualScheduler {
-	return &manualScheduler{clk: clk, timers: map[int]*manualTimer{}}
+func newManualScheduler() *manualScheduler {
+	return &manualScheduler{timers: map[int]*manualTimer{}}
 }
 
 func (s *manualScheduler) Schedule(d time.Duration, fn func()) (cancel func()) {
@@ -660,7 +657,7 @@ func (s *manualScheduler) Schedule(d time.Duration, fn func()) (cancel func()) {
 	defer s.mu.Unlock()
 	s.nextID++
 	id := s.nextID
-	s.timers[id] = &manualTimer{deadline: s.clk.Now().Add(d), fn: fn}
+	s.timers[id] = &manualTimer{deadline: time.Now().Add(d), fn: fn}
 	return func() {
 		s.mu.Lock()
 		defer s.mu.Unlock()
@@ -674,7 +671,7 @@ func (s *manualScheduler) Schedule(d time.Duration, fn func()) (cancel func()) {
 func (s *manualScheduler) run() {
 	for {
 		s.mu.Lock()
-		now := s.clk.Now()
+		now := time.Now()
 		var dueID int
 		var due *manualTimer
 		for id, t := range s.timers {

@@ -8,25 +8,30 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm"
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// armFailureScheduleTime is the schedule's fire time, one minute after
-// armFailureClockStart so a single Advance crosses it. The start moment
-// is well past the engine's clock-plausibility epoch, as the other
-// alarm harnesses keep theirs.
-const armFailureScheduleTime = "22:00"
-
+// armFailureClockStart is where the test's synctest bubble clock is
+// moved to; it is well past the engine's clock-plausibility epoch, as
+// the other alarm harnesses keep theirs.
 var armFailureClockStart = time.Date(2026, 7, 16, 21, 59, 0, 0, time.UTC)
+
+// armFailureScheduleTime is the schedule's fire time of day, one minute
+// after armFailureClockStart so a 90 s sleep crosses it. The schedule
+// runner reads time.Now in the process-local zone, so the time of day is
+// rendered in that zone: the test stays correct on a host in any zone.
+func armFailureScheduleTime() string {
+	return armFailureClockStart.Add(time.Minute).In(time.Local).Format("15:04")
+}
 
 // TestWireSystemStatusSubscribersPublishesAScheduledArmFailure pins the
 // unattended auto-arm failure onto the MQTT alarm plane through the real
@@ -45,72 +50,72 @@ var armFailureClockStart = time.Date(2026, 7, 16, 21, 59, 0, 0, time.UTC)
 // The assertion is the publish, not the setter call: a test that hands
 // the publisher to the service itself proves the two can work together
 // and says nothing about whether a running daemon connects them. Only
-// the wiring under test is production's — the fake clock replaces
-// wireAlarmService's real one so the 22:00 chain is reachable in a test,
-// and the sensor is opened through the same engine entry point the
+// the wiring under test is production's — the bubble clock makes
+// the schedule chain reachable in a test without waiting for it, and the
+// sensor is opened through the same engine entry point the
 // device-event path uses.
 func TestWireSystemStatusSubscribersPublishesAScheduledArmFailure(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		const (
+			zoneID   = "zone-schedule-arm"
+			sensorID = "sensor-front-door"
+			mqttBase = "openccu-loom"
+		)
+		ctx := context.Background()
 
-	const (
-		zoneID   = "zone-schedule-arm"
-		sensorID = "sensor-front-door"
-		mqttBase = "openccu-loom"
-	)
-	ctx := context.Background()
+		db := openMigratedTestDB(t, "alarm_arm_failure.db")
+		stores := alarm.NewStores(db)
+		seedZoneWithNightlyAutoArm(ctx, t, stores, zoneID, sensorID)
 
-	db := openMigratedTestDB(t, "alarm_arm_failure.db")
-	stores := alarm.NewStores(db)
-	seedZoneWithNightlyAutoArm(ctx, t, stores, zoneID, sensorID)
+		time.Sleep(time.Until(armFailureClockStart))
+		svc, err := alarm.NewService(alarm.Deps{
+			Settings: alarm.Settings{Enabled: true},
+			Registry: central.NewRegistry(),
+			Stores:   stores,
+			Logger:   discardTestLogger(),
+		})
+		if err != nil {
+			t.Fatalf("alarm.NewService: %v", err)
+		}
 
-	clk := clock.NewFake(armFailureClockStart)
-	svc, err := alarm.NewService(alarm.Deps{
-		Settings: alarm.Settings{Enabled: true},
-		Registry: central.NewRegistry(),
-		Stores:   stores,
-		Clock:    clk,
-		Logger:   discardTestLogger(),
+		client := mqtt.NewNoopClient()
+		wiring := mqtt.NewWiring(mqtt.NewBridge(mqtt.BridgeConfig{
+			Base: mqttBase, CentralName: "ccu-test", RawEnabled: true,
+		}, client), discardTestLogger())
+
+		_, teardown := wireSystemStatusSubscribers(
+			central.NewRegistry(), ws.NewHub(), wiring, nil,
+			svc, newAlarmMQTTSink(svc), nil, "", "", discardTestLogger(),
+		)
+		t.Cleanup(teardown)
+
+		// Production order: the subscribers are wired before the alarm
+		// service starts, and the schedule chain only exists after Start.
+		if err := svc.Start(ctx); err != nil {
+			t.Fatalf("alarm service Start: %v", err)
+		}
+		t.Cleanup(func() { _ = svc.Stop(ctx) })
+
+		// Somebody left the front door open. This is the engine entry point
+		// the device-event path calls when a contact reports open.
+		svc.Engine().HandleSensorEvent(ctx, sensorID, true)
+
+		// 22:00 arrives and the chain fires.
+		time.Sleep(90 * time.Second)
+
+		want := mqttBase + "/alarm/" + zoneID + "/event"
+		pay := waitForAlarmEvent(t, client, want)
+		if pay.Type != "FAILED_TO_ARM" {
+			t.Fatalf("event type = %q, want FAILED_TO_ARM", pay.Type)
+		}
+		if pay.Mode != string(hmenum.AlarmModeFull) {
+			t.Errorf("event mode = %q, want %q", pay.Mode, hmenum.AlarmModeFull)
+		}
+		if len(pay.OpenSensors) != 1 || pay.OpenSensors[0] != "Front door" {
+			t.Errorf("open sensors = %v, want the blocking sensor's display name", pay.OpenSensors)
+		}
 	})
-	if err != nil {
-		t.Fatalf("alarm.NewService: %v", err)
-	}
-
-	client := mqtt.NewNoopClient()
-	wiring := mqtt.NewWiring(mqtt.NewBridge(mqtt.BridgeConfig{
-		Base: mqttBase, CentralName: "ccu-test", RawEnabled: true,
-	}, client), discardTestLogger())
-
-	_, teardown := wireSystemStatusSubscribers(
-		central.NewRegistry(), ws.NewHub(), wiring, nil,
-		svc, newAlarmMQTTSink(svc), nil, "", "", discardTestLogger(),
-	)
-	t.Cleanup(teardown)
-
-	// Production order: the subscribers are wired before the alarm
-	// service starts, and the schedule chain only exists after Start.
-	if err := svc.Start(ctx); err != nil {
-		t.Fatalf("alarm service Start: %v", err)
-	}
-	t.Cleanup(func() { _ = svc.Stop(ctx) })
-
-	// Somebody left the front door open. This is the engine entry point
-	// the device-event path calls when a contact reports open.
-	svc.Engine().HandleSensorEvent(ctx, sensorID, true)
-
-	// 22:00 arrives and the chain fires.
-	clk.Advance(90 * time.Second)
-
-	want := mqttBase + "/alarm/" + zoneID + "/event"
-	pay := waitForAlarmEvent(t, client, want)
-	if pay.Type != "FAILED_TO_ARM" {
-		t.Fatalf("event type = %q, want FAILED_TO_ARM", pay.Type)
-	}
-	if pay.Mode != string(hmenum.AlarmModeFull) {
-		t.Errorf("event mode = %q, want %q", pay.Mode, hmenum.AlarmModeFull)
-	}
-	if len(pay.OpenSensors) != 1 || pay.OpenSensors[0] != "Front door" {
-		t.Errorf("open sensors = %v, want the blocking sensor's display name", pay.OpenSensors)
-	}
 }
 
 // alarmEventBody is the subset of the alarm event topic's JSON this pin
@@ -167,7 +172,7 @@ func seedZoneWithNightlyAutoArm(
 			hmenum.AlarmModeFull: {},
 		},
 		Schedules: []engine.AlarmSchedule{
-			{Time: armFailureScheduleTime, Mode: hmenum.AlarmModeFull, AutoArm: true},
+			{Time: armFailureScheduleTime(), Mode: hmenum.AlarmModeFull, AutoArm: true},
 		},
 	})
 	if err != nil {

@@ -5,6 +5,7 @@ package engine_test
 
 import (
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
@@ -23,46 +24,50 @@ import (
 // the two delay kinds. This is the one place the phase, the token and
 // the countdown decision are measured together.
 func TestZonePhasesStampTheDeclaredTimerKinds(t *testing.T) {
-	h := newHarness(t)
-	seedPreAlarmZone(h)
-	h.start()
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		seedPreAlarmZone(h)
+		h.start()
 
-	// Exit delay: full mode's 30s arming countdown.
-	if _, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{
-		Mode: hmenum.AlarmModeFull, By: "tester", Source: "test",
-	}); err != nil {
-		t.Fatalf("arm: %v", err)
-	}
-	h.wantState("eg", hmenum.AlarmZoneStateArming)
-	hmAlmWantTimerKind(t, h, engine.TimerKindExit, true)
+		// Exit delay: full mode's 30s arming countdown.
+		if _, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{
+			Mode: hmenum.AlarmModeFull, By: "tester", Source: "test",
+		}); err != nil {
+			t.Fatalf("arm: %v", err)
+		}
+		h.wantState("eg", hmenum.AlarmZoneStateArming)
+		hmAlmWantTimerKind(t, h, engine.TimerKindExit, true)
 
-	h.advance(30 * time.Second)
-	h.wantState("eg", hmenum.AlarmZoneStateArmed)
+		h.advance(30 * time.Second)
+		h.wantState("eg", hmenum.AlarmZoneStateArmed)
 
-	// Pre-alarm: a phase timer on a zone the panel already shows as
-	// triggered — never a countdown.
-	h.eng.HandleSensorEvent(h.ctx, "window", true)
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
-	hmAlmWantTimerKind(t, h, engine.TimerKindPreAlarm, false)
+		// Pre-alarm: a phase timer on a zone the panel already shows as
+		// triggered — never a countdown.
+		h.eng.HandleSensorEvent(h.ctx, "window", true)
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+		hmAlmWantTimerKind(t, h, engine.TimerKindPreAlarm, false)
 
-	// Trigger window: same, the incident's own bound.
-	h.advance(10 * time.Second)
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
-	hmAlmWantTimerKind(t, h, engine.TimerKindTrigger, false)
+		// Trigger window: same, the incident's own bound.
+		h.advance(10 * time.Second)
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+		hmAlmWantTimerKind(t, h, engine.TimerKindTrigger, false)
+	})
 }
 
 // TestEntryDelayStampsTheDeclaredTimerKind pins the second countdown
 // kind, which needs a delayed door rather than the pre-alarm zone.
 func TestEntryDelayStampsTheDeclaredTimerKind(t *testing.T) {
-	h := newHarness(t)
-	h.seedStandardZone()
-	h.start()
-	h.armFull()
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedStandardZone()
+		h.start()
+		h.armFull()
 
-	// The delayed door starts the entry countdown instead of triggering.
-	h.eng.HandleSensorEvent(h.ctx, "door", true)
-	h.wantState("eg", hmenum.AlarmZoneStatePending)
-	hmAlmWantTimerKind(t, h, engine.TimerKindEntry, true)
+		// The delayed door starts the entry countdown instead of triggering.
+		h.eng.HandleSensorEvent(h.ctx, "door", true)
+		h.wantState("eg", hmenum.AlarmZoneStatePending)
+		hmAlmWantTimerKind(t, h, engine.TimerKindEntry, true)
+	})
 }
 
 // hmAlmWantTimerKind asserts the zone's snapshot carries want as its

@@ -5,6 +5,7 @@ package outputs
 
 import (
 	"testing"
+	"testing/synctest"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -21,34 +22,36 @@ import (
 // test green while the operator validated a pattern the alarm would not
 // use.
 func TestTestFireOpticalDefaultMatchesTheFireCycle(t *testing.T) {
-	fireSelection := hmAlmOpticalSelectionOfFireCycle(t)
+	synctest.Test(t, func(t *testing.T) {
+		fireSelection := hmAlmOpticalSelectionOfFireCycle(t)
 
-	h := newHarness(t)
-	_, optical := sharedSirenChannelRows()
-	h.seedOutputs(optical)
-	dev := sirenAt(t, h, asirChannel)
-	dev.setValueLists(
-		[]string{"DISABLE_ACOUSTIC_SIGNAL", "FREQ_HIGH"},
-		"DISABLE_ACOUSTIC_SIGNAL",
-		asirOpticalSelections,
-	)
+		h := newHarness(t)
+		_, optical := sharedSirenChannelRows()
+		h.seedOutputs(optical)
+		dev := sirenAt(t, h, asirChannel)
+		dev.setValueLists(
+			[]string{"DISABLE_ACOUSTIC_SIGNAL", "FREQ_HIGH"},
+			"DISABLE_ACOUSTIC_SIGNAL",
+			asirOpticalSelections,
+		)
 
-	if err := h.mgr.TestFire(h.ctx, optical.ID, true); err != nil {
-		t.Fatalf("TestFire: %v", err)
-	}
+		if err := h.mgr.TestFire(h.ctx, optical.ID, true); err != nil {
+			t.Fatalf("TestFire: %v", err)
+		}
 
-	calls := dev.turnOnCallsSnapshot()
-	if len(calls) != 1 {
-		t.Fatalf("TurnOn calls = %d, want 1", len(calls))
-	}
-	got := selection(calls[0].Cfg.OpticalSelection)
-	if got != fireSelection {
-		t.Errorf("test-fire optical selection = %q, fire-cycle selection = %q — "+
-			"the operator validates a pattern the alarm will not use", got, fireSelection)
-	}
-	if got == "CONFIRMATION_SIGNAL_2" {
-		t.Error("test fire took the last list entry, an acknowledgement blink rather than an alarm pattern")
-	}
+		calls := dev.turnOnCallsSnapshot()
+		if len(calls) != 1 {
+			t.Fatalf("TurnOn calls = %d, want 1", len(calls))
+		}
+		got := selection(calls[0].Cfg.OpticalSelection)
+		if got != fireSelection {
+			t.Errorf("test-fire optical selection = %q, fire-cycle selection = %q — "+
+				"the operator validates a pattern the alarm will not use", got, fireSelection)
+		}
+		if got == "CONFIRMATION_SIGNAL_2" {
+			t.Error("test fire took the last list entry, an acknowledgement blink rather than an alarm pattern")
+		}
+	})
 }
 
 // hmAlmOpticalSelectionOfFireCycle reports the optical selection a real

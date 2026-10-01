@@ -28,6 +28,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   call site moved over and the free functions are gone. The subscriber,
   publisher and registry-walker guards resolve the new methods through the
   type checker. No runtime behaviour changes.
+- **Developers: time-dependent tests run on `testing/synctest`.** The
+  hand-rolled fake clock (`internal/clock`) and the test-only
+  `func() time.Time` seams across the reliability layer, health, audit,
+  scheduler, auth/session/pairing, webhook, SSDP, logging, the cover
+  debouncer, security and the alarm engine are gone; production calls
+  `time.Now` / runtime timers directly, and the tests advance a bubble
+  clock instead. Many expiry and delay checks are now pinned on both sides
+  of the boundary to the nanosecond, and two TTLs that had no test at all
+  (openccu-lite pairing sessions, log-level overrides at their exact
+  boundary) now have one. No runtime behaviour changes.
 
 ## [0.83.0] - 2026-10-01
 

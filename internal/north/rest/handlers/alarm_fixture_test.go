@@ -16,7 +16,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	alarmjournal "github.com/SukramJ/openccu-loom/internal/alarm/journal"
 	"github.com/SukramJ/openccu-loom/internal/alarm/outputs"
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	sirencdp "github.com/SukramJ/openccu-loom/internal/model/custom/siren"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -44,7 +43,6 @@ type alarmPanelFixture struct {
 	eng      *engine.Engine
 	mgr      *outputs.Manager
 	resolver *fakeAlarmDeviceResolver
-	clk      *clock.Fake
 }
 
 var _ AlarmPanel = (*alarmPanelFixture)(nil)
@@ -97,12 +95,10 @@ func newAlarmPanelFixtureWithMotionReset(t *testing.T, motionReset engine.Motion
 	db := openMigratedTestDB(t, "alarm.db")
 
 	stores := alarm.NewStores(db)
-	clk := clock.NewFake(alarmFixtureStart)
 	resolver := newFakeAlarmDeviceResolver()
-	jrn := alarmjournal.New(stores.Journal, clk, nil, nil)
+	jrn := alarmjournal.New(stores.Journal, nil, nil)
 
 	mgr, err := outputs.NewManager(outputs.Config{
-		Clock:    clk,
 		Resolver: resolver,
 		Ledger:   stores.Incidents,
 		Journal:  jrn,
@@ -116,7 +112,6 @@ func newAlarmPanelFixtureWithMotionReset(t *testing.T, motionReset engine.Motion
 	}
 
 	eng, err := engine.New(engine.Deps{
-		Clock:       clk,
 		Zones:       stores.Zones,
 		Sensors:     stores.Sensors,
 		State:       stores.State,
@@ -133,7 +128,7 @@ func newAlarmPanelFixtureWithMotionReset(t *testing.T, motionReset engine.Motion
 		t.Fatalf("engine.Start: %v", err)
 	}
 
-	return &alarmPanelFixture{t: t, stores: stores, eng: eng, mgr: mgr, resolver: resolver, clk: clk}
+	return &alarmPanelFixture{t: t, stores: stores, eng: eng, mgr: mgr, resolver: resolver}
 }
 
 // seedZone persists an zone row and reloads the engine so it takes
@@ -144,7 +139,7 @@ func (f *alarmPanelFixture) seedZone(id, name string, cfg engine.ZoneConfig) {
 	if err != nil {
 		f.t.Fatalf("marshal zone config: %v", err)
 	}
-	now := f.clk.Now().UnixMilli()
+	now := time.Now().UnixMilli()
 	if err := f.stores.Zones.Upsert(context.Background(), sqlitestore.AlarmZoneRow{
 		ID: id, Name: name, ConfigJSON: string(b), CreatedAtMS: now, UpdatedAtMS: now,
 	}); err != nil {
@@ -160,7 +155,7 @@ func (f *alarmPanelFixture) seedSensor(id, zoneID string, typ hmenum.AlarmSensor
 	if err != nil {
 		f.t.Fatalf("marshal sensor config: %v", err)
 	}
-	now := f.clk.Now().UnixMilli()
+	now := time.Now().UnixMilli()
 	if err := f.stores.Sensors.Upsert(context.Background(), sqlitestore.AlarmSensorRow{
 		ID: id, ZoneID: zoneID, CentralName: alarmFixtureCentral, InterfaceID: "HmIP-RF",
 		ChannelAddress: id + ":1", Parameter: "STATE", SensorType: typ,
@@ -179,7 +174,7 @@ func (f *alarmPanelFixture) seedOutput(id, zoneID string, class hmenum.AlarmOutp
 	if err != nil {
 		f.t.Fatalf("marshal output config: %v", err)
 	}
-	now := f.clk.Now().UnixMilli()
+	now := time.Now().UnixMilli()
 	channel := id + ":1"
 	if err := f.stores.Outputs.Upsert(context.Background(), sqlitestore.AlarmOutputRow{
 		ID: id, ZoneID: zoneID, Class: class, CentralName: alarmFixtureCentral,

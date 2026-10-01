@@ -12,7 +12,6 @@
 //   - MQTT broker: an embedded pure-Go broker
 //   - OIDC OP: a mock provider that signs RS256 tokens in memory
 //   - Persistence: SQLite in t.TempDir()
-//   - Clock: the test clock from internal/clock
 //
 // Every listener is bound to an OS-assigned ephemeral port; tests
 // read the effective port through the accessor methods on Harness.

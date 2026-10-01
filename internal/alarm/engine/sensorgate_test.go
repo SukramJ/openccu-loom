@@ -5,6 +5,7 @@ package engine_test
 
 import (
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
@@ -42,158 +43,174 @@ func seedCrossZoneArea(h *harness, group string) {
 }
 
 func TestHoldTime_ClearingBeforeTheWindowDiscardsTheActivation(t *testing.T) {
-	h := newHarness(t)
-	seedHoldSensor(h, "motion", 5)
-	h.start()
-	h.armFull()
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		seedHoldSensor(h, "motion", 5)
+		h.start()
+		h.armFull()
 
-	h.eng.HandleSensorEvent(h.ctx, "motion", true)
-	h.wantState("eg", hmenum.AlarmZoneStateArmed)
+		h.eng.HandleSensorEvent(h.ctx, "motion", true)
+		h.wantState("eg", hmenum.AlarmZoneStateArmed)
 
-	h.eng.HandleSensorEvent(h.ctx, "motion", false)
+		h.eng.HandleSensorEvent(h.ctx, "motion", false)
 
-	h.advance(6 * time.Second)
-	h.wantState("eg", hmenum.AlarmZoneStateArmed)
-	if n := h.outputs.fireCount(); n != 0 {
-		t.Fatalf("FireCycle count = %d, want 0 (cleared before the hold window elapsed)", n)
-	}
+		h.advance(6 * time.Second)
+		h.wantState("eg", hmenum.AlarmZoneStateArmed)
+		if n := h.outputs.fireCount(); n != 0 {
+			t.Fatalf("FireCycle count = %d, want 0 (cleared before the hold window elapsed)", n)
+		}
+	})
 }
 
 func TestHoldTime_StandingActivationTriggersAfterTheWindow(t *testing.T) {
-	h := newHarness(t)
-	seedHoldSensor(h, "motion", 5)
-	h.start()
-	h.armFull()
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		seedHoldSensor(h, "motion", 5)
+		h.start()
+		h.armFull()
 
-	h.eng.HandleSensorEvent(h.ctx, "motion", true)
-	h.wantState("eg", hmenum.AlarmZoneStateArmed)
+		h.eng.HandleSensorEvent(h.ctx, "motion", true)
+		h.wantState("eg", hmenum.AlarmZoneStateArmed)
 
-	h.advance(5 * time.Second)
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
-	if n := h.outputs.fireCount(); n != 1 {
-		t.Fatalf("FireCycle count = %d, want 1", n)
-	}
+		h.advance(5 * time.Second)
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+		if n := h.outputs.fireCount(); n != 1 {
+			t.Fatalf("FireCycle count = %d, want 1", n)
+		}
+	})
 }
 
 func TestHoldTime_DoesNotDelayAlwaysOnSensors(t *testing.T) {
-	h := newHarness(t)
-	h.seedZone("eg", "Erdgeschoss", defaultZoneConfig())
-	h.seedSensor("hazard-1", "eg", hmenum.AlarmSensorTypeHazard, engine.SensorConfig{
-		AlwaysOn: true, HoldTimeSeconds: 30,
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedZone("eg", "Erdgeschoss", defaultZoneConfig())
+		h.seedSensor("hazard-1", "eg", hmenum.AlarmSensorTypeHazard, engine.SensorConfig{
+			AlwaysOn: true, HoldTimeSeconds: 30,
+		})
+		h.start()
+
+		h.eng.HandleSensorEvent(h.ctx, "hazard-1", true)
+
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+		if n := h.outputs.fireCount(); n != 1 {
+			t.Fatalf("FireCycle count = %d, want 1 (always-on bypasses hold time entirely)", n)
+		}
 	})
-	h.start()
-
-	h.eng.HandleSensorEvent(h.ctx, "hazard-1", true)
-
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
-	if n := h.outputs.fireCount(); n != 1 {
-		t.Fatalf("FireCycle count = %d, want 1 (always-on bypasses hold time entirely)", n)
-	}
 }
 
 func TestCrossZone_SingleHitIsSuppressedAndJournaled(t *testing.T) {
-	h := newHarness(t)
-	seedCrossZoneArea(h, "gz")
-	h.start()
-	h.armFull()
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		seedCrossZoneArea(h, "gz")
+		h.start()
+		h.armFull()
 
-	h.eng.HandleSensorEvent(h.ctx, "motion-a", true)
+		h.eng.HandleSensorEvent(h.ctx, "motion-a", true)
 
-	h.wantState("eg", hmenum.AlarmZoneStateArmed)
-	if n := h.outputs.fireCount(); n != 0 {
-		t.Fatalf("FireCycle count = %d, want 0 (single group member never fires alone)", n)
-	}
-	if !h.journal.has("cross_zone_first_hit") {
-		t.Fatalf("missing cross_zone_first_hit journal entry; got %v", h.journal.events())
-	}
+		h.wantState("eg", hmenum.AlarmZoneStateArmed)
+		if n := h.outputs.fireCount(); n != 0 {
+			t.Fatalf("FireCycle count = %d, want 0 (single group member never fires alone)", n)
+		}
+		if !h.journal.has("cross_zone_first_hit") {
+			t.Fatalf("missing cross_zone_first_hit journal entry; got %v", h.journal.events())
+		}
+	})
 }
 
 func TestCrossZone_SecondDistinctMemberWithinTheWindowTriggers(t *testing.T) {
-	h := newHarness(t)
-	seedCrossZoneArea(h, "gz")
-	h.start()
-	h.armFull()
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		seedCrossZoneArea(h, "gz")
+		h.start()
+		h.armFull()
 
-	h.eng.HandleSensorEvent(h.ctx, "motion-a", true)
-	h.wantState("eg", hmenum.AlarmZoneStateArmed)
+		h.eng.HandleSensorEvent(h.ctx, "motion-a", true)
+		h.wantState("eg", hmenum.AlarmZoneStateArmed)
 
-	h.advance(5 * time.Second)
-	h.eng.HandleSensorEvent(h.ctx, "motion-b", true)
+		h.advance(5 * time.Second)
+		h.eng.HandleSensorEvent(h.ctx, "motion-b", true)
 
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
-	if n := h.outputs.fireCount(); n != 1 {
-		t.Fatalf("FireCycle count = %d, want 1", n)
-	}
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+		if n := h.outputs.fireCount(); n != 1 {
+			t.Fatalf("FireCycle count = %d, want 1", n)
+		}
+	})
 }
 
 func TestCrossZone_SameSensorTwiceDoesNotTrigger(t *testing.T) {
-	h := newHarness(t)
-	seedCrossZoneArea(h, "gz")
-	h.start()
-	h.armFull()
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		seedCrossZoneArea(h, "gz")
+		h.start()
+		h.armFull()
 
-	h.eng.HandleSensorEvent(h.ctx, "motion-a", true)
-	h.eng.HandleSensorEvent(h.ctx, "motion-a", false)
+		h.eng.HandleSensorEvent(h.ctx, "motion-a", true)
+		h.eng.HandleSensorEvent(h.ctx, "motion-a", false)
 
-	h.advance(5 * time.Second)
-	h.eng.HandleSensorEvent(h.ctx, "motion-a", true)
+		h.advance(5 * time.Second)
+		h.eng.HandleSensorEvent(h.ctx, "motion-a", true)
 
-	h.wantState("eg", hmenum.AlarmZoneStateArmed)
-	if n := h.outputs.fireCount(); n != 0 {
-		t.Fatalf("FireCycle count = %d, want 0 (same sensor twice is not a second distinct member)", n)
-	}
+		h.wantState("eg", hmenum.AlarmZoneStateArmed)
+		if n := h.outputs.fireCount(); n != 0 {
+			t.Fatalf("FireCycle count = %d, want 0 (same sensor twice is not a second distinct member)", n)
+		}
+	})
 }
 
 func TestCrossZone_WindowExpiryTreatsTheNextHitAsFirst(t *testing.T) {
-	h := newHarness(t)
-	seedCrossZoneArea(h, "gz")
-	h.start()
-	h.armFull()
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		seedCrossZoneArea(h, "gz")
+		h.start()
+		h.armFull()
 
-	h.eng.HandleSensorEvent(h.ctx, "motion-a", true)
-	h.wantState("eg", hmenum.AlarmZoneStateArmed)
+		h.eng.HandleSensorEvent(h.ctx, "motion-a", true)
+		h.wantState("eg", hmenum.AlarmZoneStateArmed)
 
-	h.advance(61 * time.Second)
-	h.eng.HandleSensorEvent(h.ctx, "motion-b", true)
+		h.advance(61 * time.Second)
+		h.eng.HandleSensorEvent(h.ctx, "motion-b", true)
 
-	h.wantState("eg", hmenum.AlarmZoneStateArmed)
-	if n := h.outputs.fireCount(); n != 0 {
-		t.Fatalf("FireCycle count = %d, want 0 (motion-a's hit expired outside the 60s window)", n)
-	}
-	if !h.journal.has("cross_zone_first_hit") {
-		t.Fatalf("missing cross_zone_first_hit journal entry for the fresh hit; got %v", h.journal.events())
-	}
+		h.wantState("eg", hmenum.AlarmZoneStateArmed)
+		if n := h.outputs.fireCount(); n != 0 {
+			t.Fatalf("FireCycle count = %d, want 0 (motion-a's hit expired outside the 60s window)", n)
+		}
+		if !h.journal.has("cross_zone_first_hit") {
+			t.Fatalf("missing cross_zone_first_hit journal entry for the fresh hit; got %v", h.journal.events())
+		}
+	})
 }
 
 func TestHoldTime_ComposesWithCrossZoneGroup(t *testing.T) {
-	h := newHarness(t)
-	h.seedZone("eg", "Erdgeschoss", defaultZoneConfig())
-	h.seedSensor("motion-a", "eg", hmenum.AlarmSensorTypeMotion, engine.SensorConfig{
-		Modes:           []hmenum.AlarmMode{hmenum.AlarmModeFull},
-		HoldTimeSeconds: 5,
-		Group:           "gz",
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedZone("eg", "Erdgeschoss", defaultZoneConfig())
+		h.seedSensor("motion-a", "eg", hmenum.AlarmSensorTypeMotion, engine.SensorConfig{
+			Modes:           []hmenum.AlarmMode{hmenum.AlarmModeFull},
+			HoldTimeSeconds: 5,
+			Group:           "gz",
+		})
+		h.seedSensor("motion-b", "eg", hmenum.AlarmSensorTypeMotion, engine.SensorConfig{
+			Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull},
+			Group: "gz",
+		})
+		h.start()
+		h.armFull()
+
+		h.eng.HandleSensorEvent(h.ctx, "motion-a", true)
+		h.wantState("eg", hmenum.AlarmZoneStateArmed)
+
+		// motion-a's hold elapses and becomes the group's first hit.
+		h.advance(5 * time.Second)
+		h.wantState("eg", hmenum.AlarmZoneStateArmed)
+		if !h.journal.has("cross_zone_first_hit") {
+			t.Fatalf("missing cross_zone_first_hit journal entry; got %v", h.journal.events())
+		}
+
+		h.eng.HandleSensorEvent(h.ctx, "motion-b", true)
+
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+		if n := h.outputs.fireCount(); n != 1 {
+			t.Fatalf("FireCycle count = %d, want 1", n)
+		}
 	})
-	h.seedSensor("motion-b", "eg", hmenum.AlarmSensorTypeMotion, engine.SensorConfig{
-		Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull},
-		Group: "gz",
-	})
-	h.start()
-	h.armFull()
-
-	h.eng.HandleSensorEvent(h.ctx, "motion-a", true)
-	h.wantState("eg", hmenum.AlarmZoneStateArmed)
-
-	// motion-a's hold elapses and becomes the group's first hit.
-	h.advance(5 * time.Second)
-	h.wantState("eg", hmenum.AlarmZoneStateArmed)
-	if !h.journal.has("cross_zone_first_hit") {
-		t.Fatalf("missing cross_zone_first_hit journal entry; got %v", h.journal.events())
-	}
-
-	h.eng.HandleSensorEvent(h.ctx, "motion-b", true)
-
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
-	if n := h.outputs.fireCount(); n != 1 {
-		t.Fatalf("FireCycle count = %d, want 1", n)
-	}
 }

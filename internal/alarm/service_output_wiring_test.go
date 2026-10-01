@@ -15,7 +15,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	sirencdp "github.com/SukramJ/openccu-loom/internal/model/custom/siren"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
@@ -23,7 +22,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
-// outputWiringStart keeps the fake clock past the engine's
+// outputWiringStart is the created-at stamp of seeded rows, past the engine's
 // clock-plausibility epoch, as the other alarm harnesses do.
 var outputWiringStart = time.Date(2026, 7, 18, 12, 0, 0, 0, time.UTC)
 
@@ -80,7 +79,6 @@ func newOutputWiringServiceWith(
 		Settings: Settings{Enabled: true},
 		Registry: reg,
 		Stores:   stores,
-		Clock:    clock.NewFake(outputWiringStart),
 		Logger:   slog.New(slog.DiscardHandler),
 	})
 	if err != nil {

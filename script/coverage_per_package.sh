@@ -69,7 +69,6 @@ declare -A TIER_CORE=(
     [internal/parameter]=92            # current 95.7
     [internal/config]=86               # current 89.6
     [internal/configui]=90             # current 94.0
-    [internal/clock]=97                # current 100.0
     [internal/audit]=92                # current 95.1
     [internal/auth]=91                 # current 94.9
     [internal/auth/oidc]=93            # current 96.1

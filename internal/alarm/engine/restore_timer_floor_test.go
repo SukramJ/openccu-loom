@@ -12,11 +12,6 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// implausibleRestoreEpoch is far enough behind the harness clock that
-// clockPlausible refuses the wall-clock arithmetic, which is the branch
-// that resumes the persisted relative remaining duration verbatim.
-var implausibleRestoreEpoch = time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
-
 // rewriteTimerRemaining stops the engine and rewrites the persisted
 // timer tuple of kind so it carries remainingMS, reproducing a state row
 // written the instant a countdown reached zero.
@@ -71,36 +66,39 @@ func resumedRemainingMS(t *testing.T, h *harness, event string) int64 {
 // duration must be rescheduled at the floor, not at zero: a zero-length
 // timer is a countdown that never visibly runs. Both resuming restore
 // paths share the floor, so both are measured here.
+//
+// Both run the restart in a second synctest bubble (see twoLives): its
+// clock reads 2000-01-01, before the project epoch and the persisted
+// timestamps, so clockPlausible refuses the wall-clock arithmetic and
+// the persisted relative remaining duration is resumed verbatim.
 func TestRestore_ElapsedExitDelayResumesAtTheTimerFloor(t *testing.T) {
-	h := newHarness(t)
-	h.seedStandardZone()
-	h.start()
-	if _, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"}); err != nil {
-		t.Fatalf("arm: %v", err)
-	}
-	h.advance(10 * time.Second)
-
-	rewriteTimerRemaining(h, "eg", "exit_delay", 0)
-	h.freshPorts(implausibleRestoreEpoch)
-	h.start()
-
-	h.wantState("eg", hmenum.AlarmZoneStateArming)
-	if got := resumedRemainingMS(t, h, "arming_resumed"); got != time.Second.Milliseconds() {
-		t.Errorf("resumed exit delay = %d ms, want %d (the floor)", got, time.Second.Milliseconds())
-	}
+	twoLives(t, func(h *harness) {
+		h.seedStandardZone()
+		h.start()
+		if _, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"}); err != nil {
+			t.Fatalf("arm: %v", err)
+		}
+		h.advance(10 * time.Second)
+		rewriteTimerRemaining(h, "eg", "exit_delay", 0)
+	}, func(h *harness) {
+		h.start()
+		h.wantState("eg", hmenum.AlarmZoneStateArming)
+		if got := resumedRemainingMS(t, h, "arming_resumed"); got != time.Second.Milliseconds() {
+			t.Errorf("resumed exit delay = %d ms, want %d (the floor)", got, time.Second.Milliseconds())
+		}
+	})
 }
 
 func TestRestore_ElapsedAutoRearmResumesAtTheTimerFloor(t *testing.T) {
-	h := newHarness(t)
-	seedAutoRearmZone(h)
-	h.start()
-	triggerAndDisarm(h)
-
-	rewriteTimerRemaining(h, "eg", "auto_rearm", 0)
-	h.freshPorts(implausibleRestoreEpoch)
-	h.start()
-
-	if got := resumedRemainingMS(t, h, "auto_rearm_resumed"); got != time.Second.Milliseconds() {
-		t.Errorf("resumed auto-rearm = %d ms, want %d (the floor)", got, time.Second.Milliseconds())
-	}
+	twoLives(t, func(h *harness) {
+		seedAutoRearmZone(h)
+		h.start()
+		triggerAndDisarm(h)
+		rewriteTimerRemaining(h, "eg", "auto_rearm", 0)
+	}, func(h *harness) {
+		h.start()
+		if got := resumedRemainingMS(t, h, "auto_rearm_resumed"); got != time.Second.Milliseconds() {
+			t.Errorf("resumed auto-rearm = %d ms, want %d (the floor)", got, time.Second.Milliseconds())
+		}
+	})
 }

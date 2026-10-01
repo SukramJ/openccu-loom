@@ -14,7 +14,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/alarm/codes"
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -27,18 +26,12 @@ import (
 // EffectiveCodePolicy resolution production wires seedPanels and
 // refreshPanelCodePolicies through (notes/concepts/alarm-concept.md §11/§13.3).
 
-// panelsTestStart is the harness wall-clock origin, kept after the
-// engine's clock-plausibility epoch, mirroring intents_test.go's
-// convention.
-var panelsTestStart = time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC)
-
 // panelsHarness bundles a real SQLite-backed alarm.Service for driving
 // seedPanels / refreshPanelCodePolicies against real zone configs and
 // real PIN-code rows through the codes facade.
 type panelsHarness struct {
 	t   *testing.T
 	ctx context.Context
-	clk *clock.Fake
 	svc *Service
 }
 
@@ -53,18 +46,16 @@ func newPanelsHarness(t *testing.T) *panelsHarness {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 
-	clk := clock.NewFake(panelsTestStart)
 	svc, err := NewService(Deps{
 		Settings: Settings{Enabled: true},
 		Registry: central.NewRegistry(),
 		Stores:   NewStores(db),
-		Clock:    clk,
 		Logger:   slog.New(slog.DiscardHandler),
 	})
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
-	return &panelsHarness{t: t, ctx: context.Background(), clk: clk, svc: svc}
+	return &panelsHarness{t: t, ctx: context.Background(), svc: svc}
 }
 
 // seedZone persists an zone row carrying an explicit CodePolicy so the
@@ -79,7 +70,7 @@ func (h *panelsHarness) seedZone(id, name string, policy engine.CodePolicy) {
 	if err != nil {
 		h.t.Fatalf("marshal zone config: %v", err)
 	}
-	now := h.clk.Now().UnixMilli()
+	now := time.Now().UnixMilli()
 	if err := h.svc.Stores().Zones.Upsert(h.ctx, sqlitestore.AlarmZoneRow{
 		ID: id, Name: name, ConfigJSON: string(b), CreatedAtMS: now, UpdatedAtMS: now,
 	}); err != nil {
@@ -109,7 +100,7 @@ func (h *panelsHarness) seedPINCode(id, name, pin string, enabled bool, zones []
 		}
 		zonesJSON = string(b)
 	}
-	now := h.clk.Now().UnixMilli()
+	now := time.Now().UnixMilli()
 	row := sqlitestore.AlarmCodeRow{
 		ID: id, Name: name, Kind: string(codes.KindPIN), Hash: hash,
 		PermsJSON: `{"arm":true,"disarm":true,"silence":true}`,

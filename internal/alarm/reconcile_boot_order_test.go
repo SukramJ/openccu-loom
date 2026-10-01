@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	switchcdp "github.com/SukramJ/openccu-loom/internal/model/custom/switch"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -23,10 +22,6 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
-
-// reconcileBootStart keeps the fake clock past the engine's
-// clock-plausibility epoch, as the other alarm harnesses do.
-var reconcileBootStart = time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC)
 
 // recordingSwitchWriter records what reaches the wire.
 type recordingSwitchWriter struct {
@@ -122,7 +117,6 @@ func TestReconcileActsOnASirenThatWasAlreadySoundingWhenTheModelArrived(t *testi
 		Settings: Settings{Enabled: true},
 		Registry: reg,
 		Stores:   stores,
-		Clock:    clock.NewFake(reconcileBootStart),
 		Logger:   slog.New(slog.DiscardHandler),
 	})
 	if err != nil {

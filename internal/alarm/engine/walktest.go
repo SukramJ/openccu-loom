@@ -58,7 +58,7 @@ func (e *Engine) WalkTestStart(ctx context.Context, zoneID, by, source string) e
 	if a.walk != nil {
 		return ErrWalkTestActive
 	}
-	a.walk = &walkSession{startedAt: e.clk.Now(), seen: map[string]time.Time{}}
+	a.walk = &walkSession{startedAt: time.Now(), seen: map[string]time.Time{}}
 	e.journalEntry(ctx, a, JournalEntry{
 		Class: hmenum.AlarmJournalClassTest, Event: "walktest_started", Actor: by, Source: source,
 	})
@@ -164,7 +164,7 @@ func (e *Engine) walkTestObserve(ctx context.Context, a *zone, sensorID string, 
 		return false
 	}
 	if _, seen := a.walk.seen[sensorID]; !seen {
-		now := e.clk.Now()
+		now := time.Now()
 		a.walk.seen[sensorID] = now
 		e.journalEntry(ctx, a, JournalEntry{
 			Class: hmenum.AlarmJournalClassTest, Event: "walktest_sensor_seen",

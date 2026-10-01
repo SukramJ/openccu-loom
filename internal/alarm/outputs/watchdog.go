@@ -42,7 +42,7 @@ func (m *Manager) armStopWatchdog(inst *instance, incidentID int64, d time.Durat
 	act := &activation{outputID: inst.row.ID, zoneID: inst.row.ZoneID, incidentID: incidentID}
 	m.active[inst.row.ID] = act
 	act.cancel = m.sched.Schedule(d, func() {
-		m.runStop(inst, act, s, m.clk.Now().Add(m.stopVerifyWindow))
+		m.runStop(inst, act, s, time.Now().Add(m.stopVerifyWindow))
 	})
 	m.mu.Unlock()
 }
@@ -234,7 +234,7 @@ func (m *Manager) verifyStop(inst *instance, act *activation, s stopper, verifyU
 		m.resolveFailure(act.outputID, act.zoneID)
 		return
 	}
-	if m.clk.Now().After(verifyUntil) {
+	if time.Now().After(verifyUntil) {
 		m.clearActivation(act)
 		m.journalFault(ctx, act.zoneID, "output_stop_unverified", act.outputID, act.incidentID, nil)
 		m.noteFailure(act.outputID, act.zoneID, "alarm output "+act.outputID+" stop unverified")
@@ -281,7 +281,7 @@ func (m *Manager) stopAndVerify(ctx context.Context, inst *instance, incidentID 
 	m.mu.Unlock()
 
 	err := s.stop(ctx)
-	verifyUntil := m.clk.Now().Add(m.stopVerifyWindow)
+	verifyUntil := time.Now().Add(m.stopVerifyWindow)
 	m.mu.Lock()
 	if current, ok := m.active[act.outputID]; ok && current == act {
 		act.cancel = m.sched.Schedule(stopVerifyInterval, func() {

@@ -79,7 +79,7 @@ func (e *Engine) gateCrossZone(ctx context.Context, a *zone, s *sensorState, sen
 		e.dispatchSensorActivation(ctx, a, s, sensorID)
 		return
 	}
-	now := e.clk.Now()
+	now := time.Now()
 	if a.groupHits == nil {
 		a.groupHits = map[string]map[string]time.Time{}
 	}
