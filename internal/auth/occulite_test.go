@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -257,22 +258,23 @@ func TestOcculiteSSOCacheExpires(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			now := time.Unix(1_000_000, 0)
-			v := &fakeOcculiteVerifier{sess: tc.sess}
-			s := newOcculiteSSO(OcculiteSSOTrust{Enabled: true, Verifier: v}, nil, func() time.Time { return now })
-			h := s.middleware(&occuliteRecorder{})
+			synctest.Test(t, func(t *testing.T) {
+				v := &fakeOcculiteVerifier{sess: tc.sess}
+				s := newOcculiteSSO(OcculiteSSOTrust{Enabled: true, Verifier: v}, nil)
+				h := s.middleware(&occuliteRecorder{})
 
-			serveOcculite(t, h, occuliteRequest(validSID))
-			now = now.Add(tc.ttl - time.Second)
-			serveOcculite(t, h, occuliteRequest(validSID))
-			if n := v.count(); n != 1 {
-				t.Fatalf("verifier calls inside the window = %d, want 1", n)
-			}
-			now = now.Add(time.Second)
-			serveOcculite(t, h, occuliteRequest(validSID))
-			if n := v.count(); n != 2 {
-				t.Fatalf("verifier calls past the window = %d, want 2", n)
-			}
+				serveOcculite(t, h, occuliteRequest(validSID))
+				time.Sleep(tc.ttl - time.Nanosecond)
+				serveOcculite(t, h, occuliteRequest(validSID))
+				if n := v.count(); n != 1 {
+					t.Fatalf("verifier calls inside the window = %d, want 1", n)
+				}
+				time.Sleep(time.Nanosecond)
+				serveOcculite(t, h, occuliteRequest(validSID))
+				if n := v.count(); n != 2 {
+					t.Fatalf("verifier calls past the window = %d, want 2", n)
+				}
+			})
 		})
 	}
 }
@@ -282,7 +284,7 @@ func TestOcculiteSSOCacheExpires(t *testing.T) {
 func TestOcculiteSSOCacheIsBounded(t *testing.T) {
 	t.Parallel()
 	v := &fakeOcculiteVerifier{sess: OcculiteSession{Authenticated: true, User: "alice", Role: "admin"}}
-	s := newOcculiteSSO(OcculiteSSOTrust{Enabled: true, Verifier: v}, nil, time.Now)
+	s := newOcculiteSSO(OcculiteSSOTrust{Enabled: true, Verifier: v}, nil)
 	rec := &occuliteRecorder{}
 	h := s.middleware(rec)
 

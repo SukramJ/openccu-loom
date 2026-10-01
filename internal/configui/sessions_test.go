@@ -5,9 +5,9 @@ package configui
 
 import (
 	"testing"
+	"testing/synctest"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -152,40 +152,39 @@ func TestSessionStoreReplaceSession(t *testing.T) {
 // currently grow through.
 func TestSessionStorePutSweepsSessionsPastMaxAge(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		st := NewSessionStore()
 
-	fake := clock.NewFake(time.Unix(0, 0))
-	st := NewSessionStore()
-	st.clk = fake
+		abandoned := makeKey("ccu1", "000ABCDE:1")
+		st.Put(abandoned, NewSession(nil, nil))
+		if st.Len() != 1 {
+			t.Fatalf("Len()=%d after first Put, want 1", st.Len())
+		}
 
-	abandoned := makeKey("ccu1", "000ABCDE:1")
-	st.Put(abandoned, NewSession(nil, nil))
-	if st.Len() != 1 {
-		t.Fatalf("Len()=%d after first Put, want 1", st.Len())
-	}
+		// Just under the TTL: the abandoned session must survive an unrelated
+		// Put.
+		time.Sleep(sessionMaxAge - time.Second)
+		other := makeKey("ccu1", "000ABCDE:2")
+		st.Put(other, NewSession(nil, nil))
+		if st.Get(abandoned) == nil {
+			t.Fatal("abandoned session swept before reaching sessionMaxAge")
+		}
 
-	// Just under the TTL: the abandoned session must survive an unrelated
-	// Put.
-	fake.Advance(sessionMaxAge - time.Second)
-	other := makeKey("ccu1", "000ABCDE:2")
-	st.Put(other, NewSession(nil, nil))
-	if st.Get(abandoned) == nil {
-		t.Fatal("abandoned session swept before reaching sessionMaxAge")
-	}
+		// Now just past the TTL for `abandoned` (age = TTL+1s) but well under
+		// it for `other` (age = 2s): the next Put must sweep only the former,
+		// even though nothing ever called Delete for it.
+		time.Sleep(2 * time.Second)
+		yetAnother := makeKey("ccu1", "000ABCDE:3")
+		st.Put(yetAnother, NewSession(nil, nil))
 
-	// Now just past the TTL for `abandoned` (age = TTL+1s) but well under
-	// it for `other` (age = 2s): the next Put must sweep only the former,
-	// even though nothing ever called Delete for it.
-	fake.Advance(2 * time.Second)
-	yetAnother := makeKey("ccu1", "000ABCDE:3")
-	st.Put(yetAnother, NewSession(nil, nil))
-
-	if st.Get(abandoned) != nil {
-		t.Error("abandoned session survived past sessionMaxAge — the leak this guard exists to catch")
-	}
-	if st.Get(other) == nil {
-		t.Error("session younger than sessionMaxAge was swept along with the abandoned one")
-	}
-	if st.Get(yetAnother) == nil {
-		t.Error("the just-opened session that triggered the sweep must itself survive it")
-	}
+		if st.Get(abandoned) != nil {
+			t.Error("abandoned session survived past sessionMaxAge — the leak this guard exists to catch")
+		}
+		if st.Get(other) == nil {
+			t.Error("session younger than sessionMaxAge was swept along with the abandoned one")
+		}
+		if st.Get(yetAnother) == nil {
+			t.Error("the just-opened session that triggered the sweep must itself survive it")
+		}
+	})
 }

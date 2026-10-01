@@ -6,6 +6,7 @@ package auth
 import (
 	"net/http/httptest"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -15,30 +16,31 @@ import (
 // idle clock measures inactivity, and a restart observes none — the
 // absolute Expires window is what bounds a hydrated session.
 func TestHydratedSessionSurvivesRestartWithIdleTimeout(t *testing.T) {
-	fake := newFakePersist()
-	now := time.Now()
-	preloaded := &Session{
-		ID:       "hydrated-idle",
-		Identity: Identity{Subject: "carol", Role: RoleAdmin},
-		Created:  now.Add(-time.Hour),
-		Expires:  now.Add(time.Hour),
-	}
-	fake.preloaded = []*Session{preloaded}
+	synctest.Test(t, func(t *testing.T) {
+		fake := newFakePersist()
+		now := time.Now()
+		preloaded := &Session{
+			ID:       "hydrated-idle",
+			Identity: Identity{Subject: "carol", Role: RoleAdmin},
+			Created:  now.Add(-time.Hour),
+			Expires:  now.Add(time.Hour),
+		}
+		fake.preloaded = []*Session{preloaded}
 
-	store, err := NewPersistentSessionStoreWithOptions(fake, discardLogger(), SessionStoreOptions{IdleTTL: 30 * time.Minute})
-	if err != nil {
-		t.Fatalf("NewPersistentSessionStore: %v", err)
-	}
-	store.now = func() time.Time { return now }
+		store, err := NewPersistentSessionStoreWithOptions(fake, discardLogger(), SessionStoreOptions{IdleTTL: 30 * time.Minute})
+		if err != nil {
+			t.Fatalf("NewPersistentSessionStore: %v", err)
+		}
 
-	if got := store.Lookup(preloaded.ID); got == nil {
-		t.Fatal("Lookup evicted a hydrated session that was merely older than the idle window")
-	}
-	// The idle clock still bites on real inactivity after the restart.
-	store.now = func() time.Time { return now.Add(31 * time.Minute) }
-	if got := store.Lookup(preloaded.ID); got != nil {
-		t.Fatal("Lookup kept a session idle past IdleTTL after hydration")
-	}
+		if got := store.Lookup(preloaded.ID); got == nil {
+			t.Fatal("Lookup evicted a hydrated session that was merely older than the idle window")
+		}
+		// The idle clock still bites on real inactivity after the restart.
+		time.Sleep(31 * time.Minute)
+		if got := store.Lookup(preloaded.ID); got != nil {
+			t.Fatal("Lookup kept a session idle past IdleTTL after hydration")
+		}
+	})
 }
 
 // TestClearSessionCookieIsAcceptedOverPlainHTTP pins that the logout

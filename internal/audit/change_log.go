@@ -6,8 +6,6 @@ package audit
 import (
 	"sync"
 	"time"
-
-	"github.com/SukramJ/openccu-loom/internal/clock"
 )
 
 // DefaultMaxEntriesPerSession is the FIFO cap per session.
@@ -45,7 +43,6 @@ type ChangeLog struct {
 	mu         sync.RWMutex
 	sessions   map[string][]ChangeEntry
 	maxEntries int
-	clk        clock.Clock
 }
 
 // NewChangeLog constructs an empty ChangeLog with the default per-session
@@ -57,23 +54,12 @@ func NewChangeLog() *ChangeLog {
 // NewChangeLogCapped constructs an empty ChangeLog with a custom
 // per-session cap. Values < 1 fall back to DefaultMaxEntriesPerSession.
 func NewChangeLogCapped(maxEntries int) *ChangeLog {
-	return NewChangeLogCappedWithClock(maxEntries, clock.New())
-}
-
-// NewChangeLogCappedWithClock is the test seam: pass a [clock.Fake]
-// to make change-log timestamps deterministic. Nil clk falls back to
-// [clock.New].
-func NewChangeLogCappedWithClock(maxEntries int, clk clock.Clock) *ChangeLog {
 	if maxEntries < 1 {
 		maxEntries = DefaultMaxEntriesPerSession
-	}
-	if clk == nil {
-		clk = clock.New()
 	}
 	return &ChangeLog{
 		sessions:   make(map[string][]ChangeEntry),
 		maxEntries: maxEntries,
-		clk:        clk,
 	}
 }
 
@@ -82,7 +68,7 @@ func NewChangeLogCappedWithClock(maxEntries int, clk clock.Clock) *ChangeLog {
 // dropped (FIFO) before appending.
 func (l *ChangeLog) Add(sessionID string, e ChangeEntry) ChangeEntry {
 	if e.Timestamp.IsZero() {
-		e.Timestamp = l.clk.Now().UTC()
+		e.Timestamp = time.Now().UTC()
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()

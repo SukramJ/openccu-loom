@@ -50,7 +50,6 @@ type JWKSCache struct {
 	mu         sync.RWMutex
 	keys       map[string]JSONWebKey
 	lastLoaded time.Time
-	now        func() time.Time
 }
 
 // NewJWKSCache constructs a cache. An empty URL disables the
@@ -62,7 +61,7 @@ func NewJWKSCache(url string, client *http.Client) *JWKSCache {
 	if client == nil {
 		client = defaultHTTPClient()
 	}
-	return &JWKSCache{URL: url, TTL: 15 * time.Minute, Client: client, now: time.Now, keys: make(map[string]JSONWebKey)}
+	return &JWKSCache{URL: url, TTL: 15 * time.Minute, Client: client, keys: make(map[string]JSONWebKey)}
 }
 
 // ErrJWKSUnreachable is returned when the cache could not reach the
@@ -74,7 +73,7 @@ var ErrJWKSUnreachable = errors.New("oidc: JWKS unreachable")
 func (c *JWKSCache) Key(ctx context.Context, kid string) (JSONWebKey, error) {
 	c.mu.RLock()
 	k, ok := c.keys[kid]
-	fresh := ok && c.now().Sub(c.lastLoaded) <= c.TTL
+	fresh := ok && time.Since(c.lastLoaded) <= c.TTL
 	c.mu.RUnlock()
 	if ok && fresh {
 		return k, nil
@@ -117,7 +116,7 @@ func (c *JWKSCache) refresh(ctx context.Context) error {
 	for _, k := range out.Keys {
 		c.keys[k.Kid] = k
 	}
-	c.lastLoaded = c.now()
+	c.lastLoaded = time.Now()
 	c.mu.Unlock()
 	return nil
 }
