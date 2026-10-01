@@ -10,8 +10,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/SukramJ/openccu-loom/internal/clock"
 )
 
 // SinkFunc is the persistence side of an audit recorder. It returns
@@ -33,27 +31,16 @@ type PersistedRecorder struct {
 	buf    *Buffer
 	sink   SinkFunc
 	logger *slog.Logger
-	clk    clock.Clock
 }
 
 // NewPersistedRecorder wires a buffer + sink combination. Either may
 // be nil (the sink-only or buffer-only configurations are valid).
-// Timestamps default to the real wall clock.
+// Timestamps are taken from the current time.
 func NewPersistedRecorder(buf *Buffer, sink SinkFunc, logger *slog.Logger) *PersistedRecorder {
-	return NewPersistedRecorderWithClock(buf, sink, logger, clock.New())
-}
-
-// NewPersistedRecorderWithClock is the test seam: pass a [clock.Fake]
-// to make timestamps deterministic. A nil clk falls back to
-// [clock.New].
-func NewPersistedRecorderWithClock(buf *Buffer, sink SinkFunc, logger *slog.Logger, clk clock.Clock) *PersistedRecorder {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	if clk == nil {
-		clk = clock.New()
-	}
-	return &PersistedRecorder{buf: buf, sink: sink, logger: logger, clk: clk}
+	return &PersistedRecorder{buf: buf, sink: sink, logger: logger}
 }
 
 // Record stamps the entry's timestamp (if zero) and forwards to the
@@ -61,7 +48,7 @@ func NewPersistedRecorderWithClock(buf *Buffer, sink SinkFunc, logger *slog.Logg
 // down database does not silently swallow the audit trail.
 func (r *PersistedRecorder) Record(entry Entry) {
 	if entry.Timestamp.IsZero() {
-		entry.Timestamp = r.clk.Now().UTC()
+		entry.Timestamp = time.Now().UTC()
 	}
 	if r.buf != nil {
 		r.buf.Record(entry)

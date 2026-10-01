@@ -183,19 +183,11 @@ type Manager struct {
 	// lock) — the WS broadcast hangs here.
 	OnChange func()
 	Log      *slog.Logger
-	Now      func() time.Time
 
 	mu      sync.Mutex
 	reqs    map[string]*request
 	mutes   map[string]time.Time
 	perHour map[string][]time.Time
-}
-
-func (m *Manager) now() time.Time {
-	if m.Now != nil {
-		return m.Now()
-	}
-	return time.Now()
 }
 
 func (m *Manager) log() *slog.Logger {
@@ -332,7 +324,7 @@ func (m *Manager) RequestFrom(a Ask, addr string) (Answer, error) { //nolint:fun
 		fp = m.Fingerprint()
 	}
 
-	now := m.now()
+	now := time.Now()
 	m.mu.Lock()
 	if m.reqs == nil {
 		m.reqs = map[string]*request{}
@@ -429,7 +421,7 @@ func (m *Manager) findLocked(id, pollSecret string) (*request, error) {
 // or wait passes. An approved answer carries the token exactly once —
 // the request is deleted with the answer.
 func (m *Manager) Poll(ctx context.Context, id, pollSecret, clientNonce string, wait time.Duration) (Result, error) {
-	now := m.now()
+	now := time.Now()
 	m.mu.Lock()
 	listChanged := m.expireLocked(now)
 	r, err := m.findLocked(id, pollSecret)
@@ -479,7 +471,7 @@ func (m *Manager) Poll(ctx context.Context, id, pollSecret, clientNonce string, 
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.expireLocked(m.now())
+	m.expireLocked(time.Now())
 	if r.state == StatePending {
 		return Result{State: StatePending}, nil
 	}
@@ -511,7 +503,7 @@ func (m *Manager) Withdraw(id, pollSecret string) error {
 // Pending lists the requests the admin card shows: revealed ones only,
 // oldest first, with the code both sides derived.
 func (m *Manager) Pending() []View {
-	now := m.now()
+	now := time.Now()
 	m.mu.Lock()
 	changed := m.expireLocked(now)
 	out := []View{}
@@ -550,7 +542,7 @@ func (m *Manager) Pending() []View {
 func (m *Manager) PendingCount() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.expireLocked(m.now())
+	m.expireLocked(time.Now())
 	n := 0
 	for _, r := range m.reqs {
 		if r.state == StatePending && r.clientNonce != nil {
@@ -566,7 +558,7 @@ func (m *Manager) PendingCount() int {
 // different request than the one asking — possibly an interceptor's.
 func (m *Manager) Approve(ctx context.Context, id, code, by string) (View, error) {
 	m.mu.Lock()
-	m.expireLocked(m.now())
+	m.expireLocked(time.Now())
 	r := m.reqs[id]
 	if r == nil || r.state != StatePending {
 		m.mu.Unlock()
@@ -579,7 +571,7 @@ func (m *Manager) Approve(ctx context.Context, id, code, by string) (View, error
 	want := Code(r.nonce, r.clientNonce, r.fingerprint)
 	if subtle.ConstantTimeCompare([]byte(want), []byte(strings.TrimSpace(code))) != 1 {
 		r.state = StateRejected
-		m.mutes[r.address+"|"+r.ask.App] = m.now().Add(MuteFor)
+		m.mutes[r.address+"|"+r.ask.App] = time.Now().Add(MuteFor)
 		m.signalLocked(r)
 		m.mu.Unlock()
 		m.log().Warn("pairing: wrong code — request rejected", "app", r.ask.App, "address", r.address, "by", by)
@@ -618,7 +610,7 @@ func (m *Manager) Reject(id, by string) (View, error) {
 		return View{}, ErrUnknown
 	}
 	r.state = StateRejected
-	m.mutes[r.address+"|"+r.ask.App] = m.now().Add(MuteFor)
+	m.mutes[r.address+"|"+r.ask.App] = time.Now().Add(MuteFor)
 	m.signalLocked(r)
 	view := View{ID: r.id, App: r.ask.App, Instance: r.ask.Instance, Name: r.ask.Name, Address: r.address, Role: string(r.role)}
 	m.mu.Unlock()
