@@ -6,7 +6,6 @@ package adapter
 import (
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/climate"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -77,7 +76,7 @@ func TestWireClimateLinkPeerRefreshLinkChangedWiresPeer(t *testing.T) {
 	closer := WireClimateLinkPeerRefresh(c)
 	defer closer()
 
-	events.Publish(c.EventBus, hmevent.LinkPeerChangedEvent{
+	c.EventBus.Publish(hmevent.LinkPeerChangedEvent{
 		Base:    hmevent.NewBase(),
 		Address: climCh.Address,
 		Peers:   []string{"VALVE001:1"},
@@ -109,7 +108,7 @@ func TestWireClimateLinkPeerRefreshLinkChangedIdlePeer(t *testing.T) {
 	closer := WireClimateLinkPeerRefresh(c)
 	defer closer()
 
-	events.Publish(c.EventBus, hmevent.LinkPeerChangedEvent{
+	c.EventBus.Publish(hmevent.LinkPeerChangedEvent{
 		Base:    hmevent.NewBase(),
 		Address: climCh.Address,
 		Peers:   []string{"VALVE002:1"},
@@ -145,14 +144,14 @@ func TestWireClimateLinkPeerRefreshSuccessRecoveryWalksInterface(t *testing.T) {
 	defer closer()
 
 	// Recovery fires first (resets activity subscriptions to empty peers)
-	events.Publish(c.EventBus, hmevent.RecoveryCompletedEvent{
+	c.EventBus.Publish(hmevent.RecoveryCompletedEvent{
 		Base:        hmevent.NewBase(),
 		InterfaceID: iface,
 		Result:      hmenum.RecoveryResultSuccess,
 	})
 
 	// Then the topology update re-wires the peer
-	events.Publish(c.EventBus, hmevent.LinkPeerChangedEvent{
+	c.EventBus.Publish(hmevent.LinkPeerChangedEvent{
 		Base:    hmevent.NewBase(),
 		Address: climCh.Address,
 		Peers:   []string{"VALVE003:1"},
@@ -186,7 +185,7 @@ func TestWireClimateLinkPeerRefreshFailureRecoverySkipped(t *testing.T) {
 	defer closer()
 
 	// Wire peer first via LinkPeerChanged
-	events.Publish(c.EventBus, hmevent.LinkPeerChangedEvent{
+	c.EventBus.Publish(hmevent.LinkPeerChangedEvent{
 		Base:    hmevent.NewBase(),
 		Address: climCh.Address,
 		Peers:   []string{"VALVE004:1"},
@@ -198,7 +197,7 @@ func TestWireClimateLinkPeerRefreshFailureRecoverySkipped(t *testing.T) {
 	}
 
 	// A *failed* recovery must not reset the subscriptions
-	events.Publish(c.EventBus, hmevent.RecoveryCompletedEvent{
+	c.EventBus.Publish(hmevent.RecoveryCompletedEvent{
 		Base:        hmevent.NewBase(),
 		InterfaceID: iface,
 		Result:      hmenum.RecoveryResultFailed,
@@ -236,7 +235,7 @@ func TestWireClimateLinkPeerRefreshScopedToInterface(t *testing.T) {
 	climB.OnActivity(climate.ActivityHeating)
 
 	// Fire recovery for A — B must be untouched
-	events.Publish(c.EventBus, hmevent.RecoveryCompletedEvent{
+	c.EventBus.Publish(hmevent.RecoveryCompletedEvent{
 		Base:        hmevent.NewBase(),
 		InterfaceID: ifaceA,
 		Result:      hmenum.RecoveryResultSuccess,
@@ -268,12 +267,12 @@ func TestWireClimateLinkPeerRefreshCloserUnsubscribes(t *testing.T) {
 	closer() // unsubscribe immediately
 
 	// Events after closer must not panic
-	events.Publish(c.EventBus, hmevent.RecoveryCompletedEvent{
+	c.EventBus.Publish(hmevent.RecoveryCompletedEvent{
 		Base:        hmevent.NewBase(),
 		InterfaceID: iface,
 		Result:      hmenum.RecoveryResultSuccess,
 	})
-	events.Publish(c.EventBus, hmevent.LinkPeerChangedEvent{
+	c.EventBus.Publish(hmevent.LinkPeerChangedEvent{
 		Base:    hmevent.NewBase(),
 		Address: climCh.Address,
 		Peers:   []string{"VALVE020:1"},
@@ -304,12 +303,12 @@ func TestWireClimateLinkPeerRefreshNonClimateChannelIgnored(t *testing.T) {
 	defer closer()
 
 	// Must not panic
-	events.Publish(c.EventBus, hmevent.LinkPeerChangedEvent{
+	c.EventBus.Publish(hmevent.LinkPeerChangedEvent{
 		Base:    hmevent.NewBase(),
 		Address: ch.Address,
 		Peers:   []string{"X:1"},
 	})
-	events.Publish(c.EventBus, hmevent.RecoveryCompletedEvent{
+	c.EventBus.Publish(hmevent.RecoveryCompletedEvent{
 		Base:        hmevent.NewBase(),
 		InterfaceID: iface,
 		Result:      hmenum.RecoveryResultSuccess,
@@ -333,7 +332,7 @@ func TestWireClimateLinkPeerRefreshCacheFilledByLinkPeerChanged(t *testing.T) {
 	closer := WireClimateLinkPeerRefresh(c)
 	defer closer()
 
-	events.Publish(c.EventBus, hmevent.LinkPeerChangedEvent{
+	c.EventBus.Publish(hmevent.LinkPeerChangedEvent{
 		Base:    hmevent.NewBase(),
 		Address: climCh.Address,
 		Peers:   []string{"VALVE030:1"},
@@ -358,14 +357,14 @@ func TestWireClimateLinkPeerRefreshCacheEmptiedByEmptyPeers(t *testing.T) {
 	defer closer()
 
 	// Populate cache first.
-	events.Publish(c.EventBus, hmevent.LinkPeerChangedEvent{
+	c.EventBus.Publish(hmevent.LinkPeerChangedEvent{
 		Base:    hmevent.NewBase(),
 		Address: climCh.Address,
 		Peers:   []string{"VALVE031:1"},
 	})
 
 	// Now clear it.
-	events.Publish(c.EventBus, hmevent.LinkPeerChangedEvent{
+	c.EventBus.Publish(hmevent.LinkPeerChangedEvent{
 		Base:    hmevent.NewBase(),
 		Address: climCh.Address,
 		Peers:   []string{},
@@ -394,14 +393,14 @@ func TestWireClimateLinkPeerRefreshRecoveryUsesCachedPeers(t *testing.T) {
 	defer closer()
 
 	// Step 1: topology push seeds the cache.
-	events.Publish(c.EventBus, hmevent.LinkPeerChangedEvent{
+	c.EventBus.Publish(hmevent.LinkPeerChangedEvent{
 		Base:    hmevent.NewBase(),
 		Address: climCh.Address,
 		Peers:   []string{"VALVE032:1"},
 	})
 
 	// Step 2: recovery fires — must reuse the cached peer, NOT nil.
-	events.Publish(c.EventBus, hmevent.RecoveryCompletedEvent{
+	c.EventBus.Publish(hmevent.RecoveryCompletedEvent{
 		Base:        hmevent.NewBase(),
 		InterfaceID: iface,
 		Result:      hmenum.RecoveryResultSuccess,

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -85,7 +84,7 @@ func (p *SystemStatusPublisher) StartCentral(u *central.Unit) func() {
 		return nil
 	}
 	centralName := u.Name()
-	return events.Subscribe(bus, func(e hmevent.SystemStatusChangedEvent) {
+	return bus.Subscribe(func(e hmevent.SystemStatusChangedEvent) {
 		pay := systemStatusPayload{
 			CentralName:        centralName,
 			Component:          e.Component,

@@ -58,7 +58,7 @@ func TestRebuildIndexFailureReportsDegradedNotAllClear(t *testing.T) {
 	}
 
 	var states []hmevent.SecurityStateChangedEvent
-	unsub := events.Subscribe(svc.Bus(), func(e hmevent.SecurityStateChangedEvent) {
+	unsub := svc.Bus().Subscribe(func(e hmevent.SecurityStateChangedEvent) {
 		states = append(states, e)
 	})
 	defer unsub()

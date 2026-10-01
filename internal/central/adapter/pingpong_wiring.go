@@ -8,7 +8,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/metrics"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
@@ -46,7 +45,7 @@ func WirePingPongBus(
 	if bus != nil {
 		ic.SetPublishHook(func(kind hmenum.PingPongMismatchType, count int) {
 			stats := ic.PingPong().Stats()
-			events.Publish(bus, hmevent.PingPongMismatchEvent{
+			bus.Publish(hmevent.PingPongMismatchEvent{
 				Base:         hmevent.NewBase(),
 				CentralName:  centralName,
 				InterfaceID:  interfaceID,

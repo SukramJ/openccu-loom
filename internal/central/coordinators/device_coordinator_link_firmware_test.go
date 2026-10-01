@@ -109,7 +109,7 @@ func TestRefreshDeviceLinkPeersPublishesEvent(t *testing.T) {
 	}
 
 	var got []hmevent.LinkPeerChangedEvent
-	unsub := events.Subscribe(bus, func(e hmevent.LinkPeerChangedEvent) { got = append(got, e) })
+	unsub := bus.Subscribe(func(e hmevent.LinkPeerChangedEvent) { got = append(got, e) })
 	defer unsub()
 
 	dc.RefreshDeviceLinkPeers(context.Background(), fetcher, iface, "ABC123")
@@ -135,7 +135,7 @@ func TestRefreshDeviceLinkPeersNilFetcherIsNoOp(t *testing.T) {
 	seedDevice(devs, descs, iface, "ABC123", "ABC123:1")
 
 	var called int
-	unsub := events.Subscribe(bus, func(_ hmevent.LinkPeerChangedEvent) { called++ })
+	unsub := bus.Subscribe(func(_ hmevent.LinkPeerChangedEvent) { called++ })
 	defer unsub()
 
 	dc.RefreshDeviceLinkPeers(context.Background(), nil, iface, "ABC123")
@@ -155,7 +155,7 @@ func TestRefreshDeviceLinkPeersUnknownDeviceIsNoOp(t *testing.T) {
 	fetcher := &stubLinkPeerFetcher{peers: map[string][]string{"GHOST:1": {"X"}}}
 
 	var called int
-	unsub := events.Subscribe(bus, func(_ hmevent.LinkPeerChangedEvent) { called++ })
+	unsub := bus.Subscribe(func(_ hmevent.LinkPeerChangedEvent) { called++ })
 	defer unsub()
 
 	dc.RefreshDeviceLinkPeers(context.Background(), fetcher, iface, "GHOST")
@@ -180,7 +180,7 @@ func TestRefreshDeviceLinkPeersFetcherErrorSkipsChannel(t *testing.T) {
 	fetcher := &stubLinkPeerFetcher{err: errors.New("CCU unavailable")}
 
 	var called int
-	unsub := events.Subscribe(bus, func(_ hmevent.LinkPeerChangedEvent) { called++ })
+	unsub := bus.Subscribe(func(_ hmevent.LinkPeerChangedEvent) { called++ })
 	defer unsub()
 
 	// Should not panic even though every GetLinkPeers call fails.

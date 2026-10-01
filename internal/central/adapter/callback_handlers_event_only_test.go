@@ -8,7 +8,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -71,7 +70,7 @@ func TestEventForwardsDataPointLessEventParameters(t *testing.T) {
 
 			var fired atomic.Int32
 			var got hmevent.DeviceTriggerEvent
-			unsub := events.Subscribe(c.EventBus, func(e hmevent.DeviceTriggerEvent) {
+			unsub := c.EventBus.Subscribe(func(e hmevent.DeviceTriggerEvent) {
 				fired.Add(1)
 				got = e
 			})
@@ -112,9 +111,9 @@ func TestEventStillDropsUnknownDataPointLessParameters(t *testing.T) {
 	c := reg.List()[0]
 
 	var fired atomic.Int32
-	unsubTrigger := events.Subscribe(c.EventBus, func(_ hmevent.DeviceTriggerEvent) { fired.Add(1) })
+	unsubTrigger := c.EventBus.Subscribe(func(_ hmevent.DeviceTriggerEvent) { fired.Add(1) })
 	defer unsubTrigger()
-	unsubValue := events.Subscribe(c.EventBus, func(_ hmevent.DataPointValueChangedEvent) { fired.Add(1) })
+	unsubValue := c.EventBus.Subscribe(func(_ hmevent.DataPointValueChangedEvent) { fired.Add(1) })
 	defer unsubValue()
 
 	h := NewCallbackHandlers(c, nil)

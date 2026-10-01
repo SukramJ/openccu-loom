@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -286,7 +285,7 @@ func TestInstallModeChangeReachesMQTT(t *testing.T) {
 	// No initial push for install_mode (no prior observed value on HubModel).
 	prev := len(pub.Published())
 
-	events.Publish(c.EventBus, hmevent.InstallModeChangedEvent{
+	c.EventBus.Publish(hmevent.InstallModeChangedEvent{
 		Base:        hmevent.NewBaseAt(time.Now()),
 		CentralName: "ccu-01",
 		InterfaceID: "HmIP-RF",
@@ -317,7 +316,7 @@ func TestInstallModeEventForOtherCentralIgnored(t *testing.T) {
 
 	prev := len(pub.Published())
 
-	events.Publish(c.EventBus, hmevent.InstallModeChangedEvent{
+	c.EventBus.Publish(hmevent.InstallModeChangedEvent{
 		Base:        hmevent.NewBaseAt(time.Now()),
 		CentralName: "other-central", // different name
 		Enabled:     true,
@@ -347,7 +346,7 @@ func TestConnectivityChangeReachesMQTT(t *testing.T) {
 
 	prev := len(pub.Published())
 
-	events.Publish(c.EventBus, hmevent.ConnectivityChangedEvent{
+	c.EventBus.Publish(hmevent.ConnectivityChangedEvent{
 		Base:        hmevent.NewBaseAt(time.Now()),
 		CentralName: "ccu-01",
 		InterfaceID: "HmIP-RF",
@@ -377,7 +376,7 @@ func TestConnectivityEventForOtherCentralIgnored(t *testing.T) {
 
 	prev := len(pub.Published())
 
-	events.Publish(c.EventBus, hmevent.ConnectivityChangedEvent{
+	c.EventBus.Publish(hmevent.ConnectivityChangedEvent{
 		Base:        hmevent.NewBaseAt(time.Now()),
 		CentralName: "another-ccu",
 		InterfaceID: "BidCos-RF",

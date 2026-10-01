@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/client/reliability"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -62,7 +61,7 @@ func TestPublishingIncidentRecorderPublishesOnSuccess(t *testing.T) {
 	// synchronously on the publisher's goroutine, so the handler fires before
 	// RecordIncident returns.
 	received := make(chan hmevent.IncidentRecordedEvent, 1)
-	unsub := events.Subscribe(unit.EventBus, func(e hmevent.IncidentRecordedEvent) {
+	unsub := unit.EventBus.Subscribe(func(e hmevent.IncidentRecordedEvent) {
 		received <- e
 	})
 	defer unsub()
@@ -129,7 +128,7 @@ func TestPublishingIncidentRecorderNoPublishOnInnerError(t *testing.T) {
 	}
 
 	received := make(chan hmevent.IncidentRecordedEvent, 1)
-	unsub := events.Subscribe(unit.EventBus, func(e hmevent.IncidentRecordedEvent) {
+	unsub := unit.EventBus.Subscribe(func(e hmevent.IncidentRecordedEvent) {
 		received <- e
 	})
 	defer unsub()

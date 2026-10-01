@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
@@ -215,7 +214,7 @@ func defaultRefreshClientData(unit *Unit) func(ctx context.Context) error {
 		const jobName = "central.refresh_client_data"
 		start := timeNow()
 		if unit.EventBus != nil {
-			events.Publish(unit.EventBus, hmevent.DataRefreshTriggeredEvent{
+			unit.EventBus.Publish(hmevent.DataRefreshTriggeredEvent{
 				Base:        hmevent.NewBase(),
 				CentralName: unit.cfg.Name,
 				JobName:     jobName,
@@ -235,7 +234,7 @@ func defaultRefreshClientData(unit *Unit) func(ctx context.Context) error {
 			if err != nil {
 				completed.ErrorMessage = err.Error()
 			}
-			events.Publish(unit.EventBus, completed)
+			unit.EventBus.Publish(completed)
 		}
 		return err
 	}
@@ -572,7 +571,7 @@ func RegisterStandardJobs(unit *Unit, cfg StandardJobs) ([]string, error) { //no
 						// verdict stands on its own.
 						reason = hmenum.FailureReasonTimeout
 					}
-					events.Publish(unit.EventBus, hmevent.ConnectionLostEvent{
+					unit.EventBus.Publish(hmevent.ConnectionLostEvent{
 						CentralName: centralName,
 						InterfaceID: entry.InterfaceID,
 						Reason:      reason,

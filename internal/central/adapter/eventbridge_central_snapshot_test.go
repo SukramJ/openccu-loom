@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -68,7 +67,7 @@ func TestCentralSouthboundReadyEventTriggersPerCentralSnapshot(t *testing.T) {
 	// Production latches the ready flag BEFORE publishing the event
 	// (gatedCentralBringUp) — and the snapshot pass gates on it.
 	unit.MarkSouthboundReady()
-	events.Publish(unit.EventBus, hmevent.CentralSouthboundReadyEvent{
+	unit.EventBus.Publish(hmevent.CentralSouthboundReadyEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "ccu-01",
 	})

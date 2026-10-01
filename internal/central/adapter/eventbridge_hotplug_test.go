@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -65,7 +64,7 @@ func TestOnDeviceCreatedPublishesSnapshotWhenCentralReadyAndDeviceKnown(t *testi
 	}
 	unit.MarkSouthboundReady()
 
-	events.Publish(unit.EventBus, hmevent.DeviceCreatedEvent{
+	unit.EventBus.Publish(hmevent.DeviceCreatedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "ccu-01",
 		InterfaceID: "HmIP-RF",
@@ -109,7 +108,7 @@ func TestOnDeviceCreatedSkipsPublishWhileCentralNotSouthboundReady(t *testing.T)
 	}
 	// Deliberately do NOT call unit.MarkSouthboundReady().
 
-	events.Publish(unit.EventBus, hmevent.DeviceCreatedEvent{
+	unit.EventBus.Publish(hmevent.DeviceCreatedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "ccu-01",
 		InterfaceID: "HmIP-RF",
@@ -221,7 +220,7 @@ func TestOnDeviceCreatedSkipsPublishForUnknownDevice(t *testing.T) {
 	}
 	unit.MarkSouthboundReady()
 
-	events.Publish(unit.EventBus, hmevent.DeviceCreatedEvent{
+	unit.EventBus.Publish(hmevent.DeviceCreatedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "ccu-01",
 		InterfaceID: "HmIP-RF",

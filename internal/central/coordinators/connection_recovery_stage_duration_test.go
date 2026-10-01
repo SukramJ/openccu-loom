@@ -36,7 +36,7 @@ func TestStageChangedEventCarriesDuration(t *testing.T) {
 	coord := NewConnectionRecoveryCoordinator("c1", bus)
 
 	var durations []int64
-	events.Subscribe(bus, func(e hmevent.RecoveryStageChangedEvent) {
+	bus.Subscribe(func(e hmevent.RecoveryStageChangedEvent) {
 		durations = append(durations, e.DurationInOldStageMs)
 	})
 
@@ -66,7 +66,7 @@ func TestStageChangedDurationOnFailedStageTransition(t *testing.T) {
 	coord := NewConnectionRecoveryCoordinator("c1", bus)
 
 	var captured int64 = -1
-	events.Subscribe(bus, func(e hmevent.RecoveryStageChangedEvent) {
+	bus.Subscribe(func(e hmevent.RecoveryStageChangedEvent) {
 		if e.To == hmenum.RecoveryStageReconnecting {
 			captured = e.DurationInOldStageMs
 		}

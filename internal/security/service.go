@@ -338,7 +338,7 @@ func (s *Service) publishState(snap security.Snapshot) {
 			active = append(active, c)
 		}
 	}
-	events.Publish(s.bus, hmevent.SecurityStateChangedEvent{
+	s.bus.Publish(hmevent.SecurityStateChangedEvent{
 		Base:          hmevent.NewBaseAt(s.clk.Now()),
 		To:            snap.Severity,
 		ActiveClasses: active,

@@ -7,7 +7,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -71,7 +70,7 @@ func TestSetFeaturesPublishesOnlyOnChange(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 	var got int
-	unsub := events.Subscribe(u.EventBus, func(e hmevent.CentralFeaturesChangedEvent) {
+	unsub := u.EventBus.Subscribe(func(e hmevent.CentralFeaturesChangedEvent) {
 		if e.CentralName == "feat" {
 			got++
 		}

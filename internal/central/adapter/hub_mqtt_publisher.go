@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
@@ -627,7 +626,7 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 	// HubChannelsAssignedEvent. Re-publish the affected discovery so linked
 	// entities move onto the correct device card. Discovery only — state and
 	// the OnUpdate subscriptions above are left intact.
-	p.addUnsub(events.Subscribe(u.EventBus, func(e hmevent.HubChannelsAssignedEvent) {
+	p.addUnsub(u.EventBus.Subscribe(func(e hmevent.HubChannelsAssignedEvent) {
 		if e.CentralName != centralName {
 			return
 		}
@@ -710,7 +709,7 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 	p.publish(func() {
 		seedConnectivityDiscovery(ctx, u, centralName, disco, b, connectivityDiscovered)
 	})
-	p.addUnsub(events.Subscribe(u.EventBus, func(e hmevent.ConnectivityChangedEvent) {
+	p.addUnsub(u.EventBus.Subscribe(func(e hmevent.ConnectivityChangedEvent) {
 		if e.CentralName != centralName {
 			return
 		}
@@ -875,7 +874,7 @@ func (p *HubMQTTPublisher) wireHubFeatureGate(ctx context.Context, u *central.Un
 ) {
 	gated := p.gatedHubEntities(centralName, disco)
 	p.applyHubFeatureGate(ctx, u, b, gated)
-	p.addUnsub(events.Subscribe(u.EventBus, func(e hmevent.CentralFeaturesChangedEvent) {
+	p.addUnsub(u.EventBus.Subscribe(func(e hmevent.CentralFeaturesChangedEvent) {
 		if e.CentralName != centralName {
 			return
 		}
@@ -971,7 +970,7 @@ func (p *HubMQTTPublisher) wireInstallMode(
 			}
 		})
 	}
-	p.addUnsub(events.Subscribe(u.EventBus, func(e hmevent.InstallModeChangedEvent) {
+	p.addUnsub(u.EventBus.Subscribe(func(e hmevent.InstallModeChangedEvent) {
 		if e.CentralName != centralName || e.InterfaceID == "" {
 			return
 		}

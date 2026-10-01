@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -48,13 +47,13 @@ func TestOutboundWithholdsUnreleasedDevices(t *testing.T) {
 	t.Cleanup(func() { _ = o.Stop(context.Background()) })
 
 	// The released device gets through.
-	events.Publish(u.EventBus, datapointEvent("HmIP-RF", "DEF:1", "STATE",
+	u.EventBus.Publish(datapointEvent("HmIP-RF", "DEF:1", "STATE",
 		hmtypes.BoolValue(true), hmtypes.BoolValue(false)))
 	waitForCount(t, ft, 1, 2*time.Second)
 
 	// The withheld one must not, even though its event rides the same bus
 	// on the same interface with the same shape.
-	events.Publish(u.EventBus, datapointEvent("HmIP-RF", "ABC:1", "STATE",
+	u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "STATE",
 		hmtypes.BoolValue(true), hmtypes.BoolValue(false)))
 	time.Sleep(250 * time.Millisecond)
 	if n := ft.count(); n != 1 {
@@ -67,7 +66,7 @@ func TestOutboundWithholdsUnreleasedDevices(t *testing.T) {
 	if !u.Devices.ReleaseDevice(context.Background(), iface, "ABC") {
 		t.Fatal("ReleaseDevice reported nothing to release")
 	}
-	events.Publish(u.EventBus, datapointEvent("HmIP-RF", "ABC:1", "STATE",
+	u.EventBus.Publish(datapointEvent("HmIP-RF", "ABC:1", "STATE",
 		hmtypes.BoolValue(false), hmtypes.BoolValue(true)))
 	waitForCount(t, ft, 2, 2*time.Second)
 	if n := ft.count(); n != 2 {

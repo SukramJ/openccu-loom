@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -125,7 +124,7 @@ func TestHubMQTTPublisherSlowBrokerDoesNotStallBusDispatch(t *testing.T) {
 
 	dispatched := make(chan struct{})
 	go func() {
-		events.Publish(c.EventBus, connectivityEvent("HmIP-RF", true))
+		c.EventBus.Publish(connectivityEvent("HmIP-RF", true))
 		close(dispatched)
 	}()
 
@@ -146,7 +145,7 @@ func TestHubMQTTPublisherSlowBrokerDoesNotStallBusDispatch(t *testing.T) {
 	// A follow-up event on the same bus keeps flowing too.
 	done := make(chan struct{})
 	go func() {
-		events.Publish(c.EventBus, connectivityEvent("BidCos-RF", true))
+		c.EventBus.Publish(connectivityEvent("BidCos-RF", true))
 		close(done)
 	}()
 	select {
@@ -273,7 +272,7 @@ func TestHubMQTTPublisherStopCancelsInflightPublish(t *testing.T) {
 	c, publisher := hubFanoutFixture(t, gate)
 
 	publisher.Start(context.Background())
-	go events.Publish(c.EventBus, connectivityEvent("HmIP-RF", true))
+	go c.EventBus.Publish(connectivityEvent("HmIP-RF", true))
 	select {
 	case <-gate.entered:
 	case <-time.After(2 * time.Second):
@@ -356,7 +355,7 @@ func TestHubMQTTPublisherConnectivityDedupIsWorkerOwned(t *testing.T) {
 	for _, iface := range ifaces {
 		wg.Go(func() {
 			for i := range 25 {
-				events.Publish(c.EventBus, connectivityEvent(iface, i%2 == 0))
+				c.EventBus.Publish(connectivityEvent(iface, i%2 == 0))
 			}
 		})
 	}

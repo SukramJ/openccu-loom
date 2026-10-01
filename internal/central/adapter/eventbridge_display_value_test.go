@@ -14,7 +14,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
@@ -104,7 +103,7 @@ func TestEventBridgeValueChanged_LevelDisplayValue(t *testing.T) {
 	eb.Start(context.Background())
 	defer eb.Stop()
 
-	events.Publish(unit.EventBus, hmevent.DataPointValueChangedEvent{
+	unit.EventBus.Publish(hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBase(),
 		Key: hmtypes.DataPointKey{
 			InterfaceID:    "HmIP-RF",
@@ -191,7 +190,7 @@ func TestEventBridgeAndRESTDisplayValueAgree(t *testing.T) {
 	eb.Start(context.Background())
 	defer eb.Stop()
 
-	events.Publish(unit.EventBus, hmevent.DataPointValueChangedEvent{
+	unit.EventBus.Publish(hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBase(),
 		Key: hmtypes.DataPointKey{
 			InterfaceID:    "HmIP-RF",

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -98,7 +97,7 @@ func (s *SystemStatusSubscriber) StartCentral(u *central.Unit) func() {
 	}
 	centralName := u.Name()
 	hub := s.hub
-	return events.Subscribe(bus, func(e hmevent.SystemStatusChangedEvent) {
+	return bus.Subscribe(func(e hmevent.SystemStatusChangedEvent) {
 		hub.Publish(Event{
 			Topic: SystemStatusTopic(centralName),
 			Type:  string(hmevent.EventTypeSystemStatusChanged),

@@ -342,7 +342,7 @@ hook.
 - **Concurrency**: `sync.RWMutex` for read-heavy caches, channels for
   pipelines, `errgroup` for bounded fan-out. Every goroutine has a documented
   lifecycle and a way to stop. No package-level mutable state.
-- **Generics** are expected (`events.Subscribe[T Event]`). **`any` needs a
+- **Generics** are expected (`func (b *Bus) Subscribe[T Event]`). **`any` needs a
   justifying comment** (usually "wire-decoded JSON before type-dispatch").
 - **Naming**: short lowercase packages; `MethodNamer` for single-method
   interfaces; protocol interfaces in `pkg/interfaces` carry no `I` prefix.
@@ -396,11 +396,11 @@ Outside world → northbound adapters (north/mqtt, north/rest, north/ui)
   re-entrancy:
 
 ```go
-unsubscribe := events.Subscribe(bus, func(e hmevent.DataPointValueChanged) {
+unsubscribe := bus.Subscribe(func(e hmevent.DataPointValueChanged) {
     // handle
 }, events.WithPriority(events.PriorityHigh))
 defer unsubscribe()
-events.Publish(bus, hmevent.DataPointValueChanged{ /* ... */ })
+bus.Publish(hmevent.DataPointValueChanged{ /* ... */ })
 ```
 
 **Callback servers** — two listeners, both shared across all centrals:

@@ -34,10 +34,10 @@ func TestMultipleSubscribersIndependent(t *testing.T) {
 
 	var countA, countB atomic.Int32
 
-	unsub1 := events.Subscribe[hmevent.DataPointValueChangedEvent](bus, func(_ hmevent.DataPointValueChangedEvent) {
+	unsub1 := bus.Subscribe[hmevent.DataPointValueChangedEvent](func(_ hmevent.DataPointValueChangedEvent) {
 		countA.Add(1)
 	})
-	unsub2 := events.Subscribe[hmevent.DataPointValueChangedEvent](bus, func(_ hmevent.DataPointValueChangedEvent) {
+	unsub2 := bus.Subscribe[hmevent.DataPointValueChangedEvent](func(_ hmevent.DataPointValueChangedEvent) {
 		countB.Add(1)
 	})
 	defer unsub1()
@@ -45,7 +45,7 @@ func TestMultipleSubscribersIndependent(t *testing.T) {
 
 	// Publish two events; each handler should receive both.
 	for range 2 {
-		events.Publish(bus, hmevent.DataPointValueChangedEvent{
+		bus.Publish(hmevent.DataPointValueChangedEvent{
 			Base:     hmevent.NewBase(),
 			NewValue: hmtypes.BoolValue(true),
 		})
@@ -66,7 +66,7 @@ func TestSubscribeReceiveUnsubscribe(t *testing.T) {
 
 	var received atomic.Int32
 
-	unsub := events.Subscribe[hmevent.DataPointValueChangedEvent](bus, func(_ hmevent.DataPointValueChangedEvent) {
+	unsub := bus.Subscribe[hmevent.DataPointValueChangedEvent](func(_ hmevent.DataPointValueChangedEvent) {
 		received.Add(1)
 	})
 
@@ -79,7 +79,7 @@ func TestSubscribeReceiveUnsubscribe(t *testing.T) {
 		Base:     hmevent.NewBase(),
 		NewValue: hmtypes.BoolValue(true),
 	}
-	events.Publish(bus, ev)
+	bus.Publish(ev)
 
 	if received.Load() != 1 {
 		t.Fatalf("after first publish: received %d, want 1", received.Load())
@@ -93,7 +93,7 @@ func TestSubscribeReceiveUnsubscribe(t *testing.T) {
 	}
 
 	// Publishing again after unsubscribe — count must stay at 1.
-	events.Publish(bus, ev)
+	bus.Publish(ev)
 	if received.Load() != 1 {
 		t.Fatalf("after post-unsub publish: received %d, still want 1", received.Load())
 	}
@@ -110,7 +110,7 @@ func TestSequentialEventPublishing(t *testing.T) {
 
 	values := make(map[int]struct{}, n)
 
-	unsub := events.Subscribe[hmevent.DataPointValueChangedEvent](bus, func(e hmevent.DataPointValueChangedEvent) {
+	unsub := bus.Subscribe[hmevent.DataPointValueChangedEvent](func(e hmevent.DataPointValueChangedEvent) {
 		if e.NewValue.Kind != hmtypes.ValueKindInt {
 			return
 		}
@@ -119,7 +119,7 @@ func TestSequentialEventPublishing(t *testing.T) {
 	defer unsub()
 
 	for i := range n {
-		events.Publish(bus, hmevent.DataPointValueChangedEvent{
+		bus.Publish(hmevent.DataPointValueChangedEvent{
 			Base:     hmevent.NewBase(),
 			NewValue: hmtypes.IntValue(i),
 		})
@@ -142,10 +142,7 @@ func TestSubscribeUnsubscribeLeavesCleanBus(t *testing.T) {
 
 	unsubs := make([]func(), 0, batches)
 	for range batches {
-		fn := events.Subscribe[hmevent.DataPointValueChangedEvent](
-			bus,
-			func(_ hmevent.DataPointValueChangedEvent) {},
-		)
+		fn := bus.Subscribe[hmevent.DataPointValueChangedEvent](func(_ hmevent.DataPointValueChangedEvent) {})
 		unsubs = append(unsubs, fn)
 	}
 

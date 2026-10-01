@@ -10,7 +10,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
@@ -245,7 +244,7 @@ func TestReleaseEndsTheHoldAndAnnouncesIt(t *testing.T) {
 	}
 
 	var announced []hmevent.DeviceReleasedEvent
-	unsub := events.Subscribe(c.EventBus, func(e hmevent.DeviceReleasedEvent) {
+	unsub := c.EventBus.Subscribe(func(e hmevent.DeviceReleasedEvent) {
 		announced = append(announced, e)
 	})
 	defer unsub()

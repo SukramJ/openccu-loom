@@ -242,7 +242,7 @@ func (c *Central) TransitionTo(target hmenum.CentralState, reason hmenum.Failure
 	c.mu.Unlock()
 
 	if bus != nil {
-		events.Publish(bus, hmevent.CentralStateChangedEvent{
+		bus.Publish(hmevent.CentralStateChangedEvent{
 			Base:        hmevent.NewBase(),
 			CentralName: name,
 			From:        from,
@@ -283,7 +283,7 @@ func (c *Central) ForceTransitionTo(target hmenum.CentralState, reason hmenum.Fa
 	c.mu.Unlock()
 
 	if bus != nil {
-		events.Publish(bus, hmevent.CentralStateChangedEvent{
+		bus.Publish(hmevent.CentralStateChangedEvent{
 			Base:        hmevent.NewBase(),
 			CentralName: name,
 			From:        from,

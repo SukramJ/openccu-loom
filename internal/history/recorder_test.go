@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -70,7 +69,7 @@ func centralWithDevice(t *testing.T, centralName, devAddr, chanAddr string) (
 
 // publishValueEvent fires a DataPointValueChangedEvent on unit u's bus.
 func publishValueEvent(u *central.Unit, chanAddr, param string, psk hmenum.ParamsetKey, newVal hmtypes.ParamValue) {
-	events.Publish(u.EventBus, hmevent.DataPointValueChangedEvent{
+	u.EventBus.Publish(hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBaseAt(time.Now()),
 		Key: hmtypes.DataPointKey{
 			InterfaceID:    "HmIP-RF",

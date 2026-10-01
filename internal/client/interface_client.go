@@ -1344,7 +1344,7 @@ func (c *InterfaceClient) SetStateChangedBus(bus *events.Bus, interfaceID string
 		interfaceID = string(iface)
 	}
 	c.sm.SetStateChangedPublisher(func(from, to hmenum.ClientState, reason string, failureReason hmenum.FailureReason) {
-		events.Publish(bus, hmevent.ClientStateChangedEvent{
+		bus.Publish(hmevent.ClientStateChangedEvent{
 			Base:        hmevent.Base{},
 			CentralName: centralName,
 			InterfaceID: interfaceID,

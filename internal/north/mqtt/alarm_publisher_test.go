@@ -20,7 +20,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/alarm/codes"
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/clock"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -354,12 +353,12 @@ func TestAlarmMQTTPublisher_AvailabilityFlipsOnHealthChanged(t *testing.T) {
 	availTopic := f.base + "/alarm/eg/availability"
 	f.waitForPublish(availTopic, func(r publishRecord) bool { return r.payload == "online" })
 
-	events.Publish(f.svc.Bus(), hmevent.AlarmHealthChangedEvent{
+	f.svc.Bus().Publish(hmevent.AlarmHealthChangedEvent{
 		Base: hmevent.NewBaseAt(time.Now()), Healthy: false, Note: "test degradation",
 	})
 	f.waitForPublish(availTopic, func(r publishRecord) bool { return r.payload == "offline" })
 
-	events.Publish(f.svc.Bus(), hmevent.AlarmHealthChangedEvent{
+	f.svc.Bus().Publish(hmevent.AlarmHealthChangedEvent{
 		Base: hmevent.NewBaseAt(time.Now()), Healthy: true, Note: "",
 	})
 	f.waitForPublish(availTopic, func(r publishRecord) bool { return r.payload == "online" })
@@ -658,8 +657,8 @@ func TestAlarmMQTTPublisher_NotificationRespectsMQTTFlag(t *testing.T) {
 	// than every publish inside a fixed sleep window — keeps the assertion
 	// immune to whatever else the start-up sequence is still flushing, which
 	// is what made this test fail on a loaded CI runner.
-	events.Publish(f.svc.Bus(), notification(false))
-	events.Publish(f.svc.Bus(), notification(true))
+	f.svc.Bus().Publish(notification(false))
+	f.svc.Bus().Publish(notification(true))
 
 	rec := f.waitForPublish(eventTopic, func(r publishRecord) bool {
 		var pay alarmEventPayload
@@ -707,7 +706,7 @@ func TestAlarmMQTTPublisher_NotificationOutputFallsBackToID(t *testing.T) {
 	stateTopic := f.base + "/alarm/eg/state"
 	f.waitForPublish(stateTopic, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateDisarmed })
 
-	events.Publish(f.svc.Bus(), hmevent.AlarmNotificationEvent{
+	f.svc.Bus().Publish(hmevent.AlarmNotificationEvent{
 		Base: hmevent.NewBaseAt(time.Now()), ZoneID: "eg", ZoneName: "Erdgeschoss",
 		OutputID: "notify2", OutputName: "", IncidentID: 2, Mode: hmenum.AlarmModeFull,
 		MQTT: true, Webhook: false,

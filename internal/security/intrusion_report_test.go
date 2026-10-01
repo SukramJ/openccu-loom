@@ -6,7 +6,6 @@ package security
 import (
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -16,7 +15,7 @@ import (
 func collectNotifications(t *testing.T, svc *Service) *[]hmevent.SecurityNotificationEvent {
 	t.Helper()
 	var got []hmevent.SecurityNotificationEvent
-	unsub := events.Subscribe(svc.Bus(), func(e hmevent.SecurityNotificationEvent) {
+	unsub := svc.Bus().Subscribe(func(e hmevent.SecurityNotificationEvent) {
 		got = append(got, e)
 	})
 	t.Cleanup(unsub)
@@ -78,7 +77,7 @@ func TestAnActiveIntrusionSourceStillFlipsItsClass(t *testing.T) {
 	t.Parallel()
 	svc, _, _ := newTestService(t)
 	var classes []hmevent.SecurityClassChangedEvent
-	unsub := events.Subscribe(svc.Bus(), func(e hmevent.SecurityClassChangedEvent) {
+	unsub := svc.Bus().Subscribe(func(e hmevent.SecurityClassChangedEvent) {
 		classes = append(classes, e)
 	})
 	t.Cleanup(unsub)

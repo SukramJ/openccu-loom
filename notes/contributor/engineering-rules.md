@@ -158,7 +158,7 @@ the check instead.**
 
 Guards: one `Test*SinkFansOutEveryEventType` per fan-out, driven from the
 domain's `EventType*` constants — and `TestEveryEventTypeHasASubscriber`
-(`tests/contract/`), which resolves every `events.Subscribe` through the
+(`tests/contract/`), which resolves every `Bus.Subscribe` call through the
 type checker and fails on any event type that has no consumer and no
 declared reason in `eventsWithoutSubscriber`. Declaring the silence is
 allowed; leaving it undeclared is not.

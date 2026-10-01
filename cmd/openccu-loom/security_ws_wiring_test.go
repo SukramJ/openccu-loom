@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 	"github.com/SukramJ/openccu-loom/internal/security"
@@ -54,7 +53,7 @@ func TestWireSystemStatusSubscribersBroadcastsSecurityEvents(t *testing.T) {
 	_, teardown := wireSystemStatusSubscribers(reg, wsHub, nil, nil, nil, nil, svc, "", "", discardTestLogger())
 	t.Cleanup(teardown)
 
-	events.Publish(svc.Bus(), hmevent.SecurityClassChangedEvent{
+	svc.Bus().Publish(hmevent.SecurityClassChangedEvent{
 		Base:    hmevent.NewBase(),
 		Class:   hmenum.SecurityClassSmoke,
 		Active:  true,

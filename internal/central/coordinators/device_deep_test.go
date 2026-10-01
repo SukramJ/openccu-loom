@@ -116,14 +116,14 @@ func listerOf(descs ...hmproto.DeviceDescription) *stubLister {
 // collectCreated subscribes and collects DeviceCreatedEvents.
 func collectCreated(bus *events.Bus) *[]hmevent.DeviceCreatedEvent {
 	out := make([]hmevent.DeviceCreatedEvent, 0, 8)
-	events.Subscribe(bus, func(e hmevent.DeviceCreatedEvent) { out = append(out, e) })
+	bus.Subscribe(func(e hmevent.DeviceCreatedEvent) { out = append(out, e) })
 	return &out
 }
 
 // collectRemoved subscribes and collects DeviceRemovedEvents.
 func collectRemoved(bus *events.Bus) *[]hmevent.DeviceRemovedEvent {
 	out := make([]hmevent.DeviceRemovedEvent, 0, 8)
-	events.Subscribe(bus, func(e hmevent.DeviceRemovedEvent) { out = append(out, e) })
+	bus.Subscribe(func(e hmevent.DeviceRemovedEvent) { out = append(out, e) })
 	return &out
 }
 
@@ -606,7 +606,7 @@ func TestHandleDeleteDevicesUnknownAddressIsNoop(t *testing.T) {
 	t.Parallel()
 	dc, bus, _, _, _ := newDCFull(t)
 	var count atomic.Int32
-	events.Subscribe(bus, func(_ hmevent.DeviceRemovedEvent) { count.Add(1) })
+	bus.Subscribe(func(_ hmevent.DeviceRemovedEvent) { count.Add(1) })
 
 	dc.HandleDeleteDevices(context.Background(), wireKey(hmenum.InterfaceHmIPRF), []string{"GHOST"})
 	if count.Load() != 0 {
@@ -851,7 +851,7 @@ func TestHandleNewDevicesEmitsDataFetchCompletedEvent(t *testing.T) {
 
 	var fetched []hmevent.DataFetchCompletedEvent
 	var mu sync.Mutex
-	events.Subscribe(bus, func(e hmevent.DataFetchCompletedEvent) {
+	bus.Subscribe(func(e hmevent.DataFetchCompletedEvent) {
 		mu.Lock()
 		fetched = append(fetched, e)
 		mu.Unlock()
@@ -893,7 +893,7 @@ func TestHandleNewDevicesNoEventOnEmptySlice(t *testing.T) {
 	dc, bus, _, _, _ := newDCFull(t)
 
 	var count atomic.Int32
-	events.Subscribe(bus, func(_ hmevent.DataFetchCompletedEvent) { count.Add(1) })
+	bus.Subscribe(func(_ hmevent.DataFetchCompletedEvent) { count.Add(1) })
 
 	dc.HandleNewDevices(context.Background(), wireKey(hmenum.InterfaceHmIPRF), []hmproto.DeviceDescription{})
 	if count.Load() != 0 {

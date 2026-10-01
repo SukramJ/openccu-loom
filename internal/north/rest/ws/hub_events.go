@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	hubmodel "github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -286,7 +285,7 @@ func (s *HubEventsSubscriber) StartCentral(u *central.Unit) func() {
 		}
 		hub := s.hub
 		reg := s.reg
-		unsubSv := events.Subscribe(bus, func(e hmevent.SysvarChangedEvent) {
+		unsubSv := bus.Subscribe(func(e hmevent.SysvarChangedEvent) {
 			channel, deviceAddress := sysvarDeviceLink(reg, centralName, e.Name)
 			hub.Publish(Event{
 				Topic: SysvarTopic(centralName, e.Name),
@@ -304,7 +303,7 @@ func (s *HubEventsSubscriber) StartCentral(u *central.Unit) func() {
 				},
 			})
 		})
-		unsubPg := events.Subscribe(bus, func(e hmevent.ProgramExecutedEvent) {
+		unsubPg := bus.Subscribe(func(e hmevent.ProgramExecutedEvent) {
 			channel, deviceAddress := programDeviceLink(reg, centralName, e.ProgramID)
 			hub.Publish(Event{
 				Topic: ProgramTopic(centralName, e.ProgramID),
@@ -321,7 +320,7 @@ func (s *HubEventsSubscriber) StartCentral(u *central.Unit) func() {
 				},
 			})
 		})
-		unsubPc := events.Subscribe(bus, func(e hmevent.ProgramChangedEvent) {
+		unsubPc := bus.Subscribe(func(e hmevent.ProgramChangedEvent) {
 			channel, deviceAddress := programDeviceLink(reg, centralName, e.ProgramID)
 			hub.Publish(Event{
 				Topic: ProgramTopic(centralName, e.ProgramID),
@@ -342,7 +341,7 @@ func (s *HubEventsSubscriber) StartCentral(u *central.Unit) func() {
 				},
 			})
 		})
-		unsubIM := events.Subscribe(bus, func(e hmevent.InstallModeChangedEvent) {
+		unsubIM := bus.Subscribe(func(e hmevent.InstallModeChangedEvent) {
 			hub.Publish(Event{
 				Topic: InstallModeTopic(centralName),
 				Type:  string(hmevent.EventTypeInstallModeChanged),
@@ -358,7 +357,7 @@ func (s *HubEventsSubscriber) StartCentral(u *central.Unit) func() {
 		// callback path as ConnectivityChangedEvent. Bus-driven (not a model
 		// hook) because the connectivity tracker is attached lazily — see
 		// subscribeHubModel.
-		unsubConn := events.Subscribe(bus, func(e hmevent.ConnectivityChangedEvent) {
+		unsubConn := bus.Subscribe(func(e hmevent.ConnectivityChangedEvent) {
 			hub.Publish(Event{
 				Topic: ConnectivityTopic(centralName, e.InterfaceID),
 				Type:  string(hmevent.EventTypeConnectivityChanged),

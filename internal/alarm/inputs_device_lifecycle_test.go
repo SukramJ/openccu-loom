@@ -15,7 +15,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
@@ -118,7 +117,7 @@ func TestBootAgainstAModelWithoutTheEnrolledDeviceBlocksTheArm(t *testing.T) {
 	// Southbound bring-up completes: the model is complete and does not
 	// contain the enrolled device.
 	unit.MarkSouthboundReady()
-	events.Publish(unit.EventBus, hmevent.CentralSouthboundReadyEvent{CentralName: lifecycleCentral})
+	unit.EventBus.Publish(hmevent.CentralSouthboundReadyEvent{CentralName: lifecycleCentral})
 
 	waitForBlockers(t, svc, lifecycleZone, hmenum.AlarmModeFull, []string{lifecycleSensor},
 		"a daemon that boots against a model without the enrolled device must not report the zone ready")

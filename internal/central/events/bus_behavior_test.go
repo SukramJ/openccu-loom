@@ -40,13 +40,13 @@ func TestPriorityHandlersFireInOrder(t *testing.T) {
 	var order []string
 
 	// Register in "wrong" order to prove sorting is not registration-order.
-	Subscribe(b, func(hmevent.DeviceCreatedEvent) { order = append(order, "low") }, WithPriority(PriorityLow))
-	Subscribe(b, func(hmevent.DeviceCreatedEvent) { order = append(order, "high") }, WithPriority(PriorityHigh))
-	Subscribe(b, func(hmevent.DeviceCreatedEvent) { order = append(order, "normal") }, WithPriority(PriorityNormal))
+	b.Subscribe(func(hmevent.DeviceCreatedEvent) { order = append(order, "low") }, WithPriority(PriorityLow))
+	b.Subscribe(func(hmevent.DeviceCreatedEvent) { order = append(order, "high") }, WithPriority(PriorityHigh))
+	b.Subscribe(func(hmevent.DeviceCreatedEvent) { order = append(order, "normal") }, WithPriority(PriorityNormal))
 	// Custom priority between Normal(0) and High(10).
-	Subscribe(b, func(hmevent.DeviceCreatedEvent) { order = append(order, "custom5") }, WithPriority(5))
+	b.Subscribe(func(hmevent.DeviceCreatedEvent) { order = append(order, "custom5") }, WithPriority(5))
 
-	Publish(b, hmevent.DeviceCreatedEvent{Base: hmevent.NewBase(), CentralName: "c"})
+	b.Publish(hmevent.DeviceCreatedEvent{Base: hmevent.NewBase(), CentralName: "c"})
 
 	want := []string{"high", "custom5", "normal", "low"}
 	if !slices.Equal(order, want) {
@@ -64,10 +64,10 @@ func TestPriorityEqualRegistrationFIFO(t *testing.T) {
 
 	for _, name := range []string{"a", "b", "c"} {
 		n := name
-		Subscribe(b, func(hmevent.DeviceCreatedEvent) { order = append(order, n) }, WithPriority(PriorityHigh))
+		b.Subscribe(func(hmevent.DeviceCreatedEvent) { order = append(order, n) }, WithPriority(PriorityHigh))
 	}
 
-	Publish(b, hmevent.DeviceCreatedEvent{Base: hmevent.NewBase(), CentralName: "c"})
+	b.Publish(hmevent.DeviceCreatedEvent{Base: hmevent.NewBase(), CentralName: "c"})
 
 	if !slices.Equal(order, []string{"a", "b", "c"}) {
 		t.Fatalf("FIFO broken: %v", order)
@@ -86,17 +86,17 @@ func TestKeyFilterMatchesOnly(t *testing.T) {
 
 	var keylessCount, filteredCount int
 
-	Subscribe(b, func(keyedEvent) { keylessCount++ })
-	Subscribe(b, func(keyedEvent) { filteredCount++ }, WithKey("k1"))
+	b.Subscribe(func(keyedEvent) { keylessCount++ })
+	b.Subscribe(func(keyedEvent) { filteredCount++ }, WithKey("k1"))
 
 	// Publish event whose key matches the filter.
-	Publish(b, keyedEvent{Base: hmevent.NewBase(), Key: "k1"})
+	b.Publish(keyedEvent{Base: hmevent.NewBase(), Key: "k1"})
 	if keylessCount != 1 || filteredCount != 1 {
 		t.Fatalf("after k1 publish: keyless=%d (want 1), filtered=%d (want 1)", keylessCount, filteredCount)
 	}
 
 	// Publish event whose key does NOT match the filter.
-	Publish(b, keyedEvent{Base: hmevent.NewBase(), Key: "k2"})
+	b.Publish(keyedEvent{Base: hmevent.NewBase(), Key: "k2"})
 	if keylessCount != 2 || filteredCount != 1 {
 		t.Fatalf("after k2 publish: keyless=%d (want 2), filtered=%d (want 1)", keylessCount, filteredCount)
 	}
@@ -118,11 +118,11 @@ func TestKeyFilterEmptyEventKeySkipsFiltered(t *testing.T) {
 	b := NewBus()
 
 	var keylessCount, filteredCount int
-	Subscribe(b, func(keyedEvent) { keylessCount++ })
-	Subscribe(b, func(keyedEvent) { filteredCount++ }, WithKey("k1"))
+	b.Subscribe(func(keyedEvent) { keylessCount++ })
+	b.Subscribe(func(keyedEvent) { filteredCount++ }, WithKey("k1"))
 
 	// Event with empty key — keyless handler fires, filtered handler does NOT.
-	Publish(b, keyedEvent{Base: hmevent.NewBase(), Key: ""})
+	b.Publish(keyedEvent{Base: hmevent.NewBase(), Key: ""})
 	if keylessCount != 1 {
 		t.Fatalf("keyless count=%d, want 1", keylessCount)
 	}
@@ -148,9 +148,9 @@ func TestReentrantPublishDeferredCrossType(t *testing.T) {
 	var bFiredAt int64 // nanoseconds; set by B's handler
 	var aReturnAt int64
 
-	Subscribe(b, func(hmevent.DeviceCreatedEvent) {
+	b.Subscribe(func(hmevent.DeviceCreatedEvent) {
 		// A's body — re-entrant publish of type B.
-		Publish(b, hmevent.ClientStateChangedEvent{Base: hmevent.NewBase(), CentralName: "c"})
+		b.Publish(hmevent.ClientStateChangedEvent{Base: hmevent.NewBase(), CentralName: "c"})
 		// At this point B's handler must NOT have run yet.
 		if aFinished.Load() {
 			// Already marked finished — impossible in this frame.
@@ -160,12 +160,12 @@ func TestReentrantPublishDeferredCrossType(t *testing.T) {
 		aFinished.Store(true)
 	})
 
-	Subscribe(b, func(hmevent.ClientStateChangedEvent) {
+	b.Subscribe(func(hmevent.ClientStateChangedEvent) {
 		bFiredAt = time.Now().UnixNano()
 		bFiredAfterA.Store(aFinished.Load())
 	})
 
-	Publish(b, hmevent.DeviceCreatedEvent{Base: hmevent.NewBase(), CentralName: "c"})
+	b.Publish(hmevent.DeviceCreatedEvent{Base: hmevent.NewBase(), CentralName: "c"})
 
 	if !aFinished.Load() {
 		t.Fatal("A's handler never ran")
@@ -193,8 +193,8 @@ func TestUnsubscribeIsIdempotent(t *testing.T) {
 	b := NewBus()
 	typ := hmevent.EventTypeDeviceCreated
 
-	unsub1 := Subscribe(b, func(hmevent.DeviceCreatedEvent) {})
-	_ = Subscribe(b, func(hmevent.DeviceCreatedEvent) {})
+	unsub1 := b.Subscribe(func(hmevent.DeviceCreatedEvent) {})
+	_ = b.Subscribe(func(hmevent.DeviceCreatedEvent) {})
 
 	if got := b.HandlerCount(typ); got != 2 {
 		t.Fatalf("before unsub: HandlerCount=%d, want 2", got)
@@ -227,12 +227,12 @@ func TestHandlerCountReflectsRegistration(t *testing.T) {
 		t.Fatalf("initial HandlerCount=%d, want 0", got)
 	}
 
-	u1 := Subscribe(b, func(hmevent.DeviceRemovedEvent) {})
+	u1 := b.Subscribe(func(hmevent.DeviceRemovedEvent) {})
 	if got := b.HandlerCount(typ); got != 1 {
 		t.Fatalf("after 1st Subscribe: HandlerCount=%d, want 1", got)
 	}
 
-	u2 := Subscribe(b, func(hmevent.DeviceRemovedEvent) {})
+	u2 := b.Subscribe(func(hmevent.DeviceRemovedEvent) {})
 	if got := b.HandlerCount(typ); got != 2 {
 		t.Fatalf("after 2nd Subscribe: HandlerCount=%d, want 2", got)
 	}
@@ -273,8 +273,8 @@ func TestConcurrentSubscribeUnsubscribePublish(t *testing.T) {
 		_ = i
 		wg.Go(func() {
 			for range iterations {
-				unsub := Subscribe(b, func(hmevent.RecoveryStartedEvent) {})
-				Publish(b, hmevent.RecoveryStartedEvent{Base: hmevent.NewBase(), CentralName: "c"})
+				unsub := b.Subscribe(func(hmevent.RecoveryStartedEvent) {})
+				b.Publish(hmevent.RecoveryStartedEvent{Base: hmevent.NewBase(), CentralName: "c"})
 				unsub()
 			}
 		})
@@ -285,7 +285,7 @@ func TestConcurrentSubscribeUnsubscribePublish(t *testing.T) {
 		_ = i
 		wg.Go(func() {
 			for range iterations {
-				Publish(b, hmevent.RecoveryStartedEvent{Base: hmevent.NewBase(), CentralName: "c"})
+				b.Publish(hmevent.RecoveryStartedEvent{Base: hmevent.NewBase(), CentralName: "c"})
 			}
 		})
 	}
@@ -304,14 +304,14 @@ func TestHandlerStatsTracksCallsAndMatches(t *testing.T) {
 
 	b := NewBus()
 
-	Subscribe(b, func(keyedEvent) {}, WithKey("k1"), WithName("filtered"))
-	Subscribe(b, func(keyedEvent) {}, WithName("keyless"))
+	b.Subscribe(func(keyedEvent) {}, WithKey("k1"), WithName("filtered"))
+	b.Subscribe(func(keyedEvent) {}, WithName("keyless"))
 
 	// Two events with key "k1" → filtered handler matches both.
-	Publish(b, keyedEvent{Base: hmevent.NewBase(), Key: "k1"})
-	Publish(b, keyedEvent{Base: hmevent.NewBase(), Key: "k1"})
+	b.Publish(keyedEvent{Base: hmevent.NewBase(), Key: "k1"})
+	b.Publish(keyedEvent{Base: hmevent.NewBase(), Key: "k1"})
 	// One event with key "k2" → filtered handler is called but does NOT match.
-	Publish(b, keyedEvent{Base: hmevent.NewBase(), Key: "k2"})
+	b.Publish(keyedEvent{Base: hmevent.NewBase(), Key: "k2"})
 
 	stats := b.HandlerStats()
 
@@ -354,8 +354,8 @@ func TestHandlerStatsEventTypeIsSet(t *testing.T) {
 	t.Parallel()
 
 	b := NewBus()
-	Subscribe(b, func(hmevent.DeviceCreatedEvent) {}, WithName("devCreated"))
-	Subscribe(b, func(hmevent.DeviceRemovedEvent) {}, WithName("devRemoved"))
+	b.Subscribe(func(hmevent.DeviceCreatedEvent) {}, WithName("devCreated"))
+	b.Subscribe(func(hmevent.DeviceRemovedEvent) {}, WithName("devRemoved"))
 
 	stats := b.HandlerStats()
 	found := make(map[string]hmevent.EventType)
@@ -380,7 +380,7 @@ func TestLeakedSubscriptionsReportsNamedNonReleased(t *testing.T) {
 	t.Parallel()
 
 	b := NewBus()
-	Subscribe(b, func(hmevent.DeviceCreatedEvent) {}, WithName("leaky"))
+	b.Subscribe(func(hmevent.DeviceCreatedEvent) {}, WithName("leaky"))
 	// Intentionally NOT unsubscribing.
 
 	leaked := b.LeakedSubscriptions()
@@ -407,7 +407,7 @@ func TestLeakedSubscriptionsEmptyAfterUnsubscribe(t *testing.T) {
 	t.Parallel()
 
 	b := NewBus()
-	u := Subscribe(b, func(hmevent.DeviceCreatedEvent) {}, WithName("released"))
+	u := b.Subscribe(func(hmevent.DeviceCreatedEvent) {}, WithName("released"))
 	u()
 
 	if got := b.LeakedSubscriptions(); got != nil {
@@ -421,7 +421,7 @@ func TestLeakedSubscriptionsFormatIncludesEventType(t *testing.T) {
 	t.Parallel()
 
 	b := NewBus()
-	Subscribe(b, func(hmevent.DeviceCreatedEvent) {}, WithName("myHandler"))
+	b.Subscribe(func(hmevent.DeviceCreatedEvent) {}, WithName("myHandler"))
 
 	leaked := b.LeakedSubscriptions()
 	wantPrefix := string(hmevent.EventTypeDeviceCreated) + ":"
@@ -446,8 +446,8 @@ func TestPublishWithoutSubscribersIsNoop(t *testing.T) {
 
 	b := NewBus()
 	// No subscribers registered.
-	Publish(b, hmevent.DeviceCreatedEvent{Base: hmevent.NewBase(), CentralName: "c"})
-	Publish(b, hmevent.CentralStateChangedEvent{CentralName: "c"})
+	b.Publish(hmevent.DeviceCreatedEvent{Base: hmevent.NewBase(), CentralName: "c"})
+	b.Publish(hmevent.CentralStateChangedEvent{CentralName: "c"})
 	// Reaching here without panic is the assertion.
 }
 
@@ -458,16 +458,16 @@ func TestPublishAfterAllUnsubscribedIsNoop(t *testing.T) {
 
 	b := NewBus()
 	var count int
-	u := Subscribe(b, func(hmevent.DeviceCreatedEvent) { count++ })
+	u := b.Subscribe(func(hmevent.DeviceCreatedEvent) { count++ })
 
-	Publish(b, hmevent.DeviceCreatedEvent{Base: hmevent.NewBase()})
+	b.Publish(hmevent.DeviceCreatedEvent{Base: hmevent.NewBase()})
 	if count != 1 {
 		t.Fatalf("before unsub: count=%d, want 1", count)
 	}
 
 	u()
 	// Should silently do nothing.
-	Publish(b, hmevent.DeviceCreatedEvent{Base: hmevent.NewBase()})
+	b.Publish(hmevent.DeviceCreatedEvent{Base: hmevent.NewBase()})
 	if count != 1 {
 		t.Fatalf("after unsub: count=%d, want 1 (second publish must be no-op)", count)
 	}
@@ -482,7 +482,7 @@ func TestHandlerStatsFallbackToGeneratedID(t *testing.T) {
 	t.Parallel()
 
 	b := NewBus()
-	Subscribe(b, func(hmevent.DeviceCreatedEvent) {}) // no WithName
+	b.Subscribe(func(hmevent.DeviceCreatedEvent) {}) // no WithName
 
 	stats := b.HandlerStats()
 	if len(stats) != 1 {
@@ -510,23 +510,23 @@ func TestReentrantPublishChain(t *testing.T) {
 		mu.Unlock()
 	}
 
-	Subscribe(b, func(hmevent.DeviceCreatedEvent) {
+	b.Subscribe(func(hmevent.DeviceCreatedEvent) {
 		record("A")
 		// Publishes B from inside A.
-		Publish(b, hmevent.DeviceRemovedEvent{Base: hmevent.NewBase()})
+		b.Publish(hmevent.DeviceRemovedEvent{Base: hmevent.NewBase()})
 	})
 
-	Subscribe(b, func(hmevent.DeviceRemovedEvent) {
+	b.Subscribe(func(hmevent.DeviceRemovedEvent) {
 		record("B")
 		// Publishes C from inside B's deferred frame.
-		Publish(b, hmevent.RecoveryStartedEvent{Base: hmevent.NewBase()})
+		b.Publish(hmevent.RecoveryStartedEvent{Base: hmevent.NewBase()})
 	})
 
-	Subscribe(b, func(hmevent.RecoveryStartedEvent) {
+	b.Subscribe(func(hmevent.RecoveryStartedEvent) {
 		record("C")
 	})
 
-	Publish(b, hmevent.DeviceCreatedEvent{Base: hmevent.NewBase(), CentralName: "c"})
+	b.Publish(hmevent.DeviceCreatedEvent{Base: hmevent.NewBase(), CentralName: "c"})
 
 	mu.Lock()
 	got := order

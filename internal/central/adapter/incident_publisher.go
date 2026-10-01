@@ -7,7 +7,6 @@ import (
 	"context"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/client/reliability"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -61,7 +60,7 @@ func (p *PublishingIncidentRecorder) publish(inc reliability.IncidentRecord) {
 	if !ok || unit == nil || unit.EventBus == nil {
 		return
 	}
-	events.Publish(unit.EventBus, hmevent.IncidentRecordedEvent{
+	unit.EventBus.Publish(hmevent.IncidentRecordedEvent{
 		Base:         hmevent.NewBase(),
 		CentralName:  inc.CentralName,
 		InterfaceID:  inc.InterfaceID,

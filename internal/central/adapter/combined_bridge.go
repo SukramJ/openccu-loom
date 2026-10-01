@@ -66,7 +66,7 @@ func BridgeCombinedDataPoint(
 			}
 			return
 		}
-		events.Publish(bus, hmevent.DataPointValueChangedEvent{
+		bus.Publish(hmevent.DataPointValueChangedEvent{
 			Base: hmevent.NewBase(),
 			Key: hmtypes.DataPointKey{
 				InterfaceID:    interfaceID,

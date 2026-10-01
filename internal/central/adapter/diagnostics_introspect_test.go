@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -82,7 +81,7 @@ func TestIntrospectAdapter_TapEventBus_DeliversDataPointValueChanged(t *testing.
 	// Give the goroutine time to subscribe before publishing.
 	time.Sleep(20 * time.Millisecond)
 
-	events.Publish(unit.EventBus, hmevent.DataPointValueChangedEvent{
+	unit.EventBus.Publish(hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBase(),
 		Key: hmtypes.DataPointKey{
 			InterfaceID:    "HmIP-RF",
@@ -131,12 +130,12 @@ func TestIntrospectAdapter_TapEventBus_DeliversRecoveryProgress(t *testing.T) {
 	// Give the goroutine time to subscribe before publishing.
 	time.Sleep(20 * time.Millisecond)
 
-	events.Publish(unit.EventBus, hmevent.RecoveryStageChangedEvent{
+	unit.EventBus.Publish(hmevent.RecoveryStageChangedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "ccuR",
 		InterfaceID: "HmIP-RF",
 	})
-	events.Publish(unit.EventBus, hmevent.RecoveryAttemptedEvent{
+	unit.EventBus.Publish(hmevent.RecoveryAttemptedEvent{
 		Base:          hmevent.NewBase(),
 		CentralName:   "ccuR",
 		InterfaceID:   "HmIP-RF",
@@ -189,7 +188,7 @@ func TestIntrospectAdapter_TapEventBus_TypeFilterExcludes(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 
 	// Publish a DataPointValueChanged — should be filtered out.
-	events.Publish(unit.EventBus, hmevent.DataPointValueChangedEvent{
+	unit.EventBus.Publish(hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBase(),
 		Key: hmtypes.DataPointKey{
 			InterfaceID:    "HmIP-RF",

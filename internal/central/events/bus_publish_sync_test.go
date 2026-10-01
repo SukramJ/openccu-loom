@@ -41,10 +41,10 @@ func TestPublishSyncDispatchesHandlersSynchronously(t *testing.T) {
 	bus := NewBus()
 
 	var called atomic.Int32
-	unsub := Subscribe(bus, func(_ w10EvtSync) { called.Add(1) })
+	unsub := bus.Subscribe(func(_ w10EvtSync) { called.Add(1) })
 	defer unsub()
 
-	PublishSync(bus, w10EvtSync{Base: hmevent.NewBase()})
+	bus.PublishSync(w10EvtSync{Base: hmevent.NewBase()})
 
 	if got := called.Load(); got != 1 {
 		t.Fatalf("expected handler called 1 time, got %d", got)
@@ -69,20 +69,20 @@ func TestPublishSyncInsideHandlerIsDeferred(t *testing.T) {
 
 	var outer, inner atomic.Int32
 	var didReentrant atomic.Bool
-	unsub := Subscribe(bus, func(_ w10EvtSync) {
+	unsub := bus.Subscribe(func(_ w10EvtSync) {
 		outer.Add(1)
 		if didReentrant.CompareAndSwap(false, true) {
 			// Single re-entrant publish from inside a handler.
-			PublishSync(bus, w10EvtSync{Base: hmevent.NewBase()})
+			bus.PublishSync(w10EvtSync{Base: hmevent.NewBase()})
 		}
 	})
 	defer unsub()
 
-	unsub2 := Subscribe(bus, func(_ w10EvtSync) { inner.Add(1) })
+	unsub2 := bus.Subscribe(func(_ w10EvtSync) { inner.Add(1) })
 	defer unsub2()
 
 	// First publish: outer fires once, defers the re-entrant one.
-	PublishSync(bus, w10EvtSync{Base: hmevent.NewBase()})
+	bus.PublishSync(w10EvtSync{Base: hmevent.NewBase()})
 
 	// After flush the re-entrant publish ran: outer=2, inner=2.
 	if o := outer.Load(); o != 2 {
@@ -104,8 +104,8 @@ func TestPublishSyncCountedInEventStats(t *testing.T) {
 	bus := NewBus()
 
 	// No subscriber needed — stats count publishes regardless.
-	PublishSync(bus, w10EvtSync{Base: hmevent.NewBase()})
-	PublishSync(bus, w10EvtSync{Base: hmevent.NewBase()})
+	bus.PublishSync(w10EvtSync{Base: hmevent.NewBase()})
+	bus.PublishSync(w10EvtSync{Base: hmevent.NewBase()})
 
 	stats := bus.EventStats()
 	typ := hmevent.EventType("w10.evt.sync")
@@ -132,21 +132,21 @@ func TestPublishSyncIsNotGuaranteedSynchronousUnderContention(t *testing.T) {
 	var otherRan atomic.Bool
 
 	// Handler A occupies the dispatch lock for the duration of the test.
-	unsubA := Subscribe(bus, func(_ w10EvtSync) {
+	unsubA := bus.Subscribe(func(_ w10EvtSync) {
 		close(inHandler)
 		<-release
 	})
-	unsubB := Subscribe(bus, func(_ syncEvtOther) { otherRan.Store(true) })
+	unsubB := bus.Subscribe(func(_ syncEvtOther) { otherRan.Store(true) })
 	defer unsubB()
 
-	go Publish(bus, w10EvtSync{Base: hmevent.NewBase()}) // acquires dispatch, then blocks
+	go bus.Publish(w10EvtSync{Base: hmevent.NewBase()}) // acquires dispatch, then blocks
 	<-inHandler
 
 	// The dispatch lock is held by A. PublishSync of a different event must
 	// return promptly (buffered to the deferred queue), not block until B runs.
 	done := make(chan struct{})
 	go func() {
-		PublishSync(bus, syncEvtOther{Base: hmevent.NewBase()})
+		bus.PublishSync(syncEvtOther{Base: hmevent.NewBase()})
 		close(done)
 	}()
 	select {

@@ -24,7 +24,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -60,7 +59,7 @@ func wsSubscriberCases() []wsSubscriberCase {
 				return registryObservingSubscriber{s.Start, s.StartCentral, s.Stop}
 			},
 			publish: func(u *central.Unit, _ string) {
-				events.Publish(u.EventBus, hmevent.SystemStatusChangedEvent{
+				u.EventBus.Publish(hmevent.SystemStatusChangedEvent{
 					CentralName: u.Name(), Component: "interface", Healthy: true,
 				})
 			},
@@ -73,7 +72,7 @@ func wsSubscriberCases() []wsSubscriberCase {
 				return registryObservingSubscriber{s.Start, s.StartCentral, s.Stop}
 			},
 			publish: func(u *central.Unit, addr string) {
-				events.Publish(u.EventBus, hmevent.SysvarChangedEvent{
+				u.EventBus.Publish(hmevent.SysvarChangedEvent{
 					CentralName: u.Name(), Name: addr, ValueType: hmenum.HubValueTypeLogic,
 				})
 			},
@@ -86,7 +85,7 @@ func wsSubscriberCases() []wsSubscriberCase {
 				return registryObservingSubscriber{s.Start, s.StartCentral, s.Stop}
 			},
 			publish: func(u *central.Unit, addr string) {
-				events.Publish(u.EventBus, hmevent.DeviceCreatedEvent{
+				u.EventBus.Publish(hmevent.DeviceCreatedEvent{
 					CentralName: u.Name(), Address: addr, Model: "HmIP-PS",
 				})
 			},
@@ -99,7 +98,7 @@ func wsSubscriberCases() []wsSubscriberCase {
 				return registryObservingSubscriber{s.Start, s.StartCentral, s.Stop}
 			},
 			publish: func(u *central.Unit, addr string) {
-				events.Publish(u.EventBus, hmevent.DeviceTriggerEvent{
+				u.EventBus.Publish(hmevent.DeviceTriggerEvent{
 					CentralName: u.Name(), DeviceAddress: addr, ChannelNo: 1,
 					EventType_: hmenum.DeviceTriggerEventTypeKeypress, Parameter: "PRESS_SHORT",
 				})
@@ -113,7 +112,7 @@ func wsSubscriberCases() []wsSubscriberCase {
 				return registryObservingSubscriber{s.Start, s.StartCentral, s.Stop}
 			},
 			publish: func(u *central.Unit, addr string) {
-				events.Publish(u.EventBus, hmevent.DataPointOptimisticRolledBackEvent{
+				u.EventBus.Publish(hmevent.DataPointOptimisticRolledBackEvent{
 					Key: hmtypes.DataPointKey{
 						InterfaceID:    u.Name() + "-HmIP-RF",
 						ChannelAddress: addr + ":1",

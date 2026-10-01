@@ -44,7 +44,7 @@ func TestWireMatterReassembleOnReady_TriggersOnReadyEvent(t *testing.T) {
 		t.Fatal("trigger = nil, want a reusable non-blocking trigger for the live-adopt hook")
 	}
 
-	events.Publish(bus, hmevent.CentralSouthboundReadyEvent{Base: hmevent.NewBase(), CentralName: "ccu-01"})
+	bus.Publish(hmevent.CentralSouthboundReadyEvent{Base: hmevent.NewBase(), CentralName: "ccu-01"})
 
 	select {
 	case <-fired:
@@ -75,7 +75,7 @@ func TestWireMatterReassembleOnReady_CoalescesBurst(t *testing.T) {
 	})
 
 	for range 5 {
-		events.Publish(bus, hmevent.CentralSouthboundReadyEvent{Base: hmevent.NewBase(), CentralName: "ccu"})
+		bus.Publish(hmevent.CentralSouthboundReadyEvent{Base: hmevent.NewBase(), CentralName: "ccu"})
 	}
 	// Wait well past the debounce window for the single coalesced reassemble.
 	time.Sleep(300 * time.Millisecond)
@@ -102,7 +102,7 @@ func TestWireMatterReassembleOnReady_StopsOnCtxCancel(t *testing.T) {
 
 	cancel()
 	time.Sleep(50 * time.Millisecond) // let the goroutine observe ctx.Done and exit
-	events.Publish(bus, hmevent.CentralSouthboundReadyEvent{Base: hmevent.NewBase(), CentralName: "ccu-01"})
+	bus.Publish(hmevent.CentralSouthboundReadyEvent{Base: hmevent.NewBase(), CentralName: "ccu-01"})
 	time.Sleep(100 * time.Millisecond)
 	if got := count.Load(); got != 0 {
 		t.Fatalf("reassemble count = %d, want 0 after ctx cancel", got)

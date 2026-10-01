@@ -483,7 +483,7 @@ func (u *Unit) WireDevicesCreatedGate() {
 	u.devicesCreated = false
 	u.devicesCreatedMu.Unlock()
 
-	unsub := events.Subscribe(u.EventBus, func(_ hmevent.DeviceCreatedEvent) {
+	unsub := u.EventBus.Subscribe(func(_ hmevent.DeviceCreatedEvent) {
 		u.devicesCreatedMu.Lock()
 		u.devicesCreated = true
 		u.devicesCreatedMu.Unlock()
@@ -850,7 +850,7 @@ func (u *Unit) OnStateTransition(to, from hmenum.CentralState, handler func(to, 
 	if u.EventBus == nil {
 		return func() {}
 	}
-	return events.Subscribe(u.EventBus, func(e hmevent.CentralStateChangedEvent) {
+	return u.EventBus.Subscribe(func(e hmevent.CentralStateChangedEvent) {
 		if e.CentralName != u.cfg.Name {
 			return
 		}
@@ -953,7 +953,7 @@ func (u *Unit) removeDevice(address string, teardown bool) bool {
 	}
 	removed := u.ModelRegistry.Remove(address)
 	if removed && u.EventBus != nil {
-		events.Publish(u.EventBus, hmevent.DeviceRemovedEvent{
+		u.EventBus.Publish(hmevent.DeviceRemovedEvent{
 			Base:          hmevent.NewBase(),
 			CentralName:   u.cfg.Name,
 			InterfaceID:   interfaceID,
@@ -1062,7 +1062,7 @@ func (u *Unit) PublishDeviceMetadataChanged(dev *device.Device) {
 	if u.EventBus == nil || dev == nil {
 		return
 	}
-	events.Publish(u.EventBus, hmevent.DeviceMetadataChangedEvent{
+	u.EventBus.Publish(hmevent.DeviceMetadataChangedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: u.Name(),
 		InterfaceID: dev.InterfaceID,
@@ -1427,7 +1427,7 @@ func (u *Unit) EvaluateCentralState(trigger string, fromStart bool) {
 
 	// Publish a system-status event so north-bound adapters observe the flip.
 	if u.EventBus != nil {
-		events.Publish(u.EventBus, hmevent.SystemStatusChangedEvent{
+		u.EventBus.Publish(hmevent.SystemStatusChangedEvent{
 			Base:                     hmevent.NewBase(),
 			CentralName:              u.cfg.Name,
 			Healthy:                  healthy,

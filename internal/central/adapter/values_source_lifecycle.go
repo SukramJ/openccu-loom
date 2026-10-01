@@ -7,7 +7,6 @@ import (
 	"log/slog"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -53,7 +52,7 @@ func WireValueSourceLifecycle(unit *central.Unit, logger *slog.Logger) func() {
 	publishTransition := func(centralName string, m sourceMarker, oldSrc, newSrc hmenum.ValueSource) {
 		raw, _ := m.RawValue()
 		key := m.DataPointKey()
-		events.Publish(unit.EventBus, hmevent.DataPointSourceChangedEvent{
+		unit.EventBus.Publish(hmevent.DataPointSourceChangedEvent{
 			Base:           hmevent.NewBase(),
 			CentralName:    centralName,
 			InterfaceID:    key.InterfaceID,
@@ -66,7 +65,7 @@ func WireValueSourceLifecycle(unit *central.Unit, logger *slog.Logger) func() {
 		})
 	}
 
-	unsubLost := events.Subscribe(unit.EventBus, func(e hmevent.ConnectionLostEvent) {
+	unsubLost := unit.EventBus.Subscribe(func(e hmevent.ConnectionLostEvent) {
 		transitions := 0
 		count := walkWireDPs(unit, e.InterfaceID, func(dp any) {
 			m, ok := dp.(sourceMarker)
@@ -86,7 +85,7 @@ func WireValueSourceLifecycle(unit *central.Unit, logger *slog.Logger) func() {
 				slog.Int("transitions", transitions))
 		}
 	})
-	unsubDone := events.Subscribe(unit.EventBus, func(e hmevent.RecoveryCompletedEvent) {
+	unsubDone := unit.EventBus.Subscribe(func(e hmevent.RecoveryCompletedEvent) {
 		transitions := 0
 		count := walkWireDPs(unit, e.InterfaceID, func(dp any) {
 			m, ok := dp.(sourceMarker)

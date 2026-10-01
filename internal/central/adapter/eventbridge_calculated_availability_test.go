@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/calculated"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
@@ -170,7 +169,7 @@ func wsAvailability(t *testing.T, param string, tempStatus hmenum.ParameterStatu
 	if !ok {
 		t.Fatal("setup: central not registered")
 	}
-	events.Publish(unit.EventBus, hmevent.DataPointValueChangedEvent{
+	unit.EventBus.Publish(hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBaseAt(time.Now()),
 		Key: hmtypes.DataPointKey{
 			InterfaceID:    "HmIP-RF",

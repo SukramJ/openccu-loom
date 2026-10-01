@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -76,7 +75,7 @@ func TestWireMasterValuesEviction_DeletesDeviceAKeepsDeviceB(t *testing.T) {
 	evictor := WireMasterValuesEviction(reg, store, nil)
 	t.Cleanup(evictor.Stop)
 
-	events.Publish(unit.EventBus, hmevent.DeviceRemovedEvent{
+	unit.EventBus.Publish(hmevent.DeviceRemovedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: centralName,
 		InterfaceID: ifaceID,
@@ -118,7 +117,7 @@ func TestWireMasterValuesEviction_StopUnsubscribes(t *testing.T) {
 	evictor := WireMasterValuesEviction(reg, store, nil)
 	evictor.Stop()
 
-	events.Publish(unit.EventBus, hmevent.DeviceRemovedEvent{
+	unit.EventBus.Publish(hmevent.DeviceRemovedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: centralName,
 		InterfaceID: ifaceID,

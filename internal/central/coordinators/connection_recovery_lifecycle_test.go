@@ -77,7 +77,7 @@ func TestRunMaxRetriesUpfront(t *testing.T) {
 	// The next Run must be rejected upfront.
 	var failedReason hmenum.FailureReason
 	var mu sync.Mutex
-	events.Subscribe(bus, func(e hmevent.RecoveryFailedEvent) {
+	bus.Subscribe(func(e hmevent.RecoveryFailedEvent) {
 		mu.Lock()
 		failedReason = e.Reason
 		mu.Unlock()
@@ -129,7 +129,7 @@ func TestRunExhaustsAfterMaxAttemptsDuring(t *testing.T) {
 
 	// Now attempts == limit. Next Run must be refused upfront.
 	var exhaustedFired atomic.Bool
-	events.Subscribe(bus, func(e hmevent.RecoveryFailedEvent) {
+	bus.Subscribe(func(e hmevent.RecoveryFailedEvent) {
 		if e.Reason == hmenum.FailureReasonExhausted {
 			exhaustedFired.Store(true)
 		}
@@ -168,11 +168,11 @@ func TestRunAfterStopIsNoop(t *testing.T) {
 
 	// Publishing a ConnectionLostEvent must NOT spawn a recovery run.
 	var startedFired atomic.Bool
-	events.Subscribe(bus, func(hmevent.RecoveryStartedEvent) {
+	bus.Subscribe(func(hmevent.RecoveryStartedEvent) {
 		startedFired.Store(true)
 	})
 
-	events.Publish(bus, hmevent.ConnectionLostEvent{
+	bus.Publish(hmevent.ConnectionLostEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "lc-central",
 		InterfaceID: "HmIP-RF",
@@ -202,12 +202,12 @@ func TestFailedRecoveryCycle(t *testing.T) {
 		failed  int
 		reasons []hmenum.FailureReason
 	)
-	events.Subscribe(bus, func(hmevent.RecoveryStartedEvent) {
+	bus.Subscribe(func(hmevent.RecoveryStartedEvent) {
 		mu.Lock()
 		started++
 		mu.Unlock()
 	})
-	events.Subscribe(bus, func(e hmevent.RecoveryFailedEvent) {
+	bus.Subscribe(func(e hmevent.RecoveryFailedEvent) {
 		mu.Lock()
 		failed++
 		reasons = append(reasons, e.Reason)
@@ -263,17 +263,17 @@ func TestSuccessfulRecoveryCycle(t *testing.T) {
 		completed int
 		stages    []hmenum.RecoveryStage
 	)
-	events.Subscribe(bus, func(hmevent.RecoveryStartedEvent) {
+	bus.Subscribe(func(hmevent.RecoveryStartedEvent) {
 		mu.Lock()
 		started++
 		mu.Unlock()
 	})
-	events.Subscribe(bus, func(e hmevent.RecoveryStageChangedEvent) {
+	bus.Subscribe(func(e hmevent.RecoveryStageChangedEvent) {
 		mu.Lock()
 		stages = append(stages, e.To)
 		mu.Unlock()
 	})
-	events.Subscribe(bus, func(hmevent.RecoveryCompletedEvent) {
+	bus.Subscribe(func(hmevent.RecoveryCompletedEvent) {
 		mu.Lock()
 		completed++
 		mu.Unlock()

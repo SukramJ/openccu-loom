@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
@@ -124,7 +123,7 @@ func TestNewDevicesEventFiresOnlyAfterIngestorReturns(t *testing.T) {
 		t.Fatalf("central.New: %v", err)
 	}
 	var created atomic.Int32
-	unsub := events.Subscribe(c.EventBus, func(hmevent.DeviceCreatedEvent) {
+	unsub := c.EventBus.Subscribe(func(hmevent.DeviceCreatedEvent) {
 		created.Add(1)
 	})
 	defer unsub()
@@ -178,7 +177,7 @@ func TestNewDevicesWithoutIngestorStillHandlesNewDevices(t *testing.T) {
 		t.Fatalf("central.New: %v", err)
 	}
 	var created atomic.Int32
-	unsub := events.Subscribe(c.EventBus, func(hmevent.DeviceCreatedEvent) {
+	unsub := c.EventBus.Subscribe(func(hmevent.DeviceCreatedEvent) {
 		created.Add(1)
 	})
 	defer unsub()
@@ -209,7 +208,7 @@ func TestNewDevicesDeferredCreationSkipsIngestorAndEvent(t *testing.T) {
 		t.Fatalf("central.New: %v", err)
 	}
 	var created atomic.Int32
-	unsub := events.Subscribe(c.EventBus, func(hmevent.DeviceCreatedEvent) {
+	unsub := c.EventBus.Subscribe(func(hmevent.DeviceCreatedEvent) {
 		created.Add(1)
 	})
 	defer unsub()
@@ -260,7 +259,7 @@ func TestNewDevicesIngestorErrorStillHandlesNewDevices(t *testing.T) {
 		t.Fatalf("central.New: %v", err)
 	}
 	var created atomic.Int32
-	unsub := events.Subscribe(c.EventBus, func(hmevent.DeviceCreatedEvent) {
+	unsub := c.EventBus.Subscribe(func(hmevent.DeviceCreatedEvent) {
 		created.Add(1)
 	})
 	defer unsub()

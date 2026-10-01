@@ -7,7 +7,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -54,7 +53,7 @@ func TestSouthboundCallbackFeedsHealthActivity(t *testing.T) {
 
 	// A connected, fault-free interface: everything except the activity pillar
 	// is already at full credit, so the score isolates what the callback adds.
-	events.Publish(c.EventBus, hmevent.ClientStateChangedEvent{
+	c.EventBus.Publish(hmevent.ClientStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: c.Name(),
 		InterfaceID: wireID,

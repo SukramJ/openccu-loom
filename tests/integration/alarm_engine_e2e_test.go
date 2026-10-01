@@ -40,7 +40,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/alarm/outputs"
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -171,7 +170,7 @@ func (ah *alarmHarness) injectWindow(key hmtypes.DataPointKey, open bool) {
 			}
 		}
 	}
-	events.Publish(ah.h.central.EventBus, hmevent.DataPointValueChangedEvent{
+	ah.h.central.EventBus.Publish(hmevent.DataPointValueChangedEvent{
 		Base:     hmevent.NewBase(),
 		Key:      key,
 		OldValue: hmtypes.NoneValue(),
@@ -531,7 +530,7 @@ func TestAlarmSysvarWriteCannotDisarmProtectedArea(t *testing.T) {
 
 	// A third-party CCU sysvar write of "Unscharf" (index 0) must be
 	// refused — a sysvar can never disarm a code-protected zone.
-	events.Publish(ah.h.central.EventBus, hmevent.SysvarChangedEvent{
+	ah.h.central.EventBus.Publish(hmevent.SysvarChangedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: ah.centralName(),
 		Name:        sysvarName,

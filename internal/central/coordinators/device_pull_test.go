@@ -51,7 +51,7 @@ func TestInitialPullCreatesDevicesAndChannels(t *testing.T) {
 	t.Parallel()
 	dc, bus := newDC(t)
 	created := make([]hmevent.DeviceCreatedEvent, 0, 2)
-	events.Subscribe(bus, func(e hmevent.DeviceCreatedEvent) {
+	bus.Subscribe(func(e hmevent.DeviceCreatedEvent) {
 		created = append(created, e)
 	})
 	lister := &stubLister{snapshot: []hmproto.DeviceDescription{
@@ -118,7 +118,7 @@ func TestInitialPullEmitsRemovedForVanishedDevices(t *testing.T) {
 	t.Parallel()
 	dc, bus := newDC(t)
 	removed := make([]hmevent.DeviceRemovedEvent, 0, 1)
-	events.Subscribe(bus, func(e hmevent.DeviceRemovedEvent) {
+	bus.Subscribe(func(e hmevent.DeviceRemovedEvent) {
 		removed = append(removed, e)
 	})
 	full := &stubLister{snapshot: []hmproto.DeviceDescription{
@@ -182,7 +182,7 @@ func TestRefreshAfterUnpairDropsDevice(t *testing.T) {
 	t.Parallel()
 	dc, bus := newDC(t)
 	removed := make([]hmevent.DeviceRemovedEvent, 0, 1)
-	events.Subscribe(bus, func(e hmevent.DeviceRemovedEvent) {
+	bus.Subscribe(func(e hmevent.DeviceRemovedEvent) {
 		removed = append(removed, e)
 	})
 	lister := &stubLister{snapshot: []hmproto.DeviceDescription{

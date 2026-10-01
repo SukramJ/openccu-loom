@@ -9,7 +9,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -33,7 +32,7 @@ func TestWireProgramExecuteAudit(t *testing.T) {
 	teardown := wireProgramExecuteAudit(reg, buf, nil)
 	defer teardown()
 
-	events.Publish(unit.EventBus, hmevent.ProgramExecutedEvent{
+	unit.EventBus.Publish(hmevent.ProgramExecutedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "GoOtto",
 		ProgramID:   "4711",
@@ -57,7 +56,7 @@ func TestWireProgramExecuteAudit(t *testing.T) {
 
 	// An event without a stamped source must never render a blank —
 	// "unknown" is the honest answer and keeps the note grep-stable.
-	events.Publish(unit.EventBus, hmevent.ProgramExecutedEvent{
+	unit.EventBus.Publish(hmevent.ProgramExecutedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "GoOtto",
 		ProgramID:   "4711",
@@ -93,7 +92,7 @@ func TestWireProgramExecuteAuditTeardownStops(t *testing.T) {
 	teardown := wireProgramExecuteAudit(reg, buf, nil)
 	teardown()
 
-	events.Publish(unit.EventBus, hmevent.ProgramExecutedEvent{
+	unit.EventBus.Publish(hmevent.ProgramExecutedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "GoOtto",
 		ProgramID:   "4711",

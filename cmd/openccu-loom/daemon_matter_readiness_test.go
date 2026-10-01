@@ -10,7 +10,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
@@ -28,7 +27,7 @@ func TestWireMatterCentralReadiness_LatchesOnSouthboundReady(t *testing.T) {
 	}
 
 	unitA, _ := reg.Get("ccu-a")
-	events.Publish(unitA.EventBus, hmevent.CentralSouthboundReadyEvent{
+	unitA.EventBus.Publish(hmevent.CentralSouthboundReadyEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "ccu-a",
 	})
@@ -88,7 +87,7 @@ func TestWireMatterCentralReadiness_UnsubscribeStopsLatching(t *testing.T) {
 	unwire()
 
 	unitA, _ := reg.Get("ccu-a")
-	events.Publish(unitA.EventBus, hmevent.CentralSouthboundReadyEvent{
+	unitA.EventBus.Publish(hmevent.CentralSouthboundReadyEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "ccu-a",
 	})
@@ -144,7 +143,7 @@ func TestMatterSnapshotter_StampsModelCompletePerCentral(t *testing.T) {
 
 	// ccu-a completes its initial device load.
 	unitA, _ := reg.Get("ccu-a")
-	events.Publish(unitA.EventBus, hmevent.CentralSouthboundReadyEvent{
+	unitA.EventBus.Publish(hmevent.CentralSouthboundReadyEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "ccu-a",
 	})
@@ -195,7 +194,7 @@ func TestUnregisteringACentralClearsItsReadinessLatch(t *testing.T) {
 	t.Cleanup(unwire)
 
 	unit, _ := reg.Get("ccu-boot")
-	events.Publish(unit.EventBus, hmevent.CentralSouthboundReadyEvent{
+	unit.EventBus.Publish(hmevent.CentralSouthboundReadyEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "ccu-boot",
 	})

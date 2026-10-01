@@ -29,7 +29,7 @@ func TestEdgeTriggerPressRepublishesOnRepeat(t *testing.T) {
 	ec := coordinators.NewEventCoordinator(bus, cache, nil)
 
 	var count int
-	events.Subscribe(bus, func(hmevent.DataPointValueChangedEvent) {
+	bus.Subscribe(func(hmevent.DataPointValueChangedEvent) {
 		count++
 	})
 
@@ -54,7 +54,7 @@ func TestEdgeTriggerPressRepublishesOnRepeat(t *testing.T) {
 		t.Fatal("STATE must not be classed as an edge-trigger parameter")
 	}
 	var stateCount int
-	events.Subscribe(bus, func(e hmevent.DataPointValueChangedEvent) {
+	bus.Subscribe(func(e hmevent.DataPointValueChangedEvent) {
 		if e.Key.Parameter == "STATE" {
 			stateCount++
 		}

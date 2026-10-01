@@ -6,7 +6,6 @@ package adapter
 import (
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -27,7 +26,7 @@ func TestGatedBringUpReadinessPhaseSequence(t *testing.T) {
 	_, unit := registryWithUnit(t, "ccu-readiness-seq")
 
 	var got []hmevent.CentralReadinessChangedEvent
-	unsub := events.Subscribe(unit.EventBus, func(e hmevent.CentralReadinessChangedEvent) {
+	unsub := unit.EventBus.Subscribe(func(e hmevent.CentralReadinessChangedEvent) {
 		got = append(got, e)
 	})
 	defer unsub()

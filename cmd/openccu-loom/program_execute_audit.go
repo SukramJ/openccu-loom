@@ -9,7 +9,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -67,7 +66,7 @@ func subscribeProgramExecuteAudit(u *central.Unit, rec audit.Recorder, logger *s
 	if u == nil || u.EventBus == nil || rec == nil {
 		return nil
 	}
-	return events.Subscribe(u.EventBus, func(e hmevent.ProgramExecutedEvent) {
+	return u.EventBus.Subscribe(func(e hmevent.ProgramExecutedEvent) {
 		source := e.Source
 		if source == "" {
 			source = "unknown"

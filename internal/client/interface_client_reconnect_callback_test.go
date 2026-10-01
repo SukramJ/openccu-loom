@@ -109,7 +109,7 @@ func TestSetStateChangedBusEmitsEvent(t *testing.T) {
 	bus := events.NewBus()
 
 	var received []hmevent.ClientStateChangedEvent
-	unsub := events.Subscribe(bus, func(ev hmevent.ClientStateChangedEvent) {
+	unsub := bus.Subscribe(func(ev hmevent.ClientStateChangedEvent) {
 		received = append(received, ev)
 	})
 	defer unsub()
@@ -149,7 +149,7 @@ func TestSetStateChangedBusUsesProvidedWireID(t *testing.T) {
 	bus := events.NewBus()
 
 	var received []hmevent.ClientStateChangedEvent
-	unsub := events.Subscribe(bus, func(ev hmevent.ClientStateChangedEvent) {
+	unsub := bus.Subscribe(func(ev hmevent.ClientStateChangedEvent) {
 		received = append(received, ev)
 	})
 	defer unsub()
@@ -172,7 +172,7 @@ func TestSetStateChangedBusNilRemovesPublisher(t *testing.T) {
 	bus := events.NewBus()
 
 	fired := false
-	unsub := events.Subscribe(bus, func(_ hmevent.ClientStateChangedEvent) {
+	unsub := bus.Subscribe(func(_ hmevent.ClientStateChangedEvent) {
 		fired = true
 	})
 	defer unsub()

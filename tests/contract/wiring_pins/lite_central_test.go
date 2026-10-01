@@ -18,7 +18,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
@@ -168,7 +167,7 @@ func TestLiteFeaturesFollowTokenScopes(t *testing.T) {
 	}
 
 	changed := make(chan struct{}, 4)
-	unsub := events.Subscribe(unit.EventBus, func(hmevent.CentralFeaturesChangedEvent) { changed <- struct{}{} })
+	unsub := unit.EventBus.Subscribe(func(hmevent.CentralFeaturesChangedEvent) { changed <- struct{}{} })
 	t.Cleanup(unsub)
 	fake.SetTokens(map[string][]string{token: {"rpc:configure", "meta:read", "system:read", "power"}})
 	// Run the job the bring-up registered, exactly as the scheduler would.

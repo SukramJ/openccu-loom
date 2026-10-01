@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -42,7 +41,7 @@ func TestWireDevicesCreatedGateOpenedByEvent(t *testing.T) {
 	c.WireDevicesCreatedGate()
 
 	// Publish a DeviceCreatedEvent.
-	events.Publish(c.EventBus, hmevent.DeviceCreatedEvent{
+	c.EventBus.Publish(hmevent.DeviceCreatedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: c.cfg.Name,
 		Address:     "TEST0001",
@@ -137,7 +136,7 @@ func TestGatedRunWithDevicesCreatedGateRunsAfterEvent(t *testing.T) {
 	advanceCentralToRunning(t, c)
 
 	// Open the gate via event.
-	events.Publish(c.EventBus, hmevent.DeviceCreatedEvent{
+	c.EventBus.Publish(hmevent.DeviceCreatedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: c.cfg.Name,
 		Address:     "TEST0002",

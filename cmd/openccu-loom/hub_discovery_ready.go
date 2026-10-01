@@ -94,7 +94,7 @@ func subscribeHubReadyTrigger(bus *events.Bus, trigger func()) func() {
 	if bus == nil || trigger == nil {
 		return nil
 	}
-	return events.Subscribe(bus, func(hmevent.CentralSouthboundReadyEvent) {
+	return bus.Subscribe(func(hmevent.CentralSouthboundReadyEvent) {
 		trigger()
 	})
 }

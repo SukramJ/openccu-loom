@@ -37,23 +37,23 @@ func TestRecoveryPipelineEmitsExpectedEvents(t *testing.T) {
 		failed     int
 		stageOrder []hmenum.RecoveryStage
 	)
-	events.Subscribe(bus, func(hmevent.RecoveryStartedEvent) {
+	bus.Subscribe(func(hmevent.RecoveryStartedEvent) {
 		mu.Lock()
 		started++
 		mu.Unlock()
 	})
-	events.Subscribe(bus, func(e hmevent.RecoveryStageChangedEvent) {
+	bus.Subscribe(func(e hmevent.RecoveryStageChangedEvent) {
 		mu.Lock()
 		stages = append(stages, e.To)
 		stageOrder = append(stageOrder, e.From)
 		mu.Unlock()
 	})
-	events.Subscribe(bus, func(hmevent.RecoveryCompletedEvent) {
+	bus.Subscribe(func(hmevent.RecoveryCompletedEvent) {
 		mu.Lock()
 		completed++
 		mu.Unlock()
 	})
-	events.Subscribe(bus, func(hmevent.RecoveryFailedEvent) {
+	bus.Subscribe(func(hmevent.RecoveryFailedEvent) {
 		mu.Lock()
 		failed++
 		mu.Unlock()
@@ -93,7 +93,7 @@ func TestRecoveryPipelineFailedStageEmitsRecoveryFailed(t *testing.T) {
 	c := NewConnectionRecoveryCoordinator("test", bus)
 
 	var failed atomic.Int32
-	events.Subscribe(bus, func(hmevent.RecoveryFailedEvent) { failed.Add(1) })
+	bus.Subscribe(func(hmevent.RecoveryFailedEvent) { failed.Add(1) })
 
 	stepErr := errors.New("stage 2 boom")
 	pipeline := []Pipeline{

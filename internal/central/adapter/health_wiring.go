@@ -7,7 +7,6 @@ import (
 	"fmt"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -61,7 +60,7 @@ func WireHealth(unit *central.Unit) func() { //nolint:funlen // composition/wiri
 	// site and leaving a history sample for something that never happened.
 	reportUnhealthy := func(interfaceID, note string) {
 		tr.RecordUnhealthy(component(interfaceID), health.Sample{Note: note, NoteKey: health.NoteKeyFor(note)})
-		events.Publish(bus, hmevent.ConnectionHealthChangedEvent{
+		bus.Publish(hmevent.ConnectionHealthChangedEvent{
 			Base:        hmevent.NewBase(),
 			CentralName: centralName,
 			InterfaceID: interfaceID,
@@ -73,7 +72,7 @@ func WireHealth(unit *central.Unit) func() { //nolint:funlen // composition/wiri
 		tr.Record(component(interfaceID), health.Sample{Healthy: healthy, Note: note, NoteKey: health.NoteKeyFor(note)})
 		// Recovery telemetry for the bus; the tracker above is what every
 		// health surface reads. See the doc comment on WireHealth.
-		events.Publish(bus, hmevent.ConnectionHealthChangedEvent{
+		bus.Publish(hmevent.ConnectionHealthChangedEvent{
 			Base:        hmevent.NewBase(),
 			CentralName: centralName,
 			InterfaceID: interfaceID,
@@ -97,7 +96,7 @@ func WireHealth(unit *central.Unit) func() { //nolint:funlen // composition/wiri
 	}
 
 	unsubs := []func(){
-		events.Subscribe(bus, func(e hmevent.ClientStateChangedEvent) {
+		bus.Subscribe(func(e hmevent.ClientStateChangedEvent) {
 			switch e.To { //nolint:exhaustive // Created/Initializing/Initialized/Stopping are transient states that don't affect health records
 			case hmenum.ClientStateConnected:
 				record(e.InterfaceID, true, "client connected")
@@ -116,11 +115,11 @@ func WireHealth(unit *central.Unit) func() { //nolint:funlen // composition/wiri
 			}
 		}),
 
-		events.Subscribe(bus, func(e hmevent.ConnectionLostEvent) {
+		bus.Subscribe(func(e hmevent.ConnectionLostEvent) {
 			record(e.InterfaceID, false, fmt.Sprintf("connection lost: %s", e.Reason))
 		}),
 
-		events.Subscribe(bus, func(e hmevent.CircuitBreakerStateChangedEvent) {
+		bus.Subscribe(func(e hmevent.CircuitBreakerStateChangedEvent) {
 			switch e.To {
 			case hmenum.CircuitStateClosed:
 				record(e.InterfaceID, true, "breaker closed")
@@ -131,12 +130,12 @@ func WireHealth(unit *central.Unit) func() { //nolint:funlen // composition/wiri
 			}
 		}),
 
-		events.Subscribe(bus, func(e hmevent.RecoveryStartedEvent) {
+		bus.Subscribe(func(e hmevent.RecoveryStartedEvent) {
 			record(e.InterfaceID, false, "recovery started")
 			tr.SetRecoveryFlag(e.InterfaceID, true)
 		}),
 
-		events.Subscribe(bus, func(e hmevent.RecoveryCompletedEvent) {
+		bus.Subscribe(func(e hmevent.RecoveryCompletedEvent) {
 			if e.Result == hmenum.RecoveryResultSuccess {
 				record(e.InterfaceID, true, "recovery completed")
 			} else {
@@ -145,12 +144,12 @@ func WireHealth(unit *central.Unit) func() { //nolint:funlen // composition/wiri
 			tr.SetRecoveryFlag(e.InterfaceID, false)
 		}),
 
-		events.Subscribe(bus, func(e hmevent.RecoveryFailedEvent) {
+		bus.Subscribe(func(e hmevent.RecoveryFailedEvent) {
 			reportUnhealthy(e.InterfaceID, fmt.Sprintf("recovery failed: %s (attempts=%d)", e.Reason, e.Attempts))
 			tr.SetRecoveryFlag(e.InterfaceID, false)
 		}),
 
-		events.Subscribe(bus, func(e hmevent.PingPongMismatchEvent) {
+		bus.Subscribe(func(e hmevent.PingPongMismatchEvent) {
 			// Record on a SEPARATE quality component, not the interface's
 			// liveness entry, and via RecordQuality so it caps at DEGRADED: a
 			// ping/pong mismatch (often orphan PONGs broadcast by a co-located
@@ -167,7 +166,7 @@ func WireHealth(unit *central.Unit) func() { //nolint:funlen // composition/wiri
 		// health tracker can expose "last event received N s ago" to the UI.
 		// DataPointValueReceivedEvent carries CentralName + InterfaceID so we
 		// can do a central-scoped filter and record per-interface activity.
-		events.Subscribe(bus, func(e hmevent.DataPointValueReceivedEvent) {
+		bus.Subscribe(func(e hmevent.DataPointValueReceivedEvent) {
 			if e.CentralName != centralName {
 				return
 			}
@@ -182,7 +181,7 @@ func WireHealth(unit *central.Unit) func() { //nolint:funlen // composition/wiri
 
 		// record reconnect attempts so the tracker surfaces
 		// reconnect-attempt counts in MetricsHealthSummary.
-		events.Subscribe(bus, func(e hmevent.RecoveryStartedEvent) {
+		bus.Subscribe(func(e hmevent.RecoveryStartedEvent) {
 			if e.CentralName != centralName {
 				return
 			}

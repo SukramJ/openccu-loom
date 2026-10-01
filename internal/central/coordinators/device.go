@@ -488,7 +488,7 @@ func (c *DeviceCoordinator) applyPull(iface hmtypes.WireInterfaceID, snapshot []
 		switch {
 		case !existed:
 			rep.Created++
-			events.Publish(c.bus, hmevent.DeviceCreatedEvent{
+			c.bus.Publish(hmevent.DeviceCreatedEvent{
 				Base:        hmevent.NewBase(),
 				CentralName: c.centralName,
 				InterfaceID: string(iface),
@@ -523,7 +523,7 @@ func (c *DeviceCoordinator) dropAbsent(iface hmtypes.WireInterfaceID, present ma
 		c.descs.Delete(iface, addr)
 		if c.devices.Remove(iface, addr) {
 			removed++
-			events.Publish(c.bus, hmevent.DeviceRemovedEvent{
+			c.bus.Publish(hmevent.DeviceRemovedEvent{
 				Base:        hmevent.NewBase(),
 				CentralName: c.centralName,
 				InterfaceID: string(iface),
@@ -589,7 +589,7 @@ func (c *DeviceCoordinator) RefreshAfterUnpair(ctx context.Context, iface hmtype
 			c.descs.Delete(iface, address)
 			if c.devices.Remove(iface, address) {
 				removed = true
-				events.Publish(c.bus, hmevent.DeviceRemovedEvent{
+				c.bus.Publish(hmevent.DeviceRemovedEvent{
 					Base:        hmevent.NewBase(),
 					CentralName: c.centralName,
 					InterfaceID: string(iface),
@@ -721,7 +721,7 @@ func (c *DeviceCoordinator) ingestDescriptions(
 			if !announce {
 				continue
 			}
-			events.Publish(c.bus, hmevent.DeviceCreatedEvent{
+			c.bus.Publish(hmevent.DeviceCreatedEvent{
 				Base:        hmevent.NewBase(),
 				CentralName: c.centralName,
 				InterfaceID: string(iface),
@@ -732,7 +732,7 @@ func (c *DeviceCoordinator) ingestDescriptions(
 		}
 	}
 	if len(descriptions) > 0 {
-		events.Publish(c.bus, hmevent.DataFetchCompletedEvent{
+		c.bus.Publish(hmevent.DataFetchCompletedEvent{
 			Base:        hmevent.NewBase(),
 			CentralName: c.centralName,
 			InterfaceID: string(iface),
@@ -885,7 +885,7 @@ func (c *DeviceCoordinator) HandleDeleteDevices(_ context.Context, iface hmtypes
 		c.paramsets.DeleteChannel(iface, addr)
 		c.descs.Delete(iface, addr)
 		if c.devices.Remove(iface, addr) {
-			events.Publish(c.bus, hmevent.DeviceRemovedEvent{
+			c.bus.Publish(hmevent.DeviceRemovedEvent{
 				Base:        hmevent.NewBase(),
 				CentralName: c.centralName,
 				InterfaceID: string(iface),
@@ -931,7 +931,7 @@ func (c *DeviceCoordinator) HandleDeleteDevices(_ context.Context, iface hmtypes
 // New-device events are collected while c.mu is held and published only
 // after it is released, so a subscriber that calls back into the coordinator
 // (e.g. [RenameNewDeviceFromOverride]) cannot deadlock against this method —
-// [events.Publish] dispatches every handler synchronously on the calling
+// [events.Bus.Publish] dispatches every handler synchronously on the calling
 // goroutine.
 func (c *DeviceCoordinator) CheckAndCreateDevicesFromCache(ctx context.Context) error {
 	type newDeviceEntry struct {
@@ -976,7 +976,7 @@ func (c *DeviceCoordinator) CheckAndCreateDevicesFromCache(ctx context.Context) 
 		if !c.materialised(nd.addr) {
 			continue
 		}
-		events.Publish(c.bus, hmevent.DeviceCreatedEvent{
+		c.bus.Publish(hmevent.DeviceCreatedEvent{
 			Base:        hmevent.NewBase(),
 			CentralName: c.centralName,
 			InterfaceID: string(nd.iface),
@@ -1058,7 +1058,7 @@ func (c *DeviceCoordinator) RefreshDeviceDescriptionsAndCreateMissingDevices(
 		if !c.materialised(d.Address) {
 			continue
 		}
-		events.Publish(c.bus, hmevent.DeviceCreatedEvent{
+		c.bus.Publish(hmevent.DeviceCreatedEvent{
 			Base:        hmevent.NewBase(),
 			CentralName: c.centralName,
 			InterfaceID: string(iface),
@@ -1714,7 +1714,7 @@ func (c *DeviceCoordinator) ReaddDevice(
 		// Remove device from registry — DeviceRemovedEvent fires so the
 		// cache coordinator evicts value-cache entries.
 		if c.devices.Remove(iface, addr) {
-			events.Publish(c.bus, hmevent.DeviceRemovedEvent{
+			c.bus.Publish(hmevent.DeviceRemovedEvent{
 				Base:        hmevent.NewBase(),
 				CentralName: c.centralName,
 				InterfaceID: string(iface),
@@ -1787,7 +1787,7 @@ func (c *DeviceCoordinator) RefreshDeviceLinkPeers(
 		if len(peers) == 0 {
 			continue
 		}
-		events.Publish(c.bus, hmevent.LinkPeerChangedEvent{
+		c.bus.Publish(hmevent.LinkPeerChangedEvent{
 			Base:        hmevent.NewBase(),
 			CentralName: c.centralName,
 			Address:     channelAddr,
@@ -1935,7 +1935,7 @@ func (c *DeviceCoordinator) ReplaceDevice(
 		removedFromModel = c.model.RemoveDevice(oldAddr)
 	}
 	if c.devices.Remove(iface, oldAddr) && !removedFromModel {
-		events.Publish(c.bus, hmevent.DeviceRemovedEvent{
+		c.bus.Publish(hmevent.DeviceRemovedEvent{
 			Base:        hmevent.NewBase(),
 			CentralName: c.centralName,
 			InterfaceID: string(iface),

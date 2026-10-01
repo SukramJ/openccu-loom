@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
@@ -48,7 +47,7 @@ func TestHotPlugRebuildCoalescesAReconnectBurst(t *testing.T) {
 	// Count rebuilds by their published result — the rebuild is the only
 	// producer of a state event in this test.
 	rebuilds := make(chan struct{}, 64)
-	unsub := events.Subscribe(svc.Bus(), func(hmevent.SecurityStateChangedEvent) {
+	unsub := svc.Bus().Subscribe(func(hmevent.SecurityStateChangedEvent) {
 		select {
 		case rebuilds <- struct{}{}:
 		default:
@@ -58,7 +57,7 @@ func TestHotPlugRebuildCoalescesAReconnectBurst(t *testing.T) {
 
 	const announced = 40
 	for range announced {
-		events.Publish(unit.EventBus, hmevent.DeviceCreatedEvent{Base: hmevent.NewBase()})
+		unit.EventBus.Publish(hmevent.DeviceCreatedEvent{Base: hmevent.NewBase()})
 	}
 
 	select {

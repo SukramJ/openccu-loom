@@ -14,7 +14,7 @@ import (
 // CircuitEventPublisher is the minimal contract every event sink must
 // satisfy to receive [hmevent.CircuitBreakerStateChangedEvent] notices
 // from a [CircuitBreaker]. The internal/central/events.Bus satisfies
-// this interface via its top-level [events.Publish] function — the
+// this interface via its generic [events.Bus.Publish] method — the
 // caller wraps it with a tiny adapter so this package stays free of
 // dependencies on the central event bus.
 type CircuitEventPublisher interface {

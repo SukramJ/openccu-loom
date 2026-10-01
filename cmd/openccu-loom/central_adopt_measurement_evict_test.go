@@ -12,7 +12,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -78,7 +77,7 @@ func TestRemovedDevicePurgesItsMeasurementHistory(t *testing.T) {
 		t.Fatalf("seeded measurement rows = %d, want 1", n)
 	}
 
-	events.Publish(c.EventBus, hmevent.DeviceRemovedEvent{
+	c.EventBus.Publish(hmevent.DeviceRemovedEvent{
 		CentralName: centralName, InterfaceID: ifaceID, Address: addr,
 	})
 

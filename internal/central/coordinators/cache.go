@@ -391,7 +391,7 @@ func (c *CacheCoordinator) ClearAllWithReason(reason hmenum.CacheInvalidationRea
 	if bus == nil {
 		return
 	}
-	events.Publish(bus, hmevent.CacheInvalidatedEvent{
+	bus.Publish(hmevent.CacheInvalidatedEvent{
 		Base:            hmevent.NewBase(),
 		CentralName:     centralName,
 		CacheType:       hmenum.CacheTypeData,
@@ -465,10 +465,10 @@ func (c *CacheCoordinator) SubscribeToBus(bus *events.Bus) {
 		return
 	}
 
-	unsub1 := events.Subscribe(bus, func(e hmevent.DeviceRemovedEvent) {
+	unsub1 := bus.Subscribe(func(e hmevent.DeviceRemovedEvent) {
 		c.evictDevice(e.Address)
 	})
-	unsub2 := events.Subscribe(bus, func(_ hmevent.DataFetchCompletedEvent) {
+	unsub2 := bus.Subscribe(func(_ hmevent.DataFetchCompletedEvent) {
 		c.mu.Lock()
 		c.dirty = true
 		c.mu.Unlock()

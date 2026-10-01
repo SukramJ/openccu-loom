@@ -72,7 +72,7 @@ func TestWaitForCallback_Positive_Waits(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 		dpk, _ := hmtypes.NewDataPointKey("HmIP-RF", "VCU9002:1", hmenum.ParamsetKeyValues, "LEVEL")
 		pv, _ := hmtypes.NewParamValue(0.75)
-		events.Publish(bus, hmevent.DataPointValueChangedEvent{
+		bus.Publish(hmevent.DataPointValueChangedEvent{
 			Base:     hmevent.NewBase(),
 			Key:      dpk,
 			NewValue: pv,

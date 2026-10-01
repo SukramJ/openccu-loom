@@ -13,7 +13,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -80,7 +79,7 @@ func TestMatterCentralHook_AdoptedCentralReadinessReachesSnapshotter(t *testing.
 		t.Fatal("adopted central must start model-incomplete before its ready event")
 	}
 
-	events.Publish(adopted.EventBus, hmevent.CentralSouthboundReadyEvent{
+	adopted.EventBus.Publish(hmevent.CentralSouthboundReadyEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "ccu-adopted",
 	})
@@ -149,7 +148,7 @@ func TestMatterCentralHook_ForwardsAvailabilityChanges(t *testing.T) {
 	}
 	t.Cleanup(unwire)
 
-	events.Publish(adopted.EventBus, hmevent.DeviceLifecycleEvent{
+	adopted.EventBus.Publish(hmevent.DeviceLifecycleEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "ccu-adopted",
 		Address:     "VCU0000001",
@@ -157,7 +156,7 @@ func TestMatterCentralHook_ForwardsAvailabilityChanges(t *testing.T) {
 		Available:   false,
 	})
 	// A non-availability subtype must not forward.
-	events.Publish(adopted.EventBus, hmevent.DeviceLifecycleEvent{
+	adopted.EventBus.Publish(hmevent.DeviceLifecycleEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "ccu-adopted",
 		Address:     "VCU0000002",
@@ -191,11 +190,11 @@ func TestMatterCentralHook_UnwireStopsSubscriptions(t *testing.T) {
 	}
 	unwire()
 
-	events.Publish(adopted.EventBus, hmevent.CentralSouthboundReadyEvent{
+	adopted.EventBus.Publish(hmevent.CentralSouthboundReadyEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "ccu-adopted",
 	})
-	events.Publish(adopted.EventBus, hmevent.DeviceLifecycleEvent{
+	adopted.EventBus.Publish(hmevent.DeviceLifecycleEvent{
 		Base:      hmevent.NewBase(),
 		Address:   "VCU0000001",
 		Subtype:   hmenum.DeviceLifecycleSubtypeAvailabilityChanged,
@@ -248,7 +247,7 @@ func TestMatterCentralHook_ReAdoptedCentralStartsModelIncomplete(t *testing.T) {
 	if unwire == nil {
 		t.Fatal("hook returned nil unwire for a unit with an event bus")
 	}
-	events.Publish(first.EventBus, hmevent.CentralSouthboundReadyEvent{
+	first.EventBus.Publish(hmevent.CentralSouthboundReadyEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: name,
 	})

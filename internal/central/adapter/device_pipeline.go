@@ -1496,7 +1496,7 @@ func bridgeCalculatedSensorToBus(
 			}
 			return
 		}
-		events.Publish(bus, hmevent.DataPointValueChangedEvent{
+		bus.Publish(hmevent.DataPointValueChangedEvent{
 			Base: hmevent.NewBase(),
 			Key: hmtypes.DataPointKey{
 				InterfaceID:    interfaceID,
@@ -1568,7 +1568,7 @@ func bridgeDataPointRollbacksToBus(bus *events.Bus, dev *device.Device) {
 				} else {
 					present = hmtypes.NoneValue()
 				}
-				events.Publish(bus, hmevent.DataPointOptimisticRolledBackEvent{
+				bus.Publish(hmevent.DataPointOptimisticRolledBackEvent{
 					Base:    hmevent.NewBase(),
 					Key:     key,
 					Reason:  hmenum.RollbackReason(reason),
@@ -1591,7 +1591,7 @@ func bridgeDataPointRollbacksToBus(bus *events.Bus, dev *device.Device) {
 				} else {
 					present = hmtypes.NoneValue()
 				}
-				events.Publish(bus, hmevent.DataPointOptimisticRolledBackEvent{
+				bus.Publish(hmevent.DataPointOptimisticRolledBackEvent{
 					Base:    hmevent.NewBase(),
 					Key:     key,
 					Reason:  hmenum.RollbackReason(reason),
@@ -1667,7 +1667,7 @@ func bridgeMasterDataPointToBus(bus *events.Bus, dp device.ParameterDataPoint) {
 		if oldVal.Equal(newVal) {
 			return
 		}
-		events.Publish(bus, hmevent.DataPointValueChangedEvent{
+		bus.Publish(hmevent.DataPointValueChangedEvent{
 			Base:     hmevent.NewBase(),
 			Key:      key,
 			OldValue: oldVal,
@@ -1703,7 +1703,7 @@ type weekProfileBusPublisher struct {
 // PublishUpdate implements [datapoint.EventPublisher]. The key argument is the
 // DP UniqueID (ignored here — channel address is resolved via channelAddr).
 func (w *weekProfileBusPublisher) PublishUpdate(_ context.Context, _ string, _ any) {
-	events.Publish(w.bus, hmevent.WeekProfileChangedEvent{
+	w.bus.Publish(hmevent.WeekProfileChangedEvent{
 		Base:           hmevent.NewBase(),
 		CentralName:    w.centralName,
 		ChannelAddress: w.channelAddr(),

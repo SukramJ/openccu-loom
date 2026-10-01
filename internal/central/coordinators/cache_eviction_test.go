@@ -153,7 +153,7 @@ func TestCacheCoordinatorClearAllEmitsInvalidatedEvent(t *testing.T) {
 	var (
 		mu      sync.Mutex
 		caught  []hmevent.CacheInvalidatedEvent
-		release = events.Subscribe(bus, func(e hmevent.CacheInvalidatedEvent) {
+		release = bus.Subscribe(func(e hmevent.CacheInvalidatedEvent) {
 			mu.Lock()
 			caught = append(caught, e)
 			mu.Unlock()
@@ -201,7 +201,7 @@ func TestCacheCoordinatorClearAllWithReasonShutdown(t *testing.T) {
 		mu     sync.Mutex
 		caught []hmevent.CacheInvalidatedEvent
 	)
-	release := events.Subscribe(bus, func(e hmevent.CacheInvalidatedEvent) {
+	release := bus.Subscribe(func(e hmevent.CacheInvalidatedEvent) {
 		mu.Lock()
 		caught = append(caught, e)
 		mu.Unlock()

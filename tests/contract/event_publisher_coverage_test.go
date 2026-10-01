@@ -46,7 +46,7 @@ func TestEveryEventTypeHasAPublisher(t *testing.T) {
 	}
 	published := publishedEventTypes(t, pkgs)
 	if len(published) == 0 {
-		t.Fatal("no events.Publish calls resolved; the walk is broken and this test would pass vacuously")
+		t.Fatal("no Bus.Publish calls resolved; the walk is broken and this test would pass vacuously")
 	}
 
 	for _, name := range sortedKeys(defined) {
@@ -73,7 +73,8 @@ func TestEveryEventTypeHasAPublisher(t *testing.T) {
 }
 
 // publishedEventTypes maps an event type name onto the packages that
-// publish it, resolving the value argument of every events.Publish call
+// publish it, resolving the value argument of every Bus.Publish or
+// Bus.PublishSync call
 // through the type checker. Test files are excluded from the load, so an
 // event only its own tests emit counts as unpublished — which is the
 // point.
@@ -87,7 +88,7 @@ func publishedEventTypes(t *testing.T, pkgs []*packages.Package) map[string]map[
 		for _, file := range p.Syntax {
 			ast.Inspect(file, func(n ast.Node) bool {
 				call, ok := n.(*ast.CallExpr)
-				if !ok || !isEventsPublish(call.Fun) || len(call.Args) < 2 {
+				if !ok || busMethodOf(p, call, "Publish", "PublishSync") == nil || len(call.Args) < 1 {
 					return true
 				}
 				name := publishedEventType(p, call)
@@ -105,26 +106,11 @@ func publishedEventTypes(t *testing.T, pkgs []*packages.Package) map[string]map[
 	return out
 }
 
-// isEventsPublish reports whether fun denotes events.Publish, with or
-// without an explicit type argument.
-func isEventsPublish(fun ast.Expr) bool {
-	switch f := fun.(type) {
-	case *ast.IndexExpr:
-		return isEventsPublish(f.X)
-	case *ast.IndexListExpr:
-		return isEventsPublish(f.X)
-	case *ast.SelectorExpr:
-		id, ok := f.X.(*ast.Ident)
-		return ok && id.Name == "events" && f.Sel.Name == "Publish"
-	}
-	return false
-}
-
-// publishedEventType resolves the concrete hmevent type a Publish call
+// publishedEventType resolves the concrete hmevent type a Bus.Publish call
 // emits, from the static type of its value argument — a composite
 // literal, a local variable or a parameter alike.
 func publishedEventType(p *packages.Package, call *ast.CallExpr) string {
-	tv, ok := p.TypesInfo.Types[call.Args[1]]
+	tv, ok := p.TypesInfo.Types[call.Args[0]]
 	if !ok || tv.Type == nil {
 		return ""
 	}

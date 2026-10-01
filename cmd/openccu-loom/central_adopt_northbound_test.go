@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
@@ -57,7 +56,7 @@ func TestAdoptCentralWiresNorthboundSubscribers(t *testing.T) {
 	}
 
 	// A keypress on one of the adopted CCU's devices.
-	events.Publish(unit.EventBus, hmevent.DeviceTriggerEvent{
+	unit.EventBus.Publish(hmevent.DeviceTriggerEvent{
 		CentralName:   name,
 		InterfaceID:   name + "-HmIP-RF",
 		DeviceAddress: "AAAA0001",
@@ -72,7 +71,7 @@ func TestAdoptCentralWiresNorthboundSubscribers(t *testing.T) {
 	}
 
 	// An interface transition on the adopted CCU.
-	events.Publish(unit.EventBus, hmevent.SystemStatusChangedEvent{
+	unit.EventBus.Publish(hmevent.SystemStatusChangedEvent{
 		CentralName: name,
 		Component:   "interface",
 		Healthy:     false,

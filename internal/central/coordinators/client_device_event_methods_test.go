@@ -289,7 +289,7 @@ func TestEmitDeviceRemovedEvent(t *testing.T) {
 	ec.SetCentralName("ccu1")
 
 	received := make(chan hmevent.DeviceRemovedEvent, 1)
-	_ = events.Subscribe(bus, func(e hmevent.DeviceRemovedEvent) { received <- e })
+	_ = bus.Subscribe(func(e hmevent.DeviceRemovedEvent) { received <- e })
 
 	ec.EmitDeviceRemovedEvent("iface1", "ADDR001")
 

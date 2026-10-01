@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -35,7 +34,7 @@ func deviceEventProbes() []deviceEventProbe {
 			address: "TRIG0000001",
 			topic:   func(a string) string { return ws.DeviceTriggerTopic(a, 1) },
 			publish: func(u *central.Unit, a string) {
-				events.Publish(u.EventBus, hmevent.DeviceTriggerEvent{
+				u.EventBus.Publish(hmevent.DeviceTriggerEvent{
 					Base:          hmevent.NewBase(),
 					CentralName:   u.Name(),
 					InterfaceID:   "HmIP-RF",
@@ -51,7 +50,7 @@ func deviceEventProbes() []deviceEventProbe {
 			address: "LIFE0000001",
 			topic:   ws.DeviceLifecycleTopic,
 			publish: func(u *central.Unit, a string) {
-				events.Publish(u.EventBus, hmevent.DeviceCreatedEvent{
+				u.EventBus.Publish(hmevent.DeviceCreatedEvent{
 					Base:        hmevent.NewBase(),
 					CentralName: u.Name(),
 					InterfaceID: "HmIP-RF",
@@ -65,7 +64,7 @@ func deviceEventProbes() []deviceEventProbe {
 			address: "AVAIL000001",
 			topic:   ws.DeviceLifecycleTopic,
 			publish: func(u *central.Unit, a string) {
-				events.Publish(u.EventBus, hmevent.DeviceLifecycleEvent{
+				u.EventBus.Publish(hmevent.DeviceLifecycleEvent{
 					Base:        hmevent.NewBase(),
 					CentralName: u.Name(),
 					InterfaceID: "HmIP-RF",
@@ -80,7 +79,7 @@ func deviceEventProbes() []deviceEventProbe {
 			address: "ROLL0000001",
 			topic:   func(a string) string { return ws.DataPointTopic(a, 1, "STATE") },
 			publish: func(u *central.Unit, a string) {
-				events.Publish(u.EventBus, hmevent.DataPointOptimisticRolledBackEvent{
+				u.EventBus.Publish(hmevent.DataPointOptimisticRolledBackEvent{
 					Base: hmevent.NewBase(),
 					Key: hmtypes.DataPointKey{
 						InterfaceID:    "HmIP-RF",

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
 	"github.com/SukramJ/openccu-loom/internal/model/safety"
 	"github.com/SukramJ/openccu-loom/internal/model/security"
@@ -35,11 +34,11 @@ func (s *Service) subscribeAlarm() {
 		return
 	}
 	unsubs := []func(){
-		events.Subscribe(s.alarmBus, s.onAlarmTriggered),
-		events.Subscribe(s.alarmBus, s.onAlarmStateChanged),
-		events.Subscribe(s.alarmBus, s.onAlarmHealthChanged),
-		events.Subscribe(s.alarmBus, s.onAlarmDuress),
-		events.Subscribe(s.alarmBus, s.onAlarmPanelChanged),
+		s.alarmBus.Subscribe(s.onAlarmTriggered),
+		s.alarmBus.Subscribe(s.onAlarmStateChanged),
+		s.alarmBus.Subscribe(s.onAlarmHealthChanged),
+		s.alarmBus.Subscribe(s.onAlarmDuress),
+		s.alarmBus.Subscribe(s.onAlarmPanelChanged),
 	}
 	s.mu.Lock()
 	s.unsubs = append(s.unsubs, unsubs...)
@@ -86,15 +85,15 @@ func (s *Service) attachUnit(u *central.Unit) {
 		}
 	})
 	unsubs := []func(){
-		events.Subscribe(u.EventBus, func(e hmevent.DataPointValueChangedEvent) {
+		u.EventBus.Subscribe(func(e hmevent.DataPointValueChangedEvent) {
 			s.onDataPoint(name, e)
 		}),
 		// The readiness event is the single boot signal, not a burst:
 		// rebuild straight away so the index is populated as early as
 		// the model allows.
-		events.Subscribe(u.EventBus, func(hmevent.CentralSouthboundReadyEvent) { rebuild() }),
-		events.Subscribe(u.EventBus, func(hmevent.DeviceCreatedEvent) { debounce.trigger() }),
-		events.Subscribe(u.EventBus, func(hmevent.DeviceRemovedEvent) { debounce.trigger() }),
+		u.EventBus.Subscribe(func(hmevent.CentralSouthboundReadyEvent) { rebuild() }),
+		u.EventBus.Subscribe(func(hmevent.DeviceCreatedEvent) { debounce.trigger() }),
+		u.EventBus.Subscribe(func(hmevent.DeviceRemovedEvent) { debounce.trigger() }),
 		debounce.stop,
 	}
 	s.mu.Lock()
@@ -211,7 +210,7 @@ func (s *Service) onDataPoint(centralName string, e hmevent.DataPointValueChange
 		return
 	}
 
-	events.Publish(s.bus, hmevent.SecurityClassChangedEvent{
+	s.bus.Publish(hmevent.SecurityClassChangedEvent{
 		Base:     hmevent.NewBaseAt(s.clk.Now()),
 		Class:    src.class,
 		Active:   state.Active,
@@ -584,7 +583,7 @@ func (s *Service) onAlarmDuress(e hmevent.AlarmDuressEvent) {
 
 // publishZone announces a zone view change.
 func (s *Service) publishZone(z security.ZoneState) {
-	events.Publish(s.bus, hmevent.SecurityZoneChangedEvent{
+	s.bus.Publish(hmevent.SecurityZoneChangedEvent{
 		Base:       hmevent.NewBaseAt(s.clk.Now()),
 		ZoneID:     z.ID,
 		ZoneSlug:   z.Slug,

@@ -25,7 +25,7 @@ func TestHubUpdateSysvarEmitsChangedEventOnly(t *testing.T) {
 	t.Parallel()
 	bus := events.NewBus()
 	var count atomic.Int32
-	events.Subscribe(bus, func(_ hmevent.SysvarChangedEvent) {
+	bus.Subscribe(func(_ hmevent.SysvarChangedEvent) {
 		count.Add(1)
 	})
 	h := NewHubCoordinator("c1", bus)
@@ -58,7 +58,7 @@ func TestHubUpdateSysvarEmitsOnValueDelta(t *testing.T) {
 	bus := events.NewBus()
 	var mu sync.Mutex
 	var received []hmevent.SysvarChangedEvent
-	events.Subscribe(bus, func(e hmevent.SysvarChangedEvent) {
+	bus.Subscribe(func(e hmevent.SysvarChangedEvent) {
 		mu.Lock()
 		received = append(received, e)
 		mu.Unlock()
@@ -147,7 +147,7 @@ func TestHubNotifyProgramExecutedEmits(t *testing.T) {
 	bus := events.NewBus()
 	var mu sync.Mutex
 	var got []hmevent.ProgramExecutedEvent
-	events.Subscribe(bus, func(e hmevent.ProgramExecutedEvent) {
+	bus.Subscribe(func(e hmevent.ProgramExecutedEvent) {
 		mu.Lock()
 		got = append(got, e)
 		mu.Unlock()
@@ -191,7 +191,7 @@ func TestHubNotifyProgramExecutedLiftsRequestOperation(t *testing.T) {
 	bus := events.NewBus()
 	var mu sync.Mutex
 	var got []hmevent.ProgramExecutedEvent
-	events.Subscribe(bus, func(e hmevent.ProgramExecutedEvent) {
+	bus.Subscribe(func(e hmevent.ProgramExecutedEvent) {
 		mu.Lock()
 		got = append(got, e)
 		mu.Unlock()

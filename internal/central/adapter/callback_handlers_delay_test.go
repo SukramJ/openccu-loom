@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -50,7 +49,7 @@ func TestCallbackHandlersDelayNewDeviceCreation(t *testing.T) {
 				t.Fatalf("central.New: %v", err)
 			}
 			var created atomic.Int32
-			unsub := events.Subscribe(c.EventBus, func(hmevent.DeviceCreatedEvent) {
+			unsub := c.EventBus.Subscribe(func(hmevent.DeviceCreatedEvent) {
 				created.Add(1)
 			})
 			defer unsub()
@@ -140,7 +139,7 @@ func TestDeferredDeviceIsAnnouncedOnTheInboxAndMaterialisedOnAccept(t *testing.T
 
 	var created atomic.Int32
 	var source hmenum.SourceOfDeviceCreation
-	unsub := events.Subscribe(c.EventBus, func(e hmevent.DeviceCreatedEvent) {
+	unsub := c.EventBus.Subscribe(func(e hmevent.DeviceCreatedEvent) {
 		created.Add(1)
 		source = e.Source
 	})

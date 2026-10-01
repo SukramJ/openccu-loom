@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/central/registry"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -53,7 +52,7 @@ func TestWireReadinessRecomputeCountsARecoveredInterfaceBackIn(t *testing.T) {
 	defer closer()
 
 	var readinessEvents atomic.Int32
-	unsub := events.Subscribe(c.EventBus, func(hmevent.CentralReadinessChangedEvent) {
+	unsub := c.EventBus.Subscribe(func(hmevent.CentralReadinessChangedEvent) {
 		readinessEvents.Add(1)
 	})
 	defer unsub()
@@ -65,7 +64,7 @@ func TestWireReadinessRecomputeCountsARecoveredInterfaceBackIn(t *testing.T) {
 		Interface: hmtypes.ParseWireInterfaceID(WireInterfaceID(c.Name(), hmenum.InterfaceCUxD)),
 		Address:   "DEV002",
 	})
-	events.Publish(c.EventBus, hmevent.RecoveryCompletedEvent{
+	c.EventBus.Publish(hmevent.RecoveryCompletedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: c.Name(),
 		InterfaceID: WireInterfaceID(c.Name(), hmenum.InterfaceCUxD),
@@ -110,12 +109,12 @@ func TestWireReadinessRecomputeIsANoOpWhenTheCountDidNotChange(t *testing.T) {
 	defer closer()
 
 	var readinessEvents atomic.Int32
-	unsub := events.Subscribe(c.EventBus, func(hmevent.CentralReadinessChangedEvent) {
+	unsub := c.EventBus.Subscribe(func(hmevent.CentralReadinessChangedEvent) {
 		readinessEvents.Add(1)
 	})
 	defer unsub()
 
-	events.Publish(c.EventBus, hmevent.RecoveryCompletedEvent{
+	c.EventBus.Publish(hmevent.RecoveryCompletedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: c.Name(),
 		InterfaceID: WireInterfaceID(c.Name(), hmenum.InterfaceHmIPRF),
@@ -144,7 +143,7 @@ func TestWireReadinessRecomputeIgnoresRecoveryBeforeReady(t *testing.T) {
 	defer closer()
 
 	var readinessEvents atomic.Int32
-	unsub := events.Subscribe(c.EventBus, func(hmevent.CentralReadinessChangedEvent) {
+	unsub := c.EventBus.Subscribe(func(hmevent.CentralReadinessChangedEvent) {
 		readinessEvents.Add(1)
 	})
 	defer unsub()
@@ -153,7 +152,7 @@ func TestWireReadinessRecomputeIgnoresRecoveryBeforeReady(t *testing.T) {
 		Interface: hmtypes.ParseWireInterfaceID(WireInterfaceID(c.Name(), hmenum.InterfaceHmIPRF)),
 		Address:   "DEV001",
 	})
-	events.Publish(c.EventBus, hmevent.RecoveryCompletedEvent{
+	c.EventBus.Publish(hmevent.RecoveryCompletedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: c.Name(),
 		InterfaceID: WireInterfaceID(c.Name(), hmenum.InterfaceHmIPRF),

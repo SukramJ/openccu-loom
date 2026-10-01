@@ -15,11 +15,11 @@ import (
 func TestBusDispatchesToSubscriber(t *testing.T) {
 	b := NewBus()
 	var called int
-	Subscribe(b, func(e hmevent.CentralStateChangedEvent) {
+	b.Subscribe(func(e hmevent.CentralStateChangedEvent) {
 		called++
 		_ = e
 	})
-	Publish(b, hmevent.CentralStateChangedEvent{CentralName: "main"})
+	b.Publish(hmevent.CentralStateChangedEvent{CentralName: "main"})
 	if called != 1 {
 		t.Fatalf("handler called %d times, want 1", called)
 	}
@@ -28,11 +28,11 @@ func TestBusDispatchesToSubscriber(t *testing.T) {
 func TestBusUnsubscribe(t *testing.T) {
 	b := NewBus()
 	var called int
-	unsub := Subscribe(b, func(e hmevent.CentralStateChangedEvent) { called++ })
-	Publish(b, hmevent.CentralStateChangedEvent{})
+	unsub := b.Subscribe(func(e hmevent.CentralStateChangedEvent) { called++ })
+	b.Publish(hmevent.CentralStateChangedEvent{})
 	unsub()
 	unsub() // idempotent
-	Publish(b, hmevent.CentralStateChangedEvent{})
+	b.Publish(hmevent.CentralStateChangedEvent{})
 	if called != 1 {
 		t.Fatalf("post-unsubscribe called=%d, want 1", called)
 	}
@@ -41,11 +41,11 @@ func TestBusUnsubscribe(t *testing.T) {
 func TestBusPriorityOrdering(t *testing.T) {
 	b := NewBus()
 	var order []string
-	Subscribe(b, func(e hmevent.CentralStateChangedEvent) { order = append(order, "low") }, WithPriority(PriorityLow))
-	Subscribe(b, func(e hmevent.CentralStateChangedEvent) { order = append(order, "normal") })
-	Subscribe(b, func(e hmevent.CentralStateChangedEvent) { order = append(order, "high") }, WithPriority(PriorityHigh))
+	b.Subscribe(func(e hmevent.CentralStateChangedEvent) { order = append(order, "low") }, WithPriority(PriorityLow))
+	b.Subscribe(func(e hmevent.CentralStateChangedEvent) { order = append(order, "normal") })
+	b.Subscribe(func(e hmevent.CentralStateChangedEvent) { order = append(order, "high") }, WithPriority(PriorityHigh))
 
-	Publish(b, hmevent.CentralStateChangedEvent{})
+	b.Publish(hmevent.CentralStateChangedEvent{})
 	if len(order) != 3 || order[0] != "high" || order[1] != "normal" || order[2] != "low" {
 		t.Fatalf("order=%v", order)
 	}
@@ -54,10 +54,10 @@ func TestBusPriorityOrdering(t *testing.T) {
 func TestBusPriorityTieFIFO(t *testing.T) {
 	b := NewBus()
 	var order []string
-	Subscribe(b, func(e hmevent.CentralStateChangedEvent) { order = append(order, "first") })
-	Subscribe(b, func(e hmevent.CentralStateChangedEvent) { order = append(order, "second") })
+	b.Subscribe(func(e hmevent.CentralStateChangedEvent) { order = append(order, "first") })
+	b.Subscribe(func(e hmevent.CentralStateChangedEvent) { order = append(order, "second") })
 
-	Publish(b, hmevent.CentralStateChangedEvent{})
+	b.Publish(hmevent.CentralStateChangedEvent{})
 	if order[0] != "first" || order[1] != "second" {
 		t.Fatalf("FIFO broken: %v", order)
 	}
@@ -65,8 +65,8 @@ func TestBusPriorityTieFIFO(t *testing.T) {
 
 func TestBusHandlerCount(t *testing.T) {
 	b := NewBus()
-	u1 := Subscribe(b, func(e hmevent.DataPointValueChangedEvent) {})
-	Subscribe(b, func(e hmevent.DataPointValueChangedEvent) {})
+	u1 := b.Subscribe(func(e hmevent.DataPointValueChangedEvent) {})
+	b.Subscribe(func(e hmevent.DataPointValueChangedEvent) {})
 	if got := b.HandlerCount(hmevent.EventTypeDataPointValueChanged); got != 2 {
 		t.Fatalf("HandlerCount=%d, want 2", got)
 	}
@@ -79,22 +79,22 @@ func TestBusHandlerCount(t *testing.T) {
 func TestBusReentrantPublishDefers(t *testing.T) {
 	b := NewBus()
 	var inner atomic.Int32
-	Subscribe(b, func(e hmevent.CentralStateChangedEvent) {
+	b.Subscribe(func(e hmevent.CentralStateChangedEvent) {
 		if e.CentralName == "outer" {
 			// Publish from inside a handler frame — must not run immediately.
-			Publish(b, hmevent.CentralStateChangedEvent{CentralName: "inner"})
+			b.Publish(hmevent.CentralStateChangedEvent{CentralName: "inner"})
 			// When we read here the inner handler has not yet executed.
 			if inner.Load() != 0 {
 				t.Errorf("re-entrant publish was not deferred (inner=%d)", inner.Load())
 			}
 		}
 	})
-	Subscribe(b, func(e hmevent.CentralStateChangedEvent) {
+	b.Subscribe(func(e hmevent.CentralStateChangedEvent) {
 		if e.CentralName == "inner" {
 			inner.Add(1)
 		}
 	})
-	Publish(b, hmevent.CentralStateChangedEvent{CentralName: "outer"})
+	b.Publish(hmevent.CentralStateChangedEvent{CentralName: "outer"})
 	if inner.Load() != 1 {
 		t.Fatalf("deferred publish never ran, inner=%d", inner.Load())
 	}
@@ -109,16 +109,16 @@ func TestBusDeferredHighWaterTracksRecursion(t *testing.T) {
 	// the gauge is the operator's only signal of pathological recursion.
 	const recursionBurst = 200
 	var innerCalls atomic.Int32
-	Subscribe(b, func(e hmevent.CentralStateChangedEvent) {
+	b.Subscribe(func(e hmevent.CentralStateChangedEvent) {
 		if e.CentralName != "outer" {
 			innerCalls.Add(1)
 			return
 		}
 		for range recursionBurst {
-			Publish(b, hmevent.CentralStateChangedEvent{CentralName: "inner"})
+			b.Publish(hmevent.CentralStateChangedEvent{CentralName: "inner"})
 		}
 	})
-	Publish(b, hmevent.CentralStateChangedEvent{CentralName: "outer"})
+	b.Publish(hmevent.CentralStateChangedEvent{CentralName: "outer"})
 
 	if got := innerCalls.Load(); got != int32(recursionBurst) {
 		t.Fatalf("inner handler ran %d times, want %d (no events should be dropped)",
@@ -137,10 +137,10 @@ func TestBusSubscribeUnrelatedEventNotCalled(t *testing.T) {
 	b := NewBus()
 	var state int
 	var dp int
-	Subscribe(b, func(e hmevent.CentralStateChangedEvent) { state++ })
-	Subscribe(b, func(e hmevent.DataPointValueChangedEvent) { dp++ })
+	b.Subscribe(func(e hmevent.CentralStateChangedEvent) { state++ })
+	b.Subscribe(func(e hmevent.DataPointValueChangedEvent) { dp++ })
 
-	Publish(b, hmevent.CentralStateChangedEvent{})
+	b.Publish(hmevent.CentralStateChangedEvent{})
 	if state != 1 || dp != 0 {
 		t.Fatalf("state=%d dp=%d", state, dp)
 	}
@@ -155,12 +155,12 @@ func TestBusConcurrentSubscribersAreSafe(t *testing.T) {
 	var wg sync.WaitGroup
 	for range 50 {
 		wg.Go(func() {
-			unsub := Subscribe(b, func(e hmevent.CentralStateChangedEvent) {
+			unsub := b.Subscribe(func(e hmevent.CentralStateChangedEvent) {
 				mu.Lock()
 				count++
 				mu.Unlock()
 			})
-			Publish(b, hmevent.CentralStateChangedEvent{})
+			b.Publish(hmevent.CentralStateChangedEvent{})
 			unsub()
 		})
 	}

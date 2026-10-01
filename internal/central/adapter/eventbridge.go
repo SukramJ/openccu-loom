@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/cdpkind"
@@ -315,22 +314,22 @@ func (b *EventBridge) DetachCentral(centralName string) {
 func (b *EventBridge) subscribeUnit(u *central.Unit) []func() {
 	bus := u.EventBus
 	return []func(){
-		events.Subscribe(bus, func(e hmevent.DataPointValueChangedEvent) {
+		bus.Subscribe(func(e hmevent.DataPointValueChangedEvent) {
 			b.onValueChanged(u.Name(), e)
 		}),
-		events.Subscribe(bus, func(e hmevent.CentralStateChangedEvent) {
+		bus.Subscribe(func(e hmevent.CentralStateChangedEvent) {
 			b.onCentralState(u.Name(), e)
 		}),
 		// Per-central southbound bring-up phase transitions so the UI can
 		// show "still initializing" vs "offline" while a co-booting CCU
 		// loads names then devices.
-		events.Subscribe(bus, func(e hmevent.CentralReadinessChangedEvent) {
+		bus.Subscribe(func(e hmevent.CentralReadinessChangedEvent) {
 			b.onCentralReadiness(u.Name(), e)
 		}),
 		// What the central can do changed (first bring-up resolved the
 		// system, or a credential's scopes changed): clients show or hide
 		// the matching actions live.
-		events.Subscribe(bus, func(e hmevent.CentralFeaturesChangedEvent) {
+		bus.Subscribe(func(e hmevent.CentralFeaturesChangedEvent) {
 			b.onCentralFeatures(u, e)
 		}),
 		// Wire-DP source-token transitions (cache → live, live →
@@ -338,14 +337,14 @@ func (b *EventBridge) subscribeUnit(u *central.Unit) []func() {
 		// the value did not change. Without this consumers that gate
 		// on value diff (HA without `force_update`) miss freshness
 		// flips. ADR 0019.
-		events.Subscribe(bus, func(e hmevent.DataPointSourceChangedEvent) {
+		bus.Subscribe(func(e hmevent.DataPointSourceChangedEvent) {
 			b.onSourceChanged(u.Name(), e)
 		}),
 		// Prune the MQTT bridge's declared map when a device is removed so
 		// the dedup gate does not suppress subsequent orphan-cleanup evictions
 		// of the same topics, and so snapshot passes do not re-emit discovery
 		// configs for a device that no longer exists in the model.
-		events.Subscribe(bus, func(e hmevent.DeviceRemovedEvent) {
+		bus.Subscribe(func(e hmevent.DeviceRemovedEvent) {
 			b.enqueueDurable(func(jobCtx context.Context) { b.onDeviceRemoved(jobCtx, e) })
 		}),
 		// Per-central southbound-ready: the readiness-gated bring-up loads each
@@ -354,7 +353,7 @@ func (b *EventBridge) subscribeUnit(u *central.Unit) []func() {
 		// when it signals ready so its devices reach the broker without waiting
 		// for a restart. Idempotent (the bridge diff-gates on its declared map),
 		// so it composes safely with the catch-up PublishInitialSnapshot call.
-		events.Subscribe(bus, func(e hmevent.CentralSouthboundReadyEvent) {
+		bus.Subscribe(func(e hmevent.CentralSouthboundReadyEvent) {
 			b.enqueueDurable(func(jobCtx context.Context) {
 				b.PublishCentralSnapshot(jobCtx, e.CentralName)
 			})
@@ -364,7 +363,7 @@ func (b *EventBridge) subscribeUnit(u *central.Unit) []func() {
 		// own — publish its full per-device footprint when the model
 		// announces it, so discovery + state reach the broker without a
 		// daemon restart.
-		events.Subscribe(bus, func(e hmevent.DeviceCreatedEvent) {
+		bus.Subscribe(func(e hmevent.DeviceCreatedEvent) {
 			b.enqueueDurable(func(jobCtx context.Context) { b.onDeviceCreated(jobCtx, u, e) })
 		}),
 		// A rename or room/function change updates the live model but
@@ -376,10 +375,10 @@ func (b *EventBridge) subscribeUnit(u *central.Unit) []func() {
 		// published. Nothing on the wire changed and the creation event
 		// fired long ago, so without this the device stays invisible to
 		// Home Assistant until the next daemon restart.
-		events.Subscribe(bus, func(e hmevent.DeviceReleasedEvent) {
+		bus.Subscribe(func(e hmevent.DeviceReleasedEvent) {
 			b.enqueueDurable(func(jobCtx context.Context) { b.onDeviceReleased(jobCtx, u, e) })
 		}),
-		events.Subscribe(bus, func(e hmevent.DeviceMetadataChangedEvent) {
+		bus.Subscribe(func(e hmevent.DeviceMetadataChangedEvent) {
 			b.publishDeviceMetadataChangedWS(u.Name(), e)
 			b.enqueueDurable(func(jobCtx context.Context) { b.onDeviceMetadataChanged(jobCtx, u, e) })
 		}),
@@ -393,7 +392,7 @@ func (b *EventBridge) subscribeUnit(u *central.Unit) []func() {
 		// runs. The shared transition gate in markAvailability makes this
 		// a no-op for flips the value path already published, so the two
 		// producers cannot double-publish or feed each other.
-		events.Subscribe(bus, func(e hmevent.DeviceLifecycleEvent) {
+		bus.Subscribe(func(e hmevent.DeviceLifecycleEvent) {
 			if e.Subtype != hmenum.DeviceLifecycleSubtypeAvailabilityChanged {
 				return
 			}
@@ -1724,7 +1723,7 @@ func (b *EventBridge) refreshDeviceAvailability(ctx context.Context, centralName
 	if !ok || u == nil || u.EventBus == nil {
 		return
 	}
-	events.Publish(u.EventBus, hmevent.DeviceLifecycleEvent{
+	u.EventBus.Publish(hmevent.DeviceLifecycleEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: centralName,
 		InterfaceID: iface,

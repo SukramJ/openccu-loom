@@ -39,7 +39,7 @@ func TestBridgeCombinedDataPointPublishesValueChangedEvent(t *testing.T) {
 	bus := events.NewBus()
 
 	var received atomic.Int32
-	unsub := events.Subscribe(bus, func(e hmevent.DataPointValueChangedEvent) {
+	unsub := bus.Subscribe(func(e hmevent.DataPointValueChangedEvent) {
 		if e.Key.ChannelAddress != "ABC0001:1" {
 			t.Errorf("Key.ChannelAddress = %q, want ABC0001:1", e.Key.ChannelAddress)
 		}

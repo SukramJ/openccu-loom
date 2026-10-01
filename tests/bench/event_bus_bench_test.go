@@ -18,7 +18,7 @@ import (
 // generic event bus.
 func BenchmarkEventBusPublish(b *testing.B) {
 	bus := events.NewBus()
-	events.Subscribe(bus, func(hmevent.DataPointValueChangedEvent) {})
+	bus.Subscribe(func(hmevent.DataPointValueChangedEvent) {})
 	ev := hmevent.DataPointValueChangedEvent{
 		Base:     hmevent.NewBaseAt(time.Now()),
 		Key:      hmtypes.DataPointKey{ChannelAddress: "0001:1", Parameter: "STATE"},
@@ -27,7 +27,7 @@ func BenchmarkEventBusPublish(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		events.Publish(bus, ev)
+		bus.Publish(ev)
 	}
 }
 
@@ -38,7 +38,7 @@ func BenchmarkEventBusSubscribeUnsubscribe(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		unsub := events.Subscribe(bus, func(hmevent.DataPointValueChangedEvent) {})
+		unsub := bus.Subscribe(func(hmevent.DataPointValueChangedEvent) {})
 		unsub()
 	}
 }

@@ -60,7 +60,7 @@ var registryWalkersWithoutAdoptSeam = map[string]string{
 //     the same function, so hoisting the call out of the range expression
 //     does not hide the walk, and
 //  2. inside that loop, a call that carries something derived from the loop
-//     variable into a subscription — events.Subscribe itself, or any function
+//     variable into a subscription — Bus.Subscribe itself, or any function
 //     that reaches one — tracked through local reassignment, so a Names()
 //     walk that resolves the unit via Registry.Get before subscribing is
 //     caught too, and
@@ -101,7 +101,7 @@ func TestEveryRegistryWalkerHasAnAdoptSeam(t *testing.T) {
 			"broken and this test would pass vacuously")
 	}
 	if len(g.subscribes) == 0 {
-		t.Fatal("no function reaches events.Subscribe; the subscribes fixpoint is broken " +
+		t.Fatal("no function reaches Bus.Subscribe; the subscribes fixpoint is broken " +
 			"and this test would pass vacuously")
 	}
 	walkers := g.subscribingRegistryWalkers()
@@ -159,8 +159,11 @@ type centralCallGraph struct {
 	// is all the seam check needs: the question is whether the composition
 	// root calls it, not from which line.
 	callers map[string]map[string]bool
-	// subscribes is the transitive closure of "reaches events.Subscribe".
+	// subscribes is the transitive closure of "reaches Bus.Subscribe".
 	subscribes map[string]bool
+	// subscribeKeys holds the callee keys that resolved to the Subscribe
+	// method of *events.Bus.
+	subscribeKeys map[string]bool
 }
 
 type analysedFunc struct {
@@ -184,9 +187,10 @@ type registryWalk struct {
 
 func buildCentralCallGraph(pkgs []*packages.Package) *centralCallGraph {
 	g := &centralCallGraph{
-		funcs:      map[string]*analysedFunc{},
-		callers:    map[string]map[string]bool{},
-		subscribes: map[string]bool{},
+		funcs:         map[string]*analysedFunc{},
+		callers:       map[string]map[string]bool{},
+		subscribes:    map[string]bool{},
+		subscribeKeys: map[string]bool{},
 	}
 	packages.Visit(pkgs, nil, func(p *packages.Package) {
 		if !ownPackage(p) {
@@ -239,6 +243,9 @@ func buildCentralCallGraph(pkgs []*packages.Package) *centralCallGraph {
 				return true
 			}
 			af.calls[key] = true
+			if isBusMethod(callee) && callee.Name() == "Subscribe" {
+				g.subscribeKeys[key] = true
+			}
 			if g.callers[key] == nil {
 				g.callers[key] = map[string]bool{}
 			}
@@ -250,7 +257,7 @@ func buildCentralCallGraph(pkgs []*packages.Package) *centralCallGraph {
 	// "Reaches a subscription", as a fixpoint over the edges above.
 	for key, af := range g.funcs {
 		for callee := range af.calls {
-			if isEventSubscribeKey(callee) {
+			if g.isEventSubscribeKey(callee) {
 				g.subscribes[key] = true
 			}
 		}
@@ -274,9 +281,12 @@ func buildCentralCallGraph(pkgs []*packages.Package) *centralCallGraph {
 }
 
 // isEventSubscribeKey reports whether key names the generic bus subscription
-// every consumer in this daemon goes through.
-func isEventSubscribeKey(key string) bool {
-	return key == modulePath+"/internal/central/events.Subscribe"
+// every consumer in this daemon goes through. The set is filled while the
+// edges are resolved, from callees the type checker identified as the
+// Subscribe method of *events.Bus — a name match alone would also take in
+// the unrelated Subscribe methods other types declare.
+func (g *centralCallGraph) isEventSubscribeKey(key string) bool {
+	return g.subscribeKeys[key]
 }
 
 // calleeFunc resolves the function a call expression targets, or nil when it
@@ -284,7 +294,10 @@ func isEventSubscribeKey(key string) bool {
 // value, a stdlib call, a conversion).
 func calleeFunc(p *packages.Package, call *ast.CallExpr) *types.Func {
 	fun := ast.Unparen(call.Fun)
-	if idx, ok := fun.(*ast.IndexExpr); ok { // generic instantiation: events.Subscribe[T]
+	switch idx := fun.(type) { // explicit instantiation: bus.Subscribe[T]
+	case *ast.IndexExpr:
+		fun = ast.Unparen(idx.X)
+	case *ast.IndexListExpr:
 		fun = ast.Unparen(idx.X)
 	}
 	var ident *ast.Ident
@@ -297,6 +310,11 @@ func calleeFunc(p *packages.Package, call *ast.CallExpr) *types.Func {
 		return nil
 	}
 	fn, _ := p.TypesInfo.Uses[ident].(*types.Func)
+	if fn != nil {
+		// A generic method (Bus.Subscribe) resolves to its instantiation;
+		// the call graph is keyed by the declared function.
+		fn = fn.Origin()
+	}
 	if fn == nil || fn.Pkg() == nil || !strings.HasPrefix(fn.Pkg().Path(), modulePath) {
 		return nil
 	}
@@ -494,7 +512,7 @@ func (g *centralCallGraph) loopCarriesUnitIntoSubscription(
 			return true
 		}
 		key := calleeKey(callee)
-		if !isEventSubscribeKey(key) && !g.subscribes[key] {
+		if !g.isEventSubscribeKey(key) && !g.subscribes[key] {
 			return true
 		}
 		subscribes = true

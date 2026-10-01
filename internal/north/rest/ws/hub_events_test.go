@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -211,7 +210,7 @@ func TestHubEventsSubscriberConnectivity(t *testing.T) {
 
 	// Connectivity rides the event bus (the tracker is attached lazily, so
 	// the subscriber cannot wire a model hook at Start time).
-	events.Publish(cu.EventBus, hmevent.ConnectivityChangedEvent{
+	cu.EventBus.Publish(hmevent.ConnectivityChangedEvent{
 		CentralName: "home",
 		InterfaceID: "HmIP-RF",
 		Reachable:   true,
@@ -383,7 +382,7 @@ func TestHubEventsSubscriberSysvarUniqueID(t *testing.T) {
 	sub.Start()
 	t.Cleanup(sub.Stop)
 
-	events.Publish(cu.EventBus, hmevent.SysvarChangedEvent{
+	cu.EventBus.Publish(hmevent.SysvarChangedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "home",
 		Name:        "Außen Temperatur",
@@ -423,7 +422,7 @@ func TestHubEventsSubscriberProgramUniqueIDResolvable(t *testing.T) {
 	sub.Start()
 	t.Cleanup(sub.Stop)
 
-	events.Publish(cu.EventBus, hmevent.ProgramExecutedEvent{
+	cu.EventBus.Publish(hmevent.ProgramExecutedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "home",
 		ProgramID:   "P1",
@@ -456,7 +455,7 @@ func TestHubEventsSubscriberProgramUniqueIDUnresolvable(t *testing.T) {
 	t.Cleanup(sub.Stop)
 
 	// No PutProgram call → ID "UNKNOWN" cannot be resolved.
-	events.Publish(cu.EventBus, hmevent.ProgramExecutedEvent{
+	cu.EventBus.Publish(hmevent.ProgramExecutedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "home",
 		ProgramID:   "UNKNOWN",
@@ -495,7 +494,7 @@ func TestHubEventsSubscriberSysvarDeviceLink(t *testing.T) {
 	sub.Start()
 	t.Cleanup(sub.Stop)
 
-	events.Publish(cu.EventBus, hmevent.SysvarChangedEvent{
+	cu.EventBus.Publish(hmevent.SysvarChangedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "home",
 		Name:        "svEnergyCounter_14884_000858A994D482:7",
@@ -517,7 +516,7 @@ func TestHubEventsSubscriberSysvarDeviceLink(t *testing.T) {
 		t.Fatalf("device_address = %q, want %q", p.DeviceAddress, "000858A994D482")
 	}
 
-	events.Publish(cu.EventBus, hmevent.SysvarChangedEvent{
+	cu.EventBus.Publish(hmevent.SysvarChangedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "home",
 		Name:        "Unlinked",
@@ -643,7 +642,7 @@ func TestHubEventsSubscriberSysvarUniqueIDUsesTheVid(t *testing.T) {
 	sub.Start()
 	t.Cleanup(sub.Stop)
 
-	events.Publish(cu.EventBus, hmevent.SysvarChangedEvent{
+	cu.EventBus.Publish(hmevent.SysvarChangedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "home",
 		Name:        "Außen Temperatur",

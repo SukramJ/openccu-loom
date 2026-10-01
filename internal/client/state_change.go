@@ -79,7 +79,7 @@ func WaitForStateChangeOrTimeout(
 	var once sync.Once
 	closeDone := func() { once.Do(func() { close(done) }) }
 
-	unsub := events.Subscribe(bus, func(ev hmevent.DataPointValueChangedEvent) {
+	unsub := bus.Subscribe(func(ev hmevent.DataPointValueChangedEvent) {
 		mu.Lock()
 		expected, ok := pending[ev.Key]
 		if !ok {

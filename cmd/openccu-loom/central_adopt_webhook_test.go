@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/north/webhook"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -120,7 +119,7 @@ func awaitIncidents(t *testing.T, rt *recordingTransport, name string, n int) {
 // publishIncidentOn fires one incident on the central's own bus, the way the
 // health tracker does.
 func publishIncidentOn(u *central.Unit) {
-	events.Publish(u.EventBus, hmevent.IncidentRecordedEvent{
+	u.EventBus.Publish(hmevent.IncidentRecordedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: u.Name(),
 		Message:     "test probe",
@@ -186,7 +185,7 @@ func TestAdoptCentralWiresTheOutboundWebhook(t *testing.T) {
 	publishIncidentOn(hooked)
 
 	// The witness is the bound on "nothing arrived", and it is a real bound
-	// rather than a duration: events.Publish dispatches in the caller's
+	// rather than a duration: Bus.Publish dispatches in the caller's
 	// frame, so both incidents are in the delivery queue by the time this
 	// line returns, and the queue is drained by a single worker in order. A
 	// leaked "hooked" delivery is therefore already recorded once the

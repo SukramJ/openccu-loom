@@ -10,7 +10,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/channelflags"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -63,7 +62,7 @@ func TestUnpairedDeviceLosesItsChannelFlags(t *testing.T) {
 		overlay.Set(centralName, addr, channelflags.Flags{Hidden: true})
 	}
 
-	events.Publish(unit.EventBus, hmevent.DeviceRemovedEvent{
+	unit.EventBus.Publish(hmevent.DeviceRemovedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: centralName,
 		InterfaceID: ifaceID,
@@ -132,7 +131,7 @@ func TestModelTeardownKeepsChannelFlags(t *testing.T) {
 	}
 	overlay.Set(centralName, addr+":1", channelflags.Flags{Hidden: true})
 
-	events.Publish(unit.EventBus, hmevent.DeviceRemovedEvent{
+	unit.EventBus.Publish(hmevent.DeviceRemovedEvent{
 		Base:          hmevent.NewBase(),
 		CentralName:   centralName,
 		InterfaceID:   "HmIP-RF",

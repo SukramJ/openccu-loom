@@ -6,7 +6,6 @@ package main
 import (
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
@@ -28,7 +27,7 @@ func TestSubscribeMatterDeviceLifecycleTrigger_ReadyUnitFiresOnCreateAndRemove(t
 		}
 	})
 
-	events.Publish(unit.EventBus, hmevent.DeviceCreatedEvent{
+	unit.EventBus.Publish(hmevent.DeviceCreatedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "ccu-a",
 	})
@@ -36,7 +35,7 @@ func TestSubscribeMatterDeviceLifecycleTrigger_ReadyUnitFiresOnCreateAndRemove(t
 		t.Fatalf("fired = %d after DeviceCreatedEvent, want 1", fired)
 	}
 
-	events.Publish(unit.EventBus, hmevent.DeviceRemovedEvent{
+	unit.EventBus.Publish(hmevent.DeviceRemovedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "ccu-a",
 	})
@@ -62,11 +61,11 @@ func TestSubscribeMatterDeviceLifecycleTrigger_NotReadyUnitSkipsTrigger(t *testi
 		}
 	})
 
-	events.Publish(unit.EventBus, hmevent.DeviceCreatedEvent{
+	unit.EventBus.Publish(hmevent.DeviceCreatedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "ccu-a",
 	})
-	events.Publish(unit.EventBus, hmevent.DeviceRemovedEvent{
+	unit.EventBus.Publish(hmevent.DeviceRemovedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "ccu-a",
 	})
@@ -95,11 +94,11 @@ func TestSubscribeMatterDeviceLifecycleTrigger_UnsubscribeStopsFiring(t *testing
 		unsub()
 	}
 
-	events.Publish(unit.EventBus, hmevent.DeviceCreatedEvent{
+	unit.EventBus.Publish(hmevent.DeviceCreatedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "ccu-a",
 	})
-	events.Publish(unit.EventBus, hmevent.DeviceRemovedEvent{
+	unit.EventBus.Publish(hmevent.DeviceRemovedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "ccu-a",
 	})
@@ -147,7 +146,7 @@ func TestSubscribeMatterDeviceLifecycleTrigger_FiresOnRename(t *testing.T) {
 		}
 	})
 
-	events.Publish(unit.EventBus, hmevent.DeviceMetadataChangedEvent{
+	unit.EventBus.Publish(hmevent.DeviceMetadataChangedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "ccu-a",
 		InterfaceID: "HmIP-RF",

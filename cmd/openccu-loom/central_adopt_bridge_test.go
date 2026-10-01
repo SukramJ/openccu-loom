@@ -10,7 +10,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -54,7 +53,7 @@ func publishValueChange(t *testing.T, reg *central.Registry, centralName, parame
 	if !ok {
 		t.Fatalf("central %q not registered", centralName)
 	}
-	events.Publish(unit.EventBus, hmevent.DataPointValueChangedEvent{
+	unit.EventBus.Publish(hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBase(),
 		Key: hmtypes.DataPointKey{
 			InterfaceID:    "HmIP-RF",

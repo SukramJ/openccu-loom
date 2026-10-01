@@ -18,7 +18,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/ccudata"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/central/rpcserver"
 	"github.com/SukramJ/openccu-loom/internal/channelflags"
 	"github.com/SukramJ/openccu-loom/internal/client"
@@ -273,7 +272,7 @@ func gatedCentralBringUp(
 			// between the latch and the publish observes readiness through
 			// both paths, so no interleaving can lose the transition.
 			unit.MarkSouthboundReady()
-			events.Publish(unit.EventBus, hmevent.CentralSouthboundReadyEvent{
+			unit.EventBus.Publish(hmevent.CentralSouthboundReadyEvent{
 				Base:        hmevent.NewBase(),
 				CentralName: cc.Name,
 			})
@@ -367,7 +366,7 @@ func recordCentralReadiness(unit *central.Unit, phase hmenum.ReadinessPhase, loa
 	}
 	unit.SetReadiness(phase, loaded, total)
 	if unit.EventBus != nil {
-		events.Publish(unit.EventBus, hmevent.CentralReadinessChangedEvent{
+		unit.EventBus.Publish(hmevent.CentralReadinessChangedEvent{
 			Base:             hmevent.NewBase(),
 			CentralName:      unit.Name(),
 			Phase:            phase,
@@ -416,7 +415,7 @@ func WireReadinessRecompute(unit *central.Unit, cc config.CentralConfig, logger 
 	if unit == nil || unit.EventBus == nil {
 		return func() {}
 	}
-	return events.Subscribe(unit.EventBus, func(hmevent.RecoveryCompletedEvent) {
+	return unit.EventBus.Subscribe(func(hmevent.RecoveryCompletedEvent) {
 		r := unit.Readiness()
 		if r.Phase != hmenum.ReadinessReady {
 			return
@@ -1027,7 +1026,7 @@ func wireInterface(
 			if probeBus == nil {
 				return
 			}
-			events.Publish(probeBus, hmevent.ConnectionLostEvent{
+			probeBus.Publish(hmevent.ConnectionLostEvent{
 				CentralName: probeCentral,
 				InterfaceID: probeWireID,
 				Reason:      hmenum.FailureReasonNetwork,

@@ -87,25 +87,25 @@ func TestAlarmSinkFansOutEveryEventType(t *testing.T) {
 func subscribeByType(bus *events.Bus, sample hmevent.Event, fn func(hmevent.EventType)) func() {
 	switch sample.(type) {
 	case hmevent.AlarmStateChangedEvent:
-		return events.Subscribe(bus, func(e hmevent.AlarmStateChangedEvent) { fn(e.Type()) })
+		return bus.Subscribe(func(e hmevent.AlarmStateChangedEvent) { fn(e.Type()) })
 	case hmevent.AlarmTriggeredEvent:
-		return events.Subscribe(bus, func(e hmevent.AlarmTriggeredEvent) { fn(e.Type()) })
+		return bus.Subscribe(func(e hmevent.AlarmTriggeredEvent) { fn(e.Type()) })
 	case hmevent.AlarmReadinessChangedEvent:
-		return events.Subscribe(bus, func(e hmevent.AlarmReadinessChangedEvent) { fn(e.Type()) })
+		return bus.Subscribe(func(e hmevent.AlarmReadinessChangedEvent) { fn(e.Type()) })
 	case hmevent.AlarmJournalAppendedEvent:
-		return events.Subscribe(bus, func(e hmevent.AlarmJournalAppendedEvent) { fn(e.Type()) })
+		return bus.Subscribe(func(e hmevent.AlarmJournalAppendedEvent) { fn(e.Type()) })
 	case hmevent.AlarmCountdownEvent:
-		return events.Subscribe(bus, func(e hmevent.AlarmCountdownEvent) { fn(e.Type()) })
+		return bus.Subscribe(func(e hmevent.AlarmCountdownEvent) { fn(e.Type()) })
 	case hmevent.AlarmWalkTestEvent:
-		return events.Subscribe(bus, func(e hmevent.AlarmWalkTestEvent) { fn(e.Type()) })
+		return bus.Subscribe(func(e hmevent.AlarmWalkTestEvent) { fn(e.Type()) })
 	case hmevent.AlarmHealthChangedEvent:
-		return events.Subscribe(bus, func(e hmevent.AlarmHealthChangedEvent) { fn(e.Type()) })
+		return bus.Subscribe(func(e hmevent.AlarmHealthChangedEvent) { fn(e.Type()) })
 	case hmevent.AlarmPanelChangedEvent:
-		return events.Subscribe(bus, func(e hmevent.AlarmPanelChangedEvent) { fn(e.Type()) })
+		return bus.Subscribe(func(e hmevent.AlarmPanelChangedEvent) { fn(e.Type()) })
 	case hmevent.AlarmDuressEvent:
-		return events.Subscribe(bus, func(e hmevent.AlarmDuressEvent) { fn(e.Type()) })
+		return bus.Subscribe(func(e hmevent.AlarmDuressEvent) { fn(e.Type()) })
 	case hmevent.AlarmReminderEvent:
-		return events.Subscribe(bus, func(e hmevent.AlarmReminderEvent) { fn(e.Type()) })
+		return bus.Subscribe(func(e hmevent.AlarmReminderEvent) { fn(e.Type()) })
 	default:
 		panic("subscribeByType: no subscription for " + string(sample.Type()) +
 			"; add one so the fan-out table keeps covering it")

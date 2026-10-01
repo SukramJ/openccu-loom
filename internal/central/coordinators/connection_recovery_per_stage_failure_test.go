@@ -43,7 +43,7 @@ func TestRecoveryPipelineFailureAtEachStage(t *testing.T) {
 			c := NewConnectionRecoveryCoordinator("ccu-test", bus)
 
 			var failedEvents atomic.Int32
-			events.Subscribe(bus, func(hmevent.RecoveryFailedEvent) {
+			bus.Subscribe(func(hmevent.RecoveryFailedEvent) {
 				failedEvents.Add(1)
 			})
 
@@ -52,7 +52,7 @@ func TestRecoveryPipelineFailureAtEachStage(t *testing.T) {
 			// failure event — openccu-loom surfaces stage progression
 			// through StageChanged, not as a field on RecoveryFailed.
 			var lastStage atomic.Value
-			events.Subscribe(bus, func(e hmevent.RecoveryStageChangedEvent) {
+			bus.Subscribe(func(e hmevent.RecoveryStageChangedEvent) {
 				lastStage.Store(e.To)
 			})
 

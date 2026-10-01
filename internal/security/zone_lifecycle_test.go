@@ -44,7 +44,7 @@ func TestServiceRemovesZoneOnAlarmPanelChangedRemoved(t *testing.T) {
 		t.Fatalf("Start: %v", err)
 	}
 
-	events.Publish(alarmBus, hmevent.AlarmTriggeredEvent{
+	alarmBus.Publish(hmevent.AlarmTriggeredEvent{
 		Base: hmevent.NewBaseAt(clk.Now()), ZoneID: "z1", ZoneName: "Erdgeschoss",
 		IncidentID: 1, Mode: hmenum.AlarmModeFull,
 	})
@@ -52,7 +52,7 @@ func TestServiceRemovesZoneOnAlarmPanelChangedRemoved(t *testing.T) {
 		t.Fatal("zone z1 never entered the snapshot after AlarmTriggeredEvent; the rest of this test would pass vacuously")
 	}
 
-	events.Publish(alarmBus, hmevent.AlarmPanelChangedEvent{
+	alarmBus.Publish(hmevent.AlarmPanelChangedEvent{
 		Base: hmevent.NewBaseAt(clk.Now()), ZoneID: "z1", Name: "Erdgeschoss", Removed: true,
 	})
 
@@ -91,7 +91,7 @@ func TestServiceIgnoresMasterZoneRemoval(t *testing.T) {
 		t.Fatalf("Start: %v", err)
 	}
 
-	events.Publish(alarmBus, hmevent.AlarmTriggeredEvent{
+	alarmBus.Publish(hmevent.AlarmTriggeredEvent{
 		Base: hmevent.NewBaseAt(clk.Now()), ZoneID: "z1", ZoneName: "Erdgeschoss",
 		IncidentID: 1, Mode: hmenum.AlarmModeFull,
 	})
@@ -99,7 +99,7 @@ func TestServiceIgnoresMasterZoneRemoval(t *testing.T) {
 		t.Fatal("zone z1 never entered the snapshot after AlarmTriggeredEvent; the rest of this test would pass vacuously")
 	}
 
-	events.Publish(alarmBus, hmevent.AlarmPanelChangedEvent{
+	alarmBus.Publish(hmevent.AlarmPanelChangedEvent{
 		Base: hmevent.NewBaseAt(clk.Now()), ZoneID: alarmpanel.MasterZoneID, Name: "Alarm system", Removed: true,
 	})
 
@@ -109,7 +109,7 @@ func TestServiceIgnoresMasterZoneRemoval(t *testing.T) {
 
 	// The half that can fail: an ordinary master-panel update.
 	before := len(svc.Snapshot().Zones)
-	events.Publish(alarmBus, hmevent.AlarmPanelChangedEvent{
+	alarmBus.Publish(hmevent.AlarmPanelChangedEvent{
 		Base: hmevent.NewBaseAt(clk.Now()), ZoneID: alarmpanel.MasterZoneID,
 		Name: "Alarm system", State: string(hmenum.AlarmModeDisarmed),
 	})

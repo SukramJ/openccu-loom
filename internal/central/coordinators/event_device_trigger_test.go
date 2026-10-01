@@ -20,7 +20,7 @@ func triggerRecorder(t *testing.T) (*EventCoordinator, *[]hmevent.DeviceTriggerE
 	ec := NewEventCoordinator(bus, NewCacheCoordinator(), nil)
 	ec.SetCentralName("test-central")
 	got := &[]hmevent.DeviceTriggerEvent{}
-	unsub := events.Subscribe(bus, func(e hmevent.DeviceTriggerEvent) {
+	unsub := bus.Subscribe(func(e hmevent.DeviceTriggerEvent) {
 		*got = append(*got, e)
 	})
 	t.Cleanup(unsub)

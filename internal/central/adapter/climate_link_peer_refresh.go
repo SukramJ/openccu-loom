@@ -5,7 +5,6 @@ package adapter
 
 import (
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/climate"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -92,7 +91,7 @@ func WireClimateLinkPeerRefresh(unit *central.Unit) func() {
 		peerClosers[ch.Address] = clim.RefreshLinkPeerActivitySources(peers)
 	}
 
-	unsub1 := events.Subscribe(bus, func(e hmevent.RecoveryCompletedEvent) {
+	unsub1 := bus.Subscribe(func(e hmevent.RecoveryCompletedEvent) {
 		if e.Result != hmenum.RecoveryResultSuccess && e.Result != hmenum.RecoveryResultPartial {
 			return
 		}
@@ -116,7 +115,7 @@ func WireClimateLinkPeerRefresh(unit *central.Unit) func() {
 		}
 	})
 
-	unsub2 := events.Subscribe(bus, func(e hmevent.LinkPeerChangedEvent) {
+	unsub2 := bus.Subscribe(func(e hmevent.LinkPeerChangedEvent) {
 		ch := resolveChannel(e.Address)
 		// Update the per-channel cache so the recovery path can use it
 		// on the next reconnect without waiting for another topology push.

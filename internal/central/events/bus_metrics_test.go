@@ -35,10 +35,10 @@ func TestBusEventStatsCountsPerType(t *testing.T) {
 	}
 
 	for range 3 {
-		Publish(bus, metricsTestEvent{Base: hmevent.NewBase()})
+		bus.Publish(metricsTestEvent{Base: hmevent.NewBase()})
 	}
 	for range 5 {
-		Publish(bus, metricsTestBetaEvent{Base: hmevent.NewBase()})
+		bus.Publish(metricsTestBetaEvent{Base: hmevent.NewBase()})
 	}
 
 	stats := bus.EventStats()
@@ -61,7 +61,7 @@ func TestBusEventStatsCountsWithoutSubscribers(t *testing.T) {
 
 	bus := NewBus()
 	for range 4 {
-		Publish(bus, metricsTestEvent{Base: hmevent.NewBase()})
+		bus.Publish(metricsTestEvent{Base: hmevent.NewBase()})
 	}
 	if got := bus.EventStats()["metrics.test.alpha"]; got != 4 {
 		t.Errorf("counted=%d, want 4 even with no subscribers", got)
@@ -76,9 +76,9 @@ func TestBusTotalSubscriptionCountAggregates(t *testing.T) {
 		t.Errorf("baseline=%d", got)
 	}
 
-	unsubA1 := Subscribe(bus, func(metricsTestEvent) {})
-	_ = Subscribe(bus, func(metricsTestEvent) {})
-	unsubB := Subscribe(bus, func(metricsTestBetaEvent) {})
+	unsubA1 := bus.Subscribe(func(metricsTestEvent) {})
+	_ = bus.Subscribe(func(metricsTestEvent) {})
+	unsubB := bus.Subscribe(func(metricsTestBetaEvent) {})
 	if got := bus.TotalSubscriptionCount(); got != 3 {
 		t.Errorf("after subscribe got=%d, want 3", got)
 	}
@@ -106,7 +106,7 @@ func TestBusEventStatsRaceSafe(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for range publishes {
-				Publish(bus, metricsTestEvent{Base: hmevent.NewBase()})
+				bus.Publish(metricsTestEvent{Base: hmevent.NewBase()})
 			}
 		}()
 	}

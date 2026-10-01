@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -92,7 +91,7 @@ func TestHubEventsSubscriberStartCentralAttachesEventBusSubscriptions(t *testing
 
 	adopted := registerHubEventsCentral(t, reg, "adopted")
 
-	events.Publish(adopted.EventBus, hmevent.ConnectivityChangedEvent{
+	adopted.EventBus.Publish(hmevent.ConnectivityChangedEvent{
 		CentralName: "adopted",
 		InterfaceID: "HmIP-RF",
 		Reachable:   true,
@@ -140,7 +139,7 @@ func TestHubEventsSubscriberUnregisterDetaches(t *testing.T) {
 		{ID: "1", Name: "Alarm A"},
 		{ID: "2", Name: "Alarm B"},
 	})
-	events.Publish(adopted.EventBus, hmevent.ConnectivityChangedEvent{
+	adopted.EventBus.Publish(hmevent.ConnectivityChangedEvent{
 		CentralName: "adopted",
 		InterfaceID: "HmIP-RF",
 		Reachable:   false,

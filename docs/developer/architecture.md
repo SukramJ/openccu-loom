@@ -123,7 +123,7 @@ never as a special case sprinkled through the shared code.
 Cross-domain communication inside the core runs over an internal, generic, typed, priority-aware event bus (`internal/central/events`). It has no re-entrancy: handlers subscribe with a priority and an unsubscribe handle.
 
 ```go
-unsubscribe := events.Subscribe(bus, func(e hmevent.DataPointValueChanged) {
+unsubscribe := bus.Subscribe(func(e hmevent.DataPointValueChanged) {
     // handle
 }, events.WithPriority(events.PriorityHigh))
 defer unsubscribe()

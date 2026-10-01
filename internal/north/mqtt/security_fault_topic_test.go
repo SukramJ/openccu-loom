@@ -104,7 +104,7 @@ func TestSecurityFaultTopicHasExactlyOneProducer(t *testing.T) {
 	waitForSecurityPublish(t, mp, securityAvailabilityTopic("openccu-loom"), func(r publishRecord) bool { return r.payload == "online" })
 	before := countSecurityPublishes(mp, faultTopic)
 
-	events.Publish(bus, hmevent.SecurityFaultChangedEvent{
+	bus.Publish(hmevent.SecurityFaultChangedEvent{
 		Base: hmevent.NewBaseAt(time.Now()), FaultID: "f1", Class: hmenum.SecurityClassTechnical,
 		Reason: hmenum.SecurityFaultReasonUnreachable, Severity: hmenum.SecuritySeverityInfo,
 		Open: true, OpenCount: 1,
@@ -120,7 +120,7 @@ func TestSecurityFaultTopicHasExactlyOneProducer(t *testing.T) {
 		t.Fatalf("SecurityFaultChangedEvent alone produced %d new publish(es) to %s, want 0 — onFaultChanged must only reconcile the retained plane, never write the event topic itself", after-before, faultTopic)
 	}
 
-	events.Publish(bus, hmevent.SecurityNotificationEvent{
+	bus.Publish(hmevent.SecurityNotificationEvent{
 		Base: hmevent.NewBaseAt(time.Now()), Class: hmenum.SecurityClassTechnical,
 		Severity: hmenum.SecuritySeverityInfo, Verb: hmenum.SecurityVerbRaised,
 		Subject: "Sensor unreachable", Message: "Device 1 is unreachable.",

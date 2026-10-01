@@ -69,7 +69,7 @@ func TestRecoveryAttemptedEventEmittedOnSuccess(t *testing.T) {
 	t.Parallel()
 	bus := events.NewBus()
 	var received []hmevent.RecoveryAttemptedEvent
-	unsubscribe := events.Subscribe(bus, func(e hmevent.RecoveryAttemptedEvent) {
+	unsubscribe := bus.Subscribe(func(e hmevent.RecoveryAttemptedEvent) {
 		received = append(received, e)
 	})
 	defer unsubscribe()
@@ -107,7 +107,7 @@ func TestRecoveryAttemptedEventEmittedOnFailure(t *testing.T) {
 	t.Parallel()
 	bus := events.NewBus()
 	var received []hmevent.RecoveryAttemptedEvent
-	unsubscribe := events.Subscribe(bus, func(e hmevent.RecoveryAttemptedEvent) {
+	unsubscribe := bus.Subscribe(func(e hmevent.RecoveryAttemptedEvent) {
 		received = append(received, e)
 	})
 	defer unsubscribe()

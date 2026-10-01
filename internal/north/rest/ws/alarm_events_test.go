@@ -37,7 +37,7 @@ func TestAlarmPanelSubscriberStateChanged(t *testing.T) {
 	t.Parallel()
 	h, bus := newAlarmPanelSubscriberFixture(t)
 
-	events.Publish(bus, hmevent.AlarmStateChangedEvent{
+	bus.Publish(hmevent.AlarmStateChangedEvent{
 		Base:       hmevent.NewBase(),
 		ZoneID:     "eg",
 		ZoneName:   "Erdgeschoss",
@@ -75,7 +75,7 @@ func TestAlarmPanelSubscriberCountdown(t *testing.T) {
 	t.Parallel()
 	h, bus := newAlarmPanelSubscriberFixture(t)
 
-	events.Publish(bus, hmevent.AlarmCountdownEvent{
+	bus.Publish(hmevent.AlarmCountdownEvent{
 		Base:        hmevent.NewBase(),
 		ZoneID:      "eg",
 		Kind:        "exit_delay",
@@ -109,7 +109,7 @@ func TestAlarmPanelSubscriberReadinessChanged(t *testing.T) {
 	t.Parallel()
 	h, bus := newAlarmPanelSubscriberFixture(t)
 
-	events.Publish(bus, hmevent.AlarmReadinessChangedEvent{
+	bus.Publish(hmevent.AlarmReadinessChangedEvent{
 		Base:   hmevent.NewBase(),
 		ZoneID: "eg",
 		Readiness: map[hmenum.AlarmMode]hmevent.AlarmModeReadiness{
@@ -144,7 +144,7 @@ func TestAlarmPanelSubscriberTriggered(t *testing.T) {
 	t.Parallel()
 	h, bus := newAlarmPanelSubscriberFixture(t)
 
-	events.Publish(bus, hmevent.AlarmTriggeredEvent{
+	bus.Publish(hmevent.AlarmTriggeredEvent{
 		Base:       hmevent.NewBase(),
 		ZoneID:     "eg",
 		ZoneName:   "Erdgeschoss",
@@ -181,7 +181,7 @@ func TestAlarmPanelSubscriberNotification(t *testing.T) {
 	t.Parallel()
 	h, bus := newAlarmPanelSubscriberFixture(t)
 
-	events.Publish(bus, hmevent.AlarmNotificationEvent{
+	bus.Publish(hmevent.AlarmNotificationEvent{
 		Base:       hmevent.NewBase(),
 		ZoneID:     "eg",
 		ZoneName:   "Erdgeschoss",
@@ -222,7 +222,7 @@ func TestAlarmPanelSubscriberJournalAppended(t *testing.T) {
 	t.Parallel()
 	h, bus := newAlarmPanelSubscriberFixture(t)
 
-	events.Publish(bus, hmevent.AlarmJournalAppendedEvent{
+	bus.Publish(hmevent.AlarmJournalAppendedEvent{
 		Base:       hmevent.NewBase(),
 		EntryID:    7,
 		ZoneID:     "eg",
@@ -255,7 +255,7 @@ func TestAlarmPanelSubscriberWalkTestProgress(t *testing.T) {
 	t.Parallel()
 	h, bus := newAlarmPanelSubscriberFixture(t)
 
-	events.Publish(bus, hmevent.AlarmWalkTestEvent{
+	bus.Publish(hmevent.AlarmWalkTestEvent{
 		Base:       hmevent.NewBase(),
 		ZoneID:     "eg",
 		SensorID:   "window",
@@ -288,7 +288,7 @@ func TestAlarmPanelSubscriberHealthChanged(t *testing.T) {
 	t.Parallel()
 	h, bus := newAlarmPanelSubscriberFixture(t)
 
-	events.Publish(bus, hmevent.AlarmHealthChangedEvent{
+	bus.Publish(hmevent.AlarmHealthChangedEvent{
 		Base:    hmevent.NewBase(),
 		Healthy: false,
 		Note:    "output driver watchdog timeout",
@@ -319,7 +319,7 @@ func TestAlarmPanelSubscriberPanelChanged(t *testing.T) {
 	t.Parallel()
 	h, bus := newAlarmPanelSubscriberFixture(t)
 
-	events.Publish(bus, hmevent.AlarmPanelChangedEvent{
+	bus.Publish(hmevent.AlarmPanelChangedEvent{
 		Base:               hmevent.NewBase(),
 		UniqueID:           "openccu-loom_alarm_eg",
 		ZoneID:             "eg",

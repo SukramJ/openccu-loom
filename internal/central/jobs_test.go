@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
@@ -209,7 +208,7 @@ func TestCheckConnectionJobPublishesConnectionLostOnFailedPing(t *testing.T) {
 
 	// Subscribe to ConnectionLostEvent before registering the job.
 	var lostCount atomic.Int32
-	unsub := events.Subscribe(c.EventBus, func(e hmevent.ConnectionLostEvent) {
+	unsub := c.EventBus.Subscribe(func(e hmevent.ConnectionLostEvent) {
 		if e.CentralName == "test-cc" && e.InterfaceID == "HmIP-RF" {
 			lostCount.Add(1)
 		}
@@ -275,7 +274,7 @@ func TestCheckConnectionJobDoesNotFireOnSuccessfulPing(t *testing.T) {
 	}
 
 	var lostCount atomic.Int32
-	unsub := events.Subscribe(c.EventBus, func(e hmevent.ConnectionLostEvent) {
+	unsub := c.EventBus.Subscribe(func(e hmevent.ConnectionLostEvent) {
 		lostCount.Add(1)
 	})
 	defer unsub()
@@ -451,13 +450,13 @@ func TestStandardJobsRefreshClientDataDefault(t *testing.T) {
 
 	// Subscribe to both bookend events before wiring jobs.
 	var triggered, completed atomic.Int32
-	unsubT := events.Subscribe(c.EventBus, func(e hmevent.DataRefreshTriggeredEvent) {
+	unsubT := c.EventBus.Subscribe(func(e hmevent.DataRefreshTriggeredEvent) {
 		if e.CentralName == "test-g19" {
 			triggered.Add(1)
 		}
 	})
 	defer unsubT()
-	unsubC := events.Subscribe(c.EventBus, func(e hmevent.DataRefreshCompletedEvent) {
+	unsubC := c.EventBus.Subscribe(func(e hmevent.DataRefreshCompletedEvent) {
 		if e.CentralName == "test-g19" {
 			completed.Add(1)
 		}
@@ -1187,7 +1186,7 @@ func TestCheckConnectionJobReportsTheRecordedFailureReason(t *testing.T) {
 	}
 
 	reasons := make(chan hmenum.FailureReason, 4)
-	unsub := events.Subscribe(c.EventBus, func(e hmevent.ConnectionLostEvent) {
+	unsub := c.EventBus.Subscribe(func(e hmevent.ConnectionLostEvent) {
 		if e.InterfaceID == "HmIP-RF" {
 			reasons <- e.Reason
 		}

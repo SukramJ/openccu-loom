@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -67,7 +66,7 @@ func TestTurningTheToggleOffAppliesWithoutARestart(t *testing.T) {
 	m, c, iface := managerHoldingOneDevice(t)
 
 	var announced []string
-	unsub := events.Subscribe(c.EventBus, func(e hmevent.DeviceReleasedEvent) {
+	unsub := c.EventBus.Subscribe(func(e hmevent.DeviceReleasedEvent) {
 		announced = append(announced, e.Address)
 	})
 	defer unsub()

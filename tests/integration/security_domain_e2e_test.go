@@ -48,7 +48,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/model/safety"
 	"github.com/SukramJ/openccu-loom/internal/north/rest"
@@ -179,7 +178,7 @@ func (sh *securityHarness) injectBool(key hmtypes.DataPointKey, on bool) {
 			}
 		}
 	}
-	events.Publish(sh.h.central.EventBus, hmevent.DataPointValueChangedEvent{
+	sh.h.central.EventBus.Publish(hmevent.DataPointValueChangedEvent{
 		Base:     hmevent.NewBase(),
 		Key:      key,
 		OldValue: hmtypes.BoolValue(!on),

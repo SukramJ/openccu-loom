@@ -5,7 +5,6 @@ package ws
 
 import (
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/wiring"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -140,7 +139,7 @@ func (s *DeviceLifecycleSubscriber) StartCentral(u *central.Unit) func() {
 	}
 	centralName := u.Name()
 	hub := s.hub
-	unsubCreated := events.Subscribe(bus, func(e hmevent.DeviceCreatedEvent) {
+	unsubCreated := bus.Subscribe(func(e hmevent.DeviceCreatedEvent) {
 		hub.Publish(Event{
 			Topic: DeviceLifecycleTopic(e.Address),
 			Type:  string(hmevent.EventTypeDeviceCreated),
@@ -160,7 +159,7 @@ func (s *DeviceLifecycleSubscriber) StartCentral(u *central.Unit) func() {
 			},
 		})
 	})
-	unsubReleased := events.Subscribe(bus, func(e hmevent.DeviceReleasedEvent) {
+	unsubReleased := bus.Subscribe(func(e hmevent.DeviceReleasedEvent) {
 		hub.Publish(Event{
 			Topic: DeviceLifecycleTopic(e.Address),
 			Type:  broadcastDeviceReleased,
@@ -172,7 +171,7 @@ func (s *DeviceLifecycleSubscriber) StartCentral(u *central.Unit) func() {
 			},
 		})
 	})
-	unsubRemoved := events.Subscribe(bus, func(e hmevent.DeviceRemovedEvent) {
+	unsubRemoved := bus.Subscribe(func(e hmevent.DeviceRemovedEvent) {
 		hub.Publish(Event{
 			Topic: DeviceLifecycleTopic(e.Address),
 			Type:  string(hmevent.EventTypeDeviceRemoved),
@@ -189,7 +188,7 @@ func (s *DeviceLifecycleSubscriber) StartCentral(u *central.Unit) func() {
 	// availability sub-type needs a north-bound frame here, because the
 	// creation and deletion sub-types have their own dedicated events
 	// (subscribed above) and relaying them would double each frame.
-	unsubAvailability := events.Subscribe(bus, func(e hmevent.DeviceLifecycleEvent) {
+	unsubAvailability := bus.Subscribe(func(e hmevent.DeviceLifecycleEvent) {
 		if e.Subtype != hmenum.DeviceLifecycleSubtypeAvailabilityChanged {
 			return
 		}

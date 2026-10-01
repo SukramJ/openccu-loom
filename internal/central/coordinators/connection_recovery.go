@@ -574,14 +574,14 @@ func (c *ConnectionRecoveryCoordinator) Subscribe() {
 	c.subscribed = true
 	c.subMu.Unlock()
 
-	unsub1 := events.Subscribe(c.bus, func(e hmevent.ConnectionLostEvent) {
+	unsub1 := c.bus.Subscribe(func(e hmevent.ConnectionLostEvent) {
 		if e.CentralName != c.centralName {
 			return
 		}
 		c.triggerRecovery(e.InterfaceID)
 	})
 
-	unsub2 := events.Subscribe(c.bus, func(e hmevent.CircuitBreakerStateChangedEvent) {
+	unsub2 := c.bus.Subscribe(func(e hmevent.CircuitBreakerStateChangedEvent) {
 		if e.CentralName != c.centralName {
 			return
 		}
@@ -613,7 +613,7 @@ func (c *ConnectionRecoveryCoordinator) Subscribe() {
 		}
 	})
 
-	unsub3 := events.Subscribe(c.bus, func(e hmevent.HeartbeatTimerFiredEvent) {
+	unsub3 := c.bus.Subscribe(func(e hmevent.HeartbeatTimerFiredEvent) {
 		if e.CentralName != c.centralName {
 			return
 		}
@@ -636,7 +636,7 @@ func (c *ConnectionRecoveryCoordinator) Subscribe() {
 	// tracker, or a manual operator override) transitions the central into
 	// FAILED. Without this subscriber, external state transitions would
 	// never trigger the recovery pipeline.
-	unsub4 := events.Subscribe(c.bus, func(e hmevent.CentralStateChangedEvent) {
+	unsub4 := c.bus.Subscribe(func(e hmevent.CentralStateChangedEvent) {
 		if e.CentralName != c.centralName {
 			return
 		}
@@ -737,7 +737,7 @@ func (c *ConnectionRecoveryCoordinator) fireHeartbeatIfExhausted() {
 		return
 	}
 
-	events.Publish(c.bus, hmevent.HeartbeatTimerFiredEvent{
+	c.bus.Publish(hmevent.HeartbeatTimerFiredEvent{
 		Base:         hmevent.NewBase(),
 		CentralName:  c.centralName,
 		InterfaceIDs: exhausted,
@@ -997,7 +997,7 @@ func (c *ConnectionRecoveryCoordinator) runInternal(ctx context.Context, interfa
 		if exhausted {
 			c.recordOutcome(interfaceID, time.Now(), 0, hmenum.RecoveryResultFailed, hmenum.FailureReasonExhausted)
 			c.transitionTo(hmenum.CentralStateFailed)
-			events.Publish(c.bus, hmevent.RecoveryFailedEvent{
+			c.bus.Publish(hmevent.RecoveryFailedEvent{
 				Base:                       hmevent.NewBase(),
 				CentralName:                c.centralName,
 				InterfaceID:                interfaceID,
@@ -1019,7 +1019,7 @@ func (c *ConnectionRecoveryCoordinator) runInternal(ctx context.Context, interfa
 	maxAttempts := c.maxAttempts
 	c.mu.Unlock()
 
-	events.Publish(c.bus, hmevent.RecoveryStartedEvent{
+	c.bus.Publish(hmevent.RecoveryStartedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: c.centralName,
 		InterfaceID: interfaceID,
@@ -1035,7 +1035,7 @@ func (c *ConnectionRecoveryCoordinator) runInternal(ctx context.Context, interfa
 	for _, step := range pipeline {
 		durationMs := time.Since(stageEnteredAt).Milliseconds()
 		c.setCurrentStageLocked(interfaceID, step.Stage)
-		events.Publish(c.bus, hmevent.RecoveryStageChangedEvent{
+		c.bus.Publish(hmevent.RecoveryStageChangedEvent{
 			Base:                 hmevent.NewBase(),
 			CentralName:          c.centralName,
 			InterfaceID:          interfaceID,
@@ -1056,7 +1056,7 @@ func (c *ConnectionRecoveryCoordinator) runInternal(ctx context.Context, interfa
 			c.bumpAttempt(interfaceID)
 			c.recordOutcome(interfaceID, start, time.Since(start), hmenum.RecoveryResultFailed, reason)
 			c.transitionTo(hmenum.CentralStateFailed)
-			events.Publish(c.bus, hmevent.RecoveryAttemptedEvent{
+			c.bus.Publish(hmevent.RecoveryAttemptedEvent{
 				Base:          hmevent.NewBase(),
 				CentralName:   c.centralName,
 				InterfaceID:   interfaceID,
@@ -1066,7 +1066,7 @@ func (c *ConnectionRecoveryCoordinator) runInternal(ctx context.Context, interfa
 				Success:       false,
 				ErrorMessage:  err.Error(),
 			})
-			events.Publish(c.bus, hmevent.RecoveryFailedEvent{
+			c.bus.Publish(hmevent.RecoveryFailedEvent{
 				Base:                       hmevent.NewBase(),
 				CentralName:                c.centralName,
 				InterfaceID:                interfaceID,
@@ -1087,7 +1087,7 @@ func (c *ConnectionRecoveryCoordinator) runInternal(ctx context.Context, interfa
 		if ctx.Err() != nil {
 			c.bumpAttempt(interfaceID)
 			c.recordOutcome(interfaceID, start, time.Since(start), hmenum.RecoveryResultCancelled, hmenum.FailureReasonTimeout)
-			events.Publish(c.bus, hmevent.RecoveryFailedEvent{
+			c.bus.Publish(hmevent.RecoveryFailedEvent{
 				Base:             hmevent.NewBase(),
 				CentralName:      c.centralName,
 				InterfaceID:      interfaceID,
@@ -1103,7 +1103,7 @@ func (c *ConnectionRecoveryCoordinator) runInternal(ctx context.Context, interfa
 	c.resetCircuitBreakers(interfaceID)
 	c.recordSuccess(interfaceID, start, time.Since(start))
 	c.transitionTo(hmenum.CentralStateRunning)
-	events.Publish(c.bus, hmevent.RecoveryAttemptedEvent{
+	c.bus.Publish(hmevent.RecoveryAttemptedEvent{
 		Base:          hmevent.NewBase(),
 		CentralName:   c.centralName,
 		InterfaceID:   interfaceID,
@@ -1112,7 +1112,7 @@ func (c *ConnectionRecoveryCoordinator) runInternal(ctx context.Context, interfa
 		StageReached:  hmenum.RecoveryStageRecovered,
 		Success:       true,
 	})
-	events.Publish(c.bus, hmevent.RecoveryCompletedEvent{
+	c.bus.Publish(hmevent.RecoveryCompletedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: c.centralName,
 		InterfaceID: interfaceID,

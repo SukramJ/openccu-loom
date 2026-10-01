@@ -1560,7 +1560,7 @@ Go path: `internal/central/central.go`, `internal/config/`.
 
 ### A5 — Status-subscription architecture: explicit subscribe vs. Python auto-decorator
 
-Python marks coordinator methods with `@callback_event` which auto-registers them as status-change subscribers. Go has no decorator equivalent; coordinator status events are published on the internal bus and consumed by explicit `events.Subscribe` calls in `internal/central/adapter/`.
+Python marks coordinator methods with `@callback_event` which auto-registers them as status-change subscribers. Go has no decorator equivalent; coordinator status events are published on the internal bus and consumed by explicit `Bus.Subscribe` calls in `internal/central/adapter/`.
 
 The explicit subscription pattern is by design (hexagonal architecture, SPEC §3). It makes the event-flow graph readable: every subscription appears at its wiring site, not hidden inside a decorator. `internal/central/coordinators/client.go::SubscribeToHealthEvents` is the canonical example.
 

@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
@@ -61,7 +60,7 @@ func TestEventBridgeWSDeliveryWithoutMQTT(t *testing.T) {
 		{
 			name: "value_changed",
 			publish: func(u *central.Unit, d *device.Device) {
-				events.Publish(u.EventBus, hmevent.DataPointValueChangedEvent{
+				u.EventBus.Publish(hmevent.DataPointValueChangedEvent{
 					Base: hmevent.NewBase(),
 					Key: hmtypes.DataPointKey{
 						InterfaceID:    "HmIP-RF",
@@ -78,7 +77,7 @@ func TestEventBridgeWSDeliveryWithoutMQTT(t *testing.T) {
 		{
 			name: "source_changed_refresh",
 			publish: func(u *central.Unit, d *device.Device) {
-				events.Publish(u.EventBus, hmevent.DataPointSourceChangedEvent{
+				u.EventBus.Publish(hmevent.DataPointSourceChangedEvent{
 					Base:           hmevent.NewBase(),
 					CentralName:    "ccu-01",
 					InterfaceID:    "HmIP-RF",
@@ -95,7 +94,7 @@ func TestEventBridgeWSDeliveryWithoutMQTT(t *testing.T) {
 		{
 			name: "central_state",
 			publish: func(u *central.Unit, _ *device.Device) {
-				events.Publish(u.EventBus, hmevent.CentralStateChangedEvent{
+				u.EventBus.Publish(hmevent.CentralStateChangedEvent{
 					Base:        hmevent.NewBase(),
 					CentralName: "ccu-01",
 					From:        hmenum.CentralStateRunning,
@@ -107,7 +106,7 @@ func TestEventBridgeWSDeliveryWithoutMQTT(t *testing.T) {
 		{
 			name: "central_readiness",
 			publish: func(u *central.Unit, _ *device.Device) {
-				events.Publish(u.EventBus, hmevent.CentralReadinessChangedEvent{
+				u.EventBus.Publish(hmevent.CentralReadinessChangedEvent{
 					Base:        hmevent.NewBase(),
 					CentralName: "ccu-01",
 					Phase:       hmenum.ReadinessReady,
@@ -118,7 +117,7 @@ func TestEventBridgeWSDeliveryWithoutMQTT(t *testing.T) {
 		{
 			name: "device_metadata_changed",
 			publish: func(u *central.Unit, d *device.Device) {
-				events.Publish(u.EventBus, hmevent.DeviceMetadataChangedEvent{
+				u.EventBus.Publish(hmevent.DeviceMetadataChangedEvent{
 					Base:        hmevent.NewBase(),
 					CentralName: "ccu-01",
 					InterfaceID: "HmIP-RF",
@@ -159,7 +158,7 @@ func TestSourceChangedRefreshReachesWSWithMQTT(t *testing.T) {
 	wsHub, unit, d, done := startedBridgeWS(t, true)
 	defer done()
 
-	events.Publish(unit.EventBus, hmevent.DataPointSourceChangedEvent{
+	unit.EventBus.Publish(hmevent.DataPointSourceChangedEvent{
 		Base:           hmevent.NewBase(),
 		CentralName:    "ccu-01",
 		InterfaceID:    "HmIP-RF",

@@ -7,7 +7,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -49,7 +48,7 @@ func TestBreakerNoteLiteralDrivesTheCircuitScore(t *testing.T) {
 
 	// Bring the interface to full credit on the state and activity pillars so
 	// only the circuit pillar can move the score.
-	events.Publish(c.EventBus, hmevent.ClientStateChangedEvent{
+	c.EventBus.Publish(hmevent.ClientStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: c.Name(),
 		InterfaceID: wireID,
@@ -60,7 +59,7 @@ func TestBreakerNoteLiteralDrivesTheCircuitScore(t *testing.T) {
 		t.Fatalf("Event: %v", err)
 	}
 
-	events.Publish(c.EventBus, hmevent.CircuitBreakerStateChangedEvent{
+	c.EventBus.Publish(hmevent.CircuitBreakerStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: c.Name(),
 		InterfaceID: wireID,
@@ -71,7 +70,7 @@ func TestBreakerNoteLiteralDrivesTheCircuitScore(t *testing.T) {
 		t.Fatalf("baseline score with a closed breaker = %.2f, want > 0.9", closed)
 	}
 
-	events.Publish(c.EventBus, hmevent.CircuitBreakerStateChangedEvent{
+	c.EventBus.Publish(hmevent.CircuitBreakerStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: c.Name(),
 		InterfaceID: wireID,

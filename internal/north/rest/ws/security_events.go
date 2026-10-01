@@ -162,11 +162,11 @@ func (s *SecuritySubscriber) Start() {
 	}
 	s.unsubs = append(
 		s.unsubs,
-		events.Subscribe(s.bus, s.onStateChanged),
-		events.Subscribe(s.bus, s.onClassChanged),
-		events.Subscribe(s.bus, s.onZoneChanged),
-		events.Subscribe(s.bus, s.onFaultChanged),
-		events.Subscribe(s.bus, s.onNotification),
+		s.bus.Subscribe(s.onStateChanged),
+		s.bus.Subscribe(s.onClassChanged),
+		s.bus.Subscribe(s.onZoneChanged),
+		s.bus.Subscribe(s.onFaultChanged),
+		s.bus.Subscribe(s.onNotification),
 	)
 }
 

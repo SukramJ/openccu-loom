@@ -28,7 +28,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/cdpkind"
@@ -133,7 +132,7 @@ func newSPAHarness(t *testing.T, models []string) *spaHarness {
 		caller:     caller,
 		logger:     logger,
 	}
-	h.unsubFn = events.Subscribe(c.EventBus, func(e hmevent.DataPointValueChangedEvent) {
+	h.unsubFn = c.EventBus.Subscribe(func(e hmevent.DataPointValueChangedEvent) {
 		h.eventMu.Lock()
 		h.events = append(h.events, e)
 		h.eventMu.Unlock()

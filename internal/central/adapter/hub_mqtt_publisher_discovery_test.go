@@ -13,7 +13,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -222,7 +221,7 @@ func TestConnectivityDiscoveryStateTopicIsPublished(t *testing.T) {
 	// The reachability path: stampWireInterfaceIDs stamps the wire id onto the
 	// event before the reconciler publishes it — never the CCU's bare
 	// interface name.
-	events.Publish(c.EventBus, hmevent.ConnectivityChangedEvent{
+	c.EventBus.Publish(hmevent.ConnectivityChangedEvent{
 		Base:        hmevent.NewBaseAt(time.Now()),
 		CentralName: "ccu-01",
 		InterfaceID: WireInterfaceID("ccu-01", hmenum.InterfaceHmIPRF),

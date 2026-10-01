@@ -60,7 +60,7 @@ func TestCentralEmitsEvent(t *testing.T) {
 	b := events.NewBus()
 	var seen hmevent.CentralStateChangedEvent
 	var n int
-	events.Subscribe(b, func(e hmevent.CentralStateChangedEvent) {
+	b.Subscribe(func(e hmevent.CentralStateChangedEvent) {
 		seen = e
 		n++
 	})
@@ -324,7 +324,7 @@ func TestCentralIllegalTransitions(t *testing.T) {
 func TestCentralEmitsClientStateChangedName(t *testing.T) {
 	b := events.NewBus()
 	var seen hmevent.CentralStateChangedEvent
-	events.Subscribe(b, func(e hmevent.CentralStateChangedEvent) { seen = e })
+	b.Subscribe(func(e hmevent.CentralStateChangedEvent) { seen = e })
 	m := NewCentral("cluster-1", b)
 	_ = m.TransitionTo(hmenum.CentralStateInitializing, hmenum.FailureReasonAuth)
 	if seen.CentralName != "cluster-1" {

@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/metrics"
 	"github.com/SukramJ/openccu-loom/internal/model/combined"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -96,7 +95,7 @@ func TestEventBridgeValueChangedFansOut(t *testing.T) {
 	if len(list) != 1 {
 		t.Fatalf("registry size %d", len(list))
 	}
-	events.Publish(list[0].EventBus, hmevent.DataPointValueChangedEvent{
+	list[0].EventBus.Publish(hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBaseAt(time.Now()),
 		Key: hmtypes.DataPointKey{
 			ChannelAddress: d.Address + ":1",
@@ -139,7 +138,7 @@ func TestEventBridgeDeviceRemovedRetractsRawState(t *testing.T) {
 	}
 	unit := list[0]
 
-	events.Publish(unit.EventBus, hmevent.DataPointValueChangedEvent{
+	unit.EventBus.Publish(hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBaseAt(time.Now()),
 		Key: hmtypes.DataPointKey{
 			ChannelAddress: d.Address + ":1",
@@ -156,7 +155,7 @@ func TestEventBridgeDeviceRemovedRetractsRawState(t *testing.T) {
 	}
 	stateTopic := before[0].Topic
 
-	events.Publish(unit.EventBus, hmevent.DeviceRemovedEvent{
+	unit.EventBus.Publish(hmevent.DeviceRemovedEvent{
 		Base:        hmevent.NewBaseAt(time.Now()),
 		CentralName: "ccu-01",
 		InterfaceID: d.InterfaceID,
@@ -195,7 +194,7 @@ func TestEventBridgeCentralStateFansOutWS(t *testing.T) {
 	bridge.Start(context.Background())
 	defer bridge.Stop()
 
-	events.Publish(c.EventBus, hmevent.CentralStateChangedEvent{
+	c.EventBus.Publish(hmevent.CentralStateChangedEvent{
 		Base:        hmevent.NewBaseAt(time.Now()),
 		CentralName: "ccu-01",
 		From:        hmenum.CentralStateStarting,
@@ -230,7 +229,7 @@ func TestVisibilityFilterAppliedAtMQTTOutbound(t *testing.T) {
 	defer ebridge.Stop()
 
 	list := reg.List()
-	events.Publish(list[0].EventBus, hmevent.DataPointValueChangedEvent{
+	list[0].EventBus.Publish(hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBaseAt(time.Now()),
 		Key: hmtypes.DataPointKey{
 			ChannelAddress: d.Address + ":1",
@@ -265,7 +264,7 @@ func TestVisibilityFilterDoesNotBlockVisibleMQTTPublish(t *testing.T) {
 	defer ebridge.Stop()
 
 	list := reg.List()
-	events.Publish(list[0].EventBus, hmevent.DataPointValueChangedEvent{
+	list[0].EventBus.Publish(hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBaseAt(time.Now()),
 		Key: hmtypes.DataPointKey{
 			ChannelAddress: d.Address + ":1",
@@ -327,7 +326,7 @@ func TestPerDataPointVisibilityGateBlocksHiddenDP(t *testing.T) {
 	ebridge.Start(context.Background())
 	defer ebridge.Stop()
 
-	events.Publish(reg.List()[0].EventBus, hmevent.DataPointValueChangedEvent{
+	reg.List()[0].EventBus.Publish(hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBaseAt(time.Now()),
 		Key: hmtypes.DataPointKey{
 			ChannelAddress: d.Address + ":10",
@@ -376,7 +375,7 @@ func TestPerDataPointVisibilityGateLetsVisibleDPsPass(t *testing.T) {
 	ebridge.Start(context.Background())
 	defer ebridge.Stop()
 
-	events.Publish(reg.List()[0].EventBus, hmevent.DataPointValueChangedEvent{
+	reg.List()[0].EventBus.Publish(hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBaseAt(time.Now()),
 		Key: hmtypes.DataPointKey{
 			ChannelAddress: d.Address + ":9",
@@ -408,7 +407,7 @@ func TestVisibilityFilterNilAllowsAllMQTTPublish(t *testing.T) {
 	defer ebridge.Stop()
 
 	list := reg.List()
-	events.Publish(list[0].EventBus, hmevent.DataPointValueChangedEvent{
+	list[0].EventBus.Publish(hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBaseAt(time.Now()),
 		Key: hmtypes.DataPointKey{
 			ChannelAddress: d.Address + ":1",
@@ -515,7 +514,7 @@ func TestEventBridgeDataPointValueChangedUniqueID(t *testing.T) {
 	bridge.Start(context.Background())
 	defer bridge.Stop()
 
-	events.Publish(c.EventBus, hmevent.DataPointValueChangedEvent{
+	c.EventBus.Publish(hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBaseAt(time.Now()),
 		Key: hmtypes.DataPointKey{
 			InterfaceID:    "HmIP-RF",

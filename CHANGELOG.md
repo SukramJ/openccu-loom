@@ -22,6 +22,12 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   snapshot: against the Go 1.26 build the stream takes the same time with
   33 % less memory and 31 % fewer allocations. The bytes on the wire are
   unchanged, pinned by a byte-for-byte test.
+- **Developers: the internal event bus uses generic methods.**
+  `events.Subscribe(bus, fn)` / `events.Publish(bus, e)` are now
+  `bus.Subscribe(fn)` / `bus.Publish(e)` (Go 1.27 generic methods); every
+  call site moved over and the free functions are gone. The subscriber,
+  publisher and registry-walker guards resolve the new methods through the
+  type checker. No runtime behaviour changes.
 
 ## [0.83.0] - 2026-10-01
 

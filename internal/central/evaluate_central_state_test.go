@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -75,7 +74,7 @@ func registerDisconnectedClient(t *testing.T, c *Unit, ifaceID string, iface hme
 // that unsubscribes and returns all collected events.
 func drainSystemStatusEvents(c *Unit) func() []hmevent.SystemStatusChangedEvent {
 	var received []hmevent.SystemStatusChangedEvent
-	unsub := events.Subscribe(c.EventBus, func(e hmevent.SystemStatusChangedEvent) {
+	unsub := c.EventBus.Subscribe(func(e hmevent.SystemStatusChangedEvent) {
 		received = append(received, e)
 	})
 	return func() []hmevent.SystemStatusChangedEvent {

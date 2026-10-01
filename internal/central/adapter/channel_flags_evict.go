@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/channelflags"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/internal/wiring"
@@ -56,7 +55,7 @@ func (e *ChannelFlagsEvictor) StartCentral(u *central.Unit) func() {
 	if e == nil || u == nil || u.EventBus == nil {
 		return func() {}
 	}
-	unsub := events.Subscribe(u.EventBus, func(ev hmevent.DeviceRemovedEvent) {
+	unsub := u.EventBus.Subscribe(func(ev hmevent.DeviceRemovedEvent) {
 		if ev.ModelTeardown {
 			return
 		}

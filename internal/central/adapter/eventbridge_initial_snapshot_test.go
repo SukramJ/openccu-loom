@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -255,7 +254,7 @@ func TestEventBridgePublishesGenericDPConfig(t *testing.T) {
 	defer eb.Stop()
 
 	emit := func(v bool) {
-		events.Publish(reg.List()[0].EventBus, hmevent.DataPointValueChangedEvent{
+		reg.List()[0].EventBus.Publish(hmevent.DataPointValueChangedEvent{
 			Base: hmevent.NewBaseAt(time.Now()),
 			Key: hmtypes.DataPointKey{
 				ChannelAddress: "0001ABCD:1",
@@ -315,7 +314,7 @@ func TestEventBridgeRoutesCalculatedDPToCalculatedBucket(t *testing.T) {
 	eb.Start(context.Background())
 	defer eb.Stop()
 
-	events.Publish(reg.List()[0].EventBus, hmevent.DataPointValueChangedEvent{
+	reg.List()[0].EventBus.Publish(hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBaseAt(time.Now()),
 		Key: hmtypes.DataPointKey{
 			ChannelAddress: "0001ABCD:1",
@@ -387,7 +386,7 @@ func TestEventBridgePublishesADR0011SlotState(t *testing.T) {
 	eb.Start(context.Background())
 	defer eb.Stop()
 
-	events.Publish(reg.List()[0].EventBus, hmevent.DataPointValueChangedEvent{
+	reg.List()[0].EventBus.Publish(hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBaseAt(time.Now()),
 		Key: hmtypes.DataPointKey{
 			ChannelAddress: "0001ABCD:1",
@@ -462,7 +461,7 @@ func TestEventBridgePublishesOnlineAtBootAndDoesNotRepublish(t *testing.T) {
 
 	// Step 2: a value-change event arrives — STATE is not a reachability
 	// parameter, so availability must NOT be republished (cache-gate).
-	events.Publish(reg.List()[0].EventBus, hmevent.DataPointValueChangedEvent{
+	reg.List()[0].EventBus.Publish(hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBaseAt(time.Now()),
 		Key: hmtypes.DataPointKey{
 			InterfaceID:    "HmIP-RF",
@@ -475,7 +474,7 @@ func TestEventBridgePublishesOnlineAtBootAndDoesNotRepublish(t *testing.T) {
 
 	// Step 3: a second value-change event must NOT republish availability
 	// either (still online, still non-reachability parameter).
-	events.Publish(reg.List()[0].EventBus, hmevent.DataPointValueChangedEvent{
+	reg.List()[0].EventBus.Publish(hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBaseAt(time.Now()),
 		Key: hmtypes.DataPointKey{
 			InterfaceID:    "HmIP-RF",
@@ -618,7 +617,7 @@ func TestLiveKeypressStillFiresPressEvent(t *testing.T) {
 	eb.Start(context.Background())
 	defer eb.Stop()
 
-	events.Publish(reg.List()[0].EventBus, hmevent.DataPointValueChangedEvent{
+	reg.List()[0].EventBus.Publish(hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBaseAt(time.Now()),
 		Key: hmtypes.DataPointKey{
 			InterfaceID:    "HmIP-RF",

@@ -123,23 +123,23 @@ func subscribeCuratedEvents(bus *events.Bus, typeFilter []string, emit func(hmap
 	unsubs := make([]func(), 0, 12)
 	unsubs = append(
 		unsubs,
-		events.Subscribe(bus, func(e hmevent.DataPointValueChangedEvent) { send("DataPointValueChanged", e) }),
-		events.Subscribe(bus, func(e hmevent.RequestCoalescedEvent) { send("RequestCoalesced", e) }),
-		events.Subscribe(bus, func(e hmevent.DeviceTriggerEvent) { send("DeviceTrigger", e) }),
-		events.Subscribe(bus, func(e hmevent.CentralStateChangedEvent) { send("CentralStateChanged", e) }),
-		events.Subscribe(bus, func(e hmevent.ClientStateChangedEvent) { send("ClientStateChanged", e) }),
-		events.Subscribe(bus, func(e hmevent.CircuitBreakerStateChangedEvent) { send("CircuitBreakerStateChanged", e) }),
-		events.Subscribe(bus, func(e hmevent.ConnectionLostEvent) { send("ConnectionLost", e) }),
-		events.Subscribe(bus, func(e hmevent.RecoveryStartedEvent) { send("RecoveryStarted", e) }),
+		bus.Subscribe(func(e hmevent.DataPointValueChangedEvent) { send("DataPointValueChanged", e) }),
+		bus.Subscribe(func(e hmevent.RequestCoalescedEvent) { send("RequestCoalesced", e) }),
+		bus.Subscribe(func(e hmevent.DeviceTriggerEvent) { send("DeviceTrigger", e) }),
+		bus.Subscribe(func(e hmevent.CentralStateChangedEvent) { send("CentralStateChanged", e) }),
+		bus.Subscribe(func(e hmevent.ClientStateChangedEvent) { send("ClientStateChanged", e) }),
+		bus.Subscribe(func(e hmevent.CircuitBreakerStateChangedEvent) { send("CircuitBreakerStateChanged", e) }),
+		bus.Subscribe(func(e hmevent.ConnectionLostEvent) { send("ConnectionLost", e) }),
+		bus.Subscribe(func(e hmevent.RecoveryStartedEvent) { send("RecoveryStarted", e) }),
 		// The per-stage and per-attempt events carry the operator-facing
 		// progress detail between Started and Completed/Failed: which
 		// stage the pipeline is in, how many attempts were burned, and
 		// the last error. Without them the tap shows a recovery as a
 		// silent gap between two endpoints.
-		events.Subscribe(bus, func(e hmevent.RecoveryStageChangedEvent) { send("RecoveryStageChanged", e) }),
-		events.Subscribe(bus, func(e hmevent.RecoveryAttemptedEvent) { send("RecoveryAttempted", e) }),
-		events.Subscribe(bus, func(e hmevent.RecoveryCompletedEvent) { send("RecoveryCompleted", e) }),
-		events.Subscribe(bus, func(e hmevent.RecoveryFailedEvent) { send("RecoveryFailed", e) }),
+		bus.Subscribe(func(e hmevent.RecoveryStageChangedEvent) { send("RecoveryStageChanged", e) }),
+		bus.Subscribe(func(e hmevent.RecoveryAttemptedEvent) { send("RecoveryAttempted", e) }),
+		bus.Subscribe(func(e hmevent.RecoveryCompletedEvent) { send("RecoveryCompleted", e) }),
+		bus.Subscribe(func(e hmevent.RecoveryFailedEvent) { send("RecoveryFailed", e) }),
 	)
 	return func() {
 		for _, u := range unsubs {

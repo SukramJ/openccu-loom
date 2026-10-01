@@ -13,7 +13,6 @@ import (
 	"github.com/SukramJ/godevccu/pkg/litefake"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/taxonomy"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -86,7 +85,7 @@ func TestLiteMetadataNamesStampedAtIngest(t *testing.T) {
 func TestLiteMetadataStreamRenamesLive(t *testing.T) {
 	fake, unit := startMetaCentral(t, litefake.Options{})
 	changed := make(chan struct{}, 8)
-	unsub := events.Subscribe(unit.EventBus, func(e hmevent.DeviceMetadataChangedEvent) {
+	unsub := unit.EventBus.Subscribe(func(e hmevent.DeviceMetadataChangedEvent) {
 		if e.Address == liteSwitchDevice {
 			changed <- struct{}{}
 		}

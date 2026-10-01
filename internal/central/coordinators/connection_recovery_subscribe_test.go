@@ -69,7 +69,7 @@ func TestSubscribeReactsToConnectionLostEvent(t *testing.T) {
 	c.Subscribe()
 	defer c.Stop()
 
-	events.Publish(bus, hmevent.ConnectionLostEvent{
+	bus.Publish(hmevent.ConnectionLostEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "c1",
 		InterfaceID: "HmIP-RF",
@@ -94,7 +94,7 @@ func TestSubscribeReactsToCBStateChangedOpen(t *testing.T) {
 	c.Subscribe()
 	defer c.Stop()
 
-	events.Publish(bus, hmevent.CircuitBreakerStateChangedEvent{
+	bus.Publish(hmevent.CircuitBreakerStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "c1",
 		InterfaceID: "CUxD",
@@ -125,7 +125,7 @@ func TestSubscribeReactsToCBStateChangedHalfOpenToClosed(t *testing.T) {
 	c.Subscribe()
 	defer c.Stop()
 
-	events.Publish(bus, hmevent.CircuitBreakerStateChangedEvent{
+	bus.Publish(hmevent.CircuitBreakerStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "c1",
 		InterfaceID: "CUxD",
@@ -151,7 +151,7 @@ func TestSubscribeIgnoresCBStateChangedClosed(t *testing.T) {
 	c.Subscribe()
 	defer c.Stop()
 
-	events.Publish(bus, hmevent.CircuitBreakerStateChangedEvent{
+	bus.Publish(hmevent.CircuitBreakerStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "c1",
 		InterfaceID: "CUxD",
@@ -178,7 +178,7 @@ func TestSubscribeIgnoresOtherCentral(t *testing.T) {
 	c.Subscribe()
 	defer c.Stop()
 
-	events.Publish(bus, hmevent.ConnectionLostEvent{
+	bus.Publish(hmevent.ConnectionLostEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "c2", // different central
 		InterfaceID: "HmIP-RF",
@@ -222,7 +222,7 @@ func TestSubscribeSkipsDuplicateRecovery(t *testing.T) {
 	defer c.Stop()
 
 	// First event: starts a slow (blocked) recovery.
-	events.Publish(bus, hmevent.ConnectionLostEvent{
+	bus.Publish(hmevent.ConnectionLostEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "c1",
 		InterfaceID: "HmIP-RF",
@@ -235,7 +235,7 @@ func TestSubscribeSkipsDuplicateRecovery(t *testing.T) {
 	}
 
 	// Second event while first is in flight: the duplicate guard must skip it.
-	events.Publish(bus, hmevent.ConnectionLostEvent{
+	bus.Publish(hmevent.ConnectionLostEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "c1",
 		InterfaceID: "HmIP-RF",
@@ -271,7 +271,7 @@ func TestSubscribeHeartbeatFiresRecoveryPerInterface(t *testing.T) {
 		triggered []string
 	)
 
-	events.Subscribe(bus, func(e hmevent.RecoveryStartedEvent) {
+	bus.Subscribe(func(e hmevent.RecoveryStartedEvent) {
 		if e.CentralName != "c1" {
 			return
 		}
@@ -288,7 +288,7 @@ func TestSubscribeHeartbeatFiresRecoveryPerInterface(t *testing.T) {
 	c.Subscribe()
 	defer c.Stop()
 
-	events.Publish(bus, hmevent.HeartbeatTimerFiredEvent{
+	bus.Publish(hmevent.HeartbeatTimerFiredEvent{
 		Base:         hmevent.NewBase(),
 		CentralName:  "c1",
 		InterfaceIDs: []string{"HmIP-RF", "BidCos-RF"},
@@ -320,7 +320,7 @@ func TestStopReleasesSubscriptions(t *testing.T) {
 	// Stop before publishing.
 	c.Stop()
 
-	events.Publish(bus, hmevent.ConnectionLostEvent{
+	bus.Publish(hmevent.ConnectionLostEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "c1",
 		InterfaceID: "HmIP-RF",
@@ -444,7 +444,7 @@ func TestTriggerBeforeArmIsDropped(t *testing.T) {
 	c.Subscribe()
 	defer c.Stop()
 
-	events.Publish(bus, hmevent.ConnectionLostEvent{
+	bus.Publish(hmevent.ConnectionLostEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "c-gate",
 		InterfaceID: "HmIP-RF",
@@ -458,7 +458,7 @@ func TestTriggerBeforeArmIsDropped(t *testing.T) {
 	}
 
 	c.ArmInterface("HmIP-RF")
-	events.Publish(bus, hmevent.ConnectionLostEvent{
+	bus.Publish(hmevent.ConnectionLostEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "c-gate",
 		InterfaceID: "HmIP-RF",
@@ -483,19 +483,19 @@ func TestTriggerBeforeArmIsDroppedOnEveryLane(t *testing.T) {
 	c.Subscribe()
 	defer c.Stop()
 
-	events.Publish(bus, hmevent.CircuitBreakerStateChangedEvent{
+	bus.Publish(hmevent.CircuitBreakerStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "c-lanes",
 		InterfaceID: "HmIP-RF",
 		From:        hmenum.CircuitStateClosed,
 		To:          hmenum.CircuitStateOpen,
 	})
-	events.Publish(bus, hmevent.HeartbeatTimerFiredEvent{
+	bus.Publish(hmevent.HeartbeatTimerFiredEvent{
 		Base:         hmevent.NewBase(),
 		CentralName:  "c-lanes",
 		InterfaceIDs: []string{"HmIP-RF"},
 	})
-	events.Publish(bus, hmevent.CentralStateChangedEvent{
+	bus.Publish(hmevent.CentralStateChangedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "c-lanes",
 		To:          hmenum.CentralStateFailed,

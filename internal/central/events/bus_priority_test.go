@@ -66,11 +66,11 @@ func TestPriorityCritical(t *testing.T) {
 func TestPriorityCriticalOrdering(t *testing.T) {
 	b := NewBus()
 	var order []string
-	Subscribe(b, func(e hmevent.CentralStateChangedEvent) { order = append(order, "high") }, WithPriority(PriorityHigh))
-	Subscribe(b, func(e hmevent.CentralStateChangedEvent) { order = append(order, "critical") }, WithPriority(PriorityCritical))
-	Subscribe(b, func(e hmevent.CentralStateChangedEvent) { order = append(order, "normal") })
+	b.Subscribe(func(e hmevent.CentralStateChangedEvent) { order = append(order, "high") }, WithPriority(PriorityHigh))
+	b.Subscribe(func(e hmevent.CentralStateChangedEvent) { order = append(order, "critical") }, WithPriority(PriorityCritical))
+	b.Subscribe(func(e hmevent.CentralStateChangedEvent) { order = append(order, "normal") })
 
-	Publish(b, hmevent.CentralStateChangedEvent{CentralName: "main"})
+	b.Publish(hmevent.CentralStateChangedEvent{CentralName: "main"})
 
 	if len(order) != 3 || order[0] != "critical" || order[1] != "high" || order[2] != "normal" {
 		t.Fatalf("unexpected order: %v", order)
@@ -89,12 +89,12 @@ func TestClearExternalSubscriptions(t *testing.T) {
 	internalCalls := 0
 	externalCalls := 0
 
-	Subscribe(b, func(_ hmevent.CentralStateChangedEvent) { internalCalls++ })
-	Subscribe(b, func(_ hmevent.CentralStateChangedEvent) { externalCalls++ }, WithExternal())
-	Subscribe(b, func(_ hmevent.ConnectionLostEvent) { externalCalls++ }, WithExternal())
+	b.Subscribe(func(_ hmevent.CentralStateChangedEvent) { internalCalls++ })
+	b.Subscribe(func(_ hmevent.CentralStateChangedEvent) { externalCalls++ }, WithExternal())
+	b.Subscribe(func(_ hmevent.ConnectionLostEvent) { externalCalls++ }, WithExternal())
 
 	// Before clear — all fire.
-	Publish(b, hmevent.CentralStateChangedEvent{})
+	b.Publish(hmevent.CentralStateChangedEvent{})
 	if internalCalls != 1 || externalCalls != 1 {
 		t.Fatalf("pre-clear: internal=%d external=%d", internalCalls, externalCalls)
 	}
@@ -105,7 +105,7 @@ func TestClearExternalSubscriptions(t *testing.T) {
 		t.Fatalf("ClearExternalSubscriptions returned %d, want 1", removed)
 	}
 
-	Publish(b, hmevent.CentralStateChangedEvent{})
+	b.Publish(hmevent.CentralStateChangedEvent{})
 	if internalCalls != 2 {
 		t.Fatalf("internal sub should still fire: got %d calls", internalCalls)
 	}
@@ -114,7 +114,7 @@ func TestClearExternalSubscriptions(t *testing.T) {
 	}
 
 	// ConnectionLost external sub is still registered.
-	Publish(b, hmevent.ConnectionLostEvent{})
+	b.Publish(hmevent.ConnectionLostEvent{})
 	if externalCalls != 2 {
 		t.Fatalf("other external sub should still fire: %d", externalCalls)
 	}
@@ -127,16 +127,16 @@ func TestClearExternalSubscriptionsAll(t *testing.T) {
 
 	ext1, ext2 := 0, 0
 	internal := 0
-	Subscribe(b, func(_ hmevent.CentralStateChangedEvent) { internal++ })
-	Subscribe(b, func(_ hmevent.CentralStateChangedEvent) { ext1++ }, WithExternal())
-	Subscribe(b, func(_ hmevent.ConnectionLostEvent) { ext2++ }, WithExternal())
+	b.Subscribe(func(_ hmevent.CentralStateChangedEvent) { internal++ })
+	b.Subscribe(func(_ hmevent.CentralStateChangedEvent) { ext1++ }, WithExternal())
+	b.Subscribe(func(_ hmevent.ConnectionLostEvent) { ext2++ }, WithExternal())
 
 	removed := b.ClearExternalSubscriptions()
 	if removed != 2 {
 		t.Fatalf("expected 2 removed, got %d", removed)
 	}
-	Publish(b, hmevent.CentralStateChangedEvent{})
-	Publish(b, hmevent.ConnectionLostEvent{})
+	b.Publish(hmevent.CentralStateChangedEvent{})
+	b.Publish(hmevent.ConnectionLostEvent{})
 	if ext1 != 0 || ext2 != 0 {
 		t.Fatalf("external subs fired after ClearAll: ext1=%d ext2=%d", ext1, ext2)
 	}
@@ -153,11 +153,11 @@ func TestBusClearSubscriptionsByKey(t *testing.T) {
 	b := NewBus()
 
 	var calledA, calledB, calledNoKey int
-	Subscribe(b, func(e w3Evt) { calledA++ }, WithKey("a"))
-	Subscribe(b, func(e w3Evt) { calledB++ }, WithKey("b"))
-	Subscribe(b, func(e w3Evt) { calledNoKey++ }) // no key filter
+	b.Subscribe(func(e w3Evt) { calledA++ }, WithKey("a"))
+	b.Subscribe(func(e w3Evt) { calledB++ }, WithKey("b"))
+	b.Subscribe(func(e w3Evt) { calledNoKey++ }) // no key filter
 
-	Publish(b, w3Evt{Base: hmevent.NewBase(), key: "a"})
+	b.Publish(w3Evt{Base: hmevent.NewBase(), key: "a"})
 	if calledA != 1 || calledB != 0 || calledNoKey != 1 {
 		t.Fatalf("before clear: calledA=%d calledB=%d calledNoKey=%d", calledA, calledB, calledNoKey)
 	}
@@ -165,7 +165,7 @@ func TestBusClearSubscriptionsByKey(t *testing.T) {
 	b.ClearSubscriptionsByKey("a")
 
 	calledA, calledB, calledNoKey = 0, 0, 0
-	Publish(b, w3Evt{Base: hmevent.NewBase(), key: "a"})
+	b.Publish(w3Evt{Base: hmevent.NewBase(), key: "a"})
 	if calledA != 0 {
 		t.Fatalf("after ClearSubscriptionsByKey(a): calledA=%d, want 0", calledA)
 	}
@@ -189,9 +189,9 @@ func TestBusClearSubscriptionsByKeyIdempotent(t *testing.T) {
 
 func TestBusResetEventStats(t *testing.T) {
 	b := NewBus()
-	Subscribe(b, func(e w3Evt) {})
-	Publish(b, w3Evt{Base: hmevent.NewBase()})
-	Publish(b, w3Evt{Base: hmevent.NewBase()})
+	b.Subscribe(func(e w3Evt) {})
+	b.Publish(w3Evt{Base: hmevent.NewBase()})
+	b.Publish(w3Evt{Base: hmevent.NewBase()})
 
 	stats := b.EventStats()
 	if stats["w3.test"] != 2 {
@@ -217,7 +217,7 @@ func TestPanicRecoveryDoesNotPropagateToPublisher(t *testing.T) {
 	t.Parallel()
 
 	b := NewBus()
-	Subscribe(b, func(w2EvtPanic) {
+	b.Subscribe(func(w2EvtPanic) {
 		panic("bus must not let this escape")
 	}, WithName("panic-only"))
 
@@ -228,7 +228,7 @@ func TestPanicRecoveryDoesNotPropagateToPublisher(t *testing.T) {
 		}
 	}()
 
-	Publish(b, w2EvtPanic{Base: hmevent.NewBase()})
+	b.Publish(w2EvtPanic{Base: hmevent.NewBase()})
 }
 
 // TestPanicRecoveryLogsViaSlog verifies that a recovered panic produces a
@@ -249,11 +249,11 @@ func TestPanicRecoveryLogsViaSlog(t *testing.T) {
 	defer slog.SetDefault(old)
 
 	b := NewBus()
-	Subscribe(b, func(w2EvtPanic) {
+	b.Subscribe(func(w2EvtPanic) {
 		panic("slog-capture-test")
 	}, WithName("logged-panicker"))
 
-	Publish(b, w2EvtPanic{Base: hmevent.NewBase()})
+	b.Publish(w2EvtPanic{Base: hmevent.NewBase()})
 
 	logOutput := buf.String()
 	if !strings.Contains(logOutput, "event handler panicked") {
@@ -273,11 +273,11 @@ func TestPanicRecoveryAllSubsequentHandlersFire(t *testing.T) {
 	var fired [3]atomic.Int32
 
 	// All three at same priority to ensure registration order.
-	Subscribe(b, func(w2EvtPanic) { fired[0].Add(1) }, WithPriority(PriorityNormal), WithName("h0"))
-	Subscribe(b, func(w2EvtPanic) { panic("middle panics") }, WithPriority(PriorityNormal), WithName("h1"))
-	Subscribe(b, func(w2EvtPanic) { fired[2].Add(1) }, WithPriority(PriorityNormal), WithName("h2"))
+	b.Subscribe(func(w2EvtPanic) { fired[0].Add(1) }, WithPriority(PriorityNormal), WithName("h0"))
+	b.Subscribe(func(w2EvtPanic) { panic("middle panics") }, WithPriority(PriorityNormal), WithName("h1"))
+	b.Subscribe(func(w2EvtPanic) { fired[2].Add(1) }, WithPriority(PriorityNormal), WithName("h2"))
 
-	Publish(b, w2EvtPanic{Base: hmevent.NewBase()})
+	b.Publish(w2EvtPanic{Base: hmevent.NewBase()})
 
 	if got := fired[0].Load(); got != 1 {
 		t.Errorf("h0.fired=%d, want 1 (must fire before panicking handler)", got)
@@ -297,18 +297,18 @@ func TestPanicRecoveryRepeatedPanicsDoNotBreakBus(t *testing.T) {
 	var workingCount atomic.Int32
 	var panicCount atomic.Int32
 
-	Subscribe(b, func(w2EvtPanic) {
+	b.Subscribe(func(w2EvtPanic) {
 		panicCount.Add(1)
 		panic(fmt.Sprintf("panic #%d", panicCount.Load()))
 	}, WithPriority(PriorityHigh), WithName("always-panics"))
 
-	Subscribe(b, func(w2EvtPanic) {
+	b.Subscribe(func(w2EvtPanic) {
 		workingCount.Add(1)
 	}, WithPriority(PriorityNormal), WithName("always-works"))
 
 	const rounds = 5
 	for range rounds {
-		Publish(b, w2EvtPanic{Base: hmevent.NewBase()})
+		b.Publish(w2EvtPanic{Base: hmevent.NewBase()})
 	}
 
 	if got := workingCount.Load(); got != rounds {
@@ -329,12 +329,12 @@ func TestClearSubscriptionsRemovesOnlyTargetType(t *testing.T) {
 	b := NewBus()
 
 	var countA, countB atomic.Int32
-	Subscribe(b, func(w2EvtClear) { countA.Add(1) })
-	Subscribe(b, func(w2EvtClearB) { countB.Add(1) })
+	b.Subscribe(func(w2EvtClear) { countA.Add(1) })
+	b.Subscribe(func(w2EvtClearB) { countB.Add(1) })
 
 	// Verify both fire before the clear.
-	Publish(b, w2EvtClear{Base: hmevent.NewBase()})
-	Publish(b, w2EvtClearB{Base: hmevent.NewBase()})
+	b.Publish(w2EvtClear{Base: hmevent.NewBase()})
+	b.Publish(w2EvtClearB{Base: hmevent.NewBase()})
 	if got := countA.Load(); got != 1 {
 		t.Fatalf("pre-clear: countA=%d, want 1", got)
 	}
@@ -353,8 +353,8 @@ func TestClearSubscriptionsRemovesOnlyTargetType(t *testing.T) {
 	}
 
 	// Publishing A must not fire the cleared handler; B handler still works.
-	Publish(b, w2EvtClear{Base: hmevent.NewBase()})
-	Publish(b, w2EvtClearB{Base: hmevent.NewBase()})
+	b.Publish(w2EvtClear{Base: hmevent.NewBase()})
+	b.Publish(w2EvtClearB{Base: hmevent.NewBase()})
 	if got := countA.Load(); got != 1 {
 		t.Errorf("after ClearSubscriptions(A): countA=%d, want 1 (no new fires)", got)
 	}
@@ -375,8 +375,8 @@ func TestClearSubscriptionsIsIdempotent(t *testing.T) {
 
 	// Registering after a clear works normally.
 	var count atomic.Int32
-	Subscribe(b, func(w2EvtClear) { count.Add(1) })
-	Publish(b, w2EvtClear{Base: hmevent.NewBase()})
+	b.Subscribe(func(w2EvtClear) { count.Add(1) })
+	b.Publish(w2EvtClear{Base: hmevent.NewBase()})
 	if got := count.Load(); got != 1 {
 		t.Errorf("count=%d, want 1 (subscribe after clear must work)", got)
 	}
@@ -391,12 +391,12 @@ func TestClearAllSubscriptionsRemovesEverything(t *testing.T) {
 	b := NewBus()
 
 	var countA, countB atomic.Int32
-	Subscribe(b, func(w2EvtClear) { countA.Add(1) })
-	Subscribe(b, func(w2EvtClearB) { countB.Add(1) })
+	b.Subscribe(func(w2EvtClear) { countA.Add(1) })
+	b.Subscribe(func(w2EvtClearB) { countB.Add(1) })
 
 	// Publish once to accumulate EventStats.
-	Publish(b, w2EvtClear{Base: hmevent.NewBase()})
-	Publish(b, w2EvtClearB{Base: hmevent.NewBase()})
+	b.Publish(w2EvtClear{Base: hmevent.NewBase()})
+	b.Publish(w2EvtClearB{Base: hmevent.NewBase()})
 
 	// Clear all.
 	b.ClearAllSubscriptions()
@@ -412,8 +412,8 @@ func TestClearAllSubscriptionsRemovesEverything(t *testing.T) {
 	}
 
 	// Publish again — no handlers should fire.
-	Publish(b, w2EvtClear{Base: hmevent.NewBase()})
-	Publish(b, w2EvtClearB{Base: hmevent.NewBase()})
+	b.Publish(w2EvtClear{Base: hmevent.NewBase()})
+	b.Publish(w2EvtClearB{Base: hmevent.NewBase()})
 	if got := countA.Load(); got != 1 {
 		t.Errorf("countA=%d after ClearAll+publish, want 1 (no new fires)", got)
 	}
@@ -437,10 +437,10 @@ func TestClearSubscriptionsDoesNotResetEventStats(t *testing.T) {
 	t.Parallel()
 
 	b := NewBus()
-	Subscribe(b, func(w2EvtClear) {})
+	b.Subscribe(func(w2EvtClear) {})
 
 	for range 4 {
-		Publish(b, w2EvtClear{Base: hmevent.NewBase()})
+		b.Publish(w2EvtClear{Base: hmevent.NewBase()})
 	}
 
 	b.ClearSubscriptions(w2EvtClear{}.Type())
@@ -459,8 +459,8 @@ func TestClearAllThenResubscribeWorks(t *testing.T) {
 
 	// First round.
 	var round1 atomic.Int32
-	Subscribe(b, func(w2EvtClear) { round1.Add(1) })
-	Publish(b, w2EvtClear{Base: hmevent.NewBase()})
+	b.Subscribe(func(w2EvtClear) { round1.Add(1) })
+	b.Publish(w2EvtClear{Base: hmevent.NewBase()})
 	if got := round1.Load(); got != 1 {
 		t.Fatalf("round1=%d, want 1", got)
 	}
@@ -469,8 +469,8 @@ func TestClearAllThenResubscribeWorks(t *testing.T) {
 
 	// Second round — fresh subscriptions must work.
 	var round2 atomic.Int32
-	Subscribe(b, func(w2EvtClear) { round2.Add(1) })
-	Publish(b, w2EvtClear{Base: hmevent.NewBase()})
+	b.Subscribe(func(w2EvtClear) { round2.Add(1) })
+	b.Publish(w2EvtClear{Base: hmevent.NewBase()})
 	if got := round2.Load(); got != 1 {
 		t.Errorf("round2=%d, want 1 (re-subscribe after ClearAll must work)", got)
 	}
@@ -499,10 +499,10 @@ func TestClearSubscriptionsRaceSafe(t *testing.T) {
 			for range iterations {
 				switch i % 4 {
 				case 0:
-					u := Subscribe(b, func(w2EvtClear) {})
+					u := b.Subscribe(func(w2EvtClear) {})
 					u()
 				case 1:
-					Publish(b, w2EvtClear{Base: hmevent.NewBase()})
+					b.Publish(w2EvtClear{Base: hmevent.NewBase()})
 				case 2:
 					b.ClearSubscriptions(w2EvtClear{}.Type())
 				case 3:
@@ -529,14 +529,14 @@ func TestHandlerStatDurationIsMonotonic(t *testing.T) {
 	b := NewBus()
 
 	// Handler with a deliberate short sleep so duration is measurable.
-	Subscribe(b, func(w2EvtDuration) {
+	b.Subscribe(func(w2EvtDuration) {
 		time.Sleep(time.Millisecond)
 	}, WithName("slow-handler"))
 
 	var prevDuration float64
 	const rounds = 4
 	for i := range rounds {
-		Publish(b, w2EvtDuration{Base: hmevent.NewBase()})
+		b.Publish(w2EvtDuration{Base: hmevent.NewBase()})
 
 		stats := b.HandlerStats()
 		var stat *HandlerStat
@@ -570,13 +570,13 @@ func TestHandlerStatTotalErrorsCountsPanics(t *testing.T) {
 
 	b := NewBus()
 
-	Subscribe(b, func(w2EvtError) {
+	b.Subscribe(func(w2EvtError) {
 		panic("error for stats")
 	}, WithName("error-handler"))
 
 	const panics = 3
 	for range panics {
-		Publish(b, w2EvtError{Base: hmevent.NewBase()})
+		b.Publish(w2EvtError{Base: hmevent.NewBase()})
 	}
 
 	stats := b.HandlerStats()
@@ -602,10 +602,10 @@ func TestHandlerStatTotalErrorsNotIncrementedForSuccess(t *testing.T) {
 	t.Parallel()
 
 	b := NewBus()
-	Subscribe(b, func(w2EvtError) {}, WithName("clean-handler"))
+	b.Subscribe(func(w2EvtError) {}, WithName("clean-handler"))
 
 	for range 5 {
-		Publish(b, w2EvtError{Base: hmevent.NewBase()})
+		b.Publish(w2EvtError{Base: hmevent.NewBase()})
 	}
 
 	stats := b.HandlerStats()
@@ -633,7 +633,7 @@ func TestHandlerStatDurationStableUnderConcurrentPublish(t *testing.T) {
 	t.Parallel()
 
 	b := NewBus()
-	Subscribe(b, func(w2EvtDuration) {}, WithName("concurrent-target"))
+	b.Subscribe(func(w2EvtDuration) {}, WithName("concurrent-target"))
 
 	const (
 		goroutines = 20
@@ -646,7 +646,7 @@ func TestHandlerStatDurationStableUnderConcurrentPublish(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for range iterations {
-				Publish(b, w2EvtDuration{Base: hmevent.NewBase()})
+				b.Publish(w2EvtDuration{Base: hmevent.NewBase()})
 			}
 		}()
 	}
@@ -688,14 +688,14 @@ func TestHandlerStatsBothFieldsPopulated(t *testing.T) {
 	t.Parallel()
 
 	b := NewBus()
-	Subscribe(b, func(w2EvtError) {
+	b.Subscribe(func(w2EvtError) {
 		panic("intentional")
 	}, WithName("panicker"))
-	Subscribe(b, func(w2EvtError) {}, WithName("clean"))
+	b.Subscribe(func(w2EvtError) {}, WithName("clean"))
 
 	const publishes = 4
 	for range publishes {
-		Publish(b, w2EvtError{Base: hmevent.NewBase()})
+		b.Publish(w2EvtError{Base: hmevent.NewBase()})
 	}
 
 	stats := b.HandlerStats()

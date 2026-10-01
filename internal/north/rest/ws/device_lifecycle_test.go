@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -66,7 +65,7 @@ func TestDeviceLifecycleSubscriberPublishesAvailabilityChange(t *testing.T) {
 	sub.Start()
 	t.Cleanup(sub.Stop)
 
-	events.Publish(cu.EventBus, hmevent.DeviceLifecycleEvent{
+	cu.EventBus.Publish(hmevent.DeviceLifecycleEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "test-ccu",
 		InterfaceID: "HmIP-RF",
@@ -129,7 +128,7 @@ func TestDeviceLifecycleSubscriberIgnoresNonAvailabilitySubtypes(t *testing.T) {
 		hmenum.DeviceLifecycleSubtypeUpdated,
 		hmenum.DeviceLifecycleSubtypeRemoved,
 	} {
-		events.Publish(cu.EventBus, hmevent.DeviceLifecycleEvent{
+		cu.EventBus.Publish(hmevent.DeviceLifecycleEvent{
 			Base:        hmevent.NewBase(),
 			CentralName: "test-ccu",
 			InterfaceID: "HmIP-RF",

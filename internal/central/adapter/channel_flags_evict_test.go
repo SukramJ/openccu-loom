@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/channelflags"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -89,7 +88,7 @@ func TestWireChannelFlagsEviction_UnpairDropsDeviceKeepsOthers(t *testing.T) {
 	evictor := WireChannelFlagsEviction(reg, store, overlay, nil)
 	t.Cleanup(evictor.Stop)
 
-	events.Publish(unit.EventBus, hmevent.DeviceRemovedEvent{
+	unit.EventBus.Publish(hmevent.DeviceRemovedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: centralName,
 		Address:     devA,
@@ -139,7 +138,7 @@ func TestWireChannelFlagsEviction_ModelTeardownLeavesEverythingIntact(t *testing
 	evictor := WireChannelFlagsEviction(reg, store, overlay, nil)
 	t.Cleanup(evictor.Stop)
 
-	events.Publish(unit.EventBus, hmevent.DeviceRemovedEvent{
+	unit.EventBus.Publish(hmevent.DeviceRemovedEvent{
 		Base:          hmevent.NewBase(),
 		CentralName:   centralName,
 		Address:       devA,
@@ -178,7 +177,7 @@ func TestWireChannelFlagsEviction_StopUnsubscribes(t *testing.T) {
 	evictor := WireChannelFlagsEviction(reg, store, overlay, nil)
 	evictor.Stop()
 
-	events.Publish(unit.EventBus, hmevent.DeviceRemovedEvent{
+	unit.EventBus.Publish(hmevent.DeviceRemovedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: centralName,
 		Address:     devC,

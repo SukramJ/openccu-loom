@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
@@ -73,7 +72,7 @@ func TestEventBridgeDeviceRemovedRetractsOnlyTheOwningCentral(t *testing.T) {
 	}
 
 	u, _ := reg.Get("ccu-01")
-	events.Publish(u.EventBus, hmevent.DeviceRemovedEvent{
+	u.EventBus.Publish(hmevent.DeviceRemovedEvent{
 		Base:        hmevent.NewBaseAt(time.Now()),
 		CentralName: "ccu-01",
 		InterfaceID: "HmIP-RF",

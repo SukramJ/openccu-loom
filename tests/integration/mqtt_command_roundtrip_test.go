@@ -34,7 +34,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/ccudata"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
@@ -114,7 +113,7 @@ func (r *commandChainRig) injectEcho(address, valueKey string, value any) {
 	if err != nil {
 		return
 	}
-	events.Publish(r.central.EventBus, hmevent.DataPointValueChangedEvent{
+	r.central.EventBus.Publish(hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBase(),
 		Key: hmtypes.DataPointKey{
 			InterfaceID:    string(dev.Interface),

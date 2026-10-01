@@ -9,7 +9,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/reliability"
 	"github.com/SukramJ/openccu-loom/internal/metrics"
@@ -66,7 +65,7 @@ func wireClientReliability(unit *central.Unit, ic *client.InterfaceClient, inter
 
 	reliability.WireCircuitBus(ic.Circuit(), reliability.CircuitEventPublisherFunc(
 		func(e hmevent.CircuitBreakerStateChangedEvent) {
-			events.Publish(bus, e)
+			bus.Publish(e)
 			if obs := unitObserver(unit); obs != nil {
 				obs.ObserveCounter(metrics.MetricKeys.CircuitStateTransition(interfaceID).String(), 1)
 			}
@@ -75,7 +74,7 @@ func wireClientReliability(unit *central.Unit, ic *client.InterfaceClient, inter
 	reliability.WireCircuitIncidents(ic.Circuit(), rec, name, interfaceID)
 	reliability.WireCoalesceBus(ic.Coalescer(), reliability.CoalesceEventPublisherFunc(
 		func(e hmevent.RequestCoalescedEvent) {
-			events.Publish(bus, e)
+			bus.Publish(e)
 			if obs := unitObserver(unit); obs != nil {
 				// The event names how many followers the leader absorbed;
 				// the counter tracks calls saved, not coalesce groups.
