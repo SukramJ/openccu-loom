@@ -8125,7 +8125,7 @@ export interface components {
             scheme?: "basic" | "bearer" | "session" | "oidc" | "ingress" | "occulite";
             /**
              * Format: date-time
-             * @description The instant the credential behind this identity stops being accepted, in UTC. Absent means the credential has no server-side expiry — a `basic`, `ingress` or unbounded `bearer` identity. It is the deadline a long-lived consumer needs: a WebSocket captures its identity at the upgrade and is closed when this instant passes, so a client that reads it can refill its credential through the in-band `{op:"reauth"}` frame instead of discovering the rotation through a 401.
+             * @description The instant the credential behind this identity stops being accepted, in UTC. Absent means the credential has no server-side expiry — a `basic`, `ingress`, `occulite` (the box owns that session's lifetime) or unbounded `bearer` identity. It is the deadline a long-lived consumer needs: a WebSocket captures its identity at the upgrade and is closed when this instant passes, so a client that reads it can refill its credential through the in-band `{op:"reauth"}` frame instead of discovering the rotation through a 401.
              */
             expires_at?: string;
         };
