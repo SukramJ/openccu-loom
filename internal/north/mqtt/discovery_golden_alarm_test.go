@@ -27,7 +27,7 @@ var alarmGoldenPath = filepath.Join("testdata", "discovery_golden_alarm.json")
 const alarmGoldenBase = "gh"
 
 // alarmGoldenZone is a zone id in the form the REST layer mints them —
-// uuid.NewString(). The hyphens matter: they travel into the object id,
+// uuid.New().String(). The hyphens matter: they travel into the object id,
 // the unique_id and the `default_entity_id` seed, so a fixture using a
 // tidy slug would hide what the real key looks like.
 const alarmGoldenZone = "7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33"

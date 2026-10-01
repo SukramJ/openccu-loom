@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"uuid"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/alarm/outputs"
@@ -87,7 +87,7 @@ func CreateAlarmZone(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 			return
 		}
 		row := sqlitestore.AlarmZoneRow{
-			ID: uuid.NewString(),
+			ID: uuid.New().String(),
 			// The slug is assigned once, here, and never again: it ends
 			// up in consumer entity ids and MQTT topics, so a later
 			// rename must not move it.
@@ -464,7 +464,7 @@ func resolveRowID(foreignIDs, seen map[string]struct{}, id string) string {
 			return id
 		}
 	}
-	fresh := uuid.NewString()
+	fresh := uuid.New().String()
 	seen[fresh] = struct{}{}
 	return fresh
 }

@@ -9,8 +9,7 @@ import (
 	"net/http"
 	"sync"
 	"time"
-
-	"github.com/google/uuid"
+	"uuid"
 
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 )
@@ -81,7 +80,7 @@ func (s *EditSessions) Open(key, subject string) (EditLock, bool) {
 		return *cur, false
 	}
 	lock := &EditLock{
-		Token:   uuid.NewString(),
+		Token:   uuid.New().String(),
 		Subject: subject,
 		Expires: now.Add(EditSessionTTL),
 	}

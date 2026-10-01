@@ -12,9 +12,9 @@ import (
 	"io"
 	"net/http"
 	"time"
+	"uuid"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm"
 	"github.com/SukramJ/openccu-loom/internal/alarm/codes"
@@ -290,7 +290,7 @@ func (a *AlarmCodeStoreAdmin) GetCode(ctx context.Context, id string) (hmapi.Ala
 // PIN when the kind is pin and a PIN is supplied.
 func (a *AlarmCodeStoreAdmin) CreateCode(ctx context.Context, req hmapi.AlarmCodeRequest) (hmapi.AlarmCode, error) {
 	now := time.Now().UnixMilli()
-	row, err := alarmCodeRowFromReq(uuid.NewString(), req, "", now, now)
+	row, err := alarmCodeRowFromReq(uuid.New().String(), req, "", now, now)
 	if err != nil {
 		return hmapi.AlarmCode{}, err
 	}
