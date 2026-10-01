@@ -205,7 +205,6 @@ func NewService(deps Deps) (*Service, error) {
 	s.codes = codes.New(codes.Deps{
 		Store:   deps.Stores.Codes,
 		Journal: s.journal,
-		Clock:   clk,
 		Logger:  logger,
 	})
 

@@ -18,9 +18,9 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -99,7 +99,6 @@ type Deps struct {
 	// engine's Journal port. A nil Journal disables journaling (the
 	// facade still authenticates and rate-limits normally).
 	Journal engine.Journal
-	Clock   clock.Clock
 	Logger  *slog.Logger
 }
 
@@ -109,7 +108,6 @@ type Deps struct {
 type Facade struct {
 	store   Store
 	journal engine.Journal
-	clk     clock.Clock
 	log     *slog.Logger
 	limiter *rateLimiter
 	// probes bounds the work MatchDuress does per source. It is a
@@ -132,10 +130,6 @@ var (
 
 // New constructs a Facade over deps.
 func New(deps Deps) *Facade {
-	clk := deps.Clock
-	if clk == nil {
-		clk = clock.New()
-	}
 	logger := deps.Logger
 	if logger == nil {
 		logger = slog.Default()
@@ -143,7 +137,6 @@ func New(deps Deps) *Facade {
 	return &Facade{
 		store:   deps.Store,
 		journal: deps.Journal,
-		clk:     clk,
 		log:     logger,
 		limiter: newRateLimiter(),
 		probes:  newRateLimiter(),
@@ -171,7 +164,7 @@ type pinCandidate struct {
 // empty identity) so a code policy can never lock everyone out when no
 // codes exist.
 func (f *Facade) Validate(ctx context.Context, zoneID, verb, code, source string) (identity string, duress bool, err error) {
-	now := f.clk.Now()
+	now := time.Now()
 	// Operator (break-glass) sources are exempt from rate limiting: the
 	// session is already the authenticated factor, so a lockout protects
 	// nothing — and short-circuiting here would silently suppress duress
@@ -257,7 +250,7 @@ func (f *Facade) MatchDuress(ctx context.Context, zoneID, verb, code, source str
 	if code == "" {
 		return "", false
 	}
-	now := f.clk.Now()
+	now := time.Now()
 	candidates, err := f.pinCandidates(ctx, zoneID, now.UnixMilli())
 	if err != nil {
 		f.log.Error("alarm duress match: load codes failed", "zone", zoneID, "error", err)
@@ -334,7 +327,7 @@ func (f *Facade) MatchDuress(ctx context.Context, zoneID, verb, code, source str
 // such a code exists, so a client prompts for a code precisely when one
 // is needed.
 func (f *Facade) HasPINCodes(ctx context.Context, zoneID string) bool {
-	cands, err := f.pinCandidates(ctx, zoneID, f.clk.Now().UnixMilli())
+	cands, err := f.pinCandidates(ctx, zoneID, time.Now().UnixMilli())
 	return err == nil && len(cands) > 0
 }
 
@@ -449,7 +442,7 @@ func (f *Facade) recordInvalid(ctx context.Context, zoneID, source, event string
 	if operatorSource || !chargeLimiter {
 		return
 	}
-	lockout := f.limiter.recordFailure(source, f.clk.Now())
+	lockout := f.limiter.recordFailure(source, time.Now())
 	if lockout <= 0 {
 		return
 	}
