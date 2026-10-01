@@ -265,7 +265,7 @@ func (c AddonUpdateConfig) PeriodicCheckEnabled() bool {
 
 // BackupConfig configures automatic, scheduled CCU backups. Off by default
 // (a backup touches the CCU and produces files, so it is opt-in). A change to
-// either field is hot-reloaded — it only re-tunes a scheduler job interval.
+// any backup field (dir, schedule, keep_last) is restart-required.
 type BackupConfig struct {
 	// Dir is where the downloaded `.sbk` archives are kept. Empty means
 	// `<data_dir>/backups`.
@@ -345,8 +345,9 @@ func (c AlarmConfig) AlarmEnabled() bool {
 // block defaults to "feature on, sensible defaults"; zero-valued
 // fields fall back to the hard-coded constants the wiring uses.
 //
-// Today only [PersistenceConfig.ValuesCache] is wired through. Future
-// caches (e.g. linkprofile snapshots) get their own sub-block here.
+// Today [PersistenceConfig.ValuesCache] and [PersistenceConfig.History] are
+// wired through. Future caches (e.g. linkprofile snapshots) get their own
+// sub-block here.
 type PersistenceConfig struct {
 	ValuesCache ValuesCacheConfig `yaml:"values_cache,omitempty" json:"values_cache,omitzero" cfg:"expert"`
 	History     HistoryConfig     `yaml:"history,omitempty" json:"history,omitzero" cfg:"expert"`
@@ -583,7 +584,7 @@ type CCUDataConfig struct {
 // without touching the YAML file.
 type LoggingConfig struct {
 	Level     string            `yaml:"level" json:"level" cfg:"basic"`   // debug|info|warn|error
-	Format    string            `yaml:"format" json:"format" cfg:"basic"` // json|text
+	Format    string            `yaml:"format" json:"format" cfg:"basic"` // json|text|text-color
 	Overrides map[string]string `yaml:"overrides,omitempty" json:"overrides,omitempty" cfg:"expert"`
 }
 
@@ -988,10 +989,12 @@ type NorthMatter struct {
 
 	// Attestation configures the bridge's Device Attestation surface
 	// (DAC + PAI + CD bytes + DAC private key). When all four paths
-	// resolve, [OperationalCredentials] presents the production
-	// material to commissioners; otherwise it falls back to an
-	// ephemeral self-signed development DAC that only validates
-	// under chip-tool's `--bypass-attestation-verifier true` flag.
+	// resolve, the bridge's OperationalCredentials cluster
+	// (go-fabric cluster/core) presents the production material to
+	// commissioners; otherwise it falls back to a CSA test-PAA chain
+	// and, if that cannot be built, to an ephemeral self-signed
+	// development DAC that only validates under chip-tool's
+	// `--bypass-attestation-verifier true` flag.
 	Attestation NorthMatterAttestation `yaml:"attestation" json:"attestation" cfg:"expert"`
 
 	// DevRotateUniqueIDs mixes a per-boot 16-byte random salt into
@@ -1014,7 +1017,7 @@ type NorthMatter struct {
 	// on the RootNode and Apple Home's HAP service mapper may reject an
 	// unexpected RootNode cluster at pairing. Set true only when a controller
 	// genuinely needs the bridge to expose a time-sync surface (re-pair
-	// afterwards). See notes/parity/by_design.md (BD-Matter-TimeSync-NotMounted).
+	// afterwards).
 	EnableTimeSync *bool `yaml:"enable_time_sync,omitempty" json:"enable_time_sync,omitempty" cfg:"expert"`
 }
 
@@ -1132,9 +1135,9 @@ type NorthMatterCommissioning struct {
 	// open (e.g. the operator pre-prints a label code).
 	//
 	// Recommended for production: pairing codes auto-rotate and the
-	// configured passcode never leaves the bridge process. Requires
-	// ConcurrentPairings = false (the singleton adapter path is the
-	// only one that supports a clean revert on close).
+	// configured passcode never leaves the bridge process. Works with
+	// both ConcurrentPairings modes: the singleton adapter is swapped
+	// and reverted, or the per-exchange factory is re-installed on close.
 	EphemeralWindow bool `yaml:"ephemeral_window" json:"ephemeral_window" cfg:"basic"`
 }
 
@@ -1208,14 +1211,14 @@ func (f *flexUint32) UnmarshalJSON(data []byte) error {
 
 // NorthMatterCASE configures the CASE (operational-session)
 // responder. CASE picks up after a fabric is established (commissioner
-// has installed a NOC). Until persistent fabric identity wiring lands,
-// this block enables a STRUCTURAL wiring of `secure/sigma.Responder`
-// with an ephemeral private key and a trust-everything peer verifier
-// — useful for development against a controller that ignores cert
-// validation, never for production.
+// has installed a NOC). The operational fabric identity established during
+// commissioning is persisted per fabric and rehydrated at boot, so the
+// responder validates the controller's certificate chain and survives
+// daemon restarts.
 //
-// NodeID == 0 disables CASE entirely. When non-zero, the daemon
-// constructs a CaseAdapter and wires it via [Bridge.AttachCaseHandler].
+// NodeID == 0 disables CASE entirely. When non-zero, the daemon builds a
+// per-exchange CASE provider and wires it through the bridge's
+// AttachCaseHandlerProvider.
 type NorthMatterCASE struct {
 	// NodeID is the bridge's 64-bit operational node identifier
 	// inside the fabric. Leave 0 to disable CASE.
@@ -1257,8 +1260,8 @@ type NorthREST struct {
 	// OpenAPISpecPath is the on-disk path of the API spec. The
 	// daemon loads it at boot and, when [OpenAPIValidate] is true,
 	// installs the [middleware.OpenAPIValidator] in the REST
-	// chain. Empty falls back to `assets/openapi.yaml` next to the
-	// binary; missing files are tolerated (validator simply not
+	// chain. Empty falls back to `assets/openapi.yaml` resolved
+	// against the daemon's working directory; missing files are tolerated (validator simply not
 	// installed) so dev iterations on the spec do not block the
 	// daemon.
 	OpenAPISpecPath string `yaml:"openapi_spec_path" json:"openapi_spec_path" cfg:"expert"`
@@ -1314,8 +1317,8 @@ func (n NorthREST) TLSEnabled() bool {
 type NorthRESTWS struct {
 	// ReplayCapacity is the in-memory ring-buffer ceiling for
 	// subscribe-with-since replays (ADR-0022). Default 1024 events;
-	// 0 disables replay (subscribe-with-since immediately yields
-	// replay_lost). Operators with high-event-rate deployments can
+	// 0 is rewritten to 1024 at load, so the buffer cannot be
+	// disabled. Operators with high-event-rate deployments can
 	// raise this; the buffer is a fixed Go slice so RAM cost is
 	// roughly capacity × ~200 B per event.
 	ReplayCapacity int `yaml:"replay_capacity" json:"replay_capacity" cfg:"expert"`
@@ -1367,12 +1370,12 @@ func (n NorthREST) IsEnabled() bool {
 	return orDefault(n.Enabled, true)
 }
 
-// NorthUI configures the HTMX Config UI.
+// NorthUI configures the server-rendered bootstrap surface.
 type NorthUI struct {
-	// Enabled is the master switch for the HTMX-bootstrap UI
-	// (login, /setup wizard, /health, /about). Defaults to true
-	// when absent — without it the SPA cannot offer pre-auth
-	// flows and the daemon cannot drive a first-run setup. Use
+	// Enabled is the master switch for the server-rendered bootstrap
+	// surface (/health, /about — the no-JS diagnostic fallback;
+	// login, OIDC and first-run setup live in the SPA, ADR 0045).
+	// Defaults to true when absent. Use
 	// *bool so the YAML decoder can distinguish "not set" from
 	// "explicitly false".
 	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty" cfg:"basic"`
@@ -2579,11 +2582,6 @@ func centralHostValid(host string) bool {
 	return false
 }
 
-// validatePublicURL checks north.rest.public_url when set. Empty is
-// valid (feature off). When present it must be an absolute http/https
-// URL with a host — the value is handed to a browser as the "Open
-// Config UI" target, so a relative or schemeless string would not be
-// reachable from the public side.
 // validateOperatorSurfaces groups the checks on operator-facing surface
 // settings. They are collected here rather than inlined because Validate
 // sits at the cyclomatic-complexity ceiling the linter enforces, and a
@@ -2646,6 +2644,11 @@ func validateDuressVisibility(raw string) error {
 	return fmt.Errorf("config: alarm.duress_visibility must be hidden, notify_only or full: %q", raw)
 }
 
+// validatePublicURL checks north.rest.public_url when set. Empty is
+// valid (feature off). When present it must be an absolute http/https
+// URL with a host — the value is handed to a browser as the "Open
+// Config UI" target, so a relative or schemeless string would not be
+// reachable from the public side.
 func validatePublicURL(raw string) error {
 	if raw == "" {
 		return nil

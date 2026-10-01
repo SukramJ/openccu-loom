@@ -163,7 +163,9 @@ func (p *ParamsetApplyDomain) applyOne(
 
 // isWriteRejection reports whether a write error is a pre-write refusal of
 // the request — nothing reached the CCU — rather than an upstream failure.
-// The set matches the rejections the REST write surface answers 400 for.
+// The set is the pre-write refusals of the write path (validation, hidden
+// parameter, unknown or read-only parameter, locked channel); the REST
+// surface maps them to 400, 403 or 423 as appropriate.
 func isWriteRejection(err error) bool {
 	return errors.Is(err, hmerr.ErrValidation) ||
 		errors.Is(err, hmerr.ErrParameterHidden) ||

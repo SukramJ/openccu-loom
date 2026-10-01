@@ -5,10 +5,10 @@
 // (modulo the underlying [Caller] and the backend name used in error
 // messages) across two or more backends. ListDevices,
 // GetParamsetDescription, GetParamset, PutParamset, SetValue and
-// GetValue are shared by CcuBackend, CuxdBackend and HomegearBackend;
-// GetLinks, GetLinkPeers, GetLinkParamsetDescription, GetLinkParamset,
-// PutLinkParamset and GetDeviceDescription are shared by CcuBackend and
-// HomegearBackend. Each backend method is a thin wrapper around the
+// GetValue are shared by CcuBackend, CuxdBackend, HomegearBackend and
+// LiteBackend; GetLinks, GetLinkPeers, GetLinkParamsetDescription,
+// GetLinkParamset, PutLinkParamset and GetDeviceDescription are shared by
+// CcuBackend, HomegearBackend and LiteBackend. Each backend method is a thin wrapper around the
 // corresponding helper here so the wire-decoding logic exists exactly
 // once.
 
@@ -44,7 +44,7 @@ func asWireList(raw any) (list []any, ok bool) {
 
 // listDevicesViaCaller implements the ListDevices wire call shared by
 // every backend. prefix names the backend in error messages ("ccu",
-// "cuxd", "homegear").
+// "cuxd", "homegear", "lite").
 func listDevicesViaCaller(ctx context.Context, caller Caller, prefix string) ([]hmproto.DeviceDescription, error) {
 	if caller == nil {
 		return nil, ErrNotWired
@@ -214,8 +214,8 @@ func getValueViaCaller(ctx context.Context, caller Caller, address string, param
 	return caller.Call(ctx, "getValue", address, string(parameter))
 }
 
-// getLinksViaCaller implements the GetLinks wire call shared by the CCU
-// and Homegear backends. The trailing 0 is the flag word; what each side
+// getLinksViaCaller implements the GetLinks wire call shared by the CCU,
+// Homegear and lite backends. The trailing 0 is the flag word; what each side
 // makes of it is documented on the calling method.
 func getLinksViaCaller(ctx context.Context, caller Caller, prefix, channelAddress string) ([]hmproto.LinkDescription, error) {
 	if caller == nil {
@@ -253,7 +253,7 @@ func getLinksViaCaller(ctx context.Context, caller Caller, prefix, channelAddres
 }
 
 // getLinkPeersViaCaller implements the GetLinkPeers wire call shared by
-// the CCU and Homegear backends.
+// the CCU, Homegear and lite backends.
 func getLinkPeersViaCaller(ctx context.Context, caller Caller, prefix, channelAddress string) ([]string, error) {
 	if caller == nil {
 		return nil, ErrNotWired
@@ -276,8 +276,8 @@ func getLinkPeersViaCaller(ctx context.Context, caller Caller, prefix, channelAd
 }
 
 // getLinkParamsetDescriptionViaCaller implements the
-// GetLinkParamsetDescription wire call shared by the CCU and Homegear
-// backends. The paramset key is the LINK enum member, not the peer
+// GetLinkParamsetDescription wire call shared by the CCU,
+// Homegear and lite backends. The paramset key is the LINK enum member, not the peer
 // address: the schema is identical across peers, only the values key on
 // the peer.
 func getLinkParamsetDescriptionViaCaller(
@@ -312,7 +312,7 @@ func getLinkParamsetDescriptionViaCaller(
 }
 
 // getLinkParamsetViaCaller implements the GetLinkParamset wire call
-// shared by the CCU and Homegear backends. The peer address takes the
+// shared by the CCU, Homegear and lite backends. The peer address takes the
 // place of the paramset key, which is how per-peer link values are
 // addressed.
 func getLinkParamsetViaCaller(
@@ -335,7 +335,7 @@ func getLinkParamsetViaCaller(
 }
 
 // putLinkParamsetViaCaller implements the PutLinkParamset wire call
-// shared by the CCU and Homegear backends.
+// shared by the CCU, Homegear and lite backends.
 func putLinkParamsetViaCaller(
 	ctx context.Context,
 	caller Caller,
@@ -350,7 +350,7 @@ func putLinkParamsetViaCaller(
 }
 
 // getDeviceDescriptionViaCaller implements the GetDeviceDescription wire
-// call shared by the CCU and Homegear backends.
+// call shared by the CCU, Homegear and lite backends.
 func getDeviceDescriptionViaCaller(ctx context.Context, caller Caller, prefix, address string) (map[string]any, error) {
 	if caller == nil {
 		return nil, ErrNotWired

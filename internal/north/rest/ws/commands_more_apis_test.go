@@ -243,6 +243,7 @@ func TestExtendedCommandsStubEveryOptionalProviderCommandWhenUnwired(t *testing.
 		"incidents.list", "incidents.get", "incidents.clear",
 		"service_messages.disable", "service_messages.suppressed", "service_messages.unsuppress",
 		"paramset.form_schema", "paramset.copy",
+		"addon_update.check", "addon_update.install",
 	}
 	r := NewRouter()
 	RegisterExtendedCommands(r, ExtendedCommandsConfig{})

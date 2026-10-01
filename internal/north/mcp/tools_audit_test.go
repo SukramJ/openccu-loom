@@ -139,13 +139,17 @@ func TestWriteToolsRecordTheCallersIdentity(t *testing.T) {
 		t.Fatalf("trigger_program: %v", res.Content)
 	}
 
+	// Exactly ONE row, and it is set_datapoint's: trigger_program must not
+	// record its own entry. Program runs are audited once, by the
+	// ProgramExecutedEvent subscriber in the composition root
+	// (cmd/openccu-loom/program_execute_audit.go), which attributes the MCP
+	// route through the "mcp:program-trigger" source stamp — a second row
+	// here made every MCP-triggered run look like it ran twice.
 	entries := buf.List(10)
-	if len(entries) != 2 {
-		t.Fatalf("expected 2 audit rows, got %d", len(entries))
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 audit row (set_datapoint only), got %d", len(entries))
 	}
-	for _, e := range entries {
-		if e.User != "assistant-op" {
-			t.Errorf("audit row %s: User=%q, want the resolved caller %q", e.Action, e.User, "assistant-op")
-		}
+	if e := entries[0]; e.User != "assistant-op" {
+		t.Errorf("audit row %s: User=%q, want the resolved caller %q", e.Action, e.User, "assistant-op")
 	}
 }

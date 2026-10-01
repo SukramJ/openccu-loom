@@ -22,7 +22,7 @@ export type ChannelSummary = components["schemas"]["ChannelSummary"];
 // Generated adds: state (live state snapshot). Additive, safe for SPA.
 export type CustomDPSummary = components["schemas"]["CustomDPSummary"];
 
-/** Wire-side lifecycle token for a data point. See ADR 0018. */
+/** Wire-side lifecycle token for a data point. See ADR 0019. */
 export type DataPointSource = "unobserved" | "cache" | "live" | "stale";
 
 // DataPointSummary and UIHint re-exported from generated schema.
@@ -627,7 +627,8 @@ export type AlarmSensorType = AlarmSensor["type"];
 export type AlarmOutputClass = AlarmOutput["class"];
 export type AlarmJournalClass = AlarmJournalEntry["class"];
 
-// The seven `alarm.*` WS broadcast payloads (topic `alarm.panel`). The
+// Seven of the `alarm.*` WS broadcast payloads (topic `alarm.panel`; the
+// full set is in wsapi.json). The
 // events pump passes these through untouched as { type, payload }; the
 // alarm store narrows `payload` to the matching alias in applyEvent.
 export type AlarmStateChangedPayload =

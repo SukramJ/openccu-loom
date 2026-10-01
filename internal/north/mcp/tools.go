@@ -288,8 +288,8 @@ func registerReadTools(s *mcpsdk.Server, d Deps) {
 	if d.AddonUpdate != nil {
 		registerGetAddonUpdateStatus(s, d)
 	}
-	// The MCP/REST parity backlog tools (tests/contract/mcp_rest_parity_test.go
-	// restDomainsAwaitingMCPTools): groups, areas, interfaces, history,
+	// The REST-parity tools (tests/contract/mcp_rest_parity_test.go keeps
+	// restDomainsAwaitingMCPTools empty): groups, areas, interfaces, history,
 	// visibility, energy, links, schedules. Each projects a single narrow
 	// REST facade; a nil seam leaves its tool unregistered.
 	if d.Groups != nil {
@@ -884,11 +884,13 @@ func registerWriteLinkParamset(s *mcpsdk.Server, d Deps) {
 }
 
 // editLockSubject is the fixed identity open_edit_session records on
-// the lock it opens. REST/WS sessions record the caller's authenticated
-// subject; MCP write tools have no per-call human identity of their
-// own (the mount authenticates the transport, not each tool call — see
-// the package doc comment), so every MCP-opened lock is attributed to
-// this constant rather than left blank or fabricated.
+// the lock it opens. The REST route records the subject string the
+// client sends in the request body (advisory, for the "locked by"
+// banner — the route itself sits behind the operator gate); MCP write
+// tools have no per-call human identity of their own (the mount
+// authenticates the transport, not each tool call — see the package
+// doc comment), so every MCP-opened lock is attributed to this
+// constant rather than left blank or fabricated.
 const editLockSubject = "mcp"
 
 // registerOpenEditSession implements `open_edit_session`, the MCP-side
@@ -969,18 +971,15 @@ func registerTriggerProgram(s *mcpsdk.Server, d Deps) {
 			return nil, triggerProgramOut{}, fmt.Errorf("program %q not found on central %q", programID, central)
 		}
 		// Stamp the surface so the program-execute audit/log subscriber
-		// can attribute the run to the MCP server.
+		// can attribute the run to the MCP server. That subscriber
+		// (cmd/openccu-loom/program_execute_audit.go) is the ONE audit and
+		// log writer for program runs on every route — REST, WS, MQTT and
+		// this tool alike — so no entry is recorded here: a second row made
+		// every MCP-triggered run read as if it had run twice, which is
+		// precisely the question the audit record exists to answer.
 		ctx = hmreqctx.WithOperation(ctx, "mcp:program-trigger")
 		if err := prog.Execute(ctx); err != nil {
 			return nil, triggerProgramOut{}, fmt.Errorf("execute program: %w", err)
-		}
-		if d.Audit != nil {
-			d.Audit.Record(audit.Entry{
-				Timestamp: time.Now().UTC(),
-				User:      callerSubject(ctx),
-				Action:    audit.ActionProgramExecute,
-				Note:      "program=" + programID + " via mcp",
-			})
 		}
 		return nil, triggerProgramOut{OK: true}, nil
 	})

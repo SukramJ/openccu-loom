@@ -2,8 +2,10 @@
 // Copyright (C) 2026 SukramJ.
 
 // Package audit records user-initiated configuration changes so the SPA can
-// render a change history. Persistence to SQLite can be layered on top later
-// — the Recorder interface is stable.
+// render a change history. The in-memory [Buffer] is a bounded ring; the
+// daemon additionally persists entries to SQLite and serves reads from
+// there when a database is present. The Recorder interface is stable
+// across both.
 package audit
 
 import (

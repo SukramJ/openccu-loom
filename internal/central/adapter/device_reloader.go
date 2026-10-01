@@ -89,7 +89,7 @@ func (a *DeviceReloaderAdapter) ReloadDeviceConfig(ctx context.Context, deviceAd
 // every north-bound subscriber. A patched MIN/MAX therefore reaches an
 // existing data point on the next hydration (restart), not on this call.
 //
-// Mirrors Channel.reload_channel_config (model/device.py:1448 →
+// Mirrors Channel.reload_channel_config (model/device.py →
 // on_config_changed), scoped to one channel.
 //
 // channelAddress is the "DDDDDDDDDD:n" form; the device address is derived by
@@ -115,7 +115,8 @@ func (a *DeviceReloaderAdapter) ReloadChannelConfig(ctx context.Context, channel
 		// The paramset + description registries are keyed by the canonical
 		// wire id, not the bare interface — see ReloadDeviceConfig.
 		iface := hmtypes.ParseWireInterfaceID(dev.InterfaceID)
-		// Re-pull the channel's paramset descriptions + MASTER values.
+		// Re-pull the channel's paramset descriptions (no MASTER value
+		// read — see the coordinator's ReloadChannelConfig).
 		if err := unit.Devices.ReloadChannelConfig(ctx, b, iface, channelAddress, dev.Model); err != nil {
 			return err
 		}

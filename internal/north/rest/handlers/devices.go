@@ -294,7 +294,9 @@ type DataPointSummary struct {
 	// recomputing the key. Always present and non-empty: a central does not
 	// serve any entity until its CCU serial — the central-id slot of the
 	// canonical key — is resolved (the bring-up readiness gate, see
-	// `internal/central/adapter/hub_wiring.go`).
+	// `internal/central/adapter/hub_wiring.go`). The converters still emit
+	// an empty string when the owning central's serial suffix cannot be
+	// resolved (no omitempty on the tag), so a client must tolerate "".
 	UniqueID       string `json:"unique_id"`
 	ParameterLabel string `json:"parameter_label,omitempty"`
 	Value          any    `json:"value"`
@@ -315,7 +317,7 @@ type DataPointSummary struct {
 	// Source is the wire-side lifecycle token: "unobserved" | "cache"
 	// | "live" | "stale". Surfaced so UI consumers can render a
 	// freshness badge without inferring state from timestamps alone.
-	// See ADR 0018.
+	// See ADR 0019.
 	Source string `json:"source,omitempty"`
 	// LastSeenAt is when the data point was last observed via any
 	// push or fetch_all event (RFC3339). Differs from ModifiedAt when
@@ -538,8 +540,9 @@ func ListFunctions(idx DeviceIndex) http.HandlerFunc {
 }
 
 // ListRooms aggregates rooms across every device. The CCU exposes
-// rooms via `Room.getAll`-style JSON-RPC; until that bridge ships
-// we derive the index from the device summaries directly.
+// rooms via `Room.getAll`-style JSON-RPC, which the hub wiring already
+// consumes into each device's room list; this handler derives the index
+// from those per-device room assignments directly.
 func ListRooms(idx DeviceIndex) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		counts, refs := nameIndex(idx, taxonomy.EnumRoom, (*device.Device).Rooms)
@@ -652,7 +655,7 @@ func resolvedParameterLabel(labels ParameterLabeler, channelType, paramName stri
 // SetValueRequest is the body for `PUT .../value`.
 type SetValueRequest struct {
 	Value    any    `json:"value"`
-	Priority string `json:"priority,omitempty"` // "default" | "high" | "critical"
+	Priority string `json:"priority,omitempty"` // "critical" | "high" | "low"; anything else is treated as "high"
 }
 
 // --- handlers ---
@@ -1012,7 +1015,7 @@ func lookupChannel(idx DeviceIndex, r *http.Request) (*device.Channel, error) {
 // serialSuffixForChannel resolves the routing-key serial suffix of the central
 // owning ch's device, so the data-point converters can stamp the canonical
 // unique_id. Returns "" when idx, the channel, its device or the central are
-// unknown — callers then emit the omitempty field absent.
+// unknown — callers then leave unique_id empty.
 func serialSuffixForChannel(idx DeviceIndex, ch *device.Channel) string {
 	if idx == nil || ch == nil {
 		return ""
@@ -1102,7 +1105,7 @@ func toDataPointSummary(dp device.ParameterDataPoint, labels ParameterLabeler, c
 	// Stamp the canonical loom routing key — identical to the WS
 	// value-changed payload — so a client builds its entity registry from the
 	// summary/snapshot without recomputing the algorithm. Empty serialSuffix
-	// (central serial not yet known) leaves the omitempty field absent.
+	// (central serial not yet known) leaves unique_id empty.
 	if serialSuffix != "" {
 		k := dp.DataPointKey()
 		s.UniqueID = routingkey.CanonicalUniqueID(serialSuffix, k.ChannelAddress, string(dp.Parameter()), "")

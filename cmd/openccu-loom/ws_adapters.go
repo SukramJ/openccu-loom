@@ -7,10 +7,10 @@ package main
 // WS-specific interfaces declared in internal/north/rest/ws.
 //
 // Design: each wrapper is minimal — no business logic, just
-// method-signature translation and type conversion. Where a WS
-// interface method has no direct domain equivalent the wrapper returns
-// errors.New("ws: feature not yet wired through domain") and documents
-// why. Extensions land in +.
+// method-signature translation and type conversion. When the domain a
+// wrapper fronts is absent (nil), the wrapper returns an error such as
+// errors.New("ws: links domain not wired") so the command answers with
+// a clear failure instead of panicking.
 
 import (
 	"context"
@@ -197,8 +197,8 @@ func wireWSCommands(wsHub *ws.Hub, w wsCommandWiring) {
 		Labels:  w.labels,
 	})
 
-	// RegisterMissingCommands wires all 9 previously-missing WS commands.
-	// The 5 that were stubs (L01-L05) are now fully wired via domain adapters.
+	// RegisterMissingCommands wires the ten WS commands the default set
+	// does not carry, each backed by a domain adapter.
 	allDevices := &wsAllDevices{devs: w.devices}
 	ws.RegisterMissingCommands(router, ws.MissingCommandsConfig{
 		// ccu.get_signal_quality — RSSI + reachability per device.
@@ -213,13 +213,13 @@ func wireWSCommands(wsHub *ws.Hub, w wsCommandWiring) {
 		// system.user_permissions — reads from ctx; no extra provider needed.
 		UserPermissions: nil, // always registered via nil-safe handler
 
-		// L05: schedules.set_enabled — SchedulesDomain now has SetScheduleEnabled.
+		// schedules.set_enabled — SchedulesDomain.SetScheduleEnabled.
 		ScheduleEnabler: w.schedulesDomain,
 
-		// L01: links.get_form_schema — ParamsetsDomain now has GetLinkFormSchema.
+		// links.get_form_schema — ParamsetsDomain.GetLinkFormSchema.
 		LinkFormSchema: w.paramsets,
 
-		// L02 + L03: links.get_profiles + links.apply_profile —
+		// links.get_profiles + links.apply_profile —
 		// LinkProfilesAdapter wraps linkprofile.Store; the same
 		// *adapter.ParamsetsDomain instance backs both the LINK read and
 		// the LINK write ADR 0069 requires.
@@ -229,15 +229,16 @@ func wireWSCommands(wsHub *ws.Hub, w wsCommandWiring) {
 		// route.
 		EditLocks: w.editSessions,
 
-		// L04: paramset.determine — ParameterDeterminerAdapter resolves via registry.
+		// paramset.determine — ParameterDeterminerAdapter resolves via registry.
 		ParameterDeterminer: adapter.NewParameterDeterminerAdapter(w.registry, w.valueWriter),
 	})
 
 	// alarm_panel.* — the daemon-level alarm engine + journal. Registered
 	// only when the alarm service is present (nil-safe): *alarm.Service
 	// satisfies ws.AlarmPanelQuery via its Engine()/Stores() accessors.
-	// Codes is left nil until the argon2id code facade is wired (§11); the
-	// codes_* commands then serve "unavailable" rather than panicking.
+	// Codes is the store-backed code facade; when the alarm store is absent
+	// it is nil and the codes_* commands serve "unavailable" rather than
+	// panicking.
 	if w.alarm != nil {
 		ws.RegisterAlarmPanelCommands(router, ws.AlarmPanelCommandsConfig{
 			Panel: w.alarm,
@@ -580,7 +581,7 @@ func (w *wsHubQuery) ListSysvars(_ context.Context) ([]map[string]any, error) {
 	out := make([]map[string]any, 0, len(sysvars))
 	for _, s := range sysvars {
 		// One guarded snapshot of the mutable descriptor: the 30 s hub refresh
-		// rewrites these ten fields in place through Sysvar.ApplyMeta under the
+		// rewrites the descriptor fields in place through Sysvar.ApplyMeta under the
 		// sysvar's own lock while this handler serves the list on another
 		// goroutine. Reading them straight off the struct (as this path used to)
 		// is a data race with that rewrite — REST and the MQTT publisher already

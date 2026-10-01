@@ -22,8 +22,10 @@ type BackupService interface {
 	// for completion via the same job-tracking endpoints.
 	Restore(ctx context.Context, id string) (string, error)
 	// TriggerBackupForCentral backs up exactly one central by name and
-	// returns the backup/job id. Used by the per-central scheduled-backup
-	// job so a multi-CCU daemon backs up each CCU independently.
+	// returns the backup/job id. Used by the REST backup endpoint and the
+	// WS backup command when a request names one central, so a multi-CCU
+	// daemon backs up each CCU independently. The scheduled-backup job uses
+	// the synchronous CreateBackupForCentral plus Prune instead.
 	TriggerBackupForCentral(ctx context.Context, centralName string) (string, error)
 	// Prune deletes a central's oldest backups, keeping the newest keepLast.
 	// keepLast <= 0 is a no-op (keep all).
@@ -70,7 +72,7 @@ type ConfigReader interface {
 // ultimately pushes a wire command.
 //
 // Implementations are responsible for audit-log entries — the handler
-// layer passes Source ("rest:custom-dp:PUT") so the entry has provenance.
+// layer passes Source ("rest:custom-dp:POST") so the entry has provenance.
 type CustomDPWriter interface {
 	// InvokeCustomDP dispatches `operation` with `params` on the custom
 	// data point identified by `deviceAddress` and `name`. Returns
@@ -471,7 +473,7 @@ type ParamsetDivergence struct {
 // write and still drop, clamp or coerce values it does not apply, so the
 // only trustworthy acknowledgement is re-reading the stored paramset after
 // the write and comparing it against what was sent. An empty Divergences
-// list on a nil ReadbackError means every sent value is stored as sent.
+// list with an empty ReadbackError means every sent value is stored as sent.
 type ParamsetWriteReport struct {
 	Written       []string             // parameter names sent to the CCU, sorted
 	Divergences   []ParamsetDivergence // sent != stored after the write
@@ -488,8 +490,8 @@ type ParamsetWriteReport struct {
 // The interfaceID argument is resolved from the central registry by the
 // implementation ([central/adapter.ParameterDeterminerAdapter], which
 // also backs the WS `paramset.determine` command); the REST handler
-// passes "" for it. Returns nil when the backend does not support the
-// operation (e.g. CUxD).
+// passes "" for it. A backend that does not support the operation (e.g.
+// CUxD, whose backend returns ErrUnsupported) surfaces as a wrapped error.
 type ParameterDeterminer interface {
 	DetermineParameter(ctx context.Context, interfaceID, channelAddress, parameterID string) (any, error)
 }

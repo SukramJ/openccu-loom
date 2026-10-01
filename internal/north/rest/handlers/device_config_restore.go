@@ -28,8 +28,8 @@ type DeviceConfigRestorePort interface {
 // plus the device's link peerings — the recovery path after a device
 // factory reset. The transfer runs asynchronously on the radio, so the
 // endpoint returns 202; the SPA watches the CONFIG_PENDING badge for
-// progress. Interfaces without the capability (BidCos-Wired, CUxD,
-// VirtualDevices) answer 422.
+// progress. Interfaces without the capability (everything except BidCos-RF,
+// see hmenum.InterfacesSupportingConfigRestore) answer 422.
 func RestoreDeviceConfig(svc DeviceConfigRestorePort, rec audit.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if svc == nil {

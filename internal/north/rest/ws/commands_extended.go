@@ -183,7 +183,7 @@ type SessionRecorder interface {
 // ThrottleStats is the read contract for `ccu.throttle_stats`.
 // Returns per-interface command-throttle diagnostics (in_flight, waiting,
 // burst_downgrades, waited_for_burst_slot). Mirrors Python
-// `ws_get_command_throttle_stats` (websocket_api.py:1786).
+// `ws_get_command_throttle_stats` (websocket_api.py).
 type ThrottleStats interface {
 	CommandThrottleStats(ctx context.Context) ([]map[string]any, error)
 }
@@ -191,7 +191,7 @@ type ThrottleStats interface {
 // CacheClearer is the write contract for `ccu.cache_clear`.
 // Clears CCU-derivable caches scoped by kind (global/central/interface/device)
 // and triggers a re-pull so the next read fetches fresh data from the CCU.
-// Mirrors Python `ws_clear_cache` (websocket_api.py:1885).
+// Mirrors Python `ws_clear_cache` (websocket_api.py).
 type CacheClearer interface {
 	ClearCache(ctx context.Context, scope cachereset.Scope) (cachereset.Report, error)
 }
@@ -199,21 +199,21 @@ type CacheClearer interface {
 // DeviceStatisticsQuery is the read contract for `ccu.device_statistics`.
 // Returns per-interface device counts (total, unreachable, firmware_updatable)
 // plus grand totals. Mirrors Python `ws_get_device_statistics`
-// (websocket_api.py:1906).
+// (websocket_api.py).
 type DeviceStatisticsQuery interface {
 	DeviceStatistics(ctx context.Context) (map[string]any, error)
 }
 
 // FirmwareRefresher is the write contract for `firmware.refresh`.
 // Triggers a force-refresh of the firmware cache from the CCU.
-// Mirrors Python `ws_refresh_firmware_data` (websocket_api.py:2252).
+// Mirrors Python `ws_refresh_firmware_data` (websocket_api.py).
 type FirmwareRefresher interface {
 	RefreshFirmwareData(ctx context.Context) error
 }
 
 // ChangeHistoryClearer is the write contract for `change_history.clear`.
 // Truncates the persisted change-history log. Mirrors Python
-// `ws_clear_change_history` (websocket_api.py:999).
+// `ws_clear_change_history` (websocket_api.py).
 type ChangeHistoryClearer interface {
 	ClearChangeHistory(ctx context.Context) error
 }
@@ -230,7 +230,7 @@ type AddonUpdater interface {
 
 // IncidentClearer is the write contract for `incidents.clear`.
 // Clears all entries from the incident store. Mirrors Python
-// `ws_clear_incidents` (websocket_api.py:1863).
+// `ws_clear_incidents` (websocket_api.py).
 type IncidentClearer interface {
 	ClearIncidents(ctx context.Context) error
 }
@@ -246,7 +246,7 @@ type IncidentLister interface {
 // UISchemaQuery is the read contract for `paramset.form_schema`.
 // Returns a full UI schema (groups, parameters, visibility rules,
 // profiles) for one channel/paramset pair. Mirrors Python
-// `ws_get_form_schema` (websocket_api.py:252): input channel_address +
+// `ws_get_form_schema` (websocket_api.py): input channel_address +
 // paramset_key (MASTER|VALUES), output the FormSchema object.
 // The concrete implementation is [handlers.UISchemaService].
 type UISchemaQuery interface {
@@ -321,10 +321,6 @@ type ExtendedCommandsConfig struct {
 	TaxonomyAdmin handlers.TaxonomyNodeAdmin
 }
 
-// RegisterExtendedCommands wires the post-MVP command set onto router.
-// The set complements [RegisterDefaultCommands] — call both at boot
-// to expose the full command surface. Any nil sub-config field skips its
-// commands.
 // registerDeviceCommands registers the device.* WS command family.
 // Extracted from RegisterExtendedCommands to keep it under the funlen
 // budget as the family grows.
@@ -353,12 +349,12 @@ func RegisterExtendedCommands(router *Router, cfg ExtendedCommandsConfig) {
 	if router == nil {
 		return
 	}
-	// --- Schreibpfad zuerst (priorisiert) ---
+	// --- Write path first (prioritised) ---
 	registerDeviceCommands(router, cfg.Devices)
 	if cfg.Paramsets != nil {
 		router.Register("paramset.put", paramsetPutHandler(cfg.Paramsets, cfg.EditLocks))
 	}
-	// --- Reports zweit ---
+	// --- Reports second ---
 	registerReportCommands(router, cfg)
 	if cfg.CentralLinks != nil {
 		// central.create_links / central.remove_links — toggle CCU
@@ -383,8 +379,8 @@ func RegisterExtendedCommands(router *Router, cfg ExtendedCommandsConfig) {
 // [RegisterExtendedCommands] to keep that function under the linter's
 // length budget.
 //
-// Every provider-gated command below registers a stub (rather than
-// leaving the name unregistered) when its provider is nil, mirroring
+// Most provider-gated commands below register a stub (rather than
+// leaving the name unregistered) when their provider is nil, mirroring
 // the pattern in commands_missing.go: an unwired command that Dispatch
 // cannot find at all comes back as CommandErrorUnknownCommand, which
 // reads identically to a typo or a schema/router drift, even though the
@@ -392,6 +388,8 @@ func RegisterExtendedCommands(router *Router, cfg ExtendedCommandsConfig) {
 // answers CommandErrorNotImplemented and still shows up in
 // system.commands, so a client — or the schema's own catalogue — can
 // distinguish "not available in this deployment" from "not a command".
+// The exceptions register nothing when their provider is nil: ccu.cache_clear,
+// firmware.refresh, addon_update.*, groups.* and taxonomy.*.
 func registerReportCommands(router *Router, cfg ExtendedCommandsConfig) {
 	if cfg.ChangeHistory != nil {
 		router.Register("change_history.list", changeHistoryListHandler(cfg.ChangeHistory))
@@ -422,7 +420,7 @@ func registerReportCommands(router *Router, cfg ExtendedCommandsConfig) {
 		router.Register("ccu.throttle_stats", stubHandler("ws: ccu.throttle_stats: throttle-stats provider not configured in this deployment"))
 	}
 	if cfg.CacheClearer != nil {
-		// ccu.cache_clear — clear all in-memory caches.
+		// ccu.cache_clear — clear CCU-derivable caches, scoped by kind.
 		router.Register("ccu.cache_clear", ccuCacheClearHandler(cfg.CacheClearer))
 	}
 	if cfg.DeviceStatistics != nil {
@@ -440,6 +438,12 @@ func registerReportCommands(router *Router, cfg ExtendedCommandsConfig) {
 		// (ADR 0057); results stream via addon_update.state_changed.
 		router.Register("addon_update.check", addonUpdateCheckHandler(cfg.AddonUpdater))
 		router.Register("addon_update.install", addonUpdateInstallHandler(cfg.AddonUpdater))
+	} else {
+		// Outside the CCU add-on there is nothing to self-update; the
+		// commands stay registered as stubs so a declared command never
+		// reads as a misspelled one.
+		router.Register("addon_update.check", stubHandler("ws: addon_update.check: add-on updater not available in this deployment"))
+		router.Register("addon_update.install", stubHandler("ws: addon_update.install: add-on updater not available in this deployment"))
 	}
 	if cfg.IncidentClearer != nil {
 		// incidents.clear — clear the incident store.
@@ -490,7 +494,7 @@ func registerReportCommands(router *Router, cfg ExtendedCommandsConfig) {
 	}
 	if cfg.UISchema != nil {
 		// paramset.form_schema — full UI schema for one channel/paramset.
-		// Mirrors Python `ws_get_form_schema` (websocket_api.py:252).
+		// Mirrors Python `ws_get_form_schema` (websocket_api.py).
 		router.Register("paramset.form_schema", paramsetFormSchemaHandler(cfg.UISchema))
 	} else {
 		router.Register("paramset.form_schema", stubHandler("ws: paramset.form_schema: UI-schema provider not configured in this deployment"))
@@ -499,7 +503,7 @@ func registerReportCommands(router *Router, cfg ExtendedCommandsConfig) {
 		// paramset.copy — generic paramset-to-paramset copy between
 		// channels of matching type. Reads the VALUES or MASTER paramset
 		// from the source channel and writes the writable subset to the
-		// target. Mirrors Python `ws_copy_paramset` (websocket_api.py:916).
+		// target. Mirrors Python `ws_copy_paramset` (websocket_api.py).
 		router.Register("paramset.copy", paramsetCopyHandler(cfg.ParamsetReader, cfg.Paramsets, cfg.EditLocks))
 	} else {
 		router.Register("paramset.copy", stubHandler("ws: paramset.copy: paramset-reader provider not configured in this deployment"))
@@ -948,7 +952,7 @@ func serviceMessagesUnsuppressHandler(h ExtendedHub) CommandHandler {
 // ccuThrottleStatsHandler implements `ccu.throttle_stats`.
 // Returns per-interface throttle diagnostics (in_flight, waiting,
 // burst_downgrades, waited_for_burst_slot).
-// Mirrors Python `ws_get_command_throttle_stats` (websocket_api.py:1786).
+// Mirrors Python `ws_get_command_throttle_stats` (websocket_api.py).
 func ccuThrottleStatsHandler(s ThrottleStats) CommandHandler {
 	return func(ctx context.Context, _ json.RawMessage) (any, error) {
 		stats, err := s.CommandThrottleStats(ctx)
@@ -962,7 +966,7 @@ func ccuThrottleStatsHandler(s ThrottleStats) CommandHandler {
 // ccuCacheClearHandler implements `ccu.cache_clear`.
 // Accepts optional params {kind, central, interface, device} to scope the
 // clear; omitting kind (or passing "global") clears every central.
-// Mirrors Python `ws_clear_cache` (websocket_api.py:1885).
+// Mirrors Python `ws_clear_cache` (websocket_api.py).
 func ccuCacheClearHandler(c CacheClearer) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var p struct {
@@ -1014,7 +1018,7 @@ func ccuCacheClearHandler(c CacheClearer) CommandHandler {
 // ccuDeviceStatisticsHandler implements `ccu.device_statistics`.
 // Returns per-interface counts (total, unreachable, firmware_updatable)
 // plus grand totals. Mirrors Python `ws_get_device_statistics`
-// (websocket_api.py:1906).
+// (websocket_api.py).
 func ccuDeviceStatisticsHandler(q DeviceStatisticsQuery) CommandHandler {
 	return func(ctx context.Context, _ json.RawMessage) (any, error) {
 		stats, err := q.DeviceStatistics(ctx)
@@ -1027,7 +1031,7 @@ func ccuDeviceStatisticsHandler(q DeviceStatisticsQuery) CommandHandler {
 
 // firmwareRefreshHandler implements `firmware.refresh`.
 // Triggers a force-refresh of the firmware cache from the CCU.
-// Mirrors Python `ws_refresh_firmware_data` (websocket_api.py:2252).
+// Mirrors Python `ws_refresh_firmware_data` (websocket_api.py).
 func firmwareRefreshHandler(r FirmwareRefresher) CommandHandler {
 	return func(ctx context.Context, _ json.RawMessage) (any, error) {
 		if err := r.RefreshFirmwareData(ctx); err != nil {
@@ -1039,7 +1043,7 @@ func firmwareRefreshHandler(r FirmwareRefresher) CommandHandler {
 
 // changeHistoryClearHandler implements `change_history.clear`.
 // Truncates the persisted change-history log.
-// Mirrors Python `ws_clear_change_history` (websocket_api.py:999).
+// Mirrors Python `ws_clear_change_history` (websocket_api.py).
 func changeHistoryClearHandler(c ChangeHistoryClearer) CommandHandler {
 	return func(ctx context.Context, _ json.RawMessage) (any, error) {
 		if err := c.ClearChangeHistory(ctx); err != nil {
@@ -1074,7 +1078,7 @@ func addonUpdateInstallHandler(u AddonUpdater) CommandHandler {
 
 // incidentsClearHandler implements `incidents.clear`.
 // Clears all entries from the incident store.
-// Mirrors Python `ws_clear_incidents` (websocket_api.py:1863).
+// Mirrors Python `ws_clear_incidents` (websocket_api.py).
 func incidentsClearHandler(c IncidentClearer) CommandHandler {
 	return func(ctx context.Context, _ json.RawMessage) (any, error) {
 		if err := c.ClearIncidents(ctx); err != nil {
@@ -1138,7 +1142,7 @@ func groupsListHandler(q GroupsQuery) CommandHandler {
 // defaults to "MASTER". Typically used to clone configuration from one
 // actor channel to another after pairing a replacement device.
 //
-// Mirrors Python `ws_copy_paramset` (websocket_api.py:916).
+// Mirrors Python `ws_copy_paramset` (websocket_api.py).
 //
 // Request: {
 //
@@ -1390,7 +1394,7 @@ func decodeOrEmpty(raw json.RawMessage, into any) error {
 }
 
 // paramsetFormSchemaHandler implements `paramset.form_schema`.
-// Mirrors Python `ws_get_form_schema` (websocket_api.py:252).
+// Mirrors Python `ws_get_form_schema` (websocket_api.py).
 // Input: {address, channel_no, paramset, locale?, peer?}.
 // Output: the FormSchema object (same as REST GET /ui-schema).
 func paramsetFormSchemaHandler(q UISchemaQuery) CommandHandler {

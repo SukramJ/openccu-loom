@@ -387,9 +387,11 @@ func (c *client) noteDrained() {
 
 // enqueueCtrl queues a pre-serialised control-plane frame for the writer
 // goroutine. Never blocks: a full queue means the client is not draining
-// fast enough, and — mirroring [client.enqueue]'s policy for domain
-// events — the connection is closed rather than left to stall the
-// caller (typically readPump) for up to the write deadline.
+// fast enough, and the connection is closed rather than left to stall the
+// caller (typically readPump) for up to the write deadline. Unlike
+// [client.enqueue], which drops the oldest domain events and signals a
+// gap, control frames cannot be dropped without desynchronising the
+// client, so this plane closes.
 func (c *client) enqueueCtrl(op byte, payload []byte) {
 	select {
 	case c.ctrl <- wireMsg{op: op, payload: payload}:
@@ -632,12 +634,13 @@ func (c *client) isClosed() bool {
 
 // inboundMessage is the subset of client→server JSON we care about.
 //
-// Four operations are supported today:
+// Five operations are supported today:
 //
 //   - subscribe / unsubscribe — manage the client's topic membership.
 //     subscribe accepts an optional `since` cursor that triggers a
 //     replay of buffered events with Seq > since (see ADR 0022)
 //   - pong — heartbeat acknowledgement
+//   - reauth — in-band credential refresh (see [client.reauth])
 //   - call — RPC-style command dispatch (see [Router]); requires
 //     `id` for response correlation and `command` for routing
 type inboundMessage struct {
@@ -866,11 +869,13 @@ func (c *client) failConnection(code uint16, reason string) {
 // its outbound frame to one of two channels instead of writing directly:
 //
 //   - c.out — domain events (topic broadcasts), kept as its own channel
-//     so [client.enqueue]'s backpressure policy (close on a full 1000-
-//     event buffer) stays scoped to the high-frequency broadcast path.
+//     so [client.enqueue]'s backpressure policy (drop the oldest events and
+//     signal a gap on a full buffer) stays scoped to the high-frequency
+//     broadcast path.
 //   - c.ctrl — everything else (subscribe/unsubscribe ACKs, pong
 //     replies, reauth results, replay markers, `call` command results),
-//     queued via [client.enqueueCtrl] with the same backpressure policy.
+//     queued via [client.enqueueCtrl], whose policy is stricter: a full
+//     queue closes the connection.
 //
 // Because exactly one goroutine ever calls rawWrite, frames can never
 // interleave on the wire and no write mutex is needed. This also means

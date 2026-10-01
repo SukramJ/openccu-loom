@@ -35,8 +35,7 @@ import { prefs } from "./stores/preferences.svelte";
 
 type Catalog = Record<string, string>;
 
-// English catalogue — canonical keys. Keep sorted alphabetically so
-// the migration progress is easy to audit.
+// English catalogue — canonical keys, grouped by feature area.
 const EN: Catalog = {
   // --- Alarm panel (notes/concepts/alarm-concept.md §12). Distinct from the CCU
   //     alarm-messages surface (see "messages.*"): this is loom's own
@@ -321,9 +320,11 @@ const EN: Catalog = {
   // broken.
   "alarm.journal_event.acknowledged": "Acknowledged",
   "alarm.journal_event.acoustic_budget_exhausted": "Acoustic budget exhausted",
+  "alarm.journal_event.acoustic_ledger_failed": "Acoustic budget could not be recorded",
   "alarm.journal_event.activation_during_downtime":
     "Activated while the daemon was down",
   "alarm.journal_event.always_on_activation": "Always-on sensor activated",
+  "alarm.journal_event.always_on_elapsed": "Always-on alarm window elapsed",
   "alarm.journal_event.arm_failed_on_restore": "Arming failed during restore",
   "alarm.journal_event.arm_reminder": "Arming reminder",
   "alarm.journal_event.armed": "Armed",
@@ -374,9 +375,11 @@ const EN: Catalog = {
     "Entry delay elapsed while the daemon was down",
   "alarm.journal_event.pending_resumed": "Entry delay resumed",
   "alarm.journal_event.pending_started": "Entry delay started",
+  "alarm.journal_event.output_test_failed": "Output test failed",
   "alarm.journal_event.pre_alarm_escalated": "Pre-alarm escalated to full alarm",
   "alarm.journal_event.pre_alarm_restored_as_full":
     "Pre-alarm restored as full alarm",
+  "alarm.journal_event.pre_alarm_silenced": "Pre-alarm silenced",
   "alarm.journal_event.reconcile_stopped_unowned_siren":
     "Stopped a siren nobody owned",
   "alarm.journal_event.refire_account_failed":
@@ -411,6 +414,7 @@ const EN: Catalog = {
   "alarm.journal_event.sysvar_intent_ambiguous":
     "Ambiguous system-variable command",
   "alarm.journal_event.tamper_while_disarmed": "Tamper while disarmed",
+  "alarm.journal_event.trigger_time_elapsed": "Alarm window elapsed",
   "alarm.journal_event.trigger_window_elapsed_while_down":
     "Alarm window elapsed while the daemon was down",
   "alarm.journal_event.triggered": "Triggered",
@@ -418,6 +422,7 @@ const EN: Catalog = {
   "alarm.journal_event.triggered_restored_implausible_clock":
     "Alarm restored with an implausible clock",
   "alarm.journal_event.unknown_persisted_state": "Unknown stored state",
+  "alarm.journal_event.walktest_aborted_by_arm": "Walk test aborted by arming",
   "alarm.journal_event.walktest_finished": "Walk test finished",
   "alarm.journal_event.walktest_sensor_seen": "Walk-test sensor seen",
   "alarm.journal_event.walktest_started": "Walk test started",
@@ -688,6 +693,8 @@ const EN: Catalog = {
   "audit.col.parameter": "Parameter",
   "audit.col.before": "Before",
   "audit.col.after": "After",
+  "audit.action.pairing_approve": "Pairing approved",
+  "audit.action.pairing_reject": "Pairing rejected",
   "audit.action.paramset_write": "Config",
   "audit.action.link_paramset_write": "Link config",
   "audit.action.link_add": "Link added",
@@ -4548,10 +4555,12 @@ const DE: Catalog = {
   "alarm.journal_event.acknowledged": "Quittiert",
   "alarm.journal_event.acoustic_budget_exhausted":
     "Akustik-Budget aufgebraucht",
+  "alarm.journal_event.acoustic_ledger_failed": "Akustik-Budget konnte nicht verbucht werden",
   "alarm.journal_event.activation_during_downtime":
     "Aktiviert, während der Dienst aus war",
   "alarm.journal_event.always_on_activation":
     "Dauerüberwachter Sensor ausgelöst",
+  "alarm.journal_event.always_on_elapsed": "Alarmdauer des Dauerüberwachungs-Sensors abgelaufen",
   "alarm.journal_event.arm_failed_on_restore":
     "Scharfschalten beim Wiederherstellen fehlgeschlagen",
   "alarm.journal_event.arm_reminder": "Erinnerung zum Scharfschalten",
@@ -4620,10 +4629,12 @@ const DE: Catalog = {
     "Eintrittsverzögerung abgelaufen, während der Dienst aus war",
   "alarm.journal_event.pending_resumed": "Eintrittsverzögerung fortgesetzt",
   "alarm.journal_event.pending_started": "Eintrittsverzögerung gestartet",
+  "alarm.journal_event.output_test_failed": "Test des Signalgebers fehlgeschlagen",
   "alarm.journal_event.pre_alarm_escalated":
     "Voralarm zum Vollalarm eskaliert",
   "alarm.journal_event.pre_alarm_restored_as_full":
     "Voralarm als Vollalarm wiederhergestellt",
+  "alarm.journal_event.pre_alarm_silenced": "Voralarm stummgeschaltet",
   "alarm.journal_event.reconcile_stopped_unowned_siren":
     "Fremde laufende Sirene gestoppt",
   "alarm.journal_event.refire_account_failed":
@@ -4663,6 +4674,7 @@ const DE: Catalog = {
     "Mehrdeutiger Befehl per Systemvariable",
   "alarm.journal_event.tamper_while_disarmed":
     "Sabotage im unscharfen Zustand",
+  "alarm.journal_event.trigger_time_elapsed": "Alarmdauer abgelaufen",
   "alarm.journal_event.trigger_window_elapsed_while_down":
     "Alarmfenster abgelaufen, während der Dienst aus war",
   "alarm.journal_event.triggered": "Ausgelöst",
@@ -4671,6 +4683,7 @@ const DE: Catalog = {
     "Alarm mit unplausibler Uhrzeit wiederhergestellt",
   "alarm.journal_event.unknown_persisted_state":
     "Unbekannter gespeicherter Zustand",
+  "alarm.journal_event.walktest_aborted_by_arm": "Begehungstest durch Scharfschalten abgebrochen",
   "alarm.journal_event.walktest_finished": "Begehungstest beendet",
   "alarm.journal_event.walktest_sensor_seen":
     "Sensor im Begehungstest erkannt",
@@ -4944,6 +4957,8 @@ const DE: Catalog = {
   "audit.col.parameter": "Parameter",
   "audit.col.before": "Vorher",
   "audit.col.after": "Nachher",
+  "audit.action.pairing_approve": "Kopplung genehmigt",
+  "audit.action.pairing_reject": "Kopplung abgelehnt",
   "audit.action.paramset_write": "Konfiguration",
   "audit.action.link_paramset_write": "Verknüpfung",
   "audit.action.link_add": "Verknüpfung hinzugefügt",

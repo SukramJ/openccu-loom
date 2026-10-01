@@ -156,7 +156,7 @@ func (b *CcuBackend) Capabilities() Capabilities {
 		caps = *probed
 	}
 	// Backup routes through the ReGa script runner, which production wires
-	// AFTER Initialize() runs (see ccu_wiring.go). If it were frozen at
+	// AFTER Initialize() runs (wireInterface in central/adapter/ccu_wiring.go, then ConfigureBackend via south_ccu_hub.go). If it were frozen at
 	// probe time it would be stuck false, so derive it from the current
 	// runner at call time instead.
 	caps.Backup = b.rega != nil
@@ -266,9 +266,10 @@ func (b *CcuBackend) UpdateFirmware(ctx context.Context, address string) error {
 }
 
 // RestoreConfigToDevice re-transmits the stored configuration to the
-// device via the XML-RPC `restoreConfigToDevice(address)` call. The
-// method name is identical on rfd (BidCos-RF) and HMIPServer (HmIP-RF);
-// the per-interface support gate lives in the adapter.
+// device via the XML-RPC `restoreConfigToDevice(address)` call. Only
+// rfd (BidCos-RF) serves the method; the HmIP process lists it but
+// faults, so the per-interface support gate (hmenum.Interface
+// SupportsConfigRestore) lives in the adapter.
 func (b *CcuBackend) RestoreConfigToDevice(ctx context.Context, address string) error {
 	if b.xml == nil {
 		return ErrUnsupported

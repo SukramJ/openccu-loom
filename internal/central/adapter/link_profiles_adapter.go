@@ -39,9 +39,10 @@ type LinkParamsetReader interface {
 }
 
 // LinkParamsetWriter writes the LINK paramset of one (channel, peer) pair —
-// the single write path ADR 0069 names: it applies the visibility gate,
-// coerces against the descriptor, and records the changed values in the
-// audit entry. [ParamsetsDomain] satisfies it. Declared separately from
+// the write ADR 0069 prescribes for apply. The implementation,
+// [ParamsetsDomain], routes the write through the model-level gate and
+// coerces against the descriptor; see PutLinkParamset there for the
+// rest. Declared separately from
 // [LinkParamsetReader] because most callers of this adapter need only the
 // read side; [LinkProfilesAdapter.ApplyLinkProfile] type-asserts the shared
 // paramsets collaborator to this interface at call time.
@@ -141,8 +142,8 @@ func (a *LinkProfilesAdapter) activeProfileID(
 // Resolves receiver and sender channel addresses to their channel types,
 // looks up the named profile, and writes its value set — see
 // [linkprofile.Profile.ApplyValues] for exactly what that set contains —
-// through [ParamsetsDomain.PutLinkParamset], the single LINK write path
-// (ADR 0069): the receiver channel address is the paramset's channel, the
+// through [ParamsetsDomain.PutLinkParamset], the LINK write ADR 0069
+// prescribes for apply: the receiver channel address is the paramset's channel, the
 // sender channel address is its peer. Returns the number of parameters
 // written.
 func (a *LinkProfilesAdapter) ApplyLinkProfile(

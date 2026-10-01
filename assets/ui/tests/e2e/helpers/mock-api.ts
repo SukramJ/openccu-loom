@@ -335,7 +335,7 @@ export async function mockAllApis(page: Page): Promise<void> {
     route.fulfill({ status: 200 }),
   );
 
-  // Programs
+  // Groups
   await page.route('**/api/v1/groups*', (route) =>
     route.fulfill({ json: fixture('groups.json') }),
   );
@@ -355,6 +355,7 @@ export async function mockAllApis(page: Page): Promise<void> {
     route.fulfill({ json: fixture('schedules.json') }),
   );
 
+  // Programs
   await page.route('**/api/v1/programs', (route) =>
     route.fulfill({ json: fixture('programs.json') }),
   );
@@ -763,7 +764,7 @@ export async function mockAllApis(page: Page): Promise<void> {
     route.fulfill({ status: 200 }),
   );
 
-  // Matter. The diagnostics tab reads four sibling endpoints whose
+  // Matter. The diagnostics tab reads five sibling endpoints whose
   // shapes differ from the status document, so one handler branches on
   // the path rather than layering overlapping page.route patterns —
   // those work only in the right registration order (Playwright prefers
@@ -845,7 +846,9 @@ export async function mockAllApis(page: Page): Promise<void> {
     }),
   );
 
-  // WebSocket — abort to prevent hanging
+  // Defensive aborts for a `/api/v1/ws` path. The SPA socket is
+  // `/api/v1/events` and is handled by routeWebSocket above; these two
+  // patterns match nothing the daemon serves.
   await page.route('**/api/v1/ws', (route) => route.abort());
   await page.route('**/api/v1/ws**', (route) => route.abort());
 }

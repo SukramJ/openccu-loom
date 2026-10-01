@@ -1,5 +1,29 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.83.0
+
+New: **device administration.** Configuration writes are checked
+against the channel's own parameter description before they reach the
+CCU, and after every write the daemon re-reads the stored
+configuration and reports what was actually applied — the interface
+processes accept writes they then drop, clamp, or persist unusably.
+One channel's settings can be copied to identical channels in one
+step, and a repair action rebuilds a device's stored configuration
+when it has gone bad. BidCos-RF users get a reception (RSSI) matrix, a
+per-device receiver proposal, and direct RF-gateway assignment.
+
+Fixed: after a firmware update or re-pairing the daemon could deliver
+mistyped values for the affected device until a restart; a recovered
+CCU connection now re-reads device values immediately instead of
+waiting for the next event or the periodic sweep. "Restore config" is
+no longer offered on HmIP devices — only the BidCos-RF daemon
+implements it.
+
+Also new, for OpenCCU-Loom installed on an openccu-lite box (this HA
+add-on is unaffected): the Config UI can be served through the box's
+own web server, and the box login signs the operator into the daemon's
+UI — no second login.
+
 ## 0.82.0
 
 New: **every device shows its picture.** The device artwork ships inside

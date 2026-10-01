@@ -94,9 +94,18 @@ function buttons(text: string): HTMLButtonElement[] {
   ) as HTMLButtonElement[];
 }
 
-async function renderAndDirty(value = "42") {
+async function renderAndDirty(
+  value = "42",
+  extra: { paramset?: "MASTER" | "LINK"; peer?: string } = {},
+) {
   const view = render(ChannelPanel, {
-    props: { address: "0001ABCD", channel: 1, paramset: "MASTER", locale: "en" },
+    props: {
+      address: "0001ABCD",
+      channel: 1,
+      paramset: extra.paramset ?? "MASTER",
+      peer: extra.peer,
+      locale: "en",
+    },
   });
   await waitFor(() => expect(mockUiSchema).toHaveBeenCalled());
   const input = await waitFor(() => {
@@ -172,9 +181,10 @@ describe("ChannelPanel — write preview", () => {
   });
 
   // The request line is the one thing in the dialog nothing else in the app
-  // would contradict, so it is pinned against the paths api.putParamset and
-  // api.putLinkParamset actually build. The LINK path in particular is
-  // `/link-ps/`, not the `/link-paramsets/` its method name suggests.
+  // would contradict. The MASTER and LINK literals below pin what the dialog
+  // renders; the final test pins the same literals against the URLs the real
+  // client builds. The LINK path is `/link-ps/`, not the `/link-paramsets/`
+  // its method name suggests.
   it("names the request path the client will actually call", async () => {
     await renderAndDirty();
     const dialog = await waitFor(() => {
@@ -185,6 +195,45 @@ describe("ChannelPanel — write preview", () => {
     expect(dialog.textContent).toContain(
       "PUT /api/v1/devices/0001ABCD:1/paramsets/MASTER",
     );
+  });
+
+  it("names the LINK request path with the peer", async () => {
+    await renderAndDirty("42", { paramset: "LINK", peer: "0002EFGH:3" });
+    const dialog = await waitFor(() => {
+      const el = document.querySelector('[role="dialog"]');
+      expect(el).toBeTruthy();
+      return el as HTMLElement;
+    });
+    expect(dialog.textContent).toContain(
+      "PUT /api/v1/devices/0001ABCD:1/link-ps/0002EFGH:3",
+    );
+    expect(dialog.textContent).not.toContain("link-paramsets");
+  });
+
+  // The dialog literals above are only worth anything if the real client
+  // calls the same paths, so build the URLs with the un-mocked client.
+  it("matches the URLs the real client builds for MASTER and LINK writes", async () => {
+    const actual = await vi.importActual<typeof import("$lib/api/client")>(
+      "$lib/api/client",
+    );
+    const urls: string[] = [];
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL) => {
+      urls.push(String(input));
+      return new Response("{}", {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+    try {
+      await actual.api.putParamset("0001ABCD:1", "MASTER", { X: 1 });
+      await actual.api.putLinkParamset("0001ABCD:1", "0002EFGH:3", { X: 1 });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(urls.length).toBe(2);
+    expect(urls[0]).toMatch(/\/api\/v1\/devices\/0001ABCD%3A1\/paramsets\/MASTER$/);
+    expect(urls[1]).toMatch(/\/api\/v1\/devices\/0001ABCD%3A1\/link-ps\/0002EFGH%3A3$/);
   });
 
   // VALUES is a control write, not configuration: its effect is the point,

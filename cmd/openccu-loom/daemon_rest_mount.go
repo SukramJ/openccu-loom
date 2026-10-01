@@ -203,17 +203,16 @@ func channelFlagsWriterFrom(s *sqlitestore.ChannelFlagsStore) handlers.ChannelFl
 	return s
 }
 
-// mountRESTServer stands up the REST router + server (and the optional mDNS
-// advertiser) when REST is enabled, and returns a teardown that stops the mDNS
-// advertiser at daemon exit. When REST is disabled it is a no-op returning a
-// no-op teardown. The returned teardown folds the inline mDNS-stop defer that
-// previously lived in the composition root.
 // mdnsHealthComponent is the /health component for the mDNS advertiser.
 // Only recorded when discovery.mdns is enabled: an operator who switched
 // it off is not missing anything, and a component that reports on a
 // disabled feature makes the payload harder to read, not easier.
 const mdnsHealthComponent = "discovery.mdns"
 
+// mountRESTServer stands up the REST router + server (and the optional mDNS
+// advertiser) when REST is enabled, and returns a teardown that stops the mDNS
+// advertiser at daemon exit. When REST is disabled it is a no-op returning a
+// no-op teardown.
 func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logger, northBridges *northbridge.Registry, d restMountDeps) (teardown func()) { //nolint:funlen // length is dominated by the flat rest.Deps assembly literal, not control flow
 	teardown = func() {}
 	if !cfg.North.REST.IsEnabled() {
@@ -268,11 +267,6 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		}
 	}
 	restartState := newRestartPendingProvider(bootBaseline, d.configSvc)
-	// The live surface profile. Seeded from the assembled effective
-	// config — not the raw YAML — so a profile the operator saved to the
-	// database is in force from the first request after a restart, and
-	// updated in place by the surfaces write handler so a later change
-	// needs no restart at all.
 	// How many CCUs this daemon serves, read live rather than captured:
 	// a CCU adopted at runtime widens two shipped surface defaults,
 	// because Home Assistant addresses one CCU per config entry and
@@ -442,7 +436,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 			supervisedRestart: detectSupervisedRestart(),
 			mcp:               cfg.North.MCP.Enabled,
 			mcpWrite:          cfg.North.MCP.AllowWrites,
-			// Mirrors the Deps.Alarm mount condition below: the token
+			// Mirrors the Deps.Alarm mount condition above: the token
 			// tracks whether the /alarm routes exist, not whether the
 			// engine is armed/healthy.
 			alarm: d.alarm != nil,
@@ -633,10 +627,11 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 // incidentsClearerFrom narrows the wired IncidentsReader down to the
 // optional handlers.IncidentsClearer surface DELETE /incidents needs.
 // *adapter.IncidentsStoreReader (the concrete type behind d.incidents)
-// implements both, so REST's bulk clear and the WS `incidents.clear`
-// command share the same domain call; a reader that only satisfies
-// IncidentsReader (e.g. a future non-SQLite-backed implementation)
-// simply leaves the route unmounted (nil → 404).
+// implements both, so REST's bulk clear rides the same domain method an
+// external WS bridge would wire for the dormant `incidents.clear`
+// command (notes/parity/by_design.md "ws-rest-split"); a reader that
+// only satisfies IncidentsReader (e.g. a future non-SQLite-backed
+// implementation) simply leaves the route unmounted (nil → 404).
 func incidentsClearerFrom(r handlers.IncidentsReader) handlers.IncidentsClearer {
 	c, _ := r.(handlers.IncidentsClearer)
 	return c
@@ -675,10 +670,6 @@ func alarmPanelFrom(s *alarm.Service) handlers.AlarmPanel {
 	return s
 }
 
-// securityDomainFrom converts *security.Service into the handler
-// facade, mapping a nil pointer to a genuinely nil interface so the
-// router leaves /security unmounted rather than dispatching into a nil
-// receiver.
 // entityNameCatalogueFrom converts *i18n.Catalogs into the handler port,
 // mapping a nil pointer to a genuinely nil interface so the handler's
 // nil check fires instead of a typed-nil method call.
@@ -689,6 +680,10 @@ func entityNameCatalogueFrom(c *i18n.Catalogs) handlers.EntityNameCatalogue {
 	return c
 }
 
+// securityDomainFrom converts *security.Service into the handler
+// facade, mapping a nil pointer to a genuinely nil interface so the
+// router leaves /security unmounted rather than dispatching into a nil
+// receiver.
 func securityDomainFrom(s *security.Service) handlers.SecurityDomain {
 	if s == nil {
 		return nil

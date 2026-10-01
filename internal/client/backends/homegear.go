@@ -41,7 +41,7 @@ func NewHomegearBackend(xml Caller, ann Announcer) *HomegearBackend {
 	return &HomegearBackend{xml: xml, ann: ann}
 }
 
-// SetVersion records the probed Homegear /
+// SetVersion records the probed Homegear version string
 // so [HomegearBackend.Model] can distinguish the two flavours.
 func (b *HomegearBackend) SetVersion(version string) { b.version = version }
 
@@ -84,7 +84,7 @@ func (b *HomegearBackend) Deinit(ctx context.Context, callbackURL string) error 
 }
 
 // Ping implements Operations. Homegear answers `clientServerInitialized`
-// where the CCU answers `ping`. 90).
+// where the CCU answers `ping`.
 func (b *HomegearBackend) Ping(ctx context.Context, interfaceID string) error {
 	if b.xml == nil {
 		return ErrNotWired
@@ -287,11 +287,11 @@ func (b *HomegearBackend) DeleteDevice(ctx context.Context, address string, flag
 	return err
 }
 
-// --- Homegear-spezifische Erweiterungen --------------------------------
+// --- Homegear-specific extensions --------------------------------
 
-// GetSystemVariable returns a single system variable. Homegear-only,
-// not part of the [Operations] interface — accessible via type
-// assertion when the caller knows it has a HomegearBackend.
+// GetSystemVariable returns a single system variable through
+// Homegear's native getSystemVariable call. It also satisfies the
+// system-variable method of the Operations interface.
 func (b *HomegearBackend) GetSystemVariable(ctx context.Context, name string) (any, error) {
 	if b.xml == nil {
 		return nil, ErrNotWired
@@ -300,8 +300,8 @@ func (b *HomegearBackend) GetSystemVariable(ctx context.Context, name string) (a
 }
 
 // GetAllSystemVariablesRaw returns the full sysvar map as a plain
-// name→value map. This Homegear-specific helper is used internally
-// (e.g. by the coordinator). The Operations interface method
+// name→value map. This Homegear-specific helper backs
+// GetAllSystemVariables below. The Operations interface method
 // GetAllSystemVariables (below) wraps this into the standard
 // []map[string]any shape.
 func (b *HomegearBackend) GetAllSystemVariablesRaw(ctx context.Context) (map[string]any, error) {
@@ -332,7 +332,7 @@ func (b *HomegearBackend) SetSystemVariable(ctx context.Context, name string, va
 }
 
 // DeleteSystemVariable implements Operations. Removes a sysvar by name.
-// Returns true on success. 103).
+// Returns true on success.
 func (b *HomegearBackend) DeleteSystemVariable(ctx context.Context, name string) (bool, error) {
 	if b.xml == nil {
 		return false, ErrNotWired
@@ -371,7 +371,7 @@ func (b *HomegearBackend) DeleteMetadata(ctx context.Context, address, dataID st
 // GetDeviceName fetches the device name via Metadata("NAME"). Returns an
 // empty string when the device has no name set.
 //
-// 133) for the single-address case.
+// It reads the NAME metadata entry (see [HomegearBackend.GetMetadata]).
 func (b *HomegearBackend) GetDeviceName(ctx context.Context, address string) (string, error) {
 	raw, err := b.GetMetadata(ctx, address, "NAME")
 	if err != nil {
@@ -504,7 +504,7 @@ func (*HomegearBackend) ExecuteProgram(context.Context, string) (bool, error) {
 	return false, ErrUnsupported
 }
 
-// GetSystemVariable is already declared above (line ~348) as part of the
+// GetSystemVariable is already declared above as part of the
 // Homegear-native API and satisfies Operations.GetSystemVariable.
 
 // GetAllSystemVariables implements Operations.GetAllSystemVariables.

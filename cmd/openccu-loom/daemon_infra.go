@@ -64,11 +64,12 @@ type sharedInfra struct {
 // wireSharedInfrastructure constructs the daemon-global stores,
 // registries, adapters and the MQTT supervisor that the rest of the
 // composition root consumes. It mirrors the original inline phase
-// verbatim: the SQLite-backed stores and the MQTT supervisor each
-// register a shutdown hook, all of which are folded into the returned
-// teardown func and run in the same LIFO order the inline defers used
-// (mqtt.Shutdown → valuesCacheStore.Close → masterValuesStore.Close →
-// visibilityStore.Close). The caller defers teardown.
+// verbatim: the SQLite-backed stores, the MQTT supervisor, the OTLP
+// exporter and the history / descriptor stores each contribute a shutdown
+// step; they are all folded into the returned teardown func, which runs
+// them in a fixed order (mqtt.Shutdown, OTLP exporter, values-cache WAL
+// loop + store, history WAL / retention loops + store, masterValuesStore,
+// visibilityStore, descriptorDB). The caller defers teardown.
 //
 // channelFlags carries the per-channel operator overrides (G12). It is a
 // parameter rather than a post-construction setter because the MQTT bridge
@@ -90,7 +91,7 @@ func wireSharedInfrastructure(
 	si.healthTracker = health.NewTracker()
 	si.catalogs, _ = i18n.NewCatalogs()
 
-	// Outbound visibility filter (ADR 0007): wrap the default registry
+	// Outbound visibility filter (ADR 0005): wrap the default registry
 	// as a filter.VisibilitySet so adapters never import the full
 	// visibility loading machinery. The registry uses built-in rules by
 	// default; operators can extend them via un-ignore files once that
@@ -161,7 +162,7 @@ func wireSharedInfrastructure(
 		ws.WithOcculiteRevalidate(occuliteRevalidator(buildOcculiteSSOTrust(cfg, slog.New(slog.DiscardHandler)), logger)))
 	// WS subscriber-count gauge so the diagnostics dump shows how
 	// many SPA clients are currently subscribed for live updates.
-	// Registered against every central's tracker because the WS hub
+	// Registered once on the shared health tracker because the WS hub
 	// is daemon-global; per-central scoping would double-count.
 	if si.healthTracker != nil {
 		hub := si.wsHub
@@ -222,9 +223,9 @@ func wireSharedInfrastructure(
 	}
 
 	teardown = func() { //nolint:contextcheck // shutdown path must not inherit the cancelled daemon ctx
-		// LIFO order, mirroring the original inline defers: the MQTT
-		// supervisor was deferred last (runs first), then the three
-		// SQLite-backed stores in reverse construction order.
+		// The MQTT supervisor stops first, then the OTLP exporter, then the
+		// SQLite-backed stores (background loops before the store they
+		// checkpoint) and the descriptor database last.
 		func() {
 			shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
@@ -308,11 +309,6 @@ func wireMQTTSupervisor(
 		Before:       []wiring.Mark{wiring.MarkMQTTSupervisorStarted},
 		Why:          "channels the operator hid keep publishing on the MQTT plane, so they reappear in Home Assistant while staying hidden everywhere else",
 	}, func() { si.mqttSup.SetChannelHidden(channelHiddenGate(channelFlags)) })
-	// A failed first connect is not fatal and not final: the supervisor
-	// keeps the stable Wiring every consumer binds to and retries the
-	// connect in the background, so a broker that is still booting beside
-	// the daemon costs a delay rather than the whole MQTT plane until the
-	// next restart.
 	// Broker acknowledgement time, read from whichever stack generation is
 	// live — a config swap replaces the probe, and a gauge holding the
 	// predecessor would report a broker connection that no longer exists.
@@ -334,6 +330,11 @@ func wireMQTTSupervisor(
 		si.healthTracker.RegisterGauge("mqtt.publish_ack_total",
 			func() float64 { return float64(sup.PublishLatency().Total) })
 	}
+	// A failed first connect is not fatal and not final: the supervisor
+	// keeps the stable Wiring every consumer binds to and retries the
+	// connect in the background, so a broker that is still booting beside
+	// the daemon costs a delay rather than the whole MQTT plane until the
+	// next restart.
 	startErr := si.mqttSup.Start(ctx, cfg)
 	reg.Manifest().Mark(wiring.MarkMQTTSupervisorStarted)
 	if startErr != nil {

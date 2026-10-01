@@ -48,6 +48,7 @@ type apiSurface struct {
 // field stop meaning what my client assumed", asked by someone reading an old
 // integration years later.
 var valueSemanticsChanges = []string{
+	"13.2.0 (wsapi) addon_update.check / addon_update.install: meaning — outside the CCU add-on both commands answer not_implemented now instead of unknown_command. They are declared in the catalogue either way, so no schema diff sees it; before this the registration was skipped entirely without an updater, which made a declared command indistinguishable from a typo. Both are listed in optional_deployment_providers now and follow its contract (stay dispatchable, answer not_implemented while the provider is unwired) like every other optional-provider command. A client that probed for the updater by expecting unknown_command must read not_implemented as the same absence",
 	"7.0.0 CaptureIndex: the diagnostics capture response became an array, having been declared an object",
 	"7.1.0 DataPoint.value: unchanged, but display_value was added beside it — value stays the raw CCU wire value",
 	"7.7.0 DataPointValueChangedPayload.display_value: documented, not introduced — the daemon has emitted it on the push since 7.2.0, so a client can observe the field from a 7.2.0..7.6.0 daemon whose spec does not declare it",

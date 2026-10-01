@@ -381,7 +381,7 @@
   });
 
   // Channel `:0` carries the maintenance VALUES (RSSI, LOW_BAT, …) +
-  // the device-wide MASTER. Used by the Status tab.
+  // the device-wide MASTER. Used by the device-config sub-tab.
   const channelZero = $derived.by(() => {
     if (!detail) return null;
     return detail.channels.find((c) => c.address.endsWith(":0")) ?? null;
@@ -1168,7 +1168,7 @@
     </PageHeader>
 
     {#if detail.channels.length > 0}
-      <!-- Top-level tab strip — Bedienen / Status / Konfigurieren / Verlauf. -->
+      <!-- Top-level tab strip — Overview / Configure / History. -->
       <Tabs
         class="mb-4"
         active={topTab}

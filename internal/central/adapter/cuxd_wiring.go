@@ -231,7 +231,7 @@ func wireCUxDInterface( //nolint:funlen,gocognit // composition/wiring: long seq
 	var hotplugInstalled atomic.Bool
 
 	// Boot-time activation of this interface. Wrapped in activate() so a
-	// transient failure can be retried in the background instead of leaving
+	// transient failure can be retried (runCUxDActivation) instead of leaving
 	// the interface permanently empty: CUxD is an addon that starts
 	// independently of ReGaHss, so its BIN-RPC port is regularly still
 	// closed when the readiness gate reports the CCU up. Without a retry the
@@ -342,7 +342,7 @@ func announceCUxDCallback(
 		// answers reads and writes over the same socket, it only pushes no
 		// events. Say so in the client state — left in CREATED, every
 		// gated hub job of the central stayed frozen and check_connection
-		// reported the interface lost every 30 s (see the XML-RPC twin).
+		// reported the interface lost on every probe tick (see the XML-RPC twin).
 		logger.Warn("wire.init.skipped_no_callback",
 			slog.String("central", centralName),
 			slog.String("interface", initID),

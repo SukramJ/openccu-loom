@@ -41,10 +41,9 @@
     messagesStore.release();
   });
 
-  // HA-style left sidebar with 4 navigation clusters. Mirrors the
-  // information-architecture proposal: Übersicht / Inbox /
-  // Automatisierung / Status & Diagnose / System. Mobile-first via
-  // burger toggle that overlays the main content; on ≥md screens it
+  // HA-style left sidebar with the navigation clusters of lib/nav.ts
+  // (overview, automation, diagnose, system, plus bridges when Matter is
+  // enabled). Mobile-first via burger toggle that overlays the main content; on ≥md screens it
   // sits permanently and the main pane shifts to its right.
 
 

@@ -156,8 +156,9 @@ func (d *DeviceDescription) IsChannel() bool { return d.Parent != "" }
 // Delegates to [hmtypes.ChannelNo] so the address grammar — which colon
 // separates the device part, and what counts as a numeric suffix — is
 // decided in one place. That helper takes the first separator and accepts
-// what strconv.Atoi accepts, so an address carrying two colons has no
-// channel number here rather than the last segment's.
+// a non-negative integer (strconv.Atoi syntax, negatives rejected), so an
+// address carrying two colons has no channel number here rather than the
+// last segment's.
 func (d *DeviceDescription) ChannelNo() int {
 	if n, ok := hmtypes.ChannelNo(d.Address); ok {
 		return n

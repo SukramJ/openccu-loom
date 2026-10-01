@@ -59,8 +59,8 @@ type applyParamsetToChannelsOut struct {
 	Outcomes []paramsetApplyOutcomeOut `json:"outcomes" jsonschema:"one outcome per target, in request order"`
 }
 
-// requireSourceOwner applies the multi-CCU ownership check every paramset
-// tool performs: central_name is explicit and authoritative, never a
+// requireSourceOwner applies the multi-CCU ownership check the paramset-apply
+// tools perform: central_name is explicit and authoritative, never a
 // fallback.
 func requireSourceOwner(d Deps, central, source string) error {
 	if central == "" || source == "" {

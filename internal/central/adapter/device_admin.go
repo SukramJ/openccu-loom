@@ -26,7 +26,7 @@ import (
 // It walks the central registry, locates the device's owning central
 // and dispatches the operation. Most calls are XML-RPC bound; the
 // renaming path persists through the central's JSON-RPC rename hook
-// (Device.setName / Channel.setName) wired in ccu_wiring.go.
+// (Device.setName / Channel.setName) installed via SetRenameDeviceFn.
 type DeviceAdminDomain struct {
 	registry *central.Registry
 	writer   *client.ValueWriter
@@ -382,9 +382,9 @@ func (a *DeviceAdminDomain) UpdateFirmware(ctx context.Context, address string) 
 
 // RestoreDeviceConfig re-transmits the centrally stored configuration
 // (MASTER paramsets of every channel plus link peerings) to the device
-// via `restoreConfigToDevice` (XML-RPC). Only rfd (BidCos-RF) and
-// HMIPServer (HmIP-RF) expose the method; devices on any other
-// interface answer [backends.ErrUnsupported] before a wire call is
+// via `restoreConfigToDevice` (XML-RPC). Only rfd (BidCos-RF)
+// serves the method (the HmIP process lists it but faults); devices on
+// any other interface answer [backends.ErrUnsupported] before a wire call is
 // made. The CCU runs the transfer asynchronously (CONFIG_PENDING).
 func (a *DeviceAdminDomain) RestoreDeviceConfig(ctx context.Context, address string) error {
 	if a.registry == nil || a.writer == nil {

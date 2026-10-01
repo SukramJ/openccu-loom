@@ -56,7 +56,9 @@
    "service_messages.suppressed",
    "service_messages.unsuppress",
    "paramset.form_schema",
-   "paramset.copy"
+   "paramset.copy",
+   "addon_update.check",
+   "addon_update.install"
   ]
  },
  "commands": [

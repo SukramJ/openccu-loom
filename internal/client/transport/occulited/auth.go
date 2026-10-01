@@ -79,7 +79,8 @@ func ExpandScopes(stored []string) map[string]bool {
 	return out
 }
 
-// sortedScopes renders an expanded set in a stable order, for logs.
+// sortedScopes renders an expanded set in a stable order. It has no
+// production caller; the tests use it to compare scope sets deterministically.
 func sortedScopes(set map[string]bool) []string {
 	out := make([]string, 0, len(set))
 	for s := range set {

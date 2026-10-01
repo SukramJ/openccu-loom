@@ -69,8 +69,9 @@ func (s *EditSessions) prune(now time.Time) {
 	}
 }
 
-// Open acquires a lock for `key` on behalf of `subject`. Returns 423
-// when another live session already holds the key.
+// Open acquires a lock for `key` on behalf of `subject`. Returns
+// ok == false when another live session already holds the key; the REST
+// handler then answers 423.
 func (s *EditSessions) Open(key, subject string) (EditLock, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
