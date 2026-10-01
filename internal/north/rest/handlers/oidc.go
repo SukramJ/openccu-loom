@@ -34,7 +34,6 @@ type OIDCDeps struct {
 
 	mu     sync.Mutex
 	states map[string]oidcState
-	now    func() time.Time
 }
 
 type oidcState struct {
@@ -72,7 +71,6 @@ func NewOIDCDeps(client *oidc.Client, authDeps *AuthDeps, logger *slog.Logger) *
 		Auth:   authDeps,
 		Logger: logger,
 		states: make(map[string]oidcState),
-		now:    time.Now,
 	}
 }
 
@@ -85,7 +83,7 @@ func (d *OIDCDeps) putState(verifier, nonce string) (string, error) {
 	// Sweep expired entries on every insert so states that are minted but
 	// never completed (the common abandoned-login case) cannot accumulate
 	// unbounded — consumeState alone never reclaims them.
-	now := d.now()
+	now := time.Now()
 	for k, e := range d.states {
 		if now.Sub(e.created) > oidcStateTTL {
 			delete(d.states, k)
@@ -120,7 +118,7 @@ func (d *OIDCDeps) consumeState(state string) (verifier, nonce string, ok bool) 
 		return "", "", false
 	}
 	delete(d.states, state)
-	if d.now().Sub(e.created) > oidcStateTTL {
+	if time.Since(e.created) > oidcStateTTL {
 		return "", "", false
 	}
 	return e.verifier, e.nonce, true

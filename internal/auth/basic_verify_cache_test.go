@@ -6,6 +6,7 @@ package auth
 import (
 	"context"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -86,22 +87,29 @@ func TestVerifiedBasicCacheDistinguishesSubjectsAndPasswords(t *testing.T) {
 	}
 }
 
-// TestVerifiedBasicCacheExpires pins that an entry stops being served once
-// its window elapses.
+// TestVerifiedBasicCacheExpires pins that an entry is served for exactly its
+// window and stops being served once the window elapses.
 func TestVerifiedBasicCacheExpires(t *testing.T) {
 	t.Parallel()
-	now := time.Now()
-	c := NewVerifiedBasicCache()
-	c.ttl = time.Minute
-	c.now = func() time.Time { return now }
-	calls := 0
-	verify := func() bool { calls++; return true }
-	c.Verify("alice", "$2a$12$h", "secret", verify)
-	now = now.Add(2 * time.Minute)
-	c.Verify("alice", "$2a$12$h", "secret", verify)
-	if calls != 2 {
-		t.Fatalf("verifications = %d, want the expired entry to be re-verified", calls)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		c := NewVerifiedBasicCache()
+		c.ttl = time.Minute
+		calls := 0
+		verify := func() bool { calls++; return true }
+		c.Verify("alice", "$2a$12$h", "secret", verify)
+
+		time.Sleep(time.Minute - time.Nanosecond)
+		c.Verify("alice", "$2a$12$h", "secret", verify)
+		if calls != 1 {
+			t.Fatalf("verifications = %d, want the entry served until its window elapses", calls)
+		}
+
+		time.Sleep(time.Nanosecond)
+		c.Verify("alice", "$2a$12$h", "secret", verify)
+		if calls != 2 {
+			t.Fatalf("verifications = %d, want the expired entry to be re-verified", calls)
+		}
+	})
 }
 
 // TestVerifiedBasicCacheStaysBounded pins the ceiling: only successful

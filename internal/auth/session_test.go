@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -31,17 +32,15 @@ func TestSessionIssueAndLookup(t *testing.T) {
 }
 
 func TestSessionExpiresEvicts(t *testing.T) {
-	store := NewSessionStore()
-	store.TTL = 10 * time.Millisecond
-	// Drive eviction with virtual time via the store's now seam instead of
-	// a real sleep racing the 10ms TTL.
-	vnow := time.Now()
-	store.now = func() time.Time { return vnow }
-	sess, _ := store.Issue(Identity{Subject: "bob"})
-	vnow = vnow.Add(20 * time.Millisecond) // advance past the TTL
-	if got := store.Lookup(sess.ID); got != nil {
-		t.Fatal("expired session must evict")
-	}
+	synctest.Test(t, func(t *testing.T) {
+		store := NewSessionStore()
+		store.TTL = 10 * time.Millisecond
+		sess, _ := store.Issue(Identity{Subject: "bob"})
+		time.Sleep(20 * time.Millisecond) // advance past the TTL
+		if got := store.Lookup(sess.ID); got != nil {
+			t.Fatal("expired session must evict")
+		}
+	})
 }
 
 // TestSessionRevokeBySubjectRemovesAllForSubject verifies that
@@ -197,56 +196,56 @@ func TestSessionRevokeBySubjectEmptySubjectNoOp(t *testing.T) {
 // idle clock, while one idle beyond the window since the last successful
 // Lookup is evicted on the next Lookup.
 func TestSessionIdleTTLEvictsIdleSession(t *testing.T) {
-	store := NewSessionStore()
-	store.IdleTTL = 10 * time.Millisecond
-	vnow := time.Now()
-	store.now = func() time.Time { return vnow }
+	synctest.Test(t, func(t *testing.T) {
+		store := NewSessionStore()
+		store.IdleTTL = 10 * time.Millisecond
 
-	sess, err := store.Issue(Identity{Subject: "alice"})
-	if err != nil {
-		t.Fatalf("issue: %v", err)
-	}
+		sess, err := store.Issue(Identity{Subject: "alice"})
+		if err != nil {
+			t.Fatalf("issue: %v", err)
+		}
 
-	// Looked up within the idle window: survives and refreshes lastSeen.
-	vnow = vnow.Add(5 * time.Millisecond)
-	if got := store.Lookup(sess.ID); got == nil {
-		t.Fatal("session evicted within idle window")
-	}
+		// Looked up within the idle window: survives and refreshes lastSeen.
+		time.Sleep(5 * time.Millisecond)
+		if got := store.Lookup(sess.ID); got == nil {
+			t.Fatal("session evicted within idle window")
+		}
 
-	// Idle beyond the window since the last successful Lookup: evicted.
-	vnow = vnow.Add(20 * time.Millisecond)
-	if got := store.Lookup(sess.ID); got != nil {
-		t.Fatal("session survived beyond IdleTTL")
-	}
+		// Idle beyond the window since the last successful Lookup: evicted.
+		time.Sleep(20 * time.Millisecond)
+		if got := store.Lookup(sess.ID); got != nil {
+			t.Fatal("session survived beyond IdleTTL")
+		}
+	})
 }
 
 // TestSessionIdleTTLDisabledPreservesAbsoluteTTLOnly verifies that
 // IdleTTL==0 disables the idle check (a session survives however long it
 // sits between lookups) while the absolute TTL still applies unchanged.
 func TestSessionIdleTTLDisabledPreservesAbsoluteTTLOnly(t *testing.T) {
-	store := NewSessionStore()
-	store.TTL = 100 * time.Millisecond
-	store.IdleTTL = 0
-	vnow := time.Now()
-	store.now = func() time.Time { return vnow }
+	synctest.Test(t, func(t *testing.T) {
+		store := NewSessionStore()
+		store.TTL = 100 * time.Millisecond
+		store.IdleTTL = 0
 
-	sess, err := store.Issue(Identity{Subject: "alice"})
-	if err != nil {
-		t.Fatalf("issue: %v", err)
-	}
+		sess, err := store.Issue(Identity{Subject: "alice"})
+		if err != nil {
+			t.Fatalf("issue: %v", err)
+		}
 
-	// Advance close to (but before) the absolute TTL; with IdleTTL disabled
-	// this must not evict even though it would exceed a typical idle window.
-	vnow = vnow.Add(90 * time.Millisecond)
-	if got := store.Lookup(sess.ID); got == nil {
-		t.Fatal("session evicted despite IdleTTL disabled and within absolute TTL")
-	}
+		// Advance close to (but before) the absolute TTL; with IdleTTL disabled
+		// this must not evict even though it would exceed a typical idle window.
+		time.Sleep(90 * time.Millisecond)
+		if got := store.Lookup(sess.ID); got == nil {
+			t.Fatal("session evicted despite IdleTTL disabled and within absolute TTL")
+		}
 
-	// Past the absolute TTL: evicted regardless of IdleTTL.
-	vnow = vnow.Add(20 * time.Millisecond)
-	if got := store.Lookup(sess.ID); got != nil {
-		t.Fatal("session survived past absolute TTL")
-	}
+		// Past the absolute TTL: evicted regardless of IdleTTL.
+		time.Sleep(20 * time.Millisecond)
+		if got := store.Lookup(sess.ID); got != nil {
+			t.Fatal("session survived past absolute TTL")
+		}
+	})
 }
 
 func TestSessionMiddlewareAttachesIdentity(t *testing.T) {
@@ -440,30 +439,30 @@ func TestPersistentSessionStoreRevokeDeletes(t *testing.T) {
 // persistence is hydrated into in-memory state during construction so
 // Lookup succeeds without a re-issue.
 func TestNewPersistentSessionStoreHydrates(t *testing.T) {
-	fake := newFakePersist()
-	now := time.Now()
-	preloaded := &Session{
-		ID:       "hydrated-id",
-		Identity: Identity{Subject: "carol", Role: RoleAdmin},
-		Created:  now.Add(-time.Minute),
-		Expires:  now.Add(time.Hour),
-	}
-	fake.preloaded = []*Session{preloaded}
+	synctest.Test(t, func(t *testing.T) {
+		fake := newFakePersist()
+		now := time.Now()
+		preloaded := &Session{
+			ID:       "hydrated-id",
+			Identity: Identity{Subject: "carol", Role: RoleAdmin},
+			Created:  now.Add(-time.Minute),
+			Expires:  now.Add(time.Hour),
+		}
+		fake.preloaded = []*Session{preloaded}
 
-	store, err := NewPersistentSessionStoreWithOptions(fake, discardLogger(), SessionStoreOptions{})
-	if err != nil {
-		t.Fatalf("NewPersistentSessionStore: %v", err)
-	}
-	// Anchor virtual time so the hydrated session is not expired.
-	store.now = func() time.Time { return now }
+		store, err := NewPersistentSessionStoreWithOptions(fake, discardLogger(), SessionStoreOptions{})
+		if err != nil {
+			t.Fatalf("NewPersistentSessionStore: %v", err)
+		}
 
-	got := store.Lookup(preloaded.ID)
-	if got == nil {
-		t.Fatal("Lookup returned nil for hydrated session")
-	}
-	if got.Identity.Subject != "carol" {
-		t.Errorf("Subject=%q want carol", got.Identity.Subject)
-	}
+		got := store.Lookup(preloaded.ID)
+		if got == nil {
+			t.Fatal("Lookup returned nil for hydrated session")
+		}
+		if got.Identity.Subject != "carol" {
+			t.Errorf("Subject=%q want carol", got.Identity.Subject)
+		}
+	})
 }
 
 // TestNewPersistentSessionStorePropagatesHydrationError verifies that a
@@ -485,67 +484,67 @@ func TestNewPersistentSessionStorePropagatesHydrationError(t *testing.T) {
 // sweeps the in-memory map and calls DeleteExpiredSessions on the
 // persistence layer, returning the sentinel count from the fake.
 func TestPurgeExpiredEvictsAndDelegates(t *testing.T) {
-	fake := newFakePersist()
-	fake.sentinelCount = 7
-	store, err := NewPersistentSessionStoreWithOptions(fake, discardLogger(), SessionStoreOptions{})
-	if err != nil {
-		t.Fatalf("NewPersistentSessionStore: %v", err)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		fake := newFakePersist()
+		fake.sentinelCount = 7
+		store, err := NewPersistentSessionStoreWithOptions(fake, discardLogger(), SessionStoreOptions{})
+		if err != nil {
+			t.Fatalf("NewPersistentSessionStore: %v", err)
+		}
 
-	vnow := time.Now()
-	store.TTL = 10 * time.Millisecond
-	store.now = func() time.Time { return vnow }
+		store.TTL = 10 * time.Millisecond
 
-	sess, err := store.Issue(Identity{Subject: "dave"})
-	if err != nil {
-		t.Fatalf("Issue: %v", err)
-	}
+		sess, err := store.Issue(Identity{Subject: "dave"})
+		if err != nil {
+			t.Fatalf("Issue: %v", err)
+		}
 
-	// Advance time past TTL so the session is considered expired.
-	vnow = vnow.Add(20 * time.Millisecond)
+		// Advance time past TTL so the session is considered expired.
+		time.Sleep(20 * time.Millisecond)
 
-	count, err := store.PurgeExpired(context.Background())
-	if err != nil {
-		t.Fatalf("PurgeExpired: %v", err)
-	}
-	if count != 7 {
-		t.Errorf("PurgeExpired count=%d want 7 (sentinel)", count)
-	}
-	if !fake.purgeWasCalled() {
-		t.Error("DeleteExpiredSessions was not called")
-	}
-	// In-memory item must be gone.
-	if store.Lookup(sess.ID) != nil {
-		t.Error("expired session still in memory after PurgeExpired")
-	}
+		count, err := store.PurgeExpired(context.Background())
+		if err != nil {
+			t.Fatalf("PurgeExpired: %v", err)
+		}
+		if count != 7 {
+			t.Errorf("PurgeExpired count=%d want 7 (sentinel)", count)
+		}
+		if !fake.purgeWasCalled() {
+			t.Error("DeleteExpiredSessions was not called")
+		}
+		// In-memory item must be gone.
+		if store.Lookup(sess.ID) != nil {
+			t.Error("expired session still in memory after PurgeExpired")
+		}
+	})
 }
 
 // TestPurgeExpiredNoOpSafeWithNilPersist verifies that PurgeExpired is
 // safe when the store has no persistence layer: it sweeps memory and
 // returns (0, nil).
 func TestPurgeExpiredNoOpSafeWithNilPersist(t *testing.T) {
-	store := NewSessionStore()
-	vnow := time.Now()
-	store.TTL = 10 * time.Millisecond
-	store.now = func() time.Time { return vnow }
+	synctest.Test(t, func(t *testing.T) {
+		store := NewSessionStore()
+		store.TTL = 10 * time.Millisecond
 
-	sess, err := store.Issue(Identity{Subject: "eve"})
-	if err != nil {
-		t.Fatalf("Issue: %v", err)
-	}
+		sess, err := store.Issue(Identity{Subject: "eve"})
+		if err != nil {
+			t.Fatalf("Issue: %v", err)
+		}
 
-	vnow = vnow.Add(20 * time.Millisecond)
+		time.Sleep(20 * time.Millisecond)
 
-	count, err := store.PurgeExpired(context.Background())
-	if err != nil {
-		t.Fatalf("PurgeExpired: %v", err)
-	}
-	if count != 0 {
-		t.Errorf("count=%d want 0 for nil persist", count)
-	}
-	if store.Lookup(sess.ID) != nil {
-		t.Error("expired session still in memory after PurgeExpired")
-	}
+		count, err := store.PurgeExpired(context.Background())
+		if err != nil {
+			t.Fatalf("PurgeExpired: %v", err)
+		}
+		if count != 0 {
+			t.Errorf("count=%d want 0 for nil persist", count)
+		}
+		if store.Lookup(sess.ID) != nil {
+			t.Error("expired session still in memory after PurgeExpired")
+		}
+	})
 }
 
 // TestSessionMiddlewareDefersToResolvedIdentity pins the precedence rule that

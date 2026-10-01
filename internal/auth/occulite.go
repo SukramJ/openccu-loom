@@ -115,17 +115,16 @@ type occuliteEntry struct {
 type occuliteSSO struct {
 	trust  OcculiteSSOTrust
 	logger *slog.Logger
-	now    func() time.Time
 
 	mu    sync.Mutex
 	cache map[string]occuliteEntry
 }
 
-func newOcculiteSSO(t OcculiteSSOTrust, logger *slog.Logger, now func() time.Time) *occuliteSSO {
+func newOcculiteSSO(t OcculiteSSOTrust, logger *slog.Logger) *occuliteSSO {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &occuliteSSO{trust: t, logger: logger, now: now, cache: make(map[string]occuliteEntry)}
+	return &occuliteSSO{trust: t, logger: logger, cache: make(map[string]occuliteEntry)}
 }
 
 // OcculiteSSOPassthrough is a fallback resolver for box-shell single sign-on
@@ -147,7 +146,7 @@ func newOcculiteSSO(t OcculiteSSOTrust, logger *slog.Logger, now func() time.Tim
 // The identity carries no expiry: the box owns the session's lifetime, and
 // the verification cache bounds how long a revoked session keeps working.
 func OcculiteSSOPassthrough(t OcculiteSSOTrust, logger *slog.Logger) func(http.Handler) http.Handler {
-	return newOcculiteSSO(t, logger, time.Now).middleware
+	return newOcculiteSSO(t, logger).middleware
 }
 
 func (s *occuliteSSO) middleware(next http.Handler) http.Handler {
@@ -230,7 +229,7 @@ func (s *occuliteSSO) lookup(sid string) (occuliteEntry, bool) {
 	if !hit {
 		return occuliteEntry{}, false
 	}
-	if !s.now().Before(e.expires) {
+	if !time.Now().Before(e.expires) {
 		delete(s.cache, sid)
 		return occuliteEntry{}, false
 	}
@@ -243,7 +242,7 @@ func (s *occuliteSSO) lookup(sid string) (occuliteEntry, bool) {
 func (s *occuliteSSO) store(sid string, e occuliteEntry, ttl time.Duration) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	now := s.now()
+	now := time.Now()
 	e.expires = now.Add(ttl)
 	if _, present := s.cache[sid]; !present && len(s.cache) >= occuliteCacheCap {
 		for k, v := range s.cache {
