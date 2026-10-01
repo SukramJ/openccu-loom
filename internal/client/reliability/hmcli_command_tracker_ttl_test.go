@@ -5,6 +5,7 @@ package reliability
 
 import (
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -43,17 +44,18 @@ func TestHmCliCommandTrackerTTLCoversSynchronousBudgets(t *testing.T) {
 // device is asserted rather than asserted-in-prose.
 func TestHmCliCommandTrackerEntryExpiresAtTTL(t *testing.T) {
 	t.Parallel()
-
-	tracker := NewCommandTracker("central-iface", CommandTrackerConfig{TTL: 20 * time.Millisecond})
-	dpk, ok := tracker.AddSetValue("VCU0000123:1", "LEVEL", "VALUES", 0.5)
-	if !ok {
-		t.Fatal("AddSetValue reported no tracked key")
-	}
-	if _, live := tracker.GetLastSentValue(dpk); !live {
-		t.Fatal("GetLastSentValue right after the send = (nil, false), want the sent value")
-	}
-	time.Sleep(40 * time.Millisecond)
-	if v, live := tracker.GetLastSentValue(dpk); live {
-		t.Errorf("GetLastSentValue past the TTL = (%v, true), want (nil, false) — a late callback must not be filed as the confirmation of this send", v)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		tracker := NewCommandTracker("central-iface", CommandTrackerConfig{TTL: 20 * time.Millisecond})
+		dpk, ok := tracker.AddSetValue("VCU0000123:1", "LEVEL", "VALUES", 0.5)
+		if !ok {
+			t.Fatal("AddSetValue reported no tracked key")
+		}
+		if _, live := tracker.GetLastSentValue(dpk); !live {
+			t.Fatal("GetLastSentValue right after the send = (nil, false), want the sent value")
+		}
+		synctest.Sleep(40 * time.Millisecond)
+		if v, live := tracker.GetLastSentValue(dpk); live {
+			t.Errorf("GetLastSentValue past the TTL = (%v, true), want (nil, false) — a late callback must not be filed as the confirmation of this send", v)
+		}
+	})
 }

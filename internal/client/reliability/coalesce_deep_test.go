@@ -3,7 +3,7 @@
 
 package reliability
 
-// P1-1 / P1-2 deep tests for Coalescer: concurrency, hook semantics,
+// Deep tests for Coalescer: concurrency, hook semantics,
 // error propagation, and ctx-cancellation — all deterministic, race-clean.
 
 import (
@@ -13,21 +13,19 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
+	"testing/synctest"
 )
 
 // waitAllEntered blocks until all n callers have entered c.Do (Stats().Total
 // == n), guaranteeing the n-1 non-leaders coalesce on the in-flight leader.
-// Deterministic replacement for a fixed follower-settling sleep; fails fast
-// on timeout instead of hanging.
+// It must be called inside a synctest bubble: every caller is durably
+// parked once it has entered Do, so synctest.Wait returns only after all of
+// them have registered.
 func waitAllEntered(t *testing.T, c *Coalescer, n int) {
 	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
-	for c.Stats().Total < uint64(n) {
-		if time.Now().After(deadline) {
-			t.Fatalf("timeout: only %d/%d callers entered Do", c.Stats().Total, n)
-		}
-		time.Sleep(time.Millisecond)
+	synctest.Wait()
+	if got := c.Stats().Total; got < uint64(n) {
+		t.Fatalf("only %d/%d callers entered Do", got, n)
 	}
 }
 
@@ -40,58 +38,59 @@ func waitAllEntered(t *testing.T, c *Coalescer, n int) {
 // receives the same value.
 func TestCoalescerLeaderRunsOnceForBurst(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		const N = 50
+		c := NewCoalescer()
 
-	const N = 50
-	c := NewCoalescer()
+		// leaderReady gates followers: the leader signals when it has started so
+		// all goroutines are truly coalesced before the leader returns.
+		leaderReady := make(chan struct{})
+		leaderDone := make(chan struct{})
 
-	// leaderReady gates followers: the leader signals when it has started so
-	// all goroutines are truly coalesced before the leader returns.
-	leaderReady := make(chan struct{})
-	leaderDone := make(chan struct{})
+		var callCount atomic.Int64
+		fn := func(_ context.Context) (any, error) {
+			callCount.Add(1)
+			close(leaderReady) // signal: I'm the leader and I've started
+			<-leaderDone       // block until released
+			return int64(42), nil
+		}
 
-	var callCount atomic.Int64
-	fn := func(_ context.Context) (any, error) {
-		callCount.Add(1)
-		close(leaderReady) // signal: I'm the leader and I've started
-		<-leaderDone       // block until released
-		return int64(42), nil
-	}
+		var wg sync.WaitGroup
+		results := make([]int64, N)
+		errs := make([]error, N)
 
-	var wg sync.WaitGroup
-	results := make([]int64, N)
-	errs := make([]error, N)
+		for i := range N {
+			wg.Go(func() {
+				v, err := c.Do(context.Background(), "burst-key", fn)
+				errs[i] = err
+				if err == nil {
+					results[i] = v.(int64) //nolint:forcetypeassert // known concrete type in this test
+				}
+			})
+		}
 
-	for i := range N {
-		wg.Go(func() {
-			v, err := c.Do(context.Background(), "burst-key", fn)
-			errs[i] = err
-			if err == nil {
-				results[i] = v.(int64) //nolint:forcetypeassert // known concrete type in this test
+		// Wait until at least one goroutine has entered the fn (the leader).
+		<-leaderReady
+		// Wait until all N goroutines have entered Do so every non-leader is
+		// guaranteed to coalesce on the in-flight leader.
+		waitAllEntered(t, c, N)
+		// Release the leader.
+		close(leaderDone)
+
+		wg.Wait()
+
+		if got := callCount.Load(); got != 1 {
+			t.Fatalf("inner fn called %d times, want exactly 1", got)
+		}
+		for i, err := range errs {
+			if err != nil {
+				t.Fatalf("goroutine %d: unexpected error: %v", i, err)
 			}
-		})
-	}
-
-	// Wait until at least one goroutine has entered the fn (the leader).
-	<-leaderReady
-	// Wait until all N goroutines have entered Do so every non-leader is
-	// guaranteed to coalesce on the in-flight leader.
-	waitAllEntered(t, c, N)
-	// Release the leader.
-	close(leaderDone)
-
-	wg.Wait()
-
-	if got := callCount.Load(); got != 1 {
-		t.Fatalf("inner fn called %d times, want exactly 1", got)
-	}
-	for i, err := range errs {
-		if err != nil {
-			t.Fatalf("goroutine %d: unexpected error: %v", i, err)
+			if results[i] != 42 {
+				t.Fatalf("goroutine %d: got %d, want 42", i, results[i])
+			}
 		}
-		if results[i] != 42 {
-			t.Fatalf("goroutine %d: got %d, want 42", i, results[i])
-		}
-	}
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -102,30 +101,31 @@ func TestCoalescerLeaderRunsOnceForBurst(t *testing.T) {
 // using distinct keys each run their own inner fn — there is no piggy-back.
 func TestCoalescerDistinctKeysRunIndependently(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		c := NewCoalescer()
 
-	c := NewCoalescer()
+		var countA, countB atomic.Int64
+		fnA := func(_ context.Context) (any, error) { countA.Add(1); return "a", nil }
+		fnB := func(_ context.Context) (any, error) { countB.Add(1); return "b", nil }
 
-	var countA, countB atomic.Int64
-	fnA := func(_ context.Context) (any, error) { countA.Add(1); return "a", nil }
-	fnB := func(_ context.Context) (any, error) { countB.Add(1); return "b", nil }
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() { defer wg.Done(); c.Do(context.Background(), "key-a", fnA) }() //nolint:errcheck // error is asserted via channel or atomic in the goroutine above
+		go func() { defer wg.Done(); c.Do(context.Background(), "key-b", fnB) }() //nolint:errcheck // error is asserted via channel or atomic in the goroutine above
+		wg.Wait()
 
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() { defer wg.Done(); c.Do(context.Background(), "key-a", fnA) }() //nolint:errcheck // error is asserted via channel or atomic in the goroutine above
-	go func() { defer wg.Done(); c.Do(context.Background(), "key-b", fnB) }() //nolint:errcheck // error is asserted via channel or atomic in the goroutine above
-	wg.Wait()
+		if countA.Load() != 1 {
+			t.Fatalf("key-a fn call count=%d, want 1", countA.Load())
+		}
+		if countB.Load() != 1 {
+			t.Fatalf("key-b fn call count=%d, want 1", countB.Load())
+		}
 
-	if countA.Load() != 1 {
-		t.Fatalf("key-a fn call count=%d, want 1", countA.Load())
-	}
-	if countB.Load() != 1 {
-		t.Fatalf("key-b fn call count=%d, want 1", countB.Load())
-	}
-
-	s := c.Stats()
-	if s.Coalesced != 0 {
-		t.Fatalf("coalesced=%d, want 0 (distinct keys never coalesce)", s.Coalesced)
-	}
+		s := c.Stats()
+		if s.Coalesced != 0 {
+			t.Fatalf("coalesced=%d, want 0 (distinct keys never coalesce)", s.Coalesced)
+		}
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -136,40 +136,41 @@ func TestCoalescerDistinctKeysRunIndependently(t *testing.T) {
 // returns an error every coalesced follower receives that same error.
 func TestCoalescerErrorPropagatesToWaiters(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		const N = 10
+		c := NewCoalescer()
 
-	const N = 10
-	c := NewCoalescer()
+		boom := errors.New("boom")
 
-	boom := errors.New("boom")
+		leaderReady := make(chan struct{})
+		leaderDone := make(chan struct{})
 
-	leaderReady := make(chan struct{})
-	leaderDone := make(chan struct{})
-
-	fn := func(_ context.Context) (any, error) {
-		close(leaderReady)
-		<-leaderDone
-		return nil, boom
-	}
-
-	errs := make([]error, N)
-	var wg sync.WaitGroup
-	for i := range N {
-		wg.Go(func() {
-			_, err := c.Do(context.Background(), "err-key", fn)
-			errs[i] = err
-		})
-	}
-
-	<-leaderReady
-	waitAllEntered(t, c, N)
-	close(leaderDone)
-	wg.Wait()
-
-	for i, err := range errs {
-		if !errors.Is(err, boom) {
-			t.Fatalf("goroutine %d: got %v, want boom", i, err)
+		fn := func(_ context.Context) (any, error) {
+			close(leaderReady)
+			<-leaderDone
+			return nil, boom
 		}
-	}
+
+		errs := make([]error, N)
+		var wg sync.WaitGroup
+		for i := range N {
+			wg.Go(func() {
+				_, err := c.Do(context.Background(), "err-key", fn)
+				errs[i] = err
+			})
+		}
+
+		<-leaderReady
+		waitAllEntered(t, c, N)
+		close(leaderDone)
+		wg.Wait()
+
+		for i, err := range errs {
+			if !errors.Is(err, boom) {
+				t.Fatalf("goroutine %d: got %v, want boom", i, err)
+			}
+		}
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -181,47 +182,48 @@ func TestCoalescerErrorPropagatesToWaiters(t *testing.T) {
 // Failed==0, InFlight==0.
 func TestCoalescerStatsAccountsLeaderAndFollowers(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		const N = 20
+		c := NewCoalescer()
 
-	const N = 20
-	c := NewCoalescer()
+		leaderReady := make(chan struct{})
+		leaderDone := make(chan struct{})
 
-	leaderReady := make(chan struct{})
-	leaderDone := make(chan struct{})
+		fn := func(_ context.Context) (any, error) {
+			close(leaderReady)
+			<-leaderDone
+			return "x", nil
+		}
 
-	fn := func(_ context.Context) (any, error) {
-		close(leaderReady)
-		<-leaderDone
-		return "x", nil
-	}
+		var wg sync.WaitGroup
+		for range N {
+			wg.Go(func() {
+				c.Do(context.Background(), "stats-key", fn) //nolint:errcheck // error is asserted via channel or atomic in the goroutine above
+			})
+		}
 
-	var wg sync.WaitGroup
-	for range N {
-		wg.Go(func() {
-			c.Do(context.Background(), "stats-key", fn) //nolint:errcheck // error is asserted via channel or atomic in the goroutine above
-		})
-	}
+		<-leaderReady
+		waitAllEntered(t, c, N)
+		close(leaderDone)
+		wg.Wait()
 
-	<-leaderReady
-	waitAllEntered(t, c, N)
-	close(leaderDone)
-	wg.Wait()
-
-	s := c.Stats()
-	if s.Total != N {
-		t.Errorf("Total=%d, want %d", s.Total, N)
-	}
-	if s.Executed != 1 {
-		t.Errorf("Executed=%d, want 1", s.Executed)
-	}
-	if s.Coalesced != N-1 {
-		t.Errorf("Coalesced=%d, want %d", s.Coalesced, N-1)
-	}
-	if s.Failed != 0 {
-		t.Errorf("Failed=%d, want 0", s.Failed)
-	}
-	if s.InFlight != 0 {
-		t.Errorf("InFlight=%d, want 0 after drain", s.InFlight)
-	}
+		s := c.Stats()
+		if s.Total != N {
+			t.Errorf("Total=%d, want %d", s.Total, N)
+		}
+		if s.Executed != 1 {
+			t.Errorf("Executed=%d, want 1", s.Executed)
+		}
+		if s.Coalesced != N-1 {
+			t.Errorf("Coalesced=%d, want %d", s.Coalesced, N-1)
+		}
+		if s.Failed != 0 {
+			t.Errorf("Failed=%d, want 0", s.Failed)
+		}
+		if s.InFlight != 0 {
+			t.Errorf("InFlight=%d, want 0 after drain", s.InFlight)
+		}
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -232,14 +234,15 @@ func TestCoalescerStatsAccountsLeaderAndFollowers(t *testing.T) {
 // increments Stats().Failed to 1.
 func TestCoalescerStatsCountsFailures(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		c := NewCoalescer()
+		fn := func(_ context.Context) (any, error) { return nil, errors.New("fail") }
+		c.Do(context.Background(), "fail-key", fn) //nolint:errcheck // error is asserted via channel or atomic in the goroutine above
 
-	c := NewCoalescer()
-	fn := func(_ context.Context) (any, error) { return nil, errors.New("fail") }
-	c.Do(context.Background(), "fail-key", fn) //nolint:errcheck // error is asserted via channel or atomic in the goroutine above
-
-	if s := c.Stats(); s.Failed != 1 {
-		t.Fatalf("Failed=%d, want 1", s.Failed)
-	}
+		if s := c.Stats(); s.Failed != 1 {
+			t.Fatalf("Failed=%d, want 1", s.Failed)
+		}
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -251,53 +254,54 @@ func TestCoalescerStatsCountsFailures(t *testing.T) {
 // per follower) and the set of recorded waiter counts must be {1,2,3,4}.
 func TestCoalescerHookFiresPerFollowerNotLeader(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		const goroutines = 5
+		c := NewCoalescer()
 
-	const goroutines = 5
-	c := NewCoalescer()
+		leaderReady := make(chan struct{})
+		leaderDone := make(chan struct{})
 
-	leaderReady := make(chan struct{})
-	leaderDone := make(chan struct{})
+		fn := func(_ context.Context) (any, error) {
+			close(leaderReady)
+			<-leaderDone
+			return "ok", nil
+		}
 
-	fn := func(_ context.Context) (any, error) {
-		close(leaderReady)
-		<-leaderDone
-		return "ok", nil
-	}
-
-	var mu sync.Mutex
-	var recordedWaiters []int
-	c.SetHook(func(_ string, waiters int) {
-		mu.Lock()
-		recordedWaiters = append(recordedWaiters, waiters)
-		mu.Unlock()
-	})
-
-	var wg sync.WaitGroup
-	for range goroutines {
-		wg.Go(func() {
-			c.Do(context.Background(), "hook-key", fn) //nolint:errcheck // error is asserted via channel or atomic in the goroutine above
+		var mu sync.Mutex
+		var recordedWaiters []int
+		c.SetHook(func(_ string, waiters int) {
+			mu.Lock()
+			recordedWaiters = append(recordedWaiters, waiters)
+			mu.Unlock()
 		})
-	}
 
-	<-leaderReady
-	// Wait until all goroutines have entered Do so every non-leader is registered.
-	waitAllEntered(t, c, goroutines)
-	close(leaderDone)
-	wg.Wait()
+		var wg sync.WaitGroup
+		for range goroutines {
+			wg.Go(func() {
+				c.Do(context.Background(), "hook-key", fn) //nolint:errcheck // error is asserted via channel or atomic in the goroutine above
+			})
+		}
 
-	mu.Lock()
-	got := slices.Clone(recordedWaiters)
-	mu.Unlock()
+		<-leaderReady
+		// Wait until all goroutines have entered Do so every non-leader is registered.
+		waitAllEntered(t, c, goroutines)
+		close(leaderDone)
+		wg.Wait()
 
-	if len(got) != goroutines-1 {
-		t.Fatalf("hook called %d times, want %d", len(got), goroutines-1)
-	}
+		mu.Lock()
+		got := slices.Clone(recordedWaiters)
+		mu.Unlock()
 
-	slices.Sort(got)
-	want := []int{1, 2, 3, 4}
-	if !slices.Equal(got, want) {
-		t.Fatalf("waiter counts (sorted)=%v, want %v", got, want)
-	}
+		if len(got) != goroutines-1 {
+			t.Fatalf("hook called %d times, want %d", len(got), goroutines-1)
+		}
+
+		slices.Sort(got)
+		want := []int{1, 2, 3, 4}
+		if !slices.Equal(got, want) {
+			t.Fatalf("waiter counts (sorted)=%v, want %v", got, want)
+		}
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -309,43 +313,45 @@ func TestCoalescerHookFiresPerFollowerNotLeader(t *testing.T) {
 // held).
 func TestCoalescerHookSafeToCallBackIntoCoalescer(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		c := NewCoalescer()
 
-	c := NewCoalescer()
+		leaderReady := make(chan struct{})
+		leaderDone := make(chan struct{})
 
-	leaderReady := make(chan struct{})
-	leaderDone := make(chan struct{})
+		fn := func(_ context.Context) (any, error) {
+			close(leaderReady)
+			<-leaderDone
+			return nil, nil
+		}
 
-	fn := func(_ context.Context) (any, error) {
-		close(leaderReady)
-		<-leaderDone
-		return nil, nil
-	}
-
-	hookDone := make(chan struct{}, 1)
-	c.SetHook(func(_ string, _ int) {
-		_ = c.InFlight()
-		_ = c.Stats()
-		hookDone <- struct{}{}
-	})
-
-	var wg sync.WaitGroup
-	for range 2 {
-		wg.Go(func() {
-			c.Do(context.Background(), "reentrant-key", fn) //nolint:errcheck // error is asserted via channel or atomic in the goroutine above
+		hookDone := make(chan struct{}, 1)
+		c.SetHook(func(_ string, _ int) {
+			_ = c.InFlight()
+			_ = c.Stats()
+			hookDone <- struct{}{}
 		})
-	}
 
-	<-leaderReady
-	waitAllEntered(t, c, 2)
-	close(leaderDone)
-	wg.Wait()
+		var wg sync.WaitGroup
+		for range 2 {
+			wg.Go(func() {
+				c.Do(context.Background(), "reentrant-key", fn) //nolint:errcheck // error is asserted via channel or atomic in the goroutine above
+			})
+		}
 
-	select {
-	case <-hookDone:
-		// hook fired without deadlock
-	case <-time.After(500 * time.Millisecond):
-		t.Fatal("hook did not fire — possible deadlock")
-	}
+		<-leaderReady
+		waitAllEntered(t, c, 2)
+		close(leaderDone)
+		wg.Wait()
+
+		synctest.Wait()
+		select {
+		case <-hookDone:
+			// hook fired without deadlock
+		default:
+			t.Fatal("hook did not fire — possible deadlock")
+		}
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -365,57 +371,58 @@ func TestCoalescerHookSafeToCallBackIntoCoalescer(t *testing.T) {
 // 5. Leader is released; all goroutines drain.
 func TestCoalescerSetHookReplacesExisting(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		c := NewCoalescer()
 
-	c := NewCoalescer()
+		leaderIn := make(chan struct{})    // leader has entered fn
+		followersGo := make(chan struct{}) // hooks swapped; followers may now call Do
+		leaderDone := make(chan struct{})  // release the leader
 
-	leaderIn := make(chan struct{})    // leader has entered fn
-	followersGo := make(chan struct{}) // hooks swapped; followers may now call Do
-	leaderDone := make(chan struct{})  // release the leader
+		fn := func(_ context.Context) (any, error) {
+			close(leaderIn)
+			<-leaderDone
+			return "v", nil
+		}
 
-	fn := func(_ context.Context) (any, error) {
-		close(leaderIn)
-		<-leaderDone
-		return "v", nil
-	}
+		var firedA, firedB atomic.Int64
 
-	var firedA, firedB atomic.Int64
-
-	// Launch the leader goroutine.
-	var wg sync.WaitGroup
-	wg.Go(func() {
-		c.Do(context.Background(), "replace-key", fn) //nolint:errcheck // error is asserted via channel or atomic in the goroutine above
-	})
-
-	// Wait for the leader to be inside fn.
-	<-leaderIn
-
-	// Install hook A, then immediately replace with hook B — all before
-	// any follower arrives.
-	c.SetHook(func(_ string, _ int) { firedA.Add(1) })
-	c.SetHook(func(_ string, _ int) { firedB.Add(1) })
-
-	// Now allow followers to call Do. They will all see hook B.
-	close(followersGo)
-
-	const followers = 3
-	for range followers {
+		// Launch the leader goroutine.
+		var wg sync.WaitGroup
 		wg.Go(func() {
-			<-followersGo                                 // ensure hook swap is visible before calling Do
 			c.Do(context.Background(), "replace-key", fn) //nolint:errcheck // error is asserted via channel or atomic in the goroutine above
 		})
-	}
 
-	// Wait until all goroutines (1 leader + followers) have entered Do.
-	waitAllEntered(t, c, 1+followers)
-	close(leaderDone)
-	wg.Wait()
+		// Wait for the leader to be inside fn.
+		<-leaderIn
 
-	if firedA.Load() != 0 {
-		t.Fatalf("hook A fired %d times, want 0 (should have been replaced)", firedA.Load())
-	}
-	if got := firedB.Load(); got == 0 {
-		t.Fatal("hook B was never called")
-	}
+		// Install hook A, then immediately replace with hook B — all before
+		// any follower arrives.
+		c.SetHook(func(_ string, _ int) { firedA.Add(1) })
+		c.SetHook(func(_ string, _ int) { firedB.Add(1) })
+
+		// Now allow followers to call Do. They will all see hook B.
+		close(followersGo)
+
+		const followers = 3
+		for range followers {
+			wg.Go(func() {
+				<-followersGo                                 // ensure hook swap is visible before calling Do
+				c.Do(context.Background(), "replace-key", fn) //nolint:errcheck // error is asserted via channel or atomic in the goroutine above
+			})
+		}
+
+		// Wait until all goroutines (1 leader + followers) have entered Do.
+		waitAllEntered(t, c, 1+followers)
+		close(leaderDone)
+		wg.Wait()
+
+		if firedA.Load() != 0 {
+			t.Fatalf("hook A fired %d times, want 0 (should have been replaced)", firedA.Load())
+		}
+		if got := firedB.Load(); got == 0 {
+			t.Fatal("hook B was never called")
+		}
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -426,38 +433,39 @@ func TestCoalescerSetHookReplacesExisting(t *testing.T) {
 // SetHook(nil); subsequent followers must not panic and the hook must not fire.
 func TestCoalescerSetHookNilDetaches(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		c := NewCoalescer()
 
-	c := NewCoalescer()
+		var fired atomic.Int64
+		c.SetHook(func(_ string, _ int) { fired.Add(1) })
+		// Detach the hook.
+		c.SetHook(nil)
 
-	var fired atomic.Int64
-	c.SetHook(func(_ string, _ int) { fired.Add(1) })
-	// Detach the hook.
-	c.SetHook(nil)
+		leaderReady := make(chan struct{})
+		leaderDone := make(chan struct{})
 
-	leaderReady := make(chan struct{})
-	leaderDone := make(chan struct{})
+		fn := func(_ context.Context) (any, error) {
+			close(leaderReady)
+			<-leaderDone
+			return nil, nil
+		}
 
-	fn := func(_ context.Context) (any, error) {
-		close(leaderReady)
-		<-leaderDone
-		return nil, nil
-	}
+		var wg sync.WaitGroup
+		for range 3 {
+			wg.Go(func() {
+				c.Do(context.Background(), "nil-hook-key", fn) //nolint:errcheck // error is asserted via channel or atomic in the goroutine above
+			})
+		}
 
-	var wg sync.WaitGroup
-	for range 3 {
-		wg.Go(func() {
-			c.Do(context.Background(), "nil-hook-key", fn) //nolint:errcheck // error is asserted via channel or atomic in the goroutine above
-		})
-	}
+		<-leaderReady
+		waitAllEntered(t, c, 3)
+		close(leaderDone)
+		wg.Wait()
 
-	<-leaderReady
-	waitAllEntered(t, c, 3)
-	close(leaderDone)
-	wg.Wait()
-
-	if fired.Load() != 0 {
-		t.Fatalf("detached hook fired %d times, want 0", fired.Load())
-	}
+		if fired.Load() != 0 {
+			t.Fatalf("detached hook fired %d times, want 0", fired.Load())
+		}
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -469,61 +477,63 @@ func TestCoalescerSetHookNilDetaches(t *testing.T) {
 // completion, reflected in Stats (Executed==1).
 func TestCoalescerCtxCancelReturnsErrToWaiterOnly(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		c := NewCoalescer()
 
-	c := NewCoalescer()
+		leaderReady := make(chan struct{})
+		leaderDone := make(chan struct{})
 
-	leaderReady := make(chan struct{})
-	leaderDone := make(chan struct{})
-
-	fn := func(_ context.Context) (any, error) {
-		close(leaderReady)
-		<-leaderDone
-		return "done", nil
-	}
-
-	// Leader goroutine — uses a background ctx so cancellation doesn't affect it.
-	leaderErrCh := make(chan error, 1)
-	go func() {
-		_, err := c.Do(context.Background(), "cancel-key", fn)
-		leaderErrCh <- err
-	}()
-
-	// Wait for leader to be inside fn.
-	<-leaderReady
-
-	// Follower with a cancellable context.
-	followerCtx, cancel := context.WithCancel(context.Background())
-	followerErrCh := make(chan error, 1)
-	go func() {
-		_, err := c.Do(followerCtx, "cancel-key", fn)
-		followerErrCh <- err
-	}()
-
-	// Wait until both callers (leader + follower) have entered Do.
-	waitAllEntered(t, c, 2)
-	cancel() // cancel the follower's context
-
-	// Follower should return quickly with ctx.Err().
-	select {
-	case err := <-followerErrCh:
-		if !errors.Is(err, context.Canceled) {
-			t.Fatalf("follower: got %v, want context.Canceled", err)
+		fn := func(_ context.Context) (any, error) {
+			close(leaderReady)
+			<-leaderDone
+			return "done", nil
 		}
-	case <-time.After(500 * time.Millisecond):
-		t.Fatal("follower did not return after ctx cancel")
-	}
 
-	// Release the leader now.
-	close(leaderDone)
+		// Leader goroutine — uses a background ctx so cancellation doesn't affect it.
+		leaderErrCh := make(chan error, 1)
+		go func() {
+			_, err := c.Do(context.Background(), "cancel-key", fn)
+			leaderErrCh <- err
+		}()
 
-	if err := <-leaderErrCh; err != nil {
-		t.Fatalf("leader: unexpected error: %v", err)
-	}
+		// Wait for leader to be inside fn.
+		<-leaderReady
 
-	s := c.Stats()
-	if s.Executed != 1 {
-		t.Errorf("Executed=%d, want 1", s.Executed)
-	}
+		// Follower with a cancellable context.
+		followerCtx, cancel := context.WithCancel(context.Background())
+		followerErrCh := make(chan error, 1)
+		go func() {
+			_, err := c.Do(followerCtx, "cancel-key", fn)
+			followerErrCh <- err
+		}()
+
+		// Wait until both callers (leader + follower) have entered Do.
+		waitAllEntered(t, c, 2)
+		cancel() // cancel the follower's context
+
+		// Follower should return quickly with ctx.Err().
+		synctest.Wait()
+		select {
+		case err := <-followerErrCh:
+			if !errors.Is(err, context.Canceled) {
+				t.Fatalf("follower: got %v, want context.Canceled", err)
+			}
+		default:
+			t.Fatal("follower did not return after ctx cancel")
+		}
+
+		// Release the leader now.
+		close(leaderDone)
+
+		if err := <-leaderErrCh; err != nil {
+			t.Fatalf("leader: unexpected error: %v", err)
+		}
+
+		s := c.Stats()
+		if s.Executed != 1 {
+			t.Errorf("Executed=%d, want 1", s.Executed)
+		}
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -535,30 +545,31 @@ func TestCoalescerCtxCancelReturnsErrToWaiterOnly(t *testing.T) {
 // (Executed grows by 1, Coalesced stays at 0 across both rounds combined).
 func TestCoalescerCompletedKeyAllowsFreshRun(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		c := NewCoalescer()
+		fn := func(_ context.Context) (any, error) { return "v", nil }
 
-	c := NewCoalescer()
-	fn := func(_ context.Context) (any, error) { return "v", nil }
+		// First call (round 1).
+		if _, err := c.Do(context.Background(), "fresh-key", fn); err != nil {
+			t.Fatalf("round 1: %v", err)
+		}
+		s1 := c.Stats()
+		if s1.Executed != 1 {
+			t.Fatalf("after round 1: Executed=%d, want 1", s1.Executed)
+		}
 
-	// First call (round 1).
-	if _, err := c.Do(context.Background(), "fresh-key", fn); err != nil {
-		t.Fatalf("round 1: %v", err)
-	}
-	s1 := c.Stats()
-	if s1.Executed != 1 {
-		t.Fatalf("after round 1: Executed=%d, want 1", s1.Executed)
-	}
-
-	// Second call (round 2) — must be a new leader, not coalesced with round 1.
-	if _, err := c.Do(context.Background(), "fresh-key", fn); err != nil {
-		t.Fatalf("round 2: %v", err)
-	}
-	s2 := c.Stats()
-	if s2.Executed != 2 {
-		t.Fatalf("after round 2: Executed=%d, want 2", s2.Executed)
-	}
-	if s2.Coalesced != 0 {
-		t.Fatalf("Coalesced=%d, want 0 (sequential calls must not coalesce)", s2.Coalesced)
-	}
+		// Second call (round 2) — must be a new leader, not coalesced with round 1.
+		if _, err := c.Do(context.Background(), "fresh-key", fn); err != nil {
+			t.Fatalf("round 2: %v", err)
+		}
+		s2 := c.Stats()
+		if s2.Executed != 2 {
+			t.Fatalf("after round 2: Executed=%d, want 2", s2.Executed)
+		}
+		if s2.Coalesced != 0 {
+			t.Fatalf("Coalesced=%d, want 0 (sequential calls must not coalesce)", s2.Coalesced)
+		}
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -569,46 +580,48 @@ func TestCoalescerCompletedKeyAllowsFreshRun(t *testing.T) {
 // is executing and InFlight()==0 after the call completes.
 func TestCoalescerInFlightDuringLeaderRun(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		c := NewCoalescer()
 
-	c := NewCoalescer()
+		leaderReady := make(chan struct{})
+		inflight := make(chan int, 1)
+		leaderDone := make(chan struct{})
 
-	leaderReady := make(chan struct{})
-	inflight := make(chan int, 1)
-	leaderDone := make(chan struct{})
-
-	fn := func(_ context.Context) (any, error) {
-		close(leaderReady)
-		<-leaderDone
-		return nil, nil
-	}
-
-	var wg sync.WaitGroup
-	wg.Go(func() {
-		c.Do(context.Background(), "inflight-key", fn) //nolint:errcheck // error is asserted via channel or atomic in the goroutine above
-	})
-
-	<-leaderReady
-
-	// Probe InFlight from a separate goroutine while the leader is still running.
-	go func() {
-		inflight <- c.InFlight()
-	}()
-
-	select {
-	case n := <-inflight:
-		if n != 1 {
-			t.Errorf("InFlight during leader run=%d, want 1", n)
+		fn := func(_ context.Context) (any, error) {
+			close(leaderReady)
+			<-leaderDone
+			return nil, nil
 		}
-	case <-time.After(500 * time.Millisecond):
-		t.Fatal("timed out reading InFlight")
-	}
 
-	close(leaderDone)
-	wg.Wait()
+		var wg sync.WaitGroup
+		wg.Go(func() {
+			c.Do(context.Background(), "inflight-key", fn) //nolint:errcheck // error is asserted via channel or atomic in the goroutine above
+		})
 
-	if n := c.InFlight(); n != 0 {
-		t.Errorf("InFlight after drain=%d, want 0", n)
-	}
+		<-leaderReady
+
+		// Probe InFlight from a separate goroutine while the leader is still running.
+		go func() {
+			inflight <- c.InFlight()
+		}()
+
+		synctest.Wait()
+		select {
+		case n := <-inflight:
+			if n != 1 {
+				t.Errorf("InFlight during leader run=%d, want 1", n)
+			}
+		default:
+			t.Fatal("timed out reading InFlight")
+		}
+
+		close(leaderDone)
+		wg.Wait()
+
+		if n := c.InFlight(); n != 0 {
+			t.Errorf("InFlight after drain=%d, want 0", n)
+		}
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -620,73 +633,77 @@ func TestCoalescerInFlightDuringLeaderRun(t *testing.T) {
 // call was abandoned, which must not read as a successful empty result.
 func TestCoalescerClearReleasesWaiters(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		c := NewCoalescer()
+		leaderStarted := make(chan struct{})
+		leaderContinue := make(chan struct{})
 
-	c := NewCoalescer()
-	leaderStarted := make(chan struct{})
-	leaderContinue := make(chan struct{})
+		// Start a leader that blocks until leaderContinue is closed.
+		go func() {
+			_, _ = c.Do(context.Background(), "key", func(_ context.Context) (any, error) {
+				close(leaderStarted)
+				<-leaderContinue
+				return "leader-result", nil
+			})
+		}()
 
-	// Start a leader that blocks until leaderContinue is closed.
-	go func() {
-		_, _ = c.Do(context.Background(), "key", func(_ context.Context) (any, error) {
-			close(leaderStarted)
-			<-leaderContinue
-			return "leader-result", nil
-		})
-	}()
+		// Wait until the leader is inside Do.
+		<-leaderStarted
 
-	// Wait until the leader is inside Do.
-	<-leaderStarted
+		// Start a follower — it should coalesce with the leader.
+		followerDone := make(chan struct{})
+		var followerVal any
+		var followerErr error
+		go func() {
+			defer close(followerDone)
+			followerVal, followerErr = c.Do(context.Background(), "key", func(_ context.Context) (any, error) {
+				// Must not run — this is a follower.
+				return "should-not-run", nil
+			})
+		}()
 
-	// Start a follower — it should coalesce with the leader.
-	followerDone := make(chan struct{})
-	var followerVal any
-	var followerErr error
-	go func() {
-		defer close(followerDone)
-		followerVal, followerErr = c.Do(context.Background(), "key", func(_ context.Context) (any, error) {
-			// Must not run — this is a follower.
-			return "should-not-run", nil
-		})
-	}()
+		// Wait until both callers (leader + follower) have entered Do.
+		waitAllEntered(t, c, 2)
 
-	// Wait until both callers (leader + follower) have entered Do.
-	waitAllEntered(t, c, 2)
+		// Clear: all waiters must be unblocked.
+		c.Clear()
 
-	// Clear: all waiters must be unblocked.
-	c.Clear()
+		synctest.Wait()
+		select {
+		case <-followerDone:
+		default:
+			t.Fatal("follower did not unblock after Clear")
+		}
 
-	select {
-	case <-followerDone:
-	case <-time.After(500 * time.Millisecond):
-		t.Fatal("follower did not unblock after Clear")
-	}
+		if followerVal != nil || !errors.Is(followerErr, ErrCoalescerCleared) {
+			t.Errorf("follower got (%v, %v), want (nil, %v)", followerVal, followerErr, ErrCoalescerCleared)
+		}
 
-	if followerVal != nil || !errors.Is(followerErr, ErrCoalescerCleared) {
-		t.Errorf("follower got (%v, %v), want (nil, %v)", followerVal, followerErr, ErrCoalescerCleared)
-	}
+		// InFlight must be 0 after Clear.
+		if n := c.InFlight(); n != 0 {
+			t.Errorf("InFlight after Clear=%d, want 0", n)
+		}
 
-	// InFlight must be 0 after Clear.
-	if n := c.InFlight(); n != 0 {
-		t.Errorf("InFlight after Clear=%d, want 0", n)
-	}
-
-	// Unblock the leader so goroutines can exit cleanly.
-	close(leaderContinue)
+		// Unblock the leader so goroutines can exit cleanly.
+		close(leaderContinue)
+	})
 }
 
 // TestCoalescerClearOnEmptyIsNoop verifies Clear on an empty coalescer
 // is a no-op and leaves the coalescer functional.
 func TestCoalescerClearOnEmptyIsNoop(t *testing.T) {
 	t.Parallel()
-	c := NewCoalescer()
-	c.Clear() // must not panic
+	synctest.Test(t, func(t *testing.T) {
+		c := NewCoalescer()
+		c.Clear() // must not panic
 
-	val, err := c.Do(context.Background(), "k", func(_ context.Context) (any, error) {
-		return 99, nil
+		val, err := c.Do(context.Background(), "k", func(_ context.Context) (any, error) {
+			return 99, nil
+		})
+		if err != nil || val != 99 {
+			t.Errorf("Do after Clear: got (%v, %v), want (99, nil)", val, err)
+		}
 	})
-	if err != nil || val != 99 {
-		t.Errorf("Do after Clear: got (%v, %v), want (99, nil)", val, err)
-	}
 }
 
 // TestCoalescerLeaderCancellationDoesNotFailFollowers pins that the shared
@@ -700,63 +717,66 @@ func TestCoalescerClearOnEmptyIsNoop(t *testing.T) {
 // the CCU.
 func TestCoalescerLeaderCancellationDoesNotFailFollowers(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		c := NewCoalescer()
+		leaderCtx, cancelLeader := context.WithCancel(context.Background())
+		defer cancelLeader()
 
-	c := NewCoalescer()
-	leaderCtx, cancelLeader := context.WithCancel(context.Background())
-	defer cancelLeader()
+		started := make(chan struct{})
+		release := make(chan struct{})
+		leaderErr := make(chan error, 1)
+		go func() {
+			_, err := c.Do(leaderCtx, "setValue|0|ABC:1|STATE|bool|true", func(ctx context.Context) (any, error) {
+				close(started)
+				<-release
+				// The shared call must not have been cancelled with the
+				// leader: its own error is what the followers receive.
+				return "written", ctx.Err()
+			})
+			leaderErr <- err
+		}()
+		<-started
 
-	started := make(chan struct{})
-	release := make(chan struct{})
-	leaderErr := make(chan error, 1)
-	go func() {
-		_, err := c.Do(leaderCtx, "setValue|0|ABC:1|STATE|bool|true", func(ctx context.Context) (any, error) {
-			close(started)
-			<-release
-			// The shared call must not have been cancelled with the
-			// leader: its own error is what the followers receive.
-			return "written", ctx.Err()
-		})
-		leaderErr <- err
-	}()
-	<-started
-
-	type outcome struct {
-		val any
-		err error
-	}
-	followerOut := make(chan outcome, 1)
-	go func() {
-		v, err := c.Do(context.Background(), "setValue|0|ABC:1|STATE|bool|true", func(_ context.Context) (any, error) {
-			return "should-not-run", nil
-		})
-		followerOut <- outcome{v, err}
-	}()
-	waitAllEntered(t, c, 2)
-
-	cancelLeader()
-
-	select {
-	case err := <-leaderErr:
-		if !errors.Is(err, context.Canceled) {
-			t.Fatalf("leader err=%v, want context.Canceled — a caller still returns on its own context", err)
+		type outcome struct {
+			val any
+			err error
 		}
-	case <-time.After(time.Second):
-		t.Fatal("leader did not return after its own context was cancelled")
-	}
+		followerOut := make(chan outcome, 1)
+		go func() {
+			v, err := c.Do(context.Background(), "setValue|0|ABC:1|STATE|bool|true", func(_ context.Context) (any, error) {
+				return "should-not-run", nil
+			})
+			followerOut <- outcome{v, err}
+		}()
+		waitAllEntered(t, c, 2)
 
-	close(release)
+		cancelLeader()
 
-	select {
-	case got := <-followerOut:
-		if got.err != nil {
-			t.Fatalf("follower err=%v, want nil — the leader's caller disconnecting must not fail it", got.err)
+		synctest.Wait()
+		select {
+		case err := <-leaderErr:
+			if !errors.Is(err, context.Canceled) {
+				t.Fatalf("leader err=%v, want context.Canceled — a caller still returns on its own context", err)
+			}
+		default:
+			t.Fatal("leader did not return after its own context was cancelled")
 		}
-		if got.val != "written" {
-			t.Fatalf("follower val=%v, want %q", got.val, "written")
+
+		close(release)
+
+		synctest.Wait()
+		select {
+		case got := <-followerOut:
+			if got.err != nil {
+				t.Fatalf("follower err=%v, want nil — the leader's caller disconnecting must not fail it", got.err)
+			}
+			if got.val != "written" {
+				t.Fatalf("follower val=%v, want %q", got.val, "written")
+			}
+		default:
+			t.Fatal("follower did not receive the shared call's result")
 		}
-	case <-time.After(time.Second):
-		t.Fatal("follower did not receive the shared call's result")
-	}
+	})
 }
 
 // TestCoalescerCancelsSharedCallWhenEveryCallerLeaves pins the other half of
@@ -764,26 +784,28 @@ func TestCoalescerLeaderCancellationDoesNotFailFollowers(t *testing.T) {
 // call is cancelled instead of running on and occupying the wire.
 func TestCoalescerCancelsSharedCallWhenEveryCallerLeaves(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		c := NewCoalescer()
+		ctx, cancel := context.WithCancel(context.Background())
+		started := make(chan struct{})
+		callCtxDone := make(chan struct{})
+		go func() {
+			_, _ = c.Do(ctx, "key", func(callCtx context.Context) (any, error) {
+				close(started)
+				<-callCtx.Done()
+				close(callCtxDone)
+				return nil, callCtx.Err()
+			})
+		}()
+		<-started
 
-	c := NewCoalescer()
-	ctx, cancel := context.WithCancel(context.Background())
-	started := make(chan struct{})
-	callCtxDone := make(chan struct{})
-	go func() {
-		_, _ = c.Do(ctx, "key", func(callCtx context.Context) (any, error) {
-			close(started)
-			<-callCtx.Done()
-			close(callCtxDone)
-			return nil, callCtx.Err()
-		})
-	}()
-	<-started
+		cancel()
 
-	cancel()
-
-	select {
-	case <-callCtxDone:
-	case <-time.After(time.Second):
-		t.Fatal("the shared call kept running although its last participant had left")
-	}
+		synctest.Wait()
+		select {
+		case <-callCtxDone:
+		default:
+			t.Fatal("the shared call kept running although its last participant had left")
+		}
+	})
 }

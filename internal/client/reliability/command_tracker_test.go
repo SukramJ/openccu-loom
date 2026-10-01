@@ -5,6 +5,7 @@ package reliability_test
 
 import (
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/client/reliability"
@@ -74,32 +75,36 @@ func TestCommandTrackerHasInFlight(t *testing.T) {
 }
 
 func TestCommandTrackerTTLExpiry(t *testing.T) {
-	cfg := reliability.CommandTrackerConfig{TTL: 1 * time.Millisecond}
-	tr := reliability.NewCommandTracker("HmIP-RF", cfg)
-	dpk, _ := tr.AddSetValue("VCU123:1", hmenum.ParameterLevel, hmenum.ParamsetKeyValues, 1.0)
+	synctest.Test(t, func(t *testing.T) {
+		cfg := reliability.CommandTrackerConfig{TTL: 1 * time.Millisecond}
+		tr := reliability.NewCommandTracker("HmIP-RF", cfg)
+		dpk, _ := tr.AddSetValue("VCU123:1", hmenum.ParameterLevel, hmenum.ParamsetKeyValues, 1.0)
 
-	time.Sleep(5 * time.Millisecond)
+		synctest.Sleep(5 * time.Millisecond)
 
-	_, found := tr.GetLastSentValue(dpk)
-	if found {
-		t.Fatal("expected expired entry to return not-found")
-	}
+		_, found := tr.GetLastSentValue(dpk)
+		if found {
+			t.Fatal("expected expired entry to return not-found")
+		}
+	})
 }
 
 func TestCommandTrackerCleanupExpired(t *testing.T) {
-	cfg := reliability.CommandTrackerConfig{TTL: 1 * time.Millisecond}
-	tr := reliability.NewCommandTracker("HmIP-RF", cfg)
-	tr.AddSetValue("VCU123:1", hmenum.ParameterLevel, hmenum.ParamsetKeyValues, 1.0)
-	tr.AddSetValue("VCU123:2", hmenum.ParameterLevel, hmenum.ParamsetKeyValues, 2.0)
+	synctest.Test(t, func(t *testing.T) {
+		cfg := reliability.CommandTrackerConfig{TTL: 1 * time.Millisecond}
+		tr := reliability.NewCommandTracker("HmIP-RF", cfg)
+		tr.AddSetValue("VCU123:1", hmenum.ParameterLevel, hmenum.ParamsetKeyValues, 1.0)
+		tr.AddSetValue("VCU123:2", hmenum.ParameterLevel, hmenum.ParamsetKeyValues, 2.0)
 
-	time.Sleep(5 * time.Millisecond)
-	removed := tr.CleanupExpired()
-	if removed != 2 {
-		t.Fatalf("expected 2 removed, got %d", removed)
-	}
-	if tr.Size() != 0 {
-		t.Fatalf("expected size=0 after cleanup, got %d", tr.Size())
-	}
+		synctest.Sleep(5 * time.Millisecond)
+		removed := tr.CleanupExpired()
+		if removed != 2 {
+			t.Fatalf("expected 2 removed, got %d", removed)
+		}
+		if tr.Size() != 0 {
+			t.Fatalf("expected size=0 after cleanup, got %d", tr.Size())
+		}
+	})
 }
 
 func TestCommandTrackerSizeLimitEviction(t *testing.T) {

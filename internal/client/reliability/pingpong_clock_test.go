@@ -3,94 +3,80 @@
 
 package reliability
 
-// P1-1: PingPongTracker honours the injected clock.Clock interface.
-// Tests advance virtual time instead of relying on real wall-clock
-// deltas, making timing-sensitive assertions fully deterministic.
-// Mirrors the approach used in throttle_clock_test.go.
+// PingPongTracker timing tests run in synctest bubbles: they advance the
+// bubble's fake clock instead of relying on real wall-clock deltas, which
+// makes timing-sensitive assertions fully deterministic. Mirrors the
+// approach used in throttle_clock_test.go.
 
 import (
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// TestPingPongDefaultClockIsReal verifies that a nil Clock field in
-// PingPongConfig results in the production clock.Real being wired onto
-// the tracker — not a nil pointer that would panic on first use.
-func TestPingPongDefaultClockIsReal(t *testing.T) {
+// TestPingPongRTTEqualsElapsedBubbleTime verifies that the RTT computed by
+// RecordPong is the elapsed time between Ping and Pong. Advancing the
+// bubble clock by exactly 50 ms between them must produce an RTT of
+// exactly 50 ms.
+func TestPingPongRTTEqualsElapsedBubbleTime(t *testing.T) {
 	t.Parallel()
-	tr := NewPingPongTracker(PingPongConfig{})
-	if tr.clk == nil {
-		t.Fatal("expected clk to be non-nil after construction")
-	}
-	if _, ok := tr.clk.(clock.Real); !ok {
-		t.Fatalf("expected clock.Real, got %T", tr.clk)
-	}
-}
+	synctest.Test(t, func(t *testing.T) {
+		tr := NewPingPongTracker(PingPongConfig{})
 
-// TestPingPongRTTUsesInjectedClock verifies that the RTT computed by
-// RecordPong is derived from the injected fake clock rather than the
-// real wall clock. Advancing the fake by exactly 50 ms between Ping
-// and Pong must produce an RTT of exactly 50 ms.
-func TestPingPongRTTUsesInjectedClock(t *testing.T) {
-	t.Parallel()
-	// Start the fake clock at a pinned moment so log timestamps are readable.
-	fake := clock.NewFake(time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC))
-	tr := NewPingPongTracker(PingPongConfig{Clock: fake})
+		tr.RecordPing("ping-1")
+		// Advance bubble time by exactly 50 ms — no real sleep happens.
+		synctest.Sleep(50 * time.Millisecond)
+		matched, rtt := tr.RecordPong("ping-1")
 
-	tr.RecordPing("ping-1")
-	// Advance virtual time by exactly 50 ms — no real sleep required.
-	fake.Advance(50 * time.Millisecond)
-	matched, rtt := tr.RecordPong("ping-1")
-
-	if !matched {
-		t.Fatal("RecordPong should have matched the outstanding ping")
-	}
-	const wantRTT = 50 * time.Millisecond
-	if rtt != wantRTT {
-		t.Fatalf("rtt=%v, want %v — clock injection not honoured", rtt, wantRTT)
-	}
+		if !matched {
+			t.Fatal("RecordPong should have matched the outstanding ping")
+		}
+		const wantRTT = 50 * time.Millisecond
+		if rtt != wantRTT {
+			t.Fatalf("rtt=%v, want %v", rtt, wantRTT)
+		}
+	})
 }
 
 // TestPingPongSweepEvictsExpired verifies that Sweep surfaces a
 // PingPongMismatchPending mismatch with the correct When timestamp
-// when the fake clock is advanced past PendingTTL. The mismatch When
+// when the bubble clock is advanced past PendingTTL. The mismatch When
 // field must equal the time at which RecordPing was called, not the
 // sweep time.
 func TestPingPongSweepEvictsExpired(t *testing.T) {
 	t.Parallel()
-	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	fake := clock.NewFake(start)
-	const ttl = 200 * time.Millisecond
-	tr := NewPingPongTracker(PingPongConfig{
-		PendingTTL: ttl,
-		Clock:      fake,
+	synctest.Test(t, func(t *testing.T) {
+		start := time.Now()
+		const ttl = 200 * time.Millisecond
+		tr := NewPingPongTracker(PingPongConfig{
+			PendingTTL: ttl,
+		})
+
+		// Record the ping — the tracker stores start as the sent timestamp.
+		tr.RecordPing("expired-ping")
+
+		// Advance past TTL without matching the pong.
+		synctest.Sleep(ttl + 1*time.Millisecond)
+		mismatches := tr.Sweep()
+
+		if len(mismatches) != 1 {
+			t.Fatalf("expected 1 mismatch, got %d", len(mismatches))
+		}
+		m := mismatches[0]
+		if m.Kind != hmenum.PingPongMismatchPending {
+			t.Fatalf("mismatch kind=%v, want PingPongMismatchPending", m.Kind)
+		}
+		if m.ID != "expired-ping" {
+			t.Fatalf("mismatch ID=%q, want %q", m.ID, "expired-ping")
+		}
+		// When must be the Ping timestamp (start), not the sweep time.
+		if !m.When.Equal(start) {
+			t.Fatalf("mismatch.When=%v, want %v (ping timestamp)", m.When, start)
+		}
 	})
-
-	// Record the ping — the tracker stores start as the sent timestamp.
-	tr.RecordPing("expired-ping")
-
-	// Advance past TTL without matching the pong.
-	fake.Advance(ttl + 1*time.Millisecond)
-	mismatches := tr.Sweep()
-
-	if len(mismatches) != 1 {
-		t.Fatalf("expected 1 mismatch, got %d", len(mismatches))
-	}
-	m := mismatches[0]
-	if m.Kind != hmenum.PingPongMismatchPending {
-		t.Fatalf("mismatch kind=%v, want PingPongMismatchPending", m.Kind)
-	}
-	if m.ID != "expired-ping" {
-		t.Fatalf("mismatch ID=%q, want %q", m.ID, "expired-ping")
-	}
-	// When must be the Ping timestamp (start), not the sweep time.
-	if !m.When.Equal(start) {
-		t.Fatalf("mismatch.When=%v, want %v (ping timestamp)", m.When, start)
-	}
 }
 
 // TestPingPongMismatchHookFiresOutsideLock verifies that the mismatch
@@ -99,38 +85,38 @@ func TestPingPongSweepEvictsExpired(t *testing.T) {
 // tracker methods (e.g. Stats) without deadlocking.
 func TestPingPongMismatchHookFiresOutsideLock(t *testing.T) {
 	t.Parallel()
-	fake := clock.NewFake(time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC))
-	const ttl = 100 * time.Millisecond
-	tr := NewPingPongTracker(PingPongConfig{
-		PendingTTL: ttl,
-		Clock:      fake,
-	})
+	synctest.Test(t, func(t *testing.T) {
+		const ttl = 100 * time.Millisecond
+		tr := NewPingPongTracker(PingPongConfig{
+			PendingTTL: ttl,
+		})
 
-	// Track how many times the hook fires and whether Stats() re-entered
-	// without deadlock.
-	var hookCalls atomic.Int32
-	var statsOK atomic.Bool
+		// Track how many times the hook fires and whether Stats() re-entered
+		// without deadlock.
+		var hookCalls atomic.Int32
+		var statsOK atomic.Bool
 
-	tr.SetMismatchHook(func(m Mismatch) {
-		hookCalls.Add(1)
-		// Calling Stats() from inside the hook must not deadlock — the
-		// hook is fired after Sweep drops the mutex.
-		s := tr.Stats()
-		if s.TotalSent >= 0 { // trivially true; proves no panic/deadlock
-			statsOK.Store(true)
+		tr.SetMismatchHook(func(m Mismatch) {
+			hookCalls.Add(1)
+			// Calling Stats() from inside the hook must not deadlock — the
+			// hook is fired after Sweep drops the mutex.
+			s := tr.Stats()
+			if s.TotalSent >= 0 { // trivially true; proves no panic/deadlock
+				statsOK.Store(true)
+			}
+		})
+
+		tr.RecordPing("hook-ping")
+		synctest.Sleep(ttl + 1*time.Millisecond)
+		tr.Sweep()
+
+		if hookCalls.Load() != 1 {
+			t.Fatalf("hook called %d times, want 1", hookCalls.Load())
+		}
+		if !statsOK.Load() {
+			t.Fatal("Stats() inside hook deadlocked or panicked")
 		}
 	})
-
-	tr.RecordPing("hook-ping")
-	fake.Advance(ttl + 1*time.Millisecond)
-	tr.Sweep()
-
-	if hookCalls.Load() != 1 {
-		t.Fatalf("hook called %d times, want 1", hookCalls.Load())
-	}
-	if !statsOK.Load() {
-		t.Fatal("Stats() inside hook deadlocked or panicked")
-	}
 }
 
 // ---------------------------------------------------------------------------
@@ -141,9 +127,7 @@ func TestPingPongMismatchHookFiresOutsideLock(t *testing.T) {
 // unknown tables and resets all counters.
 func TestPingPongClearEmptiesTables(t *testing.T) {
 	t.Parallel()
-	fake := clock.NewFake(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
 	tr := NewPingPongTracker(PingPongConfig{
-		Clock:       fake,
 		JournalSize: 16,
 	})
 
@@ -179,54 +163,53 @@ func TestPingPongClearEmptiesTables(t *testing.T) {
 // not purged by Clear — history is retained for post-mortem analysis.
 func TestPingPongClearPreservesJournal(t *testing.T) {
 	t.Parallel()
-	fake := clock.NewFake(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
-	tr := NewPingPongTracker(PingPongConfig{
-		Clock:       fake,
-		JournalSize: 16,
+	synctest.Test(t, func(t *testing.T) {
+		tr := NewPingPongTracker(PingPongConfig{
+			JournalSize: 16,
+		})
+
+		tr.RecordPing("p1")
+		synctest.Sleep(10 * time.Millisecond)
+		tr.RecordPong("p1")
+
+		journalBefore := tr.Journal()
+		if len(journalBefore) == 0 {
+			t.Fatal("journal should be non-empty before Clear")
+		}
+
+		tr.Clear()
+
+		journalAfter := tr.Journal()
+		if len(journalAfter) != len(journalBefore) {
+			t.Errorf("journal length changed after Clear: %d → %d", len(journalBefore), len(journalAfter))
+		}
 	})
-
-	tr.RecordPing("p1")
-	fake.Advance(10 * time.Millisecond)
-	tr.RecordPong("p1")
-
-	journalBefore := tr.Journal()
-	if len(journalBefore) == 0 {
-		t.Fatal("journal should be non-empty before Clear")
-	}
-
-	tr.Clear()
-
-	journalAfter := tr.Journal()
-	if len(journalAfter) != len(journalBefore) {
-		t.Errorf("journal length changed after Clear: %d → %d", len(journalBefore), len(journalAfter))
-	}
 }
 
 // TestPingPongClearThenRecord verifies the tracker is fully functional after
 // Clear — new PINGs can be sent and matched.
 func TestPingPongClearThenRecord(t *testing.T) {
 	t.Parallel()
-	fake := clock.NewFake(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
-	tr := NewPingPongTracker(PingPongConfig{
-		Clock: fake,
+	synctest.Test(t, func(t *testing.T) {
+		tr := NewPingPongTracker(PingPongConfig{})
+
+		tr.RecordPing("old-ping")
+		tr.Clear()
+
+		tr.RecordPing("new-ping")
+		synctest.Sleep(5 * time.Millisecond)
+		matched, rtt := tr.RecordPong("new-ping")
+
+		if !matched {
+			t.Error("RecordPong should match after Clear+RecordPing")
+		}
+		if rtt != 5*time.Millisecond {
+			t.Errorf("rtt=%v, want 5ms", rtt)
+		}
+		if tr.PendingCount() != 0 {
+			t.Errorf("PendingCount after match=%d, want 0", tr.PendingCount())
+		}
 	})
-
-	tr.RecordPing("old-ping")
-	tr.Clear()
-
-	tr.RecordPing("new-ping")
-	fake.Advance(5 * time.Millisecond)
-	matched, rtt := tr.RecordPong("new-ping")
-
-	if !matched {
-		t.Error("RecordPong should match after Clear+RecordPing")
-	}
-	if rtt != 5*time.Millisecond {
-		t.Errorf("rtt=%v, want 5ms", rtt)
-	}
-	if tr.PendingCount() != 0 {
-		t.Errorf("PendingCount after match=%d, want 0", tr.PendingCount())
-	}
 }
 
 // TestPingPongSeverityAfterClear verifies severity resets to "ok" after Clear
@@ -238,10 +221,8 @@ func TestPingPongClearThenRecord(t *testing.T) {
 // pending table unconditionally — severity must return to "ok".
 func TestPingPongSeverityAfterClear(t *testing.T) {
 	t.Parallel()
-	fake := clock.NewFake(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
 	const ttl = 30 * time.Second
 	tr := NewPingPongTracker(PingPongConfig{
-		Clock:             fake,
 		PendingTTL:        ttl,
 		MismatchThreshold: 1,
 	})

@@ -8,7 +8,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
-	"time"
+	"testing/synctest"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -24,61 +24,59 @@ import (
 // another caller that underflows the count and steals the live slot.
 func TestCloseDoesNotUnderflowInFlight(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		// Capacity 1, no burst / inter-command delay so waiters land straight
+		// in the heap and are woken by Close's drain loop.
+		tt := NewThrottle(ThrottleConfig{MaxInFlight: 1})
 
-	// Capacity 1, no burst / inter-command delay so waiters land straight
-	// in the heap and are woken by Close's drain loop.
-	tt := NewThrottle(ThrottleConfig{MaxInFlight: 1})
+		// Hold the sole permit so every further Acquire queues in the heap.
+		if err := tt.Acquire(context.Background(), hmenum.CommandPriorityHigh); err != nil {
+			t.Fatalf("holder acquire: %v", err)
+		}
+		if got := tt.InFlight(); got != 1 {
+			t.Fatalf("InFlight after holder acquire = %d, want 1", got)
+		}
 
-	// Hold the sole permit so every further Acquire queues in the heap.
-	if err := tt.Acquire(context.Background(), hmenum.CommandPriorityHigh); err != nil {
-		t.Fatalf("holder acquire: %v", err)
-	}
-	if got := tt.InFlight(); got != 1 {
-		t.Fatalf("InFlight after holder acquire = %d, want 1", got)
-	}
+		const queued = 2
+		var wg sync.WaitGroup
+		errs := make(chan error, queued)
+		for range queued {
+			wg.Go(func() {
+				errs <- tt.Acquire(context.Background(), hmenum.CommandPriorityLow)
+			})
+		}
 
-	const queued = 2
-	var wg sync.WaitGroup
-	errs := make(chan error, queued)
-	for range queued {
-		wg.Go(func() {
-			errs <- tt.Acquire(context.Background(), hmenum.CommandPriorityLow)
-		})
-	}
-
-	// Wait until both goroutines have parked in the waiter heap.
-	deadline := time.Now().Add(2 * time.Second)
-	for tt.Waiting() < queued {
-		if time.Now().After(deadline) {
+		// Wait until both goroutines have parked in the waiter heap.
+		synctest.Wait()
+		if tt.Waiting() < queued {
 			t.Fatalf("waiters did not queue: Waiting()=%d, want %d", tt.Waiting(), queued)
 		}
-		time.Sleep(time.Millisecond)
-	}
 
-	tt.Close()
+		tt.Close()
 
-	wg.Wait()
-	close(errs)
-	for err := range errs {
-		if !errors.Is(err, ErrThrottleClosed) {
-			t.Errorf("queued Acquire returned %v, want ErrThrottleClosed", err)
+		wg.Wait()
+		close(errs)
+		for err := range errs {
+			if !errors.Is(err, ErrThrottleClosed) {
+				t.Errorf("queued Acquire returned %v, want ErrThrottleClosed", err)
+			}
 		}
-	}
 
-	// The holder's permit must still be counted: Close must NOT have released
-	// permits it never handed out. Before the fix this read 0 (underflowed).
-	if got := tt.InFlight(); got != 1 {
-		t.Fatalf("InFlight after Close = %d, want 1 (holder permit intact)", got)
-	}
+		// The holder's permit must still be counted: Close must NOT have released
+		// permits it never handed out. Before the fix this read 0 (underflowed).
+		if got := tt.InFlight(); got != 1 {
+			t.Fatalf("InFlight after Close = %d, want 1 (holder permit intact)", got)
+		}
 
-	// Both drained waiters are accounted as suspended.
-	if got := tt.Suspended(); got != queued {
-		t.Errorf("Suspended after Close = %d, want %d", got, queued)
-	}
+		// Both drained waiters are accounted as suspended.
+		if got := tt.Suspended(); got != queued {
+			t.Errorf("Suspended after Close = %d, want %d", got, queued)
+		}
 
-	// Releasing the holder returns to a clean zero — accounting is balanced.
-	tt.Release()
-	if got := tt.InFlight(); got != 0 {
-		t.Errorf("InFlight after holder release = %d, want 0", got)
-	}
+		// Releasing the holder returns to a clean zero — accounting is balanced.
+		tt.Release()
+		if got := tt.InFlight(); got != 0 {
+			t.Errorf("InFlight after holder release = %d, want 0", got)
+		}
+	})
 }

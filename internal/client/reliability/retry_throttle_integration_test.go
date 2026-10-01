@@ -15,6 +15,7 @@ import (
 	"errors"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -33,50 +34,51 @@ import (
 // nil and short-circuits.
 func TestRetryThrottleContextCancelDuringThrottleWait(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		// MaxInFlight=1 — the holder goroutine occupies the only permit.
+		tt := NewThrottle(ThrottleConfig{MaxInFlight: 1})
 
-	// MaxInFlight=1 — the holder goroutine occupies the only permit.
-	tt := NewThrottle(ThrottleConfig{MaxInFlight: 1})
+		// Hold the sole permit so fn will always have to wait.
+		if err := tt.Acquire(context.Background(), hmenum.CommandPriorityHigh); err != nil {
+			t.Fatalf("holder acquire: %v", err)
+		}
+		// Release when the test ends so we don't leak goroutines.
+		defer tt.Release()
 
-	// Hold the sole permit so fn will always have to wait.
-	if err := tt.Acquire(context.Background(), hmenum.CommandPriorityHigh); err != nil {
-		t.Fatalf("holder acquire: %v", err)
-	}
-	// Release when the test ends so we don't leak goroutines.
-	defer tt.Release()
+		var attempts atomic.Int32
+		r := NewRetrier(RetryConfig{
+			MaxAttempts: 5,
+			Initial:     10 * time.Millisecond,
+			Max:         100 * time.Millisecond,
+			Multiplier:  2,
+		})
 
-	var attempts atomic.Int32
-	r := NewRetrier(RetryConfig{
-		MaxAttempts: 5,
-		Initial:     10 * time.Millisecond,
-		Max:         100 * time.Millisecond,
-		Multiplier:  2,
+		ctx, cancel := context.WithCancel(context.Background())
+
+		// fn will park in Throttle.Acquire; cancel from outside will unblock it.
+		fnBlocking := make(chan struct{})
+		go func() {
+			// Signal the main goroutine that fn is about to call Acquire.
+			close(fnBlocking)
+			cancel()
+		}()
+
+		<-fnBlocking
+
+		err := r.Do(ctx, func(innerCtx context.Context, _ int) error {
+			attempts.Add(1)
+			return tt.Acquire(innerCtx, hmenum.CommandPriorityHigh)
+		})
+
+		// Must propagate context.Canceled — not an "exhausted" wrapper.
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected context.Canceled, got %v", err)
+		}
+		// The retrier must not have retried after the ctx error.
+		if n := attempts.Load(); n != 1 {
+			t.Errorf("attempts=%d, want 1 (no retry after ctx cancel)", n)
+		}
 	})
-
-	ctx, cancel := context.WithCancel(context.Background())
-
-	// fn will park in Throttle.Acquire; cancel from outside will unblock it.
-	fnBlocking := make(chan struct{})
-	go func() {
-		// Signal the main goroutine that fn is about to call Acquire.
-		close(fnBlocking)
-		cancel()
-	}()
-
-	<-fnBlocking
-
-	err := r.Do(ctx, func(innerCtx context.Context, _ int) error {
-		attempts.Add(1)
-		return tt.Acquire(innerCtx, hmenum.CommandPriorityHigh)
-	})
-
-	// Must propagate context.Canceled — not an "exhausted" wrapper.
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("expected context.Canceled, got %v", err)
-	}
-	// The retrier must not have retried after the ctx error.
-	if n := attempts.Load(); n != 1 {
-		t.Errorf("attempts=%d, want 1 (no retry after ctx cancel)", n)
-	}
 }
 
 // ─── A2. Throttle-Close during Wait propagates ErrThrottleClosed ─────────────
@@ -90,34 +92,35 @@ func TestRetryThrottleContextCancelDuringThrottleWait(t *testing.T) {
 // ErrThrottleClosed immediately; this lets us count exactly MaxAttempts calls.
 func TestRetryThrottleClosePropagatesToRetrier(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		tt := NewThrottle(ThrottleConfig{MaxInFlight: 1})
+		tt.Close() // Close immediately — every Acquire returns ErrThrottleClosed.
 
-	tt := NewThrottle(ThrottleConfig{MaxInFlight: 1})
-	tt.Close() // Close immediately — every Acquire returns ErrThrottleClosed.
+		const maxAttempts = 3
+		var attempts atomic.Int32
+		r := NewRetrier(RetryConfig{
+			MaxAttempts: maxAttempts,
+			Initial:     time.Millisecond,
+			Max:         10 * time.Millisecond,
+			Multiplier:  2,
+		})
 
-	const maxAttempts = 3
-	var attempts atomic.Int32
-	r := NewRetrier(RetryConfig{
-		MaxAttempts: maxAttempts,
-		Initial:     time.Millisecond,
-		Max:         10 * time.Millisecond,
-		Multiplier:  2,
+		err := r.Do(context.Background(), func(_ context.Context, _ int) error {
+			attempts.Add(1)
+			return tt.Acquire(context.Background(), hmenum.CommandPriorityHigh)
+		})
+
+		// Must be an exhaustion wrapper that wraps ErrThrottleClosed.
+		if err == nil {
+			t.Fatal("expected error after exhaustion, got nil")
+		}
+		if !errors.Is(err, ErrThrottleClosed) {
+			t.Errorf("expected error chain to contain ErrThrottleClosed, got %v", err)
+		}
+		if n := attempts.Load(); n != maxAttempts {
+			t.Errorf("attempts=%d, want %d (all MaxAttempts used)", n, maxAttempts)
+		}
 	})
-
-	err := r.Do(context.Background(), func(_ context.Context, _ int) error {
-		attempts.Add(1)
-		return tt.Acquire(context.Background(), hmenum.CommandPriorityHigh)
-	})
-
-	// Must be an exhaustion wrapper that wraps ErrThrottleClosed.
-	if err == nil {
-		t.Fatal("expected error after exhaustion, got nil")
-	}
-	if !errors.Is(err, ErrThrottleClosed) {
-		t.Errorf("expected error chain to contain ErrThrottleClosed, got %v", err)
-	}
-	if n := attempts.Load(); n != maxAttempts {
-		t.Errorf("attempts=%d, want %d (all MaxAttempts used)", n, maxAttempts)
-	}
 }
 
 // ─── A3. Successful Acquire — fn runs, Retry-Counter at 1 ────────────────────
@@ -127,30 +130,31 @@ func TestRetryThrottleClosePropagatesToRetrier(t *testing.T) {
 // and the retrier records exactly one attempt.
 func TestRetryThrottleSuccessfulAcquire(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		tt := NewThrottle(ThrottleConfig{MaxInFlight: 2})
 
-	tt := NewThrottle(ThrottleConfig{MaxInFlight: 2})
+		var attempts atomic.Int32
+		r := NewRetrier(RetryConfig{
+			MaxAttempts: 5,
+			Initial:     10 * time.Millisecond,
+			Max:         100 * time.Millisecond,
+		})
 
-	var attempts atomic.Int32
-	r := NewRetrier(RetryConfig{
-		MaxAttempts: 5,
-		Initial:     10 * time.Millisecond,
-		Max:         100 * time.Millisecond,
-	})
-
-	err := r.Do(context.Background(), func(_ context.Context, _ int) error {
-		attempts.Add(1)
-		if acqErr := tt.Acquire(context.Background(), hmenum.CommandPriorityHigh); acqErr != nil {
-			return acqErr
+		err := r.Do(context.Background(), func(_ context.Context, _ int) error {
+			attempts.Add(1)
+			if acqErr := tt.Acquire(context.Background(), hmenum.CommandPriorityHigh); acqErr != nil {
+				return acqErr
+			}
+			tt.Release()
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("expected nil error on successful acquire, got %v", err)
 		}
-		tt.Release()
-		return nil
+		if n := attempts.Load(); n != 1 {
+			t.Errorf("attempts=%d, want 1", n)
+		}
 	})
-	if err != nil {
-		t.Fatalf("expected nil error on successful acquire, got %v", err)
-	}
-	if n := attempts.Load(); n != 1 {
-		t.Errorf("attempts=%d, want 1", n)
-	}
 }
 
 // ─── A4. Throttle-ErrSuperseded triggers a retry ─────────────────────────────
@@ -165,73 +169,71 @@ func TestRetryThrottleSuccessfulAcquire(t *testing.T) {
 // this queued Acquire" which the retrier should treat as transient and retry.
 func TestRetryThrottleSupersededErrorCausesRetry(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		// MaxInFlight=1 — first Acquire succeeds; second will queue.
+		tt := NewThrottle(ThrottleConfig{MaxInFlight: 1})
+		const addr = "BidCos-RF.ABC123:1"
 
-	// MaxInFlight=1 — first Acquire succeeds; second will queue.
-	tt := NewThrottle(ThrottleConfig{MaxInFlight: 1})
-	const addr = "BidCos-RF.ABC123:1"
+		var attempts atomic.Int32
+		r := NewRetrier(RetryConfig{
+			MaxAttempts: 5,
+			Initial:     time.Millisecond,
+			Max:         10 * time.Millisecond,
+			Multiplier:  2,
+		})
 
-	var attempts atomic.Int32
-	r := NewRetrier(RetryConfig{
-		MaxAttempts: 5,
-		Initial:     time.Millisecond,
-		Max:         10 * time.Millisecond,
-		Multiplier:  2,
-	})
-
-	// Holder goroutine: occupy the only permit, release after the first fn call
-	// queued its waiter.
-	holderAcquired := make(chan struct{})
-	holderRelease := make(chan struct{})
-	go func() {
-		if err := tt.Acquire(context.Background(), hmenum.CommandPriorityHigh); err != nil {
-			return
-		}
-		close(holderAcquired)
-		<-holderRelease
-		tt.Release()
-	}()
-	<-holderAcquired
-
-	// fn on attempt 1: call AcquireFor (queues behind holder), then immediately
-	// purge the address so the waiter receives ErrSuperseded.
-	// fn on attempt 2+: holder released; free permit available; succeed.
-	firstAttempt := true
-	err := r.Do(context.Background(), func(_ context.Context, _ int) error {
-		n := attempts.Add(1)
-		if firstAttempt {
-			firstAttempt = false
-			// Start AcquireFor in a goroutine so we can purge while it waits.
-			acquireDone := make(chan error, 1)
-			go func() {
-				acquireDone <- tt.AcquireFor(context.Background(), hmenum.CommandPriorityHigh, addr)
-			}()
-			// Wait for the waiter to enter the queue.
-			deadline := time.Now().Add(500 * time.Millisecond)
-			for tt.Waiting() == 0 && time.Now().Before(deadline) {
-				time.Sleep(time.Millisecond)
+		// Holder goroutine: occupy the only permit, release after the first fn call
+		// queued its waiter.
+		holderAcquired := make(chan struct{})
+		holderRelease := make(chan struct{})
+		go func() {
+			if err := tt.Acquire(context.Background(), hmenum.CommandPriorityHigh); err != nil {
+				return
 			}
-			// Purge the address — triggers ErrSuperseded for the waiter.
-			tt.Purge(addr)
-			acqErr := <-acquireDone
-			if !errors.Is(acqErr, ErrSuperseded) {
-				return errors.New("unexpected: AcquireFor did not return ErrSuperseded")
+			close(holderAcquired)
+			<-holderRelease
+			tt.Release()
+		}()
+		<-holderAcquired
+
+		// fn on attempt 1: call AcquireFor (queues behind holder), then immediately
+		// purge the address so the waiter receives ErrSuperseded.
+		// fn on attempt 2+: holder released; free permit available; succeed.
+		firstAttempt := true
+		err := r.Do(context.Background(), func(_ context.Context, _ int) error {
+			n := attempts.Add(1)
+			if firstAttempt {
+				firstAttempt = false
+				// Start AcquireFor in a goroutine so we can purge while it waits.
+				acquireDone := make(chan error, 1)
+				go func() {
+					acquireDone <- tt.AcquireFor(context.Background(), hmenum.CommandPriorityHigh, addr)
+				}()
+				// Wait for the waiter to enter the queue.
+				synctest.Wait()
+				// Purge the address — triggers ErrSuperseded for the waiter.
+				tt.Purge(addr)
+				acqErr := <-acquireDone
+				if !errors.Is(acqErr, ErrSuperseded) {
+					return errors.New("unexpected: AcquireFor did not return ErrSuperseded")
+				}
+				// Release the holder so attempt 2 can succeed.
+				close(holderRelease)
+				return ErrSuperseded // return the supersede error so the retrier retries
 			}
-			// Release the holder so attempt 2 can succeed.
-			close(holderRelease)
-			return ErrSuperseded // return the supersede error so the retrier retries
+			// Subsequent attempts: permit now free.
+			if acqErr := tt.Acquire(context.Background(), hmenum.CommandPriorityHigh); acqErr != nil {
+				return acqErr
+			}
+			tt.Release()
+			_ = n
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("expected nil on second attempt, got %v", err)
 		}
-		// Subsequent attempts: permit now free.
-		if acqErr := tt.Acquire(context.Background(), hmenum.CommandPriorityHigh); acqErr != nil {
-			return acqErr
+		if n := attempts.Load(); n != 2 {
+			t.Errorf("attempts=%d, want 2 (1 superseded + 1 success)", n)
 		}
-		tt.Release()
-		_ = n
-		return nil
 	})
-	if err != nil {
-		t.Fatalf("expected nil on second attempt, got %v", err)
-	}
-	if n := attempts.Load(); n != 2 {
-		t.Errorf("attempts=%d, want 2 (1 superseded + 1 success)", n)
-	}
 }

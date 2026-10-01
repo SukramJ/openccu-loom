@@ -13,10 +13,10 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/client/reliability"
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
@@ -101,77 +101,66 @@ func TestOpenCircuitShedsWithoutAcquiringThrottle(t *testing.T) {
 // backoff window.
 func TestBackingOffWriteReleasesThrottlePermit(t *testing.T) {
 	t.Parallel()
-
-	fakeClock := clock.NewFake(time.Now())
-	retrier := reliability.NewRetrier(reliability.RetryConfig{
-		MaxAttempts: 4,
-		Initial:     1 * time.Second,
-		Max:         8 * time.Second,
-		Multiplier:  2,
-		Jitter:      -1, // disable jitter for deterministic backoff timing
-		Clock:       fakeClock,
-	})
-	// Single shared pool: reads and writes contend for the one permit, so a
-	// write holding it across backoff would visibly block a read.
-	throttle := reliability.NewThrottle(reliability.ThrottleConfig{MaxInFlight: 1})
-	ic, err := New(Config{
-		CentralName: "c",
-		Interface:   hmenum.InterfaceHmIPRF,
-		Caller:      methodAwareCaller{setValueErr: errors.New("boom")},
-		Retrier:     retrier,
-		Throttle:    throttle,
-	})
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-
-	writeDone := make(chan struct{})
-	go func() {
-		_, _ = ic.Call(context.Background(), "setValue", nil, hmenum.CommandPriorityCritical, "")
-		close(writeDone)
-	}()
-
-	// Wait until the write is parked in its first backoff (pending fake timer).
-	deadline := time.Now().Add(2 * time.Second)
-	for fakeClock.PendingCount() == 0 {
-		if time.Now().After(deadline) {
-			t.Fatal("write never entered retry backoff")
+	synctest.Test(t, func(t *testing.T) {
+		retrier := reliability.NewRetrier(reliability.RetryConfig{
+			MaxAttempts: 4,
+			Initial:     1 * time.Second,
+			Max:         8 * time.Second,
+			Multiplier:  2,
+			Jitter:      -1, // disable jitter for deterministic backoff timing
+		})
+		// Single shared pool: reads and writes contend for the one permit, so a
+		// write holding it across backoff would visibly block a read.
+		throttle := reliability.NewThrottle(reliability.ThrottleConfig{MaxInFlight: 1})
+		ic, err := New(Config{
+			CentralName: "c",
+			Interface:   hmenum.InterfaceHmIPRF,
+			Caller:      methodAwareCaller{setValueErr: errors.New("boom")},
+			Retrier:     retrier,
+			Throttle:    throttle,
+		})
+		if err != nil {
+			t.Fatalf("New: %v", err)
 		}
-		time.Sleep(time.Millisecond)
-	}
 
-	// Key assertion: the permit is free while the write is backing off.
-	if got := throttle.InFlight(); got != 0 {
-		t.Fatalf("throttle InFlight during backoff = %d, want 0 (permit held across backoff)", got)
-	}
+		writeDone := make(chan struct{})
+		go func() {
+			_, _ = ic.Call(context.Background(), "setValue", nil, hmenum.CommandPriorityCritical, "")
+			close(writeDone)
+		}()
 
-	// An independent read acquires the freed permit and completes immediately.
-	readCtx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancel()
-	v, rerr := ic.Call(readCtx, "getValue", nil, hmenum.CommandPriorityCritical, "")
-	if rerr != nil {
-		t.Fatalf("independent read blocked/failed during write backoff: %v", rerr)
-	}
-	if v != "ok" {
-		t.Fatalf("read value = %v, want ok", v)
-	}
-
-	// Drain the write goroutine: advance the fake clock past its remaining
-	// backoffs so it exhausts and returns.
-	drainDeadline := time.Now().Add(3 * time.Second)
-	for {
+		// Wait until the write is parked in its first backoff: the wire call
+		// fails immediately, so the only thing it can be blocked on is the
+		// backoff timer — and it cannot have finished, because that timer is a
+		// full second long and the clock has not moved.
+		synctest.Wait()
 		select {
 		case <-writeDone:
-			if got := throttle.InFlight(); got != 0 {
-				t.Errorf("throttle InFlight after write finished = %d, want 0", got)
-			}
-			return
+			t.Fatal("write finished without entering retry backoff")
 		default:
-			fakeClock.Advance(10 * time.Second)
-			time.Sleep(2 * time.Millisecond)
-			if time.Now().After(drainDeadline) {
-				t.Fatal("write goroutine did not finish draining")
-			}
 		}
-	}
+
+		// Key assertion: the permit is free while the write is backing off.
+		if got := throttle.InFlight(); got != 0 {
+			t.Fatalf("throttle InFlight during backoff = %d, want 0 (permit held across backoff)", got)
+		}
+
+		// An independent read acquires the freed permit and completes immediately.
+		readCtx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		defer cancel()
+		v, rerr := ic.Call(readCtx, "getValue", nil, hmenum.CommandPriorityCritical, "")
+		if rerr != nil {
+			t.Fatalf("independent read blocked/failed during write backoff: %v", rerr)
+		}
+		if v != "ok" {
+			t.Fatalf("read value = %v, want ok", v)
+		}
+
+		// Drain the write goroutine: the bubble clock advances through its
+		// remaining backoffs on its own, so it exhausts and returns.
+		<-writeDone
+		if got := throttle.InFlight(); got != 0 {
+			t.Errorf("throttle InFlight after write finished = %d, want 0", got)
+		}
+	})
 }

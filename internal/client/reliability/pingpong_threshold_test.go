@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -31,12 +30,10 @@ func TestPingPongThresholdBoundaryIsOneRule(t *testing.T) {
 		t.Run(fmt.Sprintf("pending_%d", pending), func(t *testing.T) {
 			t.Parallel()
 
-			fake := clock.NewFake(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
 			tr := NewPingPongTracker(PingPongConfig{
 				PendingTTL:        time.Hour,
 				UnknownTTL:        time.Hour,
 				MismatchThreshold: threshold,
-				Clock:             fake,
 			})
 
 			ids := make([]string, pending)
