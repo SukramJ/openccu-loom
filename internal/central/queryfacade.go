@@ -548,8 +548,8 @@ func (q *QueryFacade) GetInstallModeByID(interfaceID string) (remaining time.Dur
 // to derive the parent device address. Returns the input unchanged when
 // no colon is found (i.e. the input is already a device address).
 func deviceAddress(channelAddress string) string {
-	if idx := strings.LastIndex(channelAddress, ":"); idx >= 0 {
-		return channelAddress[:idx]
+	if before, _, found := strings.CutLast(channelAddress, ":"); found {
+		return before
 	}
 	return channelAddress
 }

@@ -50,11 +50,10 @@ func ParseTierFault(msg string) (method, scope string, ok bool) {
 	if !found {
 		return "", "", false
 	}
-	i := strings.LastIndex(rest, tierFaultNeeds)
-	if i <= 0 {
+	method, scope, found = strings.CutLast(rest, tierFaultNeeds)
+	if !found || method == "" {
 		return "", "", false
 	}
-	method, scope = rest[:i], rest[i+len(tierFaultNeeds):]
 	tier, isRPC := strings.CutPrefix(scope, "rpc:")
 	if !isRPC || tier == "" || strings.ContainsAny(method, " \t") || strings.ContainsAny(tier, " \t") {
 		return "", "", false

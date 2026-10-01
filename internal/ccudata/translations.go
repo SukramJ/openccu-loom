@@ -466,11 +466,10 @@ func buildValueIndices(parameterValues map[string]map[string]string) map[string]
 	for locale, table := range parameterValues {
 		idx := make(map[string]string)
 		for k, label := range table {
-			eqIdx := strings.LastIndexByte(k, '=')
-			if eqIdx < 0 {
+			_, val, found := strings.CutLast(k, "=")
+			if !found {
 				continue
 			}
-			val := k[eqIdx+1:]
 			existing, ok := idx[val]
 			if !ok || len(label) < len(existing) || (len(label) == len(existing) && label < existing) {
 				idx[val] = label
@@ -729,8 +728,8 @@ func (t *Translations) ProfileLabel(store *ProfileStore, receiverType string, id
 }
 
 func localeSuffix(key string) string {
-	if i := strings.LastIndex(key, "_"); i > 0 {
-		return key[i+1:]
+	if before, after, found := strings.CutLast(key, "_"); found && before != "" {
+		return after
 	}
 	return key
 }

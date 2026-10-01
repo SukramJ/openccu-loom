@@ -197,15 +197,15 @@ type position struct {
 }
 
 func parsePosition(id string) position {
-	i := strings.LastIndexByte(id, '-')
-	if i <= 0 {
+	boot, seqText, found := strings.CutLast(id, "-")
+	if !found || boot == "" {
 		return position{raw: id}
 	}
-	seq, err := strconv.ParseUint(id[i+1:], 10, 64)
+	seq, err := strconv.ParseUint(seqText, 10, 64)
 	if err != nil {
 		return position{raw: id}
 	}
-	return position{raw: id, boot: id[:i], seq: seq, ok: true}
+	return position{raw: id, boot: boot, seq: seq, ok: true}
 }
 
 // Stream is a running lite-rpc stream reader.

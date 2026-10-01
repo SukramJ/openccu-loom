@@ -506,11 +506,11 @@ func (r *intentRouter) append(ctx context.Context, entry engine.JournalEntry) {
 // formula off HmIP-FWI — containment by circumstance, not by
 // construction.
 func wkpPairIndex(channelAddress string) (int, bool) {
-	i := strings.LastIndexByte(channelAddress, ':')
-	if i < 0 {
+	_, channelNo, found := strings.CutLast(channelAddress, ":")
+	if !found {
 		return 0, false
 	}
-	ch, err := strconv.Atoi(channelAddress[i+1:])
+	ch, err := strconv.Atoi(channelNo)
 	if err != nil || ch < 1 || ch > 16 {
 		return 0, false
 	}

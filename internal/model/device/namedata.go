@@ -258,12 +258,12 @@ func baseChannelName(channel *Channel, model, deviceName string) string {
 // implementation's `support.py::_check_channel_name_with_channel_no` + the
 // `channel_name.split(ADDRESS_SEPARATOR)[0]` truncation.
 func stripChannelAddressSuffix(channelName string) string {
-	idx := strings.LastIndexByte(channelName, ':')
-	if idx <= 0 {
+	base, suffix, found := strings.CutLast(channelName, ":")
+	if !found || base == "" {
 		return channelName
 	}
-	if _, err := strconv.Atoi(channelName[idx+1:]); err != nil {
+	if _, err := strconv.Atoi(suffix); err != nil {
 		return channelName
 	}
-	return channelName[:idx]
+	return base
 }

@@ -137,11 +137,11 @@ func (b *Bridge) RetiredMetricTopics() []string {
 // so this cannot name a metric the builder does not publish, and stays
 // correct when a fourth metric joins the group.
 func retiredMetricSpelling(base, centralName, liveTopic string) string {
-	slash := strings.LastIndex(liveTopic, "/")
-	if slash < 0 {
+	_, leaf, found := strings.CutLast(liveTopic, "/")
+	if !found {
 		return ""
 	}
-	return base + "/" + strings.ToLower(centralName) + "/system/" + liveTopic[slash+1:]
+	return base + "/" + strings.ToLower(centralName) + "/system/" + leaf
 }
 
 // LegacyAggregateStateMatcher reports whether topic matches the
@@ -620,11 +620,11 @@ var hubPlaneNodeKinds = map[string]bool{
 // (everything after the central-slug separator [discoveryNodeIDBelongsTo]
 // matched on) names one of [hubPlaneNodeKinds].
 func hubPlaneNodeID(nodeID string) bool {
-	i := strings.LastIndexByte(nodeID, '_')
-	if i < 0 {
+	_, leaf, found := strings.CutLast(nodeID, "_")
+	if !found {
 		return false
 	}
-	return hubPlaneNodeKinds[nodeID[i+1:]]
+	return hubPlaneNodeKinds[leaf]
 }
 
 // hubPlaneKey is the [Bridge.planesDeclared] key of one central's hub
