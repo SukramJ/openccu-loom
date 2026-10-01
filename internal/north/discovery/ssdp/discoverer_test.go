@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -197,39 +198,39 @@ func TestDiscovererListSortsByNameThenSerial(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// scan — stale-entry eviction via the injectable now func
+// scan — stale-entry eviction against the bubble's clock
 // ---------------------------------------------------------------------------
 
 func TestDiscovererScanEvictsStaleEntries(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		d := New(time.Minute, nil)
+		base := time.Now()
 
-	d := New(time.Minute, nil)
-	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	d.now = func() time.Time { return base }
+		// Seed one fresh and one already-stale entry directly (scan() only
+		// evicts; multicastSourceIPs()/searchFrom() are left untested here as
+		// they need real UDP sockets).
+		d.found = map[string]DiscoveredCCU{
+			"fresh": {Serial: "fresh", Name: "Fresh", LastSeen: base},
+			"stale": {Serial: "stale", Name: "Stale", LastSeen: base.Add(-staleAfter - time.Second)},
+		}
 
-	// Seed one fresh and one already-stale entry directly (scan() only
-	// evicts; multicastSourceIPs()/searchFrom() are left untested here as
-	// they need real UDP sockets).
-	d.found = map[string]DiscoveredCCU{
-		"fresh": {Serial: "fresh", Name: "Fresh", LastSeen: base},
-		"stale": {Serial: "stale", Name: "Stale", LastSeen: base.Add(-staleAfter - time.Second)},
-	}
+		// scan() calls multicastSourceIPs()/searchFrom() first, which is a real
+		// network operation; eviction runs unconditionally afterward regardless
+		// of what (if anything) those calls found, so we can assert on it
+		// directly. An already-cancelled context makes searchFrom return without
+		// waiting out its M-SEARCH read deadline — that wait says nothing about
+		// eviction and costs several seconds per call.
+		d.scan(cancelledContext(t))
 
-	// scan() calls multicastSourceIPs()/searchFrom() first, which is a real
-	// network operation; eviction runs unconditionally afterward regardless
-	// of what (if anything) those calls found, so we can assert on it
-	// directly. An already-cancelled context makes searchFrom return without
-	// waiting out its M-SEARCH read deadline — that wait says nothing about
-	// eviction and costs several seconds per call.
-	d.scan(cancelledContext(t))
-
-	got := d.List()
-	if len(got) != 1 {
-		t.Fatalf("List() after scan = %+v, want exactly the fresh entry", got)
-	}
-	if got[0].Serial != "fresh" {
-		t.Errorf("List()[0].Serial = %q, want fresh", got[0].Serial)
-	}
+		got := d.List()
+		if len(got) != 1 {
+			t.Fatalf("List() after scan = %+v, want exactly the fresh entry", got)
+		}
+		if got[0].Serial != "fresh" {
+			t.Errorf("List()[0].Serial = %q, want fresh", got[0].Serial)
+		}
+	})
 }
 
 // TestDiscovererScanStopsProbingOnCancel pins that a scan interrupted by
@@ -271,20 +272,20 @@ func cancelledContext(t *testing.T) context.Context {
 
 func TestDiscovererScanKeepsFreshEntries(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		d := New(time.Minute, nil)
+		base := time.Now()
+		d.found = map[string]DiscoveredCCU{
+			"fresh": {Serial: "fresh", Name: "Fresh", LastSeen: base.Add(-staleAfter + time.Second)},
+		}
 
-	d := New(time.Minute, nil)
-	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	d.now = func() time.Time { return base }
-	d.found = map[string]DiscoveredCCU{
-		"fresh": {Serial: "fresh", Name: "Fresh", LastSeen: base.Add(-staleAfter + time.Second)},
-	}
+		d.scan(cancelledContext(t))
 
-	d.scan(cancelledContext(t))
-
-	got := d.List()
-	if len(got) != 1 {
-		t.Fatalf("List() after scan = %+v, want the not-yet-stale entry kept", got)
-	}
+		got := d.List()
+		if len(got) != 1 {
+			t.Fatalf("List() after scan = %+v, want the not-yet-stale entry kept", got)
+		}
+	})
 }
 
 // ---------------------------------------------------------------------------
