@@ -7,6 +7,7 @@ import (
 	"errors"
 	"log/slog"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/diagnostics"
@@ -258,31 +259,32 @@ func TestLogLevelOverrides_SetAndReset(t *testing.T) {
 
 func TestList_ActiveAndArchived(t *testing.T) {
 	t.Parallel()
-	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	mgr := diagnostics.NewManager(nil, nil, diagnostics.WithClock(func() time.Time { return now }))
+	synctest.Test(t, func(t *testing.T) {
+		mgr := diagnostics.NewManager(nil, nil)
 
-	s1, err := mgr.Start(diagnostics.StartOptions{})
-	if err != nil {
-		t.Fatalf("Start 1: %v", err)
-	}
-	if _, err := mgr.Stop(s1.ID); err != nil {
-		t.Fatalf("Stop 1: %v", err)
-	}
+		s1, err := mgr.Start(diagnostics.StartOptions{})
+		if err != nil {
+			t.Fatalf("Start 1: %v", err)
+		}
+		if _, err := mgr.Stop(s1.ID); err != nil {
+			t.Fatalf("Stop 1: %v", err)
+		}
 
-	now = now.Add(time.Minute)
+		time.Sleep(time.Minute)
 
-	if _, err := mgr.Start(diagnostics.StartOptions{}); err != nil {
-		t.Fatalf("Start 2: %v", err)
-	}
+		if _, err := mgr.Start(diagnostics.StartOptions{}); err != nil {
+			t.Fatalf("Start 2: %v", err)
+		}
 
-	list := mgr.List()
-	if len(list) != 2 {
-		t.Fatalf("list len = %d, want 2", len(list))
-	}
-	// Most recent first.
-	if !list[0].StartedAt.After(list[1].StartedAt) {
-		t.Errorf("list not sorted by StartedAt desc: [0]=%v [1]=%v", list[0].StartedAt, list[1].StartedAt)
-	}
+		list := mgr.List()
+		if len(list) != 2 {
+			t.Fatalf("list len = %d, want 2", len(list))
+		}
+		// Most recent first.
+		if !list[0].StartedAt.After(list[1].StartedAt) {
+			t.Errorf("list not sorted by StartedAt desc: [0]=%v [1]=%v", list[0].StartedAt, list[1].StartedAt)
+		}
+	})
 }
 
 // --------------------------------------------------------------------------
@@ -331,37 +333,38 @@ func TestOpenArchive_Stopped_ReturnsTarGz(t *testing.T) {
 
 func TestSweep_Expiry_SetsStatusExpired(t *testing.T) {
 	t.Parallel()
-	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	mgr := diagnostics.NewManager(nil, nil, diagnostics.WithClock(func() time.Time { return now }))
+	synctest.Test(t, func(t *testing.T) {
+		mgr := diagnostics.NewManager(nil, nil)
 
-	sum, err := mgr.Start(diagnostics.StartOptions{Duration: time.Minute})
-	if err != nil {
-		t.Fatalf("Start: %v", err)
-	}
-	if sum.Status != diagnostics.StatusRunning {
-		t.Fatalf("status after Start = %q, want running", sum.Status)
-	}
+		sum, err := mgr.Start(diagnostics.StartOptions{Duration: time.Minute})
+		if err != nil {
+			t.Fatalf("Start: %v", err)
+		}
+		if sum.Status != diagnostics.StatusRunning {
+			t.Fatalf("status after Start = %q, want running", sum.Status)
+		}
 
-	// Advance past EndsAt.
-	now = now.Add(2 * time.Minute)
-	mgr.Sweep()
+		// Advance past EndsAt.
+		time.Sleep(2 * time.Minute)
+		mgr.Sweep()
 
-	list := mgr.List()
-	if len(list) == 0 {
-		t.Fatal("list empty after Sweep")
-	}
-	found := false
-	for _, s := range list {
-		if s.ID == sum.ID {
-			found = true
-			if s.Status != diagnostics.StatusExpired {
-				t.Errorf("status = %q, want expired", s.Status)
+		list := mgr.List()
+		if len(list) == 0 {
+			t.Fatal("list empty after Sweep")
+		}
+		found := false
+		for _, s := range list {
+			if s.ID == sum.ID {
+				found = true
+				if s.Status != diagnostics.StatusExpired {
+					t.Errorf("status = %q, want expired", s.Status)
+				}
 			}
 		}
-	}
-	if !found {
-		t.Error("capture not found in list after expiry sweep")
-	}
+		if !found {
+			t.Error("capture not found in list after expiry sweep")
+		}
+	})
 }
 
 // TestCaptureExpiresWithoutAnExternalSweep pins that a capture the operator
@@ -373,39 +376,36 @@ func TestSweep_Expiry_SetsStatusExpired(t *testing.T) {
 // answered 409 to every later Start until a restart.
 func TestCaptureExpiresWithoutAnExternalSweep(t *testing.T) {
 	t.Parallel()
-	tee := &fakeTee{}
-	mgr := diagnostics.NewManager(tee, nil)
+	synctest.Test(t, func(t *testing.T) {
+		tee := &fakeTee{}
+		mgr := diagnostics.NewManager(tee, nil)
 
-	sum, err := mgr.Start(diagnostics.StartOptions{Duration: 20 * time.Millisecond, Triggered: "operator"})
-	if err != nil {
-		t.Fatalf("Start: %v", err)
-	}
+		sum, err := mgr.Start(diagnostics.StartOptions{Duration: 20 * time.Millisecond, Triggered: "operator"})
+		if err != nil {
+			t.Fatalf("Start: %v", err)
+		}
 
-	deadline := time.Now().Add(5 * time.Second)
-	for {
+		time.Sleep(20 * time.Millisecond)
+		synctest.Wait()
 		got, err := mgr.Get(sum.ID)
 		if err != nil {
 			t.Fatalf("Get: %v", err)
 		}
-		if got.Status == diagnostics.StatusExpired {
-			break
-		}
-		if time.Now().After(deadline) {
+		if got.Status != diagnostics.StatusExpired {
 			t.Fatalf("capture status = %q after its window elapsed, want expired", got.Status)
 		}
-		time.Sleep(2 * time.Millisecond)
-	}
 
-	// Reads below are ordered after the finalise by mgr.Get's lock.
-	if tee.detaches != 1 {
-		t.Errorf("tee detaches = %d, want 1 — the log tee stays attached to a dead capture", tee.detaches)
-	}
-	if _, err := mgr.OpenArchive(sum.ID); err != nil {
-		t.Errorf("OpenArchive after expiry: %v", err)
-	}
-	if _, err := mgr.Start(diagnostics.StartOptions{Duration: time.Minute}); err != nil {
-		t.Errorf("Start after an expired capture: %v", err)
-	}
+		// Reads below are ordered after the finalise by mgr.Get's lock.
+		if tee.detaches != 1 {
+			t.Errorf("tee detaches = %d, want 1 — the log tee stays attached to a dead capture", tee.detaches)
+		}
+		if _, err := mgr.OpenArchive(sum.ID); err != nil {
+			t.Errorf("OpenArchive after expiry: %v", err)
+		}
+		if _, err := mgr.Start(diagnostics.StartOptions{Duration: time.Minute}); err != nil {
+			t.Errorf("Start after an expired capture: %v", err)
+		}
+	})
 }
 
 // --------------------------------------------------------------------------
@@ -414,27 +414,28 @@ func TestCaptureExpiresWithoutAnExternalSweep(t *testing.T) {
 
 func TestSweep_ArchiveRetention_RemovesOldEntries(t *testing.T) {
 	t.Parallel()
-	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	mgr := diagnostics.NewManager(nil, nil, diagnostics.WithClock(func() time.Time { return now }))
+	synctest.Test(t, func(t *testing.T) {
+		mgr := diagnostics.NewManager(nil, nil)
 
-	sum, err := mgr.Start(diagnostics.StartOptions{})
-	if err != nil {
-		t.Fatalf("Start: %v", err)
-	}
-	if _, err := mgr.Stop(sum.ID); err != nil {
-		t.Fatalf("Stop: %v", err)
-	}
-
-	// Advance past ArchiveRetention.
-	now = now.Add(diagnostics.ArchiveRetention + time.Minute)
-	mgr.Sweep()
-
-	list := mgr.List()
-	for _, s := range list {
-		if s.ID == sum.ID {
-			t.Errorf("archived capture still present after ArchiveRetention elapsed")
+		sum, err := mgr.Start(diagnostics.StartOptions{})
+		if err != nil {
+			t.Fatalf("Start: %v", err)
 		}
-	}
+		if _, err := mgr.Stop(sum.ID); err != nil {
+			t.Fatalf("Stop: %v", err)
+		}
+
+		// Advance past ArchiveRetention.
+		time.Sleep(diagnostics.ArchiveRetention + time.Minute)
+		mgr.Sweep()
+
+		list := mgr.List()
+		for _, s := range list {
+			if s.ID == sum.ID {
+				t.Errorf("archived capture still present after ArchiveRetention elapsed")
+			}
+		}
+	})
 }
 
 // --------------------------------------------------------------------------
@@ -443,31 +444,32 @@ func TestSweep_ArchiveRetention_RemovesOldEntries(t *testing.T) {
 
 func TestArchiveFIFO_OverMax_EvictsOldest(t *testing.T) {
 	t.Parallel()
-	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	mgr := diagnostics.NewManager(nil, nil, diagnostics.WithClock(func() time.Time { return now }))
+	synctest.Test(t, func(t *testing.T) {
+		mgr := diagnostics.NewManager(nil, nil)
 
-	var firstID string
-	for i := 0; i <= diagnostics.MaxArchivedCaptures; i++ {
-		sum, err := mgr.Start(diagnostics.StartOptions{})
-		if err != nil {
-			t.Fatalf("Start %d: %v", i, err)
+		var firstID string
+		for i := 0; i <= diagnostics.MaxArchivedCaptures; i++ {
+			sum, err := mgr.Start(diagnostics.StartOptions{})
+			if err != nil {
+				t.Fatalf("Start %d: %v", i, err)
+			}
+			if i == 0 {
+				firstID = sum.ID
+			}
+			if _, err := mgr.Stop(sum.ID); err != nil {
+				t.Fatalf("Stop %d: %v", i, err)
+			}
+			time.Sleep(time.Second)
 		}
-		if i == 0 {
-			firstID = sum.ID
-		}
-		if _, err := mgr.Stop(sum.ID); err != nil {
-			t.Fatalf("Stop %d: %v", i, err)
-		}
-		now = now.Add(time.Second)
-	}
 
-	list := mgr.List()
-	if len(list) > diagnostics.MaxArchivedCaptures {
-		t.Errorf("archived list len = %d, exceeds MaxArchivedCaptures %d", len(list), diagnostics.MaxArchivedCaptures)
-	}
-	for _, s := range list {
-		if s.ID == firstID {
-			t.Error("oldest capture still present after FIFO eviction")
+		list := mgr.List()
+		if len(list) > diagnostics.MaxArchivedCaptures {
+			t.Errorf("archived list len = %d, exceeds MaxArchivedCaptures %d", len(list), diagnostics.MaxArchivedCaptures)
 		}
-	}
+		for _, s := range list {
+			if s.ID == firstID {
+				t.Error("oldest capture still present after FIFO eviction")
+			}
+		}
+	})
 }

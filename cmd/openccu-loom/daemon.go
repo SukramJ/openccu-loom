@@ -914,7 +914,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	if auditDB != nil {
 		silenceStore = sqlitestore.NewWarningSilenceStore(auditDB)
 	}
-	warningsSvc := warnings.New(healthAdapter, incidentsReader, hubAdapter, silenceStore, nil)
+	warningsSvc := warnings.New(healthAdapter, incidentsReader, hubAdapter, silenceStore)
 
 	// No-op when REST is disabled. Extracted into mountRESTServer
 	// (daemon_rest_mount.go); the returned teardown folds the inline mDNS

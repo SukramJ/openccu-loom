@@ -7,84 +7,53 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
+	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// neuterGoToTimers replaces the debouncer's timer factory with one that
-// never fires on its own, so tests control the deferred CCU write
-// explicitly via [flushGoToWrites]. Installed by every rig helper — the
-// production delays (150/400 ms) would otherwise fire mid-test and race
-// the assertions.
-func neuterGoToTimers(d *goToDebouncer) {
-	d.afterFunc = func(time.Duration, func()) *time.Timer {
-		t := time.NewTimer(time.Hour)
-		t.Stop()
-		return t
-	}
+// settleGoToWrites advances the synctest clock past the longest debounce
+// window and lets the timer goroutines finish, so every deferred CCU write
+// that was not cancelled or replaced has run when it returns. It must be
+// called inside a synctest bubble.
+func settleGoToWrites() {
+	time.Sleep(goToDebounceGestureStart)
+	synctest.Wait()
 }
 
-// flushGoToWrites synchronously runs every pending deferred write, as
-// if the debounce delays had elapsed.
-func flushGoToWrites(d *goToDebouncer) {
-	for axis := range goToAxisCount {
-		d.mu.Lock()
-		slot := &d.slots[axis]
-		slot.gen++
-		if slot.timer != nil {
-			slot.timer.Stop()
-			slot.timer = nil
+// drainOptimisticRollbacks advances the synctest clock past the optimistic
+// rollback timeout so the rollback goroutines that a write arms have exited
+// before the bubble returns; synctest.Test fails while any goroutine is
+// still blocked.
+func drainOptimisticRollbacks() {
+	time.Sleep(generic.OptimisticDefaultTimeout + 2*time.Second)
+}
+
+// expectGoToWritesAfter asserts that no deferred write has run just before
+// delay elapses and that exactly want writes have run once it has, which
+// pins the debounce delay to the nanosecond. It must be called inside a
+// synctest bubble.
+func expectGoToWritesAfter(t *testing.T, w *countingWriter, delay time.Duration, want ...any) {
+	t.Helper()
+	time.Sleep(delay - time.Nanosecond)
+	synctest.Wait()
+	if got := w.recorded(); len(got) != 0 {
+		t.Fatalf("CCU writes %v ran before the %v debounce delay elapsed", got, delay)
+	}
+	time.Sleep(time.Nanosecond)
+	synctest.Wait()
+	got := w.recorded()
+	if len(got) != len(want) {
+		t.Fatalf("CCU writes after the %v debounce delay = %v, want %v", delay, got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("CCU write[%d] = %v, want %v", i, got[i], want[i])
 		}
-		write := slot.write
-		slot.write = nil
-		d.mu.Unlock()
-		if write != nil {
-			write()
-		}
 	}
-}
-
-// goToScheduleRecorder fakes the debouncer's clock and records every
-// scheduled delay so the two-phase decision is observable without real
-// timers.
-type goToScheduleRecorder struct {
-	mu     sync.Mutex
-	now    time.Time
-	delays []time.Duration
-}
-
-func installGoToRecorder(d *goToDebouncer) *goToScheduleRecorder {
-	r := &goToScheduleRecorder{now: time.Unix(1_000_000, 0)}
-	d.now = func() time.Time {
-		r.mu.Lock()
-		defer r.mu.Unlock()
-		return r.now
-	}
-	d.afterFunc = func(delay time.Duration, _ func()) *time.Timer {
-		r.mu.Lock()
-		r.delays = append(r.delays, delay)
-		r.mu.Unlock()
-		t := time.NewTimer(time.Hour)
-		t.Stop()
-		return t
-	}
-	return r
-}
-
-func (r *goToScheduleRecorder) advance(d time.Duration) {
-	r.mu.Lock()
-	r.now = r.now.Add(d)
-	r.mu.Unlock()
-}
-
-func (r *goToScheduleRecorder) recorded() []time.Duration {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	out := make([]time.Duration, len(r.delays))
-	copy(out, r.delays)
-	return out
 }
 
 // countingWriter records every SetValue payload in arrival order.
@@ -123,23 +92,23 @@ func invokeGoToLift(t *testing.T, c *Cover, pct uint16) {
 // quick swipe's first value is an unwanted intermediate step.
 func TestGoToDebounce_GestureStartUsesLongDelay(t *testing.T) {
 	t.Parallel()
-	c, _, _ := newRig(t, "HmIP-BROLL:3", &countingWriter{}, custom.CoverCapabilities{})
-	rec := installGoToRecorder(&c.matterGoTo)
+	synctest.Test(t, func(t *testing.T) {
+		defer drainOptimisticRollbacks()
+		w := &countingWriter{}
+		c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{})
 
-	invokeGoToLift(t, c, 3000)
-	rec.advance(goToGestureGap + 100*time.Millisecond) // idle: next command starts a new gesture
-	invokeGoToLift(t, c, 4000)
+		invokeGoToLift(t, c, 3000)
+		expectGoToWritesAfter(t, w, goToDebounceGestureStart, 0.7)
 
-	delays := rec.recorded()
-	if len(delays) != 2 {
-		t.Fatalf("scheduled delays = %v, want 2 entries", delays)
-	}
-	if delays[0] != goToDebounceGestureStart {
-		t.Errorf("first command delay = %v, want %v (gesture start)", delays[0], goToDebounceGestureStart)
-	}
-	if delays[1] != goToDebounceGestureStart {
-		t.Errorf("post-idle command delay = %v, want %v (new gesture)", delays[1], goToDebounceGestureStart)
-	}
+		// Idle past the gesture gap (measured from the first command):
+		// the next command starts a new gesture.
+		time.Sleep(goToGestureGap + 100*time.Millisecond - goToDebounceGestureStart)
+		invokeGoToLift(t, c, 4000)
+		w.mu.Lock()
+		w.values = nil
+		w.mu.Unlock()
+		expectGoToWritesAfter(t, w, goToDebounceGestureStart, 0.6)
+	})
 }
 
 // TestGoToDebounce_ActiveDragReplacesPendingWithShortDelay: commands
@@ -148,36 +117,47 @@ func TestGoToDebounce_GestureStartUsesLongDelay(t *testing.T) {
 // pending write so exactly one CCU write (the last value) goes out.
 func TestGoToDebounce_ActiveDragReplacesPendingWithShortDelay(t *testing.T) {
 	t.Parallel()
-	w := &countingWriter{}
-	c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{})
-	rec := installGoToRecorder(&c.matterGoTo)
+	synctest.Test(t, func(t *testing.T) {
+		defer drainOptimisticRollbacks()
+		w := &countingWriter{}
+		c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{})
 
-	invokeGoToLift(t, c, 3000)
-	rec.advance(200 * time.Millisecond)
-	invokeGoToLift(t, c, 4000)
-	rec.advance(200 * time.Millisecond)
-	invokeGoToLift(t, c, 5000)
+		// The steps stay below goToDebounceActiveDrag so no replaced
+		// write gets a chance to fire.
+		invokeGoToLift(t, c, 3000)
+		time.Sleep(100 * time.Millisecond)
+		invokeGoToLift(t, c, 4000)
+		time.Sleep(100 * time.Millisecond)
+		invokeGoToLift(t, c, 5000)
 
-	delays := rec.recorded()
-	want := []time.Duration{goToDebounceGestureStart, goToDebounceActiveDrag, goToDebounceActiveDrag}
-	if len(delays) != len(want) {
-		t.Fatalf("scheduled delays = %v, want %v", delays, want)
-	}
-	for i := range want {
-		if delays[i] != want[i] {
-			t.Errorf("delay[%d] = %v, want %v", i, delays[i], want[i])
+		// Matter 5000 → HM 0.5 — only the value the drag settled on.
+		expectGoToWritesAfter(t, w, goToDebounceActiveDrag, 0.5)
+
+		// The replaced writes never fire, not even at the original
+		// gesture-start deadline.
+		settleGoToWrites()
+		if got := w.recorded(); len(got) != 1 {
+			t.Fatalf("CCU writes after drag = %v, want exactly 1 (the settled value)", got)
 		}
-	}
+	})
+}
 
-	flushGoToWrites(&c.matterGoTo)
-	values := w.recorded()
-	if len(values) != 1 {
-		t.Fatalf("CCU writes after drag = %v, want exactly 1 (the settled value)", values)
-	}
-	// Matter 5000 → HM 0.5 — only the value the drag settled on.
-	if values[0].(float64) != 0.5 {
-		t.Errorf("settled write = %v, want 0.5", values[0])
-	}
+// TestGoToDebounce_ActiveDragSecondCommandUsesShortDelay pins the delay
+// of the second command of a drag on its own: it is armed with the short
+// window, not the gesture-start window the first command used.
+func TestGoToDebounce_ActiveDragSecondCommandUsesShortDelay(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		defer drainOptimisticRollbacks()
+		w := &countingWriter{}
+		c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{})
+
+		invokeGoToLift(t, c, 3000)
+		time.Sleep(100 * time.Millisecond)
+		invokeGoToLift(t, c, 4000)
+
+		expectGoToWritesAfter(t, w, goToDebounceActiveDrag, 0.6)
+	})
 }
 
 // TestGoToLiftPercentage_AtTargetAcknowledgedWithoutWrite: a command
@@ -189,47 +169,56 @@ func TestGoToLiftPercentage_AtTargetAcknowledgedWithoutWrite(t *testing.T) {
 
 	t.Run("SingleCommandAtCurrent", func(t *testing.T) {
 		t.Parallel()
-		w := &countingWriter{}
-		c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{})
-		c.OnLevel(0.4) // current = Matter 6000
-		srv := c.MatterClusterServers()[0]
+		synctest.Test(t, func(t *testing.T) {
+			defer drainOptimisticRollbacks()
+			w := &countingWriter{}
+			c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{})
+			c.OnLevel(0.4) // current = Matter 6000
+			srv := c.MatterClusterServers()[0]
 
-		invokeGoToLift(t, c, 6050) // |6050-6000| = 50 <= 100
-		flushGoToWrites(&c.matterGoTo)
-		if got := w.recorded(); len(got) != 0 {
-			t.Fatalf("CCU writes = %v, want none (at target)", got)
-		}
-		// The commanded destination is still the reported target.
-		if v, ok := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths); !ok || v.(uint16) != 6050 {
-			t.Fatalf("TargetPositionLift = (%v, %v), want (6050, true)", v, ok)
-		}
+			invokeGoToLift(t, c, 6050) // |6050-6000| = 50 <= 100
+			settleGoToWrites()
+			if got := w.recorded(); len(got) != 0 {
+				t.Fatalf("CCU writes = %v, want none (at target)", got)
+			}
+			// The commanded destination is still the reported target.
+			if v, ok := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths); !ok || v.(uint16) != 6050 {
+				t.Fatalf("TargetPositionLift = (%v, %v), want (6050, true)", v, ok)
+			}
+		})
 	})
 
 	t.Run("ReturnToStartDropsPendingDragValue", func(t *testing.T) {
 		t.Parallel()
-		w := &countingWriter{}
-		c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{})
-		c.OnLevel(0.4) // current = Matter 6000
+		synctest.Test(t, func(t *testing.T) {
+			defer drainOptimisticRollbacks()
+			w := &countingWriter{}
+			c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{})
+			c.OnLevel(0.4) // current = Matter 6000
 
-		invokeGoToLift(t, c, 3000) // mid-drag value, pending
-		invokeGoToLift(t, c, 6050) // drag returned to the start — at target
-		flushGoToWrites(&c.matterGoTo)
-		if got := w.recorded(); len(got) != 0 {
-			t.Fatalf("CCU writes = %v, want none — the stale 3000 must not fire", got)
-		}
+			invokeGoToLift(t, c, 3000) // mid-drag value, pending
+			invokeGoToLift(t, c, 6050) // drag returned to the start — at target
+			settleGoToWrites()
+			if got := w.recorded(); len(got) != 0 {
+				t.Fatalf("CCU writes = %v, want none — the stale 3000 must not fire", got)
+			}
+		})
 	})
 
 	t.Run("BeyondToleranceStillWrites", func(t *testing.T) {
 		t.Parallel()
-		w := &countingWriter{}
-		c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{})
-		c.OnLevel(0.4) // current = Matter 6000
+		synctest.Test(t, func(t *testing.T) {
+			defer drainOptimisticRollbacks()
+			w := &countingWriter{}
+			c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{})
+			c.OnLevel(0.4) // current = Matter 6000
 
-		invokeGoToLift(t, c, 6101) // |6101-6000| = 101 > 100
-		flushGoToWrites(&c.matterGoTo)
-		if got := w.recorded(); len(got) != 1 {
-			t.Fatalf("CCU writes = %v, want exactly 1 (beyond tolerance)", got)
-		}
+			invokeGoToLift(t, c, 6101) // |6101-6000| = 101 > 100
+			settleGoToWrites()
+			if got := w.recorded(); len(got) != 1 {
+				t.Fatalf("CCU writes = %v, want exactly 1 (beyond tolerance)", got)
+			}
+		})
 	})
 }
 
@@ -238,21 +227,24 @@ func TestGoToLiftPercentage_AtTargetAcknowledgedWithoutWrite(t *testing.T) {
 // the movement the user just halted.
 func TestGoToDebounce_StopMotionCancelsPendingWrite(t *testing.T) {
 	t.Parallel()
-	w := &countingWriter{}
-	c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{SupportsStop: true})
-	c.OnLevel(0.4)
-	srv := c.MatterClusterServers()[0]
+	synctest.Test(t, func(t *testing.T) {
+		defer drainOptimisticRollbacks()
+		w := &countingWriter{}
+		c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{SupportsStop: true})
+		c.OnLevel(0.4)
+		srv := c.MatterClusterServers()[0]
 
-	invokeGoToLift(t, c, 3000) // pending
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdStopMotion, nil); err != nil {
-		t.Fatalf("StopMotion: %v", err)
-	}
-	flushGoToWrites(&c.matterGoTo)
+		invokeGoToLift(t, c, 3000) // pending
+		if _, err := srv.MatterInvoke(context.Background(), matterCmdStopMotion, nil); err != nil {
+			t.Fatalf("StopMotion: %v", err)
+		}
+		settleGoToWrites()
 
-	values := w.recorded()
-	if len(values) != 1 || values[0] != true {
-		t.Fatalf("CCU writes = %v, want exactly the STOP write (true)", values)
-	}
+		values := w.recorded()
+		if len(values) != 1 || values[0] != true {
+			t.Fatalf("CCU writes = %v, want exactly the STOP write (true)", values)
+		}
+	})
 }
 
 // TestGoToDebounce_UnsubscribeCancelsPendingWrite: the unsubscribe
@@ -264,19 +256,22 @@ func TestGoToDebounce_UnsubscribeCancelsPendingWrite(t *testing.T) {
 
 	t.Run("Cover", func(t *testing.T) {
 		t.Parallel()
-		w := &countingWriter{}
-		c, ch, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{})
-		unsub := c.Subscribe(ch)
-		if unsub == nil {
-			t.Fatal("Subscribe returned nil unsubscribe")
-		}
+		synctest.Test(t, func(t *testing.T) {
+			defer drainOptimisticRollbacks()
+			w := &countingWriter{}
+			c, ch, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{})
+			unsub := c.Subscribe(ch)
+			if unsub == nil {
+				t.Fatal("Subscribe returned nil unsubscribe")
+			}
 
-		invokeGoToLift(t, c, 3000) // pending
-		unsub()
-		flushGoToWrites(&c.matterGoTo)
-		if got := w.recorded(); len(got) != 0 {
-			t.Fatalf("CCU writes after detach = %v, want none", got)
-		}
+			invokeGoToLift(t, c, 3000) // pending
+			unsub()
+			settleGoToWrites()
+			if got := w.recorded(); len(got) != 0 {
+				t.Fatalf("CCU writes after detach = %v, want none", got)
+			}
+		})
 	})
 }
 
@@ -285,36 +280,51 @@ func TestGoToDebounce_UnsubscribeCancelsPendingWrite(t *testing.T) {
 // pending lift write and vice versa.
 func TestGoToDebounce_BlindAxesDebounceIndependently(t *testing.T) {
 	t.Parallel()
-	w := &putWriter{}
-	b := newBlindRig(t, "VCU3560967:1", w, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
-	srv := b.MatterClusterServers()[0]
+	synctest.Test(t, func(t *testing.T) {
+		defer drainOptimisticRollbacks()
+		w := &putWriter{}
+		b := newBlindRig(t, "VCU3560967:1", w, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
+		srv := b.MatterClusterServers()[0]
 
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000)); err != nil {
-		t.Fatalf("GoToLiftPercentage: %v", err)
-	}
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToTiltPercentage, uint16(2500)); err != nil {
-		t.Fatalf("GoToTiltPercentage: %v", err)
-	}
-	flushGoToWrites(&b.matterGoTo)
+		if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000)); err != nil {
+			t.Fatalf("GoToLiftPercentage: %v", err)
+		}
+		if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToTiltPercentage, uint16(2500)); err != nil {
+			t.Fatalf("GoToTiltPercentage: %v", err)
+		}
+		settleGoToWrites()
 
-	if cc := w.combinedCalls(); len(cc) != 2 {
-		t.Fatalf("combined writes = %d, want 2 (one per axis slot)", len(cc))
-	}
+		if cc := w.combinedCalls(); len(cc) != 2 {
+			t.Fatalf("combined writes = %d, want 2 (one per axis slot)", len(cc))
+		}
+	})
 }
 
-// TestGoToDebounce_RealTimerFiresPendingWrite exercises the unseamed
-// production path: schedule arms a real time.AfterFunc whose callback
-// passes the generation check in fire and runs the pending write.
+// TestGoToDebounce_RealTimerFiresPendingWrite exercises the production
+// path directly: schedule arms a time.AfterFunc whose callback passes
+// the generation check in fire and runs the pending write.
 func TestGoToDebounce_RealTimerFiresPendingWrite(t *testing.T) {
 	t.Parallel()
-	var d goToDebouncer
-	done := make(chan struct{})
-	d.schedule(goToAxisLift, func() { close(done) })
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("pending write did not fire within 5s (gesture-start delay is 400ms)")
-	}
+	synctest.Test(t, func(t *testing.T) {
+		var d goToDebouncer
+		done := make(chan struct{})
+		d.schedule(goToAxisLift, func() { close(done) })
+
+		time.Sleep(goToDebounceGestureStart - time.Nanosecond)
+		synctest.Wait()
+		select {
+		case <-done:
+			t.Fatal("pending write fired before the gesture-start delay elapsed")
+		default:
+		}
+		time.Sleep(time.Nanosecond)
+		synctest.Wait()
+		select {
+		case <-done:
+		default:
+			t.Fatal("pending write did not fire once the gesture-start delay elapsed")
+		}
+	})
 }
 
 // TestParityMatterJS_GoToPercentageStoresTargetBeforeDeviceWrite pins
@@ -327,22 +337,25 @@ func TestGoToDebounce_RealTimerFiresPendingWrite(t *testing.T) {
 // returns, and the CCU write follows after the debounce window.
 func TestParityMatterJS_GoToPercentageStoresTargetBeforeDeviceWrite(t *testing.T) {
 	t.Parallel()
-	w := &countingWriter{}
-	c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{})
-	c.OnLevel(0.4) // current = Matter 6000
-	srv := c.MatterClusterServers()[0]
+	synctest.Test(t, func(t *testing.T) {
+		defer drainOptimisticRollbacks()
+		w := &countingWriter{}
+		c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{})
+		c.OnLevel(0.4) // current = Matter 6000
+		srv := c.MatterClusterServers()[0]
 
-	invokeGoToLift(t, c, 3000)
-	if v, ok := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths); !ok || v.(uint16) != 3000 {
-		t.Fatalf("TargetPositionLift right after invoke = (%v, %v), want (3000, true)", v, ok)
-	}
-	if got := w.recorded(); len(got) != 0 {
-		t.Fatalf("CCU writes before the debounce window elapsed = %v, want none", got)
-	}
+		invokeGoToLift(t, c, 3000)
+		if v, ok := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths); !ok || v.(uint16) != 3000 {
+			t.Fatalf("TargetPositionLift right after invoke = (%v, %v), want (3000, true)", v, ok)
+		}
+		if got := w.recorded(); len(got) != 0 {
+			t.Fatalf("CCU writes before the debounce window elapsed = %v, want none", got)
+		}
 
-	flushGoToWrites(&c.matterGoTo)
-	values := w.recorded()
-	if len(values) != 1 || values[0].(float64) != 0.7 {
-		t.Fatalf("deferred CCU write = %v, want [0.7] (Matter 3000 → HM 0.7)", values)
-	}
+		settleGoToWrites()
+		values := w.recorded()
+		if len(values) != 1 || values[0].(float64) != 0.7 {
+			t.Fatalf("deferred CCU write = %v, want [0.7] (Matter 3000 → HM 0.7)", values)
+		}
+	})
 }

@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -146,39 +147,43 @@ func TestLiveLog_LastSeq_IncrementsPerRecord(t *testing.T) {
 
 func TestLiveLog_Subscribe_ReceivesRecordAfterSubscribe(t *testing.T) {
 	t.Parallel()
-	l := NewLiveLog(10)
-	ch, cancel := l.Subscribe(slog.LevelDebug)
-	defer cancel()
+	synctest.Test(t, func(t *testing.T) {
+		l := NewLiveLog(10)
+		ch, cancel := l.Subscribe(slog.LevelDebug)
+		defer cancel()
 
-	l.record(buildRec(slog.LevelInfo, "hello"), nil)
-	select {
-	case rec := <-ch:
-		if rec.Msg != "hello" {
-			t.Errorf("msg = %q, want hello", rec.Msg)
+		l.record(buildRec(slog.LevelInfo, "hello"), nil)
+		select {
+		case rec := <-ch:
+			if rec.Msg != "hello" {
+				t.Errorf("msg = %q, want hello", rec.Msg)
+			}
+		default:
+			t.Fatal("subscribed record was not delivered")
 		}
-	case <-time.After(time.Second):
-		t.Fatal("timed out waiting for subscribed record")
-	}
+	})
 }
 
 func TestLiveLog_Subscribe_Cancel_ClosesChannel(t *testing.T) {
 	t.Parallel()
-	l := NewLiveLog(10)
-	ch, cancel := l.Subscribe(slog.LevelDebug)
-	cancel()
+	synctest.Test(t, func(t *testing.T) {
+		l := NewLiveLog(10)
+		ch, cancel := l.Subscribe(slog.LevelDebug)
+		cancel()
 
-	if l.Subscribers() != 0 {
-		t.Errorf("Subscribers after cancel = %d, want 0", l.Subscribers())
-	}
-	// Channel must be closed.
-	select {
-	case _, ok := <-ch:
-		if ok {
-			t.Error("channel still open after cancel")
+		if l.Subscribers() != 0 {
+			t.Errorf("Subscribers after cancel = %d, want 0", l.Subscribers())
 		}
-	case <-time.After(time.Second):
-		t.Fatal("timed out waiting for channel to close")
-	}
+		// Channel must be closed.
+		select {
+		case _, ok := <-ch:
+			if ok {
+				t.Error("channel still open after cancel")
+			}
+		default:
+			t.Fatal("channel was not closed by cancel")
+		}
+	})
 }
 
 func TestLiveLog_Subscribe_CancelPreventsSubsequentDelivery(t *testing.T) {
@@ -204,36 +209,40 @@ func TestLiveLog_Subscribe_CancelPreventsSubsequentDelivery(t *testing.T) {
 
 func TestLiveLog_Subscribe_MinLevel_DebugNotDeliveredToWarnSubscriber(t *testing.T) {
 	t.Parallel()
-	l := NewLiveLog(10)
-	ch, cancel := l.Subscribe(slog.LevelWarn)
-	defer cancel()
+	synctest.Test(t, func(t *testing.T) {
+		l := NewLiveLog(10)
+		ch, cancel := l.Subscribe(slog.LevelWarn)
+		defer cancel()
 
-	l.record(buildRec(slog.LevelDebug, "silent"), nil)
+		l.record(buildRec(slog.LevelDebug, "silent"), nil)
 
-	select {
-	case rec := <-ch:
-		t.Errorf("got unexpected record %q on warn subscriber", rec.Msg)
-	case <-time.After(50 * time.Millisecond):
-		// Correct: nothing delivered.
-	}
+		select {
+		case rec := <-ch:
+			t.Errorf("got unexpected record %q on warn subscriber", rec.Msg)
+		default:
+			// Correct: nothing delivered.
+		}
+	})
 }
 
 func TestLiveLog_Subscribe_MinLevel_WarnDeliveredToWarnSubscriber(t *testing.T) {
 	t.Parallel()
-	l := NewLiveLog(10)
-	ch, cancel := l.Subscribe(slog.LevelWarn)
-	defer cancel()
+	synctest.Test(t, func(t *testing.T) {
+		l := NewLiveLog(10)
+		ch, cancel := l.Subscribe(slog.LevelWarn)
+		defer cancel()
 
-	l.record(buildRec(slog.LevelWarn, "audible"), nil)
+		l.record(buildRec(slog.LevelWarn, "audible"), nil)
 
-	select {
-	case rec := <-ch:
-		if rec.Msg != "audible" {
-			t.Errorf("msg = %q, want audible", rec.Msg)
+		select {
+		case rec := <-ch:
+			if rec.Msg != "audible" {
+				t.Errorf("msg = %q, want audible", rec.Msg)
+			}
+		default:
+			t.Fatal("warn record was not delivered to the warn subscriber")
 		}
-	case <-time.After(time.Second):
-		t.Fatal("timed out waiting for warn record on warn subscriber")
-	}
+	})
 }
 
 // --------------------------------------------------------------------------
@@ -242,29 +251,32 @@ func TestLiveLog_Subscribe_MinLevel_WarnDeliveredToWarnSubscriber(t *testing.T) 
 
 func TestLiveLog_SlowSubscriber_DoesNotBlockRecord(t *testing.T) {
 	t.Parallel()
-	l := NewLiveLog(1000)
-	// Subscribe but never drain.
-	_, cancel := l.Subscribe(slog.LevelDebug)
-	defer cancel()
+	synctest.Test(t, func(t *testing.T) {
+		l := NewLiveLog(1000)
+		// Subscribe but never drain.
+		_, cancel := l.Subscribe(slog.LevelDebug)
+		defer cancel()
 
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		// Feed more than the buffer depth (256) without draining.
-		for range defaultLiveSubscriberBuffer + 10 {
-			l.record(buildRec(slog.LevelInfo, "flood"), nil)
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			// Feed more than the buffer depth (256) without draining.
+			for range defaultLiveSubscriberBuffer + 10 {
+				l.record(buildRec(slog.LevelInfo, "flood"), nil)
+			}
+		}()
+
+		synctest.Wait()
+		select {
+		case <-done:
+			// Feed loop returned promptly — no deadlock.
+		default:
+			t.Fatal("feed loop blocked: slow subscriber is stalling record()")
 		}
-	}()
-
-	select {
-	case <-done:
-		// Feed loop returned promptly — no deadlock.
-	case <-time.After(5 * time.Second):
-		t.Fatal("feed loop blocked: slow subscriber is stalling record()")
-	}
-	if l.Subscribers() != 1 {
-		t.Errorf("Subscribers = %d, want 1 (still attached)", l.Subscribers())
-	}
+		if l.Subscribers() != 1 {
+			t.Errorf("Subscribers = %d, want 1 (still attached)", l.Subscribers())
+		}
+	})
 }
 
 // --------------------------------------------------------------------------

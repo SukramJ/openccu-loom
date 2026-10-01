@@ -30,8 +30,6 @@ type LevelRegistry struct {
 	mu           sync.RWMutex
 	defaultLevel slog.Level
 	overrides    map[string]override
-	// now is replaced in tests to advance virtual time without sleeping.
-	now func() time.Time
 }
 
 type override struct {
@@ -57,7 +55,6 @@ func NewLevelRegistry(defaultLevel slog.Level) *LevelRegistry {
 	return &LevelRegistry{
 		defaultLevel: defaultLevel,
 		overrides:    map[string]override{},
-		now:          time.Now,
 	}
 }
 
@@ -91,7 +88,7 @@ func (r *LevelRegistry) Set(path string, level slog.Level, ttl time.Duration) {
 	defer r.mu.Unlock()
 	ov := override{level: level}
 	if ttl > 0 {
-		ov.expiresAt = r.now().Add(ttl)
+		ov.expiresAt = time.Now().Add(ttl)
 	}
 	r.overrides[p] = ov
 }
@@ -119,7 +116,7 @@ func (r *LevelRegistry) Resolve(path string) slog.Level {
 	p := normalisePath(path)
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	now := r.now()
+	now := time.Now()
 	for {
 		if ov, ok := r.overrides[p]; ok {
 			if ov.expiresAt.IsZero() || ov.expiresAt.After(now) {
@@ -156,7 +153,7 @@ func (r *LevelRegistry) Leveler(path string) slog.Leveler {
 func (r *LevelRegistry) Min() slog.Level {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	now := r.now()
+	now := time.Now()
 	minLevel := r.defaultLevel
 	for _, ov := range r.overrides {
 		if !ov.expiresAt.IsZero() && !ov.expiresAt.After(now) {
@@ -190,7 +187,7 @@ func (l minLeveler) Level() slog.Level { return l.reg.Min() }
 func (r *LevelRegistry) Sweep() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	now := r.now()
+	now := time.Now()
 	removed := 0
 	for p, ov := range r.overrides {
 		if !ov.expiresAt.IsZero() && !ov.expiresAt.After(now) {
@@ -207,7 +204,7 @@ func (r *LevelRegistry) Sweep() int {
 func (r *LevelRegistry) Snapshot() []OverrideInfo {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	now := r.now()
+	now := time.Now()
 	out := make([]OverrideInfo, 0, len(r.overrides))
 	for p, ov := range r.overrides {
 		if !ov.expiresAt.IsZero() && !ov.expiresAt.After(now) {
@@ -264,18 +261,6 @@ func (r *LevelRegistry) ApplyConfig(cfg map[string]string) error {
 		r.overrides[p] = override{level: lvl}
 	}
 	return nil
-}
-
-// SetNowFunc replaces the registry's clock. Intended for tests that
-// want to drive TTL expiry deterministically — production code keeps
-// the time.Now default installed by [NewLevelRegistry].
-func (r *LevelRegistry) SetNowFunc(now func() time.Time) {
-	if now == nil {
-		now = time.Now
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.now = now
 }
 
 // pathLeveler is a [slog.Leveler] bound to a specific logger path.

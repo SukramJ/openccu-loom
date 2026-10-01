@@ -10,6 +10,7 @@ import (
 	"errors"
 	"log/slog"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmlog"
@@ -482,27 +483,29 @@ func TestStartOp_UnretriedFailureStaysError(t *testing.T) {
 // bring-up completes — warning about it trains operators to ignore the
 // warning that matters later.
 func TestStartOp_ExpectedSlownessLogsAtInfo(t *testing.T) {
-	var buf bytes.Buffer
-	logger := newJSONLogger(&buf)
+	synctest.Test(t, func(t *testing.T) {
+		var buf bytes.Buffer
+		logger := newJSONLogger(&buf)
 
-	ctx := hmlog.WithExpectedSlowness(context.Background())
-	_, closer := hmlog.StartOp(ctx, "xml-rpc.ping", hmlog.OpOptions{
-		Logger:        logger,
-		SlowThreshold: time.Nanosecond,
+		ctx := hmlog.WithExpectedSlowness(context.Background())
+		_, closer := hmlog.StartOp(ctx, "xml-rpc.ping", hmlog.OpOptions{
+			Logger:        logger,
+			SlowThreshold: time.Nanosecond,
+		})
+		time.Sleep(time.Millisecond)
+		closer(nil)
+
+		end := lastRecord(t, &buf)
+		if got := end["level"]; got != "INFO" {
+			t.Errorf("level = %v, want INFO for slowness the caller expects", got)
+		}
+		if got := end["outcome"]; got != "slow" {
+			t.Errorf("outcome = %v, want slow", got)
+		}
+		if got := end["expected"]; got != true {
+			t.Errorf("expected = %v, want true so the demotion is visible in the record", got)
+		}
 	})
-	time.Sleep(time.Millisecond)
-	closer(nil)
-
-	end := lastRecord(t, &buf)
-	if got := end["level"]; got != "INFO" {
-		t.Errorf("level = %v, want INFO for slowness the caller expects", got)
-	}
-	if got := end["outcome"]; got != "slow" {
-		t.Errorf("outcome = %v, want slow", got)
-	}
-	if got := end["expected"]; got != true {
-		t.Errorf("expected = %v, want true so the demotion is visible in the record", got)
-	}
 }
 
 // TestStartOp_ExpectedSlownessDoesNotMaskFailure pins that the slowness

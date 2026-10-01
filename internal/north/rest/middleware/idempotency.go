@@ -182,11 +182,10 @@ const (
 type idempotencyCache struct {
 	mu    sync.Mutex
 	items map[string]idempotentEntry
-	now   func() time.Time
 }
 
 func newIdempotencyCache() *idempotencyCache {
-	return &idempotencyCache{items: make(map[string]idempotentEntry), now: time.Now}
+	return &idempotencyCache{items: make(map[string]idempotentEntry)}
 }
 
 // reserve atomically inspects the slot for id: a completed, still-fresh
@@ -205,12 +204,12 @@ func (c *idempotencyCache) reserve(id string) (idempotentEntry, cacheState) {
 		if e.pending {
 			return idempotentEntry{}, cacheStatePending
 		}
-		if c.now().Sub(e.at) <= IdempotencyTTL {
+		if time.Now().Sub(e.at) <= IdempotencyTTL {
 			return e, cacheStateHit
 		}
 		delete(c.items, id)
 	}
-	now := c.now()
+	now := time.Now()
 	if len(c.items) >= idempotencyCacheCap {
 		c.sweepLocked(now)
 		if len(c.items) >= idempotencyCacheCap {
@@ -258,7 +257,7 @@ func (c *idempotencyCache) complete(id string, e idempotentEntry) {
 		c.release(id)
 		return
 	}
-	e.at = c.now()
+	e.at = time.Now()
 	c.mu.Lock()
 	c.items[id] = e
 	c.mu.Unlock()

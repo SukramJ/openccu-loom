@@ -8,6 +8,7 @@ import (
 	"errors"
 	"slices"
 	"testing"
+	"testing/synctest"
 
 	mattercluster "github.com/SukramJ/go-fabric/cluster"
 	clusterwire "github.com/SukramJ/go-fabric/cluster/wire"
@@ -177,42 +178,48 @@ func TestStopMotionCommand(t *testing.T) {
 // HM domain-level 0.25 ("25 % open"). The CCU write is debounced, so
 // the wire assertion runs after the flush.
 func TestGoToLiftPercentageInversion(t *testing.T) {
-	w := &stubWriter{}
-	c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{})
-	srv := c.MatterClusterServers()[0]
-	if _, err := srv.MatterInvoke(context.Background(), 0x05, uint16(7500)); err != nil {
-		t.Fatalf("GoToLift err: %v", err)
-	}
-	flushGoToWrites(&c.matterGoTo)
-	if w.last.(float64) != 0.25 {
-		t.Fatalf("Matter 7500 → HM %v, want 0.25", w.last)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		defer drainOptimisticRollbacks()
+		w := &stubWriter{}
+		c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{})
+		srv := c.MatterClusterServers()[0]
+		if _, err := srv.MatterInvoke(context.Background(), 0x05, uint16(7500)); err != nil {
+			t.Fatalf("GoToLift err: %v", err)
+		}
+		settleGoToWrites()
+		if w.last.(float64) != 0.25 {
+			t.Fatalf("Matter 7500 → HM %v, want 0.25", w.last)
+		}
+	})
 }
 
 // TestBlindGoToTiltPercentage exercises the lift+tilt projection's tilt write
 // path. HM blinds write LEVEL_COMBINED as a comma-separated hex string
 // "0xLL,0xTT" where each byte = int(position * 100 * 2).
 func TestBlindGoToTiltPercentage(t *testing.T) {
-	w := &putWriter{}
-	b := newBlindRig(t, "VCU3560967:1", w, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
-	srv := b.MatterClusterServers()[0]
-	if _, err := srv.MatterInvoke(context.Background(), 0x08, uint16(2500)); err != nil {
-		t.Fatalf("GoToTilt err: %v", err)
-	}
-	flushGoToWrites(&b.matterGoTo)
-	cc := w.combinedCalls()
-	if len(cc) != 1 {
-		t.Fatalf("expected 1 LEVEL_COMBINED SetValue, got %d", len(cc))
-	}
-	// Matter 2500 → HM tilt 0.75 → int(0.75*100*2)=150=0x96;
-	// level=0 (not observed) → 0x00 → "0x00,0x96".
-	got, ok := cc[0].value.(string)
-	if !ok {
-		t.Fatalf("LEVEL_COMBINED value type = %T, want string", cc[0].value)
-	}
-	if got != "0x00,0x96" {
-		t.Fatalf("LEVEL_COMBINED=%q, want 0x00,0x96 (tilt=0.75, level=0)", got)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		defer drainOptimisticRollbacks()
+		w := &putWriter{}
+		b := newBlindRig(t, "VCU3560967:1", w, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
+		srv := b.MatterClusterServers()[0]
+		if _, err := srv.MatterInvoke(context.Background(), 0x08, uint16(2500)); err != nil {
+			t.Fatalf("GoToTilt err: %v", err)
+		}
+		settleGoToWrites()
+		cc := w.combinedCalls()
+		if len(cc) != 1 {
+			t.Fatalf("expected 1 LEVEL_COMBINED SetValue, got %d", len(cc))
+		}
+		// Matter 2500 → HM tilt 0.75 → int(0.75*100*2)=150=0x96;
+		// level=0 (not observed) → 0x00 → "0x00,0x96".
+		got, ok := cc[0].value.(string)
+		if !ok {
+			t.Fatalf("LEVEL_COMBINED value type = %T, want string", cc[0].value)
+		}
+		if got != "0x00,0x96" {
+			t.Fatalf("LEVEL_COMBINED=%q, want 0x00,0x96 (tilt=0.75, level=0)", got)
+		}
+	})
 }
 
 // TestGarageStateMapsToNamedStops pins the door-state to
@@ -506,22 +513,25 @@ func TestGarageOnMatterValueChangedNilSafe(t *testing.T) {
 // else.
 func TestGoToLiftPercentageClampsToPercent100thsMax(t *testing.T) {
 	t.Parallel()
-	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
-	srv := c.MatterClusterServers()[0]
+	synctest.Test(t, func(t *testing.T) {
+		defer drainOptimisticRollbacks()
+		c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
+		srv := c.MatterClusterServers()[0]
 
-	if _, err := srv.MatterInvoke(
-		context.Background(),
-		matterCmdGoToLiftPercentage,
-		map[uint8]any{0: uint64(20000)},
-	); err != nil {
-		t.Fatalf("GoToLiftPercentage(20000): %v", err)
-	}
+		if _, err := srv.MatterInvoke(
+			context.Background(),
+			matterCmdGoToLiftPercentage,
+			map[uint8]any{0: uint64(20000)},
+		); err != nil {
+			t.Fatalf("GoToLiftPercentage(20000): %v", err)
+		}
 
-	target, ok := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths)
-	if !ok {
-		t.Fatal("TargetPositionLift not readable after GoToLiftPercentage")
-	}
-	if got := target.(uint16); got != matterCoverPctMax {
-		t.Fatalf("TargetPositionLift after GoToLiftPercentage(20000) = %d, want %d", got, matterCoverPctMax)
-	}
+		target, ok := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths)
+		if !ok {
+			t.Fatal("TargetPositionLift not readable after GoToLiftPercentage")
+		}
+		if got := target.(uint16); got != matterCoverPctMax {
+			t.Fatalf("TargetPositionLift after GoToLiftPercentage(20000) = %d, want %d", got, matterCoverPctMax)
+		}
+	})
 }

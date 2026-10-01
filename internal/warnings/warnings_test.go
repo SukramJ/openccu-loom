@@ -8,6 +8,7 @@ import (
 	"errors"
 	"maps"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/health"
@@ -79,118 +80,130 @@ func (m *memSilences) DeleteOtherThan(_ context.Context, user string, active []s
 
 var t0 = time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
 
-func clock(at time.Time) func() time.Time { return func() time.Time { return at } }
+// advanceToT0 moves the synctest clock, which starts in 2000, to the
+// pinned instant the incident timestamps below are relative to. It must
+// be called inside a synctest bubble.
+func advanceToT0() { time.Sleep(time.Until(t0)) }
 
 func TestActiveAggregatesAllThreeSources(t *testing.T) {
-	h := hub.NewHub("c1")
-	a := New(
-		fakeHealth{[]health.Component{
-			{Name: "mqtt", Status: health.StatusUnhealthy},
-			{Name: "rest", Status: health.StatusHealthy},
-			{Name: "ccu", Status: health.StatusDegraded},
-		}},
-		fakeIncidents{[]hmapi.Incident{
-			{Component: "xmlrpc", Severity: "error", When: t0.Add(-time.Hour)},
-			{Component: "xmlrpc", Severity: "error", When: t0.Add(-2 * time.Hour)},
-			{Component: "xmlrpc", Severity: "error", When: t0.Add(-48 * time.Hour)}, // outside window
-			{Component: "mqtt", Severity: "info", When: t0.Add(-time.Hour)},         // below grade
-		}},
-		fakeHubs{[]restapi.NamedHub{{Central: "c1", Hub: h}}},
-		nil, clock(t0),
-	)
-	got := a.Active()
+	synctest.Test(t, func(t *testing.T) {
+		advanceToT0()
+		h := hub.NewHub("c1")
+		a := New(
+			fakeHealth{[]health.Component{
+				{Name: "mqtt", Status: health.StatusUnhealthy},
+				{Name: "rest", Status: health.StatusHealthy},
+				{Name: "ccu", Status: health.StatusDegraded},
+			}},
+			fakeIncidents{[]hmapi.Incident{
+				{Component: "xmlrpc", Severity: "error", When: t0.Add(-time.Hour)},
+				{Component: "xmlrpc", Severity: "error", When: t0.Add(-2 * time.Hour)},
+				{Component: "xmlrpc", Severity: "error", When: t0.Add(-48 * time.Hour)}, // outside window
+				{Component: "mqtt", Severity: "info", When: t0.Add(-time.Hour)},         // below grade
+			}},
+			fakeHubs{[]restapi.NamedHub{{Central: "c1", Hub: h}}},
+			nil,
+		)
+		got := a.Active()
 
-	byID := map[string]Warning{}
-	for _, w := range got {
-		byID[w.ID] = w
-	}
-	if w := byID["health:mqtt"]; w.Severity != SeverityError {
-		t.Errorf("health:mqtt = %+v", w)
-	}
-	if w := byID["health:ccu"]; w.Severity != SeverityWarning {
-		t.Errorf("health:ccu = %+v", w)
-	}
-	if _, ok := byID["health:rest"]; ok {
-		t.Error("healthy component produced a warning")
-	}
-	if w := byID["incident:xmlrpc"]; w.Args["count"] != "2" {
-		t.Errorf("incident:xmlrpc = %+v (the 48h-old one must not count)", w)
-	}
-	if _, ok := byID["incident:mqtt"]; ok {
-		t.Error("info-grade incident produced a warning")
-	}
-	// A fresh hub has no service messages, so no servicemsg warning.
-	if _, ok := byID["servicemsg:c1"]; ok {
-		t.Error("empty service-message list produced a warning")
-	}
-	// Errors sort before warnings.
-	if len(got) > 0 && got[0].Severity != SeverityError {
-		t.Errorf("order: first = %+v", got[0])
-	}
+		byID := map[string]Warning{}
+		for _, w := range got {
+			byID[w.ID] = w
+		}
+		if w := byID["health:mqtt"]; w.Severity != SeverityError {
+			t.Errorf("health:mqtt = %+v", w)
+		}
+		if w := byID["health:ccu"]; w.Severity != SeverityWarning {
+			t.Errorf("health:ccu = %+v", w)
+		}
+		if _, ok := byID["health:rest"]; ok {
+			t.Error("healthy component produced a warning")
+		}
+		if w := byID["incident:xmlrpc"]; w.Args["count"] != "2" {
+			t.Errorf("incident:xmlrpc = %+v (the 48h-old one must not count)", w)
+		}
+		if _, ok := byID["incident:mqtt"]; ok {
+			t.Error("info-grade incident produced a warning")
+		}
+		// A fresh hub has no service messages, so no servicemsg warning.
+		if _, ok := byID["servicemsg:c1"]; ok {
+			t.Error("empty service-message list produced a warning")
+		}
+		// Errors sort before warnings.
+		if len(got) > 0 && got[0].Severity != SeverityError {
+			t.Errorf("order: first = %+v", got[0])
+		}
+	})
 }
 
 func TestForUserAnnotatesAndPrunesSilences(t *testing.T) {
-	silences := newMemSilences()
-	active := fakeHealth{[]health.Component{{Name: "mqtt", Status: health.StatusUnhealthy}}}
-	a := New(active, nil, nil, silences, clock(t0))
+	synctest.Test(t, func(t *testing.T) {
+		advanceToT0()
+		silences := newMemSilences()
+		active := fakeHealth{[]health.Component{{Name: "mqtt", Status: health.StatusUnhealthy}}}
+		a := New(active, nil, nil, silences)
 
-	if err := a.SilenceWarning(context.Background(), "markus", "health:mqtt", 7); err != nil {
-		t.Fatal(err)
-	}
-	// A silence for a warning that is not active is refused.
-	if err := a.SilenceWarning(context.Background(), "markus", "health:gone", 7); !errors.Is(err, ErrUnknownWarning) {
-		t.Fatalf("silencing an inactive warning: %v", err)
-	}
-	if err := a.SilenceWarning(context.Background(), "markus", "health:mqtt", 3); !errors.Is(err, ErrBadPeriod) {
-		t.Fatalf("bad period: %v", err)
-	}
+		if err := a.SilenceWarning(context.Background(), "markus", "health:mqtt", 7); err != nil {
+			t.Fatal(err)
+		}
+		// A silence for a warning that is not active is refused.
+		if err := a.SilenceWarning(context.Background(), "markus", "health:gone", 7); !errors.Is(err, ErrUnknownWarning) {
+			t.Fatalf("silencing an inactive warning: %v", err)
+		}
+		if err := a.SilenceWarning(context.Background(), "markus", "health:mqtt", 3); !errors.Is(err, ErrBadPeriod) {
+			t.Fatalf("bad period: %v", err)
+		}
 
-	got, err := a.ForUser(context.Background(), "markus")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(got) != 1 || !got[0].Silenced || got[0].SilencedUntil == nil {
-		t.Fatalf("got %+v", got)
-	}
-	// Another user sees the warning unsilenced.
-	other, err := a.ForUser(context.Background(), "gast")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if other[0].Silenced {
-		t.Error("silence leaked across users")
-	}
+		got, err := a.ForUser(context.Background(), "markus")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 1 || !got[0].Silenced || got[0].SilencedUntil == nil {
+			t.Fatalf("got %+v", got)
+		}
+		// Another user sees the warning unsilenced.
+		other, err := a.ForUser(context.Background(), "gast")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if other[0].Silenced {
+			t.Error("silence leaked across users")
+		}
 
-	// The condition clears → the silence is pruned, so a re-occurrence
-	// alerts again.
-	a.health = fakeHealth{}
-	if _, err := a.ForUser(context.Background(), "markus"); err != nil {
-		t.Fatal(err)
-	}
-	a.health = active
-	back, err := a.ForUser(context.Background(), "markus")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if back[0].Silenced {
-		t.Error("silence survived its condition clearing")
-	}
+		// The condition clears → the silence is pruned, so a re-occurrence
+		// alerts again.
+		a.health = fakeHealth{}
+		if _, err := a.ForUser(context.Background(), "markus"); err != nil {
+			t.Fatal(err)
+		}
+		a.health = active
+		back, err := a.ForUser(context.Background(), "markus")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if back[0].Silenced {
+			t.Error("silence survived its condition clearing")
+		}
+	})
 }
 
 func TestForUserPrunesExpiredSilences(t *testing.T) {
-	silences := newMemSilences()
-	a := New(fakeHealth{[]health.Component{{Name: "mqtt", Status: health.StatusUnhealthy}}}, nil, nil, silences, clock(t0))
-	if err := a.SilenceWarning(context.Background(), "markus", "health:mqtt", 1); err != nil {
-		t.Fatal(err)
-	}
-	a.now = clock(t0.Add(25 * time.Hour))
-	got, err := a.ForUser(context.Background(), "markus")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got[0].Silenced {
-		t.Error("expired silence still annotates")
-	}
+	synctest.Test(t, func(t *testing.T) {
+		advanceToT0()
+		silences := newMemSilences()
+		a := New(fakeHealth{[]health.Component{{Name: "mqtt", Status: health.StatusUnhealthy}}}, nil, nil, silences)
+		if err := a.SilenceWarning(context.Background(), "markus", "health:mqtt", 1); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(25 * time.Hour)
+		got, err := a.ForUser(context.Background(), "markus")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got[0].Silenced {
+			t.Error("expired silence still annotates")
+		}
+	})
 }
 
 type fakePairing struct{ n int }
@@ -198,18 +211,18 @@ type fakePairing struct{ n int }
 func (f fakePairing) PendingCount() int { return f.n }
 
 func TestPairingSourceFeedsAWarning(t *testing.T) {
-	a := New(nil, nil, nil, nil, clock(t0)).WithPairing(fakePairing{n: 2})
+	a := New(nil, nil, nil, nil).WithPairing(fakePairing{n: 2})
 	got := a.Active()
 	if len(got) != 1 || got[0].ID != "pairing:pending" || got[0].Args["count"] != "2" || got[0].Severity != SeverityWarning {
 		t.Fatalf("got %+v", got)
 	}
-	if got := New(nil, nil, nil, nil, clock(t0)).WithPairing(fakePairing{n: 0}).Active(); len(got) != 0 {
+	if got := New(nil, nil, nil, nil).WithPairing(fakePairing{n: 0}).Active(); len(got) != 0 {
 		t.Fatalf("zero pending produced %+v", got)
 	}
 }
 
 func TestNilSourcesContributeNothing(t *testing.T) {
-	a := New(nil, nil, nil, nil, clock(t0))
+	a := New(nil, nil, nil, nil)
 	if got := a.Active(); len(got) != 0 {
 		t.Errorf("nil sources produced %+v", got)
 	}

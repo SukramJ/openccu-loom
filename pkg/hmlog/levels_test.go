@@ -8,6 +8,7 @@ import (
 	"sort"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmlog"
@@ -167,113 +168,106 @@ func TestLevelRegistry_PathNormalisation_EmptyPathIgnored(t *testing.T) {
 }
 
 // --------------------------------------------------------------------------
-// TTL / expiry (deterministic via fake clock)
+// TTL / expiry (deterministic via the synctest clock)
 // --------------------------------------------------------------------------
 
 func TestLevelRegistry_TTL_ResolveBeforeExpiry(t *testing.T) {
-	epoch := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	now := epoch
-	reg := hmlog.NewLevelRegistry(slog.LevelInfo)
-	reg.SetNowFunc(func() time.Time { return now })
+	synctest.Test(t, func(t *testing.T) {
+		reg := hmlog.NewLevelRegistry(slog.LevelInfo)
 
-	reg.Set("a.b", slog.LevelDebug, 100*time.Millisecond)
+		reg.Set("a.b", slog.LevelDebug, 100*time.Millisecond)
 
-	now = epoch.Add(50 * time.Millisecond)
-	got := reg.Resolve("a.b")
-	if got != slog.LevelDebug {
-		t.Errorf("before expiry: got %v, want Debug", got)
-	}
+		time.Sleep(50 * time.Millisecond)
+		got := reg.Resolve("a.b")
+		if got != slog.LevelDebug {
+			t.Errorf("before expiry: got %v, want Debug", got)
+		}
+	})
 }
 
 func TestLevelRegistry_TTL_ResolveAfterExpiry(t *testing.T) {
-	epoch := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	now := epoch
-	reg := hmlog.NewLevelRegistry(slog.LevelInfo)
-	reg.SetNowFunc(func() time.Time { return now })
+	synctest.Test(t, func(t *testing.T) {
+		reg := hmlog.NewLevelRegistry(slog.LevelInfo)
 
-	reg.Set("a.b", slog.LevelDebug, 100*time.Millisecond)
+		reg.Set("a.b", slog.LevelDebug, 100*time.Millisecond)
 
-	now = epoch.Add(200 * time.Millisecond)
-	got := reg.Resolve("a.b")
-	if got != slog.LevelInfo {
-		t.Errorf("after expiry: got %v, want Info (default)", got)
-	}
+		time.Sleep(200 * time.Millisecond)
+		got := reg.Resolve("a.b")
+		if got != slog.LevelInfo {
+			t.Errorf("after expiry: got %v, want Info (default)", got)
+		}
+	})
 }
 
 func TestLevelRegistry_TTL_SnapshotBeforeExpiry(t *testing.T) {
-	epoch := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	now := epoch
-	reg := hmlog.NewLevelRegistry(slog.LevelInfo)
-	reg.SetNowFunc(func() time.Time { return now })
+	synctest.Test(t, func(t *testing.T) {
+		reg := hmlog.NewLevelRegistry(slog.LevelInfo)
 
-	reg.Set("a.b", slog.LevelDebug, 100*time.Millisecond)
+		reg.Set("a.b", slog.LevelDebug, 100*time.Millisecond)
 
-	now = epoch.Add(50 * time.Millisecond)
-	snaps := reg.Snapshot()
-	if len(snaps) != 1 {
-		t.Errorf("Snapshot before expiry: want 1 entry, got %d", len(snaps))
-	}
+		time.Sleep(50 * time.Millisecond)
+		snaps := reg.Snapshot()
+		if len(snaps) != 1 {
+			t.Errorf("Snapshot before expiry: want 1 entry, got %d", len(snaps))
+		}
+	})
 }
 
 func TestLevelRegistry_TTL_SnapshotAfterExpiry(t *testing.T) {
-	epoch := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	now := epoch
-	reg := hmlog.NewLevelRegistry(slog.LevelInfo)
-	reg.SetNowFunc(func() time.Time { return now })
+	synctest.Test(t, func(t *testing.T) {
+		reg := hmlog.NewLevelRegistry(slog.LevelInfo)
 
-	reg.Set("a.b", slog.LevelDebug, 100*time.Millisecond)
+		reg.Set("a.b", slog.LevelDebug, 100*time.Millisecond)
 
-	now = epoch.Add(200 * time.Millisecond)
-	snaps := reg.Snapshot()
-	if len(snaps) != 0 {
-		t.Errorf("Snapshot after expiry: want 0 entries, got %d", len(snaps))
-	}
+		time.Sleep(200 * time.Millisecond)
+		snaps := reg.Snapshot()
+		if len(snaps) != 0 {
+			t.Errorf("Snapshot after expiry: want 0 entries, got %d", len(snaps))
+		}
+	})
 }
 
 func TestLevelRegistry_Sweep_RemovesExpired(t *testing.T) {
-	epoch := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	now := epoch
-	reg := hmlog.NewLevelRegistry(slog.LevelInfo)
-	reg.SetNowFunc(func() time.Time { return now })
+	synctest.Test(t, func(t *testing.T) {
+		reg := hmlog.NewLevelRegistry(slog.LevelInfo)
 
-	reg.Set("a.b", slog.LevelDebug, 100*time.Millisecond)
+		reg.Set("a.b", slog.LevelDebug, 100*time.Millisecond)
 
-	now = epoch.Add(200 * time.Millisecond)
-	removed := reg.Sweep()
-	if removed != 1 {
-		t.Errorf("Sweep after expiry: want 1 removed, got %d", removed)
-	}
+		time.Sleep(200 * time.Millisecond)
+		removed := reg.Sweep()
+		if removed != 1 {
+			t.Errorf("Sweep after expiry: want 1 removed, got %d", removed)
+		}
+	})
 }
 
 func TestLevelRegistry_Sweep_NothingRemovedBeforeExpiry(t *testing.T) {
-	epoch := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	now := epoch
-	reg := hmlog.NewLevelRegistry(slog.LevelInfo)
-	reg.SetNowFunc(func() time.Time { return now })
+	synctest.Test(t, func(t *testing.T) {
+		reg := hmlog.NewLevelRegistry(slog.LevelInfo)
 
-	reg.Set("a.b", slog.LevelDebug, 100*time.Millisecond)
+		reg.Set("a.b", slog.LevelDebug, 100*time.Millisecond)
 
-	now = epoch.Add(50 * time.Millisecond)
-	removed := reg.Sweep()
-	if removed != 0 {
-		t.Errorf("Sweep before expiry: want 0 removed, got %d", removed)
-	}
+		time.Sleep(50 * time.Millisecond)
+		removed := reg.Sweep()
+		if removed != 0 {
+			t.Errorf("Sweep before expiry: want 0 removed, got %d", removed)
+		}
+	})
 }
 
 func TestLevelRegistry_Sweep_IdempotentAfterRemoval(t *testing.T) {
-	epoch := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	now := epoch
-	reg := hmlog.NewLevelRegistry(slog.LevelInfo)
-	reg.SetNowFunc(func() time.Time { return now })
+	synctest.Test(t, func(t *testing.T) {
+		reg := hmlog.NewLevelRegistry(slog.LevelInfo)
 
-	reg.Set("a.b", slog.LevelDebug, 100*time.Millisecond)
+		reg.Set("a.b", slog.LevelDebug, 100*time.Millisecond)
 
-	now = epoch.Add(200 * time.Millisecond)
-	reg.Sweep()
-	removed := reg.Sweep()
-	if removed != 0 {
-		t.Errorf("second Sweep should remove nothing; got %d", removed)
-	}
+		time.Sleep(200 * time.Millisecond)
+		reg.Sweep()
+		removed := reg.Sweep()
+		if removed != 0 {
+			t.Errorf("second Sweep should remove nothing; got %d", removed)
+		}
+	})
 }
 
 // --------------------------------------------------------------------------
@@ -341,34 +335,33 @@ func TestLevelRegistry_Leveler_IsLive(t *testing.T) {
 // --------------------------------------------------------------------------
 
 func TestLevelRegistry_ApplyConfig_ReplacesPermanentOverrides(t *testing.T) {
-	epoch := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	now := epoch
-	reg := hmlog.NewLevelRegistry(slog.LevelInfo)
-	reg.SetNowFunc(func() time.Time { return now })
+	synctest.Test(t, func(t *testing.T) {
+		reg := hmlog.NewLevelRegistry(slog.LevelInfo)
 
-	// Install one permanent and one TTL override.
-	reg.Set("old.permanent", slog.LevelError, 0)
-	reg.Set("ttl.path", slog.LevelDebug, 10*time.Minute)
+		// Install one permanent and one TTL override.
+		reg.Set("old.permanent", slog.LevelError, 0)
+		reg.Set("ttl.path", slog.LevelDebug, 10*time.Minute)
 
-	err := reg.ApplyConfig(map[string]string{"x.y": "warn"})
-	if err != nil {
-		t.Fatalf("ApplyConfig returned unexpected error: %v", err)
-	}
+		err := reg.ApplyConfig(map[string]string{"x.y": "warn"})
+		if err != nil {
+			t.Fatalf("ApplyConfig returned unexpected error: %v", err)
+		}
 
-	// Old permanent override must be gone.
-	if reg.Resolve("old.permanent") != slog.LevelInfo {
-		t.Error("old permanent override should have been replaced by ApplyConfig")
-	}
+		// Old permanent override must be gone.
+		if reg.Resolve("old.permanent") != slog.LevelInfo {
+			t.Error("old permanent override should have been replaced by ApplyConfig")
+		}
 
-	// New permanent override from config must be active.
-	if reg.Resolve("x.y") != slog.LevelWarn {
-		t.Errorf("new config override: got %v, want Warn", reg.Resolve("x.y"))
-	}
+		// New permanent override from config must be active.
+		if reg.Resolve("x.y") != slog.LevelWarn {
+			t.Errorf("new config override: got %v, want Warn", reg.Resolve("x.y"))
+		}
 
-	// TTL override must still be active.
-	if reg.Resolve("ttl.path") != slog.LevelDebug {
-		t.Errorf("TTL override should survive ApplyConfig; got %v", reg.Resolve("ttl.path"))
-	}
+		// TTL override must still be active.
+		if reg.Resolve("ttl.path") != slog.LevelDebug {
+			t.Errorf("TTL override should survive ApplyConfig; got %v", reg.Resolve("ttl.path"))
+		}
+	})
 }
 
 func TestLevelRegistry_ApplyConfig_InvalidLevelReturnsError(t *testing.T) {

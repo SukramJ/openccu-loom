@@ -76,7 +76,6 @@ func newFleetBlind(t *testing.T, w Writer) *Blind {
 	if !b.Capabilities.SupportsStop {
 		t.Fatal("the fleet blind does not advertise STOP — the spurious-STOP half cannot be observed")
 	}
-	neuterGoToTimers(&b.matterGoTo)
 	return b
 }
 

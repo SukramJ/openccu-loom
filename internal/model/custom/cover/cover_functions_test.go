@@ -10,6 +10,7 @@ package cover
 import (
 	"context"
 	"testing"
+	"testing/synctest"
 
 	mattercluster "github.com/SukramJ/go-fabric/cluster"
 	clusterwire "github.com/SukramJ/go-fabric/cluster/wire"
@@ -1125,30 +1126,33 @@ func TestBlindMatterReadAllAttributes(t *testing.T) {
 }
 
 func TestBlindMatterInvokeAllCommands(t *testing.T) {
-	w := &putWriter{}
-	b := newBlindRig(t, "VCU:1", w, custom.CoverCapabilities{SupportsTilt: true, SupportsStop: true}, BlindKindHM)
-	srv := b.MatterClusterServers()[0]
+	synctest.Test(t, func(t *testing.T) {
+		defer drainOptimisticRollbacks()
+		w := &putWriter{}
+		b := newBlindRig(t, "VCU:1", w, custom.CoverCapabilities{SupportsTilt: true, SupportsStop: true}, BlindKindHM)
+		srv := b.MatterClusterServers()[0]
 
-	// UpOrOpen.
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdUpOrOpen, nil); err != nil {
-		t.Errorf("Blind UpOrOpen: %v", err)
-	}
-	// DownOrClose.
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdDownOrClose, nil); err != nil {
-		t.Errorf("Blind DownOrClose: %v", err)
-	}
-	// StopMotion.
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdStopMotion, nil); err != nil {
-		t.Errorf("Blind StopMotion: %v", err)
-	}
-	// GoToLiftPercentage.
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(5000)); err != nil {
-		t.Errorf("Blind GoToLift: %v", err)
-	}
-	// Unknown.
-	if _, err := srv.MatterInvoke(context.Background(), 0xFF, nil); err == nil {
-		t.Error("Blind unknown command must error")
-	}
+		// UpOrOpen.
+		if _, err := srv.MatterInvoke(context.Background(), matterCmdUpOrOpen, nil); err != nil {
+			t.Errorf("Blind UpOrOpen: %v", err)
+		}
+		// DownOrClose.
+		if _, err := srv.MatterInvoke(context.Background(), matterCmdDownOrClose, nil); err != nil {
+			t.Errorf("Blind DownOrClose: %v", err)
+		}
+		// StopMotion.
+		if _, err := srv.MatterInvoke(context.Background(), matterCmdStopMotion, nil); err != nil {
+			t.Errorf("Blind StopMotion: %v", err)
+		}
+		// GoToLiftPercentage.
+		if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(5000)); err != nil {
+			t.Errorf("Blind GoToLift: %v", err)
+		}
+		// Unknown.
+		if _, err := srv.MatterInvoke(context.Background(), 0xFF, nil); err == nil {
+			t.Error("Blind unknown command must error")
+		}
+	})
 }
 
 // TestGarageMatterClusterID pins the garage onto ClosureControl.
