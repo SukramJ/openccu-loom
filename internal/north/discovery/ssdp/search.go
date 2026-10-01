@@ -68,6 +68,11 @@ func searchFrom(ctx context.Context, srcIP net.IP) ([]string, error) {
 		deadline = dl
 	}
 	_ = conn.SetReadDeadline(deadline)
+	// ReadFromUDP blocks until the deadline; checking ctx between reads alone
+	// would make a cancelled search (daemon shutdown, discoverer restart) wait
+	// out the whole window. Pulling the deadline in wakes the blocked read.
+	stopWake := context.AfterFunc(ctx, func() { _ = conn.SetReadDeadline(time.Now()) })
+	defer stopWake()
 
 	seen := make(map[string]struct{})
 	var locations []string
