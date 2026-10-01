@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/SukramJ/godevccu/pkg/litefake"
 
@@ -140,4 +142,34 @@ func TestLiteBaseURLTakesAnIPv6LiteralInItsURLForm(t *testing.T) {
 			t.Errorf("liteBaseURL(%q) = %q", host, got)
 		}
 	}
+}
+
+// TestLitePairingSessionExpiresWithItsToken pins the TTL that bounds how long
+// an approved pairing's token stays in the daemon's memory: the session is
+// still handed out at exactly liteSessionTTL and is gone, token and all, one
+// nanosecond later.
+func TestLitePairingSessionExpiresWithItsToken(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		o := NewLiteOnboarding("loom-test", nil, "en", slog.New(slog.DiscardHandler))
+		o.mu.Lock()
+		o.sessions["s1"] = &liteSession{fingerprint: "fp", created: time.Now(), state: "approved", token: "olt_token"}
+		o.mu.Unlock()
+
+		time.Sleep(liteSessionTTL)
+		if token, _, err := o.PairingToken("s1"); err != nil || token != "olt_token" {
+			t.Fatalf("PairingToken at exactly the TTL = %q, %v; want the token", token, err)
+		}
+
+		time.Sleep(time.Nanosecond)
+		if _, _, err := o.PairingToken("s1"); !errors.Is(err, hmerr.ErrPairingNotFound) {
+			t.Fatalf("PairingToken past the TTL: %v, want ErrPairingNotFound", err)
+		}
+		o.mu.Lock()
+		left := len(o.sessions)
+		o.mu.Unlock()
+		if left != 0 {
+			t.Fatalf("sessions after the TTL = %d, want 0 — the token must not outlive its session", left)
+		}
+	})
 }
