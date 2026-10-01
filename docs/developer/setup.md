@@ -9,7 +9,7 @@ How to get a working OpenCCU-Loom build on your machine, run it locally, and kee
 
 | Tool | Version / note |
 | --- | --- |
-| Go | 1.26+ (`go.mod` pins `go 1.26`) |
+| Go | 1.27+ (`go.mod` pins `go 1.27.1`) |
 | `golangci-lint` | v2 (installed by `make setup`; `.golangci.yaml` is v2-format, a v1 binary rejects it) |
 | `gofumpt` | formatter, stricter than `gofmt` |
 | `goose` | SQLite migrations |

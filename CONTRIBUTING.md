@@ -27,7 +27,7 @@ make test
 
 Prerequisites:
 
-- Go 1.26+
+- Go 1.27+
 - `golangci-lint` v2 (installed by `make setup`; the repo's `.golangci.yaml`
   is v2-format, a v1 binary rejects the config)
 - `gofumpt`

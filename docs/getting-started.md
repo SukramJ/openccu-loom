@@ -14,7 +14,7 @@ full operator walkthrough see the [User Guide](user-guide.md).
 
 - A reachable Homematic / HomematicIP CCU (CCU2, CCU3, OpenCCU,
   or OpenCCU) on your network.
-- Docker, **or** a Go 1.26+ toolchain to build the binary — neither is
+- Docker, **or** a Go 1.27+ toolchain to build the binary — neither is
   needed for the two add-on installs below.
 
 ## Install and run

@@ -1,49 +1,9 @@
 module github.com/SukramJ/openccu-loom
 
-go 1.26.6
+go 1.27.1
 
 require (
-	github.com/SukramJ/godevccu v0.5.0
-	github.com/getkin/kin-openapi v0.149.0
-	github.com/go-chi/chi/v5 v5.3.2
-	github.com/google/uuid v1.6.0
-	github.com/gorilla/websocket v1.5.3
-	github.com/grandcat/zeroconf v1.0.0
-	github.com/lmittmann/tint v1.2.0
-	github.com/mattn/go-isatty v0.0.24
-	github.com/miekg/dns v1.1.73
-	github.com/mochi-mqtt/server/v2 v2.7.9
-	github.com/modelcontextprotocol/go-sdk v1.8.0
-	github.com/pressly/goose/v3 v3.28.0
-	github.com/sasha-s/go-deadlock v0.3.9
-	github.com/spf13/cobra v1.10.2
-	go.uber.org/goleak v1.3.0
-	golang.org/x/crypto v0.57.0
-	golang.org/x/net v0.59.0
-	golang.org/x/sync v0.23.0
-	golang.org/x/text v0.42.0
-	golang.org/x/time v0.16.0
-	golang.org/x/tools v0.50.0
-	gopkg.in/yaml.v3 v3.0.1
-	modernc.org/sqlite v1.60.1
-)
-
-require github.com/rogpeppe/go-internal v1.16.0
-
-require github.com/SukramJ/go-openccu-data v0.2.0
-
-require golang.org/x/term v0.46.0
-
-require filippo.io/nistec v0.0.4 // indirect
-
-require (
-	github.com/SukramJ/go-fabric v0.0.0-20260926063414-cca158923a33
-	github.com/SukramJ/go-ha-catalog v0.2.1
-	github.com/SukramJ/go-hamqtt v0.34.1
-)
-
-require (
-	github.com/SukramJ/go-mqtt v1.5.1
+	filippo.io/nistec v0.0.4 // indirect
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-openapi/jsonpointer v1.0.0 // indirect
@@ -64,10 +24,43 @@ require (
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/mod v0.41.0
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 	modernc.org/libc v1.77.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
+)
+
+require (
+	github.com/SukramJ/go-fabric v0.0.0-20260926063414-cca158923a33
+	github.com/SukramJ/go-ha-catalog v0.2.1
+	github.com/SukramJ/go-hamqtt v0.34.1
+	github.com/SukramJ/go-mqtt v1.5.1
+	github.com/SukramJ/go-openccu-data v0.2.0
+	github.com/SukramJ/godevccu v0.5.0
+	github.com/getkin/kin-openapi v0.149.0
+	github.com/go-chi/chi/v5 v5.3.2
+	github.com/google/uuid v1.6.0
+	github.com/gorilla/websocket v1.5.3
+	github.com/grandcat/zeroconf v1.0.0
+	github.com/lmittmann/tint v1.2.0
+	github.com/mattn/go-isatty v0.0.24
+	github.com/miekg/dns v1.1.73
+	github.com/mochi-mqtt/server/v2 v2.7.9
+	github.com/modelcontextprotocol/go-sdk v1.8.0
+	github.com/pressly/goose/v3 v3.28.0
+	github.com/rogpeppe/go-internal v1.16.0
+	github.com/sasha-s/go-deadlock v0.3.9
+	github.com/spf13/cobra v1.10.2
+	go.uber.org/goleak v1.3.0
+	golang.org/x/crypto v0.57.0
+	golang.org/x/mod v0.41.0
+	golang.org/x/net v0.59.0
+	golang.org/x/sync v0.23.0
+	golang.org/x/term v0.46.0
+	golang.org/x/text v0.42.0
+	golang.org/x/time v0.16.0
+	golang.org/x/tools v0.50.0
+	gopkg.in/yaml.v3 v3.0.1
+	modernc.org/sqlite v1.60.1
 )

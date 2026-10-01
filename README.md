@@ -306,7 +306,7 @@ dependency, and no longer a parity target.
 
 | Area | aiohomematic | OpenCCU-Loom |
 |---|---|---|
-| Language | Python 3.14 (asyncio) | Go 1.26+ |
+| Language | Python 3.14 (asyncio) | Go 1.27+ |
 | Primary consumer | Home Assistant integration | Standalone daemon (MQTT / REST / UI / Matter / MCP) |
 | CUxD transport | JSON-RPC via CCU facade + MQTT workaround | **Native BIN-RPC** + BIN-RPC callback server |
 | Multi-CCU | one `CentralUnit` per process | **many** `CentralUnit`s per process |
@@ -329,7 +329,7 @@ make lint         # golangci-lint (zero findings required)
 make docker       # multi-arch image via buildx
 ```
 
-Prerequisites: Go 1.26+, `golangci-lint` v2, `gofumpt`, `goreleaser`,
+Prerequisites: Go 1.27+, `golangci-lint` v2, `gofumpt`, `goreleaser`,
 Docker (+ buildx) for the Mosquitto-backed integration tests.
 Integration runs use [`godevccu`](https://github.com/SukramJ/godevccu),
 a pure-Go CCU simulator consumed as a regular module dependency — no
