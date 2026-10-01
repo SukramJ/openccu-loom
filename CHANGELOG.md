@@ -96,7 +96,7 @@ the box shell is signed in already (ADR 0078, ADR 0079).
   optional-provider command already follows. The e2e WS command walker
   now enforces declared-equals-registered for the whole command plane
   (`unknown_command` and `rate_limited` are no longer acceptable
-  answers), which is how this gap surfaced.
+  answers), which is how this gap surfaced. REST APIVersion 13.2.0.
 - **An MCP-triggered program run no longer writes two audit rows.** The
   `trigger_program` tool recorded its own entry on top of the one the
   program-execute subscriber writes for every route, so each run read
