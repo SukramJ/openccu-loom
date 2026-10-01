@@ -126,8 +126,28 @@ func TestBootRetainCleanupsRunOnTheFirstLiveBridge(t *testing.T) {
 			t.Fatal("the retired retained topic was not evicted; the boot scrubs never ran against the recovered bridge")
 		}
 
+		if !cleanups.completed() {
+			t.Fatal("the once-guard did not latch after the scrubs ran against a live bridge")
+		}
+
+		// A second run must not scrub again. The broker replays the retired
+		// topic once more, so a scrub that ran would evict it a second time;
+		// without the replay a repeated scrub would publish nothing and look
+		// exactly like a skipped one.
 		before := len(client.Published())
+		refed := make(chan struct{})
+		go func() {
+			defer close(refed)
+			deadline := time.Now().Add(10 * time.Second)
+			for time.Now().Before(deadline) {
+				if client.DeliverInbound("test/#", retired, []byte("true")) {
+					return
+				}
+				time.Sleep(5 * time.Millisecond)
+			}
+		}()
 		cleanups.run(ctx, bridge)
+		<-refed
 		if got := len(client.Published()); got != before {
 			t.Errorf("a second run published %d more messages, want 0: the scrubs are once-per-process", got-before)
 		}
