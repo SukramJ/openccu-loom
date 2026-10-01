@@ -52,9 +52,9 @@ func WireName(dev *device.Device, dp device.AttachableDataPoint, channelNo int) 
 // `"LEVEL"` → ("LEVEL", 0, false). A suffix that is not a number is
 // treated as part of the name (no valid channel selector).
 func ParseWireName(name string) (param string, channelNo int, exact bool) {
-	if at := strings.LastIndex(name, "@"); at >= 0 {
-		if no, err := strconv.Atoi(name[at+1:]); err == nil {
-			return name[:at], no, true
+	if before, after, found := strings.CutLast(name, "@"); found {
+		if no, err := strconv.Atoi(after); err == nil {
+			return before, no, true
 		}
 	}
 	return name, 0, false

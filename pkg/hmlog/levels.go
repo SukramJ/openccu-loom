@@ -128,11 +128,11 @@ func (r *LevelRegistry) Resolve(path string) slog.Level {
 			// Expired — fall through to the ancestor lookup. Cleanup
 			// happens out-of-band in Sweep so Resolve stays read-only.
 		}
-		idx := strings.LastIndex(p, ".")
-		if idx < 0 {
+		parent, _, found := strings.CutLast(p, ".")
+		if !found {
 			break
 		}
-		p = p[:idx]
+		p = parent
 	}
 	return r.defaultLevel
 }

@@ -27,6 +27,13 @@ func TestParseTierFault(t *testing.T) {
 		{"not permitted: needs rpc:read", "", "", false},
 		{"forbidden: setValue requires rpc:operate", "", "", false},
 		{"not permitted: set Value needs rpc:operate", "", "", false},
+		// " needs " at position 0 of the remainder leaves no method.
+		{"not permitted:  needs rpc:read", "", "", false},
+		// " needs " at the very end leaves an empty scope.
+		{"not permitted: setValue needs ", "", "", false},
+		// The last " needs " splits; the method then carries a space.
+		{"not permitted: a needs b needs rpc:read", "", "", false},
+		{"not permitted: a.needs needs rpc:read", "a.needs", "rpc:read", true},
 	} {
 		m, s, ok := occulited.ParseTierFault(tc.msg)
 		if m != tc.method || s != tc.scope || ok != tc.ok {

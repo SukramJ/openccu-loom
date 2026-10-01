@@ -178,8 +178,8 @@ func centralName(friendlyName, manufacturer string) string {
 func serialFrom(udn, modelDescription string) string {
 	if udn != "" {
 		s := strings.TrimSpace(udn)
-		if i := strings.LastIndex(s, "-"); i >= 0 && i+1 < len(s) {
-			if tail := strings.TrimSpace(s[i+1:]); tail != "" {
+		if _, after, found := strings.CutLast(s, "-"); found && after != "" {
+			if tail := strings.TrimSpace(after); tail != "" {
 				return tail
 			}
 		}

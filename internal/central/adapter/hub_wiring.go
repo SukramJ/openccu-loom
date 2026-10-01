@@ -1595,8 +1595,8 @@ func regaUnixTime(sec int64) time.Time {
 // absent, and to rawName itself when no dot is present.
 func messageDisplayName(catalogs *i18n.Catalogs, locale, rawName string) string {
 	code := rawName
-	if idx := strings.LastIndex(rawName, "."); idx >= 0 {
-		code = rawName[idx+1:]
+	if _, after, found := strings.CutLast(rawName, "."); found {
+		code = after
 	}
 	if catalogs == nil || code == "" {
 		return code
@@ -1617,8 +1617,8 @@ func messageDisplayName(catalogs *i18n.Catalogs, locale, rawName string) string 
 // when the name carries no parameter segment — the caller then suppresses
 // every service parameter of the channel.
 func serviceMessageParameter(rawName string) string {
-	if idx := strings.LastIndex(rawName, "."); idx >= 0 {
-		return rawName[idx+1:]
+	if _, after, found := strings.CutLast(rawName, "."); found {
+		return after
 	}
 	return ""
 }

@@ -155,8 +155,8 @@ func subsystemPathForFunc(fn string) string {
 	// The package name is the segment up to the first dot after the last
 	// slash; everything past that dot is the receiver and function name.
 	dir := ""
-	if slash := strings.LastIndex(rest, "/"); slash >= 0 {
-		dir, rest = rest[:slash], rest[slash+1:]
+	if before, after, found := strings.CutLast(rest, "/"); found {
+		dir, rest = before, after
 	}
 	if dot := strings.Index(rest, "."); dot >= 0 {
 		rest = rest[:dot]

@@ -92,11 +92,11 @@ func (e *AmbiguousNameError) Is(target error) bool { return target == ErrAmbiguo
 // Parent returns the reference of the node one level up, and false for a
 // root node.
 func (r Ref) Parent() (Ref, bool) {
-	i := strings.LastIndexByte(string(r.Path), '/')
-	if i < 0 {
+	parent, _, found := strings.CutLast(string(r.Path), "/")
+	if !found {
 		return Ref{}, false
 	}
-	return Ref{Enum: r.Enum, Path: r.Path[:i]}, true
+	return Ref{Enum: r.Enum, Path: Path(parent)}, true
 }
 
 // Child returns the reference of the child with id under r.

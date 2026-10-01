@@ -423,11 +423,10 @@ func (d *DefaultDiscoveryBuilder) BuildChannelKindEvent(ev Event, kind event.Kin
 // sibling channels collide on the same entity_id and must instead fall
 // back to the `ch<N>` discriminator.
 func channelNameIsBareAddressNo(name string) bool {
-	idx := strings.LastIndex(name, ":")
-	if idx < 0 || strings.Count(name, ":") != 1 {
+	_, suffix, found := strings.CutLast(name, ":")
+	if !found || strings.Count(name, ":") != 1 {
 		return false
 	}
-	suffix := name[idx+1:]
 	if suffix == "" {
 		return false
 	}

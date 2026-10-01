@@ -159,8 +159,8 @@ func (s *MQTTCommandSink) resolveChannel(
 		return nil, fmt.Errorf("mqtt_sink: unknown central %q", centralName)
 	}
 	deviceAddress := channelAddress
-	if i := strings.LastIndexByte(channelAddress, ':'); i > 0 {
-		deviceAddress = channelAddress[:i]
+	if before, _, found := strings.CutLast(channelAddress, ":"); found && before != "" {
+		deviceAddress = before
 	}
 	dev, ok := c.ModelRegistry.Get(deviceAddress)
 	if !ok || dev == nil {
