@@ -44,7 +44,7 @@ func (e *Engine) Start(ctx context.Context) error {
 	// request that scheduled the countdown.
 	e.lifeCtx = ctx
 
-	nowMS := unixMS(e.clk.Now())
+	nowMS := unixMS(time.Now())
 	boot, err := e.runtime.IncrementBootCount(ctx, nowMS)
 	if err != nil {
 		// A missing boot count degrades loop-breaker precision, not
@@ -164,7 +164,7 @@ func (e *Engine) loadConfig(ctx context.Context) error {
 // restoreZone applies the §10.2 restore table to one persisted row.
 // The caller holds the lock.
 func (e *Engine) restoreZone(ctx context.Context, a *zone, row sqlitestore.AlarmStateRow) {
-	now := e.clk.Now()
+	now := time.Now()
 	nowMS := unixMS(now)
 	plausible := clockPlausible(nowMS, row.UpdatedAtMS)
 	if !plausible {

@@ -15,14 +15,13 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
-// connectivityTestStart keeps the fake clock past the engine's
+// connectivityTestStart is the created-at stamp of seeded rows, past the engine's
 // clock-plausibility epoch, as the other alarm harnesses do.
 var connectivityTestStart = time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC)
 
@@ -360,7 +359,6 @@ func armedConnectivityServiceWithLoss(t *testing.T, loss hmenum.AlarmCentralLoss
 		Settings: Settings{Enabled: true},
 		Registry: reg,
 		Stores:   stores,
-		Clock:    clock.NewFake(connectivityTestStart),
 		Logger:   slog.New(slog.DiscardHandler),
 	})
 	if err != nil {

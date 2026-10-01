@@ -5,6 +5,7 @@ package engine_test
 
 import (
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
@@ -36,36 +37,38 @@ func hmAlmSeedPostTriggerDisarmZone(h *harness) {
 // same auto-rearm the live path schedules — otherwise a zone configured
 // with auto_rearm_s is left permanently unprotected by a crash.
 func TestPostTriggerDisarm_RestoreSchedulesTheAutoRearm(t *testing.T) {
-	h := newHarness(t)
-	hmAlmSeedPostTriggerDisarmZone(h)
-	h.start()
-	h.armFull()
-	h.eng.HandleSensorEvent(h.ctx, "window", true)
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		hmAlmSeedPostTriggerDisarmZone(h)
+		h.start()
+		h.armFull()
+		h.eng.HandleSensorEvent(h.ctx, "window", true)
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 
-	// Down past the trigger window: the restore completes the
-	// post-trigger disarm without firing outputs.
-	h.restart(5 * time.Minute)
-	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
-	if n := h.outputs.fireCount(); n != 0 {
-		t.Fatalf("elapsed trigger window still fired: %d", n)
-	}
-	if !h.journal.has("auto_rearm_scheduled") {
-		t.Fatalf("restore-side post-trigger disarm scheduled no auto-rearm; journal = %v", h.journal.events())
-	}
-	row, ok, err := h.states.Get(h.ctx, "eg")
-	if err != nil || !ok {
-		t.Fatalf("state row: ok=%v err=%v", ok, err)
-	}
-	if got := decodeAutoRearmMode(t, row.ContextJSON); !hmenum.AlarmMode(got).Armed() {
-		t.Fatalf("persisted auto-rearm mode = %q, want the pre-incident armed mode", got)
-	}
+		// Down past the trigger window: the restore completes the
+		// post-trigger disarm without firing outputs.
+		h.restart(5 * time.Minute)
+		h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
+		if n := h.outputs.fireCount(); n != 0 {
+			t.Fatalf("elapsed trigger window still fired: %d", n)
+		}
+		if !h.journal.has("auto_rearm_scheduled") {
+			t.Fatalf("restore-side post-trigger disarm scheduled no auto-rearm; journal = %v", h.journal.events())
+		}
+		row, ok, err := h.states.Get(h.ctx, "eg")
+		if err != nil || !ok {
+			t.Fatalf("state row: ok=%v err=%v", ok, err)
+		}
+		if got := decodeAutoRearmMode(t, row.ContextJSON); !hmenum.AlarmMode(got).Armed() {
+			t.Fatalf("persisted auto-rearm mode = %q, want the pre-incident armed mode", got)
+		}
 
-	// The quiet period elapses, then full mode's own exit delay runs.
-	h.advance(30 * time.Second)
-	h.wantState("eg", hmenum.AlarmZoneStateArming)
-	h.advance(30 * time.Second)
-	h.wantState("eg", hmenum.AlarmZoneStateArmed)
+		// The quiet period elapses, then full mode's own exit delay runs.
+		h.advance(30 * time.Second)
+		h.wantState("eg", hmenum.AlarmZoneStateArming)
+		h.advance(30 * time.Second)
+		h.wantState("eg", hmenum.AlarmZoneStateArmed)
+	})
 }
 
 // TestPostTriggerDisarm_RestoreJournalsTheDisarm pins the second
@@ -73,17 +76,19 @@ func TestPostTriggerDisarm_RestoreSchedulesTheAutoRearm(t *testing.T) {
 // journal after a restore-completed post-trigger disarm must see the
 // same disarm entry the live path emits.
 func TestPostTriggerDisarm_RestoreJournalsTheDisarm(t *testing.T) {
-	h := newHarness(t)
-	hmAlmSeedPostTriggerDisarmZone(h)
-	h.start()
-	h.armFull()
-	h.eng.HandleSensorEvent(h.ctx, "window", true)
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		hmAlmSeedPostTriggerDisarmZone(h)
+		h.start()
+		h.armFull()
+		h.eng.HandleSensorEvent(h.ctx, "window", true)
 
-	h.restart(5 * time.Minute)
-	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
-	if !h.journal.has("disarmed_post_trigger") {
-		t.Fatalf("restore-side post-trigger disarm emitted no disarm entry; journal = %v", h.journal.events())
-	}
+		h.restart(5 * time.Minute)
+		h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
+		if !h.journal.has("disarmed_post_trigger") {
+			t.Fatalf("restore-side post-trigger disarm emitted no disarm entry; journal = %v", h.journal.events())
+		}
+	})
 }
 
 // TestPostTriggerDisarm_RestoreClearsTheAlwaysOnResidue pins the field
@@ -95,46 +100,48 @@ func TestPostTriggerDisarm_RestoreJournalsTheDisarm(t *testing.T) {
 // next ordinary intrusion trigger routes to finishAlwaysOn and the zone
 // comes back armed instead of disarming.
 func TestPostTriggerDisarm_RestoreClearsTheAlwaysOnResidue(t *testing.T) {
-	h := newHarness(t)
-	cfg := defaultZoneConfig()
-	cfg.PostTrigger = hmenum.AlarmPostTriggerDisarm
-	h.seedZone("eg", "Erdgeschoss", cfg)
-	h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{
-		Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull},
-	})
-	h.seedSensor("hazard", "eg", hmenum.AlarmSensorTypeHazard, engine.SensorConfig{
-		AlwaysOn: true,
-	})
-	h.start()
-	h.armFull()
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		cfg := defaultZoneConfig()
+		cfg.PostTrigger = hmenum.AlarmPostTriggerDisarm
+		h.seedZone("eg", "Erdgeschoss", cfg)
+		h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{
+			Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull},
+		})
+		h.seedSensor("hazard", "eg", hmenum.AlarmSensorTypeHazard, engine.SensorConfig{
+			AlwaysOn: true,
+		})
+		h.start()
+		h.armFull()
 
-	// An always-on hazard records the pre-trigger tuple in the context.
-	h.eng.HandleSensorEvent(h.ctx, "hazard", true)
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+		// An always-on hazard records the pre-trigger tuple in the context.
+		h.eng.HandleSensorEvent(h.ctx, "hazard", true)
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 
-	// Make the incident unrecoverable across the restart, the way a
-	// failed incidents.Create does: the state row stays Triggered with
-	// the pre-trigger tuple, but no open incident can be attached.
-	if inc, ok := h.openIncident("eg"); ok {
-		if err := h.incidents.Close(h.ctx, inc.ID, testStart.Add(time.Second).UnixMilli(), "lost"); err != nil {
-			t.Fatalf("close incident: %v", err)
+		// Make the incident unrecoverable across the restart, the way a
+		// failed incidents.Create does: the state row stays Triggered with
+		// the pre-trigger tuple, but no open incident can be attached.
+		if inc, ok := h.openIncident("eg"); ok {
+			if err := h.incidents.Close(h.ctx, inc.ID, testStart.Add(time.Second).UnixMilli(), "lost"); err != nil {
+				t.Fatalf("close incident: %v", err)
+			}
 		}
-	}
 
-	h.restart(5 * time.Minute)
-	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
-	// Confirms which restore arm ran: the unrecoverable-incident one.
-	if !h.journal.has("incident_lost_on_restore") {
-		t.Fatalf("the restore did not take the lost-incident path; journal = %v", h.journal.events())
-	}
+		h.restart(5 * time.Minute)
+		h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
+		// Confirms which restore arm ran: the unrecoverable-incident one.
+		if !h.journal.has("incident_lost_on_restore") {
+			t.Fatalf("the restore did not take the lost-incident path; journal = %v", h.journal.events())
+		}
 
-	row, ok, err := h.states.Get(h.ctx, "eg")
-	if err != nil || !ok {
-		t.Fatalf("state row: ok=%v err=%v", ok, err)
-	}
-	if got := hmAlmDecodePreTriggerState(t, row.ContextJSON); got != "" {
-		t.Fatalf("persisted pre_trigger_state = %q after a disarm, want cleared", got)
-	}
+		row, ok, err := h.states.Get(h.ctx, "eg")
+		if err != nil || !ok {
+			t.Fatalf("state row: ok=%v err=%v", ok, err)
+		}
+		if got := hmAlmDecodePreTriggerState(t, row.ContextJSON); got != "" {
+			t.Fatalf("persisted pre_trigger_state = %q after a disarm, want cleared", got)
+		}
+	})
 }
 
 // hmAlmDecodePreTriggerState reads the persisted always-on pre-trigger

@@ -5,6 +5,7 @@ package engine_test
 
 import (
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
@@ -32,65 +33,69 @@ func (h *harness) pendingTimerCount() int {
 // reporting ready to arm — on the SPA, on MQTT, everywhere readiness is
 // surfaced — until that contact happens to push.
 func TestReload_SeedsCurrentValuesForNewlyEnrolledSensors(t *testing.T) {
-	h := newHarness(t)
-	h.seedZone("eg", "Erdgeschoss", defaultZoneConfig())
-	h.start()
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedZone("eg", "Erdgeschoss", defaultZoneConfig())
+		h.start()
 
-	// The operator enrolls a window contact that stands open right now.
-	h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{
-		Modes: []hmenum.AlarmMode{hmenum.AlarmModePerimeter, hmenum.AlarmModeFull},
+		// The operator enrolls a window contact that stands open right now.
+		h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{
+			Modes: []hmenum.AlarmMode{hmenum.AlarmModePerimeter, hmenum.AlarmModeFull},
+		})
+		h.reader.set("window", true)
+		if err := h.eng.Reload(h.ctx); err != nil {
+			t.Fatalf("Reload: %v", err)
+		}
+
+		rd, ok := h.mustSnapshot("eg").Readiness[hmenum.AlarmModeFull]
+		if !ok {
+			t.Fatal("no readiness verdict for full after the reload")
+		}
+		if rd.Ready {
+			t.Errorf("zone reports ready to arm with the freshly enrolled window open: %+v", rd)
+		}
+		if got := sortedStrings(rd.Blockers); len(got) != 1 || got[0] != "window" {
+			t.Errorf("blockers = %v, want [window]", got)
+		}
 	})
-	h.reader.set("window", true)
-	if err := h.eng.Reload(h.ctx); err != nil {
-		t.Fatalf("Reload: %v", err)
-	}
-
-	rd, ok := h.mustSnapshot("eg").Readiness[hmenum.AlarmModeFull]
-	if !ok {
-		t.Fatal("no readiness verdict for full after the reload")
-	}
-	if rd.Ready {
-		t.Errorf("zone reports ready to arm with the freshly enrolled window open: %+v", rd)
-	}
-	if got := sortedStrings(rd.Blockers); len(got) != 1 || got[0] != "window" {
-		t.Errorf("blockers = %v, want [window]", got)
-	}
 }
 
 func TestReload_DroppingAZoneCancelsItsPendingAutoRearmTimer(t *testing.T) {
-	h := newHarness(t)
-	seedAutoRearmZone(h)
-	h.start()
-	triggerAndDisarm(h)
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		seedAutoRearmZone(h)
+		h.start()
+		triggerAndDisarm(h)
 
-	if !h.journal.has("auto_rearm_scheduled") {
-		t.Fatalf("missing auto_rearm_scheduled journal entry; got %v", h.journal.events())
-	}
-	if n := h.pendingTimerCount(); n != 1 {
-		t.Fatalf("pending timers = %d, want 1 (the auto-rearm timer)", n)
-	}
+		if !h.journal.has("auto_rearm_scheduled") {
+			t.Fatalf("missing auto_rearm_scheduled journal entry; got %v", h.journal.events())
+		}
+		if n := h.pendingTimerCount(); n != 1 {
+			t.Fatalf("pending timers = %d, want 1 (the auto-rearm timer)", n)
+		}
 
-	if err := h.zones.Delete(h.ctx, "eg"); err != nil {
-		t.Fatalf("delete zone from the store: %v", err)
-	}
-	if err := h.eng.Reload(h.ctx); err != nil {
-		t.Fatalf("Reload: %v", err)
-	}
-	if _, ok := h.eng.Zone("eg"); ok {
-		t.Fatal("zone eg still known to the engine after Reload dropped it")
-	}
-	if n := h.pendingTimerCount(); n != 0 {
-		t.Fatalf("pending timers = %d, want 0 (Reload must cancel the auto-rearm timer of a dropped zone)", n)
-	}
+		if err := h.zones.Delete(h.ctx, "eg"); err != nil {
+			t.Fatalf("delete zone from the store: %v", err)
+		}
+		if err := h.eng.Reload(h.ctx); err != nil {
+			t.Fatalf("Reload: %v", err)
+		}
+		if _, ok := h.eng.Zone("eg"); ok {
+			t.Fatal("zone eg still known to the engine after Reload dropped it")
+		}
+		if n := h.pendingTimerCount(); n != 0 {
+			t.Fatalf("pending timers = %d, want 0 (Reload must cancel the auto-rearm timer of a dropped zone)", n)
+		}
 
-	// Advancing past the original auto-rearm deadline must neither panic
-	// nor resurrect the zone: the timer is gone, not merely a stale
-	// no-op guarded by the zoneID lookup.
-	h.advance(time.Minute)
-	if h.journal.has("auto_rearmed") {
-		t.Fatal("auto-rearm fired for an zone Reload already dropped")
-	}
-	if _, ok := h.eng.Zone("eg"); ok {
-		t.Fatal("zone eg reappeared after the cancelled auto-rearm deadline")
-	}
+		// Advancing past the original auto-rearm deadline must neither panic
+		// nor resurrect the zone: the timer is gone, not merely a stale
+		// no-op guarded by the zoneID lookup.
+		h.advance(time.Minute)
+		if h.journal.has("auto_rearmed") {
+			t.Fatal("auto-rearm fired for an zone Reload already dropped")
+		}
+		if _, ok := h.eng.Zone("eg"); ok {
+			t.Fatal("zone eg reappeared after the cancelled auto-rearm deadline")
+		}
+	})
 }

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"testing/synctest"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -41,36 +42,40 @@ func TestAFailedOutputCommandSurfacesOnEverySignal(t *testing.T) {
 
 	t.Run("test fire", func(t *testing.T) {
 		t.Parallel()
-		h := newHarness(t)
-		h.seedStandardZone()
-		failingActuator(t, h, "plug:1").boundedErr = errDeviceUnreachable
+		synctest.Test(t, func(t *testing.T) {
+			h := newHarness(t)
+			h.seedStandardZone()
+			failingActuator(t, h, "plug:1").boundedErr = errDeviceUnreachable
 
-		if err := h.mgr.TestFire(h.ctx, "plug", false); err == nil {
-			t.Fatal("TestFire reported success although the device write failed")
-		}
+			if err := h.mgr.TestFire(h.ctx, "plug", false); err == nil {
+				t.Fatal("TestFire reported success although the device write failed")
+			}
 
-		if !h.journal.hasForOutput("output_test_failed", "plug") {
-			t.Errorf("no output_test_failed journal entry; got events %v. A siren sweep whose "+
-				"failures leave no trace records only the outputs that worked",
-				journalEvents(h))
-		}
-		assertUnhealthy(t, h, "plug")
+			if !h.journal.hasForOutput("output_test_failed", "plug") {
+				t.Errorf("no output_test_failed journal entry; got events %v. A siren sweep whose "+
+					"failures leave no trace records only the outputs that worked",
+					journalEvents(h))
+			}
+			assertUnhealthy(t, h, "plug")
+		})
 	})
 
 	t.Run("incident activation", func(t *testing.T) {
 		t.Parallel()
-		h := newHarness(t)
-		h.seedStandardZone()
-		failingActuator(t, h, "plug:1").boundedErr = errDeviceUnreachable
+		synctest.Test(t, func(t *testing.T) {
+			h := newHarness(t)
+			h.seedStandardZone()
+			failingActuator(t, h, "plug:1").boundedErr = errDeviceUnreachable
 
-		// Fire the whole zone; the plug is the one output that fails.
-		_ = h.mgr.FireCycle(h.ctx, "eg", newIncident(1, hmenum.AlarmModeFull),
-			engine.FireOptions{Policy: noPolicy})
+			// Fire the whole zone; the plug is the one output that fails.
+			_ = h.mgr.FireCycle(h.ctx, "eg", newIncident(1, hmenum.AlarmModeFull),
+				engine.FireOptions{Policy: noPolicy})
 
-		if !h.journal.hasForOutput("output_fire_failed", "plug") {
-			t.Fatalf("no output_fire_failed journal entry; got events %v", journalEvents(h))
-		}
-		assertUnhealthy(t, h, "plug")
+			if !h.journal.hasForOutput("output_fire_failed", "plug") {
+				t.Fatalf("no output_fire_failed journal entry; got events %v", journalEvents(h))
+			}
+			assertUnhealthy(t, h, "plug")
+		})
 	})
 }
 
@@ -84,26 +89,27 @@ func TestAFailedOutputCommandSurfacesOnEverySignal(t *testing.T) {
 // whole time.
 func TestASuccessfulTestFireIsNotFiledAsAFault(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedStandardZone()
 
-	h := newHarness(t)
-	h.seedStandardZone()
+		if err := h.mgr.TestFire(h.ctx, "plug", false); err != nil {
+			t.Fatalf("TestFire: %v", err)
+		}
 
-	if err := h.mgr.TestFire(h.ctx, "plug", false); err != nil {
-		t.Fatalf("TestFire: %v", err)
-	}
-
-	fired := h.journal.entriesFor("output_test_fired")
-	if len(fired) != 1 {
-		t.Fatalf("got %d output_test_fired entries, want 1", len(fired))
-	}
-	if got := fired[0].Class; got != hmenum.AlarmJournalClassTest {
-		t.Errorf("class = %q, want %q — a test that worked is not a fault, and filing it as one "+
-			"buries the failures the fault filter exists to surface", got, hmenum.AlarmJournalClassTest)
-	}
-	if h.healthCallCount() != 0 {
-		t.Errorf("a successful test fire recorded health %v; it must not move the domain's health "+
-			"either way", h.healthCalls)
-	}
+		fired := h.journal.entriesFor("output_test_fired")
+		if len(fired) != 1 {
+			t.Fatalf("got %d output_test_fired entries, want 1", len(fired))
+		}
+		if got := fired[0].Class; got != hmenum.AlarmJournalClassTest {
+			t.Errorf("class = %q, want %q — a test that worked is not a fault, and filing it as one "+
+				"buries the failures the fault filter exists to surface", got, hmenum.AlarmJournalClassTest)
+		}
+		if h.healthCallCount() != 0 {
+			t.Errorf("a successful test fire recorded health %v; it must not move the domain's health "+
+				"either way", h.healthCalls)
+		}
+	})
 }
 
 // assertUnhealthy fails unless the last health sample is a degradation
@@ -162,18 +168,19 @@ func journalEvents(h *harness) []string {
 // operator trust — which is how a signal stops being read.
 func TestARefusedTestFireIsNotReportedAsADegradation(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedStandardZone()
 
-	h := newHarness(t)
-	h.seedStandardZone()
-
-	if err := h.mgr.TestFire(h.ctx, "smoke", false); !errors.Is(err, ErrTestFireUnsupported) {
-		t.Fatalf("TestFire on a smoke sounder = %v, want ErrTestFireUnsupported", err)
-	}
-	if h.healthCallCount() != 0 {
-		t.Errorf("a refused test fire recorded health %v — a refusal by design is not a "+
-			"degradation", h.healthCalls)
-	}
-	if len(h.journal.entriesFor("output_test_failed")) != 0 {
-		t.Error("a refused test fire was journalled as a failed one")
-	}
+		if err := h.mgr.TestFire(h.ctx, "smoke", false); !errors.Is(err, ErrTestFireUnsupported) {
+			t.Fatalf("TestFire on a smoke sounder = %v, want ErrTestFireUnsupported", err)
+		}
+		if h.healthCallCount() != 0 {
+			t.Errorf("a refused test fire recorded health %v — a refusal by design is not a "+
+				"degradation", h.healthCalls)
+		}
+		if len(h.journal.entriesFor("output_test_failed")) != 0 {
+			t.Error("a refused test fire was journalled as a failed one")
+		}
+	})
 }

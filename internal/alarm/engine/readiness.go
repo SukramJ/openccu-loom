@@ -6,6 +6,7 @@ package engine
 import (
 	"reflect"
 	"sort"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -114,7 +115,7 @@ func (e *Engine) refreshReadiness(a *zone) {
 	}
 	a.readiness = next
 	e.sink.Publish(hmevent.AlarmReadinessChangedEvent{
-		Base:      hmevent.NewBaseAt(e.clk.Now()),
+		Base:      hmevent.NewBaseAt(time.Now()),
 		ZoneID:    a.id,
 		Readiness: next,
 	})

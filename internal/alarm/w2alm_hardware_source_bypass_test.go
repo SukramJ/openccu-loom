@@ -6,6 +6,7 @@ package alarm
 import (
 	"encoding/json"
 	"testing"
+	"testing/synctest"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/codes"
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
@@ -95,53 +96,57 @@ func TestW2AlmHardwareIntentSourcesKeepTheEngineCodeBypass(t *testing.T) {
 
 	t.Run("keypad", func(t *testing.T) {
 		t.Parallel()
-		src := &fakeCodeSource{rows: []CodeRow{{
-			ID: "c1", Name: "Alice", Kind: CodeKindKeypadSlot, Enabled: true,
-			Perms:   CodePerms{Arm: true, Disarm: true},
-			Binding: CodeBinding{Central: intentsTestCentral, DeviceAddress: "WKP0001", Slot: 1, ArmMode: "full", ZoneID: "eg"},
-		}}}
-		h := newIntentsHarness(t, src)
-		w2AlmSeedCodeGatedZone(h, "eg", "Erdgeschoss")
-		w2AlmSeedPIN(h, "eg")
-		h.start()
+		synctest.Test(t, func(t *testing.T) {
+			src := &fakeCodeSource{rows: []CodeRow{{
+				ID: "c1", Name: "Alice", Kind: CodeKindKeypadSlot, Enabled: true,
+				Perms:   CodePerms{Arm: true, Disarm: true},
+				Binding: CodeBinding{Central: intentsTestCentral, DeviceAddress: "WKP0001", Slot: 1, ArmMode: "full", ZoneID: "eg"},
+			}}}
+			h := newIntentsHarness(t, src)
+			w2AlmSeedCodeGatedZone(h, "eg", "Erdgeschoss")
+			w2AlmSeedPIN(h, "eg")
+			h.start()
 
-		h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("WKP0001:0", hmenum.ParameterCodeID, hmtypes.IntValue(1)))
-		h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("WKP0001:0", hmenum.ParameterCodeState, hmtypes.IntValue(1)))
-		h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("WKP0001:1", hmenum.ParameterPressLock, hmtypes.BoolValue(true)))
+			h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("WKP0001:0", hmenum.ParameterCodeID, hmtypes.IntValue(1)))
+			h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("WKP0001:0", hmenum.ParameterCodeState, hmtypes.IntValue(1)))
+			h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("WKP0001:1", hmenum.ParameterPressLock, hmtypes.BoolValue(true)))
 
-		if got := h.zoneState("eg"); got != hmenum.AlarmZoneStateArmed {
-			t.Fatalf("zone state after a bound keypad press = %s, want armed: the router's "+
-				"source token no longer matches engine.CodeSourceKeypad, so the engine "+
-				"code-gated a source that carries no code", got)
-		}
-		h.wantNoJournalEvent("code_action_failed")
+			if got := h.zoneState("eg"); got != hmenum.AlarmZoneStateArmed {
+				t.Fatalf("zone state after a bound keypad press = %s, want armed: the router's "+
+					"source token no longer matches engine.CodeSourceKeypad, so the engine "+
+					"code-gated a source that carries no code", got)
+			}
+			h.wantNoJournalEvent("code_action_failed")
+		})
 	})
 
 	t.Run("remote", func(t *testing.T) {
 		t.Parallel()
-		src := &fakeCodeSource{rows: []CodeRow{{
-			ID: "r1", Name: "Remote", Kind: CodeKindRemoteKey, Enabled: true,
-			Perms:   CodePerms{Disarm: true},
-			Binding: CodeBinding{Central: intentsTestCentral, ChannelAddress: "REMOTE01:1", Parameter: "PRESS_LONG", Action: "disarm", ZoneID: "eg"},
-		}}}
-		h := newIntentsHarness(t, src)
-		w2AlmSeedCodeGatedZone(h, "eg", "Erdgeschoss")
-		w2AlmSeedPIN(h, "eg")
-		h.start()
-		if _, err := h.svc.Engine().Arm(h.ctx, "eg", engine.ArmRequest{
-			Mode: hmenum.AlarmModeFull, By: "tester", Source: engine.CodeSourceRESTOperator,
-		}); err != nil {
-			t.Fatalf("arm: %v", err)
-		}
+		synctest.Test(t, func(t *testing.T) {
+			src := &fakeCodeSource{rows: []CodeRow{{
+				ID: "r1", Name: "Remote", Kind: CodeKindRemoteKey, Enabled: true,
+				Perms:   CodePerms{Disarm: true},
+				Binding: CodeBinding{Central: intentsTestCentral, ChannelAddress: "REMOTE01:1", Parameter: "PRESS_LONG", Action: "disarm", ZoneID: "eg"},
+			}}}
+			h := newIntentsHarness(t, src)
+			w2AlmSeedCodeGatedZone(h, "eg", "Erdgeschoss")
+			w2AlmSeedPIN(h, "eg")
+			h.start()
+			if _, err := h.svc.Engine().Arm(h.ctx, "eg", engine.ArmRequest{
+				Mode: hmenum.AlarmModeFull, By: "tester", Source: engine.CodeSourceRESTOperator,
+			}); err != nil {
+				t.Fatalf("arm: %v", err)
+			}
 
-		h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("REMOTE01:1", hmenum.ParameterPressLong, hmtypes.BoolValue(true)))
+			h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("REMOTE01:1", hmenum.ParameterPressLong, hmtypes.BoolValue(true)))
 
-		if got := h.zoneState("eg"); got != hmenum.AlarmZoneStateDisarmed {
-			t.Fatalf("zone state after a bound remote press = %s, want disarmed: the router's "+
-				"source token no longer matches engine.CodeSourceRemote, so the engine "+
-				"code-gated a source that carries no code", got)
-		}
-		h.wantNoJournalEvent("code_action_failed")
+			if got := h.zoneState("eg"); got != hmenum.AlarmZoneStateDisarmed {
+				t.Fatalf("zone state after a bound remote press = %s, want disarmed: the router's "+
+					"source token no longer matches engine.CodeSourceRemote, so the engine "+
+					"code-gated a source that carries no code", got)
+			}
+			h.wantNoJournalEvent("code_action_failed")
+		})
 	})
 
 	// The counter-case: the very same zone refuses a code-free verb
@@ -149,18 +154,20 @@ func TestW2AlmHardwareIntentSourcesKeepTheEngineCodeBypass(t *testing.T) {
 	// become inert would let both cases above pass.
 	t.Run("anonymous source stays gated", func(t *testing.T) {
 		t.Parallel()
-		h := newIntentsHarness(t, &fakeCodeSource{})
-		w2AlmSeedCodeGatedZone(h, "eg", "Erdgeschoss")
-		w2AlmSeedPIN(h, "eg")
-		h.start()
+		synctest.Test(t, func(t *testing.T) {
+			h := newIntentsHarness(t, &fakeCodeSource{})
+			w2AlmSeedCodeGatedZone(h, "eg", "Erdgeschoss")
+			w2AlmSeedPIN(h, "eg")
+			h.start()
 
-		_, err := h.svc.Engine().Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "mqtt", Source: "mqtt"})
-		if err == nil {
-			t.Fatal("anonymous code-free arm succeeded: the zone's code policy is inert, " +
-				"so the bypass assertions above prove nothing")
-		}
-		if got := h.zoneState("eg"); got != hmenum.AlarmZoneStateDisarmed {
-			t.Fatalf("zone state after a refused anonymous arm = %s, want disarmed", got)
-		}
+			_, err := h.svc.Engine().Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "mqtt", Source: "mqtt"})
+			if err == nil {
+				t.Fatal("anonymous code-free arm succeeded: the zone's code policy is inert, " +
+					"so the bypass assertions above prove nothing")
+			}
+			if got := h.zoneState("eg"); got != hmenum.AlarmZoneStateDisarmed {
+				t.Fatalf("zone state after a refused anonymous arm = %s, want disarmed", got)
+			}
+		})
 	})
 }

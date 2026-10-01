@@ -7,6 +7,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"testing/synctest"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	sirencdp "github.com/SukramJ/openccu-loom/internal/model/custom/siren"
@@ -136,27 +137,29 @@ func newSirenDisableRig(t *testing.T, channelAddress string) (*sirencdp.Siren, *
 // it from the head of the flattened tone list, a projection with the
 // declared DEFAULT already lost.
 func TestSilentCycleWritesTheSirensDeclaredDisableSelectionNotValueListZero(t *testing.T) {
-	h := newHarness(t)
-	h.seedOutputs(sharedSirenChannelRows())
-	dev, w := newSirenDisableRig(t, asirChannel)
-	h.resolver.addSiren(testCentral, asirChannel, dev)
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedOutputs(sharedSirenChannelRows())
+		dev, w := newSirenDisableRig(t, asirChannel)
+		h.resolver.addSiren(testCentral, asirChannel, dev)
 
-	opts := engine.FireOptions{Policy: engine.OutputPolicy{Silent: true}}
-	if err := h.mgr.FireCycle(h.ctx, "eg", newIncident(32, hmenum.AlarmModeFull), opts); err != nil {
-		t.Fatalf("FireCycle: %v", err)
-	}
+		opts := engine.FireOptions{Policy: engine.OutputPolicy{Silent: true}}
+		if err := h.mgr.FireCycle(h.ctx, "eg", newIncident(32, hmenum.AlarmModeFull), opts); err != nil {
+			t.Fatalf("FireCycle: %v", err)
+		}
 
-	got, sent := w.sent(hmenum.ParameterAcousticAlarmSelection)
-	if !sent {
-		t.Fatalf("the silent cycle sent no %s at all: the device keeps whatever tone was selected last",
-			hmenum.ParameterAcousticAlarmSelection)
-	}
-	if got != sirenDisableDeclaredLabel {
-		t.Errorf("acoustic selection = %q, want %q (the selection the descriptor declares). "+
-			"%q is only the VALUE_LIST head — on this device a real tone, so a silent cycle sounds "+
-			"the siren the mode exists to keep quiet.",
-			got, sirenDisableDeclaredLabel, sirenDisableHeadLabel)
-	}
+		got, sent := w.sent(hmenum.ParameterAcousticAlarmSelection)
+		if !sent {
+			t.Fatalf("the silent cycle sent no %s at all: the device keeps whatever tone was selected last",
+				hmenum.ParameterAcousticAlarmSelection)
+		}
+		if got != sirenDisableDeclaredLabel {
+			t.Errorf("acoustic selection = %q, want %q (the selection the descriptor declares). "+
+				"%q is only the VALUE_LIST head — on this device a real tone, so a silent cycle sounds "+
+				"the siren the mode exists to keep quiet.",
+				got, sirenDisableDeclaredLabel, sirenDisableHeadLabel)
+		}
+	})
 }
 
 // TestTestFireOpticalOnlyUsesTheDeclaredDisableSelection pins the same
@@ -164,24 +167,26 @@ func TestSilentCycleWritesTheSirensDeclaredDisableSelectionNotValueListZero(t *t
 // writes the same atomic paramset, so it silences the tone the same
 // way or it makes the house howl during a configuration check.
 func TestTestFireOpticalOnlyUsesTheDeclaredDisableSelection(t *testing.T) {
-	h := newHarness(t)
-	row := outputRow("sirO", hmenum.AlarmOutputClassOpticalSiren, OutputConfig{})
-	h.seedOutputs(row)
-	dev, w := newSirenDisableRig(t, row.ChannelAddress)
-	h.resolver.addSiren(testCentral, row.ChannelAddress, dev)
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		row := outputRow("sirO", hmenum.AlarmOutputClassOpticalSiren, OutputConfig{})
+		h.seedOutputs(row)
+		dev, w := newSirenDisableRig(t, row.ChannelAddress)
+		h.resolver.addSiren(testCentral, row.ChannelAddress, dev)
 
-	if err := h.mgr.TestFire(h.ctx, row.ID, true); err != nil {
-		t.Fatalf("TestFire: %v", err)
-	}
+		if err := h.mgr.TestFire(h.ctx, row.ID, true); err != nil {
+			t.Fatalf("TestFire: %v", err)
+		}
 
-	got, sent := w.sent(hmenum.ParameterAcousticAlarmSelection)
-	if !sent {
-		t.Fatalf("the optical-only test fire sent no %s at all: the write re-sends the tone "+
-			"selected last", hmenum.ParameterAcousticAlarmSelection)
-	}
-	if got != sirenDisableDeclaredLabel {
-		t.Errorf("acoustic selection = %q, want %q (the selection the descriptor declares); "+
-			"%q is the VALUE_LIST head, a real tone on this device",
-			got, sirenDisableDeclaredLabel, sirenDisableHeadLabel)
-	}
+		got, sent := w.sent(hmenum.ParameterAcousticAlarmSelection)
+		if !sent {
+			t.Fatalf("the optical-only test fire sent no %s at all: the write re-sends the tone "+
+				"selected last", hmenum.ParameterAcousticAlarmSelection)
+		}
+		if got != sirenDisableDeclaredLabel {
+			t.Errorf("acoustic selection = %q, want %q (the selection the descriptor declares); "+
+				"%q is the VALUE_LIST head, a real tone on this device",
+				got, sirenDisableDeclaredLabel, sirenDisableHeadLabel)
+		}
+	})
 }

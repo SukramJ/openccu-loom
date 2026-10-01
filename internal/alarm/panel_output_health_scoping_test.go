@@ -13,7 +13,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -75,7 +74,6 @@ func TestOutputFailureScopesPanelAvailabilityToItsOwnZone(t *testing.T) {
 		Settings: Settings{Enabled: true},
 		Registry: central.NewRegistry(),
 		Stores:   stores,
-		Clock:    clock.NewFake(time.UnixMilli(now)),
 		Logger:   slog.New(slog.DiscardHandler),
 	})
 	if err != nil {

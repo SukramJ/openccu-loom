@@ -12,26 +12,28 @@ import (
 	"sort"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
 // testStart is the harness wall-clock origin — after the engine's
-// plausibility epoch so restores trust the fake clock by default.
+// plausibility epoch so restores trust the clock by default. A
+// synctest bubble's clock starts at 2000-01-01, which is before that
+// epoch, so newHarness sleeps forward to testStart first; without it
+// every restart would silently take the implausible-clock branch.
 var testStart = time.Date(2026, 7, 14, 12, 0, 0, 0, time.UTC)
 
 // manualScheduler is a deterministic TimerScheduler: callbacks run
 // inline on the test goroutine when run() is called, in deadline
-// order. Combined with clock.Fake this gives fully deterministic
-// timer assertions.
+// order. Combined with the bubble clock this gives fully deterministic
+// timer assertions. Its deadlines read time.Now, so it must be used
+// inside a synctest bubble.
 type manualScheduler struct {
-	clk *clock.Fake
-
 	mu     sync.Mutex
 	nextID int
 	timers map[int]*manualTimer
@@ -42,8 +44,8 @@ type manualTimer struct {
 	fn       func()
 }
 
-func newManualScheduler(clk *clock.Fake) *manualScheduler {
-	return &manualScheduler{clk: clk, timers: map[int]*manualTimer{}}
+func newManualScheduler() *manualScheduler {
+	return &manualScheduler{timers: map[int]*manualTimer{}}
 }
 
 func (s *manualScheduler) Schedule(d time.Duration, fn func()) (cancel func()) {
@@ -51,7 +53,7 @@ func (s *manualScheduler) Schedule(d time.Duration, fn func()) (cancel func()) {
 	defer s.mu.Unlock()
 	s.nextID++
 	id := s.nextID
-	s.timers[id] = &manualTimer{deadline: s.clk.Now().Add(d), fn: fn}
+	s.timers[id] = &manualTimer{deadline: time.Now().Add(d), fn: fn}
 	return func() {
 		s.mu.Lock()
 		defer s.mu.Unlock()
@@ -59,13 +61,13 @@ func (s *manualScheduler) Schedule(d time.Duration, fn func()) (cancel func()) {
 	}
 }
 
-// run fires every timer due at the current fake time, inline and in
+// run fires every timer due at the current bubble time, inline and in
 // deadline order, until none remain due (callbacks may schedule new
 // timers that are themselves already due).
 func (s *manualScheduler) run() {
 	for {
 		s.mu.Lock()
-		now := s.clk.Now()
+		now := time.Now()
 		var dueID int
 		var due *manualTimer
 		for id, t := range s.timers {
@@ -292,13 +294,15 @@ func (r *fakeReader) set(sensorID string, active bool) {
 }
 
 // harness bundles a real SQLite store set with fake ports and a
-// deterministic clock/scheduler pair around one engine instance.
+// deterministic scheduler around one engine instance. It lives in one
+// synctest bubble ("one life"): everything holding a channel, timer or
+// goroutine is created per life, while the SQLite file persists across
+// lives (see newHarnessOn).
 type harness struct {
 	t   *testing.T
 	ctx context.Context
 	db  *sql.DB
 
-	clk     *clock.Fake
 	sched   *manualScheduler
 	outputs *fakeOutputs
 	sink    *fakeSink
@@ -347,7 +351,19 @@ var migratedSchemaTemplate = sync.OnceValues(func() (string, error) {
 	return path, nil
 })
 
+// newHarness opens a fresh database and starts the harness clock at
+// testStart. It must be called inside a synctest bubble, before the
+// test has slept.
 func newHarness(t *testing.T) *harness {
+	t.Helper()
+	h := newHarnessOn(t, newHarnessDB(t, t.TempDir()))
+	time.Sleep(time.Until(testStart))
+	return h
+}
+
+// newHarnessDB seeds a migrated database file in dir and returns its
+// path. It touches no clock, so it may run outside a bubble.
+func newHarnessDB(t *testing.T, dir string) string {
 	t.Helper()
 	templatePath, err := migratedSchemaTemplate()
 	if err != nil {
@@ -357,9 +373,24 @@ func newHarness(t *testing.T) *harness {
 	if err != nil {
 		t.Fatalf("read schema template: %v", err)
 	}
-	path := filepath.Join(t.TempDir(), "alarm-engine.db")
+	path := filepath.Join(dir, "alarm-engine.db")
 	if err := os.WriteFile(path, schema, 0o600); err != nil {
 		t.Fatalf("seed test db: %v", err)
+	}
+	return path
+}
+
+// newHarnessOn opens the database at path for one life and does NOT
+// sleep: the clock stays wherever the bubble put it (2000-01-01 in a
+// fresh bubble). A second life over the same file therefore boots with
+// a clock before both the project epoch and the persisted timestamps —
+// the RTC-less host that starts before NTP. The database handle is
+// closed when the bubble's t cleans up, so a file never carries bubble
+// state into the next life. Must be called inside a synctest bubble.
+func newHarnessOn(t *testing.T, path string) *harness {
+	t.Helper()
+	if time.Now().Year() != 2000 {
+		t.Fatal("newHarness must be called inside a fresh synctest bubble")
 	}
 	// Open still runs goose; it finds the version table already at the
 	// latest revision and applies nothing. The lock stays because that
@@ -382,16 +413,15 @@ func newHarness(t *testing.T) *harness {
 		incidents: sqlitestore.NewAlarmIncidentStore(db),
 		runtime:   sqlitestore.NewAlarmRuntimeStore(db),
 	}
-	h.freshPorts(testStart)
+	h.freshPorts()
 	return h
 }
 
-// freshPorts replaces clock, scheduler, and all recording fakes —
+// freshPorts replaces the scheduler and all recording fakes —
 // used at construction and before every simulated restart so call
 // records start clean.
-func (h *harness) freshPorts(now time.Time) {
-	h.clk = clock.NewFake(now)
-	h.sched = newManualScheduler(h.clk)
+func (h *harness) freshPorts() {
+	h.sched = newManualScheduler()
 	h.outputs = &fakeOutputs{}
 	h.sink = &fakeSink{}
 	h.journal = &fakeJournal{}
@@ -404,7 +434,6 @@ func (h *harness) freshPorts(now time.Time) {
 func (h *harness) build() {
 	h.t.Helper()
 	eng, err := engine.New(engine.Deps{
-		Clock:        h.clk,
 		Scheduler:    h.sched,
 		Zones:        h.zones,
 		Sensors:      h.sensors,
@@ -432,30 +461,21 @@ func (h *harness) start() {
 	}
 }
 
-// advance moves the fake clock and runs every due timer callback
+// advance moves the bubble clock and runs every due timer callback
 // inline.
 func (h *harness) advance(d time.Duration) {
-	h.clk.Advance(d)
+	time.Sleep(d)
 	h.sched.run()
 }
 
 // restart simulates a daemon restart: stop the engine, optionally
-// shift the wall clock by downtime (negative values simulate a
-// backwards clock jump), and start a fresh engine with fresh
-// recording fakes on the same database.
+// let the clock run on by downtime, and start a fresh engine with
+// fresh recording fakes on the same database.
 func (h *harness) restart(downtime time.Duration) {
 	h.t.Helper()
 	h.eng.Stop(h.ctx)
-	h.freshPorts(h.clk.Now().Add(downtime))
-	h.start()
-}
-
-// restartAt is restart with an absolute new wall-clock time (for
-// implausible-clock scenarios).
-func (h *harness) restartAt(now time.Time) {
-	h.t.Helper()
-	h.eng.Stop(h.ctx)
-	h.freshPorts(now)
+	time.Sleep(downtime)
+	h.freshPorts()
 	h.start()
 }
 
@@ -575,3 +595,34 @@ func sortedStrings(in []string) []string {
 
 // jsonUnmarshal decodes a JSON string (assertion helper).
 func jsonUnmarshal(raw string, v any) error { return json.Unmarshal([]byte(raw), v) }
+
+// twoLives runs a daemon life, then a second life over the same
+// database file, each in its own synctest bubble.
+//
+// A fresh bubble's clock starts at 2000-01-01, so the second life boots
+// with a clock before the project epoch AND before every timestamp the
+// first life persisted: the RTC-less host that starts before NTP. The
+// first life sleeps forward to testStart like any harness test; the
+// second does not. Only the file crosses the bubbles — the database
+// handle, scheduler and recording fakes are per life — and both lives
+// have their engine stopped before their bubble ends. life1 must seed
+// the zones; life2 must call h.start() itself.
+func twoLives(t *testing.T, life1, life2 func(h *harness)) {
+	t.Helper()
+	path := newHarnessDB(t, t.TempDir())
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarnessOn(t, path)
+		time.Sleep(time.Until(testStart))
+		life1(h)
+		if h.eng != nil {
+			h.eng.Stop(h.ctx)
+		}
+	})
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarnessOn(t, path)
+		life2(h)
+		if h.eng != nil {
+			h.eng.Stop(h.ctx)
+		}
+	})
+}

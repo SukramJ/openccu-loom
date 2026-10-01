@@ -11,12 +11,12 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm"
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	alarmjournal "github.com/SukramJ/openccu-loom/internal/alarm/journal"
 	"github.com/SukramJ/openccu-loom/internal/alarm/outputs"
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
@@ -95,7 +95,6 @@ type alarmVerbCodeFixture struct {
 	stores *alarm.Stores
 	eng    *engine.Engine
 	sink   *recordingSink
-	clk    *clock.Fake
 }
 
 var _ AlarmPanel = (*alarmVerbCodeFixture)(nil)
@@ -127,12 +126,10 @@ func newAlarmVerbCodeFixture(t *testing.T, validator *fakeVerbCodeValidator) *al
 	db := openMigratedTestDB(t, "alarm-verb-code.db")
 
 	stores := alarm.NewStores(db)
-	clk := clock.NewFake(alarmFixtureStart)
-	jrn := alarmjournal.New(stores.Journal, clk, nil, nil)
+	jrn := alarmjournal.New(stores.Journal, nil, nil)
 	sink := &recordingSink{}
 
 	eng, err := engine.New(engine.Deps{
-		Clock:     clk,
 		Zones:     stores.Zones,
 		Sensors:   stores.Sensors,
 		State:     stores.State,
@@ -148,7 +145,7 @@ func newAlarmVerbCodeFixture(t *testing.T, validator *fakeVerbCodeValidator) *al
 	if err := eng.Start(ctx); err != nil {
 		t.Fatalf("engine.Start: %v", err)
 	}
-	return &alarmVerbCodeFixture{t: t, stores: stores, eng: eng, sink: sink, clk: clk}
+	return &alarmVerbCodeFixture{t: t, stores: stores, eng: eng, sink: sink}
 }
 
 // seedCodePolicyZone persists a single-mode "full" zone with the given
@@ -163,7 +160,7 @@ func (f *alarmVerbCodeFixture) seedCodePolicyZone(id, name string, policy engine
 	if err != nil {
 		f.t.Fatalf("marshal zone config: %v", err)
 	}
-	now := f.clk.Now().UnixMilli()
+	now := time.Now().UnixMilli()
 	if err := f.stores.Zones.Upsert(context.Background(), sqlitestore.AlarmZoneRow{
 		ID: id, Name: name, ConfigJSON: string(b), CreatedAtMS: now, UpdatedAtMS: now,
 	}); err != nil {

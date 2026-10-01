@@ -5,6 +5,7 @@ package engine
 
 import (
 	"context"
+	"time"
 
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -30,7 +31,7 @@ import (
 //
 // The caller holds the lock.
 func (e *Engine) recordSource(ctx context.Context, a *zone, incidentID int64, cause incidentCause) bool {
-	ref := cause.sourceRef(unixMS(e.clk.Now()))
+	ref := cause.sourceRef(unixMS(time.Now()))
 	if ref.Empty() {
 		// Causes without a data point (central loss, an adopted siren)
 		// carry no source identity; the incident's cause document
@@ -159,7 +160,7 @@ func (e *Engine) publishSourcesChanged(a *zone, incidentID int64) {
 	}
 	first := sources[0]
 	e.sink.Publish(hmevent.AlarmTriggeredEvent{
-		Base:       hmevent.NewBaseAt(e.clk.Now()),
+		Base:       hmevent.NewBaseAt(time.Now()),
 		ZoneID:     a.id,
 		ZoneName:   a.name,
 		IncidentID: incidentID,

@@ -8,6 +8,7 @@ import (
 	"slices"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
@@ -260,7 +261,7 @@ func (r *panelRegistry) masterLocked() (alarmpanel.Panel, bool) {
 // publishPanel emits the entity change onto the alarm bus.
 func (s *Service) publishPanel(p alarmpanel.Panel, removed bool) {
 	s.publish(hmevent.AlarmPanelChangedEvent{
-		Base:               hmevent.NewBaseAt(s.clk.Now()),
+		Base:               hmevent.NewBaseAt(time.Now()),
 		UniqueID:           p.UniqueID,
 		ZoneID:             p.ZoneID,
 		Name:               p.Name,

@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	sirencdp "github.com/SukramJ/openccu-loom/internal/model/custom/siren"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -22,7 +21,6 @@ import (
 
 // Config wires a Manager.
 type Config struct {
-	Clock     clock.Clock
 	Scheduler engine.TimerScheduler
 	Resolver  DeviceResolver
 	Ledger    IncidentLedger
@@ -84,7 +82,6 @@ type instance struct {
 // watchdog stops run on scheduler callbacks. The manager never calls
 // back into engine verbs (OutputPort contract).
 type Manager struct {
-	clk        clock.Clock
 	sched      engine.TimerScheduler
 	resolver   DeviceResolver
 	ledger     IncidentLedger
@@ -121,13 +118,9 @@ func NewManager(cfg Config) (*Manager, error) {
 	if cfg.Resolver == nil || cfg.Ledger == nil || cfg.Rows == nil {
 		return nil, errors.New("outputs: missing required dependency")
 	}
-	clk := cfg.Clock
-	if clk == nil {
-		clk = clock.New()
-	}
 	sched := cfg.Scheduler
 	if sched == nil {
-		sched = engine.NewClockScheduler(clk)
+		sched = engine.NewTimerScheduler()
 	}
 	journal := cfg.Journal
 	if journal == nil {
@@ -138,7 +131,6 @@ func NewManager(cfg Config) (*Manager, error) {
 		logger = slog.Default()
 	}
 	m := &Manager{
-		clk:              clk,
 		sched:            sched,
 		resolver:         cfg.Resolver,
 		ledger:           cfg.Ledger,

@@ -5,6 +5,7 @@ package alarm
 
 import (
 	"testing"
+	"time"
 
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -21,7 +22,7 @@ func TestSysvarMirrorReadsDisarmAndExistingFlagsFromTheStoredDocument(t *testing
 	h.seedZone("eg", "Erdgeschoss")
 
 	const raw = `{"sysvar_name":"AlarmZoneEG","sysvar_allow_disarm":true,"sysvar_existing":true}`
-	now := h.clk.Now().UnixMilli()
+	now := time.Now().UnixMilli()
 	if err := h.svc.Stores().Outputs.Upsert(h.ctx, sqlitestore.AlarmOutputRow{
 		ID: "mirror1", ZoneID: "eg", Class: hmenum.AlarmOutputClassSysvarMirror,
 		CentralName: "ccu1", Name: "mirror1", ConfigJSON: raw,

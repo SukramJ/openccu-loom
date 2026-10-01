@@ -199,7 +199,7 @@ func (r *intentRouter) trackCodeID(centralName string, e hmevent.DataPointValueC
 		r.wkp[key] = c
 	}
 	c.codeID = id
-	c.at = r.svc.clk.Now()
+	c.at = time.Now()
 	r.mu.Unlock()
 }
 
@@ -213,7 +213,7 @@ func (r *intentRouter) trackCodeState(centralName string, e hmevent.DataPointVal
 		r.wkp[key] = c
 	}
 	c.known = codeStateKnown(e.NewValue)
-	c.at = r.svc.clk.Now()
+	c.at = time.Now()
 	r.mu.Unlock()
 }
 
@@ -238,7 +238,7 @@ func (r *intentRouter) handleKeypadPress(ctx context.Context, centralName string
 	}
 	r.mu.Unlock()
 
-	now := r.svc.clk.Now()
+	now := time.Now()
 	// codeID == pairIdx is an UNVERIFIED assumption about the keypad's own
 	// behaviour: that the device raises the press on the channel pair whose
 	// index equals the CODE_ID of the PIN just accepted. No CCU source
@@ -293,7 +293,7 @@ func (r *intentRouter) handleRemotePress(ctx context.Context, centralName string
 	if err != nil {
 		return
 	}
-	now := r.svc.clk.Now()
+	now := time.Now()
 	for i := range rows {
 		row := &rows[i]
 		if row.Kind != CodeKindRemoteKey {

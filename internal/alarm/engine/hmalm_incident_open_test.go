@@ -5,6 +5,7 @@ package engine_test
 
 import (
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
@@ -36,7 +37,7 @@ func TestIncidentOpenedTheSameWayByEveryEntryPath(t *testing.T) {
 			name: "adopted sounding siren",
 			open: func(h *harness) {
 				if _, err := h.eng.AdoptSounding(h.ctx, "eg", []string{"sir1"}); err != nil {
-					t.Fatalf("AdoptSounding: %v", err)
+					h.t.Fatalf("AdoptSounding: %v", err)
 				}
 			},
 		},
@@ -44,7 +45,7 @@ func TestIncidentOpenedTheSameWayByEveryEntryPath(t *testing.T) {
 			name: "always-on panic",
 			open: func(h *harness) {
 				if err := h.eng.PanicTrigger(h.ctx, "eg", false, "tester", "test"); err != nil {
-					t.Fatalf("PanicTrigger: %v", err)
+					h.t.Fatalf("PanicTrigger: %v", err)
 				}
 			},
 		},
@@ -52,30 +53,32 @@ func TestIncidentOpenedTheSameWayByEveryEntryPath(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			h := newHarness(t)
-			h.seedZone("eg", "Erdgeschoss", defaultZoneConfig())
-			h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{
-				Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull},
+			synctest.Test(t, func(t *testing.T) {
+				h := newHarness(t)
+				h.seedZone("eg", "Erdgeschoss", defaultZoneConfig())
+				h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{
+					Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull},
+				})
+				h.start()
+				h.armFull()
+				openedAt := time.Now()
+
+				tc.open(h)
+				h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+
+				inc, ok := h.openIncident("eg")
+				if !ok {
+					t.Fatal("no open incident after the trigger")
+				}
+				if inc.CauseJSON == "" {
+					t.Error("incident carries no cause document")
+				}
+				want := openedAt.Add(triggerWindow).UnixMilli()
+				if inc.TriggerDeadlineMS != want {
+					t.Errorf("trigger deadline = %d, want %d (opened_at + the mode's %s trigger window)",
+						inc.TriggerDeadlineMS, want, triggerWindow)
+				}
 			})
-			h.start()
-			h.armFull()
-			openedAt := h.clk.Now()
-
-			tc.open(h)
-			h.wantState("eg", hmenum.AlarmZoneStateTriggered)
-
-			inc, ok := h.openIncident("eg")
-			if !ok {
-				t.Fatal("no open incident after the trigger")
-			}
-			if inc.CauseJSON == "" {
-				t.Error("incident carries no cause document")
-			}
-			want := openedAt.Add(triggerWindow).UnixMilli()
-			if inc.TriggerDeadlineMS != want {
-				t.Errorf("trigger deadline = %d, want %d (opened_at + the mode's %s trigger window)",
-					inc.TriggerDeadlineMS, want, triggerWindow)
-			}
 		})
 	}
 }

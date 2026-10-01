@@ -14,6 +14,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
@@ -76,7 +77,6 @@ func (l *fakeSourceLedger) count() int {
 func (h *harness) startWithLedger(ledger engine.IncidentSourceLedger) {
 	h.t.Helper()
 	eng, err := engine.New(engine.Deps{
-		Clock:        h.clk,
 		Scheduler:    h.sched,
 		Zones:        h.zones,
 		Sensors:      h.sensors,
@@ -104,7 +104,8 @@ func (h *harness) startWithLedger(ledger engine.IncidentSourceLedger) {
 func (h *harness) restartWithLedger(downtime time.Duration, ledger engine.IncidentSourceLedger) {
 	h.t.Helper()
 	h.eng.Stop(h.ctx)
-	h.freshPorts(h.clk.Now().Add(downtime))
+	time.Sleep(downtime)
+	h.freshPorts()
 	h.startWithLedger(ledger)
 }
 
@@ -122,73 +123,75 @@ func refFor(sensorID string) string {
 // short-circuits on an already-triggered zone (engine.go's trigger),
 // and nothing else recorded the activation's identity.
 func TestSources_SecondSensorWhileTriggeredAccumulatesAndRepublishes(t *testing.T) {
-	h := newHarness(t)
-	h.seedStandardZone()
-	ledger := &fakeSourceLedger{}
-	h.startWithLedger(ledger)
-	h.armFull()
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedStandardZone()
+		ledger := &fakeSourceLedger{}
+		h.startWithLedger(ledger)
+		h.armFull()
 
-	h.eng.HandleSensorEvent(h.ctx, "window", true)
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+		h.eng.HandleSensorEvent(h.ctx, "window", true)
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 
-	inc, ok := h.openIncident("eg")
-	if !ok {
-		t.Fatal("expected an open incident after the first trigger")
-	}
+		inc, ok := h.openIncident("eg")
+		if !ok {
+			t.Fatal("expected an open incident after the first trigger")
+		}
 
-	h.eng.HandleSensorEvent(h.ctx, "motion", true)
+		h.eng.HandleSensorEvent(h.ctx, "motion", true)
 
-	// (a) the zone stays triggered and no second incident is created.
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
-	incAfter, ok := h.openIncident("eg")
-	if !ok {
-		t.Fatal("expected the incident to still be open")
-	}
-	if incAfter.ID != inc.ID {
-		t.Fatalf("incident ID changed from %d to %d, want unchanged (no second incident)", inc.ID, incAfter.ID)
-	}
-	all, err := h.incidents.ListByZone(h.ctx, "eg", 0)
-	if err != nil {
-		t.Fatalf("ListByZone: %v", err)
-	}
-	if len(all) != 1 {
-		t.Fatalf("ListByZone len=%d want 1 (exactly one incident total)", len(all))
-	}
+		// (a) the zone stays triggered and no second incident is created.
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+		incAfter, ok := h.openIncident("eg")
+		if !ok {
+			t.Fatal("expected the incident to still be open")
+		}
+		if incAfter.ID != inc.ID {
+			t.Fatalf("incident ID changed from %d to %d, want unchanged (no second incident)", inc.ID, incAfter.ID)
+		}
+		all, err := h.incidents.ListByZone(h.ctx, "eg", 0)
+		if err != nil {
+			t.Fatalf("ListByZone: %v", err)
+		}
+		if len(all) != 1 {
+			t.Fatalf("ListByZone len=%d want 1 (exactly one incident total)", len(all))
+		}
 
-	// (b) IncidentSources returns BOTH sources, oldest first.
-	sources := h.eng.IncidentSources("eg")
-	if len(sources) != 2 {
-		t.Fatalf("IncidentSources len=%d want 2: %+v", len(sources), sources)
-	}
-	if sources[0].Ref != refFor("window") {
-		t.Errorf("sources[0].Ref = %q, want %q", sources[0].Ref, refFor("window"))
-	}
-	if sources[1].Ref != refFor("motion") {
-		t.Errorf("sources[1].Ref = %q, want %q", sources[1].Ref, refFor("motion"))
-	}
+		// (b) IncidentSources returns BOTH sources, oldest first.
+		sources := h.eng.IncidentSources("eg")
+		if len(sources) != 2 {
+			t.Fatalf("IncidentSources len=%d want 2: %+v", len(sources), sources)
+		}
+		if sources[0].Ref != refFor("window") {
+			t.Errorf("sources[0].Ref = %q, want %q", sources[0].Ref, refFor("window"))
+		}
+		if sources[1].Ref != refFor("motion") {
+			t.Errorf("sources[1].Ref = %q, want %q", sources[1].Ref, refFor("motion"))
+		}
 
-	// (c) a further AlarmTriggeredEvent was published whose Sources has
-	// both, while the headline SensorID stays the one that opened the
-	// incident.
-	triggered := h.sink.triggered()
-	if len(triggered) != 2 {
-		t.Fatalf("triggered events count = %d, want 2 (initial trigger + sources-changed republish)", len(triggered))
-	}
-	first, second := triggered[0], triggered[1]
-	if len(first.Sources) != 1 || first.Sources[0].Ref != refFor("window") {
-		t.Errorf("first triggered event Sources = %+v, want exactly [window]", first.Sources)
-	}
-	if second.SensorID != "window" {
-		t.Errorf("second triggered event SensorID = %q, want window (headline sensor unchanged)", second.SensorID)
-	}
-	if len(second.Sources) != 2 || second.Sources[0].Ref != refFor("window") || second.Sources[1].Ref != refFor("motion") {
-		t.Errorf("second triggered event Sources = %+v, want [window, motion]", second.Sources)
-	}
+		// (c) a further AlarmTriggeredEvent was published whose Sources has
+		// both, while the headline SensorID stays the one that opened the
+		// incident.
+		triggered := h.sink.triggered()
+		if len(triggered) != 2 {
+			t.Fatalf("triggered events count = %d, want 2 (initial trigger + sources-changed republish)", len(triggered))
+		}
+		first, second := triggered[0], triggered[1]
+		if len(first.Sources) != 1 || first.Sources[0].Ref != refFor("window") {
+			t.Errorf("first triggered event Sources = %+v, want exactly [window]", first.Sources)
+		}
+		if second.SensorID != "window" {
+			t.Errorf("second triggered event SensorID = %q, want window (headline sensor unchanged)", second.SensorID)
+		}
+		if len(second.Sources) != 2 || second.Sources[0].Ref != refFor("window") || second.Sources[1].Ref != refFor("motion") {
+			t.Errorf("second triggered event Sources = %+v, want [window, motion]", second.Sources)
+		}
 
-	// (d) the durable ledger received both.
-	if got := ledger.refs(); len(got) != 2 || got[0] != refFor("window") || got[1] != refFor("motion") {
-		t.Errorf("ledger refs = %v, want [%q, %q]", got, refFor("window"), refFor("motion"))
-	}
+		// (d) the durable ledger received both.
+		if got := ledger.refs(); len(got) != 2 || got[0] != refFor("window") || got[1] != refFor("motion") {
+			t.Errorf("ledger refs = %v, want [%q, %q]", got, refFor("window"), refFor("motion"))
+		}
+	})
 }
 
 // TestSources_RestoreRehydratesAccumulatorFromLedger pins the restart
@@ -198,70 +201,74 @@ func TestSources_SecondSensorWhileTriggeredAccumulatesAndRepublishes(t *testing.
 // detector to fire became sources[0] — the headline sensor of every
 // later trigger event, naming a sensor that did not open the incident.
 func TestSources_RestoreRehydratesAccumulatorFromLedger(t *testing.T) {
-	h := newHarness(t)
-	h.seedStandardZone()
-	ledger := &fakeSourceLedger{}
-	h.startWithLedger(ledger)
-	h.armFull()
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedStandardZone()
+		ledger := &fakeSourceLedger{}
+		h.startWithLedger(ledger)
+		h.armFull()
 
-	h.eng.HandleSensorEvent(h.ctx, "window", true)
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+		h.eng.HandleSensorEvent(h.ctx, "window", true)
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 
-	// Still open across a restart well inside the 60 s trigger window.
-	h.reader.set("window", true)
-	h.restartWithLedger(10*time.Second, ledger)
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+		// Still open across a restart well inside the 60 s trigger window.
+		h.reader.set("window", true)
+		h.restartWithLedger(10*time.Second, ledger)
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 
-	if got := h.eng.IncidentSources("eg"); len(got) != 1 || got[0].Ref != refFor("window") {
-		t.Fatalf("IncidentSources after restore = %+v, want exactly [window]", got)
-	}
-	// (a) the restore re-fire ships the incident's sources, so a
-	// notification output can still say what opened the alarm.
-	fire := h.outputs.lastFire(t)
-	if len(fire.Opts.Sources) != 1 || fire.Opts.Sources[0].Ref != refFor("window") {
-		t.Errorf("restore re-fire Sources = %+v, want exactly [window]", fire.Opts.Sources)
-	}
-	if got := fire.Opts.Sources[0].SensorID; got != "window" {
-		t.Errorf("restore re-fire source SensorID = %q, want window", got)
-	}
+		if got := h.eng.IncidentSources("eg"); len(got) != 1 || got[0].Ref != refFor("window") {
+			t.Fatalf("IncidentSources after restore = %+v, want exactly [window]", got)
+		}
+		// (a) the restore re-fire ships the incident's sources, so a
+		// notification output can still say what opened the alarm.
+		fire := h.outputs.lastFire(t)
+		if len(fire.Opts.Sources) != 1 || fire.Opts.Sources[0].Ref != refFor("window") {
+			t.Errorf("restore re-fire Sources = %+v, want exactly [window]", fire.Opts.Sources)
+		}
+		if got := fire.Opts.Sources[0].SensorID; got != "window" {
+			t.Errorf("restore re-fire source SensorID = %q, want window", got)
+		}
 
-	// (b) a second detector afterwards appends, it does not take over
-	// the headline.
-	h.eng.HandleSensorEvent(h.ctx, "motion", true)
-	triggered := h.sink.triggered()
-	if len(triggered) == 0 {
-		t.Fatal("no trigger event republished after the second detector")
-	}
-	last := triggered[len(triggered)-1]
-	if last.SensorID != "window" {
-		t.Errorf("republished headline SensorID = %q, want window (the sensor that opened the incident)", last.SensorID)
-	}
-	if len(last.Sources) != 2 || last.Sources[0].Ref != refFor("window") || last.Sources[1].Ref != refFor("motion") {
-		t.Errorf("republished Sources = %+v, want [window, motion]", last.Sources)
-	}
+		// (b) a second detector afterwards appends, it does not take over
+		// the headline.
+		h.eng.HandleSensorEvent(h.ctx, "motion", true)
+		triggered := h.sink.triggered()
+		if len(triggered) == 0 {
+			t.Fatal("no trigger event republished after the second detector")
+		}
+		last := triggered[len(triggered)-1]
+		if last.SensorID != "window" {
+			t.Errorf("republished headline SensorID = %q, want window (the sensor that opened the incident)", last.SensorID)
+		}
+		if len(last.Sources) != 2 || last.Sources[0].Ref != refFor("window") || last.Sources[1].Ref != refFor("motion") {
+			t.Errorf("republished Sources = %+v, want [window, motion]", last.Sources)
+		}
+	})
 }
 
 // TestSources_RestoreSurvivesAnUnreadableLedger pins the degradation
 // direction: a ledger read failure must not keep a triggered zone from
 // restoring — it falls back to the empty accumulator.
 func TestSources_RestoreSurvivesAnUnreadableLedger(t *testing.T) {
-	h := newHarness(t)
-	h.seedStandardZone()
-	ledger := &fakeSourceLedger{}
-	h.startWithLedger(ledger)
-	h.armFull()
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedStandardZone()
+		ledger := &fakeSourceLedger{}
+		h.startWithLedger(ledger)
+		h.armFull()
 
-	h.eng.HandleSensorEvent(h.ctx, "window", true)
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+		h.eng.HandleSensorEvent(h.ctx, "window", true)
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 
-	ledger.listErr = errors.New("ledger unavailable")
-	h.reader.set("window", true)
-	h.restartWithLedger(10*time.Second, ledger)
+		ledger.listErr = errors.New("ledger unavailable")
+		h.reader.set("window", true)
+		h.restartWithLedger(10*time.Second, ledger)
 
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
-	if got := h.eng.IncidentSources("eg"); len(got) != 0 {
-		t.Errorf("IncidentSources = %+v, want empty after a failed ledger read", got)
-	}
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+		if got := h.eng.IncidentSources("eg"); len(got) != 0 {
+			t.Errorf("IncidentSources = %+v, want empty after a failed ledger read", got)
+		}
+	})
 }
 
 // TestSources_ReactivatingSameSensorPublishesNothingFurther verifies that
@@ -269,34 +276,36 @@ func TestSources_RestoreSurvivesAnUnreadableLedger(t *testing.T) {
 // pure no-op on the source side: no new event, no new ledger row —
 // dedup by ref.
 func TestSources_ReactivatingSameSensorPublishesNothingFurther(t *testing.T) {
-	h := newHarness(t)
-	h.seedStandardZone()
-	ledger := &fakeSourceLedger{}
-	h.startWithLedger(ledger)
-	h.armFull()
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedStandardZone()
+		ledger := &fakeSourceLedger{}
+		h.startWithLedger(ledger)
+		h.armFull()
 
-	h.eng.HandleSensorEvent(h.ctx, "window", true)
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+		h.eng.HandleSensorEvent(h.ctx, "window", true)
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 
-	triggeredBefore := len(h.sink.triggered())
-	ledgerCountBefore := ledger.count()
-	sourcesBefore := h.eng.IncidentSources("eg")
+		triggeredBefore := len(h.sink.triggered())
+		ledgerCountBefore := ledger.count()
+		sourcesBefore := h.eng.IncidentSources("eg")
 
-	// Clear then re-activate the same sensor while still triggered.
-	h.eng.HandleSensorEvent(h.ctx, "window", false)
-	h.eng.HandleSensorEvent(h.ctx, "window", true)
+		// Clear then re-activate the same sensor while still triggered.
+		h.eng.HandleSensorEvent(h.ctx, "window", false)
+		h.eng.HandleSensorEvent(h.ctx, "window", true)
 
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
-	if got := len(h.sink.triggered()); got != triggeredBefore {
-		t.Errorf("triggered event count = %d, want unchanged %d (re-activation must not republish)", got, triggeredBefore)
-	}
-	if got := ledger.count(); got != ledgerCountBefore {
-		t.Errorf("ledger row count = %d, want unchanged %d (re-activation must not append)", got, ledgerCountBefore)
-	}
-	sourcesAfter := h.eng.IncidentSources("eg")
-	if len(sourcesAfter) != len(sourcesBefore) {
-		t.Errorf("IncidentSources len=%d, want unchanged %d", len(sourcesAfter), len(sourcesBefore))
-	}
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+		if got := len(h.sink.triggered()); got != triggeredBefore {
+			t.Errorf("triggered event count = %d, want unchanged %d (re-activation must not republish)", got, triggeredBefore)
+		}
+		if got := ledger.count(); got != ledgerCountBefore {
+			t.Errorf("ledger row count = %d, want unchanged %d (re-activation must not append)", got, ledgerCountBefore)
+		}
+		sourcesAfter := h.eng.IncidentSources("eg")
+		if len(sourcesAfter) != len(sourcesBefore) {
+			t.Errorf("IncidentSources len=%d, want unchanged %d", len(sourcesAfter), len(sourcesBefore))
+		}
+	})
 }
 
 // TestSources_CloseIncidentResetsAccumulator verifies that closing an
@@ -304,43 +313,45 @@ func TestSources_ReactivatingSameSensorPublishesNothingFurther(t *testing.T) {
 // next incident starts fresh rather than inheriting the previous one's
 // sources.
 func TestSources_CloseIncidentResetsAccumulator(t *testing.T) {
-	h := newHarness(t)
-	h.seedStandardZone()
-	ledger := &fakeSourceLedger{}
-	h.startWithLedger(ledger)
-	h.armFull()
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedStandardZone()
+		ledger := &fakeSourceLedger{}
+		h.startWithLedger(ledger)
+		h.armFull()
 
-	h.eng.HandleSensorEvent(h.ctx, "window", true)
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
-	if got := h.eng.IncidentSources("eg"); len(got) != 1 {
-		t.Fatalf("IncidentSources before disarm len=%d want 1: %+v", len(got), got)
-	}
+		h.eng.HandleSensorEvent(h.ctx, "window", true)
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+		if got := h.eng.IncidentSources("eg"); len(got) != 1 {
+			t.Fatalf("IncidentSources before disarm len=%d want 1: %+v", len(got), got)
+		}
 
-	if err := h.eng.Disarm(h.ctx, "eg", "tester", "test"); err != nil {
-		t.Fatalf("disarm: %v", err)
-	}
-	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
-	if got := h.eng.IncidentSources("eg"); len(got) != 0 {
-		t.Errorf("IncidentSources after disarm = %+v, want empty", got)
-	}
+		if err := h.eng.Disarm(h.ctx, "eg", "tester", "test"); err != nil {
+			t.Fatalf("disarm: %v", err)
+		}
+		h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
+		if got := h.eng.IncidentSources("eg"); len(got) != 0 {
+			t.Errorf("IncidentSources after disarm = %+v, want empty", got)
+		}
 
-	// Close the still-open window before re-arming, otherwise it blocks
-	// the arm as an open-contact blocker — irrelevant to what this test
-	// checks (the source accumulator, not readiness).
-	h.eng.HandleSensorEvent(h.ctx, "window", false)
+		// Close the still-open window before re-arming, otherwise it blocks
+		// the arm as an open-contact blocker — irrelevant to what this test
+		// checks (the source accumulator, not readiness).
+		h.eng.HandleSensorEvent(h.ctx, "window", false)
 
-	// A fresh incident must not inherit the closed incident's sources.
-	h.armFull()
-	h.eng.HandleSensorEvent(h.ctx, "motion", true)
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+		// A fresh incident must not inherit the closed incident's sources.
+		h.armFull()
+		h.eng.HandleSensorEvent(h.ctx, "motion", true)
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 
-	got := h.eng.IncidentSources("eg")
-	if len(got) != 1 {
-		t.Fatalf("IncidentSources for the new incident len=%d want 1: %+v", len(got), got)
-	}
-	if got[0].Ref != refFor("motion") {
-		t.Errorf("new incident source Ref = %q, want %q (must not carry over window)", got[0].Ref, refFor("motion"))
-	}
+		got := h.eng.IncidentSources("eg")
+		if len(got) != 1 {
+			t.Fatalf("IncidentSources for the new incident len=%d want 1: %+v", len(got), got)
+		}
+		if got[0].Ref != refFor("motion") {
+			t.Errorf("new incident source Ref = %q, want %q (must not carry over window)", got[0].Ref, refFor("motion"))
+		}
+	})
 }
 
 // TestSources_CentralLossCauseRecordsNoSourceAndDoesNotPanic verifies
@@ -350,33 +361,35 @@ func TestSources_CloseIncidentResetsAccumulator(t *testing.T) {
 // for it and recordSource drops an empty reference rather than
 // panicking on it.
 func TestSources_CentralLossCauseRecordsNoSourceAndDoesNotPanic(t *testing.T) {
-	h := newHarness(t)
-	cfg := defaultZoneConfig()
-	cfg.CentralLoss = hmenum.AlarmCentralLossTrigger
-	h.seedZone("eg", "Erdgeschoss", cfg)
-	h.seedSensor("door", "eg", hmenum.AlarmSensorTypeDoor, engine.SensorConfig{
-		Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull},
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		cfg := defaultZoneConfig()
+		cfg.CentralLoss = hmenum.AlarmCentralLossTrigger
+		h.seedZone("eg", "Erdgeschoss", cfg)
+		h.seedSensor("door", "eg", hmenum.AlarmSensorTypeDoor, engine.SensorConfig{
+			Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull},
+		})
+		ledger := &fakeSourceLedger{}
+		h.startWithLedger(ledger)
+		h.armFull()
+
+		h.eng.HandleCentralConnectivity(h.ctx, "ccu-test", false)
+
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+		if got := h.eng.IncidentSources("eg"); len(got) != 0 {
+			t.Errorf("IncidentSources = %+v, want empty for a central-loss cause", got)
+		}
+		if got := ledger.count(); got != 0 {
+			t.Errorf("ledger row count = %d, want 0", got)
+		}
+		triggered := h.sink.triggered()
+		if len(triggered) != 1 {
+			t.Fatalf("triggered events count = %d, want 1", len(triggered))
+		}
+		if len(triggered[0].Sources) != 0 {
+			t.Errorf("triggered[0].Sources = %+v, want empty", triggered[0].Sources)
+		}
 	})
-	ledger := &fakeSourceLedger{}
-	h.startWithLedger(ledger)
-	h.armFull()
-
-	h.eng.HandleCentralConnectivity(h.ctx, "ccu-test", false)
-
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
-	if got := h.eng.IncidentSources("eg"); len(got) != 0 {
-		t.Errorf("IncidentSources = %+v, want empty for a central-loss cause", got)
-	}
-	if got := ledger.count(); got != 0 {
-		t.Errorf("ledger row count = %d, want 0", got)
-	}
-	triggered := h.sink.triggered()
-	if len(triggered) != 1 {
-		t.Fatalf("triggered events count = %d, want 1", len(triggered))
-	}
-	if len(triggered[0].Sources) != 0 {
-		t.Errorf("triggered[0].Sources = %+v, want empty", triggered[0].Sources)
-	}
 }
 
 // TestSources_NilSourceLedgerStillAccumulatesAndPublishes verifies that
@@ -386,28 +399,30 @@ func TestSources_CentralLossCauseRecordsNoSourceAndDoesNotPanic(t *testing.T) {
 // collects every source and the engine still publishes the full list.
 // A missing ledger must never gate an alarm.
 func TestSources_NilSourceLedgerStillAccumulatesAndPublishes(t *testing.T) {
-	h := newHarness(t)
-	h.seedStandardZone()
-	h.start() // harness.build wires no SourceLedger: ledger is nil.
-	h.armFull()
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedStandardZone()
+		h.start() // harness.build wires no SourceLedger: ledger is nil.
+		h.armFull()
 
-	h.eng.HandleSensorEvent(h.ctx, "window", true)
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
-	h.eng.HandleSensorEvent(h.ctx, "motion", true)
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+		h.eng.HandleSensorEvent(h.ctx, "window", true)
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+		h.eng.HandleSensorEvent(h.ctx, "motion", true)
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 
-	sources := h.eng.IncidentSources("eg")
-	if len(sources) != 2 {
-		t.Fatalf("IncidentSources len=%d want 2: %+v", len(sources), sources)
-	}
+		sources := h.eng.IncidentSources("eg")
+		if len(sources) != 2 {
+			t.Fatalf("IncidentSources len=%d want 2: %+v", len(sources), sources)
+		}
 
-	triggered := h.sink.triggered()
-	if len(triggered) != 2 {
-		t.Fatalf("triggered events count = %d, want 2", len(triggered))
-	}
-	if len(triggered[1].Sources) != 2 {
-		t.Errorf("last triggered event Sources = %+v, want 2 entries despite a nil ledger", triggered[1].Sources)
-	}
+		triggered := h.sink.triggered()
+		if len(triggered) != 2 {
+			t.Fatalf("triggered events count = %d, want 2", len(triggered))
+		}
+		if len(triggered[1].Sources) != 2 {
+			t.Errorf("last triggered event Sources = %+v, want 2 entries despite a nil ledger", triggered[1].Sources)
+		}
+	})
 }
 
 // TestReadiness_SensorBothUnreachableAndLowBatteryDetailsVsBlockers
@@ -417,59 +432,61 @@ func TestSources_NilSourceLedgerStillAccumulatesAndPublishes(t *testing.T) {
 // deduplicates the same sensor down to one entry and loses which
 // reasons applied.
 func TestReadiness_SensorBothUnreachableAndLowBatteryDetailsVsBlockers(t *testing.T) {
-	h := newHarness(t)
-	cfg := defaultZoneConfig()
-	// Override LowBattery to Block (default is Warn) so both health
-	// classes classify as blocking and land in Blockers — the scenario
-	// where the flat list's deduplication actually loses information.
-	cfg.Blockers.LowBattery = hmenum.AlarmBlockerPolicyBlock
-	h.seedZone("eg", "Erdgeschoss", cfg)
-	h.seedSensor("motion", "eg", hmenum.AlarmSensorTypeMotion, engine.SensorConfig{
-		Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull},
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		cfg := defaultZoneConfig()
+		// Override LowBattery to Block (default is Warn) so both health
+		// classes classify as blocking and land in Blockers — the scenario
+		// where the flat list's deduplication actually loses information.
+		cfg.Blockers.LowBattery = hmenum.AlarmBlockerPolicyBlock
+		h.seedZone("eg", "Erdgeschoss", cfg)
+		h.seedSensor("motion", "eg", hmenum.AlarmSensorTypeMotion, engine.SensorConfig{
+			Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull},
+		})
+		h.start()
+
+		h.eng.SetSensorAvailability(h.ctx, "motion", false)
+		h.eng.SetSensorHealth(h.ctx, "motion", engine.SensorHealth{LowBattery: true})
+
+		snap := h.mustSnapshot("eg")
+		rd, ok := snap.Readiness[hmenum.AlarmModeFull]
+		if !ok {
+			t.Fatal("no readiness verdict for full mode")
+		}
+
+		if len(rd.Blockers) != 1 || rd.Blockers[0] != "motion" {
+			t.Errorf("Blockers = %v, want exactly [motion] (deduplicated)", rd.Blockers)
+		}
+
+		var reasons []hmevent.AlarmBlockerReason
+		for _, d := range rd.Details {
+			if d.SensorID != "motion" {
+				t.Errorf("Details entry for unexpected sensor %q", d.SensorID)
+				continue
+			}
+			if !d.Blocking {
+				t.Errorf("Details entry reason=%q Blocking=false, want true", d.Reason)
+			}
+			reasons = append(reasons, d.Reason)
+		}
+		if len(rd.Details) != 2 {
+			t.Fatalf("Details len=%d want 2 (one per reason): %+v", len(rd.Details), rd.Details)
+		}
+		wantUnreachable, wantLowBattery := false, false
+		for _, r := range reasons {
+			switch r {
+			case hmevent.AlarmBlockerReasonUnreachable:
+				wantUnreachable = true
+			case hmevent.AlarmBlockerReasonLowBattery:
+				wantLowBattery = true
+			default:
+				t.Errorf("unexpected blocker reason %q", r)
+			}
+		}
+		if !wantUnreachable || !wantLowBattery {
+			t.Errorf("Details reasons = %v, want both unreachable and low_battery", reasons)
+		}
 	})
-	h.start()
-
-	h.eng.SetSensorAvailability(h.ctx, "motion", false)
-	h.eng.SetSensorHealth(h.ctx, "motion", engine.SensorHealth{LowBattery: true})
-
-	snap := h.mustSnapshot("eg")
-	rd, ok := snap.Readiness[hmenum.AlarmModeFull]
-	if !ok {
-		t.Fatal("no readiness verdict for full mode")
-	}
-
-	if len(rd.Blockers) != 1 || rd.Blockers[0] != "motion" {
-		t.Errorf("Blockers = %v, want exactly [motion] (deduplicated)", rd.Blockers)
-	}
-
-	var reasons []hmevent.AlarmBlockerReason
-	for _, d := range rd.Details {
-		if d.SensorID != "motion" {
-			t.Errorf("Details entry for unexpected sensor %q", d.SensorID)
-			continue
-		}
-		if !d.Blocking {
-			t.Errorf("Details entry reason=%q Blocking=false, want true", d.Reason)
-		}
-		reasons = append(reasons, d.Reason)
-	}
-	if len(rd.Details) != 2 {
-		t.Fatalf("Details len=%d want 2 (one per reason): %+v", len(rd.Details), rd.Details)
-	}
-	wantUnreachable, wantLowBattery := false, false
-	for _, r := range reasons {
-		switch r {
-		case hmevent.AlarmBlockerReasonUnreachable:
-			wantUnreachable = true
-		case hmevent.AlarmBlockerReasonLowBattery:
-			wantLowBattery = true
-		default:
-			t.Errorf("unexpected blocker reason %q", r)
-		}
-	}
-	if !wantUnreachable || !wantLowBattery {
-		t.Errorf("Details reasons = %v, want both unreachable and low_battery", reasons)
-	}
 }
 
 // TestSources_EntryDelayExpiryRecordsTheSensorThatOpenedTheCountdown
@@ -484,27 +501,29 @@ func TestReadiness_SensorBothUnreachableAndLowBatteryDetailsVsBlockers(t *testin
 // is nil, and the report's sensor placeholders render blank — for the
 // single case an after-the-fact audit most needs to answer.
 func TestSources_EntryDelayExpiryRecordsTheSensorThatOpenedTheCountdown(t *testing.T) {
-	h := newHarness(t)
-	h.seedStandardZone()
-	ledger := &fakeSourceLedger{}
-	h.startWithLedger(ledger)
-	h.armFull()
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedStandardZone()
+		ledger := &fakeSourceLedger{}
+		h.startWithLedger(ledger)
+		h.armFull()
 
-	h.eng.HandleSensorEvent(h.ctx, "door", true)
-	h.wantState("eg", hmenum.AlarmZoneStatePending)
-	h.advance(15 * time.Second)
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+		h.eng.HandleSensorEvent(h.ctx, "door", true)
+		h.wantState("eg", hmenum.AlarmZoneStatePending)
+		h.advance(15 * time.Second)
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 
-	sources := h.eng.IncidentSources("eg")
-	if len(sources) != 1 {
-		t.Fatalf("IncidentSources len=%d want 1 after an entry-delay expiry: %+v", len(sources), sources)
-	}
-	if sources[0].Ref != refFor("door") {
-		t.Errorf("sources[0].Ref = %q, want %q", sources[0].Ref, refFor("door"))
-	}
-	if got := ledger.refs(); len(got) != 1 || got[0] != refFor("door") {
-		t.Errorf("ledger refs = %v, want [%s]", got, refFor("door"))
-	}
+		sources := h.eng.IncidentSources("eg")
+		if len(sources) != 1 {
+			t.Fatalf("IncidentSources len=%d want 1 after an entry-delay expiry: %+v", len(sources), sources)
+		}
+		if sources[0].Ref != refFor("door") {
+			t.Errorf("sources[0].Ref = %q, want %q", sources[0].Ref, refFor("door"))
+		}
+		if got := ledger.refs(); len(got) != 1 || got[0] != refFor("door") {
+			t.Errorf("ledger refs = %v, want [%s]", got, refFor("door"))
+		}
+	})
 }
 
 // TestSources_UnavailableWhileArmedRecordsTheSensorThatWentAway covers
@@ -512,29 +531,31 @@ func TestSources_EntryDelayExpiryRecordsTheSensorThatOpenedTheCountdown(t *testi
 // route: a sensor that stops answering while armed is itself the
 // contributing data point, so the incident must name it.
 func TestSources_UnavailableWhileArmedRecordsTheSensorThatWentAway(t *testing.T) {
-	h := newHarness(t)
-	h.seedZone("eg", "Erdgeschoss", defaultZoneConfig())
-	h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{
-		Modes:                  []hmenum.AlarmMode{hmenum.AlarmModeFull},
-		TriggerWhenUnavailable: true,
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedZone("eg", "Erdgeschoss", defaultZoneConfig())
+		h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{
+			Modes:                  []hmenum.AlarmMode{hmenum.AlarmModeFull},
+			TriggerWhenUnavailable: true,
+		})
+		ledger := &fakeSourceLedger{}
+		h.startWithLedger(ledger)
+		h.armFull()
+
+		h.eng.SetSensorAvailability(h.ctx, "window", false)
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+
+		sources := h.eng.IncidentSources("eg")
+		if len(sources) != 1 {
+			t.Fatalf("IncidentSources len=%d want 1 after an unavailable-while-armed trigger: %+v", len(sources), sources)
+		}
+		if sources[0].Ref != refFor("window") {
+			t.Errorf("sources[0].Ref = %q, want %q", sources[0].Ref, refFor("window"))
+		}
+		if ledger.count() != 1 {
+			t.Errorf("ledger rows = %d, want 1", ledger.count())
+		}
 	})
-	ledger := &fakeSourceLedger{}
-	h.startWithLedger(ledger)
-	h.armFull()
-
-	h.eng.SetSensorAvailability(h.ctx, "window", false)
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
-
-	sources := h.eng.IncidentSources("eg")
-	if len(sources) != 1 {
-		t.Fatalf("IncidentSources len=%d want 1 after an unavailable-while-armed trigger: %+v", len(sources), sources)
-	}
-	if sources[0].Ref != refFor("window") {
-		t.Errorf("sources[0].Ref = %q, want %q", sources[0].Ref, refFor("window"))
-	}
-	if ledger.count() != 1 {
-		t.Errorf("ledger rows = %d, want 1", ledger.count())
-	}
 }
 
 // TestSources_DowntimeActivationRecordsTheSensorFoundOpenOnRestore
@@ -542,29 +563,32 @@ func TestSources_UnavailableWhileArmedRecordsTheSensorThatWentAway(t *testing.T)
 // daemon was down is detected by the restore's fresh-value read, and
 // the incident it raises must name that window.
 func TestSources_DowntimeActivationRecordsTheSensorFoundOpenOnRestore(t *testing.T) {
-	h := newHarness(t)
-	h.seedStandardZone()
-	h.start()
-	h.armFull()
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedStandardZone()
+		h.start()
+		h.armFull()
 
-	// The window opens while the daemon is down; the restart re-reads it.
-	h.eng.Stop(h.ctx)
-	h.freshPorts(h.clk.Now().Add(time.Minute))
-	h.reader.set("window", true)
-	ledger := &fakeSourceLedger{}
-	h.startWithLedger(ledger)
+		// The window opens while the daemon is down; the restart re-reads it.
+		h.eng.Stop(h.ctx)
+		time.Sleep(time.Minute)
+		h.freshPorts()
+		h.reader.set("window", true)
+		ledger := &fakeSourceLedger{}
+		h.startWithLedger(ledger)
 
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
-	sources := h.eng.IncidentSources("eg")
-	if len(sources) != 1 {
-		t.Fatalf("IncidentSources len=%d want 1 after a downtime activation: %+v", len(sources), sources)
-	}
-	if sources[0].Ref != refFor("window") {
-		t.Errorf("sources[0].Ref = %q, want %q", sources[0].Ref, refFor("window"))
-	}
-	if ledger.count() != 1 {
-		t.Errorf("ledger rows = %d, want 1", ledger.count())
-	}
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+		sources := h.eng.IncidentSources("eg")
+		if len(sources) != 1 {
+			t.Fatalf("IncidentSources len=%d want 1 after a downtime activation: %+v", len(sources), sources)
+		}
+		if sources[0].Ref != refFor("window") {
+			t.Errorf("sources[0].Ref = %q, want %q", sources[0].Ref, refFor("window"))
+		}
+		if ledger.count() != 1 {
+			t.Errorf("ledger rows = %d, want 1", ledger.count())
+		}
+	})
 }
 
 // TestSources_FireCycleCarriesTheZoneSnapshot pins the other end of the
@@ -574,21 +598,23 @@ func TestSources_DowntimeActivationRecordsTheSensorFoundOpenOnRestore(t *testing
 // the engine for either one instead would self-deadlock the alarm
 // system on the first notification output an operator enrols.
 func TestSources_FireCycleCarriesTheZoneSnapshot(t *testing.T) {
-	h := newHarness(t)
-	h.seedStandardZone()
-	ledger := &fakeSourceLedger{}
-	h.startWithLedger(ledger)
-	h.armFull()
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedStandardZone()
+		ledger := &fakeSourceLedger{}
+		h.startWithLedger(ledger)
+		h.armFull()
 
-	h.eng.HandleSensorEvent(h.ctx, "window", true)
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+		h.eng.HandleSensorEvent(h.ctx, "window", true)
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 
-	fire := h.outputs.lastFire(t)
-	if fire.Opts.ZoneName != "Erdgeschoss" {
-		t.Errorf("FireOptions.ZoneName = %q, want Erdgeschoss", fire.Opts.ZoneName)
-	}
-	if len(fire.Opts.Sources) != 1 || fire.Opts.Sources[0].Ref != refFor("window") {
-		t.Errorf("FireOptions.Sources = %+v, want exactly the window source %q",
-			fire.Opts.Sources, refFor("window"))
-	}
+		fire := h.outputs.lastFire(t)
+		if fire.Opts.ZoneName != "Erdgeschoss" {
+			t.Errorf("FireOptions.ZoneName = %q, want Erdgeschoss", fire.Opts.ZoneName)
+		}
+		if len(fire.Opts.Sources) != 1 || fire.Opts.Sources[0].Ref != refFor("window") {
+			t.Errorf("FireOptions.Sources = %+v, want exactly the window source %q",
+				fire.Opts.Sources, refFor("window"))
+		}
+	})
 }

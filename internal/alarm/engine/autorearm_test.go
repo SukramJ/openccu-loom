@@ -5,6 +5,7 @@ package engine_test
 
 import (
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
@@ -53,102 +54,112 @@ func triggerAndDisarm(h *harness) {
 }
 
 func TestAutoRearm_SchedulesAfterPostTriggerDisarmAndRearmsAfterTheQuietPeriod(t *testing.T) {
-	h := newHarness(t)
-	seedAutoRearmZone(h)
-	h.start()
-	triggerAndDisarm(h)
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		seedAutoRearmZone(h)
+		h.start()
+		triggerAndDisarm(h)
 
-	if !h.journal.has("auto_rearm_scheduled") {
-		t.Fatalf("missing auto_rearm_scheduled journal entry; got %v", h.journal.events())
-	}
+		if !h.journal.has("auto_rearm_scheduled") {
+			t.Fatalf("missing auto_rearm_scheduled journal entry; got %v", h.journal.events())
+		}
 
-	h.advance(30 * time.Second)
-	h.wantState("eg", hmenum.AlarmZoneStateArming) // full's own exit delay is now running
-	if !h.journal.has("auto_rearmed") {
-		t.Fatalf("missing auto_rearmed journal entry; got %v", h.journal.events())
-	}
+		h.advance(30 * time.Second)
+		h.wantState("eg", hmenum.AlarmZoneStateArming) // full's own exit delay is now running
+		if !h.journal.has("auto_rearmed") {
+			t.Fatalf("missing auto_rearmed journal entry; got %v", h.journal.events())
+		}
 
-	h.advance(30 * time.Second)
-	h.wantState("eg", hmenum.AlarmZoneStateArmed)
-	if got := h.mustSnapshot("eg").Mode; got != hmenum.AlarmModeFull {
-		t.Fatalf("auto-rearm mode = %s, want full", got)
-	}
+		h.advance(30 * time.Second)
+		h.wantState("eg", hmenum.AlarmZoneStateArmed)
+		if got := h.mustSnapshot("eg").Mode; got != hmenum.AlarmModeFull {
+			t.Fatalf("auto-rearm mode = %s, want full", got)
+		}
+	})
 }
 
 func TestAutoRearm_MemberActivityResetsTheQuietPeriod(t *testing.T) {
-	h := newHarness(t)
-	seedAutoRearmZone(h)
-	h.start()
-	triggerAndDisarm(h)
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		seedAutoRearmZone(h)
+		h.start()
+		triggerAndDisarm(h)
 
-	h.advance(20 * time.Second)
-	h.eng.HandleSensorEvent(h.ctx, "window", true) // fresh activity while disarmed
-	if !h.journal.has("auto_rearm_deferred") {
-		t.Fatalf("missing auto_rearm_deferred journal entry; got %v", h.journal.events())
-	}
-	h.eng.HandleSensorEvent(h.ctx, "window", false) // settles closed again
+		h.advance(20 * time.Second)
+		h.eng.HandleSensorEvent(h.ctx, "window", true) // fresh activity while disarmed
+		if !h.journal.has("auto_rearm_deferred") {
+			t.Fatalf("missing auto_rearm_deferred journal entry; got %v", h.journal.events())
+		}
+		h.eng.HandleSensorEvent(h.ctx, "window", false) // settles closed again
 
-	// The original 30s deadline (10s away) has passed, but the timer
-	// was pushed back by the activity.
-	h.advance(10 * time.Second)
-	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
+		// The original 30s deadline (10s away) has passed, but the timer
+		// was pushed back by the activity.
+		h.advance(10 * time.Second)
+		h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
 
-	h.advance(20 * time.Second)                    // the deferred 30s window from the activity
-	h.wantState("eg", hmenum.AlarmZoneStateArming) // full's own exit delay is now running
-	h.advance(30 * time.Second)
-	h.wantState("eg", hmenum.AlarmZoneStateArmed)
+		h.advance(20 * time.Second)                    // the deferred 30s window from the activity
+		h.wantState("eg", hmenum.AlarmZoneStateArming) // full's own exit delay is now running
+		h.advance(30 * time.Second)
+		h.wantState("eg", hmenum.AlarmZoneStateArmed)
+	})
 }
 
 func TestAutoRearm_ExplicitDisarmCancelsAPendingRearm(t *testing.T) {
-	h := newHarness(t)
-	seedAutoRearmZone(h)
-	h.start()
-	triggerAndDisarm(h)
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		seedAutoRearmZone(h)
+		h.start()
+		triggerAndDisarm(h)
 
-	if err := h.eng.Disarm(h.ctx, "eg", "tester", "test"); err != nil {
-		t.Fatalf("explicit disarm: %v", err)
-	}
-	if !h.journal.has("auto_rearm_cancelled") {
-		t.Fatalf("missing auto_rearm_cancelled journal entry; got %v", h.journal.events())
-	}
+		if err := h.eng.Disarm(h.ctx, "eg", "tester", "test"); err != nil {
+			t.Fatalf("explicit disarm: %v", err)
+		}
+		if !h.journal.has("auto_rearm_cancelled") {
+			t.Fatalf("missing auto_rearm_cancelled journal entry; got %v", h.journal.events())
+		}
 
-	h.advance(time.Minute)
-	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
+		h.advance(time.Minute)
+		h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
+	})
 }
 
 func TestAutoRearm_FreshArmSupersedesAPendingRearm(t *testing.T) {
-	h := newHarness(t)
-	seedAutoRearmZone(h)
-	h.start()
-	triggerAndDisarm(h)
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		seedAutoRearmZone(h)
+		h.start()
+		triggerAndDisarm(h)
 
-	h.armFull()
+		h.armFull()
 
-	// The superseded auto-rearm timer must not fire a second, redundant
-	// arm attempt later.
-	before := len(h.journal.events())
-	h.advance(time.Minute)
-	if after := len(h.journal.events()); after != before {
-		t.Fatalf("journal grew from %d to %d entries after the superseded auto-rearm window", before, after)
-	}
+		// The superseded auto-rearm timer must not fire a second, redundant
+		// arm attempt later.
+		before := len(h.journal.events())
+		h.advance(time.Minute)
+		if after := len(h.journal.events()); after != before {
+			t.Fatalf("journal grew from %d to %d entries after the superseded auto-rearm window", before, after)
+		}
+	})
 }
 
 func TestAutoRearm_BlockedAtElapseStaysDisarmedAndJournalsFailedToArm(t *testing.T) {
-	h := newHarness(t)
-	seedAutoRearmZone(h)
-	h.start()
-	triggerAndDisarm(h)
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		seedAutoRearmZone(h)
+		h.start()
+		triggerAndDisarm(h)
 
-	// A sabotage flag blocks arm readiness without touching activation
-	// or deferring the quiet period (a health signal, not member
-	// activity).
-	h.eng.SetSensorHealth(h.ctx, "window", engine.SensorHealth{Sabotage: true})
+		// A sabotage flag blocks arm readiness without touching activation
+		// or deferring the quiet period (a health signal, not member
+		// activity).
+		h.eng.SetSensorHealth(h.ctx, "window", engine.SensorHealth{Sabotage: true})
 
-	h.advance(30 * time.Second)
-	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
-	if !h.journal.has("failed_to_arm") {
-		t.Fatalf("missing failed_to_arm journal entry; got %v", h.journal.events())
-	}
+		h.advance(30 * time.Second)
+		h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
+		if !h.journal.has("failed_to_arm") {
+			t.Fatalf("missing failed_to_arm journal entry; got %v", h.journal.events())
+		}
+	})
 }
 
 // TestAutoRearm_StopCancelsThePendingRearm pins the shutdown edge: the
@@ -158,28 +169,30 @@ func TestAutoRearm_BlockedAtElapseStaysDisarmedAndJournalsFailedToArm(t *testing
 // down, and an armed state row written over the final snapshot Stop
 // just persisted, so the next boot restores a zone nobody armed.
 func TestAutoRearm_StopCancelsThePendingRearm(t *testing.T) {
-	h := newHarness(t)
-	seedAutoRearmZone(h)
-	h.start()
-	triggerAndDisarm(h)
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		seedAutoRearmZone(h)
+		h.start()
+		triggerAndDisarm(h)
 
-	h.eng.Stop(h.ctx)
-	h.advance(time.Minute) // the whole quiet period elapses after the stop
+		h.eng.Stop(h.ctx)
+		h.advance(time.Minute) // the whole quiet period elapses after the stop
 
-	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
-	row, ok, err := h.states.Get(h.ctx, "eg")
-	if err != nil || !ok {
-		t.Fatalf("state row: ok=%v err=%v", ok, err)
-	}
-	if row.State != hmenum.AlarmZoneStateDisarmed {
-		t.Fatalf("persisted state = %s, want disarmed — a stopped engine must not arm", row.State)
-	}
+		h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
+		row, ok, err := h.states.Get(h.ctx, "eg")
+		if err != nil || !ok {
+			t.Fatalf("state row: ok=%v err=%v", ok, err)
+		}
+		if row.State != hmenum.AlarmZoneStateDisarmed {
+			t.Fatalf("persisted state = %s, want disarmed — a stopped engine must not arm", row.State)
+		}
 
-	// The final snapshot still carries the pending rearm, so the next
-	// Start resumes it instead of forgetting it.
-	if !hmenum.AlarmMode(decodeAutoRearmMode(t, row.ContextJSON)).Armed() {
-		t.Errorf("persisted context %q lost the pending auto-rearm mode", row.ContextJSON)
-	}
+		// The final snapshot still carries the pending rearm, so the next
+		// Start resumes it instead of forgetting it.
+		if !hmenum.AlarmMode(decodeAutoRearmMode(t, row.ContextJSON)).Armed() {
+			t.Errorf("persisted context %q lost the pending auto-rearm mode", row.ContextJSON)
+		}
+	})
 }
 
 // decodeAutoRearmMode reads the persisted auto-rearm target out of a
@@ -196,33 +209,37 @@ func decodeAutoRearmMode(t *testing.T, contextJSON string) string {
 }
 
 func TestAutoRearm_RestoreResumesTheRemainingQuietPeriod(t *testing.T) {
-	h := newHarness(t)
-	seedAutoRearmZone(h)
-	h.start()
-	triggerAndDisarm(h)
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		seedAutoRearmZone(h)
+		h.start()
+		triggerAndDisarm(h)
 
-	h.restart(10 * time.Second) // 20s of the 30s quiet period remain
-	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
-	if !h.journal.has("auto_rearm_resumed") {
-		t.Fatalf("missing auto_rearm_resumed journal entry; got %v", h.journal.events())
-	}
+		h.restart(10 * time.Second) // 20s of the 30s quiet period remain
+		h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
+		if !h.journal.has("auto_rearm_resumed") {
+			t.Fatalf("missing auto_rearm_resumed journal entry; got %v", h.journal.events())
+		}
 
-	// The quiet period elapses, then full mode's own 30s exit delay
-	// completes the arm.
-	h.advance(20 * time.Second)
-	h.wantState("eg", hmenum.AlarmZoneStateArming)
-	h.advance(30 * time.Second)
-	h.wantState("eg", hmenum.AlarmZoneStateArmed)
+		// The quiet period elapses, then full mode's own 30s exit delay
+		// completes the arm.
+		h.advance(20 * time.Second)
+		h.wantState("eg", hmenum.AlarmZoneStateArming)
+		h.advance(30 * time.Second)
+		h.wantState("eg", hmenum.AlarmZoneStateArmed)
+	})
 }
 
 func TestAutoRearm_RestoreElapsedWhileDownRearmsImmediately(t *testing.T) {
-	h := newHarness(t)
-	seedAutoRearmZone(h)
-	h.start()
-	triggerAndDisarm(h)
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		seedAutoRearmZone(h)
+		h.start()
+		triggerAndDisarm(h)
 
-	h.restart(time.Minute)                         // the whole 30s quiet period elapsed while down
-	h.wantState("eg", hmenum.AlarmZoneStateArming) // beginArm ran; full's own exit delay is now running
-	h.advance(30 * time.Second)
-	h.wantState("eg", hmenum.AlarmZoneStateArmed)
+		h.restart(time.Minute)                         // the whole 30s quiet period elapsed while down
+		h.wantState("eg", hmenum.AlarmZoneStateArming) // beginArm ran; full's own exit delay is now running
+		h.advance(30 * time.Second)
+		h.wantState("eg", hmenum.AlarmZoneStateArmed)
+	})
 }

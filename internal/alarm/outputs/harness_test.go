@@ -11,12 +11,12 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// testStart is the harness wall-clock origin.
+// testStart is the harness wall-clock origin. A synctest bubble starts
+// at 2000-01-01, so newHarness sleeps forward to it.
 var testStart = time.Date(2026, 7, 14, 12, 0, 0, 0, time.UTC)
 
 // testCentral is the fixed central name every fixture row and fake
@@ -29,13 +29,13 @@ type healthCall struct {
 	Note    string
 }
 
-// harness bundles a Manager under test with deterministic time and
-// recording fakes for every dependency.
+// harness bundles a Manager under test with a deterministic scheduler
+// and recording fakes for every dependency. It lives in one synctest
+// bubble.
 type harness struct {
 	t   *testing.T
 	ctx context.Context
 
-	clk      *clock.Fake
 	sched    *manualScheduler
 	resolver *fakeResolver
 	ledger   *fakeLedger
@@ -56,15 +56,19 @@ type harness struct {
 // newHarness builds an empty harness: no rows, no devices, no
 // Manager yet. Call seedOutputs (directly or via seedStandardZone)
 // to populate it, which also constructs the Manager on first use.
+// It must be called inside a synctest bubble.
 func newHarness(t *testing.T) *harness {
 	t.Helper()
+	// A second harness in the same bubble finds the clock already past
+	// 2000 and leaves it alone.
+	if time.Now().Year() == 2000 {
+		time.Sleep(time.Until(testStart))
+	}
 	seq := &seqCounter{}
-	clk := clock.NewFake(testStart)
 	return &harness{
 		t:        t,
 		ctx:      context.Background(),
-		clk:      clk,
-		sched:    newManualScheduler(clk),
+		sched:    newManualScheduler(),
 		resolver: newFakeResolver(),
 		ledger:   newFakeLedger(seq),
 		journal:  &fakeJournal{},
@@ -80,7 +84,6 @@ func newHarness(t *testing.T) *harness {
 func (h *harness) build(cfgOverride func(*Config)) {
 	h.t.Helper()
 	cfg := Config{
-		Clock:                  h.clk,
 		Scheduler:              h.sched,
 		Resolver:               h.resolver,
 		Ledger:                 h.ledger,
@@ -217,10 +220,10 @@ func (h *harness) lastHealth(t *testing.T) healthCall {
 	return h.healthCalls[len(h.healthCalls)-1]
 }
 
-// advance moves the fake clock and runs every due timer callback
+// advance moves the bubble clock and runs every due timer callback
 // inline, in deadline order.
 func (h *harness) advance(d time.Duration) {
-	h.clk.Advance(d)
+	time.Sleep(d)
 	h.sched.run()
 }
 

@@ -24,7 +24,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/alarm/outputs"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -49,7 +48,6 @@ type Deps struct {
 	Settings Settings
 	Registry *central.Registry
 	Stores   *Stores
-	Clock    clock.Clock
 	Logger   *slog.Logger
 	// Health receives service-level health transitions (optional).
 	Health outputs.HealthFunc
@@ -62,7 +60,6 @@ type Service struct {
 	settings Settings
 	reg      *central.Registry
 	stores   *Stores
-	clk      clock.Clock
 	log      *slog.Logger
 	health   outputs.HealthFunc
 	// outputHealth is the driver layer's fleet-wide health fan-out: the
@@ -114,10 +111,6 @@ func NewService(deps Deps) (*Service, error) {
 	if deps.Registry == nil || deps.Stores == nil {
 		return nil, errors.New("alarm: missing registry or stores")
 	}
-	clk := deps.Clock
-	if clk == nil {
-		clk = clock.New()
-	}
 	logger := deps.Logger
 	if logger == nil {
 		logger = slog.Default()
@@ -126,7 +119,6 @@ func NewService(deps Deps) (*Service, error) {
 		settings:  deps.Settings,
 		reg:       deps.Registry,
 		stores:    deps.Stores,
-		clk:       clk,
 		log:       logger,
 		bus:       events.NewBus(),
 		unsubs:    map[string][]func(){},
@@ -145,7 +137,7 @@ func NewService(deps Deps) (*Service, error) {
 			inner(healthy, note)
 		}
 		s.publish(hmevent.AlarmHealthChangedEvent{
-			Base: hmevent.NewBaseAt(s.clk.Now()), Healthy: healthy, Note: note,
+			Base: hmevent.NewBaseAt(time.Now()), Healthy: healthy, Note: note,
 		})
 	}
 	// outputHealth mirrors s.health's fan-out to the inner tracker and
@@ -159,14 +151,13 @@ func NewService(deps Deps) (*Service, error) {
 			inner(healthy, note)
 		}
 		s.bus.Publish(hmevent.AlarmHealthChangedEvent{
-			Base: hmevent.NewBaseAt(s.clk.Now()), Healthy: healthy, Note: note,
+			Base: hmevent.NewBaseAt(time.Now()), Healthy: healthy, Note: note,
 		})
 	}
-	s.journal = alarmjournal.New(deps.Stores.Journal, clk, s.publish, logger)
+	s.journal = alarmjournal.New(deps.Stores.Journal, s.publish, logger)
 
 	resolver := &deviceResolver{reg: deps.Registry}
 	mgr, err := outputs.NewManager(outputs.Config{
-		Clock:    clk,
 		Resolver: resolver,
 		// Notification outputs fan out onto the alarm bus; MQTT,
 		// webhook, and WS pick the event up per their plane flag.
@@ -208,7 +199,7 @@ func NewService(deps Deps) (*Service, error) {
 		Logger:  logger,
 	})
 
-	eng, err := engine.New(s.engineDeps(deps, clk, mgr, logger))
+	eng, err := engine.New(s.engineDeps(deps, mgr, logger))
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +212,6 @@ func NewService(deps Deps) (*Service, error) {
 		Engine:  eng,
 		Journal: s.journal,
 		Publish: s.publish,
-		Clock:   clk,
 		Logger:  logger,
 		ArmFailure: func(zoneID, zoneName string, mode hmenum.AlarmMode, blockers []hmevent.AlarmBlockerDetail) {
 			if hook := s.armFailureHookRef(); hook != nil {
@@ -263,7 +253,7 @@ func (s *Service) Codes() *codes.Facade { return s.codes }
 // refresh runs on the caller (a management write, never the engine
 // sink), so the store reads it needs are safe here.
 func (s *Service) NotifyCodesChanged() {
-	s.bus.Publish(hmevent.AlarmCodesChangedEvent{Base: hmevent.NewBaseAt(s.clk.Now())})
+	s.bus.Publish(hmevent.AlarmCodesChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
 	s.refreshPanelCodePolicies(context.Background())
 }
 
@@ -587,7 +577,7 @@ func (s *Service) notifyOutputFired(n outputs.Notification) {
 	// indistinguishable from an intrusion alert.
 	cause := incidentCauseKind(n.Incident.CauseJSON)
 	s.bus.Publish(hmevent.AlarmNotificationEvent{
-		Base:       hmevent.NewBaseAt(s.clk.Now()),
+		Base:       hmevent.NewBaseAt(time.Now()),
 		ZoneID:     n.Row.ZoneID,
 		ZoneName:   n.ZoneName,
 		OutputID:   n.Row.ID,
@@ -701,7 +691,7 @@ func (s *Service) scheduleRetention() {
 		return
 	}
 	maxAge := time.Duration(s.settings.JournalRetentionDays) * 24 * time.Hour
-	sched := engine.NewClockScheduler(s.clk)
+	sched := engine.NewTimerScheduler()
 	var chain func()
 	chain = func() {
 		cancel := sched.Schedule(24*time.Hour, func() {
@@ -756,7 +746,7 @@ func (s *Service) purgeIncidents(maxAge time.Duration) {
 		return
 	}
 	ctx := context.Background()
-	cutoff := s.clk.Now().Add(-maxAge).UnixMilli()
+	cutoff := time.Now().Add(-maxAge).UnixMilli()
 	if n, err := s.stores.Incidents.PurgeClosedBefore(ctx, cutoff); err != nil {
 		s.log.Error("alarm incident retention failed", "error", err)
 	} else if n > 0 {
@@ -776,9 +766,8 @@ func (s *Service) purgeIncidents(maxAge time.Duration) {
 // NewService so the constructor stays inside the length budget and the
 // wiring reads as one list rather than a block inside a longer
 // function.
-func (s *Service) engineDeps(deps Deps, clk clock.Clock, mgr *outputs.Manager, logger *slog.Logger) engine.Deps {
+func (s *Service) engineDeps(deps Deps, mgr *outputs.Manager, logger *slog.Logger) engine.Deps {
 	return engine.Deps{
-		Clock:               clk,
 		Zones:               deps.Stores.Zones,
 		Sensors:             deps.Stores.Sensors,
 		State:               deps.Stores.State,

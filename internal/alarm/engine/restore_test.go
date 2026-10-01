@@ -6,6 +6,7 @@ package engine_test
 import (
 	"errors"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
@@ -17,16 +18,18 @@ import (
 // the clock-plausibility rule.
 
 func TestRestore_DisarmedStaysDisarmed(t *testing.T) {
-	h := newHarness(t)
-	h.seedStandardZone()
-	h.start()
-	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedStandardZone()
+		h.start()
+		h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
 
-	h.restart(time.Minute)
-	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
-	if n := h.outputs.fireCount(); n != 0 {
-		t.Fatalf("disarmed restore fired outputs: %d", n)
-	}
+		h.restart(time.Minute)
+		h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
+		if n := h.outputs.fireCount(); n != 0 {
+			t.Fatalf("disarmed restore fired outputs: %d", n)
+		}
+	})
 }
 
 // TestRestore_DisarmedZoneSeedsSensorValues pins that a restart reads
@@ -38,46 +41,48 @@ func TestRestore_DisarmedStaysDisarmed(t *testing.T) {
 // reports ready, arms with a window standing open, and records neither
 // a blocker nor an open-at-arm baseline entry for it.
 func TestRestore_DisarmedZoneSeedsSensorValues(t *testing.T) {
-	h := newHarness(t)
-	h.seedStandardZone()
-	h.start()
-	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedStandardZone()
+		h.start()
+		h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
 
-	// The window stands open across the restart and never pushes a
-	// value afterwards — the restore read is the only source of truth.
-	h.reader.set("window", true)
-	h.restart(time.Minute)
+		// The window stands open across the restart and never pushes a
+		// value afterwards — the restore read is the only source of truth.
+		h.reader.set("window", true)
+		h.restart(time.Minute)
 
-	rd, ok := h.mustSnapshot("eg").Readiness[hmenum.AlarmModeFull]
-	if !ok {
-		t.Fatal("no readiness verdict for full after restore")
-	}
-	if rd.Ready {
-		t.Errorf("zone reports ready to arm with an open window: %+v", rd)
-	}
-	if got := sortedStrings(rd.Blockers); len(got) != 1 || got[0] != "window" {
-		t.Errorf("blockers = %v, want [window]", got)
-	}
+		rd, ok := h.mustSnapshot("eg").Readiness[hmenum.AlarmModeFull]
+		if !ok {
+			t.Fatal("no readiness verdict for full after restore")
+		}
+		if rd.Ready {
+			t.Errorf("zone reports ready to arm with an open window: %+v", rd)
+		}
+		if got := sortedStrings(rd.Blockers); len(got) != 1 || got[0] != "window" {
+			t.Errorf("blockers = %v, want [window]", got)
+		}
 
-	_, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"})
-	var nre *engine.NotReadyError
-	if !errors.As(err, &nre) {
-		t.Fatalf("arm error = %v, want *engine.NotReadyError", err)
-	}
-	if got := sortedStrings(nre.Blockers); len(got) != 1 || got[0] != "window" {
-		t.Errorf("NotReadyError.Blockers = %v, want [window]", got)
-	}
+		_, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"})
+		var nre *engine.NotReadyError
+		if !errors.As(err, &nre) {
+			t.Fatalf("arm error = %v, want *engine.NotReadyError", err)
+		}
+		if got := sortedStrings(nre.Blockers); len(got) != 1 || got[0] != "window" {
+			t.Errorf("NotReadyError.Blockers = %v, want [window]", got)
+		}
 
-	// Forcing the arm through must record the open sensor, or the
-	// restored zone would treat the standing-open window as a fresh
-	// activation on the next event.
-	res, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, Force: true, By: "tester"})
-	if err != nil {
-		t.Fatalf("force arm: %v", err)
-	}
-	if got := sortedStrings(res.Bypassed); len(got) != 1 || got[0] != "window" {
-		t.Fatalf("bypassed = %v, want [window]", got)
-	}
+		// Forcing the arm through must record the open sensor, or the
+		// restored zone would treat the standing-open window as a fresh
+		// activation on the next event.
+		res, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, Force: true, By: "tester"})
+		if err != nil {
+			t.Fatalf("force arm: %v", err)
+		}
+		if got := sortedStrings(res.Bypassed); len(got) != 1 || got[0] != "window" {
+			t.Fatalf("bypassed = %v, want [window]", got)
+		}
+	})
 }
 
 // TestArm_RefreshesSensorValuesBeforeTheBlockerCheck pins the same
@@ -85,155 +90,169 @@ func TestRestore_DisarmedZoneSeedsSensorValues(t *testing.T) {
 // (a fresh enrollment): the arm decision is taken against current
 // values, not against whatever happened to arrive on the bus.
 func TestArm_RefreshesSensorValuesBeforeTheBlockerCheck(t *testing.T) {
-	h := newHarness(t)
-	h.seedStandardZone()
-	h.start()
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedStandardZone()
+		h.start()
 
-	h.reader.set("window", true)
-	_, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"})
-	var nre *engine.NotReadyError
-	if !errors.As(err, &nre) {
-		t.Fatalf("arm error = %v, want *engine.NotReadyError", err)
-	}
-	if got := sortedStrings(nre.Blockers); len(got) != 1 || got[0] != "window" {
-		t.Errorf("NotReadyError.Blockers = %v, want [window]", got)
-	}
+		h.reader.set("window", true)
+		_, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"})
+		var nre *engine.NotReadyError
+		if !errors.As(err, &nre) {
+			t.Fatalf("arm error = %v, want *engine.NotReadyError", err)
+		}
+		if got := sortedStrings(nre.Blockers); len(got) != 1 || got[0] != "window" {
+			t.Errorf("NotReadyError.Blockers = %v, want [window]", got)
+		}
+	})
 }
 
 func TestRestore_ArmedReEvaluatesFreshValues_InstantSensorTriggers(t *testing.T) {
-	h := newHarness(t)
-	h.seedStandardZone()
-	h.start()
-	h.armFull()
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedStandardZone()
+		h.start()
+		h.armFull()
 
-	// The window opens while the daemon is down.
-	h.reader.set("window", true)
-	h.restart(time.Minute)
+		// The window opens while the daemon is down.
+		h.reader.set("window", true)
+		h.restart(time.Minute)
 
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
-	if !h.journal.has("activation_during_downtime") {
-		t.Fatalf("missing downtime-activation journal entry; got %v", h.journal.events())
-	}
-	if n := h.outputs.fireCount(); n != 1 {
-		t.Fatalf("FireCycle count = %d, want 1", n)
-	}
-	inc, ok := h.openIncident("eg")
-	if !ok {
-		t.Fatal("expected an open incident")
-	}
-	if inc.Mode != hmenum.AlarmModeFull {
-		t.Fatalf("incident mode = %s, want full", inc.Mode)
-	}
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+		if !h.journal.has("activation_during_downtime") {
+			t.Fatalf("missing downtime-activation journal entry; got %v", h.journal.events())
+		}
+		if n := h.outputs.fireCount(); n != 1 {
+			t.Fatalf("FireCycle count = %d, want 1", n)
+		}
+		inc, ok := h.openIncident("eg")
+		if !ok {
+			t.Fatal("expected an open incident")
+		}
+		if inc.Mode != hmenum.AlarmModeFull {
+			t.Fatalf("incident mode = %s, want full", inc.Mode)
+		}
+	})
 }
 
 func TestRestore_ArmedReEvaluatesFreshValues_DelayedSensorGoesPending(t *testing.T) {
-	h := newHarness(t)
-	h.seedStandardZone()
-	h.start()
-	h.armFull()
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedStandardZone()
+		h.start()
+		h.armFull()
 
-	// The door (entry-delay flagged) opens while the daemon is down.
-	h.reader.set("door", true)
-	h.restart(time.Minute)
+		// The door (entry-delay flagged) opens while the daemon is down.
+		h.reader.set("door", true)
+		h.restart(time.Minute)
 
-	h.wantState("eg", hmenum.AlarmZoneStatePending)
-	if n := h.outputs.fireCount(); n != 0 {
-		t.Fatalf("pending restore fired outputs: %d", n)
-	}
-	// The real entry delay: a disarm inside the window produces no alarm.
-	if err := h.eng.Disarm(h.ctx, "eg", "tester", "test"); err != nil {
-		t.Fatalf("disarm: %v", err)
-	}
-	h.advance(time.Hour)
-	if n := h.outputs.fireCount(); n != 0 {
-		t.Fatalf("disarmed pending still fired outputs: %d", n)
-	}
+		h.wantState("eg", hmenum.AlarmZoneStatePending)
+		if n := h.outputs.fireCount(); n != 0 {
+			t.Fatalf("pending restore fired outputs: %d", n)
+		}
+		// The real entry delay: a disarm inside the window produces no alarm.
+		if err := h.eng.Disarm(h.ctx, "eg", "tester", "test"); err != nil {
+			t.Fatalf("disarm: %v", err)
+		}
+		h.advance(time.Hour)
+		if n := h.outputs.fireCount(); n != 0 {
+			t.Fatalf("disarmed pending still fired outputs: %d", n)
+		}
+	})
 }
 
 func TestRestore_ArmedSensorOpenAtArmDoesNotTrigger(t *testing.T) {
-	h := newHarness(t)
-	h.seedStandardZone()
-	h.start()
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedStandardZone()
+		h.start()
 
-	// The window is open, gets force-armed (bypassing it would change
-	// semantics — instead use an allow-open sensor: seed a dedicated
-	// zone variant). Here: open window blocks, so force-arm with
-	// bypass, then verify the bypassed sensor never triggers.
-	h.eng.HandleSensorEvent(h.ctx, "window", true)
-	res, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, Force: true, By: "tester"})
-	if err != nil {
-		t.Fatalf("force arm: %v", err)
-	}
-	if got := sortedStrings(res.Bypassed); len(got) != 1 || got[0] != "window" {
-		t.Fatalf("bypassed = %v, want [window]", got)
-	}
-	h.advance(30 * time.Second)
-	h.wantState("eg", hmenum.AlarmZoneStateArmed)
+		// The window is open, gets force-armed (bypassing it would change
+		// semantics — instead use an allow-open sensor: seed a dedicated
+		// zone variant). Here: open window blocks, so force-arm with
+		// bypass, then verify the bypassed sensor never triggers.
+		h.eng.HandleSensorEvent(h.ctx, "window", true)
+		res, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, Force: true, By: "tester"})
+		if err != nil {
+			t.Fatalf("force arm: %v", err)
+		}
+		if got := sortedStrings(res.Bypassed); len(got) != 1 || got[0] != "window" {
+			t.Fatalf("bypassed = %v, want [window]", got)
+		}
+		h.advance(30 * time.Second)
+		h.wantState("eg", hmenum.AlarmZoneStateArmed)
 
-	// Still open after restart: the bypass survives, no trigger.
-	h.reader.set("window", true)
-	h.restart(time.Minute)
-	h.wantState("eg", hmenum.AlarmZoneStateArmed)
-	if n := h.outputs.fireCount(); n != 0 {
-		t.Fatalf("bypassed sensor fired outputs after restore: %d", n)
-	}
+		// Still open after restart: the bypass survives, no trigger.
+		h.reader.set("window", true)
+		h.restart(time.Minute)
+		h.wantState("eg", hmenum.AlarmZoneStateArmed)
+		if n := h.outputs.fireCount(); n != 0 {
+			t.Fatalf("bypassed sensor fired outputs after restore: %d", n)
+		}
+	})
 }
 
 func TestRestore_ArmingDeadlinePassedCompletesArm(t *testing.T) {
-	h := newHarness(t)
-	h.seedStandardZone()
-	h.start()
-	if _, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"}); err != nil {
-		t.Fatalf("arm: %v", err)
-	}
-	h.wantState("eg", hmenum.AlarmZoneStateArming)
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedStandardZone()
+		h.start()
+		if _, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"}); err != nil {
+			t.Fatalf("arm: %v", err)
+		}
+		h.wantState("eg", hmenum.AlarmZoneStateArming)
 
-	// Down for longer than the remaining exit delay.
-	h.restart(2 * time.Minute)
-	h.wantState("eg", hmenum.AlarmZoneStateArmed)
-	if got := h.mustSnapshot("eg").Mode; got != hmenum.AlarmModeFull {
-		t.Fatalf("mode = %s, want full", got)
-	}
+		// Down for longer than the remaining exit delay.
+		h.restart(2 * time.Minute)
+		h.wantState("eg", hmenum.AlarmZoneStateArmed)
+		if got := h.mustSnapshot("eg").Mode; got != hmenum.AlarmModeFull {
+			t.Fatalf("mode = %s, want full", got)
+		}
+	})
 }
 
 func TestRestore_ArmingDeadlinePassedBlockedFailsArm(t *testing.T) {
-	h := newHarness(t)
-	h.seedStandardZone()
-	h.start()
-	if _, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"}); err != nil {
-		t.Fatalf("arm: %v", err)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedStandardZone()
+		h.start()
+		if _, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"}); err != nil {
+			t.Fatalf("arm: %v", err)
+		}
 
-	// The window opens during downtime; the completion readiness
-	// re-check fails and the arm falls back to disarmed — loudly.
-	h.reader.set("window", true)
-	h.restart(2 * time.Minute)
+		// The window opens during downtime; the completion readiness
+		// re-check fails and the arm falls back to disarmed — loudly.
+		h.reader.set("window", true)
+		h.restart(2 * time.Minute)
 
-	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
-	if !h.journal.has("arm_failed_on_restore") {
-		t.Fatalf("missing arm_failed journal entry; got %v", h.journal.events())
-	}
-	if n := h.outputs.fireCount(); n != 0 {
-		t.Fatalf("failed arm fired outputs: %d", n)
-	}
+		h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
+		if !h.journal.has("arm_failed_on_restore") {
+			t.Fatalf("missing arm_failed journal entry; got %v", h.journal.events())
+		}
+		if n := h.outputs.fireCount(); n != 0 {
+			t.Fatalf("failed arm fired outputs: %d", n)
+		}
+	})
 }
 
 func TestRestore_ArmingResumesRemainingDelay(t *testing.T) {
-	h := newHarness(t)
-	h.seedStandardZone()
-	h.start()
-	if _, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"}); err != nil {
-		t.Fatalf("arm: %v", err)
-	}
-	h.advance(10 * time.Second) // 20 s remain
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedStandardZone()
+		h.start()
+		if _, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"}); err != nil {
+			t.Fatalf("arm: %v", err)
+		}
+		h.advance(10 * time.Second) // 20 s remain
 
-	h.restart(5 * time.Second) // 15 s remain after downtime
-	h.wantState("eg", hmenum.AlarmZoneStateArming)
+		h.restart(5 * time.Second) // 15 s remain after downtime
+		h.wantState("eg", hmenum.AlarmZoneStateArming)
 
-	h.advance(14 * time.Second)
-	h.wantState("eg", hmenum.AlarmZoneStateArming)
-	h.advance(time.Second)
-	h.wantState("eg", hmenum.AlarmZoneStateArmed)
+		h.advance(14 * time.Second)
+		h.wantState("eg", hmenum.AlarmZoneStateArming)
+		h.advance(time.Second)
+		h.wantState("eg", hmenum.AlarmZoneStateArmed)
+	})
 }
 
 // TestRestore_ResumedCountdownsKeepTicking pins that a restored
@@ -247,279 +266,309 @@ func TestRestore_ArmingResumesRemainingDelay(t *testing.T) {
 // entry warning that tells a returning resident to enter their code.
 func TestRestore_ResumedCountdownsKeepTicking(t *testing.T) {
 	t.Run("exit delay", func(t *testing.T) {
-		h := newHarness(t)
-		h.seedStandardZone()
-		h.start()
-		if _, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"}); err != nil {
-			t.Fatalf("arm: %v", err)
-		}
-		h.advance(10 * time.Second)
+		synctest.Test(t, func(t *testing.T) {
+			h := newHarness(t)
+			h.seedStandardZone()
+			h.start()
+			if _, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"}); err != nil {
+				t.Fatalf("arm: %v", err)
+			}
+			h.advance(10 * time.Second)
 
-		h.restart(5 * time.Second) // 15 s of the exit delay remain
-		h.wantState("eg", hmenum.AlarmZoneStateArming)
+			h.restart(5 * time.Second) // 15 s of the exit delay remain
+			h.wantState("eg", hmenum.AlarmZoneStateArming)
 
-		h.advance(2 * time.Second)
-		ticks := h.sink.countdowns()
-		if len(ticks) == 0 {
-			t.Fatal("no AlarmCountdownEvent after a restored exit delay: the tick chain never restarted")
-		}
-		if ticks[0].Kind != "exit_delay" || ticks[0].ZoneID != "eg" {
-			t.Fatalf("countdown = %+v, want zone eg / kind exit_delay", ticks[0])
-		}
+			h.advance(2 * time.Second)
+			ticks := h.sink.countdowns()
+			if len(ticks) == 0 {
+				t.Fatal("no AlarmCountdownEvent after a restored exit delay: the tick chain never restarted")
+			}
+			if ticks[0].Kind != "exit_delay" || ticks[0].ZoneID != "eg" {
+				t.Fatalf("countdown = %+v, want zone eg / kind exit_delay", ticks[0])
+			}
+		})
 	})
 
 	t.Run("entry delay", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			h := newHarness(t)
+			h.seedStandardZone()
+			h.start()
+			h.armFull()
+			h.eng.HandleSensorEvent(h.ctx, "door", true)
+			h.advance(5 * time.Second)
+
+			h.restart(4 * time.Second) // 6 s of the entry delay remain
+			h.wantState("eg", hmenum.AlarmZoneStatePending)
+
+			h.advance(2 * time.Second)
+			ticks := h.sink.countdowns()
+			if len(ticks) == 0 {
+				t.Fatal("no AlarmCountdownEvent after a restored entry delay: the tick chain never restarted")
+			}
+			if ticks[0].Kind != "entry_delay" || ticks[0].ZoneID != "eg" {
+				t.Fatalf("countdown = %+v, want zone eg / kind entry_delay", ticks[0])
+			}
+		})
+	})
+}
+
+func TestRestore_PendingDeadlinePassedEscalatesToTriggered(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
 		h := newHarness(t)
 		h.seedStandardZone()
 		h.start()
 		h.armFull()
 		h.eng.HandleSensorEvent(h.ctx, "door", true)
-		h.advance(5 * time.Second)
-
-		h.restart(4 * time.Second) // 6 s of the entry delay remain
 		h.wantState("eg", hmenum.AlarmZoneStatePending)
 
-		h.advance(2 * time.Second)
-		ticks := h.sink.countdowns()
-		if len(ticks) == 0 {
-			t.Fatal("no AlarmCountdownEvent after a restored entry delay: the tick chain never restarted")
+		// Down past the 15 s entry delay: better a late alarm than a
+		// silently swallowed one.
+		h.restart(time.Minute)
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+		if n := h.outputs.fireCount(); n != 1 {
+			t.Fatalf("FireCycle count = %d, want 1", n)
 		}
-		if ticks[0].Kind != "entry_delay" || ticks[0].ZoneID != "eg" {
-			t.Fatalf("countdown = %+v, want zone eg / kind entry_delay", ticks[0])
+		fire := h.outputs.lastFire(t)
+		if !fire.Opts.Restored {
+			t.Fatal("escalated fire not marked Restored")
+		}
+		if !h.journal.has("pending_elapsed_while_down") {
+			t.Fatalf("missing pending-elapsed journal entry; got %v", h.journal.events())
 		}
 	})
-}
-
-func TestRestore_PendingDeadlinePassedEscalatesToTriggered(t *testing.T) {
-	h := newHarness(t)
-	h.seedStandardZone()
-	h.start()
-	h.armFull()
-	h.eng.HandleSensorEvent(h.ctx, "door", true)
-	h.wantState("eg", hmenum.AlarmZoneStatePending)
-
-	// Down past the 15 s entry delay: better a late alarm than a
-	// silently swallowed one.
-	h.restart(time.Minute)
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
-	if n := h.outputs.fireCount(); n != 1 {
-		t.Fatalf("FireCycle count = %d, want 1", n)
-	}
-	fire := h.outputs.lastFire(t)
-	if !fire.Opts.Restored {
-		t.Fatal("escalated fire not marked Restored")
-	}
-	if !h.journal.has("pending_elapsed_while_down") {
-		t.Fatalf("missing pending-elapsed journal entry; got %v", h.journal.events())
-	}
 }
 
 func TestRestore_PendingResumesRemainingCountdown(t *testing.T) {
-	h := newHarness(t)
-	h.seedStandardZone()
-	h.start()
-	h.armFull()
-	h.eng.HandleSensorEvent(h.ctx, "door", true)
-	h.advance(5 * time.Second) // 10 s remain
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedStandardZone()
+		h.start()
+		h.armFull()
+		h.eng.HandleSensorEvent(h.ctx, "door", true)
+		h.advance(5 * time.Second) // 10 s remain
 
-	h.restart(4 * time.Second) // 6 s remain
-	h.wantState("eg", hmenum.AlarmZoneStatePending)
-	if n := h.outputs.fireCount(); n != 0 {
-		t.Fatalf("resumed pending fired outputs: %d", n)
-	}
+		h.restart(4 * time.Second) // 6 s remain
+		h.wantState("eg", hmenum.AlarmZoneStatePending)
+		if n := h.outputs.fireCount(); n != 0 {
+			t.Fatalf("resumed pending fired outputs: %d", n)
+		}
 
-	// Disarm inside the window: no alarm, ever.
-	if err := h.eng.Disarm(h.ctx, "eg", "tester", "test"); err != nil {
-		t.Fatalf("disarm: %v", err)
-	}
-	h.advance(time.Hour)
-	if n := h.outputs.fireCount(); n != 0 {
-		t.Fatalf("disarm during pending still alarmed: %d fires", n)
-	}
+		// Disarm inside the window: no alarm, ever.
+		if err := h.eng.Disarm(h.ctx, "eg", "tester", "test"); err != nil {
+			t.Fatalf("disarm: %v", err)
+		}
+		h.advance(time.Hour)
+		if n := h.outputs.fireCount(); n != 0 {
+			t.Fatalf("disarm during pending still alarmed: %d fires", n)
+		}
+	})
 }
 
 func TestRestore_TriggeredInsideWindowRefires(t *testing.T) {
-	h := newHarness(t)
-	h.seedStandardZone()
-	h.start()
-	h.armFull()
-	h.eng.HandleSensorEvent(h.ctx, "window", true)
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedStandardZone()
+		h.start()
+		h.armFull()
+		h.eng.HandleSensorEvent(h.ctx, "window", true)
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 
-	h.restart(10 * time.Second) // trigger window is 60 s
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
-	if n := h.outputs.fireCount(); n != 1 {
-		t.Fatalf("FireCycle count = %d, want 1 (the restore re-fire)", n)
-	}
-	fire := h.outputs.lastFire(t)
-	if !fire.Opts.Restored || fire.Opts.Degraded {
-		t.Fatalf("re-fire opts = %+v, want Restored && !Degraded", fire.Opts)
-	}
-	inc, ok := h.openIncident("eg")
-	if !ok || inc.RestoreRefires != 1 {
-		t.Fatalf("restore_refires = %d (ok=%v), want 1", inc.RestoreRefires, ok)
-	}
+		h.restart(10 * time.Second) // trigger window is 60 s
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+		if n := h.outputs.fireCount(); n != 1 {
+			t.Fatalf("FireCycle count = %d, want 1 (the restore re-fire)", n)
+		}
+		fire := h.outputs.lastFire(t)
+		if !fire.Opts.Restored || fire.Opts.Degraded {
+			t.Fatalf("re-fire opts = %+v, want Restored && !Degraded", fire.Opts)
+		}
+		inc, ok := h.openIncident("eg")
+		if !ok || inc.RestoreRefires != 1 {
+			t.Fatalf("restore_refires = %d (ok=%v), want 1", inc.RestoreRefires, ok)
+		}
+	})
 }
 
 func TestRestore_TriggeredWindowElapsedExecutesPostTriggerPolicy(t *testing.T) {
-	h := newHarness(t)
-	h.seedStandardZone()
-	h.start()
-	h.armFull()
-	h.eng.HandleSensorEvent(h.ctx, "window", true)
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedStandardZone()
+		h.start()
+		h.armFull()
+		h.eng.HandleSensorEvent(h.ctx, "window", true)
 
-	// Down past the 60 s trigger window: no re-fire, back to armed.
-	h.restart(5 * time.Minute)
-	h.wantState("eg", hmenum.AlarmZoneStateArmed)
-	if n := h.outputs.fireCount(); n != 0 {
-		t.Fatalf("elapsed trigger window still fired: %d", n)
-	}
-	if !h.journal.has("trigger_window_elapsed_while_down") {
-		t.Fatalf("missing elapsed-window journal entry; got %v", h.journal.events())
-	}
-	if _, ok := h.openIncident("eg"); ok {
-		t.Fatal("incident should be closed after the elapsed window")
-	}
+		// Down past the 60 s trigger window: no re-fire, back to armed.
+		h.restart(5 * time.Minute)
+		h.wantState("eg", hmenum.AlarmZoneStateArmed)
+		if n := h.outputs.fireCount(); n != 0 {
+			t.Fatalf("elapsed trigger window still fired: %d", n)
+		}
+		if !h.journal.has("trigger_window_elapsed_while_down") {
+			t.Fatalf("missing elapsed-window journal entry; got %v", h.journal.events())
+		}
+		if _, ok := h.openIncident("eg"); ok {
+			t.Fatal("incident should be closed after the elapsed window")
+		}
+	})
 }
 
 func TestRestore_TriggeredWindowElapsedDisarmPolicy(t *testing.T) {
-	h := newHarness(t)
-	cfg := defaultZoneConfig()
-	cfg.PostTrigger = hmenum.AlarmPostTriggerDisarm
-	h.seedZone("eg", "Erdgeschoss", cfg)
-	h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{
-		Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull},
-	})
-	h.start()
-	h.armFull()
-	h.eng.HandleSensorEvent(h.ctx, "window", true)
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		cfg := defaultZoneConfig()
+		cfg.PostTrigger = hmenum.AlarmPostTriggerDisarm
+		h.seedZone("eg", "Erdgeschoss", cfg)
+		h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{
+			Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull},
+		})
+		h.start()
+		h.armFull()
+		h.eng.HandleSensorEvent(h.ctx, "window", true)
 
-	h.restart(5 * time.Minute)
-	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
-	if n := h.outputs.fireCount(); n != 0 {
-		t.Fatalf("elapsed trigger window still fired: %d", n)
-	}
+		h.restart(5 * time.Minute)
+		h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
+		if n := h.outputs.fireCount(); n != 0 {
+			t.Fatalf("elapsed trigger window still fired: %d", n)
+		}
+	})
 }
 
 func TestRestore_SilencedIncidentStaysSilent(t *testing.T) {
-	h := newHarness(t)
-	h.seedStandardZone()
-	h.start()
-	h.armFull()
-	h.eng.HandleSensorEvent(h.ctx, "window", true)
-	if err := h.eng.Silence(h.ctx, "eg", "tester", "test"); err != nil {
-		t.Fatalf("silence: %v", err)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedStandardZone()
+		h.start()
+		h.armFull()
+		h.eng.HandleSensorEvent(h.ctx, "window", true)
+		if err := h.eng.Silence(h.ctx, "eg", "tester", "test"); err != nil {
+			t.Fatalf("silence: %v", err)
+		}
 
-	// Restart inside the trigger window: S3 persistence — the
-	// silenced incident never sounds again, but the state stays
-	// triggered.
-	h.restart(10 * time.Second)
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
-	if n := h.outputs.fireCount(); n != 0 {
-		t.Fatalf("silenced incident re-fired after restart: %d", n)
-	}
-	if !h.journal.has("silenced_incident_restored") {
-		t.Fatalf("missing silenced-restore journal entry; got %v", h.journal.events())
-	}
+		// Restart inside the trigger window: S3 persistence — the
+		// silenced incident never sounds again, but the state stays
+		// triggered.
+		h.restart(10 * time.Second)
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+		if n := h.outputs.fireCount(); n != 0 {
+			t.Fatalf("silenced incident re-fired after restart: %d", n)
+		}
+		if !h.journal.has("silenced_incident_restored") {
+			t.Fatalf("missing silenced-restore journal entry; got %v", h.journal.events())
+		}
 
-	// The remaining trigger window elapses silently into post-trigger.
-	h.advance(time.Minute)
-	h.wantState("eg", hmenum.AlarmZoneStateArmed)
-	if n := h.outputs.fireCount(); n != 0 {
-		t.Fatalf("silenced incident fired on window end: %d", n)
-	}
+		// The remaining trigger window elapses silently into post-trigger.
+		h.advance(time.Minute)
+		h.wantState("eg", hmenum.AlarmZoneStateArmed)
+		if n := h.outputs.fireCount(); n != 0 {
+			t.Fatalf("silenced incident fired on window end: %d", n)
+		}
+	})
 }
 
 func TestRestore_RestartLoopBreakerDegradesAfterK(t *testing.T) {
-	h := newHarness(t)
-	cfg := defaultZoneConfig()
-	// Long window so repeated restarts stay inside it.
-	full := cfg.Modes[hmenum.AlarmModeFull]
-	full.TriggerSeconds = 600
-	cfg.Modes[hmenum.AlarmModeFull] = full
-	h.seedZone("eg", "Erdgeschoss", cfg)
-	h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{
-		Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull},
-	})
-	h.start()
-	h.armFull()
-	h.eng.HandleSensorEvent(h.ctx, "window", true)
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		cfg := defaultZoneConfig()
+		// Long window so repeated restarts stay inside it.
+		full := cfg.Modes[hmenum.AlarmModeFull]
+		full.TriggerSeconds = 600
+		cfg.Modes[hmenum.AlarmModeFull] = full
+		h.seedZone("eg", "Erdgeschoss", cfg)
+		h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{
+			Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull},
+		})
+		h.start()
+		h.armFull()
+		h.eng.HandleSensorEvent(h.ctx, "window", true)
 
-	// K = 3 (default): re-fires 1..3 sound normally, the 4th degrades.
-	for i := 1; i <= 3; i++ {
+		// K = 3 (default): re-fires 1..3 sound normally, the 4th degrades.
+		for i := 1; i <= 3; i++ {
+			h.restart(time.Second)
+			fire := h.outputs.lastFire(t)
+			if fire.Opts.Degraded {
+				t.Fatalf("re-fire %d already degraded", i)
+			}
+		}
 		h.restart(time.Second)
 		fire := h.outputs.lastFire(t)
-		if fire.Opts.Degraded {
-			t.Fatalf("re-fire %d already degraded", i)
+		if !fire.Opts.Degraded {
+			t.Fatal("4th restore re-fire not degraded — restart-loop breaker missing")
 		}
-	}
-	h.restart(time.Second)
-	fire := h.outputs.lastFire(t)
-	if !fire.Opts.Degraded {
-		t.Fatal("4th restore re-fire not degraded — restart-loop breaker missing")
-	}
-	if !h.journal.has("restart_loop_breaker_degraded") {
-		t.Fatalf("missing loop-breaker journal entry; got %v", h.journal.events())
-	}
+		if !h.journal.has("restart_loop_breaker_degraded") {
+			t.Fatalf("missing loop-breaker journal entry; got %v", h.journal.events())
+		}
+	})
 }
 
-func TestRestore_ImplausibleClock_PendingDemotesToArmed(t *testing.T) {
-	h := newHarness(t)
-	h.seedStandardZone()
-	h.start()
-	h.armFull()
-	h.eng.HandleSensorEvent(h.ctx, "door", true)
-	h.wantState("eg", hmenum.AlarmZoneStatePending)
+// The ImplausibleClock tests run the restart in a second synctest
+// bubble over the same database file. A fresh bubble's clock reads
+// 2000-01-01, which is before both the project epoch and every
+// persisted timestamp — the RTC-less host that boots before NTP — so
+// the restored engine must not trust wall-clock arithmetic. See
+// twoLives.
 
-	// Boot with a pre-epoch clock (RTC-less host before NTP): never
-	// auto-escalate off an untrusted clock.
-	h.restartAt(time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC))
-	h.wantState("eg", hmenum.AlarmZoneStateArmed)
-	if n := h.outputs.fireCount(); n != 0 {
-		t.Fatalf("implausible clock escalated pending: %d fires", n)
-	}
-	if !h.journal.has("pending_demoted_implausible_clock") {
-		t.Fatalf("missing demotion journal entry; got %v", h.journal.events())
-	}
+func TestRestore_ImplausibleClock_PendingDemotesToArmed(t *testing.T) {
+	twoLives(t, func(h *harness) {
+		h.seedStandardZone()
+		h.start()
+		h.armFull()
+		h.eng.HandleSensorEvent(h.ctx, "door", true)
+		h.wantState("eg", hmenum.AlarmZoneStatePending)
+	}, func(h *harness) {
+		// The second bubble's clock is the pre-NTP boot clock: never
+		// auto-escalate off an untrusted clock.
+		h.start()
+		h.wantState("eg", hmenum.AlarmZoneStateArmed)
+		if n := h.outputs.fireCount(); n != 0 {
+			t.Fatalf("implausible clock escalated pending: %d fires", n)
+		}
+		if !h.journal.has("pending_demoted_implausible_clock") {
+			t.Fatalf("missing demotion journal entry; got %v", h.journal.events())
+		}
+	})
 }
 
 func TestRestore_ImplausibleClock_ArmingNeverAutoCompletes(t *testing.T) {
-	h := newHarness(t)
-	h.seedStandardZone()
-	h.start()
-	if _, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"}); err != nil {
-		t.Fatalf("arm: %v", err)
-	}
-	h.advance(10 * time.Second) // 20 s remain
-
-	h.restartAt(time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC))
-	// Not completed off wall math; the remaining (relative) delay
-	// resumes instead.
-	h.wantState("eg", hmenum.AlarmZoneStateArming)
-	h.advance(20 * time.Second)
-	h.wantState("eg", hmenum.AlarmZoneStateArmed)
+	twoLives(t, func(h *harness) {
+		h.seedStandardZone()
+		h.start()
+		if _, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"}); err != nil {
+			t.Fatalf("arm: %v", err)
+		}
+		h.advance(10 * time.Second) // 20 s remain
+	}, func(h *harness) {
+		// The second bubble's clock is the pre-NTP boot clock.
+		h.start()
+		// Not completed off wall math; the remaining (relative) delay
+		// resumes instead.
+		h.wantState("eg", hmenum.AlarmZoneStateArming)
+		h.advance(20 * time.Second)
+		h.wantState("eg", hmenum.AlarmZoneStateArmed)
+	})
 }
 
 func TestRestore_ImplausibleClock_TriggeredNeverRefires(t *testing.T) {
-	h := newHarness(t)
-	h.seedStandardZone()
-	h.start()
-	h.armFull()
-	h.eng.HandleSensorEvent(h.ctx, "window", true)
-
-	h.restartAt(time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC))
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
-	if n := h.outputs.fireCount(); n != 0 {
-		t.Fatalf("implausible clock re-fired outputs: %d", n)
-	}
-	inc, ok := h.openIncident("eg")
-	if !ok {
-		t.Fatal("incident must survive an implausible-clock restore")
-	}
-	if inc.RestoreRefires != 0 {
-		t.Fatalf("restore_refires = %d, want 0 (no re-fire happened)", inc.RestoreRefires)
-	}
+	twoLives(t, func(h *harness) {
+		h.seedStandardZone()
+		h.start()
+		h.armFull()
+		h.eng.HandleSensorEvent(h.ctx, "window", true)
+	}, func(h *harness) {
+		// The second bubble's clock is the pre-NTP boot clock.
+		h.start()
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+		if n := h.outputs.fireCount(); n != 0 {
+			t.Fatalf("implausible clock re-fired outputs: %d", n)
+		}
+		inc, ok := h.openIncident("eg")
+		if !ok {
+			t.Fatal("incident must survive an implausible-clock restore")
+		}
+		if inc.RestoreRefires != 0 {
+			t.Fatalf("restore_refires = %d, want 0 (no re-fire happened)", inc.RestoreRefires)
+		}
+	})
 }
 
 // TestRestore_ImplausibleClock_SilencedIncidentStillStops pins S3
@@ -527,90 +576,97 @@ func TestRestore_ImplausibleClock_TriggeredNeverRefires(t *testing.T) {
 // never keep sounding, whether or not the restore trusts wall-clock
 // math for re-fire accounting.
 func TestRestore_ImplausibleClock_SilencedIncidentStillStops(t *testing.T) {
-	h := newHarness(t)
-	h.seedStandardZone()
-	h.start()
-	h.armFull()
-	h.eng.HandleSensorEvent(h.ctx, "window", true)
-	if err := h.eng.Silence(h.ctx, "eg", "tester", "test"); err != nil {
-		t.Fatalf("silence: %v", err)
-	}
-
-	h.restartAt(time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC))
-	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
-	if n := h.outputs.fireCount(); n != 0 {
-		t.Fatalf("implausible clock re-fired a silenced incident: %d", n)
-	}
-	if n := h.outputs.stopCount(); n == 0 {
-		t.Fatalf("silenced incident restored under an implausible clock issued no counter-stop")
-	}
-	if !h.journal.has("silenced_incident_restored") {
-		t.Fatalf("missing silenced-restore journal entry; got %v", h.journal.events())
-	}
+	twoLives(t, func(h *harness) {
+		h.seedStandardZone()
+		h.start()
+		h.armFull()
+		h.eng.HandleSensorEvent(h.ctx, "window", true)
+		if err := h.eng.Silence(h.ctx, "eg", "tester", "test"); err != nil {
+			t.Fatalf("silence: %v", err)
+		}
+	}, func(h *harness) {
+		// The second bubble's clock is the pre-NTP boot clock.
+		h.start()
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+		if n := h.outputs.fireCount(); n != 0 {
+			t.Fatalf("implausible clock re-fired a silenced incident: %d", n)
+		}
+		if n := h.outputs.stopCount(); n == 0 {
+			t.Fatalf("silenced incident restored under an implausible clock issued no counter-stop")
+		}
+		if !h.journal.has("silenced_incident_restored") {
+			t.Fatalf("missing silenced-restore journal entry; got %v", h.journal.events())
+		}
+	})
 }
 
 func TestRestore_TriggeredWithLostIncidentNeverRefires(t *testing.T) {
-	h := newHarness(t)
-	h.seedStandardZone()
-	h.start()
-	h.armFull()
-	h.eng.HandleSensorEvent(h.ctx, "window", true)
-	inc, ok := h.openIncident("eg")
-	if !ok {
-		t.Fatal("expected an open incident")
-	}
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedStandardZone()
+		h.start()
+		h.armFull()
+		h.eng.HandleSensorEvent(h.ctx, "window", true)
+		inc, ok := h.openIncident("eg")
+		if !ok {
+			t.Fatal("expected an open incident")
+		}
 
-	// Simulate incident-row loss: close it behind the engine's back
-	// while the daemon is down.
-	h.eng.Stop(h.ctx)
-	if err := h.incidents.Close(h.ctx, inc.ID, h.clk.Now().UnixMilli(), "corruption-simulation"); err != nil {
-		t.Fatalf("close incident: %v", err)
-	}
-	h.freshPorts(h.clk.Now().Add(10 * time.Second))
-	h.start()
+		// Simulate incident-row loss: close it behind the engine's back
+		// while the daemon is down.
+		h.eng.Stop(h.ctx)
+		if err := h.incidents.Close(h.ctx, inc.ID, time.Now().UnixMilli(), "corruption-simulation"); err != nil {
+			t.Fatalf("close incident: %v", err)
+		}
+		time.Sleep(10 * time.Second)
+		h.freshPorts()
+		h.start()
 
-	// Without a ledger there is nothing to bound re-fires: never
-	// fire, leave triggered via the post-trigger policy, say so.
-	h.wantState("eg", hmenum.AlarmZoneStateArmed)
-	if n := h.outputs.fireCount(); n != 0 {
-		t.Fatalf("lost incident still fired: %d", n)
-	}
-	if !h.journal.has("incident_lost_on_restore") {
-		t.Fatalf("missing incident-lost journal entry; got %v", h.journal.events())
-	}
+		// Without a ledger there is nothing to bound re-fires: never
+		// fire, leave triggered via the post-trigger policy, say so.
+		h.wantState("eg", hmenum.AlarmZoneStateArmed)
+		if n := h.outputs.fireCount(); n != 0 {
+			t.Fatalf("lost incident still fired: %d", n)
+		}
+		if !h.journal.has("incident_lost_on_restore") {
+			t.Fatalf("missing incident-lost journal entry; got %v", h.journal.events())
+		}
+	})
 }
 
 func TestRestore_StopPersistsFreshRemainingDurations(t *testing.T) {
-	h := newHarness(t)
-	h.seedStandardZone()
-	h.start()
-	if _, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"}); err != nil {
-		t.Fatalf("arm: %v", err)
-	}
-	h.advance(25 * time.Second) // 5 s remain
-	h.eng.Stop(h.ctx)
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t)
+		h.seedStandardZone()
+		h.start()
+		if _, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"}); err != nil {
+			t.Fatalf("arm: %v", err)
+		}
+		h.advance(25 * time.Second) // 5 s remain
+		h.eng.Stop(h.ctx)
 
-	row, ok, err := h.states.Get(h.ctx, "eg")
-	if err != nil || !ok {
-		t.Fatalf("state row: ok=%v err=%v", ok, err)
-	}
-	if row.State != hmenum.AlarmZoneStateArming {
-		t.Fatalf("persisted state = %s, want arming", row.State)
-	}
-	// The tuple must carry the fresh remaining duration, not the
-	// schedule-time one — an implausible-clock restore depends on it.
-	type tuple struct {
-		Kind        string `json:"kind"`
-		RemainingMS int64  `json:"remaining_ms"`
-	}
-	var tuples []tuple
-	if err := jsonUnmarshal(row.TimersJSON, &tuples); err != nil {
-		t.Fatalf("timers json: %v", err)
-	}
-	if len(tuples) != 1 || tuples[0].Kind != "exit_delay" {
-		t.Fatalf("timers = %+v, want one exit_delay tuple", tuples)
-	}
-	if got := tuples[0].RemainingMS; got != (5 * time.Second).Milliseconds() {
-		t.Fatalf("remaining_ms = %d, want 5000", got)
-	}
+		row, ok, err := h.states.Get(h.ctx, "eg")
+		if err != nil || !ok {
+			t.Fatalf("state row: ok=%v err=%v", ok, err)
+		}
+		if row.State != hmenum.AlarmZoneStateArming {
+			t.Fatalf("persisted state = %s, want arming", row.State)
+		}
+		// The tuple must carry the fresh remaining duration, not the
+		// schedule-time one — an implausible-clock restore depends on it.
+		type tuple struct {
+			Kind        string `json:"kind"`
+			RemainingMS int64  `json:"remaining_ms"`
+		}
+		var tuples []tuple
+		if err := jsonUnmarshal(row.TimersJSON, &tuples); err != nil {
+			t.Fatalf("timers json: %v", err)
+		}
+		if len(tuples) != 1 || tuples[0].Kind != "exit_delay" {
+			t.Fatalf("timers = %+v, want one exit_delay tuple", tuples)
+		}
+		if got := tuples[0].RemainingMS; got != (5 * time.Second).Milliseconds() {
+			t.Fatalf("remaining_ms = %d, want 5000", got)
+		}
+	})
 }

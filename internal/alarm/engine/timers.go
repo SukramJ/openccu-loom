@@ -7,8 +7,6 @@ import (
 	"encoding/json"
 	"sync"
 	"time"
-
-	"github.com/SukramJ/openccu-loom/internal/clock"
 )
 
 // Timer kinds persisted in alarm_state.timers_json and stamped into
@@ -118,25 +116,22 @@ func clockPlausible(nowMS, persistedAtMS int64) bool {
 // unixMS converts a time to epoch milliseconds.
 func unixMS(t time.Time) int64 { return t.UnixMilli() }
 
-// clockScheduler is the production TimerScheduler: one goroutine per
-// scheduled callback, running on the injected clock seam so fake
-// clocks drive it in tests and simulations.
-type clockScheduler struct {
-	clk clock.Clock
-}
+// timerScheduler is the production TimerScheduler: one goroutine per
+// scheduled callback, driven by a runtime timer.
+type timerScheduler struct{}
 
-// NewClockScheduler returns a TimerScheduler running on clk.
-func NewClockScheduler(clk clock.Clock) TimerScheduler {
-	return &clockScheduler{clk: clk}
+// NewTimerScheduler returns a TimerScheduler running on runtime timers.
+func NewTimerScheduler() TimerScheduler {
+	return timerScheduler{}
 }
 
 // Schedule implements TimerScheduler.
-func (s *clockScheduler) Schedule(d time.Duration, fn func()) (cancel func()) {
-	t := s.clk.NewTimer(d)
+func (timerScheduler) Schedule(d time.Duration, fn func()) (cancel func()) {
+	t := time.NewTimer(d)
 	stop := make(chan struct{})
 	go func() {
 		select {
-		case <-t.C():
+		case <-t.C:
 			fn()
 		case <-stop:
 			t.Stop()

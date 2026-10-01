@@ -6,6 +6,7 @@ package engine_test
 import (
 	"errors"
 	"testing"
+	"testing/synctest"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -54,26 +55,28 @@ func TestRequireSilenceGatesOnlyAnonymousSources(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.source, func(t *testing.T) {
-			h := newHarness(t)
-			h.seedZone("eg", "Erdgeschoss", codePolicyZoneConfig(false, new(false), gateAll))
-			h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{
-				Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull},
-			})
-			// No code authenticates: every code-gated verb is refused.
-			h.startWithValidator(newFakeCodeValidator(nil))
-			h.armFull()
-			h.eng.HandleSensorEvent(h.ctx, "window", true)
-			h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+			synctest.Test(t, func(t *testing.T) {
+				h := newHarness(t)
+				h.seedZone("eg", "Erdgeschoss", codePolicyZoneConfig(false, new(false), gateAll))
+				h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{
+					Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull},
+				})
+				// No code authenticates: every code-gated verb is refused.
+				h.startWithValidator(newFakeCodeValidator(nil))
+				h.armFull()
+				h.eng.HandleSensorEvent(h.ctx, "window", true)
+				h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 
-			err := h.eng.Silence(h.ctx, "eg", "tester", tc.source)
-			gated := errors.Is(err, engine.ErrInvalidCode)
-			if gated != tc.wantGated {
-				t.Fatalf("code-free silence from %q: err = %v (gated=%v), want gated=%v",
-					tc.source, err, gated, tc.wantGated)
-			}
-			if err != nil && !gated {
-				t.Fatalf("silence from %q: unexpected error %v", tc.source, err)
-			}
+				err := h.eng.Silence(h.ctx, "eg", "tester", tc.source)
+				gated := errors.Is(err, engine.ErrInvalidCode)
+				if gated != tc.wantGated {
+					t.Fatalf("code-free silence from %q: err = %v (gated=%v), want gated=%v",
+						tc.source, err, gated, tc.wantGated)
+				}
+				if err != nil && !gated {
+					t.Fatalf("silence from %q: unexpected error %v", tc.source, err)
+				}
+			})
 		})
 	}
 }

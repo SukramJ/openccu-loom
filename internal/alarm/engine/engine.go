@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -237,7 +236,6 @@ func (c incidentCause) sourceRef(atMS int64) hmevent.SecuritySourceRef {
 // Deps wires the engine's ports. Stores are required; every other
 // dependency has a safe default.
 type Deps struct {
-	Clock     clock.Clock
 	Scheduler TimerScheduler
 	Zones     ZoneStore
 	Sensors   SensorStore
@@ -268,7 +266,6 @@ type Deps struct {
 // state never runs ahead of or behind the in-memory state.
 // loom:reachable:reason="held as alarm.Service.engine and handed to the REST and WS alarm panels through their Engine() accessors; RTA scores call edges, so a type used only structurally is invisible to it"
 type Engine struct {
-	clk          clock.Clock
 	sched        TimerScheduler
 	zonesStore   ZoneStore
 	sensorsStore SensorStore
@@ -308,13 +305,9 @@ func New(deps Deps) (*Engine, error) {
 	if deps.Zones == nil || deps.Sensors == nil || deps.State == nil || deps.Incidents == nil || deps.Runtime == nil {
 		return nil, errors.New("engine: missing required store dependency")
 	}
-	clk := deps.Clock
-	if clk == nil {
-		clk = clock.New()
-	}
 	sched := deps.Scheduler
 	if sched == nil {
-		sched = NewClockScheduler(clk)
+		sched = NewTimerScheduler()
 	}
 	outputs := deps.Outputs
 	if outputs == nil {
@@ -340,7 +333,6 @@ func New(deps Deps) (*Engine, error) {
 	// side effects is resolved once here; see [DuressMatcher].
 	matcher, _ := deps.Validator.(DuressMatcher)
 	return &Engine{
-		clk:          clk,
 		sched:        sched,
 		zonesStore:   deps.Zones,
 		sensorsStore: deps.Sensors,
@@ -407,7 +399,7 @@ func (e *Engine) ZonesLoaded() bool {
 func (e *Engine) Zones() []ZoneSnapshot {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	now := e.clk.Now()
+	now := time.Now()
 	out := make([]ZoneSnapshot, 0, len(e.zones))
 	for _, a := range e.zones {
 		out = append(out, a.snapshot(now))
@@ -424,7 +416,7 @@ func (e *Engine) Zone(id string) (ZoneSnapshot, bool) {
 	if !ok {
 		return ZoneSnapshot{}, false
 	}
-	return a.snapshot(e.clk.Now()), true
+	return a.snapshot(time.Now()), true
 }
 
 // ArmRequest parameterizes an arm verb.
@@ -754,7 +746,7 @@ func (e *Engine) fireDuress(ctx context.Context, a *zone, verb, by, source strin
 		Actor: by, Source: source, IncidentID: incID, Hidden: true,
 	})
 	e.sink.Publish(hmevent.AlarmDuressEvent{
-		Base:   hmevent.NewBaseAt(e.clk.Now()),
+		Base:   hmevent.NewBaseAt(time.Now()),
 		ZoneID: a.id, ZoneName: a.name,
 		Verb: verb, By: by, Source: source, IncidentID: incID,
 	})
@@ -981,7 +973,7 @@ func (e *Engine) silenceIncident(ctx context.Context, a *zone, by, source string
 		}
 		return
 	}
-	nowMS := unixMS(e.clk.Now())
+	nowMS := unixMS(time.Now())
 	inc.Silenced = true
 	inc.SilencedAtMS = nowMS
 	inc.SilencedBy = by
@@ -1279,7 +1271,7 @@ func (e *Engine) trigger(ctx context.Context, a *zone, cause incidentCause, opts
 	from := a.state
 	mcfg := a.cfg.Modes[a.mode]
 	opts.Policy = mcfg.Outputs
-	now := e.clk.Now()
+	now := time.Now()
 	dur := mcfg.triggerDuration()
 
 	newIncident := a.incident == nil
@@ -1347,7 +1339,7 @@ func (e *Engine) onPreAlarmElapsed(ctx context.Context, a *zone) {
 	mcfg := a.cfg.Modes[a.mode]
 	dur := mcfg.triggerDuration()
 	if inc != nil {
-		inc.TriggerDeadlineMS = unixMS(e.clk.Now().Add(dur))
+		inc.TriggerDeadlineMS = unixMS(time.Now().Add(dur))
 		if inc.ID != 0 {
 			if err := e.incidents.SetTriggerDeadline(ctx, inc.ID, inc.TriggerDeadlineMS); err != nil {
 				e.journalFault(ctx, a, "incident_persist_failed", err, inc.ID)
@@ -1392,7 +1384,7 @@ func (e *Engine) onTriggerElapsed(ctx context.Context, a *zone) {
 		if accounted {
 			inc.RetriggerCycles++
 			dur := mcfg.triggerDuration()
-			deadline := e.clk.Now().Add(dur)
+			deadline := time.Now().Add(dur)
 			inc.TriggerDeadlineMS = unixMS(deadline)
 			if inc.ID != 0 {
 				if err := e.incidents.SetTriggerDeadline(ctx, inc.ID, inc.TriggerDeadlineMS); err != nil {
@@ -1502,7 +1494,7 @@ func (e *Engine) closeIncident(ctx context.Context, a *zone, reason string) {
 		return
 	}
 	if inc.ID != 0 {
-		if err := e.incidents.Close(ctx, inc.ID, unixMS(e.clk.Now()), reason); err != nil {
+		if err := e.incidents.Close(ctx, inc.ID, unixMS(time.Now()), reason); err != nil {
 			e.journalFault(ctx, a, "incident_persist_failed", err, inc.ID)
 		}
 	}
@@ -1520,7 +1512,7 @@ func (e *Engine) scheduleStateTimer(a *zone, kind string, d time.Duration) {
 	a.timerSeq++
 	seq := a.timerSeq
 	a.timerKind = kind
-	a.timerDeadline = e.clk.Now().Add(d)
+	a.timerDeadline = time.Now().Add(d)
 	a.timerRemaining = d
 	zoneID := a.id
 	a.timerCancel = e.sched.Schedule(d, func() {
@@ -1629,12 +1621,12 @@ func (e *Engine) startTicks(a *zone, timerKind string) {
 			if !ok || aa.tickSeq != seq || aa.timerKind != timerKind || aa.timerCancel == nil {
 				return
 			}
-			remaining := aa.timerDeadline.Sub(e.clk.Now())
+			remaining := aa.timerDeadline.Sub(time.Now())
 			if remaining <= 0 {
 				return
 			}
 			e.sink.Publish(hmevent.AlarmCountdownEvent{
-				Base:   hmevent.NewBaseAt(e.clk.Now()),
+				Base:   hmevent.NewBaseAt(time.Now()),
 				ZoneID: zoneID, Kind: timerKind,
 				RemainingMS: remaining.Milliseconds(), TotalMS: total.Milliseconds(),
 			})
@@ -1671,7 +1663,7 @@ func (e *Engine) AdoptSounding(ctx context.Context, zoneID string, outputIDs []s
 	}
 	from := a.state
 	mcfg := a.cfg.Modes[a.mode]
-	now := e.clk.Now()
+	now := time.Now()
 	dur := mcfg.triggerDuration()
 	if a.incident == nil {
 		e.openIncident(ctx, a, incidentCause{Kind: causeKindAdopted}, now, dur)
@@ -1763,7 +1755,7 @@ func (e *Engine) alwaysOnFromSensor(ctx context.Context, a *zone, s *sensorState
 // incident, leaving that incident's state/timer/return untouched. The
 // caller holds the lock.
 func (e *Engine) alwaysOnFire(ctx context.Context, a *zone, causeKind string, policy OutputPolicy, cause incidentCause, by, source string) {
-	now := e.clk.Now()
+	now := time.Now()
 	if a.state == hmenum.AlarmZoneStateTriggered {
 		// An incident is already running: add the class outputs (unless
 		// silenced) and journal, but do not disturb the running incident.
@@ -1893,7 +1885,7 @@ func (e *Engine) scheduleAutoRearm(a *zone, mode hmenum.AlarmMode, d time.Durati
 	a.autoRearmMode = mode
 	a.autoRearmSeq++
 	seq := a.autoRearmSeq
-	a.autoRearmDeadline = e.clk.Now().Add(d)
+	a.autoRearmDeadline = time.Now().Add(d)
 	zoneID := a.id
 	a.autoRearmCancel = e.sched.Schedule(d, func() {
 		e.onAutoRearmFired(zoneID, seq)
@@ -1977,7 +1969,7 @@ func (e *Engine) onAutoRearmElapsed(ctx context.Context, a *zone) {
 // transition — the machine keeps operating from memory (S7).
 // The caller holds the lock.
 func (e *Engine) persist(ctx context.Context, a *zone) {
-	now := e.clk.Now()
+	now := time.Now()
 	var timers []persistedTimer
 	if a.timerCancel != nil {
 		remaining := max(a.timerDeadline.Sub(now), 0)
@@ -2030,7 +2022,7 @@ func (e *Engine) publishState(a *zone, from hmenum.AlarmZoneState, by, source st
 		incID = a.incident.ID
 	}
 	e.sink.Publish(hmevent.AlarmStateChangedEvent{
-		Base:   hmevent.NewBaseAt(e.clk.Now()),
+		Base:   hmevent.NewBaseAt(time.Now()),
 		ZoneID: a.id, ZoneName: a.name,
 		From: from, To: a.state, Mode: a.mode,
 		ChangedBy: by, Source: source, IncidentID: incID,
