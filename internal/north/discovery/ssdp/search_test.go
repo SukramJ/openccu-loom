@@ -4,8 +4,11 @@
 package ssdp
 
 import (
+	"context"
+	"net"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestLocationHeader verifies extraction of the LOCATION header from an SSDP
@@ -95,5 +98,40 @@ func TestMSearchPayload_CustomTarget(t *testing.T) {
 	payload := string(mSearchPayload(target))
 	if want := "ST: " + target; !strings.Contains(payload, want) {
 		t.Errorf("ST header missing: want %q in payload", want)
+	}
+}
+
+// TestSearchFromReturnsPromptlyOnCancel pins that cancelling the context
+// ends a running M-SEARCH right away. The read loop blocks in ReadFromUDP
+// until the socket's read deadline (MX plus the grace period), so a search
+// that only checked ctx between reads kept Discoverer.Stop — and with it
+// every daemon shutdown and restart — waiting out the rest of that window.
+func TestSearchFromReturnsPromptlyOnCancel(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	type result struct {
+		err     error
+		elapsed time.Duration
+	}
+	done := make(chan result, 1)
+	go func() {
+		start := time.Now()
+		_, err := searchFrom(ctx, net.IPv4zero)
+		done <- result{err, time.Since(start)}
+	}()
+	// Let the probe go out and the read loop block before cancelling.
+	time.Sleep(200 * time.Millisecond)
+	cancel()
+
+	select {
+	case r := <-done:
+		if r.err != nil {
+			t.Skipf("this host cannot send an SSDP probe (%v); the cancel path is not reachable", r.err)
+		}
+		if r.elapsed > time.Second {
+			t.Fatalf("searchFrom returned %v after its start, want it to stop right after the cancel at 200ms", r.elapsed)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("searchFrom did not return")
 	}
 }

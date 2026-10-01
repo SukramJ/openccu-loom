@@ -39,6 +39,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (openccu-lite pairing sessions, log-level overrides at their exact
   boundary) now have one. No runtime behaviour changes.
 
+### Fixed
+
+- **Shutting down or restarting the daemon no longer waits for a running
+  network scan.** The SSDP discovery that finds CCUs on the LAN read its
+  socket until the scan window closed (about three seconds) even after it
+  was told to stop, so every shutdown and every restart of the discovery
+  sat out the rest of that window. A stop now ends the scan at once.
+
 ## [0.83.0] - 2026-10-01
 
 ### Release summary
