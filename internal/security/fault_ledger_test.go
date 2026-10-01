@@ -73,7 +73,7 @@ func TestRebuildIndexRaisesLedgerFaultForAlreadyActiveSource(t *testing.T) {
 		t.Fatalf("reg.Register: %v", err)
 	}
 
-	svc, stores, _ := newTestService(t, func(d *Deps) { d.Registry = reg })
+	svc, stores := newTestService(t, func(d *Deps) { d.Registry = reg })
 	ctx := context.Background()
 
 	// The diagnostic classes (tamper/battery/technical) are only
@@ -165,7 +165,7 @@ func TestRebuildIndexClearsFaultOfADeviceRemovedFromTheModel(t *testing.T) {
 		t.Fatalf("reg.Register: %v", err)
 	}
 
-	svc, stores, _ := newTestService(t, func(d *Deps) { d.Registry = reg })
+	svc, stores := newTestService(t, func(d *Deps) { d.Registry = reg })
 	ctx := context.Background()
 
 	now := time.Now().UnixMilli()
@@ -239,7 +239,7 @@ func TestRebuildIndexNeverClearsAFaultOfACentralNotYetSouthboundReady(t *testing
 		t.Fatalf("reg.Register: %v", err)
 	}
 
-	svc, stores, clk := newTestService(t, func(d *Deps) { d.Registry = reg })
+	svc, stores := newTestService(t, func(d *Deps) { d.Registry = reg })
 	ctx := context.Background()
 
 	row := sqlitestore.SecurityFault{
@@ -247,7 +247,7 @@ func TestRebuildIndexNeverClearsAFaultOfACentralNotYetSouthboundReady(t *testing
 		Class: string(hmenum.SecurityClassTechnical), Reason: string(hmenum.SecurityFaultReasonUnreachable),
 		Severity: string(hmenum.SecuritySeverityInfo), CentralName: "c1", InterfaceID: "HmIP-RF",
 		DeviceAddress: "DEV1", ChannelAddress: "DEV1:1", Parameter: "UNREACH", Name: "DEV1",
-		SinceMS: clk.Now().UnixMilli(),
+		SinceMS: time.Now().UnixMilli(),
 	}
 	if _, _, err := stores.Faults.Raise(ctx, row); err != nil {
 		t.Fatalf("seed raise: %v", err)
@@ -287,7 +287,7 @@ func TestRebuildIndexNeverClearsAFaultOfACentralNotYetSouthboundReady(t *testing
 // existed at all, so the ledger grew forever on every install.
 func TestSecurityFaultRetentionPurgesOnlyFaultsPastTheWindow(t *testing.T) {
 	t.Parallel()
-	svc, stores, clk := newTestService(t, func(d *Deps) { d.Settings.RetentionDays = 1 })
+	svc, stores := newTestService(t, func(d *Deps) { d.Settings.RetentionDays = 1 })
 	ctx := context.Background()
 
 	seedClearedFault := func(ref, deviceAddr string, sinceAgo, clearedAgo time.Duration) {
@@ -297,12 +297,12 @@ func TestSecurityFaultRetentionPurgesOnlyFaultsPastTheWindow(t *testing.T) {
 			Reason: string(hmenum.SecurityFaultReasonUnreachable), Severity: string(hmenum.SecuritySeverityInfo),
 			CentralName: "c1", InterfaceID: "HmIP-RF", DeviceAddress: deviceAddr,
 			ChannelAddress: deviceAddr + ":1", Parameter: "UNREACH", Name: deviceAddr,
-			SinceMS: clk.Now().Add(-sinceAgo).UnixMilli(),
+			SinceMS: time.Now().Add(-sinceAgo).UnixMilli(),
 		}
 		if _, _, err := stores.Faults.Raise(ctx, row); err != nil {
 			t.Fatalf("seed raise %s: %v", ref, err)
 		}
-		if _, err := stores.Faults.Clear(ctx, ref, row.Reason, clk.Now().Add(-clearedAgo).UnixMilli()); err != nil {
+		if _, err := stores.Faults.Clear(ctx, ref, row.Reason, time.Now().Add(-clearedAgo).UnixMilli()); err != nil {
 			t.Fatalf("seed clear %s: %v", ref, err)
 		}
 	}
@@ -317,7 +317,7 @@ func TestSecurityFaultRetentionPurgesOnlyFaultsPastTheWindow(t *testing.T) {
 	// regression in how RetentionDays is interpreted (days vs hours,
 	// off-by-one) would show up here too.
 	maxAge := time.Duration(svc.settings.RetentionDays) * 24 * time.Hour
-	cutoff := clk.Now().Add(-maxAge).UnixMilli()
+	cutoff := time.Now().Add(-maxAge).UnixMilli()
 
 	purged, err := stores.Faults.PurgeClearedBefore(ctx, cutoff)
 	if err != nil {
@@ -330,7 +330,7 @@ func TestSecurityFaultRetentionPurgesOnlyFaultsPastTheWindow(t *testing.T) {
 	// Prove the recent row is still there rather than merely "not this
 	// one": purging everything cleared up to "now" must catch exactly
 	// the survivor.
-	purgedRest, err := stores.Faults.PurgeClearedBefore(ctx, clk.Now().Add(time.Second).UnixMilli())
+	purgedRest, err := stores.Faults.PurgeClearedBefore(ctx, time.Now().Add(time.Second).UnixMilli())
 	if err != nil {
 		t.Fatalf("PurgeClearedBefore (sweep remainder): %v", err)
 	}
@@ -351,7 +351,7 @@ func TestSecurityFaultRetentionPurgesOnlyFaultsPastTheWindow(t *testing.T) {
 // path can trigger — does not panic and does not re-arm anything.
 func TestServiceStopClearsRetentionTimerWhenRetentionEnabled(t *testing.T) {
 	t.Parallel()
-	svc, _, _ := newTestService(t, func(d *Deps) { d.Settings.RetentionDays = 1 })
+	svc, _ := newTestService(t, func(d *Deps) { d.Settings.RetentionDays = 1 })
 	ctx := context.Background()
 
 	if err := svc.Start(ctx); err != nil {
@@ -390,7 +390,7 @@ func TestServiceStopClearsRetentionTimerWhenRetentionEnabled(t *testing.T) {
 // one transition proving a fault stands — was told "no fault stands".
 func TestAcknowledgeFaultAnnouncesRealOpenCount(t *testing.T) {
 	t.Parallel()
-	svc, stores, clk := newTestService(t)
+	svc, stores := newTestService(t)
 	ctx := context.Background()
 
 	seed := func(ref, deviceAddr string) {
@@ -400,7 +400,7 @@ func TestAcknowledgeFaultAnnouncesRealOpenCount(t *testing.T) {
 			Reason: string(hmenum.SecurityFaultReasonUnreachable), Severity: string(hmenum.SecuritySeverityInfo),
 			CentralName: "c1", InterfaceID: "HmIP-RF", DeviceAddress: deviceAddr,
 			ChannelAddress: deviceAddr + ":1", Parameter: "UNREACH", Name: deviceAddr,
-			SinceMS: clk.Now().UnixMilli(),
+			SinceMS: time.Now().UnixMilli(),
 		}
 		if _, _, err := stores.Faults.Raise(ctx, row); err != nil {
 			t.Fatalf("seed raise %s: %v", ref, err)

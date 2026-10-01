@@ -11,8 +11,6 @@ import (
 	"net/http"
 	"sync"
 	"time"
-
-	"github.com/SukramJ/openccu-loom/internal/clock"
 )
 
 // InstanceStatus is one instance's last probe result, rendered on the
@@ -53,18 +51,16 @@ const maxProbeBody = 1 << 20
 type poller struct {
 	instances []*instanceProxy
 	interval  time.Duration
-	clk       clock.Clock
 	log       *slog.Logger
 
 	mu       sync.RWMutex
 	statuses map[string]InstanceStatus
 }
 
-func newPoller(instances []*instanceProxy, clk clock.Clock, log *slog.Logger) *poller {
+func newPoller(instances []*instanceProxy, log *slog.Logger) *poller {
 	p := &poller{
 		instances: instances,
 		interval:  defaultProbeInterval,
-		clk:       clk,
 		log:       log,
 		statuses:  make(map[string]InstanceStatus, len(instances)),
 	}
@@ -130,7 +126,7 @@ type infoProbeResponse struct {
 // instance. The health endpoint decides reachability/status; the info
 // endpoint enriches the tile and is best-effort.
 func (p *poller) probe(ctx context.Context, ip *instanceProxy) InstanceStatus {
-	st := InstanceStatus{Name: ip.inst.Name, CheckedAt: p.clk.Now()}
+	st := InstanceStatus{Name: ip.inst.Name, CheckedAt: time.Now()}
 
 	var health healthProbeResponse
 	// /api/v1/health answers 200 or, when unhealthy, 503 — both carry

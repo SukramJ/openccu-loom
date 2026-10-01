@@ -7,6 +7,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central/events"
@@ -90,19 +91,21 @@ func TestCentralRecordsFailureReason(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestCentralLastStateChange(t *testing.T) {
-	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	m := NewCentral("main", nil)
-	m.now = func() time.Time { return t0 }
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		t0 := time.Now()
+		m := NewCentral("main", nil)
 
-	if !m.LastStateChange().IsZero() {
-		t.Fatal("LastStateChange must be zero before any transition")
-	}
-	if err := m.TransitionTo(hmenum.CentralStateInitializing, hmenum.FailureReasonNone); err != nil {
-		t.Fatal(err)
-	}
-	if got := m.LastStateChange(); !got.Equal(t0) {
-		t.Fatalf("LastStateChange=%v, want %v", got, t0)
-	}
+		if !m.LastStateChange().IsZero() {
+			t.Fatal("LastStateChange must be zero before any transition")
+		}
+		if err := m.TransitionTo(hmenum.CentralStateInitializing, hmenum.FailureReasonNone); err != nil {
+			t.Fatal(err)
+		}
+		if got := m.LastStateChange(); !got.Equal(t0) {
+			t.Fatalf("LastStateChange=%v, want %v", got, t0)
+		}
+	})
 }
 
 func TestCentralHistoryEmptyBeforeTransitions(t *testing.T) {
@@ -546,16 +549,15 @@ func TestCentralSecondsInCurrentStateZeroBeforeTransition(t *testing.T) {
 }
 
 func TestCentralSecondsInCurrentStatePositiveAfterTransition(t *testing.T) {
-	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	t1 := t0.Add(5 * time.Second)
-	tick := t0
-	m := NewCentral("test", nil)
-	m.now = func() time.Time { return tick }
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		m := NewCentral("test", nil)
 
-	_ = m.TransitionTo(hmenum.CentralStateInitializing, hmenum.FailureReasonNone)
-	tick = t1 // advance clock after transition
+		_ = m.TransitionTo(hmenum.CentralStateInitializing, hmenum.FailureReasonNone)
+		time.Sleep(5 * time.Second)
 
-	if got := m.SecondsInCurrentState(); got < 4.9 || got > 5.1 {
-		t.Fatalf("SecondsInCurrentState()=%f, want ~5.0", got)
-	}
+		if got := m.SecondsInCurrentState(); got != 5.0 {
+			t.Fatalf("SecondsInCurrentState()=%f, want 5.0", got)
+		}
+	})
 }

@@ -27,7 +27,7 @@ import (
 func TestHotPlugRebuildCoalescesAReconnectBurst(t *testing.T) {
 	t.Parallel()
 	reg := central.NewRegistry()
-	svc, _, _ := newTestService(t, func(d *Deps) { d.Registry = reg })
+	svc, _ := newTestService(t, func(d *Deps) { d.Registry = reg })
 
 	unit, err := central.New(central.Config{Name: "ccu"})
 	if err != nil {

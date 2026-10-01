@@ -37,7 +37,7 @@ func zoneSlugFor(t *testing.T, svc *Service, zoneID string) (string, bool) {
 // other zone's.
 func TestRefreshZoneSlugsPersistsARepairedSlugAcrossARename(t *testing.T) {
 	t.Parallel()
-	svc, stores, _ := newTestService(t)
+	svc, stores := newTestService(t)
 	ctx := context.Background()
 
 	// Simulate a pre-repair row: migration 037 blanked the slug,

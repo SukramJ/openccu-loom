@@ -58,7 +58,7 @@ func fireSource(t *testing.T, svc *Service, class hmenum.SecurityClass, suffix i
 // verdict, and it reports it itself with the zone and mode filled in.
 func TestAnActiveIntrusionSourceProducesNoAlarmReport(t *testing.T) {
 	t.Parallel()
-	svc, _, _ := newTestService(t)
+	svc, _ := newTestService(t)
 	reports := collectNotifications(t, svc)
 
 	fireSource(t, svc, hmenum.SecurityClassIntrusion, 1)
@@ -75,7 +75,7 @@ func TestAnActiveIntrusionSourceProducesNoAlarmReport(t *testing.T) {
 // answer the arming flow needs.
 func TestAnActiveIntrusionSourceStillFlipsItsClass(t *testing.T) {
 	t.Parallel()
-	svc, _, _ := newTestService(t)
+	svc, _ := newTestService(t)
 	var classes []hmevent.SecurityClassChangedEvent
 	unsub := svc.Bus().Subscribe(func(e hmevent.SecurityClassChangedEvent) {
 		classes = append(classes, e)
@@ -109,7 +109,7 @@ func TestOtherHazardClassesStillReport(t *testing.T) {
 	} {
 		t.Run(string(class), func(t *testing.T) {
 			t.Parallel()
-			svc, _, _ := newTestService(t)
+			svc, _ := newTestService(t)
 			reports := collectNotifications(t, svc)
 
 			fireSource(t, svc, class, 10+i)
@@ -129,7 +129,7 @@ func TestOtherHazardClassesStillReport(t *testing.T) {
 // own path carries the zone and the mode the message names.
 func TestTheEngineStillReportsAnIntrusion(t *testing.T) {
 	t.Parallel()
-	svc, _, _ := newTestService(t)
+	svc, _ := newTestService(t)
 	reports := collectNotifications(t, svc)
 
 	svc.onAlarmTriggered(hmevent.AlarmTriggeredEvent{

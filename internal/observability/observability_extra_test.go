@@ -9,41 +9,26 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
-
-	"github.com/SukramJ/openccu-loom/internal/clock"
 )
 
-// TestSetClock replaces the tracing clock with a fake, runs a span, and
-// restores the original clock.
-func TestSetClock(t *testing.T) {
-	fake := clock.NewFake(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
-	prev := SetClock(fake)
-	defer SetClock(prev)
-
-	sp, _ := StartSpan(context.Background(), "timed_op", nil)
-	if !sp.StartedAt.Equal(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)) {
-		t.Fatalf("StartedAt = %v, want fake clock time", sp.StartedAt)
-	}
-	// Advance the fake clock by 50 ms, then End the span.
-	fake.Advance(50 * time.Millisecond)
-	sp.End()
-	if sp.DurationMS() < 40 {
-		t.Fatalf("DurationMS = %v, want ~50", sp.DurationMS())
-	}
-}
-
-// TestSetClockNilRestoresReal verifies that passing nil resets to the real clock.
-func TestSetClockNilRestoresReal(t *testing.T) {
-	prev := SetClock(nil)
-	defer SetClock(prev)
-
-	// After reset, now() should return something close to time.Now().
-	sp, _ := StartSpan(context.Background(), "real_time", nil)
-	diff := time.Since(sp.StartedAt)
-	if diff < 0 || diff > 5*time.Second {
-		t.Fatalf("StartedAt too far from real now: %v", diff)
-	}
+// TestSpanTimestampsFollowTheClock verifies StartedAt is the creation
+// time and DurationMS spans exactly the elapsed time until End.
+func TestSpanTimestampsFollowTheClock(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		start := time.Now()
+		sp, _ := StartSpan(context.Background(), "timed_op", nil)
+		if !sp.StartedAt.Equal(start) {
+			t.Fatalf("StartedAt = %v, want %v", sp.StartedAt, start)
+		}
+		time.Sleep(50 * time.Millisecond)
+		sp.End()
+		if got := sp.DurationMS(); got != 50 {
+			t.Fatalf("DurationMS = %v, want 50", got)
+		}
+	})
 }
 
 // TestSpanString exercises the String() method on Span.

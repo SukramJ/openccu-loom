@@ -39,7 +39,7 @@ func (s *Service) applyFault(parent context.Context, src *indexedSource, active 
 	if reason == "" {
 		return
 	}
-	now := s.clk.Now()
+	now := time.Now()
 	if !active {
 		cleared, err := s.stores.Faults.Clear(ctx, src.ref.Ref, string(reason), nowMS(now))
 		if err != nil {
@@ -137,7 +137,7 @@ func (s *Service) applyFault(parent context.Context, src *indexedSource, active 
 func (s *Service) clearOrphanedFault(parent context.Context, f *security.Fault) {
 	ctx, cancel := context.WithTimeout(parent, faultWriteTimeout)
 	defer cancel()
-	now := s.clk.Now()
+	now := time.Now()
 	cleared, err := s.stores.Faults.Clear(ctx, f.Source.Ref, string(f.Reason), nowMS(now))
 	if err != nil {
 		s.log.Error("security: clear fault of a removed source", "ref", f.Source.Ref, "error", err)
@@ -161,7 +161,7 @@ func (s *Service) clearOrphanedFault(parent context.Context, f *security.Fault) 
 // AcknowledgeFault marks a standing fault as seen. It never clears the
 // fault: the condition is still there.
 func (s *Service) AcknowledgeFault(ctx context.Context, id, by string) (bool, error) {
-	ok, err := s.stores.Faults.Acknowledge(ctx, id, nowMS(s.clk.Now()), by)
+	ok, err := s.stores.Faults.Acknowledge(ctx, id, nowMS(time.Now()), by)
 	if err != nil || !ok {
 		return false, err
 	}
@@ -171,7 +171,7 @@ func (s *Service) AcknowledgeFault(ctx context.Context, id, by string) (bool, er
 		s.mu.Unlock()
 		return true, nil
 	}
-	f.AcknowledgedAtMS = nowMS(s.clk.Now())
+	f.AcknowledgedAtMS = nowMS(time.Now())
 	f.AcknowledgedBy = by
 	// The standing count is unchanged by an acknowledgement, but it has
 	// to be the real one: consumers of this event read OpenCount as the
@@ -180,7 +180,7 @@ func (s *Service) AcknowledgeFault(ctx context.Context, id, by string) (bool, er
 	open := len(s.agg.faults)
 	s.mu.Unlock()
 	s.bus.Publish(hmevent.SecurityFaultChangedEvent{
-		Base: hmevent.NewBaseAt(s.clk.Now()), FaultID: id, Class: f.Class,
+		Base: hmevent.NewBaseAt(time.Now()), FaultID: id, Class: f.Class,
 		Reason: f.Reason, Severity: f.Severity, Source: f.Source,
 		Open: true, Acknowledged: true, SinceMS: f.SinceMS, OpenCount: open,
 	})
@@ -207,7 +207,7 @@ func (s *Service) notify(in reportInput, isFault bool) {
 		s.mu.Unlock()
 	}
 	s.bus.Publish(hmevent.SecurityNotificationEvent{
-		Base:       hmevent.NewBaseAt(s.clk.Now()),
+		Base:       hmevent.NewBaseAt(time.Now()),
 		Class:      n.Class,
 		Severity:   n.Severity,
 		Verb:       n.Verb,

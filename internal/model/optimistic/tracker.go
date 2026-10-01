@@ -18,8 +18,6 @@ package optimistic
 import (
 	"sync"
 	"time"
-
-	"github.com/SukramJ/openccu-loom/internal/clock"
 )
 
 // DefaultTimeout mirrors
@@ -91,8 +89,6 @@ type Snapshot[T comparable] struct {
 // Burst guarantee: three quick Apply calls only pin the *first* send's
 // `current` as the rollback anchor.
 type Tracker[T comparable] struct {
-	clk clock.Clock
-
 	mu sync.Mutex
 
 	active        bool
@@ -101,19 +97,15 @@ type Tracker[T comparable] struct {
 	previousSet   bool
 	pendingSends  int
 	sentAt        time.Time
-	timeout       clock.Timer
+	timeout       *time.Timer
 	timeoutStop   chan struct{}
 
 	done chan struct{}
 }
 
-// New constructs a Tracker. Pass nil for clk to use the real wall
-// clock (the production default).
-func New[T comparable](clk clock.Clock) *Tracker[T] {
-	if clk == nil {
-		clk = clock.New()
-	}
-	return &Tracker[T]{clk: clk}
+// New constructs a Tracker.
+func New[T comparable]() *Tracker[T] {
+	return &Tracker[T]{}
 }
 
 // IsActive reports whether the tracker holds an outstanding optimistic
@@ -138,7 +130,7 @@ func (t *Tracker[T]) Snapshot() Snapshot[T] {
 	}
 	age := time.Duration(0)
 	if !t.sentAt.IsZero() {
-		age = t.clk.Now().Sub(t.sentAt)
+		age = time.Since(t.sentAt)
 	}
 	return Snapshot[T]{
 		Value:         t.value,
@@ -178,7 +170,7 @@ func (t *Tracker[T]) ApplyBurst(value, current T, currentSet bool, additionalPen
 	if additionalPending > 0 {
 		t.pendingSends += additionalPending
 	}
-	t.sentAt = t.clk.Now()
+	t.sentAt = time.Now()
 }
 
 // Done returns the channel callers block on for the tracker to settle
@@ -264,13 +256,13 @@ func (t *Tracker[T]) ScheduleRollback(d time.Duration, fn func()) {
 	}
 	stop := make(chan struct{})
 	t.timeoutStop = stop
-	timer := t.clk.NewTimer(d)
+	timer := time.NewTimer(d)
 	t.timeout = timer
 	t.mu.Unlock()
 
 	go func() {
 		select {
-		case <-timer.C():
+		case <-timer.C:
 			fn()
 		case <-stop:
 		}

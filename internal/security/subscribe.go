@@ -178,7 +178,7 @@ func (s *Service) onDataPoint(centralName string, e hmevent.DataPointValueChange
 		s.mu.Unlock()
 		return
 	}
-	now := nowMS(s.clk.Now())
+	now := nowMS(time.Now())
 	changed := s.agg.setActive(key, active, now)
 	if !changed {
 		s.mu.Unlock()
@@ -211,7 +211,7 @@ func (s *Service) onDataPoint(centralName string, e hmevent.DataPointValueChange
 	}
 
 	s.bus.Publish(hmevent.SecurityClassChangedEvent{
-		Base:     hmevent.NewBaseAt(s.clk.Now()),
+		Base:     hmevent.NewBaseAt(time.Now()),
 		Class:    src.class,
 		Active:   state.Active,
 		Sources:  state.Sources,
@@ -257,7 +257,7 @@ func (s *Service) onDataPoint(centralName string, e hmevent.DataPointValueChange
 			Class:   src.class,
 			Verb:    verb,
 			Sources: state.Sources,
-			At:      s.clk.Now(),
+			At:      time.Now(),
 			// A covert panic trigger is delivered but never retained
 			// unless the operator chose `full`. Retained state stays
 			// readable on a hallway tablet long after the moment has
@@ -425,7 +425,7 @@ func (s *Service) onAlarmTriggered(e hmevent.AlarmTriggeredEvent) {
 	z.IncidentID = e.IncidentID
 	z.Sources = e.Sources
 	z.ByClass = groupByClass(e.Sources)
-	z.SinceMS = nowMS(s.clk.Now())
+	z.SinceMS = nowMS(time.Now())
 	s.agg.zones[e.ZoneID] = z
 	if s.agg.classSince[hmenum.SecurityClassIntrusion] == 0 {
 		s.agg.classSince[hmenum.SecurityClassIntrusion] = z.SinceMS
@@ -453,7 +453,7 @@ func (s *Service) onAlarmTriggered(e hmevent.AlarmTriggeredEvent) {
 		ZoneName:   e.ZoneName,
 		Mode:       e.Mode,
 		IncidentID: e.IncidentID,
-		At:         s.clk.Now(),
+		At:         time.Now(),
 		Retainable: !covert || vis.AllowsRetained(),
 	}, false)
 }
@@ -528,7 +528,7 @@ func (s *Service) onAlarmStateChanged(e hmevent.AlarmStateChangedEvent) {
 			ZoneSlug:   z.Slug,
 			ZoneName:   e.ZoneName,
 			Mode:       e.Mode,
-			At:         s.clk.Now(),
+			At:         time.Now(),
 			Retainable: true,
 		}, false)
 	}
@@ -576,7 +576,7 @@ func (s *Service) onAlarmDuress(e hmevent.AlarmDuressEvent) {
 		ZoneSlug:   z.Slug,
 		ZoneName:   e.ZoneName,
 		IncidentID: e.IncidentID,
-		At:         s.clk.Now(),
+		At:         time.Now(),
 		Retainable: vis.AllowsRetained(),
 	}, false)
 }
@@ -584,7 +584,7 @@ func (s *Service) onAlarmDuress(e hmevent.AlarmDuressEvent) {
 // publishZone announces a zone view change.
 func (s *Service) publishZone(z security.ZoneState) {
 	s.bus.Publish(hmevent.SecurityZoneChangedEvent{
-		Base:       hmevent.NewBaseAt(s.clk.Now()),
+		Base:       hmevent.NewBaseAt(time.Now()),
 		ZoneID:     z.ID,
 		ZoneSlug:   z.Slug,
 		ZoneName:   z.Name,

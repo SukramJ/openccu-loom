@@ -6,9 +6,8 @@ package optimistic
 import (
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
-
-	"github.com/SukramJ/openccu-loom/internal/clock"
 )
 
 // P1-4: Public Tracker mirrors
@@ -18,7 +17,7 @@ import (
 
 func TestApplyMakesValueVisible(t *testing.T) {
 	t.Parallel()
-	tr := New[int](nil)
+	tr := New[int]()
 	tr.Apply(42, 0, true)
 	snap := tr.Snapshot()
 	if !snap.Active || snap.Value != 42 {
@@ -31,7 +30,7 @@ func TestApplyMakesValueVisible(t *testing.T) {
 
 func TestBurstApplyPinsFirstAnchorOnly(t *testing.T) {
 	t.Parallel()
-	tr := New[int](nil)
+	tr := New[int]()
 	tr.Apply(1, 100, true) // first send pins anchor=100
 	tr.Apply(2, 999, true) // burst — anchor must NOT move to 999
 	tr.Apply(3, 999, true)
@@ -46,7 +45,7 @@ func TestBurstApplyPinsFirstAnchorOnly(t *testing.T) {
 
 func TestConfirmOneDrainsCounter(t *testing.T) {
 	t.Parallel()
-	tr := New[int](nil)
+	tr := New[int]()
 	tr.Apply(7, 0, true)
 	tr.Apply(7, 0, true)
 	if drained := tr.ConfirmOne(); drained {
@@ -59,7 +58,7 @@ func TestConfirmOneDrainsCounter(t *testing.T) {
 
 func TestConfirmOneOnInactiveTrackerReturnsFalse(t *testing.T) {
 	t.Parallel()
-	tr := New[int](nil)
+	tr := New[int]()
 	if drained := tr.ConfirmOne(); drained {
 		t.Fatal("inactive tracker must return false")
 	}
@@ -67,7 +66,7 @@ func TestConfirmOneOnInactiveTrackerReturnsFalse(t *testing.T) {
 
 func TestRollbackReturnsAnchorAndResets(t *testing.T) {
 	t.Parallel()
-	tr := New[int](nil)
+	tr := New[int]()
 	tr.Apply(99, 50, true)
 	rolled, restored, restoredSet, ok := tr.Rollback()
 	if !ok {
@@ -83,7 +82,7 @@ func TestRollbackReturnsAnchorAndResets(t *testing.T) {
 
 func TestRollbackOnInactiveReturnsOkFalse(t *testing.T) {
 	t.Parallel()
-	tr := New[int](nil)
+	tr := New[int]()
 	if _, _, _, ok := tr.Rollback(); ok {
 		t.Fatal("inactive Rollback must return ok=false")
 	}
@@ -91,7 +90,7 @@ func TestRollbackOnInactiveReturnsOkFalse(t *testing.T) {
 
 func TestClearResetsWithoutRollbackTuple(t *testing.T) {
 	t.Parallel()
-	tr := New[int](nil)
+	tr := New[int]()
 	tr.Apply(1, 2, true)
 	tr.Clear()
 	if tr.IsActive() {
@@ -101,7 +100,7 @@ func TestClearResetsWithoutRollbackTuple(t *testing.T) {
 
 func TestDoneClosesOnRollback(t *testing.T) {
 	t.Parallel()
-	tr := New[int](nil)
+	tr := New[int]()
 	tr.Apply(1, 0, true)
 	done := tr.Done()
 	if done == nil {
@@ -115,61 +114,62 @@ func TestDoneClosesOnRollback(t *testing.T) {
 	}
 }
 
-func TestSnapshotAgeUsesInjectedClock(t *testing.T) {
+func TestSnapshotAgeTracksElapsedTime(t *testing.T) {
 	t.Parallel()
-	fake := clock.NewFake(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
-	tr := New[int](fake)
-	tr.Apply(1, 0, true)
-	fake.Advance(5 * time.Second)
-	snap := tr.Snapshot()
-	if snap.Age != 5*time.Second {
-		t.Fatalf("age=%v want 5s", snap.Age)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		tr := New[int]()
+		tr.Apply(1, 0, true)
+		time.Sleep(5 * time.Second)
+		snap := tr.Snapshot()
+		if snap.Age != 5*time.Second {
+			t.Fatalf("age=%v want 5s", snap.Age)
+		}
+	})
 }
 
-func TestScheduleRollbackFiresOnTimeoutWithFakeClock(t *testing.T) {
+func TestScheduleRollbackFiresOnTimeout(t *testing.T) {
 	t.Parallel()
-	fake := clock.NewFake(time.Now())
-	tr := New[int](fake)
-	tr.Apply(1, 0, true)
+	synctest.Test(t, func(t *testing.T) {
+		tr := New[int]()
+		tr.Apply(1, 0, true)
 
-	var fired atomic.Int32
-	tr.ScheduleRollback(100*time.Millisecond, func() { fired.Add(1) })
+		var fired atomic.Int32
+		tr.ScheduleRollback(100*time.Millisecond, func() { fired.Add(1) })
 
-	// Before advancing the fake, the timer must NOT have fired.
-	time.Sleep(10 * time.Millisecond)
-	if fired.Load() != 0 {
-		t.Fatalf("timer fired prematurely: %d", fired.Load())
-	}
-	fake.Advance(150 * time.Millisecond)
-	deadline := time.Now().Add(time.Second)
-	for fired.Load() == 0 && time.Now().Before(deadline) {
-		time.Sleep(time.Millisecond)
-	}
-	if fired.Load() != 1 {
-		t.Fatalf("expected 1 fire, got %d", fired.Load())
-	}
+		// One nanosecond before the deadline the timer must not have fired.
+		time.Sleep(100*time.Millisecond - time.Nanosecond)
+		synctest.Wait()
+		if fired.Load() != 0 {
+			t.Fatalf("timer fired prematurely: %d", fired.Load())
+		}
+		time.Sleep(time.Nanosecond)
+		synctest.Wait()
+		if fired.Load() != 1 {
+			t.Fatalf("expected 1 fire at the deadline, got %d", fired.Load())
+		}
+	})
 }
 
 func TestScheduleRollbackCancelledByClear(t *testing.T) {
 	t.Parallel()
-	fake := clock.NewFake(time.Now())
-	tr := New[int](fake)
-	tr.Apply(1, 0, true)
+	synctest.Test(t, func(t *testing.T) {
+		tr := New[int]()
+		tr.Apply(1, 0, true)
 
-	var fired atomic.Int32
-	tr.ScheduleRollback(100*time.Millisecond, func() { fired.Add(1) })
-	tr.Clear()
-	fake.Advance(time.Second)
-	time.Sleep(20 * time.Millisecond)
-	if fired.Load() != 0 {
-		t.Fatalf("Clear did not cancel timer: fired=%d", fired.Load())
-	}
+		var fired atomic.Int32
+		tr.ScheduleRollback(100*time.Millisecond, func() { fired.Add(1) })
+		tr.Clear()
+		time.Sleep(time.Second)
+		synctest.Wait()
+		if fired.Load() != 0 {
+			t.Fatalf("Clear did not cancel timer: fired=%d", fired.Load())
+		}
+	})
 }
 
 func TestApplyBurst_BumpsExpectedEchoes(t *testing.T) {
 	t.Parallel()
-	tr := New[int](nil)
+	tr := New[int]()
 	// 3 echoes expected: 1 (initial Apply) + 2 (additionalPending).
 	tr.ApplyBurst(7, 0, true, 2)
 	if snap := tr.Snapshot(); snap.PendingSends != 3 {
@@ -190,7 +190,7 @@ func TestApplyBurst_BumpsExpectedEchoes(t *testing.T) {
 
 func TestApplyBurst_ZeroAdditionalEqualsApply(t *testing.T) {
 	t.Parallel()
-	tr := New[int](nil)
+	tr := New[int]()
 	tr.ApplyBurst(7, 0, true, 0)
 	if snap := tr.Snapshot(); snap.PendingSends != 1 {
 		t.Fatalf("PendingSends = %d, want 1", snap.PendingSends)
