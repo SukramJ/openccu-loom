@@ -938,7 +938,9 @@ func (c *client) writePump() {
 				TS:      ev.When.UTC().Format("2006-01-02T15:04:05.000Z"),
 				Payload: payload,
 			}
-			buf, err := json.Marshal(frame)
+			// A pointer spares the encoder a copy of the frame on every event
+			// for every client.
+			buf, err := json.Marshal(&frame)
 			if err != nil {
 				continue
 			}
