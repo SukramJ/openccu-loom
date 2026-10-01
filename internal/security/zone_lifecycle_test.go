@@ -38,14 +38,14 @@ func zoneIDKnown(t *testing.T, svc *Service, want string) bool {
 func TestServiceRemovesZoneOnAlarmPanelChangedRemoved(t *testing.T) {
 	t.Parallel()
 	var alarmBus *events.Bus
-	svc, _, clk := newTestService(t, func(d *Deps) { alarmBus = d.AlarmBus })
+	svc, _ := newTestService(t, func(d *Deps) { alarmBus = d.AlarmBus })
 	ctx := context.Background()
 	if err := svc.Start(ctx); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 
 	alarmBus.Publish(hmevent.AlarmTriggeredEvent{
-		Base: hmevent.NewBaseAt(clk.Now()), ZoneID: "z1", ZoneName: "Erdgeschoss",
+		Base: hmevent.NewBaseAt(time.Now()), ZoneID: "z1", ZoneName: "Erdgeschoss",
 		IncidentID: 1, Mode: hmenum.AlarmModeFull,
 	})
 	if !zoneIDKnown(t, svc, "z1") {
@@ -53,7 +53,7 @@ func TestServiceRemovesZoneOnAlarmPanelChangedRemoved(t *testing.T) {
 	}
 
 	alarmBus.Publish(hmevent.AlarmPanelChangedEvent{
-		Base: hmevent.NewBaseAt(clk.Now()), ZoneID: "z1", Name: "Erdgeschoss", Removed: true,
+		Base: hmevent.NewBaseAt(time.Now()), ZoneID: "z1", Name: "Erdgeschoss", Removed: true,
 	})
 
 	// Bus dispatch runs handlers synchronously in the uncontended case
@@ -85,14 +85,14 @@ func TestServiceRemovesZoneOnAlarmPanelChangedRemoved(t *testing.T) {
 func TestServiceIgnoresMasterZoneRemoval(t *testing.T) {
 	t.Parallel()
 	var alarmBus *events.Bus
-	svc, _, clk := newTestService(t, func(d *Deps) { alarmBus = d.AlarmBus })
+	svc, _ := newTestService(t, func(d *Deps) { alarmBus = d.AlarmBus })
 	ctx := context.Background()
 	if err := svc.Start(ctx); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 
 	alarmBus.Publish(hmevent.AlarmTriggeredEvent{
-		Base: hmevent.NewBaseAt(clk.Now()), ZoneID: "z1", ZoneName: "Erdgeschoss",
+		Base: hmevent.NewBaseAt(time.Now()), ZoneID: "z1", ZoneName: "Erdgeschoss",
 		IncidentID: 1, Mode: hmenum.AlarmModeFull,
 	})
 	if !zoneIDKnown(t, svc, "z1") {
@@ -100,7 +100,7 @@ func TestServiceIgnoresMasterZoneRemoval(t *testing.T) {
 	}
 
 	alarmBus.Publish(hmevent.AlarmPanelChangedEvent{
-		Base: hmevent.NewBaseAt(clk.Now()), ZoneID: alarmpanel.MasterZoneID, Name: "Alarm system", Removed: true,
+		Base: hmevent.NewBaseAt(time.Now()), ZoneID: alarmpanel.MasterZoneID, Name: "Alarm system", Removed: true,
 	})
 
 	if !zoneIDKnown(t, svc, "z1") {
@@ -110,7 +110,7 @@ func TestServiceIgnoresMasterZoneRemoval(t *testing.T) {
 	// The half that can fail: an ordinary master-panel update.
 	before := len(svc.Snapshot().Zones)
 	alarmBus.Publish(hmevent.AlarmPanelChangedEvent{
-		Base: hmevent.NewBaseAt(clk.Now()), ZoneID: alarmpanel.MasterZoneID,
+		Base: hmevent.NewBaseAt(time.Now()), ZoneID: alarmpanel.MasterZoneID,
 		Name: "Alarm system", State: string(hmenum.AlarmModeDisarmed),
 	})
 	if got := len(svc.Snapshot().Zones); got != before {

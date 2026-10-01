@@ -6,6 +6,7 @@ package security
 import (
 	"context"
 	"sort"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -56,7 +57,7 @@ func (s *Service) RebuildIndex(ctx context.Context) error {
 		readyCentrals[u.Name()] = u.IsSouthboundReady()
 	}
 
-	now := nowMS(s.clk.Now())
+	now := nowMS(time.Now())
 	s.mu.Lock()
 	// The reads above succeeded, so the index once again reflects the live
 	// model: clear any degraded flag a previous failed rebuild set.
@@ -527,7 +528,7 @@ func (s *Service) SetSourceOverride(ctx context.Context, centralName, interfaceI
 	row := sqlitestore.SecuritySource{
 		CentralName: centralName, InterfaceID: interfaceID, ChannelAddress: channelAddress,
 		Parameter: parameter, Class: string(class), Included: included, Note: note,
-		UpdatedAt: nowMS(s.clk.Now()),
+		UpdatedAt: nowMS(time.Now()),
 	}
 	if err := s.stores.Sources.Upsert(ctx, row); err != nil {
 		return err

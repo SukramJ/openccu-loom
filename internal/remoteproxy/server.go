@@ -7,8 +7,6 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-
-	"github.com/SukramJ/openccu-loom/internal/clock"
 )
 
 // Server routes browser requests to the configured remote instances.
@@ -41,7 +39,7 @@ func New(opts Options, log *slog.Logger) (*Server, error) {
 		s.instances = append(s.instances, p)
 	}
 	if !single {
-		s.poller = newPoller(s.instances, clock.New(), log)
+		s.poller = newPoller(s.instances, log)
 	}
 	return s, nil
 }

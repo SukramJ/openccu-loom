@@ -11,7 +11,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
 )
 
@@ -40,42 +39,6 @@ func SetSpanExporter(e SpanExporter) SpanExporter {
 		return nil
 	}
 	return *prev
-}
-
-// tracingClock is the time source used by [StartSpan], [Span.End], and
-// [Span.AddEvent]. Defaults to the real wall clock; tests inject a
-// [clock.Fake] via [SetClock] for deterministic span timestamps.
-//
-// Storing the clock as an atomic.Pointer keeps reads lock-free on the
-// hot path while still allowing test seams to swap the implementation
-// without races against producing handlers.
-var tracingClock atomic.Pointer[clock.Clock]
-
-func init() {
-	c := clock.New()
-	tracingClock.Store(&c)
-}
-
-// SetClock overrides the package-level clock used by tracing. Pass
-// nil to restore the real wall clock. Returns the previous clock so
-// tests can defer its restoration.
-func SetClock(c clock.Clock) clock.Clock {
-	if c == nil {
-		c = clock.New()
-	}
-	prev := tracingClock.Swap(&c)
-	if prev == nil {
-		return clock.New()
-	}
-	return *prev
-}
-
-func now() time.Time {
-	c := tracingClock.Load()
-	if c == nil {
-		return time.Now()
-	}
-	return (*c).Now()
 }
 
 // Span represents a single unit of work in a distributed trace. Spans
@@ -168,7 +131,7 @@ func (s *Span) Events() []SpanEvent {
 func (s *Span) AddEvent(name string, attrs map[string]any) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.events = append(s.events, spanEvent{At: now(), Name: name, Attributes: attrs})
+	s.events = append(s.events, spanEvent{At: time.Now(), Name: name, Attributes: attrs})
 }
 
 // End marks the span as finished. If a SpanExporter is registered via
@@ -178,7 +141,7 @@ func (s *Span) AddEvent(name string, attrs map[string]any) {
 func (s *Span) End() {
 	s.mu.Lock()
 	if s.EndedAt.IsZero() {
-		s.EndedAt = now()
+		s.EndedAt = time.Now()
 	}
 	s.mu.Unlock()
 
@@ -230,7 +193,7 @@ func StartSpan(ctx context.Context, name string, attrs map[string]any) (*Span, c
 		// collisions likely after tens of thousands of spans.
 		SpanID:       hmreqctx.NewSpanID(),
 		ParentSpanID: parentID,
-		StartedAt:    now(),
+		StartedAt:    time.Now(),
 	}
 	for k, v := range attrs {
 		sp.SetAttribute(k, v)

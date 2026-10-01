@@ -128,8 +128,6 @@ type Central struct {
 	historyCap  int
 	historyHead int
 	historyLen  int
-
-	now func() time.Time
 }
 
 // NewCentral returns a machine pinned to [hmenum.CentralStateStarting].
@@ -142,7 +140,6 @@ func NewCentral(name string, bus *events.Bus) *Central {
 		degraded:   make(map[string]hmenum.FailureReason),
 		history:    make([]CentralTransition, DefaultHistorySize),
 		historyCap: DefaultHistorySize,
-		now:        time.Now,
 	}
 }
 
@@ -206,7 +203,7 @@ func (c *Central) TransitionTo(target hmenum.CentralState, reason hmenum.Failure
 	}
 	c.cur = target
 	c.why = reason
-	c.lastChange = c.now()
+	c.lastChange = time.Now()
 	// Entering Running clears the degraded-interface set: the central is
 	// fully recovered and no interfaces are considered degraded any longer.
 	if target == hmenum.CentralStateRunning {
@@ -266,7 +263,7 @@ func (c *Central) ForceTransitionTo(target hmenum.CentralState, reason hmenum.Fa
 	from := c.cur
 	c.cur = target
 	c.why = reason
-	c.lastChange = c.now()
+	c.lastChange = time.Now()
 	c.history[c.historyHead] = CentralTransition{
 		From:   from,
 		To:     target,
@@ -449,5 +446,5 @@ func (c *Central) SecondsInCurrentState() float64 {
 	if c.lastChange.IsZero() {
 		return 0
 	}
-	return c.now().Sub(c.lastChange).Seconds()
+	return time.Since(c.lastChange).Seconds()
 }

@@ -8,11 +8,9 @@ import (
 	"log/slog"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -25,7 +23,7 @@ import (
 // file guards against lived in the seam between the in-memory aggregate
 // and the persisted ledger, and a fake store would reproduce whichever
 // side the test author had in mind.
-func newTestService(t *testing.T, mut ...func(*Deps)) (*Service, *Stores, *clock.Fake) {
+func newTestService(t *testing.T, mut ...func(*Deps)) (*Service, *Stores) {
 	t.Helper()
 	ctx := context.Background()
 	db, err := sqlitestore.Open(ctx, sqlitestore.FileDSN(filepath.Join(t.TempDir(), "test.db")))
@@ -44,12 +42,10 @@ func newTestService(t *testing.T, mut ...func(*Deps)) (*Service, *Stores, *clock
 		Sensors: sqlitestore.NewAlarmSensorStore(db),
 		Zones:   sqlitestore.NewAlarmZoneStore(db),
 	}
-	clk := clock.NewFake(time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC))
 	deps := Deps{
 		Registry: central.NewRegistry(),
 		Stores:   stores,
 		AlarmBus: events.NewBus(),
-		Clock:    clk,
 		Logger:   slog.New(slog.DiscardHandler),
 		Catalogs: cats,
 	}
@@ -60,7 +56,7 @@ func newTestService(t *testing.T, mut ...func(*Deps)) (*Service, *Stores, *clock
 	if err != nil {
 		t.Fatalf("security.New: %v", err)
 	}
-	return svc, stores, clk
+	return svc, stores
 }
 
 // collectFaultEvents records every fault transition the domain

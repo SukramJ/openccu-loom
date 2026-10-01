@@ -41,7 +41,7 @@ func TestZoneAdoptsTheEngineStateFromThePanelProjection(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			svc, _, _ := newTestService(t)
+			svc, _ := newTestService(t)
 
 			svc.onAlarmPanelChanged(hmevent.AlarmPanelChangedEvent{
 				Base:   hmevent.NewBase(),
@@ -63,7 +63,7 @@ func TestZoneAdoptsTheEngineStateFromThePanelProjection(t *testing.T) {
 // "disarmed" is worse than an admitted gap.
 func TestZoneKeepsItsStateOnAnUnknownToken(t *testing.T) {
 	t.Parallel()
-	svc, _, _ := newTestService(t)
+	svc, _ := newTestService(t)
 
 	svc.onAlarmPanelChanged(hmevent.AlarmPanelChangedEvent{
 		Base: hmevent.NewBase(), ZoneID: "z1", Name: "Erdgeschoss", State: "armed_away",

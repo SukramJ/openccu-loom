@@ -8,11 +8,9 @@ import (
 	"log/slog"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -44,7 +42,6 @@ func TestRebuildIndexFailureReportsDegradedNotAllClear(t *testing.T) {
 			Zones:   sqlitestore.NewAlarmZoneStore(db),
 		},
 		AlarmBus: events.NewBus(),
-		Clock:    clock.NewFake(time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)),
 		Logger:   slog.New(slog.DiscardHandler),
 		Catalogs: cats,
 	})

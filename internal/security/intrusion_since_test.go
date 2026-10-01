@@ -5,6 +5,7 @@ package security
 
 import (
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -59,35 +60,37 @@ func deactivateSource(t *testing.T, svc *Service, suffix int) {
 // Unix epoch.
 func TestDisarmingAnUninvolvedZoneKeepsTheRunningIntrusionStartTime(t *testing.T) {
 	t.Parallel()
-	svc, _, clk := newTestService(t)
+	synctest.Test(t, func(t *testing.T) {
+		svc, _ := newTestService(t)
 
-	svc.onAlarmTriggered(hmevent.AlarmTriggeredEvent{
-		Base:       hmevent.NewBaseAt(clk.Now()),
-		ZoneID:     "zone-a",
-		ZoneName:   "Erdgeschoss",
-		Mode:       hmenum.AlarmModeFull,
-		IncidentID: 7,
+		svc.onAlarmTriggered(hmevent.AlarmTriggeredEvent{
+			Base:       hmevent.NewBaseAt(time.Now()),
+			ZoneID:     "zone-a",
+			ZoneName:   "Erdgeschoss",
+			Mode:       hmenum.AlarmModeFull,
+			IncidentID: 7,
+		})
+		fireSource(t, svc, hmenum.SecurityClassIntrusion, 31)
+		want := intrusionSinceMS(t, svc)
+		if want == 0 {
+			t.Fatal("the triggered incident recorded no intrusion start time at all")
+		}
+
+		time.Sleep(time.Minute)
+		svc.onAlarmStateChanged(hmevent.AlarmStateChangedEvent{
+			Base:     hmevent.NewBaseAt(time.Now()),
+			ZoneID:   "zone-b",
+			ZoneName: "Keller",
+			From:     hmenum.AlarmZoneStateArmed,
+			To:       hmenum.AlarmZoneStateDisarmed,
+			Mode:     hmenum.AlarmModeDisarmed,
+		})
+
+		if got := intrusionSinceMS(t, svc); got != want {
+			t.Fatalf("intrusion since_ms = %d after disarming an uninvolved zone, want %d — the "+
+				"running incident in zone-a lost its start time", got, want)
+		}
 	})
-	fireSource(t, svc, hmenum.SecurityClassIntrusion, 31)
-	want := intrusionSinceMS(t, svc)
-	if want == 0 {
-		t.Fatal("the triggered incident recorded no intrusion start time at all")
-	}
-
-	clk.Advance(time.Minute)
-	svc.onAlarmStateChanged(hmevent.AlarmStateChangedEvent{
-		Base:     hmevent.NewBaseAt(clk.Now()),
-		ZoneID:   "zone-b",
-		ZoneName: "Keller",
-		From:     hmenum.AlarmZoneStateArmed,
-		To:       hmenum.AlarmZoneStateDisarmed,
-		Mode:     hmenum.AlarmModeDisarmed,
-	})
-
-	if got := intrusionSinceMS(t, svc); got != want {
-		t.Fatalf("intrusion since_ms = %d after disarming an uninvolved zone, want %d — the "+
-			"running incident in zone-a lost its start time", got, want)
-	}
 }
 
 // TestTheIntrusionStartTimeSurvivesTheZoneItStartedIn locks the other
@@ -96,32 +99,34 @@ func TestDisarmingAnUninvolvedZoneKeepsTheRunningIntrusionStartTime(t *testing.T
 // snapshot reports is still active and still the same detection.
 func TestTheIntrusionStartTimeSurvivesTheZoneItStartedIn(t *testing.T) {
 	t.Parallel()
-	svc, _, clk := newTestService(t)
+	synctest.Test(t, func(t *testing.T) {
+		svc, _ := newTestService(t)
 
-	svc.onAlarmTriggered(hmevent.AlarmTriggeredEvent{
-		Base:       hmevent.NewBaseAt(clk.Now()),
-		ZoneID:     "zone-a",
-		ZoneName:   "Erdgeschoss",
-		Mode:       hmenum.AlarmModeFull,
-		IncidentID: 7,
+		svc.onAlarmTriggered(hmevent.AlarmTriggeredEvent{
+			Base:       hmevent.NewBaseAt(time.Now()),
+			ZoneID:     "zone-a",
+			ZoneName:   "Erdgeschoss",
+			Mode:       hmenum.AlarmModeFull,
+			IncidentID: 7,
+		})
+		fireSource(t, svc, hmenum.SecurityClassIntrusion, 32)
+		want := intrusionSinceMS(t, svc)
+
+		time.Sleep(time.Minute)
+		svc.onAlarmStateChanged(hmevent.AlarmStateChangedEvent{
+			Base:     hmevent.NewBaseAt(time.Now()),
+			ZoneID:   "zone-a",
+			ZoneName: "Erdgeschoss",
+			From:     hmenum.AlarmZoneStateTriggered,
+			To:       hmenum.AlarmZoneStateDisarmed,
+			Mode:     hmenum.AlarmModeDisarmed,
+		})
+
+		if got := intrusionSinceMS(t, svc); got != want {
+			t.Fatalf("intrusion since_ms = %d after the zone was disarmed while its door is still "+
+				"open, want %d", got, want)
+		}
 	})
-	fireSource(t, svc, hmenum.SecurityClassIntrusion, 32)
-	want := intrusionSinceMS(t, svc)
-
-	clk.Advance(time.Minute)
-	svc.onAlarmStateChanged(hmevent.AlarmStateChangedEvent{
-		Base:     hmevent.NewBaseAt(clk.Now()),
-		ZoneID:   "zone-a",
-		ZoneName: "Erdgeschoss",
-		From:     hmenum.AlarmZoneStateTriggered,
-		To:       hmenum.AlarmZoneStateDisarmed,
-		Mode:     hmenum.AlarmModeDisarmed,
-	})
-
-	if got := intrusionSinceMS(t, svc); got != want {
-		t.Fatalf("intrusion since_ms = %d after the zone was disarmed while its door is still "+
-			"open, want %d", got, want)
-	}
 }
 
 // TestTheIntrusionStartTimeResetsOnceNothingIsRunning bounds the guard
@@ -131,45 +136,47 @@ func TestTheIntrusionStartTimeSurvivesTheZoneItStartedIn(t *testing.T) {
 // previous one.
 func TestTheIntrusionStartTimeResetsOnceNothingIsRunning(t *testing.T) {
 	t.Parallel()
-	svc, _, clk := newTestService(t)
+	synctest.Test(t, func(t *testing.T) {
+		svc, _ := newTestService(t)
 
-	svc.onAlarmTriggered(hmevent.AlarmTriggeredEvent{
-		Base:       hmevent.NewBaseAt(clk.Now()),
-		ZoneID:     "zone-a",
-		ZoneName:   "Erdgeschoss",
-		Mode:       hmenum.AlarmModeFull,
-		IncidentID: 7,
+		svc.onAlarmTriggered(hmevent.AlarmTriggeredEvent{
+			Base:       hmevent.NewBaseAt(time.Now()),
+			ZoneID:     "zone-a",
+			ZoneName:   "Erdgeschoss",
+			Mode:       hmenum.AlarmModeFull,
+			IncidentID: 7,
+		})
+		fireSource(t, svc, hmenum.SecurityClassIntrusion, 33)
+		first := intrusionSinceMS(t, svc)
+
+		time.Sleep(time.Minute)
+		svc.onAlarmStateChanged(hmevent.AlarmStateChangedEvent{
+			Base:     hmevent.NewBaseAt(time.Now()),
+			ZoneID:   "zone-a",
+			ZoneName: "Erdgeschoss",
+			From:     hmenum.AlarmZoneStateTriggered,
+			To:       hmenum.AlarmZoneStateDisarmed,
+			Mode:     hmenum.AlarmModeDisarmed,
+		})
+		deactivateSource(t, svc, 33)
+
+		time.Sleep(time.Hour)
+		svc.onAlarmTriggered(hmevent.AlarmTriggeredEvent{
+			Base:       hmevent.NewBaseAt(time.Now()),
+			ZoneID:     "zone-a",
+			ZoneName:   "Erdgeschoss",
+			Mode:       hmenum.AlarmModeFull,
+			IncidentID: 8,
+		})
+		fireSource(t, svc, hmenum.SecurityClassIntrusion, 34)
+
+		second := intrusionSinceMS(t, svc)
+		if second == first {
+			t.Fatalf("the second incident reports since_ms %d, the start time of the first one — a "+
+				"finished incident never released it", second)
+		}
+		if want := nowMS(time.Now()); second != want {
+			t.Fatalf("intrusion since_ms = %d for the second incident, want %d", second, want)
+		}
 	})
-	fireSource(t, svc, hmenum.SecurityClassIntrusion, 33)
-	first := intrusionSinceMS(t, svc)
-
-	clk.Advance(time.Minute)
-	svc.onAlarmStateChanged(hmevent.AlarmStateChangedEvent{
-		Base:     hmevent.NewBaseAt(clk.Now()),
-		ZoneID:   "zone-a",
-		ZoneName: "Erdgeschoss",
-		From:     hmenum.AlarmZoneStateTriggered,
-		To:       hmenum.AlarmZoneStateDisarmed,
-		Mode:     hmenum.AlarmModeDisarmed,
-	})
-	deactivateSource(t, svc, 33)
-
-	clk.Advance(time.Hour)
-	svc.onAlarmTriggered(hmevent.AlarmTriggeredEvent{
-		Base:       hmevent.NewBaseAt(clk.Now()),
-		ZoneID:     "zone-a",
-		ZoneName:   "Erdgeschoss",
-		Mode:       hmenum.AlarmModeFull,
-		IncidentID: 8,
-	})
-	fireSource(t, svc, hmenum.SecurityClassIntrusion, 34)
-
-	second := intrusionSinceMS(t, svc)
-	if second == first {
-		t.Fatalf("the second incident reports since_ms %d, the start time of the first one — a "+
-			"finished incident never released it", second)
-	}
-	if want := nowMS(clk.Now()); second != want {
-		t.Fatalf("intrusion since_ms = %d for the second incident, want %d", second, want)
-	}
 }

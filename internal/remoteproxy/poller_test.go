@@ -13,8 +13,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/SukramJ/openccu-loom/internal/clock"
 )
 
 // pollTGoroutineLeakThreshold is the maximum tolerated goroutine-count
@@ -186,7 +184,7 @@ func TestPollerProbeNoTokenSendsNoAuthorization(t *testing.T) {
 		pollTResponse{status: http.StatusOK, body: `{}`},
 	)
 	ip := pollTNewInstanceProxy(t, "alpha", upstream.URL, "")
-	p := newPoller([]*instanceProxy{ip}, clock.New(), pollTLogger())
+	p := newPoller([]*instanceProxy{ip}, pollTLogger())
 
 	_ = p.probe(context.Background(), ip)
 
@@ -205,7 +203,7 @@ func TestPollerProbeUnhealthyStatusCodeIsIgnored(t *testing.T) {
 		pollTResponse{status: http.StatusOK, body: `{}`},
 	)
 	ip := pollTNewInstanceProxy(t, "alpha", upstream.URL, "")
-	p := newPoller([]*instanceProxy{ip}, clock.New(), pollTLogger())
+	p := newPoller([]*instanceProxy{ip}, pollTLogger())
 
 	st := p.probe(context.Background(), ip)
 
@@ -216,7 +214,7 @@ func TestPollerProbeUnhealthyStatusCodeIsIgnored(t *testing.T) {
 
 func TestPollerProbeUnreachableUpstream(t *testing.T) {
 	ip := pollTNewInstanceProxy(t, "alpha", pollTClosedUpstreamURL(t), "")
-	p := newPoller([]*instanceProxy{ip}, clock.New(), pollTLogger())
+	p := newPoller([]*instanceProxy{ip}, pollTLogger())
 
 	st := p.probe(context.Background(), ip)
 
@@ -233,7 +231,7 @@ func TestPollerProbeInfoEndpointIsBestEffort(t *testing.T) {
 			pollTResponse{status: http.StatusInternalServerError, body: ``},
 		)
 		ip := pollTNewInstanceProxy(t, "alpha", upstream.URL, "")
-		p := newPoller([]*instanceProxy{ip}, clock.New(), pollTLogger())
+		p := newPoller([]*instanceProxy{ip}, pollTLogger())
 
 		st := p.probe(context.Background(), ip)
 
@@ -252,7 +250,7 @@ func TestPollerProbeInfoEndpointIsBestEffort(t *testing.T) {
 			pollTResponse{status: http.StatusOK, body: `not json`},
 		)
 		ip := pollTNewInstanceProxy(t, "alpha", upstream.URL, "")
-		p := newPoller([]*instanceProxy{ip}, clock.New(), pollTLogger())
+		p := newPoller([]*instanceProxy{ip}, pollTLogger())
 
 		st := p.probe(context.Background(), ip)
 
@@ -277,7 +275,7 @@ func TestPollerSnapshotOrderAndUnknownDefault(t *testing.T) {
 		// listener behind it.
 		instances[i] = pollTNewInstanceProxy(t, name, "http://127.0.0.1:1", "")
 	}
-	p := newPoller(instances, clock.New(), pollTLogger())
+	p := newPoller(instances, pollTLogger())
 
 	got := p.snapshot()
 	if len(got) != len(names) {
@@ -300,7 +298,7 @@ func TestPollerStartStopsOnContextCancel(t *testing.T) {
 		pollTResponse{status: http.StatusOK, body: `{}`},
 	)
 	ip := pollTNewInstanceProxy(t, "alpha", upstream.URL, "")
-	p := newPoller([]*instanceProxy{ip}, clock.New(), pollTLogger())
+	p := newPoller([]*instanceProxy{ip}, pollTLogger())
 	p.interval = 5 * time.Millisecond // bounds the test to a short custom tick
 
 	runtime.GC()

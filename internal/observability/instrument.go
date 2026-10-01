@@ -98,16 +98,16 @@ func Instrument(ctx context.Context, rec Recorder, name string, scope Scope, fn 
 	if rec == nil {
 		rec = NoopRecorder{}
 	}
-	start := now()
+	start := time.Now()
 	defer func() {
 		if r := recover(); r != nil {
-			d := now().Sub(start)
+			d := time.Since(start)
 			perr := errors.New("instrumented panic")
 			rec.ObserveLatency(name, scope, d, perr)
 			rec.IncCounter(name+".panic", scope, 1)
 			panic(r)
 		}
-		d := now().Sub(start)
+		d := time.Since(start)
 		rec.ObserveLatency(name, scope, d, err)
 		if err != nil {
 			rec.IncCounter(name+".error", scope, 1)

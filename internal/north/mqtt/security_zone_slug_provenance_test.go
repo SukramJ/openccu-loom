@@ -13,7 +13,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 	securitydomain "github.com/SukramJ/openccu-loom/internal/security"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
@@ -63,7 +62,6 @@ func TestSecurityZoneTopicsCarryTheStoredSlug(t *testing.T) {
 		Registry: central.NewRegistry(),
 		Stores:   stores,
 		AlarmBus: events.NewBus(),
-		Clock:    clock.NewFake(time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)),
 		Logger:   slog.New(slog.DiscardHandler),
 		Catalogs: cats,
 	})

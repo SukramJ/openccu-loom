@@ -31,7 +31,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
-	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/model/security"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
@@ -73,7 +72,6 @@ type Deps struct {
 	// alarm engine is disabled; the domain then runs without the
 	// intrusion and zone halves rather than not at all.
 	AlarmBus *events.Bus
-	Clock    clock.Clock
 	Logger   *slog.Logger
 	Catalogs *i18n.Catalogs
 }
@@ -84,7 +82,6 @@ type Service struct {
 	reg      *central.Registry
 	stores   *Stores
 	alarmBus *events.Bus
-	clk      clock.Clock
 	log      *slog.Logger
 	render   *renderer
 
@@ -116,10 +113,6 @@ func New(deps Deps) (*Service, error) {
 	if deps.Registry == nil || deps.Stores == nil {
 		return nil, errors.New("security: missing registry or stores")
 	}
-	clk := deps.Clock
-	if clk == nil {
-		clk = clock.New()
-	}
 	log := deps.Logger
 	if log == nil {
 		log = slog.Default()
@@ -134,7 +127,6 @@ func New(deps Deps) (*Service, error) {
 		reg:             deps.Registry,
 		stores:          deps.Stores,
 		alarmBus:        deps.AlarmBus,
-		clk:             clk,
 		log:             log,
 		render:          newRenderer(deps.Catalogs, deps.Settings.Locale, deps.Settings.PublicURL),
 		bus:             events.NewBus(),
@@ -256,7 +248,7 @@ func (s *Service) DetachCentral(name string) {
 	for _, u := range list {
 		u()
 	}
-	if _, err := s.stores.Faults.ClearByCentral(context.Background(), name, nowMS(s.clk.Now())); err != nil {
+	if _, err := s.stores.Faults.ClearByCentral(context.Background(), name, nowMS(time.Now())); err != nil {
 		s.log.Error("security: clear faults of detached central", "central", name, "error", err)
 	}
 	s.publishState(snap)
@@ -295,7 +287,7 @@ func (s *Service) startRetention() {
 	var chain func()
 	chain = func() {
 		t := time.AfterFunc(24*time.Hour, func() {
-			cutoff := s.clk.Now().Add(-maxAge).UnixMilli()
+			cutoff := time.Now().Add(-maxAge).UnixMilli()
 			if n, err := s.stores.Faults.PurgeClearedBefore(context.Background(), cutoff); err != nil {
 				s.log.Error("security fault retention failed", "error", err)
 			} else if n > 0 {
@@ -339,7 +331,7 @@ func (s *Service) publishState(snap security.Snapshot) {
 		}
 	}
 	s.bus.Publish(hmevent.SecurityStateChangedEvent{
-		Base:          hmevent.NewBaseAt(s.clk.Now()),
+		Base:          hmevent.NewBaseAt(time.Now()),
 		To:            snap.Severity,
 		ActiveClasses: active,
 		OpenFaults:    len(snap.Faults),
