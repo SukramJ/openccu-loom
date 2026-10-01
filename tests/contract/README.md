@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 7 of 547.
+Guards without a doc comment: 8 of 548.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -247,6 +247,7 @@ Guards without a doc comment: 7 of 547.
 | TestHashStableAcrossParamsetMapOrder | normalization_test.go | TestHashStableAcrossParamsetMapOrder locks the guarantee that paramset hashing is insensitive to Go map iteration order. |
 | TestNormalizeDeviceIdempotent | normalization_test.go | TestNormalizeDeviceIdempotent pins the invariant that normalisation applied twice is the same as once. |
 | TestNormalizeParameterIdempotent | normalization_test.go | TestNormalizeParameterIdempotent locks parameter normalisation. |
+| TestOcculiteSSOAgainstLiteFake | occulite_sso_contract_test.go | — (no doc comment) |
 | TestDetectionClassifies | occulited_wire_contract_test.go | TestDetectionClassifies pins §7.1 over A.6/A.1: the meta version JSON means lite; 503 starting means lite, not ready; an HTML answer means not lite; a higher API major is refused. |
 | TestLiteRPCDownIs503JSONAndClassifiedAsNoConnection | occulited_wire_contract_test.go | TestLiteRPCDownIs503JSONAndClassifiedAsNoConnection pins A.3: an interface process that does not answer yields 503 {"error":"down"}, which the client classifies as hmerr.ErrNoConnection. |
 | TestLiteRPCInitIsRefusedAsFaultOver200 | occulited_wire_contract_test.go | TestLiteRPCInitIsRefusedAsFaultOver200 pins A.3: init, alone and inside system.multicall, is refused with fault -1 over HTTP 200 and the exact text "init is not available remotely on openccu-lite: subscribe to /api/rpc/v1/events - see docs/rpc-remote.md". |
