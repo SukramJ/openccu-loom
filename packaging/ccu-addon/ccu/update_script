@@ -73,6 +73,12 @@ cp -af addon/assets ${ADDON_DIR}/ 2>/dev/null || true
 # add-on's own etc/, validates it and installs a root-owned copy. The
 # CCU3/OpenCCU firmware never looks at it.
 cp -af addon/etc ${ADDON_DIR}/ 2>/dev/null || true
+# The openccu-lite manifest, kept beside the daemon: when an OpenCCU box is
+# updated to openccu-lite, occulited reads this add-on's requirements from
+# ${ADDON_DIR}/openccu-lite.json (it declares no ReGa need) instead of
+# scanning the installed files for ReGa idioms. An install on openccu-lite
+# has already read the manifest from the package itself.
+cp -af openccu-lite.json ${ADDON_DIR}/openccu-lite.json
 cp -af rc.d/* ${RCD_DIR}/
 cp -af www/* ${WWW_DIR}/
 cp -af etc/* ${ETC_DIR}/

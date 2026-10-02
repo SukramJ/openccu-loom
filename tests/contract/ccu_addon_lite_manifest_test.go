@@ -120,6 +120,31 @@ func TestCCUAddonLiteManifestMatchesThePackage(t *testing.T) {
 	}
 }
 
+// TestCCUAddonUpdateScriptInstallsTheLiteManifest pins the copy of the
+// manifest into the add-on directory. A box updated from OpenCCU to
+// openccu-lite has no install record for the add-on, so occulited reads its
+// ReGa requirement from /usr/local/addons/<id>/openccu-lite.json; without the
+// file it falls back to scanning the installed code. The source must be the
+// tarball root, where the build stages the manifest from the package tree.
+func TestCCUAddonUpdateScriptInstallsTheLiteManifest(t *testing.T) {
+	t.Parallel()
+
+	update := readCCUAddonFile(t, "update_script")
+	if !regexp.MustCompile(`(?m)^cp -af openccu-lite\.json \$\{ADDON_DIR\}/openccu-lite\.json$`).MatchString(update) {
+		t.Error("update_script does not install openccu-lite.json into ${ADDON_DIR}")
+	}
+	if _, err := os.Stat(filepath.Join("..", "..", "packaging", "ccu-addon", "ccu", "openccu-lite.json")); err != nil {
+		t.Errorf("the manifest is not at the package root the build copies into the tarball: %v", err)
+	}
+	build, err := os.ReadFile("../../script/build_ccu_addon.sh")
+	if err != nil {
+		t.Fatalf("read build script: %v", err)
+	}
+	if !strings.Contains(string(build), `cp -a "$SRC/." "$STAGE/"`) {
+		t.Error("script/build_ccu_addon.sh no longer stages the package tree at the tarball root")
+	}
+}
+
 // TestCCUAddonLiteManifestDeclaresRuntimePolicy pins the manifest's runtime
 // declarations. openccu-lite applies a manifest as declared and a release
 // that declares less than its predecessor loses what it dropped at the next
