@@ -4,8 +4,9 @@
 // Package scheduler runs periodic background jobs for the daemon.
 //
 // Each job is a named closure that runs on a fixed interval. The
-// scheduler tracks per-job lifecycle state (scheduled, running,
-// failed) and honours the parent context for cancellation.
+// scheduler keeps a per-job failure counter, reports each run through
+// the optional OnStart / OnComplete hooks, and honours the parent
+// context for cancellation.
 package scheduler
 
 import (
@@ -71,8 +72,8 @@ type Scheduler struct {
 
 // JobFailures returns the cumulative number of failed runs for the
 // named job since daemon start. Counts both returned errors and
-// recovered panics — anything that prevented the job from completing
-// cleanly. Unknown jobs return 0.
+// recovered panics. A run that fails while the scheduler's context is
+// already cancelled (shutdown) is not counted. Unknown jobs return 0.
 func (s *Scheduler) JobFailures(name string) uint64 {
 	s.failuresMu.RLock()
 	c, ok := s.failures[name]

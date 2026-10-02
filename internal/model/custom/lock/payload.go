@@ -54,7 +54,7 @@ func (l *Lock) Config() payload.ConfigPayload {
 // All keys the discovery payload references (lock_state, direction) are
 // emitted unconditionally — HA's `value_template` filters (`{{
 // value_json.lock_state }}`) log a warning the moment they resolve to
-// `undefined`, so a fresh thermostat with no observed state would otherwise
+// `undefined`, so a fresh lock with no observed state would otherwise
 // spam the operator's HA log on every `state_topic` publish. Pre-event values
 // map to "UNLOCKED" / "" (empty direction) — matches HA's lock-default state.
 func (l *Lock) State() payload.StatePayload {

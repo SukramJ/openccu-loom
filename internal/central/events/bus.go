@@ -323,8 +323,6 @@ func (b *Bus) DeferredDepth() int {
 // API parity with the reference stack's separate publish_sync entry
 // point and carries no stronger delivery guarantee than [Bus.Publish].
 //
-// loom:reachable:reason="API-parity alias retained for callers that mirror the reference publish_sync entry point"
-//
 // It is NOT guaranteed to be synchronous: in the uncontended case
 // [Bus.Publish] dispatches every handler on the caller's goroutine before
 // returning, but when another goroutine already holds the dispatch lock
@@ -334,6 +332,8 @@ func (b *Bus) DeferredDepth() int {
 // side effects; if you need that, dispatch on the same goroutine that
 // will read the result. There is no production caller that depends on a
 // synchronous-drain contract here.
+//
+// loom:reachable:reason="API-parity alias retained for callers that mirror the reference publish_sync entry point"
 func (b *Bus) PublishSync[T hmevent.Event](e T) {
 	b.Publish(e)
 }
@@ -532,6 +532,7 @@ func (b *Bus) subscriptionCountLocked() int {
 // ClearSubscriptions removes all handlers registered for the given event
 // type. If no handlers were registered it is a no-op (idempotent). The
 // publish counters in [EventStats] are NOT reset — they survive a clear,
+// so only the subscriptions disappear.
 func (b *Bus) ClearSubscriptions(typ hmevent.EventType) {
 	fromDispatch := b.clearFromDispatch()
 	b.mu.Lock()
@@ -726,8 +727,9 @@ func (b *Bus) HandlerStats() []HandlerStat {
 }
 
 // LeakedSubscriptions returns the names of every still-registered handler.
-// Used during shutdown diagnostics — handlers that should have been
-// unsubscribed surface here.
+// Intended for shutdown diagnostics — handlers that should have been
+// unsubscribed would surface here. No production code calls it today; it is
+// exercised only by tests.
 func (b *Bus) LeakedSubscriptions() []string {
 	stats := b.HandlerStats()
 	if len(stats) == 0 {

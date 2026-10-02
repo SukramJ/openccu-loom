@@ -1129,8 +1129,8 @@ func (d *DefaultDiscoveryBuilder) BuildDaemonStatusDiscovery(centralName string)
 
 // BuildSystemHealthDiscovery emits a HA `sensor` for the openccu-loom
 // system-health score (0–100). The score is published on
-// `<base>/<central>/system/health_score`. Mirrors the entry in
-// `hubDescriptionsByKind["system_health"]` (entity_descriptions.go:404).
+// `<base>/<central>/system/health_score`. The entity description is built
+// inline below.
 func (d *DefaultDiscoveryBuilder) BuildSystemHealthDiscovery(centralName string) DiscoveryItem {
 	if centralName == "" {
 		return DiscoveryItem{}
@@ -1320,22 +1320,6 @@ func (b *Bridge) PublishHubDiscovery(ctx context.Context, item DiscoveryItem) er
 	return b.publishDiscovery(ctx, "", item.Component, item.NodeID, item.ObjectID, item.Payload)
 }
 
-// sysvarUniqueID builds the HA `unique_id` for one system variable.
-//
-// It is keyed on the CCU's own numeric variable id, not on the display name.
-// The name is not an identity: [routingkey.HubSlug] collapses punctuation and
-// case, so two variables whose names differ only there — "Alarm: Küche" and
-// "Alarm Küche" — produced byte-identical unique_ids. Home Assistant keeps the
-// config that arrived first and drops the second variable's entity entirely,
-// and since the discovery payload is retained on the broker, the loss survives
-// a restart of the daemon that caused it. Nothing in the daemon noticed,
-// because both variables published happily to their own distinct state topics;
-// only the entity registry on the far side had one fewer row than it should.
-//
-// A sysvar whose id has not been resolved yet (Vid == 0, e.g. a spec built
-// before the first hub scan) falls back to the slug. That is the pre-existing
-// behaviour and can still collide, but an entity keyed on the literal 0 would
-// collide with *every* other unresolved sysvar, which is worse.
 // programUniqueSlug is the identity half of a program's unique_id.
 //
 // Keyed on the CCU program id, for the reason the sysvar id is: the name is
@@ -1353,6 +1337,22 @@ func programUniqueSlug(p HubProgramSpec) string {
 	return routingkey.HubSlug(p.Name)
 }
 
+// sysvarUniqueID builds the HA `unique_id` for one system variable.
+//
+// It is keyed on the CCU's own numeric variable id, not on the display name.
+// The name is not an identity: [routingkey.HubSlug] collapses punctuation and
+// case, so two variables whose names differ only there — "Alarm: Küche" and
+// "Alarm Küche" — produced byte-identical unique_ids. Home Assistant keeps the
+// config that arrived first and drops the second variable's entity entirely,
+// and since the discovery payload is retained on the broker, the loss survives
+// a restart of the daemon that caused it. Nothing in the daemon noticed,
+// because both variables published happily to their own distinct state topics;
+// only the entity registry on the far side had one fewer row than it should.
+//
+// A sysvar whose id has not been resolved yet (Vid == 0, e.g. a spec built
+// before the first hub scan) falls back to the slug. That is the pre-existing
+// behaviour and can still collide, but an entity keyed on the literal 0 would
+// collide with *every* other unresolved sysvar, which is worse.
 func sysvarUniqueID(serial10 string, sv HubSysvarSpec) string {
 	if sv.Vid > 0 {
 		return routingkey.CanonicalUniqueID(serial10, "sysvar", strconv.Itoa(sv.Vid), "")

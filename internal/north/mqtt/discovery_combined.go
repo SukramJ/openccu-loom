@@ -15,7 +15,7 @@ import (
 // CombinedEvent carries the per-channel context needed to emit one HA
 // entity for a combined data point.
 //
-// Component and Body come from the data point's own
+// Component comes from the data point's own
 // [payload.CombinedProjection]; everything else identifies the channel.
 // The split is deliberate: the model layer knows what the entity *is*
 // and the bridge knows *where* it lives, and neither has to learn the
@@ -137,7 +137,7 @@ func (c combinedDiscoveryContext) ObjectID(*hamodel.Device, hamodel.Entity) stri
 // seam exists to prevent.
 //
 // Returns DiscoveryItem{OK: false} when required fields are missing, the
-// projection declined (empty Component or Body), or the render fails.
+// projection declined (empty Component platform), or the render fails.
 func (d *DefaultDiscoveryBuilder) BuildCombinedDiscovery(centralName string, ev CombinedEvent) DiscoveryItem {
 	if ev.Kind == "" || ev.DeviceAddress == "" || ev.Component.Platform == "" {
 		return DiscoveryItem{}

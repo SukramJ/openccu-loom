@@ -20,16 +20,16 @@ import (
 	"time"
 )
 
-// DefaultTimeout mirrors
-// `TimeoutConfig.optimistic_update_timeout = 30.0`. Callers usually
-// pin a per-data-point override; the default is the safety net.
+// DefaultTimeout is the 30 s rollback grace period for an optimistic update.
+// Nothing in the daemon reads this constant: the data point's effective
+// default is generic.OptimisticDefaultTimeout, which carries the same value
+// and is the one to change.
 const DefaultTimeout = 30 * time.Second
 
 // DefaultBurstWindow is the default window within which consecutive
 // Apply calls are treated as a burst — they share a single rollback
 // anchor and increment the PendingSends counter rather than updating
-// the anchor. Callers that need a per-data-point override should pass
-// a non-zero value to [Config] (future work). The window mirrors the
+// the anchor. The package has no per-data-point override for it. The window mirrors the
 // typical CCU-callback round-trip latency; 500 ms is a conservative
 // default that covers most RF propagation delays without masking
 // legitimately distinct commands.

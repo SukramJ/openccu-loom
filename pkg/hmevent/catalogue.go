@@ -92,10 +92,12 @@ const (
 	// grained than DataRefreshCompleted (which is scheduler-job scoped).
 	EventTypeDataFetchCompleted EventType = "data.fetch_completed"
 
-	// EventTypeRPCParameterReceived fires when a raw RPC parameter value
-	// arrives via a CCU callback, before the value is written to the
-	// data-point cache. A diagnostic wire trace with no subscriber
-	// (declared in the subscriber-coverage guard).
+	// EventTypeRPCParameterReceived is the type of the raw-wire-value trace
+	// for a CCU callback parameter, meant to precede the value's write to
+	// the data-point cache. Its only publisher, EventCoordinator's
+	// PublishBackendParameterEvent, has no production caller, so nothing
+	// emits it at runtime, and it has no subscriber (declared in the
+	// subscriber-coverage guard).
 	EventTypeRPCParameterReceived EventType = "rpc.parameter_received"
 
 	// EventTypeDeviceLifecycle is the unified device lifecycle event
@@ -760,10 +762,12 @@ type DataFetchCompletedEvent struct {
 // Type implements Event.
 func (DataFetchCompletedEvent) Type() EventType { return EventTypeDataFetchCompleted }
 
-// RPCParameterReceivedEvent fires when a raw RPC parameter value arrives via
-// a CCU push callback, before it is written to the data-point cache. It is a
-// diagnostic wire trace with no subscriber (declared in the
-// subscriber-coverage guard); the coerced value change travels as
+// RPCParameterReceivedEvent carries a raw RPC parameter value from a CCU push
+// callback, as it would be seen before the write to the data-point cache. It
+// is a diagnostic wire trace with no subscriber (declared in the
+// subscriber-coverage guard), and its only publisher
+// (EventCoordinator.PublishBackendParameterEvent) has no production caller,
+// so it is not emitted at runtime. The coerced value change travels as
 // [DataPointValueChangedEvent].
 type RPCParameterReceivedEvent struct {
 	Base
@@ -818,9 +822,9 @@ type DataRefreshTriggeredEvent struct {
 	// `interface_id` field which is the event key.
 	InterfaceID string
 	// Scheduled distinguishes scheduler-driven refreshes (true) from
-	// manual force-refresh calls (false). Always true for jobs.go +
-	// scheduler_events.go publishers; false-paths land when the
-	// north-bound API exposes manual refresh.
+	// manual force-refresh calls (false). Always true today: the
+	// scheduler job publishers in internal/central/jobs.go are the only
+	// publishers; the false path is reserved for a manual refresh trigger.
 	Scheduled bool
 }
 

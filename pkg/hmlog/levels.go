@@ -75,7 +75,7 @@ func (r *LevelRegistry) Default() slog.Level {
 // Set installs an override for the given path. Passing ttl <= 0 makes
 // the override permanent (it survives until [Reset] or daemon
 // restart); a positive ttl computes an absolute expiry from the
-// registry's clock.
+// wall clock (time.Now).
 //
 // The path is normalised to lowercase so that callers cannot
 // accidentally split overrides between `Client` and `client`.
@@ -182,8 +182,10 @@ func (l minLeveler) Level() slog.Level { return l.reg.Min() }
 // Sweep removes expired overrides. Safe to call concurrently with
 // Resolve / Set. Returns the number of overrides actually removed.
 //
-// Wire this to a periodic scheduler job so that the diagnostics
-// snapshot does not show stale TTL entries that have already elapsed.
+// Expired overrides are already ignored by Resolve and hidden from
+// [LevelRegistry.Snapshot], so Sweep only reclaims their memory. Nothing in
+// the daemon calls it periodically today; a caller that sets many short-lived
+// overrides should run it from a scheduler job.
 func (r *LevelRegistry) Sweep() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()

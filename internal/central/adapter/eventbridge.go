@@ -1617,8 +1617,8 @@ func (b *EventBridge) publishValueChangedMQTT(ctx context.Context, centralName s
 		}
 	}
 
-	// Press-event aggregation: when the channel has 2+ PRESS_*
-	// parameters, publish a non-retained per-channel aggregate event
+	// Press-event aggregation: when the channel has at least one PRESS_*
+	// parameter, publish a non-retained per-channel aggregate event
 	// to `<base>/<central>/<iface>/<addr>/<ch>/event`. HA's event
 	// entity (one per channel) reads `value_json.event_type` from
 	// this topic.
@@ -2531,14 +2531,12 @@ func (b *EventBridge) publishChannelEventState(
 // state).
 //
 // Synthesises a single Event for the first PRESS_* parameter the
-// channel exposes. The discovery builder's Build() method routes the
-// event:
-// - Multi-press channels (≥2 PRESS_* params) → BuildChannelEvent
-// emits one HA event entity carrying every event_type.
-// - Single-press channels → per-parameter HAComponentEvent emits
-// one HA event entity per press parameter (we only synthesise
-// for the first; runtime events for the same channel deduplicate
-// against the bridge's discovery cache).
+// channel exposes. The discovery builder's Build() method routes it to
+// BuildChannelEvent, which emits one HA event entity for the channel
+// carrying every press event_type; only an event without a channel
+// inspector falls back to the per-parameter HAComponentEvent. Runtime
+// events for the same channel deduplicate against the bridge's
+// discovery cache.
 //
 // Best-effort: a broker / discovery-builder hiccup is logged and the
 // snapshot continues with the next channel.

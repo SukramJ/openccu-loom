@@ -1811,14 +1811,15 @@ type FirmwareStateReader interface {
 
 // RefreshFirmwareDataByState filters all known devices on iface to
 // those whose firmware-update state is in the given set, then calls
-// RefreshDeviceDescriptionsAndCreateMissingDevices for each matching
-// device so the daemon's view of the device's description is
-// up-to-date.
+// RefreshDeviceDescriptionsAndCreateMissingDevices once, on the first
+// matching device. That call re-pulls the descriptions of the whole
+// interface, so a single refresh covers every matching device. No match
+// means no refresh.
 //
 // This is called by the scheduler jobs for the
 // DELIVER_FIRMWARE_IMAGE and PERFORMING_UPDATE state groups.
 //
-// Non-fatal errors per device are logged and skipped.
+// A refresh failure is logged and not returned.
 func (c *DeviceCoordinator) RefreshFirmwareDataByState(
 	ctx context.Context,
 	fetcher DeviceDescriptionFetcher,

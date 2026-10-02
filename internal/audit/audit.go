@@ -149,9 +149,9 @@ const (
 	// ActionAreaChange records create / rename / reorder / delete of an
 	// operator-defined area (a room grouping such as a floor or a shed)
 	// and full-set replacement of an area's room assignment. Distinct
-	// from ActionAlarmConfigChange, which covers the alarm engine's own
-	// "area" partitions (notes/concepts/alarm-concept.md §14) — a different
-	// concept despite the shared word. The Note carries the operation
+	// from ActionAlarmConfigChange, which covers the alarm engine's
+	// zones (notes/concepts/alarm-concept.md §14) — a different
+	// concept from these room-grouping areas. The Note carries the operation
 	// and the area id.
 	ActionAreaChange Action = "area_change"
 
@@ -235,12 +235,14 @@ const (
 
 	// Alarm-system surface. Command actions (arm / disarm / silence /
 	// acknowledge / walk test / output test) record who drove the panel
-	// and from where; ActionAlarmConfigChange covers every area / sensor
-	// / output CRUD mutation, and ActionAlarmCodeChange every alarm-code
+	// and from where; ActionAlarmConfigChange covers every zone / sensor
+	// / output mutation (plus security-fault acknowledgement and
+	// security-source edits), and ActionAlarmCodeChange every alarm-code
 	// CRUD mutation (kept distinct so a code change is auditable apart
 	// from ordinary config edits — codes are security material, §11/§16).
 	// The Entry's Note carries the target context (e.g.
-	// `area=<id> mode=<mode>`).
+	// `zone=<id> mode=<mode>` for arm, `zone_create=<id>` for a zone
+	// edit, `code_update=<id>` for a code edit).
 	ActionAlarmArm          Action = "alarm_arm"
 	ActionAlarmDisarm       Action = "alarm_disarm"
 	ActionAlarmSilence      Action = "alarm_silence"
@@ -333,15 +335,17 @@ type Change struct {
 	After     any    `json:"after,omitempty"`
 }
 
-// Recorder is the interface domain code uses to push entries. The
-// daemon wires a single concrete buffer; tests substitute a noop.
+// Recorder is the interface domain code uses to push entries. With a
+// database the daemon wires a [PersistedRecorder] (the [Buffer] plus a
+// durable sink); without one it wires the bare buffer. Tests substitute
+// a noop.
 type Recorder interface {
 	Record(entry Entry)
 	List(limit int) []Entry
 }
 
 // Buffer is a thread-safe ring buffer of Entry. Head is most-recent.
-// Capacity defaults to 500; uses the same number.
+// [NewBuffer] falls back to a capacity of 500 when given less than 1.
 type Buffer struct {
 	mu      sync.RWMutex
 	entries []Entry
@@ -352,8 +356,9 @@ type Buffer struct {
 	seq int64
 }
 
-// NewBuffer returns a buffer with the given capacity (>= 1). Entries
-// without a timestamp are stamped with the current time.
+// NewBuffer returns a buffer with the given capacity (>= 1; smaller
+// values fall back to 500). [Buffer.Record] stamps entries that carry no
+// timestamp with the current time.
 func NewBuffer(capacity int) *Buffer {
 	if capacity < 1 {
 		capacity = 500

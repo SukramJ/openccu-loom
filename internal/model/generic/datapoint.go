@@ -116,14 +116,12 @@ type Spec struct {
 	// Zero falls back to [OptimisticDefaultTimeout] (30 s).
 	OptimisticTimeout time.Duration
 
-	// OptimisticBurstWindow is the time window within which consecutive
-	// Apply calls are considered a burst and share a single rollback
-	// anchor. Zero falls back to the package default (500 ms, matching
-	// Setting
-	// this to a large value means rapid-fire SetValue calls for the
-	// same data point always share one anchor; a very small value (e.g.
-	// 1 ns) effectively disables time-bounded burst grouping so each
-	// Apply gets its own anchor.
+	// OptimisticBurstWindow is intended as the time window within which
+	// consecutive Apply calls count as a burst and share one rollback
+	// anchor. Nothing reads this field: the data point's burst handling
+	// is the value-equality rule in [DataPoint.ApplyOptimistic] (an active
+	// tracker already holding the same value is not re-applied), so
+	// setting it has no effect.
 	OptimisticBurstWindow time.Duration
 
 	// RetryableOverride sets the _retryable flag explicitly. The
@@ -225,7 +223,7 @@ type DataPoint[T comparable] struct {
 	// (confirmed by a CCU event with a healthy connection), or stale
 	// (last live value, connection lost). REST surfaces this on every
 	// data-point read; MQTT republishes on every transition so
-	// consumers see the freshness change. See ADR 0018.
+	// consumers see the freshness change. See ADR 0019.
 	source hmenum.ValueSource
 
 	// unconfirmed value slot, stored separately from the confirmed value. A nil
@@ -312,9 +310,11 @@ type DataPoint[T comparable] struct {
 	rollbackCallbacks []func(reason RollbackReason, rolledBack, restored T, restoredSet bool)
 
 	updateCallbacks []func(old, next T)
-	// confirmedUpdateCallbacks fires ONLY from [OnEvent] (CCU-confirmed
-	// value transitions) and ONLY when the new value differs from the
-	// previously confirmed one (or no value had been observed yet). The
+	// confirmedUpdateCallbacks fires on CCU-confirmed transitions only:
+	// from [OnEvent] when the new value differs from the previously
+	// confirmed one (or none had been observed yet) or the value source
+	// changed, and from [MarkStale] / [MarkLive] when the source flips
+	// (with old == next, since the value is unchanged). The
 	// Matter Subscribe engine subscribes here instead of [OnUpdate] so
 	// optimistic Apply / rollback transitions do not generate spurious
 	// ReportData. Apple Home's HAP-Mapper does its own optimistic UI
@@ -849,7 +849,7 @@ func (d *DataPoint[T]) RefreshedAt() time.Time {
 // Source reports the wire-side lifecycle state of the current value.
 // Returns [hmenum.ValueSourceUnobserved] when no value has ever been
 // applied; one of [hmenum.ValueSourceCache], [hmenum.ValueSourceLive]
-// or [hmenum.ValueSourceStale] otherwise. See ADR 0018.
+// or [hmenum.ValueSourceStale] otherwise. See ADR 0019.
 func (d *DataPoint[T]) Source() hmenum.ValueSource {
 	d.mu.RLock()
 	src := d.source
@@ -1139,10 +1139,12 @@ func (d *DataPoint[T]) OnUpdate(fn func(old, next T)) func() {
 }
 
 // OnConfirmedUpdate registers a handler that fires only when a
-// CCU-confirmed value lands AND the value differs from the previously
-// confirmed one (or no value had been observed before). Optimistic
-// Apply, rollback, and idempotent no-change CCU echoes do NOT trigger
-// the handler. Returns an idempotent unsubscribe closure.
+// CCU-confirmed value lands AND either the value differs from the
+// previously confirmed one (or none had been observed before) or the
+// value source changed (cache to live, stale to live). [MarkStale] and
+// [MarkLive] also fire it, with old == next. Optimistic Apply, rollback,
+// and idempotent CCU echoes that change neither value nor source do NOT
+// trigger the handler. Returns an idempotent unsubscribe closure.
 //
 // The Matter Subscribe engine uses this hook so Apple Home's
 // ReportData stream only carries CCU-confirmed transitions — matches
@@ -1573,12 +1575,13 @@ func (d *DataPoint[T]) WaitForConfirmation(ctx context.Context) error {
 // the CCU echo there is no signal that can confirm an optimistic
 // update, so the tracker would always roll back and spam warnings),
 // or
-// - the burst-skip rule triggers (an active tracker already holds
-// the same value), or
 // - the value cannot be coerced into T.
 //
 // Otherwise the closure undoes the optimistic state and fires the
-// rollback callbacks with [RollbackReasonSendError]. Calling the
+// rollback callbacks with [RollbackReasonSendError]. When the burst-skip
+// rule triggers (an active tracker already holds the same value) no new
+// optimistic state is staged, but the returned closure still rolls back
+// the active one. Calling the
 // closure on a tracker that already confirmed (because the wire
 // dispatch and CCU echo raced ahead of the failure handler) is a
 // safe no-op.
@@ -1915,9 +1918,10 @@ func (d *DataPoint[T]) EnumValueIsIndex() bool {
 // Authority: the parameter's own declared bounds. An ENUM descriptor spells
 // MIN, MAX and DEFAULT in the domain its values live in — either all three as
 // integers (indices into VALUE_LIST) or all three as the VALUE_LIST labels.
-// Measured over the paramset descriptions of the simulator this module pins
-// (github.com/SukramJ/godevccu v0.2.2, 399 device files, decoded as JSON and
-// classified by the Go type of each decoded bound): 38144 ENUM parameters
+// Measured over the paramset descriptions of the simulator at
+// github.com/SukramJ/godevccu v0.2.2 (399 device files, decoded as JSON and
+// classified by the Go type of each decoded bound; the module has since moved
+// to a newer release and the counts were not re-taken): 38144 ENUM parameters
 // declare a VALUE_LIST, 9186 declare all three bounds as integers, 28958
 // declare all three as strings, none mix the two. [enumValueIsIndex] carries
 // that classification, taken from MIN.
@@ -2050,8 +2054,9 @@ type StateChangeOpt[T comparable] func(current T, observed bool) bool
 //     one option signals a change. Returns false only when no option
 //     signals a change (and at least one option was provided).
 //
-// When called with zero options, returns the same value as
-// [IsStateChange] with the zero value of T.
+// When called with zero options, returns false (no option signals a
+// change), unless the early returns above (validation off, state
+// uncertain) apply first.
 func (d *DataPoint[T]) IsStateChangeWith(opts ...StateChangeOpt[T]) bool {
 	if !d.validateStateChange {
 		return true

@@ -72,7 +72,7 @@ func clientScoreState(s Status) float64 {
 // clientScoreCircuit returns the Circuit-Breaker component of the
 // per-client score (30 % weight). Reads the most recent sample Note
 // to infer the breaker state — `"breaker closed"` ⇒ 1.0,
-// `"breaker half-open"` ⇒ 0.5, `"breaker open"` ⇒ 0.0. Missing
+// `"breaker half-open"` ⇒ 0.33, `"breaker open"` ⇒ 0.0. Missing
 // information is treated as closed so a freshly-registered client
 // does not get penalised for the breaker layer alone.
 func clientScoreCircuit(note string) float64 {

@@ -350,7 +350,7 @@ func (d *DefaultDiscoveryBuilder) WithLocale(locale string) *DefaultDiscoveryBui
 
 // Build translates ev into (component, objectID, payload).
 //
-// Three paths layered on top of each other:
+// Four paths layered on top of each other, followed by a usage gate:
 // 1. Channel-aware aggregator (`aggregateChannel`): when the
 // event carries a known custom-domain ChannelType, the whole
 // channel collapses into one HA entity (climate, cover, lock,
@@ -363,7 +363,10 @@ func (d *DefaultDiscoveryBuilder) WithLocale(locale string) *DefaultDiscoveryBui
 // the same channel-level entity as a four-type remote). The writable
 // presses additionally get a button companion via
 // [Bridge.publishPressButton].
-// 3. Per-parameter fallback via [resolveComponent]: uses ev.Category
+// 3. Impulse and device-error aggregation (`BuildChannelKindEvent`): the
+// same channel-level shape as the press aggregator, one event entity
+// per channel and kind.
+// 4. Per-parameter fallback via [resolveComponent]: uses ev.Category
 // (model-driven). Drives sensor / binary_sensor / number entities
 // that are not part of an aggregate, plus VALUES paramsets on
 // channels we don't classify as a custom domain.
@@ -801,12 +804,6 @@ func jsonValueTemplate(comp HAComponent) string {
 	}
 }
 
-// lowercasedOptions converts a descriptor VALUE_LIST into the
-// lower-cased `options` array HA receives for enum sensors and
-// selects. The reference stack lowercases enum tokens so HA can
-// translate them; the `| lower` value_template keeps the state side
-// consistent and the select command_template (`| upper`) restores the
-// CCU token on write.
 // localisedEnumOptions returns the localised options for an enum entity
 // and whether they are usable. They are usable only when the labeler
 // supplied one label per value and the labels are distinct and
@@ -878,6 +875,12 @@ func binarySensorPayloads(ev Event) (off, on string) {
 	return "false", "true"
 }
 
+// lowercasedOptions converts a descriptor VALUE_LIST into the
+// lower-cased `options` array HA receives for enum sensors and
+// selects. The reference stack lowercases enum tokens so HA can
+// translate them; the `| lower` value_template keeps the state side
+// consistent and the select command_template (`| upper`) restores the
+// CCU token on write.
 func lowercasedOptions(valueList []string) []string {
 	opts := make([]string, len(valueList))
 	for i, v := range valueList {
@@ -1167,11 +1170,6 @@ func assignDeviceInfo(dev *hadiscovery.DeviceInfo, info map[string]any) {
 	}
 }
 
-// deviceDescriptor builds the HA `device` block. When ev.Device is
-// non-nil we harvest its `payload:"info"` tags — that is the payload
-// Partition
-// every field HA does not accept (see [haDeviceFields]). Missing
-// HA-required fields fall back to event-level defaults.
 // isMotionDeviceClass reports whether dc is one of the HA
 // binary_sensor device-classes that benefit from `force_update=true`
 // + `off_delay=300`.
@@ -1209,17 +1207,6 @@ type deviceWithSubDevices interface {
 	HasSubDevices() bool
 }
 
-// deviceDescriptor builds the HA `device` block. hubURL, when
-// non-empty, is propagated into the `configuration_url` field
-// callers source it from [DefaultDiscoveryBuilder.Hub.URL] so the
-// per-device configuration link points at the same CCU WebUI as
-// the synthetic hub device. Pass "" to omit the field.
-//
-// When subDevices is true and the event's parent device + channel report
-// `HasSubDevices() && IsInMultiGroup()`, the descriptor identifies the
-// logical sub-device (one HA device per channel group) and stamps the
-// parent device as `via_device`. Otherwise the descriptor identifies the
-// physical device with the central as `via_device`.
 // physicalDeviceIdentifier returns the HA device-block `identifiers` value for
 // a physical CCU device. It is the single source of truth for that string so
 // per-device-DP discovery ([deviceDescriptor]) and device-linked hub-entity
@@ -1258,6 +1245,20 @@ func centralDeviceIdentifier(centralName string) string {
 	return "openccu-loom_central_" + safeLower(centralName)
 }
 
+// deviceDescriptor builds the HA `device` block. hubURL, when
+// non-empty, is propagated into the `configuration_url` field; callers
+// source it from [DefaultDiscoveryBuilder.hubURLFor], which resolves the
+// per-central hub info through [DefaultDiscoveryBuilder.hubFor], so the
+// per-device configuration link points at the same CCU WebUI as the
+// synthetic hub device. Pass "" to omit the field.
+//
+// When subDevices is true and the event's parent device + channel report
+// `HasSubDevices() && IsInMultiGroup()`, the descriptor identifies the
+// logical sub-device (one HA device per channel group) and stamps the
+// parent device as `via_device`. Otherwise the descriptor identifies the
+// physical device with the central as `via_device`. When ev.Device
+// carries a `payload:"info"` partition it is applied on top through
+// [assignDeviceInfo].
 func deviceDescriptor(ev Event, hubURL string, subDevices bool) *hadiscovery.DeviceInfo {
 	parentID := physicalDeviceIdentifier(ev.Central, ev.DeviceAddress)
 	dev := &hadiscovery.DeviceInfo{

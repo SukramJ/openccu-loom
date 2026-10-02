@@ -546,12 +546,10 @@ func (c ValuesCacheConfig) ValuesCacheEnabled(centralName string) bool {
 }
 
 // ReliabilityConfig overrides reliability-stack defaults. All fields
-// default to the openccu-loom Go-idiomatic values when zero; set them
-// Explicitly to pin behaviour.
-//
-// References for the
-//   - command_retry_base_delay = 2.0s prod / 0.1s test
-//   - command_throttle_interval = 0.0 (disabled by default)
+// default to the built-in values when zero; set them explicitly to pin
+// behaviour. The built-in defaults are:
+//   - command retry initial delay = 2s ([hmreliability.RetryInitialBackoff])
+//   - command throttle inter-command delay = 0 (no pacing)
 type ReliabilityConfig struct {
 	// CommandRetryInitialDelay overrides the first backoff delay in
 	// [reliability.RetryConfig.Initial]. Zero (default) keeps the
@@ -567,7 +565,7 @@ type ReliabilityConfig struct {
 	CommandThrottleInterCommandDelay time.Duration `yaml:"command_throttle_inter_command_delay,omitempty" json:"command_throttle_inter_command_delay,omitempty" cfg:"expert"`
 }
 
-// CCUDataConfig locates the archives produced
+// CCUDataConfig locates the archives produced by the CCU metadata
 // extract scripts. Both paths are optional; graceful fallback is
 // raw parameter / model names in the UI.
 type CCUDataConfig struct {
@@ -1644,7 +1642,7 @@ func (m NorthMQTT) EffectiveRetainCleanupWindow() time.Duration {
 type AuthConfig struct {
 	BasicEnabled  *bool             `yaml:"basic_enabled,omitempty" json:"basic_enabled,omitempty" cfg:"basic"`
 	BearerEnabled *bool             `yaml:"bearer_enabled,omitempty" json:"bearer_enabled,omitempty" cfg:"basic"`
-	Users         map[string]string `yaml:"users" json:"users" cfg:"secret"`   // username → bcrypt hash (MVP: plaintext)
+	Users         map[string]string `yaml:"users" json:"users" cfg:"secret"`   // username → bcrypt hash or plaintext; seeding hashes plaintext
 	Tokens        map[string]string `yaml:"tokens" json:"tokens" cfg:"secret"` // token → role
 	OIDC          OIDCConfig        `yaml:"oidc" json:"oidc" cfg:"basic"`
 	CCU           CCUAuthConfig     `yaml:"ccu" json:"ccu" cfg:"basic"`
@@ -2021,7 +2019,7 @@ type VisibilityConfig struct {
 var ErrNoConfig = errors.New("config: no path provided")
 
 // Load parses path as YAML into a Config. Missing fields fall back
-// to zero values; defaults are applied by the constructor.
+// to zero values; [Parse] applies the defaults and validates the result.
 func Load(path string) (*Config, error) {
 	if path == "" {
 		return nil, ErrNoConfig

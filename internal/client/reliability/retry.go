@@ -54,13 +54,13 @@ type RetryConfig struct {
 	// external recovery signal instead of sleeping the full backoff
 	// interval. The retrier calls `WaitForRecovery(ctx, deadline)`
 	// when the most recent attempt failed with
-	// [hmerr.ErrCircuitBreakerOpen] or after a network error: as soon
-	// as the underlying CircuitBreaker transitions back to HALF_OPEN
-	// the wait returns and the next attempt fires immediately.
-	//
-	// which awaits `RecoveryCompletedEvent` from the central's event
-	// bus. The Go implementation passes the same primitive through a
-	// small interface so the retrier stays decoupled from the bus.
+	// [hmerr.ErrCircuitBreakerOpen] or with a general XML-RPC fault (see
+	// shouldWaitForRecovery): as soon as the underlying CircuitBreaker
+	// transitions back to HALF_OPEN the wait returns and the next attempt
+	// fires immediately. [NewCircuitRecoveryWaiter] builds the standard
+	// implementation; the interface keeps the retrier decoupled from the
+	// breaker. The daemon's composition root does not currently set this
+	// field, so the shortcut is opt-in.
 	RecoveryWaiter RecoveryWaiter
 
 	// RecoveryWait caps how long the retrier blocks waiting for the
@@ -126,12 +126,12 @@ type CommandRetryMetrics struct {
 	ExhaustedRetries int64
 
 	// RecoveryWaits is the number of times the retrier waited for an
-	// external recovery signal (circuit-breaker or network).
+	// external recovery signal (circuit-breaker open or general fault).
 	RecoveryWaits int64
 
-	// RecoveryWaitTimeouts is the number of recovery waits that expired
-	// before the recovery signal arrived (the retrier fell back to the
-	// regular sleep schedule).
+	// RecoveryWaitTimeouts is reserved for recovery waits that expired
+	// before the recovery signal arrived. The retrier does not increment
+	// it today, so it always reads zero.
 	RecoveryWaitTimeouts int64
 
 	// CancelledRetries is the number of chains cancelled by supersede
@@ -361,9 +361,8 @@ func shouldWaitForRecovery(err error) bool {
 	if errors.Is(err, hmerr.ErrCircuitBreakerOpen) {
 		return true
 	}
-	// Transient network failures (DUTY_CYCLE / TRANSMISSION_PENDING
-	// have their own fixed delays) — wait for recovery is most
-	// useful when the CCU itself was unreachable.
+	// DUTY_CYCLE / TRANSMISSION_PENDING have their own fixed delays and
+	// do not wait for recovery.
 	var fault *hmerr.XMLRPCFault
 	// Only the general fault triggers the circuit-recovery wait.
 	if errors.As(err, &fault) && fault.FaultCode() == hmerr.XMLRPCFaultGeneral {
@@ -669,10 +668,9 @@ func (r *Retrier) Enabled() bool {
 	return r.enabled
 }
 
-// SetEnabled turns the retry kill-switch on or off at runtime. Disabling
-// clears the pending-active map as a safety measure (any in-flight chains
-// will drain naturally via ctx cancellation or the next attempt returning
-// before the kill-switch check).
+// SetEnabled turns the retry kill-switch on or off at runtime. It only
+// flips the flag: chains already in flight are not cancelled and drain on
+// their own (ctx cancellation or their next attempt).
 func (r *Retrier) SetEnabled(on bool) {
 	r.mu.Lock()
 	r.enabled = on

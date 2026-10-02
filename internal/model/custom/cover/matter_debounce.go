@@ -200,8 +200,8 @@ func goToAtTarget(pct uint16, position func() (custom.Position, bool)) bool {
 }
 
 // dispatchGoToPercentage is the shared acceptance path for
-// GoToLiftPercentage / GoToTiltPercentage across the Cover, Blind, and
-// Garage projections:
+// GoToLiftPercentage / GoToTiltPercentage across the Cover and Blind
+// projections (the Garage projection does not use it):
 //
 //   - already at target (within 1 %): acknowledge without writing. Any
 //     pending intermediate drag value is dropped too — the freshest

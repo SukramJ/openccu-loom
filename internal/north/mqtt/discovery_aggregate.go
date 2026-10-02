@@ -920,8 +920,10 @@ func channelPathData(ev Event) naming.PathData {
 // `friendly_name`, so the entity-side `name` MUST NOT repeat the
 // device name.
 //
-// Naming convention mirrors
-// `get_custom_data_point_name` (model/support.py:443):
+// The `ch<N>` / `vch<N>` naming rules live in the model's
+// [CustomDPDisplayNamer] implementation; for a custom-DP primary or
+// secondary channel this function returns that result unchanged. The
+// model applies these rules:
 //
 //   - **Single primary custom-DP** (`HasSinglePrimaryCustomDP=true`):
 //     entity name is empty — HA falls back to `device.name` alone
@@ -933,8 +935,9 @@ func channelPathData(ev Event) naming.PathData {
 //     `secondary_channels`): name is `vch<N>` so HA renders
 //     "Bicolor BSL vch1" — the entity is also marked
 //     `enabled_by_default: false` upstream so HA hides it by default.
-//   - **Channels without custom-DP context** (the historic fallback
-//     path): channel 0 → empty, channel N > 0 → "<N>".
+//   - **Channels without custom-DP context** (the fallback path when the
+//     channel does not implement the naming inspectors): channel 0 →
+//     empty, channel N > 0 → "<N>".
 func displayChannelName(ev Event) string {
 	if insp, ok := ev.Channel.(CustomDPNamingInspector); ok &&
 		(insp.IsCustomDPPrimaryChannel() || insp.IsCustomDPSecondaryChannel()) {

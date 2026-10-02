@@ -77,8 +77,8 @@ type AccessPermission struct {
 // and the write-only ACCESS_AUTHORIZATION action-select, forcing the
 // latter to NO_CREATE so it is not exposed separately.
 //
-// Returns nil when the channel carries neither a STATE binary sensor nor
-// the un-ignored ACCESS_AUTHORIZATION control — the materializer treats
+// Returns nil when the channel lacks either the STATE binary sensor or the
+// un-ignored ACCESS_AUTHORIZATION control — the materializer treats
 // nil as "skip custom-DP registration on this channel".
 func NewAccessPermission(ch *device.Channel, group custom.RebasedChannelGroupConfig) *AccessPermission {
 	stateDp := custom.BinarySensorField(custom.ResolveSlotOr(ch, group, hmenum.FieldState, hmenum.ParameterState))

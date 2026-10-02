@@ -103,7 +103,9 @@ var (
 
 // NewPingPongTracker returns a ready tracker. Zero-valued PendingTTL,
 // UnknownTTL and MismatchThreshold are filled with parity defaults
-// (300 s / 300 s / 15) — pass negative values to disable a setting.
+// (300 s / 300 s / 15). A negative MismatchThreshold disables mismatch
+// detection; a negative PendingTTL or UnknownTTL does not disable expiry —
+// every entry is older than it, so entries expire on the next sweep.
 func NewPingPongTracker(cfg PingPongConfig) *PingPongTracker {
 	if cfg.PendingTTL == 0 {
 		cfg.PendingTTL = defaultPingPongTTL
