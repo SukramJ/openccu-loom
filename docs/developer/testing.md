@@ -83,7 +83,7 @@ The release-gate parity check compares OpenCCU-Loom's domain model against aioho
 make snapshot
 ```
 
-This runs the datasource diff, dumps both stack snapshots, and diffs them per field (`make snapshot-go`, `make snapshot-py`, `make snapshot-diff`). Exit 0 means full intersection parity. The snapshot JSON files are large and gitignored — produced on demand, kept locally. The common-schema definition lives in [`notes/parity/model_snapshot_schema.md`](https://github.com/SukramJ/openccu-loom/blob/main/notes/parity/model_snapshot_schema.md).
+This dumps both stack snapshots against the same godevccu release and diffs them per field (`make snapshot-go`, `make snapshot-py`, `make snapshot-diff`). Exit 0 means full intersection parity. The snapshot JSON files are large and gitignored — produced on demand, kept locally. The common-schema definition lives in [`notes/parity/model_snapshot_schema.md`](https://github.com/SukramJ/openccu-loom/blob/main/notes/parity/model_snapshot_schema.md).
 
 When you change model code (data-point creation, visibility marks, custom-DP composition, channel methods), rerun the snapshot and verify the drift score has not regressed in your area.
 

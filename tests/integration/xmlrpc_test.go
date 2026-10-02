@@ -86,11 +86,10 @@ func TestXMLRPCGetVersionOnMockCCU(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AsString: %v", err)
 	}
-	// Godevccu in HOMEGEAR mode reports
-	// Historical sniff prefix that clients use to
-	// recognise a simulator. We assert on the prefix rather than the
-	// exact version so godevccu version bumps don't break us.
-	if !strings.Contains(strings.ToLower(s), "pydevccu") {
+	// Godevccu in HOMEGEAR mode reports "godevccu-<version>", the name
+	// clients use to recognise the simulator. We assert on the name rather
+	// than the exact version so godevccu version bumps don't break us.
+	if !strings.Contains(strings.ToLower(s), "godevccu") {
 		t.Fatalf("getVersion = %q, expected a simulator version string", s)
 	}
 }

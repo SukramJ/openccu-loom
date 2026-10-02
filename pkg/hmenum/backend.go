@@ -12,7 +12,7 @@ type Backend string
 const (
 	BackendCCU      Backend = "CCU"
 	BackendHomegear Backend = "Homegear"
-	BackendPyDevCCU Backend = "PyDevCCU"
+	BackendGoDevCCU Backend = "GoDevCCU"
 )
 
 // String returns the wire representation.

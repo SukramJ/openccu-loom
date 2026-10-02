@@ -214,12 +214,12 @@
           "wire_value": "CCU"
         },
         {
-          "go_name": "BackendHomegear",
-          "wire_value": "Homegear"
+          "go_name": "BackendGoDevCCU",
+          "wire_value": "GoDevCCU"
         },
         {
-          "go_name": "BackendPyDevCCU",
-          "wire_value": "PyDevCCU"
+          "go_name": "BackendHomegear",
+          "wire_value": "Homegear"
         }
       ]
     },

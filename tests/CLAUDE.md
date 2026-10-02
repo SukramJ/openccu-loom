@@ -48,8 +48,8 @@ compare emitted events or output JSON against golden files. Run with
 
 ## Integration tests (`tests/integration/`)
 
-Run the daemon against an in-process `godevccu` simulator (a pure-Go
-port of pydevccu — no Python toolchain required) and assert
+Run the daemon against an in-process `godevccu` simulator (pure Go —
+no Python toolchain required) and assert
 end-to-end behavior. Slow; gated behind `-tags=integration`.
 
 The openccu-lite counterpart is `litefake` — godevccu's `pkg/litefake`
@@ -99,26 +99,25 @@ reference when both stacks load the same wire data. This catches
 unintended model regressions — it runs as a scoped parity guard, not
 as a measure that output must match aiohomematic (parity is no longer
 the project's primary goal). The four-script pipeline below is the
-snapshot regression run.
+snapshot regression run. Both stacks run against the same godevccu
+release, so the wire data is identical by construction.
 
-Four scripts, run in this order:
+Three scripts, run in this order:
 
 ```sh
-# 1. Wire-data identity (399 devices × 12 attributes per parameter
-#    between pydevccu and godevccu). Must be 0 drift.
-python3 script/datasource_diff.py
-
-# 2. Dump OpenCCU-Loom's model against godevccu (~80k DPs, 60+ MB JSON).
+# 1. Dump OpenCCU-Loom's model against godevccu (~80k DPs, 60+ MB JSON).
 go test -tags=integration -timeout=300s \
     -run TestModelSnapshotDumpAgainstGodevccu ./tests/integration/...
 
-# 3. Dump aiohomematic's model against pydevccu (~8k DPs, ~8 MB JSON).
-#    The script auto-re-execs in the aiohomematic venv if openccu_data
-#    is not on the active sys.path — without that the python snapshot
-#    silently emits empty parameter labels and masks real drift.
+# 2. Dump aiohomematic's model against godevccu (~8k DPs, ~8 MB JSON).
+#    The script builds the godevccu binary pinned in go.mod (needs `go`
+#    on PATH, or GODEVCCU_BIN) and auto-re-execs in the aiohomematic venv
+#    if openccu_data is not on the active sys.path — without that the
+#    python snapshot silently emits empty parameter labels and masks real
+#    drift.
 python3 script/aiohomematic_snapshot.py
 
-# 4. Per-field diff with documented tolerated fields (`profile`,
+# 3. Per-field diff with documented tolerated fields (`profile`,
 #    `wrapped_dps`) and a paramsets-channel-field exclusion. Exit 0
 #    means full intersection parity.
 python3 script/model_snapshot_diff.py

@@ -21,10 +21,11 @@ func TestHomegearModelDetection(t *testing.T) {
 	}{
 		{"empty version → Homegear", "", HomegearModelHomegear},
 		{"Homegear major.minor", "0.7.36", HomegearModelHomegear},
-		{"pydevccu lowercase", "pydevccu 1.0.0", HomegearModelPyDevCCU},
-		{"PyDevCCU mixed case", "PyDevCCU 2.3", HomegearModelPyDevCCU},
-		{"PYDEVCCU uppercase", "PYDEVCCU/3.0", HomegearModelPyDevCCU},
-		{"version contains pydevccu suffix", "Server-pydevccu", HomegearModelPyDevCCU},
+		{"godevccu release", "godevccu-0.8.0", HomegearModelGoDevCCU},
+		{"GoDevCCU mixed case", "GoDevCCU 0.8.0", HomegearModelGoDevCCU},
+		{"GODEVCCU uppercase", "GODEVCCU/1.0", HomegearModelGoDevCCU},
+		{"version contains godevccu suffix", "Server-godevccu", HomegearModelGoDevCCU},
+		{"retired pydevccu string → Homegear", "pydevccu-0.2.6", HomegearModelHomegear},
 		{"unrelated version → Homegear", "Server 1.2.3", HomegearModelHomegear},
 	}
 

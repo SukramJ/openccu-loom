@@ -84,3 +84,29 @@ require one calibration pass:
   the first `workflow_dispatch` run validates provisioning end-to-end.
 - A drift regression beyond the accepted baseline now fails a visible
   nightly job instead of going unnoticed until a manual local run.
+
+## Amendment (2026-10-02) — one simulator for both stacks, the datasource step is gone
+
+pydevccu is retired; godevccu (0.8.0 and later) is the simulator
+aiohomematic develops and tests against, and its device data is maintained in
+godevccu itself. `script/aiohomematic_snapshot.py` (and the two discovery
+snapshot scripts) now build the godevccu binary from the module pinned in
+`go.mod` (`script/godevccu_server.py`) instead of starting a `pydevccu.Server`.
+
+Both snapshots therefore read one device catalogue, and the first step of the
+pipeline — `datasource-diff`, which compared pydevccu's wire data against
+godevccu's — has no second source left to compare. It is removed together with
+`script/datasource_diff.py` and `script/requirements/pydevccu.txt`. The gate is
+now three steps: `snapshot-go` → `snapshot-py` → `snapshot-diff`.
+`integration.yml` keeps `snapshot-go` and no longer provisions Python at all.
+
+`_TOLERATED_DEVICE_FIELDS` in `script/model_snapshot_diff.py` (`interface_id`,
+`product_group`) stays, with a corrected reason. Measured on the full fleet
+against godevccu 0.8.0 (2026-10-02): 69 of 399 devices still differ on both
+fields — openccu-loom reports HmIP-RF, aiohomematic BidCos-RF, for models
+without a canonical prefix such as `263 155`, `ZEL STG RM DWT 10`, `ASH550`.
+The cause is the harnesses, not the simulator: the Go snapshot ingests every
+device as HmIP-RF (`tests/integration/model_snapshot_test.go`), the Python
+snapshot connects as BidCos-RF, and `hmenum.ProductGroupForModel` falls back to
+the interface for such models. The same run passed the drift gate at 4 of 10
+generic data-point drifts.

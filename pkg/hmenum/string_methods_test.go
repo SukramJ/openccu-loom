@@ -14,7 +14,7 @@ func TestBackendString(t *testing.T) {
 	cases := map[Backend]string{
 		BackendCCU:      "CCU",
 		BackendHomegear: "Homegear",
-		BackendPyDevCCU: "PyDevCCU",
+		BackendGoDevCCU: "GoDevCCU",
 	}
 	for b, want := range cases {
 		if got := b.String(); got != want {

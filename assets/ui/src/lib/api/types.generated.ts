@@ -2559,7 +2559,7 @@ export interface paths {
          *     zip containing `device_descriptions/{model}.json` and
          *     `paramset_descriptions/{model}.json`. The JSON members are byte-for-byte
          *     identical to aiohomematic's `export_device_definition`, so the archive
-         *     drops straight into pydevccu / godevccu as a device fixture.
+         *     drops straight into godevccu as a device fixture.
          */
         get: operations["exportDeviceDefinition"];
         put?: never;

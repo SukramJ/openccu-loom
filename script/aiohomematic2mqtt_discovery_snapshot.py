@@ -5,7 +5,7 @@
 # aiohomematic2mqtt_discovery_snapshot.py — produces the
 # aiohomematic2mqtt side of the cross-stack HA-Discovery snapshot diff.
 #
-# Boots a pydevccu.Server, connects an aiohomematic CentralUnit to it
+# Boots godevccu (see godevccu_server.py), connects an aiohomematic CentralUnit to it
 # (same path as ControlUnit), iterates every CallbackDataPoint via the
 # central's query_facade, drives each through aiohomematic2mqtt's
 # `create_mqtt_entity` factory with a recording MQTTClient, and dumps
@@ -42,7 +42,7 @@ from unittest.mock import MagicMock
 # We need three Python packages on sys.path simultaneously:
 #   - `paho.mqtt` (only in the aiohomematic2mqtt venv)
 #   - `aiohomematic2mqtt` (only in the aiohomematic2mqtt venv / repo)
-#   - `aiohomematic`, `pydevccu`, `openccu_data` (shipped via the
+#   - `aiohomematic`, `openccu_data` (shipped via the
 #      aiohomematic venv on PEP-668-managed hosts)
 #
 # Strategy: re-exec in aiohomematic2mqtt's venv so paho is importable,
@@ -97,7 +97,7 @@ for _root in (
             if str(_candidate) not in sys.path:
                 sys.path.append(str(_candidate))
 
-for _pkg in ("aiohomematic", "aiohomematic2mqtt", "pydevccu"):
+for _pkg in ("aiohomematic", "aiohomematic2mqtt"):
     _pkg_path = _GITHUB_ROOT / _pkg
     if _pkg_path.is_dir() and str(_pkg_path) not in sys.path:
         sys.path.insert(0, str(_pkg_path))
@@ -133,12 +133,7 @@ except ImportError as exc:
     print(f"ERROR: cannot import aiohomematic2mqtt: {exc}", file=sys.stderr)
     sys.exit(1)
 
-try:
-    import pydevccu
-    from pydevccu import Server as PyDevCCUServer
-except ImportError as exc:
-    print(f"ERROR: cannot import pydevccu: {exc}", file=sys.stderr)
-    sys.exit(1)
+from godevccu_server import GodevccuServer
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -370,13 +365,13 @@ def _parse_ha_topic(topic: str) -> tuple[str, str, str] | None:
 
 
 async def run() -> None:
-    # ── 1. Start pydevccu ────────────────────────────────────────────────────
-    _LOGGER.info("Starting pydevccu on %s:%d devices=%s", _CCU_HOST, _CCU_PORT, _DEVICES)
-    ccu = PyDevCCUServer(addr=(_CCU_HOST, _CCU_PORT), devices=_DEVICES)
+    # ── 1. Start godevccu ────────────────────────────────────────────────────
+    _LOGGER.info("Starting godevccu on %s:%d devices=%s", _CCU_HOST, _CCU_PORT, _DEVICES)
+    ccu = GodevccuServer(host=_CCU_HOST, port=_CCU_PORT, devices=_DEVICES)
     try:
         ccu.start()
     except Exception as exc:
-        print(f"ERROR: pydevccu failed to start: {exc}", file=sys.stderr)
+        print(f"ERROR: godevccu failed to start: {exc}", file=sys.stderr)
         sys.exit(1)
 
     central = None
@@ -577,16 +572,12 @@ async def run() -> None:
             ahm2mq_version = importlib.metadata.version("aiohomematic2mqtt")
         except Exception:  # noqa: BLE001
             ahm2mq_version = getattr(aiohomematic2mqtt, "__version__", "unknown")
-        try:
-            pydev_version = importlib.metadata.version("pydevccu")
-        except Exception:  # noqa: BLE001
-            pydev_version = getattr(pydevccu, "__version__", "unknown")
 
         snapshot = {
             "stack": "aiohomematic2mqtt",
             "stack_version": f"aiohomematic2mqtt={ahm2mq_version}, aiohomematic={ahm_version}",
-            "devccu": "pydevccu",
-            "devccu_version": pydev_version,
+            "devccu": "godevccu",
+            "devccu_version": ccu.version,
             "locale": _LOCALE,
             "captured_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "entities": entities,
@@ -608,8 +599,7 @@ async def run() -> None:
         if central is not None:
             with contextlib.suppress(Exception):
                 await central.stop()
-        with contextlib.suppress(Exception):
-            await ccu.stop()
+        ccu.stop()
 
 
 if __name__ == "__main__":
