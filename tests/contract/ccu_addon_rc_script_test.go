@@ -18,9 +18,13 @@ import (
 // rcScriptFakeDaemon stands in for the add-on binary: it appends its PID to
 // the file named by LOOM_RC_TEST_STARTS on every start and exits cleanly on
 // TERM, the way the real daemon does after a restart from the SPA.
+//
+// The backup directory is recorded before the PID: tests wait for the PID and
+// then read the record, so writing it second let a test read the file while
+// the redirection had created it but printf had not filled it yet.
 const rcScriptFakeDaemon = `#!/bin/sh
-echo $$ >> "${LOOM_RC_TEST_STARTS}"
 printf '%s\n' "${OPENCCU_LOOM_BACKUP_DIR:-<unset>}" > "${LOOM_RC_TEST_STARTS}.backupdir"
+echo $$ >> "${LOOM_RC_TEST_STARTS}"
 trap 'exit 0' TERM
 while :; do sleep 0.1; done
 `
