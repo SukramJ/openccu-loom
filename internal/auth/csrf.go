@@ -53,8 +53,12 @@ func CSRFToken(ctx context.Context) string {
 // cannot have been ambient-authenticated by a browser; see
 // [csrfExempt].
 //
+// exempt names further requests that pass through unchecked — routes that
+// carry no ambient credential at all and are guarded by their own protocol
+// (the client pairing routes; see the router).
+//
 // loom:reachable:reason="wired into the REST router middleware chain for SPA mutation protection"
-func CSRFMiddleware(secure bool) func(http.Handler) http.Handler {
+func CSRFMiddleware(secure bool, exempt ...func(*http.Request) bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token := ""
@@ -105,6 +109,12 @@ func CSRFMiddleware(secure bool) func(http.Handler) http.Handler {
 			if hasBearerAuthHeader(r) {
 				next.ServeHTTP(w, r)
 				return
+			}
+			for _, isExempt := range exempt {
+				if isExempt(r) {
+					next.ServeHTTP(w, r)
+					return
+				}
 			}
 			submitted := r.Header.Get(CSRFHeaderName)
 			if submitted == "" {
