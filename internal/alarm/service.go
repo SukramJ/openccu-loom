@@ -90,7 +90,7 @@ type Service struct {
 	panels       *panelRegistry
 	intents      *intentRouter
 	schedules    *scheduleRunner
-	codeSource   CodeSource     // hardware-code identities; nil until wired
+	codeSource   CodeSource     // hardware-code identities; set by NewService, replaceable via SetCodeSource
 	armFailure   ArmFailureHook // FAILED_TO_ARM notification hook; nil until wired
 	retention    func()         // retention chain cancel
 	// configChanged fires after a successful Reload; nil until wired.
@@ -340,7 +340,8 @@ func (a codeSourceAdapter) Rows(ctx context.Context) ([]CodeRow, error) {
 }
 
 // SetCodeSource wires the parsed-code source consumed by keypad and
-// remote intent routing. The codes facade injects it once built; a nil
+// remote intent routing. NewService installs the codes facade's adapter;
+// this replaces it, and a nil
 // source keeps hardware-code routing inert (notes/concepts/alarm-concept.md §11).
 func (s *Service) SetCodeSource(src CodeSource) {
 	s.mu.Lock()
@@ -556,8 +557,6 @@ func (s *Service) DetachCentral(name string) {
 	}
 }
 
-// publish fans an alarm event onto the alarm bus. Bus.Publish is
-// generic over the concrete type, so the sink dispatches explicitly.
 // notifyOutputFired publishes one notification output's fire signal
 // on the alarm bus (outputs.NotificationSink); MQTT, webhook, and WS
 // pick it up per their plane flag.
@@ -591,6 +590,8 @@ func (s *Service) notifyOutputFired(n outputs.Notification) {
 	})
 }
 
+// publish fans an alarm event onto the alarm bus. Bus.Publish is
+// generic over the concrete type, so the sink dispatches explicitly.
 func (s *Service) publish(e hmevent.Event) {
 	switch ev := e.(type) {
 	case hmevent.AlarmStateChangedEvent:

@@ -262,8 +262,12 @@ func wantsNDJSON(r *http.Request) bool {
 // The first line is a `meta` record with `generated_at`; subsequent
 // lines are `{kind, data}` per entity in deterministic order
 // (interfaces → devices → rooms → functions → programs → sysvars).
-// Order matches the legacy envelope's field declaration so consumers
-// can buffer-then-merge if they want envelope semantics back.
+// Nested channel and data-point lines (when requested) follow the
+// devices, and rooms / functions precede programs / sysvars. The order
+// is a streaming order chosen so a parent is always emitted before its
+// children; it is not the field order of [SnapshotEnvelope]. Consumers
+// route each line by its `kind`, so they can rebuild the envelope by
+// buffering regardless of order.
 func writeSnapshotNDJSON(w http.ResponseWriter, env SnapshotEnvelope) {
 	w.Header().Set("Content-Type", "application/x-ndjson")
 	enc := json.NewEncoder(w)
@@ -319,8 +323,8 @@ func writeSnapshotNDJSON(w http.ResponseWriter, env SnapshotEnvelope) {
 }
 
 // wantsAnonymise reports whether the request opts into the privacy
-// mode. Accepts `1`, `true`, `yes` (case-insensitive) on the
-// `anonymize` (US) and `anonymise` (UK) query parameters.
+// mode. Accepts the exact strings `1`, `true`, `True`, `TRUE`, `yes` and
+// `Yes` on the `anonymize` (US) and `anonymise` (UK) query parameters.
 func wantsAnonymise(r *http.Request) bool {
 	if r == nil {
 		return false

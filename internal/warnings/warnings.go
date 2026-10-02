@@ -4,8 +4,9 @@
 // Package warnings computes the operator-facing warning list served at
 // GET /api/v1/warnings: one server-side aggregate over the daemon's
 // existing diagnostic surfaces — unhealthy health components, recent
-// error-grade incidents, and per-central service-message backlogs — so
-// the Status card renders one list instead of re-deriving three.
+// error-grade incidents, per-central service-message backlogs and, when
+// wired, pending client-pairing requests — so the Status card renders
+// one list instead of re-deriving each.
 //
 // A warning can be silenced per user for a fixed period. A silence ends
 // early when its warning's condition clears, so a re-occurrence alerts

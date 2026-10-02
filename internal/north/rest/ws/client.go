@@ -1002,8 +1002,10 @@ func (c *client) sendAck(op string, topics []string) {
 // supply a correlation id; a frame without a `command` field gets the
 // same treatment.
 //
-// The dispatch uses a short context derived from the connection — the
-// caller cannot wait forever for a slow handler. Queuing the response
+// The dispatch runs under a bounded context ([commandBudget] per
+// command) built on a detached background context that carries the
+// connection's identity — the caller cannot wait forever for a slow
+// handler. Queuing the response
 // (rather than writing it inline) keeps a slow consumer from stalling
 // readPump for the write deadline; a physical write failure surfaces
 // later, in writePump, which tears the connection down via its own

@@ -48,8 +48,8 @@ type scheduleRunnerDeps struct {
 	// Engine resolves the current zone state and drives the AutoArm
 	// verb.
 	Engine scheduleEngine
-	// Journal receives "arm_reminder" and "failed_to_arm" entries via
-	// the engine's Journal port. A nil Journal disables journaling.
+	// Journal receives "arm_reminder", "failed_to_arm" and
+	// "schedule_arm_failed" entries via the engine's Journal port. A nil Journal disables journaling.
 	Journal engine.Journal
 	// Publish fans hmevent.AlarmReminderEvent onto the alarm bus. A
 	// nil Publish disables the event (journaling still happens).

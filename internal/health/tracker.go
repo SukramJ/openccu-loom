@@ -73,22 +73,23 @@ type Component struct {
 }
 
 // DefaultHistorySize caps the per-component sample ring buffer. 200
-// samples covers ~10 min of sparkline data at a 3 s connection-check
-// cadence and leaves headroom for windowed-score queries that look
+// samples covers well over an hour of sparkline data at the 30 s
+// connection-check slot (defaultCheckConnectionSlot in
+// `internal/central/jobs.go`) and leaves headroom for windowed-score queries that look
 // back further. Older deployments that want the tighter 30-sample
 // ring can opt back via [WithHistorySize].
 const DefaultHistorySize = 200
 
 // DefaultEventFreshness is the cut-off used by [Tracker.CanReceiveEvents]
 // when the caller does not specify one. Five minutes — longer than
-// the typical 10 s connection probe so a single CCU hiccup does not
+// the 30 s connection-check slot so a single CCU hiccup does not
 // flip the verdict.
 const DefaultEventFreshness = 5 * time.Minute
 
 // DefaultStaleAfter is the cut-off after which the latest sample is
 // considered stale and the component decays to [StatusUnknown]. Picks a value
-// comfortably larger than the connection-check cadence (default 10 s in
-// `internal/central/jobs.go`) so a single missed poll does not flip the
+// comfortably larger than the connection-check cadence (default 30 s,
+// defaultCheckConnectionSlot in `internal/central/jobs.go`) so a single missed poll does not flip the
 // status.
 const DefaultStaleAfter = 90 * time.Second
 
@@ -110,8 +111,9 @@ type Tracker struct {
 
 	// onChangeMu guards onChangeFn.
 	onChangeMu sync.RWMutex
-	// onChangeFn is an optional hook called after every Record when the
-	// overall status changes. Wired at boot by the central to drive
+	// onChangeFn is an optional hook called after every Record and
+	// RecordQuality sample with the current overall status; it does not
+	// filter for changes. Wired at boot by the central to drive
 	// EvaluateCentralState.
 	onChangeFn func(overall Status)
 }
@@ -167,8 +169,10 @@ func NewTracker(opts ...Option) *Tracker {
 	return t
 }
 
-// OnClientStateChange registers a callback that fires whenever the
-// overall health status changes after a [Record] call. At most one
+// OnClientStateChange registers a callback that fires after every
+// [Record] and [RecordQuality] sample with the current overall status.
+// It is not filtered for changes — the receiver decides whether the
+// status moved. At most one
 // callback is active at a time — a second call replaces the previous
 // registration. Pass nil to remove an existing callback.
 //
@@ -533,7 +537,8 @@ func (t *Tracker) Score() float64 {
 
 // ScoreInt returns the aggregate health as an integer in [0, 100]. It is a
 // convenience wrapper around [Score] for callers that prefer an integer gauge
-// (metrics, REST response fields). The mapping is `round(Score() * 100)` —
+// (metrics, REST response fields). The mapping is `int(Score() * 100)`,
+// which truncates toward zero rather than rounding —
 // HEALTHY=100, all-DEGRADED=50, all-UNHEALTHY/UNKNOWN=0.
 func (t *Tracker) ScoreInt() int {
 	return int(t.Score() * 100)
@@ -763,10 +768,10 @@ type MetricsHealthSummaryView struct {
 // counts every registered component — there is no per-client
 // distinction in the tracker beyond "healthy / degraded / unhealthy".
 //
-// ReconnectAttempts is left at 0 here: reconnect bookkeeping lives in
-// the recovery coordinator, not the health tracker. The metrics
-// wiring layer combines both providers into the final
-// [HealthMetrics] snapshot.
+// ReconnectAttempts is left at 0 here: the summary does not aggregate
+// the tracker's per-component counters (see [Tracker.RecordReconnectAttempt]
+// and [Tracker.ReconnectAttempts]). The metrics wiring layer combines
+// the providers into the final [HealthMetrics] snapshot.
 //
 // Multi-CCU safe: each [Unit] owns its own [Tracker]; the
 // returned counts only reflect components recorded against that
@@ -802,7 +807,8 @@ func (t *Tracker) MetricsHealthSummary() MetricsHealthSummaryView {
 // component (typically an interfaceID). It is used by the health-wiring
 // adapter to track when the last push-event arrived from a client, so
 // the health UI can display "last event received N s ago". The timestamp
-// is stored as the Note field of a healthy sample.
+// is stored as [Sample.Timestamp] of a healthy sample whose Note is
+// "event-received".
 func (t *Tracker) RecordEventReceived(name string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -993,8 +999,8 @@ func (t *Tracker) lastBreakerNoteLocked(name string) string {
 
 // PrimaryClientHealthy reports whether the primary interface — the
 // one [SetPrimaryInterface] pinned, or [PrimaryInterfaceHmIP] when no
-// pin is set — is currently reporting healthy. The JSON-RPC hub
-// fallback consults this to decide whether to attempt a connection.
+// pin is set — is currently reporting healthy. The REST diagnostics
+// handler surfaces this as the primary-healthy flag.
 //
 // Returns false when the primary interface has not been registered
 // yet, so callers cannot mistake "not configured" for "healthy".
@@ -1142,9 +1148,8 @@ type SyncCentralStateFunc func(overall Status)
 // health change — instead of embedding the evaluation logic in each
 // caller, they defer to SyncCentralState.
 //
-// fn is invoked synchronously under a read lock on the tracker's
-// component map; it must not call any Tracker methods that acquire
-// the write lock (Record, Unregister) as that would deadlock.
+// fn is invoked synchronously on the caller's goroutine with no
+// tracker lock held, so it may call any Tracker method.
 func (t *Tracker) SyncCentralState(fn SyncCentralStateFunc) {
 	if fn == nil {
 		return

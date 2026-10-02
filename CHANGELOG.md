@@ -6,6 +6,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.84.0] - 2026-10-02
+
+### Release summary
+
+Programs reach the daemon through an openccu-lite box with a box API token
+now, without a stored box password: one pairing at the box, and the daemon
+signs the caller in with that token after asking the box (ADR 0080). The
+CCU serial is visible to operators, so a paired client can finish its
+setup. Underneath, the daemon is built with Go 1.27.1, uses its new
+language features across the code base, and runs its time-dependent tests
+on `testing/synctest`; the shared libraries moved to their Go 1.27
+releases.
+
 ### Added
 
 - **Box API tokens through the openccu-lite gate** (ADR 0080, REST API
@@ -33,7 +46,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   integration keys its setup on the serial, so a paired setup could not
   finish. Operators now read it; viewers still do not, and host, hostname,
   URL and ports stay admin-only.
-
+- **Dependencies updated.** The shared libraries move to their Go 1.27
+  releases: go-mqtt 1.6.0, go-hamqtt 0.35.0, go-ha-catalog 0.3.0,
+  go-fabric 0.1.0 (its first tagged release), go-openccu-data 0.3.0 and
+  the godevccu test simulator 0.7.0. Indirect Go modules (go-humanize,
+  go-openapi/jsonpointer, go-strftime, goid, x/oauth2) and the Config UI's
+  Vite move to their latest compatible versions. No MQTT topic, discovery
+  payload or wire format changes with them. TypeScript 7 stays deferred:
+  svelte-check still supports only TypeScript 5 and 6.
 - **Built with Go 1.27.1** (was 1.26.6): `go.mod`, the Docker builder
   image and every CI workflow. Building from source now needs Go 1.27 or
   newer; release binaries, the Docker image and the add-ons are
@@ -67,6 +87,13 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The command throttle no longer admits one command too many after a
+  cancelled wait.** When a queued command's context was cancelled at the
+  same moment a newer command for the same device superseded it (or the
+  throttle closed), the cancellation handed back a permit that belonged to
+  another, still-running command. The throttle then let one more command
+  through to the CCU than its concurrency limit allows, for as long as the
+  daemon ran. The cancellation now returns only a permit it actually held.
 - **Shutting down or restarting the daemon no longer waits for a running
   network scan.** The SSDP discovery that finds CCUs on the LAN read its
   socket until the scan window closed (about three seconds) even after it

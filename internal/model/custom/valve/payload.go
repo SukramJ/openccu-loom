@@ -189,7 +189,7 @@ func (v *Irrigation) HADiscoveryEntity() hamodel.Entity {
 //
 // set_level is a distinct service method and the valve's only write, so the
 // render pipeline wires it up as the command topic on its own — see
-// [Modulating.Methods]. State comes from the aggregate's current_level_pct
+// [modulatingEntity.Methods]. State comes from the aggregate's current_level_pct
 // (0..100), which is why the valve reports position where an irrigation valve
 // does not.
 func (v *Modulating) HADiscoveryEntity() hamodel.Entity {

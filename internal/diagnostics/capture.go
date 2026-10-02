@@ -36,14 +36,14 @@ import (
 
 // Sentinel errors returned by the manager.
 var (
-	// ErrCaptureBusy is returned when StartCapture is called while
+	// ErrCaptureBusy is returned when [Manager.Start] is called while
 	// another capture is still running. The MVP allows at most one
 	// active capture at a time.
 	ErrCaptureBusy = errors.New("diagnostics: a capture is already in progress")
 	// ErrCaptureNotFound is returned when the supplied capture ID
 	// does not match any known capture (active or archived).
 	ErrCaptureNotFound = errors.New("diagnostics: capture id not found")
-	// ErrCaptureNotActive is returned when StopCapture is called on
+	// ErrCaptureNotActive is returned when [Manager.Stop] is called on
 	// a capture that has already stopped or expired.
 	ErrCaptureNotActive = errors.New("diagnostics: capture is not active")
 	// ErrCaptureDurationTooLong is returned when the requested
@@ -54,8 +54,7 @@ var (
 // Capture configuration knobs.
 const (
 	// MaxCaptureDuration is the upper limit on a single capture
-	// window. Mirrors the safety brief in the diagnostics concept
-	// document: longer windows are almost always a sign the operator
+	// window (ADR 0017, section 5): longer windows are almost always a sign the operator
 	// has forgotten to stop the capture, so we cap and let them
 	// explicitly start a new one if they really need more.
 	MaxCaptureDuration = 30 * time.Minute
@@ -121,7 +120,8 @@ type Summary struct {
 }
 
 // Capture is one capture session. Internal state is encapsulated;
-// REST handlers consume only [Capture.Summary].
+// REST handlers consume only the [Summary] values the [Manager]
+// returns.
 type Capture struct {
 	ID         string
 	Anonymised bool

@@ -127,8 +127,8 @@ func NewOutbound(reg *central.Registry, cfg config.NorthWebhook, logger *slog.Lo
 }
 
 // SetAlarmBus wires the daemon-level alarm event bus so the bridge also
-// forwards alarm-panel events (state, trigger, journal, health,
-// reminder, duress) under their EventType strings through the existing
+// forwards alarm-panel events (state, trigger, notification, journal,
+// health, reminder, duress) under their EventType strings through the existing
 // allow-list (notes/concepts/alarm-concept.md §13.4). Must be called before Start;
 // a nil bus leaves the alarm plane unwired.
 func (o *Outbound) SetAlarmBus(bus *events.Bus) {

@@ -16,7 +16,7 @@ package custom
 import "github.com/SukramJ/openccu-loom/pkg/hmenum"
 
 // RegisterProfiles installs the whole device-profile catalogue onto r.
-// Called from [DefaultRegistry] at init() time.
+// Called lazily, once, from [DefaultRegistry] on its first use.
 func RegisterProfiles(r *Registry) { //nolint:funlen // one registration literal per device: the catalogue is data, and splitting it would only move the data around
 	r.MustRegister(Profile{
 		Name:              hmenum.DeviceProfile("RfDimmer"),

@@ -5,17 +5,17 @@ go 1.27.1
 require (
 	filippo.io/nistec v0.0.4 // indirect
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
-	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/go-openapi/jsonpointer v1.0.0 // indirect
+	github.com/dustin/go-humanize v1.1.0 // indirect
+	github.com/go-openapi/jsonpointer v1.0.2 // indirect
 	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/mfridman/interpolate v0.0.2 // indirect
-	github.com/ncruces/go-strftime v1.0.0 // indirect
+	github.com/ncruces/go-strftime v1.1.0 // indirect
 	github.com/oasdiff/yaml v0.1.1 // indirect
 	github.com/oasdiff/yaml3 v0.0.14 // indirect
-	github.com/petermattis/goid v0.0.0-20260725062400-500c67a39b75 // indirect
+	github.com/petermattis/goid v0.0.0-20260918085751-abfca077860b // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
@@ -25,7 +25,7 @@ require (
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/oauth2 v0.36.0 // indirect
+	golang.org/x/oauth2 v0.37.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 	modernc.org/libc v1.77.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
@@ -33,12 +33,12 @@ require (
 )
 
 require (
-	github.com/SukramJ/go-fabric v0.0.0-20260926063414-cca158923a33
-	github.com/SukramJ/go-ha-catalog v0.2.1
-	github.com/SukramJ/go-hamqtt v0.34.1
-	github.com/SukramJ/go-mqtt v1.5.1
-	github.com/SukramJ/go-openccu-data v0.2.0
-	github.com/SukramJ/godevccu v0.5.0
+	github.com/SukramJ/go-fabric v0.1.0
+	github.com/SukramJ/go-ha-catalog v0.3.0
+	github.com/SukramJ/go-hamqtt v0.35.0
+	github.com/SukramJ/go-mqtt v1.6.0
+	github.com/SukramJ/go-openccu-data v0.3.0
+	github.com/SukramJ/godevccu v0.7.0
 	github.com/getkin/kin-openapi v0.149.0
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/gorilla/websocket v1.5.3

@@ -119,9 +119,10 @@ func (c addonUpdateContext) Availability(*hamodel.Device, hamodel.Entity) []hadi
 	return hubAvailability(c.topics)
 }
 
-// UniqueID implements [hadiscovery.Context]. The published id is a bare
-// constant with no namespace prefix, so [hadiscovery.StdContext]'s
-// namespaced default cannot produce it.
+// UniqueID implements [hadiscovery.Context]. The published id is the
+// fixed [addonUpdateUniqueID] literal, scoped only on a non-default base
+// (see [scopedDaemonIdentity]), so [hadiscovery.StdContext]'s
+// device-namespaced default cannot produce it.
 func (c addonUpdateContext) UniqueID(*hamodel.Device, hamodel.Entity) string {
 	return scopedDaemonIdentity(c.topics.Base, addonUpdateUniqueID)
 }

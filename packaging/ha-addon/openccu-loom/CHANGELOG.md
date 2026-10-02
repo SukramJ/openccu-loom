@@ -1,5 +1,20 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.84.0
+
+Changed: the CCU serial is visible to operators, not only to admins, so
+a client paired with operator rights — such as the Home Assistant
+integration — can finish its setup. The network coordinates (host,
+ports, WebUI address) stay admin-only.
+
+Under the hood: built with Go 1.27.1, with the shared MQTT and Home
+Assistant discovery libraries at their Go 1.27 releases. No MQTT topic
+or discovery payload changes, nothing to do on upgrade.
+
+Also new, for OpenCCU-Loom installed on an openccu-lite box (this HA
+add-on is unaffected): programs can reach the daemon through the box
+with a box API token paired at the box, instead of a stored box password.
+
 ## 0.83.0
 
 New: **device administration.** Configuration writes are checked

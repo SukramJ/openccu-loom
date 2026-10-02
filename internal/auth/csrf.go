@@ -19,13 +19,16 @@ const CSRFCookieName = "openccu_loom_csrf"
 // CSRFHeaderName is the matching header the client echoes back.
 const CSRFHeaderName = "X-CSRF-Token"
 
-// CSRFFormField is the form field the HTMX/plain-HTML path uses.
+// CSRFFormField is the form field [CSRFMiddleware] accepts as an
+// alternative to [CSRFHeaderName] on plain form posts.
 const CSRFFormField = "_csrf"
 
 type csrfCtxKey struct{}
 
-// CSRFToken fetches the active token from ctx. Handlers render it
-// into forms through `.Data.CSRFToken`.
+// CSRFToken fetches the active token [CSRFMiddleware] stored in ctx. A
+// handler that renders a form can embed it as [CSRFFormField]; no
+// production handler does so today, since the SPA echoes the cookie
+// value in [CSRFHeaderName] instead.
 func CSRFToken(ctx context.Context) string {
 	v, _ := ctx.Value(csrfCtxKey{}).(string)
 	return v
@@ -35,8 +38,6 @@ func CSRFToken(ctx context.Context) string {
 //   - every response carries (or refreshes) a CSRF cookie
 //   - mutating requests must echo the cookie value in either
 //     `X-CSRF-Token` or the form field `_csrf`
-//
-// loom:reachable:reason="wired into the REST router middleware chain for SPA mutation protection"
 //
 // Safe methods (GET/HEAD/OPTIONS) pass through unchanged.
 //
@@ -51,6 +52,8 @@ func CSRFToken(ctx context.Context) string {
 // cookie. Basic therefore keeps the exemption only for requests that
 // cannot have been ambient-authenticated by a browser; see
 // [csrfExempt].
+//
+// loom:reachable:reason="wired into the REST router middleware chain for SPA mutation protection"
 func CSRFMiddleware(secure bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

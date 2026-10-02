@@ -45,9 +45,6 @@ const (
 	alarmSlotTriggeredMotion = "triggered-motion"
 )
 
-// HA alarm_control_panel supported-feature tokens. HA reads these from
-// the discovery payload to decide which arm buttons the panel renders.
-
 // alarm topic builders. Zones are daemon-level, so the alarm plane omits
 // the `<central>` segment every per-device topic carries — a deliberate
 // extension of the topic schema precedented only by `<base>/bridge/*`
@@ -116,8 +113,8 @@ func alarmAvailability(base, zone string) []hadiscovery.AvailabilityEntry {
 // pipeline asks it for every string the model must not build itself.
 //
 // It embeds [hadiscovery.StdContext] and overrides the answers this plane
-// spells its own way — the three identity strings Home Assistant has no
-// migration path for, and the topics, which follow the daemon-level
+// spells its own way — the unique id and the entity-id seed, the identity
+// strings Home Assistant has no migration path for, and the topics, which follow the daemon-level
 // `<base>/alarm/<zone>/...` schema rather than a device layout.
 type alarmContext struct {
 	hadiscovery.StdContext

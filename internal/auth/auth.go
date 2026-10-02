@@ -125,7 +125,7 @@ type TokenStore interface {
 // bearer secrets. AuthenticateToken looks up by the map key (tokenID
 // hash) in O(1) and then verifies the full digest.
 type tokenEntry struct {
-	fingerprint string // first-8-hex of sha256, for display only
+	fingerprint string // first 16 hex chars of sha256 (same as the token id), for display only
 	// digest is the FULL SHA-256 of the token. The map key is a 64-bit
 	// prefix of it, which is a lookup index and not a credential: it is
 	// published as the token `id` by the management API and written into
@@ -199,8 +199,8 @@ func (s *MemoryTokenStore) AuthenticateToken(_ context.Context, token string) (I
 
 // TokenSummary describes one entry returned by [MemoryTokenStore.List].
 // The token value itself is never exposed — callers see an [ID] for
-// programmatic operations (delete) and a human-readable [Fingerprint]
-// (last six characters) plus the bound subject and role so they can
+// programmatic operations (delete) and a display [Fingerprint]
+// (the first 16 hex chars of the token's SHA-256, equal to [ID]) plus the bound subject and role so they can
 // audit the configured token set without leaking secrets.
 type TokenSummary struct {
 	// ID is a stable hex identifier derived from the SHA-256 of the
@@ -228,8 +228,8 @@ func tokenID(token string) string {
 }
 
 // tokenFingerprint derives a short human-readable display value from
-// a raw token. It uses the first 8 hex chars of the SHA-256 (matching
-// [tokenID]) so the fingerprint never leaks token content and is
+// a raw token. It returns [tokenID] (the first 16 hex chars of the
+// SHA-256) so the fingerprint never leaks token content and is
 // stable across daemon restarts.
 func tokenFingerprint(token string) string {
 	return tokenID(token)
@@ -413,8 +413,7 @@ func looksLikeBcryptHash(s string) bool {
 // HashPassword returns a bcrypt hash of password. A value that is already a
 // bcrypt hash is returned unchanged, so operators may seed pre-hashed
 // credentials. Call this when seeding the in-memory [MemoryUserStore] (the
-// YAML `auth.users` map, the HTMX setup bootstrap) so a plaintext password is
-// never held at rest.
+// YAML `auth.users` map) so a plaintext password is never held at rest.
 func HashPassword(password string) (string, error) {
 	if looksLikeBcryptHash(password) {
 		return password, nil

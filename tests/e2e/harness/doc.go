@@ -1,14 +1,18 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 SukramJ.
 
-// Package harness assembles a complete openccu-loom daemon in-process
-// for end-to-end black-box tests under tests/e2e/.
+// Package harness runs a complete openccu-loom daemon as a child
+// process for end-to-end black-box tests under tests/e2e/.
 //
-// The harness mirrors the wiring from cmd/openccu-loom/daemon.go but
-// substitutes external dependencies with hermetic in-process
-// equivalents:
+// Start writes a config.yaml, then executes the built daemon binary
+// (located by locateDaemonBinary, so `make build` must have run) with
+// `run --config`. Everything the daemon talks to is substituted with a
+// hermetic in-process equivalent:
 //
-//   - South-bound CCU: godevccu (re-exported from tests/integration)
+//   - South-bound CCU: godevccu (imported directly from
+//     github.com/SukramJ/godevccu)
+//   - South-bound openccu-lite box: litefake (BackendOpenCCULite; see
+//     lite.go), selected through Options.Backend
 //   - MQTT broker: an embedded pure-Go broker
 //   - OIDC OP: a mock provider that signs RS256 tokens in memory
 //   - Persistence: SQLite in t.TempDir()

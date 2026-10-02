@@ -142,8 +142,7 @@ type BridgeConfig struct {
 	ChannelHidden func(central, channelAddress string) bool
 
 	// Collector, when non-nil, receives per-publish counter increments
-	// for messages_sent, discovery_sent and publish_errors. Mirrors the
-	// Python py:10).
+	// for messages_sent, discovery_sent and publish_errors.
 	// Nil disables instrumentation (no-op).
 	Collector *metrics.MqttCollector
 
@@ -1163,8 +1162,8 @@ func (b *Bridge) PublishEvent(ctx context.Context, centralName, iface, address s
 
 // PublishChannelEventState emits a non-retained aggregate press-event
 // JSON payload to the per-channel event topic. Called by the
-// EventBridge whenever a PRESS_* parameter fires on a multi-press
-// channel (one that has 2+ PRESS_* parameters). HA reads the
+// EventBridge whenever a PRESS_* parameter fires on a press channel
+// (one that exposes at least one PRESS_* parameter). HA reads the
 // `event_type` field from the JSON and advances the entity state.
 //
 // Payload shape: `{"event_type": "<press_short|press_long|…>",
@@ -1448,10 +1447,10 @@ func (b *Bridge) PublishConnectivity(ctx context.Context, centralName string, co
 }
 
 // dataPointStateTopic returns the state topic for a data-point defined
-// by the given coordinates. Extracted from [PublishState] so that
-// [EvictState] can build the same topic without duplicating the
-// construction logic. The raw-plane topic is the only topic that
-// EvictState needs to clear; Discovery and slot topics are not erased
+// by the given coordinates, the VALUES-bucket topic that
+// [Bridge.PublishSlotState] writes. Kept as a helper so [Bridge.EvictState]
+// builds the topic through one construction path. The raw-plane topic is the only topic that
+// EvictState needs to clear; Discovery and slot companion topics are not erased
 // because they carry semantic metadata (config, modes, …) that does
 // not go stale in the same way a value payload does.
 func (b *Bridge) dataPointStateTopic(centralName, iface, address string, channel int, parameter string) string {
@@ -1505,7 +1504,7 @@ func (b *Bridge) cleanupCentralNames() []string {
 // observed value (LoadValue returned observed=false or an error).
 //
 // EvictState is best-effort: it publishes only to the raw-plane state
-// topic (the same one [PublishState] writes to). Discovery and slot
+// topic (the VALUES-bucket topic [Bridge.PublishSlotState] writes). Discovery and slot
 // companion topics are NOT touched — their content is metadata
 // (min/max/value_list/modes) that does not go stale like a scalar
 // value does.
@@ -1678,15 +1677,14 @@ func (b *Bridge) PublishAddonUpdateState(ctx context.Context, installedVersion, 
 // somebody actually pressed the button — and many physical buttons
 // have no observed value persisted on the CCU between presses.
 //
-// Routes through the same per-parameter / aggregated decision as the
-// runtime [Build] flow:
-//   - Multi-press channels (≥2 PRESS_* parameters) emit one HA `event`
-//     entity per channel via [BuildChannelEvent].
-//   - Single-press channels emit one HA `event` entity per
-//     PRESS_* parameter via the per-parameter [Build] heuristic
-//     (HAComponentEvent classifier).
+// Routes through the same decision as the runtime [Build] flow: a
+// channel that exposes any PRESS_* parameter, one type or several,
+// emits one HA `event` entity per channel via [BuildChannelEvent]. The
+// per-parameter [Build] heuristic only applies when the event carries
+// no channel inspector to aggregate over.
 //
-// Idempotent — discovery topics are diff-gated by `b.declared`.
+// Idempotent — the publisher's dedup gate (`b.pub`) skips a config it
+// has already published unchanged.
 func (b *Bridge) PublishChannelEventDiscovery(ctx context.Context, ev Event) error {
 	if !b.cfg.HADiscoveryEnabled || b.cfg.DiscoveryBuilder == nil {
 		return nil
@@ -1711,7 +1709,8 @@ func (b *Bridge) PublishChannelEventDiscovery(ctx context.Context, ev Event) err
 // (HmIP-WRCD text-display) have no readable parameter, so that path
 // never fires and the entity never reaches HA. This snapshot helper
 // emits the aggregate directly so write-only custom-DPs surface from
-// boot. Idempotent — discovery topics are diff-gated by `b.declared`.
+// boot. Idempotent — the publisher's dedup gate (`b.pub`) skips a config
+// it has already published unchanged.
 //
 // Companion entities: a text-display custom-DP spawns ONLY a `notify`
 // entity (reference parity — TEXT_DISPLAY maps to notify alone; the
@@ -1783,7 +1782,7 @@ func (b *Bridge) publishTextDisplayNotify(ctx context.Context, ev Event) {
 
 // RetractDiscoveryForDevice retracts every HA-Discovery config this bridge
 // declared for the given device address — publishing an empty retained payload
-// to each topic — and removes those entries from the declared map. Called when
+// to each topic — and drops those entries from the publisher's declared set. Called when
 // the daemon processes a device-removed callback so the removed device's
 // entities disappear from Home Assistant immediately, rather than lingering as
 // permanently "unavailable" until the next boot's orphan-cleanup pass evicts
@@ -1820,7 +1819,7 @@ func (b *Bridge) retractUnscopedDiscovery() bool {
 // scoped to one central: it clears only the configs published under that
 // central's node-id namespace.
 //
-// The scope is the whole point. The `declared` map is bridge-wide, the
+// The scope is the whole point. The declared set is bridge-wide, the
 // bridge is daemon-global, and a removal always belongs to exactly one CCU.
 // An unscoped needle therefore retracted a second CCU's live entities
 // whenever the address repeats verbatim across centrals, which it does for
@@ -1873,9 +1872,10 @@ func (b *Bridge) RetractDiscoveryForCentralDevice(ctx context.Context, centralNa
 // retractTopicsMatching walks m for every topic match accepts, publishes
 // an empty retained payload to clear it from the broker, and removes the
 // matched entries from m so a re-declare (e.g. the same address
-// re-pairing later) is not suppressed by a stale dedup entry. Shared by
-// [Bridge.RetractDiscoveryForCentralDevice] (declared map) and
-// [Bridge.RetractRawStateForDevice] (rawTopics / configCache maps).
+// re-pairing later) is not suppressed by a stale dedup entry. Used by
+// [Bridge.RetractRawStateForDevice] for the rawTopics and configCache
+// maps; the discovery retraction goes through the publisher runtime
+// instead.
 //
 // match receives the lower-cased topic, because the two planes spell the
 // address differently: discovery node ids lower-case it, raw topics

@@ -26,8 +26,9 @@ var ErrNoValueLoader = errors.New("device: no value loader configured")
 const (
 	// valuesCacheTTL is the TTL for VALUES-paramset entries. Zero means
 	// "no expiry" — VALUES are kept fresh by push events from the CCU,
-	// so the cache only avoids redundant cold reads. Push events
-	// override the cache via [Device.OnObservedValue].
+	// so the cache only avoids redundant cold reads. [Device.OnObservedValue]
+	// is the hook for letting a push event overwrite an entry; no
+	// production code calls it yet.
 	valuesCacheTTL = 0
 
 	// masterCacheTTL is the TTL for MASTER-paramset entries. MASTER is
@@ -162,8 +163,10 @@ func (d *Device) ValueLoader() ValueLoader {
 // explicitly has no value for the parameter (sentinel — cached for
 // [sentinelCacheTTL]). Returns an error for transport / loader failures.
 //
-// When direct=true the cache is bypassed both on read and write — used by the
-// reconciler for forced refreshes.
+// When direct=true the cache is bypassed on read only: the wire call always
+// runs, and its result is still written to the cache. direct=true also exempts
+// the load from the VirtualDevices / BidCos-RF placeholder skip (see
+// [Device.runLoadValuesParamset]). Used for forced refreshes.
 //
 // Both MASTER and VALUES loads are batched: a single GetParamset call fills
 // every parameter on the channel into the cache and propagates it to the
@@ -171,8 +174,8 @@ func (d *Device) ValueLoader() ValueLoader {
 // fills are gated on not-yet-observed so a bulk read never clobbers a restored
 // value (see [Device.runLoadValuesParamset]).
 //
-// src is logged / surfaced in metrics as the trigger label (HM_INIT /
-// MANUAL_OR_SCHEDULED). It does not change behaviour.
+// src names the trigger (HM_INIT / MANUAL_OR_SCHEDULED). It is currently
+// discarded: neither logged nor counted, and it does not change behaviour.
 func (d *Device) LoadValue(ctx context.Context, dpk hmtypes.DataPointKey, src hmenum.CallSource, direct bool) (value any, observed bool, err error) {
 	d.loaderMu.RLock()
 	loader := d.loader
@@ -181,7 +184,7 @@ func (d *Device) LoadValue(ctx context.Context, dpk hmtypes.DataPointKey, src hm
 	if loader == nil || cache == nil {
 		return nil, false, ErrNoValueLoader
 	}
-	_ = src // surface as a logger / metrics tag — currently log-only via callers
+	_ = src // reserved for a trigger label; not used yet
 
 	// 1) Cache hit (unless direct=true).
 	if !direct {
@@ -231,8 +234,8 @@ func singleflightKey(dpk hmtypes.DataPointKey) string {
 
 // runLoad executes the actual wire call and seeds the cache. Always
 // called from inside singleflight.Do so concurrent invocations for the
-// same key are deduplicated. direct=true bypasses no-op short-circuits;
-// the cache is always written.
+// same key are deduplicated. direct=true bypasses the VALUES placeholder
+// skip; the cache is always written.
 func (d *Device) runLoad(ctx context.Context, loader ValueLoader, cache *valueCache, dpk hmtypes.DataPointKey, direct bool) error {
 	if dpk.ParamsetKey == hmenum.ParamsetKeyMaster {
 		return d.runLoadMaster(ctx, loader, cache, dpk)
@@ -309,7 +312,7 @@ func (d *Device) runLoadValuesParamset(ctx context.Context, loader ValueLoader, 
 	//     declares one AND the device does not need waking — 282 `<get>`
 	//     frames across 65 of the 127 shipped RF device types
 	//     (RFPhysicalDataInterfaceCommand.cpp:147-176, the empty-frame
-	//     return at :152 ahead of the RxNeedsWakeup branch at :166). For every
+	//     return at :152 ahead of the RxNeedsWakeup branch at :168). For every
 	//     other parameter the read is answered from the store, and a store
 	//     miss is a hard failure, not a substituted value: HSSParamset::Get
 	//     aborts on the first unreadable parameter (HSSParamset.cpp:162-176)
@@ -398,10 +401,10 @@ func (d *Device) runLoadValuesParamset(ctx context.Context, loader ValueLoader, 
 	return nil
 }
 
-// OnObservedValue is called by the event-bus subscriber whenever the
-// CCU pushes a fresh value via the callback channel. The cache entry
-// is overwritten so a subsequent LoadValue returns the live value
-// without a wire round-trip. Idempotent.
+// OnObservedValue overwrites the cache entry with a value the CCU pushed
+// via the callback channel, so a subsequent LoadValue returns it without a
+// wire round-trip. Idempotent. Currently only tests call it; no production
+// event subscriber is wired to it.
 func (d *Device) OnObservedValue(dpk hmtypes.DataPointKey, value any) {
 	d.loaderMu.RLock()
 	cache := d.cache
@@ -413,7 +416,8 @@ func (d *Device) OnObservedValue(dpk hmtypes.DataPointKey, value any) {
 }
 
 // InvalidateCache removes a single cache entry, used after a write that
-// the caller knows changes the value. The next read repopulates.
+// the caller knows changes the value. The next read repopulates. Currently
+// only tests call it; no production path invalidates entries through it.
 func (d *Device) InvalidateCache(dpk hmtypes.DataPointKey) {
 	d.loaderMu.RLock()
 	cache := d.cache
@@ -424,10 +428,9 @@ func (d *Device) InvalidateCache(dpk hmtypes.DataPointKey) {
 	cache.invalidate(dpk)
 }
 
-// LoadAllValues mirrors the Python reference's `Channel.load_values` /
-// `DataPoint.load_data_point_value` boot pattern: walk every channel of
-// the device, for each readable VALUES DataPoint that has not yet
-// observed a wire-level value, issue a [Device.LoadValue] so the
+// LoadAllValues is a warm-up pass: it walks every channel of the device and,
+// for each readable VALUES DataPoint that has not yet observed a wire-level
+// value, issues a [Device.LoadValue] so the
 // CCU-side current state lands in the cache before any north-bound
 // subscriber (Matter Subscribe-Initial, MQTT discovery state, REST
 // snapshot) reads it. Without this pass a freshly-booted daemon ships

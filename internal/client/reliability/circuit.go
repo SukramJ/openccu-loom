@@ -167,7 +167,8 @@ func (c *CircuitBreaker) OnStateChange(fn func(from, to hmenum.CircuitState)) {
 
 // AddOnStateChange appends a listener. Multiple subscribers can
 // coexist without replacing each other — used by the incident
-// recorder, the retry-recovery hook and the event-bus publisher.
+// recorder, the event-bus publisher and the optional
+// [NewCircuitRecoveryWaiter] hook.
 func (c *CircuitBreaker) AddOnStateChange(fn func(from, to hmenum.CircuitState)) {
 	if fn == nil {
 		return
@@ -337,7 +338,7 @@ func (c *CircuitBreaker) RecordFailure() {
 // CCU, which is the only thing the breaker is allowed to react to. ctx is
 // the context the caller handed to [CircuitBreaker.Do].
 //
-// Four classes of error reach this point without having learned anything
+// Five classes of error reach this point without having learned anything
 // about the wire:
 //
 //   - The breaker's own rejection, which would otherwise feed itself.
@@ -353,6 +354,8 @@ func (c *CircuitBreaker) RecordFailure() {
 //     threshold without a single wire attempt.
 //   - The daemon shedding its own load: a full throttle queue, a throttle
 //     closed at shutdown, a waiter purged in favour of a newer command.
+//   - A missing credential scope ([hmerr.ErrScopeMissing]): the system
+//     answered and refused, so the link is healthy.
 //
 // A deadline the transport sets on its own derived context is *not* in
 // that set: the caller's context is still live, so a CCU that stops
@@ -424,9 +427,10 @@ func (c *CircuitBreaker) RecordSuccess() {
 	c.record(context.Background(), nil)
 }
 
-// LastFailureTime returns the wall-clock time of the most recent failure that
-// tripped or kept the breaker OPEN, or the zero value when no failure has
-// been recorded yet.
+// LastFailureTime returns the wall-clock time at which the breaker last
+// tripped OPEN (from CLOSED, or from a failed HALF_OPEN probe). Failures that
+// do not trip the breaker leave it unchanged, and a reset clears it, so the
+// zero value means the breaker has not tripped since creation or reset.
 func (c *CircuitBreaker) LastFailureTime() time.Time {
 	c.mu.Lock()
 	defer c.mu.Unlock()

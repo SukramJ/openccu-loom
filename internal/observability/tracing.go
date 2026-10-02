@@ -162,7 +162,7 @@ func (s *Span) String() string {
 type spanCtxKey struct{}
 
 // --------------------------------------------------------------------------
-// Public functions — mirrors py
+// Public functions
 // --------------------------------------------------------------------------
 
 // StartSpan creates a new Span, optionally inheriting the trace from a

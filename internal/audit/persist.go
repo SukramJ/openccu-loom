@@ -85,8 +85,9 @@ const persistTimeout = 5 * time.Second
 // ErrAuditOverflow is returned by the durable sink when a producer's
 // per-call block deadline expired before queue capacity opened up.
 // Producers should treat this as "audit-row-not-persisted" and decide
-// whether to retry, drop, or escalate. SPEC §13 ("append-only change-
-// log") is violated when callers ignore the error.
+// whether to retry, drop, or escalate. SPECIFICATION.md §4.5 (persistence: silent
+// drops are not allowed, the audit log is append-only) is violated when
+// callers ignore the error.
 var ErrAuditOverflow = errors.New("audit: persistence queue full")
 
 // DurableSinkStats surfaces overflow / latency telemetry from
@@ -134,11 +135,12 @@ type DurableSinkOptions struct {
 	// expected steady-state Record rate per second.
 	Capacity int
 	// BlockTimeout caps how long a producer's Record waits when the
-	// queue is full. Zero blocks indefinitely (matches SPEC's
-	// append-only contract — audit must not be silently dropped).
+	// queue is full. Zero blocks indefinitely (matches the
+	// append-only contract of SPECIFICATION.md §4.5 — audit must not be silently dropped).
 	// Negative falls back to drop-on-full (legacy compatibility).
 	BlockTimeout time.Duration
-	// Logger receives one warn record per non-zero overflow burst.
+	// Logger receives one warn record per failed write the wrapped sink
+	// returns (overflow drops are counted in the stats, not logged).
 	Logger *slog.Logger
 }
 
@@ -146,7 +148,7 @@ type DurableSinkOptions struct {
 // queue, surfacing overflows as [ErrAuditOverflow] instead of silent
 // drops. Closes audit R11: the previous [AsyncSink] dropped under
 // pressure with only a once-per-process slog warning, breaking the
-// SPEC §13 "append-only" guarantee. The durable sink converts
+// SPECIFICATION.md §4.5 "append-only" guarantee. The durable sink converts
 // overflow into a typed error the producer can act on.
 //
 // Returns the sink function, a pointer to live stats, and a stop
@@ -231,7 +233,7 @@ func NewDurableSink(sink SinkFunc, opts DurableSinkOptions) (SinkFunc, *DurableS
 			stDrop.Add(1)
 			return ErrAuditOverflow
 		case opts.BlockTimeout == 0:
-			// SPEC default: block until the queue accepts. Producer
+			// Append-only default: block until the queue accepts. Producer
 			// ctx cancel still aborts.
 			select {
 			case ch <- e:
@@ -264,14 +266,14 @@ func NewDurableSink(sink SinkFunc, opts DurableSinkOptions) (SinkFunc, *DurableS
 	return enqueue, stats, closer
 }
 
-// AsyncSink is retained for legacy callers (drop-on-full semantics).
-// New code should prefer [NewDurableSink], which surfaces overflow as
-// a typed error and exposes telemetry. SPEC §13 expects audit to be
-// append-only; the durable variant honours that contract, this one
+// AsyncSink is the drop-on-full sink; only tests call it now.
+// Production code uses [NewDurableSink], which surfaces overflow as
+// a typed error and exposes telemetry. SPECIFICATION.md §4.5 expects
+// audit to be append-only; the durable variant honours that contract, this one
 // does not.
 //
-// Drops are logged once per drop_window so a fully-saturated database
-// does not flood the logs.
+// The first drop is logged once for the sink's lifetime so a
+// fully-saturated database does not flood the logs.
 // gocritic unnamedResult: the second return is the canonical "stop"
 // closure pattern; naming it would shadow the local `stop` channel
 // declared inside the body.

@@ -74,8 +74,8 @@ func WireCoalesceBus(co *Coalescer, pub CoalesceEventPublisher, centralName, ifa
 // WireCircuitBus installs an [CircuitBreaker.AddOnStateChange]
 // callback that publishes a [hmevent.CircuitBreakerStateChangedEvent]
 // for every transition. Pass nil publisher to disable. Coexists with
-// [WireCircuitIncidents] and the retry-recovery hook because all bus
-// subscribers go through `AddOnStateChange`.
+// [WireCircuitIncidents] (and any other observer) because every subscriber
+// goes through `AddOnStateChange`.
 //
 // `central` and `iface` are baked into every event so subscribers
 // (e.g. `WireHealth`) can route by interface.
@@ -95,9 +95,10 @@ func WireCircuitBus(cb *CircuitBreaker, pub CircuitEventPublisher, centralName, 
 }
 
 // IncidentRecorder is the contract every reliability primitive uses to log an
-// incident into a persistent backend. The store/sqlite IncidentStore
-// satisfies the [Recorder] shape via the small [IncidentRecord] adapter
-// (`reliability.NewSQLiteRecorder`).
+// incident into a persistent backend. The daemon's implementation is the
+// recorder the central adapter resolves lazily from the cache coordinator
+// (cacheIncidentRecorder in internal/central/adapter/reliability_wiring.go),
+// which forwards to the store-backed recorder once it is installed.
 //
 // In Go the contract is synchronous but the recorder may dispatch
 // asynchronously internally.
@@ -168,7 +169,7 @@ func (f IncidentSinkFunc) ReportRetryExhausted(err error) { f(err) }
 
 // WireRetryIncidents returns an [IncidentSink] that records exhausted retry
 // chains as [hmenum.IncidentTypeRetryExhausted] incidents via rec.
-// Pass nil rec to get a no-op sink.
+// A nil rec yields a nil sink, which the retrier treats as "no sink configured".
 func WireRetryIncidents(rec IncidentRecorder, centralName, iface string) IncidentSink {
 	if rec == nil {
 		return nil
@@ -188,11 +189,11 @@ func WireRetryIncidents(rec IncidentRecorder, centralName, iface string) Inciden
 	})
 }
 
-// WireCircuitIncidents installs an [CircuitBreaker.OnStateChange]
-// callback that turns every transition into an incident on `rec`. The
+// WireCircuitIncidents registers a [CircuitBreaker.AddOnStateChange]
+// listener that turns every transition into an incident on `rec`. The
 // `central` / `iface` strings are baked into every record so the
-// caller does not have to thread them through. Pass a nil recorder
-// to disable.
+// caller does not have to thread them through. A nil breaker or
+// nil recorder is a no-op.
 //
 // The hook is fire-and-forget: incident-recording errors are
 // swallowed (the circuit breaker must not be coupled to the DB

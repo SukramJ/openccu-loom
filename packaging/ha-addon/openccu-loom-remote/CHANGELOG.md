@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.84.0
+
+No changes to the proxy. The daemon release lets programs reach it
+through an openccu-lite box with a box API token, shows the CCU serial
+to operators, and is built with Go 1.27.1.
+
 # 0.83.0
 
 No changes to the proxy. The daemon release adds the device

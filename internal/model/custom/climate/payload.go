@@ -353,22 +353,27 @@ func (c *Climate) Config() payload.ConfigPayload {
 	return out
 }
 
-// State returns the derived thermostat state — fields that cannot be
-// sourced from a single per-DP topic. Direct wire values
-// (current_temperature, target_temperature, current_humidity,
-// temperature_offset) are NOT duplicated here; the discovery references
-// the per-DP slot topics for those.
+// State returns the aggregate thermostat state payload.
 //
-// Per ADR 0011 — the aggregate state topic carries only:
+// Derived fields (hvac_mode, preset_mode, action, state_uncertain) cannot be
+// sourced from a single per-DP topic and are always computed here:
 //
-// - hvac_mode ← Mode() (computed from setpoint/control_mode) - preset_mode ←
-// Profile() (computed, mode-aware) - action ← Activity()
-// (heating/cooling/idle aggregate) - state_uncertain (diagnostic; pings any
-// optimistic-update window)
+//   - hvac_mode ← Mode() (computed from setpoint/control_mode)
+//   - preset_mode ← Profile() (computed, mode-aware)
+//   - action ← Activity() (heating/cooling/idle aggregate); omitted for
+//     thermostats without an activity source
+//   - state_uncertain (diagnostic; flags an optimistic-update window)
 //
-// **Bootstrap defaults**: every key is ALWAYS present in the payload.
-// Pre-observation values use safe fallbacks (`hvac_mode="off"`,
-// `preset_mode="none"`, `action="idle"`) rather than omission. HA's MQTT
+// The payload also carries observed-only values (set only once the CCU has
+// reported them, otherwise omitted): current_temperature, set_temperature
+// and current_humidity from the field DPs, the extra state attributes
+// (temperature_offset, optimum_start_stop) and the schedule-profile
+// metadata of the attached week profile.
+//
+// **Bootstrap defaults**: hvac_mode, preset_mode and (when an activity
+// source exists) action are always present. Pre-observation values use safe
+// fallbacks (`hvac_mode="off"`, `preset_mode="none"`, `action="idle"`)
+// rather than omission. HA's MQTT
 // Climate platform reads `value_json.<field>` via templates; missing keys
 // render to empty strings which HA either ignores (current state preserved,
 // never set) or maps to `unknown`. Either way the climate card stays unbound
@@ -436,7 +441,7 @@ func (c *Climate) State() payload.StatePayload {
 	// State attributes — mirror extra_state_attributes for HA-native
 	// parity. HA's MQTT Climate platform exposes them via
 	// `json_attributes_topic` + `json_attributes_template` (see
-	// HADiscoveryPayload). Each is only set when the underlying CCU
+	// HADiscoveryEntity). Each is only set when the underlying CCU
 	// value is observed; nil/zero-value fields are omitted by omitempty.
 	if v, ok := c.TemperatureOffset(); ok {
 		out.TemperatureOffset = &v
@@ -529,9 +534,9 @@ func buildScheduleData(wp *weekprofile.ProfileDataPoint, currentProfileKey strin
 
 // registerServices wires the Climate Set* methods onto the embedded
 // ServiceRegistry. Service-method names mirror
-// service_method_names for thermostat custom DPs (see
-// Set_temperature, set_mode
-// set_profile, enable_away_*).
+// service_method_names for thermostat custom DPs: set_temperature,
+// set_mode, set_profile, set_temperature_offset, enable_boost,
+// disable_boost, set_away, set_away_for_duration and disable_away.
 func (c *Climate) registerServices() {
 	c.RegisterServiceWithArg("set_temperature", "temperature", func(ctx context.Context, params map[string]any, priority hmenum.CommandPriority) error {
 		v, err := payload.ParamFloat64(params, "temperature")
