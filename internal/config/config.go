@@ -1734,8 +1734,12 @@ type HAIngressConfig struct {
 // authenticates nothing — the daemon's own port is reachable without the
 // gate, so every value is verified against the box before use, and a box
 // "admin" maps to the admin role, a box "user" to operator; any other
-// outcome leaves the request to the normal login. A genuine Bearer token,
-// session or Basic credential always wins over the SSO identity.
+// outcome leaves the request to the normal login. The same switch covers a
+// box API token the gate accepted as `Authorization: Bearer` (ADR 0080): the
+// gate then hands the token on in the same header, and the daemon accepts it
+// after the box confirms it holds the add-on's own scope (operator) or Full
+// access (admin). A genuine Bearer token, session or Basic credential always
+// wins over the SSO identity.
 type OcculiteSSOConfig struct {
 	// Enabled is tri-state: nil defaults to whether the daemon runs as the
 	// openccu-lite add-on — ON there (where the gate exists), OFF in any other

@@ -173,6 +173,11 @@ func csrfExempt(r *http.Request, s Scheme) bool {
 		// Unlike SchemeIngress its trust is not anchored per request in the
 		// network path — the double-submit defence applies.
 		return false
+	case SchemeOcculiteToken:
+		// The gate takes a box token only from the request's own
+		// Authorization header, never from a URL or a cookie, so like a
+		// bearer token nothing in the browser attaches it by itself.
+		return true
 	}
 	return false
 }

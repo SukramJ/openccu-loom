@@ -32,6 +32,10 @@ const (
 	// SchemeOcculite is a box-shell session accepted over the lite ingress,
 	// after live verification of the session against the box (ADR 0079).
 	SchemeOcculite Scheme = "occulite"
+	// SchemeOcculiteToken is a box API token the lite gate accepted as
+	// `Authorization: Bearer` for this add-on, after live verification of the
+	// token and its scope against the box (ADR 0080).
+	SchemeOcculiteToken Scheme = "occulite-token" //nolint:gosec // a scheme NAME, not a credential
 )
 
 // Federated reports whether the scheme identifies a principal an external
@@ -40,8 +44,16 @@ const (
 // federated principal: an external login name that folds to the same string
 // as a local account belongs to a different person, and the daemon holds no
 // authority over their credentials. A box-shell session is federated in
-// exactly this sense: the box vouches for its user.
-func (s Scheme) Federated() bool { return s == SchemeOIDC || s == SchemeOcculite }
+// exactly this sense: the box vouches for its user, and for its tokens.
+func (s Scheme) Federated() bool {
+	return s == SchemeOIDC || s == SchemeOcculite || s == SchemeOcculiteToken
+}
+
+// BoxVouched reports whether the identity stands only as long as the local
+// openccu-lite box keeps vouching for the credential behind it — a box-shell
+// session or a box API token. Such an identity carries no expiry of its own,
+// so a long-lived connection must ask the box again.
+func (s Scheme) BoxVouched() bool { return s == SchemeOcculite || s == SchemeOcculiteToken }
 
 // Role is the coarse-grained permission level.
 type Role string

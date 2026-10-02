@@ -7,6 +7,8 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/addonupdate"
@@ -59,8 +61,23 @@ func buildOcculiteSSOTrust(cfg *config.Config, logger *slog.Logger) auth.Occulit
 			slog.String("err", err.Error()))
 		return auth.OcculiteSSOTrust{Enabled: true}
 	}
-	logger.Info("auth.occulite_sso.enabled — box-shell sessions are accepted after live verification against the local box")
-	return auth.OcculiteSSOTrust{Enabled: true, Verifier: occuliteSessionVerifier{c: client}}
+	scope := liteAddonGateScope(envOr(liteAddonTokenPathEnv, liteAddonTokenPath))
+	logger.Info("auth.occulite_sso.enabled — box-shell sessions and box tokens are accepted after live verification against the local box",
+		slog.String("addon_scope", scope))
+	return auth.OcculiteSSOTrust{Enabled: true, Verifier: occuliteSessionVerifier{c: client}, AddonScope: scope}
+}
+
+// liteAddonGateScope derives the add-on's gate scope ("addon:<id>") from the
+// file occulited writes its token to: the box names that file
+// /run/occulite/addon-tokens/<id>.api, so the add-on id is read from the
+// path the box itself chose rather than assumed. A path of another shape
+// yields no scope, which leaves box tokens unaccepted.
+func liteAddonGateScope(tokenPath string) string {
+	id, ok := strings.CutSuffix(filepath.Base(tokenPath), ".api")
+	if !ok || id == "" {
+		return ""
+	}
+	return "addon:" + id
 }
 
 // isLiteAddonHost reports whether the daemon runs as the openccu-lite
@@ -75,13 +92,14 @@ func isLiteAddonHost() bool {
 }
 
 // occuliteSessionVerifier adapts the occulited client to the auth port: one
-// open state call carrying the session id under test as its bearer.
+// open state call carrying the credential under test (session id or token)
+// as its bearer.
 type occuliteSessionVerifier struct {
 	c *occulited.Client
 }
 
-func (v occuliteSessionVerifier) VerifySession(ctx context.Context, sessionID string) (auth.OcculiteSession, error) {
-	st, err := v.c.AuthStateOf(ctx, sessionID)
+func (v occuliteSessionVerifier) VerifySession(ctx context.Context, credential string) (auth.OcculiteSession, error) {
+	st, err := v.c.AuthStateOf(ctx, credential)
 	if err != nil {
 		return auth.OcculiteSession{}, err
 	}
@@ -89,6 +107,7 @@ func (v occuliteSessionVerifier) VerifySession(ctx context.Context, sessionID st
 		Authenticated: st.Authenticated,
 		User:          st.User,
 		Role:          st.Role,
+		Scopes:        st.Scopes,
 		AuthOff:       st.AuthOff,
 		Public:        st.Public,
 	}, nil
@@ -98,12 +117,13 @@ func (v occuliteSessionVerifier) VerifySession(ctx context.Context, sessionID st
 const occuliteRevalidateErrorLog = "auth.occulite_sso.revalidate_failed — keeping the socket"
 
 // occuliteRevalidator builds the WebSocket re-verification for box-shell
-// sessions from the same trust the request resolver uses, or nil when the
-// trust is inert (the socket watch then never asks). It answers false only
-// on a definite refusal: the session no longer confirms (the predicate is
-// [auth.OcculiteSession.Confirms], the resolver's own), or it now maps to a
-// role other than the one the socket holds — a demotion on the box must end
-// an admin socket rather than leave it commanding. A verification error
+// sessions and box tokens from the same trust the request resolver uses, or
+// nil when the trust is inert (the socket watch then never asks). It answers
+// false only on a definite refusal: the box no longer vouches for the
+// credential (the predicate is [auth.OcculiteSession.Grant], the resolver's
+// own), or it now maps to a role other than the one the socket holds — a
+// demotion on the box, or a token losing Full access, must end an admin
+// socket rather than leave it commanding. A verification error
 // answers true: the box is on the loopback, and closing every box-shell
 // socket on one hiccup would make the daemon's availability hinge on it,
 // while a real logout is still caught on the next tick.
@@ -122,10 +142,7 @@ func occuliteRevalidator(t auth.OcculiteSSOTrust, logger *slog.Logger) func(ctx 
 			logger.DebugContext(ctx, occuliteRevalidateErrorLog, slog.String("error", err.Error()))
 			return true
 		}
-		if !sess.Confirms() {
-			return false
-		}
-		mapped, _ := sess.MappedRole()
-		return mapped == role
+		id, ok := sess.Grant(sessionID, t.AddonScope)
+		return ok && id.Role == role
 	}
 }

@@ -82,8 +82,8 @@ type client struct {
 	topics   []string
 	identity auth.Identity
 
-	// occuliteSID is the box-shell session id an occulite-authenticated
-	// upgrade presented, kept so [client.watchCredentialExpiry] can ask the
+	// occuliteSID is the box credential (session id or box token) a
+	// box-vouched upgrade presented, kept so [client.watchCredentialExpiry] can ask the
 	// box whether it still authenticates. It is a live credential: it must
 	// never reach a log line, an error, or any serialised form of the
 	// client. Written once at the upgrade, before the watch starts.
@@ -580,11 +580,11 @@ func (c *client) closeRevokedOcculite() {
 // occuliteSessionHolds asks the box whether the connection's box-shell
 // session still authenticates with the role the socket holds — a demotion
 // on the box must not leave an admin socket behind. A connection whose
-// identity is no longer an occulite one (an in-band reauth replaced it) is
-// not the box's to end.
+// identity is no longer box-vouched (an in-band reauth replaced it) is not
+// the box's to end. A box token is asked about the same way.
 func (c *client) occuliteSessionHolds() bool {
 	id := c.Identity()
-	if id.Scheme != auth.SchemeOcculite {
+	if !id.Scheme.BoxVouched() {
 		return true
 	}
 	// The watch goroutine outlives the upgrade request (the connection is

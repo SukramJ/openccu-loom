@@ -48,6 +48,7 @@ type apiSurface struct {
 // field stop meaning what my client assumed", asked by someone reading an old
 // integration years later.
 var valueSemanticsChanges = []string{
+	"13.3.0 Identity.scheme: vocabulary — `occulite-token` added to the enum: a box API token the openccu-lite gate accepted for this add-on, live-verified against the box (ADR 0080). Its subject is `occulite-token:<token name>` and it carries no expiry. A client that switched on the old set of schemes meets a seventh value; like `occulite` it names a principal the box vouches for, so local-account controls (password change) do not apply to it",
 	"13.2.0 (wsapi) addon_update.check / addon_update.install: meaning — outside the CCU add-on both commands answer not_implemented now instead of unknown_command. They are declared in the catalogue either way, so no schema diff sees it; before this the registration was skipped entirely without an updater, which made a declared command indistinguishable from a typo. Both are listed in optional_deployment_providers now and follow its contract (stay dispatchable, answer not_implemented while the provider is unwired) like every other optional-provider command. A client that probed for the updater by expecting unknown_command must read not_implemented as the same absence",
 	"7.0.0 CaptureIndex: the diagnostics capture response became an array, having been declared an object",
 	"7.1.0 DataPoint.value: unchanged, but display_value was added beside it — value stays the raw CCU wire value",
