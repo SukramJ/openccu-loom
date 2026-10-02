@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 8 of 549.
+Guards without a doc comment: 8 of 550.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -55,6 +55,7 @@ Guards without a doc comment: 8 of 549.
 | TestCCUAddonLiteManifestDeclaresRuntimePolicy | ccu_addon_lite_manifest_test.go | TestCCUAddonLiteManifestDeclaresRuntimePolicy pins the manifest's runtime declarations. |
 | TestCCUAddonLiteManifestMatchesThePackage | ccu_addon_lite_manifest_test.go | TestCCUAddonLiteManifestMatchesThePackage pins the manifest to the files it describes, so a renamed add-on id, config page or tarball cannot leave the manifest pointing at something that no longer exists. |
 | TestCCUAddonLiteManifestNeedsNoSessionInTheURL | ccu_addon_lite_manifest_test.go | TestCCUAddonLiteManifestNeedsNoSessionInTheURL holds the reason the manifest sets session_header. |
+| TestCCUAddonUpdateScriptInstallsTheLiteManifest | ccu_addon_lite_manifest_test.go | TestCCUAddonUpdateScriptInstallsTheLiteManifest pins the copy of the manifest into the add-on directory. |
 | TestCCUAddonRCScriptPassesOnlyAWritableBackupDir | ccu_addon_rc_script_test.go | TestCCUAddonRCScriptPassesOnlyAWritableBackupDir pins the backup target on openccu-lite: the unit mounts /usr/local read-only apart from the add-on's own directories, so a directory the script picks there can never take an archive. |
 | TestCCUAddonRCScriptReplacesAPidfileItCannotWrite | ccu_addon_rc_script_test.go | TestCCUAddonRCScriptReplacesAPidfileItCannotWrite pins the second half of the install incident: the root-run loop left a root-owned pidfile in the unit's runtime directory, which the add-on's user cannot overwrite. |
 | TestCCUAddonRCScriptRestartsTheDaemonWithoutMonit | ccu_addon_rc_script_test.go | TestCCUAddonRCScriptRestartsTheDaemonWithoutMonit pins what the SPA's "Restart" relies on where no monit runs (openccu-lite): the daemon SIGTERMs itself and the rc.d script must start it again. |

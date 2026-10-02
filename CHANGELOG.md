@@ -6,6 +6,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The CCU add-on installs its openccu-lite manifest beside the daemon.**
+  `update_script` now copies `openccu-lite.json` to
+  `/usr/local/addons/openccu-loom/`. When an OpenCCU box is updated to
+  openccu-lite, occulited reads the add-on's requirements from that file
+  (no ReGa needed) instead of scanning the installed code. Until now the
+  openccu-lite catalogue's adapter manifest stood in for it.
+
 ## [0.84.1] - 2026-10-02
 
 ### Fixed
