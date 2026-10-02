@@ -7,7 +7,7 @@ package contract
 //
 // Every WS broadcast in assets/wsapi.json names its push-payload via the
 // `payload` field (e.g. "HubSystemUpdateChangedPayload"). Generated
-// client type packages (openccu-loom-types' `gen_ws.py`) resolve that
+// client type packages (openccu-loom-client's `script/gen/gen_ws.py`) resolve that
 // name from the OpenAPI components — the payload classes are produced by
 // datamodel-codegen from assets/openapi.yaml. If a broadcast names a
 // payload that has no `components.schemas` entry, type regeneration

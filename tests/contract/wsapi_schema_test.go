@@ -416,8 +416,8 @@ func TestWSCommandCatalogParity(t *testing.T) {
 //
 // What it does not do is keep the file consumable, and the doc comment
 // used to claim otherwise by naming "clients that want to generate
-// type-safe wrappers". No such client exists: scripts/gen_ws.py in
-// openccu-loom-types reads the broadcast half of this document and
+// type-safe wrappers". No such client exists: script/gen/gen_ws.py in
+// openccu-loom-client reads the broadcast half of this document and
 // nothing else, so the command vocabulary is checked for spelling and
 // consumed by no generator. Two different numbers describe that gap and
 // they are easy to conflate: 104 of the 136 commands declare no `result`
