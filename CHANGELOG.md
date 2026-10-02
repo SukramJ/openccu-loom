@@ -6,6 +6,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.85.0] - 2026-10-02
+
+### Release summary
+
+godevccu is the only CCU simulator now: the daemon tests against godevccu
+0.8.0, the Python reference snapshots build the same go.mod-pinned binary,
+and the datasource diff that compared pydevccu with godevccu is gone. The
+simulator's `Backend` enum value is `GoDevCCU` (REST API 13.4.0, a
+vocabulary change no payload carries). On the CCU, the add-on installs its
+openccu-lite manifest beside the daemon, so an OpenCCU box updated to
+openccu-lite reads the add-on's requirements from that file.
+
 ### Changed
 
 - **The CCU add-on installs its openccu-lite manifest beside the daemon.**

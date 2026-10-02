@@ -4,6 +4,11 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.85.0
+
+No changes to the proxy. The daemon release moves its development and test
+simulator to godevccu and reports REST API 13.4.0.
+
 # 0.84.1
 
 No changes to the proxy. The daemon release lets programs pair with the
