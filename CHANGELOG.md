@@ -25,6 +25,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The CCU serial is visible to operators.** `GET /system/ccu` and
+  `GET /centrals` returned it to admins only, together with the CCU's
+  network coordinates. The serial identifies the appliance without saying
+  where it is reached, and a paired client is never admin — neither with the
+  daemon's own pairing nor with a box token — while the Home Assistant
+  integration keys its setup on the serial, so a paired setup could not
+  finish. Operators now read it; viewers still do not, and host, hostname,
+  URL and ports stay admin-only.
+
 - **Built with Go 1.27.1** (was 1.26.6): `go.mod`, the Docker builder
   image and every CI workflow. Building from source now needs Go 1.27 or
   newer; release binaries, the Docker image and the add-ons are

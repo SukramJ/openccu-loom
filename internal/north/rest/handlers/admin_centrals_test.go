@@ -781,6 +781,22 @@ func TestCentralRowsAreNarrowedForNonAdmins(t *testing.T) {
 		}
 	})
 
+	t.Run("operator sees the serial but still not where the CCU lives", func(t *testing.T) {
+		t.Parallel()
+		operator := auth.Identity{Subject: "otto", Role: auth.RoleOperator}
+		w := centralRowRequest(t, GetCentral(svc), "/api/v1/centrals/home", &operator)
+		var row sqlite.CentralRow
+		if err := json.Unmarshal(w.Body.Bytes(), &row); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if row.Serial != "3014F711A0001F58A99" {
+			t.Errorf("serial = %q, want it for an operator: a paired client keys its setup on it", row.Serial)
+		}
+		if row.Host != "" || row.Username != "" || row.Port != 0 || row.TLS {
+			t.Errorf("operator must not learn where or how the CCU is reached: %+v", row)
+		}
+	})
+
 	t.Run("admin sees the full row with the password masked", func(t *testing.T) {
 		t.Parallel()
 		w := centralRowRequest(t, GetCentral(svc), "/api/v1/centrals/home", &admin)

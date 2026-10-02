@@ -1368,12 +1368,14 @@ export interface paths {
          *     validate that the daemon manages the same CCU the user
          *     expects.
          *
-         *     The CCU's network coordinates — `host`, `hostname`, `serial`,
-         *     `url` and the per-adapter `port` / `address` / `url` — are
-         *     admin-only. A viewer or operator reads them as empty strings /
-         *     zero, the same narrowing `GET /centrals` has always applied;
-         *     everything else on the entry stays visible so a status page
-         *     still renders.
+         *     The CCU's network coordinates — `host`, `hostname`, `url` and the
+         *     per-adapter `port` / `address` / `url` — are admin-only. A viewer
+         *     or operator reads them as empty strings / zero, the same narrowing
+         *     `GET /centrals` applies; everything else on the entry stays
+         *     visible so a status page still renders. `serial` identifies the
+         *     appliance without saying where it is reached, and is visible from
+         *     the operator role up (empty for a viewer): a paired client is never
+         *     admin, and the Home Assistant integration keys its setup on it.
          *
          *     Centrals that have not yet completed their first connect
          *     round have empty `model` / `version` / `serial` / `hostname`
@@ -4888,7 +4890,7 @@ export interface paths {
         };
         /**
          * List all configured centrals
-         * @description Open to any authenticated identity, because the energy, backup and rooms/functions views need the central list — but the row is narrowed below the admin role. A non-admin caller receives `name`, `enabled` and `interfaces`; `host` comes back empty and `serial`, `port`, `json_rpc_port`, `ports`, `username`, `password_env` and both TLS flags are omitted. Those fields say where the CCU lives and how it is reached, which none of the lower-privileged views use.
+         * @description Open to any authenticated identity, because the energy, backup and rooms/functions views need the central list — but the row is narrowed below the admin role. A non-admin caller receives `name`, `enabled` and `interfaces`; `host` comes back empty and `port`, `json_rpc_port`, `ports`, `username`, `password_env` and both TLS flags are omitted. Those fields say where the CCU lives and how it is reached, which none of the lower-privileged views use. `serial` is kept for an operator (omitted for a viewer): it identifies the appliance without locating it, and paired clients key on it.
          */
         get: operations["listCentrals"];
         put?: never;
@@ -9947,7 +9949,7 @@ export interface components {
              *     request, subscription and payload for this CCU.
              */
             name: string;
-            /** @description CCU hostname or IP address. Present but empty on the two read operations when the caller is below the admin role; the sibling connection fields are omitted outright there. */
+            /** @description CCU hostname or IP address. Present but empty on the two read operations when the caller is below the admin role; the sibling connection fields are omitted outright there (`serial` only below the operator role). */
             host: string;
             /** @description CCU hardware serial, set when the central is adopted from SSDP/UPnP discovery. Empty for YAML / manually-entered rows. Lets discovery mark a CCU "already configured" by serial regardless of its host. */
             serial?: string;

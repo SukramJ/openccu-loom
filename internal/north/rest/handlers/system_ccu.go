@@ -134,7 +134,7 @@ func SystemCCU(reader SystemCCUReader) http.HandlerFunc {
 			entries = []SystemCCUEntry{}
 		}
 		if hideCCUCoordinates(r.Context()) {
-			entries = withoutCCUCoordinates(entries)
+			entries = withoutCCUCoordinates(entries, hideCCUSerial(r.Context()))
 		}
 		JSON(w, http.StatusOK, map[string]any{"entries": entries})
 	}
@@ -143,18 +143,21 @@ func SystemCCU(reader SystemCCUReader) http.HandlerFunc {
 // withoutCCUCoordinates returns a copy of entries with every network
 // coordinate blanked, leaving the parts a viewer legitimately needs on a
 // status page: the daemon-local name, availability, readiness, the CCU
-// model and firmware version, and the astro position the SPA renders.
+// model and firmware version, and the astro position the SPA renders. The
+// serial is blanked only when hideSerial is set (see [hideCCUSerial]).
 //
 // The reader hands back its own snapshot, so this copies before blanking —
 // mutating in place would strip the coordinates for every later admin read
 // as well.
-func withoutCCUCoordinates(entries []SystemCCUEntry) []SystemCCUEntry {
+func withoutCCUCoordinates(entries []SystemCCUEntry, hideSerial bool) []SystemCCUEntry {
 	out := make([]SystemCCUEntry, len(entries))
 	copy(out, entries)
 	for i := range out {
 		out[i].Host = ""
 		out[i].Hostname = ""
-		out[i].Serial = ""
+		if hideSerial {
+			out[i].Serial = ""
+		}
 		out[i].URL = ""
 		// The adapter list itself is not sensitive — which radio the CCU
 		// carries is already implied by ConfiguredInterfaces — but the port

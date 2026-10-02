@@ -93,6 +93,13 @@ one, is the header the gate now consumes.
 
 - `GET /auth/me` can report the new scheme — an additive vocabulary change
   (APIVersion 13.3.0).
+- The box's pairing never grants Full access, so a paired token is always
+  operator — and the Home Assistant integration keys its setup on the CCU
+  serial, which was admin-only. The serial is therefore visible from the
+  operator role up (`GET /system/ccu`, `GET /centrals`); it identifies the
+  appliance without locating it, and host, hostname, URL and ports stay
+  admin-only. The daemon's own pairing (ADR 0076), which never grants admin
+  either, benefits the same way.
 - If the gate passes the `Authorization` header on, the daemon's own bearer
   resolution misses on the box token and defers, at the cost of one failed
   token lookup per request; no failed-bearer lockout exists that the

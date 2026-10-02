@@ -71,7 +71,9 @@ func maskCentralRow(ctx context.Context, row sqlite.CentralRow) sqlite.CentralRo
 	}
 	if id, ok := auth.IdentityFrom(ctx); ok && !id.HasRole(auth.RoleAdmin) {
 		row.Host = ""
-		row.Serial = ""
+		if hideCCUSerial(ctx) {
+			row.Serial = ""
+		}
 		row.Port = 0
 		row.JSONRPCPort = 0
 		row.Ports = nil
