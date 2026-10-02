@@ -16,7 +16,7 @@ import (
 // TestNoRequestOrResponseBodyIsWrittenInline pins that a body with
 // properties lives in `components/schemas` and is reached by `$ref`.
 //
-// The rule is not style. `openccu-loom-types` — and every other client
+// The rule is not style. `openccu-loom-client`'s wire layer — and every other client
 // generated from this document — is produced from `components/schemas`
 // alone, so a schema written inline in a path item reaches no consumer,
 // however faithfully the daemon sends it. It is a shape that fails
