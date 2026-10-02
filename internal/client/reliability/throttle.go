@@ -69,7 +69,7 @@ type ThrottleConfig struct {
 	// negative disables the guard (unbounded queue — historic
 	// behaviour). Recommended setting: 4× MaxInFlight.
 	//
-	// Backpressure rationale (SPECIFICATION §8.4 + audit R5): a stalled
+	// Backpressure rationale: a stalled
 	// CCU drains the in-flight semaphore at zero rate; without a depth
 	// cap, scheduler bursts pile new waiters onto the heap until the
 	// daemon OOMs. The cap converts that failure mode into a fail-fast
@@ -561,12 +561,12 @@ func (t *CommandThrottle) ThrottledCount() int64 {
 	return t.throttledCount
 }
 
-// AcquireAndPurge atomically purges any pending waiters for addr and
-// then calls [AcquireFor] with the same address. This is the atomic
-// parameter (command_throttle.py:acquire): the purge and the
-// new acquire happen as a single logical operation so a newer command
-// for the same address can preempt all older pending commands without
-// a race window between the Purge and the AcquireFor calls.
+// AcquireAndPurge purges any pending waiters for addr and then calls
+// [AcquireFor] with the same address, so a newer command for an address
+// supersedes the older ones still queued for it. The two steps lock the
+// throttle separately (Purge, then AcquireFor), so the sequence is not
+// atomic: a command for the same address that queues in between is not
+// purged by this call.
 //
 // Returns the same errors as [AcquireFor]: nil on success,
 // [ErrThrottleClosed] when the throttle is closed, or ctx.Err() on
@@ -579,8 +579,10 @@ func (t *CommandThrottle) AcquireAndPurge(ctx context.Context, prio hmenum.Comma
 }
 
 // IsEnabled reports whether throttling is active (i.e. a positive
-// InterCommandDelay or BurstThreshold has been configured). When false, every
-// Acquire returns immediately without waiting.
+// InterCommandDelay or BurstThreshold has been configured). When false, the
+// delay and burst guards never wait; the MaxInFlight semaphore still applies,
+// so an Acquire can still block (or be rejected by the queue cap) when all
+// permits are held.
 func (t *CommandThrottle) IsEnabled() bool {
 	// No lock needed — interCommandDelay and burstThreshold are set at
 	// construction and never mutated.
@@ -661,11 +663,17 @@ func (t *CommandThrottle) cancelWaiter(w *waiter) {
 			return
 		}
 	}
-	// Already admitted; emulate a Release so we don't leak a permit.
-	// The guard matters: Close() and Purge() wake a waiter WITHOUT
-	// reserving an inFlight permit for it, so a cancel racing those
-	// paths must not decrement a permit that was never handed out
-	// (mirrors [CommandThrottle.Release] and releaseAdmittedSlot).
+	// Close() and Purge() wake a waiter WITHOUT reserving an inFlight
+	// permit for it. Both mark the waiter under t.mu before closing its
+	// ready channel, so a cancel racing them sees the mark here and must
+	// return nothing: any permit still counted belongs to a live holder,
+	// and giving it back would admit one command more than the capacity.
+	if w.purged || w.closedOut {
+		return
+	}
+	// Admitted by wakeNextLocked, which reserved a permit for this waiter;
+	// emulate a Release so it does not leak (mirrors
+	// [CommandThrottle.Release] and releaseAdmittedSlot).
 	select {
 	case <-w.ready:
 		if t.inFlight > 0 {
