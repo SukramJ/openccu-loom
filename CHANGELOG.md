@@ -6,6 +6,22 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.84.1] - 2026-10-02
+
+### Fixed
+
+- **Pairing a program with the daemon works with the CSRF guard on — its
+  default.** The anonymous pairing ask (`POST /api/v1/pairing`) and a
+  program's withdrawal (`DELETE /api/v1/pairing/{id}`) were refused with
+  `403 CSRF check failed`: the double-submit guard wants a token only a
+  browser holds, and a program pairing with the daemon (the Home Assistant
+  integration, for one) is not a browser. Both routes pass the guard now;
+  neither carries an ambient credential, the ask's answer is unreadable to
+  another site, and nothing becomes a credential until an administrator
+  types the code. The admin side of pairing stays guarded. The test that
+  pins the pairing round trip ran without the guard, which is why this
+  went unnoticed; it runs with it now.
+
 ## [0.84.0] - 2026-10-02
 
 ### Release summary
