@@ -28,7 +28,9 @@ func liteAddonStampForTest(t *testing.T) {
 	if err := os.WriteFile(version, []byte("VERSION=1.0.0\nVARIANT=lite\n"), 0o600); err != nil {
 		t.Fatalf("write version: %v", err)
 	}
-	token := filepath.Join(dir, "addon.api")
+	// Named as occulited names it, /run/occulite/addon-tokens/<id>.api: the
+	// gate scope the daemon accepts box tokens for derives from this name.
+	token := filepath.Join(dir, "openccu-loom.api")
 	if err := os.WriteFile(token, []byte("olt_test\n"), 0o600); err != nil {
 		t.Fatalf("write token: %v", err)
 	}

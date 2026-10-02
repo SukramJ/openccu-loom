@@ -48,6 +48,7 @@ func (v ssoVerifier) VerifySession(ctx context.Context, sessionID string) (auth.
 		Authenticated: st.Authenticated,
 		User:          st.User,
 		Role:          st.Role,
+		Scopes:        st.Scopes,
 		AuthOff:       st.AuthOff,
 		Public:        st.Public,
 	}, nil

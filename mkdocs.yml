@@ -176,6 +176,7 @@ nav:
           - ADR 0077 — Lite add-on token onboarding: adr/0077-lite-addon-token-onboarding.md
           - ADR 0078 — Lite web-server ingress: adr/0078-lite-webserver-ingress.md
           - ADR 0079 — Box-shell SSO over the lite ingress: adr/0079-lite-shell-session-sso.md
+          - ADR 0080 — Box API tokens through the lite gate: adr/0080-lite-gate-api-tokens.md
   - Credits: attribution.md
 
 # Only the mkdocs machinery itself is excluded. Everything else under

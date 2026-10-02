@@ -1782,9 +1782,9 @@ const EN: Catalog = {
   "config.help.north.rest.auth.ha_ingress.role":
     'Loom role granted to a trusted Ingress request: "admin" (default), "operator" or "viewer".',
   "config.help.north.rest.auth.occulite_sso":
-    "Accept the openccu-lite box shell's session as a Loom sign-in, so an operator signed in to the box needs no second login.",
+    "Accept what the openccu-lite box gate accepted — the box shell's session or a box API token — as a Loom sign-in, so neither an operator signed in to the box nor a paired program needs a second credential.",
   "config.help.north.rest.auth.occulite_sso.enabled":
-    "Trust the openccu-lite box shell's session: a request the box gate passes on signs in as the box user (box admin = admin, box user = operator) — no login. Accepted only beside an openccu-lite box; every session is live-verified against the box, the header alone authenticates nothing. Default (unset) = on in the openccu-lite add-on, off in any other build; set On/Off to override. Real tokens/sessions still win. Restart required.",
+    "Trust the openccu-lite box shell's session: a request the box gate passes on signs in as the box user (box admin = admin, box user = operator) — no login. A box API token the gate accepted signs in too: with the add-on's scope addon:openccu-loom as operator, with Full access as admin. Accepted only beside an openccu-lite box; every session is live-verified against the box, the header alone authenticates nothing. Default (unset) = on in the openccu-lite add-on, off in any other build; set On/Off to override. Real tokens/sessions still win. Restart required.",
   "config.help.north.rest.auth.session_idle_timeout":
     "Log a session out after this much inactivity, even while its absolute lifetime is still running (e.g. 30m, 2h). 0 disables the idle check and leaves only the absolute session lifetime in charge.",
   "config.help.north.rest.openapi_spec_path":
@@ -6072,9 +6072,9 @@ const DE: Catalog = {
   "config.help.north.rest.auth.ha_ingress.role":
     'Loom-Rolle für eine vertrauenswürdige Ingress-Anfrage: "admin" (Standard), "operator" oder "viewer".',
   "config.help.north.rest.auth.occulite_sso":
-    "Die Sitzung der openccu-lite-Box-Shell als Loom-Anmeldung akzeptieren, damit ein an der Box angemeldeter Bediener kein zweites Login braucht.",
+    "Was das Gate der openccu-lite-Box akzeptiert hat — die Sitzung der Box-Shell oder ein API-Token der Box — als Loom-Anmeldung akzeptieren, damit weder ein an der Box angemeldeter Bediener noch ein gekoppeltes Programm eine zweite Anmeldung braucht.",
   "config.help.north.rest.auth.occulite_sso.enabled":
-    "Der Sitzung der openccu-lite-Box-Shell vertrauen: eine vom Box-Gate weitergereichte Anfrage meldet sich als Box-Benutzer an (Box-Admin = admin, Box-Benutzer = operator) — ohne Login. Nur neben einer openccu-lite-Box akzeptiert; jede Sitzung wird live gegen die Box geprüft, der Header allein authentifiziert nichts. Standard (nicht gesetzt) = an im openccu-lite-Add-on, aus in jedem anderen Build; An/Aus überschreibt. Echte Tokens/Sessions gewinnen weiterhin. Neustart erforderlich.",
+    "Der Sitzung der openccu-lite-Box-Shell vertrauen: eine vom Box-Gate weitergereichte Anfrage meldet sich als Box-Benutzer an (Box-Admin = admin, Box-Benutzer = operator) — ohne Login. Ein vom Gate akzeptiertes API-Token der Box meldet sich ebenfalls an: mit dem Add-on-Scope addon:openccu-loom als operator, mit Vollzugriff als admin. Nur neben einer openccu-lite-Box akzeptiert; jede Sitzung wird live gegen die Box geprüft, der Header allein authentifiziert nichts. Standard (nicht gesetzt) = an im openccu-lite-Add-on, aus in jedem anderen Build; An/Aus überschreibt. Echte Tokens/Sessions gewinnen weiterhin. Neustart erforderlich.",
   "config.help.north.rest.auth.session_idle_timeout":
     "Meldet eine Sitzung nach dieser Zeit ohne Aktivität ab, auch wenn ihre absolute Lebensdauer noch läuft (z. B. 30m, 2h). 0 deaktiviert die Leerlaufprüfung; dann gilt nur die absolute Lebensdauer.",
   "config.help.north.rest.openapi_spec_path":

@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/SukramJ/openccu-loom/internal/auth"
 )
 
 type fakeSystemCCUReader struct{ entries []SystemCCUEntry }
@@ -71,6 +73,48 @@ func TestSystemCCU_HappyPath(t *testing.T) {
 	}
 	if len(e.ConfiguredInterfaces) != 2 {
 		t.Fatalf("interfaces len=%d", len(e.ConfiguredInterfaces))
+	}
+}
+
+// TestSystemCCU_SerialFollowsTheOperatorBar pins the per-role projection of
+// the CCU report: a viewer sees neither the coordinates nor the serial, an
+// operator sees the serial — a paired client, never admin, keys its setup on
+// it — but still not where the CCU is reached, and an admin sees everything.
+func TestSystemCCU_SerialFollowsTheOperatorBar(t *testing.T) {
+	t.Parallel()
+	reader := fakeSystemCCUReader{entries: []SystemCCUEntry{{
+		Name: "home", Host: "192.0.2.29", Hostname: "homematic-raspi",
+		Serial: "OEQ1234567", URL: "http://homematic-raspi",
+	}}}
+	for _, tc := range []struct {
+		role       auth.Role
+		wantSerial bool
+		wantHost   bool
+	}{
+		{auth.RoleViewer, false, false},
+		{auth.RoleOperator, true, false},
+		{auth.RoleAdmin, true, true},
+	} {
+		t.Run(string(tc.role), func(t *testing.T) {
+			t.Parallel()
+			r := httptest.NewRequest(http.MethodGet, "/api/v1/system/ccu", http.NoBody)
+			r = r.WithContext(auth.ContextWithIdentity(r.Context(), auth.Identity{Subject: "x", Role: tc.role}))
+			w := httptest.NewRecorder()
+			SystemCCU(reader).ServeHTTP(w, r)
+			var got struct {
+				Entries []SystemCCUEntry `json:"entries"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil || len(got.Entries) != 1 {
+				t.Fatalf("decode: %v, entries %d", err, len(got.Entries))
+			}
+			e := got.Entries[0]
+			if (e.Serial != "") != tc.wantSerial {
+				t.Errorf("serial = %q, want present: %v", e.Serial, tc.wantSerial)
+			}
+			if (e.Host != "") != tc.wantHost || (e.URL != "") != tc.wantHost || (e.Hostname != "") != tc.wantHost {
+				t.Errorf("coordinates host=%q url=%q hostname=%q, want present: %v", e.Host, e.URL, e.Hostname, tc.wantHost)
+			}
+		})
 	}
 }
 

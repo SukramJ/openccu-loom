@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 13.2.0
+  version: 13.3.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -2042,12 +2042,14 @@ paths:
         validate that the daemon manages the same CCU the user
         expects.
 
-        The CCU's network coordinates — `host`, `hostname`, `serial`,
-        `url` and the per-adapter `port` / `address` / `url` — are
-        admin-only. A viewer or operator reads them as empty strings /
-        zero, the same narrowing `GET /centrals` has always applied;
-        everything else on the entry stays visible so a status page
-        still renders.
+        The CCU's network coordinates — `host`, `hostname`, `url` and the
+        per-adapter `port` / `address` / `url` — are admin-only. A viewer
+        or operator reads them as empty strings / zero, the same narrowing
+        `GET /centrals` applies; everything else on the entry stays
+        visible so a status page still renders. `serial` identifies the
+        appliance without saying where it is reached, and is visible from
+        the operator role up (empty for a viewer): a paired client is never
+        admin, and the Home Assistant integration keys its setup on it.
 
         Centrals that have not yet completed their first connect
         round have empty `model` / `version` / `serial` / `hostname`
@@ -7218,10 +7220,12 @@ paths:
         Open to any authenticated identity, because the energy, backup and
         rooms/functions views need the central list — but the row is
         narrowed below the admin role. A non-admin caller receives `name`,
-        `enabled` and `interfaces`; `host` comes back empty and `serial`,
-        `port`, `json_rpc_port`, `ports`, `username`, `password_env` and both
-        TLS flags are omitted. Those fields say where the CCU lives and how
-        it is reached, which none of the lower-privileged views use.
+        `enabled` and `interfaces`; `host` comes back empty and `port`,
+        `json_rpc_port`, `ports`, `username`, `password_env` and both TLS
+        flags are omitted. Those fields say where the CCU lives and how it
+        is reached, which none of the lower-privileged views use. `serial`
+        is kept for an operator (omitted for a viewer): it identifies the
+        appliance without locating it, and paired clients key on it.
       tags: [central-admin]
       responses:
         "200":
@@ -11732,22 +11736,28 @@ components:
         role: { type: string, enum: [admin, operator, viewer] }
         scheme:
           type: string
-          enum: [basic, bearer, session, oidc, ingress, occulite]
+          enum: [basic, bearer, session, oidc, ingress, occulite, occulite-token]
           description: >-
             How the request authenticated. `ingress` is the Home
             Assistant Ingress passthrough the add-on deployment uses;
             `occulite` is the box-shell single sign-on over the
             openccu-lite ingress (ADR 0079) — the gate's session,
             live-verified against the box. The SPA reads it to skip
-            its own login and hide the logout action.
+            its own login and hide the logout action. `occulite-token`
+            is a box API token the gate accepted for this add-on as
+            `Authorization: Bearer` (ADR 0080), live-verified against
+            the box: the add-on's own gate scope `addon:<id>` grants
+            operator, Full access admin. Its subject is
+            `occulite-token:<token name>`.
         expires_at:
           type: string
           format: date-time
           description: >-
             The instant the credential behind this identity stops being
             accepted, in UTC. Absent means the credential has no
-            server-side expiry — a `basic`, `ingress`, `occulite` (the
-            box owns that session's lifetime) or unbounded
+            server-side expiry — a `basic`, `ingress`, `occulite` or
+            `occulite-token` (the box owns the session's or token's
+            lifetime) or unbounded
             `bearer` identity. It is the deadline a long-lived consumer
             needs: a WebSocket captures its identity at the upgrade and
             is closed when this instant passes, so a client that reads
@@ -14172,7 +14182,8 @@ components:
           description: >-
             CCU hostname or IP address. Present but empty on the two read
             operations when the caller is below the admin role; the sibling
-            connection fields are omitted outright there.
+            connection fields are omitted outright there (`serial` only below
+            the operator role).
         serial:
           type: string
           description: >-

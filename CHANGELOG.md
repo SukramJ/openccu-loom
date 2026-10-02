@@ -6,7 +6,33 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Box API tokens through the openccu-lite gate** (ADR 0080, REST API
+  13.3.0). openccu-lite 1.0.0-dev.36 lets a program past the gate in front
+  of `https://<box>/addons/loom/` with a box API token instead of a box
+  account's password. The daemon now accepts such a token as its own
+  identity, after asking the box about it like a box session: a token with
+  the add-on's scope `addon:openccu-loom` signs in as operator, a
+  Full-access token as admin, anything else is refused — the daemon checks
+  the scope itself, because its own port is reachable without the gate.
+  One pairing with the box (`"addons": ["openccu-loom"]`) is all a client
+  needs; no daemon token and no stored password. `GET /auth/me` reports
+  such a caller with the new scheme `occulite-token`; a WebSocket opened
+  with a token closes within a minute of the token's revocation on the box.
+  Only on the openccu-lite add-on, with `north.rest.auth.occulite_sso` on
+  (its default there).
+
 ### Changed
+
+- **The CCU serial is visible to operators.** `GET /system/ccu` and
+  `GET /centrals` returned it to admins only, together with the CCU's
+  network coordinates. The serial identifies the appliance without saying
+  where it is reached, and a paired client is never admin — neither with the
+  daemon's own pairing nor with a box token — while the Home Assistant
+  integration keys its setup on the serial, so a paired setup could not
+  finish. Operators now read it; viewers still do not, and host, hostname,
+  URL and ports stay admin-only.
 
 - **Built with Go 1.27.1** (was 1.26.6): `go.mod`, the Docker builder
   image and every CI workflow. Building from source now needs Go 1.27 or

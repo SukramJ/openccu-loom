@@ -1368,12 +1368,14 @@ export interface paths {
          *     validate that the daemon manages the same CCU the user
          *     expects.
          *
-         *     The CCU's network coordinates — `host`, `hostname`, `serial`,
-         *     `url` and the per-adapter `port` / `address` / `url` — are
-         *     admin-only. A viewer or operator reads them as empty strings /
-         *     zero, the same narrowing `GET /centrals` has always applied;
-         *     everything else on the entry stays visible so a status page
-         *     still renders.
+         *     The CCU's network coordinates — `host`, `hostname`, `url` and the
+         *     per-adapter `port` / `address` / `url` — are admin-only. A viewer
+         *     or operator reads them as empty strings / zero, the same narrowing
+         *     `GET /centrals` applies; everything else on the entry stays
+         *     visible so a status page still renders. `serial` identifies the
+         *     appliance without saying where it is reached, and is visible from
+         *     the operator role up (empty for a viewer): a paired client is never
+         *     admin, and the Home Assistant integration keys its setup on it.
          *
          *     Centrals that have not yet completed their first connect
          *     round have empty `model` / `version` / `serial` / `hostname`
@@ -4888,7 +4890,7 @@ export interface paths {
         };
         /**
          * List all configured centrals
-         * @description Open to any authenticated identity, because the energy, backup and rooms/functions views need the central list — but the row is narrowed below the admin role. A non-admin caller receives `name`, `enabled` and `interfaces`; `host` comes back empty and `serial`, `port`, `json_rpc_port`, `ports`, `username`, `password_env` and both TLS flags are omitted. Those fields say where the CCU lives and how it is reached, which none of the lower-privileged views use.
+         * @description Open to any authenticated identity, because the energy, backup and rooms/functions views need the central list — but the row is narrowed below the admin role. A non-admin caller receives `name`, `enabled` and `interfaces`; `host` comes back empty and `port`, `json_rpc_port`, `ports`, `username`, `password_env` and both TLS flags are omitted. Those fields say where the CCU lives and how it is reached, which none of the lower-privileged views use. `serial` is kept for an operator (omitted for a viewer): it identifies the appliance without locating it, and paired clients key on it.
          */
         get: operations["listCentrals"];
         put?: never;
@@ -8119,13 +8121,13 @@ export interface components {
             /** @enum {string} */
             role: "admin" | "operator" | "viewer";
             /**
-             * @description How the request authenticated. `ingress` is the Home Assistant Ingress passthrough the add-on deployment uses; `occulite` is the box-shell single sign-on over the openccu-lite ingress (ADR 0079) — the gate's session, live-verified against the box. The SPA reads it to skip its own login and hide the logout action.
+             * @description How the request authenticated. `ingress` is the Home Assistant Ingress passthrough the add-on deployment uses; `occulite` is the box-shell single sign-on over the openccu-lite ingress (ADR 0079) — the gate's session, live-verified against the box. The SPA reads it to skip its own login and hide the logout action. `occulite-token` is a box API token the gate accepted for this add-on as `Authorization: Bearer` (ADR 0080), live-verified against the box: the add-on's own gate scope `addon:<id>` grants operator, Full access admin. Its subject is `occulite-token:<token name>`.
              * @enum {string}
              */
-            scheme?: "basic" | "bearer" | "session" | "oidc" | "ingress" | "occulite";
+            scheme?: "basic" | "bearer" | "session" | "oidc" | "ingress" | "occulite" | "occulite-token";
             /**
              * Format: date-time
-             * @description The instant the credential behind this identity stops being accepted, in UTC. Absent means the credential has no server-side expiry — a `basic`, `ingress`, `occulite` (the box owns that session's lifetime) or unbounded `bearer` identity. It is the deadline a long-lived consumer needs: a WebSocket captures its identity at the upgrade and is closed when this instant passes, so a client that reads it can refill its credential through the in-band `{op:"reauth"}` frame instead of discovering the rotation through a 401.
+             * @description The instant the credential behind this identity stops being accepted, in UTC. Absent means the credential has no server-side expiry — a `basic`, `ingress`, `occulite` or `occulite-token` (the box owns the session's or token's lifetime) or unbounded `bearer` identity. It is the deadline a long-lived consumer needs: a WebSocket captures its identity at the upgrade and is closed when this instant passes, so a client that reads it can refill its credential through the in-band `{op:"reauth"}` frame instead of discovering the rotation through a 401.
              */
             expires_at?: string;
         };
@@ -9947,7 +9949,7 @@ export interface components {
              *     request, subscription and payload for this CCU.
              */
             name: string;
-            /** @description CCU hostname or IP address. Present but empty on the two read operations when the caller is below the admin role; the sibling connection fields are omitted outright there. */
+            /** @description CCU hostname or IP address. Present but empty on the two read operations when the caller is below the admin role; the sibling connection fields are omitted outright there (`serial` only below the operator role). */
             host: string;
             /** @description CCU hardware serial, set when the central is adopted from SSDP/UPnP discovery. Empty for YAML / manually-entered rows. Lets discovery mark a CCU "already configured" by serial regardless of its host. */
             serial?: string;

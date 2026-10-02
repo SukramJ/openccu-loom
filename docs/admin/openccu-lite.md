@@ -204,6 +204,20 @@ from the box's Addons page. A few things differ from a CCU:
   navigation. Nothing to open in the firewall for this path; port 8119
   is only needed for direct access from other machines (a Home
   Assistant backend, MQTT-less REST clients).
+- **Signing in through the box.** Behind `https://<box>/addons/loom/` the
+  daemon accepts what the box's gate accepted, each time after asking the
+  box whether it still holds (`north.rest.auth.occulite_sso`, on by
+  default in the add-on):
+  - your **box session** — a browser opens the UI without a second login,
+    box administrators as admin, box users as operator (ADR 0079);
+  - a **box API token** (openccu-lite 1.0.0-dev.36 or newer) sent as
+    `Authorization: Bearer <token>` — the way a program such as the Home
+    Assistant integration gets through the gate without storing a box
+    password. The token needs the scope `addon:openccu-loom`, which pairing
+    with the box requests (`"addons": ["openccu-loom"]`) and the box's token
+    page offers per installed add-on; it maps to operator, a Full-access
+    token to admin. Tokens for other add-ons, or for the box APIs only, are
+    refused by the daemon as well as by the gate (ADR 0080).
 - **Reusing the box's certificate on the direct port** (optional): both
   a CCU and an openccu-lite box keep their web-server certificate in
   one combined file, `/etc/config/server.pem`, which the add-on may

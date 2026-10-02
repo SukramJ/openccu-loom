@@ -28,7 +28,8 @@ type handlerConfig struct {
 }
 
 // WithOcculiteRevalidate makes every connection authenticated through a
-// box-shell session (ADR 0079) re-ask the box periodically, closing the
+// box-shell session (ADR 0079) or a box token (ADR 0080) re-ask the box
+// periodically, closing the
 // socket once fn answers false. fn is handed the role the socket holds, so a
 // session the box has since demoted can be refused too. Such an identity carries no expiry, and
 // nothing else re-resolves an established socket, so without it a session
@@ -182,9 +183,10 @@ func Handler(hub *Hub, logger *slog.Logger, allowedOrigins []string, opts ...Han
 		// replaces the identity without a reconnect.
 		if id, ok := auth.IdentityFrom(r.Context()); ok {
 			c.SetIdentity(id)
-			// A box-shell identity is only as good as the box's session; keep
-			// the id so the watch can ask again (see [WithOcculiteRevalidate]).
-			if id.Scheme == auth.SchemeOcculite && hc.occuliteRevalidate != nil {
+			// A box-vouched identity is only as good as the box's session or
+			// token; keep the credential so the watch can ask again (see
+			// [WithOcculiteRevalidate]).
+			if id.Scheme.BoxVouched() && hc.occuliteRevalidate != nil {
 				c.occuliteSID = r.Header.Get(auth.OcculiteSessionHeader)
 				c.occuliteRevalidate = hc.occuliteRevalidate
 				c.occuliteInterval = hc.occuliteInterval
