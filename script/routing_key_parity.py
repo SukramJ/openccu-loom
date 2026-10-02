@@ -67,7 +67,7 @@
 #
 # CI: the cross-stack-parity workflow
 # (.github/workflows/cross-stack-parity.yml) already provisions the
-# aiohomematic + pydevccu + openccu-data Python stack on a nightly
+# aiohomematic + openccu-data Python stack on a nightly
 # schedule; this script runs there as an extra step. It is intentionally
 # NOT on the per-PR lane because the reference venv is not provisioned
 # there.

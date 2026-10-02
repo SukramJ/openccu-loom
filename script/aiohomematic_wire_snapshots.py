@@ -4,7 +4,7 @@ aiohomematic_wire_snapshots.py — generate aiohomematic reference wire-call sna
 
 This script produces ground-truth wire-call records for the aiohomematic
 Custom-DP setters that have known drift against the Go implementation.
-It uses a lightweight mock-client approach instead of a full pydevccu
+It uses a lightweight mock-client approach instead of a full simulator
 setup: aiohomematic Custom-DP classes call `self._client.set_value()` /
 `self._client.put_paramset()` — we capture those calls without spinning
 up an actual CCU connection.

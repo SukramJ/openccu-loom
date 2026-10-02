@@ -15,6 +15,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (no ReGa needed) instead of scanning the installed code. Until now the
   openccu-lite catalogue's adapter manifest stood in for it.
 
+- **godevccu is the only CCU simulator; pydevccu is retired (REST API
+  13.4.0).** The simulator moved to godevccu 0.8.0, which reports
+  `godevccu-<version>` from `getVersion`. The Homegear backend's model label
+  for the simulator is `godevccu` (was `pydevccu`), and the `Backend` enum in
+  `assets/schemas/enums.json` names it `GoDevCCU` (was `PyDevCCU`); no
+  OpenAPI schema references that enum, so no response payload changes, but
+  a generated client that hardcoded `PyDevCCU` must follow. The Python
+  reference snapshots (`make snapshot-py` and the two discovery snapshot
+  scripts) build the godevccu binary pinned in `go.mod` instead of starting
+  pydevccu, and the reference stack moves to aiohomematic 2026.10.2. With one
+  simulator on both sides the `datasource-diff` step has nothing left to
+  compare and is gone: the parity workflows run three steps, and
+  `integration.yml` no longer provisions Python (ADR 0038 amendment).
+
 ## [0.84.1] - 2026-10-02
 
 ### Fixed

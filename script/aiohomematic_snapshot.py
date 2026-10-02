@@ -5,8 +5,8 @@
 # aiohomematic_snapshot.py — produces the aiohomematic side of the
 # cross-stack model-snapshot diff.
 #
-# Starts a pydevccu.Server with the same 4 devices used by the Go
-# snapshot test, connects a CentralUnit via XML-RPC, waits for all
+# Starts the godevccu simulator (built from the module pinned in go.mod,
+# see godevccu_server.py), connects a CentralUnit via XML-RPC, waits for all
 # devices to be created, then dumps the full Device→Channel→DataPoint
 # tree to JSON.
 #
@@ -18,8 +18,9 @@
 # The script must be run from the repository root (openccu-loom/).
 # It uses whichever Python3 is on PATH; the aiohomematic venv
 # (aiohomematic/.venv) is added to sys.path automatically if it
-# exists – otherwise the script relies on aiohomematic and pydevccu
-# being installed into the current Python environment.
+# exists – otherwise the script relies on aiohomematic being installed
+# into the current Python environment. Building godevccu needs `go` on PATH
+# (or GODEVCCU_BIN pointing at a binary).
 
 from __future__ import annotations
 
@@ -38,7 +39,7 @@ from pathlib import Path
 
 def _ensure_venv() -> None:
     """
-    The script needs `aiohomematic`, `pydevccu` and crucially the
+    The script needs `aiohomematic` and crucially the
     `openccu_data` Python package on sys.path. The latter ships only
     in the aiohomematic venv (it is not pip-installable system-wide
     on PEP-668-managed hosts). When invoked with the system Python
@@ -127,7 +128,7 @@ def _require_openccu_data(where: str) -> None:
 _ensure_venv()
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Path bootstrap: make aiohomematic and pydevccu importable when running
+# Path bootstrap: make aiohomematic importable when running
 # directly from the openccu-loom repo without activating a venv.
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -136,7 +137,7 @@ _GITHUB_ROOT = Path(__file__).resolve().parents[2]
 
 def _bootstrap_sibling_checkouts() -> None:
     """
-    Make aiohomematic and pydevccu importable when the script runs straight
+    Make aiohomematic importable when the script runs straight
     from the openccu-loom repo with no environment prepared for it.
 
     This is a *fallback*, and the ordering matters. Whatever the active
@@ -148,7 +149,7 @@ def _bootstrap_sibling_checkouts() -> None:
     to the repo instead, so a CI failure pinned to an older release could
     not be reproduced locally at all.
     """
-    for pkg in ("aiohomematic", "pydevccu"):
+    for pkg in ("aiohomematic",):
         if importlib.util.find_spec(pkg) is not None:
             continue
         pkg_path = _GITHUB_ROOT / pkg
@@ -176,16 +177,7 @@ except ImportError as exc:
     )
     sys.exit(1)
 
-try:
-    import pydevccu
-    from pydevccu import Server as PyDevCCUServer
-except ImportError as exc:
-    print(f"ERROR: cannot import pydevccu: {exc}", file=sys.stderr)
-    print(
-        "Install it via: pip install pydevccu",
-        file=sys.stderr,
-    )
-    sys.exit(1)
+from godevccu_server import GodevccuServer
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Configuration
@@ -203,9 +195,9 @@ _OUTPUT_PATH = _REPO_ROOT / "tests" / "integration" / "testdata" / "model_snapsh
 
 def _resolve_devices() -> list[str] | None:
     """
-    Pick the device fleet pydevccu will load.
+    Pick the device fleet godevccu will load.
 
-    Default is `None` which makes pydevccu instantiate every embedded
+    Default is `None` which makes godevccu instantiate every embedded
     model (~399 devices). Set the OPENCCU_LOOM_SNAPSHOT_DEVICES env var
     to a comma-separated list (e.g. "HmIP-BWTH,HmIP-BSM") to scope the
     snapshot to a smoke-sized subset.
@@ -548,7 +540,7 @@ def _serialize_channel(channel) -> dict:  # type: ignore[type-arg]
     # fallback. Closes parity_audit gap **G-44**.
     # ----------------------------------------------------------------
 
-    # Rooms and functions: pydevccu returns empty sets normally
+    # Rooms and functions: godevccu returns empty sets normally
     rooms = sorted(channel.rooms) if channel.rooms else []
     functions = []
     if channel.function:
@@ -633,18 +625,18 @@ def _serialize_device(device) -> dict:  # type: ignore[type-arg]
 
 
 async def run() -> None:
-    """Start pydevccu, connect central, dump snapshot."""
+    """Start godevccu, connect central, dump snapshot."""
 
-    # ── 1. Start pydevccu ────────────────────────────────────────────────────
-    _LOGGER.info("Starting pydevccu on %s:%d with devices: %s", _CCU_HOST, _CCU_PORT, _DEVICES)
-    ccu = PyDevCCUServer(addr=(_CCU_HOST, _CCU_PORT), devices=_DEVICES)
+    # ── 1. Start godevccu ────────────────────────────────────────────────────
+    _LOGGER.info("Starting godevccu on %s:%d with devices: %s", _CCU_HOST, _CCU_PORT, _DEVICES)
+    ccu = GodevccuServer(host=_CCU_HOST, port=_CCU_PORT, devices=_DEVICES)
     try:
         ccu.start()
     except Exception as exc:
-        print(f"ERROR: pydevccu failed to start: {exc}", file=sys.stderr)
+        print(f"ERROR: godevccu failed to start: {exc}", file=sys.stderr)
         sys.exit(1)
 
-    _LOGGER.info("pydevccu started")
+    _LOGGER.info("godevccu %s started", ccu.version)
 
     try:
         # ── 2. Connect CentralUnit ───────────────────────────────────────────
@@ -701,7 +693,7 @@ async def run() -> None:
             await asyncio.wait_for(device_event.wait(), timeout=_INIT_TIMEOUT_S)
 
         if not device_event.is_set():
-            print("ERROR: timed out waiting for devices from pydevccu", file=sys.stderr)
+            print("ERROR: timed out waiting for devices from godevccu", file=sys.stderr)
             await central.stop()
             sys.exit(1)
 
@@ -749,17 +741,11 @@ async def run() -> None:
         except Exception:  # noqa: BLE001
             pass
 
-        pydevccu_version = getattr(pydevccu, "__version__", "unknown")
-        try:
-            pydevccu_version = importlib.metadata.version("pydevccu")
-        except Exception:  # noqa: BLE001
-            pass
-
         snapshot = {
             "stack": "aiohomematic",
             "stack_version": aiohm_version,
-            "devccu": "pydevccu",
-            "devccu_version": pydevccu_version,
+            "devccu": "godevccu",
+            "devccu_version": ccu.version,
             "locale": _LOCALE,
             "captured_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "devices": serialised_devices,
@@ -803,17 +789,9 @@ async def run() -> None:
         await central.stop()
 
     finally:
-        # ── 7. Stop pydevccu ─────────────────────────────────────────────────
-        _LOGGER.info("Stopping pydevccu…")
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                asyncio.create_task(ccu.stop())  # noqa: RUF006
-            else:
-                loop.run_until_complete(ccu.stop())
-        except Exception:  # noqa: BLE001
-            with contextlib.suppress(Exception):
-                ccu.stop()  # type: ignore[func-returns-value]
+        # ── 7. Stop godevccu ─────────────────────────────────────────────────
+        _LOGGER.info("Stopping godevccu…")
+        ccu.stop()
 
 
 if __name__ == "__main__":

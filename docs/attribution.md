@@ -49,8 +49,9 @@ Compliance: MIT. Same provenance rules as aiohomematic above.
   <https://github.com/SukramJ/godevccu>, consumed as a regular module
   dependency for the integration tests.
 - Used as: the in-process HomeMatic CCU simulator that the hermetic
-  `tests/integration/` suite runs against — `godevccu` is a pure-Go port of
-  `pydevccu`, so no Python toolchain is needed.
+  `tests/integration/` suite runs against — `godevccu` started as a pure-Go
+  port of `pydevccu` (retired) and is maintained on its own, so no Python
+  toolchain is needed.
 
 Compliance: both MIT.
 

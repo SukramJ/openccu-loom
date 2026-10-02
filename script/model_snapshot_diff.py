@@ -295,8 +295,8 @@ def _is_unnamed_channel(name: Any, number: Any) -> bool:
 
     aiohomematic represents an unnamed channel's name as the channel number
     stringified (channel N -> "N", model/support.py get_channel_name fallback);
-    openccu-loom leaves it null. Against the name-less pydevccu/godevccu
-    simulators every channel is unnamed, so the two stacks emit the same
+    openccu-loom leaves it null. Against the name-less godevccu
+    simulator every channel is unnamed, so the two stacks emit the same
     "no custom name" state in different shapes. A real assigned name (e.g.
     "Living Room") is neither null nor the channel number and still differs.
     """
@@ -313,8 +313,8 @@ def diff_channel(go_ch: dict, py_ch: dict) -> dict:
     #
     # `paramsets` is intentionally excluded: openccu-loom does not
     # retain the verbatim wire PARAMSETS list on the Channel struct
-    # (only ParamsetIn for routing). The wire-layer datasource_diff
-    # confirms identity at the paramset_descriptions level, so a
+    # (only ParamsetIn for routing). Both stacks read the same godevccu
+    # paramset_descriptions, so a
     # snapshot-side drift here is a representation gap, not a model
     # gap.
     for field in ("address", "number", "type", "name", "rooms", "functions",
@@ -371,13 +371,17 @@ def _canon_firmware(value: Any) -> Any:
 
 
 # interface_id / product_group record which XML-RPC interface served a device,
-# which is a property of the *simulator's* fixture topology, not the
-# openccu-loom model port: godevccu and pydevccu organise the same classic
-# BidCos-RF devices (e.g. `263 x`, `ZEL STG RM DWT 10`, `ASH550`) under
-# different interface endpoints, so the two stacks report HmIP-RF vs BidCos-RF
-# for the same address. On a real CCU a device is received on one interface and
-# both stacks read the same value, so these fields agree in production; against
-# the two simulators they diverge with no model-fidelity meaning. Tolerating
+# which is a property of the *snapshot harness*, not the openccu-loom model
+# port. Both harnesses talk to one godevccu endpoint, but the Go snapshot
+# ingests every device as HmIP-RF (tests/integration/model_snapshot_test.go)
+# while this stack connects as BidCos-RF (script/aiohomematic_snapshot.py). For
+# a model without a canonical prefix (e.g. `263 x`, `ZEL STG RM DWT 10`,
+# `ASH550`) the product group falls back to that interface
+# (hmenum.ProductGroupForModel), so the two stacks report HmIP-RF vs BidCos-RF
+# for the same address — 69 devices of the full fleet. On a real CCU a device is
+# received on one interface and both stacks read the same value, so these
+# fields agree in production; in the harnesses they diverge with no
+# model-fidelity meaning. Tolerating
 # them keeps device_fields sensitive to a genuine model / firmware / version
 # regression. See notes/parity/by_design.md.
 _TOLERATED_DEVICE_FIELDS = frozenset({"interface_id", "product_group"})

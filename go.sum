@@ -10,8 +10,8 @@ github.com/SukramJ/go-mqtt v1.6.0 h1:8qGuMm4BFM5xB0Lb8+GeHkTceiYDQ1YWqsmdXkQ6nKo
 github.com/SukramJ/go-mqtt v1.6.0/go.mod h1:5d2rA0gppys68MuhP8RoCtb/yorzYwVFP3Myb1HhsaA=
 github.com/SukramJ/go-openccu-data v0.3.0 h1:XF9QQy3otMTuvjvcGiV0vwi0/GTapC/vvmYEPwdsgXk=
 github.com/SukramJ/go-openccu-data v0.3.0/go.mod h1:H6EmkW8BglTusAYguH653yQ66xHdJMzsvdUotPQlvq0=
-github.com/SukramJ/godevccu v0.7.0 h1:owwPzI1a00BkNJwDZJj5EFVTR16N02DjO7jW44CPQsQ=
-github.com/SukramJ/godevccu v0.7.0/go.mod h1:BHzY07+hauIteqvHxaqxdJW5zhbAp01eiv6IXX+Px+0=
+github.com/SukramJ/godevccu v0.8.0 h1:vYYjzs6WWbY7e/LHlp+zCJ05g3W4eRmajTw9cnEAyT4=
+github.com/SukramJ/godevccu v0.8.0/go.mod h1:BHzY07+hauIteqvHxaqxdJW5zhbAp01eiv6IXX+Px+0=
 github.com/cenkalti/backoff v2.2.1+incompatible h1:tNowT99t7UNflLxfYYSlKYsBpXdEet03Pg2g16Swow4=
 github.com/cenkalti/backoff v2.2.1+incompatible/go.mod h1:90ReRw6GdpyfrHakVjL/QHaoyV4aDUVVkXQJJJ3NXXM=
 github.com/cpuguy83/go-md2man/v2 v2.0.6/go.mod h1:oOW0eioCTA6cOiMLiUPZOpcVxMig6NIQQ7OS05n1F4g=

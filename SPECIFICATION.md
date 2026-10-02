@@ -942,8 +942,9 @@ Coverage producers in place:
   when absent: not supported by the system, missing credential scope,
   or not ready (ADR 0074).
 - **godevccu** — pure-Go in-process CCU simulator used for
-  integration tests; eliminates the Python dependency
-  (`pydevccu`) at test time.
+  integration tests; no Python toolchain at test time. It is also the
+  simulator aiohomematic tests against, so both stacks share one device
+  catalogue.
 - **Hexagonal architecture** — domain core kept free of I/O;
   adapters at the boundary translate to the outside world.
 - **Hub data point** — a non-device value such as a system variable

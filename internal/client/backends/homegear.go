@@ -17,7 +17,7 @@ import (
 // software version.
 const (
 	HomegearModelHomegear = "Homegear"
-	HomegearModelPyDevCCU = "pydevccu"
+	HomegearModelGoDevCCU = "godevccu"
 )
 
 // HomegearBackend talks to a Homegear daemon (or
@@ -51,8 +51,8 @@ func (b *HomegearBackend) Version() string { return b.version }
 
 // Model returns the backend model label.
 func (b *HomegearBackend) Model() string {
-	if strings.Contains(strings.ToLower(b.version), strings.ToLower(HomegearModelPyDevCCU)) {
-		return HomegearModelPyDevCCU
+	if strings.Contains(strings.ToLower(b.version), strings.ToLower(HomegearModelGoDevCCU)) {
+		return HomegearModelGoDevCCU
 	}
 	return HomegearModelHomegear
 }

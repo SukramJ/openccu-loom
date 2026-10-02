@@ -408,8 +408,8 @@ With particular thanks:
   [aiohomematic-config](https://github.com/SukramJ/aiohomematic-config)
   (MIT) for the form-schema, grouping and label logic in the Config UI.
 - [pydevccu](https://github.com/danielperna84/pydevccu) (MIT, Daniel
-  Perna & SukramJ) — the CCU simulator that
-  [godevccu](https://github.com/SukramJ/godevccu) is a Go port of.
+  Perna & SukramJ, retired) — the CCU simulator that
+  [godevccu](https://github.com/SukramJ/godevccu) started as a Go port of.
 - [matter.js](https://github.com/matter-js/matter.js) (Apache-2.0) —
   the gold standard for the entire Matter bridge.
 - [homematicip-local-frontend](https://github.com/SukramJ/homematicip-local-frontend)

@@ -1,10 +1,10 @@
 # Cross-stack model-snapshot parity gate.
 #
 # Runs the four-step cross-stack snapshot pipeline that CLAUDE.md
-# documents as the release gate but that `integration.yml` currently
-# skips ("the aiohomematic + pydevccu + openccu_data Python stack is not
-# provisioned on the runner"). This workflow provisions that stack from
-# the public sibling packages and runs all four steps.
+# documents as the release gate but that `integration.yml` skips (the
+# aiohomematic + openccu_data Python stack is not provisioned there). This
+# workflow provisions that stack from the public sibling packages and runs
+# all three steps.
 #
 # Scheduled nightly + manual dispatch only — NOT on pull requests — so a
 # provisioning hiccup or a reference-version bump never blocks a PR
@@ -41,13 +41,13 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: provision Python reference stack (aiohomematic + pydevccu + openccu-data)
+      - name: provision Python reference stack (aiohomematic + openccu-data)
         run: |
           set -euo pipefail
           python3 -m venv "$RUNNER_TEMP/refstack"
           "$RUNNER_TEMP/refstack/bin/python" -m pip install --upgrade pip wheel
-          # aiohomematic + pydevccu + openccu-data are all published on PyPI.
-          # ALL THREE are pinned for reproducibility: the cross-stack gate
+          # aiohomematic + openccu-data are both published on PyPI.
+          # BOTH are pinned for reproducibility: the cross-stack gate
           # compares the reference stack against the metadata the Go binary
           # embeds (internal/ccudata/embedded, snapshot 2026-06-27), so the
           # reference packages must be pinned to the versions those extracts
@@ -70,32 +70,16 @@ jobs:
       - name: "routing-key parity (aiohomematic == Go-pinned golden fixtures)"
         run: make routing-key-parity
 
-      # Point datasource_diff.py at the ALREADY-PROVISIONED reference trees:
-      # the pip-installed pydevccu package and the godevccu Go module in the
-      # build cache. Without these the script's sibling-checkout defaults do
-      # not exist on the runner, glob() finds nothing, and the gate passes
-      # vacuously. The min-key floor in datasource_diff.py now fails such a
-      # run, so these roots are mandatory, not cosmetic.
-      - name: resolve provisioned datasource roots
-        run: |
-          set -euo pipefail
-          # Ensure the godevccu module zip is extracted before reading its
-          # local .Dir — `go list -m -f {{.Dir}}` reports an empty dir for a
-          # module still in go.mod but not yet unpacked into the build cache.
-          go mod download github.com/SukramJ/godevccu
-          echo "PYDEVCCU_ROOT=$(python3 -c 'import pydevccu, os; print(os.path.dirname(pydevccu.__file__))')" >> "$GITHUB_ENV"
-          echo "GODEVCCU_ROOT=$(go list -m -f '{{.Dir}}' github.com/SukramJ/godevccu)/internal/embed/data" >> "$GITHUB_ENV"
-
-      - name: "step 1/4 — datasource diff (pydevccu vs godevccu wire data)"
-        run: make datasource-diff
-
-      - name: "step 2/4 — openccu-loom model snapshot (against godevccu, ~80k DPs)"
+      - name: "step 1/3 — openccu-loom model snapshot (against godevccu, ~80k DPs)"
         run: make snapshot-go
 
-      - name: "step 3/4 — aiohomematic model snapshot (against pydevccu, ~8k DPs)"
+      # The Python side builds the godevccu binary from the module pinned in
+      # go.mod (script/godevccu_server.py), so both snapshots run against the
+      # same simulator release.
+      - name: "step 2/3 — aiohomematic model snapshot (against godevccu, ~8k DPs)"
         env:
           AIOHOMEMATIC_VENV_PYTHON: ${{ runner.temp }}/refstack/bin/python
         run: make snapshot-py
 
-      - name: "step 4/4 — cross-stack drift gate (exit 0 = intersection parity within baseline)"
+      - name: "step 3/3 — cross-stack drift gate (exit 0 = intersection parity within baseline)"
         run: make snapshot-diff

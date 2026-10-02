@@ -329,7 +329,7 @@ snapshot-go: ## dump openccu-loom's model snapshot against godevccu (~80k DPs)
 	@echo "→ tests/integration/testdata/model_snapshot_openccu-loom.json"
 
 .PHONY: snapshot-py
-snapshot-py: ## dump aiohomematic's model snapshot against pydevccu (~8k DPs)
+snapshot-py: ## dump aiohomematic's model snapshot against godevccu (~8k DPs; builds the go.mod-pinned godevccu)
 	@python3 script/aiohomematic_snapshot.py
 	@echo "→ tests/integration/testdata/model_snapshot_aiohomematic.json"
 
@@ -350,12 +350,8 @@ snapshot-diff: ## compare both stack snapshots; exit 0 = full intersection parit
 	@{ python3 script/model_snapshot_diff.py || true; } | python3 script/model_snapshot_drift_check.py
 
 .PHONY: snapshot
-snapshot: snapshot-go snapshot-py snapshot-diff ## full snapshot-verification pipeline (datasource diff + both snapshots + diff)
+snapshot: snapshot-go snapshot-py snapshot-diff ## full snapshot-verification pipeline (both snapshots + diff)
 	@echo "snapshot verification complete"
-
-.PHONY: datasource-diff
-datasource-diff: ## verify pydevccu and godevccu carry the identical wire data (399 devices × 12 attrs)
-	@python3 script/datasource_diff.py >/dev/null && echo "datasource layer: 0 drift" || (echo "datasource drift detected" && exit 1)
 
 .PHONY: routing-key-parity
 routing-key-parity: ## verify aiohomematic == the Go-pinned routing-key golden fixtures (closes the manual-copy drift gap)

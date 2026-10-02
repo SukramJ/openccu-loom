@@ -12,7 +12,7 @@
 # Strategy: import `homematicip_local`'s
 # `custom_components.homematicip_local.entity_helpers.descriptions`,
 # register every rule into REGISTRY, boot aiohomematic against
-# pydevccu, walk every CallbackDataPoint, look up its
+# godevccu, walk every CallbackDataPoint, look up its
 # `HmEntityDescription` via `REGISTRY.find(...)`, combine the
 # description's static fields (device_class, state_class,
 # entity_category, icon, enabled_by_default,
@@ -28,7 +28,7 @@
 #   python3 script/homematicip_local_snapshot.py
 #
 # Auto-re-execs in homematicip_local's venv (the only venv that ships
-# `homeassistant` + `aiohomematic` + `pydevccu` + `openccu_data` +
+# `homeassistant` + `aiohomematic` + `openccu_data` +
 # `paho.mqtt` together).
 
 from __future__ import annotations
@@ -134,12 +134,7 @@ except ImportError as exc:
     )
     sys.exit(1)
 
-try:
-    import pydevccu
-    from pydevccu import Server as PyDevCCUServer
-except ImportError as exc:
-    print(f"ERROR: cannot import pydevccu: {exc}", file=sys.stderr)
-    sys.exit(1)
+from godevccu_server import GodevccuServer
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -621,12 +616,12 @@ def _event_row(event_group: Any) -> dict[str, Any]:
 
 
 async def run() -> None:
-    _LOGGER.info("Starting pydevccu on %s:%d devices=%s", _CCU_HOST, _CCU_PORT, _DEVICES)
-    ccu = PyDevCCUServer(addr=(_CCU_HOST, _CCU_PORT), devices=_DEVICES)
+    _LOGGER.info("Starting godevccu on %s:%d devices=%s", _CCU_HOST, _CCU_PORT, _DEVICES)
+    ccu = GodevccuServer(host=_CCU_HOST, port=_CCU_PORT, devices=_DEVICES)
     try:
         ccu.start()
     except Exception as exc:
-        print(f"ERROR: pydevccu failed to start: {exc}", file=sys.stderr)
+        print(f"ERROR: godevccu failed to start: {exc}", file=sys.stderr)
         sys.exit(1)
 
     central = None
@@ -729,10 +724,6 @@ async def run() -> None:
         except Exception:  # noqa: BLE001
             ahm_version = getattr(aiohomematic, "__version__", "unknown")
         try:
-            pydev_version = importlib.metadata.version("pydevccu")
-        except Exception:  # noqa: BLE001
-            pydev_version = getattr(pydevccu, "__version__", "unknown")
-        try:
             hmip_local_version = importlib.metadata.version("homematicip_local")
         except Exception:  # noqa: BLE001
             hmip_local_version = "source"
@@ -740,8 +731,8 @@ async def run() -> None:
         snapshot = {
             "stack": "homematicip_local",
             "stack_version": f"homematicip_local={hmip_local_version}, aiohomematic={ahm_version}",
-            "devccu": "pydevccu",
-            "devccu_version": pydev_version,
+            "devccu": "godevccu",
+            "devccu_version": ccu.version,
             "locale": _LOCALE,
             "captured_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "entities": entities,
@@ -762,8 +753,7 @@ async def run() -> None:
         if central is not None:
             with contextlib.suppress(Exception):
                 await central.stop()
-        with contextlib.suppress(Exception):
-            await ccu.stop()
+        ccu.stop()
 
 
 if __name__ == "__main__":
