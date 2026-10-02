@@ -1,5 +1,11 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.85.0
+
+No change you need to act on. The release moves the daemon's development
+and test simulator to godevccu; on a CCU the add-on now also installs its
+openccu-lite manifest. The REST API reports 13.4.0.
+
 ## 0.84.1
 
 Fixed: pairing the Home Assistant integration (or any other program)
