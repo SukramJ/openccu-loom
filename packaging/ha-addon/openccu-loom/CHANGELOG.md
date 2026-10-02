@@ -1,5 +1,11 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.84.1
+
+Fixed: pairing the Home Assistant integration (or any other program)
+with the daemon failed with "CSRF check failed" — the request never
+reached the tokens panel. Pairing works now; nothing to configure.
+
 ## 0.84.0
 
 Changed: the CCU serial is visible to operators, not only to admins, so

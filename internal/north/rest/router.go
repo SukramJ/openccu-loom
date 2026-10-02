@@ -662,7 +662,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 		r.Use(middleware.Idempotency())
 	}
 	if d.CSRFEnabled {
-		r.Use(auth.CSRFMiddleware(d.CSRFSecure))
+		r.Use(auth.CSRFMiddleware(d.CSRFSecure, isClientPairingMutation))
 	}
 
 	// Mount the SPA before the NotFound handler so an unknown /app/*
@@ -1588,6 +1588,32 @@ func timeoutExceptStreaming(d time.Duration) func(http.Handler) http.Handler {
 			timed.ServeHTTP(w, r)
 		})
 	}
+}
+
+// clientPairingPath is where the client token pairing (ADR 0076) is mounted.
+const clientPairingPath = "/api/v1/pairing"
+
+// isClientPairingMutation reports the two client-pairing mutations the CSRF
+// guard lets through: the anonymous ask (POST /pairing) and the program's
+// withdrawal (DELETE /pairing/{id}). A program that pairs is not a browser and
+// holds no CSRF cookie, so the double-submit check refused it outright.
+//
+// Neither request rides an ambient credential, which is what the guard
+// defends. A page on another site can make a browser send the ask, but cannot
+// read the answer without CORS, so it never learns the poll secret or the
+// code — and nothing becomes a credential until an administrator types that
+// code. The withdrawal authenticates with the poll secret in its own
+// Authorization header, which a browser does not attach cross-site without a
+// preflight. The admin side (/pairing-requests) stays guarded.
+func isClientPairingMutation(r *http.Request) bool {
+	switch r.Method {
+	case http.MethodPost:
+		return r.URL.Path == clientPairingPath
+	case http.MethodDelete:
+		id, ok := strings.CutPrefix(r.URL.Path, clientPairingPath+"/")
+		return ok && id != "" && !strings.Contains(id, "/")
+	}
+	return false
 }
 
 // safeIngressPrefix returns the Home Assistant Ingress proxy prefix from the

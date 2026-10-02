@@ -4,6 +4,11 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.84.1
+
+No changes to the proxy. The daemon release lets programs pair with the
+daemon again: the pairing request was refused by its CSRF guard.
+
 # 0.84.0
 
 No changes to the proxy. The daemon release lets programs reach it

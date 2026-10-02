@@ -60,6 +60,10 @@ func TestClientPairingRoundTripMintsAUsableToken(t *testing.T) {
 		Pairing:     mgr,
 		AuthResolve: mw.Resolve,
 		AuthRequire: mw.Require,
+		// Production mounts the double-submit CSRF guard by default
+		// (north.rest.csrf_enabled). A client that pairs is not a browser and
+		// holds no CSRF cookie, so the pin must run with the guard in place.
+		CSRFEnabled: true,
 		RequireAdmin: func(next http.Handler) http.Handler {
 			return mw.RequireRole(auth.RoleAdmin, next)
 		},
@@ -163,5 +167,29 @@ func TestClientPairingRoundTripMintsAUsableToken(t *testing.T) {
 
 	if changes == 0 {
 		t.Fatal("OnChange never fired — the live card signal is unwired")
+	}
+
+	// 7. A second ask is withdrawn by its program — the DELETE carries only
+	// the poll secret, no CSRF token, like the ask itself.
+	commit2 := sha256.Sum256(bytes.Repeat([]byte{0x43}, 32))
+	askBody2, _ := json.Marshal(pairing.Ask{
+		App: "openccu-loom-client", Instance: "ha-2", Role: "operator", Commit: hex.EncodeToString(commit2[:]),
+	})
+	rec = do(http.MethodPost, "/api/v1/pairing", "", "", askBody2)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("second ask: %d %s", rec.Code, rec.Body.String())
+	}
+	var ans2 pairing.Answer
+	if err := json.Unmarshal(rec.Body.Bytes(), &ans2); err != nil {
+		t.Fatal(err)
+	}
+	if rec := do(http.MethodDelete, "/api/v1/pairing/"+ans2.ID, "", ans2.Poll, nil); rec.Code != http.StatusNoContent {
+		t.Fatalf("withdraw: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// 8. The exemption is the pairing routes' alone: any other anonymous
+	// mutation without a CSRF token is still refused.
+	if rec := do(http.MethodPost, "/api/v1/pairing-requests/"+ans2.ID+"/reject", "", "", nil); rec.Code != http.StatusForbidden {
+		t.Fatalf("anonymous tokenless POST elsewhere: %d, want 403 from the CSRF guard", rec.Code)
 	}
 }
