@@ -3,6 +3,20 @@ run:
   go: "1.27"
   tests: true
   allow-parallel-runners: true
+  # The test suites behind a build tag are code too; without their tags the
+  # linter never loads them. Only tags that ADD files are listed. A tag
+  # that swaps an implementation (deadlock) or excludes a file
+  # (snapshot_gen) would take other code out of the run.
+  build-tags:
+    - e2e
+    - integration
+    - integration_live
+    - cuxd_live
+    - cuxd_live_push
+    - chiptool
+    - bench
+    - loadtest
+    - wire_reference
 linters:
   default: none
   enable:
