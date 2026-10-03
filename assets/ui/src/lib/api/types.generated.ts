@@ -685,18 +685,22 @@ export interface paths {
          *     groups.
          *
          *     This is the read surface only. Creating, editing, and deleting
-         *     groups runs through the CCU jpages proxy (ADR 0055) and is
-         *     exposed separately.
+         *     groups is exposed separately and runs through the central's own
+         *     group service: the CCU jpages proxy (ADR 0055), or an
+         *     openccu-lite box's groups API.
          */
         get: operations["listGroups"];
         put?: never;
         /**
          * Create a heating group (admin)
-         * @description Creates a heating group through the CCU jpages proxy (ADR 0055):
-         *     a two-step `GET group/create` → `POST group/save` flow, then a
-         *     roster poll to confirm the group committed (the save response is
-         *     slow and unreliable). Admin-gated and audited. `?central=` selects
-         *     the target CCU (optional when only one is configured).
+         * @description Creates a heating group on the target central. On a CCU that
+         *     runs through the jpages proxy (ADR 0055): a two-step
+         *     `GET group/create` → `POST group/save` flow, then a roster poll
+         *     to confirm the group committed (the save response is slow and
+         *     unreliable). On an openccu-lite system it is one call to the
+         *     box's groups API, and the answer is checked against the members
+         *     asked for. Admin-gated and audited. `?central=` selects the
+         *     target central (optional when only one is configured).
          */
         post: operations["createGroup"];
         delete?: never;
@@ -763,14 +767,17 @@ export interface paths {
         /**
          * Edit a heating group (admin)
          * @description Edits an existing heating group (name, members, "operate only via
-         *     group" flag) through the jpages save path. Admin-gated and audited.
+         *     group" flag) — through the jpages save path on a CCU, through the
+         *     box's groups API on an openccu-lite system. Admin-gated and
+         *     audited.
          */
         put: operations["updateGroup"];
         post?: never;
         /**
          * Delete a heating group (admin)
-         * @description Deletes a heating group through the jpages delete path. Admin-gated
-         *     and audited.
+         * @description Deletes a heating group — through the jpages delete path on a CCU,
+         *     through the box's groups API on an openccu-lite system.
+         *     Admin-gated and audited.
          */
         delete: operations["deleteGroup"];
         options?: never;
@@ -6626,10 +6633,11 @@ export interface components {
             groups: components["schemas"]["GroupEntry"][];
         };
         /**
-         * @description One Homematic heating group (HmIP / BidCos), as read from the
-         *     CCU's groups.gson via `CCU.getHeatingGroupList`. Read-only — the
-         *     create / edit / delete surface runs through the CCU jpages proxy
-         *     (see ADR 0055) and is exposed separately.
+         * @description One Homematic heating group (HmIP / BidCos): on a CCU as read
+         *     from its groups.gson via `CCU.getHeatingGroupList`, on an
+         *     openccu-lite system as the box's groups API answers it. This
+         *     schema is the read shape; the create / edit / delete surface is
+         *     exposed separately.
          */
         GroupEntry: {
             /** @description Numeric CCU group id. */

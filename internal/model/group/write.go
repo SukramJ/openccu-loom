@@ -4,8 +4,9 @@
 package group
 
 // Write-side domain types for heating-group administration. The mutation
-// itself runs through the CCU's HMServer jpages endpoints (see
-// docs/adr/0055-groups-jpages-proxy.md); these types are the transport-
+// itself runs through the central's heating-group port — a CCU's HMServer
+// jpages endpoints (see docs/adr/0055-groups-jpages-proxy.md) or an
+// openccu-lite box's groups API; these types are the transport-
 // independent shapes the domain exchanges with the REST/WS layer.
 
 // Type is one group type a new group can be created as (e.g. the HmIP

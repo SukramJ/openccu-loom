@@ -4,6 +4,11 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.86.0
+
+No changes to the proxy. The daemon release lets clients read where a
+daemon runs and which login paths it accepts, and reports REST API 13.5.0.
+
 # 0.85.0
 
 No changes to the proxy. The daemon release moves its development and test

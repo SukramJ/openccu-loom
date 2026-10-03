@@ -103,8 +103,9 @@ const (
 	// whether recording is currently running: the token is set from
 	// historyStore != nil, and an operator pausing recording keeps both the
 	// store and this capability. The SPA gates its history-dependent
-	// surfaces — the Diagrams view (SV03) — on it, so they stay hidden on a
-	// daemon that has no history store at all.
+	// surfaces — the Diagrams view (SV03) — on it together with
+	// CapabilityDiagrams, so they stay hidden on a daemon that has no
+	// history store at all.
 	CapabilityHistory = "history.v1"
 	// CapabilityAddonSelfUpdate is surfaced when the CCU add-on
 	// self-update platform capability check passed (ADR 0057: an

@@ -1,5 +1,17 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.86.0
+
+No change you need to act on in the add-on. The daemon now tells clients
+where it runs and which login paths it accepts, so the Home Assistant
+integration can offer only the setup that fits (REST API 13.5.0). The
+login page shows Single Sign-On only when it is configured. On an
+openccu-lite system, heating groups can be created and edited.
+
+If you run the daemon outside this add-on and relied on
+`OPENCCU_LOOM_SUPERVISOR=1` to accept Home Assistant Ingress requests,
+also set `OPENCCU_LOOM_DEPLOYMENT=ha-addon`. This add-on sets it itself.
+
 ## 0.85.0
 
 No change you need to act on. The release moves the daemon's development

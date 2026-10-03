@@ -6,6 +6,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.86.0] - 2026-10-03
+
+### Release summary
+
+The daemon describes itself: `GET /api/v1/info` and the mDNS record say
+where the daemon runs — add-on on an openccu-lite box, add-on on a CCU,
+Home Assistant add-on, standalone — and which login paths it accepts, so a
+client can offer only the setup that is possible (REST API 13.5.0). On an
+openccu-lite system, heating groups can now be created and edited. The
+Home Assistant Ingress passthrough is armed only in the Home Assistant
+add-on, and the login page offers Single Sign-On only when it is
+configured.
+
 ### Added
 
 - **The daemon says where it runs and which login paths it accepts (REST
