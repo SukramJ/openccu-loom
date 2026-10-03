@@ -6,9 +6,11 @@ package ws
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
 
 // stubGroupsAdmin is a configurable handlers.GroupsWriter fake for the WS
@@ -99,5 +101,34 @@ func TestGroupsWSCommands(t *testing.T) {
 	if _, err := groupsSuitableMembersHandler(stub)(ctx,
 		json.RawMessage(`{"type_id":"hmip.heating.group"}`)); err != nil {
 		t.Fatalf("groups.suitable_members: %v", err)
+	}
+}
+
+// TestGroupsWSWriteNamesTheMembersTheSystemDropped pins that a group write
+// the system answered as done while leaving out members reaches the caller
+// as bad_request naming those members: the caller asked for a member the
+// group type cannot take, which is not an internal failure.
+func TestGroupsWSWriteNamesTheMembersTheSystemDropped(t *testing.T) {
+	t.Parallel()
+	const member = "0000000000FFFF:1"
+	stub := &stubGroupsAdmin{err: &hmerr.GroupMembersNotAssignedError{Members: []string{member}}}
+	r := NewRouter()
+	RegisterExtendedCommands(r, ExtendedCommandsConfig{GroupsAdmin: stub})
+
+	for _, tc := range []struct {
+		command string
+		params  map[string]any
+	}{
+		{"groups.create", map[string]any{"type_id": "hmip.heating.group", "name": "Obergeschoss", "members": []string{member}}},
+		{"groups.update", map[string]any{"id": 4, "name": "Obergeschoss", "members": []string{member}}},
+	} {
+		raw, err := json.Marshal(tc.params)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res := r.Dispatch(ctxForCommand(tc.command), tc.command, raw)
+		if res.Error == nil || res.Error.Code != CommandErrorBadRequest || !strings.Contains(res.Error.Message, member) {
+			t.Errorf("%s: error = %+v; want code %q naming %s", tc.command, res.Error, CommandErrorBadRequest, member)
+		}
 	}
 }
