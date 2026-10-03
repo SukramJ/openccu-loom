@@ -167,15 +167,19 @@ func TestBackupTargets(t *testing.T) {
 }
 
 func TestGroupsCRUD(t *testing.T) {
-	f := startFake(t, litefake.Options{})
+	const member = "0000000000AA01:1"
+	f := startFake(t, litefake.Options{GroupCandidates: map[string][]litefake.GroupMember{
+		"hmip.heating.group": {{ID: member, Serial: member, Type: "SENSOR_WINDOW"}},
+	}})
 	c := newClient(t, f.URL(), litefake.DefaultToken)
 	ctx := context.Background()
 	types, err := c.GroupTypes(ctx)
 	if err != nil || len(types.Types) != 2 {
 		t.Fatalf("types %+v %v", types, err)
 	}
-	created, err := c.CreateGroup(ctx, occulited.GroupCreate{Name: "OG", Type: types.Types[1].ID, Members: []string{"VCU2128127"}})
-	if err != nil || created.ID == 0 || created.Ref != "VirtualDevices."+created.Device {
+	created, err := c.CreateGroup(ctx, occulited.GroupCreate{Name: "OG", Type: types.Types[1].ID, Members: []string{member}})
+	if err != nil || created.ID == 0 || created.Ref != "VirtualDevices."+created.Device ||
+		len(created.Members) != 1 || created.Members[0].ID != member || len(created.DevicesToConfigure) != 1 {
 		t.Fatalf("create %+v %v", created, err)
 	}
 	name := "Obergeschoss"
@@ -189,11 +193,11 @@ func TestGroupsCRUD(t *testing.T) {
 		t.Errorf("list %+v %v", list, err)
 	}
 	detail, err := c.Group(ctx, created.ID)
-	if err != nil || string(detail.Members) != `["VCU2128127"]` {
+	if err != nil || len(detail.Members) != 1 || detail.Members[0] != (occulited.GroupMember{ID: member, Serial: member, Type: "SENSOR_WINDOW"}) {
 		t.Errorf("detail %+v %v", detail, err)
 	}
 	del, err := c.DeleteGroup(ctx, created.ID)
-	if err != nil || del.Deleted != created.ID {
+	if err != nil || del.Deleted != created.ID || len(del.FormerMembers) != 1 || del.FormerMembers[0].ID != member {
 		t.Errorf("delete %+v %v", del, err)
 	}
 	_, err = c.Group(ctx, created.ID)

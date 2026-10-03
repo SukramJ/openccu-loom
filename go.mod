@@ -38,7 +38,7 @@ require (
 	github.com/SukramJ/go-hamqtt v0.35.0
 	github.com/SukramJ/go-mqtt v1.6.0
 	github.com/SukramJ/go-openccu-data v0.3.0
-	github.com/SukramJ/godevccu v0.8.0
+	github.com/SukramJ/godevccu v0.9.0
 	github.com/getkin/kin-openapi v0.149.0
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/gorilla/websocket v1.5.3

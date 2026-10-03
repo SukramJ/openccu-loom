@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 8 of 550.
+Guards without a doc comment: 8 of 551.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -496,7 +496,8 @@ Guards without a doc comment: 8 of 550.
 | TestLiteFeaturesFollowTokenScopes | wiring_pins/lite_central_test.go | TestLiteFeaturesFollowTokenScopes pins that a lite central's features follow its token: without power the reboot is absent with the scope named, and once the token is widened on the box and the scopes are read again the feature turns available with a change event. |
 | TestLiteSerialMatchesSSDPCanonicalForm | wiring_pins/lite_central_test.go | TestLiteSerialMatchesSSDPCanonicalForm pins that a lite central's serial is the box's UPnP serial reduced exactly as SSDP discovery reduces it, so a discovered box and the configured central are recognised as the same. |
 | TestLiteValueSeederReadsTheStateStore | wiring_pins/lite_central_test.go | TestLiteValueSeederReadsTheStateStore pins that a lite bring-up seeds values from the box's state store. |
-| TestLiteGroupsCRUD | wiring_pins/lite_groups_test.go | TestLiteGroupsCRUD pins the heating-group port a lite central installs, through the domain the REST layer calls: the box's types and groups are listed, a group is deleted on the box, deleting it again is a not-found, and the operations that carry members are refused rather than guessed. |
+| TestLiteGroupWriteReportsAMemberTheBoxDropped | wiring_pins/lite_groups_test.go | TestLiteGroupWriteReportsAMemberTheBoxDropped pins the check the port owes its caller: a box answers 200 to a write naming a member its group type cannot take and simply does not assign it. |
+| TestLiteGroupsCRUD | wiring_pins/lite_groups_test.go | TestLiteGroupsCRUD pins the heating-group port a lite central installs, through the domain the REST layer calls, as a full round trip on the box: the types and their candidates are listed, a group is created with a member, read back with it, given a second member, and deleted — and each step is checked on the box itself, not on the port's own answer. |
 | TestLiteConnectivityFromInterfacesEndpoint | wiring_pins/lite_hub_refresh_test.go | TestLiteConnectivityFromInterfacesEndpoint pins the connectivity probe: an interface process the box reports down is unreachable after the reconcile pass. |
 | TestLiteDutyCycleFromListBidcosInterfaces | wiring_pins/lite_hub_refresh_test.go | TestLiteDutyCycleFromListBidcosInterfaces pins the duty-cycle refresh: the BidCos-RF gateway's duty cycle the interface process reports over XML-RPC — an integer, not the JSON-RPC wrapper's string — reaches the hub's per-interface snapshot. |
 | TestLiteServiceMessagesCannotBeAcknowledged | wiring_pins/lite_hub_refresh_test.go | TestLiteServiceMessagesCannotBeAcknowledged pins the refusal of an acknowledge on a lite central: the box has no acknowledge, and the refusal names why while matching the error callers branch on today. |

@@ -23,6 +23,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   declare their deployment in `OPENCCU_LOOM_DEPLOYMENT`; a value the
   daemon does not know stops the start.
 
+- **Heating groups on an openccu-lite system can be created and edited.**
+  The group editor lists the channels a group type can take, creates a
+  group with its members, changes name, members and the operate-as-group
+  flag, and the overview shows each group's members. These operations
+  were refused until the box's member format was established; it was
+  read and written on a box on 2026-10-03. A box answers a write as done
+  even when it left out a member its group type cannot take, so the
+  daemon compares the answer with the members asked for: a create that
+  lost a member is undone and fails, an update names the member that
+  did not arrive.
+
 ### Changed
 
 - **The Home Assistant Ingress passthrough is armed only in the Home
@@ -33,6 +44,9 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   subnet). A standalone daemon that set `OPENCCU_LOOM_SUPERVISOR=1` and
   `north.rest.auth.ha_ingress.enabled: true` to accept Ingress requests
   must now also set `OPENCCU_LOOM_DEPLOYMENT=ha-addon`.
+
+- **The tests run against godevccu 0.9.0**, whose openccu-lite fake
+  answers heating-group members as a box does.
 
 ### Fixed
 
