@@ -73,8 +73,13 @@ receiving systems accordingly.
 
 - **mDNS advertisement** (`north.discovery.mdns`, default on): the daemon
   announces itself as `_openccu-loom._tcp.local.` — hostname, REST port,
-  API version, TLS flag — so Home Assistant and other zeroconf clients
-  find it. Multicast only; nothing leaves the LAN.
+  API version, TLS flag, the number of systems and the last digits of
+  their serials, where the daemon runs (`deploy`: add-on on an
+  openccu-lite box, add-on on a CCU, Home Assistant add-on, standalone)
+  and which login paths it accepts (`auth`) — so Home Assistant and
+  other zeroconf clients find it and offer only the setup that fits.
+  `GET /api/v1/info` answers the same without a login. Multicast only;
+  nothing leaves the LAN.
 - **SSDP search** (`north.discovery.ssdp`, default on): an `M-SEARCH`
   multicast probe every 60 seconds to find CCUs on the LAN for the
   adopt-a-central UI. The probe carries no data about the daemon beyond

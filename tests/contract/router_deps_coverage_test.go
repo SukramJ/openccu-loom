@@ -55,6 +55,7 @@ var routerDepsLeftNil = map[string]string{
 	"ConfigChannelMeta":           "an optional service facade: the route mounts regardless and the handler decides what an absent facade means, so nothing the guards walk changes shape",
 	"ConfigExport":                "an optional service facade: the route mounts regardless and the handler decides what an absent facade means, so nothing the guards walk changes shape",
 	"ConfigUIURL":                 "passed by value into a middleware or handler; it is a parameter, not a collaborator whose absence stops a feature",
+	"Deployment":                  "passed by value into the info handler; it is a parameter, not a collaborator whose absence stops a feature",
 	"DataPointVis":                "an optional service facade: the route mounts regardless and the handler decides what an absent facade means, so nothing the guards walk changes shape",
 	"DefinitionExport":            "an optional service facade: the route mounts regardless and the handler decides what an absent facade means, so nothing the guards walk changes shape",
 	"DeviceIcons":                 "an optional service facade: the route mounts regardless and the handler decides what an absent facade means, so nothing the guards walk changes shape",

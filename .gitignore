@@ -161,3 +161,4 @@ __pycache__/
 test-results/
 .ccu_cred
 .mqtt_cred
+.lite_cred

@@ -20,7 +20,7 @@ func TestInfo_HappyPath(t *testing.T) {
 	startedAt := time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
 	w := httptest.NewRecorder()
-	Info(startedAt, nil, "").ServeHTTP(w, req)
+	Info(startedAt, nil, "", DeploymentInfo{}).ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
@@ -53,7 +53,7 @@ func TestInfoServesTheConfigUIURL(t *testing.T) {
 			t.Parallel()
 			w := httptest.NewRecorder()
 			req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
-			Info(time.Now(), nil, tc.in).ServeHTTP(w, req)
+			Info(time.Now(), nil, tc.in, DeploymentInfo{}).ServeHTTP(w, req)
 
 			var body InfoResponse
 			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
@@ -71,7 +71,7 @@ func TestInfo_StartedAtIsRFC3339(t *testing.T) {
 	startedAt := time.Date(2026, 4, 27, 8, 30, 0, 0, time.UTC)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
 	w := httptest.NewRecorder()
-	Info(startedAt, nil, "").ServeHTTP(w, req)
+	Info(startedAt, nil, "", DeploymentInfo{}).ServeHTTP(w, req)
 
 	var body InfoResponse
 	_ = json.Unmarshal(w.Body.Bytes(), &body)
@@ -84,7 +84,7 @@ func TestInfo_ContentTypeIsJSON(t *testing.T) {
 	t.Parallel()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
 	w := httptest.NewRecorder()
-	Info(time.Now(), nil, "").ServeHTTP(w, req)
+	Info(time.Now(), nil, "", DeploymentInfo{}).ServeHTTP(w, req)
 
 	ct := w.Header().Get("Content-Type")
 	if ct == "" {
@@ -95,12 +95,20 @@ func TestInfo_ContentTypeIsJSON(t *testing.T) {
 type fakeCapDetector struct {
 	mqtt, matter, oidc, alarm                           bool
 	mqttRaw, webhookInbound, diagrams, adminPersistence bool
+	// paths switches login paths on by the name LoginPaths reports them under.
+	paths map[string]bool
 }
 
 func (f fakeCapDetector) HasMQTTDiscovery() bool     { return f.mqtt }
 func (f fakeCapDetector) HasMatterBridge() bool      { return f.matter }
-func (f fakeCapDetector) HasOIDC() bool              { return f.oidc }
-func (f fakeCapDetector) HasCCUAuth() bool           { return false }
+func (f fakeCapDetector) HasOIDC() bool              { return f.oidc || f.paths["oidc"] }
+func (f fakeCapDetector) HasCCUAuth() bool           { return f.paths["ccu"] }
+func (f fakeCapDetector) HasBasicAuth() bool         { return f.paths["basic"] }
+func (f fakeCapDetector) HasBearerAuth() bool        { return f.paths["bearer"] }
+func (f fakeCapDetector) HasPairing() bool           { return f.paths["pairing"] }
+func (f fakeCapDetector) HasOcculiteToken() bool     { return f.paths["occulite_token"] }
+func (f fakeCapDetector) HasOcculiteSSO() bool       { return f.paths["occulite_sso"] }
+func (f fakeCapDetector) HasHAIngress() bool         { return f.paths["ha_ingress"] }
 func (f fakeCapDetector) HasSupervisedRestart() bool { return false }
 func (f fakeCapDetector) HasMCP() bool               { return false }
 func (f fakeCapDetector) HasMCPWrite() bool          { return false }
@@ -116,7 +124,7 @@ func TestInfo_APIVersionAndAlwaysOnCapabilities(t *testing.T) {
 	t.Parallel()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
 	w := httptest.NewRecorder()
-	Info(time.Now(), nil, "").ServeHTTP(w, req)
+	Info(time.Now(), nil, "", DeploymentInfo{}).ServeHTTP(w, req)
 
 	var body InfoResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
@@ -142,7 +150,7 @@ func TestInfo_ConditionalCapabilities(t *testing.T) {
 	t.Parallel()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
 	w := httptest.NewRecorder()
-	Info(time.Now(), fakeCapDetector{mqtt: true, matter: true, oidc: false}, "").ServeHTTP(w, req)
+	Info(time.Now(), fakeCapDetector{mqtt: true, matter: true, oidc: false}, "", DeploymentInfo{}).ServeHTTP(w, req)
 
 	var body InfoResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
@@ -169,7 +177,7 @@ func TestInfo_AlarmCapability(t *testing.T) {
 	t.Parallel()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
 	w := httptest.NewRecorder()
-	Info(time.Now(), fakeCapDetector{alarm: true}, "").ServeHTTP(w, req)
+	Info(time.Now(), fakeCapDetector{alarm: true}, "", DeploymentInfo{}).ServeHTTP(w, req)
 
 	var body InfoResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
@@ -184,7 +192,7 @@ func TestInfo_SchemaDigestIsServed(t *testing.T) {
 	t.Parallel()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
 	w := httptest.NewRecorder()
-	Info(time.Now(), nil, "").ServeHTTP(w, req)
+	Info(time.Now(), nil, "", DeploymentInfo{}).ServeHTTP(w, req)
 
 	var body InfoResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
@@ -201,7 +209,7 @@ func TestInfo_SchemaDigestIsServed(t *testing.T) {
 func TestInfo_AddonBuild(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
 	w := httptest.NewRecorder()
-	Info(time.Now(), nil, "").ServeHTTP(w, req)
+	Info(time.Now(), nil, "", DeploymentInfo{}).ServeHTTP(w, req)
 
 	var body InfoResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
@@ -220,7 +228,7 @@ func TestInfo_AddonBuild(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
 	w = httptest.NewRecorder()
-	Info(time.Now(), nil, "").ServeHTTP(w, req)
+	Info(time.Now(), nil, "", DeploymentInfo{}).ServeHTTP(w, req)
 
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 		t.Fatalf("unmarshal: %v", err)
@@ -230,5 +238,72 @@ func TestInfo_AddonBuild(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), `"addon_build":true`) {
 		t.Fatalf("expected body to contain addon_build:true, got %s", w.Body.String())
+	}
+}
+
+// TestInfo_ServesTheDeployment pins the deployment object: the kind as
+// handed in, and an ingress path only where there is one.
+func TestInfo_ServesTheDeployment(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		in          DeploymentInfo
+		wantIngress bool
+	}{
+		{DeploymentInfo{Kind: "lite-addon", IngressPath: "/addons/loom/"}, true},
+		{DeploymentInfo{Kind: "standalone"}, false},
+	}
+	for _, tc := range cases {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/v1/info", http.NoBody)
+		Info(time.Now(), nil, "", tc.in).ServeHTTP(w, req)
+
+		var body struct {
+			Deployment map[string]any `json:"deployment"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if got := body.Deployment["kind"]; got != tc.in.Kind {
+			t.Errorf("deployment.kind = %v, want %q", got, tc.in.Kind)
+		}
+		ingress, has := body.Deployment["ingress_path"]
+		if has != tc.wantIngress || (has && ingress != tc.in.IngressPath) {
+			t.Errorf("%s: ingress_path = %v (present %v), want %q (present %v)",
+				tc.in.Kind, ingress, has, tc.in.IngressPath, tc.wantIngress)
+		}
+	}
+}
+
+// TestLoginPathsAndAuthCapabilitiesAreOneSet pins that the list the mDNS
+// record carries and the auth.* tokens on /info are the same set: every
+// login path, switched on alone, yields exactly its own token and exactly
+// its own name, and none switched on yields neither.
+func TestLoginPathsAndAuthCapabilitiesAreOneSet(t *testing.T) {
+	t.Parallel()
+	authTokens := func(d CapabilityDetector) []string {
+		var out []string
+		for _, c := range capabilities(d) {
+			if strings.HasPrefix(c, "auth.") {
+				out = append(out, c)
+			}
+		}
+		return out
+	}
+	names := []string{"basic", "bearer", "pairing", "oidc", "ccu", "occulite_token", "occulite_sso", "ha_ingress"}
+	for _, name := range names {
+		d := fakeCapDetector{paths: map[string]bool{name: true}}
+		if got, want := authTokens(d), []string{"auth." + name + ".v1"}; !slices.Equal(got, want) {
+			t.Errorf("%s: auth tokens = %v, want %v", name, got, want)
+		}
+		if got := LoginPaths(d); !slices.Equal(got, []string{name}) {
+			t.Errorf("%s: LoginPaths = %v", name, got)
+		}
+	}
+	none := fakeCapDetector{}
+	if got := authTokens(none); len(got) != 0 {
+		t.Errorf("no path on: auth tokens = %v", got)
+	}
+	if got := LoginPaths(none); len(got) != 0 {
+		t.Errorf("no path on: LoginPaths = %v", got)
 	}
 }

@@ -3,8 +3,8 @@
   "id": "openccu-loom",
   "name": "OpenCCU-Loom",
   "description": {
-    "de": "Eigenständiger Daemon: MQTT mit Home-Assistant-Discovery, REST- und WebSocket-API, MCP-Server, Matter-Bridge und eine Konfigurationsoberfläche für ein oder mehrere Systeme. Auf openccu-lite spricht er über die API von occulited; Systemvariablen und Programme gibt es dort nicht, Heizungsgruppen lassen sich noch nicht anlegen.",
-    "en": "Standalone daemon: MQTT with Home Assistant discovery, a REST and WebSocket API, an MCP server, a Matter bridge and a configuration UI for one or more systems. On openccu-lite it talks to occulited's API; system variables and programs do not exist there, and heating groups cannot be created yet."
+    "de": "Eigenständiger Daemon: MQTT mit Home-Assistant-Discovery, REST- und WebSocket-API, MCP-Server, Matter-Bridge und eine Konfigurationsoberfläche für ein oder mehrere Systeme. Auf openccu-lite spricht er über die API von occulited; Systemvariablen und Programme gibt es dort nicht.",
+    "en": "Standalone daemon: MQTT with Home Assistant discovery, a REST and WebSocket API, an MCP server, a Matter bridge and a configuration UI for one or more systems. On openccu-lite it talks to occulited's API; system variables and programs do not exist there."
   },
   "homepage": "https://sukramj.github.io/openccu-loom",
   "licence": "MIT",

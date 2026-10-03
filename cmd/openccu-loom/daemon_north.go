@@ -934,6 +934,12 @@ type runtimeCapabilityDetector struct {
 	webhookInbound    bool
 	diagrams          bool
 	adminPersistence  bool
+	basicAuth         bool
+	bearerAuth        bool
+	pairing           bool
+	occuliteToken     bool
+	occuliteSSO       bool
+	haIngress         bool
 }
 
 func (r runtimeCapabilityDetector) HasMQTTDiscovery() bool     { return r.mqtt }
@@ -950,6 +956,12 @@ func (r runtimeCapabilityDetector) HasDiagrams() bool          { return r.diagra
 func (r runtimeCapabilityDetector) HasAdminPersistence() bool  { return r.adminPersistence }
 func (r runtimeCapabilityDetector) HasHistory() bool           { return r.history }
 func (r runtimeCapabilityDetector) HasAddonSelfUpdate() bool   { return r.addonSelfUpdate }
+func (r runtimeCapabilityDetector) HasBasicAuth() bool         { return r.basicAuth }
+func (r runtimeCapabilityDetector) HasBearerAuth() bool        { return r.bearerAuth }
+func (r runtimeCapabilityDetector) HasPairing() bool           { return r.pairing }
+func (r runtimeCapabilityDetector) HasOcculiteToken() bool     { return r.occuliteToken }
+func (r runtimeCapabilityDetector) HasOcculiteSSO() bool       { return r.occuliteSSO }
+func (r runtimeCapabilityDetector) HasHAIngress() bool         { return r.haIngress }
 
 // splitListenPort returns the TCP port from a Go net.Listen-style
 // address (":8119", "0.0.0.0:8119", "[::]:8119"). Reports ok=false

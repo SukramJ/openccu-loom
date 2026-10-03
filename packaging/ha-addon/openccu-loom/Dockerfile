@@ -33,6 +33,7 @@ COPY rootfs /
 
 ENV OPENCCU_LOOM_DATA_DIR=/data \
     OPENCCU_LOOM_SUPERVISOR=1 \
+    OPENCCU_LOOM_DEPLOYMENT=ha-addon \
     OPENCCU_LOOM_REST_OPENAPI_SPEC_PATH=/usr/share/openccu-loom/assets/openapi.yaml
 
 WORKDIR /usr/share/openccu-loom

@@ -390,14 +390,24 @@ func (c *Client) ServiceMessages(ctx context.Context) (ServiceMessages, error) {
 // Heating groups
 // ----------------------------------------------------------------------
 
-// Groups is GET /groups (system:read).
-type Groups struct {
-	Groups             []Group             `json:"groups"`
-	DevicesToConfigure []DeviceToConfigure `json:"devices_to_configure"`
+// GroupMember is a channel as the groups API names it — a candidate of a
+// group type, a member of a group, a device whose configuration is
+// pending. ID is what a write names; the box answers the channel address
+// there and in Serial. Type is the channel type.
+type GroupMember struct {
+	ID     string `json:"id"`
+	Serial string `json:"serial"`
+	Type   string `json:"type"`
 }
 
-// Group is one group: a virtual device on VirtualDevices. The box answers
-// the id as a JSON number.
+// Groups is GET /groups (system:read).
+type Groups struct {
+	Groups             []Group       `json:"groups"`
+	DevicesToConfigure []GroupMember `json:"devices_to_configure"`
+}
+
+// Group is one group as the list names it: a virtual device on
+// VirtualDevices. The box answers the id as a JSON number.
 type Group struct {
 	ID        int    `json:"id"`
 	Name      string `json:"name"`
@@ -407,41 +417,46 @@ type Group struct {
 	Ref       string `json:"ref"`
 }
 
-// DeviceToConfigure is a member device that still needs configuring.
-// loom:reachable:reason="the element type of Groups.DevicesToConfigure, decoded with every GET /groups the lite heating-group port reads; a method-less struct reached through a field, which the analyzer's type heuristic cannot see used"
-type DeviceToConfigure struct {
-	ID     string `json:"id"`
-	Serial string `json:"serial"`
-	Type   string `json:"type"`
-}
-
-// GroupTypes is GET /groups/types. The contract does not spell out the
-// member shape, so members stay raw.
+// GroupTypes is GET /groups/types.
 type GroupTypes struct {
 	Types []GroupType `json:"types"`
 }
 
-// GroupType is one group type with its candidate members.
+// GroupType is one group type with the channels it can take: Assignable
+// are free, Leftover belong to a group of the type already.
 type GroupType struct {
-	ID         string            `json:"id"`
-	Label      string            `json:"label"`
-	Assignable []json.RawMessage `json:"assignable"`
-	Leftover   []json.RawMessage `json:"leftover"`
+	ID         string        `json:"id"`
+	Label      string        `json:"label"`
+	Assignable []GroupMember `json:"assignable"`
+	Leftover   []GroupMember `json:"leftover"`
 }
 
-// GroupDetail is GET /groups/{id} (and the PUT answer). Members,
-// Assignable, Leftover and Types stay raw (shape not in the contract).
+// GroupTypeRef is a group type as a group's detail lists the offered ones.
+// loom:reachable:reason="the element type of GroupDetail.Types, decoded with every group detail the lite heating-group port reads; a method-less struct reached through a field, which the analyzer's type heuristic cannot see used"
+type GroupTypeRef struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+}
+
+// GroupDetail is GET /groups/{id}: one group with its members. Unlike the
+// list entry it carries no type label; Types are all offered types. The
+// group's own members are in neither Assignable nor Leftover.
 type GroupDetail struct {
-	Group
-	DeviceName            string          `json:"device_name"`
-	ForbidSingleOperation bool            `json:"forbid_single_operation"`
-	Members               json.RawMessage `json:"members"`
-	Assignable            json.RawMessage `json:"assignable"`
-	Leftover              json.RawMessage `json:"leftover"`
-	Types                 json.RawMessage `json:"types"`
+	ID                    int            `json:"id"`
+	Name                  string         `json:"name"`
+	Type                  string         `json:"type"`
+	Device                string         `json:"device"`
+	Ref                   string         `json:"ref"`
+	DeviceName            string         `json:"device_name"`
+	ForbidSingleOperation bool           `json:"forbid_single_operation"`
+	Members               []GroupMember  `json:"members"`
+	Assignable            []GroupMember  `json:"assignable"`
+	Leftover              []GroupMember  `json:"leftover"`
+	Types                 []GroupTypeRef `json:"types"`
 }
 
-// GroupCreate is the POST /groups body; Members are member ids.
+// GroupCreate is the POST /groups body; Members are member ids as
+// GET /groups/types lists them.
 type GroupCreate struct {
 	Name                  string   `json:"name"`
 	Type                  string   `json:"type"`
@@ -457,18 +472,23 @@ type GroupUpdate struct {
 	ForbidSingleOperation *bool     `json:"forbid_single_operation,omitempty"`
 }
 
-// GroupCreated is the POST /groups answer.
-type GroupCreated struct {
-	Group
-	DevicesToConfigure []DeviceToConfigure `json:"devices_to_configure"`
+// GroupWritten is the answer to a create and to an update: the group's
+// detail as the box holds it now, and its members as the devices whose
+// configuration is pending. The box answers 200 even when it did not
+// assign a member the write named — a member its group type cannot take
+// is left out without an error — so Members is what was assigned, and a
+// caller compares it with what it asked for.
+type GroupWritten struct {
+	GroupDetail
+	DevicesToConfigure []GroupMember `json:"devices_to_configure"`
 }
 
 // GroupDeleted is the DELETE /groups/{id} answer.
 type GroupDeleted struct {
 	// Deleted is the id of the deleted group; the box answers the number,
 	// not a flag.
-	Deleted       int             `json:"deleted"`
-	FormerMembers json.RawMessage `json:"former_members"`
+	Deleted       int           `json:"deleted"`
+	FormerMembers []GroupMember `json:"former_members"`
 }
 
 // Groups lists the groups.
@@ -487,24 +507,24 @@ func (c *Client) Group(ctx context.Context, id int) (GroupDetail, error) {
 }
 
 // CreateGroup creates a group (system:write).
-func (c *Client) CreateGroup(ctx context.Context, in GroupCreate) (GroupCreated, error) {
+func (c *Client) CreateGroup(ctx context.Context, in GroupCreate) (GroupWritten, error) {
 	if in.Members == nil {
 		in.Members = []string{}
 	}
 	raw, err := marshal(in)
 	if err != nil {
-		return GroupCreated{}, err
+		return GroupWritten{}, err
 	}
-	return call[GroupCreated](ctx, c, request{method: http.MethodPost, path: systemBase + "/groups", body: raw})
+	return call[GroupWritten](ctx, c, request{method: http.MethodPost, path: systemBase + "/groups", body: raw})
 }
 
 // UpdateGroup changes a group (system:write).
-func (c *Client) UpdateGroup(ctx context.Context, id int, in GroupUpdate) (GroupDetail, error) {
+func (c *Client) UpdateGroup(ctx context.Context, id int, in GroupUpdate) (GroupWritten, error) {
 	raw, err := marshal(in)
 	if err != nil {
-		return GroupDetail{}, err
+		return GroupWritten{}, err
 	}
-	return call[GroupDetail](ctx, c, request{method: http.MethodPut, path: systemBase + "/groups/" + strconv.Itoa(id), body: raw})
+	return call[GroupWritten](ctx, c, request{method: http.MethodPut, path: systemBase + "/groups/" + strconv.Itoa(id), body: raw})
 }
 
 // DeleteGroup removes a group (system:write).

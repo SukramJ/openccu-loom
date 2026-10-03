@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 13.4.0
+  version: 13.5.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -1077,6 +1077,17 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: |
+            The central does not offer the operation
+            (`feature_unavailable`), or the system accepted the write and
+            left out members it named (`validation`, title `Members not
+            assigned`): `detail` lists the member ids the group does not
+            hold. An openccu-lite box does this for a member its group
+            type cannot take. A refused create leaves no group behind.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
@@ -1168,6 +1179,17 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: |
+            The central does not offer the operation
+            (`feature_unavailable`), or the system accepted the write and
+            left out members it named (`validation`, title `Members not
+            assigned`): `detail` lists the member ids the group does not
+            hold. An openccu-lite box does this for a member its group
+            type cannot take. The group then holds the other members of the new list.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
     delete:
@@ -9672,8 +9694,8 @@ components:
     Info:
       type: object
       required:
-        [version, commit, build_date, addon_build, uptime, started_at, config_ui_url,
-         api_version, schema_digest, capabilities]
+        [version, commit, build_date, addon_build, deployment, uptime, started_at,
+         config_ui_url, api_version, schema_digest, capabilities]
       description: |
         Daemon build + runtime info plus a wire-contract version and a
         capability list. External clients should switch on
@@ -9690,6 +9712,9 @@ components:
             True when this binary was built as the CCU/OpenCCU
             add-on (it then runs on the CCU itself). False for the
             standalone binary, Docker image, and HA add-on builds.
+            It does not tell a classic CCU from an openccu-lite box;
+            read `deployment.kind` for that.
+        deployment: { $ref: "#/components/schemas/Deployment" }
         uptime: { type: string }
         started_at: { type: string, format: date-time }
         config_ui_url:
@@ -9745,12 +9770,28 @@ components:
             system: `system_type: openccu-lite`).
             Conditional entries surface only when configured:
             `mqtt.discovery.v1`, `mqtt.raw.v1`, `matter.bridge.v1`,
-            `auth.oidc.v1`, `auth.ccu.v1`, `webhook.inbound.v1`,
+            `auth.oidc.v1`, `auth.ccu.v1`, `auth.basic.v1`,
+            `auth.bearer.v1`, `auth.pairing.v1`, `auth.occulite_token.v1`,
+            `auth.occulite_sso.v1`, `auth.ha_ingress.v1`,
+            `webhook.inbound.v1`,
             `diagrams.v1`, `admin.persistence.v1`, `history.v1`,
             `mcp.v1`, `mcp.write.v1`, `system.restart.supervised.v1`,
             `addon_self_update`, `alarm.v1` (the `/alarm` surface is
             mounted — absent, the alarm subsystem is off and every
             `/alarm` route answers 404).
+
+            The `auth.*` tokens are the login paths this daemon accepts:
+            `auth.basic.v1` (HTTP Basic with a daemon user),
+            `auth.bearer.v1` (a daemon API token as `Authorization:
+            Bearer`), `auth.pairing.v1` (`POST /pairing` mints such a
+            token after an administrator confirms), `auth.oidc.v1`,
+            `auth.ccu.v1` (a CCU account, delegated),
+            `auth.occulite_token.v1` (an openccu-lite box API token that
+            the box's gate accepted in front of `deployment.ingress_path`),
+            `auth.occulite_sso.v1` (a box-shell session through the same
+            gate) and `auth.ha_ingress.v1` (Home Assistant Ingress
+            requests from the Supervisor). A client offers a person only
+            the paths listed here.
 
             `mcp.write.v1` implies `mcp.v1`; `addon_self_update` predates
             the `<area>.<feature>.v<n>` convention and keeps its spelling
@@ -9783,9 +9824,46 @@ components:
               - mqtt.raw.v1
               - matter.bridge.v1
               - auth.oidc.v1
+              - auth.bearer.v1
+              - auth.pairing.v1
+              - auth.occulite_token.v1
               - webhook.inbound.v1
               - diagrams.v1
               - admin.persistence.v1
+    Deployment:
+      type: object
+      required: [kind]
+      description: |
+        Where this daemon runs, as declared by its packaging and
+        resolved once at start (ADR 0081). It is a property of the
+        daemon process, not of the systems it talks to: a `standalone`
+        daemon can hold an openccu-lite central, and a `lite-addon`
+        daemon can hold a remote classic CCU as a further central. What
+        a central offers is in `features` on `GET /system/ccu`.
+
+        The same value is advertised as `deploy` (and `ingress_path` as
+        `ingress`) in the daemon's mDNS TXT record, for a client that
+        cannot read `/info` before it has logged in. Where both are
+        readable, this object is the authority.
+      properties:
+        kind:
+          type: string
+          enum: [lite-addon, ccu-addon, ha-addon, standalone]
+          description: |
+            `lite-addon`: the add-on on an openccu-lite box, fronted by
+            the box's web server and its gate. `ccu-addon`: the add-on on
+            a classic CCU / OpenCCU. `ha-addon`: the Home Assistant
+            add-on. `standalone`: everything else (a container, a
+            service, a plain process).
+        ingress_path:
+          type: string
+          description: |
+            Path under which the hosting system's own web server serves
+            this daemon, with a trailing slash. Present only when there
+            is one (`lite-addon`). A client reaches the API at
+            `https://<host><ingress_path>api/v1` and must present a
+            credential the hosting system's gate accepts.
+          example: /addons/loom/
     GroupCentralEntry:
       type: object
       required: [central, groups]

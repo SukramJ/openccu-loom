@@ -344,14 +344,16 @@ north:
   rest:
     auth:
       ha_ingress:
-        enabled: ~                        # tri-state; unset = supervised build-stamp default
+        enabled: ~                        # tri-state; unset = on in the Home Assistant add-on
         trusted_proxy_cidr: "172.30.32.0/23"  # HA Supervisor subnet
         role: admin                        # role granted to a trusted Ingress request
 ```
 
 A request qualifies for passthrough only when **all** of the following
-hold: the daemon is a supervised build (`OPENCCU_LOOM_SUPERVISOR` /
-the add-on build stamp), the TCP peer address (never
+hold: the daemon runs as the Home Assistant add-on
+(`OPENCCU_LOOM_DEPLOYMENT=ha-addon`, which the add-on image sets — the
+restart-supervisor flag `OPENCCU_LOOM_SUPERVISOR` alone does not
+qualify), the TCP peer address (never
 `X-Forwarded-For`, which is trivially spoofable) falls inside
 `trusted_proxy_cidr`, and the HA Supervisor's `X-Ingress-Path` header
 is present. A genuine Bearer token, session cookie, or Basic

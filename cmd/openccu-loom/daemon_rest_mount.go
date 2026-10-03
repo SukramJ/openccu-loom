@@ -308,6 +308,12 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 	// One reloader, two callers: the admin endpoint an operator can hit
 	// directly, and the config-section save below.
 	mqttReload := newMQTTReloadAdapter(d.mqttSup, d.reload, cfg, logger)
+	// The trust values the two passthrough resolvers are built from, read
+	// again here for the login-path capabilities; quiet, because the
+	// resolver wiring already logged their posture.
+	quiet := slog.New(slog.DiscardHandler)
+	occuliteTrust := buildOcculiteSSOTrust(cfg, quiet)
+	ingressTrust := buildIngressTrust(cfg, quiet)
 
 	deps := rest.Deps{
 		Logger:                  logger,
@@ -364,6 +370,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		// restart-required reasoning as the config.cgi hint file written
 		// in daemon.go, so the two can never name different addresses.
 		ConfigUIURL:       cfg.North.REST.ConfigUIURL(),
+		Deployment:        deploymentInfo(deploymentKind()),
 		RestartPending:    restartState,
 		ConfigChanges:     restartState,
 		UserAdmin:         d.userSvc,
@@ -460,6 +467,15 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 			// (add-on build + firmware installer present) — d.addonUpdater
 			// is only non-nil when that check passed.
 			addonSelfUpdate: d.addonUpdater != nil,
+			// The login paths: the config gates the resolver chain reads, and
+			// the passthroughs' own activity conditions on the trust values the
+			// chain was built from.
+			basicAuth:     cfg.North.REST.Auth.BasicAuthEnabled(),
+			bearerAuth:    cfg.North.REST.Auth.BearerAuthEnabled(),
+			pairing:       cfg.North.REST.Auth.Pairing.IsEnabled(),
+			occuliteToken: occuliteTrust.AcceptsTokens(),
+			occuliteSSO:   occuliteTrust.Active(),
+			haIngress:     ingressTrust.Active(),
 		},
 		CORS:       buildCORS(cfg),
 		Idempotent: true,
@@ -590,7 +606,8 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 				d.healthTracker.Record(mdnsHealthComponent, health.Sample{Healthy: healthy, Note: note})
 			}
 		}
-		adv, err := startMDNSAdvertiser(ctx, cfg, d.reg, logger)
+		self := mdnsSelf{kind: deploymentKind(), tls: tlsReloader != nil, loginPaths: handlers.LoginPaths(deps.Capabilities)}
+		adv, err := startMDNSAdvertiser(ctx, cfg, self, d.reg, logger)
 		switch {
 		case err != nil:
 			logger.Warn("discovery.mdns.start_failed", slog.String("err", err.Error()))
@@ -608,7 +625,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 			// central set changes (ADR 0058) — the hub-ready pipeline
 			// invokes this slot.
 			refresh := func() {
-				if err := adv.UpdateTXT(mdnsTXT(cfg, len(d.reg.Names()), mdnsCCUSerials(d.reg))); err != nil {
+				if err := adv.UpdateTXT(mdnsTXT(cfg, self, len(d.reg.Names()), mdnsCCUSerials(d.reg))); err != nil {
 					logger.Debug("discovery.mdns.txt_refresh_failed", slog.String("err", err.Error()))
 				}
 			}

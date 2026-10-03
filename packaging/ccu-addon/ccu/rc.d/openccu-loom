@@ -59,6 +59,11 @@ export OPENCCU_LOOM_LOG_FORMAT=text
 # leaving itself offline.
 export OPENCCU_LOOM_SUPERVISOR=1
 
+# Declare where the daemon runs (ADR 0081). The same package serves a
+# classic CCU and an openccu-lite box; on a lite box the daemon refines
+# this to lite-addon from the box's own /VERSION and token file.
+export OPENCCU_LOOM_DEPLOYMENT=ccu-addon
+
 # has_monit reports whether monit supervises the daemon. Without it nothing
 # would start the daemon again after a restart from the SPA: the openccu-lite
 # unit is a oneshot that stays "active" with the daemon gone.

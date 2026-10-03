@@ -1695,7 +1695,7 @@ func (a AuthConfig) BearerAuthEnabled() bool {
 // Supervisor is treated as an authenticated admin without a local login (see
 // ADR 0044). It is a deliberate auth bypass, so it is OFF by default and
 // guarded by several independent conditions resolved by the composition root:
-//   - the build must be supervised (the add-on build stamp / OPENCCU_LOOM_SUPERVISOR),
+//   - the daemon must run as the Home Assistant add-on (its resolved deployment),
 //   - the request's real TCP peer (RemoteAddr, never X-Forwarded-For) must fall
 //     inside TrustedProxyCIDR (the Supervisor's Docker subnet), and
 //   - the request must carry the Supervisor's X-Ingress-Path header.
@@ -1706,11 +1706,11 @@ func (a AuthConfig) BearerAuthEnabled() bool {
 // genuine Bearer token or session always wins over the passthrough, so a
 // scoped token is never silently elevated.
 type HAIngressConfig struct {
-	// Enabled is tri-state: nil defaults to the supervised stamp — ON in the
+	// Enabled is tri-state: nil defaults to the deployment — ON in the
 	// HA add-on (where Ingress is admin-only via panel_admin: true), OFF in a
 	// plain build / Docker image. An explicit true/false overrides. Resolved by
-	// the composition root (it depends on the supervised/build stamp, which
-	// config must not import). Even when ON the passthrough only ever fires for
+	// the composition root (it depends on the resolved deployment, which
+	// config does not know). Even when ON the passthrough only ever fires for
 	// a genuine Supervisor-proxied request (see the gates above).
 	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty" cfg:"basic"`
 	// TrustedProxyCIDR is the network the Ingress request must originate from
@@ -1754,11 +1754,11 @@ type OcculiteSSOConfig struct {
 // Loom role. Carries no secret: the credentials come from the login
 // form, not the config.
 type CCUAuthConfig struct {
-	// Enabled is tri-state: nil (unset) defaults to the build's add-on
-	// flag — true in the CCU add-on, false otherwise — so the add-on
+	// Enabled is tri-state: nil (unset) defaults to the deployment
+	// — true in the add-on on a CCU or a lite box, false otherwise — so the add-on
 	// ships with CCU login on and a plain build keeps it off. An
 	// explicit true/false overrides. Resolved by the composition root
-	// (it depends on the build stamp, which config must not import).
+	// (it depends on the resolved deployment, which config does not know).
 	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty" cfg:"basic"`
 	// Primary is tri-state: nil defaults to true (when CCU auth is on,
 	// the CCU is the primary source; local users are the break-glass

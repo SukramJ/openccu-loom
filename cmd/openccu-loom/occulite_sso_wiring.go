@@ -15,6 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/occulited"
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/deployment"
 )
 
 // buildOcculiteSSOTrust resolves the box-shell SSO policy (ADR 0079) from
@@ -33,7 +34,7 @@ func buildOcculiteSSOTrust(cfg *config.Config, logger *slog.Logger) auth.Occulit
 		logger = slog.Default()
 	}
 	oc := cfg.North.REST.Auth.OcculiteSSO
-	liteAddon := isLiteAddonHost()
+	liteAddon := deploymentKind() == deployment.LiteAddon
 	// Tri-state: nil defaults to the lite-add-on stamp — ON beside the box
 	// whose gate strips the header, OFF everywhere else. An explicit value
 	// overrides.

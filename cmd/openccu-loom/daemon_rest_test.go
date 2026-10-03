@@ -18,6 +18,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/deployment"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
@@ -292,7 +293,7 @@ func TestWireRESTPurgeCoversTheLegacyTokenStore(t *testing.T) {
 // passthrough is skipped — every request 401s and the operator cannot
 // reach the UI that would show them why.
 func TestWireREST_IngressPassthroughWiredWithoutTheAppDatabase(t *testing.T) {
-	t.Setenv("OPENCCU_LOOM_SUPERVISOR", "1")
+	t.Setenv(deployment.EnvVar, "ha-addon")
 
 	cfg := config.Default()
 	enabled := true
