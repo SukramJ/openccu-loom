@@ -4,7 +4,7 @@
 
 No change you need to act on in the add-on. The daemon now tells clients
 where it runs and which login paths it accepts, so the Home Assistant
-integration can offer only the setup that fits (REST API 13.5.0). The
+integration can offer only the setup that fits (REST API 13.5.1). The
 login page shows Single Sign-On only when it is configured. On an
 openccu-lite system, heating groups can be created and edited.
 

@@ -7,7 +7,7 @@ top-level CHANGELOG.md. Newest version first.
 # 0.86.0
 
 No changes to the proxy. The daemon release lets clients read where a
-daemon runs and which login paths it accepts, and reports REST API 13.5.0.
+daemon runs and which login paths it accepts, and reports REST API 13.5.1.
 
 # 0.85.0
 
