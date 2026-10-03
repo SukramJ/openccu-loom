@@ -6,6 +6,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.86.1] - 2026-10-03
+
+### Release summary
+
+A release for programs generated from the API specification; nothing
+changes for an operator, and nothing changes on the wire. 0.86.0 added
+`deployment.kind` in a way that renamed unrelated types in generated
+clients; it is a named schema now (REST API 13.5.3). The specification
+also says what `model` on `GET /system/ccu` carries.
+
 ### Changed
 
 - **The API specification says what `model` on `GET /system/ccu` carries
@@ -17,8 +27,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - **`deployment.kind` is a named schema, `DeploymentKind` (REST API
-  13.5.3).** 0.86.0
-  declared it as an inline enum. Generated clients number anonymous enums
+  13.5.3).** 0.86.0 declared it as an inline enum. Generated clients number anonymous enums
   by their position in the specification, so the new enum renamed every
   `kind` enum that follows it: in the Python client `Kind2` stopped being
   the event kind (`initial`, `change`, `refresh`) and became the pairing
