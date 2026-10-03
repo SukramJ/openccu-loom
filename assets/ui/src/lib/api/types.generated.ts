@@ -6768,6 +6768,15 @@ export interface components {
             name: string;
             host: string;
             available: boolean;
+            /**
+             * @description The system's product family, not a hardware model: `CCU` or
+             *     `OpenCCU` for a `system_type: ccu` central — the two values
+             *     the daemon reduces the firmware's product name to — and
+             *     `openccu-lite` for an
+             *     openccu-lite central. Empty until the daemon has read it from
+             *     the system. A client treats an unknown or empty value as
+             *     unknown, not as one of the families.
+             */
             model?: string;
             version?: string;
             hostname?: string;

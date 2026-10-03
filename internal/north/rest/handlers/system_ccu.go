@@ -30,7 +30,11 @@ type SystemCCUEntry struct {
 	// Available reports the central's last-known connectivity
 	// (true after a successful XML-RPC init handshake).
 	Available bool `json:"available"`
-	// Model surfaces SystemInfo.Model (CCU2 / CCU3 / OpenCCU / …).
+	// Model surfaces SystemInfo.Model: the system's product family, not a
+	// hardware model. A CCU central reports "CCU" or "OpenCCU", the two
+	// values the backend information script (get_backend_info.fn) reduces
+	// the firmware's product name to; an openccu-lite central reports
+	// "openccu-lite". Empty until the daemon has read it from the system.
 	Model string `json:"model,omitempty"`
 	// Version surfaces SystemInfo.Version (CCU software version).
 	Version string `json:"version,omitempty"`

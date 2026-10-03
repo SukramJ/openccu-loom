@@ -6,6 +6,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The API specification says what `model` on `GET /system/ccu` carries
+  (REST API 13.5.2).** It is the system's product family — `CCU`,
+  `OpenCCU` or `openccu-lite` — and empty until the daemon has read it;
+  the field had no description, and the code comment named hardware
+  models it never reports. Description only: the values are unchanged.
+
 ## [0.86.0] - 2026-10-03
 
 ### Release summary
