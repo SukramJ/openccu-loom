@@ -4,6 +4,11 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.86.1
+
+No changes to the proxy. The daemon release corrects the API description
+that client programs are generated from and reports REST API 13.5.3.
+
 # 0.86.0
 
 No changes to the proxy. The daemon release lets clients read where a

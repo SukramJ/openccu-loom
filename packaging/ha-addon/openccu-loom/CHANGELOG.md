@@ -1,5 +1,11 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.86.1
+
+No change you need to act on, and nothing behaves differently. The
+release corrects the API description that client programs are generated
+from (REST API 13.5.3).
+
 ## 0.86.0
 
 No change you need to act on in the add-on. The daemon now tells clients
