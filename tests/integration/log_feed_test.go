@@ -130,7 +130,7 @@ func TestLogFeed(t *testing.T) {
 		if err != nil {
 			t.Fatalf("open SSE stream: %v", err)
 		}
-		defer streamResp.Body.Close()
+		defer func() { _ = streamResp.Body.Close() }()
 
 		if streamResp.StatusCode != http.StatusOK {
 			t.Fatalf("expected 200 on SSE stream, got %d", streamResp.StatusCode)

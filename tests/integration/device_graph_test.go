@@ -8,7 +8,6 @@ package integration
 import (
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
 	"testing"
 	"time"
@@ -38,7 +37,7 @@ func TestDeviceGraphAgainstMockCCU(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	if err := pipeline.IngestFromBackend(ctx, "HmIP-RF", hmenum.InterfaceHmIPRF, backend, nil, nil, logger); err != nil {
 		t.Fatalf("ingest: %v", err)
 	}

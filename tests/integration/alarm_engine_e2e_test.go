@@ -30,7 +30,6 @@ package integration
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"log/slog"
 	"path/filepath"
 	"testing"
@@ -104,7 +103,7 @@ func (ah *alarmHarness) start() {
 		},
 		Registry: ah.reg,
 		Stores:   ah.stores,
-		Logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Logger:   slog.New(slog.DiscardHandler),
 	})
 	if err != nil {
 		ah.t.Fatalf("alarm.NewService: %v", err)
@@ -240,8 +239,8 @@ func (ah *alarmHarness) waitJournalEvent(zoneID, event string, timeout time.Dura
 		if err != nil {
 			ah.t.Fatalf("journal query: %v", err)
 		}
-		for _, e := range entries {
-			if e.Event == event {
+		for i := range entries {
+			if entries[i].Event == event {
 				return true
 			}
 		}

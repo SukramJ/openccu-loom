@@ -620,7 +620,7 @@ func TestMatterBridgeSmoke_BridgedNodeDeviceTypeInClusterSurface(t *testing.T) {
 
 	// The primary device type on the struct itself must be the device-specific
 	// type (not BridgedNode, which would cause Apple to silently drop the endpoint).
-	if ep.DeviceType == uint16(smokeDevTypeBridgedNode) {
+	if uint32(ep.DeviceType) == smokeDevTypeBridgedNode {
 		t.Errorf("EP %d: DeviceType is BridgedNode (0x0013) — primary type must be device-specific; BridgedNode goes in Descriptor.DeviceTypeList secondary", ep.ID)
 	}
 }

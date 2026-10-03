@@ -7,7 +7,6 @@ package integration
 
 import (
 	"context"
-	"io"
 	"log/slog"
 	"path/filepath"
 	"sync"
@@ -64,7 +63,7 @@ func vcIngestPipeline(
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 
 	if err := p.IngestFromBackend(
 		ctx, "HmIP-RF", hmenum.InterfaceHmIPRF, backend, nil, nil, logger,
@@ -138,7 +137,7 @@ func TestValuesCache_FlushAndRestoreRoundtrip(t *testing.T) {
 	if err := reg.Register(c); err != nil {
 		t.Fatalf("reg.Register: %v", err)
 	}
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	flusher := adapter.WireValuesCacheFlusher(reg, vcStore, 5*time.Millisecond, logger)
 	time.Sleep(50 * time.Millisecond)
 	flusher.Stop() // blocks until the shutdown flush completes
@@ -194,7 +193,7 @@ func TestValuesCache_LifecycleTransitions_ConnectionLostThenRecovered(t *testing
 	c := vcIngestPipeline(t, centralName, vcStore)
 
 	// Wire the lifecycle handler so ConnectionLost / RecoveryCompleted flip sources.
-	unsub := adapter.WireValueSourceLifecycle(c, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	unsub := adapter.WireValueSourceLifecycle(c, slog.New(slog.DiscardHandler))
 	defer unsub()
 
 	// Find a DP and push a live value.
@@ -293,7 +292,7 @@ func TestValuesCache_FetchAllOverwritesCache(t *testing.T) {
 		Source() hmenum.ValueSource
 		OnWireValue(any) bool
 	}
-	var dpA, dpB liveDPIface
+	var dpA liveDPIface
 	for _, d := range c.ModelRegistry.List() {
 		for _, ch := range d.Channels() {
 			for _, rawDP := range ch.DataPoints() {
@@ -303,8 +302,8 @@ func TestValuesCache_FetchAllOverwritesCache(t *testing.T) {
 				if w, ok := rawDP.(liveDPIface); ok {
 					if dpA == nil {
 						dpA = w
-					} else if dpB == nil && rawDP != nil {
-						dpB = w
+					} else {
+						// A second suitable data point exists; it stays unobserved.
 						goto done
 					}
 				}
@@ -321,13 +320,13 @@ done:
 	if dpA.Source() != hmenum.ValueSourceLive {
 		t.Fatalf("dpA: source = %s, want live", dpA.Source())
 	}
-	// dpB stays unobserved (we do not call OnWireValue on it).
+	// The second data point stays unobserved (we do not call OnWireValue on it).
 
 	reg := central.NewRegistry()
 	if err := reg.Register(c); err != nil {
 		t.Fatalf("reg.Register: %v", err)
 	}
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	flusher := adapter.WireValuesCacheFlusher(reg, vcStore, 5*time.Millisecond, logger)
 	time.Sleep(50 * time.Millisecond)
 	flusher.Stop()

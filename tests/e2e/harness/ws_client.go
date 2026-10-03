@@ -7,6 +7,7 @@ package harness
 
 import (
 	"bufio"
+	"context"
 	"crypto/rand"
 	"crypto/sha1" //nolint:gosec // required by RFC 6455 handshake
 	"encoding/base64"
@@ -43,22 +44,21 @@ type WSClient struct {
 	closed chan struct{}
 }
 
-// Dial opens a WebSocket against the daemon's /api/v1/events endpoint
+// DialWS opens a WebSocket against the daemon's /api/v1/events endpoint
 // using the cookies stored in `rest`'s jar (so a prior LoginSession
 // authorises the upgrade). Caller owns the lifetime; close via Close.
 func (c *RESTClient) DialWS(path string) (*WSClient, error) {
 	if path == "" {
 		path = "/api/v1/events"
 	}
-	wsURL := WSURL(c.base) // ws://host:port/api/ws — but we override
 	u, err := url.Parse(c.base + path)
 	if err != nil {
 		return nil, fmt.Errorf("parse ws url: %w", err)
 	}
-	_ = wsURL
 
 	// 1. Open TCP.
-	conn, err := net.DialTimeout("tcp", u.Host, 5*time.Second)
+	dialer := &net.Dialer{Timeout: 5 * time.Second}
+	conn, err := dialer.DialContext(context.Background(), "tcp", u.Host)
 	if err != nil {
 		return nil, fmt.Errorf("dial: %w", err)
 	}
@@ -104,7 +104,7 @@ func (c *RESTClient) DialWS(path string) (*WSClient, error) {
 		_ = conn.Close()
 		return nil, fmt.Errorf("read handshake: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusSwitchingProtocols {
 		_ = conn.Close()
 		return nil, fmt.Errorf("ws upgrade failed: status=%d", resp.StatusCode)
@@ -247,10 +247,10 @@ func writeMaskedFrame(bw *bufio.Writer, opcode byte, payload []byte) error {
 	header := []byte{finBit | (opcode & 0x0F)}
 	switch {
 	case len(payload) < 126:
-		header = append(header, 0x80|byte(len(payload)))
+		header = append(header, 0x80|byte(len(payload))) //nolint:gosec // G115: this case guarantees len < 126
 	case len(payload) <= 0xFFFF:
 		header = append(header, 0x80|126, 0, 0)
-		binary.BigEndian.PutUint16(header[len(header)-2:], uint16(len(payload)))
+		binary.BigEndian.PutUint16(header[len(header)-2:], uint16(len(payload))) //nolint:gosec // G115: this case guarantees len <= 0xFFFF
 	default:
 		header = append(header, 0x80|127, 0, 0, 0, 0, 0, 0, 0, 0)
 		binary.BigEndian.PutUint64(header[len(header)-8:], uint64(len(payload)))

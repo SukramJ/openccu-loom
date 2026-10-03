@@ -85,7 +85,6 @@ func (p spaPlan) execute(t *testing.T, h *spaHarness) {
 		}
 	}
 	for i, a := range p.actions {
-		i, a := i, a
 		stepName := fmt.Sprintf("%s/step%d_%s", p.name, i, a.op)
 		t.Run(stepName, func(t *testing.T) {
 			h.resetEvents()
@@ -141,8 +140,8 @@ func (p spaPlan) execute(t *testing.T, h *spaHarness) {
 				}
 				captured := h.drainEvents(250*time.Millisecond, match)
 				found := false
-				for _, e := range captured {
-					if match(e) {
+				for i := range captured {
+					if match(captured[i]) {
 						found = true
 						break
 					}

@@ -693,7 +693,7 @@ func maskPartyTimes(wc WireCapture) WireCapture {
 	return out
 }
 
-func newSoundPlayerLEDFixtureRef(t *testing.T, w *fakeWriter) (*light.SoundPlayerLED, string) {
+func newSoundPlayerLEDFixtureRef(t *testing.T, w *fakeWriter) (led *light.SoundPlayerLED, channelAddress string) {
 	t.Helper()
 	const addr = "MP3P0001:6"
 	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "MP3P0001"})
@@ -751,6 +751,7 @@ type refCase struct {
 // Failing tests indicate production-code drift that must be corrected.
 // Passing tests confirm equivalence with the reference implementation.
 func TestReferenceCompare(t *testing.T) {
+	t.Parallel()
 	refDir := refSnapshotsDir(t)
 	ctx := context.Background()
 	pri := hmenum.CommandPriorityHigh
@@ -810,8 +811,9 @@ func TestReferenceCompare(t *testing.T) {
 			dpType: "DRGDaliLight", setter: "SetEffect",
 			run: func(t *testing.T, w *fakeWriter) []WireCapture {
 				t.Helper()
-				var out []WireCapture
-				for _, lbl := range []string{"Off", "Flash", "Smooth_fast"} {
+				inputs := []string{"Off", "Flash", "Smooth_fast"}
+				out := make([]WireCapture, 0, len(inputs))
+				for _, lbl := range inputs {
 					dl := newDaliLightFixtureRef(t, w)
 					_ = dl.SetEffect(ctx, lbl, pri)
 					out = append(out, w.Capture())
@@ -825,7 +827,7 @@ func TestReferenceCompare(t *testing.T) {
 			run: func(t *testing.T, w *fakeWriter) []WireCapture {
 				t.Helper()
 				effects := []string{"BLINKING_SLOW", "FLASH_SHORT"}
-				var out []WireCapture
+				out := make([]WireCapture, 0, len(effects))
 				for _, e := range effects {
 					r := newRGBWLightFixtureRef(t, w)
 					_ = r.SetEffect(ctx, e, pri)
@@ -840,8 +842,9 @@ func TestReferenceCompare(t *testing.T) {
 			dpType: "EffectLight", setter: "SetEffect",
 			run: func(t *testing.T, w *fakeWriter) []WireCapture {
 				t.Helper()
-				var out []WireCapture
-				for _, idx := range []int32{0, 1, 2} {
+				inputs := []int32{0, 1, 2}
+				out := make([]WireCapture, 0, len(inputs))
+				for _, idx := range inputs {
 					el := newEffectLightFixtureRef(t, w)
 					_ = el.SetEffect(ctx, idx, pri)
 					out = append(out, w.Capture())
@@ -859,7 +862,7 @@ func TestReferenceCompare(t *testing.T) {
 					{SoundfileIndex: 3, Volume: 0.5, RepetitionsIndex: 2},
 					{SoundfileIndex: 5, Volume: 1.0, Loop: true},
 				}
-				var out []WireCapture
+				out := make([]WireCapture, 0, len(configs))
 				for _, cfg := range configs {
 					sp := newSoundPlayerFixtureRef(t, w)
 					_ = sp.PlaySound(ctx, cfg, pri)
@@ -896,8 +899,9 @@ func TestReferenceCompare(t *testing.T) {
 			dpType: "ClimateRF", setter: "SetProfile",
 			run: func(t *testing.T, w *fakeWriter) []WireCapture {
 				t.Helper()
-				var out []WireCapture
-				for _, p := range []climate.Profile{climate.ProfileWeekProgram1, climate.ProfileWeekProgram2, climate.ProfileWeekProgram3} {
+				inputs := []climate.Profile{climate.ProfileWeekProgram1, climate.ProfileWeekProgram2, climate.ProfileWeekProgram3}
+				out := make([]WireCapture, 0, len(inputs))
+				for _, p := range inputs {
 					c := newClimateRFFixtureRef(t, w)
 					_ = c.SetProfile(ctx, p, pri)
 					out = append(out, w.Capture())
@@ -914,7 +918,7 @@ func TestReferenceCompare(t *testing.T) {
 					hue int32
 					sat float64
 				}{{0, 100}, {120, 80}, {240, 50}}
-				var out []WireCapture
+				out := make([]WireCapture, 0, len(colors))
 				for _, c := range colors {
 					cl := newColorLightFixtureRef(t, w)
 					_ = cl.SetColor(ctx, c.hue, c.sat, pri)
@@ -932,7 +936,7 @@ func TestReferenceCompare(t *testing.T) {
 					hue int32
 					sat float64
 				}{{0, 100}, {180, 70}}
-				var out []WireCapture
+				out := make([]WireCapture, 0, len(colors))
 				for _, c := range colors {
 					r := newRGBWLightFixtureRef(t, w)
 					_ = r.SetColor(ctx, c.hue, c.sat, pri)
@@ -956,8 +960,9 @@ func TestReferenceCompare(t *testing.T) {
 			dpType: "Blind", setter: "SetTilt",
 			run: func(t *testing.T, w *fakeWriter) []WireCapture {
 				t.Helper()
-				var out []WireCapture
-				for _, v := range []float64{0.0, 0.5, 1.0} {
+				inputs := []float64{0.0, 0.5, 1.0}
+				out := make([]WireCapture, 0, len(inputs))
+				for _, v := range inputs {
 					b := newBlindFixtureRef(t, w)
 					// Seed LEVEL=1.0 (fully open) so SetTilt holds the current
 					// level position when no level target has been staged.
@@ -1052,8 +1057,9 @@ func TestReferenceCompare(t *testing.T) {
 			dpType: "Cover", setter: "SetPosition",
 			run: func(t *testing.T, w *fakeWriter) []WireCapture {
 				t.Helper()
-				var out []WireCapture
-				for _, lvl := range []float64{0.0, 0.5, 1.0} {
+				inputs := []float64{0.0, 0.5, 1.0}
+				out := make([]WireCapture, 0, len(inputs))
+				for _, lvl := range inputs {
 					c := newCoverFixtureRef(t, w)
 					_ = c.SetPosition(ctx, lvl, pri)
 					out = append(out, w.Capture())
@@ -1111,8 +1117,9 @@ func TestReferenceCompare(t *testing.T) {
 			dpType: "Light", setter: "SetLevel",
 			run: func(t *testing.T, w *fakeWriter) []WireCapture {
 				t.Helper()
-				var out []WireCapture
-				for _, lvl := range []float64{0.0, 0.5, 1.0} {
+				inputs := []float64{0.0, 0.5, 1.0}
+				out := make([]WireCapture, 0, len(inputs))
+				for _, lvl := range inputs {
 					l := newLightFixtureRef(t, w)
 					_ = l.SetLevel(ctx, lvl, pri)
 					out = append(out, w.Capture())
@@ -1124,8 +1131,9 @@ func TestReferenceCompare(t *testing.T) {
 			dpType: "ColorTempLight", setter: "SetKelvin",
 			run: func(t *testing.T, w *fakeWriter) []WireCapture {
 				t.Helper()
-				var out []WireCapture
-				for _, k := range []int32{2700, 4000, 6500} {
+				inputs := []int32{2700, 4000, 6500}
+				out := make([]WireCapture, 0, len(inputs))
+				for _, k := range inputs {
 					ct := newColorTempLightFixtureRef(t, w)
 					_ = ct.SetKelvin(ctx, k, pri)
 					out = append(out, w.Capture())
@@ -1146,8 +1154,7 @@ func TestReferenceCompare(t *testing.T) {
 			dpType: "FixedColorLight", setter: "SetColor",
 			run: func(t *testing.T, w *fakeWriter) []WireCapture {
 				t.Helper()
-				var out []WireCapture
-				for _, c := range []light.FixedColor{
+				inputs := []light.FixedColor{
 					light.FixedColorWhite,
 					light.FixedColorRed,
 					light.FixedColorGreen,
@@ -1155,7 +1162,9 @@ func TestReferenceCompare(t *testing.T) {
 					light.FixedColorCyan,
 					light.FixedColorYellow,
 					light.FixedColorMagenta,
-				} {
+				}
+				out := make([]WireCapture, 0, len(inputs))
+				for _, c := range inputs {
 					fc := newFixedColorLightFixtureRef(t, w)
 					_ = fc.SetColor(ctx, c, pri)
 					out = append(out, w.Capture())
@@ -1167,12 +1176,13 @@ func TestReferenceCompare(t *testing.T) {
 			dpType: "FixedColorLight", setter: "SetColorBehaviour",
 			run: func(t *testing.T, w *fakeWriter) []WireCapture {
 				t.Helper()
-				var out []WireCapture
-				for _, cb := range []light.ColorBehaviour{
+				inputs := []light.ColorBehaviour{
 					light.ColorBehaviourDoNotCare,
 					light.ColorBehaviourOldValue,
 					light.ColorBehaviourOn,
-				} {
+				}
+				out := make([]WireCapture, 0, len(inputs))
+				for _, cb := range inputs {
 					fc := newFixedColorLightFixtureRef(t, w)
 					_ = fc.SetColorBehaviour(ctx, cb, pri)
 					out = append(out, w.Capture())
@@ -1221,8 +1231,9 @@ func TestReferenceCompare(t *testing.T) {
 			dpType: "ModulatingValve", setter: "SetLevel",
 			run: func(t *testing.T, w *fakeWriter) []WireCapture {
 				t.Helper()
-				var out []WireCapture
-				for _, lvl := range []float64{0.0, 0.5, 1.0} {
+				inputs := []float64{0.0, 0.5, 1.0}
+				out := make([]WireCapture, 0, len(inputs))
+				for _, lvl := range inputs {
 					mv := newModulatingFixtureRef(t, w)
 					_ = mv.SetLevel(ctx, lvl, pri)
 					out = append(out, w.Capture())
@@ -1234,8 +1245,9 @@ func TestReferenceCompare(t *testing.T) {
 			dpType: "ClimateIP", setter: "SetMode",
 			run: func(t *testing.T, w *fakeWriter) []WireCapture {
 				t.Helper()
-				var out []WireCapture
-				for _, m := range []climate.Mode{climate.ModeAuto, climate.ModeHeat, climate.ModeOff} {
+				inputs := []climate.Mode{climate.ModeAuto, climate.ModeHeat, climate.ModeOff}
+				out := make([]WireCapture, 0, len(inputs))
+				for _, m := range inputs {
 					c := newClimateIPFixtureRef(t, w)
 					_ = c.SetMode(ctx, m, pri)
 					out = append(out, NormaliseCalls(w.Capture()))
@@ -1247,8 +1259,9 @@ func TestReferenceCompare(t *testing.T) {
 			dpType: "ClimateIP", setter: "SetTemperature",
 			run: func(t *testing.T, w *fakeWriter) []WireCapture {
 				t.Helper()
-				var out []WireCapture
-				for _, temp := range []float64{5, 20, 30} {
+				inputs := []float64{5, 20, 30}
+				out := make([]WireCapture, 0, len(inputs))
+				for _, temp := range inputs {
 					c := newClimateIPFixtureRef(t, w)
 					_ = c.SetTemperature(ctx, temp, pri)
 					out = append(out, w.Capture())
@@ -1299,8 +1312,9 @@ func TestReferenceCompare(t *testing.T) {
 			dpType: "ClimateIP", setter: "SetProfile",
 			run: func(t *testing.T, w *fakeWriter) []WireCapture {
 				t.Helper()
-				var out []WireCapture
-				for _, p := range []climate.Profile{climate.ProfileWeekProgram1, climate.ProfileWeekProgram2, climate.ProfileWeekProgram3} {
+				inputs := []climate.Profile{climate.ProfileWeekProgram1, climate.ProfileWeekProgram2, climate.ProfileWeekProgram3}
+				out := make([]WireCapture, 0, len(inputs))
+				for _, p := range inputs {
 					c := newClimateIPFixtureRef(t, w)
 					c.OnSetPointMode(int32(0)) // AUTO
 					_ = c.SetProfile(ctx, p, pri)
@@ -1339,8 +1353,9 @@ func TestReferenceCompare(t *testing.T) {
 			dpType: "ClimateRF", setter: "SetMode",
 			run: func(t *testing.T, w *fakeWriter) []WireCapture {
 				t.Helper()
-				var out []WireCapture
-				for _, m := range []climate.Mode{climate.ModeHeat, climate.ModeAuto, climate.ModeOff} {
+				inputs := []climate.Mode{climate.ModeHeat, climate.ModeAuto, climate.ModeOff}
+				out := make([]WireCapture, 0, len(inputs))
+				for _, m := range inputs {
 					c := newClimateRFFixtureRef(t, w)
 					_ = c.SetMode(ctx, m, pri)
 					out = append(out, NormaliseCalls(w.Capture()))
@@ -1352,8 +1367,9 @@ func TestReferenceCompare(t *testing.T) {
 			dpType: "ClimateRF", setter: "SetTemperature",
 			run: func(t *testing.T, w *fakeWriter) []WireCapture {
 				t.Helper()
-				var out []WireCapture
-				for _, temp := range []float64{5, 15, 30} {
+				inputs := []float64{5, 15, 30}
+				out := make([]WireCapture, 0, len(inputs))
+				for _, temp := range inputs {
 					c := newClimateRFFixtureRef(t, w)
 					_ = c.SetTemperature(ctx, temp, pri)
 					out = append(out, w.Capture())
@@ -1398,12 +1414,13 @@ func TestReferenceCompare(t *testing.T) {
 			run: func(t *testing.T, w *fakeWriter) []WireCapture {
 				t.Helper()
 				td := newTextDisplayFixtureRef(t, w)
-				var out []WireCapture
-				for _, row := range []textdisplay.Row{
+				inputs := []textdisplay.Row{
 					{ID: 1, Text: "Hello"},
 					{ID: 2, Text: "World"},
 					{ID: 3, Text: ""},
-				} {
+				}
+				out := make([]WireCapture, 0, len(inputs))
+				for _, row := range inputs {
 					_ = td.Write(ctx, row, pri)
 					out = append(out, w.Capture())
 				}
@@ -1432,7 +1449,6 @@ func TestReferenceCompare(t *testing.T) {
 	}
 
 	for _, rc := range cases {
-		rc := rc
 		t.Run(rc.dpType+"/"+rc.setter, func(t *testing.T) {
 			t.Parallel()
 

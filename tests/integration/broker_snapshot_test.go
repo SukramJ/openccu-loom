@@ -139,7 +139,7 @@ func TestBrokerSnapshotDiff(t *testing.T) {
 	}
 	pipeline := adapter.NewDevicePipeline(c).WithTranslations(translations, locale)
 
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	if err := pipeline.IngestFromBackend(ctx, "HmIP-RF", hmenum.InterfaceHmIPRF, backend, nil, nil, logger); err != nil {
 		t.Fatalf("IngestFromBackend: %v", err)
 	}
@@ -698,7 +698,7 @@ func ebPublishTo(w *bufio.Writer, topic string, payload []byte, qos byte) error 
 	}
 	var body bytes.Buffer
 	ts := make([]byte, 2)
-	binary.BigEndian.PutUint16(ts, uint16(len(topic))) //nolint:gosec
+	binary.BigEndian.PutUint16(ts, uint16(len(topic))) //nolint:gosec // test topics are far below the 64 KiB MQTT string limit
 	body.Write(ts)
 	body.WriteString(topic)
 	// A QoS>0 PUBLISH would carry a 2-byte packet identifier here; this
@@ -714,9 +714,9 @@ func ebPublishTo(w *bufio.Writer, topic string, payload []byte, qos byte) error 
 // ebReadVarint decodes an MQTT variable-length integer from b starting at
 // offset, returning (value, bytesConsumed, err). Used to read and skip the
 // MQTT 5.0 properties-length prefix on inbound SUBSCRIBE/PUBLISH packets.
-func ebReadVarint(b []byte, offset int) (value int, consumed int, err error) {
+func ebReadVarint(b []byte, offset int) (value, consumed int, err error) {
 	mult := 1
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		if offset+i >= len(b) {
 			return 0, 0, fmt.Errorf("ebReadVarint: short varint at offset %d", offset)
 		}
@@ -752,7 +752,7 @@ func ebReadRemainingLength(r *bufio.Reader) (int, error) {
 	var length uint32
 	var mult uint32 = 1
 	buf := make([]byte, 1)
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		if _, err := io.ReadFull(r, buf); err != nil {
 			return 0, err
 		}
@@ -762,12 +762,12 @@ func ebReadRemainingLength(r *bufio.Reader) (int, error) {
 		}
 		mult *= 128
 	}
-	return 0, fmt.Errorf("mqtt: malformed remaining length")
+	return 0, errors.New("mqtt: malformed remaining length")
 }
 
 // ebReadString reads a length-prefixed MQTT string starting at offset.
 // Returns (value, bytesConsumed, err).
-func ebReadString(b []byte, offset int) (string, int, error) {
+func ebReadString(b []byte, offset int) (value string, consumed int, err error) {
 	if offset+2 > len(b) {
 		return "", 0, fmt.Errorf("ebReadString: short header at offset %d", offset)
 	}
@@ -929,7 +929,8 @@ func loadBrokerReferenceSnapshot(path string) (map[string]refEntity, error) {
 	}
 
 	out := make(map[string]refEntity, len(snap.Entities))
-	for _, e := range snap.Entities {
+	for i := range snap.Entities {
+		e := &snap.Entities[i]
 		ent := refEntity{
 			JoinKey: e.JoinKey,
 			Model:   e.Model,
@@ -999,7 +1000,7 @@ func extractAddressFromJoinKey(jk string) string {
 
 // countKeysNotIn counts how many string keys of `a` do not appear in `b`.
 // The two maps may have different value types.
-func countKeysNotIn[A any, B any](a map[string]A, b map[string]B) int {
+func countKeysNotIn[A, B any](a map[string]A, b map[string]B) int {
 	n := 0
 	for k := range a {
 		if _, ok := b[k]; !ok {

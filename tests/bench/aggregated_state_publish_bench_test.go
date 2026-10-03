@@ -64,7 +64,7 @@ func BenchmarkPublishStateBaseline(b *testing.B) {
 	ctx := context.Background()
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		_ = br.PublishState(ctx, ev)
 	}
 }
@@ -92,7 +92,7 @@ func BenchmarkPublishStateWithSource(b *testing.B) {
 	ctx := context.Background()
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		_ = br.PublishState(ctx, ev)
 	}
 }

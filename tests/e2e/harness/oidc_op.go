@@ -176,7 +176,7 @@ func (o *mockOP) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 	}
 	code := o.IssueAuthCode("harness-user", "admin", q.Get("nonce"))
 	target := redirect + "?code=" + code + "&state=" + state
-	http.Redirect(w, r, target, http.StatusFound)
+	http.Redirect(w, r, target, http.StatusFound) //nolint:gosec // G710: a mock OP redirects to the caller's redirect_uri by design
 }
 
 func (o *mockOP) handleToken(w http.ResponseWriter, r *http.Request) {

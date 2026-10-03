@@ -26,6 +26,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -237,7 +238,7 @@ func TestMatterWireTruth_BridgedNodeDeviceTypeRevision(t *testing.T) {
 		t.Fatalf("read bridged device-type-list ep=%d: %v\n%s", eps[0], err, dtList)
 	}
 
-	wantRevStr := fmt.Sprintf("%d", wantRev)
+	wantRevStr := strconv.FormatUint(uint64(wantRev), 10)
 	if !strings.Contains(dtList, wantRevStr) {
 		t.Errorf("bridged DeviceTypeList does not advertise BridgedNode revision %d:\n%s", wantRev, dtList)
 	}

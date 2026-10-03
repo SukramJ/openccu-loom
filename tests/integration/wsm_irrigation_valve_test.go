@@ -7,7 +7,6 @@ package integration
 
 import (
 	"context"
-	"io"
 	"log/slog"
 	"testing"
 	"time"
@@ -45,7 +44,7 @@ func TestWSM_IrrigationValveSurface(t *testing.T) {
 	}
 	// Unit has no public Close — pipeline-only cleanup is enough.
 
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	pipeline := adapter.NewDevicePipeline(c)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

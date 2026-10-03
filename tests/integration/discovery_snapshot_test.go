@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -93,7 +92,7 @@ func TestDiscoverySnapshotDumpAgainstGodevccu(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	if err := pipeline.IngestFromBackend(ctx, "HmIP-RF", hmenum.InterfaceHmIPRF, backend, nil, nil, logger); err != nil {
 		t.Fatalf("ingest: %v", err)
 	}
@@ -294,7 +293,7 @@ func decodeEntity(topic string, payload []byte) snapshotEntity {
 
 	channelNo, suffix := splitObjectID(objectID)
 	addr := ""
-	parameter := ""
+	var parameter string
 	chType := ""
 	model := ""
 	paramset := ""
@@ -376,7 +375,7 @@ func identifierFromDevice(dev map[string]any) (string, bool) {
 
 // splitObjectID separates `<channel>_<suffix>` into (channel, suffix).
 // Returns (0, s) when the string does not match the expected shape.
-func splitObjectID(s string) (int, string) {
+func splitObjectID(s string) (channel int, suffix string) {
 	idx := strings.Index(s, "_")
 	if idx <= 0 || idx >= len(s)-1 {
 		return 0, s

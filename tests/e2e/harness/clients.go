@@ -7,6 +7,7 @@ package harness
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -62,7 +63,7 @@ func (c *RESTClient) LoginSession(user, pass string) error {
 		"username": user,
 		"password": pass,
 	})
-	req, err := http.NewRequest(http.MethodPost, c.base+"/api/v1/auth/login", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, c.base+"/api/v1/auth/login", bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("build login request: %w", err)
 	}
@@ -71,7 +72,7 @@ func (c *RESTClient) LoginSession(user, pass string) error {
 	if err != nil {
 		return fmt.Errorf("login: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		raw, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("login: status=%d body=%s", resp.StatusCode, raw)
@@ -87,14 +88,14 @@ func (c *RESTClient) Do(req *http.Request) (*http.Response, error) {
 	if c.auth != "" && req.Header.Get("Authorization") == "" {
 		req.Header.Set("Authorization", c.auth)
 	}
-	return c.hc.Do(req)
+	return c.hc.Do(req) //nolint:gosec // G704: the harness client exists to address the daemon under test; tests choose the URL
 }
 
 // NewRequest builds a request rooted at the daemon's base URL.
 // `path` is taken as-is (must start with "/"). For absolute URLs use
 // http.NewRequest directly.
 func (c *RESTClient) NewRequest(method, path string, body io.Reader) (*http.Request, error) {
-	return http.NewRequest(method, c.base+path, body)
+	return http.NewRequestWithContext(context.Background(), method, c.base+path, body)
 }
 
 // BasicAuthHeader returns the base64-encoded credentials string that

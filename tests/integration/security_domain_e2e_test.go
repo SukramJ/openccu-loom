@@ -242,8 +242,9 @@ func newSecurityRestHarness(t *testing.T) *securityRestHarness {
 }
 
 // do issues one JSON request against the harness's REST listener and
-// decodes a JSON response body into out. Mirrors alarmRestHarness.do.
-func (h *securityRestHarness) do(method, path string, body, out any) *http.Response {
+// decodes a JSON response body into out, returning the status code.
+// Mirrors alarmRestHarness.do.
+func (h *securityRestHarness) do(method, path string, body, out any) int {
 	h.t.Helper()
 	var rdr io.Reader
 	if body != nil {
@@ -264,7 +265,7 @@ func (h *securityRestHarness) do(method, path string, body, out any) *http.Respo
 	if err != nil {
 		h.t.Fatalf("%s %s: %v", method, path, err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	raw, err := io.ReadAll(res.Body)
 	if err != nil {
 		h.t.Fatalf("read %s %s body: %v", method, path, err)
@@ -274,8 +275,7 @@ func (h *securityRestHarness) do(method, path string, body, out any) *http.Respo
 			h.t.Fatalf("decode %s %s body %q: %v", method, path, raw, err)
 		}
 	}
-	res.Body = io.NopCloser(bytes.NewReader(raw))
-	return res
+	return res.StatusCode
 }
 
 // classByName finds one class in a snapshot, reporting presence. A class
@@ -302,9 +302,9 @@ func (h *securityRestHarness) waitClassState(class string, wantPresent, wantActi
 	var lastPresent bool
 	for {
 		var snap hmapi.SecuritySnapshot
-		res := h.do(http.MethodGet, "/security", nil, &snap)
-		if res.StatusCode != http.StatusOK {
-			h.t.Fatalf("GET /security: status %d", res.StatusCode)
+		status := h.do(http.MethodGet, "/security", nil, &snap)
+		if status != http.StatusOK {
+			h.t.Fatalf("GET /security: status %d", status)
 		}
 		st, present := classByName(snap, class)
 		lastState, lastPresent = st, present
@@ -329,13 +329,13 @@ func (h *securityRestHarness) waitFaultReason(reason string, timeout time.Durati
 	deadline := time.Now().Add(timeout)
 	for {
 		var faults []hmapi.SecurityFault
-		res := h.do(http.MethodGet, "/security/faults", nil, &faults)
-		if res.StatusCode != http.StatusOK {
-			h.t.Fatalf("GET /security/faults: status %d", res.StatusCode)
+		status := h.do(http.MethodGet, "/security/faults", nil, &faults)
+		if status != http.StatusOK {
+			h.t.Fatalf("GET /security/faults: status %d", status)
 		}
-		for _, f := range faults {
-			if f.Reason == reason {
-				return f, true
+		for i := range faults {
+			if faults[i].Reason == reason {
+				return faults[i], true
 			}
 		}
 		if time.Now().After(deadline) {
@@ -352,13 +352,13 @@ func (h *securityRestHarness) waitFaultAcknowledged(id string, timeout time.Dura
 	deadline := time.Now().Add(timeout)
 	for {
 		var faults []hmapi.SecurityFault
-		res := h.do(http.MethodGet, "/security/faults", nil, &faults)
-		if res.StatusCode != http.StatusOK {
-			h.t.Fatalf("GET /security/faults: status %d", res.StatusCode)
+		status := h.do(http.MethodGet, "/security/faults", nil, &faults)
+		if status != http.StatusOK {
+			h.t.Fatalf("GET /security/faults: status %d", status)
 		}
-		for _, f := range faults {
-			if f.ID == id && f.AcknowledgedBy != "" {
-				return f, true
+		for i := range faults {
+			if faults[i].ID == id && faults[i].AcknowledgedBy != "" {
+				return faults[i], true
 			}
 		}
 		if time.Now().After(deadline) {
@@ -375,13 +375,13 @@ func (h *securityRestHarness) waitFaultGone(reason string, timeout time.Duration
 	deadline := time.Now().Add(timeout)
 	for {
 		var faults []hmapi.SecurityFault
-		res := h.do(http.MethodGet, "/security/faults", nil, &faults)
-		if res.StatusCode != http.StatusOK {
-			h.t.Fatalf("GET /security/faults: status %d", res.StatusCode)
+		status := h.do(http.MethodGet, "/security/faults", nil, &faults)
+		if status != http.StatusOK {
+			h.t.Fatalf("GET /security/faults: status %d", status)
 		}
 		found := false
-		for _, f := range faults {
-			if f.Reason == reason {
+		for i := range faults {
+			if faults[i].Reason == reason {
 				found = true
 				break
 			}
@@ -400,9 +400,9 @@ func (h *securityRestHarness) waitFaultGone(reason string, timeout time.Duration
 func (h *securityRestHarness) listSources() []hmapi.SecuritySourceView {
 	h.t.Helper()
 	var out []hmapi.SecuritySourceView
-	res := h.do(http.MethodGet, "/security/sources", nil, &out)
-	if res.StatusCode != http.StatusOK {
-		h.t.Fatalf("GET /security/sources: status %d", res.StatusCode)
+	status := h.do(http.MethodGet, "/security/sources", nil, &out)
+	if status != http.StatusOK {
+		h.t.Fatalf("GET /security/sources: status %d", status)
 	}
 	return out
 }
@@ -425,9 +425,9 @@ func TestSecurityDomainBootReportsKnownHazardClasses(t *testing.T) {
 	h := newSecurityRestHarness(t)
 
 	var snap hmapi.SecuritySnapshot
-	res := h.do(http.MethodGet, "/security", nil, &snap)
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("GET /security: status %d", res.StatusCode)
+	status := h.do(http.MethodGet, "/security", nil, &snap)
+	if status != http.StatusOK {
+		t.Fatalf("GET /security: status %d", status)
 	}
 	if snap.Severity != string(hmenum.SecuritySeverityOK) {
 		t.Fatalf("severity = %q, want %q with nothing driven", snap.Severity, hmenum.SecuritySeverityOK)
@@ -465,9 +465,9 @@ func TestSecurityDomainBootReportsKnownHazardClasses(t *testing.T) {
 
 	// A class the installation genuinely has no source for reads back as
 	// 404, the same "not here" verdict GetSecurityClass documents.
-	res = h.do(http.MethodGet, "/security/classes/gas", nil, nil)
-	if res.StatusCode != http.StatusNotFound {
-		t.Fatalf("GET /security/classes/gas: status %d, want 404 (no gas source in this fleet)", res.StatusCode)
+	status = h.do(http.MethodGet, "/security/classes/gas", nil, nil)
+	if status != http.StatusNotFound {
+		t.Fatalf("GET /security/classes/gas: status %d, want 404 (no gas source in this fleet)", status)
 	}
 }
 
@@ -493,9 +493,9 @@ func TestSecurityWaterSensorReachesAggregateAndClears(t *testing.T) {
 	}
 
 	var snap hmapi.SecuritySnapshot
-	res := h.do(http.MethodGet, "/security", nil, &snap)
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("GET /security: status %d", res.StatusCode)
+	status := h.do(http.MethodGet, "/security", nil, &snap)
+	if status != http.StatusOK {
+		t.Fatalf("GET /security: status %d", status)
 	}
 	if snap.Severity != string(hmenum.SecuritySeverityAlarm) {
 		t.Fatalf("severity = %q, want %q while water is active", snap.Severity, hmenum.SecuritySeverityAlarm)
@@ -573,9 +573,9 @@ func TestSecuritySourceOverrideCanBeUndone(t *testing.T) {
 	// Exclude the source. included=false must remove it from the class
 	// aggregate: Known drops to 2 and the class stops being active, even
 	// though the last value the daemon observed is still true.
-	res := h.do(http.MethodPut, refPath, hmapi.SecuritySourceOverride{Included: boolPtr(false)}, nil)
-	if res.StatusCode != http.StatusNoContent {
-		t.Fatalf("PUT override included=false: status %d", res.StatusCode)
+	status := h.do(http.MethodPut, refPath, hmapi.SecuritySourceOverride{Included: boolPtr(false)}, nil)
+	if status != http.StatusNoContent {
+		t.Fatalf("PUT override included=false: status %d", status)
 	}
 	st, present = h.waitClassState("water", true, false, 2, 2*time.Second)
 	if !present || st.Active || st.Known != 2 {
@@ -606,9 +606,9 @@ func TestSecuritySourceOverrideCanBeUndone(t *testing.T) {
 
 	// Undo: empty class + included=true deletes the override row and
 	// restores the source to the index.
-	res = h.do(http.MethodPut, refPath, hmapi.SecuritySourceOverride{Included: boolPtr(true)}, nil)
-	if res.StatusCode != http.StatusNoContent {
-		t.Fatalf("PUT override undo: status %d", res.StatusCode)
+	status = h.do(http.MethodPut, refPath, hmapi.SecuritySourceOverride{Included: boolPtr(true)}, nil)
+	if status != http.StatusNoContent {
+		t.Fatalf("PUT override undo: status %d", status)
 	}
 	st, present = h.waitClassState("water", true, false, 3, 2*time.Second)
 	if !present || st.Known != 3 {
@@ -671,9 +671,9 @@ func TestSecurityFaultOpensPersistsAndCanBeAcknowledged(t *testing.T) {
 		t.Fatalf("fault already acknowledged before the acknowledge call: %+v", f)
 	}
 
-	res := h.do(http.MethodPost, "/security/faults/"+f.ID+"/acknowledge", nil, nil)
-	if res.StatusCode != http.StatusNoContent {
-		t.Fatalf("POST /security/faults/%s/acknowledge: status %d", f.ID, res.StatusCode)
+	status := h.do(http.MethodPost, "/security/faults/"+f.ID+"/acknowledge", nil, nil)
+	if status != http.StatusNoContent {
+		t.Fatalf("POST /security/faults/%s/acknowledge: status %d", f.ID, status)
 	}
 
 	f2, ok := h.waitFaultAcknowledged(f.ID, 2*time.Second)
@@ -713,9 +713,9 @@ func TestSecurityDomainReportsHazardsWithoutAlarmEngine(t *testing.T) {
 	}
 
 	var snap hmapi.SecuritySnapshot
-	res := h.do(http.MethodGet, "/security", nil, &snap)
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("GET /security: status %d", res.StatusCode)
+	status := h.do(http.MethodGet, "/security", nil, &snap)
+	if status != http.StatusOK {
+		t.Fatalf("GET /security: status %d", status)
 	}
 	if len(snap.Zones) != 0 {
 		t.Fatalf("zones = %+v, want empty with no alarm engine wired", snap.Zones)

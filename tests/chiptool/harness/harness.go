@@ -133,7 +133,7 @@ type Options struct {
 // ./bin/openccu-loom is usable the function returns an error rather
 // than calling t.Fatalf (no testing.T is available here).
 func StartShared(chipBin string, opts Options) (*Bridge, func(), error) {
-	return startCommon(nil, chipBin, opts)
+	return startCommon(&Bridge{chipBin: chipBin}, opts)
 }
 
 // Start brings up godevccu and the openccu-loom daemon, configured
@@ -141,7 +141,7 @@ func StartShared(chipBin string, opts Options) (*Bridge, func(), error) {
 // handle. A t.Cleanup is registered to stop everything.
 func Start(t *testing.T, chipBin string, opts Options) *Bridge {
 	t.Helper()
-	b, cleanup, err := startCommon(t, chipBin, opts)
+	b, cleanup, err := startCommon(&Bridge{t: t, chipBin: chipBin}, opts)
 	if err != nil {
 		t.Fatalf("bridge bring-up: %v", err)
 	}
@@ -150,19 +150,16 @@ func Start(t *testing.T, chipBin string, opts Options) *Bridge {
 }
 
 // startCommon is the shared bring-up path used by both Start (with
-// a t.Cleanup hook) and StartShared (with a returned callback). When
-// t is non-nil the function fast-fails via t.Fatalf; when nil it
-// surfaces errors via the returned error. Either way the bridge
-// handle and a cleanup function are produced.
-func startCommon(t *testing.T, chipBin string, opts Options) (*Bridge, func(), error) {
-	b := &Bridge{
-		t:       t,
-		chipBin: chipBin,
-		stdout:  newSyncBuf(),
-		stderr:  newSyncBuf(),
-	}
+// a t.Cleanup hook) and StartShared (with a returned callback). b
+// carries the caller's identity: its testing.T (nil for the suite-wide
+// bridge, which logs nothing) and the chip-tool binary. Errors are
+// surfaced via the returned error; Start turns them into t.Fatalf.
+// On success the bridge handle and a cleanup function are produced.
+func startCommon(b *Bridge, opts Options) (*Bridge, func(), error) {
+	b.stdout = newSyncBuf()
+	b.stderr = newSyncBuf()
 
-	daemonBin, err := resolveDaemonBinary(t)
+	daemonBin, err := resolveDaemonBinary()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -182,34 +179,11 @@ func startCommon(t *testing.T, chipBin string, opts Options) (*Bridge, func(), e
 		}
 	}
 
-	// Pre-allocate every loopback port we hand the daemon. The TCP
-	// dance is the standard "Listen→Addr→Close" trick (small TOCTOU
-	// window). The matter UDP port uses the UDP-equivalent helper.
-	restPort, err := pickFreeTCPPortNoT()
+	restPort, err := b.allocatePorts()
 	if err != nil {
 		rollback()
-		return nil, nil, fmt.Errorf("pick REST port: %w", err)
+		return nil, nil, err
 	}
-	if b.callbackPort, err = pickFreeTCPPortNoT(); err != nil {
-		rollback()
-		return nil, nil, fmt.Errorf("pick callback port: %w", err)
-	}
-	if b.binPort, err = pickFreeTCPPortNoT(); err != nil {
-		rollback()
-		return nil, nil, fmt.Errorf("pick bin port: %w", err)
-	}
-	if b.matterPort, err = pickFreeUDPPortNoT(); err != nil {
-		rollback()
-		return nil, nil, fmt.Errorf("pick matter UDP port: %w", err)
-	}
-	b.restAddr = fmt.Sprintf("127.0.0.1:%d", restPort)
-	// Matter binds to [::]:<port> (dual-stack). chip-tool's
-	// post-CASE operational mDNS resolution rejects non-link-local
-	// addresses, so the bridge must advertise on a real interface
-	// with fe80:: rather than just loopback; binding dual-stack and
-	// letting the kernel pick interfaces lets `grandcat/zeroconf`
-	// publish the host's actual fe80:: addresses.
-	b.matterAddr = fmt.Sprintf("[::]:%d", b.matterPort)
 
 	// zeroconf advertisement is REQUIRED for chip-tool's post-CASE
 	// operational discovery — without it the controller commissions
@@ -222,7 +196,7 @@ func startCommon(t *testing.T, chipBin string, opts Options) (*Bridge, func(), e
 	// suite always advertises.
 	_ = opts.EnableMDNS
 
-	dataDir, err := makeDataDir(t)
+	dataDir, err := b.makeDataDir()
 	if err != nil {
 		rollback()
 		return nil, nil, fmt.Errorf("data dir: %w", err)
@@ -255,7 +229,7 @@ func startCommon(t *testing.T, chipBin string, opts Options) (*Bridge, func(), e
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	b.cmd = exec.CommandContext(ctx, daemonBin, "run", "--config", b.cfgPath)
+	b.cmd = exec.CommandContext(ctx, daemonBin, "run", "--config", b.cfgPath) //nolint:gosec // G204: launching the daemon under test is the point of the harness
 	b.cmd.Stdout = b.stdout
 	b.cmd.Stderr = b.stderr
 	if runtime.GOOS != "windows" {
@@ -278,33 +252,76 @@ func startCommon(t *testing.T, chipBin string, opts Options) (*Bridge, func(), e
 	if deadline == 0 {
 		deadline = 30 * time.Second
 	}
-	if err := b.waitForHealth(deadline); err != nil {
-		if t != nil {
-			t.Logf("daemon stdout:\n%s", b.stdout.String())
-			t.Logf("daemon stderr:\n%s", b.stderr.String())
-		}
+	if err := b.awaitReady(deadline); err != nil {
 		rollback()
-		return nil, nil, fmt.Errorf("daemon health timeout (%s): %w", deadline, err)
-	}
-	if err := b.waitForMatterListening(15 * time.Second); err != nil {
-		if t != nil {
-			t.Logf("daemon stdout:\n%s", b.stdout.String())
-			t.Logf("daemon stderr:\n%s", b.stderr.String())
-		}
-		rollback()
-		return nil, nil, fmt.Errorf("matter listener timeout: %w", err)
+		return nil, nil, err
 	}
 
 	return b, rollback, nil
 }
 
+// allocatePorts pre-allocates every loopback port the daemon is
+// handed and records the derived listen addresses on b. The TCP dance
+// is the standard "Listen→Addr→Close" trick (small TOCTOU window). The
+// matter UDP port uses the UDP-equivalent helper. Returns the REST
+// port, which only the generated config needs.
+func (b *Bridge) allocatePorts() (restPort int, err error) {
+	if restPort, err = pickFreeTCPPortNoT(); err != nil {
+		return 0, fmt.Errorf("pick REST port: %w", err)
+	}
+	if b.callbackPort, err = pickFreeTCPPortNoT(); err != nil {
+		return 0, fmt.Errorf("pick callback port: %w", err)
+	}
+	if b.binPort, err = pickFreeTCPPortNoT(); err != nil {
+		return 0, fmt.Errorf("pick bin port: %w", err)
+	}
+	if b.matterPort, err = pickFreeUDPPortNoT(); err != nil {
+		return 0, fmt.Errorf("pick matter UDP port: %w", err)
+	}
+	b.restAddr = fmt.Sprintf("127.0.0.1:%d", restPort)
+	// Matter binds to [::]:<port> (dual-stack). chip-tool's
+	// post-CASE operational mDNS resolution rejects non-link-local
+	// addresses, so the bridge must advertise on a real interface
+	// with fe80:: rather than just loopback; binding dual-stack and
+	// letting the kernel pick interfaces lets `grandcat/zeroconf`
+	// publish the host's actual fe80:: addresses.
+	b.matterAddr = fmt.Sprintf("[::]:%d", b.matterPort)
+	return restPort, nil
+}
+
+// awaitReady waits for the freshly started daemon to report healthy
+// and for its Matter listener to come up. On failure it dumps the
+// captured daemon output to the test log (when a testing.T is bound)
+// before returning; the caller owns the rollback.
+func (b *Bridge) awaitReady(deadline time.Duration) error {
+	if err := b.waitForHealth(deadline); err != nil {
+		b.logDaemonOutput()
+		return fmt.Errorf("daemon health timeout (%s): %w", deadline, err)
+	}
+	if err := b.waitForMatterListening(15 * time.Second); err != nil {
+		b.logDaemonOutput()
+		return fmt.Errorf("matter listener timeout: %w", err)
+	}
+	return nil
+}
+
+// logDaemonOutput writes the captured daemon stdout and stderr to the
+// bound test log. A no-op for the suite-wide bridge, which has no
+// testing.T.
+func (b *Bridge) logDaemonOutput() {
+	if b.t == nil {
+		return
+	}
+	b.t.Logf("daemon stdout:\n%s", b.stdout.String())
+	b.t.Logf("daemon stderr:\n%s", b.stderr.String())
+}
+
 // resolveDaemonBinary mirrors [RequireDaemonBinary] but returns an
 // error instead of calling t.Fatalf, so [StartShared] (no
-// testing.T) can use it. When t is non-nil and the binary is
-// missing, falls through to t.Fatalf for compatibility.
-func resolveDaemonBinary(t *testing.T) (string, error) {
+// testing.T) can use it.
+func resolveDaemonBinary() (string, error) {
 	if p := os.Getenv(DaemonBinaryEnv); p != "" {
-		if _, err := os.Stat(p); err != nil {
+		if _, err := os.Stat(p); err != nil { //nolint:gosec // G703: the daemon binary path is an operator-supplied env override by design
 			return "", fmt.Errorf("%s=%q: %w", DaemonBinaryEnv, p, err)
 		}
 		return p, nil
@@ -321,13 +338,13 @@ func resolveDaemonBinary(t *testing.T) (string, error) {
 	return bin, nil
 }
 
-// makeDataDir creates the daemon's data directory. When a testing.T
-// is available it uses t.TempDir (per-test cleanup); otherwise it
+// makeDataDir creates the daemon's data directory. When the bridge is
+// bound to a testing.T it uses t.TempDir (per-test cleanup); otherwise it
 // creates an os.MkdirTemp the caller cleans up via the returned
 // cleanup callback in startCommon.
-func makeDataDir(t *testing.T) (string, error) {
-	if t != nil {
-		return t.TempDir(), nil
+func (b *Bridge) makeDataDir() (string, error) {
+	if b.t != nil {
+		return b.t.TempDir(), nil
 	}
 	return os.MkdirTemp("", "openccu-loom-chiptool-")
 }
@@ -379,7 +396,7 @@ func (b *Bridge) Restart(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	b.stdout = newSyncBuf()
 	b.stderr = newSyncBuf()
-	b.cmd = exec.CommandContext(ctx, daemonBin, "run", "--config", b.cfgPath)
+	b.cmd = exec.CommandContext(ctx, daemonBin, "run", "--config", b.cfgPath) //nolint:gosec // G204: launching the daemon under test is the point of the harness
 	b.cmd.Stdout = b.stdout
 	b.cmd.Stderr = b.stderr
 	if runtime.GOOS != "windows" {
@@ -423,9 +440,9 @@ func (b *Bridge) AuthHeader() string {
 	return "Basic " + creds
 }
 
-// MatterStatus queries GET /api/v1/matter/status and returns the
-// parsed body. The harness uses it during bring-up; tests use it
-// to assert on listening/advertising state.
+// MatterStatusResponse is the parsed body of GET /api/v1/matter/status.
+// The harness uses it during bring-up; tests use it to assert on
+// listening/advertising state.
 type MatterStatusResponse struct {
 	Enabled        bool   `json:"enabled"`
 	Listening      bool   `json:"listening"`
@@ -442,7 +459,7 @@ type MatterStatusResponse struct {
 // on success.
 func (b *Bridge) MatterStatus(t *testing.T) MatterStatusResponse {
 	t.Helper()
-	req, err := http.NewRequest(http.MethodGet, b.RESTBase()+"/api/v1/matter/status", nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, b.RESTBase()+"/api/v1/matter/status", http.NoBody)
 	if err != nil {
 		t.Fatalf("build matter/status request: %v", err)
 	}
@@ -451,7 +468,7 @@ func (b *Bridge) MatterStatus(t *testing.T) MatterStatusResponse {
 	if err != nil {
 		t.Fatalf("matter/status: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		raw, _ := io.ReadAll(resp.Body)
 		t.Fatalf("matter/status: status=%d body=%s", resp.StatusCode, raw)
@@ -465,7 +482,7 @@ func (b *Bridge) MatterStatus(t *testing.T) MatterStatusResponse {
 
 // RESTPost POSTs the given body to the daemon and returns the
 // response body. Used by the commissioning-window test.
-func (b *Bridge) RESTPost(t *testing.T, path string, payload any) ([]byte, int) {
+func (b *Bridge) RESTPost(t *testing.T, path string, payload any) (body []byte, status int) {
 	t.Helper()
 	var buf bytes.Buffer
 	if payload != nil {
@@ -473,7 +490,7 @@ func (b *Bridge) RESTPost(t *testing.T, path string, payload any) ([]byte, int) 
 			t.Fatalf("encode payload: %v", err)
 		}
 	}
-	req, err := http.NewRequest(http.MethodPost, b.RESTBase()+path, &buf)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, b.RESTBase()+path, &buf)
 	if err != nil {
 		t.Fatalf("build request: %v", err)
 	}
@@ -483,8 +500,8 @@ func (b *Bridge) RESTPost(t *testing.T, path string, payload any) ([]byte, int) 
 	if err != nil {
 		t.Fatalf("POST %s: %v", path, err)
 	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	defer func() { _ = resp.Body.Close() }()
+	body, _ = io.ReadAll(resp.Body)
 	return body, resp.StatusCode
 }
 
@@ -499,7 +516,7 @@ func (b *Bridge) RESTPost(t *testing.T, path string, payload any) ([]byte, int) 
 // the GET or POST fails — the caller decides whether to fatal.
 func (b *Bridge) EnableAllExposures(ctx context.Context) (int, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		b.RESTBase()+"/api/v1/matter/exposable", nil)
+		b.RESTBase()+"/api/v1/matter/exposable", http.NoBody)
 	if err != nil {
 		return 0, fmt.Errorf("build list request: %w", err)
 	}
@@ -576,7 +593,7 @@ func (b *Bridge) EnableAllExposures(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("POST bulk: %w", err)
 	}
-	defer postResp.Body.Close()
+	defer func() { _ = postResp.Body.Close() }()
 	if postResp.StatusCode < 200 || postResp.StatusCode >= 300 {
 		raw, _ := io.ReadAll(postResp.Body)
 		return 0, fmt.Errorf("POST bulk: status=%d body=%s", postResp.StatusCode, raw)
@@ -588,7 +605,14 @@ func (b *Bridge) EnableAllExposures(ctx context.Context) (int, error) {
 // matter/exposable + matter/fabrics tests.
 func (b *Bridge) RESTGet(t *testing.T, path string, into any) int {
 	t.Helper()
-	req, err := http.NewRequest(http.MethodGet, b.RESTBase()+path, nil)
+	return b.restGetCtx(context.Background(), t, path, into)
+}
+
+// restGetCtx is the [Bridge.RESTGet] variant for harness helpers that
+// already hold the caller's context.
+func (b *Bridge) restGetCtx(ctx context.Context, t *testing.T, path string, into any) int {
+	t.Helper()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, b.RESTBase()+path, http.NoBody)
 	if err != nil {
 		t.Fatalf("build request: %v", err)
 	}
@@ -597,7 +621,7 @@ func (b *Bridge) RESTGet(t *testing.T, path string, into any) int {
 	if err != nil {
 		t.Fatalf("GET %s: %v", path, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if into != nil && resp.StatusCode == http.StatusOK {
 		if err := json.NewDecoder(resp.Body).Decode(into); err != nil {
 			t.Fatalf("decode %s: %v", path, err)
@@ -625,7 +649,7 @@ func (b *Bridge) waitForHealth(deadline time.Duration) error {
 	defer expire.Stop()
 	hc := &http.Client{Timeout: 1 * time.Second}
 	for {
-		req, _ := http.NewRequest(http.MethodGet, url, nil)
+		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, url, http.NoBody)
 		resp, err := hc.Do(req)
 		if err == nil {
 			_ = resp.Body.Close()
@@ -655,7 +679,7 @@ func (b *Bridge) waitForMatterListening(deadline time.Duration) error {
 	defer expire.Stop()
 	hc := &http.Client{Timeout: 1 * time.Second}
 	for {
-		req, _ := http.NewRequest(http.MethodGet, url, nil)
+		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, url, http.NoBody)
 		req.Header.Set("Authorization", b.AuthHeader())
 		resp, err := hc.Do(req)
 		if err == nil {

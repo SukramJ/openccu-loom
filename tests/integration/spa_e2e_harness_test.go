@@ -20,7 +20,6 @@ package integration
 import (
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
 	"sync"
 	"testing"
@@ -106,7 +105,7 @@ func newSPAHarness(t *testing.T, models []string) *spaHarness {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	if err := pipeline.IngestFromBackend(ctx, "HmIP-RF", hmenum.InterfaceHmIPRF, backend, valueWriter, nil, logger); err != nil {
 		t.Fatalf("ingest: %v", err)
 	}
@@ -204,8 +203,8 @@ func (h *spaHarness) drainEvents(wait time.Duration, match func(hmevent.DataPoin
 		if match == nil {
 			return snap
 		}
-		for _, e := range snap {
-			if match(e) {
+		for i := range snap {
+			if match(snap[i]) {
 				return snap
 			}
 		}
@@ -322,7 +321,7 @@ func (w backendValueWriter) SetValue(
 // deviceAddrAndChannelHarness splits "0001ABCD:4" into the device
 // address and channel number. Mirrors handler.deviceAddrAndChannel
 // but local-only to keep test code self-contained.
-func deviceAddrAndChannelHarness(channelAddress string) (string, int) {
+func deviceAddrAndChannelHarness(channelAddress string) (deviceAddr string, channel int) {
 	for i := len(channelAddress) - 1; i >= 0; i-- {
 		if channelAddress[i] == ':' {
 			n := 0

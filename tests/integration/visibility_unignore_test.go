@@ -75,7 +75,7 @@ func newVisibilityTestFixture(t *testing.T) *visibilityTestFixture {
 	pipeline := adapter.NewDevicePipeline(c)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	if err := pipeline.IngestFromBackend(ctx, "HmIP-RF", hmenum.InterfaceHmIPRF, backend, nil, nil, logger); err != nil {
 		t.Fatalf("IngestFromBackend: %v", err)
 	}
@@ -242,8 +242,7 @@ func TestVisibilityUnIgnoreRoundTrip(t *testing.T) {
 	if putResp.StatusCode != http.StatusOK {
 		t.Fatalf("PUT status=%d body=%s", putResp.StatusCode, putBytes)
 	}
-	var putDTO handlers.UnIgnoreUpdateResponseDTO
-	putDTO = decodeJSON[handlers.UnIgnoreUpdateResponseDTO](t, putBytes)
+	putDTO := decodeJSON[handlers.UnIgnoreUpdateResponseDTO](t, putBytes)
 	if putDTO.AppliedCount != 2 {
 		t.Errorf("applied_count=%d, want 2", putDTO.AppliedCount)
 	}
@@ -264,8 +263,7 @@ func TestVisibilityUnIgnoreRoundTrip(t *testing.T) {
 	if getResp.StatusCode != http.StatusOK {
 		t.Fatalf("GET status=%d body=%s", getResp.StatusCode, getBytes)
 	}
-	var getDTO handlers.UnIgnoreListResponseDTO
-	getDTO = decodeJSON[handlers.UnIgnoreListResponseDTO](t, getBytes)
+	getDTO := decodeJSON[handlers.UnIgnoreListResponseDTO](t, getBytes)
 	if len(getDTO.Centrals) == 0 {
 		t.Fatalf("GET: no centrals in response")
 	}
@@ -308,8 +306,7 @@ func TestVisibilityUnIgnoreMalformedPatterns(t *testing.T) {
 	if putResp.StatusCode != http.StatusOK {
 		t.Fatalf("PUT status=%d body=%s", putResp.StatusCode, putBytes)
 	}
-	var dto handlers.UnIgnoreUpdateResponseDTO
-	dto = decodeJSON[handlers.UnIgnoreUpdateResponseDTO](t, putBytes)
+	dto := decodeJSON[handlers.UnIgnoreUpdateResponseDTO](t, putBytes)
 
 	if len(dto.ParseErrors) == 0 {
 		t.Errorf("parse_errors: expected at least one error for ':bogus', got none")
@@ -336,8 +333,7 @@ func TestVisibilityUnIgnoreCandidatesNonEmpty(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("candidates status=%d body=%s", resp.StatusCode, b)
 	}
-	var dto handlers.UnIgnoreCandidateListDTO
-	dto = decodeJSON[handlers.UnIgnoreCandidateListDTO](t, b)
+	dto := decodeJSON[handlers.UnIgnoreCandidateListDTO](t, b)
 
 	if dto.IncludeMaster {
 		t.Errorf("include_master=true, want false (default)")
@@ -363,8 +359,8 @@ func TestVisibilityUnIgnoreAuditEntry(t *testing.T) {
 		"central_name": fx.centralName,
 		"patterns":     []string{"OLD_PATTERN"},
 	}
-	seedResp := doPUT(t, s.URL, "/api/v1/visibility/unignore", seed)
-	readBody(t, seedResp) // drain
+	seedResp := doPUT(t, s.URL, "/api/v1/visibility/unignore", seed) //nolint:bodyclose // readBody closes the body
+	readBody(t, seedResp)                                            // drain
 
 	// Now PUT a new set so the audit records added+removed.
 	putBody := map[string]any{
@@ -432,14 +428,13 @@ func TestVisibilityUnIgnoreReplaceIsIdempotent(t *testing.T) {
 	if resp2.StatusCode != http.StatusOK {
 		t.Fatalf("second PUT status=%d body=%s", resp2.StatusCode, b2)
 	}
-	var dto handlers.UnIgnoreUpdateResponseDTO
-	dto = decodeJSON[handlers.UnIgnoreUpdateResponseDTO](t, b2)
+	dto := decodeJSON[handlers.UnIgnoreUpdateResponseDTO](t, b2)
 	if dto.AppliedCount != 1 {
 		t.Errorf("second PUT applied_count=%d, want 1", dto.AppliedCount)
 	}
 
 	// Audit should have exactly ONE un_ignore_update (the first PUT).
-	auditResp := doGET(t, s.URL, "/api/v1/audit")
+	auditResp := doGET(t, s.URL, "/api/v1/audit") //nolint:bodyclose // readBody closes the body
 	auditBytes := readBody(t, auditResp)
 	var auditEntries []struct {
 		Action string `json:"action"`

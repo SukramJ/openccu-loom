@@ -10,7 +10,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -85,7 +84,7 @@ func TestModelSnapshotDumpAgainstGodevccu(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	if err := pipeline.IngestFromBackend(ctx, "HmIP-RF", hmenum.InterfaceHmIPRF, backend, nil, nil, logger); err != nil {
 		t.Fatalf("ingest: %v", err)
 	}
@@ -149,7 +148,7 @@ func snapshotDevices(t *testing.T) []string {
 func splitCommas(s string) []string {
 	out := make([]string, 0, 8)
 	start := 0
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		if s[i] == ',' {
 			out = append(out, s[start:i])
 			start = i + 1
@@ -365,11 +364,13 @@ func (s *snapshotDumper) dumpChannel(ch *device.Channel) snapshotChannel {
 }
 
 func (s *snapshotDumper) dumpGenericDPs(ch *device.Channel) []snapshotGeneric {
-	out := make([]snapshotGeneric, 0)
-	for _, dp := range ch.DataPoints() {
+	values := ch.DataPoints()
+	master := ch.MasterDataPoints()
+	out := make([]snapshotGeneric, 0, len(values)+len(master))
+	for _, dp := range values {
 		out = append(out, s.dumpGenericDP(ch.Type, "VALUES", dp))
 	}
-	for _, dp := range ch.MasterDataPoints() {
+	for _, dp := range master {
 		out = append(out, s.dumpGenericDP(ch.Type, "MASTER", dp))
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -524,12 +525,12 @@ func dumpCustomDPs(ch *device.Channel) []snapshotCustom {
 //	`text_display.py` → `DataPointCategory.TEXT_DISPLAY = "text_display"`
 func customCategoryFromType(typeName string) string {
 	// Strip leading `*` for pointer types.
-	if len(typeName) > 0 && typeName[0] == '*' {
+	if typeName != "" && typeName[0] == '*' {
 		typeName = typeName[1:]
 	}
 	// Take the package portion (everything before the first dot).
 	pkg := ""
-	for i := 0; i < len(typeName); i++ {
+	for i := range len(typeName) {
 		if typeName[i] == '.' {
 			pkg = typeName[:i]
 			break
@@ -545,10 +546,11 @@ func customCategoryFromType(typeName string) string {
 }
 
 func dumpCalculatedDPs(ch *device.Channel) []snapshotCalc {
-	out := make([]snapshotCalc, 0)
-	for _, dp := range ch.CalculatedDataPoints() {
+	calculated := ch.CalculatedDataPoints()
+	out := make([]snapshotCalc, 0, len(calculated))
+	for _, dp := range calculated {
 		key := dp.DataPointKey()
-		c := snapshotCalc{Parameter: string(key.Parameter)}
+		c := snapshotCalc{Parameter: key.Parameter}
 		if cat, ok := dp.(interface {
 			Category() hmenum.DataPointCategory
 		}); ok {
@@ -596,8 +598,9 @@ func decodeTyped(rm json.RawMessage, paramType hmenum.ParameterType) any {
 			return nil
 		}
 		return fmt.Sprintf("%v", raw)
+	default:
+		return raw
 	}
-	return raw
 }
 
 // CoerceBool mirrors. A

@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -124,15 +125,15 @@ func NewControllerShared(chipBin string, nodeID uint64) (*Controller, func(), er
 // pickChipToolStorageDir resolves a write-accessible KVS directory
 // for the given chip-tool binary. See [NewController] for the
 // priority ladder. The cleanup callback removes the directory.
-func pickChipToolStorageDir(chipBin string) (string, func(), error) {
+func pickChipToolStorageDir(chipBin string) (dir string, cleanup func(), err error) {
 	suffix := randomToken()
 
 	if base := os.Getenv(ChipToolKVSBaseEnv); base != "" {
-		dir := filepath.Join(base, "openccu-loom-chiptool-"+suffix)
-		if err := os.MkdirAll(dir, 0o700); err != nil {
+		envDir := filepath.Join(base, "openccu-loom-chiptool-"+suffix)
+		if err := os.MkdirAll(envDir, 0o700); err != nil { //nolint:gosec // G703: the KVS base is an operator-supplied env override by design
 			return "", nil, fmt.Errorf("create chip-tool KVS dir under %s: %w", ChipToolKVSBaseEnv, err)
 		}
-		return dir, func() { _ = os.RemoveAll(dir) }, nil
+		return envDir, func() { _ = os.RemoveAll(envDir) }, nil //nolint:gosec // G703: removes only the directory the harness created above
 	}
 
 	if strings.HasPrefix(chipBin, "/snap/") {
@@ -144,18 +145,18 @@ func pickChipToolStorageDir(chipBin string) (string, func(), error) {
 		if fi, err := os.Stat(base); err != nil || !fi.IsDir() {
 			return "", nil, fmt.Errorf("snap chip-tool KVS base %s missing (run chip-tool once interactively to create it, or set %s)", base, ChipToolKVSBaseEnv)
 		}
-		dir := filepath.Join(base, "openccu-loom-chiptool-tests", suffix)
-		if err := os.MkdirAll(dir, 0o700); err != nil {
+		snapDir := filepath.Join(base, "openccu-loom-chiptool-tests", suffix)
+		if err := os.MkdirAll(snapDir, 0o700); err != nil {
 			return "", nil, fmt.Errorf("create snap KVS dir: %w", err)
 		}
-		return dir, func() { _ = os.RemoveAll(dir) }, nil
+		return snapDir, func() { _ = os.RemoveAll(snapDir) }, nil
 	}
 
-	dir, err := os.MkdirTemp("", "openccu-loom-chiptool-kvs-")
+	tmpDir, err := os.MkdirTemp("", "openccu-loom-chiptool-kvs-")
 	if err != nil {
 		return "", nil, err
 	}
-	return dir, func() { _ = os.RemoveAll(dir) }, nil
+	return tmpDir, func() { _ = os.RemoveAll(tmpDir) }, nil
 }
 
 // randomToken returns 16 hex characters from crypto/rand. Used to
@@ -202,7 +203,7 @@ func (c *Controller) RunWithTimeout(parent context.Context, t *testing.T, timeou
 	full := append([]string{}, args...)
 	full = append(full, "--storage-directory", c.StorageDir)
 
-	cmd := exec.CommandContext(ctx, c.ChipBin, full...)
+	cmd := exec.CommandContext(ctx, c.ChipBin, full...) //nolint:gosec // G204: launching chip-tool with harness-built arguments is the point of the harness
 	cmd.Env = append(
 		os.Environ(),
 		// Force coloured TTY off; the parser greps ANSI-stripped lines
@@ -251,8 +252,8 @@ func (c *Controller) Pair(ctx context.Context, t *testing.T, addr string, port i
 		ctx, t,
 		"pairing", "already-discovered",
 		fmt.Sprintf("0x%X", c.NodeID),
-		fmt.Sprintf("%d", ChipDefaultPasscode),
-		addr, fmt.Sprintf("%d", port),
+		strconv.Itoa(ChipDefaultPasscode),
+		addr, strconv.Itoa(port),
 		"--bypass-attestation-verifier", "true",
 		"--pase-only", "true",
 	)
@@ -267,8 +268,8 @@ func (c *Controller) PairFull(ctx context.Context, t *testing.T, addr string, po
 		ctx, t,
 		"pairing", "already-discovered",
 		fmt.Sprintf("0x%X", c.NodeID),
-		fmt.Sprintf("%d", ChipDefaultPasscode),
-		addr, fmt.Sprintf("%d", port),
+		strconv.Itoa(ChipDefaultPasscode),
+		addr, strconv.Itoa(port),
 		"--bypass-attestation-verifier", "true",
 	)
 }
@@ -284,8 +285,8 @@ func (c *Controller) PairFullWithPasscode(ctx context.Context, t *testing.T, add
 		ctx, t,
 		"pairing", "already-discovered",
 		fmt.Sprintf("0x%X", c.NodeID),
-		fmt.Sprintf("%d", passcode),
-		addr, fmt.Sprintf("%d", port),
+		strconv.FormatUint(uint64(passcode), 10),
+		addr, strconv.Itoa(port),
 		"--bypass-attestation-verifier", "true",
 	)
 }
@@ -303,8 +304,8 @@ func (c *Controller) PairFullVerifyAttestation(ctx context.Context, t *testing.T
 		ctx, t,
 		"pairing", "already-discovered",
 		fmt.Sprintf("0x%X", c.NodeID),
-		fmt.Sprintf("%d", ChipDefaultPasscode),
-		addr, fmt.Sprintf("%d", port),
+		strconv.Itoa(ChipDefaultPasscode),
+		addr, strconv.Itoa(port),
 	)
 }
 
@@ -325,7 +326,7 @@ func (c *Controller) ReadAttr(ctx context.Context, t *testing.T, cluster, attr s
 		ctx, t,
 		cluster, "read", attr,
 		fmt.Sprintf("0x%X", c.NodeID),
-		fmt.Sprintf("%d", endpointID),
+		strconv.FormatUint(uint64(endpointID), 10),
 	)
 }
 
@@ -339,7 +340,7 @@ func (c *Controller) ReadEvent(ctx context.Context, t *testing.T, cluster, evt s
 		ctx, t,
 		cluster, "read-event", evt,
 		fmt.Sprintf("0x%X", c.NodeID),
-		fmt.Sprintf("%d", endpointID),
+		strconv.FormatUint(uint64(endpointID), 10),
 	)
 }
 
@@ -348,12 +349,13 @@ func (c *Controller) ReadEvent(ctx context.Context, t *testing.T, cluster, evt s
 // none — e.g. "onoff on").
 func (c *Controller) Invoke(ctx context.Context, t *testing.T, cluster, cmd string, endpointID uint16, args ...string) (string, error) {
 	t.Helper()
-	full := []string{cluster, cmd}
+	full := make([]string, 0, 2+len(args)+2)
+	full = append(full, cluster, cmd)
 	full = append(full, args...)
 	full = append(
 		full,
 		fmt.Sprintf("0x%X", c.NodeID),
-		fmt.Sprintf("%d", endpointID),
+		strconv.FormatUint(uint64(endpointID), 10),
 	)
 	return c.Run(ctx, t, full...)
 }
@@ -367,10 +369,10 @@ func (c *Controller) Subscribe(ctx context.Context, t *testing.T, cluster, attr 
 	return c.RunWithTimeout(
 		ctx, t, 25*time.Second,
 		cluster, "subscribe", attr,
-		fmt.Sprintf("%d", minIntervalSec),
-		fmt.Sprintf("%d", maxIntervalSec),
+		strconv.Itoa(minIntervalSec),
+		strconv.Itoa(maxIntervalSec),
 		fmt.Sprintf("0x%X", c.NodeID),
-		fmt.Sprintf("%d", endpointID),
+		strconv.FormatUint(uint64(endpointID), 10),
 	)
 }
 
@@ -380,10 +382,10 @@ func (c *Controller) SubscribeEvent(ctx context.Context, t *testing.T, cluster, 
 	return c.RunWithTimeout(
 		ctx, t, 25*time.Second,
 		cluster, "subscribe-event", evt,
-		fmt.Sprintf("%d", minIntervalSec),
-		fmt.Sprintf("%d", maxIntervalSec),
+		strconv.Itoa(minIntervalSec),
+		strconv.Itoa(maxIntervalSec),
 		fmt.Sprintf("0x%X", c.NodeID),
-		fmt.Sprintf("%d", endpointID),
+		strconv.FormatUint(uint64(endpointID), 10),
 	)
 }
 
@@ -433,7 +435,7 @@ func (c *Controller) WriteAttr(ctx context.Context, t *testing.T, cluster, attr,
 		ctx, t,
 		cluster, "write", attr, value,
 		fmt.Sprintf("0x%X", c.NodeID),
-		fmt.Sprintf("%d", endpointID),
+		strconv.FormatUint(uint64(endpointID), 10),
 	)
 }
 
@@ -472,10 +474,10 @@ func (c *Controller) SubscribeAndAwait(
 	return c.subscribeAndAwait(
 		ctx, t, want, timeout,
 		cluster, "subscribe", attr,
-		fmt.Sprintf("%d", minIntervalSec),
-		fmt.Sprintf("%d", maxIntervalSec),
+		strconv.Itoa(minIntervalSec),
+		strconv.Itoa(maxIntervalSec),
 		fmt.Sprintf("0x%X", c.NodeID),
-		fmt.Sprintf("%d", endpointID),
+		strconv.FormatUint(uint64(endpointID), 10),
 	)
 }
 
@@ -494,10 +496,10 @@ func (c *Controller) SubscribeEventAndAwait(
 	return c.subscribeAndAwait(
 		ctx, t, want, timeout,
 		cluster, "subscribe-event", evt,
-		fmt.Sprintf("%d", minIntervalSec),
-		fmt.Sprintf("%d", maxIntervalSec),
+		strconv.Itoa(minIntervalSec),
+		strconv.Itoa(maxIntervalSec),
 		fmt.Sprintf("0x%X", c.NodeID),
-		fmt.Sprintf("%d", endpointID),
+		strconv.FormatUint(uint64(endpointID), 10),
 	)
 }
 
@@ -523,7 +525,7 @@ func (c *Controller) subscribeAndAwait(
 	full := append([]string{}, args...)
 	full = append(full, "--storage-directory", c.StorageDir)
 
-	cmd := exec.CommandContext(ctx, c.ChipBin, full...)
+	cmd := exec.CommandContext(ctx, c.ChipBin, full...) //nolint:gosec // G204: launching chip-tool with harness-built arguments is the point of the harness
 	cmd.Env = append(os.Environ(), "TERM=dumb", "NO_COLOR=1")
 
 	stdout, err := cmd.StdoutPipe()
@@ -610,7 +612,7 @@ func (c *Controller) SubscribeEventInteractiveAndAwait(
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, c.ChipBin, "interactive", "start", "--storage-directory", c.StorageDir)
+	cmd := exec.CommandContext(ctx, c.ChipBin, "interactive", "start", "--storage-directory", c.StorageDir) //nolint:gosec // G204: launching chip-tool with harness-built arguments is the point of the harness
 	cmd.Env = append(os.Environ(), "TERM=dumb", "NO_COLOR=1")
 
 	stdin, err := cmd.StdinPipe()

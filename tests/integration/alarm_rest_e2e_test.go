@@ -86,12 +86,12 @@ func newAlarmRestHarness(t *testing.T) *alarmRestHarness {
 	return &alarmRestHarness{alarmHarness: ah, api: api, client: &http.Client{Timeout: 10 * time.Second}}
 }
 
-// do issues one JSON request against the harness's REST listener and
+// do issues one JSON request against the harness's REST listener,
 // decodes a JSON response body into out (when out is non-nil and the
-// body is non-empty). Fails the test on transport errors only —
-// status-code assertions stay with the caller so failure messages can
-// name the specific step.
-func (h *alarmRestHarness) do(method, path string, body, out any) *http.Response {
+// body is non-empty) and returns the response status code. Fails the
+// test on transport errors only — status-code assertions stay with the
+// caller so failure messages can name the specific step.
+func (h *alarmRestHarness) do(method, path string, body, out any) int {
 	h.t.Helper()
 	var rdr io.Reader
 	if body != nil {
@@ -112,7 +112,7 @@ func (h *alarmRestHarness) do(method, path string, body, out any) *http.Response
 	if err != nil {
 		h.t.Fatalf("%s %s: %v", method, path, err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	raw, err := io.ReadAll(res.Body)
 	if err != nil {
 		h.t.Fatalf("read %s %s body: %v", method, path, err)
@@ -122,8 +122,7 @@ func (h *alarmRestHarness) do(method, path string, body, out any) *http.Response
 			h.t.Fatalf("decode %s %s body %q: %v", method, path, raw, err)
 		}
 	}
-	res.Body = io.NopCloser(bytes.NewReader(raw))
-	return res
+	return res.StatusCode
 }
 
 // waitAlarmState polls GET /alarm/state until zoneID reports want or
@@ -136,9 +135,9 @@ func (h *alarmRestHarness) waitAlarmState(zoneID string, want hmenum.AlarmZoneSt
 		var body struct {
 			Zones []hmapi.AlarmZoneStatus `json:"zones"`
 		}
-		res := h.do(http.MethodGet, "/alarm/state", nil, &body)
-		if res.StatusCode != http.StatusOK {
-			h.t.Fatalf("GET /alarm/state: status %d", res.StatusCode)
+		status := h.do(http.MethodGet, "/alarm/state", nil, &body)
+		if status != http.StatusOK {
+			h.t.Fatalf("GET /alarm/state: status %d", status)
 		}
 		for _, a := range body.Zones {
 			if a.ID != zoneID {
@@ -176,11 +175,11 @@ func TestAlarmRestFullChainCreateArmTriggerSilence(t *testing.T) {
 		t.Fatalf("marshal zone config: %v", err)
 	}
 	var zone hmapi.AlarmZone
-	res := h.do(http.MethodPost, "/alarm/zones", hmapi.AlarmZone{
+	status := h.do(http.MethodPost, "/alarm/zones", hmapi.AlarmZone{
 		Name: "Erdgeschoss", Config: areaCfg,
 	}, &zone)
-	if res.StatusCode != http.StatusCreated {
-		t.Fatalf("POST /alarm/zones: status %d", res.StatusCode)
+	if status != http.StatusCreated {
+		t.Fatalf("POST /alarm/zones: status %d", status)
 	}
 	if zone.ID == "" {
 		t.Fatal("POST /alarm/zones: response carried no server-generated id")
@@ -194,7 +193,7 @@ func TestAlarmRestFullChainCreateArmTriggerSilence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal sensor config: %v", err)
 	}
-	res = h.do(http.MethodPut, "/alarm/zones/"+zone.ID+"/sensors", []hmapi.AlarmSensor{{
+	status = h.do(http.MethodPut, "/alarm/zones/"+zone.ID+"/sensors", []hmapi.AlarmSensor{{
 		Central:        h.centralName(),
 		InterfaceID:    stateKey.InterfaceID,
 		ChannelAddress: stateKey.ChannelAddress,
@@ -203,18 +202,18 @@ func TestAlarmRestFullChainCreateArmTriggerSilence(t *testing.T) {
 		Name:           "Window",
 		Config:         sensorCfg,
 	}}, nil)
-	if res.StatusCode != http.StatusNoContent {
-		t.Fatalf("PUT /alarm/zones/%s/sensors: status %d", zone.ID, res.StatusCode)
+	if status != http.StatusNoContent {
+		t.Fatalf("PUT /alarm/zones/%s/sensors: status %d", zone.ID, status)
 	}
 
 	// 3. Arm via POST .../arm (skip_delay so the transition is
 	// synchronous — no exit-delay wait needed).
 	var accepted hmapi.AlarmArmAccepted
-	res = h.do(http.MethodPost, "/alarm/zones/"+zone.ID+"/arm", hmapi.AlarmArmRequest{
+	status = h.do(http.MethodPost, "/alarm/zones/"+zone.ID+"/arm", hmapi.AlarmArmRequest{
 		Mode: string(hmenum.AlarmModeFull), SkipDelay: true,
 	}, &accepted)
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("POST /alarm/zones/%s/arm: status %d", zone.ID, res.StatusCode)
+	if status != http.StatusOK {
+		t.Fatalf("POST /alarm/zones/%s/arm: status %d", zone.ID, status)
 	}
 	if accepted.State != string(hmenum.AlarmZoneStateArmed) {
 		t.Fatalf("arm response state = %q, want armed", accepted.State)
@@ -229,9 +228,9 @@ func TestAlarmRestFullChainCreateArmTriggerSilence(t *testing.T) {
 	}
 
 	// 5. Silence via REST.
-	res = h.do(http.MethodPost, "/alarm/zones/"+zone.ID+"/silence", nil, nil)
-	if res.StatusCode != http.StatusNoContent {
-		t.Fatalf("POST /alarm/zones/%s/silence: status %d", zone.ID, res.StatusCode)
+	status = h.do(http.MethodPost, "/alarm/zones/"+zone.ID+"/silence", nil, nil)
+	if status != http.StatusNoContent {
+		t.Fatalf("POST /alarm/zones/%s/silence: status %d", zone.ID, status)
 	}
 
 	// 6. The incident is persisted silenced (the store-level assertion

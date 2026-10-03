@@ -7,6 +7,7 @@ package integration
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -71,7 +72,7 @@ func startMosquittoDocker(t *testing.T) (*mosquittoServer, bool) {
 		"mosquitto", "-c", "/mosquitto-no-auth.conf",
 	}
 	var buf bytes.Buffer
-	cmd := exec.Command("docker", args...) //nolint:gosec // integration harness
+	cmd := exec.CommandContext(t.Context(), "docker", args...) //nolint:gosec // integration harness
 	cmd.Stderr = &buf
 	if err := cmd.Run(); err != nil {
 		// Docker is present but the daemon is not reachable (common on
@@ -82,7 +83,7 @@ func startMosquittoDocker(t *testing.T) (*mosquittoServer, bool) {
 	}
 
 	if err := waitForPort(port, 10*time.Second); err != nil {
-		_ = exec.Command("docker", "rm", "-f", name).Run() //nolint:gosec // cleanup
+		_ = exec.CommandContext(context.Background(), "docker", "rm", "-f", name).Run() //nolint:gosec // cleanup
 		t.Fatalf("mosquitto never accepted: %v", err)
 	}
 	// The broker port is open, but Mosquitto completes its
@@ -91,7 +92,7 @@ func startMosquittoDocker(t *testing.T) (*mosquittoServer, bool) {
 	// errors on the CONNECT.
 	time.Sleep(500 * time.Millisecond)
 	t.Cleanup(func() {
-		_ = exec.Command("docker", "rm", "-f", name).Run() //nolint:gosec // cleanup
+		_ = exec.CommandContext(context.Background(), "docker", "rm", "-f", name).Run() //nolint:gosec // cleanup
 	})
 	return &mosquittoServer{name: name, port: port}, true
 }
@@ -118,7 +119,9 @@ func startMosquittoNative(t *testing.T) (*mosquittoServer, bool) {
 	}
 
 	var buf bytes.Buffer
-	cmd := exec.Command(bin, "-c", confPath) //nolint:gosec // integration harness, fixed binary
+	// The broker outlives the test body and is stopped by the Cleanup below,
+	// so it must not be tied to t.Context(), which is cancelled first.
+	cmd := exec.CommandContext(context.Background(), bin, "-c", confPath) //nolint:gosec // integration harness, fixed binary
 	cmd.Stderr = &buf
 	cmd.Stdout = &buf
 	if err := cmd.Start(); err != nil {
@@ -140,7 +143,8 @@ func startMosquittoNative(t *testing.T) (*mosquittoServer, bool) {
 func waitForPort(port int, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 500*time.Millisecond)
+		dialer := net.Dialer{Timeout: 500 * time.Millisecond}
+		conn, err := dialer.DialContext(context.Background(), "tcp", fmt.Sprintf("127.0.0.1:%d", port))
 		if err == nil {
 			_ = conn.Close()
 			return nil
@@ -158,7 +162,8 @@ func waitForPort(port int, timeout time.Duration) error {
 // the `docker run -p` mapping, so we cannot lean on
 // godevccu.EphemeralPort here.
 func pickFreePort() (int, error) {
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	var lc net.ListenConfig
+	ln, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		return 0, err
 	}

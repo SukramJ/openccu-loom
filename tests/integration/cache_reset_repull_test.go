@@ -11,7 +11,6 @@ package integration
 
 import (
 	"context"
-	"io"
 	"log/slog"
 	"net"
 	"net/url"
@@ -98,7 +97,7 @@ func TestCacheResetReinitRepullsModel(t *testing.T) {
 		t.Fatalf("reg.StartAll: %v", err)
 	}
 
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 
 	translations, err := ccudata.LoadTranslationsEmbedded()
 	if err != nil {

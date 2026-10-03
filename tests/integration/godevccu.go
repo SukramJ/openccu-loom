@@ -69,6 +69,7 @@ func (m *mockCCU) Stop() error {
 // time, which sidesteps the listener-reuse race window that the
 // previous os/exec wrapper had.
 func startMockCCU(t *testing.T) *mockCCU {
+	t.Helper()
 	return startMockCCUWithDevices(t, defaultMockDevices)
 }
 
@@ -76,6 +77,7 @@ func startMockCCU(t *testing.T) *mockCCU {
 // override the device fleet. Pass `nil` to load every embedded model
 // (~399 devices).
 func startMockCCUWithDevices(t *testing.T, devices []string) *mockCCU {
+	t.Helper()
 	return startMockCCUWithOptions(t, devices, nil)
 }
 

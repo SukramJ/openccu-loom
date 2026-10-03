@@ -98,7 +98,7 @@ func TestPickFreeListenerPortsAreDistinct(t *testing.T) {
 	seen := make(map[int]struct{}, 10)
 	for range 5 {
 		ln, port := pickFreeListener(t)
-		defer func() { _ = ln.Close() }()
+		t.Cleanup(func() { _ = ln.Close() })
 		forgetPort(t, port)
 		if _, dup := seen[port]; dup {
 			t.Fatalf("port %d handed out twice", port)

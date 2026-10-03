@@ -37,7 +37,7 @@ func TestMQTTRoundTripAgainstRealBroker(t *testing.T) {
 	if err := sub.Connect(ctx); err != nil {
 		t.Fatalf("subscriber connect: %v", err)
 	}
-	defer sub.Disconnect(ctx) //nolint:errcheck
+	defer func() { _ = sub.Disconnect(ctx) }()
 
 	var mu sync.Mutex
 	var received []string

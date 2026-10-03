@@ -30,7 +30,6 @@ package integration
 
 import (
 	"context"
-	"io"
 	"log/slog"
 	"sync"
 	"testing"
@@ -82,8 +81,9 @@ func (s testAlarmSink) Panic(ctx context.Context, zoneID string) error {
 
 func (s testAlarmSink) MasterArm(ctx context.Context, mode hmenum.AlarmMode) error {
 	var lastErr error
-	for _, a := range s.ah.svc.Engine().Zones() {
-		if _, err := s.ah.svc.Engine().Arm(ctx, a.ID, engine.ArmRequest{Mode: mode, Source: alarmMqttSource}); err != nil {
+	zones := s.ah.svc.Engine().Zones()
+	for i := range zones {
+		if _, err := s.ah.svc.Engine().Arm(ctx, zones[i].ID, engine.ArmRequest{Mode: mode, Source: alarmMqttSource}); err != nil {
 			lastErr = err
 		}
 	}
@@ -102,8 +102,9 @@ func (s testAlarmSink) MasterResetMotion(ctx context.Context) error {
 
 func (s testAlarmSink) MasterDisarm(ctx context.Context) error {
 	var lastErr error
-	for _, a := range s.ah.svc.Engine().Zones() {
-		if err := s.ah.svc.Engine().Disarm(ctx, a.ID, "", alarmMqttSource); err != nil {
+	zones := s.ah.svc.Engine().Zones()
+	for i := range zones {
+		if err := s.ah.svc.Engine().Disarm(ctx, zones[i].ID, "", alarmMqttSource); err != nil {
 			lastErr = err
 		}
 	}
@@ -193,7 +194,7 @@ func setupAlarmMqttRig(t *testing.T) *alarmMqttRig {
 	})
 	ah.start()
 
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	topics := mqtt.NewTopicBuilder(alarmMqttBase)
 
 	// A daemon-lifetime context for the always-on subscriber/publisher;

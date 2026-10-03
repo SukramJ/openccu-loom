@@ -8,7 +8,6 @@ package harness
 import (
 	"fmt"
 	"net"
-	"testing"
 
 	"github.com/SukramJ/godevccu/pkg/godevccu"
 )
@@ -103,23 +102,10 @@ func (m *MockCCU) Stop() error {
 	return m.v.Stop()
 }
 
-// startMockCCU spins up a godevccu instance in CCU personality
+// startMockCCUShared spins up a godevccu instance in CCU personality
 // (auth enabled, XML-RPC + JSON-RPC active) on ephemeral loopback
-// ports and registers a cleanup hook that stops it after the test
-// (or TestMain) returns.
-func startMockCCU(t *testing.T, devices []string) *MockCCU {
-	t.Helper()
-	ccu, stop, err := startMockCCUShared(devices)
-	if err != nil {
-		t.Fatalf("startMockCCU: %v", err)
-	}
-	t.Cleanup(stop)
-	return ccu
-}
-
-// startMockCCUShared is the no-testing.T variant. The returned
-// `stop` callback releases the listeners; the caller (TestMain or
-// the t.Cleanup adapter in startMockCCU) owns its invocation.
+// ports. The returned `stop` callback releases the listeners; the
+// caller (the bridge bring-up's rollback chain) owns its invocation.
 func startMockCCUShared(devices []string) (*MockCCU, func(), error) {
 	if len(devices) == 0 {
 		devices = DefaultDevices

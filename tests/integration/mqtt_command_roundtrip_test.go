@@ -24,7 +24,6 @@ package integration
 
 import (
 	"context"
-	"io"
 	"log/slog"
 	"strings"
 	"sync"
@@ -155,7 +154,7 @@ func (r *commandChainRig) waitForSet(pred func(capturedSet) bool, timeout time.D
 
 // waitForStateValue polls the captured state topics until one whose topic
 // contains topicSubstr carries a payload containing payloadSubstr.
-func (r *commandChainRig) waitForStateValue(topicSubstr, payloadSubstr string, timeout time.Duration) (string, string, bool) {
+func (r *commandChainRig) waitForStateValue(topicSubstr, payloadSubstr string, timeout time.Duration) (stateTopic, statePayload string, found bool) {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		r.stateMu.Lock()
@@ -214,7 +213,7 @@ func setupCommandChainWithDevices(t *testing.T, devices []string) *commandChainR
 	if err != nil {
 		t.Fatalf("LoadTranslationsEmbedded: %v", err)
 	}
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 
 	ingestCtx, ingestCancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer ingestCancel()
