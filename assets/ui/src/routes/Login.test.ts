@@ -62,18 +62,16 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("Login — rendering", () => {
-  it("renders username/password fields, the submit button and the SSO link", () => {
+  it("renders username/password fields and the submit button", () => {
     render(Login);
 
     expect(screen.getByLabelText("login.username")).toBeInTheDocument();
     expect(screen.getByLabelText("login.password")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "login.submit" })).toBeInTheDocument();
-
-    const sso = screen.getByRole("link", { name: "login.sso" });
-    expect(sso).toHaveAttribute("href", "/api/v1/auth/oidc/start");
   });
 
-  it("carries the Home Assistant Ingress prefix on the SSO link", () => {
+  it("carries the Home Assistant Ingress prefix on the SSO link", async () => {
+    mockInfo.mockResolvedValue({ capabilities: ["auth.oidc.v1"] });
     const original = globalThis.location;
     (globalThis as { location?: unknown }).location = {
       pathname: "/api/hassio_ingress/tok-xyz/app/",
@@ -81,7 +79,7 @@ describe("Login — rendering", () => {
     } as Location;
     try {
       render(Login);
-      const sso = screen.getByRole("link", { name: "login.sso" });
+      const sso = await screen.findByRole("link", { name: "login.sso" });
       // Prefix-less /api/v1/... would bypass the Ingress proxy and 404
       // against the Home Assistant origin.
       expect(sso).toHaveAttribute(
@@ -108,6 +106,46 @@ describe("Login — rendering", () => {
     await waitFor(() => {
       expect(screen.getByText("login.ccu_hint")).toBeInTheDocument();
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Single Sign-On link — offered only when the daemon reports auth.oidc.v1
+// ---------------------------------------------------------------------------
+
+describe("Login — SSO link", () => {
+  it("renders the SSO link pointing at the OIDC start endpoint when auth.oidc.v1 is reported", async () => {
+    mockInfo.mockResolvedValue({ capabilities: ["auth.oidc.v1"] });
+    render(Login);
+
+    const sso = await screen.findByRole("link", { name: "login.sso" });
+    expect(sso.getAttribute("href")).toMatch(/\/auth\/oidc\/start$/);
+  });
+
+  it("does not render the SSO link when auth.oidc.v1 is absent from capabilities", async () => {
+    mockInfo.mockResolvedValue({ capabilities: ["auth.ccu.v1"] });
+    render(Login);
+
+    // The CCU hint proves /info has answered before the absence is asserted.
+    await screen.findByText("login.ccu_hint");
+    expect(screen.queryByRole("link", { name: "login.sso" })).toBeNull();
+  });
+
+  it("does not render the SSO link when api.info() rejects", async () => {
+    mockInfo.mockRejectedValue(new Error("unavailable"));
+    render(Login);
+
+    await waitFor(() => expect(mockInfo).toHaveBeenCalled());
+    // Let the rejection settle before asserting the absence.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByRole("link", { name: "login.sso" })).toBeNull();
+  });
+
+  it("does not render the SSO link while api.info() has not answered", () => {
+    mockInfo.mockReturnValue(new Promise(() => {}));
+    render(Login);
+
+    expect(screen.queryByRole("link", { name: "login.sso" })).toBeNull();
   });
 });
 

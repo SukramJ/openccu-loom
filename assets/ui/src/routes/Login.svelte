@@ -14,11 +14,18 @@
   // (ADR 0043). Drives an optional hint — the credential fields are the
   // same either way.
   let ccuAuth = $state(false);
+  // Whether an OIDC identity provider is configured (`auth.oidc.v1`).
+  // Stays false until /info answers, and when it fails, so the SSO link
+  // never leads into an unconfigured flow.
+  let oidcAuth = $state(false);
 
   onMount(() => {
     api
       .info()
-      .then((i) => (ccuAuth = i.capabilities.includes("auth.ccu.v1")))
+      .then((i) => {
+        ccuAuth = i.capabilities.includes("auth.ccu.v1");
+        oidcAuth = i.capabilities.includes("auth.oidc.v1");
+      })
       .catch(() => {});
   });
 
@@ -94,21 +101,23 @@
 
     <!-- Single Sign-On button: bounces the browser to the REST OIDC
          start endpoint, which redirects to the IdP and on callback
-         drops the same session cookie the password form would. The
-         backend 503s when OIDC is not configured, so a click on a
-         missing-IdP setup just shows an error page instead of a
-         silent no-op. The URL MUST carry the ingress prefix (apiBase)
-         — a hard-coded /api/v1 bypasses the Home Assistant Ingress
-         proxy and hits the HA origin (404) as an HA add-on. See
-         lib/api/base.ts. -->
-    <div class="mt-3">
-      <a
-        href={`${apiBase()}/auth/oidc/start`}
-        class="flex min-h-11 w-full items-center justify-center rounded-md border border-slate-300 px-3 text-center text-sm font-medium text-slate-700 transition hover:border-brand-500 hover:text-brand-700 dark:border-slate-700 dark:text-slate-200"
-      >
-        {t("login.sso")}
-      </a>
-    </div>
+         drops the same session cookie the password form would. It is
+         rendered only once /info reports `auth.oidc.v1`; without a
+         configured IdP the start endpoint answers 503, so offering the
+         button there would only lead to an error page. The URL MUST
+         carry the ingress prefix (apiBase) — a hard-coded /api/v1
+         bypasses the Home Assistant Ingress proxy and hits the HA
+         origin (404) as an HA add-on. See lib/api/base.ts. -->
+    {#if oidcAuth}
+      <div class="mt-3">
+        <a
+          href={`${apiBase()}/auth/oidc/start`}
+          class="flex min-h-11 w-full items-center justify-center rounded-md border border-slate-300 px-3 text-center text-sm font-medium text-slate-700 transition hover:border-brand-500 hover:text-brand-700 dark:border-slate-700 dark:text-slate-200"
+        >
+          {t("login.sso")}
+        </a>
+      </div>
+    {/if}
 
     {#if ccuAuth}
       <p class="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">

@@ -52,6 +52,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **The mDNS record's `tls` key follows the listener.** It was the
   literal `0` even when the daemon served HTTPS on its own port.
+- **The login page offers Single Sign-On only when OIDC is configured.**
+  The button was always shown and led to an error page on a daemon
+  without an identity provider; it now follows the `auth.oidc.v1`
+  capability.
+- **`groups.create` and `groups.update` over WebSocket answer
+  `bad_request` for a member the system did not assign.** They answered
+  `internal_error`, although the request named a member the group type
+  cannot take; the message still names the members.
 
 ## [0.85.0] - 2026-10-02
 
