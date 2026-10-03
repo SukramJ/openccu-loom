@@ -14,6 +14,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the field had no description, and the code comment named hardware
   models it never reports. Description only: the values are unchanged.
 
+### Fixed
+
+- **`deployment.kind` is a named schema, `DeploymentKind` (REST API
+  13.5.3).** 0.86.0
+  declared it as an inline enum. Generated clients number anonymous enums
+  by their position in the specification, so the new enum renamed every
+  `kind` enum that follows it: in the Python client `Kind2` stopped being
+  the event kind (`initial`, `change`, `refresh`) and became the pairing
+  kind. With the named schema the other enums keep the names they had
+  before 0.86.0. The wire is unchanged — same field, same values.
+
 ## [0.86.0] - 2026-10-03
 
 ### Release summary

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 13.5.2
+  version: 13.5.3
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -9837,6 +9837,19 @@ components:
               - webhook.inbound.v1
               - diagrams.v1
               - admin.persistence.v1
+    DeploymentKind:
+      type: string
+      enum: [lite-addon, ccu-addon, ha-addon, standalone]
+      description: |
+        `lite-addon`: the add-on on an openccu-lite box, fronted by
+        the box's web server and its gate. `ccu-addon`: the add-on on
+        a classic CCU / OpenCCU. `ha-addon`: the Home Assistant
+        add-on. `standalone`: everything else (a container, a
+        service, a plain process).
+
+        A named schema on purpose: generated clients number anonymous
+        enums by their position in this document, so an inline enum
+        here would rename every `kind` enum that follows it.
     Deployment:
       type: object
       required: [kind]
@@ -9853,15 +9866,7 @@ components:
         cannot read `/info` before it has logged in. Where both are
         readable, this object is the authority.
       properties:
-        kind:
-          type: string
-          enum: [lite-addon, ccu-addon, ha-addon, standalone]
-          description: |
-            `lite-addon`: the add-on on an openccu-lite box, fronted by
-            the box's web server and its gate. `ccu-addon`: the add-on on
-            a classic CCU / OpenCCU. `ha-addon`: the Home Assistant
-            add-on. `standalone`: everything else (a container, a
-            service, a plain process).
+        kind: { $ref: "#/components/schemas/DeploymentKind" }
         ingress_path:
           type: string
           description: |
