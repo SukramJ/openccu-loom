@@ -139,7 +139,8 @@ var (
 	// ErrGroupMembersNotAssigned signals a heating-group write the system
 	// answered as done while leaving out members the write named — an
 	// openccu-lite box does that for a member its group type cannot take.
-	// [GroupMembersNotAssignedError] carries the members. Mapped to 422.
+	// [GroupMembersNotAssignedError] carries the members. REST maps it to
+	// 422, the WebSocket command plane to bad_request.
 	ErrGroupMembersNotAssigned = errors.New("heating group: the system did not assign every member")
 
 	// ErrPairingNotFound signals a client-pairing id the daemon does not

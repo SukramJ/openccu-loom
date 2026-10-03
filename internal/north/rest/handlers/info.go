@@ -18,7 +18,7 @@ import (
 // external clients must reason about — addition of capabilities is
 // a minor bump, removal or rename of an existing capability or
 // payload field is a major bump.
-const APIVersion = "13.5.0"
+const APIVersion = "13.5.1"
 
 // Capability values surfaced through [InfoResponse.Capabilities].
 // External clients gate functionality on the presence of these
@@ -103,8 +103,9 @@ const (
 	// whether recording is currently running: the token is set from
 	// historyStore != nil, and an operator pausing recording keeps both the
 	// store and this capability. The SPA gates its history-dependent
-	// surfaces — the Diagrams view (SV03) — on it, so they stay hidden on a
-	// daemon that has no history store at all.
+	// surfaces — the Diagrams view (SV03) — on it together with
+	// CapabilityDiagrams, so they stay hidden on a daemon that has no
+	// history store at all.
 	CapabilityHistory = "history.v1"
 	// CapabilityAddonSelfUpdate is surfaced when the CCU add-on
 	// self-update platform capability check passed (ADR 0057: an

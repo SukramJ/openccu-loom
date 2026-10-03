@@ -20,10 +20,11 @@ import (
 )
 
 // GroupsWriter is the write facade for heating-group administration
-// (GR02). It is backed by the CCU jpages proxy — create runs the two-step
-// GET create → POST save flow and confirms completion by re-reading the
-// roster; edit/delete map onto save/delete. See
-// docs/adr/0055-groups-jpages-proxy.md.
+// (GR02). It is backed by the target central's heating-group port. On a
+// CCU that is the jpages proxy — create runs the two-step GET create →
+// POST save flow and confirms completion by re-reading the roster;
+// edit/delete map onto save/delete (docs/adr/0055-groups-jpages-proxy.md).
+// On an openccu-lite system it is the box's groups API.
 type GroupsWriter interface {
 	CreateGroup(ctx context.Context, central string, req CreateGroupRequest) (GroupEntry, error)
 	UpdateGroup(ctx context.Context, central string, id int, req UpdateGroupRequest) error

@@ -6,10 +6,23 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.86.0] - 2026-10-03
+
+### Release summary
+
+The daemon describes itself: `GET /api/v1/info` and the mDNS record say
+where the daemon runs — add-on on an openccu-lite box, add-on on a CCU,
+Home Assistant add-on, standalone — and which login paths it accepts, so a
+client can offer only the setup that is possible (REST API 13.5.1). On an
+openccu-lite system, heating groups can now be created and edited. The
+Home Assistant Ingress passthrough is armed only in the Home Assistant
+add-on, and the login page offers Single Sign-On only when it is
+configured.
+
 ### Added
 
 - **The daemon says where it runs and which login paths it accepts (REST
-  API 13.5.0, ADR 0081).** `GET /api/v1/info` carries a `deployment`
+  API 13.5.1, ADR 0081).** `GET /api/v1/info` carries a `deployment`
   object — `kind` is `lite-addon`, `ccu-addon`, `ha-addon` or
   `standalone`, and `ingress_path` is `/addons/loom/` on an openccu-lite
   box — and one capability token per login path: `auth.basic.v1`,
@@ -47,6 +60,11 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **The tests run against godevccu 0.9.0**, whose openccu-lite fake
   answers heating-group members as a box does.
+
+- **The API specification describes both ways a heating group is
+  written.** The descriptions of the group routes named the CCU's jpages
+  proxy as the only path; an openccu-lite system writes through the box's
+  groups API. Descriptions only — no route, field or status changed.
 
 ### Fixed
 

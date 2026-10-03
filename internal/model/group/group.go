@@ -2,16 +2,20 @@
 // Copyright (C) 2026 SukramJ.
 
 // Package group models Homematic heating groups (HmIP / BidCos
-// "Heizungsgruppen") for the read-only group surface.
+// "Heizungsgruppen"): the transport-independent view the group surface
+// reads and writes.
 //
 // A heating group is a virtual device on the VirtualDevices interface
 // whose members are wired together through a type-specific direct-link
 // matrix. The CCU keeps the member roster and group metadata in
 // /etc/config/groups.gson; the JSON-RPC method CCU.getHeatingGroupList
 // returns that file verbatim (as a JSON string). This package parses
-// that payload into a typed, transport-independent view. Mutating a
-// group runs through the CCU's HMServer jpages endpoints, not this
-// package — see docs/adr/0055-groups-jpages-proxy.md.
+// that payload into a typed, transport-independent view. An openccu-lite
+// system has no groups.gson; its heating-group port fills the same types
+// from the box's groups API. Mutating a group is not this package's job
+// either way: a CCU does it through its HMServer jpages endpoints
+// (docs/adr/0055-groups-jpages-proxy.md), an openccu-lite system through
+// the box's groups API.
 package group
 
 import (

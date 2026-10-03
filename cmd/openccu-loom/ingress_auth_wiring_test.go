@@ -13,9 +13,10 @@ import (
 )
 
 // TestBuildIngressTrustTriState pins the tri-state resolution of
-// north.rest.auth.ha_ingress.enabled: unset defaults to the supervised stamp
-// (on in the add-on), an explicit value overrides, and the result is inert
-// unless supervised. ptrBool is declared in ccu_auth_wiring_test.go.
+// north.rest.auth.ha_ingress.enabled: unset defaults to the deployment (on
+// in the Home Assistant add-on), an explicit value overrides, and the
+// result is inert outside that add-on. ptrBool is declared in
+// ccu_auth_wiring_test.go.
 func TestBuildIngressTrustTriState(t *testing.T) {
 	logger := slog.New(slog.DiscardHandler)
 

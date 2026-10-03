@@ -12,7 +12,7 @@
 // The package is a single cohesive wiring layer (the composition-root
 // helpers call into the feature adapters, which share unexported
 // helpers and the [*central.Unit] type). It is intentionally NOT split
-// into sub-packages — see ADR 0034. To keep a 95-file package navigable,
+// into sub-packages — see ADR 0034. To keep a package of this size navigable,
 // the files group into these clusters:
 //
 //   - Composition root / wiring: ccu_wiring, hub_wiring, cuxd_wiring,
