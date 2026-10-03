@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 8 of 551.
+Guards without a doc comment: 8 of 553.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -264,7 +264,9 @@ Guards without a doc comment: 8 of 551.
 | TestMetaWritesSendBodyOnEveryNonGET | occulited_wire_contract_test.go | TestMetaWritesSendBodyOnEveryNonGET pins A.1: requests with a body method need a Content-Length through the box's web server (411 otherwise), so the client sends "{}" when it has nothing to send. |
 | TestPairingCodeFormula | occulited_wire_contract_test.go | TestPairingCodeFormula pins the pairing code against the formula text of the box's contract, computed here independently: take SHA-256 over the hex-decoded nonce, the client nonce and the certificate fingerprint bytes, read the first four digest bytes big-endian, reduce modulo one million, pad to six digits. |
 | TestOpenAPIEnumsCoverEveryEmittedValue | openapi_enum_coverage_test.go | TestOpenAPIEnumsCoverEveryEmittedValue is the drift detector for hand-written enum lists in assets/openapi.yaml. |
+| TestOpenAPIInlineEnumsAreFrozen | openapi_inline_enum_test.go | TestOpenAPIInlineEnumsAreFrozen pins every anonymous enum in assets/openapi.yaml to its place in the document, and refuses new ones. |
 | TestNoRequestOrResponseBodyIsWrittenInline | openapi_inline_schema_test.go | TestNoRequestOrResponseBodyIsWrittenInline pins that a body with properties lives in `components/schemas` and is reached by `$ref`. |
+| TestOpenAPISchemasGainNoRequiredPropertyUnacknowledged | openapi_required_properties_test.go | TestOpenAPISchemasGainNoRequiredPropertyUnacknowledged refuses a property that becomes required on an existing component schema unless [newlyRequiredProperties] says how a client copes with older daemons. |
 | TestEverySuccessResponseDeclaresASchema | openapi_response_schema_test.go | TestEverySuccessResponseDeclaresASchema walks every 200/201 response in the specification and fails when one declares no schema and is not listed above with a reason. |
 | TestResponseSchemasToleratePlusFields | openapi_response_tolerance_test.go | TestResponseSchemasToleratePlusFields keeps every schema a client decodes a *response* through open to unknown properties. |
 | TestOpenAPISpecIsValid | openapi_schema_test.go | TestOpenAPISpecIsValid runs the full kin-openapi validator on assets/openapi.yaml, verifying the spec is structurally valid. |
