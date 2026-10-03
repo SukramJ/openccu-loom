@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
@@ -17,12 +16,6 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
-
-// ErrGroupMembersNotAssigned reports a heating-group write the system
-// answered as done while leaving out members the write named. An
-// openccu-lite box does that for a member its group type cannot take: the
-// answer is a success and the group simply does not hold the member.
-var ErrGroupMembersNotAssigned = errors.New("heating group: the system did not assign every member")
 
 // liteHeatingGroups is an openccu-lite central's heating-group port over
 // the box's groups API. The box numbers its groups, so its ids are the
@@ -163,7 +156,7 @@ func (g liteHeatingGroups) Create(ctx context.Context, in group.CreateInput) (gr
 		return group.Group{}, err
 	}
 	if missing := notAssigned(in.MemberIDs, written.Members); len(missing) > 0 {
-		err := fmt.Errorf("%w: %s", ErrGroupMembersNotAssigned, strings.Join(missing, ", "))
+		err := &hmerr.GroupMembersNotAssignedError{Members: missing}
 		if _, delErr := g.client.DeleteGroup(ctx, written.ID); delErr != nil {
 			return group.Group{}, errors.Join(err, fmt.Errorf("group %d was made without them and could not be removed: %w", written.ID, delErr))
 		}
@@ -196,7 +189,7 @@ func (g liteHeatingGroups) Update(ctx context.Context, id int, in group.UpdateIn
 		return err
 	}
 	if missing := notAssigned(members, written.Members); len(missing) > 0 {
-		return fmt.Errorf("%w: %s", ErrGroupMembersNotAssigned, strings.Join(missing, ", "))
+		return &hmerr.GroupMembersNotAssignedError{Members: missing}
 	}
 	return nil
 }

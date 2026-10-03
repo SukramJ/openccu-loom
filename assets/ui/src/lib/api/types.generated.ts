@@ -12760,6 +12760,22 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            /**
+             * @description The central does not offer the operation
+             *     (`feature_unavailable`), or the system accepted the write and
+             *     left out members it named (`validation`, title `Members not
+             *     assigned`): `detail` lists the member ids the group does not
+             *     hold. An openccu-lite box does this for a member its group
+             *     type cannot take. A refused create leaves no group behind.
+             */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };
@@ -12845,6 +12861,22 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            /**
+             * @description The central does not offer the operation
+             *     (`feature_unavailable`), or the system accepted the write and
+             *     left out members it named (`validation`, title `Members not
+             *     assigned`): `detail` lists the member ids the group does not
+             *     hold. An openccu-lite box does this for a member its group
+             *     type cannot take. The group then holds the other members of the new list.
+             */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };

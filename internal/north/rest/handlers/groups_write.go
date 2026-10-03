@@ -249,6 +249,16 @@ func writeGroupWriteError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, hmerr.ErrGroupNotFound):
 		problem.Write(w, http.StatusNotFound,
 			problem.New(problem.TypeNotFound, r, "Group not found", chi.URLParam(r, "id")))
+	case errors.Is(err, hmerr.ErrGroupMembersNotAssigned):
+		// The system accepted the write and left members out. Name them:
+		// the caller asked for a group it did not get, and only the ids
+		// say which device to look at.
+		detail := ""
+		if e, ok := errors.AsType[*hmerr.GroupMembersNotAssignedError](err); ok {
+			detail = strings.Join(e.Members, ", ")
+		}
+		problem.Write(w, http.StatusUnprocessableEntity,
+			problem.New(problem.TypeValidation, r, "Members not assigned", detail))
 	case errors.Is(err, backends.ErrUnsupported):
 		problem.Write(w, http.StatusNotFound,
 			problem.New(problem.TypeNotFound, r, "Group administration not available on this central", ""))

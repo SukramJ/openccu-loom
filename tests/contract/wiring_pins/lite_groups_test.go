@@ -172,7 +172,7 @@ func TestLiteGroupWriteReportsAMemberTheBoxDropped(t *testing.T) {
 
 	if _, err := d.Create(ctx, "box", group.CreateInput{
 		Name: "Leer", TypeID: liteGroupType, MemberIDs: []string{liteGroupWindow, stranger},
-	}); err == nil || !errors.Is(err, adapter.ErrGroupMembersNotAssigned) {
+	}); err == nil || !errors.Is(err, hmerr.ErrGroupMembersNotAssigned) {
 		t.Fatalf("Create with a member the box drops: err = %v, want ErrGroupMembersNotAssigned", err)
 	}
 	if left := fake.Groups(); len(left) != 0 {
@@ -184,7 +184,7 @@ func TestLiteGroupWriteReportsAMemberTheBoxDropped(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 	err = d.Update(ctx, "box", created.ID, group.UpdateInput{TypeID: liteGroupType, Name: "EG", MemberIDs: []string{liteGroupWindow, stranger}})
-	if err == nil || !errors.Is(err, adapter.ErrGroupMembersNotAssigned) {
+	if err == nil || !errors.Is(err, hmerr.ErrGroupMembersNotAssigned) {
 		t.Errorf("Update with a member the box drops: err = %v, want ErrGroupMembersNotAssigned", err)
 	}
 }

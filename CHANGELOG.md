@@ -31,8 +31,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   read and written on a box on 2026-10-03. A box answers a write as done
   even when it left out a member its group type cannot take, so the
   daemon compares the answer with the members asked for: a create that
-  lost a member is undone and fails, an update names the member that
-  did not arrive.
+  lost a member is undone, and both a create and an update answer 422
+  with the members that did not arrive.
 
 ### Changed
 

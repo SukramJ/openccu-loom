@@ -1077,6 +1077,17 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: |
+            The central does not offer the operation
+            (`feature_unavailable`), or the system accepted the write and
+            left out members it named (`validation`, title `Members not
+            assigned`): `detail` lists the member ids the group does not
+            hold. An openccu-lite box does this for a member its group
+            type cannot take. A refused create leaves no group behind.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
@@ -1168,6 +1179,17 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: |
+            The central does not offer the operation
+            (`feature_unavailable`), or the system accepted the write and
+            left out members it named (`validation`, title `Members not
+            assigned`): `detail` lists the member ids the group does not
+            hold. An openccu-lite box does this for a member its group
+            type cannot take. The group then holds the other members of the new list.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
     delete:

@@ -136,6 +136,12 @@ var (
 	// id the central's roster does not carry. Mapped to 404 / Not Found.
 	ErrGroupNotFound = errors.New("group not found")
 
+	// ErrGroupMembersNotAssigned signals a heating-group write the system
+	// answered as done while leaving out members the write named — an
+	// openccu-lite box does that for a member its group type cannot take.
+	// [GroupMembersNotAssignedError] carries the members. Mapped to 422.
+	ErrGroupMembersNotAssigned = errors.New("heating group: the system did not assign every member")
+
 	// ErrPairingNotFound signals a client-pairing id the daemon does not
 	// hold: never started, withdrawn, expired, or already taken by a
 	// central. Mapped to 404 / Not Found.
@@ -631,4 +637,21 @@ func (e *JSONRPCError) Is(target error) bool {
 	default:
 		return errors.Is(target, ErrClientException)
 	}
+}
+
+// GroupMembersNotAssignedError names the members of a heating-group write
+// the system did not assign. It matches [ErrGroupMembersNotAssigned].
+type GroupMembersNotAssignedError struct {
+	// Members are the member ids the write named and the group does not
+	// hold.
+	Members []string
+}
+
+func (e *GroupMembersNotAssignedError) Error() string {
+	return ErrGroupMembersNotAssigned.Error() + ": " + strings.Join(e.Members, ", ")
+}
+
+// Is makes the error match [ErrGroupMembersNotAssigned].
+func (e *GroupMembersNotAssignedError) Is(target error) bool {
+	return target == ErrGroupMembersNotAssigned
 }
