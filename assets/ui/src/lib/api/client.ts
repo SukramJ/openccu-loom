@@ -2487,6 +2487,13 @@ export type DaemonInfo = {
   // True when the daemon binary was built as the CCU/OpenCCU
   // add-on (i.e. it runs on the CCU itself).
   addon_build: boolean;
+  // Where this daemon runs, resolved once at start (ADR 0081).
+  // `ingress_path` is present only when the hosting system's own web
+  // server fronts the daemon (`lite-addon`), with a trailing slash.
+  deployment: {
+    kind: "lite-addon" | "ccu-addon" | "ha-addon" | "standalone";
+    ingress_path?: string;
+  };
   uptime: string;
   started_at: string;
   /**

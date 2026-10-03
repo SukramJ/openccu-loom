@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/tests/e2e/harness"
 )
@@ -84,6 +85,39 @@ func TestLiteGroupWriteNamesTheMembersTheBoxDropped(t *testing.T) {
 	_ = json.Unmarshal(raw, &prob)
 	if status != http.StatusUnprocessableEntity || !strings.Contains(prob.Detail, member) {
 		t.Errorf("update naming a member the box drops: status %d body %s; want 422 naming %s", status, raw, member)
+	}
+}
+
+// TestLiteGroupWriteOverWebSocketNamesTheMembersTheBoxDropped pins the same
+// refusal on the WebSocket command plane: groups.create naming a member the
+// box drops answers bad_request with the member in the message, not
+// internal_error. The caller asked for a member the group type cannot take;
+// the router decides the code, so only a run through the built binary shows
+// what a client actually receives.
+func TestLiteGroupWriteOverWebSocketNamesTheMembersTheBoxDropped(t *testing.T) {
+	t.Parallel()
+	h := harness.Start(t, harness.Options{Backend: harness.BackendOpenCCULite})
+	if err := h.REST().LoginSession(harness.AdminUser, harness.AdminPass); err != nil {
+		t.Fatalf("login: %v", err)
+	}
+	wsc, err := h.REST().DialWS("/api/v1/events")
+	if err != nil {
+		t.Fatalf("dial WS: %v", err)
+	}
+	defer func() { _ = wsc.Close() }()
+
+	const member = "0000000000FFFF:1"
+	res, err := wsc.Call("group-create", "groups.create", map[string]any{
+		"central": liteCentral,
+		"type_id": "hmip.heating.group",
+		"name":    "Obergeschoss",
+		"members": []string{member},
+	}, 10*time.Second)
+	if err != nil {
+		t.Fatalf("groups.create: %v", err)
+	}
+	if res.Error == nil || res.Error.Code != "bad_request" || !strings.Contains(res.Error.Message, member) {
+		t.Fatalf("groups.create naming a member the box drops: error %+v data %s; want bad_request naming %s", res.Error, res.Data, member)
 	}
 }
 

@@ -515,6 +515,14 @@ func (r *Router) Dispatch(ctx context.Context, command string, args json.RawMess
 			r.logOutcome(ctx, command, res, time.Since(start))
 			return res
 		}
+		if errors.Is(err, hmerr.ErrGroupMembersNotAssigned) {
+			// The caller named a member the group type cannot take; the
+			// request is at fault, not the daemon. The message keeps the
+			// member ids so the caller learns which ones were dropped.
+			res := Result{Error: commandErr(CommandErrorBadRequest, "", err)}
+			r.logOutcome(ctx, command, res, time.Since(start))
+			return res
+		}
 		// A handler that returns a raw (non-CommandError) error — most of
 		// the cdp.*/calc_dp.* lookups do — still deserves the not-found vs.
 		// internal-error distinction; classify it the same way
