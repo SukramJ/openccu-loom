@@ -6594,6 +6594,19 @@ export interface components {
             capabilities: string[];
         };
         /**
+         * @description `lite-addon`: the add-on on an openccu-lite box, fronted by
+         *     the box's web server and its gate. `ccu-addon`: the add-on on
+         *     a classic CCU / OpenCCU. `ha-addon`: the Home Assistant
+         *     add-on. `standalone`: everything else (a container, a
+         *     service, a plain process).
+         *
+         *     A named schema on purpose: generated clients number anonymous
+         *     enums by their position in this document, so an inline enum
+         *     here would rename every `kind` enum that follows it.
+         * @enum {string}
+         */
+        DeploymentKind: "lite-addon" | "ccu-addon" | "ha-addon" | "standalone";
+        /**
          * @description Where this daemon runs, as declared by its packaging and
          *     resolved once at start (ADR 0081). It is a property of the
          *     daemon process, not of the systems it talks to: a `standalone`
@@ -6607,15 +6620,7 @@ export interface components {
          *     readable, this object is the authority.
          */
         Deployment: {
-            /**
-             * @description `lite-addon`: the add-on on an openccu-lite box, fronted by
-             *     the box's web server and its gate. `ccu-addon`: the add-on on
-             *     a classic CCU / OpenCCU. `ha-addon`: the Home Assistant
-             *     add-on. `standalone`: everything else (a container, a
-             *     service, a plain process).
-             * @enum {string}
-             */
-            kind: "lite-addon" | "ccu-addon" | "ha-addon" | "standalone";
+            kind: components["schemas"]["DeploymentKind"];
             /**
              * @description Path under which the hosting system's own web server serves
              *     this daemon, with a trailing slash. Present only when there
