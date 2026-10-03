@@ -37,9 +37,9 @@ var dockerCIDR = netip.MustParsePrefix("172.16.0.0/12")
 // A host that is already a name (not an IP) is always returned unchanged, as is
 // any case where the reverse lookup yields nothing.
 type HostSuggester struct {
-	// Supervised is true only when the daemon runs as the supervised HA add-on
-	// (build stamp / OPENCCU_LOOM_SUPERVISOR); the docker-hostname rule applies
-	// only there.
+	// Supervised is true only when the daemon runs as the Home Assistant
+	// add-on (its resolved deployment); the docker-hostname rule applies only
+	// there.
 	Supervised bool
 	// LocalIPs are the daemon's own interface addresses (all non-loopback IPs,
 	// including docker/bridge ones, so a shared-host CCU is detected even when

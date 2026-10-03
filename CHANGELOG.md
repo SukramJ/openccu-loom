@@ -6,6 +6,39 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The daemon says where it runs and which login paths it accepts (REST
+  API 13.5.0, ADR 0081).** `GET /api/v1/info` carries a `deployment`
+  object — `kind` is `lite-addon`, `ccu-addon`, `ha-addon` or
+  `standalone`, and `ingress_path` is `/addons/loom/` on an openccu-lite
+  box — and one capability token per login path: `auth.basic.v1`,
+  `auth.bearer.v1`, `auth.pairing.v1`, `auth.occulite_token.v1`,
+  `auth.occulite_sso.v1` and `auth.ha_ingress.v1` beside the existing
+  `auth.oidc.v1` and `auth.ccu.v1`. The mDNS record carries the short
+  form (`txtvers`, `deploy`, `ingress`, `auth`) for a client that cannot
+  read `/info` before it has logged in, which is the case behind the
+  gate of an openccu-lite box. A client can now offer only the setup
+  fields that are possible for the daemon it found. The add-on packages
+  declare their deployment in `OPENCCU_LOOM_DEPLOYMENT`; a value the
+  daemon does not know stops the start.
+
+### Changed
+
+- **The Home Assistant Ingress passthrough is armed only in the Home
+  Assistant add-on.** Its default followed the restart-supervisor flag,
+  which the CCU add-on sets too, so the passthrough was armed on a CCU
+  and on an openccu-lite box although no Supervisor exists there. It
+  never matched in practice (it needs a peer in the Supervisor's
+  subnet). A standalone daemon that set `OPENCCU_LOOM_SUPERVISOR=1` and
+  `north.rest.auth.ha_ingress.enabled: true` to accept Ingress requests
+  must now also set `OPENCCU_LOOM_DEPLOYMENT=ha-addon`.
+
+### Fixed
+
+- **The mDNS record's `tls` key follows the listener.** It was the
+  literal `0` even when the daemon served HTTPS on its own port.
+
 ## [0.85.0] - 2026-10-02
 
 ### Release summary

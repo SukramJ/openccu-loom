@@ -5,9 +5,11 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/build"
+	"github.com/SukramJ/openccu-loom/internal/deployment"
 )
 
 // APIVersion is the contract version of the north-bound surface
@@ -16,7 +18,7 @@ import (
 // external clients must reason about — addition of capabilities is
 // a minor bump, removal or rename of an existing capability or
 // payload field is a major bump.
-const APIVersion = "13.4.0"
+const APIVersion = "13.5.0"
 
 // Capability values surfaced through [InfoResponse.Capabilities].
 // External clients gate functionality on the presence of these
@@ -46,7 +48,26 @@ const (
 	// own user database is enabled (ADR 0043). The SPA may show a
 	// "sign in with your CCU account" hint; the credential shape is
 	// unchanged.
-	CapabilityCCUAuth        = "auth.ccu.v1"
+	CapabilityCCUAuth = "auth.ccu.v1"
+	// The login paths below complete the auth.* family: a client offers a
+	// person only the paths the daemon lists. Each is emitted from the
+	// condition that wires the resolver it names (ADR 0081).
+	CapabilityBasicAuth = "auth.basic.v1"
+	//nolint:gosec // G101 false positive: a capability token, not a credential
+	CapabilityBearerAuth = "auth.bearer.v1"
+	// CapabilityPairing says the unauthenticated client-pairing routes
+	// are open (ADR 0076).
+	CapabilityPairing = "auth.pairing.v1"
+	// CapabilityOcculiteToken says an openccu-lite box API token that
+	// the box's gate accepted is a daemon identity (ADR 0080);
+	// CapabilityOcculiteSSO says the same of a box-shell session
+	// (ADR 0079).
+	//nolint:gosec // G101 false positive: a capability token, not a credential
+	CapabilityOcculiteToken = "auth.occulite_token.v1"
+	CapabilityOcculiteSSO   = "auth.occulite_sso.v1"
+	// CapabilityHAIngress says Home Assistant Ingress requests from the
+	// Supervisor are accepted as authenticated (ADR 0044).
+	CapabilityHAIngress      = "auth.ha_ingress.v1"
 	CapabilityProblemDetails = "errors.problem_details.v1"
 	// CapabilityCentralFeatures says each central reports what it offers
 	// (the features map on /system/ccu, the central.features_changed
@@ -137,9 +158,13 @@ type InfoResponse struct {
 	// CCU/OpenCCU add-on. Support surfaces (the SPA About
 	// page) show it so "where does the daemon run?" is answerable
 	// from a screenshot.
-	AddonBuild bool   `json:"addon_build"`
-	Uptime     string `json:"uptime"`
-	StartedAt  string `json:"started_at"`
+	AddonBuild bool `json:"addon_build"`
+	// Deployment says where the daemon runs and how its hosting system
+	// fronts it (ADR 0081). AddonBuild cannot tell a classic CCU from an
+	// openccu-lite box; this can.
+	Deployment DeploymentInfo `json:"deployment"`
+	Uptime     string         `json:"uptime"`
+	StartedAt  string         `json:"started_at"`
 	// ConfigUIURL is the externally-reachable address of this daemon's
 	// Config UI, derived from `north.rest.public_url`. Empty when no
 	// public URL is configured.
@@ -162,6 +187,14 @@ type InfoResponse struct {
 	Capabilities []string `json:"capabilities"`
 }
 
+// DeploymentInfo is the deployment object of `GET /api/v1/info`. Kind is
+// one of the deployment package's values; IngressPath is set only where
+// the hosting system's own web server serves the daemon.
+type DeploymentInfo struct {
+	Kind        string `json:"kind"`
+	IngressPath string `json:"ingress_path,omitempty"`
+}
+
 // CapabilityDetector lets callers report the runtime presence of
 // features the daemon was started with — MQTT-discovery requires a
 // configured broker, Matter requires the bridge to be enabled, OIDC
@@ -172,6 +205,14 @@ type CapabilityDetector interface {
 	HasMatterBridge() bool
 	HasOIDC() bool
 	HasCCUAuth() bool
+	// The remaining login paths, each reporting whether its resolver is
+	// wired to accept credentials.
+	HasBasicAuth() bool
+	HasBearerAuth() bool
+	HasPairing() bool
+	HasOcculiteToken() bool
+	HasOcculiteSSO() bool
+	HasHAIngress() bool
 	HasSupervisedRestart() bool
 	// HasMCP reports whether the MCP server is enabled; HasMCPWrite
 	// whether its write tools are permitted. HasMCPWrite implies HasMCP.
@@ -203,14 +244,20 @@ type CapabilityDetector interface {
 // The startedAt argument is normally the process start time; it is
 // captured once at router construction. The optional detector
 // surfaces feature capabilities the daemon was started with;
-// passing nil emits only the always-on capabilities.
-func Info(startedAt time.Time, detector CapabilityDetector, configUIURL string) http.HandlerFunc {
+// passing nil emits only the always-on capabilities. A zero deployment is
+// served as standalone — the kind that claims no hosting system — so a
+// router assembled without one still answers a valid body.
+func Info(startedAt time.Time, detector CapabilityDetector, configUIURL string, dep DeploymentInfo) http.HandlerFunc {
+	if dep.Kind == "" {
+		dep.Kind = string(deployment.Standalone)
+	}
 	return func(w http.ResponseWriter, _ *http.Request) {
 		JSON(w, http.StatusOK, InfoResponse{
 			Version:      build.Version,
 			Commit:       build.Commit,
 			BuildDate:    build.BuildDate,
 			AddonBuild:   build.IsAddon(),
+			Deployment:   dep,
 			Uptime:       time.Since(startedAt).Truncate(time.Second).String(),
 			StartedAt:    startedAt.UTC().Format(time.RFC3339),
 			ConfigUIURL:  configUIURL,
@@ -219,6 +266,25 @@ func Info(startedAt time.Time, detector CapabilityDetector, configUIURL string) 
 			Capabilities: capabilities(detector),
 		})
 	}
+}
+
+// LoginPaths names the login paths the detector reports: the auth.*
+// tokens of the capability list, each by its middle segment
+// (`auth.occulite_token.v1` is `occulite_token`). The mDNS record carries
+// this list, read off the very tokens `/info` serves, so the record
+// cannot name a path `/info` does not.
+func LoginPaths(d CapabilityDetector) []string {
+	var out []string
+	for _, c := range capabilities(d) {
+		name, ok := strings.CutPrefix(c, "auth.")
+		if !ok {
+			continue
+		}
+		if name, ok = strings.CutSuffix(name, ".v1"); ok {
+			out = append(out, name)
+		}
+	}
+	return out
 }
 
 // capabilities composes the capability list from the always-on set
@@ -240,11 +306,29 @@ func capabilities(d CapabilityDetector) []string {
 	if d.HasMatterBridge() {
 		out = append(out, CapabilityMatterBridge)
 	}
+	if d.HasBasicAuth() {
+		out = append(out, CapabilityBasicAuth)
+	}
+	if d.HasBearerAuth() {
+		out = append(out, CapabilityBearerAuth)
+	}
+	if d.HasPairing() {
+		out = append(out, CapabilityPairing)
+	}
 	if d.HasOIDC() {
 		out = append(out, CapabilityOIDC)
 	}
 	if d.HasCCUAuth() {
 		out = append(out, CapabilityCCUAuth)
+	}
+	if d.HasOcculiteToken() {
+		out = append(out, CapabilityOcculiteToken)
+	}
+	if d.HasOcculiteSSO() {
+		out = append(out, CapabilityOcculiteSSO)
+	}
+	if d.HasHAIngress() {
+		out = append(out, CapabilityHAIngress)
 	}
 	if d.HasSupervisedRestart() {
 		out = append(out, CapabilitySupervisedRestart)

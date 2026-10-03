@@ -47,6 +47,7 @@ import (
 	matterstore "github.com/SukramJ/go-fabric/store"
 	"github.com/SukramJ/go-fabric/transport/mrp"
 
+	"github.com/SukramJ/openccu-loom/internal/deployment"
 	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 
 	"github.com/SukramJ/openccu-loom/internal/build"
@@ -3065,8 +3066,8 @@ func (a *paseSessionCloserAdapter) ClosePaseSessions(_ context.Context) error {
 // Returns (nil, err) when the port is malformed or zeroconf fails to
 // register; the caller is expected to log and continue (mDNS is a
 // convenience, not a hard dependency).
-func startMDNSAdvertiser(ctx context.Context, cfg *config.Config, reg *central.Registry, logger *slog.Logger) (discoverymdns.Advertiser, error) {
-	svc, ok := mdnsServiceFor(cfg, len(reg.Names()), mdnsCCUSerials(reg))
+func startMDNSAdvertiser(ctx context.Context, cfg *config.Config, self mdnsSelf, reg *central.Registry, logger *slog.Logger) (discoverymdns.Advertiser, error) {
+	svc, ok := mdnsServiceFor(cfg, self, len(reg.Names()), mdnsCCUSerials(reg))
 	if !ok {
 		return nil, nil
 	}
@@ -3095,7 +3096,7 @@ func startMDNSAdvertiser(ctx context.Context, cfg *config.Config, reg *central.R
 // adopt, so the record is re-announced at runtime via
 // [discoverymdns.Advertiser.UpdateTXT]; `GET /api/v1/system/ccu`
 // stays the authoritative post-auth source.
-func mdnsServiceFor(cfg *config.Config, centralCount int, ccuSerials []string) (discoverymdns.Service, bool) {
+func mdnsServiceFor(cfg *config.Config, self mdnsSelf, centralCount int, ccuSerials []string) (discoverymdns.Service, bool) {
 	port, ok := splitListenPort(cfg.North.REST.Listen)
 	if !ok {
 		return discoverymdns.Service{}, false
@@ -3103,19 +3104,44 @@ func mdnsServiceFor(cfg *config.Config, centralCount int, ccuSerials []string) (
 	return discoverymdns.Service{
 		InstanceName: cfg.North.Discovery.MDNS.InstanceName,
 		Port:         port,
-		TXT:          mdnsTXT(cfg, centralCount, ccuSerials),
+		TXT:          mdnsTXT(cfg, self, centralCount, ccuSerials),
 	}, true
 }
 
+// mdnsSelf is the daemon's self-description as the mDNS record carries
+// it: the short form of what `/info` says (ADR 0081). It is built from
+// the values `/info` serves — the resolved deployment and the capability
+// detector's login paths — so the record cannot say something else.
+type mdnsSelf struct {
+	kind       deployment.Kind
+	tls        bool
+	loginPaths []string
+}
+
+// mdnsTXTVersion versions the record's key set (RFC 6763 section 6.7).
+const mdnsTXTVersion = "1"
+
 // mdnsTXT assembles the TXT bundle. Shared by the initial Register and
 // every runtime re-announce so both paths stay identical.
-func mdnsTXT(cfg *config.Config, centralCount int, ccuSerials []string) []string {
+func mdnsTXT(cfg *config.Config, self mdnsSelf, centralCount int, ccuSerials []string) []string {
+	tls := "0"
+	if self.tls {
+		tls = "1"
+	}
 	txt := []string{
+		"txtvers=" + mdnsTXTVersion,
 		"path=/api/v1",
 		"api_version=" + handlers.APIVersion,
-		"tls=0",
+		"tls=" + tls,
 		"instance=" + cfg.North.Discovery.MDNS.ResolveInstanceName(),
 		"centrals=" + strconv.Itoa(centralCount),
+		"deploy=" + string(self.kind),
+	}
+	if p := self.kind.IngressPath(); p != "" {
+		txt = append(txt, "ingress="+p)
+	}
+	if len(self.loginPaths) > 0 {
+		txt = append(txt, "auth="+strings.Join(self.loginPaths, ","))
 	}
 	if v := mdnsCCUsValue(ccuSerials); v != "" {
 		txt = append(txt, "ccus="+v)

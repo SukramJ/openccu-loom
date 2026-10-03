@@ -169,6 +169,15 @@ func newOcculiteSSO(t OcculiteSSOTrust, logger *slog.Logger) *occuliteSSO {
 	return &occuliteSSO{trust: t, logger: logger, cache: make(map[string]occuliteEntry)}
 }
 
+// Active reports whether box-shell sessions are accepted: enabled, with a
+// box to verify them against. The middleware and the daemon's
+// auth.occulite_sso.v1 capability read this one condition.
+func (t OcculiteSSOTrust) Active() bool { return t.Enabled && t.Verifier != nil }
+
+// AcceptsTokens reports whether box API tokens are accepted too, which
+// needs the add-on's own gate scope to check them against.
+func (t OcculiteSSOTrust) AcceptsTokens() bool { return t.Active() && t.AddonScope != "" }
+
 // OcculiteSSOPassthrough is a fallback resolver for box-shell single sign-on
 // over the lite ingress (ADR 0079). Like [IngressPassthrough] it must be
 // wired innermost so every credential resolver runs first, and like it the
@@ -190,7 +199,7 @@ func OcculiteSSOPassthrough(t OcculiteSSOTrust, logger *slog.Logger) func(http.H
 }
 
 func (s *occuliteSSO) middleware(next http.Handler) http.Handler {
-	if !s.trust.Enabled || s.trust.Verifier == nil {
+	if !s.trust.Active() {
 		return next
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -199,7 +208,7 @@ func (s *occuliteSSO) middleware(next http.Handler) http.Handler {
 			return
 		}
 		sid := r.Header.Get(OcculiteSessionHeader)
-		if !isOcculiteSessionID(sid) && (s.trust.AddonScope == "" || !isOcculiteToken(sid)) {
+		if !isOcculiteSessionID(sid) && (!s.trust.AcceptsTokens() || !isOcculiteToken(sid)) {
 			next.ServeHTTP(w, r)
 			return
 		}

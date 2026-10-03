@@ -95,6 +95,14 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 			return err
 		}
 	}
+	// A deployment the packaging declared wrongly must stop the start: every
+	// later reader falls back to standalone, which would silently switch
+	// off what the deployment was meant to switch on. After the env-file,
+	// which may carry the declaration.
+	if _, err := resolveDeployment(); err != nil {
+		_, _ = fmt.Fprintf(stderr, "openccu-loom: %v\n", err)
+		return err
+	}
 
 	var cfg *config.Config
 	if effectiveConfig == "" {

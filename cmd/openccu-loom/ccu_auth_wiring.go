@@ -11,7 +11,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/auth/ccuauth"
-	"github.com/SukramJ/openccu-loom/internal/build"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/config"
@@ -20,13 +19,13 @@ import (
 )
 
 // ccuAuthEnabled resolves the tri-state enable flag: an explicit value
-// wins; unset defaults to the build's add-on stamp (on in the CCU
-// add-on, off otherwise).
+// wins; unset defaults to the deployment (on in the add-on on a CCU or
+// a lite box, off otherwise).
 func ccuAuthEnabled(cc config.CCUAuthConfig) bool {
 	if cc.Enabled != nil {
 		return *cc.Enabled
 	}
-	return build.IsAddon()
+	return deploymentKind().OnCCU()
 }
 
 // ccuAuthPrimary resolves the tri-state primary flag: explicit value

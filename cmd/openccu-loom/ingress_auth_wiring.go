@@ -6,11 +6,10 @@ package main
 import (
 	"log/slog"
 	"net"
-	"os"
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
-	"github.com/SukramJ/openccu-loom/internal/build"
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/deployment"
 )
 
 // defaultSupervisorCIDR is the Home Assistant Supervisor's Docker subnet —
@@ -19,9 +18,9 @@ import (
 const defaultSupervisorCIDR = "172.30.32.0/23"
 
 // buildIngressTrust resolves the HA Ingress auth-passthrough policy (ADR 0044)
-// from config + the build/supervised stamp. The returned value is inert (the
-// middleware is a no-op) unless the feature is explicitly enabled AND the
-// daemon runs as the supervised add-on AND a valid trusted CIDR resolves.
+// from config + the resolved deployment. The returned value is inert (the
+// middleware is a no-op) unless the feature resolves enabled AND the daemon
+// runs as the Home Assistant add-on AND a valid trusted CIDR resolves.
 //
 // It emits a one-shot startup log so the security posture is visible: the
 // passthrough is only safe while the add-on keeps `panel_admin: true` (the
@@ -31,8 +30,8 @@ func buildIngressTrust(cfg *config.Config, logger *slog.Logger) auth.IngressTrus
 		logger = slog.Default()
 	}
 	hc := cfg.North.REST.Auth.HAIngress
-	supervised := isSupervised()
-	// Tri-state: nil defaults to the supervised stamp — ON in the HA add-on
+	supervised := deploymentKind() == deployment.HAAddon
+	// Tri-state: nil defaults to the deployment — ON in the HA add-on
 	// (Ingress is admin-only via panel_admin: true), OFF elsewhere. An explicit
 	// value overrides.
 	enabled := supervised
@@ -64,11 +63,6 @@ func buildIngressTrust(cfg *config.Config, logger *slog.Logger) auth.IngressTrus
 	logger.Warn("auth.ingress.enabled — HA Ingress requests from the trusted subnet are accepted as authenticated; security depends on config.yaml panel_admin: true",
 		slog.String("trusted_cidr", cidrStr), slog.String("role", string(role)))
 	return auth.IngressTrust{Enabled: true, Supervised: true, TrustedCIDR: cidr, Role: role}
-}
-
-// isSupervised reports whether the daemon runs as the supervised HA add-on.
-func isSupervised() bool {
-	return build.IsAddon() || os.Getenv("OPENCCU_LOOM_SUPERVISOR") == "1"
 }
 
 // ingressRole maps the config role string to an [auth.Role]; unknown/empty

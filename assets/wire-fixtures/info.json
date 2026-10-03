@@ -11,6 +11,9 @@
  ],
  "commit": "none",
  "config_ui_url": "",
+ "deployment": {
+  "kind": "standalone"
+ },
  "schema_digest": "\u003cvolatile\u003e",
  "started_at": "\u003cvolatile\u003e",
  "uptime": "\u003cvolatile\u003e",

@@ -10,13 +10,13 @@ import (
 )
 
 // IngressTrust carries the resolved policy for [IngressPassthrough]. The
-// composition root fills it from config + the build/supervised stamp so this
+// composition root fills it from config + the resolved deployment so this
 // package never imports config.
 type IngressTrust struct {
 	// Enabled is the operator opt-in (config north.rest.auth.ha_ingress.enabled).
 	Enabled bool
-	// Supervised is true only when the daemon runs as the supervised HA add-on
-	// (build stamp / OPENCCU_LOOM_SUPERVISOR). The Supervisor-subnet trust
+	// Supervised is true only when the daemon runs as the Home Assistant
+	// add-on (its resolved deployment). The Supervisor-subnet trust
 	// assumption only holds there, so the passthrough is inert otherwise even
 	// when Enabled.
 	Supervised bool
@@ -32,6 +32,10 @@ type IngressTrust struct {
 func (t IngressTrust) active() bool {
 	return t.Enabled && t.Supervised && t.TrustedCIDR != nil && t.Role != ""
 }
+
+// Active reports whether the passthrough accepts requests at all; the
+// daemon's auth.ha_ingress.v1 capability reads the same condition.
+func (t IngressTrust) Active() bool { return t.active() }
 
 // IngressPassthrough is a fallback resolver for the HA Ingress auth passthrough
 // (ADR 0044). It must be wired as the INNERMOST auth resolver (closest to the

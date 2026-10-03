@@ -1,5 +1,5 @@
 {
- "api_version": "13.4.0",
+ "api_version": "13.5.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -1051,6 +1051,10 @@
    "unique_id:string",
    "value:unknown"
   ],
+  "Deployment": [
+   "ingress_path:string",
+   "kind:string"
+  ],
   "DetermineParameterRequest": [
    "parameter:string"
   ],
@@ -1415,6 +1419,7 @@
    "capabilities:array\u003cstring\u003e",
    "commit:string",
    "config_ui_url:string",
+   "deployment:$ref:Deployment",
    "schema_digest:string",
    "started_at:string",
    "uptime:string",
