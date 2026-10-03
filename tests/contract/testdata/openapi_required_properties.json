@@ -1,0 +1,1649 @@
+{
+ "AcceptInboxDeviceRequest": [],
+ "AckAllResult": [
+  "acknowledged"
+ ],
+ "AddLinkRequest": [
+  "receiver_address",
+  "sender_address"
+ ],
+ "AddonUpdateStatus": [
+  "current_version",
+  "state",
+  "supported"
+ ],
+ "AlarmArmAccepted": [
+  "state"
+ ],
+ "AlarmArmRequest": [
+  "mode"
+ ],
+ "AlarmCode": [
+  "enabled",
+  "id",
+  "kind",
+  "name",
+  "perms"
+ ],
+ "AlarmCodePerms": [
+  "arm",
+  "disarm",
+  "silence"
+ ],
+ "AlarmCodeRequest": [
+  "enabled",
+  "kind",
+  "name",
+  "perms"
+ ],
+ "AlarmCountdownPayload": [
+  "kind",
+  "remaining_ms",
+  "remaining_s",
+  "total_ms",
+  "total_s",
+  "zone_id"
+ ],
+ "AlarmHealthChangedPayload": [
+  "healthy",
+  "note"
+ ],
+ "AlarmIncident": [
+  "acoustic_seconds",
+  "id",
+  "mode",
+  "open",
+  "retrigger_cycles",
+  "silenced",
+  "started_at",
+  "zone_id"
+ ],
+ "AlarmJournalAppendedPayload": [
+  "class",
+  "entry_id",
+  "event"
+ ],
+ "AlarmJournalEntry": [
+  "class",
+  "event",
+  "id",
+  "when",
+  "zone_id"
+ ],
+ "AlarmMessage": [
+  "counter",
+  "id",
+  "name"
+ ],
+ "AlarmModeReadiness": [
+  "ready"
+ ],
+ "AlarmMotionResetResult": [
+  "failed",
+  "reset",
+  "sensors"
+ ],
+ "AlarmNotificationPayload": [
+  "incident_id",
+  "output_id",
+  "zone_id"
+ ],
+ "AlarmOutput": [
+  "central",
+  "channel_address",
+  "class",
+  "id"
+ ],
+ "AlarmOutputCandidate": [
+  "central",
+  "channel_address",
+  "channel_no",
+  "classes",
+  "device_address",
+  "kind",
+  "model"
+ ],
+ "AlarmOutputTestRequest": [],
+ "AlarmPanelChangedPayload": [
+  "available",
+  "code_arm_required",
+  "code_disarm_required",
+  "name",
+  "state",
+  "unique_id",
+  "zone_id"
+ ],
+ "AlarmPanelEntity": [
+  "available",
+  "category",
+  "code_arm_required",
+  "code_disarm_required",
+  "name",
+  "state",
+  "unique_id",
+  "zone_id"
+ ],
+ "AlarmReadinessChangedPayload": [
+  "readiness",
+  "zone_id"
+ ],
+ "AlarmReminderPayload": [
+  "mode",
+  "zone_id"
+ ],
+ "AlarmRemoteKeyCandidate": [
+  "central",
+  "channel_address",
+  "channel_no",
+  "device_address",
+  "model",
+  "parameters"
+ ],
+ "AlarmSensor": [
+  "central",
+  "channel_address",
+  "id",
+  "interface_id",
+  "parameter",
+  "type"
+ ],
+ "AlarmSensorCandidate": [
+  "central",
+  "channel_address",
+  "channel_no",
+  "device_address",
+  "interface_id",
+  "parameter"
+ ],
+ "AlarmSource": [
+  "at",
+  "ref"
+ ],
+ "AlarmStateChangedPayload": [
+  "new_state",
+  "old_state",
+  "zone_id",
+  "zone_name"
+ ],
+ "AlarmTriggeredMotionSensor": [
+  "channel_address",
+  "parameter",
+  "sensor_id",
+  "zone_id"
+ ],
+ "AlarmTriggeredPayload": [
+  "cause",
+  "incident_id",
+  "zone_id",
+  "zone_name"
+ ],
+ "AlarmVerbRequest": [],
+ "AlarmWalkTestProgressPayload": [
+  "seen",
+  "sensor_id",
+  "total",
+  "zone_id"
+ ],
+ "AlarmWalkTestStatus": [
+  "active",
+  "sensors"
+ ],
+ "AlarmZone": [
+  "id",
+  "name"
+ ],
+ "AlarmZoneConfig": [],
+ "AlarmZoneCreate": [
+  "name"
+ ],
+ "AlarmZoneStatus": [
+  "id",
+  "name",
+  "state",
+  "walktest_active"
+ ],
+ "Area": [
+  "id",
+  "name"
+ ],
+ "AreaRoomRef": [
+  "central",
+  "room"
+ ],
+ "AuditEntry": [
+  "action",
+  "id",
+  "timestamp"
+ ],
+ "BackupEntry": [
+  "bytes",
+  "central",
+  "created_at",
+  "id"
+ ],
+ "BackupStorageInfo": [
+  "available",
+  "bytes",
+  "count"
+ ],
+ "BulkUpdateMatterExposableResponse": [
+  "applied"
+ ],
+ "CacheClearReport": [
+  "centrals_reinit",
+  "devices",
+  "master",
+  "paramsets",
+  "scope",
+  "values"
+ ],
+ "CacheClearRequest": [
+  "kind"
+ ],
+ "CalculatedDPDetail": [],
+ "CalculatedDPSummary": [
+  "available",
+  "name",
+  "observed",
+  "unique_id",
+  "value"
+ ],
+ "CentralBehavior": [],
+ "CentralFeatureState": [
+  "available"
+ ],
+ "CentralFeaturesChangedPayload": [
+  "central",
+  "features"
+ ],
+ "CentralLinksChannelStatus": [
+  "address",
+  "eligible",
+  "number"
+ ],
+ "CentralLinksStatus": [
+  "supported"
+ ],
+ "CentralPairingRequest": [
+  "host"
+ ],
+ "CentralPairingStarted": [
+  "code",
+  "expires_in",
+  "pairing_id"
+ ],
+ "CentralPairingStatus": [
+  "state"
+ ],
+ "CentralProbeRequest": [
+  "host"
+ ],
+ "CentralProbeResult": [
+  "ready",
+  "system_type"
+ ],
+ "CentralReadinessChangedPayload": [
+  "central",
+  "interfaces_loaded",
+  "interfaces_total",
+  "phase",
+  "ready"
+ ],
+ "CentralRow": [
+  "enabled",
+  "host",
+  "interfaces",
+  "name"
+ ],
+ "CentralStateChangedPayload": [
+  "central",
+  "new_state",
+  "old_state"
+ ],
+ "ChangeOwnPasswordRequest": [
+  "current_password",
+  "new_password"
+ ],
+ "ChannelFlags": [
+  "hidden",
+  "locked"
+ ],
+ "ChannelFlagsRequest": [],
+ "ChannelLockRequest": [
+  "enabled"
+ ],
+ "ChannelSummary": [
+  "address",
+  "data_points_count",
+  "number",
+  "paramset_key"
+ ],
+ "ClimatePeriod": [
+  "end_time",
+  "start_time",
+  "temperature"
+ ],
+ "ClimateProfile": [
+  "weekdays"
+ ],
+ "ClimateWeekday": [
+  "base_temperature",
+  "periods"
+ ],
+ "CommunicationTestResult": [
+  "duration_ms",
+  "passed",
+  "started_at",
+  "timed_out"
+ ],
+ "ConfigRepairCorrection": [
+  "parameter"
+ ],
+ "ConfigRepairOutcome": [
+  "channel",
+  "status"
+ ],
+ "ConfigRepairRequest": [],
+ "ConfigRepairResponse": [
+  "items"
+ ],
+ "ConfigSnapshot": [],
+ "ConfigSnapshotResponse": [
+  "config",
+  "sources"
+ ],
+ "CopyProfileRequest": [
+  "source_profile",
+  "target_channel_address",
+  "target_profile"
+ ],
+ "CopyScheduleRequest": [
+  "target_device_address"
+ ],
+ "CreateFunctionRequest": [
+  "name"
+ ],
+ "CreateGroupRequest": [
+  "name",
+  "type_id"
+ ],
+ "CreateRoomRequest": [
+  "name"
+ ],
+ "CreateSysvarRequest": [
+  "name",
+  "value_type"
+ ],
+ "CreateTokenRequest": [
+  "role",
+  "subject"
+ ],
+ "CreateTokenResponse": [
+  "fingerprint",
+  "id",
+  "role",
+  "subject",
+  "token"
+ ],
+ "CreatedNamedResource": [
+  "name",
+  "path"
+ ],
+ "CustomDPDetail": [
+  "category",
+  "channel_no",
+  "name",
+  "state"
+ ],
+ "CustomDPInvokeRequest": [],
+ "CustomDPSummary": [
+  "category",
+  "channel_no",
+  "name",
+  "supported_operations",
+  "unique_id"
+ ],
+ "CustomDataPointStateChangedPayload": [
+  "central",
+  "channel",
+  "device_address",
+  "name",
+  "state",
+  "unique_id"
+ ],
+ "DaemonStatusPayload": [
+  "event_at",
+  "status"
+ ],
+ "DataPointSummary": [
+  "observed",
+  "operations",
+  "parameter",
+  "unique_id"
+ ],
+ "DataPointValueChangedPayload": [
+  "available",
+  "central",
+  "channel",
+  "device_address",
+  "modified_at",
+  "parameter",
+  "paramset_key",
+  "unique_id",
+  "value"
+ ],
+ "Deployment": [
+  "kind"
+ ],
+ "DetermineParameterRequest": [
+  "parameter"
+ ],
+ "DetermineParameterResponse": [
+  "value"
+ ],
+ "DeviceAvailability": [],
+ "DeviceAvailabilityChangedPayload": [
+  "available",
+  "central",
+  "device_address",
+  "interface_id"
+ ],
+ "DeviceCreatedPayload": [
+  "central",
+  "device_address",
+  "interface_id",
+  "model"
+ ],
+ "DeviceDetail": [
+  "availability",
+  "channels",
+  "firmware"
+ ],
+ "DeviceFirmware": [],
+ "DeviceInstallModeRequest": [],
+ "DeviceList": [
+  "items",
+  "page",
+  "per_page",
+  "total"
+ ],
+ "DeviceMetadataChangedPayload": [
+  "central",
+  "device_address",
+  "interface_id"
+ ],
+ "DeviceReleasedPayload": [
+  "central",
+  "device_address",
+  "interface_id"
+ ],
+ "DeviceRemovedPayload": [
+  "central",
+  "device_address",
+  "interface_id"
+ ],
+ "DeviceSummary": [
+  "address",
+  "availability",
+  "available",
+  "channels_count",
+  "firmware",
+  "has_sub_devices",
+  "interface",
+  "interface_id",
+  "master_pushes_config_pending",
+  "model",
+  "name",
+  "updatable",
+  "update_available"
+ ],
+ "DeviceTriggerPayload": [
+  "central",
+  "channel",
+  "device_address",
+  "event_type",
+  "interface_id",
+  "parameter",
+  "unique_id"
+ ],
+ "DiagramConfig": [
+  "config",
+  "created_at_ms",
+  "id",
+  "name",
+  "owner",
+  "updated_at_ms",
+  "visibility"
+ ],
+ "DiagramWriteRequest": [
+  "name"
+ ],
+ "DiscoveredCentral": [
+  "already_configured",
+  "host",
+  "last_seen",
+  "name",
+  "serial",
+  "suggested_host"
+ ],
+ "DownloadSystemFirmwareRequest": [],
+ "EditSessionRequest": [
+  "key"
+ ],
+ "EditSessionResponse": [
+  "expires",
+  "key",
+  "token"
+ ],
+ "EnergyBucket": [
+  "avg_power_w",
+  "consumed_wh",
+  "feed_in_wh",
+  "peak_power_w",
+  "reset",
+  "ts"
+ ],
+ "EnergyDevice": [
+  "address",
+  "buckets",
+  "name",
+  "total_consumed_wh",
+  "total_feed_in_wh"
+ ],
+ "EnergyResponse": [
+  "devices",
+  "from",
+  "group",
+  "to",
+  "total_consumed_wh",
+  "total_feed_in_wh"
+ ],
+ "EntityNameCatalogue": [
+  "entries",
+  "locale"
+ ],
+ "EventGroupSummary": [
+  "available",
+  "channel_address",
+  "event_types",
+  "kind",
+  "parameters",
+  "unique_id"
+ ],
+ "ExportedConfiguration": [
+  "channel_address",
+  "channel_type",
+  "device_address",
+  "exported_at",
+  "model",
+  "paramset_key",
+  "values",
+  "version"
+ ],
+ "ForceCloseEditSessionRequest": [
+  "key"
+ ],
+ "FunctionEntry": [
+  "device_count",
+  "name"
+ ],
+ "GetAlarmStateResponse": [
+  "zones"
+ ],
+ "GetConfigChangesResponse": [
+  "fields"
+ ],
+ "GetDeviceTeamCandidatesResponse": [
+  "candidates"
+ ],
+ "GetDiagnosticsRSSIResponse": [],
+ "GetPreferenceResponse": [],
+ "GetRestartPendingResponse": [
+  "fields",
+  "pending"
+ ],
+ "GroupCentralEntry": [
+  "central",
+  "groups"
+ ],
+ "GroupEntry": [
+  "forbid_single_operation",
+  "id",
+  "members",
+  "name",
+  "type_id"
+ ],
+ "GroupMemberEntry": [
+  "address"
+ ],
+ "GroupTypeEntry": [
+  "id"
+ ],
+ "HMIPKeyMode": [
+  "device_keys",
+  "keyserver_mode",
+  "offline_pairing"
+ ],
+ "Health": [
+  "components",
+  "status"
+ ],
+ "HistoryBucket": [
+  "avg",
+  "count",
+  "max",
+  "min",
+  "ts"
+ ],
+ "HubConnectivityChangedPayload": [
+  "central",
+  "interface_id",
+  "reachable"
+ ],
+ "HubConnectivityDataPoint": [
+  "interface_id",
+  "reachable"
+ ],
+ "HubCountChangedPayload": [
+  "central",
+  "count"
+ ],
+ "HubCountDataPoint": [
+  "legacy_name",
+  "value"
+ ],
+ "HubDaemonConnectionDataPoint": [
+  "connected",
+  "legacy_name"
+ ],
+ "HubDataPoints": [
+  "alarm_messages",
+  "daemon_connection",
+  "inbox",
+  "service_messages",
+  "update"
+ ],
+ "HubInstallModeDataPoint": [
+  "enabled",
+  "interface_id",
+  "observed",
+  "remaining_s"
+ ],
+ "HubMetricChangedPayload": [
+  "central",
+  "metric",
+  "value"
+ ],
+ "HubMetricDataPoint": [
+  "legacy_name",
+  "value"
+ ],
+ "HubMetricsEntry": [],
+ "HubSystemUpdateChangedPayload": [
+  "central",
+  "in_progress",
+  "update_available"
+ ],
+ "HubUpdateDataPoint": [
+  "in_progress",
+  "legacy_name",
+  "update_available"
+ ],
+ "Identity": [
+  "role",
+  "subject"
+ ],
+ "IgnoredCentral": [
+  "ignored_at",
+  "serial"
+ ],
+ "InboxDevice": [
+  "address",
+  "model"
+ ],
+ "Incident": [
+  "component",
+  "id",
+  "severity",
+  "summary",
+  "when"
+ ],
+ "Info": [
+  "addon_build",
+  "api_version",
+  "build_date",
+  "capabilities",
+  "commit",
+  "config_ui_url",
+  "deployment",
+  "schema_digest",
+  "started_at",
+  "uptime",
+  "version"
+ ],
+ "InstallModeChangedPayload": [
+  "central",
+  "enabled",
+  "remaining_s"
+ ],
+ "InstallModeInterfaceEntry": [
+  "active",
+  "interface",
+  "observed",
+  "seconds"
+ ],
+ "InstallModeInterfaceRequest": [
+  "active",
+  "interface"
+ ],
+ "InstallModeSearchRequest": [
+  "interface"
+ ],
+ "InstallModeSearchResponse": [
+  "found",
+  "interface"
+ ],
+ "InstallSystemUpdateRequest": [],
+ "InterfaceSpec": [
+  "name"
+ ],
+ "InterfaceState": [
+  "connected",
+  "id",
+  "interface",
+  "name"
+ ],
+ "Link": [
+  "direction",
+  "peer_address",
+  "receiver_address",
+  "sender_address"
+ ],
+ "LinkParamset": [],
+ "LinkableChannel": [
+  "address",
+  "device_address"
+ ],
+ "ListAllLinksResponse": [
+  "links"
+ ],
+ "ListDeviceReplaceCandidatesResponse": [
+  "candidates"
+ ],
+ "ListDiagramsResponse": [
+  "diagrams"
+ ],
+ "ListGroupTypesResponse": [
+  "types"
+ ],
+ "ListGroupsResponse": [
+  "entries"
+ ],
+ "ListLogsResponse": [
+  "last_seq",
+  "records"
+ ],
+ "ListSchedulesResponse": [
+  "items"
+ ],
+ "ListSystemCCUResponse": [
+  "entries"
+ ],
+ "ListSystemStatusResponse": [
+  "events"
+ ],
+ "LiteProbeInfo": [
+  "pairing_available"
+ ],
+ "LogRecord": [
+  "level",
+  "msg",
+  "seq",
+  "time"
+ ],
+ "LoginRequest": [
+  "password",
+  "username"
+ ],
+ "MQTTReloadResponse": [
+  "reloaded",
+  "took_ms"
+ ],
+ "MatterCommissioningProgressPayload": [
+  "stage"
+ ],
+ "MatterCommissioningWindowRequest": [],
+ "MatterCommissioningWindowResponse": [
+  "discriminator",
+  "duration_seconds",
+  "manual_code",
+  "passcode",
+  "qr_code"
+ ],
+ "MatterCompatFinding": [
+  "code",
+  "ecosystem",
+  "message"
+ ],
+ "MatterCompatibility": [
+  "ecosystems",
+  "endpoint_count",
+  "findings"
+ ],
+ "MatterDiagnosticEvent": [
+  "at",
+  "kind",
+  "message",
+  "severity"
+ ],
+ "MatterDiagnosticEventList": [
+  "events"
+ ],
+ "MatterEcosystem": [
+  "ecosystem",
+  "fabric_index",
+  "vendor_id"
+ ],
+ "MatterEndpointAssembledPayload": [
+  "endpoint_count"
+ ],
+ "MatterEndpointCluster": [
+  "id",
+  "name",
+  "revision"
+ ],
+ "MatterEndpointInfo": [
+  "clusters",
+  "device_type",
+  "device_type_name",
+  "endpoint_id",
+  "friendly_name",
+  "parent_endpoint_id",
+  "reachable"
+ ],
+ "MatterEndpointList": [
+  "endpoints"
+ ],
+ "MatterExposure": [
+  "central_name",
+  "channel_no",
+  "device_address",
+  "dp_key",
+  "dp_kind",
+  "enabled",
+  "mappable"
+ ],
+ "MatterExposureBulkUpdate": [
+  "items"
+ ],
+ "MatterExposureList": [
+  "items"
+ ],
+ "MatterExposureUpdate": [
+  "central_name",
+  "channel_no",
+  "device_address",
+  "dp_key",
+  "dp_kind",
+  "enabled"
+ ],
+ "MatterFabric": [
+  "compressed_id",
+  "fabric_id",
+  "fabric_id_hex",
+  "fabric_index",
+  "node_id",
+  "node_id_hex",
+  "root_public_key",
+  "vendor_id"
+ ],
+ "MatterFabricList": [
+  "fabrics"
+ ],
+ "MatterFabricRemovedPayload": [
+  "fabric_index"
+ ],
+ "MatterFactoryResetRequest": [
+  "confirm"
+ ],
+ "MatterMdnsDiagnostics": [
+  "advertising",
+  "findings",
+  "services"
+ ],
+ "MatterMdnsFinding": [
+  "code",
+  "message",
+  "severity"
+ ],
+ "MatterMdnsService": [
+  "addresses",
+  "host_name",
+  "instance_name",
+  "port",
+  "service_type",
+  "subtypes",
+  "txt"
+ ],
+ "MatterSession": [
+  "fabric_index",
+  "idle_seconds",
+  "is_pase",
+  "last_activity",
+  "last_peer_activity",
+  "local_node_id",
+  "peer_idle_seconds",
+  "peer_node_id",
+  "session_id",
+  "subscriptions"
+ ],
+ "MatterSessionList": [
+  "occupancy",
+  "sessions"
+ ],
+ "MatterSessionOccupancy": [
+  "capacity",
+  "free",
+  "live",
+  "reserved"
+ ],
+ "MatterSetupPayload": [
+  "discriminator",
+  "manual_code",
+  "passcode",
+  "product_id",
+  "qr_code",
+  "vendor_id"
+ ],
+ "MatterStatus": [
+  "advertising",
+  "commissioning_window_open",
+  "enabled",
+  "enabled_count",
+  "endpoint_count",
+  "fabric_count",
+  "listening"
+ ],
+ "NodeRef": [
+  "central",
+  "path"
+ ],
+ "OpenEditSessionRequest": [
+  "key"
+ ],
+ "OptimisticRollbackPayload": [
+  "central",
+  "channel",
+  "device_address",
+  "parameter",
+  "paramset_key",
+  "reason",
+  "unique_id"
+ ],
+ "PairingAnswer": [
+  "expires_in",
+  "fingerprint",
+  "id",
+  "interval",
+  "nonce",
+  "poll"
+ ],
+ "PairingApproveRequest": [
+  "code"
+ ],
+ "PairingAsk": [
+  "app",
+  "commit",
+  "role"
+ ],
+ "PairingRequestList": [
+  "items"
+ ],
+ "PairingRequestsChangedPayload": [
+  "pending"
+ ],
+ "PairingResult": [
+  "state"
+ ],
+ "PairingView": [
+  "address",
+  "app",
+  "code",
+  "created",
+  "expires",
+  "id",
+  "name",
+  "role"
+ ],
+ "ParamsetApplyOutcome": [
+  "address",
+  "status"
+ ],
+ "ParamsetApplyRequest": [
+  "targets",
+  "values"
+ ],
+ "ParamsetApplyResponse": [
+  "items"
+ ],
+ "ParamsetApplyTarget": [
+  "address"
+ ],
+ "ParamsetApplyTargetsResponse": [
+  "items"
+ ],
+ "ParamsetWriteResult": [
+  "readback_divergences",
+  "written"
+ ],
+ "PatchChannelRequest": [],
+ "PatchDeviceRequest": [],
+ "PatchSysvarRequest": [],
+ "Problem": [
+  "status",
+  "title",
+  "type"
+ ],
+ "ProgramChangedPayload": [
+  "active",
+  "central",
+  "execute_available",
+  "program_id"
+ ],
+ "ProgramExecuteRequest": [],
+ "ProgramExecuteResponse": [
+  "executed"
+ ],
+ "ProgramExecutedPayload": [
+  "central",
+  "program_id",
+  "success"
+ ],
+ "ProgramSummary": [
+  "id",
+  "name",
+  "unique_id"
+ ],
+ "PutConfigSectionResponse": [
+  "applied",
+  "restart_required",
+  "section",
+  "updated_at",
+  "version"
+ ],
+ "RFInterfaceAssignRequest": [
+  "interface_address",
+  "roaming"
+ ],
+ "RPCRecordingStatus": [
+  "active",
+  "central",
+  "entries"
+ ],
+ "RSSIMatrixCentral": [
+  "central",
+  "devices",
+  "interface_id"
+ ],
+ "RSSIMatrixDevice": [
+  "address",
+  "partners"
+ ],
+ "RSSIMatrixInterface": [
+  "address"
+ ],
+ "RSSIMatrixPartner": [
+  "address"
+ ],
+ "RSSIMatrixResponse": [
+  "items"
+ ],
+ "ReceiverProposal": [
+  "address",
+  "verdict"
+ ],
+ "ReceiverProposalResponse": [
+  "items"
+ ],
+ "RecordingState": [
+  "record",
+  "source"
+ ],
+ "RecordingWriteRequest": [
+  "central",
+  "channel",
+  "interface_id",
+  "parameter"
+ ],
+ "ReliabilityState": [],
+ "RenameFunctionRequest": [
+  "new_name"
+ ],
+ "RenameRoomRequest": [
+  "new_name"
+ ],
+ "ReplaceCandidate": [
+  "address",
+  "model_matches"
+ ],
+ "ReplaceDeviceRequest": [
+  "old_address"
+ ],
+ "ReplaceDeviceResponse": [
+  "new_address",
+  "old_address",
+  "status"
+ ],
+ "RoomEntry": [
+  "device_count",
+  "name"
+ ],
+ "RxMode": [],
+ "Schedule": [
+  "channel",
+  "kind"
+ ],
+ "ScheduleChangedPayload": [
+  "central",
+  "channel",
+  "device_address",
+  "interface_id"
+ ],
+ "ScheduleChannelRef": [
+  "address",
+  "device_address",
+  "number"
+ ],
+ "ScheduleDeviceSummary": [
+  "address",
+  "central",
+  "channel",
+  "kind",
+  "name"
+ ],
+ "ScheduleTimeCorrection": [
+  "applied",
+  "field",
+  "period",
+  "profile",
+  "requested",
+  "weekday"
+ ],
+ "ScheduleWriteResult": [],
+ "SchemaField": [
+  "class",
+  "go_type",
+  "path",
+  "restart_required"
+ ],
+ "SchemaResponse": [
+  "fields",
+  "sections"
+ ],
+ "SecurityClassChangedPayload": [
+  "active",
+  "class"
+ ],
+ "SecurityClassState": [
+  "active",
+  "class",
+  "known",
+  "severity"
+ ],
+ "SecurityFault": [
+  "class",
+  "id",
+  "reason",
+  "severity",
+  "since",
+  "source"
+ ],
+ "SecurityFaultChangedPayload": [
+  "acknowledged",
+  "class",
+  "fault_id",
+  "open",
+  "open_count",
+  "reason",
+  "severity",
+  "source"
+ ],
+ "SecurityNotification": [
+  "at",
+  "class",
+  "i18n_key",
+  "message",
+  "severity",
+  "subject",
+  "verb"
+ ],
+ "SecurityNotificationPayload": [
+  "at",
+  "class",
+  "fault",
+  "i18n_key",
+  "message",
+  "severity",
+  "subject",
+  "verb"
+ ],
+ "SecuritySnapshot": [
+  "classes",
+  "engine_healthy",
+  "severity"
+ ],
+ "SecuritySourceOverride": [],
+ "SecuritySourceView": [
+  "active",
+  "central",
+  "channel_address",
+  "class",
+  "device_address",
+  "interface_id",
+  "parameter",
+  "ref",
+  "relevant"
+ ],
+ "SecurityStateChangedPayload": [
+  "open_faults",
+  "severity"
+ ],
+ "SecurityZoneChangedPayload": [
+  "state",
+  "zone_id",
+  "zone_slug"
+ ],
+ "SecurityZoneState": [
+  "id",
+  "mode",
+  "name",
+  "slug",
+  "state"
+ ],
+ "ServiceMessage": [
+  "counter",
+  "id",
+  "name",
+  "quittable"
+ ],
+ "SetActiveProfileRequest": [
+  "profile"
+ ],
+ "SetDeviceChannelTeamRequest": [],
+ "SetProgramEnabledRequest": [
+  "active"
+ ],
+ "SetSystemCCUPositionRequest": [
+  "latitude",
+  "longitude"
+ ],
+ "SetValueRequest": [
+  "value"
+ ],
+ "SetupRequest": [
+  "admin",
+  "locale"
+ ],
+ "SetupStatusResponse": [
+  "required"
+ ],
+ "SimpleScheduleEntry": [
+  "level",
+  "slot_no",
+  "time",
+  "weekdays"
+ ],
+ "Snapshot": [
+  "devices",
+  "generated_at"
+ ],
+ "StartupCaptureConfig": [
+  "anonymise",
+  "duration_seconds",
+  "enabled"
+ ],
+ "StartupCaptureConfigWrite": [
+  "duration_seconds",
+  "enabled"
+ ],
+ "SuitableMemberEntry": [
+  "address"
+ ],
+ "SuitableMembersResponse": [
+  "assignable",
+  "leftover"
+ ],
+ "SuppressedServiceMessage": [
+  "channel"
+ ],
+ "SurfaceInfo": [
+  "defaults",
+  "group",
+  "id"
+ ],
+ "SurfacesRequest": [],
+ "SurfacesResponse": [
+  "centrals",
+  "effective",
+  "embedded",
+  "embedded_scope",
+  "inside_ha",
+  "profile",
+  "profiles",
+  "surfaces"
+ ],
+ "SystemCCUEntry": [
+  "available",
+  "configured_interfaces",
+  "features",
+  "host",
+  "is_ha_app",
+  "name",
+  "readiness"
+ ],
+ "SystemRestartResponse": [],
+ "SystemStatusChangedPayload": [
+  "central",
+  "component",
+  "event_at",
+  "healthy"
+ ],
+ "SystemUpdateEntry": [
+  "in_progress",
+  "observed",
+  "update_available"
+ ],
+ "SysvarChangedPayload": [
+  "central",
+  "name",
+  "unique_id",
+  "value"
+ ],
+ "SysvarSetRequest": [
+  "value"
+ ],
+ "SysvarSummary": [
+  "name",
+  "observed",
+  "unique_id",
+  "value_type"
+ ],
+ "SysvarUsage": [
+  "programs",
+  "sysvar"
+ ],
+ "SysvarUsageProgram": [
+  "id",
+  "name"
+ ],
+ "TargetChannelSummary": [
+  "channel_address",
+  "channel_no",
+  "channel_type",
+  "name",
+  "unique_id"
+ ],
+ "TaxonomyAssignment": [
+  "enum",
+  "name",
+  "path"
+ ],
+ "TaxonomyCentral": [
+  "central",
+  "enums",
+  "revision",
+  "tree",
+  "writable"
+ ],
+ "TaxonomyEnum": [
+  "id",
+  "nodes"
+ ],
+ "TaxonomyNode": [
+  "id",
+  "name",
+  "path"
+ ],
+ "TaxonomyNodeCreateRequest": [
+  "name"
+ ],
+ "TaxonomyNodeCreated": [
+  "path"
+ ],
+ "TaxonomyNodeUpdateRequest": [],
+ "TaxonomyResponse": [
+  "centrals"
+ ],
+ "TeamCandidate": [
+  "address",
+  "current"
+ ],
+ "TestLinkAtDeviceRequest": [
+  "receiver_address",
+  "sender_address"
+ ],
+ "TokenCreate": [
+  "role",
+  "subject"
+ ],
+ "TokenCreated": [
+  "fingerprint",
+  "token"
+ ],
+ "TokenListEntry": [
+  "fingerprint",
+  "id",
+  "role",
+  "subject"
+ ],
+ "TokenSummary": [
+  "created_at",
+  "fingerprint",
+  "role",
+  "subject"
+ ],
+ "TriggerBackupRequest": [],
+ "TriggeredEventSummary": [
+  "parameter"
+ ],
+ "UIEventRequest": [
+  "event"
+ ],
+ "UISchema": [
+  "channel",
+  "parameters"
+ ],
+ "UISchemaChannel": [
+  "address",
+  "device_address",
+  "number",
+  "paramset",
+  "type"
+ ],
+ "UISchemaCrossValidation": [
+  "applies_to_params",
+  "id",
+  "rule"
+ ],
+ "UISchemaGroup": [
+  "id",
+  "label",
+  "parameters"
+ ],
+ "UISchemaParameter": [
+  "flags",
+  "name",
+  "observed",
+  "operations",
+  "type"
+ ],
+ "UISchemaParameterFlags": [
+  "internal",
+  "service",
+  "visible"
+ ],
+ "UISchemaParameterOps": [
+  "event",
+  "read",
+  "write"
+ ],
+ "UISchemaPreset": [
+  "label",
+  "value"
+ ],
+ "UISchemaProfile": [
+  "receiver_type"
+ ],
+ "UISchemaSubsetGroup": [
+  "id",
+  "label",
+  "member_params",
+  "options"
+ ],
+ "UISchemaSubsetOpt": [
+  "id",
+  "label",
+  "values"
+ ],
+ "UISchemaTimePreset": [
+  "base",
+  "factor",
+  "label"
+ ],
+ "UISchemaValueListEntry": [
+  "key",
+  "value"
+ ],
+ "UISchemaVisibility": [
+  "show",
+  "trigger",
+  "trigger_value"
+ ],
+ "UnIgnoreCandidateChannel": [
+  "channel",
+  "pattern"
+ ],
+ "UnIgnoreCandidateGroup": [
+  "channel_count",
+  "device_count",
+  "models",
+  "parameter",
+  "paramset",
+  "reason",
+  "reasons"
+ ],
+ "UnIgnoreCandidateList": [
+  "candidates"
+ ],
+ "UnIgnoreCandidateModel": [
+  "channels",
+  "device_count",
+  "model"
+ ],
+ "UnIgnoreEntry": [
+  "pattern"
+ ],
+ "UnIgnoreListResponse": [
+  "centrals"
+ ],
+ "UnIgnoreUpdateRequest": [
+  "central_name",
+  "patterns"
+ ],
+ "UnIgnoreUpdateResponse": [
+  "applied_count"
+ ],
+ "UnsuppressServiceMessageRequest": [
+  "channel"
+ ],
+ "UpdateFirmwareResponse": [
+  "status"
+ ],
+ "UpdateGroupRequest": [
+  "name"
+ ],
+ "UpdateLinkRequest": [
+  "receiver_address",
+  "sender_address"
+ ],
+ "UploadBackupRequest": [
+  "file"
+ ],
+ "UploadTLSCertificateRequest": [
+  "cert",
+  "key"
+ ],
+ "UserCreate": [
+  "password",
+  "role",
+  "username"
+ ],
+ "UserListEntry": [
+  "role",
+  "username"
+ ],
+ "UserSummary": [
+  "created_at",
+  "role",
+  "subject"
+ ],
+ "UserUpdate": [],
+ "ValuesBatchRequest": [
+  "queries"
+ ],
+ "ValuesBatchResponse": [
+  "results"
+ ],
+ "ValuesCacheStats": [
+  "cast_failures",
+  "flush_batches",
+  "flushed_entries",
+  "gc_rows_deleted",
+  "restored_rows",
+  "rows",
+  "value_json_bytes"
+ ],
+ "VisibilityConfig": [],
+ "Warning": [
+  "id",
+  "message_key",
+  "severity",
+  "silenced"
+ ],
+ "WarningList": [
+  "items"
+ ],
+ "WarningSilenceRequest": [
+  "days"
+ ],
+ "WebhookProgramRequest": [
+  "program"
+ ],
+ "WebhookValueRequest": [
+  "address",
+  "parameter",
+  "value"
+ ],
+ "WeekProfileResponse": [
+  "address",
+  "has_climate_schedule",
+  "max_temp",
+  "min_temp",
+  "profile_count",
+  "schedule_type",
+  "unique_id"
+ ],
+ "WiringSeam": [
+  "collaborator",
+  "name",
+  "phase",
+  "why"
+ ],
+ "WsEnvelope": [
+  "kind",
+  "payload",
+  "seq",
+  "ts",
+  "type"
+ ]
+}

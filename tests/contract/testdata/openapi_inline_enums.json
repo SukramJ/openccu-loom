@@ -1,0 +1,570 @@
+[
+ {
+  "path": "paths//devices/{addr}/paramsets/{key}/parameters/1/schema",
+  "name": "key"
+ },
+ {
+  "path": "paths//devices/{addr}/paramsets/{key}/apply-targets/get/parameters/1/schema",
+  "name": "key"
+ },
+ {
+  "path": "paths//devices/{addr}/paramsets/{key}/apply-to/post/parameters/1/schema",
+  "name": "key"
+ },
+ {
+  "path": "paths//devices/{addr}/channels/{no}/paramsets/{key}/determine/post/parameters/2/schema",
+  "name": "key"
+ },
+ {
+  "path": "paths//devices/{addr}/channels/{no}/ui-schema/get/parameters/2/schema",
+  "name": "paramset"
+ },
+ {
+  "path": "paths//devices/{addr}/channels/{no}/config/export/get/parameters/2/schema",
+  "name": "paramset"
+ },
+ {
+  "path": "paths//devices/{addr}/channels/{no}/linkable-channels/get/parameters/2/schema",
+  "name": "role"
+ },
+ {
+  "path": "paths//audit/get/parameters/6/schema",
+  "name": "format"
+ },
+ {
+  "path": "paths//history/get/responses/200/headers/X-History-Tier/schema",
+  "name": "X-History-Tier"
+ },
+ {
+  "path": "paths//energy/get/parameters/3/schema",
+  "name": "group"
+ },
+ {
+  "path": "paths//diagnostics/get/parameters/0/schema",
+  "name": "anonymize"
+ },
+ {
+  "path": "paths//diagnostics/logs/get/parameters/1/schema",
+  "name": "min_level"
+ },
+ {
+  "path": "paths//diagnostics/logs/get/parameters/2/schema",
+  "name": "format"
+ },
+ {
+  "path": "paths//diagnostics/logs/get/parameters/3/schema",
+  "name": "download"
+ },
+ {
+  "path": "paths//diagnostics/logs/stream/get/parameters/1/schema",
+  "name": "min_level"
+ },
+ {
+  "path": "paths//diagnostics/rpc-recording/{central}/download/get/parameters/1/schema",
+  "name": "format"
+ },
+ {
+  "path": "paths//alarm/journal/get/parameters/1/schema",
+  "name": "class"
+ },
+ {
+  "path": "paths//security/classes/{class}/parameters/0/schema",
+  "name": "class"
+ },
+ {
+  "path": "paths//security/sources/get/parameters/0/schema",
+  "name": "class"
+ },
+ {
+  "path": "paths//security/sources/get/parameters/3/schema",
+  "name": "relevant"
+ },
+ {
+  "path": "paths//security/sources/get/parameters/4/schema",
+  "name": "active"
+ },
+ {
+  "path": "paths//alarm/sensor-candidates/get/parameters/0/schema",
+  "name": "enrolled"
+ },
+ {
+  "path": "paths//alarm/output-candidates/get/parameters/0/schema",
+  "name": "class"
+ },
+ {
+  "path": "components/schemas/CustomDPInvokeRequest/properties/priority",
+  "name": "priority"
+ },
+ {
+  "path": "components/schemas/ReceiverProposal/properties/verdict",
+  "name": "verdict"
+ },
+ {
+  "path": "components/schemas/ConfigRepairOutcome/properties/status",
+  "name": "status"
+ },
+ {
+  "path": "components/schemas/ParamsetApplyOutcome/properties/status",
+  "name": "status"
+ },
+ {
+  "path": "components/schemas/Problem/properties/type",
+  "name": "type"
+ },
+ {
+  "path": "components/schemas/Problem/properties/code",
+  "name": "code"
+ },
+ {
+  "path": "components/schemas/Problem/properties/feature/properties/reason",
+  "name": "reason"
+ },
+ {
+  "path": "components/schemas/WarningSilenceRequest/properties/days",
+  "name": "days"
+ },
+ {
+  "path": "components/schemas/PairingAsk/properties/role",
+  "name": "role"
+ },
+ {
+  "path": "components/schemas/PairingResult/properties/state",
+  "name": "state"
+ },
+ {
+  "path": "components/schemas/Warning/properties/severity",
+  "name": "severity"
+ },
+ {
+  "path": "components/schemas/CentralFeatureState/properties/reason",
+  "name": "reason"
+ },
+ {
+  "path": "components/schemas/SystemCCUEntry/properties/system_type",
+  "name": "system_type"
+ },
+ {
+  "path": "components/schemas/SystemCCUEntry/properties/readiness/properties/phase",
+  "name": "phase"
+ },
+ {
+  "path": "components/schemas/Health/properties/status",
+  "name": "status"
+ },
+ {
+  "path": "components/schemas/DeviceSummary/properties/update_status",
+  "name": "update_status"
+ },
+ {
+  "path": "components/schemas/CacheClearRequest/properties/kind",
+  "name": "kind"
+ },
+ {
+  "path": "components/schemas/DataPointSummary/properties/source",
+  "name": "source"
+ },
+ {
+  "path": "components/schemas/SetValueRequest/properties/priority",
+  "name": "priority"
+ },
+ {
+  "path": "components/schemas/WebhookValueRequest/properties/priority",
+  "name": "priority"
+ },
+ {
+  "path": "components/schemas/RecordingState/properties/source",
+  "name": "source"
+ },
+ {
+  "path": "components/schemas/EnergyResponse/properties/group",
+  "name": "group"
+ },
+ {
+  "path": "components/schemas/Identity/properties/role",
+  "name": "role"
+ },
+ {
+  "path": "components/schemas/Identity/properties/scheme",
+  "name": "scheme"
+ },
+ {
+  "path": "components/schemas/UserListEntry/properties/role",
+  "name": "role"
+ },
+ {
+  "path": "components/schemas/TokenListEntry/properties/role",
+  "name": "role"
+ },
+ {
+  "path": "components/schemas/CreateTokenResponse/properties/role",
+  "name": "role"
+ },
+ {
+  "path": "components/schemas/MatterDiagnosticEvent/properties/kind",
+  "name": "kind"
+ },
+ {
+  "path": "components/schemas/MatterDiagnosticEvent/properties/severity",
+  "name": "severity"
+ },
+ {
+  "path": "components/schemas/MatterEcosystem/properties/ecosystem",
+  "name": "ecosystem"
+ },
+ {
+  "path": "components/schemas/MatterMdnsFinding/properties/severity",
+  "name": "severity"
+ },
+ {
+  "path": "components/schemas/MatterExposure/properties/dp_kind",
+  "name": "dp_kind"
+ },
+ {
+  "path": "components/schemas/MatterExposure/properties/mappable",
+  "name": "mappable"
+ },
+ {
+  "path": "components/schemas/MatterExposureUpdate/properties/dp_kind",
+  "name": "dp_kind"
+ },
+ {
+  "path": "components/schemas/UnIgnoreCandidateGroup/properties/paramset",
+  "name": "paramset"
+ },
+ {
+  "path": "components/schemas/WsEnvelope/properties/kind",
+  "name": "kind"
+ },
+ {
+  "path": "components/schemas/CentralReadinessChangedPayload/properties/phase",
+  "name": "phase"
+ },
+ {
+  "path": "components/schemas/CentralFeaturesChangedPayload/properties/system_type",
+  "name": "system_type"
+ },
+ {
+  "path": "components/schemas/AlarmStateChangedPayload/properties/old_state",
+  "name": "old_state"
+ },
+ {
+  "path": "components/schemas/AlarmStateChangedPayload/properties/new_state",
+  "name": "new_state"
+ },
+ {
+  "path": "components/schemas/AlarmStateChangedPayload/properties/mode",
+  "name": "mode"
+ },
+ {
+  "path": "components/schemas/AlarmCountdownPayload/properties/kind",
+  "name": "kind"
+ },
+ {
+  "path": "components/schemas/AlarmTriggeredPayload/properties/mode",
+  "name": "mode"
+ },
+ {
+  "path": "components/schemas/AlarmPanelEntity/properties/state",
+  "name": "state"
+ },
+ {
+  "path": "components/schemas/AlarmJournalAppendedPayload/properties/class",
+  "name": "class"
+ },
+ {
+  "path": "components/schemas/SecurityStateChangedPayload/properties/severity",
+  "name": "severity"
+ },
+ {
+  "path": "components/schemas/SecurityStateChangedPayload/properties/previous_severity",
+  "name": "previous_severity"
+ },
+ {
+  "path": "components/schemas/SecurityStateChangedPayload/properties/active_classes/items",
+  "name": "active_classes"
+ },
+ {
+  "path": "components/schemas/SecurityClassChangedPayload/properties/class",
+  "name": "class"
+ },
+ {
+  "path": "components/schemas/SecurityFaultChangedPayload/properties/class",
+  "name": "class"
+ },
+ {
+  "path": "components/schemas/SecurityFaultChangedPayload/properties/reason",
+  "name": "reason"
+ },
+ {
+  "path": "components/schemas/SecurityFaultChangedPayload/properties/severity",
+  "name": "severity"
+ },
+ {
+  "path": "components/schemas/SecurityNotificationPayload/properties/class",
+  "name": "class"
+ },
+ {
+  "path": "components/schemas/SecurityNotificationPayload/properties/severity",
+  "name": "severity"
+ },
+ {
+  "path": "components/schemas/SecurityNotificationPayload/properties/verb",
+  "name": "verb"
+ },
+ {
+  "path": "components/schemas/DaemonStatusPayload/properties/status",
+  "name": "status"
+ },
+ {
+  "path": "components/schemas/SchemaField/properties/class",
+  "name": "class"
+ },
+ {
+  "path": "components/schemas/SurfaceInfo/properties/group",
+  "name": "group"
+ },
+ {
+  "path": "components/schemas/SurfaceInfo/properties/floor",
+  "name": "floor"
+ },
+ {
+  "path": "components/schemas/SurfaceInfo/properties/gate",
+  "name": "gate"
+ },
+ {
+  "path": "components/schemas/SurfaceInfo/properties/warn",
+  "name": "warn"
+ },
+ {
+  "path": "components/schemas/SurfacesResponse/properties/embedded_scope",
+  "name": "embedded_scope"
+ },
+ {
+  "path": "components/schemas/SurfacesResponse/properties/profile",
+  "name": "profile"
+ },
+ {
+  "path": "components/schemas/SurfacesResponse/properties/profiles/additionalProperties/additionalProperties",
+  "name": "profiles"
+ },
+ {
+  "path": "components/schemas/SurfacesRequest/properties/embedded_scope",
+  "name": "embedded_scope"
+ },
+ {
+  "path": "components/schemas/SurfacesRequest/properties/profiles/additionalProperties/additionalProperties",
+  "name": "profiles"
+ },
+ {
+  "path": "components/schemas/ConfigSnapshotResponse/properties/sources/additionalProperties",
+  "name": "sources"
+ },
+ {
+  "path": "components/schemas/UserCreate/properties/role",
+  "name": "role"
+ },
+ {
+  "path": "components/schemas/UserUpdate/properties/role",
+  "name": "role"
+ },
+ {
+  "path": "components/schemas/UserSummary/properties/role",
+  "name": "role"
+ },
+ {
+  "path": "components/schemas/TokenCreate/properties/role",
+  "name": "role"
+ },
+ {
+  "path": "components/schemas/TokenSummary/properties/role",
+  "name": "role"
+ },
+ {
+  "path": "components/schemas/InterfaceSpec/properties/rpc_type",
+  "name": "rpc_type"
+ },
+ {
+  "path": "components/schemas/CentralProbeResult/properties/system_type",
+  "name": "system_type"
+ },
+ {
+  "path": "components/schemas/CentralPairingRequest/properties/access",
+  "name": "access"
+ },
+ {
+  "path": "components/schemas/CentralPairingStatus/properties/state",
+  "name": "state"
+ },
+ {
+  "path": "components/schemas/CentralRow/properties/system_type",
+  "name": "system_type"
+ },
+ {
+  "path": "components/schemas/CentralBehavior/properties/sysvar_markers/items",
+  "name": "sysvar_markers"
+ },
+ {
+  "path": "components/schemas/CentralBehavior/properties/program_markers/items",
+  "name": "program_markers"
+ },
+ {
+  "path": "components/schemas/ScheduleDeviceSummary/properties/kind",
+  "name": "kind"
+ },
+ {
+  "path": "components/schemas/ScheduleTimeCorrection/properties/field",
+  "name": "field"
+ },
+ {
+  "path": "components/schemas/Schedule/properties/kind",
+  "name": "kind"
+ },
+ {
+  "path": "components/schemas/WeekProfileResponse/properties/schedule_type",
+  "name": "schedule_type"
+ },
+ {
+  "path": "components/schemas/TargetChannelSummary/properties/channel_type",
+  "name": "channel_type"
+ },
+ {
+  "path": "components/schemas/DiagramConfig/properties/visibility",
+  "name": "visibility"
+ },
+ {
+  "path": "components/schemas/DiagramWriteRequest/properties/visibility",
+  "name": "visibility"
+ },
+ {
+  "path": "components/schemas/AddonUpdateStatus/properties/state",
+  "name": "state"
+ },
+ {
+  "path": "components/schemas/AlarmSensor/properties/type",
+  "name": "type"
+ },
+ {
+  "path": "components/schemas/AlarmOutput/properties/class",
+  "name": "class"
+ },
+ {
+  "path": "components/schemas/AlarmOutputCandidate/properties/classes/items",
+  "name": "classes"
+ },
+ {
+  "path": "components/schemas/AlarmRemoteKeyCandidate/properties/parameters/items",
+  "name": "parameters"
+ },
+ {
+  "path": "components/schemas/AlarmZoneStatus/properties/state",
+  "name": "state"
+ },
+ {
+  "path": "components/schemas/AlarmZoneStatus/properties/mode",
+  "name": "mode"
+ },
+ {
+  "path": "components/schemas/AlarmZoneStatus/properties/countdown/properties/kind",
+  "name": "kind"
+ },
+ {
+  "path": "components/schemas/AlarmArmRequest/properties/mode",
+  "name": "mode"
+ },
+ {
+  "path": "components/schemas/AlarmCode/properties/kind",
+  "name": "kind"
+ },
+ {
+  "path": "components/schemas/AlarmCodeRequest/properties/kind",
+  "name": "kind"
+ },
+ {
+  "path": "components/schemas/AlarmArmAccepted/properties/state",
+  "name": "state"
+ },
+ {
+  "path": "components/schemas/SecuritySnapshot/properties/severity",
+  "name": "severity"
+ },
+ {
+  "path": "components/schemas/SecurityClassState/properties/class",
+  "name": "class"
+ },
+ {
+  "path": "components/schemas/SecurityClassState/properties/severity",
+  "name": "severity"
+ },
+ {
+  "path": "components/schemas/SecuritySourceOverride/properties/class",
+  "name": "class"
+ },
+ {
+  "path": "components/schemas/SecurityFault/properties/reason",
+  "name": "reason"
+ },
+ {
+  "path": "components/schemas/SecurityNotification/properties/verb",
+  "name": "verb"
+ },
+ {
+  "path": "components/schemas/AlarmSensorCandidate/properties/sensor_type",
+  "name": "sensor_type"
+ },
+ {
+  "path": "components/schemas/AlarmSensorCandidate/properties/security_class",
+  "name": "security_class"
+ },
+ {
+  "path": "components/schemas/AlarmSource/properties/class",
+  "name": "class"
+ },
+ {
+  "path": "components/schemas/AlarmIncident/properties/mode",
+  "name": "mode"
+ },
+ {
+  "path": "components/schemas/AlarmIncident/properties/close_reason",
+  "name": "close_reason"
+ },
+ {
+  "path": "components/schemas/AlarmJournalEntry/properties/class",
+  "name": "class"
+ },
+ {
+  "path": "components/schemas/CreateSysvarRequest/properties/value_type",
+  "name": "value_type"
+ },
+ {
+  "path": "components/schemas/CreateTokenRequest/properties/role",
+  "name": "role"
+ },
+ {
+  "path": "components/schemas/DiscoveredCentral/properties/system_type",
+  "name": "system_type"
+ },
+ {
+  "path": "components/schemas/MatterFactoryResetRequest/properties/confirm",
+  "name": "confirm"
+ },
+ {
+  "path": "components/schemas/SetupRequest/properties/locale/properties/locale",
+  "name": "locale"
+ },
+ {
+  "path": "components/schemas/SetupRequest/properties/locale/properties/theme",
+  "name": "theme"
+ },
+ {
+  "path": "components/schemas/SetupRequest/properties/ccu/properties/system_type",
+  "name": "system_type"
+ },
+ {
+  "path": "components/schemas/SystemRestartResponse/properties/status",
+  "name": "status"
+ },
+ {
+  "path": "components/schemas/WiringSeam/properties/phase",
+  "name": "phase"
+ }
+]
