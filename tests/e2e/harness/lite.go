@@ -59,7 +59,7 @@ func startLiteFake(t *testing.T, devices []string, notReady bool, scopes []strin
 
 // liteHostPort splits the fake's base URL into the host and the port the
 // central addresses it by.
-func liteHostPort(t *testing.T, f *litefake.Fake) (string, int) {
+func liteHostPort(t *testing.T, f *litefake.Fake) (host string, port int) {
 	t.Helper()
 	u, err := url.Parse(f.URL())
 	if err != nil {
@@ -69,7 +69,7 @@ func liteHostPort(t *testing.T, f *litefake.Fake) (string, int) {
 	if err != nil {
 		t.Fatalf("split litefake host: %v", err)
 	}
-	port, err := strconv.Atoi(portStr)
+	port, err = strconv.Atoi(portStr)
 	if err != nil {
 		t.Fatalf("parse litefake port: %v", err)
 	}

@@ -139,10 +139,10 @@ func newInprocessPubSub() *inprocessPubSub {
 	}
 }
 
-func (p *inprocessPubSub) Publish(_ context.Context, topic string, payload []byte, _ mqtt.QoS, _ bool, _ ...mqtt.PublishOption) error {
+func (p *inprocessPubSub) Publish(_ context.Context, topic string, body []byte, _ mqtt.QoS, _ bool, _ ...mqtt.PublishOption) error {
 	for filter, cb := range p.subs {
 		if matchesFilter(filter, topic) {
-			cb(&mqtt.Message{Topic: topic, Payload: payload, Retain: false})
+			cb(&mqtt.Message{Topic: topic, Payload: body, Retain: false})
 			p.dispatched <- struct{}{}
 		}
 	}

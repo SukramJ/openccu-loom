@@ -205,7 +205,7 @@ func anyInterfaceConnected(t *testing.T, h *harness.Harness) bool {
 	return false
 }
 
-func getBody(h *harness.Harness, path string) ([]byte, int, error) {
+func getBody(h *harness.Harness, path string) (body []byte, status int, err error) {
 	req, err := h.REST().NewRequest(http.MethodGet, path, nil)
 	if err != nil {
 		return nil, 0, err
@@ -215,7 +215,7 @@ func getBody(h *harness.Harness, path string) ([]byte, int, error) {
 		return nil, 0, err
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
+	body, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, resp.StatusCode, err
 	}

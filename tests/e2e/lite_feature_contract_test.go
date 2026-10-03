@@ -34,7 +34,7 @@ type problemFeature struct {
 // and the missing scope, on REST and on WebSocket, while GET /system/ccu
 // reports the same feature absent. A route that let the refusal fall
 // through to a generic answer fails here.
-func TestLiteFeatureContract(t *testing.T) {
+func TestLiteFeatureContract(t *testing.T) { //nolint:tparallel // the subtests share one daemon and its login session and run against it in turn
 	t.Parallel()
 	h := harness.Start(t, harness.Options{Backend: harness.BackendOpenCCULite, LiteScopes: []string{"rpc:read"}})
 	if err := h.REST().LoginSession(harness.AdminUser, harness.AdminPass); err != nil {

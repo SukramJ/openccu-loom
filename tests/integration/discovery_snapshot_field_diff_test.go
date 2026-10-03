@@ -362,12 +362,3 @@ func ptrBoolStr(b *bool) string {
 	}
 	return "false"
 }
-
-// min returns the smaller of a and b. Duplicated here for Go <1.21
-// compatibility; the builtin min is available since Go 1.21.
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}

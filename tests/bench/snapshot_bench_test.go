@@ -64,7 +64,7 @@ func (b *benchDeviceIndex) SerialSuffix(string) string { return "vccu000bench" }
 // nested shapes perform.
 func benchFleet(devices, channels, dps int) *benchDeviceIndex {
 	idx := &benchDeviceIndex{byID: make(map[string]*device.Device, devices)}
-	for d := 0; d < devices; d++ {
+	for d := range devices {
 		addr := "BENCH" + strconv.Itoa(100000+d)
 		dev := device.New(device.Config{
 			Address:     addr,
@@ -76,7 +76,7 @@ func benchFleet(devices, channels, dps int) *benchDeviceIndex {
 		for c := 1; c <= channels; c++ {
 			chAddr := addr + ":" + strconv.Itoa(c)
 			ch := dev.AddChannel(chAddr, c, "SWITCH", hmenum.ParamsetKeyValues)
-			for p := 0; p < dps; p++ {
+			for p := range dps {
 				ch.Put(generic.NewBinarySensor(generic.Spec{
 					Key: hmtypes.DataPointKey{
 						ChannelAddress: chAddr,
@@ -108,7 +108,7 @@ func runSnapshotBench(b *testing.B, rawQuery, accept string) {
 
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		req := httptest.NewRequest(http.MethodGet, "/snapshot?"+rawQuery, http.NoBody)
 		if accept != "" {
 			req.Header.Set("Accept", accept)

@@ -7,7 +7,6 @@ package integration
 
 import (
 	"context"
-	"io"
 	"log/slog"
 	"path/filepath"
 	"sync"
@@ -21,6 +20,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -64,7 +64,7 @@ func vcIngestPipeline(
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 
 	if err := p.IngestFromBackend(
 		ctx, "HmIP-RF", hmenum.InterfaceHmIPRF, backend, nil, nil, logger,
@@ -138,7 +138,7 @@ func TestValuesCache_FlushAndRestoreRoundtrip(t *testing.T) {
 	if err := reg.Register(c); err != nil {
 		t.Fatalf("reg.Register: %v", err)
 	}
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	flusher := adapter.WireValuesCacheFlusher(reg, vcStore, 5*time.Millisecond, logger)
 	time.Sleep(50 * time.Millisecond)
 	flusher.Stop() // blocks until the shutdown flush completes
@@ -194,7 +194,7 @@ func TestValuesCache_LifecycleTransitions_ConnectionLostThenRecovered(t *testing
 	c := vcIngestPipeline(t, centralName, vcStore)
 
 	// Wire the lifecycle handler so ConnectionLost / RecoveryCompleted flip sources.
-	unsub := adapter.WireValueSourceLifecycle(c, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	unsub := adapter.WireValueSourceLifecycle(c, slog.New(slog.DiscardHandler))
 	defer unsub()
 
 	// Find a DP and push a live value.
@@ -276,7 +276,10 @@ func TestValuesCache_LifecycleTransitions_ConnectionLostThenRecovered(t *testing
 // call supersedes the cache-sourced value. The scenario:
 //  1. DP A gets a live value (true), DP B stays unobserved.
 //  2. Both are flushed; only A has a row.
-//  3. Second pipeline run with cache restore: A is source=cache, B is unobserved.
+//  3. Second pipeline run with cache restore: A is source=cache, B keeps the
+//     source it had before the flush. Both are found again by the coordinates
+//     the cache keys its rows on, so a flusher that persisted unobserved data
+//     points or a restore that marked every data point as cache turns B red.
 //  4. Simulate fetch_all by calling OnWireValue on A with a new value (false).
 //  5. A must be source=live with the new value.
 func TestValuesCache_FetchAllOverwritesCache(t *testing.T) {
@@ -288,10 +291,13 @@ func TestValuesCache_FetchAllOverwritesCache(t *testing.T) {
 	vcStore := vcOpenDB(t, dbPath)
 	c := vcIngestPipeline(t, centralName, vcStore)
 
-	// Pick the first two boolean DPs we can find.
+	// DataPointKey carries the coordinates a values-cache row is keyed on;
+	// the second run builds new objects, so only these coordinates link a
+	// data point across the two runs.
 	type liveDPIface interface {
 		Source() hmenum.ValueSource
 		OnWireValue(any) bool
+		DataPointKey() hmtypes.DataPointKey
 	}
 	var dpA, dpB liveDPIface
 	for _, d := range c.ModelRegistry.List() {
@@ -300,62 +306,83 @@ func TestValuesCache_FetchAllOverwritesCache(t *testing.T) {
 				if rawDP == nil {
 					continue
 				}
-				if w, ok := rawDP.(liveDPIface); ok {
-					if dpA == nil {
-						dpA = w
-					} else if dpB == nil && rawDP != nil {
-						dpB = w
-						goto done
-					}
+				w, ok := rawDP.(liveDPIface)
+				if !ok {
+					continue
 				}
+				if dpA == nil {
+					dpA = w
+					continue
+				}
+				// Edge-trigger parameters never enter the cache whatever their
+				// source, so such a B could not show a flusher that persists
+				// unobserved data points.
+				if hmenum.IsEdgeTriggerParameter(hmenum.Parameter(w.DataPointKey().Parameter)) {
+					continue
+				}
+				dpB = w
+				goto done
 			}
 		}
 	}
 done:
-	if dpA == nil {
+	if dpA == nil || dpB == nil {
 		t.Fatal("could not find two suitable data points")
 	}
+	keyA, keyB := dpA.DataPointKey(), dpB.DataPointKey()
 
 	// Drive dpA live.
 	dpA.OnWireValue(true)
 	if dpA.Source() != hmenum.ValueSourceLive {
 		t.Fatalf("dpA: source = %s, want live", dpA.Source())
 	}
-	// dpB stays unobserved (we do not call OnWireValue on it).
+	// B is never driven; its source before the flush is the reference the
+	// restored B is compared against.
+	sourceBBefore := dpB.Source()
+	if sourceBBefore == hmenum.ValueSourceLive {
+		t.Fatalf("dpB %s:%s: source = live before the flush, but it was never driven",
+			keyB.ChannelAddress, keyB.Parameter)
+	}
 
 	reg := central.NewRegistry()
 	if err := reg.Register(c); err != nil {
 		t.Fatalf("reg.Register: %v", err)
 	}
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	flusher := adapter.WireValuesCacheFlusher(reg, vcStore, 5*time.Millisecond, logger)
 	time.Sleep(50 * time.Millisecond)
 	flusher.Stop()
 
-	// ── second run: restore, verify A=cache, then simulate fetch_all ─────────
+	// ── second run: restore, verify A=cache and B untouched, then fetch_all ──
 	vcStore2 := vcOpenDB(t, dbPath)
 	c2 := vcIngestPipeline(t, centralName, vcStore2)
 
-	// At least one DP must be cache-sourced (from the restore pass).
-	var restoredDP liveDPIface
-	for _, d := range c2.ModelRegistry.List() {
-		for _, ch := range d.Channels() {
-			for _, rawDP := range ch.DataPoints() {
-				if rawDP == nil {
-					continue
-				}
-				if w, ok := rawDP.(liveDPIface); ok {
-					if w.Source() == hmenum.ValueSourceCache {
-						restoredDP = w
-						goto foundRestored
-					}
-				}
-			}
+	// The restore pass resolves a row through the channel address and the
+	// parameter; look A and B up the same way.
+	lookup := func(name string, key hmtypes.DataPointKey) liveDPIface {
+		t.Helper()
+		ch := c2.GetChannel(key.ChannelAddress)
+		if ch == nil || ch.Device() == nil || ch.Device().InterfaceID != key.InterfaceID {
+			t.Fatalf("%s: channel %s (%s) missing after the second pipeline run",
+				name, key.ChannelAddress, key.InterfaceID)
 		}
+		w, ok := ch.Parameter(hmenum.Parameter(key.Parameter)).(liveDPIface)
+		if !ok {
+			t.Fatalf("%s: data point %s:%s missing after the second pipeline run",
+				name, key.ChannelAddress, key.Parameter)
+		}
+		return w
 	}
-foundRestored:
-	if restoredDP == nil {
-		t.Fatal("no cache-sourced DP found after restore pass")
+	restoredDP := lookup("dpA", keyA)
+	restoredB := lookup("dpB", keyB)
+
+	if got := restoredDP.Source(); got != hmenum.ValueSourceCache {
+		t.Fatalf("dpA %s:%s: source = %s after restore, want cache",
+			keyA.ChannelAddress, keyA.Parameter, got)
+	}
+	if got := restoredB.Source(); got == hmenum.ValueSourceCache || got != sourceBBefore {
+		t.Fatalf("dpB %s:%s: source = %s after restore, want %s as before the flush (never observed, so it must have no cache row)",
+			keyB.ChannelAddress, keyB.Parameter, got, sourceBBefore)
 	}
 
 	// Simulate fetch_all: push a new live value.

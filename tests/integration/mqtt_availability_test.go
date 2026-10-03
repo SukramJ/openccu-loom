@@ -7,7 +7,6 @@ package integration
 
 import (
 	"context"
-	"io"
 	"log/slog"
 	"strings"
 	"sync"
@@ -86,7 +85,7 @@ func TestMQTTAvailabilityAgainstRealBroker(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadTranslationsEmbedded: %v", err)
 	}
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	pipeline := adapter.NewDevicePipeline(c).WithTranslations(translations, snapshotLocale())
 	if err := pipeline.IngestFromBackend(ctx, "HmIP-RF", hmenum.InterfaceHmIPRF, backend, nil, nil, logger); err != nil {
 		t.Fatalf("IngestFromBackend: %v", err)

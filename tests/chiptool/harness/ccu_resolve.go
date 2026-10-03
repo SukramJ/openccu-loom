@@ -34,12 +34,12 @@ type exposureItem struct {
 // fetchExposable GETs the current exposable list. Returns an error
 // when the daemon does not answer 200 so callers can decide whether
 // to Fatal or degrade to a skip.
-func (b *Bridge) fetchExposable(t *testing.T) ([]exposureItem, error) {
+func (b *Bridge) fetchExposable(ctx context.Context, t *testing.T) ([]exposureItem, error) {
 	t.Helper()
 	var list struct {
 		Items []exposureItem `json:"items"`
 	}
-	status := b.RESTGet(t, "/api/v1/matter/exposable", &list)
+	status := b.restGetCtx(ctx, t, "/api/v1/matter/exposable", &list)
 	if status != http.StatusOK {
 		return nil, fmt.Errorf("GET /matter/exposable: status=%d", status)
 	}
@@ -86,7 +86,7 @@ func (b *Bridge) ResolveCCUAddress(ctx context.Context, t *testing.T, endpointID
 	if !found || addr == "" {
 		return "", "", false
 	}
-	items, err := b.fetchExposable(t)
+	items, err := b.fetchExposable(ctx, t)
 	if err != nil {
 		return "", "", false
 	}

@@ -19,7 +19,6 @@ package integration
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -52,7 +51,7 @@ func fleetQueryFacade(t *testing.T) *central.QueryFacade {
 	pipeline := adapter.NewDevicePipeline(c)
 	ctx, cancel := context.WithTimeout(context.Background(), 240*time.Second)
 	defer cancel()
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	if err := pipeline.IngestFromBackend(ctx, "HmIP-RF", hmenum.InterfaceHmIPRF, backend, nil, nil, logger); err != nil {
 		t.Fatalf("IngestFromBackend: %v", err)
 	}

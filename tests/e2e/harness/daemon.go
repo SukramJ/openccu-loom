@@ -173,7 +173,11 @@ func Start(t *testing.T, opts Options) *Harness {
 		south.Lite = true
 	} else {
 		h.ccu = startMockCCU(t, opts.Devices, opts.StartCCUNotReady)
-		south.XMLRPC = h.ccu.v.XMLRPCAddr().(*net.TCPAddr).Port
+		xmlrpcAddr, ok := h.ccu.v.XMLRPCAddr().(*net.TCPAddr)
+		if !ok {
+			t.Fatalf("mock CCU XML-RPC address %T is not TCP", h.ccu.v.XMLRPCAddr())
+		}
+		south.XMLRPC = xmlrpcAddr.Port
 		south.JSONRPC = jsonrpcPort(h.ccu)
 	}
 
@@ -239,7 +243,7 @@ func Start(t *testing.T, opts Options) *Harness {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	h.cmd = exec.CommandContext(ctx, binPath, "run", "--config", h.cfgPath)
+	h.cmd = exec.CommandContext(ctx, binPath, "run", "--config", h.cfgPath) //nolint:gosec // G204: launching the locally built daemon binary is the harness's purpose
 	h.cmd.Stdout = h.stdoutBuf
 	h.cmd.Stderr = h.stderrBuf
 	if runtime.GOOS != "windows" {
@@ -448,7 +452,7 @@ func waitForHealth(t *testing.T, restAddr string, deadline time.Duration, exited
 
 	hc := &http.Client{Timeout: 1 * time.Second}
 	for {
-		req, _ := http.NewRequest(http.MethodGet, url, nil)
+		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, url, http.NoBody)
 		// Health is mounted unauthenticated; no auth header needed.
 		resp, err := hc.Do(req)
 		if err == nil {

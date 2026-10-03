@@ -65,7 +65,7 @@ func TestE2EMqttCollectorIncrements(t *testing.T) {
 	}
 	text := string(body)
 
-	if len(text) == 0 {
+	if text == "" {
 		t.Skip("metrics body empty — registry not yet populated, Phase-F candidate")
 	}
 

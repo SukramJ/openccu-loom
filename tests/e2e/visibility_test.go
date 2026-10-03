@@ -29,7 +29,7 @@ import (
 // TestVisibilityUnIgnoreE2E is the single end-to-end test for the
 // visibility/unignore surface. It uses the daemon started by the harness
 // (with a godevccu backing CCU) and hits the live REST endpoints.
-func TestVisibilityUnIgnoreE2E(t *testing.T) {
+func TestVisibilityUnIgnoreE2E(t *testing.T) { //nolint:tparallel // the subtests mutate and read back one daemon's unignore state in order
 	t.Parallel()
 	h := harness.Start(t, harness.Options{AuthMode: harness.AuthSession})
 	rest := h.REST()

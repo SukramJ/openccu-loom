@@ -15,7 +15,6 @@ package integration
 
 import (
 	"context"
-	"io"
 	"log/slog"
 	"path/filepath"
 	"slices"
@@ -54,7 +53,7 @@ func newCandidatesAlarmService(t *testing.T) *alarm.Service {
 		Settings: alarm.Settings{Enabled: true},
 		Registry: reg,
 		Stores:   alarm.NewStores(db),
-		Logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Logger:   slog.New(slog.DiscardHandler),
 	})
 	if err != nil {
 		t.Fatalf("alarm.NewService: %v", err)

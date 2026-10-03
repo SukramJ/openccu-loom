@@ -38,7 +38,7 @@ func vals(args ...any) []xmlrpc.Value {
 		case bool:
 			out = append(out, xmlrpc.BoolValue(v))
 		case int:
-			out = append(out, xmlrpc.IntValue(int32(v))) //nolint:gosec
+			out = append(out, xmlrpc.IntValue(int32(v))) //nolint:gosec // test arguments are small literals that fit int32
 		case int32:
 			out = append(out, xmlrpc.IntValue(v))
 		}
@@ -111,7 +111,7 @@ func TestCapability_getDeviceDescription(t *testing.T) {
 	ctx, cancel := ctx5s(t)
 	defer cancel()
 
-	addr := firstDeviceAddr(t, c, ctx, false)
+	addr := firstDeviceAddr(ctx, t, c, false)
 	if addr == "" {
 		t.Skip("no device address available from listDevices")
 	}
@@ -134,7 +134,7 @@ func TestCapability_getParamsetDescription(t *testing.T) {
 	ctx, cancel := ctx5s(t)
 	defer cancel()
 
-	addr := firstDeviceAddr(t, c, ctx, true /* channel */)
+	addr := firstDeviceAddr(ctx, t, c, true /* channel */)
 	if addr == "" {
 		t.Skip("no channel address available")
 	}
@@ -160,7 +160,7 @@ func TestCapability_getParamset_VALUES(t *testing.T) {
 	ctx, cancel := ctx5s(t)
 	defer cancel()
 
-	addr := firstDeviceAddr(t, c, ctx, true)
+	addr := firstDeviceAddr(ctx, t, c, true)
 	if addr == "" {
 		t.Skip("no channel address available")
 	}
@@ -182,7 +182,7 @@ func TestCapability_getParamset_MASTER(t *testing.T) {
 	ctx, cancel := ctx5s(t)
 	defer cancel()
 
-	addr := firstDeviceAddr(t, c, ctx, true)
+	addr := firstDeviceAddr(ctx, t, c, true)
 	if addr == "" {
 		t.Skip("no channel address available")
 	}
@@ -209,7 +209,7 @@ func TestCapability_getParamset_LINK(t *testing.T) {
 	defer cancel()
 
 	// Find a channel address to use as both sender and receiver.
-	addr := firstDeviceAddr(t, c, ctx, true /* channel */)
+	addr := firstDeviceAddr(ctx, t, c, true /* channel */)
 	if addr == "" {
 		t.Skip("no channel address available")
 	}
@@ -239,12 +239,12 @@ func TestCapability_getValue(t *testing.T) {
 	ctx, cancel := ctx5s(t)
 	defer cancel()
 
-	addr := firstDeviceAddr(t, c, ctx, true)
+	addr := firstDeviceAddr(ctx, t, c, true)
 	if addr == "" {
 		t.Skip("no channel address available")
 	}
 
-	key := firstParamKey(t, c, ctx, addr)
+	key := firstParamKey(ctx, t, c, addr)
 	if key == "" {
 		t.Skip("no VALUES parameter available on channel " + addr)
 	}
@@ -425,7 +425,7 @@ func TestCapability_getMetadata(t *testing.T) {
 	ctx, cancel := ctx5s(t)
 	defer cancel()
 
-	addr := firstDeviceAddr(t, c, ctx, false /* root device */)
+	addr := firstDeviceAddr(ctx, t, c, false /* root device */)
 	if addr == "" {
 		t.Skip("no root device available")
 	}
@@ -484,7 +484,7 @@ func TestCapability_deleteDevice(t *testing.T) {
 	defer cancel()
 
 	// Grab an existing root-device address from listDevices.
-	addr := firstDeviceAddr(t, c, ctx, false /* root, not channel */)
+	addr := firstDeviceAddr(ctx, t, c, false /* root, not channel */)
 	if addr == "" {
 		t.Skip("no root device address available from listDevices")
 	}
@@ -672,7 +672,7 @@ func TestCapability_readdedDevice(t *testing.T) {
 
 // firstDeviceAddr returns the address of the first device that matches the
 // channel criterion (channelOnly=true → addr contains ":", false → no ":").
-func firstDeviceAddr(t *testing.T, c *xmlrpc.Client, ctx context.Context, channelOnly bool) string {
+func firstDeviceAddr(ctx context.Context, t *testing.T, c *xmlrpc.Client, channelOnly bool) string {
 	t.Helper()
 	v, err := c.Call(ctx, "listDevices", nil)
 	if err != nil {
@@ -702,7 +702,7 @@ func firstDeviceAddr(t *testing.T, c *xmlrpc.Client, ctx context.Context, channe
 
 // firstParamKey returns the name of the first parameter in the VALUES paramset
 // of the given channel address, or "" if unavailable.
-func firstParamKey(t *testing.T, c *xmlrpc.Client, ctx context.Context, addr string) string {
+func firstParamKey(ctx context.Context, t *testing.T, c *xmlrpc.Client, addr string) string {
 	t.Helper()
 	v, err := c.Call(ctx, "getParamsetDescription", vals(addr, "VALUES"))
 	if err != nil {

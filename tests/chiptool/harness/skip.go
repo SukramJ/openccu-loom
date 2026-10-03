@@ -31,7 +31,7 @@ const DaemonBinaryEnv = "OPENCCU_LOOM_CHIPTOOL_DAEMON"
 func RequireChipTool(t *testing.T) string {
 	t.Helper()
 	if p := os.Getenv(ChipToolBinaryEnv); p != "" {
-		if _, err := os.Stat(p); err != nil {
+		if _, err := os.Stat(p); err != nil { //nolint:gosec // G703: the chip-tool path is an operator-supplied env override by design
 			t.Skipf("chip-tool: %s=%q not usable: %v", ChipToolBinaryEnv, p, err)
 		}
 		return p
@@ -51,7 +51,7 @@ func RequireChipTool(t *testing.T) string {
 func RequireDaemonBinary(t *testing.T) string {
 	t.Helper()
 	if p := os.Getenv(DaemonBinaryEnv); p != "" {
-		if _, err := os.Stat(p); err != nil {
+		if _, err := os.Stat(p); err != nil { //nolint:gosec // G703: the daemon binary path is an operator-supplied env override by design
 			t.Fatalf("%s=%q not usable: %v", DaemonBinaryEnv, p, err)
 		}
 		return p

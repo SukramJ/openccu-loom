@@ -82,8 +82,9 @@ func TestDeploymentReachesInfo(t *testing.T) {
 				t.Errorf("deployment.ingress_path = %q, want %q", got, tc.wantIngress)
 			}
 
-			var caps []string
-			for _, c := range info["capabilities"].([]any) {
+			rawCaps := info["capabilities"].([]any)
+			caps := make([]string, 0, len(rawCaps))
+			for _, c := range rawCaps {
 				caps = append(caps, c.(string))
 			}
 			for _, p := range hostBound {

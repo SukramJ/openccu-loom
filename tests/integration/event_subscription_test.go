@@ -167,11 +167,11 @@ func TestSubscribeUnsubscribeLeavesCleanBus(t *testing.T) {
 // contains the relevant values.
 func TestValidationErrorMessage(t *testing.T) {
 	value := 150.0
-	max := 100.0
+	maxValue := 100.0
 	param := "LEVEL"
 
 	wrapped := fmt.Errorf("parameter %s: value %.1f exceeds maximum %.1f: %w",
-		param, value, max, hmerr.ErrValidation)
+		param, value, maxValue, hmerr.ErrValidation)
 
 	if !errors.Is(wrapped, hmerr.ErrValidation) {
 		t.Fatal("errors.Is(wrapped, ErrValidation) = false, want true")
@@ -187,7 +187,7 @@ func TestValidationErrorMessage(t *testing.T) {
 // scenariosContains is a strings.Contains replacement that avoids
 // importing "strings" solely for this helper.
 func scenariosContains(s, sub string) bool {
-	if len(sub) == 0 {
+	if sub == "" {
 		return true
 	}
 	if len(s) < len(sub) {

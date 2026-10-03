@@ -8,7 +8,7 @@ package chiptool
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -183,7 +183,7 @@ func TestCommissioning_WrongPasscode_Fails(t *testing.T) {
 		"pairing", "already-discovered",
 		harness.FormatNodeID(ctl.NodeID),
 		"11111111", // wrong passcode
-		harness.PairTargetHost, fmt.Sprintf("%d", b.MatterPort()),
+		harness.PairTargetHost, strconv.Itoa(b.MatterPort()),
 		"--bypass-attestation-verifier", "true",
 		"--pase-only", "true",
 	)

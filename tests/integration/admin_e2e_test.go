@@ -196,7 +196,7 @@ func newCookieClient(t *testing.T) *http.Client {
 }
 
 // apiJSON is the helper used for all JSON REST calls.
-func (h *adminE2EHarness) apiJSON(client *http.Client, method, path string, body any, headers map[string]string) (*http.Response, []byte) {
+func (h *adminE2EHarness) apiJSON(client *http.Client, method, path string, body any, headers map[string]string) (status int, respBody []byte) {
 	h.t.Helper()
 	var rdr io.Reader
 	if body != nil {
@@ -217,18 +217,18 @@ func (h *adminE2EHarness) apiJSON(client *http.Client, method, path string, body
 	if err != nil {
 		h.t.Fatalf("%s %s: %v", method, path, err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	buf, _ := io.ReadAll(res.Body)
-	return res, buf
+	return res.StatusCode, buf
 }
 
 // setupStatus fetches GET /api/v1/setup/status and returns the
 // `required` flag.
 func (h *adminE2EHarness) setupStatus(client *http.Client) bool {
 	h.t.Helper()
-	res, buf := h.apiJSON(client, http.MethodGet, "/api/v1/setup/status", nil, nil)
-	if res.StatusCode != 200 {
-		h.t.Fatalf("setup/status status=%d body=%s", res.StatusCode, buf)
+	code, buf := h.apiJSON(client, http.MethodGet, "/api/v1/setup/status", nil, nil)
+	if code != http.StatusOK {
+		h.t.Fatalf("setup/status status=%d body=%s", code, buf)
 	}
 	var status struct {
 		Required bool `json:"required"`
@@ -278,9 +278,9 @@ func TestAdminE2E(t *testing.T) {
 		"admin":  map[string]string{"username": "alice", "password": "correcthorse"},
 		"locale": map[string]string{"locale": "de", "theme": "system"},
 	}
-	res, buf := h.apiJSON(client, http.MethodPost, "/api/v1/setup", setupBody, nil)
-	if res.StatusCode != http.StatusNoContent {
-		t.Fatalf("setup finalize status=%d body=%s", res.StatusCode, buf)
+	status, buf := h.apiJSON(client, http.MethodPost, "/api/v1/setup", setupBody, nil)
+	if status != http.StatusNoContent {
+		t.Fatalf("setup finalize status=%d body=%s", status, buf)
 	}
 
 	// --- Probe flips to not-required ---
@@ -289,9 +289,9 @@ func TestAdminE2E(t *testing.T) {
 	}
 
 	// --- Single-shot gate: a second finalize must be refused ---
-	res, buf = h.apiJSON(client, http.MethodPost, "/api/v1/setup", setupBody, nil)
-	if res.StatusCode != http.StatusConflict {
-		t.Fatalf("second setup finalize status=%d body=%s (want 409)", res.StatusCode, buf)
+	status, buf = h.apiJSON(client, http.MethodPost, "/api/v1/setup", setupBody, nil)
+	if status != http.StatusConflict {
+		t.Fatalf("second setup finalize status=%d body=%s (want 409)", status, buf)
 	}
 
 	// --- Verify SQLite persistence ---
@@ -308,16 +308,16 @@ func TestAdminE2E(t *testing.T) {
 
 	// --- API login ---
 	apiClient := newCookieClient(t)
-	res, buf = h.apiJSON(apiClient, http.MethodPost, "/api/v1/auth/login",
+	status, buf = h.apiJSON(apiClient, http.MethodPost, "/api/v1/auth/login",
 		map[string]string{"username": "alice", "password": "correcthorse"}, nil)
-	if res.StatusCode != 200 {
-		t.Fatalf("login status=%d body=%s", res.StatusCode, buf)
+	if status != http.StatusOK {
+		t.Fatalf("login status=%d body=%s", status, buf)
 	}
 
 	// --- GET /config/schema ---
-	res, buf = h.apiJSON(apiClient, http.MethodGet, "/api/v1/config/schema", nil, nil)
-	if res.StatusCode != 200 {
-		t.Fatalf("config/schema status=%d body=%s", res.StatusCode, buf)
+	status, buf = h.apiJSON(apiClient, http.MethodGet, "/api/v1/config/schema", nil, nil)
+	if status != http.StatusOK {
+		t.Fatalf("config/schema status=%d body=%s", status, buf)
 	}
 	var schema handlers.SchemaResponse
 	if err := json.Unmarshal(buf, &schema); err != nil {
@@ -335,9 +335,9 @@ func TestAdminE2E(t *testing.T) {
 	}
 
 	// --- GET /config/effective ---
-	res, buf = h.apiJSON(apiClient, http.MethodGet, "/api/v1/config/effective", nil, nil)
-	if res.StatusCode != 200 {
-		t.Fatalf("config/effective status=%d body=%s", res.StatusCode, buf)
+	status, buf = h.apiJSON(apiClient, http.MethodGet, "/api/v1/config/effective", nil, nil)
+	if status != http.StatusOK {
+		t.Fatalf("config/effective status=%d body=%s", status, buf)
 	}
 	var snap handlers.ConfigSnapshotResponse
 	if err := json.Unmarshal(buf, &snap); err != nil {
@@ -348,25 +348,25 @@ func TestAdminE2E(t *testing.T) {
 	}
 
 	// --- Create a second user ---
-	res, buf = h.apiJSON(apiClient, http.MethodPost, "/api/v1/users", map[string]string{
+	status, buf = h.apiJSON(apiClient, http.MethodPost, "/api/v1/users", map[string]string{
 		"username": "bob",
 		"password": "anotherpw1",
 		"role":     "operator",
 	}, nil)
-	if res.StatusCode != http.StatusCreated {
-		t.Fatalf("users create status=%d body=%s", res.StatusCode, buf)
+	if status != http.StatusCreated {
+		t.Fatalf("users create status=%d body=%s", status, buf)
 	}
 	if n, _ := h.users.Count(ctx); n != 2 {
 		t.Fatalf("users count after create = %d, want 2", n)
 	}
 
 	// --- Create a bearer token ---
-	res, buf = h.apiJSON(apiClient, http.MethodPost, "/api/v1/auth/tokens/v2", map[string]string{
+	status, buf = h.apiJSON(apiClient, http.MethodPost, "/api/v1/auth/tokens/v2", map[string]string{
 		"subject": "ci-job",
 		"role":    "operator",
 	}, nil)
-	if res.StatusCode != http.StatusCreated {
-		t.Fatalf("token create status=%d body=%s", res.StatusCode, buf)
+	if status != http.StatusCreated {
+		t.Fatalf("token create status=%d body=%s", status, buf)
 	}
 	var tokRes struct {
 		Token       string `json:"token"`
@@ -381,10 +381,10 @@ func TestAdminE2E(t *testing.T) {
 
 	// --- Use the bearer token on a different client (no cookies) ---
 	bareClient := &http.Client{Timeout: 5 * time.Second}
-	res, buf = h.apiJSON(bareClient, http.MethodGet, "/api/v1/info", nil,
+	status, buf = h.apiJSON(bareClient, http.MethodGet, "/api/v1/info", nil,
 		map[string]string{"Authorization": "Bearer " + tokRes.Token})
-	if res.StatusCode != 200 {
-		t.Fatalf("bearer GET /info status=%d body=%s", res.StatusCode, buf)
+	if status != http.StatusOK {
+		t.Fatalf("bearer GET /info status=%d body=%s", status, buf)
 	}
 
 	// --- PUT a config section ---
@@ -395,9 +395,9 @@ func TestAdminE2E(t *testing.T) {
 		"client_id":   "openccu-loom-test",
 		"raw_enabled": true,
 	}
-	res, buf = h.apiJSON(apiClient, http.MethodPut, "/api/v1/config/sections/north.mqtt", mqttSection, nil)
-	if res.StatusCode != 200 {
-		t.Fatalf("section put status=%d body=%s", res.StatusCode, buf)
+	status, buf = h.apiJSON(apiClient, http.MethodPut, "/api/v1/config/sections/north.mqtt", mqttSection, nil)
+	if status != http.StatusOK {
+		t.Fatalf("section put status=%d body=%s", status, buf)
 	}
 	var putRes struct {
 		Section string `json:"section"`
@@ -409,9 +409,9 @@ func TestAdminE2E(t *testing.T) {
 	}
 
 	// --- GET it back ---
-	res, buf = h.apiJSON(apiClient, http.MethodGet, "/api/v1/config/sections/north.mqtt", nil, nil)
-	if res.StatusCode != 200 {
-		t.Fatalf("section get status=%d body=%s", res.StatusCode, buf)
+	status, buf = h.apiJSON(apiClient, http.MethodGet, "/api/v1/config/sections/north.mqtt", nil, nil)
+	if status != http.StatusOK {
+		t.Fatalf("section get status=%d body=%s", status, buf)
 	}
 	if !strings.Contains(string(buf), "broker.example:1883") {
 		t.Fatalf("section roundtrip lost broker_url: %s", buf)
@@ -419,9 +419,9 @@ func TestAdminE2E(t *testing.T) {
 
 	// --- PUT again, version bumps ---
 	mqttSection["topic_base"] = "openccu-loom-2"
-	res, buf = h.apiJSON(apiClient, http.MethodPut, "/api/v1/config/sections/north.mqtt", mqttSection, nil)
-	if res.StatusCode != 200 {
-		t.Fatalf("section put2 status=%d body=%s", res.StatusCode, buf)
+	status, buf = h.apiJSON(apiClient, http.MethodPut, "/api/v1/config/sections/north.mqtt", mqttSection, nil)
+	if status != http.StatusOK {
+		t.Fatalf("section put2 status=%d body=%s", status, buf)
 	}
 	_ = json.Unmarshal(buf, &putRes)
 	if putRes.Version != 2 {
@@ -435,41 +435,41 @@ func TestAdminE2E(t *testing.T) {
 		"interfaces": []map[string]any{{"name": "HmIP-RF"}},
 		"enabled":    true,
 	}
-	res, buf = h.apiJSON(apiClient, http.MethodPost, "/api/v1/centrals", central, nil)
-	if res.StatusCode != http.StatusCreated {
-		t.Fatalf("central create status=%d body=%s", res.StatusCode, buf)
+	status, buf = h.apiJSON(apiClient, http.MethodPost, "/api/v1/centrals", central, nil)
+	if status != http.StatusCreated {
+		t.Fatalf("central create status=%d body=%s", status, buf)
 	}
 
-	res, buf = h.apiJSON(apiClient, http.MethodGet, "/api/v1/centrals", nil, nil)
-	if res.StatusCode != 200 {
-		t.Fatalf("centrals list status=%d body=%s", res.StatusCode, buf)
+	status, buf = h.apiJSON(apiClient, http.MethodGet, "/api/v1/centrals", nil, nil)
+	if status != http.StatusOK {
+		t.Fatalf("centrals list status=%d body=%s", status, buf)
 	}
 	if !strings.Contains(string(buf), "192.168.1.10") {
 		t.Fatalf("centrals list missing new entry: %s", buf)
 	}
 
 	// --- Effective config now shows the central ---
-	res, buf = h.apiJSON(apiClient, http.MethodGet, "/api/v1/config/effective", nil, nil)
+	_, buf = h.apiJSON(apiClient, http.MethodGet, "/api/v1/config/effective", nil, nil)
 	if !strings.Contains(string(buf), "192.168.1.10") {
 		t.Fatalf("effective config missing central: %s", buf)
 	}
 
 	// --- Delete the CCU ---
-	res, buf = h.apiJSON(apiClient, http.MethodDelete, "/api/v1/centrals/home", nil, nil)
-	if res.StatusCode != http.StatusNoContent {
-		t.Fatalf("central delete status=%d body=%s", res.StatusCode, buf)
+	status, buf = h.apiJSON(apiClient, http.MethodDelete, "/api/v1/centrals/home", nil, nil)
+	if status != http.StatusNoContent {
+		t.Fatalf("central delete status=%d body=%s", status, buf)
 	}
 
 	// --- Delete the second user ---
-	res, buf = h.apiJSON(apiClient, http.MethodDelete, "/api/v1/users/bob", nil, nil)
-	if res.StatusCode != http.StatusNoContent {
-		t.Fatalf("delete user status=%d body=%s", res.StatusCode, buf)
+	status, buf = h.apiJSON(apiClient, http.MethodDelete, "/api/v1/users/bob", nil, nil)
+	if status != http.StatusNoContent {
+		t.Fatalf("delete user status=%d body=%s", status, buf)
 	}
 
 	// --- Last-admin protection ---
-	res, buf = h.apiJSON(apiClient, http.MethodDelete, "/api/v1/users/alice", nil, nil)
-	if res.StatusCode != http.StatusConflict {
-		t.Fatalf("delete last admin status=%d body=%s (want 409)", res.StatusCode, buf)
+	status, buf = h.apiJSON(apiClient, http.MethodDelete, "/api/v1/users/alice", nil, nil)
+	if status != http.StatusConflict {
+		t.Fatalf("delete last admin status=%d body=%s (want 409)", status, buf)
 	}
 
 	// --- Audit buffer recorded our mutations ---

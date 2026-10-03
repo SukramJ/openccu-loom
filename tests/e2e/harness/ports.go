@@ -6,6 +6,7 @@
 package harness
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"sync"
@@ -37,16 +38,20 @@ var (
 // returns a bare number cannot offer that, which is why the daemon —
 // a separate process, and unable to inherit a listener — is configured
 // with ":0" and asked afterwards what it bound.
-func pickFreeListener(t *testing.T) (net.Listener, int) {
+func pickFreeListener(t *testing.T) (listener net.Listener, port int) {
 	t.Helper()
+	var lc net.ListenConfig
 	for range portAttempts {
-		l, err := net.Listen("tcp", "127.0.0.1:0")
+		l, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
 		if err != nil {
 			t.Fatalf("pickFreeListener: listen: %v", err)
 		}
-		port := l.Addr().(*net.TCPAddr).Port
-		if reservePort(port) {
-			return l, port
+		addr, ok := l.Addr().(*net.TCPAddr)
+		if !ok {
+			t.Fatalf("pickFreeListener: listener address %T is not TCP", l.Addr())
+		}
+		if reservePort(addr.Port) {
+			return l, addr.Port
 		}
 		if err := l.Close(); err != nil {
 			t.Fatalf("pickFreeListener: close: %v", err)

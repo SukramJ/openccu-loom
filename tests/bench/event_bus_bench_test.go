@@ -26,7 +26,7 @@ func BenchmarkEventBusPublish(b *testing.B) {
 	}
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		bus.Publish(ev)
 	}
 }
@@ -37,7 +37,7 @@ func BenchmarkEventBusSubscribeUnsubscribe(b *testing.B) {
 	bus := events.NewBus()
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		unsub := bus.Subscribe(func(hmevent.DataPointValueChangedEvent) {})
 		unsub()
 	}

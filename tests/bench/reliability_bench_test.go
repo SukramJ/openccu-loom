@@ -20,7 +20,7 @@ func BenchmarkCircuitBreakerClosed(b *testing.B) {
 	noop := func(context.Context) error { return nil }
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		_ = cb.Do(ctx, "bench", noop)
 	}
 }
@@ -33,7 +33,7 @@ func BenchmarkCoalescerSingleKey(b *testing.B) {
 	ctx := context.Background()
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		_, _ = c.Do(ctx, "k", func(context.Context) (any, error) { return nil, nil })
 	}
 }

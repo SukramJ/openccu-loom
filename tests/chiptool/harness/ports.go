@@ -6,60 +6,41 @@
 package harness
 
 import (
+	"context"
+	"fmt"
 	"net"
-	"testing"
 )
 
-// pickFreeTCPPort returns a TCP port the OS just confirmed free.
+// pickFreeTCPPortNoT returns a TCP port the OS just confirmed free.
 // The caller binds in the daemon shortly after; the TOCTOU window
 // is small but real — if it bites, the daemon fails fast on bind
-// and the test reports a clear error.
-func pickFreeTCPPort(t *testing.T) int {
-	t.Helper()
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("pick TCP port: %v", err)
-	}
-	port := l.Addr().(*net.TCPAddr).Port
-	_ = l.Close()
-	return port
-}
-
-// pickFreeUDPPort returns a UDP port the OS just confirmed free.
-// Matter uses UDP; for the bridge listener we either prebind (this
-// helper) and pass the explicit port to the daemon, or hand the
-// daemon a `:0` and read the chosen port out of /matter/status
-// afterwards. The harness uses the latter to dodge UDP-bind races
-// — pickFreeUDPPort is kept here for callback ports.
-func pickFreeUDPPort(t *testing.T) int {
-	t.Helper()
-	port, err := pickFreeUDPPortNoT()
-	if err != nil {
-		t.Fatalf("pick UDP port: %v", err)
-	}
-	return port
-}
-
-// pickFreeTCPPortNoT is the no-testing.T variant used by
-// [StartShared].
+// and the bring-up reports a clear error. Used by the bridge bring-up.
 func pickFreeTCPPortNoT() (int, error) {
-	l, err := net.Listen("tcp", "127.0.0.1:0")
+	var lc net.ListenConfig
+	l, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		return 0, err
 	}
-	port := l.Addr().(*net.TCPAddr).Port
+	addr, ok := l.Addr().(*net.TCPAddr)
 	_ = l.Close()
-	return port, nil
+	if !ok {
+		return 0, fmt.Errorf("unexpected TCP listener address type %T", l.Addr())
+	}
+	return addr.Port, nil
 }
 
-// pickFreeUDPPortNoT is the no-testing.T variant used by
-// [StartShared].
+// pickFreeUDPPortNoT returns a UDP port the OS just confirmed free.
+// Used by the bridge bring-up for the Matter listener port.
 func pickFreeUDPPortNoT() (int, error) {
-	c, err := net.ListenPacket("udp4", "127.0.0.1:0")
+	var lc net.ListenConfig
+	c, err := lc.ListenPacket(context.Background(), "udp4", "127.0.0.1:0")
 	if err != nil {
 		return 0, err
 	}
-	port := c.LocalAddr().(*net.UDPAddr).Port
+	addr, ok := c.LocalAddr().(*net.UDPAddr)
 	_ = c.Close()
-	return port, nil
+	if !ok {
+		return 0, fmt.Errorf("unexpected UDP listener address type %T", c.LocalAddr())
+	}
+	return addr.Port, nil
 }
