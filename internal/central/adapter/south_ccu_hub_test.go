@@ -172,3 +172,19 @@ func TestCCUFeatureSetIsAllAvailableExceptTaxonomyTree(t *testing.T) {
 		t.Errorf("unknown product: recovery = %+v, want not offered (not_ready)", s)
 	}
 }
+
+func TestOnlyOpenCCUOffersSystemBackup(t *testing.T) {
+	t.Parallel()
+	backup := []hmenum.Feature{hmenum.FeatureSystemBackupCreate, hmenum.FeatureSystemBackupRestore}
+	for _, k := range backup {
+		if !ccuFeatures("OpenCCU").Available(k) {
+			t.Errorf("OpenCCU: %s must be offered", k)
+		}
+		if s := ccuFeatures("CCU").State(k); s.Available || s.Reason != hmenum.FeatureReasonNotSupported {
+			t.Errorf("stock CCU: %s = %+v, want not offered (not_supported_by_system)", k, s)
+		}
+		if s := ccuFeatures("").State(k); s.Available || s.Reason != hmenum.FeatureReasonNotReady {
+			t.Errorf("unknown product: %s = %+v, want not offered (not_ready)", k, s)
+		}
+	}
+}

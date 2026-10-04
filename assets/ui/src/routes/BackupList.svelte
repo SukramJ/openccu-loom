@@ -60,6 +60,27 @@
       .map((c) => ({ value: c.name, label: c.name })),
   );
 
+  // Centrals that cannot restore for a lasting reason — on an openccu-lite
+  // box restore needs a broader credential scope than create, so a central
+  // can offer one and lack the other. A central that is merely booting
+  // reports "not_ready", is not in this set, and keeps its buttons.
+  const restoreLacking = $derived(
+    new Set(centralStore.centralsLacking("system.backup.restore").map((c) => c.name)),
+  );
+  // Whether any central could take a restore. While the fleet is unknown
+  // the answer is yes, so the actions do not blank during the first paint.
+  const anyCanRestore = $derived(
+    centralStore.items.length === 0 ||
+      centralStore.items.some((c) => !restoreLacking.has(c.name)),
+  );
+
+  // An archive bound to a central restores there; an uploaded archive has
+  // no central and goes to whichever central the daemon resolves, so it is
+  // restorable as long as any central can restore.
+  function canRestore(entry: BackupEntry): boolean {
+    return entry.central ? !restoreLacking.has(entry.central) : anyCanRestore;
+  }
+
   async function load() {
     loading = true;
     loadError = null;
@@ -271,16 +292,20 @@
         class="hidden"
         onchange={(ev) => void onFilePicked(ev)}
       />
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onclick={() => fileInput?.click()}
-        disabled={uploading}
-        title={t("backup.upload.help")}
-      >
-        {uploading ? t("backup.uploading") : t("backup.upload")}
-      </Button>
+      <!-- An uploaded archive is only good for a restore, so the upload is
+           offered only while some central can restore. -->
+      {#if anyCanRestore}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onclick={() => fileInput?.click()}
+          disabled={uploading}
+          title={t("backup.upload.help")}
+        >
+          {uploading ? t("backup.uploading") : t("backup.upload")}
+        </Button>
+      {/if}
       {#if centralStore.offers(triggerCentral || undefined, "system.backup.create")}
         <Button type="button" size="sm" onclick={() => void trigger()} disabled={triggering}>
           {triggering ? t("backup.triggering") : t("backup.trigger")}
@@ -350,15 +375,17 @@
                 >
                   {t("backup.download")}
                 </a>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onclick={() => void restore(entry)}
-                  disabled={restoring === entry.id}
-                >
-                  {restoring === entry.id ? "…" : t("common.restore")}
-                </Button>
+                {#if canRestore(entry)}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onclick={() => void restore(entry)}
+                    disabled={restoring === entry.id}
+                  >
+                    {restoring === entry.id ? "…" : t("common.restore")}
+                  </Button>
+                {/if}
                 <Button
                   type="button"
                   variant="outline-destructive"

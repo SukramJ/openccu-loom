@@ -39,22 +39,36 @@ func (p *ccuProfile) BringUpHub(ctx context.Context, in HubBringUpInput) (HubSes
 
 // ccuFeatures is what a CCU offers: everything the daemon has always done
 // against one, so no CCU code path consults a feature it would find absent.
-// Two keys are not unconditional. Rooms and functions are flat on a CCU, so
-// nested taxonomy nodes are not supported. Recovery mode exists on OpenCCU
-// firmware only: get_backend_info classifies anything that is not a stock CCU
-// or debmatic as "OpenCCU", and an empty model means the product is not
-// resolved yet, which must read as "not offered" rather than "offered".
+// A few keys are not unconditional. Rooms and functions are flat on a CCU, so
+// nested taxonomy nodes are not supported. Recovery mode and the system
+// backup exist on OpenCCU firmware only: get_backend_info classifies anything
+// that is not a stock CCU or debmatic as "OpenCCU", and an empty model means
+// the product is not resolved yet, which must read as "not offered" rather
+// than "offered". The backup is created by the create_backup_start script,
+// which runs the createBackup.sh that OpenCCU ships; restoring is withheld
+// together with it, so a system is never offered half of the function.
 func ccuFeatures(model string) central.Features {
 	states := make(map[hmenum.Feature]central.FeatureState, len(hmenum.AllFeatures()))
 	for _, k := range hmenum.AllFeatures() {
 		states[k] = central.FeatureState{Available: true}
 	}
 	states[hmenum.FeatureTaxonomyTree] = central.FeatureState{Reason: hmenum.FeatureReasonNotSupported}
+	openCCUOnly := []hmenum.Feature{
+		hmenum.FeatureSystemRecoveryMode,
+		hmenum.FeatureSystemBackupCreate,
+		hmenum.FeatureSystemBackupRestore,
+	}
+	var reason hmenum.FeatureReason
 	switch model {
 	case "":
-		states[hmenum.FeatureSystemRecoveryMode] = central.FeatureState{Reason: hmenum.FeatureReasonNotReady}
+		reason = hmenum.FeatureReasonNotReady
 	case "CCU":
-		states[hmenum.FeatureSystemRecoveryMode] = central.FeatureState{Reason: hmenum.FeatureReasonNotSupported}
+		reason = hmenum.FeatureReasonNotSupported
+	}
+	if reason != "" {
+		for _, k := range openCCUOnly {
+			states[k] = central.FeatureState{Reason: reason}
+		}
 	}
 	return central.NewFeatures(hmenum.SystemTypeCCU, states)
 }
