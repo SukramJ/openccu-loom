@@ -1,5 +1,22 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.87.0
+
+- Pairing a device now starts from the device list: a new "Add device"
+  dialog starts the pairing window, lists devices as they join and lets
+  you accept and name a waiting device right there. It also works with an
+  openccu-lite system, where pairing could not be started from the Config
+  UI before.
+- With two systems that share an interface name, pairing now reaches the
+  one you chose.
+- For an openccu-lite system the Config UI no longer offers options for
+  system variables and programs, which such a system does not have.
+- A stock CCU and debmatic are no longer offered the system backup; only
+  OpenCCU and openccu-lite can create one.
+- Encrypted openccu-lite backups can be restored and imported.
+- A restore your token is not allowed to run is shown disabled with the
+  missing scope instead of disappearing.
+
 ## 0.86.1
 
 No change you need to act on, and nothing behaves differently. The

@@ -6,6 +6,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.87.0] - 2026-10-04
+
+### Release summary
+
+The Config UI follows what each system can do. Pairing a device now
+starts from the device list and works on an openccu-lite system, which
+had no way to pair from the UI before. Options for system variables and
+programs are no longer offered where the system has neither, a stock CCU
+is no longer offered a system backup it cannot make, and an encrypted
+openccu-lite backup can be restored and imported. REST API 13.5.4:
+description text only, nothing changes on the wire.
+
 ### Added
 
 - **Pairing a device starts from the device list.** A new "Add device"
@@ -58,7 +70,6 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Import button, when no central could restore an import — visible but
   disabled, naming the missing scope, instead of hiding it. Granting the
   scope enables it. What the system cannot do at all stays hidden.
-
 - **The Config UI no longer offers system-variable and program options
   for an openccu-lite central.** Such a system has neither, so the
   central's edit dialog hides the seven scan, internal-entry and marker

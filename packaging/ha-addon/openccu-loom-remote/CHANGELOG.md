@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.87.0
+
+No changes to the proxy. The daemon release moves pairing to the device
+list, follows what an openccu-lite system can do in its Config UI and
+handles encrypted openccu-lite backups (REST API 13.5.4).
+
 # 0.86.1
 
 No changes to the proxy. The daemon release corrects the API description
