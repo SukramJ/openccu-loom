@@ -34,6 +34,9 @@ vi.mock("$lib/stores/devices.svelte", () => ({
 // "still initializing" banner and the reconciliation of a persisted central
 // filter. Most cases leave the fleet empty, which keeps those paths inert.
 let mockCentrals: unknown[] = [];
+// Answers centralStore.featureAvailable; the add-device button asks it for
+// "install_mode". Defaults to the real store's answer for an unloaded fleet.
+let mockFeatureAvailable: (key: string) => boolean = () => true;
 
 vi.mock("$lib/stores/centrals.svelte", () => ({
   centralStore: {
@@ -45,6 +48,7 @@ vi.mock("$lib/stores/centrals.svelte", () => ({
     refresh: vi.fn().mockResolvedValue(undefined),
     ensureStream: vi.fn(),
     byName: vi.fn(() => undefined),
+    featureAvailable: (key: string) => mockFeatureAvailable(key),
     close: vi.fn(),
   },
 }));
@@ -139,6 +143,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockItems = [];
   mockCentrals = [];
+  mockFeatureAvailable = () => true;
   mockLoading = false;
   mockError = null;
   mockLastLoaded = null;
@@ -531,5 +536,21 @@ describe("DeviceList — expandable channels", () => {
     await fireEvent.click(getAllByRole("button", { name: "datatable.expand" })[0]);
     await waitFor(() => expect(container.textContent).toContain("Channel one"));
     expect(container.textContent).not.toContain("Maintenance");
+  });
+});
+
+describe("DeviceList — add device", () => {
+  // Pairing must not depend on the CCU inbox: the button follows the
+  // install_mode feature alone, so a fleet without an inbox still gets it.
+  it("offers the add-device button when the fleet has an install mode", () => {
+    mockFeatureAvailable = (key) => key === "install_mode";
+    const { getByText } = render(DeviceList);
+    expect(getByText("devicelist.add_device")).toBeInTheDocument();
+  });
+
+  it("hides the add-device button when no central has an install mode", () => {
+    mockFeatureAvailable = (key) => key !== "install_mode";
+    const { queryByText } = render(DeviceList);
+    expect(queryByText("devicelist.add_device")).toBeNull();
   });
 });

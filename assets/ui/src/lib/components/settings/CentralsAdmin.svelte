@@ -18,6 +18,7 @@
   import ExpertGate from "$lib/components/ui/ExpertGate.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import Select from "$lib/components/ui/Select.svelte";
+  import { prefs } from "$lib/stores/preferences.svelte";
   import { t } from "$lib/i18n";
   import CentralOnboarding from "./CentralOnboarding.svelte";
   import { emptyOnboarding, liteCredential, liteReady, type OnboardingValue } from "$lib/onboarding/onboarding";
@@ -809,23 +810,23 @@
               class="h-9 rounded border border-slate-300 px-3 text-sm dark:border-slate-700 dark:bg-slate-900"
             />
           </label>
-          <!-- Not offered once the system is known to be an openccu-lite
-               box, which is reached on its web server's default port. A
-               port typed before the probe, or stored with the central,
-               is kept and still sent on save. -->
-          {#if !fIsLite}
+          <!-- An openccu-lite box is reached on its web server's default
+               port, so the field is an expert setting there. A port typed
+               before the probe, or stored with the central, is kept and
+               still sent on save while the field is hidden. -->
+          {#if !fIsLite || prefs.expertMode}
           <label class="flex flex-col gap-1">
-            <span>{t("centrals.field.json_rpc_port")}</span>
+            <span>{fIsLite ? t("centrals.field.port") : t("centrals.field.json_rpc_port")}</span>
             <input
               type="text"
               inputmode="numeric"
               pattern="[0-9]*"
               bind:value={fJsonRpcPort}
-              placeholder={fTls ? "443" : "80"}
+              placeholder={(fIsLite ? fOnboarding.tls : fTls) ? "443" : "80"}
               class="h-9 rounded border border-slate-300 px-3 text-sm dark:border-slate-700 dark:bg-slate-900"
             />
             <span class="text-xs text-[var(--ha-secondary-text-color)]"
-              >{t("centrals.field.json_rpc_port_hint")}</span
+              >{fIsLite ? t("centrals.field.lite_port_hint") : t("centrals.field.json_rpc_port_hint")}</span
             >
           </label>
           {/if}

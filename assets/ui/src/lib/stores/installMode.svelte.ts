@@ -4,9 +4,15 @@ import { t } from "$lib/i18n";
 
 // Scope of a teach-in request. `interface` is required — install mode on
 // the CCU is always per-interface (there is no CCU-wide toggle).
-// `deviceAddress` requests targeted pairing (e.g. by serial) and is
-// forwarded to the per-interface endpoint.
-export type InstallScope = { interface?: string; deviceAddress?: string };
+// `central` names the CCU when several expose the same interface name (a
+// mixed openccu-lite + CCU fleet both report HmIP-RF); without it the daemon
+// picks the first matching entry. `deviceAddress` requests targeted pairing
+// (e.g. by serial) and is forwarded to the per-interface endpoint.
+export type InstallScope = {
+  interface?: string;
+  central?: string;
+  deviceAddress?: string;
+};
 
 function createInstallModeStore() {
   let active = $state(false);
@@ -55,23 +61,28 @@ function createInstallModeStore() {
       }
       // Derive the next state from the current entry so the button mirrors
       // the selected radio.
-      const entry = interfaces.find((i) => i.interface === scope.interface);
-      const next = !(entry?.active ?? false);
-      interfaces = await api.setInstallModeInterface(
-        scope.interface,
-        next,
-        60,
-        scope.deviceAddress,
+      const entry = interfaces.find(
+        (i) =>
+          i.interface === scope.interface &&
+          (scope.central === undefined || (i.central ?? "") === scope.central),
       );
+      const next = !(entry?.active ?? false);
+      // Sending the central is always correct when the entry names one, and
+      // the only way to reach the second of two same-named interfaces.
+      const central = scope.central || entry?.central || undefined;
+      interfaces = await api.setInstallModeInterface(scope.interface, next, {
+        seconds: 60,
+        deviceAddress: scope.deviceAddress,
+        central,
+      });
       recomputeAggregate();
+      // With several centrals the interface name alone does not say which
+      // CCU the banner is about.
+      const multiCentral = new Set(interfaces.map((i) => i.central ?? "")).size > 1;
+      const iface = multiCentral && central ? `${scope.interface} · ${central}` : scope.interface;
       banner = next
-        ? t("inbox.install_mode_banner_iface_on", {
-            iface: scope.interface,
-            seconds: 60,
-          })
-        : t("inbox.install_mode_banner_iface_off", {
-            iface: scope.interface,
-          });
+        ? t("inbox.install_mode_banner_iface_on", { iface, seconds: 60 })
+        : t("inbox.install_mode_banner_iface_off", { iface });
     } catch (err) {
       banner = describeError(err);
     } finally {

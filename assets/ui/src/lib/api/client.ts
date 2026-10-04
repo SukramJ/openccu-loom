@@ -1764,19 +1764,29 @@ export const api = {
       },
     );
   },
+  // The optional values travel as one options object: `central` joined
+  // them, and a positional parameter would have silently shifted every
+  // trailing argument of an existing caller. `central` disambiguates two
+  // centrals that expose the same interface name; without it the daemon
+  // picks the first matching entry across all centrals.
   async setInstallModeInterface(
     iface: string,
     active: boolean,
-    seconds?: number,
-    deviceAddress?: string,
-    local?: { sgtin: string; key: string },
+    opts: {
+      seconds?: number;
+      deviceAddress?: string;
+      central?: string;
+      local?: { sgtin: string; key: string };
+    } = {},
   ) {
+    const { seconds, deviceAddress, central, local } = opts;
     await request<void>(`/install-mode/interfaces`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         interface: iface,
         active,
+        ...(central ? { central } : {}),
         ...(seconds ? { seconds } : {}),
         ...(deviceAddress ? { device_address: deviceAddress } : {}),
         ...(local ? { sgtin: local.sgtin, key: local.key } : {}),

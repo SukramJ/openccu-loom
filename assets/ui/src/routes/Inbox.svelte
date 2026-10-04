@@ -16,13 +16,11 @@
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import Select from "$lib/components/ui/Select.svelte";
   import PageShell from "$lib/components/ui/PageShell.svelte";
+  import AddDeviceDialog from "$lib/components/device/AddDeviceDialog.svelte";
+  import { buildAcceptConfig } from "$lib/components/device/acceptConfig";
   import { installModeStore } from "$lib/stores/installMode.svelte";
+  import { centralStore } from "$lib/stores/centrals.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
-  import {
-    isValidHmIPKeyInput,
-    normalizeSgtin,
-    stripLabelSeparators,
-  } from "$lib/hmip";
   import { t } from "$lib/i18n";
   import { loadLS, saveLS } from "$lib/utils";
   import { prefs } from "$lib/stores/preferences.svelte";
@@ -41,25 +39,9 @@
   let accepting = $state<string | null>(null);
   let releasing = $state<string | null>(null);
 
-  // Teach-in scope: install mode on the CCU is per-interface only, so the
-  // operator always pairs on a specific radio (BidCos-RF / HmIP-RF, …) —
-  // the interface-selective pairing the CCU WebUI offers. selectedInterface
-  // defaults to the first available radio (see the $effect below).
-  let selectedInterface = $state("");
-  // Keep the selection valid: default to the first interface once the list
-  // loads, and recover if the selected interface disappears.
-  $effect(() => {
-    const list = installModeStore.interfaces;
-    if (list.length === 0) return;
-    if (!list.some((i) => i.interface === selectedInterface)) {
-      selectedInterface = list[0].interface;
-    }
-  });
-  const scopeEntry = $derived(
-    installModeStore.interfaces.find((i) => i.interface === selectedInterface),
-  );
-  const scopeActive = $derived(scopeEntry?.active ?? false);
-  const scopeRemaining = $derived(scopeEntry?.seconds ?? null);
+  // Pairing starts in the add-device dialog, the one place that hosts the
+  // pairing controls; the inbox opens it and reloads its list on close.
+  let addDeviceOpen = $state(false);
 
   // Active-pairing tick: while the install mode is running on the CCU,
   // the inbox should reflect freshly-discovered candidates without the
@@ -93,88 +75,6 @@
       loadError = err instanceof ApiError ? err.message : String(err);
     } finally {
       loading = false;
-    }
-  }
-
-  // Targeted teach-in by serial / device address. Opens a pairing
-  // window for exactly one device (CCU WebUI "Gerät per Seriennummer
-  // anlernen"). The auto-poll on installModeStore.active surfaces the
-  // device in the list once it reports in.
-  let serial = $state("");
-  let pairBusy = $state(false);
-  async function pairBySerial() {
-    const addr = serial.trim();
-    if (!addr) return;
-    pairBusy = true;
-    try {
-      await api.pairDeviceInstallMode(addr, 60);
-      toastStore.success(t("inbox.pair_serial_started", { addr }));
-      serial = "";
-      installModeStore.refresh();
-    } catch (err) {
-      toastStore.error(
-        err instanceof ApiError ? `${err.status}: ${err.message}` : String(err),
-      );
-    } finally {
-      pairBusy = false;
-    }
-  }
-
-  // Keyserver-less HmIP LOCAL teach-in: pairing restricted to exactly
-  // one device by SGTIN + device key from the label — works without
-  // internet/keyserver access. Only offered on HmIP interfaces; the
-  // daemon re-normalises both inputs authoritatively (incl. the Base32
-  // label-form key conversion).
-  let localSgtin = $state("");
-  let localKey = $state("");
-  let localBusy = $state(false);
-  const selectedIsHmIP = $derived(selectedInterface.startsWith("HmIP"));
-  const selectedIsWired = $derived(selectedInterface === "BidCos-Wired");
-  let searchingWired = $state(false);
-  async function searchWiredBus() {
-    searchingWired = true;
-    try {
-      const r = await api.searchWiredDevices(
-        selectedInterface,
-        centralFilter || undefined,
-      );
-      toastStore.success(t("inbox.search_wired_done", { count: r.found }));
-      // Give ReGa a moment to surface the found (not-yet-accepted)
-      // devices in the inbox, then refetch.
-      setTimeout(() => void load(), 1500);
-    } catch (err) {
-      toastStore.error(
-        err instanceof ApiError ? `${err.status}: ${err.message}` : String(err),
-      );
-    } finally {
-      searchingWired = false;
-    }
-  }
-  const localSgtinInvalid = $derived(
-    localSgtin.trim() !== "" && normalizeSgtin(localSgtin) === null,
-  );
-  const localKeyInvalid = $derived(
-    localKey.trim() !== "" && !isValidHmIPKeyInput(localKey),
-  );
-  async function startLocalTeachIn() {
-    const sgtin = normalizeSgtin(localSgtin);
-    if (!sgtin || !isValidHmIPKeyInput(localKey)) return;
-    localBusy = true;
-    try {
-      await api.setInstallModeInterface(selectedInterface, true, 60, undefined, {
-        sgtin,
-        key: stripLabelSeparators(localKey),
-      });
-      toastStore.success(t("inbox.install_mode_local_started"));
-      localSgtin = "";
-      localKey = "";
-      void installModeStore.refresh();
-    } catch (err) {
-      toastStore.error(
-        err instanceof ApiError ? `${err.status}: ${err.message}` : String(err),
-      );
-    } finally {
-      localBusy = false;
     }
   }
 
@@ -460,22 +360,12 @@
     if (!acceptTarget) return;
     const { address, central } = acceptTarget;
     const name = acceptName.trim();
-    const rooms = Array.from(acceptRooms);
-    const functions = Array.from(acceptFunctions);
-    // Build a config object carrying only the fields the operator set,
-    // so an untouched field stays untouched on the CCU.
-    const config: {
-      name?: string;
-      include_channels?: boolean;
-      rooms?: string[];
-      functions?: string[];
-    } = {};
-    if (name) {
-      config.name = name;
-      if (acceptIncludeChannels) config.include_channels = true;
-    }
-    if (rooms.length > 0) config.rooms = rooms;
-    if (functions.length > 0) config.functions = functions;
+    const config = buildAcceptConfig({
+      name: acceptName,
+      includeChannels: acceptIncludeChannels,
+      rooms: Array.from(acceptRooms),
+      functions: Array.from(acceptFunctions),
+    });
 
     accepting = address;
     acceptSubmitting = true;
@@ -483,7 +373,7 @@
       await api.acceptInboxDevice(
         address,
         central,
-        Object.keys(config).length > 0 ? config : undefined,
+        config,
       );
       toastStore.success(t("inbox.accepted", { name: name || address }));
       // GR05: optional heating-group assignment. Best-effort — the device is
@@ -559,6 +449,15 @@
     );
   });
 
+  // Devices the daemon itself holds back (delay_new_device_creation and the
+  // onboarding release step) are listed on every system type, including one
+  // without a CCU inbox. When the fleet has no inbox at all, those entries
+  // are the only reason to show the list.
+  const heldWithoutInbox = $derived(
+    !centralStore.featureAvailable("hub.inbox") &&
+      entries.some((d) => d.pending_creation || d.awaiting_release),
+  );
+
   const visibleEntries = $derived(
     centralFilter ? entries.filter((d) => d.central === centralFilter) : entries,
   );
@@ -611,12 +510,114 @@
 
 <svelte:window onkeydown={onDialogKey} />
 
+{#snippet inboxList()}
+  {#if loadError}
+    <ErrorState message={loadError} onRetry={load} class="mb-4" />
+  {/if}
+
+  {#if loading}
+    <LoadingState />
+  {:else}
+    <Card class="p-4">
+      <DataTable
+        rows={visibleEntries}
+        {columns}
+        rowKey={(d) => (d.central ?? "") + "/" + d.address}
+        search
+        searchPlaceholder={t("common.search")}
+        persistKey="inbox"
+        initialSort={{ key: "first_seen", asc: false }}
+        emptyMessage={t("inbox.empty")}
+        emptyIcon="mdi:server"
+      >
+        {#snippet cell(d, col)}
+          {#if col.key === "address"}
+            <span class="font-mono font-semibold">{d.address}</span>
+            {#if centrals.length > 1 && d.central}
+              <Badge variant="muted">{d.central}</Badge>
+            {/if}
+            {#if d.awaiting_release}
+              <!-- Already accepted and materialised: it can be renamed and
+                   placed right now, and only the release publishes it to
+                   Home Assistant, Matter and any webhook. -->
+              <Badge variant="success" title={t("inbox.awaiting_release_hint")}>
+                {t("inbox.awaiting_release_badge")}
+              </Badge>
+            {:else if d.pending_creation}
+              <!-- The daemon parked this device (delay_new_device_creation):
+                   it has no data points here until it is accepted. -->
+              <Badge variant="warning" title={t("inbox.pending_creation_hint")}>
+                {t("inbox.pending_creation_badge")}
+              </Badge>
+            {/if}
+          {:else if col.key === "model"}
+            <Badge variant="muted">{d.model}</Badge>
+            {#if d.manufacturer}
+              <span class="block text-xs text-slate-500 dark:text-slate-400">{d.manufacturer}</span>
+            {/if}
+          {:else if col.key === "serial"}
+            {#if d.serial}
+              <span class="font-mono text-xs">{d.serial}</span>
+            {:else}
+              <span class="text-slate-400 dark:text-slate-500">—</span>
+            {/if}
+          {:else if col.key === "first_seen"}
+            {#if d.first_seen}
+              <span class="text-xs text-slate-500 dark:text-slate-400">{formatTs(d.first_seen)}</span>
+            {:else}
+              <span class="text-slate-400 dark:text-slate-500">—</span>
+            {/if}
+          {:else if col.key === "actions"}
+            {#if d.awaiting_release}
+              <!-- Offering "accept" here would ask the operator to accept a
+                   device that is already accepted. The remaining step is
+                   publishing it. -->
+              <Button
+                type="button"
+                size="sm"
+                onclick={() => void releaseDevice(d.address, d.central ?? "")}
+                disabled={releasing === d.address}
+              >
+                {releasing === d.address ? "…" : t("inbox.release")}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onclick={() => (location.hash = `#/device/${encodeURIComponent(d.address)}`)}
+              >
+                {t("inbox.configure")}
+              </Button>
+            {:else}
+              <Button
+                type="button"
+                size="sm"
+                onclick={() => openAccept(d.address, d.central ?? "")}
+                disabled={accepting === d.address}
+              >
+                {accepting === d.address ? "…" : t("inbox.accept")}
+              </Button>
+            {/if}
+            {#if isReplaceable(d)}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onclick={() => void openReplace(d.address, d.central ?? "")}
+              >
+                {t("inbox.replace.button")}
+              </Button>
+            {/if}
+          {/if}
+        {/snippet}
+      </DataTable>
+    </Card>
+  {/if}
+{/snippet}
+
 <PageShell>
   <PageHeader title={t("inbox.title")} subtitle={t("inbox.subtitle")}>
     {#snippet actions()}
-      {#if installModeStore.banner && !installModeStore.active}
-        <span class="text-xs text-slate-500 dark:text-slate-400">{installModeStore.banner}</span>
-      {/if}
       {#if centrals.length > 1}
         <Select
           class="w-auto"
@@ -627,128 +628,20 @@
           ]}
         />
       {/if}
-      {#if installModeStore.interfaces.length > 0}
-        <Select
-          class="w-auto"
-          bind:value={selectedInterface}
-          options={installModeStore.interfaces.map((iface) => ({
-            value: iface.interface,
-            label: `${iface.interface}${iface.active ? " ●" : ""}`,
-          }))}
-        />
-      {/if}
-      <Button
-        type="button"
-        variant={scopeActive ? "default" : "outline"}
-        onclick={() => void installModeStore.toggle({ interface: selectedInterface })}
-        disabled={installModeStore.busy || installModeStore.interfaces.length === 0}
-        title={scopeActive
-          ? t("inbox.install_mode_active_title")
-          : t("inbox.install_mode_start_title")}
-      >
-        {#if scopeActive}
-          {t("inbox.install_mode_pairing", { seconds: scopeRemaining ?? "…" })}
-        {:else}
-          {t("inbox.install_mode")}
-        {/if}
-      </Button>
       <Button type="button" variant="outline" onclick={() => void load()} disabled={loading}>
         {t("common.reload")}
       </Button>
+      {#if centralStore.featureAvailable("install_mode")}
+        <Button
+          type="button"
+          onclick={() => (addDeviceOpen = true)}
+          title={t("devicelist.add_device_title")}
+        >
+          {t("devicelist.add_device")}
+        </Button>
+      {/if}
     {/snippet}
   </PageHeader>
-
-  <!-- Targeted teach-in by serial / device address -->
-  <form
-    class="mb-4 flex flex-wrap items-center gap-2"
-    onsubmit={(e) => {
-      e.preventDefault();
-      void pairBySerial();
-    }}
-  >
-    <label class="text-xs text-slate-500 dark:text-slate-400" for="inbox-serial">
-      {t("inbox.pair_serial_label")}
-    </label>
-    <input
-      id="inbox-serial"
-      type="text"
-      bind:value={serial}
-      placeholder={t("inbox.pair_serial_placeholder")}
-      class="w-56 rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-      disabled={pairBusy}
-    />
-    <Button type="submit" variant="outline" disabled={pairBusy || serial.trim() === ""}>
-      {t("inbox.pair_serial_submit")}
-    </Button>
-  </form>
-
-  {#if selectedIsHmIP}
-    <!-- Keyserver-less HmIP LOCAL teach-in (SGTIN + device key). -->
-    <form
-      class="mb-4 flex flex-wrap items-center gap-2"
-      onsubmit={(e) => {
-        e.preventDefault();
-        void startLocalTeachIn();
-      }}
-    >
-      <label class="text-xs text-slate-500 dark:text-slate-400" for="inbox-local-sgtin">
-        {t("inbox.install_mode_local_label")}
-      </label>
-      <input
-        id="inbox-local-sgtin"
-        type="text"
-        bind:value={localSgtin}
-        placeholder={t("inbox.install_mode_local_sgtin_placeholder")}
-        aria-label={t("inbox.install_mode_local_sgtin_label")}
-        class="w-64 rounded-md border px-2 py-2 font-mono text-sm shadow-sm focus:outline-none {localSgtinInvalid
-          ? 'border-red-400 bg-red-50 text-red-900 dark:border-red-700 dark:bg-red-950 dark:text-red-200'
-          : 'border-slate-300 bg-white focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100'}"
-        disabled={localBusy}
-      />
-      <input
-        id="inbox-local-key"
-        type="text"
-        bind:value={localKey}
-        placeholder={t("inbox.install_mode_local_key_placeholder")}
-        aria-label={t("inbox.install_mode_local_key_label")}
-        class="w-64 rounded-md border px-2 py-2 font-mono text-sm shadow-sm focus:outline-none {localKeyInvalid
-          ? 'border-red-400 bg-red-50 text-red-900 dark:border-red-700 dark:bg-red-950 dark:text-red-200'
-          : 'border-slate-300 bg-white focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100'}"
-        disabled={localBusy}
-      />
-      <Button
-        type="submit"
-        variant="outline"
-        disabled={localBusy ||
-          normalizeSgtin(localSgtin) === null ||
-          localKey.trim() === "" ||
-          !isValidHmIPKeyInput(localKey)}
-      >
-        {t("inbox.install_mode_local_submit")}
-      </Button>
-      <span class="w-full text-xs text-slate-400 dark:text-slate-500 sm:w-auto">
-        {t("inbox.install_mode_local_hint")}
-      </span>
-    </form>
-  {/if}
-
-  {#if selectedIsWired}
-    <!-- BidCos-Wired: scan the bus for new devices (no pairing window). -->
-    <div class="mb-4 flex flex-wrap items-center gap-2">
-      <Button
-        type="button"
-        variant="outline"
-        onclick={() => void searchWiredBus()}
-        disabled={searchingWired}
-        title={t("inbox.search_wired_title")}
-      >
-        {searchingWired ? t("inbox.search_wired_running") : t("inbox.search_wired")}
-      </Button>
-      <span class="text-xs text-slate-400 dark:text-slate-500">
-        {t("inbox.search_wired_hint")}
-      </span>
-    </div>
-  {/if}
 
   {#if installModeStore.active}
     <div class="mb-4 flex items-center gap-2 rounded border border-brand-300 bg-brand-50 p-3 text-sm text-brand-900 dark:border-brand-800 dark:bg-brand-950 dark:text-brand-200">
@@ -762,111 +655,25 @@
     </div>
   {/if}
 
-  <FeatureGate feature="hub.inbox">
-    {#if loadError}
-      <ErrorState message={loadError} onRetry={load} class="mb-4" />
-    {/if}
-
-    {#if loading}
-      <LoadingState />
-    {:else}
-      <Card class="p-4">
-        <DataTable
-          rows={visibleEntries}
-          {columns}
-          rowKey={(d) => (d.central ?? "") + "/" + d.address}
-          search
-          searchPlaceholder={t("common.search")}
-          persistKey="inbox"
-          initialSort={{ key: "first_seen", asc: false }}
-          emptyMessage={t("inbox.empty")}
-          emptyIcon="mdi:server"
-        >
-          {#snippet cell(d, col)}
-            {#if col.key === "address"}
-              <span class="font-mono font-semibold">{d.address}</span>
-              {#if centrals.length > 1 && d.central}
-                <Badge variant="muted">{d.central}</Badge>
-              {/if}
-              {#if d.awaiting_release}
-                <!-- Already accepted and materialised: it can be renamed and
-                     placed right now, and only the release publishes it to
-                     Home Assistant, Matter and any webhook. -->
-                <Badge variant="success" title={t("inbox.awaiting_release_hint")}>
-                  {t("inbox.awaiting_release_badge")}
-                </Badge>
-              {:else if d.pending_creation}
-                <!-- The daemon parked this device (delay_new_device_creation):
-                     it has no data points here until it is accepted. -->
-                <Badge variant="warning" title={t("inbox.pending_creation_hint")}>
-                  {t("inbox.pending_creation_badge")}
-                </Badge>
-              {/if}
-            {:else if col.key === "model"}
-              <Badge variant="muted">{d.model}</Badge>
-              {#if d.manufacturer}
-                <span class="block text-xs text-slate-500 dark:text-slate-400">{d.manufacturer}</span>
-              {/if}
-            {:else if col.key === "serial"}
-              {#if d.serial}
-                <span class="font-mono text-xs">{d.serial}</span>
-              {:else}
-                <span class="text-slate-400 dark:text-slate-500">—</span>
-              {/if}
-            {:else if col.key === "first_seen"}
-              {#if d.first_seen}
-                <span class="text-xs text-slate-500 dark:text-slate-400">{formatTs(d.first_seen)}</span>
-              {:else}
-                <span class="text-slate-400 dark:text-slate-500">—</span>
-              {/if}
-            {:else if col.key === "actions"}
-              {#if d.awaiting_release}
-                <!-- Offering "accept" here would ask the operator to accept a
-                     device that is already accepted. The remaining step is
-                     publishing it. -->
-                <Button
-                  type="button"
-                  size="sm"
-                  onclick={() => void releaseDevice(d.address, d.central ?? "")}
-                  disabled={releasing === d.address}
-                >
-                  {releasing === d.address ? "…" : t("inbox.release")}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onclick={() => (location.hash = `#/device/${encodeURIComponent(d.address)}`)}
-                >
-                  {t("inbox.configure")}
-                </Button>
-              {:else}
-                <Button
-                  type="button"
-                  size="sm"
-                  onclick={() => openAccept(d.address, d.central ?? "")}
-                  disabled={accepting === d.address}
-                >
-                  {accepting === d.address ? "…" : t("inbox.accept")}
-                </Button>
-              {/if}
-              {#if isReplaceable(d)}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onclick={() => void openReplace(d.address, d.central ?? "")}
-                >
-                  {t("inbox.replace.button")}
-                </Button>
-              {/if}
-            {/if}
-          {/snippet}
-        </DataTable>
-      </Card>
-    {/if}
-  </FeatureGate>
+  <!-- A fleet without a CCU inbox (openccu-lite) still lists the devices the
+       daemon holds back, and only this view can accept or release them. The
+       gate's explanation stays for the case where there is nothing to show. -->
+  {#if heldWithoutInbox}
+    {@render inboxList()}
+  {:else}
+    <FeatureGate feature="hub.inbox">
+      {@render inboxList()}
+    </FeatureGate>
+  {/if}
 </PageShell>
+
+<AddDeviceDialog
+  open={addDeviceOpen}
+  onClose={() => {
+    addDeviceOpen = false;
+    void load({ silent: true });
+  }}
+/>
 
 {#if acceptTarget}
   <!-- Accept dialog: optional first-time configuration before the device
