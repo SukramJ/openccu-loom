@@ -29,8 +29,14 @@ func TestCentralBehaviorScanAndFirmwareDefaults(t *testing.T) {
 	if !b.EnableDeviceFirmwareCheckEnabled() {
 		t.Error("EnableDeviceFirmwareCheckEnabled default should be true")
 	}
+	// Onboarding holds a newly-paired device by default on every system
+	// type (ADR 0082); an operator opts out explicitly.
+	if !b.DelayNewDeviceCreationEnabled() {
+		t.Error("DelayNewDeviceCreationEnabled default should be true")
+	}
+	b.DelayNewDeviceCreation = new(false)
 	if b.DelayNewDeviceCreationEnabled() {
-		t.Error("DelayNewDeviceCreationEnabled default should be false")
+		t.Error("explicit false must disable the hold")
 	}
 }
 

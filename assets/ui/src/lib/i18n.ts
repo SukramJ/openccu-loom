@@ -1545,7 +1545,7 @@ const EN: Catalog = {
   "config.field.centrals.check_connection_interval":
     "Connection check interval",
   "config.field.centrals.behavior.delay_new_device_creation":
-    "Defer new-device creation",
+    "Hold new devices until released",
   "config.field.centrals.behavior.enable_device_firmware_check":
     "Firmware update entities",
   "config.field.centrals.behavior.enable_program_scan": "Scan programs",
@@ -1888,7 +1888,7 @@ const EN: Catalog = {
   "config.help.centrals.check_connection_interval":
     "How often the daemon pings the CCU in the background; zero uses the compiled-in default of 30 s, negative disables the check entirely.",
   "config.help.centrals.behavior.delay_new_device_creation":
-    "Hold a newly-paired device back until you accept it: it is listed in the inbox and only gets data points once accepted; default false.",
+    "Hold a newly-paired device until you accept it in the inbox (it is then built and can be named and configured) and release it (it then reaches MQTT / Home Assistant, Matter and webhooks). Devices already known are never held. Switching it off publishes new devices immediately under their factory name. Default: on.",
   "config.help.centrals.behavior.enable_device_firmware_check":
     "Surface a firmware-update entity for every device that reports available firmware; default true.",
   "config.help.centrals.behavior.enable_program_scan":
@@ -2531,7 +2531,9 @@ const EN: Catalog = {
   "centrals.behavior.enable_device_firmware_check":
     "Surface device firmware-update entities",
   "centrals.behavior.delay_new_device_creation":
-    "Defer new-device creation to the inbox",
+    "Hold new devices until released",
+  "centrals.behavior.delay_new_device_creation_hint":
+    "A newly-paired device waits in the inbox until you accept and release it, so it reaches MQTT, Matter and webhooks with the name you gave it. Off publishes new devices immediately.",
   "centrals.behavior.sysvar_scan_interval":
     "System-variable scan interval (seconds, 0 = default 30, minimum 3)",
   "centrals.behavior.sysvar_markers": "System-variable markers",
@@ -5861,7 +5863,7 @@ const DE: Catalog = {
   "config.field.centrals.check_connection_interval":
     "Verbindungsprüfungsintervall",
   "config.field.centrals.behavior.delay_new_device_creation":
-    "Neue Geräte zurückstellen",
+    "Neue Geräte bis zur Freigabe zurückhalten",
   "config.field.centrals.behavior.enable_device_firmware_check":
     "Firmware-Update-Entitäten",
   "config.field.centrals.behavior.enable_program_scan": "Programme scannen",
@@ -6203,7 +6205,7 @@ const DE: Catalog = {
   "config.help.centrals.check_connection_interval":
     "Wie oft der Daemon die CCU im Hintergrund anpingt; 0 = Compiler-Standard von 30 s, negativ = Prüfung deaktiviert.",
   "config.help.centrals.behavior.delay_new_device_creation":
-    "Neu angelernte Geräte zurückhalten, bis du sie übernimmst: Sie stehen im Posteingang und bekommen erst nach der Übernahme Datenpunkte. Standard: aus.",
+    "Neu angelernte Geräte zurückhalten, bis du sie im Posteingang übernimmst (dann werden sie angelegt und lassen sich benennen und konfigurieren) und freigibst (dann erreichen sie MQTT / Home Assistant, Matter und Webhooks). Bereits bekannte Geräte werden nie zurückgehalten. Ausgeschaltet werden neue Geräte sofort unter ihrem Werksnamen veröffentlicht. Standard: an.",
   "config.help.centrals.behavior.enable_device_firmware_check":
     "Für jedes Gerät, das Firmware-Updates meldet, eine Firmware-Update-Entität anzeigen. Standard: an.",
   "config.help.centrals.behavior.enable_program_scan":
@@ -6858,7 +6860,9 @@ const DE: Catalog = {
   "centrals.behavior.enable_device_firmware_check":
     "Firmware-Update-Entitäten anzeigen",
   "centrals.behavior.delay_new_device_creation":
-    "Neue Geräte erst über den Posteingang anlegen",
+    "Neue Geräte bis zur Freigabe zurückhalten",
+  "centrals.behavior.delay_new_device_creation_hint":
+    "Ein neu angelerntes Gerät wartet im Posteingang, bis du es übernimmst und freigibst – so erreicht es MQTT, Matter und Webhooks mit dem Namen, den du ihm gegeben hast. Ausgeschaltet werden neue Geräte sofort veröffentlicht.",
   "centrals.behavior.sysvar_scan_interval":
     "Scan-Intervall für Systemvariablen (Sekunden, 0 = Standard 30, Minimum 3)",
   "centrals.behavior.sysvar_markers": "Systemvariablen-Marker",

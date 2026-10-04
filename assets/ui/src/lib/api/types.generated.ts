@@ -10106,7 +10106,7 @@ export interface components {
             sysvar_scan_interval?: number;
             /** @description Surface per-device firmware-update entities (default true — a deliberate divergence from the reference stack's false default). */
             enable_device_firmware_check?: boolean;
-            /** @description Defer ingest of a newly-paired device to the inbox/manual-accept flow (default false). */
+            /** @description Hold a newly-paired device until an operator accepts it from the inbox (it is then built) and releases it (it then reaches MQTT, Matter and webhooks). Devices already known are never held. false builds and publishes a new device immediately (default true). */
             delay_new_device_creation?: boolean;
         };
         /** @description One device that carries a week schedule. */

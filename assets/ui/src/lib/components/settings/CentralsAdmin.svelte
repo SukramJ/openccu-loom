@@ -116,7 +116,9 @@
       includeInternalSysvars: true,
       includeInternalPrograms: false,
       enableDeviceFirmwareCheck: true,
-      delayNewDeviceCreation: false,
+      // The daemon holds newly-paired devices unless told otherwise, so an
+      // absent value must render — and save — as on.
+      delayNewDeviceCreation: true,
       sysvarMarkers: [],
       programMarkers: [],
       sysvarScanIntervalSec: 0,
@@ -953,9 +955,22 @@
                 <input type="checkbox" bind:checked={fBehavior.enableDeviceFirmwareCheck} />
                 <span>{t("centrals.behavior.enable_device_firmware_check")}</span>
               </label>
-              <label class="flex items-center gap-2">
-                <input type="checkbox" bind:checked={fBehavior.delayNewDeviceCreation} />
-                <span>{t("centrals.behavior.delay_new_device_creation")}</span>
+              <label class="flex items-start gap-2">
+                <input
+                  type="checkbox"
+                  class="mt-0.5"
+                  bind:checked={fBehavior.delayNewDeviceCreation}
+                  aria-describedby="centrals-behavior-delay-hint"
+                />
+                <span class="flex flex-col gap-0.5">
+                  <span>{t("centrals.behavior.delay_new_device_creation")}</span>
+                  <span
+                    id="centrals-behavior-delay-hint"
+                    class="text-xs text-slate-600 dark:text-slate-400"
+                  >
+                    {t("centrals.behavior.delay_new_device_creation_hint")}
+                  </span>
+                </span>
               </label>
 
               {#if sysvarsOffered}
