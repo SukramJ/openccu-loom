@@ -774,6 +774,97 @@ func TestUploadBackup_ValidArchive_Returns201WithEntryAndAudits(t *testing.T) {
 	}
 }
 
+// encryptedAwareUploader is a [fakeBackupUploader] that also answers
+// [EncryptedBackupAcceptor].
+type encryptedAwareUploader struct {
+	fakeBackupUploader
+	accepts bool
+}
+
+func (u *encryptedAwareUploader) AcceptsEncryptedBackups() bool { return u.accepts }
+
+// ageUploadBytes starts like a binary age file; the body is opaque without
+// the key, so a stand-in is enough.
+var ageUploadBytes = []byte("age-encryption.org/v1\n-> X25519 c3RhbmQtaW4\n--- c3RhbmQtaW4\n\x00\x01")
+
+// TestUploadBackup_EncryptedArchiveAcceptedWhenALiteCentralRestoresIt pins
+// that an encrypted openccu-lite archive is stored unopened, byte for byte,
+// and answered 201 without firmware details the daemon cannot read.
+func TestUploadBackup_EncryptedArchiveAcceptedWhenALiteCentralRestoresIt(t *testing.T) {
+	t.Parallel()
+	svc := &encryptedAwareUploader{
+		fakeBackupUploader: fakeBackupUploader{entry: hmapi.BackupEntry{
+			ID: "upload-20260731-120000.000", Filename: "upload-20260731-120000.000.sbk.age",
+		}},
+		accepts: true,
+	}
+	rr := httptest.NewRecorder()
+	UploadBackup(svc, nil).ServeHTTP(rr, multipartBackupRequest(t, ageUploadBytes))
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	if !bytes.Equal(svc.lastData, ageUploadBytes) {
+		t.Errorf("stored %d bytes, want the uploaded archive unchanged", len(svc.lastData))
+	}
+	var body map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	for _, k := range []string{"firmware_version", "product"} {
+		if _, ok := body[k]; ok {
+			t.Errorf("response carries %q for an archive the daemon cannot open: %v", k, body)
+		}
+	}
+}
+
+// TestUploadBackup_EncryptedArchiveRefusedWithoutALiteCentral pins the
+// refusal: with no central that restores encrypted archives — whether the
+// uploader says so or cannot say at all — the archive is not stored.
+func TestUploadBackup_EncryptedArchiveRefusedWithoutALiteCentral(t *testing.T) {
+	t.Parallel()
+	for name, svc := range map[string]interface {
+		BackupUploader
+		callCount() int
+	}{
+		"uploader reports none":      &encryptedAwareUploader{accepts: false},
+		"uploader cannot report any": &fakeBackupUploader{},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			rr := httptest.NewRecorder()
+			UploadBackup(svc, nil).ServeHTTP(rr, multipartBackupRequest(t, ageUploadBytes))
+			if rr.Code != http.StatusUnprocessableEntity {
+				t.Fatalf("expected 422, got %d body=%s", rr.Code, rr.Body.String())
+			}
+			if !strings.Contains(rr.Body.String(), "openccu-lite") {
+				t.Errorf("refusal does not say where the archive can be restored: %s", rr.Body.String())
+			}
+			if svc.callCount() != 0 {
+				t.Error("an encrypted archive no central can restore was stored")
+			}
+		})
+	}
+}
+
+// TestUploadBackup_PlainArchiveIgnoresEncryptedCapability is the negative
+// control: a plain invalid archive is refused by inspection even when a lite
+// central is configured.
+func TestUploadBackup_PlainArchiveIgnoresEncryptedCapability(t *testing.T) {
+	t.Parallel()
+	svc := &encryptedAwareUploader{accepts: true}
+	rr := httptest.NewRecorder()
+	UploadBackup(svc, nil).ServeHTTP(rr, multipartBackupRequest(t, []byte("this is not a tar archive at all")))
+	if rr.Code != http.StatusUnprocessableEntity || !strings.Contains(rr.Body.String(), "Not a CCU system backup") {
+		t.Fatalf("expected 422 Not a CCU system backup, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	if svc.calls != 0 {
+		t.Error("an archive that failed inspection was stored")
+	}
+}
+
+func (f *fakeBackupUploader) callCount() int { return f.calls }
+
 // TestBackupStorageInfo_ReportsLocation pins the answer to "where did my
 // backup go?": the route reports the directory the daemon actually writes
 // to, which no other endpoint carries — `backup.dir` is empty in the common

@@ -80,6 +80,28 @@ type BackupRestorer interface {
 	Restore(ctx context.Context, id string, payload io.Reader) (string, error)
 }
 
+// EncryptedArchiveRestorer is the optional capability a [BackupRestorer]
+// declares when the system behind it can take an age-encrypted archive.
+//
+// The daemon cannot open such an archive, so the structural inspection
+// [BackupAdapter.Restore] runs before every upload has nothing to read. It is
+// skipped only for a target that opens the archive itself and refuses one it
+// cannot use before applying anything — an openccu-lite box, which checks
+// the archive first. A CCU's restore endpoint unpacks whatever it is sent, so
+// its restorer does not declare this and an encrypted archive never reaches
+// it.
+type EncryptedArchiveRestorer interface {
+	// RestoresEncryptedArchives reports whether the target opens an
+	// encrypted archive itself.
+	RestoresEncryptedArchives() bool
+}
+
+// restoresEncrypted reports whether r declares [EncryptedArchiveRestorer].
+func restoresEncrypted(r BackupRestorer) bool {
+	e, ok := r.(EncryptedArchiveRestorer)
+	return ok && e.RestoresEncryptedArchives()
+}
+
 // ErrRestoreUnsupported is returned by [BackupAdapter.Restore] when no
 // concrete [BackupRestorer] has been wired. The handler surfaces a
 // 502/501 with this error's message so the SPA can render a clear
@@ -440,6 +462,29 @@ func (a *BackupAdapter) RestorerForCentral(centralName string) BackupRestorer {
 	return a.restorers[centralName]
 }
 
+// AcceptsEncryptedBackups reports whether any wired restorer — one per
+// central, or the legacy fallback — takes an encrypted archive. The upload
+// endpoint consults it so an encrypted archive is only imported when it
+// could ever be restored somewhere; storing one with no openccu-lite
+// central configured would offer the operator a backup that every restore
+// refuses.
+func (a *BackupAdapter) AcceptsEncryptedBackups() bool {
+	if a == nil {
+		return false
+	}
+	a.restorersMu.RLock()
+	defer a.restorersMu.RUnlock()
+	if a.restorer != nil && restoresEncrypted(a.restorer) {
+		return true
+	}
+	for _, r := range a.restorers {
+		if r != nil && restoresEncrypted(r) {
+			return true
+		}
+	}
+	return false
+}
+
 // uploadedBackupPrefix marks ids of archives the operator supplied rather
 // than ones this daemon pulled from a CCU, so they are unmistakable in a
 // listing.
@@ -475,15 +520,24 @@ func (s *FilesystemBackupStorage) SaveUploaded(
 	if _, err := s.pathForID(id); err != nil {
 		return hmapi.BackupEntry{}, err
 	}
-	// No display name: the uploaded one is untrusted (see above) and there is
-	// no CCU behind this archive to derive one from. It lists and downloads as
-	// `<id>.sbk`, which is honest about where it came from.
-	if err := s.Save(ctx, id, "", data); err != nil {
+	// No display name from the browser: the uploaded one is untrusted (see
+	// above) and there is no CCU behind this archive to derive one from. A
+	// plain archive lists and downloads as `<id>.sbk`, which is honest about
+	// where it came from. An encrypted one gets a name generated the same
+	// way plus the `.age` suffix, so a listing — and a download — says what
+	// it is: the daemon cannot open it, and only the system holding its key
+	// can.
+	displayName := ""
+	if sbk.IsEncrypted(data) {
+		displayName = id + sbk.Extension + sbk.EncryptedSuffix
+	}
+	if err := s.Save(ctx, id, displayName, data); err != nil {
 		return hmapi.BackupEntry{}, err
 	}
 	return hmapi.BackupEntry{
 		ID:        id,
 		Bytes:     int64(len(data)),
 		CreatedAt: now,
+		Filename:  displayName,
 	}, nil
 }

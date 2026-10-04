@@ -330,6 +330,24 @@ type BackupUploader interface {
 	SaveUploaded(ctx context.Context, filename string, data []byte) (hmapi.BackupEntry, error)
 }
 
+// EncryptedBackupAcceptor is the optional capability a [BackupUploader]
+// implements when it can say whether an encrypted openccu-lite archive could
+// ever be restored. It is optional so an uploader that knows nothing about
+// restore targets refuses encrypted archives rather than storing ones no
+// restore will take.
+type EncryptedBackupAcceptor interface {
+	// AcceptsEncryptedBackups reports whether at least one configured
+	// central restores encrypted archives.
+	AcceptsEncryptedBackups() bool
+}
+
+// acceptsEncrypted reports whether svc declares [EncryptedBackupAcceptor]
+// and currently has a central that restores encrypted archives.
+func acceptsEncrypted(svc BackupUploader) bool {
+	a, ok := svc.(EncryptedBackupAcceptor)
+	return ok && a.AcceptsEncryptedBackups()
+}
+
 // maxUploadedBackupBytes bounds an uploaded .sbk. Real archives run to a
 // few tens of megabytes; 512 MiB is far above any genuine backup and
 // still keeps a hostile or mistaken upload from exhausting memory. The
@@ -350,6 +368,10 @@ const maxUploadedBackupBytes = 512 << 20
 // version the backup came from is reported back so the operator can
 // compare it against the target CCU, which is exactly what the CCU's own
 // restore does before deciding whether the backup is usable.
+//
+// An age-encrypted openccu-lite archive cannot be inspected at all. It is
+// accepted only when an openccu-lite central is configured to restore it
+// on, stored as received, and answered without firmware details.
 func UploadBackup(svc BackupUploader, rec audit.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if svc == nil {
@@ -402,6 +424,18 @@ func UploadBackup(svc BackupUploader, rec audit.Recorder) http.HandlerFunc {
 			return
 		}
 		info, err := sbk.InspectBytes(data)
+		if errors.Is(err, sbk.ErrEncrypted) {
+			// The daemon cannot open an encrypted archive; only the
+			// openccu-lite system holding its key can. Storing it is only
+			// useful where such a system is configured to restore it on.
+			if !acceptsEncrypted(svc) {
+				problem.Write(w, http.StatusUnprocessableEntity,
+					problem.New(problem.TypeValidation, r, "Encrypted backup cannot be restored here",
+						"this is an encrypted openccu-lite backup; it can only be restored on an openccu-lite system, and none is configured"))
+				return
+			}
+			err = nil
+		}
 		if err != nil {
 			// The two failures call for different things from the
 			// operator: an unreadable archive usually means the wrong file

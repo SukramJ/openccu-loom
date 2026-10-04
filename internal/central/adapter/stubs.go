@@ -701,7 +701,16 @@ func (a *BackupAdapter) Restore(ctx context.Context, id string) (string, error) 
 		return "", ErrRestoreUnsupported
 	}
 	if err := a.inspectStored(ctx, id); err != nil {
-		return "", err
+		// An encrypted archive has nothing the daemon can inspect. It goes
+		// on only to a target that opens it itself and checks it before
+		// applying anything; any other target would unpack it blind.
+		if !errors.Is(err, sbk.ErrEncrypted) {
+			return "", err
+		}
+		if !restoresEncrypted(restorer) {
+			return "", fmt.Errorf("%w: backup %s is an encrypted openccu-lite backup; "+
+				"it can only be restored on an openccu-lite system: %w", hmerr.ErrValidation, id, err)
+		}
 	}
 	rc, err := a.storage.Open(ctx, id)
 	if err != nil {

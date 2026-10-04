@@ -251,6 +251,11 @@ from the box's Addons page. A few things differ from a CCU:
   `/usr/local` read-only for add-ons apart from their own directories, so
   archives land in the add-on's `var/backups` rather than
   `/usr/local/sdcard/backup`.
+- **Encrypted backups stay encrypted.** With backup encryption switched on
+  the box serves `.sbk.age` archives. Loom stores and imports them
+  unopened and hands them back to an openccu-lite box on restore, which
+  opens an archive encrypted to its own key; a CCU central never receives
+  one. See [Backup & restore](backup.md#backing-up-and-restoring-an-openccu-lite-system).
 
 ## Trying it without a box
 

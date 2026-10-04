@@ -190,3 +190,57 @@ func TestInspectOversizedFirmwareVersionIsTruncatedNotFatal(t *testing.T) {
 		t.Errorf("FirmwareVersion = %q, want empty (VERSION line lands beyond the read limit)", info.FirmwareVersion)
 	}
 }
+
+// ageBinaryArchive and ageArmoredArchive start the way the two age file
+// forms do; the bytes after the header are opaque without the key, so
+// stand-ins are enough.
+const (
+	ageBinaryArchive  = "age-encryption.org/v1\n-> X25519 c3RhbmQtaW4\nc3RhbmQtaW4tYm9keQ\n--- c3RhbmQtaW4\n\x00\x01\x02"
+	ageArmoredArchive = "-----BEGIN AGE ENCRYPTED FILE-----\nYWdlLWVuY3J5cHRpb24ub3JnL3YxCg==\n-----END AGE ENCRYPTED FILE-----\n"
+)
+
+// TestInspectAgeArchiveIsEncrypted pins that both age forms are reported as
+// encrypted — and not as the wrong file, which is what a tar reader alone
+// would call them.
+func TestInspectAgeArchiveIsEncrypted(t *testing.T) {
+	t.Parallel()
+	for name, content := range map[string]string{"binary": ageBinaryArchive, "armored": ageArmoredArchive} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			_, err := InspectBytes([]byte(content))
+			if !errors.Is(err, ErrEncrypted) {
+				t.Fatalf("InspectBytes = %v, want ErrEncrypted", err)
+			}
+			if errors.Is(err, ErrNotAnArchive) {
+				t.Errorf("an encrypted archive must not read as the wrong file: %v", err)
+			}
+			if _, err := Inspect(strings.NewReader(content)); !errors.Is(err, ErrEncrypted) {
+				t.Errorf("Inspect = %v, want ErrEncrypted", err)
+			}
+			if !IsEncrypted([]byte(content)) {
+				t.Error("IsEncrypted = false, want true")
+			}
+		})
+	}
+}
+
+// TestInspectPlainInputsAreNotEncrypted is the negative control for the
+// detection: a valid archive, a non-archive, and inputs that only resemble
+// the age header keep their previous results.
+func TestInspectPlainInputsAreNotEncrypted(t *testing.T) {
+	t.Parallel()
+	valid := buildTar(t, fullMembers()...)
+	if _, err := InspectBytes(valid); err != nil {
+		t.Errorf("valid archive: %v, want nil", err)
+	}
+	if IsEncrypted(valid) {
+		t.Error("IsEncrypted(valid archive) = true")
+	}
+	notArchive := []byte("plain text that mentions age-encryption.org/v1 somewhere later")
+	if _, err := InspectBytes(notArchive); !errors.Is(err, ErrNotAnArchive) || errors.Is(err, ErrEncrypted) {
+		t.Errorf("non-archive: %v, want ErrNotAnArchive only", err)
+	}
+	if _, err := InspectBytes([]byte("age")); !errors.Is(err, ErrNotAnArchive) {
+		t.Errorf("a short input sharing the prefix's start: %v, want ErrNotAnArchive", err)
+	}
+}

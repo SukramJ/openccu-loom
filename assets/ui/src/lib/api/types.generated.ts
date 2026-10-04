@@ -3447,6 +3447,8 @@ export interface paths {
          *
          *     The archive is inspected before it is stored, so picking the wrong file fails here rather than at restore time when the CCU is already being wiped. The check is structural: a readable tar carrying `usr_local.tar.gz` and its `signature`. The signature itself cannot be verified without the CCU's key material, so it is not claimed to be. The firmware version the archive came from is read from its `firmware_version` member and returned, so the operator can compare it against the target CCU — the same fact the CCU's own restore consults.
          *
+         *     An age-encrypted openccu-lite archive (`.sbk.age`, recognised by its content, not its name) cannot be inspected: the daemon never holds the key. It is accepted only when an openccu-lite central is configured, stored unopened, and passed to that system unopened on restore; the response then carries no `firmware_version` or `product`. Without such a central it is refused with 422.
+         *
          *     Admin-gated and audited. The request body is streamed, not schema-validated, because a real archive is far larger than the validator's buffer.
          */
         post: operations["uploadBackup"];
@@ -17064,7 +17066,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Not a CCU system backup — unreadable as a tar, or missing the configuration archive or its signature. */
+            /** @description Not a CCU system backup — unreadable as a tar, or missing the configuration archive or its signature — or an encrypted openccu-lite archive while no openccu-lite central is configured to restore it. */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17140,7 +17142,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description The restore was refused before anything was sent to any CCU. Either the backup names no owning CCU and several are configured, so the restore target cannot be derived (restore it from that CCU's own backup list instead) — or the stored archive did not survive the structural inspection that every restore runs first: it is not a readable tar, or it is missing `usr_local.tar.gz` or its `signature`. The problem detail names which. A damaged archive cannot be repaired; upload an intact one. */
+            /** @description The restore was refused before anything was sent to any CCU. Either the backup names no owning CCU and several are configured, so the restore target cannot be derived (restore it from that CCU's own backup list instead) — or the stored archive did not survive the structural inspection that every restore runs first: it is not a readable tar, or it is missing `usr_local.tar.gz` or its `signature`. The problem detail names which. A damaged archive cannot be repaired; upload an intact one. An age-encrypted openccu-lite archive skips that inspection only when its target is an openccu-lite system, which receives it unopened; any other target refuses it here. The target system may also refuse an archive after checking it, for instance one only its recovery key opens. */
             422: {
                 headers: {
                     [name: string]: unknown;

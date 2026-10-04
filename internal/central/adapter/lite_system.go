@@ -157,6 +157,12 @@ func (s *liteSystem) Restore(ctx context.Context, id string, payload io.Reader) 
 	return id, nil
 }
 
+// RestoresEncryptedArchives implements [EncryptedArchiveRestorer]: the box
+// opens an archive encrypted to its own key, and its restore check runs
+// before anything is applied — an archive it cannot open is refused there
+// (or answered with "needs the recovery key"), never unpacked blind.
+func (*liteSystem) RestoresEncryptedArchives() bool { return true }
+
 // TriggerBackup implements [hub.BackupTrigger]: the box runs its own
 // backup to its configured targets.
 func (s *liteSystem) TriggerBackup(ctx context.Context) error {
