@@ -217,7 +217,11 @@ whenever it is fed a redacted document.
 
 Separately from daemon backups, OpenCCU-Loom can trigger and store a
 backup **of the CCU** (the Homematic `.sbk` archive) through the REST
-API. These are admin-gated:
+API. Only an OpenCCU and an openccu-lite system can do this: the backup
+the daemon triggers on a CCU is the one OpenCCU ships, so for a stock CCU
+and debmatic the daemon reports `system.backup.create` and `system.backup.restore` as not
+supported and the Config UI does not offer the backup view.
+These routes are admin-gated:
 
 | Method | Path | Purpose |
 |---|---|---|

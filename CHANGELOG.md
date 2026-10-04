@@ -6,6 +6,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A stock CCU and debmatic are no longer offered the system backup.**
+  The backup the daemon triggers is the one OpenCCU ships, yet every CCU
+  reported `system.backup.create` and `system.backup.restore` as
+  available, so the Config UI offered the backup view for them too.
+  They are now reported as not supported by the system, and as not ready
+  while the product is still unknown. An OpenCCU and an openccu-lite
+  system are unaffected.
+- **The backup view no longer offers a restore the system would
+  refuse.** On an openccu-lite system restoring needs a broader token
+  scope than creating a backup; the Restore button is hidden for a
+  central that cannot restore, and the upload with it once no central
+  can.
+
 ### Changed
 
 - **The Config UI no longer offers system-variable and program options

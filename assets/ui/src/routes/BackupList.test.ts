@@ -16,14 +16,27 @@ const mockDeleteBackup = vi.fn();
 // Module mocks — hoisted before any import of the component
 // ---------------------------------------------------------------------------
 
-// A fleet that offers every feature: these cases are not about feature
-// gating, and the real store would pull in the auth store.
+// The real store would pull in the auth store. By default the fleet is
+// empty and offers every feature, so cases not about feature gating are
+// unaffected; the restore-gating cases fill `fleet.items`. centralsLacking
+// applies the same lasting-reason rule as the real store: a feature that is
+// only "not_ready" does not count as lacking.
+type MockFeature = { available: boolean; reason?: string };
+type MockCentral = { name: string; features?: Record<string, MockFeature> };
+const fleet = vi.hoisted(() => ({ items: [] as MockCentral[] }));
+
 vi.mock("$lib/stores/centrals.svelte", () => ({
   centralStore: {
-    items: [],
+    get items() {
+      return fleet.items;
+    },
     offers: () => true,
     featureAvailable: () => true,
-    centralsLacking: () => [],
+    centralsLacking: (key: string) =>
+      fleet.items.filter((c) => {
+        const f = c.features?.[key];
+        return f !== undefined && !f.available && f.reason !== "not_ready";
+      }),
     featureOf: () => undefined,
     byName: () => undefined,
   },
@@ -75,6 +88,7 @@ const TWO_CENTRALS = [
 
 beforeEach(() => {
   vi.clearAllMocks();
+  fleet.items = [];
   mockListBackups.mockResolvedValue([]);
   mockTriggerBackup.mockResolvedValue({ id: "backup-001" });
   mockBackupStorageInfo.mockResolvedValue({
@@ -235,6 +249,109 @@ describe("BackupList — delete", () => {
     // The list is re-read, so a deleted archive cannot linger in the table.
     await waitFor(() => {
       expect(mockListBackups.mock.calls.length).toBeGreaterThan(callsBefore);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Restore and upload are hidden where no central can restore
+// ---------------------------------------------------------------------------
+
+const RESTORE = "system.backup.restore";
+
+function central(name: string, restore?: MockFeature): MockCentral {
+  return { name, features: restore ? { [RESTORE]: restore } : {} };
+}
+
+const UPLOADED_BACKUP = [
+  {
+    id: "upload-20260818-140257",
+    central: "",
+    bytes: 1024,
+    created_at: "2026-08-18T14:02:57Z",
+    filename: "uploaded.sbk",
+  },
+];
+
+describe("BackupList — restore gating", () => {
+  it("hides restore on an archive whose central lacks the restore scope, keeping download", async () => {
+    // An openccu-lite credential can carry the create scope without the
+    // restore scope; a restore button there could only fail.
+    fleet.items = [central("alpha", { available: false, reason: "missing_scope" })];
+    mockListCentralsV2.mockResolvedValue(ONE_CENTRAL);
+    mockListBackups.mockResolvedValue(ONE_BACKUP);
+    render(BackupList);
+
+    await waitFor(() => {
+      expect(screen.getByText("backup.download")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("common.restore")).toBeNull();
+    expect(screen.getByText("backup.delete")).toBeInTheDocument();
+  });
+
+  it("shows restore on an archive whose central offers it", async () => {
+    fleet.items = [central("alpha", { available: true })];
+    mockListCentralsV2.mockResolvedValue(ONE_CENTRAL);
+    mockListBackups.mockResolvedValue(ONE_BACKUP);
+    render(BackupList);
+
+    await waitFor(() => {
+      expect(screen.getByText("common.restore")).toBeInTheDocument();
+    });
+  });
+
+  it("keeps restore on an archive whose central is only booting", async () => {
+    // "not_ready" is transient: hiding the button would make it vanish
+    // every time the CCU restarts.
+    fleet.items = [central("alpha", { available: false, reason: "not_ready" })];
+    mockListCentralsV2.mockResolvedValue(ONE_CENTRAL);
+    mockListBackups.mockResolvedValue(ONE_BACKUP);
+    render(BackupList);
+
+    await waitFor(() => {
+      expect(screen.getByText("common.restore")).toBeInTheDocument();
+    });
+  });
+
+  it("hides restore on an uploaded archive and the upload button when no central can restore", async () => {
+    // An uploaded archive has no central of its own and is useful only for
+    // a restore, so with no restoring central both actions are dead ends.
+    fleet.items = [
+      central("alpha", { available: false, reason: "missing_scope" }),
+      central("beta", { available: false, reason: "unsupported" }),
+    ];
+    mockListCentralsV2.mockResolvedValue(TWO_CENTRALS);
+    mockListBackups.mockResolvedValue(UPLOADED_BACKUP);
+    render(BackupList);
+
+    await waitFor(() => {
+      expect(screen.getByText("backup.download")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("common.restore")).toBeNull();
+    expect(screen.queryByText("backup.upload")).toBeNull();
+  });
+
+  it("offers the upload button and restore of an uploaded archive when one central can restore", async () => {
+    fleet.items = [
+      central("alpha", { available: false, reason: "missing_scope" }),
+      central("beta", { available: true }),
+    ];
+    mockListCentralsV2.mockResolvedValue(TWO_CENTRALS);
+    mockListBackups.mockResolvedValue(UPLOADED_BACKUP);
+    render(BackupList);
+
+    await waitFor(() => {
+      expect(screen.getByText("common.restore")).toBeInTheDocument();
+    });
+    expect(screen.getByText("backup.upload")).toBeInTheDocument();
+  });
+
+  it("offers the upload button before the fleet has loaded", async () => {
+    mockListCentralsV2.mockResolvedValue(ONE_CENTRAL);
+    render(BackupList);
+
+    await waitFor(() => {
+      expect(screen.getByText("backup.upload")).toBeInTheDocument();
     });
   });
 });
