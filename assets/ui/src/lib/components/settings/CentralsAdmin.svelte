@@ -234,6 +234,20 @@
     ),
   );
 
+  // Whether the behaviour section offers the sysvar / program controls. A
+  // central being added has no feature map yet, so its system type decides;
+  // a stored central answers through its reported features. Only a lasting
+  // reason hides them: a CCU that is still booting reports "not_ready", and
+  // hiding its configuration until it is up would be wrong. Hidden values
+  // still round-trip through buildBehavior unchanged.
+  function behaviourOffers(key: string): boolean {
+    if (fIsLite) return false;
+    if (!isEdit) return true;
+    return !centralStore.centralsLacking(key).some((c) => c.name === fName);
+  }
+  const sysvarsOffered = $derived(behaviourOffers("hub.sysvars"));
+  const programsOffered = $derived(behaviourOffers("hub.programs"));
+
   // For a stored openccu-lite central: the features its token's scopes do
   // not cover, grouped by the scope that would grant them.
   const missingScopes = $derived.by(() => {
@@ -795,6 +809,11 @@
               class="h-9 rounded border border-slate-300 px-3 text-sm dark:border-slate-700 dark:bg-slate-900"
             />
           </label>
+          <!-- Not offered once the system is known to be an openccu-lite
+               box, which is reached on its web server's default port. A
+               port typed before the probe, or stored with the central,
+               is kept and still sent on save. -->
+          {#if !fIsLite}
           <label class="flex flex-col gap-1">
             <span>{t("centrals.field.json_rpc_port")}</span>
             <input
@@ -802,13 +821,14 @@
               inputmode="numeric"
               pattern="[0-9]*"
               bind:value={fJsonRpcPort}
-              placeholder={(fIsLite ? fOnboarding.tls : fTls) ? "443" : "80"}
+              placeholder={fTls ? "443" : "80"}
               class="h-9 rounded border border-slate-300 px-3 text-sm dark:border-slate-700 dark:bg-slate-900"
             />
             <span class="text-xs text-[var(--ha-secondary-text-color)]"
-              >{fIsLite ? t("centrals.field.lite_port_hint") : t("centrals.field.json_rpc_port_hint")}</span
+              >{t("centrals.field.json_rpc_port_hint")}</span
             >
           </label>
+          {/if}
         </div>
 
         <CentralOnboarding host={fHost} port={fJsonRpcPort} bind:value={fOnboarding} tokenStored={fTokenStored} />
@@ -904,22 +924,30 @@
                 <input type="checkbox" bind:checked={fBehavior.useGroupChannelForCoverState} />
                 <span>{t("centrals.behavior.use_group_channel_for_cover_state")}</span>
               </label>
-              <label class="flex items-center gap-2">
-                <input type="checkbox" bind:checked={fBehavior.enableSysvarScan} />
-                <span>{t("centrals.behavior.enable_sysvar_scan")}</span>
-              </label>
-              <label class="flex items-center gap-2">
-                <input type="checkbox" bind:checked={fBehavior.enableProgramScan} />
-                <span>{t("centrals.behavior.enable_program_scan")}</span>
-              </label>
-              <label class="flex items-center gap-2">
-                <input type="checkbox" bind:checked={fBehavior.includeInternalSysvars} />
-                <span>{t("centrals.behavior.include_internal_sysvars")}</span>
-              </label>
-              <label class="flex items-center gap-2">
-                <input type="checkbox" bind:checked={fBehavior.includeInternalPrograms} />
-                <span>{t("centrals.behavior.include_internal_programs")}</span>
-              </label>
+              {#if sysvarsOffered}
+                <label class="flex items-center gap-2">
+                  <input type="checkbox" bind:checked={fBehavior.enableSysvarScan} />
+                  <span>{t("centrals.behavior.enable_sysvar_scan")}</span>
+                </label>
+              {/if}
+              {#if programsOffered}
+                <label class="flex items-center gap-2">
+                  <input type="checkbox" bind:checked={fBehavior.enableProgramScan} />
+                  <span>{t("centrals.behavior.enable_program_scan")}</span>
+                </label>
+              {/if}
+              {#if sysvarsOffered}
+                <label class="flex items-center gap-2">
+                  <input type="checkbox" bind:checked={fBehavior.includeInternalSysvars} />
+                  <span>{t("centrals.behavior.include_internal_sysvars")}</span>
+                </label>
+              {/if}
+              {#if programsOffered}
+                <label class="flex items-center gap-2">
+                  <input type="checkbox" bind:checked={fBehavior.includeInternalPrograms} />
+                  <span>{t("centrals.behavior.include_internal_programs")}</span>
+                </label>
+              {/if}
               <label class="flex items-center gap-2">
                 <input type="checkbox" bind:checked={fBehavior.enableDeviceFirmwareCheck} />
                 <span>{t("centrals.behavior.enable_device_firmware_check")}</span>
@@ -929,71 +957,75 @@
                 <span>{t("centrals.behavior.delay_new_device_creation")}</span>
               </label>
 
-              <label class="flex flex-col gap-1">
-                <span>{t("centrals.behavior.sysvar_scan_interval")}</span>
-                <input
-                  type="number"
-                  min="0"
-                  bind:value={fBehavior.sysvarScanIntervalSec}
-                  class="h-9 w-32 rounded border border-slate-300 px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
-                />
-              </label>
+              {#if sysvarsOffered}
+                <label class="flex flex-col gap-1">
+                  <span>{t("centrals.behavior.sysvar_scan_interval")}</span>
+                  <input
+                    type="number"
+                    min="0"
+                    bind:value={fBehavior.sysvarScanIntervalSec}
+                    class="h-9 w-32 rounded border border-slate-300 px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+                  />
+                </label>
 
-              <div class="flex flex-col gap-1">
-                <span>{t("centrals.behavior.sysvar_markers")}</span>
-                <p class="text-xs text-slate-600 dark:text-slate-400">
-                  {t("centrals.behavior.markers_hint")}
-                </p>
-                <div class="flex flex-col gap-1.5">
-                  {#each SYSVAR_MARKERS as m (m)}
-                    <label class="flex items-start gap-2">
-                      <input
-                        type="checkbox"
-                        class="mt-0.5"
-                        checked={fBehavior.sysvarMarkers.includes(m)}
-                        onchange={() =>
-                          (fBehavior.sysvarMarkers = toggleMarker(fBehavior.sysvarMarkers, m))}
-                      />
-                      <span>
-                        <code
-                          class="rounded bg-slate-100 px-1 py-0.5 text-xs dark:bg-slate-800">{m}</code
-                        >
-                        <span class="text-xs text-slate-600 dark:text-slate-400"
-                          >{markerHelp(m, "sysvar")}</span
-                        >
-                      </span>
-                    </label>
-                  {/each}
+                <div class="flex flex-col gap-1">
+                  <span>{t("centrals.behavior.sysvar_markers")}</span>
+                  <p class="text-xs text-slate-600 dark:text-slate-400">
+                    {t("centrals.behavior.markers_hint")}
+                  </p>
+                  <div class="flex flex-col gap-1.5">
+                    {#each SYSVAR_MARKERS as m (m)}
+                      <label class="flex items-start gap-2">
+                        <input
+                          type="checkbox"
+                          class="mt-0.5"
+                          checked={fBehavior.sysvarMarkers.includes(m)}
+                          onchange={() =>
+                            (fBehavior.sysvarMarkers = toggleMarker(fBehavior.sysvarMarkers, m))}
+                        />
+                        <span>
+                          <code
+                            class="rounded bg-slate-100 px-1 py-0.5 text-xs dark:bg-slate-800">{m}</code
+                          >
+                          <span class="text-xs text-slate-600 dark:text-slate-400"
+                            >{markerHelp(m, "sysvar")}</span
+                          >
+                        </span>
+                      </label>
+                    {/each}
+                  </div>
                 </div>
-              </div>
+              {/if}
 
-              <div class="flex flex-col gap-1">
-                <span>{t("centrals.behavior.program_markers")}</span>
-                <p class="text-xs text-slate-600 dark:text-slate-400">
-                  {t("centrals.behavior.markers_hint")}
-                </p>
-                <div class="flex flex-col gap-1.5">
-                  {#each PROGRAM_MARKERS as m (m)}
-                    <label class="flex items-start gap-2">
-                      <input
-                        type="checkbox"
-                        class="mt-0.5"
-                        checked={fBehavior.programMarkers.includes(m)}
-                        onchange={() =>
-                          (fBehavior.programMarkers = toggleMarker(fBehavior.programMarkers, m))}
-                      />
-                      <span>
-                        <code
-                          class="rounded bg-slate-100 px-1 py-0.5 text-xs dark:bg-slate-800">{m}</code
-                        >
-                        <span class="text-xs text-slate-600 dark:text-slate-400"
-                          >{markerHelp(m, "program")}</span
-                        >
-                      </span>
-                    </label>
-                  {/each}
+              {#if programsOffered}
+                <div class="flex flex-col gap-1">
+                  <span>{t("centrals.behavior.program_markers")}</span>
+                  <p class="text-xs text-slate-600 dark:text-slate-400">
+                    {t("centrals.behavior.markers_hint")}
+                  </p>
+                  <div class="flex flex-col gap-1.5">
+                    {#each PROGRAM_MARKERS as m (m)}
+                      <label class="flex items-start gap-2">
+                        <input
+                          type="checkbox"
+                          class="mt-0.5"
+                          checked={fBehavior.programMarkers.includes(m)}
+                          onchange={() =>
+                            (fBehavior.programMarkers = toggleMarker(fBehavior.programMarkers, m))}
+                        />
+                        <span>
+                          <code
+                            class="rounded bg-slate-100 px-1 py-0.5 text-xs dark:bg-slate-800">{m}</code
+                          >
+                          <span class="text-xs text-slate-600 dark:text-slate-400"
+                            >{markerHelp(m, "program")}</span
+                          >
+                        </span>
+                      </label>
+                    {/each}
+                  </div>
                 </div>
-              </div>
+              {/if}
             </div>
           {/if}
         </div>

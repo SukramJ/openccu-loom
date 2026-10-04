@@ -6,6 +6,10 @@ const mockListCentrals = vi.fn();
 const mockUpdateCentral = vi.fn();
 const mockCreateCentral = vi.fn();
 const fleetFeatures: Record<string, { available: boolean; reason?: string; scope?: string }> = {};
+// The fleet centralsLacking answers from, with the real store's rule: only a
+// lasting reason counts, a booting CCU ("not_ready") does not.
+type FleetEntry = { name: string; features: Record<string, { available: boolean; reason?: string }> };
+let fleet: FleetEntry[] = [];
 
 vi.mock("$lib/api/client", () => ({
   api: {
@@ -37,7 +41,11 @@ vi.mock("$lib/stores/centrals.svelte", () => ({
     items: [],
     offers: () => true,
     featureAvailable: () => true,
-    centralsLacking: () => [],
+    centralsLacking: (key: string) =>
+      fleet.filter((c) => {
+        const f = c.features[key];
+        return f !== undefined && !f.available && f.reason !== "not_ready";
+      }),
     featureOf: () => undefined,
     byName: (n: string) => (n === "box" ? { name: "box", system_type: "openccu-lite", features: fleetFeatures } : undefined),
   },
@@ -99,6 +107,7 @@ describe("CentralsAdmin — openccu-lite central", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     for (const k of Object.keys(fleetFeatures)) delete fleetFeatures[k];
+    fleet = [];
     mockUpdateCentral.mockResolvedValue(undefined);
     mockListCentrals.mockResolvedValue([{ ...liteRow }]);
   });
@@ -125,6 +134,18 @@ describe("CentralsAdmin — openccu-lite central", () => {
     expect(JSON.stringify(sent)).not.toContain("***");
   });
 
+  it("does not offer the port field and keeps a stored port on save", async () => {
+    mockListCentrals.mockResolvedValue([{ ...liteRow, json_rpc_port: 8443 }]);
+    const { container, queryByText } = render(CentralsAdmin);
+    await openEdit(container);
+
+    expect(queryByText("centrals.field.json_rpc_port")).toBeNull();
+
+    await fireEvent.click(button(container, "common.save")!);
+    await waitFor(() => expect(mockUpdateCentral).toHaveBeenCalledOnce());
+    expect(mockUpdateCentral.mock.calls[0][1].json_rpc_port).toBe(8443);
+  });
+
   it("sends a pasted token", async () => {
     const { container, getByText } = render(CentralsAdmin);
     await openEdit(container);
@@ -149,5 +170,143 @@ describe("CentralsAdmin — openccu-lite central", () => {
     expect(list?.textContent).toContain("system.reboot");
     expect(list?.textContent).toContain("system.poweroff");
     expect(list?.textContent).not.toContain("hub.programs");
+  });
+});
+
+// The seven controls that only mean something on a system with ReGa
+// variables and programs.
+const SYSVAR_PROGRAM_CONTROLS = [
+  "centrals.behavior.enable_sysvar_scan",
+  "centrals.behavior.include_internal_sysvars",
+  "centrals.behavior.sysvar_scan_interval",
+  "centrals.behavior.sysvar_markers",
+  "centrals.behavior.enable_program_scan",
+  "centrals.behavior.include_internal_programs",
+  "centrals.behavior.program_markers",
+];
+
+const ccuRow = {
+  name: "prod-ccu",
+  host: "192.168.1.10",
+  enabled: true,
+  interfaces: [{ name: "HmIP-RF", port: 2010 }],
+  primary_interface: "HmIP-RF",
+};
+
+// Every field set away from its form default, so a value the form dropped
+// or reset on save shows up as a difference.
+const storedBehavior = {
+  light_last_brightness: false,
+  use_group_channel_for_cover_state: false,
+  enable_sysvar_scan: false,
+  enable_program_scan: false,
+  include_internal_sysvars: false,
+  include_internal_programs: true,
+  enable_device_firmware_check: false,
+  delay_new_device_creation: true,
+  sysvar_markers: ["HAHM"],
+  program_markers: ["INTERNAL"],
+  sysvar_scan_interval: 30_000_000_000,
+};
+
+async function openBehaviour(container: HTMLElement) {
+  await openEdit(container);
+  const toggle = Array.from(container.querySelectorAll("button")).find((b) =>
+    b.textContent?.includes("centrals.behavior.title"),
+  );
+  if (!toggle) throw new Error("behaviour section toggle not found");
+  await fireEvent.click(toggle);
+  await waitFor(() => {
+    if (!container.textContent?.includes("centrals.behavior.light_last_brightness")) {
+      throw new Error("behaviour section did not open");
+    }
+  });
+}
+
+describe("CentralsAdmin — sysvar and program behaviour controls", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fleet = [];
+    mockUpdateCentral.mockResolvedValue(undefined);
+  });
+
+  it("hides them for an openccu-lite central and saves the stored values unchanged", async () => {
+    fleet = [
+      {
+        name: "box",
+        features: {
+          "hub.sysvars": { available: false, reason: "not_supported_by_system" },
+          "hub.programs": { available: false, reason: "not_supported_by_system" },
+        },
+      },
+    ];
+    mockListCentrals.mockResolvedValue([{ ...liteRow, behavior: { ...storedBehavior } }]);
+    const { container } = render(CentralsAdmin);
+    await openBehaviour(container);
+
+    for (const key of SYSVAR_PROGRAM_CONTROLS) {
+      expect(container.textContent, key).not.toContain(key);
+    }
+    // The device-pipeline toggles apply to openccu-lite too.
+    expect(container.textContent).toContain("centrals.behavior.light_last_brightness");
+    expect(container.textContent).toContain("centrals.behavior.enable_device_firmware_check");
+
+    await fireEvent.click(button(container, "common.save")!);
+    await waitFor(() => expect(mockUpdateCentral).toHaveBeenCalledOnce());
+    expect(mockUpdateCentral.mock.calls[0][1].behavior).toEqual(storedBehavior);
+  });
+
+  it("shows them for a CCU central", async () => {
+    fleet = [
+      { name: "prod-ccu", features: { "hub.sysvars": { available: true }, "hub.programs": { available: true } } },
+    ];
+    mockListCentrals.mockResolvedValue([{ ...ccuRow }]);
+    const { container } = render(CentralsAdmin);
+    await openBehaviour(container);
+
+    for (const key of SYSVAR_PROGRAM_CONTROLS) {
+      expect(container.textContent, key).toContain(key);
+    }
+    expect(container.textContent).toContain("centrals.field.json_rpc_port");
+  });
+
+  it("shows them for a CCU that is still booting", async () => {
+    fleet = [
+      {
+        name: "prod-ccu",
+        features: {
+          "hub.sysvars": { available: false, reason: "not_ready" },
+          "hub.programs": { available: false, reason: "not_ready" },
+        },
+      },
+    ];
+    mockListCentrals.mockResolvedValue([{ ...ccuRow }]);
+    const { container } = render(CentralsAdmin);
+    await openBehaviour(container);
+
+    for (const key of SYSVAR_PROGRAM_CONTROLS) {
+      expect(container.textContent, key).toContain(key);
+    }
+  });
+
+  it("hides only the program controls for a central that reports programs absent", async () => {
+    fleet = [
+      {
+        name: "prod-ccu",
+        features: {
+          "hub.sysvars": { available: true },
+          "hub.programs": { available: false, reason: "not_supported_by_system" },
+        },
+      },
+    ];
+    mockListCentrals.mockResolvedValue([{ ...ccuRow }]);
+    const { container } = render(CentralsAdmin);
+    await openBehaviour(container);
+
+    expect(container.textContent).toContain("centrals.behavior.enable_sysvar_scan");
+    expect(container.textContent).toContain("centrals.behavior.sysvar_markers");
+    expect(container.textContent).not.toContain("centrals.behavior.enable_program_scan");
+    expect(container.textContent).not.toContain("centrals.behavior.include_internal_programs");
+    expect(container.textContent).not.toContain("centrals.behavior.program_markers");
   });
 });
