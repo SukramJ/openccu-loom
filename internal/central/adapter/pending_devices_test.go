@@ -38,6 +38,7 @@ func TestDeferredDeviceReachesTheInboxBroadcast(t *testing.T) {
 	h := NewCallbackHandlers(cu, nil)
 	defer h.Stop()
 	h.SetDelayNewDeviceCreation(true)
+	takeStock(h, "HmIP-RF")
 	if err := h.NewDevices(context.Background(), "HmIP-RF", newDeviceDescs()); err != nil {
 		t.Fatalf("NewDevices: %v", err)
 	}

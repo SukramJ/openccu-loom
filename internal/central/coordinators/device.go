@@ -61,7 +61,7 @@ type DeviceCoordinator struct {
 	logger   *slog.Logger
 	recorder observability.Recorder
 
-	// mu guards delayedDescs and parked, below.
+	// mu guards delayedDescs, parked, unreleased and baselined, below.
 	//
 	// delayedDescs stores device descriptions that have been announced
 	// (newDevices callback) but not yet accepted, keyed by interface →
@@ -88,6 +88,15 @@ type DeviceCoordinator struct {
 	// existing installation is released and nothing disappears from
 	// Home Assistant or a Matter controller on upgrade.
 	unreleased map[string]map[string]struct{}
+	// baselined holds the interfaces whose inventory this process has
+	// taken stock of: a pull of it succeeded, or an announcement built it
+	// because no stock had been taken yet. A hold starts only on a
+	// baselined interface. Before that the daemon cannot tell its own
+	// fleet from a pairing — after a failed boot pull the fleet first
+	// arrives as the system's re-announcement — and parking would present
+	// the whole interface as waiting to be accepted. In memory only: every
+	// process takes stock again, through its own bring-up.
+	baselined map[string]struct{}
 
 	// pending persists the parked set. Nil leaves the queue in-memory
 	// only — the pre-0.65.4 behaviour, still the shape every test that
@@ -131,6 +140,7 @@ func NewDeviceCoordinator(
 		delayedDescs: make(map[string]map[string][]hmproto.DeviceDescription),
 		parked:       make(map[string]map[string]struct{}),
 		unreleased:   make(map[string]map[string]struct{}),
+		baselined:    make(map[string]struct{}),
 	}
 }
 
@@ -254,6 +264,50 @@ func (c *DeviceCoordinator) IsParked(iface hmtypes.WireInterfaceID, address stri
 	}
 	_, parked := set[address]
 	return parked
+}
+
+// InventoryBaselined reports whether this process has taken stock of the
+// interface's inventory, the precondition for holding a device announced
+// on it. See the baselined field.
+func (c *DeviceCoordinator) InventoryBaselined(iface hmtypes.WireInterfaceID) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	_, ok := c.baselined[string(iface)]
+	return ok
+}
+
+// MarkInventoryBaselined records that the interface's inventory has been
+// taken stock of: from now on an unknown device announced on it is held
+// while deferred creation is on.
+func (c *DeviceCoordinator) MarkInventoryBaselined(iface hmtypes.WireInterfaceID) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.baselined == nil {
+		c.baselined = make(map[string]struct{})
+	}
+	c.baselined[string(iface)] = struct{}{}
+}
+
+// SplitParked separates the descriptions whose device root is parked from
+// the rest. Channels follow their root, so a held device is never half
+// built.
+func (c *DeviceCoordinator) SplitParked(iface hmtypes.WireInterfaceID, descs []hmproto.DeviceDescription) (keep, held []hmproto.DeviceDescription) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	set := c.parked[string(iface)]
+	keep = make([]hmproto.DeviceDescription, 0, len(descs))
+	for i := range descs {
+		root := descs[i].Parent
+		if root == "" {
+			root = descs[i].Address
+		}
+		if _, ok := set[root]; ok {
+			held = append(held, descs[i])
+			continue
+		}
+		keep = append(keep, descs[i])
+	}
+	return keep, held
 }
 
 // ParkedAddresses returns the held-back addresses of one interface.

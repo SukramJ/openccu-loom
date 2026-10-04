@@ -595,7 +595,31 @@ func (h *CallbackHandlers) ingestDescriptions(interfaceID string, descriptions [
 		return
 	}
 	iface := hmtypes.ParseWireInterfaceID(interfaceID)
-	if h.delayNewDeviceCreation.Load() {
+	// A hold needs a baseline: until this process has taken stock of the
+	// interface's inventory, an announcement may be the fleet itself — the
+	// re-announcement after a reconnect is how the devices arrive when the
+	// boot pull failed — so it is built, and building it takes the stock.
+	// Devices an operator has not accepted yet stay held.
+	hold := h.delayNewDeviceCreation.Load()
+	baselined := h.unit.Devices.InventoryBaselined(iface)
+	if hold && !baselined {
+		var held []hmproto.DeviceDescription
+		descriptions, held = h.unit.Devices.SplitParked(iface, descriptions)
+		if len(held) > 0 {
+			//nolint:contextcheck // the queue's SQLite write outlives the callback, as for the park below
+			h.unit.Devices.StoreDelayedDeviceDescriptions(h.ctx, iface, held)
+			PublishPendingDevices(h.unit)
+		}
+		h.logger.Info("callback.new_devices.baseline",
+			slog.String("interface", interfaceID),
+			slog.Int("count", len(descriptions)),
+			slog.Int("held", len(held)),
+			slog.String("detail", "no inventory taken on this interface yet; building, not holding"))
+		if len(descriptions) == 0 {
+			return
+		}
+	}
+	if hold && baselined {
 		// Defer entity creation: the device waits on the inbox surface
 		// until an operator accepts it. The inbox is only
 		// filled here because the accept flow is the sole path that
@@ -621,6 +645,8 @@ func (h *CallbackHandlers) ingestDescriptions(interfaceID string, descriptions [
 			h.logger.Warn("callback.new_devices.ingest_failed",
 				slog.String("interface", interfaceID),
 				slog.String("err", err.Error()))
+		} else if !baselined {
+			h.unit.Devices.MarkInventoryBaselined(iface)
 		}
 		// Registry + description-cache bookkeeping and the (at-least-once)
 		// DeviceCreatedEvent — after materialisation, see doc comment.

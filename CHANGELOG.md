@@ -66,6 +66,22 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `internal_error`. Other removal failures are shown as a translated
   message instead of the raw `API 502 /devices/…` text. REST API 13.6.0:
   404 is declared on these routes; nothing else changes on the wire.
+- **New-device hold: no device is missed and no fleet is held by
+  mistake.** Two gaps around the new default hold are closed:
+  - On an openccu-lite box, a device paired while the box was still
+    coming up stayed invisible — neither under New devices nor in the
+    device list — until the next stream reconnect or daemon restart. The
+    daemon reads the box's device list as soon as the box answers, but its
+    event stream can attach a few seconds later, and a pairing in between
+    was never announced. The daemon now re-reads the device list once the
+    stream is attached, so such a device is listed under New devices.
+  - When the daemon could not read an interface's device list at startup
+    (CCU or openccu-lite), the interface recovered later with all of its
+    devices listed under New devices as waiting to be accepted instead of
+    being built. A device is now held only on an interface whose device
+    list the daemon has already read; until then the devices are built, and
+    pairings after that are held as usual. Devices already waiting to be
+    accepted stay waiting.
 
 ## [0.87.0] - 2026-10-04
 
