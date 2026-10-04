@@ -17,6 +17,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // fakeOperations is a minimal backends.Operations stub. Every method
@@ -346,13 +347,13 @@ func TestUnpairDeviceHappyPath(t *testing.T) {
 	}
 }
 
-func TestUnpairDeviceUnknownDeviceReturnsErrNoDeviceBackend(t *testing.T) {
+func TestUnpairDeviceUnknownDeviceReturnsErrDeviceNotFound(t *testing.T) {
 	t.Parallel()
 	domain, _, _, _ := buildUnpairFixture(t, nil)
 
 	err := domain.UnpairDevice(context.Background(), "UNKNOWN", false, false)
-	if !errors.Is(err, ErrNoDeviceBackend) {
-		t.Fatalf("expected ErrNoDeviceBackend, got %v", err)
+	if !errors.Is(err, interfaces.ErrDeviceNotFound) {
+		t.Fatalf("expected interfaces.ErrDeviceNotFound, got %v", err)
 	}
 }
 

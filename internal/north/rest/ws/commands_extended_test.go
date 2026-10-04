@@ -626,6 +626,33 @@ func TestExtendedDeviceReplace(t *testing.T) {
 	}
 }
 
+// TestExtendedDeviceCommandAnswersAnUnknownDeviceWithNotFound pins the
+// WebSocket twin of the REST 404: a device-admin command naming an address
+// no central's model holds answers `not_found`, so a client can drop its
+// stale view instead of retrying an internal error. The upstream failure
+// is the negative control and stays `internal_error`.
+func TestExtendedDeviceCommandAnswersAnUnknownDeviceWithNotFound(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"unknown device", fmt.Errorf("%w: old device OLD001", interfaces.ErrDeviceNotFound), CommandErrorNotFound},
+		{"upstream failure", errors.New("CCU refused"), CommandErrorInternal},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r, devs, _, _, _, _ := newRouterWithExtended()
+			devs.replaceErr = tc.err
+			raw, _ := json.Marshal(map[string]any{"address": "NEW001", "old_address": "OLD001"})
+			res := r.Dispatch(ctxForCommand("device.replace"), "device.replace", raw)
+			if res.Error == nil || res.Error.Code != tc.want {
+				t.Fatalf("got %+v, want code %q", res.Error, tc.want)
+			}
+		})
+	}
+}
+
 func TestExtendedParamsetPut(t *testing.T) {
 	r, _, pw, _, _, _ := newRouterWithExtended()
 	dispatch(t, r, "paramset.put", map[string]any{

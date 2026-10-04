@@ -31,7 +31,8 @@ type DeviceAdmin = interfaces.DeviceAdmin
 // `reset` and `force` map onto the CCU delete bitmask: reset factory-resets
 // the device during removal, force removes an unreachable device even when the
 // CCU cannot complete the handshake. A backend without a pairing concept
-// (CUxD) surfaces [backends.ErrUnsupported] and becomes 422.
+// (CUxD) surfaces [backends.ErrUnsupported] and becomes 422; an address no
+// central holds becomes 404 through [writeServerError].
 func DeleteDevice(admin DeviceAdmin) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if admin == nil {

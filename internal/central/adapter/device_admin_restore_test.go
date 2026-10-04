@@ -14,6 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // restoreRecordingOperations wraps fakeOperations (defined in
@@ -132,16 +133,16 @@ func TestRestoreDeviceConfigCUxDRejectedBeforeWireCall(t *testing.T) {
 	}
 }
 
-// TestRestoreDeviceConfigUnknownDeviceReturnsErrNoDeviceBackend verifies an
+// TestRestoreDeviceConfigUnknownDeviceReturnsErrDeviceNotFound verifies an
 // address absent from every central's ModelRegistry surfaces
-// ErrNoDeviceBackend rather than a nil-pointer panic or a silent no-op.
-func TestRestoreDeviceConfigUnknownDeviceReturnsErrNoDeviceBackend(t *testing.T) {
+// interfaces.ErrDeviceNotFound rather than a nil-pointer panic or a silent no-op.
+func TestRestoreDeviceConfigUnknownDeviceReturnsErrDeviceNotFound(t *testing.T) {
 	t.Parallel()
 	domain, _ := buildRestoreFixture(t, hmenum.InterfaceHmIPRF, nil)
 
 	err := domain.RestoreDeviceConfig(context.Background(), "UNKNOWN")
-	if !errors.Is(err, ErrNoDeviceBackend) {
-		t.Fatalf("expected ErrNoDeviceBackend, got %v", err)
+	if !errors.Is(err, interfaces.ErrDeviceNotFound) {
+		t.Fatalf("expected interfaces.ErrDeviceNotFound, got %v", err)
 	}
 }
 

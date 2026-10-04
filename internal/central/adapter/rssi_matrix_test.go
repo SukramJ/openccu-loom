@@ -382,8 +382,8 @@ func TestAssignRFInterfaceBidCosRFCallsBackend(t *testing.T) {
 	if err := d.AssignRFInterface(context.Background(), "DEV", "GW2", false); !errors.Is(err, fake.assignErr) {
 		t.Fatalf("expected backend fault, got %v", err)
 	}
-	if err := d.AssignRFInterface(context.Background(), "UNKNOWN", "GW2", false); !errors.Is(err, ErrNoDeviceBackend) {
-		t.Fatalf("unknown device: expected ErrNoDeviceBackend, got %v", err)
+	if err := d.AssignRFInterface(context.Background(), "UNKNOWN", "GW2", false); !errors.Is(err, interfaces.ErrDeviceNotFound) {
+		t.Fatalf("unknown device: expected interfaces.ErrDeviceNotFound, got %v", err)
 	}
 }
 

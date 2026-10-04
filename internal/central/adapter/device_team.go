@@ -13,6 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // SetChannelTeam assigns a channel to a team channel via the CCU's
@@ -101,5 +102,5 @@ func (a *DeviceAdminDomain) resolveTeamUnit(deviceAddr string) (*central.Unit, *
 		}
 		return u, dev, nil
 	}
-	return nil, nil, fmt.Errorf("%w: device %s", ErrNoDeviceBackend, deviceAddr)
+	return nil, nil, fmt.Errorf("%w: %s", interfaces.ErrDeviceNotFound, deviceAddr)
 }

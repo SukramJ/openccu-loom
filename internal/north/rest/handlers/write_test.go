@@ -5,13 +5,17 @@ package handlers
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // TestDecodeJSONRejectsOversizedBody verifies that DecodeJSON refuses request
@@ -159,5 +163,55 @@ func TestWriteServerErrorOmitsRawErrorFromBody(t *testing.T) {
 	}
 	if !strings.Contains(body, "Widget query failed") {
 		t.Errorf("expected the generic title in the body, got %s", body)
+	}
+}
+
+// TestWriteServerErrorAnswersAnUnknownDeviceWithNotFound pins the one place
+// every device-admin handler funnels its failures through: an address no
+// central's model holds is the caller's stale input, so it is answered 404
+// naming the address and is not logged as a server fault. The ordinary
+// error alongside is the negative control — it keeps the caller's status
+// and is logged.
+func TestWriteServerErrorAnswersAnUnknownDeviceWithNotFound(t *testing.T) {
+	var buf bytes.Buffer
+	old := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	defer slog.SetDefault(old)
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/devices/00109709B1381B", http.NoBody)
+	w := httptest.NewRecorder()
+	unknown := fmt.Errorf("%w: 00109709B1381B", interfaces.ErrDeviceNotFound)
+	writeServerError(w, req, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Unpair failed (unknown)", unknown)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d body=%s", w.Code, w.Body.String())
+	}
+	var body struct {
+		Code   string `json:"code"`
+		Title  string `json:"title"`
+		Detail string `json:"detail"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode problem: %v body=%s", err, w.Body.String())
+	}
+	if body.Code != string(problem.TypeNotFound) || body.Title != "Device not found" {
+		t.Errorf("problem code=%q title=%q, want %q / Device not found", body.Code, body.Title, problem.TypeNotFound)
+	}
+	if !strings.Contains(body.Detail, "00109709B1381B") {
+		t.Errorf("detail %q does not name the address", body.Detail)
+	}
+	if strings.Contains(buf.String(), "Unpair failed (unknown)") {
+		t.Errorf("an unknown device was logged as a server fault: %s", buf.String())
+	}
+
+	// Negative control: an ordinary failure keeps the caller's status and
+	// is logged as the server fault it is.
+	w = httptest.NewRecorder()
+	writeServerError(w, req, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Unpair failed (upstream)", errors.New("CCU refused"))
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("ordinary error: expected 502, got %d", w.Code)
+	}
+	if !strings.Contains(buf.String(), "Unpair failed (upstream)") || !strings.Contains(buf.String(), "level=ERROR") {
+		t.Errorf("ordinary error was not logged at error level: %s", buf.String())
 	}
 }

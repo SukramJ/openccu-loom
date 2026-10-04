@@ -6,6 +6,22 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Removing a device that is already gone no longer reports a gateway
+  error.** When the daemon no longer held the device, for instance because
+  it had been removed a moment earlier, the removal answered 502 "Unpair failed"
+  although no request ever reached the CCU. It answers 404 "Device not
+  found" now, and the device page says the device had already been
+  removed and returns to the refreshed device list. Every other device
+  action (rename, rooms and functions, firmware update, configuration
+  restore and cache clear, RF interface, team, replace, communication
+  test, pairing window) answers 404 the same way for an unknown device,
+  and the matching WebSocket commands answer `not_found` instead of
+  `internal_error`. Other removal failures are shown as a translated
+  message instead of the raw `API 502 /devices/…` text. REST API 13.6.0:
+  404 is declared on these routes; nothing else changes on the wire.
+
 ## [0.87.0] - 2026-10-04
 
 ### Release summary

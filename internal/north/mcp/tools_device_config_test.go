@@ -5,7 +5,11 @@ package mcp_test
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
+
+	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/auth"
@@ -30,12 +34,16 @@ func (f *fakeConfigRepairTool) RepairDeviceConfig(
 	return f.outcomes, nil
 }
 
-// fakeConfigCache records the addresses it was asked to clear.
-type fakeConfigCache struct{ cleared []string }
+// fakeConfigCache records the addresses it was asked to clear and answers
+// err when set.
+type fakeConfigCache struct {
+	cleared []string
+	err     error
+}
 
 func (f *fakeConfigCache) ClearConfigCache(_ context.Context, address string) error {
 	f.cleared = append(f.cleared, address)
-	return nil
+	return f.err
 }
 
 func deviceConfigDeps(repair *fakeConfigRepairTool, cache *fakeConfigCache, rec audit.Recorder) mcp.Deps {
@@ -124,5 +132,36 @@ func TestClearDeviceConfigCacheToolRecordsAudit(t *testing.T) {
 	if len(rows) != 1 || rows[0].User != "admin" || rows[0].DeviceAddress != "ADDR001" ||
 		rows[0].Action != audit.ActionDeviceConfigCacheClear {
 		t.Fatalf("audit rows=%+v", rows)
+	}
+}
+
+// TestClearDeviceConfigCacheToolReportsAnUnknownDeviceAsNotFound pins what
+// an MCP client sees for a device that is gone from the daemon's model:
+// MCP tools carry no error code, so the not-found answer is the tool error
+// whose text says so and names the address — not a "no backend" text that
+// reads like an unreachable CCU. No change-log row is written for a clear
+// that never happened.
+func TestClearDeviceConfigCacheToolReportsAnUnknownDeviceAsNotFound(t *testing.T) {
+	cache := &fakeConfigCache{err: fmt.Errorf("%w: GONE000000001", interfaces.ErrDeviceNotFound)}
+	buf := audit.NewBuffer(4)
+	cs := serveMCPAs(t, auth.Identity{Subject: "admin", Role: auth.RoleAdmin, Scheme: auth.SchemeBasic},
+		deviceConfigDeps(&fakeConfigRepairTool{}, cache, buf))
+
+	res := callTool(t, cs, "clear_device_config_cache", map[string]any{"address": "GONE000000001"})
+	if !res.IsError {
+		t.Fatal("an unknown device was reported as cleared")
+	}
+	var b strings.Builder
+	for _, c := range res.Content {
+		if tc, ok := c.(*mcpsdk.TextContent); ok {
+			b.WriteString(tc.Text)
+		}
+	}
+	text := b.String()
+	if !strings.Contains(text, "device not found") || !strings.Contains(text, "GONE000000001") {
+		t.Fatalf("tool error %q does not say the device was not found", text)
+	}
+	if rows := buf.List(4); len(rows) != 0 {
+		t.Fatalf("audit rows for a failed clear: %+v", rows)
 	}
 }

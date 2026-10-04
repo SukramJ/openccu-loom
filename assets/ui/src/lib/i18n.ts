@@ -2626,6 +2626,7 @@ const EN: Catalog = {
   "device.confirm_firmware":
     'Trigger firmware update for "{name}"? The device will be briefly unreachable during the update.',
   "device.removed": "Device removed.",
+  "device.already_removed": "The device had already been removed.",
   "device.renamed": "Device renamed.",
   "device.rename_include_channels": "Rename channels along",
   "channel.rename": "Rename channel",
@@ -6951,6 +6952,7 @@ const DE: Catalog = {
   "device.confirm_firmware":
     'Firmware-Update für "{name}" jetzt anstoßen? Das Gerät bleibt während des Updates kurzzeitig nicht erreichbar.',
   "device.removed": "Gerät entfernt.",
+  "device.already_removed": "Das Gerät war bereits entfernt.",
   "device.renamed": "Gerät umbenannt.",
   "device.rename_include_channels": "Kanäle mitbenennen",
   "channel.rename": "Kanal umbenennen",

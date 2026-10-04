@@ -15,6 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmreqctx"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // writeCommandRoles is the single source of truth for the minimum role a
@@ -333,6 +334,11 @@ const (
 // fault (CommandErrorInternal), which the wire contract's error.code
 // exists to carry.
 func classifyDomainErrorCode(err error) string {
+	// The device-admin domain names an unknown device by sentinel; matching
+	// it directly keeps that answer independent of how the text is phrased.
+	if errors.Is(err, interfaces.ErrDeviceNotFound) {
+		return CommandErrorNotFound
+	}
 	if strings.Contains(strings.ToLower(err.Error()), "not found") {
 		return CommandErrorNotFound
 	}

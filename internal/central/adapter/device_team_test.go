@@ -15,6 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // teamRecordingOperations wraps fakeOperations with controllable
@@ -97,12 +98,12 @@ func TestSetChannelTeam_IneligibleInterfaceRejectedBeforeWireCall(t *testing.T) 
 	}
 }
 
-func TestSetChannelTeam_UnknownDeviceReturnsErrNoDeviceBackend(t *testing.T) {
+func TestSetChannelTeam_UnknownDeviceReturnsErrDeviceNotFound(t *testing.T) {
 	t.Parallel()
 	fake := &teamRecordingOperations{fakeOperations: &fakeOperations{kind: backends.KindCCU}}
 	domain := teamDomainWith(t, hmenum.InterfaceBidCosRF, fake)
-	if err := domain.SetChannelTeam(context.Background(), "UNKNOWN", 1, "TEAM:2"); !errors.Is(err, ErrNoDeviceBackend) {
-		t.Fatalf("expected ErrNoDeviceBackend, got %v", err)
+	if err := domain.SetChannelTeam(context.Background(), "UNKNOWN", 1, "TEAM:2"); !errors.Is(err, interfaces.ErrDeviceNotFound) {
+		t.Fatalf("expected interfaces.ErrDeviceNotFound, got %v", err)
 	}
 }
 

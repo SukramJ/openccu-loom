@@ -14,6 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // cacheClearRecordingOperations wraps fakeOperations so the tests can record
@@ -92,13 +93,14 @@ func TestClearConfigCacheUnsupportedInterfacesRejectedBeforeWireCall(t *testing.
 	}
 }
 
-// TestClearConfigCacheUnknownDeviceReturnsErrNoDeviceBackend verifies an
-// address no central models surfaces ErrNoDeviceBackend.
-func TestClearConfigCacheUnknownDeviceReturnsErrNoDeviceBackend(t *testing.T) {
+// TestClearConfigCacheUnknownDeviceReturnsErrDeviceNotFound verifies an
+// address no central models surfaces interfaces.ErrDeviceNotFound, while an
+// unwired domain keeps ErrNoDeviceBackend.
+func TestClearConfigCacheUnknownDeviceReturnsErrDeviceNotFound(t *testing.T) {
 	t.Parallel()
 	domain, _ := buildCacheClearFixture(t, hmenum.InterfaceBidCosRF, nil)
-	if err := domain.ClearConfigCache(context.Background(), "UNKNOWN"); !errors.Is(err, ErrNoDeviceBackend) {
-		t.Fatalf("expected ErrNoDeviceBackend, got %v", err)
+	if err := domain.ClearConfigCache(context.Background(), "UNKNOWN"); !errors.Is(err, interfaces.ErrDeviceNotFound) {
+		t.Fatalf("expected interfaces.ErrDeviceNotFound, got %v", err)
 	}
 	if err := NewDeviceAdminDomain(nil, nil).ClearConfigCache(context.Background(), "0001ABCD"); !errors.Is(err, ErrNoDeviceBackend) {
 		t.Fatalf("unwired: expected ErrNoDeviceBackend, got %v", err)

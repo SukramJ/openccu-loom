@@ -3,7 +3,8 @@
   import { centralStore } from "$lib/stores/centrals.svelte";
   import { onMount, untrack } from "svelte";
   import type { DeviceDetail } from "$lib/api/types";
-  import { api, ApiError } from "$lib/api/client";
+  import { api, ApiError, friendlyError } from "$lib/api/client";
+  import { deviceStore } from "$lib/stores/devices.svelte";
   import ChannelPanel from "$lib/components/channel/ChannelPanel.svelte";
   import ChannelFlagsToggles from "$lib/components/channel/ChannelFlagsToggles.svelte";
   import TeamPicker from "$lib/components/device/TeamPicker.svelte";
@@ -565,7 +566,17 @@
       deleteDialogOpen = false;
       location.hash = "#/devices";
     } catch (err) {
-      toastStore.error(err instanceof Error ? err.message : String(err));
+      if (err instanceof ApiError && err.status === 404) {
+        // The daemon no longer holds the device — another session or the
+        // CCU removed it first. What the operator asked for is already
+        // true, so leave the stale page for a freshly loaded list.
+        toastStore.info(t("device.already_removed"));
+        deleteDialogOpen = false;
+        location.hash = "#/devices";
+        void deviceStore.refresh();
+        return;
+      }
+      toastStore.error(friendlyError(err, t));
     } finally {
       deleting = false;
     }
