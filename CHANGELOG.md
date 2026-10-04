@@ -6,6 +6,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.88.0] - 2026-10-04
+
+### Release summary
+
+Onboarding a device is the same on every system (ADR 0082). **A device
+paired after this upgrade waits for you:** it is listed under "New
+devices" until you accept it, which builds it so it can be named and
+assigned to rooms and functions, and release it, which publishes it to
+MQTT / Home Assistant, Matter and webhooks. The add-device dialog does
+both in one step. Devices you already have are not affected, and the
+hold can be switched off per central. With Home Assistant on the
+openccu-loom backend, a waiting device shows up as a repair issue that
+asks for its name; that needs the matching releases of the Python client
+and the integration. REST API 13.7.1.
+
 ### Changed
 
 - **New devices now wait for you before they reach Home Assistant, Matter
