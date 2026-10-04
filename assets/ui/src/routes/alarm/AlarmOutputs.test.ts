@@ -50,6 +50,15 @@ vi.mock("$lib/api/client", () => ({
   friendlyError: (err: unknown) => (err instanceof Error ? err.message : "error"),
 }));
 
+// The real central store pulls in the auth store, which this file's minimal
+// api-client mock does not satisfy. An empty fleet offers every feature.
+vi.mock("$lib/stores/centrals.svelte", () => ({
+  centralStore: {
+    items: [],
+    centralsLacking: () => [],
+  },
+}));
+
 vi.mock("$lib/stores/toast.svelte", () => ({
   toastStore: { success: vi.fn(), error: vi.fn() },
 }));

@@ -20,6 +20,7 @@
   import AutoTile from "$lib/sensor-actor/AutoTile.svelte";
   import { cdpWidgetFor, hasCdpWidget } from "$lib/cdp/dispatch";
   import { toastStore } from "$lib/stores/toast.svelte";
+  import { centralStore } from "$lib/stores/centrals.svelte";
 
   // Start page: the user's pinned devices and system variables, served
   // from server-side per-user preferences so they follow the operator
@@ -41,7 +42,9 @@
   onMount(() => {
     if (!favoritesStore.loaded) void favoritesStore.load().then(loadTileSources);
     else void loadTileSources();
-    void loadSysvars();
+    // A fleet without system variables (only openccu-lite boxes) has
+    // no variables to load, so the fetch is skipped.
+    if (centralStore.featureAvailable("hub.sysvars")) void loadSysvars();
   });
 
   // Device address behind a favorite: the id itself for a device pin,

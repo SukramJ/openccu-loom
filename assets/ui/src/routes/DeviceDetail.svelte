@@ -470,13 +470,20 @@
   async function loadDeleteDependencies() {
     if (!detail) return;
     const addr = detail.address;
+    // A central without programs for a lasting reason (an openccu-lite box
+    // has no ReGa) has none to reference the device, so the probe is
+    // skipped. A booting CCU reports "not_ready" and is still asked.
+    const central = detail.central;
+    const programsLacking =
+      central !== undefined &&
+      centralStore.centralsLacking("hub.programs").some((c) => c.name === central);
     deleteDepsLoading = true;
     deleteLinkCount = 0;
     deleteProgramNames = [];
     try {
       const [links, programs] = await Promise.all([
         api.listLinks(addr, locale).catch(() => []),
-        api.listPrograms().catch(() => []),
+        programsLacking ? Promise.resolve([]) : api.listPrograms().catch(() => []),
       ]);
       deleteLinkCount = links.length;
       deleteProgramNames = programs
