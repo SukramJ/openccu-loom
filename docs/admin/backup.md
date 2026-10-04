@@ -242,6 +242,12 @@ or store that name rather than deriving one from `id`, which is a storage
 key and carries no firmware version. It is absent for archives taken
 before the field existed — fall back to `<id>.sbk`.
 
+An openccu-lite system with backup encryption switched on serves an
+**encrypted** archive (`.sbk.age`). The daemon stores it as served but
+cannot look inside it, so the structural check a restore and an import
+run is skipped for it, and it is only ever sent to an openccu-lite
+system — see below.
+
 ### Backing up and restoring an openccu-lite system
 
 The same four endpoints work against an openccu-lite central, backed
@@ -252,18 +258,30 @@ by the box's own backup API instead of the CCU's CGI:
   served **encrypted** (`.sbk.age`) when the box owner has turned on
   backup encryption there.
 - `POST /api/v1/backups/{id}/restore` uploads the archive to the box,
-  which checks it before applying anything. An archive that needs the
-  box's **recovery key to decrypt is refused** — this daemon does not
-  hold that key, so an encrypted `.sbk.age` archive restore is **not
-  supported**; restore it directly on the box instead. An archive the
-  box otherwise rejects (wrong hardware, corrupt) is refused the same
-  way. A restore the box accepts reboots it; the central goes through
+  which checks it before applying anything. An **encrypted** `.sbk.age`
+  archive is passed to the box unopened — the daemon never holds its
+  key and cannot inspect it — and the box opens an archive encrypted to
+  its own key itself. The daemon recognises such an archive by its
+  content, not its name, and sends it only to an openccu-lite central;
+  restoring it on a CCU is refused before anything is sent. An archive
+  that needs the box's **recovery key to decrypt is refused** by the box;
+  restore that one directly on the box instead. An archive the box
+  otherwise rejects (wrong hardware, corrupt) is refused the same way.
+- An encrypted archive can also be **imported** (`POST
+  /api/v1/backups/upload`, or **Import…** in the Config UI) while an
+  openccu-lite central is configured; it is stored unopened, listed with
+  an **Encrypted** badge, and the import answers without a firmware
+  version. Without an openccu-lite central the import is refused, because
+  no configured system could restore it. A restore the box accepts reboots it; the central goes through
   its normal "waiting for the system" readiness phase and comes back
   once the box is up again.
 - Both operations need the token scope named in
   [Connecting an openccu-lite system](openccu-lite.md#feature-keys-and-what-they-need)
   (`backup` to create, `power` to restore) and are refused, naming the
-  scope, without contacting the box when it is missing.
+  scope, without contacting the box when it is missing. The Config UI
+  shows the Restore button disabled, with that reason, for a central
+  whose token lacks the scope; it hides it only where the system offers
+  no restore at all.
 
 ### Where the archives are stored
 

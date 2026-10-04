@@ -775,7 +775,10 @@ const EN: Catalog = {
   "backup.upload": "Import…",
   "backup.uploading": "Importing…",
   "backup.upload.help":
-    "Take in a .sbk archive from elsewhere so it can be restored like a local backup. The archive is checked before it is stored.",
+    "Take in a .sbk archive from elsewhere so it can be restored like a local backup. The archive is checked before it is stored. An encrypted openccu-lite backup (.sbk.age) is accepted when an openccu-lite system is configured; it is stored unopened and only that system can restore it.",
+  "backup.encrypted": "Encrypted",
+  "backup.encrypted.help":
+    "Encrypted openccu-lite backup. It can only be restored on the openccu-lite system that holds its key.",
   "backup.uploaded": "Backup {id} imported.",
   "backup.uploaded_with_version":
     "Backup {id} imported (from firmware {version}).",
@@ -5060,7 +5063,10 @@ const DE: Catalog = {
   "backup.upload": "Importieren…",
   "backup.uploading": "Wird importiert…",
   "backup.upload.help":
-    "Ein .sbk-Archiv von anderswo übernehmen, damit es wie ein lokales Backup zurückgespielt werden kann. Das Archiv wird vor dem Speichern geprüft.",
+    "Ein .sbk-Archiv von anderswo übernehmen, damit es wie ein lokales Backup zurückgespielt werden kann. Das Archiv wird vor dem Speichern geprüft. Ein verschlüsseltes openccu-lite-Backup (.sbk.age) wird angenommen, wenn ein openccu-lite-System eingerichtet ist; es wird ungeöffnet gespeichert und kann nur auf diesem System zurückgespielt werden.",
+  "backup.encrypted": "Verschlüsselt",
+  "backup.encrypted.help":
+    "Verschlüsseltes openccu-lite-Backup. Es kann nur auf dem openccu-lite-System zurückgespielt werden, das seinen Schlüssel besitzt.",
   "backup.uploaded": "Backup {id} importiert.",
   "backup.uploaded_with_version":
     "Backup {id} importiert (von Firmware {version}).",

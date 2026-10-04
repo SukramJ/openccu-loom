@@ -16,6 +16,7 @@
   import Select from "$lib/components/ui/Select.svelte";
   import PageShell from "$lib/components/ui/PageShell.svelte";
   import { t } from "$lib/i18n";
+  import { centralFeatureReason, featureName, featureReason } from "$lib/features";
   import { prefs } from "$lib/stores/preferences.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
@@ -60,25 +61,59 @@
       .map((c) => ({ value: c.name, label: c.name })),
   );
 
-  // Centrals that cannot restore for a lasting reason — on an openccu-lite
-  // box restore needs a broader credential scope than create, so a central
-  // can offer one and lack the other. A central that is merely booting
-  // reports "not_ready", is not in this set, and keeps its buttons.
-  const restoreLacking = $derived(
-    new Set(centralStore.centralsLacking("system.backup.restore").map((c) => c.name)),
-  );
-  // Whether any central could take a restore. While the fleet is unknown
-  // the answer is yes, so the actions do not blank during the first paint.
-  const anyCanRestore = $derived(
-    centralStore.items.length === 0 ||
-      centralStore.items.some((c) => !restoreLacking.has(c.name)),
-  );
+  const RESTORE = "system.backup.restore";
 
-  // An archive bound to a central restores there; an uploaded archive has
-  // no central and goes to whichever central the daemon resolves, so it is
-  // restorable as long as any central can restore.
-  function canRestore(entry: BackupEntry): boolean {
-    return entry.central ? !restoreLacking.has(entry.central) : anyCanRestore;
+  // How a restore action is offered. What the system cannot do at all is
+  // hidden — no credential will ever make it work. What only the credential
+  // lacks is shown disabled with the reason, because the operator can fix
+  // that by granting the scope. A central that is merely booting reports
+  // "not_ready" and keeps its buttons, so they do not vanish on a restart.
+  type RestoreAction =
+    | { kind: "enabled" }
+    | { kind: "disabled"; reason: string }
+    | { kind: "hidden" };
+
+  function restoreActionFor(name: string): RestoreAction {
+    const f = centralStore.featureOf(name, RESTORE);
+    if (!f || f.available || f.reason === "not_ready") return { kind: "enabled" };
+    if (f.reason === "missing_scope") {
+      const c = centralStore.byName(name);
+      return {
+        kind: "disabled",
+        reason: t("feature.unavailable", {
+          feature: featureName(RESTORE),
+          central: name,
+          reason: c ? centralFeatureReason(c, RESTORE) : featureReason(f),
+        }),
+      };
+    }
+    return { kind: "hidden" };
+  }
+
+  // The same question over the fleet, for what has no central of its own:
+  // an uploaded archive goes to whichever central the daemon resolves, and
+  // the upload is only good for a restore. Any central that can restore
+  // enables it; otherwise one that lacks only the scope explains why not.
+  // While the fleet is unknown the answer is enabled, so the actions do not
+  // blank during the first paint.
+  const fleetRestore = $derived.by((): RestoreAction => {
+    if (centralStore.items.length === 0) return { kind: "enabled" };
+    const actions = centralStore.items.map((c) => restoreActionFor(c.name));
+    return (
+      actions.find((a) => a.kind === "enabled") ??
+      actions.find((a) => a.kind === "disabled") ?? { kind: "hidden" }
+    );
+  });
+
+  // An archive bound to a central restores there.
+  function restoreAction(entry: BackupEntry): RestoreAction {
+    return entry.central ? restoreActionFor(entry.central) : fleetRestore;
+  }
+
+  // An archive the box served encrypted (".sbk.age"). The daemon cannot
+  // open it; only the openccu-lite system holding its key can restore it.
+  function isEncrypted(entry: BackupEntry): boolean {
+    return (entry.filename ?? "").toLowerCase().endsWith(".age");
   }
 
   async function load() {
@@ -288,13 +323,13 @@
       <input
         bind:this={fileInput}
         type="file"
-        accept=".sbk"
+        accept=".sbk,.age"
         class="hidden"
         onchange={(ev) => void onFilePicked(ev)}
       />
-      <!-- An uploaded archive is only good for a restore, so the upload is
-           offered only while some central can restore. -->
-      {#if anyCanRestore}
+      <!-- An uploaded archive is only good for a restore, so the upload
+           follows the fleet's restore rule. -->
+      {#if fleetRestore.kind === "enabled"}
         <Button
           type="button"
           variant="outline"
@@ -305,6 +340,18 @@
         >
           {uploading ? t("backup.uploading") : t("backup.upload")}
         </Button>
+      {:else if fleetRestore.kind === "disabled"}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled
+          title={fleetRestore.reason}
+          aria-describedby="backup-upload-reason"
+        >
+          {t("backup.upload")}
+        </Button>
+        <span id="backup-upload-reason" class="sr-only">{fleetRestore.reason}</span>
       {/if}
       {#if centralStore.offers(triggerCentral || undefined, "system.backup.create")}
         <Button type="button" size="sm" onclick={() => void trigger()} disabled={triggering}>
@@ -360,6 +407,11 @@
           {#snippet cell(entry, col)}
             {#if col.key === "created"}
               <span class="font-medium">{formatDate(entry.created_at)}</span>
+              {#if isEncrypted(entry)}
+                <Badge variant="warning" class="ml-2" title={t("backup.encrypted.help")}>
+                  {t("backup.encrypted")}
+                </Badge>
+              {/if}
             {:else if col.key === "central"}
               <Badge variant="muted">{entry.central}</Badge>
             {:else if col.key === "size"}
@@ -367,6 +419,7 @@
             {:else if col.key === "id"}
               <span class="font-mono text-xs text-slate-500 dark:text-slate-400">{entry.id}</span>
             {:else if col.key === "action"}
+              {@const action = restoreAction(entry)}
               <div class="flex items-center justify-end gap-2">
                 <a
                   class="text-brand-700 hover:text-brand-800 dark:text-brand-400 dark:hover:text-brand-300"
@@ -375,7 +428,7 @@
                 >
                   {t("backup.download")}
                 </a>
-                {#if canRestore(entry)}
+                {#if action.kind === "enabled"}
                   <Button
                     type="button"
                     variant="outline"
@@ -385,6 +438,21 @@
                   >
                     {restoring === entry.id ? "…" : t("common.restore")}
                   </Button>
+                {:else if action.kind === "disabled"}
+                  <!-- Natively disabled: neither a click nor the keyboard
+                       reaches it, and the reason stays readable for both
+                       pointer (title) and assistive technology. -->
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled
+                    title={action.reason}
+                    aria-describedby={`backup-restore-reason-${entry.id}`}
+                  >
+                    {t("common.restore")}
+                  </Button>
+                  <span id={`backup-restore-reason-${entry.id}`} class="sr-only">{action.reason}</span>
                 {/if}
                 <Button
                   type="button"

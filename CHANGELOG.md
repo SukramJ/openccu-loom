@@ -37,10 +37,27 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **The backup view no longer offers a restore the system would
   refuse.** On an openccu-lite system restoring needs a broader token
   scope than creating a backup; the Restore button is hidden for a
-  central that cannot restore, and the upload with it once no central
-  can.
+  central whose system offers no restore, and the upload with it once no
+  central can restore.
+- **Encrypted openccu-lite backups can be restored and imported.** With
+  backup encryption switched on, an openccu-lite box serves its backup as
+  an encrypted `.sbk.age` file. The daemon stored it, but every restore
+  refused it as "not a CCU system backup" before the box ever saw it, and
+  the import refused it too. Such an archive is now passed to the
+  openccu-lite system unopened — the box opens an archive encrypted to its
+  own key and checks it before applying anything — and can be imported
+  while an openccu-lite central is configured. The backup list marks it
+  **Encrypted**. A CCU never receives one: restoring an encrypted archive
+  there is refused before anything is sent.
 
 ### Changed
+
+- **A restore the token is not allowed to run is shown disabled, with
+  the reason.** When an openccu-lite central's token lacks the scope a
+  restore needs, the backup view keeps the Restore button — and the
+  Import button, when no central could restore an import — visible but
+  disabled, naming the missing scope, instead of hiding it. Granting the
+  scope enables it. What the system cannot do at all stays hidden.
 
 - **The Config UI no longer offers system-variable and program options
   for an openccu-lite central.** Such a system has neither, so the

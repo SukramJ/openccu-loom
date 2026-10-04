@@ -18,10 +18,9 @@ const mockDeleteBackup = vi.fn();
 
 // The real store would pull in the auth store. By default the fleet is
 // empty and offers every feature, so cases not about feature gating are
-// unaffected; the restore-gating cases fill `fleet.items`. centralsLacking
-// applies the same lasting-reason rule as the real store: a feature that is
-// only "not_ready" does not count as lacking.
-type MockFeature = { available: boolean; reason?: string };
+// unaffected; the restore-gating cases fill `fleet.items`. featureOf and
+// byName read the same fleet the way the real store does.
+type MockFeature = { available: boolean; reason?: string; scope?: string };
 type MockCentral = { name: string; features?: Record<string, MockFeature> };
 const fleet = vi.hoisted(() => ({ items: [] as MockCentral[] }));
 
@@ -37,8 +36,9 @@ vi.mock("$lib/stores/centrals.svelte", () => ({
         const f = c.features?.[key];
         return f !== undefined && !f.available && f.reason !== "not_ready";
       }),
-    featureOf: () => undefined,
-    byName: () => undefined,
+    featureOf: (central: string, key: string) =>
+      fleet.items.find((c) => c.name === central)?.features?.[key],
+    byName: (central: string) => fleet.items.find((c) => c.name === central),
   },
 }));
 
@@ -60,8 +60,10 @@ vi.mock("$lib/api/client", () => ({
   },
 }));
 
+// Parameters are rendered so a case can see which reason a message carries.
 vi.mock("$lib/i18n", () => ({
-  t: (key: string, _params?: unknown) => key,
+  t: (key: string, params?: Record<string, string>) =>
+    params ? `${key} ${JSON.stringify(params)}` : key,
 }));
 
 vi.mock("$lib/stores/toast.svelte", () => ({
@@ -273,11 +275,52 @@ const UPLOADED_BACKUP = [
   },
 ];
 
+/** The restore button in the row, or null when it is not rendered. */
+function restoreButton(): HTMLButtonElement | null {
+  return screen.queryByText("common.restore")?.closest("button") ?? null;
+}
+
+/** The upload button, or null when it is not rendered. */
+function uploadButton(): HTMLButtonElement | null {
+  return screen.queryByText("backup.upload")?.closest("button") ?? null;
+}
+
+/** The accessible description a disabled button points at. */
+function describedBy(button: HTMLElement): string {
+  const id = button.getAttribute("aria-describedby");
+  expect(id).toBeTruthy();
+  return document.getElementById(id!)?.textContent ?? "";
+}
+
 describe("BackupList — restore gating", () => {
-  it("hides restore on an archive whose central lacks the restore scope, keeping download", async () => {
+  it("disables restore with the reason on an archive whose central lacks the restore scope", async () => {
     // An openccu-lite credential can carry the create scope without the
-    // restore scope; a restore button there could only fail.
-    fleet.items = [central("alpha", { available: false, reason: "missing_scope" })];
+    // restore scope. The operator can grant it, so the action stays visible
+    // and says why it is not available.
+    fleet.items = [
+      central("alpha", { available: false, reason: "missing_scope", scope: "system:restore" }),
+    ];
+    mockListCentralsV2.mockResolvedValue(ONE_CENTRAL);
+    mockListBackups.mockResolvedValue(ONE_BACKUP);
+    render(BackupList);
+
+    await waitFor(() => {
+      expect(restoreButton()).not.toBeNull();
+    });
+    const button = restoreButton()!;
+    expect(button.disabled).toBe(true);
+    expect(button.title).toContain("feature.unavailable");
+    expect(button.title).toContain("feature.reason.missing_scope");
+    expect(button.title).toContain("system:restore");
+    expect(describedBy(button)).toBe(button.title);
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(mockConfirmAsk).not.toHaveBeenCalled();
+    expect(screen.getByText("backup.download")).toBeInTheDocument();
+    expect(screen.getByText("backup.delete")).toBeInTheDocument();
+  });
+
+  it("hides restore on an archive whose system does not offer it", async () => {
+    fleet.items = [central("alpha", { available: false, reason: "not_supported_by_system" })];
     mockListCentralsV2.mockResolvedValue(ONE_CENTRAL);
     mockListBackups.mockResolvedValue(ONE_BACKUP);
     render(BackupList);
@@ -285,8 +328,8 @@ describe("BackupList — restore gating", () => {
     await waitFor(() => {
       expect(screen.getByText("backup.download")).toBeInTheDocument();
     });
-    expect(screen.queryByText("common.restore")).toBeNull();
-    expect(screen.getByText("backup.delete")).toBeInTheDocument();
+    expect(restoreButton()).toBeNull();
+    expect(uploadButton()).toBeNull();
   });
 
   it("shows restore on an archive whose central offers it", async () => {
@@ -296,29 +339,49 @@ describe("BackupList — restore gating", () => {
     render(BackupList);
 
     await waitFor(() => {
-      expect(screen.getByText("common.restore")).toBeInTheDocument();
+      expect(restoreButton()).not.toBeNull();
     });
+    expect(restoreButton()!.disabled).toBe(false);
   });
 
-  it("keeps restore on an archive whose central is only booting", async () => {
-    // "not_ready" is transient: hiding the button would make it vanish
-    // every time the CCU restarts.
+  it("keeps restore enabled on an archive whose central is only booting", async () => {
+    // "not_ready" is transient: disabling or hiding the button would make
+    // it change every time the CCU restarts.
     fleet.items = [central("alpha", { available: false, reason: "not_ready" })];
     mockListCentralsV2.mockResolvedValue(ONE_CENTRAL);
     mockListBackups.mockResolvedValue(ONE_BACKUP);
     render(BackupList);
 
     await waitFor(() => {
-      expect(screen.getByText("common.restore")).toBeInTheDocument();
+      expect(restoreButton()).not.toBeNull();
     });
+    expect(restoreButton()!.disabled).toBe(false);
   });
 
-  it("hides restore on an uploaded archive and the upload button when no central can restore", async () => {
-    // An uploaded archive has no central of its own and is useful only for
-    // a restore, so with no restoring central both actions are dead ends.
+  it("disables restore of an uploaded archive and the upload when the only restoring central lacks the scope", async () => {
+    // An uploaded archive has no central of its own: with no central able
+    // to restore, both actions say why, as long as a scope would fix it.
     fleet.items = [
-      central("alpha", { available: false, reason: "missing_scope" }),
-      central("beta", { available: false, reason: "unsupported" }),
+      central("alpha", { available: false, reason: "missing_scope", scope: "system:restore" }),
+      central("beta", { available: false, reason: "not_supported_by_system" }),
+    ];
+    mockListCentralsV2.mockResolvedValue(TWO_CENTRALS);
+    mockListBackups.mockResolvedValue(UPLOADED_BACKUP);
+    render(BackupList);
+
+    await waitFor(() => {
+      expect(restoreButton()).not.toBeNull();
+    });
+    expect(restoreButton()!.disabled).toBe(true);
+    expect(describedBy(restoreButton()!)).toContain("system:restore");
+    expect(uploadButton()!.disabled).toBe(true);
+    expect(describedBy(uploadButton()!)).toContain("system:restore");
+  });
+
+  it("hides restore of an uploaded archive and the upload when no central's system offers restore", async () => {
+    fleet.items = [
+      central("alpha", { available: false, reason: "not_supported_by_system" }),
+      central("beta", { available: false, reason: "not_supported_by_system" }),
     ];
     mockListCentralsV2.mockResolvedValue(TWO_CENTRALS);
     mockListBackups.mockResolvedValue(UPLOADED_BACKUP);
@@ -327,8 +390,8 @@ describe("BackupList — restore gating", () => {
     await waitFor(() => {
       expect(screen.getByText("backup.download")).toBeInTheDocument();
     });
-    expect(screen.queryByText("common.restore")).toBeNull();
-    expect(screen.queryByText("backup.upload")).toBeNull();
+    expect(restoreButton()).toBeNull();
+    expect(uploadButton()).toBeNull();
   });
 
   it("offers the upload button and restore of an uploaded archive when one central can restore", async () => {
@@ -341,9 +404,10 @@ describe("BackupList — restore gating", () => {
     render(BackupList);
 
     await waitFor(() => {
-      expect(screen.getByText("common.restore")).toBeInTheDocument();
+      expect(restoreButton()).not.toBeNull();
     });
-    expect(screen.getByText("backup.upload")).toBeInTheDocument();
+    expect(restoreButton()!.disabled).toBe(false);
+    expect(uploadButton()!.disabled).toBe(false);
   });
 
   it("offers the upload button before the fleet has loaded", async () => {
@@ -351,7 +415,46 @@ describe("BackupList — restore gating", () => {
     render(BackupList);
 
     await waitFor(() => {
-      expect(screen.getByText("backup.upload")).toBeInTheDocument();
+      expect(uploadButton()).not.toBeNull();
     });
+    expect(uploadButton()!.disabled).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Encrypted openccu-lite archives
+// ---------------------------------------------------------------------------
+
+describe("BackupList — encrypted archives", () => {
+  it("marks an archive whose name ends in .age as encrypted", async () => {
+    mockListCentralsV2.mockResolvedValue(ONE_CENTRAL);
+    mockListBackups.mockResolvedValue([{ ...ONE_BACKUP[0], filename: "x.sbk.age" }]);
+    render(BackupList);
+
+    await waitFor(() => {
+      expect(screen.getByText("backup.encrypted")).toBeInTheDocument();
+    });
+    expect(screen.getByText("backup.encrypted").getAttribute("title")).toBe("backup.encrypted.help");
+  });
+
+  it("does not mark a plain archive", async () => {
+    mockListCentralsV2.mockResolvedValue(ONE_CENTRAL);
+    mockListBackups.mockResolvedValue([{ ...ONE_BACKUP[0], filename: "x.sbk" }]);
+    render(BackupList);
+
+    await waitFor(() => {
+      expect(screen.getByText("backup.download")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("backup.encrypted")).toBeNull();
+  });
+
+  it("lets the file picker take encrypted archives", async () => {
+    mockListCentralsV2.mockResolvedValue(ONE_CENTRAL);
+    const { container } = render(BackupList);
+    await waitFor(() => {
+      expect(container.querySelector('input[type="file"]')).not.toBeNull();
+    });
+    const accept = container.querySelector('input[type="file"]')!.getAttribute("accept") ?? "";
+    expect(accept.split(",")).toEqual(expect.arrayContaining([".sbk", ".age"]));
   });
 });

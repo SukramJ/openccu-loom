@@ -19,10 +19,18 @@
 // the failure this exists for, which is an operator uploading the wrong
 // file, and it mirrors what the CCU's own restore reads before deciding
 // whether the backup is usable (occu WebUI/www/config/cp_security.cgi).
+//
+// An openccu-lite box whose owner switched backup encryption on serves its
+// archive age-encrypted (".sbk.age"): the tar above, sealed to the box's own
+// key. The daemon never holds that key, so it cannot look inside — it can
+// only recognise the file as encrypted, which [Inspect] reports as
+// [ErrEncrypted], and leave the decision to the box that can open it. The
+// box itself decides by content, not by file name, so the daemon does too.
 package sbk
 
 import (
 	"archive/tar"
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
@@ -54,6 +62,45 @@ const maxFirmwareVersionBytes = 4 << 10
 // common case being a .tar.gz, an image, or a truncated download.
 var ErrNotAnArchive = errors.New("sbk: not a readable tar archive")
 
+// ErrEncrypted reports an age-encrypted archive. It is deliberately not a
+// form of [ErrNotAnArchive]: the file is very likely a genuine backup, just
+// one only the openccu-lite system holding its key can open, so callers
+// decide what to do with it rather than refusing it as the wrong file.
+var ErrEncrypted = errors.New("sbk: archive is encrypted")
+
+// EncryptedSuffix is the filename suffix an encrypted archive carries after
+// [Extension]. It names the file for an operator; detection never relies on
+// it — see [IsEncrypted].
+const EncryptedSuffix = ".age"
+
+// The two forms an age file starts with: the binary header line and the
+// ASCII-armored begin marker. They are the whole detection — nothing past
+// them can be read without the key.
+var encryptedPrefixes = [][]byte{
+	[]byte("age-encryption.org/v1"),
+	[]byte("-----BEGIN AGE ENCRYPTED FILE-----"),
+}
+
+// maxEncryptedPrefixLen is how many leading bytes [IsEncrypted] needs.
+var maxEncryptedPrefixLen = func() int {
+	n := 0
+	for _, p := range encryptedPrefixes {
+		n = max(n, len(p))
+	}
+	return n
+}()
+
+// IsEncrypted reports whether data — the whole archive or at least its
+// leading bytes — starts like an age-encrypted file.
+func IsEncrypted(data []byte) bool {
+	for _, p := range encryptedPrefixes {
+		if bytes.HasPrefix(data, p) {
+			return true
+		}
+	}
+	return false
+}
+
 // ErrIncomplete reports a readable tar that is missing a member the CCU's
 // restore requires.
 var ErrIncomplete = errors.New("sbk: archive is missing a required member")
@@ -76,13 +123,20 @@ type Info struct {
 // found. It reads the archive once and streams it, so the caller's copy is
 // the only full copy in memory.
 //
-// It returns [ErrNotAnArchive] when the input is not a tar, and
-// [ErrIncomplete] when the configuration archive or its signature is
+// It returns [ErrEncrypted] when the input is an age-encrypted archive,
+// [ErrNotAnArchive] when it is not a tar, and [ErrIncomplete] when the configuration archive or its signature is
 // missing. A missing firmware_version is tolerated: older CCU2 backups
 // predate it, and refusing them would be stricter than the CCU itself.
 func Inspect(r io.Reader) (Info, error) {
 	var info Info
-	tr := tar.NewReader(r)
+	br := bufio.NewReader(r)
+	// Peek reports a short read for an input shorter than the prefix; what
+	// it did return is still the input's start, which is all that matters.
+	head, _ := br.Peek(maxEncryptedPrefixLen)
+	if IsEncrypted(head) {
+		return Info{}, ErrEncrypted
+	}
+	tr := tar.NewReader(br)
 	var sawConfig, sawSignature bool
 	for {
 		hdr, err := tr.Next()

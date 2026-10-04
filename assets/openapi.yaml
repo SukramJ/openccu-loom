@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 13.5.3
+  version: 13.5.4
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -4950,6 +4950,14 @@ paths:
         CCU's own restore consults.
 
 
+        An age-encrypted openccu-lite archive (`.sbk.age`, recognised by
+        its content, not its name) cannot be inspected: the daemon never
+        holds the key. It is accepted only when an openccu-lite central is
+        configured, stored unopened, and passed to that system unopened on
+        restore; the response then carries no `firmware_version` or
+        `product`. Without such a central it is refused with 422.
+
+
         Admin-gated and audited. The request body is streamed, not
         schema-validated, because a real archive is far larger than the
         validator's buffer.
@@ -4989,7 +4997,9 @@ paths:
         "422":
           description: >
             Not a CCU system backup — unreadable as a tar, or missing the
-            configuration archive or its signature.
+            configuration archive or its signature — or an encrypted
+            openccu-lite archive while no openccu-lite central is configured
+            to restore it.
         "500":
           $ref: "#/components/responses/InternalError"
         "503":
@@ -5061,7 +5071,12 @@ paths:
             structural inspection that every restore runs first: it is not a
             readable tar, or it is missing `usr_local.tar.gz` or its
             `signature`. The problem detail names which. A damaged archive
-            cannot be repaired; upload an intact one.
+            cannot be repaired; upload an intact one. An age-encrypted
+            openccu-lite archive skips that inspection only when its target
+            is an openccu-lite system, which receives it unopened; any other
+            target refuses it here. The target system may also refuse an
+            archive after checking it, for instance one only its recovery
+            key opens.
         "501":
           description: >
             No restore path is configured, so nothing was sent to the CCU.
