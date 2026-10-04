@@ -13,6 +13,7 @@ import {
   navClusters,
   navSurfaceID,
 } from "./nav";
+import surfacesFixture from "../../tests/e2e/fixtures/ui-surfaces.json";
 
 const ALL_GATES = { matterEnabled: true, historyEnabled: true, isAdmin: true };
 
@@ -157,5 +158,30 @@ describe("nav — feature gates", () => {
     expect(hrefs).not.toContain("#/programs");
     expect(hrefs).not.toContain("#/sysvars");
     expect(hrefs).toContain("#/devices");
+  });
+});
+
+describe("nav — gates as the registry declares them", () => {
+  // The browser suite's surface fixture, which a Go contract test
+  // (TestE2ESurfaceFixtureMatchesRegistry) holds to the daemon's registry:
+  // the gates here are the ones a running daemon serves.
+  const registryGate = (id: string) =>
+    surfacesFixture.surfaces.find((s: { id: string; gate?: string }) => s.id === id)?.gate;
+
+  // An openccu-lite fleet has no CCU inbox, no programs and no system
+  // variables. The new-devices view lists the daemon's own hold, which it
+  // does have (ADR 0082).
+  const LITE_FLEET = (key: string) =>
+    !["hub.inbox", "hub.programs", "hub.sysvars"].includes(key);
+
+  it("offers the new-devices view on a fleet without a CCU inbox", () => {
+    const hrefs = navClusters({
+      ...ALL_GATES,
+      surfaceGate: registryGate,
+      featureAvailable: LITE_FLEET,
+    }).flatMap((c) => c.items.map((i) => i.href));
+    expect(hrefs).toContain("#/inbox");
+    // Control: the registry's per-central gates still apply on that fleet.
+    expect(hrefs).not.toContain("#/programs");
   });
 });

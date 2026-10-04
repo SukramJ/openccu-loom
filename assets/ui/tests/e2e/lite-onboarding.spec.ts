@@ -145,10 +145,12 @@ test.describe('openccu-lite onboarding', () => {
     );
     await page.goto('http://localhost:5173/app/#/devices');
     const nav = page.locator('aside nav');
-    await expect(nav.getByRole('link', { name: 'Devices' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Devices', exact: true })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Programs' })).toHaveCount(0);
     await expect(nav.getByRole('link', { name: 'Variables' })).toHaveCount(0);
-    await expect(nav.getByRole('link', { name: 'Inbox' })).toHaveCount(0);
+    // The new-devices view lists the daemon's own hold, which every system
+    // has; it does not depend on the CCU inbox.
+    await expect(nav.getByRole('link', { name: 'New devices' })).toBeVisible();
 
     // A bookmark still opens the view, which says why it is empty.
     await page.route('**/api/v1/programs*', (route) => route.fulfill({ json: [] }));

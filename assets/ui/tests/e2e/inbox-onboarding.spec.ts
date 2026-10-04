@@ -78,6 +78,54 @@ test.describe('Inbox onboarding states', () => {
     await mockAllApis(page);
   });
 
+  test('the view is named for what it holds', async ({ page }) => {
+    await mockInbox(page, THREE_KINDS);
+    await page.goto('http://localhost:5173/app/#/inbox');
+    await page.waitForSelector('#main');
+    await expect(page.getByRole('heading', { name: 'New devices', level: 1 })).toBeVisible({
+      timeout: 10000,
+    });
+    await expect(page.locator('aside nav').getByRole('link', { name: 'New devices' })).toBeVisible();
+  });
+
+  test('a held device is accepted and released from the view, in that order', async ({ page }) => {
+    await mockInbox(page, THREE_KINDS);
+    const sent: string[] = [];
+    await page.route('**/api/v1/devices/*/accept*', (route) => {
+      sent.push(new URL(route.request().url()).pathname);
+      return route.fulfill({ status: 202 });
+    });
+    await page.route('**/api/v1/devices/*/release*', (route) => {
+      sent.push(new URL(route.request().url()).pathname);
+      return route.fulfill({ status: 204 });
+    });
+    await page.goto('http://localhost:5173/app/#/inbox');
+    await page.waitForSelector('#main');
+
+    const pending = page.getByRole('row').filter({ hasText: '0002PEND' });
+    await pending.getByRole('button', { name: 'Accept' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Accept device' });
+    await expect(dialog.getByRole('button', { name: 'Accept', exact: true })).toBeVisible();
+    await dialog.getByRole('button', { name: 'Accept and release' }).click();
+
+    await expect.poll(() => sent).toEqual([
+      '/api/v1/devices/0002PEND/accept',
+      '/api/v1/devices/0002PEND/release',
+    ]);
+  });
+
+  test('an entry only a CCU inbox holds is accepted without a release', async ({ page }) => {
+    await mockInbox(page, THREE_KINDS);
+    await page.goto('http://localhost:5173/app/#/inbox');
+    await page.waitForSelector('#main');
+
+    const ccu = page.getByRole('row').filter({ hasText: '0001CCU0' });
+    await ccu.getByRole('button', { name: 'Accept' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Accept device' });
+    await expect(dialog.getByRole('button', { name: 'Accept', exact: true })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Accept and release' })).toHaveCount(0);
+  });
+
   test('shows a distinct badge and action per state', async ({ page }) => {
     await mockInbox(page, THREE_KINDS);
     await page.goto('http://localhost:5173/app/#/inbox');

@@ -1051,13 +1051,20 @@ const EN: Catalog = {
   "diagnostics.rpc_recording.stop": "Stop",
   "diagnostics.rpc_recording.started": "RPC recording started.",
   "diagnostics.rpc_recording.stopped": "RPC recording stopped.",
-  "inbox.title": "Inbox",
+  "inbox.title": "New devices",
   "inbox.subtitle":
-    "Devices the CCU saw during pairing but that haven't been accepted yet.",
+    "Newly paired devices wait here until you accept them (they are then built and can be configured) and release them (they then reach Home Assistant, Matter and webhooks). On a CCU, devices in its own inbox are listed too.",
   "inbox.empty":
-    "Inbox empty. Enable pairing mode on the device list to see new candidates.",
+    "No device is waiting. Pair one with “Add device”; it waits here until you accept and release it.",
   "inbox.accept": "Accept",
   "inbox.accepted": "{name} accepted.",
+  "inbox.accept_release": "Accept and release",
+  "inbox.accept_only_title":
+    "Build the device and keep it withheld from Home Assistant, Matter and webhooks until you release it.",
+  "inbox.accepted_released":
+    "{name} accepted and released — it is now available to Home Assistant, Matter and webhooks.",
+  "inbox.release_failed_after_accept":
+    "{name} was accepted but not released ({error}). It is waiting to be released.",
   "inbox.pending_creation_badge": "Awaiting acceptance",
   "inbox.pending_creation_hint":
     "Deferred device creation is enabled: this device exists on the CCU but has no data points here until you accept it.",
@@ -1137,7 +1144,7 @@ const EN: Catalog = {
   "nav.diagrams": "Diagrams",
   "nav.favorites": "Favorites",
   "nav.firmware": "Firmware",
-  "nav.inbox": "Inbox",
+  "nav.inbox": "New devices",
   "nav.fleet": "Fleet",
   "nav.groups": "Groups",
   "nav.links": "Direct links",
@@ -1888,7 +1895,7 @@ const EN: Catalog = {
   "config.help.centrals.check_connection_interval":
     "How often the daemon pings the CCU in the background; zero uses the compiled-in default of 30 s, negative disables the check entirely.",
   "config.help.centrals.behavior.delay_new_device_creation":
-    "Hold a newly-paired device until you accept it in the inbox (it is then built and can be named and configured) and release it (it then reaches MQTT / Home Assistant, Matter and webhooks). Devices already known are never held. Switching it off publishes new devices immediately under their factory name. Default: on.",
+    "Hold a newly-paired device until you accept it under New devices (it is then built and can be named and configured) and release it (it then reaches MQTT / Home Assistant, Matter and webhooks). Devices already known are never held. Switching it off publishes new devices immediately under their factory name. Default: on.",
   "config.help.centrals.behavior.enable_device_firmware_check":
     "Surface a firmware-update entity for every device that reports available firmware; default true.",
   "config.help.centrals.behavior.enable_program_scan":
@@ -2293,7 +2300,7 @@ const EN: Catalog = {
   "surface.desc.nav.alarm": "Arming, zones, sensors and sirens.",
   "surface.desc.nav.security":
     "Smoke, water, tamper and power classes with their fault state.",
-  "surface.desc.nav.inbox": "Devices waiting to be taught in, plus install mode.",
+  "surface.desc.nav.inbox": "Newly paired devices waiting to be accepted or released.",
   "surface.desc.nav.fleet": "Every configured CCU with its connection state.",
   "surface.desc.nav.programs":
     "CCU programs — run them, enable them, see when they last fired.",
@@ -2533,7 +2540,7 @@ const EN: Catalog = {
   "centrals.behavior.delay_new_device_creation":
     "Hold new devices until released",
   "centrals.behavior.delay_new_device_creation_hint":
-    "A newly-paired device waits in the inbox until you accept and release it, so it reaches MQTT, Matter and webhooks with the name you gave it. Off publishes new devices immediately.",
+    "A newly-paired device waits under New devices until you accept and release it, so it reaches MQTT, Matter and webhooks with the name you gave it. Off publishes new devices immediately.",
   "centrals.behavior.sysvar_scan_interval":
     "System-variable scan interval (seconds, 0 = default 30, minimum 3)",
   "centrals.behavior.sysvar_markers": "System-variable markers",
@@ -3733,16 +3740,15 @@ const EN: Catalog = {
   "add_device.title": "Add device",
   "add_device.intro":
     "Start the pairing mode on the radio the device uses, then put the device itself into pairing mode. Devices that join show up below.",
-  "add_device.arrived_title": "New devices",
+  "add_device.arrived_title": "Joined since opening",
   "add_device.arrived_empty": "No new device has joined yet.",
-  "add_device.waiting_link": "Open inbox",
   "add_device.interface_label": "Interface",
   "add_device.no_interfaces": "No interface offers a pairing mode right now.",
   "add_device.start_pairing": "Start pairing",
   "add_device.targeted_options": "Pair one specific device",
   "add_device.acceptable_title": "Waiting to be accepted",
-  "add_device.more_options": "Rooms, functions and heating group: accept in the inbox",
-  "add_device.awaiting_release": "Waiting for release: {count}",
+  "add_device.more_options": "Heating group: accept under New devices",
+  "add_device.awaiting_release": "Waiting to be released ({count})",
   "add_device.nothing_joined":
     "The pairing window has closed and no device joined. A device that is still paired to another central has to be reset to its factory settings before it can be taught in here.",
   "devicelist.clear_selection": "Clear selection",
@@ -3806,7 +3812,7 @@ const EN: Catalog = {
   "inbox.search_wired_title":
     "Scan the BidCos-Wired bus for newly connected devices",
   "inbox.search_wired_hint":
-    "Scans the wired bus; found devices appear in the inbox.",
+    "Scans the wired bus; found devices appear under New devices.",
   "inbox.search_wired_running": "Scanning…",
   "inbox.search_wired_done": "Found {count} device(s) — check the inbox.",
   "inbox.replace.button": "Replace device",
@@ -5364,13 +5370,20 @@ const DE: Catalog = {
   "diagnostics.recordings.anonymised": "anonymisiert",
   "diagnostics.recordings.duration_open_hint":
     "0 = offen (Server-Limit 60 min)",
-  "inbox.title": "Posteingang",
+  "inbox.title": "Neue Geräte",
   "inbox.subtitle":
-    "Geräte, die die CCU im Anlernmodus erkannt hat, aber noch nicht übernommen wurden.",
+    "Neu angelernte Geräte warten hier, bis du sie übernimmst (dann werden sie angelegt und lassen sich einrichten) und freigibst (dann erreichen sie Home Assistant, Matter und Webhooks). Auf einer CCU erscheinen auch die Geräte aus ihrem eigenen Posteingang.",
   "inbox.empty":
-    "Posteingang ist leer. Aktiviere den Anlernmodus auf der Geräte-Seite, um neue Geräte zu sehen.",
+    "Kein Gerät wartet. Lerne eines über „Gerät anlernen“ an; es wartet hier, bis du es übernimmst und freigibst.",
   "inbox.accept": "Übernehmen",
   "inbox.accepted": "{name} übernommen.",
+  "inbox.accept_release": "Übernehmen und freigeben",
+  "inbox.accept_only_title":
+    "Das Gerät anlegen und vor Home Assistant, Matter und Webhooks zurückhalten, bis du es freigibst.",
+  "inbox.accepted_released":
+    "{name} übernommen und freigegeben — jetzt in Home Assistant, Matter und Webhooks verfügbar.",
+  "inbox.release_failed_after_accept":
+    "{name} wurde übernommen, aber nicht freigegeben ({error}). Es wartet auf die Freigabe.",
   "inbox.pending_creation_badge": "Wartet auf Übernahme",
   "inbox.pending_creation_hint":
     "Verzögerte Geräteanlage ist aktiv: Das Gerät existiert auf der CCU, hat hier aber erst nach der Übernahme Datenpunkte.",
@@ -5470,7 +5483,7 @@ const DE: Catalog = {
   "favorites.unpin_program": "Programm aus Favoriten entfernen",
   "favorites.kind.device": "Gerät",
   "favorites.kind.sysvar": "Systemvariable",
-  "nav.inbox": "Posteingang",
+  "nav.inbox": "Neue Geräte",
   "nav.fleet": "CCUs",
   "nav.groups": "Gruppen",
   "nav.links": "Direktverknüpfungen",
@@ -6205,7 +6218,7 @@ const DE: Catalog = {
   "config.help.centrals.check_connection_interval":
     "Wie oft der Daemon die CCU im Hintergrund anpingt; 0 = Compiler-Standard von 30 s, negativ = Prüfung deaktiviert.",
   "config.help.centrals.behavior.delay_new_device_creation":
-    "Neu angelernte Geräte zurückhalten, bis du sie im Posteingang übernimmst (dann werden sie angelegt und lassen sich benennen und konfigurieren) und freigibst (dann erreichen sie MQTT / Home Assistant, Matter und Webhooks). Bereits bekannte Geräte werden nie zurückgehalten. Ausgeschaltet werden neue Geräte sofort unter ihrem Werksnamen veröffentlicht. Standard: an.",
+    "Neu angelernte Geräte zurückhalten, bis du sie unter Neue Geräte übernimmst (dann werden sie angelegt und lassen sich benennen und konfigurieren) und freigibst (dann erreichen sie MQTT / Home Assistant, Matter und Webhooks). Bereits bekannte Geräte werden nie zurückgehalten. Ausgeschaltet werden neue Geräte sofort unter ihrem Werksnamen veröffentlicht. Standard: an.",
   "config.help.centrals.behavior.enable_device_firmware_check":
     "Für jedes Gerät, das Firmware-Updates meldet, eine Firmware-Update-Entität anzeigen. Standard: an.",
   "config.help.centrals.behavior.enable_program_scan":
@@ -6612,7 +6625,7 @@ const DE: Catalog = {
   "surface.desc.nav.alarm": "Scharfschaltung, Zonen, Sensoren und Sirenen.",
   "surface.desc.nav.security":
     "Rauch, Wasser, Sabotage und Stromversorgung mit ihrem Störungszustand.",
-  "surface.desc.nav.inbox": "Anlernbereite Geräte und der Anlernmodus.",
+  "surface.desc.nav.inbox": "Neu angelernte Geräte, die auf Übernahme oder Freigabe warten.",
   "surface.desc.nav.fleet":
     "Alle konfigurierten CCUs mit ihrem Verbindungszustand.",
   "surface.desc.nav.programs":
@@ -6862,7 +6875,7 @@ const DE: Catalog = {
   "centrals.behavior.delay_new_device_creation":
     "Neue Geräte bis zur Freigabe zurückhalten",
   "centrals.behavior.delay_new_device_creation_hint":
-    "Ein neu angelerntes Gerät wartet im Posteingang, bis du es übernimmst und freigibst – so erreicht es MQTT, Matter und Webhooks mit dem Namen, den du ihm gegeben hast. Ausgeschaltet werden neue Geräte sofort veröffentlicht.",
+    "Ein neu angelerntes Gerät wartet unter Neue Geräte, bis du es übernimmst und freigibst – so erreicht es MQTT, Matter und Webhooks mit dem Namen, den du ihm gegeben hast. Ausgeschaltet werden neue Geräte sofort veröffentlicht.",
   "centrals.behavior.sysvar_scan_interval":
     "Scan-Intervall für Systemvariablen (Sekunden, 0 = Standard 30, Minimum 3)",
   "centrals.behavior.sysvar_markers": "Systemvariablen-Marker",
@@ -8034,16 +8047,15 @@ const DE: Catalog = {
   "add_device.title": "Gerät anlernen",
   "add_device.intro":
     "Starte den Anlernmodus auf der Funkschnittstelle des Geräts und versetze dann das Gerät selbst in den Anlernmodus. Geräte, die sich melden, erscheinen unten.",
-  "add_device.arrived_title": "Neue Geräte",
+  "add_device.arrived_title": "Seit dem Öffnen hinzugekommen",
   "add_device.arrived_empty": "Bisher hat sich kein neues Gerät gemeldet.",
-  "add_device.waiting_link": "Zum Posteingang",
   "add_device.interface_label": "Schnittstelle",
   "add_device.no_interfaces": "Derzeit bietet keine Schnittstelle einen Anlernmodus an.",
   "add_device.start_pairing": "Anlernen starten",
   "add_device.targeted_options": "Ein bestimmtes Gerät anlernen",
   "add_device.acceptable_title": "Wartet auf Übernahme",
-  "add_device.more_options": "Räume, Gewerke und Heizungsgruppe: im Posteingang übernehmen",
-  "add_device.awaiting_release": "Wartet auf Freigabe: {count}",
+  "add_device.more_options": "Heizungsgruppe: unter Neue Geräte übernehmen",
+  "add_device.awaiting_release": "Wartet auf Freigabe ({count})",
   "add_device.nothing_joined":
     "Das Anlernfenster ist geschlossen, und kein Gerät hat sich gemeldet. Ein Gerät, das noch an eine andere Zentrale angelernt ist, muss zuerst auf Werkseinstellungen zurückgesetzt werden, bevor es hier angelernt werden kann.",
   "devicelist.clear_selection": "Auswahl leeren",
@@ -8109,7 +8121,7 @@ const DE: Catalog = {
   "inbox.search_wired_title":
     "Den BidCos-Wired-Bus nach neu angeschlossenen Geräten durchsuchen",
   "inbox.search_wired_hint":
-    "Durchsucht den Draht-Bus; gefundene Geräte erscheinen im Posteingang.",
+    "Durchsucht den Draht-Bus; gefundene Geräte erscheinen unter Neue Geräte.",
   "inbox.search_wired_running": "Suche läuft…",
   "inbox.search_wired_done": "{count} Gerät(e) gefunden — siehe Posteingang.",
   "inbox.replace.button": "Gerät tauschen",

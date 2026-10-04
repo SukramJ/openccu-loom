@@ -76,13 +76,16 @@ const (
 	// GateFeaturePrograms and the other feature gates mark a surface that
 	// needs a per-central feature; it is offered while at least one
 	// central offers it. On a fleet of openccu-lite systems there are no
-	// programs, system variables or inbox, and heating groups and backups
-	// depend on the token's scopes.
+	// programs or system variables, and heating groups and backups depend
+	// on the token's scopes.
+	//
+	// The new-devices view (nav.inbox) carries no feature gate: it lists
+	// the daemon's own onboarding hold, which exists on every system type,
+	// and a CCU's inbox only feeds it (ADR 0082). The published gate
+	// vocabulary keeps `feature:hub.inbox` for clients of older daemons.
 	GateFeaturePrograms Gate = "feature:hub.programs"
 	// GateFeatureSysvars marks the system-variables view.
 	GateFeatureSysvars Gate = "feature:hub.sysvars"
-	// GateFeatureInbox marks the inbox view.
-	GateFeatureInbox Gate = "feature:hub.inbox"
 	// GateFeatureGroups marks the heating-groups view.
 	GateFeatureGroups Gate = "feature:heating_groups.read"
 	// GateFeatureBackupCreate marks the backups view.
@@ -205,7 +208,7 @@ var registry = []Surface{
 	{ID: "nav.favorites", Group: GroupOverview, Defaults: haOwned(), HAOwns: true},
 	{ID: "nav.alarm", Group: GroupOverview, Defaults: both(), Warn: WarnAlarmArmed},
 	{ID: "nav.security", Group: GroupOverview, Defaults: both(), Warn: WarnSecurityFaults},
-	{ID: "nav.inbox", Group: GroupOverview, Defaults: both(), Gate: GateFeatureInbox},
+	{ID: "nav.inbox", Group: GroupOverview, Defaults: both()},
 	{ID: "nav.fleet", Group: GroupOverview, Defaults: both()},
 
 	// --- navigation: automation -----------------------------------

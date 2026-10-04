@@ -30,3 +30,16 @@ export function buildAcceptConfig(input: {
   if (input.functions && input.functions.length > 0) config.functions = input.functions;
   return Object.keys(config).length > 0 ? config : undefined;
 }
+
+// The operator's input for one device's first-time configuration, as the
+// shared fields (AcceptConfigFields.svelte) edit it.
+export type AcceptDraft = {
+  name: string;
+  includeChannels: boolean;
+  rooms: string[];
+  functions: string[];
+};
+
+export function emptyAcceptDraft(): AcceptDraft {
+  return { name: "", includeChannels: false, rooms: [], functions: [] };
+}

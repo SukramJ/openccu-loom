@@ -672,7 +672,7 @@ modelled. All are hot-reloadable and default to sensible values:
 | `behavior.program_markers` | list | — | Marker tokens steering how programs arrive (`HX`/`INTERNAL`) |
 | `behavior.sysvar_scan_interval` | duration | `30s` | Per-central sysvar-refresh cadence; `0` selects the default, values below `3s` are rejected |
 | `behavior.enable_device_firmware_check` | bool | `true` | Expose per-device firmware-update entities |
-| `behavior.delay_new_device_creation` | bool | `true` | Hold a newly-paired device until an operator accepts it from the inbox (until then it is listed there flagged `pending_creation` and has no data points) and then releases it (until then it is built but withheld from MQTT, Matter and webhooks). Devices already known are never held. `false` builds and publishes a new device immediately. See [Adding devices](../user/web-ui.md#adding-devices) |
+| `behavior.delay_new_device_creation` | bool | `true` | Hold a newly-paired device until an operator accepts it under New devices (until then it is listed there flagged `pending_creation` and has no data points) and then releases it (until then it is built but withheld from MQTT, Matter and webhooks). Devices already known are never held. `false` builds and publishes a new device immediately. See [Adding devices](../user/web-ui.md#adding-devices) |
 
 ### `persistence`
 

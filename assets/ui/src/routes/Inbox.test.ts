@@ -170,7 +170,7 @@ beforeEach(() => {
   mockListRooms.mockResolvedValue([{ name: "Kitchen" }, { name: "Living Room" }]);
   mockListFunctions.mockResolvedValue([{ name: "Lights" }, { name: "Heating" }]);
   mockAcceptInboxDevice.mockResolvedValue(undefined);
-  mockReleaseDevice.mockResolvedValue(undefined);
+  mockReleaseDevice.mockReset().mockResolvedValue(undefined);
   mockGetGroups.mockResolvedValue([]);
   mockGroupSuitable.mockResolvedValue({ assignable: [], leftover: [] });
   mockUpdateGroup.mockResolvedValue(undefined);
@@ -495,6 +495,96 @@ describe("Inbox — add device", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Accept and release — the same helper the add-device dialog uses
+// ---------------------------------------------------------------------------
+
+describe("Inbox — accept and release", () => {
+  const HELD = [
+    { address: "0009ABCD", model: "HmIP-STH", central: "", pending_creation: true },
+  ];
+
+  it("offers accept-and-release as the primary action for a held device and sends both calls in order", async () => {
+    const order: string[] = [];
+    mockAcceptInboxDevice.mockImplementation(async () => void order.push("accept"));
+    mockReleaseDevice.mockImplementation(async () => void order.push("release"));
+    mockListInbox.mockResolvedValue(HELD);
+    await openDialog();
+
+    const nameInput = document.querySelector("#accept-name") as HTMLInputElement;
+    await fireEvent.input(nameInput, { target: { value: "Bathroom" } });
+    await pickFromCombo("inbox-rooms", "Kitchen");
+    await fireEvent.click(screen.getByText("inbox.accept_release"));
+
+    await waitFor(() => expect(order).toEqual(["accept", "release"]));
+    expect(mockAcceptInboxDevice).toHaveBeenCalledWith("0009ABCD", "", {
+      name: "Bathroom",
+      rooms: ["Kitchen"],
+    });
+    expect(mockReleaseDevice).toHaveBeenCalledWith("0009ABCD", "");
+    expect(mockToastSuccess).toHaveBeenCalledWith("inbox.accepted_released");
+  });
+
+  it("reports a release that failed after the accept as an error, never a success", async () => {
+    mockListInbox.mockResolvedValue(HELD);
+    mockReleaseDevice.mockRejectedValueOnce(new Error("upstream down"));
+    await openDialog();
+    await fireEvent.click(screen.getByText("inbox.accept_release"));
+
+    await waitFor(() =>
+      expect(mockToastError).toHaveBeenCalledWith("inbox.release_failed_after_accept"),
+    );
+    expect(mockAcceptInboxDevice).toHaveBeenCalledTimes(1);
+    expect(mockToastSuccess).not.toHaveBeenCalled();
+  });
+
+  it("keeps a plain accept as the secondary action", async () => {
+    mockListInbox.mockResolvedValue(HELD);
+    await openDialog();
+    await fireEvent.click(submitButton());
+
+    await waitFor(() => expect(mockAcceptInboxDevice).toHaveBeenCalledTimes(1));
+    expect(mockReleaseDevice).not.toHaveBeenCalled();
+  });
+
+  // A plain CCU inbox entry is not withheld once accepted: there is nothing
+  // to release, and offering it would end in a not-found.
+  it("offers no release for an entry the daemon does not hold", async () => {
+    await openDialog();
+    expect(screen.queryByText("inbox.accept_release")).toBeNull();
+    await fireEvent.click(submitButton());
+    await waitFor(() => expect(mockAcceptInboxDevice).toHaveBeenCalledTimes(1));
+    expect(mockReleaseDevice).not.toHaveBeenCalled();
+  });
+
+  it("assigns the heating group before the release", async () => {
+    const order: string[] = [];
+    mockAcceptInboxDevice.mockImplementation(async () => void order.push("accept"));
+    mockUpdateGroup.mockImplementation(async () => void order.push("group"));
+    mockReleaseDevice.mockImplementation(async () => void order.push("release"));
+    mockListInbox.mockResolvedValue(HELD);
+    mockGetGroups.mockResolvedValue([
+      {
+        central: "ccu",
+        groups: [{ id: 5, name: "Heating", type_id: "hmip.heating.group", members: [] }],
+      },
+    ]);
+    mockGroupSuitable.mockResolvedValue({ assignable: [{ address: "0009ABCD:1" }], leftover: [] });
+
+    await openDialog();
+    const list = await waitFor(() => {
+      const el = screen.getByText("inbox.accept_dialog.group_label").parentElement;
+      const listbox = el?.querySelector('[role="listbox"]');
+      if (!listbox) throw new Error("group picker not shown");
+      return listbox as HTMLElement;
+    });
+    await fireEvent.click(within(list).getByRole("option", { name: "Heating" }));
+    await fireEvent.click(screen.getByText("inbox.accept_release"));
+
+    await waitFor(() => expect(order).toEqual(["accept", "group", "release"]));
+  });
+});
+
 describe("Inbox — GR05 group assignment on accept", () => {
   it("adds the accepted device's assignable channel to the chosen group", async () => {
     mockGetGroups.mockResolvedValue([
@@ -703,6 +793,17 @@ describe("Inbox — awaiting release", () => {
     });
     expect(mockAcceptInboxDevice).not.toHaveBeenCalled();
     expect(mockToastSuccess).toHaveBeenCalled();
+  });
+
+  // The device page lives under #/devices/<address>; a singular #/device/
+  // route matches nothing and lands on the device list.
+  it("opens the device page to configure it", async () => {
+    mockListInbox.mockResolvedValue(AWAITING);
+    render(Inbox);
+    await waitFor(() => expect(screen.getByText("inbox.configure")).toBeInTheDocument());
+
+    await fireEvent.click(screen.getByText("inbox.configure"));
+    expect(location.hash).toBe("#/devices/000ABCDE");
   });
 
   it("surfaces a failed release instead of swallowing it", async () => {

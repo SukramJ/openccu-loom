@@ -47,7 +47,8 @@ The app is organised into views. The main ones, and the everyday tasks they cove
 | **Diagnostics** | Check health and troubleshooting information. |
 | **Backups** | Manage configuration backups. |
 | **Firmware** | View device firmware status. |
-| **Inbox / Messages** | Devices waiting to be accepted or released, and pending notices from your CCUs. |
+| **New devices** | Newly paired devices waiting to be accepted or released — on every system, with or without a CCU inbox. |
+| **Messages** | Pending notices from your CCUs. |
 | **Programs / System variables** | Browse CCU programs and system variables. |
 | **Audit log** | Review what changes were made and by whom. |
 | **Log viewer** | Follow the daemon's live log stream (see [Installation & First Steps](../user-guide.md#log-viewer-logs)). |
@@ -75,10 +76,14 @@ If you are unsure what "device", "channel", and "data point" mean, read [Core co
 
 Pair a new device with **Add device** in the **Devices** view: pick the interface, open the pairing window, and put the device into pairing mode.
 
-A newly paired device is not handed to your other systems straight away. OpenCCU-Loom holds it in two steps, which you find in the **Inbox** view and in the add-device dialog:
+A newly paired device is not handed to your other systems straight away. OpenCCU-Loom holds it in two steps, which you find in the add-device dialog and in the **New devices** view. The view is offered on every system — a CCU, an OpenCCU and an openccu-lite box alike; on a CCU it also lists the devices waiting in the CCU's own inbox.
 
-1. **Accept.** The device is listed as *awaiting acceptance*. Accepting it builds it in OpenCCU-Loom: its channels and data points appear, and you can give it a name and assign rooms and functions — the accept dialog asks for them right away.
+1. **Accept.** The device is listed as *awaiting acceptance*. Accepting it builds it in OpenCCU-Loom: its channels and data points appear. The dialog asks for its name and its rooms and functions right away, so they are set as it is built.
 2. **Release.** The device is now listed as *awaiting release*. It is fully usable in the web UI and the API, but MQTT / Home Assistant discovery, the Matter bridge and outbound webhooks do not see it yet. Releasing it publishes it to all of them.
+
+**Accept and release** does both in one go and is the usual choice once the name and the assignments are entered. Choose **Accept** alone when you want to configure more on the device page before it is published; the device then waits under *awaiting release* in the dialog and in the **New devices** view, each with a **Release** button. If the accept works but the release does not, the device stays withheld and is listed as *awaiting release*, so you can release it once the cause is fixed. Assigning the device to a heating group is offered in the accept dialog of the **New devices** view.
+
+A device that only a CCU's own inbox holds (with the hold switched off) is built and published by the accept itself; there is nothing to release.
 
 The order matters because the systems behind those bridges keep the identity they see first: Home Assistant keeps the entity ids of the name a device was discovered with, and a Matter controller keeps its endpoint. Releasing last means they see the name you chose, not the factory name.
 

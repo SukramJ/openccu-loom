@@ -390,9 +390,10 @@ What differs is what each **system** offers, not how the daemon organises
 centrals.
 
 - **Navigation hides what nothing serves.** A view backed by a feature no
-  configured system offers at all (system variables, programs, the inbox,
-  on a fleet made up entirely of openccu-lite boxes) leaves the
-  navigation. A view some systems support and others do not (heating
+  configured system offers at all (system variables and programs on a
+  fleet made up entirely of openccu-lite boxes) leaves the navigation. The
+  New devices view is not one of them: it lists the daemon's own hold,
+  which every system has. A view some systems support and others do not (heating
   groups, backups, scope-gated system actions) stays, and a row for a
   system that cannot serve it names the reason instead of failing:
   "openccu-lite does not offer this" or "the API token lacks the scope

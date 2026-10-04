@@ -11,7 +11,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **New devices now wait for you before they reach Home Assistant, Matter
   and webhooks.** `centrals[].behavior.delay_new_device_creation` is on by
   default and is an ordinary setting rather than an expert one. A device
-  paired after the upgrade is listed in the inbox as waiting to be
+  paired after the upgrade is listed under New devices as waiting to be
   accepted; accepting builds it so it can be named and assigned to rooms
   and functions; releasing it publishes it to MQTT / Home Assistant
   discovery, the Matter bridge and outbound webhooks. Until it is released
@@ -26,9 +26,33 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   behaviour settings in the Config UI; switching it off also releases any
   device that is waiting. REST API 13.7.0: an absent
   `delay_new_device_creation` now means on; no field or route changes.
+- **The "Inbox" view is now called "New devices" and is offered on every
+  system.** It lists the devices waiting to be accepted or released, which
+  the daemon holds on a CCU, an OpenCCU and an openccu-lite box alike; on
+  a CCU it also lists the CCU's own inbox. Its navigation entry no longer
+  depends on the CCU inbox feature, so an openccu-lite installation can
+  reach it from the navigation (ADR 0082). The view's address (`#/inbox`)
+  and its id in navigation profiles (`nav.inbox`) are unchanged. REST API
+  13.7.1: `GET /ui/surfaces` no longer reports a gate for `nav.inbox`; the
+  `feature:hub.inbox` value stays in the documented gate vocabulary.
+
+### Added
+
+- **Accept and release in one step, with rooms and functions, right in the
+  add-device dialog.** A device that joins while the dialog is open can be
+  named and assigned to rooms and functions there, and "Accept and release"
+  builds it and publishes it to Home Assistant, Matter and webhooks in one
+  go. "Accept" alone builds it and keeps it withheld for further
+  configuration. Devices waiting to be released are listed in the dialog
+  with a Release button and a link to their device page. The New devices
+  view offers the same "Accept and release" as its primary action. If the
+  release fails after a successful accept, the device stays withheld and
+  the error says so.
 
 ### Fixed
 
+- **"Configure" on a device awaiting release opens its device page.** It
+  pointed at a route that does not exist and landed on the device list.
 - **Removing a device that is already gone no longer reports a gateway
   error.** When the daemon no longer held the device, for instance because
   it had been removed a moment earlier, the removal answered 502 "Unpair failed"

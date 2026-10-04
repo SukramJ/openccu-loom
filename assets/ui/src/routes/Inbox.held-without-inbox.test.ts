@@ -3,9 +3,9 @@
 // A system without a CCU inbox (openccu-lite) never offers the hub.inbox
 // feature, yet the daemon's own hold — a device parked by
 // delay_new_device_creation, or one waiting for its release — is listed by
-// the inbox endpoint there too, and this view is the only place it can be
-// accepted. The feature gate must not hide those entries; it keeps its
-// explanation only when there is nothing held to show.
+// the inbox endpoint there too. The new-devices view does not depend on
+// that feature at all (ADR 0082): it lists what is held, and an empty list
+// is the shared empty state rather than a feature gate's explanation.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, cleanup, screen, waitFor, fireEvent } from "@testing-library/svelte";
 
@@ -138,14 +138,13 @@ describe("Inbox — fleet without a CCU inbox", () => {
     );
   });
 
-  // Negative control: with nothing held, the gate still explains why the
-  // view is empty instead of rendering an empty table.
-  it("keeps the feature gate's explanation when nothing is held", async () => {
+  // With nothing held the view is simply empty: no feature explanation
+  // claims the system lacks something the view needs.
+  it("shows the shared empty state when nothing is held", async () => {
     mockListInbox.mockResolvedValue([]);
     render(Inbox);
 
-    await waitFor(() => expect(mockListInbox).toHaveBeenCalled());
-    expect(screen.getByText("feature.gate.none")).toBeInTheDocument();
-    expect(screen.queryByRole("table")).toBeNull();
+    await waitFor(() => expect(screen.getByText("inbox.empty")).toBeInTheDocument());
+    expect(screen.queryByText("feature.gate.none")).toBeNull();
   });
 });

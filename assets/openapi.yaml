@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 13.7.0
+  version: 13.7.1
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -13899,6 +13899,10 @@ components:
             Runtime capability the surface additionally needs. A
             `feature:<key>` gate is open while at least one central
             offers that feature (see `features` on `GET /system/ccu`).
+            `feature:hub.inbox` is no longer emitted: the new-devices
+            view (`nav.inbox`) lists the daemon's own onboarding hold,
+            which exists on every system, and carries no gate. The value
+            stays in the vocabulary for clients of older daemons.
           enum:
             - matter
             - history
