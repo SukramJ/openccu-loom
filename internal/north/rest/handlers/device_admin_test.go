@@ -246,6 +246,100 @@ func TestDeleteDevice_Unsupported_Returns422(t *testing.T) {
 	}
 }
 
+// TestDeleteDevice_UnknownDevice_Returns404 pins the answer for a device
+// that is already gone from the daemon's model: nothing reached the CCU, so
+// it is "not found" for the caller to act on, not an upstream failure.
+func TestDeleteDevice_UnknownDevice_Returns404(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{unpairErr: fmt.Errorf("%w: 00109709B1381B", interfaces.ErrDeviceNotFound)}
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/devices/00109709B1381B?reset=true", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "00109709B1381B"}))
+	w := httptest.NewRecorder()
+	DeleteDevice(admin).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d body=%s", w.Code, w.Body.String())
+	}
+	var body struct {
+		Code   string `json:"code"`
+		Title  string `json:"title"`
+		Detail string `json:"detail"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode problem: %v body=%s", err, w.Body.String())
+	}
+	if body.Code != "not_found" || body.Title != "Device not found" {
+		t.Errorf("problem code=%q title=%q, want not_found / Device not found", body.Code, body.Title)
+	}
+	if !strings.Contains(body.Detail, "00109709B1381B") {
+		t.Errorf("detail %q does not name the address", body.Detail)
+	}
+}
+
+// TestDeviceAdminHandlers_UnknownDevice_Return404 walks every device-admin
+// handler whose domain call can name an unknown device and proves none of
+// them classifies it as something else first (422, 502).
+func TestDeviceAdminHandlers_UnknownDevice_Return404(t *testing.T) {
+	t.Parallel()
+	notFound := fmt.Errorf("%w: DEV001", interfaces.ErrDeviceNotFound)
+	dev := map[string]string{"addr": "DEV001"}
+	channel := map[string]string{"addr": "DEV001", "no": "1"}
+	cases := []struct {
+		name    string
+		method  string
+		body    string
+		params  map[string]string
+		handler http.Handler
+	}{
+		{"delete", http.MethodDelete, "", dev, DeleteDevice(&stubDeviceAdmin{unpairErr: notFound})},
+		{"patch rename", http.MethodPatch, `{"name":"x"}`, dev, PatchDevice(&stubDeviceAdmin{renameErr: notFound}, nil)},
+		{"patch rooms", http.MethodPatch, `{"rooms":["Flur"]}`, dev, PatchDevice(&stubDeviceAdmin{setRoomsErr: notFound}, nil)},
+		{
+			"patch functions", http.MethodPatch, `{"functions":["Licht"]}`, dev,
+			PatchDevice(&stubDeviceAdmin{setFunctionsErr: notFound}, nil),
+		},
+		{
+			"patch channel rename", http.MethodPatch, `{"name":"x"}`, channel,
+			PatchChannel(&stubDeviceAdmin{renameChannelErr: notFound}, nil),
+		},
+		{
+			"patch channel rooms", http.MethodPatch, `{"rooms":["Flur"]}`, channel,
+			PatchChannel(&stubDeviceAdmin{setRoomsErr: notFound}, nil),
+		},
+		{"firmware update", http.MethodPost, "", dev, UpdateDeviceFirmware(&stubDeviceAdmin{updateFWErr: notFound})},
+		{"config restore", http.MethodPost, "", dev, RestoreDeviceConfig(&stubDeviceAdmin{restoreErr: notFound}, nil)},
+		{"config cache clear", http.MethodPost, "", dev, ClearDeviceConfigCache(&stubDeviceAdmin{clearCacheErr: notFound}, nil)},
+		{
+			"rf interface", http.MethodPost, `{"interface_address":"GW1","roaming":false}`, dev,
+			AssignRFInterface(&stubRFAssign{err: notFound}, nil),
+		},
+		{"install mode", http.MethodPost, `{"seconds":60}`, dev, PostDeviceInstallMode(&fakeInstallMode{err: notFound}, nil)},
+		{
+			"communication test", http.MethodPost, "", dev,
+			TestDeviceCommunication(&stubCommunicationTestPort{err: notFound}, nil),
+		},
+		{"team candidates", http.MethodGet, "", channel, GetDeviceTeamCandidates(&stubDeviceTeam{candErr: notFound})},
+		{"set team", http.MethodPut, `{"team":""}`, channel, SetDeviceChannelTeam(&stubDeviceTeam{setErr: notFound}, nil)},
+		{
+			"replace (old device)", http.MethodPost, `{"old_address":"OLD001"}`,
+			map[string]string{"addr": "NEW001"},
+			PostDeviceReplace(&stubDeviceReplacer{replaceErr: notFound}, nil),
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			req := httptest.NewRequest(tc.method, "/", strings.NewReader(tc.body))
+			req = req.WithContext(chiContext(req, tc.params))
+			w := httptest.NewRecorder()
+			tc.handler.ServeHTTP(w, req)
+			if w.Code != http.StatusNotFound {
+				t.Fatalf("expected 404, got %d body=%s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
 func TestDeleteDevice_AdminNil_Returns503(t *testing.T) {
 	t.Parallel()
 	req := httptest.NewRequest(http.MethodDelete, "/", http.NoBody)

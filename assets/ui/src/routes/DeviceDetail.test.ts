@@ -24,8 +24,12 @@ const {
   mockToastSuccess,
   mockToastError,
   mockToastWarn,
+  mockToastInfo,
+  mockDeviceStoreRefresh,
   mockSetDeviceTaxonomyPaths,
 } = vi.hoisted(() => ({
+  mockToastInfo: vi.fn(),
+  mockDeviceStoreRefresh: vi.fn(),
   mockSetDeviceTaxonomyPaths: vi.fn(),
   mockGetDevice: vi.fn(),
   mockGetDeviceSchedule: vi.fn(),
@@ -50,42 +54,46 @@ const {
   mockToastWarn: vi.fn(),
 }));
 
-vi.mock("$lib/api/client", () => ({
-  api: {
-    getDevice: (...args: unknown[]) => mockGetDevice(...args),
-    getDeviceSchedule: (...args: unknown[]) => mockGetDeviceSchedule(...args),
-    getPreference: (...args: unknown[]) => mockGetPreference(...args),
-    putPreference: (...args: unknown[]) => mockPutPreference(...args),
-    renameDevice: (...args: unknown[]) => mockRenameDevice(...args),
-    renameChannel: (...args: unknown[]) => mockRenameChannel(...args),
-    setChannelRooms: (...args: unknown[]) => mockSetChannelRooms(...args),
-    setChannelFunctions: (...args: unknown[]) => mockSetChannelFunctions(...args),
-    listRooms: (...args: unknown[]) => mockListRooms(...args),
-    listFunctions: (...args: unknown[]) => mockListFunctions(...args),
-    createRoom: (...args: unknown[]) => mockCreateRoom(...args),
-    createFunction: (...args: unknown[]) => mockCreateFunction(...args),
-    deleteDevice: (...args: unknown[]) => mockDeleteDevice(...args),
-    listLinks: (...args: unknown[]) => mockListLinks(...args),
-    listPrograms: (...args: unknown[]) => mockListPrograms(...args),
-    getSystemCCUs: (...args: unknown[]) => mockGetSystemCCUs(...args),
-    restoreDeviceConfig: (...args: unknown[]) => mockRestoreDeviceConfig(...args),
-    testDeviceCommunication: (...args: unknown[]) => mockTestDeviceCommunication(...args),
-    updateFirmware: vi.fn(),
-    setDeviceRooms: vi.fn(),
-    setDeviceTaxonomyPaths: (...args: unknown[]) => mockSetDeviceTaxonomyPaths(...args),
-    setDeviceFunctions: vi.fn(),
-    listDataPoints: vi.fn().mockResolvedValue([]),
-  },
-  // Module-load hook of the auth store, which the favorites store imports
-  // to scope pinned items to the signed-in operator.
-  setUnauthorizedHandler: vi.fn(),
-  ApiError: class ApiError extends Error {
-    status: number;
-    constructor(status: number, _body: unknown, message: string) {
-      super(message);
-      this.status = status;
-    }
-  },
+vi.mock("$lib/api/client", async () => {
+  // The real error class and its localizer: a delete failure is shown
+  // through friendlyError, which branches on the ApiError it was given.
+  const actual = await vi.importActual<typeof import("$lib/api/client")>("$lib/api/client");
+  return {
+    ApiError: actual.ApiError,
+    friendlyError: actual.friendlyError,
+    api: {
+      getDevice: (...args: unknown[]) => mockGetDevice(...args),
+      getDeviceSchedule: (...args: unknown[]) => mockGetDeviceSchedule(...args),
+      getPreference: (...args: unknown[]) => mockGetPreference(...args),
+      putPreference: (...args: unknown[]) => mockPutPreference(...args),
+      renameDevice: (...args: unknown[]) => mockRenameDevice(...args),
+      renameChannel: (...args: unknown[]) => mockRenameChannel(...args),
+      setChannelRooms: (...args: unknown[]) => mockSetChannelRooms(...args),
+      setChannelFunctions: (...args: unknown[]) => mockSetChannelFunctions(...args),
+      listRooms: (...args: unknown[]) => mockListRooms(...args),
+      listFunctions: (...args: unknown[]) => mockListFunctions(...args),
+      createRoom: (...args: unknown[]) => mockCreateRoom(...args),
+      createFunction: (...args: unknown[]) => mockCreateFunction(...args),
+      deleteDevice: (...args: unknown[]) => mockDeleteDevice(...args),
+      listLinks: (...args: unknown[]) => mockListLinks(...args),
+      listPrograms: (...args: unknown[]) => mockListPrograms(...args),
+      getSystemCCUs: (...args: unknown[]) => mockGetSystemCCUs(...args),
+      restoreDeviceConfig: (...args: unknown[]) => mockRestoreDeviceConfig(...args),
+      testDeviceCommunication: (...args: unknown[]) => mockTestDeviceCommunication(...args),
+      updateFirmware: vi.fn(),
+      setDeviceRooms: vi.fn(),
+      setDeviceTaxonomyPaths: (...args: unknown[]) => mockSetDeviceTaxonomyPaths(...args),
+      setDeviceFunctions: vi.fn(),
+      listDataPoints: vi.fn().mockResolvedValue([]),
+    },
+    // Module-load hook of the auth store, which the favorites store imports
+    // to scope pinned items to the signed-in operator.
+    setUnauthorizedHandler: vi.fn(),
+  };
+});
+
+vi.mock("$lib/stores/devices.svelte", () => ({
+  deviceStore: { refresh: (...args: unknown[]) => mockDeviceStoreRefresh(...args) },
 }));
 
 // One openccu-lite box whose rooms nest; every other central is a flat CCU.
@@ -125,6 +133,7 @@ vi.mock("$lib/stores/toast.svelte", () => ({
     success: (...args: unknown[]) => mockToastSuccess(...args),
     error: (...args: unknown[]) => mockToastError(...args),
     warn: (...args: unknown[]) => mockToastWarn(...args),
+    info: (...args: unknown[]) => mockToastInfo(...args),
   },
 }));
 
@@ -160,6 +169,7 @@ vi.mock("$lib/components/HistoryChart.svelte", () => ({ default: () => {} }));
 import DeviceDetail from "./DeviceDetail.svelte";
 import { confirmStore } from "$lib/stores/confirm.svelte";
 import { centralStore } from "$lib/stores/centrals.svelte";
+import { ApiError } from "$lib/api/client";
 
 function baseDevice(overrides: Record<string, unknown> = {}) {
   return {
@@ -986,6 +996,57 @@ describe("DeviceDetail — remove device options dialog", () => {
     });
     // Dialog stays open on failure — no silent fallback / no silent close.
     expect(screen.getByText("device.delete.mode_label")).toBeInTheDocument();
+  });
+
+  // A 404 means the daemon no longer holds the device: what the operator
+  // asked for is already true, so it is information, not a failure.
+  it("treats a 404 as already removed: info toast, back to a refreshed list", async () => {
+    location.hash = "#/devices/0001ABCD";
+    mockDeleteDevice.mockRejectedValueOnce(
+      new ApiError(
+        404,
+        { code: "not_found", title: "Device not found", detail: "device not found: 0001ABCD" },
+        "API 404 /devices/0001ABCD: device not found: 0001ABCD",
+      ),
+    );
+    await openDeleteDialog();
+    await fireEvent.click(screen.getByRole("button", { name: "common.delete" }));
+    await waitFor(() => {
+      expect(mockToastInfo).toHaveBeenCalledWith("device.already_removed");
+    });
+    expect(mockToastError).not.toHaveBeenCalled();
+    expect(mockToastSuccess).not.toHaveBeenCalled();
+    expect(location.hash).toBe("#/devices");
+    expect(mockDeviceStoreRefresh).toHaveBeenCalled();
+    expect(screen.queryByText("device.delete.mode_label")).not.toBeInTheDocument();
+  });
+
+  it("shows the localized upstream message for a 502 and stays on the page", async () => {
+    location.hash = "#/devices/0001ABCD";
+    mockDeleteDevice.mockRejectedValueOnce(
+      new ApiError(
+        502,
+        { code: "upstream_unavailable", title: "Unpair failed" },
+        "API 502 /devices/0001ABCD: Unpair failed",
+      ),
+    );
+    await openDeleteDialog();
+    await fireEvent.click(screen.getByRole("button", { name: "common.delete" }));
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith("api.error.upstream_unavailable");
+    });
+    expect(mockToastInfo).not.toHaveBeenCalled();
+    expect(mockDeviceStoreRefresh).not.toHaveBeenCalled();
+    expect(location.hash).toBe("#/devices/0001ABCD");
+    expect(screen.getByText("device.delete.mode_label")).toBeInTheDocument();
+  });
+
+  // The cases above run against a key-echoing t(); this asks the real
+  // catalogues, so a key missing in one locale fails here.
+  it("has the already-removed notice in both locales", async () => {
+    const real = await vi.importActual<typeof import("$lib/i18n")>("$lib/i18n");
+    expect(real.catalogKeys("en")).toContain("device.already_removed");
+    expect(real.catalogKeys("de")).toContain("device.already_removed");
   });
 
   it("closes the dialog on cancel without calling deleteDevice", async () => {

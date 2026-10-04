@@ -10,6 +10,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // comTester is the narrow capability the communication test needs from a
@@ -48,5 +49,5 @@ func (a *DeviceAdminDomain) TestDeviceCommunication(ctx context.Context, address
 		// Defaults (30s window, 2s poll) are applied by the backend.
 		return tester.TestDevice(ctx, address, 0, 0)
 	}
-	return hmapi.CommunicationTestResult{}, fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
+	return hmapi.CommunicationTestResult{}, fmt.Errorf("%w: %s", interfaces.ErrDeviceNotFound, address)
 }

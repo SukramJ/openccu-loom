@@ -14,6 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // ReplaceCandidates lists the already-paired devices the new (inbox)
@@ -88,7 +89,7 @@ func (a *DeviceAdminDomain) ReplaceDevice(ctx context.Context, centralName, oldA
 	}
 	dev, ok := unit.ModelRegistry.Get(oldAddress)
 	if !ok {
-		return fmt.Errorf("%w: old device %s", ErrNoDeviceBackend, oldAddress)
+		return fmt.Errorf("%w: old device %s", interfaces.ErrDeviceNotFound, oldAddress)
 	}
 	if !dev.Interface.SupportsReplace() {
 		return fmt.Errorf("replace device: interface %s: %w", dev.Interface, backends.ErrUnsupported)

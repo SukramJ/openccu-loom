@@ -19,6 +19,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // replaceRecordingOperations wraps fakeOperations (defined in
@@ -282,17 +283,17 @@ func TestReplaceDeviceIneligibleInterfaceRejectedBeforeWireCall(t *testing.T) {
 	}
 }
 
-// TestReplaceDeviceUnknownOldDeviceReturnsErrNoDeviceBackend verifies an
+// TestReplaceDeviceUnknownOldDeviceReturnsErrDeviceNotFound verifies an
 // address absent from every central's ModelRegistry surfaces
-// ErrNoDeviceBackend rather than a nil-pointer panic or silent no-op.
-func TestReplaceDeviceUnknownOldDeviceReturnsErrNoDeviceBackend(t *testing.T) {
+// interfaces.ErrDeviceNotFound rather than a nil-pointer panic or silent no-op.
+func TestReplaceDeviceUnknownOldDeviceReturnsErrDeviceNotFound(t *testing.T) {
 	t.Parallel()
 	_, reg := newReplaceUnit(t, "ccu-01")
 	domain := NewDeviceAdminDomain(reg, client.NewValueWriter())
 
 	err := domain.ReplaceDevice(context.Background(), "", "UNKNOWN", "NEW001")
-	if !errors.Is(err, ErrNoDeviceBackend) {
-		t.Fatalf("expected ErrNoDeviceBackend, got %v", err)
+	if !errors.Is(err, interfaces.ErrDeviceNotFound) {
+		t.Fatalf("expected interfaces.ErrDeviceNotFound, got %v", err)
 	}
 }
 

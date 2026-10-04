@@ -219,6 +219,12 @@ var ErrInboxDeviceNotFound = errors.New("inbox device not found")
 // it to 404 so a typo is distinguishable from an upstream failure.
 var ErrChannelNotFound = errors.New("channel not found")
 
+// ErrDeviceNotFound signals that a device-admin operation named an
+// address no central's model holds — it was never paired, or it was
+// removed before the request arrived. Nothing reaches the CCU in that
+// case, so REST maps it to 404 rather than to an upstream failure (502).
+var ErrDeviceNotFound = errors.New("device not found")
+
 // DiagnosticsIntrospectService is the facade the live-introspection
 // diagnostics endpoints depend on. It exposes read-only daemon internals
 // that have no other machine-readable surface: per-interface reliability

@@ -14,6 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // comTestRecordingOperations wraps fakeOperations (defined in
@@ -108,17 +109,17 @@ func TestTestDeviceCommunicationUnsupportedInterfaceRejectedBeforeWireCall(t *te
 	}
 }
 
-// TestTestDeviceCommunicationUnknownDeviceReturnsErrNoDeviceBackend
+// TestTestDeviceCommunicationUnknownDeviceReturnsErrDeviceNotFound
 // verifies an address absent from every central's ModelRegistry surfaces
-// ErrNoDeviceBackend rather than a nil-pointer panic or silent no-op.
-func TestTestDeviceCommunicationUnknownDeviceReturnsErrNoDeviceBackend(t *testing.T) {
+// interfaces.ErrDeviceNotFound rather than a nil-pointer panic or silent no-op.
+func TestTestDeviceCommunicationUnknownDeviceReturnsErrDeviceNotFound(t *testing.T) {
 	t.Parallel()
 	_, reg := newReplaceUnit(t, "ccu-01")
 	domain := NewDeviceAdminDomain(reg, client.NewValueWriter())
 
 	_, err := domain.TestDeviceCommunication(context.Background(), "UNKNOWN")
-	if !errors.Is(err, ErrNoDeviceBackend) {
-		t.Fatalf("expected ErrNoDeviceBackend, got %v", err)
+	if !errors.Is(err, interfaces.ErrDeviceNotFound) {
+		t.Fatalf("expected interfaces.ErrDeviceNotFound, got %v", err)
 	}
 }
 

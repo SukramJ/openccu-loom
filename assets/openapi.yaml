@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 13.5.4
+  version: 13.6.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -492,8 +492,10 @@ paths:
         query flags map onto the CCU delete bitmask: `reset=true` also
         factory-resets the device during removal, and `force=true` removes
         an unreachable device even when the CCU cannot complete the
-        handshake. Both default to false (plain unpair). A backend without a
-        pairing concept (CUxD) answers 422.
+        handshake. Both default to false (plain unpair). An address no
+        central's model holds — never paired, or already removed — answers
+        404 without a CCU call. A backend without a pairing concept (CUxD)
+        answers 422.
       tags: [devices]
       security:
         - basicAuth: []
@@ -518,6 +520,7 @@ paths:
       responses:
         "202":
           description: Unpair dispatched asynchronously
+        "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
@@ -548,6 +551,7 @@ paths:
         "202":
           description: Update accepted
         "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
@@ -3125,6 +3129,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UpdateFirmwareResponse"
+        "404": { $ref: "#/components/responses/NotFound" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/config/restore:
@@ -3156,6 +3161,7 @@ paths:
             Restore dispatched; the configuration transfer continues
             asynchronously (watch CONFIG_PENDING).
         "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
@@ -3240,6 +3246,7 @@ paths:
       responses:
         "204": { description: Cache cleared }
         "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
@@ -3307,6 +3314,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/CommunicationTestResult" }
         "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
@@ -3331,6 +3339,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/GetDeviceTeamCandidatesResponse"
         "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
@@ -3360,6 +3369,7 @@ paths:
         "202":
           description: Team assignment accepted
         "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
@@ -3492,6 +3502,7 @@ paths:
         "202":
           description: Pairing window opened
         "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/channels/{no}/paramsets/{key}/determine:

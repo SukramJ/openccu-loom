@@ -15,6 +15,7 @@ import (
 	"net/http"
 
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // maxRequestBodyBytes is the ceiling applied to every JSON request
@@ -60,6 +61,15 @@ func writeServerError(w http.ResponseWriter, r *http.Request, status int, pType 
 	// server fault: 422 with the feature, whatever status the call site
 	// would have used for an unexpected error.
 	if problem.WriteFeatureUnavailable(w, r, err) {
+		return
+	}
+	// A device no central's model holds never reached the CCU: the caller
+	// named an address that is gone (or never existed), which is its own
+	// answer and not a server fault. The detail is the caller's own input
+	// plus the sentinel text, the same shape as the "Channel not found"
+	// answer of the assignment handlers.
+	if errors.Is(err, interfaces.ErrDeviceNotFound) {
+		problem.Write(w, http.StatusNotFound, problem.New(problem.TypeNotFound, r, "Device not found", err.Error()))
 		return
 	}
 	// The raw error stays out of the response body by design (see

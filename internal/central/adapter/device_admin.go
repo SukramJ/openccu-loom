@@ -37,7 +37,11 @@ func NewDeviceAdminDomain(r *central.Registry, w *client.ValueWriter) *DeviceAdm
 	return &DeviceAdminDomain{registry: r, writer: w}
 }
 
-// ErrNoDeviceBackend bubbles when the CCU backend cannot be resolved.
+// ErrNoDeviceBackend bubbles when the CCU backend cannot be resolved: the
+// domain has no registry or writer wired, or the device's interface has no
+// backend registered. A device no central's model holds is a different
+// answer — [interfaces.ErrDeviceNotFound] — because nothing upstream was
+// even attempted.
 var ErrNoDeviceBackend = errors.New("device-admin: no backend for device")
 
 // resolve walks every central, finds the owning device + backend.
@@ -66,7 +70,7 @@ func (a *DeviceAdminDomain) resolveWithDevice(deviceAddress string) (backends.Op
 		}
 		return backend, dev, nil
 	}
-	return nil, nil, fmt.Errorf("%w: device %s", ErrNoDeviceBackend, deviceAddress)
+	return nil, nil, fmt.Errorf("%w: %s", interfaces.ErrDeviceNotFound, deviceAddress)
 }
 
 // UnpairDevice asks the CCU to unpair the device. Maps to the CCU's
@@ -128,7 +132,7 @@ func (a *DeviceAdminDomain) UnpairDevice(ctx context.Context, address string, re
 		}
 		return nil
 	}
-	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
+	return fmt.Errorf("%w: %s", interfaces.ErrDeviceNotFound, address)
 }
 
 // RenameDevice updates the device name and persists it to the CCU via
@@ -146,7 +150,7 @@ func (a *DeviceAdminDomain) RenameDevice(ctx context.Context, address, name stri
 		}
 		return u.RenameDeviceWithChannels(ctx, address, name, includeChannels)
 	}
-	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
+	return fmt.Errorf("%w: %s", interfaces.ErrDeviceNotFound, address)
 }
 
 // RenameChannel updates a single channel name and persists it to the
@@ -164,7 +168,7 @@ func (a *DeviceAdminDomain) RenameChannel(ctx context.Context, deviceAddr string
 		}
 		return u.RenameChannel(ctx, channelAddress, name)
 	}
-	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, deviceAddr)
+	return fmt.Errorf("%w: %s", interfaces.ErrDeviceNotFound, deviceAddr)
 }
 
 // AcceptInboxDevice promotes a pending device into the running
@@ -404,7 +408,7 @@ func (a *DeviceAdminDomain) RestoreDeviceConfig(ctx context.Context, address str
 		}
 		return backend.RestoreConfigToDevice(ctx, address)
 	}
-	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
+	return fmt.Errorf("%w: %s", interfaces.ErrDeviceNotFound, address)
 }
 
 // ClearConfigCache asks the device's interface process to discard its
@@ -430,7 +434,7 @@ func (a *DeviceAdminDomain) ClearConfigCache(ctx context.Context, address string
 		}
 		return backend.ClearConfigCache(ctx, address)
 	}
-	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
+	return fmt.Errorf("%w: %s", interfaces.ErrDeviceNotFound, address)
 }
 
 // AssignRFInterface pins a BidCos-RF device to the RF gateway with serial
@@ -458,7 +462,7 @@ func (a *DeviceAdminDomain) AssignRFInterface(ctx context.Context, address, inte
 		}
 		return backend.SetBidcosInterface(ctx, address, interfaceAddress, roaming)
 	}
-	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
+	return fmt.Errorf("%w: %s", interfaces.ErrDeviceNotFound, address)
 }
 
 // InterfaceDutyCycle returns the transmit duty cycle in percent (0..100)
@@ -544,7 +548,7 @@ func (a *DeviceAdminDomain) SetRooms(
 		u.PublishDeviceMetadataChanged(dev)
 		return nil
 	}
-	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
+	return fmt.Errorf("%w: %s", interfaces.ErrDeviceNotFound, address)
 }
 
 // SetFunctions replaces the device's function (Gewerk) assignments
@@ -570,7 +574,7 @@ func (a *DeviceAdminDomain) SetFunctions(
 		u.PublishDeviceMetadataChanged(dev)
 		return nil
 	}
-	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
+	return fmt.Errorf("%w: %s", interfaces.ErrDeviceNotFound, address)
 }
 
 // SetChannelRooms replaces a single channel's room assignments via the
@@ -641,7 +645,7 @@ func (a *DeviceAdminDomain) setChannelAssignment(
 		u.PublishDeviceMetadataChanged(dev)
 		return nil
 	}
-	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, deviceAddr)
+	return fmt.Errorf("%w: %s", interfaces.ErrDeviceNotFound, deviceAddr)
 }
 
 // unionChannelAssignments collects the sorted union of a per-channel
@@ -716,7 +720,7 @@ func (a *DeviceAdminDomain) SetTaxonomyPaths(ctx context.Context, address, enum 
 		}
 		return a.SetChannelFunctions(ctx, devAddr, ch.Number, names)
 	}
-	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, devAddr)
+	return fmt.Errorf("%w: %s", interfaces.ErrDeviceNotFound, devAddr)
 }
 
 // flatNames resolves references to the display names a flat system's
