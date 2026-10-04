@@ -707,9 +707,12 @@ describe("api.setInstallModeInterface — LOCAL teach-in body shape", () => {
   });
 
   it("includes sgtin and key in the body when a local arg is given", async () => {
-    await api.setInstallModeInterface("HmIP-RF", true, 300, undefined, {
-      sgtin: "3014-F711-A061-A7D5-6989-2A67",
-      key: "0110C8531D0952D8D73E1194E95B5F19",
+    await api.setInstallModeInterface("HmIP-RF", true, {
+      seconds: 300,
+      local: {
+        sgtin: "3014-F711-A061-A7D5-6989-2A67",
+        key: "0110C8531D0952D8D73E1194E95B5F19",
+      },
     });
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("/api/v1/install-mode/interfaces");
@@ -722,7 +725,7 @@ describe("api.setInstallModeInterface — LOCAL teach-in body shape", () => {
   });
 
   it("omits sgtin and key from the body when no local arg is given", async () => {
-    await api.setInstallModeInterface("HmIP-RF", true, 60);
+    await api.setInstallModeInterface("HmIP-RF", true, { seconds: 60 });
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     const body = JSON.parse(init.body as string);
     expect(body).not.toHaveProperty("sgtin");
@@ -730,12 +733,36 @@ describe("api.setInstallModeInterface — LOCAL teach-in body shape", () => {
   });
 
   it("omits sgtin and key from the body for a plain device_address teach-in", async () => {
-    await api.setInstallModeInterface("HmIP-RF", true, 60, "AABBCCDD:1");
+    await api.setInstallModeInterface("HmIP-RF", true, {
+      seconds: 60,
+      deviceAddress: "AABBCCDD:1",
+    });
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     const body = JSON.parse(init.body as string);
     expect(body.device_address).toBe("AABBCCDD:1");
     expect(body).not.toHaveProperty("sgtin");
     expect(body).not.toHaveProperty("key");
+  });
+});
+
+describe("api.setInstallModeInterface — central", () => {
+  beforeEach(() => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    fetchMock.mockResolvedValueOnce(jsonResponse([]));
+  });
+
+  // Two centrals can expose the same interface name; the central is what
+  // tells the daemon which one to open.
+  it("sends the central when one is given", async () => {
+    await api.setInstallModeInterface("HmIP-RF", true, { central: "b" });
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string).central).toBe("b");
+  });
+
+  it("omits the central when none is given", async () => {
+    await api.setInstallModeInterface("HmIP-RF", true);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).not.toHaveProperty("central");
   });
 });
 

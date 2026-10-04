@@ -102,6 +102,20 @@ vi.mock("$lib/stores/preferences.svelte", () => ({
   prefs: { locale: "en", expertMode: false },
 }));
 
+// The inbox opens the add-device dialog, which reads the device list; the
+// real store would pull in the auth store.
+vi.mock("$lib/stores/devices.svelte", () => ({
+  deviceStore: {
+    items: [],
+    loading: false,
+    error: null,
+    lastLoaded: null,
+    refresh: vi.fn().mockResolvedValue(undefined),
+    ensureStream: vi.fn(),
+    close: vi.fn(),
+  },
+}));
+
 vi.mock("$lib/stores/installMode.svelte", () => ({
   installModeStore: {
     active: false,
@@ -453,71 +467,31 @@ describe("Inbox — replace workflow", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Wired-bus device search (BidCos-Wired scan button)
+// Pairing lives in the add-device dialog
 // ---------------------------------------------------------------------------
-// searchWiredBus (Inbox.svelte) is offered only when the operator has the
-// BidCos-Wired interface selected — install mode itself doesn't apply to
-// the wired bus, a scan does. installModeStore.interfaces seeds
-// selectedInterface via the component's own $effect (defaults to the
-// first entry in the list), so each test below sets it before render.
+// The dialog is the one host of the pairing controls; the inbox only opens
+// it. A pairing form back in the inbox would split the flow over two places
+// again.
 
-function installModeInterfaces(iface: string) {
-  return [{ interface: iface, active: false, seconds: 0, observed: true, central: "" }];
-}
-
-describe("Inbox — wired bus search", () => {
-  it("shows the search-wired-bus button when BidCos-Wired is selected", async () => {
-    setStoreInterfaces(installModeInterfaces("BidCos-Wired"));
+describe("Inbox — add device", () => {
+  it("offers the add-device button and no pairing form of its own", async () => {
+    setStoreInterfaces([
+      { interface: "HmIP-RF", active: false, seconds: 0, observed: true, central: "" },
+    ]);
     render(Inbox);
+    await waitFor(() => expect(screen.getByText("inbox.accept")).toBeInTheDocument());
 
-    await waitFor(() => {
-      expect(screen.getByText("inbox.search_wired")).toBeInTheDocument();
-    });
+    expect(screen.getByText("devicelist.add_device")).toBeInTheDocument();
+    expect(screen.queryByText("inbox.pair_serial_submit")).toBeNull();
+    expect(screen.queryByText("add_device.start_pairing")).toBeNull();
+    expect(screen.queryByText("inbox.install_mode_local_submit")).toBeNull();
   });
 
-  it("hides the search-wired-bus button for a non-wired interface", async () => {
-    setStoreInterfaces(installModeInterfaces("HmIP-RF"));
+  it("opens the add-device dialog from the header", async () => {
     render(Inbox);
-
-    await waitFor(() => {
-      expect(screen.getByText("inbox.accept")).toBeInTheDocument();
-    });
-    expect(screen.queryByText("inbox.search_wired")).toBeNull();
-  });
-
-  it("clicking the button scans the bus and shows the found count", async () => {
-    setStoreInterfaces(installModeInterfaces("BidCos-Wired"));
-    mockSearchWiredDevices.mockResolvedValue({
-      central: "",
-      interface: "BidCos-Wired",
-      found: 2,
-    });
-    render(Inbox);
-
-    await waitFor(() => {
-      expect(screen.getByText("inbox.search_wired")).toBeInTheDocument();
-    });
-    await fireEvent.click(screen.getByText("inbox.search_wired"));
-
-    await waitFor(() => {
-      expect(mockSearchWiredDevices).toHaveBeenCalledWith("BidCos-Wired", undefined);
-      expect(mockToastSuccess).toHaveBeenCalled();
-    });
-  });
-
-  it("surfaces a toast error when the scan fails", async () => {
-    setStoreInterfaces(installModeInterfaces("BidCos-Wired"));
-    mockSearchWiredDevices.mockRejectedValue(new Error("hs485d unreachable"));
-    render(Inbox);
-
-    await waitFor(() => {
-      expect(screen.getByText("inbox.search_wired")).toBeInTheDocument();
-    });
-    await fireEvent.click(screen.getByText("inbox.search_wired"));
-
-    await waitFor(() => {
-      expect(mockToastError).toHaveBeenCalled();
-    });
+    await waitFor(() => expect(screen.getByText("inbox.accept")).toBeInTheDocument());
+    await fireEvent.click(screen.getByText("devicelist.add_device"));
+    expect(screen.getByRole("dialog", { name: "add_device.title" })).toBeInTheDocument();
   });
 });
 

@@ -74,6 +74,7 @@ vi.mock("$lib/i18n", () => ({
 }));
 
 import CentralsAdmin from "./CentralsAdmin.svelte";
+import { prefs } from "$lib/stores/preferences.svelte";
 
 const liteRow = {
   name: "box",
@@ -134,12 +135,32 @@ describe("CentralsAdmin — openccu-lite central", () => {
     expect(JSON.stringify(sent)).not.toContain("***");
   });
 
+  it("offers the box's port in expert mode, under its own label", async () => {
+    prefs.expertMode = true;
+    mockListCentrals.mockResolvedValue([{ ...liteRow, json_rpc_port: 8443 }]);
+    const { container, queryByText, unmount } = render(CentralsAdmin);
+    try {
+      await openEdit(container);
+
+      // A box has no JSON-RPC endpoint; the field is its web server's port.
+      expect(queryByText("centrals.field.json_rpc_port")).toBeNull();
+      expect(queryByText("centrals.field.port")).not.toBeNull();
+      expect(queryByText("centrals.field.lite_port_hint")).not.toBeNull();
+    } finally {
+      // The queries search the whole document, so a dialog left mounted
+      // would answer the next test's absence checks.
+      unmount();
+      prefs.expertMode = false;
+    }
+  });
+
   it("does not offer the port field and keeps a stored port on save", async () => {
     mockListCentrals.mockResolvedValue([{ ...liteRow, json_rpc_port: 8443 }]);
     const { container, queryByText } = render(CentralsAdmin);
     await openEdit(container);
 
     expect(queryByText("centrals.field.json_rpc_port")).toBeNull();
+    expect(queryByText("centrals.field.port")).toBeNull();
 
     await fireEvent.click(button(container, "common.save")!);
     await waitFor(() => expect(mockUpdateCentral).toHaveBeenCalledOnce());

@@ -26,6 +26,7 @@
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import CentralStatusBadge from "$lib/components/ui/CentralStatusBadge.svelte";
+  import AddDeviceDialog from "$lib/components/device/AddDeviceDialog.svelte";
 
   import PageShell from "$lib/components/ui/PageShell.svelte";
   import Select from "$lib/components/ui/Select.svelte";
@@ -100,6 +101,10 @@
       channelsLoading = loading;
     }
   }
+
+  // Pairing is an action on the device list, not on the CCU inbox: a
+  // system without an inbox (openccu-lite) still has an install mode.
+  let addDeviceOpen = $state(false);
 
   let selected = $state<Set<string>>(new Set());
   let bulkBusy = $state(false);
@@ -494,6 +499,18 @@
           {t("devicelist.ccu_refresh")}
         </Button>
       </div>
+      <!-- The page's primary action, set apart from the filter cluster and
+           placed last like the primary action of the other list views. -->
+      {#if centralStore.featureAvailable("install_mode")}
+        <Button
+          type="button"
+          class="w-full sm:w-auto"
+          onclick={() => (addDeviceOpen = true)}
+          title={t("devicelist.add_device_title")}
+        >
+          {t("devicelist.add_device")}
+        </Button>
+      {/if}
     {/snippet}
   </PageHeader>
 
@@ -638,3 +655,5 @@
     </p>
   {/if}
 </PageShell>
+
+<AddDeviceDialog open={addDeviceOpen} onClose={() => (addDeviceOpen = false)} />
