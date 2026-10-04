@@ -38,7 +38,7 @@ The app is organised into views. The main ones, and the everyday tasks they cove
 |------|-------------------|
 | **Overview** | Landing dashboard: at-a-glance daemon and CCU status. |
 | **Favorites** | Quick access to the devices you pin as favorites. |
-| **Devices** | Browse all devices across your CCUs, drill into channels and parameters. |
+| **Devices** | Browse all devices across your CCUs, drill into channels and parameters. **Add device** starts pairing: pick the interface, open the pairing window, and accept and name a device as it joins. |
 | **Device detail** | Inspect one device, read and change its data points, and configure it. |
 | **Fleet** | Fleet-wide view across every configured CCU. |
 | **Energy** | Monitor power and energy readings from measuring devices. |
@@ -47,7 +47,7 @@ The app is organised into views. The main ones, and the everyday tasks they cove
 | **Diagnostics** | Check health and troubleshooting information. |
 | **Backups** | Manage configuration backups. |
 | **Firmware** | View device firmware status. |
-| **Inbox / Messages** | See pending notices from your CCUs. |
+| **Inbox / Messages** | Devices waiting to be accepted or released, and pending notices from your CCUs. |
 | **Programs / System variables** | Browse CCU programs and system variables. |
 | **Audit log** | Review what changes were made and by whom. |
 | **Log viewer** | Follow the daemon's live log stream (see [Installation & First Steps](../user-guide.md#log-viewer-logs)). |
