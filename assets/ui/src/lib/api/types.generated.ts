@@ -9716,6 +9716,10 @@ export interface components {
              * @description Runtime capability the surface additionally needs. A
              *     `feature:<key>` gate is open while at least one central
              *     offers that feature (see `features` on `GET /system/ccu`).
+             *     `feature:hub.inbox` is no longer emitted: the new-devices
+             *     view (`nav.inbox`) lists the daemon's own onboarding hold,
+             *     which exists on every system, and carries no gate. The value
+             *     stays in the vocabulary for clients of older daemons.
              * @enum {string}
              */
             gate?: "matter" | "history" | "feature:hub.programs" | "feature:hub.sysvars" | "feature:hub.inbox" | "feature:heating_groups.read" | "feature:system.backup.create";

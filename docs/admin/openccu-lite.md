@@ -38,7 +38,7 @@ CCU features simply do not exist on it:
 
 | Absent | Reason |
 |---|---|
-| System variables, programs, HM-Script, the CCU inbox | No ReGa, no script interpreter |
+| System variables, programs, HM-Script, the CCU inbox | No ReGa, no script interpreter (new devices are still held, accepted and released in the **New devices** view — that is the daemon's own hold, not the CCU inbox) |
 | Acknowledging service or alarm messages | The box's API has no acknowledge endpoint |
 | Communication test, astro position, safe mode | No endpoint on the box |
 | CUxD | The box's event stream carries only its own XML-RPC interfaces, never BIN-RPC |

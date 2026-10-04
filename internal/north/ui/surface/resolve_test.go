@@ -325,3 +325,31 @@ func TestNormalizeFollowsTheFleetDefault(t *testing.T) {
 func resolveSingle(ui config.NorthUI) Resolution {
 	return ResolveFleet(ui, true, Fleet{})
 }
+
+// TestNewDevicesViewIsOfferedOnEverySystem pins that the view listing
+// devices waiting to be accepted or released carries no capability gate.
+//
+// It lists the daemon's own onboarding hold, which exists on every system
+// type. Gated on the CCU inbox feature it vanished from the navigation of
+// an openccu-lite fleet — the system that has no other place to accept a
+// held device. The programs view stays gated, so a registry that dropped
+// every gate would not pass the second half.
+func TestNewDevicesViewIsOfferedOnEverySystem(t *testing.T) {
+	t.Parallel()
+
+	gates := map[ID]Gate{}
+	for _, s := range Registry() {
+		gates[s.ID] = s.Gate
+	}
+	got, ok := gates["nav.inbox"]
+	if !ok {
+		t.Fatal("nav.inbox is not registered; operator profiles and links reference that id")
+	}
+	if got != GateNone {
+		t.Errorf("nav.inbox gate = %q, want none: the onboarding hold exists on every system", got)
+	}
+	if gates["nav.programs"] != GateFeaturePrograms {
+		t.Errorf("nav.programs gate = %q, want %q (control: per-central gates still apply)",
+			gates["nav.programs"], GateFeaturePrograms)
+	}
+}

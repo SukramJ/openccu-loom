@@ -110,8 +110,7 @@
       "defaults": {
         "embedded": true,
         "standalone": true
-      },
-      "gate": "feature:hub.inbox"
+      }
     },
     {
       "id": "nav.fleet",

@@ -1,5 +1,4 @@
 <script lang="ts">
-  import FeatureGate from "$lib/components/ui/FeatureGate.svelte";
   import { onDestroy, onMount } from "svelte";
   import { api, ApiError } from "$lib/api/client";
   import type { InboxDevice, ReplaceCandidate, GroupEntry } from "$lib/api/types";
@@ -7,8 +6,6 @@
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
-  import Input from "$lib/components/ui/Input.svelte";
-  import RoomFunctionSelect from "$lib/components/RoomFunctionSelect.svelte";
   import DataTable from "$lib/components/ui/DataTable.svelte";
   import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
@@ -17,7 +14,18 @@
   import Select from "$lib/components/ui/Select.svelte";
   import PageShell from "$lib/components/ui/PageShell.svelte";
   import AddDeviceDialog from "$lib/components/device/AddDeviceDialog.svelte";
-  import { buildAcceptConfig } from "$lib/components/device/acceptConfig";
+  import AcceptConfigFields from "$lib/components/device/AcceptConfigFields.svelte";
+  import {
+    buildAcceptConfig,
+    emptyAcceptDraft,
+    type AcceptDraft,
+  } from "$lib/components/device/acceptConfig";
+  import {
+    acceptDevice,
+    heldAfterAccept,
+    releaseDevice as releaseEntry,
+  } from "$lib/components/device/onboarding";
+  import { createRoomFunctionCatalog } from "$lib/components/device/roomFunctionCatalog.svelte";
   import { installModeStore } from "$lib/stores/installMode.svelte";
   import { centralStore } from "$lib/stores/centrals.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
@@ -26,10 +34,11 @@
   import { prefs } from "$lib/stores/preferences.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
 
-  // Inbox of pending pairing candidates. The CCU populates the list
-  // through its system-variable feed; this view lets the operator
-  // accept devices into the running registry. Mirrors the
-  // "Posteingang" panel of the CCU WebUI.
+  // New devices: every newly paired device the daemon holds back, in its
+  // two phases (waiting to be accepted, waiting to be released), plus the
+  // entries a CCU's own inbox holds. The hold exists on every system type,
+  // so the view does not depend on the CCU inbox feature (ADR 0082); on a
+  // CCU its inbox only feeds the list.
 
   let entries = $state<InboxDevice[]>([]);
   let loading = $state(true);
@@ -79,14 +88,10 @@
   }
 
   // Accept dialog — first-time configuration (name, rooms, functions)
-  // applied right after the CCU accepts the device out of the inbox.
-  // A null target means the dialog is closed; leaving every field empty
-  // and confirming performs a plain accept.
-  let acceptTarget = $state<{ address: string; central: string } | null>(null);
-  let acceptName = $state("");
-  let acceptIncludeChannels = $state(false);
-  let acceptRooms = $state<Set<string>>(new Set());
-  let acceptFunctions = $state<Set<string>>(new Set());
+  // applied with the accept. A null target means the dialog is closed;
+  // leaving every field empty and confirming performs a plain accept.
+  let acceptTarget = $state<InboxDevice | null>(null);
+  let acceptDraft = $state<AcceptDraft>(emptyAcceptDraft());
   let acceptSubmitting = $state(false);
   // GR05: optionally assign the accepted device to a heating group.
   let acceptGroups = $state<GroupEntry[]>([]);
@@ -240,44 +245,16 @@
     }
   }
 
-  // Room / function catalogues for the multi-selects. Loaded lazily the
-  // first time the dialog opens; a load failure leaves the lists empty so
-  // the operator can still accept + rename.
-  let roomOptions = $state<string[]>([]);
-  let functionOptions = $state<string[]>([]);
-  let catalogsLoaded = $state(false);
+  // Room / function catalogues for the multi-selects, shared with the
+  // add-device dialog's accept.
+  const catalog = createRoomFunctionCatalog();
 
-  async function loadCatalogs() {
-    if (catalogsLoaded) return;
-    try {
-      const [rooms, functions] = await Promise.all([
-        api.listRooms(),
-        api.listFunctions(),
-      ]);
-      roomOptions = rooms.map((r) => r.name).sort((a, b) => a.localeCompare(b));
-      functionOptions = functions
-        .map((f) => f.name)
-        .sort((a, b) => a.localeCompare(b));
-      catalogsLoaded = true;
-    } catch (err) {
-      toastStore.error(
-        err instanceof ApiError
-          ? `${err.status}: ${t("inbox.accept_dialog.catalog_error")}`
-          : t("inbox.accept_dialog.catalog_error"),
-      );
-    }
-  }
-
-  function openAccept(addr: string, central: string) {
-    acceptTarget = { address: addr, central };
-    acceptName = "";
-    acceptIncludeChannels = false;
-    acceptRooms = new Set();
-    acceptFunctions = new Set();
+  function openAccept(d: InboxDevice) {
+    acceptTarget = d;
+    acceptDraft = emptyAcceptDraft();
     acceptGroups = [];
     acceptGroupId = "";
-    void loadCatalogs();
-    void loadAcceptGroups(central);
+    void loadAcceptGroups(d.central ?? "");
   }
 
   // GR05: load the target central's heating groups so the accept dialog can
@@ -324,81 +301,38 @@
     acceptTarget = null;
   }
 
-  // The combobox may create a brand-new CCU room / function on the spot;
-  // append it to the catalogue so it renders immediately as selected.
-  // The CCU refuses the write on a duplicate name, a missing permission or
-  // an unreachable ReGa, and the combobox discards the returned promise, so
-  // a rejection that is not caught here reaches nothing at all — the chip
-  // never appears and the operator is told neither that it worked nor that
-  // it failed.
-  async function createRoomOption(name: string) {
-    try {
-      await api.createRoom(name, acceptTarget?.central);
-    } catch (err) {
-      toastStore.error(err instanceof ApiError ? err.message : String(err));
-      throw err;
-    }
-    if (!roomOptions.includes(name))
-      roomOptions = [...roomOptions, name].sort((a, b) => a.localeCompare(b));
-    toastStore.success(t("roomfn.created.room"));
-  }
-  async function createFunctionOption(name: string) {
-    try {
-      await api.createFunction(name, acceptTarget?.central);
-    } catch (err) {
-      toastStore.error(err instanceof ApiError ? err.message : String(err));
-      throw err;
-    }
-    if (!functionOptions.includes(name))
-      functionOptions = [...functionOptions, name].sort((a, b) =>
-        a.localeCompare(b),
-      );
-    toastStore.success(t("roomfn.created.function"));
-  }
-
-  async function confirmAccept() {
+  // Accept, optionally followed by the release. The heating-group
+  // assignment runs between the two, so a released device is published
+  // with its group already set.
+  async function confirmAccept(release: boolean) {
     if (!acceptTarget) return;
-    const { address, central } = acceptTarget;
-    const name = acceptName.trim();
-    const config = buildAcceptConfig({
-      name: acceptName,
-      includeChannels: acceptIncludeChannels,
-      rooms: Array.from(acceptRooms),
-      functions: Array.from(acceptFunctions),
-    });
-
+    const target = acceptTarget;
+    const address = target.address;
+    const central = target.central ?? "";
     accepting = address;
     acceptSubmitting = true;
     try {
-      await api.acceptInboxDevice(
-        address,
-        central,
-        config,
-      );
-      toastStore.success(t("inbox.accepted", { name: name || address }));
-      // GR05: optional heating-group assignment. Best-effort — the device is
-      // already accepted, so a group-assign failure only warns.
-      if (acceptGroupId !== "") {
-        try {
-          await assignAcceptedToGroup(address, central);
-        } catch (err) {
-          toastStore.error(
-            err instanceof ApiError
-              ? `${err.status}: ${err.message}`
-              : t("inbox.group_assign.failed"),
-          );
-        }
+      const outcome = await acceptDevice(target, buildAcceptConfig(acceptDraft), {
+        release,
+        afterAccept: async () => {
+          // Best-effort: the device is already accepted, so a
+          // group-assign failure only warns.
+          if (acceptGroupId === "") return;
+          try {
+            await assignAcceptedToGroup(address, central);
+          } catch (err) {
+            toastStore.error(
+              err instanceof ApiError
+                ? `${err.status}: ${err.message}`
+                : t("inbox.group_assign.failed"),
+            );
+          }
+        },
+      });
+      if (outcome !== "failed") {
+        acceptTarget = null;
+        await load();
       }
-      acceptTarget = null;
-      await load();
-    } catch (err) {
-      toastStore.error(
-        err instanceof ApiError
-          ? `${err.status}: ${err.message}`
-          : err instanceof Error
-            ? err.message
-            : String(err),
-      );
     } finally {
       acceptSubmitting = false;
       accepting = null;
@@ -409,20 +343,10 @@
   // accepted and materialised — it has been named and placed by now — and
   // only this call publishes it to Home Assistant, Matter and any
   // webhook.
-  async function releaseDevice(address: string, central: string) {
-    releasing = address;
+  async function releaseDevice(d: InboxDevice) {
+    releasing = d.address;
     try {
-      await api.releaseDevice(address, central);
-      toastStore.success(t("inbox.released", { name: address }));
-      await load();
-    } catch (err) {
-      toastStore.error(
-        err instanceof ApiError
-          ? `${err.status}: ${err.message}`
-          : err instanceof Error
-            ? err.message
-            : String(err),
-      );
+      if (await releaseEntry(d)) await load();
     } finally {
       releasing = null;
     }
@@ -448,15 +372,6 @@
       a.localeCompare(b, undefined, { sensitivity: "base" }),
     );
   });
-
-  // Devices the daemon itself holds back (delay_new_device_creation and the
-  // onboarding release step) are listed on every system type, including one
-  // without a CCU inbox. When the fleet has no inbox at all, those entries
-  // are the only reason to show the list.
-  const heldWithoutInbox = $derived(
-    !centralStore.featureAvailable("hub.inbox") &&
-      entries.some((d) => d.pending_creation || d.awaiting_release),
-  );
 
   const visibleEntries = $derived(
     centralFilter ? entries.filter((d) => d.central === centralFilter) : entries,
@@ -575,7 +490,7 @@
               <Button
                 type="button"
                 size="sm"
-                onclick={() => void releaseDevice(d.address, d.central ?? "")}
+                onclick={() => void releaseDevice(d)}
                 disabled={releasing === d.address}
               >
                 {releasing === d.address ? "…" : t("inbox.release")}
@@ -584,7 +499,7 @@
                 type="button"
                 variant="outline"
                 size="sm"
-                onclick={() => (location.hash = `#/device/${encodeURIComponent(d.address)}`)}
+                onclick={() => (location.hash = `#/devices/${encodeURIComponent(d.address)}`)}
               >
                 {t("inbox.configure")}
               </Button>
@@ -592,7 +507,7 @@
               <Button
                 type="button"
                 size="sm"
-                onclick={() => openAccept(d.address, d.central ?? "")}
+                onclick={() => openAccept(d)}
                 disabled={accepting === d.address}
               >
                 {accepting === d.address ? "…" : t("inbox.accept")}
@@ -655,16 +570,10 @@
     </div>
   {/if}
 
-  <!-- A fleet without a CCU inbox (openccu-lite) still lists the devices the
-       daemon holds back, and only this view can accept or release them. The
-       gate's explanation stays for the case where there is nothing to show. -->
-  {#if heldWithoutInbox}
-    {@render inboxList()}
-  {:else}
-    <FeatureGate feature="hub.inbox">
-      {@render inboxList()}
-    </FeatureGate>
-  {/if}
+  <!-- Rendered on every system: the daemon's hold exists without a CCU
+       inbox, and an empty list is the shared empty state, not a feature
+       gate's explanation. -->
+  {@render inboxList()}
 </PageShell>
 
 <AddDeviceDialog
@@ -706,67 +615,16 @@
       <form
         onsubmit={(e) => {
           e.preventDefault();
-          void confirmAccept();
+          void confirmAccept(heldAfterAccept(acceptTarget!));
         }}
       >
-        <div class="mb-4">
-          <label
-            class="mb-1 block text-sm font-medium"
-            for="accept-name"
-          >
-            {t("inbox.accept_dialog.name_label")}
-          </label>
-          <Input
-            id="accept-name"
-            bind:value={acceptName}
-            placeholder={t("inbox.accept_dialog.name_placeholder")}
-            disabled={acceptSubmitting}
-          />
-          <label
-            class="mt-2 flex items-center gap-2 text-sm"
-            class:opacity-50={acceptName.trim() === ""}
-          >
-            <input
-              type="checkbox"
-              bind:checked={acceptIncludeChannels}
-              disabled={acceptSubmitting || acceptName.trim() === ""}
-              class="h-4 w-4 rounded border-[var(--ha-divider-color)] text-brand-600 focus:ring-brand-500"
-            />
-            {t("inbox.accept_dialog.include_channels")}
-          </label>
-        </div>
-
-        <div class="mb-4">
-          <span class="mb-1 block text-sm font-medium">{t("inbox.accept_dialog.rooms_label")}</span>
-          <RoomFunctionSelect
-            id="inbox-rooms"
-            ariaLabel={t("inbox.accept_dialog.rooms_label")}
-            selected={Array.from(acceptRooms)}
-            options={roomOptions}
-            onChange={(next) => (acceptRooms = new Set(next))}
-            onCreate={createRoomOption}
-            placeholder={t("roomfn.placeholder.room")}
-            createLabel={(v) => t("roomfn.create.room", { name: v })}
-            removeLabel={(n) => t("roomfn.remove_named", { name: n })}
-            disabled={acceptSubmitting}
-          />
-        </div>
-
-        <div class="mb-5">
-          <span class="mb-1 block text-sm font-medium">{t("inbox.accept_dialog.functions_label")}</span>
-          <RoomFunctionSelect
-            id="inbox-functions"
-            ariaLabel={t("inbox.accept_dialog.functions_label")}
-            selected={Array.from(acceptFunctions)}
-            options={functionOptions}
-            onChange={(next) => (acceptFunctions = new Set(next))}
-            onCreate={createFunctionOption}
-            placeholder={t("roomfn.placeholder.function")}
-            createLabel={(v) => t("roomfn.create.function", { name: v })}
-            removeLabel={(n) => t("roomfn.remove_named", { name: n })}
-            disabled={acceptSubmitting}
-          />
-        </div>
+        <AcceptConfigFields
+          bind:draft={acceptDraft}
+          central={acceptTarget.central ?? ""}
+          {catalog}
+          disabled={acceptSubmitting}
+          ids={{ name: "accept-name", rooms: "inbox-rooms", functions: "inbox-functions" }}
+        />
 
         {#if acceptGroups.length > 0}
           <div class="mb-5">
@@ -802,9 +660,27 @@
           >
             {t("common.cancel")}
           </Button>
-          <Button type="submit" class="w-full sm:w-auto" disabled={acceptSubmitting}>
-            {acceptSubmitting ? "…" : t("inbox.accept_dialog.submit")}
-          </Button>
+          {#if heldAfterAccept(acceptTarget)}
+            <!-- Held by the daemon: accepting builds it and keeps it
+                 withheld; the primary action also publishes it. -->
+            <Button
+              type="button"
+              variant="outline"
+              class="w-full sm:w-auto"
+              title={t("inbox.accept_only_title")}
+              onclick={() => void confirmAccept(false)}
+              disabled={acceptSubmitting}
+            >
+              {t("inbox.accept_dialog.submit")}
+            </Button>
+            <Button type="submit" class="w-full sm:w-auto" disabled={acceptSubmitting}>
+              {acceptSubmitting ? "…" : t("inbox.accept_release")}
+            </Button>
+          {:else}
+            <Button type="submit" class="w-full sm:w-auto" disabled={acceptSubmitting}>
+              {acceptSubmitting ? "…" : t("inbox.accept_dialog.submit")}
+            </Button>
+          {/if}
         </div>
       </form>
     </div>

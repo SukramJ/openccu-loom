@@ -5,10 +5,12 @@ import { mockAllApis, addStylesForStableScreenshots } from './helpers/mock-api';
 /**
  * The "Add device" dialog: the one place pairing starts.
  *
- * It is opened from the device list and from the inbox, and it must behave
- * the same from both: the pairing controls for the chosen interface, an
- * inline accept for every device the daemon holds back, and the devices
- * that joined while it was open. Two centrals can expose the same
+ * It is opened from the device list and from the new-devices view, and it
+ * must behave the same from both: the pairing controls for the chosen
+ * interface, an accept with name, rooms and functions for every device the
+ * daemon holds back — "accept and release" finishing onboarding in one
+ * step — a release for every device already accepted, and the devices that
+ * joined while it was open. Two centrals can expose the same
  * interface name, so starting pairing has to say which central it means —
  * without that the daemon picks the first match and the operator pairs on
  * the wrong box.
@@ -60,6 +62,25 @@ async function mockInbox(page: Page, devices: unknown[]) {
   await page.route('**/api/v1/inbox', (route) => route.fulfill({ json: devices }));
 }
 
+/**
+ * Records every accept and release in the order the SPA sent them. The
+ * accept-and-release action is two calls, and only this order publishes a
+ * device with the name and assignments the operator entered.
+ */
+async function recordOnboarding(page: Page): Promise<{ url: string; body: unknown }[]> {
+  const sent: { url: string; body: unknown }[] = [];
+  await page.route('**/api/v1/devices/*/accept*', (route) => {
+    const req = route.request();
+    sent.push({ url: req.url(), body: req.postDataJSON() });
+    return route.fulfill({ status: 202 });
+  });
+  await page.route('**/api/v1/devices/*/release*', (route) => {
+    sent.push({ url: route.request().url(), body: null });
+    return route.fulfill({ status: 204 });
+  });
+  return sent;
+}
+
 async function setTheme(page: Page, theme: 'light' | 'dark') {
   await page.addInitScript(
     (t) => {
@@ -99,7 +120,7 @@ test.describe('Add device dialog', () => {
     await expect(dialog.getByRole('button', { name: 'Start pairing' })).toBeVisible();
   });
 
-  test('opens from the inbox, whose header has no pairing form of its own', async ({ page }) => {
+  test('opens from the new-devices view, whose header has no pairing form of its own', async ({ page }) => {
     await mockInstallMode(page, [{ interface: 'HmIP-RF', active: false, seconds: 0 }]);
     await mockInbox(page, []);
 
@@ -139,27 +160,84 @@ test.describe('Add device dialog', () => {
     expect(posts[0]).toMatchObject({ central: 'box', interface: 'HmIP-RF', active: true });
   });
 
-  test('a held device is accepted inside the dialog with its name', async ({ page }) => {
+  test('a held device is accepted in the dialog with its name, rooms and functions, then released', async ({ page }) => {
     await mockInstallMode(page, [{ interface: 'HmIP-RF', active: false, seconds: 0 }]);
     await mockInbox(page, [PENDING]);
-    const accepts: { url: string; body: unknown }[] = [];
-    await page.route('**/api/v1/devices/*/accept*', (route) => {
-      const req = route.request();
-      accepts.push({ url: req.url(), body: req.postDataJSON() });
-      return route.fulfill({ status: 204 });
-    });
+    await page.route('**/api/v1/rooms', (route) =>
+      route.fulfill({ json: [{ id: 1, name: 'Bathroom' }, { id: 2, name: 'Kitchen' }] }),
+    );
+    await page.route('**/api/v1/functions', (route) =>
+      route.fulfill({ json: [{ id: 3, name: 'Climate' }, { id: 4, name: 'Lights' }] }),
+    );
+    const sent = await recordOnboarding(page);
 
     const dialog = await openFromDeviceList(page);
     const held = dialog.getByTestId('add-device-acceptable');
     await expect(held.getByText('0002PEND')).toBeVisible();
     await held.getByRole('textbox', { name: 'Name' }).fill('Bathroom climate');
-    await held.getByRole('button', { name: 'Accept' }).click();
+    await held.getByLabel('Rooms').fill('Bath');
+    await held.getByRole('option', { name: 'Bathroom' }).click();
+    await held.getByLabel('Functions').fill('Clim');
+    await held.getByRole('option', { name: 'Climate' }).click();
+    await held.getByRole('button', { name: 'Accept and release', exact: true }).click();
 
-    await expect.poll(() => accepts.length).toBe(1);
-    const url = new URL(accepts[0].url);
-    expect(url.pathname).toBe('/api/v1/devices/0002PEND/accept');
-    expect(url.searchParams.get('central')).toBe('ccu1');
-    expect(accepts[0].body).toEqual({ name: 'Bathroom climate' });
+    await expect.poll(() => sent.length).toBe(2);
+    const accept = new URL(sent[0].url);
+    expect(accept.pathname).toBe('/api/v1/devices/0002PEND/accept');
+    expect(accept.searchParams.get('central')).toBe('ccu1');
+    expect(sent[0].body).toEqual({
+      name: 'Bathroom climate',
+      rooms: ['Bathroom'],
+      functions: ['Climate'],
+    });
+    const release = new URL(sent[1].url);
+    expect(release.pathname).toBe('/api/v1/devices/0002PEND/release');
+    expect(release.searchParams.get('central')).toBe('ccu1');
+  });
+
+  test('a plain accept keeps the device withheld', async ({ page }) => {
+    await mockInstallMode(page, [{ interface: 'HmIP-RF', active: false, seconds: 0 }]);
+    const sent = await recordOnboarding(page);
+    // What the daemon lists: held until the accept, then built and withheld.
+    await page.route('**/api/v1/inbox', (route) =>
+      route.fulfill({
+        json: [
+          sent.length === 0
+            ? PENDING
+            : { ...PENDING, pending_creation: false, awaiting_release: true },
+        ],
+      }),
+    );
+
+    const dialog = await openFromDeviceList(page);
+    const held = dialog.getByTestId('add-device-acceptable');
+    await held.getByRole('button', { name: 'Accept', exact: true }).click();
+
+    await expect.poll(() => sent.length).toBe(1);
+    expect(new URL(sent[0].url).pathname).toBe('/api/v1/devices/0002PEND/accept');
+    // The device moved to the release list instead of being published.
+    const waiting = dialog.getByTestId('add-device-awaiting-release');
+    await expect(waiting.getByRole('button', { name: 'Release' })).toBeVisible();
+    await page.waitForTimeout(300);
+    expect(sent).toHaveLength(1);
+  });
+
+  test('a device waiting to be released is released in the dialog', async ({ page }) => {
+    await mockInstallMode(page, [{ interface: 'HmIP-RF', active: false, seconds: 0 }]);
+    await mockInbox(page, [{ ...PENDING, pending_creation: false, awaiting_release: true }]);
+    const sent = await recordOnboarding(page);
+
+    const dialog = await openFromDeviceList(page);
+    const waiting = dialog.getByTestId('add-device-awaiting-release');
+    await expect(waiting.getByText('Waiting to be released (1)')).toBeVisible();
+    await expect(waiting.getByRole('link', { name: 'Configure' })).toHaveAttribute(
+      'href',
+      '#/devices/0002PEND',
+    );
+    await waiting.getByRole('button', { name: 'Release' }).click();
+
+    await expect.poll(() => sent.length).toBe(1);
+    expect(new URL(sent[0].url).pathname).toBe('/api/v1/devices/0002PEND/release');
   });
 
   test('offers the controls that apply to the chosen interface', async ({ page }) => {

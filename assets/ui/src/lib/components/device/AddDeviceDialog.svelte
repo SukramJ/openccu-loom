@@ -1,30 +1,34 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import { api, ApiError } from "$lib/api/client";
+  import { api } from "$lib/api/client";
   import type { InboxDevice } from "$lib/api/types";
   import Button from "$lib/components/ui/Button.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
-  import Input from "$lib/components/ui/Input.svelte";
   import DialogFrame from "$lib/components/ui/DialogFrame.svelte";
   import PairingControls from "./PairingControls.svelte";
-  import { buildAcceptConfig } from "./acceptConfig";
+  import AcceptConfigFields from "./AcceptConfigFields.svelte";
+  import { buildAcceptConfig, emptyAcceptDraft, type AcceptDraft } from "./acceptConfig";
+  import { acceptDevice, heldAfterAccept, releaseDevice } from "./onboarding";
+  import { createRoomFunctionCatalog } from "./roomFunctionCatalog.svelte";
   import { deviceStore } from "$lib/stores/devices.svelte";
   import { installModeStore } from "$lib/stores/installMode.svelte";
-  import { toastStore } from "$lib/stores/toast.svelte";
   import { t } from "$lib/i18n";
 
   // The one place pairing starts, opened from the device list and from the
-  // inbox. It does not depend on a CCU inbox: a system without one
-  // (openccu-lite) still has an install mode, and the daemon's own hold is
-  // listed by the inbox endpoint on every system type.
+  // new-devices view. It does not depend on a CCU inbox: a system without
+  // one (openccu-lite) still has an install mode, and the daemon's own hold
+  // is listed by the inbox endpoint on every system type.
   //
   // While the dialog is open the operator sees:
   //  - the pairing controls for the chosen interface;
   //  - devices waiting to be accepted — every device the daemon holds back
   //    and every CCU inbox entry that appeared since the dialog opened —
-  //    each with an inline accept that takes a name, so pairing never
-  //    requires leaving the dialog (rooms, functions and heating groups
-  //    stay in the inbox's full accept dialog);
+  //    each with its first-time configuration (name, rooms, functions) and
+  //    "accept and release" as the one action that finishes onboarding
+  //    (ADR 0082). Plain "accept" builds the device and keeps it withheld,
+  //    for an operator who wants to configure more before publishing; the
+  //    heating group stays in the new-devices view's full dialog;
+  //  - devices waiting to be released, each with its release;
   //  - every device that appeared in the device list since opening,
   //    linking to its page;
   //  - once a pairing window started here has ended empty, the most common
@@ -50,13 +54,19 @@
   let windowStarted = $state(false);
   let windowEnded = $state(false);
 
-  // Inline accept state, per inbox entry key.
-  let names = $state<Record<string, string>>({});
-  let includeChannels = $state<Record<string, boolean>>({});
-  let accepting = $state<string | null>(null);
+  // Per-entry first-time configuration and the entry a request runs for.
+  let drafts = $state<Record<string, AcceptDraft>>({});
+  let busy = $state<string | null>(null);
+  const catalog = createRoomFunctionCatalog();
 
   function keyOf(d: InboxDevice): string {
     return (d.central ?? "") + "/" + d.address;
+  }
+
+  // Element ids for one entry's fields; a key carries a slash.
+  function idsOf(key: string) {
+    const base = "add-device-" + key.replace(/[^A-Za-z0-9_-]/g, "-");
+    return { name: base + "-name", rooms: base + "-rooms", functions: base + "-functions" };
   }
 
   async function loadInbox() {
@@ -65,8 +75,8 @@
       inbox = list;
       if (knownInbox === null) knownInbox = new Set(list.map(keyOf));
     } catch {
-      // Supplementary here: the pairing controls stay usable, and the inbox
-      // view reports its own load errors.
+      // Supplementary here: the pairing controls stay usable, and the
+      // new-devices view reports its own load errors.
     }
   }
 
@@ -84,8 +94,7 @@
       knownDevices = null;
       knownInbox = null;
       inbox = [];
-      names = {};
-      includeChannels = {};
+      drafts = {};
       windowStarted = false;
       windowEnded = false;
       lastActive = installModeStore.active;
@@ -128,8 +137,7 @@
     knownInbox === null ? [] : inbox.filter((d) => !knownInbox!.has(keyOf(d))),
   );
   // Waiting to be accepted: the daemon's hold whenever it was created, plus
-  // CCU inbox entries from this pairing session. An entry awaiting release
-  // is already accepted; its remaining step lives in the inbox.
+  // CCU inbox entries from this pairing session.
   const acceptable = $derived(
     inbox.filter(
       (d) =>
@@ -137,7 +145,7 @@
         (d.pending_creation || inboxAppeared.some((n) => keyOf(n) === keyOf(d))),
     ),
   );
-  const awaitingRelease = $derived(inbox.filter((d) => d.awaiting_release).length);
+  const awaitingRelease = $derived(inbox.filter((d) => d.awaiting_release));
   const nothingJoined = $derived(
     windowEnded &&
       !installModeStore.active &&
@@ -145,28 +153,60 @@
       inboxAppeared.length === 0,
   );
 
-  async function accept(d: InboxDevice) {
+  // Every acceptable entry gets its own draft, created when it shows up.
+  $effect(() => {
+    const missing = acceptable.filter((d) => !(keyOf(d) in untrack(() => drafts)));
+    if (missing.length === 0) return;
+    untrack(() => {
+      const next = { ...drafts };
+      for (const d of missing) next[keyOf(d)] = emptyAcceptDraft();
+      drafts = next;
+    });
+  });
+
+  // A held device is built on the server; its name lives in the device
+  // list, which the inbox entry does not carry.
+  function nameOf(d: InboxDevice): string {
+    return deviceStore.items.find((x) => x.address === d.address)?.name || d.address;
+  }
+
+  // Moves an entry between the two lists right away; the reload that
+  // follows reconciles it with the daemon.
+  function markAwaitingRelease(key: string) {
+    inbox = inbox.map((e) =>
+      keyOf(e) === key ? { ...e, pending_creation: false, awaiting_release: true } : e,
+    );
+  }
+
+  function dropEntry(key: string) {
+    inbox = inbox.filter((e) => keyOf(e) !== key);
+  }
+
+  async function accept(d: InboxDevice, release: boolean) {
     const key = keyOf(d);
-    const name = (names[key] ?? "").trim();
-    accepting = key;
+    const draft = drafts[key] ?? emptyAcceptDraft();
+    busy = key;
     try {
-      await api.acceptInboxDevice(
-        d.address,
-        d.central ?? "",
-        buildAcceptConfig({ name: names[key] ?? "", includeChannels: includeChannels[key] ?? false }),
-      );
-      toastStore.success(t("inbox.accepted", { name: name || d.address }));
+      const outcome = await acceptDevice(d, buildAcceptConfig(draft), { release });
+      if (outcome === "failed") return;
+      if (outcome === "released" || !heldAfterAccept(d)) dropEntry(key);
+      else markAwaitingRelease(key);
       refreshAll();
-    } catch (err) {
-      toastStore.error(
-        err instanceof ApiError
-          ? `${err.status}: ${err.message}`
-          : err instanceof Error
-            ? err.message
-            : String(err),
-      );
     } finally {
-      accepting = null;
+      busy = null;
+    }
+  }
+
+  async function release(d: InboxDevice) {
+    const key = keyOf(d);
+    busy = key;
+    try {
+      if (await releaseDevice(d, nameOf(d))) {
+        dropEntry(key);
+        refreshAll();
+      }
+    } finally {
+      busy = null;
     }
   }
 </script>
@@ -186,48 +226,53 @@
       <ul class="flex flex-col gap-3">
         {#each acceptable as d (keyOf(d))}
           {@const key = keyOf(d)}
+          {@const held = heldAfterAccept(d)}
           <li class="rounded-md border border-[var(--ha-divider-color)] p-3">
-            <div class="mb-2 flex flex-wrap items-center gap-2">
+            <div class="mb-3 flex flex-wrap items-center gap-2">
               <span class="font-mono text-sm font-semibold">{d.address}</span>
               <Badge variant="muted">{d.model}</Badge>
               {#if d.central}
                 <Badge variant="muted">{d.central}</Badge>
               {/if}
             </div>
-            <form
-              class="flex flex-wrap items-center gap-2"
-              onsubmit={(e) => {
-                e.preventDefault();
-                void accept(d);
-              }}
-            >
-              <Input
-                class="w-full sm:w-56"
-                value={names[key] ?? ""}
-                oninput={(e: Event) =>
-                  (names = { ...names, [key]: (e.currentTarget as HTMLInputElement).value })}
-                placeholder={t("inbox.accept_dialog.name_placeholder")}
-                aria-label={t("inbox.accept_dialog.name_label")}
-                disabled={accepting === key}
-              />
-              <label
-                class="flex items-center gap-2 text-sm"
-                class:opacity-50={(names[key] ?? "").trim() === ""}
+            {#if drafts[key]}
+              <form
+                onsubmit={(e) => {
+                  e.preventDefault();
+                  void accept(d, held);
+                }}
               >
-                <input
-                  type="checkbox"
-                  checked={includeChannels[key] ?? false}
-                  onchange={(e) =>
-                    (includeChannels = { ...includeChannels, [key]: e.currentTarget.checked })}
-                  disabled={accepting === key || (names[key] ?? "").trim() === ""}
-                  class="h-4 w-4 rounded border-[var(--ha-divider-color)] text-brand-600 focus:ring-brand-500"
+                <AcceptConfigFields
+                  bind:draft={drafts[key]}
+                  central={d.central ?? ""}
+                  {catalog}
+                  disabled={busy === key}
+                  ids={idsOf(key)}
                 />
-                {t("inbox.accept_dialog.include_channels")}
-              </label>
-              <Button type="submit" size="sm" disabled={accepting === key}>
-                {accepting === key ? "…" : t("inbox.accept")}
-              </Button>
-            </form>
+                <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                  {#if held}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      class="w-full sm:w-auto"
+                      title={t("inbox.accept_only_title")}
+                      onclick={() => void accept(d, false)}
+                      disabled={busy === key}
+                    >
+                      {t("inbox.accept_dialog.submit")}
+                    </Button>
+                    <Button type="submit" size="sm" class="w-full sm:w-auto" disabled={busy === key}>
+                      {busy === key ? "…" : t("inbox.accept_release")}
+                    </Button>
+                  {:else}
+                    <Button type="submit" size="sm" class="w-full sm:w-auto" disabled={busy === key}>
+                      {busy === key ? "…" : t("inbox.accept_dialog.submit")}
+                    </Button>
+                  {/if}
+                </div>
+              </form>
+            {/if}
           </li>
         {/each}
       </ul>
@@ -241,16 +286,42 @@
     </section>
   {/if}
 
-  {#if awaitingRelease > 0}
-    <p class="mb-4 text-sm" data-testid="add-device-awaiting-release">
-      {t("add_device.awaiting_release", { count: awaitingRelease })}
-      ·
-      <a
-        href="#/inbox"
-        class="font-medium text-[var(--ha-primary-color)] hover:underline"
-        onclick={onClose}
-      >{t("add_device.waiting_link")}</a>
-    </p>
+  {#if awaitingRelease.length > 0}
+    <section class="mb-4" data-testid="add-device-awaiting-release">
+      <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--ha-secondary-text-color)]">
+        {t("add_device.awaiting_release", { count: awaitingRelease.length })}
+      </h3>
+      <ul class="flex flex-col gap-2">
+        {#each awaitingRelease as d (keyOf(d))}
+          {@const key = keyOf(d)}
+          <li
+            class="flex flex-col gap-2 rounded-md border border-[var(--ha-divider-color)] p-3 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <span class="min-w-0">
+              <span class="block truncate font-medium">{nameOf(d)}</span>
+              <span class="block truncate font-mono text-xs text-[var(--ha-secondary-text-color)]">
+                {d.address} · {d.model}{#if d.central} · {d.central}{/if}
+              </span>
+            </span>
+            <span class="flex shrink-0 items-center gap-3">
+              <a
+                href="#/devices/{encodeURIComponent(d.address)}"
+                class="text-sm font-medium text-[var(--ha-primary-color)] hover:underline"
+                onclick={onClose}
+              >{t("inbox.configure")}</a>
+              <Button
+                type="button"
+                size="sm"
+                onclick={() => void release(d)}
+                disabled={busy === key}
+              >
+                {busy === key ? "…" : t("inbox.release")}
+              </Button>
+            </span>
+          </li>
+        {/each}
+      </ul>
+    </section>
   {/if}
 
   <section class="mb-2">

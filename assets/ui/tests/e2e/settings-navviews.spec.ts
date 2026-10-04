@@ -54,7 +54,7 @@ test.describe('Settings — navigation & views', () => {
     // The device list is floor in both profiles; the reason is shown
     // rather than the row being silently dropped.
     await expect(page.getByText(/Cannot be hidden .* the device list is what this UI is for/)).toBeVisible();
-    await expect(page.getByRole('switch', { name: 'Devices' })).toBeDisabled();
+    await expect(page.getByRole('switch', { name: 'Devices', exact: true })).toBeDisabled();
   });
 
   test('hiding a view marks it changed and offers a reset', async ({ page }) => {
