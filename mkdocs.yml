@@ -178,6 +178,7 @@ nav:
           - ADR 0079 — Box-shell SSO over the lite ingress: adr/0079-lite-shell-session-sso.md
           - ADR 0080 — Box API tokens through the lite gate: adr/0080-lite-gate-api-tokens.md
           - ADR 0081 — Deployment self-description: adr/0081-deployment-self-description.md
+          - ADR 0082 — Device onboarding: adr/0082-device-onboarding.md
   - Credits: attribution.md
 
 # Only the mkdocs machinery itself is excluded. Everything else under

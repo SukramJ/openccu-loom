@@ -2812,11 +2812,27 @@ entities unconditionally, and flipping the new toggle's default to the
 reference value would silently remove those entities from every existing
 deployment on upgrade. The toggle still lets operators turn the surface off
 (`behavior.enable_device_firmware_check: false`); only the default diverges,
-preserving the shipped behaviour. The other eight behavior toggles
+preserving the shipped behaviour. The other seven behavior toggles
 (`light_last_brightness`, `use_group_channel_for_cover_state`,
 `enable_sysvar_scan`, `enable_program_scan`, `include_internal_sysvars`,
-`include_internal_programs`, `sysvar_markers`/`program_markers`,
-`delay_new_device_creation`) match the reference defaults.
+`include_internal_programs`, `sysvar_markers`/`program_markers`) match the
+reference defaults.
+
+## Per-central behavior toggles — `delay_new_device_creation` default
+
+aiohomematic defaults `delay_new_device_creation` to **false**
+(`DEFAULT_DELAY_NEW_DEVICE_CREATION` in `aiohomematic/const.py`). OpenCCU-Loom
+defaults it to **true**: device onboarding is the daemon's own construct on
+every system type ([ADR 0082](../../docs/adr/0082-device-onboarding.md)), and
+an openccu-lite box has no CCU inbox to fall back on. A newly-paired device
+waits to be accepted, then to be released, before MQTT, Matter and the
+outbound webhook see it. The Home Assistant integration
+(`homematicip_local`) already passes `delay_new_device_creation=True`
+unconditionally (`control_unit.py`), so the daemon's default matches the
+behaviour of the reference stack's largest consumer rather than the library
+default. Devices the daemon already knows are never held, so the divergence
+does not change what an existing installation publishes. Operators opt out
+with `behavior.delay_new_device_creation: false`.
 
 ## Per-class southbound throttles — independent bounded pools in production
 

@@ -12,6 +12,7 @@ import (
 	"github.com/SukramJ/godevccu/pkg/litefake"
 
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
+	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -140,9 +141,15 @@ func TestLiteResyncTriggersReseed(t *testing.T) {
 // lite central: the stream announces only the new device's address, and
 // the central reads the descriptions through the proxy and materialises
 // the device.
+//
+// The new-device hold is switched off: this pin is about the fetch path,
+// and with the hold on (the default) the fetched descriptions are parked
+// rather than built. The hold on a lite central is covered end to end in
+// tests/e2e/device_onboarding_test.go.
 func TestLiteHotplugFetchesDescriptionsForUnknownAddresses(t *testing.T) {
 	fake := startFake(t, litefake.Options{})
-	unit := startLiteCentral(t, fake, litefake.DefaultToken)
+	unit := startLiteCentralWith(t, fake, litefake.DefaultToken,
+		config.CentralBehavior{DelayNewDeviceCreation: new(false)})
 	waitLiteReady(t, unit)
 	before := len(unit.ModelRegistry.List())
 	if err := fake.V().InterfaceRPC("HmIP-RF").AddDevices(context.Background(), []string{"HmIP-PS"}); err != nil {

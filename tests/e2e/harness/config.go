@@ -56,6 +56,9 @@ type configInputs struct {
 	// NoCentral writes an empty central list: the first-boot state the
 	// add-on auto-onboarding acts on.
 	NoCentral bool
+	// DelayNewDeviceCreation writes behavior.delay_new_device_creation
+	// on the central. Nil omits the key, leaving the daemon default.
+	DelayNewDeviceCreation *bool
 }
 
 // buildConfigYAML returns a complete openccu-loom config that wires
@@ -167,6 +170,9 @@ func buildConfigYAML(in configInputs) string {
 		// Express as a Go duration string (e.g. "5s") so the yaml unmarshaller
 		// can decode it into time.Duration via the standard YAML duration codec.
 		fmt.Fprintf(&b, "    check_connection_interval: %s\n", in.CheckConnectionInterval.String())
+	}
+	if in.DelayNewDeviceCreation != nil {
+		fmt.Fprintf(&b, "    behavior:\n      delay_new_device_creation: %s\n", boolYAML(*in.DelayNewDeviceCreation))
 	}
 	return b.String()
 }

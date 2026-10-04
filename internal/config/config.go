@@ -1924,15 +1924,29 @@ type CentralBehavior struct {
 	// notes/parity/by_design.md for the divergence rationale).
 	EnableDeviceFirmwareCheck *bool `yaml:"enable_device_firmware_check,omitempty" json:"enable_device_firmware_check,omitempty" cfg:"expert"`
 
-	// DelayNewDeviceCreation (default false) holds a newly-paired device
-	// back until an operator accepts it: the announced descriptions are
-	// parked, the device is listed on the inbox surface (REST GET /inbox,
-	// WS inbox.list, the SPA inbox view) and only the accept
-	// (POST /devices/{addr}/accept) materialises it. The accept carries
-	// the device's first-time configuration — name, rooms, functions —
-	// so the operator names it at the moment it becomes usable rather
-	// than hunting it down afterwards. Reference stack key:
-	// delay_new_device_creation.
+	// DelayNewDeviceCreation (default true) holds a newly-paired device
+	// back in two phases. First it waits to be accepted: the announced
+	// descriptions are parked, the device is listed on the inbox surface
+	// (REST GET /inbox, WS inbox.list, the SPA inbox view) flagged
+	// pending_creation, and only the accept (POST /devices/{addr}/accept)
+	// materialises it. The accept carries the device's first-time
+	// configuration — name, rooms, functions — so the operator names it
+	// at the moment it becomes usable rather than hunting it down
+	// afterwards. Then it waits to be released: it is built and
+	// configurable on the daemon's own surfaces but withheld from MQTT,
+	// Matter and the outbound webhook until POST /devices/{addr}/release,
+	// because an ecosystem keeps the identity it saw first. Reference
+	// stack key: delay_new_device_creation (default off there; see
+	// notes/parity/by_design.md).
+	//
+	// Default on, because onboarding is the daemon's own construct on
+	// every system type (docs/adr/0082-device-onboarding.md): an
+	// openccu-lite box has no CCU inbox, and with the hold off a new
+	// device reaches every bridge under its factory name. Devices the
+	// daemon already knows are never held — the bring-up builds the
+	// inventory before it announces itself for events, and the
+	// re-announcement of a known device is skipped — so neither an
+	// upgrade nor a first start parks an existing fleet.
 	//
 	// The hold is durable: the decision is persisted per central and the
 	// boot pull honours it, so a held-back device stays out of the model
@@ -1941,11 +1955,13 @@ type CentralBehavior struct {
 	// an unaccepted device was materialised by the next restart and its
 	// inbox entry disappeared with the process.
 	//
-	// Turning it off releases the queue rather than leaving it: the
-	// setting means "ask me about new devices", so switching it off means
-	// "stop asking" instead of stranding devices in a state whose only
-	// explanation is a setting that is no longer on.
-	DelayNewDeviceCreation *bool `yaml:"delay_new_device_creation,omitempty" json:"delay_new_device_creation,omitempty" cfg:"expert"`
+	// Switching it off returns to immediate creation: a new device is
+	// built and published as soon as it is announced. It releases the
+	// queue rather than leaving it: the setting means "ask me about new
+	// devices", so switching it off means "stop asking" instead of
+	// stranding devices in a state whose only explanation is a setting
+	// that is no longer on.
+	DelayNewDeviceCreation *bool `yaml:"delay_new_device_creation,omitempty" json:"delay_new_device_creation,omitempty" cfg:"basic"`
 }
 
 // LightLastBrightnessEnabled reports the resolved toggle, defaulting
@@ -1988,9 +2004,10 @@ func (b CentralBehavior) EnableDeviceFirmwareCheckEnabled() bool {
 	return orDefault(b.EnableDeviceFirmwareCheck, true)
 }
 
-// DelayNewDeviceCreationEnabled reports the resolved toggle (default false).
+// DelayNewDeviceCreationEnabled reports the resolved toggle (default true:
+// a newly-paired device waits for acceptance and release).
 func (b CentralBehavior) DelayNewDeviceCreationEnabled() bool {
-	return orDefault(b.DelayNewDeviceCreation, false)
+	return orDefault(b.DelayNewDeviceCreation, true)
 }
 
 // VisibilityConfig configures per-central visibility overrides. Empty

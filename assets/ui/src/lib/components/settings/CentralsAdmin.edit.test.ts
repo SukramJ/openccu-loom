@@ -271,3 +271,88 @@ describe("CentralsAdmin — edit save toast honesty", () => {
     expect(mockToastSuccess).not.toHaveBeenCalled();
   });
 });
+
+// The hold on newly-paired devices defaults on in the daemon. The form must
+// resolve an absent value the same way, or opening and saving an untouched
+// central would quietly switch the hold off.
+describe("CentralsAdmin — new-device hold", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUpdateCentral.mockResolvedValue(undefined);
+  });
+
+  function holdCheckbox(container: HTMLElement): HTMLInputElement | undefined {
+    const label = Array.from(container.querySelectorAll("label")).find((l) =>
+      l.textContent?.includes("centrals.behavior.delay_new_device_creation"),
+    );
+    return label?.querySelector<HTMLInputElement>("input[type=checkbox]") ?? undefined;
+  }
+
+  async function openBehaviourSection(container: HTMLElement): Promise<HTMLInputElement> {
+    await openEditModal(container);
+    const toggle = Array.from(container.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("centrals.behavior.title"),
+    );
+    if (!toggle) throw new Error("Behaviour section toggle not found");
+    await fireEvent.click(toggle);
+    return waitFor(() => {
+      const box = holdCheckbox(container);
+      if (!box) throw new Error("hold checkbox not rendered");
+      return box;
+    });
+  }
+
+  async function savedHold(container: HTMLElement): Promise<boolean | undefined> {
+    await clickSave(container);
+    await waitFor(() => expect(mockUpdateCentral).toHaveBeenCalledOnce());
+    const body = mockUpdateCentral.mock.calls[0]![1] as {
+      behavior: { delay_new_device_creation?: boolean };
+    };
+    return body.behavior.delay_new_device_creation;
+  }
+
+  it("renders an absent value as on, with its help line, and saves it as on", async () => {
+    mockListCentrals.mockResolvedValue([{ ...baseRow }]);
+    const { container } = render(CentralsAdmin);
+    const box = await openBehaviourSection(container);
+
+    expect(box.checked).toBe(true);
+    expect(container.textContent).toContain("centrals.behavior.delay_new_device_creation_hint");
+    expect(await savedHold(container)).toBe(true);
+  });
+
+  it("renders an absent value inside a stored behaviour block as on", async () => {
+    mockListCentrals.mockResolvedValue([
+      { ...baseRow, behavior: { light_last_brightness: false } },
+    ]);
+    const { container } = render(CentralsAdmin);
+    const box = await openBehaviourSection(container);
+
+    expect(box.checked).toBe(true);
+    expect(await savedHold(container)).toBe(true);
+  });
+
+  it("round-trips an explicit false as false", async () => {
+    mockListCentrals.mockResolvedValue([
+      { ...baseRow, behavior: { delay_new_device_creation: false } },
+    ]);
+    const { container } = render(CentralsAdmin);
+    const box = await openBehaviourSection(container);
+
+    expect(box.checked).toBe(false);
+    expect(await savedHold(container)).toBe(false);
+  });
+
+  it("carries the label and its help line in both locales", async () => {
+    const { readFileSync } = await import("node:fs");
+    // vitest runs with assets/ui as the working directory.
+    const src = readFileSync("src/lib/i18n.ts", "utf8");
+    for (const k of [
+      "centrals.behavior.delay_new_device_creation",
+      "centrals.behavior.delay_new_device_creation_hint",
+    ]) {
+      const hits = src.split(`"${k}":`).length - 1;
+      expect(hits, `${k} (expected EN + DE)`).toBe(2);
+    }
+  });
+});

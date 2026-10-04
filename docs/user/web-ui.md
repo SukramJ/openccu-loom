@@ -71,6 +71,30 @@ If you are unsure what "device", "channel", and "data point" mean, read [Core co
 
 ![The device detail view for a wall thermostat: header with model and address, the Overview/Configure/History tabs, the channel selector strip, and a channel's configuration parameters.](img/web-ui-device-detail.png)
 
+## Adding devices
+
+Pair a new device with **Add device** in the **Devices** view: pick the interface, open the pairing window, and put the device into pairing mode.
+
+A newly paired device is not handed to your other systems straight away. OpenCCU-Loom holds it in two steps, which you find in the **Inbox** view and in the add-device dialog:
+
+1. **Accept.** The device is listed as *awaiting acceptance*. Accepting it builds it in OpenCCU-Loom: its channels and data points appear, and you can give it a name and assign rooms and functions — the accept dialog asks for them right away.
+2. **Release.** The device is now listed as *awaiting release*. It is fully usable in the web UI and the API, but MQTT / Home Assistant discovery, the Matter bridge and outbound webhooks do not see it yet. Releasing it publishes it to all of them.
+
+The order matters because the systems behind those bridges keep the identity they see first: Home Assistant keeps the entity ids of the name a device was discovered with, and a Matter controller keeps its endpoint. Releasing last means they see the name you chose, not the factory name.
+
+The hold only applies to devices paired while OpenCCU-Loom is running. Devices it already knows — your whole installation after an upgrade, or the devices of a CCU you add — are never held.
+
+To publish new devices immediately instead, switch off **Hold new devices until released** in the **Advanced behaviour** section of the central (**Settings → CCUs**, edit the CCU), or set it in the configuration file:
+
+```yaml
+centrals:
+  - name: my-ccu
+    behavior:
+      delay_new_device_creation: false
+```
+
+Switching the hold off also releases every device that is waiting. The setting is described in the [configuration reference](../admin/configuration.md).
+
 ## Changing a value
 
 For writable parameters, the UI gives you a control (a toggle, a slider, an input field) to set a new value. When you confirm, OpenCCU-Loom sends the change to the CCU and the device reacts.

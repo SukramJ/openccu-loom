@@ -31,7 +31,11 @@ import (
 func TestE2EHotPlugTriggers(t *testing.T) {
 	t.Parallel()
 
-	h := harness.Start(t, harness.Options{EnableMQTT: true})
+	// The new-device hold is off: this test is about discovery following a
+	// hot-plug, and with the hold on (the default) a new device reaches
+	// MQTT only once it is accepted and released. The hold itself is
+	// covered in device_onboarding_test.go.
+	h := harness.Start(t, harness.Options{EnableMQTT: true, DelayNewDeviceCreation: new(false)})
 	if h.MQTT() == nil {
 		t.Fatal("MQTT broker not started")
 	}

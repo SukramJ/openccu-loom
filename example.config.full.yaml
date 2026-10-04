@@ -837,9 +837,12 @@ centrals:
       # openccu-loom default; the reference stack defaults this off).
       # [default: true]
       enable_device_firmware_check: true
-      # Defer creation of a newly-paired device until it is accepted from
-      # the inbox, instead of ingesting immediately.  [default: false]
-      delay_new_device_creation: false
+      # Hold a newly-paired device until an operator accepts it from the
+      # inbox (it is then built and configurable) and releases it (it then
+      # reaches MQTT, Matter and webhooks). Devices already known are never
+      # held. false builds and publishes new devices immediately.
+      # [default: true]
+      delay_new_device_creation: true
 
     # Interfaces: short form (list of strings) or long form (list of maps).
     # HmIP-Wired is NOT a separate interface name — devices are

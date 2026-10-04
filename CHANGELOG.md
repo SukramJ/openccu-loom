@@ -6,6 +6,27 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **New devices now wait for you before they reach Home Assistant, Matter
+  and webhooks.** `centrals[].behavior.delay_new_device_creation` is on by
+  default and is an ordinary setting rather than an expert one. A device
+  paired after the upgrade is listed in the inbox as waiting to be
+  accepted; accepting builds it so it can be named and assigned to rooms
+  and functions; releasing it publishes it to MQTT / Home Assistant
+  discovery, the Matter bridge and outbound webhooks. Until it is released
+  none of them sees it, so it arrives there with the name you gave it
+  instead of its factory name. This is the same on a CCU, an OpenCCU and
+  an openccu-lite box (ADR 0082). **Devices you already have are not
+  affected:** nothing the daemon has already built is held, so an upgrade
+  publishes exactly what it published before. To keep the old behaviour,
+  where a new device is built and published as soon as it is paired, set
+  `delay_new_device_creation: false` under the central's `behavior`
+  block, or switch off "Hold new devices until released" in the central's
+  behaviour settings in the Config UI; switching it off also releases any
+  device that is waiting. REST API 13.7.0: an absent
+  `delay_new_device_creation` now means on; no field or route changes.
+
 ### Fixed
 
 - **Removing a device that is already gone no longer reports a gateway

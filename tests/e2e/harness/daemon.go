@@ -110,6 +110,11 @@ type Options struct {
 	// OPENCCU_LOOM_LITE_ADDON_* environment overrides, which the daemon
 	// child inherits from the test process).
 	NoCentral bool
+
+	// DelayNewDeviceCreation writes the central's
+	// behavior.delay_new_device_creation. Nil leaves the key out, so the
+	// daemon's own default applies — the state a fresh installation runs.
+	DelayNewDeviceCreation *bool
 }
 
 // Harness is the test-owned facade over a running daemon sub-process.
@@ -237,6 +242,7 @@ func Start(t *testing.T, opts Options) *Harness {
 		NoCentral:               opts.NoCentral,
 		CheckConnectionInterval: opts.CheckConnectionInterval,
 		PublicURL:               opts.PublicURL,
+		DelayNewDeviceCreation:  opts.DelayNewDeviceCreation,
 	})
 	if err := os.WriteFile(h.cfgPath, []byte(cfgYAML), 0o600); err != nil {
 		t.Fatalf("write config.yaml: %v", err)
@@ -335,6 +341,13 @@ func (h *Harness) CCU() *MockCCU { return h.ccu }
 // RESTBase returns the daemon's REST base URL, e.g.
 // "http://127.0.0.1:53122".
 func (h *Harness) RESTBase() string { return "http://" + h.restAddr }
+
+// Logs returns what the daemon has written to stdout and stderr so far.
+// A test reads it to wait for an event the north-bound surface cannot
+// show, such as a callback the daemon has received and handled.
+func (h *Harness) Logs() string {
+	return h.stdoutBuf.String() + h.stderrBuf.String()
+}
 
 // UIBase returns the base URL of the server-rendered bootstrap surface
 // (login / setup / about / health / OIDC). Since 0.14.0 it is folded onto the

@@ -29,6 +29,13 @@ import (
 // the real composition entry point and returns its unit.
 func startLiteCentral(t *testing.T, fake *litefake.Fake, token string) *central.Unit {
 	t.Helper()
+	return startLiteCentralWith(t, fake, token, config.CentralBehavior{})
+}
+
+// startLiteCentralWith is [startLiteCentral] with an explicit behaviour
+// block, for a pin whose subject depends on one of its toggles.
+func startLiteCentralWith(t *testing.T, fake *litefake.Fake, token string, behavior config.CentralBehavior) *central.Unit {
+	t.Helper()
 	u, err := url.Parse(fake.URL())
 	if err != nil {
 		t.Fatalf("parse fake URL: %v", err)
@@ -48,6 +55,7 @@ func startLiteCentral(t *testing.T, fake *litefake.Fake, token string) *central.
 		SystemType:  hmenum.SystemTypeOpenCCULite,
 		APIToken:    token,
 		Interfaces:  []config.InterfaceSpec{{Name: "BidCos-RF"}, {Name: "HmIP-RF"}},
+		Behavior:    behavior,
 	}}}
 	reg := central.NewRegistry()
 	unit, err := central.New(central.Config{Name: "box"})
