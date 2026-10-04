@@ -4,6 +4,7 @@
   import { alarmPanelStore } from "$lib/stores/alarmPanel.svelte";
   import { deviceStore } from "$lib/stores/devices.svelte";
   import { areasStore } from "$lib/stores/areas.svelte";
+  import { centralStore } from "$lib/stores/centrals.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { t } from "$lib/i18n";
@@ -153,6 +154,23 @@
   $effect(() => {
     if (addOpen && addClass === "sysvar_mirror" && !sysvarsLoaded) void loadSysvars();
   });
+  // Centrals that have no system variables for a lasting reason (an
+  // openccu-lite box has no ReGa). A CCU that is merely booting reports
+  // "not_ready" and is not in this set, so it stays offered.
+  const sysvarsLacking = $derived(
+    new Set(centralStore.centralsLacking("hub.sysvars").map((c) => c.name)),
+  );
+  // A sysvar mirror is offered while the fleet is unknown or at least one
+  // central can carry one; already-enrolled mirrors render regardless.
+  const sysvarMirrorOffered = $derived(
+    centralStore.items.length === 0 || centralStore.items.some((c) => !sysvarsLacking.has(c.name)),
+  );
+  const classOptions = $derived(
+    CLASSES.filter((c) => c !== "sysvar_mirror" || sysvarMirrorOffered).map((c) => ({
+      value: c,
+      label: t(`alarm.output_class.${c}`),
+    })),
+  );
   // Centrals known to this daemon, derived from the loaded device and
   // sysvar inventories (viewer-safe; no operator-gated centrals CRUD).
   const centralOptions = $derived(
@@ -160,7 +178,7 @@
       ...deviceStore.items.map((d) => d.central ?? ""),
       ...sysvars.map((v) => v.central ?? ""),
     ])]
-      .filter((c) => c !== "")
+      .filter((c) => c !== "" && !sysvarsLacking.has(c))
       .sort()
       .map((c) => ({ value: c, label: c })),
   );
@@ -1027,7 +1045,7 @@
               addClass = v as AlarmOutputClass;
               resetAddSelection();
             }}
-            options={CLASSES.map((c) => ({ value: c, label: t(`alarm.output_class.${c}`) }))}
+            options={classOptions}
           />
           <span class="text-xs text-[var(--ha-secondary-text-color)]">{t(`alarm.output_class.${addClass}.hint`)}</span>
         </div>

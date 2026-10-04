@@ -2049,6 +2049,10 @@ const EN: Catalog = {
   "settings.ccu_auth.hint":
     "Delegate login to the CCU's own user database. When enabled, users sign in with their CCU accounts; local users stay as a break-glass fallback. Changes take effect after a daemon restart.",
   "settings.tab.callback": "Callback Ports",
+  "settings.callback.lite_only_hint":
+    "No configured system uses these ports: openccu-lite delivers its events over its own event stream. These settings only matter once a CCU or OpenCCU is added.",
+  "settings.callback.lite_mixed_hint":
+    "These settings apply only to the CCU and OpenCCU centrals. These openccu-lite centrals receive their events over their own event stream and do not use them: {centrals}",
   "settings.tab.reliability": "Reliability",
   "settings.tab.persistence": "Persistence",
   "settings.tab.visibility": "Hidden parameters",
@@ -2243,7 +2247,6 @@ const EN: Catalog = {
   "centrals.error.lite_credential": "Pair with the box or paste an API token first, and compare the certificate fingerprint when HTTPS is on.",
   "centrals.system_type.openccu-lite": "openccu-lite",
   "centrals.system_type.auto": "identifying",
-  "centrals.field.lite_port_hint": "Port of the box's web server; empty means 80, or 443 with HTTPS.",
   "centrals.lite.missing_scopes": "The API token's scopes do not cover:",
   "centrals.lite.token_from_file":
     "The API token is read from a file on every request (rotation-safe), so there is nothing to paste here:",
@@ -6342,6 +6345,10 @@ const DE: Catalog = {
   "settings.ccu_auth.hint":
     "Anmeldung an die CCU-eigene Benutzerdatenbank delegieren. Wenn aktiviert, melden sich Nutzer mit ihren CCU-Konten an; lokale Nutzer bleiben als Break-Glass-Fallback. Änderungen werden nach einem Daemon-Neustart wirksam.",
   "settings.tab.callback": "Callback-Ports",
+  "settings.callback.lite_only_hint":
+    "Kein eingerichtetes System nutzt diese Ports: openccu-lite liefert seine Ereignisse über einen eigenen Ereignisstrom. Die Einstellungen werden erst wirksam, wenn eine CCU oder OpenCCU hinzukommt.",
+  "settings.callback.lite_mixed_hint":
+    "Diese Einstellungen gelten nur für die CCU- und OpenCCU-Zentralen. Diese openccu-lite-Zentralen empfangen ihre Ereignisse über einen eigenen Ereignisstrom und nutzen sie nicht: {centrals}",
   "settings.tab.reliability": "Zuverlässigkeit",
   "settings.tab.persistence": "Persistenz",
   "settings.tab.visibility": "Ausgeblendete Parameter",
@@ -6540,7 +6547,6 @@ const DE: Catalog = {
   "centrals.error.lite_credential": "Koppele zuerst mit der Box oder füge ein API-Token ein, und vergleiche bei HTTPS den Zertifikat-Fingerabdruck.",
   "centrals.system_type.openccu-lite": "openccu-lite",
   "centrals.system_type.auto": "wird erkannt",
-  "centrals.field.lite_port_hint": "Port des Webservers der Box; leer bedeutet 80, mit HTTPS 443.",
   "centrals.lite.missing_scopes": "Die Scopes des API-Tokens decken nicht ab:",
   "centrals.lite.token_from_file":
     "Das API-Token wird bei jedem Zugriff aus einer Datei gelesen (rotationssicher); hier ist nichts einzutragen:",

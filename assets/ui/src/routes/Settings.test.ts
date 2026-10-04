@@ -13,9 +13,11 @@ const {
   mockInfo,
   mockGetStartupCapture,
   mockReloadMQTT,
+  mockGetSystemCCUs,
   mockToastSuccess,
   mockToastError,
 } = vi.hoisted(() => ({
+  mockGetSystemCCUs: vi.fn(),
   mockGetConfigSchema: vi.fn(),
   mockGetEffectiveConfig: vi.fn(),
   mockGetConfigChanges: vi.fn(),
@@ -35,6 +37,7 @@ vi.mock("$lib/api/client", () => ({
     info: (...args: unknown[]) => mockInfo(...args),
     getStartupCapture: (...args: unknown[]) => mockGetStartupCapture(...args),
     reloadMQTT: (...args: unknown[]) => mockReloadMQTT(...args),
+    getSystemCCUs: (...args: unknown[]) => mockGetSystemCCUs(...args),
   },
   ApiError: class ApiError extends Error {
     status: number;
@@ -73,9 +76,12 @@ vi.mock("$lib/components/settings/TlsCertCard.svelte", () => ({ default: () => {
 vi.mock("$lib/components/settings/SystemUpdatePanel.svelte", () => ({ default: () => {} }));
 vi.mock("$lib/components/settings/ChangesOverview.svelte", () => ({ default: () => {} }));
 vi.mock("$lib/components/settings/ConnectivityLights.svelte", () => ({ default: () => {} }));
-vi.mock("$lib/components/ui/ExpertGate.svelte", () => ({ default: () => {} }));
+// ExpertGate stays real: it renders nothing while expert mode is off, which
+// is the default, and the callback-tab cases below switch expert mode on.
 
 import Settings from "./Settings.svelte";
+import { centralStore } from "$lib/stores/centrals.svelte";
+import { setExpertMode } from "$lib/stores/preferences.svelte";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -250,5 +256,54 @@ describe("Settings — MQTT reload uses toastStore, not an inline banner", () =>
 
     await waitFor(() => expect(mockToastError).toHaveBeenCalledTimes(1));
     expect(mockToastSuccess).not.toHaveBeenCalled();
+  });
+});
+
+// The callback ports are global, but an openccu-lite central never uses
+// them. The tab stays visible for a mixed fleet and says whom it reaches.
+describe("Settings — callback tab scope note for openccu-lite centrals", () => {
+  async function openCallbackTab(fleet: { name: string; system_type: string }[]) {
+    mockGetSystemCCUs.mockResolvedValue(fleet);
+    await centralStore.refresh();
+    setExpertMode(true);
+    render(Settings, { props: { tab: "callback" } });
+    await waitFor(() => expect(mockGetConfigSchema).toHaveBeenCalled());
+  }
+
+  // The central store and the preferences are module singletons; reset both
+  // so the fleet and expert mode set here do not leak into other cases.
+  afterEach(async () => {
+    setExpertMode(false);
+    mockGetSystemCCUs.mockResolvedValue([]);
+    await centralStore.refresh();
+  });
+
+  it("says no configured system uses the ports when every central is openccu-lite", async () => {
+    await openCallbackTab([{ name: "box", system_type: "openccu-lite" }]);
+    await waitFor(() =>
+      expect(screen.getByText("settings.callback.lite_only_hint")).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/settings\.callback\.lite_mixed_hint/)).toBeNull();
+  });
+
+  it("names the openccu-lite centrals in a mixed fleet", async () => {
+    await openCallbackTab([
+      { name: "ccu1", system_type: "ccu" },
+      { name: "box", system_type: "openccu-lite" },
+    ]);
+    await waitFor(() =>
+      expect(
+        screen.getByText('settings.callback.lite_mixed_hint:{"centrals":"box"}'),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.queryByText("settings.callback.lite_only_hint")).toBeNull();
+  });
+
+  it("shows no note for a CCU-only fleet", async () => {
+    await openCallbackTab([{ name: "ccu1", system_type: "ccu" }]);
+    await waitFor(() => expect(mockGetConfigSchema).toHaveBeenCalled());
+    // Give the tab a render pass after the schema load settles.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByText(/settings\.callback\.lite_/)).toBeNull();
   });
 });

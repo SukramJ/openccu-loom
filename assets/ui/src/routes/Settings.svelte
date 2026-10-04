@@ -156,6 +156,20 @@
     }),
   );
 
+  // The callback ports are global, but an openccu-lite central never
+  // announces a callback URL: it receives events over the box's own event
+  // stream. In a fleet with such centrals the tab says whom its settings
+  // reach instead of being hidden, since a CCU in the same fleet still
+  // needs them. Empty while the fleet has not loaded or has no lite central.
+  const callbackScopeNote = $derived.by(() => {
+    const lite = centralStore.items
+      .filter((c) => c.system_type === "openccu-lite")
+      .map((c) => c.name);
+    if (lite.length === 0) return "";
+    if (lite.length === centralStore.items.length) return t("settings.callback.lite_only_hint");
+    return t("settings.callback.lite_mixed_hint", { centrals: lite.join(", ") });
+  });
+
   // What the selector shows for the stored preference. A route whose view
   // was folded into another one is displayed as its successor, so the
   // selector never sits on a value that has no matching option; anything
@@ -807,6 +821,11 @@
           {#if schemaLoading}
             <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("common.loading")}</p>
           {:else}
+            {#if callbackScopeNote}
+              <p class="mb-3 text-sm text-[var(--ha-secondary-text-color)]">
+                {callbackScopeNote}
+              </p>
+            {/if}
             <SectionEditor
               section="callback"
               {schemaFields}

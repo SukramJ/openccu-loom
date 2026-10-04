@@ -18,6 +18,7 @@ const {
   mockDeleteDevice,
   mockListLinks,
   mockListPrograms,
+  mockGetSystemCCUs,
   mockRestoreDeviceConfig,
   mockTestDeviceCommunication,
   mockToastSuccess,
@@ -41,6 +42,7 @@ const {
   mockDeleteDevice: vi.fn(),
   mockListLinks: vi.fn(),
   mockListPrograms: vi.fn(),
+  mockGetSystemCCUs: vi.fn(),
   mockRestoreDeviceConfig: vi.fn(),
   mockTestDeviceCommunication: vi.fn(),
   mockToastSuccess: vi.fn(),
@@ -65,6 +67,7 @@ vi.mock("$lib/api/client", () => ({
     deleteDevice: (...args: unknown[]) => mockDeleteDevice(...args),
     listLinks: (...args: unknown[]) => mockListLinks(...args),
     listPrograms: (...args: unknown[]) => mockListPrograms(...args),
+    getSystemCCUs: (...args: unknown[]) => mockGetSystemCCUs(...args),
     restoreDeviceConfig: (...args: unknown[]) => mockRestoreDeviceConfig(...args),
     testDeviceCommunication: (...args: unknown[]) => mockTestDeviceCommunication(...args),
     updateFirmware: vi.fn(),
@@ -156,6 +159,7 @@ vi.mock("$lib/components/HistoryChart.svelte", () => ({ default: () => {} }));
 
 import DeviceDetail from "./DeviceDetail.svelte";
 import { confirmStore } from "$lib/stores/confirm.svelte";
+import { centralStore } from "$lib/stores/centrals.svelte";
 
 function baseDevice(overrides: Record<string, unknown> = {}) {
   return {
@@ -927,6 +931,35 @@ describe("DeviceDetail — remove device options dialog", () => {
         reset: true,
         force: true,
       });
+    });
+  });
+
+  describe("on a central without programs", () => {
+    // The real central store is a module singleton; empty it again so the
+    // fleet seeded here does not leak into the other cases.
+    afterEach(async () => {
+      mockGetSystemCCUs.mockResolvedValue([]);
+      await centralStore.refresh();
+    });
+
+    async function seedFleet(programs: { available: boolean; reason?: string }) {
+      mockGetSystemCCUs.mockResolvedValue([
+        { name: "box", features: { "hub.programs": programs } },
+      ]);
+      await centralStore.refresh();
+    }
+
+    it("skips the program probe on an openccu-lite central", async () => {
+      await seedFleet({ available: false, reason: "not_supported_by_system" });
+      await openDeleteDialog({ central: "box" });
+      expect(mockListLinks).toHaveBeenCalledWith("0001ABCD", "en");
+      expect(mockListPrograms).not.toHaveBeenCalled();
+    });
+
+    it("still probes programs on a CCU that is only booting", async () => {
+      await seedFleet({ available: false, reason: "not_ready" });
+      await openDeleteDialog({ central: "box" });
+      expect(mockListPrograms).toHaveBeenCalled();
     });
   });
 

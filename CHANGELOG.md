@@ -6,6 +6,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The Config UI no longer offers system-variable and program options
+  for an openccu-lite central.** Such a system has neither, so the
+  central's edit dialog hides the seven scan, internal-entry and marker
+  options and the port field (stored values are kept), the alarm outputs
+  stop offering a
+  system-variable mirror when no central can carry one, and the views
+  skip the program and system-variable requests that could only come
+  back empty. A CCU that is still starting keeps all of its options.
+- **The Callback Ports settings say whom they apply to.** With an
+  openccu-lite central configured, the tab notes that only CCU and
+  OpenCCU centrals use these ports, and names the centrals that receive
+  their events over the box's event stream instead.
+
 ## [0.86.1] - 2026-10-03
 
 ### Release summary
