@@ -1,5 +1,25 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.88.0
+
+- **New devices wait for you.** A device paired after this update is
+  listed under "New devices" until you accept and release it; only then
+  does it reach MQTT / Home Assistant, Matter and webhooks, under the
+  name you gave it. Devices you already have are not affected. To get the
+  old behaviour back, switch off "Hold new devices until released" in the
+  central's behaviour settings.
+- The add-device dialog takes the name, rooms and functions and accepts
+  and releases in one step.
+- "Inbox" is now "New devices" and is available on every system,
+  including openccu-lite.
+- With Home Assistant on the openccu-loom backend, a waiting device
+  appears as a repair issue that asks for its name. This needs the
+  matching update of the Home Assistant integration.
+- Removing a device that is already gone no longer shows a gateway
+  error.
+- On openccu-lite, a device paired right after start-up is no longer
+  missed.
+
 ## 0.87.0
 
 - Pairing a device now starts from the device list: a new "Add device"

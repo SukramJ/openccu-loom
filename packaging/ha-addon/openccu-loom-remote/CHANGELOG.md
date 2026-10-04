@@ -4,6 +4,11 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.88.0
+
+No changes to the proxy. The daemon release holds newly paired devices
+until they are accepted and released (REST API 13.7.1).
+
 # 0.87.0
 
 No changes to the proxy. The daemon release moves pairing to the device
