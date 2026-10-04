@@ -216,6 +216,7 @@ func TestNewDevicesDeferredCreationSkipsIngestorAndEvent(t *testing.T) {
 	h := NewCallbackHandlers(c, nil)
 	defer h.Stop()
 	h.SetDelayNewDeviceCreation(true)
+	takeStock(h, "HmIP-RF")
 
 	fake := newFakeHotplugIngestor()
 	c.SetDeviceIngestFn(fake.ingest)
@@ -372,6 +373,7 @@ func TestIngestDescriptionsParksWhileCreationIsDeferred(t *testing.T) {
 	h := NewCallbackHandlers(c, nil)
 	defer h.Stop()
 	h.SetDelayNewDeviceCreation(true)
+	takeStock(h, "HmIP-RF")
 	fake := newFakeHotplugIngestor()
 	c.SetDeviceIngestFn(fake.ingest)
 

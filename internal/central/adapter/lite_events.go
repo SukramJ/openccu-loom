@@ -68,11 +68,11 @@ func (in *liteEventIngress) Attach(cc *config.CentralConfig, unit *central.Unit,
 		handlers.SetWriter(deps.Writer)
 	}
 	handlers.SetDelayNewDeviceCreation(cc.Behavior.DelayNewDeviceCreationEnabled())
-	s := newLiteStream(in.profile, *cc, unit, deps.Writer, handlers, logger)
+	ctx, cancel := context.WithCancel(context.Background())
+	s := newLiteStream(ctx, in.profile, *cc, unit, deps.Writer, handlers, logger)
 	in.mu.Lock()
 	in.stream = s
 	in.mu.Unlock()
-	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	SafeGo("lite_stream."+cc.Name, func() {
 		defer close(done)
@@ -81,6 +81,7 @@ func (in *liteEventIngress) Attach(cc *config.CentralConfig, unit *central.Unit,
 	detach = func() {
 		cancel()
 		<-done
+		s.close()
 		s.wg.Wait()
 		handlers.Stop()
 	}
@@ -126,17 +127,27 @@ type liteStream struct {
 	changed   chan struct{} // closed and replaced on every live/up change
 	reseed    func(ctx context.Context, iface hmenum.Interface) error
 	helloSeen bool
+	// ctx is the stream's own lifetime; a reconciliation started from an
+	// announcement runs on it, not on the announcing caller's context.
+	ctx context.Context
+	// attachCovered records the interfaces whose first announcement has
+	// reconciled the gap between the bring-up's inventory pull and the
+	// stream's first hello.
+	attachCovered map[hmenum.Interface]bool
+	// closed is set once detach stops the stream; no reconciliation
+	// starts after it.
+	closed bool
 
 	reconcileMu sync.Mutex
 	wg          sync.WaitGroup
 }
 
-func newLiteStream(p *liteProfile, cc config.CentralConfig, unit *central.Unit, writer *client.ValueWriter, h *CallbackHandlers, logger *slog.Logger) *liteStream {
+func newLiteStream(ctx context.Context, p *liteProfile, cc config.CentralConfig, unit *central.Unit, writer *client.ValueWriter, h *CallbackHandlers, logger *slog.Logger) *liteStream {
 	s := &liteStream{
 		client: p.client, cc: cc, unit: unit, writer: writer, handlers: h, logger: logger,
 		initIDs: map[hmenum.Interface]string{}, wireIDs: map[hmenum.Interface]string{},
 		up: map[hmenum.Interface]bool{}, changed: make(chan struct{}),
-		opts: p.eventsOptions,
+		opts: p.eventsOptions, ctx: ctx, attachCovered: map[hmenum.Interface]bool{},
 	}
 	names := make([]string, 0, len(cc.Interfaces))
 	for _, spec := range cc.Interfaces {
@@ -404,6 +415,32 @@ func (s *liteStream) reconcile(ctx context.Context, iface hmenum.Interface) {
 	})
 }
 
+// announced runs once an interface's announcement found the stream live
+// and the interface up. The first one per stream reconciles the interface:
+// the bring-up pulls the inventory before it announces, and a stream that
+// attaches after that pull gets no replay of what the box announced in
+// between — a box replays only to a client resuming with a Last-Event-ID,
+// and the first hello of a stream is not a reconnect. A device paired in
+// that window would otherwise stay unknown until the next reconnect. Later
+// announcements follow a reconnect, whose hello reconciles already.
+func (s *liteStream) announced(iface hmenum.Interface) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed || s.attachCovered[iface] {
+		return
+	}
+	s.attachCovered[iface] = true
+	s.reconcile(s.ctx, iface)
+}
+
+// close stops new reconciliations from starting; detach calls it before it
+// waits for the running ones.
+func (s *liteStream) close() {
+	s.mu.Lock()
+	s.closed = true
+	s.mu.Unlock()
+}
+
 // markDisconnected moves a connected interface client to DISCONNECTED.
 func (s *liteStream) markDisconnected(iface hmenum.Interface) {
 	if s.unit.Clients == nil {
@@ -519,6 +556,7 @@ func (a *liteAnnouncer) Init(ctx context.Context, _, _ string) error {
 	for {
 		live, up, changed := s.snapshot(a.iface)
 		if live && up {
+			s.announced(a.iface)
 			return nil
 		}
 		select {

@@ -665,6 +665,11 @@ func (p *DevicePipeline) IngestFromBackend(
 	if err := p.Ingest(ctx, interfaceID, iface, descs); err != nil {
 		return err
 	}
+	// The inventory is registered: from here on an unknown device
+	// announced on this interface is a pairing, not part of the fleet.
+	if p.unit != nil && p.unit.Devices != nil {
+		p.unit.Devices.MarkInventoryBaselined(hmtypes.ParseWireInterfaceID(interfaceID))
+	}
 	// The held-back descriptions are re-parked with this pull's payload:
 	// the queue keeps only the decision across a restart, so the inbox
 	// surface is filled from the live CCU each time rather than from a

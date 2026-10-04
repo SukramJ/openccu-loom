@@ -14,7 +14,90 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
+
+// takeStock records that the bring-up has already pulled the interface's
+// inventory — the state of a running daemon, in which an announcement is a
+// pairing the hold applies to. Without it an announcement is taken as the
+// fleet itself and built.
+func takeStock(h *CallbackHandlers, interfaceID string) {
+	h.unit.Devices.MarkInventoryBaselined(hmtypes.ParseWireInterfaceID(h.canonicalInterfaceID(interfaceID)))
+}
+
+// TestNewDevicesBuildsTheFleetBeforeTheInventoryIsBaselined pins the
+// baseline rule of the hold: an interface whose inventory this process has
+// not taken stock of — its boot pull failed, so the fleet first arrives as
+// the system's re-announcement after the reconnect — has its announcement
+// built, not parked, and that build takes the stock: the next unknown
+// device is held. A device the operator has not accepted yet stays held
+// throughout.
+func TestNewDevicesBuildsTheFleetBeforeTheInventoryIsBaselined(t *testing.T) {
+	t.Parallel()
+	c, err := central.New(central.Config{Name: "ccu-baseline"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	var built atomic.Int32
+	c.SetDeviceIngestFn(func(_ context.Context, _ string, d []hmproto.DeviceDescription) error {
+		built.Add(int32(len(d)))
+		return nil
+	})
+	h := NewCallbackHandlers(c, nil)
+	defer h.Stop()
+	h.SetDelayNewDeviceCreation(true)
+	wire := hmtypes.ParseWireInterfaceID(h.canonicalInterfaceID("HmIP-RF"))
+
+	// An operator has not accepted HELD0001 yet (restored from the store).
+	c.Devices.StoreDelayedDeviceDescriptions(context.Background(), wire,
+		[]hmproto.DeviceDescription{{Address: "HELD0001", Type: "HmIP-PS"}})
+
+	fleet := xmlrpc.ArrayValue{
+		xmlrpc.StructValue{Members: []xmlrpc.Member{
+			{Name: "ADDRESS", Value: xmlrpc.StringValue("FLEET001")},
+			{Name: "TYPE", Value: xmlrpc.StringValue("HmIP-STH")},
+		}},
+		xmlrpc.StructValue{Members: []xmlrpc.Member{
+			{Name: "ADDRESS", Value: xmlrpc.StringValue("HELD0001")},
+			{Name: "TYPE", Value: xmlrpc.StringValue("HmIP-PS")},
+		}},
+	}
+	if err := h.NewDevices(context.Background(), "HmIP-RF", fleet); err != nil {
+		t.Fatalf("NewDevices: %v", err)
+	}
+	h.Stop()
+	if got := built.Load(); got != 1 {
+		t.Fatalf("built %d descriptions from the first announcement on an interface without a baseline, want 1 (FLEET001)", got)
+	}
+	pending := map[string]bool{}
+	for _, d := range c.Devices.PendingDevices() {
+		pending[d.Address] = true
+	}
+	if pending["FLEET001"] || !pending["HELD0001"] || len(pending) != 1 {
+		t.Fatalf("pending after the first announcement = %v, want only the unaccepted HELD0001", pending)
+	}
+	if !c.Devices.InventoryBaselined(wire) {
+		t.Fatal("the build of the first announcement did not take stock of the interface")
+	}
+
+	h2 := NewCallbackHandlers(c, nil)
+	defer h2.Stop()
+	h2.SetDelayNewDeviceCreation(true)
+	if err := h2.NewDevices(context.Background(), "HmIP-RF", newDeviceDescs()); err != nil {
+		t.Fatalf("NewDevices: %v", err)
+	}
+	h2.Stop()
+	if got := built.Load(); got != 1 {
+		t.Fatalf("a pairing after the baseline was built (%d descriptions in all), want it held", got)
+	}
+	pending = map[string]bool{}
+	for _, d := range c.Devices.PendingDevices() {
+		pending[d.Address] = true
+	}
+	if !pending["DELAY001"] {
+		t.Fatalf("pending after a pairing on a baselined interface = %v, want DELAY001 held", pending)
+	}
+}
 
 func newDeviceDescs() xmlrpc.ArrayValue {
 	return xmlrpc.ArrayValue{
@@ -56,6 +139,7 @@ func TestCallbackHandlersDelayNewDeviceCreation(t *testing.T) {
 
 			h := NewCallbackHandlers(c, nil)
 			h.SetDelayNewDeviceCreation(tc.delay)
+			takeStock(h, "HmIP-RF")
 			if err := h.NewDevices(context.Background(), "HmIP-RF", newDeviceDescs()); err != nil {
 				t.Fatalf("NewDevices: %v", err)
 			}
@@ -125,6 +209,7 @@ func TestDeferredDeviceIsAnnouncedOnTheInboxAndMaterialisedOnAccept(t *testing.T
 	h := NewCallbackHandlers(c, nil)
 	defer h.Stop()
 	h.SetDelayNewDeviceCreation(true)
+	takeStock(h, "HmIP-RF")
 	if err := h.NewDevices(context.Background(), "HmIP-RF", newDeviceDescs()); err != nil {
 		t.Fatalf("NewDevices: %v", err)
 	}
@@ -182,6 +267,7 @@ func TestAcceptPendingDeviceKeepsTheEntryWhenMaterialisationFails(t *testing.T) 
 	h := NewCallbackHandlers(c, nil)
 	defer h.Stop()
 	h.SetDelayNewDeviceCreation(true)
+	takeStock(h, "HmIP-RF")
 	if err := h.NewDevices(context.Background(), "HmIP-RF", newDeviceDescs()); err != nil {
 		t.Fatalf("NewDevices: %v", err)
 	}

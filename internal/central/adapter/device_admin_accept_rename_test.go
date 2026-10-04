@@ -123,6 +123,7 @@ func acceptRenameCentral(t *testing.T, name, address string, deferred bool) (*ce
 	h := NewCallbackHandlers(cu, nil)
 	t.Cleanup(h.Stop)
 	h.SetDelayNewDeviceCreation(deferred)
+	takeStock(h, "HmIP-RF")
 	if err := h.NewDevices(context.Background(), "HmIP-RF", multiChannelDescs(address, []int{1, 2, 3})); err != nil {
 		t.Fatalf("NewDevices: %v", err)
 	}

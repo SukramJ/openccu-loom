@@ -36,6 +36,7 @@ func deferredAcceptCentral(t *testing.T, name string) (*central.Registry, *centr
 	h := NewCallbackHandlers(cu, nil)
 	t.Cleanup(h.Stop)
 	h.SetDelayNewDeviceCreation(true)
+	takeStock(h, "HmIP-RF")
 	if err := h.NewDevices(context.Background(), "HmIP-RF", newDeviceDescs()); err != nil {
 		t.Fatalf("NewDevices: %v", err)
 	}

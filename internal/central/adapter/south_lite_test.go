@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -216,7 +217,10 @@ func TestLiteValueSeederFillsOnlyWhatTheStateStoreLacks(t *testing.T) {
 // error when the caller's context ends first.
 func TestLiteAnnouncerBlocksUntilInterfaceUp(t *testing.T) {
 	t.Parallel()
-	s := &liteStream{up: map[hmenum.Interface]bool{}, changed: make(chan struct{})}
+	s := &liteStream{
+		up: map[hmenum.Interface]bool{}, changed: make(chan struct{}),
+		ctx: context.Background(), attachCovered: map[hmenum.Interface]bool{},
+	}
 	in := &liteEventIngress{stream: s}
 	a := &liteAnnouncer{ingress: in, iface: hmenum.InterfaceHmIPRF}
 
@@ -290,6 +294,70 @@ func TestLiteReconcileDeletesVanishedDevices(t *testing.T) {
 	if !unit.DeviceRegistry.Has(wire, "KEEP1") {
 		t.Error("a listed device was deleted")
 	}
+}
+
+// TestLiteFirstAnnouncementReconcilesTheAttachGap pins the reconciliation
+// that covers a device paired between the bring-up's inventory pull and
+// the stream's first hello: the box replays nothing to a first attach, so
+// the first successful announcement per interface lists the inventory once
+// and parks the unknown device while the hold is on. A known device is not
+// parked, and a later announcement does not reconcile again.
+func TestLiteFirstAnnouncementReconcilesTheAttachGap(t *testing.T) {
+	t.Parallel()
+	_, unit := registryWithUnit(t, "box")
+	wireID := WireInterfaceID("box", hmenum.InterfaceHmIPRF)
+	wire := hmtypes.ParseWireInterfaceID(wireID)
+	known := hmproto.DeviceDescription{Address: "KNOWN1", Type: "HmIP-X"}
+	unit.DeviceRegistry.Put(registry.DeviceEntry{Interface: wire, Address: known.Address, Model: known.Type})
+	unit.DescRegistry.Put(wire, known)
+	ops := &countingListOps{reconcileOps: reconcileOps{listed: []hmproto.DeviceDescription{
+		known, {Address: "NEW1", Type: "HmIP-eTRV-2"},
+	}}}
+	w := clientpkg.NewValueWriter()
+	w.Register("box", wire, ops)
+	h := NewCallbackHandlers(unit, nil)
+	t.Cleanup(h.Stop)
+	h.SetDelayNewDeviceCreation(true)
+	unit.Devices.MarkInventoryBaselined(wire) // the bring-up's pull succeeded
+	s := &liteStream{
+		cc: config.CentralConfig{Name: "box"}, unit: unit, writer: w, handlers: h,
+		logger:  slog.New(slog.DiscardHandler),
+		initIDs: map[hmenum.Interface]string{hmenum.InterfaceHmIPRF: InitInterfaceID(unit.InstanceName(), "box", hmenum.InterfaceHmIPRF)},
+		wireIDs: map[hmenum.Interface]string{hmenum.InterfaceHmIPRF: wireID},
+		up:      map[hmenum.Interface]bool{hmenum.InterfaceHmIPRF: true}, changed: make(chan struct{}),
+		live: true, ctx: context.Background(), attachCovered: map[hmenum.Interface]bool{},
+	}
+	a := &liteAnnouncer{ingress: &liteEventIngress{stream: s}, iface: hmenum.InterfaceHmIPRF}
+	for range 2 {
+		if err := a.Init(context.Background(), "", ""); err != nil {
+			t.Fatalf("Init = %v on a live stream with the interface up", err)
+		}
+		s.wg.Wait()
+	}
+	if got := ops.lists.Load(); got != 1 {
+		t.Errorf("inventory listed %d times over two announcements, want 1", got)
+	}
+	parked := map[string]bool{}
+	for _, d := range unit.Devices.PendingDevices() {
+		parked[d.Address] = true
+	}
+	if !parked["NEW1"] {
+		t.Errorf("the device paired before the first hello is not parked; parked = %v", parked)
+	}
+	if parked[known.Address] {
+		t.Errorf("a known device was parked by the reconciliation; parked = %v", parked)
+	}
+}
+
+// countingListOps counts inventory reads.
+type countingListOps struct {
+	reconcileOps
+	lists atomic.Int32
+}
+
+func (c *countingListOps) ListDevices(ctx context.Context) ([]hmproto.DeviceDescription, error) {
+	c.lists.Add(1)
+	return c.reconcileOps.ListDevices(ctx)
 }
 
 // TestLiteBringUpLoadsMetadataBeforeReturning pins the order the device

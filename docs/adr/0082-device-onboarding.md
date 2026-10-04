@@ -72,14 +72,23 @@ straight to every bridge under its factory name.
   for an address the daemon has not built. The bring-up pulls the
   inventory and builds it before it announces itself for events, and a
   re-announcement of a known device is skipped, so neither an upgrade nor
-  the first start of a fresh installation parks an existing fleet. Absence
+  the first start of a fresh installation parks an existing fleet. A hold
+  also needs a baseline: until the daemon has taken stock of an
+  interface's inventory in this process — its pull succeeded, or an
+  announcement built it — an announcement on it is built, not held, so an
+  interface whose boot pull failed recovers with its fleet built instead
+  of waiting to be accepted; devices already held stay held. Absence
   of a hold means released: an existing installation publishes exactly
   what it published before.
 - **A hold starts with an announcement the daemon receives.** The boot
   pull honours holds already recorded and never adds one, because it
   cannot tell a device paired a moment ago from one paired years ago. A
-  device paired while the daemon is not running is therefore built by the
-  next pull without a hold.
+  device paired while the daemon is not running — or before its boot pull
+  read the system's inventory — is therefore built by that pull without a
+  hold. On openccu-lite the event stream can attach after the boot pull,
+  and a box replays nothing to a first attach; the daemon re-reads the
+  inventory once the stream is attached and treats a device it does not
+  know as announced, so a pairing in that gap is held like any other.
 - **The daemon's own surfaces show a held device.** REST, WebSocket and the
   Config UI list it, with its phase, because they are where it gets
   configured. Only the ecosystems are withheld.
