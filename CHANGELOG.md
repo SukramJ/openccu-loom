@@ -6,8 +6,27 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Pairing a device starts from the device list.** A new "Add device"
+  dialog holds everything pairing needs: pick the interface, start the
+  pairing window and watch its countdown, or use the targeted ways the
+  interface offers (by serial on BidCos, SGTIN and key on HmIP, the bus
+  search on BidCos-Wired). Devices that join are listed as they arrive,
+  a device waiting for confirmation is accepted and named right there,
+  and a window that closes empty says so and names the usual cause. The
+  dialog does not depend on the CCU inbox, so it also works on an
+  openccu-lite system, where pairing could not be started from the
+  Config UI before. The inbox opens the same dialog instead of carrying
+  its own controls, and shows devices the daemon holds back even on a
+  system without an inbox.
+
 ### Fixed
 
+- **Pairing reaches the chosen system when two share an interface
+  name.** The Config UI sent only the interface, so with two centrals
+  that both have `HmIP-RF` the first one was put into pairing. It now
+  names the central.
 - **A stock CCU and debmatic are no longer offered the system backup.**
   The backup the daemon triggers is the one OpenCCU ships, yet every CCU
   reported `system.backup.create` and `system.backup.restore` as
@@ -43,8 +62,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **The Config UI no longer offers system-variable and program options
   for an openccu-lite central.** Such a system has neither, so the
   central's edit dialog hides the seven scan, internal-entry and marker
-  options and the port field (stored values are kept), the alarm outputs
-  stop offering a
+  options (stored values are kept) and shows the port field in expert
+  mode only, the alarm outputs stop offering a
   system-variable mirror when no central can carry one, and the views
   skip the program and system-variable requests that could only come
   back empty. A CCU that is still starting keeps all of its options.

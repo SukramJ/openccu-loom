@@ -69,6 +69,20 @@ vi.mock("$lib/stores/preferences.svelte", () => ({
   prefs: { locale: "en", expertMode: false },
 }));
 
+// The inbox opens the add-device dialog, which reads the device list; the
+// real store would pull in the auth store.
+vi.mock("$lib/stores/devices.svelte", () => ({
+  deviceStore: {
+    items: [],
+    loading: false,
+    error: null,
+    lastLoaded: null,
+    refresh: vi.fn().mockResolvedValue(undefined),
+    ensureStream: vi.fn(),
+    close: vi.fn(),
+  },
+}));
+
 vi.mock("$lib/stores/installMode.svelte", () => ({
   installModeStore: {
     active: false,
