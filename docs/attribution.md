@@ -148,9 +148,12 @@ matter.js schema pin used for parity at
 
 ## home-assistant-matter-bridge — Apache-2.0
 
-- Source: <https://github.com/Nabu-Casa/home-assistant-matter-bridge> (local
-  mirror `../home-assistant-matter-bridge/`)
-- Copyright: © Nabu Casa, Inc. and the home-assistant-matter-bridge authors.
+- Source: <https://github.com/SukramJ/home-assistant-matter-bridge> (local
+  mirror `../home-assistant-matter-bridge/`), a fork of
+  [home-assistant-matter-hub](https://github.com/t0bst4r/home-assistant-matter-hub)
+  by t0bst4r. Both repositories are archived.
+- Copyright: © t0bst4r and the home-assistant-matter-hub contributors;
+  fork modifications © SukramJ.
 - Used as: a supplementary reference for end-to-end bridge composition
   (Aggregator + bridged devices). Not a gold standard — it carries
   Home-Assistant-specific shims — but useful when wiring the bridge.
