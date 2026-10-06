@@ -5,7 +5,6 @@ package adapter
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -20,7 +19,7 @@ import (
 // week-profile pointer subscription publishes to. Counting publications on it
 // is how these tests observe "the callback fired once" without reaching into
 // the bridge's bookkeeping.
-const weekProfileStateTopicSuffix = "/week_profile/state"
+const weekProfileStateTopicSuffix = "/week_profile"
 
 // liveSubHarness is one central carrying one ingested device, wired to an
 // EventBridge with a recording MQTT client.
@@ -95,7 +94,7 @@ func (h *liveSubHarness) device(t *testing.T) *device.Device {
 func (h *liveSubHarness) weekProfileStatePublishes() int {
 	n := 0
 	for _, p := range h.pub.Published() {
-		if strings.HasSuffix(p.Topic, weekProfileStateTopicSuffix) {
+		if statusSuffix(p.Topic, weekProfileStateTopicSuffix) {
 			n++
 		}
 	}

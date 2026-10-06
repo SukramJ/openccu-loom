@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -61,8 +62,8 @@ func TestMQTTSubscriberTeardownStopsTheCommandDispatcher(t *testing.T) {
 	}
 
 	const (
-		filter = "openccu-loom/+/+/+/+/+/+/set"
-		topic  = "openccu-loom/ccu-test/HmIP-RF/0001ABCD/4/values/STATE/set"
+		filter = "openccu-loom/set/+/+/+/+/+/+"
+		topic  = "openccu-loom/set/ccu-test/HmIP-RF/0001ABCD/4/values/STATE"
 	)
 	if !noop.DeliverInbound(filter, topic, []byte("true")) {
 		t.Fatal("the daemon does not subscribe to its own declared command topic")
@@ -82,7 +83,7 @@ func TestMQTTSubscriberTeardownStopsTheCommandDispatcher(t *testing.T) {
 }
 
 // rejectingSubscribeClient is a no-op client whose command-topic subscribes
-// fail, the way a broker ACL that denies the `…/set` wildcard does.
+// fail, the way a broker ACL that denies the `<base>/set/…` tree does.
 type rejectingSubscribeClient struct {
 	*mqtt.NoopClient
 }
@@ -90,7 +91,7 @@ type rejectingSubscribeClient struct {
 func (c *rejectingSubscribeClient) Subscribe(ctx context.Context, filter string, qos mqtt.QoS,
 	handler mqtt.MessageHandler, opts ...mqtt.SubscribeOption,
 ) (mqtt.SubscribeResult, error) {
-	if len(filter) >= 4 && filter[len(filter)-4:] == "/set" {
+	if strings.HasPrefix(filter, "openccu-loom/set/") {
 		return mqtt.SubscribeResult{}, errors.New("not authorized")
 	}
 	return c.NoopClient.Subscribe(ctx, filter, qos, handler, opts...)

@@ -94,7 +94,7 @@ func TestTranslatedClimatePresetsCarryBothTemplates(t *testing.T) {
 
 	for _, c := range []struct{ name, tpl, want string }{
 		{"state maps the slug to the label", state, "'week_program_1': 'Wochenprogramm 1'"},
-		{"state reads the aggregate field", state, "value_json.preset_mode"},
+		{"state reads the aggregate field", state, "value_json.val.preset_mode"},
 		{"command maps the label back", command, "'Wochenprogramm 1': 'week_program_1'"},
 	} {
 		if !strings.Contains(c.tpl, c.want) {

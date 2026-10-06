@@ -191,7 +191,7 @@ func TestHubMQTTPublisherPreservesPublishOrder(t *testing.T) {
 			if discoveryAt < 0 {
 				discoveryAt = i
 			}
-		case strings.Contains(topic, "/hub/sysvars/Counter/state"):
+		case strings.HasSuffix(topic, "/hub/sysvars/Counter"):
 			stateSeq = append(stateSeq, topic)
 		}
 	}
@@ -204,7 +204,7 @@ func TestHubMQTTPublisherPreservesPublishOrder(t *testing.T) {
 	// Discovery must precede every state publish of the same entity.
 	firstStateAt := -1
 	for i, topic := range gate.accepted() {
-		if strings.Contains(topic, "/hub/sysvars/Counter/state") {
+		if strings.HasSuffix(topic, "/hub/sysvars/Counter") {
 			firstStateAt = i
 			break
 		}
@@ -241,10 +241,10 @@ func TestHubMQTTPublisherPreservesPayloadOrder(t *testing.T) {
 
 	var got []int
 	for _, p := range pub.Published() {
-		if !strings.Contains(p.Topic, "/hub/sysvars/Counter/state") {
+		if !strings.HasSuffix(p.Topic, "/hub/sysvars/Counter") {
 			continue
 		}
-		n, err := strconv.Atoi(strings.TrimSpace(string(p.Payload)))
+		n, err := strconv.Atoi(plainVal(p.Payload))
 		if err != nil {
 			continue
 		}

@@ -100,7 +100,7 @@ func TestStaleEviction_ObservedDP_NormalPublish(t *testing.T) {
 	valuePublishes := 0
 	evictions := 0
 	for _, p := range pub.Published() {
-		if strings.HasSuffix(p.Topic, "/0001ABCD/1/values/STATE") {
+		if statusSuffix(p.Topic, "/0001ABCD/1/values/STATE") {
 			if len(p.Payload) == 0 && p.Retain {
 				evictions++
 			} else {
@@ -169,13 +169,13 @@ func TestUnobservedDP_NoWireLoad_UnavailableSlotState(t *testing.T) {
 	evictions := 0
 	unavailablePublishes := 0
 	for _, p := range pub.Published() {
-		if strings.HasSuffix(p.Topic, "/0001ABCD/1/values/STATE") {
+		if statusSuffix(p.Topic, "/0001ABCD/1/values/STATE") {
 			switch {
 			case len(p.Payload) == 0 && p.Retain:
 				evictions++
 			case strings.Contains(string(p.Payload), `"available":false`):
 				unavailablePublishes++
-				if !strings.Contains(string(p.Payload), `"value":null`) {
+				if !strings.Contains(string(p.Payload), `"val":null`) {
 					t.Errorf("unobserved slot state should carry a null value, got %s", p.Payload)
 				}
 			}
@@ -251,12 +251,12 @@ func TestStaleEviction_CalculatedDP_NeitherLoadNorEvict(t *testing.T) {
 	// empty eviction body.
 	registered := false
 	for _, p := range pub.Published() {
-		if strings.HasSuffix(p.Topic, "/calculated/DEW_POINT") {
+		if statusSuffix(p.Topic, "/calculated/DEW_POINT") {
 			registered = true
 			if len(p.Payload) == 0 {
 				t.Fatalf("calculated DP slot state must not be an empty eviction body: %+v", p)
 			}
-			if !strings.Contains(string(p.Payload), `"value":null`) {
+			if !strings.Contains(string(p.Payload), `"val":null`) {
 				t.Fatalf("unobserved calculated DP must carry a null value: %s", p.Payload)
 			}
 		}

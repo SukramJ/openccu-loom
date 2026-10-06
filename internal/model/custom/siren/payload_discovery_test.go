@@ -40,7 +40,7 @@ func (discoveryCtx) WireParameterStateTopic(channelAddress, parameter string) st
 }
 
 func (discoveryCtx) DeviceAvailabilityTopic() string { return "test/availability" }
-func (discoveryCtx) BridgeStatusTopic() string       { return "test/bridge/status" }
+func (discoveryCtx) ConnectedTopic() string          { return "test/bridge/status" }
 
 // compile-time check: discoveryCtx satisfies payload.HADiscoveryTopics.
 var _ payload.HADiscoveryTopics = discoveryCtx{}

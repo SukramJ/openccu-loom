@@ -168,8 +168,8 @@ func TestCommandTransportCanAttributeSoTheDisjointnessGuardIsLoadBearing(t *test
 		hapublisher.CommandConfig{QoS: hapublisher.QoSAtLeastOnce},
 	)
 
-	const catchAll = "openccu-loom/+/+/+/+/+/set"
-	const weekProfile = "openccu-loom/+/+/+/+/week_profile/set"
+	const catchAll = "openccu-loom/set/+/+/+/+/+"
+	const weekProfile = "openccu-loom/set/+/+/+/+/week_profile"
 	noop := func(context.Context, hapublisher.Command) {}
 	if err := router.Handle(catchAll, noop); err != nil {
 		t.Fatalf("handle %q: %v", catchAll, err)
@@ -327,7 +327,6 @@ func TestRouteWildcardArityGuardDropsAMisboundRoute(t *testing.T) {
 		"program":        sub.handleProgram,
 		"program_enable": sub.handleProgramEnable,
 		"install_mode":   sub.handleInstallMode,
-		"cdp_invoke":     sub.handleCDPInvoke,
 		"service_method": sub.handleServiceMethod,
 		"alarm":          sub.handleAlarmCommand,
 		"week_profile":   sub.handleWeekProfile,

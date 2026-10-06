@@ -104,16 +104,16 @@ func TestWireSystemStatusSubscribersPublishesAScheduledArmFailure(t *testing.T) 
 		// 22:00 arrives and the chain fires.
 		time.Sleep(90 * time.Second)
 
-		want := mqttBase + "/alarm/" + zoneID + "/event"
+		want := mqttBase + "/status/alarm/" + zoneID + "/event"
 		pay := waitForAlarmEvent(t, client, want)
 		if pay.Type != "FAILED_TO_ARM" {
 			t.Fatalf("event type = %q, want FAILED_TO_ARM", pay.Type)
 		}
-		if pay.Mode != string(hmenum.AlarmModeFull) {
-			t.Errorf("event mode = %q, want %q", pay.Mode, hmenum.AlarmModeFull)
+		if pay.HM.Mode != string(hmenum.AlarmModeFull) {
+			t.Errorf("event mode = %q, want %q", pay.HM.Mode, hmenum.AlarmModeFull)
 		}
-		if len(pay.OpenSensors) != 1 || pay.OpenSensors[0] != "Front door" {
-			t.Errorf("open sensors = %v, want the blocking sensor's display name", pay.OpenSensors)
+		if len(pay.HM.OpenSensors) != 1 || pay.HM.OpenSensors[0] != "Front door" {
+			t.Errorf("open sensors = %v, want the blocking sensor's display name", pay.HM.OpenSensors)
 		}
 	})
 }
@@ -121,11 +121,15 @@ func TestWireSystemStatusSubscribersPublishesAScheduledArmFailure(t *testing.T) 
 // alarmEventBody is the subset of the alarm event topic's JSON this pin
 // asserts on. It is decoded rather than string-matched so a field rename
 // on the publisher side fails here instead of passing on a substring.
+// alarmEventBody is the alarm event's status object (ADR 0083): the event
+// type in `val`, the rest of the event under `hm`.
 type alarmEventBody struct {
-	Type        string   `json:"type"`
-	ZoneID      string   `json:"zone_id"`
-	Mode        string   `json:"mode"`
-	OpenSensors []string `json:"open_sensors"`
+	Type string `json:"val"`
+	HM   struct {
+		ZoneID      string   `json:"zone_id"`
+		Mode        string   `json:"mode"`
+		OpenSensors []string `json:"open_sensors"`
+	} `json:"hm"`
 }
 
 // waitForAlarmEvent polls the recorded publications for topic until one

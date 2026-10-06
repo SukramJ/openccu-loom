@@ -6,18 +6,20 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/000B0001/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-01/HmIP-RF/000B0001/1/values/STATE",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-01/HmIP-RF/000B0001/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/000B0001/1/values/STATE",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -32,7 +34,7 @@
       },
       "device_class": "window",
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/000B0001/1/values/STATE/config",
+      "json_attributes_topic": "gh/meta/ccu-01/HmIP-RF/000B0001/1/values/STATE",
       "name": "State",
       "origin": {
         "name": "openccu-loom",
@@ -41,9 +43,9 @@
       },
       "payload_off": "false",
       "payload_on": "true",
-      "state_topic": "gh/ccu-01/HmIP-RF/000B0001/1/values/STATE",
+      "state_topic": "gh/status/ccu-01/HmIP-RF/000B0001/1/values/STATE",
       "unique_id": "loom_000b0001_1_state",
-      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value | lower }}{% endif %}"
+      "value_template": "{% if value_json is defined and value_json.val is not none %}{{ value_json.val | lower }}{% endif %}"
     }
   },
   "climate/master": {
@@ -53,18 +55,20 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/00150001/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-01/HmIP-RF/00150001/1/master/SET_POINT_TEMPERATURE",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-01/HmIP-RF/00150001/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/00150001/1/master/SET_POINT_TEMPERATURE",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -80,7 +84,7 @@
       "device_class": "temperature",
       "entity_category": "config",
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/00150001/1/master/SET_POINT_TEMPERATURE/config",
+      "json_attributes_topic": "gh/meta/ccu-01/HmIP-RF/00150001/1/master/SET_POINT_TEMPERATURE",
       "name": "Set Point Temperature",
       "origin": {
         "name": "openccu-loom",
@@ -88,7 +92,7 @@
         "sw_version": "dev"
       },
       "unique_id": "loom_00150001_1_set_point_temperature",
-      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+      "value_template": "{% if value_json is defined and value_json.val is not none %}{{ value_json.val }}{% endif %}"
     }
   },
   "climate/values": {
@@ -98,18 +102,20 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/00150001/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-01/HmIP-RF/00150001/1/values/SET_POINT_TEMPERATURE",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-01/HmIP-RF/00150001/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/00150001/1/values/SET_POINT_TEMPERATURE",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -124,7 +130,7 @@
       },
       "device_class": "temperature",
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/00150001/1/values/SET_POINT_TEMPERATURE/config",
+      "json_attributes_topic": "gh/meta/ccu-01/HmIP-RF/00150001/1/values/SET_POINT_TEMPERATURE",
       "name": "Set Point Temperature",
       "origin": {
         "name": "openccu-loom",
@@ -132,7 +138,7 @@
         "sw_version": "dev"
       },
       "unique_id": "loom_00150001_1_set_point_temperature",
-      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+      "value_template": "{% if value_json is defined and value_json.val is not none %}{{ value_json.val }}{% endif %}"
     }
   },
   "cover/master": {
@@ -142,22 +148,24 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/000D0001/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-01/HmIP-RF/000D0001/4/master/LEVEL",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-01/HmIP-RF/000D0001/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/000D0001/4/master/LEVEL",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
-      "command_topic": "gh/ccu-01/HmIP-RF/000D0001/4/master/LEVEL/set",
+      "command_topic": "gh/set/ccu-01/HmIP-RF/000D0001/4/master/LEVEL",
       "device": {
         "identifiers": [
           "openccu-loom_000d0001"
@@ -170,7 +178,7 @@
       "device_class": "shutter",
       "entity_category": "config",
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/000D0001/4/master/LEVEL/config",
+      "json_attributes_topic": "gh/meta/ccu-01/HmIP-RF/000D0001/4/master/LEVEL",
       "name": "Level",
       "optimistic": false,
       "origin": {
@@ -178,9 +186,9 @@
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/HmIP-RF/000D0001/4/master/LEVEL",
+      "state_topic": "gh/status/ccu-01/HmIP-RF/000D0001/4/master/LEVEL",
       "unique_id": "loom_000d0001_4_level",
-      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+      "value_template": "{% if value_json is defined and value_json.val is not none %}{{ value_json.val }}{% endif %}"
     }
   },
   "cover/sub-device": {
@@ -190,22 +198,24 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/000A0001/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-01/HmIP-RF/000A0001/4/values/LEVEL",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-01/HmIP-RF/000A0001/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/000A0001/4/values/LEVEL",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
-      "command_topic": "gh/ccu-01/HmIP-RF/000A0001/4/values/LEVEL/set",
+      "command_topic": "gh/set/ccu-01/HmIP-RF/000A0001/4/values/LEVEL",
       "device": {
         "identifiers": [
           "openccu-loom_000a0001-2"
@@ -217,7 +227,7 @@
       },
       "device_class": "shutter",
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/000A0001/4/values/LEVEL/config",
+      "json_attributes_topic": "gh/meta/ccu-01/HmIP-RF/000A0001/4/values/LEVEL",
       "name": "Level",
       "optimistic": false,
       "origin": {
@@ -225,9 +235,9 @@
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/HmIP-RF/000A0001/4/values/LEVEL",
+      "state_topic": "gh/status/ccu-01/HmIP-RF/000A0001/4/values/LEVEL",
       "unique_id": "loom_000a0001_4_level",
-      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+      "value_template": "{% if value_json is defined and value_json.val is not none %}{{ value_json.val }}{% endif %}"
     }
   },
   "cover/values": {
@@ -237,22 +247,24 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/000D0001/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-01/HmIP-RF/000D0001/4/values/LEVEL",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-01/HmIP-RF/000D0001/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/000D0001/4/values/LEVEL",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
-      "command_topic": "gh/ccu-01/HmIP-RF/000D0001/4/values/LEVEL/set",
+      "command_topic": "gh/set/ccu-01/HmIP-RF/000D0001/4/values/LEVEL",
       "device": {
         "identifiers": [
           "openccu-loom_000d0001"
@@ -264,7 +276,7 @@
       },
       "device_class": "shutter",
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/000D0001/4/values/LEVEL/config",
+      "json_attributes_topic": "gh/meta/ccu-01/HmIP-RF/000D0001/4/values/LEVEL",
       "name": "Level",
       "optimistic": false,
       "origin": {
@@ -272,9 +284,9 @@
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/HmIP-RF/000D0001/4/values/LEVEL",
+      "state_topic": "gh/status/ccu-01/HmIP-RF/000D0001/4/values/LEVEL",
       "unique_id": "loom_000d0001_4_level",
-      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+      "value_template": "{% if value_json is defined and value_json.val is not none %}{{ value_json.val }}{% endif %}"
     }
   },
   "event/press": {
@@ -284,18 +296,20 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/000C0001/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-01/HmIP-RF/000C0001/1/values/PRESS_SHORT",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-01/HmIP-RF/000C0001/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/000C0001/1/values/PRESS_SHORT",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -313,15 +327,16 @@
         "press_short"
       ],
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/000C0001/1/values/PRESS_SHORT/config",
+      "json_attributes_topic": "gh/meta/ccu-01/HmIP-RF/000C0001/1/values/PRESS_SHORT",
       "name": "Press Short",
       "origin": {
         "name": "openccu-loom",
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/HmIP-RF/000C0001/1/values/PRESS_SHORT",
-      "unique_id": "loom_000c0001_1_press_short"
+      "state_topic": "gh/status/ccu-01/HmIP-RF/000C0001/1/values/PRESS_SHORT",
+      "unique_id": "loom_000c0001_1_press_short",
+      "value_template": "{{ dict(value_json.hm, event_type=value_json.val) | tojson }}"
     }
   },
   "event/virtual-remote-central-scoped": {
@@ -331,18 +346,20 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/BidCos-RF/BIDCOS-RF/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-01/BidCos-RF/BIDCOS-RF/3/values/PRESS_SHORT",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-01/BidCos-RF/BIDCOS-RF/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/BidCos-RF/BIDCOS-RF/3/values/PRESS_SHORT",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -360,15 +377,16 @@
         "press_short"
       ],
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/BidCos-RF/BIDCOS-RF/3/values/PRESS_SHORT/config",
+      "json_attributes_topic": "gh/meta/ccu-01/BidCos-RF/BIDCOS-RF/3/values/PRESS_SHORT",
       "name": "Press Short",
       "origin": {
         "name": "openccu-loom",
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/BidCos-RF/BIDCOS-RF/3/values/PRESS_SHORT",
-      "unique_id": "loom_11a0001234_bidcos_rf_3_press_short"
+      "state_topic": "gh/status/ccu-01/BidCos-RF/BIDCOS-RF/3/values/PRESS_SHORT",
+      "unique_id": "loom_11a0001234_bidcos_rf_3_press_short",
+      "value_template": "{{ dict(value_json.hm, event_type=value_json.val) | tojson }}"
     }
   },
   "light/master": {
@@ -378,22 +396,24 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/000F0001/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-01/HmIP-RF/000F0001/4/master/LEVEL",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-01/HmIP-RF/000F0001/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/000F0001/4/master/LEVEL",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
-      "command_topic": "gh/ccu-01/HmIP-RF/000F0001/4/master/LEVEL/set",
+      "command_topic": "gh/set/ccu-01/HmIP-RF/000F0001/4/master/LEVEL",
       "device": {
         "identifiers": [
           "openccu-loom_000f0001"
@@ -405,7 +425,7 @@
       },
       "entity_category": "config",
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/000F0001/4/master/LEVEL/config",
+      "json_attributes_topic": "gh/meta/ccu-01/HmIP-RF/000F0001/4/master/LEVEL",
       "name": "Level",
       "optimistic": false,
       "origin": {
@@ -413,7 +433,7 @@
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/HmIP-RF/000F0001/4/master/LEVEL",
+      "state_topic": "gh/status/ccu-01/HmIP-RF/000F0001/4/master/LEVEL",
       "unique_id": "loom_000f0001_4_level"
     }
   },
@@ -424,22 +444,24 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/000F0001/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-01/HmIP-RF/000F0001/4/values/LEVEL",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-01/HmIP-RF/000F0001/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/000F0001/4/values/LEVEL",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
-      "command_topic": "gh/ccu-01/HmIP-RF/000F0001/4/values/LEVEL/set",
+      "command_topic": "gh/set/ccu-01/HmIP-RF/000F0001/4/values/LEVEL",
       "device": {
         "identifiers": [
           "openccu-loom_000f0001"
@@ -450,7 +472,7 @@
         "via_device": "openccu-loom_central_ccu-01"
       },
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/000F0001/4/values/LEVEL/config",
+      "json_attributes_topic": "gh/meta/ccu-01/HmIP-RF/000F0001/4/values/LEVEL",
       "name": "Level",
       "optimistic": false,
       "origin": {
@@ -458,7 +480,7 @@
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/HmIP-RF/000F0001/4/values/LEVEL",
+      "state_topic": "gh/status/ccu-01/HmIP-RF/000F0001/4/values/LEVEL",
       "unique_id": "loom_000f0001_4_level"
     }
   },
@@ -469,22 +491,24 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/000E0001/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-01/HmIP-RF/000E0001/1/master/LOCK_TARGET_LEVEL",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-01/HmIP-RF/000E0001/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/000E0001/1/master/LOCK_TARGET_LEVEL",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
-      "command_topic": "gh/ccu-01/HmIP-RF/000E0001/1/master/LOCK_TARGET_LEVEL/set",
+      "command_topic": "gh/set/ccu-01/HmIP-RF/000E0001/1/master/LOCK_TARGET_LEVEL",
       "device": {
         "identifiers": [
           "openccu-loom_000e0001"
@@ -496,7 +520,7 @@
       },
       "entity_category": "config",
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/000E0001/1/master/LOCK_TARGET_LEVEL/config",
+      "json_attributes_topic": "gh/meta/ccu-01/HmIP-RF/000E0001/1/master/LOCK_TARGET_LEVEL",
       "name": "Lock Target Level",
       "optimistic": false,
       "origin": {
@@ -507,10 +531,10 @@
       "payload_lock": "0",
       "payload_unlock": "1",
       "state_locked": "0",
-      "state_topic": "gh/ccu-01/HmIP-RF/000E0001/1/master/LOCK_TARGET_LEVEL",
+      "state_topic": "gh/status/ccu-01/HmIP-RF/000E0001/1/master/LOCK_TARGET_LEVEL",
       "state_unlocked": "1",
       "unique_id": "loom_000e0001_1_lock_target_level",
-      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value | lower }}{% endif %}"
+      "value_template": "{% if value_json is defined and value_json.val is not none %}{{ value_json.val | lower }}{% endif %}"
     }
   },
   "lock/values": {
@@ -520,22 +544,24 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/000E0001/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-01/HmIP-RF/000E0001/1/values/LOCK_TARGET_LEVEL",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-01/HmIP-RF/000E0001/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/000E0001/1/values/LOCK_TARGET_LEVEL",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
-      "command_topic": "gh/ccu-01/HmIP-RF/000E0001/1/values/LOCK_TARGET_LEVEL/set",
+      "command_topic": "gh/set/ccu-01/HmIP-RF/000E0001/1/values/LOCK_TARGET_LEVEL",
       "device": {
         "identifiers": [
           "openccu-loom_000e0001"
@@ -546,7 +572,7 @@
         "via_device": "openccu-loom_central_ccu-01"
       },
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/000E0001/1/values/LOCK_TARGET_LEVEL/config",
+      "json_attributes_topic": "gh/meta/ccu-01/HmIP-RF/000E0001/1/values/LOCK_TARGET_LEVEL",
       "name": "Lock Target Level",
       "optimistic": false,
       "origin": {
@@ -557,10 +583,10 @@
       "payload_lock": "0",
       "payload_unlock": "1",
       "state_locked": "0",
-      "state_topic": "gh/ccu-01/HmIP-RF/000E0001/1/values/LOCK_TARGET_LEVEL",
+      "state_topic": "gh/status/ccu-01/HmIP-RF/000E0001/1/values/LOCK_TARGET_LEVEL",
       "state_unlocked": "1",
       "unique_id": "loom_000e0001_1_lock_target_level",
-      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value | lower }}{% endif %}"
+      "value_template": "{% if value_json is defined and value_json.val is not none %}{{ value_json.val | lower }}{% endif %}"
     }
   },
   "number/master": {
@@ -570,18 +596,20 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/0001ABCD/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-01/HmIP-RF/0001ABCD/1/master/LEVEL",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-01/HmIP-RF/0001ABCD/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/0001ABCD/1/master/LEVEL",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -598,18 +626,18 @@
       "entity_category": "config",
       "force_update": true,
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/0001ABCD/1/master/LEVEL/config",
+      "json_attributes_topic": "gh/meta/ccu-01/HmIP-RF/0001ABCD/1/master/LEVEL",
       "name": "Level",
       "origin": {
         "name": "openccu-loom",
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/HmIP-RF/0001ABCD/1/master/LEVEL",
+      "state_topic": "gh/status/ccu-01/HmIP-RF/0001ABCD/1/master/LEVEL",
       "translation_key": "pipe_level",
       "unique_id": "loom_0001abcd_1_level_sensor",
       "unit_of_measurement": "%",
-      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ (value_json.value | float * 100) }}{% endif %}"
+      "value_template": "{% if value_json is defined and value_json.val is not none %}{{ (value_json.val | float * 100) }}{% endif %}"
     }
   },
   "select/action-values": {
@@ -619,23 +647,25 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/00120001/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-01/HmIP-RF/00120001/1/values/BOOST_MODE",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-01/HmIP-RF/00120001/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/00120001/1/values/BOOST_MODE",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
       "command_template": "{{ value | upper }}",
-      "command_topic": "gh/ccu-01/HmIP-RF/00120001/1/values/BOOST_MODE/set",
+      "command_topic": "gh/set/ccu-01/HmIP-RF/00120001/1/values/BOOST_MODE",
       "device": {
         "identifiers": [
           "openccu-loom_00120001"
@@ -647,7 +677,7 @@
       },
       "entity_category": "config",
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/00120001/1/values/BOOST_MODE/config",
+      "json_attributes_topic": "gh/meta/ccu-01/HmIP-RF/00120001/1/values/BOOST_MODE",
       "name": "Boost Mode",
       "optimistic": false,
       "options": [
@@ -659,9 +689,9 @@
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/HmIP-RF/00120001/1/values/BOOST_MODE",
+      "state_topic": "gh/status/ccu-01/HmIP-RF/00120001/1/values/BOOST_MODE",
       "unique_id": "loom_00120001_1_boost_mode",
-      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value | lower }}{% endif %}"
+      "value_template": "{% if value_json is defined and value_json.val is not none %}{{ value_json.val | lower }}{% endif %}"
     }
   },
   "select/master": {
@@ -671,23 +701,25 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/00120001/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-01/HmIP-RF/00120001/1/master/SET_POINT_MODE",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-01/HmIP-RF/00120001/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/00120001/1/master/SET_POINT_MODE",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
       "command_template": "{{ value | upper }}",
-      "command_topic": "gh/ccu-01/HmIP-RF/00120001/1/master/SET_POINT_MODE/set",
+      "command_topic": "gh/set/ccu-01/HmIP-RF/00120001/1/master/SET_POINT_MODE",
       "device": {
         "identifiers": [
           "openccu-loom_00120001"
@@ -699,7 +731,7 @@
       },
       "entity_category": "config",
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/00120001/1/master/SET_POINT_MODE/config",
+      "json_attributes_topic": "gh/meta/ccu-01/HmIP-RF/00120001/1/master/SET_POINT_MODE",
       "name": "Set Point Mode",
       "optimistic": false,
       "options": [
@@ -713,9 +745,9 @@
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/HmIP-RF/00120001/1/master/SET_POINT_MODE",
+      "state_topic": "gh/status/ccu-01/HmIP-RF/00120001/1/master/SET_POINT_MODE",
       "unique_id": "loom_00120001_1_set_point_mode",
-      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value | lower }}{% endif %}"
+      "value_template": "{% if value_json is defined and value_json.val is not none %}{{ value_json.val | lower }}{% endif %}"
     }
   },
   "select/values": {
@@ -725,23 +757,25 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/00120001/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-01/HmIP-RF/00120001/1/values/SET_POINT_MODE",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-01/HmIP-RF/00120001/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/00120001/1/values/SET_POINT_MODE",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
       "command_template": "{{ value | upper }}",
-      "command_topic": "gh/ccu-01/HmIP-RF/00120001/1/values/SET_POINT_MODE/set",
+      "command_topic": "gh/set/ccu-01/HmIP-RF/00120001/1/values/SET_POINT_MODE",
       "device": {
         "identifiers": [
           "openccu-loom_00120001"
@@ -753,7 +787,7 @@
       },
       "entity_category": "config",
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/00120001/1/values/SET_POINT_MODE/config",
+      "json_attributes_topic": "gh/meta/ccu-01/HmIP-RF/00120001/1/values/SET_POINT_MODE",
       "name": "Set Point Mode",
       "optimistic": false,
       "options": [
@@ -767,9 +801,9 @@
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/HmIP-RF/00120001/1/values/SET_POINT_MODE",
+      "state_topic": "gh/status/ccu-01/HmIP-RF/00120001/1/values/SET_POINT_MODE",
       "unique_id": "loom_00120001_1_set_point_mode",
-      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value | lower }}{% endif %}"
+      "value_template": "{% if value_json is defined and value_json.val is not none %}{{ value_json.val | lower }}{% endif %}"
     }
   },
   "sensor/calculated-synthetic": {
@@ -779,18 +813,20 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/0001ABCD/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-01/HmIP-RF/0001ABCD/1/calculated/DEW_POINT",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-01/HmIP-RF/0001ABCD/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/0001ABCD/1/calculated/DEW_POINT",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -807,7 +843,7 @@
       "enabled_by_default": false,
       "force_update": true,
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/0001ABCD/1/calculated/DEW_POINT/config",
+      "json_attributes_topic": "gh/meta/ccu-01/HmIP-RF/0001ABCD/1/calculated/DEW_POINT",
       "name": "Dew Point",
       "origin": {
         "name": "openccu-loom",
@@ -815,11 +851,11 @@
         "sw_version": "dev"
       },
       "state_class": "measurement",
-      "state_topic": "gh/ccu-01/HmIP-RF/0001ABCD/1/calculated/DEW_POINT",
+      "state_topic": "gh/status/ccu-01/HmIP-RF/0001ABCD/1/calculated/DEW_POINT",
       "translation_key": "dew_point",
       "unique_id": "loom_calculated_0001abcd_1_dew_point",
       "unit_of_measurement": "°C",
-      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+      "value_template": "{% if value_json is defined and value_json.val is not none %}{{ value_json.val }}{% endif %}"
     }
   },
   "sensor/high-channel": {
@@ -829,18 +865,20 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/0001ABCD/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-01/HmIP-RF/0001ABCD/7/values/HUMIDITY",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-01/HmIP-RF/0001ABCD/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/0001ABCD/7/values/HUMIDITY",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -856,7 +894,7 @@
       "device_class": "humidity",
       "force_update": true,
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/0001ABCD/7/values/HUMIDITY/config",
+      "json_attributes_topic": "gh/meta/ccu-01/HmIP-RF/0001ABCD/7/values/HUMIDITY",
       "name": "Humidity",
       "origin": {
         "name": "openccu-loom",
@@ -864,10 +902,10 @@
         "sw_version": "dev"
       },
       "state_class": "measurement",
-      "state_topic": "gh/ccu-01/HmIP-RF/0001ABCD/7/values/HUMIDITY",
+      "state_topic": "gh/status/ccu-01/HmIP-RF/0001ABCD/7/values/HUMIDITY",
       "unique_id": "loom_0001abcd_7_humidity",
       "unit_of_measurement": "%",
-      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+      "value_template": "{% if value_json is defined and value_json.val is not none %}{{ value_json.val }}{% endif %}"
     }
   },
   "sensor/name-null-seed": {
@@ -877,18 +915,20 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/0001ABCD/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-01/HmIP-RF/0001ABCD/1/values/ACTUAL_TEMPERATURE",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-01/HmIP-RF/0001ABCD/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/0001ABCD/1/values/ACTUAL_TEMPERATURE",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -904,7 +944,7 @@
       "device_class": "temperature",
       "force_update": true,
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/0001ABCD/1/values/ACTUAL_TEMPERATURE/config",
+      "json_attributes_topic": "gh/meta/ccu-01/HmIP-RF/0001ABCD/1/values/ACTUAL_TEMPERATURE",
       "name": null,
       "origin": {
         "name": "openccu-loom",
@@ -912,10 +952,10 @@
         "sw_version": "dev"
       },
       "state_class": "measurement",
-      "state_topic": "gh/ccu-01/HmIP-RF/0001ABCD/1/values/ACTUAL_TEMPERATURE",
+      "state_topic": "gh/status/ccu-01/HmIP-RF/0001ABCD/1/values/ACTUAL_TEMPERATURE",
       "unique_id": "loom_0001abcd_1_actual_temperature",
       "unit_of_measurement": "°C",
-      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+      "value_template": "{% if value_json is defined and value_json.val is not none %}{{ value_json.val }}{% endif %}"
     }
   },
   "sensor/values": {
@@ -925,18 +965,20 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/0001ABCD/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-01/HmIP-RF/0001ABCD/1/values/ACTUAL_TEMPERATURE",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-01/HmIP-RF/0001ABCD/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/0001ABCD/1/values/ACTUAL_TEMPERATURE",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -952,7 +994,7 @@
       "device_class": "temperature",
       "force_update": true,
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/0001ABCD/1/values/ACTUAL_TEMPERATURE/config",
+      "json_attributes_topic": "gh/meta/ccu-01/HmIP-RF/0001ABCD/1/values/ACTUAL_TEMPERATURE",
       "name": "Actual Temperature",
       "origin": {
         "name": "openccu-loom",
@@ -960,10 +1002,10 @@
         "sw_version": "dev"
       },
       "state_class": "measurement",
-      "state_topic": "gh/ccu-01/HmIP-RF/0001ABCD/1/values/ACTUAL_TEMPERATURE",
+      "state_topic": "gh/status/ccu-01/HmIP-RF/0001ABCD/1/values/ACTUAL_TEMPERATURE",
       "unique_id": "loom_0001abcd_1_actual_temperature",
       "unit_of_measurement": "°C",
-      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+      "value_template": "{% if value_json is defined and value_json.val is not none %}{{ value_json.val }}{% endif %}"
     }
   },
   "siren/master": {
@@ -973,18 +1015,20 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/00110001/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-01/HmIP-RF/00110001/3/master/ACOUSTIC_ALARM_ACTIVE",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-01/HmIP-RF/00110001/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/00110001/3/master/ACOUSTIC_ALARM_ACTIVE",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -999,14 +1043,14 @@
       },
       "entity_category": "config",
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/00110001/3/master/ACOUSTIC_ALARM_ACTIVE/config",
+      "json_attributes_topic": "gh/meta/ccu-01/HmIP-RF/00110001/3/master/ACOUSTIC_ALARM_ACTIVE",
       "name": "Acoustic Alarm Active",
       "origin": {
         "name": "openccu-loom",
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/HmIP-RF/00110001/3/master/ACOUSTIC_ALARM_ACTIVE",
+      "state_topic": "gh/status/ccu-01/HmIP-RF/00110001/3/master/ACOUSTIC_ALARM_ACTIVE",
       "unique_id": "loom_00110001_3_acoustic_alarm_active"
     }
   },
@@ -1017,18 +1061,20 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/00110001/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-01/HmIP-RF/00110001/3/values/ACOUSTIC_ALARM_ACTIVE",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-01/HmIP-RF/00110001/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/00110001/3/values/ACOUSTIC_ALARM_ACTIVE",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -1042,14 +1088,14 @@
         "via_device": "openccu-loom_central_ccu-01"
       },
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/00110001/3/values/ACOUSTIC_ALARM_ACTIVE/config",
+      "json_attributes_topic": "gh/meta/ccu-01/HmIP-RF/00110001/3/values/ACOUSTIC_ALARM_ACTIVE",
       "name": "Acoustic Alarm Active",
       "origin": {
         "name": "openccu-loom",
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/HmIP-RF/00110001/3/values/ACOUSTIC_ALARM_ACTIVE",
+      "state_topic": "gh/status/ccu-01/HmIP-RF/00110001/3/values/ACOUSTIC_ALARM_ACTIVE",
       "unique_id": "loom_00110001_3_acoustic_alarm_active"
     }
   },
@@ -1060,18 +1106,20 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/CUxD/CUX2801001/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-01/CUxD/CUX2801001/1/values/STATE",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-01/CUxD/CUX2801001/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/CUxD/CUX2801001/1/values/STATE",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -1086,7 +1134,7 @@
         "via_device": "openccu-loom_central_ccu-01"
       },
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/CUxD/CUX2801001/1/values/STATE/config",
+      "json_attributes_topic": "gh/meta/ccu-01/CUxD/CUX2801001/1/values/STATE",
       "name": "State",
       "origin": {
         "name": "openccu-loom",
@@ -1095,9 +1143,9 @@
       },
       "payload_off": "false",
       "payload_on": "true",
-      "state_topic": "gh/ccu-01/CUxD/CUX2801001/1/values/STATE",
+      "state_topic": "gh/status/ccu-01/CUxD/CUX2801001/1/values/STATE",
       "unique_id": "loom_11a0001234_cux2801001_1_state",
-      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value | lower }}{% endif %}"
+      "value_template": "{% if value_json is defined and value_json.val is not none %}{{ value_json.val | lower }}{% endif %}"
     }
   },
   "switch/cuxd-ccu-02": {
@@ -1107,18 +1155,20 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-02/CUxD/CUX2801001/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-02/CUxD/CUX2801001/1/values/STATE",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-02/CUxD/CUX2801001/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-02/CUxD/CUX2801001/1/values/STATE",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -1133,7 +1183,7 @@
         "via_device": "openccu-loom_central_ccu-02"
       },
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-02/CUxD/CUX2801001/1/values/STATE/config",
+      "json_attributes_topic": "gh/meta/ccu-02/CUxD/CUX2801001/1/values/STATE",
       "name": "State",
       "origin": {
         "name": "openccu-loom",
@@ -1142,9 +1192,9 @@
       },
       "payload_off": "false",
       "payload_on": "true",
-      "state_topic": "gh/ccu-02/CUxD/CUX2801001/1/values/STATE",
+      "state_topic": "gh/status/ccu-02/CUxD/CUX2801001/1/values/STATE",
       "unique_id": "loom_11b0005678_cux2801001_1_state",
-      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value | lower }}{% endif %}"
+      "value_template": "{% if value_json is defined and value_json.val is not none %}{{ value_json.val | lower }}{% endif %}"
     }
   },
   "switch/master": {
@@ -1154,22 +1204,24 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/AABBCCDD/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-01/HmIP-RF/AABBCCDD/1/master/STATE",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-01/HmIP-RF/AABBCCDD/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/AABBCCDD/1/master/STATE",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
-      "command_topic": "gh/ccu-01/HmIP-RF/AABBCCDD/1/master/STATE/set",
+      "command_topic": "gh/set/ccu-01/HmIP-RF/AABBCCDD/1/master/STATE",
       "device": {
         "identifiers": [
           "openccu-loom_aabbccdd"
@@ -1182,7 +1234,7 @@
       "device_class": "switch",
       "entity_category": "config",
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/AABBCCDD/1/master/STATE/config",
+      "json_attributes_topic": "gh/meta/ccu-01/HmIP-RF/AABBCCDD/1/master/STATE",
       "name": "State",
       "optimistic": false,
       "origin": {
@@ -1194,9 +1246,9 @@
       "payload_on": "true",
       "state_off": "false",
       "state_on": "true",
-      "state_topic": "gh/ccu-01/HmIP-RF/AABBCCDD/1/master/STATE",
+      "state_topic": "gh/status/ccu-01/HmIP-RF/AABBCCDD/1/master/STATE",
       "unique_id": "loom_aabbccdd_1_state",
-      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value | lower }}{% endif %}"
+      "value_template": "{% if value_json is defined and value_json.val is not none %}{{ value_json.val | lower }}{% endif %}"
     }
   },
   "switch/serial-second-central": {
@@ -1206,22 +1258,24 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-02/HmIP-RF/AABBCCDD/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-02/HmIP-RF/AABBCCDD/1/values/STATE",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-02/HmIP-RF/AABBCCDD/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-02/HmIP-RF/AABBCCDD/1/values/STATE",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
-      "command_topic": "gh/ccu-02/HmIP-RF/AABBCCDD/1/values/STATE/set",
+      "command_topic": "gh/set/ccu-02/HmIP-RF/AABBCCDD/1/values/STATE",
       "device": {
         "identifiers": [
           "openccu-loom_aabbccdd"
@@ -1233,7 +1287,7 @@
       },
       "device_class": "switch",
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-02/HmIP-RF/AABBCCDD/1/values/STATE/config",
+      "json_attributes_topic": "gh/meta/ccu-02/HmIP-RF/AABBCCDD/1/values/STATE",
       "name": "State",
       "optimistic": false,
       "origin": {
@@ -1245,9 +1299,9 @@
       "payload_on": "true",
       "state_off": "false",
       "state_on": "true",
-      "state_topic": "gh/ccu-02/HmIP-RF/AABBCCDD/1/values/STATE",
+      "state_topic": "gh/status/ccu-02/HmIP-RF/AABBCCDD/1/values/STATE",
       "unique_id": "loom_aabbccdd_1_state",
-      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value | lower }}{% endif %}"
+      "value_template": "{% if value_json is defined and value_json.val is not none %}{{ value_json.val | lower }}{% endif %}"
     }
   },
   "switch/values": {
@@ -1257,22 +1311,24 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/AABBCCDD/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-01/HmIP-RF/AABBCCDD/1/values/STATE",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-01/HmIP-RF/AABBCCDD/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/AABBCCDD/1/values/STATE",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
-      "command_topic": "gh/ccu-01/HmIP-RF/AABBCCDD/1/values/STATE/set",
+      "command_topic": "gh/set/ccu-01/HmIP-RF/AABBCCDD/1/values/STATE",
       "device": {
         "identifiers": [
           "openccu-loom_aabbccdd"
@@ -1284,7 +1340,7 @@
       },
       "device_class": "switch",
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/AABBCCDD/1/values/STATE/config",
+      "json_attributes_topic": "gh/meta/ccu-01/HmIP-RF/AABBCCDD/1/values/STATE",
       "name": "State",
       "optimistic": false,
       "origin": {
@@ -1296,9 +1352,9 @@
       "payload_on": "true",
       "state_off": "false",
       "state_on": "true",
-      "state_topic": "gh/ccu-01/HmIP-RF/AABBCCDD/1/values/STATE",
+      "state_topic": "gh/status/ccu-01/HmIP-RF/AABBCCDD/1/values/STATE",
       "unique_id": "loom_aabbccdd_1_state",
-      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value | lower }}{% endif %}"
+      "value_template": "{% if value_json is defined and value_json.val is not none %}{{ value_json.val | lower }}{% endif %}"
     }
   },
   "text/master": {
@@ -1308,22 +1364,24 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/00130001/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-01/HmIP-RF/00130001/1/master/DISPLAY_LINE",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-01/HmIP-RF/00130001/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/00130001/1/master/DISPLAY_LINE",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
-      "command_topic": "gh/ccu-01/HmIP-RF/00130001/1/master/DISPLAY_LINE/set",
+      "command_topic": "gh/set/ccu-01/HmIP-RF/00130001/1/master/DISPLAY_LINE",
       "device": {
         "identifiers": [
           "openccu-loom_00130001"
@@ -1335,7 +1393,7 @@
       },
       "entity_category": "config",
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/00130001/1/master/DISPLAY_LINE/config",
+      "json_attributes_topic": "gh/meta/ccu-01/HmIP-RF/00130001/1/master/DISPLAY_LINE",
       "max": 12,
       "min": 0,
       "mode": "text",
@@ -1346,9 +1404,9 @@
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/HmIP-RF/00130001/1/master/DISPLAY_LINE",
+      "state_topic": "gh/status/ccu-01/HmIP-RF/00130001/1/master/DISPLAY_LINE",
       "unique_id": "loom_00130001_1_display_line",
-      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+      "value_template": "{% if value_json is defined and value_json.val is not none %}{{ value_json.val }}{% endif %}"
     }
   },
   "text/values": {
@@ -1358,22 +1416,24 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/00130001/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-01/HmIP-RF/00130001/1/values/DISPLAY_LINE",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-01/HmIP-RF/00130001/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/00130001/1/values/DISPLAY_LINE",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
-      "command_topic": "gh/ccu-01/HmIP-RF/00130001/1/values/DISPLAY_LINE/set",
+      "command_topic": "gh/set/ccu-01/HmIP-RF/00130001/1/values/DISPLAY_LINE",
       "device": {
         "identifiers": [
           "openccu-loom_00130001"
@@ -1384,7 +1444,7 @@
         "via_device": "openccu-loom_central_ccu-01"
       },
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/00130001/1/values/DISPLAY_LINE/config",
+      "json_attributes_topic": "gh/meta/ccu-01/HmIP-RF/00130001/1/values/DISPLAY_LINE",
       "max": 12,
       "min": 0,
       "mode": "text",
@@ -1395,9 +1455,9 @@
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/HmIP-RF/00130001/1/values/DISPLAY_LINE",
+      "state_topic": "gh/status/ccu-01/HmIP-RF/00130001/1/values/DISPLAY_LINE",
       "unique_id": "loom_00130001_1_display_line",
-      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+      "value_template": "{% if value_json is defined and value_json.val is not none %}{{ value_json.val }}{% endif %}"
     }
   },
   "update/master": {
@@ -1407,18 +1467,20 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/00140001/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-01/HmIP-RF/00140001/0/master/FIRMWARE",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-01/HmIP-RF/00140001/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/00140001/0/master/FIRMWARE",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -1433,16 +1495,16 @@
       },
       "entity_category": "config",
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/00140001/0/master/FIRMWARE/config",
+      "json_attributes_topic": "gh/meta/ccu-01/HmIP-RF/00140001/0/master/FIRMWARE",
       "name": "Firmware",
       "origin": {
         "name": "openccu-loom",
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/HmIP-RF/00140001/0/master/FIRMWARE",
+      "state_topic": "gh/status/ccu-01/HmIP-RF/00140001/0/master/FIRMWARE",
       "unique_id": "loom_00140001_0_firmware",
-      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+      "value_template": "{% if value_json is defined and value_json.val is not none %}{{ value_json.val }}{% endif %}"
     }
   },
   "update/values": {
@@ -1452,18 +1514,20 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/00140001/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-01/HmIP-RF/00140001/0/values/FIRMWARE",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-01/HmIP-RF/00140001/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/00140001/0/values/FIRMWARE",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -1477,16 +1541,16 @@
         "via_device": "openccu-loom_central_ccu-01"
       },
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/00140001/0/values/FIRMWARE/config",
+      "json_attributes_topic": "gh/meta/ccu-01/HmIP-RF/00140001/0/values/FIRMWARE",
       "name": "Firmware",
       "origin": {
         "name": "openccu-loom",
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/HmIP-RF/00140001/0/values/FIRMWARE",
+      "state_topic": "gh/status/ccu-01/HmIP-RF/00140001/0/values/FIRMWARE",
       "unique_id": "loom_00140001_0_firmware",
-      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+      "value_template": "{% if value_json is defined and value_json.val is not none %}{{ value_json.val }}{% endif %}"
     }
   },
   "valve/master": {
@@ -1496,18 +1560,20 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/00100001/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-01/HmIP-RF/00100001/1/master/VALVE_STATE",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-01/HmIP-RF/00100001/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/00100001/1/master/VALVE_STATE",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -1522,16 +1588,16 @@
       },
       "entity_category": "config",
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/00100001/1/master/VALVE_STATE/config",
+      "json_attributes_topic": "gh/meta/ccu-01/HmIP-RF/00100001/1/master/VALVE_STATE",
       "name": "Valve State",
       "origin": {
         "name": "openccu-loom",
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/HmIP-RF/00100001/1/master/VALVE_STATE",
+      "state_topic": "gh/status/ccu-01/HmIP-RF/00100001/1/master/VALVE_STATE",
       "unique_id": "loom_00100001_1_valve_state",
-      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+      "value_template": "{% if value_json is defined and value_json.val is not none %}{{ value_json.val }}{% endif %}"
     }
   },
   "valve/values": {
@@ -1541,18 +1607,20 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
-        },
-        {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/00100001/availability"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
           "payload_available": "true",
           "payload_not_available": "false",
-          "topic": "gh/ccu-01/HmIP-RF/00100001/1/values/VALVE_STATE",
-          "value_template": "{{ value_json.available | lower }}"
+          "topic": "gh/status/ccu-01/HmIP-RF/00100001/online",
+          "value_template": "{{ value_json.val | lower }}"
+        },
+        {
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/00100001/1/values/VALVE_STATE",
+          "value_template": "{{ value_json.hm.available | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -1566,16 +1634,16 @@
         "via_device": "openccu-loom_central_ccu-01"
       },
       "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/00100001/1/values/VALVE_STATE/config",
+      "json_attributes_topic": "gh/meta/ccu-01/HmIP-RF/00100001/1/values/VALVE_STATE",
       "name": "Valve State",
       "origin": {
         "name": "openccu-loom",
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/HmIP-RF/00100001/1/values/VALVE_STATE",
+      "state_topic": "gh/status/ccu-01/HmIP-RF/00100001/1/values/VALVE_STATE",
       "unique_id": "loom_00100001_1_valve_state",
-      "value_template": "{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}"
+      "value_template": "{% if value_json is defined and value_json.val is not none %}{{ value_json.val }}{% endif %}"
     }
   }
 }

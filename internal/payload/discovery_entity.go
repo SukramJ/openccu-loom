@@ -175,12 +175,12 @@ type HADiscoveryTopics interface {
 	// WireParameterStateTopic is the per-parameter VALUES state topic. An
 	// empty channelAddress means the channel the bridge is rendering.
 	WireParameterStateTopic(channelAddress, parameter string) string
-	// WireParameterCommandTopic is the matching `/set` topic.
+	// WireParameterCommandTopic is the matching `set` item.
 	WireParameterCommandTopic(channelAddress, parameter string) string
 	// DeviceAvailabilityTopic is the owning device's reachability topic.
 	DeviceAvailabilityTopic() string
-	// BridgeStatusTopic is the daemon's own LWT.
-	BridgeStatusTopic() string
+	// ConnectedTopic is the instance's `<base>/connected` topic, the Last Will.
+	ConnectedTopic() string
 }
 
 // SlotLayout renders a custom data point's slots through a
@@ -233,7 +233,7 @@ func (l SlotLayout) Bridge() string {
 	if l.Topics == nil {
 		return ""
 	}
-	return l.Topics.BridgeStatusTopic()
+	return l.Topics.ConnectedTopic()
 }
 
 // slotChannelAddress renders a slot's `<device>:<channel>` address, or the

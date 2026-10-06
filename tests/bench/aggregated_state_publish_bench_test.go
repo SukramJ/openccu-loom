@@ -13,6 +13,7 @@ package bench
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/internal/payload"
@@ -98,7 +99,8 @@ func BenchmarkPublishStateWithSource(b *testing.B) {
 }
 
 // BenchmarkPublishSlotState is the per-data-point state publish every value
-// event reaches: one PerDPState wrapper encoded and handed to the broker.
+// event reaches: one PerDPState rendered as a status object and handed to
+// the broker.
 func BenchmarkPublishSlotState(b *testing.B) {
 	br := mqtt.NewBridge(mqtt.BridgeConfig{
 		Base:        "gh",
@@ -106,7 +108,7 @@ func BenchmarkPublishSlotState(b *testing.B) {
 		RawEnabled:  true,
 	}, benchPublisher{})
 	slot := payload.TopicSlot{Address: "000C9709AEF157", Channel: 1, Bucket: payload.BucketValues, Parameter: "ACTUAL_TEMPERATURE"}
-	state := payload.PerDPState{Value: 21.5, Available: true, ModifiedAt: 1759350000.123, RefreshedAt: 1759350001.456}
+	state := payload.PerDPState{Value: 21.5, Available: true, ObservedAt: time.UnixMilli(1759350001456)}
 	ctx := context.Background()
 	b.ReportAllocs()
 	for b.Loop() {

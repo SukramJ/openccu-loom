@@ -7,7 +7,6 @@ package e2e
 
 import (
 	"encoding/json"
-	"strings"
 	"testing"
 	"time"
 
@@ -21,7 +20,7 @@ import (
 //  2. Stop godevccu (simulates CCU disconnect).
 //  3. Assert that the daemon detects the connection loss and publishes a
 //     system-status event with healthy=false on
-//     openccu-loom/<central>/system/status within the test deadline.
+//     openccu-loom/status/<central>/system/status within the test deadline.
 //
 // The detection path: the per-interface probe goroutine (15 s cadence) and
 // the central.check_connection scheduler job (CheckConnectionInterval) both
@@ -49,14 +48,11 @@ func TestE2EReconnectRepublishes(t *testing.T) {
 
 	// Phase 1: wait for the initial online birth message.
 	deadline := 30 * time.Second
-	onlineTopic := awaitTopic(t, h.MQTT(), "openccu-loom/bridge/status", deadline, func(_ string, payload []byte) bool {
-		body := strings.TrimSpace(string(payload))
-		return body != "" &&
-			body != "offline" &&
-			!strings.Contains(body, `"status":"offline"`)
+	onlineTopic := awaitTopic(t, h.MQTT(), "openccu-loom/connected", deadline, func(_ string, payload []byte) bool {
+		return connectedAtLeast(payload, 1)
 	})
 	if onlineTopic == "" {
-		t.Skipf("bridge/status never went online within %s — skipping reconnect phase", deadline)
+		t.Skipf("connected never reached level 1 within %s — skipping reconnect phase", deadline)
 	}
 	t.Logf("bridge went online on %s", onlineTopic)
 
@@ -67,18 +63,24 @@ func TestE2EReconnectRepublishes(t *testing.T) {
 	}
 	t.Log("mock CCU stopped — waiting for system-status degraded event")
 
+	// A status object (ADR 0083): the component in `val`, the event under
+	// `hm`. Decoding `hm` explicitly matters — a top-level `healthy` no
+	// longer exists, and its zero value would read as "unhealthy".
 	type statusPay struct {
-		Healthy bool `json:"healthy"`
+		Val json.RawMessage `json:"val"`
+		HM  *struct {
+			Healthy bool `json:"healthy"`
+		} `json:"hm"`
 	}
 
 	// Allow 5 failures × checkInterval + recovery cooldown + margin.
 	statusDeadline := 6*checkInterval + 15*time.Second
-	unhealthyTopic := awaitTopic(t, h.MQTT(), "openccu-loom/ccu-e2e/system/status", statusDeadline, func(_ string, payload []byte) bool {
+	unhealthyTopic := awaitTopic(t, h.MQTT(), "openccu-loom/status/ccu-e2e/system/status", statusDeadline, func(_ string, payload []byte) bool {
 		var p statusPay
-		if err := json.Unmarshal(payload, &p); err != nil {
+		if err := json.Unmarshal(payload, &p); err != nil || p.Val == nil || p.HM == nil {
 			return false
 		}
-		return !p.Healthy
+		return !p.HM.Healthy
 	})
 
 	if unhealthyTopic == "" {

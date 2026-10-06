@@ -59,15 +59,15 @@ func TestPublishedScheduleEntityStateCountsActiveEntries(t *testing.T) {
 	want := strconv.Itoa(weekprofile.CountSimpleEntries(sched))
 	var found bool
 	for _, p := range pub.Published() {
-		if !strings.HasSuffix(p.Topic, "/state") {
+		if !statusSuffix(p.Topic, "/schedule/active_entries") {
 			continue
 		}
 		if !strings.Contains(p.Topic, "schedule") && !strings.Contains(p.Topic, "zeitplan") {
 			continue
 		}
 		found = true
-		if string(p.Payload) != want {
-			t.Fatalf("published schedule state on %s = %q, want %q (CountSimpleEntries)", p.Topic, p.Payload, want)
+		if got := plainVal(p.Payload); got != want {
+			t.Fatalf("published schedule state on %s = %q, want %q (CountSimpleEntries)", p.Topic, got, want)
 		}
 	}
 	if !found {

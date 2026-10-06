@@ -1995,14 +1995,13 @@ func (b *EventBridge) buildPublishEvent( //nolint:gocognit,gocyclo,funlen // wir
 	return ev, ch, true, discoveryEligible
 }
 
-// publishSlotState publishes the ADR-0011 per-DP slot state topic
-// for the given value-change event. The JSON wrapper carries
-// `value`, `available`, `unit`, `type`, `modified_at`, `refreshed_at`
-// — the schema downstream HA-Discovery will reference via
-// `value_json.value` templates.
+// publishSlotState publishes the per-DP status item for the given
+// value-change event: an mqtt-smarthome status object (ADR 0083) with the
+// value in `val`, the event time as `ts`, and `available` under `hm` — the
+// schema downstream HA-Discovery references via `value_json.val` templates.
 //
-// Bucket selection: VALUES paramset → `values/<param>/state`,
-// MASTER → `master/<param>/state`. Calculated DPs flow through a
+// Bucket selection: VALUES paramset → `…/values/<param>`,
+// MASTER → `…/master/<param>`. Calculated DPs flow through a
 // separate path because they don't ride the VALUES bus.
 //
 // Best-effort: errors are swallowed at debug level — the legacy
@@ -2033,12 +2032,8 @@ func (b *EventBridge) publishSlotState(
 
 	value := e.NewValue.Unwrap()
 	state := payload.PerDPState{
-		Available: true,
-	}
-	if !e.Timestamp().IsZero() {
-		ts := payload.EpochSeconds(e.Timestamp())
-		state.RefreshedAt = ts
-		state.ModifiedAt = ts
+		Available:  true,
+		ObservedAt: e.Timestamp(),
 	}
 
 	// Resolve the DP's source for ENUM value-label coercion. PerDPState
@@ -2183,11 +2178,7 @@ func (b *EventBridge) republishBaseForStatusPair(
 		Value:                 value,
 		Available:             dpValid(dp),
 		AdditionalInformation: dpAdditionalInformation(dp),
-	}
-	if ts := dp.ModifiedAt(); !ts.IsZero() {
-		epoch := payload.EpochSeconds(ts)
-		state.RefreshedAt = epoch
-		state.ModifiedAt = epoch
+		ObservedAt:            dp.ModifiedAt(),
 	}
 	slot := payload.TopicSlot{
 		Address:   deviceAddr,

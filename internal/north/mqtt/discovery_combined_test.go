@@ -39,7 +39,7 @@ func TestBuildCombinedDiscovery(t *testing.T) {
 				Component: hadiscovery.Component{
 					Platform:       hacatalog.PlatformNumber,
 					Name:           "Zeitdauer",
-					CommandTopic:   "gh/ccu1/HmIP-RF/0001ABCD/3/combined/duration/set",
+					CommandTopic:   "gh/set/ccu1/HmIP-RF/0001ABCD/3/combined/duration",
 					EntityCategory: "config",
 				},
 			},
@@ -65,7 +65,7 @@ func TestBuildCombinedDiscovery(t *testing.T) {
 						t.Errorf("frame key %q missing from body", key)
 					}
 				}
-				if got := body["state_topic"]; got != "gh/ccu1/HmIP-RF/0001ABCD/3/combined/duration" {
+				if got := body["state_topic"]; got != "gh/status/ccu1/HmIP-RF/0001ABCD/3/combined/duration" {
 					t.Errorf("state_topic = %v", got)
 				}
 				// The half the projection owns, carried through verbatim.
@@ -209,8 +209,8 @@ func TestPublishCombinedState(t *testing.T) {
 		for _, m := range pub.sent {
 			if strings.HasSuffix(m.topic, "/combined/door_mode") {
 				found = true
-				if m.payload != "OPEN" {
-					t.Errorf("payload = %q, want OPEN", m.payload)
+				if v := statusVal(m.payload); v != "OPEN" {
+					t.Errorf("payload = %q, want a status object with val OPEN", m.payload)
 				}
 			}
 		}

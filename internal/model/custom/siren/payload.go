@@ -242,7 +242,7 @@ func (s *Siren) HADiscoveryEntity() hamodel.Entity {
 		// State from the channel's aggregate — the StatePayload publishes the
 		// HA-compliant minimal JSON `{"state": "on"|"off"}` so HA's strict
 		// siren schema (SIREN_PLATFORM_PAYLOAD_SCHEMA) accepts it.
-		StateValueTemplate: "{{ value_json.state }}",
+		StateValueTemplate: "{{ value_json.val.state }}",
 		StateOn:            "on",
 		StateOff:           "off",
 		SupportDuration:    new(supportDuration),
@@ -299,7 +299,7 @@ func (s *SmokeSiren) HADiscoveryEntity() hamodel.Entity {
 		Fields: hadiscovery.SirenFields{
 			PayloadOn:          "INTRUSION_ALARM",
 			PayloadOff:         "INTRUSION_ALARM_OFF",
-			StateValueTemplate: "{{ value_json.state }}",
+			StateValueTemplate: "{{ value_json.val.state }}",
 			StateOn:            "on",
 			StateOff:           "off",
 			SupportDuration:    new(false),
@@ -325,7 +325,7 @@ func (sp *SoundPlayer) HADiscoveryEntity() hamodel.Entity {
 		// State from the aggregate — StatePayload emits only the
 		// HA-compliant `{"state": "on"|"off"}` keys so HA's strict siren
 		// schema validation accepts it.
-		StateValueTemplate: "{{ value_json.state }}",
+		StateValueTemplate: "{{ value_json.val.state }}",
 		StateOn:            "on",
 		StateOff:           "off",
 		SupportDuration:    new(true),

@@ -150,7 +150,7 @@ func (l *LevelCombined) HACombinedDiscovery(ctx payload.CombinedDiscoveryContext
 	return hadiscovery.Component{
 		Platform:       hacatalog.PlatformSensor,
 		Name:           ctx.Translate("discovery.level_combined"),
-		ValueTemplate:  "{{ value_json.level }}",
+		ValueTemplate:  "{{ value_json.val.level }}",
 		EntityCategory: payload.CombinedEntityCategoryDiagnostic,
 	}
 }
@@ -190,7 +190,7 @@ func (c *HSColor) HACombinedDiscovery(ctx payload.CombinedDiscoveryContext) hadi
 	return hadiscovery.Component{
 		Platform:       hacatalog.PlatformSensor,
 		Name:           ctx.Translate("discovery.hs_color"),
-		ValueTemplate:  "{{ value_json.hue }}",
+		ValueTemplate:  "{{ value_json.val.hue }}",
 		EntityCategory: payload.CombinedEntityCategoryDiagnostic,
 	}
 }

@@ -33,7 +33,8 @@ func TestAlarmPlaneIsVisibleToTheBridge(t *testing.T) {
 	stateTopic := alarmStateTopic(f.base, "z1")
 	f.waitForPublish(stateTopic, func(rec publishRecord) bool { return rec.retain && rec.payload != "" })
 	availTopic := alarmAvailabilityTopic(f.base, "z1")
-	f.waitForPublish(availTopic, func(rec publishRecord) bool { return rec.payload == "online" })
+	f.waitForPublish(availTopic, func(rec publishRecord) bool { return statusVal(rec.payload) == "true" })
+	f.waitForPublish(stateTopic, func(rec publishRecord) bool { return statusVal(rec.payload) == "disarmed" })
 	motionTopic := alarmTriggeredMotionTopic(f.base, "z1")
 	f.waitForPublish(motionTopic, func(rec publishRecord) bool { return rec.retain })
 
@@ -231,7 +232,7 @@ func TestTheAlarmBarrierOutlastsAWorkerStalledPastTheBrokerCall(t *testing.T) {
 
 		var retained []string
 		for _, rec := range f.mp.recorded() {
-			if strings.HasPrefix(rec.topic, f.base+"/alarm/") && rec.retain && rec.payload != "" {
+			if strings.HasPrefix(rec.topic, f.base+"/status/alarm/") && rec.retain && rec.payload != "" {
 				retained = append(retained, rec.topic)
 			}
 		}

@@ -35,7 +35,7 @@ require (
 require (
 	github.com/SukramJ/go-fabric v0.1.0
 	github.com/SukramJ/go-ha-catalog v0.3.0
-	github.com/SukramJ/go-hamqtt v0.35.0
+	github.com/SukramJ/go-hamqtt v0.36.0
 	github.com/SukramJ/go-mqtt v1.6.0
 	github.com/SukramJ/go-openccu-data v0.3.0
 	github.com/SukramJ/godevccu v0.9.0

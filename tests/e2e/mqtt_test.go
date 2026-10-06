@@ -6,6 +6,7 @@
 package e2e
 
 import (
+	"encoding/json"
 	"strings"
 	"sync"
 	"testing"
@@ -20,8 +21,8 @@ import (
 // retained-message handling is easier when isolated):
 //
 //   - TestMQTTBridgeOnline: the daemon connects to the broker and
-//     publishes its `openccu-loom/bridge/status = online` retained
-//     birth message. This is the basic "bridge is alive" smoke.
+//     publishes its retained `openccu-loom/connected` level (1 or 2,
+//     never the will's 0). This is the basic "bridge is alive" smoke.
 //
 //   - TestMQTTHomeAssistantDiscovery: every device with at least
 //     one publishable channel emits an HA Discovery `config` payload
@@ -36,13 +37,13 @@ import (
 
 const (
 	mqttDeadline   = 30 * time.Second
-	mqttBridgeBase = "openccu-loom/bridge/status"
+	mqttBridgeBase = "openccu-loom/connected"
 	haDiscoveryAny = "homeassistant/+/+/+/config"
-	rawStateAny    = "openccu-loom/+/+/+/+/values/+"
+	rawStateAny    = "openccu-loom/status/+/+/+/+/values/+"
 )
 
 // TestMQTTBridgeOnline asserts the daemon publishes its retained
-// birth message on `openccu-loom/bridge/status`. This is the simplest
+// connection level on `openccu-loom/connected`. This is the simplest
 // signal that MQTT wiring works end-to-end (config → connect →
 // publish → broker dispatch → subscriber).
 func TestMQTTBridgeOnline(t *testing.T) {
@@ -53,13 +54,9 @@ func TestMQTTBridgeOnline(t *testing.T) {
 	}
 
 	got := awaitTopic(t, h.MQTT(), mqttBridgeBase, mqttDeadline, func(_ string, payload []byte) bool {
-		// Daemons publish either raw "online" or a JSON envelope per
-		// SPEC §17. Accept either; reject "offline" / empty.
-		body := strings.TrimSpace(string(payload))
-		return body != "" &&
-			body != "offline" &&
-			!strings.Contains(body, `"status":"offline"`) &&
-			!strings.Contains(body, `"online":false`)
+		// mqtt-smarthome 2.0 (ADR 0083): a plain 0/1/2. 1 = connected to
+		// the broker, 2 = at least one central reachable; 0 is the will.
+		return connectedAtLeast(payload, 1)
 	})
 	if got == "" {
 		t.Fatalf("never observed online status on %s within %s", mqttBridgeBase, mqttDeadline)
@@ -114,8 +111,8 @@ func TestMQTTSetCommandIngested(t *testing.T) {
 	// Publish a canonical raw-plane SET frame. Address values are
 	// arbitrary — the daemon will fail to route it (no matching
 	// device), but the broker MUST count the inbound publish.
-	target := "openccu-loom/ccu-e2e/HmIP-RF/VCU0000000/3/values/STATE/set"
-	if err := h.MQTT().Publish(target, []byte(`{"value": true}`), false, 0); err != nil {
+	target := "openccu-loom/set/ccu-e2e/HmIP-RF/VCU0000000/3/values/STATE"
+	if err := h.MQTT().Publish(target, []byte(`{"val": true}`), false, 0); err != nil {
 		t.Fatalf("publish %s: %v", target, err)
 	}
 
@@ -169,4 +166,44 @@ func awaitTopic(t *testing.T, broker harness.MQTTBroker, filter string, deadline
 	case <-time.After(deadline):
 		return ""
 	}
+}
+
+// connectedAtLeast reports whether payload is the instance's plain
+// `<name>/connected` level (ADR 0083) at or above level.
+func connectedAtLeast(payload []byte, level int64) bool {
+	body := strings.TrimSpace(string(payload))
+	if body == "" {
+		return false
+	}
+	return atoiPayload([]byte(body)) >= level
+}
+
+// statusObjectVal decodes a status object (`{"val","ts","lc",…}`, ADR 0083)
+// and returns its `val`. ok is false for anything else — an empty retained
+// clear, a bare token, a JSON document without `val` — so a check that
+// waits for a value cannot be satisfied by the pre-convention payloads.
+func statusObjectVal(payload []byte) (val any, ok bool) {
+	var obj map[string]any
+	if err := json.Unmarshal(payload, &obj); err != nil {
+		return nil, false
+	}
+	val, ok = obj["val"]
+	if !ok {
+		return nil, false
+	}
+	if _, hasTS := obj["ts"]; !hasTS {
+		return nil, false
+	}
+	return val, true
+}
+
+// statusObjectBool reports whether payload is a boolean status item whose
+// `val` equals want — the shape of every `online` reachability item.
+func statusObjectBool(payload []byte, want bool) bool {
+	val, ok := statusObjectVal(payload)
+	if !ok {
+		return false
+	}
+	b, isBool := val.(bool)
+	return isBool && b == want
 }

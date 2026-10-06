@@ -348,7 +348,7 @@ func TestSweepsDoNotRideTheCommandClient(t *testing.T) {
 	cfg.North.MQTT.TopicBase = "openccu-loom"
 	cfg.North.MQTT.ClientID = "loom"
 
-	stack := buildMQTT(cfg, slog.Default(), nil, nil, func() []string { return nil })
+	stack := buildMQTT(cfg, slog.Default(), nil, nil, func() []string { return nil }, mqttMaintenanceHooks{})
 	if stack == nil {
 		t.Fatal("buildMQTT returned nil with MQTT enabled")
 	}

@@ -121,7 +121,7 @@ func TestInitialSnapshotSignalsResyncInsteadOfBroadcasting(t *testing.T) {
 		switch {
 		case strings.Contains(p.Topic, "_WP_"):
 			mqttWeekProfile++
-		case strings.HasSuffix(p.Topic, "/values/STATE"):
+		case statusSuffix(p.Topic, "/values/STATE"):
 			mqttState++
 		}
 	}

@@ -11,6 +11,7 @@ import (
 	hamodel "github.com/SukramJ/go-hamqtt/model"
 
 	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
+	"github.com/SukramJ/openccu-loom/internal/model/naming"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -45,29 +46,43 @@ const (
 	alarmSlotTriggeredMotion = "triggered-motion"
 )
 
-// alarm topic builders. Zones are daemon-level, so the alarm plane omits
-// the `<central>` segment every per-device topic carries — a deliberate
-// extension of the topic schema precedented only by `<base>/bridge/*`
-// (docs/mqtt-topic-schema.md, notes/concepts/alarm-concept.md §13.3).
-func alarmStateTopic(base, zone string) string { return base + "/alarm/" + zone + "/state" }
+// alarm topic builders. Zones are daemon-level, so the alarm items omit the
+// `<central>` segment every per-device item carries — the `alarm` literal
+// sits at the level of `<central>` instead, which is why a central may not
+// be named `alarm` (ADR 0052, ADR 0083 §Reserved first-level items).
+//
+// The panel is one item, `panel`: the `alarm_control_panel` state token is
+// its status, the `ARM_*` command its `set` (ADR 0083).
+func alarmStateTopic(base, zone string) string {
+	return naming.StatusTopic(base, alarmTree, naming.TopicSafe(zone), alarmPanelItem)
+}
 
 func alarmAvailabilityTopic(base, zone string) string {
-	return base + "/alarm/" + zone + "/availability"
+	return naming.StatusTopic(base, alarmTree, naming.TopicSafe(zone), "online")
 }
-func alarmEventTopic(base, zone string) string   { return base + "/alarm/" + zone + "/event" }
-func alarmCommandTopic(base, zone string) string { return base + "/alarm/" + zone + "/set" }
 
-// alarmBridgeStatusTopic is the retained bridge LWT topic the panel's
-// availability list references as the first (transport-level) source.
-// The security plane declares the same source.
+func alarmEventTopic(base, zone string) string {
+	return naming.StatusTopic(base, alarmTree, naming.TopicSafe(zone), "event")
+}
+
+func alarmCommandTopic(base, zone string) string {
+	return naming.SetTopic(base, alarmTree, naming.TopicSafe(zone), alarmPanelItem)
+}
+
+// alarmTree is the literal first item level of the daemon-level alarm plane.
+const alarmTree = "alarm"
+
+// alarmBridgeStatusTopic is the instance's `connected` topic, which the
+// panel's availability list references as its first (transport-level)
+// source. The security plane declares the same source.
 //
 // It goes through the topic builder instead of assembling the topic a
-// second time: the bridge publishes its status on the builder's
-// normalised base, and with `availability_mode: "all"` an availability
-// source that differs from it by a single slash never receives a
-// payload, which leaves every entity of both planes unavailable
-// forever rather than costing one value.
-func alarmBridgeStatusTopic(base string) string { return NewTopicBuilder(base).BridgeStatus() }
+// second time: the runtime writes `connected` on the builder's normalised
+// base, and with `availability_mode: "all"` an availability source that
+// differs from it by a single slash never receives a payload, which leaves
+// every entity of both planes unavailable forever rather than costing one
+// value.
+func alarmBridgeStatusTopic(base string) string { return NewTopicBuilder(base).Connected() }
 
 // alarmDevice is the single synthetic device that groups every zone panel
 // (and the master panel) under one card, in the shared model's terms.
@@ -91,21 +106,13 @@ func alarmDeviceBlock() *hadiscovery.DeviceInfo {
 }
 
 // alarmAvailability is the two-source availability list every alarm panel
-// carries: the bridge LWT plus the per-zone alarm availability topic. With
-// availability_mode "all" HA marks the panel available only when both are
-// online (notes/concepts/alarm-concept.md §13.3).
+// carries: the instance's `connected` level plus the zone's `online` status
+// item. With availability_mode "all" HA marks the panel available only when
+// both are (notes/concepts/alarm-concept.md §13.3).
 func alarmAvailability(base, zone string) []hadiscovery.AvailabilityEntry {
 	return []hadiscovery.AvailabilityEntry{
-		{
-			Topic:               alarmBridgeStatusTopic(base),
-			PayloadAvailable:    "online",
-			PayloadNotAvailable: "offline",
-		},
-		{
-			Topic:               alarmAvailabilityTopic(base, zone),
-			PayloadAvailable:    "online",
-			PayloadNotAvailable: "offline",
-		},
+		connectedAvailability(alarmBridgeStatusTopic(base)),
+		onlineAvailability(alarmAvailabilityTopic(base, zone)),
 	}
 }
 
@@ -115,7 +122,7 @@ func alarmAvailability(base, zone string) []hadiscovery.AvailabilityEntry {
 // It embeds [hadiscovery.StdContext] and overrides the answers this plane
 // spells its own way — the unique id and the entity-id seed, the identity
 // strings Home Assistant has no migration path for, and the topics, which follow the daemon-level
-// `<base>/alarm/<zone>/...` schema rather than a device layout.
+// `<base>/{status,set}/alarm/<zone>/...` items rather than a device layout.
 type alarmContext struct {
 	hadiscovery.StdContext
 	base string
@@ -123,14 +130,12 @@ type alarmContext struct {
 
 // newAlarmContext binds a context to one topic base.
 //
-// [hadiscovery.RawEncoding] is not a preference here: the alarm plane
-// publishes a retained plain state token, not the `{"value":…}` envelope
-// the datapoint planes use, so an entity rendered with the envelope's value
-// template would read its state through a filter that never matches and
-// show as unknown forever.
+// [hadiscovery.StatusObjectEncoding] is not a preference here: the alarm
+// plane publishes its state token as a status object's `val` (ADR 0083),
+// so an entity reads it through `{{ value_json.val }}`.
 func newAlarmContext(base string) alarmContext {
 	return alarmContext{
-		Enc:  hadiscovery.RawEncoding,
+		Enc:  hadiscovery.StatusObjectEncoding,
 		base: base,
 	}
 }
@@ -339,7 +344,7 @@ func BuildAlarmPanelDiscovery(base, zoneID, zoneName string, modes []hmenum.Alar
 // detectors of a zone. It is a state topic like the panel's, so the
 // round-trip guard covers it the same way.
 func alarmTriggeredMotionTopic(base, zone string) string {
-	return base + "/alarm/" + zone + "/triggered-motion"
+	return naming.StatusTopic(base, alarmTree, naming.TopicSafe(zone), "triggered_motion")
 }
 
 // BuildAlarmMotionResetDiscovery builds the "clear latched motion
@@ -347,7 +352,7 @@ func alarmTriggeredMotionTopic(base, zone string) string {
 //
 // It rides the panel's existing command topic with a `RESET_MOTION`
 // press payload rather than opening a second command plane: the
-// subscriber already wildcards `<base>/alarm/+/set`, so one plane keeps
+// subscriber already wildcards `<base>/set/alarm/+/panel`, so one plane keeps
 // one subscription and the round-trip guard keeps checking one shape.
 //
 // The button is an entity in its own right rather than a panel feature

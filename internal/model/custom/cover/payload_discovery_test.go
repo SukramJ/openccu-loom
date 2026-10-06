@@ -43,7 +43,7 @@ func (discoveryCtx) WireParameterStateTopic(channelAddress, parameter string) st
 }
 
 func (discoveryCtx) DeviceAvailabilityTopic() string { return "test/availability" }
-func (discoveryCtx) BridgeStatusTopic() string       { return "test/bridge/status" }
+func (discoveryCtx) ConnectedTopic() string          { return "test/bridge/status" }
 
 // compile-time check: discoveryCtx satisfies payload.HADiscoveryTopics.
 var _ payload.HADiscoveryTopics = discoveryCtx{}
@@ -348,8 +348,8 @@ func TestCoverHADiscoveryPayload_StateParity(t *testing.T) {
 		t.Errorf("state_topic = %q, want %q", v, ctx.CustomDPStateTopic())
 	}
 	// value_template must reference state field.
-	if v, _ := body["value_template"].(string); v != "{{ value_json.state }}" {
-		t.Errorf("value_template = %q, want %q", v, "{{ value_json.state }}")
+	if v, _ := body["value_template"].(string); v != "{{ value_json.val.state }}" {
+		t.Errorf("value_template = %q, want %q", v, "{{ value_json.val.state }}")
 	}
 	// All five HA-canonical state strings must be present and lowercase.
 	stateStrings := map[string]string{
@@ -400,8 +400,8 @@ func TestBlindHADiscoveryPayload_StateParity(t *testing.T) {
 		t.Errorf("state_topic = %q, want %q", v, ctx.CustomDPStateTopic())
 	}
 	// value_template must reference state field.
-	if v, _ := body["value_template"].(string); v != "{{ value_json.state }}" {
-		t.Errorf("value_template = %q, want %q", v, "{{ value_json.state }}")
+	if v, _ := body["value_template"].(string); v != "{{ value_json.val.state }}" {
+		t.Errorf("value_template = %q, want %q", v, "{{ value_json.val.state }}")
 	}
 	// All five HA-canonical state strings must be present and lowercase.
 	stateStrings := map[string]string{
@@ -452,8 +452,8 @@ func TestGarageHADiscoveryPayload_StateParity(t *testing.T) {
 		t.Errorf("state_topic = %q, want %q", v, ctx.CustomDPStateTopic())
 	}
 	// value_template must reference state (lowercase) not door_state (uppercase CCU raw).
-	if v, _ := body["value_template"].(string); v != "{{ value_json.state }}" {
-		t.Errorf("value_template = %q, want %q", v, "{{ value_json.state }}")
+	if v, _ := body["value_template"].(string); v != "{{ value_json.val.state }}" {
+		t.Errorf("value_template = %q, want %q", v, "{{ value_json.val.state }}")
 	}
 	// All five HA-canonical state strings must be present and lowercase.
 	stateStrings := map[string]string{

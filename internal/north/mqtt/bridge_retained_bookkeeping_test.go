@@ -287,12 +287,12 @@ func TestPublishDiscoveryRepublishesAfterAFailedPublish(t *testing.T) {
 }
 
 // TestPublishSlotConfigRepublishesAfterAFailedPublish is the raw-plane twin
-// of the discovery dedup cache: a `/config` companion whose publish failed
+// of the discovery dedup cache: a `meta` companion whose publish failed
 // must be retried, not suppressed as already-published.
 func TestPublishSlotConfigRepublishesAfterAFailedPublish(t *testing.T) {
 	t.Parallel()
 
-	mp := &failingPublisher{failFor: "/config"}
+	mp := &failingPublisher{failFor: "/meta/"}
 	b := NewBridge(BridgeConfig{Base: "loom", RawEnabled: true, CentralName: "ccu01"}, mp)
 	ctx := context.Background()
 	slot := pload.TopicSlot{Address: "AABBCCDD1122", Channel: 1, Bucket: pload.BucketValues, Parameter: "LEVEL"}

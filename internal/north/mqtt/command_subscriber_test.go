@@ -98,8 +98,8 @@ func TestCommandSubscriberDataPointTopic(t *testing.T) {
 	if err := sub.Start(context.Background()); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	ok := noop.DeliverInbound("openccu-loom/+/+/+/+/+/set",
-		"openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/STATE/set", []byte("true"))
+	ok := noop.DeliverInbound("openccu-loom/set/+/+/+/+/+/+",
+		"openccu-loom/set/ccu-01/HmIP-RF/0001ABCD/1/values/STATE", []byte("true"))
 	if !ok {
 		t.Fatal("subscription did not match")
 	}
@@ -119,8 +119,8 @@ func TestCommandSubscriberSysvarTopic(t *testing.T) {
 	sink := &fakeSink{}
 	sub := NewCommandSubscriber(noop, topics, sink, nil)
 	_ = sub.Start(context.Background())
-	noop.DeliverInbound("openccu-loom/+/hub/sysvars/+/set",
-		"openccu-loom/ccu-01/hub/sysvars/PartyMode/set", []byte("false"))
+	noop.DeliverInbound("openccu-loom/set/+/hub/sysvars/+",
+		"openccu-loom/set/ccu-01/hub/sysvars/PartyMode", []byte("false"))
 	sub.WaitIdle()
 	if sink.setSysvars.Load() != 1 || sink.lastSysvar.name != "PartyMode" || sink.lastSysvar.value != false {
 		t.Fatalf("sysvar call: %+v", sink.lastSysvar)
@@ -134,8 +134,8 @@ func TestCommandSubscriberProgramTopic(t *testing.T) {
 	sub := NewCommandSubscriber(noop, topics, sink, nil)
 	_ = sub.Start(context.Background())
 	// "true" is the payload_press the HA-Discovery button declares.
-	noop.DeliverInbound("openccu-loom/+/hub/programs/+/trigger",
-		"openccu-loom/ccu-01/hub/programs/Morning/trigger", []byte("true"))
+	noop.DeliverInbound("openccu-loom/set/+/hub/programs/+/trigger",
+		"openccu-loom/set/ccu-01/hub/programs/Morning/trigger", []byte("true"))
 	sub.WaitIdle()
 	if sink.triggers.Load() != 1 || sink.lastProgram.id != "Morning" {
 		t.Fatalf("program: %+v", sink.lastProgram)
@@ -154,8 +154,8 @@ func TestCommandSubscriberProgramEmptyPayloadDropped(t *testing.T) {
 	sub := NewCommandSubscriber(noop, topics, sink, nil)
 	_ = sub.Start(context.Background())
 	for _, payload := range [][]byte{nil, []byte(""), []byte("  ")} {
-		noop.DeliverInbound("openccu-loom/+/hub/programs/+/trigger",
-			"openccu-loom/ccu-01/hub/programs/Morning/trigger", payload)
+		noop.DeliverInbound("openccu-loom/set/+/hub/programs/+/trigger",
+			"openccu-loom/set/ccu-01/hub/programs/Morning/trigger", payload)
 	}
 	sub.WaitIdle()
 	if n := sink.triggers.Load(); n != 0 {
@@ -219,8 +219,8 @@ func TestCommandSubscriberCDPInvoke(t *testing.T) {
 		Params:   map[string]any{"brightness": 0.8},
 		Priority: "high",
 	})
-	ok := noop.DeliverInbound("openccu-loom/+/devices/+/cdps/+/+/invoke",
-		"openccu-loom/ccu-01/devices/0001ABCD/cdps/light_dp/turn_on/invoke", payload)
+	ok := noop.DeliverInbound("openccu-loom/set/+/+/+/+/+/+",
+		"openccu-loom/set/ccu-01/devices/0001ABCD/cdps/light_dp/turn_on", payload)
 	if !ok {
 		t.Fatal("subscription did not match")
 	}
@@ -278,8 +278,8 @@ func TestCommandSubscriberCDPInvokeBadPayload(t *testing.T) {
 	_ = sub.Start(context.Background())
 
 	// Deliver malformed JSON — should not crash and should not call the sink.
-	noop.DeliverInbound("openccu-loom/+/devices/+/cdps/+/+/invoke",
-		"openccu-loom/ccu-01/devices/0001ABCD/cdps/light_dp/turn_on/invoke",
+	noop.DeliverInbound("openccu-loom/set/+/+/+/+/+/+",
+		"openccu-loom/set/ccu-01/devices/0001ABCD/cdps/light_dp/turn_on",
 		[]byte("{not valid json"))
 	// The drop happens on a worker, not on the delivering goroutine, so a
 	// zero-call assertion without this barrier would pass vacuously.
@@ -299,8 +299,8 @@ func TestCommandSubscriberCDPInvokeNilSink(t *testing.T) {
 	_ = sub.Start(context.Background())
 
 	// Should not panic even without a CDP sink.
-	noop.DeliverInbound("openccu-loom/+/devices/+/cdps/+/+/invoke",
-		"openccu-loom/ccu-01/devices/0001ABCD/cdps/light_dp/turn_on/invoke",
+	noop.DeliverInbound("openccu-loom/set/+/+/+/+/+/+",
+		"openccu-loom/set/ccu-01/devices/0001ABCD/cdps/light_dp/turn_on",
 		[]byte(`{}`))
 	// The drop happens on a worker, not on the delivering goroutine, so a
 	// zero-call assertion without this barrier would pass vacuously.
@@ -316,13 +316,24 @@ func TestCommandSubscriberCDPInvokeEmptyPayload(t *testing.T) {
 	sub := NewCommandSubscriber(noop, topics, sink, nil).WithCDPSink(cdpSink)
 	_ = sub.Start(context.Background())
 
-	// Empty payload → default priority + nil params → should still dispatch.
-	noop.DeliverInbound("openccu-loom/+/devices/+/cdps/+/+/invoke",
-		"openccu-loom/ccu-01/devices/0001ABCD/cdps/light_dp/turn_off/invoke",
+	// An empty payload is not a request under mqtt-smarthome 2.0 (ADR 0083):
+	// it is also what clearing a retained topic looks like on a live
+	// subscription. It never reaches the handler.
+	noop.DeliverInbound("openccu-loom/set/+/+/+/+/+/+",
+		"openccu-loom/set/ccu-01/devices/0001ABCD/cdps/light_dp/turn_off",
 		[]byte(""))
 	sub.WaitIdle()
+	if n := cdpSink.calls.Load(); n != 0 {
+		t.Fatalf("an empty payload invoked the operation %d times, want 0", n)
+	}
+
+	// `{}` is the empty body: default priority, no params, dispatched.
+	noop.DeliverInbound("openccu-loom/set/+/+/+/+/+/+",
+		"openccu-loom/set/ccu-01/devices/0001ABCD/cdps/light_dp/turn_off",
+		[]byte("{}"))
+	sub.WaitIdle()
 	if cdpSink.calls.Load() != 1 {
-		t.Fatalf("expected 1 call on empty payload, got %d", cdpSink.calls.Load())
+		t.Fatalf("expected 1 call on an empty JSON body, got %d", cdpSink.calls.Load())
 	}
 	if cdpSink.lastPrio != hmenum.CommandPriorityHigh {
 		t.Errorf("expected default High priority, got %v", cdpSink.lastPrio)
@@ -339,8 +350,8 @@ func TestCommandSubscriberCDPInvokeSinkError(t *testing.T) {
 	_ = sub.Start(context.Background())
 
 	// Sink error must be logged but not propagate (subscriber is fire-and-forget).
-	noop.DeliverInbound("openccu-loom/+/devices/+/cdps/+/+/invoke",
-		"openccu-loom/ccu-01/devices/UNKNOWN/cdps/x/turn_on/invoke",
+	noop.DeliverInbound("openccu-loom/set/+/+/+/+/+/+",
+		"openccu-loom/set/ccu-01/devices/UNKNOWN/cdps/x/turn_on",
 		[]byte(`{}`))
 	sub.WaitIdle()
 	// Should not panic or block; error is swallowed.
@@ -432,8 +443,8 @@ func TestCommandSubscriberWeekProfileTopic(t *testing.T) {
 	if err := sub.Start(context.Background()); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	ok := noop.DeliverInbound("openccu-loom/+/+/+/+/+/set",
-		"openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/week_profile/set", []byte("P3"))
+	ok := noop.DeliverInbound("openccu-loom/set/+/+/+/+/week_profile",
+		"openccu-loom/set/ccu-01/HmIP-RF/0001ABCD/1/week_profile", []byte("P3"))
 	if !ok {
 		t.Fatal("subscription did not match")
 	}
@@ -470,8 +481,8 @@ func TestCommandSubscriberWeekProfileMissingSink(t *testing.T) {
 		t.Fatalf("start: %v", err)
 	}
 	// Should not panic; subscription still matches the wildcard.
-	noop.DeliverInbound("openccu-loom/+/+/+/+/+/set",
-		"openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/week_profile/set", []byte("P3"))
+	noop.DeliverInbound("openccu-loom/set/+/+/+/+/week_profile",
+		"openccu-loom/set/ccu-01/HmIP-RF/0001ABCD/1/week_profile", []byte("P3"))
 	// The drop happens on a worker, not on the delivering goroutine, so a
 	// zero-call assertion without this barrier would pass vacuously.
 	sub.WaitIdle()
@@ -487,8 +498,8 @@ func TestCommandSubscriberWeekProfileEmptyPayload(t *testing.T) {
 	if err := sub.Start(context.Background()); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	noop.DeliverInbound("openccu-loom/+/+/+/+/+/set",
-		"openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/week_profile/set", []byte{})
+	noop.DeliverInbound("openccu-loom/set/+/+/+/+/week_profile",
+		"openccu-loom/set/ccu-01/HmIP-RF/0001ABCD/1/week_profile", []byte{})
 	// The drop happens on a worker, not on the delivering goroutine, so a
 	// zero-call assertion without this barrier would pass vacuously.
 	sub.WaitIdle()
@@ -525,8 +536,8 @@ func TestCommandSubscriberInstallModePressTopic(t *testing.T) {
 	if err := sub.Start(context.Background()); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	ok := noop.DeliverInbound("openccu-loom/+/hub/install_mode/+/set",
-		"openccu-loom/ccu-01/hub/install_mode/HmIP-RF/set", []byte("PRESS"))
+	ok := noop.DeliverInbound("openccu-loom/set/+/hub/install_mode/+",
+		"openccu-loom/set/ccu-01/hub/install_mode/HmIP-RF", []byte("PRESS"))
 	if !ok {
 		t.Fatal("subscription did not match")
 	}
@@ -550,8 +561,8 @@ func TestCommandSubscriberInstallModeNumericDuration(t *testing.T) {
 	imSink := &fakeInstallModeSink{}
 	sub := NewCommandSubscriber(noop, topics, &fakeSink{}, nil).WithInstallModeSink(imSink)
 	_ = sub.Start(context.Background())
-	noop.DeliverInbound("openccu-loom/+/hub/install_mode/+/set",
-		"openccu-loom/ccu-01/hub/install_mode/BidCos-RF/set", []byte("120"))
+	noop.DeliverInbound("openccu-loom/set/+/hub/install_mode/+",
+		"openccu-loom/set/ccu-01/hub/install_mode/BidCos-RF", []byte("120"))
 	sub.WaitIdle()
 	if imSink.calls.Load() != 1 || imSink.last.seconds != 120 || imSink.last.iface != "BidCos-RF" {
 		t.Fatalf("last=%+v", imSink.last)
@@ -565,8 +576,8 @@ func TestCommandSubscriberInstallModeMissingSink(t *testing.T) {
 	sub := NewCommandSubscriber(noop, topics, &fakeSink{}, nil) // no install-mode sink
 	_ = sub.Start(context.Background())
 	// Must not panic when the sink is unwired.
-	noop.DeliverInbound("openccu-loom/+/hub/install_mode/+/set",
-		"openccu-loom/ccu-01/hub/install_mode/HmIP-RF/set", []byte("PRESS"))
+	noop.DeliverInbound("openccu-loom/set/+/hub/install_mode/+",
+		"openccu-loom/set/ccu-01/hub/install_mode/HmIP-RF", []byte("PRESS"))
 	// The drop happens on a worker, not on the delivering goroutine, so a
 	// zero-call assertion without this barrier would pass vacuously.
 	sub.WaitIdle()
@@ -579,8 +590,8 @@ func TestCommandSubscriberInstallModeRetainedDrop(t *testing.T) {
 	imSink := &fakeInstallModeSink{}
 	sub := NewCommandSubscriber(noop, topics, &fakeSink{}, nil).WithInstallModeSink(imSink)
 	_ = sub.Start(context.Background())
-	noop.DeliverInboundRetained("openccu-loom/+/hub/install_mode/+/set",
-		"openccu-loom/ccu-01/hub/install_mode/HmIP-RF/set", []byte("PRESS"))
+	noop.DeliverInboundRetained("openccu-loom/set/+/hub/install_mode/+",
+		"openccu-loom/set/ccu-01/hub/install_mode/HmIP-RF", []byte("PRESS"))
 	// The retained drop is the router's now ([hapublisher.CommandConfig].
 	// DeliverRetained stays off) rather than an `if retained` at the top of
 	// each handler, and it happens on the delivering goroutine — but the
@@ -606,8 +617,8 @@ func TestCommandSubscriberMasterBucketRoutes(t *testing.T) {
 	if err := sub.Start(context.Background()); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	ok := noop.DeliverInbound("openccu-loom/+/+/+/+/+/+/set",
-		"openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/master/SHORT_ON_TIME/set", []byte("0.5"))
+	ok := noop.DeliverInbound("openccu-loom/set/+/+/+/+/+/+",
+		"openccu-loom/set/ccu-01/HmIP-RF/0001ABCD/1/master/SHORT_ON_TIME", []byte("0.5"))
 	if !ok {
 		t.Fatal("subscription did not match")
 	}
@@ -648,8 +659,8 @@ func TestCommandSubscriberCalculatedBucketDropped(t *testing.T) {
 	if err := sub.Start(context.Background()); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	noop.DeliverInbound("openccu-loom/+/+/+/+/+/+/set",
-		"openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/calculated/SOME_PARAM/set", []byte("true"))
+	noop.DeliverInbound("openccu-loom/set/+/+/+/+/+/+",
+		"openccu-loom/set/ccu-01/HmIP-RF/0001ABCD/1/calculated/SOME_PARAM", []byte("true"))
 	// The drop happens on a worker, not on the delivering goroutine, so a
 	// zero-call assertion without this barrier would pass vacuously.
 	sub.WaitIdle()
@@ -672,8 +683,8 @@ func TestCommandSubscriberValuesBucketStillRoutes(t *testing.T) {
 	if err := sub.Start(context.Background()); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	noop.DeliverInbound("openccu-loom/+/+/+/+/+/+/set",
-		"openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/values/STATE/set", []byte("true"))
+	noop.DeliverInbound("openccu-loom/set/+/+/+/+/+/+",
+		"openccu-loom/set/ccu-01/HmIP-RF/0001ABCD/1/values/STATE", []byte("true"))
 	sub.WaitIdle()
 	if sink.setValues.Load() != 1 {
 		t.Fatalf("SetValue calls=%d, want 1", sink.setValues.Load())
@@ -771,8 +782,8 @@ func TestCommandSubscriberProgramEnableTopic(t *testing.T) {
 			sink := &fakeSink{}
 			sub := NewCommandSubscriber(noop, NewTopicBuilder("openccu-loom"), sink, nil)
 			_ = sub.Start(context.Background())
-			noop.DeliverInbound("openccu-loom/+/hub/programs/+/set",
-				"openccu-loom/ccu-01/hub/programs/1234/set", []byte(tc.payload))
+			noop.DeliverInbound("openccu-loom/set/+/hub/programs/+/active",
+				"openccu-loom/set/ccu-01/hub/programs/1234/active", []byte(tc.payload))
 			sub.WaitIdle()
 
 			if !tc.applied {
@@ -833,8 +844,8 @@ func TestCommandSubscriberResolvesEscapedCentralSegment(t *testing.T) {
 	t.Run("data point", func(t *testing.T) {
 		t.Parallel()
 		noop, sink, sub := newSub()
-		if !noop.DeliverInbound(base+"/+/+/+/+/+/+/set",
-			base+"/"+segment+"/HmIP-RF/0001ABCD/4/values/STATE/set", []byte("true")) {
+		if !noop.DeliverInbound(base+"/set/+/+/+/+/+/+",
+			base+"/set/"+segment+"/HmIP-RF/0001ABCD/4/values/STATE", []byte("true")) {
 			t.Fatal("subscription did not match the declared command topic")
 		}
 		sub.WaitIdle()
@@ -849,8 +860,8 @@ func TestCommandSubscriberResolvesEscapedCentralSegment(t *testing.T) {
 	t.Run("sysvar", func(t *testing.T) {
 		t.Parallel()
 		noop, sink, sub := newSub()
-		noop.DeliverInbound(base+"/+/hub/sysvars/+/set",
-			base+"/"+segment+"/hub/sysvars/Anwesenheit/set", []byte("true"))
+		noop.DeliverInbound(base+"/set/+/hub/sysvars/+",
+			base+"/set/"+segment+"/hub/sysvars/Anwesenheit", []byte("true"))
 		sub.WaitIdle()
 		if sink.lastSysvar.centralName != configured {
 			t.Errorf("central = %q, want %q", sink.lastSysvar.centralName, configured)
@@ -860,8 +871,8 @@ func TestCommandSubscriberResolvesEscapedCentralSegment(t *testing.T) {
 	t.Run("program trigger", func(t *testing.T) {
 		t.Parallel()
 		noop, sink, sub := newSub()
-		noop.DeliverInbound(base+"/+/hub/programs/+/trigger",
-			base+"/"+segment+"/hub/programs/1234/trigger", []byte("PRESS"))
+		noop.DeliverInbound(base+"/set/+/hub/programs/+/trigger",
+			base+"/set/"+segment+"/hub/programs/1234/trigger", []byte("PRESS"))
 		sub.WaitIdle()
 		if sink.lastProgram.centralName != configured {
 			t.Errorf("central = %q, want %q", sink.lastProgram.centralName, configured)
@@ -871,8 +882,8 @@ func TestCommandSubscriberResolvesEscapedCentralSegment(t *testing.T) {
 	t.Run("unescaped names still route verbatim", func(t *testing.T) {
 		t.Parallel()
 		noop, sink, sub := newSub()
-		noop.DeliverInbound(base+"/+/+/+/+/+/+/set",
-			base+"/ccu-01/HmIP-RF/0001ABCD/4/values/STATE/set", []byte("true"))
+		noop.DeliverInbound(base+"/set/+/+/+/+/+/+",
+			base+"/set/ccu-01/HmIP-RF/0001ABCD/4/values/STATE", []byte("true"))
 		sub.WaitIdle()
 		if sink.lastVal.centralName != "ccu-01" {
 			t.Errorf("central = %q, want %q", sink.lastVal.centralName, "ccu-01")
@@ -894,8 +905,8 @@ func TestCommandSubscriberRefusesAmbiguousCentralSegment(t *testing.T) {
 	if err := sub.Start(context.Background()); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	noop.DeliverInbound(base+"/+/+/+/+/+/+/set",
-		base+"/Wohn_Zimmer/HmIP-RF/0001ABCD/4/values/STATE/set", []byte("true"))
+	noop.DeliverInbound(base+"/set/+/+/+/+/+/+",
+		base+"/set/Wohn_Zimmer/HmIP-RF/0001ABCD/4/values/STATE", []byte("true"))
 	sub.WaitIdle()
 	if sink.setValues.Load() != 0 {
 		t.Fatalf("an ambiguous central segment was routed to a CCU anyway (calls=%d)", sink.setValues.Load())
@@ -936,7 +947,7 @@ func TestWeekProfileCommandDoesNotAlsoIssueADataPointWrite(t *testing.T) {
 		t.Fatalf("start: %v", err)
 	}
 
-	const topic = "openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/week_profile/set"
+	const topic = "openccu-loom/set/ccu-01/HmIP-RF/0001ABCD/1/week_profile"
 	matching := 0
 	for _, f := range client.Filters() {
 		if mqttFilterMatches(f, topic) {

@@ -77,7 +77,7 @@ func (l scheduleTopicLayout) Availability(hamodel.Slot) string {
 }
 
 // Bridge implements the shared model's topic layout.
-func (l scheduleTopicLayout) Bridge() string { return l.d.TopicBuilder.BridgeStatus() }
+func (l scheduleTopicLayout) Bridge() string { return l.d.TopicBuilder.Connected() }
 
 // scheduleDiscoveryContext is the render context for this plane: the
 // standard one with this daemon's identity strings substituted.
@@ -93,6 +93,12 @@ type scheduleDiscoveryContext struct {
 
 	uniqueID string
 	nodeID   string
+}
+
+// Availability implements [hadiscovery.Context]: the standard resolution,
+// rewritten into the ADR 0083 vocabulary by [conventionAvailability].
+func (c scheduleDiscoveryContext) Availability(dev *hamodel.Device, e hamodel.Entity) []hadiscovery.AvailabilityEntry {
+	return conventionAvailability(c.StdContext.Availability(dev, e), c.Layout.Bridge())
 }
 
 // UniqueID implements [hadiscovery.Context] with the id this daemon already
@@ -148,11 +154,10 @@ func scheduleSlot(dev *hamodel.Device, central, iface string, channel int, path 
 // renderScheduleItem renders one schedule entity through the shared
 // per-entity pipeline and packages it as the item the publishers take.
 //
-// [hadiscovery.RawEncoding] is not a preference: a schedule state topic
-// carries the bare entry count or the bare boolean, not the `{"value":…}`
-// envelope the datapoint planes publish, so an entity rendered with the
-// envelope's value template would read its state through a filter that
-// never matches and show as unknown forever.
+// [hadiscovery.StatusObjectEncoding] is not a preference: a schedule status
+// item carries the entry count or the boolean as a status object's `val`
+// (ADR 0083), which the encoding's default template reads — `| lower` on
+// the switch, whose payloads are `true`/`false`.
 func (d *DefaultDiscoveryBuilder) renderScheduleItem(
 	dev *hamodel.Device, e *scheduleEntity, layout scheduleTopicLayout, uniqueID, nodeID, objectID string,
 ) DiscoveryItem {
@@ -162,7 +167,7 @@ func (d *DefaultDiscoveryBuilder) renderScheduleItem(
 	ctx := scheduleDiscoveryContext{
 		Layout:     layout,
 		Lang:       d.Locale,
-		Enc:        hadiscovery.RawEncoding,
+		Enc:        hadiscovery.StatusObjectEncoding,
 		Translator: d.tr,
 		uniqueID:   uniqueID,
 		nodeID:     nodeID,
@@ -226,7 +231,7 @@ func (d *DefaultDiscoveryBuilder) BuildScheduleEntityDiscovery(centralName strin
 			// longer, so the count is the state and the document is
 			// attached as attributes.
 			JSONAttributesTopic:    attrsTopic,
-			JSONAttributesTemplate: "{{ value_json | tojson }}",
+			JSONAttributesTemplate: "{{ value_json.val | tojson }}",
 		},
 		Binds: []hamodel.Binding{
 			{

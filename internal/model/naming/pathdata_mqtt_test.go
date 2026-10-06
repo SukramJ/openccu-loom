@@ -97,7 +97,7 @@ func TestMQTTChannelEvent(t *testing.T) {
 	t.Parallel()
 	pd := newChannelPD()
 	got := pd.MQTTChannelEvent(testBase, testCentral)
-	want := "openccu-loom/ccu1/HmIP-RF/VCU1234567/2/event"
+	want := "openccu-loom/status/ccu1/HmIP-RF/VCU1234567/2/event"
 	if got != want {
 		t.Errorf("MQTTChannelEvent = %q, want %q", got, want)
 	}
@@ -110,32 +110,13 @@ func TestMQTTChannelEvent_EmptyAddress(t *testing.T) {
 	}
 }
 
-// --- MQTTDataPointEvent ---
-
-func TestMQTTDataPointEvent(t *testing.T) {
-	t.Parallel()
-	pd := newChannelPD()
-	got := pd.MQTTDataPointEvent(testBase, testCentral, "long_press")
-	want := "openccu-loom/ccu1/HmIP-RF/VCU1234567/2/event/long_press"
-	if got != want {
-		t.Errorf("MQTTDataPointEvent = %q, want %q", got, want)
-	}
-}
-
-func TestMQTTDataPointEvent_EmptyAddress(t *testing.T) {
-	t.Parallel()
-	if got := EmptyPathData.MQTTDataPointEvent(testBase, testCentral, "x"); got != "" {
-		t.Errorf("empty address must return empty, got %q", got)
-	}
-}
-
 // --- MQTTDeviceAvailability ---
 
 func TestMQTTDeviceAvailability(t *testing.T) {
 	t.Parallel()
 	pd := newDevicePD()
 	got := pd.MQTTDeviceAvailability(testBase, testCentral)
-	want := "openccu-loom/ccu1/HmIP-RF/VCU1234567/availability"
+	want := "openccu-loom/status/ccu1/HmIP-RF/VCU1234567/online"
 	if got != want {
 		t.Errorf("MQTTDeviceAvailability = %q, want %q", got, want)
 	}
@@ -154,7 +135,7 @@ func TestMQTTDeviceInfo(t *testing.T) {
 	t.Parallel()
 	pd := newDevicePD()
 	got := pd.MQTTDeviceInfo(testBase, testCentral)
-	want := "openccu-loom/ccu1/HmIP-RF/VCU1234567/info"
+	want := "openccu-loom/status/ccu1/HmIP-RF/VCU1234567/info"
 	if got != want {
 		t.Errorf("MQTTDeviceInfo = %q, want %q", got, want)
 	}
@@ -173,7 +154,7 @@ func TestMQTTDeviceDiagnostics(t *testing.T) {
 	t.Parallel()
 	pd := newDevicePD()
 	got := pd.MQTTDeviceDiagnostics(testBase, testCentral)
-	want := "openccu-loom/ccu1/HmIP-RF/VCU1234567/diagnostics"
+	want := "openccu-loom/status/ccu1/HmIP-RF/VCU1234567/diagnostics"
 	if got != want {
 		t.Errorf("MQTTDeviceDiagnostics = %q, want %q", got, want)
 	}
@@ -192,7 +173,7 @@ func TestMQTTDeviceUpdateState(t *testing.T) {
 	t.Parallel()
 	pd := newDevicePD()
 	got := pd.MQTTDeviceUpdateState(testBase, testCentral)
-	want := "openccu-loom/ccu1/HmIP-RF/VCU1234567/update"
+	want := "openccu-loom/status/ccu1/HmIP-RF/VCU1234567/update"
 	if got != want {
 		t.Errorf("MQTTDeviceUpdateState = %q, want %q", got, want)
 	}
@@ -209,7 +190,7 @@ func TestMQTTDeviceUpdateCommand(t *testing.T) {
 	t.Parallel()
 	pd := newDevicePD()
 	got := pd.MQTTDeviceUpdateCommand(testBase, testCentral)
-	want := "openccu-loom/ccu1/HmIP-RF/VCU1234567/update/set"
+	want := "openccu-loom/set/ccu1/HmIP-RF/VCU1234567/update"
 	if got != want {
 		t.Errorf("MQTTDeviceUpdateCommand = %q, want %q", got, want)
 	}
@@ -228,7 +209,7 @@ func TestMQTTWeekProfileState(t *testing.T) {
 	t.Parallel()
 	pd := newChannelPD()
 	got := pd.MQTTWeekProfileState(testBase, testCentral)
-	want := "openccu-loom/ccu1/HmIP-RF/VCU1234567/2/week_profile/state"
+	want := "openccu-loom/status/ccu1/HmIP-RF/VCU1234567/2/week_profile"
 	if got != want {
 		t.Errorf("MQTTWeekProfileState = %q, want %q", got, want)
 	}
@@ -245,7 +226,7 @@ func TestMQTTWeekProfileCommand(t *testing.T) {
 	t.Parallel()
 	pd := newChannelPD()
 	got := pd.MQTTWeekProfileCommand(testBase, testCentral)
-	want := "openccu-loom/ccu1/HmIP-RF/VCU1234567/2/week_profile/set"
+	want := "openccu-loom/set/ccu1/HmIP-RF/VCU1234567/2/week_profile"
 	if got != want {
 		t.Errorf("MQTTWeekProfileCommand = %q, want %q", got, want)
 	}
@@ -264,7 +245,7 @@ func TestMQTTCustomDPState(t *testing.T) {
 	t.Parallel()
 	pd := newCustomPD()
 	got := pd.MQTTCustomDPState(testBase, testCentral)
-	want := "openccu-loom/ccu1/HmIP-RF/VCU1234567/2/custom/climate"
+	want := "openccu-loom/status/ccu1/HmIP-RF/VCU1234567/2/custom/climate"
 	if got != want {
 		t.Errorf("MQTTCustomDPState = %q, want %q", got, want)
 	}
@@ -290,7 +271,7 @@ func TestMQTTCustomDPConfig(t *testing.T) {
 	t.Parallel()
 	pd := newCustomPD()
 	got := pd.MQTTCustomDPConfig(testBase, testCentral)
-	want := "openccu-loom/ccu1/HmIP-RF/VCU1234567/2/custom/climate/config"
+	want := "openccu-loom/meta/ccu1/HmIP-RF/VCU1234567/2/custom/climate"
 	if got != want {
 		t.Errorf("MQTTCustomDPConfig = %q, want %q", got, want)
 	}
@@ -307,7 +288,7 @@ func TestMQTTCustomDPServiceMethod(t *testing.T) {
 	t.Parallel()
 	pd := newCustomPD()
 	got := pd.MQTTCustomDPServiceMethod(testBase, testCentral, "set_mode")
-	want := "openccu-loom/ccu1/HmIP-RF/VCU1234567/2/custom/climate/set/set_mode"
+	want := "openccu-loom/set/ccu1/HmIP-RF/VCU1234567/2/custom/climate/set_mode"
 	if got != want {
 		t.Errorf("MQTTCustomDPServiceMethod = %q, want %q", got, want)
 	}
@@ -386,7 +367,7 @@ func TestMQTTTopics_BaseSlashTrimmed(t *testing.T) {
 	pd := newDevicePD()
 	// Leading/trailing slashes on the base must be stripped.
 	got := pd.MQTTDeviceInfo("/openccu-loom/", testCentral)
-	want := "openccu-loom/ccu1/HmIP-RF/VCU1234567/info"
+	want := "openccu-loom/status/ccu1/HmIP-RF/VCU1234567/info"
 	if got != want {
 		t.Errorf("MQTTDeviceInfo (slash base) = %q, want %q", got, want)
 	}

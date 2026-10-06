@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -80,19 +81,31 @@ func TestBootBuiltMQTTBridgeHonoursHiddenChannels(t *testing.T) {
 		}
 	}
 
-	publish(hiddenChannel, 3)
-	if pubs := noop.Published(); len(pubs) != 0 {
-		topics := make([]string, 0, len(pubs))
-		for _, p := range pubs {
-			topics = append(topics, p.Topic)
+	// The instance's own topics — `connected`, `info` and the maintenance
+	// stats, which a goroutine of the stack publishes on its own schedule —
+	// are not the channel's, so they are left out of both counts.
+	topics := bridge.Topics()
+	channelPublishes := func() []string {
+		var out []string
+		for _, p := range noop.Published() {
+			if p.Topic == topics.Connected() || p.Topic == topics.Info() ||
+				strings.HasPrefix(p.Topic, topics.Maintenance("")) {
+				continue
+			}
+			out = append(out, p.Topic)
 		}
-		t.Fatalf("hidden channel produced %d publish(es): %v", len(pubs), topics)
+		return out
+	}
+
+	publish(hiddenChannel, 3)
+	if pubs := channelPublishes(); len(pubs) != 0 {
+		t.Fatalf("hidden channel produced %d publish(es): %v", len(pubs), pubs)
 	}
 
 	// The gate must be a gate, not a mute: a channel the operator did not
 	// hide still publishes.
 	publish(visibleChannel, 4)
-	if n := len(noop.Published()); n == 0 {
+	if n := len(channelPublishes()); n == 0 {
 		t.Fatal("visible channel produced no publish — the gate is dropping everything")
 	}
 }

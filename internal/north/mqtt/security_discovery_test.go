@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"testing"
 
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+
 	"github.com/SukramJ/openccu-loom/internal/build"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -73,16 +75,21 @@ func TestSecuritySystemEntities_CommonShape(t *testing.T) {
 			if !ok || len(avail) != 2 {
 				t.Fatalf("availability = %v, want a 2-element list", body["availability"])
 			}
+			// `connected` ≥ 2, then the plane's boolean `online` item.
+			wantAvail := []struct{ topic, on, off, tmpl string }{
+				{"gh/connected", "online", "offline", hadiscovery.ConnectedTemplate(hadiscovery.ConnectedOperational)},
+				{"gh/status/security/online", "true", "false", hadiscovery.StatusBoolValueTemplate},
+			}
 			for i, entry := range avail {
 				m, ok := entry.(map[string]any)
 				if !ok {
 					t.Fatalf("availability[%d] not an object: %v", i, entry)
 				}
-				if got, want := m["payload_available"], "online"; got != want {
-					t.Errorf("availability[%d].payload_available = %v, want %v", i, got, want)
-				}
-				if got, want := m["payload_not_available"], "offline"; got != want {
-					t.Errorf("availability[%d].payload_not_available = %v, want %v", i, got, want)
+				w := wantAvail[i]
+				if m["topic"] != w.topic || m["payload_available"] != w.on ||
+					m["payload_not_available"] != w.off || m["value_template"] != w.tmpl {
+					t.Errorf("availability[%d] = %v, want topic %s, payloads %s/%s, template %s",
+						i, m, w.topic, w.on, w.off, w.tmpl)
 				}
 			}
 			if got, want := body["availability_mode"], "all"; got != want {
@@ -108,9 +115,10 @@ func TestSecuritySystemEntities_CommonShape(t *testing.T) {
 // the announced event_types vocabulary and nothing else the switch in
 // BuildSecurityDiscovery reserves for non-event entities.
 //
-// A value_template on an event entity would try to extract a scalar
-// from a payload the consumer instead parses whole as JSON (to read
-// `event_type`), breaking that parse outright. A device_class on an
+// The value_template must rebuild the JSON document the consumer parses
+// whole (to read `event_type`) out of the status object: the verb from
+// `val`, the report from `hm`. A template extracting a scalar would break
+// that parse outright. A device_class on an
 // event entity is likewise wrong: the consumer's event-entity
 // vocabulary only defines doorbell/button/motion device classes, none
 // of which describes a security event.
@@ -138,7 +146,10 @@ func TestSecuritySystemEntities_EventEntitiesShape(t *testing.T) {
 				}
 			}
 
-			for _, forbidden := range []string{"value_template", "device_class", "json_attributes_topic"} {
+			if got := body["value_template"]; got != eventValueTemplate {
+				t.Errorf("event entity %q value_template = %v, want %v", e.key, got, eventValueTemplate)
+			}
+			for _, forbidden := range []string{"device_class", "json_attributes_topic"} {
 				if got, has := body[forbidden]; has {
 					t.Errorf("event entity %q must not carry %q; got %v", e.key, forbidden, got)
 				}
@@ -149,13 +160,10 @@ func TestSecuritySystemEntities_EventEntitiesShape(t *testing.T) {
 
 // TestSecuritySystemEntities_BinarySensorShape covers the binary
 // sensors that double their state topic as their attribute source
-// ("alarm", "problem"): payload_on/payload_off are the HA ON/OFF
-// tokens, a value_template extracts the state from the shared JSON
-// envelope, and json_attributes_topic equals state_topic so the same
-// publish serves both roles.
-//
-// "health" is a deliberate exception (plain "ON"/"OFF" wire payload, no
-// JSON envelope) and is intentionally not covered here.
+// ("alarm", "problem"): the status object's boolean `val` is read
+// lower-cased against the `true`/`false` payloads (ADR 0083: ON/OFF became
+// booleans), and json_attributes_topic equals state_topic so the same
+// publish serves both roles, its `hm` facets as the attributes.
 func TestSecuritySystemEntities_BinarySensorShape(t *testing.T) {
 	t.Parallel()
 	for _, key := range []string{"alarm", "problem"} {
@@ -177,15 +185,17 @@ func TestSecuritySystemEntities_BinarySensorShape(t *testing.T) {
 			item := BuildSecurityDiscovery("gh", "Security & Safety", "", target)
 			body := securityDiscoveryBody(t, item)
 
-			if got, want := body["payload_on"], "ON"; got != want {
+			if got, want := body["payload_on"], "true"; got != want {
 				t.Errorf("payload_on = %v, want %v", got, want)
 			}
-			if got, want := body["payload_off"], "OFF"; got != want {
+			if got, want := body["payload_off"], "false"; got != want {
 				t.Errorf("payload_off = %v, want %v", got, want)
 			}
-			vt, ok := body["value_template"].(string)
-			if !ok || vt == "" {
-				t.Fatalf("value_template missing/empty: %v", body["value_template"])
+			if got, want := body["value_template"], hadiscovery.StatusBoolValueTemplate; got != want {
+				t.Fatalf("value_template = %v, want %v", got, want)
+			}
+			if got, want := body["json_attributes_template"], "{{ value_json.hm | tojson }}"; got != want {
+				t.Errorf("json_attributes_template = %v, want %v", got, want)
 			}
 			jat, ok := body["json_attributes_topic"].(string)
 			if !ok || jat != body["state_topic"] {

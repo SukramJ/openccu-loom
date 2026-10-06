@@ -59,13 +59,17 @@ func statusPublishesFor(t *testing.T, client *mqtt.NoopClient, topic string) int
 		if p.Topic != topic {
 			continue
 		}
+		// A status object (ADR 0083): the component in `val`, the rest
+		// of the event under `hm`.
 		var body struct {
-			Reason string `json:"reason"`
+			HM struct {
+				Reason string `json:"reason"`
+			} `json:"hm"`
 		}
 		if err := json.Unmarshal(p.Payload, &body); err != nil {
 			t.Fatalf("system-status payload on %q is not JSON: %v", topic, err)
 		}
-		if body.Reason == probeStatusReason {
+		if body.HM.Reason == probeStatusReason {
 			n++
 		}
 	}
@@ -76,7 +80,7 @@ func statusPublishesFor(t *testing.T, client *mqtt.NoopClient, topic string) int
 // the production adopt path: a central adopted at runtime — the same call the
 // REST centrals admin API drives — must reach every system-status surface.
 //
-// The MQTT `<base>/<central>/system/status` topic is the one an operator's
+// The MQTT `<base>/status/<central>/system/status` item is the one an operator's
 // alerting rule watches for CCU interface degradation. Its publisher, like
 // the WebSocket subscriber and the REST ring buffer beside it, walked the
 // registry exactly once at boot: for a CCU adopted afterwards the rule stayed

@@ -7,7 +7,6 @@ import (
 	"context"
 	"log/slog"
 	"maps"
-	"strings"
 	"sync"
 	"testing"
 
@@ -212,7 +211,7 @@ func TestMasterParamsetWriteSavesAndReachesBothPushPlanes(t *testing.T) {
 	wantSuffix := "/0/master/" + declared
 	found := ""
 	for _, p := range pub.Published() {
-		if strings.HasSuffix(p.Topic, wantSuffix) {
+		if statusSuffix(p.Topic, wantSuffix) {
 			found = string(p.Payload)
 		}
 	}
@@ -224,8 +223,8 @@ func TestMasterParamsetWriteSavesAndReachesBothPushPlanes(t *testing.T) {
 		t.Fatalf("no publish to a topic ending %q — a MASTER write never reaches the master state topic, "+
 			"so the consumer keeps the boot value; published=%v", wantSuffix, all)
 	}
-	if !strings.Contains(found, `"value":3`) {
-		t.Errorf("master slot payload = %s, want value 3", found)
+	if got := plainVal([]byte(found)); got != "3" {
+		t.Errorf("master slot payload = %s, want val 3", found)
 	}
 
 	// WebSocket: the same change must be broadcast so a second session sees it.

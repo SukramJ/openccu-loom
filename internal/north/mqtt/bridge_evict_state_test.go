@@ -27,7 +27,7 @@ func TestEvictStatePublishesEmptyRetainedPayload(t *testing.T) {
 	}
 	rec := pub.sent[0]
 
-	wantTopic := "openccu-loom/ccu-01/HmIP-RF/000A/1/values/STATE"
+	wantTopic := "openccu-loom/status/ccu-01/HmIP-RF/000A/1/values/STATE"
 	if rec.topic != wantTopic {
 		t.Fatalf("topic = %q, want %q", rec.topic, wantTopic)
 	}
@@ -72,7 +72,7 @@ func TestEvictStateUsesDefaultCentralWhenEmpty(t *testing.T) {
 	if len(pub.sent) == 0 {
 		t.Fatal("expected at least one publish")
 	}
-	wantTopic := "openccu-loom/ccu-01/HmIP-RF/000A/1/values/STATE"
+	wantTopic := "openccu-loom/status/ccu-01/HmIP-RF/000A/1/values/STATE"
 	if pub.sent[0].topic != wantTopic {
 		t.Fatalf("topic = %q, want %q (default central must be resolved)", pub.sent[0].topic, wantTopic)
 	}

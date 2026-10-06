@@ -75,7 +75,7 @@ type MQTTTopicSet struct {
 //   - [hamodel.Slot] is device-shaped and a hub object is not a device.
 //     Slot.Valid needs a non-empty Address and at least one Path segment; a
 //     system variable has no device and no paramset, and
-//     `<base>/<central>/hub/alarm_messages` has no leaf at all.
+//     `<base>/status/<central>/hub/alarm_messages` has no leaf at all.
 //   - The two runtime facts a hub topic needs — the broker base and the
 //     resolved central — are parameters here, so the compiler refuses a call
 //     that omits them. On a [hamodel.Slot] they live in Scope, which nothing

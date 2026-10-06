@@ -101,7 +101,7 @@ func TestTheCCUGateIsSeededBeforeTheHubDiscoveryConfigsThatNameIt(t *testing.T) 
 	gate, firstConfig := -1, -1
 	for i, p := range pub.Published() {
 		switch {
-		case p.Topic == "openccu-loom/ccu-01/hub/status":
+		case p.Topic == "openccu-loom/status/ccu-01/online":
 			if gate < 0 {
 				gate = i
 			}
@@ -145,7 +145,7 @@ func TestTheCCUGateIsNotSeededBeforeTheSerialResolves(t *testing.T) {
 	publisher.Flush()
 
 	for _, p := range pub.Published() {
-		if p.Topic == "openccu-loom/ccu-01/hub/status" {
+		if p.Topic == "openccu-loom/status/ccu-01/online" {
 			t.Fatalf("the reachability gate was seeded with %q before the CCU's serial was "+
 				"read off it: a configured-but-unreachable CCU is claimed reachable, and "+
 				"nothing reads the gate this early anyway", string(p.Payload))

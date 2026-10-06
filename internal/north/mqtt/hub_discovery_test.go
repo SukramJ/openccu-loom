@@ -438,7 +438,7 @@ func TestAlarmMessagesDiscovery(t *testing.T) {
 		t.Fatalf("Component: got %q want sensor", item.Component)
 	}
 	m := jsonMap(t, item)
-	if m["value_template"] != "{{ value_json | length }}" {
+	if m["value_template"] != "{{ value_json.val | length }}" {
 		t.Fatalf("value_template: got %v", m["value_template"])
 	}
 	if _, ok := m["json_attributes_topic"]; !ok {
@@ -472,7 +472,7 @@ func TestServiceMessagesDiscovery(t *testing.T) {
 		t.Fatalf("Component: got %q want sensor", item.Component)
 	}
 	m := jsonMap(t, item)
-	if m["value_template"] != "{{ value_json | length }}" {
+	if m["value_template"] != "{{ value_json.val | length }}" {
 		t.Fatalf("value_template: got %v", m["value_template"])
 	}
 	if _, ok := m["json_attributes_topic"]; !ok {
@@ -553,7 +553,7 @@ func TestInstallModeButtonDiscovery(t *testing.T) {
 	if m["payload_press"] != "PRESS" {
 		t.Fatalf("payload_press: got %v want PRESS", m["payload_press"])
 	}
-	if !strings.Contains(m["command_topic"].(string), "/hub/install_mode/HmIP-RF/set") {
+	if !strings.HasSuffix(m["command_topic"].(string), "/set/ccu-01/hub/install_mode/HmIP-RF") {
 		t.Fatalf("command_topic: got %v want per-interface set topic", m["command_topic"])
 	}
 }

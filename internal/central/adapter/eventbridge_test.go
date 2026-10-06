@@ -4,7 +4,9 @@
 package adapter
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -25,35 +27,79 @@ import (
 )
 
 // nonAvailabilityPublishes filters out the orthogonal side-effect
-// publishes (per-device availability + ADR-0011 per-DP slot configs)
-// from a recorded slice. Most assertions only care about the
-// per-DP slot state publish (the canonical value topic). Centralising
-// the filter avoids fragile "expected 1 publish, got 2" assertions
-// when the bridge gains additional dispatch arms.
+// publishes (per-device `online` item + the per-DP `meta` descriptor
+// companions) from a recorded slice. Most assertions only care about the
+// per-DP status item (the canonical value topic). Centralising the filter
+// avoids fragile "expected 1 publish, got 2" assertions when the bridge
+// gains additional dispatch arms.
 func nonAvailabilityPublishes(got []mqtt.Publication) []mqtt.Publication {
 	out := make([]mqtt.Publication, 0, len(got))
 	for _, p := range got {
-		// Trailing segment "/availability" identifies device-availability
-		// publishes regardless of central / interface / address shape.
-		if strings.HasSuffix(p.Topic, "/availability") {
+		// The trailing `online` leaf identifies the device's reachability
+		// item regardless of central / interface / address shape.
+		if statusSuffix(p.Topic, "/online") {
 			continue
 		}
-		// Old ADR 0011 phase 1b slot topics (now retired but guard kept
-		// for tests that still exercise the old "/channels/<n>/..." shape).
-		if strings.Contains(p.Topic, "/channels/") &&
-			(strings.HasSuffix(p.Topic, "/state") || strings.HasSuffix(p.Topic, "/config")) {
-			continue
-		}
-		// New bucket-aware topology: the slot-config companion
-		// "<addr>/<ch>/<bucket>/<param>/config" carries static descriptor
-		// metadata (min/max/value_list/unit/usage). Filter it so
-		// assertions only see the slot-state publish.
-		if strings.HasSuffix(p.Topic, "/config") {
+		// The descriptor companion `<base>/meta/<central>/…` carries static
+		// metadata (min/max/value_list/unit/usage), and a discovery config
+		// ends in `/config`. Filter both so assertions only see the status
+		// item.
+		if isMetaTopic(p.Topic) || strings.HasSuffix(p.Topic, "/config") {
 			continue
 		}
 		out = append(out, p)
 	}
 	return out
+}
+
+// plainVal renders a status object's `val` the way the plane published it
+// before the status object (ADR 0083): a string unquoted, anything else as
+// its JSON literal. A payload that is not a status object comes back as is.
+func plainVal(payload []byte) string {
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &obj); err != nil {
+		return string(payload)
+	}
+	raw, ok := obj["val"]
+	if !ok {
+		return string(payload)
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		return s
+	}
+	return string(raw)
+}
+
+// statusSuffix reports whether topic is not a `meta` descriptor companion
+// and ends in suffix — the companion shares the status item's path.
+func statusSuffix(topic, suffix string) bool {
+	return !isMetaTopic(topic) && strings.HasSuffix(topic, suffix)
+}
+
+// isMetaTopic reports whether topic is a descriptor companion — the `meta`
+// function at the second level below the base (ADR 0083).
+func isMetaTopic(topic string) bool {
+	parts := strings.SplitN(topic, "/", 3)
+	return len(parts) == 3 && parts[1] == "meta"
+}
+
+// statusVal decodes a status object and returns its `val` and the
+// `hm.available` flag (ADR 0083). ok is false for a payload that is not one.
+func statusVal(payload []byte) (val any, available, ok bool) {
+	var obj struct {
+		Val any `json:"val"`
+		HM  struct {
+			Available bool `json:"available"`
+		} `json:"hm"`
+	}
+	if err := json.Unmarshal(payload, &obj); err != nil {
+		return nil, false, false
+	}
+	if !bytes.Contains(payload, []byte(`"val":`)) {
+		return nil, false, false
+	}
+	return obj.Val, obj.HM.Available, true
 }
 
 // stubVisSet is a test-double for filter.VisibilitySet that hides the
@@ -107,9 +153,9 @@ func TestEventBridgeValueChangedFansOut(t *testing.T) {
 	ebridge.Flush()
 
 	// MQTT assertion. Filter the orthogonal availability + config side-publishes.
-	// The new bucket-aware topology produces "openccu-loom/<central>/<iface>/<addr>/<ch>/values/<param>".
+	// The status item is "openccu-loom/status/<central>/<iface>/<addr>/<ch>/values/<param>".
 	// inferInterface returns "" for these synthetic events so the iface segment is empty.
-	if got := nonAvailabilityPublishes(pub.Published()); len(got) != 1 || got[0].Topic != "openccu-loom/ccu-01//0001ABCD/1/values/STATE" {
+	if got := nonAvailabilityPublishes(pub.Published()); len(got) != 1 || got[0].Topic != "openccu-loom/status/ccu-01//0001ABCD/1/values/STATE" {
 		t.Fatalf("mqtt published=%+v", got)
 	}
 }

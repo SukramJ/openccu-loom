@@ -45,13 +45,16 @@ func TestPublishDaemonShuttingDownAnnouncesOffline(t *testing.T) {
 // one vocabulary. A client bridging both — which is what the Home
 // Assistant integration does — would otherwise have to translate between
 // them, and a divergence would only show up in that third codebase.
+//
+// Since ADR 0083 the MQTT topic `<base>/connected` carries the level
+// 0/1/2; the words live in the "Daemon connection" entity's payloads, which
+// its template renders from that level (TestDaemonStatusSensorReadsTheTopicTheWillIsSetOn
+// in internal/north/mqtt evaluates it). Those payloads are the words pinned
+// here, and the WebSocket vocabulary did not change.
 func TestDaemonStatusUsesTheSameWordsAsTheMQTTBridge(t *testing.T) {
 	t.Parallel()
-	// These are the literals internal/north/mqtt writes to
-	// <base>/bridge/status in AnnounceOnline / AnnounceOffline, and the
-	// literal cmd/openccu-loom sets as the broker's last will.
 	if DaemonStatusOnline != "online" || DaemonStatusOffline != "offline" {
-		t.Fatalf("status words are %q/%q, but the MQTT bridge retains \"online\"/\"offline\"",
+		t.Fatalf("status words are %q/%q, but the MQTT daemon-connection entity reports \"online\"/\"offline\"",
 			DaemonStatusOnline, DaemonStatusOffline)
 	}
 }

@@ -86,7 +86,7 @@ func (l combinedTopicLayout) Availability(hamodel.Slot) string {
 }
 
 // Bridge implements the shared model's topic layout.
-func (l combinedTopicLayout) Bridge() string { return l.d.TopicBuilder.BridgeStatus() }
+func (l combinedTopicLayout) Bridge() string { return l.d.TopicBuilder.Connected() }
 
 // combinedDiscoveryContext is the render context for this plane: the
 // standard one with this daemon's identity strings substituted.
@@ -101,6 +101,12 @@ type combinedDiscoveryContext struct {
 
 	uniqueID string
 	nodeID   string
+}
+
+// Availability implements [hadiscovery.Context]: the standard resolution,
+// rewritten into the ADR 0083 vocabulary by [conventionAvailability].
+func (c combinedDiscoveryContext) Availability(dev *hamodel.Device, e hamodel.Entity) []hadiscovery.AvailabilityEntry {
+	return conventionAvailability(c.StdContext.Availability(dev, e), c.Layout.Bridge())
 }
 
 // UniqueID implements [hadiscovery.Context] with the id this daemon already
@@ -179,10 +185,10 @@ func (d *DefaultDiscoveryBuilder) BuildCombinedDiscovery(centralName string, ev 
 	ctx := combinedDiscoveryContext{
 		Layout: combinedTopicLayout{d: d, ev: ev, central: centralName},
 		Lang:   d.Locale,
-		// A combined state topic carries the projection's own JSON
-		// document, read by the template the projection wrote, not the
-		// `{"value":…}` envelope the datapoint planes publish — so the
-		// frame must contribute no value template of its own.
+		// A combined status item carries the projection's own JSON
+		// document as its `val`, read by the template the projection
+		// wrote — so the frame must contribute no value template of its
+		// own.
 		Enc:        hadiscovery.RawEncoding,
 		Translator: d.tr,
 		uniqueID:   objectID,

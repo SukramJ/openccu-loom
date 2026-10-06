@@ -43,7 +43,7 @@ func TestE2EMqttCollectorIncrements(t *testing.T) {
 
 	// Wait for MQTT to produce at least one event so metrics are non-zero.
 	deadlineForMQTT := int64(0)
-	_ = awaitTopic(t, h.MQTT(), "openccu-loom/bridge/status", mqttDeadline, func(_ string, payload []byte) bool {
+	_ = awaitTopic(t, h.MQTT(), "openccu-loom/connected", mqttDeadline, func(_ string, payload []byte) bool {
 		deadlineForMQTT++
 		return true
 	})

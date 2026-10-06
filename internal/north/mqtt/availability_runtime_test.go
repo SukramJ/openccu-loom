@@ -137,8 +137,8 @@ func TestEveryAvailabilityWriteIsAtLeastOnce(t *testing.T) {
 			switch {
 			case w.empty && rec.payload != "":
 				t.Errorf("%s: retraction carried %q, want zero bytes", w.name, rec.payload)
-			case !w.empty && rec.payload != "online":
-				t.Errorf("%s: flip carried %q, want %q", w.name, rec.payload, "online")
+			case !w.empty && statusVal(rec.payload) != "true":
+				t.Errorf("%s: flip carried %q, want a status object with val true", w.name, rec.payload)
 			}
 		}
 		if !found {
@@ -166,17 +166,14 @@ func TestEveryAvailabilityWriteIsAtLeastOnce(t *testing.T) {
 // bridge publishes `online`/`offline` through, and the Last Will the
 // composition root configures.
 //
-// Falsifiability: have [availabilityLayout.Bridge] return
-// `l.topics.Base + "/bridge/state"` and every arm fails.
+// Falsifiability: have [Bridge.availabilityBridgeTopic] return
+// `b.topics.Base + "/bridge/status"` and every arm fails.
 func TestAvailabilityLayoutAgreesWithTheBridgeStatusTopic(t *testing.T) {
 	t.Parallel()
 
 	b, _ := newTestBridge(t)
-	got, err := b.availabilityBridgeTopic()
-	if err != nil {
-		t.Fatalf("availabilityBridgeTopic: %v", err)
-	}
-	if want := b.topics.BridgeStatus(); got != want {
+	got := b.availabilityBridgeTopic()
+	if want := b.topics.Connected(); got != want {
 		t.Errorf("availability layout bridge topic = %q, want %q", got, want)
 	}
 	will, err := b.LastWill()
@@ -201,10 +198,9 @@ func TestAvailabilityLayoutAgreesWithTheBridgeStatusTopic(t *testing.T) {
 // [Bridge.deviceAvailabilityTopic] is what makes the retraction name the
 // string the publish actually wrote.
 //
-// Falsifiability: have [availabilityLayout.Availability] append a segment and
+// Falsifiability: have [Bridge.deviceAvailabilityTopic] append a segment and
 // both the identity arm and the index arm fail — the publish would land on
-// one topic and every other derivation would name another, which is the
-// defect the layout exists to prevent.
+// one topic and every other derivation would name another.
 func TestDeviceAvailabilityIsIndexedAndRetractedByTheSameDerivation(t *testing.T) {
 	t.Parallel()
 
@@ -222,16 +218,16 @@ func TestDeviceAvailabilityIsIndexedAndRetractedByTheSameDerivation(t *testing.T
 	if err := b.PublishAvailability(t.Context(), central, iface, addr, true); err != nil {
 		t.Fatalf("PublishAvailability: %v", err)
 	}
-	if !slices.Contains(b.avail.Topics(), topic) {
-		t.Fatalf("%s did not enter the availability index; index=%v", topic, b.avail.Topics())
+	if !slices.Contains(b.avail.Published(), topic) {
+		t.Fatalf("%s did not enter the availability index; index=%v", topic, b.avail.Published())
 	}
-	if online, known := b.avail.Online(topic); !known || !online {
-		t.Errorf("Online(%s) = (%v, %v), want (true, true)", topic, online, known)
+	if got := lastPublishedOn(mp, topic); !strings.HasPrefix(got, `{"val":true,`) {
+		t.Errorf("online item %s carries %q, want a status object with val true", topic, got)
 	}
 
 	mp.reset()
 	b.RetractRawStateForDevice(t.Context(), central, iface, addr)
-	if slices.Contains(b.avail.Topics(), topic) {
+	if slices.Contains(b.avail.Published(), topic) {
 		t.Errorf("%s stayed in the availability index after the device was removed", topic)
 	}
 	cleared := false
@@ -300,4 +296,15 @@ func (p roleProgram) MQTTRoles(base, central string) []pload.MQTTRole {
 			Availability: prefix + "/execute_available",
 		},
 	}}
+}
+
+// lastPublishedOn returns the last payload the recorder saw on topic, or "".
+func lastPublishedOn(mp *mockPublisher, topic string) string {
+	got := ""
+	for _, rec := range mp.recorded() {
+		if rec.topic == topic {
+			got = rec.payload
+		}
+	}
+	return got
 }

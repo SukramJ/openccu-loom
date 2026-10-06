@@ -297,14 +297,14 @@ func TestAlarmMQTTPublisher_RetainedDiscoveryAndStateOnStart(t *testing.T) {
 		t.Errorf("discovery name = %v, want Erdgeschoss", body["name"])
 	}
 
-	stateTopic := f.base + "/alarm/eg/state"
-	stRec := f.waitForPublish(stateTopic, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateDisarmed })
+	stateTopic := f.base + "/status/alarm/eg/panel"
+	stRec := f.waitForPublish(stateTopic, func(r publishRecord) bool { return statusVal(r.payload) == alarmpanel.HAAlarmStateDisarmed })
 	if !stRec.retain {
 		t.Errorf("state publish for eg must be retained")
 	}
 
-	availTopic := f.base + "/alarm/eg/availability"
-	avRec := f.waitForPublish(availTopic, func(r publishRecord) bool { return r.payload == "online" })
+	availTopic := f.base + "/status/alarm/eg/online"
+	avRec := f.waitForPublish(availTopic, func(r publishRecord) bool { return statusVal(r.payload) == "true" })
 	if !avRec.retain {
 		t.Errorf("availability publish for eg must be retained")
 	}
@@ -319,8 +319,8 @@ func TestAlarmMQTTPublisher_StateTokenUpdatesOnStateChanged(t *testing.T) {
 	f.seedZone("eg", "Erdgeschoss", zeroDelayFullMode())
 	f.start()
 
-	stateTopic := f.base + "/alarm/eg/state"
-	f.waitForPublish(stateTopic, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateDisarmed })
+	stateTopic := f.base + "/status/alarm/eg/panel"
+	f.waitForPublish(stateTopic, func(r publishRecord) bool { return statusVal(r.payload) == alarmpanel.HAAlarmStateDisarmed })
 
 	if _, err := f.eng.Arm(context.Background(), "eg", engine.ArmRequest{
 		Mode: hmenum.AlarmModeFull, By: "tester", Source: "test",
@@ -328,7 +328,7 @@ func TestAlarmMQTTPublisher_StateTokenUpdatesOnStateChanged(t *testing.T) {
 		t.Fatalf("Arm: %v", err)
 	}
 
-	f.waitForPublish(stateTopic, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateArmedAway })
+	f.waitForPublish(stateTopic, func(r publishRecord) bool { return statusVal(r.payload) == alarmpanel.HAAlarmStateArmedAway })
 }
 
 // TestAlarmMQTTPublisher_AvailabilityFlipsOnHealthChanged publishes an
@@ -341,18 +341,18 @@ func TestAlarmMQTTPublisher_AvailabilityFlipsOnHealthChanged(t *testing.T) {
 	f.seedZone("eg", "Erdgeschoss", zeroDelayFullMode())
 	f.start()
 
-	availTopic := f.base + "/alarm/eg/availability"
-	f.waitForPublish(availTopic, func(r publishRecord) bool { return r.payload == "online" })
+	availTopic := f.base + "/status/alarm/eg/online"
+	f.waitForPublish(availTopic, func(r publishRecord) bool { return statusVal(r.payload) == "true" })
 
 	f.svc.Bus().Publish(hmevent.AlarmHealthChangedEvent{
 		Base: hmevent.NewBaseAt(time.Now()), Healthy: false, Note: "test degradation",
 	})
-	f.waitForPublish(availTopic, func(r publishRecord) bool { return r.payload == "offline" })
+	f.waitForPublish(availTopic, func(r publishRecord) bool { return statusVal(r.payload) == "false" })
 
 	f.svc.Bus().Publish(hmevent.AlarmHealthChangedEvent{
 		Base: hmevent.NewBaseAt(time.Now()), Healthy: true, Note: "",
 	})
-	f.waitForPublish(availTopic, func(r publishRecord) bool { return r.payload == "online" })
+	f.waitForPublish(availTopic, func(r publishRecord) bool { return statusVal(r.payload) == "true" })
 }
 
 // TestAlarmMQTTPublisher_RetractsRemovedZone covers zone deletion: once
@@ -379,16 +379,16 @@ func TestAlarmMQTTPublisher_RetractsRemovedZone(t *testing.T) {
 	f.start()
 
 	discTopic := "homeassistant/alarm_control_panel/alarm/og/config"
-	stateTopic := f.base + "/alarm/og/state"
-	availTopic := f.base + "/alarm/og/availability"
-	f.waitForPublish(stateTopic, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateDisarmed })
+	stateTopic := f.base + "/status/alarm/og/panel"
+	availTopic := f.base + "/status/alarm/og/online"
+	f.waitForPublish(stateTopic, func(r publishRecord) bool { return statusVal(r.payload) == alarmpanel.HAAlarmStateDisarmed })
 
 	if _, err := f.eng.Arm(context.Background(), "og", engine.ArmRequest{
 		Mode: hmenum.AlarmModeFull, By: "tester", Source: "test",
 	}); err != nil {
 		t.Fatalf("Arm og: %v", err)
 	}
-	f.waitForPublish(stateTopic, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateArmedAway })
+	f.waitForPublish(stateTopic, func(r publishRecord) bool { return statusVal(r.payload) == alarmpanel.HAAlarmStateArmedAway })
 
 	f.removeZone("og")
 
@@ -411,17 +411,17 @@ func TestAlarmMQTTPublisher_RetractsDeletedDisarmedZone(t *testing.T) {
 	f.seedZone("og", "Obergeschoss", zeroDelayFullMode())
 	f.start()
 
-	stateTopic := f.base + "/alarm/og/state"
-	masterState := f.base + "/alarm/master/state"
-	f.waitForPublish(stateTopic, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateDisarmed })
-	f.waitForPublish(masterState, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateDisarmed })
+	stateTopic := f.base + "/status/alarm/og/panel"
+	masterState := f.base + "/status/alarm/master/panel"
+	f.waitForPublish(stateTopic, func(r publishRecord) bool { return statusVal(r.payload) == alarmpanel.HAAlarmStateDisarmed })
+	f.waitForPublish(masterState, func(r publishRecord) bool { return statusVal(r.payload) == alarmpanel.HAAlarmStateDisarmed })
 
 	// Delete while disarmed — no arm, no state event.
 	f.removeZone("og")
 
 	f.waitForPublish("homeassistant/alarm_control_panel/alarm/og/config", func(r publishRecord) bool { return r.payload == "" })
 	f.waitForPublish(stateTopic, func(r publishRecord) bool { return r.payload == "" })
-	f.waitForPublish(f.base+"/alarm/og/availability", func(r publishRecord) bool { return r.payload == "" })
+	f.waitForPublish(f.base+"/status/alarm/og/online", func(r publishRecord) bool { return r.payload == "" })
 	// The master panel retracts with the zone count back below two.
 	f.waitForPublish("homeassistant/alarm_control_panel/alarm/master/config", func(r publishRecord) bool { return r.payload == "" })
 }
@@ -435,8 +435,8 @@ func TestAlarmMQTTPublisher_BrokerConnectReseeds(t *testing.T) {
 	f := newAlarmPublisherFixture(t)
 	f.seedZone("eg", "Erdgeschoss", zeroDelayFullMode())
 	f.start()
-	stateTopic := f.base + "/alarm/eg/state"
-	f.waitForPublish(stateTopic, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateDisarmed })
+	stateTopic := f.base + "/status/alarm/eg/panel"
+	f.waitForPublish(stateTopic, func(r publishRecord) bool { return statusVal(r.payload) == alarmpanel.HAAlarmStateDisarmed })
 
 	f.mp.mu.Lock()
 	before := len(f.mp.sent)
@@ -449,7 +449,7 @@ func TestAlarmMQTTPublisher_BrokerConnectReseeds(t *testing.T) {
 		f.mp.mu.Unlock()
 		if after > before {
 			// The re-seed republished the retained plane.
-			f.waitForPublish(stateTopic, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateDisarmed })
+			f.waitForPublish(stateTopic, func(r publishRecord) bool { return statusVal(r.payload) == alarmpanel.HAAlarmStateDisarmed })
 			return
 		}
 		if time.Now().After(deadline) {
@@ -524,11 +524,11 @@ func TestAlarmMQTTPublisher_MasterAggregationAcrossTwoZones(t *testing.T) {
 	f.seedZone("eg", "Erdgeschoss", zeroDelayFullMode())
 	f.start()
 
-	masterState := f.base + "/alarm/master/state"
+	masterState := f.base + "/status/alarm/master/panel"
 	masterDisc := "homeassistant/alarm_control_panel/alarm/master/config"
 
 	// A single zone never gets a master panel.
-	f.waitForPublish(f.base+"/alarm/eg/state", func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateDisarmed })
+	f.waitForPublish(f.base+"/status/alarm/eg/panel", func(r publishRecord) bool { return statusVal(r.payload) == alarmpanel.HAAlarmStateDisarmed })
 	time.Sleep(20 * time.Millisecond)
 	if _, ok := f.findPublish(masterState); ok {
 		t.Fatalf("master panel published with only one zone configured")
@@ -536,7 +536,7 @@ func TestAlarmMQTTPublisher_MasterAggregationAcrossTwoZones(t *testing.T) {
 
 	f.seedZone("og", "Obergeschoss", zeroDelayFullMode())
 	// Both zones disarmed -> the uniform token collapses to disarmed.
-	f.waitForPublish(masterState, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateDisarmed })
+	f.waitForPublish(masterState, func(r publishRecord) bool { return statusVal(r.payload) == alarmpanel.HAAlarmStateDisarmed })
 	discRec := f.waitForPublish(masterDisc, func(r publishRecord) bool { return r.retain })
 	var discBody map[string]any
 	if err := json.Unmarshal([]byte(discRec.payload), &discBody); err != nil {
@@ -552,7 +552,7 @@ func TestAlarmMQTTPublisher_MasterAggregationAcrossTwoZones(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Arm eg: %v", err)
 	}
-	f.waitForPublish(masterState, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateArmedAway })
+	f.waitForPublish(masterState, func(r publishRecord) bool { return statusVal(r.payload) == alarmpanel.HAAlarmStateArmedAway })
 
 	// Arm the second zone the same way -> uniform set -> exact token.
 	if _, err := f.eng.Arm(context.Background(), "og", engine.ArmRequest{
@@ -560,7 +560,7 @@ func TestAlarmMQTTPublisher_MasterAggregationAcrossTwoZones(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Arm og: %v", err)
 	}
-	f.waitForPublish(masterState, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateArmedAway })
+	f.waitForPublish(masterState, func(r publishRecord) bool { return statusVal(r.payload) == alarmpanel.HAAlarmStateArmedAway })
 
 	// Dropping back to one zone retracts the master panel.
 	f.removeZone("og")
@@ -578,23 +578,23 @@ func TestAlarmMQTTPublisher_EventTopicJSONOnTriggered(t *testing.T) {
 	f.seedSensor("door1", "eg", "Front Door", []hmenum.AlarmMode{hmenum.AlarmModeFull})
 	f.start()
 
-	stateTopic := f.base + "/alarm/eg/state"
-	f.waitForPublish(stateTopic, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateDisarmed })
+	stateTopic := f.base + "/status/alarm/eg/panel"
+	f.waitForPublish(stateTopic, func(r publishRecord) bool { return statusVal(r.payload) == alarmpanel.HAAlarmStateDisarmed })
 
 	if _, err := f.eng.Arm(context.Background(), "eg", engine.ArmRequest{
 		Mode: hmenum.AlarmModeFull, By: "tester", Source: "test",
 	}); err != nil {
 		t.Fatalf("Arm: %v", err)
 	}
-	f.waitForPublish(stateTopic, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateArmedAway })
+	f.waitForPublish(stateTopic, func(r publishRecord) bool { return statusVal(r.payload) == alarmpanel.HAAlarmStateArmedAway })
 
 	f.eng.HandleSensorEvent(context.Background(), "door1", true)
-	f.waitForPublish(stateTopic, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateTriggered })
+	f.waitForPublish(stateTopic, func(r publishRecord) bool { return statusVal(r.payload) == alarmpanel.HAAlarmStateTriggered })
 
-	eventTopic := f.base + "/alarm/eg/event"
+	eventTopic := f.base + "/status/alarm/eg/event"
 	rec := f.waitForPublish(eventTopic, func(r publishRecord) bool {
-		var pay alarmEventPayload
-		if err := json.Unmarshal([]byte(r.payload), &pay); err != nil {
+		pay, ok := decodeAlarmEvent(r.payload)
+		if !ok {
 			return false
 		}
 		return pay.Type == alarmEventTypeTrigger
@@ -602,9 +602,9 @@ func TestAlarmMQTTPublisher_EventTopicJSONOnTriggered(t *testing.T) {
 	if rec.retain {
 		t.Errorf("event-topic publish must not be retained")
 	}
-	var pay alarmEventPayload
-	if err := json.Unmarshal([]byte(rec.payload), &pay); err != nil {
-		t.Fatalf("unmarshal event payload: %v", err)
+	pay, ok := decodeAlarmEvent(rec.payload)
+	if !ok {
+		t.Fatalf("event payload is not a status object with the type in val: %s", rec.payload)
 	}
 	if pay.ZoneID != "eg" {
 		t.Errorf("event zone_id = %q, want eg", pay.ZoneID)
@@ -630,10 +630,10 @@ func TestAlarmMQTTPublisher_NotificationRespectsMQTTFlag(t *testing.T) {
 	f.seedZone("eg", "Erdgeschoss", zeroDelayFullMode())
 	f.start()
 
-	stateTopic := f.base + "/alarm/eg/state"
-	f.waitForPublish(stateTopic, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateDisarmed })
+	stateTopic := f.base + "/status/alarm/eg/panel"
+	f.waitForPublish(stateTopic, func(r publishRecord) bool { return statusVal(r.payload) == alarmpanel.HAAlarmStateDisarmed })
 
-	eventTopic := f.base + "/alarm/eg/event"
+	eventTopic := f.base + "/status/alarm/eg/event"
 	notification := func(mqtt bool) hmevent.AlarmNotificationEvent {
 		return hmevent.AlarmNotificationEvent{
 			Base: hmevent.NewBaseAt(time.Now()), ZoneID: "eg", ZoneName: "Erdgeschoss",
@@ -652,8 +652,8 @@ func TestAlarmMQTTPublisher_NotificationRespectsMQTTFlag(t *testing.T) {
 	f.svc.Bus().Publish(notification(true))
 
 	rec := f.waitForPublish(eventTopic, func(r publishRecord) bool {
-		var pay alarmEventPayload
-		if err := json.Unmarshal([]byte(r.payload), &pay); err != nil {
+		pay, ok := decodeAlarmEvent(r.payload)
+		if !ok {
 			return false
 		}
 		return pay.Type == alarmEventTypeNotification
@@ -673,9 +673,9 @@ func TestAlarmMQTTPublisher_NotificationRespectsMQTTFlag(t *testing.T) {
 		t.Fatalf("%d publishes on the event topic, want exactly 1 — the MQTT=false notification must "+
 			"publish nothing", onEventTopic)
 	}
-	var pay alarmEventPayload
-	if err := json.Unmarshal([]byte(rec.payload), &pay); err != nil {
-		t.Fatalf("unmarshal event payload: %v", err)
+	pay, ok := decodeAlarmEvent(rec.payload)
+	if !ok {
+		t.Fatalf("event payload is not a status object with the type in val: %s", rec.payload)
 	}
 	if pay.Output != "Doorbell" {
 		t.Errorf("event output = %q, want Doorbell", pay.Output)
@@ -694,8 +694,8 @@ func TestAlarmMQTTPublisher_NotificationOutputFallsBackToID(t *testing.T) {
 	f.seedZone("eg", "Erdgeschoss", zeroDelayFullMode())
 	f.start()
 
-	stateTopic := f.base + "/alarm/eg/state"
-	f.waitForPublish(stateTopic, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateDisarmed })
+	stateTopic := f.base + "/status/alarm/eg/panel"
+	f.waitForPublish(stateTopic, func(r publishRecord) bool { return statusVal(r.payload) == alarmpanel.HAAlarmStateDisarmed })
 
 	f.svc.Bus().Publish(hmevent.AlarmNotificationEvent{
 		Base: hmevent.NewBaseAt(time.Now()), ZoneID: "eg", ZoneName: "Erdgeschoss",
@@ -703,17 +703,17 @@ func TestAlarmMQTTPublisher_NotificationOutputFallsBackToID(t *testing.T) {
 		MQTT: true, Webhook: false,
 	})
 
-	eventTopic := f.base + "/alarm/eg/event"
+	eventTopic := f.base + "/status/alarm/eg/event"
 	rec := f.waitForPublish(eventTopic, func(r publishRecord) bool {
-		var pay alarmEventPayload
-		if err := json.Unmarshal([]byte(r.payload), &pay); err != nil {
+		pay, ok := decodeAlarmEvent(r.payload)
+		if !ok {
 			return false
 		}
 		return pay.Type == alarmEventTypeNotification
 	})
-	var pay alarmEventPayload
-	if err := json.Unmarshal([]byte(rec.payload), &pay); err != nil {
-		t.Fatalf("unmarshal event payload: %v", err)
+	pay, ok := decodeAlarmEvent(rec.payload)
+	if !ok {
+		t.Fatalf("event payload is not a status object with the type in val: %s", rec.payload)
 	}
 	if pay.Output != "notify2" {
 		t.Errorf("event output = %q, want notify2 (ID fallback for an unnamed output)", pay.Output)
@@ -844,7 +844,7 @@ func (p *discoveryRefusingPublisher) sawStateTopic() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	for _, t := range p.other {
-		if strings.HasSuffix(t, "/alarm/eg/state") {
+		if strings.HasSuffix(t, "/alarm/eg/panel") {
 			return true
 		}
 	}
@@ -914,20 +914,20 @@ func TestAlarmPlaneGatesOnlyTheTopicDiscoveryDoesNotDeclare(t *testing.T) {
 	b, pub := newTestBridge(t, func(c *BridgeConfig) { c.RawEnabled = false })
 	ctx := context.Background()
 
-	if err := b.PublishAlarmState(ctx, "openccu-loom/alarm/eg/state", "armed_home"); err != nil {
+	if err := b.PublishAlarmState(ctx, "openccu-loom/status/alarm/eg/panel", "armed_home"); err != nil {
 		t.Fatalf("PublishAlarmState: %v", err)
 	}
-	if err := b.PublishAlarmAvailability(ctx, "openccu-loom/alarm/eg/availability", true); err != nil {
+	if err := b.PublishAlarmAvailability(ctx, "openccu-loom/status/alarm/eg/online", true); err != nil {
 		t.Fatalf("PublishAlarmAvailability: %v", err)
 	}
-	if err := b.RetractAlarmTopic(ctx, "openccu-loom/alarm/eg/state"); err != nil {
+	if err := b.RetractAlarmTopic(ctx, "openccu-loom/status/alarm/eg/panel"); err != nil {
 		t.Fatalf("RetractAlarmTopic: %v", err)
 	}
 	if len(pub.sent) != 3 {
 		t.Fatalf("raw_enabled=false: the discovery-declared alarm topics must still publish, got %d writes: %+v", len(pub.sent), pub.sent)
 	}
 
-	if err := b.PublishAlarmEvent(ctx, "openccu-loom/alarm/eg/event", []byte(`{}`)); err != nil {
+	if err := b.PublishAlarmEvent(ctx, "openccu-loom/status/alarm/eg/event", []byte(`{}`)); err != nil {
 		t.Fatalf("PublishAlarmEvent: %v", err)
 	}
 	if len(pub.sent) != 3 {
@@ -935,10 +935,21 @@ func TestAlarmPlaneGatesOnlyTheTopicDiscoveryDoesNotDeclare(t *testing.T) {
 	}
 
 	b2, pub2 := newTestBridge(t)
-	if err := b2.PublishAlarmEvent(ctx, "openccu-loom/alarm/eg/event", []byte(`{}`)); err != nil {
+	if err := b2.PublishAlarmEvent(ctx, "openccu-loom/status/alarm/eg/event", []byte(`{}`)); err != nil {
 		t.Fatalf("PublishAlarmEvent: %v", err)
 	}
 	if len(pub2.sent) != 1 {
 		t.Fatalf("raw_enabled=true: the event topic must reach the broker, got %d writes", len(pub2.sent))
 	}
+}
+
+// decodeAlarmEvent reads an alarm event status object back into the event
+// document: the type from `val`, every other field from `hm` (ADR 0083).
+func decodeAlarmEvent(payload string) (alarmEventPayload, bool) {
+	var pay alarmEventPayload
+	env, ok := decodeStatus(payload)
+	if !ok || json.Unmarshal(env.Val, &pay.Type) != nil || json.Unmarshal(env.HM, &pay) != nil {
+		return alarmEventPayload{}, false
+	}
+	return pay, true
 }

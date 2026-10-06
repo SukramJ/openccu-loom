@@ -4,6 +4,7 @@
 package mqtt
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -15,31 +16,42 @@ func TestTopicBuilderDataPointStateShape(t *testing.T) {
 	t.Parallel()
 	tb := NewTopicBuilder("openccu-loom")
 	got := tb.DataPointState("c1", "HmIP-RF", "0001ABCD", 3, "STATE")
-	want := "openccu-loom/c1/HmIP-RF/0001ABCD/3/values/STATE"
+	want := "openccu-loom/status/c1/HmIP-RF/0001ABCD/3/values/STATE"
 	if got != want {
 		t.Fatalf("DataPointState: got %q want %q", got, want)
 	}
 }
 
-// 12. DataPointCommand appends /set to the state topic.
+// 12. DataPointCommand is the status item's path under the `set` function
+// (ADR 0083: item paths are identical under status, set and meta).
 func TestTopicBuilderDataPointCommandHasSetSuffix(t *testing.T) {
 	t.Parallel()
 	tb := NewTopicBuilder("openccu-loom")
 	state := tb.DataPointState("c1", "HmIP-RF", "0001ABCD", 3, "STATE")
 	cmd := tb.DataPointCommand("c1", "HmIP-RF", "0001ABCD", 3, "STATE")
-	if cmd != state+"/set" {
-		t.Fatalf("DataPointCommand: got %q want %q", cmd, state+"/set")
+	meta := tb.DataPointConfig("c1", "HmIP-RF", "0001ABCD", 3, "STATE")
+	item := strings.TrimPrefix(state, "openccu-loom/status/")
+	if cmd != "openccu-loom/set/"+item {
+		t.Fatalf("DataPointCommand: got %q want %q", cmd, "openccu-loom/set/"+item)
+	}
+	if meta != "openccu-loom/meta/"+item {
+		t.Fatalf("DataPointConfig: got %q want %q", meta, "openccu-loom/meta/"+item)
 	}
 }
 
-// 13. DataPointEvent produces .../event/{etype} shape.
-func TestTopicBuilderDataPointEventShape(t *testing.T) {
+// 13. ADR 0083 drops the legacy per-event-type pulse `…/event/<type>`: the
+// event type is the `val` of the channel's `event` status item, so no
+// builder renders a topic below it.
+func TestTopicBuilderHasNoPerTypeEventShape(t *testing.T) {
 	t.Parallel()
 	tb := NewTopicBuilder("openccu-loom")
-	got := tb.DataPointEvent("c1", "HmIP-RF", "0001ABCD", 3, "keypress")
-	want := "openccu-loom/c1/HmIP-RF/0001ABCD/3/event/keypress"
+	got := tb.ChannelEvent("c1", "HmIP-RF", "0001ABCD", 3)
+	want := "openccu-loom/status/c1/HmIP-RF/0001ABCD/3/event"
 	if got != want {
-		t.Fatalf("DataPointEvent: got %q want %q", got, want)
+		t.Fatalf("ChannelEvent: got %q want %q", got, want)
+	}
+	if _, ok := reflect.TypeOf(tb).MethodByName("DataPointEvent"); ok {
+		t.Fatal("TopicBuilder.DataPointEvent is back: the per-type pulse topic was dropped by ADR 0083")
 	}
 }
 
@@ -47,12 +59,12 @@ func TestTopicBuilderDataPointEventShape(t *testing.T) {
 func TestNamingHubProgramStateAndTrigger(t *testing.T) {
 	t.Parallel()
 	state := naming.MQTTHubProgramState("openccu-loom", "c1", "MorningRoutine")
-	wantState := "openccu-loom/c1/hub/programs/MorningRoutine/state"
+	wantState := "openccu-loom/status/c1/hub/programs/MorningRoutine/active"
 	if state != wantState {
 		t.Fatalf("MQTTHubProgramState: got %q want %q", state, wantState)
 	}
 	trigger := naming.MQTTHubProgramTrigger("openccu-loom", "c1", "MorningRoutine")
-	wantTrigger := "openccu-loom/c1/hub/programs/MorningRoutine/trigger"
+	wantTrigger := "openccu-loom/set/c1/hub/programs/MorningRoutine/trigger"
 	if trigger != wantTrigger {
 		t.Fatalf("MQTTHubProgramTrigger: got %q want %q", trigger, wantTrigger)
 	}
@@ -67,7 +79,7 @@ func TestTopicBuilderTrimsTrailingSlash(t *testing.T) {
 	if strings.HasPrefix(got, "foo//") {
 		t.Fatalf("double slash in topic: %q", got)
 	}
-	want := "foo/c1/HmIP-RF/0001ABCD/3/values/STATE"
+	want := "foo/status/c1/HmIP-RF/0001ABCD/3/values/STATE"
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}
@@ -80,8 +92,8 @@ func TestTopicBuilderEmptyBaseUsesDefault(t *testing.T) {
 	if tb.Base != "openccu-loom" {
 		t.Fatalf("expected default base %q, got %q", "openccu-loom", tb.Base)
 	}
-	got := tb.BridgeStatus()
-	want := "openccu-loom/bridge/status"
+	got := tb.Connected()
+	want := "openccu-loom/connected"
 	if got != want {
 		t.Fatalf("BridgeStatus with empty base: got %q want %q", got, want)
 	}
@@ -158,7 +170,7 @@ func TestTopicBuilderSafeReplacesAllDisallowedChars(t *testing.T) {
 	// address with slash, iface with +, parameter with # and space
 	got := tb.DataPointState("c1", "If+ace", "A/B", 0, "STA#TE me")
 	// Each disallowed char → underscore; address + kind upper-cased.
-	want := "gh/c1/If_ace/A_B/0/values/STA_TE_ME"
+	want := "gh/status/c1/If_ace/A_B/0/values/STA_TE_ME"
 	if got != want {
 		t.Fatalf("safe replacement: got %q want %q", got, want)
 	}
@@ -168,7 +180,7 @@ func TestTopicBuilderSafeReplacesAllDisallowedChars(t *testing.T) {
 func TestNamingHubConnectivityShape(t *testing.T) {
 	t.Parallel()
 	got := naming.MQTTHubConnectivity("openccu-loom", "c1", "HmIP-RF")
-	want := "openccu-loom/c1/hub/connectivity/HmIP-RF"
+	want := "openccu-loom/status/c1/hub/connectivity/HmIP-RF"
 	if got != want {
 		t.Fatalf("MQTTHubConnectivity: got %q want %q", got, want)
 	}
@@ -178,12 +190,12 @@ func TestNamingHubConnectivityShape(t *testing.T) {
 func TestNamingHubSysvarAndCommand(t *testing.T) {
 	t.Parallel()
 	sv := naming.MQTTHubSysvarState("openccu-loom", "c1", "PartyMode")
-	wantSV := "openccu-loom/c1/hub/sysvars/PartyMode/state"
+	wantSV := "openccu-loom/status/c1/hub/sysvars/PartyMode"
 	if sv != wantSV {
 		t.Fatalf("MQTTHubSysvarState: got %q want %q", sv, wantSV)
 	}
 	cmd := naming.MQTTHubSysvarCommand("openccu-loom", "c1", "PartyMode")
-	wantCmd := "openccu-loom/c1/hub/sysvars/PartyMode/set"
+	wantCmd := "openccu-loom/set/c1/hub/sysvars/PartyMode"
 	if cmd != wantCmd {
 		t.Fatalf("MQTTHubSysvarCommand: got %q want %q", cmd, wantCmd)
 	}
@@ -194,7 +206,7 @@ func TestTopicBuilderCustomDPInvokeShape(t *testing.T) {
 	t.Parallel()
 	tb := NewTopicBuilder("openccu-loom")
 	got := tb.CustomDPInvoke("c1", "0001ABCD", "light_dp", "turn_on")
-	want := "openccu-loom/c1/devices/0001ABCD/cdps/light_dp/turn_on/invoke"
+	want := "openccu-loom/set/c1/devices/0001ABCD/cdps/light_dp/turn_on"
 	if got != want {
 		t.Fatalf("CustomDPInvoke: got %q want %q", got, want)
 	}
@@ -206,7 +218,7 @@ func TestTopicBuilderCustomDPInvokeSafeComponents(t *testing.T) {
 	tb := NewTopicBuilder("openccu-loom")
 	got := tb.CustomDPInvoke("c1", "A/B+C", "dp#1", "set value")
 	// safe() replaces /, +, #, space → underscore; verify the exact sanitised form.
-	want := "openccu-loom/c1/devices/A_B_C/cdps/dp_1/set_value/invoke"
+	want := "openccu-loom/set/c1/devices/A_B_C/cdps/dp_1/set_value"
 	if got != want {
 		t.Fatalf("CustomDPInvoke safe: got %q want %q", got, want)
 	}
@@ -216,9 +228,10 @@ func TestTopicBuilderCustomDPInvokeSafeComponents(t *testing.T) {
 			t.Fatalf("disallowed char %q found in topic: %q", bad, got)
 		}
 	}
-	// last segment must still be "invoke"
-	if !strings.HasSuffix(got, "/invoke") {
-		t.Fatalf("missing /invoke suffix: %q", got)
+	// The operation is the last level: ADR 0083 drops the `invoke` suffix,
+	// the item sits under the `set` function instead.
+	if !strings.HasSuffix(got, "/set_value") || !strings.HasPrefix(got, "openccu-loom/set/") {
+		t.Fatalf("operation item not under the set function: %q", got)
 	}
 }
 
@@ -226,7 +239,7 @@ func TestTopicBuilderCustomDPInvokeSafeComponents(t *testing.T) {
 func TestNamingHubAlarmMessagesShape(t *testing.T) {
 	t.Parallel()
 	got := naming.MQTTHubAlarmMessages("openccu-loom", "c1")
-	want := "openccu-loom/c1/hub/alarm_messages"
+	want := "openccu-loom/status/c1/hub/alarm_messages"
 	if got != want {
 		t.Fatalf("MQTTHubAlarmMessages: got %q want %q", got, want)
 	}
@@ -236,7 +249,7 @@ func TestNamingHubAlarmMessagesShape(t *testing.T) {
 func TestNamingHubServiceMessagesShape(t *testing.T) {
 	t.Parallel()
 	got := naming.MQTTHubServiceMessages("openccu-loom", "c1")
-	want := "openccu-loom/c1/hub/service_messages"
+	want := "openccu-loom/status/c1/hub/service_messages"
 	if got != want {
 		t.Fatalf("MQTTHubServiceMessages: got %q want %q", got, want)
 	}

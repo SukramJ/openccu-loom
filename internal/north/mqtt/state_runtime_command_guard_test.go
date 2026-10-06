@@ -10,6 +10,8 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/model/naming"
+
 	hapublisher "github.com/SukramJ/go-hamqtt/publisher"
 )
 
@@ -82,12 +84,12 @@ func TestTheStateRuntimeGuardRefusesACommandTopic(t *testing.T) {
 	const base = "gh"
 	b := NewBridge(BridgeConfig{Base: base, CentralName: "ccu-01", RawEnabled: true}, newFanoutClient())
 
-	collide := base + "/ccu-01/hub/programs/12459/trigger"
+	collide := naming.MQTTHubProgramTrigger(base, "ccu-01", "12459")
 	if !anyFilterMatches(commandFilters(base), collide) {
 		t.Fatalf("%q is not matched by any command filter, so it cannot exercise the guard", collide)
 	}
 
-	_, err := b.state.Publish(context.Background(), collide, []byte(`{"value":true}`))
+	_, err := b.state.PublishStatus(context.Background(), collide, hapublisher.Observation{Value: true})
 	if !errors.Is(err, hapublisher.ErrStateCommandCollision) {
 		t.Fatalf("publishing state onto a command topic returned %v, want ErrStateCommandCollision — "+
 			"the runtime guard is not armed, so the broker delivers this write straight back into "+
@@ -96,8 +98,9 @@ func TestTheStateRuntimeGuardRefusesACommandTopic(t *testing.T) {
 
 	// And a topic no command filter claims must still go out, or the guard
 	// would refuse the whole plane rather than the collisions in it.
-	if _, err := b.state.Publish(context.Background(), base+"/bridge/health", []byte(`{}`)); err != nil {
-		t.Fatalf("publishing the bridge health topic was refused: %v", err)
+	if _, err := b.state.PublishStatus(context.Background(), naming.MQTTHubProgramState(base, "ccu-01", "12459"),
+		hapublisher.Observation{Value: true}); err != nil {
+		t.Fatalf("publishing the program's own status item was refused: %v", err)
 	}
 }
 
@@ -109,11 +112,11 @@ func TestTheAvailabilityRuntimeGuardIsArmed(t *testing.T) {
 
 	const base = "gh"
 	b := NewBridge(BridgeConfig{Base: base, CentralName: "ccu-01", RawEnabled: true}, newFanoutClient())
-	collide := base + "/system/addon_update/set"
+	collide := base + "/set/system/addon_update"
 	if !anyFilterMatches(commandFilters(base), collide) {
 		t.Fatalf("%q is not matched by any command filter, so it cannot exercise the guard", collide)
 	}
-	if _, err := b.avail.Publish(context.Background(), collide, true); !errors.Is(err, hapublisher.ErrStateCommandCollision) {
+	if _, err := b.publishOnline(context.Background(), collide, true); !errors.Is(err, hapublisher.ErrStateCommandCollision) {
 		t.Fatalf("publishing availability onto a command topic returned %v, want "+
 			"ErrStateCommandCollision", err)
 	}

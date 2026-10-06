@@ -130,8 +130,8 @@ func (f *commandGuardFixture) deliver(t *testing.T, filter, topic, payload strin
 // subscription — rather than by calling a handler the router parses the topic
 // for.
 const (
-	dpBucketFilter = "gh/+/+/+/+/+/+/set"
-	addonFilter    = "gh/system/addon_update/set"
+	dpBucketFilter = "gh/set/+/+/+/+/week_profile"
+	addonFilter    = "gh/set/system/addon_update"
 )
 
 // TestScheduleSwitchRejectsAnUnrecognisedPayload covers
@@ -149,7 +149,7 @@ func TestScheduleSwitchRejectsAnUnrecognisedPayload(t *testing.T) {
 	t.Parallel()
 	f := newCommandGuardFixture(t)
 
-	const topic = "gh/ccu-01/HmIP-RF/0001ABCD/1/schedule/WEEK_PROGRAM_CHANNEL_LOCKS/set"
+	const topic = "gh/set/ccu-01/HmIP-RF/0001ABCD/1/schedule/switch/WEEK_PROGRAM_CHANNEL_LOCKS"
 	for _, payload := range []string{"maybe", `"true"`, "unknown", "", "2", "enable"} {
 		f.deliver(t, dpBucketFilter, topic, payload)
 	}
@@ -191,7 +191,7 @@ func TestCombinedDPRejectsAnEmptyPayload(t *testing.T) {
 	t.Parallel()
 	f := newCommandGuardFixture(t)
 
-	const topic = "gh/ccu-01/HmIP-RF/0001ABCD/1/combined/level/set"
+	const topic = "gh/set/ccu-01/HmIP-RF/0001ABCD/1/combined/level"
 	for _, payload := range []string{"", "   ", "\t\n"} {
 		f.deliver(t, dpBucketFilter, topic, payload)
 	}

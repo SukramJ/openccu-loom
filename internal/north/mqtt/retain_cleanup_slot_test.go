@@ -45,7 +45,7 @@ func TestRetainCleanupRunsWithTheBudgetLeftAfterWaitingForTheSlot(t *testing.T) 
 	const base = "openccu-loom"
 	legacy := base + "/GoOtto/HmIP-RF/0001ABCD/1/STATE"
 	mc := &mockRetainClient{retained: []retainedMsg{{topic: legacy, payload: []byte(`{"value":true}`)}}}
-	b := NewBridge(BridgeConfig{Base: base, RawEnabled: true}, mc)
+	b := NewBridge(BridgeConfig{Base: base, CentralName: "GoOtto", RawEnabled: true}, mc)
 
 	holdSweepSlot(t, b, 250*time.Millisecond)
 

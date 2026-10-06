@@ -7,7 +7,6 @@ package e2e
 
 import (
 	"encoding/json"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -22,7 +21,7 @@ const degradedCheckInterval = 5 * time.Second
 
 // TestE2EDegradedSystemState verifies that when the south-bound CCU
 // becomes unreachable the daemon publishes a system-status payload
-// on `openccu-loom/<central>/system/status` with `healthy: false`.
+// on `openccu-loom/status/<central>/system/status` with `hm.healthy: false`.
 //
 // The test triggers the degraded condition by stopping the godevccu
 // instance. The daemon detects the disconnection, fires a
@@ -45,9 +44,8 @@ func TestE2EDegradedSystemState(t *testing.T) {
 	}
 
 	// Wait for the daemon to come fully online before stopping godevccu.
-	initial := awaitTopic(t, h.MQTT(), "openccu-loom/bridge/status", 30*time.Second, func(_ string, payload []byte) bool {
-		body := strings.TrimSpace(string(payload))
-		return body != "" && body != "offline"
+	initial := awaitTopic(t, h.MQTT(), "openccu-loom/connected", 30*time.Second, func(_ string, payload []byte) bool {
+		return connectedAtLeast(payload, 1)
 	})
 	if initial == "" {
 		t.Skip("bridge never went online — skipping degraded-state test")
@@ -55,11 +53,17 @@ func TestE2EDegradedSystemState(t *testing.T) {
 
 	// Subscribe to the system/status topic BEFORE stopping the CCU so we
 	// do not miss the event.
-	statusTopic := "openccu-loom/ccu-e2e/system/status"
+	statusTopic := "openccu-loom/status/ccu-e2e/system/status"
 
+	// The event is a status object (ADR 0083): the component in `val`,
+	// the rest of the event under `hm`.
 	type statusPay struct {
 		Healthy            bool     `json:"healthy"`
 		DegradedInterfaces []string `json:"degraded_interfaces"`
+	}
+	type statusObj struct {
+		Val json.RawMessage `json:"val"`
+		HM  statusPay       `json:"hm"`
 	}
 
 	var mu sync.Mutex
@@ -67,10 +71,11 @@ func TestE2EDegradedSystemState(t *testing.T) {
 	hit := make(chan struct{}, 1)
 
 	_ = h.MQTT().Subscribe(statusTopic, func(_ string, payload []byte, _ bool) {
-		var p statusPay
-		if err := json.Unmarshal(payload, &p); err != nil {
+		var obj statusObj
+		if err := json.Unmarshal(payload, &obj); err != nil || obj.Val == nil {
 			return
 		}
+		p := obj.HM
 		if !p.Healthy {
 			mu.Lock()
 			got = &p

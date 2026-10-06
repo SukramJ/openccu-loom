@@ -244,8 +244,8 @@ func TestAHungRegaPublishesOfflineWhileEveryInterfaceIsUp(t *testing.T) {
 		result systemProbeResult
 		want   string
 	}{
-		{"rega serving", regaProbeServing, "online"},
-		{"rega answered that it is not serving", regaProbeNotServing, "offline"},
+		{"rega serving", regaProbeServing, "true"},
+		{"rega answered that it is not serving", regaProbeNotServing, "false"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -270,15 +270,15 @@ func TestAHungRegaPublishesOfflineWhileEveryInterfaceIsUp(t *testing.T) {
 			var payload string
 			var seen bool
 			for _, p := range pub.Published() {
-				if p.Topic == "openccu-loom/ccu-01/hub/status" {
-					payload, seen = string(p.Payload), true
+				if p.Topic == "openccu-loom/status/ccu-01/online" {
+					payload, seen = plainVal(p.Payload), true
 				}
 			}
 			if !seen {
 				t.Fatalf("the per-CCU gate was never written; topics=%v", publishedTopics(pub))
 			}
 			if payload != tc.want {
-				t.Fatalf("hub/status = %q, want %q — every interface of this CCU reads "+
+				t.Fatalf("the CCU's online item = %q, want %q — every interface of this CCU reads "+
 					"reachable, so only the ReGa half can decide it", payload, tc.want)
 			}
 		})
@@ -453,9 +453,9 @@ func TestALatchedOffProbeRefoldsTheGateBeforeItLeaves(t *testing.T) {
 	var writes int
 	var last string
 	for _, p := range pub.Published() {
-		if p.Topic == "openccu-loom/ccu-01/hub/status" {
+		if p.Topic == "openccu-loom/status/ccu-01/online" {
 			writes++
-			last = string(p.Payload)
+			last = plainVal(p.Payload)
 		}
 	}
 	if writes == 0 {
@@ -463,9 +463,9 @@ func TestALatchedOffProbeRefoldsTheGateBeforeItLeaves(t *testing.T) {
 			"`down`, so its hub plane stays `offline` for the life of the process on "+
 			"hardware that is healthy and answering", publishedTopics(pub))
 	}
-	if last != "online" {
-		t.Fatalf("hub/status = %q after the latch, want %q: the tracker is back at unknown, "+
-			"which folds to reachable, and this tick is the last one that can say so", last, "online")
+	if last != "true" {
+		t.Fatalf("the CCU's online item = %q after the latch, want %q: the tracker is back at unknown, "+
+			"which folds to reachable, and this tick is the last one that can say so", last, "true")
 	}
 	if got := publisher.rega.state("ccu-01"); got != regaLivenessUnknown {
 		t.Fatalf("the latch left the tracker at %v, want unknown", got)
@@ -754,7 +754,7 @@ func TestRetractCentralStopsTheRegaPoller(t *testing.T) {
 			got-stopped)
 	}
 	for _, p := range pub.Published()[afterRetract:] {
-		if p.Topic == "openccu-loom/ccu-01/hub/status" {
+		if p.Topic == "openccu-loom/status/ccu-01/online" {
 			t.Fatalf("the orphaned poller wrote %q to the gate of a removed CCU after the "+
 				"retract; nothing ever reaches that topic again, so it stays retained forever",
 				string(p.Payload))

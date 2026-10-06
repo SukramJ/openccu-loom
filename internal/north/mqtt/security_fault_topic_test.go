@@ -5,6 +5,7 @@ package mqtt
 
 import (
 	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -101,7 +102,7 @@ func TestSecurityFaultTopicHasExactlyOneProducer(t *testing.T) {
 
 	// Let the initial reconcile (Start's catch-up publish) settle before
 	// taking the baseline; the fault-topic count must not include it.
-	waitForSecurityPublish(t, mp, securityAvailabilityTopic("openccu-loom"), func(r publishRecord) bool { return r.payload == "online" })
+	waitForSecurityPublish(t, mp, securityAvailabilityTopic("openccu-loom"), func(r publishRecord) bool { return statusVal(r.payload) == "true" })
 	before := countSecurityPublishes(mp, faultTopic)
 
 	bus.Publish(hmevent.SecurityFaultChangedEvent{
@@ -129,5 +130,13 @@ func TestSecurityFaultTopicHasExactlyOneProducer(t *testing.T) {
 	rec := waitForSecurityPublish(t, mp, faultTopic, func(r publishRecord) bool { return true })
 	if rec.retain {
 		t.Errorf("the fault event-topic publish must not be retained; got retain=true")
+	}
+	// A status object that is not retained: the verb in `val`, the rendered
+	// report under `hm` (ADR 0083).
+	if v := statusVal(rec.payload); v != string(hmenum.SecurityVerbRaised) {
+		t.Errorf("fault event val = %q, want %q (payload %s)", v, hmenum.SecurityVerbRaised, rec.payload)
+	}
+	if !strings.Contains(rec.payload, `"subject":"Sensor unreachable"`) {
+		t.Errorf("fault event lost the rendered report under hm: %s", rec.payload)
 	}
 }

@@ -25,8 +25,14 @@ import (
 // ready and logs the diff as deferred.
 type reloadDeps struct {
 	mqttSup atomic.Pointer[mqttSupervisor]
-	curCfg  atomic.Pointer[config.Config]
-	reseed  atomic.Pointer[mqttReseedHook]
+
+	// maintenance carries the daemon-side halves of the MQTT maintenance
+	// topics (ADR 0083): the root log level and the supervised restart. Set
+	// once at boot, before the MQTT supervisor builds its first stack, and
+	// read by every generation it builds. See [reloadDeps.SetMQTTMaintenance].
+	maintenance atomic.Pointer[mqttMaintenanceHooks]
+	curCfg      atomic.Pointer[config.Config]
+	reseed      atomic.Pointer[mqttReseedHook]
 
 	// assemble re-derives the effective config the way boot does: the YAML
 	// base with the DB-tier sections overlaid on top. curCfg alone is not
@@ -107,6 +113,30 @@ func (d *reloadDeps) SetMQTTReseed(fn func(context.Context)) {
 		return
 	}
 	d.reseed.Store(&mqttReseedHook{fn: fn})
+}
+
+// SetMQTTMaintenance installs the daemon-side halves of the MQTT
+// maintenance topics. The boot path calls it before the shared
+// infrastructure starts the MQTT supervisor, which hands them to every
+// bridge it builds.
+func (d *reloadDeps) SetMQTTMaintenance(h mqttMaintenanceHooks) {
+	if d == nil {
+		return
+	}
+	d.maintenance.Store(&h)
+}
+
+// MQTTMaintenance returns the installed maintenance hooks, or the zero value
+// — which refuses the log-level and restart commands — when none has been
+// installed (tests, nil deps).
+func (d *reloadDeps) MQTTMaintenance() mqttMaintenanceHooks {
+	if d == nil {
+		return mqttMaintenanceHooks{}
+	}
+	if h := d.maintenance.Load(); h != nil {
+		return *h
+	}
+	return mqttMaintenanceHooks{}
 }
 
 // MQTTReseed returns the installed re-seed function, or nil when none

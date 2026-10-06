@@ -115,7 +115,7 @@ func TestCombinedProjectionBodiesAreUnchanged(t *testing.T) {
 			wantComponent: "sensor",
 			wantBody: map[string]any{
 				"name":            "discovery.level_combined",
-				"value_template":  "{{ value_json.level }}",
+				"value_template":  "{{ value_json.val.level }}",
 				"entity_category": "diagnostic",
 			},
 		},
@@ -125,7 +125,7 @@ func TestCombinedProjectionBodiesAreUnchanged(t *testing.T) {
 			wantComponent: "sensor",
 			wantBody: map[string]any{
 				"name":            "discovery.hs_color",
-				"value_template":  "{{ value_json.hue }}",
+				"value_template":  "{{ value_json.val.hue }}",
 				"entity_category": "diagnostic",
 			},
 		},

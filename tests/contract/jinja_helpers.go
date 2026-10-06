@@ -19,12 +19,15 @@ import (
 // Supported constructs:
 //
 //   - `{% if value_json is defined %} … {% endif %}` and its
-//     `{% if value_json is defined and value_json.value is not none %}`
+//     `{% if value_json is defined and value_json.val is not none %}`
 //     variant — guard against undefined value_json (empty or non-JSON
-//     input → empty output)
+//     input → empty output) and against a status object whose `val` is
+//     null (ADR 0083)
 //   - `{{ expr }}` — variable/filter expression output
 //   - Filters: `lower`, `int`, `float`, `tojson`, `default(x)`, `default(x, true)`
-//   - `value_json.<field>` — JSON field access
+//   - `value_json.<field>` and `value_json.<field>.<sub>` — JSON field access
+//   - `dict(<expr>, key=<expr>)` — the event templates' merge of `hm` and
+//     `event_type`
 //   - Arithmetic: `(value_json.field | float * N)` — multiply after float cast
 //
 // envelope is the raw JSON string published on the state topic. An empty
@@ -60,24 +63,24 @@ func evalTemplate(tmpl string, valueJSON map[string]any) string {
 	// This is the guard pattern used by valueJSONValueTemplate and
 	// valueJSONValueLowerTemplate. Both halves are evaluated:
 	//   - valueJSON == nil → return ""  (`is defined` fires)
-	//   - the `is not none` clause present AND value_json.value is JSON
+	//   - the `is not none` clause present AND value_json.val is JSON
 	//     null → return "" as well
 	//   - otherwise evaluate the inner block
 	//
 	// Evaluating the second clause rather than merely tolerating it is
 	// what makes it load-bearing here. While the regex only skipped over
-	// it, deleting `and value_json.value is not none` from production left
+	// it, deleting `and value_json.val is not none` from production left
 	// every guard in this package green — and the real Jinja renders
 	// `none | lower` as the literal string "none", which Home Assistant
 	// matches against neither payload_on nor payload_off.
-	ifDefinedRe := regexp.MustCompile(`(?s)\{%[-\s]*if\s+value_json\s+is\s+defined(\s+and\s+value_json\.value\s+is\s+not\s+none)?\s*[-\s]*%\}(.*?)\{%[-\s]*endif\s*[-\s]*%\}`)
+	ifDefinedRe := regexp.MustCompile(`(?s)\{%[-\s]*if\s+value_json\s+is\s+defined(\s+and\s+value_json\.val\s+is\s+not\s+none)?\s*[-\s]*%\}(.*?)\{%[-\s]*endif\s*[-\s]*%\}`)
 	if loc := ifDefinedRe.FindStringSubmatchIndex(tmpl); loc != nil {
 		if valueJSON == nil {
 			return ""
 		}
 		notNoneClause := loc[2] >= 0
 		if notNoneClause {
-			if v, ok := valueJSON["value"]; !ok || v == nil {
+			if v, ok := valueJSON["val"]; !ok || v == nil {
 				return ""
 			}
 		}
@@ -158,6 +161,21 @@ func splitPipeline(expr string) []string {
 // its Go value.
 func resolveValue(expr string, valueJSON map[string]any) any {
 	expr = strings.TrimSpace(expr)
+	if m := dictCallRe.FindStringSubmatch(expr); m != nil {
+		// `dict(mapping, key=value)`: a copy of mapping with key set. A
+		// mapping that does not resolve to an object starts empty, which is
+		// what Jinja's dict() of an undefined value is not — but the
+		// templates that use it always pass an object, and the empty start
+		// keeps a broken one visible in the rendered output.
+		out := map[string]any{}
+		if base, ok := resolveValue(m[1], valueJSON).(map[string]any); ok {
+			for k, v := range base {
+				out[k] = v
+			}
+		}
+		out[m[2]] = resolveValue(m[3], valueJSON)
+		return out
+	}
 	switch {
 	case expr == "value_json":
 		return valueJSON
@@ -189,6 +207,9 @@ func resolveValue(expr string, valueJSON map[string]any) any {
 		return expr // literal string
 	}
 }
+
+// dictCallRe matches `dict(<mapping>, <key>=<value>)`.
+var dictCallRe = regexp.MustCompile(`^dict\(\s*([^,]+?)\s*,\s*(\w+)\s*=\s*([^)]+?)\s*\)$`)
 
 // applyFilter applies a single Jinja filter (with optional args) to val.
 func applyFilter(filter string, val any) any {

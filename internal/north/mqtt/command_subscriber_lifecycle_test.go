@@ -88,8 +88,8 @@ func TestCommandSubscriberLifecycleContextCancelledLifecycle(t *testing.T) {
 	}
 
 	// Drive the data-point handler through the stub Subscriber.
-	ok := noop.DeliverInbound("openccu-loom/+/+/+/+/+/set",
-		"openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/STATE/set", []byte("true"))
+	ok := noop.DeliverInbound("openccu-loom/set/+/+/+/+/+/+",
+		"openccu-loom/set/ccu-01/HmIP-RF/0001ABCD/1/values/STATE", []byte("true"))
 	if !ok {
 		t.Fatal("subscription did not match topic filter")
 	}
@@ -122,8 +122,8 @@ func TestCommandSubscriberLifecycleContextLiveLifecycle(t *testing.T) {
 		t.Fatalf("Start: %v", err)
 	}
 
-	ok := noop.DeliverInbound("openccu-loom/+/+/+/+/+/set",
-		"openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/STATE/set", []byte("false"))
+	ok := noop.DeliverInbound("openccu-loom/set/+/+/+/+/+/+",
+		"openccu-loom/set/ccu-01/HmIP-RF/0001ABCD/1/values/STATE", []byte("false"))
 	if !ok {
 		t.Fatal("subscription did not match topic filter")
 	}
@@ -155,8 +155,8 @@ func TestCommandSubscriberLifecycleContextNilIgnored(t *testing.T) {
 		t.Fatalf("Start: %v", err)
 	}
 
-	ok := noop.DeliverInbound("openccu-loom/+/+/+/+/+/set",
-		"openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/STATE/set", []byte("true"))
+	ok := noop.DeliverInbound("openccu-loom/set/+/+/+/+/+/+",
+		"openccu-loom/set/ccu-01/HmIP-RF/0001ABCD/1/values/STATE", []byte("true"))
 	if !ok {
 		t.Fatal("subscription did not match topic filter")
 	}

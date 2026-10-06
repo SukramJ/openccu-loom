@@ -39,8 +39,8 @@ func TestE2EMQTTSubscriberRoutesToCCU(t *testing.T) {
 	// Publish a canonical raw-plane SET frame on the HmIP-RF interface.
 	// The daemon will fail to route it (no matching device in godevccu has
 	// that exact address), but the broker MUST count the inbound publish.
-	setTopic := "openccu-loom/ccu-e2e/HmIP-RF/VCU0000000/3/values/STATE/set"
-	if err := h.MQTT().Publish(setTopic, []byte(`{"value":true}`), false, 0); err != nil {
+	setTopic := "openccu-loom/set/ccu-e2e/HmIP-RF/VCU0000000/3/values/STATE"
+	if err := h.MQTT().Publish(setTopic, []byte(`{"val":true}`), false, 0); err != nil {
 		t.Fatalf("publish %s: %v", setTopic, err)
 	}
 

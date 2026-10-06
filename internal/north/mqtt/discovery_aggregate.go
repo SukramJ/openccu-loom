@@ -155,7 +155,7 @@ func (l channelEventTopicLayout) Availability(hamodel.Slot) string {
 }
 
 // Bridge implements the shared model's topic layout.
-func (l channelEventTopicLayout) Bridge() string { return l.d.TopicBuilder.BridgeStatus() }
+func (l channelEventTopicLayout) Bridge() string { return l.d.TopicBuilder.Connected() }
 
 // channelEventDiscoveryContext is the render context for this plane: the
 // standard one with this daemon's identity strings substituted.
@@ -171,6 +171,12 @@ type channelEventDiscoveryContext struct {
 
 	uniqueID string
 	nodeID   string
+}
+
+// Availability implements [hadiscovery.Context]: the standard resolution,
+// rewritten into the ADR 0083 vocabulary by [conventionAvailability].
+func (c channelEventDiscoveryContext) Availability(dev *hamodel.Device, e hamodel.Entity) []hadiscovery.AvailabilityEntry {
+	return conventionAvailability(c.StdContext.Availability(dev, e), c.Layout.Bridge())
 }
 
 // UniqueID implements [hadiscovery.Context] with the id this daemon already
@@ -244,14 +250,13 @@ func (d *DefaultDiscoveryBuilder) renderChannelEvent(s channelEventSpec) ([]byte
 			DeviceClass: hamodel.DeviceClass(s.deviceClass),
 			// Home Assistant's event platform requires the
 			// post-template payload to be parseable as JSON and reads
-			// `event_type` out of it itself. This daemon already
-			// publishes that envelope on the channel topic, so a
-			// template extracting the scalar would hand Home Assistant a
-			// bare string it then fails to parse — `No valid JSON event
-			// payload detected` in the log. The event platform DOES
-			// declare `value_template`, so the default envelope encoding
-			// would project one; suppress it explicitly.
-			ValueTemplate: hamodel.NoValueTemplate,
+			// `event_type` out of it itself. The channel item carries a
+			// status object with the type in `val`, so the template
+			// rebuilds that JSON — `event_type` from `val`, the rest from
+			// `hm` as event attributes. A template extracting the scalar
+			// would hand Home Assistant a bare string it then fails to
+			// parse — `No valid JSON event payload detected` in the log.
+			ValueTemplate: eventValueTemplate,
 		},
 		Binds: []hamodel.Binding{{
 			Role: hamodel.RoleState,
@@ -516,6 +521,12 @@ type aggregateDiscoveryContext struct {
 
 	uniqueID string
 	nodeID   string
+}
+
+// Availability implements [hadiscovery.Context]: the standard resolution,
+// rewritten into the ADR 0083 vocabulary by [conventionAvailability].
+func (c aggregateDiscoveryContext) Availability(dev *hamodel.Device, e hamodel.Entity) []hadiscovery.AvailabilityEntry {
+	return conventionAvailability(c.StdContext.Availability(dev, e), c.Layout.Bridge())
 }
 
 // UniqueID implements [hadiscovery.Context] with the id this daemon already
@@ -796,7 +807,7 @@ func (c discoveryCtx) ServiceMethodCommandTopic(method string) string {
 	return c.d.TopicBuilder.CustomDPServiceMethod(c.d.centralFor(c.ev), c.ev.Interface, slot, method)
 }
 
-// WireParameterCommandTopic is the per-parameter `/set` topic. An empty
+// WireParameterCommandTopic is the per-parameter `set` item. An empty
 // channelAddress means the channel this event names, which is what a slot
 // built by [payload.WireSlot] leaves unsaid.
 func (c discoveryCtx) WireParameterCommandTopic(channelAddress, parameter string) string {
@@ -809,7 +820,7 @@ func (c discoveryCtx) WireParameterCommandTopic(channelAddress, parameter string
 // WireParameterStateTopic is the canonical per-parameter state topic — the
 // same shape every consumer uses. Home Assistant reads the PerDPState envelope
 // `{"value": …, "available": …, "modified_at": …, "type": …, "unit": …}`
-// through a `value_json.value` template.
+// through a `value_json.val` template.
 func (c discoveryCtx) WireParameterStateTopic(channelAddress, parameter string) string {
 	address, channel := c.channelOf(channelAddress)
 	return c.d.TopicBuilder.ParameterState(
@@ -823,8 +834,8 @@ func (c discoveryCtx) DeviceAvailabilityTopic() string {
 	return c.d.TopicBuilder.DeviceAvailability(c.d.centralFor(c.ev), c.ev.Interface, c.ev.DeviceAddress)
 }
 
-// BridgeStatusTopic is the daemon's own LWT.
-func (c discoveryCtx) BridgeStatusTopic() string { return c.d.TopicBuilder.BridgeStatus() }
+// ConnectedTopic is the instance's `<base>/connected` topic, the Last Will.
+func (c discoveryCtx) ConnectedTopic() string { return c.d.TopicBuilder.Connected() }
 
 // channelOf resolves a `<device>:<n>` address to its parts, falling back to
 // the channel this event names.

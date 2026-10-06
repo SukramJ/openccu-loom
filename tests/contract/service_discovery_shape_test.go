@@ -122,23 +122,16 @@ func payloadKeys(m map[string]any) []string {
 	return out
 }
 
-// deliverOnTopic sends payload to sub's internal handler by parsing the
-// command_topic format and routing to the matching subscriber. Because
-// NoopClient.DeliverInbound requires the registered filter string, we
-// derive it from the topic structure.
+// CommandSubscriber registers its `set` routes below `<base>/set/`
+// (ADR 0083):
+//   - data point:      <base>/set/+/+/+/+/+/+            (8 segments)
+//   - service method:  <base>/set/+/+/+/+/custom/+/+     (9 segments)
+//   - week profile:    <base>/set/+/+/+/+/week_profile   (7 segments)
+//   - schedule switch: <base>/set/+/+/+/+/schedule/switch/+
 //
-// CommandSubscriber registers two data-point wildcards:
-//   - 8-segment: <base>/+/+/+/+/+/+/set  (bucket-aware)
-//   - 7-segment: <base>/+/+/+/+/+/set     (legacy)
-//   - service method: <base>/+/+/+/+/svc/+/set
-//
-// We must use the same NoopClient the subscriber was wired with, but
-// startSubscriber creates an internal one. This helper instead invokes
-// the internal handler directly through the public test surface (the
-// subscriber's exported handleDataPoint-equivalent behaviour). Since
-// CommandSubscriber handlers are package-private we use NoopClient's
-// DeliverInbound by reconstructing the subscriber with the caller-
-// supplied NoopClient.
+// Since CommandSubscriber handlers are package-private these tests deliver
+// through the NoopClient the subscriber was started with, which needs the
+// registered filter string — [topicFilter] derives it from the topic.
 func newSubscriberWithNoop(t *testing.T, sink *contractFakeSink, cdpSink *contractFakeCDPSink) (*mqtt.CommandSubscriber, *mqtt.NoopClient) {
 	t.Helper()
 	noop := mqtt.NewNoopClient()
@@ -156,24 +149,19 @@ func newSubscriberWithNoop(t *testing.T, sink *contractFakeSink, cdpSink *contra
 // topicFilter derives the registered wildcard filter for a concrete topic.
 func topicFilter(topic string) string {
 	parts := strings.Split(topic, "/")
-	switch len(parts) {
-	case 8:
-		// <base>/+/+/+/+/+/+/set — bucket-aware datapoint
-		if parts[len(parts)-1] == "set" && parts[5] != "svc" {
-			base := parts[0]
-			return base + "/+/+/+/+/+/+/set"
-		}
-		// <base>/+/+/+/+/svc/+/set — service method
-		if parts[5] == "svc" {
-			base := parts[0]
-			return base + "/+/+/+/+/svc/+/set"
-		}
-	case 7:
-		// <base>/+/+/+/+/+/set — legacy datapoint
-		if parts[len(parts)-1] == "set" {
-			base := parts[0]
-			return base + "/+/+/+/+/+/set"
-		}
+	if len(parts) < 7 || parts[1] != "set" {
+		return ""
+	}
+	set := parts[0] + "/set"
+	switch {
+	case len(parts) == 8:
+		return set + "/+/+/+/+/+/+"
+	case len(parts) == 9 && parts[6] == "custom":
+		return set + "/+/+/+/+/custom/+/+"
+	case len(parts) == 9 && parts[6] == "schedule" && parts[7] == "switch":
+		return set + "/+/+/+/+/schedule/switch/+"
+	case len(parts) == 7 && parts[6] == "week_profile":
+		return set + "/+/+/+/+/week_profile"
 	}
 	return ""
 }
@@ -183,7 +171,7 @@ func topicFilter(topic string) string {
 // TestServiceDiscoveryShape_Light_SchemaJson verifies that the HA Light
 // discovery payload for a dimmable Light (schema=json) declares a
 // command_topic that:
-//  1. Is subscribed by the CommandSubscriber (via the svc/set_level shape).
+//  1. Is subscribed by the CommandSubscriber (via the custom/<kind>/set_level shape).
 //  2. Accepts HA's canonical schema=json command `{"state":"ON","brightness":255}`.
 //  3. Routes through InvokeChannelService("set_level", ...) to the domain.
 //  4. The params map contains brightness=255 so the domain layer can
@@ -196,13 +184,13 @@ func TestServiceDiscoveryShape_Light_SchemaJson(t *testing.T) {
 
 	// We verify the discovery shape at the contract level — the Light
 	// custom-DP sets command_topic to ServiceMethodCommandTopic("set_level")
-	// which has the form `…/<ch>/svc/set_level/set` (8 segments). The
+	// which has the form `<base>/set/…/<ch>/custom/light/set_level` (9 segments). The
 	// CommandSubscriber's handleServiceMethod processes this shape.
 	//
 	// Rather than constructing a full Light (which requires a device/channel
 	// backing), we verify the shape contract directly using the per-parameter
 	// LEVEL discovery path (classifyComponent → HAComponentLight) and assert:
-	//  1. command_topic has the 8-segment bucket-aware shape (values/LEVEL/set).
+	//  1. command_topic has the 8-segment data-point shape (set/…/values/LEVEL).
 	//  2. Subscriber is registered for that shape.
 	//  3. An HA schema=json command `{"state":"ON","brightness":255}` is
 	//     correctly parsed as value=map[state:ON brightness:255] by
@@ -242,13 +230,14 @@ func TestServiceDiscoveryShape_Light_SchemaJson(t *testing.T) {
 		t.Fatal("light command_topic is empty")
 	}
 
-	// 2. The command_topic must use the 8-segment bucket-aware shape.
+	// 2. The command_topic must use the 8-segment data-point shape
+	//    `<base>/set/<central>/<iface>/<addr>/<ch>/<bucket>/<param>`.
 	parts := strings.Split(cmdTopic, "/")
 	if len(parts) != 8 {
-		t.Errorf("light command_topic %q has %d segments, want 8 (bucket-aware shape)", cmdTopic, len(parts))
+		t.Errorf("light command_topic %q has %d segments, want 8 (data-point shape)", cmdTopic, len(parts))
 	}
-	if len(parts) == 8 && parts[5] != "values" {
-		t.Errorf("light command_topic bucket segment = %q, want %q", parts[5], "values")
+	if len(parts) == 8 && (parts[1] != "set" || parts[6] != "values") {
+		t.Errorf("light command_topic function/bucket = %q/%q, want set/values", parts[1], parts[6])
 	}
 
 	// 3. CommandSubscriber must be registered for the 8-segment filter.
@@ -388,8 +377,8 @@ func TestServiceDiscoveryShape_Switch_Bucket8Segment(t *testing.T) {
 	if filter == "" {
 		t.Fatalf("could not derive filter from command_topic %q", cmdTopic)
 	}
-	if !strings.HasSuffix(filter, "/+/+/set") && !strings.HasSuffix(filter, "/+/set") {
-		t.Logf("filter: %q", filter)
+	if !strings.HasPrefix(filter, "openccu-loom/set/") {
+		t.Errorf("filter %q is not below the `set` function", filter)
 	}
 
 	// 4. Deliver payload_on from HA ("true") and assert it reaches wire.
@@ -523,7 +512,7 @@ func TestServiceDiscoveryShape_Lock_Bucket8Segment(t *testing.T) {
 
 // TestServiceDiscoveryShape_Climate_HvacMode verifies that the climate
 // discovery payload's mode_command_topic is a 7-segment service-method
-// topic (`…/<ch>/svc/set_mode/set`) and that the CommandSubscriber routes
+// topic (`<base>/set/…/<ch>/custom/climate/set_mode`) and that the CommandSubscriber routes
 // the scalar HA mode string `"heat"` through InvokeChannelService with
 // params["mode"]="heat".
 //
@@ -537,7 +526,7 @@ func TestServiceDiscoveryShape_Climate_HvacMode(t *testing.T) {
 	sub, noop := newSubscriberWithNoop(t, sink, cdpSink)
 
 	// Build the canonical ADR-0011 per-method command topic shape:
-	//   openccu-loom/ccu/HmIP-RF/AABBCC/1/custom/climate/set/set_mode  (9 parts)
+	//   openccu-loom/set/ccu/HmIP-RF/AABBCC/1/custom/climate/set_mode  (9 parts)
 	tb := mqtt.NewTopicBuilder("openccu-loom")
 	slot := payload.TopicSlot{Address: "AABBCC001122", Channel: 1, Bucket: payload.BucketCustom, Parameter: "climate"}
 	modeCmd := tb.CustomDPServiceMethod("ccu", "HmIP-RF", slot, "set_mode")
@@ -546,18 +535,18 @@ func TestServiceDiscoveryShape_Climate_HvacMode(t *testing.T) {
 	if len(parts) != 9 {
 		t.Errorf("service-method command topic %q has %d segments, want 9", modeCmd, len(parts))
 	}
-	if len(parts) == 9 && parts[5] != "custom" {
-		t.Errorf("service-method command topic segment[5] = %q, want %q", parts[5], "custom")
+	if len(parts) == 9 && parts[1] != "set" {
+		t.Errorf("service-method command topic segment[1] = %q, want the function %q", parts[1], "set")
 	}
-	if len(parts) == 9 && parts[7] != "set" {
-		t.Errorf("service-method command topic segment[7] = %q, want %q", parts[7], "set")
+	if len(parts) == 9 && parts[6] != "custom" {
+		t.Errorf("service-method command topic segment[6] = %q, want %q", parts[6], "custom")
 	}
 	if len(parts) == 9 && parts[8] != "set_mode" {
 		t.Errorf("service-method command topic method = %q, want %q", parts[8], "set_mode")
 	}
 
 	// Deliver synthetic HA mode command: HA sends "heat" (bare scalar).
-	svcFilter := "openccu-loom/+/+/+/+/custom/+/set/+"
+	svcFilter := "openccu-loom/set/+/+/+/+/custom/+/+"
 	ok := noop.DeliverInbound(svcFilter, modeCmd, []byte("heat"))
 	if !ok {
 		t.Fatalf("service-method topic %q NOT subscribed via filter %q", modeCmd, svcFilter)
@@ -607,13 +596,13 @@ func TestServiceDiscoveryShape_Cover_Position(t *testing.T) {
 	if len(parts) != 9 {
 		t.Errorf("set_position topic %q has %d segments, want 9", setPosCmd, len(parts))
 	}
-	if len(parts) == 9 && parts[5] != "custom" {
-		t.Errorf("set_position topic segment[5] = %q, want %q", parts[5], "custom")
+	if len(parts) == 9 && parts[6] != "custom" {
+		t.Errorf("set_position topic segment[6] = %q, want %q", parts[6], "custom")
 	}
 
 	// HA sends the set_position_template result; scalarPayloadToParams
 	// wraps "50" → {"position": 50.0}.
-	svcFilter := "openccu-loom/+/+/+/+/custom/+/set/+"
+	svcFilter := "openccu-loom/set/+/+/+/+/custom/+/+"
 	ok := noop.DeliverInbound(svcFilter, setPosCmd, []byte("50"))
 	if !ok {
 		t.Fatalf("set_position topic %q NOT subscribed via filter %q", setPosCmd, svcFilter)
@@ -881,7 +870,7 @@ func TestServiceDiscoveryShape_Cover_OpenCloseStop(t *testing.T) {
 
 	// The subscriber's service-method wildcard, reproduced independently
 	// so a drift on either side fails the comparison.
-	const svcFilter = base + "/+/+/+/+/custom/+/set/+"
+	const svcFilter = base + "/set/+/+/+/+/custom/+/+"
 	if !mqttFilterMatches(svcFilter, cmdTopic) {
 		t.Fatalf("command_topic %q does not match the service-method subscription %q — "+
 			"HA's cover buttons reach the broker and are dropped there", cmdTopic, svcFilter)

@@ -58,7 +58,7 @@ func (v *Irrigation) Config() payload.ConfigPayload {
 // State returns the live irrigation valve state.
 //
 // `is_open` is emitted unconditionally — HA's
-// `value_template={{ value_json.is_open }}` filter logs a warning on
+// `value_template={{ value_json.val.is_open }}` filter logs a warning on
 // every retained-state rebroadcast where the key is missing, before
 // the CCU has reported the actual state. Defaults to `false`
 // (closed) until the first wire event arrives.
@@ -116,7 +116,7 @@ func (v *Modulating) Config() payload.ConfigPayload {
 // State returns the live modulating valve state.
 //
 // `current_level_pct` is emitted unconditionally — HA's
-// `value_template={{ value_json.current_level_pct }}` filter logs a
+// `value_template={{ value_json.val.current_level_pct }}` filter logs a
 // warning on every retained-state rebroadcast where the key is
 // missing, before the CCU has reported the actual level. Defaults
 // to 0 (closed) until the first wire event arrives.
@@ -155,13 +155,13 @@ func (v *Irrigation) HADiscoveryEntity() hamodel.Entity {
 			// classification.
 			DeviceClass: "water",
 			// Render the HA-canonical state strings ("open" / "closed")
-			// directly: the bare `{{ value_json.is_open }}` form returns
+			// directly: the bare `{{ value_json.val.is_open }}` form returns
 			// Python's `True`/`False` (capitalised) and matches no
 			// state_open / state_closed permutation. HA logs `Payload
 			// received … is not one of [open, closed, opening, closing],
 			// got: False` until the explicit branch emits a matching
 			// string.
-			ValueTemplate: "{% if value_json.is_open %}open{% else %}closed{% endif %}",
+			ValueTemplate: "{% if value_json.val.is_open %}open{% else %}closed{% endif %}",
 			Optimistic:    new(false),
 		},
 		Binds: []hamodel.Binding{
@@ -204,7 +204,7 @@ func (v *Modulating) HADiscoveryEntity() hamodel.Entity {
 			// irrigation valves; modulating water-flow regulators inherit
 			// the same classification.
 			DeviceClass:   "water",
-			ValueTemplate: "{{ value_json.current_level_pct }}",
+			ValueTemplate: "{{ value_json.val.current_level_pct }}",
 			Optimistic:    new(false),
 		},
 		Binds: []hamodel.Binding{{

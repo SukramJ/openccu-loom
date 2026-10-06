@@ -72,7 +72,7 @@ func (c bindingDiscoveryCtx) WireParameterStateTopic(channelAddress, parameter s
 }
 
 func (bindingDiscoveryCtx) DeviceAvailabilityTopic() string { return "test/availability" }
-func (bindingDiscoveryCtx) BridgeStatusTopic() string       { return "test/bridge/status" }
+func (bindingDiscoveryCtx) ConnectedTopic() string          { return "test/bridge/status" }
 
 // putWireDP registers one wire data point on ch, choosing the generic
 // shape the device pipeline would resolve for the descriptor.

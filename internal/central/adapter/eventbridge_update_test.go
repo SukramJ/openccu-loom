@@ -84,7 +84,7 @@ func TestEventBridgePublishesUpdateForEveryDevice(t *testing.T) {
 	nonUpdatableUpdateState := 0
 
 	for _, p := range got {
-		if strings.HasSuffix(p.Topic, "/update") {
+		if statusSuffix(p.Topic, "/update") {
 			updateStateCount++
 			// Verify the JSON payload contains the "firmware" key.
 			if !strings.Contains(string(p.Payload), `"firmware"`) {

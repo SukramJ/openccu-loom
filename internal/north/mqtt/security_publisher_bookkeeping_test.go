@@ -48,7 +48,7 @@ func TestSecurityPlaneIsVisibleToTheBridge(t *testing.T) {
 	obs.settle(t, p)
 
 	// Every retained topic the plane wrote must be in the index.
-	prefix := base + "/security/"
+	prefix := base + "/status/security/"
 	var retained []string
 	for _, rec := range obs.records() {
 		if strings.HasPrefix(rec.topic, prefix) && rec.retain && rec.payload != "" {
@@ -93,10 +93,10 @@ func TestSecurityPlanePublishErrorsAreCounted(t *testing.T) {
 
 	ctx := context.Background()
 	topic := securityStateTopic("openccu-loom", "state")
-	if err := bridge.PublishSecurityState(ctx, topic, []byte(`{"state":"ok"}`)); err == nil {
+	if err := bridge.PublishSecurityState(ctx, topic, "ok", map[string]any{}); err == nil {
 		t.Fatal("PublishSecurityState: want the broker error to propagate")
 	}
-	if err := bridge.PublishSecurityEvent(ctx, securityStateTopic("openccu-loom", "event"), []byte(`{}`)); err == nil {
+	if err := bridge.PublishSecurityEvent(ctx, securityStateTopic("openccu-loom", "event"), "triggered", map[string]any{}, time.Time{}); err == nil {
 		t.Fatal("PublishSecurityEvent: want the broker error to propagate")
 	}
 	if err := bridge.RetractSecurityState(ctx, topic); err == nil {

@@ -3,11 +3,31 @@
 
 package mqtt
 
-import "github.com/SukramJ/openccu-loom/pkg/hmenum"
+import (
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
 
-// stateValueTemplate extracts the state from the JSON payload that
-// doubles as the attribute source.
-const stateValueTemplate = "{{ value_json.state }}"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+)
+
+// The security aggregates are status objects (ADR 0083): the primary value —
+// the folded severity, an ON/OFF flag as a boolean, a zone's source count —
+// is `val`, and the facets travel under `hm`, which doubles as the entity's
+// attribute source. The retained last-report documents have no primary
+// value and are `val` whole.
+const (
+	// stateValueTemplate extracts the primary value.
+	stateValueTemplate = hadiscovery.StatusValueTemplate
+	// stateBoolTemplate extracts a boolean primary value as `true`/`false`,
+	// the payloads the binary sensors declare.
+	stateBoolTemplate = hadiscovery.StatusBoolValueTemplate
+	// reportTimestampTemplate reads a last-report document's time.
+	reportTimestampTemplate = "{{ value_json.val.at | default('') }}"
+	// eventValueTemplate turns an event's status object back into the
+	// JSON document Home Assistant's event platform parses: the type from
+	// `val` as `event_type`, the rest of the event from `hm` as its
+	// attributes.
+	eventValueTemplate = "{{ dict(value_json.hm, event_type=value_json.val) | tojson }}"
+)
 
 // securitySystemEntities are the entities that exist regardless of what
 // the installation has: the folded state, the two aggregate flags, the
@@ -42,8 +62,8 @@ func securitySystemEntities(tr func(key, fallback string) string) []securityEnti
 			component: HAComponentBinarySensor, key: "alarm",
 			name:        tr("security.entity.alarm", "Security alarm"),
 			deviceClass: "safety",
-			payloadOn:   "ON", payloadOff: "OFF",
-			valueTemplate:    stateValueTemplate,
+			payloadOn:   hadiscovery.PayloadTrue, payloadOff: hadiscovery.PayloadFalse,
+			valueTemplate:    stateBoolTemplate,
 			jsonAttributes:   true,
 			enabledByDefault: true,
 		},
@@ -51,8 +71,8 @@ func securitySystemEntities(tr func(key, fallback string) string) []securityEnti
 			component: HAComponentBinarySensor, key: "problem",
 			name:        tr("security.entity.problem", "Security problem"),
 			deviceClass: "problem",
-			payloadOn:   "ON", payloadOff: "OFF",
-			valueTemplate:    stateValueTemplate,
+			payloadOn:   hadiscovery.PayloadTrue, payloadOff: hadiscovery.PayloadFalse,
+			valueTemplate:    stateBoolTemplate,
 			jsonAttributes:   true,
 			diagnostic:       true,
 			enabledByDefault: true,
@@ -61,7 +81,8 @@ func securitySystemEntities(tr func(key, fallback string) string) []securityEnti
 			component: HAComponentBinarySensor, key: "health",
 			name:        tr("security.entity.health", "Alarm engine problem"),
 			deviceClass: "problem",
-			payloadOn:   "ON", payloadOff: "OFF",
+			payloadOn:   hadiscovery.PayloadTrue, payloadOff: hadiscovery.PayloadFalse,
+			valueTemplate:    stateBoolTemplate,
 			diagnostic:       true,
 			enabledByDefault: true,
 		},
@@ -69,16 +90,18 @@ func securitySystemEntities(tr func(key, fallback string) string) []securityEnti
 			component: HAComponentSensor, key: "last_alarm",
 			name:             tr("security.entity.last_alarm", "Last security alarm"),
 			deviceClass:      "timestamp",
-			valueTemplate:    "{{ value_json.at | default('') }}",
+			valueTemplate:    reportTimestampTemplate,
 			jsonAttributes:   true,
+			attributesInVal:  true,
 			enabledByDefault: true,
 		},
 		{
 			component: HAComponentSensor, key: "last_fault",
 			name:             tr("security.entity.last_fault", "Last security fault"),
 			deviceClass:      "timestamp",
-			valueTemplate:    "{{ value_json.at | default('') }}",
+			valueTemplate:    reportTimestampTemplate,
 			jsonAttributes:   true,
+			attributesInVal:  true,
 			diagnostic:       true,
 			enabledByDefault: true,
 		},
@@ -108,9 +131,9 @@ func securityClassEntity(base string, class hmenum.SecurityClass, tr func(key, f
 		topic:            securityClassTopic(base, class),
 		name:             tr("security.entity.class."+string(class), string(class)),
 		deviceClass:      securityClassDeviceClass[class],
-		payloadOn:        "ON",
-		payloadOff:       "OFF",
-		valueTemplate:    stateValueTemplate,
+		payloadOn:        hadiscovery.PayloadTrue,
+		payloadOff:       hadiscovery.PayloadFalse,
+		valueTemplate:    stateBoolTemplate,
 		jsonAttributes:   true,
 		diagnostic:       class.Diagnostic(),
 		enabledByDefault: true,

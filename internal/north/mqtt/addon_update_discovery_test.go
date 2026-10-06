@@ -23,8 +23,13 @@ func TestBuildAddonUpdateDiscovery_NoValueOrInProgressTemplate(t *testing.T) {
 		t.Fatalf("component=%q want update", item.Component)
 	}
 	m := jsonMap(t, item)
-	if _, ok := m["value_template"]; ok {
-		t.Error("value_template must not be set: it prevents HA from reading in_progress out of the state JSON")
+	// The status item carries the update document as its `val` (ADR 0083).
+	// The template must hand that document over whole, as JSON, so HA's
+	// update platform still parses in_progress natively; a template
+	// narrowing it to a scalar (`value_json.val.installed_version`) would
+	// silence the in-progress indication again.
+	if vt, _ := m["value_template"].(string); vt != updateDocumentTemplate {
+		t.Errorf("value_template = %q, want %q — the whole status-object value as JSON", vt, updateDocumentTemplate)
 	}
 	if _, ok := m["in_progress_template"]; ok {
 		t.Error("in_progress_template is not an HA MQTT update option and is silently dropped")

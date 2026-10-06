@@ -108,7 +108,7 @@ func (l notifyTopicLayout) Availability(hamodel.Slot) string {
 }
 
 // Bridge implements the shared model's topic layout.
-func (l notifyTopicLayout) Bridge() string { return l.d.TopicBuilder.BridgeStatus() }
+func (l notifyTopicLayout) Bridge() string { return l.d.TopicBuilder.Connected() }
 
 // notifyDiscoveryContext is the render context for the notify plane: the
 // standard one, with this daemon's three identity strings substituted.
@@ -124,6 +124,12 @@ type notifyDiscoveryContext struct {
 	ev       Event
 	uniqueID string
 	nodeID   string
+}
+
+// Availability implements [hadiscovery.Context]: the standard resolution,
+// rewritten into the ADR 0083 vocabulary by [conventionAvailability].
+func (c notifyDiscoveryContext) Availability(dev *hamodel.Device, e hamodel.Entity) []hadiscovery.AvailabilityEntry {
+	return conventionAvailability(c.StdContext.Availability(dev, e), c.Layout.Bridge())
 }
 
 // UniqueID implements [hadiscovery.Context] with the id this daemon already

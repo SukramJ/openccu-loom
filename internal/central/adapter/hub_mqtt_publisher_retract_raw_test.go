@@ -62,7 +62,7 @@ func TestRetractCentralClearsRawPlaneHubState(t *testing.T) {
 			published[p.Topic] = true
 		}
 	}
-	wantMarkers := []string{"hub/programs/prog-9/state", "hub/sysvars/", "hub/update"}
+	wantMarkers := []string{"hub/programs/prog-9/active", "hub/sysvars/", "hub/update"}
 	for _, marker := range wantMarkers {
 		found := false
 		for topic := range published {

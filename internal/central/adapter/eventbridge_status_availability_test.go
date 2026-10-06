@@ -27,7 +27,7 @@ func latestSlotPayload(pub *mqtt.NoopClient, param string) string {
 	suffix := "/values/" + param
 	latest := ""
 	for _, p := range pub.Published() {
-		if strings.HasSuffix(p.Topic, suffix) {
+		if statusSuffix(p.Topic, suffix) {
 			latest = string(p.Payload)
 		}
 	}

@@ -26,31 +26,31 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
-// valueJSONValueTemplate is the canonical Jinja extractor for the
-// PerDPState `value` field. The defensive guard renders empty (so HA
-// falls back to the "unknown" entity state) in two cases:
+// valueJSONValueTemplate is the canonical Jinja extractor for the status
+// object's `val` (ADR 0083). The defensive guard renders empty (so HA falls
+// back to the "unknown" entity state) in two cases:
 //
 //   - `value_json is defined` — the payload is not the empty retained
 //     eviction body (the `'value_json' is undefined` template error HA
 //     otherwise raises).
-//   - `value_json.value is not none` — the DP is registered but has not
+//   - `value_json.val is not none` — the DP is registered but has not
 //     reported a value yet (the unobserved-DP boot path publishes
-//     `{"value":null,"available":true}`). Without this clause
-//     `{{ value_json.value }}` renders the literal string "None".
+//     `{"val":null,…,"hm":{"available":true}}`). Without this clause
+//     `{{ value_json.val }}` renders the literal string "None".
 //
 // The entity stays available (the per-device + per-DP availability
 // topics resolve to online); only its value reads "unknown" until the
 // CCU pushes a real value.
-const valueJSONValueTemplate = `{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}`
+const valueJSONValueTemplate = `{% if value_json is defined and value_json.val is not none %}{{ value_json.val }}{% endif %}`
 
 // valueJSONValueLowerTemplate is the boolean-aware variant used for
-// switch / lock / binary_sensor entities. PerDPState carries Python-
-// boolean rendering (`{"value":true}` → Jinja `True`/`False` with
-// capitalised initial), but HA compares to lowercase tokens
-// (`payload_on:"true"`, `payload_off:"false"`). Pipe through `| lower`
-// so the comparison is case-stable. Same guard semantics as the
-// non-lower variant (`none | lower` would otherwise render "none").
-const valueJSONValueLowerTemplate = `{% if value_json is defined and value_json.value is not none %}{{ value_json.value | lower }}{% endif %}`
+// switch / lock / binary_sensor entities. The status object carries a JSON
+// boolean (`{"val":true}` → Jinja `True`/`False` with capitalised initial),
+// but HA compares to lowercase tokens (`payload_on:"true"`,
+// `payload_off:"false"`). Pipe through `| lower` so the comparison is
+// case-stable. Same guard semantics as the non-lower variant (`none | lower`
+// would otherwise render "none").
+const valueJSONValueLowerTemplate = `{% if value_json is defined and value_json.val is not none %}{{ value_json.val | lower }}{% endif %}`
 
 // enumOptionTemplates builds the pair of templates that let an entity
 // display a localised enum option while still writing the CCU's own
@@ -79,8 +79,8 @@ func enumOptionTemplates(values, labels []string) (valueTemplate, commandTemplat
 		state.WriteString(jinjaQuote(v) + ": " + jinjaQuote(labels[i]))
 		command.WriteString(jinjaQuote(labels[i]) + ": " + jinjaQuote(v))
 	}
-	state.WriteString(`} %}{% if value_json is defined and value_json.value is not none %}` +
-		`{{ m.get(value_json.value, value_json.value) }}{% endif %}`)
+	state.WriteString(`} %}{% if value_json is defined and value_json.val is not none %}` +
+		`{{ m.get(value_json.val, value_json.val) }}{% endif %}`)
 	command.WriteString(`} %}{{ m.get(value, value) }}`)
 	return state.String(), command.String()
 }
@@ -559,7 +559,7 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 			state:   stateTopic,
 			command: commandTopic,
 			device:  d.TopicBuilder.DeviceAvailability(central, ev.Interface, ev.DeviceAddress),
-			bridge:  d.TopicBuilder.BridgeStatus(),
+			bridge:  d.TopicBuilder.Connected(),
 		},
 		Lang:       d.Locale,
 		Translator: d.tr,
@@ -932,20 +932,20 @@ func resolveMultiplier(ev Event, override *float64) (float64, bool) {
 
 // applyMultiplierSensor patches body["value_template"] when ev.Channel or
 // override reports a non-trivial multiplier for ev.Parameter. The emitted
-// Jinja template multiplies the wire scalar — `value_json.value` on a
-// state topic, the bare payload on a raw one — by the multiplier.
+// Jinja template multiplies the status object's scalar `value_json.val` by
+// the multiplier.
 func applyMultiplierSensor(ev Event, entity *hadiscovery.Component, override *float64) {
 	m, nontrivial := resolveMultiplier(ev, override)
 	if !nontrivial {
 		return
 	}
-	// State topics carry the JSON envelope (ADR 0011); the multiplied
-	// template pulls value_json.value, wrapped in the defined/not-none
+	// Status items carry the status object (ADR 0083); the multiplied
+	// template pulls value_json.val, wrapped in the defined/not-none
 	// guard so HA renders empty (entity "unknown") when the slot carries
 	// no payload yet (empty eviction body) or a null value (unobserved
 	// DP boot publish) rather than logging Jinja errors or rendering a
 	// misleading multiplied 0.0.
-	entity.ValueTemplate = fmt.Sprintf("{%% if value_json is defined and value_json.value is not none %%}{{ (value_json.value | float * %s) }}{%% endif %%}", formatMultiplier(m))
+	entity.ValueTemplate = fmt.Sprintf("{%% if value_json is defined and value_json.val is not none %%}{{ (value_json.val | float * %s) }}{%% endif %%}", formatMultiplier(m))
 }
 
 // applyMultiplierNumber patches the component so HA scales `min`/`max`/`step`
@@ -956,12 +956,12 @@ func applyMultiplierNumber(ev Event, entity *hadiscovery.Component, override *fl
 		return
 	}
 	mStr := formatMultiplier(m)
-	// State topics carry JSON; the multiplied template pulls
-	// value_json.value (ADR 0011 — JSON is the only supported shape).
+	// Status items carry the status object; the multiplied template pulls
+	// value_json.val (ADR 0083).
 	// The defined/not-none guard renders empty (entity "unknown") for
 	// the empty eviction body or an unobserved null value instead of a
 	// misleading multiplied 0.0.
-	entity.ValueTemplate = fmt.Sprintf("{%% if value_json is defined and value_json.value is not none %%}{{ (value_json.value | float * %s) }}{%% endif %%}", mStr)
+	entity.ValueTemplate = fmt.Sprintf("{%% if value_json is defined and value_json.val is not none %%}{{ (value_json.val | float * %s) }}{%% endif %%}", mStr)
 	// Write template — invert (HA-supplied value / multiplier).
 	entity.CommandTemplate = fmt.Sprintf("{{ (value | float / %s) }}", mStr)
 	// Bounds — multiply min/max/step if the component already carries them

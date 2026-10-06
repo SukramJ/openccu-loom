@@ -220,8 +220,8 @@ func TestBuildPressButton(t *testing.T) {
 		t.Fatalf("unique_id=%v want loom_11a0001234_hmip_rcv_1_12_press_short", m["unique_id"])
 	}
 	cmd, _ := m["command_topic"].(string)
-	if !strings.HasSuffix(cmd, "/values/PRESS_SHORT/set") {
-		t.Fatalf("command_topic=%q want .../values/PRESS_SHORT/set", cmd)
+	if !strings.HasSuffix(cmd, "/values/PRESS_SHORT") || !strings.Contains(cmd, "/set/") {
+		t.Fatalf("command_topic=%q want <base>/set/.../values/PRESS_SHORT", cmd)
 	}
 	if m["payload_press"] != "PRESS" {
 		t.Fatalf("payload_press=%v want PRESS", m["payload_press"])

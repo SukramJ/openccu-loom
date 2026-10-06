@@ -387,3 +387,43 @@ func TestRestart_AuditNoteCarriesOutcome(t *testing.T) {
 		}
 	}
 }
+
+// TestRequestRestart_SharesTheLatchWithTheRESTHandler pins the MQTT restart
+// path (ADR 0083, `maintenance/set/restart`) onto the REST handler's
+// contract: one latch, one SIGTERM, and an audit entry attributed to the
+// caller's user. A restart requested on both surfaces at once signals once.
+//
+// Falsifiability: give RequestRestart a latch of its own and the REST
+// request after it reports `shutdown_signalled` and a second signal lands.
+func TestRequestRestart_SharesTheLatchWithTheRESTHandler(t *testing.T) {
+	env := newRestartTestEnv(t)
+	rec := audit.NewBuffer(10)
+
+	if !RequestRestart(rec, "mqtt:maintenance/set/restart") {
+		t.Fatal("the first restart request did not claim the signal")
+	}
+	if got := env.post(t, Restart(rec)); got != "shutdown_in_progress" {
+		t.Fatalf("REST status after an MQTT restart = %q, want shutdown_in_progress", got)
+	}
+	if RequestRestart(rec, "mqtt:maintenance/set/restart") {
+		t.Fatal("a second restart request inside the grace window claimed the signal again")
+	}
+	env.awaitSignals(t, 1)
+
+	entries := rec.List(10)
+	if len(entries) != 3 {
+		t.Fatalf("audit entries=%d, want 3 (every request is recorded)", len(entries))
+	}
+	var mqttEntries int
+	for _, e := range entries {
+		if e.Action != audit.ActionSystemRestartRequested {
+			t.Errorf("audit action = %q, want %q", e.Action, audit.ActionSystemRestartRequested)
+		}
+		if e.User == "mqtt:maintenance/set/restart" {
+			mqttEntries++
+		}
+	}
+	if mqttEntries != 2 {
+		t.Errorf("audit entries attributed to the MQTT surface = %d, want 2", mqttEntries)
+	}
+}

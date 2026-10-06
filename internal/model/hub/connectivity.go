@@ -170,7 +170,7 @@ func (c *Connectivity) TranslationKey() string { return "interface_connectivity"
 func (*Connectivity) EnabledByDefault() bool { return true }
 
 // MQTTTopicsForInterface returns the canonical ADR-0011 connectivity
-// topic `<base>/<central>/hub/connectivity/<iface>` for one interface.
+// item `<base>/status/<central>/hub/connectivity/<iface>` for one interface.
 // Connectivity is a multi-interface aggregate, so callers parametrise
 // over the interface ID rather than calling [payload.MQTTAddressable]
 // on the aggregate as a whole.

@@ -81,18 +81,22 @@ func TestE2EReconnectReseedsValuesChangedDuringDowntime(t *testing.T) {
 	want := !beforeBool
 	t.Logf("%s before the outage: %v; will change it to %v during the downtime", dpPath, before, want)
 
-	statusTopic := "openccu-loom/ccu-e2e/system/status"
+	statusTopic := "openccu-loom/status/ccu-e2e/system/status"
 	unhealthy := make(chan struct{}, 1)
 	healthy := make(chan struct{}, 1)
 	if err := h.MQTT().Subscribe(statusTopic, func(_ string, payload []byte, _ bool) {
+		// A status object (ADR 0083): the event's fields are under `hm`.
 		var p struct {
-			Healthy bool `json:"healthy"`
+			Val json.RawMessage `json:"val"`
+			HM  *struct {
+				Healthy bool `json:"healthy"`
+			} `json:"hm"`
 		}
-		if json.Unmarshal(payload, &p) != nil {
+		if json.Unmarshal(payload, &p) != nil || p.Val == nil || p.HM == nil {
 			return
 		}
 		target := unhealthy
-		if p.Healthy {
+		if p.HM.Healthy {
 			target = healthy
 		}
 		select {

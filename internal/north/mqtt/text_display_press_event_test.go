@@ -235,10 +235,11 @@ func TestPressTypeDiscoveryPayloadHasEventTypes(t *testing.T) {
 		t.Errorf("device_class=%v want \"button\"", dc)
 	}
 
-	// value_template must be ABSENT — HA reads `event_type` directly
-	// from the JSON envelope without a template.
-	if _, present := payload["value_template"]; present {
-		t.Errorf("value_template must be absent from event discovery payload (HA parses raw JSON)")
+	// The template must rebuild the event document HA parses: the status
+	// object carries the type in `val` (ADR 0083), so without it HA finds no
+	// `event_type`, and a scalar template breaks the JSON parse.
+	if got := payload["value_template"]; got != eventValueTemplate {
+		t.Errorf("value_template = %v, want the event-document template %q", got, eventValueTemplate)
 	}
 }
 

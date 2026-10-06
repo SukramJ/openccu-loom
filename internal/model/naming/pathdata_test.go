@@ -112,15 +112,15 @@ func TestPathData_MQTTState(t *testing.T) {
 	t.Parallel()
 	pd := NewDataPointPathData("", wireHmIPRF, "VCU1234567", 1, model.BucketValues, "STATE")
 	got := pd.MQTTState("openccu-loom", "ccu-1")
-	want := "openccu-loom/ccu-1/HmIP-RF/VCU1234567/1/values/STATE"
+	want := "openccu-loom/status/ccu-1/HmIP-RF/VCU1234567/1/values/STATE"
 	if got != want {
 		t.Errorf("MQTTState = %q, want %q", got, want)
 	}
-	if cmd := pd.MQTTCommand("openccu-loom", "ccu-1"); cmd != want+"/set" {
-		t.Errorf("MQTTCommand = %q, want %q", cmd, want+"/set")
+	if cmd := pd.MQTTCommand("openccu-loom", "ccu-1"); cmd != "openccu-loom/set/ccu-1/HmIP-RF/VCU1234567/1/values/STATE" {
+		t.Errorf("MQTTCommand = %q, want %q", cmd, "openccu-loom/set/…")
 	}
-	if cfg := pd.MQTTConfig("openccu-loom", "ccu-1"); cfg != want+"/config" {
-		t.Errorf("MQTTConfig = %q, want %q", cfg, want+"/config")
+	if cfg := pd.MQTTConfig("openccu-loom", "ccu-1"); cfg != "openccu-loom/meta/ccu-1/HmIP-RF/VCU1234567/1/values/STATE" {
+		t.Errorf("MQTTConfig = %q, want %q", cfg, "openccu-loom/meta/…")
 	}
 }
 

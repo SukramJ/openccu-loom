@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -142,14 +141,13 @@ func TestEventBridgeValueChanged_LevelDisplayValue(t *testing.T) {
 	found := false
 	for _, p := range pub.Published() {
 		// The per-parameter slot-state topic ends in the bare parameter
-		// name (…/values/LEVEL); its /config companion carries the
-		// static descriptor (unit, multiplier, …) under a disjoint JSON
-		// shape with no "value" key, so the decode below naturally skips it.
-		if !strings.HasSuffix(p.Topic, "/LEVEL") {
+		// name (…/values/LEVEL); its `meta` companion is excluded by
+		// statusSuffix. The value is the status object's `val`.
+		if !statusSuffix(p.Topic, "/LEVEL") {
 			continue
 		}
 		var state struct {
-			Value        json.Number `json:"value"`
+			Value        json.Number `json:"val"`
 			DisplayValue *float64    `json:"display_value"`
 		}
 		if err := json.Unmarshal(p.Payload, &state); err != nil {

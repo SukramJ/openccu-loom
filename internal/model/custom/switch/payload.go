@@ -29,11 +29,11 @@ var (
 	_ payload.HADiscoveryEntityBuilder = (*AccessPermission)(nil)
 )
 
-// switchValueTemplate reads the STATE envelope's scalar as a lower-cased
+// switchValueTemplate reads the STATE status object's `val` as a lower-cased
 // string.
 //
-// The PerDPState envelope carries the value as a JSON boolean
-// (`{"value":true,…}`). Jinja's default rendering of a Python boolean is
+// The status object carries the value as a JSON boolean
+// (`{"val":true,…}`, ADR 0083). Jinja's default rendering of a Python boolean is
 // `True`/`False` (capitalised) — that would never match `state_on`/`state_off`
 // ("true"/"false"), leaving every switch entity stuck in `unknown`. Piping the
 // scalar through `| lower` makes the comparison case-insensitive. The
@@ -41,15 +41,15 @@ var (
 // Assistant reads an empty retained payload (unobserved DPs after a
 // register-and-load-data cycle); without it it logs `'value_json' is
 // undefined` template errors. The `value is not none` clause covers the
-// registered-but-unobserved DP, whose envelope is
-// `{"value":null,"available":true}` — `none | lower` renders the literal
+// registered-but-unobserved DP, whose status object is
+// `{"val":null,…,"hm":{"available":true}}` — `none | lower` renders the literal
 // string "none", which matches neither `state_on` nor `state_off` and leaves
 // the entity in a wrong state rather than in "unknown".
 //
 // This is the same rule the per-parameter discovery plane applies
 // (valueJSONValueLowerTemplate in internal/north/mqtt/discovery.go) to the
-// same envelope on the same topic; the two spellings must not drift.
-const switchValueTemplate = `{% if value_json is defined and value_json.value is not none %}{{ value_json.value | lower }}{% endif %}`
+// same status object on the same topic; the two spellings must not drift.
+const switchValueTemplate = `{% if value_json is defined and value_json.val is not none %}{{ value_json.val | lower }}{% endif %}`
 
 // switchFields is the HA switch platform's own payload vocabulary, shared by
 // the plain switch and the access permission: both mirror the Generic-Switch

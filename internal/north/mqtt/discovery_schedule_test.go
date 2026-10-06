@@ -174,8 +174,8 @@ func TestPublishScheduleEntityState(t *testing.T) {
 					t.Fatal("expected a state publish")
 				}
 				last := pub.sent[len(pub.sent)-1]
-				if last.payload != tc.wantBody {
-					t.Errorf("payload = %q, want %q", last.payload, tc.wantBody)
+				if v := statusVal(last.payload); v != tc.wantBody {
+					t.Errorf("payload = %q, want a status object with val %q", last.payload, tc.wantBody)
 				}
 			} else if len(pub.sent) != 0 {
 				t.Fatalf("expected no publish when raw disabled, got %d", len(pub.sent))
@@ -197,9 +197,11 @@ func TestPublishScheduleEntityAttrs(t *testing.T) {
 		if len(pub.sent) == 0 {
 			t.Fatal("expected an attrs publish")
 		}
+		// The attributes document has no primary value, so it is the status
+		// object's `val` whole.
 		var got map[string]any
-		if err := json.Unmarshal([]byte(pub.sent[len(pub.sent)-1].payload), &got); err != nil {
-			t.Fatalf("attrs payload not valid JSON: %v", err)
+		if err := json.Unmarshal([]byte(statusVal(pub.sent[len(pub.sent)-1].payload)), &got); err != nil {
+			t.Fatalf("attrs payload is not a status object carrying a JSON object: %v", err)
 		}
 		if got["p1"] != "07:00-09:00" {
 			t.Errorf("p1 = %v, want 07:00-09:00", got["p1"])
@@ -216,8 +218,8 @@ func TestPublishScheduleEntityAttrs(t *testing.T) {
 		if len(pub.sent) == 0 {
 			t.Fatal("expected an attrs publish")
 		}
-		if pub.sent[len(pub.sent)-1].payload != "{}" {
-			t.Errorf("payload = %q, want {}", pub.sent[len(pub.sent)-1].payload)
+		if v := statusVal(pub.sent[len(pub.sent)-1].payload); v != "{}" {
+			t.Errorf("payload = %q, want a status object with val {}", pub.sent[len(pub.sent)-1].payload)
 		}
 	})
 
@@ -335,8 +337,8 @@ func TestPublishScheduleSwitchState(t *testing.T) {
 					t.Fatal("expected a state publish")
 				}
 				last := pub.sent[len(pub.sent)-1]
-				if last.payload != tc.wantBody {
-					t.Errorf("payload = %q, want %q", last.payload, tc.wantBody)
+				if v := statusVal(last.payload); v != tc.wantBody {
+					t.Errorf("payload = %q, want a status object with val %q", last.payload, tc.wantBody)
 				}
 				if !last.retain {
 					t.Error("expected the state publish to be retained")

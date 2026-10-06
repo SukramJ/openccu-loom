@@ -42,10 +42,10 @@ func TestSecurityQueueDropsTheNewestAndSaysSo(t *testing.T) {
 	p := NewSecurityMQTTPublisher(staticSecuritySnapshot{roundTripSnapshot()},
 		NewWiring(bridge, slog.Default()), "en", "", slog.Default())
 
-	first := securityMsg{kind: securityMsgRetract, topic: "openccu-loom/security/zone/gone"}
+	first := securityMsg{kind: securityMsgRetract, topic: "openccu-loom/status/security/zone/gone"}
 	p.enqueue(first)
 	for i := range cap(p.msgCh) {
-		p.enqueue(securityMsg{topic: "openccu-loom/security/filler", payload: []byte{byte(i)}})
+		p.enqueue(securityMsg{topic: "openccu-loom/status/security/filler", val: i})
 	}
 
 	if got := col.PublishErrors("").Value(); got == 0 {
@@ -171,7 +171,7 @@ func TestAvailabilityIsAlwaysQoS1(t *testing.T) {
 
 	seen := 0
 	for _, rec := range mp.sent {
-		if !strings.HasSuffix(rec.topic, "/availability") {
+		if !strings.HasSuffix(rec.topic, "/online") {
 			continue
 		}
 		seen++

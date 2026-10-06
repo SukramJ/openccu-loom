@@ -165,7 +165,7 @@ func TestCommandSubscriberParsesEveryShapeRelativeToTheTopicBase(t *testing.T) {
 	}{
 		{
 			name:   "datapoint values bucket",
-			filter: "/+/+/+/+/+/+/set",
+			filter: "/set/+/+/+/+/+/+",
 			topic: func(b *TopicBuilder) string {
 				return b.ParameterCommand(central, iface, addr, 1, payload.BucketValues, "STATE")
 			},
@@ -183,7 +183,7 @@ func TestCommandSubscriberParsesEveryShapeRelativeToTheTopicBase(t *testing.T) {
 		},
 		{
 			name:   "datapoint master bucket",
-			filter: "/+/+/+/+/+/+/set",
+			filter: "/set/+/+/+/+/+/+",
 			topic: func(b *TopicBuilder) string {
 				return b.ParameterCommand(central, iface, addr, 1, payload.BucketMaster, "TEMPERATURE_MINIMUM")
 			},
@@ -199,12 +199,13 @@ func TestCommandSubscriberParsesEveryShapeRelativeToTheTopicBase(t *testing.T) {
 			},
 		},
 		{
-			name:   "datapoint legacy bucket-less shape",
-			filter: "/+/+/+/+/+/set",
+			// mqtt-smarthome 2.0 §5.3: `{"val": x}` is the plain value x.
+			name:   "datapoint value wrapped in val",
+			filter: "/set/+/+/+/+/+/+",
 			topic: func(b *TopicBuilder) string {
-				return b.Base + "/" + central + "/" + iface + "/" + addr + "/1/STATE/set"
+				return b.ParameterCommand(central, iface, addr, 1, payload.BucketValues, "STATE")
 			},
-			body: []byte("false"),
+			body: []byte(`{"val": false}`),
 			want: func(t *testing.T, s *commandPlaneSinks) {
 				t.Helper()
 				if n := s.values.setValues.Load(); n != 1 {
@@ -217,7 +218,7 @@ func TestCommandSubscriberParsesEveryShapeRelativeToTheTopicBase(t *testing.T) {
 		},
 		{
 			name:   "sysvar",
-			filter: "/+/hub/sysvars/+/set",
+			filter: "/set/+/hub/sysvars/+",
 			topic: func(b *TopicBuilder) string {
 				return naming.MQTTHubSysvarCommand(b.Base, central, "Sunset")
 			},
@@ -234,7 +235,7 @@ func TestCommandSubscriberParsesEveryShapeRelativeToTheTopicBase(t *testing.T) {
 		},
 		{
 			name:   "program trigger",
-			filter: "/+/hub/programs/+/trigger",
+			filter: "/set/+/hub/programs/+/trigger",
 			topic: func(b *TopicBuilder) string {
 				return naming.MQTTHubProgramTrigger(b.Base, central, "4711")
 			},
@@ -251,7 +252,7 @@ func TestCommandSubscriberParsesEveryShapeRelativeToTheTopicBase(t *testing.T) {
 		},
 		{
 			name:   "program enable",
-			filter: "/+/hub/programs/+/set",
+			filter: "/set/+/hub/programs/+/active",
 			topic: func(b *TopicBuilder) string {
 				return naming.MQTTHubProgramSet(b.Base, central, "4711")
 			},
@@ -268,7 +269,7 @@ func TestCommandSubscriberParsesEveryShapeRelativeToTheTopicBase(t *testing.T) {
 		},
 		{
 			name:   "install mode",
-			filter: "/+/hub/install_mode/+/set",
+			filter: "/set/+/hub/install_mode/+",
 			topic: func(b *TopicBuilder) string {
 				return naming.MQTTHubInstallModeCommand(b.Base, central, iface)
 			},
@@ -285,7 +286,7 @@ func TestCommandSubscriberParsesEveryShapeRelativeToTheTopicBase(t *testing.T) {
 		},
 		{
 			name:   "custom-DP invoke",
-			filter: "/+/devices/+/cdps/+/+/invoke",
+			filter: "/set/+/+/+/+/+/+",
 			topic: func(b *TopicBuilder) string {
 				return b.CustomDPInvoke(central, addr, "light_dp", "turn_on")
 			},
@@ -302,7 +303,7 @@ func TestCommandSubscriberParsesEveryShapeRelativeToTheTopicBase(t *testing.T) {
 		},
 		{
 			name:   "custom-DP service method",
-			filter: "/+/+/+/+/custom/+/set/+",
+			filter: "/set/+/+/+/+/custom/+/+",
 			topic: func(b *TopicBuilder) string {
 				return b.CustomDPServiceMethod(central, iface, customSlot, "set_temperature")
 			},
@@ -319,7 +320,7 @@ func TestCommandSubscriberParsesEveryShapeRelativeToTheTopicBase(t *testing.T) {
 		},
 		{
 			name:   "week profile",
-			filter: "/+/+/+/+/+/set",
+			filter: "/set/+/+/+/+/week_profile",
 			topic: func(b *TopicBuilder) string {
 				return b.WeekProfileCommand(central, iface, addr, 1)
 			},
@@ -336,7 +337,7 @@ func TestCommandSubscriberParsesEveryShapeRelativeToTheTopicBase(t *testing.T) {
 		},
 		{
 			name:   "combined data point",
-			filter: "/+/+/+/+/+/+/set",
+			filter: "/set/+/+/+/+/+/+",
 			topic: func(b *TopicBuilder) string {
 				return b.CombinedCommand(central, iface, addr, 1, "duration")
 			},
@@ -353,7 +354,7 @@ func TestCommandSubscriberParsesEveryShapeRelativeToTheTopicBase(t *testing.T) {
 		},
 		{
 			name:   "schedule switch",
-			filter: "/+/+/+/+/+/+/set",
+			filter: "/set/+/+/+/+/schedule/switch/+",
 			topic: func(b *TopicBuilder) string {
 				return b.ScheduleSwitchCommand(central, iface, addr, 1, "1_1")
 			},
@@ -370,7 +371,7 @@ func TestCommandSubscriberParsesEveryShapeRelativeToTheTopicBase(t *testing.T) {
 		},
 		{
 			name:   "alarm command",
-			filter: "/alarm/+/set",
+			filter: "/set/alarm/+/panel",
 			topic: func(b *TopicBuilder) string {
 				return alarmCommandTopic(b.Base, "night")
 			},
@@ -389,7 +390,7 @@ func TestCommandSubscriberParsesEveryShapeRelativeToTheTopicBase(t *testing.T) {
 		},
 		{
 			name:   "add-on update install",
-			filter: "/system/addon_update/set",
+			filter: "/set/system/addon_update",
 			topic:  func(b *TopicBuilder) string { return b.AddonUpdateCommand() },
 			body:   []byte("INSTALL"),
 			want: func(t *testing.T, s *commandPlaneSinks) {

@@ -100,7 +100,7 @@ func TestSecurityZoneTopicsCarryTheStoredSlug(t *testing.T) {
 	bus.Publish(hmevent.SecurityStateChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
 	obs.settle(t, p)
 
-	want := base + "/security/zone/" + zoneSlug
+	want := base + "/status/security/zone/" + zoneSlug
 	published := obs.publishedTopics()
 	if !published[want] {
 		t.Fatalf("zone state topic %q was never written; published=%v", want, published)

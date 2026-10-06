@@ -63,8 +63,8 @@ func (e *climateEntity) BuildDiscovery(ctx hadiscovery.Context, comp *hadiscover
 	fields := e.fields
 	aggregate := e.stateTopic(ctx, hamodel.RoleState)
 
-	// Direct wire values → per-parameter topics with `value_json.value`. Each
-	// carries its own envelope from the bridge's slot-state publish, so Home
+	// Direct wire values → per-parameter topics with `value_json.val`. Each
+	// carries its own status object from the bridge's slot-state publish, so Home
 	// Assistant renders a fresh value as soon as the matching wire DP is
 	// observed and a missing DP stays unavailable per field instead of forcing
 	// the whole climate card to wait on the slowest constituent.
@@ -77,13 +77,13 @@ func (e *climateEntity) BuildDiscovery(ctx hadiscovery.Context, comp *hadiscover
 	// Derived fields → the aggregate, which carries the curated,
 	// model-computed document rather than every wire value.
 	fields.ModeStateTopic = aggregate
-	fields.ModeStateTemplate = "{{ value_json.hvac_mode }}"
+	fields.ModeStateTemplate = "{{ value_json.val.hvac_mode }}"
 	fields.ModeCommandTopic = e.MethodTopic(ctx, "set_mode")
 
 	if len(e.presets) > 0 {
 		fields.PresetModes = e.presets
 		fields.PresetModeStateTopic = aggregate
-		fields.PresetModeValueTemplate = "{{ value_json.preset_mode }}"
+		fields.PresetModeValueTemplate = "{{ value_json.val.preset_mode }}"
 		fields.PresetModeCommandTopic = e.MethodTopic(ctx, "set_profile")
 	}
 	if topic := e.stateTopic(ctx, roleCurrentHumidity); topic != "" {
@@ -103,7 +103,7 @@ func (e *climateEntity) BuildDiscovery(ctx hadiscovery.Context, comp *hadiscover
 	// cache re-publishes the changed bytes.
 	if e.action {
 		fields.ActionTopic = aggregate
-		fields.ActionTemplate = "{{ value_json.action }}"
+		fields.ActionTemplate = "{{ value_json.val.action }}"
 	}
 	comp.Fields = fields
 
@@ -127,8 +127,8 @@ func (e *climateEntity) stateTopic(ctx hadiscovery.Context, role string) string 
 	return ctx.StateTopic(b.Slot)
 }
 
-// wireValueTemplate reads the scalar out of a per-parameter state envelope.
-const wireValueTemplate = "{{ value_json.value }}"
+// wireValueTemplate reads the scalar out of a per-parameter status object.
+const wireValueTemplate = "{{ value_json.val }}"
 
 // HADiscoveryEntity describes the thermostat on the shared model.
 //
@@ -221,7 +221,8 @@ func (c *Climate) HADiscoveryEntity() hamodel.Entity {
 }
 
 // climateJSONAttributesTemplate is the Jinja template HA's MQTT
-// integration applies to the aggregated state JSON to produce the
+// integration applies to the aggregated state document — the status
+// object's `val` (ADR 0083) — to produce the
 // Climate entity's state_attributes dict. Picks only
 // extra_state_attributes keys; entity-property keys (hvac_mode,
 // preset_mode, action, state_uncertain) are excluded so they aren't
@@ -240,14 +241,14 @@ func (c *Climate) HADiscoveryEntity() hamodel.Entity {
 // natively. The climate card omits the row when the value renders as
 // null instead of showing the literal "null" string.
 const climateJSONAttributesTemplate = `{
-  "schedule_data": {{ (value_json.schedule_data | default(none, true)) | tojson }},
-  "temperature_offset": {{ (value_json.temperature_offset | default(none, true)) | tojson }},
-  "optimum_start_stop": {{ (value_json.optimum_start_stop | default(none, true)) | tojson }},
-  "available_profiles": {{ (value_json.available_profiles | default(none, true)) | tojson }},
-  "current_schedule_profile": {{ (value_json.current_schedule_profile | default(none, true)) | tojson }},
-  "device_active_profile_index": {{ (value_json.device_active_profile_index | default(none, true)) | tojson }},
-  "schedule_api_version": {{ (value_json.schedule_api_version | default(none, true)) | tojson }},
-  "value_state": {{ ("uncertain" if value_json.state_uncertain else "valid") | tojson }}
+  "schedule_data": {{ (value_json.val.schedule_data | default(none, true)) | tojson }},
+  "temperature_offset": {{ (value_json.val.temperature_offset | default(none, true)) | tojson }},
+  "optimum_start_stop": {{ (value_json.val.optimum_start_stop | default(none, true)) | tojson }},
+  "available_profiles": {{ (value_json.val.available_profiles | default(none, true)) | tojson }},
+  "current_schedule_profile": {{ (value_json.val.current_schedule_profile | default(none, true)) | tojson }},
+  "device_active_profile_index": {{ (value_json.val.device_active_profile_index | default(none, true)) | tojson }},
+  "schedule_api_version": {{ (value_json.val.schedule_api_version | default(none, true)) | tojson }},
+  "value_state": {{ ("uncertain" if value_json.val.state_uncertain else "valid") | tojson }}
 }`
 
 // Info returns identity-level fields. Stable across the thermostat's
@@ -374,7 +375,7 @@ func (c *Climate) Config() payload.ConfigPayload {
 // source exists) action are always present. Pre-observation values use safe
 // fallbacks (`hvac_mode="off"`, `preset_mode="none"`, `action="idle"`)
 // rather than omission. HA's MQTT
-// Climate platform reads `value_json.<field>` via templates; missing keys
+// Climate platform reads `value_json.val.<field>` via templates; missing keys
 // render to empty strings which HA either ignores (current state preserved,
 // never set) or maps to `unknown`. Either way the climate card stays unbound
 // until the first push event. Stamping defaults gives HA a coherent initial
@@ -478,7 +479,7 @@ func (c *Climate) State() payload.StatePayload {
 	// by the info payload and the discovery `device.identifiers`; and
 	// ValueState is a pure restatement of StateUncertain, which the
 	// discovery `json_attributes_template` derives from
-	// value_json.state_uncertain. Repeating either on the state topic
+	// value_json.val.state_uncertain. Repeating either on the state topic
 	// would put the same fact on the wire twice, with two chances to
 	// disagree.
 	return out

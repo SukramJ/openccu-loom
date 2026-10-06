@@ -22,14 +22,17 @@ func TestTopicBuilder(t *testing.T) {
 	cases := []struct {
 		got, want string
 	}{
-		{tb.BridgeStatus(), "openccu-loom/bridge/status"},
-		{tb.DeviceAvailability("ccu", "HmIP-RF", "000A"), "openccu-loom/ccu/HmIP-RF/000A/availability"},
-		{tb.DataPointState("ccu", "HmIP-RF", "000A", 1, "STATE"), "openccu-loom/ccu/HmIP-RF/000A/1/values/STATE"},
-		{tb.DataPointCommand("ccu", "HmIP-RF", "000A", 1, "STATE"), "openccu-loom/ccu/HmIP-RF/000A/1/values/STATE/set"},
-		{tb.DataPointEvent("ccu", "HmIP-RF", "000A", 1, "keypress"), "openccu-loom/ccu/HmIP-RF/000A/1/event/keypress"},
-		{tb.HubStatus("ccu"), "openccu-loom/ccu/hub/status"},
-		{tb.HubInfo("ccu"), "openccu-loom/ccu/hub/info"},
-		{tb.HubDiagnostics("ccu"), "openccu-loom/ccu/hub/diagnostics"},
+		{tb.Connected(), "openccu-loom/connected"},
+		{tb.Info(), "openccu-loom/info"},
+		{tb.Maintenance("set", "restart"), "openccu-loom/maintenance/set/restart"},
+		{tb.Maintenance("stats"), "openccu-loom/maintenance/stats"},
+		{tb.DeviceAvailability("ccu", "HmIP-RF", "000A"), "openccu-loom/status/ccu/HmIP-RF/000A/online"},
+		{tb.DataPointState("ccu", "HmIP-RF", "000A", 1, "STATE"), "openccu-loom/status/ccu/HmIP-RF/000A/1/values/STATE"},
+		{tb.DataPointCommand("ccu", "HmIP-RF", "000A", 1, "STATE"), "openccu-loom/set/ccu/HmIP-RF/000A/1/values/STATE"},
+		{tb.DataPointConfig("ccu", "HmIP-RF", "000A", 1, "STATE"), "openccu-loom/meta/ccu/HmIP-RF/000A/1/values/STATE"},
+		{tb.HubStatus("ccu"), "openccu-loom/status/ccu/online"},
+		{tb.HubInfo("ccu"), "openccu-loom/status/ccu/hub/info"},
+		{tb.HubDiagnostics("ccu"), "openccu-loom/status/ccu/hub/diagnostics"},
 		{tb.DiscoveryConfig("switch", "openccu-loom", "abc"), "homeassistant/switch/openccu-loom/abc/config"},
 	}
 	for i, c := range cases {
@@ -42,7 +45,7 @@ func TestTopicBuilder(t *testing.T) {
 func TestTopicBuilderSanitizesDisallowedChars(t *testing.T) {
 	tb := NewTopicBuilder("gh")
 	got := tb.DataPointState("ccu", "HmIP/RF", "000+A", 1, "STA#TE")
-	want := "gh/ccu/HmIP_RF/000_A/1/values/STA_TE"
+	want := "gh/status/ccu/HmIP_RF/000_A/1/values/STA_TE"
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}
@@ -160,65 +163,84 @@ func TestBridgeAnnounceOnline(t *testing.T) {
 	if err := b.AnnounceOnline(context.Background()); err != nil {
 		t.Fatalf("announce: %v", err)
 	}
-	// AnnounceOnline also publishes a one-shot
-	// `bridge/health` snapshot. Find each by topic instead of
-	// relying on it being the last record.
-	var statusRec, healthRec *publishRecord
+	// AnnounceOnline publishes the instance level and the retained
+	// `info` document (ADR 0083). Find each by topic instead of relying on
+	// it being the last record.
+	var statusRec, infoRec *publishRecord
 	for i := range pub.sent {
 		switch pub.sent[i].topic {
-		case "openccu-loom/bridge/status":
+		case "openccu-loom/connected":
 			statusRec = &pub.sent[i]
-		case "openccu-loom/bridge/health":
-			healthRec = &pub.sent[i]
+		case "openccu-loom/info":
+			infoRec = &pub.sent[i]
 		}
 	}
-	if statusRec == nil || statusRec.payload != "online" || !statusRec.retain {
-		t.Fatalf("bridge/status missing/wrong: %+v", statusRec)
+	if statusRec == nil || statusRec.payload != "1" || !statusRec.retain {
+		t.Fatalf("connected missing/wrong: %+v", statusRec)
 	}
-	if healthRec == nil || !strings.Contains(healthRec.payload, `"status":"online"`) || !healthRec.retain {
-		t.Fatalf("bridge/health missing/wrong: %+v", healthRec)
+	if infoRec == nil || !strings.Contains(infoRec.payload, `"spec":"2.0"`) || !infoRec.retain {
+		t.Fatalf("info missing/wrong: %+v", infoRec)
 	}
 }
 
-// TestAnnounceOnlineHealthSupplierMergedAndStatusProtected verifies
-// that HealthSupplier values appear in the bridge/health body and
-// that the supplier cannot override the authoritative `status` field.
-func TestAnnounceOnlineHealthSupplierMergedAndStatusProtected(t *testing.T) {
+// TestAnnounceOnlinePublishesConnectedLevelAndInfo pins the two instance
+// topics every (re)connect republishes (ADR 0083): `<base>/connected` at the
+// level the bridge last set — 1 until a central is reachable — and the
+// retained `<base>/info` document, which folds what `bridge/health` carried:
+// the live central list resolved per publish, the build commit, and the
+// fields the shared instance publisher answers itself (`name`, `spec`,
+// `maintenance`, …).
+//
+// Falsifiability: drop the instance announce from [Bridge.AnnounceOnline]
+// and the info arm fails; capture the central list at construction and the
+// second announce still names one central.
+func TestAnnounceOnlinePublishesConnectedLevelAndInfo(t *testing.T) {
 	t.Parallel()
 	pub := &mockPublisher{}
+	centrals := make([]string, 0, 2)
+	centrals = append(centrals, "GoOtto")
+	var mu sync.Mutex
 	b := NewBridge(BridgeConfig{
 		Base: "openccu-loom",
-		HealthSupplier: func() map[string]any {
-			return map[string]any{
-				"version":  "1.2.3",
-				"centrals": []string{"GoOtto"},
-				"status":   "DEFINITELY_NOT_AUTHORITATIVE",
-			}
+		CentralNamesSupplier: func() []string {
+			mu.Lock()
+			defer mu.Unlock()
+			return append([]string(nil), centrals...)
 		},
 	}, pub)
 	if err := b.AnnounceOnline(context.Background()); err != nil {
 		t.Fatalf("announce: %v", err)
 	}
-	var healthRec *publishRecord
-	for i := range pub.sent {
-		if pub.sent[i].topic == "openccu-loom/bridge/health" {
-			healthRec = &pub.sent[i]
+	if got := lastPublishedOn(pub, "openccu-loom/connected"); got != "1" {
+		t.Fatalf("connected = %q, want 1 before any central is reachable", got)
+	}
+	info := lastPublishedOn(pub, "openccu-loom/info")
+	var doc map[string]any
+	if err := json.Unmarshal([]byte(info), &doc); err != nil {
+		t.Fatalf("info is not JSON: %q (%v)", info, err)
+	}
+	for key, want := range map[string]any{"name": "openccu-loom", "spec": "2.0", "maintenance": true} {
+		if doc[key] != want {
+			t.Errorf("info.%s = %v, want %v", key, doc[key], want)
 		}
 	}
-	if healthRec == nil {
-		t.Fatal("bridge/health missing")
+	for _, key := range []string{"version", "go", "pid", "started", "commit"} {
+		if _, ok := doc[key]; !ok {
+			t.Errorf("info lacks %q: %s", key, info)
+		}
 	}
-	if !strings.Contains(healthRec.payload, `"version":"1.2.3"`) {
-		t.Fatalf("supplier field missing: %s", healthRec.payload)
+	if _, ok := doc["status"]; ok {
+		t.Errorf("info carries the redundant bridge/health `status` field: %s", info)
 	}
-	if !strings.Contains(healthRec.payload, `"centrals":["GoOtto"]`) {
-		t.Fatalf("supplier list missing: %s", healthRec.payload)
+
+	mu.Lock()
+	centrals = append(centrals, "Zweite")
+	mu.Unlock()
+	if err := b.AnnounceOnline(context.Background()); err != nil {
+		t.Fatalf("announce: %v", err)
 	}
-	if !strings.Contains(healthRec.payload, `"status":"online"`) {
-		t.Fatalf("status not protected: %s", healthRec.payload)
-	}
-	if strings.Contains(healthRec.payload, "DEFINITELY_NOT_AUTHORITATIVE") {
-		t.Fatalf("supplier shadowed authoritative status: %s", healthRec.payload)
+	if got := lastPublishedOn(pub, "openccu-loom/info"); !strings.Contains(got, `"centrals":["GoOtto","Zweite"]`) {
+		t.Errorf("info after a central was adopted = %s, want both centrals", got)
 	}
 }
 
@@ -308,10 +330,10 @@ func TestDiscoveryBuilderSwitchPayload(t *testing.T) {
 	if err := json.Unmarshal(payload, &doc); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if doc["state_topic"] != "gh/ccu/HmIP-RF/000A/1/values/STATE" {
+	if doc["state_topic"] != "gh/status/ccu/HmIP-RF/000A/1/values/STATE" {
 		t.Fatalf("state_topic=%v", doc["state_topic"])
 	}
-	if doc["command_topic"] != "gh/ccu/HmIP-RF/000A/1/values/STATE/set" {
+	if doc["command_topic"] != "gh/set/ccu/HmIP-RF/000A/1/values/STATE" {
 		t.Fatalf("command_topic=%v", doc["command_topic"])
 	}
 	if doc["payload_on"] != "true" || doc["payload_off"] != "false" {
@@ -373,4 +395,43 @@ func startsWith(s, prefix string) bool {
 		return false
 	}
 	return s[:len(prefix)] == prefix
+}
+
+// statusEnvelope is an mqtt-smarthome 2.0 status object as it reaches the
+// broker (ADR 0083): `val`, the integer millisecond `ts` and `lc`, and this
+// daemon's optional `hm` extension.
+type statusEnvelope struct {
+	Val json.RawMessage `json:"val"`
+	TS  *int64          `json:"ts"`
+	LC  *int64          `json:"lc"`
+	HM  json.RawMessage `json:"hm"`
+}
+
+// decodeStatus parses payload as a status object and reports whether it is
+// one: a JSON object with `val`, and integer `ts` and `lc` with lc <= ts.
+func decodeStatus(payload string) (statusEnvelope, bool) {
+	var env statusEnvelope
+	if err := json.Unmarshal([]byte(payload), &env); err != nil {
+		return env, false
+	}
+	if env.Val == nil || env.TS == nil || env.LC == nil || *env.LC > *env.TS {
+		return env, false
+	}
+	return env, true
+}
+
+// statusVal returns a status object's `val` for comparison: a JSON string
+// unquoted, anything else as its JSON literal. It returns "" for a payload
+// that is not a status object, so an empty retraction never compares equal
+// to a value.
+func statusVal(payload string) string {
+	env, ok := decodeStatus(payload)
+	if !ok {
+		return ""
+	}
+	var s string
+	if err := json.Unmarshal(env.Val, &s); err == nil {
+		return s
+	}
+	return string(env.Val)
 }

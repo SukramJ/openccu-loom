@@ -21,7 +21,7 @@ import (
 // `strings.ToLower` of the published value, which is only a faithful stand-in
 // for Home Assistant's Jinja rendering while this exact template is declared —
 // so the test asserts the template too, rather than assuming it.
-const valueLowerTemplate = `{% if value_json is defined and value_json.value is not none %}{{ value_json.value | lower }}{% endif %}`
+const valueLowerTemplate = `{% if value_json is defined and value_json.val is not none %}{{ value_json.val | lower }}{% endif %}`
 
 // TestE2EMQTTBinarySensorPayloadsMatchPublishedState drives a door/window
 // contact through the built daemon and compares what the state plane PUBLISHES
@@ -103,13 +103,13 @@ func TestE2EMQTTBinarySensorPayloadsMatchPublishedState(t *testing.T) {
 		return false
 	})
 
-	// `<base>/<central>/<iface>/<address>/<channel>/<bucket>/<parameter>`
+	// `<base>/status/<central>/<iface>/<address>/<channel>/<bucket>/<parameter>`
 	parts := strings.Split(stateTopic, "/")
-	if len(parts) != 7 {
+	if len(parts) != 8 || parts[1] != "status" {
 		t.Fatalf("unexpected state topic shape %q", stateTopic)
 	}
-	channelAddress := parts[3] + ":" + parts[4]
-	parameter := parts[6]
+	channelAddress := parts[4] + ":" + parts[5]
+	parameter := parts[7]
 
 	// Push the second VALUE_LIST entry (the "on" side of the pair) so the
 	// state topic carries a real value instead of the boot-time null.
@@ -125,7 +125,8 @@ func TestE2EMQTTBinarySensorPayloadsMatchPublishedState(t *testing.T) {
 		if !ok {
 			return false
 		}
-		published, ok = decodeJSON(t, payload)["value"]
+		// The status object's `val` (ADR 0083).
+		published, ok = decodeJSON(t, payload)["val"]
 		return ok && published != nil
 	})
 

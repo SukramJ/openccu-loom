@@ -77,10 +77,10 @@ func TestSettleOutlastsAWorkerStalledPastTheBrokerCall(t *testing.T) {
 		// wait that ends mid-burst loses.
 		published := obs.publishedTopics()
 		for _, want := range []string{
-			base + "/security/state",
-			base + "/security/alarm",
-			base + "/security/problem",
-			base + "/security/health",
+			base + "/status/security/severity",
+			base + "/status/security/alarm",
+			base + "/status/security/problem",
+			base + "/status/security/health",
 		} {
 			if !published[want] {
 				t.Errorf("settle returned before %q was written; the plane was still publishing", want)
@@ -88,7 +88,7 @@ func TestSettleOutlastsAWorkerStalledPastTheBrokerCall(t *testing.T) {
 		}
 		tail := 0
 		for topic := range published {
-			if strings.HasPrefix(topic, base+"/security/class/") || strings.HasPrefix(topic, base+"/security/zone/") {
+			if strings.HasPrefix(topic, base+"/status/security/class/") || strings.HasPrefix(topic, base+"/status/security/zone/") {
 				tail++
 			}
 		}
@@ -101,7 +101,7 @@ func TestSettleOutlastsAWorkerStalledPastTheBrokerCall(t *testing.T) {
 		// bridge-side bookkeeping, which happens after the broker call.
 		var retained []string
 		for _, rec := range obs.records() {
-			if strings.HasPrefix(rec.topic, base+"/security/") && rec.retain && rec.payload != "" {
+			if strings.HasPrefix(rec.topic, base+"/status/security/") && rec.retain && rec.payload != "" {
 				retained = append(retained, rec.topic)
 			}
 		}

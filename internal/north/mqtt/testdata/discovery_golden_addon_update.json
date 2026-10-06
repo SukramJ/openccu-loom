@@ -6,11 +6,12 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "openccu-loom/bridge/status"
+          "topic": "openccu-loom/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         }
       ],
       "availability_mode": "all",
-      "command_topic": "openccu-loom/system/addon_update/set",
+      "command_topic": "openccu-loom/set/system/addon_update",
       "default_entity_id": "update.loom_addon_update",
       "device": {
         "identifiers": [
@@ -22,8 +23,8 @@
       },
       "enabled_by_default": true,
       "entity_category": "diagnostic",
-      "latest_version_template": "{{ value_json.latest_version }}",
-      "latest_version_topic": "openccu-loom/system/addon_update/state",
+      "latest_version_template": "{{ value_json.val.latest_version }}",
+      "latest_version_topic": "openccu-loom/status/system/addon_update",
       "name": "Add-on Update",
       "origin": {
         "name": "openccu-loom",
@@ -31,8 +32,9 @@
         "sw_version": "dev"
       },
       "payload_install": "INSTALL",
-      "state_topic": "openccu-loom/system/addon_update/state",
-      "unique_id": "loom_addon_update"
+      "state_topic": "openccu-loom/status/system/addon_update",
+      "unique_id": "loom_addon_update",
+      "value_template": "{{ value_json.val | tojson }}"
     }
   },
   "default": {
@@ -42,11 +44,12 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         }
       ],
       "availability_mode": "all",
-      "command_topic": "gh/system/addon_update/set",
+      "command_topic": "gh/set/system/addon_update",
       "default_entity_id": "update.gh_loom_addon_update",
       "device": {
         "identifiers": [
@@ -58,8 +61,8 @@
       },
       "enabled_by_default": true,
       "entity_category": "diagnostic",
-      "latest_version_template": "{{ value_json.latest_version }}",
-      "latest_version_topic": "gh/system/addon_update/state",
+      "latest_version_template": "{{ value_json.val.latest_version }}",
+      "latest_version_topic": "gh/status/system/addon_update",
       "name": "Add-on Update",
       "origin": {
         "name": "openccu-loom",
@@ -67,8 +70,9 @@
         "sw_version": "dev"
       },
       "payload_install": "INSTALL",
-      "state_topic": "gh/system/addon_update/state",
-      "unique_id": "gh_loom_addon_update"
+      "state_topic": "gh/status/system/addon_update",
+      "unique_id": "gh_loom_addon_update",
+      "value_template": "{{ value_json.val | tojson }}"
     }
   },
   "locale-de": {
@@ -78,11 +82,12 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         }
       ],
       "availability_mode": "all",
-      "command_topic": "gh/system/addon_update/set",
+      "command_topic": "gh/set/system/addon_update",
       "default_entity_id": "update.gh_loom_addon_update",
       "device": {
         "identifiers": [
@@ -94,8 +99,8 @@
       },
       "enabled_by_default": true,
       "entity_category": "diagnostic",
-      "latest_version_template": "{{ value_json.latest_version }}",
-      "latest_version_topic": "gh/system/addon_update/state",
+      "latest_version_template": "{{ value_json.val.latest_version }}",
+      "latest_version_topic": "gh/status/system/addon_update",
       "name": "Add-on-Aktualisierung",
       "origin": {
         "name": "openccu-loom",
@@ -103,8 +108,9 @@
         "sw_version": "dev"
       },
       "payload_install": "INSTALL",
-      "state_topic": "gh/system/addon_update/state",
-      "unique_id": "gh_loom_addon_update"
+      "state_topic": "gh/status/system/addon_update",
+      "unique_id": "gh_loom_addon_update",
+      "value_template": "{{ value_json.val | tojson }}"
     }
   },
   "second-central": {
@@ -114,11 +120,12 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         }
       ],
       "availability_mode": "all",
-      "command_topic": "gh/system/addon_update/set",
+      "command_topic": "gh/set/system/addon_update",
       "default_entity_id": "update.gh_loom_addon_update",
       "device": {
         "identifiers": [
@@ -130,8 +137,8 @@
       },
       "enabled_by_default": true,
       "entity_category": "diagnostic",
-      "latest_version_template": "{{ value_json.latest_version }}",
-      "latest_version_topic": "gh/system/addon_update/state",
+      "latest_version_template": "{{ value_json.val.latest_version }}",
+      "latest_version_topic": "gh/status/system/addon_update",
       "name": "Add-on Update",
       "origin": {
         "name": "openccu-loom",
@@ -139,8 +146,9 @@
         "sw_version": "dev"
       },
       "payload_install": "INSTALL",
-      "state_topic": "gh/system/addon_update/state",
-      "unique_id": "gh_loom_addon_update"
+      "state_topic": "gh/status/system/addon_update",
+      "unique_id": "gh_loom_addon_update",
+      "value_template": "{{ value_json.val | tojson }}"
     }
   }
 }

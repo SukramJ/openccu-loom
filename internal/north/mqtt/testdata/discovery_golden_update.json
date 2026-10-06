@@ -6,12 +6,14 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/BidCos-RF/LEQ0123456/availability"
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/BidCos-RF/LEQ0123456/online",
+          "value_template": "{{ value_json.val | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -30,20 +32,20 @@
       "device_class": "firmware",
       "display_precision": 0,
       "entity_category": "config",
-      "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/BidCos-RF/LEQ0123456/update",
-      "latest_version_template": "{{ value_json.latest_firmware }}",
-      "latest_version_topic": "gh/ccu-01/BidCos-RF/LEQ0123456/update",
+      "json_attributes_template": "{{ value_json.val | tojson }}",
+      "json_attributes_topic": "gh/status/ccu-01/BidCos-RF/LEQ0123456/update",
+      "latest_version_template": "{{ value_json.val.latest_firmware }}",
+      "latest_version_topic": "gh/status/ccu-01/BidCos-RF/LEQ0123456/update",
       "name": "Firmware",
       "origin": {
         "name": "openccu-loom",
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/BidCos-RF/LEQ0123456/update",
+      "state_topic": "gh/status/ccu-01/BidCos-RF/LEQ0123456/update",
       "title": "HM-CC-RT-DN Firmware",
       "unique_id": "loom_leq0123456_update",
-      "value_template": "{{ value_json.firmware }}"
+      "value_template": "{{ value_json.val.firmware }}"
     }
   },
   "update/blank-model": {
@@ -53,12 +55,14 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/VCU7654321/availability"
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/VCU7654321/online",
+          "value_template": "{{ value_json.val | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -76,20 +80,20 @@
       "device_class": "firmware",
       "display_precision": 0,
       "entity_category": "config",
-      "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/VCU7654321/update",
-      "latest_version_template": "{{ value_json.latest_firmware }}",
-      "latest_version_topic": "gh/ccu-01/HmIP-RF/VCU7654321/update",
+      "json_attributes_template": "{{ value_json.val | tojson }}",
+      "json_attributes_topic": "gh/status/ccu-01/HmIP-RF/VCU7654321/update",
+      "latest_version_template": "{{ value_json.val.latest_firmware }}",
+      "latest_version_topic": "gh/status/ccu-01/HmIP-RF/VCU7654321/update",
       "name": "Firmware",
       "origin": {
         "name": "openccu-loom",
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/HmIP-RF/VCU7654321/update",
+      "state_topic": "gh/status/ccu-01/HmIP-RF/VCU7654321/update",
       "title": " Firmware",
       "unique_id": "loom_vcu7654321_update",
-      "value_template": "{{ value_json.firmware }}"
+      "value_template": "{{ value_json.val.firmware }}"
     }
   },
   "update/hmip": {
@@ -99,12 +103,14 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/VCU1234567/availability"
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/VCU1234567/online",
+          "value_template": "{{ value_json.val | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -123,20 +129,20 @@
       "device_class": "firmware",
       "display_precision": 0,
       "entity_category": "config",
-      "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/VCU1234567/update",
-      "latest_version_template": "{{ value_json.latest_firmware }}",
-      "latest_version_topic": "gh/ccu-01/HmIP-RF/VCU1234567/update",
+      "json_attributes_template": "{{ value_json.val | tojson }}",
+      "json_attributes_topic": "gh/status/ccu-01/HmIP-RF/VCU1234567/update",
+      "latest_version_template": "{{ value_json.val.latest_firmware }}",
+      "latest_version_topic": "gh/status/ccu-01/HmIP-RF/VCU1234567/update",
       "name": "Firmware",
       "origin": {
         "name": "openccu-loom",
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/HmIP-RF/VCU1234567/update",
+      "state_topic": "gh/status/ccu-01/HmIP-RF/VCU1234567/update",
       "title": "HmIP-eTRV-2 Firmware",
       "unique_id": "loom_vcu1234567_update",
-      "value_template": "{{ value_json.firmware }}"
+      "value_template": "{{ value_json.val.firmware }}"
     }
   },
   "update/mixed-case-central": {
@@ -146,12 +152,14 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/CCU-Keller/HmIP-RF/VCU1234567/availability"
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/CCU-Keller/HmIP-RF/VCU1234567/online",
+          "value_template": "{{ value_json.val | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -170,20 +178,20 @@
       "device_class": "firmware",
       "display_precision": 0,
       "entity_category": "config",
-      "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/CCU-Keller/HmIP-RF/VCU1234567/update",
-      "latest_version_template": "{{ value_json.latest_firmware }}",
-      "latest_version_topic": "gh/CCU-Keller/HmIP-RF/VCU1234567/update",
+      "json_attributes_template": "{{ value_json.val | tojson }}",
+      "json_attributes_topic": "gh/status/CCU-Keller/HmIP-RF/VCU1234567/update",
+      "latest_version_template": "{{ value_json.val.latest_firmware }}",
+      "latest_version_topic": "gh/status/CCU-Keller/HmIP-RF/VCU1234567/update",
       "name": "Firmware",
       "origin": {
         "name": "openccu-loom",
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/CCU-Keller/HmIP-RF/VCU1234567/update",
+      "state_topic": "gh/status/CCU-Keller/HmIP-RF/VCU1234567/update",
       "title": "HmIP-eTRV-2 Firmware",
       "unique_id": "loom_vcu1234567_update",
-      "value_template": "{{ value_json.firmware }}"
+      "value_template": "{{ value_json.val.firmware }}"
     }
   },
   "update/no-device-object": {
@@ -193,12 +201,14 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/VCU1234567/availability"
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/VCU1234567/online",
+          "value_template": "{{ value_json.val | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -215,20 +225,20 @@
       "device_class": "firmware",
       "display_precision": 0,
       "entity_category": "config",
-      "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/VCU1234567/update",
-      "latest_version_template": "{{ value_json.latest_firmware }}",
-      "latest_version_topic": "gh/ccu-01/HmIP-RF/VCU1234567/update",
+      "json_attributes_template": "{{ value_json.val | tojson }}",
+      "json_attributes_topic": "gh/status/ccu-01/HmIP-RF/VCU1234567/update",
+      "latest_version_template": "{{ value_json.val.latest_firmware }}",
+      "latest_version_topic": "gh/status/ccu-01/HmIP-RF/VCU1234567/update",
       "name": "Firmware",
       "origin": {
         "name": "openccu-loom",
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/HmIP-RF/VCU1234567/update",
+      "state_topic": "gh/status/ccu-01/HmIP-RF/VCU1234567/update",
       "title": "HmIP-eTRV-2 Firmware",
       "unique_id": "loom_vcu1234567_update",
-      "value_template": "{{ value_json.firmware }}"
+      "value_template": "{{ value_json.val.firmware }}"
     }
   },
   "update/second-central": {
@@ -238,12 +248,14 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-02/HmIP-RF/VCU1234567/availability"
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-02/HmIP-RF/VCU1234567/online",
+          "value_template": "{{ value_json.val | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -262,20 +274,20 @@
       "device_class": "firmware",
       "display_precision": 0,
       "entity_category": "config",
-      "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-02/HmIP-RF/VCU1234567/update",
-      "latest_version_template": "{{ value_json.latest_firmware }}",
-      "latest_version_topic": "gh/ccu-02/HmIP-RF/VCU1234567/update",
+      "json_attributes_template": "{{ value_json.val | tojson }}",
+      "json_attributes_topic": "gh/status/ccu-02/HmIP-RF/VCU1234567/update",
+      "latest_version_template": "{{ value_json.val.latest_firmware }}",
+      "latest_version_topic": "gh/status/ccu-02/HmIP-RF/VCU1234567/update",
       "name": "Firmware",
       "origin": {
         "name": "openccu-loom",
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-02/HmIP-RF/VCU1234567/update",
+      "state_topic": "gh/status/ccu-02/HmIP-RF/VCU1234567/update",
       "title": "HmIP-eTRV-2 Firmware",
       "unique_id": "loom_vcu1234567_update",
-      "value_template": "{{ value_json.firmware }}"
+      "value_template": "{{ value_json.val.firmware }}"
     }
   },
   "update/sub-devices-enabled": {
@@ -285,12 +297,14 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/VCU1234567/availability"
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/VCU1234567/online",
+          "value_template": "{{ value_json.val | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -309,20 +323,20 @@
       "device_class": "firmware",
       "display_precision": 0,
       "entity_category": "config",
-      "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/VCU1234567/update",
-      "latest_version_template": "{{ value_json.latest_firmware }}",
-      "latest_version_topic": "gh/ccu-01/HmIP-RF/VCU1234567/update",
+      "json_attributes_template": "{{ value_json.val | tojson }}",
+      "json_attributes_topic": "gh/status/ccu-01/HmIP-RF/VCU1234567/update",
+      "latest_version_template": "{{ value_json.val.latest_firmware }}",
+      "latest_version_topic": "gh/status/ccu-01/HmIP-RF/VCU1234567/update",
       "name": "Firmware",
       "origin": {
         "name": "openccu-loom",
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/HmIP-RF/VCU1234567/update",
+      "state_topic": "gh/status/ccu-01/HmIP-RF/VCU1234567/update",
       "title": "HmIP-eTRV-2 Firmware",
       "unique_id": "loom_vcu1234567_update",
-      "value_template": "{{ value_json.firmware }}"
+      "value_template": "{{ value_json.val.firmware }}"
     }
   }
 }

@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/build"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/central/rpcserver"
@@ -55,34 +54,6 @@ func liveCentralNames(cfg *config.Config, reg *central.Registry) []string {
 		names = append(names, n)
 	}
 	return names
-}
-
-// bridgeHealthSupplier returns a closure the MQTT bridge invokes on
-// every AnnounceOnline to compose the `<base>/bridge/health` payload.
-// The body carries operator-visible metadata that is more useful than
-// a bare "online" flag — build identity, daemon boot timestamp, and
-// the centrals the daemon serves.
-//
-// centralNames is resolved per call, never captured: the payload is retained
-// and republished on every broker reconnect, so a list snapshotted when the
-// MQTT stack was built would keep announcing the boot fleet — a CCU adopted
-// at runtime would be missing from it until a config reload or a restart.
-func bridgeHealthSupplier(centralNames func() []string, startedAt time.Time) func() map[string]any {
-	return func() map[string]any {
-		names := []string{}
-		if centralNames != nil {
-			if resolved := centralNames(); resolved != nil {
-				names = resolved
-			}
-		}
-		return map[string]any{
-			"version":    build.Version,
-			"commit":     build.Commit,
-			"build_date": build.BuildDate,
-			"started_at": startedAt.Format(time.RFC3339),
-			"centrals":   names,
-		}
-	}
 }
 
 // startCallbackServer binds the XML-RPC callback listener on

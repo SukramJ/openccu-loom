@@ -152,8 +152,8 @@ func presetModeTemplates(vocab *hamodel.Enum, lang string) (valueTemplate, comma
 		state.WriteString(jinjaQuote(slug) + ": " + jinjaQuote(label))
 		command.WriteString(jinjaQuote(label) + ": " + jinjaQuote(slug))
 	}
-	state.WriteString(`} %}{% if value_json is defined and value_json.preset_mode is not none %}` +
-		`{{ m.get(value_json.preset_mode, value_json.preset_mode) }}{% endif %}`)
+	state.WriteString(`} %}{% if value_json is defined and value_json.val.preset_mode is not none %}` +
+		`{{ m.get(value_json.val.preset_mode, value_json.val.preset_mode) }}{% endif %}`)
 	command.WriteString(`} %}{{ m.get(value, value) }}`)
 	return state.String(), command.String()
 }

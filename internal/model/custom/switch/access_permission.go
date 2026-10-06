@@ -306,7 +306,7 @@ func (a *AccessPermission) HADiscoveryEntity() hamodel.Entity {
 			// The aggregate omits is_on until STATE has been observed; the
 			// `is defined` guard keeps HA from logging a template error on
 			// the retained pre-observation payload.
-			ValueTemplate: `{% if value_json.is_on is defined %}{{ value_json.is_on | lower }}{% endif %}`,
+			ValueTemplate: `{% if value_json.val.is_on is defined %}{{ value_json.val.is_on | lower }}{% endif %}`,
 			// The CCU confirms the grant on STATE; HA must not flip the
 			// entity locally before that echo arrives.
 			Optimistic: new(false),

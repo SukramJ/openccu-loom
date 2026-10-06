@@ -6,16 +6,18 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/BidCos-RF/LEQ0123456/availability"
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/BidCos-RF/LEQ0123456/online",
+          "value_template": "{{ value_json.val | lower }}"
         }
       ],
       "availability_mode": "all",
-      "command_topic": "gh/ccu-01/BidCos-RF/LEQ0123456/4/week_profile/set",
+      "command_topic": "gh/set/ccu-01/BidCos-RF/LEQ0123456/4/week_profile",
       "default_entity_id": "select.openccu-loom_ccu-01_leq0123456_4_weekprofile",
       "device": {
         "identifiers": [
@@ -38,8 +40,9 @@
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/BidCos-RF/LEQ0123456/4/week_profile/state",
-      "unique_id": "loom_leq0123456_4_weekprofile"
+      "state_topic": "gh/status/ccu-01/BidCos-RF/LEQ0123456/4/week_profile",
+      "unique_id": "loom_leq0123456_4_weekprofile",
+      "value_template": "{{ value_json.val }}"
     }
   },
   "week_profile/hmip-six-profiles": {
@@ -49,16 +52,18 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/VCU1234567/availability"
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/VCU1234567/online",
+          "value_template": "{{ value_json.val | lower }}"
         }
       ],
       "availability_mode": "all",
-      "command_topic": "gh/ccu-01/HmIP-RF/VCU1234567/1/week_profile/set",
+      "command_topic": "gh/set/ccu-01/HmIP-RF/VCU1234567/1/week_profile",
       "default_entity_id": "select.openccu-loom_ccu-01_vcu1234567_1_weekprofile",
       "device": {
         "identifiers": [
@@ -84,8 +89,9 @@
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/HmIP-RF/VCU1234567/1/week_profile/state",
-      "unique_id": "loom_vcu1234567_1_weekprofile"
+      "state_topic": "gh/status/ccu-01/HmIP-RF/VCU1234567/1/week_profile",
+      "unique_id": "loom_vcu1234567_1_weekprofile",
+      "value_template": "{{ value_json.val }}"
     }
   },
   "week_profile/mixed-case-central": {
@@ -95,16 +101,18 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/CCU-Keller/HmIP-RF/VCU1234567/availability"
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/CCU-Keller/HmIP-RF/VCU1234567/online",
+          "value_template": "{{ value_json.val | lower }}"
         }
       ],
       "availability_mode": "all",
-      "command_topic": "gh/CCU-Keller/HmIP-RF/VCU1234567/1/week_profile/set",
+      "command_topic": "gh/set/CCU-Keller/HmIP-RF/VCU1234567/1/week_profile",
       "default_entity_id": "select.openccu-loom_ccu-keller_vcu1234567_1_weekprofile",
       "device": {
         "identifiers": [
@@ -130,8 +138,9 @@
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/CCU-Keller/HmIP-RF/VCU1234567/1/week_profile/state",
-      "unique_id": "loom_vcu1234567_1_weekprofile"
+      "state_topic": "gh/status/CCU-Keller/HmIP-RF/VCU1234567/1/week_profile",
+      "unique_id": "loom_vcu1234567_1_weekprofile",
+      "value_template": "{{ value_json.val }}"
     }
   },
   "week_profile/no-device-object": {
@@ -141,16 +150,18 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/VCU1234567/availability"
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/VCU1234567/online",
+          "value_template": "{{ value_json.val | lower }}"
         }
       ],
       "availability_mode": "all",
-      "command_topic": "gh/ccu-01/HmIP-RF/VCU1234567/1/week_profile/set",
+      "command_topic": "gh/set/ccu-01/HmIP-RF/VCU1234567/1/week_profile",
       "default_entity_id": "select.openccu-loom_ccu-01_vcu1234567_1_weekprofile",
       "device": {
         "identifiers": [
@@ -175,8 +186,9 @@
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/HmIP-RF/VCU1234567/1/week_profile/state",
-      "unique_id": "loom_vcu1234567_1_weekprofile"
+      "state_topic": "gh/status/ccu-01/HmIP-RF/VCU1234567/1/week_profile",
+      "unique_id": "loom_vcu1234567_1_weekprofile",
+      "value_template": "{{ value_json.val }}"
     }
   },
   "week_profile/second-central": {
@@ -186,16 +198,18 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-02/HmIP-RF/VCU1234567/availability"
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-02/HmIP-RF/VCU1234567/online",
+          "value_template": "{{ value_json.val | lower }}"
         }
       ],
       "availability_mode": "all",
-      "command_topic": "gh/ccu-02/HmIP-RF/VCU1234567/1/week_profile/set",
+      "command_topic": "gh/set/ccu-02/HmIP-RF/VCU1234567/1/week_profile",
       "default_entity_id": "select.openccu-loom_ccu-02_vcu1234567_1_weekprofile",
       "device": {
         "identifiers": [
@@ -221,8 +235,9 @@
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-02/HmIP-RF/VCU1234567/1/week_profile/state",
-      "unique_id": "loom_vcu1234567_1_weekprofile"
+      "state_topic": "gh/status/ccu-02/HmIP-RF/VCU1234567/1/week_profile",
+      "unique_id": "loom_vcu1234567_1_weekprofile",
+      "value_template": "{{ value_json.val }}"
     }
   },
   "week_profile/sub-devices-enabled": {
@@ -232,16 +247,18 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/VCU1234567/availability"
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/VCU1234567/online",
+          "value_template": "{{ value_json.val | lower }}"
         }
       ],
       "availability_mode": "all",
-      "command_topic": "gh/ccu-01/HmIP-RF/VCU1234567/1/week_profile/set",
+      "command_topic": "gh/set/ccu-01/HmIP-RF/VCU1234567/1/week_profile",
       "default_entity_id": "select.openccu-loom_ccu-01_vcu1234567_1_weekprofile",
       "device": {
         "identifiers": [
@@ -267,8 +284,9 @@
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/HmIP-RF/VCU1234567/1/week_profile/state",
-      "unique_id": "loom_vcu1234567_1_weekprofile"
+      "state_topic": "gh/status/ccu-01/HmIP-RF/VCU1234567/1/week_profile",
+      "unique_id": "loom_vcu1234567_1_weekprofile",
+      "value_template": "{{ value_json.val }}"
     }
   }
 }

@@ -52,6 +52,10 @@ type mqttSupervisor struct {
 	mu     sync.Mutex
 	logger *slog.Logger
 
+	// maintenance is handed to every stack generation's bridge. See
+	// [mqttSupervisor.SetMaintenance].
+	maintenance mqttMaintenanceHooks
+
 	// lifecycleCtx is the daemon-lifetime context [Start] was handed, and the
 	// context EVERY stack generation's reconnect loop and health probe runs on
 	// — never the context of the call that happened to build the generation.
@@ -78,7 +82,7 @@ type mqttSupervisor struct {
 	// the (re)built bridge skips its MQTT state. Nil disables the gate.
 	channelHidden func(central, channelAddress string) bool
 	// centralNames resolves the centrals the daemon currently serves, for the
-	// retained bridge/health payload every (re)built bridge republishes. Nil
+	// retained `<base>/info` document every (re)built bridge republishes. Nil
 	// falls back to the boot config, which misses a CCU adopted at runtime.
 	centralNames func() []string
 	subBuilder   SubscriberBuilder
@@ -118,6 +122,7 @@ type mqttSwap struct {
 	lifecycle    *mqtt.Lifecycle // nil for NoOp client
 	bridge       *mqtt.Bridge
 	cancelHealth func() // nil when no probe attached
+	cancelStats  func() // nil before the maintenance stats loop starts
 	stopSubs     func() // nil when no subscribers attached
 	// sweep is this generation's dedicated retained-sweep connection, torn
 	// down with the rest of the stack. Nil when no broker is configured.
@@ -182,6 +187,17 @@ func newMQTTSupervisor(logger *slog.Logger, healthTracker *health.Tracker, centr
 func (s *mqttSupervisor) SetChannelHidden(fn func(central, channelAddress string) bool) {
 	s.mu.Lock()
 	s.channelHidden = fn
+	s.mu.Unlock()
+}
+
+// SetMaintenance wires the daemon-side halves of the MQTT maintenance topics
+// (ADR 0083) — the root log level and the supervised restart — into every
+// stack generation this supervisor builds. Like [mqttSupervisor.SetChannelHidden]
+// it must run before [mqttSupervisor.Start]: a bridge captures them at build
+// time.
+func (s *mqttSupervisor) SetMaintenance(h mqttMaintenanceHooks) {
+	s.mu.Lock()
+	s.maintenance = h
 	s.mu.Unlock()
 }
 
@@ -663,9 +679,10 @@ func (s *mqttSupervisor) buildSwap(ctx context.Context, cfg *config.Config) (*mq
 	col := s.collector
 	hidden := s.channelHidden
 	names := s.centralNames
+	maintenance := s.maintenance
 	s.mu.Unlock()
 	runCtx := s.runContext(ctx)
-	stack := buildMQTT(cfg, s.logger, col, hidden, names)
+	stack := buildMQTT(cfg, s.logger, col, hidden, names, maintenance)
 	if stack == nil {
 		return nil, errors.New("mqtt.supervisor.build: buildMQTT returned nil with MQTT enabled")
 	}
@@ -697,6 +714,16 @@ func (s *mqttSupervisor) buildSwap(ctx context.Context, cfg *config.Config) (*mq
 			return nil, fmt.Errorf("lifecycle.Start: %w", err)
 		}
 	}
+	// `<base>/maintenance/stats` (ADR 0083): one loop per generation, on the
+	// daemon-lifetime context like the probe below, cancelled with the
+	// generation. It returns at once when maintenance or the stats are off.
+	statsCtx, cancelStats := context.WithCancel(runCtx) //nolint:contextcheck // the loop outlives the call that built this stack
+	sw.cancelStats = cancelStats
+	go func() {
+		if err := sw.bridge.RunMaintenanceStats(statsCtx); err != nil {
+			s.logger.Debug("mqtt.maintenance.stats", slog.String("err", err.Error()))
+		}
+	}()
 	if cs, ok := sw.client.(mqtt.ConnectionStatus); ok && s.healthTracker != nil {
 		//nolint:contextcheck // same rationale as the lifecycle above: the probe outlives the call that built this stack
 		sw.cancelHealth = mqtt.StartHealthProbe(runCtx, cs, s.healthTracker, mqtt.DefaultProbeInterval)
@@ -771,6 +798,9 @@ func (s *mqttSupervisor) teardown(ctx context.Context, sw *mqttSwap) {
 	}
 	if sw.cancelHealth != nil {
 		sw.cancelHealth()
+	}
+	if sw.cancelStats != nil {
+		sw.cancelStats()
 	}
 	// The sweep connection is its own socket and its own session, so the
 	// lifecycle below does not reach it. A generation left behind with a live
@@ -930,7 +960,10 @@ func makeMQTTSubscriberBuilder(
 			// Capture the daemon-lifetime ctx (not the per-Start/Swap ctx,
 			// which on a reload-triggered swap is request-scoped) so command
 			// handlers cancel on shutdown but survive a broker swap.
-			WithLifecycleContext(lifecycleCtx)
+			WithLifecycleContext(lifecycleCtx).
+			// `<base>/maintenance/set/{loglevel,restart}` (ADR 0083, spec §7),
+			// served by the bridge's instance publisher on this plane's router.
+			WithMaintenance(bridge.Instance())
 		// The alarm sink is a concrete pointer so the nil case is a clean
 		// pointer check — passing a typed-nil through the interface would
 		// make the subscriber treat the alarm plane as wired.

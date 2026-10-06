@@ -186,15 +186,15 @@ func (u *Update) HADiscoveryComponent(ctx payload.HADiscoveryContext) hadiscover
 		DeviceClass:    "firmware",
 		EntityCategory: payload.CombinedEntityCategoryConfig,
 		StateTopic:     stateTopic,
-		ValueTemplate:  "{{ value_json.firmware }}",
+		ValueTemplate:  "{{ value_json.val.firmware }}",
 		// json_attributes_topic mirrors the state so operators can
 		// inspect all four fields (firmware, latest_firmware,
 		// in_progress, firmware_update_state) in HA entity attributes.
 		JSONAttributesTopic:    stateTopic,
-		JSONAttributesTemplate: "{{ value_json | tojson }}",
+		JSONAttributesTemplate: "{{ value_json.val | tojson }}",
 		Fields: hadiscovery.UpdateFields{
 			LatestVersionTopic:    stateTopic,
-			LatestVersionTemplate: "{{ value_json.latest_firmware }}",
+			LatestVersionTemplate: "{{ value_json.val.latest_firmware }}",
 			Title:                 model + " Firmware",
 			DisplayPrecision:      new(0),
 		},
