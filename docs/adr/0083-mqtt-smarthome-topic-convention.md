@@ -92,6 +92,24 @@ configured value is kept verbatim. Two details follow from the code:
 - mtec gains a default where it had none, so existing installations — all of
   which configured a value — keep their root.
 
+**The name is the only thing that keeps two instances apart**, and nothing
+checks it. Two cases, both the operator's to resolve by configuring a
+different name; each bridge's README says so next to the option:
+
+- Two instances of the same project on one broker (two inverters, two UniFi
+  consoles) with the same `<name>` write the same topics and overwrite each
+  other's `connected` and `info`. A daemon cannot tell a second instance's
+  retained `connected` from the one its own previous run left, so it does not
+  try to detect this.
+- The defaults `unifi` and `homeconnect` are also the default instance names
+  of hobbyquaker's Node.js adapters `unifi2mqtt` and `homeconnect2mqtt`
+  (`--name` default in unifi2mqtt's README; `defaults: {name: 'homeconnect'}`
+  in homeconnect2mqtt's `config.js`). Running one of those beside the Go
+  bridge of the same name on one broker needs one of the two renamed. The
+  defaults deliberately carry no `go-` prefix (decided 2026-10-06): the short
+  word is what the spec asks for, and the overlap needs both adapters for the
+  same hardware on the same broker.
+
 ### Naming
 
 - Segments and keys a project **coins** are `snake_case`: mtec `now-base` →
