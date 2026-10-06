@@ -70,6 +70,7 @@ func TestCombinedProjectionBodiesAreUnchanged(t *testing.T) {
 				"entity_category":     "config",
 				"mode":                "box",
 				"optimistic":          false,
+				"value_template":      "{{ value_json.val }}",
 			},
 		},
 		{
@@ -90,6 +91,7 @@ func TestCombinedProjectionBodiesAreUnchanged(t *testing.T) {
 				"entity_category":     "config",
 				"mode":                "box",
 				"optimistic":          false,
+				"value_template":      "{{ value_json.val }}",
 			},
 		},
 		{
@@ -107,6 +109,7 @@ func TestCombinedProjectionBodiesAreUnchanged(t *testing.T) {
 				"entity_category":     "config",
 				"mode":                "box",
 				"optimistic":          false,
+				"value_template":      "{{ value_json.val }}",
 			},
 		},
 		{

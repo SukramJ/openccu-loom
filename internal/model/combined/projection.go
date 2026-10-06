@@ -63,9 +63,13 @@ func (t *Timer) HACombinedDiscovery(ctx payload.CombinedDiscoveryContext) hadisc
 		return hadiscovery.Component{}
 	}
 	return hadiscovery.Component{
-		Platform:       hacatalog.PlatformNumber,
-		Name:           t.discoveryLabel(ctx),
-		CommandTopic:   ctx.CombinedCommandTopic(),
+		Platform:     hacatalog.PlatformNumber,
+		Name:         t.discoveryLabel(ctx),
+		CommandTopic: ctx.CombinedCommandTopic(),
+		// The state topic carries a status object, and number.py
+		// float()s the rendered payload: without a template HA reads the
+		// whole object and rejects it.
+		ValueTemplate:  hadiscovery.StatusValueTemplate,
 		Min:            new(float64(0)),
 		Max:            new(float64(timerMaxSeconds)),
 		Step:           new(float64(1)),

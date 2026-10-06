@@ -351,6 +351,7 @@ func perDatapointVocabulary(ev Event, comp HAComponent) perDatapointDeclaration 
 		decl.writable = true
 		decl.optimistic = new(false)
 		decl.fields = hadiscovery.TextFields{Mode: "text"}
+		decl.commandTemplate = textCommandTemplate
 		if mn := ev.descMin(); mn != nil {
 			decl.min = new(float64(int(*mn)))
 		}

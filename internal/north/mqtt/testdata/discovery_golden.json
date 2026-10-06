@@ -336,7 +336,7 @@
       },
       "state_topic": "gh/status/ccu-01/HmIP-RF/000C0001/1/values/PRESS_SHORT",
       "unique_id": "loom_000c0001_1_press_short",
-      "value_template": "{{ dict(value_json.hm, event_type=value_json.val) | tojson }}"
+      "value_template": "{{ dict(value_json.hm or {}, event_type=value_json.val) | tojson }}"
     }
   },
   "event/virtual-remote-central-scoped": {
@@ -386,7 +386,7 @@
       },
       "state_topic": "gh/status/ccu-01/BidCos-RF/BIDCOS-RF/3/values/PRESS_SHORT",
       "unique_id": "loom_11a0001234_bidcos_rf_3_press_short",
-      "value_template": "{{ dict(value_json.hm, event_type=value_json.val) | tojson }}"
+      "value_template": "{{ dict(value_json.hm or {}, event_type=value_json.val) | tojson }}"
     }
   },
   "light/master": {
@@ -1381,6 +1381,7 @@
         }
       ],
       "availability_mode": "all",
+      "command_template": "{{ {\"val\": value} | tojson }}",
       "command_topic": "gh/set/ccu-01/HmIP-RF/00130001/1/master/DISPLAY_LINE",
       "device": {
         "identifiers": [
@@ -1433,6 +1434,7 @@
         }
       ],
       "availability_mode": "all",
+      "command_template": "{{ {\"val\": value} | tojson }}",
       "command_topic": "gh/set/ccu-01/HmIP-RF/00130001/1/values/DISPLAY_LINE",
       "device": {
         "identifiers": [

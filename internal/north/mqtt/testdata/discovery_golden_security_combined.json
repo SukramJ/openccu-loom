@@ -41,7 +41,8 @@
       "state_topic": "gh/status/ccu-01/HmIP-RF/INT0000001/3/combined/duration",
       "step": 1,
       "unique_id": "openccu-loom_ccu-01_int0000001_3_duration",
-      "unit_of_measurement": "s"
+      "unit_of_measurement": "s",
+      "value_template": "{{ value_json.val }}"
     }
   },
   "combined/duration-catalogue-label": {
@@ -87,7 +88,8 @@
       "state_topic": "gh/status/ccu-01/HmIP-RF/0001ABCD/3/combined/duration",
       "step": 1,
       "unique_id": "openccu-loom_0001abcd_3_duration",
-      "unit_of_measurement": "s"
+      "unit_of_measurement": "s",
+      "value_template": "{{ value_json.val }}"
     }
   },
   "combined/duration-ccu-label": {
@@ -133,7 +135,8 @@
       "state_topic": "gh/status/ccu-01/HmIP-RF/0001ABCD/3/combined/duration",
       "step": 1,
       "unique_id": "openccu-loom_0001abcd_3_duration",
-      "unit_of_measurement": "s"
+      "unit_of_measurement": "s",
+      "value_template": "{{ value_json.val }}"
     }
   },
   "combined/enum-select-door-mode": {
@@ -178,7 +181,8 @@
         "sw_version": "dev"
       },
       "state_topic": "gh/status/ccu-01/HmIP-RF/0004DOOR/1/combined/door_mode",
-      "unique_id": "openccu-loom_0004door_1_door_mode"
+      "unique_id": "openccu-loom_0004door_1_door_mode",
+      "value_template": "{{ value_json.val }}"
     }
   },
   "combined/hs-color": {
@@ -303,7 +307,8 @@
       "state_topic": "gh/status/ccu-01/HmIP-RF/0001ABCD/3/combined/duration",
       "step": 1,
       "unique_id": "openccu-loom_0001abcd_3_duration",
-      "unit_of_measurement": "s"
+      "unit_of_measurement": "s",
+      "value_template": "{{ value_json.val }}"
     }
   },
   "combined/projection-sets-unique-id": {
@@ -349,7 +354,8 @@
       "state_topic": "gh/status/ccu-01/HmIP-RF/0001ABCD/3/combined/duration",
       "step": 1,
       "unique_id": "openccu-loom_projection_pinned",
-      "unit_of_measurement": "s"
+      "unit_of_measurement": "s",
+      "value_template": "{{ value_json.val }}"
     }
   },
   "combined/second-central": {
@@ -395,7 +401,8 @@
       "state_topic": "gh/status/ccu-02/HmIP-RF/0001ABCD/3/combined/duration",
       "step": 1,
       "unique_id": "openccu-loom_0001abcd_3_duration",
-      "unit_of_measurement": "s"
+      "unit_of_measurement": "s",
+      "value_template": "{{ value_json.val }}"
     }
   },
   "combined/sub-devices-enabled": {
@@ -441,7 +448,8 @@
       "state_topic": "gh/status/ccu-01/HmIP-RF/0001ABCD/3/combined/duration",
       "step": 1,
       "unique_id": "openccu-loom_0001abcd_3_duration",
-      "unit_of_measurement": "s"
+      "unit_of_measurement": "s",
+      "value_template": "{{ value_json.val }}"
     }
   },
   "security/class/battery-diagnostic": {
@@ -622,7 +630,7 @@
       },
       "state_topic": "gh/status/security/event",
       "unique_id": "gh_loom_security_event",
-      "value_template": "{{ dict(value_json.hm, event_type=value_json.val) | tojson }}"
+      "value_template": "{{ dict(value_json.hm or {}, event_type=value_json.val) | tojson }}"
     }
   },
   "security/system/fault": {
@@ -668,7 +676,7 @@
       },
       "state_topic": "gh/status/security/fault",
       "unique_id": "gh_loom_security_fault",
-      "value_template": "{{ dict(value_json.hm, event_type=value_json.val) | tojson }}"
+      "value_template": "{{ dict(value_json.hm or {}, event_type=value_json.val) | tojson }}"
     }
   },
   "security/system/health": {

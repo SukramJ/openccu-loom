@@ -299,7 +299,7 @@ What the discovery payloads read:
   (Jinja renders a JSON boolean as `True`), `{{ value_json.val.<field> }}`
   for a field of a document. Event entities render the event document Home
   Assistant parses from the status object:
-  `{{ dict(value_json.hm, event_type=value_json.val) | tojson }}`.
+  `{{ dict(value_json.hm or {}, event_type=value_json.val) | tojson }}`.
 - **Availability**, `availability_mode: all`: `<name>/connected`, available
   at level 2 — `{{ 'online' if value | int(0) >= 2 else 'offline' }}` — plus
   the entity's own reachability item: the device's, the central's, the alarm
@@ -309,8 +309,14 @@ What the discovery payloads read:
   read with `{{ value_json.hm.available | lower }}`. Each list entry carries
   only `topic`, `payload_available`, `payload_not_available` and
   `value_template`.
-- The "Daemon connection" sensor reads `<name>/connected` at level ≥ 1 and
-  carries no availability block of its own.
+- Level 2 means a central is reachable, so the entities that report on the
+  daemon or on that reachability are gated at level 1 instead (`>= 1`):
+  the per-interface connectivity sensors and the add-on update entity. The
+  "Daemon connection" sensor reads `<name>/connected` at level ≥ 1 itself
+  and carries no availability block of its own.
+- `text` entities send `{{ {"val": value} | tojson }}`. The plain `set`
+  form cannot carry an empty string (an empty payload is ignored) or one
+  starting with `{` or `[` (read as JSON); wrapped, both arrive verbatim.
 
 ### Bridge / hub status
 

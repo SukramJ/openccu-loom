@@ -23,6 +23,36 @@ func connectedAvailability(connected string) hadiscovery.AvailabilityEntry {
 	return hadiscovery.ConnectedAvailability(connected, hadiscovery.ConnectedOperational)
 }
 
+// daemonAvailability is the availability entry for an entity that reports on
+// the daemon itself or on the upstream connection: available at level 1
+// (connected to the broker), so it stays readable while no central is
+// reachable. ADR 0083's default is level 2 and this is the exception, for
+// exactly the entities whose state an operator reads to learn why the
+// others went unavailable — gating them on the level they help explain would
+// hide them in the one situation they exist for:
+//
+//   - the per-interface connectivity sensors (a CCU interface's own
+//     reachability, the inputs the per-CCU gate is folded from);
+//   - the add-on update entity (this daemon's own release, which no CCU
+//     outage changes and which must stay installable through one).
+//
+// The daemon-status sensor, the third self-reporting entity, reads
+// `connected` itself and carries no availability at all.
+func daemonAvailability(connected string) hadiscovery.AvailabilityEntry {
+	return hadiscovery.ConnectedAvailability(connected, hadiscovery.ConnectedBroker)
+}
+
+// atDaemonLevel rewrites the `connected` entry of entries to
+// [daemonAvailability], leaving every other entry as it is.
+func atDaemonLevel(entries []hadiscovery.AvailabilityEntry, connected string) []hadiscovery.AvailabilityEntry {
+	for i, e := range entries {
+		if e.Topic == connected {
+			entries[i] = daemonAvailability(connected)
+		}
+	}
+	return entries
+}
+
 // onlineAvailability is the availability entry for a boolean status item —
 // a device's, a central's, the alarm zone's or the security plane's `online`
 // item, and a program's `execute_available`.

@@ -6,6 +6,7 @@ package mqtt
 import (
 	"bytes"
 	"encoding/json"
+	"reflect"
 	"sync"
 	"time"
 
@@ -85,6 +86,25 @@ func (c *statusClock) forget(topics ...string) {
 	}
 }
 
+// statusExt is hm as the status object's extension, or nil when hm holds a
+// nil map, slice or pointer. The shared renderer omits the key only for an
+// untyped nil, and a typed nil marshals to `"hm":null` — which the event
+// template's `value_json.hm or {}` survives, but which no consumer should
+// have to: an absent extension is spelled by its absence.
+func statusExt(hm any) any {
+	if hm == nil {
+		return nil
+	}
+	switch v := reflect.ValueOf(hm); v.Kind() {
+	case reflect.Map, reflect.Slice, reflect.Pointer, reflect.Interface:
+		if v.IsNil() {
+			return nil
+		}
+	default:
+	}
+	return hm
+}
+
 // renderStatus renders one status object through the shared
 // [hapublisher.StatusObject], so this daemon's bytes are the convention's
 // bytes, with `lc` from the bridge's [statusClock]. at is the observation
@@ -101,7 +121,7 @@ func (b *Bridge) renderStatus(topic string, val, hm any, at time.Time) ([]byte, 
 	lc := b.clock.observe(topic, raw, ts)
 	return hapublisher.StatusObject{
 		Val: json.RawMessage(raw), TS: ts, LC: lc,
-		ExtKey: statusExtKey, Ext: hm,
+		ExtKey: statusExtKey, Ext: statusExt(hm),
 	}.JSON()
 }
 
@@ -116,7 +136,7 @@ func renderPulse(val, hm any, at time.Time) ([]byte, error) {
 	ms := at.UnixMilli()
 	return hapublisher.StatusObject{
 		Val: val, TS: ms, LC: ms,
-		ExtKey: statusExtKey, Ext: hm,
+		ExtKey: statusExtKey, Ext: statusExt(hm),
 	}.JSON()
 }
 

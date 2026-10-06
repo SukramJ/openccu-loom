@@ -359,7 +359,7 @@
       },
       "state_topic": "gh/status/ccu-01/HmIP-RF/0001SWDO0001/1/device_error",
       "unique_id": "loom_event_group_device_error_0001swdo0001_1",
-      "value_template": "{{ dict(value_json.hm, event_type=value_json.val) | tojson }}"
+      "value_template": "{{ dict(value_json.hm or {}, event_type=value_json.val) | tojson }}"
     }
   },
   "event/impulse": {
@@ -401,7 +401,7 @@
       },
       "state_topic": "gh/status/ccu-01/HmIP-RF/0001SRD00001/1/impulse",
       "unique_id": "loom_event_group_impulse_0001srd00001_1",
-      "value_template": "{{ dict(value_json.hm, event_type=value_json.val) | tojson }}"
+      "value_template": "{{ dict(value_json.hm or {}, event_type=value_json.val) | tojson }}"
     }
   },
   "event/keypress-bare-address-name": {
@@ -447,7 +447,7 @@
       },
       "state_topic": "gh/status/ccu-01/HmIP-RF/0001BRC20001/1/event",
       "unique_id": "loom_event_group_keypress_0001brc20001_1",
-      "value_template": "{{ dict(value_json.hm, event_type=value_json.val) | tojson }}"
+      "value_template": "{{ dict(value_json.hm or {}, event_type=value_json.val) | tojson }}"
     }
   },
   "event/keypress-channel-number": {
@@ -493,7 +493,7 @@
       },
       "state_topic": "gh/status/ccu-01/HmIP-RF/0001BRC20001/1/event",
       "unique_id": "loom_event_group_keypress_0001brc20001_1",
-      "value_template": "{{ dict(value_json.hm, event_type=value_json.val) | tojson }}"
+      "value_template": "{{ dict(value_json.hm or {}, event_type=value_json.val) | tojson }}"
     }
   },
   "event/keypress-doorbell": {
@@ -536,7 +536,7 @@
       },
       "state_topic": "gh/status/ccu-01/HmIP-RF/0001DBB00001/1/event",
       "unique_id": "loom_event_group_keypress_0001dbb00001_1",
-      "value_template": "{{ dict(value_json.hm, event_type=value_json.val) | tojson }}"
+      "value_template": "{{ dict(value_json.hm or {}, event_type=value_json.val) | tojson }}"
     }
   },
   "event/keypress-operator-named": {
@@ -582,7 +582,7 @@
       },
       "state_topic": "gh/status/ccu-01/HmIP-RF/0001BRC20001/1/event",
       "unique_id": "loom_event_group_keypress_0001brc20001_1",
-      "value_template": "{{ dict(value_json.hm, event_type=value_json.val) | tojson }}"
+      "value_template": "{{ dict(value_json.hm or {}, event_type=value_json.val) | tojson }}"
     }
   },
   "event/keypress-virtual-remote-ccu-01": {
@@ -626,7 +626,7 @@
       },
       "state_topic": "gh/status/ccu-01/BidCos-RF/BIDCOS-RF/3/event",
       "unique_id": "loom_event_group_keypress_11a0001234_bidcos_rf_3",
-      "value_template": "{{ dict(value_json.hm, event_type=value_json.val) | tojson }}"
+      "value_template": "{{ dict(value_json.hm or {}, event_type=value_json.val) | tojson }}"
     }
   },
   "event/keypress-virtual-remote-ccu-02": {
@@ -670,7 +670,7 @@
       },
       "state_topic": "gh/status/ccu-02/BidCos-RF/BIDCOS-RF/3/event",
       "unique_id": "loom_event_group_keypress_11b0005678_bidcos_rf_3",
-      "value_template": "{{ dict(value_json.hm, event_type=value_json.val) | tojson }}"
+      "value_template": "{{ dict(value_json.hm or {}, event_type=value_json.val) | tojson }}"
     }
   },
   "light/dimmer": {

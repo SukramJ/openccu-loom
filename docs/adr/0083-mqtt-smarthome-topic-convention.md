@@ -625,7 +625,7 @@ Found in loom:
 13. **Event and update entities need a template that rebuilds JSON.** Home
     Assistant's event platform and update platform both parse the
     post-template payload as JSON; the event entities render
-    `{{ dict(value_json.hm, event_type=value_json.val) | tojson }}`, the
+    `{{ dict(value_json.hm or {}, event_type=value_json.val) | tojson }}`, the
     update entities `{{ value_json.val | tojson }}`. `system/status` puts
     the component that changed in `val`; a Security & Safety event its verb.
 14. **`<base>/info` carries a live field.** go-hamqtt's
@@ -642,6 +642,28 @@ Found in loom:
     names the "Daemon connection" entity, whose template renders the
     `connected` level into those words. No REST or WebSocket behaviour
     changed.
+17. **Self-reporting entities are the exception to `connected ≥ 2`.**
+    Level 2 means a central is reachable, so an entity whose state is that
+    reachability, or this daemon itself, is gated at level 1 — otherwise it
+    is unavailable exactly when an operator needs to read it. Of the
+    entities whose only availability was `bridge/status` before this ADR,
+    two are of that kind and take `≥ 1`: the per-interface connectivity
+    sensors and the add-on update entity (the daemon's own release, which
+    must stay installable through a CCU outage). The "Daemon connection"
+    sensor reads `connected` itself and has no availability. Every other
+    entity keeps `≥ 2`.
+18. **`dict()` raises on a missing `hm`.** jinja2 3.1.6, which Home
+    Assistant renders with, raises for `dict()` of an undefined or `null`
+    argument, so the event template reads `value_json.hm or {}`, and a
+    status object without project fields omits `hm` rather than writing
+    `null`.
+19. **`text` entities wrap their value.** Under the plain `set` form an
+    empty string is an ignored empty payload and a string opening with `{`
+    or `[` is malformed JSON; before this ADR both reached the CCU (the
+    empty one as a null value). The `text` entities — a writable string
+    parameter, an editable string system variable — therefore send
+    `{{ {"val": value} | tojson }}`. The display's `notify` entity already
+    sent a JSON object and is unaffected.
 
 ## Revisit when
 

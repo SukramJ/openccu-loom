@@ -25,8 +25,11 @@ const (
 	// eventValueTemplate turns an event's status object back into the
 	// JSON document Home Assistant's event platform parses: the type from
 	// `val` as `event_type`, the rest of the event from `hm` as its
-	// attributes.
-	eventValueTemplate = "{{ dict(value_json.hm, event_type=value_json.val) | tojson }}"
+	// attributes. `or {}` because Jinja's dict() raises on an undefined
+	// or null argument (verified against jinja2 3.1.6, which Home
+	// Assistant renders with): an event published without facets must
+	// still fire with its type rather than fail the render.
+	eventValueTemplate = "{{ dict(value_json.hm or {}, event_type=value_json.val) | tojson }}"
 )
 
 // securitySystemEntities are the entities that exist regardless of what

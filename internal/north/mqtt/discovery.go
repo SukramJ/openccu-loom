@@ -43,6 +43,16 @@ import (
 // CCU pushes a real value.
 const valueJSONValueTemplate = `{% if value_json is defined and value_json.val is not none %}{{ value_json.val }}{% endif %}`
 
+// textCommandTemplate wraps a `text` entity's value as `{"val": …}` before
+// it reaches the `set` topic. A free-form string is the one command whose
+// plain form the mqtt-smarthome `set` grammar cannot carry whole
+// ([hapublisher.ParseSet]): an empty string is an empty payload, which is
+// dropped as a retained-topic eviction, and a string opening with `{` or `[`
+// is read as JSON and rejected when it does not parse. Wrapped, both arrive
+// as the string they are — the empty one as the nil value the pre-ADR 0083
+// handler passed on for it, the brace-leading one verbatim.
+const textCommandTemplate = `{{ {"val": value} | tojson }}`
+
 // valueJSONValueLowerTemplate is the boolean-aware variant used for
 // switch / lock / binary_sensor entities. The status object carries a JSON
 // boolean (`{"val":true}` → Jinja `True`/`False` with capitalised initial),

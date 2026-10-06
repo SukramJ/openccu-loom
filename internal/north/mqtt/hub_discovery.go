@@ -167,12 +167,6 @@ func hubEntityDeviceBlock(centralName, deviceAddress string, info HubInfo) *hadi
 	}
 }
 
-// hubAvailability is the daemon-level availability list: the instance's
-// `connected` level alone, available at ≥ 2.
-func hubAvailability(t *TopicBuilder) []hadiscovery.AvailabilityEntry {
-	return []hadiscovery.AvailabilityEntry{connectedAvailability(t.Connected())}
-}
-
 func hubNodeID(centralName, kind string) string {
 	return safeLower(centralName) + "_" + kind
 }
@@ -257,6 +251,9 @@ type hubDiscoveryContext struct {
 	// ccuStatus is the per-CCU reachability gate appended to every gated
 	// hub entity's availability list. Empty suppresses the append.
 	ccuStatus string
+	// selfReports gates the entity on `connected ≥ 1` instead of ≥ 2; see
+	// [hubEntity.selfReports] and [daemonAvailability].
+	selfReports bool
 }
 
 // UniqueID implements [hadiscovery.Context] with the id this daemon already
@@ -294,9 +291,14 @@ func (c hubDiscoveryContext) NodeID(*hamodel.Device) string { return c.nodeID }
 //     that, and "an entity that declares no gate acquires none" is a rule
 //     that needs no per-entity list to maintain.
 //   - An entity marked [hubEntity.selfReports] — the per-interface
-//     connectivity sensors, which are the fold's own inputs.
+//     connectivity sensors, which are the fold's own inputs. They are also
+//     gated on `connected ≥ 1` rather than ≥ 2: level 2 means some central
+//     is reachable, which is the very thing they report.
 func (c hubDiscoveryContext) Availability(dev *hamodel.Device, e hamodel.Entity) []hadiscovery.AvailabilityEntry {
 	entries := conventionAvailability(c.StdContext.Availability(dev, e), c.Layout.Bridge())
+	if c.selfReports {
+		entries = atDaemonLevel(entries, c.Layout.Bridge())
+	}
 	if c.ccuStatus == "" || len(entries) == 0 {
 		return entries
 	}
@@ -328,12 +330,17 @@ type hubEntity struct {
 	// the same reasoning [DefaultDiscoveryBuilder.BuildDaemonStatusDiscovery]
 	// applies one level up, against `connected`.
 	selfReports bool
+	// commandTemplate is the entity's `command_template`, empty for none.
+	commandTemplate string
 }
 
 // BuildDiscovery implements [hadiscovery.Builder].
 func (e *hubEntity) BuildDiscovery(_ hadiscovery.Context, comp *hadiscovery.Component) error {
 	if e.fields != nil {
 		comp.Fields = e.fields
+	}
+	if e.commandTemplate != "" {
+		comp.CommandTemplate = e.commandTemplate
 	}
 	return nil
 }
@@ -387,13 +394,14 @@ func (d *DefaultDiscoveryBuilder) renderHubItem(
 		ccu = ""
 	}
 	ctx := hubDiscoveryContext{
-		Layout:     layout,
-		Lang:       d.Locale,
-		Enc:        hadiscovery.StatusObjectEncoding,
-		Translator: d.tr,
-		uniqueID:   uniqueID,
-		nodeID:     nodeID,
-		ccuStatus:  ccu,
+		Layout:      layout,
+		Lang:        d.Locale,
+		Enc:         hadiscovery.StatusObjectEncoding,
+		Translator:  d.tr,
+		uniqueID:    uniqueID,
+		nodeID:      nodeID,
+		ccuStatus:   ccu,
+		selfReports: e.selfReports,
 	}
 	comp, err := hadiscovery.RenderComponent(ctx, dev, e, *BuildOriginInfo())
 	if err != nil {
@@ -514,6 +522,7 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv Hu
 			writes = true
 			desc.Optimistic = new(false)
 			entity.fields = hadiscovery.TextFields{Mode: "text"}
+			entity.commandTemplate = textCommandTemplate
 		} else {
 			// HA's `text` entity caps state payloads at 255 chars and warns
 			// loudly on every overrun. CCU string sysvars (e.g.

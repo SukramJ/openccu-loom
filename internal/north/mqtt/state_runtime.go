@@ -173,7 +173,7 @@ func (b *Bridge) ResetRuntimeGates() {
 // make the metric describe intent rather than traffic, which is the opposite
 // of what an operator reads it for.
 func (b *Bridge) publishRuntimeStatus(ctx context.Context, centralName, topic string, val, hm any) error {
-	sent, err := b.state.PublishStatus(ctx, topic, hapublisher.Observation{Value: val, Ext: hm})
+	sent, err := b.state.PublishStatus(ctx, topic, hapublisher.Observation{Value: val, Ext: statusExt(hm)})
 	if err != nil {
 		b.incPublishErrors(centralName)
 		return err

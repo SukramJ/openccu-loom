@@ -339,8 +339,14 @@ func (e *EnumSelect) HACombinedDiscovery(ctx payload.CombinedDiscoveryContext) h
 		Platform:     hacatalog.PlatformSelect,
 		Name:         ctx.Translate(e.labelKey),
 		CommandTopic: ctx.CombinedCommandTopic(),
-		Options:      e.Modes(),
-		Optimistic:   new(false),
+		// The state topic carries a status object whose `val` is the
+		// mode token, which is also the option HA sends back, so
+		// [EnumSelect.WriteCombined] receives a token it maps. Without
+		// the template select.py compares the whole object against
+		// `options` and drops it.
+		ValueTemplate: hadiscovery.StatusValueTemplate,
+		Options:       e.Modes(),
+		Optimistic:    new(false),
 	}
 }
 

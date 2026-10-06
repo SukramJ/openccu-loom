@@ -7,7 +7,7 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "openccu-loom/connected",
-          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
+          "value_template": "{{ 'online' if value | int(0) \u003e= 1 else 'offline' }}"
         }
       ],
       "availability_mode": "all",
@@ -45,7 +45,7 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/connected",
-          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
+          "value_template": "{{ 'online' if value | int(0) \u003e= 1 else 'offline' }}"
         }
       ],
       "availability_mode": "all",
@@ -83,7 +83,7 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/connected",
-          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
+          "value_template": "{{ 'online' if value | int(0) \u003e= 1 else 'offline' }}"
         }
       ],
       "availability_mode": "all",
@@ -121,7 +121,7 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/connected",
-          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
+          "value_template": "{{ 'online' if value | int(0) \u003e= 1 else 'offline' }}"
         }
       ],
       "availability_mode": "all",

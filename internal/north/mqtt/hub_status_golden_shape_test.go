@@ -287,8 +287,15 @@ func TestHubGoldenAvailabilityGainedOnlyTheCCUGate(t *testing.T) {
 			t.Errorf("%s: first availability entry is %v, want the instance's connected topic — "+
 				"the CCU gate is added alongside it, never instead of it", name, first)
 		}
-		if tmpl := list[0]["value_template"]; tmpl != "{{ 'online' if value | int(0) >= 2 else 'offline' }}" {
-			t.Errorf("%s: connected entry reads %v, want available at level 2", name, tmpl)
+		// Level 2 (a central reachable) is the default; the connectivity
+		// sensors report that very reachability and are gated on level 1
+		// (daemon up) instead — see daemonAvailability.
+		wantLevel := "2"
+		if strings.HasPrefix(name, "connectivity/") {
+			wantLevel = "1"
+		}
+		if tmpl := list[0]["value_template"]; tmpl != "{{ 'online' if value | int(0) >= "+wantLevel+" else 'offline' }}" {
+			t.Errorf("%s: connected entry reads %v, want available at level %s", name, tmpl, wantLevel)
 		}
 		for i, e := range list {
 			topic, _ := e["topic"].(string)
@@ -532,6 +539,11 @@ var hubConventionTemplates = map[string]map[string]string{
 	},
 	"latest_version_template": {
 		"{{ value_json.val.latest_version }}": "{{ value_json.latest_version }}",
+	},
+	// The `text` sysvar's command wrapper: the `set` grammar cannot carry
+	// an empty or brace-leading string bare, which the raw plane could.
+	"command_template": {
+		textCommandTemplate: "",
 	},
 }
 

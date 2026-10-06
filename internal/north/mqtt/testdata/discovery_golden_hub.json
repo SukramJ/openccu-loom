@@ -185,7 +185,7 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/connected",
-          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
+          "value_template": "{{ 'online' if value | int(0) \u003e= 1 else 'offline' }}"
         }
       ],
       "availability_mode": "all",
@@ -224,7 +224,7 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/connected",
-          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
+          "value_template": "{{ 'online' if value | int(0) \u003e= 1 else 'offline' }}"
         }
       ],
       "availability_mode": "all",
@@ -261,7 +261,7 @@
           "payload_available": "online",
           "payload_not_available": "offline",
           "topic": "gh/connected",
-          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
+          "value_template": "{{ 'online' if value | int(0) \u003e= 1 else 'offline' }}"
         }
       ],
       "availability_mode": "all",
@@ -2053,6 +2053,7 @@
         }
       ],
       "availability_mode": "all",
+      "command_template": "{{ {\"val\": value} | tojson }}",
       "command_topic": "gh/set/ccu-01/hub/sysvars/Notiz",
       "default_entity_id": "text.loom_11a0001234_sysvar_4717",
       "device": {

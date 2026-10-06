@@ -34,9 +34,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   custom-DP operation topic lost its `invoke` suffix. A `set` accepts the
   plain value or `{"val": …}`; empty and retained `set` messages are
   ignored, and a rejected or failed one is logged at warn with its topic
-  and payload (an alarm `code` redacted). Home Assistant discovery keeps
-  every `unique_id`, node id, device identifier and discovery topic, so
-  entities re-point to the new topics on their own; dashboards and
+  and payload (an alarm `code` redacted); Home Assistant `text` entities
+  send `{"val": …}`, so an empty or `{`-leading text still arrives. Home
+  Assistant entities are available while `connected` is 2, except the
+  per-interface connectivity sensors and the add-on update entity, which
+  stay available at 1 so they can show a CCU outage. Home Assistant
+  discovery keeps every `unique_id`, node id, device identifier and
+  discovery topic, so entities re-point to the new topics on their own;
+  dashboards and
   automations reading `value_json.value` from raw topics, Node-RED flows,
   Telegraf and `mosquitto_sub` scripts must move to the new topics. The
   one item kept in Home Assistant's own shape is the light aggregate

@@ -112,11 +112,12 @@ func (c addonUpdateContext) CommandTopic(hamodel.Slot) string {
 	return c.topics.AddonUpdateCommand()
 }
 
-// Availability implements [hadiscovery.Context] with this daemon's
-// bridge-status entry, the same one every other plane in this package
-// emits.
+// Availability implements [hadiscovery.Context] with the instance's
+// `connected` entry at the daemon level: the entity reports this daemon's
+// own release, so it stays available while no central is reachable — see
+// [daemonAvailability].
 func (c addonUpdateContext) Availability(*hamodel.Device, hamodel.Entity) []hadiscovery.AvailabilityEntry {
-	return hubAvailability(c.topics)
+	return []hadiscovery.AvailabilityEntry{daemonAvailability(c.topics.Connected())}
 }
 
 // UniqueID implements [hadiscovery.Context]. The published id is the
