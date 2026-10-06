@@ -211,21 +211,32 @@ curl -X PUT \
 
 ## MQTT topic layout
 
-Raw plane (always on when MQTT is enabled):
-
+Raw plane (always on when MQTT is enabled). The layout follows the
+[mqtt-smarthome 2.0](https://github.com/mqtt-smarthome/mqtt-smarthome/blob/master/SPEC.md)
+convention, `<base>/<function>/<item…>` (ADR 0083): state under `status`,
+commands under `set` on the same item path, descriptors under `meta`.
 A `<bucket>` segment (`values` | `master` | `calculated`) sits between
 the channel and the parameter:
 
 ```
-<base>/<central>/<interface>/<addr>/<channel>/<bucket>/<parameter>       state (retained)
-<base>/<central>/<interface>/<addr>/<channel>/<bucket>/<parameter>/set   command
-<base>/<central>/<interface>/<addr>/availability                        online|offline (retained)
-<base>/<central>/hub/programs/<id>/state                                state (retained)
-<base>/<central>/hub/programs/<id>/trigger                              command
-<base>/<central>/hub/sysvars/<name>/state                               value (retained)
-<base>/<central>/hub/sysvars/<name>/set                                 command
-<base>/bridge/status                                                    LWT (retained)
+<base>/status/<central>/<interface>/<addr>/<channel>/<bucket>/<parameter>   state (retained)
+<base>/set/<central>/<interface>/<addr>/<channel>/<bucket>/<parameter>      command
+<base>/meta/<central>/<interface>/<addr>/<channel>/<bucket>/<parameter>     descriptor (retained)
+<base>/status/<central>/<interface>/<addr>/online                           device reachable (retained)
+<base>/status/<central>/hub/programs/<id>/active                            state (retained)
+<base>/set/<central>/hub/programs/<id>/trigger                              command
+<base>/status/<central>/hub/sysvars/<name>                                  value (retained)
+<base>/set/<central>/hub/sysvars/<name>                                     command
+<base>/connected                                                            0|1|2, LWT 0 (retained)
+<base>/info                                                                 instance info (retained)
 ```
+
+Every state payload is a status object,
+`{"val": 21.6, "ts": 1730385720123, "lc": 1730385720123, "hm": {"available": true}}`
+— the value in `val`, the observation (`ts`) and last-change (`lc`) times in
+milliseconds, project fields under `hm`. A command takes the plain value or
+`{"val": …}`. See [MQTT Topic Schema](mqtt-topic-schema.md) for every item
+and the migration table from the previous layout.
 
 Home Assistant Discovery plane (same state topics, separate config messages):
 

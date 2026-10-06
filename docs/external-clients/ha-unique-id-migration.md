@@ -285,7 +285,7 @@ new  device.identifiers = ["openccu-loom_central_cafe"]
 
 unchanged  unique_id          = loom_11a0001234_0001d3c99c1234_1_state
 unchanged  default_entity_id  = (unchanged, or absent on this plane)
-unchanged  state_topic        = gh/Café/HmIP-RF/0001D3C99C1234/1/values/STATE
+unchanged  state_topic        = gh/status/Café/HmIP-RF/0001D3C99C1234/1/values/STATE
 ```
 
 **What is lost, named.** Less than a `unique_id` re-key costs, and it is not
@@ -377,7 +377,7 @@ only if, one of the following carries a non-German accented Latin character
 
 - **your CCU's configured name** — this is the expensive one, because it moves
   every device card of that CCU. Check `central` in the add-on configuration,
-  or read it off a topic: `mosquitto_sub -h <broker> -t '<base>/+/hub/status' -v -W 3`.
+  or read it off a topic: `mosquitto_sub -h <broker> -t '<base>/status/+/online' -v -W 3`.
 - **a system variable or program name**, which moves only that entity's
   discovery topic (its `unique_id` is keyed on the ISE id).
 
@@ -485,7 +485,7 @@ new  homeassistant/update/house_daemon/addon_update/config
 
 unchanged  unique_id          = loom_000a0000000001_4_state   (per-device plane)
 unchanged  device.identifiers = ["openccu-loom_000a0000000001"]
-unchanged  state_topic        = house/ccu-haus/HmIP-RF/000A0000000001/4/values/STATE
+unchanged  state_topic        = house/status/ccu-haus/HmIP-RF/000A0000000001/4/values/STATE
 ```
 
 The three daemon-level planes move their identity as well, because moving

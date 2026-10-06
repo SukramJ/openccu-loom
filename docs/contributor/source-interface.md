@@ -107,9 +107,10 @@ When you add a new model type, walk this tree:
 
 5. **Use HA-friendly key names.** State fields should match what HA's
    MQTT platform expects (`hvac_mode`, `current_temperature`,
-   `current_position`, `lock_state`, …). The MQTT bridge points HA at
-   the aggregated state topic with `value_template:
-   "{{ value_json.<field> }}"` — your key names show up verbatim in HA
+   `current_position`, `lock_state`, …). The MQTT bridge publishes the
+   aggregate as the `val` of an mqtt-smarthome status object (ADR 0083)
+   and points HA at it with `value_template:
+   "{{ value_json.val.<field> }}"` — your key names show up verbatim in HA
    templates.
 
 6. **Filter typed-nil values from your maps.** Empty optional fields
@@ -158,7 +159,7 @@ Use the `ctx` helpers to assemble topic references:
 
 - `ctx.AggregatedStateTopic()` — the channel's aggregated state topic.
   Read references (`*_state_topic`) point here with
-  `value_template: "{{ value_json.<field> }}"`.
+  `value_template: "{{ value_json.val.<field> }}"`.
 - `ctx.ServiceMethodCommandTopic(method)` — write references
   (`*_command_topic`) point at the per-service-method topic. The
   CommandSubscriber dispatches into `Source.Invoke(method, …)`.
@@ -179,7 +180,7 @@ func (f *Foo) HADiscoveryPayload(ctx payload.HADiscoveryContext) (string, map[st
         "min_temp":                 f.MinTemp(),
         "max_temp":                 f.MaxTemp(),
         "mode_state_topic":         ctx.AggregatedStateTopic(),
-        "mode_state_template":      "{{ value_json.hvac_mode }}",
+        "mode_state_template":      "{{ value_json.val.hvac_mode }}",
         "mode_command_topic":       ctx.ServiceMethodCommandTopic("set_mode"),
     }
     return "climate", body
@@ -200,10 +201,10 @@ enforces the no-dual-state-source rule. Add your new type to both.
 - **No REST handler edits** for the basic invoke path — the generic
   `cdps/<dp>/<op>/invoke` route dispatches through `Source.Invoke`.
 - **No HA-Discovery template edits** for the read side — state is
-  consumed via `value_json.<field>` templates that already match the
+  consumed via `value_json.val.<field>` templates that already match the
   StatePayload key set you choose.
 - **No service-method-command-topic wiring.** The CommandSubscriber
-  subscribes a wildcard (`{base}/+/+/+/+/svc/+/set`) and dispatches by
+  subscribes a wildcard (`{base}/set/+/+/+/+/custom/+/+`) and dispatches by
   method name. `Source.Invoke` does the rest.
 
 ---
