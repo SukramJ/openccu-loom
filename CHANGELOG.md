@@ -44,8 +44,11 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   dashboards and
   automations reading `value_json.value` from raw topics, Node-RED flows,
   Telegraf and `mosquitto_sub` scripts must move to the new topics. The
-  one item kept in Home Assistant's own shape is the light aggregate
-  `…/custom/light`, which the JSON-schema light parses natively. The
+  light aggregate `…/custom/light` is a status object like every other
+  item; its Home Assistant document is also published bare on the new
+  `<base>/ha/…/custom/light` (`ha` is this project's one function for a
+  Home Assistant-native document that takes no template), which the
+  JSON-schema light reads. The
   [MQTT topic schema](docs/mqtt-topic-schema.md) has the full old/new
   table.
 - **On start the daemon clears what the old layout left on the broker.**
@@ -55,7 +58,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   new layout. Running it twice clears nothing.
 - **A central named `alarm`, `security`, `system`, `bridge` or like a topic
   function (`connected`, `status`, `set`, `get`, `info`, `meta`,
-  `maintenance`) is refused at start-up**, because its topics would share a
+  `maintenance`, `ha`) is refused at start-up**, because its topics would share a
   level with the daemon's own trees. Rename such a central before upgrading;
   the refusal is a hard failure.
 - A multi-level `north.mqtt.topic_base` (`home/loom`) keeps working

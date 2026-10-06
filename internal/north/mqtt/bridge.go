@@ -982,35 +982,47 @@ func (b *Bridge) PublishCustomDPState(ctx context.Context, centralName, iface st
 		centralName = b.cfg.CentralName
 	}
 	topic := b.topics.SlotState(centralName, iface, slot)
-	var body []byte
-	var err error
-	if slot.Parameter == haJSONLightKind {
-		// The one aggregate that stays in Home Assistant's own shape: see
-		// [haJSONLightKind].
-		body, err = json.Marshal(state)
-	} else {
-		// The aggregate is a document without a primary value, so it is
-		// the status object's `val` whole (ADR 0083).
-		body, err = b.renderStatus(topic, state, nil, time.Time{})
-	}
+	// The aggregate is a document without a primary value, so it is the
+	// status object's `val` whole (ADR 0083) — the light's included.
+	body, err := b.renderStatus(topic, state, nil, time.Time{})
 	if err != nil {
 		return err
+	}
+	// The light's Home Assistant-native twin is the same document, bare:
+	// one builder (the source's state), two renderings of it.
+	haTopic := b.topics.SlotHAState(centralName, iface, slot)
+	var haBody []byte
+	if haTopic != "" {
+		if haBody, err = json.Marshal(state); err != nil {
+			return err
+		}
 	}
 	if err := b.client.Publish(ctx, topic, body, b.cfg.QoS.State, true); err != nil {
 		return err
 	}
 	b.rememberRawTopic(topic)
+	if haTopic == "" {
+		return nil
+	}
+	if err := b.client.Publish(ctx, haTopic, haBody, b.cfg.QoS.State, true); err != nil {
+		return err
+	}
+	b.rememberRawTopic(haTopic)
 	return nil
 }
 
-// haJSONLightKind is the custom-DP kind of every light. Its aggregate is the
-// one status item this daemon does not publish as an mqtt-smarthome status
-// object: the light entity is declared in Home Assistant's JSON schema
+// haJSONLightKind is the custom-DP kind of every light, the one slot with a
+// Home Assistant-native twin under `<base>/ha/…` ([naming.FunctionHA]).
+//
+// The light entity is declared in Home Assistant's JSON schema
 // (`schema: "json"`), whose platform parses the state topic's JSON document
 // natively — `state`, `brightness`, `color`, `color_temp_kelvin`, `effect`,
 // `color_mode` at the top level — and accepts no value template that could
-// reach into `val`. Wrapping it would leave every light entity without a
-// state. The deviation from ADR 0083 is recorded in the ADR's amendment.
+// reach into a status object's `val` (homeassistant/components/mqtt/light/
+// schema_json.py, `_state_received`). The `status` item stays a status
+// object like every other one, and the entity reads the twin. Both topics
+// are retained, evicted together with the device, and republished together
+// on reconnect, because one publish writes both.
 const haJSONLightKind = "light"
 
 // configCacheGate is the reconnect gate over [Bridge.configCache], the byte

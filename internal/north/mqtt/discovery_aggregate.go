@@ -733,10 +733,18 @@ var _ payload.HADiscoveryTopics = discoveryCtx{}
 // the [payload.Slotted] interface — every custom-DP implements it. Empty when
 // the source is missing or not a slotted custom-DP (e.g. a per-parameter
 // discovery event).
+//
+// For the JSON-schema light it is the Home Assistant-native twin under
+// `<base>/ha/…` instead ([TopicBuilder.SlotHAState]): Home Assistant parses
+// that entity's state document without a template, so it cannot read the
+// status object's `val`.
 func (c discoveryCtx) CustomDPStateTopic() string {
 	slot, ok := customDPSlotForEvent(c.ev)
 	if !ok {
 		return ""
+	}
+	if ha := c.d.TopicBuilder.SlotHAState(c.d.centralFor(c.ev), c.ev.Interface, slot); ha != "" {
+		return ha
 	}
 	return c.d.TopicBuilder.SlotState(c.d.centralFor(c.ev), c.ev.Interface, slot)
 }

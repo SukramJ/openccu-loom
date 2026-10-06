@@ -70,14 +70,17 @@ this ADR records how.
 ### Grammar
 
 ```
-<name>/<function>/<item...>     function ∈ connected | status | set | info | meta | maintenance
+<name>/<function>/<item...>     function ∈ connected | status | set | info | meta | maintenance | ha
 ```
 
 The function moves from the topic suffix (`…/state`, `…/set`) to the second
-level. `get` stays reserved and unimplemented. `meta` is this project family's
-one additional function (§3 allows it): the retained descriptor companion,
-today loom's `…/config`, payload unchanged. Item paths are identical under
-`status`, `set` and `meta`.
+level. `get` stays reserved and unimplemented. `meta` is a function of this
+project family (§3 allows it): the retained descriptor companion, today
+loom's `…/config`, payload unchanged. Item paths are identical under
+`status`, `set` and `meta`. `ha` is the family's second one, added by
+amendment item 7: a Home Assistant-native document that Home Assistant
+parses without a template, and nothing else — its single tenant is loom's
+JSON-schema light.
 
 `<name>` is the existing config key (`MQTT_TOPIC` in the bridges,
 `north.mqtt.topic_base` in loom), with new defaults `mtec`, `zendure`,
@@ -295,8 +298,9 @@ daikin's `scheduler` beside device UUIDs; unifi's `bridge` beside `<site>`.
 interface ids are `<central>-<interface>`. This ADR adds the guard: loom
 refuses a central, and unifi a `SITE`, whose topic-safe form is `alarm`,
 `security`, `system` or `bridge`, or any function name (`connected`,
-`status`, `set`, `get`, `info`, `meta`, `maintenance`) — the latter so the
-migration sweep below can never mistake an old topic for a new one.
+`status`, `set`, `get`, `info`, `meta`, `maintenance`, and loom's `ha` —
+amendment item 7) — the latter so the migration sweep below can never
+mistake an old topic for a new one.
 
 ## Target, by example
 
@@ -317,7 +321,7 @@ Unless marked, status is retained and set is subscribed at QoS 1.
 | Today | After |
 |---|---|
 | `<base>/<central>/<iface>/<addr>/<ch>/values/<param>` (also `master`, `calculated`) | `<n>/status/…/<ch>/values/<param>` |
-| `…/<ch>/custom/<kind>` | `<n>/status/…/<ch>/custom/<kind>` |
+| `…/<ch>/custom/<kind>` | `<n>/status/…/<ch>/custom/<kind>` (the light also `<n>/ha/…/<ch>/custom/light`, amendment item 7) |
 | `…/<ch>/event`, `…/<ch>/impulse`, `…/<ch>/device_error` (not retained) | `<n>/status/…/<ch>/event` etc. (not retained) |
 | `…/<addr>/availability` | `<n>/status/…/online` |
 | `…/<addr>/info`, `…/diagnostics`, `…/update` | `<n>/status/…/info`, `…/diagnostics`, `…/update` |
@@ -560,9 +564,10 @@ the decision text above does not say, or says differently.
    of which can match a `<base>/set/…` route, and it rides a connection of
    its own besides.
 3. **she manages only instance names matching `[A-Za-z0-9_.-]+`, and its
-   wipe does not clear `<name>/meta/…`.** A loom base outside that set (a
-   multi-level `home/loom` included) is not offered by she at all; on any
-   base, she's wipe leaves the `meta` companions retained.
+   wipe does not clear `<name>/meta/…` or `<name>/ha/…`.** A loom base
+   outside that set (a multi-level `home/loom` included) is not offered by
+   she at all; on any base, she's wipe leaves the `meta` companions and the
+   light's `ha` twins retained.
 4. **The bridges' enum tokens are their English catalog tokens where the
    raw code is numeric** (mtec, zendure): a numeric register code is not a
    token a consumer could read, so the English catalog spelling stands in
@@ -579,16 +584,30 @@ the decision text above does not say, or says differently.
 
 Found in loom:
 
-7. **The JSON-schema light is the one status item not published as a
-   status object.** Home Assistant's light platform in `schema: json` parses
-   the state topic's JSON document natively — `state`, `brightness`,
+7. **The `status` tree is status objects without exception; the
+   JSON-schema light reads a twin under `ha`** (decided 2026-10-06,
+   replacing the first implementation, which kept `…/custom/light` in Home
+   Assistant's shape). Home Assistant's light platform in `schema: json`
+   parses the state topic's document natively — `state`, `brightness`,
    `color`, `color_temp_kelvin`, `effect`, `color_mode` at the top level —
-   and accepts no value template that could reach into `val`. Wrapping it
-   would leave every light entity without a state; converting the lights
-   to the template schema would lose the explicit colour-mode declarations
-   (the HmIP-LSC's simultaneous `hs`/`color_temp`) the JSON schema carries.
-   So `…/custom/light` keeps Home Assistant's shape. Revisit when go-hamqtt
-   or Home Assistant offers a templated JSON light.
+   and takes no value template (`light/schema_json.py`, `_state_received`),
+   so it cannot read a status object's `val`; converting the lights to the
+   template schema would lose the colour-mode declarations (the HmIP-LSC's
+   simultaneous `hs`/`color_temp`) the JSON schema carries. So
+   `<name>/status/…/<ch>/custom/light` is a status object whose `val` is
+   that document, like every other aggregate, and the same document is
+   published bare and retained on `<name>/ha/…/<ch>/custom/light`, which
+   the light entity's `state_topic` names; its `command_topic` stays under
+   `set`. `ha` becomes a topic function of this project family, for a Home
+   Assistant-native document that cannot be templated and nothing else;
+   the light is its single tenant. The reason is that a consumer of the
+   `status` tree meets one payload form; the cost is that each light is
+   published twice. One publish writes both from one document, device
+   removal and the orphan sweep evict both, and a reconnect republishes
+   both. A central named `ha` is refused like one named after any other
+   function, and the migration sweep treats `<name>/ha/…` as new. go-hamqtt
+   v0.36.0's `topic.IsFunction` does not know `ha`, so loom checks it
+   locally (`naming.IsFunction`); go-hamqtt should learn it.
 8. **Two loom shapes were not rows of the table.** The undocumented alarm
    item `<base>/alarm/<zone>/triggered-motion` (the latched-detector count)
    became `<base>/status/alarm/<zone>/triggered_motion`, `snake_case` per

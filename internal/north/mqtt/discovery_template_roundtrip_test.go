@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"regexp"
 	"slices"
 	"strconv"
@@ -495,7 +496,9 @@ func rtDecodeBody(t *testing.T, name string, buf []byte) map[string]any {
 //     channel event is what production declares for press parameters, and
 //     it is covered below;
 //   - the JSON-schema light parses its state document natively, with no
-//     template to render; its document is checked for the keys HA reads.
+//     template to render; [checkJSONLight] checks instead that it reads its
+//     `ha` twin, that the twin is HA's document, and that the `status` twin
+//     is a status object carrying the same document.
 func TestEveryDiscoveredTemplateReadsWhatItsPublisherWrites(t *testing.T) {
 	t.Parallel()
 
@@ -532,6 +535,11 @@ func TestEveryDiscoveredTemplateReadsWhatItsPublisherWrites(t *testing.T) {
 				if st == "" {
 					st, _ = body["mode_state_topic"].(string)
 				}
+				// The light reads its `ha` twin; the publisher is addressed
+				// by the status item both come from.
+				if rest, isHA := strings.CutPrefix(st, naming.HATopic(r.base)); isHA {
+					st = naming.StatusTopic(r.base) + rest
+				}
 				if it := r.itemOf(st); len(it) == 6 && it[4] == "custom" {
 					ch, _ := strconv.Atoi(it[3])
 					slot := pload.TopicSlot{Address: it[2], Channel: ch, Bucket: pload.BucketCustom, Parameter: it[5]}
@@ -541,12 +549,7 @@ func TestEveryDiscoveredTemplateReadsWhatItsPublisherWrites(t *testing.T) {
 				}
 			}
 			if component == "light" {
-				st, _ := body["state_topic"].(string)
-				payload, ok := r.last(st)
-				var doc map[string]any
-				if !ok || json.Unmarshal([]byte(payload), &doc) != nil || doc["state"] == nil {
-					t.Errorf("%s: the JSON-schema light's state topic carries %q, not HA's light document with `state`", c.name, payload)
-				}
+				checkJSONLight(t, r, c.name, body)
 				delete(body, "state_topic")
 			}
 			r.checkCase(rtCase{name: c.name, body: body, platform: component})
@@ -627,6 +630,39 @@ func TestEveryDiscoveredTemplateReadsWhatItsPublisherWrites(t *testing.T) {
 			}
 		}
 	})
+}
+
+// checkJSONLight is the light's round trip. Its entity has no template to
+// render: Home Assistant's JSON-schema light parses the state topic's
+// document natively (light/schema_json.py, `_state_received`), so the state
+// topic must be the `ha` twin and carry that document bare — an object with
+// `state` ON/OFF — while the `status` twin carries the same document as a
+// well-formed status object's `val`.
+func checkJSONLight(t *testing.T, r *rtRig, name string, body map[string]any) {
+	t.Helper()
+	st, _ := body["state_topic"].(string)
+	rest, isHA := strings.CutPrefix(st, naming.HATopic(r.base))
+	if !isHA {
+		t.Errorf("%s: the JSON-schema light reads %s, not its `ha` twin", name, st)
+		return
+	}
+	payload, ok := r.last(st)
+	var doc map[string]any
+	if !ok || json.Unmarshal([]byte(payload), &doc) != nil || (doc["state"] != "ON" && doc["state"] != "OFF") {
+		t.Errorf("%s: %s carries %q, not HA's light document with `state` ON/OFF", name, st, payload)
+		return
+	}
+	status, ok := r.last(naming.StatusTopic(r.base) + rest)
+	var obj map[string]any
+	if !ok || json.Unmarshal([]byte(status), &obj) != nil {
+		t.Errorf("%s: the `status` twin carries %q, not a JSON object", name, status)
+		return
+	}
+	_, hasTS := obj["ts"].(float64)
+	_, hasLC := obj["lc"].(float64)
+	if !hasTS || !hasLC || !reflect.DeepEqual(obj["val"], doc) {
+		t.Errorf("%s: the `status` twin %s is not a status object whose `val` is the `ha` document %s", name, status, payload)
+	}
 }
 
 // combinedStateFor is the state the projection of kind publishes, in the

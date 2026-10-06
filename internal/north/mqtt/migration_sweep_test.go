@@ -184,6 +184,7 @@ func TestMigrationSweepClearsExactlyTheOldLayoutOfThisDaemon(t *testing.T) {
 				base + "/status/GoOtto/online",
 				base + "/status/GoOtto/GoOtto-HmIP-RF/0001ABCD/1/values/ACTUAL_TEMPERATURE",
 				base + "/meta/GoOtto/GoOtto-HmIP-RF/0001ABCD/1/values/ACTUAL_TEMPERATURE",
+				base + "/ha/GoOtto/GoOtto-HmIP-RF/0001ABCD/4/custom/light",
 				base + "/status/alarm/eg/panel",
 				base + "/status/security/severity",
 				base + "/status/system/addon_update",
@@ -259,8 +260,11 @@ func TestMigrationSweepClearsExactlyTheOldLayoutOfThisDaemon(t *testing.T) {
 // that — even when the configured central set would claim the segment.
 func TestLegacyLayoutMatcherNeverMatchesAFunctionLevel(t *testing.T) {
 	t.Parallel()
-	centrals := map[string]bool{"status": true, "set": true, "meta": true, "GoOtto": true}
+	centrals := map[string]bool{"status": true, "set": true, "meta": true, "ha": true, "GoOtto": true}
 	for _, topic := range []string{
+		// This project family's `ha` function: new layout too, although
+		// go-hamqtt's IsFunction does not know it.
+		"openccu-loom/ha/GoOtto-HmIP-RF/0001ABCD/4/custom/light",
 		"openccu-loom/status/GoOtto-HmIP-RF/0001ABCD/1/values/STATE",
 		"openccu-loom/set/GoOtto-HmIP-RF/0001ABCD/1/values/STATE",
 		"openccu-loom/meta/GoOtto-HmIP-RF/0001ABCD/availability",

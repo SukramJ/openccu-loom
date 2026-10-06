@@ -16,7 +16,6 @@ import (
 	"time"
 
 	hapublisher "github.com/SukramJ/go-hamqtt/publisher"
-	hatopic "github.com/SukramJ/go-hamqtt/topic"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
@@ -1095,10 +1094,11 @@ func daemonLevelNodeID(scope string, retractUnscoped bool, nodeID string) string
 	return ""
 }
 
-// rawCentralPrefixes returns the two prefixes the raw plane publishes every
+// rawCentralPrefixes returns the three prefixes the raw plane publishes every
 // per-data-point item of one central under: `<base>/status/<central>/` for
-// the status items and `<base>/meta/<central>/` for their descriptor
-// companions. One definition for both halves of the orphan sweep — the
+// the status items, `<base>/meta/<central>/` for their descriptor
+// companions and `<base>/ha/<central>/` for the light's Home
+// Assistant-native twin ([naming.FunctionHA]). One definition for both halves of the orphan sweep — the
 // subscribe filters and the candidate matcher — and for the device-removal
 // retraction, so they cannot look in different places.
 //
@@ -1112,14 +1112,17 @@ func rawCentralPrefixes(topicBase, centralName string) []string {
 	return []string{
 		naming.StatusTopic(topicBase, central) + "/",
 		naming.MetaTopic(topicBase, central) + "/",
+		naming.HATopic(topicBase, central) + "/",
 	}
 }
 
 // RawOrphanCandidateMatcher reports whether topic is a per-DP bucket item
-// (status or its meta companion) of the given central under topicBase:
+// (status, its meta companion, or the `ha` twin) of the given central under
+// topicBase:
 //
 //	<topic_base>/status/<central>/<iface>/<address>/<channelNo>/<bucket>/<PARAM>
 //	<topic_base>/meta/<central>/<iface>/<address>/<channelNo>/<bucket>/<PARAM>
+//	<topic_base>/ha/<central>/<iface>/<address>/<channelNo>/custom/light
 //
 // with `<bucket>` one of values / master / calculated / custom and a numeric
 // channel id. The reserved hub subtree (`<central>/hub/...`) never matches.
@@ -1515,7 +1518,7 @@ func newLayoutTopic(base, topic string) bool {
 		return false
 	}
 	first, _, _ := strings.Cut(rest, "/")
-	return hatopic.IsFunction(first)
+	return naming.IsFunction(first)
 }
 
 // coveredByFilter reports whether one of the `<prefix>/#` filters already

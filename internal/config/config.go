@@ -23,7 +23,6 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/SukramJ/go-fabric/secure/spake2"
-	hatopic "github.com/SukramJ/go-hamqtt/topic"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -2597,9 +2596,11 @@ var reservedCentralSegments = map[string]bool{
 // would collide with a literal first-level item or spell a topic function.
 // A central named like a function is refused too, because the migration
 // sweep tells new topics from old ones by that level: `<base>/status/…` is
-// new, and a central called `status` would make its old tree look new.
+// new, and a central called `status` would make its old tree look new. The
+// functions are [naming.IsFunction]'s: mqtt-smarthome's and this project
+// family's `ha`.
 func reservedCentralSegment(seg string) bool {
-	return reservedCentralSegments[seg] || hatopic.IsFunction(seg)
+	return reservedCentralSegments[seg] || naming.IsFunction(seg)
 }
 
 // validateCentralHost enforces that centrals[].host is a bare hostname

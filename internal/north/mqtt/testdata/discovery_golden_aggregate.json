@@ -713,7 +713,7 @@
         "sw_version": "dev"
       },
       "schema": "json",
-      "state_topic": "gh/status/ccu-01/HmIP-RF/0001BDT00001/4/custom/light",
+      "state_topic": "gh/ha/ccu-01/HmIP-RF/0001BDT00001/4/custom/light",
       "supported_color_modes": [
         "brightness"
       ],

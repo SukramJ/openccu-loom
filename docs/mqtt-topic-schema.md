@@ -8,8 +8,15 @@ Since ADR 0083 the layout follows the
 [mqtt-smarthome 2.0 convention](https://github.com/mqtt-smarthome/mqtt-smarthome/blob/master/SPEC.md):
 
 ```
-<name>/<function>/<item...>     function ∈ connected | status | set | info | meta | maintenance
+<name>/<function>/<item...>     function ∈ connected | status | set | info | meta | maintenance | ha
 ```
+
+`meta` and `ha` are this project family's own functions (§3 allows them).
+`ha` exists for one reason only: to carry a Home Assistant-native document
+that Home Assistant parses without a template, so that the `status` tree
+keeps one payload form. Its single tenant is the JSON-schema light's state
+(see [Payload shape](#payload-shape)). Nothing a value template can read
+belongs there.
 
 The same grammar is spoken by the five sibling bridges (`go-mtec2mqtt`,
 `go-zendure2mqtt`, `go-homeconnect2mqtt`, `go-daikin2mqtt`,
@@ -58,7 +65,7 @@ daemon tree the migration sweep still reads) share the first item level
 with `<central>`. The daemon therefore **refuses at config validation** a
 central whose topic-safe name is `alarm`, `security`, `system` or `bridge`,
 or one of the function names `connected`, `status`, `set`, `get`, `info`,
-`meta`, `maintenance` — the latter so the migration sweep can never mistake
+`meta`, `maintenance`, `ha` — the latter so the migration sweep can never mistake
 an old topic for a new one. Below `<central>`, `hub`, `system` and `devices`
 cannot collide with an interface, because wire interface ids are
 `<central>-<interface>`.
@@ -126,6 +133,7 @@ The maintenance topics are described in [Maintenance](#maintenance).
 | Per-DP MASTER state | `<name>/status/<central>/<iface>/<addr>/<ch>/master/<param>` |
 | Per-DP CALCULATED state | `<name>/status/<central>/<iface>/<addr>/<ch>/calculated/<param>` |
 | Custom-DP derived state | `<name>/status/<central>/<iface>/<addr>/<ch>/custom/<kind>` |
+| Light state, Home Assistant's own document | `<name>/ha/<central>/<iface>/<addr>/<ch>/custom/light` |
 | Channel press event (not retained) | `<name>/status/<central>/<iface>/<addr>/<ch>/event` |
 | Channel impulse event (not retained) | `<name>/status/<central>/<iface>/<addr>/<ch>/impulse` |
 | Channel device-error event (not retained) | `<name>/status/<central>/<iface>/<addr>/<ch>/device_error` |
@@ -146,6 +154,7 @@ The maintenance topics are described in [Maintenance](#maintenance).
 | Alarm zone latched motion detectors † | `<name>/status/alarm/<zone>/triggered_motion` |
 
 Go builder methods: `TopicBuilder.ParameterState`, `TopicBuilder.SlotState`,
+`TopicBuilder.SlotHAState`,
 `TopicBuilder.ChannelEvent`, `TopicBuilder.ChannelImpulse`,
 `TopicBuilder.ChannelDeviceError`, `TopicBuilder.DeviceAvailability`,
 `TopicBuilder.DeviceInfo`, `TopicBuilder.DeviceDiagnostics`,
@@ -667,12 +676,17 @@ Which value goes in `val`:
 | Security `event`/`fault` (not retained) | the report's verb (`event_type`) | the rest of the rendered report |
 | `<central>/system/status` (not retained) | the component that changed | the rest of the event; `ts` is the event's time |
 
-**One deviation:** the custom-DP light aggregate
-`<name>/status/<central>/<iface>/<addr>/<ch>/custom/light` stays Home
-Assistant's JSON-light document (`{"state": "ON", "brightness": …}`) rather
-than a status object, because the discovered light uses Home Assistant's
-`schema: json`, which reads that document natively and supports no value
-template. Every other status item is a status object.
+**The `ha` twin of the light.** Every status item is a status object,
+the custom-DP light aggregate
+`<name>/status/<central>/<iface>/<addr>/<ch>/custom/light` included: its
+`val` is the light's state document (`{"state": "ON", "brightness": …}`).
+The discovered light uses Home Assistant's `schema: json`, which parses its
+state topic's document natively and supports no value template, so it
+cannot read `val`. The same document is therefore also published bare and
+retained on `<name>/ha/<central>/<iface>/<addr>/<ch>/custom/light`, and the
+light entity's `state_topic` points there; its `command_topic` stays under
+`set`. Both come from one publish, leave together when the device is
+removed, and are republished together on reconnect.
 
 #### Optional `additional_information`
 
@@ -750,7 +764,7 @@ typed descriptor in `internal/payload/descriptor.go`.
 ## Retain and QoS policy
 
 OpenCCU-Loom retains every status item except the events, plus the `meta`
-companions, `<name>/connected`, `<name>/info`, `<name>/maintenance/stats` and
+companions, the light's `ha` twin, `<name>/connected`, `<name>/info`, `<name>/maintenance/stats` and
 the discovery configs. Event items (`event`, `impulse`, `device_error`, alarm
 and security events, `system/status`) are non-retained QoS 0. Command
 (`set`) items are non-retained and subscribed at QoS 1 (at-least-once) — a
@@ -949,7 +963,7 @@ left retained on the broker:
   `<name>/alarm/#`, `<name>/security/#` and `<name>/system/#` — never
   `<name>/#`, which would overlap the daemon's own `set` routes.
 - A topic whose first level below the base is a function name (`status`,
-  `set`, `meta`, …) is new and never touched.
+  `set`, `meta`, `ha`, …) is new and never touched.
 - Every other topic is cleared only if it matches an **exact old shape** for
   an identifier this daemon owns — a configured central, or its own
   `bridge`, `alarm`, `security` and `system/addon_update` trees. Never a

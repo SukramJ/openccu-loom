@@ -121,7 +121,7 @@ central is reachable, `1` while none is, `0` when the daemon is gone.
 
 A central may not be named `alarm`, `security`, `system`, `bridge` or like a
 topic function (`connected`, `status`, `set`, `get`, `info`, `meta`,
-`maintenance`): those names sit at the same topic level as the central and
+`maintenance`, `ha`): those names sit at the same topic level as the central and
 are refused at start-up.
 
 ### 2.1 Home Assistant Discovery

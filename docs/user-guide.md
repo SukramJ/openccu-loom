@@ -235,7 +235,10 @@ Every state payload is a status object,
 `{"val": 21.6, "ts": 1730385720123, "lc": 1730385720123, "hm": {"available": true}}`
 — the value in `val`, the observation (`ts`) and last-change (`lc`) times in
 milliseconds, project fields under `hm`. A command takes the plain value or
-`{"val": …}`. See [MQTT Topic Schema](mqtt-topic-schema.md) for every item
+`{"val": …}`. The one exception to "state lives under `status`" is for Home
+Assistant: a light's state document is also published bare on
+`<base>/ha/<central>/<interface>/<addr>/<channel>/custom/light`, because Home
+Assistant's JSON light reads it without a template. See [MQTT Topic Schema](mqtt-topic-schema.md) for every item
 and the migration table from the previous layout.
 
 Home Assistant Discovery plane (same state topics, separate config messages):

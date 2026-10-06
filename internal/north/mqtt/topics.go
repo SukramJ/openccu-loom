@@ -200,6 +200,17 @@ func (b *TopicBuilder) SlotState(centralName, iface string, slot payload.TopicSl
 	return b.ParameterState(centralName, iface, slot.Address, slot.Channel, slot.Bucket, slot.Parameter)
 }
 
+// SlotHAState is the Home Assistant-native twin `<base>/ha/…` of a custom-DP
+// slot's status item, or "" for a slot that has none. Only the JSON-schema
+// light has one; see [naming.FunctionHA].
+func (b *TopicBuilder) SlotHAState(centralName, iface string, slot payload.TopicSlot) string {
+	if slot.Bucket != payload.BucketCustom || slot.Parameter != haJSONLightKind {
+		return ""
+	}
+	pd := naming.NewCustomDPPathData(hmtypes.ParseWireInterfaceID(iface), slot.Address, slot.Channel, slot.Parameter)
+	return pd.MQTTCustomDPHAState(b.Base, centralName)
+}
+
 // SlotConfig resolves to the matching descriptor-companion topic.
 func (b *TopicBuilder) SlotConfig(centralName, iface string, slot payload.TopicSlot) string {
 	if slot.Bucket == payload.BucketCustom {

@@ -115,6 +115,28 @@ func mqttTopic(base, function string, item ...string) string {
 	return strings.Trim(base, "/") + "/" + function + "/" + strings.Join(item, "/")
 }
 
+// FunctionHA is this project family's one adapter-specific topic function,
+// `<base>/ha/<item...>` (ADR 0083, amendment item 7). It exists for one
+// reason only: to carry a Home Assistant-native document that Home
+// Assistant parses without a template, so the `status` tree can keep one
+// payload form, the status object. Its single tenant is the JSON-schema
+// light's state document (`…/custom/light`), whose `status` twin carries the
+// same document as the status object's `val`. Nothing that a value template
+// can reach belongs here.
+//
+// go-hamqtt's [topic.IsFunction] does not know it (v0.36.0); use
+// [IsFunction] wherever "is this level a function" decides something.
+const FunctionHA = "ha"
+
+// IsFunction reports whether s is a topic function of this daemon's tree:
+// one of mqtt-smarthome 2.0's, or [FunctionHA].
+func IsFunction(s string) bool { return s == FunctionHA || topic.IsFunction(s) }
+
+// HATopic is `<base>/ha/<item...>`; see [FunctionHA].
+func HATopic(base string, item ...string) string {
+	return mqttTopic(base, FunctionHA, item...)
+}
+
 // StatusTopic is `<base>/status/<item...>`. Exported for the adapters that
 // compose an item path the model owns no helper for (the combined-DP and
 // schedule items, the daemon-level alarm and security trees), so every
@@ -316,6 +338,17 @@ func (p PathData) MQTTCustomDPState(base, centralName string) string {
 		return ""
 	}
 	return StatusTopic(base, item...)
+}
+
+// MQTTCustomDPHAState is the Home Assistant-native twin `<base>/ha/<item>`
+// of the custom-DP slot's status item; see [FunctionHA] for the one slot
+// that has one.
+func (p PathData) MQTTCustomDPHAState(base, centralName string) string {
+	item := p.customDPItem(centralName)
+	if item == nil {
+		return ""
+	}
+	return HATopic(base, item...)
 }
 
 // MQTTCustomDPConfig is the descriptor companion `<base>/meta/<item>` of

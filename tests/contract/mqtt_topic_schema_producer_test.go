@@ -96,6 +96,11 @@ var mqttDocTopicPromises = map[string]docTopicPromise{
 	"<name>/status/<central>/<iface>/<addr>/<ch>/custom/<kind>": {
 		kind: promisePublished, producers: []string{"SlotState"},
 	},
+	// This family's `ha` function, whose one tenant is the JSON-schema
+	// light: Bridge.PublishCustomDPState writes it beside the status item.
+	"<name>/ha/<central>/<iface>/<addr>/<ch>/custom/light": {
+		kind: promisePublished, producers: []string{"SlotHAState"},
+	},
 	"<name>/status/<central>/<iface>/<addr>/<ch>/event": {
 		kind: promisePublished, producers: []string{"ChannelEvent"},
 	},
@@ -703,6 +708,7 @@ var mqttTopicProducers = map[string]topicProducer{
 
 	"SlotState":             {shape: "<name>/status/<central>/<iface>/<addr>/<ch>/custom/<kind>"},
 	"SlotConfig":            {shape: "<name>/meta/<central>/<iface>/<addr>/<ch>/custom/<kind>"},
+	"SlotHAState":           {shape: "<name>/ha/<central>/<iface>/<addr>/<ch>/custom/light"},
 	"CustomDPServiceMethod": {shape: "<name>/set/<central>/<iface>/<addr>/<ch>/custom/<kind>/<method>"},
 	"CustomDPInvoke":        {shape: "<name>/set/<central>/devices/<addr>/cdps/<cdp>/<op>"},
 
@@ -744,6 +750,7 @@ var mqttTopicProducers = map[string]topicProducer{
 	"MQTTChannelDeviceError":    {delegateOf: "ChannelDeviceError"},
 	"MQTTCustomDPState":         {delegateOf: "SlotState"},
 	"MQTTCustomDPConfig":        {delegateOf: "SlotConfig"},
+	"MQTTCustomDPHAState":       {delegateOf: "SlotHAState"},
 	"MQTTCustomDPServiceMethod": {delegateOf: "CustomDPServiceMethod"},
 	"MQTTCustomDPInvoke":        {delegateOf: "CustomDPInvoke"},
 	"MQTTDeviceAvailability":    {delegateOf: "DeviceAvailability"},

@@ -1072,6 +1072,8 @@ func TestCentralNameReservedTopicSegmentIsRefused(t *testing.T) {
 	reserved := []string{
 		"alarm", "security", "system", "bridge",
 		"connected", "status", "set", "get", "info", "meta", "maintenance",
+		// This project family's own function (ADR 0083, amendment item 7).
+		"ha",
 	}
 	for _, name := range reserved {
 		t.Run(name, func(t *testing.T) {

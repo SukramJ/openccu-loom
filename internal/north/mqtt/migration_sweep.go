@@ -6,8 +6,6 @@ package mqtt
 import (
 	"strings"
 
-	hatopic "github.com/SukramJ/go-hamqtt/topic"
-
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 )
 
@@ -39,13 +37,14 @@ var legacyLayoutTrees = []string{"bridge", alarmTree, securityTree, "system"}
 // legacyLayoutFilters are the subscription filters of the migration sweep:
 // one per configured central's old tree and one per daemon-level tree, each
 // disjoint from every `<base>/set/…` command route and from the new
-// `status`/`meta` trees, because a central can never be named like a function.
+// `status`/`meta`/`ha` trees, because a central can never be named like a
+// function ([naming.IsFunction], which knows this family's `ha`).
 func legacyLayoutFilters(base string, centralNames []string) []string {
 	base = strings.Trim(base, "/")
 	seen := map[string]bool{}
 	out := make([]string, 0, len(centralNames)+len(legacyLayoutTrees))
 	add := func(level string) {
-		if level == "" || hatopic.IsFunction(level) || seen[level] {
+		if level == "" || naming.IsFunction(level) || seen[level] {
 			return
 		}
 		seen[level] = true
@@ -75,7 +74,7 @@ func LegacyLayoutMatcher(base string, centrals map[string]bool, topic string) bo
 		return false
 	}
 	p := strings.Split(rest, "/")
-	if slicesContainsEmpty(p) || hatopic.IsFunction(p[0]) {
+	if slicesContainsEmpty(p) || naming.IsFunction(p[0]) {
 		return false
 	}
 	switch p[0] {
