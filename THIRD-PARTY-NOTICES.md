@@ -143,8 +143,10 @@ Supplementary reference for end-to-end bridge composition (Aggregator + bridged
 devices). Not a gold standard — carries Home-Assistant-specific shims — but read
 when wiring the bridge.
 
-- Source: <https://github.com/Nabu-Casa/home-assistant-matter-bridge>
-- Copyright: © Nabu Casa, Inc. and the home-assistant-matter-bridge authors.
+- Source: <https://github.com/SukramJ/home-assistant-matter-bridge>, a fork of
+  <https://github.com/t0bst4r/home-assistant-matter-hub> (both archived).
+- Copyright: © t0bst4r and the home-assistant-matter-hub contributors;
+  fork modifications © SukramJ.
 - License: Apache License 2.0 — see [`licenses/Apache-2.0.txt`](./licenses/Apache-2.0.txt).
 
 ### Home Assistant Frontend — Apache-2.0

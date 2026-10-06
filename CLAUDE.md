@@ -521,7 +521,7 @@ own behaviour, and the controller-side semantics already cited by `path:line`
 across `internal/north/matter/`. When a chip-derived tool rejects an
 invocation, its source is in that tree; read it rather than inferring the
 contract from the tool's output.
-[`home-assistant-matter-bridge`](https://github.com/Nabu-Casa/home-assistant-matter-bridge)
+[`home-assistant-matter-bridge`](https://github.com/SukramJ/home-assistant-matter-bridge)
 (`../home-assistant-matter-bridge/`) is a supplementary read for end-to-end
 bridge composition, never a gold standard.
 
