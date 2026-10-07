@@ -23,6 +23,10 @@
   if a plug looks wrong, re-pairing the bridge fixes it.
 - Matter "stop" on a garage door still stops the door in every situation,
   also right after it started moving.
+- Inside the openccu-lite shell the Config UI follows the shell's theme and
+  language. It used to stay dark whenever the computer was set to dark, even
+  under a light shell, and ignored its own theme setting there. Nothing
+  changes in Home Assistant.
 
 ## 0.88.0
 
