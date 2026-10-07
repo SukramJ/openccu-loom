@@ -479,7 +479,7 @@
         "manufacturer": "OpenCCU-Loom",
         "model": "Security \u0026 Safety",
         "name": "Security \u0026 Safety",
-        "sw_version": "0.88.0"
+        "sw_version": "0.89.0"
       },
       "device_class": "battery",
       "entity_category": "diagnostic",
@@ -525,7 +525,7 @@
         "manufacturer": "OpenCCU-Loom",
         "model": "Security \u0026 Safety",
         "name": "Security \u0026 Safety",
-        "sw_version": "0.88.0"
+        "sw_version": "0.89.0"
       },
       "device_class": "smoke",
       "json_attributes_template": "{{ value_json.hm | tojson }}",
@@ -570,7 +570,7 @@
         "manufacturer": "OpenCCU-Loom",
         "model": "Security \u0026 Safety",
         "name": "Security \u0026 Safety",
-        "sw_version": "0.88.0"
+        "sw_version": "0.89.0"
       },
       "device_class": "safety",
       "json_attributes_template": "{{ value_json.hm | tojson }}",
@@ -615,7 +615,7 @@
         "manufacturer": "OpenCCU-Loom",
         "model": "Security \u0026 Safety",
         "name": "Security \u0026 Safety",
-        "sw_version": "0.88.0"
+        "sw_version": "0.89.0"
       },
       "event_types": [
         "triggered",
@@ -660,7 +660,7 @@
         "manufacturer": "OpenCCU-Loom",
         "model": "Security \u0026 Safety",
         "name": "Security \u0026 Safety",
-        "sw_version": "0.88.0"
+        "sw_version": "0.89.0"
       },
       "entity_category": "diagnostic",
       "event_types": [
@@ -706,7 +706,7 @@
         "manufacturer": "OpenCCU-Loom",
         "model": "Security \u0026 Safety",
         "name": "Security \u0026 Safety",
-        "sw_version": "0.88.0"
+        "sw_version": "0.89.0"
       },
       "device_class": "problem",
       "entity_category": "diagnostic",
@@ -750,7 +750,7 @@
         "manufacturer": "OpenCCU-Loom",
         "model": "Security \u0026 Safety",
         "name": "Security \u0026 Safety",
-        "sw_version": "0.88.0"
+        "sw_version": "0.89.0"
       },
       "device_class": "timestamp",
       "json_attributes_template": "{{ value_json.val | tojson }}",
@@ -793,7 +793,7 @@
         "manufacturer": "OpenCCU-Loom",
         "model": "Security \u0026 Safety",
         "name": "Security \u0026 Safety",
-        "sw_version": "0.88.0"
+        "sw_version": "0.89.0"
       },
       "device_class": "timestamp",
       "entity_category": "diagnostic",
@@ -837,7 +837,7 @@
         "manufacturer": "OpenCCU-Loom",
         "model": "Security \u0026 Safety",
         "name": "Security \u0026 Safety",
-        "sw_version": "0.88.0"
+        "sw_version": "0.89.0"
       },
       "device_class": "problem",
       "entity_category": "diagnostic",
@@ -883,7 +883,7 @@
         "manufacturer": "OpenCCU-Loom",
         "model": "Security \u0026 Safety",
         "name": "Security \u0026 Safety",
-        "sw_version": "0.88.0"
+        "sw_version": "0.89.0"
       },
       "device_class": "enum",
       "json_attributes_template": "{{ value_json.hm | tojson }}",
@@ -932,7 +932,7 @@
         "manufacturer": "OpenCCU-Loom",
         "model": "Security \u0026 Safety",
         "name": "Security \u0026 Safety",
-        "sw_version": "0.88.0"
+        "sw_version": "0.89.0"
       },
       "device_class": "enum",
       "json_attributes_template": "{{ value_json.hm | tojson }}",
@@ -982,7 +982,7 @@
         "manufacturer": "OpenCCU-Loom",
         "model": "Security \u0026 Safety",
         "name": "Security \u0026 Safety",
-        "sw_version": "0.88.0"
+        "sw_version": "0.89.0"
       },
       "json_attributes_template": "{{ value_json.hm | tojson }}",
       "json_attributes_topic": "gh/status/security/zone/erdgeschoss-flur",
@@ -1025,7 +1025,7 @@
         "manufacturer": "OpenCCU-Loom",
         "model": "Security \u0026 Safety",
         "name": "Security \u0026 Safety",
-        "sw_version": "0.88.0"
+        "sw_version": "0.89.0"
       },
       "json_attributes_template": "{{ value_json.hm | tojson }}",
       "json_attributes_topic": "gh/status/security/zone/erdgeschoss-flur",

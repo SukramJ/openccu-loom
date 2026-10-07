@@ -1,5 +1,29 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.89.0
+
+- **MQTT topics and payloads changed.** Topics follow the
+  mqtt-smarthome 2.0 layout (`<base>/status/…`, `<base>/set/…`,
+  `<base>/meta/…`), state payloads are `{"val", "ts", "lc", "hm"}`, and
+  `bridge/status` is now `connected` (0/1/2). Your Home Assistant
+  entities are not affected: they keep their identities and follow the new
+  topics on their own. Node-RED flows, dashboards, Telegraf or scripts that
+  read the raw topics must be updated.
+- On first start the add-on clears the old retained topics it left on the
+  broker.
+- A central named `alarm`, `security`, `system`, `bridge`, `ha` or like a
+  topic function (`connected`, `status`, `set`, `info`, …) is refused at
+  start. Rename it before updating.
+- New MQTT maintenance topics, on by default: set the log level, restart
+  the add-on and read periodic stats under `<base>/maintenance/…`. Anyone
+  who may publish on your broker can use them; restrict
+  `<base>/maintenance/#` with broker ACLs if needed.
+- Matter bridge: updated to Matter 1.6.1. Smart plugs report a newer
+  device-type revision; your controller normally picks it up by itself, and
+  if a plug looks wrong, re-pairing the bridge fixes it.
+- Matter "stop" on a garage door still stops the door in every situation,
+  also right after it started moving.
+
 ## 0.88.0
 
 - **New devices wait for you.** A device paired after this update is
