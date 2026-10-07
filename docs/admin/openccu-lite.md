@@ -204,6 +204,13 @@ from the box's Addons page. A few things differ from a CCU:
   navigation. Nothing to open in the firewall for this path; port 8119
   is only needed for direct access from other machines (a Home
   Assistant backend, MQTT-less REST clients).
+- **The UI follows the shell's look.** Shown inside the box shell, the
+  Config UI takes the shell's theme and language (handed over on the
+  frame URL, by message on every change, and through the shell's
+  `ol-theme`/`ol-lang` cookies) and keeps the OpenCCU-Loom design; its own
+  theme and language controls are locked to "follows openccu-lite" there.
+  Change them in the shell, or open the UI in its own tab, where your own
+  setting applies.
 - **Signing in through the box.** Behind `https://<box>/addons/loom/` the
   daemon accepts what the box's gate accepted, each time after asking the
   box whether it still holds (`north.rest.auth.occulite_sso`, on by

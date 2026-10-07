@@ -6,6 +6,7 @@
     prefs,
     setLocale,
     applyTheme,
+    bindShellLook,
     bindSystemTheme,
   } from "$lib/stores/preferences.svelte";
   import { isEmbedded, startHaBridge } from "$lib/theme/ha-bridge";
@@ -225,6 +226,9 @@
     // preference changes for "system" mode.
     applyTheme();
     const unbindTheme = bindSystemTheme();
+    // Embedded in the openccu-lite shell: follow the shell's theme and
+    // language messages (same-origin parent only). Inert otherwise.
+    const unbindShellLook = bindShellLook();
     // When embedded in HA (Ingress iframe) mirror the live HA theme:
     // copy HA's CSS vars onto our root and track HA's light/dark. Inert
     // and cleanup is a no-op when standalone or cross-origin.
@@ -254,6 +258,7 @@
       window.removeEventListener("beforeunload", beforeUnload);
       window.removeEventListener("keydown", onKey);
       unbindTheme();
+      unbindShellLook();
       stopHaBridge();
     };
   });

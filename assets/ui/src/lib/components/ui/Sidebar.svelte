@@ -5,6 +5,7 @@
   import type { IconName } from "$lib/icons";
   import { navClusters, type NavItem, type RouteKind } from "$lib/nav";
   import { t } from "$lib/i18n";
+  import { liteShell } from "$lib/theme/lite-shell.svelte";
   import { installModeStore } from "$lib/stores/installMode.svelte";
   import { messagesStore } from "$lib/stores/messages.svelte";
   import { matterStore } from "$lib/stores/matter.svelte";
@@ -257,18 +258,20 @@
     <div class="flex flex-wrap items-center gap-1">
       <button
         type="button"
-        class="inline-flex items-center justify-center rounded-md p-2.5 hover:bg-black/5 dark:hover:bg-white/5"
-        title={t("app.switch_language")}
+        class="inline-flex items-center justify-center rounded-md p-2.5 hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent dark:hover:bg-white/5"
+        title={liteShell.lang !== null ? t("settings.follows_lite") : t("app.switch_language")}
         aria-label={t("app.switch_language")}
+        disabled={liteShell.lang !== null}
         onclick={onLocaleToggle}
       >
         <span class="text-xs font-semibold">{locale === "de" ? "EN" : "DE"}</span>
       </button>
       <button
         type="button"
-        class="inline-flex items-center justify-center rounded-md p-2.5 hover:bg-black/5 dark:hover:bg-white/5"
-        title={t("app.theme.toggle")}
+        class="inline-flex items-center justify-center rounded-md p-2.5 hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent dark:hover:bg-white/5"
+        title={liteShell.theme !== null ? t("settings.follows_lite") : t("app.theme.toggle")}
         aria-label={t("app.theme.toggle")}
+        disabled={liteShell.theme !== null}
         onclick={cycleTheme}
       >
         <Icon name={themeIcon} size={16} />

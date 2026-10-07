@@ -27,12 +27,43 @@
         try {
           var theme = "system";
           var raw = localStorage.getItem("openccu-loom.prefs.v1");
+          var p = null;
           if (raw) {
-            var p = JSON.parse(raw);
+            p = JSON.parse(raw);
             if (p && (p.theme === "light" || p.theme === "dark" || p.theme === "system")) {
               theme = p.theme;
             }
           }
+          // The host. Mirrors src/lib/theme/lite-shell.svelte.ts and
+          // isEmbedded() in src/lib/theme/ha-bridge.ts:
+          // - the openccu-lite shell (same-origin parent that put theme= /
+          //   lang= on our URL or set the ol-theme / ol-lang cookies): its
+          //   theme wins, the skin stays the operator's;
+          // - Home Assistant (Ingress path, or a same-origin parent that is
+          //   HA's frontend): skin "ha", the HA bridge owns .dark later;
+          // - anything else, framed or not: the operator's own preference.
+          var framed = window.parent !== window;
+          var lite = false;
+          var shellTheme = null;
+          if (framed) {
+            try {
+              if (window.parent.location.origin === location.origin) {
+                var q = new URLSearchParams(location.search);
+                var qt = q.get("theme");
+                var ql = (q.get("lang") || "").toLowerCase();
+                if (qt === "system" || qt === "light" || qt === "dark") shellTheme = qt;
+                var hasLang = /^(de|en)(-|$)/.test(ql);
+                var ck = document.cookie || "";
+                var ct = /(?:^|;\s*)ol-theme=(light|dark)(?:;|$)/.exec(ck);
+                if (!shellTheme && ct) shellTheme = ct[1];
+                if (!hasLang) hasLang = /(?:^|;\s*)ol-lang=(de|en)/.test(ck);
+                lite = shellTheme !== null || hasLang;
+              }
+            } catch (e) {
+              /* cross-origin parent — not the shell */
+            }
+          }
+          if (shellTheme) theme = shellTheme;
           var dark =
             theme === "dark" ||
             (theme === "system" &&
@@ -42,15 +73,20 @@
           root.classList.toggle("dark", dark);
           root.style.colorScheme = dark ? "dark" : "light";
           // Set data-skin before first paint too, so the app shell never
-          // flashes Loom-teal before the store/bridge run. Embedded in an
-          // iframe (HA Ingress) always forces "ha"; else the persisted skin.
-          var skin = "loom";
-          if (window.self !== window.top) {
-            skin = "ha";
-          } else if (raw) {
-            var pp = JSON.parse(raw);
-            if (pp && pp.skin === "ha") skin = "ha";
+          // flashes Loom-teal before the store/bridge run.
+          var ha = false;
+          if (framed && !lite) {
+            if (location.pathname.indexOf("/api/hassio_ingress/") >= 0) {
+              ha = true;
+            } else {
+              try {
+                ha = window.parent.document.querySelector("home-assistant") !== null;
+              } catch (e) {
+                /* cross-origin parent — not provably HA */
+              }
+            }
           }
+          var skin = ha ? "ha" : p && p.skin === "ha" ? "ha" : "loom";
           root.setAttribute("data-skin", skin);
         } catch (e) {
           /* localStorage / JSON / cross-origin — fall back to Loom light. */

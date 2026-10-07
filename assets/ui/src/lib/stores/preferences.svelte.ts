@@ -3,8 +3,20 @@
 // immediately see something sensible. The store is a Svelte 5 rune
 // object so callers can read e.g. `prefs.locale` / `prefs.theme` and
 // the UI re-renders on change.
+//
+// `prefs.locale` / `prefs.theme` are the EFFECTIVE values. Embedded in the
+// openccu-lite shell (lite-shell.svelte.ts) they follow the shell's look;
+// the operator's own choice is kept apart in `own` and is the only thing
+// ever persisted, so a direct tab keeps the own setting.
 
 import { isEmbedded, resolveSkin } from "$lib/theme/ha-bridge";
+import {
+  adoptShellLook,
+  detectInitialLook,
+  liteShell,
+  listenForShellLook,
+  type ShellLook,
+} from "$lib/theme/lite-shell.svelte";
 
 const KEY = "openccu-loom.prefs.v1";
 // LEGACY_KEY removed: clean break on rebrand to OpenCCU-Loom
@@ -84,25 +96,63 @@ function load(): Prefs {
   };
 }
 
+// The operator's own locale/theme — what persist() writes, whatever the
+// shell currently shows.
+const own: Pick<Prefs, "locale" | "theme"> = { locale: "en", theme: "system" };
+
 function persist(p: Prefs): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify(p));
+    localStorage.setItem(
+      KEY,
+      JSON.stringify({ ...p, locale: own.locale, theme: own.theme }),
+    );
   } catch {
     // ignore (private mode, quota)
   }
 }
 
 const initial = load();
+own.locale = initial.locale;
+own.theme = initial.theme;
+
+// The shell's first-paint look (URL, else cookies), read before the first
+// render so the app never flashes the own preference first.
+const initialShellLook = detectInitialLook();
+if (initialShellLook) adoptShellLook(initialShellLook);
 
 export const prefs = $state<Prefs>({
-  locale: initial.locale,
-  theme: initial.theme,
+  locale: liteShell.lang ?? initial.locale,
+  theme: liteShell.theme ?? initial.theme,
   skin: initial.skin,
   navCollapsed: initial.navCollapsed,
   expertMode: initial.expertMode,
   writePreview: initial.writePreview,
   paramDensity: initial.paramDensity,
 });
+
+// True while the openccu-lite shell decides the theme / the language. The
+// Settings controls and the sidebar toggle are disabled then.
+export function themeFollowsShell(): boolean {
+  return liteShell.theme !== null;
+}
+
+export function localeFollowsShell(): boolean {
+  return liteShell.lang !== null;
+}
+
+// Apply a look the shell sent: display only, never persisted.
+export function applyShellLook(look: ShellLook): void {
+  adoptShellLook(look);
+  if (liteShell.theme) prefs.theme = liteShell.theme;
+  if (liteShell.lang) prefs.locale = liteShell.lang;
+  applyTheme();
+}
+
+// Follow the shell's theme message (on load and on every change). Safe to
+// call once at app start; returns the cleanup.
+export function bindShellLook(): () => void {
+  return listenForShellLook(applyShellLook);
+}
 
 // Keep <html> in sync with the resolved theme. Listens to
 // system-preference changes so "system" mode tracks the OS toggle.
@@ -111,7 +161,7 @@ export function applyTheme(): void {
   // Axis 1: the resolved skin. Embedded in HA, resolveSkin forces "ha".
   const skin = resolveSkin(prefs.skin);
   root.dataset.skin = skin;
-  // Axis 2: light/dark. When embedded, startHaBridge owns .dark (it tracks
+  // Axis 2: light/dark. Embedded in HA, startHaBridge owns .dark (it tracks
   // HA's own light/dark), so applyTheme must NOT fight it here.
   if (isEmbedded()) return;
   const dark =
@@ -122,13 +172,17 @@ export function applyTheme(): void {
   root.style.colorScheme = dark ? "dark" : "light";
 }
 
+// Set the operator's own language / theme. While the shell decides it,
+// the choice is stored but the display keeps following the shell.
 export function setLocale(loc: "de" | "en"): void {
-  prefs.locale = loc;
+  own.locale = loc;
+  if (!localeFollowsShell()) prefs.locale = loc;
   persist({ ...prefs });
 }
 
 export function setTheme(theme: Theme): void {
-  prefs.theme = theme;
+  own.theme = theme;
+  if (!themeFollowsShell()) prefs.theme = theme;
   persist({ ...prefs });
   applyTheme();
 }
