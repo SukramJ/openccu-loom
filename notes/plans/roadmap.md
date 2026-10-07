@@ -120,6 +120,28 @@ replace it, and the metrics that say whether it worked.
   `by_design.md` entry recording the divergence.
   *Plan: [`notes/plans/matter-case-resume-session-id.md`](matter-case-resume-session-id.md).*
 
+- **Migrate the bridged endpoints to `groups.Manager`.** go-fabric v0.2.0
+  deprecates `wire.Groups` (removable in v0.3.0) in favour of
+  `endpoint.Config.Groups` plus a `groups.Manager`. Five uses — light (two),
+  siren, switch and generic switch — keep the stub with a
+  `//nolint:staticcheck` until then. The migration changes Groups behaviour on
+  every one of those endpoints (real membership, AddGroup / RemoveGroup, group
+  messaging), so it is its own change, due before go-fabric v0.3.0 is adopted.
+  Detail: `BD-Matter-WireGroupsStub` in
+  [`by_design.md`](../parity/by_design.md) and the 0.89.0 release summary in
+  [`CHANGELOG.md`](../../CHANGELOG.md) (release 0.89.0, in preparation).
+
+- **Garage closure: report Moving optimistically.** A Matter Stop is
+  forwarded to the drive whatever the closure state, because MainState comes
+  from the drive's lagging `SECTION` report and the cluster spec would ignore a
+  Stop on a closure it does not see moving. Reporting Moving from a forwarded
+  MoveTo until the drive reports a stop or end position, or a timeout, lets the
+  cluster's own Stop handling apply and narrows the divergence to the window
+  the drive has not yet reported (`internal/model/custom/cover/matter_closure.go`).
+  Detail: `BD-Matter-ClosureControl-StopForwarded` in
+  [`by_design.md`](../parity/by_design.md), "Follow-up" (release 0.89.0, in
+  preparation).
+
 ### Device model
 
 - **Custom-DP fields still bound by a fixed parameter name.** A custom data
@@ -145,6 +167,51 @@ replace it, and the metrics that say whether it worked.
   blocked the sibling rename below: changing a response *shape* is a
   breaking change for the `api contract guard` CI job, so this lands
   bundled with a deliberate API-version step, not as a drive-by.
+
+### MQTT and Home Assistant discovery
+
+- **Discovery bundles on by default.** `north.mqtt.discovery_bundles`
+  (default `false`, [`configuration.md`](../../docs/admin/configuration.md))
+  becomes the default in a release of its own after 0.89.0. The measured
+  ordering rules of [ADR 0070](../../docs/adr/0070-shared-ha-discovery-model-module.md),
+  amendment "the bundle migration is measured, and ordered", apply: retract
+  the per-entity config first, the rollback needs the same care, and the
+  entity is absent between retraction and bundle. go-unifi2mqtt is excluded
+  (ADR 0070, "Closing", Phase 9).
+
+- **ADR 0083 follow-ups owned by loom.** Two items of
+  [ADR 0083](../../docs/adr/0083-mqtt-smarthome-topic-convention.md):
+  - *she's wipe does not clear `<base>/meta/…` or `<base>/ha/…`* (amendment
+    item 3), so the descriptor companions and the light's `ha` twins stay
+    retained after a wipe from she.
+  - *`lc` across restarts* ("Status payload", Known limitation; amendment
+    item 10): after a restart `lc` is the first observation unless the
+    daemon reads its own retained value back first.
+
+  The cross-project items of the same wave (acceptance against a running she
+  instance among them) are listed in go-hamqtt's `docs/open-items.md`.
+
+### openccu-lite
+
+- **Check against openccu-lite 1.0.0-dev.42.** The version last verified
+  live is dev.30 ([`openccu-lite-live-verification.md`](../testplans/openccu-lite-live-verification.md)).
+  To check:
+  - the new default host name `openccu-lite-<last four hex digits of the
+    MAC>` against loom's host assumptions (the `openccu-lite.local` example in
+    `internal/client/transport/occulited/client.go`, mDNS discovery of lite
+    hosts, [`openccu-lite.md`](../../docs/admin/openccu-lite.md));
+  - `rpc.streams_per_session` now defaults to 3 (was 2): how many event
+    streams loom opens per token
+    ([ADR 0072](../../docs/adr/0072-openccu-lite-event-stream.md));
+  - add-on units no longer start the interface daemons;
+  - a diff of the OpenAPI, AsyncAPI and RPC documents occulited ships with
+    dev.42 against the version loom targets;
+  - the add-on logo SVG has no intrinsic size; fixed on lite's side, but
+    loom's SVG should carry `width`/`height` anyway.
+
+- **In progress: follow the lite shell's theme and language.** Inside lite's
+  iframe loom was treated as Home Assistant embedding. Fix on branch
+  `fix/follow-lite-shell-theme`; remove this entry when it merges.
 
 ## Reviewed and deferred
 
