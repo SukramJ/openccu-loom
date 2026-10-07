@@ -6,7 +6,6 @@ package adapter
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"testing"
 	"time"
 
@@ -79,16 +78,18 @@ func calcSlotAvailability(t *testing.T, tempStatus hmenum.ParameterStatus) bool 
 	eb.PublishInitialSnapshot(context.Background())
 
 	for _, p := range pub.Published() {
-		if !strings.HasSuffix(p.Topic, "/calculated/DEW_POINT") {
+		if !statusSuffix(p.Topic, "/calculated/DEW_POINT") {
 			continue
 		}
 		var state struct {
-			Available bool `json:"available"`
+			HM struct {
+				Available bool `json:"available"`
+			} `json:"hm"`
 		}
 		if err := json.Unmarshal(p.Payload, &state); err != nil {
 			t.Fatalf("decode slot state %q: %v", p.Topic, err)
 		}
-		return state.Available
+		return state.HM.Available
 	}
 	t.Fatal("no calculated DEW_POINT slot state was published")
 	return false

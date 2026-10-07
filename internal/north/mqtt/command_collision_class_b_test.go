@@ -204,7 +204,7 @@ const classBBase = "openccu-loom"
 func TestCombinedDPCommandDoesNotAlsoIssueADataPointWrite(t *testing.T) {
 	f := newClassBFixture(t)
 
-	const topic = classBBase + "/ccu-01/HmIP-RF/0001ABCD/1/combined/duration/set"
+	const topic = classBBase + "/set/ccu-01/HmIP-RF/0001ABCD/1/combined/duration"
 
 	// Disjointness guard, and the load-bearing half of this test: one
 	// matching subscription means the broker produces one copy and the
@@ -262,18 +262,21 @@ func TestCombinedDPCommandDoesNotAlsoIssueADataPointWrite(t *testing.T) {
 // parse while leaving the guard intact would be invisible in the combined
 // fixture.
 //
-// The counts moved with its combined twin when the filters were coalesced:
-// one matching subscription, one broker copy, one schedule write. See
+// Under ADR 0083 the schedule switch has a route of its own again —
+// `<base>/set/+/+/+/+/schedule/switch/+`, eight levels below the base and
+// therefore out of reach of the seven-level data-point catch-all — so the
+// counts are the same as its combined twin's for a different reason: one
+// matching subscription, one broker copy, one schedule write. See
 // TestCombinedDPCommandDoesNotAlsoIssueADataPointWrite for the full
 // reasoning; it is not repeated here.
 func TestScheduleSwitchCommandDoesNotAlsoIssueADataPointWrite(t *testing.T) {
 	f := newClassBFixture(t)
 
-	const topic = classBBase + "/ccu-01/HmIP-RF/0001ABCD/1/schedule/1_1/set"
+	const topic = classBBase + "/set/ccu-01/HmIP-RF/0001ABCD/1/schedule/switch/1_1"
 
 	if got := f.client.matchingFilters(topic); got != 1 {
 		t.Fatalf("filters matching %q = %d, want exactly 1 — "+
-			"the schedule shape has no filter of its own since coalescing, and a second "+
+			"the schedule item has exactly one route of its own, and a second "+
 			"matching subscription is a second dispatch of every schedule write", topic, got)
 	}
 
@@ -373,12 +376,12 @@ func TestClassBTopicsAreNotAlsoAWeekProfileShape(t *testing.T) {
 		topic string
 		depth int
 	}{
-		{classBBase + "/ccu-01/HmIP-RF/0001ABCD/1/combined/duration/set", 7},
-		{classBBase + "/ccu-01/HmIP-RF/0001ABCD/1/schedule/1_1/set", 7},
+		{classBBase + "/set/ccu-01/HmIP-RF/0001ABCD/1/combined/duration", 7},
+		{classBBase + "/set/ccu-01/HmIP-RF/0001ABCD/1/schedule/switch/1_1", 8},
 		// The class-A shape for contrast: one level shorter, and likewise
 		// matched by exactly one subscription since its own filter was
 		// folded into the six-segment route.
-		{classBBase + "/ccu-01/HmIP-RF/0001ABCD/1/week_profile/set", 6},
+		{classBBase + "/set/ccu-01/HmIP-RF/0001ABCD/1/week_profile", 6},
 	} {
 		claimed := claimingFilters(classBBase, tc.topic)
 		if len(claimed) != 1 {

@@ -6,6 +6,8 @@ package mqtt
 import (
 	"context"
 	"encoding/json"
+	"regexp"
+	"strconv"
 	"testing"
 )
 
@@ -59,7 +61,7 @@ func TestDaemonStatusSensorReadsTheTopicTheWillIsSetOn(t *testing.T) {
 	body := daemonStatusPayload(t, central)
 
 	topics := NewTopicBuilder("openccu-loom")
-	if got, want := body["state_topic"], topics.BridgeStatus(); got != want {
+	if got, want := body["state_topic"], topics.Connected(); got != want {
 		t.Fatalf("state_topic = %v, want %v", got, want)
 	}
 
@@ -72,17 +74,35 @@ func TestDaemonStatusSensorReadsTheTopicTheWillIsSetOn(t *testing.T) {
 	if err := bridge.AnnounceOnline(ctx); err != nil {
 		t.Fatalf("announce online: %v", err)
 	}
-	online := lastPayloadOn(t, rec, topics.BridgeStatus())
+	online := lastPayloadOn(t, rec, topics.Connected())
 	if err := bridge.AnnounceOffline(ctx); err != nil {
 		t.Fatalf("announce offline: %v", err)
 	}
-	offline := lastPayloadOn(t, rec, topics.BridgeStatus())
+	offline := lastPayloadOn(t, rec, topics.Connected())
 
-	if got := body["payload_on"]; got != online {
-		t.Fatalf("payload_on = %v, but the bridge announces %q — the sensor would never turn on", got, online)
+	// `<base>/connected` carries the level 0/1/2 (ADR 0083), and the
+	// sensor's template turns it into its payload words: connected at 1 or
+	// above. The template is evaluated here for the two levels the bridge
+	// really announced, so a template whose threshold moved, or payload
+	// words that stopped matching it, fail.
+	tmpl, _ := body["value_template"].(string)
+	m := regexp.MustCompile(`^\{\{ 'online' if value \| int\(0\) >= (\d+) else 'offline' \}\}$`).FindStringSubmatch(tmpl)
+	if m == nil {
+		t.Fatalf("value_template = %q, want the connected-level threshold template", tmpl)
 	}
-	if got := body["payload_off"]; got != offline {
-		t.Fatalf("payload_off = %v, but the bridge announces %q — the sensor would never turn off", got, offline)
+	threshold, _ := strconv.Atoi(m[1])
+	render := func(level string) string {
+		n, err := strconv.Atoi(level)
+		if err == nil && n >= threshold {
+			return "online"
+		}
+		return "offline"
+	}
+	if got, want := body["payload_on"], render(online); got != want {
+		t.Fatalf("payload_on = %v, but the bridge announces %q, which the template renders %q — the sensor would never turn on", got, online, want)
+	}
+	if got, want := body["payload_off"], render(offline); got != want {
+		t.Fatalf("payload_off = %v, but the bridge announces %q, which the template renders %q — the sensor would never turn off", got, offline, want)
 	}
 	if online == offline {
 		t.Fatal("online and offline announce the same payload; the comparison above cannot distinguish them")

@@ -1,0 +1,1424 @@
+{
+  "discovery_golden.json": {
+    "binary_sensor/values": {
+      "device_identifiers": [
+        "openccu-loom_000b0001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/binary_sensor/gh_ccu-01_000b0001/1_state/config",
+      "unique_id": "loom_000b0001_1_state"
+    },
+    "climate/master": {
+      "device_identifiers": [
+        "openccu-loom_00150001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/climate/gh_ccu-01_00150001/1_set_point_temperature/config",
+      "unique_id": "loom_00150001_1_set_point_temperature"
+    },
+    "climate/values": {
+      "device_identifiers": [
+        "openccu-loom_00150001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/climate/gh_ccu-01_00150001/1_set_point_temperature/config",
+      "unique_id": "loom_00150001_1_set_point_temperature"
+    },
+    "cover/master": {
+      "device_identifiers": [
+        "openccu-loom_000d0001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/cover/gh_ccu-01_000d0001/4_level/config",
+      "unique_id": "loom_000d0001_4_level"
+    },
+    "cover/sub-device": {
+      "device_identifiers": [
+        "openccu-loom_000a0001-2"
+      ],
+      "device_via_device": "openccu-loom_000a0001",
+      "topic": "homeassistant/cover/gh_ccu-01_000a0001/4_level/config",
+      "unique_id": "loom_000a0001_4_level"
+    },
+    "cover/values": {
+      "device_identifiers": [
+        "openccu-loom_000d0001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/cover/gh_ccu-01_000d0001/4_level/config",
+      "unique_id": "loom_000d0001_4_level"
+    },
+    "event/press": {
+      "device_identifiers": [
+        "openccu-loom_000c0001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/event/gh_ccu-01_000c0001/1_press_short/config",
+      "unique_id": "loom_000c0001_1_press_short"
+    },
+    "event/virtual-remote-central-scoped": {
+      "device_identifiers": [
+        "openccu-loom_ccu-01_bidcos-rf"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/event/gh_ccu-01_bidcos-rf/3_press_short/config",
+      "unique_id": "loom_11a0001234_bidcos_rf_3_press_short"
+    },
+    "light/master": {
+      "device_identifiers": [
+        "openccu-loom_000f0001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/light/gh_ccu-01_000f0001/4_level/config",
+      "unique_id": "loom_000f0001_4_level"
+    },
+    "light/values": {
+      "device_identifiers": [
+        "openccu-loom_000f0001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/light/gh_ccu-01_000f0001/4_level/config",
+      "unique_id": "loom_000f0001_4_level"
+    },
+    "lock/master": {
+      "device_identifiers": [
+        "openccu-loom_000e0001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/lock/gh_ccu-01_000e0001/1_lock_target_level/config",
+      "unique_id": "loom_000e0001_1_lock_target_level"
+    },
+    "lock/values": {
+      "device_identifiers": [
+        "openccu-loom_000e0001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/lock/gh_ccu-01_000e0001/1_lock_target_level/config",
+      "unique_id": "loom_000e0001_1_lock_target_level"
+    },
+    "number/master": {
+      "device_identifiers": [
+        "openccu-loom_0001abcd"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/sensor/gh_ccu-01_0001abcd/1_level/config",
+      "unique_id": "loom_0001abcd_1_level_sensor"
+    },
+    "select/action-values": {
+      "device_identifiers": [
+        "openccu-loom_00120001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/select/gh_ccu-01_00120001/1_boost_mode/config",
+      "unique_id": "loom_00120001_1_boost_mode"
+    },
+    "select/master": {
+      "device_identifiers": [
+        "openccu-loom_00120001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/select/gh_ccu-01_00120001/1_set_point_mode/config",
+      "unique_id": "loom_00120001_1_set_point_mode"
+    },
+    "select/values": {
+      "device_identifiers": [
+        "openccu-loom_00120001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/select/gh_ccu-01_00120001/1_set_point_mode/config",
+      "unique_id": "loom_00120001_1_set_point_mode"
+    },
+    "sensor/calculated-synthetic": {
+      "device_identifiers": [
+        "openccu-loom_0001abcd"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/sensor/gh_ccu-01_0001abcd/1_dew_point/config",
+      "unique_id": "loom_calculated_0001abcd_1_dew_point"
+    },
+    "sensor/high-channel": {
+      "device_identifiers": [
+        "openccu-loom_0001abcd"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/sensor/gh_ccu-01_0001abcd/7_humidity/config",
+      "unique_id": "loom_0001abcd_7_humidity"
+    },
+    "sensor/name-null-seed": {
+      "device_identifiers": [
+        "openccu-loom_0001abcd"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/sensor/gh_ccu-01_0001abcd/1_actual_temperature/config",
+      "unique_id": "loom_0001abcd_1_actual_temperature"
+    },
+    "sensor/values": {
+      "device_identifiers": [
+        "openccu-loom_0001abcd"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/sensor/gh_ccu-01_0001abcd/1_actual_temperature/config",
+      "unique_id": "loom_0001abcd_1_actual_temperature"
+    },
+    "siren/master": {
+      "device_identifiers": [
+        "openccu-loom_00110001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/siren/gh_ccu-01_00110001/3_acoustic_alarm_active/config",
+      "unique_id": "loom_00110001_3_acoustic_alarm_active"
+    },
+    "siren/values": {
+      "device_identifiers": [
+        "openccu-loom_00110001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/siren/gh_ccu-01_00110001/3_acoustic_alarm_active/config",
+      "unique_id": "loom_00110001_3_acoustic_alarm_active"
+    },
+    "switch/cuxd-ccu-01": {
+      "device_identifiers": [
+        "openccu-loom_ccu-01_cux2801001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/binary_sensor/gh_ccu-01_cux2801001/1_state/config",
+      "unique_id": "loom_11a0001234_cux2801001_1_state"
+    },
+    "switch/cuxd-ccu-02": {
+      "device_identifiers": [
+        "openccu-loom_ccu-02_cux2801001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-02",
+      "topic": "homeassistant/binary_sensor/gh_ccu-02_cux2801001/1_state/config",
+      "unique_id": "loom_11b0005678_cux2801001_1_state"
+    },
+    "switch/master": {
+      "device_identifiers": [
+        "openccu-loom_aabbccdd"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/switch/gh_ccu-01_aabbccdd/1_state/config",
+      "unique_id": "loom_aabbccdd_1_state"
+    },
+    "switch/serial-second-central": {
+      "device_identifiers": [
+        "openccu-loom_aabbccdd"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-02",
+      "topic": "homeassistant/switch/gh_ccu-02_aabbccdd/1_state/config",
+      "unique_id": "loom_aabbccdd_1_state"
+    },
+    "switch/values": {
+      "device_identifiers": [
+        "openccu-loom_aabbccdd"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/switch/gh_ccu-01_aabbccdd/1_state/config",
+      "unique_id": "loom_aabbccdd_1_state"
+    },
+    "text/master": {
+      "device_identifiers": [
+        "openccu-loom_00130001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/text/gh_ccu-01_00130001/1_display_line/config",
+      "unique_id": "loom_00130001_1_display_line"
+    },
+    "text/values": {
+      "device_identifiers": [
+        "openccu-loom_00130001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/text/gh_ccu-01_00130001/1_display_line/config",
+      "unique_id": "loom_00130001_1_display_line"
+    },
+    "update/master": {
+      "device_identifiers": [
+        "openccu-loom_00140001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/update/gh_ccu-01_00140001/0_firmware/config",
+      "unique_id": "loom_00140001_0_firmware"
+    },
+    "update/values": {
+      "device_identifiers": [
+        "openccu-loom_00140001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/update/gh_ccu-01_00140001/0_firmware/config",
+      "unique_id": "loom_00140001_0_firmware"
+    },
+    "valve/master": {
+      "device_identifiers": [
+        "openccu-loom_00100001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/valve/gh_ccu-01_00100001/1_valve_state/config",
+      "unique_id": "loom_00100001_1_valve_state"
+    },
+    "valve/values": {
+      "device_identifiers": [
+        "openccu-loom_00100001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/valve/gh_ccu-01_00100001/1_valve_state/config",
+      "unique_id": "loom_00100001_1_valve_state"
+    }
+  },
+  "discovery_golden_addon_update.json": {
+    "alternate-base": {
+      "default_entity_id": "update.loom_addon_update",
+      "device_identifiers": [
+        "openccu-loom_daemon"
+      ],
+      "topic": "homeassistant/update/daemon/addon_update/config",
+      "unique_id": "loom_addon_update"
+    },
+    "default": {
+      "default_entity_id": "update.gh_loom_addon_update",
+      "device_identifiers": [
+        "openccu-loom_daemon"
+      ],
+      "topic": "homeassistant/update/gh_daemon/addon_update/config",
+      "unique_id": "gh_loom_addon_update"
+    },
+    "locale-de": {
+      "default_entity_id": "update.gh_loom_addon_update",
+      "device_identifiers": [
+        "openccu-loom_daemon"
+      ],
+      "topic": "homeassistant/update/gh_daemon/addon_update/config",
+      "unique_id": "gh_loom_addon_update"
+    },
+    "second-central": {
+      "default_entity_id": "update.gh_loom_addon_update",
+      "device_identifiers": [
+        "openccu-loom_daemon"
+      ],
+      "topic": "homeassistant/update/gh_daemon/addon_update/config",
+      "unique_id": "gh_loom_addon_update"
+    }
+  },
+  "discovery_golden_aggregate.json": {
+    "climate/thermostat": {
+      "device_identifiers": [
+        "openccu-loom_0001bwth0001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/climate/gh_ccu-01_0001bwth0001/1_climate/config",
+      "unique_id": "loom_0001bwth0001_1_climate"
+    },
+    "cover/blind": {
+      "device_identifiers": [
+        "openccu-loom_0001broll001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/cover/gh_ccu-01_0001broll001/4_cover/config",
+      "unique_id": "loom_0001broll001_4_cover"
+    },
+    "cover/garage": {
+      "device_identifiers": [
+        "openccu-loom_0001modho001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/cover/gh_ccu-01_0001modho001/1_cover/config",
+      "unique_id": "loom_0001modho001_1_cover"
+    },
+    "cover/multi-primary-ch-name": {
+      "device_identifiers": [
+        "openccu-loom_0001drbli401"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/cover/gh_ccu-01_0001drbli401/10_cover/config",
+      "unique_id": "loom_0001drbli401_10_cover"
+    },
+    "cover/sub-device-split": {
+      "device_identifiers": [
+        "openccu-loom_0001drbli401-10"
+      ],
+      "device_via_device": "openccu-loom_0001drbli401",
+      "topic": "homeassistant/cover/gh_ccu-01_0001drbli401/10_cover/config",
+      "unique_id": "loom_0001drbli401_10_cover"
+    },
+    "event/device-error": {
+      "device_identifiers": [
+        "openccu-loom_0001swdo0001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/event/gh_ccu-01_0001swdo0001/1_event_group_device_error/config",
+      "unique_id": "loom_event_group_device_error_0001swdo0001_1"
+    },
+    "event/impulse": {
+      "device_identifiers": [
+        "openccu-loom_0001srd00001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/event/gh_ccu-01_0001srd00001/1_event_group_impulse/config",
+      "unique_id": "loom_event_group_impulse_0001srd00001_1"
+    },
+    "event/keypress-bare-address-name": {
+      "device_identifiers": [
+        "openccu-loom_0001brc20001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/event/gh_ccu-01_0001brc20001/1_event_group_keypress/config",
+      "unique_id": "loom_event_group_keypress_0001brc20001_1"
+    },
+    "event/keypress-channel-number": {
+      "device_identifiers": [
+        "openccu-loom_0001brc20001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/event/gh_ccu-01_0001brc20001/1_event_group_keypress/config",
+      "unique_id": "loom_event_group_keypress_0001brc20001_1"
+    },
+    "event/keypress-doorbell": {
+      "device_identifiers": [
+        "openccu-loom_0001dbb00001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/event/gh_ccu-01_0001dbb00001/1_event_group_keypress/config",
+      "unique_id": "loom_event_group_keypress_0001dbb00001_1"
+    },
+    "event/keypress-operator-named": {
+      "device_identifiers": [
+        "openccu-loom_0001brc20001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/event/gh_ccu-01_0001brc20001/1_event_group_keypress/config",
+      "unique_id": "loom_event_group_keypress_0001brc20001_1"
+    },
+    "event/keypress-virtual-remote-ccu-01": {
+      "device_identifiers": [
+        "openccu-loom_ccu-01_bidcos-rf"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/event/gh_ccu-01_bidcos-rf/3_event_group_keypress/config",
+      "unique_id": "loom_event_group_keypress_11a0001234_bidcos_rf_3"
+    },
+    "event/keypress-virtual-remote-ccu-02": {
+      "device_identifiers": [
+        "openccu-loom_ccu-02_bidcos-rf"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-02",
+      "topic": "homeassistant/event/gh_ccu-02_bidcos-rf/3_event_group_keypress/config",
+      "unique_id": "loom_event_group_keypress_11b0005678_bidcos_rf_3"
+    },
+    "light/dimmer": {
+      "device_identifiers": [
+        "openccu-loom_0001bdt00001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/light/gh_ccu-01_0001bdt00001/4_light/config",
+      "unique_id": "loom_0001bdt00001_4_light"
+    },
+    "lock/door-lock-drive": {
+      "device_identifiers": [
+        "openccu-loom_0001dld00001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/lock/gh_ccu-01_0001dld00001/1_lock/config",
+      "unique_id": "loom_0001dld00001_1_lock"
+    },
+    "siren/alarm-siren": {
+      "device_identifiers": [
+        "openccu-loom_0001asir0001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/siren/gh_ccu-01_0001asir0001/3_siren/config",
+      "unique_id": "loom_0001asir0001_3_siren"
+    },
+    "switch/single-primary-name-null": {
+      "device_identifiers": [
+        "openccu-loom_0001bsm00001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/switch/gh_ccu-01_0001bsm00001/4_switch/config",
+      "unique_id": "loom_0001bsm00001_4_switch"
+    },
+    "valve/irrigation": {
+      "device_identifiers": [
+        "openccu-loom_0001wsm00001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/valve/gh_ccu-01_0001wsm00001/4_valve/config",
+      "unique_id": "loom_0001wsm00001_4_valve"
+    }
+  },
+  "discovery_golden_alarm.json": {
+    "button/master-reset-motion": {
+      "default_entity_id": "button.gh_openccu-loom_alarm_master_reset_motion",
+      "device_identifiers": [
+        "openccu-loom_alarm"
+      ],
+      "topic": "homeassistant/button/gh_alarm/master_reset_motion/config",
+      "unique_id": "gh_openccu-loom_alarm_master_reset_motion"
+    },
+    "button/zone-reset-motion": {
+      "default_entity_id": "button.gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33_reset_motion",
+      "device_identifiers": [
+        "openccu-loom_alarm"
+      ],
+      "topic": "homeassistant/button/gh_alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33_reset_motion/config",
+      "unique_id": "gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33_reset_motion"
+    },
+    "panel/master-overrides-zone": {
+      "default_entity_id": "alarm_control_panel.gh_openccu-loom_alarm_master",
+      "device_identifiers": [
+        "openccu-loom_alarm"
+      ],
+      "topic": "homeassistant/alarm_control_panel/gh_alarm/master/config",
+      "unique_id": "gh_openccu-loom_alarm_master"
+    },
+    "panel/zone-all-modes": {
+      "default_entity_id": "alarm_control_panel.gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33",
+      "device_identifiers": [
+        "openccu-loom_alarm"
+      ],
+      "topic": "homeassistant/alarm_control_panel/gh_alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/config",
+      "unique_id": "gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33"
+    },
+    "panel/zone-code-arm-only": {
+      "default_entity_id": "alarm_control_panel.gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33",
+      "device_identifiers": [
+        "openccu-loom_alarm"
+      ],
+      "topic": "homeassistant/alarm_control_panel/gh_alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/config",
+      "unique_id": "gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33"
+    },
+    "panel/zone-code-disarm-only": {
+      "default_entity_id": "alarm_control_panel.gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33",
+      "device_identifiers": [
+        "openccu-loom_alarm"
+      ],
+      "topic": "homeassistant/alarm_control_panel/gh_alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/config",
+      "unique_id": "gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33"
+    },
+    "panel/zone-single-mode": {
+      "default_entity_id": "alarm_control_panel.gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33",
+      "device_identifiers": [
+        "openccu-loom_alarm"
+      ],
+      "topic": "homeassistant/alarm_control_panel/gh_alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/config",
+      "unique_id": "gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33"
+    },
+    "sensor/master-triggered-motion": {
+      "default_entity_id": "sensor.gh_openccu-loom_alarm_master_triggered_motion",
+      "device_identifiers": [
+        "openccu-loom_alarm"
+      ],
+      "topic": "homeassistant/sensor/gh_alarm/master_triggered_motion/config",
+      "unique_id": "gh_openccu-loom_alarm_master_triggered_motion"
+    },
+    "sensor/zone-triggered-motion": {
+      "default_entity_id": "sensor.gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33_triggered_motion",
+      "device_identifiers": [
+        "openccu-loom_alarm"
+      ],
+      "topic": "homeassistant/sensor/gh_alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33_triggered_motion/config",
+      "unique_id": "gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33_triggered_motion"
+    }
+  },
+  "discovery_golden_hub.json": {
+    "aggregate/alarm-messages": {
+      "default_entity_id": "sensor.loom_11a0001234_alarm_messages",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/sensor/gh_ccu-01_messages/alarm/config",
+      "unique_id": "loom_11a0001234_alarm_messages"
+    },
+    "aggregate/hazard-second-central-inbox": {
+      "default_entity_id": "sensor.loom_11b0005678_inbox",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-02"
+      ],
+      "topic": "homeassistant/sensor/gh_ccu-02_messages/inbox/config",
+      "unique_id": "loom_11b0005678_inbox"
+    },
+    "aggregate/inbox": {
+      "default_entity_id": "sensor.loom_11a0001234_inbox",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/sensor/gh_ccu-01_messages/inbox/config",
+      "unique_id": "loom_11a0001234_inbox"
+    },
+    "aggregate/service-messages": {
+      "default_entity_id": "sensor.loom_11a0001234_service_messages",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/sensor/gh_ccu-01_messages/service/config",
+      "unique_id": "loom_11a0001234_service_messages"
+    },
+    "connectivity/bidcos": {
+      "default_entity_id": "binary_sensor.loom_11a0001234_connectivity_bidcos-rf",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/binary_sensor/gh_ccu-01_connectivity/bidcos-rf/config",
+      "unique_id": "loom_11a0001234_connectivity_bidcos-rf"
+    },
+    "connectivity/hazard-second-central": {
+      "default_entity_id": "binary_sensor.loom_11b0005678_connectivity_hmip-rf",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-02"
+      ],
+      "topic": "homeassistant/binary_sensor/gh_ccu-02_connectivity/hmip-rf/config",
+      "unique_id": "loom_11b0005678_connectivity_hmip-rf"
+    },
+    "connectivity/hmip": {
+      "default_entity_id": "binary_sensor.loom_11a0001234_connectivity_hmip-rf",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/binary_sensor/gh_ccu-01_connectivity/hmip-rf/config",
+      "unique_id": "loom_11a0001234_connectivity_hmip-rf"
+    },
+    "install-mode/button-bidcos": {
+      "default_entity_id": "button.loom_11a0001234_install_mode_bidcos-button",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/button/gh_ccu-01_central/install_mode_bidcos_button/config",
+      "unique_id": "loom_11a0001234_install_mode_bidcos-button"
+    },
+    "install-mode/button-bidcos-wired": {
+      "default_entity_id": "button.loom_11a0001234_install_mode_bidcos-wired-button",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/button/gh_ccu-01_central/install_mode_bidcos-wired_button/config",
+      "unique_id": "loom_11a0001234_install_mode_bidcos-wired-button"
+    },
+    "install-mode/button-hmip": {
+      "default_entity_id": "button.loom_11a0001234_install_mode_hmip-button",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/button/gh_ccu-01_central/install_mode_hmip_button/config",
+      "unique_id": "loom_11a0001234_install_mode_hmip-button"
+    },
+    "install-mode/hazard-second-central-sensor": {
+      "default_entity_id": "sensor.loom_11b0005678_install_mode_hmip",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-02"
+      ],
+      "topic": "homeassistant/sensor/gh_ccu-02_central/install_mode_hmip/config",
+      "unique_id": "loom_11b0005678_install_mode_hmip"
+    },
+    "install-mode/sensor-bidcos": {
+      "default_entity_id": "sensor.loom_11a0001234_install_mode_bidcos",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/sensor/gh_ccu-01_central/install_mode_bidcos/config",
+      "unique_id": "loom_11a0001234_install_mode_bidcos"
+    },
+    "install-mode/sensor-bidcos-wired": {
+      "default_entity_id": "sensor.loom_11a0001234_install_mode_bidcos-wired",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/sensor/gh_ccu-01_central/install_mode_bidcos-wired/config",
+      "unique_id": "loom_11a0001234_install_mode_bidcos-wired"
+    },
+    "install-mode/sensor-hmip": {
+      "default_entity_id": "sensor.loom_11a0001234_install_mode_hmip",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/sensor/gh_ccu-01_central/install_mode_hmip/config",
+      "unique_id": "loom_11a0001234_install_mode_hmip"
+    },
+    "program/hazard-second-central": {
+      "default_entity_id": "switch.loom_11b0005678_program_3721",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-02"
+      ],
+      "topic": "homeassistant/switch/gh_ccu-02_programs/3721/config",
+      "unique_id": "loom_11b0005678_program_3721"
+    },
+    "program/hazard-unnamed": {
+      "default_entity_id": "switch.loom_11a0001234_program_3722",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/switch/gh_ccu-01_programs/3722/config",
+      "unique_id": "loom_11a0001234_program_3722"
+    },
+    "program/legacy-single-switch": {
+      "default_entity_id": "switch.loom_11a0001234_program_3721",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/switch/gh_ccu-01_programs/3721/config",
+      "unique_id": "loom_11a0001234_program_3721"
+    },
+    "program/role-execute-button": {
+      "default_entity_id": "button.loom_11a0001234_program_3721_execute",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/button/gh_ccu-01_programs/3721_execute/config",
+      "unique_id": "loom_11a0001234_program_3721_execute"
+    },
+    "program/role-principal-switch": {
+      "default_entity_id": "switch.loom_11a0001234_program_3721",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/switch/gh_ccu-01_programs/3721/config",
+      "unique_id": "loom_11a0001234_program_3721"
+    },
+    "system/connection-latency": {
+      "default_entity_id": "sensor.loom_11a0001234_connection_latency",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/sensor/gh_ccu-01_system/connection_latency/config",
+      "unique_id": "loom_11a0001234_connection_latency"
+    },
+    "system/daemon-status": {
+      "default_entity_id": "binary_sensor.loom_11a0001234_daemon_status",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/binary_sensor/gh_ccu-01_system/daemon_status/config",
+      "unique_id": "loom_11a0001234_daemon_status"
+    },
+    "system/hazard-second-central-health": {
+      "default_entity_id": "sensor.loom_11b0005678_system_health",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-02"
+      ],
+      "topic": "homeassistant/sensor/gh_ccu-02_system/system_health/config",
+      "unique_id": "loom_11b0005678_system_health"
+    },
+    "system/health": {
+      "default_entity_id": "sensor.loom_11a0001234_system_health",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/sensor/gh_ccu-01_system/system_health/config",
+      "unique_id": "loom_11a0001234_system_health"
+    },
+    "system/hub-update": {
+      "default_entity_id": "update.loom_11a0001234_system_update",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/update/gh_ccu-01_system/system_update/config",
+      "unique_id": "loom_11a0001234_system_update"
+    },
+    "system/last-event-age": {
+      "default_entity_id": "sensor.loom_11a0001234_last_event_age",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/sensor/gh_ccu-01_system/last_event_age/config",
+      "unique_id": "loom_11a0001234_last_event_age"
+    },
+    "sysvar/alarm-binary-sensor": {
+      "default_entity_id": "binary_sensor.loom_11a0001234_sysvar_4713",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/binary_sensor/gh_ccu-01_sysvars/alarmzone/config",
+      "unique_id": "loom_11a0001234_sysvar_4713"
+    },
+    "sysvar/auto-energy-counter": {
+      "default_entity_id": "sensor.loom_11a0001234_sysvar_4723",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/sensor/gh_ccu-01_sysvars/svenergycounter_1234_abc0123456_6/config",
+      "unique_id": "loom_11a0001234_sysvar_4723"
+    },
+    "sysvar/float-number-fallback-range": {
+      "default_entity_id": "number.loom_11a0001234_sysvar_4719",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/number/gh_ccu-01_sysvars/sollwert/config",
+      "unique_id": "loom_11a0001234_sysvar_4719"
+    },
+    "sysvar/hazard-accent-twin-a": {
+      "default_entity_id": "binary_sensor.loom_11a0001234_sysvar_4740",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/binary_sensor/gh_ccu-01_sysvars/cafe_terrasse/config",
+      "unique_id": "loom_11a0001234_sysvar_4740"
+    },
+    "sysvar/hazard-accent-twin-b": {
+      "default_entity_id": "binary_sensor.loom_11a0001234_sysvar_4741",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/binary_sensor/gh_ccu-01_sysvars/caf_terrasse/config",
+      "unique_id": "loom_11a0001234_sysvar_4741"
+    },
+    "sysvar/hazard-linked-to-channel": {
+      "default_entity_id": "sensor.loom_11a0001234_sysvar_4733",
+      "device_identifiers": [
+        "openccu-loom_abc0123456:4"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/sensor/gh_ccu-01_sysvars/wohnzimmer_heizung_ventil/config",
+      "unique_id": "loom_11a0001234_sysvar_4733"
+    },
+    "sysvar/hazard-linked-to-device": {
+      "default_entity_id": "sensor.loom_11a0001234_sysvar_4732",
+      "device_identifiers": [
+        "openccu-loom_abc0123456"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/sensor/gh_ccu-01_sysvars/wohnzimmer_heizung_soll/config",
+      "unique_id": "loom_11a0001234_sysvar_4732"
+    },
+    "sysvar/hazard-linked-to-internal-device": {
+      "default_entity_id": "sensor.loom_11a0001234_sysvar_4734",
+      "device_identifiers": [
+        "openccu-loom_ccu-01_int0000001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/sensor/gh_ccu-01_sysvars/interner_zaehler/config",
+      "unique_id": "loom_11a0001234_sysvar_4734"
+    },
+    "sysvar/hazard-literal-double-underscore": {
+      "default_entity_id": "binary_sensor.loom_11a0001234_sysvar_4742",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/binary_sensor/gh_ccu-01_sysvars/watchdog_ccu-jack/config",
+      "unique_id": "loom_11a0001234_sysvar_4742"
+    },
+    "sysvar/hazard-punctuation-twin-a": {
+      "default_entity_id": "binary_sensor.loom_11a0001234_sysvar_4730",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/binary_sensor/gh_ccu-01_sysvars/alarm_kueche/config",
+      "unique_id": "loom_11a0001234_sysvar_4730"
+    },
+    "sysvar/hazard-punctuation-twin-b": {
+      "default_entity_id": "binary_sensor.loom_11a0001234_sysvar_4731",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/binary_sensor/gh_ccu-01_sysvars/alarm_kueche/config",
+      "unique_id": "loom_11a0001234_sysvar_4731"
+    },
+    "sysvar/hazard-second-central": {
+      "default_entity_id": "binary_sensor.loom_11b0005678_sysvar_4711",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-02"
+      ],
+      "topic": "homeassistant/binary_sensor/gh_ccu-02_sysvars/anwesenheit/config",
+      "unique_id": "loom_11b0005678_sysvar_4711"
+    },
+    "sysvar/hazard-unresolved-vid": {
+      "default_entity_id": "binary_sensor.loom_11a0001234_sysvar_nicht-aufgeloste-variable",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/binary_sensor/gh_ccu-01_sysvars/nicht_aufgeloeste_variable/config",
+      "unique_id": "loom_11a0001234_sysvar_nicht-aufgeloste-variable"
+    },
+    "sysvar/integer-number-bounded": {
+      "default_entity_id": "number.loom_11a0001234_sysvar_4720",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/number/gh_ccu-01_sysvars/helligkeit/config",
+      "unique_id": "loom_11a0001234_sysvar_4720"
+    },
+    "sysvar/list-extended-without-options": {
+      "default_entity_id": "sensor.loom_11a0001234_sysvar_4716",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/sensor/gh_ccu-01_sysvars/leere_liste/config",
+      "unique_id": "loom_11a0001234_sysvar_4716"
+    },
+    "sysvar/list-select": {
+      "default_entity_id": "select.loom_11a0001234_sysvar_4714",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/select/gh_ccu-01_sysvars/betriebsart/config",
+      "unique_id": "loom_11a0001234_sysvar_4714"
+    },
+    "sysvar/list-sensor-enum": {
+      "default_entity_id": "sensor.loom_11a0001234_sysvar_4715",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/sensor/gh_ccu-01_sysvars/betriebsart_anzeige/config",
+      "unique_id": "loom_11a0001234_sysvar_4715"
+    },
+    "sysvar/logic-binary-sensor": {
+      "default_entity_id": "binary_sensor.loom_11a0001234_sysvar_4712",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/binary_sensor/gh_ccu-01_sysvars/fenster_offen/config",
+      "unique_id": "loom_11a0001234_sysvar_4712"
+    },
+    "sysvar/logic-switch": {
+      "default_entity_id": "switch.loom_11a0001234_sysvar_4711",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/switch/gh_ccu-01_sysvars/anwesenheit/config",
+      "unique_id": "loom_11a0001234_sysvar_4711"
+    },
+    "sysvar/number-sensor": {
+      "default_entity_id": "sensor.loom_11a0001234_sysvar_4721",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/sensor/gh_ccu-01_sysvars/aussentemperatur/config",
+      "unique_id": "loom_11a0001234_sysvar_4721"
+    },
+    "sysvar/string-sensor": {
+      "default_entity_id": "sensor.loom_11a0001234_sysvar_4718",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/sensor/gh_ccu-01_sysvars/alleservicemeldungen/config",
+      "unique_id": "loom_11a0001234_sysvar_4718"
+    },
+    "sysvar/string-text": {
+      "default_entity_id": "text.loom_11a0001234_sysvar_4717",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/text/gh_ccu-01_sysvars/notiz/config",
+      "unique_id": "loom_11a0001234_sysvar_4717"
+    },
+    "sysvar/unknown-type-sensor": {
+      "default_entity_id": "sensor.loom_11a0001234_sysvar_4722",
+      "device_identifiers": [
+        "openccu-loom_central_ccu-01"
+      ],
+      "topic": "homeassistant/sensor/gh_ccu-01_sysvars/unbekannt/config",
+      "unique_id": "loom_11a0001234_sysvar_4722"
+    }
+  },
+  "discovery_golden_notify.json": {
+    "notify/escaped-central": {
+      "device_identifiers": [
+        "openccu-loom_002a5d8989d5c3"
+      ],
+      "device_via_device": "openccu-loom_central_ccu_kueche",
+      "topic": "homeassistant/notify/gh_ccu_kueche_002a5d8989d5c3/3_notify/config",
+      "unique_id": "loom_002a5d8989d5c3_3_notify"
+    },
+    "notify/no-channel-context": {
+      "device_identifiers": [
+        "openccu-loom_002a5d8989d5c3"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/notify/gh_ccu-01_002a5d8989d5c3/3_notify/config",
+      "unique_id": "loom_002a5d8989d5c3_3_notify"
+    },
+    "notify/operator-named-channel": {
+      "device_identifiers": [
+        "openccu-loom_002a5d8989d5c3"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/notify/gh_ccu-01_002a5d8989d5c3/3_notify/config",
+      "unique_id": "loom_002a5d8989d5c3_3_notify"
+    },
+    "notify/primary-channel": {
+      "device_identifiers": [
+        "openccu-loom_002a5d8989d5c3"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/notify/gh_ccu-01_002a5d8989d5c3/3_notify/config",
+      "unique_id": "loom_002a5d8989d5c3_3_notify"
+    },
+    "notify/second-central": {
+      "device_identifiers": [
+        "openccu-loom_002a5d8989d5c3"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-02",
+      "topic": "homeassistant/notify/gh_ccu-02_002a5d8989d5c3/3_notify/config",
+      "unique_id": "loom_002a5d8989d5c3_3_notify"
+    },
+    "notify/sub-device": {
+      "device_identifiers": [
+        "openccu-loom_002a5d8989d5c3-2"
+      ],
+      "device_via_device": "openccu-loom_002a5d8989d5c3",
+      "topic": "homeassistant/notify/gh_ccu-01_002a5d8989d5c3/3_notify/config",
+      "unique_id": "loom_002a5d8989d5c3_3_notify"
+    }
+  },
+  "discovery_golden_press_button.json": {
+    "button/bare-address-channel-name": {
+      "device_identifiers": [
+        "openccu-loom_0001d3c99c1234"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/button/gh_ccu-01_0001d3c99c1234/3_press_short/config",
+      "unique_id": "loom_0001d3c99c1234_3_press_short"
+    },
+    "button/channel-number-fallback": {
+      "device_identifiers": [
+        "openccu-loom_0001d3c99c1234"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/button/gh_ccu-01_0001d3c99c1234/2_press_long/config",
+      "unique_id": "loom_0001d3c99c1234_2_press_long"
+    },
+    "button/descriptor-label": {
+      "device_identifiers": [
+        "openccu-loom_0001d3c99c1234"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/button/gh_ccu-01_0001d3c99c1234/4_press_short/config",
+      "unique_id": "loom_0001d3c99c1234_4_press_short"
+    },
+    "button/label-omitted": {
+      "device_identifiers": [
+        "openccu-loom_0001d3c99c1234"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/button/gh_ccu-01_0001d3c99c1234/5_press_short/config",
+      "unique_id": "loom_0001d3c99c1234_5_press_short"
+    },
+    "button/operator-named-channel": {
+      "device_identifiers": [
+        "openccu-loom_0001d3c99c1234"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/button/gh_ccu-01_0001d3c99c1234/1_press_short/config",
+      "unique_id": "loom_0001d3c99c1234_1_press_short"
+    },
+    "button/reset-motion-config": {
+      "device_identifiers": [
+        "openccu-loom_0001d3c99cabcd"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/button/gh_ccu-01_0001d3c99cabcd/1_reset_motion/config",
+      "unique_id": "loom_0001d3c99cabcd_1_reset_motion"
+    },
+    "button/serial-second-central": {
+      "device_identifiers": [
+        "openccu-loom_0001d3c99c1234"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-02",
+      "topic": "homeassistant/button/gh_ccu-02_0001d3c99c1234/1_press_short/config",
+      "unique_id": "loom_0001d3c99c1234_1_press_short"
+    },
+    "button/sub-device": {
+      "device_identifiers": [
+        "openccu-loom_0001d3c99c5678-2"
+      ],
+      "device_via_device": "openccu-loom_0001d3c99c5678",
+      "topic": "homeassistant/button/gh_ccu-01_0001d3c99c5678/3_press_short/config",
+      "unique_id": "loom_0001d3c99c5678_3_press_short"
+    },
+    "button/virtual-remote-ccu-01": {
+      "device_identifiers": [
+        "openccu-loom_ccu-01_hmip-rcv-1"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/button/gh_ccu-01_hmip-rcv-1/10_press_short/config",
+      "unique_id": "loom_11a0001234_hmip_rcv_1_10_press_short"
+    },
+    "button/virtual-remote-ccu-02": {
+      "device_identifiers": [
+        "openccu-loom_ccu-02_hmip-rcv-1"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-02",
+      "topic": "homeassistant/button/gh_ccu-02_hmip-rcv-1/10_press_short/config",
+      "unique_id": "loom_11b0005678_hmip_rcv_1_10_press_short"
+    }
+  },
+  "discovery_golden_schedule.json": {
+    "sensor/cuxd-central-scoped": {
+      "device_identifiers": [
+        "openccu-loom_ccu-01_cux2801001_schedule"
+      ],
+      "device_via_device": "openccu-loom_ccu-01_cux2801001",
+      "topic": "homeassistant/sensor/gh_ccu-01_cux2801001/openccu-loom_ccu-01_cux2801001_1_schedule/config",
+      "unique_id": "openccu-loom_ccu-01_cux2801001_1_schedule"
+    },
+    "sensor/cuxd-second-central": {
+      "device_identifiers": [
+        "openccu-loom_ccu-02_cux2801001_schedule"
+      ],
+      "device_via_device": "openccu-loom_ccu-02_cux2801001",
+      "topic": "homeassistant/sensor/gh_ccu-02_cux2801001/openccu-loom_ccu-02_cux2801001_1_schedule/config",
+      "unique_id": "openccu-loom_ccu-02_cux2801001_1_schedule"
+    },
+    "sensor/hmip-multi-io": {
+      "device_identifiers": [
+        "openccu-loom_0001d3c9_schedule"
+      ],
+      "device_via_device": "openccu-loom_0001d3c9",
+      "topic": "homeassistant/sensor/gh_ccu-01_0001d3c9/openccu-loom_0001d3c9_5_schedule/config",
+      "unique_id": "openccu-loom_0001d3c9_5_schedule"
+    },
+    "sensor/mixed-case-central": {
+      "device_identifiers": [
+        "openccu-loom_ccu-keller_cux2801001_schedule"
+      ],
+      "device_via_device": "openccu-loom_ccu-keller_cux2801001",
+      "topic": "homeassistant/sensor/gh_ccu-keller_cux2801001/openccu-loom_ccu-keller_cux2801001_1_schedule/config",
+      "unique_id": "openccu-loom_ccu-keller_cux2801001_1_schedule"
+    },
+    "sensor/no-device-object": {
+      "device_identifiers": [
+        "openccu-loom_0001d3c9_schedule"
+      ],
+      "device_via_device": "openccu-loom_0001d3c9",
+      "topic": "homeassistant/sensor/gh_ccu-01_0001d3c9/openccu-loom_0001d3c9_5_schedule/config",
+      "unique_id": "openccu-loom_0001d3c9_5_schedule"
+    },
+    "switch/cuxd-central-scoped": {
+      "device_identifiers": [
+        "openccu-loom_ccu-01_cux2801001_schedule"
+      ],
+      "device_via_device": "openccu-loom_ccu-01_cux2801001",
+      "topic": "homeassistant/switch/gh_ccu-01_cux2801001/openccu-loom_ccu-01_cux2801001_1_schedule_1_1/config",
+      "unique_id": "openccu-loom_ccu-01_cux2801001_1_schedule_1_1"
+    },
+    "switch/no-device-object": {
+      "device_identifiers": [
+        "openccu-loom_0001d3c9_schedule"
+      ],
+      "device_via_device": "openccu-loom_0001d3c9",
+      "topic": "homeassistant/switch/gh_ccu-01_0001d3c9/openccu-loom_0001d3c9_5_schedule_1_1/config",
+      "unique_id": "openccu-loom_0001d3c9_5_schedule_1_1"
+    },
+    "switch/target-channel-1": {
+      "device_identifiers": [
+        "openccu-loom_0001d3c9_schedule"
+      ],
+      "device_via_device": "openccu-loom_0001d3c9",
+      "topic": "homeassistant/switch/gh_ccu-01_0001d3c9/openccu-loom_0001d3c9_5_schedule_1_1/config",
+      "unique_id": "openccu-loom_0001d3c9_5_schedule_1_1"
+    },
+    "switch/target-channel-18": {
+      "device_identifiers": [
+        "openccu-loom_0001d3c9_schedule"
+      ],
+      "device_via_device": "openccu-loom_0001d3c9",
+      "topic": "homeassistant/switch/gh_ccu-01_0001d3c9/openccu-loom_0001d3c9_5_schedule_1_18/config",
+      "unique_id": "openccu-loom_0001d3c9_5_schedule_1_18"
+    }
+  },
+  "discovery_golden_security_combined.json": {
+    "combined/central-scoped-address": {
+      "device_identifiers": [
+        "openccu-loom_ccu-01_int0000001"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/number/gh_ccu-01_int0000001/openccu-loom_ccu-01_int0000001_3_duration/config",
+      "unique_id": "openccu-loom_ccu-01_int0000001_3_duration"
+    },
+    "combined/duration-catalogue-label": {
+      "device_identifiers": [
+        "openccu-loom_0001abcd"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/number/gh_ccu-01_0001abcd/openccu-loom_0001abcd_3_duration/config",
+      "unique_id": "openccu-loom_0001abcd_3_duration"
+    },
+    "combined/duration-ccu-label": {
+      "device_identifiers": [
+        "openccu-loom_0001abcd"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/number/gh_ccu-01_0001abcd/openccu-loom_0001abcd_3_duration/config",
+      "unique_id": "openccu-loom_0001abcd_3_duration"
+    },
+    "combined/enum-select-door-mode": {
+      "device_identifiers": [
+        "openccu-loom_0004door"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/select/gh_ccu-01_0004door/openccu-loom_0004door_1_door_mode/config",
+      "unique_id": "openccu-loom_0004door_1_door_mode"
+    },
+    "combined/hs-color": {
+      "device_identifiers": [
+        "openccu-loom_0003cafe"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/sensor/gh_ccu-01_0003cafe/openccu-loom_0003cafe_1_hs_color/config",
+      "unique_id": "openccu-loom_0003cafe_1_hs_color"
+    },
+    "combined/level-combined": {
+      "device_identifiers": [
+        "openccu-loom_0002beef"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/sensor/gh_ccu-01_0002beef/openccu-loom_0002beef_4_level_combined/config",
+      "unique_id": "openccu-loom_0002beef_4_level_combined"
+    },
+    "combined/no-device-object": {
+      "device_identifiers": [
+        "openccu-loom_0001abcd"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/number/gh_ccu-01_0001abcd/openccu-loom_0001abcd_3_duration/config",
+      "unique_id": "openccu-loom_0001abcd_3_duration"
+    },
+    "combined/projection-sets-unique-id": {
+      "device_identifiers": [
+        "openccu-loom_0001abcd"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/number/gh_ccu-01_0001abcd/openccu-loom_0001abcd_3_duration/config",
+      "unique_id": "openccu-loom_projection_pinned"
+    },
+    "combined/second-central": {
+      "device_identifiers": [
+        "openccu-loom_0001abcd"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-02",
+      "topic": "homeassistant/number/gh_ccu-02_0001abcd/openccu-loom_0001abcd_3_duration/config",
+      "unique_id": "openccu-loom_0001abcd_3_duration"
+    },
+    "combined/sub-devices-enabled": {
+      "device_identifiers": [
+        "openccu-loom_0001abcd"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/number/gh_ccu-01_0001abcd/openccu-loom_0001abcd_3_duration/config",
+      "unique_id": "openccu-loom_0001abcd_3_duration"
+    },
+    "security/class/battery-diagnostic": {
+      "default_entity_id": "binary_sensor.gh_loom_security_class_battery",
+      "device_identifiers": [
+        "openccu-loom_security"
+      ],
+      "topic": "homeassistant/binary_sensor/gh_security/class_battery/config",
+      "unique_id": "gh_loom_security_class_battery"
+    },
+    "security/class/smoke-hazard": {
+      "default_entity_id": "binary_sensor.gh_loom_security_class_smoke",
+      "device_identifiers": [
+        "openccu-loom_security"
+      ],
+      "topic": "homeassistant/binary_sensor/gh_security/class_smoke/config",
+      "unique_id": "gh_loom_security_class_smoke"
+    },
+    "security/system/alarm": {
+      "default_entity_id": "binary_sensor.gh_loom_security_alarm",
+      "device_identifiers": [
+        "openccu-loom_security"
+      ],
+      "topic": "homeassistant/binary_sensor/gh_security/alarm/config",
+      "unique_id": "gh_loom_security_alarm"
+    },
+    "security/system/event": {
+      "default_entity_id": "event.gh_loom_security_event",
+      "device_identifiers": [
+        "openccu-loom_security"
+      ],
+      "topic": "homeassistant/event/gh_security/event/config",
+      "unique_id": "gh_loom_security_event"
+    },
+    "security/system/fault": {
+      "default_entity_id": "event.gh_loom_security_fault",
+      "device_identifiers": [
+        "openccu-loom_security"
+      ],
+      "topic": "homeassistant/event/gh_security/fault/config",
+      "unique_id": "gh_loom_security_fault"
+    },
+    "security/system/health": {
+      "default_entity_id": "binary_sensor.gh_loom_security_health",
+      "device_identifiers": [
+        "openccu-loom_security"
+      ],
+      "topic": "homeassistant/binary_sensor/gh_security/health/config",
+      "unique_id": "gh_loom_security_health"
+    },
+    "security/system/last_alarm": {
+      "default_entity_id": "sensor.gh_loom_security_last_alarm",
+      "device_identifiers": [
+        "openccu-loom_security"
+      ],
+      "topic": "homeassistant/sensor/gh_security/last_alarm/config",
+      "unique_id": "gh_loom_security_last_alarm"
+    },
+    "security/system/last_fault": {
+      "default_entity_id": "sensor.gh_loom_security_last_fault",
+      "device_identifiers": [
+        "openccu-loom_security"
+      ],
+      "topic": "homeassistant/sensor/gh_security/last_fault/config",
+      "unique_id": "gh_loom_security_last_fault"
+    },
+    "security/system/problem": {
+      "default_entity_id": "binary_sensor.gh_loom_security_problem",
+      "device_identifiers": [
+        "openccu-loom_security"
+      ],
+      "topic": "homeassistant/binary_sensor/gh_security/problem/config",
+      "unique_id": "gh_loom_security_problem"
+    },
+    "security/system/state": {
+      "default_entity_id": "sensor.gh_loom_security_state",
+      "device_identifiers": [
+        "openccu-loom_security"
+      ],
+      "topic": "homeassistant/sensor/gh_security/state/config",
+      "unique_id": "gh_loom_security_state"
+    },
+    "security/system/state-without-config-url": {
+      "default_entity_id": "sensor.gh_loom_security_state",
+      "device_identifiers": [
+        "openccu-loom_security"
+      ],
+      "topic": "homeassistant/sensor/gh_security/state/config",
+      "unique_id": "gh_loom_security_state"
+    },
+    "security/zone/named": {
+      "default_entity_id": "sensor.gh_loom_security_zone_erdgeschoss-flur",
+      "device_identifiers": [
+        "openccu-loom_security"
+      ],
+      "topic": "homeassistant/sensor/gh_security/zone_erdgeschoss-flur/config",
+      "unique_id": "gh_loom_security_zone_erdgeschoss-flur"
+    },
+    "security/zone/unnamed-falls-back-to-slug": {
+      "default_entity_id": "sensor.gh_loom_security_zone_erdgeschoss-flur",
+      "device_identifiers": [
+        "openccu-loom_security"
+      ],
+      "topic": "homeassistant/sensor/gh_security/zone_erdgeschoss-flur/config",
+      "unique_id": "gh_loom_security_zone_erdgeschoss-flur"
+    }
+  },
+  "discovery_golden_update.json": {
+    "update/bidcos": {
+      "default_entity_id": "update.loom_leq0123456_update",
+      "device_identifiers": [
+        "openccu-loom_leq0123456"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/update/gh_ccu-01_leq0123456/loom_leq0123456_update/config",
+      "unique_id": "loom_leq0123456_update"
+    },
+    "update/blank-model": {
+      "default_entity_id": "update.loom_vcu7654321_update",
+      "device_identifiers": [
+        "openccu-loom_vcu7654321"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/update/gh_ccu-01_vcu7654321/loom_vcu7654321_update/config",
+      "unique_id": "loom_vcu7654321_update"
+    },
+    "update/hmip": {
+      "default_entity_id": "update.loom_vcu1234567_update",
+      "device_identifiers": [
+        "openccu-loom_vcu1234567"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/update/gh_ccu-01_vcu1234567/loom_vcu1234567_update/config",
+      "unique_id": "loom_vcu1234567_update"
+    },
+    "update/mixed-case-central": {
+      "default_entity_id": "update.loom_vcu1234567_update",
+      "device_identifiers": [
+        "openccu-loom_vcu1234567"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-keller",
+      "topic": "homeassistant/update/gh_ccu-keller_vcu1234567/loom_vcu1234567_update/config",
+      "unique_id": "loom_vcu1234567_update"
+    },
+    "update/no-device-object": {
+      "default_entity_id": "update.loom_vcu1234567_update",
+      "device_identifiers": [
+        "openccu-loom_vcu1234567"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/update/gh_ccu-01_vcu1234567/loom_vcu1234567_update/config",
+      "unique_id": "loom_vcu1234567_update"
+    },
+    "update/second-central": {
+      "default_entity_id": "update.loom_vcu1234567_update",
+      "device_identifiers": [
+        "openccu-loom_vcu1234567"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-02",
+      "topic": "homeassistant/update/gh_ccu-02_vcu1234567/loom_vcu1234567_update/config",
+      "unique_id": "loom_vcu1234567_update"
+    },
+    "update/sub-devices-enabled": {
+      "default_entity_id": "update.loom_vcu1234567_update",
+      "device_identifiers": [
+        "openccu-loom_vcu1234567"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/update/gh_ccu-01_vcu1234567/loom_vcu1234567_update/config",
+      "unique_id": "loom_vcu1234567_update"
+    }
+  },
+  "discovery_golden_week_profile.json": {
+    "week_profile/bidcos-three-profiles": {
+      "default_entity_id": "select.openccu-loom_ccu-01_leq0123456_4_weekprofile",
+      "device_identifiers": [
+        "openccu-loom_leq0123456"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/select/gh_ccu-01_leq0123456/openccu-loom_ccu-01_leq0123456_4_weekprofile/config",
+      "unique_id": "loom_leq0123456_4_weekprofile"
+    },
+    "week_profile/hmip-six-profiles": {
+      "default_entity_id": "select.openccu-loom_ccu-01_vcu1234567_1_weekprofile",
+      "device_identifiers": [
+        "openccu-loom_vcu1234567"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/select/gh_ccu-01_vcu1234567/openccu-loom_ccu-01_vcu1234567_1_weekprofile/config",
+      "unique_id": "loom_vcu1234567_1_weekprofile"
+    },
+    "week_profile/mixed-case-central": {
+      "default_entity_id": "select.openccu-loom_ccu-keller_vcu1234567_1_weekprofile",
+      "device_identifiers": [
+        "openccu-loom_vcu1234567"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-keller",
+      "topic": "homeassistant/select/gh_ccu-keller_vcu1234567/openccu-loom_ccu-keller_vcu1234567_1_weekprofile/config",
+      "unique_id": "loom_vcu1234567_1_weekprofile"
+    },
+    "week_profile/no-device-object": {
+      "default_entity_id": "select.openccu-loom_ccu-01_vcu1234567_1_weekprofile",
+      "device_identifiers": [
+        "openccu-loom_vcu1234567"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/select/gh_ccu-01_vcu1234567/openccu-loom_ccu-01_vcu1234567_1_weekprofile/config",
+      "unique_id": "loom_vcu1234567_1_weekprofile"
+    },
+    "week_profile/second-central": {
+      "default_entity_id": "select.openccu-loom_ccu-02_vcu1234567_1_weekprofile",
+      "device_identifiers": [
+        "openccu-loom_vcu1234567"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-02",
+      "topic": "homeassistant/select/gh_ccu-02_vcu1234567/openccu-loom_ccu-02_vcu1234567_1_weekprofile/config",
+      "unique_id": "loom_vcu1234567_1_weekprofile"
+    },
+    "week_profile/sub-devices-enabled": {
+      "default_entity_id": "select.openccu-loom_ccu-01_vcu1234567_1_weekprofile",
+      "device_identifiers": [
+        "openccu-loom_vcu1234567"
+      ],
+      "device_via_device": "openccu-loom_central_ccu-01",
+      "topic": "homeassistant/select/gh_ccu-01_vcu1234567/openccu-loom_ccu-01_vcu1234567_1_weekprofile/config",
+      "unique_id": "loom_vcu1234567_1_weekprofile"
+    }
+  }
+}

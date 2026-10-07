@@ -9,6 +9,7 @@ import (
 	hamodel "github.com/SukramJ/go-hamqtt/model"
 
 	"github.com/SukramJ/openccu-loom/internal/build"
+	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -17,18 +18,39 @@ import (
 // so the node carries no central segment.
 const securityDiscoveryNodeID = "security"
 
-// Security topic builders. The tree sits beside `alarm/` and
-// `bridge/` as the third daemon-level plane — see ADR 0052 and its
-// extension in ADR 0059.
-func securityStateTopic(base, key string) string { return base + "/security/" + key }
-
-func securityClassTopic(base string, class hmenum.SecurityClass) string {
-	return base + "/security/class/" + string(class)
+// Security topic builders. The tree sits beside `alarm/` as the second
+// daemon-level plane below `status/` — see ADR 0052, its extension in
+// ADR 0059, and ADR 0083 for the grammar.
+func securityStateTopic(base, key string) string {
+	return naming.StatusTopic(base, securityTree, securityItem(key))
 }
 
-func securityZoneTopic(base, slug string) string { return base + "/security/zone/" + slug }
+// securityItem maps an entity key onto its item. The one rename is the
+// folded severity: its entity key stays `state`, because that key is part of
+// the `unique_id` Home Assistant keys its registry on (ADR 0068), while the
+// item is `severity` — under the convention a `state` leaf would read as a
+// function suffix, and severity is what the value is (ADR 0083).
+func securityItem(key string) string {
+	if key == "state" {
+		return "severity"
+	}
+	return key
+}
 
-func securityAvailabilityTopic(base string) string { return base + "/security/availability" }
+func securityClassTopic(base string, class hmenum.SecurityClass) string {
+	return naming.StatusTopic(base, securityTree, "class", naming.TopicSafe(string(class)))
+}
+
+func securityZoneTopic(base, slug string) string {
+	return naming.StatusTopic(base, securityTree, "zone", naming.TopicSafe(slug))
+}
+
+func securityAvailabilityTopic(base string) string {
+	return naming.StatusTopic(base, securityTree, "online")
+}
+
+// securityTree is the literal first item level of the security plane.
+const securityTree = "security"
 
 // securityDeviceIdentifier is the one synthetic HA device identifier the
 // whole plane shares. It is carried as a [hamodel.Identifier] with an empty
@@ -105,8 +127,11 @@ type securityEntity struct {
 	// jsonAttributes publishes the state topic as the attribute source
 	// too — the pattern hub discovery already uses.
 	jsonAttributes bool
-	// valueTemplate extracts the state from a JSON payload.
+	// valueTemplate extracts the state from the status object.
 	valueTemplate string
+	// attributesInVal marks a document without a primary value, whose
+	// attributes are `val` itself rather than the `hm` facets.
+	attributesInVal bool
 	// event marks a non-retained event entity, which must carry no
 	// value template and no device class.
 	event bool
@@ -182,6 +207,12 @@ type securityDiscoveryContext struct {
 	hadiscovery.StdContext
 
 	uniqueID string
+}
+
+// Availability implements [hadiscovery.Context]: the standard resolution,
+// rewritten into the ADR 0083 vocabulary by [conventionAvailability].
+func (c securityDiscoveryContext) Availability(dev *hamodel.Device, e hamodel.Entity) []hadiscovery.AvailabilityEntry {
+	return conventionAvailability(c.StdContext.Availability(dev, e), c.Layout.Bridge())
 }
 
 // UniqueID implements [hadiscovery.Context] with the id this daemon already
@@ -264,10 +295,12 @@ func BuildSecurityDiscovery(base, deviceName, configURL string, e securityEntity
 	desc := &entity.Description
 	switch {
 	case e.event:
-		// An event entity must not carry a value template — a scalar
-		// destroys the JSON parsing — and must not carry a device
-		// class, whose vocabulary is limited to doorbell/button/motion.
+		// An event entity's value template must render the JSON document
+		// the event platform parses — a scalar destroys it — and the
+		// entity must not carry a device class, whose vocabulary is
+		// limited to doorbell/button/motion.
 		entity.fields = hadiscovery.EventFields{EventTypes: securityEventTypes}
+		desc.ValueTemplate = eventValueTemplate
 	default:
 		desc.DeviceClass = hamodel.DeviceClass(e.deviceClass)
 		desc.StateClass = hacatalog.StateClass(e.stateClass)
@@ -289,7 +322,10 @@ func BuildSecurityDiscovery(base, deviceName, configURL string, e securityEntity
 		}
 		if e.jsonAttributes {
 			desc.JSONAttributesTopic = stateTopic
-			desc.JSONAttributesTemplate = "{{ value_json | tojson }}"
+			desc.JSONAttributesTemplate = "{{ value_json.hm | tojson }}"
+			if e.attributesInVal {
+				desc.JSONAttributesTemplate = "{{ value_json.val | tojson }}"
+			}
 		}
 	}
 	if e.diagnostic {
@@ -301,11 +337,8 @@ func BuildSecurityDiscovery(base, deviceName, configURL string, e securityEntity
 
 	ctx := securityDiscoveryContext{
 		Layout: securityTopicLayout{base: base, state: stateTopic},
-		// The security state topics carry a bare token or a JSON document
-		// read by the entity's own template, not the `{"value":…}`
-		// envelope the datapoint planes publish, so an entity rendered
-		// with the envelope's value template would read its state through
-		// a filter that never matches and show as unknown forever.
+		// Every entity of the plane names its own template over the status
+		// object; the encoding's default must not project a second one.
 		Enc:      hadiscovery.RawEncoding,
 		uniqueID: uniqueID,
 	}

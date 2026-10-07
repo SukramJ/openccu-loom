@@ -99,20 +99,30 @@ entries.
 
 ## 2. MQTT topic scoping
 
-Every MQTT topic carries `central_name` as the second path segment
-under the configured `topic_base`:
+Every MQTT item carries `central_name` as the first item level, directly
+below the function (`status`, `set`, `meta` — ADR 0083):
 
 ```
-<topic_base>/<central_name>/<central_name>-<interface>/<device>/<channel>/<bucket>/<parameter>
+<topic_base>/status/<central_name>/<central_name>-<interface>/<device>/<channel>/<bucket>/<parameter>
 ```
 
 A `<bucket>` segment (`values` | `master` | `calculated`) sits between
 the channel and the parameter. Examples:
 
 ```
-openccu-loom/ccu-haus/ccu-haus-HmIP-RF/000A0000000001/4/values/STATE
-openccu-loom/ccu-garage/ccu-garage-HmIP-RF/000A0000000099/1/values/LEVEL
+openccu-loom/status/ccu-haus/ccu-haus-HmIP-RF/000A0000000001/4/values/STATE
+openccu-loom/status/ccu-garage/ccu-garage-HmIP-RF/000A0000000099/1/values/LEVEL
 ```
+
+Each central also has its own reachability item,
+`<topic_base>/status/<central_name>/online` (`val` true or false), and the
+daemon as a whole reports `<topic_base>/connected`: `2` while at least one
+central is reachable, `1` while none is, `0` when the daemon is gone.
+
+A central may not be named `alarm`, `security`, `system`, `bridge` or like a
+topic function (`connected`, `status`, `set`, `get`, `info`, `meta`,
+`maintenance`, `ha`): those names sit at the same topic level as the central and
+are refused at start-up.
 
 ### 2.1 Home Assistant Discovery
 
@@ -188,20 +198,21 @@ exact string the listing printed — copy the topic, do not compose it:
 # 1. List the retained topics for that device. `-W 2` ends the
 #    subscription after a two-second quiet window.
 mosquitto_sub -h <broker> --retained-only -W 2 -v \
-  -t 'openccu-loom/ccu-haus/ccu-haus-HmIP-RF/000A0000000001/#'
+  -t 'openccu-loom/status/ccu-haus/ccu-haus-HmIP-RF/000A0000000001/#' \
+  -t 'openccu-loom/meta/ccu-haus/ccu-haus-HmIP-RF/000A0000000001/#'
 
 # 2. Clear each topic the listing printed. `-r -n` publishes an empty
 #    retained payload, which is how a broker drops a retained message.
 #    `-n` and `-l` are mutually exclusive — pass only `-n`.
 mosquitto_pub -h <broker> -r -n \
-  -t 'openccu-loom/ccu-haus/ccu-haus-HmIP-RF/000A0000000001/4/values/STATE'
+  -t 'openccu-loom/status/ccu-haus/ccu-haus-HmIP-RF/000A0000000001/4/values/STATE'
 
 # 3. The device's HA Discovery config, same rule.
 mosquitto_pub -h <broker> -r -n \
   -t 'homeassistant/binary_sensor/ccu-haus_000a0000000001/4_state/config'
 ```
 
-The third path segment is the **wire interface id**, `<central>-<interface>`
+The interface level is the **wire interface id**, `<central>-<interface>`
 — `ccu-haus-HmIP-RF`, not `HmIP-RF`. That is what the daemon publishes and
 what the listing in step 1 prints; see
 [the topic schema](../mqtt-topic-schema.md).

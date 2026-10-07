@@ -44,7 +44,7 @@ func (discoveryCtx) WireParameterStateTopic(channelAddress, parameter string) st
 }
 
 func (discoveryCtx) DeviceAvailabilityTopic() string { return "test/availability" }
-func (discoveryCtx) BridgeStatusTopic() string       { return "test/bridge/status" }
+func (discoveryCtx) ConnectedTopic() string          { return "test/bridge/status" }
 
 // compile-time check: discoveryCtx satisfies payload.HADiscoveryTopics.
 var _ payload.HADiscoveryTopics = discoveryCtx{}
@@ -508,7 +508,7 @@ func TestClimateDiscoveryAdvertisesIntegerHumidity(t *testing.T) {
 	if _, ok := body["current_humidity_topic"]; !ok {
 		t.Fatal("current_humidity_topic missing for an INTEGER-typed HUMIDITY channel")
 	}
-	if v, _ := body["current_humidity_template"].(string); v != "{{ value_json.value }}" {
+	if v, _ := body["current_humidity_template"].(string); v != "{{ value_json.val }}" {
 		t.Errorf("current_humidity_template = %q", v)
 	}
 }

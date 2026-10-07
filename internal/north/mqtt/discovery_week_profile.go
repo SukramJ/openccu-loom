@@ -97,7 +97,7 @@ func (l weekProfileTopicLayout) Availability(hamodel.Slot) string {
 }
 
 // Bridge implements the shared model's topic layout.
-func (l weekProfileTopicLayout) Bridge() string { return l.d.TopicBuilder.BridgeStatus() }
+func (l weekProfileTopicLayout) Bridge() string { return l.d.TopicBuilder.Connected() }
 
 // weekProfileDiscoveryContext is the render context for this plane: the
 // standard one with this daemon's three identity strings substituted.
@@ -114,6 +114,12 @@ type weekProfileDiscoveryContext struct {
 	uniqueID string
 	nodeID   string
 	objectID string
+}
+
+// Availability implements [hadiscovery.Context]: the standard resolution,
+// rewritten into the ADR 0083 vocabulary by [conventionAvailability].
+func (c weekProfileDiscoveryContext) Availability(dev *hamodel.Device, e hamodel.Entity) []hadiscovery.AvailabilityEntry {
+	return conventionAvailability(c.StdContext.Availability(dev, e), c.Layout.Bridge())
 }
 
 // UniqueID implements [hadiscovery.Context] with the id this daemon already
@@ -222,12 +228,10 @@ func (d *DefaultDiscoveryBuilder) BuildWeekProfileDiscovery(centralName string, 
 	ctx := weekProfileDiscoveryContext{
 		Layout: weekProfileTopicLayout{d: d, ev: ev, central: centralName},
 		Lang:   d.Locale,
-		// The week-profile state topic carries the bare profile key, so
-		// there is nothing for a value template to reach into — and the
-		// select platform does accept `value_template`, so the default
-		// envelope encoding would project one matching no payload this
-		// daemon publishes.
-		Enc:        hadiscovery.RawEncoding,
+		// The week-profile status item carries the profile key as its
+		// `val` (ADR 0083), which the status-object default template
+		// reads.
+		Enc:        hadiscovery.StatusObjectEncoding,
 		Translator: d.tr,
 		uniqueID:   uniqueID,
 		nodeID:     nodeID,

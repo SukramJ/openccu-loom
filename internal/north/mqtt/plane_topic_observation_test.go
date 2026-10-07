@@ -200,7 +200,7 @@ var bridgeAnnounceTails = func() []string {
 	const probe = "\x00base"
 	b := NewTopicBuilder(probe)
 	out := make([]string, 0, 2)
-	for _, topic := range []string{b.BridgeStatus(), b.BridgeHealth()} {
+	for _, topic := range []string{b.Connected(), b.Info()} {
 		out = append(out, strings.TrimPrefix(topic, probe))
 	}
 	return out
@@ -208,7 +208,16 @@ var bridgeAnnounceTails = func() []string {
 
 // isBridgeAnnounceTopic reports whether topic is one of the bridge-level
 // announce topics every runner gets for free.
+//
+// The instance topics sit directly below the base, so a topic with a
+// function level (`…/status/…/info`, a device's info item) is never one of
+// them, however it ends.
 func isBridgeAnnounceTopic(topic string) bool {
+	for _, fn := range []string{"/status/", "/set/", "/meta/"} {
+		if strings.Contains(topic, fn) {
+			return false
+		}
+	}
 	for _, tail := range bridgeAnnounceTails {
 		if strings.HasSuffix(topic, tail) {
 			return true
@@ -216,6 +225,10 @@ func isBridgeAnnounceTopic(topic string) bool {
 	}
 	return false
 }
+
+// instanceInfoTail is the tail of `<base>/info`, the spec §6 introspection
+// document: carried on every connect, deliberately declared by no entity.
+var instanceInfoTail = strings.TrimPrefix(NewTopicBuilder("\x00base").Info(), "\x00base")
 
 // planeTopics is every topic the plane under test contributed itself: the
 // published set minus the discovery configs and minus the bridge-level
@@ -286,7 +299,11 @@ func collectDeclaredTopicsFromPayload(t *testing.T, out map[string]bool, label s
 //
 // It is an allow-list, not a switch: [planeRoundTrip] FAILS on any other
 // carried-but-undeclared topic. Keeping the list this short is the point —
-// there is exactly one shape on it today, across all five planes.
+// it is empty today, across all five planes: its one entry, the daemon's
+// `bridge/health` snapshot, was folded into the instance document
+// `<base>/info` by ADR 0083, which is an announce topic every runner gets
+// for free (see [bridgeAnnounceTails]). A `"info"` entry would be wrong — that
+// tail also matches the per-device `…/info` items, which are declared.
 //
 // Finding **F11** was that this direction of the comparison was a `t.Logf`.
 // A plane writing into a topic no entity references is silent in every other
@@ -300,10 +317,7 @@ func collectDeclaredTopicsFromPayload(t *testing.T, out map[string]bool, label s
 // [TestCarriedWithoutDeclarationExemptionsAreAllStillCarried], so the list
 // cannot rot into a blanket exemption the way an unchecked exemption list
 // does.
-var carriedWithoutDeclaration = map[string]string{
-	"bridge/health": "the daemon's own JSON health snapshot, consumed by operators and by " +
-		"the REST/SPA surface rather than by a Home Assistant entity; deliberately not discovered",
-}
+var carriedWithoutDeclaration = map[string]string{}
 
 // carriedWithoutDeclarationReason reports whether topic is one of the
 // deliberately-undeclared shapes, matching on the tail below the base.
@@ -369,6 +383,11 @@ func planeRoundTrip(t *testing.T, label string, declared, published map[string]b
 			continue
 		}
 		if _, exempt := carriedWithoutDeclarationReason(topic); exempt {
+			continue
+		}
+		// `<base>/info` describes the instance, not an entity (spec §6), and
+		// replaces the `bridge/health` snapshot this list used to exempt.
+		if isBridgeAnnounceTopic(topic) && strings.HasSuffix(topic, instanceInfoTail) {
 			continue
 		}
 		t.Errorf("%s: published but not declared: %q — no discovery config names this topic, so no "+

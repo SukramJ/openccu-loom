@@ -45,7 +45,7 @@ func discoveryRuntimeConfig(b *Bridge, logger *slog.Logger) hapublisher.Config {
 		// makes [hapublisher.Runtime.Will] describe the will the composition
 		// root actually configures; TestDiscoveryRuntimeWillMatchesLWT pins
 		// the two together.
-		StatusTopic: b.topics.BridgeStatus(),
+		StatusTopic: b.topics.Connected(),
 		// …and the layout is what makes that literal checkable rather than
 		// free-form. [hapublisher.New] compares the two and panics at the
 		// composition root on a disagreement, which is the only place a
@@ -66,31 +66,32 @@ func discoveryRuntimeConfig(b *Bridge, logger *slog.Logger) hapublisher.Config {
 	}
 }
 
-// bridgeStatusLayout is the [hatopic.Layout] the publisher runtime is
-// configured with. It answers exactly one question — which topic
-// [hamodel.LevelBridge] is — and takes its answer from
-// [alarmBridgeStatusTopic], the derivation the daemon-level planes' own
-// layouts ([securityTopicLayout], the alarm panel's availability list)
-// already use.
+// bridgeStatusLayout is the [hatopic.SmartHomeLayout] the publisher runtime
+// is configured with. It answers which topic [hamodel.LevelBridge] is — the
+// instance's `<base>/connected` — and, by being a SmartHomeLayout at all,
+// switches the runtime into mqtt-smarthome 2.0's vocabulary: the Last Will
+// and [Bridge.AnnounceOffline] write `0`, [Bridge.AnnounceOnline] republishes
+// the level [hapublisher.Runtime.SetConnected] last set (ADR 0083).
 //
-// That is the whole point of handing the runtime a layout at all. A layout
-// whose Bridge() simply returned the same string the config's StatusTopic
-// was built from could never disagree with it, so the library's guard
-// would be armed against nothing. Pointing it at the declaring side's
-// second derivation is what gives it teeth: if that derivation ever stops
-// agreeing with [TopicBuilder.BridgeStatus] — a base normalised
-// differently, a segment respelled — the daemon refuses to start instead
-// of coming up with a fleet whose availability sources nobody writes to.
+// Its Bridge answer comes from [alarmBridgeStatusTopic], the derivation the
+// daemon-level planes' own availability lists use, while the config's
+// StatusTopic comes from [TopicBuilder.Connected]. That is the whole point of
+// handing the runtime a layout at all: [hapublisher.New] compares the two
+// and panics at the composition root on a disagreement, so if the second
+// derivation ever stops agreeing with the first — a base normalised
+// differently, a segment respelled — the daemon refuses to start instead of
+// coming up with a fleet whose availability sources nobody writes to.
+// Connected must equal Bridge too; the runtime refuses a layout where it
+// does not.
 //
-// The other three methods deliberately return the empty string rather than
-// a plausible topic. This layout is not a render layout and names no state,
-// command or per-entity availability topic; the shared module's own rule is
-// that a layout answering for a coordinate it does not own is worse than a
-// compile error, because a deterministic topic nobody subscribes to looks
-// like an answer.
+// State, Command and Availability deliberately return the empty string. This
+// layout is not a render layout and names no state, command or per-entity
+// availability topic; the shared module's own rule is that a layout answering
+// for a coordinate it does not own is worse than a compile error, because a
+// deterministic topic nobody subscribes to looks like an answer.
 type bridgeStatusLayout struct{ base string }
 
-var _ hatopic.Layout = bridgeStatusLayout{}
+var _ hatopic.SmartHomeLayout = bridgeStatusLayout{}
 
 // State implements [hatopic.Layout].
 func (bridgeStatusLayout) State(hamodel.Slot) string { return "" }
@@ -103,6 +104,17 @@ func (bridgeStatusLayout) Availability(hamodel.Slot) string { return "" }
 
 // Bridge implements [hatopic.Layout].
 func (l bridgeStatusLayout) Bridge() string { return alarmBridgeStatusTopic(l.base) }
+
+// Connected implements [hatopic.SmartHomeLayout].
+func (l bridgeStatusLayout) Connected() string { return alarmBridgeStatusTopic(l.base) }
+
+// Info implements [hatopic.SmartHomeLayout].
+func (l bridgeStatusLayout) Info() string { return NewTopicBuilder(l.base).Info() }
+
+// Maintenance implements [hatopic.SmartHomeLayout].
+func (l bridgeStatusLayout) Maintenance(item ...string) string {
+	return NewTopicBuilder(l.base).Maintenance(item...)
+}
 
 // lateSubscriber resolves the bridge's subscribe-capable client at call time
 // rather than at construction.

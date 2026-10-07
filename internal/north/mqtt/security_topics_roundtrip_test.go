@@ -85,10 +85,17 @@ func runSecurityPlane(t *testing.T, base string) *observedPlane {
 
 	bus.Publish(hmevent.SecurityStateChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
 	for _, fault := range []bool{false, true} {
+		// The verb production sets: the detector path triggers, the
+		// fault path raises (internal/security/subscribe.go, fault.go).
+		verb := hmenum.SecurityVerbTriggered
+		if fault {
+			verb = hmenum.SecurityVerbRaised
+		}
 		bus.Publish(hmevent.SecurityNotificationEvent{
 			Base:       hmevent.NewBaseAt(time.Now()),
 			Class:      hmenum.SecurityClassSmoke,
 			Severity:   hmenum.SecuritySeverityCritical,
+			Verb:       verb,
 			Subject:    "Rauch",
 			Message:    "Rauch erkannt",
 			AtMS:       time.Now().UnixMilli(),

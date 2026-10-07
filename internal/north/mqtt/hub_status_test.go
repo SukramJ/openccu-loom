@@ -302,12 +302,12 @@ func TestPublishHubReachabilityWritesTheDocumentedTopicAtQoS1(t *testing.T) {
 	if err := b.PublishHubReachability(context.Background(), "ccu-01", true); err != nil {
 		t.Fatalf("publish: %v", err)
 	}
-	got, ok := rec.findTopic("gh/ccu-01/hub/status")
+	got, ok := rec.findTopic("gh/status/ccu-01/online")
 	if !ok {
 		t.Fatalf("nothing published to gh/ccu-01/hub/status; got %v", rec.records())
 	}
-	if got.payload != "online" {
-		t.Errorf("payload %q, want online", got.payload)
+	if statusVal(got.payload) != "true" {
+		t.Errorf("payload %q, want a status object with val true", got.payload)
 	}
 	if !got.retain {
 		t.Error("not retained — Home Assistant reads this gate on every restart")
@@ -321,7 +321,7 @@ func TestPublishHubReachabilityWritesTheDocumentedTopicAtQoS1(t *testing.T) {
 // ordering pin.
 //
 // MQTT allows one will per connection and this daemon's is spent on
-// `bridge/status`, so the per-CCU gate cannot have one. On a graceful stop
+// `<base>/connected`, so the per-CCU gate cannot have one. On a graceful stop
 // the broker discards the will, and this is the only path that ever writes
 // the counterpart. The gates go FIRST so no instant exists in which the
 // daemon has declared itself gone while its CCU gates still claim
@@ -343,12 +343,15 @@ func TestAnnounceOfflineWritesTheCCUGatesBeforeTheBridgeMarker(t *testing.T) {
 	gate, bridge := -1, -1
 	for i, r := range rec.records() {
 		switch r.topic {
-		case "gh/ccu-01/hub/status":
-			if r.payload != "offline" {
-				t.Errorf("gate payload %q, want offline", r.payload)
+		case "gh/status/ccu-01/online":
+			if statusVal(r.payload) != "false" {
+				t.Errorf("gate payload %q, want a status object with val false", r.payload)
 			}
 			gate = i
-		case "gh/bridge/status":
+		case "gh/connected":
+			if r.payload != "0" {
+				t.Errorf("instance level %q, want 0", r.payload)
+			}
 			bridge = i
 		}
 	}
@@ -381,7 +384,7 @@ func TestRetractHubStatusClearsTheTopicAndTheLevel(t *testing.T) {
 	if err := b.RetractHubStatus(ctx, "ccu-01"); err != nil {
 		t.Fatalf("retract: %v", err)
 	}
-	got, ok := rec.findTopic("gh/ccu-01/hub/status")
+	got, ok := rec.findTopic("gh/status/ccu-01/online")
 	if !ok {
 		t.Fatalf("nothing published to the gate topic; got %v", rec.records())
 	}
@@ -425,14 +428,14 @@ func TestTheShutdownCounterpartReachesAGateAReconnectReopened(t *testing.T) {
 	rec.clear()
 	b.announceHubStatusOffline(ctx)
 
-	got, ok := rec.findTopic("gh/ccu-01/hub/status")
+	got, ok := rec.findTopic("gh/status/ccu-01/online")
 	if !ok {
 		t.Fatalf("the shutdown counterpart never reached a CCU whose gate a reconnect had "+
 			"re-opened, so its hub entities stay available with their last value for the whole "+
 			"downtime; got %v", rec.records())
 	}
-	if got.payload != "offline" {
-		t.Errorf("shutdown counterpart payload %q, want offline", got.payload)
+	if statusVal(got.payload) != "false" {
+		t.Errorf("shutdown counterpart payload %q, want a status object with val false", got.payload)
 	}
 }
 
@@ -466,7 +469,7 @@ func TestHubStatusIsReseededAfterABrokerReconnect(t *testing.T) {
 	if err := b.PublishHubReachability(ctx, "ccu-01", true); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	if _, ok := rec.findTopic("gh/ccu-01/hub/status"); !ok {
+	if _, ok := rec.findTopic("gh/status/ccu-01/online"); !ok {
 		t.Fatalf("the seed never reached the broker; got %v", rec.records())
 	}
 
@@ -478,13 +481,13 @@ func TestHubStatusIsReseededAfterABrokerReconnect(t *testing.T) {
 		t.Fatalf("reseed: %v", err)
 	}
 
-	got, ok := rec.findTopic("gh/ccu-01/hub/status")
+	got, ok := rec.findTopic("gh/status/ccu-01/online")
 	if !ok {
 		t.Fatalf("the gate was not republished after the reconnect, so the broker holds "+
 			"no byte and every CCU-scoped hub entity stays unavailable; got %v", rec.records())
 	}
-	if got.payload != "online" {
-		t.Errorf("payload %q, want online", got.payload)
+	if statusVal(got.payload) != "true" {
+		t.Errorf("payload %q, want a status object with val true", got.payload)
 	}
 	if !got.retain {
 		t.Error("the reseed is not retained — HA reads this gate on every restart")
@@ -576,23 +579,36 @@ func TestEveryBridgeDedupGateIsRegisteredForReset(t *testing.T) {
 	t.Parallel()
 	b := newDeepBridge(t, &recordingPublisher{})
 
-	registered := map[reflect.Type]bool{}
+	// Registration is checked by identity, not by type: since ADR 0083 the
+	// state plane and the `online` plane are both a
+	// [hapublisher.StatePublisher], so two gate fields share one type and a
+	// type set would let either go unregistered behind the other.
+	registered := map[uintptr]bool{}
 	for i, g := range b.gates {
 		if g == nil {
 			t.Fatalf("gate %d is nil — a nil gate is a gate that is never reset", i)
 		}
-		registered[reflect.TypeOf(g)] = true
+		registered[reflect.ValueOf(g).Pointer()] = true
 	}
 
-	rt := reflect.TypeFor[Bridge]()
+	bv := reflect.ValueOf(b).Elem()
+	rt := bv.Type()
 	found := 0
-	for f := range rt.Fields() {
+	for i := range rt.NumField() {
+		f := rt.Field(i)
 		want, isGate := gateShape(f.Type)
 		if !isGate {
 			continue
 		}
 		found++
-		if !registered[want] {
+		fv := bv.Field(i)
+		var ptr uintptr
+		if f.Type.Kind() == reflect.Pointer {
+			ptr = fv.Pointer()
+		} else {
+			ptr = fv.Addr().Pointer()
+		}
+		if !registered[ptr] {
 			t.Errorf("Bridge.%s (%v) is a dedup gate that NewBridge never appends to b.gates, "+
 				"so ResetRuntimeGates does not reach it: after a broker restart without a "+
 				"retained store it keeps answering \"already published\" for bytes nothing holds "+
@@ -604,7 +620,7 @@ func TestEveryBridgeDedupGateIsRegisteredForReset(t *testing.T) {
 		t.Fatal("no gate-shaped field found on Bridge — this guard has stopped guarding anything")
 	}
 	if len(registered) != found {
-		t.Errorf("b.gates holds %d distinct gate types but Bridge has %d gate fields",
+		t.Errorf("b.gates holds %d distinct gates but Bridge has %d gate fields",
 			len(registered), found)
 	}
 }
@@ -712,11 +728,54 @@ func TestHubStatusFailedSeedIsRetriedThroughTheBridge(t *testing.T) {
 	if err := b.PublishHubReachability(ctx, "ccu-01", true); err != nil {
 		t.Fatalf("retry: %v", err)
 	}
-	got, ok := rec.findTopic("gh/ccu-01/hub/status")
+	got, ok := rec.findTopic("gh/status/ccu-01/online")
 	if !ok {
 		t.Fatalf("the gate topic was never written after a refused seed; got %v", rec.records())
 	}
-	if got.payload != "online" {
-		t.Errorf("payload %q, want online", got.payload)
+	if statusVal(got.payload) != "true" {
+		t.Errorf("payload %q, want a status object with val true", got.payload)
+	}
+}
+
+// TestHubReachabilityDrivesTheConnectedLevel pins the daemon-wide half of
+// availability under ADR 0083: `<base>/connected` is 1 while no central is
+// reachable and 2 while at least one is, and it follows the per-CCU gates —
+// the seed, a second central, and a removal.
+//
+// Falsifiability: drop [Bridge.syncConnected] from the gate's write and the
+// level never leaves 1; compute it from the last write only and the
+// second-central arm drops it back to 1 while ccu-01 is still reachable.
+func TestHubReachabilityDrivesTheConnectedLevel(t *testing.T) {
+	t.Parallel()
+	rec := &recordingPublisher{}
+	b := newDeepBridge(t, rec, func(c *BridgeConfig) { c.Base = "gh" })
+	ctx := context.Background()
+	level := func() string {
+		got := ""
+		for _, r := range rec.records() {
+			if r.topic == "gh/connected" {
+				got = r.payload
+			}
+		}
+		return got
+	}
+
+	if err := b.PublishHubReachability(ctx, "ccu-01", true); err != nil {
+		t.Fatalf("seed ccu-01: %v", err)
+	}
+	if got := level(); got != "2" {
+		t.Fatalf("connected after a reachable central = %q, want 2", got)
+	}
+	if err := b.PublishHubReachability(ctx, "ccu-02", false); err != nil {
+		t.Fatalf("seed ccu-02: %v", err)
+	}
+	if got := level(); got != "2" {
+		t.Fatalf("connected with one of two centrals reachable = %q, want 2", got)
+	}
+	if err := b.RetractHubStatus(ctx, "ccu-01"); err != nil {
+		t.Fatalf("retract ccu-01: %v", err)
+	}
+	if got := level(); got != "1" {
+		t.Fatalf("connected with no central reachable = %q, want 1", got)
 	}
 }

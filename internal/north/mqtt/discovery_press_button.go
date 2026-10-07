@@ -98,7 +98,7 @@ func (l pressButtonTopicLayout) Availability(hamodel.Slot) string {
 }
 
 // Bridge implements the shared model's topic layout.
-func (l pressButtonTopicLayout) Bridge() string { return l.d.TopicBuilder.BridgeStatus() }
+func (l pressButtonTopicLayout) Bridge() string { return l.d.TopicBuilder.Connected() }
 
 // pressButtonDiscoveryContext is the render context for the press-button
 // plane: the standard one with this daemon's three identity strings
@@ -113,6 +113,12 @@ type pressButtonDiscoveryContext struct {
 
 	uniqueID string
 	nodeID   string
+}
+
+// Availability implements [hadiscovery.Context]: the standard resolution,
+// rewritten into the ADR 0083 vocabulary by [conventionAvailability].
+func (c pressButtonDiscoveryContext) Availability(dev *hamodel.Device, e hamodel.Entity) []hadiscovery.AvailabilityEntry {
+	return conventionAvailability(c.StdContext.Availability(dev, e), c.Layout.Bridge())
 }
 
 // UniqueID implements [hadiscovery.Context] with the id this daemon already

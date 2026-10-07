@@ -21,19 +21,23 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
 )
 
-// RetainCleanup implements a one-shot orphan-clear
-// pass that runs once per daemon start and clears retained topics
-// the new topology no longer publishes to. The legacy aggregate
-// state topic (`<central>/<iface>/<addr>/<ch>/state`) is the most
-// prominent example — ADR 0011 moved state to per-DP topics under
-// `…/channels/<ch>/<bucket>/<param>/state`, but HA's retained-message
-// store still carries the aggregate from the previous build.
+// RetainCleanup implements a one-shot orphan-clear pass that runs once per
+// daemon start and clears retained topics the current topology no longer
+// publishes to. Since ADR 0083 the largest set is the whole pre-convention
+// layout — every `<base>/<central>/…`, `bridge/…`, `alarm/…`, `security/…`
+// and `system/addon_update/…` item (see [LegacyLayoutMatcher]); the older
+// retired shapes below the central (the `channels/` infix, the bucket-less
+// data point, the channel aggregate `…/<ch>/state`, the program-trigger
+// mirror, the lower-cased metric spelling) are matched too.
 //
-// Mechanism: subscribe to `<topic_base>/#` with retained-only
-// snapshot semantics, accumulate every retained topic that matches
-// a legacy pattern into a worklist, then publish empty payloads
-// (retain=true) at every worklist entry to evict it. The pass is
-// idempotent — clearing an already-empty topic is a no-op.
+// Mechanism: subscribe to the old trees only — one filter per configured
+// central and one per daemon-level tree, never `<base>/#`, which would
+// overlap the daemon's own command routes — with retained-only snapshot
+// semantics, accumulate every retained topic that matches an old shape into
+// a worklist, then publish empty payloads (retain=true) at every worklist
+// entry to evict it. A topic whose first level below the base is a function
+// name is new and never touched. The pass is idempotent — clearing an
+// already-empty topic is a no-op.
 //
 // The pass is gated behind an explicit opt-in to avoid surprise
 // data loss during the migration window. Callers enable it via
@@ -49,6 +53,10 @@ type RetainCleanup struct {
 	// which are resolved once when the pass is constructed.
 	retiredMetrics map[string]bool
 
+	// centrals holds the escaped topic segment of every configured
+	// central: the identifiers whose old trees this daemon owns.
+	centrals map[string]bool
+
 	mu       sync.Mutex
 	worklist []string // retained topic names earmarked for eviction
 }
@@ -59,7 +67,14 @@ func NewRetainCleanup(b *Bridge) *RetainCleanup {
 	if b == nil {
 		return c
 	}
-	retired := retiredMetricTopics(b.topics, b.cleanupCentralNames())
+	names := b.cleanupCentralNames()
+	c.centrals = make(map[string]bool, len(names))
+	for _, name := range names {
+		if name != "" {
+			c.centrals[naming.TopicSafe(name)] = true
+		}
+	}
+	retired := retiredMetricTopics(b.topics, names)
 	if len(retired) > 0 {
 		c.retiredMetrics = make(map[string]bool, len(retired))
 		for _, topic := range retired {
@@ -346,13 +361,12 @@ func ProgramTriggerMirrorMatcher(topicBase, topic string) bool {
 }
 
 // collect inspects topic+payload pairs delivered by a retained-topic
-// snapshot subscription and accumulates eviction candidates. The
-// payload is unused here — we only care about the topic shape — but
-// kept on the signature so the call site matches the
-// [MessageHandler] contract.
+// snapshot subscription and accumulates eviction candidates. The payload is
+// read only to skip an eviction already in flight; everything else is the
+// topic shape.
 //
-// Matches three legacy shapes retired by the Option-B topology
-// migration:
+// Matches the pre-ADR-0083 layout ([LegacyLayoutMatcher]) and three older
+// shapes retired by the Option-B topology migration:
 //   - bucket-less DataPointState (`<addr>/<ch>/<PARAM>`)
 //   - verbose SlotState (`<addr>/channels/<ch>/<bucket>/<PARAM>/state`)
 //   - aggregated channel state where the StatePayload schema changed
@@ -362,18 +376,29 @@ func ProgramTriggerMirrorMatcher(topicBase, topic string) bool {
 // plus the retired program-trigger state mirror (see
 // [ProgramTriggerMirrorMatcher]) and the retired lower-cased spelling of
 // the central-wide metric topics (see [retiredMetricTopics]).
-func (c *RetainCleanup) collect(topic string, _ []byte, _ bool) {
+func (c *RetainCleanup) collect(topic string, payload []byte, _ bool) {
 	if c.bridge == nil {
 		return
 	}
+	// A zero-length payload is an eviction in flight, not a retained value.
+	if len(payload) == 0 {
+		return
+	}
 	base := c.bridge.cfg.Base
-	if LegacyDataPointStateMatcher(base, topic) ||
+	if newLayoutTopic(base, topic) {
+		return
+	}
+	if LegacyLayoutMatcher(base, c.centrals, topic) ||
+		LegacyDataPointStateMatcher(base, topic) ||
 		LegacySlotStateMatcher(base, topic) ||
 		LegacyAggregateStateMatcher(base, topic) ||
 		ProgramTriggerMirrorMatcher(base, topic) ||
 		c.retiredMetrics[topic] {
 		c.mu.Lock()
-		c.worklist = append(c.worklist, topic)
+		// Two filters can deliver one topic; it is evicted once.
+		if !slices.Contains(c.worklist, topic) {
+			c.worklist = append(c.worklist, topic)
+		}
 		c.mu.Unlock()
 	}
 }
@@ -388,7 +413,7 @@ func (c *RetainCleanup) Worklist() []string {
 	return out
 }
 
-// RunRetainCleanupOnce subscribes to <topic_base>/# for a short
+// RunRetainCleanupOnce subscribes to the old layout's trees for a short
 // snapshot window, accumulates every legacy retained topic, then
 // publishes empty payloads (retain=true) at each one to evict. The
 // snapshot window defaults to 2 seconds — long enough for typical
@@ -418,8 +443,17 @@ func (b *Bridge) RunRetainCleanupOnce(ctx context.Context, snapshotWindow time.D
 		return 0, errCleanupClientLacksSubscribe
 	}
 	cleanup := NewRetainCleanup(b)
-	// Wait for the broker to deliver retained messages.
-	if err := b.snapshotRetained(ctx, subClient, b.cfg.Base+"/#", b.cfg.QoS.State, snapshotWindow, cleanup.collect); err != nil {
+	// Wait for the broker to deliver retained messages — on the old trees
+	// only. See [legacyLayoutFilters] for why not `<base>/#`.
+	filters := legacyLayoutFilters(b.cfg.Base, b.cleanupCentralNames())
+	// The retired lower-cased metric spelling can sit below a segment that is
+	// no configured central's; those exact topics are subscribed too.
+	for _, topic := range b.RetiredMetricTopics() {
+		if !coveredByFilter(topic, filters) {
+			filters = append(filters, topic)
+		}
+	}
+	if err := b.snapshotRetainedFilters(ctx, subClient, filters, b.cfg.QoS.State, snapshotWindow, cleanup.collect); err != nil {
 		return 0, err
 	}
 	worklist := cleanup.Worklist()
@@ -447,6 +481,22 @@ func (b *Bridge) snapshotRetained(
 	ctx context.Context,
 	subClient Subscriber,
 	filter string,
+	qos QoS,
+	window time.Duration,
+	collect func(topic string, payload []byte, retained bool),
+) error {
+	return b.snapshotRetainedFilters(ctx, subClient, []string{filter}, qos, window, collect)
+}
+
+// snapshotRetainedFilters is [Bridge.snapshotRetained] over several filters
+// at once: every filter is installed for the same window, and every one is
+// taken down again on every exit path. A sweep whose old tree is several
+// disjoint subtrees subscribes those subtrees rather than a wildcard over
+// the whole base, which would overlap the daemon's own command filters.
+func (b *Bridge) snapshotRetainedFilters(
+	ctx context.Context,
+	subClient Subscriber,
+	filters []string,
 	qos QoS,
 	window time.Duration,
 	collect func(topic string, payload []byte, retained bool),
@@ -497,27 +547,33 @@ func (b *Bridge) snapshotRetained(
 		}
 		collect(topic, payload, retained)
 	}
-	if _, err := subClient.Subscribe(ctx, filter, qos, LegacyHandler(gated)); err != nil {
-		return err
-	}
+	installed := make([]string, 0, len(filters))
 	defer func() {
 		closed.Store(true)
-		// Detached from ctx on purpose: a shutdown mid-window is exactly
-		// the case where the subscription would otherwise be stranded.
-		//
-		// The error is logged and not acted on HERE because acting on it is
-		// the subscriber's job: go-mqtt keeps the local registration when an
-		// UNSUBSCRIBE fails on `ErrNotConnected` or an ack timeout, and
-		// replays it on every reconnect for the rest of the process — so a
-		// retry on this connection would be answered by the same dead link.
-		// [SweepSubscriber] drops the whole connection instead, which is
-		// what makes the next sweep start from an empty filter set. The
-		// collect gate above has already made this handler inert either way.
-		if err := subClient.Unsubscribe(context.WithoutCancel(ctx), filter); err != nil {
-			slog.Default().Warn("mqtt.retain_cleanup.unsubscribe",
-				slog.String("filter", filter), slog.String("err", err.Error()))
+		for _, filter := range installed {
+			// Detached from ctx on purpose: a shutdown mid-window is exactly
+			// the case where the subscription would otherwise be stranded.
+			//
+			// The error is logged and not acted on HERE because acting on it is
+			// the subscriber's job: go-mqtt keeps the local registration when an
+			// UNSUBSCRIBE fails on `ErrNotConnected` or an ack timeout, and
+			// replays it on every reconnect for the rest of the process — so a
+			// retry on this connection would be answered by the same dead link.
+			// [SweepSubscriber] drops the whole connection instead, which is
+			// what makes the next sweep start from an empty filter set. The
+			// collect gate above has already made this handler inert either way.
+			if err := subClient.Unsubscribe(context.WithoutCancel(ctx), filter); err != nil {
+				slog.Default().Warn("mqtt.retain_cleanup.unsubscribe",
+					slog.String("filter", filter), slog.String("err", err.Error()))
+			}
 		}
 	}()
+	for _, filter := range filters {
+		if _, err := subClient.Subscribe(ctx, filter, qos, LegacyHandler(gated)); err != nil {
+			return err
+		}
+		installed = append(installed, filter)
+	}
 	timer := time.NewTimer(window)
 	defer timer.Stop()
 	select {
@@ -1038,25 +1094,35 @@ func daemonLevelNodeID(scope string, retractUnscoped bool, nodeID string) string
 	return ""
 }
 
-// rawCentralPrefix returns the `<base>/<central>/` prefix the raw plane
-// publishes every per-data-point topic under. One definition for both halves
-// of the orphan sweep — the subscribe filter and the candidate matcher — so
-// they cannot look in different places.
+// rawCentralPrefixes returns the three prefixes the raw plane publishes every
+// per-data-point item of one central under: `<base>/status/<central>/` for
+// the status items, `<base>/meta/<central>/` for their descriptor
+// companions and `<base>/ha/<central>/` for the light's Home
+// Assistant-native twin ([naming.FunctionHA]). One definition for both halves of the orphan sweep — the
+// subscribe filters and the candidate matcher — and for the device-removal
+// retraction, so they cannot look in different places.
 //
 // The base is trimmed and the central name escaped exactly as
 // [naming.PathData.MQTTState] does when it writes those topics. Both had
 // drifted: a `topic_base` written with a trailing slash and a CCU whose name
 // carries a space each produced a sweep that collected nothing at all, so
 // retained topics from a previous build kept feeding stale values forever.
-func rawCentralPrefix(topicBase, centralName string) string {
-	return strings.Trim(topicBase, "/") + "/" + naming.TopicSafe(centralName) + "/"
+func rawCentralPrefixes(topicBase, centralName string) []string {
+	central := naming.TopicSafe(centralName)
+	return []string{
+		naming.StatusTopic(topicBase, central) + "/",
+		naming.MetaTopic(topicBase, central) + "/",
+		naming.HATopic(topicBase, central) + "/",
+	}
 }
 
-// RawOrphanCandidateMatcher reports whether topic is a per-DP bucket topic
-// (state or its /config companion) of the given central under topicBase:
+// RawOrphanCandidateMatcher reports whether topic is a per-DP bucket item
+// (status, its meta companion, or the `ha` twin) of the given central under
+// topicBase:
 //
-//	<topic_base>/<central>/<iface>/<address>/<channelNo>/<bucket>/<PARAM>
-//	<topic_base>/<central>/<iface>/<address>/<channelNo>/<bucket>/<PARAM>/config
+//	<topic_base>/status/<central>/<iface>/<address>/<channelNo>/<bucket>/<PARAM>
+//	<topic_base>/meta/<central>/<iface>/<address>/<channelNo>/<bucket>/<PARAM>
+//	<topic_base>/ha/<central>/<iface>/<address>/<channelNo>/custom/light
 //
 // with `<bucket>` one of values / master / calculated / custom and a numeric
 // channel id. The reserved hub subtree (`<central>/hub/...`) never matches.
@@ -1071,19 +1137,19 @@ func RawOrphanCandidateMatcher(topicBase, centralName, topic string) bool {
 	if topicBase == "" || centralName == "" {
 		return false
 	}
-	prefix := rawCentralPrefix(topicBase, centralName)
-	if !strings.HasPrefix(topic, prefix) {
+	var rest string
+	for _, prefix := range rawCentralPrefixes(topicBase, centralName) {
+		if r, ok := strings.CutPrefix(topic, prefix); ok {
+			rest = r
+			break
+		}
+	}
+	if rest == "" {
 		return false
 	}
-	parts := strings.Split(strings.TrimPrefix(topic, prefix), "/")
+	parts := strings.Split(rest, "/")
 	// `<iface>/<address>/<channel>/<bucket>/<PARAM>` — 5 segments for the
-	// state topic, 6 with the trailing `config` companion.
-	if len(parts) == 6 {
-		if parts[5] != "config" {
-			return false
-		}
-		parts = parts[:5]
-	}
+	// status item and for its meta companion alike.
 	if len(parts) != 5 {
 		return false
 	}
@@ -1107,9 +1173,9 @@ func RawOrphanCandidateMatcher(topicBase, centralName, topic string) bool {
 	return parts[4] != ""
 }
 
-// RunRawOrphanCleanupOnce subscribes to the central's raw-plane subtree for a
-// short snapshot window, accumulates every retained per-DP bucket topic
-// (state + /config), then evicts the ones the current model did NOT
+// RunRawOrphanCleanupOnce subscribes to the central's raw-plane subtrees for
+// a short snapshot window, accumulates every retained per-DP bucket item
+// (status + meta), then evicts the ones the current model did NOT
 // (re)publish during the central's snapshot — i.e. topics absent from the
 // bridge's rawTopics / configCache bookkeeping. Anything in that set is a
 // leftover from a previous build or boot: a MASTER paramset published before
@@ -1160,8 +1226,12 @@ func (b *Bridge) RunRawOrphanCleanupOnce(ctx context.Context, centralName string
 		mu.Unlock()
 	}
 
-	filter := rawCentralPrefix(b.cfg.Base, centralName) + "#"
-	if err := b.snapshotRetained(ctx, subClient, filter, b.cfg.QoS.State, snapshotWindow, handler); err != nil {
+	prefixes := rawCentralPrefixes(b.cfg.Base, centralName)
+	filters := make([]string, 0, len(prefixes))
+	for _, prefix := range prefixes {
+		filters = append(filters, prefix+"#")
+	}
+	if err := b.snapshotRetainedFilters(ctx, subClient, filters, b.cfg.QoS.State, snapshotWindow, handler); err != nil {
 		return 0, err
 	}
 	// Copy under the same lock the deliveries append under — see the
@@ -1437,4 +1507,27 @@ func unaddressableUniqueID(uniqueID string) bool {
 		return true
 	}
 	return carriesLegacyUnscopedCUxDID(uniqueID)
+}
+
+// newLayoutTopic reports whether topic's first level below base is a
+// function of the mqtt-smarthome grammar — a topic of the current layout,
+// which no legacy sweep may touch whatever else it looks like.
+func newLayoutTopic(base, topic string) bool {
+	rest, ok := strings.CutPrefix(topic, strings.Trim(base, "/")+"/")
+	if !ok {
+		return false
+	}
+	first, _, _ := strings.Cut(rest, "/")
+	return naming.IsFunction(first)
+}
+
+// coveredByFilter reports whether one of the `<prefix>/#` filters already
+// delivers topic.
+func coveredByFilter(topic string, filters []string) bool {
+	for _, f := range filters {
+		if prefix, ok := strings.CutSuffix(f, "#"); ok && strings.HasPrefix(topic, prefix) {
+			return true
+		}
+	}
+	return false
 }

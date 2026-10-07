@@ -62,13 +62,22 @@ func TestNoTopicBuilderMethodProducesLegacyAggregateStateShape(t *testing.T) {
 					args = append(args, reflect.ValueOf(payload.BucketValues))
 				case pt.Kind() == reflect.Int:
 					args = append(args, reflect.ValueOf(1))
+				case pt.Kind() == reflect.Slice && pt.Elem().Kind() == reflect.String:
+					// A variadic item path ([TopicBuilder.Maintenance]).
+					args = append(args, reflect.ValueOf([]string{sampleStringArg(strIdx)}))
+					strIdx++
 				default:
 					// Do not silently skip: an unhandled parameter type
 					// means the guard stopped covering a method.
 					t.Fatalf("%s: unhandled parameter type %s — extend the guard", m.Name, pt)
 				}
 			}
-			got := rv.Method(i).Call(args)[0].String()
+			var got string
+			if mt.IsVariadic() {
+				got = rv.Method(i).CallSlice(args)[0].String()
+			} else {
+				got = rv.Method(i).Call(args)[0].String()
+			}
 			if got == "" {
 				continue
 			}

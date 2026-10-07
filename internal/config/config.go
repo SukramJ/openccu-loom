@@ -1606,6 +1606,48 @@ type NorthMQTT struct {
 	// stores; lowering it shortens boot time at the risk of missing some
 	// retained messages.  [default: 2000]
 	RetainCleanupWindowMs int `yaml:"retain_cleanup_window_ms" json:"retain_cleanup_window_ms,omitempty" cfg:"expert"`
+
+	// Maintenance configures the mqtt-smarthome 2.0 maintenance topics
+	// (`<topic_base>/maintenance/…`, ADR 0083): log level and restart
+	// commands and the periodic process statistics.
+	Maintenance NorthMQTTMaintenance `yaml:"maintenance" json:"maintenance" cfg:"expert"`
+}
+
+// NorthMQTTMaintenance configures the mqtt-smarthome 2.0 §7 maintenance
+// topics under `<topic_base>/maintenance/`:
+//
+//   - `set/loglevel` (error / warn / info / debug) sets the root level of
+//     the log-level registry, not persisted;
+//   - `set/restart` shuts the daemon down gracefully for its supervisor to
+//     restart it — refused when no supervisor is detected;
+//   - `stats` is a retained process-statistics document.
+//
+// On by default, as the convention recommends. Anyone allowed to publish on
+// the broker can use these topics; the broker's ACLs are the only gate.
+type NorthMQTTMaintenance struct {
+	// Enabled switches the maintenance topics on. Nil means true.
+	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty" cfg:"expert"`
+	// StatsIntervalSeconds is the period of the `stats` document in
+	// seconds. Nil means 60; 0 switches the document off.
+	StatsIntervalSeconds *int `yaml:"stats_interval_seconds,omitempty" json:"stats_interval_seconds,omitempty" cfg:"expert"`
+}
+
+// DefaultMaintenanceStatsIntervalSeconds is the stats period when
+// [NorthMQTTMaintenance.StatsIntervalSeconds] is unset.
+const DefaultMaintenanceStatsIntervalSeconds = 60
+
+// IsEnabled reports the effective maintenance switch: on unless set false.
+func (m NorthMQTTMaintenance) IsEnabled() bool {
+	return m.Enabled == nil || *m.Enabled
+}
+
+// EffectiveStatsIntervalSeconds returns the stats period in seconds: the
+// default when unset, 0 (off) when set to zero or below.
+func (m NorthMQTTMaintenance) EffectiveStatsIntervalSeconds() int {
+	if m.StatsIntervalSeconds == nil {
+		return DefaultMaintenanceStatsIntervalSeconds
+	}
+	return max(*m.StatsIntervalSeconds, 0)
 }
 
 // EffectiveRetainCleanupWindow returns the broker snapshot window for retain
@@ -2525,6 +2567,14 @@ func validateCentralNames(centrals []CentralConfig) error {
 			)
 		}
 		segments[seg] = name
+		if reservedCentralSegment(seg) {
+			return fmt.Errorf(
+				"config: centrals[%d].name %q: its MQTT topic segment %q is reserved — it sits at the level of "+
+					"the daemon's own `alarm`, `security`, `system` and `bridge` trees and of the topic functions "+
+					"(connected, status, set, get, info, meta, maintenance); rename the central",
+				i, name, seg,
+			)
+		}
 	}
 	for i := range centrals {
 		if err := hmtypes.ValidateCentralName(centrals[i].Name); err != nil {
@@ -2532,6 +2582,25 @@ func validateCentralNames(centrals []CentralConfig) error {
 		}
 	}
 	return nil
+}
+
+// reservedCentralSegments are the literal first-level items of the MQTT
+// topic tree that share a level with `<central>` (ADR 0083 §Reserved
+// first-level items): the daemon-level alarm, security and system trees, and
+// `bridge`, the old daemon tree the migration sweep still reads.
+var reservedCentralSegments = map[string]bool{
+	"alarm": true, "security": true, "system": true, "bridge": true,
+}
+
+// reservedCentralSegment reports whether a central's escaped topic segment
+// would collide with a literal first-level item or spell a topic function.
+// A central named like a function is refused too, because the migration
+// sweep tells new topics from old ones by that level: `<base>/status/…` is
+// new, and a central called `status` would make its old tree look new. The
+// functions are [naming.IsFunction]'s: mqtt-smarthome's and this project
+// family's `ha`.
+func reservedCentralSegment(seg string) bool {
+	return reservedCentralSegments[seg] || naming.IsFunction(seg)
 }
 
 // validateCentralHost enforces that centrals[].host is a bare hostname

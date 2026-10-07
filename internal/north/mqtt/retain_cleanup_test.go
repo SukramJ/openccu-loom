@@ -112,16 +112,21 @@ func (m *mockRetainClient) Publish(_ context.Context, topic string, payload []by
 	return nil
 }
 
-func (m *mockRetainClient) Subscribe(_ context.Context, _ string, _ QoS, handler MessageHandler, _ ...SubscribeOption) (SubscribeResult, error) {
-	// Deliver retained messages synchronously — the cleanup logic waits
-	// with a timer, so we deliver before RunRetainCleanupOnce's snapshot
-	// window expires.
+func (m *mockRetainClient) Subscribe(_ context.Context, filter string, _ QoS, handler MessageHandler, _ ...SubscribeOption) (SubscribeResult, error) {
+	// Deliver the retained messages the filter matches, synchronously — the
+	// cleanup logic waits with a timer, so we deliver before
+	// RunRetainCleanupOnce's snapshot window expires. Matching the filter
+	// matters since the sweeps subscribe several disjoint subtrees: a mock
+	// that delivered everything to each would show every topic once per
+	// filter, and one outside every filter at all.
 	m.mu.Lock()
 	retained := make([]retainedMsg, len(m.retained))
 	copy(retained, m.retained)
 	m.mu.Unlock()
 	for _, msg := range retained {
-		handler(&Message{Topic: msg.topic, Payload: msg.payload, Retain: true})
+		if topicMatchesFilter(msg.topic, filter) {
+			handler(&Message{Topic: msg.topic, Payload: msg.payload, Retain: true})
+		}
 	}
 	return SubscribeResult{}, nil
 }
@@ -189,6 +194,12 @@ func TestRunRetainCleanupOnce_EvictsLegacyTopics(t *testing.T) {
 	const base = "openccu-loom"
 
 	legacyTopics := [...]string{
+		// The pre-ADR-0083 layout of a configured central.
+		base + "/GoOtto/HmIP-RF/0001ABCD/1/values/STATE",
+		base + "/GoOtto/HmIP-RF/0001ABCD/availability",
+		base + "/GoOtto/hub/programs/12459/state",
+		base + "/GoOtto/hub/programs/12459/execute_available",
+		base + "/bridge/status",
 		// Bucket-less per-DP (old phase 1a shape).
 		base + "/GoOtto/HmIP-RF/0001ABCD/1/STATE",
 		base + "/GoOtto/HmIP-RF/0001ABCD/1/ACTUAL_TEMPERATURE",
@@ -200,13 +211,12 @@ func TestRunRetainCleanupOnce_EvictsLegacyTopics(t *testing.T) {
 		base + "/GoOtto/hub/programs/12459/trigger",
 	}
 	currentTopics := [...]string{
-		// Current shape — must NOT be evicted.
-		base + "/GoOtto/HmIP-RF/0001ABCD/1/values/STATE",
-		base + "/GoOtto/HmIP-RF/0001ABCD/availability",
-		base + "/bridge/status",
-		// Program state plane — must NOT be evicted.
-		base + "/GoOtto/hub/programs/12459/state",
-		base + "/GoOtto/hub/programs/12459/execute_available",
+		// Current (ADR 0083) shapes — must NOT be evicted.
+		base + "/status/GoOtto/HmIP-RF/0001ABCD/1/values/STATE",
+		base + "/status/GoOtto/HmIP-RF/0001ABCD/online",
+		base + "/connected",
+		base + "/status/GoOtto/hub/programs/12459/active",
+		base + "/status/GoOtto/hub/programs/12459/execute_available",
 	}
 
 	allMessages := make([]retainedMsg, 0, len(legacyTopics)+len(currentTopics))
@@ -219,8 +229,9 @@ func TestRunRetainCleanupOnce_EvictsLegacyTopics(t *testing.T) {
 
 	mc := &mockRetainClient{retained: allMessages}
 	b := NewBridge(BridgeConfig{
-		Base:       base,
-		RawEnabled: true,
+		Base:        base,
+		CentralName: "GoOtto",
+		RawEnabled:  true,
 	}, mc)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -268,7 +279,8 @@ func TestRunRetainCleanupOnce_ProductionShape_BreakerWrappedPublisher(t *testing
 		{topic: base + "/GoOtto/hub/programs/12459/trigger", payload: []byte("true")},
 	}}
 	pub := NewBreaker(mc, BreakerConfig{})
-	b := NewBridge(BridgeConfig{Base: base, RawEnabled: true}, pub).WithSubscriber(mc)
+	// The sweep reads only the old trees of the centrals this daemon owns.
+	b := NewBridge(BridgeConfig{Base: base, CentralName: "GoOtto", RawEnabled: true}, pub).WithSubscriber(mc)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -455,11 +467,11 @@ func TestRawOrphanCandidateMatcher(t *testing.T) {
 	t.Parallel()
 	base, central := "openccu-loom", "GoOtto"
 	hits := []string{
-		base + "/GoOtto/HmIP-RF/0001ABCD/8/master/01_WP_WEEKDAY",
-		base + "/GoOtto/HmIP-RF/0001ABCD/8/master/01_WP_WEEKDAY/config",
-		base + "/GoOtto/HmIP-RF/0001ABCD/0/values/BOOTED",
-		base + "/GoOtto/HmIP-RF/0001ABCD/1/calculated/DEW_POINT",
-		base + "/GoOtto/HmIP-RF/0001ABCD/3/custom/switch",
+		base + "/status/GoOtto/HmIP-RF/0001ABCD/8/master/01_WP_WEEKDAY",
+		base + "/meta/GoOtto/HmIP-RF/0001ABCD/8/master/01_WP_WEEKDAY",
+		base + "/status/GoOtto/HmIP-RF/0001ABCD/0/values/BOOTED",
+		base + "/status/GoOtto/HmIP-RF/0001ABCD/1/calculated/DEW_POINT",
+		base + "/status/GoOtto/HmIP-RF/0001ABCD/3/custom/switch",
 	}
 	for _, topic := range hits {
 		if !RawOrphanCandidateMatcher(base, central, topic) {
@@ -467,19 +479,22 @@ func TestRawOrphanCandidateMatcher(t *testing.T) {
 		}
 	}
 	misses := []string{
-		// Device-level retained topics stay.
-		base + "/GoOtto/HmIP-RF/0001ABCD/availability",
-		base + "/GoOtto/HmIP-RF/0001ABCD/info",
+		// Device-level retained items stay.
+		base + "/status/GoOtto/HmIP-RF/0001ABCD/online",
+		base + "/status/GoOtto/HmIP-RF/0001ABCD/info",
 		// Hub subtree stays.
-		base + "/GoOtto/hub/sysvars/Anwesenheit/state",
+		base + "/status/GoOtto/hub/sysvars/Anwesenheit",
 		// Another central's namespace stays.
-		base + "/Office/HmIP-RF/0001ABCD/8/master/01_WP_WEEKDAY",
+		base + "/status/Office/HmIP-RF/0001ABCD/8/master/01_WP_WEEKDAY",
+		// The command function is never a retained item of this daemon.
+		base + "/set/GoOtto/HmIP-RF/0001ABCD/8/master/01_WP_WEEKDAY",
 		// Legacy shapes are the legacy pass's business.
+		base + "/GoOtto/HmIP-RF/0001ABCD/1/values/STATE",
 		base + "/GoOtto/HmIP-RF/0001ABCD/1/STATE",
 		base + "/GoOtto/HmIP-RF/0001ABCD/0/state",
 		// Non-numeric channel / unknown bucket.
-		base + "/GoOtto/HmIP-RF/0001ABCD/x/master/PARAM",
-		base + "/GoOtto/HmIP-RF/0001ABCD/1/paramset/PARAM",
+		base + "/status/GoOtto/HmIP-RF/0001ABCD/x/master/PARAM",
+		base + "/status/GoOtto/HmIP-RF/0001ABCD/1/paramset/PARAM",
 	}
 	for _, topic := range misses {
 		if RawOrphanCandidateMatcher(base, central, topic) {
@@ -496,16 +511,16 @@ func TestRunRawOrphanCleanupOnce_EvictsUnpublishedBucketTopics(t *testing.T) {
 	t.Parallel()
 
 	const base = "openccu-loom"
-	keepState := base + "/GoOtto/HmIP-RF/0001ABCD/1/values/STATE"
-	keepConfig := base + "/GoOtto/HmIP-RF/0001ABCD/1/values/STATE/config"
+	keepState := base + "/status/GoOtto/HmIP-RF/0001ABCD/1/values/STATE"
+	keepConfig := base + "/meta/GoOtto/HmIP-RF/0001ABCD/1/values/STATE"
 	orphans := []string{
-		base + "/GoOtto/HmIP-RF/0001ABCD/8/master/01_WP_WEEKDAY",
-		base + "/GoOtto/HmIP-RF/0001ABCD/8/master/01_WP_WEEKDAY/config",
-		base + "/GoOtto/HmIP-RF/0001ABCD/0/values/BOOTED",
+		base + "/status/GoOtto/HmIP-RF/0001ABCD/8/master/01_WP_WEEKDAY",
+		base + "/meta/GoOtto/HmIP-RF/0001ABCD/8/master/01_WP_WEEKDAY",
+		base + "/status/GoOtto/HmIP-RF/0001ABCD/0/values/BOOTED",
 	}
 	untouched := []string{
-		base + "/GoOtto/HmIP-RF/0001ABCD/availability",
-		base + "/GoOtto/hub/sysvars/Anwesenheit/state",
+		base + "/status/GoOtto/HmIP-RF/0001ABCD/online",
+		base + "/status/GoOtto/hub/sysvars/Anwesenheit",
 	}
 
 	retained := make([]retainedMsg, 0, 2+len(orphans)+len(untouched))
@@ -620,7 +635,7 @@ func TestRawOrphanCandidateMatcherEscapesCentralName(t *testing.T) {
 		base        = "openccu-loom"
 		centralName = "Wohn Zimmer"
 	)
-	topic := base + "/" + naming.TopicSafe(centralName) + "/HmIP-RF/0001ABCD/1/values/STATE"
+	topic := base + "/status/" + naming.TopicSafe(centralName) + "/HmIP-RF/0001ABCD/1/values/STATE"
 	if !RawOrphanCandidateMatcher(base, centralName, topic) {
 		t.Fatalf("the escaped topic %q of central %q was not recognised as this daemon's", topic, centralName)
 	}
@@ -898,6 +913,7 @@ func TestRunRetainCleanupOnceKeepsTheTopicsOfARuntimeAdoptedCentral(t *testing.T
 // wildcard subscription installed on the shared client.
 type unsubscribeTrackingClient struct {
 	mu           sync.Mutex
+	subscribed   []string
 	unsubscribed []string
 }
 
@@ -905,8 +921,17 @@ func (c *unsubscribeTrackingClient) Publish(_ context.Context, _ string, _ []byt
 	return nil
 }
 
-func (c *unsubscribeTrackingClient) Subscribe(_ context.Context, _ string, _ QoS, _ MessageHandler, _ ...SubscribeOption) (SubscribeResult, error) {
+func (c *unsubscribeTrackingClient) Subscribe(_ context.Context, filter string, _ QoS, _ MessageHandler, _ ...SubscribeOption) (SubscribeResult, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.subscribed = append(c.subscribed, filter)
 	return SubscribeResult{}, nil
+}
+
+func (c *unsubscribeTrackingClient) subscribedFilters() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]string(nil), c.subscribed...)
 }
 
 func (c *unsubscribeTrackingClient) Unsubscribe(_ context.Context, filter string) error {
@@ -970,8 +995,16 @@ func TestRetainSweepsUnsubscribeWhenTheWindowIsCancelled(t *testing.T) {
 			if err := tc.run(ctx, b); !errors.Is(err, context.Canceled) {
 				t.Fatalf("err = %v, want context.Canceled", err)
 			}
-			if got := client.filters(); len(got) != 1 {
-				t.Fatalf("unsubscribed = %v, want exactly one filter — a stranded wildcard runs for the daemon's lifetime", got)
+			// A sweep may install several filters (the migration sweep one
+			// per old tree); every one of them must come down again.
+			subscribed, got := client.subscribedFilters(), client.filters()
+			if len(subscribed) == 0 {
+				t.Fatal("the sweep subscribed nothing — the teardown assertion would be vacuous")
+			}
+			slices.Sort(subscribed)
+			slices.Sort(got)
+			if !slices.Equal(got, subscribed) {
+				t.Fatalf("unsubscribed = %v, subscribed = %v — a stranded wildcard runs for the daemon's lifetime", got, subscribed)
 			}
 		})
 	}

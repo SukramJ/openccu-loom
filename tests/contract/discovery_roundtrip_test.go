@@ -5,7 +5,9 @@
 //
 // These tests verify that the value_template strings emitted in the
 // HA-Discovery payloads produce the correct output when rendered
-// against a realistic PerDPState JSON envelope. The bug cluster that
+// against a realistic status object — `{"val", "ts", "lc", "hm"}` (ADR 0083),
+// rendered by the same hapublisher.StatusObject the bridge uses. The bug
+// cluster that
 // motivated them:
 //
 // 1. Switch / Lock / binary_sensor stayed "unknown" — Jinja `True`/
@@ -14,10 +16,11 @@
 // the round-trip test verifies the fix is present end-to-end.
 //
 // 2. mqtt.event parses the post-value_template payload as JSON. The
-// default valueJSONValueTemplate extracts a scalar
-// (`{{ value_json.value }}`), which breaks the JSON parser when HA
-// tries to read `event_type` from the rendered string. The fix
-// drops value_template for event entities; the test pins that.
+// default template extracts a scalar (`{{ value_json.val }}`), which
+// breaks the JSON parser when HA tries to read `event_type` from the
+// rendered string; and since the pulse carries its type in `val`, an
+// event entity needs a template that renders `{"event_type": …}` back
+// out of the status object. The test pins that.
 //
 // The Jinja2 engine is approximated by a minimal Go renderer (see
 // jinja_helpers.go) covering the exact filter/test subset openccu-loom's
@@ -38,6 +41,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	hapublisher "github.com/SukramJ/go-hamqtt/publisher"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/climate"
@@ -95,6 +100,48 @@ func mapKeys(m map[string]any) []string {
 	return out
 }
 
+// rtDPStatus renders the status object the per-parameter plane publishes for
+// value (ADR 0083): `val`, integer-millisecond `ts`/`lc`, and the data
+// point's `available` flag under `hm`. It goes through the shared
+// hapublisher.StatusObject — the renderer the bridge uses — so the round
+// trip reads the bytes the daemon actually writes rather than a hand-typed
+// stand-in of them.
+func rtDPStatus(t *testing.T, value any) string {
+	t.Helper()
+	return rtStatusObject(t, value, map[string]any{"available": true})
+}
+
+// rtDocStatus renders the status object of a document without a primary
+// value — a custom-DP aggregate — which is `val` whole.
+func rtDocStatus(t *testing.T, doc string) string {
+	t.Helper()
+	if !json.Valid([]byte(doc)) {
+		t.Fatalf("document %q is not JSON", doc)
+	}
+	return rtStatusObject(t, json.RawMessage(doc), nil)
+}
+
+// rtPulseStatus renders a channel event's status object: the event type in
+// `val`, `available` under `hm`.
+func rtPulseStatus(t *testing.T, eventType string) string {
+	t.Helper()
+	return rtStatusObject(t, eventType, map[string]any{"available": true})
+}
+
+func rtStatusObject(t *testing.T, value, hm any) string {
+	t.Helper()
+	const ts = 1767225600500
+	obj := hapublisher.StatusObject{Val: value, TS: ts, LC: ts}
+	if hm != nil {
+		obj.ExtKey, obj.Ext = "hm", hm
+	}
+	raw, err := obj.JSON()
+	if err != nil {
+		t.Fatalf("render status object: %v", err)
+	}
+	return string(raw)
+}
+
 // --- aggregate builder rigs -------------------------------------------------
 //
 // The aggregate components (cover / climate / siren / valve) do not flow
@@ -139,7 +186,7 @@ func (roundtripDiscoveryCtx) WireParameterCommandTopic(addr, p string) string {
 }
 
 func (roundtripDiscoveryCtx) DeviceAvailabilityTopic() string { return "rt/availability" }
-func (roundtripDiscoveryCtx) BridgeStatusTopic() string       { return "rt/bridge/status" }
+func (roundtripDiscoveryCtx) ConnectedTopic() string          { return "rt/bridge/status" }
 
 var _ pload.HADiscoveryTopics = roundtripDiscoveryCtx{}
 
@@ -218,10 +265,10 @@ func mustBodyString(t *testing.T, body map[string]any, key string) string {
 // only handles the `is defined` guard, so this dedicated renderer covers
 // the boolean if/else shape without pulling a full Jinja engine into the
 // contract suite.
-var boolIfElseRe = regexp.MustCompile(`(?s)\{%\s*if\s+value_json\.(\w+)\s*%\}(.*?)\{%\s*else\s*%\}(.*?)\{%\s*endif\s*%\}`)
+var boolIfElseRe = regexp.MustCompile(`(?s)\{%\s*if\s+value_json\.([\w.]+)\s*%\}(.*?)\{%\s*else\s*%\}(.*?)\{%\s*endif\s*%\}`)
 
 // renderJinjaBoolIfElse renders the valve/irrigation truthiness template
-// against a PerDPState envelope, returning the true-branch text when the
+// against a status object, returning the true-branch text when the
 // referenced boolean field is truthy and the false-branch otherwise.
 func renderJinjaBoolIfElse(t *testing.T, template, envelope string) string {
 	t.Helper()
@@ -234,8 +281,19 @@ func renderJinjaBoolIfElse(t *testing.T, template, envelope string) string {
 	if err := json.Unmarshal([]byte(envelope), &vj); err != nil {
 		t.Fatalf("envelope %q is not JSON: %v", envelope, err)
 	}
+	// The field may be nested — `val.is_open` reads the document the status
+	// object carries (ADR 0083).
+	var cur any = vj
+	for _, part := range strings.Split(field, ".") {
+		obj, ok := cur.(map[string]any)
+		if !ok {
+			cur = nil
+			break
+		}
+		cur = obj[part]
+	}
 	truthy := false
-	switch v := vj[field].(type) {
+	switch v := cur.(type) {
 	case bool:
 		truthy = v
 	case float64:
@@ -256,7 +314,7 @@ func renderJinjaBoolIfElse(t *testing.T, template, envelope string) string {
 //
 // 1. Discovery payload declares value_template with `| lower` filter.
 // 2. state_on = "true", state_off = "false" (lowercase).
-// 3. PerDPState envelope {"value":true} → rendered by value_template → "true".
+// 3. Status object {"val":true,…} → rendered by value_template → "true".
 // 4. Rendered output matches state_on (not the Python-capitalised "True").
 func TestDiscoveryRoundTrip_Switch(t *testing.T) {
 	t.Parallel()
@@ -281,11 +339,11 @@ func TestDiscoveryRoundTrip_Switch(t *testing.T) {
 	}
 
 	// --- Surface 2: Template render -----------------------------------------
-	// PerDPState: {"value":true} — Go JSON encodes bool as lowercase "true".
-	rendered := renderJinja(t, valueTemplate, `{"value":true,"available":true}`)
+	// Status object {"val":true,…} — Go JSON encodes bool as lowercase "true".
+	rendered := renderJinja(t, valueTemplate, rtDPStatus(t, true))
 	if rendered != "true" {
 		t.Errorf("rendered value_template = %q, want %q\n"+
-			"  template: %q\n  envelope: {\"value\":true}\n"+
+			"  template: %q\n  envelope: {\"val\":true}\n"+
 			"  (Go JSON bool is lowercase; Jinja | lower must keep it lowercase)",
 			rendered, "true", valueTemplate)
 	}
@@ -294,7 +352,7 @@ func TestDiscoveryRoundTrip_Switch(t *testing.T) {
 	}
 
 	// Negative: off state.
-	renderedOff := renderJinja(t, valueTemplate, `{"value":false,"available":true}`)
+	renderedOff := renderJinja(t, valueTemplate, rtDPStatus(t, false))
 	if renderedOff != stateOff {
 		t.Errorf("off render %q does not match state_off %q", renderedOff, stateOff)
 	}
@@ -354,7 +412,7 @@ func TestDiscoveryRoundTrip_Lock(t *testing.T) {
 // TestDiscoveryRoundTrip_BinarySensor verifies:
 // 1. payload_on / payload_off use lowercase ("true"/"false").
 // 2. value_template contains `| lower`.
-// 3. Round-trip from {"value":true} → "true" == payload_on.
+// 3. Round-trip from {"val":true,…} → "true" == payload_on.
 func TestDiscoveryRoundTrip_BinarySensor(t *testing.T) {
 	t.Parallel()
 	// Use a read-only STATE parameter → classified as binary_sensor (writability downgrade).
@@ -378,12 +436,12 @@ func TestDiscoveryRoundTrip_BinarySensor(t *testing.T) {
 	}
 
 	// Round-trip.
-	rendered := renderJinja(t, valueTemplate, `{"value":true,"available":true}`)
+	rendered := renderJinja(t, valueTemplate, rtDPStatus(t, true))
 	if rendered != payloadOn {
 		t.Errorf("binary_sensor render %q != payload_on %q — sensor stays 'unknown'", rendered, payloadOn)
 	}
 
-	renderedOff := renderJinja(t, valueTemplate, `{"value":false,"available":true}`)
+	renderedOff := renderJinja(t, valueTemplate, rtDPStatus(t, false))
 	if renderedOff != payloadOff {
 		t.Errorf("binary_sensor off render %q != payload_off %q", renderedOff, payloadOff)
 	}
@@ -414,7 +472,7 @@ func TestDiscoveryRoundTrip_Sensor(t *testing.T) {
 	}
 
 	// Round-trip: float value.
-	rendered := renderJinja(t, valueTemplate, `{"value":22.5,"available":true}`)
+	rendered := renderJinja(t, valueTemplate, rtDPStatus(t, 22.5))
 	if rendered != "22.5" {
 		t.Errorf("sensor render = %q, want %q", rendered, "22.5")
 	}
@@ -456,7 +514,7 @@ func TestDiscoveryRoundTrip_Light(t *testing.T) {
 
 	// Round-trip: float LEVEL 0.75 renders numerically.
 	if vt, has := payload["value_template"].(string); has {
-		rendered := renderJinja(t, vt, `{"value":0.75,"available":true}`)
+		rendered := renderJinja(t, vt, rtDPStatus(t, 0.75))
 		if rendered == "" {
 			t.Errorf("light value_template rendered empty for {value:0.75}")
 		}
@@ -503,11 +561,11 @@ func TestDiscoveryRoundTrip_Cover(t *testing.T) {
 	stateClosed := mustBodyString(t, body, "state_closed")
 
 	// Round-trip the aggregated envelope through the builder's own template.
-	openEnv := `{"state":"open","current_position":75}`
+	openEnv := rtDocStatus(t, `{"state":"open","current_position":75}`)
 	if got := renderJinja(t, valueTemplate, openEnv); got != stateOpen {
 		t.Errorf("cover value_template render = %q, want state_open %q", got, stateOpen)
 	}
-	closedEnv := `{"state":"closed","current_position":0}`
+	closedEnv := rtDocStatus(t, `{"state":"closed","current_position":0}`)
 	if got := renderJinja(t, valueTemplate, closedEnv); got != stateClosed {
 		t.Errorf("cover value_template render = %q, want state_closed %q", got, stateClosed)
 	}
@@ -556,17 +614,17 @@ func TestDiscoveryRoundTrip_Climate(t *testing.T) {
 	body := buildClimateBody(t)
 
 	curTempTemplate := mustBodyString(t, body, "current_temperature_template")
-	if got := renderJinja(t, curTempTemplate, `{"value":21.5,"available":true,"unit":"°C"}`); got != "21.5" {
+	if got := renderJinja(t, curTempTemplate, rtDPStatus(t, 21.5)); got != "21.5" {
 		t.Errorf("climate current_temperature render = %q, want %q", got, "21.5")
 	}
 
 	setpointTemplate := mustBodyString(t, body, "temperature_state_template")
-	if got := renderJinja(t, setpointTemplate, `{"value":19.5,"available":true,"unit":"°C"}`); got != "19.5" {
+	if got := renderJinja(t, setpointTemplate, rtDPStatus(t, 19.5)); got != "19.5" {
 		t.Errorf("climate temperature_state render = %q, want %q", got, "19.5")
 	}
 
 	modeTemplate := mustBodyString(t, body, "mode_state_template")
-	if got := renderJinja(t, modeTemplate, `{"hvac_mode":"heat","action":"heating"}`); got != "heat" {
+	if got := renderJinja(t, modeTemplate, rtDocStatus(t, `{"hvac_mode":"heat","action":"heating"}`)); got != "heat" {
 		t.Errorf("climate mode_state render = %q, want %q", got, "heat")
 	}
 
@@ -601,10 +659,10 @@ func TestDiscoveryRoundTrip_Siren(t *testing.T) {
 	stateOn := mustBodyString(t, body, "state_on")
 	stateOff := mustBodyString(t, body, "state_off")
 
-	if got := renderJinja(t, valueTemplate, `{"state":"on"}`); got != stateOn {
+	if got := renderJinja(t, valueTemplate, rtDocStatus(t, `{"state":"on"}`)); got != stateOn {
 		t.Errorf("siren state_value_template render = %q, want state_on %q", got, stateOn)
 	}
-	if got := renderJinja(t, valueTemplate, `{"state":"off"}`); got != stateOff {
+	if got := renderJinja(t, valueTemplate, rtDocStatus(t, `{"state":"off"}`)); got != stateOff {
 		t.Errorf("siren state_value_template render = %q, want state_off %q", got, stateOff)
 	}
 	// The command surface HA sends payload_on/payload_off to must be present.
@@ -681,10 +739,10 @@ func TestDiscoveryRoundTrip_Valve(t *testing.T) {
 		if !strings.Contains(valueTemplate, "{% if") {
 			t.Errorf("irrigation value_template %q must use the {%% if %%} branch", valueTemplate)
 		}
-		if got := renderJinjaBoolIfElse(t, valueTemplate, `{"is_open":true}`); got != stateOpen {
+		if got := renderJinjaBoolIfElse(t, valueTemplate, rtDocStatus(t, `{"is_open":true}`)); got != stateOpen {
 			t.Errorf("irrigation open render = %q, want state_open %q", got, stateOpen)
 		}
-		if got := renderJinjaBoolIfElse(t, valueTemplate, `{"is_open":false}`); got != stateClosed {
+		if got := renderJinjaBoolIfElse(t, valueTemplate, rtDocStatus(t, `{"is_open":false}`)); got != stateClosed {
 			t.Errorf("irrigation closed render = %q, want state_closed %q", got, stateClosed)
 		}
 		// Binary irrigation must NOT report a position.
@@ -698,7 +756,7 @@ func TestDiscoveryRoundTrip_Valve(t *testing.T) {
 		body := buildModulatingBody(t)
 
 		valueTemplate := mustBodyString(t, body, "value_template")
-		if got := renderJinja(t, valueTemplate, `{"current_level_pct":42}`); got != "42" {
+		if got := renderJinja(t, valueTemplate, rtDocStatus(t, `{"current_level_pct":42}`)); got != "42" {
 			t.Errorf("modulating value_template render = %q, want %q", got, "42")
 		}
 		// Modulating valves report position.
@@ -710,18 +768,20 @@ func TestDiscoveryRoundTrip_Valve(t *testing.T) {
 
 // --- event ------------------------------------------------------------------
 
-// TestDiscoveryRoundTrip_Event_NoValueTemplate pins the contract that
-// mqtt.event entities must NOT have a value_template. HA's mqtt.event
-// component parses the post-value_template payload as JSON and reads
-// `event_type` from it. If a scalar-extracting value_template like
-// `{{ value_json.value }}` is present, HA receives "press_short" (a
-// plain string, not JSON) and logs:
+// TestDiscoveryRoundTrip_Event_TemplateRendersEventJSON pins the contract
+// for mqtt.event entities under the status object (ADR 0083). HA's
+// mqtt.event component parses the post-value_template payload as JSON and
+// reads `event_type` from it. The pulse now carries the type in `val`
+// (`{"val":"press_short","ts":…,"lc":…,"hm":{…}}`), so an event entity
+// WITHOUT a value_template hands HA an object with no `event_type` and every
+// keypress is dropped; one with a scalar-extracting template hands it
+// "press_short", which is not JSON:
 //
 //	"No valid JSON event payload detected, value after processing payload 'press_short'"
 //
-// The fix: drop value_template for event entities so HA receives the
-// raw {"event_type":"press_short"} envelope directly.
-func TestDiscoveryRoundTrip_Event_NoValueTemplate(t *testing.T) {
+// The entity must therefore carry a template that renders a JSON object
+// whose `event_type` is the pulse's `val`.
+func TestDiscoveryRoundTrip_Event_TemplateRendersEventJSON(t *testing.T) {
 	t.Parallel()
 	payload := buildDiscovery(t, mqtt.Event{
 		Interface: "HmIP-RF", DeviceAddress: "AABBCC", ChannelNo: 1,
@@ -741,11 +801,19 @@ func TestDiscoveryRoundTrip_Event_NoValueTemplate(t *testing.T) {
 		t.Errorf("event_types[0] = %v, want %q", typesList[0], "press_short")
 	}
 
-	// THE CRITICAL CONTRACT: no value_template on an event entity.
-	// If value_template is present HA parses the rendered scalar as JSON
-	// and fails with "No valid JSON event payload detected".
-	if vt, has := payload["value_template"]; has {
-		t.Errorf("event entity must NOT have value_template (breaks HA JSON parsing of event_type), got %q", vt)
+	// THE CRITICAL CONTRACT: the rendered template is an event document.
+	vt, has := payload["value_template"].(string)
+	if !has {
+		t.Fatalf("event entity carries no value_template — HA would parse the status object itself, " +
+			"find no event_type and drop every keypress")
+	}
+	rendered := renderJinja(t, vt, rtPulseStatus(t, "press_short"))
+	var eventJSON map[string]any
+	if err := json.Unmarshal([]byte(rendered), &eventJSON); err != nil {
+		t.Fatalf("event value_template %q rendered %q, which is not a JSON object: %v", vt, rendered, err)
+	}
+	if eventJSON["event_type"] != "press_short" {
+		t.Errorf("rendered event_type = %v, want %q (template %q)", eventJSON["event_type"], "press_short", vt)
 	}
 
 	// device_class must be "button" per HA event platform convention.
@@ -754,54 +822,35 @@ func TestDiscoveryRoundTrip_Event_NoValueTemplate(t *testing.T) {
 	}
 }
 
-// TestDiscoveryRoundTrip_Event_JSONPayloadNotBroken verifies the scenario
-// that triggered the bug: if value_template extracted a scalar, the HA
-// event parser would receive a non-JSON string and fail. We simulate
-// what WOULD happen if the template were present, to document the failure
-// mode, and then assert the fix (no template) avoids it.
-func TestDiscoveryRoundTrip_Event_JSONPayloadNotBroken(t *testing.T) {
+// TestDiscoveryRoundTrip_Event_ScalarTemplateBreaksJSON documents the
+// failure mode the event template exists to avoid: the generic
+// scalar-extracting template applied to a pulse renders a bare string,
+// which HA's mqtt.event parser rejects. Pulled from a REAL sensor discovery
+// build so drift in the production template text is caught here too.
+func TestDiscoveryRoundTrip_Event_ScalarTemplateBreaksJSON(t *testing.T) {
 	t.Parallel()
 
-	// Real production event payload — drives the actual builder, not a
-	// hand-typed stand-in, so a regression here fails this test directly.
 	eventPayload := buildDiscovery(t, mqtt.Event{
 		Interface: "HmIP-RF", DeviceAddress: "AABBCC", ChannelNo: 1,
 		Parameter: "PRESS_SHORT", Category: hmenum.DataPointCategoryEvent,
 	})
-	if vt, has := eventPayload["value_template"]; has {
-		t.Fatalf("event entity carries value_template %q — HA's mqtt.event JSON parser breaks on it", vt)
-	}
-
-	// The default scalar-extracting template production applies to every
-	// other per-parameter category — pulled from a REAL sensor discovery
-	// build (not hand-typed) so drift in the production template text is
-	// caught here too.
 	sensorPayload := buildDiscovery(t, mqtt.Event{
 		Interface: "HmIP-RF", DeviceAddress: "AABBCC", ChannelNo: 1,
 		Parameter: "ACTUAL_TEMPERATURE", Category: hmenum.DataPointCategorySensor, Descriptor: &pload.GenericConfig{Unit: "°C"},
 	})
 	genericTemplate := mustStringField(t, sensorPayload, "value_template")
+	if vt, _ := eventPayload["value_template"].(string); vt == genericTemplate {
+		t.Fatalf("event entity carries the generic scalar template %q — HA's mqtt.event JSON parser breaks on it", vt)
+	}
 
-	// The raw state-topic payload an event entity publishes.
-	rawEnvelope := `{"event_type":"press_short"}`
-
-	// Applying the generic scalar template to an event envelope — the bug
-	// this test pins — must NOT produce a JSON object: that scalar output
-	// is exactly what broke HA's mqtt.event parser in production.
-	broken := renderJinja(t, genericTemplate, rawEnvelope)
+	broken := renderJinja(t, genericTemplate, rtPulseStatus(t, "press_short"))
+	if broken != "press_short" {
+		t.Fatalf("generic template rendered %q for a pulse, want the bare type — the demonstrated failure "+
+			"mode no longer applies", broken)
+	}
 	var brokenObj map[string]any
 	if err := json.Unmarshal([]byte(broken), &brokenObj); err == nil {
-		t.Fatalf("scalar template render %q unexpectedly parsed as a JSON object — the demonstrated failure mode no longer applies", broken)
-	}
-
-	// Because production drops value_template for events, HA receives
-	// rawEnvelope untouched and event_type parses out cleanly.
-	var eventJSON map[string]any
-	if err := json.Unmarshal([]byte(rawEnvelope), &eventJSON); err != nil {
-		t.Fatalf("raw event envelope is not valid JSON: %v", err)
-	}
-	if eventJSON["event_type"] != "press_short" {
-		t.Errorf("event_type = %v, want %q", eventJSON["event_type"], "press_short")
+		t.Fatalf("scalar template render %q unexpectedly parsed as a JSON object", broken)
 	}
 }
 
@@ -867,19 +916,19 @@ func TestDiscoveryRoundTrip_GuardEmptyEnvelope(t *testing.T) {
 		t.Errorf("guard rendered %q for non-JSON input, want empty string", renderedNotJSON)
 	}
 
-	// Valid JSON with defined value → guard passes → renders.
-	renderedValid := renderJinja(t, guardedTemplate, `{"value":true}`)
+	// A status object with a defined value → guard passes → renders.
+	renderedValid := renderJinja(t, guardedTemplate, rtDPStatus(t, true))
 	if renderedValid != "true" {
 		t.Errorf("guard with valid input rendered %q, want %q", renderedValid, "true")
 	}
 
 	// Valid JSON whose value is explicitly null — the second half of the
 	// guard, and the one the `is defined` clause does not cover. Without
-	// `value_json.value is not none` the expression reaches the filter with
+	// `value_json.val is not none` the expression reaches the filter with
 	// a Python None and `none | lower` renders the literal string "none",
 	// which HA then compares against payload_on/payload_off and matches
 	// neither: the entity shows a value it was never sent.
-	renderedNull := renderJinja(t, guardedTemplate, `{"value":null}`)
+	renderedNull := renderJinja(t, guardedTemplate, rtDPStatus(t, nil))
 	if renderedNull != "" {
 		t.Errorf("guard rendered %q for an explicit null value, want empty string", renderedNull)
 	}
@@ -900,16 +949,12 @@ func TestDiscoveryRoundTrip_GuardEmptyEnvelope(t *testing.T) {
 // ("true") succeeds.
 func TestDiscoveryRoundTrip_BoolCapitalisation(t *testing.T) {
 	t.Parallel()
-	// Go encodes bool true as lowercase "true" in JSON.
-	envelope := map[string]any{"value": true, "available": true}
-	raw, err := json.Marshal(envelope)
-	if err != nil {
-		t.Fatalf("json.Marshal: %v", err)
-	}
-	envelopeJSON := string(raw)
+	// Go encodes bool true as lowercase "true" in JSON — through the
+	// shared status-object renderer the bridge publishes with.
+	envelopeJSON := rtDPStatus(t, true)
 
 	// Verify Go produces lowercase.
-	if !strings.Contains(envelopeJSON, `"value":true`) {
+	if !strings.Contains(envelopeJSON, `"val":true`) {
 		t.Fatalf("Go json.Marshal(true) did not produce lowercase 'true'; got %q — fundamental encoding assumption violated", envelopeJSON)
 	}
 
@@ -941,9 +986,11 @@ func TestDiscoveryRoundTrip_BoolCapitalisation(t *testing.T) {
 
 // --- multi-press event aggregation ------------------------------------------
 
-// TestDiscoveryRoundTrip_Event_MultiPress verifies that a PRESS_LONG
-// event entity also drops value_template — the same fix applies to all
-// press-event variants.
+// TestDiscoveryRoundTrip_Event_MultiPress verifies that every press-event
+// variant carries the same event-document template as PRESS_SHORT (see
+// TestDiscoveryRoundTrip_Event_TemplateRendersEventJSON): under the status
+// object a missing template hands HA no `event_type`, a scalar one breaks
+// its JSON parsing.
 func TestDiscoveryRoundTrip_Event_MultiPress(t *testing.T) {
 	t.Parallel()
 	for _, param := range []string{"PRESS_SHORT", "PRESS_LONG", "PRESS_LONG_RELEASE", "PRESS_LONG_START"} {
@@ -953,8 +1000,13 @@ func TestDiscoveryRoundTrip_Event_MultiPress(t *testing.T) {
 				Interface: "HmIP-RF", DeviceAddress: "AABBCC", ChannelNo: 1,
 				Parameter: param, Category: hmenum.DataPointCategoryEvent,
 			})
-			if _, has := p["value_template"]; has {
-				t.Errorf("%s event entity must NOT have value_template (breaks mqtt.event JSON parsing)", param)
+			vt, _ := p["value_template"].(string)
+			rendered := renderJinja(t, vt, rtPulseStatus(t, strings.ToLower(param)))
+			var doc map[string]any
+			want := strings.ToLower(param)
+			if err := json.Unmarshal([]byte(rendered), &doc); err != nil || doc["event_type"] != want {
+				t.Errorf("%s event template %q rendered %q, want a JSON document with event_type %q",
+					param, vt, rendered, want)
 			}
 			if _, has := p["event_types"]; !has {
 				t.Errorf("%s event entity missing event_types", param)
@@ -984,7 +1036,7 @@ func TestDiscoveryRoundTrip_Number(t *testing.T) {
 	if strings.Contains(vt, "| lower") {
 		t.Errorf("number value_template %q must NOT apply | lower to a float", vt)
 	}
-	rendered := renderJinja(t, vt, `{"value":-2.5,"available":true}`)
+	rendered := renderJinja(t, vt, rtDPStatus(t, -2.5))
 	if rendered != "-2.5" {
 		t.Errorf("number render = %q, want %q", rendered, "-2.5")
 	}
@@ -1021,7 +1073,7 @@ func TestDiscoveryRoundTrip_Select(t *testing.T) {
 	if !strings.Contains(vt, "| lower") {
 		t.Errorf("select value_template %q must apply | lower so the state matches the lower-cased options", vt)
 	}
-	rendered := renderJinja(t, vt, `{"value":"AUTO","available":true}`)
+	rendered := renderJinja(t, vt, rtDPStatus(t, "AUTO"))
 	if rendered != "auto" {
 		t.Errorf("select render = %q, want %q", rendered, "auto")
 	}
@@ -1047,7 +1099,7 @@ func TestDiscoveryRoundTrip_Text(t *testing.T) {
 	if !ok || vt == "" {
 		t.Fatal("text-style sensor must have value_template")
 	}
-	rendered := renderJinja(t, vt, `{"value":"Hello World","available":true}`)
+	rendered := renderJinja(t, vt, rtDPStatus(t, "Hello World"))
 	if rendered != "Hello World" {
 		t.Errorf("text render = %q, want %q", rendered, "Hello World")
 	}

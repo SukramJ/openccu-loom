@@ -350,6 +350,16 @@ north:
     # Valid range: 500–30000. Zero falls back to the default.  [default: 2000]
     retain_cleanup_window_ms: 2000
 
+    # mqtt-smarthome 2.0 maintenance topics under <topic_base>/maintenance/
+    # (ADR 0083): set/loglevel (error|warn|info|debug, not persisted),
+    # set/restart (only when a supervisor restarts the daemon; refused
+    # otherwise) and the retained process statistics on `stats`. Anyone
+    # allowed to publish on the broker can use them — the broker's ACLs are
+    # the only gate, so switch this off on a broker you do not trust.
+    maintenance:
+      enabled: true                 # [default: true]
+      stats_interval_seconds: 60    # 0 = no statistics  [default: 60]
+
 
   # =============================================================================
   # NORTH — Matter bridge

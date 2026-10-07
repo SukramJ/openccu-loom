@@ -14,7 +14,7 @@ package contract
 //
 // What a PASS here does NOT mean: that anything publishes the topic. A
 // builder nobody calls renders its documented string perfectly, which is
-// how `<base>/<central>/hub/status` stayed pinned and green while no
+// how `<base>/<central>/hub/status` (today `<name>/status/<central>/online`) stayed pinned and green while no
 // daemon build ever put a byte on it. That half is
 // TestMQTTDocumentedTopicsHaveAProducer's job
 // (mqtt_topic_schema_producer_test.go).
@@ -47,6 +47,9 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	hamodel "github.com/SukramJ/go-hamqtt/model"
+	hatopic "github.com/SukramJ/go-hamqtt/topic"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
@@ -88,19 +91,19 @@ func stateTopicCases() []docTopicCase {
 			// §"State topics" table row 1: Per-DP VALUES state
 			// §"Concrete mapping examples" / "Actual temperature"
 			name:     "values-state/ACTUAL_TEMPERATURE",
-			docTopic: "openccu-loom/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/1/values/ACTUAL_TEMPERATURE",
+			docTopic: "openccu-loom/status/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/1/values/ACTUAL_TEMPERATURE",
 			got:      b.ParameterState(central, iface, addr, ch, payload.BucketValues, "ACTUAL_TEMPERATURE"),
 		},
 		{
 			// §"State topics" table row 2: Per-DP MASTER state
 			name:     "master-state/TEMPERATURE_MINIMUM",
-			docTopic: "openccu-loom/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/1/master/TEMPERATURE_MINIMUM",
+			docTopic: "openccu-loom/status/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/1/master/TEMPERATURE_MINIMUM",
 			got:      b.ParameterState(central, iface, addr, ch, payload.BucketMaster, "TEMPERATURE_MINIMUM"),
 		},
 		{
 			// §"State topics" table row 3: Custom-DP derived state
 			name:     "custom-state/climate",
-			docTopic: "openccu-loom/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/1/custom/climate",
+			docTopic: "openccu-loom/status/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/1/custom/climate",
 			got: b.SlotState(central, iface, payload.TopicSlot{
 				Address:   addr,
 				Channel:   ch,
@@ -111,19 +114,19 @@ func stateTopicCases() []docTopicCase {
 		{
 			// §"State topics" table row 4: Device availability
 			name:     "device-availability",
-			docTopic: "openccu-loom/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/availability",
+			docTopic: "openccu-loom/status/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/online",
 			got:      b.DeviceAvailability(central, iface, addr),
 		},
 		{
 			// §"State topics" table row 5: Device info snapshot
 			name:     "device-info",
-			docTopic: "openccu-loom/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/info",
+			docTopic: "openccu-loom/status/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/info",
 			got:      b.DeviceInfo(central, iface, addr),
 		},
 		{
 			// §"State topics" table row 6: Device diagnostics
 			name:     "device-diagnostics",
-			docTopic: "openccu-loom/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/diagnostics",
+			docTopic: "openccu-loom/status/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/diagnostics",
 			got:      b.DeviceDiagnostics(central, iface, addr),
 		},
 	}
@@ -153,20 +156,20 @@ func commandTopicCases() []docTopicCase {
 			// §"Command topics" table row 1: Write single parameter VALUES
 			// §"Concrete mapping examples" / "Set-point temperature"
 			name:     "values-set/SET_POINT_TEMPERATURE",
-			docTopic: "openccu-loom/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/1/values/SET_POINT_TEMPERATURE/set",
+			docTopic: "openccu-loom/set/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/1/values/SET_POINT_TEMPERATURE",
 			got:      b.ParameterCommand(central, iface, addr, ch, payload.BucketValues, "SET_POINT_TEMPERATURE"),
 		},
 		{
 			// §"Command topics" table row 2: Write MASTER parameter
 			name:     "master-set/TEMPERATURE_MINIMUM",
-			docTopic: "openccu-loom/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/1/master/TEMPERATURE_MINIMUM/set",
+			docTopic: "openccu-loom/set/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/1/master/TEMPERATURE_MINIMUM",
 			got:      b.ParameterCommand(central, iface, addr, ch, payload.BucketMaster, "TEMPERATURE_MINIMUM"),
 		},
 		{
 			// §"Command topics" table row 3: Custom-DP service method
 			// §"Concrete mapping examples" / "Climate service method"
 			name:     "custom-service-method/climate/set_mode",
-			docTopic: "openccu-loom/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/1/custom/climate/set/set_mode",
+			docTopic: "openccu-loom/set/GoOtto/GoOtto-HmIP-RF/000C9709AEF157/1/custom/climate/set_mode",
 			got: b.CustomDPServiceMethod(central, iface,
 				payload.TopicSlot{Address: addr, Channel: ch, Bucket: payload.BucketCustom, Parameter: "climate"},
 				"set_mode"),
@@ -194,16 +197,40 @@ func bridgeHubTopicCases() []docTopicCase {
 
 	cases := []docTopicCase{
 		{
-			// §"Bridge / hub status" row: Bridge online/offline (LWT)
-			name:     "bridge-status",
-			docTopic: "openccu-loom/bridge/status",
-			got:      b.BridgeStatus(),
+			// §"Instance topics" row: connection level (Last Will)
+			// §"Concrete examples" / "Instance level"
+			name:     "connected",
+			docTopic: "openccu-loom/connected",
+			got:      b.Connected(),
 		},
 		{
-			// §"Bridge / hub status" row: Bridge health
-			name:     "bridge-health",
-			docTopic: "openccu-loom/bridge/health",
-			got:      b.BridgeHealth(),
+			// §"Instance topics" row: instance introspection
+			name:     "info",
+			docTopic: "openccu-loom/info",
+			got:      b.Info(),
+		},
+		{
+			// §"Instance topics" rows: maintenance stats and commands
+			name:     "maintenance-stats",
+			docTopic: "openccu-loom/maintenance/stats",
+			got:      b.Maintenance("stats"),
+		},
+		{
+			name:     "maintenance-loglevel",
+			docTopic: "openccu-loom/maintenance/set/loglevel",
+			got:      b.Maintenance("set", "loglevel"),
+		},
+		{
+			name:     "maintenance-restart",
+			docTopic: "openccu-loom/maintenance/set/restart",
+			got:      b.Maintenance("set", "restart"),
+		},
+		{
+			// §"Bridge / hub status" row: CCU reachability gate
+			// §"Concrete examples" / "CCU reachability"
+			name:     "hub-status",
+			docTopic: "openccu-loom/status/GoOtto/online",
+			got:      b.HubStatus(central),
 		},
 		{
 			// §"Reserved `hub/` shapes" row — NOT a published topic.
@@ -211,14 +238,8 @@ func bridgeHubTopicCases() []docTopicCase {
 			// publishes it is asserted by
 			// TestMQTTDocumentedTopicsHaveAProducer, which this test
 			// cannot see (ADR 0011, amendment 2026-09-12).
-			name:     "hub-status-reserved",
-			docTopic: "openccu-loom/GoOtto/hub/status",
-			got:      b.HubStatus(central),
-		},
-		{
-			// §"Reserved `hub/` shapes" row — NOT a published topic.
 			name:     "hub-info-reserved",
-			docTopic: "openccu-loom/GoOtto/hub/info",
+			docTopic: "openccu-loom/status/GoOtto/hub/info",
 			got:      b.HubInfo(central),
 		},
 		{
@@ -226,39 +247,61 @@ func bridgeHubTopicCases() []docTopicCase {
 			// never documented as one. It reached no pin at all before
 			// the reserved table existed.
 			name:     "hub-diagnostics-reserved",
-			docTopic: "openccu-loom/GoOtto/hub/diagnostics",
+			docTopic: "openccu-loom/status/GoOtto/hub/diagnostics",
 			got:      b.HubDiagnostics(central),
 		},
 		{
 			// §"Bridge / hub status" row: System-variable state
-			// §"Concrete mapping examples" / "System variable"
+			// §"Concrete examples" / "System variable"
 			name:     "hub-sysvar-state/Presence",
-			docTopic: "openccu-loom/GoOtto/hub/sysvars/Presence/state",
+			docTopic: "openccu-loom/status/GoOtto/hub/sysvars/Presence",
 			got:      naming.MQTTHubSysvarState(b.Base, central, "Presence"),
 		},
 		{
 			// §"Bridge / hub status" row: System-variable set
 			name:     "hub-sysvar-set/Presence",
-			docTopic: "openccu-loom/GoOtto/hub/sysvars/Presence/set",
+			docTopic: "openccu-loom/set/GoOtto/hub/sysvars/Presence",
 			got:      naming.MQTTHubSysvarCommand(b.Base, central, "Presence"),
+		},
+		{
+			// §"Bridge / hub status" rows: program activation, status and set
+			name:     "hub-program-active/12",
+			docTopic: "openccu-loom/status/GoOtto/hub/programs/12/active",
+			got:      naming.MQTTHubProgramState(b.Base, central, "12"),
+		},
+		{
+			name:     "hub-program-active-set/12",
+			docTopic: "openccu-loom/set/GoOtto/hub/programs/12/active",
+			got:      naming.MQTTHubProgramSet(b.Base, central, "12"),
 		},
 		{
 			// §"Bridge / hub status" row: Program trigger
 			name:     "hub-program-trigger/12",
-			docTopic: "openccu-loom/GoOtto/hub/programs/12/trigger",
+			docTopic: "openccu-loom/set/GoOtto/hub/programs/12/trigger",
 			got:      naming.MQTTHubProgramTrigger(b.Base, central, "12"),
 		},
 		{
 			// §"Bridge / hub status" row: Interface connectivity
 			name:     "hub-connectivity/GoOtto-HmIP-RF",
-			docTopic: "openccu-loom/GoOtto/hub/connectivity/GoOtto-HmIP-RF",
+			docTopic: "openccu-loom/status/GoOtto/hub/connectivity/GoOtto-HmIP-RF",
 			got:      naming.MQTTHubConnectivity(b.Base, central, iface),
 		},
 		{
 			// §"Bridge / hub status" row: System status event
 			name:     "system-status",
-			docTopic: "openccu-loom/GoOtto/system/status",
+			docTopic: "openccu-loom/status/GoOtto/system/status",
 			got:      b.SystemStatus(central),
+		},
+		{
+			// §"Bridge / hub status" row: add-on self-update (daemon-level)
+			name:     "addon-update-state",
+			docTopic: "openccu-loom/status/system/addon_update",
+			got:      b.AddonUpdateState(),
+		},
+		{
+			name:     "addon-update-set",
+			docTopic: "openccu-loom/set/system/addon_update",
+			got:      b.AddonUpdateCommand(),
 		},
 	}
 
@@ -325,6 +368,64 @@ func TestMQTTTopicSchemaDoc_DiscoveryNodeScopeIsNotATopic(t *testing.T) {
 	if scope := mqtt.NewTopicBuilder("").DiscoveryNodeScope(); scope != "" {
 		t.Errorf("an empty topic base produced scope %q; NewTopicBuilder fills in the default, so it "+
 			"must reach the same answer as naming it", scope)
+	}
+}
+
+// TestMQTTTopicSchemaDoc_GrammarIsTheSharedLayouts pins this daemon's
+// hand-composed topics against go-hamqtt's topic.SmartHome — the layout the
+// five sibling bridges render through. ADR 0083's whole point is one grammar
+// for six projects; a builder that drifts from the shared spelling by one
+// segment is a seventh grammar that every consumer has to learn, and the
+// doctests above would agree with it because they pin this builder against
+// this document. Both a single-level and a multi-level base are checked —
+// the multi-level one through NewSmartHomeMultiLevel, the constructor that
+// exists for exactly this daemon's accepted `home/loom` bases.
+func TestMQTTTopicSchemaDoc_GrammarIsTheSharedLayouts(t *testing.T) {
+	t.Parallel()
+	for _, base := range []string{"openccu-loom", "home/loom"} {
+		layout, err := hatopic.NewSmartHomeMultiLevel(base)
+		if err != nil {
+			t.Fatalf("NewSmartHomeMultiLevel(%q): %v", base, err)
+		}
+		b := mqtt.NewTopicBuilder(base)
+		const (
+			central = "GoOtto"
+			addr    = "000C9709AEF157"
+		)
+		iface := hmtypes.NewWireInterfaceID(central, hmenum.InterfaceHmIPRF).String()
+		cases := []docTopicCase{
+			{name: base + "/connected", docTopic: layout.Connected(), got: b.Connected()},
+			{name: base + "/info", docTopic: layout.Info(), got: b.Info()},
+			{name: base + "/maintenance/stats", docTopic: layout.Maintenance("stats"), got: b.Maintenance("stats")},
+			{
+				name:     base + "/status/values",
+				docTopic: layout.Status(central, iface, addr, "1", "values", "ACTUAL_TEMPERATURE"),
+				got:      b.ParameterState(central, iface, addr, 1, payload.BucketValues, "ACTUAL_TEMPERATURE"),
+			},
+			{
+				name:     base + "/set/values",
+				docTopic: layout.Set(central, iface, addr, "1", "values", "SET_POINT_TEMPERATURE"),
+				got:      b.ParameterCommand(central, iface, addr, 1, payload.BucketValues, "SET_POINT_TEMPERATURE"),
+			},
+			{
+				name:     base + "/meta/values",
+				docTopic: layout.Meta(central, iface, addr, "1", "values", "SET_POINT_TEMPERATURE"),
+				got:      b.ParameterConfig(central, iface, addr, 1, payload.BucketValues, "SET_POINT_TEMPERATURE"),
+			},
+			{
+				// The shared layout's device availability is the device's
+				// `online` status item below its scope.
+				name:     base + "/status/online",
+				docTopic: layout.Availability(hamodel.Slot{Scope: []string{central, iface}, Address: addr}),
+				got:      b.DeviceAvailability(central, iface, addr),
+			},
+		}
+		for _, tc := range cases {
+			if tc.got != tc.docTopic {
+				t.Errorf("%s: this daemon spells %q, go-hamqtt's SmartHome layout spells %q — one "+
+					"grammar for six projects (ADR 0083) means the two may not differ", tc.name, tc.got, tc.docTopic)
+			}
+		}
 	}
 }
 

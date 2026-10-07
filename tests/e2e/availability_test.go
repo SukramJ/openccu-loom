@@ -38,7 +38,7 @@ const availabilityCheckInterval = 2 * time.Second
 //     reporting every device online for as long as the daemon ran.
 //
 //  3. A graceful shutdown. A broker discards the Last Will of a client that
-//     disconnects cleanly, so `<base>/bridge/status` — the first availability
+//     disconnects cleanly, so `<base>/connected` (the old `bridge/status`) — the first availability
 //     source of every discovery payload the daemon emits — stayed retained at
 //     `online` after a normal stop, while a SIGKILL reported it correctly.
 //
@@ -63,16 +63,17 @@ func TestE2EAvailabilityFollowsTheCCUAndTheShutdown(t *testing.T) {
 	}
 
 	// Phase 0 — the daemon is up and reports the fleet as reachable.
-	if awaitTopic(t, h.MQTT(), "openccu-loom/bridge/status", 45*time.Second, func(_ string, payload []byte) bool {
-		return strings.TrimSpace(string(payload)) == "online"
+	// `connected` = 2 is "at least one central reachable" (ADR 0083).
+	if awaitTopic(t, h.MQTT(), "openccu-loom/connected", 45*time.Second, func(_ string, payload []byte) bool {
+		return connectedAtLeast(payload, 2)
 	}) == "" {
-		t.Fatal("bridge/status never went online")
+		t.Fatal("connected never reached level 2")
 	}
 	devices := getJSONArray(t, h, "/api/v1/devices", "items")
 	addr := firstAvailableDevice(t, devices)
 	t.Logf("device under test: %s", addr)
 
-	availFilter := "openccu-loom/ccu-e2e/+/" + addr + "/availability"
+	availFilter := "openccu-loom/status/ccu-e2e/+/" + addr + "/online"
 
 	// Phase 1 — one device goes unreachable. The stimulus is the CCU's own
 	// UNREACH report on the maintenance channel, i.e. exactly the suppressed
@@ -84,7 +85,7 @@ func TestE2EAvailabilityFollowsTheCCUAndTheShutdown(t *testing.T) {
 		t.Fatalf("REST still reports %s available after UNREACH", addr)
 	}
 	if awaitTopic(t, h.MQTT(), availFilter, 30*time.Second, func(_ string, payload []byte) bool {
-		return strings.TrimSpace(string(payload)) == "offline"
+		return statusObjectBool(payload, false)
 	}) == "" {
 		t.Fatalf("retained availability topic for %s never went offline after UNREACH", addr)
 	}
@@ -98,7 +99,7 @@ func TestE2EAvailabilityFollowsTheCCUAndTheShutdown(t *testing.T) {
 		t.Fatalf("REST still reports %s unavailable after UNREACH cleared", addr)
 	}
 	if awaitTopic(t, h.MQTT(), availFilter, 30*time.Second, func(_ string, payload []byte) bool {
-		return strings.TrimSpace(string(payload)) == "online"
+		return statusObjectBool(payload, true)
 	}) == "" {
 		t.Fatalf("retained availability topic for %s never went back online", addr)
 	}
@@ -119,7 +120,7 @@ func TestE2EAvailabilityFollowsTheCCUAndTheShutdown(t *testing.T) {
 		t.Fatalf("GET /api/v1/devices still reports %s available after the CCU died", addr)
 	}
 	if awaitTopic(t, h.MQTT(), availFilter, 30*time.Second, func(_ string, payload []byte) bool {
-		return strings.TrimSpace(string(payload)) == "offline"
+		return statusObjectBool(payload, false)
 	}) == "" {
 		t.Fatalf("retained availability topic for %s never went offline after the CCU died", addr)
 	}
@@ -128,21 +129,21 @@ func TestE2EAvailabilityFollowsTheCCUAndTheShutdown(t *testing.T) {
 	// clean MQTT DISCONNECT: the broker drops the will, so the daemon has to
 	// retract the marker itself.
 	offline := make(chan struct{}, 1)
-	if err := h.MQTT().Subscribe("openccu-loom/bridge/status", func(_ string, payload []byte, _ bool) {
-		if strings.TrimSpace(string(payload)) == "offline" {
+	if err := h.MQTT().Subscribe("openccu-loom/connected", func(_ string, payload []byte, _ bool) {
+		if strings.TrimSpace(string(payload)) == "0" {
 			select {
 			case offline <- struct{}{}:
 			default:
 			}
 		}
 	}); err != nil {
-		t.Fatalf("subscribe bridge/status: %v", err)
+		t.Fatalf("subscribe connected: %v", err)
 	}
 	h.Stop()
 	select {
 	case <-offline:
 	case <-time.After(20 * time.Second):
-		t.Fatal("bridge/status never went offline after a graceful shutdown")
+		t.Fatal("connected never went to 0 after a graceful shutdown")
 	}
 }
 

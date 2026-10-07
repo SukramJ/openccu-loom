@@ -157,6 +157,30 @@ func securityPlaneJSONObject(t *testing.T, label string, payload []byte) map[str
 	return body
 }
 
+// securityPlaneFacets reads a security aggregate's status object (ADR 0083)
+// and returns its `hm` facets — the attribute source the discovery config
+// reads with `{{ value_json.hm | tojson }}`. It fails when the payload is
+// not a status object: no `val`, no integer `ts`/`lc`, or `hm` that is not
+// an object, which a consumer's recorder would discard outright.
+func securityPlaneFacets(t *testing.T, label string, payload []byte) map[string]any {
+	t.Helper()
+	body := securityPlaneJSONObject(t, label, payload)
+	if _, ok := body["val"]; !ok {
+		t.Fatalf("%s: status object carries no `val`: %s", label, payload)
+	}
+	for _, key := range []string{"ts", "lc"} {
+		n, ok := body[key].(float64)
+		if !ok || n != float64(int64(n)) || n <= 0 {
+			t.Fatalf("%s: status object `%s` = %v, want integer milliseconds: %s", label, key, body[key], payload)
+		}
+	}
+	hm, ok := body["hm"].(map[string]any)
+	if !ok {
+		t.Fatalf("%s: status object facets `hm` = %v, want a JSON object: %s", label, body["hm"], payload)
+	}
+	return hm
+}
+
 // manySecuritySources builds n distinct source refs under one class, so
 // a test can push the reconcile path's attribute list past its
 // truncation cap without depending on the cap's exact value.
@@ -267,11 +291,11 @@ func TestSecurityPlane_EventTopicsNeverRetained(t *testing.T) {
 	// It does republish the retained half, which is where the ledger
 	// facts live now — so waiting on that proves the event was dispatched
 	// rather than merely slow, and makes the absence below meaningful.
-	waitForSecurityTopic(t, pub, securityPlaneBase+"/security/problem", func(r securityPlaneRecord) bool { return r.retain })
-	if rec, found := findSecurityTopic(pub, securityPlaneBase+"/security/fault"); found {
+	waitForSecurityTopic(t, pub, securityPlaneBase+"/status/security/problem", func(r securityPlaneRecord) bool { return r.retain })
+	if rec, found := findSecurityTopic(pub, securityPlaneBase+"/status/security/fault"); found {
 		t.Errorf("a ledger transition published %q on the fault event topic: %s — "+
 			"the topic has one producer, and a second payload shape makes every "+
-			"consumer field intermittent", securityPlaneBase+"/security/fault", rec.payload)
+			"consumer field intermittent", securityPlaneBase+"/status/security/fault", rec.payload)
 	}
 
 	bus.Publish(hmevent.SecurityNotificationEvent{
@@ -287,7 +311,7 @@ func TestSecurityPlane_EventTopicsNeverRetained(t *testing.T) {
 		// below.
 		Retainable: false,
 	})
-	faultRec := waitForSecurityTopic(t, pub, securityPlaneBase+"/security/fault", nil)
+	faultRec := waitForSecurityTopic(t, pub, securityPlaneBase+"/status/security/fault", nil)
 	if faultRec.retain {
 		t.Errorf("security/fault publish has retain=true, want false")
 	}
@@ -305,19 +329,31 @@ func TestSecurityPlane_EventTopicsNeverRetained(t *testing.T) {
 		Fault:      false,
 		Retainable: true,
 	})
-	eventRec := waitForSecurityTopic(t, pub, securityPlaneBase+"/security/event", nil)
+	eventRec := waitForSecurityTopic(t, pub, securityPlaneBase+"/status/security/event", nil)
 	if eventRec.retain {
 		t.Errorf("security/event publish has retain=true, want false")
 	}
 	if eventRec.qos != mqtt.QoS0 {
 		t.Errorf("security/event publish has QoS %v, want QoS0", eventRec.qos)
 	}
+	// An event is a status item (ADR 0083): its verb is `val`, the rendered
+	// report travels under `hm`, and the verb is not duplicated there.
+	eventFacets := securityPlaneFacets(t, "security/event", eventRec.payload)
+	if got := securityPlaneJSONObject(t, "security/event", eventRec.payload)["val"]; got != string(hmenum.SecurityVerbTriggered) {
+		t.Errorf("security/event val = %#v, want the verb %q: %s", got, hmenum.SecurityVerbTriggered, eventRec.payload)
+	}
+	if eventFacets["subject"] != "Intrusion" {
+		t.Errorf("security/event hm.subject = %#v, want %q: %s", eventFacets["subject"], "Intrusion", eventRec.payload)
+	}
+	if _, dup := eventFacets["event_type"]; dup {
+		t.Errorf("security/event repeats event_type under hm; the verb is `val`: %s", eventRec.payload)
+	}
 
 	// Contrast: the same Retainable notification also republishes the
 	// retained last_alarm sensor, proving retain=false above is a
 	// deliberate split and not an accident that dropped retention
 	// everywhere.
-	lastAlarmRec := waitForSecurityTopic(t, pub, securityPlaneBase+"/security/last_alarm", func(r securityPlaneRecord) bool { return r.retain })
+	lastAlarmRec := waitForSecurityTopic(t, pub, securityPlaneBase+"/status/security/last_alarm", func(r securityPlaneRecord) bool { return r.retain })
 	if !lastAlarmRec.retain {
 		t.Errorf("security/last_alarm publish has retain=false, want true")
 	}
@@ -368,29 +404,37 @@ func TestSecurityPlane_AttributePayloadsAreObjects(t *testing.T) {
 	p.Start(bus)
 	t.Cleanup(p.Stop)
 
-	// enqueueJSON (security_reconcile.go) always injects a "state" key on
-	// top of whatever the builder returns, so `len(body) == 0` cannot
-	// distinguish a gutted builder from a working one — both payloads
-	// carry that one key. Assert the fields each builder actually owns
-	// instead: systemAttributes / hazardAttributes / faultAttributes /
-	// classAttributes / zoneAttributes in internal/north/mqtt/
-	// security_reconcile.go.
+	// The facets travel under `hm` (ADR 0083), the primary value in `val`.
+	// An empty `hm` object would still be "an object", so assert the fields
+	// each builder actually owns: systemAttributes / hazardAttributes /
+	// faultAttributes / classAttributes / zoneAttributes in
+	// internal/north/mqtt/security_reconcile.go. The primary value is
+	// pinned alongside — the severity token, a boolean, the source count —
+	// because the field the plane used to publish as `state` must now be
+	// `val` and nowhere else.
 	for _, tc := range []struct {
 		topic    string
 		wantKeys []string
+		wantVal  any
 	}{
-		{securityPlaneBase + "/security/state", []string{"classes", "zones", "open_faults", "engine_healthy"}},
-		{securityPlaneBase + "/security/alarm", []string{"sources", "source_names", "count", "truncated", "total", "by_class"}},
-		{securityPlaneBase + "/security/problem", []string{"faults", "count", "truncated", "total"}},
-		{securityPlaneBase + "/security/class/smoke", []string{"sources", "source_names", "count", "truncated", "total", "known", "centrals", "since_ms", "severity"}},
-		{securityPlaneBase + "/security/zone/eg", []string{"sources", "source_names", "count", "truncated", "total", "by_class", "zone_id", "zone_name", "zone_state", "mode", "incident_id"}},
+		{securityPlaneBase + "/status/security/severity", []string{"classes", "zones", "open_faults", "engine_healthy"}, string(hmenum.SecuritySeverityCritical)},
+		{securityPlaneBase + "/status/security/alarm", []string{"sources", "source_names", "count", "truncated", "total", "by_class"}, true},
+		{securityPlaneBase + "/status/security/problem", []string{"faults", "count", "truncated", "total"}, true},
+		{securityPlaneBase + "/status/security/class/smoke", []string{"sources", "source_names", "count", "truncated", "total", "known", "centrals", "since_ms", "severity"}, true},
+		{securityPlaneBase + "/status/security/zone/eg", []string{"sources", "source_names", "count", "truncated", "total", "by_class", "zone_id", "zone_name", "zone_state", "mode", "incident_id"}, float64(2)},
 	} {
 		rec := waitForSecurityTopic(t, pub, tc.topic, nil)
-		body := securityPlaneJSONObject(t, tc.topic, rec.payload)
+		body := securityPlaneFacets(t, tc.topic, rec.payload)
 		for _, key := range tc.wantKeys {
 			if _, ok := body[key]; !ok {
-				t.Errorf("%s: attribute payload missing key %q (builder dropped it): %s", tc.topic, key, rec.payload)
+				t.Errorf("%s: attribute facets missing key %q (builder dropped it): %s", tc.topic, key, rec.payload)
 			}
+		}
+		if _, ok := body["state"]; ok {
+			t.Errorf("%s: facets still carry `state`; the primary value belongs in `val`: %s", tc.topic, rec.payload)
+		}
+		if got := securityPlaneJSONObject(t, tc.topic, rec.payload)["val"]; got != tc.wantVal {
+			t.Errorf("%s: val = %#v, want %#v: %s", tc.topic, got, tc.wantVal, rec.payload)
 		}
 	}
 }
@@ -428,8 +472,8 @@ func TestSecurityPlane_TruncationIsAnnounced(t *testing.T) {
 	p.Start(bus)
 	t.Cleanup(p.Stop)
 
-	rec := waitForSecurityTopic(t, pub, securityPlaneBase+"/security/class/smoke", nil)
-	body := securityPlaneJSONObject(t, "class/smoke", rec.payload)
+	rec := waitForSecurityTopic(t, pub, securityPlaneBase+"/status/security/class/smoke", nil)
+	body := securityPlaneFacets(t, "class/smoke", rec.payload)
 
 	truncated, ok := body["truncated"].(bool)
 	if !ok || !truncated {

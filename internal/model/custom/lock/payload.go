@@ -53,7 +53,7 @@ func (l *Lock) Config() payload.ConfigPayload {
 //
 // All keys the discovery payload references (lock_state, direction) are
 // emitted unconditionally — HA's `value_template` filters (`{{
-// value_json.lock_state }}`) log a warning the moment they resolve to
+// value_json.val.lock_state }}`) log a warning the moment they resolve to
 // `undefined`, so a fresh lock with no observed state would otherwise
 // spam the operator's HA log on every `state_topic` publish. Pre-event values
 // map to "UNLOCKED" / "" (empty direction) — matches HA's lock-default state.
@@ -175,7 +175,7 @@ func (l *Lock) HADiscoveryEntity() hamodel.Entity {
 		EntityPlatform: hacatalog.PlatformLock,
 		Description: hamodel.Description{
 			// lock_state is the HA lifecycle string the aggregate emits.
-			ValueTemplate: "{{ value_json.lock_state }}",
+			ValueTemplate: "{{ value_json.val.lock_state }}",
 			// optimistic=false — without this HA defaults to true and shows
 			// the lock as locked / unlocked before the CCU echo arrives.
 			// Critical for door locks, where a brief connection drop would

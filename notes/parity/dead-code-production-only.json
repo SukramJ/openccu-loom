@@ -1,15 +1,15 @@
 {
-  "generated": "693a8c0c",
-  "head": "693a8c0c",
+  "generated": "54289deb",
+  "head": "54289deb",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/openccu-loom-remote/main.go",
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 6084,
-    "reachable": 3919,
-    "whitelisted": 2039,
+    "total_exported": 6123,
+    "reachable": 3943,
+    "whitelisted": 2054,
     "unreachable": 126
   },
   "by_package": [
@@ -211,21 +211,21 @@
       "package": "internal/audit",
       "identifier": "AsyncSink",
       "file": "internal/audit/persist.go",
-      "line": 280,
+      "line": 282,
       "kind": "func"
     },
     {
       "package": "internal/auth",
       "identifier": "CSRFToken",
       "file": "internal/auth/csrf.go",
-      "line": 29,
+      "line": 32,
       "kind": "func"
     },
     {
       "package": "internal/auth",
       "identifier": "ErrForbidden",
       "file": "internal/auth/auth.go",
-      "line": 98,
+      "line": 110,
       "kind": "var"
     },
     {
@@ -708,7 +708,7 @@
       "package": "internal/north/mqtt",
       "identifier": "IgnoreMultipleChannelsForNameInspector",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 475,
+      "line": 469,
       "kind": "type"
     },
     {
@@ -1009,14 +1009,14 @@
       "package": "pkg/hmerr",
       "identifier": "ErrorContext",
       "file": "pkg/hmerr/errors.go",
-      "line": 246,
+      "line": 253,
       "kind": "func"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "IntegrationIssue",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 927,
+      "line": 931,
       "kind": "type"
     },
     {
@@ -1149,6 +1149,13 @@
     },
     {
       "package": "internal/auth",
+      "identifier": "CSRFMiddleware",
+      "reason": "wired into the REST router middleware chain for SPA mutation protection",
+      "file": "internal/auth/csrf.go",
+      "line": 61
+    },
+    {
+      "package": "internal/auth",
       "identifier": "ContextWithIdentity",
       "reason": "used by WS upgrade handler and integration tests to inject pre-resolved identity",
       "file": "internal/auth/middleware.go",
@@ -1159,7 +1166,7 @@
       "identifier": "DummyBcryptHash",
       "reason": "auto-whitelist:pattern=mock-fake-stub-dummy",
       "file": "internal/auth/auth.go",
-      "line": 388
+      "line": 400
     },
     {
       "package": "internal/auth",
@@ -1327,7 +1334,7 @@
       "identifier": "HeldDevice",
       "reason": "element type of PendingDeviceSink.Load, which SetPendingDeviceSink consumes on every bring-up; a method-less data struct the analyzer's type heuristic cannot see used",
       "file": "internal/central/coordinators/device.go",
-      "line": 170
+      "line": 180
     },
     {
       "package": "internal/central/coordinators",
@@ -1341,14 +1348,14 @@
       "identifier": "PendingDevice",
       "reason": "element type of PendingDevices(), which PublishPendingDevices calls from the newDevices callback to populate the operator inbox surface; a method-less data struct the analyzer's type heuristic (reachable only via its methods) cannot see used",
       "file": "internal/central/coordinators/device.go",
-      "line": 1217
+      "line": 1271
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "PendingDeviceSink",
       "reason": "port satisfied by adapter.pendingSink and passed to SetPendingDeviceSink from WirePendingDevices; an interface the analyzer resolves only through its concrete implementor, which lives in another package",
       "file": "internal/central/coordinators/device.go",
-      "line": 152
+      "line": 162
     },
     {
       "package": "internal/central/events",
@@ -1705,84 +1712,84 @@
       "identifier": "IncidentRecord",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/client/reliability/incident.go",
-      "line": 114
+      "line": 115
     },
     {
       "package": "internal/client/reliability",
       "identifier": "IncidentRecorder",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/client/reliability/incident.go",
-      "line": 104
+      "line": 105
     },
     {
       "package": "internal/client/reliability",
       "identifier": "IncidentSink",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/client/reliability/incident.go",
-      "line": 155
+      "line": 156
     },
     {
       "package": "internal/client/reliability",
       "identifier": "IncidentSinkFunc",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/client/reliability/incident.go",
-      "line": 164
+      "line": 165
     },
     {
       "package": "internal/client/reliability",
       "identifier": "IsWireFailure",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/client/reliability/circuit.go",
-      "line": 360
+      "line": 363
     },
     {
       "package": "internal/client/reliability",
       "identifier": "JournalEntry",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/client/reliability/pingpong.go",
-      "line": 146
+      "line": 148
     },
     {
       "package": "internal/client/reliability",
       "identifier": "JournalEventEvicted",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/client/reliability/pingpong.go",
-      "line": 140
+      "line": 142
     },
     {
       "package": "internal/client/reliability",
       "identifier": "JournalEventExpired",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/client/reliability/pingpong.go",
-      "line": 139
+      "line": 141
     },
     {
       "package": "internal/client/reliability",
       "identifier": "JournalEventKind",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/client/reliability/pingpong.go",
-      "line": 132
+      "line": 134
     },
     {
       "package": "internal/client/reliability",
       "identifier": "JournalEventMatched",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/client/reliability/pingpong.go",
-      "line": 137
+      "line": 139
     },
     {
       "package": "internal/client/reliability",
       "identifier": "JournalEventSent",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/client/reliability/pingpong.go",
-      "line": 136
+      "line": 138
     },
     {
       "package": "internal/client/reliability",
       "identifier": "JournalEventUnknown",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/client/reliability/pingpong.go",
-      "line": 138
+      "line": 140
     },
     {
       "package": "internal/client/reliability",
@@ -1796,7 +1803,7 @@
       "identifier": "Mismatch",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/client/reliability/pingpong.go",
-      "line": 307
+      "line": 309
     },
     {
       "package": "internal/client/reliability",
@@ -1810,7 +1817,7 @@
       "identifier": "NewCircuitRecoveryWaiter",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/client/reliability/retry.go",
-      "line": 384
+      "line": 383
     },
     {
       "package": "internal/client/reliability",
@@ -1838,7 +1845,7 @@
       "identifier": "NewPingPongTracker",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/client/reliability/pingpong.go",
-      "line": 107
+      "line": 109
     },
     {
       "package": "internal/client/reliability",
@@ -1936,7 +1943,7 @@
       "identifier": "Stats",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/client/reliability/pingpong.go",
-      "line": 155
+      "line": 157
     },
     {
       "package": "internal/client/reliability",
@@ -1957,7 +1964,7 @@
       "identifier": "WireCircuitIncidents",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/client/reliability/incident.go",
-      "line": 200
+      "line": 201
     },
     {
       "package": "internal/client/reliability",
@@ -1971,14 +1978,14 @@
       "identifier": "WirePingPongIncidents",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/client/reliability/incident.go",
-      "line": 129
+      "line": 130
     },
     {
       "package": "internal/client/reliability",
       "identifier": "WireRetryIncidents",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/client/reliability/incident.go",
-      "line": 172
+      "line": 173
     },
     {
       "package": "internal/client/transport/jsonrpc",
@@ -1989,10 +1996,10 @@
     },
     {
       "package": "internal/client/transport/occulited",
-      "identifier": "DeviceToConfigure",
-      "reason": "the element type of Groups.DevicesToConfigure, decoded with every GET /groups the lite heating-group port reads; a method-less struct reached through a field, which the analyzer's type heuristic cannot see used",
+      "identifier": "GroupTypeRef",
+      "reason": "the element type of GroupDetail.Types, decoded with every group detail the lite heating-group port reads; a method-less struct reached through a field, which the analyzer's type heuristic cannot see used",
       "file": "internal/client/transport/occulited/system.go",
-      "line": 412
+      "line": 436
     },
     {
       "package": "internal/client/transport/occulited",
@@ -2160,7 +2167,7 @@
       "identifier": "AuthConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1644
+      "line": 1684
     },
     {
       "package": "internal/config",
@@ -2195,35 +2202,35 @@
       "identifier": "CCUAuthConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1754
+      "line": 1798
     },
     {
       "package": "internal/config",
       "identifier": "CCUDataConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 573
+      "line": 571
     },
     {
       "package": "internal/config",
       "identifier": "CallbackConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 651
+      "line": 649
     },
     {
       "package": "internal/config",
       "identifier": "CentralBehavior",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1875
+      "line": 1919
     },
     {
       "package": "internal/config",
       "identifier": "CentralConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1802
+      "line": 1846
     },
     {
       "package": "internal/config",
@@ -2251,7 +2258,7 @@
       "identifier": "Clone",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 2066
+      "line": 2127
     },
     {
       "package": "internal/config",
@@ -2272,7 +2279,7 @@
       "identifier": "Default",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 2046
+      "line": 2107
     },
     {
       "package": "internal/config",
@@ -2287,6 +2294,13 @@
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/envfile.go",
       "line": 18
+    },
+    {
+      "package": "internal/config",
+      "identifier": "DefaultMaintenanceStatsIntervalSeconds",
+      "reason": "auto-whitelist:pattern=generic-model-helper",
+      "file": "internal/config/config.go",
+      "line": 1637
     },
     {
       "package": "internal/config",
@@ -2314,21 +2328,21 @@
       "identifier": "EmbeddedScope",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1451
+      "line": 1449
     },
     {
       "package": "internal/config",
       "identifier": "EmbeddedScopeAlways",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1461
+      "line": 1459
     },
     {
       "package": "internal/config",
       "identifier": "EmbeddedScopeInsideHA",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1458
+      "line": 1456
     },
     {
       "package": "internal/config",
@@ -2356,7 +2370,7 @@
       "identifier": "ErrNoConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 2017
+      "line": 2078
     },
     {
       "package": "internal/config",
@@ -2405,7 +2419,7 @@
       "identifier": "HAIngressConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1710
+      "line": 1750
     },
     {
       "package": "internal/config",
@@ -2440,7 +2454,7 @@
       "identifier": "Load",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 2021
+      "line": 2082
     },
     {
       "package": "internal/config",
@@ -2468,14 +2482,14 @@
       "identifier": "LoggingConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 586
+      "line": 584
     },
     {
       "package": "internal/config",
       "identifier": "MinHubScanInterval",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 2252
+      "line": 2313
     },
     {
       "package": "internal/config",
@@ -2489,140 +2503,147 @@
       "identifier": "NorthConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 665
+      "line": 663
     },
     {
       "package": "internal/config",
       "identifier": "NorthDiscovery",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 810
+      "line": 808
     },
     {
       "package": "internal/config",
       "identifier": "NorthDiscoveryMDNS",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 853
+      "line": 851
     },
     {
       "package": "internal/config",
       "identifier": "NorthDiscoverySSDP",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 823
+      "line": 821
     },
     {
       "package": "internal/config",
       "identifier": "NorthMCP",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 754
+      "line": 752
     },
     {
       "package": "internal/config",
       "identifier": "NorthMQTT",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1535
+      "line": 1533
+    },
+    {
+      "package": "internal/config",
+      "identifier": "NorthMQTTMaintenance",
+      "reason": "auto-whitelist:pattern=generic-model-helper",
+      "file": "internal/config/config.go",
+      "line": 1627
     },
     {
       "package": "internal/config",
       "identifier": "NorthMatter",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 886
+      "line": 884
     },
     {
       "package": "internal/config",
       "identifier": "NorthMatterAttestation",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1082
+      "line": 1080
     },
     {
       "package": "internal/config",
       "identifier": "NorthMatterCASE",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1223
+      "line": 1221
     },
     {
       "package": "internal/config",
       "identifier": "NorthMatterCommissioning",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1103
+      "line": 1101
     },
     {
       "package": "internal/config",
       "identifier": "NorthREST",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1242
+      "line": 1240
     },
     {
       "package": "internal/config",
       "identifier": "NorthRESTRateLimit",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1334
+      "line": 1332
     },
     {
       "package": "internal/config",
       "identifier": "NorthRESTWS",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1318
+      "line": 1316
     },
     {
       "package": "internal/config",
       "identifier": "NorthUI",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1375
+      "line": 1373
     },
     {
       "package": "internal/config",
       "identifier": "NorthWebhook",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 683
+      "line": 681
     },
     {
       "package": "internal/config",
       "identifier": "NorthWebhookInbound",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 738
+      "line": 736
     },
     {
       "package": "internal/config",
       "identifier": "OIDCConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1782
+      "line": 1826
     },
     {
       "package": "internal/config",
       "identifier": "OcculiteSSOConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1739
+      "line": 1783
     },
     {
       "package": "internal/config",
       "identifier": "PairingAuthConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1671
+      "line": 1711
     },
     {
       "package": "internal/config",
       "identifier": "Parse",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 2033
+      "line": 2094
     },
     {
       "package": "internal/config",
@@ -2650,21 +2671,21 @@
       "identifier": "ProfileEmbedded",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1472
+      "line": 1470
     },
     {
       "package": "internal/config",
       "identifier": "ProfileStandalone",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1470
+      "line": 1468
     },
     {
       "package": "internal/config",
       "identifier": "ReliabilityConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 555
+      "line": 553
     },
     {
       "package": "internal/config",
@@ -2720,28 +2741,28 @@
       "identifier": "SurfaceHidden",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1445
+      "line": 1443
     },
     {
       "package": "internal/config",
       "identifier": "SurfaceState",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1439
+      "line": 1437
     },
     {
       "package": "internal/config",
       "identifier": "SurfaceVisible",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1443
+      "line": 1441
     },
     {
       "package": "internal/config",
       "identifier": "TracingConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1235
+      "line": 1233
     },
     {
       "package": "internal/config",
@@ -2755,21 +2776,21 @@
       "identifier": "ValidateCentralHost",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 2549
+      "line": 2637
     },
     {
       "package": "internal/config",
       "identifier": "ValidateCentralSystem",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 2362
+      "line": 2423
     },
     {
       "package": "internal/config",
       "identifier": "ValidateCentralSystemToken",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 2370
+      "line": 2431
     },
     {
       "package": "internal/config",
@@ -2783,7 +2804,7 @@
       "identifier": "VisibilityConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1997
+      "line": 2058
     },
     {
       "package": "internal/config",
@@ -2839,14 +2860,14 @@
       "identifier": "WithHistorySize",
       "reason": "functional option retained as a deliberate NewTracker config seam; test-only callers today",
       "file": "internal/health/tracker.go",
-      "line": 133
+      "line": 135
     },
     {
       "package": "internal/health",
       "identifier": "WithStaleAfter",
       "reason": "functional option retained as a deliberate NewTracker config seam; test-only callers today",
       "file": "internal/health/tracker.go",
-      "line": 147
+      "line": 149
     },
     {
       "package": "internal/metrics",
@@ -3567,7 +3588,7 @@
       "identifier": "AllowedInternalParameters",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 2185
+      "line": 2190
     },
     {
       "package": "internal/model/generic",
@@ -3644,7 +3665,7 @@
       "identifier": "DataPoint",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 205
+      "line": 203
     },
     {
       "package": "internal/model/generic",
@@ -3658,7 +3679,7 @@
       "identifier": "DetectStatusParameter",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 1985
+      "line": 1989
     },
     {
       "package": "internal/model/generic",
@@ -3749,7 +3770,7 @@
       "identifier": "EventData",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 2126
+      "line": 2131
     },
     {
       "package": "internal/model/generic",
@@ -4183,7 +4204,7 @@
       "identifier": "StateChangeOpt",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 2039
+      "line": 2043
     },
     {
       "package": "internal/model/generic",
@@ -4232,7 +4253,7 @@
       "identifier": "WithValue",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 2074
+      "line": 2079
     },
     {
       "package": "internal/model/generic",
@@ -5674,28 +5695,28 @@
       "identifier": "BuildAlarmMotionResetDiscovery",
       "reason": "auto-whitelist:pattern=mqtt-discovery-builder",
       "file": "internal/north/mqtt/alarm_discovery.go",
-      "line": 359
+      "line": 361
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "BuildAlarmPanelDiscovery",
       "reason": "auto-whitelist:pattern=mqtt-discovery-builder",
       "file": "internal/north/mqtt/alarm_discovery.go",
-      "line": 292
+      "line": 294
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "BuildAlarmTriggeredMotionDiscovery",
       "reason": "auto-whitelist:pattern=mqtt-discovery-builder",
       "file": "internal/north/mqtt/alarm_discovery.go",
-      "line": 398
+      "line": 400
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "BuildSecurityDiscovery",
       "reason": "auto-whitelist:pattern=mqtt-discovery-builder",
       "file": "internal/north/mqtt/security_discovery.go",
-      "line": 239
+      "line": 270
     },
     {
       "package": "internal/north/mqtt",
@@ -5723,7 +5744,7 @@
       "identifier": "CustomDPDisplayNamer",
       "reason": "satisfied by *device.Channel and reached only through a type assertion in displayChannelName; RTA cannot follow an interface reached by assertion",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 464
+      "line": 458
     },
     {
       "package": "internal/north/mqtt",
@@ -5765,14 +5786,14 @@
       "identifier": "ErrCleanupNeedsSubscriber",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/retain_cleanup.go",
-      "line": 590
+      "line": 646
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "ErrSweepSlotBusy",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/retain_cleanup.go",
-      "line": 578
+      "line": 634
     },
     {
       "package": "internal/north/mqtt",
@@ -5828,21 +5849,21 @@
       "identifier": "LegacyAggregateStateMatcher",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/retain_cleanup.go",
-      "line": 166
+      "line": 181
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "LegacyDataPointStateMatcher",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/retain_cleanup.go",
-      "line": 218
+      "line": 233
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "LegacySlotStateMatcher",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/retain_cleanup.go",
-      "line": 290
+      "line": 305
     },
     {
       "package": "internal/north/mqtt",
@@ -5975,14 +5996,14 @@
       "identifier": "NewRetainCleanup",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/retain_cleanup.go",
-      "line": 57
+      "line": 65
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "ProgramTriggerMirrorMatcher",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/retain_cleanup.go",
-      "line": 332
+      "line": 347
     },
     {
       "package": "internal/north/mqtt",
@@ -6017,14 +6038,14 @@
       "identifier": "RawOrphanCandidateMatcher",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/retain_cleanup.go",
-      "line": 1070
+      "line": 1136
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "RetainCleanup",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/retain_cleanup.go",
-      "line": 42
+      "line": 46
     },
     {
       "package": "internal/north/mqtt",
@@ -6066,7 +6087,7 @@
       "identifier": "ValueListLabeler",
       "reason": "the event bridge asserts its labeler against this interface (b.labels.(mqtt.ValueListLabeler)) before stamping localised enum options, and the labeler the daemon wires in satisfies it; a type reached only through an interface assertion, which the analyzer's callgraph does not resolve",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 512
+      "line": 506
     },
     {
       "package": "internal/north/mqtt",
@@ -6080,21 +6101,21 @@
       "identifier": "APIVersion",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/info.go",
-      "line": 19
+      "line": 21
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "AcceptInboxDevice",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/device_admin.go",
-      "line": 441
+      "line": 442
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "AcceptInboxRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/device_admin.go",
-      "line": 395
+      "line": 396
     },
     {
       "package": "internal/north/rest/handlers",
@@ -6374,140 +6395,182 @@
       "identifier": "CapabilityAddonSelfUpdate",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/info.go",
-      "line": 95
+      "line": 117
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "CapabilityAdminPersistence",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/info.go",
-      "line": 128
+      "line": 150
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "CapabilityAlarm",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/info.go",
-      "line": 78
+      "line": 99
     },
     {
       "package": "internal/north/rest/handlers",
-      "identifier": "CapabilityCCUAuth",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/info.go",
-      "line": 49
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "CapabilityCentralFeatures",
+      "identifier": "CapabilityBasicAuth",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/info.go",
       "line": 55
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "CapabilityBearerAuth",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/info.go",
+      "line": 57
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "CapabilityCCUAuth",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/info.go",
+      "line": 51
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "CapabilityCentralFeatures",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/info.go",
+      "line": 76
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "CapabilityDetector",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/info.go",
-      "line": 170
+      "line": 204
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "CapabilityDiagrams",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/info.go",
-      "line": 115
+      "line": 137
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "CapabilityHAIngress",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/info.go",
+      "line": 70
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "CapabilityHistory",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/info.go",
-      "line": 87
+      "line": 109
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "CapabilityMCP",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/info.go",
-      "line": 69
+      "line": 90
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "CapabilityMCPWrite",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/info.go",
-      "line": 71
+      "line": 92
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "CapabilityMQTTDiscovery",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/info.go",
-      "line": 42
+      "line": 44
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "CapabilityMQTTRaw",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/info.go",
-      "line": 101
+      "line": 123
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "CapabilityMatterBridge",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/info.go",
-      "line": 43
+      "line": 45
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "CapabilityOIDC",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/info.go",
-      "line": 44
+      "line": 46
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "CapabilityOcculiteSSO",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/info.go",
+      "line": 67
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "CapabilityOcculiteToken",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/info.go",
+      "line": 66
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "CapabilityPairing",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/info.go",
+      "line": 60
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "CapabilityProblemDetails",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/info.go",
-      "line": 50
+      "line": 71
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "CapabilityREST",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/info.go",
-      "line": 40
+      "line": 42
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "CapabilitySouthOpenCCULite",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/info.go",
-      "line": 58
+      "line": 79
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "CapabilitySupervisedRestart",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/info.go",
-      "line": 64
+      "line": 85
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "CapabilityWSBroadcasts",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/info.go",
-      "line": 41
+      "line": 43
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "CapabilityWebhookInbound",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/info.go",
-      "line": 106
+      "line": 128
     },
     {
       "package": "internal/north/rest/handlers",
@@ -6542,7 +6605,7 @@
       "identifier": "CentralFeatureState",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/system_ccu.go",
-      "line": 95
+      "line": 99
     },
     {
       "package": "internal/north/rest/handlers",
@@ -6584,7 +6647,7 @@
       "identifier": "CentralReadiness",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/system_ccu.go",
-      "line": 116
+      "line": 120
     },
     {
       "package": "internal/north/rest/handlers",
@@ -6626,7 +6689,7 @@
       "identifier": "ChannelPatchRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/device_admin.go",
-      "line": 85
+      "line": 86
     },
     {
       "package": "internal/north/rest/handlers",
@@ -6787,7 +6850,7 @@
       "identifier": "ContentDispositionAttachment",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/write.go",
-      "line": 81
+      "line": 91
     },
     {
       "package": "internal/north/rest/handlers",
@@ -6829,7 +6892,7 @@
       "identifier": "CreateCentral",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/admin_centrals.go",
-      "line": 261
+      "line": 263
     },
     {
       "package": "internal/north/rest/handlers",
@@ -6857,14 +6920,14 @@
       "identifier": "CreateGroup",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/groups_write.go",
-      "line": 90
+      "line": 91
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "CreateGroupRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/groups_write.go",
-      "line": 36
+      "line": 37
     },
     {
       "package": "internal/north/rest/handlers",
@@ -6983,14 +7046,14 @@
       "identifier": "DecodeJSON",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/write.go",
-      "line": 99
+      "line": 109
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "DecodeJSONStatus",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/write.go",
-      "line": 43
+      "line": 44
     },
     {
       "package": "internal/north/rest/handlers",
@@ -7025,7 +7088,7 @@
       "identifier": "DeleteCentral",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/admin_centrals.go",
-      "line": 490
+      "line": 492
     },
     {
       "package": "internal/north/rest/handlers",
@@ -7046,7 +7109,7 @@
       "identifier": "DeleteDevice",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/device_admin.go",
-      "line": 35
+      "line": 36
     },
     {
       "package": "internal/north/rest/handlers",
@@ -7067,7 +7130,7 @@
       "identifier": "DeleteGroup",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/groups_write.go",
-      "line": 149
+      "line": 150
     },
     {
       "package": "internal/north/rest/handlers",
@@ -7138,6 +7201,13 @@
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/admin_users.go",
       "line": 322
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "DeploymentInfo",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/info.go",
+      "line": 194
     },
     {
       "package": "internal/north/rest/handlers",
@@ -7235,7 +7305,7 @@
       "identifier": "DevicePatchRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/device_admin.go",
-      "line": 69
+      "line": 70
     },
     {
       "package": "internal/north/rest/handlers",
@@ -7477,6 +7547,13 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "EncryptedBackupAcceptor",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/backup.go",
+      "line": 338
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "EnergyBucket",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/energy.go",
@@ -7662,14 +7739,14 @@
       "identifier": "FirmwareRefresher",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/device_admin.go",
-      "line": 366
+      "line": 367
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "FirmwareUpdateResponse",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/device_admin.go",
-      "line": 330
+      "line": 331
     },
     {
       "package": "internal/north/rest/handlers",
@@ -7753,7 +7830,7 @@
       "identifier": "GetCentral",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/admin_centrals.go",
-      "line": 237
+      "line": 239
     },
     {
       "package": "internal/north/rest/handlers",
@@ -8061,7 +8138,7 @@
       "identifier": "GroupTypeEntry",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/groups_write.go",
-      "line": 55
+      "line": 56
     },
     {
       "package": "internal/north/rest/handlers",
@@ -8075,7 +8152,7 @@
       "identifier": "GroupsWriter",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/groups_write.go",
-      "line": 27
+      "line": 28
     },
     {
       "package": "internal/north/rest/handlers",
@@ -8271,14 +8348,14 @@
       "identifier": "Info",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/info.go",
-      "line": 207
+      "line": 251
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "InfoResponse",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/info.go",
-      "line": 132
+      "line": 154
     },
     {
       "package": "internal/north/rest/handlers",
@@ -8320,14 +8397,14 @@
       "identifier": "IsBodyTooLargeError",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/write.go",
-      "line": 31
+      "line": 32
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "JSON",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/write.go",
-      "line": 86
+      "line": 96
     },
     {
       "package": "internal/north/rest/handlers",
@@ -8488,7 +8565,7 @@
       "identifier": "ListCentrals",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/admin_centrals.go",
-      "line": 220
+      "line": 222
     },
     {
       "package": "internal/north/rest/handlers",
@@ -8551,7 +8628,7 @@
       "identifier": "ListGroupTypes",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/groups_write.go",
-      "line": 196
+      "line": 197
     },
     {
       "package": "internal/north/rest/handlers",
@@ -8677,7 +8754,7 @@
       "identifier": "ListSuitableMembers",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/groups_write.go",
-      "line": 172
+      "line": 173
     },
     {
       "package": "internal/north/rest/handlers",
@@ -8811,6 +8888,13 @@
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/auth.go",
       "line": 278
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "LoginPaths",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/info.go",
+      "line": 277
     },
     {
       "package": "internal/north/rest/handlers",
@@ -9447,14 +9531,14 @@
       "identifier": "PatchChannel",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/device_admin.go",
-      "line": 195
+      "line": 196
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "PatchDevice",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/device_admin.go",
-      "line": 136
+      "line": 137
     },
     {
       "package": "internal/north/rest/handlers",
@@ -9860,7 +9944,7 @@
       "identifier": "RefreshFirmwareData",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/device_admin.go",
-      "line": 374
+      "line": 375
     },
     {
       "package": "internal/north/rest/handlers",
@@ -9874,7 +9958,7 @@
       "identifier": "ReleaseDevice",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/device_admin.go",
-      "line": 413
+      "line": 414
     },
     {
       "package": "internal/north/rest/handlers",
@@ -9934,6 +10018,13 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "RequestRestart",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/system_admin.go",
+      "line": 181
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "ResetAlarmZoneMotion",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/alarm.go",
@@ -9972,7 +10063,7 @@
       "identifier": "Restart",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/system_admin.go",
-      "line": 176
+      "line": 214
     },
     {
       "package": "internal/north/rest/handlers",
@@ -10329,14 +10420,14 @@
       "identifier": "SuitableMemberEntry",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/groups_write.go",
-      "line": 64
+      "line": 65
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SuitableMembersResponse",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/groups_write.go",
-      "line": 82
+      "line": 83
     },
     {
       "package": "internal/north/rest/handlers",
@@ -10371,7 +10462,7 @@
       "identifier": "SystemCCU",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/system_ccu.go",
-      "line": 127
+      "line": 131
     },
     {
       "package": "internal/north/rest/handlers",
@@ -10385,7 +10476,7 @@
       "identifier": "SystemCCUInterface",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/system_ccu.go",
-      "line": 107
+      "line": 111
     },
     {
       "package": "internal/north/rest/handlers",
@@ -10553,7 +10644,7 @@
       "identifier": "TaxonomyPathAssigner",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/device_admin.go",
-      "line": 100
+      "line": 101
     },
     {
       "package": "internal/north/rest/handlers",
@@ -10861,14 +10952,14 @@
       "identifier": "UpdateCentral",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/admin_centrals.go",
-      "line": 337
+      "line": 339
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "UpdateDeviceFirmware",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/device_admin.go",
-      "line": 342
+      "line": 343
     },
     {
       "package": "internal/north/rest/handlers",
@@ -10882,14 +10973,14 @@
       "identifier": "UpdateGroup",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/groups_write.go",
-      "line": 118
+      "line": 119
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "UpdateGroupRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/groups_write.go",
-      "line": 48
+      "line": 49
     },
     {
       "package": "internal/north/rest/handlers",
@@ -10931,7 +11022,7 @@
       "identifier": "UploadBackup",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/backup.go",
-      "line": 353
+      "line": 375
     },
     {
       "package": "internal/north/rest/handlers",
@@ -11533,91 +11624,91 @@
       "identifier": "CommandError",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 237
+      "line": 238
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorBadRequest",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 289
+      "line": 290
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorFeatureUnavailable",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 324
+      "line": 325
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorForbidden",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 294
+      "line": 295
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorInternal",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 290
+      "line": 291
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorLocked",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 313
+      "line": 314
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorNotFound",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 319
+      "line": 320
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorNotImplemented",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 305
+      "line": 306
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorRateLimited",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 308
+      "line": 309
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorUnauthorized",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 291
+      "line": 292
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorUnencodableString",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 299
+      "line": 300
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorUnknownCommand",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 288
+      "line": 289
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandHandler",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 231
+      "line": 232
     },
     {
       "package": "internal/north/rest/ws",
@@ -11673,28 +11764,28 @@
       "identifier": "DaemonStatusOffline",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/daemon_status_events.go",
-      "line": 27
+      "line": 30
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "DaemonStatusOnline",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/daemon_status_events.go",
-      "line": 26
+      "line": 29
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "DaemonStatusPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/daemon_status_events.go",
-      "line": 32
+      "line": 35
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "DaemonStatusTopic",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/daemon_status_events.go",
-      "line": 46
+      "line": 49
     },
     {
       "package": "internal/north/rest/ws",
@@ -11883,7 +11974,7 @@
       "identifier": "FeatureDetails",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 247
+      "line": 248
     },
     {
       "package": "internal/north/rest/ws",
@@ -11904,7 +11995,7 @@
       "identifier": "Handler",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/handler.go",
-      "line": 72
+      "line": 73
     },
     {
       "package": "internal/north/rest/ws",
@@ -12093,7 +12184,7 @@
       "identifier": "NewCommandError",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 282
+      "line": 283
     },
     {
       "package": "internal/north/rest/ws",
@@ -12135,7 +12226,7 @@
       "identifier": "NewRouter",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 385
+      "line": 391
     },
     {
       "package": "internal/north/rest/ws",
@@ -12268,7 +12359,7 @@
       "identifier": "Result",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 582
+      "line": 596
     },
     {
       "package": "internal/north/rest/ws",
@@ -12282,7 +12373,7 @@
       "identifier": "Router",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 365
+      "line": 371
     },
     {
       "package": "internal/north/rest/ws",
@@ -12464,7 +12555,7 @@
       "identifier": "WithOcculiteRevalidate",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/handler.go",
-      "line": 43
+      "line": 44
     },
     {
       "package": "internal/north/ui/surface",
@@ -12513,14 +12604,14 @@
       "identifier": "Surface",
       "reason": "returned by Registry() and ranged over by the REST /ui/surfaces handler on every request; a data struct whose fields production reads directly, which the analyzer's type heuristic cannot see used",
       "file": "internal/north/ui/surface/surface.go",
-      "line": 118
+      "line": 121
     },
     {
       "package": "internal/north/ui/surface",
       "identifier": "Warn",
       "reason": "carried by Surface.Warn into the REST payload so the editor knows which confirmation a hide needs; a method-less string alias the analyzer's type heuristic cannot see used",
       "file": "internal/north/ui/surface/surface.go",
-      "line": 98
+      "line": 101
     },
     {
       "package": "internal/observability",
@@ -13613,6 +13704,20 @@
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/syncx/syncx.go",
       "line": 30
+    },
+    {
+      "package": "internal/testsupport/hajinja",
+      "identifier": "Render",
+      "reason": "test-support package: its only callers are internal/north/mqtt tests (the text command_template round trip) and RenderValue; no production code renders Jinja",
+      "file": "internal/testsupport/hajinja/hajinja.go",
+      "line": 65
+    },
+    {
+      "package": "internal/testsupport/hajinja",
+      "identifier": "RenderValue",
+      "reason": "test-support package: its only callers are the template round-trip tests in internal/north/mqtt and tests/contract (renderJinja), which pin discovery templates against Jinja2 semantics; no production code renders Jinja",
+      "file": "internal/testsupport/hajinja/hajinja.go",
+      "line": 53
     },
     {
       "package": "internal/wiring",

@@ -89,7 +89,7 @@ func TestCommandSubscriberDeliveryReturnsPromptlyWithSlowSink(t *testing.T) {
 	done := make(chan struct{})
 	start := time.Now()
 	go func() {
-		if !noop.DeliverInbound("gh/+/+/+/+/+/set", "gh/ccu/HmIP-RF/0001ABCD/1/STATE/set", []byte("true")) {
+		if !noop.DeliverInbound("gh/set/+/+/+/+/+/+", "gh/set/ccu/HmIP-RF/0001ABCD/1/values/STATE", []byte("true")) {
 			t.Error("no subscriber registered for the data-point route")
 		}
 		close(done)
@@ -143,7 +143,7 @@ func TestCommandSubscriberPreservesOrderPerTopic(t *testing.T) {
 	// Release immediately — this test is about ordering, not blocking.
 	close(sink.release)
 	for i := range n {
-		if !noop.DeliverInbound("gh/+/+/+/+/+/set", "gh/ccu/HmIP-RF/0001ABCD/1/LEVEL/set", []byte(intPayload(i))) {
+		if !noop.DeliverInbound("gh/set/+/+/+/+/+/+", "gh/set/ccu/HmIP-RF/0001ABCD/1/values/LEVEL", []byte(intPayload(i))) {
 			t.Fatal("no subscriber registered for the data-point route")
 		}
 	}
@@ -195,7 +195,7 @@ func TestCommandSubscriberCloseDrainsCleanly(t *testing.T) {
 		t.Fatalf("start: %v", err)
 	}
 
-	if !noop.DeliverInbound("gh/+/+/+/+/+/set", "gh/ccu/HmIP-RF/0001ABCD/1/STATE/set", []byte("true")) {
+	if !noop.DeliverInbound("gh/set/+/+/+/+/+/+", "gh/set/ccu/HmIP-RF/0001ABCD/1/values/STATE", []byte("true")) {
 		t.Fatal("no subscriber registered for the data-point route")
 	}
 	select {

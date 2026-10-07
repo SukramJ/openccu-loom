@@ -75,7 +75,7 @@ type addonUpdateEntity struct {
 func (e *addonUpdateEntity) BuildDiscovery(_ hadiscovery.Context, comp *hadiscovery.Component) error {
 	comp.Fields = hadiscovery.UpdateFields{
 		LatestVersionTopic:    e.latestVersionTopic,
-		LatestVersionTemplate: "{{ value_json.latest_version }}",
+		LatestVersionTemplate: "{{ value_json.val.latest_version }}",
 		PayloadInstall:        "INSTALL",
 	}
 	return nil
@@ -112,11 +112,12 @@ func (c addonUpdateContext) CommandTopic(hamodel.Slot) string {
 	return c.topics.AddonUpdateCommand()
 }
 
-// Availability implements [hadiscovery.Context] with this daemon's
-// bridge-status entry, the same one every other plane in this package
-// emits.
+// Availability implements [hadiscovery.Context] with the instance's
+// `connected` entry at the daemon level: the entity reports this daemon's
+// own release, so it stays available while no central is reachable — see
+// [daemonAvailability].
 func (c addonUpdateContext) Availability(*hamodel.Device, hamodel.Entity) []hadiscovery.AvailabilityEntry {
-	return hubAvailability(c.topics)
+	return []hadiscovery.AvailabilityEntry{daemonAvailability(c.topics.Connected())}
 }
 
 // UniqueID implements [hadiscovery.Context]. The published id is the
@@ -163,15 +164,13 @@ func (d *DefaultDiscoveryBuilder) buildAddonUpdateEntity() (*addonUpdateEntity, 
 			// source gating this entity — there is no device
 			// reachability behind a synthetic daemon card to add.
 			Availability: hamodel.BridgeOnly(),
-			// No `value_template`: HA's MQTT update platform parses the
-			// raw state_topic payload natively against its state-payload
-			// schema (installed_version, latest_version, in_progress)
-			// when no value_template narrows it to a scalar first.
-			// `in_progress_template` is not a schema option at all — HA
-			// reads `in_progress` only from that native parse — so
-			// setting either one here left the entity showing no
-			// install-in-progress indication.
-			ValueTemplate: hamodel.NoValueTemplate,
+			// The template hands HA's MQTT update platform the status
+			// object's `val` as JSON, which it parses natively against its
+			// state-payload schema (installed_version, latest_version,
+			// in_progress). A template narrowing it to a scalar would lose
+			// `in_progress`: `in_progress_template` is not a schema option
+			// at all — HA reads `in_progress` only from that native parse.
+			ValueTemplate: updateDocumentTemplate,
 		},
 		Binds: []hamodel.Binding{
 			{Role: hamodel.RoleState, Slot: addonUpdateSlot(), Mode: hamodel.Read},

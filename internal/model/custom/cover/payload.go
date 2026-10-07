@@ -69,7 +69,7 @@ func (c *Cover) Config() payload.ConfigPayload {
 //
 // `current_position` is emitted unconditionally when the cover declares
 // SupportsPosition — HA's `position_template` references
-// `value_json.current_position` and logs a warning on every retained-state
+// `value_json.val.current_position` and logs a warning on every retained-state
 // rebroadcast where the key is missing, before the CCU has reported the
 // actual level. Defaults to 0 (closed) until the first wire event arrives.
 func (c *Cover) State() payload.StatePayload {
@@ -304,10 +304,10 @@ func (g *Garage) Config() payload.ConfigPayload {
 
 // State returns the garage door state (open/closed/ventilation) using
 // lowercase HA-canonical state strings consumed by value_template
-// "{{ value_json.state }}".
+// "{{ value_json.val.state }}".
 //
 // `current_position` is emitted unconditionally — HA's
-// `position_template` references `value_json.current_position` and
+// `position_template` references `value_json.val.current_position` and
 // logs a warning on every retained-state rebroadcast where the key
 // is missing. Defaults to 0 (closed) until the first wire event
 // arrives.
@@ -430,7 +430,7 @@ func (e *coverEntity) BuildDiscovery(ctx hadiscovery.Context, comp *hadiscovery.
 		fields.PositionOpen = new(100)
 		fields.PositionClosed = new(0)
 		fields.PositionTopic = comp.StateTopic
-		fields.PositionTemplate = "{{ value_json.current_position }}"
+		fields.PositionTemplate = "{{ value_json.val.current_position }}"
 	}
 	if e.setPosition {
 		fields.SetPositionTopic = e.MethodTopic(ctx, "set_position")
@@ -440,7 +440,7 @@ func (e *coverEntity) BuildDiscovery(ctx hadiscovery.Context, comp *hadiscovery.
 		// set_tilt is a distinct named action. tilt_opened_value /
 		// tilt_closed_value mirror the reference stack (platforms/cover.py).
 		fields.TiltStatusTopic = comp.StateTopic
-		fields.TiltStatusTemplate = "{{ value_json.current_tilt_position }}"
+		fields.TiltStatusTemplate = "{{ value_json.val.current_tilt_position }}"
 		fields.TiltCommandTopic = e.MethodTopic(ctx, "set_tilt")
 		fields.TiltCommandTemplate = "{{ (value | float / 100) }}"
 		fields.TiltMin = new(0)
@@ -489,7 +489,7 @@ func (c *Cover) HADiscoveryEntity() hamodel.Entity {
 		EntityPlatform: hacatalog.PlatformCover,
 		Description: hamodel.Description{
 			DeviceClass:   hamodel.DeviceClass(VariantString(c.Variant)),
-			ValueTemplate: "{{ value_json.state }}",
+			ValueTemplate: "{{ value_json.val.state }}",
 			Optimistic:    new(false),
 		},
 		Binds: []hamodel.Binding{{
@@ -552,7 +552,7 @@ func (g *Garage) HADiscoveryEntity() hamodel.Entity {
 		EntityPlatform: hacatalog.PlatformCover,
 		Description: hamodel.Description{
 			DeviceClass:   "garage",
-			ValueTemplate: "{{ value_json.state }}",
+			ValueTemplate: "{{ value_json.val.state }}",
 			Optimistic:    new(false),
 		},
 		Binds: []hamodel.Binding{

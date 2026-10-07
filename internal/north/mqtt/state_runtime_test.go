@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/model/naming"
+
 	hapublisher "github.com/SukramJ/go-hamqtt/publisher"
 
 	pload "github.com/SukramJ/openccu-loom/internal/payload"
@@ -33,83 +35,85 @@ type movedStatePublish struct {
 // publish appearing in this table is a statement that its bytes and its
 // delivery guarantee were checked.
 func movedStatePlane(base, central string) []movedStatePublish {
-	hub := base + "/" + central + "/hub"
+	tb := NewTopicBuilder(base)
 	return []movedStatePublish{
 		{
-			name:  "bridge health",
-			topic: base + "/bridge/health",
+			// `<base>/info` replaced `bridge/health` (ADR 0083); it goes out
+			// through the shared instance publisher at QoS 0, retained.
+			name:  "instance info",
+			topic: tb.Info(),
 			call: func(ctx context.Context, b *Bridge) error {
 				return b.AnnounceOnline(ctx)
 			},
 		},
 		{
 			name:  "sysvar",
-			topic: hub + "/sysvars/party_mode/state",
+			topic: naming.MQTTHubSysvarState(base, central, "party_mode"),
 			call: func(ctx context.Context, b *Bridge) error {
 				return b.PublishSysvar(ctx, central, testSysvar{name: "party_mode"}, 21.5)
 			},
 		},
 		{
 			name:  "program state",
-			topic: hub + "/programs/12459/state",
+			topic: naming.MQTTHubProgramState(base, central, "12459"),
 			call: func(ctx context.Context, b *Bridge) error {
 				return b.PublishProgram(ctx, central, testProgram{id: "12459"}, true)
 			},
 		},
 		{
 			name:  "install mode",
-			topic: hub + "/install_mode/HmIP-RF",
+			topic: naming.MQTTHubInstallModeForInterface(base, central, "HmIP-RF"),
 			call: func(ctx context.Context, b *Bridge) error {
 				return b.PublishInstallMode(ctx, central, "HmIP-RF", 60)
 			},
 		},
 		{
 			name:  "hub system health score",
-			topic: base + "/" + central + "/system/health_score",
+			topic: tb.HubSystemHealthScore(central),
 			call: func(ctx context.Context, b *Bridge) error {
 				return b.PublishHubSystemHealthScore(ctx, central, 97)
 			},
 		},
 		{
 			name:  "hub connection latency",
-			topic: base + "/" + central + "/system/latency",
+			topic: tb.HubConnectionLatency(central),
 			call: func(ctx context.Context, b *Bridge) error {
 				return b.PublishHubConnectionLatency(ctx, central, 12.5)
 			},
 		},
 		{
 			name:  "hub last event age",
-			topic: base + "/" + central + "/system/last_event_age",
+			topic: tb.HubLastEventAge(central),
 			call: func(ctx context.Context, b *Bridge) error {
 				return b.PublishHubLastEventAge(ctx, central, 4)
 			},
 		},
 		{
 			name:  "hub firmware update",
-			topic: hub + "/update",
+			topic: tb.HubUpdate(central),
 			call: func(ctx context.Context, b *Bridge) error {
 				return b.PublishHubUpdate(ctx, central, "3.79.6", "3.81.5", false)
 			},
 		},
 		{
 			name:  "addon update state",
-			topic: base + "/system/addon_update/state",
+			topic: tb.AddonUpdateState(),
 			call: func(ctx context.Context, b *Bridge) error {
 				return b.PublishAddonUpdateState(ctx, "1.2.3", "1.2.4", false)
 			},
 		},
 		{
 			name:  "alarm zone state",
-			topic: base + "/alarm/erdgeschoss/state",
+			topic: alarmStateTopic(base, "erdgeschoss"),
 			call: func(ctx context.Context, b *Bridge) error {
-				return b.PublishAlarmState(ctx, base+"/alarm/erdgeschoss/state", "disarmed")
+				return b.PublishAlarmState(ctx, alarmStateTopic(base, "erdgeschoss"), "disarmed")
 			},
 		},
 		{
 			name:  "security aggregate state",
-			topic: base + "/security/state",
+			topic: securityStateTopic(base, "state"),
 			call: func(ctx context.Context, b *Bridge) error {
-				return b.PublishSecurityState(ctx, base+"/security/state", []byte(`{"state":"ok"}`))
+				return b.PublishSecurityState(ctx, securityStateTopic(base, "state"), "ok", map[string]any{})
 			},
 		},
 	}
@@ -189,7 +193,7 @@ func TestMovedStateRetractionsAreAtMostOnceAndEmpty(t *testing.T) {
 
 	b, mp := newTestBridge(t)
 	sv := testSysvar{name: "party_mode"}
-	topic := b.cfg.Base + "/" + b.cfg.CentralName + "/hub/sysvars/party_mode/state"
+	topic := naming.MQTTHubSysvarState(b.cfg.Base, b.cfg.CentralName, "party_mode")
 
 	if err := b.PublishSysvar(t.Context(), b.cfg.CentralName, sv, 21.5); err != nil {
 		t.Fatalf("PublishSysvar: %v", err)
@@ -413,8 +417,8 @@ type testSysvar struct{ name string }
 
 func (s testSysvar) MQTTTopics(base, central string) pload.MQTTTopicSet {
 	return pload.MQTTTopicSet{
-		State: strings.Join([]string{base, central, "hub", "sysvars", s.name, "state"}, "/"),
-		Set:   strings.Join([]string{base, central, "hub", "sysvars", s.name, "set"}, "/"),
+		State: naming.MQTTHubSysvarState(base, central, s.name),
+		Set:   naming.MQTTHubSysvarCommand(base, central, s.name),
 	}
 }
 
@@ -423,7 +427,7 @@ type testProgram struct{ id string }
 
 func (p testProgram) MQTTTopics(base, central string) pload.MQTTTopicSet {
 	return pload.MQTTTopicSet{
-		State: strings.Join([]string{base, central, "hub", "programs", p.id, "state"}, "/"),
-		Set:   strings.Join([]string{base, central, "hub", "programs", p.id, "set"}, "/"),
+		State: naming.MQTTHubProgramState(base, central, p.id),
+		Set:   naming.MQTTHubProgramSet(base, central, p.id),
 	}
 }

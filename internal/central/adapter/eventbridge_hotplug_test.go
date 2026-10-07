@@ -78,7 +78,7 @@ func TestOnDeviceCreatedPublishesSnapshotWhenCentralReadyAndDeviceKnown(t *testi
 
 	var availability, info int
 	for _, p := range pub.Published() {
-		if strings.HasSuffix(p.Topic, "/0001ABCD/availability") {
+		if statusSuffix(p.Topic, "/0001ABCD/online") {
 			availability++
 		}
 		if strings.Contains(p.Topic, "/0001ABCD/") {

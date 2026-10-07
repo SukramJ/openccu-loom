@@ -75,6 +75,12 @@ type perDatapointContext struct {
 	nodeID   string
 }
 
+// Availability implements [hadiscovery.Context]: the standard resolution,
+// rewritten into the ADR 0083 vocabulary by [conventionAvailability].
+func (c perDatapointContext) Availability(dev *hamodel.Device, e hamodel.Entity) []hadiscovery.AvailabilityEntry {
+	return conventionAvailability(c.StdContext.Availability(dev, e), c.Layout.Bridge())
+}
+
 // UniqueID implements [hadiscovery.Context] with the id this daemon already
 // publishes.
 func (c perDatapointContext) UniqueID(*hamodel.Device, hamodel.Entity) string { return c.uniqueID }
@@ -345,6 +351,7 @@ func perDatapointVocabulary(ev Event, comp HAComponent) perDatapointDeclaration 
 		decl.writable = true
 		decl.optimistic = new(false)
 		decl.fields = hadiscovery.TextFields{Mode: "text"}
+		decl.commandTemplate = textCommandTemplate
 		if mn := ev.descMin(); mn != nil {
 			decl.min = new(float64(int(*mn)))
 		}
@@ -357,12 +364,12 @@ func perDatapointVocabulary(ev Event, comp HAComponent) perDatapointDeclaration 
 		// `{"event_type":"press_short"}` payloads when the button fires.
 		//
 		// HA's mqtt.event component parses the *post-value_template* payload
-		// as JSON and reads `event_type` from it. The envelope extractor
-		// yields a scalar — that breaks the JSON parsing and floods the HA
-		// log with `No valid JSON event payload detected`. [hamodel.NoValueTemplate]
-		// is how the model says "publish none", which an empty string cannot:
-		// that is also what "no opinion" looks like.
-		decl.valueTemplate = hamodel.NoValueTemplate
+		// as JSON and reads `event_type` from it. The status object carries
+		// the type in `val` (ADR 0083), so the template rebuilds the event
+		// document — `event_type` from `val`, the rest from `hm`; a scalar
+		// extractor would break the JSON parsing and flood the HA log with
+		// `No valid JSON event payload detected`.
+		decl.valueTemplate = eventValueTemplate
 		decl.fields = hadiscovery.EventFields{
 			EventTypes: MapDoorbellEventTypes(ev.Model, pressEventTypesFor(ev.Parameter)),
 		}

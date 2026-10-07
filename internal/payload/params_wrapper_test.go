@@ -8,7 +8,6 @@ import (
 	"math"
 	"strconv"
 	"testing"
-	"time"
 )
 
 // ---------------------------------------------------------------------------
@@ -255,25 +254,6 @@ func TestParamStringInvalidType(t *testing.T) {
 	_, err := ParamString(map[string]any{"k": []int{1, 2}}, "k")
 	if !errors.Is(err, ErrServiceInvalidParam) {
 		t.Fatalf("want ErrServiceInvalidParam, got %v", err)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// EpochSeconds (wrapper.go)
-// ---------------------------------------------------------------------------
-
-func TestEpochSecondsZeroTime(t *testing.T) {
-	if got := EpochSeconds(time.Time{}); got != 0 {
-		t.Fatalf("zero time: want 0, got %v", got)
-	}
-}
-
-func TestEpochSecondsNonZero(t *testing.T) {
-	ts := time.Unix(1_700_000_000, 500_000_000)
-	got := EpochSeconds(ts)
-	want := float64(ts.UnixNano()) / 1e9
-	if got != want {
-		t.Fatalf("want %v, got %v", want, got)
 	}
 }
 

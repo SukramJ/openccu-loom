@@ -13,13 +13,14 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/payload"
 )
 
-// TestMQTTTopicHierarchyShape pins the ADR-0011 topic shape actually
-// produced by [mqtt.TopicBuilder] — every case below calls the real
-// builder method rather than restating its output as a literal, so a
-// TopicBuilder change that breaks the hierarchy (a swapped segment, a
-// method that stops delegating to the model layer) fails here instead
-// of silently reaching HA Discovery / REST exporters / retained-state
-// migrators.
+// TestMQTTTopicHierarchyShape pins the mqtt-smarthome 2.0 topic shape
+// (ADR 0083) actually produced by [mqtt.TopicBuilder]:
+// `<name>/<function>/<central>/<iface>/<addr>/…`. Every case below calls the
+// real builder method rather than restating its output as a literal, so a
+// TopicBuilder change that breaks the hierarchy (a swapped segment, a function
+// moved back into a suffix, a method that stops delegating to the model layer)
+// fails here instead of silently reaching HA Discovery / REST exporters /
+// retained-state migrators.
 func TestMQTTTopicHierarchyShape(t *testing.T) {
 	t.Parallel()
 
@@ -35,6 +36,7 @@ func TestMQTTTopicHierarchyShape(t *testing.T) {
 	type want struct {
 		method       string
 		topic        string
+		function     string
 		wantSegments int
 		// checks maps a 0-indexed segment position to its required value.
 		checks map[int]string
@@ -43,44 +45,72 @@ func TestMQTTTopicHierarchyShape(t *testing.T) {
 		{
 			method:       "SlotState/values",
 			topic:        tb.SlotState(central, iface, payload.TopicSlot{Address: addr, Channel: channel, Bucket: payload.BucketValues, Parameter: "ACTUAL_TEMPERATURE"}),
-			wantSegments: 7,
-			checks:       map[int]string{4: "1", 5: "values", 6: "ACTUAL_TEMPERATURE"},
+			function:     "status",
+			wantSegments: 8,
+			checks:       map[int]string{5: "1", 6: "values", 7: "ACTUAL_TEMPERATURE"},
 		},
 		{
 			method:       "SlotState/master",
 			topic:        tb.SlotState(central, iface, payload.TopicSlot{Address: addr, Channel: channel, Bucket: payload.BucketMaster, Parameter: "TEMPERATURE_MINIMUM"}),
-			wantSegments: 7,
-			checks:       map[int]string{5: "master", 6: "TEMPERATURE_MINIMUM"},
+			function:     "status",
+			wantSegments: 8,
+			checks:       map[int]string{6: "master", 7: "TEMPERATURE_MINIMUM"},
 		},
 		{
 			method:       "SlotState/calculated",
 			topic:        tb.SlotState(central, iface, payload.TopicSlot{Address: addr, Channel: channel, Bucket: payload.BucketCalculated, Parameter: "DEW_POINT"}),
-			wantSegments: 7,
-			checks:       map[int]string{5: "calculated", 6: "DEW_POINT"},
+			function:     "status",
+			wantSegments: 8,
+			checks:       map[int]string{6: "calculated", 7: "DEW_POINT"},
 		},
 		{
 			method:       "SlotState/custom",
 			topic:        tb.SlotState(central, iface, payload.TopicSlot{Address: addr, Channel: channel, Bucket: payload.BucketCustom, Parameter: "climate"}),
-			wantSegments: 7,
-			checks:       map[int]string{4: "1", 5: "custom", 6: "climate"},
+			function:     "status",
+			wantSegments: 8,
+			checks:       map[int]string{5: "1", 6: "custom", 7: "climate"},
+		},
+		{
+			method:       "SlotConfig/values",
+			topic:        tb.SlotConfig(central, iface, payload.TopicSlot{Address: addr, Channel: channel, Bucket: payload.BucketValues, Parameter: "ACTUAL_TEMPERATURE"}),
+			function:     "meta",
+			wantSegments: 8,
+			checks:       map[int]string{5: "1", 6: "values", 7: "ACTUAL_TEMPERATURE"},
+		},
+		{
+			method:       "ParameterCommand",
+			topic:        tb.ParameterCommand(central, iface, addr, channel, payload.BucketValues, "SET_POINT_TEMPERATURE"),
+			function:     "set",
+			wantSegments: 8,
+			checks:       map[int]string{5: "1", 6: "values", 7: "SET_POINT_TEMPERATURE"},
 		},
 		{
 			method:       "CustomDPServiceMethod",
 			topic:        tb.CustomDPServiceMethod(central, iface, payload.TopicSlot{Address: addr, Channel: channel, Bucket: payload.BucketCustom, Parameter: "climate"}, "set_temperature"),
+			function:     "set",
 			wantSegments: 9,
-			checks:       map[int]string{4: "1", 5: "custom", 6: "climate", 7: "set", 8: "set_temperature"},
+			checks:       map[int]string{5: "1", 6: "custom", 7: "climate", 8: "set_temperature"},
+		},
+		{
+			method:       "DeviceAvailability",
+			topic:        tb.DeviceAvailability(central, iface, addr),
+			function:     "status",
+			wantSegments: 6,
+			checks:       map[int]string{5: "online"},
 		},
 		{
 			method:       "DeviceInfo",
 			topic:        tb.DeviceInfo(central, iface, addr),
-			wantSegments: 5,
-			checks:       map[int]string{4: "info"},
+			function:     "status",
+			wantSegments: 6,
+			checks:       map[int]string{5: "info"},
 		},
 		{
 			method:       "DeviceDiagnostics",
 			topic:        tb.DeviceDiagnostics(central, iface, addr),
-			wantSegments: 5,
-			checks:       map[int]string{4: "diagnostics"},
+			function:     "status",
+			wantSegments: 6,
+			checks:       map[int]string{5: "diagnostics"},
 		},
 	}
 
@@ -94,22 +124,29 @@ func TestMQTTTopicHierarchyShape(t *testing.T) {
 			t.Errorf("%s: topic %q has %d segments, want %d", c.method, c.topic, len(segments), c.wantSegments)
 			continue
 		}
-		if segments[0] != base {
-			t.Errorf("%s: topic %q segment[0] = %q, want base %q", c.method, c.topic, segments[0], base)
-		}
-		if segments[1] != central {
-			t.Errorf("%s: topic %q segment[1] = %q, want central %q", c.method, c.topic, segments[1], central)
-		}
-		if segments[2] != iface {
-			t.Errorf("%s: topic %q segment[2] = %q, want interface %q", c.method, c.topic, segments[2], iface)
-		}
-		if segments[3] != addr {
-			t.Errorf("%s: topic %q segment[3] = %q, want device address %q", c.method, c.topic, segments[3], addr)
+		for pos, want := range map[int]string{0: base, 1: c.function, 2: central, 3: iface, 4: addr} {
+			if segments[pos] != want {
+				t.Errorf("%s: topic %q segment[%d] = %q, want %q", c.method, c.topic, pos, segments[pos], want)
+			}
 		}
 		for pos, want := range c.checks {
 			if pos >= len(segments) || segments[pos] != want {
 				t.Errorf("%s: topic %q segment[%d] = %q, want %q", c.method, c.topic, pos, segments[pos], want)
 			}
+		}
+	}
+
+	// The instance topics sit directly below the name, with no item level.
+	for got, want := range map[string]string{
+		tb.Connected():          base + "/connected",
+		tb.Info():               base + "/info",
+		tb.Maintenance("stats"): base + "/maintenance/stats",
+		tb.HubStatus(central):   base + "/status/" + central + "/online",
+		tb.AddonUpdateState():   base + "/status/system/addon_update",
+		tb.AddonUpdateCommand(): base + "/set/system/addon_update",
+	} {
+		if got != want {
+			t.Errorf("instance/daemon-level topic = %q, want %q", got, want)
 		}
 	}
 }

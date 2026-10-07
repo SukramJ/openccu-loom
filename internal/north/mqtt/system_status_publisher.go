@@ -5,9 +5,7 @@ package mqtt
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
-	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/wiring"
@@ -16,7 +14,7 @@ import (
 
 // SystemStatusPublisher subscribes to every registered central's event
 // bus and publishes [hmevent.SystemStatusChangedEvent] payloads to the
-// MQTT topic `<base>/<central>/system/status`. The topic is
+// MQTT status item `<base>/status/<central>/system/status`. The topic is
 // non-retained (QoS 0) so consumers only see live events — a stale
 // retained payload would be misleading after a daemon restart.
 //
@@ -41,17 +39,15 @@ func NewSystemStatusPublisher(reg *central.Registry, w *Wiring, logger *slog.Log
 }
 
 // systemStatusPayload is the JSON shape published to
-// `<base>/<central>/system/status`.
+// `<base>/status/<central>/system/status`.
 type systemStatusPayload struct {
-	CentralName        string    `json:"central"`
-	Component          string    `json:"component"`
-	Healthy            bool      `json:"healthy"`
-	Reason             string    `json:"reason,omitempty"`
-	InterfaceID        string    `json:"interface_id,omitempty"`
-	ErrorCode          int       `json:"error_code,omitempty"`
-	DegradedInterfaces []string  `json:"degraded_interfaces,omitempty"`
-	Issues             []string  `json:"issues,omitempty"`
-	EventAt            time.Time `json:"event_at"`
+	CentralName        string   `json:"central"`
+	Healthy            bool     `json:"healthy"`
+	Reason             string   `json:"reason,omitempty"`
+	InterfaceID        string   `json:"interface_id,omitempty"`
+	ErrorCode          int      `json:"error_code,omitempty"`
+	DegradedInterfaces []string `json:"degraded_interfaces,omitempty"`
+	Issues             []string `json:"issues,omitempty"`
 }
 
 // Start attaches one subscription per central the registry holds now, and one
@@ -85,23 +81,17 @@ func (p *SystemStatusPublisher) StartCentral(u *central.Unit) func() {
 	}
 	centralName := u.Name()
 	return bus.Subscribe(func(e hmevent.SystemStatusChangedEvent) {
+		// The event is a status item that is not retained (ADR 0083): the
+		// component that changed is its `val`, the event's time its `ts`,
+		// and the rest of the event under `hm`.
 		pay := systemStatusPayload{
 			CentralName:        centralName,
-			Component:          e.Component,
 			Healthy:            e.Healthy,
 			Reason:             e.Reason,
 			InterfaceID:        e.InterfaceID,
 			ErrorCode:          e.ErrorCode,
 			DegradedInterfaces: e.DegradedInterfaces,
 			Issues:             e.Issues,
-			EventAt:            e.Timestamp(),
-		}
-		b, err := json.Marshal(pay)
-		if err != nil {
-			p.logger.Warn("mqtt.system_status.marshal",
-				slog.String("central", centralName),
-				slog.String("err", err.Error()))
-			return
 		}
 		ctx := context.Background()
 		// Nil while MQTT is disabled at runtime — the Wiring stays alive
@@ -112,7 +102,7 @@ func (p *SystemStatusPublisher) StartCentral(u *central.Unit) func() {
 		if bridge == nil {
 			return
 		}
-		if err := bridge.PublishSystemStatus(ctx, centralName, b); err != nil {
+		if err := bridge.PublishSystemStatus(ctx, centralName, e.Component, pay, e.Timestamp()); err != nil {
 			p.logger.Warn("mqtt.system_status.publish",
 				slog.String("central", centralName),
 				slog.String("err", err.Error()))

@@ -19,9 +19,12 @@ const daemonStatusTopic = "system.daemon_status"
 // switch on. Mirrors wsapi.json's `daemon_status.changed`.
 const broadcastDaemonStatusChanged = "daemon_status.changed"
 
-// Daemon status values. They are the same two words the MQTT bridge
-// retains on `<base>/bridge/status`, so a client bridging both planes
-// does not have to translate between them.
+// Daemon status values. They are the two words the MQTT plane's "Daemon
+// connection" entity reports for the instance's `<base>/connected` level
+// (`offline` at 0, `online` from 1 — ADR 0083), so a client bridging both
+// planes reads one vocabulary. The MQTT topic itself carries the
+// mqtt-smarthome level 0/1/2, which the discovery template maps onto these
+// words.
 const (
 	DaemonStatusOnline  = "online"
 	DaemonStatusOffline = "offline"

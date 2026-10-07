@@ -1,6 +1,6 @@
 # ADR 0083 — One topic convention for all six projects: mqtt-smarthome 2.0
 
-- **Status**: proposed (2026-10-06)
+- **Status**: accepted (2026-10-06)
 - **Supersedes (in part)**: [ADR 0011](./0011-mqtt-topic-and-payload-architecture.md)
   §Topic hierarchy, §Payload schemas and the retain rule for `bridge/status`;
   [ADR 0070](./0070-shared-ha-discovery-model-module.md) — the *topic-schema*
@@ -70,14 +70,17 @@ this ADR records how.
 ### Grammar
 
 ```
-<name>/<function>/<item...>     function ∈ connected | status | set | info | meta | maintenance
+<name>/<function>/<item...>     function ∈ connected | status | set | info | meta | maintenance | ha
 ```
 
 The function moves from the topic suffix (`…/state`, `…/set`) to the second
-level. `get` stays reserved and unimplemented. `meta` is this project family's
-one additional function (§3 allows it): the retained descriptor companion,
-today loom's `…/config`, payload unchanged. Item paths are identical under
-`status`, `set` and `meta`.
+level. `get` stays reserved and unimplemented. `meta` is a function of this
+project family (§3 allows it): the retained descriptor companion, today
+loom's `…/config`, payload unchanged. Item paths are identical under
+`status`, `set` and `meta`. `ha` is the family's second one, added by
+amendment item 7: a Home Assistant-native document that Home Assistant
+parses without a template, and nothing else — its single tenant is loom's
+JSON-schema light.
 
 `<name>` is the existing config key (`MQTT_TOPIC` in the bridges,
 `north.mqtt.topic_base` in loom), with new defaults `mtec`, `zendure`,
@@ -295,8 +298,9 @@ daikin's `scheduler` beside device UUIDs; unifi's `bridge` beside `<site>`.
 interface ids are `<central>-<interface>`. This ADR adds the guard: loom
 refuses a central, and unifi a `SITE`, whose topic-safe form is `alarm`,
 `security`, `system` or `bridge`, or any function name (`connected`,
-`status`, `set`, `get`, `info`, `meta`, `maintenance`) — the latter so the
-migration sweep below can never mistake an old topic for a new one.
+`status`, `set`, `get`, `info`, `meta`, `maintenance`, and loom's `ha` —
+amendment item 7) — the latter so the migration sweep below can never
+mistake an old topic for a new one.
 
 ## Target, by example
 
@@ -317,7 +321,7 @@ Unless marked, status is retained and set is subscribed at QoS 1.
 | Today | After |
 |---|---|
 | `<base>/<central>/<iface>/<addr>/<ch>/values/<param>` (also `master`, `calculated`) | `<n>/status/…/<ch>/values/<param>` |
-| `…/<ch>/custom/<kind>` | `<n>/status/…/<ch>/custom/<kind>` |
+| `…/<ch>/custom/<kind>` | `<n>/status/…/<ch>/custom/<kind>` (the light also `<n>/ha/…/<ch>/custom/light`, amendment item 7) |
 | `…/<ch>/event`, `…/<ch>/impulse`, `…/<ch>/device_error` (not retained) | `<n>/status/…/<ch>/event` etc. (not retained) |
 | `…/<addr>/availability` | `<n>/status/…/online` |
 | `…/<addr>/info`, `…/diagnostics`, `…/update` | `<n>/status/…/info`, `…/diagnostics`, `…/update` |
@@ -536,6 +540,163 @@ and she's wipe would miss every state topic, which lives outside
   publish tests.
 - `docs/mqtt-topic-schema.md` and the user docs change with the implementation,
   not with this ADR.
+
+## Amendment (2026-10-06) — findings from the implementation
+
+This ADR was written before the code. The implementation in openccu-loom,
+go-hamqtt v0.36.0 and the five bridges found the following; each is a fact
+the decision text above does not say, or says differently.
+
+1. **`maintenance/set/restart` fires on an empty payload.** The decision
+   says empty `set` payloads are ignored in all six projects. The one
+   exception is the restart: spec §7 gives its payload as "any", and she
+   publishes it with an empty payload (`she-services-api.js`), so treating
+   it like a `set` would make she's Restart button do nothing. go-hamqtt's
+   `publisher.Instance` routes it without the `set` normalisation; a
+   retained restart is still dropped, and the restart only happens behind
+   the supervisor predicate.
+2. **The sweep does not subscribe `<old-root>/#` where that overlaps live
+   command routes** (Migration, step 1). go-mtec2mqtt found that a filter
+   overlapping the daemon's own `set` subscriptions delivers a `set`
+   arriving during the window twice on a shared connection. loom's sweep
+   subscribes one filter per old tree — `<base>/<central>/#` for each
+   configured central and `<base>/{bridge,alarm,security,system}/#` — none
+   of which can match a `<base>/set/…` route, and it rides a connection of
+   its own besides.
+3. **she manages only instance names matching `[A-Za-z0-9_.-]+`, and its
+   wipe does not clear `<name>/meta/…` or `<name>/ha/…`.** A loom base
+   outside that set (a multi-level `home/loom` included) is not offered by
+   she at all; on any base, she's wipe leaves the `meta` companions and the
+   light's `ha` twins retained.
+4. **The bridges' enum tokens are their English catalog tokens where the
+   raw code is numeric** (mtec, zendure): a numeric register code is not a
+   token a consumer could read, so the English catalog spelling stands in
+   for it — still independent of `LANGUAGE`, which is the property the
+   Enums rule exists for.
+5. **go-hamqtt gained `publisher.DetectSupervised`**, loom's
+   `detectSupervisedRestart` shared for the bridges. The bridges' Home
+   Assistant add-ons set their `*_SUPERVISED=0`, so the MQTT restart is
+   refused there (a container marker alone is a known false positive).
+   loom keeps its own predicate, because the REST restart route is mounted
+   behind the same function and the two surfaces must not disagree.
+6. **zendure and mtec also keep a multi-level name** with a start-up
+   warning, as loom does (Grammar).
+
+Found in loom:
+
+7. **The `status` tree is status objects without exception; the
+   JSON-schema light reads a twin under `ha`** (decided 2026-10-06,
+   replacing the first implementation, which kept `…/custom/light` in Home
+   Assistant's shape). Home Assistant's light platform in `schema: json`
+   parses the state topic's document natively — `state`, `brightness`,
+   `color`, `color_temp_kelvin`, `effect`, `color_mode` at the top level —
+   and takes no value template (`light/schema_json.py`, `_state_received`),
+   so it cannot read a status object's `val`; converting the lights to the
+   template schema would lose the colour-mode declarations (the HmIP-LSC's
+   simultaneous `hs`/`color_temp`) the JSON schema carries. So
+   `<name>/status/…/<ch>/custom/light` is a status object whose `val` is
+   that document, like every other aggregate, and the same document is
+   published bare and retained on `<name>/ha/…/<ch>/custom/light`, which
+   the light entity's `state_topic` names; its `command_topic` stays under
+   `set`. `ha` becomes a topic function of this project family, for a Home
+   Assistant-native document that cannot be templated and nothing else;
+   the light is its single tenant. The reason is that a consumer of the
+   `status` tree meets one payload form; the cost is that each light is
+   published twice. One publish writes both from one document, device
+   removal and the orphan sweep evict both, and a reconnect republishes
+   both. A central named `ha` is refused like one named after any other
+   function, and the migration sweep treats `<name>/ha/…` as new. go-hamqtt
+   v0.36.0's `topic.IsFunction` does not know `ha`, so loom checks it
+   locally (`naming.IsFunction`); go-hamqtt should learn it.
+8. **Two loom shapes were not rows of the table.** The undocumented alarm
+   item `<base>/alarm/<zone>/triggered-motion` (the latched-detector count)
+   became `<base>/status/alarm/<zone>/triggered_motion`, `snake_case` per
+   Naming. The bucket-less command shape `…/<ch>/<PARAM>/set`, kept for
+   pre-bucket automations, was dropped: under the grammar it would share a
+   length with the week-profile item, and nothing in this repository
+   produced it.
+9. **The command route set changed shape, not size.** The schedule switch
+   (`…/schedule/switch/<key>`, eight levels below the base) has a route of
+   its own again, out of reach of the seven-level data-point catch-all; the
+   custom-DP operation item (`<central>/devices/<addr>/cdps/<name>/<op>`)
+   has the catch-all's length and is dispatched from inside it, like the
+   combined item. The set stays pairwise disjoint, so the router never
+   switches into attributed mode.
+10. **`lc` is tracked per topic by the bridge, not taken from
+    `modified_at`.** The domain stamps `modified_at` and `refreshed_at` with
+    the same event time on every publish, so `modified_at` does not say
+    when the value last changed. `ts` is the event time; `lc` moves only
+    when `val` does, which is the spec's definition. The Known limitation
+    stands: after a restart `lc` is the first observation.
+11. **The `online` items publish at QoS 1**, as loom's availability markers
+    always have (finding F5 of the ADR 0070 runtime measurement: a lost
+    transition is never repaired by a later publish); every other status
+    item stays at the state QoS, 0 by default.
+12. **Per-data-point self-availability survives under `hm`.** go-hamqtt's
+    standard context drops the envelope-flag availability level under the
+    status-object encoding, because the convention has no `available`
+    field. loom keeps the flag under `hm` and renders the entry as
+    `{{ value_json.hm.available | lower }}`. loom's planes keep their own
+    layouts (none is a `SmartHomeLayout`, which would also switch the
+    default value template of entities that name their own) and pass the
+    resolved availability list through one rewrite into the `connected ≥ 2`
+    / boolean-`online` vocabulary.
+13. **Event and update entities need a template that rebuilds JSON.** Home
+    Assistant's event platform and update platform both parse the
+    post-template payload as JSON; the event entities render
+    `{{ dict(value_json.hm or {}, event_type=value_json.val) | tojson }}`, the
+    update entities `{{ value_json.val | tojson }}`. `system/status` puts
+    the component that changed in `val`; a Security & Safety event its verb.
+14. **`<base>/info` carries a live field.** go-hamqtt's
+    `InstanceConfig.Extra` is fixed at construction, while loom's
+    `centrals` must name a CCU adopted at runtime; the field is a value that
+    resolves when the document is rendered.
+15. **The sweep's notion of an owned device is the configured central.** A
+    device the daemon knows may not be loaded when the sweep runs at boot
+    (a CCU still starting), so the exact old shapes are matched below every
+    configured central rather than per known device address; a sibling
+    daemon's centrals are never subscribed.
+16. **The WebSocket daemon status keeps `online`/`offline`.** Its doc
+    claimed the MQTT plane retains the same words on `bridge/status`; it now
+    names the "Daemon connection" entity, whose template renders the
+    `connected` level into those words. No REST or WebSocket behaviour
+    changed.
+17. **Self-reporting entities are the exception to `connected ≥ 2`.**
+    Level 2 means a central is reachable, so an entity whose state is that
+    reachability, or this daemon itself, is gated at level 1 — otherwise it
+    is unavailable exactly when an operator needs to read it. Of the
+    entities whose only availability was `bridge/status` before this ADR,
+    two are of that kind and take `≥ 1`: the per-interface connectivity
+    sensors and the add-on update entity (the daemon's own release, which
+    must stay installable through a CCU outage). The "Daemon connection"
+    sensor reads `connected` itself and has no availability. Every other
+    entity keeps `≥ 2`.
+18. **`dict()` raises on a missing `hm`.** jinja2 3.1.6, which Home
+    Assistant renders with, raises for `dict()` of an undefined or `null`
+    argument, so the event template reads `value_json.hm or {}`, and a
+    status object without project fields omits `hm` rather than writing
+    `null`.
+19. **`text` entities wrap their value.** Under the plain `set` form an
+    empty string is an ignored empty payload and a string opening with `{`
+    or `[` is malformed JSON; before this ADR both reached the CCU (the
+    empty one as a null value). The `text` entities — a writable string
+    parameter, an editable string system variable — therefore send
+    `{{ {"val": value} | tojson }}`. The display's `notify` entity already
+    sent a JSON object and is unaffected.
+
+20. **An unobserved data point is `{"val": null, …, "hm": {"available":
+    false}}`.** Before this ADR it was `{"value": null, "available":
+    false}`; the fields moved into the status object, and the decision
+    stands for the same reason: the per-parameter availability entry reads
+    `hm.available` from the state topic, so publishing nothing would leave
+    the entity unavailable with no body to explain it. `val` stays present
+    as `null` rather than being omitted. Every per-parameter value template
+    guards on `value_json.val is not none` and renders an empty string, which
+    Home Assistant 2026.10 ignores instead of storing (`number.py:177`,
+    `select.py:119`, `binary_sensor.py:186`, `lock.py:192`, `sensor.py:322`
+    for numeric sensors, and the empty-payload guards in `cover.py`,
+    `valve.py` and `climate.py`); no `| lower` template sees the `null`,
+    which would otherwise render `none`.
 
 ## Revisit when
 

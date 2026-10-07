@@ -63,9 +63,13 @@ func (t *Timer) HACombinedDiscovery(ctx payload.CombinedDiscoveryContext) hadisc
 		return hadiscovery.Component{}
 	}
 	return hadiscovery.Component{
-		Platform:       hacatalog.PlatformNumber,
-		Name:           t.discoveryLabel(ctx),
-		CommandTopic:   ctx.CombinedCommandTopic(),
+		Platform:     hacatalog.PlatformNumber,
+		Name:         t.discoveryLabel(ctx),
+		CommandTopic: ctx.CombinedCommandTopic(),
+		// The state topic carries a status object, and number.py
+		// float()s the rendered payload: without a template HA reads the
+		// whole object and rejects it.
+		ValueTemplate:  hadiscovery.StatusValueTemplate,
 		Min:            new(float64(0)),
 		Max:            new(float64(timerMaxSeconds)),
 		Step:           new(float64(1)),
@@ -150,7 +154,7 @@ func (l *LevelCombined) HACombinedDiscovery(ctx payload.CombinedDiscoveryContext
 	return hadiscovery.Component{
 		Platform:       hacatalog.PlatformSensor,
 		Name:           ctx.Translate("discovery.level_combined"),
-		ValueTemplate:  "{{ value_json.level }}",
+		ValueTemplate:  "{{ value_json.val.level }}",
 		EntityCategory: payload.CombinedEntityCategoryDiagnostic,
 	}
 }
@@ -190,7 +194,7 @@ func (c *HSColor) HACombinedDiscovery(ctx payload.CombinedDiscoveryContext) hadi
 	return hadiscovery.Component{
 		Platform:       hacatalog.PlatformSensor,
 		Name:           ctx.Translate("discovery.hs_color"),
-		ValueTemplate:  "{{ value_json.hue }}",
+		ValueTemplate:  "{{ value_json.val.hue }}",
 		EntityCategory: payload.CombinedEntityCategoryDiagnostic,
 	}
 }

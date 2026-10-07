@@ -25,11 +25,11 @@ import (
 // recording broker — the exemption cannot be justified by a topic helper
 // agreeing with itself.
 //
-// One exemption stands today, `<base>/bridge/health`, and the fact that it is
-// one is the measurement that made the assertion possible: before counting,
-// nobody knew whether turning the log line into a failure would light up the
-// whole suite. Across all five planes, at both base spellings, it lights up
-// exactly this.
+// The one exemption that once stood, `<base>/bridge/health`, was the
+// measurement that made the assertion possible: before counting, nobody knew
+// whether turning the log line into a failure would light up the whole suite.
+// ADR 0083 folded it into `<base>/info`, an instance topic every runner gets
+// with the announce, so an empty list is the expected state.
 func TestCarriedWithoutDeclarationExemptionsAreAllStillCarried(t *testing.T) {
 	t.Parallel()
 
@@ -110,12 +110,22 @@ func TestUndeclaredPublishIsAFailureNotALogLine(t *testing.T) {
 
 	t.Run("exempt-passes", func(t *testing.T) {
 		t.Parallel()
+		// Whichever shape the allow-list exempts today; with an empty list
+		// there is no exemption path to check.
+		var exempt string
+		for tail := range carriedWithoutDeclaration {
+			exempt = "gh/" + tail
+			break
+		}
+		if exempt == "" {
+			t.Skip("carriedWithoutDeclaration is empty — every carried topic must be declared")
+		}
 		sub := &testing.T{}
 		planeRoundTrip(sub, "probe", declared,
-			map[string]bool{"gh/x/state": true, "gh/bridge/health": true}, nil, nil)
+			map[string]bool{"gh/x/state": true, exempt: true}, nil, nil)
 		if sub.Failed() {
-			t.Fatal("planeRoundTrip failed on an exempt shape — the allow-list is not consulted, " +
-				"so every plane run would now fail on bridge/health")
+			t.Fatalf("planeRoundTrip failed on the exempt shape %q — the allow-list is not consulted, "+
+				"so every plane run would now fail on it", exempt)
 		}
 	})
 }

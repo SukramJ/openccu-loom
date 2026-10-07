@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 
+	hatopic "github.com/SukramJ/go-hamqtt/topic"
+
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -15,21 +17,25 @@ import (
 // TopicBuilder assembles topic strings from the raw plane components.
 // Base defaults to "openccu-loom" but can be overridden per bridge.
 //
-// Every method that targets a model-relevant topic (data point,
-// channel aggregate, device snapshot, hub topic, …) delegates to
-// [naming.PathData] or a free function in the naming package — the
-// model layer owns every format string. The bridge layer only fills
-// in the runtime context (Base, Central) that the model has no
-// natural access to.
+// The grammar is mqtt-smarthome 2.0's `<name>/<function>/<item...>`
+// (ADR 0083), with the configured base as `<name>`: status items under
+// `status`, their commands under `set` on the same item path, descriptor
+// companions under `meta`, and the instance topics `connected`, `info` and
+// `maintenance/…` directly below the base.
 //
-// The topics whose format string stays here are the bridge-internal
-// pair ([TopicBuilder.BridgeStatus], [TopicBuilder.BridgeHealth]), the
-// daemon-level add-on update pair, the central-wide `system/<metric>`
-// sensors, and the combined-DP and schedule channel topics that the
-// naming package carries no helper for yet (see
-// [TopicBuilder.CombinedState]). [TopicBuilder.DiscoveryConfig] is not
-// among them, although this comment used to list it: it delegates to
-// [naming.DiscoveryConfigTopic], scoping the node id by the topic base.
+// Every method that targets a model-relevant topic (data point, channel
+// aggregate, device snapshot, hub item, …) delegates to [naming.PathData] or
+// a free function in the naming package — the model layer owns those
+// shapes. The bridge layer only fills in the runtime context (Base,
+// Central) that the model has no natural access to.
+//
+// The shapes composed here are the instance topics ([TopicBuilder.Connected],
+// [TopicBuilder.Info], [TopicBuilder.Maintenance]), the daemon-level add-on
+// update pair, the central-wide `system/<metric>` items, and the combined-DP
+// and schedule channel items that the naming package carries no helper for
+// (see [TopicBuilder.CombinedState]). They go through
+// [naming.StatusTopic] / [naming.SetTopic] like everything else, so the
+// function level is spelled once.
 type TopicBuilder struct {
 	Base string
 }
@@ -42,37 +48,57 @@ func NewTopicBuilder(base string) *TopicBuilder {
 	return &TopicBuilder{Base: strings.Trim(base, "/")}
 }
 
-// --- Bridge-internal (not model-driven) -------------------------------
-
-// BridgeStatus is the LWT / retained status topic.
-func (b *TopicBuilder) BridgeStatus() string {
-	return b.Base + "/bridge/status"
+// TopicBaseConformant reports whether base is an mqtt-smarthome 2.0
+// instance name — a single topic level. A multi-level base (`home/loom`) is
+// accepted verbatim and works, but runs outside spec §3 and is invisible to a
+// `+/info` scan (ADR 0083); go-hamqtt's multi-level layout is the authority
+// on the distinction.
+func TopicBaseConformant(base string) bool {
+	l, err := hatopic.NewSmartHomeMultiLevel(strings.Trim(base, "/"))
+	return err == nil && l.Conformant()
 }
 
-// BridgeHealth is the retained daemon-level health topic.
-//
-//	<base>/bridge/health
-func (b *TopicBuilder) BridgeHealth() string {
-	return b.Base + "/bridge/health"
+// --- Instance topics (mqtt-smarthome §3.1, §6, §7) --------------------
+
+// Connected is the instance's `<base>/connected` topic: a plain retained
+// `0`/`1`/`2` (`0` by Last Will and on graceful stop, `1` while no central
+// is reachable, `2` while at least one is). It replaces the former
+// `bridge/status` online/offline marker.
+func (b *TopicBuilder) Connected() string {
+	return b.Base + "/" + hatopic.FunctionConnected
 }
 
-// AddonUpdateState is the retained state topic for the daemon-level
-// CCU add-on self-update entity (ADR 0057). Unlike every per-central
-// hub topic this carries no <central> segment: the self-updater is a
-// property of the daemon process itself, not of any one CCU.
+// Info is the retained instance-introspection document `<base>/info`
+// (spec §6). The daemon's build and boot metadata that used to live on
+// `bridge/health` are folded into it.
+func (b *TopicBuilder) Info() string {
+	return b.Base + "/" + hatopic.FunctionInfo
+}
+
+// Maintenance is `<base>/maintenance/<item...>` (spec §7):
+// `maintenance/set/loglevel`, `maintenance/set/restart` and the retained
+// `maintenance/stats`.
+func (b *TopicBuilder) Maintenance(item ...string) string {
+	return b.Base + "/" + hatopic.FunctionMaintenance + "/" + strings.Join(item, "/")
+}
+
+// AddonUpdateState is the status item of the daemon-level CCU add-on
+// self-update entity (ADR 0057). Unlike every per-central hub item this
+// carries no <central> segment: the self-updater is a property of the daemon
+// process itself, not of any one CCU.
 //
-//	<base>/system/addon_update/state
+//	<base>/status/system/addon_update
 func (b *TopicBuilder) AddonUpdateState() string {
-	return b.Base + "/system/addon_update/state"
+	return naming.StatusTopic(b.Base, "system", "addon_update")
 }
 
-// AddonUpdateCommand is the subscribed command topic pairing
+// AddonUpdateCommand is the subscribed `set` item pairing
 // [TopicBuilder.AddonUpdateState] — HA's `update` entity publishes its
 // install command here.
 //
-//	<base>/system/addon_update/set
+//	<base>/set/system/addon_update
 func (b *TopicBuilder) AddonUpdateCommand() string {
-	return b.Base + "/system/addon_update/set"
+	return naming.SetTopic(b.Base, "system", "addon_update")
 }
 
 // DiscoveryNodeScope is the `<base-slug>_` prefix this daemon's discovery
@@ -114,12 +140,12 @@ func (b *TopicBuilder) ParameterState(centralName, iface, address string, channe
 	return b.parameterPathData(centralName, iface, address, channel, bucket, parameter).MQTTState(b.Base, centralName)
 }
 
-// ParameterCommand returns the subscribed `/set` topic.
+// ParameterCommand returns the data point's `set` item.
 func (b *TopicBuilder) ParameterCommand(centralName, iface, address string, channel int, bucket payload.Bucket, parameter string) string {
 	return b.parameterPathData(centralName, iface, address, channel, bucket, parameter).MQTTCommand(b.Base, centralName)
 }
 
-// ParameterConfig returns the descriptor-companion `/config` topic.
+// ParameterConfig returns the descriptor companion `<base>/meta/<item>`.
 func (b *TopicBuilder) ParameterConfig(centralName, iface, address string, channel int, bucket payload.Bucket, parameter string) string {
 	return b.parameterPathData(centralName, iface, address, channel, bucket, parameter).MQTTConfig(b.Base, centralName)
 }
@@ -130,21 +156,14 @@ func (b *TopicBuilder) DataPointState(centralName, iface, address string, channe
 	return b.ParameterState(centralName, iface, address, channel, payload.BucketValues, parameter)
 }
 
-// DataPointCommand is the VALUES-bucket /set alias.
+// DataPointCommand is the VALUES-bucket `set` alias.
 func (b *TopicBuilder) DataPointCommand(centralName, iface, address string, channel int, parameter string) string {
 	return b.ParameterCommand(centralName, iface, address, channel, payload.BucketValues, parameter)
 }
 
-// DataPointConfig is the VALUES-bucket /config alias.
+// DataPointConfig is the VALUES-bucket `meta` alias.
 func (b *TopicBuilder) DataPointConfig(centralName, iface, address string, channel int, parameter string) string {
 	return b.ParameterConfig(centralName, iface, address, channel, payload.BucketValues, parameter)
-}
-
-// DataPointEvent is the legacy per-event-type pulse topic. Delegates
-// to [naming.PathData.MQTTDataPointEvent].
-func (b *TopicBuilder) DataPointEvent(centralName, iface, address string, channel int, etype string) string {
-	pd := naming.NewChannelPathData(hmtypes.ParseWireInterfaceID(iface), address, channel)
-	return pd.MQTTDataPointEvent(b.Base, centralName, etype)
 }
 
 // ChannelEvent is the non-retained per-channel aggregate-event
@@ -179,6 +198,17 @@ func (b *TopicBuilder) SlotState(centralName, iface string, slot payload.TopicSl
 		return pd.MQTTCustomDPState(b.Base, centralName)
 	}
 	return b.ParameterState(centralName, iface, slot.Address, slot.Channel, slot.Bucket, slot.Parameter)
+}
+
+// SlotHAState is the Home Assistant-native twin `<base>/ha/…` of a custom-DP
+// slot's status item, or "" for a slot that has none. Only the JSON-schema
+// light has one; see [naming.FunctionHA].
+func (b *TopicBuilder) SlotHAState(centralName, iface string, slot payload.TopicSlot) string {
+	if slot.Bucket != payload.BucketCustom || slot.Parameter != haJSONLightKind {
+		return ""
+	}
+	pd := naming.NewCustomDPPathData(hmtypes.ParseWireInterfaceID(iface), slot.Address, slot.Channel, slot.Parameter)
+	return pd.MQTTCustomDPHAState(b.Base, centralName)
 }
 
 // SlotConfig resolves to the matching descriptor-companion topic.
@@ -233,7 +263,7 @@ func (b *TopicBuilder) DeviceUpdateState(centralName, iface, address string) str
 }
 
 // DeviceUpdateCommand is the canonical spelling of the install-command
-// topic (`.../update/set`). Nothing subscribes to it and the update
+// item (`<base>/set/…/update`). Nothing subscribes to it and the update
 // entity declares no command_topic — flashing firmware from a possibly
 // retained broker payload is unsafe. See
 // [naming.PathData.MQTTDeviceUpdateCommand] for the full rationale.
@@ -255,76 +285,67 @@ func (b *TopicBuilder) WeekProfileCommand(centralName, iface, address string, ch
 	return pd.MQTTWeekProfileCommand(b.Base, centralName)
 }
 
-// CombinedState returns the retained state topic for a combined DP
-// (HSColor, Timer, LevelCombined, …) on a channel. The kind disambiguates
-// multiple combined DPs on the same channel ("duration", "hs_color", …).
+// CombinedState returns the status item of a combined DP (HSColor, Timer,
+// LevelCombined, …) on a channel. The kind disambiguates multiple combined
+// DPs on the same channel ("duration", "hs_color", …).
 //
-//	<base>/<central>/<iface>/<addr>/<channel>/combined/<kind>
+//	<base>/status/<central>/<iface>/<addr>/<channel>/combined/<kind>
 func (b *TopicBuilder) CombinedState(centralName, iface, address string, channel int, kind string) string {
-	// The combined-DP topology is local to the bridge layer (the naming
-	// package does not yet carry a helper for it). Construct via the
-	// shared channelScopedTopic prefix using the same TopicSafe contract
-	// every channel topic uses.
-	return b.channelScopedTopic(centralName, iface, address, channel) + "/combined/" + naming.TopicSafe(kind)
+	return naming.StatusTopic(b.Base, channelItem(centralName, iface, address, channel, "combined", naming.TopicSafe(kind))...)
 }
 
-// CombinedCommand returns the subscribed set topic for a combined DP.
+// CombinedCommand returns the `set` item of a combined DP.
 //
-//	<base>/<central>/<iface>/<addr>/<channel>/combined/<kind>/set
+//	<base>/set/<central>/<iface>/<addr>/<channel>/combined/<kind>
 func (b *TopicBuilder) CombinedCommand(centralName, iface, address string, channel int, kind string) string {
-	return b.CombinedState(centralName, iface, address, channel, kind) + "/set"
+	return naming.SetTopic(b.Base, channelItem(centralName, iface, address, channel, "combined", naming.TopicSafe(kind))...)
 }
 
-// ScheduleEntityState returns the retained state topic for the
-// device-level Zeitplan sensor (one per schedule-relevant device). The
-// state payload is the count of active schedule entries.
+// ScheduleEntityState returns the status item of the device-level Zeitplan
+// sensor (one per schedule-relevant device): the count of active schedule
+// entries.
 //
-//	<base>/<central>/<iface>/<addr>/<channel>/schedule/state
+//	<base>/status/<central>/<iface>/<addr>/<channel>/schedule/active_entries
 func (b *TopicBuilder) ScheduleEntityState(centralName, iface, address string, channel int) string {
-	return b.channelScopedTopic(centralName, iface, address, channel) + "/schedule/state"
+	return naming.StatusTopic(b.Base, channelItem(centralName, iface, address, channel, segSchedule, "active_entries")...)
 }
 
-// ScheduleEntityAttrs returns the retained json_attributes topic for the
-// Zeitplan sensor — schedule_type, max_entries, available_target_channels,
-// schedule_enabled, schedule_data, …
+// ScheduleEntityAttrs returns the status item carrying the Zeitplan
+// sensor's attributes — schedule_type, max_entries,
+// available_target_channels, schedule_enabled, schedule_data, …
 //
-//	<base>/<central>/<iface>/<addr>/<channel>/schedule/attrs
+//	<base>/status/<central>/<iface>/<addr>/<channel>/schedule/attributes
 func (b *TopicBuilder) ScheduleEntityAttrs(centralName, iface, address string, channel int) string {
-	return b.channelScopedTopic(centralName, iface, address, channel) + "/schedule/attrs"
+	return naming.StatusTopic(b.Base, channelItem(centralName, iface, address, channel, segSchedule, "attributes")...)
 }
 
-// ScheduleSwitchState returns the retained boolean state topic for one
-// schedule channel switch.
+// ScheduleSwitchState returns the boolean status item of one schedule
+// channel switch. The `switch` level keeps every key out of the namespace of
+// the two items above, so no schedule key can shadow `active_entries`.
 //
-//	<base>/<central>/<iface>/<addr>/<channel>/schedule/<key>/state
+//	<base>/status/<central>/<iface>/<addr>/<channel>/schedule/switch/<key>
 func (b *TopicBuilder) ScheduleSwitchState(centralName, iface, address string, channel int, key string) string {
-	return b.channelScopedTopic(centralName, iface, address, channel) + "/schedule/" + naming.TopicSafe(key) + "/state"
+	return naming.StatusTopic(b.Base, channelItem(centralName, iface, address, channel, segSchedule, segScheduleSwitch, naming.TopicSafe(key))...)
 }
 
-// ScheduleSwitchCommand returns the subscribed set topic for one
-// schedule channel switch.
+// ScheduleSwitchCommand returns the `set` item of one schedule channel
+// switch.
 //
-//	<base>/<central>/<iface>/<addr>/<channel>/schedule/<key>/set
+//	<base>/set/<central>/<iface>/<addr>/<channel>/schedule/switch/<key>
 func (b *TopicBuilder) ScheduleSwitchCommand(centralName, iface, address string, channel int, key string) string {
-	return b.channelScopedTopic(centralName, iface, address, channel) + "/schedule/" + naming.TopicSafe(key) + "/set"
+	return naming.SetTopic(b.Base, channelItem(centralName, iface, address, channel, segSchedule, segScheduleSwitch, naming.TopicSafe(key))...)
 }
 
-// channelScopedTopic returns the shared "<base>/<central>/<iface>/<addr>/<channel>"
-// prefix used by every bridge-internal channel topic that has no
-// naming.PathData helper yet (combined-DP and schedule topics).
-//
-// The base is only slash-trimmed, never [naming.TopicSafe]d: a base is a
-// topic *prefix*, and an operator may configure it with levels
-// ("home/loom"). Escaping it here collapsed those to "home_loom" while
-// every naming.MQTT* helper kept them, so the combined-DP and schedule
-// topics of such an installation landed on a prefix of their own — one
-// no subscriber and no retain sweep looks at.
-func (b *TopicBuilder) channelScopedTopic(centralName, iface, address string, channel int) string {
-	return strings.Trim(b.Base, "/") + "/" +
-		naming.TopicSafe(centralName) + "/" +
-		naming.TopicSafe(iface) + "/" +
-		naming.TopicSafe(address) + "/" +
-		intStr(channel)
+// channelItem returns the escaped `<central>/<iface>/<addr>/<channel>` item
+// path followed by rest — the prefix of every bridge-local channel item that
+// has no naming.PathData helper (combined-DP and schedule items).
+func channelItem(centralName, iface, address string, channel int, rest ...string) []string {
+	return append([]string{
+		naming.TopicSafe(centralName),
+		naming.TopicSafe(iface),
+		naming.TopicSafe(address),
+		intStr(channel),
+	}, rest...)
 }
 
 func intStr(i int) string {
@@ -339,31 +360,22 @@ func (b *TopicBuilder) SystemStatus(centralName string) string {
 }
 
 // HubStatus renders the per-CCU availability gate
-// `<base>/<central>/hub/status`.
+// `<base>/status/<central>/online`.
 //
-// **It is published.** A retained `online` / `offline` marker per
-// configured CCU, folded from the CCU's per-interface reachability states
-// and written through the shared availability publisher at QoS 1. Every
-// CCU-scoped hub entity lists it in its discovery `availability` block
-// alongside [TopicBuilder.BridgeStatus], so an unreachable CCU no longer
-// leaves its sysvars, programs and system scores "available" with stale
-// values.
-//
-// This comment described the opposite until 2026-09-13, and was the
-// version of the fact a reader was most likely to meet: it sat on the
-// builder, it was assertive, and nothing tested it. The shape was indeed
-// reserved and unpublished for the whole life of the daemon before that —
-// see the 2026-09-12 amendment to
-// docs/adr/0011-mqtt-topic-and-payload-architecture.md for the
-// withdrawal, and the 2026-09-13 amendment for the implementation. The
-// two shapes that are still reserved are [TopicBuilder.HubInfo] and
+// **It is published**: a retained status item whose `val` is true while the
+// CCU is reachable, folded from the CCU's per-interface reachability states
+// and the ReGa probe, and written at QoS 1. Every CCU-scoped hub entity
+// lists it in its discovery `availability` block alongside
+// [TopicBuilder.Connected], so an unreachable CCU does not leave its
+// sysvars, programs and system scores "available" with stale values. The
+// two shapes that stay reserved are [TopicBuilder.HubInfo] and
 // [TopicBuilder.HubDiagnostics].
 func (b *TopicBuilder) HubStatus(centralName string) string {
 	return naming.MQTTHubStatus(b.Base, centralName)
 }
 
 // HubInfo renders the reserved per-CCU info-snapshot shape
-// `<base>/<central>/hub/info`.
+// `<base>/status/<central>/hub/info`.
 //
 // **Nothing publishes it**, and no consumer needs it: the fields it
 // would carry (model, sw_version, serial_number, configuration_url) are
@@ -379,7 +391,7 @@ func (b *TopicBuilder) HubInfo(centralName string) string {
 }
 
 // HubDiagnostics renders the reserved per-CCU diagnostics shape
-// `<base>/<central>/hub/diagnostics`.
+// `<base>/status/<central>/hub/diagnostics`.
 //
 // **Nothing publishes it.** It went undocumented until 2026-09-12, when
 // it was written into docs/mqtt-topic-schema.md's reserved table
@@ -393,8 +405,8 @@ func (b *TopicBuilder) HubDiagnostics(centralName string) string {
 	return naming.MQTTHubDiagnostics(b.Base, centralName)
 }
 
-// HubSystemHealthScore is the retained system-health score topic
-// (`<base>/<central>/system/health_score`). Matches the state_topic
+// HubSystemHealthScore is the retained system-health score item
+// (`<base>/status/<central>/system/health_score`). Matches the state_topic
 // in BuildSystemHealthDiscovery.
 //
 // The central segment is [naming.TopicSafe]d like every other topic on
@@ -407,27 +419,27 @@ func (b *TopicBuilder) HubSystemHealthScore(centralName string) string {
 }
 
 // HubConnectionLatency is the retained aggregated connection-latency
-// topic (`<base>/<central>/system/latency`). Matches the state_topic in
+// item (`<base>/status/<central>/system/latency`). Matches the state_topic in
 // BuildConnectionLatencyDiscovery — one central-wide latency sensor, not
 // per-interface.
 func (b *TopicBuilder) HubConnectionLatency(centralName string) string {
 	return b.systemTopic(centralName, "latency")
 }
 
-// HubLastEventAge is the retained last-event-age state topic
-// (`<base>/<central>/system/last_event_age`). Matches the state_topic in
+// HubLastEventAge is the retained last-event-age status item
+// (`<base>/status/<central>/system/last_event_age`). Matches the state_topic in
 // BuildLastEventAgeDiscovery. The value is the age in seconds of the
 // newest backend event — a liveness signal for the CCU connection.
 func (b *TopicBuilder) HubLastEventAge(centralName string) string {
 	return b.systemTopic(centralName, "last_event_age")
 }
 
-// systemTopic is the shared `<base>/<central>/system/<metric>` shape of
+// systemTopic is the shared `<base>/status/<central>/system/<metric>` shape of
 // the central-wide metric sensors. One builder so the three of them
 // cannot drift apart from each other or from the discovery payloads,
 // which derive their state topics from these methods.
 func (b *TopicBuilder) systemTopic(centralName, metric string) string {
-	return b.Base + "/" + naming.TopicSafe(centralName) + "/system/" + metric
+	return naming.StatusTopic(b.Base, naming.TopicSafe(centralName), "system", metric)
 }
 
 // systemMetricTopics returns the retained topics of all central-wide
@@ -445,8 +457,8 @@ func (b *TopicBuilder) systemMetricTopics(centralName string) []string {
 	}
 }
 
-// HubUpdate is the retained firmware-update state topic
-// (`<base>/<central>/hub/update`). Matches the state_topic in
+// HubUpdate is the retained firmware-update status item
+// (`<base>/status/<central>/hub/update`). Matches the state_topic in
 // BuildHubUpdateDiscovery.
 func (b *TopicBuilder) HubUpdate(centralName string) string {
 	return naming.MQTTHubUpdate(b.Base, centralName)
@@ -478,10 +490,6 @@ func (b *TopicBuilder) parameterPathData(centralName, iface, address string, cha
 // exactly.
 //
 // Its sole caller is the retained-topic address matcher in bridge.go.
-// The four consumers this comment used to name were all wrong:
-// BridgeStatus and BridgeHealth escape nothing, DiscoveryConfig
-// delegates to the naming package, and no TopicBuilder method called
-// ServiceMethodCommand has ever existed.
 func safe(s string) string {
 	return naming.TopicSafe(s)
 }

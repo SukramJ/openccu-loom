@@ -45,23 +45,28 @@ type UpdateEvent struct {
 const updateEntityKey = "update"
 
 // updateValueTemplate reads the installed version out of the four-field
-// firmware document [Bridge.PublishUpdateState] publishes. The state
-// topic carries that document rather than a scalar, so the render
-// pipeline's envelope default would reach for a `value` key no payload on
-// this plane has.
-const updateValueTemplate = "{{ value_json.firmware }}"
+// firmware document [Bridge.PublishUpdateState] publishes. The status item
+// carries that document whole as its `val` (ADR 0083: a document without a
+// primary value), so the template reaches into it.
+const updateValueTemplate = "{{ value_json.val.firmware }}"
 
 // updateLatestVersionTemplate reads the target version out of the same
 // document. Home Assistant compares it against the installed version to
 // decide whether the entity reports an available update.
-const updateLatestVersionTemplate = "{{ value_json.latest_firmware }}"
+const updateLatestVersionTemplate = "{{ value_json.val.latest_firmware }}"
 
 // updateJSONAttributesTemplate republishes the whole firmware document as
 // entity attributes, so an operator can inspect all four fields
 // (firmware, latest_firmware, in_progress, firmware_update_state) from the
 // entity rather than from the broker. It is [hamodel.Description]
 // vocabulary since go-hamqtt v0.24.0.
-const updateJSONAttributesTemplate = "{{ value_json | tojson }}"
+const updateJSONAttributesTemplate = "{{ value_json.val | tojson }}"
+
+// updateDocumentTemplate hands Home Assistant's update platform the status
+// object's `val` — a document in the platform's own state schema
+// (installed_version, latest_version, in_progress) — as JSON, which the
+// platform parses natively.
+const updateDocumentTemplate = "{{ value_json.val | tojson }}"
 
 // updateEntity is the per-device firmware updater on the shared model: a
 // [hamodel.Basic] with one description and a single readable binding.
@@ -139,7 +144,7 @@ func (l updateTopicLayout) Availability(hamodel.Slot) string {
 }
 
 // Bridge implements the shared model's topic layout.
-func (l updateTopicLayout) Bridge() string { return l.d.TopicBuilder.BridgeStatus() }
+func (l updateTopicLayout) Bridge() string { return l.d.TopicBuilder.Connected() }
 
 // updateDiscoveryContext is the render context for this plane: the
 // standard one with this daemon's identity strings substituted.
@@ -154,6 +159,12 @@ type updateDiscoveryContext struct {
 
 	uniqueID string
 	nodeID   string
+}
+
+// Availability implements [hadiscovery.Context]: the standard resolution,
+// rewritten into the ADR 0083 vocabulary by [conventionAvailability].
+func (c updateDiscoveryContext) Availability(dev *hamodel.Device, e hamodel.Entity) []hadiscovery.AvailabilityEntry {
+	return conventionAvailability(c.StdContext.Availability(dev, e), c.Layout.Bridge())
 }
 
 // UniqueID implements [hadiscovery.Context] with the id this daemon

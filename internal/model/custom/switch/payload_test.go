@@ -46,7 +46,7 @@ func (s *stubDiscoveryCtx) WireParameterStateTopic(_, param string) string {
 
 func (s *stubDiscoveryCtx) DeviceAvailabilityTopic() string { return "wire/availability" }
 
-func (s *stubDiscoveryCtx) BridgeStatusTopic() string { return "wire/bridge/status" }
+func (s *stubDiscoveryCtx) ConnectedTopic() string { return "wire/bridge/status" }
 
 // compile-time check: stubDiscoveryCtx satisfies payload.HADiscoveryTopics.
 var _ payload.HADiscoveryTopics = (*stubDiscoveryCtx)(nil)

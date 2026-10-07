@@ -52,6 +52,8 @@
   "north.mqtt.discovery_enabled": "bool",
   "north.mqtt.discovery_retract_unscoped": "bool,omitempty",
   "north.mqtt.enabled": "bool",
+  "north.mqtt.maintenance.enabled": "*bool,omitempty",
+  "north.mqtt.maintenance.stats_interval_seconds": "*int,omitempty",
   "north.mqtt.password": "string",
   "north.mqtt.protocol_version": "string,omitempty",
   "north.mqtt.raw_enabled": "bool",

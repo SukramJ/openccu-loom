@@ -5,7 +5,6 @@ package adapter
 
 import (
 	"context"
-	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -77,10 +76,10 @@ func TestCentralSouthboundReadyEventTriggersPerCentralSnapshot(t *testing.T) {
 
 	var stateTopics, availability int
 	for _, p := range pub.Published() {
-		if strings.HasSuffix(p.Topic, "/0001ABCD/1/values/STATE") {
+		if statusSuffix(p.Topic, "/0001ABCD/1/values/STATE") {
 			stateTopics++
 		}
-		if strings.HasSuffix(p.Topic, "/0001ABCD/availability") {
+		if statusSuffix(p.Topic, "/0001ABCD/online") {
 			availability++
 		}
 	}

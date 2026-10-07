@@ -51,7 +51,7 @@ func TestTheBridgeRoutesItsSweepsThroughTheSweepConnection(t *testing.T) {
 	t.Parallel()
 	cfg := northSweepTestConfig()
 
-	stack := buildMQTT(cfg, slog.Default(), nil, nil, func() []string { return nil })
+	stack := buildMQTT(cfg, slog.Default(), nil, nil, func() []string { return nil }, mqttMaintenanceHooks{})
 	if stack == nil {
 		t.Fatal("buildMQTT returned nil with MQTT enabled")
 	}
@@ -100,7 +100,7 @@ func TestTheBridgeRoutesItsSweepsThroughTheSweepConnection(t *testing.T) {
 // with every window and is dropped outright when an UNSUBSCRIBE fails. A
 // graceful Close discards a will, which is why normal operation would never
 // show this — but a dropped socket or a broker kick would publish a retained
-// `offline` to `<base>/bridge/status`, the topic every entity of every CCU
+// `0` to `<base>/connected`, the topic every entity of every CCU
 // lists as its availability source. The whole fleet greys out while the
 // daemon runs on and keeps publishing, and nothing anywhere reports it.
 func TestTheSweepConnectionCarriesNoLastWill(t *testing.T) {
@@ -114,7 +114,7 @@ func TestTheSweepConnectionCarriesNoLastWill(t *testing.T) {
 			"from an absent policy")
 	}
 
-	stack := buildMQTT(cfg, logger, nil, nil, func() []string { return nil })
+	stack := buildMQTT(cfg, logger, nil, nil, func() []string { return nil }, mqttMaintenanceHooks{})
 	if stack == nil {
 		t.Fatal("buildMQTT returned nil with MQTT enabled")
 	}

@@ -7,6 +7,7 @@ package integration
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"strings"
 	"sync"
@@ -29,12 +30,14 @@ import (
 // (dockerised, or the native binary on dev machines). A second client
 // subscribes to the whole topic tree and the test asserts the contract:
 //
-//   - every reachable device publishes its `…/availability` topic as
-//     "online" (none as "offline" — godevccu devices are all reachable);
-//   - registered data points publish a slot state carrying
-//     `"available":true`; and
+//   - every reachable device publishes its `…/online` status item with
+//     `val` true (none false — godevccu devices are all reachable);
+//   - registered data points publish a status object carrying
+//     `hm.available` true; and
 //   - not-yet-observed VALUES data points publish
-//     `{"value":null,"available":false}` rather than an empty eviction.
+//     `{"val":null,"ts":…,"lc":…,"hm":{"available":false}}` rather than an
+//     empty eviction (ADR 0083: the pre-convention
+//     `{"value":null,"available":false}`, same fields in the status object).
 //
 // The last bullet pins a convention that was deliberately reversed, so it
 // says which side it holds and why. The original fix published unobserved
@@ -48,7 +51,7 @@ import (
 //
 // What survived both is the part that actually caused the outage: the slot
 // topic must carry a JSON body. An unobserved point publishing
-// `{"value":null,"available":false}` is the decided behaviour; an
+// `{"val":null,…,"hm":{"available":false}}` is the decided behaviour; an
 // unobserved point publishing nothing at all is the regression.
 //
 // The bullet is scoped to the VALUES plane for a reason worth keeping.
@@ -173,22 +176,37 @@ func TestMQTTAvailabilityAgainstRealBroker(t *testing.T) {
 	mu.Unlock()
 
 	for topic, payload := range snapshot {
+		// Every state item is an mqtt-smarthome 2.0 status object
+		// (ADR 0083): the value in `val`, the data point's availability
+		// under the project extension `hm`.
+		var obj struct {
+			Val any `json:"val"`
+			HM  *struct {
+				Available *bool `json:"available"`
+			} `json:"hm"`
+		}
+		decoded := len(payload) > 0 && json.Unmarshal(payload, &obj) == nil
+		var available *bool
+		if decoded && obj.HM != nil {
+			available = obj.HM.Available
+		}
 		switch {
-		case strings.HasSuffix(topic, "/availability"):
-			switch string(payload) {
-			case "online":
+		case strings.HasSuffix(topic, "/online") && strings.HasPrefix(topic, "gh/status/ccu-01/HmIP-RF/"):
+			// A device's reachability: a boolean status item.
+			switch obj.Val {
+			case true:
 				online++
-			case "offline":
+			case false:
 				offline++
 			}
-		case strings.Contains(string(payload), `"available":true`):
+		case available != nil && *available:
 			slotAvailableTrue++
-		case strings.Contains(string(payload), `"value":null,"available":false`):
-			// An unobserved data point: no confirmed reading, but a body
-			// the availability template can read. Counted per plane so the
-			// VALUES assertion cannot be satisfied by another plane, which
-			// is how the previous version of it stayed green after the
-			// behaviour it pinned had already changed.
+		case available != nil && !*available && obj.Val == nil:
+			// An unobserved data point: no confirmed reading (`val` null),
+			// but a body the availability template can read. Counted per
+			// plane so the VALUES assertion cannot be satisfied by another
+			// plane, which is how the previous version of it stayed green
+			// after the behaviour it pinned had already changed.
 			if strings.Contains(topic, "/values/") {
 				unobservedUnavailable++
 			} else {
@@ -206,16 +224,16 @@ func TestMQTTAvailabilityAgainstRealBroker(t *testing.T) {
 		unobservedUnavailableOtherPlanes, emptyValueStateRetainedEvicts, len(snapshot))
 
 	if online == 0 {
-		t.Error("no device published availability=online — reachable devices must be online at boot")
+		t.Error("no device published `online` val=true — reachable devices must be online at boot")
 	}
 	if offline != 0 {
-		t.Errorf("got %d availability=offline publishes — all godevccu devices are reachable", offline)
+		t.Errorf("got %d device `online` val=false publishes — all godevccu devices are reachable", offline)
 	}
 	if slotAvailableTrue == 0 {
 		t.Error("no slot state carried available:true — per-DP availability template would resolve to unavailable")
 	}
 	if unobservedUnavailable == 0 {
-		t.Error("no unobserved VALUES DP published {value:null, available:false} — an unobserved point " +
+		t.Error("no unobserved VALUES DP published {val:null, hm:{available:false}} — an unobserved point " +
 			"must still publish a readable body; publishing nothing is what left HA entities " +
 			"stuck on unavailable")
 	}

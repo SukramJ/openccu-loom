@@ -129,8 +129,8 @@ func TestDeviceUpdateHADiscoveryPayloadShape(t *testing.T) {
 	checks := map[string]any{
 		"device_class":            "firmware",
 		"entity_category":         "config",
-		"value_template":          "{{ value_json.firmware }}",
-		"latest_version_template": "{{ value_json.latest_firmware }}",
+		"value_template":          "{{ value_json.val.firmware }}",
+		"latest_version_template": "{{ value_json.val.latest_firmware }}",
 		"state_topic":             wantStateTopic,
 		"latest_version_topic":    wantStateTopic,
 	}

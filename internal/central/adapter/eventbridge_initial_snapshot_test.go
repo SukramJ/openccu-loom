@@ -72,17 +72,17 @@ func TestPublishInitialSnapshotPushesEveryObservedDataPoint(t *testing.T) {
 	matched := 0
 	availability := 0
 	for _, p := range got {
-		if strings.HasSuffix(p.Topic, "/0001ABCD/1/values/STATE") {
+		if statusSuffix(p.Topic, "/0001ABCD/1/values/STATE") {
 			matched++
 			// Slot-state topics carry the PerDPState JSON envelope; verify
 			// value:true is present in the payload.
-			if !strings.Contains(string(p.Payload), `"value":true`) {
-				t.Fatalf("unexpected payload %q for %s (expected JSON with value:true)", p.Payload, p.Topic)
+			if !strings.Contains(string(p.Payload), `"val":true`) {
+				t.Fatalf("unexpected payload %q for %s (expected a status object with val true)", p.Payload, p.Topic)
 			}
 		}
-		if strings.HasSuffix(p.Topic, "/0001ABCD/availability") {
+		if statusSuffix(p.Topic, "/0001ABCD/online") {
 			availability++
-			if string(p.Payload) != "online" {
+			if v, _, ok := statusVal(p.Payload); !ok || v != true {
 				t.Fatalf("unexpected availability payload %q for %s", p.Payload, p.Topic)
 			}
 		}
@@ -146,13 +146,13 @@ func TestPublishInitialSnapshotPublishesUnavailableForUnobservedDP(t *testing.T)
 	evictions := 0
 	unavailablePublishes := 0
 	for _, p := range pub.Published() {
-		if strings.HasSuffix(p.Topic, "/0001ABCD/1/values/STATE") {
+		if statusSuffix(p.Topic, "/0001ABCD/1/values/STATE") {
 			switch {
 			case len(p.Payload) == 0 && p.Retain:
 				evictions++
 			case strings.Contains(string(p.Payload), `"available":false`):
 				unavailablePublishes++
-				if !strings.Contains(string(p.Payload), `"value":null`) {
+				if !strings.Contains(string(p.Payload), `"val":null`) {
 					t.Errorf("unobserved slot state should carry a null value, got %s", p.Payload)
 				}
 			}
@@ -209,7 +209,7 @@ func TestPublishInitialSnapshotPublishesOnlineForReachableDevice(t *testing.T) {
 	availabilityPayload := ""
 	availabilityCount := 0
 	for _, p := range pub.Published() {
-		if strings.HasSuffix(p.Topic, "/0001ABCD/availability") {
+		if statusSuffix(p.Topic, "/0001ABCD/online") {
 			availabilityCount++
 			availabilityPayload = string(p.Payload)
 		}
@@ -217,8 +217,8 @@ func TestPublishInitialSnapshotPublishesOnlineForReachableDevice(t *testing.T) {
 	if availabilityCount != 1 {
 		t.Fatalf("expected 1 availability publish, got %d", availabilityCount)
 	}
-	if availabilityPayload != "online" {
-		t.Fatalf("availability payload = %q, want \"online\" (reachable device)", availabilityPayload)
+	if v, _, ok := statusVal([]byte(availabilityPayload)); !ok || v != true {
+		t.Fatalf("availability payload = %q, want val true (reachable device)", availabilityPayload)
 	}
 }
 
@@ -268,16 +268,15 @@ func TestEventBridgePublishesGenericDPConfig(t *testing.T) {
 	emit(false) // identical descriptor → config must NOT republish.
 	eb.Flush()
 
-	// New bucket-aware topology: config topic is "<addr>/<ch>/<bucket>/<param>/config".
-	suffix := "/0001ABCD/1/values/STATE/config"
+	// The descriptor companion is the status item's path under `meta`.
 	configCount := 0
 	for _, p := range pub.Published() {
-		if strings.HasSuffix(p.Topic, suffix) {
+		if isMetaTopic(p.Topic) && strings.HasSuffix(p.Topic, "/0001ABCD/1/values/STATE") {
 			configCount++
 		}
 	}
 	if configCount != 1 {
-		t.Fatalf("expected exactly 1 /config publish (diff-gated), got %d", configCount)
+		t.Fatalf("expected exactly 1 meta publish (diff-gated), got %d", configCount)
 	}
 }
 
@@ -330,10 +329,10 @@ func TestEventBridgeRoutesCalculatedDPToCalculatedBucket(t *testing.T) {
 	calcSeen := 0
 	wrongBucket := 0
 	for _, p := range pub.Published() {
-		if strings.HasSuffix(p.Topic, "/1/calculated/DEW_POINT") {
+		if statusSuffix(p.Topic, "/1/calculated/DEW_POINT") {
 			calcSeen++
 		}
-		if strings.HasSuffix(p.Topic, "/1/values/DEW_POINT") {
+		if statusSuffix(p.Topic, "/1/values/DEW_POINT") {
 			wrongBucket++
 		}
 	}
@@ -405,10 +404,10 @@ func TestEventBridgePublishesADR0011SlotState(t *testing.T) {
 	wantSuffix := "/0001ABCD/1/values/STATE"
 	matched := 0
 	for _, p := range pub.Published() {
-		if strings.HasSuffix(p.Topic, wantSuffix) {
+		if statusSuffix(p.Topic, wantSuffix) {
 			matched++
-			if !strings.Contains(string(p.Payload), `"value":true`) {
-				t.Errorf("slot-state payload missing `value:true`: %s", p.Payload)
+			if !strings.Contains(string(p.Payload), `"val":true`) {
+				t.Errorf("slot-state payload missing `val:true`: %s", p.Payload)
 			}
 			if !strings.Contains(string(p.Payload), `"available":true`) {
 				t.Errorf("slot-state payload missing `available:true`: %s", p.Payload)
@@ -490,15 +489,15 @@ func TestEventBridgePublishesOnlineAtBootAndDoesNotRepublish(t *testing.T) {
 	got := pub.Published()
 	availability := []string{}
 	for _, p := range got {
-		if strings.HasSuffix(p.Topic, "/0001ABCD/availability") {
-			availability = append(availability, string(p.Payload))
+		if statusSuffix(p.Topic, "/0001ABCD/online") {
+			availability = append(availability, plainVal(p.Payload))
 		}
 	}
 	if len(availability) != 1 {
 		t.Fatalf("expected 1 availability publish (online at boot, no republish on value events), got %d: %v", len(availability), availability)
 	}
-	if availability[0] != "online" {
-		t.Errorf("availability = %q, want online", availability[0])
+	if availability[0] != "true" {
+		t.Errorf("availability = %q, want val true", availability[0])
 	}
 }
 
@@ -569,7 +568,7 @@ func TestPublishInitialSnapshotDoesNotFirePressEvents(t *testing.T) {
 	eb.Flush()
 
 	for _, p := range pub.Published() {
-		if strings.HasSuffix(p.Topic, "/0001ABCD/1/event") {
+		if statusSuffix(p.Topic, "/0001ABCD/1/event") {
 			t.Errorf("boot snapshot published a keypress pulse to %s: %s", p.Topic, p.Payload)
 		}
 	}
@@ -631,10 +630,10 @@ func TestLiveKeypressStillFiresPressEvent(t *testing.T) {
 
 	found := false
 	for _, p := range pub.Published() {
-		if strings.HasSuffix(p.Topic, "/0001ABCD/1/event") {
+		if statusSuffix(p.Topic, "/0001ABCD/1/event") {
 			found = true
-			if !strings.Contains(string(p.Payload), `"event_type":"press_short"`) {
-				t.Errorf("keypress payload = %s, want event_type press_short", p.Payload)
+			if v, _, ok := statusVal(p.Payload); !ok || v != "press_short" {
+				t.Errorf("keypress payload = %s, want val press_short", p.Payload)
 			}
 		}
 	}

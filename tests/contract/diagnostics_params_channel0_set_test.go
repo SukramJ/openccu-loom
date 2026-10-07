@@ -126,10 +126,18 @@ func TestDeviceDiagnosticsCoversEveryChannel0Parameter(t *testing.T) {
 		// Without this the whole guard could pass by observing nothing.
 		t.Fatalf("no publication on %s — the diagnostics aggregate never ran", want)
 	}
-	var diag map[string]any
-	if err := json.Unmarshal(body, &diag); err != nil {
+	// The diagnostics aggregate is a document without a primary value, so
+	// it is the status object's `val` whole (ADR 0083).
+	var obj struct {
+		Val map[string]any `json:"val"`
+	}
+	if err := json.Unmarshal(body, &obj); err != nil {
 		t.Fatalf("diagnostics body %q: %v", body, err)
 	}
+	if obj.Val == nil {
+		t.Fatalf("diagnostics body %s is not a status object carrying the aggregate in `val`", body)
+	}
+	diag := obj.Val
 	for _, param := range diagnosticsParamsWireSpellings {
 		key := strings.ToLower(param)
 		if _, ok := diag[key]; !ok {

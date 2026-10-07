@@ -59,7 +59,15 @@ import (
 //     added or changed three fields in two payloads
 //     ([hubGoldenReferenceAlignmentMoves]).
 //
-// All three substitutions are reversals, not exemptions: what they put back is the
+//  4. ADR 0083 moved every hub state and command topic into the
+//     mqtt-smarthome grammar and switched the plane to the status-object
+//     encoding. That too is undone by rule rather than by table —
+//     [undoTopicConvention] maps each topic back to its pre-convention
+//     spelling and each template back to what the raw-encoded plane emitted
+//     — and every rule demands the exact new value it reverses, so a rule
+//     that stopped applying fails instead of passing.
+//
+// All four substitutions are reversals, not exemptions: what they put back is the
 // exact byte sequence the pre-change builder produced, so anything else that
 // moved still breaks the digest.
 var hubGoldenPreCCUGateDigests = map[string]string{
@@ -239,6 +247,7 @@ func TestHubGoldenChangedOnlyInAvailability(t *testing.T) {
 			entry.Topic = was
 		}
 		undoReferenceAlignment(t, name, entry)
+		undoTopicConvention(t, name, entry)
 		if got := hubEntryDigestWithoutAvailability(t, entry); got != want {
 			t.Errorf("%s: payload changed outside `availability` (digest %s, want %s). "+
 				"The per-CCU gate adds one availability entry and nothing else; anything "+
@@ -253,8 +262,8 @@ func TestHubGoldenChangedOnlyInAvailability(t *testing.T) {
 //
 // Appending is the whole semantics. Home Assistant's default
 // `availability_mode: "all"` is a conjunction over the list, so an entity
-// stays gated on `bridge/status` (daemon up) and gains a gate on
-// `hub/status` (CCU on the bus). Replacing the bridge entry instead would
+// stays gated on `connected` ≥ 2 (daemon up, a CCU reachable) and gains a
+// gate on the central's own `online` item (this CCU on the bus). Replacing the bridge entry instead would
 // have traded one blind spot for another: a dead daemon publishes nothing
 // about its CCUs.
 func TestHubGoldenAvailabilityGainedOnlyTheCCUGate(t *testing.T) {
@@ -274,24 +283,35 @@ func TestHubGoldenAvailabilityGainedOnlyTheCCUGate(t *testing.T) {
 			t.Errorf("%s: availability_mode=%q — the CCU gate is a conjunction with the "+
 				"bridge entry and means nothing under any other mode", name, mode)
 		}
-		if first := list[0]["topic"]; first != hubGoldenBase+"/bridge/status" {
-			t.Errorf("%s: first availability entry is %v, want the bridge status topic — "+
+		if first := list[0]["topic"]; first != hubGoldenBase+"/connected" {
+			t.Errorf("%s: first availability entry is %v, want the instance's connected topic — "+
 				"the CCU gate is added alongside it, never instead of it", name, first)
+		}
+		// Level 2 (a central reachable) is the default; the connectivity
+		// sensors report that very reachability and are gated on level 1
+		// (daemon up) instead — see daemonAvailability.
+		wantLevel := "2"
+		if strings.HasPrefix(name, "connectivity/") {
+			wantLevel = "1"
+		}
+		if tmpl := list[0]["value_template"]; tmpl != "{{ 'online' if value | int(0) >= "+wantLevel+" else 'offline' }}" {
+			t.Errorf("%s: connected entry reads %v, want available at level %s", name, tmpl, wantLevel)
 		}
 		for i, e := range list {
 			topic, _ := e["topic"].(string)
-			isGate := strings.HasSuffix(topic, "/hub/status")
+			isGate := isCCUGate(topic)
 			if isGate && i != len(list)-1 {
 				t.Errorf("%s: CCU gate at position %d of %d, want last", name, i, len(list))
 			}
 			if !isGate {
 				continue
 			}
-			if e["payload_available"] != "online" || e["payload_not_available"] != "offline" {
-				t.Errorf("%s: CCU gate payloads %v/%v, want online/offline — Home Assistant "+
-					"ignores an availability payload it does not recognise and leaves the "+
-					"entity permanently unavailable with nothing on the wire to show why",
-					name, e["payload_available"], e["payload_not_available"])
+			if e["payload_available"] != "true" || e["payload_not_available"] != "false" ||
+				e["value_template"] != "{{ value_json.val | lower }}" {
+				t.Errorf("%s: CCU gate payloads %v/%v via %v, want true/false read from `val` — "+
+					"Home Assistant ignores an availability payload it does not recognise and "+
+					"leaves the entity permanently unavailable with nothing on the wire to show why",
+					name, e["payload_available"], e["payload_not_available"], e["value_template"])
 			}
 		}
 	}
@@ -344,7 +364,7 @@ func hubAvailabilityOf(t *testing.T, entry goldenEntry) (list []map[string]any, 
 //
 // The per-interface connectivity sensors are the fold's inputs. The
 // daemon-status sensor is the same argument one level up, against
-// `bridge/status`, and already carries no availability block at all — which
+// `connected`, and already carries no availability block at all — which
 // is why "an entity that declares no gate acquires none" is the rule rather
 // than a second exemption list.
 func TestTheFoldsOwnInputsAreNotGatedOnTheFold(t *testing.T) {
@@ -364,7 +384,7 @@ func TestTheFoldsOwnInputsAreNotGatedOnTheFold(t *testing.T) {
 		}
 		list, _ := hubAvailabilityOf(t, entry)
 		for _, e := range list {
-			if topic, _ := e["topic"].(string); strings.HasSuffix(topic, "/hub/status") {
+			if topic, _ := e["topic"].(string); isCCUGate(topic) {
 				t.Errorf("%s lists the CCU gate %q — it reports the signal the gate is "+
 					"folded from, so gating it makes it unavailable in exactly the "+
 					"situation it exists for", name, topic)
@@ -390,7 +410,7 @@ func TestEveryOtherCCUScopedHubEntityIsGated(t *testing.T) {
 		list, _ := hubAvailabilityOf(t, entry)
 		gated := false
 		for _, e := range list {
-			if topic, _ := e["topic"].(string); strings.HasSuffix(topic, "/hub/status") {
+			if topic, _ := e["topic"].(string); isCCUGate(topic) {
 				gated = true
 			}
 		}
@@ -412,12 +432,12 @@ func TestTheCCUGateIsScopedToTheEntitysOwnCentral(t *testing.T) {
 		list, _ := hubAvailabilityOf(t, entry)
 		for _, e := range list {
 			topic, _ := e["topic"].(string)
-			if !strings.HasSuffix(topic, "/hub/status") {
+			if !isCCUGate(topic) {
 				continue
 			}
-			// `<base>/<central>/hub/status`, and the same `<central>` the
-			// entity's own state topic carries.
-			want := strings.TrimSuffix(topic, "hub/status")
+			// `<base>/status/<central>/online`, and the same `<central>`
+			// the entity's own state topic carries.
+			want := strings.TrimSuffix(topic, "online")
 			if state, ok := entry.Payload["state_topic"].(string); ok &&
 				strings.Contains(state, "/hub/") && !strings.HasPrefix(state, want) {
 				t.Errorf("%s: gate %q but state topic %q — different centrals", name, topic, state)
@@ -452,4 +472,115 @@ func renderedHubEntries(t *testing.T) map[string]goldenEntry {
 		}
 	}
 	return out
+}
+
+// isCCUGate reports whether topic is a central's `online` item,
+// `<base>/status/<central>/online` — the per-CCU reachability gate.
+func isCCUGate(topic string) bool {
+	rest, ok := strings.CutPrefix(topic, hubGoldenBase+"/status/")
+	if !ok {
+		return false
+	}
+	central, leaf, ok := strings.Cut(rest, "/")
+	return ok && central != "" && leaf == "online"
+}
+
+// legacyHubTopic maps one hub topic of the mqtt-smarthome grammar back to
+// the spelling the pre-ADR-0083 builders produced. It knows exactly the hub
+// shapes and reports false for anything else, so a topic that moved some
+// other way is not silently mapped.
+func legacyHubTopic(topic string) (string, bool) {
+	base := hubGoldenBase + "/"
+	if topic == base+"connected" {
+		return base + "bridge/status", true
+	}
+	rest, ok := strings.CutPrefix(topic, base)
+	if !ok {
+		return "", false
+	}
+	fn, item, ok := strings.Cut(rest, "/")
+	if !ok {
+		return "", false
+	}
+	p := strings.Split(item, "/")
+	switch {
+	case fn == "status" && len(p) == 4 && p[1] == "hub" && p[2] == "sysvars":
+		return base + item + "/state", true
+	case fn == "set" && len(p) == 4 && p[1] == "hub" && p[2] == "sysvars":
+		return base + item + "/set", true
+	case len(p) == 5 && p[1] == "hub" && p[2] == "programs" && p[4] == "active":
+		leaf := map[string]string{"status": "state", "set": "set"}[fn]
+		return base + strings.Join(p[:4], "/") + "/" + leaf, leaf != ""
+	case fn == "set" && len(p) == 5 && p[1] == "hub" && p[2] == "programs" && p[4] == "trigger",
+		fn == "status" && len(p) == 5 && p[1] == "hub" && p[2] == "programs" && p[4] == "execute_available",
+		fn == "status" && len(p) >= 3 && p[1] == "hub",
+		fn == "status" && len(p) == 3 && p[1] == "system":
+		return base + item, true
+	case fn == "set" && len(p) == 4 && p[1] == "hub" && p[2] == "install_mode":
+		return base + item + "/set", true
+	}
+	return "", false
+}
+
+// hubConventionTemplates maps every template the status-object encoding put
+// on a hub payload to the one the raw-encoded plane carried; "" means the
+// key was absent.
+var hubConventionTemplates = map[string]map[string]string{
+	"value_template": {
+		"{{ value_json.val }}":                                 "",
+		"{{ value_json.val | lower }}":                         "",
+		"{{ value_json.val | tojson }}":                        "",
+		"{{ value_json.val | length }}":                        "{{ value_json | length }}",
+		"{{ 'online' if value | int(0) >= 1 else 'offline' }}": "",
+	},
+	"json_attributes_template": {
+		`{"messages": {{ value_json.val | tojson }} }`: `{"messages": {{ value_json | tojson }} }`,
+		`{"devices": {{ value_json.val | tojson }} }`:  `{"devices": {{ value_json | tojson }} }`,
+	},
+	"latest_version_template": {
+		"{{ value_json.val.latest_version }}": "{{ value_json.latest_version }}",
+	},
+	// The `text` sysvar's command wrapper: the `set` grammar cannot carry
+	// an empty or brace-leading string bare, which the raw plane could.
+	"command_template": {
+		textCommandTemplate: "",
+	},
+}
+
+// hubTopicFields are the payload keys that carry a topic on this plane.
+var hubTopicFields = []string{"state_topic", "command_topic", "json_attributes_topic", "latest_version_topic"}
+
+// undoTopicConvention reverses ADR 0083 on one entry: every topic field back
+// to its pre-convention spelling, every template back to what the raw
+// encoding emitted. A topic still in the old grammar, or one this rule does
+// not know, fails rather than passing through.
+func undoTopicConvention(t *testing.T, name string, entry goldenEntry) {
+	t.Helper()
+	for _, field := range hubTopicFields {
+		v, ok := entry.Payload[field].(string)
+		if !ok {
+			continue
+		}
+		old, ok := legacyHubTopic(v)
+		if !ok {
+			t.Errorf("%s: %s %q is not a hub topic of the mqtt-smarthome grammar", name, field, v)
+			continue
+		}
+		entry.Payload[field] = old
+	}
+	for field, table := range hubConventionTemplates {
+		v, ok := entry.Payload[field].(string)
+		if !ok {
+			continue
+		}
+		was, known := table[v]
+		if !known {
+			continue
+		}
+		if was == "" {
+			delete(entry.Payload, field)
+		} else {
+			entry.Payload[field] = was
+		}
+	}
 }

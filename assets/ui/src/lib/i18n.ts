@@ -1582,6 +1582,9 @@ const EN: Catalog = {
   "config.field.north.webhook.inbound.token": "Inbound token",
   "config.field.north.mqtt.retain_cleanup_window_ms":
     "Retain cleanup window (ms)",
+  "config.field.north.mqtt.maintenance.enabled": "MQTT maintenance topics",
+  "config.field.north.mqtt.maintenance.stats_interval_seconds":
+    "Maintenance statistics interval (s)",
   "config.field.north.rest.csrf_enabled": "CSRF protection",
   "config.field.north.rest.csrf_secure": "CSRF Secure cookie",
   "config.field.north.rest.tracing.otlp_endpoint": "OTLP trace endpoint",
@@ -1616,7 +1619,7 @@ const EN: Catalog = {
   "config.help.north.mqtt.topic_base":
     "Prefix every raw-plane and Discovery topic with this string. Change it when running multiple daemons against one broker.",
   "config.help.north.mqtt.raw_enabled":
-    "Publish per-data-point state under <topic_base>/<interface>/... — the raw topic plane non-HA consumers subscribe to. Discovery needs it: switching Discovery on turns this on too, since Discovery payloads only point at raw-plane topics.",
+    "Publish per-data-point state under <topic_base>/status/<central>/... — the raw topic plane non-HA consumers subscribe to. Discovery needs it: switching Discovery on turns this on too, since Discovery payloads only point at raw-plane topics.",
   "config.help.north.mqtt.discovery_enabled":
     "Emit Home Assistant Discovery payloads so HA auto-registers the daemon's devices. Implies the raw plane — the payloads name its topics, so enabling this enables 'Publish raw plane' as well.",
   "config.help.north.mqtt.discovery_retract_unscoped":
@@ -1918,6 +1921,10 @@ const EN: Catalog = {
     "Report a cover's position from its group-channel LEVEL rather than from its own channel; default true.",
   "config.help.north.mqtt.retain_cleanup_window_ms":
     "How long (in milliseconds) the daemon waits for the broker to deliver all retained messages before processing the retain-cleanup eviction list; zero falls back to 2000 ms.",
+  "config.help.north.mqtt.maintenance.enabled":
+    "Serve the mqtt-smarthome maintenance topics under <topic_base>/maintenance/: set the log level, restart the daemon (only when a supervisor restarts it) and publish process statistics. Anyone allowed to publish on the broker can use them — the broker's ACLs are the only gate, so switch this off on a broker you do not trust.",
+  "config.help.north.mqtt.maintenance.stats_interval_seconds":
+    "How often <topic_base>/maintenance/stats is republished, in seconds; empty means 60, 0 switches the statistics off.",
   "config.help.north.rest.csrf_enabled":
     "Mount the double-submit cookie/header CSRF guard on mutating REST endpoints; enabled by default for browser-facing deployments — disable only for pure API-token setups where no session cookies are issued.",
   "config.help.north.rest.csrf_secure":
@@ -2025,6 +2032,7 @@ const EN: Catalog = {
   "config.subgroup.auth": "Authentication",
   "config.subgroup.oidc": "OIDC (OpenID Connect)",
   "config.subgroup.rate_limit": "Rate Limiting",
+  "config.subgroup.maintenance": "Maintenance",
   "config.subgroup.ws": "WebSocket",
   "config.subgroup.tracing": "Tracing",
   "config.subgroup.commissioning": "Commissioning",
@@ -5909,6 +5917,9 @@ const DE: Catalog = {
   "config.field.north.webhook.inbound.token": "Eingangs-Token",
   "config.field.north.mqtt.retain_cleanup_window_ms":
     "Retain-Cleanup-Fenster (ms)",
+  "config.field.north.mqtt.maintenance.enabled": "MQTT-Wartungs-Topics",
+  "config.field.north.mqtt.maintenance.stats_interval_seconds":
+    "Intervall der Wartungsstatistik (s)",
   "config.field.north.rest.csrf_enabled": "CSRF-Schutz",
   "config.field.north.rest.csrf_secure": "CSRF Secure-Cookie",
   "config.field.north.rest.tracing.otlp_endpoint": "OTLP-Trace-Endpunkt",
@@ -5939,7 +5950,7 @@ const DE: Catalog = {
   "config.help.north.mqtt.topic_base":
     "Präfix für jedes Raw- und Discovery-Topic. Ändern, wenn mehrere Daemons gegen denselben Broker laufen.",
   "config.help.north.mqtt.raw_enabled":
-    "Veröffentlicht pro-DataPoint-State unter <topic_base>/<interface>/… — die rohe Ebene für non-HA-Konsumenten. Discovery braucht sie: Wird Discovery eingeschaltet, wird dies mit eingeschaltet, denn Discovery-Payloads verweisen ausschließlich auf Topics der Rohebene.",
+    "Veröffentlicht pro-DataPoint-State unter <topic_base>/status/<central>/… — die rohe Ebene für non-HA-Konsumenten. Discovery braucht sie: Wird Discovery eingeschaltet, wird dies mit eingeschaltet, denn Discovery-Payloads verweisen ausschließlich auf Topics der Rohebene.",
   "config.help.north.mqtt.discovery_enabled":
     "Emittiert Home-Assistant-Discovery-Payloads, sodass HA die Geräte automatisch registriert. Setzt die Rohebene voraus — die Payloads benennen deren Topics, daher wird „Rohebene veröffentlichen“ mit aktiviert.",
   "config.help.north.mqtt.discovery_retract_unscoped":
@@ -6241,6 +6252,10 @@ const DE: Catalog = {
     "Rollladen-Position vom LEVEL-Wert des Gruppenkanals statt vom eigenen Kanal melden. Standard: an.",
   "config.help.north.mqtt.retain_cleanup_window_ms":
     "Wie lange (in Millisekunden) der Daemon auf alle retained Messages des Brokers wartet, bevor die Retain-Cleanup-Eviction-Liste verarbeitet wird; 0 = 2000 ms.",
+  "config.help.north.mqtt.maintenance.enabled":
+    "Stellt die mqtt-smarthome-Wartungs-Topics unter <topic_base>/maintenance/ bereit: Log-Level setzen, den Daemon neu starten (nur wenn ein Supervisor ihn neu startet) und Prozessstatistiken veröffentlichen. Jeder, der am Broker publizieren darf, kann sie nutzen — die ACLs des Brokers sind die einzige Hürde; auf einem nicht vertrauenswürdigen Broker abschalten.",
+  "config.help.north.mqtt.maintenance.stats_interval_seconds":
+    "Wie oft <topic_base>/maintenance/stats neu veröffentlicht wird, in Sekunden; leer = 60, 0 schaltet die Statistik ab.",
   "config.help.north.rest.csrf_enabled":
     "Double-Submit-Cookie/Header-CSRF-Schutz auf mutierenden REST-Endpunkten aktivieren; standardmäßig an für Browser-Deployments — nur für reine API-Token-Setups ohne Session-Cookies deaktivieren.",
   "config.help.north.rest.csrf_secure":
@@ -6351,6 +6366,7 @@ const DE: Catalog = {
   "config.subgroup.auth": "Authentifizierung",
   "config.subgroup.oidc": "OIDC (OpenID Connect)",
   "config.subgroup.rate_limit": "Rate Limiting",
+  "config.subgroup.maintenance": "Wartung",
   "config.subgroup.ws": "WebSocket",
   "config.subgroup.tracing": "Tracing",
   "config.subgroup.commissioning": "Inbetriebnahme",

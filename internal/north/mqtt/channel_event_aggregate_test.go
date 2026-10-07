@@ -123,18 +123,16 @@ func TestChannelEventAggregateDiscovery(t *testing.T) {
 			t.Errorf("Build(%q): device_class=%v want \"button\"", pressParam, dc)
 		}
 
-		// value_template must NOT be set: HA's mqtt.event component
-		// parses the post-template payload as JSON and reads
-		// `event_type` from it. A scalar-extracting template
-		// (`{{ value_json.event_type }}`) returns a bare string that
-		// HA then fails to JSON-decode — surfaced in the HA log as
-		// `No valid JSON event payload detected, value after
-		// processing payload 'press_long'`. The bridge already
-		// publishes a `{"event_type": ...}` envelope to the
-		// `<channel>/event` topic, so HA reads `event_type`
-		// directly from the raw payload without a template.
-		if _, set := payload["value_template"]; set {
-			t.Errorf("Build(%q): value_template must be absent; HA reads event_type directly from JSON payload", pressParam)
+		// value_template must rebuild the JSON document HA's mqtt.event
+		// component parses: it reads `event_type` from the
+		// post-template payload. The channel item is a status object
+		// with the type in `val` (ADR 0083), so the template maps `val`
+		// back to `event_type` and keeps `hm` as attributes. A
+		// scalar-extracting template (`{{ value_json.val }}`) would
+		// return a bare string HA fails to JSON-decode — `No valid JSON
+		// event payload detected` in the HA log.
+		if got := payload["value_template"]; got != eventValueTemplate {
+			t.Errorf("Build(%q): value_template=%v want %q", pressParam, got, eventValueTemplate)
 		}
 
 		// state_topic must end with "/<channel>/event".
@@ -176,16 +174,16 @@ func TestChannelEventAggregateTopicFormat(t *testing.T) {
 	}{
 		{
 			centralName: "ccu", iface: "HmIP-RF", addr: "0034WRC2", channel: 1,
-			want: "openccu-loom/ccu/HmIP-RF/0034WRC2/1/event",
+			want: "openccu-loom/status/ccu/HmIP-RF/0034WRC2/1/event",
 		},
 		{
 			centralName: "ccu2", iface: "BidCos-RF", addr: "0ABC", channel: 3,
-			want: "openccu-loom/ccu2/BidCos-RF/0ABC/3/event",
+			want: "openccu-loom/status/ccu2/BidCos-RF/0ABC/3/event",
 		},
 		// Characters that are unsafe for MQTT topic levels must be sanitised.
 		{
 			centralName: "ccu", iface: "HmIP/RF", addr: "0034+WRC2", channel: 2,
-			want: "openccu-loom/ccu/HmIP_RF/0034_WRC2/2/event",
+			want: "openccu-loom/status/ccu/HmIP_RF/0034_WRC2/2/event",
 		},
 	}
 
@@ -204,8 +202,8 @@ func TestChannelEventAggregateTopicFormat(t *testing.T) {
 
 // TestChannelEventStatePayloadFormat verifies that
 // Bridge.PublishChannelEventState publishes a non-retained JSON
-// payload to the channel event topic with the required fields:
-// event_type (lower-cased), available, and modified_at.
+// status object to the channel event item: the lower-cased event type in
+// `val`, `available` under `hm`.
 func TestChannelEventStatePayloadFormat(t *testing.T) {
 	t.Parallel()
 	pub := &mockPublisher{}
@@ -224,7 +222,7 @@ func TestChannelEventStatePayloadFormat(t *testing.T) {
 	rec := pub.sent[0]
 
 	// Topic must match ChannelEvent format.
-	wantTopic := "gh/ccu/HmIP-RF/0034WRC2/1/event"
+	wantTopic := "gh/status/ccu/HmIP-RF/0034WRC2/1/event"
 	if rec.topic != wantTopic {
 		t.Errorf("topic=%q want %q", rec.topic, wantTopic)
 	}
@@ -234,30 +232,30 @@ func TestChannelEventStatePayloadFormat(t *testing.T) {
 		t.Error("channel event publish must be non-retained (retain=false)")
 	}
 
-	// Payload must be valid JSON with required fields.
-	var body map[string]any
-	if err := json.Unmarshal([]byte(rec.payload), &body); err != nil {
-		t.Fatalf("payload not valid JSON: %v; payload=%q", err, rec.payload)
+	// Payload must be a status object (ADR 0083): the lower-cased event
+	// type in `val`, `ts` == `lc` (every occurrence is a change), and the
+	// availability flag under `hm`.
+	env, ok := decodeStatus(rec.payload)
+	if !ok {
+		t.Fatalf("payload is not a status object: %q", rec.payload)
 	}
-
-	// event_type must be lower-cased.
-	if et, _ := body["event_type"].(string); et != "press_short" {
-		t.Errorf("event_type=%q want \"press_short\"", et)
+	if et := statusVal(rec.payload); et != "press_short" {
+		t.Errorf("val=%q want \"press_short\"", et)
 	}
-
-	// available must be present and true.
-	if avail, _ := body["available"].(bool); !avail {
-		t.Errorf("available=%v want true", body["available"])
+	if *env.TS != *env.LC {
+		t.Errorf("ts=%d lc=%d, want equal for an occurrence", *env.TS, *env.LC)
 	}
-
-	// modified_at must be present.
-	if _, present := body["modified_at"]; !present {
-		t.Error("modified_at missing from channel event state payload")
+	var hm map[string]any
+	if err := json.Unmarshal(env.HM, &hm); err != nil {
+		t.Fatalf("hm not an object: %v; payload=%q", err, rec.payload)
+	}
+	if avail, _ := hm["available"].(bool); !avail {
+		t.Errorf("hm.available=%v want true", hm["available"])
 	}
 }
 
 // TestChannelEventStatePayloadDoorbellModelMapsRing verifies that
-// Bridge.PublishChannelEventState publishes `event_type: "ring"` — not
+// Bridge.PublishChannelEventState publishes `val: "ring"` — not
 // the raw "press_short" — when the channel belongs to a curated
 // doorbell model (HmIP-DBB here). The non-doorbell case is pinned by
 // TestChannelEventStatePayloadFormat above.
@@ -278,13 +276,8 @@ func TestChannelEventStatePayloadDoorbellModelMapsRing(t *testing.T) {
 	}
 	rec := pub.sent[0]
 
-	var body map[string]any
-	if err := json.Unmarshal([]byte(rec.payload), &body); err != nil {
-		t.Fatalf("payload not valid JSON: %v; payload=%q", err, rec.payload)
-	}
-
-	if et, _ := body["event_type"].(string); et != "ring" {
-		t.Errorf("event_type=%q want \"ring\"", et)
+	if et := statusVal(rec.payload); et != "ring" {
+		t.Errorf("val=%q want \"ring\" (payload %q)", et, rec.payload)
 	}
 }
 

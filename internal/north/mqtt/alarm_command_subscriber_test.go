@@ -116,7 +116,7 @@ func (f *fakeAlarmSink) snapshot() alarmSinkSnapshot {
 // one message on one subscription — rather than by calling the handler,
 // which is no longer reachable from outside the router that parses the topic
 // for it.
-const alarmCommandFilter = "gh/alarm/+/set"
+const alarmCommandFilter = "gh/set/alarm/+/panel"
 
 // alarmFixture is a started CommandSubscriber wired only with sink as its
 // AlarmSink — the CommandSink dependency stays nil since none of these tests
@@ -180,7 +180,7 @@ func TestHandleAlarmCommand_Trigger_RoutesToPanic(t *testing.T) {
 	sink := &fakeAlarmSink{}
 	sub := newAlarmCommandSubscriber(t, sink)
 
-	sub.deliver(t, "gh/alarm/eg/set", "TRIGGER")
+	sub.deliver(t, "gh/set/alarm/eg/panel", "TRIGGER")
 
 	got := sink.snapshot()
 	if len(got.panicCalls) != 1 || got.panicCalls[0] != "eg" {
@@ -199,7 +199,7 @@ func TestHandleAlarmCommand_MasterTrigger_Dropped(t *testing.T) {
 	sink := &fakeAlarmSink{}
 	sub := newAlarmCommandSubscriber(t, sink)
 
-	sub.deliver(t, "gh/alarm/master/set", "TRIGGER")
+	sub.deliver(t, "gh/set/alarm/master/panel", "TRIGGER")
 
 	if got := sink.snapshot(); len(got.panicCalls) != 0 {
 		t.Fatalf("panicCalls = %v, want none for master TRIGGER", got.panicCalls)
@@ -213,7 +213,7 @@ func TestHandleAlarmCommand_ArmWithCode_ParsesJSONEnvelope(t *testing.T) {
 	sink := &fakeAlarmSink{}
 	sub := newAlarmCommandSubscriber(t, sink)
 
-	sub.deliver(t, "gh/alarm/eg/set", `{"action":"ARM_AWAY","code":"1234"}`)
+	sub.deliver(t, "gh/set/alarm/eg/panel", `{"action":"ARM_AWAY","code":"1234"}`)
 
 	got := sink.snapshot()
 	if len(got.armCalls) != 1 {
@@ -229,7 +229,7 @@ func TestHandleAlarmCommand_Disarm_BareStringPayloadCarriesNoCode(t *testing.T) 
 	sink := &fakeAlarmSink{}
 	sub := newAlarmCommandSubscriber(t, sink)
 
-	sub.deliver(t, "gh/alarm/eg/set", "DISARM")
+	sub.deliver(t, "gh/set/alarm/eg/panel", "DISARM")
 
 	got := sink.snapshot()
 	if len(got.disarmCalls) != 1 || got.disarmCalls[0] != (fakeAlarmCodeCall{area: "eg", code: ""}) {
@@ -242,7 +242,7 @@ func TestHandleAlarmCommand_Silence(t *testing.T) {
 	sink := &fakeAlarmSink{}
 	sub := newAlarmCommandSubscriber(t, sink)
 
-	sub.deliver(t, "gh/alarm/eg/set", `{"action":"SILENCE","code":"9999"}`)
+	sub.deliver(t, "gh/set/alarm/eg/panel", `{"action":"SILENCE","code":"9999"}`)
 
 	got := sink.snapshot()
 	if len(got.silenceCalls) != 1 || got.silenceCalls[0] != (fakeAlarmCodeCall{area: "eg", code: "9999"}) {
@@ -255,7 +255,7 @@ func TestHandleAlarmCommand_MasterSilence_Dropped(t *testing.T) {
 	sink := &fakeAlarmSink{}
 	sub := newAlarmCommandSubscriber(t, sink)
 
-	sub.deliver(t, "gh/alarm/master/set", "SILENCE")
+	sub.deliver(t, "gh/set/alarm/master/panel", "SILENCE")
 
 	if got := sink.snapshot(); len(got.silenceCalls) != 0 {
 		t.Fatalf("silenceCalls = %+v, want none for master SILENCE", got.silenceCalls)
@@ -269,8 +269,8 @@ func TestHandleAlarmCommand_MasterArmAndMasterDisarm(t *testing.T) {
 	sink := &fakeAlarmSink{}
 	sub := newAlarmCommandSubscriber(t, sink)
 
-	sub.deliver(t, "gh/alarm/master/set", "ARM_NIGHT")
-	sub.deliver(t, "gh/alarm/master/set", "DISARM")
+	sub.deliver(t, "gh/set/alarm/master/panel", "ARM_NIGHT")
+	sub.deliver(t, "gh/set/alarm/master/panel", "DISARM")
 
 	got := sink.snapshot()
 	if len(got.masterArmCalls) != 1 || got.masterArmCalls[0] != hmenum.AlarmModeNight {
@@ -303,7 +303,7 @@ func TestHandleAlarmCommand_RetainedMessage_Dropped(t *testing.T) {
 	sink := &fakeAlarmSink{}
 	sub := newAlarmCommandSubscriber(t, sink)
 
-	sub.deliverRetained(t, "gh/alarm/eg/set", "TRIGGER")
+	sub.deliverRetained(t, "gh/set/alarm/eg/panel", "TRIGGER")
 
 	if got := sink.snapshot(); len(got.panicCalls) != 0 {
 		t.Fatalf("panicCalls = %v, want none for a retained message", got.panicCalls)
@@ -315,7 +315,7 @@ func TestHandleAlarmCommand_UnknownAction_Dropped(t *testing.T) {
 	sink := &fakeAlarmSink{}
 	sub := newAlarmCommandSubscriber(t, sink)
 
-	sub.deliver(t, "gh/alarm/eg/set", "BOGUS_ACTION")
+	sub.deliver(t, "gh/set/alarm/eg/panel", "BOGUS_ACTION")
 
 	got := sink.snapshot()
 	if len(got.armCalls)+len(got.disarmCalls)+len(got.silenceCalls)+len(got.panicCalls) != 0 {
@@ -357,7 +357,7 @@ func TestHandleAlarmCommand_NilSink_DroppedWithoutPanic(t *testing.T) {
 
 	// Must not panic on a nil alarmSink.
 	f := &alarmFixture{client: client, sub: sub}
-	f.deliver(t, "gh/alarm/eg/set", "TRIGGER")
+	f.deliver(t, "gh/set/alarm/eg/panel", "TRIGGER")
 }
 
 func TestHandleAlarmCommand_EmptyPayload_Dropped(t *testing.T) {
@@ -365,7 +365,7 @@ func TestHandleAlarmCommand_EmptyPayload_Dropped(t *testing.T) {
 	sink := &fakeAlarmSink{}
 	sub := newAlarmCommandSubscriber(t, sink)
 
-	sub.deliver(t, "gh/alarm/eg/set", "  ")
+	sub.deliver(t, "gh/set/alarm/eg/panel", "  ")
 
 	got := sink.snapshot()
 	if len(got.armCalls)+len(got.disarmCalls)+len(got.silenceCalls)+len(got.panicCalls) != 0 {

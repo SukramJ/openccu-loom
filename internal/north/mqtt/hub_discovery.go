@@ -167,16 +167,6 @@ func hubEntityDeviceBlock(centralName, deviceAddress string, info HubInfo) *hadi
 	}
 }
 
-func hubAvailability(t *TopicBuilder) []hadiscovery.AvailabilityEntry {
-	return []hadiscovery.AvailabilityEntry{
-		{
-			Topic:               t.BridgeStatus(),
-			PayloadAvailable:    "online",
-			PayloadNotAvailable: "offline",
-		},
-	}
-}
-
 func hubNodeID(centralName, kind string) string {
 	return safeLower(centralName) + "_" + kind
 }
@@ -220,7 +210,7 @@ type hubTopicLayout struct {
 	// Empty for every other hub entity, which is gated by the bridge alone.
 	device string
 	bridge string
-	// ccu is the per-CCU reachability gate `<base>/<central>/hub/status`,
+	// ccu is the per-CCU reachability gate `<base>/status/<central>/online`,
 	// the availability source every CCU-scoped hub entity carries ALONGSIDE
 	// the bridge one. Rendered by [hubDiscoveryContext.Availability] rather
 	// than by a level, because the levels the model resolves against a slot are already spoken
@@ -261,6 +251,9 @@ type hubDiscoveryContext struct {
 	// ccuStatus is the per-CCU reachability gate appended to every gated
 	// hub entity's availability list. Empty suppresses the append.
 	ccuStatus string
+	// selfReports gates the entity on `connected ≥ 1` instead of ≥ 2; see
+	// [hubEntity.selfReports] and [daemonAvailability].
+	selfReports bool
 }
 
 // UniqueID implements [hadiscovery.Context] with the id this daemon already
@@ -276,7 +269,7 @@ func (c hubDiscoveryContext) NodeID(*hamodel.Device) string { return c.nodeID }
 // Home Assistant's default `availability_mode: "all"` is a conjunction over
 // the whole list, so appending is exactly the semantics wanted: an entity is
 // available when the daemon is up AND its CCU is on the bus. The existing
-// `bridge/status` entry is kept rather than replaced, because the two say
+// `connected` entry is kept rather than replaced, because the two say
 // different things and neither implies the other — a dead daemon publishes
 // nothing about its CCUs, and a live daemon with a dead CCU says nothing
 // about itself.
@@ -298,17 +291,18 @@ func (c hubDiscoveryContext) NodeID(*hamodel.Device) string { return c.nodeID }
 //     that, and "an entity that declares no gate acquires none" is a rule
 //     that needs no per-entity list to maintain.
 //   - An entity marked [hubEntity.selfReports] — the per-interface
-//     connectivity sensors, which are the fold's own inputs.
+//     connectivity sensors, which are the fold's own inputs. They are also
+//     gated on `connected ≥ 1` rather than ≥ 2: level 2 means some central
+//     is reachable, which is the very thing they report.
 func (c hubDiscoveryContext) Availability(dev *hamodel.Device, e hamodel.Entity) []hadiscovery.AvailabilityEntry {
-	entries := c.StdContext.Availability(dev, e)
+	entries := conventionAvailability(c.StdContext.Availability(dev, e), c.Layout.Bridge())
+	if c.selfReports {
+		entries = atDaemonLevel(entries, c.Layout.Bridge())
+	}
 	if c.ccuStatus == "" || len(entries) == 0 {
 		return entries
 	}
-	return append(entries, hadiscovery.AvailabilityEntry{
-		Topic:               c.ccuStatus,
-		PayloadAvailable:    hadiscovery.PayloadOnline,
-		PayloadNotAvailable: hadiscovery.PayloadOffline,
-	})
+	return append(entries, onlineAvailability(c.ccuStatus))
 }
 
 // ObjectID implements [hadiscovery.Context]. This plane DOES publish an
@@ -334,14 +328,19 @@ type hubEntity struct {
 	// on the answer it is reporting — pointing its availability at the fold
 	// makes it unavailable in exactly the situation it exists for, which is
 	// the same reasoning [DefaultDiscoveryBuilder.BuildDaemonStatusDiscovery]
-	// applies one level up, against `bridge/status`.
+	// applies one level up, against `connected`.
 	selfReports bool
+	// commandTemplate is the entity's `command_template`, empty for none.
+	commandTemplate string
 }
 
 // BuildDiscovery implements [hadiscovery.Builder].
 func (e *hubEntity) BuildDiscovery(_ hadiscovery.Context, comp *hadiscovery.Component) error {
 	if e.fields != nil {
 		comp.Fields = e.fields
+	}
+	if e.commandTemplate != "" {
+		comp.CommandTemplate = e.commandTemplate
 	}
 	return nil
 }
@@ -380,10 +379,10 @@ func hubBinds(slot hamodel.Slot, reads, writes bool) []hamodel.Binding {
 // renderHubItem renders one hub entity through the shared per-entity
 // pipeline and packages it as the item the publishers take.
 //
-// [hadiscovery.RawEncoding] is not a preference: hub state topics carry the
-// bare value, not the `{"value":…}` envelope the datapoint planes publish,
-// so an entity rendered with the envelope's value template would read its
-// state through a filter that never matches and show as unknown forever.
+// [hadiscovery.StatusObjectEncoding] is not a preference: hub status items
+// carry the mqtt-smarthome status object (ADR 0083), so an entity without a
+// template of its own reads `{{ value_json.val }}` — `| lower` on the boolean
+// platforms, whose payloads are `true`/`false`.
 func (d *DefaultDiscoveryBuilder) renderHubItem(
 	dev *hamodel.Device, e *hubEntity, layout hubTopicLayout, uniqueID, nodeID, objectID string,
 ) DiscoveryItem {
@@ -395,13 +394,14 @@ func (d *DefaultDiscoveryBuilder) renderHubItem(
 		ccu = ""
 	}
 	ctx := hubDiscoveryContext{
-		Layout:     layout,
-		Lang:       d.Locale,
-		Enc:        hadiscovery.RawEncoding,
-		Translator: d.tr,
-		uniqueID:   uniqueID,
-		nodeID:     nodeID,
-		ccuStatus:  ccu,
+		Layout:      layout,
+		Lang:        d.Locale,
+		Enc:         hadiscovery.StatusObjectEncoding,
+		Translator:  d.tr,
+		uniqueID:    uniqueID,
+		nodeID:      nodeID,
+		ccuStatus:   ccu,
+		selfReports: e.selfReports,
 	}
 	comp, err := hadiscovery.RenderComponent(ctx, dev, e, *BuildOriginInfo())
 	if err != nil {
@@ -412,14 +412,14 @@ func (d *DefaultDiscoveryBuilder) renderHubItem(
 
 // hubLayout is the topic layout every central-scoped hub entity renders
 // under: one state topic and TWO availability sources — the daemon's own
-// LWT (`bridge/status`) and the per-CCU reachability gate
-// (`<central>/hub/status`), conjoined by Home Assistant's default
+// level (`<base>/connected` ≥ 2) and the per-CCU reachability gate
+// (`<base>/status/<central>/online`), conjoined by Home Assistant's default
 // `availability_mode: "all"`. See [hubDiscoveryContext.Availability] for why
 // the CCU gate rides the render context rather than an availability level.
 func (d *DefaultDiscoveryBuilder) hubLayout(centralName, stateTopic string) hubTopicLayout {
 	return hubTopicLayout{
 		state:  stateTopic,
-		bridge: d.TopicBuilder.BridgeStatus(),
+		bridge: d.TopicBuilder.Connected(),
 		ccu:    d.TopicBuilder.HubStatus(centralName),
 	}
 }
@@ -522,6 +522,7 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv Hu
 			writes = true
 			desc.Optimistic = new(false)
 			entity.fields = hadiscovery.TextFields{Mode: "text"}
+			entity.commandTemplate = textCommandTemplate
 		} else {
 			// HA's `text` entity caps state payloads at 255 chars and warns
 			// loudly on every overrun. CCU string sysvars (e.g.
@@ -811,9 +812,9 @@ func (d *DefaultDiscoveryBuilder) BuildAlarmMessagesDiscovery(centralName string
 			// The state topic carries the message LIST, not a scalar, so
 			// the count is read out of it by template. That is a per-entity
 			// answer the context's encoding cannot give.
-			ValueTemplate:          "{{ value_json | length }}",
+			ValueTemplate:          "{{ value_json.val | length }}",
 			JSONAttributesTopic:    topic,
-			JSONAttributesTemplate: `{"messages": {{ value_json | tojson }} }`,
+			JSONAttributesTemplate: `{"messages": {{ value_json.val | tojson }} }`,
 		},
 		Binds: hubBinds(hubSlot(dev, centralName, "alarm_messages"), true, false),
 	}
@@ -844,9 +845,9 @@ func (d *DefaultDiscoveryBuilder) BuildServiceMessagesDiscovery(centralName stri
 			StateClass:             "measurement",
 			Category:               "diagnostic",
 			Availability:           hamodel.BridgeOnly(),
-			ValueTemplate:          "{{ value_json | length }}",
+			ValueTemplate:          "{{ value_json.val | length }}",
 			JSONAttributesTopic:    topic,
-			JSONAttributesTemplate: `{"messages": {{ value_json | tojson }} }`,
+			JSONAttributesTemplate: `{"messages": {{ value_json.val | tojson }} }`,
 		},
 		Binds: hubBinds(hubSlot(dev, centralName, "service_messages"), true, false),
 	}
@@ -881,9 +882,9 @@ func (d *DefaultDiscoveryBuilder) BuildInboxDiscovery(centralName string) Discov
 			StateClass:             "measurement",
 			Icon:                   "mdi:tray-arrow-down",
 			Availability:           hamodel.BridgeOnly(),
-			ValueTemplate:          "{{ value_json | length }}",
+			ValueTemplate:          "{{ value_json.val | length }}",
 			JSONAttributesTopic:    topic,
-			JSONAttributesTemplate: `{"devices": {{ value_json | tojson }} }`,
+			JSONAttributesTemplate: `{"devices": {{ value_json.val | tojson }} }`,
 		},
 		Binds: hubBinds(hubSlot(dev, centralName, "inbox"), true, false),
 	}
@@ -1114,14 +1115,19 @@ func (d *DefaultDiscoveryBuilder) BuildDaemonStatusDiscovery(centralName string)
 			// list and `availability_mode` together, where an empty
 			// level list would still resolve to the default pair.
 			Availability: hamodel.NoAvailability(),
+			// `<base>/connected` carries the plain level 0/1/2 (ADR 0083):
+			// the daemon is connected at 1 or above, whether or not a
+			// central is reachable — that second half is each central's
+			// own `online` item, not this sensor's question.
+			ValueTemplate: hadiscovery.ConnectedTemplate(hadiscovery.ConnectedBroker),
 		},
 		Binds: hubBinds(hubSlot(dev, centralName, "daemon_status"), true, false),
 		fields: hadiscovery.BinarySensorFields{
-			PayloadOn:  "online",
-			PayloadOff: "offline",
+			PayloadOn:  hadiscovery.PayloadOnline,
+			PayloadOff: hadiscovery.PayloadOffline,
 		},
 	}
-	return d.renderHubItem(dev, entity, d.hubLayout(centralName, d.TopicBuilder.BridgeStatus()), uniqueID,
+	return d.renderHubItem(dev, entity, d.hubLayout(centralName, d.TopicBuilder.Connected()), uniqueID,
 		hubNodeID(centralName, "system"), "daemon_status")
 }
 
@@ -1129,7 +1135,7 @@ func (d *DefaultDiscoveryBuilder) BuildDaemonStatusDiscovery(centralName string)
 
 // BuildSystemHealthDiscovery emits a HA `sensor` for the openccu-loom
 // system-health score (0–100). The score is published on
-// `<base>/<central>/system/health_score`. The entity description is built
+// `<base>/status/<central>/system/health_score`. The entity description is built
 // inline below.
 func (d *DefaultDiscoveryBuilder) BuildSystemHealthDiscovery(centralName string) DiscoveryItem {
 	if centralName == "" {
@@ -1184,7 +1190,7 @@ func (d *DefaultDiscoveryBuilder) hubMetricItem(
 // exposes ONE central-wide connection-latency sensor
 // (`<central>_hub_connection-latency`, translation_key connection_latency)
 // derived from the aggregated ping/pong metric — not one sensor per
-// interface. The measurement topic is `<base>/<central>/system/latency`.
+// interface. The measurement topic is `<base>/status/<central>/system/latency`.
 func (d *DefaultDiscoveryBuilder) BuildConnectionLatencyDiscovery(centralName string) DiscoveryItem {
 	if centralName == "" {
 		return DiscoveryItem{}
@@ -1214,7 +1220,7 @@ func (d *DefaultDiscoveryBuilder) BuildConnectionLatencyDiscovery(centralName st
 // BuildLastEventAgeDiscovery emits a HA `sensor` (duration, s) for the
 // age of the newest backend event — a liveness signal for the CCU
 // connection. The measurement topic is
-// `<base>/<central>/system/last_event_age`. Reference parity:
+// `<base>/status/<central>/system/last_event_age`. Reference parity:
 // hub_last-event-age (translation_key last_event_age, German "Alter
 // letztes Ereignis").
 func (d *DefaultDiscoveryBuilder) BuildLastEventAgeDiscovery(centralName string) DiscoveryItem {
@@ -1272,20 +1278,18 @@ func (d *DefaultDiscoveryBuilder) BuildHubUpdateDiscovery(centralName string) Di
 			Category:     "diagnostic",
 			Enabled:      new(true),
 			Availability: hamodel.BridgeOnly(),
-			// No `value_template`: HA's MQTT update platform parses the
-			// raw state_topic payload natively against its state-payload
-			// schema (installed_version, latest_version, in_progress)
-			// when no value_template narrows it to a scalar first.
-			// `in_progress_template` is not a schema option at all — HA
-			// reads `in_progress` only from that native parse — so
-			// setting either one here left the entity showing no
-			// install-in-progress indication.
-			ValueTemplate: hamodel.NoValueTemplate,
+			// The template hands HA's MQTT update platform the status
+			// object's `val` as JSON, which it parses natively against its
+			// state-payload schema (installed_version, latest_version,
+			// in_progress). A template narrowing it to a scalar would lose
+			// `in_progress`: `in_progress_template` is not a schema option
+			// at all — HA reads `in_progress` only from that native parse.
+			ValueTemplate: updateDocumentTemplate,
 		},
 		Binds: hubBinds(hubSlot(dev, centralName, "system_update"), true, false),
 		fields: hadiscovery.UpdateFields{
 			LatestVersionTopic:    topic,
-			LatestVersionTemplate: "{{ value_json.latest_version }}",
+			LatestVersionTemplate: "{{ value_json.val.latest_version }}",
 		},
 	}
 	return d.renderHubItem(dev, entity, d.hubLayout(centralName, topic), uniqueID,

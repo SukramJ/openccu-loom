@@ -8,6 +8,7 @@ import (
 	"errors"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	hacatalog "github.com/SukramJ/go-ha-catalog"
 	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
@@ -249,7 +250,7 @@ func TestBridgePublishSystemStatusRawDisabled(t *testing.T) {
 	t.Parallel()
 	mp := &mockPublisher{}
 	b := NewBridge(BridgeConfig{Base: "gh", RawEnabled: false}, mp)
-	if err := b.PublishSystemStatus(context.Background(), "ccu", []byte(`{}`)); err != nil {
+	if err := b.PublishSystemStatus(context.Background(), "ccu", "central_state", map[string]any{}, time.Time{}); err != nil {
 		t.Fatalf("unexpected error when RawEnabled=false: %v", err)
 	}
 	if len(mp.publications()) != 0 {
@@ -261,7 +262,7 @@ func TestBridgePublishSystemStatusRawEnabled(t *testing.T) {
 	t.Parallel()
 	mp := &mockPublisher{}
 	b := NewBridge(BridgeConfig{Base: "gh", RawEnabled: true}, mp)
-	if err := b.PublishSystemStatus(context.Background(), "ccu", []byte(`{}`)); err != nil {
+	if err := b.PublishSystemStatus(context.Background(), "ccu", "central_state", map[string]any{"healthy": true}, time.UnixMilli(1_700_000_000_000)); err != nil {
 		t.Fatalf("PublishSystemStatus: %v", err)
 	}
 	pubs := mp.publications()
@@ -269,9 +270,17 @@ func TestBridgePublishSystemStatusRawEnabled(t *testing.T) {
 		t.Fatal("expected at least one publish")
 	}
 	got := pubs[0].topic
-	want := "gh/ccu/system/status"
+	want := "gh/status/ccu/system/status"
 	if got != want {
 		t.Fatalf("topic = %q, want %q", got, want)
+	}
+	// A non-retained status item: the component in `val`, the event time as
+	// both `ts` and `lc`, the rest under `hm`.
+	if body, wantBody := pubs[0].payload, `{"val":"central_state","ts":1700000000000,"lc":1700000000000,"hm":{"healthy":true}}`; body != wantBody {
+		t.Fatalf("payload = %s, want %s", body, wantBody)
+	}
+	if pubs[0].retain {
+		t.Fatal("system/status is an event and must not be retained")
 	}
 }
 
@@ -454,7 +463,7 @@ func TestTopicBuilderDataPointConfig(t *testing.T) {
 	t.Parallel()
 	tb := NewTopicBuilder("gh")
 	got := tb.DataPointConfig("ccu", "HmIP-RF", "0001ABCD", 1, "LEVEL")
-	want := "gh/ccu/HmIP-RF/0001ABCD/1/values/LEVEL/config"
+	want := "gh/meta/ccu/HmIP-RF/0001ABCD/1/values/LEVEL"
 	if got != want {
 		t.Fatalf("DataPointConfig: got %q want %q", got, want)
 	}
@@ -465,7 +474,7 @@ func TestTopicBuilderCustomDPServiceMethodShape(t *testing.T) {
 	tb := NewTopicBuilder("gh")
 	slot := pload.TopicSlot{Address: "0001ABCD", Channel: 1, Bucket: pload.BucketCustom, Parameter: "climate"}
 	got := tb.CustomDPServiceMethod("ccu", "HmIP-RF", slot, "boost")
-	want := "gh/ccu/HmIP-RF/0001ABCD/1/custom/climate/set/boost"
+	want := "gh/set/ccu/HmIP-RF/0001ABCD/1/custom/climate/boost"
 	if got != want {
 		t.Fatalf("CustomDPServiceMethod: got %q want %q", got, want)
 	}
@@ -476,7 +485,7 @@ func TestTopicBuilderSlotConfig(t *testing.T) {
 	tb := NewTopicBuilder("gh")
 	slot := pload.TopicSlot{Address: "0001ABCD", Channel: 2, Bucket: pload.BucketValues, Parameter: "SET_TEMPERATURE"}
 	got := tb.SlotConfig("ccu", "HmIP-RF", slot)
-	want := "gh/ccu/HmIP-RF/0001ABCD/2/values/SET_TEMPERATURE/config"
+	want := "gh/meta/ccu/HmIP-RF/0001ABCD/2/values/SET_TEMPERATURE"
 	if got != want {
 		t.Fatalf("SlotConfig: got %q want %q", got, want)
 	}
@@ -506,7 +515,7 @@ func TestTopicBuilderSystemStatus(t *testing.T) {
 	t.Parallel()
 	tb := NewTopicBuilder("gh")
 	got := tb.SystemStatus("ccu")
-	want := "gh/ccu/system/status"
+	want := "gh/status/ccu/system/status"
 	if got != want {
 		t.Fatalf("SystemStatus: got %q want %q", got, want)
 	}
@@ -516,7 +525,7 @@ func TestTopicBuilderHubStatus(t *testing.T) {
 	t.Parallel()
 	tb := NewTopicBuilder("gh")
 	got := tb.HubStatus("ccu")
-	want := "gh/ccu/hub/status"
+	want := "gh/status/ccu/online"
 	if got != want {
 		t.Fatalf("HubStatus: got %q want %q", got, want)
 	}
@@ -526,7 +535,7 @@ func TestTopicBuilderHubInfo(t *testing.T) {
 	t.Parallel()
 	tb := NewTopicBuilder("gh")
 	got := tb.HubInfo("ccu")
-	want := "gh/ccu/hub/info"
+	want := "gh/status/ccu/hub/info"
 	if got != want {
 		t.Fatalf("HubInfo: got %q want %q", got, want)
 	}
@@ -536,7 +545,7 @@ func TestTopicBuilderHubDiagnostics(t *testing.T) {
 	t.Parallel()
 	tb := NewTopicBuilder("gh")
 	got := tb.HubDiagnostics("ccu")
-	want := "gh/ccu/hub/diagnostics"
+	want := "gh/status/ccu/hub/diagnostics"
 	if got != want {
 		t.Fatalf("HubDiagnostics: got %q want %q", got, want)
 	}
@@ -545,7 +554,7 @@ func TestTopicBuilderHubDiagnostics(t *testing.T) {
 func TestHubSysvarCommand(t *testing.T) {
 	t.Parallel()
 	got := naming.MQTTHubSysvarCommand("gh", "ccu", "Holiday")
-	want := "gh/ccu/hub/sysvars/Holiday/set"
+	want := "gh/set/ccu/hub/sysvars/Holiday"
 	if got != want {
 		t.Fatalf("MQTTHubSysvarCommand: got %q want %q", got, want)
 	}
@@ -555,7 +564,7 @@ func TestTopicBuilderDeviceInfo(t *testing.T) {
 	t.Parallel()
 	tb := NewTopicBuilder("gh")
 	got := tb.DeviceInfo("ccu", "HmIP-RF", "0001ABCD")
-	want := "gh/ccu/HmIP-RF/0001ABCD/info"
+	want := "gh/status/ccu/HmIP-RF/0001ABCD/info"
 	if got != want {
 		t.Fatalf("DeviceInfo: got %q want %q", got, want)
 	}
@@ -565,7 +574,7 @@ func TestTopicBuilderDeviceDiagnostics(t *testing.T) {
 	t.Parallel()
 	tb := NewTopicBuilder("gh")
 	got := tb.DeviceDiagnostics("ccu", "HmIP-RF", "0001ABCD")
-	want := "gh/ccu/HmIP-RF/0001ABCD/diagnostics"
+	want := "gh/status/ccu/HmIP-RF/0001ABCD/diagnostics"
 	if got != want {
 		t.Fatalf("DeviceDiagnostics: got %q want %q", got, want)
 	}
@@ -575,7 +584,7 @@ func TestTopicBuilderDeviceUpdateState(t *testing.T) {
 	t.Parallel()
 	tb := NewTopicBuilder("gh")
 	got := tb.DeviceUpdateState("ccu", "HmIP-RF", "0001ABCD")
-	want := "gh/ccu/HmIP-RF/0001ABCD/update"
+	want := "gh/status/ccu/HmIP-RF/0001ABCD/update"
 	if got != want {
 		t.Fatalf("DeviceUpdateState: got %q want %q", got, want)
 	}
@@ -585,7 +594,7 @@ func TestTopicBuilderDeviceUpdateCommand(t *testing.T) {
 	t.Parallel()
 	tb := NewTopicBuilder("gh")
 	got := tb.DeviceUpdateCommand("ccu", "HmIP-RF", "0001ABCD")
-	want := "gh/ccu/HmIP-RF/0001ABCD/update/set"
+	want := "gh/set/ccu/HmIP-RF/0001ABCD/update"
 	if got != want {
 		t.Fatalf("DeviceUpdateCommand: got %q want %q", got, want)
 	}
@@ -596,7 +605,7 @@ func TestTopicBuilderSlotStateNonCustom(t *testing.T) {
 	tb := NewTopicBuilder("gh")
 	slot := pload.TopicSlot{Address: "0001ABCD", Channel: 1, Bucket: pload.BucketMaster, Parameter: "TEMPERATURE_MINIMUM"}
 	got := tb.SlotState("ccu", "HmIP-RF", slot)
-	want := "gh/ccu/HmIP-RF/0001ABCD/1/master/TEMPERATURE_MINIMUM"
+	want := "gh/status/ccu/HmIP-RF/0001ABCD/1/master/TEMPERATURE_MINIMUM"
 	if got != want {
 		t.Fatalf("SlotState master: got %q want %q", got, want)
 	}
@@ -607,7 +616,7 @@ func TestTopicBuilderParamterPathDataEmptyBucket(t *testing.T) {
 	tb := NewTopicBuilder("gh")
 	// ParameterState with empty bucket → defaults to "values".
 	got := tb.ParameterState("ccu", "HmIP-RF", "0001ABCD", 1, pload.BucketUnset, "STATE")
-	want := "gh/ccu/HmIP-RF/0001ABCD/1/values/STATE"
+	want := "gh/status/ccu/HmIP-RF/0001ABCD/1/values/STATE"
 	if got != want {
 		t.Fatalf("ParameterState empty bucket: got %q want %q", got, want)
 	}
@@ -701,8 +710,8 @@ func TestCommandSubscriberServiceMethodNoSink(t *testing.T) {
 	sub := NewCommandSubscriber(noop, topics, sink, nil)
 	_ = sub.Start(context.Background())
 
-	noop.DeliverInbound("gh/+/+/+/+/custom/+/set/+",
-		"gh/ccu/HmIP-RF/0001ABCD/1/custom/climate/set/boost", []byte("true"))
+	noop.DeliverInbound("gh/set/+/+/+/+/custom/+/+",
+		"gh/set/ccu/HmIP-RF/0001ABCD/1/custom/climate/boost", []byte("true"))
 	// The drop happens on a worker, not on the delivering goroutine, so a
 	// zero-call assertion without this barrier would pass vacuously.
 	sub.WaitIdle()
@@ -719,8 +728,8 @@ func TestCommandSubscriberServiceMethodBadChannel(t *testing.T) {
 	_ = sub.Start(context.Background())
 
 	// Channel segment "abc" is not an int → should log warn, no call.
-	noop.DeliverInbound("gh/+/+/+/+/custom/+/set/+",
-		"gh/ccu/HmIP-RF/0001ABCD/abc/custom/climate/set/boost", []byte("true"))
+	noop.DeliverInbound("gh/set/+/+/+/+/custom/+/+",
+		"gh/set/ccu/HmIP-RF/0001ABCD/abc/custom/climate/boost", []byte("true"))
 	// The drop happens on a worker, not on the delivering goroutine, so a
 	// zero-call assertion without this barrier would pass vacuously.
 	sub.WaitIdle()
@@ -742,7 +751,7 @@ func TestCommandSubscriberServiceMethodBadTopicShape(t *testing.T) {
 	// broker's cross-talk arrives. The per-handler shape re-check this used
 	// to exercise is gone — the route is the shape check — so what is pinned
 	// now is the router's unroutable path: no handler, no sink call.
-	noop.DeliverInbound("gh/+/+/+/+/custom/+/set/+", "wrong/shape", []byte("true"))
+	noop.DeliverInbound("gh/set/+/+/+/+/custom/+/+", "wrong/shape", []byte("true"))
 	sub.WaitIdle()
 	if cdpSink.calls.Load() != 0 {
 		t.Fatalf("expected 0 calls on bad topic shape, got %d", cdpSink.calls.Load())
@@ -758,8 +767,8 @@ func TestCommandSubscriberServiceMethodSuccess(t *testing.T) {
 	sub := NewCommandSubscriber(noop, topics, sink, nil).WithCDPSink(cdpSink)
 	_ = sub.Start(context.Background())
 
-	noop.DeliverInbound("gh/+/+/+/+/custom/+/set/+",
-		"gh/ccu/HmIP-RF/0001ABCD/1/custom/climate/set/boost", []byte("true"))
+	noop.DeliverInbound("gh/set/+/+/+/+/custom/+/+",
+		"gh/set/ccu/HmIP-RF/0001ABCD/1/custom/climate/boost", []byte("true"))
 	sub.WaitIdle()
 	if cdpSink.calls.Load() != 1 {
 		t.Fatalf("expected 1 call, got %d", cdpSink.calls.Load())
@@ -776,8 +785,8 @@ func TestCommandSubscriberServiceMethodSinkError(t *testing.T) {
 	_ = sub.Start(context.Background())
 
 	// Error from sink must not panic.
-	noop.DeliverInbound("gh/+/+/+/+/custom/+/set/+",
-		"gh/ccu/HmIP-RF/0001ABCD/1/custom/climate/set/boost", []byte("true"))
+	noop.DeliverInbound("gh/set/+/+/+/+/custom/+/+",
+		"gh/set/ccu/HmIP-RF/0001ABCD/1/custom/climate/boost", []byte("true"))
 	sub.WaitIdle()
 	if cdpSink.calls.Load() != 1 {
 		t.Fatalf("expected 1 call even on error, got %d", cdpSink.calls.Load())
@@ -918,8 +927,8 @@ func TestCommandSubscriberDataPointNonValuesBucketDropped(t *testing.T) {
 	_ = sub.Start(context.Background())
 
 	// 8-segment topic with "master" bucket — must be silently dropped.
-	ok := noop.DeliverInbound("gh/+/+/+/+/+/+/set",
-		"gh/ccu/HmIP-RF/0001ABCD/1/master/TEMPERATURE_MINIMUM/set", []byte("21"))
+	ok := noop.DeliverInbound("gh/set/+/+/+/+/+/+",
+		"gh/set/ccu/HmIP-RF/0001ABCD/1/master/TEMPERATURE_MINIMUM", []byte("21"))
 	// The drop happens on a worker, not on the delivering goroutine, so a
 	// zero-call assertion without this barrier would pass vacuously.
 	sub.WaitIdle()
@@ -940,8 +949,8 @@ func TestCommandSubscriberDataPointBucketAwareValues(t *testing.T) {
 	_ = sub.Start(context.Background())
 
 	// 8-segment topic with "values" bucket — must reach the sink.
-	ok := noop.DeliverInbound("gh/+/+/+/+/+/+/set",
-		"gh/ccu/HmIP-RF/0001ABCD/1/values/STATE/set", []byte("true"))
+	ok := noop.DeliverInbound("gh/set/+/+/+/+/+/+",
+		"gh/set/ccu/HmIP-RF/0001ABCD/1/values/STATE", []byte("true"))
 	if !ok {
 		t.Fatal("subscription did not match")
 	}
@@ -963,8 +972,8 @@ func TestCommandSubscriberDataPointBadChannel(t *testing.T) {
 	_ = sub.Start(context.Background())
 
 	// Channel segment is not an integer.
-	noop.DeliverInbound("gh/+/+/+/+/+/set",
-		"gh/ccu/HmIP-RF/0001ABCD/abc/STATE/set", []byte("true"))
+	noop.DeliverInbound("gh/set/+/+/+/+/+/+",
+		"gh/set/ccu/HmIP-RF/0001ABCD/abc/values/STATE", []byte("true"))
 	// The drop happens on a worker, not on the delivering goroutine, so a
 	// zero-call assertion without this barrier would pass vacuously.
 	sub.WaitIdle()
@@ -984,8 +993,8 @@ func TestCommandSubscriberWeekProfileBadChannel(t *testing.T) {
 
 	// The week-profile shape has no filter of its own; it arrives on the
 	// legacy bucket-less data-point route and is dispatched from there.
-	noop.DeliverInbound("gh/+/+/+/+/+/set",
-		"gh/ccu/HmIP-RF/0001ABCD/notanint/week_profile/set", []byte("P1"))
+	noop.DeliverInbound("gh/set/+/+/+/+/week_profile",
+		"gh/set/ccu/HmIP-RF/0001ABCD/notanint/week_profile", []byte("P1"))
 	sub.WaitIdle()
 	if wpSink.calls.Load() != 0 {
 		t.Fatalf("bad channel must not reach sink; calls=%d", wpSink.calls.Load())
@@ -1002,8 +1011,8 @@ func TestCommandSubscriberWeekProfileSinkError(t *testing.T) {
 	_ = sub.Start(context.Background())
 
 	// Sink error should be logged, not propagated.
-	noop.DeliverInbound("gh/+/+/+/+/+/set",
-		"gh/ccu/HmIP-RF/0001ABCD/1/week_profile/set", []byte("P1"))
+	noop.DeliverInbound("gh/set/+/+/+/+/week_profile",
+		"gh/set/ccu/HmIP-RF/0001ABCD/1/week_profile", []byte("P1"))
 	sub.WaitIdle()
 	if errSink.calls.Load() != 1 {
 		t.Fatalf("expected 1 call, got %d", errSink.calls.Load())
@@ -1034,7 +1043,7 @@ func TestCommandSubscriberSysvarBadTopicShape(t *testing.T) {
 	// A topic the sysvar route does not claim: the shape check is the route
 	// now, so this pins the router's unroutable path rather than a
 	// re-derivation of segment positions inside the handler.
-	noop.DeliverInbound("gh/+/hub/sysvars/+/set", "gh/ccu/wrong/PartyMode/set/extra", []byte("true"))
+	noop.DeliverInbound("gh/set/+/hub/sysvars/+", "gh/ccu/wrong/PartyMode/set/extra", []byte("true"))
 	sub.WaitIdle()
 	if sink.setSysvars.Load() != 0 {
 		t.Fatalf("bad topic must not call SetSysvar; calls=%d", sink.setSysvars.Load())
@@ -1049,8 +1058,8 @@ func TestCommandSubscriberSysvarSinkError(t *testing.T) {
 	sub := NewCommandSubscriber(noop, topics, sink, nil)
 	_ = sub.Start(context.Background())
 
-	noop.DeliverInbound("gh/+/hub/sysvars/+/set",
-		"gh/ccu/hub/sysvars/PartyMode/set", []byte("true"))
+	noop.DeliverInbound("gh/set/+/hub/sysvars/+",
+		"gh/set/ccu/hub/sysvars/PartyMode", []byte("true"))
 	sub.WaitIdle()
 	if sink.sysvars.Load() != 1 {
 		t.Fatalf("expected 1 SetSysvar call; got %d", sink.sysvars.Load())
@@ -1069,7 +1078,7 @@ func TestCommandSubscriberProgramBadTopicShape(t *testing.T) {
 	sub := NewCommandSubscriber(noop, topics, sink, nil)
 	_ = sub.Start(context.Background())
 
-	noop.DeliverInbound("gh/+/hub/programs/+/trigger", "gh/ccu/programs/Morning/trigger/extra", nil)
+	noop.DeliverInbound("gh/set/+/hub/programs/+/trigger", "gh/ccu/programs/Morning/trigger/extra", nil)
 	sub.WaitIdle()
 	if sink.triggers.Load() != 0 {
 		t.Fatalf("bad topic must not call TriggerProgram; calls=%d", sink.triggers.Load())
@@ -1084,8 +1093,8 @@ func TestCommandSubscriberProgramSinkError(t *testing.T) {
 	sub := NewCommandSubscriber(noop, topics, sink, nil)
 	_ = sub.Start(context.Background())
 
-	noop.DeliverInbound("gh/+/hub/programs/+/trigger",
-		"gh/ccu/hub/programs/Morning/trigger", []byte("true"))
+	noop.DeliverInbound("gh/set/+/hub/programs/+/trigger",
+		"gh/set/ccu/hub/programs/Morning/trigger", []byte("true"))
 	sub.WaitIdle()
 	if sink.programs.Load() != 1 {
 		t.Fatalf("expected 1 TriggerProgram call; got %d", sink.programs.Load())
@@ -1134,7 +1143,7 @@ func TestCommandSubscriberCDPInvokeBadTopicShape(t *testing.T) {
 	_ = sub.Start(context.Background())
 
 	// Wrong shape, delivered past the cdps/invoke subscription: unroutable.
-	noop.DeliverInbound("gh/+/devices/+/cdps/+/+/invoke", "gh/ccu/wrong/invoke", []byte(`{}`))
+	noop.DeliverInbound("gh/set/+/+/+/+/+/+", "gh/ccu/wrong/invoke", []byte(`{}`))
 	sub.WaitIdle()
 	if cdpSink.calls.Load() != 0 {
 		t.Fatalf("bad topic must not call InvokeCustomDP; calls=%d", cdpSink.calls.Load())
@@ -1191,12 +1200,18 @@ func TestBridgeAnnounceOnlineStatusAndHealth(t *testing.T) {
 	pubs := mp.publications()
 	found := false
 	for _, p := range pubs {
-		if p.topic == "gh/bridge/status" && p.payload == "online" {
+		// No central reachable yet: the instance announces level 1.
+		if p.topic == "gh/connected" && p.payload == "1" && p.retain {
 			found = true
 		}
 	}
 	if !found {
-		t.Fatalf("AnnounceOnline: bridge/status=online not published; got %v", pubs)
+		t.Fatalf("AnnounceOnline: connected=1 not published; got %v", pubs)
+	}
+	for _, p := range pubs {
+		if p.topic == "gh/bridge/status" || p.topic == "gh/bridge/health" {
+			t.Fatalf("AnnounceOnline still writes the retired %s; got %v", p.topic, pubs)
+		}
 	}
 }
 
@@ -1593,10 +1608,10 @@ func TestUpdateTopicLayoutTopics(t *testing.T) {
 		got  string
 		want string
 	}{
-		{"State", l.State(hamodel.Slot{}), "gh/ccu/HmIP-RF/0001ABCD/update"},
-		{"Command", l.Command(hamodel.Slot{}), "gh/ccu/HmIP-RF/0001ABCD/update/set"},
-		{"Availability", l.Availability(hamodel.Slot{}), "gh/ccu/HmIP-RF/0001ABCD/availability"},
-		{"Bridge", l.Bridge(), "gh/bridge/status"},
+		{"State", l.State(hamodel.Slot{}), "gh/status/ccu/HmIP-RF/0001ABCD/update"},
+		{"Command", l.Command(hamodel.Slot{}), "gh/set/ccu/HmIP-RF/0001ABCD/update"},
+		{"Availability", l.Availability(hamodel.Slot{}), "gh/status/ccu/HmIP-RF/0001ABCD/online"},
+		{"Bridge", l.Bridge(), "gh/connected"},
 	}
 	for _, c := range cases {
 		if c.got != c.want {
@@ -1674,7 +1689,7 @@ func TestBridgePublishAvailabilityOnline(t *testing.T) {
 	}
 	found := false
 	for _, p := range mp.publications() {
-		if p.topic == "gh/ccu/HmIP-RF/0001ABCD/availability" && p.payload == "online" {
+		if p.topic == "gh/status/ccu/HmIP-RF/0001ABCD/online" && statusVal(p.payload) == "true" && p.qos == QoS1 {
 			found = true
 		}
 	}
@@ -1693,7 +1708,7 @@ func TestBridgePublishAvailabilityOffline(t *testing.T) {
 	}
 	found := false
 	for _, p := range mp.publications() {
-		if p.topic == "gh/ccu/HmIP-RF/0001ABCD/availability" && p.payload == "offline" {
+		if p.topic == "gh/status/ccu/HmIP-RF/0001ABCD/online" && statusVal(p.payload) == "false" && p.qos == QoS1 {
 			found = true
 		}
 	}
@@ -1715,7 +1730,7 @@ func TestBridgePublishInstallModeRawEnabled(t *testing.T) {
 	}
 	found := false
 	for _, p := range mp.publications() {
-		if p.topic == "gh/ccu/hub/install_mode/HmIP-RF" && p.payload == "30" {
+		if p.topic == "gh/status/ccu/hub/install_mode/HmIP-RF" && statusVal(p.payload) == "30" {
 			found = true
 		}
 	}
@@ -1942,9 +1957,13 @@ func TestBridgePublishUpdateStateRawEnabled(t *testing.T) {
 		t.Fatal("expected a publish")
 	}
 	got := pubs[0].topic
-	want := "gh/ccu/HmIP-RF/0001ABCD/update"
+	want := "gh/status/ccu/HmIP-RF/0001ABCD/update"
 	if got != want {
 		t.Fatalf("topic: got %q want %q", got, want)
+	}
+	// The firmware document has no primary value, so it is `val` whole.
+	if v := statusVal(pubs[0].payload); v != `{"firmware":"1.0"}` {
+		t.Fatalf("payload val: got %q (payload %s)", v, pubs[0].payload)
 	}
 }
 
@@ -2172,7 +2191,7 @@ func TestBridgePublishDeviceInfoEmptyCentral(t *testing.T) {
 	}
 	found := false
 	for _, p := range mp.publications() {
-		if p.topic == "gh/default/HmIP-RF/0001ABCD/info" {
+		if p.topic == "gh/status/default/HmIP-RF/0001ABCD/info" && statusVal(p.payload) == `{"type":"X"}` {
 			found = true
 		}
 	}
@@ -2190,7 +2209,7 @@ func TestBridgePublishDeviceDiagnosticsEmptyCentral(t *testing.T) {
 	}
 	found := false
 	for _, p := range mp.publications() {
-		if p.topic == "gh/default/HmIP-RF/0001ABCD/diagnostics" {
+		if p.topic == "gh/status/default/HmIP-RF/0001ABCD/diagnostics" && statusVal(p.payload) == `{"rssi":-60}` {
 			found = true
 		}
 	}

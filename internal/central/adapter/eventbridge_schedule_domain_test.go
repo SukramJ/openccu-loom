@@ -33,10 +33,13 @@ func scheduleDomainFromPublishedAttrs(
 	eb.publishScheduleEntityPayload(context.Background(), "ccu-01", "HmIP-RF", address, channelNo, wp)
 
 	for _, p := range pub.Published() {
-		var attrs map[string]any
-		if err := json.Unmarshal(p.Payload, &attrs); err != nil {
+		var obj struct {
+			Val map[string]any `json:"val"`
+		}
+		if err := json.Unmarshal(p.Payload, &obj); err != nil {
 			continue
 		}
+		attrs := obj.Val
 		if d, ok := attrs["schedule_domain"].(string); ok {
 			return d
 		}

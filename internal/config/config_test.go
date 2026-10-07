@@ -1061,3 +1061,74 @@ func TestDiscoveryBundlesNeedsTheDiscoveryPlane(t *testing.T) {
 		t.Error("discovery_bundles was cleared although the discovery plane is on")
 	}
 }
+
+// TestCentralNameReservedTopicSegmentIsRefused pins ADR 0083's reserved-name
+// guard: a central whose topic-safe name sits at the level of the daemon's
+// own MQTT trees (`alarm`, `security`, `system`, `bridge`) or spells a topic
+// function is refused at config validation, with an error naming the
+// segment. Near misses keep working.
+func TestCentralNameReservedTopicSegmentIsRefused(t *testing.T) {
+	t.Parallel()
+	reserved := []string{
+		"alarm", "security", "system", "bridge",
+		"connected", "status", "set", "get", "info", "meta", "maintenance",
+		// This project family's own function (ADR 0083, amendment item 7).
+		"ha",
+	}
+	for _, name := range reserved {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			err := validateCentralNames([]CentralConfig{{Name: "ccu-01"}, {Name: name}})
+			if err == nil {
+				t.Fatalf("central %q accepted; its topic segment collides with a reserved item", name)
+			}
+			if !strings.Contains(err.Error(), "reserved") || !strings.Contains(err.Error(), name) {
+				t.Fatalf("error does not name the reserved segment: %v", err)
+			}
+		})
+	}
+	for _, name := range []string{"Alarm", "alarms", "status-ccu", "Settings", "ccu-01"} {
+		if err := validateCentralNames([]CentralConfig{{Name: name}}); err != nil {
+			t.Errorf("central %q refused: %v", name, err)
+		}
+	}
+}
+
+// TestNorthMQTTMaintenanceDefaults pins the maintenance switch's defaults:
+// enabled unless set false, stats every 60 s unless set, 0 meaning off.
+func TestNorthMQTTMaintenanceDefaults(t *testing.T) {
+	t.Parallel()
+	var m NorthMQTTMaintenance
+	if !m.IsEnabled() {
+		t.Error("maintenance is off by default; the convention recommends on")
+	}
+	if got := m.EffectiveStatsIntervalSeconds(); got != DefaultMaintenanceStatsIntervalSeconds {
+		t.Errorf("default stats interval = %d, want %d", got, DefaultMaintenanceStatsIntervalSeconds)
+	}
+	off, zero, neg, ten := false, 0, -5, 10
+	m = NorthMQTTMaintenance{Enabled: &off, StatsIntervalSeconds: &zero}
+	if m.IsEnabled() {
+		t.Error("enabled: false is ignored")
+	}
+	if got := m.EffectiveStatsIntervalSeconds(); got != 0 {
+		t.Errorf("stats interval 0 = %d, want 0 (off)", got)
+	}
+	if got := (NorthMQTTMaintenance{StatsIntervalSeconds: &neg}).EffectiveStatsIntervalSeconds(); got != 0 {
+		t.Errorf("negative stats interval = %d, want 0 (off)", got)
+	}
+	if got := (NorthMQTTMaintenance{StatsIntervalSeconds: &ten}).EffectiveStatsIntervalSeconds(); got != 10 {
+		t.Errorf("stats interval 10 = %d, want 10", got)
+	}
+}
+
+// TestNorthMQTTMaintenanceParsesFromYAML pins the YAML keys the docs name.
+func TestNorthMQTTMaintenanceParsesFromYAML(t *testing.T) {
+	t.Parallel()
+	var n NorthMQTT
+	if err := yaml.Unmarshal([]byte("maintenance:\n  enabled: false\n  stats_interval_seconds: 0\n"), &n); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if n.Maintenance.IsEnabled() || n.Maintenance.EffectiveStatsIntervalSeconds() != 0 {
+		t.Fatalf("north.mqtt.maintenance not read: %+v", n.Maintenance)
+	}
+}

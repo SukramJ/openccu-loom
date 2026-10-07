@@ -9,8 +9,8 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// HA alarm_control_panel state tokens. These are the plain strings the
-// retained `<base>/alarm/<zone>/state` topic carries and that Home
+// HA alarm_control_panel state tokens. These are the strings the retained
+// `<base>/status/alarm/<zone>/panel` item carries as its `val` and that Home
 // Assistant's alarm_control_panel entity renders 1:1. Wire-stable.
 const (
 	HAAlarmStateDisarmed          = "disarmed"
@@ -26,7 +26,7 @@ const (
 
 // HA alarm_control_panel command payloads. Home Assistant publishes one
 // of these bare strings (or the JSON `{"action":"…"}` form) to the
-// `<base>/alarm/<zone>/set` command topic.
+// `<base>/set/alarm/<zone>/panel` command item.
 //
 //nolint:gosec // HA command vocabulary tokens, not credentials
 const (

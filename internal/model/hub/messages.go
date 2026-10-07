@@ -110,7 +110,7 @@ func NewAlarmMessagesWithCentral(centralName string, ack MessageAcknowledger) *A
 
 // MQTTTopics implements [payload.MQTTAddressable] — the canonical
 // ADR-0011 alarm-messages aggregate is published to
-// `<base>/<central>/hub/alarm_messages`. Read-only; no Set topic.
+// `<base>/status/<central>/hub/alarm_messages`. Read-only; no Set topic.
 func (a *AlarmMessages) MQTTTopics(base, centralName string) payload.MQTTTopicSet {
 	return payload.MQTTTopicSet{
 		State: naming.MQTTHubAlarmMessages(base, centralName),
@@ -133,7 +133,7 @@ func (a *AlarmMessages) List() []AlarmMessage {
 // Count returns the number of active alarm messages. It is the aggregate's
 // only count accessor on purpose: north-bound planes receive the raw message
 // list, not a count, and derive the number themselves — the MQTT discovery
-// body with `{{ value_json | length }}`, the REST hub data points and the
+// body with `{{ value_json.val | length }}`, the REST hub data points and the
 // WebSocket adapter by calling this method. A second accessor for the same
 // datum would be free to drift without any surface noticing.
 func (a *AlarmMessages) Count() int {
@@ -401,7 +401,7 @@ func NewServiceMessagesWithCentral(centralName string, ack MessageAcknowledger) 
 
 // MQTTTopics implements [payload.MQTTAddressable] — the canonical
 // ADR-0011 service-messages aggregate is published to
-// `<base>/<central>/hub/service_messages`. Read-only; no Set topic.
+// `<base>/status/<central>/hub/service_messages`. Read-only; no Set topic.
 func (s *ServiceMessages) MQTTTopics(base, centralName string) payload.MQTTTopicSet {
 	return payload.MQTTTopicSet{
 		State: naming.MQTTHubServiceMessages(base, centralName),

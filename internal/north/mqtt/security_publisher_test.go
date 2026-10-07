@@ -45,7 +45,7 @@ func TestSecurityPlaneFeedsTheEntitiesItDeclares(t *testing.T) {
 	bus.Publish(hmevent.SecurityStateChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
 	obs.settle(t, p)
 
-	statePrefix := base + "/security/"
+	statePrefix := base + "/status/security/"
 	fed := 0
 	for topic := range obs.publishedTopics() {
 		if strings.HasPrefix(topic, statePrefix) {

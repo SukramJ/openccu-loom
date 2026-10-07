@@ -11,11 +11,11 @@
 //	broker → CommandSubscriber → MQTTCommandSink → ValueWriter → CCU
 //
 // against a real Mosquitto broker and a godevccu virtual CCU. A publish
-// on the raw-plane `…/values/<param>/set` topic (and on the ADR-0011
-// custom-DP service-method `…/custom/<kind>/set/<method>` topic) must
+// on the raw-plane `<base>/set/…/values/<param>` item (and on the ADR-0011
+// custom-DP service-method item `<base>/set/…/custom/<kind>/<method>`) must
 // reach godevccu and change device state; the resulting value echo is
-// re-published on the raw-plane state topic, whose on-the-wire VALUE the
-// state subscriber asserts.
+// re-published on the `<base>/status/…` item, whose status object's `val`
+// the state subscriber asserts (ADR 0083).
 //
 // Gated exactly like the sibling real-broker tests: startMosquitto skips
 // automatically when neither a Docker daemon nor a native `mosquitto`
@@ -24,6 +24,7 @@ package integration
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"strings"
 	"sync"
@@ -152,23 +153,26 @@ func (r *commandChainRig) waitForSet(pred func(capturedSet) bool, timeout time.D
 	return capturedSet{}, false
 }
 
-// waitForStateValue polls the captured state topics until one whose topic
-// contains topicSubstr carries a payload containing payloadSubstr.
-func (r *commandChainRig) waitForStateValue(topicSubstr, payloadSubstr string, timeout time.Duration) (stateTopic, statePayload string, found bool) {
+// waitForStatusVal polls the captured payload of topic until it is a
+// status object whose `val` is want, returning the last payload seen.
+func (r *commandChainRig) waitForStatusVal(topic string, want any, timeout time.Duration) (statePayload string, found bool) {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		r.stateMu.Lock()
-		for topic, pl := range r.stateTopics {
-			if strings.Contains(strings.ToLower(topic), strings.ToLower(topicSubstr)) &&
-				strings.Contains(string(pl), payloadSubstr) {
-				r.stateMu.Unlock()
-				return topic, string(pl), true
-			}
-		}
+		pl, ok := r.stateTopics[topic]
 		r.stateMu.Unlock()
+		var obj struct {
+			Val any   `json:"val"`
+			TS  int64 `json:"ts"`
+		}
+		if ok && json.Unmarshal(pl, &obj) == nil && obj.Val == want && obj.TS > 0 {
+			return string(pl), true
+		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	return "", "", false
+	r.stateMu.Lock()
+	defer r.stateMu.Unlock()
+	return string(r.stateTopics[topic]), false
 }
 
 // setupCommandChain boots the entire write path and returns the rig. The
@@ -375,15 +379,15 @@ func hasServiceMethod(names []string, want string) bool {
 // TestMQTTRawSetCommandDrivesWriteAndRepublishesState proves the full
 // inbound write loop against a real broker + godevccu:
 //
-//  1. A publish on the raw-plane bucket-aware command topic
-//     `<base>/<central>/<iface>/<addr>/<ch>/values/STATE/set` reaches the
+//  1. A publish on the raw-plane bucket-aware command item
+//     `<base>/set/<central>/<iface>/<addr>/<ch>/values/STATE` reaches the
 //     real CommandSubscriber, flows through MQTTCommandSink →
 //     backendValueWriter → CcuBackend, and lands as a SetValue on
 //     godevccu — the raw `/set` drives a write end-to-end.
 //  2. godevccu applies the value (device state change) and the confirmed
-//     echo is re-published on the raw-plane state topic, whose on-the-wire
-//     VALUE the state subscriber asserts is `"value":true` — not merely
-//     the topic shape.
+//     echo is re-published on the `<base>/status/…/values/STATE` item,
+//     whose status object the state subscriber asserts carries `val` true
+//     — not merely the topic shape.
 func TestMQTTRawSetCommandDrivesWriteAndRepublishesState(t *testing.T) {
 	rig := setupCommandChain(t)
 
@@ -406,24 +410,17 @@ func TestMQTTRawSetCommandDrivesWriteAndRepublishesState(t *testing.T) {
 
 	// (2) the raw-plane state topic re-published the confirmed value on the
 	// wire — assert the VALUE, not just the topic shape.
-	topic, plStr, ok := rig.waitForStateValue("/values/state", `"value":true`, 15*time.Second)
+	topic := rig.topics.ParameterState(cmdRoundtripCentral, iface, dev.Address, ch.Number, payload.BucketValues, "STATE")
+	plStr, ok := rig.waitForStatusVal(topic, true, 15*time.Second)
 	if !ok {
-		rig.stateMu.Lock()
-		keys := make([]string, 0, len(rig.stateTopics))
-		for k := range rig.stateTopics {
-			if strings.Contains(strings.ToLower(k), "/values/state") {
-				keys = append(keys, k)
-			}
-		}
-		rig.stateMu.Unlock()
-		t.Fatalf("raw-plane STATE state topic never carried \"value\":true; matching topics=%v", keys)
+		t.Fatalf("status item %s never carried a status object with val true; last payload=%q", topic, plStr)
 	}
 	t.Logf("raw-plane republish: topic=%s payload=%s", topic, plStr)
 }
 
 // TestMQTTServiceMethodCommandReachesCustomDP proves the ADR-0011
 // custom-DP service-method write path over a real broker: a publish on
-// `<base>/<central>/<iface>/<addr>/<ch>/custom/<kind>/set/turn_on`
+// `<base>/set/<central>/<iface>/<addr>/<ch>/custom/<kind>/turn_on`
 // reaches the CommandSubscriber, routes through
 // MQTTCommandSink.InvokeChannelService → the channel's CustomDataPoint
 // `turn_on` → the switch writer → godevccu, landing as a real STATE
@@ -436,8 +433,14 @@ func TestMQTTServiceMethodCommandReachesCustomDP(t *testing.T) {
 	_ = dev
 
 	svcTopic := rig.topics.CustomDPServiceMethod(cmdRoundtripCentral, iface, slot, "turn_on")
-	if err := rig.cmdPub.Publish(context.Background(), svcTopic, []byte(""), mqtt.QoS1, false); err != nil {
-		t.Fatalf("publish service-method command: %v", err)
+	// An empty `set` is ignored (ADR 0083: it is also what clearing a
+	// retained topic looks like); a zero-argument method takes `{}`. Both
+	// go out on the one topic, in order, so the single write asserted
+	// below can only have come from the `{}`.
+	for _, body := range []string{"", "{}"} {
+		if err := rig.cmdPub.Publish(context.Background(), svcTopic, []byte(body), mqtt.QoS1, false); err != nil {
+			t.Fatalf("publish service-method command %q: %v", body, err)
+		}
 	}
 
 	got, ok := rig.waitForSet(func(c capturedSet) bool {
@@ -448,6 +451,19 @@ func TestMQTTServiceMethodCommandReachesCustomDP(t *testing.T) {
 		t.Fatalf("turn_on service method never reached godevccu for %s (captured=%v)", channelAddress, rig.setCalls)
 	}
 	t.Logf("service-method turn_on applied on godevccu: addr=%s key=%s value=%v", got.address, got.valueKey, got.value)
+	// Let anything else queued on the topic land before counting.
+	time.Sleep(500 * time.Millisecond)
+	rig.capMu.Lock()
+	writes := 0
+	for _, c := range rig.setCalls {
+		if strings.EqualFold(c.address, channelAddress) {
+			writes++
+		}
+	}
+	rig.capMu.Unlock()
+	if writes != 1 {
+		t.Fatalf("turn_on reached godevccu %d times, want once — the empty `set` must be ignored", writes)
+	}
 }
 
 // findVirtualRemotePressChannel returns the first channel of the virtual
@@ -476,7 +492,7 @@ func findVirtualRemotePressChannel(t *testing.T, c *central.Unit) (iface string,
 // TestMQTTVirtualRemotePressButtonRoundTrip pins the HA `button` → CCU
 // path for the virtual remote: HA publishes the discovery payload's
 // `payload_press` token ("PRESS") on the button's bucket-aware command
-// topic `<base>/<central>/<iface>/<addr>/<ch>/values/PRESS_SHORT/set`;
+// item `<base>/set/<central>/<iface>/<addr>/<ch>/values/PRESS_SHORT`;
 // the CommandSubscriber must coerce it to `true` and the write must land
 // as a SetValue on the CCU. This is the wire behaviour behind the
 // operator report "pressing the RCV button in Home Assistant does

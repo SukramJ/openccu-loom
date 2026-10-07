@@ -263,6 +263,20 @@ func (g *hubStatusGate) forget(central string) {
 	}
 }
 
+// anyOnline reports whether any central's last recorded level is reachable.
+// The level survives [hubStatusGate.Reset], which only re-opens the gate, so
+// a reconnect keeps answering from the last known fold.
+func (g *hubStatusGate) anyOnline() bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	for _, e := range g.entries {
+		if e.level {
+			return true
+		}
+	}
+	return false
+}
+
 // centrals returns every CCU the gate has observed a level for, so the
 // shutdown path can write the counterpart without being told the fleet.
 //
@@ -289,22 +303,24 @@ func (e *hubStatusEntry) stopTimer() {
 	}
 }
 
-// hubStatusTopic is the per-CCU reachability gate's topic,
-// `<base>/<central>/hub/status`.
+// hubStatusTopic is the per-CCU reachability gate's topic, the central's
+// `online` status item `<base>/status/<central>/online`.
 //
 // It goes through [TopicBuilder.HubStatus] rather than composing the string,
 // because the declaring side reaches the same builder from
 // [DefaultDiscoveryBuilder.renderHubItem]. Under Home Assistant's default
 // `availability_mode: "all"` a disagreement between the two does not degrade
 // an entity, it makes it permanently unavailable with nothing on the wire
-// naming the cause — the same reason [availabilityLayout] exists for the
-// device plane.
+// naming the cause — the same reason the device plane derives its `online`
+// item from one builder on both sides.
 func (b *Bridge) hubStatusTopic(centralName string) string {
 	return b.topics.HubStatus(b.resolvedCentral(centralName))
 }
 
 // PublishHubReachability folds one CCU's reachability into the retained gate
-// at `<base>/<central>/hub/status`, debounced by [hubStatusDwell].
+// at `<base>/status/<central>/online`, debounced by [hubStatusDwell], and
+// keeps the instance's `<base>/connected` level in step with it: 2 while at
+// least one central's gate reads reachable, 1 otherwise (ADR 0083).
 //
 // `online` is the caller's fold over BOTH inputs of the gate: the
 // disjunction over the CCU's interface states — see
@@ -331,12 +347,14 @@ func (b *Bridge) PublishHubReachability(ctx context.Context, centralName string,
 	var seedErr error
 	synchronous := b.hubStatus.observe(ctx, b.resolvedCentral(centralName), online,
 		func(ctx context.Context, central string, online bool) error {
-			_, err := b.avail.Publish(ctx, b.hubStatusTopic(central), online)
+			_, err := b.publishOnline(ctx, b.hubStatusTopic(central), online)
 			if err != nil {
 				b.incPublishErrors(central)
 				seedErr = err
+				return err
 			}
-			return err
+			b.syncConnected(ctx)
+			return nil
 		})
 	if synchronous {
 		return seedErr
@@ -349,14 +367,14 @@ func (b *Bridge) PublishHubReachability(ctx context.Context, centralName string,
 //
 // This is the LWT ordering answer, and it starts from a protocol fact: MQTT
 // allows exactly ONE Last Will per connection, and this daemon's is already
-// spent on `<base>/bridge/status`. `hub/status` therefore cannot have a will
+// spent on `<base>/connected`. The central's `online` item therefore cannot have a will
 // of its own, and a per-CCU `online` left retained by a daemon that died is
 // not preventable at the broker.
 //
-// It does not have to be. The gate is added ALONGSIDE `bridge/status` in
+// It does not have to be. The gate is added ALONGSIDE `connected` in
 // every entity's availability list, never instead of it, and Home Assistant's
 // default `availability_mode: "all"` is a conjunction: the will's
-// `bridge/status: offline` alone is enough to make every CCU-scoped entity
+// `connected` = 0 alone is enough to make every CCU-scoped entity
 // unavailable, whatever the per-CCU gates still say. A stale `online` is a
 // false STATEMENT on a topic an operator can read, not a ghost entity.
 //
@@ -368,14 +386,14 @@ func (b *Bridge) PublishHubReachability(ctx context.Context, centralName string,
 // entities and the next connect repairs the statement: the per-CCU seed
 // republishes the current fold before that CCU's hub discovery configs, so a
 // stale `online` survives only for as long as the daemon is down — exactly
-// the window in which `bridge/status` already says otherwise.
+// the window in which `connected` already says otherwise.
 func (b *Bridge) announceHubStatusOffline(ctx context.Context) {
 	if !b.cfg.RawEnabled {
 		return
 	}
 	for _, central := range b.hubStatus.centrals() {
 		b.hubStatus.forget(central)
-		if _, err := b.avail.Publish(ctx, b.hubStatusTopic(central), false); err != nil {
+		if _, err := b.publishOnline(ctx, b.hubStatusTopic(central), false); err != nil {
 			b.incPublishErrors(central)
 		}
 	}
@@ -402,5 +420,21 @@ func (b *Bridge) RetractHubStatus(ctx context.Context, centralName string) error
 	}
 	central := b.resolvedCentral(centralName)
 	b.hubStatus.forget(central)
-	return b.avail.Retract(ctx, b.hubStatusTopic(central))
+	err := b.retractOnline(ctx, b.hubStatusTopic(central))
+	b.syncConnected(ctx)
+	return err
+}
+
+// syncConnected moves `<base>/connected` to 2 while any central's
+// reachability gate last wrote reachable, and to 1 otherwise. A failed
+// publish is counted and left for the next (re)connect, which republishes
+// the level the runtime remembers.
+func (b *Bridge) syncConnected(ctx context.Context) {
+	level := 1
+	if b.hubStatus.anyOnline() {
+		level = 2
+	}
+	if _, err := b.pub.SetConnected(ctx, level); err != nil {
+		b.incPublishErrors("")
+	}
 }

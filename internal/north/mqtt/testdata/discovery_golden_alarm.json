@@ -6,16 +6,18 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/alarm/master/availability"
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/alarm/master/online",
+          "value_template": "{{ value_json.val | lower }}"
         }
       ],
       "availability_mode": "all",
-      "command_topic": "gh/alarm/master/set",
+      "command_topic": "gh/set/alarm/master/panel",
       "default_entity_id": "button.gh_openccu-loom_alarm_master_reset_motion",
       "device": {
         "identifiers": [
@@ -42,16 +44,18 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/availability"
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/online",
+          "value_template": "{{ value_json.val | lower }}"
         }
       ],
       "availability_mode": "all",
-      "command_topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/set",
+      "command_topic": "gh/set/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/panel",
       "default_entity_id": "button.gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33_reset_motion",
       "device": {
         "identifiers": [
@@ -78,19 +82,21 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/alarm/master/availability"
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/alarm/master/online",
+          "value_template": "{{ value_json.val | lower }}"
         }
       ],
       "availability_mode": "all",
       "code_arm_required": false,
       "code_disarm_required": false,
       "code_trigger_required": false,
-      "command_topic": "gh/alarm/master/set",
+      "command_topic": "gh/set/alarm/master/panel",
       "default_entity_id": "alarm_control_panel.gh_openccu-loom_alarm_master",
       "device": {
         "identifiers": [
@@ -105,7 +111,7 @@
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/alarm/master/state",
+      "state_topic": "gh/status/alarm/master/panel",
       "supported_features": [
         "arm_home",
         "arm_away",
@@ -114,7 +120,8 @@
         "arm_custom_bypass",
         "trigger"
       ],
-      "unique_id": "gh_openccu-loom_alarm_master"
+      "unique_id": "gh_openccu-loom_alarm_master",
+      "value_template": "{{ value_json.val }}"
     }
   },
   "panel/zone-all-modes": {
@@ -124,19 +131,21 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/availability"
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/online",
+          "value_template": "{{ value_json.val | lower }}"
         }
       ],
       "availability_mode": "all",
       "code_arm_required": false,
       "code_disarm_required": false,
       "code_trigger_required": false,
-      "command_topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/set",
+      "command_topic": "gh/set/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/panel",
       "default_entity_id": "alarm_control_panel.gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33",
       "device": {
         "identifiers": [
@@ -151,7 +160,7 @@
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/state",
+      "state_topic": "gh/status/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/panel",
       "supported_features": [
         "arm_home",
         "arm_away",
@@ -160,7 +169,8 @@
         "arm_custom_bypass",
         "trigger"
       ],
-      "unique_id": "gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33"
+      "unique_id": "gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33",
+      "value_template": "{{ value_json.val }}"
     }
   },
   "panel/zone-code-arm-only": {
@@ -170,12 +180,14 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/availability"
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/online",
+          "value_template": "{{ value_json.val | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -184,7 +196,7 @@
       "code_disarm_required": false,
       "code_trigger_required": false,
       "command_template": "{\"action\":\"{{ action }}\",\"code\":\"{{ code }}\"}",
-      "command_topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/set",
+      "command_topic": "gh/set/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/panel",
       "default_entity_id": "alarm_control_panel.gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33",
       "device": {
         "identifiers": [
@@ -199,7 +211,7 @@
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/state",
+      "state_topic": "gh/status/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/panel",
       "supported_features": [
         "arm_home",
         "arm_away",
@@ -208,7 +220,8 @@
         "arm_custom_bypass",
         "trigger"
       ],
-      "unique_id": "gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33"
+      "unique_id": "gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33",
+      "value_template": "{{ value_json.val }}"
     }
   },
   "panel/zone-code-disarm-only": {
@@ -218,12 +231,14 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/availability"
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/online",
+          "value_template": "{{ value_json.val | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -232,7 +247,7 @@
       "code_disarm_required": true,
       "code_trigger_required": false,
       "command_template": "{\"action\":\"{{ action }}\",\"code\":\"{{ code }}\"}",
-      "command_topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/set",
+      "command_topic": "gh/set/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/panel",
       "default_entity_id": "alarm_control_panel.gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33",
       "device": {
         "identifiers": [
@@ -247,7 +262,7 @@
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/state",
+      "state_topic": "gh/status/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/panel",
       "supported_features": [
         "arm_home",
         "arm_away",
@@ -256,7 +271,8 @@
         "arm_custom_bypass",
         "trigger"
       ],
-      "unique_id": "gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33"
+      "unique_id": "gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33",
+      "value_template": "{{ value_json.val }}"
     }
   },
   "panel/zone-single-mode": {
@@ -266,19 +282,21 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/availability"
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/online",
+          "value_template": "{{ value_json.val | lower }}"
         }
       ],
       "availability_mode": "all",
       "code_arm_required": false,
       "code_disarm_required": false,
       "code_trigger_required": false,
-      "command_topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/set",
+      "command_topic": "gh/set/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/panel",
       "default_entity_id": "alarm_control_panel.gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33",
       "device": {
         "identifiers": [
@@ -293,12 +311,13 @@
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/state",
+      "state_topic": "gh/status/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/panel",
       "supported_features": [
         "arm_away",
         "trigger"
       ],
-      "unique_id": "gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33"
+      "unique_id": "gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33",
+      "value_template": "{{ value_json.val }}"
     }
   },
   "sensor/master-triggered-motion": {
@@ -308,12 +327,14 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/alarm/master/availability"
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/alarm/master/online",
+          "value_template": "{{ value_json.val | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -334,9 +355,10 @@
         "sw_version": "dev"
       },
       "state_class": "measurement",
-      "state_topic": "gh/alarm/master/triggered-motion",
+      "state_topic": "gh/status/alarm/master/triggered_motion",
       "unique_id": "gh_openccu-loom_alarm_master_triggered_motion",
-      "unit_of_measurement": "detectors"
+      "unit_of_measurement": "detectors",
+      "value_template": "{{ value_json.val }}"
     }
   },
   "sensor/zone-triggered-motion": {
@@ -346,12 +368,14 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/availability"
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/online",
+          "value_template": "{{ value_json.val | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -372,9 +396,10 @@
         "sw_version": "dev"
       },
       "state_class": "measurement",
-      "state_topic": "gh/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/triggered-motion",
+      "state_topic": "gh/status/alarm/7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33/triggered_motion",
       "unique_id": "gh_openccu-loom_alarm_7f3a1c2e-9b4d-4e51-8a6f-2d0c5b8e1a33_triggered_motion",
-      "unit_of_measurement": "detectors"
+      "unit_of_measurement": "detectors",
+      "value_template": "{{ value_json.val }}"
     }
   }
 }

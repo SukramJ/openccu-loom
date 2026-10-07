@@ -32,8 +32,11 @@ Matter, and two ready-made add-ons.
 ### North-bound bridges
 
 - **MQTT** — Home Assistant Discovery **and** a raw topic plane in
-  parallel, bidirectional control via `/set` topics, localized entity
-  names. Pure-Go MQTT 5.0 client (3.1.1 selectable).
+  parallel, laid out by the
+  [mqtt-smarthome 2.0](https://github.com/mqtt-smarthome/mqtt-smarthome/blob/master/SPEC.md)
+  convention (`<base>/status/…`, `<base>/set/…`, `<base>/connected`,
+  `<base>/info`, maintenance topics), localized entity names. Pure-Go MQTT
+  5.0 client (3.1.1 selectable).
   → [`docs/mqtt-topic-schema.md`](./docs/mqtt-topic-schema.md)
 - **REST + WebSocket** — OpenAPI 3.1 contract, RFC 9457 `problem+json`,
   Idempotency-Key middleware, resumable WebSocket subscriptions with
@@ -352,7 +355,8 @@ tests, wire snapshots (`make wire-snapshots`) and E2E smoke
   constraints, resolved decisions; [`docs/adr/`](./docs/adr/) — the
   architecture decisions behind them, e.g. Matter
   ([0012](./docs/adr/0012-matter-pure-go-implementation.md)), MQTT topics
-  ([0011](./docs/adr/0011-mqtt-topic-and-payload-architecture.md)) and
+  ([0011](./docs/adr/0011-mqtt-topic-and-payload-architecture.md),
+  [0083](./docs/adr/0083-mqtt-smarthome-topic-convention.md)) and
   multi-CCU ([0002](./docs/adr/0002-multi-ccu-first-class.md)).
 - [`docs/SECURITY.md`](./docs/SECURITY.md) — threat model and audit
   checklist; [`docs/caching.md`](./docs/caching.md) — every cache layer

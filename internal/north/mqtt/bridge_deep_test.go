@@ -135,7 +135,8 @@ func newDeepBridge(t *testing.T, rec *recordingPublisher, opts ...func(*BridgeCo
 	return NewBridge(cfg, rec)
 }
 
-// 1. AnnounceOnline publishes "online" retained on {base}/bridge/status with QoS1.
+// 1. AnnounceOnline publishes the instance level retained on {base}/connected
+// with QoS1 — 1 while no central is reachable (ADR 0083).
 func TestBridgeAnnounceOnlinePublishesBridgeStatus(t *testing.T) {
 	t.Parallel()
 	rec := &recordingPublisher{}
@@ -145,13 +146,13 @@ func TestBridgeAnnounceOnlinePublishesBridgeStatus(t *testing.T) {
 		t.Fatalf("AnnounceOnline: %v", err)
 	}
 
-	want := "openccu-loom/bridge/status"
+	want := "openccu-loom/connected"
 	r, ok := rec.findTopic(want)
 	if !ok {
 		t.Fatalf("topic %q not published; got: %v", want, rec.records())
 	}
-	if r.payload != "online" {
-		t.Fatalf("payload: got %q want %q", r.payload, "online")
+	if r.payload != "1" {
+		t.Fatalf("payload: got %q want %q", r.payload, "1")
 	}
 	if r.qos != QoS1 {
 		t.Fatalf("QoS: got %d want %d", r.qos, QoS1)
@@ -321,44 +322,10 @@ func TestBridgeAutoWiresDefaultDiscoveryBuilder(t *testing.T) {
 	}
 }
 
-// 7. PublishEvent uses QoS0 and retain=false (event-stream semantics).
-func TestBridgePublishEventNonRetained(t *testing.T) {
-	t.Parallel()
-	rec := &recordingPublisher{}
-	b := newDeepBridge(t, rec)
-
-	if err := b.PublishEvent(context.Background(), "c1", "HmIP-RF", "0001ABCD", 3, "keypress", "short"); err != nil {
-		t.Fatalf("PublishEvent: %v", err)
-	}
-
-	wantTopic := "openccu-loom/c1/HmIP-RF/0001ABCD/3/event/keypress"
-	r, ok := rec.findTopic(wantTopic)
-	if !ok {
-		t.Fatalf("event topic %q not found; got: %v", wantTopic, rec.records())
-	}
-	if r.qos != QoS0 {
-		t.Fatalf("QoS: got %d want QoS0 (%d)", r.qos, QoS0)
-	}
-	if r.retain {
-		t.Fatalf("PublishEvent must be non-retained")
-	}
-	if r.payload != "short" {
-		t.Fatalf("payload: got %q want %q", r.payload, "short")
-	}
-}
-
-// 7b. PublishEvent is skipped when RawEnabled is false.
-func TestBridgePublishEventSkippedWhenRawDisabled(t *testing.T) {
-	t.Parallel()
-	rec := &recordingPublisher{}
-	b := newDeepBridge(t, rec, func(c *BridgeConfig) { c.RawEnabled = false })
-
-	_ = b.PublishEvent(context.Background(), "c1", "HmIP-RF", "0001ABCD", 3, "keypress", "short")
-
-	if n := len(rec.records()); n != 0 {
-		t.Fatalf("expected 0 publishes with RawEnabled=false, got %d", n)
-	}
-}
+// 7. The legacy per-event-type pulse `…/event/<type>` is dropped by ADR
+// 0083: the event type travels in the `val` of the channel's `event` status
+// item. No producer is left — TestTopicBuilderHasNoPerTypeEventShape pins
+// the builder side.
 
 // 8. PublishProgram publishes on the correct topic with the right payload.
 func TestBridgePublishProgramAvailability(t *testing.T) {
@@ -379,8 +346,8 @@ func TestBridgePublishProgramAvailability(t *testing.T) {
 	if !ok {
 		t.Fatalf("program topic %q not found; got: %v", wantTopic, rec.records())
 	}
-	if r.payload != "true" {
-		t.Fatalf("payload: got %q want %q", r.payload, "true")
+	if v := statusVal(r.payload); v != "true" {
+		t.Fatalf("payload: got %q want val %q", r.payload, "true")
 	}
 	if !r.retain {
 		t.Fatalf("program topic must be retained")
@@ -393,8 +360,8 @@ func TestBridgePublishProgramAvailability(t *testing.T) {
 	if !ok2 {
 		t.Fatalf("program topic missing on second call")
 	}
-	if r2.payload != "false" {
-		t.Fatalf("payload (inactive): got %q want %q", r2.payload, "false")
+	if v := statusVal(r2.payload); v != "false" {
+		t.Fatalf("payload (inactive): got %q want val %q", r2.payload, "false")
 	}
 }
 
@@ -430,8 +397,10 @@ func TestBridgePublishSysvarValueRendering(t *testing.T) {
 			if !ok {
 				t.Fatalf("sysvar topic %q not found; got: %v", wantTopic, rec.records())
 			}
-			if r.payload != tc.want {
-				t.Fatalf("payload: got %q want %q", r.payload, tc.want)
+			// The status object carries the value in `val`, typed: a string
+			// stays a JSON string, numbers and booleans their literals.
+			if v := statusVal(r.payload); v != tc.want {
+				t.Fatalf("payload: got %q want val %q", r.payload, tc.want)
 			}
 			if !r.retain {
 				t.Fatalf("sysvar topic must be retained")
@@ -469,8 +438,8 @@ func TestBridgePublishConnectivity(t *testing.T) {
 	if !ok {
 		t.Fatalf("connectivity topic %q not found; got: %v", wantTopic, rec.records())
 	}
-	if r.payload != "true" {
-		t.Fatalf("payload(connected): got %q want %q", r.payload, "true")
+	if v := statusVal(r.payload); v != "true" {
+		t.Fatalf("payload(connected): got %q want val %q", r.payload, "true")
 	}
 	if !r.retain {
 		t.Fatalf("connectivity topic must be retained")
@@ -484,8 +453,8 @@ func TestBridgePublishConnectivity(t *testing.T) {
 	if !ok2 {
 		t.Fatalf("connectivity topic missing on second call")
 	}
-	if r2.payload != "false" {
-		t.Fatalf("payload(disconnected): got %q want %q", r2.payload, "false")
+	if v := statusVal(r2.payload); v != "false" {
+		t.Fatalf("payload(disconnected): got %q want val %q", r2.payload, "false")
 	}
 }
 
@@ -527,7 +496,7 @@ func TestBridgeCentralNameFallback(t *testing.T) {
 		t.Fatalf("PublishSlotState: %v", err)
 	}
 
-	wantTopic := "openccu-loom/fallback-ccu/HmIP-RF/0001ABCD/3/values/STATE"
+	wantTopic := "openccu-loom/status/fallback-ccu/HmIP-RF/0001ABCD/3/values/STATE"
 	if _, ok := rec.findTopic(wantTopic); !ok {
 		t.Fatalf("expected fallback central in topic; got: %v", rec.records())
 	}

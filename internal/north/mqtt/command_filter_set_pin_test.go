@@ -73,34 +73,37 @@ type pinnedFilter struct {
 // Groups by segment count, which is the same thing as grouping by potential
 // collision class — no filter carries `#`, so MQTT filter matching requires
 // equal segment counts and two filters of different lengths are disjoint no
-// matter what literals they carry:
+// matter what literals they carry. Every filter starts with the `set`
+// function (ADR 0083), which is counted:
 //
-//	3 segments: the two daemon-level planes (alarm, addon_update) — literal
-//	            first segment.
-//	5 segments: the four hub planes — `hub` literal at index 1 and a second
-//	            literal at index 2.
-//	6 segments: the legacy bucket-less data-point catch-all, alone. It was
-//	            once paired with a `week_profile` filter of the same length,
-//	            which is the overlap coalescing removed.
-//	7 segments: the bucket-aware data-point catch-all and the cdps/invoke
-//	            filter, which escapes it on its literal last segment. The
-//	            `combined` and `schedule` filters used to sit here too.
-//	8 segments: the per-service-method filter — the only one of its length.
+//	3 segments: the add-on update item — literal throughout.
+//	4 segments: the alarm panel — `alarm` and `panel` literals.
+//	5 segments: the sysvar and install-mode items — `hub` literal at index 2
+//	            and a second literal at index 3.
+//	6 segments: the two program items, escaping each other on their last
+//	            literal, and the week-profile item, which escapes them on
+//	            `week_profile` at the position they carry `hub`/`programs`.
+//	7 segments: the data-point catch-all, alone. It also carries the
+//	            `combined` item and the custom-DP operation item
+//	            `<central>/devices/<addr>/cdps/<name>/<op>`, which it
+//	            dispatches itself.
+//	8 segments: the schedule switch and the per-service-method item,
+//	            escaping each other on `schedule` / `custom`.
 //
 // The set is pairwise disjoint, which
 // TestCommandFiltersArePairwiseDisjoint asserts by enumeration rather than
 // by reading this comment.
 var pinnedCommandFilters = []pinnedFilter{
-	{"<base>/system/addon_update/set", 3},
-	{"<base>/alarm/+/set", 3},
-	{"<base>/+/hub/sysvars/+/set", 5},
-	{"<base>/+/hub/programs/+/set", 5},
-	{"<base>/+/hub/programs/+/trigger", 5},
-	{"<base>/+/hub/install_mode/+/set", 5},
-	{"<base>/+/+/+/+/+/set", 6},
-	{"<base>/+/devices/+/cdps/+/+/invoke", 7},
-	{"<base>/+/+/+/+/+/+/set", 7},
-	{"<base>/+/+/+/+/custom/+/set/+", 8},
+	{"<base>/set/system/addon_update", 3},
+	{"<base>/set/alarm/+/panel", 4},
+	{"<base>/set/+/hub/sysvars/+", 5},
+	{"<base>/set/+/hub/install_mode/+", 5},
+	{"<base>/set/+/hub/programs/+/active", 6},
+	{"<base>/set/+/hub/programs/+/trigger", 6},
+	{"<base>/set/+/+/+/+/week_profile", 6},
+	{"<base>/set/+/+/+/+/+/+", 7},
+	{"<base>/set/+/+/+/+/schedule/switch/+", 8},
+	{"<base>/set/+/+/+/+/custom/+/+", 8},
 }
 
 // TestCommandFilterSetIsPinned pins the exact ordered set of command filters
@@ -348,13 +351,12 @@ func TestFiltersOverlapDetectsAnOverlap(t *testing.T) {
 		a, b string
 		want bool
 	}{
-		{"class A: legacy catch-all x week_profile", "gh/+/+/+/+/+/set", "gh/+/+/+/+/week_profile/set", true},
-		{"class B: bucket catch-all x combined", "gh/+/+/+/+/+/+/set", "gh/+/+/+/+/combined/+/set", true},
-		{"class B: bucket catch-all x schedule", "gh/+/+/+/+/+/+/set", "gh/+/+/+/+/schedule/+/set", true},
+		{"a catch-all overlaps an equal-length literal shape", "gh/set/+/+/+/+/+/+", "gh/set/+/+/+/+/combined/+", true},
+		{"week profile escapes the program items on its last literal", "gh/set/+/+/+/+/week_profile", "gh/set/+/hub/programs/+/active", false},
+		{"schedule switch and service method escape each other", "gh/set/+/+/+/+/schedule/switch/+", "gh/set/+/+/+/+/custom/+/+", false},
 		{"identical filters overlap", "gh/+/+/set", "gh/+/+/set", true},
-		{"cdps/invoke escapes on its last segment", "gh/+/+/+/+/+/+/set", "gh/+/devices/+/cdps/+/+/invoke", false},
-		{"unequal length without `#`", "gh/+/+/+/+/+/set", "gh/+/+/+/+/+/+/set", false},
-		{"differing literal at the same position", "gh/+/hub/sysvars/+/set", "gh/+/hub/programs/+/set", false},
+		{"unequal length without `#`", "gh/set/+/+/+/+/week_profile", "gh/set/+/+/+/+/+/+", false},
+		{"differing literal at the same position", "gh/set/+/hub/sysvars/+", "gh/set/+/hub/install_mode/+", false},
 		{"`#` swallows the rest", "gh/#", "gh/a/b/c/set", true},
 	}
 	for _, tc := range cases {

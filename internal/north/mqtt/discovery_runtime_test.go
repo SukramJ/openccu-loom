@@ -67,11 +67,12 @@ func TestLastWillIsTheStatusTopicEveryEntityReferences(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LastWill: %v", err)
 	}
-	if will.Topic != b.Topics().BridgeStatus() {
-		t.Fatalf("will topic = %q, want the bridge status topic %q", will.Topic, b.Topics().BridgeStatus())
+	if will.Topic != b.Topics().Connected() {
+		t.Fatalf("will topic = %q, want the bridge status topic %q", will.Topic, b.Topics().Connected())
 	}
-	if string(will.Payload) != "offline" {
-		t.Fatalf("will payload = %q, want offline", will.Payload)
+	// `<base>/connected` = 0: mqtt-smarthome 2.0 §3.1's "not running".
+	if string(will.Payload) != "0" {
+		t.Fatalf("will payload = %q, want 0", will.Payload)
 	}
 	if !will.Retain {
 		t.Fatal("the will must be retained: an availability marker nobody can read after the crash tells nothing")
@@ -101,8 +102,10 @@ func TestAnnounceOnlineAndTheWillAgree(t *testing.T) {
 			continue
 		}
 		found = true
-		if p.payload != "online" {
-			t.Fatalf("online marker = %q, want online", p.payload)
+		// The running level: 1 until a central is reachable, never the
+		// will's 0.
+		if p.payload != "1" {
+			t.Fatalf("connected level = %q, want 1", p.payload)
 		}
 		if !p.retain {
 			t.Fatal("the online marker must be retained")

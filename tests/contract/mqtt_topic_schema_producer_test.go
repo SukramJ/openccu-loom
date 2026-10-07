@@ -64,131 +64,157 @@ type docTopicPromise struct {
 // in step in both directions, so a new documented shape fails the suite
 // until someone says here how it is produced.
 var mqttDocTopicPromises = map[string]docTopicPromise{
+	// --- Instance topics (mqtt-smarthome 2.0 §3.1, §6, §7) -------------
+	// `connected` is the Last Will and the runtime's level; the runtime
+	// reaches it through bridgeStatusLayout.Connected, which is a call site
+	// of TopicBuilder.Connected outside the builder files.
+	"<name>/connected": {kind: promisePublished, producers: []string{"Connected"}},
+	"<name>/info":      {kind: promisePublished, producers: []string{"Info"}},
+	"<name>/maintenance/stats": {
+		kind: promisePublished, producers: []string{"Maintenance"},
+	},
+	"<name>/maintenance/set/loglevel": {
+		kind: promiseCommand, producers: []string{"Maintenance"},
+		why: "routed as `<name>/maintenance/set/#` by go-hamqtt's publisher.Instance.Register on the " +
+			"command plane's router (CommandSubscriber.WithMaintenance)",
+	},
+	"<name>/maintenance/set/restart": {
+		kind: promiseCommand, producers: []string{"Maintenance"},
+		why: "routed by the same `<name>/maintenance/set/#` route; refused unless supervised",
+	},
+
 	// --- State topics ---------------------------------------------------
-	"<base>/<central>/<iface>/<addr>/<ch>/values/<param>": {
+	"<name>/status/<central>/<iface>/<addr>/<ch>/values/<param>": {
 		kind: promisePublished, producers: []string{"ParameterState", "SlotState"},
 	},
-	"<base>/<central>/<iface>/<addr>/<ch>/master/<param>": {
+	"<name>/status/<central>/<iface>/<addr>/<ch>/master/<param>": {
 		kind: promisePublished, producers: []string{"ParameterState", "SlotState"},
 	},
-	"<base>/<central>/<iface>/<addr>/<ch>/calculated/<param>": {
+	"<name>/status/<central>/<iface>/<addr>/<ch>/calculated/<param>": {
 		kind: promisePublished, producers: []string{"ParameterState", "SlotState"},
 	},
-	"<base>/<central>/<iface>/<addr>/<ch>/custom/<kind>": {
+	"<name>/status/<central>/<iface>/<addr>/<ch>/custom/<kind>": {
 		kind: promisePublished, producers: []string{"SlotState"},
 	},
-	"<base>/<central>/<iface>/<addr>/<ch>/event": {
+	// This family's `ha` function, whose one tenant is the JSON-schema
+	// light: Bridge.PublishCustomDPState writes it beside the status item.
+	"<name>/ha/<central>/<iface>/<addr>/<ch>/custom/light": {
+		kind: promisePublished, producers: []string{"SlotHAState"},
+	},
+	"<name>/status/<central>/<iface>/<addr>/<ch>/event": {
 		kind: promisePublished, producers: []string{"ChannelEvent"},
 	},
-	"<base>/<central>/<iface>/<addr>/<ch>/impulse": {
+	"<name>/status/<central>/<iface>/<addr>/<ch>/impulse": {
 		kind: promisePublished, producers: []string{"ChannelImpulse"},
 	},
-	"<base>/<central>/<iface>/<addr>/<ch>/device_error": {
+	"<name>/status/<central>/<iface>/<addr>/<ch>/device_error": {
 		kind: promisePublished, producers: []string{"ChannelDeviceError"},
 	},
-	"<base>/<central>/<iface>/<addr>/availability": {
+	"<name>/status/<central>/<iface>/<addr>/online": {
 		kind: promisePublished, producers: []string{"DeviceAvailability"},
 	},
-	"<base>/<central>/<iface>/<addr>/info": {
+	"<name>/status/<central>/<iface>/<addr>/info": {
 		kind: promisePublished, producers: []string{"DeviceInfo"},
 	},
-	"<base>/<central>/<iface>/<addr>/diagnostics": {
+	"<name>/status/<central>/<iface>/<addr>/diagnostics": {
 		kind: promisePublished, producers: []string{"DeviceDiagnostics"},
 	},
-	"<base>/<central>/<iface>/<addr>/update": {
+	"<name>/status/<central>/<iface>/<addr>/update": {
 		kind: promisePublished, producers: []string{"DeviceUpdateState"},
 	},
-	"<base>/<central>/<iface>/<addr>/<ch>/values/<param>/config": {
+	"<name>/meta/<central>/<iface>/<addr>/<ch>/values/<param>": {
 		kind: promisePublished, producers: []string{"ParameterConfig", "SlotConfig"},
 	},
-	"<base>/<central>/<iface>/<addr>/<ch>/custom/<kind>/config": {
+	"<name>/meta/<central>/<iface>/<addr>/<ch>/custom/<kind>": {
 		kind: promisePublished, producers: []string{"SlotConfig"},
 	},
-	"<base>/<central>/<iface>/<addr>/<ch>/event/<type>": {
-		kind: promisePublished, producers: []string{"DataPointEvent"},
-	},
-	"<base>/<central>/<iface>/<addr>/<ch>/combined/<kind>": {
+	"<name>/status/<central>/<iface>/<addr>/<ch>/combined/<kind>": {
 		kind: promisePublished, producers: []string{"CombinedState"},
 	},
-	"<base>/<central>/<iface>/<addr>/<ch>/week_profile/state": {
+	"<name>/status/<central>/<iface>/<addr>/<ch>/week_profile": {
 		kind: promisePublished, producers: []string{"WeekProfileState"},
 	},
-	"<base>/<central>/<iface>/<addr>/<ch>/schedule/state": {
+	"<name>/status/<central>/<iface>/<addr>/<ch>/schedule/active_entries": {
 		kind: promisePublished, producers: []string{"ScheduleEntityState"},
 	},
-	"<base>/<central>/<iface>/<addr>/<ch>/schedule/attrs": {
+	"<name>/status/<central>/<iface>/<addr>/<ch>/schedule/attributes": {
 		kind: promisePublished, producers: []string{"ScheduleEntityAttrs"},
 	},
-	"<base>/<central>/<iface>/<addr>/<ch>/schedule/<key>/state": {
+	"<name>/status/<central>/<iface>/<addr>/<ch>/schedule/switch/<key>": {
 		kind: promisePublished, producers: []string{"ScheduleSwitchState"},
 	},
-	"<base>/alarm/<zone>/state": {
+	"<name>/status/alarm/<zone>/panel": {
 		kind: promisePublished, producers: []string{"alarmStateTopic"},
 	},
-	"<base>/alarm/<zone>/availability": {
+	"<name>/status/alarm/<zone>/online": {
 		kind: promisePublished, producers: []string{"alarmAvailabilityTopic"},
 	},
-	"<base>/alarm/<zone>/event": {
+	"<name>/status/alarm/<zone>/event": {
 		kind: promisePublished, producers: []string{"alarmEventTopic"},
+	},
+	"<name>/status/alarm/<zone>/triggered_motion": {
+		kind: promisePublished, producers: []string{"alarmTriggeredMotionTopic"},
 	},
 
 	// --- Command (set) topics -------------------------------------------
-	// The daemon subscribes to these with wildcard filters, so no builder
-	// call site exists per topic — TopicBuilder.ParameterCommand has no
-	// production caller at all and the shape is still honoured.
-	"<base>/<central>/<iface>/<addr>/<ch>/values/<param>/set": {
+	// The daemon subscribes to these with wildcard filters below
+	// `<name>/set/`, so no builder call site exists per topic —
+	// TopicBuilder.ParameterCommand has no production caller at all and the
+	// shape is still honoured.
+	"<name>/set/<central>/<iface>/<addr>/<ch>/values/<param>": {
 		kind: promiseCommand,
-		why:  "matched by the daemon's `<base>/+/+/+/+/+/set` wildcard filter",
+		why:  "matched by the daemon's data-point filter `<name>/set/+/+/+/+/+/+`",
 	},
-	"<base>/<central>/<iface>/<addr>/<ch>/master/<param>/set": {
+	"<name>/set/<central>/<iface>/<addr>/<ch>/master/<param>": {
 		kind: promiseCommand,
-		why:  "matched by the same wildcard filter as the VALUES form",
+		why:  "matched by the same data-point filter as the VALUES form",
 	},
-	"<base>/<central>/<iface>/<addr>/<ch>/custom/<kind>/set/<method>": {
+	"<name>/set/<central>/<iface>/<addr>/<ch>/custom/<kind>/<method>": {
 		kind: promiseCommand, producers: []string{"CustomDPServiceMethod"},
-		why: "declared as command_topic in discovery, consumed by a wildcard filter",
+		why: "declared as command_topic in discovery, consumed by the `<name>/set/+/+/+/+/custom/+/+` filter",
 	},
-	"<base>/<central>/<iface>/<addr>/<ch>/combined/<kind>/set": {
+	"<name>/set/<central>/<iface>/<addr>/<ch>/combined/<kind>": {
 		kind: promiseCommand, producers: []string{"CombinedCommand"},
-		why: "declared as command_topic in combined-DP discovery; consumed by the " +
-			"8-segment `<base>/+/+/+/+/+/+/set` filter, which the combined kind sits in",
+		why: "declared as command_topic in combined-DP discovery; dispatched from the data-point " +
+			"filter, which the combined kind sits in at the bucket position",
 	},
-	"<base>/<central>/<iface>/<addr>/<ch>/week_profile/set": {
+	"<name>/set/<central>/<iface>/<addr>/<ch>/week_profile": {
 		kind: promiseCommand, producers: []string{"WeekProfileCommand"},
-		why: "declared as command_topic in week-profile discovery; consumed by the " +
-			"7-segment `<base>/+/+/+/+/+/set` filter, which it shares with the legacy bucket-less shape",
+		why: "declared as command_topic in week-profile discovery; consumed by the literal " +
+			"`<name>/set/+/+/+/+/week_profile` filter",
 	},
-	"<base>/<central>/<iface>/<addr>/<ch>/schedule/<key>/set": {
+	"<name>/set/<central>/<iface>/<addr>/<ch>/schedule/switch/<key>": {
 		kind: promiseCommand, producers: []string{"ScheduleSwitchCommand"},
-		why: "declared as command_topic in schedule-switch discovery, consumed by the 8-segment filter",
+		why: "declared as command_topic in schedule-switch discovery, consumed by the " +
+			"`<name>/set/+/+/+/+/schedule/switch/+` filter",
 	},
-	"<base>/<central>/devices/<addr>/cdps/<name>/<op>/invoke": {
+	"<name>/set/<central>/devices/<addr>/cdps/<cdp>/<op>": {
 		kind: promiseCommand, producers: []string{"CustomDPInvoke", "MQTTCustomDPInvoke"},
-		why: "consumed by the `<base>/+/devices/+/cdps/+/+/invoke` filter. Like " +
+		why: "an action item dispatched from the data-point filter, which has its length. Like " +
 			"ParameterCommand the builder has zero production callers and the shape is honoured",
 	},
-	"<base>/<central>/hub/install_mode/<iface>/set": {
+	"<name>/set/<central>/hub/install_mode/<iface>": {
 		kind: promiseCommand, producers: []string{"MQTTHubInstallModeCommand"},
 		why: "declared as command_topic in install-mode discovery, consumed by a wildcard filter",
 	},
-	"<base>/system/addon_update/set": {
+	"<name>/set/system/addon_update": {
 		kind: promiseCommand, producers: []string{"AddonUpdateCommand"},
 		why: "declared as command_topic in add-on update discovery; consumed by the " +
 			"one literal (non-wildcard) route the subscriber registers",
 	},
-	"<base>/alarm/<zone>/set": {
+	"<name>/set/alarm/<zone>/panel": {
 		kind: promiseCommand, producers: []string{"alarmCommandTopic"},
 		why: "declared as command_topic in alarm discovery, consumed by a wildcard filter",
 	},
-	"<base>/<central>/hub/sysvars/<name>/set": {
+	"<name>/set/<central>/hub/sysvars/<sysvar>": {
 		kind: promiseCommand, producers: []string{"MQTTHubSysvarCommand"},
 		why: "declared as command_topic in hub discovery, consumed by a wildcard filter",
 	},
-	"<base>/<central>/hub/programs/<id>/set": {
+	"<name>/set/<central>/hub/programs/<id>/active": {
 		kind: promiseCommand, producers: []string{"MQTTHubProgramSet"},
 		why: "declared as command_topic in hub discovery, consumed by a wildcard filter",
 	},
-	"<base>/<central>/hub/programs/<id>/trigger": {
+	"<name>/set/<central>/hub/programs/<id>/trigger": {
 		kind: promiseCommand, producers: []string{"MQTTHubProgramTrigger"},
 		why: "declared as command_topic in hub discovery, consumed by a wildcard filter",
 	},
@@ -199,60 +225,51 @@ var mqttDocTopicPromises = map[string]docTopicPromise{
 	},
 
 	// --- Bridge / hub status --------------------------------------------
-	"<base>/bridge/status": {
-		kind: promisePublished, producers: []string{"BridgeStatus"},
-	},
-	"<base>/bridge/health": {
-		kind: promisePublished, producers: []string{"BridgeHealth"},
-	},
-	"<base>/<central>/hub/sysvars/<name>/state": {
+	"<name>/status/<central>/hub/sysvars/<sysvar>": {
 		kind: promisePublished, producers: []string{"MQTTHubSysvarState"},
 	},
-	"<base>/<central>/hub/programs/<id>/state": {
+	"<name>/status/<central>/hub/programs/<id>/active": {
 		kind: promisePublished, producers: []string{"MQTTHubProgramState"},
 	},
-	"<base>/<central>/hub/programs/<id>/execute_available": {
+	"<name>/status/<central>/hub/programs/<id>/execute_available": {
 		kind: promisePublished, producers: []string{"MQTTHubProgramExecuteAvailability"},
 	},
-	"<base>/<central>/hub/connectivity/<iface>": {
+	"<name>/status/<central>/hub/connectivity/<iface>": {
 		kind: promisePublished, producers: []string{"MQTTHubConnectivity"},
 	},
-	"<base>/<central>/system/status": {
+	"<name>/status/<central>/system/status": {
 		kind: promisePublished, producers: []string{"SystemStatus"},
 	},
-	"<base>/<central>/hub/install_mode/<iface>": {
+	"<name>/status/<central>/hub/install_mode/<iface>": {
 		kind: promisePublished, producers: []string{"MQTTHubInstallModeForInterface"},
 	},
-	"<base>/<central>/hub/update": {
+	"<name>/status/<central>/hub/update": {
 		kind: promisePublished, producers: []string{"HubUpdate"},
 	},
-	"<base>/<central>/hub/alarm_messages": {
+	"<name>/status/<central>/hub/alarm_messages": {
 		kind: promisePublished, producers: []string{"MQTTHubAlarmMessages"},
 	},
-	"<base>/<central>/hub/service_messages": {
+	"<name>/status/<central>/hub/service_messages": {
 		kind: promisePublished, producers: []string{"MQTTHubServiceMessages"},
 	},
-	"<base>/<central>/hub/inbox": {
+	"<name>/status/<central>/hub/inbox": {
 		kind: promisePublished, producers: []string{"MQTTHubInbox"},
 	},
-	"<base>/<central>/system/health_score": {
+	"<name>/status/<central>/system/health_score": {
 		kind: promisePublished, producers: []string{"HubSystemHealthScore"},
 	},
-	"<base>/<central>/system/latency": {
+	"<name>/status/<central>/system/latency": {
 		kind: promisePublished, producers: []string{"HubConnectionLatency"},
 	},
-	"<base>/<central>/system/last_event_age": {
+	"<name>/status/<central>/system/last_event_age": {
 		kind: promisePublished, producers: []string{"HubLastEventAge"},
 	},
-	"<base>/system/addon_update/state": {
+	"<name>/status/system/addon_update": {
 		kind: promisePublished, producers: []string{"AddonUpdateState"},
 	},
-	// Promoted from reserved to published on 2026-09-13: the per-CCU
-	// availability gate the 2026-09-12 amendment named as the real gap
-	// behind this shape. Both halves of the promotion are here — the row
-	// moved AND HubStatus gained production call sites (the availability
-	// list every CCU-scoped hub entity declares, and the publish path).
-	"<base>/<central>/hub/status": {
+	// The per-CCU availability gate (ADR 0011 amendments 2026-09-12/13),
+	// since ADR 0083 the central's `online` status item.
+	"<name>/status/<central>/online": {
 		kind: promisePublished, producers: []string{"HubStatus"},
 	},
 
@@ -261,17 +278,17 @@ var mqttDocTopicPromises = map[string]docTopicPromise{
 	// Promoting one of these to a published class means giving it a
 	// publisher AND moving its row into the table above; flipping the row
 	// alone, or adding the publisher alone, fails this test.
-	"<base>/<central>/hub/info": {
+	"<name>/status/<central>/hub/info": {
 		kind: promiseReserved, producers: []string{"HubInfo", "MQTTHubInfo"},
 		why: "its fields are in the HA discovery device block instead",
 	},
-	"<base>/<central>/hub/diagnostics": {
+	"<name>/status/<central>/hub/diagnostics": {
 		kind: promiseReserved, producers: []string{"HubDiagnostics", "MQTTHubDiagnostics"},
-		why: "per-device data points and the system/* metric topics carry this",
+		why: "per-device data points and the system/* metric items carry this",
 	},
 
 	// --- Unwired command spelling ---------------------------------------
-	"<base>/<central>/<iface>/<addr>/update/set": {
+	"<name>/set/<central>/<iface>/<addr>/update": {
 		kind: promiseUnwired, producers: []string{"DeviceUpdateCommand", "MQTTDeviceUpdateCommand"},
 		why: "the update entity's topic layout answers with it, but declares no command_topic, " +
 			"and no subscription filter has this shape — flashing firmware from a possibly " +
@@ -279,21 +296,21 @@ var mqttDocTopicPromises = map[string]docTopicPromise{
 	},
 
 	// --- Security & Safety plane ----------------------------------------
-	"<base>/security/state":   {kind: promisePublished, producers: []string{"securityStateTopic"}},
-	"<base>/security/alarm":   {kind: promisePublished, producers: []string{"securityStateTopic"}},
-	"<base>/security/problem": {kind: promisePublished, producers: []string{"securityStateTopic"}},
-	"<base>/security/health":  {kind: promisePublished, producers: []string{"securityStateTopic"}},
-	"<base>/security/class/<class>": {
+	"<name>/status/security/severity": {kind: promisePublished, producers: []string{"securityStateTopic"}},
+	"<name>/status/security/alarm":    {kind: promisePublished, producers: []string{"securityStateTopic"}},
+	"<name>/status/security/problem":  {kind: promisePublished, producers: []string{"securityStateTopic"}},
+	"<name>/status/security/health":   {kind: promisePublished, producers: []string{"securityStateTopic"}},
+	"<name>/status/security/class/<class>": {
 		kind: promisePublished, producers: []string{"securityClassTopic"},
 	},
-	"<base>/security/zone/<slug>": {
+	"<name>/status/security/zone/<slug>": {
 		kind: promisePublished, producers: []string{"securityZoneTopic"},
 	},
-	"<base>/security/last_alarm": {kind: promisePublished, producers: []string{"securityStateTopic"}},
-	"<base>/security/last_fault": {kind: promisePublished, producers: []string{"securityStateTopic"}},
-	"<base>/security/event":      {kind: promisePublished, producers: []string{"securityStateTopic"}},
-	"<base>/security/fault":      {kind: promisePublished, producers: []string{"securityStateTopic"}},
-	"<base>/security/availability": {
+	"<name>/status/security/last_alarm": {kind: promisePublished, producers: []string{"securityStateTopic"}},
+	"<name>/status/security/last_fault": {kind: promisePublished, producers: []string{"securityStateTopic"}},
+	"<name>/status/security/event":      {kind: promisePublished, producers: []string{"securityStateTopic"}},
+	"<name>/status/security/fault":      {kind: promisePublished, producers: []string{"securityStateTopic"}},
+	"<name>/status/security/online": {
 		kind: promisePublished, producers: []string{"securityAvailabilityTopic"},
 	},
 }
@@ -447,8 +464,11 @@ func recordCalls(decl ast.Decl, rel string, calls map[string]map[string]bool) {
 }
 
 // docTopicPatternRe matches the first backticked topic pattern of a
-// markdown table row — the `<base>/…` or `homeassistant/…` shape.
-var docTopicPatternRe = regexp.MustCompile("`((?:<base>|homeassistant)/[^`]*)`")
+// markdown table row — the `<name>/…` or `homeassistant/…` shape. The
+// pre-ADR-0083 spellings in the migration table are written against `<base>`
+// and are deliberately not matched: they are history, not shapes the daemon
+// produces.
+var docTopicPatternRe = regexp.MustCompile("`((?:<name>|homeassistant)/[^`]*)`")
 
 // mqttDocTableTopics returns every topic pattern that appears in a table
 // row of docs/mqtt-topic-schema.md.
@@ -492,7 +512,7 @@ func mqttDocTableTopics(t *testing.T, root string) []string {
 //
 // This is the half the schema doctest cannot see. That test pins a
 // builder's output against a documented string, which a builder nobody
-// calls satisfies perfectly: `<base>/<central>/hub/status` was promised
+// calls satisfies perfectly: `<base>/<central>/hub/status` (today `<name>/status/<central>/online`) was promised
 // as "CCU connection status" from the document's first revision, was
 // pinned green by the doctest the whole time, and was never published by
 // any daemon build (ADR 0011, amendment 2026-09-12). It is published now
@@ -659,8 +679,11 @@ type topicProducer struct {
 // table records, and the reason a new producer has to stop and say it.
 var mqttTopicProducers = map[string]topicProducer{
 	// --- internal/north/mqtt/topics.go: *TopicBuilder ------------------
-	"BridgeStatus":    {shape: "<base>/bridge/status"},
-	"BridgeHealth":    {shape: "<base>/bridge/health"},
+	"Connected": {shape: "<name>/connected"},
+	"Info":      {shape: "<name>/info"},
+	// Maintenance renders every `<name>/maintenance/<item…>` topic; the
+	// documented rows are `stats` and the two `set/…` commands.
+	"Maintenance":     {shape: "<name>/maintenance/stats"},
 	"DiscoveryConfig": {shape: "homeassistant/<component>/<node_id>/<object_id>/config"},
 	// The `<base-slug>_` scope this daemon prefixes its discovery node ids
 	// with — part of DiscoveryConfig's `<node_id>` segment, never a topic.
@@ -669,60 +692,65 @@ var mqttTopicProducers = map[string]topicProducer{
 	// because the scope lives inside `<node_id>` rather than beside it.
 	"DiscoveryNodeScope": {segmentOf: "DiscoveryConfig"},
 
-	"AddonUpdateState":   {shape: "<base>/system/addon_update/state"},
-	"AddonUpdateCommand": {shape: "<base>/system/addon_update/set"},
+	"AddonUpdateState":   {shape: "<name>/status/system/addon_update"},
+	"AddonUpdateCommand": {shape: "<name>/set/system/addon_update"},
 
-	"ParameterState":   {shape: "<base>/<central>/<iface>/<addr>/<ch>/values/<param>"},
-	"ParameterCommand": {shape: "<base>/<central>/<iface>/<addr>/<ch>/values/<param>/set"},
-	"ParameterConfig":  {shape: "<base>/<central>/<iface>/<addr>/<ch>/values/<param>/config"},
+	"ParameterState":   {shape: "<name>/status/<central>/<iface>/<addr>/<ch>/values/<param>"},
+	"ParameterCommand": {shape: "<name>/set/<central>/<iface>/<addr>/<ch>/values/<param>"},
+	"ParameterConfig":  {shape: "<name>/meta/<central>/<iface>/<addr>/<ch>/values/<param>"},
 	"DataPointState":   {alias: "ParameterState"},
 	"DataPointCommand": {alias: "ParameterCommand"},
 	"DataPointConfig":  {alias: "ParameterConfig"},
 
-	"DataPointEvent":     {shape: "<base>/<central>/<iface>/<addr>/<ch>/event/<type>"},
-	"ChannelEvent":       {shape: "<base>/<central>/<iface>/<addr>/<ch>/event"},
-	"ChannelImpulse":     {shape: "<base>/<central>/<iface>/<addr>/<ch>/impulse"},
-	"ChannelDeviceError": {shape: "<base>/<central>/<iface>/<addr>/<ch>/device_error"},
+	"ChannelEvent":       {shape: "<name>/status/<central>/<iface>/<addr>/<ch>/event"},
+	"ChannelImpulse":     {shape: "<name>/status/<central>/<iface>/<addr>/<ch>/impulse"},
+	"ChannelDeviceError": {shape: "<name>/status/<central>/<iface>/<addr>/<ch>/device_error"},
 
-	"SlotState":             {shape: "<base>/<central>/<iface>/<addr>/<ch>/custom/<kind>"},
-	"SlotConfig":            {shape: "<base>/<central>/<iface>/<addr>/<ch>/custom/<kind>/config"},
-	"CustomDPServiceMethod": {shape: "<base>/<central>/<iface>/<addr>/<ch>/custom/<kind>/set/<method>"},
-	"CustomDPInvoke":        {shape: "<base>/<central>/devices/<addr>/cdps/<name>/<op>/invoke"},
+	"SlotState":             {shape: "<name>/status/<central>/<iface>/<addr>/<ch>/custom/<kind>"},
+	"SlotConfig":            {shape: "<name>/meta/<central>/<iface>/<addr>/<ch>/custom/<kind>"},
+	"SlotHAState":           {shape: "<name>/ha/<central>/<iface>/<addr>/<ch>/custom/light"},
+	"CustomDPServiceMethod": {shape: "<name>/set/<central>/<iface>/<addr>/<ch>/custom/<kind>/<method>"},
+	"CustomDPInvoke":        {shape: "<name>/set/<central>/devices/<addr>/cdps/<cdp>/<op>"},
 
-	"DeviceAvailability":  {shape: "<base>/<central>/<iface>/<addr>/availability"},
-	"DeviceInfo":          {shape: "<base>/<central>/<iface>/<addr>/info"},
-	"DeviceDiagnostics":   {shape: "<base>/<central>/<iface>/<addr>/diagnostics"},
-	"DeviceUpdateState":   {shape: "<base>/<central>/<iface>/<addr>/update"},
-	"DeviceUpdateCommand": {shape: "<base>/<central>/<iface>/<addr>/update/set"},
+	"DeviceAvailability":  {shape: "<name>/status/<central>/<iface>/<addr>/online"},
+	"DeviceInfo":          {shape: "<name>/status/<central>/<iface>/<addr>/info"},
+	"DeviceDiagnostics":   {shape: "<name>/status/<central>/<iface>/<addr>/diagnostics"},
+	"DeviceUpdateState":   {shape: "<name>/status/<central>/<iface>/<addr>/update"},
+	"DeviceUpdateCommand": {shape: "<name>/set/<central>/<iface>/<addr>/update"},
 
-	"WeekProfileState":      {shape: "<base>/<central>/<iface>/<addr>/<ch>/week_profile/state"},
-	"WeekProfileCommand":    {shape: "<base>/<central>/<iface>/<addr>/<ch>/week_profile/set"},
-	"CombinedState":         {shape: "<base>/<central>/<iface>/<addr>/<ch>/combined/<kind>"},
-	"CombinedCommand":       {shape: "<base>/<central>/<iface>/<addr>/<ch>/combined/<kind>/set"},
-	"ScheduleEntityState":   {shape: "<base>/<central>/<iface>/<addr>/<ch>/schedule/state"},
-	"ScheduleEntityAttrs":   {shape: "<base>/<central>/<iface>/<addr>/<ch>/schedule/attrs"},
-	"ScheduleSwitchState":   {shape: "<base>/<central>/<iface>/<addr>/<ch>/schedule/<key>/state"},
-	"ScheduleSwitchCommand": {shape: "<base>/<central>/<iface>/<addr>/<ch>/schedule/<key>/set"},
+	"WeekProfileState":      {shape: "<name>/status/<central>/<iface>/<addr>/<ch>/week_profile"},
+	"WeekProfileCommand":    {shape: "<name>/set/<central>/<iface>/<addr>/<ch>/week_profile"},
+	"CombinedState":         {shape: "<name>/status/<central>/<iface>/<addr>/<ch>/combined/<kind>"},
+	"CombinedCommand":       {shape: "<name>/set/<central>/<iface>/<addr>/<ch>/combined/<kind>"},
+	"ScheduleEntityState":   {shape: "<name>/status/<central>/<iface>/<addr>/<ch>/schedule/active_entries"},
+	"ScheduleEntityAttrs":   {shape: "<name>/status/<central>/<iface>/<addr>/<ch>/schedule/attributes"},
+	"ScheduleSwitchState":   {shape: "<name>/status/<central>/<iface>/<addr>/<ch>/schedule/switch/<key>"},
+	"ScheduleSwitchCommand": {shape: "<name>/set/<central>/<iface>/<addr>/<ch>/schedule/switch/<key>"},
 
-	"SystemStatus":         {shape: "<base>/<central>/system/status"},
-	"HubStatus":            {shape: "<base>/<central>/hub/status"},
-	"HubInfo":              {shape: "<base>/<central>/hub/info"},
-	"HubDiagnostics":       {shape: "<base>/<central>/hub/diagnostics"},
-	"HubSystemHealthScore": {shape: "<base>/<central>/system/health_score"},
-	"HubConnectionLatency": {shape: "<base>/<central>/system/latency"},
-	"HubLastEventAge":      {shape: "<base>/<central>/system/last_event_age"},
-	"HubUpdate":            {shape: "<base>/<central>/hub/update"},
+	"SystemStatus":         {shape: "<name>/status/<central>/system/status"},
+	"HubStatus":            {shape: "<name>/status/<central>/online"},
+	"HubInfo":              {shape: "<name>/status/<central>/hub/info"},
+	"HubDiagnostics":       {shape: "<name>/status/<central>/hub/diagnostics"},
+	"HubSystemHealthScore": {shape: "<name>/status/<central>/system/health_score"},
+	"HubConnectionLatency": {shape: "<name>/status/<central>/system/latency"},
+	"HubLastEventAge":      {shape: "<name>/status/<central>/system/last_event_age"},
+	"HubUpdate":            {shape: "<name>/status/<central>/hub/update"},
 
 	// --- internal/model/naming/pathdata.go ----------------------------
+	// naming.StatusTopic / SetTopic / MetaTopic are deliberately absent: they
+	// compose `<base>/<function>/<item…>` for any item and render no shape of
+	// their own — every shape they help build is inventoried through the
+	// producer that names its item path. The scan below enumerates only
+	// MQTT*-prefixed names in pathdata.go, which is what keeps them out.
 	"MQTTState":                 {delegateOf: "ParameterState"},
 	"MQTTCommand":               {delegateOf: "ParameterCommand"},
 	"MQTTConfig":                {delegateOf: "ParameterConfig"},
-	"MQTTDataPointEvent":        {delegateOf: "DataPointEvent"},
 	"MQTTChannelEvent":          {delegateOf: "ChannelEvent"},
 	"MQTTChannelImpulse":        {delegateOf: "ChannelImpulse"},
 	"MQTTChannelDeviceError":    {delegateOf: "ChannelDeviceError"},
 	"MQTTCustomDPState":         {delegateOf: "SlotState"},
 	"MQTTCustomDPConfig":        {delegateOf: "SlotConfig"},
+	"MQTTCustomDPHAState":       {delegateOf: "SlotHAState"},
 	"MQTTCustomDPServiceMethod": {delegateOf: "CustomDPServiceMethod"},
 	"MQTTCustomDPInvoke":        {delegateOf: "CustomDPInvoke"},
 	"MQTTDeviceAvailability":    {delegateOf: "DeviceAvailability"},
@@ -740,18 +768,18 @@ var mqttTopicProducers = map[string]topicProducer{
 
 	// No TopicBuilder wrapper — the document cites these free functions
 	// directly, so they carry their own shape.
-	"MQTTHubSysvarState":                {shape: "<base>/<central>/hub/sysvars/<name>/state"},
-	"MQTTHubSysvarCommand":              {shape: "<base>/<central>/hub/sysvars/<name>/set"},
-	"MQTTHubProgramState":               {shape: "<base>/<central>/hub/programs/<id>/state"},
-	"MQTTHubProgramSet":                 {shape: "<base>/<central>/hub/programs/<id>/set"},
-	"MQTTHubProgramTrigger":             {shape: "<base>/<central>/hub/programs/<id>/trigger"},
-	"MQTTHubProgramExecuteAvailability": {shape: "<base>/<central>/hub/programs/<id>/execute_available"},
-	"MQTTHubConnectivity":               {shape: "<base>/<central>/hub/connectivity/<iface>"},
-	"MQTTHubInstallModeForInterface":    {shape: "<base>/<central>/hub/install_mode/<iface>"},
-	"MQTTHubInstallModeCommand":         {shape: "<base>/<central>/hub/install_mode/<iface>/set"},
-	"MQTTHubAlarmMessages":              {shape: "<base>/<central>/hub/alarm_messages"},
-	"MQTTHubServiceMessages":            {shape: "<base>/<central>/hub/service_messages"},
-	"MQTTHubInbox":                      {shape: "<base>/<central>/hub/inbox"},
+	"MQTTHubSysvarState":                {shape: "<name>/status/<central>/hub/sysvars/<sysvar>"},
+	"MQTTHubSysvarCommand":              {shape: "<name>/set/<central>/hub/sysvars/<sysvar>"},
+	"MQTTHubProgramState":               {shape: "<name>/status/<central>/hub/programs/<id>/active"},
+	"MQTTHubProgramSet":                 {shape: "<name>/set/<central>/hub/programs/<id>/active"},
+	"MQTTHubProgramTrigger":             {shape: "<name>/set/<central>/hub/programs/<id>/trigger"},
+	"MQTTHubProgramExecuteAvailability": {shape: "<name>/status/<central>/hub/programs/<id>/execute_available"},
+	"MQTTHubConnectivity":               {shape: "<name>/status/<central>/hub/connectivity/<iface>"},
+	"MQTTHubInstallModeForInterface":    {shape: "<name>/status/<central>/hub/install_mode/<iface>"},
+	"MQTTHubInstallModeCommand":         {shape: "<name>/set/<central>/hub/install_mode/<iface>"},
+	"MQTTHubAlarmMessages":              {shape: "<name>/status/<central>/hub/alarm_messages"},
+	"MQTTHubServiceMessages":            {shape: "<name>/status/<central>/hub/service_messages"},
+	"MQTTHubInbox":                      {shape: "<name>/status/<central>/hub/inbox"},
 }
 
 // mqttTopicProducerNames parses the two builder files and returns the name

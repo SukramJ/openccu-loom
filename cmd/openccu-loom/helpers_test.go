@@ -4,9 +4,11 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
+	"log/slog"
 	"slices"
 	"testing"
-	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/config"
@@ -20,7 +22,7 @@ func TestBuildLWTTopic_Default(t *testing.T) {
 	cfg := config.Default()
 	cfg.North.MQTT.TopicBase = ""
 	got := buildLWTTopic(cfg)
-	want := "openccu-loom/bridge/status"
+	want := "openccu-loom/connected"
 	if got != want {
 		t.Errorf("buildLWTTopic default: got %q, want %q", got, want)
 	}
@@ -31,7 +33,7 @@ func TestBuildLWTTopic_CustomBase(t *testing.T) {
 	cfg := config.Default()
 	cfg.North.MQTT.TopicBase = "home/ccu"
 	got := buildLWTTopic(cfg)
-	want := "home/ccu/bridge/status"
+	want := "home/ccu/connected"
 	if got != want {
 		t.Errorf("buildLWTTopic custom: got %q, want %q", got, want)
 	}
@@ -40,23 +42,22 @@ func TestBuildLWTTopic_CustomBase(t *testing.T) {
 // TestBuildLWTTopicMatchesBridgeStatusTopic pins the will against the
 // topic the bridge itself publishes its status on.
 //
-// The two are a pair: the broker writes the retained `offline` will when
-// the daemon's link dies, and the bridge writes the retained `online`
-// counterpart on connect. They have to be the same topic, and they are
+// The two are a pair: the broker writes the retained `0` will on
+// `<base>/connected` when the daemon's link dies, and the bridge writes the
+// retained running level on connect. They have to be the same topic, and they are
 // built in two different places — the will before the bridge exists, the
 // counterpart from the bridge's topic builder. A configured base with a
-// trailing slash made them diverge: the will landed on
-// `loom//bridge/status` while `online` landed on `loom/bridge/status`,
-// so the stale `offline` never got overwritten and every consumer that
-// uses the bridge status as an availability source (the alarm and
-// security planes declare it for every entity) treated the whole daemon
-// as permanently down.
+// trailing slash made them diverge: the will landed on `loom//…` while the
+// running level landed on `loom/…`, so the stale will never got overwritten
+// and every consumer that uses the instance level as an availability
+// source (every entity declares it) treated the whole daemon as
+// permanently down.
 func TestBuildLWTTopicMatchesBridgeStatusTopic(t *testing.T) {
 	t.Parallel()
 	for _, base := range []string{"", "home/ccu", "loom/", "/loom", "/loom/"} {
 		cfg := config.Default()
 		cfg.North.MQTT.TopicBase = base
-		want := mqtt.NewTopicBuilder(base).BridgeStatus()
+		want := mqtt.NewTopicBuilder(base).Connected()
 		if got := buildLWTTopic(cfg); got != want {
 			t.Errorf("topic_base %q: will topic %q, bridge publishes %q", base, got, want)
 		}
@@ -96,24 +97,64 @@ func TestPickFirstCentral_Multiple(t *testing.T) {
 	}
 }
 
-// ── liveCentralNames / bridgeHealthSupplier ─────────────────────────────────
+// ── liveCentralNames / <base>/info ──────────────────────────────────────────
 
-// TestBridgeHealthSupplierSeesACentralAdoptedAfterTheStackWasBuilt pins the
-// retained `<base>/bridge/health` payload against a runtime adopt. The payload
-// is rebuilt on every AnnounceOnline — i.e. on every broker reconnect — so a
-// central list captured when the MQTT stack was built keeps announcing the
-// boot fleet for the daemon's lifetime, and a CCU the operator added through
-// the SPA never appears to anyone reading that topic.
-func TestBridgeHealthSupplierSeesACentralAdoptedAfterTheStackWasBuilt(t *testing.T) {
+// TestInfoCentralsSeeACentralAdoptedAfterTheStackWasBuilt pins the `centrals`
+// field of the retained `<base>/info` document (ADR 0083; it replaced
+// `bridge/health`) against a runtime adopt. The document is republished on
+// every AnnounceOnline — i.e. on every broker reconnect — so a central list
+// captured when the MQTT stack was built would keep announcing the boot fleet
+// for the daemon's lifetime, and a CCU the operator added through the SPA
+// would never appear to anyone reading that topic. It goes through buildMQTT,
+// the composition root that hands the live supplier to the bridge.
+func TestInfoCentralsSeeACentralAdoptedAfterTheStackWasBuilt(t *testing.T) {
 	t.Parallel()
 
 	cfg := config.Default()
+	cfg.North.MQTT.Enabled = true
+	cfg.North.MQTT.TopicBase = "openccu-loom"
 	cfg.Centrals = []config.CentralConfig{{Name: "boot-ccu"}}
 	reg := buildTestRegistry(t, "boot-ccu")
 
-	supplier := bridgeHealthSupplier(func() []string { return liveCentralNames(cfg, reg) }, time.Now())
-	if got := supplier()["centrals"]; !slices.Equal(got.([]string), []string{"boot-ccu"}) {
-		t.Fatalf("boot payload centrals = %v, want [boot-ccu]", got)
+	stack := buildMQTT(cfg, slog.Default(), nil, nil,
+		func() []string { return liveCentralNames(cfg, reg) }, mqttMaintenanceHooks{})
+	if stack == nil {
+		t.Fatal("expected a stack with MQTT enabled")
+	}
+	noop, ok := stack.client.(*mqtt.NoopClient)
+	if !ok {
+		t.Fatalf("client is %T, want the no-broker NoopClient", stack.client)
+	}
+	bridge := stack.wiring.Bridge()
+
+	centrals := func() []string {
+		t.Helper()
+		if err := bridge.AnnounceOnline(context.Background()); err != nil {
+			t.Fatalf("AnnounceOnline: %v", err)
+		}
+		var last []byte
+		for _, p := range noop.Published() {
+			if p.Topic == "openccu-loom/info" {
+				last = p.Payload
+			}
+		}
+		if last == nil {
+			t.Fatal("no <base>/info published on AnnounceOnline")
+		}
+		var doc struct {
+			Name     string   `json:"name"`
+			Centrals []string `json:"centrals"`
+		}
+		if err := json.Unmarshal(last, &doc); err != nil {
+			t.Fatalf("info is not JSON: %v (%s)", err, last)
+		}
+		if doc.Name != "openccu-loom" {
+			t.Errorf("info.name = %q, want openccu-loom", doc.Name)
+		}
+		return doc.Centrals
+	}
+	if got := centrals(); !slices.Equal(got, []string{"boot-ccu"}) {
+		t.Fatalf("boot info centrals = %v, want [boot-ccu]", got)
 	}
 
 	// A runtime adopt writes the registry and the centrals table; it never
@@ -126,10 +167,7 @@ func TestBridgeHealthSupplierSeesACentralAdoptedAfterTheStackWasBuilt(t *testing
 		t.Fatalf("reg.Register: %v", err)
 	}
 
-	got, ok := supplier()["centrals"].([]string)
-	if !ok {
-		t.Fatalf("centrals is %T, want []string", supplier()["centrals"])
-	}
+	got := centrals()
 	if !slices.Contains(got, "adopted-ccu") {
 		t.Errorf("centrals = %v after adopt, want it to include adopted-ccu", got)
 	}

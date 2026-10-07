@@ -33,8 +33,8 @@ func TestDiscoveryRuntimeStatusTopicIsChecked(t *testing.T) {
 	if got, want := cfg.Layout.Bridge(), cfg.StatusTopic; got != want {
 		t.Errorf("Layout.Bridge() = %q, StatusTopic = %q — the declaring and publishing sides disagree", got, want)
 	}
-	if cfg.StatusTopic != bridge.topics.BridgeStatus() {
-		t.Errorf("StatusTopic = %q, want the bridge's own %q", cfg.StatusTopic, bridge.topics.BridgeStatus())
+	if cfg.StatusTopic != bridge.topics.Connected() {
+		t.Errorf("StatusTopic = %q, want the bridge's own %q", cfg.StatusTopic, bridge.topics.Connected())
 	}
 }
 

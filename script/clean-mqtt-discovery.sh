@@ -447,8 +447,9 @@ phase_ha_discovery() {
 # filter). Captures every retained topic under <topic_base>/#:
 # DataPointState, AggregatedState, DeviceAvailability, DataPointConfig
 # (json_attributes_topic), ChannelEvent, Hub topics, Sysvars, Programs,
-# AlarmMessages, ServiceMessages, InstallMode, Connectivity,
-# bridge/status. The daemon republishes everything on next start.
+# AlarmMessages, ServiceMessages, InstallMode, Connectivity, connected,
+# info, and any leftover of the pre-ADR-0083 layout. The daemon
+# republishes everything on next start.
 phase_state_topics() {
   echo "=== openccu-loom state topics (${STATE_PATTERN}) ==="
   local records topics total
@@ -473,58 +474,32 @@ phase_state_topics() {
 }
 
 # is_legacy_shape reports whether a retained topic under the daemon's
-# topic_base falls into one of the three retired-topology buckets the
-# daemon's RunRetainCleanupOnce evicts on boot. Mirrors the matchers
-# in `internal/north/mqtt/retain_cleanup.go`:
+# topic_base belongs to a retired topology.
 #
-#   - LegacyAggregateStateMatcher: 5-segment `<central>/<iface>/
-#     <addr>/<channel>/state`
-#   - LegacyDataPointStateMatcher: 5-segment `<central>/<iface>/
-#     <addr>/<channel>/<UPPER_PARAM>` (bucket-less per-DP, retired
-#     because MASTER and VALUES collided on the same topic)
-#   - LegacySlotStateMatcher: anything under `<central>/<iface>/
-#     <addr>/channels/<channel>/...` (the verbose 8-segment SlotState
-#     plus its config / set / custom-DP companions)
+# Since ADR 0083 (mqtt-smarthome 2.0) every topic the daemon publishes has
+# a topic function as its first level below the base — `connected`,
+# `status`, `set`, `get`, `info`, `meta`, `maintenance` — and a central may
+# not be named like one. Every other first level is therefore a retired
+# topology: the pre-ADR-0083 `<central>/…`, `bridge/…`, `alarm/…`,
+# `security/…` and `system/addon_update/…` trees, and below them the older
+# shapes the daemon's RunRetainCleanupOnce also matches (the `channels/`
+# infix, the bucket-less data point, the channel aggregate `…/<ch>/state`).
+#
+# This is broader than the daemon's own sweep, which clears only exact old
+# shapes of the centrals it is configured with, so that a SIBLING daemon on
+# the same topic_base keeps its topics. An operator running this script by
+# hand states the base; run it only when no other instance publishes under
+# that base.
 #
 # Returns 0 (match) / 1 (no match). $1 is the relative path AFTER the
 # topic_base prefix has been stripped.
 is_legacy_shape() {
   local tail="$1"
-  local parts
-  IFS='/' read -ra parts <<<"$tail"
-  local n="${#parts[@]}"
-
-  # Need at least <central>/<iface>/<addr>/<segment4>/...
-  (( n < 4 )) && return 1
-
-  # `<addr>/channels/<ch>/...` subtree (any depth ≥ 5).
-  if [[ "${parts[3]}" == "channels" ]]; then
-    (( n < 5 )) && return 1
-    [[ "${parts[4]}" =~ ^[0-9]+$ ]] || return 1
-    return 0
-  fi
-
-  # The next two shapes both have exactly 5 segments.
-  (( n != 5 )) && return 1
-  [[ "${parts[3]}" =~ ^[0-9]+$ ]] || return 1
-
-  # Channel-aggregate `<central>/<iface>/<addr>/<ch>/state`.
-  if [[ "${parts[4]}" == "state" ]]; then
-    return 0
-  fi
-
-  # Bucket-less DataPointState `<central>/<iface>/<addr>/<ch>/<PARAM>`.
-  # Reserved sub-tree nodes that aren't legacy:
-  case "${parts[4]}" in
-    state|event|set|config|availability|info|diagnostics|update|week_profile|svc|values|master|calculated|custom)
-      return 1
-      ;;
+  local first="${tail%%/*}"
+  case "$first" in
+    connected|status|set|get|info|meta|maintenance) return 1 ;;
+    "") return 1 ;;
   esac
-  # Legacy wire-parameter names are upper-case by convention; the
-  # new shape uses lower-case bucket labels at this depth.
-  if [[ "${parts[4]}" =~ ^[a-z] ]]; then
-    return 1
-  fi
   return 0
 }
 

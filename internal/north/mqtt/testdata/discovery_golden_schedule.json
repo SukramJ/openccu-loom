@@ -6,12 +6,14 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/CUxD/CUX2801001/availability"
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/CUxD/CUX2801001/online",
+          "value_template": "{{ value_json.val | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -29,16 +31,17 @@
       },
       "entity_category": "diagnostic",
       "icon": "mdi:calendar-clock",
-      "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/CUxD/CUX2801001/1/schedule/attrs",
+      "json_attributes_template": "{{ value_json.val | tojson }}",
+      "json_attributes_topic": "gh/status/ccu-01/CUxD/CUX2801001/1/schedule/attributes",
       "name": "Schedule",
       "origin": {
         "name": "openccu-loom",
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/CUxD/CUX2801001/1/schedule/state",
-      "unique_id": "openccu-loom_ccu-01_cux2801001_1_schedule"
+      "state_topic": "gh/status/ccu-01/CUxD/CUX2801001/1/schedule/active_entries",
+      "unique_id": "openccu-loom_ccu-01_cux2801001_1_schedule",
+      "value_template": "{{ value_json.val }}"
     }
   },
   "sensor/cuxd-second-central": {
@@ -48,12 +51,14 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-02/CUxD/CUX2801001/availability"
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-02/CUxD/CUX2801001/online",
+          "value_template": "{{ value_json.val | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -71,16 +76,17 @@
       },
       "entity_category": "diagnostic",
       "icon": "mdi:calendar-clock",
-      "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-02/CUxD/CUX2801001/1/schedule/attrs",
+      "json_attributes_template": "{{ value_json.val | tojson }}",
+      "json_attributes_topic": "gh/status/ccu-02/CUxD/CUX2801001/1/schedule/attributes",
       "name": "Schedule",
       "origin": {
         "name": "openccu-loom",
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-02/CUxD/CUX2801001/1/schedule/state",
-      "unique_id": "openccu-loom_ccu-02_cux2801001_1_schedule"
+      "state_topic": "gh/status/ccu-02/CUxD/CUX2801001/1/schedule/active_entries",
+      "unique_id": "openccu-loom_ccu-02_cux2801001_1_schedule",
+      "value_template": "{{ value_json.val }}"
     }
   },
   "sensor/hmip-multi-io": {
@@ -90,12 +96,14 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/0001D3C9/availability"
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/0001D3C9/online",
+          "value_template": "{{ value_json.val | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -113,16 +121,17 @@
       },
       "entity_category": "diagnostic",
       "icon": "mdi:calendar-clock",
-      "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/0001D3C9/5/schedule/attrs",
+      "json_attributes_template": "{{ value_json.val | tojson }}",
+      "json_attributes_topic": "gh/status/ccu-01/HmIP-RF/0001D3C9/5/schedule/attributes",
       "name": "Schedule",
       "origin": {
         "name": "openccu-loom",
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/HmIP-RF/0001D3C9/5/schedule/state",
-      "unique_id": "openccu-loom_0001d3c9_5_schedule"
+      "state_topic": "gh/status/ccu-01/HmIP-RF/0001D3C9/5/schedule/active_entries",
+      "unique_id": "openccu-loom_0001d3c9_5_schedule",
+      "value_template": "{{ value_json.val }}"
     }
   },
   "sensor/mixed-case-central": {
@@ -132,12 +141,14 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/CCU-Keller/CUxD/CUX2801001/availability"
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/CCU-Keller/CUxD/CUX2801001/online",
+          "value_template": "{{ value_json.val | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -155,16 +166,17 @@
       },
       "entity_category": "diagnostic",
       "icon": "mdi:calendar-clock",
-      "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/CCU-Keller/CUxD/CUX2801001/1/schedule/attrs",
+      "json_attributes_template": "{{ value_json.val | tojson }}",
+      "json_attributes_topic": "gh/status/CCU-Keller/CUxD/CUX2801001/1/schedule/attributes",
       "name": "Schedule",
       "origin": {
         "name": "openccu-loom",
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/CCU-Keller/CUxD/CUX2801001/1/schedule/state",
-      "unique_id": "openccu-loom_ccu-keller_cux2801001_1_schedule"
+      "state_topic": "gh/status/CCU-Keller/CUxD/CUX2801001/1/schedule/active_entries",
+      "unique_id": "openccu-loom_ccu-keller_cux2801001_1_schedule",
+      "value_template": "{{ value_json.val }}"
     }
   },
   "sensor/no-device-object": {
@@ -174,12 +186,14 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/0001D3C9/availability"
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/0001D3C9/online",
+          "value_template": "{{ value_json.val | lower }}"
         }
       ],
       "availability_mode": "all",
@@ -194,16 +208,17 @@
       },
       "entity_category": "diagnostic",
       "icon": "mdi:calendar-clock",
-      "json_attributes_template": "{{ value_json | tojson }}",
-      "json_attributes_topic": "gh/ccu-01/HmIP-RF/0001D3C9/5/schedule/attrs",
+      "json_attributes_template": "{{ value_json.val | tojson }}",
+      "json_attributes_topic": "gh/status/ccu-01/HmIP-RF/0001D3C9/5/schedule/attributes",
       "name": "Schedule",
       "origin": {
         "name": "openccu-loom",
         "support_url": "https://github.com/SukramJ/openccu-loom",
         "sw_version": "dev"
       },
-      "state_topic": "gh/ccu-01/HmIP-RF/0001D3C9/5/schedule/state",
-      "unique_id": "openccu-loom_0001d3c9_5_schedule"
+      "state_topic": "gh/status/ccu-01/HmIP-RF/0001D3C9/5/schedule/active_entries",
+      "unique_id": "openccu-loom_0001d3c9_5_schedule",
+      "value_template": "{{ value_json.val }}"
     }
   },
   "switch/cuxd-central-scoped": {
@@ -213,16 +228,18 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/CUxD/CUX2801001/availability"
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/CUxD/CUX2801001/online",
+          "value_template": "{{ value_json.val | lower }}"
         }
       ],
       "availability_mode": "all",
-      "command_topic": "gh/ccu-01/CUxD/CUX2801001/1/schedule/1_1/set",
+      "command_topic": "gh/set/ccu-01/CUxD/CUX2801001/1/schedule/switch/1_1",
       "device": {
         "configuration_url": "http://ccu-01.local",
         "identifiers": [
@@ -248,8 +265,9 @@
       "payload_on": "true",
       "state_off": "false",
       "state_on": "true",
-      "state_topic": "gh/ccu-01/CUxD/CUX2801001/1/schedule/1_1/state",
-      "unique_id": "openccu-loom_ccu-01_cux2801001_1_schedule_1_1"
+      "state_topic": "gh/status/ccu-01/CUxD/CUX2801001/1/schedule/switch/1_1",
+      "unique_id": "openccu-loom_ccu-01_cux2801001_1_schedule_1_1",
+      "value_template": "{{ value_json.val | lower }}"
     }
   },
   "switch/no-device-object": {
@@ -259,16 +277,18 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/0001D3C9/availability"
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/0001D3C9/online",
+          "value_template": "{{ value_json.val | lower }}"
         }
       ],
       "availability_mode": "all",
-      "command_topic": "gh/ccu-01/HmIP-RF/0001D3C9/5/schedule/1_1/set",
+      "command_topic": "gh/set/ccu-01/HmIP-RF/0001D3C9/5/schedule/switch/1_1",
       "device": {
         "configuration_url": "http://ccu-01.local",
         "identifiers": [
@@ -291,8 +311,9 @@
       "payload_on": "true",
       "state_off": "false",
       "state_on": "true",
-      "state_topic": "gh/ccu-01/HmIP-RF/0001D3C9/5/schedule/1_1/state",
-      "unique_id": "openccu-loom_0001d3c9_5_schedule_1_1"
+      "state_topic": "gh/status/ccu-01/HmIP-RF/0001D3C9/5/schedule/switch/1_1",
+      "unique_id": "openccu-loom_0001d3c9_5_schedule_1_1",
+      "value_template": "{{ value_json.val | lower }}"
     }
   },
   "switch/target-channel-1": {
@@ -302,16 +323,18 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/0001D3C9/availability"
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/0001D3C9/online",
+          "value_template": "{{ value_json.val | lower }}"
         }
       ],
       "availability_mode": "all",
-      "command_topic": "gh/ccu-01/HmIP-RF/0001D3C9/5/schedule/1_1/set",
+      "command_topic": "gh/set/ccu-01/HmIP-RF/0001D3C9/5/schedule/switch/1_1",
       "device": {
         "configuration_url": "http://ccu-01.local",
         "identifiers": [
@@ -337,8 +360,9 @@
       "payload_on": "true",
       "state_off": "false",
       "state_on": "true",
-      "state_topic": "gh/ccu-01/HmIP-RF/0001D3C9/5/schedule/1_1/state",
-      "unique_id": "openccu-loom_0001d3c9_5_schedule_1_1"
+      "state_topic": "gh/status/ccu-01/HmIP-RF/0001D3C9/5/schedule/switch/1_1",
+      "unique_id": "openccu-loom_0001d3c9_5_schedule_1_1",
+      "value_template": "{{ value_json.val | lower }}"
     }
   },
   "switch/target-channel-18": {
@@ -348,16 +372,18 @@
         {
           "payload_available": "online",
           "payload_not_available": "offline",
-          "topic": "gh/bridge/status"
+          "topic": "gh/connected",
+          "value_template": "{{ 'online' if value | int(0) \u003e= 2 else 'offline' }}"
         },
         {
-          "payload_available": "online",
-          "payload_not_available": "offline",
-          "topic": "gh/ccu-01/HmIP-RF/0001D3C9/availability"
+          "payload_available": "true",
+          "payload_not_available": "false",
+          "topic": "gh/status/ccu-01/HmIP-RF/0001D3C9/online",
+          "value_template": "{{ value_json.val | lower }}"
         }
       ],
       "availability_mode": "all",
-      "command_topic": "gh/ccu-01/HmIP-RF/0001D3C9/5/schedule/1_18/set",
+      "command_topic": "gh/set/ccu-01/HmIP-RF/0001D3C9/5/schedule/switch/1_18",
       "device": {
         "configuration_url": "http://ccu-01.local",
         "identifiers": [
@@ -383,8 +409,9 @@
       "payload_on": "true",
       "state_off": "false",
       "state_on": "true",
-      "state_topic": "gh/ccu-01/HmIP-RF/0001D3C9/5/schedule/1_18/state",
-      "unique_id": "openccu-loom_0001d3c9_5_schedule_1_18"
+      "state_topic": "gh/status/ccu-01/HmIP-RF/0001D3C9/5/schedule/switch/1_18",
+      "unique_id": "openccu-loom_0001d3c9_5_schedule_1_18",
+      "value_template": "{{ value_json.val | lower }}"
     }
   }
 }

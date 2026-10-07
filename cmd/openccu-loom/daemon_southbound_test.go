@@ -113,7 +113,7 @@ func TestBootRetainCleanupsRunOnTheFirstLiveBridge(t *testing.T) {
 			defer close(fed)
 			deadline := time.Now().Add(10 * time.Second)
 			for time.Now().Before(deadline) {
-				if client.DeliverInbound("test/#", retired, []byte("true")) {
+				if client.DeliverInbound("test/ccu/#", retired, []byte("true")) {
 					return
 				}
 				time.Sleep(5 * time.Millisecond)
@@ -140,7 +140,7 @@ func TestBootRetainCleanupsRunOnTheFirstLiveBridge(t *testing.T) {
 			defer close(refed)
 			deadline := time.Now().Add(10 * time.Second)
 			for time.Now().Before(deadline) {
-				if client.DeliverInbound("test/#", retired, []byte("true")) {
+				if client.DeliverInbound("test/ccu/#", retired, []byte("true")) {
 					return
 				}
 				time.Sleep(5 * time.Millisecond)

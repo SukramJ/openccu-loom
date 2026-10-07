@@ -108,7 +108,7 @@ func TestPublishInitialSnapshotSkipsCentralMidBringUp(t *testing.T) {
 
 	var stateSeen, masterLeaks int
 	for _, p := range pub.Published() {
-		if strings.HasSuffix(p.Topic, "/0001ABCD/1/values/STATE") {
+		if statusSuffix(p.Topic, "/0001ABCD/1/values/STATE") {
 			stateSeen++
 		}
 		if strings.Contains(p.Topic, "01_WP_WEEKDAY") || strings.Contains(p.Topic, "01_wp_weekday") {

@@ -52,25 +52,25 @@ func (w *lockTargetLevelWriter) SetValue(_ context.Context, _ string, p hmenum.P
 // this guard reads the payload values, not the topic wiring.
 type lockTargetLevelDiscoveryCtx struct{}
 
-func (lockTargetLevelDiscoveryCtx) CustomDPStateTopic() string   { return "ltl/custom/state" }
-func (lockTargetLevelDiscoveryCtx) CustomDPCommandTopic() string { return "ltl/svc" }
+func (lockTargetLevelDiscoveryCtx) CustomDPStateTopic() string   { return "ltl/status/custom/lock" }
+func (lockTargetLevelDiscoveryCtx) CustomDPCommandTopic() string { return "ltl/set/custom/lock" }
 
 func (lockTargetLevelDiscoveryCtx) WireParameterStateTopic(addr, p string) string {
 	if addr == "" {
-		return "ltl/" + p
+		return "ltl/status/" + p
 	}
-	return "ltl/" + addr + "/" + p
+	return "ltl/status/" + addr + "/" + p
 }
 
 func (lockTargetLevelDiscoveryCtx) WireParameterCommandTopic(addr, p string) string {
 	if addr == "" {
-		return "ltl/" + p + "/set"
+		return "ltl/set/" + p
 	}
-	return "ltl/" + addr + "/" + p + "/set"
+	return "ltl/set/" + addr + "/" + p
 }
 
-func (lockTargetLevelDiscoveryCtx) DeviceAvailabilityTopic() string { return "ltl/availability" }
-func (lockTargetLevelDiscoveryCtx) BridgeStatusTopic() string       { return "ltl/bridge/status" }
+func (lockTargetLevelDiscoveryCtx) DeviceAvailabilityTopic() string { return "ltl/status/online" }
+func (lockTargetLevelDiscoveryCtx) ConnectedTopic() string          { return "ltl/connected" }
 
 var _ pload.HADiscoveryTopics = lockTargetLevelDiscoveryCtx{}
 

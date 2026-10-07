@@ -63,7 +63,7 @@ func TestE2ECustomDPRoundtrip(t *testing.T) {
 	// segment. Both the SET command topic and the state topic use this form.
 	const centralName = "ccu-e2e"
 	const wireIface = "ccu-e2e-HmIP-RF"
-	stateTopic := fmt.Sprintf("openccu-loom/%s/%s/%s/4/values/STATE", centralName, wireIface, bsmAddress)
+	stateTopic := fmt.Sprintf("openccu-loom/status/%s/%s/%s/4/values/STATE", centralName, wireIface, bsmAddress)
 
 	// Step 2: Subscribe to the raw-plane state topic BEFORE sending the
 	// SET so we do not miss the echo.
@@ -71,9 +71,11 @@ func TestE2ECustomDPRoundtrip(t *testing.T) {
 	var lastPayload string
 	hit := make(chan struct{}, 1)
 
-	subscribeFilter := fmt.Sprintf("openccu-loom/%s/%s/+/4/values/STATE", centralName, wireIface)
+	subscribeFilter := fmt.Sprintf("openccu-loom/status/%s/%s/+/4/values/STATE", centralName, wireIface)
 	_ = h.MQTT().Subscribe(subscribeFilter, func(topic string, payload []byte, _ bool) {
-		if !strings.Contains(topic, bsmAddress) {
+		// The echo is the status object of the written value (ADR 0083):
+		// `val` true. A retained `false` from before the write is not it.
+		if !strings.Contains(topic, bsmAddress) || !statusObjectBool(payload, true) {
 			return
 		}
 		mu.Lock()
@@ -85,11 +87,12 @@ func TestE2ECustomDPRoundtrip(t *testing.T) {
 		mu.Unlock()
 	})
 
-	// Step 3: Publish SET true on the command topic. The topic shape is
-	// <stateTopic>/set. The daemon's CommandSubscriber is subscribed to
-	// the same wire-interface form and routes the write to the correct backend.
-	setCmdTopic := stateTopic + "/set"
-	setPayload := []byte(`{"value":true}`)
+	// Step 3: Publish SET true on the command topic: the status item's
+	// path under the `set` function (ADR 0083), payload `{"val": true}`.
+	// The daemon's CommandSubscriber is subscribed to the same
+	// wire-interface form and routes the write to the correct backend.
+	setCmdTopic := fmt.Sprintf("openccu-loom/set/%s/%s/%s/4/values/STATE", centralName, wireIface, bsmAddress)
+	setPayload := []byte(`{"val":true}`)
 	if err := h.MQTT().Publish(setCmdTopic, setPayload, false, 0); err != nil {
 		t.Fatalf("publish SET command: %v", err)
 	}

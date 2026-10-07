@@ -66,7 +66,7 @@ func TestTopicBuilderWeekProfileState(t *testing.T) {
 	t.Parallel()
 	tb := NewTopicBuilder("openccu-loom")
 	got := tb.WeekProfileState("ccu-01", "HmIP-RF", "VCU123456", 1)
-	want := "openccu-loom/ccu-01/HmIP-RF/VCU123456/1/week_profile/state"
+	want := "openccu-loom/status/ccu-01/HmIP-RF/VCU123456/1/week_profile"
 	if got != want {
 		t.Fatalf("WeekProfileState: got %q want %q", got, want)
 	}
@@ -76,7 +76,7 @@ func TestTopicBuilderWeekProfileCommand(t *testing.T) {
 	t.Parallel()
 	tb := NewTopicBuilder("openccu-loom")
 	got := tb.WeekProfileCommand("ccu-01", "HmIP-RF", "VCU123456", 1)
-	want := "openccu-loom/ccu-01/HmIP-RF/VCU123456/1/week_profile/set"
+	want := "openccu-loom/set/ccu-01/HmIP-RF/VCU123456/1/week_profile"
 	if got != want {
 		t.Fatalf("WeekProfileCommand: got %q want %q", got, want)
 	}
@@ -115,13 +115,13 @@ func TestWeekProfileDiscoveryShape(t *testing.T) {
 	}
 
 	// state topic.
-	wantState := "openccu-loom/ccu-01/HmIP-RF/VCU123456/1/week_profile/state"
+	wantState := "openccu-loom/status/ccu-01/HmIP-RF/VCU123456/1/week_profile"
 	if doc["state_topic"] != wantState {
 		t.Fatalf("state_topic: got %q want %q", doc["state_topic"], wantState)
 	}
 
 	// command topic.
-	wantCmd := "openccu-loom/ccu-01/HmIP-RF/VCU123456/1/week_profile/set"
+	wantCmd := "openccu-loom/set/ccu-01/HmIP-RF/VCU123456/1/week_profile"
 	if doc["command_topic"] != wantCmd {
 		t.Fatalf("command_topic: got %q want %q", doc["command_topic"], wantCmd)
 	}
@@ -261,7 +261,7 @@ func TestPublishWeekProfileStateCarriesProfile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PublishWeekProfileState: %v", err)
 	}
-	wantTopic := "openccu-loom/ccu-01/HmIP-RF/VCU123456/1/week_profile/state"
+	wantTopic := "openccu-loom/status/ccu-01/HmIP-RF/VCU123456/1/week_profile"
 	var found *publishRecord
 	for i := range pub.sent {
 		if pub.sent[i].topic == wantTopic {
@@ -272,8 +272,8 @@ func TestPublishWeekProfileStateCarriesProfile(t *testing.T) {
 	if found == nil {
 		t.Fatalf("state publish not found; topics: %v", collectTopics(pub))
 	}
-	if found.payload != "P3" {
-		t.Fatalf("payload: got %q want %q", found.payload, "P3")
+	if v := statusVal(found.payload); v != "P3" {
+		t.Fatalf("payload: got %q want a status object with val %q", found.payload, "P3")
 	}
 	if !found.retain {
 		t.Fatal("expected retain=true on state topic")
@@ -289,7 +289,7 @@ func TestPublishWeekProfileStateEmptyProfile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PublishWeekProfileState: %v", err)
 	}
-	wantTopic := "openccu-loom/ccu-01/HmIP-RF/VCU123456/1/week_profile/state"
+	wantTopic := "openccu-loom/status/ccu-01/HmIP-RF/VCU123456/1/week_profile"
 	var found *publishRecord
 	for i := range pub.sent {
 		if pub.sent[i].topic == wantTopic {

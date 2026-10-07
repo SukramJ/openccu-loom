@@ -156,7 +156,7 @@ func waitFor(t *testing.T, cond func() bool) {
 func availabilityPublishCount(pub *mqtt.NoopClient, addr string) int {
 	n := 0
 	for _, p := range pub.Published() {
-		if strings.Contains(p.Topic, addr) && strings.HasSuffix(p.Topic, "/availability") {
+		if strings.Contains(p.Topic, addr) && statusSuffix(p.Topic, "/online") {
 			n++
 		}
 	}
@@ -316,7 +316,7 @@ func TestOnDeviceRemovedForgetsAvailabilityAfterTheRetraction(t *testing.T) {
 
 	var once sync.Once
 	client.onPublish = func(topic string, payload []byte) {
-		if !strings.HasSuffix(topic, "/"+addr+"/availability") || len(payload) != 0 {
+		if !strings.HasSuffix(topic, "/"+addr+"/online") || len(payload) != 0 {
 			return
 		}
 		// A wire value for the device being removed, landing while the

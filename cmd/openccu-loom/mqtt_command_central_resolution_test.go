@@ -85,8 +85,8 @@ func TestMQTTSubscriberBuilderResolvesEscapedCentralSegment(t *testing.T) {
 		}
 	})
 
-	if !noop.DeliverInbound(base+"/+/+/+/+/+/+/set",
-		base+"/"+segment+"/HmIP-RF/0001ABCD/4/values/STATE/set", []byte("true")) {
+	if !noop.DeliverInbound(base+"/set/+/+/+/+/+/+",
+		base+"/set/"+segment+"/HmIP-RF/0001ABCD/4/values/STATE", []byte("true")) {
 		t.Fatal("the daemon does not subscribe to its own declared command topic")
 	}
 

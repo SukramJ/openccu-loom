@@ -328,7 +328,7 @@ func (i *Inbox) OnUpdate(fn func([]InboxDevice)) func() {
 }
 
 // MQTTTopics implements [payload.MQTTAddressable] — the canonical inbox
-// aggregate is published to `<base>/<central>/hub/inbox`. Read-only;
+// aggregate is published to `<base>/status/<central>/hub/inbox`. Read-only;
 // no Set topic.
 func (i *Inbox) MQTTTopics(base, centralName string) payload.MQTTTopicSet {
 	return payload.MQTTTopicSet{

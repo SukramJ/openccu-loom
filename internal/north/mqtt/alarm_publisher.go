@@ -5,10 +5,9 @@ package mqtt
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
-	"strconv"
 	"sync"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
 
@@ -43,9 +42,12 @@ const (
 )
 
 // alarmEventPayload is the JSON body published on the non-retained
-// `<base>/alarm/<zone>/event` topic (notes/concepts/alarm-concept.md §13.3).
+// `<base>/status/alarm/<zone>/event` item (notes/concepts/alarm-concept.md §13.3).
+//
+// On the wire it is a status object that is not retained (ADR 0083): Type is
+// its `val`, every other field travels under `hm`.
 type alarmEventPayload struct {
-	Type        string   `json:"type"`
+	Type        string   `json:"-"`
 	ZoneID      string   `json:"zone_id"`
 	ZoneName    string   `json:"zone_name,omitempty"`
 	ChangedBy   string   `json:"changed_by,omitempty"`
@@ -644,7 +646,7 @@ func (p *AlarmMQTTPublisher) signalReconcile() {
 }
 
 func (p *AlarmMQTTPublisher) enqueueEvent(zone string, pay alarmEventPayload) {
-	body, err := json.Marshal(pay)
+	body, err := renderPulse(pay.Type, pay, time.Time{})
 	if err != nil {
 		p.logger.Warn("mqtt.alarm.event.marshal", slog.String("zone", zone), slog.String("err", err.Error()))
 		return
@@ -776,12 +778,12 @@ func (b *Bridge) RetractAlarmDiscovery(ctx context.Context, component, nodeID, o
 // them — and its publishes appeared in neither `messages_sent` nor
 // `publish_errors`. An alarm surface is the last plane whose publishes an
 // operator should have to take on trust.
-func (b *Bridge) PublishAlarmState(ctx context.Context, topic, token string) error {
-	return b.publishRuntimeState(ctx, "", topic, []byte(token))
+func (b *Bridge) PublishAlarmState(ctx context.Context, topic string, val any) error {
+	return b.publishRuntimeStatus(ctx, "", topic, val, nil)
 }
 
-// PublishAlarmAvailability publishes the retained per-panel availability
-// flag (online/offline). Not gated on the raw plane, for the same reason
+// PublishAlarmAvailability publishes the zone's retained `online` status
+// item (`val` true/false). Not gated on the raw plane, for the same reason
 // as [Bridge.PublishAlarmState]: the discovery payload names this topic.
 //
 // QoS 1, not the state QoS, and that was already so: availability is the
@@ -793,7 +795,7 @@ func (b *Bridge) PublishAlarmState(ctx context.Context, topic, token string) err
 // It records the topic and counts the publish for the reason spelled out
 // on [Bridge.PublishAlarmState].
 func (b *Bridge) PublishAlarmAvailability(ctx context.Context, topic string, online bool) error {
-	sent, err := b.avail.Publish(ctx, topic, online)
+	sent, err := b.publishOnline(ctx, topic, online)
 	if err != nil {
 		b.incPublishErrors("")
 		return err
@@ -822,7 +824,7 @@ func (b *Bridge) PublishAlarmAvailability(ctx context.Context, topic string, onl
 // availability publisher means one stated level covers both halves and they
 // cannot drift apart again. See [newAvailabilityPublisher].
 func (b *Bridge) RetractAlarmAvailability(ctx context.Context, topic string) error {
-	if err := b.avail.Retract(ctx, topic); err != nil {
+	if err := b.retractOnline(ctx, topic); err != nil {
 		b.incPublishErrors("")
 		return err
 	}
@@ -842,7 +844,7 @@ func (b *Bridge) RetractAlarmTopic(ctx context.Context, topic string) error {
 	return b.evictRuntimeState(ctx, "", topic)
 }
 
-// PublishAlarmEvent publishes a non-retained JSON alarm event. Returns nil
+// PublishAlarmEvent publishes a non-retained alarm event status object. Returns nil
 // silently when the raw plane is disabled, matching every other raw-plane
 // publisher on [Bridge].
 //
@@ -896,7 +898,7 @@ func (p *AlarmMQTTPublisher) publishMotionEntities(ctx context.Context, b *Bridg
 	if master {
 		scope = ""
 	}
-	count := strconv.Itoa(len(eng.TriggeredMotionSensors(scope)))
+	count := len(eng.TriggeredMotionSensors(scope))
 	if err := b.PublishAlarmState(ctx, alarmTriggeredMotionTopic(base, zone), count); err != nil {
 		p.logger.Warn("mqtt.alarm.triggered_motion",
 			slog.String("zone", zone), slog.String("err", err.Error()))

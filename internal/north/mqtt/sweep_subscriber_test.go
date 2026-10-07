@@ -75,16 +75,20 @@ func (c *replayingClient) Unsubscribe(ctx context.Context, filter string) error 
 // inbound command invoked its handler twice — a doubled `PRESS_SHORT`, a
 // doubled program trigger, a doubled alarm arm, with nothing in any log.
 //
-// The assertion is the handler call count, not the wiring, because the wiring
-// is only interesting through its effect: [fanoutClient] reproduces BOTH
-// multiplications, so pointing the sweep back at the command client makes
-// this count 2.
+// Since ADR 0083 the migration sweep subscribes the old trees only, and no
+// sweep filter overlaps a `<base>/set/…` route any more (asserted below by
+// enumeration), so the separate connection is the second of two defences.
+// Both are pinned: the sweep's filters must land on the sweep connection,
+// and none of them may overlap a command filter — pointing the sweep back
+// at the command client fails the first, and a sweep that subscribes
+// `<base>/#` again fails the second and, through [fanoutClient], doubles
+// the handler count.
 func TestSweepsDoNotDoubleInboundCommands(t *testing.T) {
 	t.Parallel()
 
 	const (
 		base  = "gh"
-		topic = base + "/ccu-01/HmIP-RF/0001ABCD/1/values/PRESS_SHORT/set"
+		topic = base + "/set/ccu-01/HmIP-RF/0001ABCD/1/values/PRESS_SHORT"
 	)
 
 	cmdClient := newFanoutClient()
@@ -124,6 +128,17 @@ func TestSweepsDoNotDoubleInboundCommands(t *testing.T) {
 		return hasWildcardFilter(sweepClient) || hasWildcardFilter(cmdClient)
 	})
 
+	if hasWildcardFilter(cmdClient) {
+		t.Fatalf("a sweep filter is installed on the command plane's connection: %v", cmdClient.Filters())
+	}
+	for _, sf := range sweepClient.Filters() {
+		for _, cf := range commandFilters(base) {
+			if filtersOverlap(strings.Split(sf, "/"), strings.Split(cf, "/")) {
+				t.Errorf("sweep filter %q overlaps command filter %q — a `set` arriving during "+
+					"the window would be delivered twice on a shared connection", sf, cf)
+			}
+		}
+	}
 	if got := cmdClient.deliver(topic, []byte("true"), false); got != 1 {
 		t.Fatalf("the broker matched %d subscriptions on the command client, want 1 — the sweep "+
 			"filter is still riding the command plane's connection", got)

@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"testing"
 	"time"
 
@@ -59,29 +58,25 @@ func perDPCanonical(t *testing.T, body map[string]any) string {
 // The two instants every fixture is stamped with.
 //
 // This is the answer to the wall-clock problem, and it is worth stating
-// explicitly because the alternative was tempting and wrong.
-// [payload.PerDPState] carries two epoch-second fields, `modified_at` and
-// `refreshed_at`, and a payload carrying a wall clock cannot be byte-pinned.
-// The clock is therefore INJECTED rather than normalised: both fields are
-// populated from the EVENT's timestamp (`hmevent.Base`, set through
-// [hmevent.NewBaseAt]), never from `time.Now()`, so a fixture can choose the
-// instant and the pinned bytes are exact — no field is blanked, no field is
-// excluded from the comparison, and a regression that started reading the
-// wall clock on this path would fail the pin rather than be normalised away.
+// explicitly because the alternative was tempting and wrong. The status
+// object (ADR 0083) carries two integer-millisecond fields, `ts` (when the
+// value was observed) and `lc` (when it last changed), and a payload carrying
+// a wall clock cannot be byte-pinned. The clock is therefore INJECTED rather
+// than normalised: `ts` is the EVENT's timestamp (`hmevent.Base`, set through
+// [hmevent.NewBaseAt]) carried as [payload.PerDPState.ObservedAt], never
+// `time.Now()`, and `lc` is that same instant on a topic's first observation
+// — every fixture builds a fresh bridge, so its change clock starts empty. So
+// a fixture can choose the instant and the pinned bytes are exact — no field
+// is blanked, no field is excluded from the comparison, and a regression that
+// started reading the wall clock on this path would fail the pin rather than
+// be normalised away.
 //
-// The values are deliberately not round: 1767225600.5 exercises the
-// float64-seconds encoding (a sub-second fraction, which an integer-seconds
-// regression would silently truncate) and is far enough from zero that the
-// `omitempty` elision cannot be confused with a real value.
-//
-// [goldenRestampAt] is chosen so the pinned bytes also show a wart worth
-// seeing: .25 s past a non-round second renders as `1767225723.2499998`,
-// because [payload.EpochSeconds] divides `UnixNano()` by 1e9 in float64 and
-// the quotient is not exactly representable. Every timestamp on this plane is
-// approximate at roughly the 100 ns level. That is harmless for the field's
-// documented purpose and it is pinned rather than smoothed, because a
-// migration to an integer-milliseconds encoding would be a payload break and
-// this row is where it would show up.
+// The values are deliberately not round: 1767225600.5 s exercises the
+// millisecond encoding (a sub-second fraction, which a seconds regression
+// would silently truncate). [goldenRestampAt] is .25 s past a non-round
+// second, which the integer-millisecond encoding renders exactly — the
+// float-seconds wart (`1767225723.2499998`) the previous encoding pinned is
+// gone with it.
 var (
 	goldenObservedAt = time.Unix(1767225600, 500_000_000).UTC()
 	goldenRestampAt  = time.Unix(1767225723, 250_000_000).UTC()
@@ -133,19 +128,15 @@ func (f *perDPGoldenFixture) publish(
 	}
 	f.eb.publishSlotState(context.Background(), "ccu-01", "HmIP-RF", "0001ABCD", 1, ev, ch)
 
-	// publishSlotState writes the state topic and, when the data point
-	// resolves to a [payload.Source], the retained `/config` companion
-	// beside it. Only the state message is pinned here (see the scope note
+	// publishSlotState writes the status item and, when the data point
+	// resolves to a [payload.Source], the retained `meta` companion with the
+	// same item path. Only the status item is pinned here (see the scope note
 	// on TestPerDPStatePayloadsArePinned), so it is selected by excluding the
-	// `/config` suffix rather than by position — a positional pick would
-	// silently follow the config write if the two ever swapped order.
-	//
-	// Note the state topic carries NO trailing `/state` segment, contrary to
-	// [payload.PerDPState]'s own doc comment ("`values/<param>/state`"). The
-	// golden pins what the code does.
+	// `meta` function rather than by position — a positional pick would
+	// silently follow the companion write if the two ever swapped order.
 	var picked []mqtt.Publication
 	for _, p := range f.client.Published()[before:] {
-		if !strings.HasSuffix(p.Topic, "/config") {
+		if !isMetaTopic(p.Topic) {
 			picked = append(picked, p)
 		}
 	}
@@ -227,48 +218,36 @@ func putEnumDP(ch *device.Channel, param string, valueList []string, wire any) {
 // datapoint per channel per device, roughly ten thousand of them on a real
 // CCU — and before this test **no state message in this repository was
 // byte-pinned anywhere that runs in `make test`**. The only state-payload
-// coverage was key PRESENCE (`payload_format_test.go` and
-// `internal/payload/wrapper_test.go` assert that `value` and `available`
-// exist) plus the nine exact float cases `TestRenderValueFloatPrecision`
-// added. Adding, removing or reordering a field of [payload.PerDPState], or
+// coverage was key PRESENCE (`payload_format_test.go` asserted that the
+// value and `available` exist) plus the nine exact float cases
+// `TestRenderValueFloatPrecision` added. Adding, removing or reordering a field of [payload.PerDPState], or
 // changing any non-float value encoding, passed the whole suite. The two
 // tests that would have noticed —
 // `tests/integration/mqtt_roundtrip_test.go` and
 // `tests/e2e/mqtt_binary_sensor_payload_test.go` — are behind
 // `//go:build integration` / `e2e` and do not run in `make test`.
 //
-// That matters now specifically because the shared library's
-// `publisher.StatePublisher` is the next thing this plane is proposed to move
-// onto, and the library's own `publisher.Envelope` is two keys — `value` and
-// `available`. Moving this plane onto it would silently drop `modified_at`,
-// `refreshed_at` and `additional_information` from every datapoint payload.
-// This pin is what turns that from a quiet regression into a failing test.
+// The payload is mqtt-smarthome 2.0's status object (ADR 0083):
+// `{"val", "ts", "lc", "hm": {"available", "additional_information"}}`.
+// Dropping or renaming any of those keys — moving `available` out of `hm`,
+// `ts` back to seconds — is what this pin turns from a quiet regression into
+// a failing test.
 //
 // Why the payload is byte-stable. See the comment on [goldenObservedAt]: the
 // clock is injected through the event, not read at publish time, so nothing
-// is normalised and nothing is excluded from the comparison. That is only
-// possible because [EventBridge.publishSlotState] populates both timestamps
-// from `e.Timestamp()`. The sibling legacy-alias mirror does read
-// `time.Now()` at publish time and therefore cannot be pinned this way; it is
-// out of scope here and named in the scope note below.
+// is normalised and nothing is excluded from the comparison — with the one
+// exception the zero-timestamp row states. That is only possible because
+// [EventBridge.publishSlotState] carries `e.Timestamp()` as the observation
+// time.
 //
-// Pinned rows that are defects:
+// Pinned rows worth naming:
 //
-//   - **F1**, row `values/f1-unchanged-value-restamps-modified-at`.
-//     [payload.PerDPState.ModifiedAt]'s doc comment reads "Updated only when
-//     the new value differs from the previous one".
-//     [EventBridge.publishSlotState] assigns it the SAME epoch as
-//     `RefreshedAt` unconditionally, with no last-value comparison anywhere
-//     on the path. The pinned row is the second of two emissions of an
-//     UNCHANGED value, and its `modified_at` has advanced — so a datapoint
-//     re-reporting the same reading advertises a new modification time on
-//     every poll, and every consumer reading `modified_at` to mean "last
-//     change" is wrong. Pinned, not fixed: the fix is a behaviour change on
-//     every entity and belongs in its own change, where this row moving is
-//     the visible proof it worked.
-//   - **F1**, second consequence, pinned by the same row: this is also the
-//     direct reason a byte-level dedup gate is impossible on this plane. A
-//     gate would be possible if the doc comment were true.
+//   - **F1**, row `values/f1-unchanged-value-keeps-lc`. This was a pinned
+//     defect under the old envelope: `modified_at` advanced on every
+//     re-report of an unchanged value. Under the status object the bridge
+//     tracks `lc` per topic, so the second of two emissions of an UNCHANGED
+//     value carries the new `ts` and the first one's `lc`. The row is the
+//     visible proof of that fix.
 //   - Row `values/no-channel-object` pins that an unresolvable data point
 //     reports `available: true`. That is deliberate (an unclassifiable entry
 //     must not be greyed out) but it is indistinguishable on the wire from a
@@ -360,15 +339,14 @@ func TestPerDPStatePayloadsArePinned(t *testing.T) {
 		// the shape a text datapoint carries natively.
 		{"values/string", "DIRECTION_TEXT", "UP"},
 		// A string list. Home Assistant cannot template a JSON array through
-		// `value_json.value` without an index, so this shape is load-bearing
+		// `value_json.val` without an index, so this shape is load-bearing
 		// for the consumers that read it raw.
 		{"values/string-list", "PARTY_MODE_LIST", []string{"P1", "P2"}},
 		// nil. Documented as rare but reachable — an unobserved calculated
 		// binary sensor publishes it at registration so the entity exists in
-		// Home Assistant as `unknown` rather than not at all. `value` has NO
-		// omitempty, so the key must survive as an explicit null; an
-		// omitempty added to it would make this payload `{"available":…}` and
-		// every consumer's `value_json.value` template would fail.
+		// Home Assistant as `unknown` rather than not at all. `val` must
+		// survive as an explicit null; a payload without it would make every
+		// consumer's `value_json.val` template fail.
 		{"values/null", "SMOKE_ALARM", nil},
 	} {
 		f := newPerDPGoldenFixture(t)
@@ -376,10 +354,10 @@ func TestPerDPStatePayloadsArePinned(t *testing.T) {
 		record(vc.name, f.publish(t, vc.name, goldenObservedAt, valuesKey(vc.param), vc.value, ch))
 	}
 
-	// --- The availability gate and the omitempty elisions. ---
+	// --- The availability gate and the elisions. ---
 
-	// An unobserved VALUES data point. `available` flips to false while
-	// `value` still carries whatever the event reported — the two fields are
+	// An unobserved VALUES data point. `hm.available` flips to false while
+	// `val` still carries whatever the event reported — the two fields are
 	// independent, and a consumer that reads `value` without checking
 	// `available` shows a stale reading as live.
 	{
@@ -407,14 +385,27 @@ func TestPerDPStatePayloadsArePinned(t *testing.T) {
 			goldenObservedAt, valuesKey("STATE"), true, nil))
 	}
 
-	// A zero event timestamp. Both time fields carry `omitempty`, so the two
-	// keys vanish entirely rather than appearing as 0. A consumer reading
-	// `value_json.modified_at` gets `undefined`, not an epoch at 1970.
+	// A zero event timestamp. The status object requires `ts` and `lc`
+	// (spec §5.2), so they are not elided: the observation time falls back
+	// to the publish time. That is the one wall clock on this path, so this
+	// row asserts it — present, equal, not at 1970, not in the future — and
+	// pins the payload with the two keys removed.
 	{
 		f := newPerDPGoldenFixture(t)
 		ch := f.dev.AddChannel("0001ABCD:1", 1, "TEST", hmenum.ParamsetKeyValues)
-		record("values/zero-timestamp-elides-both", f.publish(t, "values/zero-timestamp-elides-both",
-			time.Time{}, valuesKey("STATE"), false, ch))
+		before := time.Now().UnixMilli()
+		e := f.publish(t, "values/zero-timestamp-is-publish-time", time.Time{}, valuesKey("STATE"), false, ch)
+		after := time.Now().UnixMilli()
+		ts, _ := e.Payload["ts"].(float64)
+		if int64(ts) < before || int64(ts) > after {
+			t.Errorf("zero timestamp: ts = %v, want the publish time in [%d, %d]", e.Payload["ts"], before, after)
+		}
+		if e.Payload["lc"] != e.Payload["ts"] {
+			t.Errorf("zero timestamp: lc = %v, want ts %v on a first observation", e.Payload["lc"], e.Payload["ts"])
+		}
+		delete(e.Payload, "ts")
+		delete(e.Payload, "lc")
+		record("values/zero-timestamp-is-publish-time", e)
 	}
 
 	// --- Enum-label coercion. ENUM wire values arrive as int indices; the
@@ -455,25 +446,21 @@ func TestPerDPStatePayloadsArePinned(t *testing.T) {
 		first := f.publish(t, "F1 first", goldenObservedAt, valuesKey("STATE"), true, ch)
 		second := f.publish(t, "F1 second", goldenRestampAt, valuesKey("STATE"), true, ch)
 
-		// The defect, asserted rather than only pinned, so the finding is
-		// legible in the failure message and not only in the golden diff.
-		if first.Payload["value"] != second.Payload["value"] {
+		// The fix, asserted rather than only pinned, so it is legible in the
+		// failure message and not only in the golden diff.
+		if first.Payload["val"] != second.Payload["val"] {
 			t.Fatalf("F1: the two emissions do not carry the same value (%v vs %v) — "+
 				"the fixture no longer exercises an unchanged reading",
-				first.Payload["value"], second.Payload["value"])
+				first.Payload["val"], second.Payload["val"])
 		}
-		if first.Payload["modified_at"] == second.Payload["modified_at"] {
-			t.Errorf("F1: modified_at did NOT advance across two emissions of an unchanged value. " +
-				"That is what PerDPState.ModifiedAt's doc comment promises, and it is not what the " +
-				"code did when this pin was written — if this is now a deliberate fix, refresh the " +
-				"golden and retire finding F1 from this test's doc comment")
+		if first.Payload["ts"] == second.Payload["ts"] {
+			t.Errorf("F1: ts did not advance across two observations at two instants (%v)", second.Payload["ts"])
 		}
-		if second.Payload["modified_at"] != second.Payload["refreshed_at"] {
-			t.Errorf("F1: modified_at (%v) != refreshed_at (%v); publishSlotState assigned them the "+
-				"same epoch unconditionally when this pin was written",
-				second.Payload["modified_at"], second.Payload["refreshed_at"])
+		if second.Payload["lc"] != first.Payload["lc"] {
+			t.Errorf("F1: lc moved from %v to %v across two emissions of an UNCHANGED value; "+
+				"lc is the time the value last changed", first.Payload["lc"], second.Payload["lc"])
 		}
-		record("values/f1-unchanged-value-restamps-modified-at", second)
+		record("values/f1-unchanged-value-keeps-lc", second)
 	}
 
 	if *updatePerDPStateGolden {

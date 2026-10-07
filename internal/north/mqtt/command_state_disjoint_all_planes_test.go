@@ -292,9 +292,7 @@ func runRawDataPointPlane(t *testing.T) *observedPlane {
 	// The non-retained event stream. Not retained, so a consumer never
 	// replays it — but a broker still delivers it back to the daemon on a
 	// matching own subscription, so it belongs in the sweep.
-	if err := b.PublishEvent(ctx, central, iface, addr, 1, "keypress", map[string]any{
-		"press": "SHORT",
-	}); err != nil {
+	if err := b.PublishChannelEventState(ctx, central, iface, addr, 1, "HmIP-WRC2", "press_short"); err != nil {
 		t.Fatalf("publish event: %v", err)
 	}
 

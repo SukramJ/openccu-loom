@@ -14,6 +14,8 @@ import (
 	"sync"
 	"time"
 
+	hapublisher "github.com/SukramJ/go-hamqtt/publisher"
+
 	"github.com/SukramJ/openccu-loom/internal/alarm"
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/auth"
@@ -521,8 +523,11 @@ func northTCPConfig(cfg *config.Config, logger *slog.Logger) mqtt.TCPConfig {
 		Username:  cfg.North.MQTT.Username,
 		Password:  cfg.North.MQTT.Password,
 		Will: &mqtt.Will{
-			Topic:   buildLWTTopic(cfg),
-			Payload: []byte("offline"),
+			Topic: buildLWTTopic(cfg),
+			// `<base>/connected` = 0: mqtt-smarthome 2.0 §3.1's "not
+			// running" level (ADR 0083), the payload the runtime's
+			// [hapublisher.Runtime.Will] reports for a SmartHomeLayout.
+			Payload: []byte(hapublisher.ConnectedPayloadDown),
 			Retain:  true,
 		},
 		CleanStart:      true,
@@ -547,8 +552,8 @@ func sweepSubscriberFor(sweep *mqtt.SweepSubscriber, fallback mqtt.Client) mqtt.
 //
 // No Will, and that absence is the whole point. This connection comes and
 // goes with every sweep window and is dropped outright when an UNSUBSCRIBE
-// fails, so a will on it would publish the bridge's retained `offline` marker
-// to `<base>/bridge/status` on any drop the broker noticed ungracefully — a
+// fails, so a will on it would publish the instance's retained `0` to
+// `<base>/connected` on any drop the broker noticed ungracefully — a
 // broker kick, a dropped socket — and grey out every entity of every CCU
 // while the daemon runs on, publishing fine, with nothing in any log saying
 // so. A graceful [mqtt.SweepSubscriber.Close] discards a will, which is
@@ -772,10 +777,13 @@ func buildOIDCClient(cfg *config.Config, logger *slog.Logger) *oidc.Client {
 //
 // centralNames resolves the centrals the daemon currently serves. It is a
 // function, not a slice, because a CCU adopted at runtime never reaches
-// cfg.Centrals: the retained `bridge/health` payload is rebuilt on every
+// cfg.Centrals: the retained `<base>/info` document is rebuilt on every
 // AnnounceOnline and must name the live fleet. A nil func falls back to the
 // boot config.
-func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttCollector, channelHidden func(central, channelAddress string) bool, centralNames func() []string) *mqttStack {
+//
+// maintenance carries the daemon-side halves of the maintenance topics; the
+// zero value refuses the log-level and restart commands.
+func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttCollector, channelHidden func(central, channelAddress string) bool, centralNames func() []string, maintenance mqttMaintenanceHooks) *mqttStack {
 	if !cfg.North.MQTT.Enabled {
 		return nil
 	}
@@ -821,7 +829,6 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 		}, logger)
 	}
 
-	startedAt := time.Now().UTC()
 	// Circuit breaker between the bridge and the broker: during a
 	// degraded-broker phase (link up, acks missing) publishes fail
 	// fast with ErrCircuitOpen instead of each stalling on the
@@ -866,7 +873,7 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 		RetractUnscopedDiscovery: cfg.North.MQTT.DiscoveryRetractUnscoped,
 		SubDevicesEnabled:        cfg.North.MQTT.SubDevicesEnabled,
 		Locale:                   cfg.Locale,
-		HealthSupplier:           bridgeHealthSupplier(centralNames, startedAt),
+		Maintenance:              maintenance.config(cfg.North.MQTT.Maintenance),
 		Collector:                collector,
 		ChannelHidden:            channelHidden,
 		// The bridge's discovery runtime logs the orphan sweep, the birth
@@ -900,7 +907,7 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 // base needs normalising, and the will is the one topic whose divergence stays
 // invisible until the daemon is already gone.
 func buildLWTTopic(cfg *config.Config) string {
-	return mqtt.NewTopicBuilder(cfg.North.MQTT.TopicBase).BridgeStatus()
+	return mqtt.NewTopicBuilder(cfg.North.MQTT.TopicBase).Connected()
 }
 
 // buildRateLimitConfig projects the YAML config into the middleware

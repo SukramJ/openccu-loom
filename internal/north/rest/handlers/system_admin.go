@@ -158,6 +158,44 @@ var restartSignal = func() {
 	_ = p.Signal(syscall.SIGTERM)
 }
 
+// restartStatus names the outcome of a restart request: this request sent
+// the signal, or a shutdown signalled less than [restartGrace] ago is still
+// running.
+func restartStatus(signalling bool) string {
+	if signalling {
+		return "shutdown_signalled"
+	}
+	return "shutdown_in_progress"
+}
+
+// RequestRestart is the restart path for a surface other than this REST
+// handler — the MQTT `maintenance/set/restart` topic (ADR 0083). It shares
+// the handler's whole contract: the same once-per-[restartGrace] latch, the
+// same audit action attributed to user, and the same SIGTERM, so a restart
+// requested on two surfaces at once signals once. It reports whether this
+// call sent the signal.
+//
+// The caller decides whether a restart is allowed at all; the REST route is
+// mounted only when a supervisor is detected, and the MQTT path asks the same
+// predicate before it gets here.
+func RequestRestart(rec audit.Recorder, user string) bool {
+	signalling := claimRestart(restartNow())
+	if rec != nil {
+		rec.Record(audit.Entry{
+			User:   user,
+			Action: audit.ActionSystemRestartRequested,
+			Note:   restartStatus(signalling),
+		})
+	}
+	if signalling {
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			restartSignal()
+		}()
+	}
+	return signalling
+}
+
 // Restart sends a SIGTERM to the daemon's own process and returns
 // immediately. The response body acknowledges the request; the
 // daemon's signal handler drives the graceful shutdown. Re-launch is
@@ -177,10 +215,7 @@ func Restart(rec audit.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		now := restartNow()
 		signalling := claimRestart(now)
-		status := "shutdown_in_progress"
-		if signalling {
-			status = "shutdown_signalled"
-		}
+		status := restartStatus(signalling)
 		// Acknowledge before the signal lands — once SIGTERM fires
 		// the shutdown sequence may close the connection before we
 		// can send the response.

@@ -23,16 +23,16 @@ func TestHandleDataPoint_RetainedDropped(t *testing.T) {
 	if err := sub.Start(context.Background()); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	if !noop.DeliverInboundRetained("openccu-loom/+/+/+/+/+/set",
-		"openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/STATE/set", []byte("true")) {
+	if !noop.DeliverInboundRetained("openccu-loom/set/+/+/+/+/+/+",
+		"openccu-loom/set/ccu-01/HmIP-RF/0001ABCD/1/values/STATE", []byte("true")) {
 		t.Fatal("retained delivery rejected by subscriber lookup")
 	}
 	if got := sink.setValues.Load(); got != 0 {
 		t.Fatalf("retained set produced sink call: setValues=%d", got)
 	}
 	// Sanity: a non-retained replay of the same shape DOES propagate.
-	noop.DeliverInbound("openccu-loom/+/+/+/+/+/set",
-		"openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/STATE/set", []byte("true"))
+	noop.DeliverInbound("openccu-loom/set/+/+/+/+/+/+",
+		"openccu-loom/set/ccu-01/HmIP-RF/0001ABCD/1/values/STATE", []byte("true"))
 	sub.WaitIdle()
 	if got := sink.setValues.Load(); got != 1 {
 		t.Fatalf("non-retained set blocked too: setValues=%d, want 1", got)
@@ -48,13 +48,13 @@ func TestHandleSysvar_RetainedDropped(t *testing.T) {
 	if err := sub.Start(context.Background()); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	noop.DeliverInboundRetained("openccu-loom/+/hub/sysvars/+/set",
-		"openccu-loom/ccu-01/hub/sysvars/Anwesenheit/set", []byte("true"))
+	noop.DeliverInboundRetained("openccu-loom/set/+/hub/sysvars/+",
+		"openccu-loom/set/ccu-01/hub/sysvars/Anwesenheit", []byte("true"))
 	if got := sink.setSysvars.Load(); got != 0 {
 		t.Fatalf("retained sysvar set produced sink call: setSysvars=%d", got)
 	}
-	noop.DeliverInbound("openccu-loom/+/hub/sysvars/+/set",
-		"openccu-loom/ccu-01/hub/sysvars/Anwesenheit/set", []byte("true"))
+	noop.DeliverInbound("openccu-loom/set/+/hub/sysvars/+",
+		"openccu-loom/set/ccu-01/hub/sysvars/Anwesenheit", []byte("true"))
 	sub.WaitIdle()
 	if got := sink.setSysvars.Load(); got != 1 {
 		t.Fatalf("non-retained sysvar blocked: setSysvars=%d, want 1", got)
@@ -70,13 +70,13 @@ func TestHandleProgram_RetainedDropped(t *testing.T) {
 	if err := sub.Start(context.Background()); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	noop.DeliverInboundRetained("openccu-loom/+/hub/programs/+/trigger",
-		"openccu-loom/ccu-01/hub/programs/123/trigger", []byte("true"))
+	noop.DeliverInboundRetained("openccu-loom/set/+/hub/programs/+/trigger",
+		"openccu-loom/set/ccu-01/hub/programs/123/trigger", []byte("true"))
 	if got := sink.triggers.Load(); got != 0 {
 		t.Fatalf("retained program trigger fired sink: triggers=%d", got)
 	}
-	noop.DeliverInbound("openccu-loom/+/hub/programs/+/trigger",
-		"openccu-loom/ccu-01/hub/programs/123/trigger", []byte("true"))
+	noop.DeliverInbound("openccu-loom/set/+/hub/programs/+/trigger",
+		"openccu-loom/set/ccu-01/hub/programs/123/trigger", []byte("true"))
 	sub.WaitIdle()
 	if got := sink.triggers.Load(); got != 1 {
 		t.Fatalf("non-retained trigger blocked: triggers=%d, want 1", got)
@@ -93,8 +93,8 @@ func TestHandleServiceMethod_RetainedDropped(t *testing.T) {
 	if err := sub.Start(context.Background()); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	noop.DeliverInboundRetained("openccu-loom/+/+/+/+/custom/+/set/+",
-		"openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/custom/climate/set/boost", []byte("true"))
+	noop.DeliverInboundRetained("openccu-loom/set/+/+/+/+/custom/+/+",
+		"openccu-loom/set/ccu-01/HmIP-RF/0001ABCD/1/custom/climate/boost", []byte("true"))
 	// The drop happens on a worker, not on the delivering goroutine, so a
 	// zero-call assertion without this barrier would pass vacuously.
 	sub.WaitIdle()
@@ -113,8 +113,8 @@ func TestHandleCDPInvoke_RetainedDropped(t *testing.T) {
 	if err := sub.Start(context.Background()); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	noop.DeliverInboundRetained("openccu-loom/+/devices/+/cdps/+/+/invoke",
-		"openccu-loom/ccu-01/devices/0001ABCD/cdps/climate/boost/invoke", []byte(`{}`))
+	noop.DeliverInboundRetained("openccu-loom/set/+/+/+/+/+/+",
+		"openccu-loom/set/ccu-01/devices/0001ABCD/cdps/climate/boost", []byte(`{}`))
 	// The drop happens on a worker, not on the delivering goroutine, so a
 	// zero-call assertion without this barrier would pass vacuously.
 	sub.WaitIdle()
@@ -133,8 +133,8 @@ func TestHandleWeekProfile_RetainedDropped(t *testing.T) {
 	if err := sub.Start(context.Background()); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	noop.DeliverInboundRetained("openccu-loom/+/+/+/+/+/set",
-		"openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/week_profile/set", []byte("P2"))
+	noop.DeliverInboundRetained("openccu-loom/set/+/+/+/+/week_profile",
+		"openccu-loom/set/ccu-01/HmIP-RF/0001ABCD/1/week_profile", []byte("P2"))
 	// The drop happens on a worker, not on the delivering goroutine, so a
 	// zero-call assertion without this barrier would pass vacuously.
 	sub.WaitIdle()

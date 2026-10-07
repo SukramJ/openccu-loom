@@ -8,6 +8,8 @@ import (
 	"log/slog"
 	"testing"
 
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
+
 	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -29,8 +31,9 @@ func alarmDiscoveryBody(t *testing.T, item DiscoveryItem) map[string]any {
 
 // TestBuildAlarmPanelDiscovery_AreaPanelShape covers the per-zone
 // discovery config: component/node/object routing, state+command
-// topics, no value_template envelope (the topic carries the plain HA
-// token directly), two-source availability with mode "all", both code
+// topics, the status-object value template (the panel item carries the HA
+// token as `val`, ADR 0083), two-source availability with mode "all" —
+// `connected` ≥ 2 and the zone's boolean `online` item — both code
 // flags hard-false, and supported_features tracking the configured
 // modes.
 func TestBuildAlarmPanelDiscovery_AreaPanelShape(t *testing.T) {
@@ -62,14 +65,14 @@ func TestBuildAlarmPanelDiscovery_AreaPanelShape(t *testing.T) {
 	if _, has := body["object_id"]; has {
 		t.Errorf("discovery payload must not carry the removed object_id key; got %v", body["object_id"])
 	}
-	if got, want := body["state_topic"], "gh/alarm/eg/state"; got != want {
+	if got, want := body["state_topic"], "gh/status/alarm/eg/panel"; got != want {
 		t.Errorf("state_topic = %v, want %v", got, want)
 	}
-	if got, want := body["command_topic"], "gh/alarm/eg/set"; got != want {
+	if got, want := body["command_topic"], "gh/set/alarm/eg/panel"; got != want {
 		t.Errorf("command_topic = %v, want %v", got, want)
 	}
-	if _, has := body["value_template"]; has {
-		t.Errorf("discovery payload must not carry a value_template envelope; got %v", body["value_template"])
+	if got, want := body["value_template"], hadiscovery.StatusValueTemplate; got != want {
+		t.Errorf("value_template = %v, want %v", got, want)
 	}
 
 	if got, want := body["code_arm_required"], false; got != want {
@@ -105,18 +108,28 @@ func TestBuildAlarmPanelDiscovery_AreaPanelShape(t *testing.T) {
 	if !ok1 || !ok2 {
 		t.Fatalf("availability entries not objects: %v", avail)
 	}
-	if got, want := first["topic"], "gh/bridge/status"; got != want {
+	if got, want := first["topic"], "gh/connected"; got != want {
 		t.Errorf("availability[0].topic = %v, want %v", got, want)
 	}
-	if got, want := second["topic"], "gh/alarm/eg/availability"; got != want {
+	if got, want := first["value_template"], hadiscovery.ConnectedTemplate(hadiscovery.ConnectedOperational); got != want {
+		t.Errorf("availability[0].value_template = %v, want %v", got, want)
+	}
+	if got, want := second["topic"], "gh/status/alarm/eg/online"; got != want {
 		t.Errorf("availability[1].topic = %v, want %v", got, want)
 	}
+	if got, want := second["value_template"], hadiscovery.StatusBoolValueTemplate; got != want {
+		t.Errorf("availability[1].value_template = %v, want %v", got, want)
+	}
 	for i, entry := range []map[string]any{first, second} {
-		if got, want := entry["payload_available"], "online"; got != want {
-			t.Errorf("availability[%d].payload_available = %v, want %v", i, got, want)
+		wantOn, wantOff := "online", "offline"
+		if i == 1 {
+			wantOn, wantOff = "true", "false"
 		}
-		if got, want := entry["payload_not_available"], "offline"; got != want {
-			t.Errorf("availability[%d].payload_not_available = %v, want %v", i, got, want)
+		if got := entry["payload_available"]; got != wantOn {
+			t.Errorf("availability[%d].payload_available = %v, want %v", i, got, wantOn)
+		}
+		if got := entry["payload_not_available"]; got != wantOff {
+			t.Errorf("availability[%d].payload_not_available = %v, want %v", i, got, wantOff)
 		}
 	}
 	if got, want := body["availability_mode"], "all"; got != want {
@@ -160,10 +173,10 @@ func TestBuildAlarmPanelDiscovery_MasterPanel(t *testing.T) {
 	if got, want := body["unique_id"], "gh_openccu-loom_alarm_master"; got != want {
 		t.Errorf("unique_id = %v, want %v", got, want)
 	}
-	if got, want := body["state_topic"], "gh/alarm/master/state"; got != want {
+	if got, want := body["state_topic"], "gh/status/alarm/master/panel"; got != want {
 		t.Errorf("state_topic = %v, want %v", got, want)
 	}
-	if got, want := body["command_topic"], "gh/alarm/master/set"; got != want {
+	if got, want := body["command_topic"], "gh/set/alarm/master/panel"; got != want {
 		t.Errorf("command_topic = %v, want %v", got, want)
 	}
 	avail, ok := body["availability"].([]any)
@@ -171,8 +184,8 @@ func TestBuildAlarmPanelDiscovery_MasterPanel(t *testing.T) {
 		t.Fatalf("availability = %v, want a 2-element list", body["availability"])
 	}
 	second, ok := avail[1].(map[string]any)
-	if !ok || second["topic"] != "gh/alarm/master/availability" {
-		t.Errorf("availability[1].topic = %v, want gh/alarm/master/availability", avail[1])
+	if !ok || second["topic"] != "gh/status/alarm/master/online" {
+		t.Errorf("availability[1].topic = %v, want gh/status/alarm/master/online", avail[1])
 	}
 }
 

@@ -248,6 +248,11 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	centralHealthSeed := seedCentralHealthAndMetrics(reg, cfg, auditDurableStats, logger)
 
 	// --- shared infrastructure ---------------------------------
+	// The MQTT maintenance topics' daemon-side halves (ADR 0083): set before
+	// the shared infrastructure starts the MQTT supervisor, which hands them
+	// to every bridge it builds.
+	deps.SetMQTTMaintenance(newMQTTMaintenanceHooks(levels, auditRec))
+	warnNonConformantTopicBase(cfg, logger)
 	si, sharedInfraTeardown := wireSharedInfrastructure(ctx, cfg, logger, reg, deps, channelFlagsOverlay)
 	defer sharedInfraTeardown()
 	metricsReg := si.metricsReg

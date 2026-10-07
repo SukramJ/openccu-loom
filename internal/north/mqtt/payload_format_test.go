@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	pload "github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -38,12 +39,11 @@ func TestPayloadFormatBareIsBackwardCompatible(t *testing.T) {
 
 	for _, p := range rec.records() {
 		if strings.HasSuffix(p.topic, "/STATE") {
-			// Bare mode: the PerDPState JSON still wraps the value.
-			// PublishSlotState always uses the PerDPState JSON envelope
-			// — consumers read value_json.value. Verify the JSON
-			// contains value:true.
-			if !strings.Contains(p.payload, `"value":true`) {
-				t.Fatalf("PerDPState envelope must contain value:true, got %q", p.payload)
+			// There is no bare mode: every status item is an
+			// mqtt-smarthome status object (ADR 0083) — consumers read
+			// value_json.val. Verify it carries val:true.
+			if !strings.HasPrefix(p.payload, `{"val":true,`) {
+				t.Fatalf("status object must open with val:true, got %q", p.payload)
 			}
 			return
 		}
@@ -52,8 +52,8 @@ func TestPayloadFormatBareIsBackwardCompatible(t *testing.T) {
 }
 
 // TestPayloadFormatJSONWrapsState verifies that PublishSlotState publishes
-// a PerDPState JSON envelope {"value":..,"available":..,"modified_at":..}
-// as the state topic payload. JSON is now the only supported shape.
+// the status object {"val":..,"ts":..,"lc":..,"hm":{"available":..}} as the
+// status item payload, with the observation time as ts.
 func TestPayloadFormatJSONWrapsState(t *testing.T) {
 	rec := &recordingPublisher{}
 	b := NewBridge(BridgeConfig{
@@ -63,7 +63,8 @@ func TestPayloadFormatJSONWrapsState(t *testing.T) {
 	}, rec)
 
 	slot := pload.TopicSlot{Address: "0001ABCD", Channel: 1, Bucket: pload.BucketValues, Parameter: "STATE"}
-	dpState := pload.PerDPState{Value: true, Available: true}
+	observed := time.UnixMilli(1_767_225_600_500)
+	dpState := pload.PerDPState{Value: true, Available: true, ObservedAt: observed}
 	if err := b.PublishSlotState(context.Background(), "ccu", "HmIP-RF", slot, dpState); err != nil {
 		t.Fatalf("PublishSlotState: %v", err)
 	}
@@ -72,15 +73,9 @@ func TestPayloadFormatJSONWrapsState(t *testing.T) {
 		if !strings.HasSuffix(p.topic, "/STATE") {
 			continue
 		}
-		var got map[string]any
-		if err := json.Unmarshal([]byte(p.payload), &got); err != nil {
-			t.Fatalf("state payload not JSON: %v (raw=%q)", err, p.payload)
-		}
-		if got["value"] != true {
-			t.Fatalf("wrong value field: %+v", got)
-		}
-		if got["available"] != true {
-			t.Fatalf("missing/false available field: %+v", got)
+		want := `{"val":true,"ts":1767225600500,"lc":1767225600500,"hm":{"available":true}}`
+		if p.payload != want {
+			t.Fatalf("state payload = %s, want %s", p.payload, want)
 		}
 		return
 	}
@@ -88,9 +83,8 @@ func TestPayloadFormatJSONWrapsState(t *testing.T) {
 }
 
 // TestDiscoveryAddsValueTemplateInJSONMode pins the contract that
-// the discovery payload includes the {{ value_json.value }}
-// template AND a third availability entry sourced from the state
-// topic's JSON. Without these HA cannot extract the scalar from
+// the discovery payload includes a template reading value_json.val AND a
+// third availability entry reading the state topic's `hm.available` flag. Without these HA cannot extract the scalar from
 // the wrapped payload and the entity stays "unknown".
 func TestDiscoveryAddsValueTemplateInJSONMode(t *testing.T) {
 	rec := &recordingPublisher{}
@@ -118,20 +112,20 @@ func TestDiscoveryAddsValueTemplateInJSONMode(t *testing.T) {
 			t.Fatalf("discovery payload not JSON: %v (raw=%q)", err, p.payload)
 		}
 		vt, _ := got["value_template"].(string)
-		if !strings.Contains(vt, "value_json.value") {
-			t.Fatalf("missing value_template referencing value_json.value: %v", got["value_template"])
+		if !strings.Contains(vt, "value_json.val") || strings.Contains(vt, "value_json.value") {
+			t.Fatalf("value_template must read value_json.val: %v", got["value_template"])
 		}
 		availability, _ := got["availability"].([]any)
 		var foundJSONAvailEntry bool
 		for _, entry := range availability {
 			m, _ := entry.(map[string]any)
-			if tmpl, _ := m["value_template"].(string); strings.Contains(tmpl, "value_json.available") {
+			if tmpl, _ := m["value_template"].(string); tmpl == "{{ value_json.hm.available | lower }}" {
 				foundJSONAvailEntry = true
 				break
 			}
 		}
 		if !foundJSONAvailEntry {
-			t.Fatalf("missing availability entry with value_json.available template: %+v", availability)
+			t.Fatalf("missing availability entry with value_json.hm.available template: %+v", availability)
 		}
 		return
 	}

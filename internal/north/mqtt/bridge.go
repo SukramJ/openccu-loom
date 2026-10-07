@@ -8,10 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
-	"maps"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -41,10 +38,9 @@ var DefaultQoS = QoSProfile{
 	Discovery: QoS1,
 }
 
-// All MQTT state topics carry a JSON envelope
-// (`{"value": <v>, "available": <bool>, "modified_at": "<rfc3339>"}`).
-// The earlier bare-scalar mode was retired as part of the ADR-0011
-// payload unification — every consumer reads `value_json.value`.
+// Every MQTT status item carries mqtt-smarthome 2.0's status object
+// (`{"val": <v>, "ts": <ms>, "lc": <ms>, "hm": {…}}`, ADR 0083) — every
+// consumer reads `value_json.val`.
 
 // VisibilitySet is the narrow gate the bridge consults before each
 // publish. A parameter that is not visible is silently dropped — no
@@ -157,14 +153,13 @@ type BridgeConfig struct {
 	// may not have configured.
 	Logger *slog.Logger
 
-	// HealthSupplier is invoked by [Bridge.AnnounceOnline] to compose
-	// the JSON body for the retained `<base>/bridge/health` topic.
-	// When nil the bridge emits a minimal `{"status":"online"}` so
-	// dashboards still see liveness. Production wires this to a
-	// daemon-side function that returns build metadata, the boot
-	// timestamp, configured central names, and any other operator-
-	// visible state.
-	HealthSupplier func() map[string]any
+	// StartedAt is the process start, `info.started`. Zero means when the
+	// shared publisher package was initialised.
+	StartedAt time.Time
+
+	// Maintenance configures spec §7's maintenance topics. See
+	// [MaintenanceConfig].
+	Maintenance MaintenanceConfig
 }
 
 // DiscoveryBuilder describes the HA payload for one device channel's
@@ -552,15 +547,26 @@ type Bridge struct {
 	// per-datapoint plane deliberately does not use it — see
 	// [newStatePublisher] for why a byte gate is inert there.
 	state *hapublisher.StatePublisher
-	// avail is the shared availability publisher the device, program-role,
-	// alarm and Security & Safety planes flip through. Its `last` map is
-	// simultaneously the transition gate, the topic listing, the republish
-	// worklist and the ownership set of its own sweep — which is what
-	// finding F6 was about: before this, device availability topics were in
-	// no index at all and reachable only by reconstructing their names.
-	avail *hapublisher.AvailabilityPublisher
+	// avail is the state publisher the device, CCU, program-role, alarm and
+	// Security & Safety `online` items flip through. Under mqtt-smarthome
+	// 2.0 a reachability flag is a boolean status item like any other, so
+	// this is a [hapublisher.StatePublisher] rather than the shared
+	// availability publisher, whose online/offline marker the convention
+	// has no place for. Its gate compares `val`, which is the transition
+	// gate, and its index is the topic listing and the ownership set — which
+	// is what finding F6 was about: before the shared publisher, device
+	// availability topics were in no index at all and reachable only by
+	// reconstructing their names. It publishes at QoS 1; see
+	// [newAvailabilityPublisher].
+	avail *hapublisher.StatePublisher
+	// instance publishes `<base>/info` and serves the maintenance topics
+	// (spec §6, §7). See [newInstance].
+	instance *hapublisher.Instance
+	// clock tracks `lc` for the status objects this bridge renders itself.
+	// See [statusClock].
+	clock statusClock
 	// hubStatus debounces the per-CCU reachability gate published at
-	// `<base>/<central>/hub/status`. It holds only the levels the broker
+	// `<base>/status/<central>/online`. It holds only the levels the broker
 	// took, never the reachability itself — see [hubStatusGate].
 	hubStatus *hubStatusGate
 	// gates is every dedup gate on this bridge, as one list, so
@@ -690,6 +696,7 @@ func NewBridge(cfg BridgeConfig, client Publisher) *Bridge {
 	b.pub = newDiscoveryRuntime(b, logger)
 	b.state = newStatePublisher(b, logger)
 	b.avail = newAvailabilityPublisher(b, logger)
+	b.instance = newInstance(b, logger)
 	b.hubStatus = newHubStatusGate(hubStatusDwell)
 	b.configGate = &configCacheGate{b: b}
 	b.gates = []runtimeGate{b.pub, b.state, b.avail, b.hubStatus, b.configGate}
@@ -812,67 +819,69 @@ func (b *Bridge) RepublishDiscovery(ctx context.Context) error {
 	return err
 }
 
-// AnnounceOnline publishes the "online" LWT counterpart and a
-// retained health snapshot to `<base>/bridge/health`. The broker
-// client must have been configured with the matching offline LWT.
+// AnnounceOnline republishes the instance's `<base>/connected` level and the
+// retained `<base>/info` document — the counterparts the Last Will and a
+// broker restart clear. The broker client must have been configured with the
+// matching will (`connected` = 0).
 //
-// The health body is composed by [BridgeConfig.HealthSupplier];
-// without a supplier the bridge emits the minimal
-// `{"status":"online"}` payload so dashboards still see liveness.
-// The supplier is invoked synchronously — it must not block.
+// The level is the one [Bridge.SetConnected] last set, starting at 1 (no
+// central reachable yet), so a reconnect never claims more than the daemon
+// knows. The info document is composed with [BridgeConfig.InfoSupplier] on
+// every call.
 func (b *Bridge) AnnounceOnline(ctx context.Context) error {
-	// Through the runtime rather than by hand, so the marker, its retain
-	// flag and the topic cannot drift from the Last Will the composition
-	// root configures — [hapublisher.Runtime.Will] returns that will from
-	// the same [hapublisher.Config.StatusTopic] this publishes to.
-	// Before anything else on a (re)connect: a broker that came back
-	// without its retained store holds none of the bytes the dedup gates
-	// remember, so they must stop suppressing. See [Bridge.ResetRuntimeGates].
+	// Through the runtime rather than by hand, so the level, its retain flag
+	// and the topic cannot drift from the Last Will the composition root
+	// configures — [hapublisher.Runtime.Will] returns that will from the same
+	// [hapublisher.Config.StatusTopic] this publishes to.
+	// Before anything else on a (re)connect: a broker that came back without
+	// its retained store holds none of the bytes the dedup gates remember, so
+	// they must stop suppressing. See [Bridge.ResetRuntimeGates].
 	b.ResetRuntimeGates()
 	if err := b.pub.AnnounceOnline(ctx); err != nil {
 		return err
 	}
-	health := map[string]any{"status": "online"}
-	if b.cfg.HealthSupplier != nil {
-		if extra := b.cfg.HealthSupplier(); extra != nil {
-			maps.Copy(health, extra)
-			// "status" must stay authoritative — suppliers cannot
-			// shadow the LWT signal.
-			health["status"] = "online"
-		}
+	if err := b.instance.AnnounceInfo(ctx); err != nil {
+		// Best-effort, like the health document it replaces: the level is
+		// what availability reads, and it went out.
+		b.logger.Debug("mqtt.info.publish", slog.String("err", err.Error()))
 	}
-	body, err := json.Marshal(health)
-	if err != nil {
-		return nil //nolint:nilerr // health is best-effort
-	}
-	_ = b.publishRuntimeState(ctx, "", b.topics.BridgeHealth(), body)
 	return nil
 }
 
-// AnnounceOffline publishes the retained `offline` marker on
-// `<base>/bridge/status` — the counterpart of [Bridge.AnnounceOnline] and the
-// same payload the broker publishes as the connection's Last Will.
+// SetConnected moves `<base>/connected` between 1 (connected to the broker,
+// no central reachable) and 2 (at least one central reachable), and reports
+// whether that was a transition. Under `availability_mode: all` every entity
+// lists `connected ≥ 2`, so this is the daemon-wide half of availability; a
+// central's own `online` item is the per-CCU half.
+func (b *Bridge) SetConnected(ctx context.Context, level int) (bool, error) {
+	return b.pub.SetConnected(ctx, level)
+}
+
+// AnnounceOffline publishes `<base>/connected` = 0 — the counterpart of
+// [Bridge.AnnounceOnline] and the same payload the broker publishes as the
+// connection's Last Will.
 //
 // It exists because a graceful stop sends a clean DISCONNECT, and an MQTT
 // broker discards the will of a client that disconnects cleanly. Without this
 // call a `systemctl stop`, an add-on stop or a `docker stop` leaves the topic
-// retained at `online` while nothing is running, so every entity whose
-// discovery payload lists it as an availability source — which is all of them
-// — stays available in Home Assistant, showing its last value forever. A
-// SIGKILL, by contrast, has always been reported correctly by the will.
+// retained at its running level while nothing is running, so every entity
+// whose discovery payload lists it as an availability source — which is all
+// of them — stays available in Home Assistant, showing its last value
+// forever. A SIGKILL, by contrast, has always been reported correctly by the
+// will.
 //
-// The per-device availability topics are deliberately left untouched. They
+// The per-device `online` items are deliberately left untouched. They
 // answer "is this device reachable", a property of the CCU-to-device link
 // that the daemon can no longer observe once it is gone, and every discovery
-// payload declares `availability_mode: all` with the bridge status alongside
-// them precisely so the whole retained state can be read as "last known,
-// valid while the bridge is online". A kill cannot rewrite those topics
-// either, so rewriting them on a clean stop would only make the two shutdown
-// paths disagree while destroying the last-known state a restart starts from.
+// payload declares `availability_mode: all` with `connected` alongside them
+// precisely so the whole retained state can be read as "last known, valid
+// while the instance runs". A kill cannot rewrite those items either, so
+// rewriting them on a clean stop would only make the two shutdown paths
+// disagree while destroying the last-known state a restart starts from.
 //
-// The health snapshot on `<base>/bridge/health` is left at its last value for
-// the same reason: it describes the run that just ended.
-// The per-CCU reachability gates go first, before the bridge marker — see
+// The info document on `<base>/info` is left at its last value for the same
+// reason: it describes the run that just ended.
+// The per-CCU reachability gates go first, before the instance level — see
 // [Bridge.announceHubStatusOffline] for the ordering and why the gate needs
 // no will of its own.
 func (b *Bridge) AnnounceOffline(ctx context.Context) error {
@@ -953,13 +962,13 @@ func (b *Bridge) PublishDiscoveryOnly(ctx context.Context, ev Event) error {
 // --- ADR 0011 publish helpers (per-DP topology) -----------------------
 
 // PublishCustomDPState publishes the curated derived-state JSON for
-// a custom-DP at its `channels/<ch>/custom/<kind>/state` slot. Unlike
+// a custom-DP at its `<base>/status/…/<ch>/custom/<kind>` item. Unlike
 // per-DP wire publishes, the body is a plain map[string]any (the
 // custom-DP's own [Source.StatePayload]) — derived fields like
 // `hvac_mode`, `preset_mode`, `action`, `lock_state`, … that have no
 // single wire-DP analogue.
 //
-// Mirrors ADR 0011 §"Custom-DP `custom/<kind>/state`" — the
+// Mirrors ADR 0011 §"Custom-DP aggregate" — the
 // aggregate carries derived fields only; direct wire values stay
 // under values/<param>/state.
 func (b *Bridge) PublishCustomDPState(ctx context.Context, centralName, iface string, slot pload.TopicSlot, state pload.StatePayload) error {
@@ -972,17 +981,49 @@ func (b *Bridge) PublishCustomDPState(ctx context.Context, centralName, iface st
 	if centralName == "" {
 		centralName = b.cfg.CentralName
 	}
-	body, err := json.Marshal(state)
+	topic := b.topics.SlotState(centralName, iface, slot)
+	// The aggregate is a document without a primary value, so it is the
+	// status object's `val` whole (ADR 0083) — the light's included.
+	body, err := b.renderStatus(topic, state, nil, time.Time{})
 	if err != nil {
 		return err
 	}
-	topic := b.topics.SlotState(centralName, iface, slot)
+	// The light's Home Assistant-native twin is the same document, bare:
+	// one builder (the source's state), two renderings of it.
+	haTopic := b.topics.SlotHAState(centralName, iface, slot)
+	var haBody []byte
+	if haTopic != "" {
+		if haBody, err = json.Marshal(state); err != nil {
+			return err
+		}
+	}
 	if err := b.client.Publish(ctx, topic, body, b.cfg.QoS.State, true); err != nil {
 		return err
 	}
 	b.rememberRawTopic(topic)
+	if haTopic == "" {
+		return nil
+	}
+	if err := b.client.Publish(ctx, haTopic, haBody, b.cfg.QoS.State, true); err != nil {
+		return err
+	}
+	b.rememberRawTopic(haTopic)
 	return nil
 }
+
+// haJSONLightKind is the custom-DP kind of every light, the one slot with a
+// Home Assistant-native twin under `<base>/ha/…` ([naming.FunctionHA]).
+//
+// The light entity is declared in Home Assistant's JSON schema
+// (`schema: "json"`), whose platform parses the state topic's JSON document
+// natively — `state`, `brightness`, `color`, `color_temp_kelvin`, `effect`,
+// `color_mode` at the top level — and accepts no value template that could
+// reach into a status object's `val` (homeassistant/components/mqtt/light/
+// schema_json.py, `_state_received`). The `status` item stays a status
+// object like every other one, and the entity reads the twin. Both topics
+// are retained, evicted together with the device, and republished together
+// on reconnect, because one publish writes both.
+const haJSONLightKind = "light"
 
 // configCacheGate is the reconnect gate over [Bridge.configCache], the byte
 // dedup cache in front of the ADR 0011 `/config` companions.
@@ -1071,8 +1112,10 @@ func (b *Bridge) PublishSlotConfig(ctx context.Context, centralName, iface strin
 	return nil
 }
 
-// PublishSlotState publishes a [pload.PerDPState] JSON wrapper at the slot's
-// per-DP state topic.
+// PublishSlotState publishes a [pload.PerDPState] as the status object of the
+// slot's per-DP status item: the value in `val`, the observation in `ts`, the
+// last change in `lc`, and `available` and `additional_information` under
+// `hm`.
 //
 // Returns nil silently when the raw plane is disabled.
 func (b *Bridge) PublishSlotState(ctx context.Context, centralName, iface string, slot pload.TopicSlot, state pload.PerDPState) error {
@@ -1082,13 +1125,14 @@ func (b *Bridge) PublishSlotState(ctx context.Context, centralName, iface string
 	if centralName == "" {
 		centralName = b.cfg.CentralName
 	}
-	// A pointer lets the encoder read the wrapper in place; handed over by
-	// value it is copied first, on every data-point event.
-	body, err := json.Marshal(&state)
+	topic := b.topics.SlotState(centralName, iface, slot)
+	body, err := b.renderStatus(topic, state.Value, perDPExtension{
+		Available:             state.Available,
+		AdditionalInformation: state.AdditionalInformation,
+	}, state.ObservedAt)
 	if err != nil {
 		return err
 	}
-	topic := b.topics.SlotState(centralName, iface, slot)
 	if err := b.client.Publish(ctx, topic, body, b.cfg.QoS.State, true); err != nil {
 		b.incPublishErrors(centralName)
 		return err
@@ -1109,11 +1153,12 @@ func (b *Bridge) PublishDeviceInfo(ctx context.Context, centralName, iface, addr
 	if centralName == "" {
 		centralName = b.cfg.CentralName
 	}
-	body, err := json.Marshal(info)
+	topic := b.topics.DeviceInfo(centralName, iface, address)
+	body, err := b.renderStatus(topic, info, nil, time.Time{})
 	if err != nil {
 		return err
 	}
-	return b.client.Publish(ctx, b.topics.DeviceInfo(centralName, iface, address), body, b.cfg.QoS.State, true)
+	return b.client.Publish(ctx, topic, body, b.cfg.QoS.State, true)
 }
 
 // PublishDeviceDiagnostics publishes the per-device diagnostics
@@ -1126,38 +1171,29 @@ func (b *Bridge) PublishDeviceDiagnostics(ctx context.Context, centralName, ifac
 	if centralName == "" {
 		centralName = b.cfg.CentralName
 	}
-	body, err := json.Marshal(diag)
+	topic := b.topics.DeviceDiagnostics(centralName, iface, address)
+	body, err := b.renderStatus(topic, diag, nil, time.Time{})
 	if err != nil {
 		return err
 	}
-	return b.client.Publish(ctx, b.topics.DeviceDiagnostics(centralName, iface, address), body, b.cfg.QoS.State, true)
+	return b.client.Publish(ctx, topic, body, b.cfg.QoS.State, true)
 }
 
-// PublishAvailability toggles the retained availability topic.
+// PublishAvailability flips the device's retained `online` status item.
 //
-// Through the shared availability publisher, which means the topic is
-// addressed by the slot its discovery config was declared from, the flip is
-// gated on being a transition, the marker enters an index a sweep can walk,
-// and the retraction later leaves at the same QoS. See
-// [newAvailabilityPublisher].
+// Through the availability publisher, which means the flip is gated on being
+// a transition, the item enters an index a sweep can walk, and the
+// retraction later leaves at the same QoS. See [newAvailabilityPublisher].
 func (b *Bridge) PublishAvailability(ctx context.Context, centralName, iface, address string, online bool) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
-	_, err := b.avail.Device(ctx, deviceAvailabilitySlot(centralName, iface, address), online)
-	return err
-}
-
-// PublishEvent emits a pulse (non-retained) event on the raw plane.
-func (b *Bridge) PublishEvent(ctx context.Context, centralName, iface, address string, channel int, etype string, payload any) error {
-	if !b.cfg.RawEnabled {
-		return nil
-	}
-	buf, err := renderValue(payload)
+	topic, err := b.deviceAvailabilityTopic(centralName, iface, address)
 	if err != nil {
 		return err
 	}
-	return b.client.Publish(ctx, b.topics.DataPointEvent(centralName, iface, address, channel, etype), buf, QoS0, false)
+	_, err = b.publishOnline(ctx, topic, online)
+	return err
 }
 
 // PublishChannelEventState emits a non-retained aggregate press-event
@@ -1166,8 +1202,9 @@ func (b *Bridge) PublishEvent(ctx context.Context, centralName, iface, address s
 // (one that exposes at least one PRESS_* parameter). HA reads the
 // `event_type` field from the JSON and advances the entity state.
 //
-// Payload shape: `{"event_type": "<press_short|press_long|…>",
-// "available": true, "modified_at": "<rfc3339>"}`. On the curated
+// Payload shape: a status object with the event type in `val` —
+// `{"val": "<press_short|press_long|…>", "ts": …, "lc": …,
+// "hm": {"available": true}}`. On the curated
 // doorbell models the press_short fires as HA's standard "ring"
 // (matching the announced event_types — HA rejects unannounced types).
 //
@@ -1177,12 +1214,7 @@ func (b *Bridge) PublishChannelEventState(ctx context.Context, centralName, ifac
 	if !b.cfg.RawEnabled {
 		return nil
 	}
-	body := map[string]any{
-		"event_type":  DoorbellEventType(model, pressType),
-		"available":   true,
-		"modified_at": time.Now().UTC().Format(time.RFC3339Nano),
-	}
-	buf, err := json.Marshal(body)
+	buf, err := renderPulse(DoorbellEventType(model, pressType), pulseExtension{Available: true}, time.Time{})
 	if err != nil {
 		return err
 	}
@@ -1216,11 +1248,7 @@ func (b *Bridge) publishChannelEventLeaf(ctx context.Context, topic, eventType s
 	if !b.cfg.RawEnabled || topic == "" || eventType == "" {
 		return nil
 	}
-	buf, err := json.Marshal(map[string]any{
-		"event_type":  eventType,
-		"available":   true,
-		"modified_at": time.Now().UTC().Format(time.RFC3339Nano),
-	})
+	buf, err := renderPulse(eventType, pulseExtension{Available: true}, time.Time{})
 	if err != nil {
 		return err
 	}
@@ -1228,8 +1256,8 @@ func (b *Bridge) publishChannelEventLeaf(ctx context.Context, topic, eventType s
 }
 
 // PublishSysvar emits a sysvar value on the canonical ADR-0011 topic
-// owned by the sysvar model object (`<base>/<central>/hub/sysvars/
-// <name>/state`). The bridge only fills in `base` and JSON-encodes
+// owned by the sysvar model object (`<base>/status/<central>/hub/sysvars/
+// <name>`). The bridge only fills in `base` and publishes
 // the value; it never decides the topic shape.
 //
 // The publish is retained, which makes a nil value a trap: zero bytes
@@ -1246,11 +1274,10 @@ func (b *Bridge) PublishSysvar(ctx context.Context, centralName string, sv pload
 	if topics.State == "" {
 		return nil
 	}
-	body, err := renderValue(value)
-	if err != nil {
-		return err
+	if value == nil {
+		return ErrNilValue
 	}
-	return b.publishRuntimeState(ctx, centralName, topics.State, body)
+	return b.publishRuntimeStatus(ctx, centralName, topics.State, value, nil)
 }
 
 // RetractSysvarState clears the retained raw-plane state topic
@@ -1292,13 +1319,13 @@ func (b *Bridge) PublishRoleAvailability(ctx context.Context, role *pload.MQTTRo
 	if !b.cfg.RawEnabled || role.Topics.Availability == "" {
 		return nil
 	}
-	_, err := b.avail.Publish(ctx, role.Topics.Availability, available)
+	_, err := b.publishOnline(ctx, role.Topics.Availability, available)
 	return err
 }
 
 // PublishProgram emits the program's active flag on the canonical
 // ADR-0011 state topic owned by the program model object — and ONLY
-// there. The `…/set` and `…/trigger` topics are command topics this
+// there. The `…/active` and `…/trigger` `set` items are command topics this
 // daemon itself subscribes to, and a broker routes a publisher's own
 // messages back to its established subscriptions with Retain=false
 // (no No-Local option is used). An earlier state mirror onto
@@ -1314,11 +1341,7 @@ func (b *Bridge) PublishProgram(ctx context.Context, centralName string, prog pl
 	if topics.State == "" {
 		return nil
 	}
-	body := []byte("false")
-	if active {
-		body = []byte("true")
-	}
-	return b.publishRuntimeState(ctx, centralName, topics.State, body)
+	return b.publishRuntimeStatus(ctx, centralName, topics.State, active, nil)
 }
 
 // RetractProgramTopics clears every retained raw-plane topic
@@ -1348,7 +1371,7 @@ func (b *Bridge) RetractProgramTopics(ctx context.Context, centralName string, p
 			if role.Topics.Availability == "" {
 				continue
 			}
-			if err := b.avail.Retract(ctx, role.Topics.Availability); err != nil {
+			if err := b.retractOnline(ctx, role.Topics.Availability); err != nil {
 				return err
 			}
 		}
@@ -1358,7 +1381,7 @@ func (b *Bridge) RetractProgramTopics(ctx context.Context, centralName string, p
 
 // PublishInstallMode emits the per-interface install-mode countdown
 // (remaining seconds) to the retained topic
-// `<base>/<central>/hub/install_mode/<iface>`. The reference stack
+// `<base>/status/<central>/hub/install_mode/<iface>`. The reference stack
 // exposes one remaining-seconds sensor per interface; each carries its
 // own retained state topic.
 func (b *Bridge) PublishInstallMode(ctx context.Context, centralName, iface string, seconds int) error {
@@ -1366,8 +1389,7 @@ func (b *Bridge) PublishInstallMode(ctx context.Context, centralName, iface stri
 		return nil
 	}
 	topic := naming.MQTTHubInstallModeForInterface(b.cfg.Base, b.resolvedCentral(centralName), iface)
-	body := fmt.Appendf(nil, "%d", seconds)
-	return b.publishRuntimeState(ctx, centralName, topic, body)
+	return b.publishRuntimeStatus(ctx, centralName, topic, seconds, nil)
 }
 
 // PublishAlarmMessages emits the active alarm-message list to the
@@ -1380,11 +1402,7 @@ func (b *Bridge) PublishAlarmMessages(ctx context.Context, centralName string, a
 	if topics.State == "" {
 		return nil
 	}
-	body, err := json.Marshal(items)
-	if err != nil {
-		return err
-	}
-	return b.publishRuntimeState(ctx, centralName, topics.State, body)
+	return b.publishRuntimeStatus(ctx, centralName, topics.State, items, nil)
 }
 
 // PublishServiceMessages mirrors PublishAlarmMessages for the
@@ -1397,11 +1415,7 @@ func (b *Bridge) PublishServiceMessages(ctx context.Context, centralName string,
 	if topics.State == "" {
 		return nil
 	}
-	body, err := json.Marshal(items)
-	if err != nil {
-		return err
-	}
-	return b.publishRuntimeState(ctx, centralName, topics.State, body)
+	return b.publishRuntimeStatus(ctx, centralName, topics.State, items, nil)
 }
 
 // PublishInbox emits the pending inbox-device list to the topic
@@ -1414,11 +1428,7 @@ func (b *Bridge) PublishInbox(ctx context.Context, centralName string, agg pload
 	if topics.State == "" {
 		return nil
 	}
-	body, err := json.Marshal(items)
-	if err != nil {
-		return err
-	}
-	return b.publishRuntimeState(ctx, centralName, topics.State, body)
+	return b.publishRuntimeStatus(ctx, centralName, topics.State, items, nil)
 }
 
 // ConnectivityPublisher is the contract the [hub.Connectivity]
@@ -1439,11 +1449,7 @@ func (b *Bridge) PublishConnectivity(ctx context.Context, centralName string, co
 	if topics.State == "" {
 		return nil
 	}
-	body := []byte("false")
-	if connected {
-		body = []byte("true")
-	}
-	return b.publishRuntimeState(ctx, centralName, topics.State, body)
+	return b.publishRuntimeStatus(ctx, centralName, topics.State, connected, nil)
 }
 
 // dataPointStateTopic returns the state topic for a data-point defined
@@ -1535,6 +1541,9 @@ func (b *Bridge) EvictState(
 	// retract-side helper deletes from its maps for exactly this reason;
 	// this side now does too.
 	b.forgetRawTopic(topic)
+	// The next value on the topic starts a new `lc`: nothing is retained to
+	// have stood still since.
+	b.clock.forget(topic)
 	return nil
 }
 
@@ -1551,19 +1560,25 @@ func (b *Bridge) Topics() *TopicBuilder { return b.topics }
 // either — BridgeConfig.QoS is never populated from the daemon config.
 func (b *Bridge) CommandQoS() QoS { return b.cfg.QoS.Commands }
 
-// PublishSystemStatus publishes payload to the per-central system-status
-// topic (`<base>/<central>/system/status`). Non-retained, QoS 0 — the
-// topic carries live events, not persistent state. Returns nil when
-// RawEnabled is false (disabled broker plane).
-func (b *Bridge) PublishSystemStatus(ctx context.Context, centralName string, payload []byte) error {
+// PublishSystemStatus publishes one system-status event to the per-central
+// status item `<base>/status/<central>/system/status`. Non-retained, QoS 0 —
+// the item carries live events, not persistent state. The event's type is
+// `val` — the component that changed — and the rest of the event document
+// travels under `hm`; the event's own time is `ts`. Returns nil
+// when RawEnabled is false (disabled broker plane).
+func (b *Bridge) PublishSystemStatus(ctx context.Context, centralName, eventType string, hm any, at time.Time) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
-	return b.client.Publish(ctx, b.topics.SystemStatus(centralName), payload, QoS0, false)
+	body, err := renderPulse(eventType, hm, at)
+	if err != nil {
+		return err
+	}
+	return b.client.Publish(ctx, b.topics.SystemStatus(centralName), body, QoS0, false)
 }
 
 // PublishHubSystemHealthScore publishes the system-health score (0–100) to
-// the retained topic `<base>/<central>/system/health_score`. Returns nil when
+// the retained item `<base>/status/<central>/system/health_score`. Returns nil when
 // RawEnabled is false.
 func (b *Bridge) PublishHubSystemHealthScore(ctx context.Context, centralName string, score float64) error {
 	if !b.cfg.RawEnabled {
@@ -1576,12 +1591,11 @@ func (b *Bridge) PublishHubSystemHealthScore(ctx context.Context, centralName st
 	if score < 0 {
 		return b.evictRuntimeState(ctx, centralName, b.topics.HubSystemHealthScore(centralName))
 	}
-	body := []byte(strconv.FormatFloat(score, 'f', -1, 64))
-	return b.publishRuntimeState(ctx, centralName, b.topics.HubSystemHealthScore(centralName), body)
+	return b.publishRuntimeStatus(ctx, centralName, b.topics.HubSystemHealthScore(centralName), score, nil)
 }
 
 // PublishHubConnectionLatency publishes the aggregated CCU round-trip
-// latency (ms) to the retained topic `<base>/<central>/system/latency`.
+// latency (ms) to the retained item `<base>/status/<central>/system/latency`.
 // The reference stack exposes ONE central-wide connection-latency sensor
 // fed from the aggregated ping/pong metric, not per-interface samples.
 // Returns nil when RawEnabled is false.
@@ -1589,24 +1603,22 @@ func (b *Bridge) PublishHubConnectionLatency(ctx context.Context, centralName st
 	if !b.cfg.RawEnabled {
 		return nil
 	}
-	body := []byte(strconv.FormatFloat(latencyMs, 'f', -1, 64))
-	return b.publishRuntimeState(ctx, centralName, b.topics.HubConnectionLatency(centralName), body)
+	return b.publishRuntimeStatus(ctx, centralName, b.topics.HubConnectionLatency(centralName), latencyMs, nil)
 }
 
 // PublishHubLastEventAge publishes the age (seconds) of the newest
 // backend event to the retained topic
-// `<base>/<central>/system/last_event_age`. Returns nil when RawEnabled
+// `<base>/status/<central>/system/last_event_age`. Returns nil when RawEnabled
 // is false.
 func (b *Bridge) PublishHubLastEventAge(ctx context.Context, centralName string, ageSeconds float64) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
-	body := []byte(strconv.FormatFloat(ageSeconds, 'f', -1, 64))
-	return b.publishRuntimeState(ctx, centralName, b.topics.HubLastEventAge(centralName), body)
+	return b.publishRuntimeStatus(ctx, centralName, b.topics.HubLastEventAge(centralName), ageSeconds, nil)
 }
 
 // PublishHubUpdate publishes the CCU's firmware-update state to the
-// retained topic `<base>/<central>/hub/update` as a JSON object with
+// retained item `<base>/status/<central>/hub/update` as the `val` document with
 // the fields expected by HA's MQTT Update entity:
 // `installed_version`, `latest_version`, and `in_progress`.
 // Returns nil when RawEnabled is false.
@@ -1623,11 +1635,7 @@ func (b *Bridge) PublishHubUpdate(ctx context.Context, centralName, installedVer
 		LatestVersion:    latestVersion,
 		InProgress:       inProgress,
 	}
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-	return b.publishRuntimeState(ctx, centralName, b.topics.HubUpdate(centralName), body)
+	return b.publishRuntimeStatus(ctx, centralName, b.topics.HubUpdate(centralName), payload, nil)
 }
 
 // RetractHubUpdate clears the retained topic [Bridge.PublishHubUpdate]
@@ -1644,7 +1652,7 @@ func (b *Bridge) RetractHubUpdate(ctx context.Context, centralName string) error
 
 // PublishAddonUpdateState publishes the CCU add-on self-updater's
 // status (ADR 0057) to the retained, daemon-level (no <central>
-// segment) topic `<base>/system/addon_update/state`, in the same
+// segment) item `<base>/status/system/addon_update`, in the same
 // `installed_version` / `latest_version` / `in_progress` shape
 // [Bridge.PublishHubUpdate] uses so both ride the same HA `update`
 // entity contract. Returns nil when RawEnabled is false.
@@ -1661,11 +1669,7 @@ func (b *Bridge) PublishAddonUpdateState(ctx context.Context, installedVersion, 
 		LatestVersion:    latestVersion,
 		InProgress:       inProgress,
 	}
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-	return b.publishRuntimeState(ctx, "", b.topics.AddonUpdateState(), body)
+	return b.publishRuntimeStatus(ctx, "", b.topics.AddonUpdateState(), payload, nil)
 }
 
 // PublishChannelEventDiscovery publishes the HA Discovery payload for
@@ -1971,8 +1975,22 @@ func (b *Bridge) forgetRawTopic(topic string) {
 // only the `<iface>/<addr>/<ch>/<bucket>/<PARAM>` shape. A publisher that
 // skips the bookkeeping therefore leaves its retained payload on the broker
 // forever after the device is unpaired.
+//
+// body is the value the publisher rendered; it goes out as the `val` of a
+// status object (see [statusValue]). An empty body is not a value: it
+// clears the retained item, as it always did.
 func (b *Bridge) publishRawRetained(ctx context.Context, topic string, body []byte) error {
-	if err := b.client.Publish(ctx, topic, body, b.cfg.QoS.State, true); err != nil {
+	payload := body
+	if len(body) > 0 {
+		rendered, err := b.renderStatus(topic, statusValue(body), nil, time.Time{})
+		if err != nil {
+			return err
+		}
+		payload = rendered
+	} else {
+		b.clock.forget(topic)
+	}
+	if err := b.client.Publish(ctx, topic, payload, b.cfg.QoS.State, true); err != nil {
 		return err
 	}
 	b.rememberRawTopic(topic)
@@ -2009,7 +2027,7 @@ func (b *Bridge) RetractRawStateForDevice(ctx context.Context, centralName, ifac
 	// central segment, so the scoping has no hole left in it.
 	//
 	// The needle matches the ONE segment the address actually occupies,
-	// not the address anywhere at any depth: `<base>/<central>/<iface>/
+	// not the address anywhere at any depth: `<base>/<fn>/<central>/<iface>/
 	// <addr>/…`, index 1 past the prefix. A `strings.Contains` needle over
 	// the whole topic matched the other positions too. The virtual remote
 	// is the case that turns that into damage: its device address is
@@ -2018,10 +2036,12 @@ func (b *Bridge) RetractRawStateForDevice(ctx context.Context, centralName, ifac
 	// entire BidCos-RF interface — every real wireless device on the CCU
 	// — and the hub subtree's sysvar names were reachable the same way.
 	addr := strings.ToLower(safe(deviceAddress))
-	rawPrefix := strings.ToLower(rawCentralPrefix(b.cfg.Base, centralName))
+	rawPrefixes := rawCentralPrefixes(b.cfg.Base, centralName)
 	match := func(topic string) bool {
-		if rest, ok := strings.CutPrefix(topic, rawPrefix); ok {
-			return topicSegment(rest, 1) == addr
+		for _, prefix := range rawPrefixes {
+			if rest, ok := strings.CutPrefix(topic, strings.ToLower(prefix)); ok {
+				return topicSegment(rest, 1) == addr
+			}
 		}
 		return false
 	}
@@ -2034,7 +2054,7 @@ func (b *Bridge) RetractRawStateForDevice(ctx context.Context, centralName, ifac
 	// finding F6's other half, where this loop reconstructed the name by
 	// hand and cleared it at the state QoS.
 	if availTopic, err := b.deviceAvailabilityTopic(centralName, iface, deviceAddress); err == nil {
-		if err := b.avail.Retract(ctx, availTopic); err != nil {
+		if err := b.retractOnline(ctx, availTopic); err != nil {
 			b.incPublishErrors(centralName)
 		} else {
 			n++
@@ -2048,6 +2068,7 @@ func (b *Bridge) RetractRawStateForDevice(ctx context.Context, centralName, ifac
 			b.incPublishErrors(centralName)
 			continue
 		}
+		b.clock.forget(topic)
 		n++
 	}
 	return n

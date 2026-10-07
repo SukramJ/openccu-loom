@@ -15,6 +15,7 @@ import (
 
 	hapublisher "github.com/SukramJ/go-hamqtt/publisher"
 	hagomqtt "github.com/SukramJ/go-hamqtt/publisher/gomqtt"
+	hatopic "github.com/SukramJ/go-hamqtt/topic"
 
 	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
 
@@ -182,7 +183,7 @@ type CDPInvocationSink interface {
 	// custom DP attached to the channel
 	// (central, interfaceID, deviceAddress, channel). ADR 0009 — the
 	// bridge calls this when an HA-Discovery command-topic write
-	// arrives on `…/<chan>/svc/<method>/set`.
+	// arrives on `<base>/set/…/<chan>/custom/<kind>/<method>`.
 	//
 	// Implementations look up the channel's custom DP via the central
 	// registry and call its `Source.Invoke(ctx, method, params, priority)`.
@@ -224,12 +225,12 @@ type CDPInvokePayload struct {
 // filter of their length would overlap one of that handler's two catch-alls
 // (see [CommandSubscriber.routes]). The routes are sysvars, programs (enable
 // and trigger), install mode, custom-DP invoke, service methods, alarm
-// commands and add-on updates, over the raw-plane schema (ADR 0011):
+// commands and add-on updates, all under the `set` function (ADR 0083):
 //
-//	<base>/<central>/<interface>/<device>/<channel>/<parameter>/set
-//	<base>/<central>/hub/sysvars/<name>/set
-//	<base>/<central>/hub/programs/<id>/trigger
-//	<base>/<central>/devices/<device>/cdps/<name>/<operation>/invoke
+//	<base>/set/<central>/<interface>/<device>/<channel>/<bucket>/<parameter>
+//	<base>/set/<central>/hub/sysvars/<name>
+//	<base>/set/<central>/hub/programs/<id>/trigger
+//	<base>/set/<central>/devices/<device>/cdps/<name>/<operation>
 type CommandSubscriber struct {
 	sub       Subscriber
 	topics    *TopicBuilder
@@ -276,6 +277,11 @@ type CommandSubscriber struct {
 	// constructor and Start — and [hapublisher.NewCommandRouter] starts no
 	// goroutines, so a subscriber that never reaches Start owns none either.
 	router *hapublisher.CommandRouter
+	// maintenance serves `<base>/maintenance/set/#` on the same router, so
+	// the maintenance commands share the plane's subscription QoS and its
+	// workers. Nil leaves the maintenance topics unrouted. See
+	// [CommandSubscriber.WithMaintenance].
+	maintenance *hapublisher.Instance
 
 	// routesOverride replaces [CommandSubscriber.routes] in
 	// [CommandSubscriber.Start]. Nil in every build the daemon produces —
@@ -540,6 +546,15 @@ func (c *CommandSubscriber) WithAddonUpdateSink(s AddonUpdateSink) *CommandSubsc
 	return c
 }
 
+// WithMaintenance routes mqtt-smarthome 2.0 §7's maintenance commands —
+// `<base>/maintenance/set/loglevel` and `…/restart` — to inst, the bridge's
+// instance publisher, on this plane's router. The composition root passes
+// [Bridge.Instance].
+func (c *CommandSubscriber) WithMaintenance(inst *hapublisher.Instance) *CommandSubscriber {
+	c.maintenance = inst
+	return c
+}
+
 // WithLifecycleContext sets the daemon-lifetime context that command handlers
 // derive each per-command context from. Wiring this — rather than reusing
 // Start's ctx, which on a hot-reload broker swap is request-scoped and dies
@@ -563,34 +578,42 @@ func (c *CommandSubscriber) WithLifecycleContext(ctx context.Context) *CommandSu
 // segment before indexing around it.
 //
 // Why these shapes have no subscription of their own: the data-point plane
-// needs two wildcard catch-alls — `<base>/+/+/+/+/+/set` (legacy,
-// bucket-less) and `<base>/+/+/+/+/+/+/set` (bucket-aware) — and every
-// command shape of the same length is therefore matched by one of them. MQTT
-// has no exclusion wildcard, so a narrower sibling filter cannot subtract
-// itself from a catch-all: it only adds a second matching subscription. A
-// broker then sends one copy per matching subscription (MQTT 3.1.1 §4.7.3 /
-// 5.0 §3.3.4) and the client re-matches every copy against its whole local
-// filter list, so the two fan-outs multiply and one operator action runs the
-// handler N times. Dispatching from inside the catch-all is the only shape
-// that resolves the overlap rather than guarding its symptoms.
+// needs a wildcard catch-all — `<base>/set/+/+/+/+/+/+`, six levels below
+// the function — and every command shape of the same length is therefore
+// matched by it. MQTT has no exclusion wildcard, so a narrower sibling
+// filter cannot subtract itself from a catch-all: it only adds a second
+// matching subscription. A broker then sends one copy per matching
+// subscription (MQTT 3.1.1 §4.7.3 / 5.0 §3.3.4) and the client re-matches
+// every copy against its whole local filter list, so the two fan-outs
+// multiply and one operator action runs the handler N times. Dispatching
+// from inside the catch-all is the only shape that resolves the overlap
+// rather than guarding its symptoms.
 const (
-	// segWeekProfile owns `<…>/<channel>/week_profile/set`, six segments
-	// below the base — the same length as the legacy bucket-less
-	// data-point shape. Declared by
-	// [DefaultDiscoveryBuilder.BuildWeekProfileDiscovery], handled by
-	// [CommandSubscriber.handleWeekProfile].
+	// segWeekProfile is the literal of `<…>/<channel>/week_profile`, five
+	// levels below `set`. It has a filter of its own whose fifth level is
+	// this literal, which keeps it disjoint from the program items of the
+	// same length (`<central>/hub/programs/<id>/active`).
 	segWeekProfile = "week_profile"
-	// segCombined owns `<…>/<channel>/combined/<kind>/set`, seven
-	// segments below the base, sitting where the bucket-aware shape
-	// carries its bucket. Declared by
-	// [DefaultDiscoveryBuilder.BuildCombinedTimerDiscovery], handled by
-	// [CommandSubscriber.handleCombinedDP].
+	// segCombined owns `<…>/<channel>/combined/<kind>`, six levels below
+	// `set`, sitting where the data-point shape carries its bucket.
+	// Declared by [DefaultDiscoveryBuilder.BuildCombinedTimerDiscovery],
+	// handled by [CommandSubscriber.handleCombinedDP].
 	segCombined = "combined"
-	// segSchedule owns `<…>/<channel>/schedule/<key>/set`, likewise at
-	// the bucket position. Declared by
-	// [DefaultDiscoveryBuilder.BuildScheduleSwitchDiscovery], handled by
-	// [CommandSubscriber.handleScheduleSwitch].
-	segSchedule = "schedule"
+	// segSchedule and segScheduleSwitch spell
+	// `<…>/<channel>/schedule/switch/<key>`, seven levels below `set`.
+	// Declared by [DefaultDiscoveryBuilder.BuildScheduleSwitchDiscovery],
+	// handled by [CommandSubscriber.handleScheduleSwitch]. The `switch`
+	// level keeps a schedule key out of the namespace of the schedule's own
+	// status items (`active_entries`, `attributes`).
+	segSchedule       = "schedule"
+	segScheduleSwitch = "switch"
+	// segDevices and segCDPs are the literals of the custom-DP operation
+	// item `<central>/devices/<addr>/cdps/<name>/<op>`, six levels below
+	// `set` — the length of the data-point catch-all, which dispatches it.
+	// A wire interface id is always `<central>-<interface>`, so it can
+	// never read `devices` and the two shapes cannot be confused.
+	segDevices = "devices"
+	segCDPs    = "cdps"
 )
 
 // inboundOnlyPublisher is the publish half [hagomqtt.Split] insists on for a
@@ -680,49 +703,42 @@ func (c *CommandSubscriber) routeSet(base string) []commandRoute {
 }
 
 func (c *CommandSubscriber) routes(base string) []commandRoute {
+	set := strings.Trim(base, "/") + "/" + hatopic.FunctionSet
 	return []commandRoute{
-		// Bucket-aware data-point command topology (the canonical shape
-		// the discovery builder advertises since the Option-B migration):
-		//   <base>/<central>/<interface>/<addr>/<channel>/<bucket>/<param>/set
-		// where `<bucket>` is `values` / `master` / `calculated`. The
-		// switch / lock / select / number entities all publish here, so
-		// the subscriber MUST register the 8-segment shape — without it
-		// HA's `payload_on=true` to a Custom-DP switch arrives at the
-		// broker but never reaches the daemon.
-		//
-		// Also carries the combined-DP and schedule-switch shapes, which
-		// put a literal where the bucket sits.
-		{base + "/+/+/+/+/+/+/set", c.handleDataPoint},
-		// Legacy 7-segment shape (no bucket infix) — still emitted by
-		// some hand-built tools and by automations written against the
-		// pre-bucket topology. Keep it active so they don't break.
-		// Also carries the week-profile shape, which is the same length.
-		{base + "/+/+/+/+/+/set", c.handleDataPoint},
-		// Canonical (ADR 0011): {base}/{central}/hub/sysvars/{name}/set.
-		{base + "/+/hub/sysvars/+/set", c.handleSysvar},
-		// Canonical (ADR 0011): {base}/{central}/hub/programs/{id}/set.
-		// Activation is a separate control from execution — a deactivated
-		// program refuses to run — so it has its own topic (see
-		// hub.Program.MQTTRoles).
-		{base + "/+/hub/programs/+/set", c.handleProgramEnable},
-		{base + "/+/hub/programs/+/trigger", c.handleProgram},
-		// Per-interface install-mode activation button:
-		// {base}/{central}/hub/install_mode/{iface}/set — HA publishes the
-		// press token; the handler activates pairing on the named interface.
-		{base + "/+/hub/install_mode/+/set", c.handleInstallMode},
-		// {base}/{central}/devices/{device}/cdps/{name}/{operation}/invoke
-		{base + "/+/devices/+/cdps/+/+/invoke", c.handleCDPInvoke},
-		// Canonical ADR-0011 per-service-method form:
-		// {base}/{central}/{interface}/{address}/{channel}/custom/{kind}/set/{method}
-		{base + "/+/+/+/+/custom/+/set/+", c.handleServiceMethod},
-		// {base}/alarm/{zone}/set — the daemon-level alarm arm/disarm/silence
-		// plane. Zones are daemon-level, so the topic carries no <central>
-		// segment; the reserved <zone> "master" routes to the aggregate verbs.
-		{base + "/alarm/+/set", c.handleAlarmCommand},
-		// {base}/system/addon_update/set — the daemon-level CCU add-on
-		// self-update INSTALL command (ADR 0057). Daemon-level like the
-		// alarm plane above, so the topic carries no <central> segment.
-		{base + "/system/addon_update/set", c.handleAddonUpdateCommand},
+		// Data-point catch-all, six levels below `set`:
+		//   <central>/<iface>/<addr>/<channel>/<bucket>/<param>
+		// where `<bucket>` is `values` / `master`. The switch / lock /
+		// select / number entities all publish here. It also carries the
+		// combined-DP item (`combined` where the bucket sits) and the
+		// custom-DP operation item `<central>/devices/<addr>/cdps/<name>/<op>`,
+		// which are dispatched from inside the handler.
+		{set + "/+/+/+/+/+/+", c.normalized(c.handleDataPoint)},
+		// <central>/<iface>/<addr>/<channel>/week_profile
+		{set + "/+/+/+/+/" + segWeekProfile, c.normalized(c.handleWeekProfile)},
+		// <central>/<iface>/<addr>/<channel>/custom/<kind>/<method> — the
+		// per-service-method form (ADR 0009 bodies).
+		{set + "/+/+/+/+/custom/+/+", c.normalized(c.handleServiceMethod)},
+		// <central>/<iface>/<addr>/<channel>/schedule/switch/<key>
+		{set + "/+/+/+/+/" + segSchedule + "/" + segScheduleSwitch + "/+", c.normalized(c.handleScheduleSwitch)},
+		// <central>/hub/sysvars/<name>
+		{set + "/+/hub/sysvars/+", c.normalized(c.handleSysvar)},
+		// <central>/hub/programs/<id>/active. Activation is a separate
+		// control from execution — a deactivated program refuses to run —
+		// so it has its own item (see hub.Program.MQTTRoles).
+		{set + "/+/hub/programs/+/active", c.normalized(c.handleProgramEnable)},
+		// <central>/hub/programs/<id>/trigger — an action item.
+		{set + "/+/hub/programs/+/trigger", c.normalized(c.handleProgram)},
+		// <central>/hub/install_mode/<iface> — HA publishes the press
+		// token; the handler activates pairing on the named interface.
+		{set + "/+/hub/install_mode/+", c.normalized(c.handleInstallMode)},
+		// alarm/<zone>/panel — the daemon-level alarm arm/disarm/silence
+		// plane. Zones are daemon-level, so the item carries no <central>
+		// segment; the reserved <zone> "master" routes to the aggregate
+		// verbs. Its payload is logged with the alarm code redacted.
+		{set + "/alarm/+/" + alarmPanelItem, c.normalizedRedacted(c.handleAlarmCommand, redactAlarmCode)},
+		// system/addon_update — the daemon-level CCU add-on self-update
+		// INSTALL command (ADR 0057).
+		{set + "/system/addon_update", c.normalized(c.handleAddonUpdateCommand)},
 	}
 }
 
@@ -798,6 +814,14 @@ func (c *CommandSubscriber) Start(ctx context.Context) error {
 	for _, rt := range c.routeSet(base) {
 		if err := router.Handle(rt.filter, rt.handler); err != nil {
 			return fmt.Errorf("mqtt/command: route %s: %w", rt.filter, err)
+		}
+	}
+	// `<base>/maintenance/set/#` is a different function from every `set`
+	// route, so it is disjoint from all of them. It registers nothing when
+	// maintenance is disabled.
+	if c.maintenance != nil {
+		if err := c.maintenance.Register(router); err != nil {
+			return fmt.Errorf("mqtt/command: maintenance routes: %w", err)
 		}
 	}
 	if router.Attributed() {
@@ -883,21 +907,16 @@ func (c *CommandSubscriber) incSubscribeFailures() {
 }
 
 // handleScheduleSwitch dispatches a payload from
-// `<base>/<central>/<iface>/<addr>/<chan>/schedule/<key>/set` into the
-// schedule-switch sink. Payload is "true" or "false" (HA's standard
-// switch payload).
+// `<base>/set/<central>/<iface>/<addr>/<chan>/schedule/switch/<key>` into
+// the schedule-switch sink. Payload is a boolean in any of the spellings
+// spec §5.3 lists (HA's switch publishes "true" / "false").
 //
-// Reached only from [CommandSubscriber.handleDataPoint]'s bucket branch,
-// which has already established that the shape carries [segSchedule] where
-// the bucket sits — the schedule shape has no filter of its own, because one
-// would overlap the bucket-aware catch-all. So it does not re-check that
-// literal: a guard on a condition its only caller has just proved cannot
-// fail is a guard that tests nothing. The arity check that remains is the
-// panic bound [CommandSubscriber.routeWildcards] documents, which is a
-// different question.
+// The `schedule` and `switch` literals are the route's, so the five
+// wildcards are the central, the interface, the address, the channel and
+// the key.
 func (c *CommandSubscriber) handleScheduleSwitch(ctx context.Context, cmd hapublisher.Command) {
 	topic := cmd.Topic
-	w, ok := c.routeWildcards(cmd, 6)
+	w, ok := c.routeWildcards(cmd, 5)
 	if !ok {
 		return
 	}
@@ -905,23 +924,15 @@ func (c *CommandSubscriber) handleScheduleSwitch(ctx context.Context, cmd hapubl
 	if !ok {
 		return
 	}
-	iface, deviceAddr, key := w[1], w[2], w[5]
+	iface, deviceAddr, key := w[1], w[2], w[4]
 	channel, err := strconv.Atoi(w[3])
 	if err != nil {
 		c.logger.Warn("mqtt.command.schedule.bad_channel", slog.String("topic", topic))
 		return
 	}
-	raw := strings.ToLower(strings.TrimSpace(string(cmd.Payload)))
-	var enabled bool
-	switch raw {
-	case "true", "on", "1":
-		enabled = true
-	case "false", "off", "0":
-		enabled = false
-	default:
-		c.logger.Warn("mqtt.command.schedule.bad_payload",
-			slog.String("topic", topic),
-			slog.String("payload", raw))
+	enabled, ok := parseBoolPayload(cmd.Payload)
+	if !ok {
+		c.logger.Warn("mqtt.command.schedule.bad_payload", c.setAttrs(cmd)...)
 		return
 	}
 	if c.schedSink == nil {
@@ -932,25 +943,20 @@ func (c *CommandSubscriber) handleScheduleSwitch(ctx context.Context, cmd hapubl
 	}
 	if err := c.schedSink.SetScheduleSwitch(ctx, centralName, iface, deviceAddr, channel, key, enabled, hmenum.CommandPriorityHigh); err != nil {
 		c.logger.Warn("mqtt.command.schedule.set",
-			slog.String("topic", topic),
-			slog.String("key", key),
-			slog.Bool("enabled", enabled),
-			slog.String("err", err.Error()))
+			append(c.setAttrs(cmd),
+				slog.String("key", key),
+				slog.String("err", err.Error()))...)
 	}
 }
 
 // handleWeekProfile dispatches a payload from
-// `<base>/<central>/<iface>/<addr>/<chan>/week_profile/set` to the
-// week-profile sink. The payload is the profile key ("P1".."PN") as
-// a plain string (no quotes / no JSON envelope) — the same shape HA
-// publishes for `select` entities.
-//
-// Reached only from [CommandSubscriber.handleDataPoint]'s six-segment
-// branch, which has already established the [segWeekProfile] literal — see
-// the note on [CommandSubscriber.handleScheduleSwitch].
+// `<base>/set/<central>/<iface>/<addr>/<chan>/week_profile` to the
+// week-profile sink. The payload is the profile key ("P1".."PN") as a plain
+// string or `{"val": "P1"}` — HA publishes the plain form for `select`
+// entities.
 func (c *CommandSubscriber) handleWeekProfile(ctx context.Context, cmd hapublisher.Command) {
 	topic := cmd.Topic
-	w, ok := c.routeWildcards(cmd, 5)
+	w, ok := c.routeWildcards(cmd, 4)
 	if !ok {
 		return
 	}
@@ -965,10 +971,6 @@ func (c *CommandSubscriber) handleWeekProfile(ctx context.Context, cmd hapublish
 		return
 	}
 	profile := strings.TrimSpace(string(cmd.Payload))
-	if profile == "" {
-		c.logger.Warn("mqtt.command.wp.empty_payload", slog.String("topic", topic))
-		return
-	}
 	if c.wpSink == nil {
 		c.logger.Debug("mqtt.command.wp.no_sink",
 			slog.String("topic", topic),
@@ -977,14 +979,12 @@ func (c *CommandSubscriber) handleWeekProfile(ctx context.Context, cmd hapublish
 	}
 	if err := c.wpSink.SetActiveProfile(ctx, centralName, iface, deviceAddr, channel, profile, hmenum.CommandPriorityHigh); err != nil {
 		c.logger.Warn("mqtt.command.wp.set_active_profile",
-			slog.String("topic", topic),
-			slog.String("profile", profile),
-			slog.String("err", err.Error()))
+			append(c.setAttrs(cmd), slog.String("err", err.Error()))...)
 	}
 }
 
 // handleCombinedDP dispatches a payload from
-// `<base>/<central>/<iface>/<addr>/<chan>/combined/<kind>/set` into the
+// `<base>/set/<central>/<iface>/<addr>/<chan>/combined/<kind>` into the
 // combined-DP sink.
 //
 // The payload is forwarded verbatim. HA publishes a bare scalar for both
@@ -1012,12 +1012,6 @@ func (c *CommandSubscriber) handleCombinedDP(ctx context.Context, cmd hapublishe
 		return
 	}
 	raw := strings.TrimSpace(string(cmd.Payload))
-	if raw == "" {
-		c.logger.Warn("mqtt.command.combined.bad_payload",
-			slog.String("topic", topic),
-			slog.String("detail", "empty payload"))
-		return
-	}
 	if c.cmbSink == nil {
 		c.logger.Debug("mqtt.command.combined.no_sink",
 			slog.String("topic", topic),
@@ -1026,17 +1020,15 @@ func (c *CommandSubscriber) handleCombinedDP(ctx context.Context, cmd hapublishe
 	}
 	if err := c.cmbSink.SetCombinedValue(ctx, centralName, iface, deviceAddr, channel, kind, raw, hmenum.CommandPriorityHigh); err != nil {
 		c.logger.Warn("mqtt.command.combined.set",
-			slog.String("topic", topic),
-			slog.String("kind", kind),
-			slog.String("value", raw),
-			slog.String("err", err.Error()))
+			append(c.setAttrs(cmd),
+				slog.String("kind", kind),
+				slog.String("err", err.Error()))...)
 	}
 }
 
-// handleServiceMethod dispatches a payload from the canonical
-// ADR-0011 per-service-method topic
-// `<base>/<central>/<iface>/<addr>/<chan>/custom/<kind>/set/<method>`
-// into `Source.Invoke`.
+// handleServiceMethod dispatches a payload from the per-service-method item
+// `<base>/set/<central>/<iface>/<addr>/<chan>/custom/<kind>/<method>` into
+// `Source.Invoke`.
 //
 // The MQTT payload may be a JSON object (forwarded verbatim as
 // `params`) or a scalar (wrapped under the canonical argument name
@@ -1051,11 +1043,11 @@ func (c *CommandSubscriber) handleServiceMethod(ctx context.Context, cmd hapubli
 	if !ok {
 		return
 	}
-	// The `custom` and `set` literals and the segment count are the route's,
-	// not this handler's: the filter is
-	// `<base>/+/+/+/+/custom/+/set/+`, so a delivered message has them by
-	// construction. Wildcard 4 is the `<kind>` segment, which this shape
-	// carries for the discovery payload's benefit and the dispatch ignores.
+	// The `custom` literal and the segment count are the route's, not this
+	// handler's: the filter is `<base>/set/+/+/+/+/custom/+/+`, so a
+	// delivered message has them by construction. Wildcard 4 is the `<kind>`
+	// segment, which this shape carries for the discovery payload's benefit
+	// and the dispatch ignores.
 	iface, deviceAddr, method := w[1], w[2], w[5]
 	channel, err := strconv.Atoi(w[3])
 	if err != nil {
@@ -1071,106 +1063,72 @@ func (c *CommandSubscriber) handleServiceMethod(ctx context.Context, cmd hapubli
 	params, err := scalarPayloadToParams(method, cmd.Payload, payload.GlobalScalarArgKey)
 	if err != nil {
 		c.logger.Warn("mqtt.command.svc.bad_payload",
-			slog.String("topic", topic),
-			slog.String("err", err.Error()))
+			append(c.setAttrs(cmd), slog.String("err", err.Error()))...)
 		return
 	}
 	if err := c.cdpSink.InvokeChannelService(ctx, centralName, iface, deviceAddr, channel, method, params, hmenum.CommandPriorityHigh); err != nil {
 		c.logger.Warn("mqtt.command.svc.invoke",
-			slog.String("topic", topic),
-			slog.String("method", method),
-			slog.String("err", err.Error()))
+			append(c.setAttrs(cmd),
+				slog.String("method", method),
+				slog.String("err", err.Error()))...)
 	}
 }
 
-// handleDataPoint owns both data-point command shapes and, because they are
-// wildcard catch-alls nothing can be carved out of, the three narrow shapes
-// of the same lengths.
+// handleDataPoint owns the data-point command shape and, because it is a
+// wildcard catch-all nothing can be carved out of, the two narrow shapes of
+// the same length.
 //
-// Two accepted data-point shapes — both end with `/set`, and both are read
-// off [hapublisher.Command.Wildcards], the levels the route's `+` positions
-// matched, rather than off a split of the topic:
+// The data-point shape is read off [hapublisher.Command.Wildcards], the
+// levels the route's `+` positions matched, rather than off a split of the
+// topic:
 //
-//  1. Bucket-aware (canonical, emitted by the discovery builder):
-//     <central>/<iface>/<addr>/<channel>/<bucket>/<param>/set
-//     — six wildcards; `<bucket>` is `values`/`master`/`calculated`.
-//  2. Legacy bucket-less shape, still produced by hand-built tools and by
-//     automations written against the pre-bucket topology:
-//     <central>/<iface>/<addr>/<channel>/<param>/set
-//     — five wildcards.
+//	<central>/<iface>/<addr>/<channel>/<bucket>/<param>
 //
-// The bucket-less form always routes to VALUES. In the bucket-aware form
 // `values` routes to SetValue, `master` routes to SetMasterValue, and
 // `calculated` is read-only and dropped with a debug log.
 //
-// Three shapes of those two lengths are not data-point writes at all and are
-// dispatched from here rather than from a filter of their own, because a
-// filter of their own would overlap one of these two catch-alls and MQTT
-// cannot express the exclusion: `week_profile` at five wildcards, `combined`
-// and `schedule` at the bucket position of the six-wildcard shape.
+// Two shapes of this length are not data-point writes and are dispatched
+// from here rather than from a filter of their own, because a filter of
+// their own would overlap the catch-all and MQTT cannot express the
+// exclusion: `combined` at the bucket position, and the custom-DP operation
+// item `<central>/devices/<addr>/cdps/<name>/<op>`.
 //
 // Counting wildcards rather than topic segments is what makes the reading
 // independent of the topic base. The base is free-form operator config and
-// may carry levels of its own ("home/loom"); this handler used to count
-// absolute segments, which shifted every index by the base's depth and
-// dropped every inbound command on such an installation while the state
-// plane kept publishing normally — an outage that reads exactly like a
-// broker or CCU fault. A wildcard list cannot have that bug, and
-// [CommandSubscriber.Start] refuses a base that would contribute a wildcard
-// level of its own.
+// may carry levels of its own ("home/loom"); a wildcard list cannot shift
+// with it, and [CommandSubscriber.Start] refuses a base that would
+// contribute a wildcard level of its own.
 func (c *CommandSubscriber) handleDataPoint(ctx context.Context, cmd hapublisher.Command) {
 	topic := cmd.Topic
-	w := cmd.Wildcards
-	// Deliberately not routeWildcards: this handler owns two routes of
-	// different arity and discriminates on the count itself, so the `default`
-	// arm below IS the guard.
-	var parameter string
-	isMaster := false
-	switch len(w) {
-	case 5:
-		// This route is the only five-wildcard subscription on the plane,
-		// so a shape of that length which is not a data-point write is
-		// dispatched from here rather than owned by a sibling filter that
-		// would overlap it — see the segWeekProfile block.
-		if w[4] == segWeekProfile {
-			c.handleWeekProfile(ctx, cmd)
-			return
-		}
-		parameter = w[4]
-	case 6:
-		switch bucket := w[4]; bucket {
-		case "values":
-			// Default VALUES write — no special flag needed.
-		case "master":
-			isMaster = true
-		case segCombined:
-			// Not a bucket: the combined-DP shape carries its own
-			// literal where the bucket sits, and is dispatched from
-			// here for the reason the segCombined block gives.
-			c.handleCombinedDP(ctx, cmd)
-			return
-		case segSchedule:
-			c.handleScheduleSwitch(ctx, cmd)
-			return
-		default:
-			// `calculated` and any unknown bucket are read-only; drop
-			// with a debug breadcrumb so operators can diagnose
-			// mis-directed writes.
-			c.logger.Debug("mqtt.command.unsupported_bucket",
-				slog.String("topic", topic),
-				slog.String("bucket", bucket))
-			return
-		}
-		parameter = w[5]
-	default:
-		// Unreachable through the two registered routes, which capture
-		// exactly five or six wildcards. It is kept as the failure mode for
-		// a third route bound to this handler by mistake: a silent wrong
-		// read of w[4] would be a CCU write to a parameter named after
-		// somebody else's literal.
-		c.logger.Warn("mqtt.command.unknown_topic", slog.String("topic", topic))
+	w, ok := c.routeWildcards(cmd, 6)
+	if !ok {
 		return
 	}
+	if w[1] == segDevices && w[3] == segCDPs {
+		c.handleCDPInvoke(ctx, cmd, w[0], w[2], w[4], w[5])
+		return
+	}
+	isMaster := false
+	switch bucket := w[4]; bucket {
+	case "values":
+		// Default VALUES write — no special flag needed.
+	case "master":
+		isMaster = true
+	case segCombined:
+		// Not a bucket: the combined-DP shape carries its own literal
+		// where the bucket sits, and is dispatched from here for the
+		// reason the segCombined block gives.
+		c.handleCombinedDP(ctx, cmd)
+		return
+	default:
+		// `calculated` and any unknown bucket are read-only; drop with a
+		// debug breadcrumb so operators can diagnose mis-directed writes.
+		c.logger.Debug("mqtt.command.unsupported_bucket",
+			slog.String("topic", topic),
+			slog.String("bucket", bucket))
+		return
+	}
+	parameter := w[5]
 	centralName, ok := c.resolveCentral(topic, w[0])
 	if !ok {
 		return
@@ -1188,21 +1146,19 @@ func (c *CommandSubscriber) handleDataPoint(ctx context.Context, cmd hapublisher
 		if err := c.sink.SetMasterValue(ctx, centralName, iface, channelAddress,
 			hmenum.Parameter(parameter), value, hmenum.CommandPriorityHigh); err != nil {
 			c.logger.Warn("mqtt.command.setmasterparam",
-				slog.String("topic", topic),
-				slog.String("err", err.Error()))
+				append(c.setAttrs(cmd), slog.String("err", err.Error()))...)
 		}
 		return
 	}
 	if err := c.sink.SetValue(ctx, centralName, iface, channelAddress,
 		hmenum.Parameter(parameter), value, hmenum.CommandPriorityHigh); err != nil {
 		c.logger.Warn("mqtt.command.setvalue",
-			slog.String("topic", topic),
-			slog.String("err", err.Error()))
+			append(c.setAttrs(cmd), slog.String("err", err.Error()))...)
 	}
 }
 
-// handleSysvar writes a system variable from the canonical ADR-0011 topic
-// `<base>/<central>/hub/sysvars/<name>/set`. The `hub` and `sysvars`
+// handleSysvar writes a system variable from the item
+// `<base>/set/<central>/hub/sysvars/<name>`. The `hub` and `sysvars`
 // literals are the route's, so the wildcards are the central and the name.
 func (c *CommandSubscriber) handleSysvar(ctx context.Context, cmd hapublisher.Command) {
 	w, ok := c.routeWildcards(cmd, 2)
@@ -1217,24 +1173,19 @@ func (c *CommandSubscriber) handleSysvar(ctx context.Context, cmd hapublisher.Co
 	c.incReceivedCommands(centralName)
 	if err := c.sink.SetSysvar(ctx, centralName, w[1], value); err != nil {
 		c.logger.Warn("mqtt.command.setsysvar",
-			slog.String("topic", cmd.Topic), slog.String("err", err.Error()))
+			append(c.setAttrs(cmd), slog.String("err", err.Error()))...)
 	}
 }
 
-// handleProgram executes a CCU program from the canonical ADR-0011 topic
-// `<base>/<central>/hub/programs/<id>/trigger`.
+// handleProgram executes a CCU program from the action item
+// `<base>/set/<central>/hub/programs/<id>/trigger`. Any non-empty payload
+// fires it; the empty one never reaches here (see
+// [CommandSubscriber.normalized]), which matters because an empty payload is
+// what a retained-message eviction looks like on a live subscription — and
+// executing a CCU program because a topic was cleaned would repeat the
+// state-mirror defect the guard exists to keep out.
 func (c *CommandSubscriber) handleProgram(ctx context.Context, cmd hapublisher.Command) {
 	topic := cmd.Topic
-	// An empty payload is not a command. It is what the retain-cleanup
-	// pass publishes to evict a parked retained message from the trigger
-	// topic — the broker forwards that eviction to this very subscription as
-	// a live (non-retained) message, so the router's retained drop does NOT
-	// catch it, and executing a CCU program because a topic was cleaned
-	// would repeat the state-mirror defect this guard exists to keep out.
-	if strings.TrimSpace(string(cmd.Payload)) == "" {
-		c.logger.Debug("mqtt.command.program.empty_drop", slog.String("topic", topic))
-		return
-	}
 	w, ok := c.routeWildcards(cmd, 2)
 	if !ok {
 		return
@@ -1249,12 +1200,12 @@ func (c *CommandSubscriber) handleProgram(ctx context.Context, cmd hapublisher.C
 	ctx = hmreqctx.WithOperation(ctx, "mqtt:program-trigger")
 	if err := c.sink.TriggerProgram(ctx, centralName, w[1]); err != nil {
 		c.logger.Warn("mqtt.command.program",
-			slog.String("topic", topic), slog.String("err", err.Error()))
+			append(c.setAttrs(cmd), slog.String("err", err.Error()))...)
 	}
 }
 
 // handleProgramEnable toggles a program's CCU-side activity flag from
-// `<base>/<central>/hub/programs/<id>/set`. While the flag is off the CCU
+// `<base>/set/<central>/hub/programs/<id>/active`. While the flag is off the CCU
 // ignores the program's triggers and refuses a manual run, so this is the
 // control that decides whether the paired execute button does anything.
 func (c *CommandSubscriber) handleProgramEnable(ctx context.Context, cmd hapublisher.Command) {
@@ -1269,38 +1220,37 @@ func (c *CommandSubscriber) handleProgramEnable(ctx context.Context, cmd hapubli
 	}
 	enabled, ok := parseBoolPayload(cmd.Payload)
 	if !ok {
-		c.logger.Warn("mqtt.command.program_enable.bad_payload",
-			slog.String("topic", topic), slog.String("payload", string(cmd.Payload)))
+		c.logger.Warn("mqtt.command.program_enable.bad_payload", c.setAttrs(cmd)...)
 		return
 	}
 	c.incReceivedCommands(centralName)
 	if err := c.sink.SetProgramEnabled(ctx, centralName, w[1], enabled); err != nil {
 		c.logger.Warn("mqtt.command.program_enable",
-			slog.String("topic", topic), slog.String("err", err.Error()))
+			append(c.setAttrs(cmd), slog.String("err", err.Error()))...)
 	}
 }
 
-// parseBoolPayload accepts the on/off spellings HA and hand-written
-// clients publish. An unrecognised payload is rejected rather than
-// guessed, so a typo does not silently deactivate a program.
+// parseBoolPayload accepts the boolean spellings spec §5.3 lists — true /
+// false, 1 / 0, on / off, yes / no, in any case — through the shared
+// [hapublisher.SetValue.Bool], so this plane and the bridges read one
+// vocabulary. An unrecognised payload is rejected rather than guessed, so a
+// typo does not silently deactivate a program.
 func parseBoolPayload(body []byte) (value, ok bool) {
-	switch strings.ToLower(strings.TrimSpace(string(body))) {
-	case "true", "on", "1", "yes":
-		return true, true
-	case "false", "off", "0", "no":
-		return false, true
+	v, err := hapublisher.ParseSet(body)
+	if err != nil {
+		return false, false
 	}
-	return false, false
+	b, err := v.Bool()
+	return b, err == nil
 }
 
 // handleInstallMode activates pairing/install mode on one interface from
-// the per-interface button command topic
-// `<base>/<central>/hub/install_mode/<iface>/set`. HA's button entity
+// the per-interface button command item
+// `<base>/set/<central>/hub/install_mode/<iface>`. HA's button entity
 // publishes the press token ("PRESS"); the sink applies its own default
 // pairing duration. A numeric payload is honoured as the duration in
 // seconds for tools that publish one directly.
 func (c *CommandSubscriber) handleInstallMode(ctx context.Context, cmd hapublisher.Command) {
-	// <base>/<central>/hub/install_mode/<iface>/set
 	topic := cmd.Topic
 	w, ok := c.routeWildcards(cmd, 2)
 	if !ok {
@@ -1317,8 +1267,8 @@ func (c *CommandSubscriber) handleInstallMode(ctx context.Context, cmd hapublish
 			slog.String("detail", "InstallModeSink not wired; ignoring install-mode press"))
 		return
 	}
-	// "PRESS" (HA button) and empty payloads request the default
-	// duration (seconds=0 → sink default); a bare integer overrides it.
+	// "PRESS" (HA button) requests the default duration (seconds=0 → sink
+	// default); a bare integer overrides it.
 	seconds := 0
 	if raw := strings.TrimSpace(string(cmd.Payload)); raw != "" && !strings.EqualFold(raw, "PRESS") {
 		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
@@ -1328,9 +1278,9 @@ func (c *CommandSubscriber) handleInstallMode(ctx context.Context, cmd hapublish
 	c.incReceivedCommands(centralName)
 	if err := c.imSink.ActivateInstallMode(ctx, centralName, iface, seconds); err != nil {
 		c.logger.Warn("mqtt.command.install_mode.activate",
-			slog.String("topic", topic),
-			slog.String("interface", iface),
-			slog.String("err", err.Error()))
+			append(c.setAttrs(cmd),
+				slog.String("interface", iface),
+				slog.String("err", err.Error()))...)
 	}
 }
 
@@ -1342,14 +1292,14 @@ type alarmCommandPayload struct {
 	Code   string `json:"code"`
 }
 
-// handleAlarmCommand routes a payload from `<base>/alarm/<zone>/set` into
-// the alarm sink. The <zone> segment is an zone ID or the reserved
+// handleAlarmCommand routes a payload from `<base>/set/alarm/<zone>/panel`
+// into the alarm sink. The <zone> segment is an zone ID or the reserved
 // "master" token; the payload is either a bare HA command string
 // (ARM_HOME / ARM_AWAY / … / DISARM, plus the SILENCE extension) or the
 // JSON {"action":…,"code":…} envelope. Unknown payloads are logged and
 // dropped, matching the other command handlers.
 func (c *CommandSubscriber) handleAlarmCommand(ctx context.Context, cmd hapublisher.Command) {
-	// <base>/alarm/<zone>/set — one wildcard, the zone.
+	// <base>/set/alarm/<zone>/panel — one wildcard, the zone.
 	topic := cmd.Topic
 	w, ok := c.routeWildcards(cmd, 1)
 	if !ok {
@@ -1358,7 +1308,7 @@ func (c *CommandSubscriber) handleAlarmCommand(ctx context.Context, cmd hapublis
 	zone := w[0]
 	action, code := parseAlarmAction(cmd.Payload)
 	if action == "" {
-		c.logger.Warn("mqtt.command.alarm.empty_payload", slog.String("topic", topic))
+		c.logger.Warn("mqtt.command.alarm.rejected", c.alarmAttrs(cmd)...)
 		return
 	}
 	if c.alarmSink == nil {
@@ -1370,7 +1320,7 @@ func (c *CommandSubscriber) handleAlarmCommand(ctx context.Context, cmd hapublis
 	// The alarm command topic carries no <central> segment (zones are
 	// daemon-level, see [AlarmSink]) — nothing to label this increment with.
 	c.incReceivedCommands("")
-	c.dispatchAlarm(ctx, topic, zone, action, code)
+	c.dispatchAlarm(ctx, cmd, zone, action, code)
 }
 
 // alarmCommandTrigger is the HA panic command routed onto the engine's
@@ -1387,7 +1337,8 @@ const alarmCommandResetMotion = "RESET_MOTION"
 // SILENCE and TRIGGER have no master form and are dropped for it. The
 // parsed code is threaded into the per-zone verbs and validated by the
 // sink; the master verbs stay code-free.
-func (c *CommandSubscriber) dispatchAlarm(ctx context.Context, topic, zone, action, code string) {
+func (c *CommandSubscriber) dispatchAlarm(ctx context.Context, cmd hapublisher.Command, zone, action, code string) {
+	topic := cmd.Topic
 	master := zone == alarmMasterZone
 	switch action {
 	case alarmpanel.HAAlarmCommandDisarm:
@@ -1399,7 +1350,7 @@ func (c *CommandSubscriber) dispatchAlarm(ctx context.Context, topic, zone, acti
 		}
 		if err != nil {
 			c.logger.Warn("mqtt.command.alarm.disarm",
-				slog.String("topic", topic), slog.String("err", err.Error()))
+				append(c.alarmAttrs(cmd), slog.String("err", err.Error()))...)
 		}
 	case alarmpanel.HAAlarmCommandSilence:
 		if master {
@@ -1408,7 +1359,7 @@ func (c *CommandSubscriber) dispatchAlarm(ctx context.Context, topic, zone, acti
 		}
 		if err := c.alarmSink.Silence(ctx, zone, code); err != nil {
 			c.logger.Warn("mqtt.command.alarm.silence",
-				slog.String("topic", topic), slog.String("err", err.Error()))
+				append(c.alarmAttrs(cmd), slog.String("err", err.Error()))...)
 		}
 	case alarmCommandResetMotion:
 		var err error
@@ -1419,7 +1370,7 @@ func (c *CommandSubscriber) dispatchAlarm(ctx context.Context, topic, zone, acti
 		}
 		if err != nil {
 			c.logger.Warn("mqtt.command.alarm.reset_motion",
-				slog.String("topic", topic), slog.String("err", err.Error()))
+				append(c.alarmAttrs(cmd), slog.String("err", err.Error()))...)
 		}
 	case alarmCommandTrigger:
 		if master {
@@ -1428,13 +1379,12 @@ func (c *CommandSubscriber) dispatchAlarm(ctx context.Context, topic, zone, acti
 		}
 		if err := c.alarmSink.Panic(ctx, zone); err != nil {
 			c.logger.Warn("mqtt.command.alarm.trigger",
-				slog.String("topic", topic), slog.String("err", err.Error()))
+				append(c.alarmAttrs(cmd), slog.String("err", err.Error()))...)
 		}
 	default:
 		mode, ok := alarmpanel.ArmModeForCommand(action)
 		if !ok {
-			c.logger.Warn("mqtt.command.alarm.unknown_action",
-				slog.String("topic", topic), slog.String("action", action))
+			c.logger.Warn("mqtt.command.alarm.unknown_action", c.alarmAttrs(cmd)...)
 			return
 		}
 		var err error
@@ -1445,7 +1395,7 @@ func (c *CommandSubscriber) dispatchAlarm(ctx context.Context, topic, zone, acti
 		}
 		if err != nil {
 			c.logger.Warn("mqtt.command.alarm.arm",
-				slog.String("topic", topic), slog.String("mode", string(mode)), slog.String("err", err.Error()))
+				append(c.alarmAttrs(cmd), slog.String("mode", string(mode)), slog.String("err", err.Error()))...)
 		}
 	}
 }
@@ -1470,17 +1420,13 @@ func parseAlarmAction(body []byte) (action, code string) {
 }
 
 // handleAddonUpdateCommand triggers the add-on self-update install
-// sequence from `<base>/system/addon_update/set`. HA's `update`
+// sequence from `<base>/set/system/addon_update`. HA's `update`
 // entity publishes its configured `payload_install` ("INSTALL", see
 // [DefaultDiscoveryBuilder.BuildAddonUpdateDiscovery]) here; any
 // non-empty payload is accepted so a hand-built tool need not match
 // the exact token.
 func (c *CommandSubscriber) handleAddonUpdateCommand(ctx context.Context, cmd hapublisher.Command) {
 	topic := cmd.Topic
-	if strings.TrimSpace(string(cmd.Payload)) == "" {
-		c.logger.Warn("mqtt.command.addon_update.empty_payload", slog.String("topic", topic))
-		return
-	}
 	if c.addonSink == nil {
 		c.logger.Debug("mqtt.command.addon_update.no_sink",
 			slog.String("topic", topic),
@@ -1493,27 +1439,21 @@ func (c *CommandSubscriber) handleAddonUpdateCommand(ctx context.Context, cmd ha
 	c.incReceivedCommands("")
 	if err := c.addonSink.TriggerInstall(ctx); err != nil {
 		c.logger.Warn("mqtt.command.addon_update.install",
-			slog.String("topic", topic),
-			slog.String("err", err.Error()))
+			append(c.setAttrs(cmd), slog.String("err", err.Error()))...)
 	}
 }
 
-// handleCDPInvoke dispatches a Custom-DP operation from
-// `<base>/<central>/devices/<deviceAddr>/cdps/<name>/<operation>/invoke`.
-// The `devices`, `cdps` and `invoke` literals are the route's, so the four
-// wildcards are the central, the device address, the custom-DP name and the
-// operation.
-func (c *CommandSubscriber) handleCDPInvoke(ctx context.Context, cmd hapublisher.Command) {
+// handleCDPInvoke dispatches a Custom-DP operation from the action item
+// `<base>/set/<central>/devices/<deviceAddr>/cdps/<name>/<operation>`.
+// [CommandSubscriber.handleDataPoint] owns the route — the item has the
+// catch-all's length — and hands over the four segments it carries: the
+// central, the device address, the custom-DP name and the operation.
+func (c *CommandSubscriber) handleCDPInvoke(ctx context.Context, cmd hapublisher.Command, centralSeg, deviceAddr, name, operation string) {
 	topic := cmd.Topic
-	w, ok := c.routeWildcards(cmd, 4)
+	centralName, ok := c.resolveCentral(topic, centralSeg)
 	if !ok {
 		return
 	}
-	centralName, ok := c.resolveCentral(topic, w[0])
-	if !ok {
-		return
-	}
-	deviceAddr, name, operation := w[1], w[2], w[3]
 
 	if c.cdpSink == nil {
 		c.logger.Warn("mqtt.command.cdp.no_sink",
@@ -1523,20 +1463,16 @@ func (c *CommandSubscriber) handleCDPInvoke(ctx context.Context, cmd hapublisher
 	}
 
 	var body CDPInvokePayload
-	if len(cmd.Payload) > 0 {
-		if err := json.Unmarshal(cmd.Payload, &body); err != nil {
-			c.logger.Warn("mqtt.command.cdp.bad_payload",
-				slog.String("topic", topic),
-				slog.String("err", err.Error()))
-			return
-		}
+	if err := json.Unmarshal(cmd.Payload, &body); err != nil {
+		c.logger.Warn("mqtt.command.cdp.bad_payload",
+			append(c.setAttrs(cmd), slog.String("err", err.Error()))...)
+		return
 	}
 
 	priority := parseMQTTPriority(body.Priority)
 	if err := c.cdpSink.InvokeCustomDP(ctx, centralName, deviceAddr, name, operation, body.Params, priority); err != nil {
 		c.logger.Warn("mqtt.command.cdp.invoke",
-			slog.String("topic", topic),
-			slog.String("err", err.Error()))
+			append(c.setAttrs(cmd), slog.String("err", err.Error()))...)
 	}
 }
 

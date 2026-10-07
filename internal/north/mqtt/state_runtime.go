@@ -57,25 +57,19 @@ func runtimeQoS(q QoS) hapublisher.QoS {
 // newStatePublisher builds the shared state publisher the daemon-level and
 // hub planes publish through.
 //
-// What it adds over a bare client call is a byte dedup gate, an index of the
-// retained topics this process holds a value for, and one renderer. The gate
-// is the reason the per-datapoint plane is deliberately NOT on it: a
-// [pload.PerDPState] carries `modified_at` and `refreshed_at` off the event,
-// so every payload on that plane is unique and a byte gate there is inert by
-// construction. Of this daemon's retained state shapes it is the only one
-// left with a per-emission field — the legacy mirror's publish-time wall
-// clock was the other, and that mirror is gone — and it is the whole
-// per-datapoint plane, which is where the traffic is. The planes routed here
-// carry no such field, so the gate actually fires; the runtime measurement
-// behind ADR 0070 counted the shapes.
+// What it adds over a bare client call is the mqtt-smarthome 2.0 status
+// object (ADR 0083) with a dedup gate on its `val` and `hm` extension — never
+// on `ts`, so a value re-reported unchanged is not republished — the `lc`
+// memory, an index of the retained topics this process holds a value for,
+// and one renderer: [hapublisher.StatePublisher.PublishStatus]. The
+// per-datapoint plane is deliberately NOT on it: its `ts` and `lc` come off
+// the CCU event, and every event is published, so it renders the same
+// [hapublisher.StatusObject] itself (see [Bridge.PublishSlotState]).
 //
-// [hapublisher.StateConfig.Encoding] is deliberately left at its zero value.
-// It selects what [hapublisher.StatePublisher.PublishValue] renders, and no
-// path in this daemon calls that: every publisher here marshals its own body
-// and hands the bytes to [hapublisher.StatePublisher.Publish], because the
-// shapes on this plane are a scalar, a JSON aggregate and a bare Home
-// Assistant token rather than one envelope. Setting an encoding would
-// suggest a rendering decision that nothing reads.
+// [hapublisher.StateConfig.ExtensionKey] is `hm`, this daemon's one
+// project-extension key. [hapublisher.StateConfig.Encoding] is left at its
+// zero value: it selects what [hapublisher.StatePublisher.PublishValue]
+// renders, and no path in this daemon calls that.
 //
 // [hapublisher.StateConfig.CommandFilters] carries this daemon's own command
 // filter set, so a state publish that would land inside one of its own
@@ -103,7 +97,8 @@ func newStatePublisher(b *Bridge, logger *slog.Logger) *hapublisher.StatePublish
 			// The pulse planes do not publish through here yet, but the
 			// default is stated for the same reason the state level is: a
 			// pulse is QoS 0 by this daemon's policy, not by omission.
-			PulseQoS: hapublisher.QoSAtMostOnce,
+			PulseQoS:     hapublisher.QoSAtMostOnce,
+			ExtensionKey: statusExtKey,
 			// See the paragraph above: the runtime half of the
 			// state-vs-command disjointness invariant.
 			CommandFilters: commandFilters(b.cfg.Base),
@@ -165,8 +160,9 @@ func (b *Bridge) ResetRuntimeGates() {
 	}
 }
 
-// publishRuntimeState writes one retained daemon- or hub-plane payload
-// through the shared state publisher, and keeps this daemon's own
+// publishRuntimeStatus writes one retained daemon- or hub-plane status item
+// through the shared state publisher — val as the status object's `val`, hm
+// under the `hm` extension (nil omits it) — and keeps this daemon's own
 // bookkeeping in step with what the broker actually accepted.
 //
 // The bookkeeping is split on the gate's answer on purpose. The retained
@@ -176,8 +172,8 @@ func (b *Bridge) ResetRuntimeGates() {
 // messages, and a publish the gate swallowed is not one. Counting it would
 // make the metric describe intent rather than traffic, which is the opposite
 // of what an operator reads it for.
-func (b *Bridge) publishRuntimeState(ctx context.Context, centralName, topic string, body []byte) error {
-	sent, err := b.state.Publish(ctx, topic, body)
+func (b *Bridge) publishRuntimeStatus(ctx context.Context, centralName, topic string, val, hm any) error {
+	sent, err := b.state.PublishStatus(ctx, topic, hapublisher.Observation{Value: val, Ext: statusExt(hm)})
 	if err != nil {
 		b.incPublishErrors(centralName)
 		return err
@@ -187,6 +183,13 @@ func (b *Bridge) publishRuntimeState(ctx context.Context, centralName, topic str
 		b.incMessagesSent(centralName)
 	}
 	return nil
+}
+
+// publishRuntimeState is [Bridge.publishRuntimeStatus] for a publisher that
+// renders its value to bytes: a JSON document is the status object's `val`
+// whole, a bare token is a JSON string. See [statusValue].
+func (b *Bridge) publishRuntimeState(ctx context.Context, centralName, topic string, body []byte) error {
+	return b.publishRuntimeStatus(ctx, centralName, topic, statusValue(body), nil)
 }
 
 // evictRuntimeState clears one retained daemon- or hub-plane topic and drops

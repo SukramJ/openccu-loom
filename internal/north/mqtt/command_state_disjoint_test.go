@@ -130,7 +130,7 @@ func TestProgramStatePublishMustNotEchoAsTriggerCommand(t *testing.T) {
 	// otherwise a topology change could turn this test into a no-op.
 	stateSeen := false
 	for _, p := range client.Published() {
-		if p.Topic == "openccu-loom/ccu-01/hub/programs/12459/state" {
+		if p.Topic == "openccu-loom/status/ccu-01/hub/programs/12459/active" {
 			stateSeen = true
 		}
 	}

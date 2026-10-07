@@ -195,10 +195,10 @@ func wireSharedInfrastructure(
 	// One daemon-wide MQTT counter series: the single shared bridge carries
 	// every central's traffic, so the counters are not per-central.
 	si.mqttCollector = metrics.NewMqttCollector(si.metricsReg)
-	// The bridge/health payload names the live fleet, not the boot config: a
+	// The `<base>/info` document names the live fleet, not the boot config: a
 	// CCU adopted through the SPA joins the registry without ever reaching
 	// cfg.Centrals.
-	wireMQTTSupervisor(ctx, cfg, logger, reg, si, channelFlags)
+	wireMQTTSupervisor(ctx, cfg, logger, reg, si, channelFlags, deps.MQTTMaintenance())
 	// Late-bind the supervisor + the live config snapshot into the
 	// reload deps bag so the config-watcher's hot-reload handler can
 	// issue an MQTT Swap when north.mqtt.* changes and the REST
@@ -284,14 +284,18 @@ func wireMQTTSupervisor(
 	reg *central.Registry,
 	si *sharedInfra,
 	channelFlags *channelflags.Overlay,
+	maintenance mqttMaintenanceHooks,
 ) {
-	// The bridge/health payload names the live fleet, not the boot config: a
+	// The `<base>/info` document names the live fleet, not the boot config: a
 	// CCU adopted through the SPA joins the registry without ever reaching
 	// cfg.Centrals.
 	si.mqttSup = newMQTTSupervisor(logger, si.healthTracker, func() []string {
 		return liveCentralNames(cfg, reg)
 	})
 	si.mqttSup.SetCollector(si.mqttCollector)
+	// Captured at bridge-build time like the gate below, so it is installed
+	// before Start builds the first bridge.
+	si.mqttSup.SetMaintenance(maintenance)
 	// Let every (re)built MQTT bridge skip operator-hidden channels, so a
 	// hidden channel disappears from the MQTT plane like it does from the
 	// REST operation list and Matter. The overlay is keyed on

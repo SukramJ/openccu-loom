@@ -5,9 +5,9 @@ package mqtt
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/i18n"
@@ -54,9 +54,14 @@ const (
 
 // securityMsg is one queued publish.
 type securityMsg struct {
-	kind    securityMsgKind
-	topic   string
-	payload []byte
+	kind  securityMsgKind
+	topic string
+	// val is the status object's `val` — the primary value, or the whole
+	// document of one without a primary value — and hm its `hm` facets.
+	val any
+	hm  map[string]any
+	// at is the occurrence's time for an event; zero means now.
+	at time.Time
 }
 
 // SecurityMQTTPublisher mirrors the Security & Safety domain onto the
@@ -304,13 +309,14 @@ func (p *SecurityMQTTPublisher) publish(ctx context.Context, m securityMsg) {
 	var err error
 	switch m.kind {
 	case securityMsgEvent:
-		err = b.PublishSecurityEvent(ctx, m.topic, m.payload)
+		err = b.PublishSecurityEvent(ctx, m.topic, m.val, m.hm, m.at)
 	case securityMsgRetract:
 		err = b.RetractSecurityState(ctx, m.topic)
 	case securityMsgAvailability:
-		err = b.PublishSecurityAvailability(ctx, m.topic, string(m.payload) == "online")
+		online, _ := m.val.(bool)
+		err = b.PublishSecurityAvailability(ctx, m.topic, online)
 	case securityMsgState:
-		err = b.PublishSecurityState(ctx, m.topic, m.payload)
+		err = b.PublishSecurityState(ctx, m.topic, m.val, m.hm)
 	}
 	if err != nil {
 		p.logger.Error("security mqtt publish failed", "topic", m.topic, "error", err)
@@ -330,10 +336,15 @@ func (p *SecurityMQTTPublisher) publish(ctx context.Context, m securityMsg) {
 // increment carries an empty central label rather than attributing a
 // daemon-wide plane to one CCU.
 
-// PublishSecurityState publishes one retained Security & Safety
-// aggregate and records the topic in the bridge's retained-topic index.
-func (b *Bridge) PublishSecurityState(ctx context.Context, topic string, body []byte) error {
-	return b.publishRuntimeState(ctx, "", topic, body)
+// PublishSecurityState publishes one retained Security & Safety status item
+// — val as its `val`, the facets under `hm` (nil omits them) — and records
+// the topic in the bridge's retained-topic index.
+func (b *Bridge) PublishSecurityState(ctx context.Context, topic string, val any, hm map[string]any) error {
+	var ext any
+	if hm != nil {
+		ext = hm
+	}
+	return b.publishRuntimeStatus(ctx, "", topic, val, ext)
 }
 
 // PublishSecurityEvent publishes one non-retained Security & Safety
@@ -343,7 +354,11 @@ func (b *Bridge) PublishSecurityState(ctx context.Context, topic string, body []
 // moment, not a state. At-most-once is the right trade — a re-delivered
 // alarm event would re-fire every automation subscribed to it — and
 // there is no retained message on the topic for a sweep to find.
-func (b *Bridge) PublishSecurityEvent(ctx context.Context, topic string, body []byte) error {
+func (b *Bridge) PublishSecurityEvent(ctx context.Context, topic string, val any, hm map[string]any, at time.Time) error {
+	body, err := renderPulse(val, hm, at)
+	if err != nil {
+		return err
+	}
 	if err := b.client.Publish(ctx, topic, body, QoS0, false); err != nil {
 		b.incPublishErrors("")
 		return err
@@ -352,8 +367,8 @@ func (b *Bridge) PublishSecurityEvent(ctx context.Context, topic string, body []
 	return nil
 }
 
-// PublishSecurityAvailability publishes the plane's retained
-// availability marker.
+// PublishSecurityAvailability publishes the plane's retained `online`
+// status item.
 //
 // QoS 1, not the state QoS. Availability is the one topic whose loss
 // cannot be repaired by the next publish: the plane writes it on a flip,
@@ -369,7 +384,7 @@ func (b *Bridge) PublishSecurityEvent(ctx context.Context, topic string, body []
 // reason; the three availability topics of one daemon must not have
 // three different delivery guarantees.
 func (b *Bridge) PublishSecurityAvailability(ctx context.Context, topic string, online bool) error {
-	sent, err := b.avail.Publish(ctx, topic, online)
+	sent, err := b.publishOnline(ctx, topic, online)
 	if err != nil {
 		b.incPublishErrors("")
 		return err
@@ -507,15 +522,27 @@ func (p *SecurityMQTTPublisher) onFaultChanged(hmevent.SecurityFaultChangedEvent
 // attacker could reach long afterwards.
 func (p *SecurityMQTTPublisher) onNotification(e hmevent.SecurityNotificationEvent) {
 	p.markDomainReported()
-	body, err := json.Marshal(securityNotificationPayload(e))
-	if err != nil {
-		return
-	}
+	report := securityNotificationPayload(e)
 	topic := "event"
 	if e.Fault {
 		topic = "fault"
 	}
-	p.enqueue(securityMsg{kind: securityMsgEvent, topic: securityStateTopic(p.base(), topic), payload: body})
+	// The event is a status item that is not retained: its verb is `val`,
+	// the rendered report travels under `hm` (ADR 0083).
+	facets := make(map[string]any, len(report))
+	for k, v := range report {
+		if k != "event_type" {
+			facets[k] = v
+		}
+	}
+	var at time.Time
+	if e.AtMS != 0 {
+		at = time.UnixMilli(e.AtMS)
+	}
+	p.enqueue(securityMsg{
+		kind: securityMsgEvent, topic: securityStateTopic(p.base(), topic),
+		val: report["event_type"], hm: facets, at: at,
+	})
 
 	// Retainability is decided once, by the domain, according to the
 	// duress-visibility policy. The plane honours the flag rather than
@@ -528,7 +555,8 @@ func (p *SecurityMQTTPublisher) onNotification(e hmevent.SecurityNotificationEve
 	if e.Fault {
 		key = "last_fault"
 	}
-	p.enqueue(securityMsg{topic: securityStateTopic(p.base(), key), payload: body})
+	// The retained last report has no primary value, so it is `val` whole.
+	p.enqueue(securityMsg{topic: securityStateTopic(p.base(), key), val: report})
 }
 
 // base is the topic prefix of every security topic. It reads the topic

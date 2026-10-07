@@ -235,6 +235,10 @@ type aggregateGoldenCase struct {
 	build func(t *testing.T, b *DefaultDiscoveryBuilder) (component, nodeID, objectID string, buf []byte, ok bool)
 	// subDevices selects the builder with the sub-device split enabled.
 	subDevices bool
+	// source rebuilds the case's channel and returns the model source the
+	// aggregate is built from — the production origin of its state
+	// document. Nil for the channel-event cases, which have none.
+	source func(t *testing.T) payload.Source
 }
 
 // climateFixture is the thermostat. Its temperature bounds and unit are
@@ -262,14 +266,21 @@ func climateFixture() aggregateFixture {
 // the model-side builder, and pinning six light variants here would pin
 // that plane through this one.
 func aggregateCustomDPCases() []aggregateGoldenCase {
+	// sources records each agg call in literal order, which is the order
+	// of the cases, so every case can be handed its own source below.
+	var sources []func(*testing.T) payload.Source
 	agg := func(f aggregateFixture, channelNo int) func(*testing.T, *DefaultDiscoveryBuilder) (string, string, string, []byte, bool) {
+		sources = append(sources, func(t *testing.T) payload.Source {
+			t.Helper()
+			return aggregateEvent(t, newAggregateDevice(t, f), channelNo, aggregateGoldenCentral).Source
+		})
 		return func(t *testing.T, b *DefaultDiscoveryBuilder) (string, string, string, []byte, bool) {
 			t.Helper()
 			dev := newAggregateDevice(t, f)
 			return b.aggregateChannel(aggregateEvent(t, dev, channelNo, aggregateGoldenCentral))
 		}
 	}
-	return []aggregateGoldenCase{
+	cases := []aggregateGoldenCase{
 		// Identity hazard: an absent entity-id seed. A device with one
 		// primary custom data point publishes `name: null`, which tells
 		// Home Assistant to seed the entity id from the device name
@@ -335,6 +346,13 @@ func aggregateCustomDPCases() []aggregateGoldenCase {
 		// every multi-group actuator on the fleet.
 		{name: "cover/sub-device-split", subDevices: true, build: agg(multiGroupCoverFixture(), 10)},
 	}
+	if len(sources) != len(cases) {
+		panic("aggregateCustomDPCases: every case must be built through agg")
+	}
+	for i := range cases {
+		cases[i].source = sources[i]
+	}
+	return cases
 }
 
 // multiGroupCoverFixture is the four-group blind actuator. Its channel

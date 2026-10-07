@@ -16,7 +16,7 @@ import (
 
 // TestE2EHubAggregatesPublished asserts that the hub-aggregate MQTT topics
 // are published after daemon boot. The tested topics follow the pattern
-// openccu-loom/<central>/hub/<aggregate>.
+// openccu-loom/status/<central>/hub/<aggregate>.
 //
 // The test subscribes to the hub wildcard and waits for at least two of the
 // four expected topics. The chosen topics are sourced from godevccu defaults:
@@ -33,7 +33,8 @@ func TestE2EHubAggregatesPublished(t *testing.T) {
 
 	// Track which hub suffixes arrive on the retained topic plane.
 	const centralName = "ccu-e2e"
-	base := "openccu-loom/" + centralName
+	// Status items of the central (ADR 0083): `<name>/status/<central>/…`.
+	base := "openccu-loom/status/" + centralName
 
 	// godevccu supports the ID_PROGRAMS and ID_SYSTEM_VARIABLES ReGa patterns,
 	// so programs and sysvars are reliably published. The alarm_messages ReGa
@@ -63,7 +64,7 @@ func TestE2EHubAggregatesPublished(t *testing.T) {
 		suffix := strings.TrimPrefix(topic, base+"/")
 		mu.Lock()
 		// Exact match for leaf aggregates or prefix match for tree aggregates
-		// (e.g. "hub/programs/1000/trigger" satisfies "hub/programs").
+		// (e.g. "hub/programs/1000/active" satisfies "hub/programs").
 		for k := range aggregates {
 			if suffix == k || strings.HasPrefix(suffix, k+"/") {
 				aggregates[k] = true

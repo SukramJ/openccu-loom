@@ -5,8 +5,6 @@ package mqtt
 
 import (
 	"context"
-	"encoding/json"
-	"strconv"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/security"
@@ -46,9 +44,9 @@ func (p *SecurityMQTTPublisher) reconcile() {
 		return
 	}
 	p.enqueue(securityMsg{
-		kind:    securityMsgAvailability,
-		topic:   securityAvailabilityTopic(base),
-		payload: []byte("online"),
+		kind:  securityMsgAvailability,
+		topic: securityAvailabilityTopic(base),
+		val:   true,
 	})
 
 	// Retractions go in before the states, because the queue discards
@@ -67,42 +65,36 @@ func (p *SecurityMQTTPublisher) reconcile() {
 	p.declareEntities(snap)
 
 	p.enqueueJSON(securityStateTopic(base, "state"), string(snap.Severity), systemAttributes(snap))
-	p.enqueueJSON(securityStateTopic(base, "alarm"), onOff(hazardActive(snap)), hazardAttributes(snap))
-	p.enqueueJSON(securityStateTopic(base, "problem"), onOff(len(snap.Faults) > 0), faultAttributes(snap))
+	p.enqueueJSON(securityStateTopic(base, "alarm"), hazardActive(snap), hazardAttributes(snap))
+	p.enqueueJSON(securityStateTopic(base, "problem"), len(snap.Faults) > 0, faultAttributes(snap))
 	p.enqueue(securityMsg{
-		topic:   securityStateTopic(base, "health"),
-		payload: []byte(onOff(!snap.EngineHealthy)),
+		topic: securityStateTopic(base, "health"),
+		val:   !snap.EngineHealthy,
 	})
 
 	for class := range snap.Classes {
 		st := snap.Classes[class]
-		p.enqueueJSON(securityClassTopic(base, class), onOff(st.Active), classAttributes(st))
+		p.enqueueJSON(securityClassTopic(base, class), st.Active, classAttributes(st))
 	}
 	for slug := range snap.Zones {
 		z := snap.Zones[slug]
-		p.enqueueJSON(securityZoneTopic(base, slug), strconv.Itoa(len(z.Sources)), zoneAttributes(z))
+		p.enqueueJSON(securityZoneTopic(base, slug), len(z.Sources), zoneAttributes(z))
 	}
 }
 
-// enqueueJSON publishes a state whose payload doubles as the attribute
-// source: the state itself under `state`, the facets alongside. The
-// discovery config points `value_template` at `state` and
-// `json_attributes_topic` at the same topic, which is the pattern hub
-// discovery already uses.
+// enqueueJSON publishes a status item whose facets double as the attribute
+// source: the primary value — the field the plane used to publish as
+// `state` — is `val`, the facets travel under `hm` (ADR 0083). The discovery
+// config points `value_template` at `val` and `json_attributes_topic` at the
+// same topic, reading `hm`.
 //
 // Attributes are always an object, never a bare list — a consumer
 // discards a non-object attribute payload outright.
-func (p *SecurityMQTTPublisher) enqueueJSON(topic, state string, attrs map[string]any) {
+func (p *SecurityMQTTPublisher) enqueueJSON(topic string, val any, attrs map[string]any) {
 	if attrs == nil {
 		attrs = map[string]any{}
 	}
-	attrs["state"] = state
-	buf, err := json.Marshal(attrs)
-	if err != nil {
-		p.logger.Error("security mqtt payload not serializable", "topic", topic, "error", err)
-		return
-	}
-	p.enqueue(securityMsg{topic: topic, payload: buf})
+	p.enqueue(securityMsg{topic: topic, val: val, hm: attrs})
 }
 
 // declareEntities declares the entities the installation actually has,
@@ -415,11 +407,4 @@ func securityNotificationPayload(e hmevent.SecurityNotificationEvent) map[string
 		attrs["at"] = time.UnixMilli(e.AtMS).UTC().Format(time.RFC3339)
 	}
 	return attrs
-}
-
-func onOff(b bool) string {
-	if b {
-		return "ON"
-	}
-	return "OFF"
 }

@@ -570,7 +570,7 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 	// Queued here, ahead of every discovery build below, because Home
 	// Assistant holds an entity unavailable until EVERY topic in its
 	// `availability` list has reported. Every CCU-scoped hub entity built
-	// below now lists `<base>/<central>/hub/status`, so a config that
+	// below now lists `<base>/status/<central>/online`, so a config that
 	// reached HA before the gate's first retained byte would grey the whole
 	// hub plane out until the next reachability change — which on a healthy
 	// CCU may never come. The worker is FIFO, so queueing the seed first is
@@ -1369,7 +1369,7 @@ func (p *HubMQTTPublisher) startRegaLivenessPoll(
 // decommissioned host every interval for the life of the process, and each
 // tick re-folded the gate whose tracker entry the removal had just dropped,
 // so [regaLivenessTracker.observe] took its seed branch and wrote a retained
-// `online` to `<base>/<central>/hub/status` for a CCU that no longer exists.
+// `true` to `<base>/status/<central>/online` for a CCU that no longer exists.
 // The orphan sweep is scoped to registered centrals, so nothing would ever
 // reach that topic again.
 func (p *HubMQTTPublisher) stopRegaLivenessPoll(centralName string) {
@@ -1419,7 +1419,7 @@ func (p *HubMQTTPublisher) pollRegaLivenessOnce(
 	// and unknown folds to reachable, but this tick is the last one, so there
 	// is no later tick to write it. Returning before the publish left a CCU
 	// whose previous verdict was `down` with a retained `offline` on
-	// `<base>/<central>/hub/status` for the rest of the process — on hardware
+	// `<base>/status/<central>/online` for the rest of the process — on hardware
 	// that is healthy and answering. The field sequence is exactly the one
 	// [TestRegaLivenessLatchesOffAnEndpointTheCCURefuses] models: ReGa hangs
 	// (`down`), the CCU reboots into a firmware or reverse proxy that answers

@@ -1281,10 +1281,10 @@ func TestDiscoveryTopicsUseEventCentralNotBuilderDefault(t *testing.T) {
 		t.Fatal("Build returned ok=false")
 	}
 	s := string(payload)
-	if !strings.Contains(s, "openccu-loom/SecondCCU/") {
+	if !strings.Contains(s, "openccu-loom/status/SecondCCU/") {
 		t.Errorf("payload has no SecondCCU-scoped topic; got %s", s)
 	}
-	if strings.Contains(s, "openccu-loom/FirstCCU/") {
+	if strings.Contains(s, "/FirstCCU/") {
 		t.Errorf("payload leaked the builder-default central into a topic: %s", s)
 	}
 }

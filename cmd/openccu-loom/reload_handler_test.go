@@ -612,7 +612,7 @@ func TestHotReloadHandlerMQTTSwapRebuildsFromTheAssembledConfig(t *testing.T) {
 	if bridge == nil {
 		t.Fatal("no MQTT stack after the reload")
 	}
-	status := bridge.Topics().BridgeStatus()
+	status := bridge.Topics().Connected()
 	if !strings.HasPrefix(status, "from-database/") {
 		t.Fatalf("the rebuilt bridge publishes under %q — the reload discarded the database-tier section", status)
 	}

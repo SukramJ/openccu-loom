@@ -6,6 +6,82 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING (MQTT topics and payloads; Home Assistant entities and their
+  identities are unaffected): the MQTT plane follows the
+  [mqtt-smarthome 2.0](https://github.com/mqtt-smarthome/mqtt-smarthome/blob/master/SPEC.md)
+  convention** (ADR 0083), the same layout the five `go-*2mqtt` bridges
+  adopt. Every topic is `<base>/<function>/<item…>`: state under
+  `<base>/status/…`, commands under `<base>/set/…` on the same item path,
+  the descriptor companion under `<base>/meta/…`. The central stays the
+  first item level, so multi-CCU setups keep one subtree per CCU
+  (`<base>/status/<central>/#`). Every state payload is a status object
+  `{"val": …, "ts": <ms>, "lc": <ms>, "hm": {…}}` — the value in `val`,
+  observation and last-change time in milliseconds (`refreshed_at` →
+  `ts`, `modified_at` → `lc`), `available` and `additional_information`
+  under `hm`; `ON`/`OFF` became `true`/`false`, alarm state tokens and
+  documents without a primary value travel in `val`, events carry their
+  type in `val` and are not retained. Renamed leaves: the alarm panel is
+  `…/alarm/<zone>/panel` (state and `ARM_*` commands), program activation
+  `…/programs/<id>/active`, the schedule items `schedule/active_entries`,
+  `schedule/attributes` and `schedule/switch/<key>`, the security severity
+  `…/security/severity`, device and CCU reachability `…/online` (boolean
+  status items). `<base>/bridge/status` is replaced by `<base>/connected`
+  (`0` gone, `1` no CCU reachable, `2` at least one) and
+  `<base>/bridge/health` by `<base>/info`. The legacy per-type pulse
+  `…/event/<type>` and the bucket-less command shape are gone; the
+  custom-DP operation topic lost its `invoke` suffix. A `set` accepts the
+  plain value or `{"val": …}`; empty and retained `set` messages are
+  ignored, and a rejected or failed one is logged at warn with its topic
+  and payload (an alarm `code` redacted); Home Assistant `text` entities
+  send `{"val": …}`, so an empty or `{`-leading text still arrives. Home
+  Assistant entities are available while `connected` is 2, except the
+  per-interface connectivity sensors and the add-on update entity, which
+  stay available at 1 so they can show a CCU outage. Home Assistant
+  discovery keeps every `unique_id`, node id, device identifier and
+  discovery topic, so entities re-point to the new topics on their own;
+  dashboards and
+  automations reading `value_json.value` from raw topics, Node-RED flows,
+  Telegraf and `mosquitto_sub` scripts must move to the new topics. The
+  light aggregate `…/custom/light` is a status object like every other
+  item; its Home Assistant document is also published bare on the new
+  `<base>/ha/…/custom/light` (`ha` is this project's one function for a
+  Home Assistant-native document that takes no template), which the
+  JSON-schema light reads. The
+  [MQTT topic schema](docs/mqtt-topic-schema.md) has the full old/new
+  table.
+- **On start the daemon clears what the old layout left on the broker.**
+  It reads the old trees of its own configured centrals and of its
+  `bridge`, `alarm`, `security` and `system` trees, and clears exact old
+  shapes only — never a prefix, never a topic of another daemon or of the
+  new layout. Running it twice clears nothing.
+- **A central named `alarm`, `security`, `system`, `bridge` or like a topic
+  function (`connected`, `status`, `set`, `get`, `info`, `meta`,
+  `maintenance`, `ha`) is refused at start-up**, because its topics would share a
+  level with the daemon's own trees. Rename such a central before upgrading;
+  the refusal is a hard failure.
+- The WebSocket daemon-status payload's description names the MQTT
+  `connected` level instead of the retired `bridge/status` (REST API
+  13.7.2, description only; the `online`/`offline` values are unchanged).
+- A multi-level `north.mqtt.topic_base` (`home/loom`) keeps working
+  verbatim; it runs outside the convention, which a tool scanning `+/info`
+  cannot see, and the daemon says so once at start.
+
+### Added
+
+- **MQTT maintenance topics** (mqtt-smarthome §7), on by default:
+  `<base>/maintenance/set/loglevel` (`error`/`warn`/`info`/`debug`, sets
+  the root log level until the next start), `<base>/maintenance/set/restart`
+  (restarts the daemon when a supervisor will start it again — the same
+  check, 30-second latch, SIGTERM path and audit entry as the REST restart
+  — and is refused otherwise) and the retained `<base>/maintenance/stats`.
+  `north.mqtt.maintenance.enabled: false` switches them off,
+  `north.mqtt.maintenance.stats_interval_seconds` sets the stats period
+  (default 60, `0` off). Anyone allowed to publish on the broker can use
+  them; restrict `<base>/maintenance/#` with broker ACLs on a broker you do
+  not fully trust.
+
 ## [0.88.0] - 2026-10-04
 
 ### Release summary
