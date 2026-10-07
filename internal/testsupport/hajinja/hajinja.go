@@ -36,19 +36,20 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"sort"
 	"strconv"
 	"strings"
 )
 
-// Undefined is Jinja's undefined value.
-type Undefined struct{ name string }
+// undefinedValue is Jinja's undefined value.
+type undefinedValue struct{ name string }
 
-// ErrTemplate wraps every render failure.
-var ErrTemplate = errors.New("hajinja")
+// errTemplate wraps every render failure.
+var errTemplate = errors.New("hajinja")
 
 // RenderValue renders template the way Home Assistant renders an MQTT value
 // template against payload.
+//
+// loom:reachable:reason="test-support package: its only callers are the template round-trip tests in internal/north/mqtt and tests/contract (renderJinja), which pin discovery templates against Jinja2 semantics; no production code renders Jinja"
 func RenderValue(template, payload string) (string, error) {
 	vars := map[string]any{"value": payload}
 	if v, err := decodeJSON(payload); err == nil {
@@ -59,6 +60,8 @@ func RenderValue(template, payload string) (string, error) {
 
 // Render renders template with the given variables, which must be values of
 // the JSON model (nil, bool, int64, float64, string, map[string]any, []any).
+//
+// loom:reachable:reason="test-support package: its only callers are internal/north/mqtt tests (the text command_template round trip) and RenderValue; no production code renders Jinja"
 func Render(template string, vars map[string]any) (string, error) {
 	nodes, err := parseTemplate(template)
 	if err != nil {
@@ -163,11 +166,11 @@ func lex(t string) ([]token, error) {
 		}
 		end := strings.Index(t[i+2:], closer)
 		if end < 0 {
-			return nil, fmt.Errorf("%w: unterminated %q", ErrTemplate, t[i:])
+			return nil, fmt.Errorf("%w: unterminated %q", errTemplate, t[i:])
 		}
 		inner := strings.TrimSpace(t[i+2 : i+2+end])
 		if strings.HasPrefix(inner, "-") || strings.HasSuffix(inner, "-") {
-			return nil, fmt.Errorf("%w: whitespace control is not supported", ErrTemplate)
+			return nil, fmt.Errorf("%w: whitespace control is not supported", errTemplate)
 		}
 		out = append(out, token{kind, inner})
 		t = t[i+2+end+2:]
@@ -185,7 +188,7 @@ func parseTemplate(t string) ([]node, error) {
 		return nil, err
 	}
 	if stop != "" || len(rest) > 0 {
-		return nil, fmt.Errorf("%w: unexpected {%% %s %%}", ErrTemplate, stop)
+		return nil, fmt.Errorf("%w: unexpected {%% %s %%}", errTemplate, stop)
 	}
 	return nodes, nil
 }
@@ -217,7 +220,7 @@ func parseNodes(toks []token) (nodes []node, rest []token, stop string, err erro
 			case "set":
 				name, rhs, ok := strings.Cut(arg, "=")
 				if !ok {
-					return nil, nil, "", fmt.Errorf("%w: bad set %q", ErrTemplate, tk.val)
+					return nil, nil, "", fmt.Errorf("%w: bad set %q", errTemplate, tk.val)
 				}
 				e, err := parseExpr(rhs)
 				if err != nil {
@@ -227,7 +230,7 @@ func parseNodes(toks []token) (nodes []node, rest []token, stop string, err erro
 			case "elif", "else", "endif":
 				return nodes, toks, tk.val, nil
 			default:
-				return nil, nil, "", fmt.Errorf("%w: unsupported statement %q", ErrTemplate, tk.val)
+				return nil, nil, "", fmt.Errorf("%w: unsupported statement %q", errTemplate, tk.val)
 			}
 		}
 	}
@@ -257,14 +260,14 @@ func parseIf(cond string, toks []token) (ifNode, []token, error) {
 				return n, nil, err
 			}
 			if stop2 != "endif" {
-				return n, nil, fmt.Errorf("%w: else without endif", ErrTemplate)
+				return n, nil, fmt.Errorf("%w: else without endif", errTemplate)
 			}
 			n.els = els
 			return n, rest2, nil
 		case stop == "endif":
 			return n, toks, nil
 		default:
-			return n, nil, fmt.Errorf("%w: if without endif", ErrTemplate)
+			return n, nil, fmt.Errorf("%w: if without endif", errTemplate)
 		}
 	}
 }
@@ -319,7 +322,7 @@ func execNodes(nodes []node, scope map[string]any, out *strings.Builder) error {
 
 func truthy(v any) bool {
 	switch x := v.(type) {
-	case nil, Undefined:
+	case nil, undefinedValue:
 		return false
 	case bool:
 		return x
@@ -342,7 +345,7 @@ func str(v any) (string, error) {
 	switch x := v.(type) {
 	case nil:
 		return "None", nil
-	case Undefined:
+	case undefinedValue:
 		return "", nil
 	case bool:
 		if x {
@@ -356,7 +359,7 @@ func str(v any) (string, error) {
 	case string:
 		return x, nil
 	}
-	return "", fmt.Errorf("%w: printing a %T has no stable Python repr here; use tojson", ErrTemplate, v)
+	return "", fmt.Errorf("%w: printing a %T has no stable Python repr here; use tojson", errTemplate, v)
 }
 
 func pyFloat(f float64) string {
@@ -377,15 +380,15 @@ func toJSON(v any) (string, error) {
 	var b bytes.Buffer
 	enc := json.NewEncoder(&b)
 	if err := enc.Encode(v); err != nil {
-		return "", fmt.Errorf("%w: tojson: %w", ErrTemplate, err)
+		return "", fmt.Errorf("%w: tojson: %w", errTemplate, err)
 	}
 	return strings.TrimSpace(b.String()), nil
 }
 
 func noUndefined(v any) error {
 	switch x := v.(type) {
-	case Undefined:
-		return fmt.Errorf("%w: tojson of an undefined value %q", ErrTemplate, x.name)
+	case undefinedValue:
+		return fmt.Errorf("%w: tojson of an undefined value %q", errTemplate, x.name)
 	case map[string]any:
 		for _, e := range x {
 			if err := noUndefined(e); err != nil {
@@ -404,15 +407,15 @@ func noUndefined(v any) error {
 
 func getattr(obj any, name string) (any, error) {
 	switch x := obj.(type) {
-	case Undefined:
-		return nil, fmt.Errorf("%w: %q is undefined, so it has no attribute %q", ErrTemplate, x.name, name)
+	case undefinedValue:
+		return nil, fmt.Errorf("%w: %q is undefined, so it has no attribute %q", errTemplate, x.name, name)
 	case map[string]any:
 		if v, ok := x[name]; ok {
 			return v, nil
 		}
-		return Undefined{name: name}, nil
+		return undefinedValue{name: name}, nil
 	}
-	return Undefined{name: name}, nil
+	return undefinedValue{name: name}, nil
 }
 
 // --- expressions ---------------------------------------------------------
@@ -431,7 +434,7 @@ func (n name) eval(s map[string]any) (any, error) {
 	if v, ok := s[n.n]; ok {
 		return v, nil
 	}
-	return Undefined{name: n.n}, nil
+	return undefinedValue{name: n.n}, nil
 }
 
 type attr struct {
@@ -458,7 +461,7 @@ func (d dictLit) eval(s map[string]any) (any, error) {
 		}
 		ks, ok := k.(string)
 		if !ok {
-			return nil, fmt.Errorf("%w: non-string dict key", ErrTemplate)
+			return nil, fmt.Errorf("%w: non-string dict key", errTemplate)
 		}
 		v, err := d.vals[i].eval(s)
 		if err != nil {
@@ -496,11 +499,11 @@ func (c call) eval(s map[string]any) (any, error) {
 	switch f := c.fn.(type) {
 	case name:
 		if f.n != "dict" {
-			return nil, fmt.Errorf("%w: unsupported function %q", ErrTemplate, f.n)
+			return nil, fmt.Errorf("%w: unsupported function %q", errTemplate, f.n)
 		}
 		out := map[string]any{}
 		if len(args) > 1 {
-			return nil, fmt.Errorf("%w: dict() takes one positional argument", ErrTemplate)
+			return nil, fmt.Errorf("%w: dict() takes one positional argument", errTemplate)
 		}
 		if len(args) == 1 {
 			switch m := args[0].(type) {
@@ -508,10 +511,10 @@ func (c call) eval(s map[string]any) (any, error) {
 				for k, v := range m {
 					out[k] = v
 				}
-			case Undefined:
-				return nil, fmt.Errorf("%w: dict() of the undefined %q raises UndefinedError", ErrTemplate, m.name)
+			case undefinedValue:
+				return nil, fmt.Errorf("%w: dict() of the undefined %q raises UndefinedError", errTemplate, m.name)
 			default:
-				return nil, fmt.Errorf("%w: dict() of a %T is a TypeError", ErrTemplate, args[0])
+				return nil, fmt.Errorf("%w: dict() of a %T is a TypeError", errTemplate, args[0])
 			}
 		}
 		for k, v := range kws {
@@ -520,7 +523,7 @@ func (c call) eval(s map[string]any) (any, error) {
 		return out, nil
 	case attr:
 		if f.name != "get" {
-			return nil, fmt.Errorf("%w: unsupported method %q", ErrTemplate, f.name)
+			return nil, fmt.Errorf("%w: unsupported method %q", errTemplate, f.name)
 		}
 		o, err := f.obj.eval(s)
 		if err != nil {
@@ -528,10 +531,10 @@ func (c call) eval(s map[string]any) (any, error) {
 		}
 		m, ok := o.(map[string]any)
 		if !ok {
-			return nil, fmt.Errorf("%w: .get on a %T", ErrTemplate, o)
+			return nil, fmt.Errorf("%w: .get on a %T", errTemplate, o)
 		}
 		if len(args) == 0 {
-			return nil, fmt.Errorf("%w: .get without a key", ErrTemplate)
+			return nil, fmt.Errorf("%w: .get without a key", errTemplate)
 		}
 		key, ok := args[0].(string)
 		if v, found := m[key]; ok && found {
@@ -542,7 +545,7 @@ func (c call) eval(s map[string]any) (any, error) {
 		}
 		return nil, nil
 	}
-	return nil, fmt.Errorf("%w: unsupported call", ErrTemplate)
+	return nil, fmt.Errorf("%w: unsupported call", errTemplate)
 }
 
 type filter struct {
@@ -596,13 +599,13 @@ func (f filter) eval(s map[string]any) (any, error) {
 			def = args[0]
 		}
 		boolean := len(args) > 1 && truthy(args[1])
-		if _, und := v.(Undefined); und || (boolean && !truthy(v)) {
+		if _, und := v.(undefinedValue); und || (boolean && !truthy(v)) {
 			return def, nil
 		}
 		return v, nil
 	case "length":
 		switch x := v.(type) {
-		case Undefined:
+		case undefinedValue:
 			return int64(0), nil
 		case string:
 			return int64(len([]rune(x))), nil
@@ -611,9 +614,9 @@ func (f filter) eval(s map[string]any) (any, error) {
 		case []any:
 			return int64(len(x)), nil
 		}
-		return nil, fmt.Errorf("%w: length of a %T", ErrTemplate, v)
+		return nil, fmt.Errorf("%w: length of a %T", errTemplate, v)
 	}
-	return nil, fmt.Errorf("%w: unsupported filter %q", ErrTemplate, f.name)
+	return nil, fmt.Errorf("%w: unsupported filter %q", errTemplate, f.name)
 }
 
 func toInt(v, def any) any {
@@ -671,12 +674,12 @@ func (t test) eval(s map[string]any) (any, error) {
 	var r bool
 	switch t.name {
 	case "defined":
-		_, und := v.(Undefined)
+		_, und := v.(undefinedValue)
 		r = !und
 	case "none":
 		r = v == nil
 	default:
-		return nil, fmt.Errorf("%w: unsupported test %q", ErrTemplate, t.name)
+		return nil, fmt.Errorf("%w: unsupported test %q", errTemplate, t.name)
 	}
 	return r != t.neg, nil
 }
@@ -702,7 +705,7 @@ func (u unary) eval(s map[string]any) (any, error) {
 			return -x, nil
 		}
 	}
-	return nil, fmt.Errorf("%w: bad unary %s", ErrTemplate, u.op)
+	return nil, fmt.Errorf("%w: bad unary %s", errTemplate, u.op)
 }
 
 type binary struct {
@@ -740,7 +743,7 @@ func (b binary) eval(s map[string]any) (any, error) {
 	lf, lok := num(l)
 	rf, rok := num(r)
 	if !lok || !rok {
-		return nil, fmt.Errorf("%w: %s between %T and %T is a TypeError", ErrTemplate, b.op, l, r)
+		return nil, fmt.Errorf("%w: %s between %T and %T is a TypeError", errTemplate, b.op, l, r)
 	}
 	switch b.op {
 	case ">=":
@@ -760,11 +763,11 @@ func (b binary) eval(s map[string]any) (any, error) {
 		return lf * rf, nil
 	case "/":
 		if rf == 0 {
-			return nil, fmt.Errorf("%w: division by zero", ErrTemplate)
+			return nil, fmt.Errorf("%w: division by zero", errTemplate)
 		}
 		return lf / rf, nil
 	}
-	return nil, fmt.Errorf("%w: unsupported operator %s", ErrTemplate, b.op)
+	return nil, fmt.Errorf("%w: unsupported operator %s", errTemplate, b.op)
 }
 
 func num(v any) (float64, bool) {
@@ -802,7 +805,7 @@ func (c cond) eval(s map[string]any) (any, error) {
 		return c.yes.eval(s)
 	}
 	if c.no == nil {
-		return Undefined{}, nil
+		return undefinedValue{}, nil
 	}
 	return c.no.eval(s)
 }
@@ -825,7 +828,7 @@ func parseExpr(src string) (expr, error) {
 		return nil, err
 	}
 	if p.pos != len(p.toks) {
-		return nil, fmt.Errorf("%w: trailing %q in %q", ErrTemplate, p.toks[p.pos:], src)
+		return nil, fmt.Errorf("%w: trailing %q in %q", errTemplate, p.toks[p.pos:], src)
 	}
 	return e, nil
 }
@@ -864,7 +867,7 @@ func scanToken(s string, i int) (string, error) {
 			j++
 		}
 		if j >= len(s) {
-			return "", fmt.Errorf("%w: unterminated string", ErrTemplate)
+			return "", fmt.Errorf("%w: unterminated string", errTemplate)
 		}
 		return s[i : j+1], nil
 	case strings.ContainsRune(">=<!", rune(c)) && i+1 < len(s) && s[i+1] == '=':
@@ -884,7 +887,7 @@ func scanToken(s string, i int) (string, error) {
 		}
 		return s[i:j], nil
 	}
-	return "", fmt.Errorf("%w: unexpected %q", ErrTemplate, c)
+	return "", fmt.Errorf("%w: unexpected %q", errTemplate, c)
 }
 
 func (p *parser) peek() string {
@@ -898,7 +901,7 @@ func (p *parser) next() string { t := p.peek(); p.pos++; return t }
 
 func (p *parser) expect(t string) error {
 	if p.next() != t {
-		return fmt.Errorf("%w: expected %q", ErrTemplate, t)
+		return fmt.Errorf("%w: expected %q", errTemplate, t)
 	}
 	return nil
 }
@@ -1048,7 +1051,7 @@ func (p *parser) callArgs() (args []expr, kwKeys []string, kwVals []expr, err er
 		if p.peek() == "," {
 			p.next()
 		} else if p.peek() != ")" {
-			return nil, nil, nil, fmt.Errorf("%w: bad argument list", ErrTemplate)
+			return nil, nil, nil, fmt.Errorf("%w: bad argument list", errTemplate)
 		}
 	}
 	p.next()
@@ -1081,7 +1084,7 @@ func (p *parser) primary() (expr, error) {
 	t := p.next()
 	switch {
 	case t == "":
-		return nil, fmt.Errorf("%w: unexpected end", ErrTemplate)
+		return nil, fmt.Errorf("%w: unexpected end", errTemplate)
 	case t == "(":
 		e, err := p.conditional()
 		if err != nil {
@@ -1139,14 +1142,4 @@ func unquote(s string) string {
 		b.WriteByte(s[i])
 	}
 	return b.String()
-}
-
-// SortedKeys is a convenience for deterministic iteration in tests.
-func SortedKeys[V any](m map[string]V) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
 }

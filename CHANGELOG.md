@@ -61,6 +61,9 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `maintenance`, `ha`) is refused at start-up**, because its topics would share a
   level with the daemon's own trees. Rename such a central before upgrading;
   the refusal is a hard failure.
+- The WebSocket daemon-status payload's description names the MQTT
+  `connected` level instead of the retired `bridge/status` (REST API
+  13.7.2, description only; the `online`/`offline` values are unchanged).
 - A multi-level `north.mqtt.topic_base` (`home/loom`) keeps working
   verbatim; it runs outside the convention, which a tool scanning `+/info`
   cannot see, and the daemon says so once at start.

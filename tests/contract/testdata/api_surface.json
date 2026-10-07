@@ -1,5 +1,5 @@
 {
- "api_version": "13.7.1",
+ "api_version": "13.7.2",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",

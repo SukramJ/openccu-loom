@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 693a8c0c
-HEAD: 693a8c0c
+Generated: 54289deb
+HEAD: 54289deb
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 6084 |
-| Reachable | 3989 |
-| Whitelisted | 2039 |
+| Total Exported | 6123 |
+| Reachable | 4013 |
+| Whitelisted | 2054 |
 | **Unreachable** | **56** |
 
 ## What these numbers cannot see

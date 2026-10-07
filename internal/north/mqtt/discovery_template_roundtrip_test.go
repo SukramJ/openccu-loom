@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"reflect"
 	"regexp"
 	"slices"
@@ -336,7 +337,7 @@ func (r *rtRig) checkCase(c rtCase) {
 		}
 		return r.last(topic)
 	}
-	for _, key := range hajinja.SortedKeys(body) {
+	for _, key := range slices.Sorted(maps.Keys(body)) {
 		// Command topics are written, not read; `set_position_topic` is
 		// the cover's one command topic not spelled `*command*`.
 		if !strings.HasSuffix(key, "_topic") || strings.Contains(key, "command") || strings.HasPrefix(key, "set_") {
