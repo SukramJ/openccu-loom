@@ -688,6 +688,18 @@ light entity's `state_topic` points there; its `command_topic` stays under
 `set`. Both come from one publish, leave together when the device is
 removed, and are republished together on reconnect.
 
+**An unobserved data point still publishes a body.** A registered data
+point the CCU has not reported yet is published as
+`{"val": null, "ts": …, "lc": …, "hm": {"available": false}}`, never as
+nothing: the entity's own availability entry reads `hm.available` from this
+topic, and a topic with no retained body would leave the entity
+unavailable with nothing on the wire to say why. The per-parameter value
+templates guard on `value_json.val is not none` and render an empty string
+for it, which Home Assistant's platforms ignore as "no update" (numeric
+sensors, number, select, binary sensor, lock, cover, valve, climate) rather
+than reading `None` as a value, exactly as for the pre-convention
+`{"value": null, "available": false}`.
+
 #### Optional `additional_information`
 
 Data points that expose enriched model metadata carry it under

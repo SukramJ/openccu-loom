@@ -684,6 +684,20 @@ Found in loom:
     `{{ {"val": value} | tojson }}`. The display's `notify` entity already
     sent a JSON object and is unaffected.
 
+20. **An unobserved data point is `{"val": null, …, "hm": {"available":
+    false}}`.** Before this ADR it was `{"value": null, "available":
+    false}`; the fields moved into the status object, and the decision
+    stands for the same reason: the per-parameter availability entry reads
+    `hm.available` from the state topic, so publishing nothing would leave
+    the entity unavailable with no body to explain it. `val` stays present
+    as `null` rather than being omitted. Every per-parameter value template
+    guards on `value_json.val is not none` and renders an empty string, which
+    Home Assistant 2026.10 ignores instead of storing (`number.py:177`,
+    `select.py:119`, `binary_sensor.py:186`, `lock.py:192`, `sensor.py:322`
+    for numeric sensors, and the empty-payload guards in `cover.py`,
+    `valve.py` and `climate.py`); no `| lower` template sees the `null`,
+    which would otherwise render `none`.
+
 ## Revisit when
 
 - Command acknowledgement or error reporting over MQTT is wanted — the spec

@@ -19,9 +19,11 @@
 // an instant sensor (no exit or entry delay, so a command-plane arm
 // resolves synchronously) rather than a full siren/window fixture — this
 // test proves the MQTT wiring, not the engine's trigger chain, which is
-// alarm_engine_e2e_test.go's job. A publish on `<base>/alarm/<zone>/set`
-// must reach the engine and the resulting state change must republish on
-// the retained `<base>/alarm/<zone>/state` topic.
+// alarm_engine_e2e_test.go's job. A publish on
+// `<base>/set/alarm/<zone>/panel` must reach the engine and the resulting
+// state change must republish on the retained
+// `<base>/status/alarm/<zone>/panel` status item (ADR 0083: the panel token
+// in `val`).
 //
 // Gated exactly like the sibling real-broker tests: startMosquitto skips
 // automatically when neither a Docker daemon nor a native `mosquitto`
@@ -30,6 +32,7 @@ package integration
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"sync"
 	"testing"
@@ -38,6 +41,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
+	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -137,16 +141,20 @@ func (r *alarmMqttRig) captureState(topic string, payload []byte, _ bool) {
 	r.mu.Unlock()
 }
 
-// waitStateTopic polls the capture log until topic carries exactly want
-// or the timeout elapses. Returns the last observed payload and whether
-// it matched.
+// waitStateTopic polls the capture log until topic carries a status object
+// whose `val` is exactly want, or the timeout elapses. Returns the last
+// observed payload and whether it matched.
 func (r *alarmMqttRig) waitStateTopic(topic, want string, timeout time.Duration) (string, bool) {
 	deadline := time.Now().Add(timeout)
 	for {
 		r.mu.Lock()
 		got, ok := r.states[topic]
 		r.mu.Unlock()
-		if ok && got == want {
+		var obj struct {
+			Val any   `json:"val"`
+			TS  int64 `json:"ts"`
+		}
+		if ok && json.Unmarshal([]byte(got), &obj) == nil && obj.Val == want && obj.TS > 0 {
 			return got, true
 		}
 		if time.Now().After(deadline) {
@@ -157,11 +165,11 @@ func (r *alarmMqttRig) waitStateTopic(topic, want string, timeout time.Duration)
 }
 
 // publishAlarmCommand publishes a non-retained command on
-// `<base>/alarm/<zone>/set`, the shape [CommandSubscriber.Start]
+// `<base>/set/alarm/<zone>/panel`, the shape [CommandSubscriber.Start]
 // registers for the daemon-level alarm plane.
 func (r *alarmMqttRig) publishAlarmCommand(t *testing.T, zoneID, action string) {
 	t.Helper()
-	topic := alarmMqttBase + "/alarm/" + zoneID + "/set"
+	topic := naming.SetTopic(alarmMqttBase, "alarm", zoneID, "panel")
 	if err := r.cmdPub.Publish(context.Background(), topic, []byte(action), mqtt.QoS1, false); err != nil {
 		t.Fatalf("publish alarm command %s to %s: %v", action, topic, err)
 	}
@@ -215,7 +223,7 @@ func setupAlarmMqttRig(t *testing.T) *alarmMqttRig {
 		t.Fatalf("state subscriber connect: %v", err)
 	}
 	t.Cleanup(func() { _ = stateSub.Disconnect(context.Background()) })
-	if _, err := stateSub.Subscribe(connectCtx, alarmMqttBase+"/alarm/#", mqtt.QoS1, mqtt.LegacyHandler(rig.captureState)); err != nil {
+	if _, err := stateSub.Subscribe(connectCtx, naming.StatusTopic(alarmMqttBase, "alarm", "#"), mqtt.QoS1, mqtt.LegacyHandler(rig.captureState)); err != nil {
 		t.Fatalf("state subscribe: %v", err)
 	}
 
@@ -236,7 +244,7 @@ func setupAlarmMqttRig(t *testing.T) *alarmMqttRig {
 	rig.pub.Start()
 	t.Cleanup(rig.pub.Stop)
 
-	// --- command subscriber: the real inbound `…/alarm/<zone>/set` plane ---
+	// --- command subscriber: the real inbound `…/set/alarm/<zone>/panel` plane ---
 	cmdSubClient := mqtt.NewTCPClient(mqtt.TCPConfig{
 		BrokerURL: broker.URL(), ClientID: "alarm-cmd-sub", KeepAlive: 30 * time.Second, CleanStart: true,
 	})
@@ -272,15 +280,15 @@ func setupAlarmMqttRig(t *testing.T) *alarmMqttRig {
 
 // TestAlarmMqttArmDisarmRoundtrip proves the full daemon-level alarm MQTT
 // loop against a real broker: publishing ARM_AWAY on
-// `<base>/alarm/<zone>/set` reaches the real CommandSubscriber, flows
+// `<base>/set/alarm/<zone>/panel` reaches the real CommandSubscriber, flows
 // through the AlarmSink into the engine, and the resulting armed/full
-// state republishes as `armed_away` on the retained
-// `<base>/alarm/<zone>/state` topic (notes/concepts/alarm-concept.md §13.3 state
+// state republishes as `armed_away` (the status object's `val`) on the
+// retained `<base>/status/alarm/<zone>/panel` item (notes/concepts/alarm-concept.md §13.3 state
 // mapping); DISARM reverses both sides.
 func TestAlarmMqttArmDisarmRoundtrip(t *testing.T) {
 	rig := setupAlarmMqttRig(t)
 	zoneID := rig.zoneID
-	stateTopic := alarmMqttBase + "/alarm/" + zoneID + "/state"
+	stateTopic := naming.StatusTopic(alarmMqttBase, "alarm", zoneID, "panel")
 
 	rig.publishAlarmCommand(t, zoneID, alarmpanel.HAAlarmCommandArmAway)
 
