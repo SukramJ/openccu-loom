@@ -93,7 +93,8 @@ REST API 13.7.2.
   revision 5 (was 4). A paired controller normally refreshes the device
   type on its own; if it does not, re-pairing the bridge is the remedy.
   Bridged devices keep "eQ-3" as their vendor name, which the daemon now
-  supplies itself.
+  supplies itself. Groups still use the deprecated `wire.Groups` stubs; the
+  `groups.Manager` migration follows.
 - A Matter Stop on a garage door drive (HmIP-MOD-HO / HmIP-MOD-TM) still
   reaches the drive whatever state the bridge last saw, as in 0.88.0.
   Matter 1.6.1 ignores a Stop unless the closure is reported as moving,

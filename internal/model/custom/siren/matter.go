@@ -222,7 +222,7 @@ func (s *Siren) MatterEligibility() interfaces.MatterEligibilityVerdict {
 func (s *Siren) MatterClusterServers() []interfaces.MatterClusterServer {
 	return []interfaces.MatterClusterServer{
 		sirenOnOffServer{s: s},
-		wire.Groups{},
+		wire.Groups{}, //nolint:staticcheck // SA1019: go-fabric v0.2.0 deprecates wire.Groups in favour of endpoint.Config.Groups + groups.Manager; the migration changes Groups behaviour on this endpoint and is its own change (see notes/parity/by_design.md, BD-Matter-WireGroupsStub)
 		wire.ScenesManagement{},
 	}
 }

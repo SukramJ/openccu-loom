@@ -190,13 +190,13 @@ func (l *Light) MatterClusterServers() []interfaces.MatterClusterServer {
 		return []interfaces.MatterClusterServer{
 			lightOnOffServer{l: l},
 			lightLevelServer{l: l},
-			wire.Groups{},
+			wire.Groups{}, //nolint:staticcheck // SA1019: go-fabric v0.2.0 deprecates wire.Groups in favour of endpoint.Config.Groups + groups.Manager; the migration changes Groups behaviour on this endpoint and is its own change (see notes/parity/by_design.md, BD-Matter-WireGroupsStub)
 			wire.ScenesManagement{},
 		}
 	}
 	return []interfaces.MatterClusterServer{
 		lightOnOffServer{l: l},
-		wire.Groups{},
+		wire.Groups{}, //nolint:staticcheck // SA1019: go-fabric v0.2.0 deprecates wire.Groups in favour of endpoint.Config.Groups + groups.Manager; the migration changes Groups behaviour on this endpoint and is its own change (see notes/parity/by_design.md, BD-Matter-WireGroupsStub)
 		wire.ScenesManagement{},
 	}
 }
