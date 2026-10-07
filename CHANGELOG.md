@@ -6,6 +6,26 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.89.0] - 2026-10-07
+
+### Release summary
+
+**This release changes the MQTT topics and payloads.** The MQTT plane
+follows the mqtt-smarthome 2.0 convention (ADR 0083): every topic moves to
+`<base>/status/…`, `<base>/set/…` or `<base>/meta/…`, every state payload
+becomes `{"val", "ts", "lc", "hm"}`, and `<base>/bridge/status` becomes
+`<base>/connected` (`0`/`1`/`2`). **Anyone reading raw topics must act:**
+Node-RED flows, dashboards, Telegraf and scripts have to move to the new
+topics and payloads. **Home Assistant users need not:** entities and their
+identities are unchanged and re-point to the new topics on their own. On
+first start the daemon clears the old retained topics it left on the
+broker. A central named `alarm`, `security`, `system`, `bridge`, `ha` or
+like a topic function is refused at start, so rename it before upgrading.
+The new MQTT maintenance topics (log level, restart, stats) are on by
+default and reachable by anyone who may publish on the broker; restrict
+`<base>/maintenance/#` with broker ACLs if you do not fully trust it.
+REST API 13.7.2.
+
 ### Changed
 
 - **BREAKING (MQTT topics and payloads; Home Assistant entities and their
@@ -67,6 +87,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A multi-level `north.mqtt.topic_base` (`home/loom`) keeps working
   verbatim; it runs outside the convention, which a tool scanning `+/info`
   cannot see, and the daemon says so once at start.
+- Updated go-fabric to v0.2.0 — Matter 1.6.1 with subscription
+  resumption, real Groups and more cluster servers. The device-type
+  revisions follow Matter 1.6.1: a bridged On/Off Plug-in Unit now reports
+  revision 5 (was 4). A paired controller normally refreshes the device
+  type on its own; if it does not, re-pairing the bridge is the remedy.
+  Bridged devices keep "eQ-3" as their vendor name, which the daemon now
+  supplies itself. Groups still use the deprecated `wire.Groups` stubs; the
+  `groups.Manager` migration follows.
+- A Matter Stop on a garage door drive (HmIP-MOD-HO / HmIP-MOD-TM) still
+  reaches the drive whatever state the bridge last saw, as in 0.88.0.
+  Matter 1.6.1 ignores a Stop unless the closure is reported as moving,
+  and the bridge learns of motion only when the drive reports it, so a Stop
+  pressed right after the door started would otherwise succeed and do
+  nothing.
 
 ### Added
 

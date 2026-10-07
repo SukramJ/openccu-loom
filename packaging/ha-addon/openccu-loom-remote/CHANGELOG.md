@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.89.0
+
+No changes to the proxy, which does not carry MQTT. The daemon release
+moves its MQTT topics and payloads to the mqtt-smarthome 2.0 layout
+(REST API 13.7.2).
+
 # 0.88.0
 
 No changes to the proxy. The daemon release holds newly paired devices

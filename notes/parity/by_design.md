@@ -1122,6 +1122,68 @@ Pinned by `TestCoverInferredTarget_*`,
 axis has no motion signal in the model, so no tilt inference applies
 (matching the existing OperationalStatus tilt limitation).
 
+### BD-Matter-ClosureControl-StopForwarded — a garage Stop reaches the drive whatever the closure state
+
+**Where:** `internal/model/custom/cover/matter_closure.go`
+(`garageClosureServer.MatterInvoke`, `closureInMotion`).
+
+**matter.js / go-fabric behaviour:** cluster §5.4.8.1, as matter.js carries
+it in `closure-control.resource.ts`: Stop acts only on a closure that is
+Moving, WaitingForMotion or Calibrating and answers SUCCESS in every other
+state without doing anything. go-fabric follows it since v0.2.0
+(`cluster/closure/closurecontrol_server.go`, `invokeStop`); v0.1.0 called the
+Stop handler in every state.
+
+**OpenCCU-Loom divergence (bridge-domain, deliberate):** on a native Matter
+closure MainState is the device's own knowledge of its motion. Here it is
+derived from the drive's `SECTION` push (2 opening, 5 closing; HmIP-MOD-HO /
+HmIP-MOD-TM, the `IPGarage` profile), which lags the physical motion, is
+overwritten by every `DOOR_STATE` / `SECTION` push and is absent on a
+firmware that sends no `SECTION`. No measurement of that lag exists. Under
+the spec behaviour a Stop pressed in that window would answer SUCCESS and
+leave the door running. The projection therefore sends a Stop that the
+cluster would ignore to the drive itself (`DOOR_COMMAND=STOP`, as 0.88.0
+did), then lets the cluster server apply its own state machine unchanged;
+while the cluster considers the closure moving, its own Stop handler is the
+one path, so the drive receives exactly one STOP either way.
+
+**Caveat:** on a drive wired in impulse mode a single input steps through
+open / stop / close, so a STOP sent to a door that really is at rest may
+start it. 0.88.0 had the same exposure.
+
+**Follow-up:** report Moving optimistically from a forwarded MoveTo until the
+drive reports a stop or end position, or a timeout — after which this
+divergence can be narrowed to the window the drive has not yet reported.
+
+Pinned by `TestGarageMatterStopReachesTheDriveInEveryClosureState` in
+`internal/model/custom/cover/matter_closure_stop_forward_test.go`.
+
+### BD-Matter-WireGroupsStub — bridged endpoints keep the deprecated `wire.Groups` stub
+
+**Where:** `internal/model/custom/light/matter.go`,
+`internal/model/custom/siren/matter.go`,
+`internal/model/custom/switch/matter.go`,
+`internal/model/generic/switch_matter.go` (each `wire.Groups{}` carries a
+`//nolint:staticcheck // SA1019` naming this entry).
+
+**go-fabric behaviour:** since v0.2.0 group membership is stack state, as in
+matter.js (`GroupsServer` keeps it in the root's
+`GroupKeyManagementServer`). A host sets `endpoint.Config.Groups` to a
+`groups.Manager`, and the assembler mounts the real `core.Groups` server on
+every endpoint whose device type mandates Groups, replacing a source's stub.
+`wire.Groups`, the read-only stub, is deprecated and removable in v0.3.0.
+
+**OpenCCU-Loom state (known limitation, temporary):** the daemon does not yet
+set `endpoint.Config.Groups`, so these endpoints keep serving the read-only
+stub they served under v0.1.0. The migration changes Groups behaviour on
+every one of them (real membership, AddGroup / RemoveGroup, group
+messaging) and needs its own review, so it was kept out of the 0.89.0
+dependency bump.
+
+**Revisit:** before go-fabric v0.3.0 is adopted, which may remove
+`wire.Groups`: wire a `groups.Manager` into the assembler config, drop the
+stubs and the nolint directives, and re-record the topology golden.
+
 ### BD-Matter-WindowCovering-SliderDebounce — GoTo*Percentage two-phase slider debounce with accepted-before-written CCU write
 
 **Where:** `internal/model/custom/cover/matter_debounce.go`; the

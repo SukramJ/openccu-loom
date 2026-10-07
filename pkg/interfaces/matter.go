@@ -93,6 +93,9 @@ const (
 
 	// MatterMeasurementElectrical is a compatibility alias for [contract.MeasurementElectrical].
 	MatterMeasurementElectrical = contract.MeasurementElectrical
+
+	// MatterMeasurementFlow is a compatibility alias for [contract.MeasurementFlow].
+	MatterMeasurementFlow = contract.MeasurementFlow
 )
 
 // MatterElectricalReadings is a compatibility alias for [contract.ElectricalReadings].
