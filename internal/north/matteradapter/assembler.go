@@ -134,6 +134,10 @@ type Assembler struct {
 	cfg       Config
 }
 
+// bridgedVendorName is the manufacturer served as the
+// BridgedDeviceBasicInformation VendorName of every bridged endpoint.
+const bridgedVendorName = "eQ-3"
+
 // New returns an assembler. logger may be nil; the assembler then
 // uses [slog.Default]. Until [Assembler.SetExposureChecker] wires a
 // checker the assembler permits every source (legacy / test default);
@@ -144,6 +148,13 @@ func New(s endpoint.Store, cfg Config, logger *slog.Logger) (*Assembler, error) 
 		VendorID:  cfg.VendorID,
 		ProductID: cfg.ProductID,
 		NodeLabel: cfg.NodeLabel,
+		// VendorName here is only the fallback BridgedDeviceBasicInformation
+		// VendorName of every bridged endpoint (the root BasicInformation is
+		// built by the daemon). go-fabric served "eQ-3" itself up to
+		// v0.1.0 and leaves it to the host since v0.2.0; every bridged
+		// endpoint is a Homematic device, and Apple Home relies on the
+		// vendor fields being filled.
+		VendorName: bridgedVendorName,
 	}, logger)
 	if err != nil {
 		return nil, err
