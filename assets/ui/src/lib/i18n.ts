@@ -1952,6 +1952,8 @@ const EN: Catalog = {
   "settings.theme.light": "Light",
   "settings.theme.dark": "Dark",
   "settings.theme.system": "System",
+  "settings.follows_lite":
+    "Follows openccu-lite. Change it in openccu-lite's settings, or open OpenCCU-Loom in its own tab to use your own setting.",
   "settings.appearance.design": "Design",
   "settings.appearance.design.help":
     "Choose the visual style. Inside Home Assistant the SPA follows your HA theme automatically.",
@@ -6283,6 +6285,8 @@ const DE: Catalog = {
   "settings.theme.light": "Hell",
   "settings.theme.dark": "Dunkel",
   "settings.theme.system": "System",
+  "settings.follows_lite":
+    "Folgt openccu-lite. Ändern in den Einstellungen von openccu-lite, oder OpenCCU-Loom im eigenen Tab öffnen, um die eigene Einstellung zu nutzen.",
   "settings.appearance.design": "Design",
   "settings.appearance.design.help":
     "Wähle den visuellen Stil. In Home Assistant folgt die Oberfläche automatisch deinem HA-Theme.",

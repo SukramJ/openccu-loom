@@ -33,6 +33,7 @@
     type Skin,
   } from "$lib/stores/preferences.svelte";
   import { isEmbedded } from "$lib/theme/ha-bridge";
+  import { liteShell } from "$lib/theme/lite-shell.svelte";
   import { refreshRestartPending } from "$lib/stores/restartPending.svelte";
   import { t } from "$lib/i18n";
   import ConnectivityLights from "$lib/components/settings/ConnectivityLights.svelte";
@@ -564,6 +565,7 @@
                   value={prefs.locale}
                   ariaLabel={t("settings.language")}
                   onValueChange={(v) => setLocale(v === "de" ? "de" : "en")}
+                  disabled={liteShell.lang !== null}
                   options={[
                     { value: "de", label: "Deutsch" },
                     { value: "en", label: "English" },
@@ -578,6 +580,7 @@
                   value={prefs.theme}
                   ariaLabel={t("settings.theme")}
                   onValueChange={(v) => setTheme(v as Theme)}
+                  disabled={liteShell.theme !== null}
                   options={[
                     { value: "light", label: t("settings.theme.light") },
                     { value: "dark", label: t("settings.theme.dark") },
@@ -585,6 +588,14 @@
                   ]}
                 />
               </span>
+              {#if liteShell.theme !== null || liteShell.lang !== null}
+                <p
+                  class="-mt-1 text-xs text-[var(--ha-secondary-text-color)]"
+                  data-testid="follows-lite-hint"
+                >
+                  {t("settings.follows_lite")}
+                </p>
+              {/if}
 
               <span class="flex items-center gap-3 text-sm">
                 <span class="min-w-24">{t("settings.start_route")}</span>

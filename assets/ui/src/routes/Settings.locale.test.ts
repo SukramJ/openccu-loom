@@ -11,6 +11,7 @@ import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { render, cleanup, screen, waitFor } from "@testing-library/svelte";
 import { tick } from "svelte";
 import { prefs } from "$lib/stores/preferences.svelte";
+import { liteShell } from "$lib/theme/lite-shell.svelte";
 
 const {
   mockGetConfigSchema,
@@ -89,6 +90,9 @@ beforeEach(() => {
 
 afterEach(() => {
   prefs.locale = originalLocale;
+  liteShell.active = false;
+  liteShell.theme = null;
+  liteShell.lang = null;
   cleanup();
 });
 
@@ -104,5 +108,29 @@ describe("Settings — tab list follows a live locale switch", () => {
 
     await waitFor(() => expect(screen.getAllByText("General").length).toBeGreaterThan(0));
     expect(screen.queryByText("Allgemein")).toBeNull();
+  });
+});
+
+describe("Settings — embedded in the openccu-lite shell", () => {
+  it("disables theme and language and says they follow openccu-lite", async () => {
+    prefs.locale = "en";
+    liteShell.active = true;
+    liteShell.theme = "dark";
+    liteShell.lang = "en";
+    render(Settings);
+
+    await waitFor(() => expect(screen.getByTestId("follows-lite-hint")).toBeInTheDocument());
+    expect(screen.getByTestId("follows-lite-hint").textContent).toContain("Follows openccu-lite");
+    expect(screen.getByLabelText("Theme")).toBeDisabled();
+    expect(screen.getByLabelText("Language")).toBeDisabled();
+  });
+
+  it("leaves both controls enabled and shows no hint otherwise", async () => {
+    prefs.locale = "en";
+    render(Settings);
+
+    await waitFor(() => expect(screen.getByLabelText("Theme")).toBeEnabled());
+    expect(screen.getByLabelText("Language")).toBeEnabled();
+    expect(screen.queryByTestId("follows-lite-hint")).toBeNull();
   });
 });

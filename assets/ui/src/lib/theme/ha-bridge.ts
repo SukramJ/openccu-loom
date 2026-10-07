@@ -2,8 +2,11 @@
 // iframe (same-origin) it mirrors the user's live HA theme by copying
 // HA's CSS custom properties off the parent document onto our own
 // :root, and by tracking HA's light/dark choice via the parent
-// background luminance. Standalone (non-iframe) the bridge is inert and
+// background luminance. Outside HA (standalone, the openccu-lite shell,
+// any other iframe — see isEmbedded) the bridge is inert and
 // the static HA-default literals in app.css [data-skin="ha"] apply.
+
+import { liteShell } from "./lite-shell.svelte";
 
 // HA theme variables copied from the parent document onto our root. The
 // --ha-* consumption tokens in app.css read these via var(--…, fallback),
@@ -46,11 +49,33 @@ const HA_THEME_VARS = [
   "--ha-color-surface-default",
 ];
 
-// True when the SPA is rendered inside an iframe (HA Ingress). A
-// cross-origin parent still satisfies this — the throwing property
-// accesses are guarded in startHaBridge.
+// The path segment Home Assistant's Supervisor serves an add-on's Ingress
+// under (`/api/hassio_ingress/<token>/…`, see $lib/api/base).
+const HA_INGRESS_SEGMENT = "/api/hassio_ingress/";
+
+// True when the SPA runs inside Home Assistant, detected positively — an
+// iframe alone is not enough (the openccu-lite shell frames the SPA too,
+// and an unknown host must not be dressed as HA):
+//   - served under HA's Ingress path, or
+//   - a same-origin parent whose document is HA's frontend
+//     (`<home-assistant>`).
+// The openccu-lite shell's signals (lite-shell.svelte.ts) win over both.
+// Anything else framed behaves as standalone.
 export function isEmbedded(): boolean {
-  return typeof window !== "undefined" && window.self !== window.top;
+  if (typeof window === "undefined") return false;
+  try {
+    if (window.self === window.top) return false;
+  } catch {
+    // top inaccessible — still framed
+  }
+  if (liteShell.active) return false;
+  if (window.location.pathname.includes(HA_INGRESS_SEGMENT)) return true;
+  try {
+    return window.parent.document.querySelector("home-assistant") !== null;
+  } catch {
+    // Cross-origin or unreadable parent — not provably HA.
+    return false;
+  }
 }
 
 // Resolve the effective skin: embedding into HA always forces "ha";
@@ -107,6 +132,8 @@ export function startHaBridge(): () => void {
     const ourRoot = document.documentElement;
 
     const apply = () => {
+      // The openccu-lite shell took over after start — not HA after all.
+      if (liteShell.active) return;
       try {
         const ps = parentWin.getComputedStyle(parentRoot);
         for (const name of HA_THEME_VARS) {

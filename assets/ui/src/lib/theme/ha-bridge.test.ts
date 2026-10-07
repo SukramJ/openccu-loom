@@ -2,6 +2,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 import { isEmbedded, resolveSkin, startHaBridge } from "./ha-bridge";
+import { liteShell } from "./lite-shell.svelte";
+
+const INGRESS_PATH = "/api/hassio_ingress/tok3n/app/";
+
+// Serve the document under HA's Ingress path — the positive HA signal.
+function underIngress(): void {
+  history.replaceState(null, "", INGRESS_PATH);
+}
 
 // Restore window.top/window.parent to their happy-dom defaults (== window)
 // after every test so isEmbedded() reports false again.
@@ -18,6 +26,10 @@ beforeEach(() => {
 
 afterEach(() => {
   resetFraming();
+  history.replaceState(null, "", "/");
+  liteShell.active = false;
+  liteShell.theme = null;
+  liteShell.lang = null;
   document.documentElement.className = "";
   document.documentElement.removeAttribute("style");
 });
@@ -27,9 +39,49 @@ describe("isEmbedded", () => {
     expect(isEmbedded()).toBe(false);
   });
 
-  it("is true when window.top differs from window.self (framed)", () => {
+  it("is true framed under HA's Ingress path", () => {
+    underIngress();
     Object.defineProperty(window, "top", { value: {}, configurable: true });
     expect(isEmbedded()).toBe(true);
+  });
+
+  it("is true framed by a same-origin parent that is HA's frontend", () => {
+    const haDoc = document.implementation.createHTMLDocument("ha");
+    haDoc.body.appendChild(haDoc.createElement("home-assistant"));
+    Object.defineProperty(window, "top", { value: {}, configurable: true });
+    Object.defineProperty(window, "parent", {
+      value: { document: haDoc },
+      configurable: true,
+    });
+    expect(isEmbedded()).toBe(true);
+  });
+
+  it("is false in an unknown iframe (not every parent is HA)", () => {
+    const otherDoc = document.implementation.createHTMLDocument("other");
+    Object.defineProperty(window, "top", { value: {}, configurable: true });
+    Object.defineProperty(window, "parent", {
+      value: { document: otherDoc },
+      configurable: true,
+    });
+    expect(isEmbedded()).toBe(false);
+  });
+
+  it("is false in a cross-origin iframe off the Ingress path", () => {
+    Object.defineProperty(window, "top", { value: {}, configurable: true });
+    Object.defineProperty(window, "parent", {
+      get() {
+        throw new DOMException("cross-origin");
+      },
+      configurable: true,
+    });
+    expect(isEmbedded()).toBe(false);
+  });
+
+  it("is false once the openccu-lite shell has signalled, even under an Ingress-like path", () => {
+    underIngress();
+    Object.defineProperty(window, "top", { value: {}, configurable: true });
+    liteShell.active = true;
+    expect(isEmbedded()).toBe(false);
   });
 });
 
@@ -39,7 +91,8 @@ describe("resolveSkin", () => {
     expect(resolveSkin("ha")).toBe("ha");
   });
 
-  it("forces 'ha' when embedded, regardless of the stored value", () => {
+  it("forces 'ha' when embedded in HA, regardless of the stored value", () => {
+    underIngress();
     Object.defineProperty(window, "top", { value: {}, configurable: true });
     expect(resolveSkin("loom")).toBe("ha");
     expect(resolveSkin("ha")).toBe("ha");
@@ -66,6 +119,7 @@ describe("startHaBridge", () => {
       backgroundColor: "",
     }));
 
+    underIngress();
     Object.defineProperty(window, "top", { value: {}, configurable: true });
     Object.defineProperty(window, "parent", {
       value: {
@@ -100,6 +154,7 @@ describe("startHaBridge", () => {
       backgroundColor: "",
     }));
 
+    underIngress();
     Object.defineProperty(window, "top", { value: {}, configurable: true });
     Object.defineProperty(window, "parent", {
       value: {
@@ -118,6 +173,7 @@ describe("startHaBridge", () => {
   });
 
   it("swallows a throwing (cross-origin) parent access and returns a no-op cleanup", () => {
+    underIngress();
     Object.defineProperty(window, "top", { value: {}, configurable: true });
     Object.defineProperty(window, "parent", {
       get() {

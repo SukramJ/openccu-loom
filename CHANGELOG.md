@@ -116,6 +116,21 @@ REST API 13.7.2.
   them; restrict `<base>/maintenance/#` with broker ACLs on a broker you do
   not fully trust.
 
+### Fixed
+
+- **Inside the openccu-lite shell the Config UI follows the shell's theme
+  and language.** It used to take any page it was framed in for Home
+  Assistant: it wore the Home Assistant look, stayed dark whenever the
+  computer was set to dark even under a light shell, and ignored its own
+  theme setting. It now tells the two apart. In Home Assistant nothing
+  changes. In the openccu-lite shell it takes the shell's theme and
+  language — when the page opens, on every change in the shell, and from
+  the shell's cookies when neither arrives — keeps the OpenCCU-Loom look,
+  and its own theme and language controls say that they follow
+  openccu-lite. Your own setting is kept and applies again when you open
+  the UI in its own tab. Framed by anything else, it behaves as in its
+  own tab.
+
 ## [0.88.0] - 2026-10-04
 
 ### Release summary
