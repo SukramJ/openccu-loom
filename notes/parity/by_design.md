@@ -1122,6 +1122,42 @@ Pinned by `TestCoverInferredTarget_*`,
 axis has no motion signal in the model, so no tilt inference applies
 (matching the existing OperationalStatus tilt limitation).
 
+### BD-Matter-ClosureControl-StopForwarded — a garage Stop reaches the drive whatever the closure state
+
+**Where:** `internal/model/custom/cover/matter_closure.go`
+(`garageClosureServer.MatterInvoke`, `closureInMotion`).
+
+**matter.js / go-fabric behaviour:** cluster §5.4.8.1, as matter.js carries
+it in `closure-control.resource.ts`: Stop acts only on a closure that is
+Moving, WaitingForMotion or Calibrating and answers SUCCESS in every other
+state without doing anything. go-fabric follows it since v0.2.0
+(`cluster/closure/closurecontrol_server.go`, `invokeStop`); v0.1.0 called the
+Stop handler in every state.
+
+**OpenCCU-Loom divergence (bridge-domain, deliberate):** on a native Matter
+closure MainState is the device's own knowledge of its motion. Here it is
+derived from the drive's `SECTION` push (2 opening, 5 closing; HmIP-MOD-HO /
+HmIP-MOD-TM, the `IPGarage` profile), which lags the physical motion, is
+overwritten by every `DOOR_STATE` / `SECTION` push and is absent on a
+firmware that sends no `SECTION`. No measurement of that lag exists. Under
+the spec behaviour a Stop pressed in that window would answer SUCCESS and
+leave the door running. The projection therefore sends a Stop that the
+cluster would ignore to the drive itself (`DOOR_COMMAND=STOP`, as 0.88.0
+did), then lets the cluster server apply its own state machine unchanged;
+while the cluster considers the closure moving, its own Stop handler is the
+one path, so the drive receives exactly one STOP either way.
+
+**Caveat:** on a drive wired in impulse mode a single input steps through
+open / stop / close, so a STOP sent to a door that really is at rest may
+start it. 0.88.0 had the same exposure.
+
+**Follow-up:** report Moving optimistically from a forwarded MoveTo until the
+drive reports a stop or end position, or a timeout — after which this
+divergence can be narrowed to the window the drive has not yet reported.
+
+Pinned by `TestGarageMatterStopReachesTheDriveInEveryClosureState` in
+`internal/model/custom/cover/matter_closure_stop_forward_test.go`.
+
 ### BD-Matter-WindowCovering-SliderDebounce — GoTo*Percentage two-phase slider debounce with accepted-before-written CCU write
 
 **Where:** `internal/model/custom/cover/matter_debounce.go`; the

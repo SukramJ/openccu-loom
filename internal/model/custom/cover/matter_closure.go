@@ -155,12 +155,44 @@ func (s *garageClosureServer) MatterWrite(
 func (s *garageClosureServer) MatterInvoke(
 	ctx context.Context, cmdID uint32, fields any,
 ) (response any, err error) {
+	if cmdID == clusterwire.ClosureControlCmdStop && !s.closureInMotion() {
+		// Deliberate divergence (notes/parity/by_design.md,
+		// BD-Matter-ClosureControl-StopForwarded): the cluster ignores a Stop
+		// while it does not consider the closure moving, but MainState here
+		// follows the drive's SECTION push, which lags the physical motion.
+		// A Stop pressed in that window must still reach the drive.
+		if err := s.g.Stop(ctx, matterDispatchPriority); err != nil {
+			return nil, err
+		}
+	}
 	resp, err := s.srv.MatterInvoke(ctx, cmdID, fields)
 	if err != nil {
 		return nil, err
 	}
 	s.g.dataVersion.Bump()
 	return resp, nil
+}
+
+// closureInMotion reports whether the cluster server is in one of the
+// states in which its own Stop handling reaches the Stop handler
+// (go-fabric closurecontrol_server.go invokeStop, cluster §5.4.8.1).
+func (s *garageClosureServer) closureInMotion() bool {
+	v, ok := s.srv.MatterRead(clusterwire.ClosureControlAttrMainState)
+	if !ok {
+		return false
+	}
+	state, ok := v.(uint8)
+	if !ok {
+		return false
+	}
+	switch clusterwire.ClosureMainState(state) {
+	case clusterwire.ClosureMainStateMoving,
+		clusterwire.ClosureMainStateWaitingForMotion,
+		clusterwire.ClosureMainStateCalibrating:
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *garageClosureServer) MatterReportable() []uint32 { return s.srv.MatterReportable() }
