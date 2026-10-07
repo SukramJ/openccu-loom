@@ -97,11 +97,19 @@ func (n *scenarioFakeNotifier) OnMatterValueChanged(cb func()) func() {
 	}
 }
 
-// fire dispatches every live subscriber callback. Used by the
-// fire_notifier_source step kind to drive the production
-// notifier-callback wiring.
+// fire moves the measured value, then dispatches every live subscriber
+// callback. Used by the fire_notifier_source step kind to drive the
+// production notifier-callback wiring.
+//
+// The value has to move: since go-fabric v0.2.0 a change notification
+// reports only the attributes whose value changed, as matter.js's
+// Datasource broadcasts the changed properties alone (go-fabric
+// bridge/subscribe.go wireMeasurementNotifier, values.changed()). A real
+// source notifies because its value changed; a fire that left 21.0 in
+// place would be a notification with nothing to report.
 func (n *scenarioFakeNotifier) fire() {
 	n.mu.Lock()
+	n.value += 0.5
 	cbs := append([]func(){}, n.cbs...)
 	n.mu.Unlock()
 	for _, cb := range cbs {
