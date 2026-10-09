@@ -318,3 +318,35 @@ describe("dirty tracking via push + undo (ChannelPanel integration contract)", (
     expect(dirtyNames(values, serverValues)).toEqual(["LEVEL"]);
   });
 });
+
+describe("profile selection", () => {
+  it("keeps a profile switch that stages no value change", () => {
+    const entry = entryFromPatch({}, {}, "profile.select", undefined, { before: 3, after: 0 });
+    const stack = pushEntry(emptyStack(), entry);
+    expect(canUndo(stack)).toBe(true);
+  });
+
+  it("still collapses an entry whose profile did not move", () => {
+    const entry = entryFromPatch({}, {}, "profile.select", undefined, { before: 3, after: 3 });
+    expect(pushEntry(emptyStack(), entry)).toEqual(emptyStack());
+  });
+
+  it("hands the profile back on undo and forward on redo", () => {
+    const values: ParamValues = { A: 2 };
+    const stack = pushEntry(
+      emptyStack(),
+      entryFromPatch({ A: 2 }, { A: 1 }, "profile.apply", undefined, { before: 0, after: 3 }),
+    );
+    const u = undo(stack, values);
+    expect(u.values.A).toBe(1);
+    expect(u.profile).toBe(0);
+    const r = redo(u.state, u.values);
+    expect(r.values.A).toBe(2);
+    expect(r.profile).toBe(3);
+  });
+
+  it("reports no profile for a plain field edit", () => {
+    const stack = pushEntry(emptyStack(), entryFromPatch({ A: 2 }, { A: 1 }));
+    expect("profile" in undo(stack, { A: 2 })).toBe(false);
+  });
+});

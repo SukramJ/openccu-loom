@@ -21,6 +21,7 @@
   import ProgramList from "./routes/ProgramList.svelte";
   import GroupList from "./routes/GroupList.svelte";
   import LinkList from "./routes/LinkList.svelte";
+  import LinkEditor from "./routes/LinkEditor.svelte";
   import ScheduleList from "./routes/ScheduleList.svelte";
   import Diagrams from "./routes/Diagrams.svelte";
   import MessageList from "./routes/MessageList.svelte";
@@ -285,6 +286,7 @@
     | { kind: "programs" }
     | { kind: "groups" }
     | { kind: "links" }
+    | { kind: "linkEdit"; sender: string; receiver: string }
     | { kind: "schedules" }
     | { kind: "diagrams" }
     | { kind: "messages" }
@@ -319,6 +321,15 @@
     if (path === "/programs") return { kind: "programs" };
     if (path === "/groups") return { kind: "groups" };
     if (path === "/links") return { kind: "links" };
+    // One direct link: #/links/<sender channel>/<receiver channel>.
+    const linkMatch = rawPath.match(/^\/links\/([^/]+)\/([^/]+)\/?$/);
+    if (linkMatch) {
+      return {
+        kind: "linkEdit",
+        sender: decodeURIComponent(linkMatch[1]),
+        receiver: decodeURIComponent(linkMatch[2]),
+      };
+    }
     if (path === "/schedules") return { kind: "schedules" };
     if (path === "/diagrams") return { kind: "diagrams" };
     if (path === "/messages") return { kind: "messages" };
@@ -363,7 +374,7 @@
 
   // Sidebar activeKind treats "firmware" and "matter" as their own leaf.
   const activeKindForSidebar = $derived(
-    route.kind === "detail" ? "detail" : route.kind,
+    route.kind === "detail" ? "detail" : route.kind === "linkEdit" ? "links" : route.kind,
   );
 </script>
 
@@ -376,6 +387,7 @@
     route.kind === "fleet" ? t("page.title.fleet") :
     route.kind === "groups" ? t("page.title.groups") :
     route.kind === "links" ? t("page.title.links") :
+    route.kind === "linkEdit" ? t("page.title.link_editor") :
     route.kind === "schedules" ? t("page.title.schedules") :
     route.kind === "diagrams" ? t("page.title.diagrams") :
     route.kind === "logs" ? t("page.title.logs") :
@@ -500,6 +512,8 @@
           <GroupList />
         {:else if route.kind === "links"}
           <LinkList {locale} />
+        {:else if route.kind === "linkEdit"}
+          <LinkEditor sender={route.sender} receiver={route.receiver} {locale} />
         {:else if route.kind === "schedules"}
           <ScheduleList />
         {:else if route.kind === "diagrams"}

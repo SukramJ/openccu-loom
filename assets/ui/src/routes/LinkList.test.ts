@@ -55,7 +55,7 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe("LinkList — rendering", () => {
-  it("renders every link with its party names and a device-edit deep link", async () => {
+  it("renders every link with its party names and a link to its own page", async () => {
     mockListAllLinks.mockResolvedValue(LINKS);
 
     render(LinkList, { props: { locale: "en" } });
@@ -66,10 +66,10 @@ describe("LinkList — rendering", () => {
 
     expect(mockListAllLinks).toHaveBeenCalledTimes(1);
     expect(screen.getByText("Deckenlampe")).toBeInTheDocument();
-    // The sender's device (address before the ':') deep-links straight to its
-    // Direct-links tab, not just the device detail.
+    // Each row opens that link's "Profileinstellung" page, keyed by both
+    // channel addresses.
     const edit = screen.getAllByRole("link").find(
-      (a) => a.getAttribute("href") === "#/devices/DEVA?tab=links",
+      (a) => a.getAttribute("href") === "#/links/DEVA%3A1/PEERA%3A3",
     );
     expect(edit).toBeTruthy();
     // Both centrals are shown as badges when more than one is present.

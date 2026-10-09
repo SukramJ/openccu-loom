@@ -83,7 +83,7 @@ help: ## show this help
 # matching ci.yml: none of them is a formatter, and for govulncheck and
 # go-licenses a floating answer is the point (see the security job).
 GOFUMPT_VERSION       ?= v0.10.0
-GOLANGCI_LINT_VERSION ?= v2.13.0
+GOLANGCI_LINT_VERSION ?= v2.14.0
 
 .PHONY: setup
 setup: ## install developer tooling and the pre-commit hook

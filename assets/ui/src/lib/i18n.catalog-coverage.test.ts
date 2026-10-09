@@ -140,6 +140,40 @@ describe("i18n catalogue coverage", () => {
     }
   });
 
+  // LinkEditor.svelte, the link-profile picker and the keypress table.
+  // The page is the one place a direct link is edited, so a dotted literal
+  // in its save bar or panel headings stands in front of every link write.
+  it("resolves the link page keys in both locales", () => {
+    for (const key of [
+      "links.edit",
+      "links.add.create_and_edit",
+      "links.editor.title",
+      "links.editor.link",
+      "links.editor.sender_profile",
+      "links.editor.receiver_profile",
+      "links.editor.sender_empty",
+      "links.editor.channel_params",
+      "links.editor.delete",
+      "links.editor.not_found",
+      "links.editor.pending",
+      "links.editor.pending_hint",
+      "links.editor.apply",
+      "links.editor.saved",
+      "links.editor.sender",
+      "links.editor.receiver",
+      "links.editor.meta",
+      "links.editor.partial_title",
+      "links.editor.partial_body",
+      "profile.expert_hint",
+      "profile.no_settings",
+      "profile.hidden_count",
+      "page.title.link_editor",
+    ]) {
+      expect(de.has(key), `${key} missing in de`).toBe(true);
+      expect(en.has(key), `${key} missing in en`).toBe(true);
+    }
+  });
+
   // Every user-visible string ships in both locales (CLAUDE.md, SPA
   // operating concept). A key added to one catalogue only degrades to the
   // other language on screen instead of failing anywhere, so nothing but

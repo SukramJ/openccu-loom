@@ -1,10 +1,10 @@
 import { test, expect } from './helpers/fixtures';
-import { mockAllApis, mockHiddenSurfaces } from './helpers/mock-api';
+import { mockAllApis, mockHiddenSurfaces, addStylesForStableScreenshots } from './helpers/mock-api';
 
-// The fleet-wide direct-links overview. It is a read-only catalogue that
-// hands off to the owning device's link editor, so the two things worth
-// driving in a browser are that the hand-off exists and that it
-// disappears when the profile removes the editor it points at.
+// The fleet-wide direct-links overview. Each row hands off to the link's
+// own page, so the two things worth driving in a browser are that the
+// hand-off exists and that it disappears when the profile removes the
+// editor it points at.
 
 const URL = 'http://localhost:5173/app/#/links';
 
@@ -13,18 +13,17 @@ test.describe('Direct links overview', () => {
     await mockAllApis(page);
   });
 
-  test('offers the hand-off to the device link editor', async ({ page }) => {
+  test('offers the hand-off to the link page', async ({ page }) => {
     await page.goto(URL);
     await page.waitForSelector('#main');
     await page.waitForTimeout(500);
 
-    const edit = page.getByRole('link', { name: /Edit on device/ }).first();
-    await expect(edit).toHaveAttribute('href', /#\/devices\/[^?]+\?tab=links/);
+    const edit = page.getByRole('link', { name: 'Edit', exact: true }).first();
+    await expect(edit).toHaveAttribute('href', /#\/links\/[^/]+\/[^/]+$/);
   });
 
-  // The state that shipped broken: with the device's link tab hidden the
-  // row still offered "Edit on device" and landed on a device where that
-  // tab was gone.
+  // The state that shipped broken: with the link editor hidden the row
+  // still offered an edit action and landed on a page that could not edit.
   test('drops the hand-off when the device link editor is hidden', async ({ page }) => {
     await mockHiddenSurfaces(page, ['device.configure.links']);
 
@@ -34,13 +33,13 @@ test.describe('Direct links overview', () => {
 
     // The cross-device listing keeps its rows — the device detail has no
     // fleet-wide link view to fall back on.
-    await expect(page.getByRole('link', { name: /Edit on device/ })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Edit', exact: true })).toHaveCount(0);
     await expect(page.getByText(/link editor is hidden in this profile/i)).toBeVisible();
   });
 });
 
 // ---------------------------------------------------------------------------
-// The device's own link editor, driven end to end in a browser.
+// The link page, reached from a device and driven end to end in a browser.
 // ---------------------------------------------------------------------------
 
 const DEVICE = 'ABC123';
@@ -167,7 +166,46 @@ async function mockDeviceLinkEditor(page: import('@playwright/test').Page, putDe
             observed: true,
             value: 50,
           },
+          {
+            name: 'LONG_ON_TIME',
+            label: 'Long on time',
+            type: 'FLOAT',
+            operations: { read: true, write: true, event: true },
+            flags: { visible: true, internal: false, service: false },
+            observed: true,
+            value: 50,
+          },
         ],
+        // The receiver side carries easymode profiles, shaped like the
+        // archive's: profile 0 is Expert, the stored values match profile 3.
+        ...(address === RECEIVER.split(':')[0]
+          ? {
+              profile: {
+                receiver_type: 'SWITCH_VIRTUAL_RECEIVER',
+                sender_type: 'KEY_TRANSCEIVER',
+                active_profile_id: 3,
+                raw: {
+                  KEY_TRANSCEIVER: {
+                    profiles: [
+                      { id: 0, name: { en: 'Expert' }, params: {} },
+                      { id: 1, name: { en: 'Switch on' }, params: {} },
+                      {
+                        id: 3,
+                        name: { en: 'Switch on / off' },
+                        description: {
+                          en: 'A short or long press toggles the switch for the set time.',
+                        },
+                        params: {
+                          SHORT_ON_TIME: { constraint_type: 'range', min_value: 0, max_value: 100 },
+                          LONG_ON_TIME: { constraint_type: 'range', min_value: 0, max_value: 100 },
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            }
+          : {}),
       },
     });
   });
@@ -177,42 +215,45 @@ async function mockDeviceLinkEditor(page: import('@playwright/test').Page, putDe
   });
 }
 
-test.describe('Device link editor', () => {
+test.describe('Link page (Profileinstellung)', () => {
   test.beforeEach(async ({ page }) => {
     await mockAllApis(page);
   });
 
-  // The editor renders from primitives the list snapshots when it opens,
-  // not from the Link object — so the header parties and the save path
-  // are what a browser has to confirm still line up. The race that made
-  // that refactor necessary (leaving the editor while the PUT is in
-  // flight) is pinned in the vitest reproducer
-  // src/lib/components/links/LinkConfigPanel.null-link.test.ts: after a
-  // browser teardown has fully settled Svelte answers a destroyed
-  // derived from its cache, so the same gesture here cannot reach the
-  // defect and a test asserting it would be green either way.
-  test('opens a link from the list and writes its LINK paramset', async ({ page }) => {
+  // The device's link list hands off to the link's own page; the page
+  // names both parties and writes the receiver side with one Apply. The
+  // race of leaving the page while the PUT is in flight is pinned in the
+  // vitest reproducer src/routes/LinkEditor.leave-mid-save.test.ts: after
+  // a browser teardown has fully settled, Svelte answers a destroyed
+  // derived from its cache, so the same gesture here could not reach it.
+  test('opens a link from the device and writes its LINK paramset', async ({ page }) => {
     await mockDeviceLinkEditor(page, 0);
 
     await page.goto(DEVICE_URL);
     await page.waitForSelector('#main');
 
-    await page.getByRole('button', { name: /Configure/i }).first().click();
+    await page.getByRole('button', { name: 'Edit', exact: true }).first().click();
+    await expect(page).toHaveURL(
+      new RegExp(`#/links/${encodeURIComponent(SENDER)}/${encodeURIComponent(RECEIVER)}$`),
+    );
 
-    // Every party label comes through the snapshot, each with its own prop.
     await expect(page.getByRole('heading', { name: 'Stairwell light' })).toBeVisible();
-    await expect(
-      page.getByText('Test Switch · Push-button → Hall lamp · Switch'),
-    ).toBeVisible();
+    const header = page.getByTestId('link-peer-header');
+    await expect(header.getByText('Push-button')).toBeVisible();
+    await expect(header.getByText('Switch', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Profile settings – sender' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Profile settings – receiver' })).toBeVisible();
 
-    const input = page.locator('input[type="number"]').first();
+    const input = page
+      .locator('[aria-labelledby="link-receiver-heading"] input[type="number"]')
+      .first();
     await expect(input).toBeVisible();
     await input.fill('75');
 
     const putBody = page.waitForRequest(
       (r) => r.method() === 'PUT' && r.url().includes('/link-ps/'),
     );
-    await page.getByRole('button', { name: /Save/i }).first().click();
+    await page.getByRole('button', { name: 'Apply', exact: true }).click();
     // A LINK save is previewed before it leaves; its request line names the
     // per-peer endpoint the write actually uses.
     const dialog = page.getByRole('dialog', { name: 'Review this write' });
@@ -220,8 +261,34 @@ test.describe('Device link editor', () => {
     await expect(dialog.getByText(`/link-ps/${SENDER}`)).toBeVisible();
     await dialog.getByRole('button', { name: 'Write', exact: true }).click();
     const request = await putBody;
-    // The peer in the path is the sender address the snapshot carries.
-    expect(decodeURIComponent(request.url())).toContain(`/link-ps/${SENDER}`);
-    await expect(page.getByText('Saved.')).toBeVisible();
+    // The receiver side is written for the sender as its peer.
+    expect(decodeURIComponent(request.url())).toContain(`${RECEIVER}/link-ps/${SENDER}`);
+    await expect(page.getByText('Link saved.')).toBeVisible();
   });
 });
+
+for (const theme of ['light', 'dark'] as const) {
+  test.describe(`Link page visual - ${theme}`, () => {
+    test.beforeEach(async ({ page }) => {
+      await mockAllApis(page);
+      await page.addInitScript((t) => {
+        localStorage.setItem(
+          'openccu-loom.prefs.v1',
+          JSON.stringify({ theme: t, locale: 'en', navCollapsed: false, expertMode: false }),
+        );
+      }, theme);
+    });
+
+    test(`link page ${theme}`, async ({ page }) => {
+      await mockDeviceLinkEditor(page, 0);
+      await page.goto(
+        `http://localhost:5173/app/#/links/${encodeURIComponent(SENDER)}/${encodeURIComponent(RECEIVER)}`,
+      );
+      await page.waitForSelector('#main');
+      await expect(page.getByTestId('link-peer-header')).toBeVisible();
+      await page.waitForTimeout(1500);
+      await addStylesForStableScreenshots(page);
+      await expect(page).toHaveScreenshot(`link-page-${theme}.png`, { fullPage: true });
+    });
+  });
+}

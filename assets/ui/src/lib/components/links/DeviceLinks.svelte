@@ -8,7 +8,6 @@
   import Input from "$lib/components/ui/Input.svelte";
   import Label from "$lib/components/ui/Label.svelte";
   import AddLinkForm from "./AddLinkForm.svelte";
-  import LinkConfigPanel from "./LinkConfigPanel.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { notifyWakeupPending } from "$lib/links/wakeup-hint";
@@ -29,37 +28,6 @@
   let loadError = $state<string | null>(null);
   let adding = $state(false);
 
-  // The open link editor is held as a key plus an immutable snapshot of
-  // the strings it renders, not as the Link object itself.
-  //
-  // LinkConfigPanel's props feed ChannelPanel, whose save() reads them
-  // again after `await api.putLinkParamset(...)`. With the Link object as
-  // the prop, closing the editor while that PUT was in flight nulled the
-  // holder underneath the running save and it died on
-  // `link.sender_address` — the CCU had taken the write, and the UI still
-  // reported "channel.save_failed". The key drives the {#if}; the
-  // snapshot is never cleared, so a late read always finds strings.
-  type LinkEditorTarget = {
-    senderAddress: string;
-    receiverAddress: string;
-    name: string;
-    senderDeviceLabel: string;
-    senderChannelLabel: string;
-    receiverDeviceLabel: string;
-    receiverChannelLabel: string;
-  };
-  const noEditorTarget: LinkEditorTarget = {
-    senderAddress: "",
-    receiverAddress: "",
-    name: "",
-    senderDeviceLabel: "",
-    senderChannelLabel: "",
-    receiverDeviceLabel: "",
-    receiverChannelLabel: "",
-  };
-  // "<sender>-><receiver>" while an editor is open, null for list view.
-  let editingKey = $state<string | null>(null);
-  let editingTarget = $state<LinkEditorTarget>(noEditorTarget);
   // The link whose name/description is being renamed (or null). Opening
   // the rename form prefills these draft fields from the link.
   let renaming = $state<Link | null>(null);
@@ -208,8 +176,16 @@
   async function onAdded(result: {
     senderAddress: string;
     receiverAddress: string;
+    edit: boolean;
   }) {
     adding = false;
+    // "Erstellen und bearbeiten": the profile is chosen on the link's own
+    // page, so go there instead of back to the list.
+    if (result.edit) {
+      toastStore.success(t("links.created"));
+      location.hash = linkHref(result.senderAddress, result.receiverAddress);
+      return;
+    }
     // A new link writes config to both endpoints; a battery device
     // applies it only on its next wakeup. The wakeup hint (when shown)
     // stands in for the plain "created" toast.
@@ -221,19 +197,8 @@
     await load();
   }
 
-  function startEditing(link: Link) {
-    editingTarget = {
-      senderAddress: link.sender_address,
-      receiverAddress: link.receiver_address,
-      name: link.name ?? "",
-      senderDeviceLabel: link.sender_device_name || link.sender_address,
-      senderChannelLabel:
-        link.sender_channel_type_label || link.sender_channel_type || "",
-      receiverDeviceLabel: link.receiver_device_name || link.receiver_address,
-      receiverChannelLabel:
-        link.receiver_channel_type_label || link.receiver_channel_type || "",
-    };
-    editingKey = `${link.sender_address}->${link.receiver_address}`;
+  function linkHref(senderAddress: string, receiverAddress: string): string {
+    return `#/links/${encodeURIComponent(senderAddress)}/${encodeURIComponent(receiverAddress)}`;
   }
 
   function startRename(link: Link) {
@@ -296,20 +261,7 @@
   }
 </script>
 
-{#if editingKey}
-  <LinkConfigPanel
-    senderAddress={editingTarget.senderAddress}
-    receiverAddress={editingTarget.receiverAddress}
-    name={editingTarget.name}
-    senderDeviceLabel={editingTarget.senderDeviceLabel}
-    senderChannelLabel={editingTarget.senderChannelLabel}
-    receiverDeviceLabel={editingTarget.receiverDeviceLabel}
-    receiverChannelLabel={editingTarget.receiverChannelLabel}
-    {locale}
-    onBack={() => (editingKey = null)}
-  />
-{:else}
-  <Card class="p-4">
+<Card class="p-4">
     <header class="mb-4 flex items-center justify-between gap-3">
       <div>
         <h2 class="text-lg font-semibold">{t("links.title")}</h2>
@@ -510,9 +462,9 @@
                 type="button"
                 variant="outline"
                 size="sm"
-                onclick={() => startEditing(link)}
+                onclick={() => (location.hash = linkHref(link.sender_address, link.receiver_address))}
               >
-                {t("links.configure")}
+                {t("links.edit")}
               </Button>
               <Button
                 type="button"
@@ -528,4 +480,3 @@
       </ul>
     {/if}
   </Card>
-{/if}

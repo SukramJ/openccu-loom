@@ -10,7 +10,7 @@ permissions:
 
 env:
   CGO_ENABLED: "0"
-  GO_VERSION: "1.27.1"
+  GO_VERSION: "1.27.2"
   # Same per-package ceiling as ci.yml and the Makefile's
   # GO_TEST_TIMEOUT. The derivation, and the rule against raising it
   # reflexively when it trips, are documented on ci.yml's test-shard job.

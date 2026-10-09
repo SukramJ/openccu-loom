@@ -43,6 +43,8 @@
      * Wired only in the MASTER editor; omitted elsewhere.
      */
     onDetermine?: (name: string) => Promise<void>;
+    /** False hides the raw CCU names under the labels. */
+    showRawName?: boolean;
   };
 
   let {
@@ -57,6 +59,7 @@
     onParamChange,
     onAction,
     onDetermine,
+    showRawName = true,
   }: Props = $props();
 
   // Build the per-field brightness helper for a condition-threshold
@@ -215,6 +218,7 @@
       unitError={errors[pair.unitParam.name] ?? null}
       valueError={errors[pair.valueParam.name] ?? null}
       onChange={(name, v) => onParamChange(name, v)}
+      {showRawName}
     />
   {/each}
   {#if !useCategoryGrouping}
@@ -223,6 +227,7 @@
       <ParameterField
         parameter={dis ? { ...p, label: decorateLabel(p, dis) } : p}
         nameBadge={dis?.emphasizeName ?? false}
+        {showRawName}
         value={currentValue(p)}
         dirty={dirty.has(p.name)}
         error={errors[p.name] ?? null}
@@ -251,6 +256,7 @@
             <ParameterField
               parameter={dis ? { ...p, label: decorateLabel(p, dis) } : p}
               nameBadge={dis?.emphasizeName ?? false}
+              {showRawName}
               value={currentValue(p)}
               dirty={dirty.has(p.name)}
               error={errors[p.name] ?? null}

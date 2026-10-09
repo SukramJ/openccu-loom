@@ -18,6 +18,14 @@
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import ProfileSelector from "./ProfileSelector.svelte";
+  import LinkKeypressTable from "./LinkKeypressTable.svelte";
+  import {
+    EXPERT_PROFILE_ID,
+    activeVariant,
+    profilePatch,
+    profileVariants,
+    type ProfileVariant,
+  } from "$lib/links/link-profiles";
   import SubsetGroupSelector from "./SubsetGroupSelector.svelte";
   import SecureTransmission from "./SecureTransmission.svelte";
   import WritePreviewDialog from "./WritePreviewDialog.svelte";
@@ -57,7 +65,6 @@
   import type { DataPointChangedEvent } from "$lib/api/types";
   import { dirty } from "$lib/stores/dirty.svelte";
   import SessionTimeoutWarning from "$lib/components/ui/SessionTimeoutWarning.svelte";
-  import Tabs from "$lib/components/ui/Tabs.svelte";
   import type { EditSessionResponse } from "$lib/api/types";
   import { t } from "$lib/i18n";
 
@@ -96,6 +103,21 @@
      * hidden. Optional; omit when the panel is always shown.
      */
     onLoaded?: (info: { count: number; error: boolean }) => void;
+    /**
+     * The page around the panel owns saving. The panel drops its own
+     * Reset / Save buttons and sticky save bar, reports its unsaved-edit
+     * count through `onDirtyChange`, and is saved through the exported
+     * `save()` / `discard()`. The link page uses this so one
+     * "Übernehmen" writes the sender and the receiver side together.
+     */
+    hosted?: boolean;
+    onDirtyChange?: (count: number) => void;
+    /**
+     * Which end of a direct link this LINK panel edits. The device test
+     * triggers the receiver as if the sender fired, so it is offered on
+     * the receiver side only.
+     */
+    linkRole?: "sender" | "receiver";
   };
 
   let {
@@ -106,6 +128,9 @@
     locale,
     pushesConfigPending = false,
     onLoaded,
+    hosted = false,
+    onDirtyChange,
+    linkRole = "receiver",
   }: Props = $props();
 
   const channelAddress = $derived(`${address}:${channel}`);
@@ -177,6 +202,7 @@
       values = { ...seed };
       stack = emptyStack();
       lockedParams = new Set();
+      profileId = detectedProfileId(next, ps, loc);
       onLoaded?.({ count: next.parameters.length, error: false });
     } catch (err) {
       if (generation !== loadGeneration) return;
@@ -454,6 +480,7 @@
     values = result.values;
     stack = result.state;
     lockedParams = result.lockedParams;
+    if (result.profile !== undefined) profileId = result.profile;
     banner = null;
   }
 
@@ -462,6 +489,7 @@
     values = result.values;
     stack = result.state;
     lockedParams = result.lockedParams;
+    if (result.profile !== undefined) profileId = result.profile;
     banner = null;
   }
 
@@ -508,53 +536,88 @@
     !!schema && schema.parameters.some((p) => p.hidden_by_default),
   );
 
-  const visibleParams = $derived(
-    schema
-      ? visibleParameters(schema.parameters, schema.visibility, values).filter(
-          (p) => showAdvanced || !p.hidden_by_default,
-        )
-      : [],
+  // --- Link profile (LINK only) ----------------------------------
+  // The selected easymode profile decides which LINK parameters the
+  // panel shows, as the CCU WebUI's profile dropdown decides which
+  // easymode form it renders: a profile shows only the parameters it
+  // leaves to the operator, "Experte" (profile 0) shows the whole
+  // paramset including jump targets and conditions. A link the archive
+  // has no profiles for is edited in the expert view.
+  let profileId = $state<number | null>(null);
+
+  function detectedProfileId(
+    s: UISchema,
+    ps: "VALUES" | "MASTER" | "LINK",
+    loc: string,
+  ): number | null {
+    if (ps !== "LINK" || !s.profile) return null;
+    return activeVariant(profileVariants(s.profile, loc), s.profile.active_profile_id)?.id ?? null;
+  }
+
+  const profileOptions = $derived(
+    paramset === "LINK" && schema?.profile ? profileVariants(schema.profile, locale) : [],
+  );
+  const selectedProfile = $derived(
+    profileOptions.find((v) => v.id === profileId) ?? null,
+  );
+  const linkExpert = $derived(
+    paramset === "LINK" &&
+      (selectedProfile === null || selectedProfile.id === EXPERT_PROFILE_ID),
+  );
+  const profileEditable = $derived(
+    paramset === "LINK" && selectedProfile && !linkExpert
+      ? new Set(profilePatch(selectedProfile).editable)
+      : null,
   );
 
-  // LINK paramsets carry keypress-specific groups (common/short/long)
-  // which we render as tabs instead of three stacked sections. Falls
-  // back to stacked rendering when the schema has no keypress tags
-  // (VALUES, MASTER, pre-classifier LINK).
-  const keypressGroups = $derived(
-    (schema?.groups ?? []).filter((g) => g.id.startsWith("keypress.")),
-  );
-  const useKeypressTabs = $derived(
-    paramset === "LINK" && keypressGroups.length > 1,
-  );
-
-  type KeypressTab = "common" | "short" | "long";
-  let activeKeypressTab = $state<KeypressTab>("common");
-  // When the schema (or visible-params filter) removes the current
-  // tab, fall back to the first available group.
-  $effect(() => {
-    if (!useKeypressTabs) return;
-    const availableIds = new Set(keypressGroups.map((g) => g.id));
-    const wantedId = `keypress.${activeKeypressTab}`;
-    if (!availableIds.has(wantedId)) {
-      const first = keypressGroups[0]?.id;
-      if (first === "keypress.short") activeKeypressTab = "short";
-      else if (first === "keypress.long") activeKeypressTab = "long";
-      else activeKeypressTab = "common";
+  // Choosing a profile stages its values at once as one undoable edit;
+  // the device sees them only on save. Switching to Experte stages
+  // nothing and releases the fields the previous profile held fixed.
+  function selectProfile(variant: ProfileVariant) {
+    const before = profileId;
+    if (variant.id === EXPERT_PROFILE_ID) {
+      stack = pushEntry(
+        stack,
+        entryFromPatch({}, values, "profile.select", { before: [...lockedParams], after: [] }, {
+          before,
+          after: variant.id,
+        }),
+      );
+      lockedParams = new Set();
+      profileId = variant.id;
+      return;
     }
+    const { patch, fixed } = profilePatch(variant);
+    stack = pushEntry(
+      stack,
+      entryFromPatch(patch, values, "profile.apply", { before: [...lockedParams], after: fixed }, {
+        before,
+        after: variant.id,
+      }),
+    );
+    values = { ...values, ...patch };
+    lockedParams = new Set(fixed);
+    profileId = variant.id;
+  }
+
+  const visibleParams = $derived.by(() => {
+    if (!schema) return [];
+    const all = visibleParameters(schema.parameters, schema.visibility, values);
+    if (paramset === "LINK") {
+      if (linkExpert) return all;
+      return all.filter((p) => !p.hidden_by_default && (profileEditable?.has(p.name) ?? false));
+    }
+    return all.filter((p) => showAdvanced || !p.hidden_by_default);
   });
 
-  function keypressTabLabel(id: string): string {
-    switch (id) {
-      case "keypress.common":
-        return t("channel.tab.common");
-      case "keypress.short":
-        return t("channel.tab.short");
-      case "keypress.long":
-        return t("channel.tab.long");
-      default:
-        return id;
-    }
-  }
+  // How many parameters the profile view leaves out — shown so the
+  // operator knows "Experte" holds more than the form does.
+  const hiddenByProfile = $derived(
+    schema && paramset === "LINK" && !linkExpert
+      ? visibleParameters(schema.parameters, schema.visibility, values).length -
+          visibleParams.length
+      : 0,
+  );
 
   // groupLabel localises a parameter group's heading. The curated
   // pattern-based groups carry a stable id (temperature, timing, …) and
@@ -619,8 +682,9 @@
    * do: those are immediate control actions whose effect is the point, and a
    * dialog in front of a light switch is friction with nothing behind it.
    */
-  function requestSave() {
-    if (!schema || dirtyNames.length === 0 || hasErrors) return;
+  function requestSave(): Promise<boolean> {
+    if (!schema || hasErrors) return Promise.resolve(false);
+    if (dirtyNames.length === 0) return Promise.resolve(true);
     // Refuse a lost lock here rather than after the preview: previewing a
     // write that cannot happen asks the operator to review and approve a
     // change the daemon will refuse, and the refusal then reads as a failure
@@ -628,14 +692,26 @@
     // the lock can lapse while the dialog is open.
     if (lockedByOther || lockLost) {
       toastStore.error(t("channel.lock_lost"), t("channel.lock_lost_detail"));
-      return;
+      return Promise.resolve(false);
     }
     if (prefs.writePreview && paramset !== "VALUES") {
       previewEntries = buildPreview(schema, values, serverValues, dirtyNames);
       previewOpen = true;
-      return;
+      // Settled by the dialog: confirm runs the write, cancel reports
+      // "not saved" so a hosting page stops instead of writing the other side.
+      return new Promise((resolve) => {
+        previewResolve = resolve;
+      });
     }
-    void performSave();
+    return performSave();
+  }
+
+  let previewResolve: ((saved: boolean) => void) | null = null;
+
+  function cancelPreview() {
+    previewOpen = false;
+    previewResolve?.(false);
+    previewResolve = null;
   }
 
   // MASTER multi-apply. Offered only while the panel holds unsaved MASTER
@@ -658,18 +734,26 @@
 
   function confirmPreview() {
     previewOpen = false;
-    void performSave();
+    const resolve = previewResolve;
+    previewResolve = null;
+    void performSave().then((saved) => resolve?.(saved));
   }
 
-  async function performSave() {
-    if (!schema || dirtyNames.length === 0 || hasErrors) return;
+  /**
+   * Write the unsaved edits. Resolves true when the device took them
+   * (or there was nothing to write), false when the write was refused
+   * or failed — the failure itself is already toasted here.
+   */
+  async function performSave(): Promise<boolean> {
+    if (!schema || hasErrors) return false;
+    if (dirtyNames.length === 0) return true;
     // Refuse to write once our edit lock was taken over or dropped
     // mid-life: PUTting now would silently clobber whoever holds the
     // lock. A lock we never acquired (sessions unwired → both null)
     // still saves optimistically. The server's 409/423 is the backstop.
     if (lockedByOther || lockLost) {
       toastStore.error(t("channel.lock_lost"), t("channel.lock_lost_detail"));
-      return;
+      return false;
     }
     saving = true;
     banner = null;
@@ -732,12 +816,16 @@
           t("channel.readback.body", { count: readBack.length }),
         );
       }
-      // A LINK paramset write goes to a battery device only on its next
-      // wakeup; surface that hint in place of the plain success toast.
-      const wakeupShown =
-        paramset === "LINK" ? await notifyWakeupPending([address]) : false;
-      if (!wakeupShown) toastStore.success(t("channel.saved_short"));
       banner = null;
+      // A hosting page reports the outcome once for all its panels.
+      if (!hosted) {
+        // A LINK paramset write goes to a battery device only on its next
+        // wakeup; surface that hint in place of the plain success toast.
+        const wakeupShown =
+          paramset === "LINK" ? await notifyWakeupPending([address]) : false;
+        if (!wakeupShown) toastStore.success(t("channel.saved_short"));
+      }
+      return true;
     } catch (err) {
       // 423 Locked: our edit lock lapsed mid-save (heartbeat missed or
       // taken over). Drop the dead session and flag the loss — lockLost
@@ -750,6 +838,7 @@
       } else {
         toastStore.error(t("channel.save_failed"), friendlyError(err, t));
       }
+      return false;
     } finally {
       saving = false;
     }
@@ -759,8 +848,24 @@
     values = { ...serverValues };
     stack = emptyStack();
     lockedParams = new Set();
+    if (schema) profileId = detectedProfileId(schema, paramset, locale);
     banner = null;
   }
+
+  // Entry points for a hosting page (see the `hosted` prop). save()
+  // takes the same path as the panel's own Save button, write preview
+  // included, and tells the page whether the device took the edits.
+  export function save(): Promise<boolean> {
+    return requestSave();
+  }
+
+  export function discard(): void {
+    reset();
+  }
+
+  $effect(() => {
+    onDirtyChange?.(dirtyNames.length);
+  });
 
   // Determine one parameter's live value from the device and stage it
   // into the working copy through onParamChange, so dirty tracking + undo
@@ -808,9 +913,8 @@
 
   // Parameters the last-applied profile fixed. Locked fields are
   // rendered as disabled so the user does not accidentally desync
-  // the form from the preset. Clear on reset / reload / save; user
-  // can unlock explicitly with the "Profil aufheben"-button below
-  // the profile selector.
+  // the form from the preset. Cleared on reset / reload / save; for a
+  // link, switching to "Experte" releases them.
   let lockedParams = $state<Set<string>>(new Set());
 
   // --- Export / Import ------------------------------------------
@@ -923,11 +1027,6 @@
     banner = t("channel.profile_staged");
   }
 
-  function unlockProfile() {
-    lockedParams = new Set();
-    banner = null;
-  }
-
   // Test the direct link at the device (V03): trigger the receiver
   // (channelAddress) as if the sender (peer) fired. It physically actuates
   // the device, so it is confirmed first.
@@ -1013,14 +1112,17 @@
 {:else if schema}
   <Card class="p-4">
     <header class="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <h2 class="text-lg font-semibold">
-          {schema.channel.label || schema.channel.type}
-        </h2>
-        <p class="text-xs text-[var(--ha-secondary-text-color)]">
-          {schema.channel.address} · {t("channel.kanal", { n: schema.channel.number })}
-        </p>
-      </div>
+      <!-- A hosting page names the channel in its own header. -->
+      {#if !hosted}
+        <div>
+          <h2 class="text-lg font-semibold">
+            {schema.channel.label || schema.channel.type}
+          </h2>
+          <p class="text-xs text-[var(--ha-secondary-text-color)]">
+            {schema.channel.address} · {t("channel.kanal", { n: schema.channel.number })}
+          </p>
+        </div>
+      {/if}
       <div class="flex flex-wrap items-center gap-2">
         {#if banner}
           <span class="text-xs text-[var(--ha-secondary-text-color)]">{banner}</span>
@@ -1065,23 +1167,25 @@
         >
           {t("channel.import")}
         </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onclick={reset}
-          disabled={dirtyNames.length === 0 || saving}
-        >
-          {t("common.reset")}
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          onclick={requestSave}
-          disabled={dirtyNames.length === 0 || saving || hasErrors}
-        >
-          {saving ? t("common.saving") : t("channel.save_n", { count: dirtyNames.length })}
-        </Button>
+        {#if !hosted}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onclick={reset}
+            disabled={dirtyNames.length === 0 || saving}
+          >
+            {t("common.reset")}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            onclick={() => void requestSave()}
+            disabled={dirtyNames.length === 0 || saving || hasErrors}
+          >
+            {saving ? t("common.saving") : t("channel.save_n", { count: dirtyNames.length })}
+          </Button>
+        {/if}
       </div>
     </header>
 
@@ -1104,41 +1208,18 @@
       </div>
     {/if}
 
-    {#if schema.profile}
-      <div class="mb-4">
-        <!-- ChannelPanel itself can be reused across a channel switch (the
-             caller updates address/channel props rather than remounting —
-             see ChannelPanel.channel-switch-race.test.ts), so without a key
-             ProfileSelector's own component instance — and the `userTouched`
-             state that locks its dropdown to whatever the previous channel's
-             user selected — would survive the switch and keep showing the
-             old channel's profile forever. Keying on channelAddress (plus
-             peer, for LINK) forces a fresh instance, and therefore a fresh
-             `userTouched = false`, whenever the underlying channel changes;
-             a same-channel reload (e.g. after Save) keeps the same key and
-             so does not disturb an in-progress manual selection. -->
-        {#key `${channelAddress}:${peer ?? ""}`}
+    {#if paramset === "LINK" && (profileOptions.length > 0 || (peer && linkRole === "receiver"))}
+      <div class="mb-4 space-y-3">
+        {#if profileOptions.length > 0}
           <ProfileSelector
-            profile={schema.profile}
-            locale={locale}
-            currentValues={values}
-            onApply={applyProfilePatch}
+            variants={profileOptions}
+            selectedId={profileId ?? EXPERT_PROFILE_ID}
+            detectedId={schema.profile?.active_profile_id ?? EXPERT_PROFILE_ID}
+            onSelect={selectProfile}
           />
-        {/key}
-        {#if lockedParams.size > 0}
-          <p class="mt-2 flex items-center gap-2 text-xs text-[var(--ha-secondary-text-color)]">
-            <span>{t("channel.lock_count", { count: lockedParams.size })}</span>
-            <button
-              type="button"
-              class="text-brand-700 underline hover:text-brand-800"
-              onclick={unlockProfile}
-            >
-              {t("channel.unlock_label")}
-            </button>
-          </p>
         {/if}
-        {#if paramset === "LINK" && peer}
-          <div class="mt-2 flex flex-wrap items-center gap-2">
+        {#if peer && linkRole === "receiver"}
+          <div class="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -1160,7 +1241,7 @@
       </div>
     {/if}
 
-    {#if hasAdvanced}
+    {#if hasAdvanced && paramset !== "LINK"}
       <label class="mb-4 flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
         <input
           type="checkbox"
@@ -1192,76 +1273,30 @@
       </label>
     {/if}
 
-    {#if useKeypressTabs}
-      <!-- LINK paramsets: tab between common / short / long keypress
-           groups. Matches homematicip-local-frontend's link-config
-           view where the three sections are UX-sibling tabs rather
-           than stacked. -->
-      <Tabs
-        class="mb-4"
-        active={activeKeypressTab}
-        onSelect={(key) => (activeKeypressTab = key as KeypressTab)}
-        items={keypressGroups.map((group) => ({
-          key: group.id.split(".")[1],
-          label: keypressTabLabel(group.id),
-          badge: group.parameters.length,
-        }))}
-      />
-      {@const activeGroup = keypressGroups.find(
-        (g) => g.id === `keypress.${activeKeypressTab}`,
-      )}
-      {#if activeGroup}
-        {@const activeItems = activeGroup.parameters
-          .map((name) => parameterIndex.get(name))
-          .filter((p): p is NonNullable<typeof p> => p != null)}
-        {#if activeItems.length > 0}
-          <section class="mb-6">
-            <ParameterGrid
-              parameters={activeItems}
-              {values}
-              dirty={dirtySet}
-              errors={crossErrors}
-              readBack={readBackMap}
-              {locale}
-              locked={lockedParams}
-              brightnessSource={brightnessSource}
-              {onParamChange}
-              onAction={runAction}
-              onDetermine={determineHandler}
-            />
-          </section>
-        {:else}
-          <p class="mb-6 text-sm text-[var(--ha-secondary-text-color)]">
-            {t("channel.no_params_in_group")}
-          </p>
-        {/if}
+    {#if paramset === "LINK"}
+      {#if visibleParams.length > 0}
+        <LinkKeypressTable
+          parameters={visibleParams}
+          {values}
+          dirty={dirtySet}
+          errors={crossErrors}
+          readBack={readBackMap}
+          {locale}
+          locked={lockedParams}
+          {brightnessSource}
+          {onParamChange}
+          onAction={runAction}
+          showRawName={linkExpert}
+        />
+      {:else}
+        <p class="text-sm text-[var(--ha-secondary-text-color)]">
+          {t("profile.no_settings")}
+        </p>
       {/if}
-      {@const keypressNames = new Set(
-        keypressGroups.flatMap((g) => g.parameters),
-      )}
-      {@const leftover = visibleParams.filter(
-        (p) => !keypressNames.has(p.name),
-      )}
-      {#if leftover.length > 0}
-        <section>
-          <h3 class="mb-3 flex items-center gap-2 border-b border-slate-200 pb-1 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:text-slate-200">
-            {t("channel.other")}
-            <Badge variant="muted">{leftover.length}</Badge>
-          </h3>
-          <ParameterGrid
-            parameters={leftover}
-            {values}
-            dirty={dirtySet}
-            errors={crossErrors}
-            readBack={readBackMap}
-            {locale}
-            locked={lockedParams}
-            brightnessSource={brightnessSource}
-            {onParamChange}
-            onAction={runAction}
-            onDetermine={determineHandler}
-          />
-        </section>
+      {#if hiddenByProfile > 0}
+        <p class="mt-3 text-xs text-[var(--ha-secondary-text-color)]">
+          {t("profile.hidden_count", { count: hiddenByProfile })}
+        </p>
       {/if}
     {:else if schema.groups && schema.groups.length > 0}
       <!-- Grouped rendering: only parameters inside a known group are
@@ -1336,7 +1371,7 @@
       />
     {/if}
 
-    {#if dirtyNames.length > 0}
+    {#if dirtyNames.length > 0 && !hosted}
       <!-- Sticky save bar: mirrors the header's Reset/Save so they stay
            reachable on long channel-config pages without scrolling up.
            Negative margins bleed to the Card's p-4 edges. -->
@@ -1359,7 +1394,7 @@
         <Button type="button" variant="outline" size="sm" onclick={reset} disabled={saving}>
           {t("common.reset")}
         </Button>
-        <Button type="button" size="sm" onclick={requestSave} disabled={saving || hasErrors}>
+        <Button type="button" size="sm" onclick={() => void requestSave()} disabled={saving || hasErrors}>
           {saving ? t("common.saving") : t("channel.save_n", { count: dirtyNames.length })}
         </Button>
       </div>
@@ -1371,7 +1406,7 @@
   open={previewOpen}
   entries={previewEntries}
   request={previewRequest}
-  onCancel={() => (previewOpen = false)}
+  onCancel={cancelPreview}
   onConfirm={confirmPreview}
 />
 

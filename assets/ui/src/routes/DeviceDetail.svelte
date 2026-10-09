@@ -312,8 +312,8 @@
     }
   }
 
-  // Deep-link into a specific configure sub-tab (e.g. "links" from the global
-  // direct-links overview's "edit on device" action), so the view opens on the
+  // Deep-link into a specific configure sub-tab (e.g. "channels" from the link
+  // page's "Kanalparameter" action, which also names the channel), so the view opens on the
   // requested tab instead of the default channels strip. Tracks the prop
   // rather than running once at mount: this component stays mounted while the
   // router only swaps `address` and `sub` (see the reload effect above), so a
@@ -321,7 +321,12 @@
   // page already open would otherwise land on the previously selected tab.
   $effect(() => {
     const want = sub;
-    if (want !== "links" && want !== "schedule" && want !== "device-config") {
+    if (
+      want !== "links" &&
+      want !== "schedule" &&
+      want !== "device-config" &&
+      want !== "channels"
+    ) {
       // A route without a `?tab=` parameter must undo the previous deep
       // link, not inherit it: following `#/devices/A?tab=schedule` with
       // `#/devices/B` otherwise keeps the schedule sub-tab selected for a
