@@ -7,7 +7,6 @@
   "effective": {
     "device.configure": true,
     "device.configure.channels": true,
-    "device.configure.device-config": true,
     "device.configure.links": true,
     "device.configure.schedule": true,
     "device.history": true,
@@ -462,17 +461,6 @@
         "embedded": false,
         "standalone": true
       },
-      "multi_central_visible": true,
-      "ha_owns": true
-    },
-    {
-      "id": "device.configure.device-config",
-      "group": "device",
-      "defaults": {
-        "embedded": false,
-        "standalone": true
-      },
-      "parent": "device.configure",
       "multi_central_visible": true,
       "ha_owns": true
     },

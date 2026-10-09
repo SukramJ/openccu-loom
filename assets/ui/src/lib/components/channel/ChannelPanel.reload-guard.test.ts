@@ -61,6 +61,7 @@ vi.mock("$lib/stores/events.svelte", () => ({
 }));
 
 import ChannelPanel from "./ChannelPanel.svelte";
+import { prefs } from "$lib/stores/preferences.svelte";
 
 function masterSchema(address: string, number: number): UISchema {
   return {
@@ -104,10 +105,11 @@ function expertCheckbox(container: HTMLElement): HTMLInputElement {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // expertMode is seeded from localStorage ("openccu-loom.expert_mode"),
-  // and the checkbox test below flips it for real via setExpert() — clear
-  // it so that write does not leak into a later test's initial state.
+  // expertMode is the global preference, and the checkbox test below flips
+  // it for real — reset it so that write does not leak into a later test's
+  // initial state.
   localStorage.clear();
+  prefs.expertMode = false;
   mockUiSchema.mockImplementation((address: string, channel: number) =>
     Promise.resolve(masterSchema(address, channel)),
   );
@@ -118,6 +120,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   localStorage.clear();
+  prefs.expertMode = false;
 });
 
 describe("ChannelPanel — locale/expert-mode reload guard", () => {

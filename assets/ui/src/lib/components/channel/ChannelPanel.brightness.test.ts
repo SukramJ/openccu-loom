@@ -196,7 +196,7 @@ describe("ChannelPanel — motion-detector brightness helper (LINK)", () => {
     expect(screen.queryByTitle(BUTTON_TITLE)).not.toBeInTheDocument();
     // The panel itself still rendered (schema loaded fine); only the
     // optional brightness context failed to load.
-    expect(screen.getByText("channel.export")).toBeInTheDocument();
+    expect(screen.getByLabelText("channel.more_actions")).toBeInTheDocument();
   });
 
   it("does not query the peer at all for a VALUES paramset", async () => {

@@ -17,6 +17,8 @@
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
+  import Icon from "$lib/components/ui/Icon.svelte";
+  import OverflowMenu from "$lib/components/ui/OverflowMenu.svelte";
   import ProfileSelector from "./ProfileSelector.svelte";
   import LinkKeypressTable from "./LinkKeypressTable.svelte";
   import {
@@ -29,7 +31,7 @@
   import SubsetGroupSelector from "./SubsetGroupSelector.svelte";
   import SecureTransmission from "./SecureTransmission.svelte";
   import WritePreviewDialog from "./WritePreviewDialog.svelte";
-  import { prefs } from "$lib/stores/preferences.svelte";
+  import { prefs, setExpertMode } from "$lib/stores/preferences.svelte";
   import {
     buildPreview,
     readBackDiff,
@@ -152,22 +154,13 @@
   // one action at a time. Cleared on load and after save.
   let stack = $state<ChangeStackState>(emptyStack());
 
-  // Expert toggle (MASTER only): when enabled, the backend stops
-  // filtering out untranslated parameters. Persisted in localStorage
-  // so the user does not have to re-enable it on every nav.
-  let expertMode = $state<boolean>(
-    typeof localStorage !== "undefined" &&
-      localStorage.getItem("openccu-loom.expert_mode") === "1",
-  );
+  // The one expert switch (prefs.expertMode, shared with Settings): the
+  // backend stops filtering out untranslated MASTER parameters, and the
+  // raw CCU names show under every label.
+  const expertMode = $derived(prefs.expertMode);
 
   function setExpert(v: boolean) {
-    expertMode = v;
-    try {
-      if (v) localStorage.setItem("openccu-loom.expert_mode", "1");
-      else localStorage.removeItem("openccu-loom.expert_mode");
-    } catch {
-      // storage may be disabled; the in-memory state still works.
-    }
+    setExpertMode(v);
   }
 
   // Monotonic generation counter guarding the async load path. Every
@@ -609,6 +602,10 @@
     }
     return all.filter((p) => showAdvanced || !p.hidden_by_default);
   });
+
+  // Raw CCU parameter names belong to the expert view: the global expert
+  // mode, or a link edited under its "Experte" profile.
+  const showRawNames = $derived(expertMode || linkExpert);
 
   // How many parameters the profile view leaves out — shown so the
   // operator knows "Experte" holds more than the form does.
@@ -1111,7 +1108,9 @@
   </Card>
 {:else if schema}
   <Card class="p-4">
-    <header class="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <header
+      class="mb-4 flex flex-wrap items-center gap-3 {hosted ? 'justify-end' : 'justify-between'}"
+    >
       <!-- A hosting page names the channel in its own header. -->
       {#if !hosted}
         <div>
@@ -1127,46 +1126,49 @@
         {#if banner}
           <span class="text-xs text-[var(--ha-secondary-text-color)]">{banner}</span>
         {/if}
+        <!-- Undo / redo stay in view; export and import are rare and
+             live in the overflow menu. -->
         <Button
           type="button"
-          variant="outline"
-          size="sm"
+          variant="ghost"
+          size="icon"
           onclick={onUndo}
           disabled={!undoEnabled || saving}
           title={t("channel.undo.tooltip")}
+          aria-label={t("channel.undo.tooltip")}
         >
-          ↶
+          <Icon name="mdi:undo" size={18} />
         </Button>
         <Button
           type="button"
-          variant="outline"
-          size="sm"
+          variant="ghost"
+          size="icon"
           onclick={onRedo}
           disabled={!redoEnabled || saving}
           title={t("channel.redo.tooltip")}
+          aria-label={t("channel.redo.tooltip")}
         >
-          ↷
+          <Icon name="mdi:redo" size={18} />
         </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onclick={exportSnapshot}
-          disabled={saving}
-          title={t("channel.export.tooltip")}
-        >
-          {t("channel.export")}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onclick={pickImport}
-          disabled={saving}
-          title={t("channel.import.tooltip")}
-        >
-          {t("channel.import")}
-        </Button>
+        {#if hosted && canApplyToOthers}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onclick={() => (applyOpen = true)}
+            disabled={saving || hasErrors}
+            title={t("channel.apply.tooltip")}
+          >
+            {t("channel.apply.open")}
+          </Button>
+        {/if}
+        <OverflowMenu
+          ariaLabel={t("channel.more_actions")}
+          items={[
+            { label: t("channel.export"), onSelect: exportSnapshot, disabled: saving },
+            { label: t("channel.import"), onSelect: pickImport, disabled: saving },
+          ]}
+        />
         {#if !hosted}
           <Button
             type="button"
@@ -1262,15 +1264,18 @@
         editToken={lockSession?.token}
         disabled={!!lockedByOther || lockLost}
       />
-      <label class="mb-4 flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
-        <input
-          type="checkbox"
-          checked={expertMode}
-          onchange={(e) => setExpert((e.target as HTMLInputElement).checked)}
-          class="h-4 w-4 rounded border-[var(--ha-divider-color)]"
-        />
-        {t("channel.expert_label")}
-      </label>
+      <!-- A hosting page offers the one expert switch for all its panels. -->
+      {#if !hosted}
+        <label class="mb-4 flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
+          <input
+            type="checkbox"
+            checked={expertMode}
+            onchange={(e) => setExpert((e.target as HTMLInputElement).checked)}
+            class="h-4 w-4 rounded border-[var(--ha-divider-color)]"
+          />
+          {t("channel.expert_label")}
+        </label>
+      {/if}
     {/if}
 
     {#if paramset === "LINK"}
@@ -1286,7 +1291,7 @@
           {brightnessSource}
           {onParamChange}
           onAction={runAction}
-          showRawName={linkExpert}
+          showRawName={showRawNames}
         />
       {:else}
         <p class="text-sm text-[var(--ha-secondary-text-color)]">
@@ -1324,6 +1329,7 @@
               {onParamChange}
               onAction={runAction}
               onDetermine={determineHandler}
+              showRawName={showRawNames}
             />
           </section>
         {/if}
@@ -1352,6 +1358,7 @@
             {onParamChange}
             onAction={runAction}
             onDetermine={determineHandler}
+            showRawName={showRawNames}
           />
         </section>
       {/if}
@@ -1368,6 +1375,7 @@
         {onParamChange}
         onAction={runAction}
         onDetermine={determineHandler}
+        showRawName={showRawNames}
       />
     {/if}
 

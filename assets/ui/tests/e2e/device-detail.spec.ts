@@ -165,14 +165,12 @@ test.describe('Device detail — MASTER parameter write', () => {
     // Locate the FLOAT input rendered for TEMPERATURE_OFFSET and change it.
     // The single MASTER group in this fixture carries exactly one
     // parameter, so the page's only number input is unambiguous.
-    const input = page.locator('input[type="number"]').first();
+    const input = page.locator('section[data-channel="1"]').locator('input[type="number"]').first();
     await input.fill('1.5');
     await input.blur();
 
-    // The sticky save bar shows the dirty-field count and becomes enabled.
-    // ChannelPanel renders the Save control twice (header + sticky footer
-    // bar), so scope to the first match to stay out of strict-mode.
-    const saveButton = page.getByRole('button', { name: /Save \(\d+\)/ }).first();
+    // The parameter page's one save bar appears with the edit.
+    const saveButton = page.getByRole('button', { name: 'Apply', exact: true });
     await expect(saveButton).toBeEnabled();
     await saveButton.click();
 
@@ -200,7 +198,7 @@ test.describe('Device detail — MASTER parameter write', () => {
     expect(putEditToken).toBe(EDIT_TOKEN);
 
     // ...and a success toast confirms the write to the operator.
-    await expect(page.getByText('Saved.')).toBeVisible();
+    await expect(page.getByText('Parameters saved.')).toBeVisible();
   });
 
   test('with the write preview turned off, saving writes straight through', async ({
@@ -226,10 +224,10 @@ test.describe('Device detail — MASTER parameter write', () => {
     await page.getByRole('tab', { name: 'Configure' }).click();
     await page.waitForSelector('text=Temperature offset');
 
-    const input = page.locator('input[type="number"]').first();
+    const input = page.locator('section[data-channel="1"]').locator('input[type="number"]').first();
     await input.fill('2.5');
     await input.blur();
-    await page.getByRole('button', { name: /Save \(\d+\)/ }).first().click();
+    await page.getByRole('button', { name: 'Apply', exact: true }).click();
 
     await expect.poll(() => putBody).not.toBeNull();
     expect(putBody).toMatchObject({ TEMPERATURE_OFFSET: 2.5 });
@@ -266,7 +264,7 @@ async function openApply(page: Page) {
   await page.waitForSelector('#main');
   await page.getByRole('tab', { name: 'Configure' }).click();
   await page.waitForSelector('text=Temperature offset');
-  const input = page.locator('input[type="number"]').first();
+  const input = page.locator('section[data-channel="1"]').locator('input[type="number"]').first();
   await input.fill('1.5');
   await input.blur();
   await page.getByRole('button', { name: 'Apply to identical channels…' }).click();

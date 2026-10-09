@@ -43,3 +43,13 @@ export type DataColumn<Row> = {
 };
 
 export type DataTableSort = { key: string; asc: boolean };
+
+// One caption over a run of adjacent columns, for DataTable's optional
+// grouped header row.
+export type DataColumnGroup = {
+  label: string;
+  // Number of columns the caption spans.
+  span: number;
+  // Extra classes for the caption cell (accent, separator).
+  class?: string;
+};

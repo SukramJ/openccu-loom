@@ -32,10 +32,10 @@ type Prefs = {
   // in HA (Ingress iframe) resolveSkin forces "ha" regardless of this.
   skin: Skin;
   navCollapsed: boolean;
-  // expertMode reveals expert-tier configuration fields in the
-  // Settings UI (analog to the existing channel-paramset expert
-  // toggle). Persisted alongside the other preferences so the
-  // operator's choice survives navigation and reloads.
+  // expertMode is the one expert switch: it reveals expert-tier fields
+  // in Settings, untranslated MASTER parameters and the raw CCU parameter
+  // names in every parameter editor. Persisted alongside the other
+  // preferences so the choice survives navigation and reloads.
   expertMode: boolean;
   // writePreview shows what a MASTER or LINK save will write, and to which
   // request, before it goes out. On by default: those paramsets are device
@@ -112,6 +112,19 @@ function persist(p: Prefs): void {
 }
 
 const initial = load();
+// The parameter editors used to keep their own expert flag under this
+// key. An operator who had switched it on keeps expert mode; the key is
+// then dropped so the two can never disagree again.
+const LEGACY_PANEL_EXPERT_KEY = "openccu-loom.expert_mode";
+try {
+  if (localStorage.getItem(LEGACY_PANEL_EXPERT_KEY) === "1") {
+    initial.expertMode = true;
+    persist(initial);
+  }
+  localStorage.removeItem(LEGACY_PANEL_EXPERT_KEY);
+} catch {
+  // storage may be disabled; the in-memory value stands.
+}
 own.locale = initial.locale;
 own.theme = initial.theme;
 

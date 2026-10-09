@@ -274,13 +274,9 @@ var registry = []Surface{
 		ID: "device.configure", Group: GroupDevice, Defaults: haOwned(),
 		HAOwns: true, MultiCentralVisible: true,
 	},
-	{
-		ID: "device.configure.device-config", Group: GroupDevice, Defaults: haOwned(),
-		MultiCentralVisible: true,
-		Parent:              "device.configure", HAOwns: true,
-	},
-	// The channel strip is a selector, not an editor: every write it
-	// leads to belongs to the device-config sub-tab.
+	// The device and channel parameters on one page, as the CCU WebUI's
+	// "Geräte-/Kanalparameter". A stored override for the former
+	// device.configure.device-config sub-tab is reported as Ignored.
 	{
 		ID: "device.configure.channels", Group: GroupDevice, Defaults: haOwned(),
 		MultiCentralVisible: true,

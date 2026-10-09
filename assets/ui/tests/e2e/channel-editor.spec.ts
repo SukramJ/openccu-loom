@@ -148,7 +148,7 @@ test.describe('Channel editor — undo/redo', () => {
 
     await gotoConfigureTab(page);
 
-    const input = page.locator('input[type="number"]').first();
+    const input = page.locator('section[data-channel="4"]').locator('input[type="number"]').first();
     await expect(input).toHaveValue('0.5');
 
     // Two sequential edits create two undo-stack entries.
@@ -162,8 +162,8 @@ test.describe('Channel editor — undo/redo', () => {
     // The undo/redo buttons render as a bare "↶"/"↷" glyph with the
     // human-readable label only on `title`, so target them by title
     // rather than accessible name (which would resolve to the glyph).
-    const undoButton = page.getByTitle('Undo (Ctrl+Z)');
-    const redoButton = page.getByTitle('Redo (Ctrl+Y)');
+    const undoButton = page.locator('section[data-channel="4"]').getByTitle('Undo (Ctrl+Z)');
+    const redoButton = page.locator('section[data-channel="4"]').getByTitle('Redo (Ctrl+Y)');
 
     // Undo rolls back exactly one step (2.5 -> 1.5), not all the way to
     // the server value.
@@ -174,7 +174,7 @@ test.describe('Channel editor — undo/redo', () => {
     await redoButton.click();
     await expect(input).toHaveValue('2.5');
 
-    const saveButton = page.getByRole('button', { name: /Save \(\d+\)/ }).first();
+    const saveButton = page.getByRole('button', { name: 'Apply', exact: true });
     await expect(saveButton).toBeEnabled();
     await saveButton.click();
     // A MASTER save is previewed before it leaves (write-preview preference,
@@ -186,7 +186,7 @@ test.describe('Channel editor — undo/redo', () => {
 
     await expect.poll(() => putBody).not.toBeNull();
     expect(putBody).toMatchObject({ ON_TIME: 2.5 });
-    await expect(page.getByText('Saved.')).toBeVisible();
+    await expect(page.getByText('Parameters saved.')).toBeVisible();
   });
 
   test('undoing back to the server value disables Save and clears the dirty indicator', async ({
@@ -194,19 +194,19 @@ test.describe('Channel editor — undo/redo', () => {
   }) => {
     await gotoConfigureTab(page);
 
-    const input = page.locator('input[type="number"]').first();
+    const input = page.locator('section[data-channel="4"]').locator('input[type="number"]').first();
     await input.fill('1.5');
     await input.blur();
 
-    const saveButton = page.getByRole('button', { name: /Save \(\d+\)/ }).first();
+    const saveButton = page.getByRole('button', { name: 'Apply', exact: true });
     await expect(saveButton).toBeEnabled();
 
-    await page.getByTitle('Undo (Ctrl+Z)').click();
+    await page.locator('section[data-channel="4"]').getByTitle('Undo (Ctrl+Z)').click();
     await expect(input).toHaveValue('0.5');
 
-    // Back at the server value: nothing left to save, and the sticky
-    // "unsaved changes" bar disappears.
-    await expect(page.getByText('Unsaved changes')).toHaveCount(0);
+    // Back at the server value: nothing left to save, and the page's
+    // save bar disappears.
+    await expect(page.getByRole('button', { name: 'Apply', exact: true })).toHaveCount(0);
   });
 });
 
@@ -268,10 +268,10 @@ test.describe('Channel editor — edit-lock lifecycle', () => {
 
     // Acquire the lock (the open call already fired on mount) and make
     // an edit so Save has something to write.
-    const input = page.locator('input[type="number"]').first();
+    const input = page.locator('section[data-channel="4"]').locator('input[type="number"]').first();
     await input.fill('1.5');
     await input.blur();
-    const saveButton = page.getByRole('button', { name: /Save \(\d+\)/ }).first();
+    const saveButton = page.getByRole('button', { name: 'Apply', exact: true });
     await expect(saveButton).toBeEnabled();
 
     // Simulate the lock being taken over / expiring: the next heartbeat
@@ -282,7 +282,7 @@ test.describe('Channel editor — edit-lock lifecycle', () => {
     // The panel surfaces the lost-lock banner without any further user
     // action — the operator is told before they even try to save.
     await expect(
-      page.getByText(
+      page.locator('section[data-channel="4"]').getByText(
         "Another session took over the edit lock, or your lock expired. Re-open this editor before saving so you don't overwrite concurrent changes.",
       ),
     ).toBeVisible();

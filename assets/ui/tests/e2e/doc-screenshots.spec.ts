@@ -259,8 +259,8 @@ test.describe('Documentation screenshots (light mode)', () => {
     await applyDeviceMocks(page);
     await page.goto(`http://localhost:5173/app/#/devices/${DEVICE_ADDRESS}`);
     await page.waitForSelector('#main');
-    // Land on the Configure tab so the channel strip + config form are
-    // both visible — the clearest single shot of "channels & parameters".
+    // Land on the Configure tab: the device and channel parameters on one
+    // page — the clearest single shot of "channels & parameters".
     await page.getByRole('tab', { name: 'Configure' }).click();
     await page.waitForSelector('text=Temperature offset');
     await page.waitForTimeout(800);
@@ -276,14 +276,10 @@ test.describe('Documentation screenshots (light mode)', () => {
     await page.waitForSelector('text=Temperature offset');
     await page.waitForTimeout(800);
     await addStylesForStableScreenshots(page);
-    // Frame just the configuration form card so it is unambiguously the
-    // subject (the full-page device-detail shot already shows the
-    // surrounding header + channel strip). The form lives in the Card
-    // that carries the "Heating Thermostat" channel heading.
-    const formCard = page
-      .locator('main')
-      .getByRole('heading', { name: 'Heating Thermostat' })
-      .locator('xpath=ancestor::div[contains(@class,"rounded")][1]');
+    // Frame just channel 1's block of the parameter page so it is
+    // unambiguously the subject (the full-page device-detail shot already
+    // shows the surrounding header and the other blocks).
+    const formCard = page.locator('section[data-channel="1"]');
     await formCard.screenshot({ path: `${IMG_DIR}/web-ui-channel-config.png` });
   });
 

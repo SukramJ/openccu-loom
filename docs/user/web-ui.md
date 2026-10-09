@@ -70,7 +70,7 @@ Selecting a device opens its detail view, where you can:
 
 If you are unsure what "device", "channel", and "data point" mean, read [Core concepts](concepts.md) first.
 
-![The device detail view for a wall thermostat: header with model and address, the Overview/Configure/History tabs, the channel selector strip, and a channel's configuration parameters.](img/web-ui-device-detail.png)
+![The device detail view for a wall thermostat: header with model and address, the Overview/Configure/History tabs, and the device and channel parameters page with its expert-mode switch.](img/web-ui-device-detail.png)
 
 ## Adding devices
 
@@ -112,12 +112,22 @@ Behind the scenes this is a single write to the parameter
 
 ## Configuring a device (paramsets)
 
-Beyond live values, many devices have **configuration parameters** (the device's settings, as opposed to its current state). The UI presents these as editable forms per channel, with sensible grouping and labels.
+Beyond live values, many devices have **configuration parameters** (the device's settings, as opposed to its current state). On a device's **Configure** tab, **Device and channel parameters** shows them on one page, laid out like the CCU WebUI's *Geräte-/Kanalparameter*: the device parameters first, then one block per channel (*Ch. 1*, *Ch. 2*, …). A channel block also holds the channel's name, rooms, functions and visibility flags. The device parameters and the first channel are open; every other channel loads its parameters from the device when you open its block.
 
-You can also **export** a channel's configuration and **import** it again, which is handy for copying settings between similar devices. These map to the channel config export/import endpoints
-(`GET .../config/export` and `POST .../config/import`).
+Edits are collected across the whole page. A save bar at the bottom counts them, and **Apply** writes every changed channel; a channel that fails is named, the rest is written. **Cancel** discards all of them.
 
-![A channel configuration form with grouped, labelled parameters: a temperature offset slider, a maximum-temperature slider, a display-unit selector, and a child-lock toggle, plus Export/Import/Reset/Save controls.](img/web-ui-channel-config.png)
+**Expert mode** (the switch at the top of the page, the same as in **Settings**) also shows untranslated parameters and the raw CCU name of each parameter.
+
+You can also **export** a channel's configuration and **import** it again from the **⋯** menu of its block, which is handy for copying settings between similar devices.
+
+![A channel block of the parameter page: the channel's name, rooms and functions, its hide and lock switches, and its grouped parameters — a temperature offset slider, a maximum-temperature slider, a display-unit selector and a child-lock toggle — with undo, redo and the ⋯ menu.](img/web-ui-channel-config.png)
+
+## Direct links
+
+**Direct links** lists every direct link between two channels, headed *Sender | Link | Receiver* as in the CCU WebUI, and can group the list by sender or by receiver. A device's own links are on its **Configure → Direct links** tab.
+
+- **New link** walks through three steps: the first link partner (any device's channel that can be linked), a compatible second partner, then a name and a description.
+- **Edit** opens the link's **profile settings**: the sender's and the receiver's settings, each led by a **profile** (for example *Switch on / off*). A profile shows only the settings it leaves open; *Expert* shows every link parameter, with short and long keypress side by side. **Apply** writes both sides together.
 
 ## Showing hidden parameters (un-ignore)
 

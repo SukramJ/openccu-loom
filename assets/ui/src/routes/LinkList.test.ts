@@ -73,8 +73,13 @@ describe("LinkList — rendering", () => {
     );
     expect(edit).toBeTruthy();
     // Both centrals are shown as badges when more than one is present.
-    expect(screen.getByText("ccu-a-HmIP-RF")).toBeInTheDocument();
-    expect(screen.getByText("ccu-b-BidCos-RF")).toBeInTheDocument();
+    expect(screen.getAllByText("ccu-a").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("ccu-b").length).toBeGreaterThan(0);
+    // The CCU WebUI's three captioned column groups head the table.
+    const groups = screen.getByTestId("column-groups");
+    expect(groups.textContent).toContain("links.sender");
+    expect(groups.textContent).toContain("links.editor.link");
+    expect(groups.textContent).toContain("links.receiver");
   });
 });
 
