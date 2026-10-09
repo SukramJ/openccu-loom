@@ -232,15 +232,15 @@ test.describe('Link page (Profileinstellung)', () => {
     await page.goto(DEVICE_URL);
     await page.waitForSelector('#main');
 
-    await page.getByRole('button', { name: 'Edit', exact: true }).first().click();
+    await page.getByRole('link', { name: 'Edit', exact: true }).first().click();
     await expect(page).toHaveURL(
       new RegExp(`#/links/${encodeURIComponent(SENDER)}/${encodeURIComponent(RECEIVER)}$`),
     );
 
     await expect(page.getByRole('heading', { name: 'Stairwell light' })).toBeVisible();
     const header = page.getByTestId('link-peer-header');
-    await expect(header.getByText('Push-button')).toBeVisible();
-    await expect(header.getByText('Switch', { exact: true })).toBeVisible();
+    await expect(header.getByText('Test Switch · Push-button', { exact: true })).toBeVisible();
+    await expect(header.getByText('Hall lamp · Switch', { exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Profile settings – sender' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Profile settings – receiver' })).toBeVisible();
 
@@ -289,6 +289,29 @@ for (const theme of ['light', 'dark'] as const) {
       await page.waitForTimeout(1500);
       await addStylesForStableScreenshots(page);
       await expect(page).toHaveScreenshot(`link-page-${theme}.png`, { fullPage: true });
+    });
+  });
+}
+
+for (const theme of ['light', 'dark'] as const) {
+  test.describe(`Link wizard visual - ${theme}`, () => {
+    test.beforeEach(async ({ page }) => {
+      await mockAllApis(page);
+      await page.addInitScript((t) => {
+        localStorage.setItem(
+          'openccu-loom.prefs.v1',
+          JSON.stringify({ theme: t, locale: 'en', navCollapsed: false, expertMode: false }),
+        );
+      }, theme);
+    });
+
+    test(`link wizard step 1 ${theme}`, async ({ page }) => {
+      await page.goto('http://localhost:5173/app/#/links/new');
+      await page.waitForSelector('#main');
+      await expect(page.getByText('First link partner')).toBeVisible();
+      await page.waitForTimeout(1500);
+      await addStylesForStableScreenshots(page);
+      await expect(page).toHaveScreenshot(`link-wizard-${theme}.png`);
     });
   });
 }

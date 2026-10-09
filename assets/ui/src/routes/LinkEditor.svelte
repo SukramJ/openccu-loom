@@ -7,7 +7,7 @@
   // The two sides are two LINK paramsets on two devices, each under its
   // own edit lock, so "Übernehmen" is two writes, not one transaction:
   // both are attempted, and a side that fails is named in the result.
-  import { api, ApiError, friendlyError } from "$lib/api/client";
+  import { api, friendlyError } from "$lib/api/client";
   import type { Link } from "$lib/api/types";
   import ChannelPanel from "$lib/components/channel/ChannelPanel.svelte";
   import DeviceImage from "$lib/components/device/DeviceImage.svelte";
@@ -20,7 +20,8 @@
   import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import PageShell from "$lib/components/ui/PageShell.svelte";
   import { notifyWakeupPending } from "$lib/links/wakeup-hint";
-  import { confirmStore } from "$lib/stores/confirm.svelte";
+  import { deleteLink } from "$lib/links/link-actions";
+  import { partyLabel } from "$lib/links/link-routes";
   import { dirty } from "$lib/stores/dirty.svelte";
   import { surfacesStore } from "$lib/stores/surfaces.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
@@ -150,41 +151,14 @@
   }
 
   async function remove() {
-    const ok = await confirmStore.ask({
-      title: t("common.delete"),
-      body: t("links.confirm_delete", { sender: senderLabel, receiver: receiverLabel }),
-      confirmLabel: t("common.delete"),
-      destructive: true,
-    });
-    if (!ok) return;
-    try {
-      await api.removeLink(senderParts.device, sender, receiver);
-      const wakeupShown = await notifyWakeupPending([sender, receiver]);
-      if (!wakeupShown) toastStore.success(t("links.removed"));
-      // The panels' unsaved edits belong to a link that no longer exists.
-      discard();
-      location.hash = "#/links";
-    } catch (err) {
-      const msg = err instanceof ApiError ? `${err.status}: ${err.message}` : friendlyError(err, t);
-      toastStore.error(t("links.removal_failed"), msg);
-    }
+    if (!link || !(await deleteLink(link))) return;
+    // The panels' unsaved edits belong to a link that no longer exists.
+    discard();
+    location.hash = "#/links";
   }
 
-  function channelName(
-    channelName: string | undefined,
-    typeLabel: string | undefined,
-    address: string,
-  ): string {
-    return channelName?.trim() || typeLabel || address;
-  }
-  const senderLabel = $derived(
-    link ? channelName(link.sender_channel_name, link.sender_channel_type_label, sender) : sender,
-  );
-  const receiverLabel = $derived(
-    link
-      ? channelName(link.receiver_channel_name, link.receiver_channel_type_label, receiver)
-      : receiver,
-  );
+  const senderLabel = $derived(link ? partyLabel(link, "sender") : sender);
+  const receiverLabel = $derived(link ? partyLabel(link, "receiver") : receiver);
   const title = $derived(link?.name || `${senderLabel} → ${receiverLabel}`);
 </script>
 

@@ -1,12 +1,12 @@
 <!--
-  Global direct-links overview (V01). Aggregates every direct link
-  (channel-to-channel peering) across all configured centrals into one
-  searchable list — the CCU WebUI's cross-device link view. Each row opens
-  the link's own "Profileinstellung" page (#/links/<sender>/<receiver>);
-  creating a link still starts on a device's detail page.
+  Fleet-wide list of direct links ("Programme und Verknüpfungen › Direkte
+  Verknüpfungen" in the CCU WebUI). Aggregates every link across all
+  configured centrals into one LinkTable; each row opens the link's own
+  "Profileinstellung" page (#/links/<sender>/<receiver>), and "Neue
+  Verknüpfung" starts the wizard.
 
-  When the surface profile hides that editor the listing stays and the
-  rows stop linking — see the `opens` relation in
+  When the surface profile hides the link editor the listing stays and
+  the rows lose their actions — see the `opens` relation in
   notes/concepts/ui-surface-profiles.md.
 -->
 <script lang="ts">
@@ -15,7 +15,7 @@
   import type { Link } from "$lib/api/types";
   import { surfacesStore } from "$lib/stores/surfaces.svelte";
   import Card from "$lib/components/ui/Card.svelte";
-  import Badge from "$lib/components/ui/Badge.svelte";
+  import Button from "$lib/components/ui/Button.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
   import Input from "$lib/components/ui/Input.svelte";
   import PageHeader from "$lib/components/ui/PageHeader.svelte";
@@ -23,9 +23,10 @@
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import PageShell from "$lib/components/ui/PageShell.svelte";
-  import DataTable from "$lib/components/ui/DataTable.svelte";
-  import type { DataColumn } from "$lib/components/ui/data-table";
   import Select from "$lib/components/ui/Select.svelte";
+  import LinkTable from "$lib/components/links/LinkTable.svelte";
+  import { deleteLink } from "$lib/links/link-actions";
+  import { newLinkHref } from "$lib/links/link-routes";
   import { t } from "$lib/i18n";
   import { loadLS, saveLS } from "$lib/utils";
 
@@ -55,23 +56,6 @@
 
   onMount(load);
 
-  function partyName(link: Link, side: "sender" | "receiver"): string {
-    if (side === "sender") {
-      return (
-        link.sender_device_name ||
-        link.sender_channel_name ||
-        link.sender_channel_type_label ||
-        link.sender_address
-      );
-    }
-    return (
-      link.receiver_device_name ||
-      link.receiver_channel_name ||
-      link.receiver_channel_type_label ||
-      link.receiver_address
-    );
-  }
-
   const centrals = $derived(
     [...new Set(links.map((l) => l.central_name).filter(Boolean) as string[])].sort(
       (a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }),
@@ -88,6 +72,8 @@
       link.description,
       link.sender_device_name,
       link.receiver_device_name,
+      link.sender_channel_name,
+      link.receiver_channel_name,
       link.sender_channel_type_label,
       link.receiver_channel_type_label,
       link.central_name,
@@ -97,9 +83,8 @@
       .some((v) => (v as string).toLowerCase().includes(needle));
   }
 
-  // Whether the device's own link editor exists in this profile. Hidden
-  // means the rows lose their "edit on device" action, not that the
-  // cross-device listing loses its value.
+  // Whether the link editor exists in this profile. Hidden means the rows
+  // lose their actions, not that the cross-device listing loses its value.
   const linkable = $derived(surfacesStore.opensVisible("nav.links"));
 
   const filtered = $derived(
@@ -108,65 +93,9 @@
       .filter((l) => matches(l, search)),
   );
 
-  // Column set for the shared DataTable. Sender/receiver read through
-  // partyName() so search, sort and the on-screen text agree — the operator
-  // sorts and filters on exactly what they see. The central column only
-  // earns its place with more than one CCU configured, mirroring the badge
-  // that used to appear conditionally in the card layout; the actions
-  // column likewise only appears while the device-side link editor exists.
-  const columns = $derived([
-    {
-      key: "sender",
-      label: t("links.col.sender"),
-      sortable: true,
-      title: true,
-      get: (l: Link) => partyName(l, "sender"),
-    },
-    {
-      key: "receiver",
-      label: t("links.col.receiver"),
-      sortable: true,
-      get: (l: Link) => partyName(l, "receiver"),
-    },
-    {
-      key: "name",
-      label: t("links.col.name"),
-      sortable: true,
-      get: (l: Link) => l.name || "",
-    },
-    {
-      key: "description",
-      label: t("links.col.description"),
-      sortable: true,
-      get: (l: Link) => l.description || "",
-    },
-    {
-      key: "interface",
-      label: t("links.col.interface"),
-      sortable: true,
-      get: (l: Link) => l.interface_id || "",
-    },
-    ...(centrals.length > 1
-      ? [
-          {
-            key: "central",
-            label: t("links.col.central"),
-            sortable: true,
-            get: (l: Link) => l.central_name || "",
-          },
-        ]
-      : []),
-    ...(linkable
-      ? [
-          {
-            key: "actions",
-            label: t("links.col.actions"),
-            align: "right" as const,
-            cellClass: "reflow-actions",
-          },
-        ]
-      : []),
-  ] satisfies DataColumn<Link>[]);
+  async function remove(link: Link) {
+    if (await deleteLink(link)) await load();
+  }
 </script>
 
 <svelte:head>
@@ -189,6 +118,12 @@
             ...centrals.map((c) => ({ value: c, label: c })),
           ]}
         />
+      {/if}
+      {#if linkable}
+        <Button type="button" onclick={() => (location.hash = newLinkHref())}>
+          <Icon name="mdi:plus" size={16} />
+          {t("links.new")}
+        </Button>
       {/if}
     {/snippet}
   </PageHeader>
@@ -228,57 +163,15 @@
       <EmptyState message={t("links.no_matches")} icon="mdi:link" />
     {:else}
       <Card class="p-4">
-        <DataTable
-          rows={filtered}
-          {columns}
-          rowKey={(l) => l.central_name + "|" + l.sender_address + "->" + l.receiver_address}
-          cell={linkCell}
-          columnFilters
+        <LinkTable
+          links={filtered}
           persistKey="links"
-          initialSort={{ key: "sender", asc: true }}
+          showCentral={centrals.length > 1}
+          editable={linkable}
+          onDelete={remove}
           emptyMessage={t("links.no_matches")}
         />
       </Card>
     {/if}
   {/if}
 </PageShell>
-
-{#snippet linkCell(link: Link, col: DataColumn<Link>)}
-  {#if col.key === "sender"}
-    <span class="block font-semibold text-[var(--ha-primary-text-color)]">
-      {partyName(link, "sender")}
-    </span>
-    <span class="block font-mono text-xs text-[var(--ha-secondary-text-color)]">
-      {link.sender_address}
-    </span>
-  {:else if col.key === "receiver"}
-    <span class="block text-[var(--ha-primary-text-color)]">{partyName(link, "receiver")}</span>
-    <span class="block font-mono text-xs text-[var(--ha-secondary-text-color)]">
-      {link.receiver_address}
-    </span>
-  {:else if col.key === "name"}
-    {link.name || "—"}
-  {:else if col.key === "description"}
-    {link.description || "—"}
-  {:else if col.key === "interface"}
-    {#if link.interface_id}
-      <Badge variant="muted">{link.interface_id}</Badge>
-    {:else}
-      —
-    {/if}
-  {:else if col.key === "central"}
-    {#if link.central_name}
-      <Badge variant="muted">{link.central_name}</Badge>
-    {:else}
-      —
-    {/if}
-  {:else if col.key === "actions" && linkable}
-    <a
-      href={`#/links/${encodeURIComponent(link.sender_address)}/${encodeURIComponent(link.receiver_address)}`}
-      class="inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:underline dark:text-brand-400"
-    >
-      <Icon name="mdi:pencil" />
-      {t("links.edit")}
-    </a>
-  {/if}
-{/snippet}

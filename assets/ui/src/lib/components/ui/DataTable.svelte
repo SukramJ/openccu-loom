@@ -1,7 +1,7 @@
 <script lang="ts" generics="Row">
   import type { Snippet } from "svelte";
   import type { IconName } from "$lib/icons";
-  import type { DataColumn, DataTableSort } from "./data-table";
+  import type { DataColumn, DataColumnGroup, DataTableSort } from "./data-table";
   import { makeTextMatcher } from "$lib/utils";
   import { t } from "$lib/i18n";
   import Input from "./Input.svelte";
@@ -35,9 +35,15 @@
     onExpand,
     groupBy,
     groupHeader,
+    columnGroups,
   }: {
     rows: Row[];
     columns: DataColumn<Row>[];
+    // Optional header row above the column labels that bundles adjacent
+    // columns under one caption ("Sender | Link | Receiver"). The spans
+    // must add up to the column count; the reflowed phone layout ignores
+    // the row, because there every cell carries its own label.
+    columnGroups?: DataColumnGroup[];
     rowKey: (row: Row) => string;
     search?: boolean;
     searchPlaceholder?: string;
@@ -310,6 +316,16 @@
       <thead
         class="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wide text-[var(--ha-secondary-text-color)] dark:border-slate-800"
       >
+        {#if columnGroups && columnGroups.length > 0}
+          <tr class="border-b border-slate-200 dark:border-slate-800" data-testid="column-groups">
+            {#if canExpand}<th class="w-8 px-2 py-2"></th>{/if}
+            {#each columnGroups as group, i (i)}
+              <th colspan={group.span} scope="colgroup" class="px-3 py-2 {group.class ?? ''}">
+                {group.label}
+              </th>
+            {/each}
+          </tr>
+        {/if}
         <tr>
           {#if canExpand}
             <th class="w-8 px-2 py-2" scope="col">

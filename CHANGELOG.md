@@ -34,8 +34,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   parameter names appear only under *Expert*.
 - **Short and long keypress sit side by side** in one table, row by row,
   instead of on two tabs.
-- The link wizard offers **Create and edit**, which opens the new link's
-  page so its profile can be chosen right away.
+- **The link lists follow the CCU's layout.** The fleet-wide list and a
+  device's links share one table headed *Sender | Link | Receiver*, each
+  party with name and serial number, and can be grouped by sender or by
+  receiver; a group header adds one more partner to that channel. Every
+  row offers *Edit* and *Delete*; the device's separate rename row is gone,
+  because name and description are edited on the link's page. The list
+  no longer shows an interface column — the search still matches it.
+- **New links are created in a wizard page** at `#/links/new`, in the
+  CCU's three steps: the first link partner (any device's linkable
+  channel, sender or receiver), a compatible second partner with room and
+  function filters, then name and description prefilled as
+  *"<sender> with <receiver>"*. It warns when the link already exists and
+  offers *Create* and *Create and edit*. *New link* on the list and on a
+  device, and *Add receiver / Add sender* on a grouped list, start it.
 - German labels follow the CCU WebUI: *Direkte Verknüpfungen*,
   *Profileinstellung*, *Erstellen*, *Bearbeiten*.
 - A parameter row lays out label, field and range in columns only when the

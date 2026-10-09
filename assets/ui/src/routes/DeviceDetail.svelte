@@ -1433,11 +1433,7 @@
         {:else if activeConfigSub === "links"}
           <div class="space-y-4">
             <CentralLinksPanel address={detail.address} />
-            <DeviceLinks
-              deviceAddress={detail.address}
-              interfaceId={detail.interface_id}
-              {locale}
-            />
+            <DeviceLinks deviceAddress={detail.address} {locale} />
           </div>
         {:else if activeConfigSub === "schedule"}
           <ScheduleTab address={detail.address} />

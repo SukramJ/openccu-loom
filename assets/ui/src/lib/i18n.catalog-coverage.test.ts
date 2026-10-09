@@ -174,6 +174,49 @@ describe("i18n catalogue coverage", () => {
     }
   });
 
+  // LinkTable.svelte (both link lists) and LinkWizard.svelte.
+  it("resolves the link list and wizard keys in both locales", () => {
+    for (const key of [
+      "links.col.serial",
+      "links.col.action",
+      "links.col.model",
+      "links.col.room",
+      "links.col.function",
+      "links.col.category",
+      "links.group_by",
+      "links.group.none",
+      "links.group.sender",
+      "links.group.receiver",
+      "links.add_receiver",
+      "links.add_sender",
+      "links.no_description",
+      "links.new",
+      "links.wizard.crumb",
+      "links.wizard.step1",
+      "links.wizard.step2",
+      "links.wizard.step3",
+      "links.wizard.step1_hint",
+      "links.wizard.step2_hint",
+      "links.wizard.pick",
+      "links.wizard.pick_as_sender",
+      "links.wizard.pick_as_receiver",
+      "links.wizard.no_linkable_channels",
+      "links.wizard.no_devices",
+      "links.wizard.not_chosen",
+      "links.wizard.default_name",
+      "links.wizard.default_description",
+      "links.wizard.exists",
+      "links.wizard.create_failed",
+      "links.wizard.all_devices",
+      "links.wizard.show_virtual",
+      "links.wizard.hide_virtual",
+      "page.title.link_wizard",
+    ]) {
+      expect(de.has(key), `${key} missing in de`).toBe(true);
+      expect(en.has(key), `${key} missing in en`).toBe(true);
+    }
+  });
+
   // Every user-visible string ships in both locales (CLAUDE.md, SPA
   // operating concept). A key added to one catalogue only degrades to the
   // other language on screen instead of failing anywhere, so nothing but
