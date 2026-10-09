@@ -141,7 +141,8 @@ test.describe('Channel editor — export / import snapshot', () => {
     await gotoConfigureTab(page);
 
     const downloadPromise = page.waitForEvent('download');
-    await page.getByRole('button', { name: 'Export', exact: true }).click();
+    await page.getByRole('button', { name: 'More actions' }).first().click();
+    await page.getByRole('menuitem', { name: 'Export', exact: true }).click();
     const download = await downloadPromise;
 
     // Chrome's download manager sanitises ":" out of suggested filenames
@@ -181,7 +182,8 @@ test.describe('Channel editor — export / import snapshot', () => {
     };
 
     const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.getByRole('button', { name: 'Import', exact: true }).click();
+    await page.getByRole('button', { name: 'More actions' }).first().click();
+    await page.getByRole('menuitem', { name: 'Import', exact: true }).click();
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles({
       name: 'snapshot.json',
@@ -209,7 +211,8 @@ test.describe('Channel editor — export / import snapshot', () => {
     };
 
     const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.getByRole('button', { name: 'Import', exact: true }).click();
+    await page.getByRole('button', { name: 'More actions' }).first().click();
+    await page.getByRole('menuitem', { name: 'Import', exact: true }).click();
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles({
       name: 'snapshot.json',

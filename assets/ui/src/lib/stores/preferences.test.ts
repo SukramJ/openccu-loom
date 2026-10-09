@@ -294,3 +294,20 @@ describe("preferences: Home Assistant ingress", () => {
     expect(isDark()).toBe(true);
   });
 });
+
+describe("preferences: one expert mode", () => {
+  it("keeps expert mode for an operator who had the old parameter-editor switch on", async () => {
+    localStorage.setItem("openccu-loom.expert_mode", "1");
+    vi.resetModules();
+    const { prefs } = await import("./preferences.svelte");
+    expect(prefs.expertMode).toBe(true);
+    expect(storedPrefs()?.expertMode).toBe(true);
+    expect(localStorage.getItem("openccu-loom.expert_mode")).toBeNull();
+  });
+
+  it("leaves expert mode off when the old switch was off", async () => {
+    vi.resetModules();
+    const { prefs } = await import("./preferences.svelte");
+    expect(prefs.expertMode).toBe(false);
+  });
+});

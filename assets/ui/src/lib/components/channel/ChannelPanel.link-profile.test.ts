@@ -266,3 +266,28 @@ describe("ChannelPanel — hosted", () => {
     expect(mockPutLinkParamset).not.toHaveBeenCalled();
   });
 });
+
+describe("ChannelPanel — one expert mode", () => {
+  function masterSchema(): UISchema {
+    return {
+      channel: { address: "RECV:4", number: 4, type: "SWITCH", device_address: "RECV" },
+      parameters: [param("POWERUP_JUMPTARGET", 0)],
+    };
+  }
+
+  it("hides the raw CCU names outside expert mode and the panel switch turns the global mode on", async () => {
+    prefs.expertMode = false;
+    mockUiSchema.mockImplementation(() => Promise.resolve(masterSchema()));
+    render(ChannelPanel, {
+      props: { address: "RECV", channel: 4, paramset: "MASTER", locale: "en" },
+    });
+    await waitFor(() => expect(shown("POWERUP_JUMPTARGET")).toBe(true));
+    expect(screen.queryByText("POWERUP_JUMPTARGET", { exact: true })).toBeNull();
+
+    await fireEvent.click(screen.getByLabelText("channel.expert_label"));
+    expect(prefs.expertMode).toBe(true);
+    await waitFor(() => expect(mockUiSchema).toHaveBeenLastCalledWith("RECV", 4, "MASTER", "en", undefined, true));
+    await waitFor(() => expect(screen.getByText("POWERUP_JUMPTARGET", { exact: true })).toBeTruthy());
+    prefs.expertMode = false;
+  });
+});

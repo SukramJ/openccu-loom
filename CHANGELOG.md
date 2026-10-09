@@ -48,6 +48,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   *"<sender> with <receiver>"*. It warns when the link already exists and
   offers *Create* and *Create and edit*. *New link* on the list and on a
   device, and *Add receiver / Add sender* on a grouped list, start it.
+- **One expert mode.** The parameter editors' own expert switch and the
+  expert mode in Settings are now the same setting; an editor's switch
+  turns on the global one, and a browser that had the editor switch on
+  keeps expert mode. The raw CCU parameter names (`ON_TIME`, …) show only
+  in expert mode — and on a link's *Expert* profile — instead of under
+  every label.
+- Parameter editors keep undo and redo as icons and move *Export* and
+  *Import* into a "⋯" menu.
 - German labels follow the CCU WebUI: *Direkte Verknüpfungen*,
   *Profileinstellung*, *Erstellen*, *Bearbeiten*.
 - A parameter row lays out label, field and range in columns only when the

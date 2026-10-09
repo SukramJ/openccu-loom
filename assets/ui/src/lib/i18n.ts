@@ -1362,7 +1362,7 @@ const EN: Catalog = {
   "settings.prefs.density.compact": "Compact",
   "settings.prefs.density.comfortable": "Comfortable",
   "settings.expert_mode_hint":
-    "Reveal deep-tuning fields (reliability, callback ports, Matter internals). Off by default.",
+    "Reveal deep-tuning fields (reliability, callback ports, Matter internals), untranslated device parameters and the raw CCU parameter names. Off by default.",
   "settings.live_edit_disabled":
     "Live edit is disabled — the data directory is read-only. Pflege Settings via config.yaml + restart.",
   "settings.restart_required":
@@ -2939,7 +2939,8 @@ const EN: Catalog = {
   "channel.advanced_label":
     "Show advanced parameters (jump targets, conditions)",
   "channel.expert_label":
-    "Expert mode (show all parameters, including untranslated)",
+    "Expert mode (all parameters, including untranslated, with their CCU names)",
+  "channel.more_actions": "More actions",
   "channel.no_params_in_group": "No parameters in this group.",
   "channel.other": "Other",
   "channel.cross_validation_error":
@@ -5709,7 +5710,7 @@ const DE: Catalog = {
   "settings.prefs.density.compact": "Kompakt",
   "settings.prefs.density.comfortable": "Komfortabel",
   "settings.expert_mode_hint":
-    "Tiefe Tuning-Felder einblenden (Reliability, Callback-Ports, Matter-Internals). Standard: aus.",
+    "Tiefe Tuning-Felder (Reliability, Callback-Ports, Matter-Internals), unübersetzte Geräteparameter und die CCU-Rohnamen der Parameter einblenden. Standard: aus.",
   "settings.live_edit_disabled":
     "Live-Bearbeitung deaktiviert — das Daten-Verzeichnis ist read-only. Settings via config.yaml + Neustart pflegen.",
   "settings.restart_required":
@@ -7301,7 +7302,8 @@ const DE: Catalog = {
   "channel.advanced_label":
     "Erweiterte Parameter anzeigen (Jump-Targets, Bedingungen)",
   "channel.expert_label":
-    "Experten-Modus (alle Parameter, auch ohne Übersetzung)",
+    "Experten-Modus (alle Parameter, auch unübersetzte, mit CCU-Namen)",
+  "channel.more_actions": "Weitere Aktionen",
   "channel.no_params_in_group": "Keine Parameter in dieser Gruppe.",
   "channel.other": "Weitere",
   "channel.cross_validation_error":

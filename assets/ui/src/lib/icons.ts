@@ -26,6 +26,9 @@ import {
   Calendar,
   CalendarClock,
   Check,
+  Ellipsis,
+  Undo2,
+  Redo2,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -160,6 +163,9 @@ export type IconName =
   | "mdi:pencil"
   | "mdi:play"
   | "mdi:plus"
+  | "mdi:dots-horizontal"
+  | "mdi:undo"
+  | "mdi:redo"
   | "mdi:power"
   | "mdi:refresh"
   | "mdi:save"
@@ -252,6 +258,9 @@ const REGISTRY: Record<IconName, Component> = {
   "mdi:pencil": Pencil,
   "mdi:play": Play,
   "mdi:plus": Plus,
+  "mdi:dots-horizontal": Ellipsis,
+  "mdi:undo": Undo2,
+  "mdi:redo": Redo2,
   "mdi:power": Power,
   "mdi:refresh": RefreshCw,
   "mdi:save": Save,
