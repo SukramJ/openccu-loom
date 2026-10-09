@@ -4,6 +4,13 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.90.0
+
+**Security update:** the proxy is built with Go 1.27.2, which fixes
+vulnerabilities in the Go standard library's HTTP, HTTP/2 and TLS code;
+update soon. The daemon release makes direct links and device
+configuration look like the CCU's (REST API 13.7.2, unchanged).
+
 # 0.89.0
 
 No changes to the proxy, which does not carry MQTT. The daemon release

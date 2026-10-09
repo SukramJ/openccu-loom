@@ -27,7 +27,7 @@
 //   `api.listLinks`, `api.linkableChannels`). Components that make
 //   these calls DO need a `locale` prop so the caller can pass the
 //   current value reactively. Keep the prop at the ChannelPanel,
-//   DeviceLinks, LinkConfigPanel level where it feeds an API call,
+//   DeviceLinks, LinkEditor level where it feeds an API call,
 //   and let App.svelte derive it from `prefs.locale` once for the
 //   whole tree.
 

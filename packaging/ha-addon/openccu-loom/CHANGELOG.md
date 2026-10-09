@@ -1,5 +1,29 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.90.0
+
+- **Security update:** built with Go 1.27.2, which fixes vulnerabilities in
+  the HTTP, TLS and HTML-template code the add-on uses. Update soon.
+- **Direct links look like the CCU's.** The list is headed *Sender | Link |
+  Receiver*, can be grouped by sender or receiver, and offers *Edit* and
+  *Delete* on every row.
+- **New links in three steps**, as in the CCU: pick the first partner,
+  then a matching second one, then name the link. *Create and edit* opens
+  the new link right away.
+- **Each link has its own settings page.** Pick a profile (for example
+  *Switch on / off*) and only its settings are shown; *Expert* shows them
+  all, short and long keypress side by side. One *Apply* writes both ends.
+- **Device and channel parameters on one page** on a device's *Configure*
+  tab: the device parameters, then a block per channel with its name,
+  rooms, functions and settings, and one *Apply* for the whole device.
+  Channels other than the first read their settings from the device only
+  when you open them.
+- **One expert mode.** The switch in the parameter editors and the one in
+  Settings are now the same. The technical parameter names (`ON_TIME`, …)
+  are shown only in expert mode.
+- Export and import of a channel's settings moved into the "⋯" menu of the
+  parameter editor.
+
 ## 0.89.0
 
 - **MQTT topics and payloads changed.** Topics follow the

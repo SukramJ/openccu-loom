@@ -48,8 +48,9 @@
   type Props = {
     address: string;
     channel?: number;
-    // Optional deep-link target sub-tab (e.g. "links" from the global
-    // direct-links overview) so the view opens on that tab, not just the device.
+    // Optional deep-link target sub-tab (e.g. "links" when the link wizard
+    // returns to a device, "channels" from a link page's "Kanalparameter")
+    // so the view opens on that tab, not just the device.
     sub?: string;
     locale: string;
   };
@@ -308,7 +309,7 @@
 
   // Deep-link into a specific configure sub-tab (e.g. "channels" from the link
   // page's "Kanalparameter" action, which also names the channel), so the view opens on the
-  // requested tab instead of the default channels strip. Tracks the prop
+  // requested tab instead of the first one. Tracks the prop
   // rather than running once at mount: this component stays mounted while the
   // router only swaps `address` and `sub` (see the reload effect above), so a
   // pasted or bookmarked `#/devices/<other>?tab=links` followed with a device
@@ -328,9 +329,9 @@
       return;
     }
     untrack(() => {
-      // A deep link must not land on a tab the surface profile hides —
-      // the row in the fleet-wide link list still offers "edit on
-      // device", and following it would open an empty Configure shell.
+      // A deep link must not land on a tab the surface profile hides — a
+      // bookmark or a link page's "Kanalparameter" can still point at it,
+      // and following it would open an empty Configure shell.
       if (!surfacesStore.visible(`device.configure.${want}`)) return;
       topTab = "configure";
       configSub = want;
@@ -378,14 +379,15 @@
   });
 
   // Channel `:0` carries the maintenance VALUES (RSSI, LOW_BAT, …) +
-  // the device-wide MASTER. Used by the device-config sub-tab.
+  // the device-wide MASTER. Shown with the device parameters on the
+  // parameter page.
   const channelZero = $derived.by(() => {
     if (!detail) return null;
     return detail.channels.find((c) => c.address.endsWith(":0")) ?? null;
   });
 
-  // Skip ":0" and the device-level channel from the user-facing
-  // channel strip — those have their own dedicated cards.
+  // Skip ":0" and the device-level channel from the channel blocks —
+  // the parameter page shows those as the device parameters.
   const userChannels = $derived(
     visibleChannels.filter(
       (c) => c.address.includes(":") && !c.address.endsWith(":0"),

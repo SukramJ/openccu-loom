@@ -34,7 +34,7 @@ type Prefs = {
   navCollapsed: boolean;
   // expertMode is the one expert switch: it reveals expert-tier fields
   // in Settings, untranslated MASTER parameters and the raw CCU parameter
-  // names in every parameter editor. Persisted alongside the other
+  // names in the device and link parameter editors. Persisted alongside the other
   // preferences so the choice survives navigation and reloads.
   expertMode: boolean;
   // writePreview shows what a MASTER or LINK save will write, and to which

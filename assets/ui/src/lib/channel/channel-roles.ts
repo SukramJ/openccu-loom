@@ -33,7 +33,7 @@ export function roleLabel(role: ChannelRole): string {
 /**
  * Channels numbered 50 and up are the CCU's virtual channels (the ones a
  * device exposes for internal links rather than for hardware), which the
- * channel strip has always marked separately.
+ * channel lists mark separately and the link wizard hides by default.
  */
 export function isVirtualChannel(no: number): boolean {
   return no >= 50;
