@@ -174,6 +174,26 @@ describe("i18n catalogue coverage", () => {
     }
   });
 
+  // DeviceParameters.svelte and the parameter editor's overflow menu.
+  it("resolves the device parameter page keys in both locales", () => {
+    for (const key of [
+      "device.subtab.channels",
+      "device.params.device",
+      "device.params.channels",
+      "device.params.jump",
+      "device.params.links",
+      "device.params.links_plain",
+      "device.params.pending_hint",
+      "device.params.saved",
+      "device.params.partial_title",
+      "device.params.partial_body",
+      "channel.more_actions",
+    ]) {
+      expect(de.has(key), `${key} missing in de`).toBe(true);
+      expect(en.has(key), `${key} missing in en`).toBe(true);
+    }
+  });
+
   // LinkTable.svelte (both link lists) and LinkWizard.svelte.
   it("resolves the link list and wizard keys in both locales", () => {
     for (const key of [

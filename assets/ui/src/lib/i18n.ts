@@ -2376,10 +2376,8 @@ const EN: Catalog = {
     "Live values and controls for the selected device.",
   "surface.desc.device.configure":
     "The whole configuration tab, including its sub-tabs.",
-  "surface.desc.device.configure.device-config":
-    "MASTER and VALUES paramsets with edit sessions and undo.",
   "surface.desc.device.configure.channels":
-    "The channel strip that selects which channel the editor shows.",
+    "The device and channel parameters: every channel's MASTER settings, name, rooms and flags on one page.",
   "surface.desc.device.configure.links":
     "Create and delete links between this device and others.",
   "surface.desc.device.configure.schedule":
@@ -2929,8 +2927,8 @@ const EN: Catalog = {
   "channel.kanal": "Channel {n}",
   "channel.action_triggered": "Action {name} triggered.",
   "channel.action_failed": "Action {name} failed",
-  "channel.profile_staged": "Profile staged — press Save to apply.",
-  "channel.import_staged": "Import staged — press Save to apply.",
+  "channel.profile_staged": "Profile staged — press Apply to write it.",
+  "channel.import_staged": "Import staged — press Apply to write it.",
   "channel.import_paramset_mismatch":
     "Paramset mismatch: snapshot={snapshot}, current={current}.",
   "channel.import_invalid_file": "Not a valid OpenCCU-Loom export.",
@@ -3292,14 +3290,20 @@ const EN: Catalog = {
   "device.toptab.overview": "Overview",
   "device.toptab.configure": "Configure",
   "device.toptab.history": "History",
-  "device.subtab.device_config": "Device configuration",
   "device.subtab.maintenance_config": "Maintenance configuration",
-  "device.subtab.channels": "Channels",
+  "device.subtab.channels": "Device and channel parameters",
+  "device.params.device": "Device parameters",
+  "device.params.channels": "Channel parameters",
+  "device.params.jump": "Jump to",
+  "device.params.links": "Direct links ({count})",
+  "device.params.links_plain": "Direct links",
+  "device.params.pending_hint": "written to the device on Apply",
+  "device.params.saved": "Parameters saved.",
+  "device.params.partial_title": "Not everything was saved",
+  "device.params.partial_body": "Failed: {channels}. Everything else was written; the failed part is still pending.",
   "device.subtab.links": "Direct links",
   "device.subtab.schedule": "Schedule",
   "device.virtual": "Virtual",
-  "device.no_device_config": "This device has no device-level configuration.",
-  "device.week_profile_channel.title": "Week-profile channel",
   "device.week_profile_channel.body":
     "This channel only stores the device schedule. Open the schedule editor to edit it.",
   "device.confirm_remove_title": "Remove device?",
@@ -6736,10 +6740,8 @@ const DE: Catalog = {
     "Live-Werte und Bedienelemente des gewählten Geräts.",
   "surface.desc.device.configure":
     "Der gesamte Konfigurationstab inklusive seiner Untertabs.",
-  "surface.desc.device.configure.device-config":
-    "MASTER- und VALUES-Paramsets mit Bearbeitungssitzung und Undo.",
   "surface.desc.device.configure.channels":
-    "Die Kanalleiste, mit der ausgewählt wird, welchen Kanal der Editor zeigt.",
+    "Geräte- und Kanalparameter: MASTER-Einstellungen, Name, Räume und Flags aller Kanäle auf einer Seite.",
   "surface.desc.device.configure.links":
     "Verknüpfungen dieses Geräts anlegen und löschen.",
   "surface.desc.device.configure.schedule":
@@ -7291,9 +7293,9 @@ const DE: Catalog = {
   "channel.action_triggered": "Aktion {name} ausgelöst.",
   "channel.action_failed": "Aktion {name} fehlgeschlagen",
   "channel.profile_staged":
-    "Profil vorgemerkt — zum Anwenden Speichern drücken.",
+    "Profil vorgemerkt — zum Übertragen Übernehmen drücken.",
   "channel.import_staged":
-    "Import vorgemerkt — zum Anwenden Speichern drücken.",
+    "Import vorgemerkt — zum Übertragen Übernehmen drücken.",
   "channel.import_paramset_mismatch":
     "Paramset-Mismatch: Snapshot={snapshot}, aktuell={current}.",
   "channel.import_invalid_file": "Datei ist kein gültiger OpenCCU-Loom-Export.",
@@ -7654,15 +7656,20 @@ const DE: Catalog = {
   "device.toptab.overview": "Übersicht",
   "device.toptab.configure": "Konfigurieren",
   "device.toptab.history": "Verlauf",
-  "device.subtab.device_config": "Gerätekonfiguration",
   "device.subtab.maintenance_config": "Wartungskonfiguration",
-  "device.subtab.channels": "Kanäle",
+  "device.subtab.channels": "Geräte-/Kanalparameter",
+  "device.params.device": "Geräteparameter",
+  "device.params.channels": "Kanalparameter",
+  "device.params.jump": "Springen zu",
+  "device.params.links": "Direkte ({count})",
+  "device.params.links_plain": "Direkte",
+  "device.params.pending_hint": "werden mit Übernehmen an das Gerät übertragen",
+  "device.params.saved": "Parameter gespeichert.",
+  "device.params.partial_title": "Nicht alles wurde gespeichert",
+  "device.params.partial_body": "Fehlgeschlagen: {channels}. Alles andere wurde geschrieben; der fehlgeschlagene Teil bleibt vorgemerkt.",
   "device.subtab.links": "Verknüpfungen",
   "device.subtab.schedule": "Zeitplan",
   "device.virtual": "Virtuell",
-  "device.no_device_config":
-    "Dieses Gerät hat keine Geräte-Konfigurationsebene.",
-  "device.week_profile_channel.title": "Zeitplan-Kanal",
   "device.week_profile_channel.body":
     "Dieser Kanal hält nur den Geräte-Zeitplan. Öffne den Zeitplan-Editor zum Bearbeiten.",
   "device.confirm_remove_title": "Gerät entfernen?",

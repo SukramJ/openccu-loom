@@ -141,8 +141,8 @@ test.describe('Channel editor — export / import snapshot', () => {
     await gotoConfigureTab(page);
 
     const downloadPromise = page.waitForEvent('download');
-    await page.getByRole('button', { name: 'More actions' }).first().click();
-    await page.getByRole('menuitem', { name: 'Export', exact: true }).click();
+    await page.locator('section[data-channel="4"]').getByRole('button', { name: 'More actions' }).click();
+    await page.locator('section[data-channel="4"]').getByRole('menuitem', { name: 'Export', exact: true }).click();
     const download = await downloadPromise;
 
     // Chrome's download manager sanitises ":" out of suggested filenames
@@ -169,7 +169,7 @@ test.describe('Channel editor — export / import snapshot', () => {
   test('import stages a matching snapshot into the working copy and enables Save', async ({ page }) => {
     await gotoConfigureTab(page);
 
-    const input = page.locator('input[type="number"]').first();
+    const input = page.locator('section[data-channel="4"]').locator('input[type="number"]').first();
     await expect(input).toHaveValue('0.5');
 
     const snapshot = {
@@ -182,8 +182,8 @@ test.describe('Channel editor — export / import snapshot', () => {
     };
 
     const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.getByRole('button', { name: 'More actions' }).first().click();
-    await page.getByRole('menuitem', { name: 'Import', exact: true }).click();
+    await page.locator('section[data-channel="4"]').getByRole('button', { name: 'More actions' }).click();
+    await page.locator('section[data-channel="4"]').getByRole('menuitem', { name: 'Import', exact: true }).click();
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles({
       name: 'snapshot.json',
@@ -191,10 +191,10 @@ test.describe('Channel editor — export / import snapshot', () => {
       buffer: Buffer.from(JSON.stringify(snapshot)),
     });
 
-    await expect(page.getByText('Import staged — press Save to apply.')).toBeVisible();
+    await expect(page.getByText('Import staged — press Apply to write it.')).toBeVisible();
     await expect(input).toHaveValue('9.5');
 
-    const saveButton = page.getByRole('button', { name: /Save \(\d+\)/ }).first();
+    const saveButton = page.getByRole('button', { name: 'Apply', exact: true });
     await expect(saveButton).toBeEnabled();
   });
 
@@ -211,8 +211,8 @@ test.describe('Channel editor — export / import snapshot', () => {
     };
 
     const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.getByRole('button', { name: 'More actions' }).first().click();
-    await page.getByRole('menuitem', { name: 'Import', exact: true }).click();
+    await page.locator('section[data-channel="4"]').getByRole('button', { name: 'More actions' }).click();
+    await page.locator('section[data-channel="4"]').getByRole('menuitem', { name: 'Import', exact: true }).click();
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles({
       name: 'snapshot.json',
@@ -226,6 +226,6 @@ test.describe('Channel editor — export / import snapshot', () => {
     await expect(dialog).toBeVisible();
     await dialog.getByRole('button', { name: 'Import', exact: true }).click();
 
-    await expect(page.getByText('Import staged — press Save to apply.')).toBeVisible();
+    await expect(page.getByText('Import staged — press Apply to write it.')).toBeVisible();
   });
 });

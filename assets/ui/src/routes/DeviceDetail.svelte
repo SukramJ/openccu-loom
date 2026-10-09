@@ -2,10 +2,10 @@
   import { apiErrorMessage } from "$lib/features";
   import { centralStore } from "$lib/stores/centrals.svelte";
   import { onMount, untrack } from "svelte";
-  import type { DeviceDetail } from "$lib/api/types";
+  import type { ChannelSummary, DeviceDetail } from "$lib/api/types";
   import { api, ApiError, friendlyError } from "$lib/api/client";
   import { deviceStore } from "$lib/stores/devices.svelte";
-  import ChannelPanel from "$lib/components/channel/ChannelPanel.svelte";
+  import DeviceParameters from "$lib/components/device/DeviceParameters.svelte";
   import ChannelFlagsToggles from "$lib/components/channel/ChannelFlagsToggles.svelte";
   import TeamPicker from "$lib/components/device/TeamPicker.svelte";
   import DeviceLinks from "$lib/components/links/DeviceLinks.svelte";
@@ -23,17 +23,12 @@
   import TaxonomyPicker from "$lib/components/taxonomy/TaxonomyPicker.svelte";
   import { taxonomyStore } from "$lib/stores/taxonomy.svelte";
   import { assignedPaths, nodeRef } from "$lib/taxonomy/tree";
-  import Card from "$lib/components/ui/Card.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Input from "$lib/components/ui/Input.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Breadcrumb from "$lib/components/ui/Breadcrumb.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
-  import ChannelTable from "$lib/components/channel/ChannelTable.svelte";
-  import {
-    channelHeader,
-    isWeekProfileChannel,
-  } from "$lib/channel/channel-roles";
+  import { channelHeader } from "$lib/channel/channel-roles";
   import type { IconName } from "$lib/icons";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { maintenanceStore } from "$lib/stores/maintenance.svelte";
@@ -71,11 +66,10 @@
   type TopTab = "overview" | "configure" | "history";
   let topTab = $state<TopTab>("overview");
 
-  // Sub-tabs inside `configure`. WEEK_PROFILE channels redirect from
-  // the channels strip to `schedule`, so users never end up in an
-  // empty MASTER editor for a profile-only channel.
+  // Sub-tabs inside `configure`. "channels" is the CCU's
+  // "Geräte-/Kanalparameter" page: the device parameters and every
+  // channel on one page (DeviceParameters).
   type ConfigSub =
-    | "device-config"
     | "channels"
     | "links"
     | "schedule";
@@ -320,13 +314,10 @@
   // pasted or bookmarked `#/devices/<other>?tab=links` followed with a device
   // page already open would otherwise land on the previously selected tab.
   $effect(() => {
-    const want = sub;
-    if (
-      want !== "links" &&
-      want !== "schedule" &&
-      want !== "device-config" &&
-      want !== "channels"
-    ) {
+    // `device-config` named the device parameters before they joined the
+    // channel parameters on one page; old bookmarks land there.
+    const want = sub === "device-config" ? "channels" : sub;
+    if (want !== "links" && want !== "schedule" && want !== "channels") {
       // A route without a `?tab=` parameter must undo the previous deep
       // link, not inherit it: following `#/devices/A?tab=schedule` with
       // `#/devices/B` otherwise keeps the schedule sub-tab selected for a
@@ -392,10 +383,6 @@
     if (!detail) return null;
     return detail.channels.find((c) => c.address.endsWith(":0")) ?? null;
   });
-
-  const selectedChannel = $derived(
-    channel ?? visibleChannels[0]?.number ?? 0,
-  );
 
   // Skip ":0" and the device-level channel from the user-facing
   // channel strip — those have their own dedicated cards.
@@ -765,14 +752,6 @@
     toastStore.success(t("roomfn.created.function"));
   }
 
-  function clickChannelInStrip(ch: { number: number; type?: string }) {
-    if (isWeekProfileChannel(ch.type) && scheduleSupported) {
-      configSub = "schedule";
-      return;
-    }
-    location.hash = `#/devices/${detail?.address}/channels/${ch.number}`;
-  }
-
   // Per-channel assignment mirrors the device level: optimistic update on the
   // matching channel, rolled back on a CCU error.
   async function updateChannelRooms(no: number, next: string[]) {
@@ -829,13 +808,7 @@
   type SubDef = { key: ConfigSub; label: string };
   const configSubs = $derived.by<SubDef[]>(() => {
     const out: SubDef[] = [];
-    if (deviceChannel || channelZero) {
-      out.push({
-        key: "device-config",
-        label: t("device.subtab.device_config"),
-      });
-    }
-    if (userChannels.length > 0) {
+    if (deviceChannel || channelZero || userChannels.length > 0) {
       out.push({ key: "channels", label: t("device.subtab.channels") });
     }
     out.push({ key: "links", label: t("device.subtab.links") });
@@ -1227,209 +1200,143 @@
           onSelect={(key) => (configSub = key as ConfigSub)}
         />
 
-        {#if activeConfigSub === "device-config"}
-          {#if deviceChannel}
-            <h3 class="mb-2 text-sm font-semibold text-slate-900 dark:text-white">
-              {t("device.subtab.device_config")} — {deviceChannel.address}
-            </h3>
-            <ChannelPanel
-              address={detail.address}
-              channel={deviceChannel.number}
-              paramset="MASTER"
-              {locale}
-              pushesConfigPending={detail.master_pushes_config_pending}
-            />
-            {#if channelZero && channelZero.address !== deviceChannel.address}
-              <h3 class="mb-2 mt-6 text-sm font-semibold text-slate-900 dark:text-white">
-                {t("device.subtab.maintenance_config")} — {channelZero.address}
-              </h3>
-              <ChannelPanel
-                address={detail.address}
-                channel={channelZero.number}
-                paramset="MASTER"
-                {locale}
-              />
-            {/if}
-          {:else if channelZero}
-            <h3 class="mb-2 text-sm font-semibold text-slate-900 dark:text-white">
-              {t("device.subtab.maintenance_config")} — {channelZero.address}
-            </h3>
-            <ChannelPanel
-              address={detail.address}
-              channel={channelZero.number}
-              paramset="MASTER"
-              {locale}
-              pushesConfigPending={detail.master_pushes_config_pending}
-            />
-          {:else}
-            <EmptyState message={t("device.no_device_config")} />
-          {/if}
-        {:else if activeConfigSub === "channels"}
-          <!-- Channel selector. Selecting a row opens that channel's editor
-               below the table; a week-profile row routes to the Schedule
-               sub-tab instead, because those channels hold a weekly program
-               rather than parameters. -->
-          <div class="mb-4">
-            <ChannelTable
-              channels={userChannels}
-              selected={selectedChannel}
-              linkCounts={channelLinkCounts}
-              onSelect={clickChannelInStrip}
+        {#if activeConfigSub === "channels"}
+          <!-- Name, rooms, functions, team and flags of one channel; the
+               parameter page renders it at the top of each channel block. -->
+          {#snippet channelSettings(ch: ChannelSummary)}
+            {#if detail}
+      <!-- Per-channel rename affordance. The pencil opens an inline
+           editor; the CCU stores the channel name via Channel.setName. -->
+      <div class="mb-3 flex flex-wrap items-center gap-2">
+        {#if renameChannelNo === ch.number}
+          <div class="w-full sm:w-64">
+            <Input
+              type="text"
+              aria-label={t("channel.rename")}
+              bind:value={renameChannelValue}
+              onkeydown={(e) => {
+                if (e.key === "Enter") void commitRenameChannel();
+                else if (e.key === "Escape") cancelRenameChannel();
+              }}
             />
           </div>
-
-          {#if userChannels.length === 0}
-            <EmptyState message={t("device.no_channels")} />
-          {:else}
-            {@const ch = userChannels.find((c) => c.number === selectedChannel) ?? userChannels[0]}
-            {#if isWeekProfileChannel(ch.type)}
-              <Card class="p-4">
-                <div class="flex items-center gap-3">
-                  <Icon name="mdi:calendar-clock" size={24} />
-                  <div class="flex-1">
-                    <h3 class="font-medium text-slate-900 dark:text-white">
-                      {t("device.week_profile_channel.title")}
-                    </h3>
-                    <p class="text-sm text-slate-500 dark:text-slate-400">
-                      {t("device.week_profile_channel.body")}
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onclick={() => (configSub = "schedule")}
-                  >
-                    {t("device.subtab.schedule")}
-                  </Button>
-                </div>
-              </Card>
-            {:else}
-              <!-- Per-channel rename affordance. The pencil opens an inline
-                   editor; the CCU stores the channel name via Channel.setName. -->
-              <div class="mb-3 flex flex-wrap items-center gap-2">
-                {#if renameChannelNo === ch.number}
-                  <div class="w-full sm:w-64">
-                    <Input
-                      type="text"
-                      aria-label={t("channel.rename")}
-                      bind:value={renameChannelValue}
-                      onkeydown={(e) => {
-                        if (e.key === "Enter") void commitRenameChannel();
-                        else if (e.key === "Escape") cancelRenameChannel();
-                      }}
-                    />
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    onclick={() => void commitRenameChannel()}
-                    disabled={renameChannelBusy}
-                  >
-                    {t("common.save")}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onclick={cancelRenameChannel}
-                    disabled={renameChannelBusy}
-                  >
-                    {t("common.cancel")}
-                  </Button>
-                {:else}
-                  <h3 class="font-medium text-slate-900 dark:text-white">
-                    {channelHeader(ch, detail.model || detail.model_label || "")}
-                  </h3>
-                  <span class="font-mono text-xs text-[var(--ha-secondary-text-color)]">
-                    {ch.address}
-                  </span>
-                  {#if canRename}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      aria-label={t("channel.rename")}
-                      title={t("channel.rename")}
-                      onclick={() => startRenameChannel(ch.number, ch.name ?? "")}
-                    >
-                      <Icon name="mdi:pencil" size={16} />
-                    </Button>
-                  {/if}
-                {/if}
-              </div>
-              <!-- Per-channel room / function assignment. Same combobox as the
-                   device level, persisted per change via
-                   PATCH /devices/{addr}/channels/{no}. -->
-              <div class="mb-3 grid grid-cols-[auto_1fr] items-start gap-x-3 gap-y-2 text-xs text-slate-500 dark:text-slate-400">
-                {#if treeTaxonomy}
-                  <span class="pt-2 font-semibold">{t("channel.rooms")}:</span>
-                  <TaxonomyPicker
-                    taxonomy={roomTree}
-                    selected={assignedPaths(ch.taxonomy, "room")}
-                    onChange={(paths) => void assignPaths("room", paths, ch.number)}
-                    disabled={!canAssign}
-                    ariaLabel={t("channel.rooms")}
-                  />
-                  <span class="pt-2 font-semibold">{t("channel.functions")}:</span>
-                  <TaxonomyPicker
-                    taxonomy={functionTree}
-                    selected={assignedPaths(ch.taxonomy, "function")}
-                    onChange={(paths) => void assignPaths("function", paths, ch.number)}
-                    disabled={!canAssign}
-                    ariaLabel={t("channel.functions")}
-                  />
-                {:else}
-                  <span class="pt-2 font-semibold">{t("channel.rooms")}:</span>
-                  <RoomFunctionSelect
-                    id={`ch-${ch.number}-rooms`}
-                    ariaLabel={t("channel.rooms")}
-                    selected={ch.rooms ?? []}
-                    options={roomOptions}
-                    onChange={(next) => void updateChannelRooms(ch.number, next)}
-                    onCreate={canEditNodes ? createRoomEntry : undefined}
-                    disabled={!canAssign}
-                    placeholder={t("roomfn.placeholder.room")}
-                    createLabel={(v) => t("roomfn.create.room", { name: v })}
-                    removeLabel={(n) => t("roomfn.remove_named", { name: n })}
-                  />
-                  <span class="pt-2 font-semibold">{t("channel.functions")}:</span>
-                  <RoomFunctionSelect
-                    id={`ch-${ch.number}-functions`}
-                    ariaLabel={t("channel.functions")}
-                    selected={ch.functions ?? []}
-                    options={functionOptions}
-                    onChange={(next) => void updateChannelFunctions(ch.number, next)}
-                    onCreate={canEditNodes ? createFunctionEntry : undefined}
-                    disabled={!canAssign}
-                    placeholder={t("roomfn.placeholder.function")}
-                    createLabel={(v) => t("roomfn.create.function", { name: v })}
-                    removeLabel={(n) => t("roomfn.remove_named", { name: n })}
-                  />
-                {/if}
-              </div>
-              {#if detail.team_supported}
-                <div class="mb-3">
-                  <TeamPicker address={detail.address} channel={ch.number} />
-                </div>
-              {/if}
-              <div class="mb-3">
-                <ChannelFlagsToggles
-                  address={detail.address}
-                  channelNo={ch.number}
-                  hidden={ch.hidden}
-                  locked={ch.locked}
-                />
-              </div>
-              <ChannelPanel
-                address={detail.address}
-                channel={ch.number}
-                paramset="MASTER"
-                {locale}
-                pushesConfigPending={detail.master_pushes_config_pending}
-              />
-            {/if}
+          <Button
+            type="button"
+            size="sm"
+            onclick={() => void commitRenameChannel()}
+            disabled={renameChannelBusy}
+          >
+            {t("common.save")}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onclick={cancelRenameChannel}
+            disabled={renameChannelBusy}
+          >
+            {t("common.cancel")}
+          </Button>
+        {:else}
+          <h3 class="font-medium text-slate-900 dark:text-white">
+            {channelHeader(ch, detail.model || detail.model_label || "")}
+          </h3>
+          <span class="font-mono text-xs text-[var(--ha-secondary-text-color)]">
+            {ch.address}
+          </span>
+          {#if canRename}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-label={t("channel.rename")}
+              title={t("channel.rename")}
+              onclick={() => startRenameChannel(ch.number, ch.name ?? "")}
+            >
+              <Icon name="mdi:pencil" size={16} />
+            </Button>
           {/if}
+        {/if}
+      </div>
+      <!-- Per-channel room / function assignment. Same combobox as the
+           device level, persisted per change via
+           PATCH /devices/{addr}/channels/{no}. -->
+      <div class="mb-3 grid grid-cols-[auto_1fr] items-start gap-x-3 gap-y-2 text-xs text-slate-500 dark:text-slate-400">
+        {#if treeTaxonomy}
+          <span class="pt-2 font-semibold">{t("channel.rooms")}:</span>
+          <TaxonomyPicker
+            taxonomy={roomTree}
+            selected={assignedPaths(ch.taxonomy, "room")}
+            onChange={(paths) => void assignPaths("room", paths, ch.number)}
+            disabled={!canAssign}
+            ariaLabel={t("channel.rooms")}
+          />
+          <span class="pt-2 font-semibold">{t("channel.functions")}:</span>
+          <TaxonomyPicker
+            taxonomy={functionTree}
+            selected={assignedPaths(ch.taxonomy, "function")}
+            onChange={(paths) => void assignPaths("function", paths, ch.number)}
+            disabled={!canAssign}
+            ariaLabel={t("channel.functions")}
+          />
+        {:else}
+          <span class="pt-2 font-semibold">{t("channel.rooms")}:</span>
+          <RoomFunctionSelect
+            id={`ch-${ch.number}-rooms`}
+            ariaLabel={t("channel.rooms")}
+            selected={ch.rooms ?? []}
+            options={roomOptions}
+            onChange={(next) => void updateChannelRooms(ch.number, next)}
+            onCreate={canEditNodes ? createRoomEntry : undefined}
+            disabled={!canAssign}
+            placeholder={t("roomfn.placeholder.room")}
+            createLabel={(v) => t("roomfn.create.room", { name: v })}
+            removeLabel={(n) => t("roomfn.remove_named", { name: n })}
+          />
+          <span class="pt-2 font-semibold">{t("channel.functions")}:</span>
+          <RoomFunctionSelect
+            id={`ch-${ch.number}-functions`}
+            ariaLabel={t("channel.functions")}
+            selected={ch.functions ?? []}
+            options={functionOptions}
+            onChange={(next) => void updateChannelFunctions(ch.number, next)}
+            onCreate={canEditNodes ? createFunctionEntry : undefined}
+            disabled={!canAssign}
+            placeholder={t("roomfn.placeholder.function")}
+            createLabel={(v) => t("roomfn.create.function", { name: v })}
+            removeLabel={(n) => t("roomfn.remove_named", { name: n })}
+          />
+        {/if}
+      </div>
+      {#if detail.team_supported}
+        <div class="mb-3">
+          <TeamPicker address={detail.address} channel={ch.number} />
+        </div>
+      {/if}
+      <div class="mb-3">
+        <ChannelFlagsToggles
+          address={detail.address}
+          channelNo={ch.number}
+          hidden={ch.hidden}
+          locked={ch.locked}
+        />
+      </div>
+            {/if}
+          {/snippet}
+          <DeviceParameters
+            {detail}
+            {locale}
+            {deviceChannel}
+            {channelZero}
+            channels={userChannels}
+            linkCounts={channelLinkCounts}
+            focusChannel={channel}
+            settings={channelSettings}
+            onOpenSchedule={scheduleSupported ? () => (configSub = "schedule") : undefined}
+            onOpenLinks={surfacesStore.visible("device.configure.links")
+              ? () => (configSub = "links")
+              : undefined}
+          />
         {:else if activeConfigSub === "links"}
           <div class="space-y-4">
             <CentralLinksPanel address={detail.address} />

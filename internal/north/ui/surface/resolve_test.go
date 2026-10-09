@@ -44,7 +44,7 @@ func TestResolveDefaultsPerProfile(t *testing.T) {
 		"nav.overview", "nav.favorites", "nav.energy", "nav.diagrams", "nav.matter",
 		"settings.ccus", "settings.oidc", "settings.ccu_auth", "settings.users",
 		"settings.groups", "settings.tokens", "settings.matter",
-		"device.configure", "device.configure.device-config", "device.configure.channels",
+		"device.configure", "device.configure.channels",
 		"device.configure.links", "device.configure.schedule",
 	}
 	got := embedded.HiddenIDs()
@@ -247,7 +247,6 @@ func TestMultiCentralWidensTheEmbeddedDefaults(t *testing.T) {
 	widened := []ID{
 		"settings.ccus",
 		"device.configure",
-		"device.configure.device-config",
 		"device.configure.channels",
 		"device.configure.links",
 		"device.configure.schedule",

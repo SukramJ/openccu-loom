@@ -48,6 +48,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   *"<sender> with <receiver>"*. It warns when the link already exists and
   offers *Create* and *Create and edit*. *New link* on the list and on a
   device, and *Add receiver / Add sender* on a grouped list, start it.
+- **Device and channel parameters on one page.** A device's *Configure*
+  tab merges *Device configuration* and *Channels* into one sub-tab laid
+  out like the CCU's *Geräte-/Kanalparameter*: the device parameters,
+  then one block per channel with its name, rooms, functions, flags and
+  parameters, and a jump list on wide screens. The device parameters and
+  the first channel open at once; any other channel reads its parameters
+  from the device only when its block is opened. One save bar writes
+  every changed channel and names any that failed. Bookmarks to the old
+  `?tab=device-config` open the new page; the navigation-profile entry
+  *device.configure.device-config* is retired (a stored override for it
+  is ignored), and *device.configure.channels* now governs the page.
 - **One expert mode.** The parameter editors' own expert switch and the
   expert mode in Settings are now the same setting; an editor's switch
   turns on the global one, and a browser that had the editor switch on

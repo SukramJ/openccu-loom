@@ -1150,6 +1150,18 @@
         >
           <Icon name="mdi:redo" size={18} />
         </Button>
+        {#if hosted && canApplyToOthers}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onclick={() => (applyOpen = true)}
+            disabled={saving || hasErrors}
+            title={t("channel.apply.tooltip")}
+          >
+            {t("channel.apply.open")}
+          </Button>
+        {/if}
         <OverflowMenu
           ariaLabel={t("channel.more_actions")}
           items={[
@@ -1252,15 +1264,18 @@
         editToken={lockSession?.token}
         disabled={!!lockedByOther || lockLost}
       />
-      <label class="mb-4 flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
-        <input
-          type="checkbox"
-          checked={expertMode}
-          onchange={(e) => setExpert((e.target as HTMLInputElement).checked)}
-          class="h-4 w-4 rounded border-[var(--ha-divider-color)]"
-        />
-        {t("channel.expert_label")}
-      </label>
+      <!-- A hosting page offers the one expert switch for all its panels. -->
+      {#if !hosted}
+        <label class="mb-4 flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
+          <input
+            type="checkbox"
+            checked={expertMode}
+            onchange={(e) => setExpert((e.target as HTMLInputElement).checked)}
+            class="h-4 w-4 rounded border-[var(--ha-divider-color)]"
+          />
+          {t("channel.expert_label")}
+        </label>
+      {/if}
     {/if}
 
     {#if paramset === "LINK"}
