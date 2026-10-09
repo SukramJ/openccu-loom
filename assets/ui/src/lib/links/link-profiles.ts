@@ -16,7 +16,8 @@ import type { UISchemaProfile } from "$lib/api/types";
  * archive and carries no parameters: it stands for "no easymode, edit
  * the raw paramset" — the same slot the CCU WebUI gives its "Experte"
  * option (easymodes/<RECEIVER>/<SENDER>.tcl, PROFILES_MAP(0)). The
- * daemon reports active_profile_id 0 when no other profile matches.
+ * daemon reports active_profile_id 0 when no other profile matches, and
+ * equally when the link's current values could not be read.
  */
 export const EXPERT_PROFILE_ID = 0;
 

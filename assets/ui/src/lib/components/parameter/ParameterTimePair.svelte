@@ -135,6 +135,7 @@
         dirty={unitDirty}
         error={unitError}
         onChange={(v) => onChange(pair.unitParam.name, v)}
+        {showRawName}
       />
       <ParameterField
         parameter={pair.valueParam}
@@ -142,6 +143,7 @@
         dirty={valueDirty}
         error={valueError}
         onChange={(v) => onChange(pair.valueParam.name, v)}
+        {showRawName}
       />
     </div>
   {/if}

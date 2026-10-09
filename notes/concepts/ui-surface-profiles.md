@@ -79,7 +79,8 @@ A surface is an addressable entry point, identified by a stable string:
 - `nav.<key>` — a navigation item (`nav.devices`, `nav.alarm`, `nav.matter`)
 - `settings.<tab>` — a settings tab (`settings.mqtt`, `settings.users`)
 - `device.<tab>` — a device-detail tab or configure sub-tab (`device.configure`,
-  and its four children `device-config`, `channels`, `links`, `schedule`)
+  and its children `channels`, `links`, `schedule`; `channels` is the device and channel
+  parameter page, which absorbed the former `device-config` sub-tab)
 
 The IDs are derived from the tables that already exist — `navClusters` in
 `assets/ui/src/lib/nav.ts:75-259`, `ALL_TABS` in `assets/ui/src/routes/Settings.svelte:243-261`,
@@ -227,7 +228,7 @@ nothing. `embedded` ships the ownership matrix of the [embedded UI mode](./embed
 |---|---|
 | Navigation | `nav.overview`, `nav.favorites`, `nav.energy`, `nav.diagrams`, `nav.matter` |
 | Settings | `settings.ccus`, `settings.oidc`, `settings.ccu_auth`, `settings.users`, `settings.groups`, `settings.tokens`, `settings.matter` |
-| Device detail | `device.configure` (with its `device-config` / `links` / `schedule` sub-tabs) |
+| Device detail | `device.configure` (with its `channels` / `links` / `schedule` sub-tabs) |
 
 Everything else stays visible, including `nav.devices`, `nav.alarm`, `nav.security`,
 `nav.inbox`, `nav.fleet`, the whole automation cluster, the ops cluster and

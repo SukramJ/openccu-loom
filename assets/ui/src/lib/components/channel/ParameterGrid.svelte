@@ -191,6 +191,7 @@
         {dirty}
         {errors}
         {onParamChange}
+        {showRawName}
       />
     {/if}
     {#if dst.end.length > 0}
@@ -201,6 +202,7 @@
         {dirty}
         {errors}
         {onParamChange}
+        {showRawName}
       />
     {/if}
   </div>

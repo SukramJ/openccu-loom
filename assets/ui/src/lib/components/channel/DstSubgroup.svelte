@@ -18,6 +18,8 @@
     dirty: Set<string>;
     errors: Record<string, string>;
     onParamChange: (name: string, value: unknown) => void;
+    /** False hides the raw CCU names under the labels (outside expert mode). */
+    showRawName?: boolean;
   };
 
   let {
@@ -27,6 +29,7 @@
     dirty,
     errors,
     onParamChange,
+    showRawName = true,
   }: Props = $props();
 
   function currentValue(p: UISchemaParameter): unknown {
@@ -85,6 +88,7 @@
           dirty={dirty.has(p.name)}
           error={errors[p.name] ?? null}
           onChange={(v) => onParamChange(p.name, v)}
+          {showRawName}
         />
       {/if}
     {/each}

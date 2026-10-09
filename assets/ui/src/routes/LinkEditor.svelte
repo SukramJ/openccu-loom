@@ -89,8 +89,8 @@
   let senderPanel = $state<ChannelPanel | null>(null);
   let receiverDirty = $state(0);
   let senderDirty = $state(0);
-  // -1 = not probed yet. A sender without a LINK paramset for this peer
-  // (most actuator senders, many HmIP buttons) reports 0.
+  // -1 = not probed yet; 0 = the sender side shows no panel — it carries
+  // no LINK parameters for this peer, or its paramset could not be read.
   let senderParamCount = $state(-1);
 
   const pending = $derived(receiverDirty + senderDirty + (metaDirty ? 1 : 0));

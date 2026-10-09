@@ -3,8 +3,8 @@
 
 // @vitest-environment happy-dom
 //
-// The device-config view mounts two ChannelPanels side by side (device
-// MASTER plus channel MASTER), and the link editor mounts the receiver
+// The parameter page mounts several ChannelPanels at once (device
+// MASTER plus each open channel), and the link editor mounts the receiver
 // next to the sender. The undo / redo shortcut listens on the window, so
 // without an owner one Ctrl+Z steps every mounted change stack — the
 // second revert lands in a panel the operator is not looking at.
