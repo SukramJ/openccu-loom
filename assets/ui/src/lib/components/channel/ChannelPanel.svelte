@@ -860,8 +860,14 @@
     reset();
   }
 
+  // The count is this effect's only dependency. The host's callback runs
+  // untracked: a host that reads its own state while storing the count
+  // (the parameter page keeps one count per channel) would otherwise make
+  // that state a dependency of this effect, and every store would wake it
+  // again — effect_update_depth_exceeded after one keystroke.
   $effect(() => {
-    onDirtyChange?.(dirtyNames.length);
+    const count = dirtyNames.length;
+    untrack(() => onDirtyChange?.(count));
   });
 
   // Determine one parameter's live value from the device and stage it
