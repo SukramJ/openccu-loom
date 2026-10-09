@@ -6,6 +6,24 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.90.0] - 2026-10-09
+
+### Release summary
+
+**Security release.** OpenCCU-Loom is built with Go 1.27.2, which fixes
+vulnerabilities in the Go standard library the daemon uses for HTTP,
+HTTP/2, TLS and HTML templates; update soon. The release also makes direct
+links and device configuration recognisable to CCU users: direct links
+are listed *Sender | Link | Receiver* as in the CCU WebUI, are created in
+the CCU's three-step wizard and edited on a per-link *Profile settings*
+page led by the link profile, with short and long keypress side by side;
+a device's *Configure* tab shows its device and channel parameters on one
+page with one save bar. **Behaviour change:** the raw CCU parameter names
+(`ON_TIME`, …) now show only in expert mode, and the parameter editors'
+expert switch is the one in Settings. The navigation-profile entry for the
+former *Device configuration* sub-tab is retired; *device.configure.channels*
+now governs the merged page. REST API 13.7.2, unchanged.
+
 ### Security
 
 - Built with **Go 1.27.2**, which fixes standard-library vulnerabilities
