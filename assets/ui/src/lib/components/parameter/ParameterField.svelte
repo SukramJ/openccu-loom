@@ -49,6 +49,12 @@
      */
     nameBadge?: boolean;
     /**
+     * False hides the raw CCU name under the label. The link page's
+     * profile view does so: the profile already says what each field is
+     * for, and the raw names belong to the expert view.
+     */
+    showRawName?: boolean;
+    /**
      * Present only for LINK condition-threshold fields whose sender
      * channel currently reports a brightness reading. Renders a
      * one-click "take current brightness" button that patches the field
@@ -80,6 +86,7 @@
     onChange,
     onAction,
     nameBadge = false,
+    showRawName = true,
     brightnessHelper = null,
     onDetermine,
   }: Props = $props();
@@ -318,10 +325,13 @@
 {:else}
 <!-- One parameter row. The three columns line up across a whole section:
      label (with the raw CCU name beneath it), the widget, and the range /
-     default the CCU will hold the write to. Below `md` the columns stack,
-     which is the old card shape and the right one on a phone. -->
-<div class="grid grid-cols-1 gap-x-4 gap-y-1 {rowPad} md:grid-cols-[minmax(14rem,1fr)_minmax(12rem,2fr)_auto] md:items-start">
-  <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1 md:flex-col md:items-start md:gap-y-0.5">
+     default the CCU will hold the write to. The columns need about 34rem;
+     in anything narrower — a phone, or one cell of the link page's
+     short/long table — they stack, so the breakpoint is the row's own
+     width, not the viewport's. -->
+<div class="@container">
+<div class="grid grid-cols-1 gap-x-4 gap-y-1 {rowPad} @xl:grid-cols-[minmax(14rem,1fr)_minmax(12rem,2fr)_auto] @xl:items-start">
+  <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1 @xl:flex-col @xl:items-start @xl:gap-y-0.5">
     <span class="min-w-0 break-words text-sm font-medium text-slate-700 dark:text-slate-300">
       {parameter.label || parameter.name}
       {#if parameter.unit}
@@ -333,7 +343,7 @@
     <!-- The raw CCU name goes on its own line under the label: it is what the
          operator matches against the device documentation and against any
          other tool, and inline it competes with the label for the same row. -->
-    {#if parameter.label && parameter.name !== parameter.label}
+    {#if showRawName && parameter.label && parameter.name !== parameter.label}
       {#if nameBadge}
         <Badge variant="muted" class="align-middle font-mono">{parameter.name}</Badge>
       {:else}
@@ -610,9 +620,10 @@
   </div>
 
   {#if rangeSummary}
-    <div class="whitespace-nowrap text-xs tabular-nums text-[var(--ha-secondary-text-color)] md:pt-1.5 md:text-right">
+    <div class="whitespace-nowrap text-xs tabular-nums text-[var(--ha-secondary-text-color)] @xl:pt-1.5 @xl:text-right">
       {rangeSummary}
     </div>
   {/if}
+</div>
 </div>
 {/if}

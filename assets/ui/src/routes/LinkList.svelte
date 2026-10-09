@@ -1,10 +1,9 @@
 <!--
   Global direct-links overview (V01). Aggregates every direct link
   (channel-to-channel peering) across all configured centrals into one
-  searchable list — the CCU WebUI's cross-device link view. This surface
-  is read-only; creating, editing and deleting a link happens on the
-  owning device's detail page (its Links section), which each row links
-  to.
+  searchable list — the CCU WebUI's cross-device link view. Each row opens
+  the link's own "Profileinstellung" page (#/links/<sender>/<receiver>);
+  creating a link still starts on a device's detail page.
 
   When the surface profile hides that editor the listing stays and the
   rows stop linking — see the `opens` relation in
@@ -55,11 +54,6 @@
   }
 
   onMount(load);
-
-  function deviceOf(channelAddress: string): string {
-    const i = channelAddress.lastIndexOf(":");
-    return i === -1 ? channelAddress : channelAddress.slice(0, i);
-  }
 
   function partyName(link: Link, side: "sender" | "receiver"): string {
     if (side === "sender") {
@@ -280,11 +274,11 @@
     {/if}
   {:else if col.key === "actions" && linkable}
     <a
-      href={`#/devices/${encodeURIComponent(deviceOf(link.sender_address))}?tab=links`}
+      href={`#/links/${encodeURIComponent(link.sender_address)}/${encodeURIComponent(link.receiver_address)}`}
       class="inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:underline dark:text-brand-400"
     >
       <Icon name="mdi:pencil" />
-      {t("links.edit_on_device")}
+      {t("links.edit")}
     </a>
   {/if}
 {/snippet}

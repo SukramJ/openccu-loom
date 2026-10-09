@@ -6,6 +6,33 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Direct links get their own page, laid out like the CCU WebUI's link
+  editor.** Every link opens at `#/links/<sender>/<receiver>` — from the
+  link list's new *Edit* action and from the device's link list alike —
+  instead of replacing the device's list in place. The page shows
+  *Sender | Link | Receiver* side by side with name, description and
+  delete, then the sender's and the receiver's profile settings, and one
+  save bar whose *Apply* writes both sides plus the name and description.
+  The two sides are two devices under two edit locks, so *Apply* is two
+  writes, not one transaction: both are attempted, and a side that fails
+  is named while everything else is saved.
+- **The link profile is the first control of each side.** Choosing a
+  profile stages its values at once as an unsaved, undoable edit and shows
+  only the settings that profile leaves open; *Expert* — the archive's
+  profile 0, as in the CCU — shows every link parameter. The separate
+  apply button, the dry-run preview and *Remove lock* are gone. Raw CCU
+  parameter names appear only under *Expert*.
+- **Short and long keypress sit side by side** in one table, row by row,
+  instead of on two tabs.
+- The link wizard offers **Create and edit**, which opens the new link's
+  page so its profile can be chosen right away.
+- German labels follow the CCU WebUI: *Direkte Verknüpfungen*,
+  *Profileinstellung*, *Erstellen*, *Bearbeiten*.
+- A parameter row lays out label, field and range in columns only when the
+  row itself is wide enough, so it no longer overflows a narrow panel.
+
 ## [0.89.0] - 2026-10-07
 
 ### Release summary

@@ -20,6 +20,12 @@ export type ChangeEntry = {
    * becoming editable) after the values themselves were reverted.
    */
   lockedParams?: { before: string[]; after: string[] };
+  /**
+   * Link profile selection before/after this entry, when the edit is a
+   * profile switch. Undo/redo hand it back so the profile picker moves
+   * with the values the switch staged.
+   */
+  profile?: { before: number | null; after: number | null };
 };
 
 /** Stack state. Index −1 means "no entry active" (fresh/empty). */
@@ -43,13 +49,17 @@ export function pushEntry(
 ): ChangeStackState {
   // If entry is a no-op, drop it (e.g., user set the same value).
   const keys = Object.keys(entry.changes);
-  if (keys.length === 0) return state;
+  // A profile switch is an edit of its own even when every value it
+  // stages already matches, otherwise undo could not move the picker back.
+  const profileMoved =
+    entry.profile !== undefined && entry.profile.before !== entry.profile.after;
+  if (keys.length === 0 && !profileMoved) return state;
   const allNoop = keys.every(
     (k) =>
       JSON.stringify(entry.changes[k].before) ===
       JSON.stringify(entry.changes[k].after),
   );
-  if (allNoop) return state;
+  if (allNoop && !profileMoved) return state;
   const head = state.entries.slice(0, state.index + 1);
   head.push(entry);
   return { entries: head, index: head.length - 1 };
@@ -79,6 +89,8 @@ export function undo(
   values: ParamValues;
   state: ChangeStackState;
   lockedParams: Set<string>;
+  /** Present only when the replayed entry was a profile switch. */
+  profile?: number | null;
 } {
   if (!canUndo(state)) {
     return { values, state, lockedParams: new Set(lockedParams) };
@@ -95,6 +107,7 @@ export function undo(
     values: next,
     state: { ...state, index: state.index - 1 },
     lockedParams: nextLocked,
+    ...(entry.profile ? { profile: entry.profile.before } : {}),
   };
 }
 
@@ -110,6 +123,8 @@ export function redo(
   values: ParamValues;
   state: ChangeStackState;
   lockedParams: Set<string>;
+  /** Present only when the replayed entry was a profile switch. */
+  profile?: number | null;
 } {
   if (!canRedo(state)) {
     return { values, state, lockedParams: new Set(lockedParams) };
@@ -126,6 +141,7 @@ export function redo(
     values: next,
     state: { ...state, index: state.index + 1 },
     lockedParams: nextLocked,
+    ...(entry.profile ? { profile: entry.profile.after } : {}),
   };
 }
 
@@ -138,10 +154,11 @@ export function entryFromPatch(
   current: ParamValues,
   label?: string,
   lockedParams?: { before: string[]; after: string[] },
+  profile?: { before: number | null; after: number | null },
 ): ChangeEntry {
   const changes: ChangeEntry["changes"] = {};
   for (const [name, after] of Object.entries(patch)) {
     changes[name] = { before: current[name], after };
   }
-  return { changes, label, lockedParams };
+  return { changes, label, lockedParams, ...(profile ? { profile } : {}) };
 }

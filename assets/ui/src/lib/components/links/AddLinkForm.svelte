@@ -13,10 +13,12 @@
     onCancel: () => void;
     // Fired after the link is created. Carries both endpoint addresses so
     // the parent can check either side for a WAKEUP / LAZY_CONFIG battery
-    // device and show the "pending wakeup" hint.
+    // device and show the "pending wakeup" hint. `edit` is set by
+    // "Erstellen und bearbeiten": the parent then opens the link's page.
     onAdded: (result: {
       senderAddress: string;
       receiverAddress: string;
+      edit: boolean;
     }) => void;
   };
 
@@ -199,7 +201,7 @@
     onCancel();
   }
 
-  async function submit() {
+  async function submit(edit: boolean) {
     if (!senderAddress || !receiverAddress) return;
     submitting = true;
     error = null;
@@ -210,7 +212,7 @@
         name: linkName,
         description: linkDescription,
       });
-      onAdded({ senderAddress, receiverAddress });
+      onAdded({ senderAddress, receiverAddress, edit });
     } catch (err) {
       error =
         err instanceof ApiError
@@ -458,13 +460,24 @@
           </Button>
           <Button
             type="button"
+            variant="outline"
             size="sm"
-            onclick={() => void submit()}
+            onclick={() => void submit(false)}
             disabled={submitting ||
               !senderAddress ||
               !receiverAddress}
           >
             {submitting ? t("links.add.creating") : t("links.add.create")}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            onclick={() => void submit(true)}
+            disabled={submitting ||
+              !senderAddress ||
+              !receiverAddress}
+          >
+            {t("links.add.create_and_edit")}
           </Button>
         </div>
       </div>

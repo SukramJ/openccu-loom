@@ -21,6 +21,8 @@
     unitError: string | null;
     valueError: string | null;
     onChange: (name: string, value: unknown) => void;
+    /** False hides the raw CCU names next to the label. */
+    showRawName?: boolean;
   };
 
   let {
@@ -33,6 +35,7 @@
     unitError,
     valueError,
     onChange,
+    showRawName = true,
   }: Props = $props();
 
   // The LINK classifier attaches a selector-specific preset list
@@ -88,9 +91,11 @@
   <div class="flex items-baseline gap-2">
     <span class="text-sm font-medium text-slate-700 dark:text-slate-300">
       {label}
-      <span class="ml-1 font-mono text-[10px] text-[var(--ha-secondary-text-color)]">
-        {pair.unitParam.name} / {pair.valueParam.name}
-      </span>
+      {#if showRawName}
+        <span class="ml-1 font-mono text-[10px] text-[var(--ha-secondary-text-color)]">
+          {pair.unitParam.name} / {pair.valueParam.name}
+        </span>
+      {/if}
     </span>
     {#if dirty}<Badge variant="warning">{t("parameter.modified")}</Badge>{/if}
     {#if !writable}
