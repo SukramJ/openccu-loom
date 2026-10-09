@@ -15,7 +15,7 @@ concurrency:
 
 env:
   CGO_ENABLED: "0"
-  GO_VERSION: "1.27.1"
+  GO_VERSION: "1.27.2"
   NODE_VERSION: "24"
   # Per-package ceiling for every `go test` invocation in this workflow,
   # stated rather than inherited from Go's 10-minute default. The Makefile
@@ -37,7 +37,7 @@ env:
   # standalone formatter, which is stricter than the one golangci-lint
   # bundles, so check `gofumpt -l .` against GOFUMPT_VERSION too.
   GOFUMPT_VERSION: "v0.10.0"
-  GOLANGCI_LINT_VERSION: "v2.13.0"
+  GOLANGCI_LINT_VERSION: "v2.14.0"
 
 jobs:
   lint:

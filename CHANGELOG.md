@@ -6,6 +6,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Security
+
+- Built with **Go 1.27.2**, which fixes standard-library vulnerabilities
+  the daemon reaches (`net/http` and its bundled HTTP/2, `crypto/tls`,
+  `net/textproto`, `html/template`), and with `golang.org/x/net` v0.60.0.
+  golangci-lint moves to v2.14.0, the first release that reads Go 1.27.2's
+  export data.
+
 ### Changed
 
 - **Direct links get their own page, laid out like the CCU WebUI's link
