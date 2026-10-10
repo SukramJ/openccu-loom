@@ -37,15 +37,27 @@ same defect as a doc claim made without checking the source.
 
 ### The four agents
 
-Defined in `.claude/agents/`, so the model follows from the agent rather
-than from a per-call decision:
+Defined in `.claude/agents/`, so each agent carries a default model:
 
-| Agent | Model | Use for |
+| Agent | Default model | Use for |
 |---|---|---|
-| `impl` | Sonnet | scoped implementation with a stated acceptance command |
+| `impl` | Opus | scoped implementation with a stated acceptance command |
 | `guard` | Sonnet | tests from a caller-written guard spec, plus the bite proof |
 | `sweep` | Haiku | read-only inventories and grep sweeps, high fan-out |
 | `hunt` | Fable | adversarial read-only defect hunt, returns ranked candidates |
+
+The default is not the whole rule. The root `CLAUDE.md` section *Which model
+does which work* sorts tasks into four rows by what the result becomes: a
+fact others cite (Fable), an implementation of a finished plan behind guards
+(Opus), work a test or generator checks immediately or a first reading the
+owner re-reads (Sonnet), a list the caller can re-grep (Haiku). `impl` sits
+in the Opus row by default — implementation of a finished plan is the common
+case — and drops to `model: "sonnet"` only for work a generator or formatter
+checks on the spot; `guard` sits in the Sonnet row because the bite proof is
+the check behind it. The rule was mirrored from go-fabric on 2026-10-10, where it followed
+from the matter.js parity discipline; here the equivalent is the
+comment-claims discipline — a comment naming a consumer is a claim that gets
+cited later, so the model that writes it is the one that verified it.
 
 ### Parallelism is bounded by the machine, and the machine is measured
 
