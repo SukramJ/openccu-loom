@@ -32,8 +32,10 @@ A comment is a **claim**. These four shapes go stale silently:
 ## How to run it
 
 Size the fan-out from the host (see the root `CLAUDE.md`): these are
-read-only `sweep` agents, so 6–8 in parallel is fine. Give each one a
-disjoint tree — `internal/central`, `internal/north/mqtt`, `internal/north/rest`,
+read-only `sweep` agents, so 6–8 in parallel is fine. Run them with
+`model: "sonnet"` — a VERIFIED verdict is a first reading nobody re-reads, and
+the root `CLAUDE.md` (*Which model does which work*) keeps Haiku to lists. Give
+each one a disjoint tree — `internal/central`, `internal/north/mqtt`, `internal/north/rest`,
 `internal/north/matter`, `internal/model`, `internal/store` + `internal/client`,
 `tests/contract` — and this brief:
 
@@ -48,4 +50,6 @@ disjoint tree — `internal/central`, `internal/north/mqtt`, `internal/north/res
 A report is a claim too. For every REFUTED finding, read the cited lines
 yourself before rewording or fixing — a refuted claim about a dead consumer is
 usually a **delivery bug**, not a comment bug. Fix the code first, then the
-comment.
+comment. A fix wave over the verified list is row-two work: `impl` agents at
+their Opus default, disjoint trees, and the sibling search (the same claim
+repeated across partition borders) stays in the main conversation.

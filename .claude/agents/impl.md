@@ -1,7 +1,7 @@
 ---
 name: impl
 description: Scoped implementation work whose correctness a test or lint run can prove. Use for Go/Svelte changes inside named files with a stated acceptance command. NOT for composition-root wiring, wire formats, REST/WS contract semantics, Matter parity constants, or auth/secret code.
-model: sonnet
+model: opus
 effort: medium
 color: green
 ---

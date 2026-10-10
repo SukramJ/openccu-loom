@@ -552,6 +552,31 @@ Completion checklist per change:
 
 ---
 
+## Which model does which work
+
+Set on 2026-10-10, mirrored from go-fabric's rule of the same date. A
+statement that lands in this repo is cited later as fact — a ratchet
+justification, a comment naming a consumer, a `by_design.md` entry, a claim
+about CCU or Matter behaviour — so the work that produces such statements
+gets the strongest model, and the work a guard checks may use a cheaper one.
+The agents in the next section carry a default model each; the rows below
+decide when a call overrides it (`model:` on the Agent tool). Implementation
+defaults to Opus.
+
+| Work | Model |
+| --- | --- |
+| Analysis, planning, reviews, audits; anything written into an ADR, `SPECIFICATION.md`, `notes/parity/by_design.md`, a ratchet entry (`wiringSettersWithoutCaller`, `eventsWithoutSubscriber`, …) or a comment that names a consumer, a caller, or a CCU / matter.js behaviour; *which* guard gets built and its bite line; the never-delegate list of the next section (composition root and wiring seams, `assets/openapi.yaml` / `assets/wsapi.json` / `pkg/hmapi`, Matter constants, auth / session / secret handling); rebases and merge conflicts where `main` may have overtaken the change; every live-CCU write | **Fable** (the default for this repo; also the `hunt` agent) |
+| Implementation of a finished plan with guards behind it: a device profile once the pattern exists in `internal/model/custom/`, a REST handler whose `openapi.yaml` entry is already written, a SPA view behind a registered surface, rewording refuted comment claims from a findings list the owner has verified, a CHANGELOG entry for a finished diff | **Opus** (the `impl` default; also what fast mode runs on) |
+| Work a test or generator checks immediately: `make generate` / `make export-schemas`, `gofumpt`, `config.field.*` / `config.help.*` catalogue work, table cases on an existing pattern, a version bump across the changelog set, regenerating a ratchet baseline; search and first reading of a tree whose result a stronger model or the owner reads again — the comment-claims sweep's VERIFIED / REFUTED table included | **Sonnet** (the `guard` default; `impl` with `model: "sonnet"`) |
+| Mechanical inventories whose answer is a list the caller can re-grep: which files reference X, which `cfg:` fields lack a catalogue key, which links are dead | **Haiku** (`sweep` default) |
+
+Sonnet never writes a claim about wiring, consumers, CCU or Matter behaviour
+into the repo, and never touches the paths named in the first row. Haiku
+returns lists, never verdicts. When in doubt about which row a task is in, it
+is in the first.
+
+---
+
 ## Sub-Agent Delegation
 
 The main conversation owns planning, contract and wire decisions, guard
@@ -567,12 +592,17 @@ composition root and any new wiring seam, `assets/openapi.yaml` /
 session / secret handling, and *which* guard gets built. Locating is
 delegable; reading is not.
 
-| Agent | Model | Use for |
+| Agent | Default model | Use for |
 |---|---|---|
-| `impl` | Sonnet | scoped implementation with a stated acceptance command |
+| `impl` | Opus | scoped implementation with a stated acceptance command |
 | `guard` | Sonnet | tests from a caller-written guard spec, plus the bite proof |
 | `sweep` | Haiku | read-only inventories and grep sweeps, high fan-out |
 | `hunt` | Fable | adversarial read-only defect hunt, ranked candidates |
+
+Each default is one row of
+[Which model does which work](#which-model-does-which-work); a call that
+falls into another row passes `model:` on the Agent tool — `impl` with
+`model: "sonnet"` for work a generator or formatter checks immediately.
 
 **Size CPU-bound fan-out from the host, never from a constant** — this project
 is worked on from a 4-core box and a 14-core box:
