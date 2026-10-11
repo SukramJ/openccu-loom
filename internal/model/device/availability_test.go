@@ -10,8 +10,9 @@ import (
 
 // TestAvailabilityInfoJSONShapeMatchesDocumentedSchema pins
 // AvailabilityInfo's wire shape against assets/openapi.yaml's
-// DeviceDetail.availability schema: exactly the five documented keys
-// (IsReachable, LastUpdated, BatteryLevel, LowBattery, SignalStrength).
+// DeviceDetail.availability schema: exactly the six documented keys
+// (IsReachable, LastUpdated, LastRefreshed, BatteryLevel, LowBattery,
+// SignalStrength).
 // Before explicit json tags were added, the struct had none at all, so
 // encoding/json fell back to the literal Go field names — which happened
 // to already match the documented casing for the first five, but also
@@ -31,7 +32,7 @@ func TestAvailabilityInfoJSONShapeMatchesDocumentedSchema(t *testing.T) {
 	if err := json.Unmarshal(raw, &m); err != nil {
 		t.Fatalf("Unmarshal: %v", err)
 	}
-	want := []string{"IsReachable", "LastUpdated", "BatteryLevel", "LowBattery", "SignalStrength"}
+	want := []string{"IsReachable", "LastUpdated", "LastRefreshed", "BatteryLevel", "LowBattery", "SignalStrength"}
 	if len(m) != len(want) {
 		t.Fatalf("AvailabilityInfo JSON has %d keys, want %d: %v", len(m), len(want), keysOfMap(m))
 	}

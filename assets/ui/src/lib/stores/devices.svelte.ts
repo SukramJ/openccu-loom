@@ -3,6 +3,7 @@ import { t } from "$lib/i18n";
 import { onResync, subscribe } from "./events.svelte";
 import type {
   DeviceAvailabilityEvent,
+  DeviceRefreshedEvent,
   DeviceSummary,
   EventEnvelope,
 } from "$lib/api/types";
@@ -71,6 +72,10 @@ function createDeviceStore() {
   //  - `device.availability_changed` patches one device in place, so the
   //    availability column and the available/unavailable filter follow a
   //    device that goes unreachable instead of waiting for a reload.
+  //  - `device.refreshed` patches the device's `availability.LastRefreshed`
+  //    so the "last refreshed" column moves while the page is open — also
+  //    for a periodic sweep whose readings did not change and therefore
+  //    produced no data_point frame.
   //  - the daemon's resync signal reloads the whole list (the boot
   //    snapshot writes MQTT's retained topics instead of replaying every
   //    data point into the stream, so without this the list keeps what it
@@ -86,15 +91,26 @@ function createDeviceStore() {
   }
 
   function applyEvent(ev: EventEnvelope) {
-    if (ev.type !== "device_availability") return;
     // The fallback variant of EventEnvelope widens payload to
     // `unknown`, so narrow explicitly before indexing.
-    const p = ev.payload as DeviceAvailabilityEvent;
-    const i = items.findIndex((d) => d.address === p.address);
-    if (i < 0) return;
-    // $state arrays are reactive on index assignment; no spread
-    // needed for the mutation to propagate.
-    items[i] = { ...items[i], available: p.available };
+    if (ev.type === "device_availability") {
+      const p = ev.payload as DeviceAvailabilityEvent;
+      const i = items.findIndex((d) => d.address === p.address);
+      if (i < 0) return;
+      // $state arrays are reactive on index assignment; no spread
+      // needed for the mutation to propagate.
+      items[i] = { ...items[i], available: p.available };
+      return;
+    }
+    if (ev.type === "device_refreshed") {
+      const p = ev.payload as DeviceRefreshedEvent;
+      const i = items.findIndex((d) => d.address === p.address);
+      if (i < 0) return;
+      items[i] = {
+        ...items[i],
+        availability: { ...items[i].availability, LastRefreshed: p.refreshed_at },
+      };
+    }
   }
 
   return {

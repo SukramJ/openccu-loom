@@ -207,6 +207,9 @@ func TestAvailabilityInfoFromObservedValues(t *testing.T) {
 	if info.LastUpdated.IsZero() {
 		t.Fatal("LastUpdated should track modifiedAt")
 	}
+	if info.LastRefreshed.IsZero() {
+		t.Fatal("LastRefreshed should track refreshedAt")
+	}
 }
 
 func TestAvailabilityLowBatteryFromHmIPLowbat(t *testing.T) {

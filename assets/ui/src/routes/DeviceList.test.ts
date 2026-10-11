@@ -218,6 +218,48 @@ describe("DeviceList — renders device rows", () => {
       "devices.title",
     );
   });
+
+  it("renders each device's last-refreshed time relative, with the absolute time as tooltip", () => {
+    const recent = new Date(Date.now() - 3 * 60_000).toISOString();
+    mockItems = [
+      // The list sorts by display name, so the names fix the row order the
+      // assertions below rely on.
+      makeDevice({
+        address: "DEV1",
+        name: "A observed",
+        availability: {
+          IsReachable: true,
+          LastUpdated: recent,
+          LastRefreshed: recent,
+          BatteryLevel: null,
+          LowBattery: null,
+          SignalStrength: null,
+        },
+      }),
+      makeDevice({
+        address: "DEV2",
+        name: "Z never observed",
+        availability: {
+          IsReachable: true,
+          LastUpdated: "0001-01-01T00:00:00Z",
+          LastRefreshed: "0001-01-01T00:00:00Z",
+          BatteryLevel: null,
+          LowBattery: null,
+          SignalStrength: null,
+        },
+      }),
+    ];
+    const { container } = render(DeviceList);
+    const cells = Array.from(
+      container.querySelectorAll('[data-testid="device-last-refreshed"]'),
+    );
+    expect(cells).toHaveLength(2);
+    const [observed, never] = cells as HTMLElement[];
+    expect(observed.textContent).toMatch(/3 minutes ago|vor 3 Minuten/);
+    expect(observed.getAttribute("title")).toBeTruthy();
+    // Go's zero time means "never observed", not a date in year 1.
+    expect(never.textContent?.trim()).toBe("—");
+  });
 });
 
 describe("DeviceList — search filter", () => {

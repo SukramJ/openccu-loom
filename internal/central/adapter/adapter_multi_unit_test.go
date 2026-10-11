@@ -4098,8 +4098,9 @@ func (d *noOnWireValueDP) Parameter() hmenum.Parameter { return d.param }
 func (d *noOnWireValueDP) ParameterData() hmproto.ParameterData {
 	return hmproto.ParameterData{Type: hmenum.ParameterTypeFloat}
 }
-func (d *noOnWireValueDP) RawValue() (any, bool) { return nil, false }
-func (d *noOnWireValueDP) ModifiedAt() time.Time { return time.Time{} }
+func (d *noOnWireValueDP) RawValue() (any, bool)  { return nil, false }
+func (d *noOnWireValueDP) ModifiedAt() time.Time  { return time.Time{} }
+func (d *noOnWireValueDP) RefreshedAt() time.Time { return time.Time{} }
 func (d *noOnWireValueDP) OnAnyUpdate(func(old, next any)) func() {
 	return func() {}
 }

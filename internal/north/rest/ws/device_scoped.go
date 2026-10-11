@@ -48,6 +48,9 @@ func (p DeviceRemovedPayload) DeviceAddr() string { return p.DeviceAddress }
 func (p DeviceAvailabilityChangedPayload) DeviceAddr() string { return p.DeviceAddress }
 
 // DeviceAddr implements [DeviceScopedPayload].
+func (p DeviceRefreshedPayload) DeviceAddr() string { return p.DeviceAddress }
+
+// DeviceAddr implements [DeviceScopedPayload].
 func (p DeviceTriggerPayload) DeviceAddr() string { return p.DeviceAddress }
 
 // DeviceAddr implements [DeviceScopedPayload].

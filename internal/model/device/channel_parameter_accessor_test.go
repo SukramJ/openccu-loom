@@ -34,7 +34,8 @@ func (f *fakeParameterDP) RawValue() (any, bool) {
 	}
 	return f.raw, true
 }
-func (f *fakeParameterDP) ModifiedAt() time.Time { return time.Time{} }
+func (f *fakeParameterDP) ModifiedAt() time.Time  { return time.Time{} }
+func (f *fakeParameterDP) RefreshedAt() time.Time { return time.Time{} }
 func (f *fakeParameterDP) OnAnyUpdate(func(old, next any)) func() {
 	return func() {}
 }
@@ -926,6 +927,7 @@ func (f *fakeMultiplierDP) RawValue() (any, bool) {
 	return f.raw, true
 }
 func (f *fakeMultiplierDP) ModifiedAt() time.Time                  { return time.Time{} }
+func (f *fakeMultiplierDP) RefreshedAt() time.Time                 { return time.Time{} }
 func (f *fakeMultiplierDP) OnAnyUpdate(func(old, next any)) func() { return func() {} }
 func (f *fakeMultiplierDP) Multiplier() float64                    { return f.multiplier }
 

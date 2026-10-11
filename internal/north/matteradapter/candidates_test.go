@@ -54,6 +54,7 @@ func (g *genericParamDP) ParameterData() hmproto.ParameterData {
 }
 func (g *genericParamDP) RawValue() (any, bool)                    { return 0.0, true }
 func (g *genericParamDP) ModifiedAt() time.Time                    { return time.Time{} }
+func (g *genericParamDP) RefreshedAt() time.Time                   { return time.Time{} }
 func (g *genericParamDP) OnAnyUpdate(_ func(old, next any)) func() { return func() {} }
 func (g *genericParamDP) MatterDeviceType() uint16                 { return g.devType }
 func (g *genericParamDP) MatterClusterServers() []contract.ClusterServer {

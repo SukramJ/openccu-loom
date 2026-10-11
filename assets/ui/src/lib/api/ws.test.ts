@@ -32,6 +32,55 @@ afterEach(() => vi.unstubAllGlobals());
 
 import { connectEvents } from "./ws";
 
+describe("connectEvents normalises device.refreshed", () => {
+  it("reshapes the wire frame into the device_refreshed envelope the stores key on", () => {
+    const stream = connectEvents();
+    const sock = MockWebSocket.instances[0];
+    const got: unknown[] = [];
+    stream.onMessage((ev) => got.push(ev));
+    sock.emit("open");
+
+    sock.emit("message", {
+      data: JSON.stringify({
+        topic: "device.ABC123.lifecycle",
+        type: "device.refreshed",
+        payload: {
+          central: "ccu1",
+          interface_id: "HmIP-RF",
+          device_address: "ABC123",
+          refreshed_at: "2030-05-01T10:05:00Z",
+        },
+      }),
+    });
+
+    expect(got).toEqual([
+      {
+        type: "device_refreshed",
+        payload: { central: "ccu1", address: "ABC123", refreshed_at: "2030-05-01T10:05:00Z" },
+      },
+    ]);
+    stream.close();
+  });
+
+  it("drops a device.refreshed frame without a device address or time", () => {
+    const stream = connectEvents();
+    const sock = MockWebSocket.instances[0];
+    const got: unknown[] = [];
+    stream.onMessage((ev) => got.push(ev));
+    sock.emit("open");
+
+    sock.emit("message", {
+      data: JSON.stringify({
+        type: "device.refreshed",
+        payload: { central: "ccu1", device_address: "ABC123" },
+      }),
+    });
+
+    expect(got).toEqual([]);
+    stream.close();
+  });
+});
+
 describe("connectEvents heartbeat", () => {
   it("replies pong to the server ping so an idle socket is not torn down", () => {
     const stream = connectEvents();

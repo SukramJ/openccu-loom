@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 8 of 556.
+Guards without a doc comment: 8 of 558.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -472,6 +472,8 @@ Guards without a doc comment: 8 of 556.
 | TestPin_FinalizeInit_CalledInDevicePipeline | wiring_pins/device_model_wiring_test.go | TestPin_FinalizeInit_CalledInDevicePipeline pins that device_pipeline.go calls Channel.FinalizeInit. |
 | TestPin_OnConfigChanged_CalledInReloadDeviceConfig | wiring_pins/device_model_wiring_test.go | TestPin_OnConfigChanged_CalledInReloadDeviceConfig pins that device.go calls Channel.OnConfigChanged during ReloadDeviceConfig. |
 | TestPin_RemoveChannel_CalledInCentral | wiring_pins/device_model_wiring_test.go | TestPin_RemoveChannel_CalledInCentral pins that central.go calls Device.RemoveChannel during RemoveDevice. |
+| TestPin_DeviceRefreshedSubscriber_StartedInDaemon | wiring_pins/device_refreshed_wiring_test.go | TestPin_DeviceRefreshedSubscriber_StartedInDaemon pins that the composition root constructs the WebSocket relay for DeviceRefreshedEvent. |
+| TestPin_WireDeviceRefreshedToBus_CalledInDevicePipeline | wiring_pins/device_refreshed_wiring_test.go | TestPin_WireDeviceRefreshedToBus_CalledInDevicePipeline pins that device_pipeline.go runs the device-level refresh bridge over every device it materialises. |
 | TestPin_ACLLister_AttachedInDaemon | wiring_pins/dormant_capability_wiring_test.go | TestPin_ACLLister_AttachedInDaemon pins that the daemon attaches the store-backed ACL source to the Matter bridge. |
 | TestPin_ConnectivityProbe_WiredInHubWiring | wiring_pins/dormant_capability_wiring_test.go | TestPin_ConnectivityProbe_WiredInHubWiring pins that the hub wiring installs the Interface.listInterfaces probe as the Reconciler's Connect source. |
 | TestPin_KeepaliveEnablesPingPong | wiring_pins/dormant_capability_wiring_test.go | TestPin_KeepaliveEnablesPingPong pins that the periodic keepalive probes with ping-pong tracking ON. |

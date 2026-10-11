@@ -37,6 +37,7 @@ func (d *enumStateDP) ParameterData() hmproto.ParameterData {
 }
 func (d *enumStateDP) RawValue() (any, bool)                    { return d.raw, true }
 func (d *enumStateDP) ModifiedAt() time.Time                    { return time.Time{} }
+func (d *enumStateDP) RefreshedAt() time.Time                   { return time.Time{} }
 func (d *enumStateDP) OnAnyUpdate(_ func(old, next any)) func() { return func() {} }
 
 // TestEnumSelectResolvesEveryIntegerShapeOfAnEnumIndex drives

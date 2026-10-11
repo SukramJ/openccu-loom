@@ -75,6 +75,7 @@ var wsPayloadStructs = map[string]any{
 	"DeviceAvailabilityChangedPayload":   ws.DeviceAvailabilityChangedPayload{},
 	"DeviceCreatedPayload":               ws.DeviceCreatedPayload{},
 	"DeviceMetadataChangedPayload":       ws.DeviceMetadataChangedPayload{},
+	"DeviceRefreshedPayload":             ws.DeviceRefreshedPayload{},
 	"DeviceReleasedPayload":              ws.DeviceReleasedPayload{},
 	"DeviceRemovedPayload":               ws.DeviceRemovedPayload{},
 	"DeviceTriggerPayload":               ws.DeviceTriggerPayload{},

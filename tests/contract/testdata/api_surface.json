@@ -1,5 +1,5 @@
 {
- "api_version": "13.7.2",
+ "api_version": "13.8.0",
  "operations": {
   "DELETE /alarm/codes/{id}": "deleteAlarmCode",
   "DELETE /alarm/zones/{id}": "deleteAlarmZone",
@@ -1065,6 +1065,7 @@
   "DeviceAvailability": [
    "BatteryLevel:integer|null",
    "IsReachable:boolean",
+   "LastRefreshed:string",
    "LastUpdated:string",
    "LowBattery:boolean|null",
    "SignalStrength:integer|null"
@@ -1103,6 +1104,12 @@
    "central:string",
    "device_address:string",
    "interface_id:string"
+  ],
+  "DeviceRefreshedPayload": [
+   "central:string",
+   "device_address:string",
+   "interface_id:string",
+   "refreshed_at:string"
   ],
   "DeviceReleasedPayload": [
    "central:string",

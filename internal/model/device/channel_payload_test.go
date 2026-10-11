@@ -71,6 +71,7 @@ func (f *fakeRawDP) Parameter() hmenum.Parameter          { return f.param }
 func (f *fakeRawDP) ParameterData() hmproto.ParameterData { return f.desc }
 func (f *fakeRawDP) RawValue() (any, bool)                { return f.rawValue, f.observed }
 func (f *fakeRawDP) ModifiedAt() time.Time                { return time.Time{} }
+func (f *fakeRawDP) RefreshedAt() time.Time               { return time.Time{} }
 func (f *fakeRawDP) OnAnyUpdate(fn func(old, next any)) func() {
 	return func() {}
 }

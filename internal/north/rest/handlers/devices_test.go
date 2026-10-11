@@ -1467,6 +1467,7 @@ func (m *minimalDP) DataPointKey() hmtypes.DataPointKey {
 func (m *minimalDP) ParameterData() hmproto.ParameterData     { return hmproto.ParameterData{} }
 func (m *minimalDP) RawValue() (any, bool)                    { return nil, false }
 func (m *minimalDP) ModifiedAt() time.Time                    { return time.Time{} }
+func (m *minimalDP) RefreshedAt() time.Time                   { return time.Time{} }
 func (m *minimalDP) OnAnyUpdate(_ func(old, next any)) func() { return func() {} }
 
 // ---------------------------------------------------------------------------

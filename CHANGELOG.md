@@ -6,6 +6,24 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Per-device "last refreshed" time.** Every device now records when its
+  data was last observed from the CCU — a pushed event or an active read
+  (boot seed, periodic sweep, operator refresh), whether or not a value
+  changed — as the latest `RefreshedAt` across its VALUES data points.
+  The REST device summary and detail carry it as
+  `availability.LastRefreshed`, next to the existing `LastUpdated`, which
+  tracks the last value *change* only. The device list shows it as a new
+  sortable *Last refreshed* column ("3 minutes ago", absolute time in the
+  tooltip, a dash for a device never observed), and the device page shows
+  it in its header. A new `device.refreshed` WebSocket broadcast
+  (`DeviceRefreshedPayload`, on the device's lifecycle topic, throttled to
+  one frame per device per two seconds) moves the value live while a page
+  is open — including after a periodic sweep whose readings did not
+  change and therefore published no `datapoint.value_changed` frame.
+  REST API 13.8.0, WebSocket API 1.14 (both additive).
+
 ### Internal
 
 - A daily `download-stats` workflow appends the GitHub release asset
