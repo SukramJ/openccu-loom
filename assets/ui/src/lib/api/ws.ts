@@ -59,7 +59,7 @@ export type EventStream = {
 // EventEnvelope so the normaliser below is the single place that
 // reshapes server events into the discriminator the rest of the SPA
 // already consumes ("data_point", "custom_data_point", "sysvar",
-// "device_availability").
+// "device_availability", "device_refreshed").
 type WireEnvelope = {
   topic?: string;
   type?: string;
@@ -218,6 +218,27 @@ function normalizeEvent(raw: unknown): EventEnvelope | null {
         central: p.central ?? "",
         address: p.device_address,
         available: p.available,
+      },
+    };
+  }
+  if (type === "device.refreshed" && wire.payload) {
+    const p = wire.payload as {
+      central?: string;
+      device_address?: string;
+      refreshed_at?: string;
+    };
+    if (
+      typeof p.device_address !== "string" ||
+      typeof p.refreshed_at !== "string"
+    ) {
+      return null;
+    }
+    return {
+      type: "device_refreshed",
+      payload: {
+        central: p.central ?? "",
+        address: p.device_address,
+        refreshed_at: p.refreshed_at,
       },
     };
   }

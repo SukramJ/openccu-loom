@@ -69,6 +69,7 @@ export type EventEnvelope =
   | { type: "custom_data_point"; payload: CustomDataPointStateEvent }
   | { type: "sysvar"; payload: SysvarChangedEvent }
   | { type: "device_availability"; payload: DeviceAvailabilityEvent }
+  | { type: "device_refreshed"; payload: DeviceRefreshedEvent }
   | { type: string; payload: unknown };
 
 // DataPointChangedEvent is the SPA's internal normalized shape produced by
@@ -111,6 +112,18 @@ export type DeviceAvailabilityEvent = {
   central: string;
   address: string;
   available: boolean;
+};
+
+// DeviceRefreshedEvent is the SPA's normalized shape from ws.ts
+// normalizeEvent(), produced from the daemon's `device.refreshed` broadcast
+// (wire: DeviceRefreshedPayload). `refreshed_at` is the RFC 3339 UTC
+// observation time and is written straight into the device summary's
+// `availability.LastRefreshed`, which uses the same wire form. The wire
+// payload also carries interface_id, which no SPA surface keys on.
+export type DeviceRefreshedEvent = {
+  central: string;
+  address: string;
+  refreshed_at: string;
 };
 
 // SysvarChangedEvent is the SPA's normalized shape. The wire payload

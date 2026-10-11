@@ -1,5 +1,5 @@
 {
- "version": "1.13",
+ "version": "1.14",
  "envelope": {
   "description": "Shape of every WebSocket frame the daemon emits — both command replies and broadcasts. The `payload` member is replaced per-frame; broadcast entries below name the OpenAPI schema (in assets/openapi.yaml under components.schemas) that pins its structure.",
   "fields": {
@@ -400,6 +400,14 @@
    "name": "device.availability_changed",
    "topic": "device.{address}.lifecycle",
    "payload": "DeviceAvailabilityChangedPayload"
+  },
+  {
+   "category": "devices",
+   "description": "Server-pushed: a device's VALUES data was observed from the CCU — a pushed event or an active read (boot seed, periodic sweep, operator refresh), whether or not any value changed. Throttled by the daemon to one frame per device per two-second window, so `refreshed_at` may trail the device's exact latest observation by up to that window; the REST device summary's `availability.LastRefreshed` carries the exact value. Rides the same device.{address}.lifecycle topic as device.created — subscribers route by envelope `type`.",
+   "kind": "broadcast",
+   "name": "device.refreshed",
+   "topic": "device.{address}.lifecycle",
+   "payload": "DeviceRefreshedPayload"
   },
   {
    "category": "devices",

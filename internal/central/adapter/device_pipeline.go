@@ -909,6 +909,12 @@ func (p *DevicePipeline) finishIngest(
 		centralName := p.unit.Name()
 		for _, d := range p.devicesFor(interfaceID) {
 			wireDataPointLifecycle(p.unit.EventBus, centralName, d)
+			// Device-level "last refreshed" signal: one throttled bus event
+			// per device whenever any of its VALUES data points records a
+			// fresh CCU observation. Rides the same per-device pass so a
+			// device gets the bridge exactly when it gets its lifecycle
+			// wiring.
+			wireDeviceRefreshedToBus(p.unit.EventBus, centralName, d)
 		}
 	}
 	// Refine every attached week-profile descriptor with the device-

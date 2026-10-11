@@ -20,10 +20,17 @@ type AvailabilityInfo struct {
 	// STICKY_UN_REACH, defaults to true when neither has been seen).
 	IsReachable bool `json:"IsReachable"`
 
-	// LastUpdated is the most recent OnEvent timestamp across every
-	// data point on every channel. Zero when nothing has been
-	// observed yet.
+	// LastUpdated is the most recent value *change* across every VALUES
+	// data point on every channel ([Device.LastUpdated]). Zero when
+	// nothing has been observed yet.
 	LastUpdated time.Time `json:"LastUpdated"`
+
+	// LastRefreshed is the most recent *observation* across every VALUES
+	// data point on every channel ([Device.LastRefreshed]): a pushed
+	// event or an active read, changed or not. It is what the SPA shows
+	// as the device's "last refreshed" time. Zero when nothing has been
+	// observed yet.
+	LastRefreshed time.Time `json:"LastRefreshed"`
 
 	// BatteryLevel is a 0-100 percentage derived from
 	// OPERATING_VOLTAGE_LEVEL. It is nil on devices that report only a
@@ -153,6 +160,7 @@ func (a *Availability) Info() AvailabilityInfo {
 	return AvailabilityInfo{
 		IsReachable:    a.IsReachable(),
 		LastUpdated:    a.device.LastUpdated(),
+		LastRefreshed:  a.device.LastRefreshed(),
 		BatteryLevel:   a.batteryLevel(),
 		LowBattery:     a.lowBattery(),
 		SignalStrength: a.signalStrength(),

@@ -22,6 +22,7 @@ package ws
 import (
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -87,6 +88,20 @@ func wsSubscriberCases() []wsSubscriberCase {
 			publish: func(u *central.Unit, addr string) {
 				u.EventBus.Publish(hmevent.DeviceCreatedEvent{
 					CentralName: u.Name(), Address: addr, Model: "HmIP-PS",
+				})
+			},
+			topic: func(_, addr string) string { return DeviceLifecycleTopic(addr) },
+		},
+		{
+			name: "device refreshed",
+			build: func(reg *central.Registry, hub *Hub) registryObservingSubscriber {
+				s := NewDeviceRefreshedSubscriber(reg, hub)
+				return registryObservingSubscriber{s.Start, s.StartCentral, s.Stop}
+			},
+			publish: func(u *central.Unit, addr string) {
+				u.EventBus.Publish(hmevent.DeviceRefreshedEvent{
+					CentralName: u.Name(), InterfaceID: "HmIP-RF", DeviceAddress: addr,
+					RefreshedAt: time.Now(),
 				})
 			},
 			topic: func(_, addr string) string { return DeviceLifecycleTopic(addr) },

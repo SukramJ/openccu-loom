@@ -76,6 +76,7 @@ func (d *minimalDP) ParameterData() hmproto.ParameterData {
 }
 func (d *minimalDP) RawValue() (any, bool)             { return nil, false }
 func (d *minimalDP) ModifiedAt() time.Time             { return time.Time{} }
+func (d *minimalDP) RefreshedAt() time.Time            { return time.Time{} }
 func (d *minimalDP) OnAnyUpdate(func(any, any)) func() { return func() {} }
 func (d *minimalDP) ForcedUsage() (hmenum.DataPointUsage, bool) {
 	if d.forcedUsage == nil {

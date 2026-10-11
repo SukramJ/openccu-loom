@@ -472,6 +472,12 @@
   "device_address",
   "interface_id"
  ],
+ "DeviceRefreshedPayload": [
+  "central",
+  "device_address",
+  "interface_id",
+  "refreshed_at"
+ ],
  "DeviceReleasedPayload": [
   "central",
   "device_address",

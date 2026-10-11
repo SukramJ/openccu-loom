@@ -221,6 +221,13 @@ var closerSeams = []closerSeam{
 		testFiles:   []string{"internal/north/rest/ws/subscriber_unsubscribe_ownership_test.go"},
 	},
 	{
+		name:        "ws.DeviceRefreshedSubscriber.StartCentral",
+		declFile:    "internal/north/rest/ws/device_refreshed.go",
+		attachIdent: "start",
+		invokeIdent: "stop",
+		testFiles:   []string{"internal/north/rest/ws/subscriber_unsubscribe_ownership_test.go"},
+	},
+	{
 		name:        "ws.DeviceTriggerSubscriber.StartCentral",
 		declFile:    "internal/north/rest/ws/device_trigger.go",
 		attachIdent: "start",

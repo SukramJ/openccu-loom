@@ -49,7 +49,11 @@ import { api } from "$lib/api/client";
 import { deviceStore } from "./devices.svelte";
 
 function makePage(
-  items: { address: string; available?: boolean }[],
+  items: {
+    address: string;
+    available?: boolean;
+    availability?: Record<string, unknown>;
+  }[],
   total: number,
 ) {
   return { items, total };
@@ -162,6 +166,41 @@ describe("deviceStore — live availability", () => {
     expect(deviceStore.items[0].available).toBe(false);
     // A live frame must not trigger a full reload — that is what the
     // resync signal is for.
+    expect(listDevicesMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("moves availability.LastRefreshed on a device_refreshed broadcast without refetching", async () => {
+    listDevicesMock.mockResolvedValueOnce(
+      makePage(
+        [
+          {
+            address: "ABC123",
+            available: true,
+            availability: {
+              IsReachable: true,
+              LastUpdated: "2030-05-01T10:00:00Z",
+              LastRefreshed: "2030-05-01T10:00:00Z",
+              BatteryLevel: null,
+              LowBattery: null,
+              SignalStrength: null,
+            },
+          },
+        ],
+        1,
+      ),
+    );
+    await deviceStore.refresh();
+    deviceStore.ensureStream();
+
+    wsPump.handlers[0]({
+      type: "device_refreshed",
+      payload: { central: "ccu1", address: "ABC123", refreshed_at: "2030-05-01T10:05:00Z" },
+    });
+
+    expect(deviceStore.items[0].availability?.LastRefreshed).toBe("2030-05-01T10:05:00Z");
+    // The sibling members survive the patch; only the refresh time moves.
+    expect(deviceStore.items[0].availability?.LastUpdated).toBe("2030-05-01T10:00:00Z");
+    expect(deviceStore.items[0].availability?.IsReachable).toBe(true);
     expect(listDevicesMock).toHaveBeenCalledTimes(1);
   });
 

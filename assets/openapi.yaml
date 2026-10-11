@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 13.7.2
+  version: 13.8.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -10549,7 +10549,22 @@ components:
         never 0 or false, which would read as a real measurement.
       properties:
         IsReachable: { type: boolean }
-        LastUpdated: { type: string, format: date-time }
+        LastUpdated:
+          type: string
+          format: date-time
+          description: |
+            When any VALUES data point of the device last *changed* value.
+            Zero time (`0001-01-01T00:00:00Z`) when nothing has been observed.
+        LastRefreshed:
+          type: string
+          format: date-time
+          description: |
+            When any VALUES data point of the device was last *observed*
+            from the CCU — a pushed event or an active read (boot seed,
+            periodic sweep, operator refresh), whether or not the value
+            changed. The SPA shows it as the device's "last refreshed"
+            time; the `device.refreshed` WebSocket broadcast announces
+            that it moved. Zero time when nothing has been observed.
         BatteryLevel: { type: ["integer", "null"] }
         LowBattery: { type: ["boolean", "null"] }
         SignalStrength: { type: ["integer", "null"] }
@@ -13681,6 +13696,28 @@ components:
         interface_id: { type: string }
         device_address: { type: string }
         available: { type: boolean }
+
+    DeviceRefreshedPayload:
+      type: object
+      description: |
+        Payload of a `device.refreshed` broadcast. Topic pattern
+        `device.{address}.lifecycle` — same topic as `device.created`;
+        subscribers route by the envelope `type` field. Fires when a
+        VALUES data point of the device recorded a fresh observation from
+        the CCU — a pushed event or an active read, whether or not the
+        value changed. The daemon throttles it to one frame per device
+        per two-second window, so `refreshed_at` may trail the device's
+        exact latest observation by up to that window; the REST device
+        summary's `availability.LastRefreshed` carries the exact value.
+      required: [central, interface_id, device_address, refreshed_at]
+      properties:
+        central: { type: string }
+        interface_id: { type: string }
+        device_address: { type: string }
+        refreshed_at:
+          type: string
+          format: date-time
+          description: Observation time that opened the throttle window, RFC 3339 UTC.
 
     DeviceMetadataChangedPayload:
       type: object

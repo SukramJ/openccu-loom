@@ -48,6 +48,7 @@ var expectedWiringSeams = []string{
 	"store.values_cache_flush",
 	"visibility.un_ignore",
 	"ws.device_lifecycle",
+	"ws.device_refreshed",
 	"ws.device_trigger",
 	"ws.hub_events",
 	"ws.optimistic_rollback",

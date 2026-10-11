@@ -266,6 +266,7 @@ list does not drift from reality.
 | `device.created` | `device.{address}.lifecycle` | [`DeviceCreatedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
 | `device.removed` | `device.{address}.lifecycle` | [`DeviceRemovedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
 | `device.availability_changed` | `device.{address}.lifecycle` | [`DeviceAvailabilityChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
+| `device.refreshed` | `device.{address}.lifecycle` | [`DeviceRefreshedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
 | `central.state_changed` | `central.{name}.state` | [`CentralStateChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
 | `system.status_changed` | `system.{central}.status` | [`SystemStatusChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
 | `daemon_status.changed` | `system.daemon_status` | [`DaemonStatusPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |

@@ -2,9 +2,12 @@
   import { apiErrorMessage } from "$lib/features";
   import { centralStore } from "$lib/stores/centrals.svelte";
   import { onMount, untrack } from "svelte";
-  import type { ChannelSummary, DeviceDetail } from "$lib/api/types";
+  import type { ChannelSummary, DeviceDetail, DeviceRefreshedEvent, EventEnvelope } from "$lib/api/types";
   import { api, ApiError, friendlyError } from "$lib/api/client";
   import { deviceStore } from "$lib/stores/devices.svelte";
+  import { subscribe } from "$lib/stores/events.svelte";
+  import { prefs } from "$lib/stores/preferences.svelte";
+  import { formatAbsoluteTime, formatRelativeTime } from "$lib/relative-time";
   import DeviceParameters from "$lib/components/device/DeviceParameters.svelte";
   import ChannelFlagsToggles from "$lib/components/channel/ChannelFlagsToggles.svelte";
   import TeamPicker from "$lib/components/device/TeamPicker.svelte";
@@ -256,9 +259,36 @@
     });
   });
 
+  // Wall clock for the header's relative "last refreshed" time, re-stamped
+  // every 30 s; the `device.refreshed` frame below moves the value itself.
+  let now = $state(new Date());
+  const relativeLocale = $derived(prefs.locale === "de" ? "de-DE" : "en-US");
+  const lastRefreshedRelative = $derived(
+    formatRelativeTime(detail?.availability?.LastRefreshed, now, relativeLocale),
+  );
+  const lastRefreshedAbsolute = $derived(
+    formatAbsoluteTime(detail?.availability?.LastRefreshed, relativeLocale),
+  );
+
   onMount(() => {
     void loadRoomFunctionCatalogs();
     void taxonomyStore.refresh();
+    const clock = setInterval(() => {
+      now = new Date();
+    }, 30_000);
+    const unsub = subscribe((ev: EventEnvelope) => {
+      if (ev.type !== "device_refreshed") return;
+      const p = ev.payload as DeviceRefreshedEvent;
+      if (!detail || p.address !== detail.address) return;
+      detail = {
+        ...detail,
+        availability: { ...detail.availability, LastRefreshed: p.refreshed_at },
+      };
+    });
+    return () => {
+      clearInterval(clock);
+      unsub();
+    };
   });
 
   // On a system whose rooms and functions nest, a name can stand for two
@@ -965,6 +995,12 @@
               <span>{device.interface}</span>
               <span aria-hidden="true">·</span>
               <span class="font-mono">{device.address}</span>
+              {#if lastRefreshedRelative}
+                <span aria-hidden="true">·</span>
+                <span data-testid="device-last-refreshed" title={lastRefreshedAbsolute}>
+                  {t("device.last_refreshed", { time: lastRefreshedRelative })}
+                </span>
+              {/if}
               {#if !device.available}
                 <Badge variant="warning">{t("device.offline")}</Badge>
               {/if}

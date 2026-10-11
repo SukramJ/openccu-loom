@@ -60,6 +60,9 @@ func wireSystemStatusSubscribers(
 	wsDeviceTrigger := ws.NewDeviceTriggerSubscriber(reg, wsHub)
 	wsDeviceTrigger.Start()
 
+	wsDeviceRefreshed := ws.NewDeviceRefreshedSubscriber(reg, wsHub)
+	wsDeviceRefreshed.Start()
+
 	wsOptimisticRollback := ws.NewOptimisticRollbackSubscriber(reg, wsHub)
 	wsOptimisticRollback.Start()
 
@@ -150,6 +153,7 @@ func wireSystemStatusSubscribers(
 			wsSecurity.Stop()
 		}
 		wsOptimisticRollback.Stop()
+		wsDeviceRefreshed.Stop()
 		wsDeviceTrigger.Stop()
 		wsDeviceLifecycle.Stop()
 		wsHubEvents.Stop()

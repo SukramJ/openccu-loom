@@ -107,6 +107,11 @@ var wsBroadcastEmitters = map[string]wsBroadcastEmitter{
 		},
 		WireValue: "device.availability_changed",
 	},
+	"device.refreshed": {
+		Files:     []string{"internal/north/rest/ws/device_refreshed.go"},
+		Tokens:    []string{"hub.Publish(Event{", "string(hmevent.EventTypeDeviceRefreshed)"},
+		WireValue: string(hmevent.EventTypeDeviceRefreshed),
+	},
 	"device.removed": {
 		Files:     []string{"internal/north/rest/ws/device_lifecycle.go"},
 		Tokens:    []string{"hub.Publish(Event{", "string(hmevent.EventTypeDeviceRemoved)"},

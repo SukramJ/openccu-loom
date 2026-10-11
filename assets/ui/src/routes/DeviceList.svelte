@@ -16,6 +16,8 @@
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { t } from "$lib/i18n";
   import { makeTextMatcher } from "$lib/utils";
+  import { prefs } from "$lib/stores/preferences.svelte";
+  import { formatAbsoluteTime, formatRelativeTime, timestampSortKey } from "$lib/relative-time";
   import {
     deviceListFilters as saved,
     persistDeviceListFilters,
@@ -314,6 +316,16 @@
     { key: "interface", label: t("diagnostics.interfaces"), sortable: true, get: (d) => d.interface_id || d.interface },
     { key: "rooms", label: t("devicelist.col.rooms"), sortable: true, get: (d) => (d.rooms ?? []).join(", ") },
     {
+      key: "refreshed",
+      label: t("devicelist.col.last_refreshed"),
+      sortable: true,
+      // Sorted on the epoch so "most recently refreshed first" is one
+      // click; the cell renders the relative form. Not filterable: nobody
+      // types an epoch into a text box.
+      get: (d) => timestampSortKey(d.availability?.LastRefreshed),
+      filter: false,
+    },
+    {
       key: "status",
       label: t("devicelist.col.status"),
       sortable: true,
@@ -330,20 +342,33 @@
     },
   ]);
 
+  // Wall clock the relative "last refreshed" cells are computed against.
+  // Re-stamped every 30 s so an open list keeps "3 minutes ago" honest
+  // between live frames; the frames themselves move the per-device value.
+  let now = $state(new Date());
+  const relativeLocale = $derived(prefs.locale === "de" ? "de-DE" : "en-US");
+
   onMount(() => {
     deviceStore.refresh();
     deviceStore.ensureStream();
     centralStore.refresh();
     centralStore.ensureStream();
     areasStore.ensureLoaded();
+    const clock = setInterval(() => {
+      now = new Date();
+    }, 30_000);
     // When a central finishes bring-up its devices become fetchable, so
     // pull a fresh list the moment one flips to ready — the operator sees
     // the initializing state resolve into real devices without a reload.
-    return subscribe((ev: EventEnvelope) => {
+    const unsub = subscribe((ev: EventEnvelope) => {
       if (ev.type !== "central.readiness_changed") return;
       const p = ev.payload as { ready?: boolean };
       if (p.ready) void deviceStore.refresh();
     });
+    return () => {
+      clearInterval(clock);
+      unsub();
+    };
   });
 </script>
 
@@ -402,6 +427,17 @@
       <span class="text-xs">{device.rooms.join(", ")}</span>
     {:else}
       <span class="text-[var(--ha-secondary-text-color)]">—</span>
+    {/if}
+  {:else if col.key === "refreshed"}
+    {@const relative = formatRelativeTime(device.availability?.LastRefreshed, now, relativeLocale)}
+    {#if relative}
+      <span
+        class="text-xs whitespace-nowrap"
+        data-testid="device-last-refreshed"
+        title={formatAbsoluteTime(device.availability?.LastRefreshed, relativeLocale)}
+      >{relative}</span>
+    {:else}
+      <span class="text-[var(--ha-secondary-text-color)]" data-testid="device-last-refreshed">—</span>
     {/if}
   {:else if col.key === "status"}
     <span class="inline-flex flex-wrap items-center justify-end gap-1.5">

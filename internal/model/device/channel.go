@@ -31,7 +31,12 @@ type ParameterDataPoint interface {
 	Parameter() hmenum.Parameter
 	ParameterData() hmproto.ParameterData
 	RawValue() (any, bool)
+	// ModifiedAt is when the value last changed; RefreshedAt is when it
+	// was last observed from the CCU, changed or not. The device-level
+	// [Device.LastUpdated] / [Device.LastRefreshed] aggregates ride on
+	// them respectively.
 	ModifiedAt() time.Time
+	RefreshedAt() time.Time
 
 	// OnAnyUpdate registers a type-erased change handler. Returns an
 	// idempotent unsubscribe closure. Used by [SubscribingDataPoint]

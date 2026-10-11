@@ -845,9 +845,25 @@ func isWordChar(r rune) bool {
 	return r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r)
 }
 
-// LastUpdated is the most recent ModifiedAt across every data point
-// on every channel. Returns zero time when nothing has been observed.
+// LastUpdated is the most recent ModifiedAt across every VALUES data
+// point on every channel — the last time any value of this device
+// changed. Returns zero time when nothing has been observed.
 func (d *Device) LastUpdated() time.Time {
+	return d.latestAcrossDataPoints(ParameterDataPoint.ModifiedAt)
+}
+
+// LastRefreshed is the most recent RefreshedAt across every VALUES data
+// point on every channel — the last time any value of this device was
+// observed from the CCU, whether through a pushed event or an active read
+// (boot seed, periodic sweep, operator refresh), and whether or not the
+// value changed. Returns zero time when nothing has been observed.
+func (d *Device) LastRefreshed() time.Time {
+	return d.latestAcrossDataPoints(ParameterDataPoint.RefreshedAt)
+}
+
+// latestAcrossDataPoints returns the latest timestamp `stamp` yields over
+// every VALUES data point of every channel.
+func (d *Device) latestAcrossDataPoints(stamp func(ParameterDataPoint) time.Time) time.Time {
 	d.mu.RLock()
 	channels := make([]*Channel, 0, len(d.channels))
 	for _, ch := range d.channels {
@@ -858,7 +874,7 @@ func (d *Device) LastUpdated() time.Time {
 	var latest time.Time
 	for _, ch := range channels {
 		for _, dp := range ch.DataPoints() {
-			if t := dp.ModifiedAt(); t.After(latest) {
+			if t := stamp(dp); t.After(latest) {
 				latest = t
 			}
 		}

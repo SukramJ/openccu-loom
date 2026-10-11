@@ -26,6 +26,7 @@ func (d *enrichedDP) Parameter() hmenum.Parameter               { return "OPERAT
 func (d *enrichedDP) ParameterData() hmproto.ParameterData      { return hmproto.ParameterData{} }
 func (d *enrichedDP) RawValue() (any, bool)                     { return nil, false }
 func (d *enrichedDP) ModifiedAt() time.Time                     { return time.Time{} }
+func (d *enrichedDP) RefreshedAt() time.Time                    { return time.Time{} }
 func (d *enrichedDP) OnAnyUpdate(fn func(old, next any)) func() { return func() {} }
 
 // AdditionalInformation satisfies additionalInfoProvider.
@@ -40,6 +41,7 @@ func (d *plainDP) Parameter() hmenum.Parameter               { return "LEVEL" }
 func (d *plainDP) ParameterData() hmproto.ParameterData      { return hmproto.ParameterData{} }
 func (d *plainDP) RawValue() (any, bool)                     { return nil, false }
 func (d *plainDP) ModifiedAt() time.Time                     { return time.Time{} }
+func (d *plainDP) RefreshedAt() time.Time                    { return time.Time{} }
 func (d *plainDP) OnAnyUpdate(fn func(old, next any)) func() { return func() {} }
 
 // ---- tests ----------------------------------------------------------------

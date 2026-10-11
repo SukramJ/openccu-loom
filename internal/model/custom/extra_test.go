@@ -588,6 +588,7 @@ func (f *fakeDeviceDP) Parameter() hmenum.Parameter          { return f.param }
 func (f *fakeDeviceDP) ParameterData() hmproto.ParameterData { return hmproto.ParameterData{} }
 func (f *fakeDeviceDP) RawValue() (any, bool)                { return nil, false }
 func (f *fakeDeviceDP) ModifiedAt() time.Time                { return time.Time{} }
+func (f *fakeDeviceDP) RefreshedAt() time.Time               { return time.Time{} }
 func (f *fakeDeviceDP) OnAnyUpdate(func(any, any)) func()    { return func() {} }
 
 // ─── AggregateView.HasAnyKey ─────────────────────────────────────────────────

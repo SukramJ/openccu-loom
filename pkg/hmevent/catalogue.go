@@ -6,6 +6,7 @@ package hmevent
 import (
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -47,7 +48,13 @@ const (
 	// regardless of which field changed: re-materialise the device's
 	// north-bound footprint (MQTT HA-discovery name/suggested_area, Matter
 	// NodeLabel).
-	EventTypeDeviceMetadataChanged      EventType = "device.metadata_changed"
+	EventTypeDeviceMetadataChanged EventType = "device.metadata_changed"
+	// EventTypeDeviceRefreshed fires when a device's VALUES data was
+	// observed from the CCU — a pushed event or an active read, changed or
+	// not — throttled to one event per device per short window. It is the
+	// live signal behind the device-level "last refreshed" time; the exact
+	// aggregate is [Device.LastRefreshed] on the model.
+	EventTypeDeviceRefreshed            EventType = "device.refreshed"
 	EventTypeDeviceTrigger              EventType = "device.trigger"
 	EventTypeLinkPeerChanged            EventType = "link.peer_changed"
 	EventTypeConnectionLost             EventType = "connection.lost"
@@ -344,6 +351,30 @@ type DeviceReleasedEvent struct {
 
 // Type implements Event.
 func (DeviceReleasedEvent) Type() EventType { return EventTypeDeviceReleased }
+
+// DeviceRefreshedEvent fires when at least one VALUES data point of a
+// device recorded a fresh observation from the CCU (its RefreshedAt
+// moved) — whether the observation came in as a pushed event or through
+// an active read, and whether or not the value changed.
+//
+// The device pipeline publishes it through a per-device throttle, so a
+// burst of observations (a paramset read filling every parameter of a
+// channel at once) collapses into one event; RefreshedAt carries the
+// observation time of the event that opened the window, not the last
+// one in it. Consumers that need the exact latest time read
+// [Device.LastRefreshed] from the model — this event only tells them it
+// moved.
+type DeviceRefreshedEvent struct {
+	Base
+	CentralName   string
+	InterfaceID   string
+	DeviceAddress string
+	// RefreshedAt is the observation timestamp that triggered the event.
+	RefreshedAt time.Time
+}
+
+// Type implements Event.
+func (DeviceRefreshedEvent) Type() EventType { return EventTypeDeviceRefreshed }
 
 // DeviceRemovedEvent fires when the CCU reports a device deletion.
 type DeviceRemovedEvent struct {

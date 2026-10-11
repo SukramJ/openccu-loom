@@ -322,8 +322,16 @@ type DataPoint[T comparable] struct {
 	// values plus the 30 s rollback would make the user-visible state
 	// flip back unprompted.
 	confirmedUpdateCallbacks []func(old, next T)
-	statusCallbacks          []func(old, next hmenum.ParameterStatus)
-	removedCbs               []func()
+	// refreshedCallbacks fires exactly when [refreshedAt] moves: on every
+	// CCU-confirmed observation ([OnEventAt], whether or not the value
+	// changed) and on the CUxD post-send bump in [sendAndObserve]. It is
+	// the observation signal the per-device "last refreshed" aggregate
+	// rides on; [OnUpdate] cannot serve that role because it also fires
+	// on optimistic writes and on [TriggerUpdate], neither of which is a
+	// fresh reading from the CCU.
+	refreshedCallbacks []func(at time.Time)
+	statusCallbacks    []func(old, next hmenum.ParameterStatus)
+	removedCbs         []func()
 }
 
 // NewDataPoint constructs a generic data point. The
@@ -1066,6 +1074,8 @@ func (d *DataPoint[T]) OnEventAt(v T, at time.Time) {
 		confirmedCallbacks = make([]func(old, next T), len(d.confirmedUpdateCallbacks))
 		copy(confirmedCallbacks, d.confirmedUpdateCallbacks)
 	}
+	refreshedCallbacks := make([]func(at time.Time), len(d.refreshedCallbacks))
+	copy(refreshedCallbacks, d.refreshedCallbacks)
 	d.mu.Unlock()
 
 	if d.optimistic.IsActive() {
@@ -1099,6 +1109,37 @@ func (d *DataPoint[T]) OnEventAt(v T, at time.Time) {
 		if cb != nil {
 			cb(old, v)
 		}
+	}
+	for _, cb := range refreshedCallbacks {
+		if cb != nil {
+			cb(at)
+		}
+	}
+}
+
+// OnRefreshed registers a handler that fires whenever [RefreshedAt]
+// moves — every CCU-confirmed observation, changed or not, plus the
+// CUxD post-send bump. It receives the observation timestamp. Returns an
+// idempotent unsubscribe closure. Optimistic writes, rollbacks and
+// [TriggerUpdate] do not fire it: none of them is a reading from the CCU.
+func (d *DataPoint[T]) OnRefreshed(fn func(at time.Time)) func() {
+	if fn == nil {
+		return func() {}
+	}
+	d.mu.Lock()
+	d.refreshedCallbacks = append(d.refreshedCallbacks, fn)
+	idx := len(d.refreshedCallbacks) - 1
+	d.mu.Unlock()
+
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			d.mu.Lock()
+			defer d.mu.Unlock()
+			if idx < len(d.refreshedCallbacks) {
+				d.refreshedCallbacks[idx] = nil
+			}
+		})
 	}
 }
 
@@ -1735,7 +1776,14 @@ func (d *DataPoint[T]) sendAndObserve(
 		// this synchronous post-send is our only chance to refresh — bump
 		// refreshedAt explicitly.
 		d.refreshedAt = now
+		refreshedCallbacks := make([]func(at time.Time), len(d.refreshedCallbacks))
+		copy(refreshedCallbacks, d.refreshedCallbacks)
 		d.mu.Unlock()
+		for _, cb := range refreshedCallbacks {
+			if cb != nil {
+				cb(now)
+			}
+		}
 		return nil
 	}
 

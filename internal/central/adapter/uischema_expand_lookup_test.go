@@ -123,8 +123,9 @@ func (n *noIsWritableDP) Parameter() hmenum.Parameter        { return "" }
 func (n *noIsWritableDP) ParameterData() hmproto.ParameterData {
 	return hmproto.ParameterData{}
 }
-func (n *noIsWritableDP) RawValue() (any, bool) { return nil, false }
-func (n *noIsWritableDP) ModifiedAt() time.Time { return time.Time{} }
+func (n *noIsWritableDP) RawValue() (any, bool)  { return nil, false }
+func (n *noIsWritableDP) ModifiedAt() time.Time  { return time.Time{} }
+func (n *noIsWritableDP) RefreshedAt() time.Time { return time.Time{} }
 func (n *noIsWritableDP) OnAnyUpdate(fn func(old, next any)) func() {
 	return func() {}
 }

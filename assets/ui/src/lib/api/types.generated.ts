@@ -7122,8 +7122,22 @@ export interface components {
          */
         DeviceAvailability: {
             IsReachable?: boolean;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When any VALUES data point of the device last *changed* value.
+             *     Zero time (`0001-01-01T00:00:00Z`) when nothing has been observed.
+             */
             LastUpdated?: string;
+            /**
+             * Format: date-time
+             * @description When any VALUES data point of the device was last *observed*
+             *     from the CCU — a pushed event or an active read (boot seed,
+             *     periodic sweep, operator refresh), whether or not the value
+             *     changed. The SPA shows it as the device's "last refreshed"
+             *     time; the `device.refreshed` WebSocket broadcast announces
+             *     that it moved. Zero time when nothing has been observed.
+             */
+            LastRefreshed?: string;
             BatteryLevel?: number | null;
             LowBattery?: boolean | null;
             SignalStrength?: number | null;
@@ -9533,6 +9547,27 @@ export interface components {
             interface_id: string;
             device_address: string;
             available: boolean;
+        };
+        /**
+         * @description Payload of a `device.refreshed` broadcast. Topic pattern
+         *     `device.{address}.lifecycle` — same topic as `device.created`;
+         *     subscribers route by the envelope `type` field. Fires when a
+         *     VALUES data point of the device recorded a fresh observation from
+         *     the CCU — a pushed event or an active read, whether or not the
+         *     value changed. The daemon throttles it to one frame per device
+         *     per two-second window, so `refreshed_at` may trail the device's
+         *     exact latest observation by up to that window; the REST device
+         *     summary's `availability.LastRefreshed` carries the exact value.
+         */
+        DeviceRefreshedPayload: {
+            central: string;
+            interface_id: string;
+            device_address: string;
+            /**
+             * Format: date-time
+             * @description Observation time that opened the throttle window, RFC 3339 UTC.
+             */
+            refreshed_at: string;
         };
         /**
          * @description Payload of a `device.metadata_changed` broadcast. Topic pattern
