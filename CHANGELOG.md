@@ -6,6 +6,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Internal
+
+- A daily `download-stats` workflow appends the GitHub release asset
+  download counters and the Home Assistant add-on analytics install counts
+  to the orphan branch `stats` (`downloads.ndjson`), so the download history
+  per version exists at all — both sources keep only the current total.
+  `script/release_download_snapshot.py` produces the rows; a contract test
+  pins the workflow to every add-on under `packaging/ha-addon/`.
+
 ## [0.90.0] - 2026-10-09
 
 ### Release summary
