@@ -54,7 +54,7 @@ jobs:
             git fetch --depth=1 origin "${STATS_BRANCH}"
             git worktree add -B "${STATS_BRANCH}" "${STATS_DIR}" "origin/${STATS_BRANCH}"
           else
-            git worktree add --orphan "${STATS_BRANCH}" "${STATS_DIR}"
+            git worktree add --orphan -b "${STATS_BRANCH}" "${STATS_DIR}"
             cat > "${STATS_DIR}/README.md" <<'MD'
           # Download statistics
 
