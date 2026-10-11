@@ -80,3 +80,29 @@ aiohomematic install.
   ```
 
   Re-running on unchanged sources is a no-op (deterministic output, file mtime unchanged). Re-run after editing any struct that carries `payload:"..."` tags. Generated files MUST end in `_gen.go` so `golangci-lint` skips them.
+
+## Download statistics
+
+`release_download_snapshot.py` turns two public counters into rows of
+newline-delimited JSON: the per-asset download totals of every GitHub release
+and the opt-in install counts per version from the Home Assistant analytics
+export (`https://analytics.home-assistant.io/addons.json`). Neither source
+keeps history, so the `download-stats` workflow runs the script daily and
+appends to `downloads.ndjson` on the orphan branch `stats` — the only place
+the series exists. `test_release_download_snapshot.py` is its unit test; the
+workflow runs it before every sample, and
+`tests/contract/download_stats_workflow_test.go` pins the workflow to every
+add-on declared under `packaging/ha-addon/`.
+
+```sh
+# Read the series without touching the working tree
+git fetch origin stats && git show origin/stats:downloads.ndjson \
+  | python3 -c 'import json,sys
+for l in sys.stdin:
+    r=json.loads(l)
+    if r["kind"]=="github_release" and r["tag"]=="v0.90.0": print(r["ts"], r["total"])'
+```
+
+Two caveats travel with the numbers: GitHub counts requests, not users, and
+the maintainer's own installs are in there; the HA export lists only
+installations that opted into analytics.
