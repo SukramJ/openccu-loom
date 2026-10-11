@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 8 of 555.
+Guards without a doc comment: 8 of 556.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -131,7 +131,7 @@ Guards without a doc comment: 8 of 555.
 | TestDiscoveryRoundTrip_Button | discovery_roundtrip_test.go | TestDiscoveryRoundTrip_Button verifies that button entities have no state topic rendering and carry payload_press="PRESS". |
 | TestDiscoveryRoundTrip_Climate | discovery_roundtrip_test.go | TestDiscoveryRoundTrip_Climate drives the ACTUAL climate-builder output (not hand-written strings). |
 | TestDiscoveryRoundTrip_Cover | discovery_roundtrip_test.go | TestDiscoveryRoundTrip_Cover drives the ACTUAL cover-builder output (not a hand-written template string): the value_template `{{ value_json.state }}` must render the HA-canonical state strings the builder also advertises via state_open / state_closed, and the position_template must render the numeric current_position. |
-| TestDiscoveryRoundTrip_Event_MultiPress | discovery_roundtrip_test.go | TestDiscoveryRoundTrip_Event_MultiPress verifies that a PRESS_LONG event entity also drops value_template — the same fix applies to all press-event variants. |
+| TestDiscoveryRoundTrip_Event_MultiPress | discovery_roundtrip_test.go | TestDiscoveryRoundTrip_Event_MultiPress verifies that every press-event variant carries the same event-document template as PRESS_SHORT (see TestDiscoveryRoundTrip_Event_TemplateRendersEventJSON): under the status object a missing template hands HA no `event_type`, a scalar one breaks its JSON parsing. |
 | TestDiscoveryRoundTrip_Event_ScalarTemplateBreaksJSON | discovery_roundtrip_test.go | TestDiscoveryRoundTrip_Event_ScalarTemplateBreaksJSON documents the failure mode the event template exists to avoid: the generic scalar-extracting template applied to a pulse renders a bare string, which HA's mqtt.event parser rejects. |
 | TestDiscoveryRoundTrip_Event_TemplateRendersEventJSON | discovery_roundtrip_test.go | TestDiscoveryRoundTrip_Event_TemplateRendersEventJSON pins the contract for mqtt.event entities under the status object (ADR 0083). |
 | TestDiscoveryRoundTrip_GuardEmptyEnvelope | discovery_roundtrip_test.go | TestDiscoveryRoundTrip_GuardEmptyEnvelope pins the `is defined` guard in valueJSONValueTemplate and valueJSONValueLowerTemplate. |
@@ -151,6 +151,7 @@ Guards without a doc comment: 8 of 555.
 | TestDocPurity_MarkdownRefsExist | doc_purity_test.go | TestDocPurity_MarkdownRefsExist scans every `//` comment in internal/, pkg/, cmd/ for references that look like markdown file paths and fails when the referenced file does not exist at the project root. |
 | TestGermanWordRuleBites | doc_purity_test.go | TestGermanWordRuleBites measures the rule instead of trusting it. |
 | TestDomainConstantsAreNamedNotRestated | domain_constants_single_source_test.go | TestDomainConstantsAreNamedNotRestated pins three values that a north plane used to spell out beside the domain's own. |
+| TestDownloadStatsWorkflowRecordsEveryAddon | download_stats_workflow_test.go | TestDownloadStatsWorkflowRecordsEveryAddon pins the download-stats workflow to the inputs it samples. |
 | TestReadFunctionsDoNotCollapseFailureIntoEmpty | empty_absent_failed_collapse_test.go | TestReadFunctionsDoNotCollapseFailureIntoEmpty guards against the defect class the round-4 audit found 34 times: a Get*/Load*/Fetch*/ List*/Read*/Query* function that fetches from a source outside the process (the CCU, SQLite, the broker) answering an error branch with the zero value and a nil error, so a caller cannot tell "there is nothing" from "I could not find out". |
 | TestEnumCatalogueMatchesGoConstants | enum_catalogue_parity_test.go | TestEnumCatalogueMatchesGoConstants asserts that the entries for DataPointCategory and DataPointType in assets/schemas/enums.json exactly match the const declarations in pkg/hmenum/datapoint.go. |
 | TestEventTypeStringsStable | event_catalogue_test.go | TestEventTypeStringsStable locks the wire-level strings the event- bus uses as routing keys. |
