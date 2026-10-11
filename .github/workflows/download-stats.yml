@@ -1,0 +1,88 @@
+name: download-stats
+
+# Samples the two public usage counters this project has and appends them to
+# the `stats` branch, one row per release and per add-on, once a day. GitHub
+# keeps only the running total per release asset and the Home Assistant
+# analytics export only the current opt-in install count, so the history
+# exists only as long as something records it. The row format is documented
+# in script/release_download_snapshot.py; script/README.md explains how to
+# read the branch.
+on:
+  schedule:
+    - cron: "41 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: download-stats
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: "3.14"
+  STATS_BRANCH: stats
+  STATS_DIR: .stats
+
+jobs:
+  snapshot:
+    if: github.repository_owner == 'SukramJ'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: unit-test the snapshot script
+        run: python3 -I script/test_release_download_snapshot.py
+
+      - name: fetch release asset counters
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" > releases.json
+
+      - name: fetch Home Assistant add-on analytics
+        run: curl --fail --silent --show-error --location https://analytics.home-assistant.io/addons.json -o addons.json
+
+      - name: check out the stats branch
+        # The branch is an orphan: it shares no history with main, so a reader
+        # of main never sees the daily commits. The first run creates it.
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --heads origin "${STATS_BRANCH}" >/dev/null; then
+            git fetch --depth=1 origin "${STATS_BRANCH}"
+            git worktree add -B "${STATS_BRANCH}" "${STATS_DIR}" "origin/${STATS_BRANCH}"
+          else
+            git worktree add --orphan -b "${STATS_BRANCH}" "${STATS_DIR}"
+            cat > "${STATS_DIR}/README.md" <<'MD'
+          # Download statistics
+
+          Daily samples of the public usage counters, appended by the
+          `download-stats` workflow. `downloads.ndjson` holds one JSON object per
+          line; the row shapes are documented in
+          `script/release_download_snapshot.py` on `main`. Never edit by hand —
+          the file is append-only and the workflow is its only writer.
+          MD
+          fi
+
+      - name: append today's rows
+        run: |
+          python3 -I script/release_download_snapshot.py \
+            --releases releases.json \
+            --addons addons.json \
+            --addon-slug openccu-loom \
+            --addon-slug openccu-loom-remote \
+            --out "${STATS_DIR}/downloads.ndjson"
+
+      - name: commit and push
+        run: |
+          set -euo pipefail
+          cd "${STATS_DIR}"
+          git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              add README.md downloads.ndjson
+          git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit --quiet -m "stats: download snapshot $(date -u +%F)"
+          git push origin "HEAD:${STATS_BRANCH}"
