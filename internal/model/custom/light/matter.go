@@ -215,9 +215,10 @@ func (l *Light) matterOnOffServer() *onoff.Server {
 			},
 		})
 		if l.Float != nil {
+			feedback := generic.NewMatterOnOffFeedback(srv)
 			_ = l.OnConfirmedUpdate(func(_, _ float64) {
 				on, _ := l.IsOn()
-				srv.Set(on)
+				feedback.Set(on)
 			})
 		}
 		// A confirmation that landed between the initial read and the

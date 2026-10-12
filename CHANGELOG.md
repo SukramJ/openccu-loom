@@ -89,7 +89,13 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   controller path); and a scene stored by ScenesManagement recalls
   OnOff through the stack's scene paths. The LevelControl "with On/Off"
   commands of a light move the OnOff attribute the moment the CCU
-  accepted the level write, as matter.js couples the two clusters.
+  accepted the level write, as matter.js couples the two clusters. The
+  confirmed state reaches the server through a coalescing worker rather
+  than from the event callback directly: `onoff.Server` runs the Sink
+  under its operation lock, and a CCU that sends the write's event before
+  the write's reply (the simulator does) would otherwise block the
+  interface's whole event callback until the write timed out — the
+  chip-tool suite caught it, go-fabric #63 tracks it upstream.
 - **Matter session parameters.** PBKDFParamResponse (PASE) and Sigma2
   (CASE) now carry the node's whole SessionParameters structure — the
   MRP intervals as before, plus the Data Model, Interaction Model and

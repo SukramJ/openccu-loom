@@ -204,9 +204,10 @@ func (s *Siren) matterOnOffServer() *onoff.Server {
 				return s.TurnOff(ctx, matterDispatchPriority)
 			},
 		})
+		feedback := generic.NewMatterOnOffFeedback(srv)
 		sync := func(_, _ bool) {
 			active, _ := s.IsActive()
-			srv.Set(active)
+			feedback.Set(active)
 		}
 		if s.acousticActive != nil {
 			_ = s.acousticActive.OnConfirmedUpdate(sync)
