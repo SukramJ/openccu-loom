@@ -1,0 +1,274 @@
+# ADR 0084 — Matter: the profiles move onto go-fabric's device layer, the bring-up onto its node facade
+
+- **Status**: accepted (2026-10-12); phases 1 and 2 are this repository's
+  work, phase 3 waits for go-fabric host hooks named below
+- **Related**: [ADR 0012](./0012-matter-pure-go-implementation.md) (pure-Go
+  Matter), [ADR 0049](./0049-matter-one-endpoint-per-device.md) (one endpoint
+  per device), [ADR 0063](./0063-self-maintained-device-profiles.md) (the
+  profiles are hand-maintained),
+  go-fabric [ADR 0016](https://github.com/SukramJ/go-fabric/blob/main/docs/adr/0016-device-type-validation.md),
+  [ADR 0017](https://github.com/SukramJ/go-fabric/blob/main/docs/adr/0017-generated-default-cluster-server.md) and
+  [ADR 0018](https://github.com/SukramJ/go-fabric/blob/main/docs/adr/0018-device-layer-and-node-facade.md)
+  (the device layer and the node facade this ADR adopts)
+- **Supersedes**: nothing; it binds the migration go-fabric ADR 0018 names
+  ("openccu-loom migrates at least its lights and covers before v1.0.0")
+
+## Context
+
+Since go-fabric v0.3.0 (#951) the Matter stack offers three things this
+daemon does not use:
+
+- **`device/`** — one generated Go type per Matter device type, carrying what
+  matter.js's `devices/*.ts` state: the mandatory and optional clusters, the
+  mandated features, the attribute constraints and defaults. A host calls
+  `device.NewDimmableLight(opts, …)` and gets an `endpoint.Spec`; a cluster
+  the host must drive itself is supplied with `device.WithServer`.
+- **`node/`** — the facade that performs the forty-call bridge bring-up in
+  the documented order with every port wired (`node.New`, `Start`, `Stop`,
+  an `Aggregator` with `Add` / `Remove` / `MarkComplete`).
+- **`cluster/onoff.Server`** — matter.js's `OnOffServer` as a self-held
+  server: the six commands, the 100 ms timed-on and delayed-off countdowns,
+  StartUpOnOff, GlobalSceneControl and the scene paths, with a host `Sink`
+  that is asked before a change is stored.
+
+The daemon reaches the stack through `contract.EndpointSource` and a
+hand-built `endpoint.Spec` instead. Measured on main after #951:
+
+- `cmd/openccu-loom/daemon_matter.go` is 4 442 lines. Of the 37
+  responsibilities of `startMatterBridge`, 29 are stack-generic (sessions,
+  PASE / CASE adapters, ACL, root clusters, fabric hooks, diagnostics
+  counters, event-number persistence); 4 are this daemon's (the enable and
+  database gate, the endpoint-identity and exposure store, the per-central
+  readiness latch, the i18n channel word); 4 mix the two (health probe and
+  RTT gauges, the stop closure, the bundle).
+- The profiles carry **14 hand-written cluster servers** (OnOff five times:
+  custom switch, generic switch, light, siren, sound player; LevelControl
+  and three ColorControl variants for the lights; WindowCovering twice;
+  Thermostat and its UI configuration; SmokeCOAlarm) and already delegate
+  **4** to go-fabric servers behind a host port (DoorLock, ClosureControl,
+  LevelControl for the sound player, ModeSelect). Every one of the five
+  OnOff servers re-implements the same six commands; the light alone keeps
+  its own 100 ms timed-off engine (`matter_timed_onoff.go`).
+- `internal/north/matteradapter` knows which clusters a device type carries
+  only implicitly, through what each profile returns; nothing validates a
+  profile's cluster set against the device type it advertises except the
+  per-package parity tests, which pin what the profile does, not what the
+  type mandates.
+- A controller-written bridged-endpoint NodeLabel is not persisted: the
+  assembler never sets `endpoint.Config.OnNodeLabelWritten` or
+  `Spec.NodeLabel`. Only the root NodeLabel and Location persist.
+
+Three facts about go-fabric v0.3.0 decide the shape of the migration (all
+measured in the module, not in its changelog):
+
+1. **The assembler path is one path.** `endpoint.ClusterServers` takes
+   `Source.MatterClusterServers()` for a `device.Device` exactly as for a
+   hand-built Spec, mounts Groups and ScenesManagement from the node's group
+   state in both cases, and the stack owns Identify, Descriptor and
+   BridgedDeviceBasicInformation in both cases. A `device.Device` differs
+   only by what its Spec carries in addition: Parts, OptIn, ClientClusters,
+   DeviceConditions, NodeLabel, Measurement, and device-type validation at
+   assembly (go-fabric ADR 0016). `device.WithServer` accepts any
+   `contract.ClusterServer`, so every one of the 18 servers above plugs in
+   unchanged.
+2. **`node.Config` has no host callbacks.** It exposes the configuration a
+   reference daemon needs and accessors to the ports (`Bridge()`, `Root()`,
+   `CommissioningWindow()`, `Store()`, …), but the hooks this daemon wires
+   for its REST and WebSocket surfaces are either not wired by the facade
+   (`Bridge.SetOnFabricAdded` is never fired by it) or wired by the facade
+   itself and overwritten by a host that sets them
+   (`OperationalCredentials.SetOnFabricRemoved` / `SetOnFabricUpdated`,
+   `GeneralCommissioning.SetOnCommissioningComplete`,
+   `CommissioningWindow.SetTransitionHook`). The facade also fixes product
+   choices this daemon exposes as configuration: TimeSynchronization is
+   always mounted (`north.matter.enable_time_sync` is an opt-in here), the
+   node opens its own 48-hour window at first boot and announces CM=1 only
+   while a window is open (this daemon announces only operator-opened
+   windows), and a window with per-window random credentials
+   (`north.matter.commissioning.ephemeral_window`) has no facade API.
+3. **The default `onoff.Server` has no Sink.** `device.NewOnOffLight`
+   mounts `onoff.Server` with `Bridged: true` and nothing else; a host whose
+   device must act on a command builds `onoff.New(onoff.Config{Sink: …})`
+   itself and supplies it with `WithServer`. `Server.Set(on)` is the host's
+   own change (stored and reported, Sink not called), so the CCU's
+   confirmation never echoes into a second CCU write.
+
+## Decision
+
+**The migration happens in three phases, each its own pull request series,
+each live-verified against Apple Home before the next starts. The profiles
+move first, the bring-up last, because the first two phases need nothing
+from go-fabric and the third does.**
+
+### Phase 1 — the assembler constructs devices through `device/`
+
+`internal/north/matteradapter` stops building `endpoint.Spec` by hand for
+a source that is a `contract.EndpointSource`. It maps the source's
+`MatterDeviceType()` onto the generated constructor (one table:
+`0x0100 → device.NewOnOffLight`, `0x0101 → NewDimmableLight`,
+`0x010C → NewColorTemperatureLight`, `0x010D → NewExtendedColorLight`,
+`0x010A → NewOnOffPlugInUnit`, `0x0202 → NewWindowCovering`,
+`0x0230 → NewClosure`, `0x000A → NewDoorLock`, `0x0301 → NewThermostat`,
+`0x0076 → NewSmokeCoAlarm`, `0x0022 → NewSpeaker`, `0x0027 → NewModeSelect`,
+`0x000F → NewGenericSwitch`, `0x0510 → NewElectricalSensor`, and the sensor
+types by measurement class), passes `device.Options{StableKey, Name,
+Vendor, DeviceAddress, ChannelAddress, Reachable, NodeLabel}`, every server
+the source returns as `device.WithServer`, the source as
+`device.WithChangeNotifier`, a measurement source as
+`device.WithMeasurement`, the features a type refuses to default
+(`WithFeatures` for WindowCovering, Thermostat, SmokeCoAlarm,
+GenericSwitch, ElectricalSensor — read from the profile's own FeatureMap
+answer, never from a constant here), and hands `dev.Spec()` to the inner
+assembler. The walk, the exposure allowlist, the per-central snapshots, the
+secondary-channel policy, the button and electrical consolidation, the
+battery placement, the StableKey and the labels are unchanged: the
+`matterendpoint.SourceKey` string stays the UniqueID hash input.
+
+What phase 1 adds, and what it must not change:
+
+- **Device-type validation** runs at assembly (go-fabric ADR 0016). Mode
+  `warn` in production for one release, `error` in every test that
+  assembles a profile, so a profile whose cluster set contradicts its type
+  fails a test instead of a pairing. A profile the validator refuses is a
+  finding, not a reason to relax the mode.
+- **Bridged NodeLabel persistence**: `endpoint.Config.OnNodeLabelWritten`
+  stores the label under the endpoint's key; `device.Options.NodeLabel`
+  hands it back on the next assembly. The gap closes in this phase because
+  the option is the carrier.
+- **Wire shape is unchanged** except where the type order of
+  `device.Device.MatterClusterServers` differs from a profile's own list
+  order — the Descriptor ServerList is the only attribute that can move.
+  The topology golden decides; a re-record needs the diff to be an order
+  change only. UniqueIDs, endpoint numbers, cluster sets, revisions,
+  FeatureMaps and attribute values do not change.
+- **Sources keep their shape.** A profile still implements
+  `contract.EndpointSource`; the assembler, not the profile, calls
+  `device.New`. The profiles' knowledge of *which* clusters they serve
+  stays theirs; the knowledge of what the type mandates becomes go-fabric's.
+
+### Phase 2 — the OnOff family runs on `cluster/onoff.Server`
+
+The five hand-written OnOff servers (custom switch, generic switch, light,
+siren, sound player) are replaced by `onoff.New(onoff.Config{Features,
+Sink, Bridged: true, DataVersion})`, built **once per source** and reused
+across reassemblies (a reassembly re-reads `MatterClusterServers`; a server
+rebuilt each time loses its timers and its data version). The Sink is the
+profile's CCU write at `CommandPriorityHigh` (`TurnOn` / `TurnOff`); a
+failed write refuses the change, so the command answers FAILURE and the
+attribute keeps the CCU's truth. The CCU's confirmed state reaches the
+server through `Server.Set(on)` from the data point's confirmed-update
+hook — the one path that stores without asking the Sink.
+
+Consequences inside the profiles:
+
+- The light's `matter_timed_onoff.go` engine, the LT attribute atomics of
+  every OnOff server and the five copies of the six-command switch are
+  deleted; OnWithTimedOff, OffWithEffect, OnWithRecallGlobalScene,
+  StartUpOnOff and GlobalSceneControl are the stack's, including the scene
+  paths the assembler injects (`SetScenes`).
+- The light's LevelControl server, when it switches the device through a
+  `…WithOnOff` command, calls `onOff.Set(true/false)` so the OnOff
+  attribute follows, as the reference daemon's `publishOnOff` does; it
+  must not call the Sink.
+- The siren keeps collapsing On / Off / Toggle onto `TurnOn(OnConfig{})` /
+  `TurnOff` in its Sink; a timed-off now ends the alarm after OnTime
+  through the stack's countdown, which it did not before. The sound player
+  keeps an empty FeatureMap (no LT).
+- `onoff.Server` reports through `contract.AttributeChangeNotifier`; the
+  profile's `OnMatterValueChanged` stays for its other clusters.
+
+Two follow-ups are named here and decided per profile later, each with its
+own `by_design.md` review of the Homematic ramp and transition semantics:
+the light's LevelControl onto `levelcontrol.NewServer` with a `LevelSource`
+port (the transition engine, `Move` / `Step` with a rate and `RemainingTime`,
+which the hand-written server answers as no-ops today), and the three
+ColorControl variants onto `light.NewColorControlServer` with the
+`ColorWriter` / `ColorTemperatureWriter` ports. The WindowCovering servers
+stay hand-written: their two-phase GoTo debounce and target inference are
+this daemon's accepted-before-written contract with the CCU
+(`BD-Matter-WindowCovering-SliderDebounce`), which go-fabric's
+`cover.WindowCoveringServer` does not model. The Thermostat server stays
+hand-written until the SystemMode → `CONTROL_MODE` mapping has a port in
+`cluster/thermo`.
+
+### Phase 3 — the bring-up runs on `node.New`
+
+`startMatterBridge`'s 29 stack-generic responsibilities become
+`node.New(node.Config{…})` plus `Start` / `Stop`; what stays in
+`cmd/openccu-loom` is this daemon's: the enable and database gate, the
+endpoint-identity and exposure store, the per-central readiness latch
+(which maps onto `Aggregator.MarkComplete` once every registered central
+is ready — the same rule the reference daemon states: mark complete only
+after the model is loaded, or the stored endpoint numbers are garbage
+collected at boot), the i18n channel word, the health probe and gauges,
+the REST / WebSocket adapters over `n.Bridge()`, `n.Root()`,
+`n.CommissioningWindow()` and `n.Store()`, and the live-adopt hook.
+
+This phase is **blocked until go-fabric's facade offers, as additive
+`node.Config` fields or chained observers that do not overwrite the
+facade's own wiring**: fabric added / removed / updated observers for the
+WebSocket publisher and the CASE identity refresh; a commissioning-complete
+observer; a window-transition observer (the enhanced-window CM=2
+announcement with the window's discriminator); a per-window PASE acceptor
+with credentials other than the configured passcode (the ephemeral window);
+concurrent-pairings mode; TimeSynchronization as an opt-in; the
+`SupportedFabrics` count; and the CASE node-id and fabric-id preferences.
+The product semantics the facade fixes — commissionable only while a
+window is open, the node's own window at first boot when no fabric exists
+— are **adopted** in this phase: they are matter.js's and chip's, the
+operator-opened window keeps working as an administrator window, and a
+commissioned daemon stops being commissionable with its configured
+passcode for its whole lifetime, which is a security gain. The request to
+go-fabric is filed with this ADR and tracked in `notes/plans/roadmap.md`;
+until it is answered, `startMatterBridge` stays, and nothing in phases 1 and
+2 depends on it.
+
+### Live verification
+
+Every phase ends with the same run against the developer's CCU and Apple
+Home, under the live-write rule of `CLAUDE.md`: writes only to the
+sanctioned slot (`00021BE9957782:4 Bücherregal`, HMIP-PS), left OFF by one
+final explicit command before unpairing; every other device read-only.
+
+1. Topology golden and the chip-tool suite green in CI (the suite's
+   positive Groups / Scenes tests are added in phase 1, since the
+   stub-rejection tests left with #951).
+2. Pair with Apple Home from a fresh fabric; confirm the bookshelf lamp
+   appears as the device type the profile advertises and that every
+   exposed accessory of the fleet keeps its name and room.
+3. Phase 1: switch the lamp on and off from Apple Home and from the CCU;
+   read a thermostat, a cover and a sensor. Phase 2: the same, plus
+   OnWithTimedOff via `chip-tool onoff on-with-timed-off` (lamp returns to
+   OFF after OnTime without a CCU-side timer), a scene stored and recalled
+   from Apple Home. Phase 3: unpair, restart, re-pair; the fabric list,
+   the subscriptions after a restart and the WebSocket fabric events are
+   what they were.
+4. Unpair, confirm the lamp is OFF.
+
+A phase whose live run is not green does not merge; a finding goes into
+`by_design.md` or back into go-fabric, never into a relaxed test.
+
+## Consequences
+
+- `internal/north/matteradapter` loses the implicit "which clusters does a
+  type carry" knowledge and gains device-type validation as a guard; a new
+  profile that advertises a type it does not satisfy fails
+  `go test ./internal/model/...`.
+- The profiles shrink by the OnOff family (about 1 000 lines across five
+  packages plus the timed-off engine) and gain the stack's OnOff behaviour
+  wholesale; their wire-shape pins (`parity_matterjs_test.go`, the schema
+  snapshot, the topology golden) stay and are the gate for each phase.
+- `cmd/openccu-loom/daemon_matter.go` shrinks to the daemon's own
+  responsibilities in phase 3; the 47 test call sites of
+  `startMatterBridge` move to a helper that boots the node facade the same
+  way, so the effect pins of #951 (`bridgetest.Commissioner` against the
+  real boot) keep their meaning.
+- Two go-fabric requests leave this ADR: the facade host hooks above, and
+  the SoilSensor label already filed as go-fabric issue #57.
+- Rejected: a loom-local facade duplicating `node.New` with hooks (it would
+  be the fourth copy of the bring-up order and age with every go-fabric
+  release); migrating the profiles to `device.New` calls inside the
+  profiles themselves (the profiles would then depend on the assembler's
+  key and label rules); skipping phase 2 for the siren and sound player
+  because they are "simple" (they are the two OnOff servers whose
+  OnWithTimedOff behaviour is wrong today).

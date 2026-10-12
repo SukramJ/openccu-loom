@@ -120,6 +120,20 @@ replace it, and the metrics that say whether it worked.
   `by_design.md` entry recording the divergence.
   *Plan: [`notes/plans/matter-case-resume-session-id.md`](matter-case-resume-session-id.md).*
 
+- **Matter device layer and node facade (ADR 0084).** Phase 1: the
+  assembler constructs endpoints through `device.New<Type>` with the
+  profiles' servers as `WithServer`, device-type validation as a guard,
+  bridged NodeLabel persistence. Phase 2: the five OnOff servers onto
+  `cluster/onoff.Server` with a CCU Sink. Phase 3 (blocked on go-fabric):
+  `startMatterBridge` onto `node.New` once the facade carries host hooks —
+  fabric added/removed/updated observers, commissioning-complete and
+  window-transition observers, per-window PASE credentials (ephemeral
+  window), concurrent pairings, TimeSync opt-in, SupportedFabrics, CASE
+  node/fabric preferences. Each phase ends with the Apple Home run in the
+  ADR. Follow-ups named there: LevelControl onto `levelcontrol.NewServer`,
+  ColorControl onto `light.NewColorControlServer`.
+  Detail: [`docs/adr/0084`](../../docs/adr/0084-matter-device-layer-and-node-facade.md).
+
 - **Bridged endpoints run on `groups.Manager` — done with go-fabric v0.3.0.**
   `wire.Groups` is gone; the daemon wires one `groups.Manager` into
   `matteradapter.Config.Groups`, the root GroupKeyManagement and Groupcast
