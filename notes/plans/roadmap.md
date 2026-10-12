@@ -123,9 +123,10 @@ replace it, and the metrics that say whether it worked.
 - **Matter device layer and node facade (ADR 0084).** Phase 1 (merged,
   #953): the assembler constructs endpoints through `device.New<Type>`
   with the profiles' servers as `WithServer`, device-type validation as a
-  guard, bridged NodeLabel persistence. Phase 2 (implemented, PR open):
+  guard, bridged NodeLabel persistence. Phase 2 (merged, #955):
   the five OnOff servers onto `cluster/onoff.Server` with a CCU Sink; the
-  live Apple Home run covers phases 1 and 2 together and is still due.
+  chip-tool Groups/Scenes positive test is in; the live Apple Home run
+  covers phases 1 and 2 together and is still due.
   Upstream asks filed on the way: go-fabric #60 (thermo Sink), #61
   (cover Mover port), #62 (versioned store migrations). Phase 3 (blocked
   on go-fabric #58):
