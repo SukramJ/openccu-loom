@@ -2392,6 +2392,10 @@
           "wire_value": "RAINING"
         },
         {
+          "go_name": "ParameterRampStop",
+          "wire_value": "RAMP_STOP"
+        },
+        {
           "go_name": "ParameterRampTime",
           "wire_value": "RAMP_TIME"
         },
