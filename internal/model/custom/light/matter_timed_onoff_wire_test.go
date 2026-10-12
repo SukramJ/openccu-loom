@@ -69,14 +69,14 @@ func encodeOnWithTimedOffInvoke(t *testing.T, ep uint16, control uint8, onTime, 
 // TestOnWithTimedOffFromWireReachesTheCCU drives OnWithTimedOff from TLV
 // bytes through the IM invoke decode with the generated OnOff definition
 // and the real TopologyDispatcher onto the Light's OnOff server, and
-// asserts the CCU write and the armed countdown. With the generated
+// asserts the CCU write and the armed countdown attributes. With the generated
 // definition linked, the server receives onoff.OnWithTimedOffRequest, not
 // the tag map; a decoder that only knows the map answers the command with
 // an error and nothing reaches the CCU.
 func TestOnWithTimedOffFromWireReachesTheCCU(t *testing.T) {
 	w := &stubWriter{last: -1}
 	l, _ := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
-	l.timed.loopDisabled = true
+	t.Cleanup(l.Close)
 	l.OnLevel(0.0)
 
 	const ep = 2

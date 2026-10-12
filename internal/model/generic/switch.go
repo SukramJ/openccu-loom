@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // Switch is a bool-typed writable data point with an optional ON_TIME
@@ -17,15 +18,16 @@ type Switch struct {
 	*DataPoint[bool]
 	TimerSlot
 
-	// matterLT holds the Lighting-feature OnOff attributes the Matter
-	// projection answers. See internal/model/generic/switch_matter.go.
-	matterLT matterOnOffLTState
+	// matterOnOff holds the OnOff cluster server the Matter projection
+	// serves, built once per switch (switch_matter.go); matterVersion is
+	// its data-version tracker.
+	matterOnOff   MatterOnOffHolder
+	matterVersion hmtypes.DataVersionTracker
 }
 
 // NewSwitch constructs a Switch.
 func NewSwitch(cfg Spec) *Switch {
 	s := &Switch{DataPoint: NewDataPoint[bool](cfg)}
-	s.matterLT.initMatterOnOffLT()
 	s.RegisterService("turn_on", func(ctx context.Context, _ map[string]any, priority hmenum.CommandPriority) error {
 		return s.TurnOn(ctx, priority)
 	})

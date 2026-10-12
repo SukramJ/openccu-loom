@@ -6,6 +6,7 @@ package siren
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/go-fabric/cluster/levelcontrol"
@@ -47,17 +48,22 @@ func newSpeakerRig(t *testing.T) (*SoundPlayer, *generic.Sensor[int32], *generic
 	return sp, direction, level, w
 }
 
-func speakerServers(t *testing.T, sp *SoundPlayer) (onOff, level interfaces.MatterClusterServer) {
+func speakerServers(t *testing.T, sp *SoundPlayer) (onOff *onoff.Server, level interfaces.MatterClusterServer) {
 	t.Helper()
 	servers := sp.MatterClusterServers()
 	if len(servers) != 2 {
 		t.Fatalf("MatterClusterServers() returned %d servers, want 2 (OnOff + LevelControl)", len(servers))
 	}
-	var on, lvl interfaces.MatterClusterServer
+	var on *onoff.Server
+	var lvl interfaces.MatterClusterServer
 	for _, s := range servers {
 		switch s.MatterClusterID() {
 		case onoff.ClusterID:
-			on = s
+			srv, ok := s.(*onoff.Server)
+			if !ok {
+				t.Fatalf("Speaker OnOff server is %T, want go-fabric's *onoff.Server", s)
+			}
+			on = srv
 		case levelcontrol.ClusterID:
 			lvl = s
 		default:
@@ -106,38 +112,72 @@ func TestSoundPlayerOnOffReadsDirection(t *testing.T) {
 }
 
 // TestSoundPlayerOnOffFeatureMapIsEmpty guards the conformance pair: Speaker
-// mandates no OnOff feature, so the LT-gated attributes and commands must not
-// be advertised alongside a FeatureMap that does not carry LT.
+// mandates no OnOff feature (speaker.element.ts), so the cluster carries
+// OnOff, Off, On and Toggle only — no LT-gated attribute or command beside a
+// FeatureMap that does not carry LT.
 func TestSoundPlayerOnOffFeatureMapIsEmpty(t *testing.T) {
 	t.Parallel()
 
 	sp, _, _, _ := newSpeakerRig(t)
 	on, _ := speakerServers(t, sp)
 
-	fm, ok := on.MatterRead(matterAttrFeatureMap)
-	if !ok || fm != uint32(0) {
+	if fm, ok := on.MatterRead(0xFFFC); !ok || fm != uint32(0) {
 		t.Fatalf("OnOff FeatureMap = (%v, %v), want (0, true)", fm, ok)
 	}
-	lister, ok := on.(interfaces.MatterClusterAttributeLister)
-	if !ok {
-		t.Fatal("OnOff server does not list its attributes")
+	if v, ok := on.MatterRead(0xFFFD); !ok || v != onoff.Revision() {
+		t.Errorf("ClusterRevision = (%v, %v), want (%v, true)", v, ok, onoff.Revision())
 	}
-	if got := lister.MatterAttributes(); len(got) != 1 || got[0] != onoff.AttrOnOff {
-		t.Errorf("MatterAttributes() = %v, want [0x0000] only", got)
-	}
-	cmds, ok := on.(interfaces.MatterClusterCommandLister)
-	if !ok {
-		t.Fatal("OnOff server does not list its commands")
+	if got := on.MatterAttributes(); !slices.Equal(got, []uint32{onoff.AttrOnOff}) {
+		t.Errorf("MatterAttributes() = %#x, want [0x0000] only", got)
 	}
 	want := []uint32{onoff.CmdOff, onoff.CmdOn, onoff.CmdToggle}
-	got := cmds.MatterAcceptedCommands()
-	if len(got) != len(want) {
-		t.Fatalf("MatterAcceptedCommands() = %v, want %v", got, want)
+	if got := on.MatterAcceptedCommands(); !slices.Equal(got, want) {
+		t.Errorf("MatterAcceptedCommands() = %#x, want %#x", got, want)
 	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("MatterAcceptedCommands() = %v, want %v", got, want)
-		}
+	if _, err := on.MatterInvoke(context.Background(), onoff.CmdOnWithTimedOff, nil); err == nil {
+		t.Error("OnWithTimedOff succeeded on the Speaker; it is LT-gated and must be rejected")
+	}
+}
+
+// TestSoundPlayerOnOffServerIsBuiltOnce pins that the projection hands out
+// the same two servers on every call, and that both share the player's data
+// version tracker.
+func TestSoundPlayerOnOffServerIsBuiltOnce(t *testing.T) {
+	t.Parallel()
+
+	sp, direction, _, _ := newSpeakerRig(t)
+	on, lvl := speakerServers(t, sp)
+	again, againLvl := speakerServers(t, sp)
+	if again != on || againLvl != lvl {
+		t.Fatal("a second MatterClusterServers call returned different servers; the bridge keeps the ones it serves")
+	}
+	fireDirection(t, direction, "UP")
+	if got, want := on.MatterDataVersion(), sp.Current(); got != want {
+		t.Errorf("OnOff server data version = %d, player's tracker = %d; the tracker must be shared", got, want)
+	}
+}
+
+// TestSoundPlayerOnOffConfirmedDirectionReachesTheServerWithoutAWrite pins
+// the CCU→Matter direction: a DIRECTION confirmation is stored on the server
+// and advances its data version, without a CCU write.
+func TestSoundPlayerOnOffConfirmedDirectionReachesTheServerWithoutAWrite(t *testing.T) {
+	t.Parallel()
+
+	sp, direction, _, w := newSpeakerRig(t)
+	on, _ := speakerServers(t, sp)
+	before := on.MatterDataVersion()
+	fireDirection(t, direction, "DOWN")
+	if v, _ := on.MatterRead(onoff.AttrOnOff); v != true {
+		t.Fatalf("OnOff after DIRECTION=DOWN = %v, want true", v)
+	}
+	if after := on.MatterDataVersion(); after == before {
+		t.Errorf("data version did not advance on a confirmed change (%d)", after)
+	}
+	w.mu.Lock()
+	n := len(w.calls)
+	w.mu.Unlock()
+	if n != 0 {
+		t.Fatalf("a confirmed CCU update must not write back: %d write(s)", n)
 	}
 }
 

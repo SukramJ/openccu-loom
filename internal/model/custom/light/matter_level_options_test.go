@@ -300,9 +300,8 @@ func TestLevelInvokeMoveAbsentOrNullRateIsNoOp(t *testing.T) {
 // MatterDataVersion — only an actually-applied SetLevel bumps the counter.
 func TestGatedMoveToLevelDoesNotBumpDataVersion(t *testing.T) {
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
+	srv := levelServer(t, l) // builds the cluster servers before the baseline is taken
 	before := l.MatterDataVersion()
-
-	srv := levelServer(t, l)
 	req := wire.MoveToLevelRequest{Level: 100}
 	if _, err := srv.MatterInvoke(context.Background(), matterCmdMoveToLevel, req); err != nil {
 		t.Fatalf("MoveToLevel while off: unexpected error %v", err)

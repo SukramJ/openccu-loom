@@ -6,163 +6,146 @@ package switchdev
 import (
 	"context"
 	"testing"
+
+	"github.com/SukramJ/go-fabric/cluster/onoff"
 )
 
-// TestParityMatterJS_SwitchDataVersionBumpsOnWrite verifies that a
-// successful MatterWrite increments MatterDataVersion. Controllers
-// rely on this counter for DataVersionFilter evaluation; a stuck
-// version means the controller skips reporting the cluster as changed.
-func TestParityMatterJS_SwitchDataVersionBumpsOnWrite(t *testing.T) {
-	t.Parallel()
-	s := newTestSwitch(t, "HmIP-PS:3", "", &stubWriter{})
-	before := s.MatterDataVersion()
-
-	if err := s.MatterWrite(context.Background(), matterAttrOnOff, true); err != nil {
-		t.Fatalf("MatterWrite: %v", err)
-	}
-	if after := s.MatterDataVersion(); after <= before {
-		t.Fatalf("MatterDataVersion did not bump after write: before=%d after=%d", before, after)
+// assertSharedDataVersion pins that the Switch reports the server's own
+// counter: the bridge reads the source's MatterDataVersion for
+// DataVersionFilter evaluation, so a second counter would let a report
+// carry a version the filter never saw.
+func assertSharedDataVersion(t *testing.T, s *Switch, srv *onoff.Server) {
+	t.Helper()
+	if got, want := s.MatterDataVersion(), srv.MatterDataVersion(); got != want {
+		t.Fatalf("Switch.MatterDataVersion = %d, server's = %d; they must be one counter", got, want)
 	}
 }
 
-// TestParityMatterJS_SwitchDataVersionBumpsOnInvokeOff verifies that a
-// successful MatterInvoke(Off) increments MatterDataVersion.
-func TestParityMatterJS_SwitchDataVersionBumpsOnInvokeOff(t *testing.T) {
+// TestParityMatterJS_SwitchDataVersionBumpsOnInvoke verifies that an
+// accepted On or Off advances the cluster's data version.
+func TestParityMatterJS_SwitchDataVersionBumpsOnInvoke(t *testing.T) {
 	t.Parallel()
-	s := newTestSwitch(t, "HmIP-PS:3", "", &stubWriter{})
-	before := s.MatterDataVersion()
-
-	if _, err := s.MatterInvoke(context.Background(), matterCmdOff, nil); err != nil {
-		t.Fatalf("MatterInvoke(Off): %v", err)
-	}
-	if after := s.MatterDataVersion(); after <= before {
-		t.Fatalf("MatterDataVersion did not bump after invoke Off: before=%d after=%d", before, after)
-	}
-}
-
-// TestParityMatterJS_SwitchDataVersionBumpsOnInvokeOn verifies that a
-// successful MatterInvoke(On) increments MatterDataVersion.
-func TestParityMatterJS_SwitchDataVersionBumpsOnInvokeOn(t *testing.T) {
-	t.Parallel()
-	s := newTestSwitch(t, "HmIP-PS:3", "", &stubWriter{})
-	before := s.MatterDataVersion()
-
-	if _, err := s.MatterInvoke(context.Background(), matterCmdOn, nil); err != nil {
-		t.Fatalf("MatterInvoke(On): %v", err)
-	}
-	if after := s.MatterDataVersion(); after <= before {
-		t.Fatalf("MatterDataVersion did not bump after invoke On: before=%d after=%d", before, after)
+	for _, tc := range []struct {
+		name    string
+		startOn bool
+		cmd     uint32
+	}{
+		{"On", false, onoff.CmdOn},
+		{"Off", true, onoff.CmdOff},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			s, srv, _ := matterSwitch(t)
+			s.OnState(tc.startOn)
+			before := s.MatterDataVersion()
+			if _, err := srv.MatterInvoke(context.Background(), tc.cmd, nil); err != nil {
+				t.Fatalf("%s: %v", tc.name, err)
+			}
+			if after := s.MatterDataVersion(); after <= before {
+				t.Fatalf("data version did not advance after %s: before=%d after=%d", tc.name, before, after)
+			}
+			assertSharedDataVersion(t, s, srv)
+		})
 	}
 }
 
 // TestParityMatterJS_SwitchDataVersionMonotonicallyRises verifies that
-// consecutive successful mutations each increment the counter strictly.
+// consecutive state-changing commands each advance the counter.
 func TestParityMatterJS_SwitchDataVersionMonotonicallyRises(t *testing.T) {
 	t.Parallel()
-	s := newTestSwitch(t, "HmIP-PS:3", "", &stubWriter{})
-
-	for i, on := range []bool{true, false, true} {
+	s, srv, _ := matterSwitch(t)
+	for i, cmd := range []uint32{onoff.CmdOn, onoff.CmdOff, onoff.CmdToggle} {
 		prev := s.MatterDataVersion()
-		if err := s.MatterWrite(context.Background(), matterAttrOnOff, on); err != nil {
-			t.Fatalf("write %d: %v", i, err)
+		if _, err := srv.MatterInvoke(context.Background(), cmd, nil); err != nil {
+			t.Fatalf("command %d: %v", i, err)
 		}
 		if next := s.MatterDataVersion(); next <= prev {
-			t.Fatalf("write %d: DataVersion not monotonically rising: prev=%d next=%d", i, prev, next)
+			t.Fatalf("command %d: data version not rising: prev=%d next=%d", i, prev, next)
 		}
 	}
+	assertSharedDataVersion(t, s, srv)
 }
 
-// TestParityMatterJS_SwitchDataVersionStableOnRead verifies that
-// MatterRead does not alter MatterDataVersion.
+// TestParityMatterJS_SwitchDataVersionStableOnRead verifies that reads
+// leave the counter alone.
 func TestParityMatterJS_SwitchDataVersionStableOnRead(t *testing.T) {
 	t.Parallel()
-	s := newTestSwitch(t, "HmIP-PS:3", "", &stubWriter{})
+	s, srv, _ := matterSwitch(t)
 	before := s.MatterDataVersion()
-
-	s.MatterRead(matterAttrOnOff)
-	s.MatterRead(matterAttrFeatureMap)
-	s.MatterRead(matterAttrClusterRevision)
-
+	srv.MatterRead(onoff.AttrOnOff)
+	srv.MatterRead(0xFFFC)
+	srv.MatterRead(0xFFFD)
 	if after := s.MatterDataVersion(); after != before {
-		t.Fatalf("MatterRead bumped DataVersion: before=%d after=%d", before, after)
+		t.Fatalf("a read advanced the data version: before=%d after=%d", before, after)
 	}
 }
 
-// TestParityMatterJS_SwitchDataVersionStableOnUnknownAttrWrite verifies
-// that a write to an unsupported attribute (which returns an error) does
-// not increment MatterDataVersion.
-func TestParityMatterJS_SwitchDataVersionStableOnUnknownAttrWrite(t *testing.T) {
+// TestParityMatterJS_SwitchDataVersionStableOnRefusedWrite verifies that
+// a refused write to the read-only OnOff attribute leaves the counter
+// alone.
+func TestParityMatterJS_SwitchDataVersionStableOnRefusedWrite(t *testing.T) {
 	t.Parallel()
-	s := newTestSwitch(t, "HmIP-PS:3", "", &stubWriter{})
+	s, srv, _ := matterSwitch(t)
 	before := s.MatterDataVersion()
-
-	_ = s.MatterWrite(context.Background(), 0x4001, true)
-
+	_ = srv.MatterWrite(context.Background(), onoff.AttrOnOff, true)
 	if after := s.MatterDataVersion(); after != before {
-		t.Fatalf("failed write bumped DataVersion: before=%d after=%d", before, after)
-	}
-}
-
-// TestParityMatterJS_SwitchDataVersionStableOnNilWrite verifies that a
-// nil-value write (no-op path) does not increment MatterDataVersion.
-func TestParityMatterJS_SwitchDataVersionStableOnNilWrite(t *testing.T) {
-	t.Parallel()
-	s := newTestSwitch(t, "HmIP-PS:3", "", &stubWriter{})
-	before := s.MatterDataVersion()
-
-	if err := s.MatterWrite(context.Background(), matterAttrOnOff, nil); err != nil {
-		t.Fatalf("nil write returned unexpected error: %v", err)
-	}
-	if after := s.MatterDataVersion(); after != before {
-		t.Fatalf("nil write bumped DataVersion: before=%d after=%d", before, after)
+		t.Fatalf("a refused write advanced the data version: before=%d after=%d", before, after)
 	}
 }
 
 // TestParityMatterJS_SwitchDataVersionStableOnUnknownCommand verifies
-// that MatterInvoke with an unknown command ID does not bump DataVersion.
+// that a rejected command leaves the counter alone.
 func TestParityMatterJS_SwitchDataVersionStableOnUnknownCommand(t *testing.T) {
 	t.Parallel()
-	s := newTestSwitch(t, "HmIP-PS:3", "", &stubWriter{})
+	s, srv, _ := matterSwitch(t)
 	before := s.MatterDataVersion()
-
-	// 0x43 is above the highest defined OnOff command (OnWithTimedOff 0x42).
-	_, _ = s.MatterInvoke(context.Background(), 0x43, nil)
-
+	_, _ = srv.MatterInvoke(context.Background(), 0x43, nil)
 	if after := s.MatterDataVersion(); after != before {
-		t.Fatalf("failed invoke bumped DataVersion: before=%d after=%d", before, after)
+		t.Fatalf("a rejected command advanced the data version: before=%d after=%d", before, after)
 	}
 }
 
-// TestSwitch_MatterDataVersion_BumpsOnCCUEcho verifies that
-// DataVersionTracker.Bump is called via the OnConfirmedUpdate hook
-// registered in New. The OnOff cluster DataVersion must advance on every
-// real CCU STATE transition so Apple HAP-Mapper does not dedupe ReportData
-// for changes that originate outside Matter (wall switch, MQTT, ReGa).
-// Same-value echoes must NOT bump the version (matches OnConfirmedUpdate
-// semantics: fires only when old != new or on first observation).
+// TestSwitch_MatterDataVersion_BumpsOnCCUEcho verifies that a CCU-confirmed
+// STATE transition advances the OnOff cluster's data version, with and
+// without a Matter server built: Apple's HAP mapper dedupes a report with
+// an unchanged version, so a relay flip from outside Matter (wall switch,
+// MQTT, ReGa) would never reach the accessory. A same-value echo is no
+// transition and must not advance it.
 func TestSwitch_MatterDataVersion_BumpsOnCCUEcho(t *testing.T) {
 	t.Parallel()
-	sw := newTestSwitch(t, "00021BE9957782:4", "test", nil)
+	for _, withServer := range []bool{false, true} {
+		name := "without server"
+		if withServer {
+			name = "with server"
+		}
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			sw := newTestSwitch(t, "00021BE9957782:4", "test", nil)
+			var srv *onoff.Server
+			if withServer {
+				srv = matterOnOffServerOf(t, sw)
+			}
 
-	// Step 1: first CCU echo (true) — no prior value, counts as transition.
-	before := sw.MatterDataVersion()
-	sw.OnEvent(true)
-	if after := sw.MatterDataVersion(); after <= before {
-		t.Fatalf("first CCU echo (true): DataVersion did not bump: before=%d after=%d", before, after)
-	}
+			before := sw.MatterDataVersion()
+			sw.OnEvent(true)
+			if after := sw.MatterDataVersion(); after <= before {
+				t.Fatalf("first CCU echo (true): data version did not advance: before=%d after=%d", before, after)
+			}
 
-	// Step 2: same value echo (true → true) — confirmed-update skips no-op;
-	// DataVersion must stay unchanged.
-	stable := sw.MatterDataVersion()
-	sw.OnEvent(true)
-	if after := sw.MatterDataVersion(); after != stable {
-		t.Fatalf("same-value CCU echo (true→true): DataVersion must not bump: stable=%d after=%d", stable, after)
-	}
+			stable := sw.MatterDataVersion()
+			sw.OnEvent(true)
+			if after := sw.MatterDataVersion(); after != stable {
+				t.Fatalf("same-value CCU echo: data version must not advance: stable=%d after=%d", stable, after)
+			}
 
-	// Step 3: real state transition (true → false) — must bump.
-	before = sw.MatterDataVersion()
-	sw.OnEvent(false)
-	if after := sw.MatterDataVersion(); after <= before {
-		t.Fatalf("CCU echo (true→false): DataVersion did not bump: before=%d after=%d", before, after)
+			before = sw.MatterDataVersion()
+			sw.OnEvent(false)
+			if after := sw.MatterDataVersion(); after <= before {
+				t.Fatalf("CCU echo (true→false): data version did not advance: before=%d after=%d", before, after)
+			}
+			if srv != nil {
+				assertSharedDataVersion(t, sw, srv)
+			}
+		})
 	}
 }

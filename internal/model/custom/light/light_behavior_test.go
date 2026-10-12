@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/go-fabric/cluster/onoff"
 	"github.com/SukramJ/go-fabric/cluster/wire"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -1341,30 +1342,30 @@ func TestLightMatterClusterServers(t *testing.T) {
 	}
 }
 
-// TestLightOnOffServerRead verifies lightOnOffServer.MatterRead for all attributes.
+// TestLightOnOffServerRead verifies the light's OnOff server reads.
 func TestLightOnOffServerRead(t *testing.T) {
 	w := &stubWriter{}
 	l, level := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
-	s := lightOnOffServer{l: l}
+	s := onOffServer(t, l)
 
 	// Unobserved → (false, true). Apple Home's HAP-mapper aborts on
 	// nil OnOff during HAP-service rebuild, so the unobserved path
 	// must surface the boolean default rather than a TLV null.
-	v, ok := s.MatterRead(matterAttrOnOffOnOff)
+	v, ok := s.MatterRead(onoff.AttrOnOff)
 	if !ok || v != false {
 		t.Errorf("MatterRead(OnOff) unobserved = (%v, %v), want (false, true)", v, ok)
 	}
 
 	// Observed off.
 	level.OnEvent(0)
-	v, ok = s.MatterRead(matterAttrOnOffOnOff)
+	v, ok = s.MatterRead(onoff.AttrOnOff)
 	if !ok || v.(bool) != false {
 		t.Errorf("MatterRead(OnOff) off = (%v, %v), want (false, true)", v, ok)
 	}
 
 	// Observed on.
 	level.OnEvent(0.5)
-	v, ok = s.MatterRead(matterAttrOnOffOnOff)
+	v, ok = s.MatterRead(onoff.AttrOnOff)
 	if !ok || v.(bool) != true {
 		t.Errorf("MatterRead(OnOff) on = (%v, %v), want (true, true)", v, ok)
 	}
@@ -1372,19 +1373,19 @@ func TestLightOnOffServerRead(t *testing.T) {
 	// OnOff cluster has no Options attribute per matter.js HEAD; reads
 	// of 0x000F must surface ok=false (UnsupportedAttribute).
 	if _, ok := s.MatterRead(0x000F); ok {
-		t.Error("MatterRead(0x000F) on lightOnOffServer must return ok=false")
+		t.Error("MatterRead(0x000F) on the light OnOff server must return ok=false")
 	}
 
 	// FeatureMap.
 	v, ok = s.MatterRead(matterAttrFeatureMap)
-	if !ok {
-		t.Errorf("MatterRead(FeatureMap) = (%v, %v), want (0, true)", v, ok)
+	if !ok || v != onoff.FeatureLighting {
+		t.Errorf("MatterRead(FeatureMap) = (%v, %v), want (%d, true)", v, ok, onoff.FeatureLighting)
 	}
 
 	// ClusterRevision.
 	v, ok = s.MatterRead(matterAttrClusterRevision)
-	if !ok {
-		t.Errorf("MatterRead(ClusterRevision) = (%v, %v)", v, ok)
+	if !ok || v != onoff.Revision() {
+		t.Errorf("MatterRead(ClusterRevision) = (%v, %v), want (%d, true)", v, ok, onoff.Revision())
 	}
 
 	// Unknown attribute → (nil, false).
@@ -1394,68 +1395,66 @@ func TestLightOnOffServerRead(t *testing.T) {
 	}
 }
 
-// TestLightOnOffServerWrite verifies lightOnOffServer.MatterWrite.
+// TestLightOnOffServerWrite verifies the light's OnOff server writes:
+// OnOff itself is read-only, the LT countdown attributes are writable.
 func TestLightOnOffServerWrite(t *testing.T) {
 	w := &stubWriter{}
 	l, _ := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
-	s := lightOnOffServer{l: l}
+	s := onOffServer(t, l)
 
-	// Write true → TurnOn.
-	if err := s.MatterWrite(context.Background(), matterAttrOnOffOnOff, true); err != nil {
-		t.Errorf("MatterWrite(true): %v", err)
+	if err := s.MatterWrite(context.Background(), onoff.AttrOnOff, true); err == nil {
+		t.Error("MatterWrite(OnOff) must return error — the attribute is read-only")
 	}
-	// Write false → TurnOff.
-	if err := s.MatterWrite(context.Background(), matterAttrOnOffOnOff, false); err != nil {
-		t.Errorf("MatterWrite(false): %v", err)
+	if err := s.MatterWrite(context.Background(), onoff.AttrOnTime, uint64(5)); err != nil {
+		t.Errorf("MatterWrite(OnTime): %v", err)
 	}
 	// Unknown attribute.
 	if err := s.MatterWrite(context.Background(), 0xFFFF, true); err == nil {
 		t.Error("MatterWrite(unknown attr) must return error")
 	}
 	// Wrong type.
-	if err := s.MatterWrite(context.Background(), matterAttrOnOffOnOff, "bad"); err == nil {
+	if err := s.MatterWrite(context.Background(), onoff.AttrOffWaitTime, "bad"); err == nil {
 		t.Error("MatterWrite(wrong type) must return error")
 	}
 }
 
-// TestLightOnOffServerInvoke verifies lightOnOffServer.MatterInvoke.
+// TestLightOnOffServerInvoke verifies the light's OnOff server commands
+// reach the CCU: Off, On, Toggle both ways, and an unknown command is
+// refused.
 func TestLightOnOffServerInvoke(t *testing.T) {
 	w := &stubWriter{}
 	l, level := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
-	s := lightOnOffServer{l: l}
+	s := onOffServer(t, l)
 
 	// Off command.
-	if _, err := s.MatterInvoke(context.Background(), matterCmdOff, nil); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), onoff.CmdOff, nil); err != nil {
 		t.Errorf("MatterInvoke(Off): %v", err)
 	}
 	// On command.
-	if _, err := s.MatterInvoke(context.Background(), matterCmdOn, nil); err != nil {
+	if _, err := s.MatterInvoke(context.Background(), onoff.CmdOn, nil); err != nil {
 		t.Errorf("MatterInvoke(On): %v", err)
 	}
 	// Toggle when off → TurnOn.
 	level.OnEvent(0)
-	if _, err := s.MatterInvoke(context.Background(), matterCmdToggle, nil); err != nil {
+	w.last = -1
+	if _, err := s.MatterInvoke(context.Background(), onoff.CmdToggle, nil); err != nil {
 		t.Errorf("MatterInvoke(Toggle/off): %v", err)
+	}
+	if w.last <= 0 {
+		t.Errorf("Toggle while off wrote %v, want a turn-on level", w.last)
 	}
 	// Toggle when on → TurnOff.
 	level.OnEvent(0.5)
-	if _, err := s.MatterInvoke(context.Background(), matterCmdToggle, nil); err != nil {
+	w.last = -1
+	if _, err := s.MatterInvoke(context.Background(), onoff.CmdToggle, nil); err != nil {
 		t.Errorf("MatterInvoke(Toggle/on): %v", err)
+	}
+	if w.last != 0 {
+		t.Errorf("Toggle while on wrote %v, want 0", w.last)
 	}
 	// Unknown command.
 	if _, err := s.MatterInvoke(context.Background(), 0xFF, nil); err == nil {
 		t.Error("MatterInvoke(unknown cmd) must return error")
-	}
-}
-
-// TestLightOnOffServerMatterReportableAndAttributes verifies the list methods.
-func TestLightOnOffServerMatterReportableAndAttributes(t *testing.T) {
-	s := lightOnOffServer{l: &Light{}}
-	if r := s.MatterReportable(); len(r) == 0 {
-		t.Error("MatterReportable must return at least one attribute")
-	}
-	if a := s.MatterAttributes(); len(a) == 0 {
-		t.Error("MatterAttributes must return at least one attribute")
 	}
 }
 

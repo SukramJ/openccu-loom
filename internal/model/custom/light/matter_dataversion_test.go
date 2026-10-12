@@ -7,37 +7,42 @@ import (
 	"context"
 	"testing"
 
+	"github.com/SukramJ/go-fabric/cluster/onoff"
+
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 )
 
 // TestParityMatterJS_LightOnOffDataVersionBumpsOnWrite verifies that a
-// successful OnOff attribute write via lightOnOffServer increments the
-// shared Light.MatterDataVersion. Controllers rely on this counter for
-// DataVersionFilter evaluation.
+// successful OnOff attribute write (OnTime) increments the shared
+// Light.MatterDataVersion and that the OnOff server reports that same
+// counter. Controllers rely on it for DataVersionFilter evaluation.
 func TestParityMatterJS_LightOnOffDataVersionBumpsOnWrite(t *testing.T) {
 	t.Parallel()
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
+	srv := onOffServer(t, l)
 	before := l.MatterDataVersion()
 
-	srv := onOffServer(t, l)
-	if err := srv.MatterWrite(context.Background(), matterAttrOnOffOnOff, true); err != nil {
-		t.Fatalf("MatterWrite(OnOff): %v", err)
+	if err := srv.MatterWrite(context.Background(), onoff.AttrOnTime, uint64(5)); err != nil {
+		t.Fatalf("MatterWrite(OnTime): %v", err)
 	}
-	if after := l.MatterDataVersion(); after <= before {
-		t.Fatalf("MatterDataVersion did not bump after OnOff write: before=%d after=%d", before, after)
+	after := l.MatterDataVersion()
+	if after <= before {
+		t.Fatalf("MatterDataVersion did not bump after OnTime write: before=%d after=%d", before, after)
+	}
+	if got := srv.MatterDataVersion(); got != after {
+		t.Fatalf("OnOff server data version %d, Light data version %d — the counter must be shared", got, after)
 	}
 }
 
 // TestParityMatterJS_LightOnOffDataVersionBumpsOnInvoke verifies that a
-// successful OnOff Invoke (On command) via lightOnOffServer increments
-// MatterDataVersion.
+// successful OnOff Invoke (On command) increments MatterDataVersion.
 func TestParityMatterJS_LightOnOffDataVersionBumpsOnInvoke(t *testing.T) {
 	t.Parallel()
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
+	srv := onOffServer(t, l)
 	before := l.MatterDataVersion()
 
-	srv := onOffServer(t, l)
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdOn, nil); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), onoff.CmdOn, nil); err != nil {
 		t.Fatalf("MatterInvoke(On): %v", err)
 	}
 	if after := l.MatterDataVersion(); after <= before {
@@ -84,8 +89,8 @@ func TestParityMatterJS_LightLevelDataVersionBumpsOnInvoke(t *testing.T) {
 }
 
 // TestParityMatterJS_LightDataVersionMonotonicallyRises verifies that
-// alternating writes to OnOff and LevelControl each increment the shared
-// counter strictly.
+// alternating writes to OnOff (OnTime, OffWaitTime) and LevelControl each
+// increment the shared counter strictly.
 func TestParityMatterJS_LightDataVersionMonotonicallyRises(t *testing.T) {
 	t.Parallel()
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
@@ -94,13 +99,13 @@ func TestParityMatterJS_LightDataVersionMonotonicallyRises(t *testing.T) {
 
 	ops := []func() error{
 		func() error {
-			return oo.MatterWrite(context.Background(), matterAttrOnOffOnOff, true)
+			return oo.MatterWrite(context.Background(), onoff.AttrOnTime, uint64(5))
 		},
 		func() error {
 			return lv.MatterWrite(context.Background(), matterAttrLevelCurrent, uint8(100))
 		},
 		func() error {
-			return oo.MatterWrite(context.Background(), matterAttrOnOffOnOff, false)
+			return oo.MatterWrite(context.Background(), onoff.AttrOffWaitTime, uint64(7))
 		},
 	}
 	for i, op := range ops {
@@ -119,11 +124,11 @@ func TestParityMatterJS_LightDataVersionMonotonicallyRises(t *testing.T) {
 func TestParityMatterJS_LightDataVersionStableOnRead(t *testing.T) {
 	t.Parallel()
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
-	before := l.MatterDataVersion()
-
 	oo := onOffServer(t, l)
 	lv := levelServer(t, l)
-	oo.MatterRead(matterAttrOnOffOnOff)
+	before := l.MatterDataVersion()
+
+	oo.MatterRead(onoff.AttrOnOff)
 	oo.MatterRead(matterAttrClusterRevision)
 	lv.MatterRead(matterAttrLevelCurrent)
 	lv.MatterRead(matterAttrFeatureMap)
@@ -134,16 +139,21 @@ func TestParityMatterJS_LightDataVersionStableOnRead(t *testing.T) {
 }
 
 // TestParityMatterJS_LightDataVersionStableOnFailedWrite verifies that
-// a write to an unsupported attribute ID does not increment
-// MatterDataVersion.
+// refused writes — a wrongly typed OnTime, the read-only OnOff — do not
+// increment MatterDataVersion.
 func TestParityMatterJS_LightDataVersionStableOnFailedWrite(t *testing.T) {
 	t.Parallel()
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
+	oo := onOffServer(t, l)
+	lv := levelServer(t, l)
 	before := l.MatterDataVersion()
 
-	oo := onOffServer(t, l)
-	_ = oo.MatterWrite(context.Background(), 0x4001, true)
-	lv := levelServer(t, l)
+	if err := oo.MatterWrite(context.Background(), onoff.AttrOnTime, true); err == nil {
+		t.Fatal("MatterWrite(OnTime, bool) succeeded, want a type refusal")
+	}
+	if err := oo.MatterWrite(context.Background(), onoff.AttrOnOff, true); err == nil {
+		t.Fatal("MatterWrite(OnOff) succeeded, want a refusal — OnOff is read-only")
+	}
 	_ = lv.MatterWrite(context.Background(), 0x4001, uint8(0))
 
 	if after := l.MatterDataVersion(); after != before {

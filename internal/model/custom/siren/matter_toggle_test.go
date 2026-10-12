@@ -4,32 +4,59 @@
 package siren
 
 import (
+	"context"
 	"slices"
 	"testing"
+
+	"github.com/SukramJ/go-fabric/cluster/onoff"
 )
 
-// TestOnOffToggleIsAdvertisedAndAccepted pins Toggle onto the siren's OnOff
-// projection.
-//
-// matter.js declares it `Command({ name: "Toggle", id: 0x2, access: "O",
-// conformance: "!OFFONLY" })` (on-off.element.ts:39): mandatory unless the
-// cluster advertises the OffOnly feature. This projection advertises LT
-// (0x01) and not OffOnly, so Toggle is mandatory for it — the comment that
-// justified its absence argued from the device's wire surface, which
-// conformance does not ask about. Our three other OnOff projections all carry
-// it, so a controller met one cluster that answered a mandatory command with
-// an error, which is the shape that ends a commissioning in a pair-abort.
-func TestOnOffToggleIsAdvertisedAndAccepted(t *testing.T) {
+// TestSirenOnOffToggleIsAdvertised pins Toggle onto the siren's OnOff
+// cluster. matter.js declares it with conformance "!OFFONLY"
+// (on-off.element.ts:39): mandatory unless the cluster advertises the
+// OffOnly feature. The siren advertises LT and not OffOnly, so a controller
+// that met a siren answering Toggle with an error would see a mandatory
+// command missing — the shape that ends a commissioning in a pair-abort.
+func TestSirenOnOffToggleIsAdvertised(t *testing.T) {
 	t.Parallel()
-
-	srv := sirenOnOffServer{}
-	if !slices.Contains(srv.MatterAcceptedCommands(), matterCmdToggle) {
-		t.Errorf("AcceptedCommandList = %v, want Toggle (0x02): mandatory while OffOnly is unset",
+	_, srv, _ := matterSiren(t)
+	if !slices.Contains(srv.MatterAcceptedCommands(), onoff.CmdToggle) {
+		t.Errorf("AcceptedCommandList = %#x, want Toggle (0x02): mandatory while OffOnly is unset",
 			srv.MatterAcceptedCommands())
 	}
-	// The premise: this projection advertises LT and nothing else, so the
-	// OffOnly feature that would make Toggle optional is not set.
-	if matterFeatureOnOffLT != 0x01 {
-		t.Errorf("LT feature bit = %#x, want 0x01", matterFeatureOnOffLT)
+	if fm, _ := srv.MatterRead(0xFFFC); fm != onoff.FeatureLighting {
+		t.Errorf("FeatureMap = %v, want LT alone (0x%02X) — the premise that OffOnly is unset", fm, onoff.FeatureLighting)
 	}
+}
+
+// TestSirenOnOffToggleFromUnobservedRaisesTheAlarm pins Toggle's direction
+// on a siren nothing was observed for: the stored OnOff starts false, so
+// Toggle raises the alarm through Siren.TurnOn.
+func TestSirenOnOffToggleFromUnobservedRaisesTheAlarm(t *testing.T) {
+	t.Parallel()
+	_, srv, w := matterSiren(t)
+	if _, err := srv.MatterInvoke(context.Background(), onoff.CmdToggle, nil); err != nil {
+		t.Fatalf("Toggle: %v", err)
+	}
+	calls := w.snapshot()
+	if len(calls) != 1 {
+		t.Fatalf("Toggle: %d CCU write(s) %+v, want exactly one", len(calls), calls)
+	}
+	wantSirenWrite(t, calls[0], "FREQUENCY_RISING")
+}
+
+// TestSirenOnOffToggleFromActiveEndsTheAlarm pins the other direction: a
+// siren the CCU confirmed active toggles off through Siren.TurnOff.
+func TestSirenOnOffToggleFromActiveEndsTheAlarm(t *testing.T) {
+	t.Parallel()
+	r, srv, w := matterSiren(t)
+	r.acousticActiveDP.OnEvent(true)
+	if _, err := srv.MatterInvoke(context.Background(), onoff.CmdToggle, nil); err != nil {
+		t.Fatalf("Toggle: %v", err)
+	}
+	calls := w.snapshot()
+	if len(calls) != 1 {
+		t.Fatalf("Toggle: %d CCU write(s) %+v, want exactly one", len(calls), calls)
+	}
+	wantSirenWrite(t, calls[0], acousticDisableLabel)
 }

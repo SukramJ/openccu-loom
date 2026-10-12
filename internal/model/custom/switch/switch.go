@@ -9,7 +9,6 @@ package switchdev
 
 import (
 	"context"
-	"sync/atomic"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -18,11 +17,6 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
-
-// startUpOnOffNull is the sentinel stored in Switch.startUpOnOff when
-// the attribute is null (Matter quality X on StartUpOnOff 0x4003).
-// The uint32 guard value (above 0xFF) cannot be confused with an enum8.
-const startUpOnOffNull uint32 = 0xFFFFFFFF
 
 // Writer is an alias for [custom.Writer] so existing callers of
 // switchdev.Writer keep compiling.
@@ -69,22 +63,9 @@ type Switch struct {
 	// so DataVersionFilter evaluation correctly detects cluster changes.
 	hmtypes.DataVersionTracker
 
-	// LT-feature writable OnOff attributes stored atomically so
-	// MatterRead and MatterWrite race safely without a dedicated mutex.
-	// matter.js OnOffServer.ts:80 (offWaitTime), :102 (onTime), :39 (startUpOnOff).
-	onTime       atomic.Uint32 // uint16 seconds; 0 = none
-	offWaitTime  atomic.Uint32 // uint16 seconds; 0 = none
-	startUpOnOff atomic.Uint32 // startUpOnOffNull = null (default)
-
-	// globalSceneControl mirrors the LT-gated GlobalSceneControl
-	// attribute (0x4000): true after On / OnWithTimedOff /
-	// OnWithRecallGlobalScene, false after OffWithEffect; a plain Off
-	// leaves it unchanged. Defaults to true. matter.js
-	// packages/node/src/behaviors/on-off/OnOffServer.ts:97-104 (on),
-	// :158-169 (offWithEffect). Held directly on Switch (rather than a
-	// separate cluster-server projection) so the value survives
-	// [Switch.MatterClusterServers] reconstruction.
-	globalSceneControl atomic.Bool
+	// matterOnOff holds the OnOff cluster server the Matter projection
+	// serves, built once per switch (matter.go).
+	matterOnOff generic.MatterOnOffHolder
 }
 
 // New constructs a Switch that wraps the channel's existing
@@ -112,8 +93,6 @@ func New(ch *device.Channel, group custom.RebasedChannelGroupConfig) *Switch {
 		Switch:     sw,
 		groupState: custom.NewGroupState(),
 	}
-	s.startUpOnOff.Store(startUpOnOffNull)
-	s.globalSceneControl.Store(true)
 	s.registerSwitchServices()
 	// Bump the OnOff cluster's DataVersion on every CCU-confirmed STATE
 	// transition (Matter §10.6.5: DataVersion MUST monotonically advance
