@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/SukramJ/go-fabric/cluster/levelcontrol"
 	"github.com/SukramJ/go-fabric/cluster/onoff"
 
 	matterparity "github.com/SukramJ/go-fabric/parity"
@@ -71,38 +72,77 @@ func TestParityMatterJS_LightOnOffNoSpuriousOptions(t *testing.T) {
 	}
 }
 
-// TestParityMatterJS_LevelControlMandatoryAttributes asserts lightLevelServer
-// exposes LevelControl.Options (0x000F) and OnLevel (0x0011) per
-// matter.js level-control.element.ts. Both are spec-mandatory and must
-// be served on every dimmable-light endpoint.
-func TestParityMatterJS_LevelControlMandatoryAttributes(t *testing.T) {
+// TestParityMatterJS_LevelControlMatchesMatterJS pins the LevelControl
+// server a dimmable light serves against the matter.js snapshot: the
+// FeatureMap is exactly OO|LT with both bits read from the element's own
+// feature entries, and the attribute and accepted-command lists are the
+// ones that FeatureMap and the served revision make mandatory — every
+// attribute whose conformance is M, LT, or "Rev >= v7, O" at revision >= 7,
+// and every request command whose conformance is M.
+func TestParityMatterJS_LevelControlMatchesMatterJS(t *testing.T) {
 	t.Parallel()
+	var schema struct {
+		Clusters []hmLgtOnOffCluster `json:"clusters"`
+	}
+	if err := json.Unmarshal(matterparity.SchemaJSON(), &schema); err != nil {
+		t.Fatalf("unmarshal matter-schema-snapshot.json: %v", err)
+	}
+	var el hmLgtOnOffCluster
+	found := false
+	for _, c := range schema.Clusters {
+		if c.ID == levelcontrol.ClusterID {
+			el, found = c, true
+		}
+	}
+	if !found {
+		t.Fatal("matter.js snapshot carries no LevelControl cluster (0x0008)")
+	}
+
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
-	var srv lightLevelServer
-	for _, s := range l.MatterClusterServers() {
-		if v, ok := s.(lightLevelServer); ok {
-			srv = v
-			break
+	srv := levelServer(t, l)
+
+	bits := map[string]uint32{}
+	for _, f := range el.Features {
+		bits[f.Name] = f.Bit
+	}
+	oo, haveOO := bits["OO"]
+	lt, haveLT := bits["LT"]
+	if !haveOO || !haveLT {
+		t.Fatalf("matter.js LevelControl element lacks OO or LT: %v", bits)
+	}
+	fm, ok := srv.MatterRead(matterAttrFeatureMap)
+	if want := uint32(1)<<oo | uint32(1)<<lt; !ok || fm != want {
+		t.Fatalf("LevelControl FeatureMap = (%v, %v), want 0x%02X (matter.js OO bit %d | LT bit %d)", fm, ok, want, oo, lt)
+	}
+
+	rev, ok := srv.MatterRead(matterAttrClusterRevision)
+	if !ok || rev != el.Revision {
+		t.Fatalf("LevelControl ClusterRevision = (%v, %v), matter.js says %d", rev, ok, el.Revision)
+	}
+
+	wantAttrs := map[uint32]string{}
+	for _, a := range el.Attributes {
+		switch a.Conformance {
+		case "M", "LT":
+			wantAttrs[a.ID] = a.Name
+		case "Rev >= v7, O":
+			if el.Revision >= 7 {
+				wantAttrs[a.ID] = a.Name
+			}
 		}
 	}
-	attrs := make(map[uint32]bool)
-	for _, id := range srv.MatterAttributes() {
-		attrs[id] = true
+	hmLgtAssertIDSet(t, "light LevelControl MatterAttributes", srv.MatterAttributes(), wantAttrs)
+
+	wantCmds := map[uint32]string{}
+	for _, c := range el.Commands {
+		if c.Direction == "request" && c.Conformance == "M" {
+			wantCmds[c.ID] = c.Name
+		}
 	}
-	for _, m := range []struct {
-		id   uint32
-		name string
-	}{
-		{matterAttrLevelOptions, "Options (0x000F)"},
-		{matterAttrLevelOnLevel, "OnLevel (0x0011)"},
-	} {
-		if !attrs[m.id] {
-			t.Errorf("lightLevelServer MatterAttributes() missing mandatory %s", m.name)
-		}
-		_, ok := srv.MatterRead(m.id)
-		if !ok {
-			t.Errorf("lightLevelServer MatterRead(0x%04X) returned ok=false for %s", m.id, m.name)
-		}
+	hmLgtAssertIDSet(t, "light LevelControl MatterAcceptedCommands", srv.MatterAcceptedCommands(), wantCmds)
+
+	if got := srv.MatterReportable(); len(got) != 1 || got[0] != levelcontrol.AttrCurrentLevel {
+		t.Errorf("light LevelControl MatterReportable = %#x, want [CurrentLevel]", got)
 	}
 }
 
@@ -124,45 +164,6 @@ func TestParityMatterJS_StackOwnedClustersNotSupplied(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-// TestParityMatterJS_LevelControlAcceptedCommands verifies that
-// lightLevelServer enumerates all eight LevelControl commands in
-// MatterAcceptedCommands so AcceptedCommandList (0xFFF9) is populated
-// correctly during commissioning.
-func TestParityMatterJS_LevelControlAcceptedCommands(t *testing.T) {
-	t.Parallel()
-	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
-	var srv lightLevelServer
-	for _, s := range l.MatterClusterServers() {
-		if v, ok := s.(lightLevelServer); ok {
-			srv = v
-			break
-		}
-	}
-	lister, ok := any(srv).(interface{ MatterAcceptedCommands() []uint32 })
-	if !ok {
-		t.Fatal("lightLevelServer does not implement MatterClusterCommandLister")
-	}
-	want := map[uint32]string{
-		0x00: "MoveToLevel",
-		0x01: "Move",
-		0x02: "Step",
-		0x03: "Stop",
-		0x04: "MoveToLevelWithOnOff",
-		0x05: "MoveWithOnOff",
-		0x06: "StepWithOnOff",
-		0x07: "StopWithOnOff",
-	}
-	got := make(map[uint32]bool)
-	for _, id := range lister.MatterAcceptedCommands() {
-		got[id] = true
-	}
-	for id, name := range want {
-		if !got[id] {
-			t.Errorf("LevelControl MatterAcceptedCommands() missing %s (0x%02X)", name, id)
-		}
 	}
 }
 
@@ -199,7 +200,7 @@ func TestParityMatterJS_LightClusterRevisions(t *testing.T) {
 		codeRevision uint16
 	}{
 		{onoff.ClusterID, "OnOff", onOffClusterRevision(t)},
-		{matterClusterLevelControl, "LevelControl", matterLevelControlClusterRevision},
+		{levelcontrol.ClusterID, "LevelControl", levelClusterRevision(t)},
 		// D-50: ColorControl is mounted on dimmable+colored lights via
 		// `matter_color.go::{ctColorServer, hsColorServer, rgbwColorServer}`.
 		// matter.js HEAD `color-control.element.ts` carries revision 9.
@@ -234,6 +235,19 @@ func onOffClusterRevision(t *testing.T) uint16 {
 	rev, isU16 := v.(uint16)
 	if !ok || !isU16 {
 		t.Fatalf("light OnOff ClusterRevision = (%v, %v), want a uint16", v, ok)
+	}
+	return rev
+}
+
+// levelClusterRevision reads ClusterRevision from the LevelControl server
+// a dimmable light actually serves.
+func levelClusterRevision(t *testing.T) uint16 {
+	t.Helper()
+	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
+	v, ok := levelServer(t, l).MatterRead(matterAttrClusterRevision)
+	rev, isU16 := v.(uint16)
+	if !ok || !isU16 {
+		t.Fatalf("light LevelControl ClusterRevision = (%v, %v), want a uint16", v, ok)
 	}
 	return rev
 }

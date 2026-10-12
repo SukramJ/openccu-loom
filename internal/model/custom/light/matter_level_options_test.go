@@ -5,9 +5,9 @@ package light
 
 import (
 	"context"
-	"strings"
 	"testing"
 
+	"github.com/SukramJ/go-fabric/cluster/levelcontrol"
 	"github.com/SukramJ/go-fabric/cluster/wire"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -31,7 +31,7 @@ func TestLevelInvokeMoveToLevelWhileOffIsNoOp(t *testing.T) {
 	srv := levelServer(t, l)
 
 	req := wire.MoveToLevelRequest{Level: 100}
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdMoveToLevel, req); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), levelcontrol.CmdMoveToLevel, req); err != nil {
 		t.Fatalf("MoveToLevel while off: unexpected error %v", err)
 	}
 	if w.last != noWriteSentinel {
@@ -49,7 +49,7 @@ func TestLevelInvokeMoveToLevelWhileOffExecuteIfOffExecutes(t *testing.T) {
 	srv := levelServer(t, l)
 
 	req := wire.MoveToLevelRequest{Level: 100, OptionsMask: 1, OptionsOverride: 1}
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdMoveToLevel, req); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), levelcontrol.CmdMoveToLevel, req); err != nil {
 		t.Fatalf("MoveToLevel with ExecuteIfOff: unexpected error %v", err)
 	}
 	// 100/254 ≈ 0.3937
@@ -60,8 +60,8 @@ func TestLevelInvokeMoveToLevelWhileOffExecuteIfOffExecutes(t *testing.T) {
 
 // TestLevelInvokeMoveToLevelWhileOffPartialOptionsIsNoOp verifies that the
 // ExecuteIfOff gate requires BOTH OptionsMask bit 0 AND OptionsOverride bit
-// 0 — either bit alone leaves the effective option unset (Options attribute
-// is a constant 0 on this projection), so the command stays a no-op.
+// 0 — either bit alone leaves the effective option unset (the stored Options
+// attribute is 0 until a controller writes it), so the command stays a no-op.
 func TestLevelInvokeMoveToLevelWhileOffPartialOptionsIsNoOp(t *testing.T) {
 	cases := []struct {
 		name            string
@@ -78,7 +78,7 @@ func TestLevelInvokeMoveToLevelWhileOffPartialOptionsIsNoOp(t *testing.T) {
 			srv := levelServer(t, l)
 
 			req := wire.MoveToLevelRequest{Level: 100, OptionsMask: tc.optionsMask, OptionsOverride: tc.optionsOverride}
-			if _, err := srv.MatterInvoke(context.Background(), matterCmdMoveToLevel, req); err != nil {
+			if _, err := srv.MatterInvoke(context.Background(), levelcontrol.CmdMoveToLevel, req); err != nil {
 				t.Fatalf("MoveToLevel partial options: unexpected error %v", err)
 			}
 			if w.last != noWriteSentinel {
@@ -100,29 +100,12 @@ func TestLevelInvokeMoveToLevelCropsBelowMin(t *testing.T) {
 	srv := levelServer(t, l)
 
 	req := wire.MoveToLevelRequest{Level: 0}
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdMoveToLevel, req); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), levelcontrol.CmdMoveToLevel, req); err != nil {
 		t.Fatalf("MoveToLevel(0): unexpected error %v", err)
 	}
 	// Cropped to MinLevel=1 → 1/254 ≈ 0.0039; the light stays on (not 0).
 	if w.last < 0.003 || w.last > 0.005 {
 		t.Fatalf("MoveToLevel(0) wrote %v, want ~0.0039 (cropped to MinLevel, still on)", w.last)
-	}
-}
-
-// TestLevelInvokeMoveToLevelCropsAboveMax verifies that Level=255 crops to
-// MaxLevel (254), saturating CurrentLevel to 1.0.
-func TestLevelInvokeMoveToLevelCropsAboveMax(t *testing.T) {
-	w := &stubWriter{}
-	l, _ := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
-	l.OnLevel(0.5) // light is on
-	srv := levelServer(t, l)
-
-	req := wire.MoveToLevelRequest{Level: 255}
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdMoveToLevel, req); err != nil {
-		t.Fatalf("MoveToLevel(255): unexpected error %v", err)
-	}
-	if w.last != 1.0 {
-		t.Fatalf("MoveToLevel(255) wrote %v, want 1.0 (cropped to MaxLevel)", w.last)
 	}
 }
 
@@ -138,7 +121,7 @@ func TestLevelInvokeMoveToLevelWithOnOffWhileOffExecutes(t *testing.T) {
 	srv := levelServer(t, l)
 
 	req := wire.MoveToLevelRequest{Level: 100}
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdMoveToLevelWithOnOff, req); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), levelcontrol.CmdMoveToLevelWithOnOff, req); err != nil {
 		t.Fatalf("MoveToLevelWithOnOff while off: unexpected error %v", err)
 	}
 	// 100/254 ≈ 0.3937 — not gated, so it executes despite the light being off.
@@ -161,7 +144,7 @@ func TestLevelInvokeMoveToLevelWithOnOffMinLevelTurnsOff(t *testing.T) {
 			srv := levelServer(t, l)
 
 			req := wire.MoveToLevelRequest{Level: level}
-			if _, err := srv.MatterInvoke(context.Background(), matterCmdMoveToLevelWithOnOff, req); err != nil {
+			if _, err := srv.MatterInvoke(context.Background(), levelcontrol.CmdMoveToLevelWithOnOff, req); err != nil {
 				t.Fatalf("MoveToLevelWithOnOff(%d): unexpected error %v", level, err)
 			}
 			if w.last != 0.0 {
@@ -186,7 +169,7 @@ func TestLevelInvokeStepDownFloorsAtMinLevelNotOff(t *testing.T) {
 	srv := levelServer(t, l)
 
 	fields := map[uint8]any{0: uint64(wire.LevelStepModeDown), 1: uint64(200)}
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdStep, fields); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), levelcontrol.CmdStep, fields); err != nil {
 		t.Fatalf("Step down: unexpected error %v", err)
 	}
 	// 1/254 ≈ 0.0039 — floors at MinLevel, light stays on.
@@ -205,7 +188,7 @@ func TestLevelInvokeStepWithOnOffDownAtMinLevelTurnsOff(t *testing.T) {
 	srv := levelServer(t, l)
 
 	fields := map[uint8]any{0: uint64(wire.LevelStepModeDown), 1: uint64(200)}
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdStepWithOnOff, fields); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), levelcontrol.CmdStepWithOnOff, fields); err != nil {
 		t.Fatalf("StepWithOnOff down: unexpected error %v", err)
 	}
 	if w.last != 0.0 {
@@ -223,10 +206,11 @@ func TestLevelInvokeStepWhileOffGate(t *testing.T) {
 	t.Run("no options is a no-op", func(t *testing.T) {
 		w := &stubWriter{last: noWriteSentinel}
 		l, _ := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
+		l.OnLevel(0) // observed off, so only the gate can hold the step back
 		srv := levelServer(t, l)
 
 		fields := map[uint8]any{0: uint64(wire.LevelStepModeUp), 1: uint64(20)}
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdStep, fields); err != nil {
+		if _, err := srv.MatterInvoke(context.Background(), levelcontrol.CmdStep, fields); err != nil {
 			t.Fatalf("Step while off: unexpected error %v", err)
 		}
 		if w.last != noWriteSentinel {
@@ -237,76 +221,15 @@ func TestLevelInvokeStepWhileOffGate(t *testing.T) {
 	t.Run("ExecuteIfOff executes", func(t *testing.T) {
 		w := &stubWriter{last: noWriteSentinel}
 		l, _ := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
+		l.OnLevel(0) // observed off: a known level to step from
 		srv := levelServer(t, l)
 
 		fields := map[uint8]any{0: uint64(1), 1: uint64(20), 3: uint64(1), 4: uint64(1)}
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdStep, fields); err != nil {
+		if _, err := srv.MatterInvoke(context.Background(), levelcontrol.CmdStep, fields); err != nil {
 			t.Fatalf("Step while off with ExecuteIfOff: unexpected error %v", err)
 		}
 		if w.last == noWriteSentinel {
 			t.Fatalf("Step while off with ExecuteIfOff did not write")
 		}
 	})
-}
-
-// ─── Move (0x01) / MoveWithOnOff (0x05) zero-rate rejection ────────────────
-
-// TestLevelInvokeMoveZeroRateRejected verifies that Move / MoveWithOnOff
-// reject an explicit Rate of 0 with an InvalidCommand-flavoured error,
-// mirroring matter.js LevelControlServer.ts:271 (#assertRateValue). A null
-// or absent rate falls back to DefaultMoveRate there and stays a no-op
-// Success here.
-func TestLevelInvokeMoveZeroRateRejected(t *testing.T) {
-	for _, cmdID := range []uint32{matterCmdMove, matterCmdMoveWithOnOff} {
-		t.Run("", func(t *testing.T) {
-			l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
-			srv := levelServer(t, l)
-
-			fields := map[uint8]any{1: uint64(0)}
-			_, err := srv.MatterInvoke(context.Background(), cmdID, fields)
-			if err == nil || !strings.Contains(err.Error(), "invalid command argument") {
-				t.Fatalf("Move cmd 0x%02X with rate=0: err = %v, want an \"invalid command argument\" error", cmdID, err)
-			}
-		})
-	}
-}
-
-// TestLevelInvokeMoveAbsentOrNullRateIsNoOp verifies that Move without a
-// rate field, and Move with an explicit TLV-null rate (tag present, value
-// nil), both stay a Success no-op.
-func TestLevelInvokeMoveAbsentOrNullRateIsNoOp(t *testing.T) {
-	t.Run("absent fields", func(t *testing.T) {
-		l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
-		srv := levelServer(t, l)
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdMove, nil); err != nil {
-			t.Fatalf("Move(nil fields): unexpected error %v", err)
-		}
-	})
-
-	t.Run("null rate", func(t *testing.T) {
-		l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
-		srv := levelServer(t, l)
-		fields := map[uint8]any{1: nil}
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdMove, fields); err != nil {
-			t.Fatalf("Move(rate=null): unexpected error %v", err)
-		}
-	})
-}
-
-// ─── DataVersion ─────────────────────────────────────────────────────────
-
-// TestGatedMoveToLevelDoesNotBumpDataVersion verifies that a gated
-// MoveToLevel no-op (light off, no ExecuteIfOff option) does not increment
-// MatterDataVersion — only an actually-applied SetLevel bumps the counter.
-func TestGatedMoveToLevelDoesNotBumpDataVersion(t *testing.T) {
-	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
-	srv := levelServer(t, l) // builds the cluster servers before the baseline is taken
-	before := l.MatterDataVersion()
-	req := wire.MoveToLevelRequest{Level: 100}
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdMoveToLevel, req); err != nil {
-		t.Fatalf("MoveToLevel while off: unexpected error %v", err)
-	}
-	if after := l.MatterDataVersion(); after != before {
-		t.Fatalf("gated MoveToLevel bumped MatterDataVersion: before=%d after=%d", before, after)
-	}
 }

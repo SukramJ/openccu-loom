@@ -6,13 +6,8 @@ package light
 import (
 	"context"
 	"errors"
-	"fmt"
-	"time"
 
 	"github.com/SukramJ/go-fabric/cluster/onoff"
-	levelcontrolspec "github.com/SukramJ/go-fabric/cluster/spec/levelcontrol"
-
-	"github.com/SukramJ/go-fabric/cluster/wire"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -65,15 +60,11 @@ const (
 	matterDeviceTypeOnOffLight    uint16 = 0x0100
 	matterDeviceTypeDimmableLight uint16 = 0x0101
 
-	matterClusterLevelControl uint32 = 0x0008
-
 	// Groups cluster (0x0004) and ScenesManagement (0x0062) are
 	// mandatory on OnOffLight + DimmableLight (matter.js
 	// packages/node/src/devices/on-off-light.ts). Light does not supply
 	// them: the endpoint assembler mounts both from the node's group
 	// state (go-fabric endpoint/materialize.go mountGroups / mountScenes).
-
-	matterAttrLevelCurrent uint32 = 0x0000
 
 	// LT (Lighting) feature-gated OnOff attributes. OnOffLight (0x0100)
 	// and DimmableLight (0x0101) mandate the LT feature on the OnOff
@@ -90,28 +81,19 @@ const (
 	// matter.js packages/model/src/standard/elements/level-control.element.ts:33,67:
 	//   RemainingTime       0x0001 uint16 conformance "LT" access "R V"  quality "Q"
 	//   StartUpCurrentLevel 0x4000 uint8  conformance "LT" access "RW VM" quality "X N"
-	matterAttrLevelRemainingTime uint32 = 0x0001
-	matterAttrLevelStartUpLevel  uint32 = 0x4000
 
 	// LT (Lighting) FeatureMap bits. On the OnOff cluster LT sits at
 	// constraint "0" → bit 0 (0x01); matter.js on-off.element.ts:24. On
 	// LevelControl LT sits at constraint "1" → bit 1 (0x02) and OO at
 	// constraint "0" → bit 0 (0x01); level-control.element.ts:24-25.
-	matterFeatureLevelOO      uint32 = 0x01 // OnOff feature, constraint "0", default 1
-	matterFeatureLevelLT      uint32 = 0x02 // Lighting feature, constraint "1"
-	matterFeatureLevelControl uint32 = matterFeatureLevelOO | matterFeatureLevelLT
 	// LevelControl.Options (0x000F) is mandatory per matter.js
 	// packages/model/src/standard/elements/level-control.element.ts:65
 	// (conformance "M"). LevelControl.OnLevel (0x0011) is mandatory —
 	// nullable uint8, null = return to previous level on transition to ON.
-	matterAttrLevelOptions uint32 = 0x000F // mandatory — bitmap8
-	matterAttrLevelOnLevel uint32 = 0x0011 // mandatory — nullable uint8, null = previous
 	// MinLevel (0x0002) and MaxLevel (0x0003) are optional attributes
 	// added in LevelControl cluster revision v7 (Matter 1.5). Default
 	// values: MinLevel=0x01, MaxLevel=0xFE (matching the Matter-safe
 	// 1–254 range; 0xFF is the TLV null sentinel and is excluded).
-	matterAttrLevelMin uint32 = 0x0002
-	matterAttrLevelMax uint32 = 0x0003
 
 	// matterLevelMinDefault is the Matter-defined default for MinLevel
 	// (LevelControl cluster rev 7). MaxLevel shares its default with matterLevelMax.
@@ -127,20 +109,10 @@ const (
 	// On and Toggle "!OFFONLY", and the three 0x4x commands "LT": all six
 	// are mandatory for the FeatureMap this projection advertises.
 
-	matterCmdMoveToLevel          uint32 = 0x00
-	matterCmdMove                 uint32 = 0x01
-	matterCmdStep                 uint32 = 0x02
-	matterCmdStop                 uint32 = 0x03
-	matterCmdMoveToLevelWithOnOff uint32 = 0x04
-	matterCmdMoveWithOnOff        uint32 = 0x05
-	matterCmdStepWithOnOff        uint32 = 0x06
-	matterCmdStopWithOnOff        uint32 = 0x07
-
 	// matterLevelControlClusterRevision pinned to matter.js HEAD
 	// (@matter/model 0.16.11). Matter 1.5 bumped the revision from 6 to 7
 	// with additional level-control refinements (OnTransitionTime /
 	// OffTransitionTime were in 1.4 at rev 6; rev 7 is the 1.5 update).
-	matterLevelControlClusterRevision uint16 = 7
 
 	// matterLevelMax is the maximum CurrentLevel value Matter
 	// LevelControl carries. Matter reserves 0xFF (255) as the null
@@ -177,7 +149,7 @@ func (l *Light) MatterClusterServers() []interfaces.MatterClusterServer {
 	if l.Capabilities.Dimmable {
 		return []interfaces.MatterClusterServer{
 			l.matterOnOffServer(),
-			lightLevelServer{l: l},
+			l.matterLevelServer(),
 		}
 	}
 	return []interfaces.MatterClusterServer{
@@ -254,506 +226,6 @@ func matterLevelToHM(m uint8) float64 {
 		return 1.0
 	}
 	return float64(m) / float64(matterLevelMax)
-}
-
-// lightLevelServer projects [Light] onto the Matter LevelControl
-// cluster (0x0008). Only emitted for dimmable lights.
-//
-// A positive MoveToLevel / MoveToLevelWithOnOff TransitionTime maps to
-// HM's RAMP_TIME parameter via [Light.TurnOnWith] /
-// [Light.TurnOffWithRamp] on devices that accept RAMP_TIME
-// ([custom.LightCapabilities.Transition]); a null or zero transition
-// time keeps the instant SetLevel path — matter.js
-// LevelControlServer.ts:297-303 (moveToLevelLogic) only derives a rate
-// from a truthy transition time, and transition()'s changePerS contract
-// (LevelControlServer.ts:459) reads "0 or nullish means transition
-// instantly".
-// The non-WithOnOff command variants are gated on the effective
-// ExecuteIfOff option while the device is off (matter.js
-// LevelControlServer.ts:596 #optionsAllowExecution); the WithOnOff
-// variants couple a MinLevel target to Off (LevelControlServer.ts:500).
-// HM dimmers carry a single LEVEL knob (LEVEL=0 implicitly off,
-// LEVEL>0 on), so both couplings collapse onto SetLevel — an
-// ExecuteIfOff level change while off still powers the device on,
-// which is the closest single-knob projection of the Matter state pair.
-type lightLevelServer struct{ l *Light }
-
-func (s lightLevelServer) MatterClusterID() uint32 { return matterClusterLevelControl }
-
-func (s lightLevelServer) MatterRead(attrID uint32) (any, bool) {
-	switch attrID {
-	case matterAttrLevelCurrent:
-		// Value temporarily unavailable — return (nil, true); see lightOnOffServer.MatterRead.
-		b, observed := s.l.Brightness()
-		if !observed {
-			return nil, true
-		}
-		return brightnessToMatter(b), true
-	case matterAttrLevelMin:
-		// MinLevel optional uint8: the minimum value the CurrentLevel
-		// attribute may be set to. Default 0x01 per Matter 1.5
-		// LevelControl cluster rev 7.
-		return matterLevelMinDefault, true
-	case matterAttrLevelMax:
-		// MaxLevel optional uint8: the maximum value the CurrentLevel
-		// attribute may be set to. Default 0xFE — 0xFF is the TLV
-		// null sentinel and is excluded from the usable range.
-		return matterLevelMax, true
-	case matterAttrLevelOptions:
-		// Options bitmap8: 0 = execute command unconditionally.
-		// matter.js level-control.element.ts Options attribute.
-		return uint8(0), true
-	case matterAttrLevelOnLevel:
-		// OnLevel nullable uint8: null = return to previous level on
-		// transition to ON. matter.js level-control.element.ts OnLevel.
-		// 0xFF is the TLV null sentinel for nullable uint8.
-		return nil, true
-	case matterAttrLevelRemainingTime:
-		// RemainingTime (uint16, conformance LT): time left in the current
-		// transition, in 1/10 s. Transitions are delegated to the device's
-		// native RAMP_TIME handling and the CCU does not report ramp
-		// progress, so the bridge never tracks an in-flight transition → 0.
-		// matter.js level-control.element.ts:33.
-		return uint16(0), true
-	case matterAttrLevelStartUpLevel:
-		// StartUpCurrentLevel (uint8, conformance LT, quality "X N"):
-		// nullable; null = "keep the current level on startup". matter.js
-		// level-control.element.ts:67 declares no default, so null is the
-		// safe value. (nil, true) encodes the TLV null.
-		return nil, true
-	case matterAttrFeatureMap:
-		// OO (bit 0, constraint "0") | LT (bit 1, constraint "1").
-		// DimmableLight (0x0101) mandates LT on LevelControl.
-		// matter.js level-control.element.ts:24-25.
-		return matterFeatureLevelControl, true
-	case matterAttrClusterRevision:
-		return matterLevelControlClusterRevision, true
-	default:
-		return nil, false
-	}
-}
-
-func (s lightLevelServer) MatterWrite(ctx context.Context, attrID uint32, value any) error {
-	if attrID != matterAttrLevelCurrent {
-		return fmt.Errorf("%w: 0x%04X", errMatterUnknownAttribute, attrID)
-	}
-	b, ok := value.(uint8)
-	if !ok {
-		return fmt.Errorf("%w: CurrentLevel write expected uint8, got %T", errMatterValueType, value)
-	}
-	if err := s.l.SetLevel(ctx, matterLevelToHM(b), matterDispatchPriority); err != nil {
-		return err
-	}
-	s.l.dataVersion.Bump()
-	return nil
-}
-
-func (s lightLevelServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any) (any, error) {
-	switch cmdID {
-	case matterCmdMoveToLevel, matterCmdMoveToLevelWithOnOff:
-		req, err := extractMoveToLevel(fields)
-		if err != nil {
-			return nil, err
-		}
-		withOnOff := cmdID == matterCmdMoveToLevelWithOnOff
-		if !withOnOff && !s.levelOptionsAllowExecution(req.OptionsMask, req.OptionsOverride) {
-			// matter.js LevelControlServer.ts:245 returns without acting
-			// when the effective options forbid execution while the device
-			// is off — a silent Success, not an error status.
-			return nil, nil
-		}
-		level := cropMatterLevel(req.Level)
-		target := matterLevelToHM(level)
-		if withOnOff && level == matterLevelMinDefault {
-			// The WithOnOff variant couples MinLevel to Off: matter.js
-			// LevelControlServer.ts:500 (couple) and chip
-			// LevelControlCluster.cpp:344 flip the OnOff state off when
-			// the target level equals minLevel (Matter §1.6.4.1.2).
-			// HM dimmers carry a single LEVEL knob, so "CurrentLevel=min +
-			// OnOff=false" projects to LEVEL=0.
-			target = 0
-		}
-		if ramp, ramped := transitionRampDuration(req.TransitionTime); ramped && s.l.Capabilities.Transition {
-			// A positive transition time becomes the device-side ramp:
-			// matter.js LevelControlServer.ts:297-303 (moveToLevelLogic)
-			// turns it into a rate towards the target level; HM dimmers
-			// ramp natively when RAMP_TIME accompanies LEVEL in one
-			// atomic put_paramset, so the bridge delegates the whole
-			// transition to the device. Devices without RAMP_TIME
-			// (Capabilities.Transition unset) keep the instant path.
-			if err := s.setLevelRamped(ctx, target, ramp, matterDispatchPriority); err != nil {
-				return nil, err
-			}
-			s.syncOnOff(withOnOff, target)
-			s.l.dataVersion.Bump()
-			return nil, nil
-		}
-		if err := s.l.SetLevel(ctx, target, matterDispatchPriority); err != nil {
-			return nil, err
-		}
-		s.syncOnOff(withOnOff, target)
-		s.l.dataVersion.Bump()
-		return nil, nil
-
-	case matterCmdMove, matterCmdMoveWithOnOff:
-		// A zero rate is rejected before anything else, mirroring
-		// matter.js LevelControlServer.ts:271 (#assertRateValue →
-		// StatusResponseError InvalidCommand); a null/absent rate would
-		// fall back to DefaultMoveRate there and is accepted here.
-		// HM has no continuous-rate dimming; a valid Move is a no-op
-		// that returns Success so conformance checkers accept the
-		// command. A future implementation could map Rate to RAMP_TIME
-		// on devices that expose it.
-		if rate, ok := extractMoveRate(fields); ok && rate == 0 {
-			return nil, errors.New("matter: Move: invalid command argument: rate must not be 0")
-		}
-		return nil, nil
-
-	case matterCmdStep, matterCmdStepWithOnOff:
-		// Apply a discrete brightness step. StepSize is in the same
-		// 1–254 range as CurrentLevel; the target is clamped to
-		// [MinLevel, MaxLevel] = [1, 254], mirroring matter.js
-		// Transitions.ts:139 (min/max property clamp) — a plain Step
-		// can therefore never turn the device off.
-		stepSize, err := extractStepSize(fields)
-		if err != nil {
-			return nil, err
-		}
-		stepMode, err := extractStepMode(fields)
-		if err != nil {
-			return nil, err
-		}
-		if cmdID == matterCmdStep {
-			// Fields decode first, gate second — matter.js validates the
-			// payload before the options check reaches the handler.
-			mask, override := extractLevelOptions(fields)
-			if !s.levelOptionsAllowExecution(mask, override) {
-				// Silent Success while off; LevelControlServer.ts:387.
-				return nil, nil
-			}
-		}
-		b, _ := s.l.Brightness()
-		current := brightnessToMatter(b)
-		var next uint8
-		if stepMode == wire.LevelStepModeDown {
-			diff := int(current) - int(stepSize)
-			if diff < int(matterLevelMinDefault) {
-				next = matterLevelMinDefault
-			} else {
-				next = uint8(diff) //nolint:gosec // clamped above; see #20
-			}
-		} else {
-			sum := int(current) + int(stepSize)
-			if sum > int(matterLevelMax) {
-				next = matterLevelMax
-			} else {
-				next = uint8(sum) //nolint:gosec // clamped above; see #20
-			}
-		}
-		target := matterLevelToHM(next)
-		if cmdID == matterCmdStepWithOnOff && next == matterLevelMinDefault {
-			// StepWithOnOff clamped to MinLevel turns the device off
-			// (Matter §1.6.7.6: new CurrentLevel == minimum → OnOff
-			// FALSE). Mirrors chip LevelControlCluster.cpp:508, which
-			// compares the post-clamp target; matter.js couple()
-			// compares the pre-clamp target and would stay on — chip +
-			// spec win here. Single-LEVEL-knob projection: LEVEL=0.
-			target = 0
-		}
-		if err := s.l.SetLevel(ctx, target, matterDispatchPriority); err != nil {
-			return nil, err
-		}
-		s.syncOnOff(cmdID == matterCmdStepWithOnOff, target)
-		s.l.dataVersion.Bump()
-		return nil, nil
-
-	case matterCmdStop, matterCmdStopWithOnOff:
-		// There is no in-flight ramp to stop on HM; return Success
-		// so the chip-tool conformance check passes.
-		return nil, nil
-
-	default:
-		return nil, fmt.Errorf("%w: 0x%02X", errMatterUnknownCommand, cmdID)
-	}
-}
-
-// syncOnOff mirrors a "with On/Off" level command onto the OnOff
-// attribute the moment the CCU accepted the level write, as matter.js's
-// LevelControlServer couples the two clusters (LevelControlServer.ts, the
-// WithOnOff commands): a MoveToLevelWithOnOff to MinLevel turns the
-// light off, one above it turns it on. It stores through
-// [onoff.Server.Set] — the host's own change — so the OnOff Sink is not
-// asked for a second CCU write; the LEVEL confirmation corrects the value
-// if the device answered otherwise.
-func (s lightLevelServer) syncOnOff(withOnOff bool, target float64) {
-	if !withOnOff {
-		return
-	}
-	s.l.matterOnOffServer().Set(target > 0)
-}
-
-func (s lightLevelServer) MatterReportable() []uint32 {
-	return []uint32{matterAttrLevelCurrent}
-}
-
-// MatterAttributes lists every LevelControl (0x0008) attribute the
-// server implements via MatterRead. Apple Home's HAP service rebuild
-// reads the full attribute set; without this the dispatcher falls back
-// to MatterReportable's single attribute.
-func (s lightLevelServer) MatterAttributes() []uint32 {
-	return []uint32{
-		matterAttrLevelCurrent,
-		matterAttrLevelRemainingTime,
-		matterAttrLevelMin,
-		matterAttrLevelMax,
-		matterAttrLevelOptions,
-		matterAttrLevelOnLevel,
-		matterAttrLevelStartUpLevel,
-	}
-}
-
-// MatterAcceptedCommands implements [interfaces.MatterClusterCommandLister]
-// for the LevelControl cluster (0x0008). All eight commands are enumerated
-// so AcceptedCommandList is populated correctly; chip-tool and Apple Home
-// both read this list during commissioning.
-func (s lightLevelServer) MatterAcceptedCommands() []uint32 {
-	return []uint32{
-		matterCmdMoveToLevel,
-		matterCmdMove,
-		matterCmdStep,
-		matterCmdStop,
-		matterCmdMoveToLevelWithOnOff,
-		matterCmdMoveWithOnOff,
-		matterCmdStepWithOnOff,
-		matterCmdStopWithOnOff,
-	}
-}
-
-// MatterGeneratedCommands implements [interfaces.MatterClusterCommandLister]
-// for the LevelControl cluster (0x0008). LevelControl commands have no
-// response payload.
-func (s lightLevelServer) MatterGeneratedCommands() []uint32 {
-	return nil
-}
-
-// levelOptionsAllowExecution mirrors matter.js LevelControlServer.ts:581
-// (#calculateEffectiveOptions) + :596 (#optionsAllowExecution) for the
-// non-WithOnOff command variants: while the device is off, the command
-// only executes when the effective ExecuteIfOff option (bit 0) is set.
-// The Options attribute is a constant 0 on this projection, so the
-// effective option reduces to "mask bit set AND override bit set". An
-// unobserved OnOff data point counts as off, consistent with
-// lightOnOffServer.MatterRead's FALSE default.
-func (s lightLevelServer) levelOptionsAllowExecution(optionsMask, optionsOverride uint8) bool {
-	const executeIfOffBit = 0x01
-	if optionsMask&executeIfOffBit != 0 && optionsOverride&executeIfOffBit != 0 {
-		return true
-	}
-	on, _ := s.l.IsOn()
-	return on
-}
-
-// cropMatterLevel crops a requested level into [MinLevel, MaxLevel] =
-// [1, 254]. Mirrors matter.js LevelControlServer.ts:249
-// cropValueRange(level, this.minLevel, this.maxLevel) with the LT
-// feature's minLevel=1 / maxLevel=254 defaults (LevelControlServer.ts:64-70).
-func cropMatterLevel(level uint8) uint8 {
-	if level < matterLevelMinDefault {
-		return matterLevelMinDefault
-	}
-	if level > matterLevelMax {
-		return matterLevelMax
-	}
-	return level
-}
-
-// transitionRampDuration converts a decoded MoveToLevel TransitionTime
-// (nullable uint16, tenths of a second per Matter §1.6.7.1) into the
-// RAMP_TIME duration handed to the CCU. Null/absent and 0 both report
-// ramped=false so the caller keeps the instant SetLevel path: matter.js
-// LevelControlServer.ts:297-303 (moveToLevelLogic) only computes an
-// effectiveRate for a truthy transition time, and transition()'s
-// changePerS contract (LevelControlServer.ts:459) documents "0 or
-// nullish means transition instantly".
-func transitionRampDuration(tenths *uint16) (ramp time.Duration, ramped bool) {
-	if tenths == nil || *tenths == 0 {
-		return 0, false
-	}
-	return time.Duration(*tenths) * 100 * time.Millisecond, true
-}
-
-// setLevelRamped drives LEVEL to target over the given ramp duration.
-// The off direction (target 0, only reachable via the WithOnOff
-// MinLevel coupling) goes through [Light.TurnOffWithRamp]; every other
-// target goes through [Light.TurnOnWith] — both bundle
-// {LEVEL, RAMP_TIME, ON_TIME=TimerNotUsed} into one atomic put_paramset so
-// the device performs the transition natively.
-func (s lightLevelServer) setLevelRamped(ctx context.Context, target float64, ramp time.Duration, priority hmenum.CommandPriority) error {
-	if target == 0 {
-		return s.l.TurnOffWithRamp(ctx, ramp, priority)
-	}
-	return s.l.TurnOnWith(ctx, OnConfig{Brightness: &target, RampTime: &ramp}, priority)
-}
-
-// extractMoveToLevel pulls the MoveToLevel / MoveToLevelWithOnOff
-// request out of the bridge-decoded fields. The wire path delivers the
-// typed [wire.MoveToLevelRequest]; a bare uint8 and the map carrying a
-// "level" key are legacy shapes kept for in-package callers (both
-// carry no Options, so the ExecuteIfOff gate sees an all-zero bitmap).
-func extractMoveToLevel(fields any) (wire.MoveToLevelRequest, error) {
-	switch v := fields.(type) {
-	case wire.MoveToLevelRequest:
-		return v, nil
-	case uint8:
-		return wire.MoveToLevelRequest{Level: v}, nil
-	case map[string]any:
-		raw, ok := v["level"]
-		if !ok {
-			return wire.MoveToLevelRequest{}, fmt.Errorf("%w: MoveToLevel missing level field", errMatterValueType)
-		}
-		level, ok := raw.(uint8)
-		if !ok {
-			return wire.MoveToLevelRequest{}, fmt.Errorf("%w: MoveToLevel level expected uint8, got %T", errMatterValueType, raw)
-		}
-		return wire.MoveToLevelRequest{Level: level}, nil
-	default:
-		return wire.MoveToLevelRequest{}, fmt.Errorf("%w: MoveToLevel expected wire.MoveToLevelRequest, uint8 or map[string]any, got %T", errMatterValueType, fields)
-	}
-}
-
-// extractMoveRate pulls the nullable Rate field (context tag 1) out of
-// a Move / MoveWithOnOff payload. Returns ok=false when the field is
-// absent or null — matter.js substitutes DefaultMoveRate then
-// (LevelControlServer.ts:274). The wire path lands here as
-// decodeGenericTagMap's map[uint8]any: the bridge decodes Move ahead of
-// the generated LevelControl definition (go-fabric
-// bridge/fields_reader.go, the LevelControl case). The generated
-// [levelcontrolspec.MoveRequest] is accepted too, so the decode holds if
-// that ordering changes; the string-keyed shape serves in-package tests.
-func extractMoveRate(fields any) (uint8, bool) {
-	switch v := fields.(type) {
-	case levelcontrolspec.MoveRequest:
-		if v.Rate.Null {
-			return 0, false
-		}
-		return v.Rate.Value, true
-	case map[uint8]any:
-		raw, ok := v[1]
-		if !ok || raw == nil {
-			return 0, false
-		}
-		return wireUint8(raw)
-	case map[string]any:
-		raw, ok := v["rate"]
-		if !ok || raw == nil {
-			return 0, false
-		}
-		r, ok := raw.(uint8)
-		return r, ok
-	default:
-		return 0, false
-	}
-}
-
-// extractLevelOptions pulls the OptionsMask / OptionsOverride bitmaps
-// (context tags 3 / 4 per Matter §1.6.7.3) out of a Step payload.
-// Absent fields default to 0, matching the spec default. The wire path
-// lands here as decodeGenericTagMap's map[uint8]any; the generated
-// [levelcontrolspec.StepRequest] is accepted as well (see
-// [extractMoveRate]); the string-keyed shape serves in-package tests.
-func extractLevelOptions(fields any) (mask, override uint8) {
-	switch v := fields.(type) {
-	case levelcontrolspec.StepRequest:
-		return uint8(v.OptionsMask), uint8(v.OptionsOverride)
-	case map[uint8]any:
-		if raw, ok := v[3]; ok {
-			if m, mok := wireUint8(raw); mok {
-				mask = m
-			}
-		}
-		if raw, ok := v[4]; ok {
-			if o, ook := wireUint8(raw); ook {
-				override = o
-			}
-		}
-	case map[string]any:
-		if raw, ok := v["options_mask"].(uint8); ok {
-			mask = raw
-		}
-		if raw, ok := v["options_override"].(uint8); ok {
-			override = raw
-		}
-	}
-	return mask, override
-}
-
-// extractStepSize pulls the StepSize field (context tag 1) out of a
-// Step / StepWithOnOff payload. Step has no typed decoder in the bridge,
-// so the real wire path lands here as the tag-keyed map[uint8]any that
-// decodeGenericTagMap produces (unsigned ints as uint64) — see
-// go-fabric bridge/fields_reader.go. The generated
-// [levelcontrolspec.StepRequest] is accepted as well (see
-// [extractMoveRate]); the string-keyed shape is kept for the in-package
-// tests.
-func extractStepSize(fields any) (uint8, error) {
-	switch v := fields.(type) {
-	case levelcontrolspec.StepRequest:
-		return v.StepSize, nil
-	case map[uint8]any:
-		raw, ok := v[1]
-		if !ok {
-			return 0, fmt.Errorf("%w: Step missing step_size field (tag 1)", errMatterValueType)
-		}
-		s, ok := wireUint8(raw)
-		if !ok {
-			return 0, fmt.Errorf("%w: Step step_size expected integer, got %T", errMatterValueType, raw)
-		}
-		return s, nil
-	case map[string]any:
-		raw, ok := v["step_size"]
-		if !ok {
-			return 0, fmt.Errorf("%w: Step missing step_size field", errMatterValueType)
-		}
-		s, ok := raw.(uint8)
-		if !ok {
-			return 0, fmt.Errorf("%w: Step step_size expected uint8, got %T", errMatterValueType, raw)
-		}
-		return s, nil
-	default:
-		return 0, fmt.Errorf("%w: Step expected levelcontrol.StepRequest or map[uint8]any, got %T", errMatterValueType, fields)
-	}
-}
-
-// extractStepMode pulls the StepMode field (context tag 0) out of a
-// Step / StepWithOnOff payload. Returns [wire.LevelStepModeUp] (0) when
-// absent, matching the pre-decoded default.
-func extractStepMode(fields any) (uint8, error) {
-	switch m := fields.(type) {
-	case levelcontrolspec.StepRequest:
-		return uint8(m.StepMode), nil
-	case map[uint8]any:
-		raw, ok := m[0]
-		if !ok {
-			return wire.LevelStepModeUp, nil
-		}
-		mode, ok := wireUint8(raw)
-		if !ok {
-			return 0, fmt.Errorf("%w: Step step_mode expected integer, got %T", errMatterValueType, raw)
-		}
-		return mode, nil
-	case map[string]any:
-		raw, ok := m["step_mode"]
-		if !ok {
-			return wire.LevelStepModeUp, nil
-		}
-		mode, ok := raw.(uint8)
-		if !ok {
-			return 0, fmt.Errorf("%w: Step step_mode expected uint8, got %T", errMatterValueType, raw)
-		}
-		return mode, nil
-	default:
-		return wire.LevelStepModeUp, nil
-	}
 }
 
 // wireUint8 reads an unsigned integer out of a value decoded from the

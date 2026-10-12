@@ -1237,6 +1237,59 @@ conformance guard carries the finding as a declared entry.
 for the device types whose composition mandates it, in its own change with
 the re-learn named in the changelog; decided per type, not for the fleet.
 
+### BD-Matter-LevelControl-NativeRamp — the light's LevelControl runs on go-fabric's hand-off path, the dimmer ramps itself
+
+**Where:** `internal/model/custom/light/matter_level.go` (`lightLevelSource`,
+the host port of `levelcontrol.Server`; `Light.matterLevelServer` builds the
+server with `Transitions` nil).
+
+**matter.js behaviour:** `LevelControlServer` with
+`managedTransitionTimeHandling` runs every transition itself on
+`behavior/Transitions.ts`: MoveToLevel with a TransitionTime, Move at a
+Rate (levels per second), Step over its TransitionTime, Stop — stepping
+CurrentLevel every `transitionStepInterval` (100 ms) and reporting
+RemainingTime as the countdown. go-fabric offers the same engine through
+`levelcontrol.Config.Transitions`, which hands the host one
+`LevelSource.MoveToLevel` per step.
+
+**Loom divergence:** the engine is not used. Every step of a managed
+transition would be one LEVEL write over the Homematic radio — ten per
+second for the whole transition on a duty-cycle-limited medium — where the
+dimmer performs the same movement from one atomic `{LEVEL, RAMP_TIME,
+ON_TIME=not used}` put_paramset. The wire facts (godevccu paramset
+descriptions, `HmIP-BDT.json` channel 4 VALUES, `HM-LC-Dim1T-FM-2.json`
+channel 1 VALUES): `RAMP_TIME` is a FLOAT in seconds (default 0.5), on the
+HmIP value/unit families `RAMP_TIME_VALUE` + `RAMP_TIME_UNIT`
+(`resolveRampTimeParams`); the classic HM dimmers carry a `RAMP_STOP`
+ACTION, the HmIP dimmers none. On that basis:
+
+- MoveToLevel / Step with a TransitionTime ramp through RAMP_TIME on a
+  channel that carries it (`LightCapabilities.Transition`); without one,
+  or with TransitionTime null/0, LEVEL is written at once (matter.js
+  `moveToLevelLogic` derives a rate only from a truthy transition time).
+- Move runs to MaxLevel (up) or MinLevel (down; the WithOnOff variant to
+  off) as one ramp of `|target − current| / Rate` seconds — the duration
+  matter.js's rate would take — when the device ramps and the current
+  level is known; without a Rate it applies at once, the reading matter.js
+  gives an unset DefaultMoveRate.
+- Stop writes RAMP_STOP where the channel has it and is a Success that
+  changes nothing elsewhere; a Stop on a HmIP dimmer cannot halt a ramp.
+- RemainingTime reads 0: the CCU reports no ramp progress, so there is no
+  countdown to report; the server's own rule on the hand-off path.
+- The ExecuteIfOff gate of the plain commands weighs the effective
+  Options against the light's own OnOff (the single LEVEL knob: LEVEL>0 is
+  on); the WithOnOff coupling to MinLevel is LEVEL=0, and the OnOff
+  attribute follows through the OnOff server's own `Set`.
+- The Options bit CoupleColorTempToLevel (0x02) is conformant under LT,
+  so the server accepts and stores it; nothing couples colour temperature
+  to the level on the hand-off path (matter.js does that inside its
+  transition engine), so the bit reads back without an effect. The
+  ColorControl follow-up of ADR 0084 is where the coupling would land.
+
+**Why not the engine:** radio budget and device truth — the dimmer's own
+ramp is smoother than ten LEVEL writes a second could be, and the CCU would
+refuse or queue that write rate on a busy interface.
+
 ### BD-Matter-WindowCovering-SliderDebounce — GoTo*Percentage two-phase slider debounce with accepted-before-written CCU write
 
 **Where:** `internal/model/custom/cover/matter_debounce.go`; the

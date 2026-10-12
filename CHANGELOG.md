@@ -74,6 +74,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Matter: the light's LevelControl cluster is go-fabric's
+  `levelcontrol.Server`** on its hand-off path (ADR 0084 follow-up): the
+  light is the server's `LevelSource`, the dimmer ramps itself through
+  RAMP_TIME (`BD-Matter-LevelControl-NativeRamp`). What a controller
+  observes differently: Move is a real command (to MaxLevel or MinLevel,
+  over `distance / Rate` seconds where the device ramps; before it was a
+  silent no-op), Step honours its TransitionTime, Stop halts a ramp on the
+  classic HM dimmers through RAMP_STOP, Options and OnLevel are writable
+  and read back, StartUpCurrentLevel is kept by the server, and a
+  CurrentLevel write is refused (access `R V`) — commands are the path.
+  The enums schema gains `RAMP_STOP` (REST API 13.9.0, additive).
 - **Matter: the OnOff cluster of every bridged switch, light, siren and
   sound player is go-fabric's `onoff.Server`** (ADR 0084 phase 2). The
   five hand-written servers and the light's own timed-off engine are
