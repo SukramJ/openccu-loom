@@ -8,6 +8,7 @@ import (
 	"context"
 	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/go-fabric/bridge/bridgetest"
 	"github.com/SukramJ/go-fabric/im"
@@ -238,9 +239,20 @@ func TestStartMatterBridgePersistsServerSubscriptions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Subscribe on endpoint %d: %v", onOffEP, err)
 	}
-	payloads, err := bundle.store.LoadServerSubscriptions(ctx)
-	if err != nil {
-		t.Fatalf("LoadServerSubscriptions: %v", err)
+	// The bridge records a subscription once it is active, after the
+	// SubscribeResponse the controller just received, so the row lands a
+	// moment later than the response; wait for it rather than racing it.
+	deadline := time.Now().Add(5 * time.Second)
+	var payloads [][]byte
+	for {
+		payloads, err = bundle.store.LoadServerSubscriptions(ctx)
+		if err != nil {
+			t.Fatalf("LoadServerSubscriptions: %v", err)
+		}
+		if len(payloads) == 1 || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 	if len(payloads) != 1 {
 		t.Fatalf("persisted server subscriptions = %d after subscription %d, want 1 — "+
