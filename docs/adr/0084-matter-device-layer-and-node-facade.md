@@ -219,7 +219,8 @@ window is open, the node's own window at first boot when no fabric exists
 operator-opened window keeps working as an administrator window, and a
 commissioned daemon stops being commissionable with its configured
 passcode for its whole lifetime, which is a security gain. The request to
-go-fabric is filed with this ADR and tracked in `notes/plans/roadmap.md`;
+go-fabric is [issue #58](https://github.com/SukramJ/go-fabric/issues/58)
+and is tracked in `notes/plans/roadmap.md`;
 until it is answered, `startMatterBridge` stays, and nothing in phases 1 and
 2 depends on it.
 
