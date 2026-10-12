@@ -15,6 +15,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SukramJ/go-fabric/cluster/levelcontrol"
+
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -77,8 +79,16 @@ type Light struct {
 	dataVersion hmtypes.DataVersionTracker
 
 	// matterOnOff holds the OnOff cluster server the Matter projection
-	// serves, built once per light (matter.go).
-	matterOnOff generic.MatterOnOffHolder
+	// serves, built once per light (matter.go); matterLevelSrv the
+	// LevelControl server (matter_level.go), with the cluster-state
+	// attributes it reads from matterLevel.
+	matterOnOff     generic.MatterOnOffHolder
+	matterLevelOnce sync.Once
+	matterLevelSrv  *levelcontrol.Server
+	matterLevel     lightLevelState
+	// hasRampStop reports a RAMP_STOP action on the channel (the classic
+	// HM dimmers), which a LevelControl Stop writes.
+	hasRampStop bool
 
 	mu        sync.RWMutex
 	lastLevel float64
@@ -162,6 +172,7 @@ func New(cfg Config) *Light {
 		rampTimeValueParam:   rampTimeValueParam,
 		rampTimeUnitParam:    rampTimeUnitParam,
 		enableLastBrightness: deviceLightLastBrightness(cfg.Channel),
+		hasRampStop:          cfg.Channel != nil && cfg.Channel.Parameter(hmenum.ParameterRampStop) != nil,
 	}
 	if level != nil {
 		l.unsubLevel = level.OnUpdate(func(_, next float64) {

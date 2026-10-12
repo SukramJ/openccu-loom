@@ -11,9 +11,11 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/SukramJ/go-fabric/cluster/levelcontrol"
 	"github.com/SukramJ/go-fabric/cluster/onoff"
 	onoffspec "github.com/SukramJ/go-fabric/cluster/spec/onoff"
 	"github.com/SukramJ/go-fabric/cluster/wire"
+	"github.com/SukramJ/go-fabric/im"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -107,16 +109,16 @@ func (w *recWriter) writes() ([]float64, []hmenum.CommandPriority) {
 }
 
 // levelServer returns the LevelControl cluster server for a dimmable
-// light.
-func levelServer(t *testing.T, l *Light) lightLevelServer {
+// light — go-fabric's [levelcontrol.Server], built once per light.
+func levelServer(t *testing.T, l *Light) *levelcontrol.Server {
 	t.Helper()
 	for _, s := range l.MatterClusterServers() {
-		if lvl, ok := s.(lightLevelServer); ok {
+		if lvl, ok := s.(*levelcontrol.Server); ok {
 			return lvl
 		}
 	}
 	t.Fatalf("light has no LevelControl cluster server")
-	return lightLevelServer{}
+	return nil
 }
 
 // TestOnOffReadUnobserved returns (nil, true) on an unobserved light —
@@ -335,7 +337,7 @@ func TestLevelWithOnOffCommandsDriveTheOnOffAttribute(t *testing.T) {
 	oo := onOffServer(t, l)
 	lv := levelServer(t, l)
 
-	if _, err := lv.MatterInvoke(context.Background(), matterCmdMoveToLevelWithOnOff, wire.MoveToLevelRequest{Level: matterLevelMinDefault}); err != nil {
+	if _, err := lv.MatterInvoke(context.Background(), levelcontrol.CmdMoveToLevelWithOnOff, wire.MoveToLevelRequest{Level: matterLevelMinDefault}); err != nil {
 		t.Fatalf("MoveToLevelWithOnOff(MinLevel): %v", err)
 	}
 	if v, _ := oo.MatterRead(onoff.AttrOnOff); v != false {
@@ -345,7 +347,7 @@ func TestLevelWithOnOffCommandsDriveTheOnOffAttribute(t *testing.T) {
 		t.Fatalf("CCU writes after MoveToLevelWithOnOff(MinLevel) = %v, want exactly [0]", values)
 	}
 
-	if _, err := lv.MatterInvoke(context.Background(), matterCmdMoveToLevelWithOnOff, wire.MoveToLevelRequest{Level: 190}); err != nil {
+	if _, err := lv.MatterInvoke(context.Background(), levelcontrol.CmdMoveToLevelWithOnOff, wire.MoveToLevelRequest{Level: 190}); err != nil {
 		t.Fatalf("MoveToLevelWithOnOff(190): %v", err)
 	}
 	if v, _ := oo.MatterRead(onoff.AttrOnOff); v != true {
@@ -366,12 +368,8 @@ func TestLevelFeatureMapAdvertisesOnOffAndLighting(t *testing.T) {
 	if !ok {
 		t.Fatal("MatterRead(FeatureMap) ok=false")
 	}
-	got := v.(uint32)
-	if got&0x01 == 0 {
-		t.Errorf("LevelControl FeatureMap = 0x%08X, missing OO bit (0x01)", got)
-	}
-	if got&0x02 == 0 {
-		t.Errorf("LevelControl FeatureMap = 0x%08X, missing LT bit (0x02)", got)
+	if got := v.(uint32); got != 0x03 {
+		t.Errorf("LevelControl FeatureMap = 0x%08X, want exactly OO|LT = 0x03", got)
 	}
 }
 
@@ -471,47 +469,9 @@ func TestLevelReadCurrentLevelHalf(t *testing.T) {
 	}
 }
 
-// TestLevelWriteAtSaturation confirms a full-range write (0xFE) round-
-// trips back to HM 1.0 brightness.
-func TestLevelWriteAtSaturation(t *testing.T) {
-	w := &stubWriter{}
-	l, _ := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
-	srv := levelServer(t, l)
-	if err := srv.MatterWrite(context.Background(), 0x0000, uint8(0xFE)); err != nil {
-		t.Fatalf("MatterWrite(0xFE) error: %v", err)
-	}
-	if w.last != 1.0 {
-		t.Fatalf("Matter 254 → HM %v, want 1.0", w.last)
-	}
-}
-
-// TestLevelWriteHalf checks midpoint round-trip.
-func TestLevelWriteHalf(t *testing.T) {
-	w := &stubWriter{}
-	l, _ := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
-	srv := levelServer(t, l)
-	if err := srv.MatterWrite(context.Background(), 0x0000, uint8(127)); err != nil {
-		t.Fatalf("MatterWrite(127) error: %v", err)
-	}
-	// 127/254 ≈ 0.5
-	if w.last < 0.49 || w.last > 0.51 {
-		t.Fatalf("Matter 127 → HM %v, want ~0.5", w.last)
-	}
-}
-
-// TestLevelWriteWrongTypeRejected catches non-uint8 writes.
-func TestLevelWriteWrongTypeRejected(t *testing.T) {
-	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
-	srv := levelServer(t, l)
-	err := srv.MatterWrite(context.Background(), 0x0000, 127)
-	if !errors.Is(err, errMatterValueType) {
-		t.Fatalf("err = %v, want errMatterValueType", err)
-	}
-}
-
 // TestLevelInvokeMoveToLevel routes a MoveToLevel command through to
-// SetLevel. The bare-uint8 shape carries no transition time, so the
-// instant SetLevel path applies.
+// SetLevel. The request carries no transition time, so the instant
+// SetLevel path applies.
 // The plain MoveToLevel variant (0x00, no OnOff coupling) is gated on the
 // effective ExecuteIfOff option while the light is off (matter.js
 // LevelControlServer.ts:596 #optionsAllowExecution); with no options set it
@@ -523,28 +483,12 @@ func TestLevelInvokeMoveToLevel(t *testing.T) {
 	l, _ := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
 	l.OnLevel(0.5) // light is on
 	srv := levelServer(t, l)
-	if _, err := srv.MatterInvoke(context.Background(), 0x00, uint8(190)); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), 0x00, wire.MoveToLevelRequest{Level: 190}); err != nil {
 		t.Fatalf("MoveToLevel error: %v", err)
 	}
 	// 190/254 ≈ 0.748
 	if w.last < 0.74 || w.last > 0.76 {
 		t.Fatalf("MoveToLevel(190) wrote %v, want ~0.748", w.last)
-	}
-}
-
-// TestLevelInvokeMoveToLevelWithOnOffMap accepts the typed-request
-// fallback shape (map carrying "level").
-func TestLevelInvokeMoveToLevelWithOnOffMap(t *testing.T) {
-	w := &stubWriter{}
-	l, _ := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
-	srv := levelServer(t, l)
-	fields := map[string]any{"level": uint8(64)}
-	if _, err := srv.MatterInvoke(context.Background(), 0x04, fields); err != nil {
-		t.Fatalf("MoveToLevelWithOnOff error: %v", err)
-	}
-	// 64/254 ≈ 0.252
-	if w.last < 0.24 || w.last > 0.26 {
-		t.Fatalf("MoveToLevelWithOnOff(64) wrote %v, want ~0.252", w.last)
 	}
 }
 
@@ -692,24 +636,8 @@ func TestLevelInvokeMoveToLevelTransitionWithoutRampSupportIsInstant(t *testing.
 	}
 }
 
-// TestLevelInvokeMoveReturnsSuccess verifies that Move (0x01) and
-// MoveWithOnOff (0x05) return Success without error — HM has no
-// continuous-rate dimming, so these are accepted no-ops.
-func TestLevelInvokeMoveReturnsSuccess(t *testing.T) {
-	for _, cmdID := range []uint32{0x01, 0x05} {
-		t.Run(fmt.Sprintf("cmd=0x%02X", cmdID), func(t *testing.T) {
-			l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
-			srv := levelServer(t, l)
-			_, err := srv.MatterInvoke(context.Background(), cmdID, nil)
-			if err != nil {
-				t.Fatalf("cmd 0x%02X returned error: %v", cmdID, err)
-			}
-		})
-	}
-}
-
-// TestLevelInvokeStepUpAndDown verifies that Step (0x02) and
-// StepWithOnOff (0x06) adjust the brightness by the given step size.
+// TestLevelInvokeStepUpAndDown verifies that Step (0x02) adjusts the
+// brightness by the given step size.
 func TestLevelInvokeStepUpAndDown(t *testing.T) {
 	w := &stubWriter{}
 	l, _ := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
@@ -717,7 +645,7 @@ func TestLevelInvokeStepUpAndDown(t *testing.T) {
 
 	srv := levelServer(t, l)
 	// Step up by 10 — expect ~137/254 ≈ 0.539.
-	fields := map[string]any{"step_mode": uint8(0), "step_size": uint8(10)}
+	fields := wire.StepRequest{StepMode: wire.LevelStepModeUp, StepSize: 10}
 	if _, err := srv.MatterInvoke(context.Background(), 0x02, fields); err != nil {
 		t.Fatalf("Step up error: %v", err)
 	}
@@ -736,34 +664,13 @@ func TestLevelInvokeStepDownFloor(t *testing.T) {
 	l.OnLevel(0.1)
 	srv := levelServer(t, l)
 	// Step down by 200 from a low baseline — must clamp to MinLevel (1).
-	fields := map[string]any{"step_mode": uint8(1), "step_size": uint8(200)}
+	fields := wire.StepRequest{StepMode: wire.LevelStepModeDown, StepSize: 200}
 	if _, err := srv.MatterInvoke(context.Background(), 0x02, fields); err != nil {
 		t.Fatalf("Step down error: %v", err)
 	}
 	// 1/254 ≈ 0.0039
 	if w.last < 0.003 || w.last > 0.005 {
 		t.Fatalf("Step down floor wrote %v, want ~0.0039 (MinLevel, not 0)", w.last)
-	}
-}
-
-// TestLevelInvokeStopReturnsSuccess verifies that Stop (0x03) and
-// StopWithOnOff (0x07) return Success without modifying brightness —
-// there is no in-flight ramp on HM to stop.
-func TestLevelInvokeStopReturnsSuccess(t *testing.T) {
-	for _, cmdID := range []uint32{0x03, 0x07} {
-		t.Run(fmt.Sprintf("cmd=0x%02X", cmdID), func(t *testing.T) {
-			w := &stubWriter{}
-			l, _ := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
-			l.OnLevel(0.6)
-			srv := levelServer(t, l)
-			_, err := srv.MatterInvoke(context.Background(), cmdID, nil)
-			if err != nil {
-				t.Fatalf("cmd 0x%02X returned error: %v", cmdID, err)
-			}
-			if w.last != 0 {
-				t.Fatalf("Stop cmd 0x%02X triggered a write (wrote %v), want no-op", cmdID, w.last)
-			}
-		})
 	}
 }
 
@@ -774,8 +681,9 @@ func TestLevelInvokeUnknownCommand(t *testing.T) {
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
 	srv := levelServer(t, l)
 	_, err := srv.MatterInvoke(context.Background(), 0x09, nil)
-	if !errors.Is(err, errMatterUnknownCommand) {
-		t.Fatalf("err = %v, want errMatterUnknownCommand", err)
+	var sc im.StatusCodeError
+	if !errors.As(err, &sc) || sc.MatterStatusCode() != im.StatusUnsupportedCommand {
+		t.Fatalf("err = %v, want UnsupportedCommand", err)
 	}
 }
 
@@ -786,7 +694,7 @@ func TestLevelInvokeUnknownCommand(t *testing.T) {
 func TestLevelControlNotPresentOnNonDimmable(t *testing.T) {
 	l, _ := newLightRig(t, "HM-LC-Sw:1", &stubWriter{}, custom.LightCapabilities{})
 	for _, s := range l.MatterClusterServers() {
-		if _, ok := s.(lightLevelServer); ok {
+		if _, ok := s.(*levelcontrol.Server); ok {
 			t.Fatalf("non-dimmable light unexpectedly contributes LevelControl")
 		}
 	}
@@ -816,7 +724,7 @@ func TestBrightnessByteEncodingDoesNotCollideWithMatterNull(t *testing.T) {
 func TestLevelControlMinLevelDefault(t *testing.T) {
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
 	srv := levelServer(t, l)
-	v, ok := srv.MatterRead(matterAttrLevelMin)
+	v, ok := srv.MatterRead(levelcontrol.AttrMinLevel)
 	if !ok {
 		t.Fatal("MatterRead(MinLevel=0x0002) ok=false, want true")
 	}
@@ -834,7 +742,7 @@ func TestLevelControlMinLevelDefault(t *testing.T) {
 func TestLevelControlMaxLevelDefault(t *testing.T) {
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
 	srv := levelServer(t, l)
-	v, ok := srv.MatterRead(matterAttrLevelMax)
+	v, ok := srv.MatterRead(levelcontrol.AttrMaxLevel)
 	if !ok {
 		t.Fatal("MatterRead(MaxLevel=0x0003) ok=false, want true")
 	}
@@ -857,11 +765,11 @@ func TestLevelControlMatterAttributesIncludesMinMax(t *testing.T) {
 	for _, a := range attrs {
 		got[a] = true
 	}
-	if !got[matterAttrLevelMin] {
-		t.Errorf("MatterAttributes does not contain MinLevel (0x%04X)", matterAttrLevelMin)
+	if !got[levelcontrol.AttrMinLevel] {
+		t.Errorf("MatterAttributes does not contain MinLevel (0x%04X)", levelcontrol.AttrMinLevel)
 	}
-	if !got[matterAttrLevelMax] {
-		t.Errorf("MatterAttributes does not contain MaxLevel (0x%04X)", matterAttrLevelMax)
+	if !got[levelcontrol.AttrMaxLevel] {
+		t.Errorf("MatterAttributes does not contain MaxLevel (0x%04X)", levelcontrol.AttrMaxLevel)
 	}
 }
 
@@ -870,7 +778,7 @@ func TestLevelControlMatterAttributesIncludesMinMax(t *testing.T) {
 func TestLevelControlMaxLevelDoesNotEqualNullSentinel(t *testing.T) {
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
 	srv := levelServer(t, l)
-	v, ok := srv.MatterRead(matterAttrLevelMax)
+	v, ok := srv.MatterRead(levelcontrol.AttrMaxLevel)
 	if !ok {
 		t.Fatal("MatterRead(MaxLevel) ok=false")
 	}

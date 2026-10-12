@@ -133,6 +133,7 @@ const (
 	ParameterPressShort                    Parameter = "PRESS_SHORT"
 	ParameterPressUnlock                   Parameter = "PRESS_UNLOCK"
 	ParameterProgram                       Parameter = "PROGRAM"
+	ParameterRampStop                      Parameter = "RAMP_STOP"
 	ParameterRampTime                      Parameter = "RAMP_TIME"
 	ParameterRampTimeToOffUnit             Parameter = "RAMP_TIME_TO_OFF_UNIT"
 	ParameterRampTimeToOffValue            Parameter = "RAMP_TIME_TO_OFF_VALUE"
