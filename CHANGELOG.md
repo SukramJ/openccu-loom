@@ -160,6 +160,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Internal
 
+- **chip-tool capability suite: positive Groups and ScenesManagement
+  test** (`TestSendReceive_GroupsScenes`): GroupKeyMap written before its
+  key set (the order matter.js accepts and the hand-carried schema used
+  to refuse), KeySetWrite, AddGroup / ViewGroup with NameSupport, a scene
+  stored from the live OnOff state and recalled through the OnOff
+  server's Sink, measured on the simulator's STATE, GetSceneMembership.
+  Red with the dropped foreign key restored (map write 0x87, AddGroup
+  UnsupportedAccess), which pins the 0.90.x store fix hermetically.
 - go-fabric v0.2.0 → v0.3.0 and go-hamqtt v0.36.0 → v0.37.0. The deprecated
   PASE MRP-triplet setters are replaced by the SessionParameters ones;
   loom's hand-written cluster servers accept the generated request structs
