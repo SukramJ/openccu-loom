@@ -109,6 +109,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Matter: `matter_group_key_map` still carried the foreign key to
+  `matter_group_keys` that go-fabric 0.3.0 drops**, so a commissioner's
+  GroupKeyMap write that names a key set not written yet (matter.js
+  accepts it; certification tests write the map first) answered FAILURE.
+  Migration 048 rebuilds the table to go-fabric's shape, and the contract
+  guard `TestLoomMigrationsMatchGoFabricMatterTableShapes` now pins every
+  hand-carried table's columns and foreign keys against the database
+  go-fabric's own `store.Apply` produces, so a changed constraint is caught
+  at the dependency bump rather than at a live write.
 - **Matter: four store tables go-fabric added were missing from loom's
   migrations** (`matter_group_table`, `matter_groupcast_groups`,
   `matter_server_subscriptions`, `matter_ota_default_providers`). The
