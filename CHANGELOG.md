@@ -8,6 +8,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Matter: every bridged endpoint is built through go-fabric's device
+  layer** (ADR 0084, phase 1). The assembler maps a profile's advertised
+  device type onto the generated `device/` type and supplies the profile's
+  own cluster servers unchanged; cluster sets, revisions, FeatureMaps,
+  endpoint numbers and UniqueIDs are what they were (the topology golden
+  is unchanged). What the layer adds: device-type conformance of every
+  assembled endpoint is now a test guard, and a NodeLabel a controller
+  writes on a bridged endpoint survives a restart (migration 047 adds the
+  column; before, only the root's NodeLabel persisted).
 - **Per-device "last refreshed" time.** Every device now records when its
   data was last observed from the CCU — a pushed event or an active read
   (boot seed, periodic sweep, operator refresh), whether or not a value

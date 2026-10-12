@@ -325,6 +325,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		ChannelLabel:            channelLabel,
 		Groups:                  groupMgr,
 		Scenes:                  matterScenesStore{store: store, logger: logger},
+		NodeLabels:              identity,
 	}, logger)
 	if err != nil {
 		logger.Warn("matter.bridge.assembler", slog.String("err", err.Error()))

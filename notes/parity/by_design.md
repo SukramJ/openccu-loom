@@ -1189,6 +1189,54 @@ change. The conformance exception map in
 `tests/integration/matter_cluster_conformance_test.go` and the chip-tool
 stub-rejection cells were removed with it.
 
+### BD-Matter-ExtendedColorLight-HSOnly — HS / HS+CT lights advertise ExtendedColorLight without the XY feature
+
+**Where:** `internal/model/custom/light/matter_color.go` (`hsColorServer`,
+`rgbwColorServer`; device type 0x010D for `ColorLight` and `RGBWLight`);
+ratchet entries in `tests/integration/matter_device_layer_conformance_test.go`.
+
+**matter.js behaviour:** `devices/extended-color-light.ts` mandates
+ColorControl with the XY and CT features and the RemainingTime attribute;
+HS is optional. There is no device type for a hue/saturation-only light.
+go-fabric's device-type validator (ADR 0016) reports three violations for
+such an endpoint: ColorControl.XY and ColorControl.CT missing, RemainingTime
+missing.
+
+**OpenCCU-Loom state (known limitation):** the HS-only RGB lights
+(HmIP-RGBW in HS mode, HM-LC-RGBW-WM) and the HS+CT RGBW light serve the
+HS commands and attributes only; 0x010D is the nearest type and Apple Home,
+Google Home and chip-tool drive the light through HS. The validator runs in
+warn mode in production; the conformance guard carries the three findings
+as declared entries so a fourth one fails the suite.
+
+**Resolution path:** ADR 0084's ColorControl follow-up — `light.NewColorControlServer`
+with the `ColorWriter` / `ColorTemperatureWriter` ports serves XY, HS, EHUE,
+CL and CT with matter.js's colour-space conversions and RemainingTime from
+the transition engine; the HS data points then back an XY+CT-conforming
+server. Until then the entries stay.
+
+### BD-Matter-SmokeCoAlarm-PowerSourceOnEndpoint — the smoke alarm's battery is a cluster on its endpoint, not a PowerSource part
+
+**Where:** `internal/north/matteradapter/assembler.go` (`attachPowerSource`:
+the device's battery reading becomes `Spec.PowerSource` of one endpoint, so
+PowerSource 0x002F is served on that endpoint); `internal/model/custom/siren`
+(`SmokeSiren`, device type 0x0076).
+
+**matter.js behaviour:** `devices/smoke-co-alarm.ts` composes the alarm with
+a PowerSource device type (0x0011) as a component endpoint (`instanceCount`
+min 1); the validator reports "Component device type PowerSource requires
+min 1 endpoint(s) in the composition; found 0".
+
+**OpenCCU-Loom state (known limitation):** the battery is served on the
+alarm's own endpoint, the one-endpoint-per-device rule of ADR 0049; a
+PowerSource part would be a second endpoint per smoke alarm and a
+controller re-learn. The validator runs in warn mode in production; the
+conformance guard carries the finding as a declared entry.
+
+**Resolution path:** `device.AddPart(device.NewPowerSource(…, WithMeasurement(battery)))`
+for the device types whose composition mandates it, in its own change with
+the re-learn named in the changelog; decided per type, not for the fleet.
+
 ### BD-Matter-WindowCovering-SliderDebounce — GoTo*Percentage two-phase slider debounce with accepted-before-written CCU write
 
 **Where:** `internal/model/custom/cover/matter_debounce.go`; the

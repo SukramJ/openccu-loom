@@ -26,6 +26,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 
+	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/climate"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/cover"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/light"
@@ -99,7 +100,11 @@ func makeSmokeCoverDevice(addr, name string) *device.Device {
 func makeSmokeColorLightDevice(addr, name string) *device.Device {
 	dev := device.New(device.Config{Address: addr, Name: name})
 	ch := dev.AddChannel(addr+":1", 1, "RGBW", hmenum.ParamsetKeyValues)
-	ch.SetCustomDataPoint(light.NewColorLight(light.Config{Channel: ch}))
+	// Every registered colour profile is dimmable (custom/light/init.go);
+	// the fixture states it too, so the endpoint serves LevelControl itself
+	// rather than receiving the device layer's default for a cluster
+	// ExtendedColorLight mandates.
+	ch.SetCustomDataPoint(light.NewColorLight(light.Config{Channel: ch, Capabilities: custom.LightCapabilities{Dimmable: true}}))
 	return dev
 }
 
@@ -205,7 +210,7 @@ func TestMatterBridgeSmoke_ColorLightClusterSurface(t *testing.T) {
 		t,
 		makeSmokeColorLightDevice("CATCOLR01", "Bridged Color Light"),
 		catDevTypeExtendedColorLight,
-		[]uint32{0x0006, 0x0004, 0x0062, 0x0300}, // OnOff, Groups, ScenesManagement, ColorControl
+		[]uint32{0x0006, 0x0008, 0x0004, 0x0062, 0x0300}, // OnOff, LevelControl, Groups, ScenesManagement, ColorControl
 	)
 }
 

@@ -9,8 +9,10 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"sync"
 
 	"github.com/SukramJ/go-fabric/contract"
+	fabricdevice "github.com/SukramJ/go-fabric/device"
 	"github.com/SukramJ/go-fabric/endpoint"
 	"github.com/SukramJ/go-fabric/groups"
 
@@ -49,6 +51,13 @@ type Config struct {
 	// ScenesManagement ([endpoint.Config.Scenes]); nil keeps them for the
 	// life of the process.
 	Scenes endpoint.ScenesStore
+	// NodeLabels persists the BridgedDeviceBasicInformation NodeLabel a
+	// controller writes on a bridged endpoint and hands it back on the
+	// next assembly ([endpoint.Config.OnNodeLabelWritten],
+	// [fabricdevice.Options.NodeLabel]) — matter.js keeps a written
+	// nodeLabel in the endpoint's persisted state. nil keeps a written
+	// label for the life of the process only.
+	NodeLabels NodeLabelStore
 	// IncludeMeasurements toggles whether DPs that implement
 	// [contract.MeasurementSource] (but not EndpointSource)
 	// produce standalone sensor endpoints. Off by default; operators
@@ -146,6 +155,18 @@ type Assembler struct {
 	inner     *endpoint.Assembler
 	exposures ExposureChecker
 	cfg       Config
+	logger    *slog.Logger
+	// fallbackTypes records, once each, a device type the generated
+	// device layer does not carry, so the hand-built Spec path is visible
+	// in the log rather than silent.
+	fallbackTypes sync.Map
+}
+
+// NodeLabelStore persists controller-written bridged NodeLabels per
+// endpoint key. Load answers "" for an endpoint no controller renamed.
+type NodeLabelStore interface {
+	LoadNodeLabel(key matterendpoint.SourceKey) string
+	SaveNodeLabel(key matterendpoint.SourceKey, label string)
 }
 
 // bridgedVendorName is the manufacturer served as the
@@ -171,14 +192,26 @@ func New(s endpoint.Store, cfg Config, logger *slog.Logger) (*Assembler, error) 
 		VendorName: bridgedVendorName,
 		Groups:     cfg.Groups,
 		Scenes:     cfg.Scenes,
+		OnNodeLabelWritten: func(key endpoint.SourceKey, label string) {
+			if cfg.NodeLabels == nil {
+				return
+			}
+			if k, ok := key.(matterendpoint.SourceKey); ok {
+				cfg.NodeLabels.SaveNodeLabel(k, label)
+			}
+		},
 	}, logger)
 	if err != nil {
 		return nil, err
+	}
+	if logger == nil {
+		logger = slog.Default()
 	}
 	return &Assembler{
 		inner:     inner,
 		exposures: allowAllExposureChecker{},
 		cfg:       cfg,
+		logger:    logger,
 	}, nil
 }
 
@@ -600,15 +633,14 @@ func (a *Assembler) makeElectricalGroupSpec(
 		DPKind:        matterendpoint.DPKindGeneric,
 		DPKey:         ElectricalGroupDPKey,
 	}
-	return endpoint.Spec{
-		StableKey:      sourceKey,
-		DeviceAddress:  dev.Address,
-		DeviceType:     measurementDeviceType(contract.MeasurementElectrical),
-		FriendlyName:   endpoint.ComposeNodeLabel(names.EndpointLabel(sourceKey), names.ParameterLabel(sourceKey)),
-		ChannelAddress: ch.Address,
-		Availability:   dev.Available,
-		Measurement:    group,
-	}, true
+	return a.deviceSpec(specInput{
+		key:          sourceKey,
+		dev:          dev,
+		ch:           ch,
+		deviceType:   measurementDeviceType(contract.MeasurementElectrical),
+		friendlyName: endpoint.ComposeNodeLabel(names.EndpointLabel(sourceKey), names.ParameterLabel(sourceKey)),
+		measurement:  group,
+	}), true
 }
 
 // ButtonGroupDPKey is the synthetic dp_key persisted for the
@@ -656,17 +688,16 @@ func (a *Assembler) makeButtonGroupSpec(
 		DPKind:        matterendpoint.DPKindGeneric,
 		DPKey:         ButtonGroupDPKey,
 	}
-	return endpoint.Spec{
-		StableKey:     sourceKey,
-		DeviceAddress: dev.Address,
-		DeviceType:    measurementDeviceType(contract.MeasurementMomentarySwitch),
+	return a.deviceSpec(specInput{
+		key:        sourceKey,
+		dev:        dev,
+		ch:         ch,
+		deviceType: measurementDeviceType(contract.MeasurementMomentarySwitch),
 		// The endpoint stands for the whole physical button (the
 		// channel), not one PRESS_* parameter — no parameter suffix.
-		FriendlyName:   endpoint.ComposeNodeLabel(names.EndpointLabel(sourceKey), ""),
-		ChannelAddress: ch.Address,
-		Availability:   dev.Available,
-		Measurement:    group,
-	}, true
+		friendlyName: endpoint.ComposeNodeLabel(names.EndpointLabel(sourceKey), ""),
+		measurement:  group,
+	}), true
 }
 
 // hideFromMatter reports whether a generic DP should be dropped from the
@@ -733,15 +764,14 @@ func (a *Assembler) makeSpec(
 		DPKind:        kind,
 		DPKey:         key,
 	}
-	return endpoint.Spec{
-		StableKey:      sourceKey,
-		DeviceAddress:  dev.Address,
-		DeviceType:     src.MatterDeviceType(),
-		FriendlyName:   endpoint.ComposeNodeLabel(names.EndpointLabel(sourceKey), ""),
-		ChannelAddress: ch.Address,
-		Availability:   dev.Available,
-		Source:         src,
-	}
+	return a.deviceSpec(specInput{
+		key:          sourceKey,
+		dev:          dev,
+		ch:           ch,
+		deviceType:   src.MatterDeviceType(),
+		friendlyName: endpoint.ComposeNodeLabel(names.EndpointLabel(sourceKey), ""),
+		source:       src,
+	})
 }
 
 // makeMeasurementSpec describes one standalone sensor endpoint. Its
@@ -763,15 +793,106 @@ func (a *Assembler) makeMeasurementSpec(
 		DPKind:        kind,
 		DPKey:         key,
 	}
-	return endpoint.Spec{
-		StableKey:      sourceKey,
-		DeviceAddress:  dev.Address,
-		DeviceType:     measurementDeviceType(meas.MatterMeasurementClass()),
-		FriendlyName:   endpoint.ComposeNodeLabel(names.EndpointLabel(sourceKey), names.ParameterLabel(sourceKey)),
-		ChannelAddress: ch.Address,
-		Availability:   dev.Available,
-		Measurement:    meas,
+	return a.deviceSpec(specInput{
+		key:          sourceKey,
+		dev:          dev,
+		ch:           ch,
+		deviceType:   measurementDeviceType(meas.MatterMeasurementClass()),
+		friendlyName: endpoint.ComposeNodeLabel(names.EndpointLabel(sourceKey), names.ParameterLabel(sourceKey)),
+		measurement:  meas,
+	})
+}
+
+// specInput is what one bridged endpoint is built from: the key, the
+// physical device and channel, the advertised device type, the label and
+// exactly one of a cluster-serving source or a measurement.
+type specInput struct {
+	key          matterendpoint.SourceKey
+	dev          *device.Device
+	ch           *device.Channel
+	deviceType   uint16
+	friendlyName string
+	source       contract.EndpointSource
+	measurement  contract.MeasurementSource
+}
+
+// deviceSpec builds the endpoint through go-fabric's device layer: the
+// generated type for the advertised device type id carries what
+// matter.js's devices/*.ts state (mandatory clusters, mandated features,
+// constraints), the source's own cluster servers are supplied with
+// [fabricdevice.WithServer] exactly as they were served before, a
+// measurement with [fabricdevice.WithMeasurement], and the source's
+// change notifier with [fabricdevice.WithChangeNotifier] so the bridge
+// keeps hearing the model's confirmed updates. The assembler path is the
+// same for both shapes (go-fabric endpoint/materialize.go
+// ClusterServers): the cluster set, revisions, FeatureMaps and the
+// UniqueID input are unchanged; what the device adds is device-type
+// validation, the persisted NodeLabel and the type's client clusters.
+//
+// A device type the generated layer does not carry, or a composition it
+// refuses, falls back to the hand-built Spec and is logged once per
+// type, so the assembly never loses an endpoint over a conformance
+// finding — the finding is reported through the bridge's device-type
+// validator, which judges the hand-built Spec too.
+func (a *Assembler) deviceSpec(in specInput) endpoint.Spec {
+	handBuilt := endpoint.Spec{
+		StableKey:      in.key,
+		DeviceAddress:  in.dev.Address,
+		DeviceType:     in.deviceType,
+		FriendlyName:   in.friendlyName,
+		ChannelAddress: in.ch.Address,
+		Availability:   in.dev.Available,
+		Source:         in.source,
+		Measurement:    in.measurement,
 	}
+	t, ok := fabricdevice.TypeByID(in.deviceType)
+	if !ok {
+		a.logFallback(in.deviceType, "device type not in the generated device layer", nil)
+		return handBuilt
+	}
+	opts := fabricdevice.Options{
+		StableKey:      in.key,
+		Name:           in.friendlyName,
+		DeviceAddress:  in.dev.Address,
+		ChannelAddress: in.ch.Address,
+		Reachable:      in.dev.Available,
+	}
+	if a.cfg.NodeLabels != nil {
+		opts.NodeLabel = a.cfg.NodeLabels.LoadNodeLabel(in.key)
+	}
+	var with []fabricdevice.Option
+	if in.source != nil {
+		for _, srv := range in.source.MatterClusterServers() {
+			if srv == nil {
+				continue
+			}
+			with = append(with, fabricdevice.WithServer(srv))
+		}
+		if n, ok := in.source.(contract.ChangeNotifier); ok {
+			with = append(with, fabricdevice.WithChangeNotifier(n))
+		}
+	}
+	if in.measurement != nil {
+		with = append(with, fabricdevice.WithMeasurement(in.measurement))
+	}
+	d, err := fabricdevice.New(t, opts, with...)
+	if err != nil {
+		a.logFallback(in.deviceType, "device layer refused the composition", err)
+		return handBuilt
+	}
+	return d.Spec()
+}
+
+// logFallback reports a hand-built Spec once per device type.
+func (a *Assembler) logFallback(deviceType uint16, reason string, err error) {
+	if _, seen := a.fallbackTypes.LoadOrStore(deviceType, struct{}{}); seen {
+		return
+	}
+	attrs := []any{slog.String("device_type", fmt.Sprintf("0x%04X", deviceType)), slog.String("reason", reason)}
+	if err != nil {
+		attrs = append(attrs, slog.String("err", err.Error()))
+	}
+	a.logger.Warn("matter.assembler.device_layer_fallback", attrs...)
 }
 
 // measurementDeviceType is a thin alias for
