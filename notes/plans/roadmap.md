@@ -120,16 +120,13 @@ replace it, and the metrics that say whether it worked.
   `by_design.md` entry recording the divergence.
   *Plan: [`notes/plans/matter-case-resume-session-id.md`](matter-case-resume-session-id.md).*
 
-- **Migrate the bridged endpoints to `groups.Manager`.** go-fabric v0.2.0
-  deprecates `wire.Groups` (removable in v0.3.0) in favour of
-  `endpoint.Config.Groups` plus a `groups.Manager`. Five uses — light (two),
-  siren, switch and generic switch — keep the stub with a
-  `//nolint:staticcheck` until then. The migration changes Groups behaviour on
-  every one of those endpoints (real membership, AddGroup / RemoveGroup, group
-  messaging), so it is its own change, due before go-fabric v0.3.0 is adopted.
-  Detail: `BD-Matter-WireGroupsStub` in
-  [`by_design.md`](../parity/by_design.md) and the 0.89.0 release summary in
-  [`CHANGELOG.md`](../../CHANGELOG.md) (release 0.89.0, in preparation).
+- **Bridged endpoints run on `groups.Manager` — done with go-fabric v0.3.0.**
+  `wire.Groups` is gone; the daemon wires one `groups.Manager` into
+  `matteradapter.Config.Groups`, the root GroupKeyManagement and Groupcast
+  servers and the bridge's group messaging, and the assembler mounts the
+  stack's Groups and ScenesManagement servers wherever a device type
+  mandates them. Detail: `BD-Matter-WireGroupsStub` (resolved) in
+  [`by_design.md`](../parity/by_design.md).
 
 - **Garage closure: report Moving optimistically.** A Matter Stop is
   forwarded to the drive whatever the closure state, because MainState comes

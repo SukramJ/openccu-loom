@@ -740,9 +740,10 @@ func TestColorLightMatterClusterServers(t *testing.T) {
 	w := &colorStubWriter{}
 	cl, _, _, _ := newColorLightRig(t, "X:1", w)
 	servers := cl.MatterClusterServers()
-	// Expects: OnOff, LevelControl, Groups, ScenesManagement, ColorControl (5 total).
-	if len(servers) < 5 {
-		t.Errorf("ColorLight.MatterClusterServers() len=%d, want ≥5", len(servers))
+	// Expects: OnOff, LevelControl, ColorControl. Groups and
+	// ScenesManagement are mounted by the endpoint assembler.
+	if len(servers) < 3 {
+		t.Errorf("ColorLight.MatterClusterServers() len=%d, want ≥3", len(servers))
 	}
 }
 
@@ -751,8 +752,8 @@ func TestColorTempLightMatterClusterServers(t *testing.T) {
 	w := &colorStubWriter{}
 	ctl, _, _ := newColorTempLightRig(t, "X:1", w, 2700, 6500)
 	servers := ctl.MatterClusterServers()
-	if len(servers) < 5 {
-		t.Errorf("ColorTempLight.MatterClusterServers() len=%d, want ≥5", len(servers))
+	if len(servers) < 3 {
+		t.Errorf("ColorTempLight.MatterClusterServers() len=%d, want ≥3", len(servers))
 	}
 }
 
@@ -761,8 +762,8 @@ func TestRGBWLightMatterClusterServers(t *testing.T) {
 	w := &colorStubWriter{}
 	r := newRGBWLightRigCh(t, "RGBW:1", w, 1)
 	servers := r.MatterClusterServers()
-	if len(servers) < 5 {
-		t.Errorf("RGBWLight.MatterClusterServers() len=%d, want ≥5", len(servers))
+	if len(servers) < 3 {
+		t.Errorf("RGBWLight.MatterClusterServers() len=%d, want ≥3", len(servers))
 	}
 }
 

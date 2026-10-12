@@ -33,42 +33,31 @@ func TestMatterDeviceTypeNonDimmable(t *testing.T) {
 	}
 }
 
-// TestMatterClusterServersDimmable expects OnOff (0x0006),
-// LevelControl (0x0008), Groups (0x0004) and ScenesManagement (0x0062)
-// on a dimmable light. Groups + ScenesManagement are mandatory on
-// OnOffLight / DimmableLight per Matter §5.3 +
-// matter.js packages/node/src/devices/on-off-light.ts.
+// TestMatterClusterServersDimmable expects exactly OnOff (0x0006) and
+// LevelControl (0x0008) from a dimmable light. Groups (0x0004) and
+// ScenesManagement (0x0062), mandatory on DimmableLight per matter.js
+// packages/node/src/devices/on-off-light.ts, are stack state the endpoint
+// assembler mounts — the source supplies neither.
 func TestMatterClusterServersDimmable(t *testing.T) {
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
 	servers := l.MatterClusterServers()
-	if len(servers) != 4 {
-		t.Fatalf("dimmable: %d cluster servers, want 4 (OnOff + LevelControl + Groups + ScenesManagement)", len(servers))
-	}
 	got := map[uint32]bool{}
 	for _, s := range servers {
 		got[s.MatterClusterID()] = true
 	}
-	if !got[0x0006] || !got[0x0008] || !got[0x0004] || !got[0x0062] {
-		t.Fatalf("dimmable cluster set = %v, want {0x0006, 0x0008, 0x0004, 0x0062}", got)
+	if len(servers) != 2 || !got[0x0006] || !got[0x0008] {
+		t.Fatalf("dimmable cluster set = %v (%d servers), want exactly {0x0006, 0x0008}", got, len(servers))
 	}
 }
 
-// TestMatterClusterServersNonDimmable expects OnOff (0x0006),
-// Groups (0x0004) and ScenesManagement (0x0062) on a non-dimmable
-// light. Both are mandatory per matter.js
-// packages/node/src/devices/on-off-light.ts.
+// TestMatterClusterServersNonDimmable expects exactly OnOff (0x0006)
+// from a non-dimmable light; Groups and ScenesManagement are mounted by
+// the endpoint assembler, not supplied by the source.
 func TestMatterClusterServersNonDimmable(t *testing.T) {
 	l, _ := newLightRig(t, "HM-LC-Sw:1", &stubWriter{}, custom.LightCapabilities{})
 	servers := l.MatterClusterServers()
-	if len(servers) != 3 {
-		t.Fatalf("non-dimmable: %d cluster servers, want 3 (OnOff + Groups + ScenesManagement)", len(servers))
-	}
-	got := map[uint32]bool{}
-	for _, s := range servers {
-		got[s.MatterClusterID()] = true
-	}
-	if !got[0x0006] || !got[0x0004] || !got[0x0062] {
-		t.Fatalf("non-dimmable cluster set = %v, want {0x0006, 0x0004, 0x0062}", got)
+	if len(servers) != 1 || servers[0].MatterClusterID() != 0x0006 {
+		t.Fatalf("non-dimmable: %d cluster servers, want exactly [0x0006]", len(servers))
 	}
 }
 

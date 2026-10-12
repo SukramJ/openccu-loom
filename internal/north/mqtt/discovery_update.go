@@ -60,7 +60,7 @@ const updateLatestVersionTemplate = "{{ value_json.val.latest_firmware }}"
 // (firmware, latest_firmware, in_progress, firmware_update_state) from the
 // entity rather than from the broker. It is [hamodel.Description]
 // vocabulary since go-hamqtt v0.24.0.
-const updateJSONAttributesTemplate = "{{ value_json.val | tojson }}"
+const updateJSONAttributesTemplate = hadiscovery.StatusAttributesTemplate
 
 // updateDocumentTemplate hands Home Assistant's update platform the status
 // object's `val` — a document in the platform's own state schema

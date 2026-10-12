@@ -345,7 +345,6 @@
         "serial_number": "0001SWDO0001",
         "via_device": "openccu-loom_central_ccu-01"
       },
-      "device_class": "problem",
       "event_types": [
         "error",
         "error_overheat",

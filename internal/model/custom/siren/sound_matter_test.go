@@ -72,7 +72,7 @@ func speakerServers(t *testing.T, sp *SoundPlayer) (onOff, level interfaces.Matt
 
 // TestSoundPlayerProjectsSpeakerDeviceType pins the device type and its exact
 // cluster set: matter.js speaker.element.ts:18-19 mandates OnOff and
-// LevelControl and requires no Groups / ScenesManagement stubs.
+// LevelControl and requires neither Groups nor ScenesManagement.
 func TestSoundPlayerProjectsSpeakerDeviceType(t *testing.T) {
 	t.Parallel()
 

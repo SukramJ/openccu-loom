@@ -12,7 +12,6 @@ import (
 	matterparity "github.com/SukramJ/go-fabric/parity"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // TestParityMatterJS_LightClusterRevisions pins every cluster revision
@@ -113,40 +112,22 @@ func TestParityMatterJS_LevelControlMandatoryAttributes(t *testing.T) {
 	}
 }
 
-// TestParityMatterJS_GroupsMandatoryAttributes asserts that both dimmable
-// and non-dimmable lights include the Groups cluster (0x0004) stub with
-// NameSupport (0x0000) per matter.js packages/node/src/devices/on-off-light.ts.
-func TestParityMatterJS_GroupsMandatoryAttributes(t *testing.T) {
+// TestParityMatterJS_StackOwnedClustersNotSupplied asserts that neither
+// a dimmable nor a non-dimmable light supplies Groups (0x0004) or
+// ScenesManagement (0x0062). Both are mandatory on the light device types
+// (matter.js packages/node/src/devices/on-off-light.ts) but are stack
+// state: the endpoint assembler mounts them from the node's group state
+// (go-fabric endpoint/materialize.go mountGroups / mountScenes).
+func TestParityMatterJS_StackOwnedClustersNotSupplied(t *testing.T) {
 	t.Parallel()
 	for _, dimmable := range []bool{true, false} {
 		t.Run(map[bool]string{true: "dimmable", false: "non-dimmable"}[dimmable], func(t *testing.T) {
 			t.Parallel()
 			l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: dimmable})
-			var found bool
 			for _, s := range l.MatterClusterServers() {
-				if s.MatterClusterID() != uint32(0x0004) {
-					continue
+				if id := s.MatterClusterID(); id == 0x0004 || id == 0x0062 {
+					t.Errorf("light (dimmable=%v) supplies stack-owned cluster 0x%04X", dimmable, id)
 				}
-				found = true
-				lister, ok := s.(interfaces.MatterClusterAttributeLister)
-				if !ok {
-					t.Errorf("groupsServer does not implement MatterClusterAttributeLister")
-					continue
-				}
-				attrs := make(map[uint32]bool)
-				for _, id := range lister.MatterAttributes() {
-					attrs[id] = true
-				}
-				if !attrs[uint32(0x0000)] {
-					t.Errorf("groupsServer MatterAttributes() missing NameSupport (0x0000)")
-				}
-				_, ok2 := s.MatterRead(uint32(0x0000))
-				if !ok2 {
-					t.Errorf("groupsServer MatterRead(NameSupport) returned ok=false")
-				}
-			}
-			if !found {
-				t.Errorf("light (dimmable=%v) has no Groups cluster server (0x0004)", dimmable)
 			}
 		})
 	}
@@ -234,15 +215,10 @@ func TestParityMatterJS_LightClusterRevisions(t *testing.T) {
 	}{
 		{matterClusterOnOff, "OnOff", onoff.Revision()},
 		{matterClusterLevelControl, "LevelControl", matterLevelControlClusterRevision},
-		{uint32(0x0004), "Groups", uint16(4)},
 		// D-50: ColorControl is mounted on dimmable+colored lights via
 		// `matter_color.go::{ctColorServer, hsColorServer, rgbwColorServer}`.
 		// matter.js HEAD `color-control.element.ts` carries revision 9.
 		{matterClusterColorControl, "ColorControl", matterColorControlClusterRevision},
-		// D-51: ScenesManagement is the shared stub from
-		// `cluster/wire/scenes_management.go` (revision 1, matter.js
-		// HEAD `scenes-management.element.ts`).
-		{uint32(0x0062), "ScenesManagement", uint16(1)},
 	}
 
 	for _, c := range cases {

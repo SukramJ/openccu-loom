@@ -23,14 +23,15 @@ func TestMatterDeviceType(t *testing.T) {
 }
 
 // TestMatterClusterServersExposesOnOff confirms the Switch contributes
-// exactly the three mandatory OnOffPlugInUnit baseline clusters: OnOff
-// (0x0006), Groups (0x0004), and ScenesManagement (0x0062).
+// exactly OnOff (0x0006). The other mandatory OnOffPlugInUnit clusters,
+// Groups (0x0004) and ScenesManagement (0x0062), are stack state the
+// endpoint assembler mounts from the node's group state.
 // Adding or reordering clusters here is a breaking change to the endpoint shape.
 func TestMatterClusterServersExposesOnOff(t *testing.T) {
 	s := newTestSwitch(t, "VCU0000001:1", "", &stubWriter{})
 	servers := s.MatterClusterServers()
-	if len(servers) != 3 {
-		t.Fatalf("expected 3 cluster servers, got %d", len(servers))
+	if len(servers) != 1 {
+		t.Fatalf("expected 1 cluster server, got %d", len(servers))
 	}
 	if id := servers[0].MatterClusterID(); id != 0x0006 {
 		t.Fatalf("servers[0] MatterClusterID = 0x%04X, want 0x0006 (OnOff)", id)

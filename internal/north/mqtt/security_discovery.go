@@ -324,7 +324,7 @@ func BuildSecurityDiscovery(base, deviceName, configURL string, e securityEntity
 			desc.JSONAttributesTopic = stateTopic
 			desc.JSONAttributesTemplate = "{{ value_json.hm | tojson }}"
 			if e.attributesInVal {
-				desc.JSONAttributesTemplate = "{{ value_json.val | tojson }}"
+				desc.JSONAttributesTemplate = hadiscovery.StatusAttributesTemplate
 			}
 		}
 	}

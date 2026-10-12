@@ -55,6 +55,14 @@ var measurementClasses = []interfaces.MatterMeasurementClass{
 	interfaces.MatterMeasurementMomentarySwitch,
 	interfaces.MatterMeasurementElectrical,
 	interfaces.MatterMeasurementFlow,
+	interfaces.MatterMeasurementCO,
+	interfaces.MatterMeasurementNO2,
+	interfaces.MatterMeasurementOzone,
+	interfaces.MatterMeasurementFormaldehyde,
+	interfaces.MatterMeasurementPM1,
+	interfaces.MatterMeasurementTVOC,
+	interfaces.MatterMeasurementRadon,
+	interfaces.MatterMeasurementSoilMoisture,
 }
 
 // hostRiddenMeasurementClasses are the classes that map to device type 0

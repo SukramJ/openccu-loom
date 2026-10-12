@@ -12,6 +12,7 @@ import (
 
 	"github.com/SukramJ/go-fabric/contract"
 	"github.com/SukramJ/go-fabric/endpoint"
+	"github.com/SukramJ/go-fabric/groups"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -35,6 +36,19 @@ type Config struct {
 	ProductID uint16
 	// NodeLabel is the user-visible bridge label.
 	NodeLabel string
+	// Groups is the node's group state, handed through to
+	// [endpoint.Config.Groups]: the assembler then mounts the stack's
+	// Groups and ScenesManagement servers on every bridged endpoint whose
+	// device type mandates them, in place of anything a source supplies —
+	// group membership and scene tables are stack state, as in matter.js
+	// (GroupsServer keeps them in the root's GroupKeyManagementServer).
+	// nil keeps whatever a source supplies; production wires the daemon's
+	// manager, tests may leave it unset.
+	Groups *groups.Manager
+	// Scenes persists the scene tables of the endpoints that serve
+	// ScenesManagement ([endpoint.Config.Scenes]); nil keeps them for the
+	// life of the process.
+	Scenes endpoint.ScenesStore
 	// IncludeMeasurements toggles whether DPs that implement
 	// [contract.MeasurementSource] (but not EndpointSource)
 	// produce standalone sensor endpoints. Off by default; operators
@@ -155,6 +169,8 @@ func New(s endpoint.Store, cfg Config, logger *slog.Logger) (*Assembler, error) 
 		// endpoint is a Homematic device, and Apple Home relies on the
 		// vendor fields being filled.
 		VendorName: bridgedVendorName,
+		Groups:     cfg.Groups,
+		Scenes:     cfg.Scenes,
 	}, logger)
 	if err != nil {
 		return nil, err

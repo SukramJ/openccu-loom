@@ -336,6 +336,38 @@ func TestValidateChecksTheMatterBridgeParameters(t *testing.T) {
 			})
 		}
 	})
+
+	t.Run("tcp", func(t *testing.T) {
+		t.Parallel()
+		cases := []struct {
+			name    string
+			tcp     string
+			wantErr bool
+		}{
+			{"empty selects the default", "", false},
+			{"off", MatterTCPOff, false},
+			{"incoming", MatterTCPIncoming, false},
+			{"outgoing", MatterTCPOutgoing, false},
+			{"both", MatterTCPBoth, false},
+			{"capitalised near-miss", "Incoming", true},
+			{"a typo", "incomming", true},
+			{"a boolean spelling", "true", true},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				cfg := Default()
+				cfg.North.Matter.TCP = tc.tcp
+				err := cfg.Validate()
+				if tc.wantErr {
+					assertRejected(t, err, "north.matter.tcp")
+					assertRejected(t, err, "off|incoming|outgoing|both")
+					return
+				}
+				assertAccepted(t, err)
+			})
+		}
+	})
 }
 
 // TestValidateChecksTheRESTCapacityKnobs pins the REST rate-limiter and

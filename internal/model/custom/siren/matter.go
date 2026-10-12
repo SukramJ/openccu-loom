@@ -11,8 +11,6 @@ import (
 
 	"github.com/SukramJ/go-fabric/cluster/onoff"
 
-	"github.com/SukramJ/go-fabric/cluster/wire"
-
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -205,10 +203,12 @@ func (s *Siren) MatterEligibility() interfaces.MatterEligibilityVerdict {
 }
 
 // MatterClusterServers returns OnOff (for the alarm-on/off command
-// surface, LT feature and all — see sirenOnOffServer) plus the
-// mandatory Groups + ScenesManagement stubs for the OnOffPlugInUnit
-// (0x010A) device-type per matter.js
-// packages/model/src/standard/elements/on-off-plug-in-unit.element.ts.
+// surface, LT feature and all — see sirenOnOffServer). The Groups +
+// ScenesManagement clusters that matter.js
+// packages/model/src/standard/elements/on-off-plug-in-unit.element.ts
+// makes mandatory for the OnOffPlugInUnit (0x010A) device type are
+// stack state: the endpoint assembler mounts both from the node's group
+// state (go-fabric endpoint/materialize.go mountGroups / mountScenes).
 //
 // BooleanState (0x0045) is intentionally absent: it is NOT part of the
 // OnOffPlugInUnit cluster set in matter.js or the spec; mounting it is
@@ -222,8 +222,6 @@ func (s *Siren) MatterEligibility() interfaces.MatterEligibilityVerdict {
 func (s *Siren) MatterClusterServers() []interfaces.MatterClusterServer {
 	return []interfaces.MatterClusterServer{
 		sirenOnOffServer{s: s},
-		wire.Groups{}, //nolint:staticcheck // SA1019: go-fabric v0.2.0 deprecates wire.Groups in favour of endpoint.Config.Groups + groups.Manager; the migration changes Groups behaviour on this endpoint and is its own change (see notes/parity/by_design.md, BD-Matter-WireGroupsStub)
-		wire.ScenesManagement{},
 	}
 }
 

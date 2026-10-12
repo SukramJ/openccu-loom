@@ -252,6 +252,7 @@ func TestBuildRootClusters_WithLiveBridge(t *testing.T) {
 		context.Background(),
 		cfg.North.Matter,
 		bundle.store,
+		nil, // no group state: GroupKeyManagement alone, no Groupcast
 		bundle.bridge,
 		nil,
 		slog.New(slog.DiscardHandler),
@@ -304,6 +305,7 @@ func TestBuildRootClusters_NilStore(t *testing.T) {
 		context.Background(),
 		cfg.North.Matter,
 		nil, // nil store
+		nil, // no group state
 		bundle.bridge,
 		nil,
 		slog.New(slog.DiscardHandler),

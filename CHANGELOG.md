@@ -24,7 +24,114 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   change and therefore published no `datapoint.value_changed` frame.
   REST API 13.8.0, WebSocket API 1.14 (both additive).
 
+- **Matter: real Groups and ScenesManagement on every bridged endpoint.**
+  go-fabric v0.3.0 removed the read-only Groups stub; group membership and
+  scene tables are now stack state, as in matter.js. The daemon wires one
+  group manager into the topology assembler, the root GroupKeyManagement
+  server and the bridge's group-message routing (a group Invoke / Write
+  reaches every member endpoint over the group's multicast address), and
+  mounts the Groupcast cluster on the root next to GroupKeyManagement.
+  AddGroup / ViewGroup / RemoveGroup and the scene commands now work on
+  lights, switches and sirens instead of answering UNSUPPORTED_COMMAND;
+  scene tables survive a restart (settings key `scenes.<endpoint key>`,
+  the same shape go-fabric's node facade writes). The Descriptor
+  ServerList of those endpoints is unchanged — the stubs already named
+  both clusters, so paired controllers keep their cached topology.
+- **Matter TCP transport, opt-in.** New config key `north.matter.tcp`
+  (`off` — the default —, `incoming`, `outgoing`, `both`): with
+  `incoming` the bridge accepts Matter-over-TCP connections on its UDP
+  port and advertises the roles in the operational record's `T` key and
+  in the PASE / CASE session parameters; a controller that supports TCP
+  then moves large payloads (wildcard reads, event bursts) off MRP. Every
+  session's close now also releases its TCP connection once the last
+  session on it is gone. Restart-required; label and help in both UI
+  languages, documented in the configuration page.
+- **Matter subscriptions survive a restart.** The bridge now persists every
+  CASE session's subscriptions (`matter_server_subscriptions`) and
+  re-establishes them under their old SubscriptionId after a start, through
+  mDNS operational resolution of the controller (go-fabric ADR 0008,
+  matter.js SubscriptionsServer). Before, a restart dropped every
+  subscription and each controller waited out its own liveness timeout
+  before re-subscribing, during which the bridge looked unresponsive.
+- **MQTT discovery: a component Home Assistant would refuse no longer
+  costs the whole device.** The publish path runs go-hamqtt's containment
+  (`discovery.Contain`): a component with an error at the level HA
+  refuses — a missing `unique_id`, an unsupported platform — is withheld
+  and logged, the rest of the device document still reaches HA, and the
+  withheld key is never turned into a removal tombstone on the next
+  diff. The `mqtt_discovery_invalid` counter now counts components HA
+  would refuse or alter (`discovery.Inspect`: errors and warnings, one
+  per component) instead of the old all-or-nothing verdict.
+
+### Changed
+
+- **Matter session parameters.** PBKDFParamResponse (PASE) and Sigma2
+  (CASE) now carry the node's whole SessionParameters structure — the
+  MRP intervals as before, plus the Data Model, Interaction Model and
+  specification revisions, MaxPathsPerInvoke and, with TCP on, the
+  supported transports — as matter.js sends on both handshakes. Before,
+  only the MRP triplet went out and a controller fell back to the oldest
+  revisions and one path per invoke. The commissioner's transports are
+  kept on the session for the reply chunkers.
+- **Matter subscriptions honour the requested MinIntervalFloor** (go-fabric
+  default moved from a 1 s floor to the subscriber's own request, as
+  matter.js keeps it), and a second CASE from the same controller node no
+  longer closes its earlier sessions — a peer may hold up to five
+  (matter.js `MAX_SESSIONS_PER_PEER`), so a controller running two clients
+  under one node identity keeps both subscriptions.
+- **Matter GeneralDiagnostics TotalOperationalHours keeps part-hours
+  across restarts.** The operational time is persisted at millisecond
+  resolution (settings key `gendiag.operational_ms`, written every
+  15 minutes and at shutdown); a database of an earlier release seeds
+  from its whole-hour row once. A bridge restarting more often than hourly
+  no longer loses every run.
+- **Matter command validation comes from the generated definitions** for
+  Thermostat and WindowCovering too: a SetpointRaiseLower or
+  GoTo*Percentage request missing a mandatory field is answered
+  INVALID_COMMAND (was FAILURE), and a GoToLiftPercentage /
+  GoToTiltPercentage above 100.00 % is CONSTRAINT_ERROR (was clamped), as
+  matter.js answers them. OnWithTimedOff's OnTime / OffWaitTime above 65534
+  likewise. The profiles accept both the generated request structs and the
+  legacy tag maps, pinned by a wire-path test that drives OnWithTimedOff
+  from TLV bytes to the CCU write.
+- MQTT `<base>/info`'s `centrals` field is rendered through go-hamqtt's
+  per-publish `ExtraFunc` instead of a marshaller workaround; bytes
+  unchanged.
+
+### Fixed
+
+- **Matter: four store tables go-fabric added were missing from loom's
+  migrations** (`matter_group_table`, `matter_groupcast_groups`,
+  `matter_server_subscriptions`, `matter_ota_default_providers`). The
+  daemon owns its database and carries go-fabric's Matter schema as goose
+  migrations, which stopped at the v0.1.0 table set; a commissioner's first
+  KeySetWrite failed on the missing group table, so no Groups cluster was
+  ever usable. Migration 046 adds them verbatim, and a contract test now
+  pins loom's migrated schema against every table and index go-fabric's
+  `store.Schema()` creates, so the next table that module adds fails a
+  test instead of a controller.
+- **MQTT discovery: the device-error event entity now exists in Home
+  Assistant.** The `event` component published for every channel carrying
+  an ERROR / SENSOR_ERROR / ERROR_* parameter set `device_class: problem`,
+  which HA's event platform refuses (it knows button, doorbell and motion
+  only) — the entity was silently never created, for most sensors on a
+  fleet. The class is dropped; the errors keep reaching REST and WebSocket
+  as before.
+
 ### Internal
+
+- go-fabric v0.2.0 → v0.3.0 and go-hamqtt v0.36.0 → v0.37.0. The deprecated
+  PASE MRP-triplet setters are replaced by the SessionParameters ones;
+  loom's hand-written cluster servers accept the generated request structs
+  the bridge now decodes for OnOff, Thermostat, WindowCovering and
+  ColorControl as well as the legacy tag maps, so behaviour no longer
+  depends on which definition packages happen to be linked. Not adopted in
+  this release, on purpose: the device layer (`device.New<Type>`, the
+  `node.New` facade, `cluster/onoff.Server`) — a separate, ADR-first
+  migration — and the node's own 48-hour commissioning window at first
+  boot (loom keeps operator-opened windows). `naming.FunctionHA` and
+  `naming.IsFunction` now alias go-hamqtt's `topic.FunctionHA` /
+  `topic.IsReservedFunction`.
 
 - A daily `download-stats` workflow appends the GitHub release asset
   download counters and the Home Assistant add-on analytics install counts

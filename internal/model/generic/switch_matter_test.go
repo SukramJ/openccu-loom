@@ -35,22 +35,22 @@ func TestSwitchMatter_MatterDeviceType(t *testing.T) {
 	}
 }
 
-// TestSwitchMatter_MatterClusterServers_State pins the mandatory cluster
-// set of the OnOffPlugInUnit device type this source advertises: OnOff
-// plus the Groups and ScenesManagement stubs, both conformance "M" per
-// matter.js on-off-plug-in-unit.element.ts.
+// TestSwitchMatter_MatterClusterServers_State pins the cluster set the
+// source supplies: OnOff only. Groups (0x0004) and ScenesManagement
+// (0x0062) are mandatory on OnOffPlugInUnit but stack state — the
+// endpoint assembler mounts them from the node's group state, and a
+// source-supplied ScenesManagement would only be replaced there.
 func TestSwitchMatter_MatterClusterServers_State(t *testing.T) {
 	t.Parallel()
 	s := NewSwitch(baseCfg(hmenum.ParameterState, hmenum.ParameterTypeBool,
 		hmenum.OperationsRead|hmenum.OperationsWrite))
-	mounted := map[uint32]bool{}
-	for _, srv := range s.MatterClusterServers() {
-		mounted[srv.MatterClusterID()] = true
-	}
-	for _, want := range []uint32{0x0006, 0x0004, 0x0062} {
-		if !mounted[want] {
-			t.Errorf("cluster 0x%04X not mounted; got %v", want, mounted)
+	servers := s.MatterClusterServers()
+	if len(servers) != 1 || servers[0].MatterClusterID() != 0x0006 {
+		ids := make([]uint32, 0, len(servers))
+		for _, srv := range servers {
+			ids = append(ids, srv.MatterClusterID())
 		}
+		t.Fatalf("cluster servers = %#04x, want exactly [0x0006]", ids)
 	}
 }
 

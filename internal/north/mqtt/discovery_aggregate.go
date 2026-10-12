@@ -397,12 +397,15 @@ func (d *DefaultDiscoveryBuilder) BuildChannelKindEvent(ev Event, kind event.Kin
 		}
 	}
 
-	// A device error is a problem signal; the keypress entity has no
-	// device_class and the impulse kind has no fitting one.
+	// No device_class for any of the three kinds. Home Assistant's event
+	// platform accepts only doorbell, button and motion
+	// (homeassistant/components/event/const.py EventDeviceClass) and
+	// refuses the component otherwise, so the entity never existed in
+	// HA; "problem" is a binary_sensor class. The reference integration
+	// raises a device error as a Home Assistant bus event (the reference
+	// integration's DeviceTriggerEventType.DEVICE_ERROR) with no entity
+	// class to mirror.
 	deviceClass := ""
-	if kind == event.KindDeviceError {
-		deviceClass = "problem"
-	}
 
 	out, rendered := d.renderChannelEvent(channelEventSpec{
 		ev:          ev,

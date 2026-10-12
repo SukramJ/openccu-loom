@@ -444,6 +444,7 @@ The native-Go Matter bridge. Disabled by default; opt-in.
 | `north.matter.enabled` | bool | `false` | — | no |
 | `north.matter.listen` | string | `:5540` | — | no |
 | `north.matter.prefer_ipv4` | bool | `false` | — | no |
+| `north.matter.tcp` | string | `off` | — | no |
 | `north.matter.expose_secondary_channels` | bool | `false` | — | no |
 | `north.matter.vendor_id` | uint16 | `0xFFF1` | — | no |
 | `north.matter.product_id` | uint16 | `0x8000` | — | no |
@@ -497,6 +498,17 @@ commissioning are covered on the Matter user page (`docs/user/matter.md`).
   publishes the commissionable records) or `noop` (in-memory only, no
   multicast — a hermetic-test opt-out; QR-scan pairing cannot work in
   this mode).
+- `tcp` (expert) selects the Matter TCP transport roles: `off`
+  (default — UDP only), `incoming` (accept TCP connections on the same
+  port as the UDP listener), `outgoing` (the bridge may open TCP
+  connections itself) or `both`. The roles are advertised in the
+  operational mDNS record's `T` key and in the session handshakes. A
+  controller that supports Matter TCP then moves large payloads —
+  wildcard reads, OTA transfers — off MRP onto a TCP connection. Turn it
+  on (`incoming` is the usual choice) when a controller supports Matter
+  TCP and large reads are slow or time out over UDP; with `incoming` the
+  TCP port must be reachable alongside the UDP one. Restart the daemon
+  after changing it.
 
 ### `north.mcp`
 

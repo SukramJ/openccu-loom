@@ -193,6 +193,22 @@ north:
   #     enabled: false
   #     token: change-me     # optional Bearer token for header-only callers
 
+  # Matter bridge (ADR 0012). Disabled by default; every other Matter key
+  # is managed in the SPA. Changes are restart-required (the bridge and
+  # its listener are built once at boot).
+  # matter:
+  #   enabled: false
+  #   listen: ":5540"        # UDP port; TCP (below) shares it
+  #   tcp: off               # Matter TCP transport roles:
+  #                          #   off      — UDP only (default)
+  #                          #   incoming — accept TCP connections on the
+  #                          #              Matter port
+  #                          #   outgoing — open TCP connections to peers
+  #                          #   both     — incoming and outgoing
+  #                          # A controller that supports Matter TCP then
+  #                          # moves large payloads (wildcard reads, OTA)
+  #                          # off MRP onto the TCP connection.
+
 # First-run setup safety. The /setup wizard always refuses once
 # there is at least one admin user; setting this to false keeps the
 # route dormant even with a manually-emptied users table (the status

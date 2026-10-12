@@ -422,10 +422,16 @@ func TestReportableAttributes(t *testing.T) {
 		matterAttrCurrentPositionTiltPercent100ths,
 	})
 	// The garage reports the ClosureControl carriers instead: what the
-	// drive is doing, where it is, and where it is heading.
+	// drive is doing, which errors it reports, where it is, and where it
+	// is heading. The list is go-fabric closure.ControlServer's: every
+	// served attribute without the Fixed quality (cluster/spec
+	// Instance.MatterReportable). CurrentErrorList carries no Fixed
+	// quality in matter.js (closure-control.element.ts:42, "R V", M), so
+	// it is reported like the others.
 	g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
 	requireAttrs(t, "Garage", g.MatterClusterServers()[0].MatterReportable(), []uint32{
 		clusterwire.ClosureControlAttrMainState,
+		clusterwire.ClosureControlAttrCurrentErrorList,
 		clusterwire.ClosureControlAttrOverallCurrentState,
 		clusterwire.ClosureControlAttrOverallTargetState,
 	})

@@ -7,15 +7,25 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"strconv"
+	"strings"
 	"testing"
 
 	matterbridge "github.com/SukramJ/go-fabric/bridge"
 	"github.com/SukramJ/go-fabric/cluster/modeselect"
+	"github.com/SukramJ/go-fabric/cluster/spec"
 	"github.com/SukramJ/go-fabric/im"
 	"github.com/SukramJ/go-fabric/tlv"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+)
+
+// ModeOptionStruct field tags as cluster/spec/modeselect ModeOptionStruct.EncodeTLV writes them.
+const (
+	modeOptionTagLabel        uint8 = 0
+	modeOptionTagMode         uint8 = 1
+	modeOptionTagSemanticTags uint8 = 2
 )
 
 // ---------------------------------------------------------------------------
@@ -84,9 +94,11 @@ func TestSelectMatter_SupportedModesMirrorTheValueListInOrder(t *testing.T) {
 	if !ok {
 		t.Fatal("SupportedModes must answer; it is conformance M")
 	}
-	modes, isList := raw.([]modeselect.ModeOptionStruct)
+	// The server hands the list to the generated codec, which encodes a
+	// spec.List of the generated ModeOptionStruct.
+	modes, isList := raw.(spec.List[modeselect.ModeOptionStruct])
 	if !isList {
-		t.Fatalf("SupportedModes read as %T, want []modeselect.ModeOptionStruct", raw)
+		t.Fatalf("SupportedModes read as %T, want spec.List[modeselect.ModeOptionStruct]", raw)
 	}
 	if len(modes) != len(modeSelectValueList) {
 		t.Fatalf("SupportedModes has %d entries, want %d (one per VALUE_LIST entry)",
@@ -198,12 +210,15 @@ func decodeOneModeOption(t *testing.T, d *tlv.Decoder) decodedModeOption {
 		if el.Tag.Kind != tlv.TagKindContext {
 			t.Fatalf("ModeOptionStruct field carries tag kind %v, want a context tag", el.Tag.Kind)
 		}
+		// The context tags are the generated codec's
+		// (cluster/spec/modeselect ModeOptionStruct.EncodeTLV): Label 0,
+		// Mode 1, SemanticTags 2.
 		switch uint8(el.Tag.Number) {
-		case modeselect.ModeOptionFieldLabel:
+		case modeOptionTagLabel:
 			opt.label = el.String
-		case modeselect.ModeOptionFieldMode:
+		case modeOptionTagMode:
 			opt.mode = uint8(el.Uint)
-		case modeselect.ModeOptionFieldSemanticTags:
+		case modeOptionTagSemanticTags:
 			if el.Type != tlv.TypeArray {
 				t.Fatalf("SemanticTags has type 0x%02X, want an array", el.Type)
 			}
@@ -458,4 +473,75 @@ func TestSelectMatter_IneligibleDataPointsMountNoServer(t *testing.T) {
 			t.Errorf("a nil Select mounted %d servers, want none", len(servers))
 		}
 	})
+}
+
+// TestSelectMatter_SupportedModesStayWithinTheListBound pins the host's part
+// of the SupportedModes constraint "max 255" (mode-select-cluster.element.ts:37).
+// go-fabric's server returns the list as given and the generated codec writes
+// it untrimmed, so the bound holds only because this projection enforces it: a
+// VALUE_LIST of exactly 255 entries is carried whole, one entry more opts the
+// parameter out of Matter instead of reaching the wire.
+func TestSelectMatter_SupportedModesStayWithinTheListBound(t *testing.T) {
+	t.Parallel()
+	valueList := func(n int) []string {
+		out := make([]string, n)
+		for i := range out {
+			out[i] = "MODE_" + strconv.Itoa(i)
+		}
+		return out
+	}
+	ops := hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent
+
+	t.Run("at the bound", func(t *testing.T) {
+		t.Parallel()
+		s, _ := newModeSelect(t, ops, valueList(modeselect.SupportedModesMaxEntries))
+		raw, ok := modeSelectServer(t, s).MatterRead(modeselect.AttrSupportedModes)
+		if !ok {
+			t.Fatal("SupportedModes must answer; it is conformance M")
+		}
+		modes, isList := raw.(spec.List[modeselect.ModeOptionStruct])
+		if !isList {
+			t.Fatalf("SupportedModes read as %T, want spec.List[modeselect.ModeOptionStruct]", raw)
+		}
+		if len(modes) != modeselect.SupportedModesMaxEntries {
+			t.Fatalf("SupportedModes has %d entries, want %d", len(modes), modeselect.SupportedModesMaxEntries)
+		}
+	})
+
+	t.Run("past the bound", func(t *testing.T) {
+		t.Parallel()
+		s, _ := newModeSelect(t, ops, valueList(modeselect.SupportedModesMaxEntries+1))
+		if servers := s.MatterClusterServers(); servers != nil {
+			t.Fatalf("a %d-entry VALUE_LIST mounted %d servers, want none",
+				modeselect.SupportedModesMaxEntries+1, len(servers))
+		}
+		if modes := s.SupportedModes(); len(modes) != 0 {
+			t.Fatalf("SupportedModes past the bound returned %d entries, want none", len(modes))
+		}
+	})
+}
+
+// TestSelectMatter_ModeLabelsStayWithinTheByteBound pins the host's part of
+// the Label constraint "max 64" (mode-select-cluster.element.ts:63), counted in
+// UTF-8 bytes: the generated codec writes the label as given, so a longer CCU
+// label is cut here, back to the last whole rune.
+func TestSelectMatter_ModeLabelsStayWithinTheByteBound(t *testing.T) {
+	t.Parallel()
+	// 63 ASCII bytes followed by a two-byte rune: the 64-byte cut lands
+	// inside the rune and must step back to 63.
+	long := strings.Repeat("A", modeselect.LabelMaxBytes-1) + "ä" + "TAIL"
+	exact := strings.Repeat("B", modeselect.LabelMaxBytes)
+	s, _ := newModeSelect(t, hmenum.OperationsRead|hmenum.OperationsWrite|hmenum.OperationsEvent,
+		[]string{long, exact})
+	modes := s.SupportedModes()
+	if len(modes) != 2 {
+		t.Fatalf("SupportedModes has %d entries, want 2", len(modes))
+	}
+	if want := strings.Repeat("A", modeselect.LabelMaxBytes-1); modes[0].Label != want {
+		t.Errorf("long label = %q (%d bytes), want the %d-byte prefix ending before the split rune",
+			modes[0].Label, len(modes[0].Label), len(want))
+	}
+	if modes[1].Label != exact {
+		t.Errorf("a %d-byte label was altered to %q", modeselect.LabelMaxBytes, modes[1].Label)
+	}
 }

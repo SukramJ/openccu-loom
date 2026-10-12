@@ -147,6 +147,12 @@ You do not have to expose everything. The **Matter** view lets you pick which de
 
 By default OpenCCU-Loom exposes one Matter endpoint per device. The expert flag `north.matter.expose_secondary_channels` opts a device's *secondary* actor channels out into their own extra endpoints — useful for multi-channel actuators (for example a dual switch) where you want each channel as a separate Matter accessory. Leave it off unless you specifically need the fan-out; see [ADR 0049](../adr/0049-matter-one-endpoint-per-device.md).
 
+## Groups, scenes, restarts and TCP
+
+- **Matter groups and scenes work on every light, switch and siren.** A controller can put bridged endpoints into Matter groups (AddGroup / RemoveGroup, group commands over multicast) and store scenes on them; group membership and scene tables are kept in the daemon's database and survive a restart.
+- **Subscriptions survive a daemon restart.** The bridge persists each controller's subscriptions and re-establishes them after a start, so a controller does not have to wait out its own liveness timeout before the bridge reacts again.
+- **Matter over TCP is available, off by default.** `north.matter.tcp: incoming` accepts TCP connections on the Matter port next to UDP and advertises it to controllers; a controller that supports TCP then moves large reads off the retransmission protocol. Leave it off unless a controller in your fleet uses it — see the key in the [configuration reference](../admin/configuration.md).
+
 ## Controller ecosystem caveats
 
 Matter controllers do not implement the specification uniformly — each ecosystem supports its own subset of device types, ports, and fleet sizes. The field observations below were collected by the [home-assistant-matter-hub](https://github.com/RiDDiX/home-assistant-matter-hub) project; some of them shape how OpenCCU-Loom maps devices.

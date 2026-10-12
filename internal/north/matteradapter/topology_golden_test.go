@@ -20,6 +20,8 @@ import (
 	mattercore "github.com/SukramJ/go-fabric/cluster/core"
 	"github.com/SukramJ/go-fabric/contract"
 	"github.com/SukramJ/go-fabric/endpoint"
+	"github.com/SukramJ/go-fabric/groups"
+	matterstore "github.com/SukramJ/go-fabric/store"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	_ "github.com/SukramJ/openccu-loom/internal/model/custom/builtins"
@@ -27,6 +29,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
+	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -316,12 +319,28 @@ func goldenContactSensor(t *testing.T) *device.Device {
 // under. ChannelLabel is deliberately left empty so the recorded names
 // travel through [Assembler.channelLabel]'s own fallback word rather
 // than a value the test supplies.
-func goldenConfig() matteradapter.Config {
+//
+// Groups carries a real group manager over a migrated store, as the
+// daemon does: with it the assembler mounts the stack's Groups and
+// ScenesManagement servers wherever a device type mandates them, so the
+// recorded ServerLists are the ones a commissioner reads in production.
+func goldenConfig(t *testing.T) matteradapter.Config {
+	t.Helper()
+	db, err := sqlitestore.Open(context.Background(), sqlitestore.FileDSN(filepath.Join(t.TempDir(), "golden.db")))
+	if err != nil {
+		t.Fatalf("open golden store: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	mgr, err := groups.NewManager(matterstore.New(db), slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatalf("groups.NewManager: %v", err)
+	}
 	return matteradapter.Config{
 		VendorID:            0x1234,
 		ProductID:           0x5678,
 		NodeLabel:           "GoldenBridge",
 		IncludeMeasurements: true,
+		Groups:              mgr,
 	}
 }
 
@@ -511,7 +530,7 @@ func TestAssembledTopologyMatchesGolden(t *testing.T) {
 			"at package scope — move that into its own binary before touching this fixture.", got)
 	}
 
-	a, err := matteradapter.New(newFakeStore(), goldenConfig(), slog.New(slog.DiscardHandler))
+	a, err := matteradapter.New(newFakeStore(), goldenConfig(t), slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

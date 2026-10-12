@@ -249,6 +249,7 @@ func TestBuildRootClusters_WithStore_BuildsFullSet(t *testing.T) {
 		context.Background(),
 		cfg.North.Matter,
 		bundle.store,
+		nil, // no group state: GroupKeyManagement alone, no Groupcast
 		bundle.bridge,
 		nil,
 		slog.New(slog.DiscardHandler),
@@ -306,6 +307,7 @@ func TestBuildRootClusters_OnFabricInstalledExtra_Registered(t *testing.T) {
 		context.Background(),
 		cfg.North.Matter,
 		bundle.store,
+		nil, // no group state: GroupKeyManagement alone, no Groupcast
 		bundle.bridge,
 		nil,
 		slog.New(slog.DiscardHandler),
@@ -665,6 +667,7 @@ func TestBuildPaseAdapterFromCreds_WithOpCreds_Builds(t *testing.T) {
 		context.Background(),
 		cfg.North.Matter,
 		bundle.store,
+		nil, // no group state: GroupKeyManagement alone, no Groupcast
 		bundle.bridge,
 		nil,
 		slog.New(slog.DiscardHandler),

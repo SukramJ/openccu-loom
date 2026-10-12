@@ -231,7 +231,7 @@ func (d *DefaultDiscoveryBuilder) BuildScheduleEntityDiscovery(centralName strin
 			// longer, so the count is the state and the document is
 			// attached as attributes.
 			JSONAttributesTopic:    attrsTopic,
-			JSONAttributesTemplate: "{{ value_json.val | tojson }}",
+			JSONAttributesTemplate: hadiscovery.StatusAttributesTemplate,
 		},
 		Binds: []hamodel.Binding{
 			{

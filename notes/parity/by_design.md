@@ -1158,31 +1158,36 @@ divergence can be narrowed to the window the drive has not yet reported.
 Pinned by `TestGarageMatterStopReachesTheDriveInEveryClosureState` in
 `internal/model/custom/cover/matter_closure_stop_forward_test.go`.
 
-### BD-Matter-WireGroupsStub — bridged endpoints keep the deprecated `wire.Groups` stub
+### BD-Matter-WireGroupsStub — bridged endpoints keep the deprecated `wire.Groups` stub — RESOLVED
 
-**Where:** `internal/model/custom/light/matter.go`,
+**Where:** `cmd/openccu-loom/daemon_matter.go` (`startMatterBridge` builds
+one `groups.Manager` over the Matter store),
+`internal/north/matteradapter/assembler.go` (`Config.Groups` handed through
+to `endpoint.Config.Groups`). The former stub sites —
+`internal/model/custom/light/matter.go`,
 `internal/model/custom/siren/matter.go`,
 `internal/model/custom/switch/matter.go`,
-`internal/model/generic/switch_matter.go` (each `wire.Groups{}` carries a
-`//nolint:staticcheck // SA1019` naming this entry).
+`internal/model/generic/switch_matter.go` — now supply neither Groups nor
+ScenesManagement.
 
-**go-fabric behaviour:** since v0.2.0 group membership is stack state, as in
-matter.js (`GroupsServer` keeps it in the root's
-`GroupKeyManagementServer`). A host sets `endpoint.Config.Groups` to a
-`groups.Manager`, and the assembler mounts the real `core.Groups` server on
-every endpoint whose device type mandates Groups, replacing a source's stub.
-`wire.Groups`, the read-only stub, is deprecated and removable in v0.3.0.
+**go-fabric behaviour:** group membership is stack state, as in matter.js
+(`GroupsServer` keeps it in the root's `GroupKeyManagementServer`). A host
+sets `endpoint.Config.Groups` to a `groups.Manager`, and the assembler
+mounts the real `core.Groups` and ScenesManagement servers on every
+endpoint whose device type mandates them, replacing anything a source
+supplies (`endpoint/materialize.go` `mountGroups` / `mountScenes`).
+go-fabric v0.3.0 removed `wire.Groups`.
 
-**OpenCCU-Loom state (known limitation, temporary):** the daemon does not yet
-set `endpoint.Config.Groups`, so these endpoints keep serving the read-only
-stub they served under v0.1.0. The migration changes Groups behaviour on
-every one of them (real membership, AddGroup / RemoveGroup, group
-messaging) and needs its own review, so it was kept out of the 0.89.0
-dependency bump.
-
-**Revisit:** before go-fabric v0.3.0 is adopted, which may remove
-`wire.Groups`: wire a `groups.Manager` into the assembler config, drop the
-stubs and the nolint directives, and re-record the topology golden.
+**Status: RESOLVED with the go-fabric v0.3.0 adoption.** The daemon wires
+the manager into the assembler, so every OnOffLight / DimmableLight /
+OnOffPlugInUnit endpoint serves real group membership, AddGroup /
+RemoveGroup, group messaging and a scene table. The `wire.Groups{}` and
+`wire.ScenesManagement{}` stubs and their nolint directives are gone; the
+topology golden (`internal/north/matteradapter/topology_golden_test.go`)
+now assembles with a real manager and its recorded ServerLists did not
+change. The conformance exception map in
+`tests/integration/matter_cluster_conformance_test.go` and the chip-tool
+stub-rejection cells were removed with it.
 
 ### BD-Matter-WindowCovering-SliderDebounce — GoTo*Percentage two-phase slider debounce with accepted-before-written CCU write
 

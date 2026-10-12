@@ -11,8 +11,6 @@ import (
 
 	"github.com/SukramJ/go-fabric/cluster/onoff"
 
-	"github.com/SukramJ/go-fabric/cluster/wire"
-
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -143,21 +141,18 @@ func (s *Switch) MatterDeviceType() uint16 { return matterGenericSwitchDeviceTyp
 // STATE so the assembler skips the projection — see
 // [matterGenericSwitchEligible].
 //
-// Besides OnOff the endpoint mounts the Groups (0x0004) and
-// ScenesManagement (0x0062) stubs, both `conformance: "M"` on the
-// OnOffPlugInUnit device type this source advertises — matter.js
-// packages/model/src/standard/elements/on-off-plug-in-unit.element.ts:22,38.
-// Leaving them off produced a ServerList that contradicts the
-// DeviceTypeList the endpoint publishes.
+// The source supplies OnOff only. Groups (0x0004) and ScenesManagement
+// (0x0062), both `conformance: "M"` on the OnOffPlugInUnit device type
+// this source advertises (matter.js
+// packages/model/src/standard/elements/on-off-plug-in-unit.element.ts:22,38),
+// are stack state: the endpoint assembler mounts both from the node's
+// group state (go-fabric endpoint/materialize.go mountGroups /
+// mountScenes), so the ServerList still matches the DeviceTypeList.
 func (s *Switch) MatterClusterServers() []interfaces.MatterClusterServer {
 	if s == nil || !matterGenericSwitchEligible(s.Parameter()) {
 		return nil
 	}
-	return []interfaces.MatterClusterServer{
-		s,
-		wire.Groups{}, //nolint:staticcheck // SA1019: go-fabric v0.2.0 deprecates wire.Groups in favour of endpoint.Config.Groups + groups.Manager; the migration changes Groups behaviour on this endpoint and is its own change (see notes/parity/by_design.md, BD-Matter-WireGroupsStub)
-		wire.ScenesManagement{},
-	}
+	return []interfaces.MatterClusterServer{s}
 }
 
 // MatterClusterID implements [interfaces.MatterClusterServer].

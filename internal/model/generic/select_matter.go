@@ -5,6 +5,7 @@ package generic
 
 import (
 	"context"
+	"unicode/utf8"
 
 	"github.com/SukramJ/go-fabric/cluster/modeselect"
 
@@ -43,9 +44,12 @@ const matterSelectDeviceType uint16 = 0x0027
 
 // matterSelectMaxModes is the number of VALUE_LIST entries this projection
 // can carry. SupportedModes has constraint "max 255"
-// (mode-select-cluster.element.ts:37) and the encoder trims a longer list
-// at encode time, which would leave modes that CurrentMode can still name
-// but ChangeToMode would reject as unsupported. A parameter with more
+// (mode-select-cluster.element.ts:37). Staying within it is the host's
+// part: go-fabric's ModeSelect server returns the list as given and the
+// generated codec writes it untrimmed (see [modeselect.ModeSource]), so a
+// longer list would go on the wire for a controller to reject. Trimming it
+// here instead would leave modes that CurrentMode can still name but
+// ChangeToMode would reject as unsupported, so a parameter with more
 // entries than that opts out of Matter entirely rather than being
 // half-projected.
 const matterSelectMaxModes = modeselect.SupportedModesMaxEntries
@@ -133,6 +137,10 @@ func (s *Select) ModeNamespace() (namespace uint8, present bool) { return 0, fal
 // the wire — an empty list is the encoding for "this mode is anonymous",
 // and that is the truthful reading of a CCU enum entry: a label, and no
 // classification behind it.
+//
+// The list bound is [matterSelectMaxModes]; each Label is bounded by
+// [boundedModeLabel]. Both are the host's part of the
+// [modeselect.ModeSource] contract.
 func (s *Select) SupportedModes() []modeselect.ModeOptionStruct {
 	if s == nil || s.DataPoint == nil {
 		return nil
@@ -144,11 +152,29 @@ func (s *Select) SupportedModes() []modeselect.ModeOptionStruct {
 	out := make([]modeselect.ModeOptionStruct, 0, len(values))
 	for i, label := range values {
 		out = append(out, modeselect.ModeOptionStruct{
-			Label: label,
+			Label: boundedModeLabel(label),
 			Mode:  uint8(i), //nolint:gosec // the list is length-gated to matterSelectMaxModes (255) above
 		})
 	}
 	return out
+}
+
+// boundedModeLabel trims label to the ModeOptionStruct Label constraint
+// "max 64" (mode-select-cluster.element.ts:63, [modeselect.LabelMaxBytes]),
+// counted in UTF-8 bytes, cutting back to the last whole rune. The
+// generated codec writes the label untrimmed, so this bound is the host's
+// part; the cut is the one the bridge's former Label encoder applied
+// (go-fabric tlv Encoder.PutUTF8Bounded), so a long CCU label keeps the
+// prefix it always had on the wire.
+func boundedModeLabel(label string) string {
+	if len(label) <= modeselect.LabelMaxBytes {
+		return label
+	}
+	trimmed := label[:modeselect.LabelMaxBytes]
+	for !utf8.ValidString(trimmed) {
+		trimmed = trimmed[:len(trimmed)-1]
+	}
+	return trimmed
 }
 
 // CurrentMode implements [modeselect.ModeSource].
