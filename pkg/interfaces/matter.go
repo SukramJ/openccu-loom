@@ -3,7 +3,12 @@
 
 package interfaces
 
-import contract "github.com/SukramJ/go-fabric/contract"
+import (
+	"strings"
+
+	contract "github.com/SukramJ/go-fabric/contract"
+	"github.com/SukramJ/go-fabric/schema"
+)
 
 // The Matter port contracts live in
 // [github.com/SukramJ/go-fabric/contract], a separate module that depends on
@@ -96,6 +101,22 @@ const (
 
 	// MatterMeasurementFlow is a compatibility alias for [contract.MeasurementFlow].
 	MatterMeasurementFlow = contract.MeasurementFlow
+	// MatterMeasurementCO is a compatibility alias for [contract.MeasurementCO].
+	MatterMeasurementCO = contract.MeasurementCO
+	// MatterMeasurementNO2 is a compatibility alias for [contract.MeasurementNO2].
+	MatterMeasurementNO2 = contract.MeasurementNO2
+	// MatterMeasurementOzone is a compatibility alias for [contract.MeasurementOzone].
+	MatterMeasurementOzone = contract.MeasurementOzone
+	// MatterMeasurementFormaldehyde is a compatibility alias for [contract.MeasurementFormaldehyde].
+	MatterMeasurementFormaldehyde = contract.MeasurementFormaldehyde
+	// MatterMeasurementPM1 is a compatibility alias for [contract.MeasurementPM1].
+	MatterMeasurementPM1 = contract.MeasurementPM1
+	// MatterMeasurementTVOC is a compatibility alias for [contract.MeasurementTVOC].
+	MatterMeasurementTVOC = contract.MeasurementTVOC
+	// MatterMeasurementRadon is a compatibility alias for [contract.MeasurementRadon].
+	MatterMeasurementRadon = contract.MeasurementRadon
+	// MatterMeasurementSoilMoisture is a compatibility alias for [contract.MeasurementSoilMoisture].
+	MatterMeasurementSoilMoisture = contract.MeasurementSoilMoisture
 )
 
 // MatterElectricalReadings is a compatibility alias for [contract.ElectricalReadings].
@@ -161,10 +182,24 @@ type MatterEligibilitySource = contract.EligibilitySource
 // to — the UI then still has something stable to render and to filter
 // on.
 //
-// Compatibility wrapper; [contract.DeviceTypeName] is the single
-// source of truth for the device-type → human label mapping and
-// carries the rule that every advertised device type needs a case
-// there.
+// [contract.DeviceTypeName] answers first; a device type its label
+// table lacks is named from the generated schema
+// ([schema.DeviceTypeName]) before the hex fallback, so every type a
+// measurement class advertises has a label here
+// (TestW2PkgMatterDeviceTypeNameCoversEveryAdvertisedType).
 func MatterDeviceTypeName(id uint16) string {
+	if id == 0 {
+		return ""
+	}
+	if name := contract.DeviceTypeName(id); !strings.HasPrefix(name, "0x") {
+		return name
+	}
+	// contract's hand-kept label table lags the generated schema (it
+	// names no SoilSensor, 0x0045, which the soil-moisture measurement
+	// class advertises); the schema carries every device type matter.js
+	// models, so it answers before the hex fallback.
+	if name, ok := schema.DeviceTypeName(uint32(id)); ok {
+		return name
+	}
 	return contract.DeviceTypeName(id)
 }

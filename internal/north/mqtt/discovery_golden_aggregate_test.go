@@ -664,29 +664,15 @@ func (b aggregateGoldenBuilder) buildGoldenCase(t *testing.T, c aggregateGoldenC
 }
 
 // aggregateGoldenSchemaRejections names the pinned cases whose body the
-// Home Assistant schema rejects today, with the reason each is recorded
-// rather than fixed.
-//
-// Unlike the per-parameter plane's unreachable shapes, this one is LIVE:
-// the device-error event entity is published for every channel carrying
-// an ERROR / SENSOR_ERROR / ERROR_* parameter, which is most sensors on
-// a fleet.
-//
-//   - event/device-error: the builder sets `device_class: "problem"`
-//     (discovery_aggregate.go, the device-error arm of
-//     BuildChannelKindEvent). Home Assistant's event platform declares
-//     exactly three device classes — button, doorbell, motion — so the
-//     config is rejected and the entity is never created. The channel's
-//     errors reach the REST and WebSocket planes either way, which is
-//     why nothing surfaced it.
-//
-// Not fixed here on purpose: this change is a pin, and a pin that also
-// changes behaviour cannot show that behaviour did not change. The fix
-// belongs in its own change, where the entity appearing for the first
-// time is the visible, intended effect.
-var aggregateGoldenSchemaRejections = map[string]struct{}{
-	"event/device-error": {},
-}
+// Home Assistant schema rejects, with the reason each is recorded rather
+// than fixed. Empty: the one entry it carried — the device-error event
+// whose `device_class: "problem"` the event platform refuses (it declares
+// button, doorbell and motion only), so the entity was never created —
+// is fixed in the builder (discovery_aggregate.go, BuildChannelKindEvent)
+// and the entity now appears for every channel carrying an ERROR /
+// SENSOR_ERROR / ERROR_* parameter. The map stays so the next rejection
+// is declared here rather than tolerated.
+var aggregateGoldenSchemaRejections = map[string]struct{}{}
 
 // TestAggregatePinnedPayloadsAreValid reads the same fixtures back
 // through the extracted Home Assistant MQTT schema, so a payload that is

@@ -1330,14 +1330,14 @@ func TestLightMatterClusterServers(t *testing.T) {
 	w := &stubWriter{}
 	lDim, _ := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
 	servers := lDim.MatterClusterServers()
-	if len(servers) != 4 { // OnOff + LevelControl + Groups + ScenesManagement
-		t.Errorf("MatterClusterServers(dimmable) len=%d, want 4", len(servers))
+	if len(servers) != 2 { // OnOff + LevelControl; Groups + Scenes are stack-mounted
+		t.Errorf("MatterClusterServers(dimmable) len=%d, want 2", len(servers))
 	}
 
 	lNonDim, _ := newLightRig(t, "HmIP-SW:1", w, custom.LightCapabilities{})
 	servers = lNonDim.MatterClusterServers()
-	if len(servers) != 3 { // OnOff + Groups + ScenesManagement
-		t.Errorf("MatterClusterServers(non-dimmable) len=%d, want 3", len(servers))
+	if len(servers) != 1 { // OnOff; Groups + Scenes are stack-mounted
+		t.Errorf("MatterClusterServers(non-dimmable) len=%d, want 1", len(servers))
 	}
 }
 

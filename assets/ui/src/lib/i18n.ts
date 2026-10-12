@@ -1414,6 +1414,7 @@ const EN: Catalog = {
   "config.field.north.matter.node_label": "Bridge label",
   "config.field.north.matter.discriminator": "Commissioning discriminator",
   "config.field.north.matter.prefer_ipv4": "Force IPv4",
+  "config.field.north.matter.tcp": "Matter TCP transport",
   "config.field.north.matter.expose_secondary_channels":
     "Expose secondary channels",
   "config.field.north.matter.include_measurements":
@@ -1646,6 +1647,8 @@ const EN: Catalog = {
     "12-bit Matter commissioning discriminator. Combined with the passcode to form the manual setup code.",
   "config.help.north.matter.prefer_ipv4":
     "Force the Matter UDP socket to bind IPv4-only. Default false opens an IPv6 dual-stack socket that also accepts IPv4 traffic — the standard choice.",
+  "config.help.north.matter.tcp":
+    "Matter TCP transport roles. `off` (default): UDP only. `incoming`: accept TCP connections on the Matter port. `outgoing`: open TCP connections to peers. `both`: incoming and outgoing. A controller that supports Matter TCP then moves large payloads (wildcard reads, OTA) off MRP onto the TCP connection.",
   "config.help.north.matter.expose_secondary_channels":
     "Off by default: a multi-channel device (switch, dimmer, cover, lock, siren, valve) projects a single Matter endpoint from its primary channel. Enable to also expose its secondary virtual-receiver actor channels as separate endpoints. Matter only — MQTT, HA-Discovery and REST always carry every channel.",
   "config.help.north.matter.include_measurements":
@@ -5768,6 +5771,7 @@ const DE: Catalog = {
   "config.field.north.matter.node_label": "Bridge-Label",
   "config.field.north.matter.discriminator": "Commissioning-Discriminator",
   "config.field.north.matter.prefer_ipv4": "IPv4 erzwingen",
+  "config.field.north.matter.tcp": "Matter-TCP-Transport",
   "config.field.north.matter.expose_secondary_channels":
     "Sekundärkanäle exponieren",
   "config.field.north.matter.include_measurements":
@@ -6004,6 +6008,8 @@ const DE: Catalog = {
     "12-bit Matter-Commissioning-Discriminator. Mit dem Passcode bildet er den manuellen Setup-Code.",
   "config.help.north.matter.prefer_ipv4":
     "Erzwingt IPv4-only auf dem Matter-UDP-Socket. Default aus = IPv6-Dual-Stack-Socket, der auch IPv4 akzeptiert (Standardwahl).",
+  "config.help.north.matter.tcp":
+    "Rollen des Matter-TCP-Transports. `off` (Standard): nur UDP. `incoming`: TCP-Verbindungen auf dem Matter-Port annehmen. `outgoing`: TCP-Verbindungen zu Gegenstellen aufbauen. `both`: eingehend und ausgehend. Ein Controller, der Matter-TCP unterstützt, verlagert große Nutzlasten (Wildcard-Reads, OTA) dann von MRP auf die TCP-Verbindung.",
   "config.help.north.matter.expose_secondary_channels":
     "Standardmäßig aus: Ein Mehrkanalgerät (Schalter, Dimmer, Rollladen, Schloss, Sirene, Ventil) projiziert einen einzelnen Matter-Endpoint aus seinem Primärkanal. Aktivieren, um auch die sekundären Aktor-Kanäle als eigene Endpoints zu exponieren. Nur Matter — MQTT, HA-Discovery und REST führen immer alle Kanäle.",
   "config.help.north.matter.include_measurements":

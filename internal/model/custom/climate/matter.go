@@ -12,6 +12,7 @@ import (
 	"github.com/SukramJ/go-fabric/cluster/measurement"
 
 	"github.com/SukramJ/go-fabric/cluster"
+	thermostatspec "github.com/SukramJ/go-fabric/cluster/spec/thermostat"
 	"github.com/SukramJ/go-fabric/cluster/wire"
 	"github.com/SukramJ/go-fabric/im"
 
@@ -805,13 +806,20 @@ func (s climateThermostatUIServer) MatterAttributes() []uint32 {
 
 // extractSetpointRaiseLower pulls (mode, amount) out of a
 // SetpointRaiseLower request. Mode is context tag 0 (enum8), Amount is
-// context tag 1 (int8). SetpointRaiseLower has no typed decoder in the
-// bridge, so the real wire path lands here as the tag-keyed map[uint8]any
-// that decodeGenericTagMap produces — unsigned ints as uint64, signed
-// ints as int64 (see go-fabric bridge/fields_reader.go). The
-// string-keyed shape is kept for the in-package tests.
+// context tag 1 (int8). The bridge decodes a Thermostat request through
+// the generated definition (cluster/spec/thermostat) whenever that
+// package is linked — this file links it — so the wire path delivers
+// [thermostatspec.SetpointRaiseLowerRequest], with a missing field
+// already answered INVALID_COMMAND. Without a linked definition the
+// bridge falls back to the tag-keyed map[uint8]any of
+// decodeGenericTagMap — unsigned ints as uint64, signed ints as int64
+// (go-fabric bridge/fields_reader.go); that shape stays accepted so the
+// decode does not depend on what the binary links. The string-keyed
+// shape is kept for the in-package tests.
 func extractSetpointRaiseLower(fields any) (mode uint8, amount int8, err error) {
 	switch v := fields.(type) {
+	case thermostatspec.SetpointRaiseLowerRequest:
+		return uint8(v.Mode), v.Amount, nil
 	case map[uint8]any:
 		if rawMode, ok := v[0]; ok {
 			m, ok := wireSetpointMode(rawMode)
@@ -848,7 +856,7 @@ func extractSetpointRaiseLower(fields any) (mode uint8, amount int8, err error) 
 		}
 		return mode, amount, nil
 	default:
-		return 0, 0, fmt.Errorf("%w: SetpointRaiseLower expected map[uint8]any, got %T", errMatterValueType, fields)
+		return 0, 0, fmt.Errorf("%w: SetpointRaiseLower expected thermostat.SetpointRaiseLowerRequest or map[uint8]any, got %T", errMatterValueType, fields)
 	}
 }
 

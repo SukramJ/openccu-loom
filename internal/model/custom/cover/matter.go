@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"sync"
 
+	windowcoveringspec "github.com/SukramJ/go-fabric/cluster/spec/windowcovering"
+
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -828,12 +830,16 @@ func (s blindWCServer) MatterGeneratedCommands() []uint32 { return nil }
 
 // extractGoToPercentage pulls the LiftPercent100thsValue /
 // TiltPercent100thsValue (context tag 0) out of a GoToLiftPercentage /
-// GoToTiltPercentage request. GoTo*Percentage has no typed decoder in
-// the bridge, so the real wire path lands here as the tag-keyed
-// map[uint8]any that decodeGenericTagMap produces (unsigned ints as
-// uint64) — see go-fabric bridge/fields_reader.go. The
-// bare-uint16 and string-keyed shapes are kept for the in-package
-// tests.
+// GoToTiltPercentage request. The bridge decodes a WindowCovering
+// request through the generated definition (cluster/spec/windowcovering)
+// whenever that package is linked — this file links it — so the wire
+// path delivers [windowcoveringspec.GoToLiftPercentageRequest] /
+// [windowcoveringspec.GoToTiltPercentageRequest]. Without a linked
+// definition the bridge falls back to the tag-keyed map[uint8]any of
+// decodeGenericTagMap (unsigned ints as uint64, go-fabric
+// bridge/fields_reader.go); that shape stays accepted so the decode does
+// not depend on what the binary links. The bare-uint16 and string-keyed
+// shapes are kept for the in-package tests.
 //
 // The value is clamped to [matterCoverPctMax] (Percent100ths max,
 // Matter §5.3): matter.js WindowCoveringServer rejects an out-of-range
@@ -849,6 +855,10 @@ func (s blindWCServer) MatterGeneratedCommands() []uint32 { return nil }
 // shape; Matter 1.3+ (incl. 1.5.1) uses a single Percent100ths field.
 func extractGoToPercentage(fields any) (uint16, error) {
 	switch v := fields.(type) {
+	case windowcoveringspec.GoToLiftPercentageRequest:
+		return clampPercent100ths(v.LiftPercent100thsValue), nil
+	case windowcoveringspec.GoToTiltPercentageRequest:
+		return clampPercent100ths(v.TiltPercent100thsValue), nil
 	case uint16:
 		return clampPercent100ths(v), nil
 	case map[uint8]any:
@@ -872,7 +882,7 @@ func extractGoToPercentage(fields any) (uint16, error) {
 		}
 		return clampPercent100ths(pct), nil
 	default:
-		return 0, fmt.Errorf("%w: GoTo*Percentage expected uint16 or map[uint8]any, got %T", errMatterValueType, fields)
+		return 0, fmt.Errorf("%w: GoTo*Percentage expected a GoTo*PercentageRequest, uint16 or map[uint8]any, got %T", errMatterValueType, fields)
 	}
 }
 

@@ -620,6 +620,11 @@ type Bridge struct {
 	// publish-path claim.
 	bundleBatch bool
 	bundleDirty map[string]string
+	// bundleCentral maps a node id to the central its document was last
+	// published for. The publisher runtime reports a containment by node
+	// id alone, so this is how [Bridge.logContained] names the central.
+	// Guarded by mu.
+	bundleCentral map[string]string
 
 	// collector is the optional MqttCollector for per-bridge counters.
 	// Nil when no collector was wired in BridgeConfig.Collector.

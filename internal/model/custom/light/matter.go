@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/SukramJ/go-fabric/cluster/onoff"
+	levelcontrolspec "github.com/SukramJ/go-fabric/cluster/spec/levelcontrol"
+	onoffspec "github.com/SukramJ/go-fabric/cluster/spec/onoff"
 
 	"github.com/SukramJ/go-fabric/cluster/wire"
 
@@ -68,9 +70,9 @@ const (
 
 	// Groups cluster (0x0004) and ScenesManagement (0x0062) are
 	// mandatory on OnOffLight + DimmableLight (matter.js
-	// packages/node/src/devices/on-off-light.ts). Light contributes
-	// them via the shared stubs in
-	// go-fabric cluster/wire/{groups,scenes_management}.go.
+	// packages/node/src/devices/on-off-light.ts). Light does not supply
+	// them: the endpoint assembler mounts both from the node's group
+	// state (go-fabric endpoint/materialize.go mountGroups / mountScenes).
 
 	matterAttrOnOffOnOff   uint32 = 0x0000
 	matterAttrLevelCurrent uint32 = 0x0000
@@ -177,27 +179,22 @@ func (l *Light) MatterDeviceType() uint16 {
 }
 
 // MatterClusterServers implements [interfaces.MatterEndpointSource].
-// A non-dimmable light contributes OnOff + Groups + ScenesManagement
-// (all mandatory per Matter §5.3 OnOffLight device type). A dimmable
-// light additionally contributes LevelControl.
-// Groups is a minimal stub — HM has no group management concept.
-// ScenesManagement is a minimal stub returning SceneTableSize=0 and
-// an empty FabricSceneInfo list — HM has no scene management concept.
-// matter.js packages/node/src/devices/on-off-light.ts lists Groups
+// A non-dimmable light contributes OnOff; a dimmable light
+// additionally contributes LevelControl.
+// matter.js packages/node/src/devices/on-off-light.ts also lists Groups
 // (0x0004) and ScenesManagement (0x0062) as mandatory server clusters.
+// Those are stack state, not device state: the endpoint assembler mounts
+// both from the node's group state (go-fabric endpoint/materialize.go
+// mountGroups / mountScenes), so the source supplies neither.
 func (l *Light) MatterClusterServers() []interfaces.MatterClusterServer {
 	if l.Capabilities.Dimmable {
 		return []interfaces.MatterClusterServer{
 			lightOnOffServer{l: l},
 			lightLevelServer{l: l},
-			wire.Groups{}, //nolint:staticcheck // SA1019: go-fabric v0.2.0 deprecates wire.Groups in favour of endpoint.Config.Groups + groups.Manager; the migration changes Groups behaviour on this endpoint and is its own change (see notes/parity/by_design.md, BD-Matter-WireGroupsStub)
-			wire.ScenesManagement{},
 		}
 	}
 	return []interfaces.MatterClusterServer{
 		lightOnOffServer{l: l},
-		wire.Groups{}, //nolint:staticcheck // SA1019: go-fabric v0.2.0 deprecates wire.Groups in favour of endpoint.Config.Groups + groups.Manager; the migration changes Groups behaviour on this endpoint and is its own change (see notes/parity/by_design.md, BD-Matter-WireGroupsStub)
-		wire.ScenesManagement{},
 	}
 }
 
@@ -806,10 +803,18 @@ func extractMoveToLevel(fields any) (wire.MoveToLevelRequest, error) {
 // a Move / MoveWithOnOff payload. Returns ok=false when the field is
 // absent or null — matter.js substitutes DefaultMoveRate then
 // (LevelControlServer.ts:274). The wire path lands here as
-// decodeGenericTagMap's map[uint8]any; the string-keyed shape serves
-// in-package tests.
+// decodeGenericTagMap's map[uint8]any: the bridge decodes Move ahead of
+// the generated LevelControl definition (go-fabric
+// bridge/fields_reader.go, the LevelControl case). The generated
+// [levelcontrolspec.MoveRequest] is accepted too, so the decode holds if
+// that ordering changes; the string-keyed shape serves in-package tests.
 func extractMoveRate(fields any) (uint8, bool) {
 	switch v := fields.(type) {
+	case levelcontrolspec.MoveRequest:
+		if v.Rate.Null {
+			return 0, false
+		}
+		return v.Rate.Value, true
 	case map[uint8]any:
 		raw, ok := v[1]
 		if !ok || raw == nil {
@@ -831,10 +836,13 @@ func extractMoveRate(fields any) (uint8, bool) {
 // extractLevelOptions pulls the OptionsMask / OptionsOverride bitmaps
 // (context tags 3 / 4 per Matter §1.6.7.3) out of a Step payload.
 // Absent fields default to 0, matching the spec default. The wire path
-// lands here as decodeGenericTagMap's map[uint8]any; the string-keyed
-// shape serves in-package tests.
+// lands here as decodeGenericTagMap's map[uint8]any; the generated
+// [levelcontrolspec.StepRequest] is accepted as well (see
+// [extractMoveRate]); the string-keyed shape serves in-package tests.
 func extractLevelOptions(fields any) (mask, override uint8) {
 	switch v := fields.(type) {
+	case levelcontrolspec.StepRequest:
+		return uint8(v.OptionsMask), uint8(v.OptionsOverride)
 	case map[uint8]any:
 		if raw, ok := v[3]; ok {
 			if m, mok := wireUint8(raw); mok {
@@ -861,10 +869,14 @@ func extractLevelOptions(fields any) (mask, override uint8) {
 // Step / StepWithOnOff payload. Step has no typed decoder in the bridge,
 // so the real wire path lands here as the tag-keyed map[uint8]any that
 // decodeGenericTagMap produces (unsigned ints as uint64) — see
-// go-fabric bridge/fields_reader.go. The string-keyed shape
-// is kept for the in-package tests.
+// go-fabric bridge/fields_reader.go. The generated
+// [levelcontrolspec.StepRequest] is accepted as well (see
+// [extractMoveRate]); the string-keyed shape is kept for the in-package
+// tests.
 func extractStepSize(fields any) (uint8, error) {
 	switch v := fields.(type) {
+	case levelcontrolspec.StepRequest:
+		return v.StepSize, nil
 	case map[uint8]any:
 		raw, ok := v[1]
 		if !ok {
@@ -886,7 +898,7 @@ func extractStepSize(fields any) (uint8, error) {
 		}
 		return s, nil
 	default:
-		return 0, fmt.Errorf("%w: Step expected map[uint8]any, got %T", errMatterValueType, fields)
+		return 0, fmt.Errorf("%w: Step expected levelcontrol.StepRequest or map[uint8]any, got %T", errMatterValueType, fields)
 	}
 }
 
@@ -895,6 +907,8 @@ func extractStepSize(fields any) (uint8, error) {
 // absent, matching the pre-decoded default.
 func extractStepMode(fields any) (uint8, error) {
 	switch m := fields.(type) {
+	case levelcontrolspec.StepRequest:
+		return uint8(m.StepMode), nil
 	case map[uint8]any:
 		raw, ok := m[0]
 		if !ok {
@@ -966,6 +980,13 @@ func matterWriteUint8(value any) (uint8, bool) {
 // are conformance M; absent fields default to 0 for robustness. The
 // constraints reject the reserved 0xFFFF hold value on the command
 // path — it is reachable only via an attribute write.
+//
+// The bridge decodes OnOff requests through the generated definition
+// (cluster/spec/onoff) whenever that package is linked — it is, through
+// cluster/onoff — so the wire path delivers
+// [onoffspec.OnWithTimedOffRequest]. The tag-keyed map is the bridge's
+// generic fallback for a cluster without a linked definition and stays
+// accepted so the decode does not depend on what the binary links.
 func extractOnWithTimedOff(fields any) (control uint8, onTime, offWaitTime uint16, err error) {
 	read := func(rawControl, rawOnTime, rawOffWait any) error {
 		if rawControl != nil {
@@ -992,6 +1013,8 @@ func extractOnWithTimedOff(fields any) (control uint8, onTime, offWaitTime uint1
 		return nil
 	}
 	switch v := fields.(type) {
+	case onoffspec.OnWithTimedOffRequest:
+		control, onTime, offWaitTime = uint8(v.OnOffControl), v.OnTime, v.OffWaitTime
 	case map[uint8]any:
 		err = read(v[0], v[1], v[2])
 	case map[string]any:
@@ -999,7 +1022,7 @@ func extractOnWithTimedOff(fields any) (control uint8, onTime, offWaitTime uint1
 	case nil:
 		// No fields decoded — all defaults.
 	default:
-		return 0, 0, 0, fmt.Errorf("%w: OnWithTimedOff expected map[uint8]any, got %T", errMatterValueType, fields)
+		return 0, 0, 0, fmt.Errorf("%w: OnWithTimedOff expected onoff.OnWithTimedOffRequest or map[uint8]any, got %T", errMatterValueType, fields)
 	}
 	if err != nil {
 		return 0, 0, 0, err

@@ -103,8 +103,10 @@ var (
 func (s *Switch) MatterDeviceType() uint16 { return matterDeviceTypeOnOffPlugInUnit }
 
 // MatterClusterServers implements [interfaces.MatterEndpointSource].
-// Switch contributes OnOff plus the Groups + ScenesManagement clusters
-// the Device Library makes mandatory for OnOffPlugInUnit (0x010A).
+// Switch contributes OnOff. The Groups + ScenesManagement clusters the
+// Device Library makes mandatory for OnOffPlugInUnit (0x010A) are stack
+// state: the endpoint assembler mounts both from the node's group state
+// (go-fabric endpoint/materialize.go mountGroups / mountScenes).
 //
 // Electrical measurement is deliberately absent. ElectricalPowerMeasurement
 // (0x0090) and ElectricalEnergyMeasurement (0x0091) used to be attached here
@@ -114,11 +116,7 @@ func (s *Switch) MatterDeviceType() uint16 { return matterDeviceTypeOnOffPlugInU
 // its own consolidated ElectricalSensor endpoint; see
 // matteradapter.ElectricalGroupDPKey.
 func (s *Switch) MatterClusterServers() []interfaces.MatterClusterServer {
-	return []interfaces.MatterClusterServer{
-		s,
-		wire.Groups{}, //nolint:staticcheck // SA1019: go-fabric v0.2.0 deprecates wire.Groups in favour of endpoint.Config.Groups + groups.Manager; the migration changes Groups behaviour on this endpoint and is its own change (see notes/parity/by_design.md, BD-Matter-WireGroupsStub)
-		wire.ScenesManagement{},
-	}
+	return []interfaces.MatterClusterServer{s}
 }
 
 // MatterClusterID implements [interfaces.MatterClusterServer].

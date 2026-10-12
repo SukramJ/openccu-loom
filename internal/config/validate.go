@@ -169,6 +169,14 @@ func validateMatter(m *NorthMatter) error {
 			"config: north.matter.commissioning.passcode: %d is not a usable Matter setup code — it must be in 1-99999998 and must not be a trivially guessable code such as 11111111 or 12345678 (0 disables PASE)", pc,
 		)
 	}
+	// The consumer maps any unrecognised word to "off", so a typo such as
+	// "incomming" would leave the bridge UDP-only while the operator
+	// believes TCP is served. Empty is what an unset key means and selects
+	// the default.
+	if m.TCP != "" && !slices.Contains(MatterTCPModes, m.TCP) {
+		return fmt.Errorf("config: north.matter.tcp must be one of %s (empty selects %q), got %q",
+			strings.Join(MatterTCPModes, "|"), MatterTCPOff, m.TCP)
+	}
 	return nil
 }
 

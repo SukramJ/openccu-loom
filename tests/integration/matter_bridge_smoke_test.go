@@ -12,15 +12,18 @@ package integration
 import (
 	"context"
 	"errors"
+	"log/slog"
+	"path/filepath"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
-
 	"github.com/SukramJ/go-fabric/endpoint"
-
-	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
+	"github.com/SukramJ/go-fabric/groups"
+	matterstore "github.com/SukramJ/go-fabric/store"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
+	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
+	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -136,12 +139,27 @@ func (s *smokeEndpointSource) MatterClusterServers() []interfaces.MatterClusterS
 
 // ─── builder helpers ──────────────────────────────────────────────────────────
 
-// smokeValidConfig returns a minimal assembler config.
-func smokeValidConfig() matteradapter.Config {
+// smokeValidConfig returns a minimal assembler config. Groups carries a
+// real group manager over a migrated store, as the daemon does: with it
+// the assembler mounts the stack's Groups and ScenesManagement servers
+// wherever a device type mandates them, so the cluster surfaces asserted
+// here are the ones a commissioner reads in production.
+func smokeValidConfig(t *testing.T) matteradapter.Config {
+	t.Helper()
+	db, err := sqlitestore.Open(context.Background(), sqlitestore.FileDSN(filepath.Join(t.TempDir(), "smoke.db")))
+	if err != nil {
+		t.Fatalf("open smoke store: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	mgr, err := groups.NewManager(matterstore.New(db), slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatalf("groups.NewManager: %v", err)
+	}
 	return matteradapter.Config{
 		VendorID:  0xFFF1,
 		ProductID: 0x8001,
 		NodeLabel: "SmokeTestBridge",
+		Groups:    mgr,
 	}
 }
 
@@ -149,7 +167,7 @@ func smokeValidConfig() matteradapter.Config {
 // an in-memory store. Helper shared by multiple test cases.
 func buildSmokeTopology(t *testing.T, snaps []matteradapter.DeviceSnapshot) *endpoint.Topology {
 	t.Helper()
-	a, err := matteradapter.New(newSmokeFakeStore(), smokeValidConfig(), nil)
+	a, err := matteradapter.New(newSmokeFakeStore(), smokeValidConfig(t), nil)
 	if err != nil {
 		t.Fatalf("matteradapter.New: %v", err)
 	}

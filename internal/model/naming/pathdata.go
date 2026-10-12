@@ -124,15 +124,21 @@ func mqttTopic(base, function string, item ...string) string {
 // same document as the status object's `val`. Nothing that a value template
 // can reach belongs here.
 //
-// go-hamqtt's [topic.IsFunction] does not know it (v0.36.0); use
-// [IsFunction] wherever "is this level a function" decides something.
-const FunctionHA = "ha"
+// The name is go-hamqtt's [topic.FunctionHA], so this tree and the shared
+// layout cannot spell it differently. go-hamqtt's [topic.IsFunction]
+// deliberately leaves it out; use [IsFunction] wherever "is this level a
+// function" decides something.
+const FunctionHA = topic.FunctionHA
 
 // IsFunction reports whether s is a topic function of this daemon's tree:
-// one of mqtt-smarthome 2.0's, or [FunctionHA].
-func IsFunction(s string) bool { return s == FunctionHA || topic.IsFunction(s) }
+// one of mqtt-smarthome 2.0's, or [FunctionHA]. It is go-hamqtt's
+// [topic.IsReservedFunction] under this package's name.
+func IsFunction(s string) bool { return topic.IsReservedFunction(s) }
 
-// HATopic is `<base>/ha/<item...>`; see [FunctionHA].
+// HATopic is `<base>/ha/<item...>`; see [FunctionHA]. It is not
+// [topic.SmartHome.HA]: that one answers "" for an empty item path, while
+// callers here compose the bare `<base>/ha/` prefix for retain sweeps and
+// prefix matching, and the base is only slash-trimmed here, never validated.
 func HATopic(base string, item ...string) string {
 	return mqttTopic(base, FunctionHA, item...)
 }

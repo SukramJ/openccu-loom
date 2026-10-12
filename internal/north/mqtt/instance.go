@@ -5,7 +5,6 @@ package mqtt
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"time"
@@ -58,10 +57,6 @@ func newInstance(b *Bridge, logger *slog.Logger) *hapublisher.Instance {
 	extra := map[string]any{
 		"commit":     build.Commit,
 		"build_date": build.BuildDate,
-		// Resolved per publish, never captured: the document is republished
-		// on every broker reconnect, and a CCU adopted at runtime must
-		// appear in it without a restart.
-		"centrals": infoCentrals{b: b},
 	}
 	m := b.cfg.Maintenance
 	return hapublisher.NewInstance(
@@ -72,6 +67,7 @@ func newInstance(b *Bridge, logger *slog.Logger) *hapublisher.Instance {
 			Version:             build.Version,
 			Started:             b.cfg.StartedAt,
 			Extra:               extra,
+			ExtraFunc:           func() map[string]any { return infoExtraNow(b) },
 			MaintenanceDisabled: m.Disabled,
 			SetLogLevel:         m.SetLogLevel,
 			Supervised:          m.Supervised,
@@ -82,19 +78,16 @@ func newInstance(b *Bridge, logger *slog.Logger) *hapublisher.Instance {
 	)
 }
 
-// infoCentrals is the `centrals` field of `<base>/info`: the centrals the
-// daemon serves, resolved when the document is rendered rather than when the
-// instance is built. The shared [hapublisher.InstanceConfig.Extra] is fixed
-// at construction, so the value is a marshaller that asks the bridge.
-type infoCentrals struct{ b *Bridge }
-
-// MarshalJSON implements [json.Marshaler].
-func (c infoCentrals) MarshalJSON() ([]byte, error) {
-	names := c.b.cleanupCentralNames()
+// infoExtraNow is the part of `<base>/info` resolved per render rather than
+// at construction. `centrals` is the centrals the daemon serves: the document
+// is republished on every broker reconnect, and a CCU adopted at runtime must
+// appear in it without a restart. An empty set renders as `[]`, never null.
+func infoExtraNow(b *Bridge) map[string]any {
+	names := b.cleanupCentralNames()
 	if names == nil {
 		names = []string{}
 	}
-	return json.Marshal(names)
+	return map[string]any{"centrals": names}
 }
 
 // Instance exposes the bridge's instance publisher for the composition

@@ -877,6 +877,19 @@ func (m NorthDiscoveryMDNS) ResolveInstanceName() string {
 	return ""
 }
 
+// The values of [NorthMatter.TCP]. MatterTCPOff is what an unset key
+// defaults to.
+const (
+	MatterTCPOff      = "off"
+	MatterTCPIncoming = "incoming"
+	MatterTCPOutgoing = "outgoing"
+	MatterTCPBoth     = "both"
+)
+
+// MatterTCPModes lists the accepted [NorthMatter.TCP] values, in the
+// order the validator names them.
+var MatterTCPModes = []string{MatterTCPOff, MatterTCPIncoming, MatterTCPOutgoing, MatterTCPBoth}
+
 // NorthMatter configures the Matter bridge runtime. Disabled by
 // default — when enabled, the daemon stands up the UDP listener,
 // assembles the endpoint topology, and advertises via mDNS. See
@@ -894,6 +907,14 @@ type NorthMatter struct {
 	// PreferIPv4 forces an IPv4-only socket. Default (false) opens an
 	// IPv6 dual-stack socket which also accepts IPv4 traffic.
 	PreferIPv4 bool `yaml:"prefer_ipv4" json:"prefer_ipv4" cfg:"expert"`
+
+	// TCP selects the Matter TCP transport roles (Matter 1.4+, matter.js
+	// NetworkServer.ts resolveTcpConfig): "off" (the default — UDP only,
+	// the operational record carries no T key), "incoming" (accept TCP
+	// connections on the UDP port — the tcpServer role), "outgoing" (open
+	// them — the tcpClient role) or "both". A controller that supports
+	// TCP then moves large payloads (wildcard reads, OTA) off MRP.
+	TCP string `yaml:"tcp" json:"tcp" cfg:"expert"`
 
 	// ExposeSecondaryChannels, when true, projects a device's secondary
 	// channel-group members — the status transmitter channel and the
@@ -1050,6 +1071,9 @@ func (m NorthMatter) WithDefaults() NorthMatter {
 	}
 	if out.Discriminator == 0 {
 		out.Discriminator = 0xF00
+	}
+	if out.TCP == "" {
+		out.TCP = MatterTCPOff
 	}
 	if out.MDNSAdvertise == "" {
 		// An enabled bridge that never advertises is undiscoverable —

@@ -224,6 +224,12 @@ func matterRestartRules() []RestartRule {
 			Path:    "north.matter.listen",
 			Differs: func(b, e *Config) bool { return b.North.Matter.Listen != e.North.Matter.Listen },
 		},
+		{
+			// The TCP listener is bound next to the UDP socket at bring-up
+			// and the operational record's T key is written then.
+			Path:    "north.matter.tcp",
+			Differs: func(b, e *Config) bool { return b.North.Matter.WithDefaults().TCP != e.North.Matter.WithDefaults().TCP },
+		},
 		// The bridge's Basic Information cluster and its commissionable mDNS
 		// records are built once during bridge bring-up, so the identity and
 		// pairing parameters only change on the next boot. A commissioner that

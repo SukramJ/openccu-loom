@@ -34,6 +34,7 @@ import (
 	"github.com/SukramJ/go-fabric/diagevent"
 	"github.com/SukramJ/go-fabric/eligibility"
 	fabricendpoint "github.com/SukramJ/go-fabric/endpoint"
+	mattergroups "github.com/SukramJ/go-fabric/groups"
 	"github.com/SukramJ/go-fabric/im/subscription"
 	"github.com/SukramJ/go-fabric/mdns"
 	matterschema "github.com/SukramJ/go-fabric/schema"
@@ -41,6 +42,7 @@ import (
 	"github.com/SukramJ/go-fabric/secure/channel"
 	"github.com/SukramJ/go-fabric/secure/mattercert"
 	"github.com/SukramJ/go-fabric/secure/operational"
+	"github.com/SukramJ/go-fabric/secure/sessionparams"
 	mattersetup "github.com/SukramJ/go-fabric/secure/setup"
 	"github.com/SukramJ/go-fabric/secure/sigma"
 	"github.com/SukramJ/go-fabric/secure/spake2"
@@ -76,12 +78,51 @@ import (
 //
 // The numeric values match the operational SII/SAI/SAT defaults from
 // `mdns/service.go`: SII=500ms, SAI=300ms, SAT=4000ms.
-func bridgeSessionParameters() *sigma.SessionParameters {
-	return &sigma.SessionParameters{
-		SessionIdleInterval:    500,
-		SessionActiveInterval:  300,
-		SessionActiveThreshold: 4000,
+func bridgeSessionParameters(tcp matterbridge.TCPConfig) *sigma.SessionParameters {
+	p := matterbridge.SessionParametersFor(matterTransportsBitmap(tcp), 0)
+	p.SessionIdleInterval = 500
+	p.SessionActiveInterval = 300
+	p.SessionActiveThreshold = 4000
+	return &p
+}
+
+// matterTransportsBitmap is the SupportedTransports bitmap a session
+// handshake advertises for the configured TCP roles — the tcpServer bit
+// for Incoming, the tcpClient bit for Outgoing, nothing with TCP off
+// (matter.js SessionParameters.ts:50-62: a node states only the roles it
+// serves).
+func matterTransportsBitmap(tcp matterbridge.TCPConfig) uint16 {
+	var bits uint16
+	if tcp.Incoming {
+		bits |= sessionparams.TransportTCPServer
 	}
+	if tcp.Outgoing {
+		bits |= sessionparams.TransportTCPClient
+	}
+	return bits
+}
+
+// paseResponderParams is what a PASE adapter advertises as
+// PBKDFParamResponse tag 5 for the configured TCP roles: Sigma2's
+// parameters with the node's transports stated (matter.js PaseServer.ts:151
+// sends the node's one SessionParameters on both handshakes).
+func paseResponderParams(tcpMode string) *sigma.SessionParameters {
+	return bridgeSessionParameters(matterTCPConfig(tcpMode))
+}
+
+// matterTCPConfig maps config.NorthMatter.TCP onto the bridge's TCP
+// roles. The validator restricts the value to the four words; the zero
+// value (off) is what an unset key means.
+func matterTCPConfig(mode string) matterbridge.TCPConfig {
+	switch mode {
+	case config.MatterTCPIncoming:
+		return matterbridge.TCPConfig{Incoming: true}
+	case config.MatterTCPOutgoing:
+		return matterbridge.TCPConfig{Outgoing: true}
+	case config.MatterTCPBoth:
+		return matterbridge.TCPConfig{Incoming: true, Outgoing: true}
+	}
+	return matterbridge.TCPConfig{}
 }
 
 // buildMatterAdvertiser selects the mDNS advertiser from mc.MDNSAdvertise and
@@ -214,6 +255,18 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	}
 
 	store := matterstore.New(db)
+	// Group membership is stack state, as in matter.js where GroupsServer
+	// keeps it in the root's GroupKeyManagementServer (go-fabric ADR
+	// 0009): one manager over the store feeds the assembler (the bridged
+	// endpoints' Groups and ScenesManagement servers), the root
+	// GroupKeyManagement and Groupcast servers, and the bridge's
+	// group-message routing. A bridge without it would serve a Descriptor
+	// ServerList that contradicts its own DeviceTypeList.
+	groupMgr, gErr := mattergroups.NewManager(store, logger)
+	if gErr != nil {
+		logger.Warn("matter.bridge.groups", slog.String("err", gErr.Error()))
+		return nil
+	}
 	// Endpoint identity and the exposure allowlist are keyed by this
 	// daemon's own 5-tuple, so they are persisted here rather than by the
 	// bridge module — which sees only an opaque key. Same database handle,
@@ -270,6 +323,8 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		IncludeMeasurements:     mc.IncludeMeasurements,
 		Labels:                  labels,
 		ChannelLabel:            channelLabel,
+		Groups:                  groupMgr,
+		Scenes:                  matterScenesStore{store: store, logger: logger},
 	}, logger)
 	if err != nil {
 		logger.Warn("matter.bridge.assembler", slog.String("err", err.Error()))
@@ -286,6 +341,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		ProductID:     mc.ProductID,
 		NodeLabel:     mc.NodeLabel,
 		Discriminator: mc.Discriminator,
+		TCP:           matterTCPConfig(mc.TCP),
 	}, logger)
 	if err != nil {
 		logger.Warn("matter.bridge.new", slog.String("err", err.Error()))
@@ -298,6 +354,31 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// requests (Matter §9.10). Wired before Start so the first assembled
 	// dispatcher already gates reads / writes / invokes.
 	bridge.AttachACLLister(store)
+
+	// Server-subscription resumption (go-fabric ADR 0008, matter.js
+	// SubscriptionsServer): Start loads the previous run's CASE
+	// subscriptions from the store and re-establishes each under its old
+	// SubscriptionId through the operational resolver. Without both, a
+	// restart drops every subscription and each controller waits out its
+	// own liveness timeout before it re-subscribes — the bridge looks
+	// unresponsive for that long. Attached before Start, which is when
+	// the rows are read.
+	bridge.AttachSubscriptionStore(store)
+	bridge.AttachOperationalResolver(mdns.NewOperationalResolver(logger))
+
+	// Group messaging and the auxiliary ACL, over the restored group
+	// state. Load before Start: the first assembled dispatcher already
+	// routes group Invokes / Writes to member endpoints and joins their
+	// multicast addresses, and both ports fail closed — silently, a group
+	// message is never answered — when left on the noop default.
+	if err := groupMgr.Load(ctx); err != nil {
+		logger.Warn("matter.bridge.groups.load", slog.String("err", err.Error()))
+		unwireReadiness()
+		closeAdvertiser()
+		return nil
+	}
+	bridge.AttachGroupMessaging(groupMgr)
+	bridge.AttachAuxiliaryACL(groupMgr)
 
 	// The pairing trace has to be attached before the bridge starts serving:
 	// the moments worth recording begin with the first commissioner that
@@ -527,7 +608,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 			}
 		}, 0)
 	}
-	rootServers, opCreds, rootRefs, err := buildRootClusters(ctx, mc, store, bridge, advertiser, logger, caseRefresh, adoptSessionForFabric, closePaseSessions)
+	rootServers, opCreds, rootRefs, err := buildRootClusters(ctx, mc, store, groupMgr, bridge, advertiser, logger, caseRefresh, adoptSessionForFabric, closePaseSessions)
 	if err != nil {
 		logger.Warn("matter.bridge.root_clusters.build", slog.String("err", err.Error()))
 	} else {
@@ -554,9 +635,12 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 
 	// Seed GeneralDiagnostics with persisted counters: load the row,
 	// bump RebootCount, persist back so the next boot starts at the
-	// new value, then hand the seed to the cluster. The cluster adds
-	// the live process uptime to BaseOperationalHours on every read.
-	// The shutdown closure (further down) writes the final value.
+	// new value, then hand the seed to the cluster. The operational
+	// time is seeded at full resolution ([loadMatterOperationalTime]) so
+	// a restart keeps its part-hour, as matter.js's millisecond
+	// totalOperationalHoursCounter does; the cluster adds the live
+	// process uptime on every read. The shutdown closure (further down)
+	// and [keepMatterOperationalTime] write it back.
 	if rootRefs.GeneralDiagnostics != nil && store != nil {
 		seedCtx, seedCancel := context.WithTimeout(ctx, 2*time.Second)
 		if rec, lerr := store.LoadDiagnostics(seedCtx); lerr == nil {
@@ -564,10 +648,13 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 			if serr := store.SaveDiagnostics(seedCtx, rec); serr != nil {
 				logger.Warn("matter.bridge.diagnostics.save_seed", slog.String("err", serr.Error()))
 			}
-			rootRefs.GeneralDiagnostics.SetPersistedCounters(rec.RebootCount, rec.BaseOperationalHours)
+			opTime := loadMatterOperationalTime(seedCtx, store, rec, logger)
+			rootRefs.GeneralDiagnostics.SetPersistedCounters(rec.RebootCount, 0)
+			rootRefs.GeneralDiagnostics.SetPersistedOperationalTime(opTime)
 			logger.Info("matter.bridge.diagnostics.seeded",
 				slog.Int("reboot_count", int(rec.RebootCount)),
-				slog.Int("base_op_hours", int(rec.BaseOperationalHours)))
+				slog.Duration("operational_time", opTime))
+			go keepMatterOperationalTime(ctx, store, rootRefs.GeneralDiagnostics, matterOperationalTimePersistInterval, logger)
 		} else {
 			logger.Warn("matter.bridge.diagnostics.load", slog.String("err", lerr.Error()))
 		}
@@ -590,7 +677,17 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 			}
 			return entry.Session, true
 		},
-	).WithFabricResolver(func(id uint16) (uint8, bool) {
+	).WithTransportResolver(func(id uint16) (uint16, uint32, bool) {
+		// The peer's SupportedTransports and MaxTcpMessageSize, stamped
+		// on the entry at PASE / CASE establishment below; the reply
+		// chunkers bound a TCP frame by them (bridge/reply.go).
+		entry, err := opMgr.Get(id)
+		if err != nil || entry == nil {
+			return 0, 0, false
+		}
+		tr, mx := entry.PeerTransportParameters()
+		return tr, mx, tr != 0 || mx != 0
+	}).WithFabricResolver(func(id uint16) (uint8, bool) {
 		entry, err := opMgr.Get(id)
 		if err != nil || entry == nil {
 			return 0, false
@@ -671,7 +768,14 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// the burst as redundant noise. Mirrors matter.js
 	// packages/protocol/src/session/SessionManager.ts — close
 	// callbacks chain into SubscriptionHandler cleanup.
-	opMgr.SetOnSessionClose(subMgr.CloseSession)
+	// One close hook, two observers: the session's subscriptions fall
+	// with it, and the bridge forgets the session's route — closing a TCP
+	// connection whose last session it was (matter.js
+	// ExchangeManager.ts:669-676 #closeTcpChannelIfLastSession).
+	opMgr.SetOnSessionClose(func(id uint16) {
+		subMgr.CloseSession(id)
+		bridge.SessionClosed(id)
+	})
 
 	// Wire the session manager into the Secure-Channel path so the
 	// bridge (a) closes sessions on inbound CloseSession StatusReports,
@@ -801,6 +905,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 					logger.Warn("matter.bridge.pase.build", slog.String("err", err.Error()))
 					return nil
 				}
+				a.SetResponderSessionParams(paseResponderParams(mc.TCP))
 				return a
 			})
 			// Reap stale per-exchange adapters every 30s with a 60s
@@ -818,6 +923,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 			if err != nil {
 				logger.Warn("matter.bridge.pase.build", slog.String("err", err.Error()))
 			} else {
+				paseAdapter.SetResponderSessionParams(paseResponderParams(mc.TCP))
 				bridge.AttachPaseHandler(paseAdapter)
 				configuredPase = paseAdapter
 				logger.Info("matter.bridge.pase.armed",
@@ -977,7 +1083,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 			// learns the bridge's preferred MRP intervals post-CASE — matches
 			// the operational mDNS SII/SAI/SAT defaults. Mirrors chip
 			// CASESession.cpp:1326 EncodeSessionParameters.
-			responder.SetSessionParameters(bridgeSessionParameters())
+			responder.SetSessionParameters(bridgeSessionParameters(matterTCPConfig(mc.TCP)))
 			// Wire the resumption-record lookup so a fresh Sigma1 that
 			// carries a known ResumptionID can fast-path through
 			// Sigma2_Resume instead of the full handshake. Mirrors
@@ -1041,6 +1147,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 				if resp := adapter.SnapshotResponder(); resp != nil {
 					if sp, ok := resp.PeerSessionParameters(); ok {
 						entry.SetPeerMRPIntervals(sp.SessionIdleInterval, sp.SessionActiveInterval, uint32(sp.SessionActiveThreshold))
+						entry.SetPeerTransportParameters(sp.EffectiveTransports(), sp.EffectiveMaxTCPMessageSize())
 					}
 				}
 				logger.Info("matter.bridge.case.session_established",
@@ -1106,18 +1213,12 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		if stopReannounce != nil {
 			stopReannounce()
 		}
-		// Persist the diagnostics counters before tearing down the
-		// store. RebootCount was already bumped at boot; here we add
-		// the just-elapsed process uptime to BaseOperationalHours so
-		// the next boot's TotalOperationalHours read picks up where we
-		// left off.
+		// Persist the operational time before tearing down the store.
+		// RebootCount was already bumped at boot; the full-resolution
+		// operational time is what the next boot seeds from.
 		if rootRefs.GeneralDiagnostics != nil && store != nil {
-			if rec, lerr := store.LoadDiagnostics(stopCtx); lerr == nil {
-				delta := uint32(rootRefs.GeneralDiagnostics.UpTimeSeconds()/3600) & 0xFFFFFFFF
-				rec.BaseOperationalHours += delta
-				if serr := store.SaveDiagnostics(stopCtx, rec); serr != nil {
-					logger.Warn("matter.bridge.diagnostics.save_shutdown", slog.String("err", serr.Error()))
-				}
+			if serr := storeMatterOperationalTime(stopCtx, store, rootRefs.GeneralDiagnostics); serr != nil {
+				logger.Warn("matter.bridge.diagnostics.save_shutdown", slog.String("err", serr.Error()))
 			}
 		}
 		if err := bridge.Stop(stopCtx); err != nil {
@@ -1290,7 +1391,10 @@ func buildCaseAdapter(ctx context.Context, cfg config.NorthMatterCASE, mgr *oper
 	const initialSessionID uint16 = 1
 	responder := sigma.NewResponder(identity, verifier, initialSessionID)
 	// Emit responderSessionParams — see bridgeSessionParameters.
-	responder.SetSessionParameters(bridgeSessionParameters())
+	// This helper has test callers only; the daemon's own CASE adapter is
+	// built inline in startMatterBridge with the configured TCP roles, so
+	// the parameters here state no transport.
+	responder.SetSessionParameters(bridgeSessionParameters(matterbridge.TCPConfig{}))
 	caseAdapter := matterbridge.NewCaseAdapter(responder)
 	nodeID := identity.NodeID
 	caseAdapter.SetOnSessionEstablished(func(keys sigma.SessionKeys, _ uint16) error { //nolint:contextcheck // callback signature is fixed; PersistResumption uses context.Background() since no ctx is available in the callback
@@ -1313,6 +1417,7 @@ func buildCaseAdapter(ctx context.Context, cfg config.NorthMatterCASE, mgr *oper
 		if resp := caseAdapter.SnapshotResponder(); resp != nil {
 			if sp, ok := resp.PeerSessionParameters(); ok {
 				entry.SetPeerMRPIntervals(sp.SessionIdleInterval, sp.SessionActiveInterval, uint32(sp.SessionActiveThreshold))
+				entry.SetPeerTransportParameters(sp.EffectiveTransports(), sp.EffectiveMaxTCPMessageSize())
 			}
 		}
 		logger.Info("matter.bridge.case.session_established",
@@ -1925,7 +2030,7 @@ func resolveBridgeUniqueID(ctx context.Context, store *matterstore.Store, mc con
 // Operators that disable Matter via cfg.Enabled never reach this
 // function. Construction errors are surfaced individually so a
 // single misconfigured cluster cannot block the rest.
-func buildRootClusters(ctx context.Context, mc config.NorthMatter, store *matterstore.Store, bridge *matterbridge.Bridge, adv mdns.Advertiser, logger *slog.Logger, onFabricInstalledExtra func(ctx context.Context, fabricIndex uint8, fabricID, nodeID uint64, rootPub []byte), adoptSessionForFabric func(ctx context.Context, fabricIndex uint8), closePaseSessions func() int) ([]interfaces.MatterClusterServer, *mattercore.OperationalCredentials, rootClusterRefs, error) { //nolint:gocognit,funlen,gocyclo // composition/wiring: long sequential setup
+func buildRootClusters(ctx context.Context, mc config.NorthMatter, store *matterstore.Store, groupMgr *mattergroups.Manager, bridge *matterbridge.Bridge, adv mdns.Advertiser, logger *slog.Logger, onFabricInstalledExtra func(ctx context.Context, fabricIndex uint8, fabricID, nodeID uint64, rootPub []byte), adoptSessionForFabric func(ctx context.Context, fabricIndex uint8), closePaseSessions func() int) ([]interfaces.MatterClusterServer, *mattercore.OperationalCredentials, rootClusterRefs, error) { //nolint:gocognit,funlen,gocyclo // composition/wiring: long sequential setup
 	out := make([]interfaces.MatterClusterServer, 0, 8)
 	var opCreds *mattercore.OperationalCredentials
 	var refs rootClusterRefs
@@ -2468,11 +2573,27 @@ func buildRootClusters(ctx context.Context, mc config.NorthMatter, store *matter
 			out = append(out, opcreds)
 			opCreds = opcreds
 		}
-		gkm, err := mattercore.NewGroupKeyManagement(store, mattercore.GroupKeyMgmtConfig{})
+		// GroupKeyManagement over the node's group state, and Groupcast
+		// next to it — matter.js mounts both on the root
+		// (go-fabric node/root.go mirrors ServerNode's root behaviours).
+		// groupMgr is nil only in tests that build the root without a
+		// group state; GroupKeyManagement then keeps its keys alone and
+		// Groupcast is not served.
+		gkm, err := mattercore.NewGroupKeyManagement(store, mattercore.GroupKeyMgmtConfig{Groups: groupMgr})
 		if err != nil {
 			logger.Warn("matter.bridge.gkm.build", slog.String("err", err.Error()))
 		} else {
 			out = append(out, gkm)
+			if groupMgr != nil && refs.AccessControl != nil {
+				gc, gcErr := mattercore.NewGroupcast(mattercore.GroupcastConfig{
+					Groups: groupMgr, GroupKeyManagement: gkm, AccessControl: refs.AccessControl,
+				})
+				if gcErr != nil {
+					logger.Warn("matter.bridge.groupcast.build", slog.String("err", gcErr.Error()))
+				} else {
+					out = append(out, gc)
+				}
+			}
 		}
 	}
 
@@ -2895,18 +3016,11 @@ func buildPaseAdapterFromContext(vc *spake2.VerifierContext, salt []byte, iterat
 	// pre-allocated sessID as ResponderSessionID so the commissioner
 	// echoes back the correct id on post-PASE IM traffic.
 	paseAdapter.SetPBKDFParams(uint32(iterations), salt, sessID) //nolint:gosec // iterations was validated by NewVerifierContext; see #20
-	// Advertise the bridge's MRP profile as PBKDFParamResponse tag 5 —
-	// the same idle/active/threshold triplet Sigma2 tag 5 and the mDNS
-	// SII/SAI keys carry. Mirrors matter.js PaseServer.ts:151.
-	sp := bridgeSessionParameters()
-	idle := sp.SessionIdleInterval
-	active := sp.SessionActiveInterval
-	thresh := sp.SessionActiveThreshold
-	paseAdapter.SetResponderMRPParams(&spake2.MRPParameters{
-		IdleRetransTimeoutMs:   &idle,
-		ActiveRetransTimeoutMs: &active,
-		ActiveThresholdTimeMs:  &thresh,
-	})
+	// PBKDFParamResponse tag 5 carries the node's SessionParameters —
+	// matter.js PaseServer.ts:151. The adapter's default states the same
+	// MRP triplet, revisions and MaxPathsPerInvoke Sigma2 advertises; the
+	// callers add the TCP roles through [paseResponderParams], which is
+	// the one fact this builder does not know.
 	paseAdapter.SetOnSessionEstablished(func(sharedSecret []byte, peerSessionID uint16) error {
 		// Pickup marker: this fires after a successful Pake3
 		// verification but before the session is registered. Paired
@@ -2927,22 +3041,13 @@ func buildPaseAdapterFromContext(vc *spake2.VerifierContext, salt []byte, iterat
 		}
 		logger.Debug("matter.bridge.pase.session_open_ok",
 			slog.Int("session_id", int(entry.SessionID)))
-		// Honour the commissioner's InitiatorMRPParams (tag 5) so
-		// outbound retransmissions on the PASE session use the peer's
-		// advertised intervals. Mirrors matter.js PaseServer.ts:155-157
-		// `session.timingParameters = initiatorSessionParams`.
-		if pm := paseAdapter.PeerMRPParams(); pm != nil {
-			var idleMs, activeMs, threshMs uint32
-			if pm.IdleRetransTimeoutMs != nil {
-				idleMs = *pm.IdleRetransTimeoutMs
-			}
-			if pm.ActiveRetransTimeoutMs != nil {
-				activeMs = *pm.ActiveRetransTimeoutMs
-			}
-			if pm.ActiveThresholdTimeMs != nil {
-				threshMs = uint32(*pm.ActiveThresholdTimeMs)
-			}
-			entry.SetPeerMRPIntervals(idleMs, activeMs, threshMs)
+		// The commissioner's SessionParameters (tag 5) size the session's
+		// retransmissions and name its transports. Mirrors matter.js
+		// PaseServer.ts:155-157 `session.timingParameters =
+		// initiatorSessionParams`.
+		if pm := paseAdapter.PeerSessionParams(); pm != nil {
+			entry.SetPeerMRPIntervals(pm.SessionIdleInterval, pm.SessionActiveInterval, uint32(pm.SessionActiveThreshold))
+			entry.SetPeerTransportParameters(pm.EffectiveTransports(), pm.EffectiveMaxTCPMessageSize())
 		}
 		// Plumb the AttestationChallenge into OperationalCredentials
 		// so AttestationRequest / CSRRequest signatures bind to the
@@ -3808,6 +3913,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 		var verifierConfiguredFactory func() *matterbridge.PaseAdapter
 		if mcfg.Commissioning.ConcurrentPairings {
 			cmCopy := mcfg.Commissioning
+			tcpLocal := mcfg.TCP
 			opMgrLocal := bundle.opMgr
 			opCredsLocal := bundle.opCreds
 			gcLocal := bundle.rootRefs.GeneralCommissioning
@@ -3818,6 +3924,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 					loggerLocal.Warn("matter.bridge.pase.build", slog.String("err", err.Error()))
 					return nil
 				}
+				a.SetResponderSessionParams(paseResponderParams(tcpLocal))
 				return a
 			}
 		}
@@ -3919,6 +4026,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 				// so the Restore closure can re-install it after the
 				// ephemeral window closes.
 				cmCopy := mcfg.Commissioning
+				tcpLocal := mcfg.TCP
 				opMgrLocal := bundle.opMgr
 				opCredsLocal := bundle.opCreds
 				gcLocal := bundle.rootRefs.GeneralCommissioning
@@ -3929,6 +4037,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 						loggerLocal.Warn("matter.bridge.pase.build", slog.String("err", err.Error()))
 						return nil
 					}
+					a.SetResponderSessionParams(paseResponderParams(tcpLocal))
 					return a
 				}
 			}

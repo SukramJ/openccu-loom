@@ -232,6 +232,9 @@ func TestAnnounceOnlinePublishesConnectedLevelAndInfo(t *testing.T) {
 	if _, ok := doc["status"]; ok {
 		t.Errorf("info carries the redundant bridge/health `status` field: %s", info)
 	}
+	if !strings.Contains(info, `"centrals":["GoOtto"]`) {
+		t.Errorf("info.centrals is not rendered as a JSON array of names: %s", info)
+	}
 
 	mu.Lock()
 	centrals = append(centrals, "Zweite")

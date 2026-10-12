@@ -42,6 +42,7 @@
   "north.matter.node_label": "string",
   "north.matter.prefer_ipv4": "bool",
   "north.matter.product_id": "uint16",
+  "north.matter.tcp": "string",
   "north.matter.vendor_id": "uint16",
   "north.mcp.allow_writes": "bool",
   "north.mcp.enabled": "bool",

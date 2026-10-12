@@ -7,6 +7,7 @@ import (
 	"context"
 	"log/slog"
 
+	hadiscovery "github.com/SukramJ/go-hamqtt/discovery"
 	hamodel "github.com/SukramJ/go-hamqtt/model"
 	hapublisher "github.com/SukramJ/go-hamqtt/publisher"
 	hagomqtt "github.com/SukramJ/go-hamqtt/publisher/gomqtt"
@@ -61,6 +62,34 @@ func discoveryRuntimeConfig(b *Bridge, logger *slog.Logger) hapublisher.Config {
 				return
 			}
 			logger.Info("mqtt.birth_sync.republished", slog.Int("replayed", replayed))
+		},
+		// Containment publishes the document Home Assistant would accept
+		// instead of the one rendered: a component it refuses — no
+		// `platform`, an unsupported one, no `unique_id` — is withheld and
+		// the rest of the device still arrives. Without it one such
+		// component costs the whole device, because a missing platform or
+		// unique_id refuses the document as a whole
+		// (homeassistant/components/mqtt/schemas.py:194-227,
+		// discovery.py:304-313), and a component that fails its own
+		// platform schema would be refused by Home Assistant anyway
+		// (mqtt/entity.py:324-347), so withholding it loses nothing.
+		//
+		// StripWarnings stays false. A strippable finding is a key Home
+		// Assistant removes on receipt (the discovery schemas run with
+		// extra=REMOVE_EXTRA) or a state class it only logs about, so
+		// stripping it here would not change the entity Home Assistant
+		// ends up with — it would only change the bytes on the wire, and
+		// the per-entity and bundle forms are kept byte-identical per
+		// component on purpose (see [discoveryBundleStore.Put]).
+		//
+		// The ignore set is the keys this daemon publishes deliberately,
+		// so `translation_key` is neither withheld nor counted.
+		Contain: &hadiscovery.ContainOptions{
+			Ignore:        discoveryKeysHomeAssistantIgnores,
+			StripWarnings: false,
+		},
+		OnContained: func(nodeID string, c *hadiscovery.Containment) {
+			b.logContained(nodeID, c)
 		},
 		Logger: logger,
 	}
