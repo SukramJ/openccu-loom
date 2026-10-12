@@ -180,6 +180,7 @@ nav:
           - ADR 0081 — Deployment self-description: adr/0081-deployment-self-description.md
           - ADR 0082 — Device onboarding: adr/0082-device-onboarding.md
           - ADR 0083 — mqtt-smarthome topic convention: adr/0083-mqtt-smarthome-topic-convention.md
+          - ADR 0084 — Matter device layer and node facade: adr/0084-matter-device-layer-and-node-facade.md
   - Credits: attribution.md
 
 # Only the mkdocs machinery itself is excluded. Everything else under
