@@ -128,7 +128,10 @@ replace it, and the metrics that say whether it worked.
   chip-tool Groups/Scenes positive test is in; the live Apple Home run
   covers phases 1 and 2 together and is still due.
   Upstream asks filed on the way: go-fabric #60 (thermo Sink), #61
-  (cover Mover port), #62 (versioned store migrations). Phase 3 (blocked
+  (cover Mover port), #62 (versioned store migrations), #63 (onoff Sink
+  under the operation lock), #66 (ColorControlServer has no setter for
+  device-originated colour — the ColorControl follow-up waits on it, the
+  LevelControl follow-up is merged, #957). Phase 3 (blocked
   on go-fabric #58):
   `startMatterBridge` onto `node.New` once the facade carries host hooks —
   fabric added/removed/updated observers, commissioning-complete and
