@@ -84,6 +84,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   classic HM dimmers through RAMP_STOP, Options and OnLevel are writable
   and read back, StartUpCurrentLevel is kept by the server, and a
   CurrentLevel write is refused (access `R V`) — commands are the path.
+  The enums schema gains `RAMP_STOP` (REST API 13.9.0, additive).
 - **Matter: the OnOff cluster of every bridged switch, light, siren and
   sound player is go-fabric's `onoff.Server`** (ADR 0084 phase 2). The
   five hand-written servers and the light's own timed-off engine are
