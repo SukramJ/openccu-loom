@@ -57,10 +57,21 @@ func TestSendReceive_GroupsScenes(t *testing.T) {
 	// chip-tool's guide does, and the server overwrites it with the
 	// accessing fabric anyway.
 	groupKeyMap := fmt.Sprintf(`[{"groupId": %d, "groupKeySetID": %d, "fabricIndex": 1}]`, groupID, keySetID)
-	keySet := fmt.Sprintf(`{"groupKeySetID": %d, "groupKeySecurityPolicy": 0, `+
+	// chip-tool's generated struct parser demands every member of its own
+	// schema version and rejects members it does not know: a Matter 1.4
+	// build (the pinned chip-cert-bins) requires GroupKeyMulticastPolicy,
+	// a 1.3 build (the snap) refuses it. The key set is written in the
+	// 1.4 shape first and in the 1.3 shape when the tool refuses the
+	// arguments; the daemon accepts both (go-fabric reads field 8 when
+	// present).
+	keySetFields := fmt.Sprintf(`"groupKeySetID": %d, "groupKeySecurityPolicy": 0, `+
 		`"epochKey0": "hex:d0d1d2d3d4d5d6d7d8d9dadbdcdddedf", "epochStartTime0": 2220000, `+
 		`"epochKey1": "hex:d1d1d2d3d4d5d6d7d8d9dadbdcdddedf", "epochStartTime1": 2220001, `+
-		`"epochKey2": "hex:d2d1d2d3d4d5d6d7d8d9dadbdcdddedf", "epochStartTime2": 2220002}`, keySetID)
+		`"epochKey2": "hex:d2d1d2d3d4d5d6d7d8d9dadbdcdddedf", "epochStartTime2": 2220002`, keySetID)
+	keySetShapes := []string{
+		"{" + keySetFields + `, "groupKeyMulticastPolicy": 0}`,
+		"{" + keySetFields + "}",
+	}
 
 	// Housekeeping first, so a half-run leaves neither the group nor the
 	// lamp behind: the group is removed and the switch is OFF.
@@ -93,10 +104,18 @@ func TestSendReceive_GroupsScenes(t *testing.T) {
 		}
 	})
 	t.Run("send/key-set-write", func(t *testing.T) {
-		out, err := b.SharedCtl.Invoke(ctx, t, "groupkeymanagement", "key-set-write", 0, keySet)
-		if err != nil || !harness.CommandSuccess(out) {
-			t.Fatalf("KeySetWrite: err=%v\n%s", err, out)
+		var out string
+		var err error
+		for _, shape := range keySetShapes {
+			out, err = b.SharedCtl.Invoke(ctx, t, "groupkeymanagement", "key-set-write", 0, shape)
+			if err == nil && harness.CommandSuccess(out) {
+				return
+			}
+			if !reArgumentRefused.MatchString(out) {
+				break // the wire answered; a second shape would not change that
+			}
 		}
+		t.Fatalf("KeySetWrite: err=%v\n%s", err, out)
 	})
 	t.Run("send/add-group", func(t *testing.T) {
 		out, err := b.SharedCtl.Invoke(ctx, t, "groups", "add-group", ep, strconv.Itoa(groupID), "loom-chiptool")
@@ -176,6 +195,11 @@ func TestSendReceive_GroupsScenes(t *testing.T) {
 		}
 	})
 }
+
+// reArgumentRefused matches chip-tool refusing a command's arguments
+// before anything reaches the wire (Commands.cpp InitArguments: it prints
+// the usage and "Run command failure … Error 0x0000002F").
+var reArgumentRefused = regexp.MustCompile(`Run command failure.*Error 0x0{6}2F`)
 
 // reIMWriteStatus matches the StatusIB lines of chip-tool's WriteResponse
 // dump (`status = 0x00 (SUCCESS)`), which a list write answers once per
