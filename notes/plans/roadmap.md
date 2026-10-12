@@ -120,11 +120,15 @@ replace it, and the metrics that say whether it worked.
   `by_design.md` entry recording the divergence.
   *Plan: [`notes/plans/matter-case-resume-session-id.md`](matter-case-resume-session-id.md).*
 
-- **Matter device layer and node facade (ADR 0084).** Phase 1: the
-  assembler constructs endpoints through `device.New<Type>` with the
-  profiles' servers as `WithServer`, device-type validation as a guard,
-  bridged NodeLabel persistence. Phase 2: the five OnOff servers onto
-  `cluster/onoff.Server` with a CCU Sink. Phase 3 (blocked on go-fabric):
+- **Matter device layer and node facade (ADR 0084).** Phase 1 (merged,
+  #953): the assembler constructs endpoints through `device.New<Type>`
+  with the profiles' servers as `WithServer`, device-type validation as a
+  guard, bridged NodeLabel persistence. Phase 2 (implemented, PR open):
+  the five OnOff servers onto `cluster/onoff.Server` with a CCU Sink; the
+  live Apple Home run covers phases 1 and 2 together and is still due.
+  Upstream asks filed on the way: go-fabric #60 (thermo Sink), #61
+  (cover Mover port), #62 (versioned store migrations). Phase 3 (blocked
+  on go-fabric #58):
   `startMatterBridge` onto `node.New` once the facade carries host hooks —
   fabric added/removed/updated observers, commissioning-complete and
   window-transition observers, per-window PASE credentials (ephemeral

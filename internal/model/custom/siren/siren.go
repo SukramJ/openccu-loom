@@ -50,6 +50,10 @@ type Siren struct {
 	// so DataVersionFilter evaluation correctly detects cluster changes.
 	dataVersion hmtypes.DataVersionTracker
 
+	// matterOnOff holds the OnOff cluster server the Matter projection
+	// serves, built once per siren (matter.go).
+	matterOnOff generic.MatterOnOffHolder
+
 	key    hmtypes.DataPointKey
 	writer Writer
 

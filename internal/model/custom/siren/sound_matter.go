@@ -12,6 +12,7 @@ import (
 	"github.com/SukramJ/go-fabric/cluster/onoff"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
+	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -49,24 +50,27 @@ type speakerLevelState struct {
 // MatterDeviceType implements [interfaces.MatterEndpointSource].
 func (sp *SoundPlayer) MatterDeviceType() uint16 { return matterDeviceTypeSpeaker }
 
-// MatterClusterServers implements [interfaces.MatterEndpointSource]: the two
-// clusters the Speaker device type mandates, and no stubs — speaker.element.ts
-// requires neither Groups nor ScenesManagement, unlike OnOffPlugInUnit.
-//
-// LevelControl is the library server over this data point as its narrow port;
-// the Matter shape of a level belongs there, not here. Its DataVersion tracker
-// is the data point's own, so a volume the device changed keeps advancing the
-// same counter across reconstructions. OnOff has no library server, so the
-// cluster's identity constants come from cluster/onoff and the projection is
-// written here.
+// MatterClusterServers implements [interfaces.MatterEndpointSource]:
+// OnOff and LevelControl, both go-fabric servers built once per player
+// (the bridge keeps a server it already serves across reassemblies; a
+// server rebuilt each time would lose its data version and timers).
 func (sp *SoundPlayer) MatterClusterServers() []interfaces.MatterClusterServer {
 	return []interfaces.MatterClusterServer{
-		soundPlayerOnOffServer{sp: sp},
-		levelcontrol.NewServer(levelcontrol.Config{
+		sp.matterOnOffServer(),
+		sp.matterLevelServer(),
+	}
+}
+
+// matterLevelServer builds the LevelControl server once, over the
+// player's [levelcontrol.LevelSource] port.
+func (sp *SoundPlayer) matterLevelServer() *levelcontrol.Server {
+	sp.matterLevelOnce.Do(func() {
+		sp.matterLevelSrv = levelcontrol.NewServer(levelcontrol.Config{
 			Source:      sp,
 			DataVersion: &sp.DataVersionTracker,
-		}),
-	}
+		})
+	})
+	return sp.matterLevelSrv
 }
 
 // MatterEligibility marks SoundPlayer as partially mappable. Volume and the
@@ -102,111 +106,54 @@ func (sp *SoundPlayer) OnMatterValueChanged(cb func()) func() {
 
 // ─── OnOff (0x0006) ──────────────────────────────────────────────────
 
-// soundPlayerOnOffServer projects [SoundPlayer] onto the Matter OnOff cluster.
+// matterOnOffServer builds the player's OnOff server once, go-fabric's
+// [onoff.Server] without the LT feature (ADR 0084 phase 2): the Speaker
+// device type (speaker.ts:20-22) reads OnOff as mute / unmute, mandates
+// no Lighting feature, and so the cluster carries OnOff, Off, On and
+// Toggle only.
 //
-// The Speaker device type reads OnOff as mute/unmute: TRUE is "volume on (not
-// muted)", FALSE is "volume off (muted)" — matter.js
-// packages/node/src/devices/speaker.ts:20-22. The HmIP-MP3P carries no mute
-// parameter, and it does not need one: the whole of its audio output is one
-// LEVEL knob, and [SoundPlayer.StopSound] silences the player by writing
-// LEVEL=0. Muted and silent are therefore the same device state here, and both
-// halves of the projection are backed by real wire values — the attribute is
-// read from DIRECTION (UP/DOWN = a file is being played, so sound is coming
-// out) and the commands are the profile's own play and stop paths. Nothing is
-// remembered or invented on either side.
+// The HmIP-MP3P carries no mute parameter, and it does not need one: the
+// whole of its audio output is one LEVEL knob, and [SoundPlayer.StopSound]
+// silences the player by writing LEVEL=0. Muted and silent are therefore
+// the same device state here, and both halves of the projection are
+// backed by real wire values — the attribute follows DIRECTION (UP/DOWN =
+// a file is being played, so sound is coming out) through the confirmed-
+// update hook and [onoff.Server.Set], and the Sink is the profile's own
+// play and stop paths. Nothing is remembered or invented on either side.
 //
-// What the cluster deliberately does not carry is *which* file plays. That is
-// SOUNDFILE, which has no Matter cluster; On resumes with whatever the device
-// last selected.
-type soundPlayerOnOffServer struct{ sp *SoundPlayer }
-
-// Compile-time assertions for the optional dispatcher capabilities.
-var (
-	_ interfaces.MatterClusterServer          = soundPlayerOnOffServer{}
-	_ interfaces.MatterClusterAttributeLister = soundPlayerOnOffServer{}
-	_ interfaces.MatterClusterCommandLister   = soundPlayerOnOffServer{}
-	_ interfaces.MatterClusterDataVersion     = soundPlayerOnOffServer{}
-)
-
-func (s soundPlayerOnOffServer) MatterClusterID() uint32 { return onoff.ClusterID }
-
-// MatterDataVersion reports the data point's counter, the same one threaded
-// into the LevelControl server, so a state the device changed on its own
-// advances both clusters' versions.
-func (s soundPlayerOnOffServer) MatterDataVersion() uint32 { return s.sp.Current() }
-
-func (s soundPlayerOnOffServer) MatterRead(attrID uint32) (any, bool) {
-	switch attrID {
-	case onoff.AttrOnOff:
-		// Non-nullable bool (on-off.element.ts:29, quality "N S" without
-		// X): an unobserved player reads as FALSE — silent — rather than
-		// as TLV null, which chip-tool rejects with CHIP_ERROR_WRONG_TLV_TYPE.
-		playing, _ := s.sp.IsPlaying()
-		return playing, true
-	case matterAttrFeatureMap:
-		// Speaker mandates no OnOff feature (speaker.element.ts:18), so
-		// neither LT nor DF nor OFFONLY is advertised and the four 0x40xx
-		// attributes plus the three 0x4x commands stay off this cluster.
-		return uint32(0), true
-	case matterAttrClusterRevision:
-		return onoff.Revision(), true
-	default:
-		return nil, false
-	}
-}
-
-// MatterWrite refuses every attribute: OnOff is the only one this cluster
-// carries and its access is "R V" (on-off.element.ts:29). The state changes
-// through the On / Off / Toggle commands.
-func (s soundPlayerOnOffServer) MatterWrite(_ context.Context, attrID uint32, _ any) error {
-	return fmt.Errorf("%w: 0x%04X", errMatterUnknownAttribute, attrID)
-}
-
-func (s soundPlayerOnOffServer) MatterInvoke(ctx context.Context, cmdID uint32, _ any) (any, error) {
-	var err error
-	switch cmdID {
-	case onoff.CmdOff:
-		err = s.sp.StopSound(ctx, matterDispatchPriority)
-	case onoff.CmdOn:
-		err = s.sp.matterPlay(ctx)
-	case onoff.CmdToggle:
-		// An unobserved player is treated as silent, so a first Toggle
-		// starts playback rather than doing nothing — the same reading
-		// [sirenOnOffServer] applies to an unobserved siren.
-		playing, observed := s.sp.IsPlaying()
-		if observed && playing {
-			err = s.sp.StopSound(ctx, matterDispatchPriority)
-		} else {
-			err = s.sp.matterPlay(ctx)
+// What the cluster deliberately does not carry is *which* file plays.
+// That is SOUNDFILE, which has no Matter cluster; On resumes with
+// whatever the device last selected.
+func (sp *SoundPlayer) matterOnOffServer() *onoff.Server {
+	return sp.matterOnOff.Server(func() *onoff.Server {
+		playing, _ := sp.IsPlaying()
+		srv := generic.MustMatterOnOffServer(generic.MatterOnOffConfig{
+			Lighting:    false,
+			DataVersion: &sp.DataVersionTracker,
+			Initial:     playing,
+			Sink: func(ctx context.Context, on bool) error {
+				if on {
+					return sp.matterPlay(ctx)
+				}
+				return sp.StopSound(ctx, matterDispatchPriority)
+			},
+		})
+		if sp.direction != nil {
+			feedback := generic.NewMatterOnOffFeedback(srv)
+			_ = sp.direction.OnConfirmedUpdate(func(_, _ int32) {
+				playing, _ := sp.IsPlaying()
+				feedback.Set(playing)
+			})
 		}
-	default:
-		return nil, fmt.Errorf("%w: 0x%02X", errMatterUnknownCommand, cmdID)
-	}
-	if err != nil {
-		return nil, err
-	}
-	s.sp.Bump()
-	return nil, nil
+		// A confirmation that landed between the initial read and the
+		// hook registration is not lost: the current value is stored
+		// again, which is a no-op when nothing changed.
+		if playing, observed := sp.IsPlaying(); observed {
+			srv.Set(playing)
+		}
+		return srv
+	})
 }
-
-func (s soundPlayerOnOffServer) MatterReportable() []uint32 { return []uint32{onoff.AttrOnOff} }
-
-// MatterAttributes lists the one attribute this cluster serves. The 0x40xx
-// four are LT-gated (on-off.element.ts:30-36) and LT is not advertised, so
-// enumerating them would pair an attribute with a FeatureMap that does not
-// carry its feature on every commissioner read.
-func (s soundPlayerOnOffServer) MatterAttributes() []uint32 { return []uint32{onoff.AttrOnOff} }
-
-// MatterAcceptedCommands lists Off (conformance "M") plus On and Toggle
-// (conformance "!OFFONLY", and OffOnly is not advertised) — on-off.element.ts:37-39.
-// The three 0x4x commands are LT-gated and absent with the feature.
-func (s soundPlayerOnOffServer) MatterAcceptedCommands() []uint32 {
-	return []uint32{onoff.CmdOff, onoff.CmdOn, onoff.CmdToggle}
-}
-
-// MatterGeneratedCommands implements [interfaces.MatterClusterCommandLister]:
-// OnOff commands answer with a status, never a payload.
-func (s soundPlayerOnOffServer) MatterGeneratedCommands() []uint32 { return nil }
 
 // matterPlay starts playback at the volume the device currently reports, or
 // lets [SoundPlayer.PlaySound] apply its own default when nothing has been

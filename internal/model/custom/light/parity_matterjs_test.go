@@ -50,7 +50,7 @@ func clusterByID(s *matterSchema, id uint32) (matterClusterEntry, bool) {
 }
 
 // TestParityMatterJS_LightOnOffNoSpuriousOptions locks the absence of
-// OnOff.Options (0x000F) on the lightOnOffServer projection. Options is a
+// OnOff.Options (0x000F) on the light's OnOff server. Options is a
 // Zigbee-Cluster-Library holdover the Matter spec dropped from the OnOff
 // cluster — matter.js HEAD on-off.element.ts and chip HEAD's
 // zzz_generated/.../OnOff/AttributeIds.h both omit it. The LevelControl
@@ -60,20 +60,14 @@ func TestParityMatterJS_LightOnOffNoSpuriousOptions(t *testing.T) {
 	t.Parallel()
 	const spuriousOptionsID uint32 = 0x000F
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
-	var srv lightOnOffServer
-	for _, s := range l.MatterClusterServers() {
-		if v, ok := s.(lightOnOffServer); ok {
-			srv = v
-			break
-		}
-	}
+	srv := onOffServer(t, l)
 	for _, id := range srv.MatterAttributes() {
 		if id == spuriousOptionsID {
-			t.Errorf("lightOnOffServer MatterAttributes() advertises spurious OnOff.Options (0x000F)")
+			t.Errorf("light OnOff MatterAttributes() advertises spurious OnOff.Options (0x000F)")
 		}
 	}
 	if _, ok := srv.MatterRead(spuriousOptionsID); ok {
-		t.Errorf("lightOnOffServer MatterRead(0x000F) must return ok=false — OnOff has no Options attribute")
+		t.Errorf("light OnOff MatterRead(0x000F) must return ok=false — OnOff has no Options attribute")
 	}
 }
 
@@ -172,22 +166,13 @@ func TestParityMatterJS_LevelControlAcceptedCommands(t *testing.T) {
 	}
 }
 
-// TestParityMatterJS_OnOffAcceptedCommands verifies that lightOnOffServer
+// TestParityMatterJS_OnOffAcceptedCommands verifies that the light's OnOff server
 // enumerates Off (0x00), On (0x01), Toggle (0x02) in MatterAcceptedCommands.
 func TestParityMatterJS_OnOffAcceptedCommands(t *testing.T) {
 	t.Parallel()
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
-	var srv lightOnOffServer
-	for _, s := range l.MatterClusterServers() {
-		if v, ok := s.(lightOnOffServer); ok {
-			srv = v
-			break
-		}
-	}
-	lister, ok := any(srv).(interface{ MatterAcceptedCommands() []uint32 })
-	if !ok {
-		t.Fatal("lightOnOffServer does not implement MatterClusterCommandLister")
-	}
+	srv := onOffServer(t, l)
+	lister := srv
 	want := map[uint32]string{
 		0x00: "Off",
 		0x01: "On",
@@ -213,7 +198,7 @@ func TestParityMatterJS_LightClusterRevisions(t *testing.T) {
 		name         string
 		codeRevision uint16
 	}{
-		{matterClusterOnOff, "OnOff", onoff.Revision()},
+		{onoff.ClusterID, "OnOff", onOffClusterRevision(t)},
 		{matterClusterLevelControl, "LevelControl", matterLevelControlClusterRevision},
 		// D-50: ColorControl is mounted on dimmable+colored lights via
 		// `matter_color.go::{ctColorServer, hsColorServer, rgbwColorServer}`.
@@ -238,4 +223,17 @@ func TestParityMatterJS_LightClusterRevisions(t *testing.T) {
 			}
 		})
 	}
+}
+
+// onOffClusterRevision reads ClusterRevision from the OnOff server a
+// light actually serves, so the revision pin covers the served value.
+func onOffClusterRevision(t *testing.T) uint16 {
+	t.Helper()
+	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
+	v, ok := onOffServer(t, l).MatterRead(matterAttrClusterRevision)
+	rev, isU16 := v.(uint16)
+	if !ok || !isU16 {
+		t.Fatalf("light OnOff ClusterRevision = (%v, %v), want a uint16", v, ok)
+	}
+	return rev
 }

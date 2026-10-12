@@ -106,8 +106,9 @@ func TestSendReceive_OnOff(t *testing.T) {
 	// cannot pre-satisfy want(). OnOff is non-nullable: a successful
 	// FindAttrBool match (rather than a TLV-null encoding, which chip-tool
 	// would refuse to parse as CHIP 0x26) is itself the non-nullability
-	// assertion — switch.Switch implements MatterClusterServer, so the
-	// change-notifier only ever reports a concrete boolean for OnOff.
+	// assertion — the switch's OnOff cluster is go-fabric's onoff.Server,
+	// whose stored attribute is a concrete boolean, and the STATE
+	// confirmed-update hook stores the CCU's value through Server.Set.
 	t.Run("receive/on-off", func(t *testing.T) {
 		out, err := harness.AwaitProactiveReport(ctx, t, b.SharedCtl,
 			"onoff", "on-off", ep,

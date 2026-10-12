@@ -54,14 +54,13 @@ func TestParityMatterJS_CTColorDataVersionStableOnRead(t *testing.T) {
 		Writer:       w,
 		Capabilities: custom.LightCapabilities{SupportsColorTemp: true, Dimmable: true},
 	}, 2700, 6500)
-	before := l.MatterDataVersion()
-
 	var cc ctColorServer
 	for _, s := range l.MatterClusterServers() {
 		if v, ok := s.(ctColorServer); ok {
 			cc = v
 		}
 	}
+	before := l.MatterDataVersion()
 	cc.MatterRead(matterAttrColorColorTemperatureMireds)
 	cc.MatterRead(matterAttrColorColorMode)
 
@@ -110,14 +109,13 @@ func TestParityMatterJS_HSColorDataVersionStableOnRead(t *testing.T) {
 		Writer:       w,
 		Capabilities: custom.LightCapabilities{SupportsColor: true, Dimmable: true},
 	})
-	before := l.MatterDataVersion()
-
 	var hs hsColorServer
 	for _, s := range l.MatterClusterServers() {
 		if v, ok := s.(hsColorServer); ok {
 			hs = v
 		}
 	}
+	before := l.MatterDataVersion()
 	hs.MatterRead(matterAttrColorCurrentHue)
 	hs.MatterRead(matterAttrColorCurrentSaturation)
 
@@ -198,14 +196,13 @@ func TestParityMatterJS_RGBWColorDataVersionStableOnRead(t *testing.T) {
 		Writer:       w,
 		Capabilities: custom.LightCapabilities{SupportsColor: true, SupportsColorTemp: true, Dimmable: true},
 	})
-	before := l.MatterDataVersion()
-
 	var rgbw rgbwColorServer
 	for _, s := range l.MatterClusterServers() {
 		if v, ok := s.(rgbwColorServer); ok {
 			rgbw = v
 		}
 	}
+	before := l.MatterDataVersion()
 	rgbw.MatterRead(matterAttrColorCurrentHue)
 	rgbw.MatterRead(matterAttrColorColorTemperatureMireds)
 

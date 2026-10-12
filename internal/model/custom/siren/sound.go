@@ -10,7 +10,10 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/SukramJ/go-fabric/cluster/levelcontrol"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -93,6 +96,12 @@ type SoundPlayer struct {
 	// changes. It is threaded into the library LevelControl server and read
 	// by the OnOff one, so both Speaker clusters share the counter.
 	hmtypes.DataVersionTracker
+
+	// matterOnOff and matterLevelSrv hold the two cluster servers the
+	// Matter projection serves, built once per player (sound_matter.go).
+	matterOnOff     generic.MatterOnOffHolder
+	matterLevelOnce sync.Once
+	matterLevelSrv  *levelcontrol.Server
 
 	// matterLevel carries the two LevelControl attributes that describe
 	// the cluster rather than the device — see [speakerLevelState].

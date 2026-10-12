@@ -11,11 +11,11 @@ import (
 
 	"github.com/SukramJ/go-fabric/cluster/onoff"
 	levelcontrolspec "github.com/SukramJ/go-fabric/cluster/spec/levelcontrol"
-	onoffspec "github.com/SukramJ/go-fabric/cluster/spec/onoff"
 
 	"github.com/SukramJ/go-fabric/cluster/wire"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
+	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -65,7 +65,6 @@ const (
 	matterDeviceTypeOnOffLight    uint16 = 0x0100
 	matterDeviceTypeDimmableLight uint16 = 0x0101
 
-	matterClusterOnOff        uint32 = 0x0006
 	matterClusterLevelControl uint32 = 0x0008
 
 	// Groups cluster (0x0004) and ScenesManagement (0x0062) are
@@ -74,7 +73,6 @@ const (
 	// them: the endpoint assembler mounts both from the node's group
 	// state (go-fabric endpoint/materialize.go mountGroups / mountScenes).
 
-	matterAttrOnOffOnOff   uint32 = 0x0000
 	matterAttrLevelCurrent uint32 = 0x0000
 
 	// LT (Lighting) feature-gated OnOff attributes. OnOffLight (0x0100)
@@ -85,10 +83,6 @@ const (
 	//   OnTime             0x4001 uint16 conformance "LT" access "RW VO"
 	//   OffWaitTime        0x4002 uint16 conformance "LT" access "RW VO"
 	//   StartUpOnOff       0x4003 enum8  conformance "LT" access "RW VM" quality "X N"
-	matterAttrOnOffGlobalSceneControl uint32 = 0x4000
-	matterAttrOnOffOnTime             uint32 = 0x4001
-	matterAttrOnOffOffWaitTime        uint32 = 0x4002
-	matterAttrOnOffStartUpOnOff       uint32 = 0x4003
 
 	// LT (Lighting) feature-gated LevelControl attributes. DimmableLight
 	// (0x0101) mandates the LT feature on LevelControl, making these two
@@ -103,7 +97,6 @@ const (
 	// constraint "0" → bit 0 (0x01); matter.js on-off.element.ts:24. On
 	// LevelControl LT sits at constraint "1" → bit 1 (0x02) and OO at
 	// constraint "0" → bit 0 (0x01); level-control.element.ts:24-25.
-	matterFeatureOnOffLT      uint32 = 0x01
 	matterFeatureLevelOO      uint32 = 0x01 // OnOff feature, constraint "0", default 1
 	matterFeatureLevelLT      uint32 = 0x02 // Lighting feature, constraint "1"
 	matterFeatureLevelControl uint32 = matterFeatureLevelOO | matterFeatureLevelLT
@@ -133,12 +126,6 @@ const (
 	// packages/model/src/standard/elements/on-off.element.ts marks Off "M",
 	// On and Toggle "!OFFONLY", and the three 0x4x commands "LT": all six
 	// are mandatory for the FeatureMap this projection advertises.
-	matterCmdOff                     = wire.OnOffCmdOff
-	matterCmdOn                      = wire.OnOffCmdOn
-	matterCmdToggle                  = wire.OnOffCmdToggle
-	matterCmdOffWithEffect           = wire.OnOffCmdOffWithEffect
-	matterCmdOnWithRecallGlobalScene = wire.OnOffCmdOnWithRecallGlobalScene
-	matterCmdOnWithTimedOff          = wire.OnOffCmdOnWithTimedOff
 
 	matterCmdMoveToLevel          uint32 = 0x00
 	matterCmdMove                 uint32 = 0x01
@@ -189,13 +176,59 @@ func (l *Light) MatterDeviceType() uint16 {
 func (l *Light) MatterClusterServers() []interfaces.MatterClusterServer {
 	if l.Capabilities.Dimmable {
 		return []interfaces.MatterClusterServer{
-			lightOnOffServer{l: l},
+			l.matterOnOffServer(),
 			lightLevelServer{l: l},
 		}
 	}
 	return []interfaces.MatterClusterServer{
-		lightOnOffServer{l: l},
+		l.matterOnOffServer(),
 	}
+}
+
+// matterOnOffServer builds the light's OnOff server once (ADR 0084 phase
+// 2): go-fabric's [onoff.Server] owns the attributes, the six commands,
+// the OnTime / OffWaitTime countdowns and the scene paths. The Sink is
+// [Light.TurnOn] / [Light.TurnOff] at [matterDispatchPriority]; the LEVEL
+// data point's confirmed-update hook feeds the CCU's state back through
+// [onoff.Server.Set], the one path that stores without asking the Sink,
+// so a wall switch or a CCU program reaches a subscribed controller and a
+// confirmed command does not echo into a second write. A timed-on ends
+// through the stack's countdown (OnOffServer.ts:102, whose off reaches
+// the Sink) — no CCU-side ON_TIME is written for it.
+//
+// The server starts from the observed brightness, false while nothing was
+// observed: matter.js's OnOff behaviour reads an unset attribute as false
+// (OnOffServer.ts:39), and Apple Home drops an accessory whose first
+// report carries no boolean.
+func (l *Light) matterOnOffServer() *onoff.Server {
+	return l.matterOnOff.Server(func() *onoff.Server {
+		on, _ := l.IsOn()
+		srv := generic.MustMatterOnOffServer(generic.MatterOnOffConfig{
+			Lighting:    true,
+			DataVersion: &l.dataVersion,
+			Initial:     on,
+			Sink: func(ctx context.Context, on bool) error {
+				if on {
+					return l.TurnOn(ctx, matterDispatchPriority)
+				}
+				return l.TurnOff(ctx, matterDispatchPriority)
+			},
+		})
+		if l.Float != nil {
+			feedback := generic.NewMatterOnOffFeedback(srv)
+			_ = l.OnConfirmedUpdate(func(_, _ float64) {
+				on, _ := l.IsOn()
+				feedback.Set(on)
+			})
+		}
+		// A confirmation that landed between the initial read and the
+		// hook registration is not lost: the current value is stored
+		// again, which is a no-op when nothing changed.
+		if on, observed := l.IsOn(); observed {
+			srv.Set(on)
+		}
+		return srv
+	})
 }
 
 // brightnessToMatter encodes an HM brightness (0.0–1.0 float) into
@@ -221,235 +254,6 @@ func matterLevelToHM(m uint8) float64 {
 		return 1.0
 	}
 	return float64(m) / float64(matterLevelMax)
-}
-
-// lightOnOffServer projects [Light] onto the Matter OnOff cluster
-// (0x0006). The On command restores [Light.LastLevel] via
-// [Light.TurnOn]; Off via [Light.TurnOff]; Toggle reads current
-// brightness and dispatches accordingly.
-type lightOnOffServer struct{ l *Light }
-
-func (s lightOnOffServer) MatterClusterID() uint32 { return matterClusterOnOff }
-
-func (s lightOnOffServer) MatterRead(attrID uint32) (any, bool) {
-	switch attrID {
-	case matterAttrOnOffOnOff:
-		// OnOff (Matter §1.5.6.2) is a non-nullable bool — chip-tool's
-		// TLVReader returns CHIP_ERROR_WRONG_TLV_TYPE when it sees a
-		// TLV null where a bool is required, and the read fails with
-		// "Response Failure: Can not decode Data". Default to FALSE
-		// on unobserved DPs (HmIP-BDT post-boot before the first
-		// LEVEL value lands) so the cluster surface stays spec-clean.
-		on, _ := s.l.IsOn()
-		return on, true
-	case matterAttrOnOffGlobalSceneControl:
-		// GlobalSceneControl (bool, conformance LT): true after On /
-		// OnWithTimedOff / OnWithRecallGlobalScene, false after
-		// OffWithEffect; a plain Off leaves it unchanged. Defaults to
-		// true. matter.js packages/node/src/behaviors/on-off/OnOffServer.ts:
-		// 97-104 (on), :158-169 (offWithEffect).
-		return s.l.matterGlobalSceneControl(), true
-	case matterAttrOnOffOnTime:
-		// OnTime (uint16, conformance LT): remaining timed-on countdown
-		// in tenths of a second, driven by the OnWithTimedOff engine.
-		// matter.js OnOffServer.ts:239 #timedOnTick.
-		return s.l.matterOnTime(), true
-	case matterAttrOnOffOffWaitTime:
-		// OffWaitTime (uint16, conformance LT): remaining delayed-off
-		// guard in tenths of a second. matter.js OnOffServer.ts:312
-		// #delayedOffTick.
-		return s.l.matterOffWaitTime(), true
-	case matterAttrOnOffStartUpOnOff:
-		// StartUpOnOff (StartUpOnOffEnum, conformance LT, quality "X N"):
-		// nullable; null = "keep last state on startup". matter.js
-		// OnOffServer.ts:39 reads `this.state.startUpOnOff ?? null`.
-		// (nil, true) encodes the TLV null.
-		if v := s.l.matterStartUpOnOff(); v != nil {
-			return *v, true
-		}
-		return nil, true
-	case matterAttrFeatureMap:
-		// LT (Lighting) feature, bit 0 (0x01). OnOffLight / DimmableLight
-		// device types mandate LT on the OnOff cluster.
-		// matter.js packages/model/src/standard/elements/on-off.element.ts:24
-		// (Field LT, constraint "0").
-		return matterFeatureOnOffLT, true
-	case matterAttrClusterRevision:
-		return onoff.Revision(), true
-	default:
-		return nil, false
-	}
-}
-
-func (s lightOnOffServer) MatterWrite(ctx context.Context, attrID uint32, value any) error {
-	switch attrID {
-	case matterAttrOnOffOnOff:
-		on, ok := value.(bool)
-		if !ok {
-			return fmt.Errorf("%w: OnOff write expected bool, got %T", errMatterValueType, value)
-		}
-		var err error
-		if on {
-			err = s.l.TurnOn(ctx, matterDispatchPriority)
-		} else {
-			err = s.l.TurnOff(ctx, matterDispatchPriority)
-		}
-		if err != nil {
-			return err
-		}
-		s.l.dataVersion.Bump()
-		return nil
-	case matterAttrOnOffOnTime, matterAttrOnOffOffWaitTime:
-		// OnTime / OffWaitTime are RW (on-off.element.ts:31-32). A write
-		// updates the countdown attribute; parking it at 0 or the 0xFFFF
-		// hold ends a running countdown, and writes never start one —
-		// matter.js OnOffServer.ts:66-84 #stopHeldTimer.
-		v, ok := matterWriteUint16(value)
-		if !ok {
-			return fmt.Errorf("%w: OnTime/OffWaitTime write expected uint16, got %T", errMatterValueType, value)
-		}
-		if attrID == matterAttrOnOffOnTime {
-			s.l.matterSetOnTime(v)
-		} else {
-			s.l.matterSetOffWaitTime(v)
-		}
-		s.l.dataVersion.Bump()
-		return nil
-	case matterAttrOnOffStartUpOnOff:
-		// StartUpOnOff is RW VM, nullable, enum 0..2 (on-off.element.ts:33-36).
-		// The value is stored on the projection; the physical power-on
-		// behaviour of an HM device stays governed by its own device
-		// configuration.
-		if value == nil {
-			s.l.matterSetStartUpOnOff(nil)
-			s.l.dataVersion.Bump()
-			return nil
-		}
-		v, ok := matterWriteUint8(value)
-		if !ok {
-			return fmt.Errorf("%w: StartUpOnOff write expected enum8, got %T", errMatterValueType, value)
-		}
-		if v > 2 {
-			return fmt.Errorf("%w: StartUpOnOff constraint 0..2, got %d", errMatterValueType, v)
-		}
-		s.l.matterSetStartUpOnOff(&v)
-		s.l.dataVersion.Bump()
-		return nil
-	default:
-		return fmt.Errorf("%w: 0x%04X", errMatterUnknownAttribute, attrID)
-	}
-}
-
-// MinWritePrivilege implements
-// [interfaces.MatterClusterAttributeWritePrivilege]: StartUpOnOff is
-// RW VM per on-off.element.ts:34 (write access Manage); the countdown
-// attributes stay at the RW VO default.
-func (s lightOnOffServer) MinWritePrivilege(attrID uint32) uint8 {
-	if attrID == matterAttrOnOffStartUpOnOff {
-		return 4 // Manage
-	}
-	return 3 // Operate
-}
-
-func (s lightOnOffServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any) (any, error) {
-	var err error
-	switch cmdID {
-	case matterCmdOff:
-		err = s.l.TurnOff(ctx, matterDispatchPriority)
-		if err == nil {
-			s.l.matterTimedHandleOff()
-		}
-	case matterCmdOn:
-		err = s.l.TurnOn(ctx, matterDispatchPriority)
-		if err == nil {
-			s.l.matterTimedHandleOn()
-		}
-	case matterCmdToggle:
-		on, observed := s.l.IsOn()
-		if !observed || !on {
-			err = s.l.TurnOn(ctx, matterDispatchPriority)
-			if err == nil {
-				s.l.matterTimedHandleOn()
-			}
-		} else {
-			err = s.l.TurnOff(ctx, matterDispatchPriority)
-			if err == nil {
-				s.l.matterTimedHandleOff()
-			}
-		}
-	case matterCmdOffWithEffect:
-		// OffWithEffect (LT, mandatory): the bridge has no dimming-effect
-		// engine, so the effect identifier/variant are ignored and the
-		// device is turned off plainly. matter.js OnOffServer.ts treats
-		// the effect as best-effort. on-off.element.ts:41. matter.js
-		// OnOffServer.ts:158-169 also clears GlobalSceneControl here —
-		// a plain Off never touches it.
-		err = s.l.TurnOff(ctx, matterDispatchPriority)
-		if err == nil {
-			s.l.matterTimedHandleOff()
-			s.l.matterClearGlobalSceneControl()
-		}
-	case matterCmdOnWithRecallGlobalScene:
-		// OnWithRecallGlobalScene (LT, mandatory): no scene engine, so
-		// recall collapses to a plain On. on-off.element.ts:46.
-		err = s.l.TurnOn(ctx, matterDispatchPriority)
-		if err == nil {
-			s.l.matterTimedHandleOn()
-		}
-	case matterCmdOnWithTimedOff:
-		// OnWithTimedOff (LT, mandatory): full timed-off engine —
-		// AcceptOnlyWhenOn gate, delayed-off guard, OnTime/OffWaitTime
-		// countdowns. matter.js OnOffServer.ts:198-225.
-		control, onTime, offWaitTime, ferr := extractOnWithTimedOff(fields)
-		if ferr != nil {
-			return nil, ferr
-		}
-		err = s.l.matterOnWithTimedOff(ctx, control, onTime, offWaitTime)
-	default:
-		return nil, fmt.Errorf("%w: 0x%02X", errMatterUnknownCommand, cmdID)
-	}
-	if err != nil {
-		return nil, err
-	}
-	s.l.dataVersion.Bump()
-	return nil, nil
-}
-
-func (s lightOnOffServer) MatterReportable() []uint32 {
-	return []uint32{matterAttrOnOffOnOff}
-}
-
-// MatterAttributes lists every OnOff (0x0006) attribute the server
-// implements via MatterRead. Apple Home's HAP service rebuild reads
-// the full attribute set; without this the dispatcher falls back to
-// MatterReportable's single attribute.
-func (s lightOnOffServer) MatterAttributes() []uint32 {
-	return []uint32{
-		matterAttrOnOffOnOff,
-		matterAttrOnOffGlobalSceneControl,
-		matterAttrOnOffOnTime,
-		matterAttrOnOffOffWaitTime,
-		matterAttrOnOffStartUpOnOff,
-	}
-}
-
-// MatterAcceptedCommands implements [interfaces.MatterClusterCommandLister]
-// for the OnOff cluster (0x0006).
-func (s lightOnOffServer) MatterAcceptedCommands() []uint32 {
-	return []uint32{
-		matterCmdOff,
-		matterCmdOn,
-		matterCmdToggle,
-		matterCmdOffWithEffect,
-		matterCmdOnWithRecallGlobalScene,
-		matterCmdOnWithTimedOff,
-	}
-}
-
-// MatterGeneratedCommands implements [interfaces.MatterClusterCommandLister]
-// for the OnOff cluster (0x0006). OnOff commands have no response payload.
-func (s lightOnOffServer) MatterGeneratedCommands() []uint32 {
-	return nil
 }
 
 // lightLevelServer projects [Light] onto the Matter LevelControl
@@ -580,12 +384,14 @@ func (s lightLevelServer) MatterInvoke(ctx context.Context, cmdID uint32, fields
 			if err := s.setLevelRamped(ctx, target, ramp, matterDispatchPriority); err != nil {
 				return nil, err
 			}
+			s.syncOnOff(withOnOff, target)
 			s.l.dataVersion.Bump()
 			return nil, nil
 		}
 		if err := s.l.SetLevel(ctx, target, matterDispatchPriority); err != nil {
 			return nil, err
 		}
+		s.syncOnOff(withOnOff, target)
 		s.l.dataVersion.Bump()
 		return nil, nil
 
@@ -657,6 +463,7 @@ func (s lightLevelServer) MatterInvoke(ctx context.Context, cmdID uint32, fields
 		if err := s.l.SetLevel(ctx, target, matterDispatchPriority); err != nil {
 			return nil, err
 		}
+		s.syncOnOff(cmdID == matterCmdStepWithOnOff, target)
 		s.l.dataVersion.Bump()
 		return nil, nil
 
@@ -668,6 +475,21 @@ func (s lightLevelServer) MatterInvoke(ctx context.Context, cmdID uint32, fields
 	default:
 		return nil, fmt.Errorf("%w: 0x%02X", errMatterUnknownCommand, cmdID)
 	}
+}
+
+// syncOnOff mirrors a "with On/Off" level command onto the OnOff
+// attribute the moment the CCU accepted the level write, as matter.js's
+// LevelControlServer couples the two clusters (LevelControlServer.ts, the
+// WithOnOff commands): a MoveToLevelWithOnOff to MinLevel turns the
+// light off, one above it turns it on. It stores through
+// [onoff.Server.Set] — the host's own change — so the OnOff Sink is not
+// asked for a second CCU write; the LEVEL confirmation corrects the value
+// if the device answered otherwise.
+func (s lightLevelServer) syncOnOff(withOnOff bool, target float64) {
+	if !withOnOff {
+		return
+	}
+	s.l.matterOnOffServer().Set(target > 0)
 }
 
 func (s lightLevelServer) MatterReportable() []uint32 {
@@ -947,94 +769,4 @@ func wireUint8(raw any) (uint8, bool) {
 	default:
 		return 0, false
 	}
-}
-
-// wireUint16 is the 16-bit sibling of [wireUint8].
-func wireUint16(raw any) (uint16, bool) {
-	switch n := raw.(type) {
-	case uint64:
-		return uint16(n & 0xFFFF), true
-	case uint16:
-		return n, true
-	default:
-		return 0, false
-	}
-}
-
-// matterWriteUint16 coerces an attribute-write value into uint16. The
-// IM write layer delivers decoded TLV unsigned ints as uint64; the
-// narrower types keep in-package callers working.
-func matterWriteUint16(value any) (uint16, bool) {
-	return wireUint16(value)
-}
-
-// matterWriteUint8 coerces an attribute-write value into uint8.
-func matterWriteUint8(value any) (uint8, bool) {
-	return wireUint8(value)
-}
-
-// extractOnWithTimedOff pulls the OnWithTimedOff (0x42) fields out of
-// the bridge-decoded payload. Tags per on-off.element.ts:50-55:
-// [0] OnOffControl (bitmap8, constraint "0 to 1"), [1] OnTime
-// (uint16, max 65534), [2] OffWaitTime (uint16, max 65534). All three
-// are conformance M; absent fields default to 0 for robustness. The
-// constraints reject the reserved 0xFFFF hold value on the command
-// path — it is reachable only via an attribute write.
-//
-// The bridge decodes OnOff requests through the generated definition
-// (cluster/spec/onoff) whenever that package is linked — it is, through
-// cluster/onoff — so the wire path delivers
-// [onoffspec.OnWithTimedOffRequest]. The tag-keyed map is the bridge's
-// generic fallback for a cluster without a linked definition and stays
-// accepted so the decode does not depend on what the binary links.
-func extractOnWithTimedOff(fields any) (control uint8, onTime, offWaitTime uint16, err error) {
-	read := func(rawControl, rawOnTime, rawOffWait any) error {
-		if rawControl != nil {
-			v, ok := wireUint8(rawControl)
-			if !ok {
-				return fmt.Errorf("%w: OnWithTimedOff OnOffControl expected integer, got %T", errMatterValueType, rawControl)
-			}
-			control = v
-		}
-		if rawOnTime != nil {
-			v, ok := wireUint16(rawOnTime)
-			if !ok {
-				return fmt.Errorf("%w: OnWithTimedOff OnTime expected integer, got %T", errMatterValueType, rawOnTime)
-			}
-			onTime = v
-		}
-		if rawOffWait != nil {
-			v, ok := wireUint16(rawOffWait)
-			if !ok {
-				return fmt.Errorf("%w: OnWithTimedOff OffWaitTime expected integer, got %T", errMatterValueType, rawOffWait)
-			}
-			offWaitTime = v
-		}
-		return nil
-	}
-	switch v := fields.(type) {
-	case onoffspec.OnWithTimedOffRequest:
-		control, onTime, offWaitTime = uint8(v.OnOffControl), v.OnTime, v.OffWaitTime
-	case map[uint8]any:
-		err = read(v[0], v[1], v[2])
-	case map[string]any:
-		err = read(v["on_off_control"], v["on_time"], v["off_wait_time"])
-	case nil:
-		// No fields decoded — all defaults.
-	default:
-		return 0, 0, 0, fmt.Errorf("%w: OnWithTimedOff expected onoff.OnWithTimedOffRequest or map[uint8]any, got %T", errMatterValueType, fields)
-	}
-	if err != nil {
-		return 0, 0, 0, err
-	}
-	if control > 1 {
-		return 0, 0, 0, fmt.Errorf("%w: OnOffControl constraint 0..1, got %d", errMatterValueType, control)
-	}
-	if onTime > 0xFFFE {
-		return 0, 0, 0, fmt.Errorf("%w: OnTime constraint max 65534, got %d", errMatterValueType, onTime)
-	}
-	if offWaitTime > 0xFFFE {
-		return 0, 0, 0, fmt.Errorf("%w: OffWaitTime constraint max 65534, got %d", errMatterValueType, offWaitTime)
-	}
-	return control, onTime, offWaitTime, nil
 }

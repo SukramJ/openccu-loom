@@ -7,9 +7,9 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/SukramJ/go-fabric/cluster/onoff"
-
 	matterparity "github.com/SukramJ/go-fabric/parity"
+
+	"github.com/SukramJ/openccu-loom/internal/model/custom"
 )
 
 // hmLgtOnOffCluster is the matter.js OnOff element as the snapshot
@@ -64,12 +64,14 @@ func hmLgtLoadOnOffElement(t *testing.T) hmLgtOnOffCluster {
 // !OFFONLY, and every attribute whose conformance is M or LT. Pinning
 // the ids against matter.js — rather than against a second hand-written
 // list — is what makes a transcription slip in the constant block
-// visible instead of shipping as a silent pair-abort.
+// visible instead of shipping as a silent pair-abort. The lists are read
+// from the server the light actually serves.
 func TestHmLgtLightOnOffMatchesMatterJS(t *testing.T) {
 	t.Parallel()
 
 	el := hmLgtLoadOnOffElement(t)
-	s := lightOnOffServer{l: &Light{}}
+	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
+	s := onOffServer(t, l)
 
 	// The FeatureMap the endpoint advertises decides which conformance
 	// clauses apply, so read it first.
@@ -106,7 +108,7 @@ func TestHmLgtLightOnOffMatchesMatterJS(t *testing.T) {
 			wantCmds[c.ID] = c.Name
 		}
 	}
-	hmLgtAssertIDSet(t, "lightOnOffServer.MatterAcceptedCommands", s.MatterAcceptedCommands(), wantCmds)
+	hmLgtAssertIDSet(t, "light OnOff MatterAcceptedCommands", s.MatterAcceptedCommands(), wantCmds)
 
 	wantAttrs := map[uint32]string{}
 	for _, a := range el.Attributes {
@@ -115,10 +117,11 @@ func TestHmLgtLightOnOffMatchesMatterJS(t *testing.T) {
 			wantAttrs[a.ID] = a.Name
 		}
 	}
-	hmLgtAssertIDSet(t, "lightOnOffServer.MatterAttributes", s.MatterAttributes(), wantAttrs)
+	hmLgtAssertIDSet(t, "light OnOff MatterAttributes", s.MatterAttributes(), wantAttrs)
 
-	if onoff.Revision() != el.Revision {
-		t.Errorf("OnOff cluster revision %d, matter.js says %d", onoff.Revision(), el.Revision)
+	rev, ok := s.MatterRead(matterAttrClusterRevision)
+	if !ok || rev != el.Revision {
+		t.Errorf("light OnOff ClusterRevision = (%v, %v), matter.js says %d", rev, ok, el.Revision)
 	}
 }
 

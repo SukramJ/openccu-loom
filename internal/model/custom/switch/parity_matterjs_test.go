@@ -7,8 +7,6 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/SukramJ/go-fabric/cluster/onoff"
-
 	matterparity "github.com/SukramJ/go-fabric/parity"
 )
 
@@ -47,8 +45,8 @@ func clusterByID(s *matterSchema, id uint32) (matterClusterEntry, bool) {
 	return matterClusterEntry{}, false
 }
 
-// TestParityMatterJS_SwitchOnOffNoSpuriousOptions asserts that
-// Switch.MatterAttributes() does NOT advertise OnOff.Options (0x000F).
+// TestParityMatterJS_SwitchOnOffNoSpuriousOptions asserts that the
+// switch's OnOff server does NOT advertise OnOff.Options (0x000F).
 // Options is a historical Zigbee-Cluster-Library attribute that Matter
 // dropped: matter.js HEAD on-off.element.ts and chip HEAD's
 // zzz_generated/.../OnOff/AttributeIds.h both omit it from the OnOff
@@ -57,14 +55,14 @@ func clusterByID(s *matterSchema, id uint32) (matterClusterEntry, bool) {
 func TestParityMatterJS_SwitchOnOffNoSpuriousOptions(t *testing.T) {
 	t.Parallel()
 	const spuriousOptionsID uint32 = 0x000F
-	s := &Switch{}
-	for _, id := range s.MatterAttributes() {
+	_, srv, _ := matterSwitch(t)
+	for _, id := range srv.MatterAttributes() {
 		if id == spuriousOptionsID {
-			t.Errorf("Switch MatterAttributes() advertises spurious OnOff.Options (0x000F)")
+			t.Errorf("Switch OnOff MatterAttributes() advertises spurious OnOff.Options (0x000F)")
 		}
 	}
-	if _, ok := s.MatterRead(spuriousOptionsID); ok {
-		t.Errorf("Switch MatterRead(0x000F) must return ok=false — attribute not in spec")
+	if _, ok := srv.MatterRead(spuriousOptionsID); ok {
+		t.Errorf("Switch OnOff MatterRead(0x000F) must return ok=false — attribute not in spec")
 	}
 }
 
@@ -72,12 +70,15 @@ func TestParityMatterJS_SwitchClusterRevisions(t *testing.T) {
 	t.Parallel()
 
 	schema := loadMatterSchemaT(t)
+	srv := matterOnOffServerOf(t, newTestSwitch(t, "VCU0000001:1", "", &stubWriter{}))
+	rev, _ := srv.MatterRead(0xFFFD)
+	onOffRevision, _ := rev.(uint16)
 	cases := []struct {
 		id           uint32
 		name         string
 		codeRevision uint16
 	}{
-		{matterClusterOnOff, "OnOff", onoff.Revision()},
+		{srv.MatterClusterID(), "OnOff", onOffRevision},
 	}
 
 	for _, c := range cases {

@@ -6,403 +6,385 @@ package switchdev
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
+	"time"
+
+	"github.com/SukramJ/go-fabric/cluster/onoff"
+	onoffspec "github.com/SukramJ/go-fabric/cluster/spec/onoff"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
-// TestMatterDeviceType locks the OnOffPlugInUnit (0x010A) device-type
-// projection. Endpoint-assembler logic depends on this exact value;
-// changes here must coordinate with the bridge endpoint topology.
+// matterWriteCall is one southbound write the OnOff Sink caused.
+type matterWriteCall struct {
+	param    hmenum.Parameter
+	value    any
+	priority hmenum.CommandPriority
+}
+
+// matterWriter records every southbound write with its priority. It is
+// safe for the OnOff server's countdown goroutine, and err refuses the
+// write the way a busy radio would.
+type matterWriter struct {
+	mu    sync.Mutex
+	calls []matterWriteCall
+	err   error
+}
+
+func (w *matterWriter) SetValue(_ context.Context, _ string, parameter hmenum.Parameter, value any, priority hmenum.CommandPriority) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.err != nil {
+		return w.err
+	}
+	w.calls = append(w.calls, matterWriteCall{param: parameter, value: value, priority: priority})
+	return nil
+}
+
+func (w *matterWriter) snapshot() []matterWriteCall {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return append([]matterWriteCall(nil), w.calls...)
+}
+
+// matterSwitch builds a writable STATE switch and returns it with its
+// OnOff server and the writer behind the Sink.
+func matterSwitch(t *testing.T) (*Switch, *onoff.Server, *matterWriter) {
+	t.Helper()
+	w := &matterWriter{}
+	s := newTestSwitch(t, "HmIP-PS:3", "", w)
+	return s, matterOnOffServerOf(t, s), w
+}
+
+// matterOnOffServerOf returns the one cluster server s contributes,
+// failing unless it is go-fabric's OnOff server.
+func matterOnOffServerOf(t *testing.T, s *Switch) *onoff.Server {
+	t.Helper()
+	servers := s.MatterClusterServers()
+	if len(servers) != 1 {
+		t.Fatalf("MatterClusterServers = %d servers, want exactly the OnOff server", len(servers))
+	}
+	srv, ok := servers[0].(*onoff.Server)
+	if !ok {
+		t.Fatalf("OnOff server is %T, want go-fabric's *onoff.Server", servers[0])
+	}
+	return srv
+}
+
+// TestMatterDeviceType locks the OnOffPlugInUnit device-type projection
+// the endpoint assembler starts from.
 func TestMatterDeviceType(t *testing.T) {
+	t.Parallel()
 	s := newTestSwitch(t, "VCU0000001:1", "", &stubWriter{})
-	if got := s.MatterDeviceType(); got != 0x010A {
-		t.Fatalf("MatterDeviceType = 0x%04X, want 0x010A", got)
+	if got := s.MatterDeviceType(); got != onoff.DeviceTypeOnOffPlugInUnit {
+		t.Fatalf("MatterDeviceType = 0x%04X, want OnOffPlugInUnit 0x%04X", got, onoff.DeviceTypeOnOffPlugInUnit)
 	}
 }
 
 // TestMatterClusterServersExposesOnOff confirms the Switch contributes
-// exactly OnOff (0x0006). The other mandatory OnOffPlugInUnit clusters,
-// Groups (0x0004) and ScenesManagement (0x0062), are stack state the
-// endpoint assembler mounts from the node's group state.
-// Adding or reordering clusters here is a breaking change to the endpoint shape.
+// exactly the OnOff server. Groups and ScenesManagement are stack state
+// the endpoint assembler mounts from the node's group state.
 func TestMatterClusterServersExposesOnOff(t *testing.T) {
-	s := newTestSwitch(t, "VCU0000001:1", "", &stubWriter{})
-	servers := s.MatterClusterServers()
-	if len(servers) != 1 {
-		t.Fatalf("expected 1 cluster server, got %d", len(servers))
-	}
-	if id := servers[0].MatterClusterID(); id != 0x0006 {
-		t.Fatalf("servers[0] MatterClusterID = 0x%04X, want 0x0006 (OnOff)", id)
+	t.Parallel()
+	_, srv, _ := matterSwitch(t)
+	if id := srv.MatterClusterID(); id != onoff.ClusterID {
+		t.Fatalf("cluster id = 0x%04X, want OnOff 0x%04X", id, onoff.ClusterID)
 	}
 }
 
-// TestMatterReadOnOffUnobserved confirms an unobserved Switch reads (false, true).
-// Apple Home's HAP-mapper drops the OnOffPlugInUnit accessory when OnOff=null on
-// the Subscribe-Initial-Report — matter.js's OnOff attribute is TlvBoolean, not
-// TlvNullable, so defaulting to false on cold-start matches both spec shape and
-// Apple's HMOutlet projection requirements. The first observed CCU state
-// overwrites the default.
-func TestMatterReadOnOffUnobserved(t *testing.T) {
-	s := newTestSwitch(t, "VCU0000001:1", "", &stubWriter{})
-	v, ok := s.MatterRead(0x0000)
-	if !ok || v != false {
-		t.Fatalf("MatterRead(OnOff) on unobserved = (%v, %v), want (false, true)", v, ok)
+// TestMatterClusterServersBuiltOncePerSwitch pins that reassembly sees
+// the same server: a rebuilt one would lose its timers, its attribute
+// state and the subscription behind it.
+func TestMatterClusterServersBuiltOncePerSwitch(t *testing.T) {
+	t.Parallel()
+	s, srv, _ := matterSwitch(t)
+	if again := s.MatterClusterServers()[0]; again != srv {
+		t.Fatalf("a second MatterClusterServers call returned a different server (%p vs %p)", again, srv)
 	}
 }
 
-// TestMatterReadOnOffObserved walks the read path after OnState.
-func TestMatterReadOnOffObserved(t *testing.T) {
-	s := newTestSwitch(t, "VCU0000001:1", "", &stubWriter{})
-	s.OnState(true)
-	v, ok := s.MatterRead(0x0000)
-	if !ok || v != true {
-		t.Fatalf("MatterRead(OnOff) = (%v, %v), want (true, true)", v, ok)
-	}
-}
-
-// TestMatterReadClusterRevisionAndFeatureMap locks the static
-// metadata attributes against the Matter 1.5.1 OnOff cluster baseline.
-// The OnOffPlugInUnit (0x010A) device type mandates the LT (Lighting)
-// feature, so FeatureMap advertises bit 0 (0x01).
-// matter.js on-off.element.ts:24 (Field LT, constraint "0").
-func TestMatterReadClusterRevisionAndFeatureMap(t *testing.T) {
-	s := newTestSwitch(t, "VCU0000001:1", "", &stubWriter{})
-	rev, ok := s.MatterRead(0xFFFD)
-	if !ok || rev.(uint16) != 6 {
-		t.Fatalf("ClusterRevision = (%v, %v), want (6, true)", rev, ok)
-	}
-	fmap, ok := s.MatterRead(0xFFFC)
-	if !ok || fmap.(uint32) != 0x01 {
-		t.Fatalf("FeatureMap = (%v, %v), want (0x01 LT, true)", fmap, ok)
-	}
-}
-
-// TestMatterReadLightingGatedAttributes verifies the four LT-mandatory
-// OnOff attributes read with their matter.js-default values.
-// GlobalSceneControl=true (OnOffServer.ts:75), OnTime=0, OffWaitTime=0
-// (OnOffServer.ts:80,102), StartUpOnOff=null (OnOffServer.ts:39).
-func TestMatterReadLightingGatedAttributes(t *testing.T) {
-	s := newTestSwitch(t, "VCU0000001:1", "", &stubWriter{})
-	if v, ok := s.MatterRead(0x4000); !ok || v != true {
-		t.Fatalf("GlobalSceneControl = (%v, %v), want (true, true)", v, ok)
-	}
-	if v, ok := s.MatterRead(0x4001); !ok || v.(uint16) != 0 {
-		t.Fatalf("OnTime = (%v, %v), want (0, true)", v, ok)
-	}
-	if v, ok := s.MatterRead(0x4002); !ok || v.(uint16) != 0 {
-		t.Fatalf("OffWaitTime = (%v, %v), want (0, true)", v, ok)
-	}
-	if v, ok := s.MatterRead(0x4003); !ok || v != nil {
-		t.Fatalf("StartUpOnOff = (%v, %v), want (nil/null, true)", v, ok)
-	}
-}
-
-// TestMatterAttributesEnumeratesLightingGated confirms MatterAttributes
-// lists the four LT-mandatory attributes alongside OnOff.
-func TestMatterAttributesEnumeratesLightingGated(t *testing.T) {
-	s := newTestSwitch(t, "VCU0000001:1", "", &stubWriter{})
-	got := map[uint32]bool{}
-	for _, a := range s.MatterAttributes() {
-		got[a] = true
-	}
-	for _, want := range []uint32{0x0000, 0x4000, 0x4001, 0x4002, 0x4003} {
-		if !got[want] {
-			t.Errorf("MatterAttributes missing 0x%04X", want)
-		}
-	}
-}
-
-// TestMatterAcceptedCommandsEnumeratesLightingGated confirms the OnOff
-// baseline plus the three LT-mandatory commands are enumerated.
-func TestMatterAcceptedCommandsEnumeratesLightingGated(t *testing.T) {
-	s := newTestSwitch(t, "VCU0000001:1", "", &stubWriter{})
-	got := map[uint32]bool{}
-	for _, c := range s.MatterAcceptedCommands() {
-		got[c] = true
-	}
-	for _, want := range []uint32{0x00, 0x01, 0x02, 0x40, 0x41, 0x42} {
-		if !got[want] {
-			t.Errorf("MatterAcceptedCommands missing 0x%02X", want)
-		}
-	}
-}
-
-// TestMatterInvokeLightingGatedCommands verifies the three LT-mandatory
-// commands are accepted without error and route to plain On/Off.
-func TestMatterInvokeLightingGatedCommands(t *testing.T) {
-	cases := []struct {
-		cmd  uint32
-		want bool // expected southbound STATE value
-	}{
-		{0x40, false}, // OffWithEffect → Off
-		{0x41, true},  // OnWithRecallGlobalScene → On
-		{0x42, true},  // OnWithTimedOff → On
-	}
-	for _, tc := range cases {
-		w := &stubWriter{}
-		s := newTestSwitch(t, "HmIP-PS:3", "", w)
-		if _, err := s.MatterInvoke(context.Background(), tc.cmd, nil); err != nil {
-			t.Fatalf("MatterInvoke(0x%02X) error: %v", tc.cmd, err)
-		}
-		if w.lastVal != tc.want {
-			t.Fatalf("cmd 0x%02X wrote STATE=%v, want %v", tc.cmd, w.lastVal, tc.want)
-		}
-	}
-}
-
-// TestGlobalSceneControlLifecycle verifies GlobalSceneControl (0x4000)
-// is live state, not the hardcoded constant it used to be: it reads
-// true initially, stays true after a plain On, flips to false after
-// OffWithEffect, is left unchanged by a subsequent plain Off, and
-// reverts to true on a following On. The value also survives a
-// MatterClusterServers reconstruction. Mirrors matter.js
-// packages/node/src/behaviors/on-off/OnOffServer.ts:97-104 (on),
-// :119-139 (off — GlobalSceneControl untouched), :158-169
-// (offWithEffect).
-func TestGlobalSceneControlLifecycle(t *testing.T) {
-	w := &stubWriter{}
-	s := newTestSwitch(t, "HmIP-PS:3", "", w)
-
-	if v, ok := s.MatterRead(0x4000); !ok || v != true {
-		t.Fatalf("initial GlobalSceneControl = (%v, %v), want (true, true)", v, ok)
-	}
-
-	if _, err := s.MatterInvoke(context.Background(), 0x01, nil); err != nil {
-		t.Fatalf("On error: %v", err)
-	}
-	if v, ok := s.MatterRead(0x4000); !ok || v != true {
-		t.Fatalf("GlobalSceneControl after On = (%v, %v), want (true, true)", v, ok)
-	}
-
-	if _, err := s.MatterInvoke(context.Background(), 0x40, nil); err != nil {
-		t.Fatalf("OffWithEffect error: %v", err)
-	}
-	if v, ok := s.MatterRead(0x4000); !ok || v != false {
-		t.Fatalf("GlobalSceneControl after OffWithEffect = (%v, %v), want (false, true)", v, ok)
-	}
-
-	if _, err := s.MatterInvoke(context.Background(), 0x00, nil); err != nil {
-		t.Fatalf("plain Off error: %v", err)
-	}
-	if v, ok := s.MatterRead(0x4000); !ok || v != false {
-		t.Fatalf("GlobalSceneControl after plain Off = (%v, %v), want (false, true) — a plain Off must not change it", v, ok)
-	}
-
-	if _, err := s.MatterInvoke(context.Background(), 0x01, nil); err != nil {
-		t.Fatalf("second On error: %v", err)
-	}
-	if v, ok := s.MatterRead(0x4000); !ok || v != true {
-		t.Fatalf("GlobalSceneControl after second On = (%v, %v), want (true, true)", v, ok)
-	}
-
-	// The cluster server list is rebuilt fresh on every
-	// MatterClusterServers call; the flag lives on Switch and must
-	// still read back true through the fresh slice.
-	servers := s.MatterClusterServers()
-	if v, ok := servers[0].MatterRead(0x4000); !ok || v != true {
-		t.Fatalf("GlobalSceneControl after MatterClusterServers reconstruction = (%v, %v), want (true, true)", v, ok)
-	}
-}
-
-// TestGlobalSceneControlOnWithRecallGlobalSceneSetsTrue verifies
-// OnWithRecallGlobalScene (0x41) sets GlobalSceneControl true, matching
-// the plain On path. matter.js OnOffServer.ts:171-191.
-func TestGlobalSceneControlOnWithRecallGlobalSceneSetsTrue(t *testing.T) {
-	w := &stubWriter{}
-	s := newTestSwitch(t, "HmIP-PS:3", "", w)
-
-	if _, err := s.MatterInvoke(context.Background(), 0x40, nil); err != nil {
-		t.Fatalf("OffWithEffect error: %v", err)
-	}
-	if v, _ := s.MatterRead(0x4000); v != false {
-		t.Fatalf("precondition: GlobalSceneControl = %v, want false", v)
-	}
-
-	if _, err := s.MatterInvoke(context.Background(), 0x41, nil); err != nil {
-		t.Fatalf("OnWithRecallGlobalScene error: %v", err)
-	}
-	if v, ok := s.MatterRead(0x4000); !ok || v != true {
-		t.Fatalf("GlobalSceneControl after OnWithRecallGlobalScene = (%v, %v), want (true, true)", v, ok)
-	}
-}
-
-// TestMatterReadUnknownAttribute returns (nil, false) for IDs the
-// projection does not implement.
-func TestMatterReadUnknownAttribute(t *testing.T) {
-	s := newTestSwitch(t, "VCU0000001:1", "", &stubWriter{})
-	// 0x4004 is above the highest LT-gated attribute (StartUpOnOff 0x4003)
-	// and is not implemented by the OnOff projection.
-	if v, ok := s.MatterRead(0x4004); ok {
-		t.Fatalf("MatterRead(unknown) = (%v, true), want (nil, false)", v)
-	}
-}
-
-// TestMatterWriteOnOffSetsState routes the write through to the
-// southbound stubWriter as a STATE setvalue.
-func TestMatterWriteOnOffSetsState(t *testing.T) {
-	w := &stubWriter{}
-	s := newTestSwitch(t, "HmIP-PS:3", "", w)
-	if err := s.MatterWrite(context.Background(), 0x0000, true); err != nil {
-		t.Fatalf("MatterWrite(OnOff, true) error: %v", err)
-	}
-	if w.lastParm != hmenum.ParameterState || w.lastVal != true {
-		t.Fatalf("setvalue = (%v=%v), want (STATE=true)", w.lastParm, w.lastVal)
-	}
-}
-
-// TestMatterWriteOnOffWrongType refuses non-bool values; the bridge
-// never reaches this path because TLV decoding catches the type
-// mismatch first, but defence-in-depth matters.
-func TestMatterWriteOnOffWrongType(t *testing.T) {
-	s := newTestSwitch(t, "HmIP-PS:3", "", &stubWriter{})
-	err := s.MatterWrite(context.Background(), 0x0000, "true")
-	if !errors.Is(err, errMatterValueType) {
-		t.Fatalf("MatterWrite(OnOff, string) err = %v, want errMatterValueType", err)
-	}
-}
-
-// TestMatterWriteUnknownAttributeRejected rejects writes to
-// unsupported attribute IDs. Attribute 0x4004 is not defined on OnOff.
-func TestMatterWriteUnknownAttributeRejected(t *testing.T) {
-	s := newTestSwitch(t, "HmIP-PS:3", "", &stubWriter{})
-	err := s.MatterWrite(context.Background(), 0x4004, uint16(0))
-	if !errors.Is(err, errMatterUnknownAttribute) {
-		t.Fatalf("MatterWrite(unknown) err = %v, want errMatterUnknownAttribute", err)
-	}
-}
-
-// TestMatterInvokeOff dispatches the Off command and confirms the
-// southbound STATE=false write.
-func TestMatterInvokeOff(t *testing.T) {
-	w := &stubWriter{}
-	s := newTestSwitch(t, "HmIP-PS:3", "", w)
-	if _, err := s.MatterInvoke(context.Background(), 0x00, nil); err != nil {
-		t.Fatalf("MatterInvoke(Off) error: %v", err)
-	}
-	if w.lastParm != hmenum.ParameterState || w.lastVal != false {
-		t.Fatalf("setvalue = (%v=%v), want (STATE=false)", w.lastParm, w.lastVal)
-	}
-}
-
-// TestMatterInvokeOn dispatches the On command.
-func TestMatterInvokeOn(t *testing.T) {
-	w := &stubWriter{}
-	s := newTestSwitch(t, "HmIP-PS:3", "", w)
-	if _, err := s.MatterInvoke(context.Background(), 0x01, nil); err != nil {
-		t.Fatalf("MatterInvoke(On) error: %v", err)
-	}
-	if w.lastParm != hmenum.ParameterState || w.lastVal != true {
-		t.Fatalf("setvalue = (%v=%v), want (STATE=true)", w.lastParm, w.lastVal)
-	}
-}
-
-// TestMatterInvokeToggleFromOn flips an observed-on Switch off.
-func TestMatterInvokeToggleFromOn(t *testing.T) {
-	w := &stubWriter{}
-	s := newTestSwitch(t, "HmIP-PS:3", "", w)
-	s.OnState(true)
-	if _, err := s.MatterInvoke(context.Background(), 0x02, nil); err != nil {
-		t.Fatalf("MatterInvoke(Toggle) error: %v", err)
-	}
-	if w.lastVal != false {
-		t.Fatalf("Toggle from On wrote %v, want false", w.lastVal)
-	}
-}
-
-// TestMatterInvokeToggleUnobserved treats unknown current state as
-// off (Matter spec: unobserved → transition to On).
-func TestMatterInvokeToggleUnobserved(t *testing.T) {
-	w := &stubWriter{}
-	s := newTestSwitch(t, "HmIP-PS:3", "", w)
-	if _, err := s.MatterInvoke(context.Background(), 0x02, nil); err != nil {
-		t.Fatalf("MatterInvoke(Toggle) error: %v", err)
-	}
-	if w.lastVal != true {
-		t.Fatalf("Toggle when unobserved wrote %v, want true", w.lastVal)
-	}
-}
-
-// TestMatterInvokeUnknownCommand rejects unsupported command IDs. 0x43
-// is above the highest defined OnOff command (OnWithTimedOff 0x42).
-func TestMatterInvokeUnknownCommand(t *testing.T) {
-	s := newTestSwitch(t, "HmIP-PS:3", "", &stubWriter{})
-	_, err := s.MatterInvoke(context.Background(), 0x43, nil)
-	if !errors.Is(err, errMatterUnknownCommand) {
-		t.Fatalf("MatterInvoke(0x43) err = %v, want errMatterUnknownCommand", err)
-	}
-}
-
-// TestMatterReportableListsOnOff confirms the OnOff attribute is the
-// only reportable attribute on this projection.
-func TestMatterReportableListsOnOff(t *testing.T) {
-	s := newTestSwitch(t, "VCU0000001:1", "", &stubWriter{})
-	r := s.MatterReportable()
-	if len(r) != 1 || r[0] != 0x0000 {
-		t.Fatalf("MatterReportable = %v, want [0x0000]", r)
-	}
-}
-
-// TestMatterWriteNilValueIsNoOp verifies that a nil value write to the OnOff
-// attribute is silently ignored rather than panicking on a type assertion.
-// Matter OnOff has quality "N S" (non-volatile + scene); a scene controller
-// may write nil to reset a scene-tagged attribute. The attribute is non-nullable
-// (no quality X), so nil carries no spec-defined meaning — no-op is safe.
-// Mirrors matter.js packages/model/src/standard/elements/on-off.element.ts:29.
-func TestMatterWriteNilValueIsNoOp(t *testing.T) {
-	w := &stubWriter{}
-	s := newTestSwitch(t, "HmIP-PS:3", "", w)
-	err := s.MatterWrite(context.Background(), 0x0000, nil)
-	if err != nil {
-		t.Fatalf("MatterWrite(OnOff, nil) = %v, want nil (no-op)", err)
-	}
-	if w.lastParm != "" {
-		t.Fatalf("nil write reached the wire unexpectedly: lastParm=%v", w.lastParm)
-	}
-}
-
-// TestMatterClusterServerInterfaceSatisfaction confirms the Switch
-// satisfies the source-surface interface contracts at runtime through
-// the same path the endpoint assembler will use.
+// TestMatterClusterServerInterfaceSatisfaction reaches the server through
+// the source-surface interface the endpoint assembler uses.
 func TestMatterClusterServerInterfaceSatisfaction(t *testing.T) {
-	s := newTestSwitch(t, "VCU0000001:1", "", &stubWriter{})
-	var src interfaces.MatterEndpointSource = s
+	t.Parallel()
+	var src interfaces.MatterEndpointSource = newTestSwitch(t, "VCU0000001:1", "", &stubWriter{})
 	servers := src.MatterClusterServers()
-	if len(servers) == 0 {
-		t.Fatalf("expected ≥1 cluster server")
+	if len(servers) != 1 || servers[0].MatterClusterID() != onoff.ClusterID {
+		t.Fatalf("MatterClusterServers through the interface = %v, want the OnOff server", servers)
 	}
-	srv := servers[0]
-	if srv.MatterClusterID() != 0x0006 {
-		t.Fatalf("cluster ID = 0x%04X, want 0x0006", srv.MatterClusterID())
+}
+
+// TestMatterOnOffStartsFalseWhileUnobserved pins the cold-start value:
+// Apple Home's HAP mapper drops the OnOffPlugInUnit accessory when OnOff
+// carries no boolean on the first Subscribe report.
+func TestMatterOnOffStartsFalseWhileUnobserved(t *testing.T) {
+	t.Parallel()
+	_, srv, _ := matterSwitch(t)
+	if v, ok := srv.MatterRead(onoff.AttrOnOff); !ok || v != false {
+		t.Fatalf("OnOff on unobserved = (%v, %v), want (false, true)", v, ok)
+	}
+}
+
+// TestMatterOnOffStartsFromTheObservedState pins that a server built
+// after the CCU reported STATE starts from that state.
+func TestMatterOnOffStartsFromTheObservedState(t *testing.T) {
+	t.Parallel()
+	s := newTestSwitch(t, "VCU0000001:1", "", &stubWriter{})
+	s.OnState(true)
+	srv := matterOnOffServerOf(t, s)
+	if v, ok := srv.MatterRead(onoff.AttrOnOff); !ok || v != true {
+		t.Fatalf("OnOff after observed STATE=true = (%v, %v), want (true, true)", v, ok)
+	}
+}
+
+// TestMatterConfirmedStateReachesTheServerWithoutAWrite pins the
+// confirmed-update hook: a wall switch or CCU program flip is stored on
+// the server and reported, and never echoes back into a CCU write.
+func TestMatterConfirmedStateReachesTheServerWithoutAWrite(t *testing.T) {
+	t.Parallel()
+	s, srv, w := matterSwitch(t)
+	for _, on := range []bool{true, false, true} {
+		s.OnState(on)
+		if v, _ := srv.MatterRead(onoff.AttrOnOff); v != on {
+			t.Fatalf("OnOff after confirmed STATE=%v: got %v", on, v)
+		}
+	}
+	if calls := w.snapshot(); len(calls) != 0 {
+		t.Fatalf("a confirmed CCU update must not write back: %+v", calls)
+	}
+}
+
+// TestMatterFeatureMapAdvertisesLighting pins the LT feature the
+// OnOffPlugInUnit device type mandates, and the stack's revision.
+func TestMatterFeatureMapAdvertisesLighting(t *testing.T) {
+	t.Parallel()
+	_, srv, _ := matterSwitch(t)
+	if v, ok := srv.MatterRead(0xFFFC); !ok || v != onoff.FeatureLighting {
+		t.Errorf("FeatureMap = (%v, %v), want (0x%02X, true)", v, ok, onoff.FeatureLighting)
+	}
+	if v, ok := srv.MatterRead(0xFFFD); !ok || v != onoff.Revision() {
+		t.Errorf("ClusterRevision = (%v, %v), want (%v, true)", v, ok, onoff.Revision())
+	}
+}
+
+// TestMatterAdvertisedListsAreTheLightingSet pins the attribute and
+// accepted-command lists to the LT set of the stack's definition.
+func TestMatterAdvertisedListsAreTheLightingSet(t *testing.T) {
+	t.Parallel()
+	_, srv, _ := matterSwitch(t)
+	if got, want := srv.MatterAttributes(), onoff.LightingAttributes(); !sameIDs(got, want) {
+		t.Errorf("MatterAttributes() = %#x, want the LT set %#x", got, want)
+	}
+	if got, want := srv.MatterAcceptedCommands(), onoff.LightingCommands(); !sameIDs(got, want) {
+		t.Errorf("MatterAcceptedCommands() = %#x, want the LT set %#x", got, want)
+	}
+	if len(srv.MatterGeneratedCommands()) != 0 {
+		t.Error("OnOff commands carry no response payload")
+	}
+}
+
+func sameIDs(a, b []uint32) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// TestMatterOnOffAttributeIsNotWritable pins OnOff's access R V: a
+// controller changes it only through a command, and a refused write
+// never reaches the CCU.
+func TestMatterOnOffAttributeIsNotWritable(t *testing.T) {
+	t.Parallel()
+	_, srv, w := matterSwitch(t)
+	if err := srv.MatterWrite(context.Background(), onoff.AttrOnOff, true); err == nil {
+		t.Fatal("a write to OnOff must be refused")
+	}
+	if calls := w.snapshot(); len(calls) != 0 {
+		t.Fatalf("a refused attribute write must not reach the CCU: %+v", calls)
 	}
 }
 
 // TestMatterWriteLTAttributesAcceptDecodedUint64 pins the type the IM
-// layer actually delivers: the bridge decodes every unsigned TLV integer
-// to uint64, so a uint16/uint8 assertion rejected every controller write
-// to the three LT attributes the FeatureMap advertises as writable.
+// layer delivers: every unsigned TLV integer decodes to uint64, and the
+// three writable LT attributes must accept it.
 func TestMatterWriteLTAttributesAcceptDecodedUint64(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name  string
 		attr  uint32
 		write any
 		want  any
 	}{
-		{"OnTime", matterAttrOnTime, uint64(42), uint16(42)},
-		{"OffWaitTime", matterAttrOffWaitTime, uint64(7), uint16(7)},
-		{"StartUpOnOff", matterAttrStartUpOnOff, uint64(1), uint8(1)},
+		{"OnTime", onoff.AttrOnTime, uint64(42), uint16(42)},
+		{"OffWaitTime", onoff.AttrOffWaitTime, uint64(7), uint16(7)},
+		{"StartUpOnOff", onoff.AttrStartUpOnOff, uint64(1), uint8(1)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			s := newTestSwitch(t, "HmIP-PS:3", "", &stubWriter{})
-			err := s.MatterWrite(context.Background(), tc.attr, tc.write)
-			if err != nil {
-				t.Fatalf("MatterWrite(%s, uint64) error: %v", tc.name, err)
+			t.Parallel()
+			_, srv, w := matterSwitch(t)
+			if err := srv.MatterWrite(context.Background(), tc.attr, tc.write); err != nil {
+				t.Fatalf("write %s: %v", tc.name, err)
 			}
-			if v, _ := s.MatterRead(tc.attr); v != tc.want {
+			if v, _ := srv.MatterRead(tc.attr); v != tc.want {
 				t.Errorf("%s after write: got %v (%T), want %v", tc.name, v, v, tc.want)
 			}
+			if calls := w.snapshot(); len(calls) != 0 {
+				t.Errorf("an LT attribute write must not reach the CCU: %+v", calls)
+			}
 		})
+	}
+}
+
+// TestMatterCommandsReachTheCCUThroughTheSink pins the Sink: every
+// command that changes OnOff becomes exactly one STATE write at the
+// bridge's foreground priority, and the server stores the new value.
+func TestMatterCommandsReachTheCCUThroughTheSink(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		startOn bool
+		cmd     uint32
+		want    bool
+	}{
+		{"On", false, onoff.CmdOn, true},
+		{"Off", true, onoff.CmdOff, false},
+		{"Toggle from off", false, onoff.CmdToggle, true},
+		{"Toggle from on", true, onoff.CmdToggle, false},
+		{"OffWithEffect", true, onoff.CmdOffWithEffect, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			s, srv, w := matterSwitch(t)
+			s.OnState(tc.startOn)
+			if _, err := srv.MatterInvoke(context.Background(), tc.cmd, nil); err != nil {
+				t.Fatalf("%s: %v", tc.name, err)
+			}
+			calls := w.snapshot()
+			if len(calls) != 1 {
+				t.Fatalf("%s: %d CCU write(s), want exactly one: %+v", tc.name, len(calls), calls)
+			}
+			c := calls[0]
+			if c.param != hmenum.ParameterState || c.value != tc.want || c.priority != hmenum.CommandPriorityHigh {
+				t.Errorf("%s wrote %+v, want STATE=%v at priority High", tc.name, c, tc.want)
+			}
+			if v, _ := srv.MatterRead(onoff.AttrOnOff); v != tc.want {
+				t.Errorf("%s: OnOff = %v after the accepted command, want %v", tc.name, v, tc.want)
+			}
+		})
+	}
+}
+
+// TestMatterOnWithRecallGlobalSceneReachesTheSink pins the recall path
+// after an OffWithEffect cleared GlobalSceneControl: the On it implies
+// reaches the CCU.
+func TestMatterOnWithRecallGlobalSceneReachesTheSink(t *testing.T) {
+	t.Parallel()
+	_, srv, w := matterSwitch(t)
+	ctx := context.Background()
+	if _, err := srv.MatterInvoke(ctx, onoff.CmdOffWithEffect, nil); err != nil {
+		t.Fatalf("OffWithEffect: %v", err)
+	}
+	if _, err := srv.MatterInvoke(ctx, onoff.CmdOnWithRecallGlobalScene, nil); err != nil {
+		t.Fatalf("OnWithRecallGlobalScene: %v", err)
+	}
+	calls := w.snapshot()
+	if len(calls) == 0 || calls[len(calls)-1].value != true {
+		t.Fatalf("OnWithRecallGlobalScene must end with STATE=true, got %+v", calls)
+	}
+}
+
+// TestMatterCommandMatchingTheObservedStateDoesNotWrite pins that the
+// Sink is the profile's gated TurnOn / TurnOff: a command whose target
+// equals the CCU-confirmed state costs no radio telegram.
+func TestMatterCommandMatchingTheObservedStateDoesNotWrite(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		on   bool
+		cmd  uint32
+	}{
+		{"On while on", true, onoff.CmdOn},
+		{"Off while off", false, onoff.CmdOff},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			s, srv, w := matterSwitch(t)
+			s.OnState(tc.on)
+			if _, err := srv.MatterInvoke(context.Background(), tc.cmd, nil); err != nil {
+				t.Fatalf("%s: %v", tc.name, err)
+			}
+			if calls := w.snapshot(); len(calls) != 0 {
+				t.Fatalf("%s wrote %+v, want no write", tc.name, calls)
+			}
+			if v, _ := srv.MatterRead(onoff.AttrOnOff); v != tc.on {
+				t.Errorf("%s: OnOff = %v, want %v", tc.name, v, tc.on)
+			}
+		})
+	}
+}
+
+// TestMatterRefusedWriteKeepsTheAttribute pins that a failed CCU write
+// answers the command with an error and leaves OnOff at the CCU's value.
+func TestMatterRefusedWriteKeepsTheAttribute(t *testing.T) {
+	t.Parallel()
+	_, srv, w := matterSwitch(t)
+	w.err = errors.New("radio busy")
+	if _, err := srv.MatterInvoke(context.Background(), onoff.CmdOn, nil); err == nil {
+		t.Fatal("a failed CCU write must answer the command with an error")
+	}
+	if v, _ := srv.MatterRead(onoff.AttrOnOff); v != false {
+		t.Errorf("OnOff after a refused On: got %v, want the CCU's value false", v)
+	}
+}
+
+// TestMatterOnWithTimedOffSwitchesOffAfterOnTime pins that the stack's
+// countdown reaches the CCU: the timed On writes STATE=true, and the
+// Off at the end of OnTime writes STATE=false through the same Sink.
+func TestMatterOnWithTimedOffSwitchesOffAfterOnTime(t *testing.T) {
+	t.Parallel()
+	_, srv, w := matterSwitch(t)
+	// OnTime is in tenths of a second.
+	if _, err := srv.MatterInvoke(context.Background(), onoff.CmdOnWithTimedOff, onoffspec.OnWithTimedOffRequest{OnTime: 2}); err != nil {
+		t.Fatalf("OnWithTimedOff: %v", err)
+	}
+	if v, _ := srv.MatterRead(onoff.AttrOnOff); v != true {
+		t.Fatalf("OnOff right after OnWithTimedOff: got %v, want true", v)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) && len(w.snapshot()) < 2 {
+		time.Sleep(20 * time.Millisecond)
+	}
+	calls := w.snapshot()
+	if len(calls) != 2 || calls[0].value != true || calls[1].value != false {
+		t.Fatalf("timed on must write STATE=true then STATE=false, got %+v", calls)
+	}
+	if calls[1].priority != hmenum.CommandPriorityHigh {
+		t.Errorf("countdown Off priority = %v, want High", calls[1].priority)
+	}
+	if v, _ := srv.MatterRead(onoff.AttrOnOff); v != false {
+		t.Errorf("OnOff after the countdown: got %v, want false", v)
+	}
+}
+
+// TestMatterUnknownCommandIsRejected pins that an id outside the OnOff
+// command set is refused without a write.
+func TestMatterUnknownCommandIsRejected(t *testing.T) {
+	t.Parallel()
+	_, srv, w := matterSwitch(t)
+	if _, err := srv.MatterInvoke(context.Background(), 0x43, nil); err == nil {
+		t.Fatal("unknown command: expected error")
+	}
+	if calls := w.snapshot(); len(calls) != 0 {
+		t.Fatalf("an unknown command must not write: %+v", calls)
 	}
 }

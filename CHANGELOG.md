@@ -74,6 +74,28 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Matter: the OnOff cluster of every bridged switch, light, siren and
+  sound player is go-fabric's `onoff.Server`** (ADR 0084 phase 2). The
+  five hand-written servers and the light's own timed-off engine are
+  gone; the profile contributes the CCU write as the server's Sink and
+  feeds the CCU's confirmed state back through `Server.Set`, which stores
+  without a second write. What a controller observes changes in four
+  places: OnWithTimedOff runs the stack's OnTime / OffWaitTime countdown
+  on every one of these endpoints (before, only the light counted down;
+  a switch or siren switched on and forgot the timer), so a siren's
+  timed-on now ends the alarm after OnTime; OffWaitTime is honoured
+  (OnOffServer.ts:203-214); the OnOff attribute itself is no longer
+  writable (matter.js on-off.element.ts marks it `R V`; commands are the
+  controller path); and a scene stored by ScenesManagement recalls
+  OnOff through the stack's scene paths. The LevelControl "with On/Off"
+  commands of a light move the OnOff attribute the moment the CCU
+  accepted the level write, as matter.js couples the two clusters. The
+  confirmed state reaches the server through a coalescing worker rather
+  than from the event callback directly: `onoff.Server` runs the Sink
+  under its operation lock, and a CCU that sends the write's event before
+  the write's reply (the simulator does) would otherwise block the
+  interface's whole event callback until the write timed out — the
+  chip-tool suite caught it, go-fabric #63 tracks it upstream.
 - **Matter session parameters.** PBKDFParamResponse (PASE) and Sigma2
   (CASE) now carry the node's whole SessionParameters structure — the
   MRP intervals as before, plus the Data Model, Interaction Model and

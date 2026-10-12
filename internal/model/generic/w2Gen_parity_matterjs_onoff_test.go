@@ -58,12 +58,12 @@ func w2GenOnOffCluster(t *testing.T) w2GenSchemaCluster {
 		t.Fatalf("unmarshal embedded matter-schema-snapshot.json: %v", err)
 	}
 	for _, c := range s.Clusters {
-		if c.ID == matterGenericSwitchClusterOnOff {
+		if c.ID == onoff.ClusterID {
 			return c
 		}
 	}
-	t.Fatalf("snapshot carries no cluster 0x%04X — matterGenericSwitchClusterOnOff names a "+
-		"cluster the gold standard does not define", matterGenericSwitchClusterOnOff)
+	t.Fatalf("snapshot carries no cluster 0x%04X — onoff.ClusterID names a "+
+		"cluster the gold standard does not define", onoff.ClusterID)
 	return w2GenSchemaCluster{}
 }
 
@@ -94,9 +94,9 @@ func TestW2GenParityMatterJSGenericOnOffLTBit(t *testing.T) {
 			continue
 		}
 		want := uint32(1) << uint(f.Bit)
-		if matterGenericFeatureOnOffLT != want {
-			t.Errorf("matterGenericFeatureOnOffLT = 0x%02X, matter.js LT is bit %d (0x%02X)",
-				matterGenericFeatureOnOffLT, f.Bit, want)
+		if onoff.FeatureLighting != want {
+			t.Errorf("onoff.FeatureLighting = 0x%02X, matter.js LT is bit %d (0x%02X)",
+				onoff.FeatureLighting, f.Bit, want)
 		}
 		return
 	}
@@ -117,13 +117,13 @@ func TestW2GenParityMatterJSGenericOnOffAttributeIDs(t *testing.T) {
 		name  string
 		value uint32
 	}{
-		{"OnOff", matterGenericSwitchAttrOnOff},
-		{"GlobalSceneControl", matterGenericSwitchAttrGlobalSceneControl},
-		{"OnTime", matterGenericSwitchAttrOnTime},
-		{"OffWaitTime", matterGenericSwitchAttrOffWaitTime},
-		{"StartUpOnOff", matterGenericSwitchAttrStartUpOnOff},
-		{"FeatureMap", matterGenericSwitchAttrFeatureMap},
-		{"ClusterRevision", matterGenericSwitchAttrClusterRevision},
+		{"OnOff", onoff.AttrOnOff},
+		{"GlobalSceneControl", onoff.AttrGlobalSceneControl},
+		{"OnTime", onoff.AttrOnTime},
+		{"OffWaitTime", onoff.AttrOffWaitTime},
+		{"StartUpOnOff", onoff.AttrStartUpOnOff},
+		{"FeatureMap", uint32(0xFFFC)},
+		{"ClusterRevision", uint32(0xFFFD)},
 	} {
 		el, ok := byName[tc.name]
 		if !ok {
@@ -149,8 +149,8 @@ func TestW2GenParityMatterJSGenericOnOffAdvertisedSets(t *testing.T) {
 	t.Parallel()
 	c := w2GenOnOffCluster(t)
 
-	s := &Switch{}
-	raw, ok := s.MatterRead(matterGenericSwitchAttrFeatureMap)
+	_, s, _ := matterSwitch(t)
+	raw, ok := s.MatterRead(uint32(0xFFFC))
 	if !ok {
 		t.Fatal("Switch does not answer FeatureMap; the advertised feature set cannot be derived")
 	}

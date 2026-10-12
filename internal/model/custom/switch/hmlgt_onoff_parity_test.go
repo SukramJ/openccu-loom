@@ -7,8 +7,6 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/SukramJ/go-fabric/cluster/onoff"
-
 	matterparity "github.com/SukramJ/go-fabric/parity"
 )
 
@@ -63,17 +61,17 @@ func hmLgtLoadOnOffElement(t *testing.T) hmLgtOnOffCluster {
 // must contain: every OnOff command whose conformance is M, LT or
 // !OFFONLY, and every attribute whose conformance is M or LT. Pinning
 // the ids against matter.js — rather than against a second hand-written
-// list — is what makes a transcription slip in the constant block
+// list — is what makes a transcription slip in the stack's definition
 // visible instead of shipping as a silent pair-abort.
 func TestHmLgtSwitchOnOffMatchesMatterJS(t *testing.T) {
 	t.Parallel()
 
 	el := hmLgtLoadOnOffElement(t)
-	s := &Switch{}
+	_, srv, _ := matterSwitch(t)
 
 	// The FeatureMap the endpoint advertises decides which conformance
 	// clauses apply, so read it first.
-	fm, ok := s.MatterRead(matterAttrFeatureMap)
+	fm, ok := srv.MatterRead(0xFFFC)
 	if !ok {
 		t.Fatal("Switch does not answer FeatureMap (0xFFFC)")
 	}
@@ -106,7 +104,7 @@ func TestHmLgtSwitchOnOffMatchesMatterJS(t *testing.T) {
 			wantCmds[c.ID] = c.Name
 		}
 	}
-	hmLgtAssertIDSet(t, "Switch.MatterAcceptedCommands", s.MatterAcceptedCommands(), wantCmds)
+	hmLgtAssertIDSet(t, "Switch OnOff MatterAcceptedCommands", srv.MatterAcceptedCommands(), wantCmds)
 
 	wantAttrs := map[uint32]string{}
 	for _, a := range el.Attributes {
@@ -115,10 +113,13 @@ func TestHmLgtSwitchOnOffMatchesMatterJS(t *testing.T) {
 			wantAttrs[a.ID] = a.Name
 		}
 	}
-	hmLgtAssertIDSet(t, "Switch.MatterAttributes", s.MatterAttributes(), wantAttrs)
+	hmLgtAssertIDSet(t, "Switch OnOff MatterAttributes", srv.MatterAttributes(), wantAttrs)
 
-	if onoff.Revision() != el.Revision {
-		t.Errorf("OnOff cluster revision %d, matter.js says %d", onoff.Revision(), el.Revision)
+	if rev, _ := srv.MatterRead(0xFFFD); rev != el.Revision {
+		t.Errorf("OnOff ClusterRevision reads %v, matter.js says %d", rev, el.Revision)
+	}
+	if id := srv.MatterClusterID(); id != el.ID {
+		t.Errorf("OnOff cluster id 0x%04X, matter.js says 0x%04X", id, el.ID)
 	}
 }
 

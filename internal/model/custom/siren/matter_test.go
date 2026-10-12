@@ -6,7 +6,12 @@ package siren
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
+	"time"
+
+	"github.com/SukramJ/go-fabric/cluster/onoff"
+	onoffspec "github.com/SukramJ/go-fabric/cluster/spec/onoff"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -48,7 +53,7 @@ func TestSirenClusterServersIncludeOnOff(t *testing.T) {
 	for _, s := range r.siren.MatterClusterServers() {
 		got[s.MatterClusterID()] = true
 	}
-	if !got[0x0006] {
+	if !got[onoff.ClusterID] {
 		t.Fatalf("Siren clusters = %v, want OnOff (0x0006)", got)
 	}
 	if got[0x0045] {
@@ -56,51 +61,234 @@ func TestSirenClusterServersIncludeOnOff(t *testing.T) {
 	}
 }
 
-// TestSirenOnOffReadActiveTracksIsActive walks the active flag through
-// the OnOff cluster's OnOff attribute.
-func TestSirenOnOffReadActiveTracksIsActive(t *testing.T) {
-	r := newRig(t, "HmIP-ASIR:3", &stubWriter{}, custom.SirenCapabilities{
-		SupportsAcoustic: true,
-	})
-	r.acousticActiveDP.OnEvent(true)
-	srv := findCluster(t, r.siren, 0x0006)
-	v, ok := srv.MatterRead(0x0000)
-	if !ok || v != true {
-		t.Fatalf("OnOff read active = (%v, %v), want (true, true)", v, ok)
-	}
+// matterWriter records every CCU write the Matter Sink causes, with the
+// priority it was dispatched at, and can refuse writes.
+type matterWriter struct {
+	mu    sync.Mutex
+	calls []matterCall
+	err   error
 }
 
-// TestSirenOnOffReadAlarmReflectsUnobservedAsFalse verifies that when no
-// CCU push has arrived yet, OnOff returns (false, true) — non-nullable
-// safe-state default.
-func TestSirenOnOffReadAlarmReflectsUnobservedAsFalse(t *testing.T) {
-	r := newRig(t, "HmIP-ASIR:3", &stubWriter{}, custom.SirenCapabilities{
-		SupportsAcoustic: true,
-	})
-	// No event pushed → IsActive returns (false, false).
-	srv := findCluster(t, r.siren, 0x0006)
-	v, ok := srv.MatterRead(0x0000)
-	// sirenOnOffServer returns (nil, true) when not observed (same pattern
-	// as TemperatureMeasurement for nullable attribute); OnOff is non-nullable
-	// but the controller handles null gracefully here.
+type matterCall struct {
+	param    hmenum.Parameter
+	value    any
+	priority hmenum.CommandPriority
+}
+
+func (w *matterWriter) SetValue(_ context.Context, _ string, p hmenum.Parameter, v any, prio hmenum.CommandPriority) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.err != nil {
+		return w.err
+	}
+	w.calls = append(w.calls, matterCall{p, v, prio})
+	return nil
+}
+
+func (w *matterWriter) snapshot() []matterCall {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return append([]matterCall(nil), w.calls...)
+}
+
+// matterSiren builds an acoustic-only siren whose observed tone is
+// FREQUENCY_RISING, so a switch-on writes that tone and a switch-off writes
+// the disable label — the two Sink paths are told apart on the wire. It
+// returns the siren's OnOff server and the writer behind the Sink.
+func matterSiren(t *testing.T) (*rig, *onoff.Server, *matterWriter) {
+	t.Helper()
+	w := &matterWriter{}
+	r := newRig(t, "HmIP-ASIR:3", w, custom.SirenCapabilities{SupportsAcoustic: true})
+	r.acousticIdxDP.RecordLabel("FREQUENCY_RISING")
+	servers := r.siren.MatterClusterServers()
+	if len(servers) != 1 {
+		t.Fatalf("MatterClusterServers = %d servers, want exactly the OnOff server", len(servers))
+	}
+	srv, ok := servers[0].(*onoff.Server)
 	if !ok {
-		t.Fatalf("OnOff unobserved: ok=false, want true")
+		t.Fatalf("OnOff server is %T, want go-fabric's *onoff.Server", servers[0])
 	}
-	_ = v // nil or false both acceptable before first push
+	return r, srv, w
 }
 
-// TestSirenOnOffOffCommandTurnsOff routes Matter Off through Siren.TurnOff.
-func TestSirenOnOffOffCommandTurnsOff(t *testing.T) {
-	w := &stubWriter{}
-	r := newRig(t, "HmIP-ASIR:3", w, custom.SirenCapabilities{
-		SupportsAcoustic: true, SupportsOptical: true,
-	})
-	srv := findCluster(t, r.siren, 0x0006)
-	if _, err := srv.MatterInvoke(context.Background(), 0x00, nil); err != nil {
-		t.Fatalf("Off err: %v", err)
+// wantSirenWrite asserts the one acoustic selection write a Sink call makes.
+func wantSirenWrite(t *testing.T, c matterCall, label string) {
+	t.Helper()
+	if c.param != hmenum.ParameterAcousticAlarmSelection || c.value != label {
+		t.Errorf("write = %s=%v, want %s=%s", c.param, c.value, hmenum.ParameterAcousticAlarmSelection, label)
 	}
-	if len(w.calls) == 0 {
-		t.Fatal("Off did not reach the wire")
+	if c.priority != matterDispatchPriority {
+		t.Errorf("write dispatched at priority %v, want %v", c.priority, matterDispatchPriority)
+	}
+}
+
+// TestSirenOnOffServerIsBuiltOnce pins that the projection hands out the
+// same server on every call: the bridge keeps the server it serves across
+// reassemblies, and a rebuilt one would lose its data version and timers.
+func TestSirenOnOffServerIsBuiltOnce(t *testing.T) {
+	t.Parallel()
+	r, srv, _ := matterSiren(t)
+	if again := r.siren.MatterClusterServers()[0]; again != srv {
+		t.Fatalf("a second MatterClusterServers call returned a different server (%p vs %p)", again, srv)
+	}
+}
+
+// TestSirenOnOffStartsFalseWhileUnobserved pins the non-nullable default:
+// OnOff is a plain bool (Matter §1.5.6.2), so an unobserved siren reads
+// false, never TLV null.
+func TestSirenOnOffStartsFalseWhileUnobserved(t *testing.T) {
+	t.Parallel()
+	_, srv, _ := matterSiren(t)
+	if v, ok := srv.MatterRead(onoff.AttrOnOff); !ok || v != false {
+		t.Fatalf("unobserved OnOff = (%v, %v), want (false, true)", v, ok)
+	}
+}
+
+// TestSirenOnOffStartsFromTheObservedState pins the initial value: an alarm
+// the CCU reported before the server was built is served as on.
+func TestSirenOnOffStartsFromTheObservedState(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, "HmIP-ASIR:3", &matterWriter{}, custom.SirenCapabilities{SupportsAcoustic: true})
+	r.acousticActiveDP.OnEvent(true)
+	srv := findCluster(t, r.siren, onoff.ClusterID)
+	if v, ok := srv.MatterRead(onoff.AttrOnOff); !ok || v != true {
+		t.Fatalf("OnOff observed active before build = (%v, %v), want (true, true)", v, ok)
+	}
+}
+
+// TestSirenOnOffConfirmedActivityReachesTheServerWithoutAWrite pins the
+// CCU→Matter direction: an ACOUSTIC_ALARM_ACTIVE or OPTICAL_ALARM_ACTIVE
+// confirmation (a CCU program raising the alarm) is stored on the server
+// and advances its data version, without a single CCU write.
+func TestSirenOnOffConfirmedActivityReachesTheServerWithoutAWrite(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		dp   func(r *rig) *generic.BinarySensor
+	}{
+		{"acoustic", func(r *rig) *generic.BinarySensor { return r.acousticActiveDP }},
+		{"optical", func(r *rig) *generic.BinarySensor { return r.opticalActiveDP }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			r, srv, w := matterSiren(t)
+			dp := tc.dp(r)
+			before := srv.MatterDataVersion()
+			dp.OnEvent(true)
+			if v, _ := srv.MatterRead(onoff.AttrOnOff); v != true {
+				t.Fatalf("OnOff after confirmed %s alarm active: got %v, want true", tc.name, v)
+			}
+			if after := srv.MatterDataVersion(); after == before {
+				t.Errorf("data version did not advance on a confirmed change (%d)", after)
+			}
+			dp.OnEvent(false)
+			if v, _ := srv.MatterRead(onoff.AttrOnOff); v != false {
+				t.Fatalf("OnOff after confirmed %s alarm inactive: got %v, want false", tc.name, v)
+			}
+			if n := len(w.snapshot()); n != 0 {
+				t.Fatalf("a confirmed CCU update must not write back: %d write(s)", n)
+			}
+		})
+	}
+}
+
+// TestSirenOnOffCommandsReachTheSink pins the Matter→CCU direction: every
+// switch-on command raises the alarm through Siren.TurnOn and every
+// switch-off ends it through Siren.TurnOff, at the bridge's dispatch
+// priority, and the attribute follows the accepted command.
+func TestSirenOnOffCommandsReachTheSink(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name   string
+		cmd    uint32
+		wantOn bool
+	}{
+		{"On", onoff.CmdOn, true},
+		{"OnWithRecallGlobalScene", onoff.CmdOnWithRecallGlobalScene, true},
+		{"Off", onoff.CmdOff, false},
+		{"OffWithEffect", onoff.CmdOffWithEffect, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, srv, w := matterSiren(t)
+			if _, err := srv.MatterInvoke(context.Background(), tc.cmd, nil); err != nil {
+				t.Fatalf("%s: %v", tc.name, err)
+			}
+			calls := w.snapshot()
+			if len(calls) != 1 {
+				t.Fatalf("%s: %d CCU write(s) %+v, want exactly one", tc.name, len(calls), calls)
+			}
+			want := acousticDisableLabel
+			if tc.wantOn {
+				want = "FREQUENCY_RISING"
+			}
+			wantSirenWrite(t, calls[0], want)
+			if v, _ := srv.MatterRead(onoff.AttrOnOff); v != tc.wantOn {
+				t.Errorf("%s: OnOff = %v after the accepted command, want %v", tc.name, v, tc.wantOn)
+			}
+		})
+	}
+}
+
+// TestSirenOnOffRefusedWriteKeepsTheAttribute pins the error path: a CCU
+// write the Sink fails answers the command with an error, and the attribute
+// and data version stay where the CCU left them.
+func TestSirenOnOffRefusedWriteKeepsTheAttribute(t *testing.T) {
+	t.Parallel()
+	_, srv, w := matterSiren(t)
+	w.err = errors.New("radio busy")
+	before := srv.MatterDataVersion()
+	if _, err := srv.MatterInvoke(context.Background(), onoff.CmdOn, nil); err == nil {
+		t.Fatal("a failed CCU write must answer the command with an error")
+	}
+	if v, _ := srv.MatterRead(onoff.AttrOnOff); v != false {
+		t.Errorf("OnOff after a refused On: got %v, want the CCU's value false", v)
+	}
+	if after := srv.MatterDataVersion(); after != before {
+		t.Errorf("a refused command advanced the data version: %d -> %d", before, after)
+	}
+}
+
+// TestSirenOnOffTimedOffEndsTheAlarm pins OnWithTimedOff end to end: the
+// alarm is raised through the Sink, and after OnTime the stack's countdown
+// ends it through the same Sink. OnTime is in tenths of a second.
+func TestSirenOnOffTimedOffEndsTheAlarm(t *testing.T) {
+	t.Parallel()
+	_, srv, w := matterSiren(t)
+	if _, err := srv.MatterInvoke(context.Background(), onoff.CmdOnWithTimedOff, onoffspec.OnWithTimedOffRequest{OnTime: 2}); err != nil {
+		t.Fatalf("OnWithTimedOff: %v", err)
+	}
+	if v, _ := srv.MatterRead(onoff.AttrOnOff); v != true {
+		t.Fatalf("OnOff right after OnWithTimedOff: got %v, want true", v)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) && len(w.snapshot()) < 2 {
+		time.Sleep(20 * time.Millisecond)
+	}
+	calls := w.snapshot()
+	if len(calls) != 2 {
+		t.Fatalf("timed on must raise and then end the alarm, got %d write(s) %+v", len(calls), calls)
+	}
+	wantSirenWrite(t, calls[0], "FREQUENCY_RISING")
+	wantSirenWrite(t, calls[1], acousticDisableLabel)
+	if v, _ := srv.MatterRead(onoff.AttrOnOff); v != false {
+		t.Errorf("OnOff after the countdown: got %v, want false", v)
+	}
+}
+
+// TestSirenOnOffAttributeIsNotWritable pins access "R V" on OnOff (matter.js
+// on-off.element.ts): the alarm moves through commands only, and a refused
+// write never reaches the CCU.
+func TestSirenOnOffAttributeIsNotWritable(t *testing.T) {
+	t.Parallel()
+	_, srv, w := matterSiren(t)
+	if err := srv.MatterWrite(context.Background(), onoff.AttrOnOff, true); err == nil {
+		t.Fatal("a write of OnOff must be refused")
+	}
+	if n := len(w.snapshot()); n != 0 {
+		t.Fatalf("a refused attribute write must not reach the CCU: %d write(s)", n)
 	}
 }
 

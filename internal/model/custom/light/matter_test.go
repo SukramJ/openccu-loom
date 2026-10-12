@@ -7,8 +7,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"sync"
 	"testing"
 
+	"github.com/SukramJ/go-fabric/cluster/onoff"
+	onoffspec "github.com/SukramJ/go-fabric/cluster/spec/onoff"
 	"github.com/SukramJ/go-fabric/cluster/wire"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -61,17 +65,45 @@ func TestMatterClusterServersNonDimmable(t *testing.T) {
 	}
 }
 
-// onOffServer returns the OnOff cluster server for a dimmable light.
-// Helper to keep tests focused.
-func onOffServer(t *testing.T, l *Light) lightOnOffServer {
+// onOffServer returns the light's OnOff cluster server — go-fabric's
+// [onoff.Server], built once per light.
+func onOffServer(t *testing.T, l *Light) *onoff.Server {
 	t.Helper()
 	for _, s := range l.MatterClusterServers() {
-		if onoff, ok := s.(lightOnOffServer); ok {
-			return onoff
+		if srv, ok := s.(*onoff.Server); ok {
+			return srv
 		}
 	}
 	t.Fatalf("light has no OnOff cluster server")
-	return lightOnOffServer{}
+	return nil
+}
+
+// recWriter records every LEVEL write the Light issues, with its
+// priority, under a lock: the OnOff server's countdown writes from a
+// timer goroutine. A non-nil err refuses every write.
+type recWriter struct {
+	mu     sync.Mutex
+	values []float64
+	prios  []hmenum.CommandPriority
+	err    error
+}
+
+func (w *recWriter) SetValue(_ context.Context, _ string, _ hmenum.Parameter, value any, priority hmenum.CommandPriority) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.err != nil {
+		return w.err
+	}
+	f, _ := value.(float64)
+	w.values = append(w.values, f)
+	w.prios = append(w.prios, priority)
+	return nil
+}
+
+func (w *recWriter) writes() ([]float64, []hmenum.CommandPriority) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return append([]float64(nil), w.values...), append([]hmenum.CommandPriority(nil), w.prios...)
 }
 
 // levelServer returns the LevelControl cluster server for a dimmable
@@ -102,7 +134,7 @@ func TestOnOffReadUnobserved(t *testing.T) {
 }
 
 // TestOnOffFeatureMapAdvertisesLighting verifies the OnOff cluster
-// advertises the LT (Lighting) feature bit 0 (0x01) — mandatory on
+// advertises exactly the LT (Lighting) feature — mandatory on
 // OnOffLight / DimmableLight. matter.js on-off.element.ts:24.
 func TestOnOffFeatureMapAdvertisesLighting(t *testing.T) {
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
@@ -111,76 +143,58 @@ func TestOnOffFeatureMapAdvertisesLighting(t *testing.T) {
 	if !ok {
 		t.Fatal("MatterRead(FeatureMap) ok=false")
 	}
-	if v.(uint32)&0x01 == 0 {
-		t.Fatalf("OnOff FeatureMap = 0x%08X, missing LT bit (0x01)", v.(uint32))
+	if v.(uint32) != onoff.FeatureLighting {
+		t.Fatalf("OnOff FeatureMap = 0x%08X, want 0x%08X (LT only)", v.(uint32), onoff.FeatureLighting)
 	}
 }
 
 // TestOnOffLightingGatedAttributes verifies the four LT-mandatory OnOff
-// attributes read with their matter.js-default values:
-// GlobalSceneControl=true, OnTime=0, OffWaitTime=0, StartUpOnOff=null.
-// matter.js OnOffServer.ts:39,75,80,102.
+// attributes are served (readable) on a light.
 func TestOnOffLightingGatedAttributes(t *testing.T) {
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
 	srv := onOffServer(t, l)
-	if v, ok := srv.MatterRead(0x4000); !ok || v != true {
-		t.Fatalf("GlobalSceneControl = (%v, %v), want (true, true)", v, ok)
-	}
-	if v, ok := srv.MatterRead(0x4001); !ok || v.(uint16) != 0 {
-		t.Fatalf("OnTime = (%v, %v), want (0, true)", v, ok)
-	}
-	if v, ok := srv.MatterRead(0x4002); !ok || v.(uint16) != 0 {
-		t.Fatalf("OffWaitTime = (%v, %v), want (0, true)", v, ok)
-	}
-	if v, ok := srv.MatterRead(0x4003); !ok || v != nil {
-		t.Fatalf("StartUpOnOff = (%v, %v), want (nil/null, true)", v, ok)
+	for _, id := range []uint32{onoff.AttrGlobalSceneControl, onoff.AttrOnTime, onoff.AttrOffWaitTime, onoff.AttrStartUpOnOff} {
+		if _, ok := srv.MatterRead(id); !ok {
+			t.Errorf("MatterRead(0x%04X) ok=false, want the LT attribute served", id)
+		}
 	}
 }
 
-// TestOnOffAttributesAndCommandsEnumerateLightingGated confirms the
-// LT-mandatory attributes and commands are enumerated for conformance.
+// TestOnOffAttributesAndCommandsEnumerateLightingGated pins the exact
+// attribute and accepted-command lists a light's OnOff server
+// advertises for the LT FeatureMap.
 func TestOnOffAttributesAndCommandsEnumerateLightingGated(t *testing.T) {
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
 	srv := onOffServer(t, l)
-	attrs := map[uint32]bool{}
-	for _, a := range srv.MatterAttributes() {
-		attrs[a] = true
+	if got, want := srv.MatterAttributes(), []uint32{0x0000, 0x4000, 0x4001, 0x4002, 0x4003}; !slices.Equal(got, want) {
+		t.Errorf("MatterAttributes = %#x, want %#x", got, want)
 	}
-	for _, want := range []uint32{0x4000, 0x4001, 0x4002, 0x4003} {
-		if !attrs[want] {
-			t.Errorf("MatterAttributes missing LT-gated 0x%04X", want)
-		}
-	}
-	cmds := map[uint32]bool{}
-	for _, c := range srv.MatterAcceptedCommands() {
-		cmds[c] = true
-	}
-	for _, want := range []uint32{0x40, 0x41, 0x42} {
-		if !cmds[want] {
-			t.Errorf("MatterAcceptedCommands missing LT-gated 0x%02X", want)
-		}
+	if got, want := srv.MatterAcceptedCommands(), []uint32{0x00, 0x01, 0x02, 0x40, 0x41, 0x42}; !slices.Equal(got, want) {
+		t.Errorf("MatterAcceptedCommands = %#x, want %#x", got, want)
 	}
 }
 
 // TestOnOffLightingGatedCommandsAccepted verifies the three LT-mandatory
-// commands route to plain On/Off without error.
+// commands reach the CCU as a plain turn-off / turn-on.
 func TestOnOffLightingGatedCommandsAccepted(t *testing.T) {
 	cases := []struct {
 		cmd     uint32
-		wantOn  bool
+		fields  any
 		wantVal float64
 	}{
-		{0x40, false, 0.0}, // OffWithEffect → Off
-		{0x41, true, 0.5},  // OnWithRecallGlobalScene → On (restores last level)
-		{0x42, true, 0.5},  // OnWithTimedOff → On
+		{onoff.CmdOffWithEffect, nil, 0.0},                                // → Off
+		{onoff.CmdOnWithRecallGlobalScene, nil, 0.5},                      // → On (restores last level)
+		{onoff.CmdOnWithTimedOff, onoffspec.OnWithTimedOffRequest{}, 0.5}, // → On
 	}
 	for _, tc := range cases {
-		w := &stubWriter{}
+		w := &stubWriter{last: -1}
 		l, _ := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
 		l.OnLevel(0.5)
-		l.OnLevel(0.0) // current goes to 0; LastLevel retains 0.5
+		if tc.cmd != onoff.CmdOffWithEffect {
+			l.OnLevel(0.0) // current goes to 0; LastLevel retains 0.5
+		}
 		srv := onOffServer(t, l)
-		if _, err := srv.MatterInvoke(context.Background(), tc.cmd, nil); err != nil {
+		if _, err := srv.MatterInvoke(context.Background(), tc.cmd, tc.fields); err != nil {
 			t.Fatalf("MatterInvoke(0x%02X) error: %v", tc.cmd, err)
 		}
 		if w.last != tc.wantVal {
@@ -189,106 +203,156 @@ func TestOnOffLightingGatedCommandsAccepted(t *testing.T) {
 	}
 }
 
-// TestGlobalSceneControlLifecycle verifies GlobalSceneControl (0x4000)
-// is live state, not the hardcoded constant it used to be: it reads
-// true initially, stays true after a plain On, flips to false after
-// OffWithEffect, is left unchanged by a subsequent plain Off, and
-// reverts to true on a following On. The value also survives a
-// MatterClusterServers reconstruction — the lightOnOffServer
-// projection is rebuilt fresh on every call, but the flag lives on the
-// long-lived Light (see timedOnOffState in matter_timed_onoff.go).
-// Mirrors matter.js packages/node/src/behaviors/on-off/OnOffServer.ts:
-// 97-104 (on), :119-139 (off — GlobalSceneControl untouched),
-// :158-169 (offWithEffect).
-func TestGlobalSceneControlLifecycle(t *testing.T) {
-	w := &stubWriter{}
-	l, _ := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
-	l.OnLevel(0.5)
-	srv := onOffServer(t, l)
-
-	if v, ok := srv.MatterRead(0x4000); !ok || v != true {
-		t.Fatalf("initial GlobalSceneControl = (%v, %v), want (true, true)", v, ok)
-	}
-
-	if _, err := srv.MatterInvoke(context.Background(), 0x01, nil); err != nil {
-		t.Fatalf("On error: %v", err)
-	}
-	if v, ok := srv.MatterRead(0x4000); !ok || v != true {
-		t.Fatalf("GlobalSceneControl after On = (%v, %v), want (true, true)", v, ok)
-	}
-
-	if _, err := srv.MatterInvoke(context.Background(), 0x40, nil); err != nil {
-		t.Fatalf("OffWithEffect error: %v", err)
-	}
-	if v, ok := srv.MatterRead(0x4000); !ok || v != false {
-		t.Fatalf("GlobalSceneControl after OffWithEffect = (%v, %v), want (false, true)", v, ok)
-	}
-
-	if _, err := srv.MatterInvoke(context.Background(), 0x00, nil); err != nil {
-		t.Fatalf("plain Off error: %v", err)
-	}
-	if v, ok := srv.MatterRead(0x4000); !ok || v != false {
-		t.Fatalf("GlobalSceneControl after plain Off = (%v, %v), want (false, true) — a plain Off must not change it", v, ok)
-	}
-
-	if _, err := srv.MatterInvoke(context.Background(), 0x01, nil); err != nil {
-		t.Fatalf("second On error: %v", err)
-	}
-	if v, ok := srv.MatterRead(0x4000); !ok || v != true {
-		t.Fatalf("GlobalSceneControl after second On = (%v, %v), want (true, true)", v, ok)
-	}
-
-	// The cluster-server projection is rebuilt fresh on every
-	// MatterClusterServers call; the flag must still read back true.
-	fresh := onOffServer(t, l)
-	if v, ok := fresh.MatterRead(0x4000); !ok || v != true {
-		t.Fatalf("GlobalSceneControl after MatterClusterServers reconstruction = (%v, %v), want (true, true)", v, ok)
+// TestOnOffServerIsBuiltOncePerLight pins that every MatterClusterServers
+// call hands out the same OnOff server: the bridge keeps the server it
+// already serves across reassemblies, and a rebuilt one would lose its
+// countdowns, its scene state and the confirmed-update hook behind it.
+func TestOnOffServerIsBuiltOncePerLight(t *testing.T) {
+	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
+	first := onOffServer(t, l)
+	if second := onOffServer(t, l); second != first {
+		t.Fatal("MatterClusterServers built a second OnOff server for the same light")
 	}
 }
 
-// TestGlobalSceneControlOnWithRecallGlobalSceneSetsTrue verifies
-// OnWithRecallGlobalScene (0x41) sets GlobalSceneControl true, matching
-// the plain On path. matter.js OnOffServer.ts:171-191.
-func TestGlobalSceneControlOnWithRecallGlobalSceneSetsTrue(t *testing.T) {
-	w := &stubWriter{}
+// TestOnOffCommandReachesTheCCUAtHighPriority pins the Sink: a
+// controller's On / Off becomes Light.TurnOn / Light.TurnOff, written at
+// CommandPriorityHigh, and the attribute follows the accepted command.
+func TestOnOffCommandReachesTheCCUAtHighPriority(t *testing.T) {
+	w := &recWriter{}
 	l, _ := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
-	l.OnLevel(0.5)
 	srv := onOffServer(t, l)
 
-	if _, err := srv.MatterInvoke(context.Background(), 0x40, nil); err != nil {
-		t.Fatalf("OffWithEffect error: %v", err)
+	if _, err := srv.MatterInvoke(context.Background(), onoff.CmdOn, nil); err != nil {
+		t.Fatalf("On: %v", err)
 	}
-	if v, _ := srv.MatterRead(0x4000); v != false {
-		t.Fatalf("precondition: GlobalSceneControl = %v, want false", v)
+	if v, _ := srv.MatterRead(onoff.AttrOnOff); v != true {
+		t.Fatalf("OnOff after On = %v, want true", v)
+	}
+	if _, err := srv.MatterInvoke(context.Background(), onoff.CmdOff, nil); err != nil {
+		t.Fatalf("Off: %v", err)
+	}
+	if v, _ := srv.MatterRead(onoff.AttrOnOff); v != false {
+		t.Fatalf("OnOff after Off = %v, want false", v)
 	}
 
-	if _, err := srv.MatterInvoke(context.Background(), 0x41, nil); err != nil {
-		t.Fatalf("OnWithRecallGlobalScene error: %v", err)
+	values, prios := w.writes()
+	if len(values) != 2 || values[0] <= 0 || values[1] != 0 {
+		t.Fatalf("CCU writes = %v, want [turn-on level, 0]", values)
 	}
-	if v, ok := srv.MatterRead(0x4000); !ok || v != true {
-		t.Fatalf("GlobalSceneControl after OnWithRecallGlobalScene = (%v, %v), want (true, true)", v, ok)
+	for i, p := range prios {
+		if p != hmenum.CommandPriorityHigh {
+			t.Errorf("write %d priority = %v, want CommandPriorityHigh", i, p)
+		}
 	}
 }
 
-// TestGlobalSceneControlOnWithTimedOffGatedNoOpLeavesUnchanged verifies
-// the AcceptOnlyWhenOn gate on OnWithTimedOff (0x42): when the device
-// is off and the gate rejects the command, no on() runs, so
-// GlobalSceneControl must stay at its pre-call value instead of being
-// flipped true by a command that never actually turned the light on.
-// matter.js OnOffServer.ts:199-201 returns before the :101-104 GSC
-// flip inside on() ever runs.
-func TestGlobalSceneControlOnWithTimedOffGatedNoOpLeavesUnchanged(t *testing.T) {
-	l := timedRig(t, &stubWriter{})
-	l.OnLevel(0.0)
-	l.matterClearGlobalSceneControl()
+// TestOnOffSinkErrorFailsTheCommandAndKeepsTheAttribute pins that a CCU
+// write the CCU refuses answers the command with an error and leaves
+// OnOff — and the shared data version — where they were.
+func TestOnOffSinkErrorFailsTheCommandAndKeepsTheAttribute(t *testing.T) {
+	w := &recWriter{err: errors.New("ccu unreachable")}
+	l, _ := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
 	srv := onOffServer(t, l)
+	before := l.MatterDataVersion()
 
-	gated := map[uint8]any{0: uint64(1), 1: uint64(5), 2: uint64(5)} // AcceptOnlyWhenOn bit set
-	if _, err := srv.MatterInvoke(context.Background(), 0x42, gated); err != nil {
-		t.Fatalf("gated OnWithTimedOff error: %v", err)
+	for _, cmd := range []struct {
+		id     uint32
+		fields any
+	}{
+		{onoff.CmdOn, nil},
+		{onoff.CmdToggle, nil},
+		{onoff.CmdOnWithTimedOff, onoffspec.OnWithTimedOffRequest{OnTime: 5}},
+	} {
+		if _, err := srv.MatterInvoke(context.Background(), cmd.id, cmd.fields); err == nil {
+			t.Fatalf("command 0x%02X: want the CCU refusal answered as an error", cmd.id)
+		}
+		if v, _ := srv.MatterRead(onoff.AttrOnOff); v != false {
+			t.Fatalf("command 0x%02X: OnOff after a refused write = %v, want false", cmd.id, v)
+		}
 	}
-	if v, ok := srv.MatterRead(0x4000); !ok || v != false {
-		t.Fatalf("GlobalSceneControl after gated no-op = (%v, %v), want (false, true) unchanged", v, ok)
+	if v, _ := srv.MatterRead(onoff.AttrOnTime); v != uint16(0) {
+		t.Fatalf("OnTime after a refused OnWithTimedOff = %v, want 0", v)
+	}
+	if after := l.MatterDataVersion(); after != before {
+		t.Fatalf("refused commands bumped the data version: %d -> %d", before, after)
+	}
+}
+
+// TestOnOffConfirmedLevelUpdateIsStoredWithoutACCUWrite pins the
+// feedback path: a CCU-confirmed LEVEL update — a wall switch, a CCU
+// program — reaches the OnOff attribute through the confirmed-update
+// hook, and is not echoed back to the CCU as a second write.
+func TestOnOffConfirmedLevelUpdateIsStoredWithoutACCUWrite(t *testing.T) {
+	w := &recWriter{}
+	l, _ := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
+	srv := onOffServer(t, l)
+	before := srv.MatterDataVersion()
+
+	l.OnLevel(0.6)
+	if v, _ := srv.MatterRead(onoff.AttrOnOff); v != true {
+		t.Fatalf("OnOff after confirmed LEVEL 0.6 = %v, want true", v)
+	}
+	if srv.MatterDataVersion() == before {
+		t.Fatal("a confirmed change must bump the data version a subscription reports with")
+	}
+	l.OnLevel(0)
+	if v, _ := srv.MatterRead(onoff.AttrOnOff); v != false {
+		t.Fatalf("OnOff after confirmed LEVEL 0 = %v, want false", v)
+	}
+	if values, _ := w.writes(); len(values) != 0 {
+		t.Fatalf("confirmed updates reached the CCU as writes %v, want none", values)
+	}
+}
+
+// TestOnOffAttributeIsNotWritable pins that OnOff itself is read-only
+// (matter.js on-off.element.ts, access "R V"): a write is refused and
+// nothing reaches the CCU — a controller changes it through a command.
+func TestOnOffAttributeIsNotWritable(t *testing.T) {
+	w := &recWriter{}
+	l, _ := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
+	srv := onOffServer(t, l)
+	if err := srv.MatterWrite(context.Background(), onoff.AttrOnOff, true); err == nil {
+		t.Fatal("MatterWrite(OnOff) succeeded, want a refusal")
+	}
+	if v, _ := srv.MatterRead(onoff.AttrOnOff); v != false {
+		t.Fatalf("OnOff after a refused write = %v, want false", v)
+	}
+	if values, _ := w.writes(); len(values) != 0 {
+		t.Fatalf("a refused OnOff write reached the CCU: %v", values)
+	}
+}
+
+// TestLevelWithOnOffCommandsDriveTheOnOffAttribute pins the
+// LevelControl → OnOff coupling of the "with On/Off" commands: a
+// MoveToLevelWithOnOff to MinLevel turns OnOff off, one above it turns
+// it on, each with exactly the one LEVEL write — the OnOff attribute
+// follows without a second CCU write and before any CCU confirmation.
+func TestLevelWithOnOffCommandsDriveTheOnOffAttribute(t *testing.T) {
+	w := &recWriter{}
+	l, _ := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
+	l.OnLevel(0.5)
+	oo := onOffServer(t, l)
+	lv := levelServer(t, l)
+
+	if _, err := lv.MatterInvoke(context.Background(), matterCmdMoveToLevelWithOnOff, wire.MoveToLevelRequest{Level: matterLevelMinDefault}); err != nil {
+		t.Fatalf("MoveToLevelWithOnOff(MinLevel): %v", err)
+	}
+	if v, _ := oo.MatterRead(onoff.AttrOnOff); v != false {
+		t.Fatalf("OnOff after MoveToLevelWithOnOff(MinLevel) = %v, want false", v)
+	}
+	if values, _ := w.writes(); len(values) != 1 || values[0] != 0 {
+		t.Fatalf("CCU writes after MoveToLevelWithOnOff(MinLevel) = %v, want exactly [0]", values)
+	}
+
+	if _, err := lv.MatterInvoke(context.Background(), matterCmdMoveToLevelWithOnOff, wire.MoveToLevelRequest{Level: 190}); err != nil {
+		t.Fatalf("MoveToLevelWithOnOff(190): %v", err)
+	}
+	if v, _ := oo.MatterRead(onoff.AttrOnOff); v != true {
+		t.Fatalf("OnOff after MoveToLevelWithOnOff(190) = %v, want true", v)
+	}
+	if values, _ := w.writes(); len(values) != 2 || values[1] <= 0 {
+		t.Fatalf("CCU writes after MoveToLevelWithOnOff(190) = %v, want exactly one more, a turn-on level", values)
 	}
 }
 

@@ -76,10 +76,9 @@ type Light struct {
 	// correctly detects cluster changes.
 	dataVersion hmtypes.DataVersionTracker
 
-	// timed is the OnOff cluster LT timed-command engine (OnTime /
-	// OffWaitTime countdowns + StartUpOnOff store). Owned here so the
-	// countdowns survive cluster-server reconstruction.
-	timed timedOnOffState
+	// matterOnOff holds the OnOff cluster server the Matter projection
+	// serves, built once per light (matter.go).
+	matterOnOff generic.MatterOnOffHolder
 
 	mu        sync.RWMutex
 	lastLevel float64
@@ -164,10 +163,6 @@ func New(cfg Config) *Light {
 		rampTimeUnitParam:    rampTimeUnitParam,
 		enableLastBrightness: deviceLightLastBrightness(cfg.Channel),
 	}
-	// GlobalSceneControl (Matter OnOff attribute 0x4000) defaults to
-	// true. matter.js OnOffServer.ts state default; the field is unset
-	// (false) otherwise since Go zero-values a fresh timedOnOffState.
-	l.timed.globalSceneControl = true
 	if level != nil {
 		l.unsubLevel = level.OnUpdate(func(_, next float64) {
 			// OnUpdate fires both for optimistic notifications (synchronously
@@ -238,17 +233,16 @@ func (l *Light) MarkLightRefreshed() { l.baseDP.MarkRefreshed() }
 // wired through [Subscribe] / [Channel.SetCustomDataPoint] so replacing the
 // custom DP on the channel tears both down automatically.
 //
-// The tick goroutine has to be named here because nothing else can reach
-// it: its stop channel lives inside [timedOnOffState] and is closed only
-// when a countdown runs out. A light with an armed OnWithTimedOff whose
-// device leaves the model would otherwise keep ticking — and write a
-// turn-off to the CCU at expiry — long after the Light was retired.
+// The OnOff server's countdowns are stopped here because nothing else
+// reaches them once the Light leaves the model: a light with an armed
+// OnWithTimedOff would otherwise keep ticking — and write a turn-off to
+// the CCU at expiry — long after the Light was retired.
 func (l *Light) Close() {
 	if l.unsubLevel != nil {
 		l.unsubLevel()
 		l.unsubLevel = nil
 	}
-	l.timed.stopLoop()
+	l.matterOnOff.Quiesce()
 }
 
 // Subscribe satisfies [device.SubscribingDataPoint]. Light has no
