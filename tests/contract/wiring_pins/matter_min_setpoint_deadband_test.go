@@ -15,9 +15,12 @@ import (
 // in packages/model/src/standard/elements/thermostat-cluster.element.ts.
 func TestPin_ThermostatServer_MinSetpointDeadBand_Default(t *testing.T) {
 	t.Parallel()
-	srv := thermo.NewThermostatServer(thermo.ThermostatConfig{
-		Features: thermo.ThermostatFeatureHEAT | thermo.ThermostatFeatureCOOL | thermo.ThermostatFeatureAUTO,
-	})
+	// The default configuration carries the setpoint limits the server
+	// checks since go-fabric validates them in thermo.New (an all-zero
+	// configuration cannot hold the AUTO deadband between its limits).
+	cfg := thermo.DefaultThermostatConfig()
+	cfg.Features = thermo.ThermostatFeatureHEAT | thermo.ThermostatFeatureCOOL | thermo.ThermostatFeatureAUTO
+	srv := thermo.NewThermostatServer(cfg)
 	const attrMinSetpointDeadBand uint32 = 0x0019
 	v, ok := srv.MatterRead(attrMinSetpointDeadBand)
 	if !ok {

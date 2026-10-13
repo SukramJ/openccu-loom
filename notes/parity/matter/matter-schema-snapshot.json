@@ -4,7 +4,7 @@
     "specificationVersion": 17170688,
     "interactionModelRevision": 12,
     "dataModelRevision": 21,
-    "sourceCommit": "85cf66472b02763fe3b9c736ebab443b999a95a1"
+    "sourceCommit": "0ceb202d28edc82f1ce131afde06e18a87c58a11"
   },
   "deviceTypes": [
     {
@@ -51564,6 +51564,14 @@
                   "type": "M"
                 }
               }
+            },
+            {
+              "name": "ManufacturerError",
+              "constraint": {
+                "text": "128 to 191",
+                "min": 128,
+                "max": 191
+              }
             }
           ]
         },
@@ -51696,6 +51704,14 @@
                 "ast": {
                   "type": "M"
                 }
+              }
+            },
+            {
+              "name": "ManufacturerStates",
+              "constraint": {
+                "text": "128 to 191",
+                "min": 128,
+                "max": 191
               }
             }
           ]
@@ -52108,6 +52124,14 @@
             {
               "id": 3,
               "name": "InvalidInMode"
+            },
+            {
+              "name": "MfgCodes",
+              "constraint": {
+                "text": "128 to 191",
+                "min": 128,
+                "max": 191
+              }
             }
           ]
         },
@@ -52281,6 +52305,14 @@
             {
               "id": 16396,
               "name": "FrozenFood"
+            },
+            {
+              "name": "MfgTags",
+              "constraint": {
+                "text": "32768 to 49151",
+                "min": 32768,
+                "max": 49151
+              }
             }
           ]
         },
@@ -53263,6 +53295,14 @@
             {
               "id": 3,
               "name": "InvalidInMode"
+            },
+            {
+              "name": "MfgCodes",
+              "constraint": {
+                "text": "128 to 191",
+                "min": 128,
+                "max": 191
+              }
             }
           ]
         },
@@ -53400,6 +53440,14 @@
             {
               "id": 16387,
               "name": "Whites"
+            },
+            {
+              "name": "MfgTags",
+              "constraint": {
+                "text": "32768 to 49151",
+                "min": 32768,
+                "max": 49151
+              }
             }
           ]
         },
@@ -53784,6 +53832,14 @@
             {
               "id": 3,
               "name": "InvalidInMode"
+            },
+            {
+              "name": "MfgCodes",
+              "constraint": {
+                "text": "128 to 191",
+                "min": 128,
+                "max": 191
+              }
             }
           ]
         },
@@ -53913,6 +53969,14 @@
             {
               "id": 16385,
               "name": "RapidFreeze"
+            },
+            {
+              "name": "MfgTags",
+              "constraint": {
+                "text": "32768 to 49151",
+                "min": 32768,
+                "max": 49151
+              }
             }
           ]
         },
@@ -54639,6 +54703,14 @@
             {
               "id": 72,
               "name": "BatteryLow"
+            },
+            {
+              "name": "MfgCodes",
+              "constraint": {
+                "text": "128 to 191",
+                "min": 128,
+                "max": 191
+              }
             }
           ]
         },
@@ -54772,6 +54844,14 @@
             {
               "id": 16386,
               "name": "Mapping"
+            },
+            {
+              "name": "MfgTags",
+              "constraint": {
+                "text": "32768 to 49151",
+                "min": 32768,
+                "max": 49151
+              }
             }
           ]
         },
@@ -55173,6 +55253,14 @@
             {
               "id": 64,
               "name": "CleaningInProgress"
+            },
+            {
+              "name": "MfgCodes",
+              "constraint": {
+                "text": "128 to 191",
+                "min": 128,
+                "max": 191
+              }
             }
           ]
         },
@@ -55310,6 +55398,14 @@
             {
               "id": 16387,
               "name": "VacuumThenMop"
+            },
+            {
+              "name": "MfgTags",
+              "constraint": {
+                "text": "32768 to 49151",
+                "min": 32768,
+                "max": 49151
+              }
             }
           ]
         },
@@ -56455,6 +56551,14 @@
             {
               "id": 3,
               "name": "InvalidInMode"
+            },
+            {
+              "name": "MfgCodes",
+              "constraint": {
+                "text": "128 to 191",
+                "min": 128,
+                "max": 191
+              }
             }
           ]
         },
@@ -56588,6 +56692,14 @@
             {
               "id": 16386,
               "name": "Light"
+            },
+            {
+              "name": "MfgTags",
+              "constraint": {
+                "text": "32768 to 49151",
+                "min": 32768,
+                "max": 49151
+              }
             }
           ]
         },
@@ -58822,6 +58934,14 @@
             {
               "id": 3,
               "name": "InvalidInMode"
+            },
+            {
+              "name": "MfgCodes",
+              "constraint": {
+                "text": "128 to 191",
+                "min": 128,
+                "max": 191
+              }
             }
           ]
         },
@@ -58949,6 +59069,14 @@
             {
               "id": 16385,
               "name": "Defrost"
+            },
+            {
+              "name": "MfgTags",
+              "constraint": {
+                "text": "32768 to 49151",
+                "min": 32768,
+                "max": 49151
+              }
             }
           ]
         },
@@ -60200,6 +60328,14 @@
                   "type": "M"
                 }
               }
+            },
+            {
+              "name": "ManufacturerError",
+              "constraint": {
+                "text": "128 to 191",
+                "min": 128,
+                "max": 191
+              }
             }
           ]
         },
@@ -60332,6 +60468,14 @@
                 "ast": {
                   "type": "M"
                 }
+              }
+            },
+            {
+              "name": "ManufacturerStates",
+              "constraint": {
+                "text": "128 to 191",
+                "min": 128,
+                "max": 191
               }
             }
           ]
@@ -61121,6 +61265,14 @@
                   "type": "M"
                 }
               }
+            },
+            {
+              "name": "ManufacturerError",
+              "constraint": {
+                "text": "128 to 191",
+                "min": 128,
+                "max": 191
+              }
             }
           ]
         },
@@ -61324,6 +61476,14 @@
                 "ast": {
                   "type": "O"
                 }
+              }
+            },
+            {
+              "name": "ManufacturerStates",
+              "constraint": {
+                "text": "128 to 191",
+                "min": 128,
+                "max": 191
               }
             }
           ]
@@ -78882,6 +79042,14 @@
             {
               "id": 3,
               "name": "InvalidInMode"
+            },
+            {
+              "name": "MfgCodes",
+              "constraint": {
+                "text": "128 to 191",
+                "min": 128,
+                "max": 191
+              }
             }
           ]
         },
@@ -79019,6 +79187,14 @@
             {
               "id": 16387,
               "name": "V2X"
+            },
+            {
+              "name": "MfgTags",
+              "constraint": {
+                "text": "32768 to 49151",
+                "min": 32768,
+                "max": 49151
+              }
             }
           ]
         },
@@ -79401,6 +79577,14 @@
             {
               "id": 3,
               "name": "InvalidInMode"
+            },
+            {
+              "name": "MfgCodes",
+              "constraint": {
+                "text": "128 to 191",
+                "min": 128,
+                "max": 191
+              }
             }
           ]
         },
@@ -79534,6 +79718,14 @@
             {
               "id": 16386,
               "name": "Timed"
+            },
+            {
+              "name": "MfgTags",
+              "constraint": {
+                "text": "32768 to 49151",
+                "min": 32768,
+                "max": 49151
+              }
             }
           ]
         },
@@ -79916,6 +80108,14 @@
             {
               "id": 3,
               "name": "InvalidInMode"
+            },
+            {
+              "name": "MfgCodes",
+              "constraint": {
+                "text": "128 to 191",
+                "min": 128,
+                "max": 191
+              }
             }
           ]
         },
@@ -80053,6 +80253,14 @@
             {
               "id": 16387,
               "name": "GridOptimization"
+            },
+            {
+              "name": "MfgTags",
+              "constraint": {
+                "text": "32768 to 49151",
+                "min": 32768,
+                "max": 49151
+              }
             }
           ]
         },
@@ -90040,6 +90248,14 @@
                 "ast": {
                   "type": "M"
                 }
+              }
+            },
+            {
+              "name": "ManufacturerError",
+              "constraint": {
+                "text": "128 to 191",
+                "min": 128,
+                "max": 191
               }
             }
           ]
@@ -105920,15 +106136,16 @@
         {
           "id": 4,
           "name": "LightSensorType",
-          "type": "uint8",
+          "type": "LightSensorTypeEnum",
           "conformance": "O",
           "access": "R V",
           "quality": "X F",
           "default": null,
           "effective": {
-            "type": "uint8",
-            "metatype": "integer",
+            "type": "LightSensorTypeEnum",
+            "metatype": "enum",
             "primitive": "uint8",
+            "scope": "cluster",
             "conformance": {
               "text": "O",
               "ast": {
@@ -106004,6 +106221,20 @@
                 "ast": {
                   "type": "M"
                 }
+              }
+            },
+            {
+              "name": "Ms",
+              "conformance": {
+                "text": "O",
+                "ast": {
+                  "type": "O"
+                }
+              },
+              "constraint": {
+                "text": "64 to 254",
+                "min": 64,
+                "max": 254
               }
             }
           ]

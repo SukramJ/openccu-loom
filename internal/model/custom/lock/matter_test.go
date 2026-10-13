@@ -9,9 +9,19 @@ import (
 	"testing"
 
 	"github.com/SukramJ/go-fabric/cluster/wire"
+	"github.com/SukramJ/go-fabric/im"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 )
+
+// requesterCtx is the context of a lock command from a commissioned
+// controller: go-fabric's DoorLock server refuses a lock command whose
+// session has no fabric (a PASE session before AddNOC) with
+// UNSUPPORTED_ACCESS before the lock is asked, as matter.js does
+// (DoorLockServer.ts:1017-1022), so every invoke here names fabric 1.
+func requesterCtx() context.Context {
+	return im.WithFabricFilter(context.Background(), false, 1)
+}
 
 // srv returns the DoorLockServer mounted by the lock's MatterClusterServers.
 func srv(l *Lock) interface {
@@ -113,7 +123,7 @@ func TestLockTypeIsDeadBolt(t *testing.T) {
 func TestLockDoorCommand(t *testing.T) {
 	w := &stubWriter{}
 	r := newRig(t, "HmIP-DLD:1", KindIP, w, custom.LockCapabilities{})
-	if _, err := srv(r.lock).MatterInvoke(context.Background(), wire.DoorLockCmdLockDoor, nil); err != nil {
+	if _, err := srv(r.lock).MatterInvoke(requesterCtx(), wire.DoorLockCmdLockDoor, nil); err != nil {
 		t.Fatalf("LockDoor err: %v", err)
 	}
 	if len(w.calls) == 0 {
@@ -125,7 +135,7 @@ func TestLockDoorCommand(t *testing.T) {
 func TestUnlockDoorCommand(t *testing.T) {
 	w := &stubWriter{}
 	r := newRig(t, "HmIP-DLD:1", KindIP, w, custom.LockCapabilities{})
-	if _, err := srv(r.lock).MatterInvoke(context.Background(), wire.DoorLockCmdUnlockDoor, nil); err != nil {
+	if _, err := srv(r.lock).MatterInvoke(requesterCtx(), wire.DoorLockCmdUnlockDoor, nil); err != nil {
 		t.Fatalf("UnlockDoor err: %v", err)
 	}
 	if len(w.calls) == 0 {
@@ -134,12 +144,20 @@ func TestUnlockDoorCommand(t *testing.T) {
 }
 
 // TestUnboltDoorRequiresSupportsOpen confirms the latch-release
-// command is gated by [LockCapabilities.SupportsOpen].
+// command is gated by [LockCapabilities.SupportsOpen]: the lock refuses
+// it with ErrNotSupported, which go-fabric's server answers as the IM
+// status FAILURE (the error carries no status of its own), as matter.js
+// answers a lock operation whose handler throws (DoorLockServer.ts:1033-1038).
 func TestUnboltDoorRequiresSupportsOpen(t *testing.T) {
-	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{SupportsOpen: false})
-	_, err := srv(r.lock).MatterInvoke(context.Background(), wire.DoorLockCmdUnboltDoor, nil)
-	if !errors.Is(err, ErrNotSupported) {
-		t.Fatalf("UnboltDoor without SupportsOpen err = %v, want ErrNotSupported", err)
+	w := &stubWriter{}
+	r := newRig(t, "HmIP-DLD:1", KindIP, w, custom.LockCapabilities{SupportsOpen: false})
+	_, err := srv(r.lock).MatterInvoke(requesterCtx(), wire.DoorLockCmdUnboltDoor, nil)
+	var sc im.StatusCodeError
+	if !errors.As(err, &sc) || sc.MatterStatusCode() != im.StatusFailure {
+		t.Fatalf("UnboltDoor without SupportsOpen err = %v, want IM status FAILURE", err)
+	}
+	if len(w.calls) != 0 {
+		t.Fatalf("UnboltDoor without SupportsOpen reached the wire: %v", w.calls)
 	}
 }
 
@@ -147,7 +165,7 @@ func TestUnboltDoorRequiresSupportsOpen(t *testing.T) {
 func TestUnboltDoorWhenSupported(t *testing.T) {
 	w := &stubWriter{}
 	r := newRig(t, "HmIP-DLD:1", KindIP, w, custom.LockCapabilities{SupportsOpen: true})
-	if _, err := srv(r.lock).MatterInvoke(context.Background(), wire.DoorLockCmdUnboltDoor, nil); err != nil {
+	if _, err := srv(r.lock).MatterInvoke(requesterCtx(), wire.DoorLockCmdUnboltDoor, nil); err != nil {
 		t.Fatalf("UnboltDoor err: %v", err)
 	}
 	if len(w.calls) == 0 {
@@ -158,7 +176,7 @@ func TestUnboltDoorWhenSupported(t *testing.T) {
 // TestUnknownLockCommand surfaces an error for an unknown command ID.
 func TestUnknownLockCommand(t *testing.T) {
 	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{})
-	_, err := srv(r.lock).MatterInvoke(context.Background(), 0x99, nil)
+	_, err := srv(r.lock).MatterInvoke(requesterCtx(), 0x99, nil)
 	if err == nil {
 		t.Fatal("expected error for unknown command ID 0x99")
 	}
