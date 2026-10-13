@@ -519,22 +519,56 @@ func (l *RGBWLight) matterColorServer() *fabriclight.ColorControlServer {
 		}})
 		// The hooks close over srv rather than going through the holder:
 		// the holder's lock is held while this builder runs, and the
-		// first sync below runs inside it.
-		resync := func() { l.syncColorTo(srv) }
-		l.onColorConfirmed(resync)
+		// first sync below runs inside it. Each colour axis confirms in
+		// its own mode ([RGBWLight.syncAxisTo]); the operating mode and
+		// the first sync use the device's mode.
+		l.onColorConfirmed(func() { l.syncAxisTo(srv, fabriclight.ColorModeHueSaturation) })
 		if l.kelvin != nil {
-			_ = l.kelvin.OnConfirmedUpdate(func(_, _ int32) { resync() })
+			_ = l.kelvin.OnConfirmedUpdate(func(_, _ int32) { l.syncAxisTo(srv, fabriclight.ColorModeColorTemperature) })
 		}
-		resync()
+		l.syncColorTo(srv)
 		return srv
 	})
 }
 
-// syncColorTo stores the device's current colour on srv.
+// syncColorTo stores the device's current colour on srv, in the mode
+// [RGBWLight.matterColorMode] derives from the device.
 func (l *RGBWLight) syncColorTo(srv *fabriclight.ColorControlServer) {
 	if c, observed := l.deviceColor(); observed {
 		srv.Set(c)
 	}
+}
+
+// syncAxisTo stores a confirmed colour axis on srv. On the HmIP-LSC,
+// which runs hue/saturation and colour temperature at once and has no
+// operating mode, the device's colour mode is whichever axis the CCU
+// confirmed last: a HUE / SATURATION confirmation is the device in HS, a
+// COLOR_TEMPERATURE confirmation the device in CT — [matterColorMode]
+// alone would call it CT as long as the colour-temperature axis carries
+// a value, and report the echo of every hue write as a CT colour (the
+// server then contradicts the command it just carried out and stays in
+// CT; measured on the chip-tool HmIP-LSC bridge). A light with an
+// operating mode keeps the mode-derived colour: the mode names the axis
+// the device obeys, whichever parameter the CCU repeats.
+func (l *RGBWLight) syncAxisTo(srv *fabriclight.ColorControlServer, mode fabriclight.ColorMode) {
+	if !l.colorTempCombined {
+		l.syncColorTo(srv)
+		return
+	}
+	// deviceColor fills every observed axis; only the mode is the axis's.
+	c, _ := l.deviceColor()
+	c.Mode = mode
+	switch mode {
+	case fabriclight.ColorModeColorTemperature:
+		if !l.colorTempKelvinActive() {
+			return
+		}
+	default:
+		if _, _, hsObserved := l.Color(); !hsObserved {
+			return
+		}
+	}
+	srv.Set(c)
 }
 
 // matterColorSync stores the device's current colour on the ColorControl

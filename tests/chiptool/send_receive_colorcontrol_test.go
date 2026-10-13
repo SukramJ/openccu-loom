@@ -125,6 +125,17 @@ func TestSendReceive_ColorControl(t *testing.T) {
 		if !valueNear(got, 0.5, 0.01) {
 			t.Fatalf("CCU SATURATION = %v, want ~0.5", got)
 		}
+		// The HmIP-LSC runs both axes at once: the echo of the hue /
+		// saturation writes is the device in HS, so the server stays in
+		// the HS mode although the colour-temperature axis carries a
+		// value (RGBWLight.syncAxisTo).
+		read, err := b.SharedCtl.ReadAttr(ctx, t, "colorcontrol", "color-mode", ep)
+		if err != nil {
+			t.Fatalf("read color-mode: %v", err)
+		}
+		if v, ok := harness.FindAttrUint(read, "ColorMode"); !ok || v != 0 {
+			t.Fatalf("ColorMode after move-to-saturation = %v (ok=%v), want 0 (CurrentHueAndCurrentSaturation)\n%s", v, ok, read)
+		}
 	})
 
 	// SEND — MoveToColorTemperature(250 mireds) must land as

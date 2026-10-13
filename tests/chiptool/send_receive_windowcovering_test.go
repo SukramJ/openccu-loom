@@ -281,7 +281,14 @@ func TestSendReceive_WindowCovering_Tilt(t *testing.T) {
 
 	// RECEIVE — a LEVEL_2 the CCU reports reaches the server's tilt
 	// position and is reported proactively (HM 0.4 open → Matter 6000).
+	// The SEND cell's write is slider-debounced (400 ms gesture start)
+	// and the simulator decodes the COMBINED_PARAMETER it then receives
+	// into LEVEL / LEVEL_2 echoes (godevccu internal/converter); fired
+	// before that echo, the push below would be overwritten by it before
+	// the subscription primes. Let the deferred write and its echo land
+	// first.
 	t.Run("receive/current-position-tilt-percent100ths", func(t *testing.T) {
+		time.Sleep(1500 * time.Millisecond)
 		out, err := harness.AwaitProactiveReport(ctx, t, ctl,
 			"windowcovering", "current-position-tilt-percent100ths", ep,
 			func() error { return b.CCU.FireDeviceEvent(address, "LEVEL_2", 0.4) },

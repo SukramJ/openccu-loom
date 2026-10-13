@@ -228,6 +228,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Matter: the HmIP-LSC's colour mode follows the axis the CCU confirmed
+  last.** The light runs hue/saturation and colour temperature at once
+  and has no operating mode; the ColorControl server took the colour
+  temperature axis as the mode as long as it carried a value, so the
+  echo of every hue or saturation write was reported as a colour
+  temperature, the server contradicted the command it had just carried
+  out and stayed in the CT mode (the CCU had the colour). A confirmed
+  HUE / SATURATION now reports the device in HS, a confirmed
+  COLOR_TEMPERATURE in CT. The chip-tool tilt test on its own HmIP-FBL
+  bridge waits for the debounced tilt write and its echo before it
+  pushes the tilt position, which the CI run of #966 raced.
+
 - **Matter: `matter_group_key_map` still carried the foreign key to
   `matter_group_keys` that go-fabric 0.3.0 drops**, so a commissioner's
   GroupKeyMap write that names a key set not written yet (matter.js
