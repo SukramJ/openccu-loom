@@ -33,7 +33,7 @@ require (
 )
 
 require (
-	github.com/SukramJ/go-fabric v0.3.2-0.20261013112917-666609d3d870
+	github.com/SukramJ/go-fabric v0.3.2-0.20261013154136-c7e67ac74dc9
 	github.com/SukramJ/go-ha-catalog v0.3.0
 	github.com/SukramJ/go-hamqtt v0.37.0
 	github.com/SukramJ/go-mqtt v1.6.0

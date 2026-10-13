@@ -146,6 +146,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   whole event callback until the write timed out — the chip-tool suite
   caught it, go-fabric #63 fixed it in 0.3.1, and a contract test now
   pins the behaviour against the module in use.
+- **Matter: the colour lights serve the XY feature.** `ColorLight` serves
+  ColorControl with HS and XY, `RGBWLight` with HS, XY and CT — the
+  features the ExtendedColorLight device type mandates — so a
+  controller's MoveToColor / MoveColor / StepColor reach the CCU: the x/y
+  target is converted through matter.js's xyToHsv to HUE and SATURATION,
+  and the CCU's confirmation of that write confirms it on the server in
+  the device's colour space (go-fabric #79; one writer call per command
+  with both targets, go-fabric #84) — including the confirmation
+  a real CCU sends after the command answered, which the daemon
+  recognises as the echo rather than a colour of its own. CurrentX /
+  CurrentY start from the observed colour. Measured on the chip-tool
+  HmIP-LSC bridge: sRGB red lands as HUE 0 / SATURATION 1.0 with the
+  server in the XY mode. The XY conformance exemption is gone; CT on the
+  HS-only lights stays declared.
 - **Matter: every window covering's WindowCovering cluster is served by
   go-fabric's `cover.WindowCoveringServer`** (ADR 0084 WindowCovering
   follow-up, unblocked by go-fabric #76 / #77). The Cover serves the lift
@@ -164,12 +178,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   not yet observed reports fully open instead of null. The Garage keeps
   its ClosureControl projection. The chip-tool tilt test runs on its own
   HmIP-FBL bridge with a positive tilt report.
-- **go-fabric main (`v0.3.2-0.20261013112917-666609d3d870`).** The Matter
-  stack moves to the commit that closes the two device-layer asks left
-  open after 0.3.1: `cover.WindowCoveringServer` serves the tilt axis and
-  an inbound `SetTargetPosition` (#76, #77), and `light.ColorControlServer`
-  no longer drives the colour writer on a colour mode switch and confirms
-  an in-flight colour in the device's own colour mode (#79). What the
+- **go-fabric main (`v0.3.2-0.20261013154136-c7e67ac74dc9`).** The Matter
+  stack moves to the commit that closes the device-layer asks left open
+  after 0.3.1: `cover.WindowCoveringServer` serves the tilt axis and an
+  inbound `SetTargetPosition` (#76, #77), `light.ColorControlServer` no
+  longer drives the colour writer on a colour mode switch and confirms an
+  in-flight colour in the device's own colour mode (#79), and a command's
+  transitions start as one, so MoveToColor drives the writer once with
+  both targets instead of x first and y after (#84). What the
   daemon inherits with the pin: the matter.js schema snapshot moves to
   `0ceb202d` (enum manufacturer ranges are accepted; no cluster or
   device-type revision moved), a DoorLock command from a session without
@@ -178,7 +194,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   LockOperationError event, the thermostat server checks its configured
   setpoint limits at construction, and AddNOC refuses a reserved
   AdminVendorId. The pinned schema snapshot and the DoorLock / Thermostat
-  tests follow; the cover and XY follow-ups land separately.
+  tests follow; the cover follow-up landed with the first pin (666609d),
+  the XY feature with this one.
 - **go-fabric 0.3.1.** The Matter stack moves to the release that closes
   every ask the device-layer migration filed: `onoff.Server` runs the
   host Sink outside the lock `Set` takes (#63 — the coalescing feedback
