@@ -46,6 +46,9 @@ const (
 
 // Default credentials baked into every harness daemon.
 const (
+	// CentralName is the one CCU the harness configures.
+	CentralName = "ccu-e2e"
+
 	AdminUser  = "admin"
 	AdminPass  = "harness-admin-pw"
 	AdminToken = "harness-admin-token" //nolint:gosec // test-only literal

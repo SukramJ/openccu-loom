@@ -49,6 +49,17 @@ func TestE2EEventGroupsAreProducedDuringDeviceIngestion(t *testing.T) {
 		t.Fatalf("login: %v", err)
 	}
 
+	// Start returns once /health answers, which by design is before the
+	// south-bound bring-up has finished. A device is listed as soon as its
+	// ingest registered it, but its channels build their event groups only
+	// in the ingest's final step (DevicePipeline.finishIngest →
+	// Channel.FinalizeInit), and the central records readiness "ready"
+	// only after every interface's ingest returned. Walking the channels
+	// before that reads empty groups on a slow runner and populated ones
+	// on a fast one, so the walk waits for the readiness the daemon itself
+	// publishes.
+	awaitCentralReady(t, h, harness.CentralName)
+
 	devices := getJSONArray(t, h, "/api/v1/devices", "items")
 	if len(devices) == 0 {
 		t.Fatalf("no devices after boot — this test would report a missing producer it cannot "+
@@ -91,6 +102,22 @@ func TestE2EEventGroupsAreProducedDuringDeviceIngestion(t *testing.T) {
 				"devices whose VALUES paramset carries such parameters; kinds found: %v",
 				kind, sortedKinds(found))
 		}
+	}
+}
+
+// awaitCentralReady polls GET /system/ccu until the named central's
+// south-bound bring-up is recorded complete, and fails the test when it
+// never is: "never" is a broken bring-up, "not yet" is the asynchronous
+// boot this test must not race.
+func awaitCentralReady(t *testing.T, h *harness.Harness, name string) {
+	t.Helper()
+	deadline := time.Now().Add(45 * time.Second)
+	for !centralReady(t, h, name) {
+		if time.Now().After(deadline) {
+			t.Fatalf("central %q never reported readiness \"ready\" — the south-bound bring-up did not "+
+				"complete, so the event-group walk below would measure a boot that never finished", name)
+		}
+		time.Sleep(250 * time.Millisecond)
 	}
 }
 
