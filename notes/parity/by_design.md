@@ -1214,10 +1214,16 @@ Since the ADR 0084 ColorControl follow-up the cluster is go-fabric's
 server: RemainingTime is served (the server keeps it, 0 on the hand-off
 path without a transition engine), so that finding is gone; XY and, on the
 HS-only lights, CT stay missing because the feature set is still what the
-device carries. The server converts between colour spaces, so advertising
-XY and converting a MoveToColor onto HUE/SATURATION is possible — a
-behaviour decision (a controller that sees XY drives the light through
-XY), not a port. Until it is taken the two entries stay.
+device carries. Advertising XY was tried and measured broken with
+go-fabric 0.3.1: a MoveToColor on an HS device drives the ColorWriter with
+the converted current colour first (the mode switch is an update of its
+own) and the device's HS echo of that write, which arrives inside the
+writer, never equals the in-flight XY colour (HS↔XY does not round-trip
+in the attribute quantisation), so it is stored as a device-originated
+colour and the command's own store is abandoned — the CCU ended at HUE
+358 / SATURATION 0.82 for sRGB red. Filed as go-fabric #79 (no writer
+call on a mode switch; echo matching in the device's colour space). The
+two entries stay until it lands.
 
 ### BD-Matter-SmokeCoAlarm-PowerSourceOnEndpoint — the smoke alarm's battery is a cluster on its endpoint, not a PowerSource part
 
