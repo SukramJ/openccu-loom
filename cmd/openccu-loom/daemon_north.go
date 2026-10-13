@@ -394,7 +394,7 @@ func configuredAuthSources(cfg *config.Config, src authSources) []string {
 // with a bounded timeout. Production wires ctx to SIGINT/SIGTERM via
 // signal.NotifyContext in main.go; tests pass a context.WithCancel ctx so
 // they can drive shutdown without signals.
-func awaitShutdown(ctx context.Context, logger *slog.Logger, matter matterWiring, northBridges *northbridge.Registry, wsHub *ws.Hub) {
+func awaitShutdown(ctx context.Context, logger *slog.Logger, northBridges *northbridge.Registry, wsHub *ws.Hub) {
 	logger.Info("daemon.ready")
 	<-ctx.Done()
 	// context.Cause is non-nil once ctx is cancelled (guaranteed here by the
@@ -421,13 +421,8 @@ func awaitShutdown(ctx context.Context, logger *slog.Logger, matter matterWiring
 		cancelAnnounce()
 	}
 
-	// Matter ShutDown event: spec §11.1.6.2 mandates the cluster fires this
-	// event when the bridge is about to terminate so commissioners can detach
-	// gracefully. Best-effort — failure to emit is not fatal. matter.bi is nil
-	// when matter is disabled.
-	if matter.bi != nil {
-		matter.bi.EmitShutDown()
-	}
+	// The Matter ShutDown event (§11.1.6.2) is the node facade's: its Stop
+	// emits it before the bridge goes down (matterService → bundle.stop).
 
 	//nolint:contextcheck // shutdown path must not inherit the cancelled daemon ctx
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)

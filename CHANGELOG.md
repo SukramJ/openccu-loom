@@ -74,6 +74,57 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Matter: the bridge's bring-up runs on go-fabric's node facade**
+  (ADR 0084 phase 3). `startMatterBridge` hands `node.New` the daemon's
+  own responsibilities — the topology assembler as `Config.Topology`
+  (per-CCU scopes and completeness, the exposure allowlist, the localized
+  channel word), the two stores (never the handle: the schema stays in
+  the daemon's migrations), the shared group manager, the pinned
+  UniqueID, the attestation material — and the facade performs the
+  stack-generic bring-up in its documented order: root and Aggregator
+  servers, sessions, PASE, CASE, the commissioning window with its
+  fail-safe, verifier installer and enhanced-window announcement, the
+  fabric hooks, the StartUp / BootReason / ShutDown events, the event
+  number and operational-time persistence. About 2 700 lines of the
+  daemon's own copy of that bring-up are gone, with the tests that
+  exercised them; what the daemon still owns is pinned over the facade
+  (the REST opener, the fabric revoke, the session diagnostics, the
+  shared group manager, the WebSocket fabric events). What changes on the
+  wire and for the operator, all of it the facade's semantics — matter.js's
+  and chip's — adopted as the ADR states:
+  - An uncommissioned bridge opens its own commissioning window at start
+    (48 h, the configured passcode); the operator's window request
+    restarts it with the requested duration. A commissioned bridge is
+    commissionable only while a window is open.
+  - The REST open-window request answers 409 while a window it opened is
+    running; an administrator's window (a commissioner's
+    OpenCommissioningWindow) is never replaced.
+  - `north.matter.commissioning.concurrent_pairings` and
+    `north.matter.case.*` are accepted and have no effect: PASE is per
+    exchange always, and CASE answers with the identity each
+    commissioner installed. The fields stay for existing configs; their
+    help texts say so.
+  - Without a configured passcode the node runs on a random one for the
+    process (the facade refuses to build without one) and the REST
+    opener refuses the configured-credentials window as before; the
+    ephemeral window needs no configured passcode. A configured salt
+    outside spake2's bounds is replaced by a random one, which a
+    commissioner cannot tell: the salt travels in PBKDFParamResponse.
+  - The root endpoint serves what the facade mounts: LocalizationConfiguration
+    (the daemon's locale, en-US always), TimeFormatLocalization,
+    UnitLocalization, SoftwareDiagnostics, EthernetNetworkDiagnostics,
+    DiagnosticLogs, PowerSourceConfiguration, FixedLabel and UserLabel
+    besides the clusters it served before; the Aggregator gains FixedLabel
+    and UserLabel. TimeSynchronization stays an opt-in
+    (`enable_time_sync`).
+  - RebootCount counts the way matter.js does: 0 on the first boot of a
+    store, +1 on every later one. The facade keeps it under its own
+    settings key, so the first boot after this release reads 0; the
+    operational time keeps its key and carries over.
+  - Without vendor attestation material the bridge uses the CSA test
+    chain for the configured vendor and product; the self-signed
+    development fallback that only validated under
+    `--bypass-attestation-verifier` is gone.
 - **Matter: the Thermostat and ThermostatUserInterfaceConfiguration
   clusters of every climate are go-fabric's `thermo` servers** (ADR 0084
   thermostat follow-up). The hand-written projection is gone; the
@@ -178,14 +229,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   not yet observed reports fully open instead of null. The Garage keeps
   its ClosureControl projection. The chip-tool tilt test runs on its own
   HmIP-FBL bridge with a positive tilt report.
-- **go-fabric main (`v0.3.2-0.20261013154136-c7e67ac74dc9`).** The Matter
+- **go-fabric main (`v0.3.2-0.20261013184816-b11840f408b9`).** The Matter
   stack moves to the commit that closes the device-layer asks left open
   after 0.3.1: `cover.WindowCoveringServer` serves the tilt axis and an
   inbound `SetTargetPosition` (#76, #77), `light.ColorControlServer` no
   longer drives the colour writer on a colour mode switch and confirms an
-  in-flight colour in the device's own colour mode (#79), and a command's
+  in-flight colour in the device's own colour mode (#79), a command's
   transitions start as one, so MoveToColor drives the writer once with
-  both targets instead of x first and y after (#84). What the
+  both targets instead of x first and y after (#84), and the node facade
+  carries what a host with its own topology assembler and operator
+  surface needs (#87, #89: `Config.Topology`, `Config.Groups`,
+  `BasicInformation.UniqueID`, `Node.Sessions` / `Subscriptions` /
+  `RemoveFabric`, `Commissioning.LocationCapability`, responder session
+  parameters that advertise `Network.TCP`). What the
   daemon inherits with the pin: the matter.js schema snapshot moves to
   `0ceb202d` (enum manufacturer ranges are accepted; no cluster or
   device-type revision moved), a DoorLock command from a session without
@@ -195,7 +251,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   setpoint limits at construction, and AddNOC refuses a reserved
   AdminVendorId. The pinned schema snapshot and the DoorLock / Thermostat
   tests follow; the cover follow-up landed with the first pin (666609d),
-  the XY feature with this one.
+  the XY feature with the second (c7e67ac), the node facade with this one.
 - **go-fabric 0.3.1.** The Matter stack moves to the release that closes
   every ask the device-layer migration filed: `onoff.Server` runs the
   host Sink outside the lock `Set` takes (#63 — the coalescing feedback
@@ -245,6 +301,12 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Matter: scene tables are persisted.** The daemon's scenes store
+  checked for a key type the daemon never produces (`endpoint.StringKey`
+  against the daemon's own `matterendpoint.SourceKey`), so every
+  ScenesManagement table a controller stored lived for the process only
+  and was gone after a restart. The store keys by the stable key's
+  `String()` now, the shape go-fabric's facade uses.
 - **Matter: the HmIP-LSC's colour mode follows the axis the CCU confirmed
   last.** The light runs hue/saturation and colour temperature at once
   and has no operating mode; the ColorControl server took the colour

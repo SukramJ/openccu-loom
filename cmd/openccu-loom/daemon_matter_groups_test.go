@@ -99,6 +99,7 @@ func bootCommissionedBridge(t *testing.T) (context.Context, *matterBridgeBundle,
 		t.Fatal("startMatterBridge returned nil")
 	}
 	t.Cleanup(bundle.stop)
+	exposeEveryCandidate(ctx, t, bundle, reg)
 
 	topo := bundle.bridge.Topology()
 	if topo == nil {

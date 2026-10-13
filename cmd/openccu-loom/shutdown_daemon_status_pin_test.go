@@ -62,7 +62,7 @@ func TestAwaitShutdownAnnouncesTheDaemonStopBeforeTheServersGoAway(t *testing.T)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		awaitShutdown(ctx, slog.Default(), matterWiring{}, reg, hub)
+		awaitShutdown(ctx, slog.Default(), reg, hub)
 	}()
 	cancel()
 	select {
@@ -108,7 +108,7 @@ func TestAwaitShutdownWithoutAWebSocketHubStillStops(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		awaitShutdown(ctx, slog.Default(), matterWiring{}, reg, nil)
+		awaitShutdown(ctx, slog.Default(), reg, nil)
 	}()
 	cancel()
 	select {

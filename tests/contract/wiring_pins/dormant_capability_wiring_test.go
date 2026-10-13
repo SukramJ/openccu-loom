@@ -47,32 +47,6 @@ import (
 
 // --- Matter ACL gate (the archetype) ---
 
-// TestPin_ACLLister_AttachedInDaemon pins that the daemon attaches the
-// store-backed ACL source to the Matter bridge. Without it the
-// TopologyDispatcher has no ACL source and denies every operational (CASE)
-// read, write and invoke — the bridge answers a commissioned controller
-// nothing at all.
-//
-// The behavioural half of this pin is
-// TestMatterBridgeEnforcesStoredACLAfterBoot in cmd/openccu-loom: it boots
-// the real bridge, seeds one stored entry, and asserts that the named
-// subject is served while another subject on the same fabric is refused.
-// This pin is the cheap source-level companion, not the proof.
-func TestPin_ACLLister_AttachedInDaemon(t *testing.T) {
-	contract.MustFindMethodCall(t,
-		"cmd/openccu-loom",
-		"bridge", "AttachACLLister")
-}
-
-// The bridge-internal half of this pin — that AttachACLLister forwards the
-// lister into the dispatcher gate — cannot be measured from here any more:
-// the bridge source moved to github.com/SukramJ/go-fabric, and a source pin
-// only reads files in its own repository. The behavioural assertion in
-// cmd/openccu-loom/daemon_matter_acl_wiring_test.go still crosses that seam,
-// because it boots the real bridge and observes the refusal.
-
-// --- D1: connectivity reconcile probe ---
-
 // TestPin_ConnectivityProbe_WiredInHubWiring pins that the hub wiring installs
 // the Interface.listInterfaces probe as the Reconciler's Connect source.
 // reconcileConnectivity needs BOTH the Connectivity cache (already seeded) AND
@@ -208,40 +182,6 @@ func TestPin_NotifyDeviceReachable_WiredInDaemon(t *testing.T) {
 }
 
 // --- D4: stale CASE session teardown on NOC rotation ---
-
-// TestPin_SetOnFabricUpdated_WiredInDaemon pins that the daemon wires the
-// UpdateNOC hook that aborts other CASE sessions for the updated fabric.
-// Without it a NOC rotation leaves stale sessions keyed to the old credential.
-func TestPin_SetOnFabricUpdated_WiredInDaemon(t *testing.T) {
-	contract.MustFindMethodCall(t,
-		"cmd/openccu-loom",
-		"opCreds", "SetOnFabricUpdated")
-}
-
-// --- D5: aborted-CASE dedupe-map reaper ---
-
-// TestPin_SetOnEvict_WiredInDaemon pins that the CASE provider's TTL reaper is
-// wired to forget the bridge's Sigma1 dedupe entry. Without it every aborted
-// Sigma1-only handshake leaks one map entry for the daemon's lifetime.
-func TestPin_SetOnEvict_WiredInDaemon(t *testing.T) {
-	contract.MustFindMethodCall(t,
-		"cmd/openccu-loom",
-		"caseProvider", "SetOnEvict")
-}
-
-// --- D6: uncommissioned first-pairing window ---
-
-// TestPin_SetFabricCounter_WiredInDaemon pins that AdministratorCommissioning
-// learns the fabric count. Without it an uncommissioned bridge cannot detect
-// it is uncommissioned and the 48-hour first-pairing window collapses to the
-// 900-second cap.
-func TestPin_SetFabricCounter_WiredInDaemon(t *testing.T) {
-	contract.MustFindMethodCall(t,
-		"cmd/openccu-loom",
-		"admComm", "SetFabricCounter")
-}
-
-// --- D7: MQTT Discovery origin version ---
 
 // TestPin_SetOriginVersion_WiredInDaemon pins that the daemon stamps the build
 // version onto the MQTT Discovery origin block. Without it HA shows the bridge

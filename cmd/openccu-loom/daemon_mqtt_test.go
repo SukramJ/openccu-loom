@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
-	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 )
 
@@ -185,42 +184,3 @@ func TestBuildMQTT_RetainedSweepFollowsARuntimeAdoptedCentral(t *testing.T) {
 }
 
 // ── announcePersistedFabric ───────────────────────────────────────────────────
-
-func TestAnnouncePersistedFabric_NilStore_IsNoop(t *testing.T) {
-	t.Parallel()
-	// Must not panic.
-	announcePersistedFabric(context.Background(), nil, nil, slog.Default())
-}
-
-func TestAnnouncePersistedFabric_NilBridge_IsNoop(t *testing.T) {
-	t.Parallel()
-	mgr := buildTestOperationalManager(t)
-	store := matterStoreFromManager(t, mgr)
-	// nil bridge — must not panic.
-	announcePersistedFabric(context.Background(), store, nil, slog.Default())
-}
-
-func TestAnnouncePersistedFabric_EmptyStore_IsNoop(t *testing.T) {
-	t.Parallel()
-	cfg := config.Default()
-	cfg.North.Matter.Enabled = true
-	cfg.North.Matter.MDNSAdvertise = "noop"
-	cfg.North.Matter.Listen = ":0"
-	cfg.DataDir = t.TempDir()
-	cfg.Centrals = []config.CentralConfig{{Name: "ccu-01"}}
-
-	reg := buildTestRegistry(t, "ccu-01")
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-
-	db := openTestLoomDB(t)
-	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.Default())
-	if bundle == nil {
-		t.Skip("bridge did not start; skipping empty-store test")
-	}
-	t.Cleanup(bundle.stop)
-
-	// Empty store → no fabrics → function returns early.
-	// Must not panic.
-	announcePersistedFabric(context.Background(), bundle.store, bundle.bridge, slog.Default())
-}

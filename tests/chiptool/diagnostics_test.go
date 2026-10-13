@@ -72,24 +72,32 @@ func TestDiagnostics_NetworkInterfaces(t *testing.T) {
 	}
 }
 
-// TestDiagnostics_RebootCount reads GeneralDiagnostics.RebootCount.
-// Must succeed and be ≥ 1 — the bridge has booted at least once for
-// the suite to be running.
+// TestDiagnostics_RebootCount: RebootCount counts the node's boots the way
+// matter.js does (GeneralDiagnosticsServer.ts initialize(): 0 on the first
+// boot of a store, incremented on every later one), so the effect to pin
+// is the increment across a daemon restart, not any absolute value — the
+// shared bridge may have been restarted by an earlier test.
 func TestDiagnostics_RebootCount(t *testing.T) {
 	b := requireBridge(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
-	out, err := b.SharedCtl.ReadAttr(ctx, t, "generaldiagnostics", "reboot-count", 0)
-	if err != nil {
-		t.Fatalf("read reboot-count: %v", err)
+	readCount := func(label string) int64 {
+		t.Helper()
+		out, err := b.SharedCtl.ReadAttr(ctx, t, "generaldiagnostics", "reboot-count", 0)
+		if err != nil {
+			t.Fatalf("read reboot-count (%s): %v", label, err)
+		}
+		v, ok := harness.FindAttrUint(out, "RebootCount")
+		if !ok {
+			t.Fatalf("RebootCount not parsed (%s):\n%s", label, out)
+		}
+		return v
 	}
-	v, ok := harness.FindAttrUint(out, "RebootCount")
-	if !ok {
-		t.Fatalf("RebootCount not parsed:\n%s", out)
-	}
-	if v < 1 {
-		t.Errorf("RebootCount=%d, want ≥ 1", v)
+	before := readCount("before restart")
+	b.Restart(t)
+	if after := readCount("after restart"); after != before+1 {
+		t.Errorf("RebootCount after a restart = %d, want %d (before + 1)", after, before+1)
 	}
 }
 

@@ -1,7 +1,7 @@
 filippo.io/nistec v0.0.4 h1:F14ZHT5htWlMnQVPndX9ro9arf56cBhQxq4LnDI491s=
 filippo.io/nistec v0.0.4/go.mod h1:PK/lw8I1gQT4hUML4QGaqljwdDaFcMyFKSXN7kjrtKI=
-github.com/SukramJ/go-fabric v0.3.2-0.20261013154136-c7e67ac74dc9 h1:uxLjCvONPLc0Sy+MKK2e3LfWsPF8NEduW5Ec3wkCZ54=
-github.com/SukramJ/go-fabric v0.3.2-0.20261013154136-c7e67ac74dc9/go.mod h1:2P1sZofCeHgVYsx8S9XhteHGgEK4SNaT0K8yK9xkM9c=
+github.com/SukramJ/go-fabric v0.3.2-0.20261013184816-b11840f408b9 h1:Zk5kDrvtXFMWd1FgpvhqQC7OoIaaBeiiKBwhtcF3Ups=
+github.com/SukramJ/go-fabric v0.3.2-0.20261013184816-b11840f408b9/go.mod h1:2P1sZofCeHgVYsx8S9XhteHGgEK4SNaT0K8yK9xkM9c=
 github.com/SukramJ/go-ha-catalog v0.3.0 h1:yyb0JmvWN9TsNT6Ev9KACCV+KFK5a/va/Dhg50igUrA=
 github.com/SukramJ/go-ha-catalog v0.3.0/go.mod h1:z+G41LzF/Aj6xeoT0CqXylm7TxFhScqt118+h1vPwA8=
 github.com/SukramJ/go-hamqtt v0.37.0 h1:qe14Mpq8JUi+QB9vZa+P3VIg/xiBJRSJ2xfKlrs1ObI=

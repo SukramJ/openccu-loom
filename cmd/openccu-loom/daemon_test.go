@@ -6,9 +6,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	gosql "database/sql"
 	"log/slog"
 	"os"
@@ -186,8 +183,8 @@ func TestStartMatterBridge_PASEDisabledByDefault(t *testing.T) {
 	t.Cleanup(bundle.stop)
 
 	// With Passcode=0 the "matter.bridge.pase.armed" log line must NOT appear.
-	if logs := buf.String(); containsSubstring(logs, "pase.armed") {
-		t.Errorf("unexpected pase.armed log when passcode is 0; logs:\n%s", logs)
+	if bundle.configuredCommissioning {
+		t.Error("passcode 0 was reported as a configured passcode; the REST opener would hand out a window on credentials nobody holds")
 	}
 }
 
@@ -213,72 +210,16 @@ func TestStartMatterBridge_CommissioningArmsHandler(t *testing.T) {
 	db := openTestLoomDB(t)
 	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, logger)
 	if bundle == nil {
-		t.Fatal("expected non-nil bundle; PASE adapter construction may have failed — check logs:\n" + buf.String())
+		t.Fatal("expected non-nil bundle; check logs:\n" + buf.String())
 	}
 	t.Cleanup(bundle.stop)
 
-	if logs := buf.String(); !containsSubstring(logs, "pase.armed") {
-		t.Errorf("expected 'pase.armed' log line; got:\n%s", logs)
+	if !bundle.configuredCommissioning {
+		t.Fatalf("the configured passcode was not recognised as configured; logs:\n%s", buf.String())
 	}
-}
-
-// TestBuildPaseAdapter_InvalidPasscodeRejects verifies that buildPaseAdapter
-// rejects a config whose effective PBKDF parameters are invalid. An explicit
-// negative Iterations value bypasses the zero-default path and triggers the
-// spake2.PBKDF guard (iterations must be > 0).
-func TestBuildPaseAdapter_InvalidPasscodeRejects(t *testing.T) {
-	t.Parallel()
-	cfg := config.NorthMatterCommissioning{
-		Passcode:   20202021,
-		Salt:       "openccu-loom-dev0", // 16 bytes — valid
-		Iterations: -1,                  // non-zero so the default path is skipped; PBKDF rejects ≤ 0
+	if qr, manual, err := bundle.node.PairingCodes(); err != nil || qr == "" || manual == "" {
+		t.Fatalf("PairingCodes = %q, %q, %v; want the configured passcode's codes", qr, manual, err)
 	}
-	var buf syncBuffer
-	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
-
-	// Construct a minimal operational.Manager (nil store is accepted by
-	// manager.NewManager for in-memory-only use in tests).
-	mgr := buildTestOperationalManager(t)
-
-	_, err := buildPaseAdapter(cfg, mgr, nil, nil, logger)
-	if err == nil {
-		t.Error("expected error for invalid (iterations=-1) PBKDF config, got nil")
-	}
-}
-
-// TestBuildPaseAdapter_DefaultsApplied verifies that buildPaseAdapter succeeds
-// when Salt and Iterations are zero-valued, applying the dev-salt and
-// iterations-1000 defaults internally.
-func TestBuildPaseAdapter_DefaultsApplied(t *testing.T) {
-	t.Parallel()
-	cfg := config.NorthMatterCommissioning{
-		Passcode:   20202021,
-		Salt:       "", // triggers dev-salt default
-		Iterations: 0,  // triggers 1000 default
-	}
-	var buf syncBuffer
-	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
-
-	mgr := buildTestOperationalManager(t)
-
-	adapter, err := buildPaseAdapter(cfg, mgr, nil, nil, logger)
-	if err != nil {
-		t.Fatalf("expected success with defaults applied, got: %v", err)
-	}
-	if adapter == nil {
-		t.Error("expected non-nil PaseAdapter")
-	}
-}
-
-// containsSubstring is a lightweight helper (avoids strings import at
-// package level when "strings" is not otherwise needed in this file).
-func containsSubstring(s, sub string) bool {
-	for i := 0; i <= len(s)-len(sub); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
 }
 
 // gooseMigrateMu serialises sqlitestore.Open calls across tests.
@@ -374,227 +315,6 @@ func buildTestOperationalManager(t *testing.T) *operational.Manager {
 }
 
 // ─── CASE wiring tests (5) ───────────────────────────────────────────────────
-
-// TestStartMatterBridge_CASEArmedByDefault verifies that the CASE
-// provider is wired even when cfg.North.Matter.CASE.NodeID is left at
-// its zero default. The pre-2026-05 implementation gated the entire
-// CASE block on NodeID != 0; with `node_id: 0` in config the bridge
-// happily ran PASE + AddNOC, then dropped every Sigma1 with
-// `ErrCaseHandlerMissing` at DEBUG level, leaving the commissioner to
-// time out (CHIP Error 0x32 in chip-tool, "verbinden..." spinner in
-// Apple Home). CASE has to be armed whenever Matter is enabled — the
-// identity is filled in by `caseRefresh` on the first AddNOC.
-func TestStartMatterBridge_CASEArmedByDefault(t *testing.T) {
-	t.Parallel()
-	cfg := config.Default()
-	cfg.North.Matter.Enabled = true
-	cfg.North.Matter.MDNSAdvertise = "noop"
-	cfg.North.Matter.Listen = ":0"
-	cfg.DataDir = t.TempDir()
-	// CASE.NodeID intentionally left at zero — provider must still arm.
-	cfg.Centrals = []config.CentralConfig{{Name: "ccu-01", Host: "127.0.0.1"}}
-
-	reg := buildTestRegistry(t, "ccu-01")
-	var buf syncBuffer
-	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-
-	db := openTestLoomDB(t)
-	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, logger)
-	if bundle == nil {
-		t.Fatal("expected non-nil bundle")
-	}
-	t.Cleanup(bundle.stop)
-
-	logs := buf.String()
-	if !containsSubstring(logs, "case.armed") {
-		t.Errorf("expected 'case.armed' log line when CASE.NodeID=0; logs:\n%s", logs)
-	}
-	if !containsSubstring(logs, "case.awaiting_addnoc") {
-		t.Errorf("expected 'case.awaiting_addnoc' log line when no fabric persisted; logs:\n%s", logs)
-	}
-}
-
-// TestStartMatterBridge_CASEArmedWhenConfigured verifies that setting
-// cfg.North.Matter.CASE.NodeID=42 causes the "case.armed" log line to appear.
-func TestStartMatterBridge_CASEArmedWhenConfigured(t *testing.T) {
-	t.Parallel()
-	cfg := config.Default()
-	cfg.North.Matter.Enabled = true
-	cfg.North.Matter.MDNSAdvertise = "noop"
-	cfg.North.Matter.Listen = ":0"
-	cfg.DataDir = t.TempDir()
-	cfg.North.Matter.CASE.NodeID = 42
-	cfg.North.Matter.CASE.FabricID = 1
-	cfg.Centrals = []config.CentralConfig{{Name: "ccu-01", Host: "127.0.0.1"}}
-
-	reg := buildTestRegistry(t, "ccu-01")
-	var buf syncBuffer
-	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-
-	db := openTestLoomDB(t)
-	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, logger)
-	if bundle == nil {
-		t.Fatal("expected non-nil bundle; CASE adapter construction may have failed — check logs:\n" + buf.String())
-	}
-	t.Cleanup(bundle.stop)
-
-	if logs := buf.String(); !containsSubstring(logs, "case.armed") {
-		t.Errorf("expected 'case.armed' log line; got:\n%s", logs)
-	}
-}
-
-// TestBuildCaseAdapter_HappyPath verifies that buildCaseAdapter returns a
-// non-nil adapter without error for a valid (NodeID=42, FabricID=1) config.
-func TestBuildCaseAdapter_HappyPath(t *testing.T) {
-	t.Parallel()
-	cfg := config.NorthMatterCASE{NodeID: 42, FabricID: 1}
-	var buf syncBuffer
-	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	mgr := buildTestOperationalManager(t)
-
-	adapter, err := buildCaseAdapter(t.Context(), cfg, mgr, nil /* no store → ephemeral fallback */, logger)
-	if err != nil {
-		t.Fatalf("buildCaseAdapter: %v", err)
-	}
-	if adapter == nil {
-		t.Error("expected non-nil CaseAdapter")
-	}
-}
-
-// TestBuildCaseAdapter_LogsEphemeralWarning verifies that buildCaseAdapter
-// emits the "ephemeral_identity" warning regardless of config values.
-func TestBuildCaseAdapter_LogsEphemeralWarning(t *testing.T) {
-	t.Parallel()
-	cfg := config.NorthMatterCASE{NodeID: 1, FabricID: 1}
-	var buf syncBuffer
-	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	mgr := buildTestOperationalManager(t)
-
-	if _, err := buildCaseAdapter(t.Context(), cfg, mgr, nil /* no store → ephemeral fallback */, logger); err != nil {
-		t.Fatalf("buildCaseAdapter: %v", err)
-	}
-	if logs := buf.String(); !containsSubstring(logs, "ephemeral_identity") {
-		t.Errorf("expected 'ephemeral_identity' warning in logs; got:\n%s", logs)
-	}
-}
-
-// TestTrustAnyPeerVerifier_EmptyNocErrors verifies that
-// trustAnyPeerVerifier.VerifyAndExtractPubKey returns an error when the NOC
-// slice is empty.
-func TestTrustAnyPeerVerifier_EmptyNocErrors(t *testing.T) {
-	t.Parallel()
-	var v trustAnyPeerVerifier
-	pub, err := v.VerifyAndExtractPubKey(nil, nil)
-	if err == nil {
-		t.Errorf("expected error for empty NOC, got nil (pub=%v)", pub)
-	}
-}
-
-// ─── persistent CASE identity tests ──────────────────────────────────────
-
-// TestLoadPersistentCaseIdentity_NoStoreNoFabric verifies that the
-// loader returns persisted=false when no store is wired (caller
-// falls back to the ephemeral path).
-func TestLoadPersistentCaseIdentity_NoStoreNoFabric(t *testing.T) {
-	t.Parallel()
-	cfg := config.NorthMatterCASE{NodeID: 1, FabricID: 0}
-	logger := slog.New(slog.DiscardHandler)
-	_, _, _, persisted, err := loadPersistentCaseIdentity(t.Context(), cfg, nil, logger)
-	if err != nil {
-		t.Fatalf("loadPersistentCaseIdentity: %v", err)
-	}
-	if persisted {
-		t.Error("persisted=true with nil store, want false")
-	}
-}
-
-// TestLoadPersistentCaseIdentity_EmptyStore verifies that an
-// empty-but-migrated store returns persisted=false rather than
-// surfacing an error.
-func TestLoadPersistentCaseIdentity_EmptyStore(t *testing.T) {
-	t.Parallel()
-	mgr := buildTestOperationalManager(t)
-	store := matterStoreFromManager(t, mgr)
-	cfg := config.NorthMatterCASE{NodeID: 1, FabricID: 0}
-	logger := slog.New(slog.DiscardHandler)
-	_, _, _, persisted, err := loadPersistentCaseIdentity(t.Context(), cfg, store, logger)
-	if err != nil {
-		t.Fatalf("loadPersistentCaseIdentity: %v", err)
-	}
-	if persisted {
-		t.Error("persisted=true with empty store, want false")
-	}
-}
-
-// TestLoadPersistentCaseIdentity_PicksFabric verifies that with a
-// persisted (fabric, identity) pair the loader returns a
-// fully-populated *sigma.Identity backed by a real *ecdsa.PrivateKey.
-func TestLoadPersistentCaseIdentity_PicksFabric(t *testing.T) {
-	t.Parallel()
-	mgr := buildTestOperationalManager(t)
-	store := matterStoreFromManager(t, mgr)
-	ctx := t.Context()
-
-	rootPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatalf("root key: %v", err)
-	}
-	rootPub := elliptic.Marshal(elliptic.P256(), rootPriv.X, rootPriv.Y) //nolint:staticcheck // SA1019: matches store wire shape
-	if rootPub[0] != 0x04 || len(rootPub) != 65 {
-		t.Fatalf("root pub shape: len=%d prefix=%#x", len(rootPub), rootPub[0])
-	}
-
-	fabricIdx, err := store.AddFabric(ctx, matterstore.FabricRecord{
-		FabricID:      0xCAFEBABE,
-		NodeID:        0xDEADBEEF,
-		RootPublicKey: rootPub,
-		VendorID:      0xFFF1,
-		Label:         "test",
-	})
-	if err != nil {
-		t.Fatalf("AddFabric: %v", err)
-	}
-
-	nodePriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatalf("node key: %v", err)
-	}
-	scalar := nodePriv.D.FillBytes(make([]byte, 32)) //nolint:staticcheck // SA1019: direct D access is the Matter NOC private-scalar bytes — crypto/ecdh wraps these in an opaque PrivateKey.
-	if err := store.UpsertIdentity(ctx, matterstore.IdentityRecord{
-		FabricIndex: fabricIdx,
-		NOC:         []byte{0xDE, 0xAD},
-		PrivateKey:  scalar,
-		IPK:         make([]byte, 16),
-	}); err != nil {
-		t.Fatalf("UpsertIdentity: %v", err)
-	}
-
-	cfg := config.NorthMatterCASE{NodeID: 0xDEADBEEF, FabricID: 0xCAFEBABE}
-	logger := slog.New(slog.DiscardHandler)
-	identity, verifier, idx, persisted, err := loadPersistentCaseIdentity(ctx, cfg, store, logger)
-	if err != nil {
-		t.Fatalf("loadPersistentCaseIdentity: %v", err)
-	}
-	if !persisted {
-		t.Fatal("persisted=false, want true")
-	}
-	if idx != fabricIdx {
-		t.Errorf("FabricIndex: got %d, want %d", idx, fabricIdx)
-	}
-	if identity == nil || identity.PrivateKey == nil {
-		t.Fatalf("identity = %+v, want non-nil w/ PrivateKey", identity)
-	}
-	if identity.NodeID != 0xDEADBEEF || identity.FabricID != 0xCAFEBABE {
-		t.Errorf("identity ids: got node=%x fabric=%x", identity.NodeID, identity.FabricID)
-	}
-	if verifier == nil {
-		t.Error("verifier = nil, want a non-nil mattercert.Verifier")
-	}
-}
 
 // matterStoreFromManager extracts the matterstore.Store underlying a
 // test operational manager. operational.Manager doesn't expose its

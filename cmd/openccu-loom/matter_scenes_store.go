@@ -20,8 +20,10 @@ const matterScenesSettingPrefix = "scenes."
 // matterScenesStore persists the scene tables of the bridged endpoints
 // that serve ScenesManagement, as matter.js keeps them in the endpoint's
 // nonvolatile state. It implements [fabricendpoint.ScenesStore] over the
-// Matter store's settings; a key that is not a [fabricendpoint.StringKey]
-// cannot be named in a setting and is kept for the process only.
+// Matter store's settings, keyed by the stable key's String() — the
+// daemon's keys are [matterendpoint.SourceKey] values, not StringKeys,
+// and a type check for StringKey kept every scene table for the process
+// only.
 type matterScenesStore struct {
 	store  *matterstore.Store
 	logger *slog.Logger
@@ -29,11 +31,10 @@ type matterScenesStore struct {
 
 // LoadScenes implements [fabricendpoint.ScenesStore].
 func (p matterScenesStore) LoadScenes(key fabricendpoint.SourceKey) []byte {
-	k, ok := key.(fabricendpoint.StringKey)
-	if !ok || p.store == nil {
+	if key == nil || p.store == nil {
 		return nil
 	}
-	v, found, err := p.store.GetSetting(context.Background(), matterScenesSettingPrefix+string(k))
+	v, found, err := p.store.GetSetting(context.Background(), matterScenesSettingPrefix+key.String())
 	if err != nil || !found {
 		return nil
 	}
@@ -42,11 +43,10 @@ func (p matterScenesStore) LoadScenes(key fabricendpoint.SourceKey) []byte {
 
 // SaveScenes implements [fabricendpoint.ScenesStore].
 func (p matterScenesStore) SaveScenes(key fabricendpoint.SourceKey, table []byte) {
-	k, ok := key.(fabricendpoint.StringKey)
-	if !ok || p.store == nil {
+	if key == nil || p.store == nil {
 		return
 	}
-	if err := p.store.SetSetting(context.Background(), matterScenesSettingPrefix+string(k), string(table)); err != nil && p.logger != nil {
+	if err := p.store.SetSetting(context.Background(), matterScenesSettingPrefix+key.String(), string(table)); err != nil && p.logger != nil {
 		p.logger.Warn("matter.scenes.persist", slog.String("err", err.Error()))
 	}
 }
