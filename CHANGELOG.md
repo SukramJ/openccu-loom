@@ -146,6 +146,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   whole event callback until the write timed out — the chip-tool suite
   caught it, go-fabric #63 fixed it in 0.3.1, and a contract test now
   pins the behaviour against the module in use.
+- **go-fabric main (`v0.3.2-0.20261013112917-666609d3d870`).** The Matter
+  stack moves to the commit that closes the two device-layer asks left
+  open after 0.3.1: `cover.WindowCoveringServer` serves the tilt axis and
+  an inbound `SetTargetPosition` (#76, #77), and `light.ColorControlServer`
+  no longer drives the colour writer on a colour mode switch and confirms
+  an in-flight colour in the device's own colour mode (#79). What the
+  daemon inherits with the pin: the matter.js schema snapshot moves to
+  `0ceb202d` (enum manufacturer ranges are accepted; no cluster or
+  device-type revision moved), a DoorLock command from a session without
+  a fabric is refused with UNSUPPORTED_ACCESS before the lock is asked
+  and a lock operation the lock refuses answers FAILURE with a
+  LockOperationError event, the thermostat server checks its configured
+  setpoint limits at construction, and AddNOC refuses a reserved
+  AdminVendorId. The pinned schema snapshot and the DoorLock / Thermostat
+  tests follow; the cover and XY follow-ups land separately.
 - **go-fabric 0.3.1.** The Matter stack moves to the release that closes
   every ask the device-layer migration filed: `onoff.Server` runs the
   host Sink outside the lock `Set` takes (#63 — the coalescing feedback
