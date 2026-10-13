@@ -161,6 +161,11 @@ type Climate struct {
 	// so DataVersionFilter evaluation correctly detects cluster changes.
 	dataVersion hmtypes.DataVersionTracker
 
+	// matterThermo holds the Thermostat and
+	// ThermostatUserInterfaceConfiguration servers the Matter projection
+	// serves, built once per Climate (matter.go).
+	matterThermo matterThermoHolder
+
 	// key is the composite data-point key used by [DataPointKey] to
 	// satisfy [device.AttachableDataPoint]. It is keyed on the setpoint
 	// parameter so the materializer can attach this DP to the channel.
@@ -943,6 +948,7 @@ func (c *Climate) OnMode(m Mode) {
 	c.mode = m
 	c.hasMode = true
 	c.mu.Unlock()
+	c.syncMatterMode()
 }
 
 // OnProfile records a CCU-emitted profile.
@@ -1666,6 +1672,9 @@ func (c *Climate) OnControlMode(wireValue any) {
 		return
 	}
 
+	// Deferred before the unlock so it runs after it (LIFO): the Matter
+	// server reads the mode through [Climate.Mode], which takes mu.
+	defer c.syncMatterMode()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	switch label {
@@ -1736,6 +1745,9 @@ func (c *Climate) OnSetPointMode(wireValue any) {
 	// (heatingMode acquires muHC; we then acquire mu). Separate reads are
 	// safe because heatingMode changes are infrequent and guarded by muHC.
 	hc := c.heatingMode()
+	// Deferred before the unlock so it runs after it (LIFO): the Matter
+	// server reads the mode through [Climate.Mode], which takes mu.
+	defer c.syncMatterMode()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	switch idx {
@@ -2096,6 +2108,7 @@ func (c *Climate) OnHeatingCooling(mode string) {
 	c.heatingCooling = mode
 	c.hasHC = true
 	c.muHC.Unlock()
+	c.syncMatterMode()
 }
 
 // IsHeating reports whether the device is in heating mode (rather than

@@ -11,13 +11,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/go-fabric/im"
+	"github.com/SukramJ/go-fabric/cluster"
+	thermostatspec "github.com/SukramJ/go-fabric/cluster/spec/thermostat"
+	"github.com/SukramJ/go-fabric/cluster/thermo"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // ---------------------------------------------------------------------------
@@ -961,59 +962,6 @@ func TestClimateDiscoveryTriggers(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// extractSetpointRaiseLower helper
-// ---------------------------------------------------------------------------
-
-func TestExtractSetpointRaiseLowerSuccess(t *testing.T) {
-	fields := map[string]any{
-		"mode":   uint8(0),
-		"amount": int8(10),
-	}
-	mode, amount, err := extractSetpointRaiseLower(fields)
-	if err != nil {
-		t.Fatalf("extractSetpointRaiseLower: %v", err)
-	}
-	if mode != 0 || amount != 10 {
-		t.Errorf("got mode=%d amount=%d, want 0/10", mode, amount)
-	}
-}
-
-func TestExtractSetpointRaiseLowerMissingMode(t *testing.T) {
-	_, _, err := extractSetpointRaiseLower(map[string]any{"amount": int8(5)})
-	if err == nil {
-		t.Error("missing mode should return error")
-	}
-}
-
-func TestExtractSetpointRaiseLowerBadModeType(t *testing.T) {
-	_, _, err := extractSetpointRaiseLower(map[string]any{"mode": "bad", "amount": int8(5)})
-	if err == nil {
-		t.Error("wrong mode type should return error")
-	}
-}
-
-func TestExtractSetpointRaiseLowerMissingAmount(t *testing.T) {
-	_, _, err := extractSetpointRaiseLower(map[string]any{"mode": uint8(0)})
-	if err == nil {
-		t.Error("missing amount should return error")
-	}
-}
-
-func TestExtractSetpointRaiseLowerBadAmountType(t *testing.T) {
-	_, _, err := extractSetpointRaiseLower(map[string]any{"mode": uint8(0), "amount": "bad"})
-	if err == nil {
-		t.Error("wrong amount type should return error")
-	}
-}
-
-func TestExtractSetpointRaiseLowerWrongType(t *testing.T) {
-	_, _, err := extractSetpointRaiseLower("not-a-map")
-	if err == nil {
-		t.Error("non-map input should return error")
-	}
-}
-
-// ---------------------------------------------------------------------------
 // toFloat helper
 // ---------------------------------------------------------------------------
 
@@ -1138,218 +1086,16 @@ func TestProfileForWeekIndexOutOfRange(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// matter server – ThermostatUI (0x0204) coverage
-// ---------------------------------------------------------------------------
-
-func TestClimateThermostatUIServerRead(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0204) // ThermostatUserInterfaceConfiguration
-
-	v, ok := srv.MatterRead(0x0000) // TemperatureDisplayMode
-	if !ok {
-		t.Error("MatterRead(0x0000) on UI cluster should return ok=true")
-	}
-	if v == nil {
-		t.Error("MatterRead(0x0000) on UI cluster should return non-nil value")
-	}
-}
-
-func TestClimateThermostatUIServerReadUnknownAttr(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0204)
-	_, ok := srv.MatterRead(0xFFFF)
-	if ok {
-		t.Error("MatterRead(0xFFFF) on UI cluster should return ok=false")
-	}
-}
-
-func TestClimateThermostatUIServerMatterWrite(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0204)
-	err := srv.MatterWrite(context.Background(), 0x0000, nil)
-	if err == nil {
-		t.Error("MatterWrite on UI cluster should return error")
-	}
-}
-
-func TestClimateThermostatUIServerMatterReportable(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0204)
-	// Reportable is nil for the UI cluster.
-	_ = srv.MatterReportable()
-}
-
-func TestClimateThermostatUIServerMatterAttributes(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0204)
-	lister, ok := srv.(interfaces.MatterClusterAttributeLister)
-	if !ok {
-		t.Fatal("ThermostatUI server does not implement MatterClusterAttributeLister")
-	}
-	if got := lister.MatterAttributes(); len(got) == 0 {
-		t.Error("MatterAttributes() returned empty slice for ThermostatUI")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// matter server – Thermostat (0x0201) additional coverage
-// ---------------------------------------------------------------------------
-
-func TestClimateThermostatServerMatterAttributes(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0201)
-	lister, ok := srv.(interfaces.MatterClusterAttributeLister)
-	if !ok {
-		t.Fatal("Thermostat server does not implement MatterClusterAttributeLister")
-	}
-	attrs := lister.MatterAttributes()
-	if len(attrs) == 0 {
-		t.Error("MatterAttributes() returned empty slice for Thermostat")
-	}
-}
-
-func TestClimateThermostatServerMatterReportable(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0201)
-	if got := srv.MatterReportable(); len(got) == 0 {
-		t.Error("MatterReportable() returned empty slice for Thermostat")
-	}
-}
-
-func TestClimateThermostatServerReadMinMaxSetpoints(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{},
-		custom.ClimateCapabilities{MinTemperature: 5.0, MaxTemperature: 30.0})
-	srv := findCluster(t, r.climate, 0x0201)
-
-	// MinHeatSP = 0x0015, MaxHeatSP = 0x0016 (from matter.go constants).
-	_, ok := srv.MatterRead(matterAttrThermMinHeatSp)
-	if !ok {
-		t.Error("MatterRead(MinHeatSP) should return ok=true")
-	}
-	_, ok = srv.MatterRead(matterAttrThermMaxHeatSp)
-	if !ok {
-		t.Error("MatterRead(MaxHeatSP) should return ok=true")
-	}
-}
-
-func TestClimateThermostatServerReadControlSeq(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0201)
-	_, ok := srv.MatterRead(matterAttrThermControlSeq)
-	if !ok {
-		t.Error("MatterRead(ControlSeq) should return ok=true")
-	}
-	// 0x0030 is SetpointChangeSource in matter.js (not LocalTemperatureNotExposed,
-	// which is FeatureMap bit 6). The bridge must not advertise a fabricated
-	// attribute at 0x0030.
-	if _, ok := srv.MatterRead(0x0030); ok {
-		t.Error("MatterRead(0x0030) must return ok=false — no fabricated LTNE attribute")
-	}
-}
-
-func TestClimateThermostatServerReadSystemMode(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0201)
-
-	// Unobserved: (nil, true).
-	v, ok := srv.MatterRead(matterAttrThermSystemMode)
-	if !ok || v != nil {
-		t.Errorf("unobserved SystemMode = (%v, %v), want (nil, true)", v, ok)
-	}
-
-	// Observed AUTO: uint8.
-	r.climate.OnMode(ModeAuto)
-	v, ok = srv.MatterRead(matterAttrThermSystemMode)
-	if !ok || v == nil {
-		t.Errorf("observed SystemMode = (%v, %v), want non-nil", v, ok)
-	}
-}
-
-func TestClimateThermostatServerMatterWriteSetpoint(t *testing.T) {
-	w := &stubWriter{}
-	r := newRig(t, "HmIP-BWTH:1", KindIP, w, custom.ClimateCapabilities{MinTemperature: 5.0, MaxTemperature: 30.0})
-	srv := findCluster(t, r.climate, 0x0201)
-
-	// Write 2200 → 22.00°C via OccupiedHeatSetpoint.
-	err := srv.MatterWrite(context.Background(), matterAttrThermOccupiedHeatSp, int16(2200))
-	if err != nil {
-		t.Fatalf("MatterWrite setpoint: %v", err)
-	}
-}
-
-func TestClimateThermostatServerMatterWriteSetpointBadType(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0201)
-	err := srv.MatterWrite(context.Background(), matterAttrThermOccupiedHeatSp, "not-int16")
-	if err == nil {
-		t.Error("MatterWrite with bad type should return error")
-	}
-}
-
-// TestClimateThermostatServerMatterWriteSystemMode asserts that
-// SystemMode=Auto is rejected on a heating-only Climate: Auto conformance
-// requires the AUTO feature (thermostat-cluster.element.ts:558), and
-// every climate profile registered in init.go reports HEAT only
-// (Capabilities.SupportsCool is false), so FeatureMap never advertises
-// AUTO. The rejection is a ConstraintError, matching matter.js
-// ThermostatServer.ts:#assertSystemModeChanging for an analogous
-// SystemMode/feature mismatch.
-func TestClimateThermostatServerMatterWriteSystemMode(t *testing.T) {
-	w := &stubWriter{}
-	r := newRig(t, "HmIP-BWTH:1", KindIP, w, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0201)
-	err := srv.MatterWrite(context.Background(), matterAttrThermSystemMode, matterSysModeAuto)
-	if err == nil {
-		t.Fatal("MatterWrite SystemMode=Auto on a heating-only device should be rejected")
-	}
-	sc, ok := err.(interface{ MatterStatusCode() im.StatusCode })
-	if !ok {
-		t.Fatalf("error %v does not implement MatterStatusCode()", err)
-	}
-	if sc.MatterStatusCode() != im.StatusConstraintError {
-		t.Errorf("MatterStatusCode() = 0x%02X, want StatusConstraintError (0x87)", sc.MatterStatusCode())
-	}
-}
-
-func TestClimateThermostatServerMatterWriteSystemModeBadType(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0201)
-	err := srv.MatterWrite(context.Background(), matterAttrThermSystemMode, "not-uint8")
-	if err == nil {
-		t.Error("MatterWrite SystemMode with bad type should return error")
-	}
-}
-
-func TestClimateThermostatServerMatterWriteUnknownAttr(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0201)
-	err := srv.MatterWrite(context.Background(), 0xFFF0, nil)
-	if err == nil {
-		t.Error("MatterWrite unknown attr should return error")
-	}
-}
-
-func TestClimateThermostatServerMatterWriteSystemModeUnknownMode(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0201)
-	// Mode 0x7F is not mapped by matterToHmMode.
-	err := srv.MatterWrite(context.Background(), matterAttrThermSystemMode, uint8(0x7F))
-	if err == nil {
-		t.Error("MatterWrite with unknown SystemMode value should return error")
-	}
-}
-
-// ---------------------------------------------------------------------------
 // systemModeFromHmMode / matterToHmMode
 // ---------------------------------------------------------------------------
 
 func TestSystemModeFromHmModeClampsToFeatureMap(t *testing.T) {
 	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := climateThermostatServer{c: r.climate}
+	c := r.climate
 
-	heatOnly := matterThermFeatureHeat
-	heatCool := matterThermFeatureHeat | matterThermFeatureCool
-	withAuto := heatCool | matterThermFeatureAuto
+	heatOnly := thermo.ThermostatFeatureHEAT
+	heatCool := thermo.ThermostatFeatureHEAT | thermo.ThermostatFeatureCOOL
+	withAuto := heatCool | thermo.ThermostatFeatureAUTO
 
 	cases := []struct {
 		name string
@@ -1366,7 +1112,7 @@ func TestSystemModeFromHmModeClampsToFeatureMap(t *testing.T) {
 		{"unknown mode defaults to Heat", Mode("unknown"), heatOnly, matterSysModeHeat},
 	}
 	for _, tc := range cases {
-		if got := srv.systemModeFromHmMode(tc.mode, tc.fm); got != tc.want {
+		if got := c.systemModeFromHmMode(tc.mode, tc.fm); got != tc.want {
 			t.Errorf("%s: systemModeFromHmMode(%q, 0x%02X) = %d, want %d",
 				tc.name, tc.mode, tc.fm, got, tc.want)
 		}
@@ -1374,7 +1120,7 @@ func TestSystemModeFromHmModeClampsToFeatureMap(t *testing.T) {
 
 	// A cooling-direction hybrid clamps ModeAuto to Cool instead of Heat.
 	r.climate.OnHeatingCooling("COOLING")
-	if got := srv.systemModeFromHmMode(ModeAuto, heatCool); got != matterSysModeCool {
+	if got := c.systemModeFromHmMode(ModeAuto, heatCool); got != matterSysModeCool {
 		t.Errorf("systemModeFromHmMode(ModeAuto, HEAT|COOL) in cooling direction = %d, want %d",
 			got, matterSysModeCool)
 	}
@@ -1472,17 +1218,6 @@ func TestClimateThermostatServerMatterInvokeUnknownCmd(t *testing.T) {
 	_, err := srv.MatterInvoke(context.Background(), 0xFF, nil)
 	if err == nil {
 		t.Error("MatterInvoke with unknown cmd should return error")
-	}
-}
-
-func TestClimateThermostatServerMatterInvokeNoSetpoint(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	// No setpoint observation — invoke should fail.
-	srv := findCluster(t, r.climate, 0x0201)
-	fields := map[string]any{"mode": uint8(0), "amount": int8(10)}
-	_, err := srv.MatterInvoke(context.Background(), 0x00, fields)
-	if err == nil {
-		t.Error("SetpointRaiseLower without baseline setpoint should return error")
 	}
 }
 
@@ -1905,7 +1640,7 @@ func TestMatterScheduleEntriesWeekProfile(t *testing.T) {
 func TestClimateThermostatUIServerReadFeatureMap(t *testing.T) {
 	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
 	srv := findCluster(t, r.climate, 0x0204)
-	v, ok := srv.MatterRead(matterAttrFeatureMap)
+	v, ok := srv.MatterRead(cluster.AttrGlobalFeatureMap)
 	if !ok || v == nil {
 		t.Errorf("MatterRead(FeatureMap) on UI cluster = (%v, %v), want non-nil/true", v, ok)
 	}
@@ -2047,12 +1782,12 @@ func TestClimateThermostatServerReadRunningMode(t *testing.T) {
 	srv := findCluster(t, r.climate, 0x0201)
 
 	// Unobserved.
-	if _, ok := srv.MatterRead(matterAttrThermRunningMode); ok {
+	if _, ok := srv.MatterRead(thermostatspec.AttrThermostatRunningMode); ok {
 		t.Error("RunningMode must read as not-present without the AUTO feature")
 	}
 
 	r.climate.OnMode(ModeHeat)
-	if _, ok := srv.MatterRead(matterAttrThermRunningMode); ok {
+	if _, ok := srv.MatterRead(thermostatspec.AttrThermostatRunningMode); ok {
 		t.Error("RunningMode must remain not-present without the AUTO feature even once observed")
 	}
 }
@@ -2064,7 +1799,7 @@ func TestClimateThermostatServerReadRunningMode(t *testing.T) {
 func TestClimateThermostatServerReadLocalTempUnobserved(t *testing.T) {
 	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
 	srv := findCluster(t, r.climate, 0x0201)
-	v, ok := srv.MatterRead(matterAttrThermLocalTemperature)
+	v, ok := srv.MatterRead(thermostatspec.AttrLocalTemperature)
 	if !ok || v != nil {
 		t.Errorf("unobserved LocalTemperature = (%v, %v), want (nil, true)", v, ok)
 	}
@@ -2077,7 +1812,7 @@ func TestClimateThermostatServerReadLocalTempUnobserved(t *testing.T) {
 func TestClimateThermostatServerReadFeatureMap(t *testing.T) {
 	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
 	srv := findCluster(t, r.climate, 0x0201)
-	v, ok := srv.MatterRead(matterAttrFeatureMap)
+	v, ok := srv.MatterRead(cluster.AttrGlobalFeatureMap)
 	if !ok || v == nil {
 		t.Errorf("FeatureMap = (%v, %v), want non-nil/true", v, ok)
 	}

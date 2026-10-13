@@ -10,7 +10,9 @@ import (
 	"testing"
 
 	"github.com/SukramJ/go-fabric/cluster"
+	thermostatspec "github.com/SukramJ/go-fabric/cluster/spec/thermostat"
 	"github.com/SukramJ/go-fabric/cluster/thermo"
+	"github.com/SukramJ/go-fabric/im"
 	matterparity "github.com/SukramJ/go-fabric/parity"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -61,8 +63,8 @@ func TestParityMatterJS_ClimateClusterRevisions(t *testing.T) {
 		name         string
 		codeRevision uint16
 	}{
-		{matterClusterThermostat, "Thermostat", matterThermClusterRevision},
-		{matterClusterThermostatUI, "ThermostatUserInterfaceConfiguration", matterThermUIClusterRevision},
+		{thermo.ThermostatClusterID, "Thermostat", servedClusterRevision(t, thermo.ThermostatClusterID)},
+		{thermo.ClusterIDThermostatUserInterfaceConfiguration, "ThermostatUserInterfaceConfiguration", servedClusterRevision(t, thermo.ClusterIDThermostatUserInterfaceConfiguration)},
 	}
 
 	for _, c := range cases {
@@ -95,9 +97,9 @@ func TestParityMatterJS_ThermostatFeatureMapBits(t *testing.T) {
 		bit     uint32
 		wantBit int
 	}{
-		{"HEAT", matterThermFeatureHeat, 0},
-		{"COOL", matterThermFeatureCool, 1},
-		{"AUTO", matterThermFeatureAuto, 5},
+		{"HEAT", thermo.ThermostatFeatureHEAT, 0},
+		{"COOL", thermo.ThermostatFeatureCOOL, 1},
+		{"AUTO", thermo.ThermostatFeatureAUTO, 5},
 	}
 
 	for _, c := range cases {
@@ -134,9 +136,9 @@ func TestParityMatterJS_ThermostatMandatoryAttributeIDs(t *testing.T) {
 	}
 
 	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	server := climateThermostatServer{c: r.climate}
+	server := findCluster(t, r.climate, thermo.ThermostatClusterID)
 
-	attrList := server.MatterAttributes()
+	attrList := server.(interfaces.MatterClusterAttributeLister).MatterAttributes()
 	attrSet := make(map[uint32]bool, len(attrList))
 
 	for _, id := range attrList {
@@ -215,15 +217,16 @@ func TestParityMatterJS_SystemModeAutoRequiresAutoFeature(t *testing.T) {
 				r.climate.hasMode = true
 				r.climate.mu.Unlock()
 
-				srv := climateThermostatServer{c: r.climate}
-				if fm := srv.featureMap(); fm&matterThermFeatureAuto != 0 {
-					t.Errorf("featureMap() = 0x%08X advertises AUTO without dual setpoints + MinSetpointDeadBand", fm)
+				r.climate.syncMatterMode()
+				srv := findCluster(t, r.climate, thermo.ThermostatClusterID)
+				if fm, _ := srv.MatterRead(cluster.AttrGlobalFeatureMap); fm.(uint32)&thermo.ThermostatFeatureAUTO != 0 {
+					t.Errorf("FeatureMap = 0x%08X advertises AUTO without dual setpoints + MinSetpointDeadBand", fm)
 				}
-				v, ok := srv.MatterRead(matterAttrThermSystemMode)
+				v, ok := srv.MatterRead(thermostatspec.AttrSystemMode)
 				if !ok || v.(uint8) == matterSysModeAuto {
 					t.Errorf("SystemMode = (%v, %v): Auto(1) without the AUTO feature violates SystemModeEnum conformance", v, ok)
 				}
-				if _, ok := srv.MatterRead(matterAttrThermRunningMode); ok {
+				if _, ok := srv.MatterRead(thermostatspec.AttrThermostatRunningMode); ok {
 					t.Error("ThermostatRunningMode served without the AUTO feature (conformance \"TEVT & AUTO, [AUTO]\")")
 				}
 			})
@@ -246,9 +249,10 @@ func TestParityMatterJS_ThermostatUIMandatoryAttributeIDs(t *testing.T) {
 		{0x0001, "KeypadLockout"},
 	}
 
-	server := climateThermostatUIServer{}
+	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
+	server := findCluster(t, r.climate, thermo.ClusterIDThermostatUserInterfaceConfiguration)
 
-	attrList := server.MatterAttributes()
+	attrList := server.(interfaces.MatterClusterAttributeLister).MatterAttributes()
 	attrSet := make(map[uint32]bool, len(attrList))
 
 	for _, id := range attrList {
@@ -289,11 +293,11 @@ func TestParityMatterJS_ThermostatCommandList(t *testing.T) {
 	const jsCmdSetpointRaiseLower uint32 = 0x0
 
 	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	server := climateThermostatServer{c: r.climate}
+	server := findCluster(t, r.climate, thermo.ThermostatClusterID)
 
 	lister, ok := any(server).(interfaces.MatterClusterCommandLister)
 	if !ok {
-		t.Fatal("climateThermostatServer does not implement MatterClusterCommandLister — AcceptedCommandList would be empty")
+		t.Fatal("the Thermostat server does not implement MatterClusterCommandLister — AcceptedCommandList would be empty")
 	}
 	accepted := lister.MatterAcceptedCommands()
 	if len(accepted) != 1 || accepted[0] != jsCmdSetpointRaiseLower {
@@ -302,9 +306,25 @@ func TestParityMatterJS_ThermostatCommandList(t *testing.T) {
 	if got := lister.MatterGeneratedCommands(); len(got) != 0 {
 		t.Errorf("MatterGeneratedCommands() = %v, want empty", got)
 	}
-	// Advertised must equal implemented: an unhandled command reports
-	// itself through errMatterUnknownCommand.
-	if _, err := server.MatterInvoke(context.Background(), jsCmdSetpointRaiseLower, nil); errors.Is(err, errMatterUnknownCommand) {
-		t.Errorf("SetpointRaiseLower is advertised but MatterInvoke rejects it: %v", err)
+	// Advertised must equal implemented: a command the server does not
+	// handle answers UNSUPPORTED_COMMAND; the advertised one, given no
+	// fields, answers the field error instead.
+	_, err := server.MatterInvoke(context.Background(), jsCmdSetpointRaiseLower, nil)
+	var sc im.StatusCodeError
+	if errors.As(err, &sc) && sc.MatterStatusCode() == im.StatusUnsupportedCommand {
+		t.Errorf("SetpointRaiseLower is advertised but MatterInvoke rejects it as unsupported: %v", err)
 	}
+}
+
+// servedClusterRevision reads ClusterRevision from the server a Climate
+// serves for id, so the revision pin covers the served value.
+func servedClusterRevision(t *testing.T, id uint32) uint16 {
+	t.Helper()
+	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
+	v, ok := findCluster(t, r.climate, id).MatterRead(cluster.AttrGlobalClusterRevision)
+	rev, isU16 := v.(uint16)
+	if !ok || !isU16 {
+		t.Fatalf("cluster 0x%04X ClusterRevision = (%v, %v), want a uint16", id, v, ok)
+	}
+	return rev
 }

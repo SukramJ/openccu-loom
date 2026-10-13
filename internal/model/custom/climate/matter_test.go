@@ -7,7 +7,11 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
+	"github.com/SukramJ/go-fabric/cluster"
+	thermostatspec "github.com/SukramJ/go-fabric/cluster/spec/thermostat"
+	"github.com/SukramJ/go-fabric/cluster/thermo"
 	"github.com/SukramJ/go-fabric/im"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -26,6 +30,74 @@ func findCluster(t *testing.T, c *Climate, id uint32) interfaces.MatterClusterSe
 	return nil
 }
 
+// thermostatServer returns the Thermostat server a Climate serves.
+func thermostatServer(t *testing.T, c *Climate) *thermo.ThermostatServer {
+	t.Helper()
+	srv, ok := findCluster(t, c, thermo.ThermostatClusterID).(*thermo.ThermostatServer)
+	if !ok {
+		t.Fatal("the Thermostat server is not go-fabric's *thermo.ThermostatServer")
+	}
+	return srv
+}
+
+// readInt16 / readU8 read an attribute that must be served with a value.
+func readInt16(t *testing.T, srv interfaces.MatterClusterServer, attr uint32) int16 {
+	t.Helper()
+	v, ok := srv.MatterRead(attr)
+	if !ok {
+		t.Fatalf("attribute 0x%04X not served", attr)
+	}
+	n, isI16 := v.(int16)
+	if !isI16 {
+		t.Fatalf("attribute 0x%04X read %T (%v), want int16", attr, v, v)
+	}
+	return n
+}
+
+func readU8(t *testing.T, srv interfaces.MatterClusterServer, attr uint32) uint8 {
+	t.Helper()
+	v, ok := srv.MatterRead(attr)
+	if !ok {
+		t.Fatalf("attribute 0x%04X not served", attr)
+	}
+	n, isU8 := v.(uint8)
+	if !isU8 {
+		t.Fatalf("attribute 0x%04X read %T (%v), want uint8", attr, v, v)
+	}
+	return n
+}
+
+func featureMapOf(t *testing.T, srv interfaces.MatterClusterServer) uint32 {
+	t.Helper()
+	v, ok := srv.MatterRead(cluster.AttrGlobalFeatureMap)
+	if !ok {
+		t.Fatal("FeatureMap not served")
+	}
+	return v.(uint32)
+}
+
+func attributeSet(t *testing.T, srv interfaces.MatterClusterServer) map[uint32]bool {
+	t.Helper()
+	lister, ok := srv.(interfaces.MatterClusterAttributeLister)
+	if !ok {
+		t.Fatal("server does not implement MatterClusterAttributeLister")
+	}
+	out := map[uint32]bool{}
+	for _, id := range lister.MatterAttributes() {
+		out[id] = true
+	}
+	return out
+}
+
+func containsAttr(ids []uint32, want uint32) bool {
+	for _, id := range ids {
+		if id == want {
+			return true
+		}
+	}
+	return false
+}
+
 // TestMatterDeviceTypeIsThermostat locks the Thermostat (0x0301)
 // device-type advertisement.
 func TestMatterDeviceTypeIsThermostat(t *testing.T) {
@@ -35,85 +107,219 @@ func TestMatterDeviceTypeIsThermostat(t *testing.T) {
 	}
 }
 
-// TestThermostatLocalTemperatureEncoding round-trips ACTUAL_TEMPERATURE
-// through the int16 0.01°C encoding.
-func TestThermostatLocalTemperatureEncoding(t *testing.T) {
+// TestThermostatServerIsOneInstanceAcrossReassemblies pins the holder:
+// the assembler re-reads the servers on every reassembly and the bridge
+// keeps the one it already serves.
+func TestThermostatServerIsOneInstanceAcrossReassemblies(t *testing.T) {
 	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	r.actualTemperature.OnEvent(21.5)
-	srv := findCluster(t, r.climate, 0x0201)
-	v, ok := srv.MatterRead(0x0000)
-	if !ok || v.(int16) != 2150 {
-		t.Fatalf("LocalTemperature = (%v, %v), want (2150, true)", v, ok)
+	first, second := thermostatServer(t, r.climate), thermostatServer(t, r.climate)
+	if first != second {
+		t.Fatal("MatterClusterServers built a second Thermostat server")
+	}
+	ui1, ui2 := findCluster(t, r.climate, 0x0204), findCluster(t, r.climate, 0x0204)
+	if ui1 != ui2 {
+		t.Fatal("MatterClusterServers built a second ThermostatUserInterfaceConfiguration server")
 	}
 }
 
-// TestThermostatLocalTemperatureUnobserved ensures stale reads
-// surface (nil, true) — attribute is supported but value is transiently null.
-// (nil, false) would signal UnsupportedAttribute to the HAP mapper and abort
-// the HAP service build with HAPErrorDomain Code=24.
+// TestThermostatLocalTemperatureFollowsTheConfirmedReading pins the
+// inbound temperature path: ACTUAL_TEMPERATURE observed before the server
+// is built is its start value, and a later confirmed reading replaces it
+// through SetLocalTemperature (the int16 0.01 °C encoding).
+func TestThermostatLocalTemperatureFollowsTheConfirmedReading(t *testing.T) {
+	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
+	r.actualTemperature.OnEvent(21.5)
+	srv := thermostatServer(t, r.climate)
+	if got := readInt16(t, srv, thermostatspec.AttrLocalTemperature); got != 2150 {
+		t.Fatalf("LocalTemperature at build = %d, want 2150", got)
+	}
+	r.actualTemperature.OnEvent(22.25)
+	if got := readInt16(t, srv, thermostatspec.AttrLocalTemperature); got != 2225 {
+		t.Fatalf("LocalTemperature after the confirmed reading = %d, want 2225", got)
+	}
+}
+
+// TestThermostatLocalTemperatureUnobserved ensures an unobserved reading
+// surfaces (nil, true) — attribute supported, value transiently null.
+// (nil, false) would signal UnsupportedAttribute to the HAP mapper and
+// abort the HAP service build with HAPErrorDomain Code=24.
 func TestThermostatLocalTemperatureUnobserved(t *testing.T) {
 	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0201)
-	v, ok := srv.MatterRead(0x0000)
+	srv := thermostatServer(t, r.climate)
+	v, ok := srv.MatterRead(thermostatspec.AttrLocalTemperature)
 	if !ok || v != nil {
 		t.Fatalf("LocalTemperature on unobserved = (%v, %v), want (nil, true)", v, ok)
 	}
 }
 
-// TestThermostatHeatingSetpointReadAndWrite covers the round-trip on
-// OccupiedHeatingSetpoint: read returns the current setpoint *100,
-// write decodes back through SetTemperature.
-func TestThermostatHeatingSetpointReadAndWrite(t *testing.T) {
+// TestThermostatHeatingSetpointWriteReachesTheCCU covers the outbound
+// setpoint path: a controller's OccupiedHeatingSetpoint write (the wire
+// delivers the int16 as int64) reaches the CCU through the Sink as
+// SetTemperature, and the attribute moves once the Sink consented.
+func TestThermostatHeatingSetpointWriteReachesTheCCU(t *testing.T) {
 	w := &stubWriter{}
 	r := newRig(t, "HmIP-BWTH:1", KindIP, w, custom.ClimateCapabilities{
 		MinTemperature: 4.5,
 		MaxTemperature: 30.5,
 	})
 	r.setpoint.OnEvent(20.0)
-	srv := findCluster(t, r.climate, 0x0201)
-	v, ok := srv.MatterRead(0x0012)
-	if !ok || v.(int16) != 2000 {
-		t.Fatalf("OccupiedHeatingSetpoint = (%v, %v), want (2000, true)", v, ok)
+	srv := thermostatServer(t, r.climate)
+	if got := readInt16(t, srv, thermostatspec.AttrOccupiedHeatingSetpoint); got != 2000 {
+		t.Fatalf("OccupiedHeatingSetpoint = %d, want 2000", got)
 	}
-
-	if err := srv.MatterWrite(context.Background(), 0x0012, int16(2150)); err != nil {
-		t.Fatalf("MatterWrite(setpoint=21.5) err: %v", err)
+	if err := srv.MatterWrite(context.Background(), thermostatspec.AttrOccupiedHeatingSetpoint, int64(2150)); err != nil {
+		t.Fatalf("MatterWrite(setpoint=21.5): %v", err)
 	}
 	if got := w.last(); got.value.(float64) != 21.5 {
-		t.Fatalf("setpoint write reached wire as %v, want 21.5", got.value)
+		t.Fatalf("setpoint write reached the wire as %v, want 21.5", got.value)
+	}
+	if got := readInt16(t, srv, thermostatspec.AttrOccupiedHeatingSetpoint); got != 2150 {
+		t.Fatalf("OccupiedHeatingSetpoint after the write = %d, want 2150", got)
 	}
 }
 
+// TestThermostatConfirmedSetpointReachesTheServer pins the inbound
+// setpoint path: a SET_POINT_TEMPERATURE the CCU confirms (wall dial, CCU
+// program) lands on the server through SetOccupiedHeatingSetpoint —
+// readable at once and reported through the change notifier — without a
+// write.
+func TestThermostatConfirmedSetpointReachesTheServer(t *testing.T) {
+	w := &stubWriter{}
+	r := newRig(t, "HmIP-BWTH:1", KindIP, w, custom.ClimateCapabilities{
+		MinTemperature: 4.5,
+		MaxTemperature: 30.5,
+	})
+	srv := thermostatServer(t, r.climate)
+	reported := make(chan []uint32, 4)
+	unsub := srv.OnMatterAttributesChanged(func(ids []uint32) { reported <- ids })
+	defer unsub()
+
+	r.setpoint.OnEvent(19.5)
+
+	if got := readInt16(t, srv, thermostatspec.AttrOccupiedHeatingSetpoint); got != 1950 {
+		t.Fatalf("OccupiedHeatingSetpoint after the confirmed 19.5 °C = %d, want 1950", got)
+	}
+	select {
+	case ids := <-reported:
+		if !containsAttr(ids, thermostatspec.AttrOccupiedHeatingSetpoint) {
+			t.Fatalf("reported %v, want OccupiedHeatingSetpoint", ids)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the confirmed setpoint was not reported through the change notifier")
+	}
+	if len(w.calls) != 0 {
+		t.Fatalf("a confirmed setpoint must not echo into a write; writes: %d", len(w.calls))
+	}
+}
+
+// TestThermostatOffSentinelReportsSystemModeOff: a setpoint at or below
+// the OFF temperature means the thermostat is off ([Climate.Mode]), and
+// the server's SystemMode follows the setpoint hook.
+func TestThermostatOffSentinelReportsSystemModeOff(t *testing.T) {
+	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{
+		MinTemperature: 4.5,
+		MaxTemperature: 30.5,
+	})
+	r.climate.OnMode(ModeHeat)
+	r.setpoint.OnEvent(20.0)
+	srv := thermostatServer(t, r.climate)
+	if got := readU8(t, srv, thermostatspec.AttrSystemMode); got != matterSysModeHeat {
+		t.Fatalf("SystemMode at 20 °C = %d, want 4 (Heat)", got)
+	}
+	r.setpoint.OnEvent(offTemperature)
+	if got := readU8(t, srv, thermostatspec.AttrSystemMode); got != matterSysModeOff {
+		t.Fatalf("SystemMode at the OFF temperature = %d, want 0 (Off)", got)
+	}
+}
+
+// TestThermostatModeRecordersReachTheServer pins the mode hook: a mode
+// the device took on itself reaches the server through SetSystemMode
+// from every recorder the wire feeds — SET_POINT_MODE (IP), CONTROL_MODE
+// (RF), the generic OnMode and HEATING_COOLING — and is reported through
+// the change notifier.
+func TestThermostatModeRecordersReachTheServer(t *testing.T) {
+	t.Run("set-point-mode MANU on an IP thermostat", func(t *testing.T) {
+		r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
+		r.setpoint.OnEvent(20.0)
+		srv := thermostatServer(t, r.climate)
+		reported := make(chan []uint32, 4)
+		unsub := srv.OnMatterAttributesChanged(func(ids []uint32) { reported <- ids })
+		defer unsub()
+		r.climate.OnSetPointMode(1) // MANU → ModeHeat
+		if got := readU8(t, srv, thermostatspec.AttrSystemMode); got != matterSysModeHeat {
+			t.Fatalf("SystemMode after MANU = %d, want 4 (Heat)", got)
+		}
+		// The server starts in Heat, so the first mode report is the one
+		// the OFF transition below produces; the setpoint itself is
+		// reported first.
+		r.setpoint.OnEvent(offTemperature)
+		deadline := time.After(2 * time.Second)
+		for {
+			select {
+			case ids := <-reported:
+				if containsAttr(ids, thermostatspec.AttrSystemMode) {
+					return
+				}
+			case <-deadline:
+				t.Fatal("the mode change was not reported through the change notifier")
+			}
+		}
+	})
+	t.Run("control-mode on an RF thermostat", func(t *testing.T) {
+		r := newRig(t, "HM-CC-RT-DN:4", KindRF, &stubWriter{}, custom.ClimateCapabilities{})
+		r.setpoint.OnEvent(20.0)
+		srv := thermostatServer(t, r.climate)
+		r.climate.OnControlMode("MANU-MODE")
+		if got := readU8(t, srv, thermostatspec.AttrSystemMode); got != matterSysModeHeat {
+			t.Fatalf("SystemMode after MANU-MODE = %d, want 4 (Heat)", got)
+		}
+	})
+	t.Run("heating-cooling direction on a hybrid thermostat", func(t *testing.T) {
+		r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{SupportsCool: true})
+		r.setpoint.OnEvent(20.0)
+		r.climate.OnMode(ModeAuto)
+		srv := thermostatServer(t, r.climate)
+		if got := readU8(t, srv, thermostatspec.AttrSystemMode); got != matterSysModeHeat {
+			t.Fatalf("SystemMode in AUTO heating = %d, want 4 (Heat)", got)
+		}
+		r.climate.OnHeatingCooling("COOLING")
+		if got := readU8(t, srv, thermostatspec.AttrSystemMode); got != matterSysModeCool {
+			t.Fatalf("SystemMode in AUTO cooling = %d, want 3 (Cool)", got)
+		}
+	})
+}
+
 // TestThermostatMinMaxHeatSetpointFromCapabilities reads the
-// configurator-supplied limits. Note: Climate.MinTemp() has the
-// off-temperature special case (4.5 °C → 5.0 °C bump) that the
-// projection inherits — using 5.5 °C here keeps the test focused
-// on the encoding rather than the off-shift behaviour.
+// configurator-supplied limits as the absolute and user limits of the
+// server. Note: Climate.MinTemp() has the off-temperature special case
+// (4.5 °C → 5.0 °C bump) that the projection inherits — using 5.5 °C
+// here keeps the test focused on the encoding rather than the
+// off-shift behaviour.
 func TestThermostatMinMaxHeatSetpointFromCapabilities(t *testing.T) {
 	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{
 		MinTemperature: 5.5,
 		MaxTemperature: 30.5,
 	})
-	srv := findCluster(t, r.climate, 0x0201)
-	mn, _ := srv.MatterRead(0x0015) // MinHeatSetpointLimit
-	if mn.(int16) != 550 {
-		t.Errorf("MinHeatSetpointLimit = %d, want 550", mn.(int16))
-	}
-	mx, _ := srv.MatterRead(0x0016) // MaxHeatSetpointLimit
-	if mx.(int16) != 3050 {
-		t.Errorf("MaxHeatSetpointLimit = %d, want 3050", mx.(int16))
+	srv := thermostatServer(t, r.climate)
+	for attr, want := range map[uint32]int16{
+		thermostatspec.AttrMinHeatSetpointLimit:    550,
+		thermostatspec.AttrMaxHeatSetpointLimit:    3050,
+		thermostatspec.AttrAbsMinHeatSetpointLimit: 550,
+		thermostatspec.AttrAbsMaxHeatSetpointLimit: 3050,
+	} {
+		if got := readInt16(t, srv, attr); got != want {
+			t.Errorf("attribute 0x%04X = %d, want %d", attr, got, want)
+		}
 	}
 }
 
 // TestThermostatControlSequenceHeatingOnly locks the heating-only
-// projection — the worked example treats every HM Climate as a heating
-// device. M6 widens this for cooling-capable profiles.
+// projection's ControlSequenceOfOperation.
 func TestThermostatControlSequenceHeatingOnly(t *testing.T) {
 	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0201)
-	v, _ := srv.MatterRead(0x001B)
-	if v.(uint8) != matterCtrlSeqHeatingOnly {
-		t.Fatalf("ControlSequenceOfOperation = %d, want 2 (HeatingOnly)", v.(uint8))
+	srv := thermostatServer(t, r.climate)
+	if got := readU8(t, srv, thermostatspec.AttrControlSequenceOfOperation); got != uint8(thermostatspec.ControlSequenceOfOperationHeatingOnly) {
+		t.Fatalf("ControlSequenceOfOperation = %d, want 2 (HeatingOnly)", got)
 	}
 }
 
@@ -122,260 +328,189 @@ func TestThermostatControlSequenceHeatingOnly(t *testing.T) {
 // COOL (spec conformance "AUTO, O.a+"), so it must not be set here.
 func TestThermostatFeatureMapHeatOnly(t *testing.T) {
 	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0201)
-	v, _ := srv.MatterRead(0xFFFC)
-	got := v.(uint32)
-	if got&matterThermFeatureHeat == 0 {
-		t.Errorf("FeatureMap = 0x%08X, missing HEAT bit", got)
-	}
-	if got&matterThermFeatureCool != 0 {
-		t.Errorf("FeatureMap = 0x%08X, must not advertise COOL on heating-only", got)
-	}
-	if got&matterThermFeatureAuto != 0 {
-		t.Errorf("FeatureMap = 0x%08X, must not advertise AUTO without COOL", got)
+	srv := thermostatServer(t, r.climate)
+	if got := featureMapOf(t, srv); got != thermo.ThermostatFeatureHEAT {
+		t.Fatalf("FeatureMap = 0x%08X, want HEAT only", got)
 	}
 }
 
 // TestThermostatHeatOnlyExcludesCoolAndAutoAttributes locks the
-// conformance-gated MatterAttributes() surface for a heating-only
-// device: OccupiedCoolingSetpoint (0x11), MinCoolSetpointLimit (0x17),
+// conformance-gated attribute surface for a heating-only device:
+// OccupiedCoolingSetpoint (0x11), MinCoolSetpointLimit (0x17),
 // MaxCoolSetpointLimit (0x18) require the COOL feature
 // (thermostat-cluster.element.ts:66-68, 92-98) and ThermostatRunningMode
 // (0x1e) requires AUTO (thermostat-cluster.element.ts:117-120) — none of
-// which a heat-only FeatureMap advertises.
+// which a heat-only FeatureMap advertises; a read reports not-present.
 func TestThermostatHeatOnlyExcludesCoolAndAutoAttributes(t *testing.T) {
 	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0201)
-	lister, ok := srv.(interfaces.MatterClusterAttributeLister)
-	if !ok {
-		t.Fatal("Thermostat server does not implement MatterClusterAttributeLister")
-	}
-	attrs := lister.MatterAttributes()
-	forbidden := map[uint32]string{
-		matterAttrThermOccupiedCoolSp: "OccupiedCoolingSetpoint",
-		matterAttrThermMinCoolSp:      "MinCoolSetpointLimit",
-		matterAttrThermMaxCoolSp:      "MaxCoolSetpointLimit",
-		matterAttrThermRunningMode:    "ThermostatRunningMode",
-	}
-	for _, id := range attrs {
-		if name, bad := forbidden[id]; bad {
+	r.setpoint.OnEvent(20.0)
+	srv := thermostatServer(t, r.climate)
+	attrs := attributeSet(t, srv)
+	for id, name := range map[uint32]string{
+		thermostatspec.AttrOccupiedCoolingSetpoint: "OccupiedCoolingSetpoint",
+		thermostatspec.AttrMinCoolSetpointLimit:    "MinCoolSetpointLimit",
+		thermostatspec.AttrMaxCoolSetpointLimit:    "MaxCoolSetpointLimit",
+		thermostatspec.AttrThermostatRunningMode:   "ThermostatRunningMode",
+	} {
+		if attrs[id] {
 			t.Errorf("MatterAttributes() lists %s (0x%04X) on a heating-only device", name, id)
 		}
-	}
-}
-
-// TestThermostatHeatOnlyCoolSetpointNotPresent asserts that reading
-// OccupiedCoolingSetpoint (0x11) on a heating-only device reports
-// not-present (ok=false) rather than leaking the shared HM setpoint —
-// the attribute does not exist on the cluster without the COOL feature.
-func TestThermostatHeatOnlyCoolSetpointNotPresent(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	r.setpoint.OnEvent(20.0)
-	srv := findCluster(t, r.climate, 0x0201)
-	if _, ok := srv.MatterRead(matterAttrThermOccupiedCoolSp); ok {
-		t.Error("MatterRead(OccupiedCoolingSetpoint) on a heating-only device should report not-present")
-	}
-	if _, ok := srv.MatterRead(matterAttrThermMinCoolSp); ok {
-		t.Error("MatterRead(MinCoolSetpointLimit) on a heating-only device should report not-present")
-	}
-	if _, ok := srv.MatterRead(matterAttrThermMaxCoolSp); ok {
-		t.Error("MatterRead(MaxCoolSetpointLimit) on a heating-only device should report not-present")
+		if _, ok := srv.MatterRead(id); ok {
+			t.Errorf("MatterRead(%s) on a heating-only device should report not-present", name)
+		}
 	}
 }
 
 // TestThermostatSystemModeWriteCoolRejectedHeatOnly asserts that writing
 // SystemMode=Cool on a heating-only device is rejected with a
-// ConstraintError rather than silently retargeting the single HM
-// heating setpoint. Mirrors matter.js
-// ThermostatServer.ts:#assertSystemModeChanging (lines 615-632).
+// ConstraintError by the server's definition rather than silently
+// retargeting the single HM heating setpoint. Mirrors matter.js
+// ThermostatServer.ts:#assertSystemModeChanging.
 func TestThermostatSystemModeWriteCoolRejectedHeatOnly(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0201)
-	err := srv.MatterWrite(context.Background(), matterAttrThermSystemMode, matterSysModeCool)
-	if err == nil {
-		t.Fatal("MatterWrite SystemMode=Cool on a heating-only device should be rejected")
+	w := &stubWriter{}
+	r := newRig(t, "HmIP-BWTH:1", KindIP, w, custom.ClimateCapabilities{})
+	srv := thermostatServer(t, r.climate)
+	err := srv.MatterWrite(context.Background(), thermostatspec.AttrSystemMode, uint64(matterSysModeCool))
+	var sc im.StatusCodeError
+	if !errors.As(err, &sc) || sc.MatterStatusCode() != im.StatusConstraintError {
+		t.Fatalf("SystemMode=Cool on a heating-only device = %v, want ConstraintError", err)
 	}
-	sc, ok := err.(interface{ MatterStatusCode() im.StatusCode })
-	if !ok {
-		t.Fatalf("error %v does not implement MatterStatusCode()", err)
-	}
-	if sc.MatterStatusCode() != im.StatusConstraintError {
-		t.Errorf("MatterStatusCode() = 0x%02X, want StatusConstraintError (0x87)", sc.MatterStatusCode())
+	if len(w.calls) != 0 {
+		t.Fatal("a refused SystemMode reached the wire")
 	}
 }
 
 // TestThermostatCoolCapableDeviceAdvertisesCoolWithoutAuto proves the
-// COOL gating keys off the FeatureMap while AUTO stays off even on a
-// cooling-capable profile: a Climate whose Capabilities advertise
-// SupportsCool lists and serves the Cool-setpoint attributes, but the
-// FeatureMap must not carry AUTO (HM climates are single-setpoint and
-// the projection implements no MinSetpointDeadBand, which AUTO
-// mandates), so ThermostatRunningMode stays absent and a
-// SystemMode=Auto write is rejected with ConstraintError.
+// COOL gating keys off the capability while AUTO stays off even on a
+// cooling-capable profile: the Cool-setpoint attributes are listed and
+// served (aliasing the one HM setpoint), the FeatureMap carries no AUTO,
+// ThermostatRunningMode stays absent and a SystemMode=Auto write is
+// rejected with ConstraintError.
 func TestThermostatCoolCapableDeviceAdvertisesCoolWithoutAuto(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{SupportsCool: true})
-	srv := findCluster(t, r.climate, 0x0201)
+	w := &stubWriter{}
+	r := newRig(t, "HmIP-BWTH:1", KindIP, w, custom.ClimateCapabilities{
+		SupportsCool:   true,
+		MinTemperature: 4.5,
+		MaxTemperature: 30.5,
+	})
+	r.setpoint.OnEvent(21.0)
+	srv := thermostatServer(t, r.climate)
 
-	fm, ok := srv.MatterRead(matterAttrFeatureMap)
-	if !ok || fm.(uint32)&(matterThermFeatureHeat|matterThermFeatureCool) !=
-		matterThermFeatureHeat|matterThermFeatureCool {
-		t.Fatalf("FeatureMap = (%v, %v), want HEAT|COOL", fm, ok)
+	if fm := featureMapOf(t, srv); fm != thermo.ThermostatFeatureHEAT|thermo.ThermostatFeatureCOOL {
+		t.Fatalf("FeatureMap = 0x%08X, want HEAT|COOL without AUTO", fm)
 	}
-	if fm.(uint32)&matterThermFeatureAuto != 0 {
-		t.Fatalf("FeatureMap = 0x%08X advertises AUTO on a single-setpoint device without MinSetpointDeadBand", fm)
-	}
-
-	lister, ok := srv.(interfaces.MatterClusterAttributeLister)
-	if !ok {
-		t.Fatal("Thermostat server does not implement MatterClusterAttributeLister")
-	}
-	attrs := lister.MatterAttributes()
-	want := map[uint32]string{
-		matterAttrThermOccupiedCoolSp: "OccupiedCoolingSetpoint",
-		matterAttrThermMinCoolSp:      "MinCoolSetpointLimit",
-		matterAttrThermMaxCoolSp:      "MaxCoolSetpointLimit",
-	}
-	got := make(map[uint32]bool, len(attrs))
-	for _, id := range attrs {
-		got[id] = true
-	}
-	for id, name := range want {
-		if !got[id] {
+	attrs := attributeSet(t, srv)
+	for id, name := range map[uint32]string{
+		thermostatspec.AttrOccupiedCoolingSetpoint: "OccupiedCoolingSetpoint",
+		thermostatspec.AttrMinCoolSetpointLimit:    "MinCoolSetpointLimit",
+		thermostatspec.AttrMaxCoolSetpointLimit:    "MaxCoolSetpointLimit",
+	} {
+		if !attrs[id] {
 			t.Errorf("MatterAttributes() missing %s (0x%04X) on a heat+cool device", name, id)
 		}
 		if _, ok := srv.MatterRead(id); !ok {
-			t.Errorf("MatterRead(%s / 0x%04X) reports not-present on a heat+cool device", name, id)
+			t.Errorf("MatterRead(%s) reports not-present on a heat+cool device", name)
 		}
 	}
-	if got[matterAttrThermRunningMode] {
+	if got := readInt16(t, srv, thermostatspec.AttrOccupiedCoolingSetpoint); got != 2100 {
+		t.Fatalf("OccupiedCoolingSetpoint = %d, want the one HM setpoint 2100", got)
+	}
+	if attrs[thermostatspec.AttrThermostatRunningMode] {
 		t.Error("MatterAttributes() lists ThermostatRunningMode (0x001E) without the AUTO feature")
 	}
-	if _, ok := srv.MatterRead(matterAttrThermRunningMode); ok {
-		t.Error("MatterRead(ThermostatRunningMode) should report not-present without the AUTO feature")
-	}
 
-	err := srv.MatterWrite(context.Background(), matterAttrThermSystemMode, matterSysModeAuto)
+	err := srv.MatterWrite(context.Background(), thermostatspec.AttrSystemMode, uint64(matterSysModeAuto))
 	var sc im.StatusCodeError
 	if !errors.As(err, &sc) || sc.MatterStatusCode() != im.StatusConstraintError {
 		t.Errorf("SystemMode=Auto write without the AUTO feature = %v, want ConstraintError", err)
 	}
+
+	// A cooling setpoint write is the same single HM setpoint.
+	if err := srv.MatterWrite(context.Background(), thermostatspec.AttrOccupiedCoolingSetpoint, int64(2300)); err != nil {
+		t.Fatalf("OccupiedCoolingSetpoint write: %v", err)
+	}
+	if got := w.last(); got.value.(float64) != 23.0 {
+		t.Fatalf("cooling setpoint write reached the wire as %v, want 23.0", got.value)
+	}
 }
 
 // TestThermostatSystemModeReadClampsHmAutoToFeatureMap asserts the
-// SystemMode read never surfaces Auto(1) when the FeatureMap does not
-// advertise the AUTO feature — Auto has conformance "AUTO" per matter.js
-// packages/model/src/standard/elements/thermostat-cluster.element.ts:558.
-// HM's factory-default AUTO (week-program) mode is a single-setpoint
-// schedule and projects onto Heat, or Cool when a hybrid device is
-// currently in its COOLING direction. The clamp keeps reads and the
-// write gate consistent: a controller echoing the read value back on
-// state sync must not receive ConstraintError.
+// reported SystemMode never surfaces Auto(1) when the FeatureMap does
+// not advertise the AUTO feature — Auto has conformance "AUTO" per
+// matter.js thermostat-cluster.element.ts:558. HM's factory-default AUTO
+// (week-program) mode is a single-setpoint schedule and projects onto
+// Heat, or Cool when a hybrid device is currently in its COOLING
+// direction. The clamp keeps reports and the write gate consistent: a
+// controller echoing the read value back on state sync must not receive
+// ConstraintError.
 func TestThermostatSystemModeReadClampsHmAutoToFeatureMap(t *testing.T) {
-	setAutoMode := func(c *Climate) {
-		c.mu.Lock()
-		c.mode = ModeAuto
-		c.hasMode = true
-		c.mu.Unlock()
-	}
-
 	t.Run("heat-only device surfaces Heat", func(t *testing.T) {
-		w := &stubWriter{}
-		r := newRig(t, "HmIP-BWTH:1", KindIP, w, custom.ClimateCapabilities{})
-		setAutoMode(r.climate)
-		srv := findCluster(t, r.climate, 0x0201)
-		v, ok := srv.MatterRead(matterAttrThermSystemMode)
-		if !ok || v.(uint8) != matterSysModeHeat {
-			t.Fatalf("SystemMode = (%v, %v), want (4 Heat, true)", v, ok)
+		r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
+		r.setpoint.OnEvent(20.0)
+		r.climate.OnMode(ModeAuto)
+		srv := thermostatServer(t, r.climate)
+		v := readU8(t, srv, thermostatspec.AttrSystemMode)
+		if v != matterSysModeHeat {
+			t.Fatalf("SystemMode = %d, want 4 (Heat)", v)
 		}
-		// The read value must survive the write gate when echoed back.
-		if err := srv.MatterWrite(context.Background(), matterAttrThermSystemMode, v); err != nil {
+		if err := srv.MatterWrite(context.Background(), thermostatspec.AttrSystemMode, uint64(v)); err != nil {
 			t.Fatalf("echoing the read SystemMode back must not error, got: %v", err)
 		}
 	})
-
 	t.Run("cool-capable device in cooling direction surfaces Cool", func(t *testing.T) {
 		r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{SupportsCool: true})
-		setAutoMode(r.climate)
+		r.setpoint.OnEvent(20.0)
+		r.climate.OnMode(ModeAuto)
 		r.climate.OnHeatingCooling("COOLING")
-		srv := findCluster(t, r.climate, 0x0201)
-		v, ok := srv.MatterRead(matterAttrThermSystemMode)
-		if !ok || v.(uint8) != matterSysModeCool {
-			t.Fatalf("SystemMode = (%v, %v), want (3 Cool, true)", v, ok)
-		}
-	})
-
-	t.Run("cool-capable device in heating direction surfaces Heat", func(t *testing.T) {
-		r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{SupportsCool: true})
-		setAutoMode(r.climate)
-		srv := findCluster(t, r.climate, 0x0201)
-		v, ok := srv.MatterRead(matterAttrThermSystemMode)
-		if !ok || v.(uint8) != matterSysModeHeat {
-			t.Fatalf("SystemMode = (%v, %v), want (4 Heat, true)", v, ok)
+		srv := thermostatServer(t, r.climate)
+		if v := readU8(t, srv, thermostatspec.AttrSystemMode); v != matterSysModeCool {
+			t.Fatalf("SystemMode = %d, want 3 (Cool)", v)
 		}
 	})
 }
 
-// TestThermostatRunningModeValueNeverAuto pins the value space of the
-// RunningMode projection to ThermostatRunningModeEnum, which has no
-// Auto member — Off(0)/Cool(3)/Heat(4) only, matter.js
-// packages/model/src/standard/elements/thermostat-cluster.element.ts:568-573.
-// HM's AUTO mode maps onto the active HEATING_COOLING direction.
-func TestThermostatRunningModeValueNeverAuto(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{SupportsCool: true})
-	srv := climateThermostatServer{c: r.climate}
-
-	if got := srv.runningModeFromHmMode(ModeAuto); got != matterRunningModeHeat {
-		t.Errorf("runningModeFromHmMode(ModeAuto) heating direction = %d, want 4 (Heat)", got)
-	}
-	r.climate.OnHeatingCooling("COOLING")
-	if got := srv.runningModeFromHmMode(ModeAuto); got != matterRunningModeCool {
-		t.Errorf("runningModeFromHmMode(ModeAuto) cooling direction = %d, want 3 (Cool)", got)
-	}
-	for _, c := range []struct {
-		mode Mode
-		want uint8
-	}{
-		{ModeOff, matterRunningModeOff},
-		{ModeHeat, matterRunningModeHeat},
-		{ModeCool, matterRunningModeCool},
-	} {
-		if got := srv.runningModeFromHmMode(c.mode); got != c.want {
-			t.Errorf("runningModeFromHmMode(%s) = %d, want %d", c.mode, got, c.want)
-		}
-	}
-}
-
-// TestThermostatSystemModeWriteRoundTrip writes Heat (4) and asserts
-// Climate.SetMode is invoked with ModeHeat.
+// TestThermostatSystemModeWriteRoundTrip writes Heat (4) on a thermostat
+// reporting Off and asserts Climate.SetMode reached the wire through the
+// Sink.
 func TestThermostatSystemModeWriteRoundTrip(t *testing.T) {
 	w := &stubWriter{}
-	r := newRig(t, "HmIP-BWTH:1", KindIP, w, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0201)
-	if err := srv.MatterWrite(context.Background(), 0x001C, matterSysModeHeat); err != nil {
-		t.Fatalf("SystemMode write err: %v", err)
+	r := newRig(t, "HmIP-BWTH:1", KindIP, w, custom.ClimateCapabilities{
+		MinTemperature: 4.5,
+		MaxTemperature: 30.5,
+	})
+	r.setpoint.OnEvent(offTemperature)
+	srv := thermostatServer(t, r.climate)
+	if got := readU8(t, srv, thermostatspec.AttrSystemMode); got != matterSysModeOff {
+		t.Fatalf("SystemMode before the write = %d, want 0 (Off)", got)
 	}
-	// SetMode on KindIP writes CONTROL_MODE=1 (MANUAL) for ModeHeat.
-	// We assert the chain reached the writer at all rather than the
-	// HM-specific parameter shape — that's what the existing climate
-	// tests cover.
+	if err := srv.MatterWrite(context.Background(), thermostatspec.AttrSystemMode, uint64(matterSysModeHeat)); err != nil {
+		t.Fatalf("SystemMode write: %v", err)
+	}
 	if len(w.calls) == 0 {
 		t.Fatal("SystemMode=Heat write did not reach the wire")
 	}
 }
 
-// TestThermostatSystemModeUnsupportedRejected rejects e.g. SystemMode=7
-// (FanOnly) which has no HM equivalent.
+// TestThermostatSystemModeUnsupportedRejected: SystemMode=7 (FanOnly) is
+// conformant for the definition but has no HM mode; the Sink refuses it
+// and the server answers FAILURE without a write.
 func TestThermostatSystemModeUnsupportedRejected(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0201)
-	err := srv.MatterWrite(context.Background(), 0x001C, uint8(7))
-	if !errors.Is(err, errMatterUnsupportedMode) {
-		t.Fatalf("err = %v, want errMatterUnsupportedMode", err)
+	w := &stubWriter{}
+	r := newRig(t, "HmIP-BWTH:1", KindIP, w, custom.ClimateCapabilities{})
+	srv := thermostatServer(t, r.climate)
+	err := srv.MatterWrite(context.Background(), thermostatspec.AttrSystemMode, uint64(thermostatspec.SystemModeFanOnly))
+	var sc im.StatusCodeError
+	if !errors.As(err, &sc) || sc.MatterStatusCode() != im.StatusFailure {
+		t.Fatalf("SystemMode=FanOnly = %v, want FAILURE from the Sink's refusal", err)
+	}
+	if len(w.calls) != 0 {
+		t.Fatal("a refused SystemMode reached the wire")
 	}
 }
 
-// TestThermostatSetpointRaiseLowerCommand exercises the delta-style
-// command shape: amount is in 0.1°C; positive raises.
+// TestThermostatSetpointRaiseLowerCommand exercises the delta command
+// through the server: amount is in 0.1 °C; +15 on 20.0 °C reaches the CCU
+// as 21.5.
 func TestThermostatSetpointRaiseLowerCommand(t *testing.T) {
 	w := &stubWriter{}
 	r := newRig(t, "HmIP-BWTH:1", KindIP, w, custom.ClimateCapabilities{
@@ -383,95 +518,73 @@ func TestThermostatSetpointRaiseLowerCommand(t *testing.T) {
 		MaxTemperature: 30.5,
 	})
 	r.setpoint.OnEvent(20.0)
-	srv := findCluster(t, r.climate, 0x0201)
-	fields := map[string]any{"mode": uint8(0), "amount": int8(15)} // +1.5 °C
-	_, err := srv.MatterInvoke(context.Background(), 0x00, fields)
-	if err != nil {
-		t.Fatalf("SetpointRaiseLower err: %v", err)
+	srv := thermostatServer(t, r.climate)
+	req := thermostatspec.SetpointRaiseLowerRequest{Mode: thermostatspec.SetpointRaiseLowerModeHeat, Amount: 15}
+	if _, err := srv.MatterInvoke(context.Background(), 0x00, req); err != nil {
+		t.Fatalf("SetpointRaiseLower: %v", err)
 	}
 	if got := w.last(); got.value.(float64) != 21.5 {
-		t.Fatalf("raise reached wire as %v, want 21.5", got.value)
+		t.Fatalf("raise reached the wire as %v, want 21.5", got.value)
+	}
+	if got := readInt16(t, srv, thermostatspec.AttrOccupiedHeatingSetpoint); got != 2150 {
+		t.Fatalf("OccupiedHeatingSetpoint after the command = %d, want 2150", got)
 	}
 }
 
-// TestThermostatSetpointRaiseLowerWithoutBaselineFails refuses the
-// command when the setpoint has not been observed — the bridge will
-// translate the resulting error to FAILURE.
-func TestThermostatSetpointRaiseLowerWithoutBaselineFails(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{
-		MinTemperature: 4.5,
-		MaxTemperature: 30.5,
-	})
-	srv := findCluster(t, r.climate, 0x0201)
-	fields := map[string]any{"mode": uint8(0), "amount": int8(15)}
-	_, err := srv.MatterInvoke(context.Background(), 0x00, fields)
-	if err == nil {
-		t.Fatalf("SetpointRaiseLower without baseline should fail")
-	}
-}
-
-// TestThermostatUITempDisplayModeIsCelsius locks the static-Celsius
-// projection.
+// TestThermostatUITempDisplayModeIsCelsius locks the display-mode start
+// value of the ThermostatUserInterfaceConfiguration server.
 func TestThermostatUITempDisplayModeIsCelsius(t *testing.T) {
 	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0204)
-	v, ok := srv.MatterRead(0x0000)
-	if !ok || v.(uint8) != matterTempDisplayCelsius {
-		t.Fatalf("TempDisplayMode = (%v, %v), want (0=Celsius, true)", v, ok)
+	srv := findCluster(t, r.climate, thermo.ClusterIDThermostatUserInterfaceConfiguration)
+	if got := readU8(t, srv, 0x0000); got != uint8(thermo.TemperatureDisplayCelsius) {
+		t.Fatalf("TemperatureDisplayMode = %d, want 0 (Celsius)", got)
+	}
+	if got := readU8(t, srv, 0x0001); got != 0 {
+		t.Fatalf("KeypadLockout = %d, want 0 (NoLockout)", got)
 	}
 }
 
 // TestSetpointWriteWrongTypeRejected — defence-in-depth against bridge
-// regressions.
+// regressions: the definition refuses a value that is not a temperature.
 func TestSetpointWriteWrongTypeRejected(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{
+	w := &stubWriter{}
+	r := newRig(t, "HmIP-BWTH:1", KindIP, w, custom.ClimateCapabilities{
 		MinTemperature: 4.5,
 		MaxTemperature: 30.5,
 	})
-	srv := findCluster(t, r.climate, 0x0201)
-	err := srv.MatterWrite(context.Background(), 0x0012, "21.5")
-	if !errors.Is(err, errMatterValueType) {
-		t.Fatalf("err = %v, want errMatterValueType", err)
+	srv := thermostatServer(t, r.climate)
+	if err := srv.MatterWrite(context.Background(), thermostatspec.AttrOccupiedHeatingSetpoint, "21.5"); err == nil {
+		t.Fatal("a string setpoint write must be refused")
+	}
+	if len(w.calls) != 0 {
+		t.Fatal("a refused setpoint reached the wire")
 	}
 }
 
-// TestThermostatClusterRevisionIs7 locks the ClusterRevision bump to 7
-// introduced with Matter 1.4 mandatory attributes.
-func TestThermostatClusterRevisionIs7(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0201)
-	v, ok := srv.MatterRead(0xFFFD)
-	if !ok || v.(uint16) != matterThermClusterRevision {
-		t.Fatalf("ClusterRevision = (%v, %v), want (%d, true)", v, ok, matterThermClusterRevision)
-	}
-}
-
-// TestThermostatNoFabricatedAttrAt0x30 confirms the bridge does not
-// advertise a fabricated attribute at 0x0030 — that ID is
-// SetpointChangeSource in matter.js; LocalTemperatureNotExposed is
-// FeatureMap bit 6, not an attribute.
+// TestThermostatNoFabricatedAttrAt0x30 confirms the server does not
+// serve SetpointChangeSource (0x0030): it is optional and unbacked, and
+// LocalTemperatureNotExposed is FeatureMap bit 6, not an attribute.
 func TestThermostatNoFabricatedAttrAt0x30(t *testing.T) {
 	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	srv := findCluster(t, r.climate, 0x0201)
-	if _, ok := srv.MatterRead(0x0030); ok {
-		t.Fatalf("0x0030 must not be readable (no fabricated LocalTemperatureNotExposed attribute)")
+	srv := thermostatServer(t, r.climate)
+	if _, ok := srv.MatterRead(thermostatspec.AttrSetpointChangeSource); ok {
+		t.Fatal("0x0030 must not be readable")
 	}
-	for _, id := range srv.MatterReportable() {
-		if id == 0x0030 {
-			t.Fatalf("0x0030 must not appear in MatterReportable")
-		}
+	if attributeSet(t, srv)[thermostatspec.AttrSetpointChangeSource] {
+		t.Fatal("0x0030 must not be listed")
 	}
 }
 
 // TestUnknownCommandsRejected — uniform UNSUPPORTED_COMMAND surface
-// across every cluster server in the projection.
+// across both cluster servers in the projection.
 func TestUnknownCommandsRejected(t *testing.T) {
 	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	for _, id := range []uint32{0x0201, 0x0204} {
+	for _, id := range []uint32{thermo.ThermostatClusterID, thermo.ClusterIDThermostatUserInterfaceConfiguration} {
 		srv := findCluster(t, r.climate, id)
 		_, err := srv.MatterInvoke(context.Background(), 0x99, nil)
-		if !errors.Is(err, errMatterUnknownCommand) {
-			t.Errorf("cluster 0x%04X: err=%v, want errMatterUnknownCommand", id, err)
+		var sc im.StatusCodeError
+		if !errors.As(err, &sc) || sc.MatterStatusCode() != im.StatusUnsupportedCommand {
+			t.Errorf("cluster 0x%04X: err=%v, want UNSUPPORTED_COMMAND", id, err)
 		}
 	}
 }
