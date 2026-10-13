@@ -1,7 +1,7 @@
 # ADR 0084 — Matter: the profiles move onto go-fabric's device layer, the bring-up onto its node facade
 
 - **Status**: accepted (2026-10-12); phases 1 and 2 are this repository's
-  work, phase 3 waits for go-fabric host hooks named below
+  work, phase 3 waits for the go-fabric facade seams named below (#87)
 - **Related**: [ADR 0012](./0012-matter-pure-go-implementation.md) (pure-Go
   Matter), [ADR 0049](./0049-matter-one-endpoint-per-device.md) (one endpoint
   per device), [ADR 0063](./0063-self-maintained-device-profiles.md) (the
@@ -204,25 +204,58 @@ collected at boot), the i18n channel word, the health probe and gauges,
 the REST / WebSocket adapters over `n.Bridge()`, `n.Root()`,
 `n.CommissioningWindow()` and `n.Store()`, and the live-adopt hook.
 
-This phase is **blocked until go-fabric's facade offers, as additive
-`node.Config` fields or chained observers that do not overwrite the
-facade's own wiring**: fabric added / removed / updated observers for the
-WebSocket publisher and the CASE identity refresh; a commissioning-complete
-observer; a window-transition observer (the enhanced-window CM=2
-announcement with the window's discriminator); a per-window PASE acceptor
-with credentials other than the configured passcode (the ephemeral window);
-concurrent-pairings mode; TimeSynchronization as an opt-in; the
-`SupportedFabrics` count; and the CASE node-id and fabric-id preferences.
+This phase was first **blocked until go-fabric's facade offered, as
+additive `node.Config` fields or chained observers that do not overwrite
+the facade's own wiring**, the host hooks of
+[issue #58](https://github.com/SukramJ/go-fabric/issues/58): fabric added /
+removed / updated observers for the WebSocket publisher and the CASE
+identity refresh; a commissioning-complete observer; a window-transition
+observer (the enhanced-window CM=2 announcement with the window's
+discriminator); a per-window PASE acceptor with credentials other than
+the configured passcode (the ephemeral window); TimeSynchronization as an
+opt-in; the `SupportedFabrics` count. go-fabric 0.3.1 closed #58
+(`node.Config.Observers`, `Node.OpenBasicWindow`, `SupportedFabrics`,
+`DisableTimeSynchronization`). Concurrent-pairings mode and the CASE
+node-id / fabric-id preferences were not taken up: the facade runs a
+per-exchange PASE provider always and seeds its pre-AddNOC CASE stub with
+an ephemeral key alone, so `north.matter.commissioning.concurrent_pairings`
+and `north.matter.case.*` become inert with this phase.
+
+Read against go-fabric main at c7e67ac, the facade still has no seam for
+four daemon responsibilities, filed as
+[issue #87](https://github.com/SukramJ/go-fabric/issues/87), and the
+phase is **blocked on it**:
+
+1. **The topology.** `node.New` builds its own `endpoint.Assembler` and
+   hands `bridge.New` the Aggregator's snapshotter; the Aggregator
+   assembles one scope with a sticky `MarkComplete`, and each `Add` on a
+   started node reassembles. The daemon assembles one snapshot per
+   central, with `ModelComplete` latched per central, through its own
+   assembler over the live model (exposure allowlist, localized channel
+   labels). The facade's label / configuration-version / scenes
+   persistence is also keyed on `endpoint.StringKey` alone and silently
+   skips the daemon's key type. Ask: a host snapshotter on `node.Config`.
+2. **`BasicInformation.UniqueID`.** The facade derives it from the
+   configured NodeLabel; the daemon pins the value persisted on the first
+   boot (`store.SettingUniqueID`), because UniqueID carries quality F and
+   a `node_label` edit must not re-identify the bridge under a paired
+   controller's cache.
+3. **Session and subscription diagnostics.** The facade's
+   `operational.Manager` and `subscription.Manager` are private; the
+   daemon's `GET /api/v1/matter/sessions` reads both.
+4. **Host-initiated fabric removal.** The facade's removal fan-out runs
+   only from the cluster's RemoveFabric; the daemon's REST revoke and
+   factory reset remove fabrics without a commissioner.
+
 The product semantics the facade fixes — commissionable only while a
 window is open, the node's own window at first boot when no fabric exists
 — are **adopted** in this phase: they are matter.js's and chip's, the
 operator-opened window keeps working as an administrator window, and a
 commissioned daemon stops being commissionable with its configured
-passcode for its whole lifetime, which is a security gain. The request to
-go-fabric is [issue #58](https://github.com/SukramJ/go-fabric/issues/58)
-and is tracked in `notes/plans/roadmap.md`;
-until it is answered, `startMatterBridge` stays, and nothing in phases 1 and
-2 depends on it.
+passcode for its whole lifetime, which is a security gain. The phase is
+tracked in `notes/plans/roadmap.md`; until #87 is answered,
+`startMatterBridge` stays, and nothing in phases 1 and 2 or in the
+cluster follow-ups depends on it.
 
 ### Live verification
 

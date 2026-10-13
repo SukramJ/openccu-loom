@@ -133,14 +133,20 @@ replace it, and the metrics that say whether it worked.
   against `store.Migrations()` step by step), #63 (onoff Sink under the
   operation lock — the daemon's coalescing feedback worker is gone,
   #960), #66 (`ColorControlServer.Set` — the ColorControl follow-up is
-  done; the LevelControl follow-up is merged, #957). Phase 3 (unblocked by
-  go-fabric #58, not started):
-  `startMatterBridge` onto `node.New` now that the facade carries host hooks —
-  fabric added/removed/updated observers, commissioning-complete and
-  window-transition observers, per-window PASE credentials (ephemeral
-  window), concurrent pairings, TimeSync opt-in, SupportedFabrics, CASE
-  node/fabric preferences. Each phase ends with the Apple Home run in the
-  ADR. Both cluster follow-ups named there (LevelControl, ColorControl)
+  done; the LevelControl follow-up is merged, #957). Phase 3
+  (`startMatterBridge` onto `node.New`) is **parked on go-fabric #87**:
+  #58 brought the host hooks (observers, `OpenBasicWindow`,
+  `SupportedFabrics`, `DisableTimeSynchronization`), but read against
+  main at c7e67ac the facade still assembles its own single-scope
+  topology (the daemon assembles per central with per-central
+  completeness, and the facade's label / scenes persistence skips the
+  daemon's key type), derives UniqueID from the NodeLabel instead of
+  serving the pinned one, keeps its session and subscription managers
+  private (the sessions diagnostics endpoint reads both), and has no
+  host-initiated fabric removal (REST revoke, factory reset). Resume when
+  #87 lands; the ADR's phase 3 section lists what is adopted as the
+  facade's semantics (per-exchange PASE always, no CASE id preferences).
+  Each phase ends with the Apple Home run in the ADR. Both cluster follow-ups named there (LevelControl, ColorControl)
   are done, #957 and #961; the Thermostat server (go-fabric #60) is
   done too, #962, and the WindowCovering server (Cover lift-only, Blind
   lift+tilt, the inferred target written through go-fabric's inbound
