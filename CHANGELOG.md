@@ -74,6 +74,25 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Matter: the Thermostat and ThermostatUserInterfaceConfiguration
+  clusters of every climate are go-fabric's `thermo` servers** (ADR 0084
+  thermostat follow-up). The hand-written projection is gone; the
+  Climate is the Thermostat server's Sink — a SystemMode write becomes
+  `SetMode`, an occupied-setpoint write or a SetpointRaiseLower becomes
+  `SetTemperature` (HM has one setpoint, so both occupied setpoints
+  alias it on a cooling-capable profile) — and feeds the CCU's confirmed
+  values back through the server's inbound setters: the setpoint, the
+  room temperature and the mode from every recorder the wire feeds
+  (SET_POINT_MODE, CONTROL_MODE, HEATING_COOLING). What a controller
+  observes changes: a setpoint or mode the device took on itself (wall
+  dial, CCU program, week program) is reported through the server's
+  change notifier; the absolute and user setpoint limits are the
+  device's own bounds and a write outside them answers CONSTRAINT_ERROR;
+  SetpointRaiseLower works from the server's start value before the CCU
+  reported a setpoint (before, it was refused); LocalTemperatureCalibration,
+  TemperatureDisplayMode and KeypadLockout are stored in process on a
+  controller's write, as matter.js does, since HM exposes none of them
+  on the wire. FeatureMaps are unchanged (HEAT, HEAT|COOL, never AUTO).
 - **Matter: the ColorControl cluster of every colour light is go-fabric's
   `light.ColorControlServer`** (ADR 0084 ColorControl follow-up). The
   three hand-written projections (HS, CT, HS+CT) are gone; the profile

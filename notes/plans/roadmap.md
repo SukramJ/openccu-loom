@@ -141,8 +141,10 @@ replace it, and the metrics that say whether it worked.
   window), concurrent pairings, TimeSync opt-in, SupportedFabrics, CASE
   node/fabric preferences. Each phase ends with the Apple Home run in the
   ADR. Both cluster follow-ups named there (LevelControl, ColorControl)
-  are done; open behind them: advertising XY on the ExtendedColorLight
-  variants (by_design BD-Matter-ExtendedColorLight-HSOnly).
+  are done, #957 and #961; the Thermostat server (go-fabric #60) follows
+  the same shape, the WindowCovering server (go-fabric #61) is next.
+  Open behind them: advertising XY on the ExtendedColorLight variants
+  (by_design BD-Matter-ExtendedColorLight-HSOnly).
   Detail: [`docs/adr/0084`](../../docs/adr/0084-matter-device-layer-and-node-facade.md).
 
 - **Bridged endpoints run on `groups.Manager` — done with go-fabric v0.3.0.**

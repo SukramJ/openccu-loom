@@ -8,13 +8,12 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"sync"
 
 	"github.com/SukramJ/go-fabric/cluster/measurement"
-
-	"github.com/SukramJ/go-fabric/cluster"
 	thermostatspec "github.com/SukramJ/go-fabric/cluster/spec/thermostat"
+	"github.com/SukramJ/go-fabric/cluster/thermo"
 	"github.com/SukramJ/go-fabric/cluster/wire"
-	"github.com/SukramJ/go-fabric/im"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -34,30 +33,25 @@ import (
 const matterDispatchPriority = hmenum.CommandPriorityHigh
 
 // Compile-time assertion: Climate participates in the Matter source
-// surface (ADR 0012) as a Matter Thermostat (0x0301) endpoint
-// with four cluster servers: Thermostat (0x0201),
-// ThermostatUserInterfaceConfiguration (0x0204), TemperatureMeasurement
-// (0x0402), and RelativeHumidityMeasurement (0x0405) — the last is
-// emitted only when the channel carries a HUMIDITY parameter. The
-// Schedules cluster (0x0024) is intentionally NOT emitted (the
-// week-profile mapping is not surfaced as a Matter cluster; see the
-// composition at buildClusters below and its unit test).
+// surface (ADR 0012) as a Matter Thermostat (0x0301) endpoint with two
+// cluster servers, both go-fabric's since the ADR 0084 thermostat
+// follow-up: Thermostat (0x0201, [thermo.ThermostatServer] with the
+// Climate as its Sink) and ThermostatUserInterfaceConfiguration (0x0204,
+// [thermo.ThermostatUIServer]). The Schedules cluster (0x0024) is
+// intentionally NOT emitted (see [Climate.MatterClusterServers]).
 var (
 	_ interfaces.MatterEndpointSource     = (*Climate)(nil)
 	_ interfaces.MatterClusterDataVersion = (*Climate)(nil)
 	_ interfaces.MatterChangeNotifier     = (*Climate)(nil)
-	// The Thermostat cluster's setpoint adjustment is a command, so the
-	// server has to advertise it: the dispatcher answers
-	// AcceptedCommandList from this capability and falls back to an empty
-	// list without it, which reads to a controller as "nothing to invoke".
-	_ interfaces.MatterClusterCommandLister = climateThermostatServer{}
+	_ thermo.Sink                         = climateThermoSink{}
 )
 
-// MatterDataVersion implements [interfaces.MatterClusterDataVersion].
-// Shared across all cluster servers that project this Climate (Thermostat,
-// ThermostatUI, TemperatureMeasurement, RelativeHumidityMeasurement).
-// Bumped on every successful write / invoke so DataVersionFilter
-// evaluation correctly detects cluster changes.
+// MatterDataVersion implements [interfaces.MatterClusterDataVersion]:
+// the counter the ThermostatUserInterfaceConfiguration server bumps on
+// every change it stores. The Thermostat server has no host tracker; the
+// bridge hosts its DataVersion on the endpoint and advances it from the
+// server's change notifier (go-fabric bridge/subscribe.go
+// wireAttributeNotifiersLocked).
 func (c *Climate) MatterDataVersion() uint32 { return c.dataVersion.Current() }
 
 // OnMatterValueChanged implements [interfaces.MatterChangeNotifier].
@@ -67,8 +61,11 @@ func (c *Climate) MatterDataVersion() uint32 { return c.dataVersion.Current() }
 // adjusted at the wall dial, ambient temperature/humidity reading) dirty-
 // marks the endpoint and reaches Apple's Subscribe. Each DP's own
 // OnMatterValueChanged guards a nil receiver, so absent DPs contribute a
-// no-op unsubscribe. SystemMode/RunningMode are re-read on any of these
-// firing because the notifier marks the whole reportable path set dirty.
+// no-op unsubscribe. The Thermostat server lists LocalTemperature and
+// SystemMode as its reportable attributes, so this dirty-mark is what
+// reports a temperature reading; the setpoints and a mode the device
+// took on itself are reported by the server's own change notifier once
+// the confirmed value reaches it.
 func (c *Climate) OnMatterValueChanged(cb func()) func() {
 	if c == nil || cb == nil {
 		return func() {}
@@ -81,110 +78,27 @@ func (c *Climate) OnMatterValueChanged(cb func()) func() {
 	)
 }
 
-// Matter constants follow the Matter Application Cluster Specification
-// §4.3 (Thermostat), §4.4 (ThermostatUserInterfaceConfiguration),
-// §2.3 (TemperatureMeasurement) and §2.6 (RelativeHumidityMeasurement).
-// Cluster revisions and attribute IDs mirror
-// packages/model/src/standard/elements/ in matter.js HEAD.
-// They live here next to the projection, unexported: the generic
-// cluster servers in go-fabric (cluster/thermo, cluster/measurement)
-// carry their own copies across the module boundary.
+// The Thermostat device type (matter.js
+// packages/node/src/devices/thermostat.ts). The two clusters' ids,
+// revisions, attribute and command lists come from go-fabric's generated
+// definitions behind the servers.
+const matterDeviceTypeThermostat uint16 = 0x0301
+
+// Matter Thermostat SystemModeEnum values (thermostat-cluster.element.ts
+// SystemModeEnum), as the generated definition spells them.
 const (
-	matterDeviceTypeThermostat uint16 = 0x0301
-
-	matterClusterThermostat   uint32 = 0x0201
-	matterClusterThermostatUI uint32 = 0x0204
-	matterClusterSchedules    uint32 = wire.SchedulesClusterID
-
-	// Thermostat (0x0201) attribute IDs (subset).
-	matterAttrThermLocalTemperature uint32 = 0x0000
-	matterAttrThermOccupiedCoolSp   uint32 = 0x0011
-	matterAttrThermOccupiedHeatSp   uint32 = 0x0012
-	matterAttrThermMinHeatSp        uint32 = 0x0015
-	matterAttrThermMaxHeatSp        uint32 = 0x0016
-	matterAttrThermMinCoolSp        uint32 = 0x0017
-	matterAttrThermMaxCoolSp        uint32 = 0x0018
-	matterAttrThermControlSeq       uint32 = 0x001B
-	matterAttrThermSystemMode       uint32 = 0x001C
-	matterAttrThermRunningMode      uint32 = 0x001E
-
-	// ThermostatUserInterfaceConfiguration (0x0204) attribute IDs.
-	matterAttrUITempDisplayMode uint32 = 0x0000
-	matterAttrUIKeypadLockout   uint32 = 0x0001
-
-	matterAttrFeatureMap      uint32 = 0xFFFC
-	matterAttrClusterRevision uint32 = 0xFFFD
-
-	// Thermostat command IDs.
-	matterCmdSetpointRaiseLower uint32 = 0x00
-
-	// Cluster revisions: Thermostat 11, ThermostatUI 2.
-	// Pinned via notes/parity/matter/matter-schema-snapshot.json.
-	matterThermClusterRevision   uint16 = 11
-	matterThermUIClusterRevision uint16 = 2
-
-	// Matter Thermostat SystemMode enum values (spec 4.3.7.4.4).
-	matterSysModeOff  uint8 = 0
-	matterSysModeAuto uint8 = 1
-	matterSysModeCool uint8 = 3
-	matterSysModeHeat uint8 = 4
-
-	// Matter ThermostatRunningModeEnum values (attribute 0x001E). The
-	// running-mode enum has NO Auto member — only Off(0), Cool(3) and
-	// Heat(4) are legal, unlike SystemModeEnum — matter.js
-	// packages/model/src/standard/elements/thermostat-cluster.element.ts:568-573.
-	matterRunningModeOff  uint8 = 0
-	matterRunningModeCool uint8 = 3
-	matterRunningModeHeat uint8 = 4
-
-	// ControlSequenceOfOperation values (spec 4.3.7.4.3).
-	matterCtrlSeqCoolingOnly       uint8 = 0
-	matterCtrlSeqHeatingOnly       uint8 = 2
-	matterCtrlSeqHeatingAndCooling uint8 = 4
-
-	// Thermostat FeatureMap bits (spec 4.3.5).
-	matterThermFeatureHeat uint32 = 1 << 0
-	matterThermFeatureCool uint32 = 1 << 1
-	matterThermFeatureAuto uint32 = 1 << 5
-
-	// TemperatureDisplayMode values: 0 = Celsius, 1 = Fahrenheit.
-	matterTempDisplayCelsius uint8 = 0
-
-	// KeypadLockoutEnum values (0x0204 / 0x0001). HM devices do not expose
-	// keypad lockout; the bridge always reports NoLockout (0).
-	matterKeypadLockoutNone uint8 = 0
+	matterSysModeOff  = uint8(thermostatspec.SystemModeOff)
+	matterSysModeAuto = uint8(thermostatspec.SystemModeAuto)
+	matterSysModeCool = uint8(thermostatspec.SystemModeCool)
+	matterSysModeHeat = uint8(thermostatspec.SystemModeHeat)
 )
 
-var (
-	errMatterUnknownAttribute = errors.New("matter: unknown attribute")
-	errMatterUnknownCommand   = errors.New("matter: unknown command")
-	errMatterValueType        = errors.New("matter: unexpected value type")
-	errMatterUnsupportedMode  = errors.New("matter: unsupported SystemMode for this device")
-)
-
-// climateSystemModeUnsupportedError is a typed [im.StatusCodeError]
-// returned when a SystemMode write requests Cool or Auto on a Climate
-// whose FeatureMap does not advertise the corresponding feature (e.g.
-// SystemMode=Cool on a heating-only HmIP valve). Mirrors matter.js
-// ThermostatServer.ts:#assertSystemModeChanging, which throws
-// StatusResponse.ConstraintErrorError for a SystemMode value the current
-// feature/ControlSequenceOfOperation configuration forbids —
-// packages/node/src/behaviors/thermostat/ThermostatServer.ts:615-632. The
-// SystemModeEnum conformance table itself ties Cool to "[COOL]" and Auto
-// to "AUTO" — packages/model/src/standard/elements/thermostat-cluster.element.ts:558-559.
-type climateSystemModeUnsupportedError struct{ msg string }
-
-func (e climateSystemModeUnsupportedError) Error() string { return e.msg }
-
-// MatterStatusCode implements [im.StatusCodeError] so the dispatcher
-// encodes ConstraintError instead of falling back to the generic
-// StatusFailure — see go-fabric endpoint/dispatcher.go
-// writeErrorStatus.
-func (climateSystemModeUnsupportedError) MatterStatusCode() im.StatusCode {
-	return im.StatusConstraintError
-}
-
-var _ im.StatusCodeError = climateSystemModeUnsupportedError{}
+// errMatterUnsupportedMode is the refusal of a SystemMode the Climate
+// domain has no mode for. The modes a feature set does not admit (Cool
+// without COOL, Auto without AUTO) never reach it: the server's
+// definition refuses them with CONSTRAINT_ERROR first (matter.js
+// ThermostatServer.ts #assertSystemModeChanging).
+var errMatterUnsupportedMode = errors.New("matter: unsupported SystemMode for this device")
 
 // celsiusToMatter encodes a Celsius reading as Matter's centi-degree int16
 // through the one encoder, in [measurement.CelsiusToInt16]. It used to be a
@@ -254,8 +168,8 @@ func (c *Climate) MatterDeviceType() uint16 { return matterDeviceTypeThermostat 
 // ships in matter.js or the spec.
 func (c *Climate) MatterClusterServers() []interfaces.MatterClusterServer {
 	return []interfaces.MatterClusterServer{
-		climateThermostatServer{c: c},
-		climateThermostatUIServer{c: c},
+		c.matterThermostatServer(),
+		c.matterThermostatUIServer(),
 	}
 }
 
@@ -392,54 +306,189 @@ func toFloat64(raw any) (float64, bool) {
 // Compile-time assertion: Climate implements [wire.SchedulesSource].
 var _ wire.SchedulesSource = (*Climate)(nil)
 
-// climateThermostatServer projects Climate onto the Matter Thermostat
-// cluster (0x0201).
-type climateThermostatServer struct{ c *Climate }
+// matterThermoHolder keeps the one Thermostat server a Climate serves
+// across [interfaces.MatterEndpointSource.MatterClusterServers] calls,
+// for the same reason [generic.MatterOnOffHolder] does: the assembler
+// re-reads the servers on every reassembly and the bridge keeps the ones
+// it already serves.
+type matterThermoHolder struct {
+	mu  sync.Mutex
+	srv *thermo.ThermostatServer
+	ui  *thermo.ThermostatUIServer
+}
 
-func (s climateThermostatServer) MatterClusterID() uint32 { return matterClusterThermostat }
-
-// featureMap computes the Thermostat FeatureMap this server actually
-// reports. HEAT is always advertised; COOL follows the profile's
+// matterThermoFeatures is the Thermostat FeatureMap this Climate
+// advertises. HEAT is always set; COOL follows the profile's
 // SupportsCool capability (hybrid wall thermostats driven by
-// HEATING_COOLING), and the attribute gating in
-// MatterRead/MatterAttributes/MatterWrite below follows automatically.
+// HEATING_COOLING).
 //
 // AUTO is deliberately NEVER advertised — not even on SupportsCool
 // profiles. Matter AutoMode means independent dual setpoints and
 // mandates MinSetpointDeadBand (0x0019, conformance "AUTO") — matter.js
 // packages/model/src/standard/elements/thermostat-cluster.element.ts:100-104
 // — while HM climates are single-setpoint devices (the Cool setpoint
-// here aliases the one HM setpoint) and this projection implements no
-// deadband attribute. Advertising AUTO without both is a conformance
-// violation. Precondition for lighting AUTO up: a true dual-setpoint
-// surface plus MinSetpointDeadBand (and per the FeatureMap conformance
-// table, HEAT and COOL both set — HEAT/COOL: "AUTO, O.a+",
-// thermostat-cluster.element.ts:24-25,28).
-func (s climateThermostatServer) featureMap() uint32 {
-	fm := matterThermFeatureHeat
-	if s.c.Capabilities.SupportsCool {
-		fm |= matterThermFeatureCool
+// here aliases the one HM setpoint). Advertising AUTO over one setpoint
+// would promise a deadband the device cannot keep.
+func (c *Climate) matterThermoFeatures() uint32 {
+	fm := thermo.ThermostatFeatureHEAT
+	if c.Capabilities.SupportsCool {
+		fm |= thermo.ThermostatFeatureCOOL
 	}
 	return fm
+}
+
+// matterThermostatServer builds the Climate's Thermostat server once:
+// go-fabric's [thermo.ThermostatServer] with the Climate as its Sink —
+// a SystemMode write becomes [Climate.SetMode], an occupied-setpoint
+// write or a SetpointRaiseLower becomes [Climate.SetTemperature], both at
+// [matterDispatchPriority] — and the CCU's confirmed values fed back
+// through the inbound setters, which store without the Sink: the
+// SET_POINT_TEMPERATURE data point's confirmed-update hook carries the
+// setpoint (and the OFF sentinel [Climate.Mode] derives from it), the
+// ACTUAL_TEMPERATURE hook the room temperature, and the mode recorders
+// ([Climate.OnMode], [Climate.OnSetPointMode], [Climate.OnControlMode],
+// [Climate.OnHeatingCooling]) the mode. The absolute setpoint limits are
+// the device's own ([Climate.MinTemp] / [Climate.MaxTemp]).
+//
+// The server starts from the observed setpoint and temperature; before
+// the CCU reported a setpoint it starts from go-fabric's 20.00 °C
+// default cropped to the limits, which the first confirmed value
+// replaces.
+func (c *Climate) matterThermostatServer() *thermo.ThermostatServer {
+	c.matterThermo.mu.Lock()
+	defer c.matterThermo.mu.Unlock()
+	if c.matterThermo.srv != nil {
+		return c.matterThermo.srv
+	}
+	fm := c.matterThermoFeatures()
+	cfg := thermo.DefaultThermostatConfig()
+	cfg.Features = fm
+	minSP, maxSP := celsiusToMatter(c.MinTemp()), celsiusToMatter(c.MaxTemp())
+	if minSP >= maxSP {
+		// No descriptor bounds and no capability bounds (a Climate
+		// outside the profile catalogue): go-fabric's defaults keep the
+		// server's limits well-formed instead of pinning every setpoint
+		// to one value.
+		minSP, maxSP = cfg.AbsMinHeatSetpointLimit, cfg.AbsMaxHeatSetpointLimit
+	}
+	cfg.Sink = climateThermoSink{c: c}
+	cfg.AbsMinHeatSetpointLimit, cfg.AbsMaxHeatSetpointLimit = minSP, maxSP
+	cfg.AbsMinCoolSetpointLimit, cfg.AbsMaxCoolSetpointLimit = minSP, maxSP
+	initial := min(max(cfg.InitialHeatingSetpoint, minSP), maxSP)
+	if sp, observed := c.Setpoint(); observed {
+		initial = min(max(celsiusToMatter(sp), minSP), maxSP)
+	}
+	cfg.InitialHeatingSetpoint, cfg.InitialCoolingSetpoint = initial, initial
+	srv := thermo.NewThermostatServer(cfg)
+	c.matterThermo.srv = srv
+
+	if c.setpoint != nil {
+		_ = c.setpoint.OnConfirmedUpdate(func(_, _ float64) { c.syncMatterSetpoint(srv) })
+	}
+	if c.actualTemperature != nil {
+		_ = c.actualTemperature.OnConfirmedUpdate(func(_, _ float64) { c.syncMatterLocalTemperature(srv) })
+	}
+	// A confirmation that landed between the initial read and the hook
+	// registration is not lost: the current values are stored again,
+	// which is a no-op when nothing changed.
+	c.syncMatterSetpoint(srv)
+	c.syncMatterLocalTemperature(srv)
+	c.syncMatterModeTo(srv)
+	return srv
+}
+
+// matterThermostatUIServer builds the
+// ThermostatUserInterfaceConfiguration server once: matter.js's
+// defaults (Celsius, no keypad lockout); a controller's writes are
+// stored in process, as in matter.js, since HM devices expose neither
+// display unit nor keypad lockout on the wire.
+func (c *Climate) matterThermostatUIServer() *thermo.ThermostatUIServer {
+	c.matterThermo.mu.Lock()
+	defer c.matterThermo.mu.Unlock()
+	if c.matterThermo.ui == nil {
+		display := thermo.TemperatureDisplayCelsius
+		ui, err := thermo.NewThermostatUserInterfaceConfiguration(thermo.ThermostatUIConfig{
+			TemperatureDisplayMode: &display,
+			DataVersion:            &c.dataVersion,
+		})
+		if err != nil {
+			// invariant: the configuration is constant; a refusal is a
+			// defect in the generated definition, not a runtime
+			// condition.
+			panic(err)
+		}
+		c.matterThermo.ui = ui
+	}
+	return c.matterThermo.ui
+}
+
+// syncMatterSetpoint stores the observed setpoint on srv — on both
+// occupied setpoints when COOL is advertised, since HM has one setpoint
+// — and the mode the setpoint implies (the OFF sentinel).
+func (c *Climate) syncMatterSetpoint(srv *thermo.ThermostatServer) {
+	sp, observed := c.Setpoint()
+	if !observed {
+		return
+	}
+	v := celsiusToMatter(sp)
+	srv.SetOccupiedHeatingSetpoint(v)
+	if c.matterThermoFeatures()&thermo.ThermostatFeatureCOOL != 0 {
+		srv.SetOccupiedCoolingSetpoint(v)
+	}
+	c.syncMatterModeTo(srv)
+}
+
+// syncMatterLocalTemperature stores the observed room temperature on
+// srv, null while none was observed.
+func (c *Climate) syncMatterLocalTemperature(srv *thermo.ThermostatServer) {
+	t, observed := c.CurrentTemperature()
+	if !observed {
+		srv.SetLocalTemperature(nil)
+		return
+	}
+	v := celsiusToMatter(t)
+	srv.SetLocalTemperature(&v)
+}
+
+// syncMatterModeTo stores the device's current mode on srv.
+func (c *Climate) syncMatterModeTo(srv *thermo.ThermostatServer) {
+	m, observed := c.Mode()
+	if !observed {
+		return
+	}
+	srv.SetSystemMode(c.systemModeFromHmMode(m, c.matterThermoFeatures()))
+}
+
+// syncMatterMode stores the device's current mode on the Thermostat
+// server, if one was built. The mode recorders call it after they
+// released the Climate's lock, so a mode the device took on itself —
+// the wall dial, a CCU program, the week program — reaches a subscribed
+// controller as a SystemMode report.
+func (c *Climate) syncMatterMode() {
+	c.matterThermo.mu.Lock()
+	srv := c.matterThermo.srv
+	c.matterThermo.mu.Unlock()
+	if srv != nil {
+		c.syncMatterModeTo(srv)
+	}
 }
 
 // systemModeFromHmMode maps the Climate domain Mode onto Matter's
 // SystemModeEnum, clamped to the values the FeatureMap fm makes legal:
 // Auto(1) has conformance "AUTO" and Cool(3) "[COOL]" — matter.js
 // packages/model/src/standard/elements/thermostat-cluster.element.ts:556-566.
-// A read must never surface a value the FeatureMap forbids: controllers
-// (Apple Home, Google Home) echo the read SystemMode back on state
-// sync, and a non-conformant Auto answer turns that echo into the
-// ConstraintError that [systemModeAllowed] correctly raises on writes.
-// HM's AUTO (week-program) mode is a single-setpoint schedule, not
-// Matter AutoMode (independent dual setpoints + deadband); without the
-// AUTO feature it surfaces as Heat — or Cool when the wrapped hybrid
-// device currently operates in its COOLING direction (the same
-// HEATING_COOLING signal that derives ModeCool for MANU, see
-// [Climate.OnSetPointMode]). Profile-overlay states (away, boost)
-// collapse onto their parent mode — Matter has no native equivalents
-// and the Thermostat-schedule surface is not yet wired (see ADR 0012).
-func (s climateThermostatServer) systemModeFromHmMode(m Mode, fm uint32) uint8 {
+// A report must never surface a value the FeatureMap forbids:
+// controllers (Apple Home, Google Home) echo the read SystemMode back on
+// state sync, and a non-conformant Auto answer turns that echo into the
+// CONSTRAINT_ERROR the server's definition raises on writes. HM's AUTO
+// (week-program) mode is a single-setpoint schedule, not Matter AutoMode
+// (independent dual setpoints + deadband); without the AUTO feature it
+// surfaces as Heat — or Cool when the wrapped hybrid device currently
+// operates in its COOLING direction (the same HEATING_COOLING signal that
+// derives ModeCool for MANU, see [Climate.OnSetPointMode]).
+// Profile-overlay states (away, boost) collapse onto their parent mode —
+// Matter has no native equivalents.
+func (c *Climate) systemModeFromHmMode(m Mode, fm uint32) uint8 {
 	switch m {
 	case ModeOff:
 		return matterSysModeOff
@@ -447,15 +496,15 @@ func (s climateThermostatServer) systemModeFromHmMode(m Mode, fm uint32) uint8 {
 		// ModeCool only derives on hybrid profiles whose FeatureMap
 		// carries COOL; clamp defensively so a heat-only FeatureMap can
 		// never leak the "[COOL]"-gated value.
-		if fm&matterThermFeatureCool == 0 {
+		if fm&thermo.ThermostatFeatureCOOL == 0 {
 			return matterSysModeHeat
 		}
 		return matterSysModeCool
 	case ModeAuto:
-		if fm&matterThermFeatureAuto != 0 {
+		if fm&thermo.ThermostatFeatureAUTO != 0 {
 			return matterSysModeAuto
 		}
-		if fm&matterThermFeatureCool != 0 && !s.c.IsHeating() {
+		if fm&thermo.ThermostatFeatureCOOL != 0 && !c.IsHeating() {
 			return matterSysModeCool
 		}
 		return matterSysModeHeat
@@ -464,427 +513,25 @@ func (s climateThermostatServer) systemModeFromHmMode(m Mode, fm uint32) uint8 {
 	}
 }
 
-// runningModeFromHmMode maps the Climate domain Mode onto Matter's
-// ThermostatRunningModeEnum. The enum only carries Off(0)/Cool(3)/Heat(4)
-// — Auto(1) is not a member (thermostat-cluster.element.ts:568-573) —
-// so HM's AUTO mode is projected onto the direction the device is
-// currently operating in rather than echoed as a SystemMode value.
-func (s climateThermostatServer) runningModeFromHmMode(m Mode) uint8 {
-	switch m {
-	case ModeOff:
-		return matterRunningModeOff
-	case ModeCool:
-		return matterRunningModeCool
-	case ModeHeat:
-		return matterRunningModeHeat
-	default: // ModeAuto: report the active HEATING_COOLING direction.
-		if !s.c.IsHeating() {
-			return matterRunningModeCool
-		}
-		return matterRunningModeHeat
-	}
-}
+// climateThermoSink is the [thermo.Sink] of a Climate: the CCU writes a
+// controller's change becomes, called by the server after validation
+// and before anything is stored; an error refuses the change.
+type climateThermoSink struct{ c *Climate }
 
-// controlSequenceOfOperation derives the mandatory
-// ControlSequenceOfOperation value (Matter §4.3.7.4.3) from the
-// FeatureMap so a future heat+cool profile reports CoolingAndHeating
-// instead of the previously hardcoded HeatingOnly. The bridge exposes
-// this attribute read-only because it tracks the wrapped HM device's
-// fixed HEAT/COOL capability — there is nothing for a controller to
-// change.
-func controlSequenceOfOperation(fm uint32) uint8 {
-	hasHeat := fm&matterThermFeatureHeat != 0
-	hasCool := fm&matterThermFeatureCool != 0
-	switch {
-	case hasHeat && hasCool:
-		return matterCtrlSeqHeatingAndCooling
-	case hasCool:
-		return matterCtrlSeqCoolingOnly
-	default:
-		return matterCtrlSeqHeatingOnly
-	}
-}
-
-// systemModeAllowed reports whether raw is a legal SystemMode value for
-// the FeatureMap fm reports. Cool(3) conformance is "[COOL]" and Auto(1)
-// conformance is "AUTO" — both disallowed when the corresponding feature
-// bit is absent. Mirrors matter.js
-// packages/model/src/standard/elements/thermostat-cluster.element.ts:558-559.
-func systemModeAllowed(raw uint8, fm uint32) bool {
-	switch raw {
-	case matterSysModeCool:
-		return fm&matterThermFeatureCool != 0
-	case matterSysModeAuto:
-		return fm&matterThermFeatureAuto != 0
-	default:
-		return true
-	}
-}
-
-func (s climateThermostatServer) MatterRead(attrID uint32) (any, bool) {
-	fm := s.featureMap()
-	switch attrID {
-	case matterAttrThermLocalTemperature:
-		// LocalTemperature is mandatory for the Thermostat cluster
-		// (Matter §4.3.9.1). When the bridged HmIP device is currently
-		// unreachable (CCU offline / circuit-breaker open / no
-		// observation yet) we return (nil, true) → TLV null + Success.
-		// Apple Home's HAP-service rebuild tolerates a null mandatory
-		// attribute ("temporarily unknown") but treats
-		// UnsupportedAttribute as a structural error and aborts with
-		// HAPErrorDomain Code=24.
-		t, ok := s.c.CurrentTemperature()
-		if !ok {
-			return nil, true
-		}
-		return celsiusToMatter(t), true
-	case matterAttrThermOccupiedHeatSp:
-		// HM exposes a single setpoint per Climate; the Heat setpoint in
-		// Matter maps back to that one value. Same null-on-unknown
-		// rationale as LocalTemperature above — OccupiedHeatingSetpoint
-		// is mandatory conformance "HEAT" (always present here; every
-		// climate profile sets Capabilities.SupportsHeat).
-		t, ok := s.c.Setpoint()
-		if !ok {
-			return nil, true
-		}
-		return celsiusToMatter(t), true
-	case matterAttrThermOccupiedCoolSp:
-		// Conformance "COOL" (thermostat-cluster.element.ts:66-68):
-		// disallowed without the COOL feature. Not present on any
-		// registered climate profile today — kept feature-gated so a
-		// future heat+cool HM device lights it up via featureMap alone.
-		if fm&matterThermFeatureCool == 0 {
-			return nil, false
-		}
-		t, ok := s.c.Setpoint()
-		if !ok {
-			return nil, true
-		}
-		return celsiusToMatter(t), true
-	case matterAttrThermMinHeatSp:
-		return celsiusToMatter(s.c.MinTemp()), true
-	case matterAttrThermMaxHeatSp:
-		return celsiusToMatter(s.c.MaxTemp()), true
-	case matterAttrThermMinCoolSp:
-		// Conformance "[COOL]" (thermostat-cluster.element.ts:92-95).
-		if fm&matterThermFeatureCool == 0 {
-			return nil, false
-		}
-		return celsiusToMatter(s.c.MinTemp()), true
-	case matterAttrThermMaxCoolSp:
-		// Conformance "[COOL]" (thermostat-cluster.element.ts:96-98).
-		if fm&matterThermFeatureCool == 0 {
-			return nil, false
-		}
-		return celsiusToMatter(s.c.MaxTemp()), true
-	case matterAttrThermControlSeq:
-		return controlSequenceOfOperation(fm), true
-	case matterAttrThermSystemMode:
-		// SystemMode is mandatory. Null-on-unknown so a briefly-
-		// unreachable bridged device doesn't break HAP service
-		// construction (see LocalTemperature comment above). The value
-		// is clamped to the FeatureMap so HM's AUTO (week-program) mode
-		// never surfaces as Auto(1) on a cluster that does not advertise
-		// the AUTO feature — see [systemModeFromHmMode].
-		m, ok := s.c.Mode()
-		if !ok {
-			return nil, true
-		}
-		return s.systemModeFromHmMode(m, fm), true
-	case matterAttrThermRunningMode:
-		// Conformance "TEVT & AUTO, [AUTO]" (thermostat-cluster.element.ts:117-120):
-		// disallowed without the AUTO feature, which featureMap never
-		// advertises today — kept feature-gated so a future
-		// dual-setpoint surface lights it up without further changes.
-		// The value space is ThermostatRunningModeEnum, which has no
-		// Auto member — see [runningModeFromHmMode].
-		if fm&matterThermFeatureAuto == 0 {
-			return nil, false
-		}
-		m, ok := s.c.Mode()
-		if !ok {
-			return nil, true
-		}
-		return s.runningModeFromHmMode(m), true
-	case matterAttrFeatureMap:
-		return fm, true
-	case matterAttrClusterRevision:
-		return matterThermClusterRevision, true
-	default:
-		return nil, false
-	}
-}
-
-func (s climateThermostatServer) MatterWrite(ctx context.Context, attrID uint32, value any) error {
-	var err error
-	switch attrID {
-	case matterAttrThermOccupiedHeatSp:
-		// The bridge's TLV decoder surfaces a signed setpoint as int64, not
-		// int16 (see go-fabric cluster/coerce.go). Coerce rather
-		// than assert one exact Go type — a strict value.(int16) rejected the
-		// wire value and every Apple/Google setpoint write failed with IM
-		// status Failure.
-		v, ok := cluster.AsInt16(value)
-		if !ok {
-			return fmt.Errorf("%w: setpoint write expected numeric, got %T", errMatterValueType, value)
-		}
-		err = s.c.SetTemperature(ctx, matterToCelsius(v), matterDispatchPriority)
-	case matterAttrThermOccupiedCoolSp:
-		// Conformance "COOL" — not a writable attribute at all when the
-		// FeatureMap omits COOL, so this reaches the wire as an unknown
-		// attribute rather than silently retargeting the single HM
-		// heating setpoint.
-		if s.featureMap()&matterThermFeatureCool == 0 {
-			return fmt.Errorf("%w: 0x%04X", errMatterUnknownAttribute, attrID)
-		}
-		v, ok := cluster.AsInt16(value)
-		if !ok {
-			return fmt.Errorf("%w: setpoint write expected numeric, got %T", errMatterValueType, value)
-		}
-		err = s.c.SetTemperature(ctx, matterToCelsius(v), matterDispatchPriority)
-	case matterAttrThermSystemMode:
-		// SystemMode is an enum8; the decoder delivers it as uint64. Coerce,
-		// mirroring the setpoint path and thermo/thermostat_server.go.
-		raw, ok := cluster.AsUint8(value)
-		if !ok {
-			return fmt.Errorf("%w: SystemMode write expected numeric, got %T", errMatterValueType, value)
-		}
-		mode, e := matterToHmMode(raw)
-		if e != nil {
-			return e
-		}
-		fm := s.featureMap()
-		if !systemModeAllowed(raw, fm) {
-			return climateSystemModeUnsupportedError{
-				fmt.Sprintf("matter: SystemMode=%d not supported by FeatureMap 0x%02X", raw, fm),
-			}
-		}
-		err = s.c.SetMode(ctx, mode, matterDispatchPriority)
-	default:
-		return fmt.Errorf("%w: 0x%04X", errMatterUnknownAttribute, attrID)
-	}
+// SetSystemMode implements [thermo.Sink]: the mode the definition
+// admitted for the feature set becomes [Climate.SetMode].
+func (s climateThermoSink) SetSystemMode(ctx context.Context, mode uint8) error {
+	m, err := matterToHmMode(mode)
 	if err != nil {
 		return err
 	}
-	s.c.dataVersion.Bump()
-	return nil
+	return s.c.SetMode(ctx, m, matterDispatchPriority)
 }
 
-func (s climateThermostatServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any) (any, error) {
-	if cmdID != matterCmdSetpointRaiseLower {
-		return nil, fmt.Errorf("%w: 0x%02X", errMatterUnknownCommand, cmdID)
-	}
-	mode, amount, err := extractSetpointRaiseLower(fields)
-	if err != nil {
-		return nil, err
-	}
-	cur, ok := s.c.Setpoint()
-	if !ok {
-		// No baseline — the command can't be applied as a delta. The
-		// spec allows refusing here; the bridge will translate this
-		// into a FAILURE status.
-		return nil, errors.New("matter: SetpointRaiseLower needs an observed setpoint")
-	}
-	// `amount` is in 0.1°C units; positive raises, negative lowers.
-	delta := float64(amount) / 10
-	target := cur + delta
-	// `mode` (Heat/Cool/Both) is informational on heating-only HM
-	// devices — every effective adjust hits the single setpoint.
-	_ = mode
-	if err := s.c.SetTemperature(ctx, target, matterDispatchPriority); err != nil {
-		return nil, err
-	}
-	s.c.dataVersion.Bump()
-	return nil, nil
-}
-
-func (s climateThermostatServer) MatterReportable() []uint32 {
-	return []uint32{
-		matterAttrThermLocalTemperature,
-		matterAttrThermOccupiedHeatSp,
-		matterAttrThermSystemMode,
-	}
-}
-
-// MatterAttributes lists every Thermostat (0x0201) attribute the server
-// implements via [MatterRead], feature-gated against [featureMap] so the
-// advertised set matches conformance exactly: OccupiedCoolingSetpoint /
-// MinCoolSetpointLimit / MaxCoolSetpointLimit require COOL, and
-// ThermostatRunningMode requires AUTO (thermostat-cluster.element.ts:66-68,
-// 92-98, 117-120). Advertising a disallowed attribute is as much a HAP
-// service rebuild hazard for Apple Home as omitting a mandatory one, so
-// on a heating-only device (every profile registered today) this list
-// covers only LocalTemperature, the Heat-gated setpoints/limits,
-// ControlSequenceOfOperation and SystemMode. Without this method the
-// dispatcher falls back to MatterReportable's three-attribute
-// subscription surface — which is fine for change-driven subscribes but
-// starves Apple's HAP mapper.
-func (s climateThermostatServer) MatterAttributes() []uint32 {
-	fm := s.featureMap()
-	attrs := []uint32{
-		matterAttrThermLocalTemperature,
-		matterAttrThermOccupiedHeatSp,
-		matterAttrThermMinHeatSp,
-		matterAttrThermMaxHeatSp,
-		matterAttrThermControlSeq,
-		matterAttrThermSystemMode,
-	}
-	if fm&matterThermFeatureCool != 0 {
-		attrs = append(
-			attrs,
-			matterAttrThermOccupiedCoolSp,
-			matterAttrThermMinCoolSp,
-			matterAttrThermMaxCoolSp,
-		)
-	}
-	if fm&matterThermFeatureAuto != 0 {
-		attrs = append(attrs, matterAttrThermRunningMode)
-	}
-	return attrs
-}
-
-// MatterAcceptedCommands implements [interfaces.MatterClusterCommandLister].
-// SetpointRaiseLower (0x00) is the Thermostat cluster's only mandatory
-// command and the only one this server handles; the rest are gated on
-// features (MSCH / PRES / TSUGGEST) the projection does not advertise
-// (thermostat-cluster.element.ts:317-363). Without this list the
-// dispatcher answers AcceptedCommandList with an empty set, and a
-// controller that derives write capability from it sees a thermostat it
-// cannot command.
-func (s climateThermostatServer) MatterAcceptedCommands() []uint32 {
-	return []uint32{matterCmdSetpointRaiseLower}
-}
-
-// MatterGeneratedCommands implements [interfaces.MatterClusterCommandLister].
-// SetpointRaiseLower answers with a plain status
-// (thermostat-cluster.element.ts:317-321).
-func (s climateThermostatServer) MatterGeneratedCommands() []uint32 { return nil }
-
-// climateThermostatUIServer projects Climate onto the
-// ThermostatUserInterfaceConfiguration cluster (0x0204). HM devices
-// always report Celsius and do not expose KeypadLockout / scheduling
-// visibility through the wire layer; the projection is therefore
-// largely static.
-type climateThermostatUIServer struct{ c *Climate }
-
-func (s climateThermostatUIServer) MatterClusterID() uint32 { return matterClusterThermostatUI }
-
-func (s climateThermostatUIServer) MatterRead(attrID uint32) (any, bool) {
-	switch attrID {
-	case matterAttrUITempDisplayMode:
-		return matterTempDisplayCelsius, true
-	case matterAttrUIKeypadLockout:
-		// HM devices do not expose keypad lockout; always report NoLockout.
-		return matterKeypadLockoutNone, true
-	case matterAttrFeatureMap:
-		return uint32(0), true
-	case matterAttrClusterRevision:
-		return matterThermUIClusterRevision, true
-	default:
-		return nil, false
-	}
-}
-
-func (s climateThermostatUIServer) MatterWrite(_ context.Context, attrID uint32, _ any) error {
-	return fmt.Errorf("%w: 0x%04X", errMatterUnknownAttribute, attrID)
-}
-
-func (s climateThermostatUIServer) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
-	return nil, fmt.Errorf("%w: 0x%02X", errMatterUnknownCommand, cmdID)
-}
-
-func (s climateThermostatUIServer) MatterReportable() []uint32 { return nil }
-
-// MatterAttributes lists the ThermostatUserInterfaceConfiguration
-// (0x0204) surface. Both mandatory attributes — TemperatureDisplayMode
-// (0x0000) and KeypadLockout (0x0001) — are included so Apple Home's
-// HAP service rebuild does not abort on a missing mandatory attribute.
-func (s climateThermostatUIServer) MatterAttributes() []uint32 {
-	return []uint32{matterAttrUITempDisplayMode, matterAttrUIKeypadLockout}
-}
-
-// extractSetpointRaiseLower pulls (mode, amount) out of a
-// SetpointRaiseLower request. Mode is context tag 0 (enum8), Amount is
-// context tag 1 (int8). The bridge decodes a Thermostat request through
-// the generated definition (cluster/spec/thermostat) whenever that
-// package is linked — this file links it — so the wire path delivers
-// [thermostatspec.SetpointRaiseLowerRequest], with a missing field
-// already answered INVALID_COMMAND. Without a linked definition the
-// bridge falls back to the tag-keyed map[uint8]any of
-// decodeGenericTagMap — unsigned ints as uint64, signed ints as int64
-// (go-fabric bridge/fields_reader.go); that shape stays accepted so the
-// decode does not depend on what the binary links. The string-keyed
-// shape is kept for the in-package tests.
-func extractSetpointRaiseLower(fields any) (mode uint8, amount int8, err error) {
-	switch v := fields.(type) {
-	case thermostatspec.SetpointRaiseLowerRequest:
-		return uint8(v.Mode), v.Amount, nil
-	case map[uint8]any:
-		if rawMode, ok := v[0]; ok {
-			m, ok := wireSetpointMode(rawMode)
-			if !ok {
-				return 0, 0, fmt.Errorf("%w: SetpointRaiseLower mode expected integer, got %T", errMatterValueType, rawMode)
-			}
-			mode = m
-		}
-		rawAmount, ok := v[1]
-		if !ok {
-			return 0, 0, fmt.Errorf("%w: SetpointRaiseLower missing amount (tag 1)", errMatterValueType)
-		}
-		amount, ok = wireSetpointAmount(rawAmount)
-		if !ok {
-			return 0, 0, fmt.Errorf("%w: SetpointRaiseLower amount expected integer, got %T", errMatterValueType, rawAmount)
-		}
-		return mode, amount, nil
-	case map[string]any:
-		rawMode, ok := v["mode"]
-		if !ok {
-			return 0, 0, fmt.Errorf("%w: SetpointRaiseLower missing mode", errMatterValueType)
-		}
-		mode, ok = rawMode.(uint8)
-		if !ok {
-			return 0, 0, fmt.Errorf("%w: SetpointRaiseLower mode expected uint8, got %T", errMatterValueType, rawMode)
-		}
-		rawAmount, ok := v["amount"]
-		if !ok {
-			return 0, 0, fmt.Errorf("%w: SetpointRaiseLower missing amount", errMatterValueType)
-		}
-		amount, ok = rawAmount.(int8)
-		if !ok {
-			return 0, 0, fmt.Errorf("%w: SetpointRaiseLower amount expected int8, got %T", errMatterValueType, rawAmount)
-		}
-		return mode, amount, nil
-	default:
-		return 0, 0, fmt.Errorf("%w: SetpointRaiseLower expected thermostat.SetpointRaiseLowerRequest or map[uint8]any, got %T", errMatterValueType, fields)
-	}
-}
-
-// wireSetpointMode reads the SetpointRaiseLower Mode enum from a value
-// decoded by decodeGenericTagMap (unsigned ints land as uint64).
-func wireSetpointMode(raw any) (uint8, bool) {
-	switch n := raw.(type) {
-	case uint64:
-		return uint8(n & 0xFF), true
-	case uint8:
-		return n, true
-	default:
-		return 0, false
-	}
-}
-
-// wireSetpointAmount reads the SetpointRaiseLower Amount (signed int8)
-// from a value decoded by decodeGenericTagMap (signed ints land as
-// int64).
-func wireSetpointAmount(raw any) (int8, bool) {
-	switch n := raw.(type) {
-	case int64:
-		return int8(n), true //nolint:gosec // field is a signed byte per spec; see #20
-	case int8:
-		return n, true
-	case int:
-		return int8(n), true //nolint:gosec // field is a signed byte per spec; see #20
-	default:
-		return 0, false
-	}
+// SetSetpoint implements [thermo.Sink]: HM exposes one setpoint per
+// Climate, so OccupiedHeatingSetpoint and OccupiedCoolingSetpoint both
+// become [Climate.SetTemperature] and the companions the server's
+// reconcile would move alongside carry nothing the device could take.
+func (s climateThermoSink) SetSetpoint(ctx context.Context, _ uint32, value int16, _ []thermo.SetpointChange) error {
+	return s.c.SetTemperature(ctx, matterToCelsius(value), matterDispatchPriority)
 }
