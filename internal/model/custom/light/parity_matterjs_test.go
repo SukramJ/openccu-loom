@@ -9,6 +9,7 @@ import (
 
 	"github.com/SukramJ/go-fabric/cluster/levelcontrol"
 	"github.com/SukramJ/go-fabric/cluster/onoff"
+	"github.com/SukramJ/go-fabric/cluster/wire"
 
 	matterparity "github.com/SukramJ/go-fabric/parity"
 
@@ -202,9 +203,9 @@ func TestParityMatterJS_LightClusterRevisions(t *testing.T) {
 		{onoff.ClusterID, "OnOff", onOffClusterRevision(t)},
 		{levelcontrol.ClusterID, "LevelControl", levelClusterRevision(t)},
 		// D-50: ColorControl is mounted on dimmable+colored lights via
-		// `matter_color.go::{ctColorServer, hsColorServer, rgbwColorServer}`.
+		// `matter_color.go` (go-fabric's ColorControlServer per colour variant).
 		// matter.js HEAD `color-control.element.ts` carries revision 9.
-		{matterClusterColorControl, "ColorControl", matterColorControlClusterRevision},
+		{wire.ColorControlClusterID, "ColorControl", colorClusterRevision(t)},
 	}
 
 	for _, c := range cases {
@@ -224,6 +225,19 @@ func TestParityMatterJS_LightClusterRevisions(t *testing.T) {
 			}
 		})
 	}
+}
+
+// colorClusterRevision reads ClusterRevision from the ColorControl
+// server a colour light actually serves.
+func colorClusterRevision(t *testing.T) uint16 {
+	t.Helper()
+	l := newHSLight(t, &stubWriter{})
+	v, ok := colorServer(t, l).MatterRead(matterAttrClusterRevision)
+	rev, isU16 := v.(uint16)
+	if !ok || !isU16 {
+		t.Fatalf("light ColorControl ClusterRevision = (%v, %v), want a uint16", v, ok)
+	}
+	return rev
 }
 
 // onOffClusterRevision reads ClusterRevision from the OnOff server a

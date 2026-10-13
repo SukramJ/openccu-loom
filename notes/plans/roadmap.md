@@ -131,17 +131,18 @@ replace it, and the metrics that say whether it worked.
   the daemon now pins: #60 (thermo Sink), #61 (cover Mover port), #62
   (versioned store migrations — the loom migrations 04x could be checked
   against `store.Migrations()` step by step), #63 (onoff Sink under the
-  operation lock — the daemon's coalescing feedback worker is gone), #66
-  (`ColorControlServer.Set` — the ColorControl follow-up is unblocked;
-  the LevelControl follow-up is merged, #957). Phase 3 (unblocked by
+  operation lock — the daemon's coalescing feedback worker is gone,
+  #960), #66 (`ColorControlServer.Set` — the ColorControl follow-up is
+  done; the LevelControl follow-up is merged, #957). Phase 3 (unblocked by
   go-fabric #58, not started):
   `startMatterBridge` onto `node.New` now that the facade carries host hooks —
   fabric added/removed/updated observers, commissioning-complete and
   window-transition observers, per-window PASE credentials (ephemeral
   window), concurrent pairings, TimeSync opt-in, SupportedFabrics, CASE
   node/fabric preferences. Each phase ends with the Apple Home run in the
-  ADR. Follow-ups named there: LevelControl onto `levelcontrol.NewServer`,
-  ColorControl onto `light.NewColorControlServer`.
+  ADR. Both cluster follow-ups named there (LevelControl, ColorControl)
+  are done; open behind them: advertising XY on the ExtendedColorLight
+  variants (by_design BD-Matter-ExtendedColorLight-HSOnly).
   Detail: [`docs/adr/0084`](../../docs/adr/0084-matter-device-layer-and-node-facade.md).
 
 - **Bridged endpoints run on `groups.Manager` — done with go-fabric v0.3.0.**

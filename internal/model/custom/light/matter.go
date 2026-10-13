@@ -5,7 +5,6 @@ package light
 
 import (
 	"context"
-	"errors"
 
 	"github.com/SukramJ/go-fabric/cluster/onoff"
 
@@ -121,12 +120,6 @@ const (
 	matterLevelMax uint8 = 0xFE
 )
 
-var (
-	errMatterUnknownAttribute = errors.New("matter: unknown attribute")
-	errMatterUnknownCommand   = errors.New("matter: unknown command")
-	errMatterValueType        = errors.New("matter: unexpected value type")
-)
-
 // MatterDeviceType implements [interfaces.MatterEndpointSource]. Maps
 // the dimmable / non-dimmable distinction onto Matter's two basic
 // light device types (0x0101 / 0x0100).
@@ -225,19 +218,4 @@ func matterLevelToHM(m uint8) float64 {
 		return 1.0
 	}
 	return float64(m) / float64(matterLevelMax)
-}
-
-// wireUint8 reads an unsigned integer out of a value decoded from the
-// generic tag-keyed fields map, where decodeGenericTagMap stores
-// unsigned ints as uint64. The narrower Go-type cases keep the helper
-// usable from tests that pass those directly.
-func wireUint8(raw any) (uint8, bool) {
-	switch n := raw.(type) {
-	case uint64:
-		return uint8(n & 0xFF), true
-	case uint8:
-		return n, true
-	default:
-		return 0, false
-	}
 }

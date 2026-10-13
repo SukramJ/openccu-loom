@@ -294,6 +294,14 @@ func (r *RGBWLight) Subscribe(ch *device.Channel) func() {
 }
 
 func (r *RGBWLight) recordMode(s string) {
+	r.setMode(s)
+	// The Matter colour mode follows the operating mode; the server
+	// learns of the switch here because no colour event carries it.
+	r.matterColorSync()
+}
+
+// setMode records the wire label s as the current operating mode.
+func (r *RGBWLight) setMode(s string) {
 	r.muMode.Lock()
 	defer r.muMode.Unlock()
 	r.hasMode = true

@@ -86,6 +86,9 @@ type Light struct {
 	matterLevelOnce sync.Once
 	matterLevelSrv  *levelcontrol.Server
 	matterLevel     lightLevelState
+	// matterColor holds the ColorControl server a colour variant builds
+	// (matter_color.go); the plain Light never fills it.
+	matterColor matterColorHolder
 	// hasRampStop reports a RAMP_STOP action on the channel (the classic
 	// HM dimmers), which a LevelControl Stop writes.
 	hasRampStop bool
@@ -254,6 +257,7 @@ func (l *Light) Close() {
 		l.unsubLevel = nil
 	}
 	l.matterOnOff.Quiesce()
+	l.matterColor.quiesce()
 }
 
 // Subscribe satisfies [device.SubscribingDataPoint]. Light has no

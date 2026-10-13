@@ -74,6 +74,25 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Matter: the ColorControl cluster of every colour light is go-fabric's
+  `light.ColorControlServer`** (ADR 0084 ColorControl follow-up). The
+  three hand-written projections (HS, CT, HS+CT) are gone; the profile
+  contributes its CCU writes as the server's writer ports — one atomic
+  HUE+SATURATION put_paramset or the RF dimmers' COLOR integer for a
+  colour, SetKelvin for a colour temperature — and feeds the CCU's
+  confirmed colour back through the server's `Set`, which stores without
+  a second write. What a controller observes changes: a colour changed
+  at the wall, by a CCU program or by an RGBW operating-mode switch is
+  now reported proactively on the ColorControl attributes (before, only
+  OnOff and brightness were; the chip-tool suite carried the colour gap
+  as a pinned expectation, now a positive test); RemainingTime is
+  served; the Move / Step / Stop commands move the in-process colour and
+  reach the CCU as whole colours instead of being accepted as no-ops;
+  Options is writable; a command to the colour the server already holds
+  is no change and does not reach the CCU (matter.js). The ExecuteIfOff
+  gate reads the light's own OnOff. FeatureMaps are unchanged (HS, CT,
+  HS|CT); the CT servers start from go-fabric's 2700 K default until the
+  CCU reports a colour temperature.
 - **Matter: the light's LevelControl cluster is go-fabric's
   `levelcontrol.Server`** on its hand-off path (ADR 0084 follow-up): the
   light is the server's `LevelSource`, the dimmer ramps itself through

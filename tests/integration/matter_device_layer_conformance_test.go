@@ -26,11 +26,10 @@ import (
 // acceptedCategoryDeviceTypeViolations declares known device-type conformance
 // departures of the category fleet. Key: "<device type>|<requirement>|<kind>".
 var acceptedCategoryDeviceTypeViolations = map[string]string{
-	"OnOffLight|OnOff.LT|missing":                           "finding: the OnOff smoke fixture is a single-cluster stub without the LT feature, see report",
-	"ExtendedColorLight|ColorControl.XY|missing":            "finding: loom's ColorControl server is HS-only, see report",
-	"ExtendedColorLight|ColorControl.CT|missing":            "finding: loom's ColorControl server carries no colour-temperature feature, see report",
-	"ExtendedColorLight|ColorControl.RemainingTime|missing": "finding: ColorControl server omits the mandatory RemainingTime attribute, see report",
-	"SmokeCoAlarm|device:PowerSource|instanceCount":         "finding: the smoke siren endpoint has no PowerSource composition in the smoke fleet, see report",
+	"OnOffLight|OnOff.LT|missing":                   "finding: the OnOff smoke fixture is a single-cluster stub without the LT feature, see report",
+	"ExtendedColorLight|ColorControl.XY|missing":    "finding: loom's ColorControl server is HS-only, see report",
+	"ExtendedColorLight|ColorControl.CT|missing":    "finding: loom's ColorControl server carries no colour-temperature feature, see report",
+	"SmokeCoAlarm|device:PowerSource|instanceCount": "finding: the smoke siren endpoint has no PowerSource composition in the smoke fleet, see report",
 }
 
 func buildCategoryFleetTopology(t *testing.T) *endpoint.Topology {

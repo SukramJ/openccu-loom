@@ -5,13 +5,15 @@ package light
 
 import (
 	"context"
-	"errors"
 	"testing"
+	"time"
 
+	fabriclight "github.com/SukramJ/go-fabric/cluster/light"
 	"github.com/SukramJ/go-fabric/cluster/wire"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // --- Encoding helpers ---
@@ -85,25 +87,102 @@ func TestKelvinToMiredsConversionRange(t *testing.T) {
 	}
 }
 
+// colorServer returns the ColorControl server a colour variant serves,
+// as the endpoint assembler sees it.
+func colorServer(t *testing.T, src interfaces.MatterEndpointSource) *fabriclight.ColorControlServer {
+	t.Helper()
+	for _, s := range src.MatterClusterServers() {
+		if srv, ok := s.(*fabriclight.ColorControlServer); ok {
+			return srv
+		}
+	}
+	t.Fatal("no *fabriclight.ColorControlServer among MatterClusterServers()")
+	return nil
+}
+
+// readU8 / readU16 read an attribute that must be served.
+func readU8(t *testing.T, srv *fabriclight.ColorControlServer, attr uint32) uint8 {
+	t.Helper()
+	v, ok := srv.MatterRead(attr)
+	if !ok {
+		t.Fatalf("attribute 0x%04X not served", attr)
+	}
+	u, isU8 := v.(uint8)
+	if !isU8 {
+		t.Fatalf("attribute 0x%04X read %T, want uint8", attr, v)
+	}
+	return u
+}
+
+func readU16(t *testing.T, srv *fabriclight.ColorControlServer, attr uint32) uint16 {
+	t.Helper()
+	v, ok := srv.MatterRead(attr)
+	if !ok {
+		t.Fatalf("attribute 0x%04X not served", attr)
+	}
+	u, isU16 := v.(uint16)
+	if !isU16 {
+		t.Fatalf("attribute 0x%04X read %T, want uint16", attr, v)
+	}
+	return u
+}
+
+// writtenValues collects the last value w observed per parameter.
+func writtenValues(w *colorStubWriter) map[hmenum.Parameter]any {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	out := make(map[hmenum.Parameter]any, len(w.calls))
+	for _, c := range w.calls {
+		out[c.param] = c.value
+	}
+	return out
+}
+
+const (
+	ctCaps   = "ct"
+	ctMinK   = 2700
+	ctMaxK   = 6500
+	onLevel  = 0.5
+	offLevel = 0.0
+)
+
+func newCTLight(t *testing.T, w Writer) *ColorTempLight {
+	t.Helper()
+	caps := custom.LightCapabilities{SupportsColorTemp: true, Dimmable: true}
+	ch := newColorTempRig(t, "HmIP-CTL:4", w, caps, ctMinK, ctMaxK)
+	return NewColorTempLight(Config{Channel: ch, Writer: w, Capabilities: caps}, ctMinK, ctMaxK)
+}
+
+func newHSLight(t *testing.T, w Writer) *ColorLight {
+	t.Helper()
+	caps := custom.LightCapabilities{SupportsColor: true, Dimmable: true}
+	ch := newColorRig(t, "HmIP-RGB:4", w, caps)
+	return NewColorLight(Config{Channel: ch, Writer: w, Capabilities: caps})
+}
+
+func newRGBW(t *testing.T, w Writer) *RGBWLight {
+	t.Helper()
+	caps := custom.LightCapabilities{SupportsColor: true, SupportsColorTemp: true, Dimmable: true}
+	ch := newRGBWRig(t, "HmIP-RGBW:4", w, caps)
+	return NewRGBWLight(Config{Channel: ch, Writer: w, Capabilities: caps})
+}
+
 // --- ColorTempLight ---
 
 // TestColorTempLightDeviceTypeIsColorTemperatureLight locks the
 // 0x010C device type override on the embedded Light's 0x0101.
 func TestColorTempLightDeviceTypeIsColorTemperatureLight(t *testing.T) {
-	w := &stubWriter{}
-	ch := newColorTempRig(t, "HmIP-CTL:4", w, custom.LightCapabilities{SupportsColorTemp: true}, 2700, 6500)
-	l := NewColorTempLight(Config{Channel: ch, Writer: w, Capabilities: custom.LightCapabilities{SupportsColorTemp: true, Dimmable: true}}, 2700, 6500)
+	l := newCTLight(t, &stubWriter{})
 	if got := l.MatterDeviceType(); got != 0x010C {
 		t.Fatalf("ColorTempLight.MatterDeviceType = 0x%04X, want 0x010C", got)
 	}
 }
 
 // TestColorTempLightExposesOnOffLevelAndColorControl confirms the
-// three-cluster projection.
+// three-cluster projection, with ColorControl served by go-fabric's
+// server carrying the CT feature alone.
 func TestColorTempLightExposesOnOffLevelAndColorControl(t *testing.T) {
-	w := &stubWriter{}
-	ch := newColorTempRig(t, "HmIP-CTL:4", w, custom.LightCapabilities{SupportsColorTemp: true}, 2700, 6500)
-	l := NewColorTempLight(Config{Channel: ch, Writer: w, Capabilities: custom.LightCapabilities{SupportsColorTemp: true, Dimmable: true}}, 2700, 6500)
+	l := newCTLight(t, &stubWriter{})
 	got := map[uint32]bool{}
 	for _, s := range l.MatterClusterServers() {
 		got[s.MatterClusterID()] = true
@@ -113,45 +192,141 @@ func TestColorTempLightExposesOnOffLevelAndColorControl(t *testing.T) {
 			t.Errorf("ColorTempLight cluster 0x%04X missing from %v", want, got)
 		}
 	}
-}
-
-// TestColorTempServerKelvinReadAndWrite round-trips through Mireds.
-func TestColorTempServerKelvinReadAndWrite(t *testing.T) {
-	w := &stubWriter{}
-	ch := newColorTempRig(t, "HmIP-CTL:4", w, custom.LightCapabilities{SupportsColorTemp: true}, 2700, 6500)
-	l := NewColorTempLight(Config{Channel: ch, Writer: w, Capabilities: custom.LightCapabilities{SupportsColorTemp: true, Dimmable: true}}, 2700, 6500)
-	// Find ColorControl server.
-	var cc ctColorServer
-	for _, s := range l.MatterClusterServers() {
-		if v, ok := s.(ctColorServer); ok {
-			cc = v
-		}
+	srv := colorServer(t, l)
+	fm, _ := srv.MatterRead(matterAttrFeatureMap)
+	if fm != uint32(fabriclight.ColorFeatureColorTemperature) {
+		t.Fatalf("FeatureMap = %v, want CT only (0x%X)", fm, uint32(fabriclight.ColorFeatureColorTemperature))
 	}
-	// Issue MoveToColorTemperature(370 mireds ≈ 2700 K).
-	if _, err := cc.MatterInvoke(context.Background(), 0x0A, uint16(370)); err != nil {
-		t.Fatalf("MoveToColorTemperature err: %v", err)
-	}
-	// Verify Kelvin reached the wire.
-	dp := ch.Parameter(hmenum.ParameterColorTemperature)
-	if dp == nil {
-		t.Fatal("COLOR_TEMPERATURE DP missing from channel")
+	if got := readU8(t, srv, wire.ColorCtrlAttrColorMode); got != uint8(fabriclight.ColorModeColorTemperature) {
+		t.Fatalf("ColorMode = %d, want 2 (ColorTemperature)", got)
 	}
 }
 
-// TestColorTempServerColorModeIsCT locks the EnhancedColorMode read.
-func TestColorTempServerColorModeIsCT(t *testing.T) {
-	w := &stubWriter{}
-	ch := newColorTempRig(t, "HmIP-CTL:4", w, custom.LightCapabilities{SupportsColorTemp: true}, 2700, 6500)
-	l := NewColorTempLight(Config{Channel: ch, Writer: w, Capabilities: custom.LightCapabilities{SupportsColorTemp: true, Dimmable: true}}, 2700, 6500)
-	var cc ctColorServer
-	for _, s := range l.MatterClusterServers() {
-		if v, ok := s.(ctColorServer); ok {
-			cc = v
+// TestColorTempServerIsOneInstanceAcrossReassemblies pins the holder: the
+// assembler re-reads the servers on every reassembly and the bridge keeps
+// the one it already serves.
+func TestColorTempServerIsOneInstanceAcrossReassemblies(t *testing.T) {
+	l := newCTLight(t, &stubWriter{})
+	first, second := colorServer(t, l), colorServer(t, l)
+	if first != second {
+		t.Fatal("MatterClusterServers built a second ColorControl server")
+	}
+}
+
+// TestColorTempServerMoveToColorTemperatureReachesTheCCU drives
+// MoveToColorTemperature through go-fabric's server and expects the
+// Kelvin write on the wire plus the attribute moved: 250 mireds is
+// 4000 K. (370 mireds would be the server's own start value while the
+// CCU has not reported one, and a command to the current value is no
+// change — matter.js Datasource skips a deep-equal commit.)
+func TestColorTempServerMoveToColorTemperatureReachesTheCCU(t *testing.T) {
+	w := &colorStubWriter{}
+	l := newCTLight(t, w)
+	l.OnLevel(onLevel)
+	srv := colorServer(t, l)
+	req := wire.MoveToColorTemperatureRequest{ColorTemperatureMireds: 250}
+	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToColorTemperature, req); err != nil {
+		t.Fatalf("MoveToColorTemperature: %v", err)
+	}
+	got, ok := writtenValues(w)[hmenum.ParameterColorTemperature]
+	if !ok {
+		t.Fatalf("COLOR_TEMPERATURE was not written; writes: %v", writtenValues(w))
+	}
+	if got != int32(4000) {
+		t.Fatalf("COLOR_TEMPERATURE written = %v, want 4000 K", got)
+	}
+	if m := readU16(t, srv, wire.ColorCtrlAttrColorTemperatureMireds); m != 250 {
+		t.Fatalf("ColorTemperatureMireds after the command = %d, want 250", m)
+	}
+}
+
+// TestColorTempServerMoveToColorTemperatureGatedWhileOff mirrors matter.js
+// ColorControlServer.ts #optionsAllowExecution through go-fabric's server
+// and the light's own OnOff: while the light is off the command silently
+// no-ops unless ExecuteIfOff is effective (mask bit 0 AND override bit 0).
+func TestColorTempServerMoveToColorTemperatureGatedWhileOff(t *testing.T) {
+	w := &colorStubWriter{}
+	l := newCTLight(t, w)
+	l.OnLevel(offLevel)
+	srv := colorServer(t, l)
+
+	req := wire.MoveToColorTemperatureRequest{ColorTemperatureMireds: 250}
+	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToColorTemperature, req); err != nil {
+		t.Fatalf("gated MoveToColorTemperature returned error: %v", err)
+	}
+	if _, written := writtenValues(w)[hmenum.ParameterColorTemperature]; written {
+		t.Fatal("gated MoveToColorTemperature wrote COLOR_TEMPERATURE while off without ExecuteIfOff")
+	}
+
+	req.OptionsMask, req.OptionsOverride = 0x01, 0x01
+	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToColorTemperature, req); err != nil {
+		t.Fatalf("ExecuteIfOff MoveToColorTemperature returned error: %v", err)
+	}
+	if _, written := writtenValues(w)[hmenum.ParameterColorTemperature]; !written {
+		t.Fatal("ExecuteIfOff MoveToColorTemperature did not reach the CCU")
+	}
+}
+
+// TestColorTempServerConfirmedKelvinReachesTheServer pins the inbound
+// path: a COLOR_TEMPERATURE the CCU confirms (a wall transmitter, a CCU
+// program) lands on the server through Set — readable at once and
+// reported through the change notifier — without a write.
+func TestColorTempServerConfirmedKelvinReachesTheServer(t *testing.T) {
+	w := &colorStubWriter{}
+	l := newCTLight(t, w)
+	srv := colorServer(t, l)
+	reported := make(chan []uint32, 4)
+	unsub := srv.OnMatterAttributesChanged(func(ids []uint32) { reported <- ids })
+	defer unsub()
+
+	l.kelvin.OnEvent(int32(4000))
+
+	if m := readU16(t, srv, wire.ColorCtrlAttrColorTemperatureMireds); m != 250 {
+		t.Fatalf("ColorTemperatureMireds after the confirmed 4000 K = %d, want 250", m)
+	}
+	select {
+	case ids := <-reported:
+		if !containsAttr(ids, wire.ColorCtrlAttrColorTemperatureMireds) {
+			t.Fatalf("reported %v, want ColorTemperatureMireds", ids)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the confirmed colour temperature was not reported through the change notifier")
+	}
+	if len(w.calls) != 0 {
+		t.Fatalf("a confirmed value must not echo into a write; writes: %v", writtenValues(w))
+	}
+}
+
+func containsAttr(ids []uint32, want uint32) bool {
+	for _, id := range ids {
+		if id == want {
+			return true
 		}
 	}
-	v, ok := cc.MatterRead(0x0008)
-	if !ok || v.(uint8) != matterColorModeColorTemp {
-		t.Fatalf("ColorMode = (%v, %v), want (2=ColorTemp, true)", v, ok)
+	return false
+}
+
+// TestColorTempServerPhysicalMiredsFollowTheLightsKelvinBounds pins the
+// projection rule for ColorTempPhysicalMin/MaxMireds: the light's own
+// Kelvin bounds, reciprocated (higher Kelvin → lower mireds).
+func TestColorTempServerPhysicalMiredsFollowTheLightsKelvinBounds(t *testing.T) {
+	l := newCTLight(t, &stubWriter{})
+	srv := colorServer(t, l)
+	if got := readU16(t, srv, wire.ColorCtrlAttrColorTempPhysicalMin); got != kelvinToMireds(ctMaxK) {
+		t.Fatalf("ColorTempPhysicalMinMireds = %d, want %d", got, kelvinToMireds(ctMaxK))
+	}
+	if got := readU16(t, srv, wire.ColorCtrlAttrColorTempPhysicalMax); got != kelvinToMireds(ctMinK) {
+		t.Fatalf("ColorTempPhysicalMaxMireds = %d, want %d", got, kelvinToMireds(ctMinK))
+	}
+
+	r := newRGBW(t, &stubWriter{})
+	r.MinKelvin, r.MaxKelvin = 2700, 6000
+	rs := colorServer(t, r)
+	if got := readU16(t, rs, wire.ColorCtrlAttrColorTempPhysicalMin); got != kelvinToMireds(6000) {
+		t.Fatalf("RGBW ColorTempPhysicalMinMireds = %d, want %d", got, kelvinToMireds(6000))
+	}
+	if got := readU16(t, rs, wire.ColorCtrlAttrColorTempPhysicalMax); got != kelvinToMireds(2700) {
+		t.Fatalf("RGBW ColorTempPhysicalMaxMireds = %d, want %d", got, kelvinToMireds(2700))
 	}
 }
 
@@ -160,71 +335,106 @@ func TestColorTempServerColorModeIsCT(t *testing.T) {
 // TestColorLightDeviceTypeIsExtendedColorLight locks the 0x010D
 // device type override.
 func TestColorLightDeviceTypeIsExtendedColorLight(t *testing.T) {
-	w := &stubWriter{}
-	ch := newColorRig(t, "HmIP-RGB:4", w, custom.LightCapabilities{SupportsColor: true, Dimmable: true})
-	l := NewColorLight(Config{Channel: ch, Writer: w, Capabilities: custom.LightCapabilities{SupportsColor: true, Dimmable: true}})
+	l := newHSLight(t, &stubWriter{})
 	if got := l.MatterDeviceType(); got != 0x010D {
 		t.Fatalf("ColorLight.MatterDeviceType = 0x%04X, want 0x010D", got)
 	}
 }
 
-// TestColorLightHueSatRoundTrip routes a MoveToHueAndSaturation
-// command through SetColor.
-func TestColorLightHueSatRoundTrip(t *testing.T) {
-	w := &stubWriter{}
-	ch := newColorRig(t, "HmIP-RGB:4", w, custom.LightCapabilities{SupportsColor: true, Dimmable: true})
-	l := NewColorLight(Config{Channel: ch, Writer: w, Capabilities: custom.LightCapabilities{SupportsColor: true, Dimmable: true}})
-	var hs hsColorServer
-	for _, s := range l.MatterClusterServers() {
-		if v, ok := s.(hsColorServer); ok {
-			hs = v
-		}
-	}
-	// Matter 127 hue ≈ 180°, 254 saturation = 1.0.
-	if _, err := hs.MatterInvoke(context.Background(), 0x06, wire.MoveToHueAndSaturationRequest{Hue: 127, Saturation: 254}); err != nil {
-		t.Fatalf("MoveToHueAndSaturation err: %v", err)
-	}
-	if ch.Parameter(hmenum.ParameterHue) == nil {
-		t.Fatal("HUE DP missing")
-	}
-	if ch.Parameter(hmenum.ParameterSaturation) == nil {
-		t.Fatal("SATURATION DP missing")
-	}
-}
-
-// TestColorLightHueSatMissingFieldsRejected covers the field-shape
-// guard.
-func TestColorLightHueSatMissingFieldsRejected(t *testing.T) {
-	w := &stubWriter{}
-	ch := newColorRig(t, "HmIP-RGB:4", w, custom.LightCapabilities{SupportsColor: true, Dimmable: true})
-	l := NewColorLight(Config{Channel: ch, Writer: w, Capabilities: custom.LightCapabilities{SupportsColor: true, Dimmable: true}})
-	var hs hsColorServer
-	for _, s := range l.MatterClusterServers() {
-		if v, ok := s.(hsColorServer); ok {
-			hs = v
-		}
-	}
-	fields := map[string]any{"hue": uint8(64)} // missing saturation
-	_, err := hs.MatterInvoke(context.Background(), 0x06, fields)
-	if !errors.Is(err, errMatterValueType) {
-		t.Fatalf("err = %v, want errMatterValueType for missing saturation", err)
-	}
-}
-
-// TestColorLightColorModeIsHS locks the EnhancedColorMode read.
+// TestColorLightColorModeIsHS locks the HS-only feature set and mode.
 func TestColorLightColorModeIsHS(t *testing.T) {
-	w := &stubWriter{}
-	ch := newColorRig(t, "HmIP-RGB:4", w, custom.LightCapabilities{SupportsColor: true, Dimmable: true})
-	l := NewColorLight(Config{Channel: ch, Writer: w, Capabilities: custom.LightCapabilities{SupportsColor: true, Dimmable: true}})
-	var hs hsColorServer
-	for _, s := range l.MatterClusterServers() {
-		if v, ok := s.(hsColorServer); ok {
-			hs = v
+	l := newHSLight(t, &stubWriter{})
+	srv := colorServer(t, l)
+	fm, _ := srv.MatterRead(matterAttrFeatureMap)
+	if fm != uint32(fabriclight.ColorFeatureHueSaturation) {
+		t.Fatalf("FeatureMap = %v, want HS only", fm)
+	}
+	for _, attr := range []uint32{wire.ColorCtrlAttrColorMode, wire.ColorCtrlAttrEnhancedColorMode} {
+		if got := readU8(t, srv, attr); got != uint8(fabriclight.ColorModeHueSaturation) {
+			t.Fatalf("attr 0x%04X = %d, want 0 (HueSaturation)", attr, got)
 		}
 	}
-	v, ok := hs.MatterRead(0x0008)
-	if !ok || v.(uint8) != matterColorModeHueSaturation {
-		t.Fatalf("ColorMode = (%v, %v), want (0=HS, true)", v, ok)
+}
+
+// TestColorLightMoveToHueAndSaturationReachesTheCCU routes
+// MoveToHueAndSaturation through go-fabric's server into one SetColor:
+// Matter hue 127 is 180°, saturation 254 is the wire's 1.0.
+func TestColorLightMoveToHueAndSaturationReachesTheCCU(t *testing.T) {
+	w := &colorStubWriter{}
+	l := newHSLight(t, w)
+	l.OnLevel(onLevel)
+	srv := colorServer(t, l)
+	req := wire.MoveToHueAndSaturationRequest{Hue: 127, Saturation: 254}
+	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToHueAndSaturation, req); err != nil {
+		t.Fatalf("MoveToHueAndSaturation: %v", err)
+	}
+	got := writtenValues(w)
+	if got[hmenum.ParameterHue] != int32(180) {
+		t.Fatalf("HUE written = %v, want 180", got[hmenum.ParameterHue])
+	}
+	if got[hmenum.ParameterSaturation] != 1.0 {
+		t.Fatalf("SATURATION written = %v, want 1.0", got[hmenum.ParameterSaturation])
+	}
+	if h := readU8(t, srv, wire.ColorCtrlAttrCurrentHue); h != 127 {
+		t.Fatalf("CurrentHue after the command = %d, want 127", h)
+	}
+}
+
+// TestColorLightMoveToHueAndSaturationGatedWhileOff is the HS twin of the
+// CT gate test above.
+func TestColorLightMoveToHueAndSaturationGatedWhileOff(t *testing.T) {
+	w := &colorStubWriter{}
+	l := newHSLight(t, w)
+	l.OnLevel(offLevel)
+	srv := colorServer(t, l)
+
+	req := wire.MoveToHueAndSaturationRequest{Hue: 127, Saturation: 254}
+	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToHueAndSaturation, req); err != nil {
+		t.Fatalf("gated MoveToHueAndSaturation returned error: %v", err)
+	}
+	if _, written := writtenValues(w)[hmenum.ParameterHue]; written {
+		t.Fatal("gated MoveToHueAndSaturation wrote HUE while off without ExecuteIfOff")
+	}
+
+	req.OptionsMask, req.OptionsOverride = 0x01, 0x01
+	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToHueAndSaturation, req); err != nil {
+		t.Fatalf("ExecuteIfOff MoveToHueAndSaturation returned error: %v", err)
+	}
+	if _, written := writtenValues(w)[hmenum.ParameterHue]; !written {
+		t.Fatal("ExecuteIfOff MoveToHueAndSaturation did not reach the CCU")
+	}
+}
+
+// TestColorLightConfirmedColourReachesTheServer pins the inbound HS path:
+// HUE and SATURATION the CCU confirms land on the server through Set.
+func TestColorLightConfirmedColourReachesTheServer(t *testing.T) {
+	w := &colorStubWriter{}
+	l := newHSLight(t, w)
+	srv := colorServer(t, l)
+
+	l.hue.OnEvent(int32(90))
+	l.saturation.OnEvent(0.5)
+
+	if h := readU8(t, srv, wire.ColorCtrlAttrCurrentHue); h != hueToMatter(90) {
+		t.Fatalf("CurrentHue after the confirmed 90° = %d, want %d", h, hueToMatter(90))
+	}
+	if s := readU8(t, srv, wire.ColorCtrlAttrCurrentSaturation); s != saturationToMatter(50) {
+		t.Fatalf("CurrentSaturation after the confirmed 0.5 = %d, want %d", s, saturationToMatter(50))
+	}
+	if len(w.calls) != 0 {
+		t.Fatalf("a confirmed colour must not echo into a write; writes: %v", writtenValues(w))
+	}
+}
+
+// TestColorLightServerStartsFromTheObservedColour: a colour observed
+// before the server is built is its initial state, not the zero colour.
+func TestColorLightServerStartsFromTheObservedColour(t *testing.T) {
+	l := newHSLight(t, &stubWriter{})
+	l.hue.OnEvent(int32(180))
+	l.saturation.OnEvent(1.0)
+	srv := colorServer(t, l)
+	if h := readU8(t, srv, wire.ColorCtrlAttrCurrentHue); h != hueToMatter(180) {
+		t.Fatalf("initial CurrentHue = %d, want %d", h, hueToMatter(180))
 	}
 }
 
@@ -233,106 +443,148 @@ func TestColorLightColorModeIsHS(t *testing.T) {
 // TestRGBWLightDeviceTypeIsExtendedColorLight locks the 0x010D device
 // type override.
 func TestRGBWLightDeviceTypeIsExtendedColorLight(t *testing.T) {
-	w := &stubWriter{}
-	ch := newRGBWRig(t, "HmIP-RGBW:4", w, custom.LightCapabilities{SupportsColor: true, SupportsColorTemp: true, Dimmable: true})
-	l := NewRGBWLight(Config{Channel: ch, Writer: w, Capabilities: custom.LightCapabilities{SupportsColor: true, SupportsColorTemp: true, Dimmable: true}})
+	l := newRGBW(t, &stubWriter{})
 	if got := l.MatterDeviceType(); got != 0x010D {
 		t.Fatalf("RGBWLight.MatterDeviceType = 0x%04X, want 0x010D", got)
 	}
 }
 
 // TestRGBWLightFeatureMapAdvertisesHSAndCT confirms the FeatureMap
-// has both HS (bit 0) and CT (bit 4) bits set.
+// carries both HS and CT.
 func TestRGBWLightFeatureMapAdvertisesHSAndCT(t *testing.T) {
-	w := &stubWriter{}
-	ch := newRGBWRig(t, "HmIP-RGBW:4", w, custom.LightCapabilities{SupportsColor: true, SupportsColorTemp: true, Dimmable: true})
-	l := NewRGBWLight(Config{Channel: ch, Writer: w, Capabilities: custom.LightCapabilities{SupportsColor: true, SupportsColorTemp: true, Dimmable: true}})
-	var rgbw rgbwColorServer
-	for _, s := range l.MatterClusterServers() {
-		if v, ok := s.(rgbwColorServer); ok {
-			rgbw = v
-		}
-	}
-	v, _ := rgbw.MatterRead(0xFFFC)
-	got := v.(uint32)
-	if got&matterColorFeatureHS == 0 {
-		t.Errorf("FeatureMap = 0x%08X, missing HS bit", got)
-	}
-	if got&matterColorFeatureCT == 0 {
-		t.Errorf("FeatureMap = 0x%08X, missing CT bit", got)
+	l := newRGBW(t, &stubWriter{})
+	srv := colorServer(t, l)
+	v, _ := srv.MatterRead(matterAttrFeatureMap)
+	want := uint32(fabriclight.ColorFeatureHueSaturation | fabriclight.ColorFeatureColorTemperature)
+	if v != want {
+		t.Fatalf("FeatureMap = %v, want 0x%X (HS|CT)", v, want)
 	}
 }
 
-// TestRGBWLightInvokeMoveToCTRequiresTunableMode confirms the
-// projection delegates the mode-gating to the upstream RGBWLight.
-// HmIP-RGBW devices reject SetKelvin when the current mode is not
-// RGBW or TunableWhite — the projection surfaces that error verbatim.
-func TestRGBWLightInvokeMoveToCTRequiresTunableMode(t *testing.T) {
-	w := &stubWriter{}
-	ch := newRGBWRig(t, "HmIP-RGBW:4", w, custom.LightCapabilities{SupportsColor: true, SupportsColorTemp: true, Dimmable: true})
-	l := NewRGBWLight(Config{Channel: ch, Writer: w, Capabilities: custom.LightCapabilities{SupportsColor: true, SupportsColorTemp: true, Dimmable: true}})
-	// Seed the mode via the wire-side recorder so SetKelvin is allowed.
-	l.recordMode("2_TUNABLE_WHITE")
-	var rgbw rgbwColorServer
-	for _, s := range l.MatterClusterServers() {
-		if v, ok := s.(rgbwColorServer); ok {
-			rgbw = v
+// TestRGBWLightMoveToColorTemperatureWritesOnlyTheColourTemperature
+// pins the writer split: a CT command reaches the CCU as one
+// COLOR_TEMPERATURE write; the hue/saturation fields the colour writer is
+// handed alongside are the last of their mode and must not be written.
+func TestRGBWLightMoveToColorTemperatureWritesOnlyTheColourTemperature(t *testing.T) {
+	w := &colorStubWriter{}
+	l := newRGBW(t, w)
+	l.recordMode("RGBW")
+	l.OnLevel(onLevel)
+	srv := colorServer(t, l)
+	req := wire.MoveToColorTemperatureRequest{ColorTemperatureMireds: 250}
+	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToColorTemperature, req); err != nil {
+		t.Fatalf("MoveToColorTemperature: %v", err)
+	}
+	got := writtenValues(w)
+	if got[hmenum.ParameterColorTemperature] != int32(4000) {
+		t.Fatalf("COLOR_TEMPERATURE written = %v, want 4000", got[hmenum.ParameterColorTemperature])
+	}
+	for _, p := range []hmenum.Parameter{hmenum.ParameterHue, hmenum.ParameterSaturation} {
+		if _, written := got[p]; written {
+			t.Fatalf("%s was written by a colour-temperature command; writes: %v", p, got)
 		}
 	}
-	if _, err := rgbw.MatterInvoke(context.Background(), 0x0A, uint16(370)); err != nil {
-		t.Fatalf("MoveToColorTemperature err: %v", err)
+	if got := readU8(t, srv, wire.ColorCtrlAttrColorMode); got != uint8(fabriclight.ColorModeColorTemperature) {
+		t.Fatalf("ColorMode after MoveToColorTemperature = %d, want 2", got)
 	}
-	if ch.Parameter(hmenum.ParameterColorTemperature) == nil {
-		t.Fatal("COLOR_TEMPERATURE DP missing")
+}
+
+// TestRGBWLightMoveToHueWritesTheColour: an HS command in RGBW mode
+// reaches the CCU as HUE + SATURATION and leaves COLOR_TEMPERATURE alone.
+func TestRGBWLightMoveToHueWritesTheColour(t *testing.T) {
+	w := &colorStubWriter{}
+	l := newRGBW(t, w)
+	l.recordMode("RGBW")
+	l.OnLevel(onLevel)
+	srv := colorServer(t, l)
+	req := wire.MoveToHueRequest{Hue: 127}
+	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToHue, req); err != nil {
+		t.Fatalf("MoveToHue: %v", err)
+	}
+	got := writtenValues(w)
+	if got[hmenum.ParameterHue] != int32(180) {
+		t.Fatalf("HUE written = %v, want 180", got[hmenum.ParameterHue])
+	}
+	if _, written := got[hmenum.ParameterColorTemperature]; written {
+		t.Fatalf("COLOR_TEMPERATURE was written by a hue command; writes: %v", got)
 	}
 }
 
 // TestRGBWLightColorModeFollowsDeviceOperatingMode locks the ColorMode
-// projection contract. ColorMode (and the mirror EnhancedColorMode) must
-// report CT when the device-side RGBW operating mode is TunableWhite and
-// HS in every other case — Apple Home reads ColorMode at Subscribe-initial
-// and routes MoveTo* commands accordingly. A projection that returns HS
-// unconditionally would route MoveToHueAndSaturation at a TunableWhite-mode
-// lamp.
-//
-// Mirrors matter.js color-control behavior: the server reports the mode
-// matching the most recently active attribute family.
+// projection contract: CT when the device-side operating mode is
+// TunableWhite, HS in every other case, HS before the mode was observed.
+// Apple Home reads ColorMode at Subscribe-initial and routes MoveTo*
+// commands accordingly.
 func TestRGBWLightColorModeFollowsDeviceOperatingMode(t *testing.T) {
 	cases := []struct {
 		modeWire string
-		want     uint8
+		want     fabriclight.ColorMode
 	}{
-		{"2_TUNABLE_WHITE", matterColorModeColorTemp},
-		{"RGB", matterColorModeHueSaturation},
-		{"RGBW", matterColorModeHueSaturation},
-		{"4_PWM", matterColorModeHueSaturation},
-		// Empty / unset mode resolves to RGBWModeUnknown and must keep
-		// the defensive HS fallback.
-		{"", matterColorModeHueSaturation},
+		{"2_TUNABLE_WHITE", fabriclight.ColorModeColorTemperature},
+		{"RGB", fabriclight.ColorModeHueSaturation},
+		{"RGBW", fabriclight.ColorModeHueSaturation},
+		{"4_PWM", fabriclight.ColorModeHueSaturation},
+		{"", fabriclight.ColorModeHueSaturation},
 	}
 	for _, tc := range cases {
 		t.Run(tc.modeWire, func(t *testing.T) {
-			w := &stubWriter{}
-			ch := newRGBWRig(t, "HmIP-RGBW:4", w, custom.LightCapabilities{SupportsColor: true, SupportsColorTemp: true, Dimmable: true})
-			l := NewRGBWLight(Config{Channel: ch, Writer: w, Capabilities: custom.LightCapabilities{SupportsColor: true, SupportsColorTemp: true, Dimmable: true}})
+			l := newRGBW(t, &stubWriter{})
 			if tc.modeWire != "" {
 				l.recordMode(tc.modeWire)
 			}
-			var rgbw rgbwColorServer
-			for _, s := range l.MatterClusterServers() {
-				if v, ok := s.(rgbwColorServer); ok {
-					rgbw = v
-				}
-			}
-			for _, attrID := range []uint32{matterAttrColorColorMode, matterAttrColorEnhancedColorMode} {
-				got, ok := rgbw.MatterRead(attrID)
-				if !ok {
-					t.Fatalf("attr 0x%04X: MatterRead must return ok", attrID)
-				}
-				if got.(uint8) != tc.want {
-					t.Fatalf("attr 0x%04X mode=%q: got %d, want %d", attrID, tc.modeWire, got.(uint8), tc.want)
+			srv := colorServer(t, l)
+			for _, attr := range []uint32{wire.ColorCtrlAttrColorMode, wire.ColorCtrlAttrEnhancedColorMode} {
+				if got := readU8(t, srv, attr); got != uint8(tc.want) {
+					t.Fatalf("attr 0x%04X mode=%q: got %d, want %d", attr, tc.modeWire, got, tc.want)
 				}
 			}
 		})
 	}
+}
+
+// TestRGBWLightOperatingModeChangeMovesTheServer pins the mode hook: a
+// device switched to TUNABLE_WHITE after the server was built reports the
+// CT mode through Set, with the observed colour temperature, and a switch
+// back reports HS again.
+func TestRGBWLightOperatingModeChangeMovesTheServer(t *testing.T) {
+	l := newRGBW(t, &stubWriter{})
+	l.recordMode("RGBW")
+	l.hue.OnEvent(int32(180))
+	l.saturation.OnEvent(1.0)
+	l.kelvin.OnEvent(int32(4000))
+	srv := colorServer(t, l)
+	reported := make(chan []uint32, 8)
+	unsub := srv.OnMatterAttributesChanged(func(ids []uint32) { reported <- ids })
+	defer unsub()
+
+	l.recordMode("2_TUNABLE_WHITE")
+	if got := readU8(t, srv, wire.ColorCtrlAttrColorMode); got != uint8(fabriclight.ColorModeColorTemperature) {
+		t.Fatalf("ColorMode after the switch to TUNABLE_WHITE = %d, want 2", got)
+	}
+	if m := readU16(t, srv, wire.ColorCtrlAttrColorTemperatureMireds); m != 250 {
+		t.Fatalf("ColorTemperatureMireds after the switch = %d, want 250", m)
+	}
+	select {
+	case ids := <-reported:
+		if !containsAttr(ids, wire.ColorCtrlAttrColorMode) {
+			t.Fatalf("reported %v, want ColorMode", ids)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the mode switch was not reported through the change notifier")
+	}
+
+	l.recordMode("RGB")
+	if got := readU8(t, srv, wire.ColorCtrlAttrColorMode); got != uint8(fabriclight.ColorModeHueSaturation) {
+		t.Fatalf("ColorMode after the switch back to RGB = %d, want 0", got)
+	}
+}
+
+// TestLightCloseQuiescesTheColourServer: Close must not panic with or
+// without a built server, and must leave the server readable.
+func TestLightCloseQuiescesTheColourServer(t *testing.T) {
+	l := newRGBW(t, &stubWriter{})
+	l.Close()
+	srv := colorServer(t, l)
+	l.Close()
+	readU8(t, srv, wire.ColorCtrlAttrColorMode)
 }

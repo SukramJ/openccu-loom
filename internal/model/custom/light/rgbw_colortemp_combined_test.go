@@ -12,6 +12,9 @@ import (
 	"context"
 	"testing"
 
+	fabriclight "github.com/SukramJ/go-fabric/cluster/light"
+	"github.com/SukramJ/go-fabric/cluster/wire"
+
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/payload"
@@ -177,39 +180,24 @@ func TestLSCStateColorModeFollowsKelvin(t *testing.T) {
 	}
 }
 
-// TestLSCMatterColorModeFollowsKelvin verifies the Matter ColorControl
-// server's ColorMode attribute reports HueSaturation while KELVIN is
-// unobserved and ColorTemp once a non-zero KELVIN value lands.
+// TestLSCMatterColorModeFollowsKelvin verifies the ColorControl server's
+// ColorMode attribute reports HueSaturation while KELVIN is unobserved
+// and ColorTemperature once a non-zero KELVIN value lands — the HmIP-LSC
+// has no operating mode, so the confirmed colour temperature carries
+// the mode switch through Set.
 func TestLSCMatterColorModeFollowsKelvin(t *testing.T) {
 	w := &colorStubWriter{}
 	r := newLSCLightRig(t, w)
+	srv := colorServer(t, r)
 
-	var rgbw rgbwColorServer
-	for _, s := range r.MatterClusterServers() {
-		if v, ok := s.(rgbwColorServer); ok {
-			rgbw = v
-		}
-	}
-	if rgbw.l == nil {
-		t.Fatal("rgbwColorServer not found among MatterClusterServers()")
-	}
-
-	got, ok := rgbw.MatterRead(matterAttrColorColorMode)
-	if !ok {
-		t.Fatal("MatterRead(ColorMode) must return ok=true")
-	}
-	if got.(uint8) != matterColorModeHueSaturation {
-		t.Errorf("ColorMode before kelvin = %d, want %d (HueSaturation)", got.(uint8), matterColorModeHueSaturation)
+	if got := readU8(t, srv, wire.ColorCtrlAttrColorMode); got != uint8(fabriclight.ColorModeHueSaturation) {
+		t.Errorf("ColorMode before kelvin = %d, want 0 (HueSaturation)", got)
 	}
 
 	r.kelvin.OnEvent(int32(4000))
 
-	got, ok = rgbw.MatterRead(matterAttrColorColorMode)
-	if !ok {
-		t.Fatal("MatterRead(ColorMode) must return ok=true")
-	}
-	if got.(uint8) != matterColorModeColorTemp {
-		t.Errorf("ColorMode after kelvin = %d, want %d (ColorTemp)", got.(uint8), matterColorModeColorTemp)
+	if got := readU8(t, srv, wire.ColorCtrlAttrColorMode); got != uint8(fabriclight.ColorModeColorTemperature) {
+		t.Errorf("ColorMode after kelvin = %d, want 2 (ColorTemperature)", got)
 	}
 }
 
