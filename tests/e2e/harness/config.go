@@ -156,7 +156,7 @@ func buildConfigYAML(in configInputs) string {
 		return b.String()
 	}
 	fmt.Fprintf(&b, "centrals:\n")
-	fmt.Fprintf(&b, "  - name: ccu-e2e\n")
+	fmt.Fprintf(&b, "  - name: %s\n", CentralName)
 	fmt.Fprintf(&b, "    host: %s\n", in.CCUHost)
 	if in.Lite {
 		fmt.Fprintf(&b, "    system_type: openccu-lite\n")
