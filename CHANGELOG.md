@@ -107,6 +107,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the write's reply (the simulator does) would otherwise block the
   interface's whole event callback until the write timed out — the
   chip-tool suite caught it, go-fabric #63 tracks it upstream.
+- **go-fabric 0.3.1.** The Matter stack moves to the release that closes
+  every ask the device-layer migration filed: `onoff.Server` runs the
+  host Sink outside the lock `Set` takes (#63 — the daemon's coalescing
+  feedback worker is no longer load-bearing and will go with the next
+  OnOff slice), `ColorControlServer.Set` records a device-originated
+  colour (#66, the ColorControl follow-up is unblocked), thermostat Sink
+  and window-covering Mover ports with inbound setters (#60, #61),
+  `store.Migrations()` as versioned steps (#62), host observers on the
+  node facade (#58, phase 3 is unblocked) and generated device-type names
+  (#57). No schema change: the store is the one 0.3.0 created. Wire
+  fixes the daemon inherits: a PASE / CASE handshake in flight keeps its
+  TCP connection open, the lost first chunk of a chunked report counts
+  as peer loss, and RemoveFabric / UpdateNOC tell the fabric's other
+  sessions with a CloseSession before closing them.
 - **Matter session parameters.** PBKDFParamResponse (PASE) and Sigma2
   (CASE) now carry the node's whole SessionParameters structure — the
   MRP intervals as before, plus the Data Model, Interaction Model and

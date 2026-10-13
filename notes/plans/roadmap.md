@@ -127,13 +127,15 @@ replace it, and the metrics that say whether it worked.
   the five OnOff servers onto `cluster/onoff.Server` with a CCU Sink; the
   chip-tool Groups/Scenes positive test is in; the live Apple Home run
   covers phases 1 and 2 together and is still due.
-  Upstream asks filed on the way: go-fabric #60 (thermo Sink), #61
-  (cover Mover port), #62 (versioned store migrations), #63 (onoff Sink
-  under the operation lock), #66 (ColorControlServer has no setter for
-  device-originated colour — the ColorControl follow-up waits on it, the
-  LevelControl follow-up is merged, #957). Phase 3 (blocked
-  on go-fabric #58):
-  `startMatterBridge` onto `node.New` once the facade carries host hooks —
+  Upstream asks filed on the way — all closed by go-fabric v0.3.1, which
+  the daemon now pins: #60 (thermo Sink), #61 (cover Mover port), #62
+  (versioned store migrations — the loom migrations 04x could be checked
+  against `store.Migrations()` step by step), #63 (onoff Sink under the
+  operation lock — the daemon's coalescing feedback worker can go), #66
+  (`ColorControlServer.Set` — the ColorControl follow-up is unblocked;
+  the LevelControl follow-up is merged, #957). Phase 3 (unblocked by
+  go-fabric #58, not started):
+  `startMatterBridge` onto `node.New` now that the facade carries host hooks —
   fabric added/removed/updated observers, commissioning-complete and
   window-transition observers, per-window PASE credentials (ephemeral
   window), concurrent pairings, TimeSync opt-in, SupportedFabrics, CASE
