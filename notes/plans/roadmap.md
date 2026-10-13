@@ -148,9 +148,13 @@ replace it, and the metrics that say whether it worked.
   inferred target of by_design BD-Matter-WindowCovering-InferredTarget
   (Apple's motion arrow on wall-button movement) could not be carried
   over — asks filed as go-fabric #76 (inbound target setter or motion
-  rule) and #77 (tilt axis with a tilt Mover port). Open behind them:
-  advertising XY on the ExtendedColorLight variants (by_design
-  BD-Matter-ExtendedColorLight-HSOnly).
+  rule) and #77 (tilt axis with a tilt Mover port). The XY feature on
+  the ExtendedColorLight variants is parked as well: measured with
+  go-fabric 0.3.1, a MoveToColor on an HS device drives the ColorWriter
+  with the converted current colour first (the mode switch) and the
+  device's HS echo of that write counts as a different colour, so the
+  command is lost (CCU ends at HUE 358 instead of red) — go-fabric #79.
+  by_design BD-Matter-ExtendedColorLight-HSOnly stays declared.
   Detail: [`docs/adr/0084`](../../docs/adr/0084-matter-device-layer-and-node-facade.md).
 
 - **Bridged endpoints run on `groups.Manager` — done with go-fabric v0.3.0.**
