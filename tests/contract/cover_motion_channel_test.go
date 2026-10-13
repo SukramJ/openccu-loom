@@ -5,9 +5,9 @@
 // parameter across the two consumers that read it.
 //
 // A Cover reads motion twice: the constructor resolves it through the
-// profile schema (custom.ResolveSlotOnCarryingChannel) and hangs the Matter
-// cluster DataVersion hook off the result, while the state path feeds
-// Direction / IsOpening / IsClosing. On the HmIP cover families the schema
+// profile schema (custom.ResolveSlotOnCarryingChannel) and the Matter
+// WindowCovering server's OperationalStatus follows the result, while the
+// state path feeds Direction / IsOpening / IsClosing. On the HmIP cover families the schema
 // puts the field on the shared transmitter channel — StateChannelOffset -1
 // — while the custom data point itself hangs off a virtual-receiver
 // channel, so a second, own-channel lookup binds a DIFFERENT data point
@@ -24,6 +24,8 @@ package contract
 import (
 	"strconv"
 	"testing"
+
+	windowcoveringspec "github.com/SukramJ/go-fabric/cluster/spec/windowcovering"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/cover"
@@ -119,16 +121,32 @@ func coverMotionBrollDevice(t *testing.T) (cov *cover.Cover, transmitter, receiv
 	return got, transmitter, receiver
 }
 
+// coverOperationalStatus reads the WindowCovering OperationalStatus the
+// cover's Matter server serves (global bits 0-1, lift bits 2-3).
+func coverOperationalStatus(t *testing.T, cov *cover.Cover) uint8 {
+	t.Helper()
+	v, ok := cov.MatterClusterServers()[0].MatterRead(windowcoveringspec.AttrOperationalStatus)
+	if !ok {
+		t.Fatal("OperationalStatus not served")
+	}
+	st, ok := v.(uint8)
+	if !ok {
+		t.Fatalf("OperationalStatus = %T, want uint8", v)
+	}
+	return st
+}
+
 // TestCoverMotionBindsTheSchemaResolvedChannel asserts that the state path
-// (Direction / IsOpening) and the Matter DataVersion path observe the SAME
-// motion data point — the one the profile schema names.
+// (Direction / IsOpening) and the Matter path (the WindowCovering server's
+// OperationalStatus) observe the SAME motion data point — the one the
+// profile schema names.
 func TestCoverMotionBindsTheSchemaResolvedChannel(t *testing.T) {
 	t.Run("transmitter push drives both consumers", func(t *testing.T) {
 		cov, transmitter, _ := coverMotionBrollDevice(t)
 
-		// Snapshot immediately before the motion push: LEVEL updates bump
-		// the same counter, so anything in between would make this arm noise.
-		before := cov.MatterDataVersion()
+		if st := coverOperationalStatus(t, cov); st != 0 {
+			t.Fatalf("OperationalStatus before any motion push = 0x%02X, want 0 (stopped)", st)
+		}
 		transmitter.OnEvent(1) // UP
 
 		got, observed := cov.Direction()
@@ -141,8 +159,9 @@ func TestCoverMotionBindsTheSchemaResolvedChannel(t *testing.T) {
 		if !cov.IsOpening() {
 			t.Fatalf("IsOpening = false after transmitter ACTIVITY_STATE=UP")
 		}
-		if cov.MatterDataVersion() == before {
-			t.Fatalf("MatterDataVersion unchanged (%d) after transmitter ACTIVITY_STATE push — the Matter path did not observe the same event as the state path", before)
+		// Opening: global=01, lift=01.
+		if st := coverOperationalStatus(t, cov); st != 0x05 {
+			t.Fatalf("OperationalStatus = 0x%02X after transmitter ACTIVITY_STATE push, want 0x05 — the Matter path did not observe the same event as the state path", st)
 		}
 	})
 
@@ -153,7 +172,7 @@ func TestCoverMotionBindsTheSchemaResolvedChannel(t *testing.T) {
 	t.Run("receiver push drives neither consumer", func(t *testing.T) {
 		cov, _, receiver := coverMotionBrollDevice(t)
 
-		before := cov.MatterDataVersion()
+		before := coverOperationalStatus(t, cov)
 		receiver.OnEvent(2) // DOWN on the cover's OWN channel
 
 		if got, observed := cov.Direction(); observed {
@@ -162,8 +181,8 @@ func TestCoverMotionBindsTheSchemaResolvedChannel(t *testing.T) {
 		if cov.IsClosing() {
 			t.Fatalf("IsClosing = true after a receiver-channel ACTIVITY_STATE push")
 		}
-		if cov.MatterDataVersion() != before {
-			t.Fatalf("MatterDataVersion moved from %d to %d on a receiver-channel push", before, cov.MatterDataVersion())
+		if st := coverOperationalStatus(t, cov); st != before {
+			t.Fatalf("OperationalStatus moved from 0x%02X to 0x%02X on a receiver-channel push", before, st)
 		}
 	})
 

@@ -6,10 +6,13 @@ package cover
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"testing"
 
 	matterparity "github.com/SukramJ/go-fabric/parity"
+
+	windowcoveringspec "github.com/SukramJ/go-fabric/cluster/spec/windowcovering"
+
+	"github.com/SukramJ/go-fabric/cluster/spec"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -59,7 +62,7 @@ func TestParityMatterJS_CoverClusterRevisions(t *testing.T) {
 		name         string
 		codeRevision uint16
 	}{
-		{matterClusterWindowCovering, "WindowCovering", matterWindowCoveringClusterRevision},
+		{windowcoveringspec.ClusterID, "WindowCovering", servedWindowCoveringRevision(t)},
 	}
 
 	for _, c := range cases {
@@ -259,12 +262,33 @@ func TestParityMatterJS_WindowCoveringCommandLists(t *testing.T) {
 			}
 
 			for _, id := range clusterCommands {
+				// Every advertised command succeeds against the stub
+				// writer (GoTo is debounced, Stop is served); the server
+				// refuses an unknown id and a GoTo of an axis it does not
+				// serve.
 				_, err := srv.MatterInvoke(context.Background(), id, uint16(5000))
-				handled := !errors.Is(err, errMatterUnknownCommand)
+				handled := err == nil
 				if handled != advertised[id] {
 					t.Errorf("command 0x%02X: MatterInvoke handles=%v, advertised=%v", id, handled, advertised[id])
 				}
 			}
 		})
 	}
+}
+
+// servedWindowCoveringRevision reads ClusterRevision from the server a
+// Cover mounts — go-fabric's generated definition — so the parity case
+// compares what the daemon serves against the matter.js snapshot.
+func servedWindowCoveringRevision(t *testing.T) uint16 {
+	t.Helper()
+	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
+	v, ok := c.MatterClusterServers()[0].MatterRead(spec.AttrClusterRevision)
+	if !ok {
+		t.Fatal("ClusterRevision not served")
+	}
+	rev, ok := v.(uint16)
+	if !ok {
+		t.Fatalf("ClusterRevision = %T, want uint16", v)
+	}
+	return rev
 }

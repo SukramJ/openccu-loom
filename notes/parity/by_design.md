@@ -1089,8 +1089,9 @@ report which geometry the actuator drives. Pinned by
 
 ### BD-Matter-WindowCovering-InferredTarget — inferred TargetPosition on externally initiated movement
 
-**Where:** `internal/model/custom/cover/matter.go` (`liftTargetRead`),
-`cover.go` (`Cover.OnDirection`), `garage.go` (`Garage.OnSection`).
+**Where:** `internal/model/custom/cover/matter.go`
+(`Cover.syncMatterMotionTo`, `Cover.syncMatterLiftTo`), `cover.go`
+(`Cover.OnDirection`), `garage.go` (`Garage.OnSection`).
 
 **matter.js behaviour:** `WindowCoveringServer` derives OperationalStatus
 FROM target-vs-current (`#handleLiftTargetPositionChanging` →
@@ -1110,17 +1111,29 @@ and infers the target from the motion: while opening, a commanded target is
 kept only if strictly ahead of current (`target < current` in percent100ths,
 0 = open), otherwise the reported target is the direction limit 0; closing is
 the mirror image (keep `target > current`, else 10000); at rest the commanded
-target is reported while in effect, otherwise the read mirrors
-CurrentPosition (matter.js startup init `:142`, StopMotion snap `:490`). An
-externally reported moving→stopped transition additionally clears the stored
-commanded target (the `handleStopMovement` snap semantics,
-`WindowCoveringServer.ts:485-493`, applied to a device-initiated stop).
-Pinned by `TestCoverInferredTarget_*`,
-`TestBlindInferredTarget_LiftInferredTiltCommandedUntilStop`, and
-`TestGarageInferredTarget_SectionMovementAndStop` in
-`internal/model/custom/cover/matter_target_position_test.go`. The Blind tilt
-axis has no motion signal in the model, so no tilt inference applies
-(matching the existing OperationalStatus tilt limitation).
+target stands while in effect, otherwise the target follows every confirmed
+position (matter.js startup init `:142`, StopMotion snap `:490`). An
+externally reported moving→stopped transition additionally snaps the stored
+targets to the current positions and ends the command in effect (the
+`handleStopMovement` snap semantics, `WindowCoveringServer.ts:485-493`,
+applied to a device-initiated stop).
+
+Since the ADR 0084 WindowCovering follow-up the Cover and the Blind serve
+go-fabric's `cover.WindowCoveringServer`, which owns the target: the
+inference is no longer computed at read time but written into the server
+through its inbound `SetTargetPosition` (go-fabric #76) — the direction
+limit while moving, the position at the stop — and the "command in effect"
+state is the cover's own flag (`matterCommanded`), set by the Mover and
+cleared by Stop and the reported stop, so a confirmed position snaps the
+target only while no command is pursuing one. A cover whose position the
+CCU has not reported yet starts at the server's default, fully open (0),
+where the hand-rolled projection answered null. Pinned by
+`TestCoverInferredTarget_*`, `TestCoverCommandedTargetSurvivesAPositionEchoBeforeMotion`,
+`TestBlindInferredTarget_LiftInferredTiltCommandedUntilStop` in
+`internal/model/custom/cover/matter_target_position_test.go` and
+`TestGarageInferredTarget_SectionMovementAndStop`. The Blind tilt axis has
+no motion signal in the model, so no tilt inference applies (matching the
+existing OperationalStatus tilt limitation).
 
 ### BD-Matter-ClosureControl-StopForwarded — a garage Stop reaches the drive whatever the closure state
 
@@ -1303,8 +1316,9 @@ refuse or queue that write rate on a busy interface.
 ### BD-Matter-WindowCovering-SliderDebounce — GoTo*Percentage two-phase slider debounce with accepted-before-written CCU write
 
 **Where:** `internal/model/custom/cover/matter_debounce.go`; the
-`MatterInvoke` GoToLiftPercentage / GoToTiltPercentage / StopMotion /
-UpOrOpen / DownOrClose cases in `internal/model/custom/cover/matter.go`.
+`wcMover` (go-fabric `cover.Mover`) in `internal/model/custom/cover/matter.go`,
+which carries GoToLiftPercentage / GoToTiltPercentage / StopMotion /
+UpOrOpen / DownOrClose from the server to the cover.
 
 **matter.js behaviour:** `WindowCoveringServer.goToLiftPercentage` /
 `goToTiltPercentage` store `TargetPosition*Percent100ths` immediately and
@@ -1323,11 +1337,17 @@ pending write. A command whose destination is within 1 % (100 percent100ths)
 of the observed current position is acknowledged without any radio write and
 additionally drops a pending intermediate drag value. StopMotion cancels all
 pending axis writes; UpOrOpen / DownOrClose cancel the pending writes of the
-axes they drive. Consequence: the Matter command returns Success on
-acceptance, and a subsequently failing deferred CCU write is only logged
+axes they drive. A lift target at either limit (0 or 10000) is written at
+once through the cover's Open / Close: the server hands UpOrOpen and a
+GoToLiftPercentage at the limit to the Mover as the same call, so the
+immediate write UpOrOpen always had now covers the GoTo at the limit too.
+Consequence: the Matter command returns Success on acceptance, and a
+subsequently failing deferred CCU write is only logged
 (`cover: deferred window covering position write failed`) — the commanded
 target stays reported and the position mismatch surfaces through the normal
-CCU value-event echo.
+CCU value-event echo. A command whose immediate write fails (UpOrOpen,
+DownOrClose, StopMotion) answers FAILURE and the server restores the
+previous target.
 
 **Why:** Apple Home / Google Home slider drags emit 5-10 GoTo commands in
 quick succession. HM cover actuators sit behind a duty-cycle-limited radio;

@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"math"
 	"sync"
+	"sync/atomic"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -144,15 +145,16 @@ type Cover struct {
 	// reach the LEVEL DP through Channel.Parameter.
 	payload.ServiceRegistry
 
-	// dataVersion tracks the per-cluster monotonic counter (Matter
-	// §10.6.5). Bumped on every successful MatterInvoke so
-	// DataVersionFilter evaluation correctly detects cluster changes.
-	dataVersion hmtypes.DataVersionTracker
-
-	// matterTarget stores the last commanded WindowCovering target
-	// positions for the Matter projection (lift + tilt axis). Owned
-	// here so the value survives cluster-server reconstruction.
-	matterTarget matterTargetState
+	// matterWC holds the one WindowCovering server the cover serves
+	// (shared with the Blind subtype via the embedded Cover), matterPorts
+	// the operations and the tilt axis the variant handed its builder,
+	// and matterCommanded whether a Matter command's target is in effect
+	// — set by the Mover, cleared by Stop and by the moving→stopped
+	// transition the CCU reports, so a confirmed position snaps the
+	// target only when no command is pursuing one.
+	matterWC        matterWCHolder
+	matterPorts     wcPorts
+	matterCommanded atomic.Bool
 
 	// matterGoTo debounces GoTo*Percentage slider gestures into a
 	// single deferred CCU write per axis. Owned here (shared with the
@@ -226,14 +228,6 @@ func New(cfg Config) *Cover {
 	}
 	if c.Float != nil {
 		c.registerCoverServices()
-		// Matter §10.6.5: DataVersion advances on every CCU-confirmed attribute change.
-		_ = c.OnConfirmedUpdate(func(_, _ float64) { c.dataVersion.Bump() })
-	}
-	if c.directionDp != nil {
-		// A motion transition changes the WindowCovering OperationalStatus
-		// and inferred TargetPosition reads, so it must advance the
-		// cluster DataVersion just like a LEVEL change.
-		_ = c.directionDp.OnConfirmedUpdate(func(_, _ int32) { c.dataVersion.Bump() })
 	}
 	return c
 }
@@ -477,14 +471,16 @@ func (c *Cover) Close(ctx context.Context, priority hmenum.CommandPriority) erro
 // to clear the cached state when the CCU stops reporting (e.g. after a
 // controller restart).
 //
-// A moving→stopped transition additionally snaps the stored Matter
-// targets back to mirroring the current positions — the semantics of
-// matter.js handleStopMovement (WindowCoveringServer.ts:485-493)
-// applied to a stop the CCU reports on its own (wall button, end
-// position reached, obstruction) rather than a Matter StopMotion
-// command. Without the snap a commanded target from an earlier Matter
-// invoke survives the stop and keeps reporting a destination the cover
-// is no longer pursuing.
+// The motion reaches the WindowCovering server afterwards
+// ([Cover.syncMatterMotion]): OperationalStatus, the inferred target
+// while moving, and on a moving→stopped transition the snap of the
+// stored targets to the current positions — the semantics of matter.js
+// handleStopMovement (WindowCoveringServer.ts:485-493) applied to a
+// stop the CCU reports on its own (wall button, end position reached,
+// obstruction) rather than a Matter StopMotion command. Without the
+// snap a commanded target from an earlier Matter invoke survives the
+// stop and keeps reporting a destination the cover is no longer
+// pursuing.
 func (c *Cover) OnDirection(d CoverDirection) {
 	c.directionMu.Lock()
 	wasMoving := c.movingLocked()
@@ -492,9 +488,7 @@ func (c *Cover) OnDirection(d CoverDirection) {
 	c.hasDir = d != DirectionUnknown
 	nowMoving := c.movingLocked()
 	c.directionMu.Unlock()
-	if wasMoving && !nowMoving {
-		c.matterTarget.clear()
-	}
+	c.syncMatterMotion(wasMoving, nowMoving)
 }
 
 // movingLocked reports whether the cached direction is an active motion

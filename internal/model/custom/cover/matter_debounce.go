@@ -199,18 +199,19 @@ func goToAtTarget(pct uint16, position func() (custom.Position, bool)) bool {
 	return diff <= goToAtTargetTolerance
 }
 
-// dispatchGoToPercentage is the shared acceptance path for
-// GoToLiftPercentage / GoToTiltPercentage across the Cover and Blind
-// projections (the Garage projection does not use it):
+// dispatchGoToPercentage is the shared acceptance path of the Mover for
+// a GoToLiftPercentage / GoToTiltPercentage target across the Cover and
+// Blind projections (the Garage projection does not use it):
 //
 //   - already at target (within 1 %): acknowledge without writing. Any
 //     pending intermediate drag value is dropped too — the freshest
 //     intent is "stay where you are".
-//   - otherwise: store the commanded target immediately (matter.js sets
-//     TargetPosition*Percent100ths before triggering motion,
-//     WindowCoveringServer.ts:578/:600) so attribute reads and the
-//     motion-direction inference see it at once, then defer the CCU
-//     write through the two-phase debouncer.
+//   - otherwise: defer the CCU write through the two-phase debouncer.
+//     The commanded target is already stored — go-fabric's server sets
+//     TargetPosition*Percent100ths before it calls the Mover, as
+//     matter.js sets it before triggering motion
+//     (WindowCoveringServer.ts:578/:600) — so attribute reads and the
+//     motion-direction inference see it at once.
 //
 // write receives the HM domain-level converted from pct — captured
 // here, before scheduling, so the timer callback reads no live state.
@@ -221,10 +222,8 @@ func dispatchGoToPercentage(
 	address string,
 	pct uint16,
 	position func() (custom.Position, bool),
-	storeTarget func(uint16),
 	write func(ctx context.Context, hmLevel float64) error,
 ) {
-	storeTarget(pct)
 	if goToAtTarget(pct, position) {
 		deb.cancel(axis)
 		return

@@ -18,10 +18,10 @@ import (
 // variant that is actually present in godevccu's fleet today. The
 // cluster has two sibling EndProductType variants — Blind (lift+tilt,
 // HmIP-FBL) and Garage (HmIP-MOD-HO) — covered by
-// [TestSendReceive_WindowCovering_Tilt] and
-// [TestSendReceive_WindowCovering_Garage]; both currently skip because
-// godevccu's DefaultDevices fleet does not yet embed those fixtures
-// (see notes/contributor/chiptool-send-receive-matrix.md WindowCovering
+// [TestSendReceive_WindowCovering_Tilt] (its own HmIP-FBL bridge) and
+// [TestSendReceive_WindowCovering_Garage], which skips because
+// godevccu's DefaultDevices fleet does not embed that fixture (see
+// notes/contributor/chiptool-send-receive-matrix.md WindowCovering
 // godevccu_gap).
 func TestSendReceive_WindowCovering(t *testing.T) {
 	b := requireBridge(t)
@@ -148,10 +148,11 @@ func TestSendReceive_WindowCovering(t *testing.T) {
 // EndProductType=10 (InteriorBlind), Garage reports Type=0
 // (RollerShade — the enum has no garage code) + EndProductType=0
 // (RollerShade). A plain Shutter reports Type=6 + EndProductType=17
-// and falls into the "cover" default. See the MatterRead methods on
-// coverWCServer, blindWCServer, and garageWCServer in
-// internal/model/custom/cover/matter.go (values sourced from
-// matter.js WindowCovering.element.ts).
+// and falls into the "cover" default. See coverTypeFor /
+// coverEndProductTypeFor and the Blind's server configuration in
+// internal/model/custom/cover/matter.go (values from go-fabric's
+// generated WindowCovering definition, matter.js
+// window-covering-cluster.element.ts).
 func windowcoveringClassify(ctx context.Context, t *testing.T, ctl *harness.Controller, ep uint16) string {
 	t.Helper()
 	typeOut, err := ctl.ReadAttr(ctx, t, "windowcovering", "type", ep)
@@ -191,29 +192,62 @@ func windowcoveringFindByKind(ctx context.Context, t *testing.T, b *harness.Brid
 }
 
 // TestSendReceive_WindowCovering_Tilt exercises the Blind (HmIP-FBL,
-// lift+tilt) SEND cell and pins a documented model-layer RECEIVE gap:
-// a LEVEL_2-only CCU push has no dedicated Matter change notifier.
-// Blind inherits OnMatterValueChanged from the embedded
-// *generic.Float bound to LEVEL only (see the "Cover and Blind
-// inherit OnMatterValueChanged from the embedded *generic.Float"
-// compile-time-assertion comment in
-// internal/model/custom/cover/matter.go), so a tilt-only external
-// change never dirty-marks the endpoint and therefore never reaches a
-// live Subscribe as a proactive report — even though the value is
-// correct and servable on demand via a plain read.
+// lift+tilt) SEND and RECEIVE cells. Since the ADR 0084 WindowCovering
+// follow-up the Blind serves go-fabric's WindowCovering server with the
+// tilt axis (LF | TL | PA_LF | PA_TL): a GoToTiltPercentage reaches the
+// Blind's combined write through the server's Mover, and a LEVEL_2 the
+// CCU reports reaches CurrentPositionTiltPercent100ths through the
+// server's inbound setter and its change notifier — so a tilt-only
+// push is a proactive report, where the hand-rolled projection carried
+// it on the LEVEL notifier only.
 //
-// HmIP-FBL is not yet part of godevccu's DefaultDevices fleet (see
-// notes/contributor/chiptool-send-receive-matrix.md WindowCovering
-// godevccu_gap), so this currently skips; it is written to run
-// unattended the moment the fixture lands.
+// The shared fleet leaves HmIP-FBL out on purpose (see
+// harness.DefaultDevices), so this test brings up its own single-device
+// bridge and enumerates the WindowCovering endpoint itself, as
+// TestSendReceive_ColorControl does for HmIP-LSC.
 func TestSendReceive_WindowCovering_Tilt(t *testing.T) {
-	b := requireBridge(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	chipBin := harness.RequireChipTool(t)
+	b := harness.Start(t, chipBin, harness.Options{
+		CASEEnabled: true,
+		Devices:     []string{"HmIP-FBL"},
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
-	ep, found := windowcoveringFindByKind(ctx, t, b, "blind")
+	expCtx, expCancel := context.WithTimeout(ctx, 15*time.Second)
+	if _, err := b.EnableAllExposures(expCtx); err != nil {
+		t.Fatalf("enable exposures: %v", err)
+	}
+	expCancel()
+	time.Sleep(1500 * time.Millisecond)
+
+	ctl := harness.NewController(t, chipBin, 0x5302)
+	out, err := ctl.PairFull(ctx, t, harness.PairTargetHost, b.MatterPort())
+	if err != nil {
+		t.Fatalf("commission: %v\n%s", err, out)
+	}
+	if !harness.PairingSuccess(out) {
+		t.Fatalf("pairing did not report success:\n%s", out)
+	}
+	// [Bridge.ResolveCCUAddress] reads through b.SharedCtl.
+	b.SharedCtl = ctl
+
+	slOut, err := ctl.ReadAttr(ctx, t, "descriptor", "server-list", 0xFFFF)
+	if err != nil {
+		t.Fatalf("wildcard server-list: %v", err)
+	}
+	perEP := harness.ServerListIDsPerEndpoint(slOut)
+	var ep uint16
+	found := false
+	for e := range perEP {
+		if harness.HasCluster(perEP[e], 0x0102) && windowcoveringClassify(ctx, t, ctl, e) == "blind" {
+			ep = e
+			found = true
+			break
+		}
+	}
 	if !found {
-		t.Skip("no Blind (lift+tilt) WindowCovering endpoint — HmIP-FBL not yet in godevccu fleet")
+		t.Fatalf("no Blind WindowCovering (0x0102) endpoint materialised for HmIP-FBL; server lists: %v", perEP)
 	}
 
 	address, _, ok := b.ResolveCCUAddress(ctx, t, ep, 0x0102)
@@ -221,49 +255,43 @@ func TestSendReceive_WindowCovering_Tilt(t *testing.T) {
 		t.Fatalf("could not resolve CCU address for blind endpoint %d", ep)
 	}
 
-	// SEND — GoToTiltPercentage(3000) must be accepted. Blind writes
-	// LEVEL + LEVEL_2 atomically through a single COMBINED_PARAMETER
-	// (HmIP) / LEVEL_COMBINED (HM) string rather than a plain LEVEL_2
-	// paramset write (see Blind.sendCombined in
-	// internal/model/custom/cover/blind.go), so a tight GetDPValue
-	// readback here would pin godevccu's own COMBINED_PARAMETER
-	// decode rather than the bridge's encoding — deferred until the
-	// fixture exists and that behaviour can be observed directly.
+	// SEND — GoToTiltPercentage(3000) must be accepted and stored as the
+	// tilt target. Blind writes LEVEL + LEVEL_2 atomically through a
+	// single COMBINED_PARAMETER string (see Blind.sendCombined in
+	// internal/model/custom/cover/blind.go) after the slider debounce,
+	// so a GetDPValue readback here would pin godevccu's own
+	// COMBINED_PARAMETER decode rather than the bridge's encoding — the
+	// unit tests pin the encoding.
 	t.Run("send/go-to-tilt-percentage", func(t *testing.T) {
-		out, err := b.SharedCtl.Invoke(ctx, t, "windowcovering", "go-to-tilt-percentage", ep, "3000")
+		out, err := ctl.Invoke(ctx, t, "windowcovering", "go-to-tilt-percentage", ep, "3000")
 		if err != nil {
 			t.Fatalf("invoke go-to-tilt-percentage: %v", err)
 		}
 		if !harness.CommandSuccess(out) {
 			t.Errorf("go-to-tilt-percentage did not report success:\n%s", out)
 		}
+		read, err := ctl.ReadAttr(ctx, t, "windowcovering", "target-position-tilt-percent100ths", ep)
+		if err != nil {
+			t.Fatalf("read target-position-tilt-percent100ths: %v", err)
+		}
+		if v, ok := harness.FindAttrUint(read, "TargetPositionTiltPercent100ths"); !ok || v != 3000 {
+			t.Fatalf("TargetPositionTiltPercent100ths = %v (ok=%v), want 3000\n%s", v, ok, read)
+		}
 	})
 
-	// RECEIVE — GAP: LEVEL_2 rides on LEVEL's change notifier only, so
-	// a tilt-only push must NOT surface as a proactive report. Assert
-	// the timeout first (short — this must genuinely not arrive, not
-	// merely arrive slowly), then confirm the value IS correct via an
-	// explicit on-demand read. This pins the documented limitation
-	// instead of silently tolerating it.
-	t.Run("receive/current-position-tilt-percent100ths-gap", func(t *testing.T) {
-		out, err := harness.AwaitProactiveReport(ctx, t, b.SharedCtl,
+	// RECEIVE — a LEVEL_2 the CCU reports reaches the server's tilt
+	// position and is reported proactively (HM 0.4 open → Matter 6000).
+	t.Run("receive/current-position-tilt-percent100ths", func(t *testing.T) {
+		out, err := harness.AwaitProactiveReport(ctx, t, ctl,
 			"windowcovering", "current-position-tilt-percent100ths", ep,
 			func() error { return b.CCU.FireDeviceEvent(address, "LEVEL_2", 0.4) },
 			func(out string) bool {
 				v, ok := harness.FindAttrUint(out, "CurrentPositionTiltPercent100ths")
 				return ok && v == 6000
 			},
-			8*time.Second)
-		if err == nil {
-			t.Fatalf("expected AwaitProactiveReport to time out for a LEVEL_2-only push (no dedicated notifier — documented gap), but it matched:\n%s", out)
-		}
-
-		read, err := b.SharedCtl.ReadAttr(ctx, t, "windowcovering", "current-position-tilt-percent100ths", ep)
+			20*time.Second)
 		if err != nil {
-			t.Fatalf("on-demand read after LEVEL_2 push: %v", err)
-		}
-		if v, ok := harness.FindAttrUint(read, "CurrentPositionTiltPercent100ths"); !ok || v != 6000 {
-			t.Fatalf("CurrentPositionTiltPercent100ths on-demand = %v (ok=%v), want 6000\n%s", v, ok, read)
+			t.Fatalf("CurrentPositionTiltPercent100ths after a LEVEL_2 push: %v\n%s", err, out)
 		}
 	})
 }

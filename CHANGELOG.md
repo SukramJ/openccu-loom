@@ -146,6 +146,24 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   whole event callback until the write timed out — the chip-tool suite
   caught it, go-fabric #63 fixed it in 0.3.1, and a contract test now
   pins the behaviour against the module in use.
+- **Matter: every window covering's WindowCovering cluster is served by
+  go-fabric's `cover.WindowCoveringServer`** (ADR 0084 WindowCovering
+  follow-up, unblocked by go-fabric #76 / #77). The Cover serves the lift
+  axis, the Blind lift and tilt (`LF | TL | PA_LF | PA_TL`); the cover's
+  Open / Close / Stop / SetPosition / SetTilt sit behind the server's
+  Mover port, and the CCU's confirmed LEVEL / LEVEL_2 and motion reach
+  the server through its inbound setters — a tilt the CCU reports is now
+  a proactive report of its own (it rode on the LEVEL notifier before).
+  The inferred target on wall-button movement (Apple's motion arrow) is
+  carried over through the server's `SetTargetPosition`; the slider
+  debounce is unchanged, a lift target at either limit writes at once. A
+  command the cover cannot carry out (the CCU write fails) now answers
+  FAILURE with the previous target restored, a Percent100ths above
+  10000 is CONSTRAINT_ERROR instead of being clamped, a Mode write is
+  validated by the generated definition, and a cover whose position is
+  not yet observed reports fully open instead of null. The Garage keeps
+  its ClosureControl projection. The chip-tool tilt test runs on its own
+  HmIP-FBL bridge with a positive tilt report.
 - **go-fabric main (`v0.3.2-0.20261013112917-666609d3d870`).** The Matter
   stack moves to the commit that closes the two device-layer asks left
   open after 0.3.1: `cover.WindowCoveringServer` serves the tilt axis and
