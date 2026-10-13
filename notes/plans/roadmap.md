@@ -141,10 +141,16 @@ replace it, and the metrics that say whether it worked.
   window), concurrent pairings, TimeSync opt-in, SupportedFabrics, CASE
   node/fabric preferences. Each phase ends with the Apple Home run in the
   ADR. Both cluster follow-ups named there (LevelControl, ColorControl)
-  are done, #957 and #961; the Thermostat server (go-fabric #60) follows
-  the same shape, the WindowCovering server (go-fabric #61) is next.
-  Open behind them: advertising XY on the ExtendedColorLight variants
-  (by_design BD-Matter-ExtendedColorLight-HSOnly).
+  are done, #957 and #961; the Thermostat server (go-fabric #60) is
+  done too, #962. The WindowCovering server is parked: go-fabric's
+  `cover.WindowCoveringServer` serves the lift axis only (the Blind
+  would lose tilt) and has no inbound setter for TargetPosition, so the
+  inferred target of by_design BD-Matter-WindowCovering-InferredTarget
+  (Apple's motion arrow on wall-button movement) could not be carried
+  over — asks filed as go-fabric #76 (inbound target setter or motion
+  rule) and #77 (tilt axis with a tilt Mover port). Open behind them:
+  advertising XY on the ExtendedColorLight variants (by_design
+  BD-Matter-ExtendedColorLight-HSOnly).
   Detail: [`docs/adr/0084`](../../docs/adr/0084-matter-device-layer-and-node-facade.md).
 
 - **Bridged endpoints run on `groups.Manager` — done with go-fabric v0.3.0.**
