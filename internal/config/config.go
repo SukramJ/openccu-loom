@@ -1141,13 +1141,10 @@ type NorthMatterCommissioning struct {
 	// Spec §3.10). Defaults to 1000 when 0.
 	Iterations int `yaml:"iterations" json:"iterations" cfg:"expert"`
 
-	// ConcurrentPairings, when true, isolates the PaseAdapter per
-	// exchange-id so multiple commissioners can pair in parallel
-	// without trampling each other's transcript-bind capture. The
-	// default (false) attaches a singleton adapter — fine for the
-	// typical "one commissioner at a time" flow and slightly cheaper
-	// memory-wise. Flip on for shared-bridge scenarios (e.g. multi-
-	// admin Matter Hub) where two controllers may overlap.
+	// ConcurrentPairings is accepted for compatibility and has no
+	// effect: go-fabric's node facade, which runs the bridge since ADR
+	// 0084 phase 3, isolates the PASE adapter per exchange always, so
+	// multiple commissioners can pair in parallel whatever this says.
 	ConcurrentPairings bool `yaml:"concurrent_pairings" json:"concurrent_pairings" cfg:"expert"`
 
 	// EphemeralWindow, when true, makes every REST-driven Open
@@ -1232,23 +1229,19 @@ func (f *flexUint32) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// NorthMatterCASE configures the CASE (operational-session)
-// responder. CASE picks up after a fabric is established (commissioner
-// has installed a NOC). The operational fabric identity established during
-// commissioning is persisted per fabric and rehydrated at boot, so the
-// responder validates the controller's certificate chain and survives
-// daemon restarts.
-//
-// NodeID == 0 disables CASE entirely. When non-zero, the daemon builds a
-// per-exchange CASE provider and wires it through the bridge's
-// AttachCaseHandlerProvider.
+// NorthMatterCASE is accepted for compatibility and has no effect: the
+// operational identity CASE answers with is the one each commissioner
+// installs through AddNOC, persisted per fabric and reloaded at boot by
+// go-fabric's node facade (ADR 0084 phase 3). Before the first AddNOC the
+// facade answers Sigma1 with an ephemeral key that cannot complete a
+// handshake, so there is no identity to configure.
 type NorthMatterCASE struct {
-	// NodeID is the bridge's 64-bit operational node identifier
-	// inside the fabric. Leave 0 to disable CASE.
+	// NodeID is ignored; the operational node id is the one the
+	// commissioner assigns in the NOC.
 	NodeID uint64 `yaml:"node_id" json:"node_id" cfg:"expert"`
 
-	// FabricID is the 64-bit fabric identifier the bridge belongs to.
-	// Required when NodeID is non-zero.
+	// FabricID is ignored; the fabric id is the one the commissioner's
+	// NOC carries.
 	FabricID uint64 `yaml:"fabric_id" json:"fabric_id" cfg:"expert"`
 }
 

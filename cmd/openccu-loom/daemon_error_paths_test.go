@@ -17,10 +17,6 @@ package main
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
-	"errors"
 	"io"
 	"log/slog"
 	"os"
@@ -36,38 +32,9 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 )
 
 // ── matter_window_adapter.go: generic error path (line 50) ──────────────────
-
-// TestMatterCommissioningOpenerAdapter_GenericError_PropagatesErr exercises
-// the `return handlers.MatterCommissioningWindowResult{}, err` path at line 50
-// of matter_window_adapter.go.  A CommissioningWindowOpener with a nil window
-// returns ErrCommissioningWindowNotConfigured — that is not
-// ErrCommissioningWindowAlreadyOpen, so the adapter propagates it as-is.
-func TestMatterCommissioningOpenerAdapter_GenericError_PropagatesErr(t *testing.T) {
-	t.Parallel()
-	// Opener with a nil window → OpenCommissioningWindow returns
-	// ErrCommissioningWindowNotConfigured (not AlreadyOpen).
-	inner := matterbridge.NewCommissioningWindowOpener(
-		nil, // nil window → returns ErrCommissioningWindowNotConfigured
-		0, 20202021, 0xFFF1, 0x8001,
-	)
-	a := &matterCommissioningOpenerAdapter{
-		inner: inner,
-	}
-	_, err := a.OpenCommissioningWindow(context.Background(), 300)
-	if err == nil {
-		t.Fatal("expected error from nil-window opener, got nil")
-	}
-	// Must not be the already-open sentinel.
-	if errors.Is(err, handlers.ErrCommissioningInProgress) {
-		t.Errorf("expected propagated inner error, not ErrCommissioningInProgress")
-	}
-}
-
-// ── reload.go: daemonServeWithReload watcher-init error (lines 56-58) ────────
 
 // TestDaemonServeWithReload_NonExistentConfig_ReturnsError exercises the
 // `return err` path in daemonServeWithReload when NewWatcher fails because
@@ -282,7 +249,7 @@ func TestRevokeFabricBumpsOperationalCredentialsDataVersion(t *testing.T) {
 
 	before := bundle.opCreds.MatterDataVersion()
 
-	a := &matterFabricRevokerAdapter{store: bundle.store, opCreds: bundle.opCreds}
+	a := &matterFabricRevokerAdapter{node: bundle.node, store: bundle.store}
 	if err := a.RevokeFabric(ctx, idx); err != nil {
 		t.Fatalf("RevokeFabric: %v", err)
 	}
@@ -341,24 +308,6 @@ func TestMatterStatusReaderAdapter_WindowOpen_ReportsRequestedDuration(t *testin
 
 // ── matter_ephemeral_provider.go: nil bridge/opMgr (lines 87-89) ─────────────
 
-// TestMatterEphemeralProvider_NilBridge_GenerateAndInstallErrors exercises
-// the `if p == nil || p.bridge == nil || p.opMgr == nil` guard at lines 87-89
-// of matter_ephemeral_provider.go.
-func TestMatterEphemeralProvider_NilBridge_GenerateAndInstallErrors(t *testing.T) {
-	t.Parallel()
-	p := &matterEphemeralProvider{
-		bridge: nil, // nil bridge → error
-		opMgr:  nil,
-		logger: slog.New(slog.DiscardHandler),
-	}
-	_, err := p.GenerateAndInstall(context.Background())
-	if err == nil {
-		t.Fatal("expected error from nil-bridge provider, got nil")
-	}
-}
-
-// ── daemon.go: startCallbackServer port-range parse error (lines 1254-1256) ──
-
 // TestStartCallbackServer_InvalidPortRange_ReturnsError exercises the
 // `if err != nil { return nil, "", fmt.Errorf("callback: %w", err) }` path
 // at lines 1254-1256 of daemon.go when the PortRange string is malformed.
@@ -400,133 +349,6 @@ func TestLoadTranslations_InvalidGzip_LogsWarnFallsBack(t *testing.T) {
 }
 
 // ── daemon.go: loadPersistentCaseIdentity — empty fabrics (line 2234-2235) ───
-
-// TestLoadPersistentCaseIdentity_EmptyStore_NotPersisted exercises the
-// `len(fabrics) == 0 → return ..., false, nil` path at line 2234-2235.
-func TestLoadPersistentCaseIdentity_EmptyStore_NotPersisted(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-	mgr := buildTestOperationalManager(t)
-	store := matterStoreFromManager(t, mgr)
-	logger := slog.New(slog.DiscardHandler)
-
-	_, _, _, persisted, err := loadPersistentCaseIdentity(ctx, config.NorthMatterCASE{}, store, logger)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if persisted {
-		t.Error("expected persisted=false for empty store")
-	}
-}
-
-// TestLoadPersistentCaseIdentity_FabricWithoutIdentity_ReturnsNotPersisted
-// exercises the `GetIdentity → ErrIdentityNotFound → return ..., false, nil`
-// path at lines 2242-2246 of daemon.go. Adds a fabric row but no identity row.
-func TestLoadPersistentCaseIdentity_FabricWithoutIdentity_ReturnsNotPersisted(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-	mgr := buildTestOperationalManager(t)
-	store := matterStoreFromManager(t, mgr)
-	logger := slog.New(slog.DiscardHandler)
-
-	// Generate a valid 65-byte P-256 uncompressed public key.
-	rootPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatalf("GenerateKey: %v", err)
-	}
-	rootPub := elliptic.Marshal(elliptic.P256(), rootPriv.X, rootPriv.Y) //nolint:staticcheck // elliptic.Marshal is deprecated in Go 1.26 but still the correct wire encoding for P-256 uncompressed public keys in the Matter spec
-
-	if _, err := store.AddFabric(ctx, matterstore.FabricRecord{
-		FabricID:      0xDEAD0001,
-		NodeID:        0xBEEF0001,
-		RootPublicKey: rootPub,
-		VendorID:      0xFFF1,
-		Label:         "no-identity",
-	}); err != nil {
-		t.Fatalf("AddFabric: %v", err)
-	}
-	// No UpsertIdentity call → GetIdentity returns ErrIdentityNotFound.
-
-	_, _, _, persisted, err := loadPersistentCaseIdentity(ctx, config.NorthMatterCASE{}, store, logger)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if persisted {
-		t.Error("expected persisted=false when identity is missing")
-	}
-}
-
-// ── daemon.go: buildCaseAdapter error propagation (lines 2165-2167) ───────────
-
-// TestBuildCaseAdapter_LoadIdentityError_ReturnsError exercises the
-// `if err != nil { return nil, err }` path at lines 2165-2167 by providing
-// a store with a fabric but an invalid private key scalar, which causes
-// loadPersistentCaseIdentity to return an error.
-func TestBuildCaseAdapter_LoadIdentityError_ReturnsError(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-	mgr := buildTestOperationalManager(t)
-	store := matterStoreFromManager(t, mgr)
-	logger := slog.New(slog.DiscardHandler)
-
-	rootPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatalf("GenerateKey: %v", err)
-	}
-	rootPub := elliptic.Marshal(elliptic.P256(), rootPriv.X, rootPriv.Y) //nolint:staticcheck // elliptic.Marshal is deprecated in Go 1.26 but still the correct wire encoding for P-256 uncompressed public keys in the Matter spec
-
-	fabricIdx, err := store.AddFabric(ctx, matterstore.FabricRecord{
-		FabricID:      0xBAD00001,
-		NodeID:        0xBAD00001,
-		RootPublicKey: rootPub,
-		VendorID:      0xFFF1,
-		Label:         "bad-key-buildcase",
-	})
-	if err != nil {
-		t.Fatalf("AddFabric: %v", err)
-	}
-	// Too-short private key → privKeyFromScalar error → loadPersistentCaseIdentity returns error.
-	if err := store.UpsertIdentity(ctx, matterstore.IdentityRecord{
-		FabricIndex: fabricIdx,
-		NOC:         []byte("mock-noc"),
-		PrivateKey:  []byte{0x01, 0x02}, // wrong length
-		IPK:         make([]byte, 16),
-	}); err != nil {
-		t.Fatalf("UpsertIdentity: %v", err)
-	}
-
-	_, buildErr := buildCaseAdapter(ctx, config.NorthMatterCASE{}, mgr, store, logger)
-	if buildErr == nil {
-		t.Fatal("expected buildCaseAdapter to return error for invalid private key")
-	}
-}
-
-// ── daemon.go: loadPersistentCaseIdentity — ListFabrics error (2230-2233) ────
-
-// TestLoadPersistentCaseIdentity_ClosedDB_ListFabricsError exercises the
-// `logger.Warn("matter.bridge.case.list_fabrics")` path at lines 2230-2233
-// by closing the DB before the ListFabrics call.
-func TestLoadPersistentCaseIdentity_ClosedDB_ListFabricsError(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-	db := openMigratedTestDB(t, "matter_closed.db")
-	store := matterstore.New(db)
-	// Close the DB so ListFabrics fails.
-	if err := db.Close(); err != nil {
-		t.Fatalf("db.Close: %v", err)
-	}
-
-	logger := slog.New(slog.DiscardHandler)
-	_, _, _, persisted, err := loadPersistentCaseIdentity(ctx, config.NorthMatterCASE{}, store, logger)
-	if err != nil {
-		t.Fatalf("unexpected error (warn path should return nil err): %v", err)
-	}
-	if persisted {
-		t.Error("expected persisted=false when ListFabrics fails")
-	}
-}
-
-// ── daemon.go: readECDSAPrivateKey PKCS#8 non-ECDSA key (line 3108-3110) ─────
 
 // TestReadECDSAPrivateKey_PKCS8NotECDSA_ReturnsError exercises the
 // `if !ok { return nil, fmt.Errorf(...) }` path at lines 3108-3110 of

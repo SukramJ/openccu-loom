@@ -75,6 +75,7 @@ func TestBridgedEndpointNameCarriesTheOperatorsChannelWord(t *testing.T) {
 		t.Fatal("the Matter bridge did not start; without it this pin asserts nothing")
 	}
 	t.Cleanup(bundle.stop)
+	exposeEveryCandidate(ctx, t, bundle, reg)
 
 	endpoints := bridgedEndpointsViaREST(t, matterEndpointInspector{bridge: bundle.bridge})
 

@@ -1664,15 +1664,15 @@ const EN: Catalog = {
   "config.help.north.matter.commissioning.iterations":
     "PBKDF2 iteration count (1000..100000 per Spec §3.10). Default 1000. Higher = more CPU at pairing time, harder to brute-force a captured transcript.",
   "config.help.north.matter.commissioning.concurrent_pairings":
-    "Isolate the PASE adapter per exchange-id so multiple commissioners can pair in parallel. Default off — the singleton adapter is fine for the typical one-commissioner flow and cheaper memory-wise.",
+    "No effect since the bridge runs on go-fabric's node facade: the PASE adapter is isolated per exchange always, so multiple commissioners can pair in parallel. Kept for compatibility with existing configs.",
   "config.help.north.matter.commissioning.ephemeral_window":
     "Generate a fresh discriminator + passcode + verifier each time the SPA opens a commissioning window. Recommended for production: pairing codes auto-rotate and the static configured passcode acts only as the long-lived label-code fallback.",
   "config.help.north.matter.case.node_id":
-    "64-bit operational node identifier inside the fabric. 0 disables the CASE responder entirely — needed when no commissioner has installed a NOC yet.",
+    "No effect: the operational node id is the one each commissioner assigns in the NOC it installs, persisted per fabric. Kept for compatibility with existing configs.",
   "config.help.north.matter.case.fabric_id":
-    "64-bit fabric identifier the bridge belongs to. Required when Node ID is non-zero.",
+    "No effect: the fabric id is the one the commissioner's NOC carries. Kept for compatibility with existing configs.",
   "config.help.north.matter.attestation.dac_path":
-    "Filesystem path to the vendor-supplied Device Attestation Certificate (PEM or DER). Empty falls back to an ephemeral self-signed development DAC that only validates under chip-tool --bypass-attestation-verifier.",
+    "Filesystem path to the vendor-supplied Device Attestation Certificate (PEM or DER). Empty falls back to the CSA test chain (test PAA → PAI → DAC) for the configured vendor and product, which Apple Home, Google Home and chip-tool accept but which must not ship.",
   "config.help.north.matter.attestation.dac_key_path":
     "Filesystem path to the DAC's P-256 private key (PEM PKCS#8 or DER). MUST match the public key embedded in the DAC certificate.",
   "config.help.north.matter.attestation.pai_path":
@@ -6025,15 +6025,15 @@ const DE: Catalog = {
   "config.help.north.matter.commissioning.iterations":
     "PBKDF2-Iterationszahl (1000..100000 gemäß Spec §3.10). Default 1000. Höher = mehr CPU beim Pairing, härter gegen Brute-Force-Angriffe auf abgehörte Transcripts.",
   "config.help.north.matter.commissioning.concurrent_pairings":
-    "Isoliert den PASE-Adapter pro Exchange-ID, sodass mehrere Commissioner parallel pairen können. Default aus — Singleton-Adapter reicht für den typischen 1-Commissioner-Flow und ist speichersparsamer.",
+    "Ohne Wirkung, seit die Bridge auf go-fabrics Node-Fassade läuft: der PASE-Adapter ist immer pro Exchange isoliert, mehrere Commissioner können parallel pairen. Bleibt für bestehende Konfigurationen erhalten.",
   "config.help.north.matter.commissioning.ephemeral_window":
     "Erzeugt bei jedem in der SPA geöffneten Commissioning-Fenster einen frischen Discriminator + Passcode + Verifier. Empfohlen für Produktion: Pairing-Codes rotieren automatisch, der statische Passcode dient nur noch als langlebiger Label-Code-Fallback.",
   "config.help.north.matter.case.node_id":
-    "64-bit Operational-Node-Identifier innerhalb der Fabric. 0 deaktiviert den CASE-Responder ganz — gebraucht solange kein Commissioner einen NOC installiert hat.",
+    "Ohne Wirkung: die Operational-Node-ID vergibt jeder Commissioner im NOC, den er installiert; sie wird pro Fabric persistiert. Bleibt für bestehende Konfigurationen erhalten.",
   "config.help.north.matter.case.fabric_id":
-    "64-bit Fabric-Identifier, zu der die Bridge gehört. Pflicht wenn Node-ID ≠ 0.",
+    "Ohne Wirkung: die Fabric-ID steht im NOC des Commissioners. Bleibt für bestehende Konfigurationen erhalten.",
   "config.help.north.matter.attestation.dac_path":
-    "Pfad zum vom Vendor gelieferten Device Attestation Certificate (PEM oder DER). Leer = ephemerer self-signed Development-DAC, der nur unter chip-tool --bypass-attestation-verifier validiert.",
+    "Pfad zum vom Vendor gelieferten Device Attestation Certificate (PEM oder DER). Leer = CSA-Testkette (Test-PAA → PAI → DAC) für Vendor und Produkt, die Apple Home, Google Home und chip-tool akzeptieren, die aber nicht ausgeliefert werden darf.",
   "config.help.north.matter.attestation.dac_key_path":
     "Pfad zum P-256-Privatschlüssel des DAC (PEM PKCS#8 oder DER). MUSS zum Public-Key im DAC-Zertifikat passen.",
   "config.help.north.matter.attestation.pai_path":

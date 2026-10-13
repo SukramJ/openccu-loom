@@ -17,13 +17,13 @@ import (
 )
 
 // TestMatterCommissioningWindowReachesTheAdminCommissioningCluster asserts
-// the effect of wireCommissioningWindow rather than its presence: a window
-// the daemon opens through its REST opener is what the
-// AdministratorCommissioning cluster reports. The cluster only learns the
-// window's state through the controller the wiring installs; without it
-// WindowStatus reads Closed while a window is live, and every
-// cluster-driven OpenCommissioningWindow answers BUSY — Matter multi-admin
-// is dead while the REST surface looks healthy.
+// the effect of the window wiring rather than its presence: the root
+// endpoint serves AdministratorCommissioning, and a window the daemon
+// opens through its REST opener is the node facade's window — open, the
+// node's own, and what the status surface reports. The facade keeps the
+// AdministratorCommissioning attributes for administrator windows alone,
+// as matter.js does: the node's own window reads WindowNotOpen there,
+// before and after the REST open.
 func TestMatterCommissioningWindowReachesTheAdminCommissioningCluster(t *testing.T) {
 	t.Parallel()
 
@@ -66,9 +66,7 @@ func TestMatterCommissioningWindowReachesTheAdminCommissioningCluster(t *testing
 		rootEndpoint     uint16 = 0
 		admCommCluster   uint32 = 0x003C
 		windowStatusAttr uint32 = 0x0000
-		// The daemon's opener hands the window a PAKE verifier, which is
-		// an Enhanced Commissioning Method window (WindowStatus 1).
-		windowStatusEnhanced = "1"
+		windowNotOpen           = "0"
 	)
 	readStatus := func() string {
 		results := bridge.Dispatcher().Read(ctx, im.ConcreteAttributePath{Endpoint: rootEndpoint, Cluster: admCommCluster, Attribute: windowStatusAttr, HasEndpoint: true, HasCluster: true, HasAttribute: true})
@@ -78,12 +76,9 @@ func TestMatterCommissioningWindowReachesTheAdminCommissioningCluster(t *testing
 		return fmt.Sprint(results[0].Value.Value)
 	}
 
-	if got := readStatus(); got != "0" {
-		t.Fatalf("WindowStatus before any window = %s, want 0 (Closed)", got)
+	if got := readStatus(); got != windowNotOpen {
+		t.Fatalf("WindowStatus at boot = %s, want %s (the node's own window is not an administrator's)", got, windowNotOpen)
 	}
-	// The production opener refuses to advertise a bridge without bridged
-	// endpoints; this daemon has no CCU devices, and the gate is not what
-	// is under test here.
 	opener, ok := wiring.opener.(*matterCommissioningOpenerAdapter)
 	if !ok {
 		t.Fatalf("opener is %T, want the daemon's window adapter", wiring.opener)
@@ -92,8 +87,20 @@ func TestMatterCommissioningWindowReachesTheAdminCommissioningCluster(t *testing
 	if _, err := opener.OpenCommissioningWindow(ctx, 180); err != nil {
 		t.Fatalf("open commissioning window: %v", err)
 	}
-	if got := readStatus(); got != windowStatusEnhanced {
-		t.Fatalf("WindowStatus with a live REST-opened window = %s, want %s (Enhanced) — "+
-			"the AdministratorCommissioning cluster never received the window controller", got, windowStatusEnhanced)
+	window := bridge.CommissioningWindow()
+	if window == nil || !window.IsOpen() || !window.IsOwnWindow() {
+		t.Fatalf("after the REST open the facade's window is open=%v own=%v; want the node's own window open — "+
+			"the REST opener never reached the window the AdministratorCommissioning cluster is wired to",
+			window != nil && window.IsOpen(), window != nil && window.IsOwnWindow())
+	}
+	if got := window.RequestedDurationSeconds(); got != 180 {
+		t.Fatalf("the window runs for %d s, want the requested 180", got)
+	}
+	if status := wiring.statusReader.MatterStatus(ctx); !status.WindowOpen || status.WindowDuration != 180 {
+		t.Fatalf("status = open %v / %d s, want open / 180 — the status surface reads another window than the opener opens",
+			status.WindowOpen, status.WindowDuration)
+	}
+	if got := readStatus(); got != windowNotOpen {
+		t.Fatalf("WindowStatus with the node's own window open = %s, want %s", got, windowNotOpen)
 	}
 }

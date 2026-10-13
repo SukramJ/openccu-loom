@@ -7,58 +7,85 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"sync"
+	"time"
 
 	matterbridge "github.com/SukramJ/go-fabric/bridge"
+	"github.com/SukramJ/go-fabric/node"
+	mattersetup "github.com/SukramJ/go-fabric/secure/setup"
 
+	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 )
 
-// matterCommissioningOpenerAdapter bridges the type gap between the
-// bridge-side [matterbridge.CommissioningWindowOpener] (which returns
-// a [matterbridge.OpenCommissioningWindowResult]) and the REST
-// handler's [handlers.MatterCommissioningOpener] interface (which
-// expects [handlers.MatterCommissioningWindowResult]).
+// matterCommissioningOpenerAdapter serves the operator's
+// open-commissioning-window request over the node facade's window. With
+// the configured credentials it opens the node's own window
+// (bridge.CommissioningWindow.OpenOwnWindow): the facade runs PASE
+// against the configured passcode and publishes the commissionable
+// record (CM=1) under the configured discriminator. In ephemeral-window
+// mode it opens a basic window with credentials generated for this
+// window alone (node.Node.OpenBasicWindow): the facade installs the
+// verifier for the window's lifetime, advertises the window's
+// discriminator, and restores the configured credentials when the window
+// closes.
 //
-// The two result types are structurally identical; this adapter
-// keeps the import directions clean — the bridge lives in the separate
-// github.com/SukramJ/go-fabric module, which cannot import
-// `internal/north/rest/handlers` at all, and conceptually it has no
-// business knowing about REST.
-//
-// The adapter additionally drives the `_matterc._udp` mDNS publish
-// lifecycle: a successful open emits the commissionable record
-// (`_L<long>` / `_S<short>` / `_V<vendor>` subtypes); the close hook
-// withdraws it.
+// The window is refused while the bridge serves no bridged endpoint,
+// unless allowEmptyTopology: a controller that pairs an empty bridge
+// renders it as "added but not supported", and the operator has to
+// unpair before the first exposure takes effect.
 type matterCommissioningOpenerAdapter struct {
-	inner  *matterbridge.CommissioningWindowOpener
-	bridge *matterbridge.Bridge
-	advert matterbridge.CommissioningAdvertisement
-	// allowEmptyTopology disables the bridged-endpoint readiness check.
-	// Production keeps it false so OpenCommissioningWindow refuses to
-	// open a window before the CCU initial-load has populated the
-	// topology (see [matterCommissioningOpenerAdapter.OpenCommissioningWindow]).
-	// Tests that exercise the adapter without a real CCU pipeline set
-	// it to true.
+	node          *node.Node
+	bridge        *matterbridge.Bridge
+	commissioning config.NorthMatterCommissioning
+	discriminator uint16
+	vendorID      uint16
+	productID     uint16
+	// configured reports a valid operator-configured passcode; without
+	// one the configured-credentials window is refused with
+	// [matterbridge.ErrCommissioningWindowNotConfigured], as before the
+	// facade (the node itself runs on credentials nobody holds, see
+	// matterCommissioningCredentials).
+	configured bool
+	// allowEmptyTopology lifts the bridged-endpoint check (tests of the
+	// window itself).
 	allowEmptyTopology bool
+
+	// restUntil is when the window this adapter last opened expires. The
+	// facade opens the node's own window at start (an uncommissioned
+	// node) and lets a later own window replace it; the REST contract
+	// answers 409 while a window the operator opened is running rather
+	// than restarting it with fresh credentials under a pairing in
+	// progress. An administrator's window (a commissioner's
+	// OpenCommissioningWindow) is never replaced.
+	mu        sync.Mutex
+	restUntil time.Time
 }
 
-// OpenCommissioningWindow translates the bridge result into the
-// handler-side struct + maps the bridge sentinel errors to the
-// handler sentinels so the HTTP layer surfaces the right status
-// codes (409 Conflict on already-open, 503 on not-configured).
-//
-// Pre-flight: refuse to open the window when the bridge topology has
-// no bridged endpoints yet. Without this guard a commissioner can
-// pair against the bridge before the CCU initial load completes —
-// Apple's MTREndpointInfo (CHIPFramework
-// `src/darwin/Framework/CHIP/MTREndpointInfo.mm:209-265`) reads
-// Descriptor.PartsList once from the initial Subscribe report and
-// never re-reads it; an empty PartsList collapses the HAP-Mapper to
-// RootNode-only and surfaces as `endpointDeviceTypes={0=(22)}` even
-// after a later Reassemble adds the bridged endpoints.
+// windowBusy reports whether an open window must not be replaced: an
+// administrator's, or one this adapter opened that has not expired.
+func (a *matterCommissioningOpenerAdapter) windowBusy(window *matterbridge.CommissioningWindow) bool {
+	if !window.IsOpen() {
+		return false
+	}
+	if !window.IsOwnWindow() {
+		return true
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return time.Now().Before(a.restUntil)
+}
+
+// opened records the window this adapter just opened.
+func (a *matterCommissioningOpenerAdapter) opened(window *matterbridge.CommissioningWindow) {
+	a.mu.Lock()
+	a.restUntil = time.Now().Add(time.Duration(window.RequestedDurationSeconds()) * time.Second)
+	a.mu.Unlock()
+}
+
 func (a *matterCommissioningOpenerAdapter) OpenCommissioningWindow(ctx context.Context, durationSeconds uint16) (handlers.MatterCommissioningWindowResult, error) {
-	if a == nil || a.inner == nil {
-		return handlers.MatterCommissioningWindowResult{}, handlers.ErrCommissioningInProgress
+	if a == nil || a.node == nil {
+		return handlers.MatterCommissioningWindowResult{}, matterbridge.ErrCommissioningWindowNotConfigured
 	}
 	if a.bridge != nil && !a.allowEmptyTopology {
 		if topo := a.bridge.Topology(); topo != nil {
@@ -77,37 +104,102 @@ func (a *matterCommissioningOpenerAdapter) OpenCommissioningWindow(ctx context.C
 			}
 		}
 	}
-	res, err := a.inner.OpenCommissioningWindow(ctx, durationSeconds)
+	window := a.node.CommissioningWindow()
+	if a.windowBusy(window) {
+		return handlers.MatterCommissioningWindowResult{}, handlers.ErrCommissioningInProgress
+	}
+	timeout := time.Duration(durationSeconds) * time.Second
+
+	if a.commissioning.EphemeralWindow {
+		return a.openEphemeral(ctx, window, timeout, durationSeconds)
+	}
+	if !a.configured {
+		return handlers.MatterCommissioningWindowResult{}, matterbridge.ErrCommissioningWindowNotConfigured
+	}
+	if err := window.OpenOwnWindow(ctx, timeout); err != nil {
+		return handlers.MatterCommissioningWindowResult{}, mapWindowOpenError(err)
+	}
+	a.opened(window)
+	qr, manual, err := a.node.PairingCodes()
 	if err != nil {
-		if errors.Is(err, matterbridge.ErrCommissioningWindowAlreadyOpen) {
-			return handlers.MatterCommissioningWindowResult{}, handlers.ErrCommissioningInProgress
-		}
+		_ = window.RevokeWindow(ctx)
 		return handlers.MatterCommissioningWindowResult{}, err
 	}
-	// Publish the commissionable record. The discriminator may have
-	// rotated under ephemeral mode — stamp the result's value, not the
-	// configured one. InstanceID stays stable across windows for the
-	// daemon's lifetime: rolling it per open confused Apple Home,
-	// which silently aborts pairing when a service it has just begun
-	// resolving disappears mid-handshake. The boot-time ID set in
-	// daemon.go is enough to keep different daemon runs distinguishable.
-	// Best-effort: a publish failure does not abort the open;
-	// commissioners that already have the IP can still pair via
-	// direct PASE.
-	if a.bridge != nil {
-		params := a.advert
-		params.Discriminator = res.Discriminator
-		if err := a.bridge.AnnounceCommissioning(ctx, params); err != nil {
-			slog.Default().Warn("matter.window_adapter.announce_err",
-				slog.String("err", err.Error()),
-				slog.Int("discriminator", int(params.Discriminator)))
-		}
-	}
 	return handlers.MatterCommissioningWindowResult{
-		Discriminator:   res.Discriminator,
-		Passcode:        res.Passcode,
-		DurationSeconds: res.DurationSeconds,
-		QRCode:          res.QRCode,
-		ManualCode:      res.ManualCode,
+		Discriminator:   a.discriminator,
+		Passcode:        a.commissioning.Passcode,
+		DurationSeconds: window.RequestedDurationSeconds(),
+		QRCode:          qr,
+		ManualCode:      manual,
 	}, nil
+}
+
+// openEphemeral opens the node's own window on credentials generated for
+// this window: a fresh discriminator, passcode and salt, the configured
+// PBKDF iteration count. The passcode never leaves this process except
+// through the pairing codes returned to the operator.
+func (a *matterCommissioningOpenerAdapter) openEphemeral(ctx context.Context, window *matterbridge.CommissioningWindow, timeout time.Duration, durationSeconds uint16) (handlers.MatterCommissioningWindowResult, error) {
+	disc, err := matterbridge.RandomDiscriminator()
+	if err != nil {
+		return handlers.MatterCommissioningWindowResult{}, err
+	}
+	pass, err := matterbridge.RandomPasscode()
+	if err != nil {
+		return handlers.MatterCommissioningWindowResult{}, err
+	}
+	salt, err := matterbridge.RandomSalt()
+	if err != nil {
+		return handlers.MatterCommissioningWindowResult{}, err
+	}
+	iterations := a.commissioning.Iterations
+	if iterations <= 0 {
+		iterations = 1000
+	}
+	creds := node.WindowCredentials{
+		Discriminator: disc,
+		Passcode:      pass,
+		Iterations:    uint32(iterations), //nolint:gosec // bounded by the config validator
+		Salt:          salt,
+		Timeout:       timeout,
+	}
+	if err := a.node.OpenBasicWindow(ctx, creds); err != nil {
+		return handlers.MatterCommissioningWindowResult{}, mapWindowOpenError(err)
+	}
+	a.opened(window)
+	qr, err := mattersetup.QRCode(mattersetup.Payload{
+		VendorID:      a.vendorID,
+		ProductID:     a.productID,
+		Discriminator: disc,
+		Passcode:      pass,
+		DiscoveryCaps: mattersetup.DiscoveryOnIP,
+	})
+	if err != nil {
+		_ = window.RevokeWindow(ctx)
+		return handlers.MatterCommissioningWindowResult{}, err
+	}
+	manual, err := mattersetup.ManualCode(disc, pass)
+	if err != nil {
+		_ = window.RevokeWindow(ctx)
+		return handlers.MatterCommissioningWindowResult{}, err
+	}
+	slog.Default().Info("matter.bridge.pase.ephemeral_window",
+		slog.Int("iterations", iterations),
+		slog.Int("discriminator", int(disc)),
+		slog.Int("duration_seconds", int(durationSeconds)))
+	return handlers.MatterCommissioningWindowResult{
+		Discriminator:   disc,
+		Passcode:        pass,
+		DurationSeconds: window.RequestedDurationSeconds(),
+		QRCode:          qr,
+		ManualCode:      manual,
+	}, nil
+}
+
+// mapWindowOpenError translates the facade's refusal of a second window
+// into the REST contract's conflict.
+func mapWindowOpenError(err error) error {
+	if errors.Is(err, matterbridge.ErrAdministratorWindowOpen) || errors.Is(err, matterbridge.ErrCommissioningWindowAlreadyOpen) {
+		return handlers.ErrCommissioningInProgress
+	}
+	return err
 }

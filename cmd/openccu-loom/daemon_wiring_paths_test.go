@@ -12,7 +12,6 @@ package main
 //   - buildBackupAdapter: un-creatable directory → Warn path
 
 import (
-	"context"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -135,31 +134,6 @@ func TestWireSessionRecorderPersistence_NilRecorder_ContinueBranch(t *testing.T)
 }
 
 // ── buildCaseAdapter: nil store → ephemeral path ──────────────────────────────
-
-// TestBuildCaseAdapter_NilStore_EphemeralPath exercises the non-persisted
-// branch (loadPersistentCaseIdentity returns persisted=false with nil store),
-// causing buildCaseAdapter to generate an ephemeral ECDSA key.
-func TestBuildCaseAdapter_NilStore_EphemeralPath(t *testing.T) {
-	t.Parallel()
-	mgr := buildTestOperationalManager(t)
-	logger := slog.New(slog.DiscardHandler)
-
-	adapter, err := buildCaseAdapter(
-		context.Background(),
-		config.NorthMatterCASE{},
-		mgr,
-		nil, // nil store → loadPersistentCaseIdentity returns persisted=false
-		logger,
-	)
-	if err != nil {
-		t.Fatalf("buildCaseAdapter with nil store: %v", err)
-	}
-	if adapter == nil {
-		t.Fatal("expected non-nil CaseAdapter")
-	}
-}
-
-// ── buildBackupAdapter: blocked directory → Warn path ────────────────────────
 
 // TestBuildBackupAdapter_BlockedDir_LogsWarn exercises the
 // "backup.storage.disabled" warn path when the backup directory cannot be

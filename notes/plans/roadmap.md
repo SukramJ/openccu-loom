@@ -134,18 +134,15 @@ replace it, and the metrics that say whether it worked.
   operation lock — the daemon's coalescing feedback worker is gone,
   #960), #66 (`ColorControlServer.Set` — the ColorControl follow-up is
   done; the LevelControl follow-up is merged, #957). Phase 3
-  (`startMatterBridge` onto `node.New`) is **parked on go-fabric #87**:
-  #58 brought the host hooks (observers, `OpenBasicWindow`,
-  `SupportedFabrics`, `DisableTimeSynchronization`), but read against
-  main at c7e67ac the facade still assembles its own single-scope
-  topology (the daemon assembles per central with per-central
-  completeness, and the facade's label / scenes persistence skips the
-  daemon's key type), derives UniqueID from the NodeLabel instead of
-  serving the pinned one, keeps its session and subscription managers
-  private (the sessions diagnostics endpoint reads both), and has no
-  host-initiated fabric removal (REST revoke, factory reset). Resume when
-  #87 lands; the ADR's phase 3 section lists what is adopted as the
-  facade's semantics (per-exchange PASE always, no CASE id preferences).
+  (`startMatterBridge` onto `node.New`) is **done** on go-fabric main at
+  b11840f: #58 brought the host hooks, #87/#88 the host-assembled
+  topology, the UniqueID pin, the session accessors and the host-side
+  RemoveFabric, #89/#92 the shared group manager and the TCP roles in the
+  responder session parameters. The ADR's phase 3 section lists what is
+  adopted as the facade's semantics (the own window at first boot,
+  per-exchange PASE always, `concurrent_pairings` and `case.*` inert, the
+  facade's root server set). Still due: the live Apple Home run of the
+  ADR for phases 1–3 together.
   Each phase ends with the Apple Home run in the ADR. Both cluster follow-ups named there (LevelControl, ColorControl)
   are done, #957 and #961; the Thermostat server (go-fabric #60) is
   done too, #962, and the WindowCovering server (Cover lift-only, Blind

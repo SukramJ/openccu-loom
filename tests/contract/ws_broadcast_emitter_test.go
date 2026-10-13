@@ -314,7 +314,7 @@ var wsBroadcastEmitters = map[string]wsBroadcastEmitter{
 			"cmd/openccu-loom/matter_event_publisher.go",
 			"cmd/openccu-loom/daemon_matter.go",
 		},
-		Tokens:    []string{`MatterTopicFabricAdded = "matter.fabric_added"`, "Topic:   handlers.MatterTopicFabricAdded", "SetOnFabricAdded(wiring.pub.publishFabricAdded)"},
+		Tokens:    []string{`MatterTopicFabricAdded = "matter.fabric_added"`, "Topic:   handlers.MatterTopicFabricAdded", "fabricEvents.set(wiring.pub.publishFabricAdded, wiring.pub.publishFabricRemoved)"},
 		WireValue: handlers.MatterTopicFabricAdded,
 	},
 	"matter.fabric_removed": {
@@ -328,7 +328,7 @@ var wsBroadcastEmitters = map[string]wsBroadcastEmitter{
 			`MatterTopicFabricRemoved = "matter.fabric_removed"`,
 			"MatterTopicFabricRemoved, map[string]any{",
 			"Topic:   handlers.MatterTopicFabricRemoved",
-			"SetOnFabricRemoved(wiring.pub.publishFabricRemoved)",
+			"fabricEvents.set(wiring.pub.publishFabricAdded, wiring.pub.publishFabricRemoved)",
 		},
 		WireValue: handlers.MatterTopicFabricRemoved,
 	},

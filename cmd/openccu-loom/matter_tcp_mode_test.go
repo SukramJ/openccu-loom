@@ -13,32 +13,25 @@ import (
 
 	matterbridge "github.com/SukramJ/go-fabric/bridge"
 	"github.com/SukramJ/go-fabric/mdns"
-	"github.com/SukramJ/go-fabric/secure/sessionparams"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
 )
 
-// TestMatterTCPModeMapsOntoBridgeRoles pins, for every accepted value of
-// north.matter.tcp, the bridge roles the daemon configures and the
-// transports both handshakes state: the TCP roles and SupportedTransports
-// bitmap, plus the MaxTcpMessageSize that accompanies any TCP role.
+// TestMatterTCPModeMapsOntoBridgeRoles: the four config values map onto
+// the bridge's TCP roles. The session parameters that advertise those
+// roles to a peer (SupportedTransports in Sigma2 and PBKDFParamResponse)
+// are the node facade's, derived from node.Network.TCP (go-fabric #89).
 func TestMatterTCPModeMapsOntoBridgeRoles(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		mode    string
-		want    matterbridge.TCPConfig
-		bitmap  uint16
-		maxSize uint32
+		mode string
+		want matterbridge.TCPConfig
 	}{
-		{config.MatterTCPOff, matterbridge.TCPConfig{}, 0, 0},
-		{config.MatterTCPIncoming, matterbridge.TCPConfig{Incoming: true}, sessionparams.TransportTCPServer, sessionparams.DefaultMaxTCPMessageSize},
-		{config.MatterTCPOutgoing, matterbridge.TCPConfig{Outgoing: true}, sessionparams.TransportTCPClient, sessionparams.DefaultMaxTCPMessageSize},
-		{
-			config.MatterTCPBoth,
-			matterbridge.TCPConfig{Incoming: true, Outgoing: true},
-			sessionparams.TransportTCPServer | sessionparams.TransportTCPClient, sessionparams.DefaultMaxTCPMessageSize,
-		},
+		{config.MatterTCPOff, matterbridge.TCPConfig{}},
+		{config.MatterTCPIncoming, matterbridge.TCPConfig{Incoming: true}},
+		{config.MatterTCPOutgoing, matterbridge.TCPConfig{Outgoing: true}},
+		{config.MatterTCPBoth, matterbridge.TCPConfig{Incoming: true, Outgoing: true}},
 	}
 	if len(cases) != len(config.MatterTCPModes) {
 		t.Fatalf("table covers %d modes, config.MatterTCPModes lists %d", len(cases), len(config.MatterTCPModes))
@@ -46,24 +39,8 @@ func TestMatterTCPModeMapsOntoBridgeRoles(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.mode, func(t *testing.T) {
 			t.Parallel()
-			got := matterTCPConfig(tc.mode)
-			if got != tc.want {
+			if got := matterTCPConfig(tc.mode); got != tc.want {
 				t.Fatalf("matterTCPConfig(%q) = %+v, want %+v", tc.mode, got, tc.want)
-			}
-			if bits := matterTransportsBitmap(got); bits != tc.bitmap {
-				t.Errorf("matterTransportsBitmap = %#x, want %#x", bits, tc.bitmap)
-			}
-			p := paseResponderParams(tc.mode)
-			if p.SupportedTransports != tc.bitmap {
-				t.Errorf("paseResponderParams.SupportedTransports = %#x, want %#x", p.SupportedTransports, tc.bitmap)
-			}
-			if p.MaxTCPMessageSize != tc.maxSize {
-				t.Errorf("paseResponderParams.MaxTCPMessageSize = %d, want %d", p.MaxTCPMessageSize, tc.maxSize)
-			}
-			// The MRP triplet must survive the transports being added.
-			if p.SessionIdleInterval != 500 || p.SessionActiveInterval != 300 || p.SessionActiveThreshold != 4000 {
-				t.Errorf("MRP triplet = %d/%d/%d, want 500/300/4000",
-					p.SessionIdleInterval, p.SessionActiveInterval, p.SessionActiveThreshold)
 			}
 		})
 	}

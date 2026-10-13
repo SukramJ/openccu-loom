@@ -13,34 +13,6 @@ import (
 
 // ── buildAggregatorClusters ───────────────────────────────────────────────────
 
-func TestBuildAggregatorClusters_ReturnsOneCluster(t *testing.T) {
-	t.Parallel()
-	clusters, err := buildAggregatorClusters()
-	if err != nil {
-		t.Fatalf("buildAggregatorClusters: %v", err)
-	}
-	if len(clusters) == 0 {
-		t.Fatal("expected at least one cluster")
-	}
-}
-
-func TestBuildAggregatorClusters_IsIdempotent(t *testing.T) {
-	t.Parallel()
-	a, err := buildAggregatorClusters()
-	if err != nil {
-		t.Fatalf("first call: %v", err)
-	}
-	b, err := buildAggregatorClusters()
-	if err != nil {
-		t.Fatalf("second call: %v", err)
-	}
-	if len(a) != len(b) {
-		t.Errorf("cluster count mismatch: %d vs %d", len(a), len(b))
-	}
-}
-
-// ── scheduleWeekProfileSink.SetActiveProfile ──────────────────────────────────
-
 func TestScheduleWeekProfileSink_SetActiveProfile_NilReg_ReturnsError(t *testing.T) {
 	t.Parallel()
 	// NewSchedulesDomain with nil registry — SetActiveProfile will error

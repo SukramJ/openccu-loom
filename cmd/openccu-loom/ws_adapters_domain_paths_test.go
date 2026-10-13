@@ -295,69 +295,6 @@ func TestHotReloadHandler_OpenAPIValidateEnabledChange(t *testing.T) {
 
 // ── matter_ephemeral_provider.go: concurrent-mode (lines 115-129, 157-165) ───
 
-// TestMatterEphemeralProvider_GenerateAndInstall_ConcurrentMode exercises the
-// per-exchange (concurrent-pairings) code path of GenerateAndInstall. It also
-// exercises the concurrent Restore closure.
-func TestMatterEphemeralProvider_GenerateAndInstall_ConcurrentMode(t *testing.T) {
-	t.Parallel()
-	cfg := config.Default()
-	cfg.North.Matter.Enabled = true
-	cfg.North.Matter.MDNSAdvertise = "noop"
-	cfg.North.Matter.Listen = ":0"
-	cfg.North.Matter.Commissioning.ConcurrentPairings = true
-	cfg.DataDir = t.TempDir()
-	cfg.Centrals = []config.CentralConfig{{Name: "ccu-01", Host: "127.0.0.1"}}
-
-	reg := buildTestRegistry(t, "ccu-01")
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-
-	db := openTestLoomDB(t)
-	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
-	if bundle == nil {
-		t.Skip("bridge did not start; skipping concurrent mode test")
-	}
-	t.Cleanup(bundle.stop)
-
-	mgr := buildTestOperationalManager(t)
-	logger := slog.New(slog.DiscardHandler)
-
-	// configuredFactory != nil → concurrent mode.
-	configuredFactory := func() *matterbridge.PaseAdapter {
-		a, err := buildPaseAdapterFromCreds(20202021, []byte("openccu-loom-dev0"), 1000, mgr, nil, nil, logger)
-		if err != nil {
-			return nil
-		}
-		return a
-	}
-
-	provider := newMatterEphemeralProvider(
-		bundle.bridge,
-		config.NorthMatterCommissioning{Iterations: 1000},
-		mgr,
-		nil,               // opCreds
-		nil,               // configured singleton adapter
-		configuredFactory, // non-nil → concurrent mode
-		logger,
-	)
-
-	creds, err := provider.GenerateAndInstall(ctx)
-	if err != nil {
-		t.Fatalf("GenerateAndInstall concurrent: %v", err)
-	}
-	if creds.Passcode == 0 {
-		t.Error("expected non-zero Passcode")
-	}
-	if creds.Restore == nil {
-		t.Error("expected non-nil Restore func")
-	}
-
-	// Calling Restore exercises the concurrent restore path (lines 157-165).
-	creds.Restore()
-}
-
-// ── matter_status_adapter.go: RevokeFabric with live store (line ~79) ─────────
-
 // TestMatterFabricRevokerAdapter_LiveStore_RevokeMissingFabric exercises the
 // non-nil-store path of RevokeFabric. RemoveFabric for a non-existent index
 // may return nil or an error — what matters is that the live-store path is hit.

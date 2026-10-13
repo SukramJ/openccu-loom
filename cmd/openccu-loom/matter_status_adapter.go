@@ -7,7 +7,7 @@ import (
 	"context"
 
 	matterbridge "github.com/SukramJ/go-fabric/bridge"
-	mattercore "github.com/SukramJ/go-fabric/cluster/core"
+	"github.com/SukramJ/go-fabric/node"
 	matterstore "github.com/SukramJ/go-fabric/store"
 
 	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
@@ -58,8 +58,13 @@ func (r *matterStatusReaderAdapter) MatterStatus(ctx context.Context) handlers.M
 		res.Advertising = r.cfg.advertising
 	}
 	if r.window != nil {
-		snap := r.window.CurrentWindow()
-		res.WindowOpen = snap.Status != 0
+		// IsOpen rather than the AdministratorCommissioning snapshot: the
+		// node's own window — the operator's REST window, the window an
+		// uncommissioned node opens at start — reads WindowNotOpen on the
+		// cluster, as matter.js keeps those attributes for administrator
+		// windows alone, and the status surface would call a live window
+		// closed.
+		res.WindowOpen = r.window.IsOpen()
 		if res.WindowOpen {
 			res.WindowDuration = r.window.RequestedDurationSeconds()
 		}
@@ -79,81 +84,29 @@ func (r *matterStatusReaderAdapter) MatterStatus(ctx context.Context) handlers.M
 	return res
 }
 
-// matterFabricRevokerAdapter implements [handlers.MatterFabricRevoker].
-//
-// It carries the runtime teardown because no cluster command runs on this
-// path: the OperationalCredentials RemoveFabric hooks that close sessions and
-// retire the mDNS instance fire only for a commissioner's wire invocation, so
-// the operator surfaces have to run the same fan-out themselves.
+// matterFabricRevokerAdapter removes fabrics for the REST revoke and the
+// factory reset through the node facade: node.RemoveFabric is the
+// RemoveFabric command's own path — the fabric's rows go and the same
+// fan-out runs (the Leave event, the CASE identity and the operational
+// record withdrawn, the sessions and subscriptions closed, the group
+// state, the node's own window reopened once the last fabric is gone),
+// followed by the daemon's fabric-removed observer. Deleting the row
+// alone left the removed controller's CASE session and subscription
+// alive, and the next pair retry collided on the same session id with
+// `aesccm: authentication failed`.
 type matterFabricRevokerAdapter struct {
+	node  *node.Node
 	store *matterstore.Store
-	// opCreds is the live OperationalCredentials cluster instance. Nil in
-	// tests that exercise the store half alone. See [RevokeFabric].
-	opCreds *mattercore.OperationalCredentials
-	// teardown is the shared fabric-removal fan-out (session + subscription
-	// close, resumption purge, fabric-removed emission). Nil only in tests
-	// that exercise the store half alone.
-	teardown func(ctx context.Context, fabricIndex uint8)
-	// withdraw retires the removed identity's operational mDNS instance and
-	// republishes the remaining fabric set.
-	withdraw func(ctx context.Context, compressedID [8]byte, nodeID uint64)
 }
 
-// RevokeFabric implements [handlers.MatterFabricRevoker]: it removes the
-// fabric row AND runs every runtime consequence the wire command's
-// RemoveFabric would have triggered.
-//
-// Removing the row alone was the whole implementation once, and it read as a
-// success on every surface: the SPA reported "removed", fabric_count dropped
-// to zero, and the unpaired controller kept its live CASE session, its
-// subscription and the operational `_matter._tcp` record until the daemon
-// restarted.
-//
-// It also runs [mattercore.OperationalCredentials.NotifyFabricRemoved]
-// directly — the same call handleRemoveFabric makes inline for the wire
-// command — rather than through the shared a.teardown closure: that closure
-// is also the wire command's own onFabricRemoved hook, and the wire path
-// already runs NotifyFabricRemoved itself, so folding it into the shared
-// closure would double it there. Without this call here at all, the
-// OperationalCredentials cluster's DataVersion never bumps for a REST
-// revoke or a factory reset, so a controller reading behind a cached
-// DataVersionFilter keeps seeing the removed fabric in Fabrics /
-// CommissionedFabrics.
+// RevokeFabric implements [handlers.MatterFabricRevoker].
 func (a *matterFabricRevokerAdapter) RevokeFabric(ctx context.Context, fabricIndex uint8) error {
-	if a == nil || a.store == nil {
+	if a == nil || a.node == nil {
 		return matterbridge.ErrCommissioningWindowNotConfigured
 	}
-	// Read before delete: the operational advertisement is keyed by the
-	// fabric's compressed ID + node ID, and the row is the only place that
-	// knows them. A failed read is therefore a failed revoke, not a revoke
-	// without the mDNS half: deleting the row first and skipping the withdraw
-	// on a transient store error (a concurrent write holding the table) leaves
-	// the unpaired controller's operational `_matter._tcp` instance advertised
-	// until the daemon restarts, while every surface reports the fabric gone.
-	// The operator can retry a revoke that failed; they cannot retry one that
-	// answered 204.
-	rec, err := a.store.GetFabric(ctx, fabricIndex)
-	if err != nil {
-		return err
-	}
-	if err := a.store.RemoveFabric(ctx, fabricIndex); err != nil {
-		return err
-	}
-	if a.opCreds != nil {
-		a.opCreds.NotifyFabricRemoved(fabricIndex)
-	}
-	if a.withdraw != nil {
-		a.withdraw(ctx, rec.CompressedID, rec.NodeID)
-	}
-	if a.teardown != nil {
-		a.teardown(ctx, fabricIndex)
-	}
-	return nil
+	return a.node.RemoveFabric(ctx, fabricIndex)
 }
 
-// ListFabricIndexes implements [handlers.MatterFabricPurger]. The
-// factory reset needs the set to remove, and the store is the only
-// place that knows which fabrics survived a restart.
 func (a *matterFabricRevokerAdapter) ListFabricIndexes(ctx context.Context) ([]uint8, error) {
 	if a == nil || a.store == nil {
 		return nil, matterbridge.ErrCommissioningWindowNotConfigured

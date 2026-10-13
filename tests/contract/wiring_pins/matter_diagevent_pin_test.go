@@ -8,8 +8,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/go-fabric/bridge"
-
-	"github.com/SukramJ/openccu-loom/tests/contract"
 )
 
 // TestABridgeWithoutARingStillServesAnEmptyTrace pins the property that
@@ -29,40 +27,18 @@ func TestABridgeWithoutARingStillServesAnEmptyTrace(t *testing.T) {
 	}
 }
 
-// TestAnAttachedRingIsWhatTheBridgeServes closes the other half: the
-// setter has to reach the reader, or the REST surface would answer empty
-// while the receive path recorded into a ring nobody serves.
-//
-// That the Bridge type itself forwards an attached ring's contents to
-// DiagnosticEvents() is proven directly against the real constructor in
-// go-fabric's bridge/bridge_diagnostic_events_test.go
-// (TestDiagnosticRingAttachIsSafeWhileTheReceivePathRecords) — building
-// a bare &bridge.Bridge{} and calling the setter on it here would only
-// re-prove that same fact and never touch the composition root, which
-// is the half that actually breaks when someone edits daemon_matter.go.
-// This pin instead asserts what only the composition root can prove:
-// that production calls the setter at all, and that it does so before
-// Start — the ordering daemon_matter.go documents as load-bearing (the
-// receive path reads the ring without the bridge lock, so attaching
-// after Start races the serve goroutine and loses every pairing moment
-// recorded up to that point).
-func TestAnAttachedRingIsWhatTheBridgeServes(t *testing.T) {
-	contract.MustFindMethodCall(t, "cmd/openccu-loom/daemon_matter.go", "bridge", "AttachDiagnosticEvents")
-
-	src := readMatterComposition(t)
-	attachIdx := strings.Index(src, "AttachDiagnosticEvents(")
-	startIdx := strings.Index(src, "bridge.Start(ctx)")
-	if attachIdx < 0 {
-		t.Fatal("AttachDiagnosticEvents call not found in daemon_matter.go")
+// TestTheBridgeIsTheRESTSurfacesEventReporter: the pairing trace ring is
+// attached by go-fabric's node facade before the bridge serves its first
+// datagram (node.New, AttachDiagnosticEvents); what the daemon owns is
+// exposing that bridge as the REST events reporter. A reporter built over
+// anything else would serve an empty trace while the bridge records.
+func TestTheBridgeIsTheRESTSurfacesEventReporter(t *testing.T) {
+	src := collapseSpaces(readMatterComposition(t))
+	if !strings.Contains(src, "wiring.diagEvents = mb") {
+		t.Fatal("wireMatterRuntime does not expose the live bridge as the diagnostic events reporter")
 	}
-	if startIdx < 0 {
-		t.Fatal("bridge.Start(ctx) call not found in daemon_matter.go")
-	}
-	if attachIdx > startIdx {
-		t.Errorf(
-			"AttachDiagnosticEvents is wired after bridge.Start(ctx) in daemon_matter.go — " +
-				"this races the serve goroutine (which reads the ring without the bridge lock) " +
-				"and loses every pairing moment recorded before the attach",
-		)
+	mount := collapseSpaces(readRestMount(t))
+	if !strings.Contains(mount, "MatterDiagnosticEvents: d.matter.diagEvents") {
+		t.Fatal("the REST router never receives the diagnostic events reporter")
 	}
 }

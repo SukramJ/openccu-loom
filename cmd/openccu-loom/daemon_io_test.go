@@ -320,22 +320,6 @@ func TestReadECDSAPrivateKey_InvalidPEM_Errors(t *testing.T) {
 
 // ── buildTestAttestation ──────────────────────────────────────────────────────
 
-func TestBuildTestAttestation_ReturnsNonNilChain(t *testing.T) {
-	t.Parallel()
-	chain, cd, err := buildTestAttestation(0xFFF1, 0x8000)
-	if err != nil {
-		t.Fatalf("buildTestAttestation: %v", err)
-	}
-	if chain == nil {
-		t.Fatal("expected non-nil attestation chain")
-	}
-	// CD may be nil or non-nil depending on CSA test chain impl —
-	// both are valid.
-	_ = cd
-}
-
-// ── scheduleWeekProfileSink.SetActiveProfile ──────────────────────────────────
-
 // TestScheduleWeekProfileSink_InterfaceSatisfied verifies at compile
 // time that scheduleWeekProfileSink implements SetActiveProfile with
 // the right signature. The method is called via domain path; we cannot

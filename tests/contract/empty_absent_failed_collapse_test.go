@@ -37,7 +37,6 @@ var emptyAbsentFailedCollapseExemptions = map[string]string{
 	"internal/store/linkprofile/store.go:GetLinkProfiles":                                  "the branch does not narrow — it collapses every Store.load error — and that is safe only because load returns exactly two: an empty receiver type, and ErrUnsupported for a type carrying no profiles. Both mean \"no profiles registered\" to a caller. Narrow it the moment load can fail for a third reason",
 	"internal/store/sqlite/devices.go:GetModel":                                            "the branch narrows via errors.Is(err, sql.ErrNoRows), the specific sentinel for a query that ran and found nothing",
 	"internal/store/sqlite/paramsets.go:GetParameterData":                                  "the branch narrows via errors.Is(err, ErrParamsetNotFound), the store's own not-found sentinel, documented as the method's nil,nil contract",
-	"cmd/openccu-loom/daemon_matter.go:GetByID":                                            "any resumption-lookup failure intentionally falls through to a full CASE handshake (matter.js CaseServer.ts resumption branch); the fallback is the safe direction, never a deletion",
 }
 
 // readFuncNameRE matches the read-verb prefixes this guard cares about:
