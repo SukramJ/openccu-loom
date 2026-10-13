@@ -579,6 +579,71 @@ func TestRGBWLightOperatingModeChangeMovesTheServer(t *testing.T) {
 	}
 }
 
+// echoRGBWWriter is a CCU that confirms every HUE / SATURATION /
+// COLOR_TEMPERATURE write before the write returns, as the simulator and
+// a fast CCU do.
+type echoRGBWWriter struct {
+	colorStubWriter
+	l *RGBWLight
+}
+
+func (w *echoRGBWWriter) SetValue(ctx context.Context, addr string, p hmenum.Parameter, v any, prio hmenum.CommandPriority) error {
+	_ = w.colorStubWriter.SetValue(ctx, addr, p, v, prio)
+	switch p { //nolint:exhaustive // the three colour axes are the only parameters this writer echoes
+	case hmenum.ParameterHue:
+		w.l.hue.OnEvent(v.(int32))
+	case hmenum.ParameterSaturation:
+		w.l.saturation.OnEvent(v.(float64))
+	case hmenum.ParameterColorTemperature:
+		w.l.kelvin.OnEvent(v.(int32))
+	default:
+	}
+	return nil
+}
+
+// TestRGBWCombinedLightColorModeFollowsTheConfirmedAxis: the HmIP-LSC
+// runs hue/saturation and colour temperature at once and has no
+// operating mode, so the colour mode is the axis the CCU confirmed last.
+// With the colour-temperature axis carrying a value, a
+// MoveToHueAndSaturation whose HUE / SATURATION the CCU echoes leaves the
+// server in HS at the commanded colour — reporting the echo as a CT
+// colour would contradict the command just carried out and leave the
+// server in CT (the measured state before this rule). A later
+// COLOR_TEMPERATURE confirmation moves it to CT.
+func TestRGBWCombinedLightColorModeFollowsTheConfirmedAxis(t *testing.T) {
+	e := &echoRGBWWriter{}
+	l := newRGBW(t, e)
+	e.l = l
+	l.colorTempCombined = true
+	l.OnLevel(onLevel)
+	l.hue.OnEvent(int32(180))
+	l.saturation.OnEvent(0.5)
+	l.kelvin.OnEvent(int32(4000))
+	srv := colorServer(t, l)
+	if m := readU8(t, srv, wire.ColorCtrlAttrColorMode); m != uint8(fabriclight.ColorModeColorTemperature) {
+		t.Fatalf("ColorMode with the CT axis active = %d, want 2 (CT)", m)
+	}
+
+	req := wire.MoveToHueAndSaturationRequest{Hue: 20, Saturation: 254}
+	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToHueAndSaturation, req); err != nil {
+		t.Fatalf("MoveToHueAndSaturation: %v", err)
+	}
+	if m := readU8(t, srv, wire.ColorCtrlAttrColorMode); m != uint8(fabriclight.ColorModeHueSaturation) {
+		t.Fatalf("ColorMode after the echoed MoveToHueAndSaturation = %d, want 0 (HS)", m)
+	}
+	if h := readU8(t, srv, wire.ColorCtrlAttrCurrentHue); h != 20 {
+		t.Fatalf("CurrentHue after the echoed MoveToHueAndSaturation = %d, want 20", h)
+	}
+
+	l.kelvin.OnEvent(int32(3000)) // the wall remote turns the white axis
+	if m := readU8(t, srv, wire.ColorCtrlAttrColorMode); m != uint8(fabriclight.ColorModeColorTemperature) {
+		t.Fatalf("ColorMode after a confirmed COLOR_TEMPERATURE = %d, want 2 (CT)", m)
+	}
+	if mireds := readU16(t, srv, wire.ColorCtrlAttrColorTemperatureMireds); mireds != kelvinToMireds(3000) {
+		t.Fatalf("ColorTemperatureMireds = %d, want %d", mireds, kelvinToMireds(3000))
+	}
+}
+
 // TestLightCloseQuiescesTheColourServer: Close must not panic with or
 // without a built server, and must leave the server readable.
 func TestLightCloseQuiescesTheColourServer(t *testing.T) {

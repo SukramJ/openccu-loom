@@ -145,13 +145,13 @@ replace it, and the metrics that say whether it worked.
   done too, #962, and the WindowCovering server (Cover lift-only, Blind
   lift+tilt, the inferred target written through go-fabric's inbound
   `SetTargetPosition`) with go-fabric main at 666609d, which closed #76
-  and #77 (pinned as a pseudo-version, #965). The XY feature on
-  the ExtendedColorLight variants is parked as well: measured with
-  go-fabric 0.3.1, a MoveToColor on an HS device drives the ColorWriter
-  with the converted current colour first (the mode switch) and the
-  device's HS echo of that write counts as a different colour, so the
-  command is lost (CCU ends at HUE 358 instead of red) — go-fabric #79.
-  by_design BD-Matter-ExtendedColorLight-HSOnly stays declared.
+  and #77 (pinned as a pseudo-version, #965). The XY feature on the
+  ExtendedColorLight variants stays parked: go-fabric #79 is fixed in that
+  pin, but MoveToColor still drives the ColorWriter twice (x, then y) on
+  the hand-off path, so the device gets an intermediate colour on every
+  command — go-fabric #84; the host side is ready on branch
+  `claude/matter-light-xy`. by_design BD-Matter-ExtendedColorLight-HSOnly
+  stays declared.
   Detail: [`docs/adr/0084`](../../docs/adr/0084-matter-device-layer-and-node-facade.md).
 
 - **Bridged endpoints run on `groups.Manager` — done with go-fabric v0.3.0.**
