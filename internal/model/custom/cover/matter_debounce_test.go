@@ -10,6 +10,8 @@ import (
 	"testing/synctest"
 	"time"
 
+	windowcoveringspec "github.com/SukramJ/go-fabric/cluster/spec/windowcovering"
+
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -81,7 +83,7 @@ func (w *countingWriter) recorded() []any {
 func invokeGoToLift(t *testing.T, c *Cover, pct uint16) {
 	t.Helper()
 	srv := c.MatterClusterServers()[0]
-	if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, pct); err != nil {
+	if _, err := srv.MatterInvoke(context.Background(), windowcoveringspec.CmdGoToLiftPercentage, pct); err != nil {
 		t.Fatalf("GoToLiftPercentage(%d): %v", pct, err)
 	}
 }
@@ -182,7 +184,7 @@ func TestGoToLiftPercentage_AtTargetAcknowledgedWithoutWrite(t *testing.T) {
 				t.Fatalf("CCU writes = %v, want none (at target)", got)
 			}
 			// The commanded destination is still the reported target.
-			if v, ok := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths); !ok || v.(uint16) != 6050 {
+			if v, ok := srv.MatterRead(windowcoveringspec.AttrTargetPositionLiftPercent100ths); !ok || v.(uint16) != 6050 {
 				t.Fatalf("TargetPositionLift = (%v, %v), want (6050, true)", v, ok)
 			}
 		})
@@ -235,7 +237,7 @@ func TestGoToDebounce_StopMotionCancelsPendingWrite(t *testing.T) {
 		srv := c.MatterClusterServers()[0]
 
 		invokeGoToLift(t, c, 3000) // pending
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdStopMotion, nil); err != nil {
+		if _, err := srv.MatterInvoke(context.Background(), windowcoveringspec.CmdStopMotion, nil); err != nil {
 			t.Fatalf("StopMotion: %v", err)
 		}
 		settleGoToWrites()
@@ -286,10 +288,10 @@ func TestGoToDebounce_BlindAxesDebounceIndependently(t *testing.T) {
 		b := newBlindRig(t, "VCU3560967:1", w, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
 		srv := b.MatterClusterServers()[0]
 
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(3000)); err != nil {
+		if _, err := srv.MatterInvoke(context.Background(), windowcoveringspec.CmdGoToLiftPercentage, uint16(3000)); err != nil {
 			t.Fatalf("GoToLiftPercentage: %v", err)
 		}
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToTiltPercentage, uint16(2500)); err != nil {
+		if _, err := srv.MatterInvoke(context.Background(), windowcoveringspec.CmdGoToTiltPercentage, uint16(2500)); err != nil {
 			t.Fatalf("GoToTiltPercentage: %v", err)
 		}
 		settleGoToWrites()
@@ -345,7 +347,7 @@ func TestParityMatterJS_GoToPercentageStoresTargetBeforeDeviceWrite(t *testing.T
 		srv := c.MatterClusterServers()[0]
 
 		invokeGoToLift(t, c, 3000)
-		if v, ok := srv.MatterRead(matterAttrTargetPositionLiftPercent100ths); !ok || v.(uint16) != 3000 {
+		if v, ok := srv.MatterRead(windowcoveringspec.AttrTargetPositionLiftPercent100ths); !ok || v.(uint16) != 3000 {
 			t.Fatalf("TargetPositionLift right after invoke = (%v, %v), want (3000, true)", v, ok)
 		}
 		if got := w.recorded(); len(got) != 0 {

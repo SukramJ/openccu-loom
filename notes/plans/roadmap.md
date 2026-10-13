@@ -142,13 +142,10 @@ replace it, and the metrics that say whether it worked.
   node/fabric preferences. Each phase ends with the Apple Home run in the
   ADR. Both cluster follow-ups named there (LevelControl, ColorControl)
   are done, #957 and #961; the Thermostat server (go-fabric #60) is
-  done too, #962. The WindowCovering server is parked: go-fabric's
-  `cover.WindowCoveringServer` serves the lift axis only (the Blind
-  would lose tilt) and has no inbound setter for TargetPosition, so the
-  inferred target of by_design BD-Matter-WindowCovering-InferredTarget
-  (Apple's motion arrow on wall-button movement) could not be carried
-  over — asks filed as go-fabric #76 (inbound target setter or motion
-  rule) and #77 (tilt axis with a tilt Mover port). The XY feature on
+  done too, #962, and the WindowCovering server (Cover lift-only, Blind
+  lift+tilt, the inferred target written through go-fabric's inbound
+  `SetTargetPosition`) with go-fabric main at 666609d, which closed #76
+  and #77 (pinned as a pseudo-version, #965). The XY feature on
   the ExtendedColorLight variants is parked as well: measured with
   go-fabric 0.3.1, a MoveToColor on an HS device drives the ColorWriter
   with the converted current colour first (the mode switch) and the

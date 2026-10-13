@@ -148,9 +148,6 @@ func NewBlind(cfg BlindConfig) *Blind {
 	} else if cov != nil {
 		b.combinedAddr = cov.Address()
 	}
-	if b.level2 != nil {
-		_ = b.level2.OnConfirmedUpdate(func(_, _ float64) { b.dataVersion.Bump() })
-	}
 	// Attach a LevelCombined combined DP so the aggregate (level + slats)
 	// is surfaced on the event bus and visible via Channel.CombinedDataPoints.
 	// The write path remains sendCombined; LevelCombined is read-side only.

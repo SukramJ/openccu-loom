@@ -15,6 +15,10 @@ import (
 	mattercluster "github.com/SukramJ/go-fabric/cluster"
 	clusterwire "github.com/SukramJ/go-fabric/cluster/wire"
 
+	windowcoveringspec "github.com/SukramJ/go-fabric/cluster/spec/windowcovering"
+
+	"github.com/SukramJ/go-fabric/cluster/spec"
+
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -910,24 +914,23 @@ func TestTopicSlotInvalidAddress(t *testing.T) {
 // ---------------------------------------------------------------------------
 // matter.go: coverTypeFor, hmLevelToMatterPct100ths / matterPct100thsToHMLevel
 // edge cases, MatterClusterID, MatterWrite, MatterAttributes,
-// extractGoToPercentage (map path + error paths), Blind MatterRead/Invoke,
-// Garage MatterRead/Invoke/MatterClusterID/MatterWrite
+// Blind MatterRead/Invoke, Garage MatterRead/Invoke/MatterClusterID/MatterWrite
 // ---------------------------------------------------------------------------
 
 func TestCoverTypeFor(t *testing.T) {
 	cases := []struct {
 		v    CoverVariant
-		want uint8
+		want windowcoveringspec.TypeEnum
 	}{
-		{VariantAwning, matterWCTypeAwning},
-		{VariantCurtain, matterWCTypeDrapery},
-		{VariantShutter, matterWCTypeShutter},
-		{VariantWindow, matterWCTypeShutter},
-		{VariantShade, matterWCTypeRollerShade},
-		{VariantDamper, matterWCTypeRollerShade},
-		{VariantBlind, matterWCTypeRollerShade},
-		{VariantGarage, matterWCTypeRollerShade},
-		{CoverVariant(99), matterWCTypeRollerShade}, // default
+		{VariantAwning, windowcoveringspec.TypeAwning},
+		{VariantCurtain, windowcoveringspec.TypeDrapery},
+		{VariantShutter, windowcoveringspec.TypeShutter},
+		{VariantWindow, windowcoveringspec.TypeShutter},
+		{VariantShade, windowcoveringspec.TypeRollershade},
+		{VariantDamper, windowcoveringspec.TypeRollershade},
+		{VariantBlind, windowcoveringspec.TypeRollershade},
+		{VariantGarage, windowcoveringspec.TypeRollershade},
+		{CoverVariant(99), windowcoveringspec.TypeRollershade}, // default
 	}
 	for _, tc := range cases {
 		if got := coverTypeFor(tc.v); got != tc.want {
@@ -943,17 +946,17 @@ func TestCoverTypeFor(t *testing.T) {
 func TestCoverEndProductTypeFor(t *testing.T) {
 	cases := []struct {
 		v    CoverVariant
-		want uint8
+		want windowcoveringspec.EndProductTypeEnum
 	}{
-		{VariantAwning, matterWCEndProductAwningTerracePatio},
-		{VariantCurtain, matterWCEndProductCentralCurtain},
-		{VariantShutter, matterWCEndProductRollerShutter},
-		{VariantWindow, matterWCEndProductRollerShutter},
-		{VariantShade, matterWCEndProductRollerShade},
-		{VariantDamper, matterWCEndProductRollerShade},
-		{VariantBlind, matterWCEndProductInteriorBlind},
-		{VariantGarage, matterWCEndProductRollerShade},
-		{CoverVariant(99), matterWCEndProductRollerShade}, // default
+		{VariantAwning, windowcoveringspec.EndProductTypeAwningTerracePatio},
+		{VariantCurtain, windowcoveringspec.EndProductTypeCentralCurtain},
+		{VariantShutter, windowcoveringspec.EndProductTypeRollerShutter},
+		{VariantWindow, windowcoveringspec.EndProductTypeRollerShutter},
+		{VariantShade, windowcoveringspec.EndProductTypeRollerShade},
+		{VariantDamper, windowcoveringspec.EndProductTypeRollerShade},
+		{VariantBlind, windowcoveringspec.EndProductTypeInteriorBlind},
+		{VariantGarage, windowcoveringspec.EndProductTypeRollerShade},
+		{CoverVariant(99), windowcoveringspec.EndProductTypeRollerShade}, // default
 	}
 	for _, tc := range cases {
 		if got := coverEndProductTypeFor(tc.v); got != tc.want {
@@ -987,15 +990,15 @@ func TestMatterPct100thsToHMLevelEdge(t *testing.T) {
 func TestCoverMatterClusterID(t *testing.T) {
 	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
 	srv := c.MatterClusterServers()[0]
-	if srv.MatterClusterID() != matterClusterWindowCovering {
-		t.Errorf("Cover MatterClusterID = 0x%04X, want 0x%04X", srv.MatterClusterID(), matterClusterWindowCovering)
+	if srv.MatterClusterID() != windowcoveringspec.ClusterID {
+		t.Errorf("Cover MatterClusterID = 0x%04X, want 0x%04X", srv.MatterClusterID(), windowcoveringspec.ClusterID)
 	}
 }
 
 func TestCoverMatterWrite(t *testing.T) {
 	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
 	srv := c.MatterClusterServers()[0]
-	err := srv.MatterWrite(context.Background(), matterAttrType, uint8(0))
+	err := srv.MatterWrite(context.Background(), windowcoveringspec.AttrType, uint8(0))
 	if err == nil {
 		t.Error("MatterWrite must return error (writes not supported)")
 	}
@@ -1021,14 +1024,14 @@ func TestCoverMatterReadAllAttributes(t *testing.T) {
 	srv := c.MatterClusterServers()[0]
 
 	readableAttrs := []uint32{
-		matterAttrType,
-		matterAttrEndProductType,
-		matterAttrConfigStatus,
-		matterAttrOperationalStatus,
-		matterAttrCurrentPositionLiftPercent100ths,
-		matterAttrMode,
-		matterAttrFeatureMap,
-		matterAttrClusterRevision,
+		windowcoveringspec.AttrType,
+		windowcoveringspec.AttrEndProductType,
+		windowcoveringspec.AttrConfigStatus,
+		windowcoveringspec.AttrOperationalStatus,
+		windowcoveringspec.AttrCurrentPositionLiftPercent100ths,
+		windowcoveringspec.AttrMode,
+		spec.AttrFeatureMap,
+		spec.AttrClusterRevision,
 	}
 	for _, id := range readableAttrs {
 		v, ok := srv.MatterRead(id)
@@ -1043,40 +1046,18 @@ func TestCoverMatterReadAllAttributes(t *testing.T) {
 	}
 }
 
-func TestExtractGoToPercentageMap(t *testing.T) {
-	// map[string]any with "percent" key.
-	m := map[string]any{"percent": uint16(5000)}
-	pct, err := extractGoToPercentage(m)
-	if err != nil {
-		t.Fatalf("extractGoToPercentage(map) error: %v", err)
-	}
-	if pct != 5000 {
-		t.Errorf("extractGoToPercentage(map) = %d, want 5000", pct)
-	}
-	// map without "percent" key.
-	_, err2 := extractGoToPercentage(map[string]any{})
-	if err2 == nil {
-		t.Error("extractGoToPercentage(empty map) must error")
-	}
-	// map with wrong type.
-	_, err3 := extractGoToPercentage(map[string]any{"percent": "bad"})
-	if err3 == nil {
-		t.Error("extractGoToPercentage(map, wrong type) must error")
-	}
-}
-
 func TestBlindMatterClusterID(t *testing.T) {
 	b := newBlindRig(t, "VCU:1", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
 	srv := b.MatterClusterServers()[0]
-	if srv.MatterClusterID() != matterClusterWindowCovering {
-		t.Errorf("Blind MatterClusterID = 0x%04X, want 0x%04X", srv.MatterClusterID(), matterClusterWindowCovering)
+	if srv.MatterClusterID() != windowcoveringspec.ClusterID {
+		t.Errorf("Blind MatterClusterID = 0x%04X, want 0x%04X", srv.MatterClusterID(), windowcoveringspec.ClusterID)
 	}
 }
 
 func TestBlindMatterWrite(t *testing.T) {
 	b := newBlindRig(t, "VCU:1", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
 	srv := b.MatterClusterServers()[0]
-	err := srv.MatterWrite(context.Background(), matterAttrType, uint8(0))
+	err := srv.MatterWrite(context.Background(), windowcoveringspec.AttrType, uint8(0))
 	if err == nil {
 		t.Error("Blind MatterWrite must return error")
 	}
@@ -1103,15 +1084,15 @@ func TestBlindMatterReadAllAttributes(t *testing.T) {
 	srv := b.MatterClusterServers()[0]
 
 	readableAttrs := []uint32{
-		matterAttrType,
-		matterAttrEndProductType,
-		matterAttrConfigStatus,
-		matterAttrOperationalStatus,
-		matterAttrCurrentPositionLiftPercent100ths,
-		matterAttrCurrentPositionTiltPercent100ths,
-		matterAttrMode,
-		matterAttrFeatureMap,
-		matterAttrClusterRevision,
+		windowcoveringspec.AttrType,
+		windowcoveringspec.AttrEndProductType,
+		windowcoveringspec.AttrConfigStatus,
+		windowcoveringspec.AttrOperationalStatus,
+		windowcoveringspec.AttrCurrentPositionLiftPercent100ths,
+		windowcoveringspec.AttrCurrentPositionTiltPercent100ths,
+		windowcoveringspec.AttrMode,
+		spec.AttrFeatureMap,
+		spec.AttrClusterRevision,
 	}
 	for _, id := range readableAttrs {
 		_, ok := srv.MatterRead(id)
@@ -1133,19 +1114,19 @@ func TestBlindMatterInvokeAllCommands(t *testing.T) {
 		srv := b.MatterClusterServers()[0]
 
 		// UpOrOpen.
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdUpOrOpen, nil); err != nil {
+		if _, err := srv.MatterInvoke(context.Background(), windowcoveringspec.CmdUpOrOpen, nil); err != nil {
 			t.Errorf("Blind UpOrOpen: %v", err)
 		}
 		// DownOrClose.
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdDownOrClose, nil); err != nil {
+		if _, err := srv.MatterInvoke(context.Background(), windowcoveringspec.CmdDownOrClose, nil); err != nil {
 			t.Errorf("Blind DownOrClose: %v", err)
 		}
 		// StopMotion.
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdStopMotion, nil); err != nil {
+		if _, err := srv.MatterInvoke(context.Background(), windowcoveringspec.CmdStopMotion, nil); err != nil {
 			t.Errorf("Blind StopMotion: %v", err)
 		}
 		// GoToLiftPercentage.
-		if _, err := srv.MatterInvoke(context.Background(), matterCmdGoToLiftPercentage, uint16(5000)); err != nil {
+		if _, err := srv.MatterInvoke(context.Background(), windowcoveringspec.CmdGoToLiftPercentage, uint16(5000)); err != nil {
 			t.Errorf("Blind GoToLift: %v", err)
 		}
 		// Unknown.
