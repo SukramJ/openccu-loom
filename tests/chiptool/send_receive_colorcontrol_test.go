@@ -7,6 +7,7 @@ package chiptool
 
 import (
 	"context"
+	"sort"
 	"testing"
 	"time"
 
@@ -15,9 +16,9 @@ import (
 
 // TestSendReceive_ColorControl exercises ColorControl (0x0300) against
 // HmIP-LSC — the one godevccu fixture that runs hue/saturation AND
-// colour-temperature simultaneously (rgbwColorServer's HS+CT
-// projection), so a single pairing covers every ColorControl command
-// combination the matrix calls for.
+// colour-temperature simultaneously (the RGBW light's HS+CT server), so
+// a single pairing covers every ColorControl command combination the
+// matrix calls for.
 //
 //   - SEND: MoveToHue / MoveToSaturation / MoveToColorTemperature must
 //     each land on the CCU side (GetDPValue ground truth), matching the
@@ -25,20 +26,64 @@ import (
 //   - NEGATIVE: every ColorControl attribute is read-only per Matter
 //     §3.2.6 — a WriteAttr must be rejected before it ever reaches the
 //     cluster server.
-//   - RECEIVE (documented gap): a colour-temperature-only device push
-//     has no dedicated notifier (RGBWLight only wires LEVEL changes
-//     into OnMatterValueChanged; HUE/SATURATION/COLOR_TEMPERATURE ride
-//     on nothing), so AwaitProactiveReport must time out — followed by
-//     a plain ReadAttr proving the value is still served on demand.
+//   - RECEIVE: a colour-temperature push from the CCU reaches the
+//     server through its Set and is reported proactively.
 func TestSendReceive_ColorControl(t *testing.T) {
-	b := requireBridge(t)
-	eps := discoverEndpointsWith(t, b, 0x0300, 1)
-	if len(eps) == 0 {
-		t.Skip("no ColorControl endpoint — godevccu fleet lacks an HmIP-LSC")
-	}
-	ep := eps[0]
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	// The shared fleet leaves HmIP-LSC out on purpose (its endpoint
+	// footprint pushes the wildcard server-list past chip-tool's report
+	// truncation), so this test brings up its own single-device bridge
+	// and enumerates the ColorControl endpoint itself, as
+	// TestSendReceive_GenericSwitch does for the button channel.
+	chipBin := harness.RequireChipTool(t)
+	b := harness.Start(t, chipBin, harness.Options{
+		CASEEnabled: true,
+		Devices:     []string{"HmIP-LSC"},
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
+
+	// Light up the exposures so the light channel materialises its
+	// endpoint before the controller is commissioned.
+	expCtx, expCancel := context.WithTimeout(ctx, 15*time.Second)
+	if _, err := b.EnableAllExposures(expCtx); err != nil {
+		t.Fatalf("enable exposures: %v", err)
+	}
+	expCancel()
+	time.Sleep(1500 * time.Millisecond)
+
+	ctl := harness.NewController(t, chipBin, 0x5301)
+	out, err := ctl.PairFull(ctx, t, harness.PairTargetHost, b.MatterPort())
+	if err != nil {
+		t.Fatalf("commission: %v\n%s", err, out)
+	}
+	if !harness.PairingSuccess(out) {
+		t.Fatalf("pairing did not report success:\n%s", out)
+	}
+	// [Bridge.ResolveCCUAddress] reads through b.SharedCtl.
+	b.SharedCtl = ctl
+
+	slOut, err := ctl.ReadAttr(ctx, t, "descriptor", "server-list", 0xFFFF)
+	if err != nil {
+		t.Fatalf("wildcard server-list: %v", err)
+	}
+	perEP := harness.ServerListIDsPerEndpoint(slOut)
+	eps := make([]uint16, 0, len(perEP))
+	for e := range perEP {
+		eps = append(eps, e)
+	}
+	sort.Slice(eps, func(i, j int) bool { return eps[i] < eps[j] })
+	var ep uint16
+	found := false
+	for _, e := range eps {
+		if harness.HasCluster(perEP[e], 0x0300) {
+			ep = e
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("no ColorControl (0x0300) endpoint materialised for HmIP-LSC; server lists: %v", perEP)
+	}
 
 	address, _, ok := b.ResolveCCUAddress(ctx, t, ep, 0x0300)
 	if !ok {
@@ -65,8 +110,9 @@ func TestSendReceive_ColorControl(t *testing.T) {
 		}
 	})
 
-	// SEND — MoveToSaturation(127) must land as SATURATION=50.0
-	// (matterSaturationToHM(127) == 127/254*100 == 50.0 exactly).
+	// SEND — MoveToSaturation(127) must land as SATURATION=0.5: Matter's
+	// 127/254 is the HA-canonical 50 %, which ColorLight.SetColor scales
+	// onto the wire's 0..1 SATURATION fraction (color.go).
 	t.Run("send/move-to-saturation", func(t *testing.T) {
 		if _, err := b.SharedCtl.Invoke(ctx, t, "colorcontrol", "move-to-saturation", ep,
 			"127", "0", "1", "1"); err != nil {
@@ -76,8 +122,8 @@ func TestSendReceive_ColorControl(t *testing.T) {
 		if !ok {
 			t.Fatalf("SATURATION absent on CCU after move-to-saturation")
 		}
-		if !valueNear(got, 50.0, 1.0) {
-			t.Fatalf("CCU SATURATION = %v, want ~50.0", got)
+		if !valueNear(got, 0.5, 0.01) {
+			t.Fatalf("CCU SATURATION = %v, want ~0.5", got)
 		}
 	})
 
@@ -101,10 +147,8 @@ func TestSendReceive_ColorControl(t *testing.T) {
 
 	// NEGATIVE — every ColorControl attribute is read-only (Matter
 	// §3.2.6); the dispatcher's schema.AttributeWritable gate rejects
-	// the write with UNSUPPORTED_WRITE (0x88) before it ever reaches
-	// rgbwColorServer.MatterWrite (which would itself reject with
-	// errMatterUnknownAttribute — the gate gets there first for every
-	// attribute in this cluster's read-only set).
+	// the write with UNSUPPORTED_WRITE (0x88) before it ever reaches the
+	// server.
 	t.Run("negative/write-color-temperature-mireds", func(t *testing.T) {
 		// chip-tool's own exit status is not asserted here: a rejected
 		// write may or may not turn into a non-zero process exit
@@ -124,43 +168,24 @@ func TestSendReceive_ColorControl(t *testing.T) {
 		}
 	})
 
-	// RECEIVE — KNOWN LOOM GAP (pin it, do not "fix" by loosening the
-	// assertion): a colour-temperature-only device push has no dedicated
-	// change-notifier. RGBWLight embeds *Light (-> *generic.Float) and
-	// only wires LEVEL confirmations into OnMatterValueChanged; the
-	// HUE/SATURATION/COLOR_TEMPERATURE wire DPs sit on the same channel
-	// but are never fanned into a dirty-mark, so an isolated
-	// COLOR_TEMPERATURE push produces no proactive ColorTemperatureMireds
-	// report. AwaitProactiveReport must time out here — a green result
-	// would mean the notifier gap silently closed and this test should
-	// be promoted to a positive assertion (see notes/parity/by_design.md
-	// for the model-layer notifier-gap catalogue).
-	t.Run("receive/color-temperature-only-no-proactive-report", func(t *testing.T) {
-		const gapTimeout = 12 * time.Second
+	// RECEIVE — a colour-temperature push from the CCU (a wall transmitter,
+	// a CCU program) reaches the ColorControl server through its Set and
+	// is reported proactively: the daemon's confirmed-update hook stores
+	// 3000 K as 333 mireds and the server's change notifier marks the
+	// attribute dirty. Before the ADR 0084 ColorControl follow-up this
+	// subtest pinned the opposite — no notifier fanned the colour data
+	// points into the cluster — so a timeout here is the regression.
+	t.Run("receive/color-temperature-proactive-report", func(t *testing.T) {
 		out, err := harness.AwaitProactiveReport(ctx, t, b.SharedCtl,
 			"colorcontrol", "color-temperature-mireds", ep,
 			func() error { return b.CCU.FireDeviceEvent(address, "COLOR_TEMPERATURE", 3000) },
 			func(out string) bool {
 				v, ok := harness.FindAttrUint(out, "ColorTemperatureMireds")
-				return ok && v == 333 // miredsToKelvin inverse: 1_000_000/3000 == 333
+				return ok && v == 333 // 1_000_000 / 3000
 			},
-			gapTimeout)
-		if err == nil {
-			t.Fatalf("expected AwaitProactiveReport to time out (documented ColorControl CT-only notifier gap), but it observed a proactive report:\n%s", out)
-		}
-		t.Logf("confirmed documented gap: no proactive ColorTemperatureMireds report within %s: %v", gapTimeout, err)
-
-		// The value is nonetheless served on demand — the gap is in the
-		// change-notifier, not in the read path.
-		readOut, rerr := b.SharedCtl.ReadAttr(ctx, t, "colorcontrol", "color-temperature-mireds", ep)
-		if rerr != nil {
-			t.Fatalf("read-on-demand color-temperature-mireds after gap: %v", rerr)
-		}
-		if !harness.AttrReadOK(readOut) {
-			t.Errorf("read-on-demand did not report success:\n%s", readOut)
-		}
-		if v, ok := harness.FindAttrUint(readOut, "ColorTemperatureMireds"); !ok || v != 333 {
-			t.Errorf("read-on-demand ColorTemperatureMireds = %v (ok=%v), want 333\n%s", v, ok, readOut)
+			30*time.Second)
+		if err != nil {
+			t.Fatalf("no proactive ColorTemperatureMireds report after the CCU pushed 3000 K: %v\n%s", err, out)
 		}
 	})
 }

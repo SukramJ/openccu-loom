@@ -1191,9 +1191,10 @@ stub-rejection cells were removed with it.
 
 ### BD-Matter-ExtendedColorLight-HSOnly — HS / HS+CT lights advertise ExtendedColorLight without the XY feature
 
-**Where:** `internal/model/custom/light/matter_color.go` (`hsColorServer`,
-`rgbwColorServer`; device type 0x010D for `ColorLight` and `RGBWLight`);
-ratchet entries in `tests/integration/matter_device_layer_conformance_test.go`.
+**Where:** `internal/model/custom/light/matter_color.go` (go-fabric's
+`light.ColorControlServer` with the HS feature for `ColorLight`, HS+CT for
+`RGBWLight`; device type 0x010D for both); ratchet entries in
+`tests/integration/matter_device_layer_conformance_test.go`.
 
 **matter.js behaviour:** `devices/extended-color-light.ts` mandates
 ColorControl with the XY and CT features and the RemainingTime attribute;
@@ -1203,17 +1204,20 @@ such an endpoint: ColorControl.XY and ColorControl.CT missing, RemainingTime
 missing.
 
 **OpenCCU-Loom state (known limitation):** the HS-only RGB lights
-(HmIP-RGBW in HS mode, HM-LC-RGBW-WM) and the HS+CT RGBW light serve the
-HS commands and attributes only; 0x010D is the nearest type and Apple Home,
-Google Home and chip-tool drive the light through HS. The validator runs in
-warn mode in production; the conformance guard carries the three findings
-as declared entries so a fourth one fails the suite.
+(HmIP-RGBW in HS mode, HM-LC-RGBW-WM) serve the HS commands and
+attributes; the RGBW light adds CT. 0x010D is the nearest type and Apple
+Home, Google Home and chip-tool drive the light through HS. The validator
+runs in warn mode in production; the conformance guard carries the
+findings as declared entries so a new one fails the suite.
 
-**Resolution path:** ADR 0084's ColorControl follow-up — `light.NewColorControlServer`
-with the `ColorWriter` / `ColorTemperatureWriter` ports serves XY, HS, EHUE,
-CL and CT with matter.js's colour-space conversions and RemainingTime from
-the transition engine; the HS data points then back an XY+CT-conforming
-server. Until then the entries stay.
+Since the ADR 0084 ColorControl follow-up the cluster is go-fabric's
+server: RemainingTime is served (the server keeps it, 0 on the hand-off
+path without a transition engine), so that finding is gone; XY and, on the
+HS-only lights, CT stay missing because the feature set is still what the
+device carries. The server converts between colour spaces, so advertising
+XY and converting a MoveToColor onto HUE/SATURATION is possible — a
+behaviour decision (a controller that sees XY drives the light through
+XY), not a port. Until it is taken the two entries stay.
 
 ### BD-Matter-SmokeCoAlarm-PowerSourceOnEndpoint — the smoke alarm's battery is a cluster on its endpoint, not a PowerSource part
 
@@ -2850,7 +2854,7 @@ Go path: `internal/configui/easymode/usecase.go::Pipeline`, `internal/central/ad
 
 Two scoping notes:
 
-- **`combined.HSColor` is a north-bound aggregate only — it does not feed Matter, and does not need to.** The Matter ColorControl projection for RGB lights is independent and complete: `ColorLight` (which embeds `Light`) projects the `ExtendedColorLight` (0x010D) device type with an HS-mode `ColorControl` (0x0300) cluster server (`hsColorServer` in `custom/light/matter_color.go`), reading and writing the underlying HUE / SATURATION data points directly. `combined.HSColor` is the MQTT/WS/REST aggregate of those same two data points; routing it into Matter as well would double-surface the colour.
+- **`combined.HSColor` is a north-bound aggregate only — it does not feed Matter, and does not need to.** The Matter ColorControl projection for RGB lights is independent and complete: `ColorLight` (which embeds `Light`) projects the `ExtendedColorLight` (0x010D) device type with an HS-mode `ColorControl` (0x0300) cluster server (go-fabric's `light.ColorControlServer` built in `custom/light/matter_color.go`), reading and writing the underlying HUE / SATURATION data points directly. `combined.HSColor` is the MQTT/WS/REST aggregate of those same two data points; routing it into Matter as well would double-surface the colour.
 - **WeekProfile pipeline**: `combined.WeekProfile` runs via its own dedicated pipeline in `model/weekprofile/` and is not wired through `materialiseCombinedDataPoints`. This is by design — week-profile scheduling has its own coordinator lifecycle and does not fit the per-device combined-DP pattern.
 
 Go paths: `internal/model/combined/`, `internal/central/adapter/combined_bridge.go`, `internal/central/adapter/device_pipeline.go`, `internal/model/custom/light/matter_color.go`.
