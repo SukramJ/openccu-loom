@@ -139,10 +139,9 @@ func (sp *SoundPlayer) matterOnOffServer() *onoff.Server {
 			},
 		})
 		if sp.direction != nil {
-			feedback := generic.NewMatterOnOffFeedback(srv)
 			_ = sp.direction.OnConfirmedUpdate(func(_, _ int32) {
 				playing, _ := sp.IsPlaying()
-				feedback.Set(playing)
+				srv.Set(playing)
 			})
 		}
 		// A confirmation that landed between the initial read and the
