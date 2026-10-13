@@ -9,6 +9,7 @@ import (
 	"time"
 
 	fabriclight "github.com/SukramJ/go-fabric/cluster/light"
+	colorcontrolspec "github.com/SukramJ/go-fabric/cluster/spec/colorcontrol"
 	"github.com/SukramJ/go-fabric/cluster/wire"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -341,13 +342,15 @@ func TestColorLightDeviceTypeIsExtendedColorLight(t *testing.T) {
 	}
 }
 
-// TestColorLightColorModeIsHS locks the HS-only feature set and mode.
+// TestColorLightColorModeIsHS locks the feature set (HS and the XY
+// feature the ExtendedColorLight device type mandates) and the starting
+// mode, which is the device's: HS.
 func TestColorLightColorModeIsHS(t *testing.T) {
 	l := newHSLight(t, &stubWriter{})
 	srv := colorServer(t, l)
 	fm, _ := srv.MatterRead(matterAttrFeatureMap)
-	if fm != uint32(fabriclight.ColorFeatureHueSaturation) {
-		t.Fatalf("FeatureMap = %v, want HS only", fm)
+	if fm != uint32(fabriclight.ColorFeatureHueSaturation|fabriclight.ColorFeatureXY) {
+		t.Fatalf("FeatureMap = %v, want HS | XY", fm)
 	}
 	for _, attr := range []uint32{wire.ColorCtrlAttrColorMode, wire.ColorCtrlAttrEnhancedColorMode} {
 		if got := readU8(t, srv, attr); got != uint8(fabriclight.ColorModeHueSaturation) {
@@ -438,6 +441,130 @@ func TestColorLightServerStartsFromTheObservedColour(t *testing.T) {
 	}
 }
 
+// echoColorWriter is a CCU that confirms every HUE / SATURATION write
+// before the write returns, as the simulator and a fast CCU do: the
+// confirmed value reaches the light's data point — and through it the
+// server's Set — from inside the writer the server is driving.
+type echoColorWriter struct {
+	colorStubWriter
+	l *ColorLight
+}
+
+func (w *echoColorWriter) SetValue(ctx context.Context, addr string, p hmenum.Parameter, v any, prio hmenum.CommandPriority) error {
+	_ = w.colorStubWriter.SetValue(ctx, addr, p, v, prio)
+	switch p { //nolint:exhaustive // the two colour axes are the only parameters this writer echoes
+	case hmenum.ParameterHue:
+		w.l.hue.OnEvent(v.(int32))
+	case hmenum.ParameterSaturation:
+		w.l.saturation.OnEvent(v.(float64))
+	default:
+	}
+	return nil
+}
+
+// sRGB red in CurrentX / CurrentY (matter.js hsvToXy(0, 1) × 65536).
+const redX, redY = 45914, 19615
+
+// TestColorLightMoveToColorWritesTheConvertedHueAndSaturation routes
+// MoveToColor (the XY feature) through go-fabric's server into one
+// SetColor: the x/y target is converted through matter.js's xyToHsv —
+// sRGB red lands as HUE 0 and SATURATION 1.0 — and the server ends in the
+// XY mode at the target. With a CCU that echoes each write before it
+// returns, the HS echo confirms the x/y write in the device's own colour
+// space instead of counting as a colour of its own (go-fabric #79): the
+// server keeps the XY mode and the target, and the CCU holds red, not the
+// converted colour of an intermediate step (HUE 358 was the measured
+// failure).
+func TestColorLightMoveToColorWritesTheConvertedHueAndSaturation(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		echo bool
+	}{{"silent CCU", false}, {"echoing CCU", true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			var l *ColorLight
+			stub := &colorStubWriter{}
+			if tc.echo {
+				e := &echoColorWriter{}
+				l = newHSLight(t, e)
+				e.l = l
+				stub = &e.colorStubWriter
+			} else {
+				l = newHSLight(t, stub)
+			}
+			l.OnLevel(onLevel)
+			l.hue.OnEvent(int32(180))
+			l.saturation.OnEvent(0.5)
+			srv := colorServer(t, l)
+
+			req := colorcontrolspec.MoveToColorRequest{ColorX: redX, ColorY: redY}
+			if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToColor, req); err != nil {
+				t.Fatalf("MoveToColor: %v", err)
+			}
+			got := writtenValues(stub)
+			if got[hmenum.ParameterHue] != int32(0) {
+				t.Fatalf("HUE written = %v, want 0 (sRGB red)", got[hmenum.ParameterHue])
+			}
+			if s, _ := got[hmenum.ParameterSaturation].(float64); s < 0.99 {
+				t.Fatalf("SATURATION written = %v, want 1.0", got[hmenum.ParameterSaturation])
+			}
+			if m := readU8(t, srv, wire.ColorCtrlAttrColorMode); m != uint8(fabriclight.ColorModeXY) {
+				t.Fatalf("ColorMode after MoveToColor = %d, want 1 (XY)", m)
+			}
+			if x, y := readU16(t, srv, wire.ColorCtrlAttrCurrentX), readU16(t, srv, wire.ColorCtrlAttrCurrentY); x != redX || y != redY {
+				t.Fatalf("CurrentX/Y after MoveToColor = %d/%d, want %d/%d", x, y, redX, redY)
+			}
+		})
+	}
+}
+
+// TestColorLightConfirmedColourKeepsTheServersXYMode: a HUE / SATURATION
+// the CCU confirms that is the colour the server holds in the XY mode
+// (the late echo of a MoveToColor) does not flip the server back to HS;
+// a different colour — the wall remote — does, and is reported in HS.
+func TestColorLightConfirmedColourKeepsTheServersXYMode(t *testing.T) {
+	stub := &colorStubWriter{}
+	l := newHSLight(t, stub)
+	l.OnLevel(onLevel)
+	srv := colorServer(t, l)
+	req := colorcontrolspec.MoveToColorRequest{ColorX: redX, ColorY: redY}
+	if _, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToColor, req); err != nil {
+		t.Fatalf("MoveToColor: %v", err)
+	}
+	// The CCU's late echo of the write: red in the device's colour space.
+	l.hue.OnEvent(int32(0))
+	l.saturation.OnEvent(1.0)
+	if m := readU8(t, srv, wire.ColorCtrlAttrColorMode); m != uint8(fabriclight.ColorModeXY) {
+		t.Fatalf("ColorMode after the confirmed echo = %d, want 1 (XY kept)", m)
+	}
+	if x := readU16(t, srv, wire.ColorCtrlAttrCurrentX); x != redX {
+		t.Fatalf("CurrentX after the confirmed echo = %d, want %d (target kept)", x, redX)
+	}
+	// A colour of the device's own: the server follows it in HS.
+	l.hue.OnEvent(int32(120))
+	l.saturation.OnEvent(0.5)
+	if m := readU8(t, srv, wire.ColorCtrlAttrColorMode); m != uint8(fabriclight.ColorModeHueSaturation) {
+		t.Fatalf("ColorMode after a device-originated colour = %d, want 0 (HS)", m)
+	}
+	if h := readU8(t, srv, wire.ColorCtrlAttrCurrentHue); h != hueToMatter(120) {
+		t.Fatalf("CurrentHue after the device-originated colour = %d, want %d", h, hueToMatter(120))
+	}
+}
+
+// TestColorLightXYStartsFromTheObservedColour: CurrentX / CurrentY start
+// as the x/y of the colour observed before the server was built, so a
+// controller reading them before the first MoveToColor sees the light's
+// colour rather than the zero colour.
+func TestColorLightXYStartsFromTheObservedColour(t *testing.T) {
+	l := newHSLight(t, &stubWriter{})
+	l.hue.OnEvent(int32(0))
+	l.saturation.OnEvent(1.0)
+	srv := colorServer(t, l)
+	x, y := readU16(t, srv, wire.ColorCtrlAttrCurrentX), readU16(t, srv, wire.ColorCtrlAttrCurrentY)
+	if x < redX-2 || x > redX+2 || y < redY-2 || y > redY+2 {
+		t.Fatalf("initial CurrentX/Y = %d/%d, want sRGB red %d/%d (±2)", x, y, redX, redY)
+	}
+}
+
 // --- RGBWLight ---
 
 // TestRGBWLightDeviceTypeIsExtendedColorLight locks the 0x010D device
@@ -455,9 +582,9 @@ func TestRGBWLightFeatureMapAdvertisesHSAndCT(t *testing.T) {
 	l := newRGBW(t, &stubWriter{})
 	srv := colorServer(t, l)
 	v, _ := srv.MatterRead(matterAttrFeatureMap)
-	want := uint32(fabriclight.ColorFeatureHueSaturation | fabriclight.ColorFeatureColorTemperature)
+	want := uint32(fabriclight.ColorFeatureHueSaturation | fabriclight.ColorFeatureXY | fabriclight.ColorFeatureColorTemperature)
 	if v != want {
-		t.Fatalf("FeatureMap = %v, want 0x%X (HS|CT)", v, want)
+		t.Fatalf("FeatureMap = %v, want 0x%X (HS|XY|CT)", v, want)
 	}
 }
 

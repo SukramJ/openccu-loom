@@ -138,6 +138,42 @@ func TestSendReceive_ColorControl(t *testing.T) {
 		}
 	})
 
+	// SEND — MoveToColor(45914, 19615), sRGB red in CIE x/y × 65536, must
+	// land as HUE 0 and SATURATION 1.0: the XY feature's target is
+	// converted through matter.js's xyToHsv before the write
+	// (xyToHM in internal/model/custom/light/matter_color.go), and the
+	// simulator's echo of the write, which arrives inside the write,
+	// confirms it in the device's colour space (go-fabric #79) — the
+	// measured failure before the fix was HUE 358, the converted colour of
+	// the mode switch.
+	t.Run("send/move-to-color", func(t *testing.T) {
+		if _, err := b.SharedCtl.Invoke(ctx, t, "colorcontrol", "move-to-color", ep,
+			"45914", "19615", "0", "1", "1"); err != nil {
+			t.Fatalf("invoke move-to-color: %v", err)
+		}
+		got, ok := b.CCU.GetDPValue(address, "HUE")
+		if !ok {
+			t.Fatalf("HUE absent on CCU after move-to-color")
+		}
+		if !valueNear(got, 0.0, 1.0) {
+			t.Fatalf("CCU HUE = %v, want ~0 (sRGB red)", got)
+		}
+		sat, ok := b.CCU.GetDPValue(address, "SATURATION")
+		if !ok {
+			t.Fatalf("SATURATION absent on CCU after move-to-color")
+		}
+		if !valueNear(sat, 1.0, 0.02) {
+			t.Fatalf("CCU SATURATION = %v, want ~1.0", sat)
+		}
+		read, err := b.SharedCtl.ReadAttr(ctx, t, "colorcontrol", "color-mode", ep)
+		if err != nil {
+			t.Fatalf("read color-mode: %v", err)
+		}
+		if v, ok := harness.FindAttrUint(read, "ColorMode"); !ok || v != 1 {
+			t.Fatalf("ColorMode after move-to-color = %v (ok=%v), want 1 (CurrentXAndCurrentY)\n%s", v, ok, read)
+		}
+	})
+
 	// SEND — MoveToColorTemperature(250 mireds) must land as
 	// COLOR_TEMPERATURE=4000 Kelvin (miredsToKelvin(250) ==
 	// 1_000_000/250 == 4000 exactly), within HmIP-LSC's default

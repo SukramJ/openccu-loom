@@ -105,6 +105,10 @@ const (
 	matterDeviceTypeColorTemperatureLight uint16 = 0x010C
 	matterDeviceTypeExtendedColorLight    uint16 = 0x010D
 
+	// matterCIEScale is the CurrentX / CurrentY encoding: CIE 1931 x and
+	// y times 65536 (0..65279 served).
+	matterCIEScale = 65536.0
+
 	// matterHueScale matches Matter's CurrentHue range (0..254); the
 	// HM hue is in degrees (0..359). Same reasoning as
 	// [matterLevelMax] in matter.go: 0xFF is the null sentinel for
@@ -261,11 +265,15 @@ func physicalMireds(minKelvin, maxKelvin int32) (minMireds, maxMireds uint16) {
 // hsColorWriter is the [fabriclight.ColorWriter] of a hue/saturation
 // light: every colour the server applies becomes one [ColorLight.SetColor]
 // at [matterDispatchPriority] — one atomic HUE+SATURATION put_paramset,
-// or the RF dimmers' single COLOR integer. The server configures no
-// transition engine (hand-off, like LevelControl), so a MoveToHue with a
-// TransitionTime applies at once as matter.js does without managed
-// transitions, and Move/Step/Stop move the in-process attributes and
-// reach the CCU as whole colours.
+// or the RF dimmers' single COLOR integer. An x/y colour (MoveToColor
+// and its Move/Step siblings, the XY feature) is converted to hue and
+// saturation through go-fabric's matter.js conversion before the write;
+// the device's HUE / SATURATION echo confirms the x/y write on the
+// server in the device's own colour space (go-fabric #79). The server
+// configures no transition engine (hand-off, like LevelControl), so a
+// MoveToHue with a TransitionTime applies at once as matter.js does
+// without managed transitions, and Move/Step/Stop move the in-process
+// attributes and reach the CCU as whole colours.
 type hsColorWriter struct{ l *ColorLight }
 
 // SetColor implements [fabriclight.ColorWriter]. A colour in the CT mode
@@ -273,10 +281,60 @@ type hsColorWriter struct{ l *ColorLight }
 // colour temperature writer's business: the hue/saturation fields are
 // the last of their mode and must not be written to the CCU.
 func (w hsColorWriter) SetColor(ctx context.Context, c fabriclight.Color) error {
-	if c.Mode == fabriclight.ColorModeColorTemperature {
+	switch c.Mode {
+	case fabriclight.ColorModeColorTemperature:
 		return nil
+	case fabriclight.ColorModeXY:
+		hue, sat := xyToHM(c.X, c.Y)
+		return w.l.SetColor(ctx, hue, sat, matterDispatchPriority)
+	default:
+		return w.l.SetColor(ctx, matterHueToHM(c.Hue), matterSaturationToHM(c.Saturation), matterDispatchPriority)
 	}
-	return w.l.SetColor(ctx, matterHueToHM(c.Hue), matterSaturationToHM(c.Saturation), matterDispatchPriority)
+}
+
+// xyToHM converts Matter CurrentX / CurrentY (CIE 1931 x and y times
+// 65536) into the HM hue in whole degrees (0..359) and the HA-canonical
+// saturation (0..100) [ColorLight.SetColor] expects, through matter.js's
+// xyToHsv ([fabriclight.XYToHSV]).
+func xyToHM(x, y uint16) (hue int32, saturation float64) {
+	deg, sat := fabriclight.XYToHSV(float64(x)/matterCIEScale, float64(y)/matterCIEScale)
+	return int32(deg+0.5) % 360, sat * 100
+}
+
+// confirmsXY reports whether the device's hue/saturation colour c is the
+// colour the server holds in the XY mode — the x/y target converted the
+// way [xyToHM] wrote it, within one attribute unit, hue around the wrap.
+// go-fabric matches a confirmation against the in-flight colour only
+// while its writer runs (#79); a real CCU confirms a write as a later
+// event, after the command answered, and a Set with that echo would
+// count as a colour of the device's own and move the server to HS. The
+// echo is no change, so the hooks skip it; a colour that differs — the
+// wall remote, a CCU program — reaches Set and is reported in HS.
+func confirmsXY(held, c fabriclight.Color) bool {
+	if held.Mode != fabriclight.ColorModeXY || c.Mode != fabriclight.ColorModeHueSaturation {
+		return false
+	}
+	hue, sat := xyToHM(held.X, held.Y)
+	wantHue, wantSat := hueToMatter(hue), saturationToMatter(sat)
+	dh := absDiffU8(wantHue, c.Hue)
+	if dh > uint8(matterHueScale)/2 {
+		dh = uint8(matterHueScale) - dh
+	}
+	return dh <= 1 && absDiffU8(wantSat, c.Saturation) <= 1
+}
+
+func absDiffU8(a, b uint8) uint8 {
+	if a > b {
+		return a - b
+	}
+	return b - a
+}
+
+// hmToXY is the inverse of [xyToHM]: the x/y the server would report for
+// the device's hue and saturation, through matter.js's hsvToXy.
+func hmToXY(hue int32, saturation float64) (x, y uint16) {
+	fx, fy := fabriclight.HSVToXY(float64(hue), saturation/100)
+	return uint16(fx*matterCIEScale + 0.5), uint16(fy*matterCIEScale + 0.5)
 }
 
 // ctColorWriter is the [fabriclight.ColorTemperatureWriter] of a
@@ -383,7 +441,7 @@ func (l *ColorLight) MatterDeviceType() uint16 {
 }
 
 // MatterClusterServers for ColorLight returns OnOff + LevelControl +
-// ColorControl with the HS feature.
+// ColorControl with the HS and XY features.
 func (l *ColorLight) MatterClusterServers() []interfaces.MatterClusterServer {
 	servers := l.Light.MatterClusterServers()
 	return append(servers, l.matterColorServer())
@@ -392,21 +450,27 @@ func (l *ColorLight) MatterClusterServers() []interfaces.MatterClusterServer {
 // matterColorServer builds the HS light's ColorControl server once; see
 // [ColorTempLight.matterColorServer] for the shape. The HUE / SATURATION
 // pair or the RF dimmers' COLOR integer feed the confirmed colour back.
+// The XY feature the ExtendedColorLight device type mandates is served
+// next to HS: the server converts between the modes, the writer
+// converts an x/y target for the device (see [hsColorWriter]), and the
+// x/y attributes start from the observed colour so a read before the
+// first MoveToColor is not the zero colour.
 func (l *ColorLight) matterColorServer() *fabriclight.ColorControlServer {
 	return l.matterColor.server(func() *fabriclight.ColorControlServer {
 		mode := fabriclight.ColorModeHueSaturation
 		cfg := fabriclight.ColorControlServerConfig{
-			Features:         fabriclight.ColorFeatureHueSaturation,
+			Features:         fabriclight.ColorFeatureHueSaturation | fabriclight.ColorFeatureXY,
 			InitialColorMode: &mode,
 			OnOff:            l.Light,
 		}
 		if c, observed := l.hsColor(); observed {
 			cfg.InitialHue, cfg.InitialSaturation = c.Hue, c.Saturation
+			cfg.InitialX, cfg.InitialY = hmToXY(matterHueToHM(c.Hue), matterSaturationToHM(c.Saturation))
 		}
 		srv := fabriclight.NewColorControlServer(cfg)
 		srv.SetColorWriter(hsColorWriter{l: l})
 		resync := func() {
-			if c, observed := l.hsColor(); observed {
+			if c, observed := l.hsColor(); observed && !confirmsXY(srv.Color(), c) {
 				srv.Set(c)
 			}
 		}
@@ -439,7 +503,7 @@ func (l *RGBWLight) MatterDeviceType() uint16 {
 }
 
 // MatterClusterServers for RGBWLight returns OnOff + LevelControl +
-// ColorControl with the HS and CT features.
+// ColorControl with the HS, XY and CT features.
 func (l *RGBWLight) MatterClusterServers() []interfaces.MatterClusterServer {
 	servers := l.Light.MatterClusterServers()
 	return append(servers, l.matterColorServer())
@@ -491,7 +555,7 @@ func (l *RGBWLight) deviceColor() (fabriclight.Color, bool) {
 }
 
 // matterColorServer builds the RGBW light's ColorControl server once:
-// HS and CT features, both writer ports, and the HUE / SATURATION /
+// HS, XY and CT features, both writer ports, and the HUE / SATURATION /
 // COLOR_TEMPERATURE data points plus the device operating mode feeding
 // the confirmed colour back through Set.
 func (l *RGBWLight) matterColorServer() *fabriclight.ColorControlServer {
@@ -499,7 +563,7 @@ func (l *RGBWLight) matterColorServer() *fabriclight.ColorControlServer {
 		minMireds, maxMireds := physicalMireds(l.MinKelvin, l.MaxKelvin)
 		mode := l.matterColorMode()
 		cfg := fabriclight.ColorControlServerConfig{
-			Features:         fabriclight.ColorFeatureHueSaturation | fabriclight.ColorFeatureColorTemperature,
+			Features:         fabriclight.ColorFeatureHueSaturation | fabriclight.ColorFeatureXY | fabriclight.ColorFeatureColorTemperature,
 			MinMireds:        minMireds,
 			MaxMireds:        maxMireds,
 			InitialMireds:    matterInitialMireds,
@@ -508,6 +572,7 @@ func (l *RGBWLight) matterColorServer() *fabriclight.ColorControlServer {
 		}
 		if c, _ := l.deviceColor(); c.ColorTemperatureMireds != 0 || c.Hue != 0 || c.Saturation != 0 {
 			cfg.InitialHue, cfg.InitialSaturation = c.Hue, c.Saturation
+			cfg.InitialX, cfg.InitialY = hmToXY(matterHueToHM(c.Hue), matterSaturationToHM(c.Saturation))
 			if c.ColorTemperatureMireds != 0 {
 				cfg.InitialMireds = c.ColorTemperatureMireds
 			}
@@ -532,9 +597,10 @@ func (l *RGBWLight) matterColorServer() *fabriclight.ColorControlServer {
 }
 
 // syncColorTo stores the device's current colour on srv, in the mode
-// [RGBWLight.matterColorMode] derives from the device.
+// [RGBWLight.matterColorMode] derives from the device — unless it is
+// the late confirmation of an x/y write ([confirmsXY]).
 func (l *RGBWLight) syncColorTo(srv *fabriclight.ColorControlServer) {
-	if c, observed := l.deviceColor(); observed {
+	if c, observed := l.deviceColor(); observed && !confirmsXY(srv.Color(), c) {
 		srv.Set(c)
 	}
 }
@@ -586,7 +652,7 @@ func (l *RGBWLight) matterColorSync() {
 }
 
 // MatterEligibility marks RGBWLight as partially mappable: OnOff +
-// LevelControl + ColorControl (HS+CT) cover the standard light
+// LevelControl + ColorControl (HS+XY+CT) cover the standard light
 // surface, but the device's effect playlist (`Effects()` /
 // `Effect()`) has no Matter cluster — Matter §3 Color Control covers
 // scenes but not arbitrary effect dispatch. Effects stay MQTT-only.
@@ -605,7 +671,7 @@ func (l *RGBWLight) MatterEligibility() interfaces.MatterEligibilityVerdict {
 }
 
 // MatterEligibility marks EffectLight as partially mappable: OnOff +
-// LevelControl + ColorControl (HS) cover the regular light surface,
+// LevelControl + ColorControl (HS+XY) cover the regular light surface,
 // but the PROGRAM parameter (Slow / Medium / Fast color change,
 // Campfire, Waterfall, …) has no Matter cluster equivalent. Effect
 // dispatch stays MQTT-only.

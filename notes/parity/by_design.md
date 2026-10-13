@@ -1202,12 +1202,12 @@ change. The conformance exception map in
 `tests/integration/matter_cluster_conformance_test.go` and the chip-tool
 stub-rejection cells were removed with it.
 
-### BD-Matter-ExtendedColorLight-HSOnly — HS / HS+CT lights advertise ExtendedColorLight without the XY feature
+### BD-Matter-ExtendedColorLight-HSOnly — the HS-only lights advertise ExtendedColorLight without the CT feature
 
 **Where:** `internal/model/custom/light/matter_color.go` (go-fabric's
-`light.ColorControlServer` with the HS feature for `ColorLight`, HS+CT for
-`RGBWLight`; device type 0x010D for both); ratchet entries in
-`tests/integration/matter_device_layer_conformance_test.go`.
+`light.ColorControlServer` with the HS and XY features for `ColorLight`,
+HS+XY+CT for `RGBWLight`; device type 0x010D for both); the CT ratchet
+entry in `tests/integration/matter_device_layer_conformance_test.go`.
 
 **matter.js behaviour:** `devices/extended-color-light.ts` mandates
 ColorControl with the XY and CT features and the RemainingTime attribute;
@@ -1225,26 +1225,28 @@ findings as declared entries so a new one fails the suite.
 
 Since the ADR 0084 ColorControl follow-up the cluster is go-fabric's
 server: RemainingTime is served (the server keeps it, 0 on the hand-off
-path without a transition engine), so that finding is gone; XY and, on the
-HS-only lights, CT stay missing because the feature set is still what the
-device carries. Advertising XY was tried twice. With go-fabric 0.3.1 the
-mode switch drove the ColorWriter with the converted current colour and
-the device's echo of that write abandoned the command (go-fabric #79,
-fixed in main at 666609d). With that fix, measured again: `moveToColorLogic`
-starts the x and the y transition one after the other, and without a
-transition engine each applies at once and drives the writer — the device
-receives the target x with the old y first (sRGB red arrives as HUE 17°
-then HUE 0°), a visible intermediate colour and a second radio write on
-every MoveToColor, which is the command Apple Home uses. Filed as
-go-fabric #84 (one writer call with both targets). The host side is ready
-on branch `claude/matter-light-xy`: the x/y → HUE / SATURATION
-conversion through matter.js's xyToHsv, the initial x/y from the observed
-colour, and the rule that a confirmed HUE / SATURATION equal to the colour
-the server holds in the XY mode is the late echo of the write (a real CCU
-confirms after the command answered, where go-fabric matches an echo
-only while its writer runs). The two entries stay until #84 lands.
+path without a transition engine), so that finding is gone. The XY feature
+is served since go-fabric main at c7e67ac (pinned as a pseudo-version):
+an x/y target is converted for the device through matter.js's xyToHsv
+(`xyToHM`), the mode switch no longer drives the writer (go-fabric #79,
+fixed at 666609d) and a command's transitions start as one, so MoveToColor
+drives the writer once with both targets (go-fabric #84, fixed at
+c7e67ac — before, the device received the target x with the old y first,
+sRGB red arrived as HUE 17° then HUE 0°). An echo that arrives inside the
+writer confirms the x/y write in the device's colour space. One host-side
+rule remains, because go-fabric matches an echo only while its writer
+runs and a real CCU confirms a write as a later event: a confirmed HUE /
+SATURATION that is the colour the server holds in the XY mode, within
+one attribute unit (`confirmsXY`), is skipped by the hooks — otherwise
+the late echo would count as the device's own colour and move the server
+to HS after every MoveToColor. A colour that differs reaches `Set` and is
+reported in HS. Measured on the chip-tool HmIP-LSC bridge:
+MoveToColor(45914, 19615) lands as HUE 0 / SATURATION 1.0 and the server
+stays in the XY mode. What stays declared is CT on the HS-only lights —
+the feature set is what the device carries — pinned by the one remaining
+ratchet entry.
 
-One rule from that attempt is in: on the HmIP-LSC, which runs both axes at
+A second rule from the same work: on the HmIP-LSC, which runs both axes at
 once and has no operating mode, the colour mode follows the axis the CCU
 confirmed last (`RGBWLight.syncAxisTo`) — before, the echo of every hue
 write was reported as a CT colour while the colour-temperature axis
