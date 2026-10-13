@@ -93,8 +93,7 @@ func (s *Switch) matterOnOffServer() *onoff.Server {
 				return s.TurnOff(ctx, matterDispatchPriority)
 			},
 		})
-		feedback := generic.NewMatterOnOffFeedback(srv)
-		_ = s.OnConfirmedUpdate(func(_, on bool) { feedback.Set(on) })
+		_ = s.OnConfirmedUpdate(func(_, on bool) { srv.Set(on) })
 		// A confirmation that landed between the initial read and the
 		// hook registration is not lost: the current value is stored
 		// again, which is a no-op when nothing changed.

@@ -13,32 +13,32 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
-// TestMatterOnOffFeedbackDoesNotDeadlockOnASynchronousEcho pins the
-// property the chip-tool suite found missing: a CCU whose event for a
-// write arrives before the write's reply confirms from inside the Sink,
-// while onoff.Server holds its operation lock. A feedback that stored
-// synchronously would block that confirmation — and with it the RPC
-// callback goroutine that handles every event of the interface — until
-// the command timed out. The Sink here plays that CCU: it confirms the
-// value through the feedback before it returns.
-func TestMatterOnOffFeedbackDoesNotDeadlockOnASynchronousEcho(t *testing.T) {
+// TestMatterOnOffServerAcceptsASynchronousEcho pins the go-fabric contract
+// the profiles rely on: a CCU whose event for a write arrives before the
+// write's reply confirms through [onoff.Server.Set] from inside the Sink,
+// on the RPC callback goroutine that handles every event of the
+// interface. go-fabric 0.3.0 ran the Sink under the lock Set takes and
+// held that goroutine until the command timed out (the chip-tool suite
+// found it; go-fabric #63); 0.3.1 moved the Sink outside that lock. The
+// Sink here plays that CCU, and the test fails against a module that
+// reintroduces the lock: On never returns and the echo is held.
+func TestMatterOnOffServerAcceptsASynchronousEcho(t *testing.T) {
 	t.Parallel()
 	var (
-		feedback *MatterOnOffFeedback
-		tracker  hmtypes.DataVersionTracker
-		echoed   = make(chan time.Duration, 1)
+		srv     *onoff.Server
+		tracker hmtypes.DataVersionTracker
+		echoed  = make(chan time.Duration, 1)
 	)
-	srv := MustMatterOnOffServer(MatterOnOffConfig{
+	srv = MustMatterOnOffServer(MatterOnOffConfig{
 		Lighting:    true,
 		DataVersion: &tracker,
 		Sink: func(_ context.Context, on bool) error {
 			start := time.Now()
-			feedback.Set(on) // the echo, from inside the Sink
+			srv.Set(on) // the echo, from inside the Sink
 			echoed <- time.Since(start)
 			return nil
 		},
 	})
-	feedback = NewMatterOnOffFeedback(srv)
 
 	done := make(chan error, 1)
 	go func() {
@@ -54,33 +54,9 @@ func TestMatterOnOffFeedbackDoesNotDeadlockOnASynchronousEcho(t *testing.T) {
 		t.Fatal("On never returned: the synchronous echo deadlocked the server")
 	}
 	if waited := <-echoed; waited > time.Second {
-		t.Fatalf("the confirming goroutine was held for %s; it must move on after the bounded wait", waited)
+		t.Fatalf("the confirming goroutine was held for %s inside the Sink", waited)
 	}
-	deadline := time.Now().Add(2 * time.Second)
-	for {
-		if v, _ := srv.MatterRead(onoff.AttrOnOff); v == true {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("the confirmed value never landed on the server")
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-}
-
-// TestMatterOnOffFeedbackStoresTheNewestValue pins the coalescing order:
-// a burst of confirmations ends with the last one on the server, never
-// an older value stored after a newer one.
-func TestMatterOnOffFeedbackStoresTheNewestValue(t *testing.T) {
-	t.Parallel()
-	var tracker hmtypes.DataVersionTracker
-	srv := MustMatterOnOffServer(MatterOnOffConfig{Lighting: true, DataVersion: &tracker})
-	feedback := NewMatterOnOffFeedback(srv)
-	for i := range 50 {
-		feedback.Set(i%2 == 0)
-	}
-	feedback.Set(true)
 	if v, _ := srv.MatterRead(onoff.AttrOnOff); v != true {
-		t.Fatalf("OnOff after the burst = %v, want the last confirmed value true", v)
+		t.Fatalf("OnOff after On = %v, want true", v)
 	}
 }

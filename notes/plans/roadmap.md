@@ -131,7 +131,7 @@ replace it, and the metrics that say whether it worked.
   the daemon now pins: #60 (thermo Sink), #61 (cover Mover port), #62
   (versioned store migrations — the loom migrations 04x could be checked
   against `store.Migrations()` step by step), #63 (onoff Sink under the
-  operation lock — the daemon's coalescing feedback worker can go), #66
+  operation lock — the daemon's coalescing feedback worker is gone), #66
   (`ColorControlServer.Set` — the ColorControl follow-up is unblocked;
   the LevelControl follow-up is merged, #957). Phase 3 (unblocked by
   go-fabric #58, not started):

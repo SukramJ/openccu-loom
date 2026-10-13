@@ -101,17 +101,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   OnOff through the stack's scene paths. The LevelControl "with On/Off"
   commands of a light move the OnOff attribute the moment the CCU
   accepted the level write, as matter.js couples the two clusters. The
-  confirmed state reaches the server through a coalescing worker rather
-  than from the event callback directly: `onoff.Server` runs the Sink
-  under its operation lock, and a CCU that sends the write's event before
-  the write's reply (the simulator does) would otherwise block the
-  interface's whole event callback until the write timed out — the
-  chip-tool suite caught it, go-fabric #63 tracks it upstream.
+  confirmed state reaches the server straight from the data point's
+  confirmed-update hook, which may run from inside the Sink: a CCU that
+  sends the write's event before the write's reply (the simulator does)
+  confirms that way, and with go-fabric 0.3.0 that held the interface's
+  whole event callback until the write timed out — the chip-tool suite
+  caught it, go-fabric #63 fixed it in 0.3.1, and a contract test now
+  pins the behaviour against the module in use.
 - **go-fabric 0.3.1.** The Matter stack moves to the release that closes
   every ask the device-layer migration filed: `onoff.Server` runs the
-  host Sink outside the lock `Set` takes (#63 — the daemon's coalescing
-  feedback worker is no longer load-bearing and will go with the next
-  OnOff slice), `ColorControlServer.Set` records a device-originated
+  host Sink outside the lock `Set` takes (#63 — the coalescing feedback
+  worker the daemon carried for it is gone; the confirmed-update hooks
+  call `Set` directly), `ColorControlServer.Set` records a device-originated
   colour (#66, the ColorControl follow-up is unblocked), thermostat Sink
   and window-covering Mover ports with inbound setters (#60, #61),
   `store.Migrations()` as versioned steps (#62), host observers on the
