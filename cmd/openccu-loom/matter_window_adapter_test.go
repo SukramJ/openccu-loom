@@ -54,7 +54,10 @@ func openerBundle(t *testing.T, central string, mutate func(*config.Config)) (*m
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
 	cfg.North.Matter.MDNSAdvertise = "noop"
-	cfg.North.Matter.Listen = ":0"
+	// Loopback, as the other pairing tests listen: the ephemeral pin
+	// dials bridge.LocalAddr(), and a wildcard listener's address is not
+	// dialable on every CI runner (macOS times out).
+	cfg.North.Matter.Listen = "127.0.0.1:0"
 	cfg.DataDir = t.TempDir()
 	cfg.Centrals = []config.CentralConfig{{Name: central, Host: "127.0.0.1"}}
 	if mutate != nil {
