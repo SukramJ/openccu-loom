@@ -988,33 +988,31 @@ type NorthMatter struct {
 	//     mode; commissioners never see the bridge.
 	MDNSAdvertise string `yaml:"mdns_advertise" json:"mdns_advertise" cfg:"expert"`
 
-	// Commissioning configures the PASE acceptor. When Passcode is
-	// non-zero the daemon stands up a Spake2+ verifier wired into
-	// the bridge's PASE port; commissioner Pake1 traffic completes
-	// against it and Pake3 success registers a fresh PASE session
-	// with the operational manager. Passcode=0 leaves the PASE port
-	// at noop (commissioners get debug-logged drops).
+	// Commissioning configures the PASE credentials the node facade
+	// runs the bridge's own commissioning window on. A valid Passcode
+	// is the long-lived setup code (printed labels, the REST window on
+	// configured credentials); Passcode=0 makes the daemon run the
+	// process on a random passcode, which the REST window on
+	// configured credentials then refuses — the ephemeral window
+	// needs no configured passcode.
 	Commissioning NorthMatterCommissioning `yaml:"commissioning" json:"commissioning" cfg:"basic"`
 
-	// CASE configures the operational-session responder. When NodeID is
-	// non-zero the daemon constructs a sigma responder and wires it into
-	// the bridge's CASE port. The operational fabric identity established
-	// during commissioning (NOC + ICAC + operational private key + IPK) is
-	// persisted per fabric and rehydrated at boot, so CASE completes against
-	// a production controller that validates the certificate chain and
-	// survives daemon restarts — commissioned controllers reconnect without
-	// re-pairing. The operational private key is stored unencrypted at rest;
-	// protecting the data directory is the operator's responsibility.
+	// CASE is accepted for compatibility and has no effect: the node
+	// facade answers CASE with the operational identity each commissioner
+	// installed (NOC + ICAC + operational private key + IPK), persisted
+	// per fabric and rehydrated at boot, so commissioned controllers
+	// reconnect without re-pairing. The operational private key is
+	// stored unencrypted at rest; protecting the data directory is the
+	// operator's responsibility.
 	CASE NorthMatterCASE `yaml:"case" json:"case" cfg:"expert"`
 
 	// Attestation configures the bridge's Device Attestation surface
 	// (DAC + PAI + CD bytes + DAC private key). When all four paths
 	// resolve, the bridge's OperationalCredentials cluster
 	// (go-fabric cluster/core) presents the production material to
-	// commissioners; otherwise it falls back to a CSA test-PAA chain
-	// and, if that cannot be built, to an ephemeral self-signed
-	// development DAC that only validates under chip-tool's
-	// `--bypass-attestation-verifier true` flag.
+	// commissioners; otherwise the node facade builds the CSA test
+	// chain for the configured vendor and product, which the
+	// ecosystems and chip-tool accept as a test device.
 	Attestation NorthMatterAttestation `yaml:"attestation" json:"attestation" cfg:"expert"`
 
 	// DevRotateUniqueIDs mixes a per-boot 16-byte random salt into
@@ -1133,8 +1131,9 @@ type NorthMatterCommissioning struct {
 	Passcode uint32 `yaml:"passcode" json:"passcode" cfg:"secret"`
 
 	// Salt is the PBKDF2 salt persisted alongside the passcode
-	// (16..32 bytes per Spec §3.10). Empty defaults to a fixed
-	// development salt — never ship that default in production.
+	// (16..32 bytes per Spec §3.10). Empty, or outside that range, is
+	// replaced by a random per-process salt; a commissioner cannot
+	// tell, the salt travels in PBKDFParamResponse.
 	Salt string `yaml:"salt" json:"salt" cfg:"secret"`
 
 	// Iterations is the PBKDF2 iteration count (1000..100000 per
@@ -1149,15 +1148,14 @@ type NorthMatterCommissioning struct {
 
 	// EphemeralWindow, when true, makes every REST-driven Open
 	// Commissioning Window call generate a fresh discriminator +
-	// passcode + Spake2+ verifier and swap them onto the bridge for
-	// the window's lifetime. The configured Passcode then acts only
-	// as the long-lived fallback acceptor used when no window is
-	// open (e.g. the operator pre-prints a label code).
+	// passcode + Spake2+ verifier for the window's lifetime. The
+	// configured Passcode then serves only the window the uncommissioned
+	// node opens at start (e.g. the operator pre-prints a label code).
 	//
 	// Recommended for production: pairing codes auto-rotate and the
-	// configured passcode never leaves the bridge process. Works with
-	// both ConcurrentPairings modes: the singleton adapter is swapped
-	// and reverted, or the per-exchange factory is re-installed on close.
+	// configured passcode never leaves the bridge process. The window
+	// runs on the node facade's basic window with the fresh
+	// credentials; the configured ones return when it closes.
 	EphemeralWindow bool `yaml:"ephemeral_window" json:"ephemeral_window" cfg:"basic"`
 }
 

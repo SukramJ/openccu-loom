@@ -1,5 +1,28 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.91.0
+
+- **Matter bridge rebuilt on go-fabric v0.4.0.** Every bridged device is
+  served through the library's device layer and node facade. Pairings,
+  fabrics and device identities carry over; no re-pairing is needed.
+- **Behaviour changes on the Matter side:** an unpaired bridge opens its
+  own commissioning window for 48 hours after every start (the configured
+  passcode); the settings `concurrent_pairings` and `case.*` are accepted
+  but have no effect any more; the Matter "reboot count" starts again at 0
+  with this update.
+- **Matter over TCP**, opt-in with `north.matter.tcp` (`incoming` lets a
+  controller move large reads off the radio-friendly retry transport).
+- **Matter subscriptions survive a restart**: controllers no longer show
+  the bridge as unresponsive for a while after an add-on restart.
+- **Groups and scenes** written by a Matter controller are real now and
+  survive a restart.
+- **"Last refreshed" per device** in the device list and on the device
+  page: when the CCU last confirmed the device's values, even when nothing
+  changed.
+- **Home Assistant discovery:** one component HA refuses no longer costs
+  the whole device, and the device-error event entity that HA never
+  created now exists.
+
 ## 0.90.0
 
 - **Security update:** built with Go 1.27.2, which fixes vulnerabilities in

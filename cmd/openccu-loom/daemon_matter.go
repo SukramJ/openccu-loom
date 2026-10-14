@@ -239,7 +239,7 @@ const matterSetupPasscodeMax = 99999998
 // reads SerialNumber for accessory deduplication, logging `could not find
 // cached attribute values` when it is absent. Distinct from UniqueID
 // (the full SHA-256 digest) so the matter.js invariant
-// `uniqueId !== serialNumber` (basic-information-validators.ts:26) holds.
+// `uniqueId !== serialNumber` (basic-information-validators.ts:42) holds.
 func matterRootSerial(mc config.NorthMatter) string {
 	h := sha256.Sum256(fmt.Appendf(nil, "%04X|%04X|%s|serial", mc.VendorID, mc.ProductID, mc.NodeLabel))
 	return hex.EncodeToString(h[:8])
@@ -1370,8 +1370,9 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// bridge so the matching bridged endpoint fires the §9.13.6
 	// ReachableChanged event — without this Apple/Google always see
 	// every bridged device as reachable even when the CCU device is
-	// dead. The Reachable attribute itself reads dev.Available() live
-	// per dispatch (endpoint/materialize.go); this supplies the push
+	// dead. The Reachable attribute itself reads the endpoint's
+	// Availability hook — the assembler hands it dev.Available — live
+	// per dispatch (go-fabric endpoint/materialize.go:198); this supplies the push
 	// half so active subscriptions are notified, not just polled reads.
 	for _, u := range reg.List() {
 		if unsub := wireMatterDeviceReachableForward(u, mb.NotifyDeviceReachable); unsub != nil {

@@ -135,7 +135,8 @@ replace it, and the metrics that say whether it worked.
   #960), #66 (`ColorControlServer.Set` — the ColorControl follow-up is
   done; the LevelControl follow-up is merged, #957). Phase 3
   (`startMatterBridge` onto `node.New`) is **done** on go-fabric main at
-  b11840f: #58 brought the host hooks, #87/#88 the host-assembled
+  b11840f (the daemon pins the v0.4.0 release that contains it since
+  2026-10-14): #58 brought the host hooks, #87/#88 the host-assembled
   topology, the UniqueID pin, the session accessors and the host-side
   RemoveFabric, #89/#92 the shared group manager and the TCP roles in the
   responder session parameters. The ADR's phase 3 section lists what is

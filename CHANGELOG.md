@@ -6,6 +6,28 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.91.0] - 2026-10-14
+
+### Release summary
+
+**Matter release.** Every bridged endpoint is built through go-fabric's
+device layer and the bridge's bring-up runs on its node facade (ADR 0084,
+all three phases), pinned on the go-fabric v0.4.0 release: the OnOff,
+LevelControl, ColorControl (with the XY feature), WindowCovering and
+Thermostat clusters of the profiles are the library's servers with the
+profile as their port, about 2 700 lines of the daemon's own bring-up copy
+are gone, and the stack semantics that come with it are matter.js's — an
+uncommissioned bridge opens its own 48-hour window at start, PASE is per
+exchange always (`concurrent_pairings` and `case.*` are accepted and
+inert), RebootCount starts at 0 on the first boot after the update, and
+the root serves the facade's cluster set. Also new: Matter-over-TCP as an
+opt-in (`north.matter.tcp`), subscriptions that survive a restart, real
+Groups and ScenesManagement, and a per-device *last refreshed* time on
+REST, WebSocket and the device list. MQTT discovery no longer loses a
+whole device over one component Home Assistant would refuse, and the
+device-error event entity that HA silently never created now exists.
+REST API 13.9.0, WebSocket API 1.14 (both additive).
+
 ### Added
 
 - **Matter: every bridged endpoint is built through go-fabric's device
@@ -229,6 +251,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   not yet observed reports fully open instead of null. The Garage keeps
   its ClosureControl projection. The chip-tool tilt test runs on its own
   HmIP-FBL bridge with a positive tilt report.
+- **go-fabric v0.4.0.** The Matter stack moves from the pinned main
+  commit (b11840f) to the release tag. The release adds the controller
+  role, the OTA provider, DiagnosticLogs over BDX, the media clusters and
+  Wi-Fi diagnostics — all opt-in through `node.Config` fields the daemon
+  leaves nil, so no new endpoint or cluster is served. What the daemon
+  inherits on the node facade it already runs: the group manager opens
+  its multicast sender socket at `Start` (a warning, not a failure,
+  without IPv6). The release's Binding persistence and fabric-scoped
+  Binding write do not reach the bridge — no device type the profiles
+  advertise carries a Binding server. The matter.js schema snapshot stays
+  at `0ceb202d`.
 - **go-fabric main (`v0.3.2-0.20261013184816-b11840f408b9`).** The Matter
   stack moves to the commit that closes the device-layer asks left open
   after 0.3.1: `cover.WindowCoveringServer` serves the tilt axis and an
@@ -369,6 +402,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `naming.IsFunction` now alias go-hamqtt's `topic.FunctionHA` /
   `topic.IsReservedFunction`.
 
+- Dependency refresh alongside the go-fabric v0.4.0 pin: go-hamqtt
+  v0.37.0 → v0.38.0 (built on Go 1.27.2; its new opt-in
+  `SupersedeObserved` retraction window is not adopted here — see
+  `docs/open-items.md` in that module), go-ha-catalog v0.3.0 → v0.3.1
+  (Home Assistant 2026.10.1, no vocabulary change), chi v5.3.2 → v5.5.0,
+  goose v3.28.0 → v3.29.0, kin-openapi v0.149.0 → v0.150.0, the
+  `golang.org/x` modules one minor each. The SPA's npm dependencies move
+  to the newest versions inside their declared ranges (Svelte 5.57.2,
+  Vite 8.3.4, Vitest 5.0.4, bits-ui 2.19.5, lucide 1.57.0);
+  `@playwright/test` stays at 1.63.0, the version of the CI image.
 - A daily `download-stats` workflow appends the GitHub release asset
   download counters and the Home Assistant add-on analytics install counts
   to the orphan branch `stats` (`downloads.ndjson`), so the download history

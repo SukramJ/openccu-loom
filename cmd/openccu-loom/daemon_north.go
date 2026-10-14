@@ -389,9 +389,9 @@ func configuredAuthSources(cfg *config.Config, src authSources) []string {
 }
 
 // awaitShutdown blocks until ctx is cancelled, then runs the graceful
-// shutdown sequence: announce the stop to every WebSocket client, emit the
-// Matter ShutDown event (both best-effort) and stop every north-bound server
-// with a bounded timeout. Production wires ctx to SIGINT/SIGTERM via
+// shutdown sequence: announce the stop to every WebSocket client
+// (best-effort) and stop every north-bound server with a bounded timeout;
+// the Matter ShutDown event is the node facade's, emitted by its Stop. Production wires ctx to SIGINT/SIGTERM via
 // signal.NotifyContext in main.go; tests pass a context.WithCancel ctx so
 // they can drive shutdown without signals.
 func awaitShutdown(ctx context.Context, logger *slog.Logger, northBridges *northbridge.Registry, wsHub *ws.Hub) {

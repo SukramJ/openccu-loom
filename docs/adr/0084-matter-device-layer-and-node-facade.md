@@ -1,7 +1,8 @@
 # ADR 0084 — Matter: the profiles move onto go-fabric's device layer, the bring-up onto its node facade
 
 - **Status**: accepted (2026-10-12); phases 1 and 2 are this repository's
-  work, phase 3 done on go-fabric main b11840f (#87, #89 closed)
+  work, phase 3 done on go-fabric main b11840f (#87, #89 closed), pinned
+  on the go-fabric v0.4.0 release since 2026-10-14
 - **Related**: [ADR 0012](./0012-matter-pure-go-implementation.md) (pure-Go
   Matter), [ADR 0049](./0049-matter-one-endpoint-per-device.md) (one endpoint
   per device), [ADR 0063](./0063-self-maintained-device-profiles.md) (the

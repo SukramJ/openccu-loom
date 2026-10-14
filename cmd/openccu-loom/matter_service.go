@@ -12,9 +12,10 @@ import "context"
 // and background goroutines are started during CONSTRUCTION
 // (wireMatterRuntime), not in Start. Its bring-up interleaves construct,
 // handler-attach and start steps in an order the Matter protocol and
-// commissioner interop depend on: bridge.Start precedes ~600 lines of
-// Attach* wiring, and announcePersistedFabric requires an already-running
-// bridge. Separating start from construct would risk silent Apple/Google
+// commissioner interop depend on: the node facade's Start runs the
+// stack bring-up in its documented order, and the daemon's own wiring
+// (readiness, reannounce, the REST surface) attaches around it.
+// Separating start from construct would risk silent Apple/Google
 // Home pair-aborts that take days to attribute, and Matter cannot be
 // interop-verified from a unit test. So this Service deliberately owns only
 // the ordered teardown (run in the registry's reverse-order StopAll, after
@@ -23,7 +24,7 @@ import "context"
 // "Service.Start does the starting" ideal; see ADR 0047.
 //
 // The BasicInformation ShutDown event (Matter spec §11.1.6.2) is emitted by
-// awaitShutdown BEFORE StopAll, so it still precedes bridge.Stop.
+// the node facade's Stop, which this Service's Stop runs.
 type matterService struct {
 	stop func()
 }
@@ -42,9 +43,9 @@ func (s *matterService) Name() string { return "matter" }
 // (see the type doc).
 func (s *matterService) Start(context.Context) error { return nil }
 
-// Stop runs the Matter teardown (stopReannounce, diagnostics persist,
-// bridge.Stop, subMgr.Stop, db.Close). Idempotent via the registry, which
-// calls it at most once.
+// Stop runs the Matter teardown (unwire the readiness hook, stop the
+// reannounce loop, the node facade's Stop, close the advertiser).
+// Idempotent via the registry, which calls it at most once.
 func (s *matterService) Stop(context.Context) error {
 	if s.stop != nil {
 		s.stop()

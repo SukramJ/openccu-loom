@@ -162,8 +162,8 @@ func (l *Light) MatterClusterServers() []interfaces.MatterClusterServer {
 // the Sink) — no CCU-side ON_TIME is written for it.
 //
 // The server starts from the observed brightness, false while nothing was
-// observed: matter.js's OnOff behaviour reads an unset attribute as false
-// (OnOffServer.ts:39), and Apple Home drops an accessory whose first
+// observed: the OnOff attribute is mandatory and non-nullable
+// (on-off.element.ts:29), and Apple Home drops an accessory whose first
 // report carries no boolean.
 func (l *Light) matterOnOffServer() *onoff.Server {
 	return l.matterOnOff.Server(func() *onoff.Server {

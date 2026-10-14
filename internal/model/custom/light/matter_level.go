@@ -123,7 +123,7 @@ func (l *Light) matterLevelExecutes(mask, override uint8) bool {
 // MoveToLevel implements [levelcontrol.LevelSource]: LEVEL to the
 // requested level, ramped over TransitionTime where the device carries
 // RAMP_TIME. A plain MoveToLevel while off is a silent Success unless
-// ExecuteIfOff is in effect (LevelControlServer.ts:245).
+// ExecuteIfOff is in effect (LevelControlServer.ts:729-736).
 func (s lightLevelSource) MoveToLevel(ctx context.Context, req levelcontrol.MoveToLevelRequest) error {
 	if !s.l.matterLevelExecutes(req.OptionsMask, req.OptionsOverride) {
 		return nil
@@ -133,7 +133,7 @@ func (s lightLevelSource) MoveToLevel(ctx context.Context, req levelcontrol.Move
 
 // MoveToLevelWithOnOff implements [levelcontrol.LevelSource]: the
 // coupled variant. A target at MinLevel turns the device off
-// (LevelControlServer.ts:500 couple, chip LevelControlCluster.cpp:344;
+// (LevelControlServer.ts:557 couple, chip LevelControlCluster.cpp:344;
 // Matter §1.6.4.1.2); HM dimmers carry a single LEVEL knob, so
 // "CurrentLevel=min + OnOff=false" is LEVEL=0.
 func (s lightLevelSource) MoveToLevelWithOnOff(ctx context.Context, req levelcontrol.MoveToLevelRequest) error {
@@ -150,7 +150,7 @@ func (l *Light) matterMoveToLevel(ctx context.Context, level uint8, transition *
 	}
 	if ramp, ramped := transitionRampDuration(transition); ramped && l.Capabilities.Transition {
 		// A positive transition time becomes the device-side ramp:
-		// matter.js LevelControlServer.ts:297-303 (moveToLevelLogic)
+		// matter.js LevelControlServer.ts:326 (moveToLevelLogic)
 		// turns it into a rate towards the target level; HM dimmers
 		// ramp natively when RAMP_TIME accompanies LEVEL in one atomic
 		// put_paramset, so the whole transition is the device's.
@@ -213,7 +213,7 @@ func (l *Light) matterMove(ctx context.Context, req levelcontrol.MoveRequest, wi
 // target clamped to [MinLevel, MaxLevel] = [1, 254] as matter.js
 // Transitions.ts:139 clamps — a plain Step can never turn the device
 // off. A plain Step while off is a silent Success unless ExecuteIfOff is
-// in effect (LevelControlServer.ts:387).
+// in effect (LevelControlServer.ts:388).
 func (s lightLevelSource) Step(ctx context.Context, req levelcontrol.StepRequest) error {
 	if !s.l.matterLevelExecutes(req.OptionsMask, req.OptionsOverride) {
 		return nil
@@ -317,9 +317,9 @@ func (l *Light) syncMatterOnOff(withOnOff bool, target float64) {
 }
 
 // cropMatterLevel crops a requested level into [MinLevel, MaxLevel] =
-// [1, 254]. Mirrors matter.js LevelControlServer.ts:249
+// [1, 254]. Mirrors matter.js LevelControlServer.ts:274
 // cropValueRange(level, this.minLevel, this.maxLevel) with the LT
-// feature's minLevel=1 / maxLevel=254 defaults (LevelControlServer.ts:64-70).
+// feature's minLevel=1 / maxLevel=254 defaults (LevelControlServer.ts:115-119).
 func cropMatterLevel(level uint8) uint8 {
 	if level < matterLevelMinDefault {
 		return matterLevelMinDefault
@@ -334,9 +334,9 @@ func cropMatterLevel(level uint8) uint8 {
 // (nullable uint16, tenths of a second per Matter §1.6.7.1) into the
 // RAMP_TIME duration handed to the CCU. Null/absent and 0 both report
 // ramped=false so the caller keeps the instant SetLevel path: matter.js
-// LevelControlServer.ts:297-303 (moveToLevelLogic) only computes an
+// LevelControlServer.ts:326 (moveToLevelLogic) only computes an
 // effectiveRate for a truthy transition time, and transition()'s
-// changePerS contract (LevelControlServer.ts:459) documents "0 or
+// changePerS contract (LevelControlServer.ts:525) documents "0 or
 // nullish means transition instantly".
 func transitionRampDuration(tenths *uint16) (ramp time.Duration, ramped bool) {
 	if tenths == nil || *tenths == 0 {

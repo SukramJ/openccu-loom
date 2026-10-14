@@ -64,8 +64,9 @@ func (p *matterEventPublisher) publishEndpointAssembled(count int) {
 }
 
 // publishFabricAdded emits `matter.fabric_added` for the freshly commissioned
-// fabric. Wired through a wrapping StoreFacade in the daemon so the
-// cluster-side AddNOC + REST-side flows both surface the event.
+// fabric. The node facade's OnFabricAdded observer reaches it through
+// matterFabricEvents (wireMatterRuntime), so the cluster-side AddNOC
+// surfaces the event.
 //
 // The declared payload is the full MatterFabric identity (assets/wsapi.json →
 // the MatterFabric schema in assets/openapi.yaml), so the index alone leaves
@@ -139,8 +140,10 @@ func (p *matterEventPublisher) fabricPayload(fabricIndex uint8) any {
 }
 
 // publishFabricRemoved emits `matter.fabric_removed` with the
-// revoked fabric_index. Wired via [Bridge.SetOnFabricRemoved] so
-// the WS layer receives the event whenever RemoveFabric completes.
+// revoked fabric_index. The node facade's OnFabricRemoved observer
+// reaches it through matterFabricEvents (wireMatterRuntime), so the WS
+// layer receives the event whenever a RemoveFabric — the command's or
+// the REST revoke's — completes.
 func (p *matterEventPublisher) publishFabricRemoved(fabricIndex uint8) {
 	p.PublishMatterEvent(context.Background(), handlers.MatterEvent{
 		Topic:   handlers.MatterTopicFabricRemoved,
