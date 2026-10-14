@@ -194,10 +194,11 @@ func MatterDeviceTypeName(id uint16) string {
 	if name := contract.DeviceTypeName(id); !strings.HasPrefix(name, "0x") {
 		return name
 	}
-	// contract's hand-kept label table lags the generated schema (it
-	// names no SoilSensor, 0x0045, which the soil-moisture measurement
-	// class advertises); the schema carries every device type matter.js
-	// models, so it answers before the hex fallback.
+	// contract's label table can lag the generated schema (it once
+	// named no SoilSensor, 0x0045, which the soil-moisture measurement
+	// class advertises; go-fabric v0.4.0 generates it); the schema
+	// carries every device type matter.js models, so it answers before
+	// the hex fallback.
 	if name, ok := schema.DeviceTypeName(uint32(id)); ok {
 		return name
 	}

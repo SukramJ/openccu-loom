@@ -604,7 +604,7 @@ func (c *Channel) MasterParameterIntRange(name string) (lo, hi int, ok bool) {
 // dataPointMultiplierReader is an internal adapter the Multiplier
 // helper uses to fish a per-DP scaling factor out of a DataPoint
 // without forcing every consumer to re-import generic. Every
-// `*generic.DataPoint[T]` satisfies it (`unit_cleanup.go:111`).
+// `*generic.DataPoint[T]` satisfies it (`unit_cleanup.go:180`).
 type dataPointMultiplierReader interface {
 	Multiplier() float64
 }

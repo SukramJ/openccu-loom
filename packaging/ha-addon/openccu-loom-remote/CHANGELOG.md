@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.91.0
+
+No changes to the proxy. The daemon release rebuilds the Matter bridge on
+go-fabric v0.4.0 and adds a per-device "last refreshed" time (REST API
+13.9.0, additive).
+
 # 0.90.0
 
 **Security update:** the proxy is built with Go 1.27.2, which fixes

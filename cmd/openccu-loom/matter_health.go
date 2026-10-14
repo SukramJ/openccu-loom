@@ -14,8 +14,8 @@ import (
 
 // matterHealthComponentName is the tracker component name reported
 // by [startMatterHealthProbe]. Matches the SPA's component-list
-// naming convention (subsystem dotted with the surface, here `matter`
-// alone because the bridge is daemon-global rather than per-CCU).
+// naming convention (subsystem dotted with the surface; the bridge is
+// daemon-global rather than per-CCU, so no central name follows).
 const matterHealthComponentName = "matter.bridge"
 
 // matterHealthProbeInterval matches the SQLite + MQTT probes so the

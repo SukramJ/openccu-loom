@@ -77,8 +77,8 @@ func (s *Switch) MatterClusterServers() []interfaces.MatterClusterServer {
 // observed: Apple Home's HAP mapper drops the whole OnOffPlugInUnit
 // accessory when OnOff is null on the first Subscribe report (verified
 // empirically: bridge pair succeeds, sensors visible, the switch absent),
-// and matter.js's OnOff behaviour likewise reads an unset attribute as
-// false (OnOffServer.ts:39).
+// and the OnOff attribute is mandatory and non-nullable
+// (on-off.element.ts:29), so the server never reports null.
 func (s *Switch) matterOnOffServer() *onoff.Server {
 	return s.matterOnOff.Server(func() *onoff.Server {
 		on, _ := s.IsOn()
