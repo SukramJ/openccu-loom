@@ -6,6 +6,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.91.1] - 2026-10-15
+
+### Release summary
+
+**Colour for the fixed-colour lights, and the licence change.** The
+HmIP-BSL, the HmIP-MP3P signal channels and the HmIPW-WGC offer a colour
+picker in Apple Home and every other Matter controller: a colour the
+controller picks snaps to the nearest of the device's eight colours, and
+the controller sees where it landed. Both channels of the 2-channel
+HB-LC-Bl1-Velux become covers. **This release moves the source code from
+MIT to the Apache License 2.0** (ADR 0085) — the licence of matter.js,
+connectedhomeip and go-fabric, with its patent grant; 0.91.0 and earlier
+stay MIT as published, contributions come under `CLA.md`. REST API
+13.9.0 and WebSocket API 1.14, unchanged.
+
 ### Added
 
 - **Matter: the fixed-colour lights offer a colour picker.** The
@@ -48,6 +63,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `BLIND` channel got no cover. Channels 1 and 2 are registered now; the
   1-channel variant has no channel 2 and keeps its single cover and name
   (SukramJ/aiohomematic#3447).
+
+### Internal
+
+- godevccu v0.9.0 → v0.10.1: the simulator stores an HmIP ENUM written
+  by its label as that label's slot (godevccu #40; before, every label
+  became slot 0, so a CCU-side check could not tell a landed `COLOR`
+  write from a dropped one) and carries the 2-channel HB-LC-Bl1-Velux
+  fixture (#974 registers both channels as covers).
 
 ## [0.91.0] - 2026-10-14
 
@@ -445,11 +468,6 @@ REST API 13.9.0, WebSocket API 1.14 (both additive).
   `naming.IsFunction` now alias go-hamqtt's `topic.FunctionHA` /
   `topic.IsReservedFunction`.
 
-- godevccu v0.9.0 → v0.10.1: the simulator stores an HmIP ENUM written
-  by its label as that label's slot (godevccu #40; before, every label
-  became slot 0, so a CCU-side check could not tell a landed `COLOR`
-  write from a dropped one) and carries the 2-channel HB-LC-Bl1-Velux
-  fixture (#974 registers both channels as covers).
 - Dependency refresh alongside the go-fabric v0.4.0 pin: go-hamqtt
   v0.37.0 → v0.38.0 (built on Go 1.27.2; its new opt-in
   `SupersedeObserved` retraction window is not adopted here — see
