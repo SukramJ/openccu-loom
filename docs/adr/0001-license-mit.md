@@ -1,6 +1,6 @@
 # ADR 0001 — License: MIT
 
-- **Status**: accepted
+- **Status**: superseded by [ADR 0085 — Apache License 2.0 and a contributor licence agreement](./0085-apache-2-and-the-cla.md) (2026-10-15); releases up to 0.91.0 stay MIT
 - **Date**: 2026-04-24
 - **Related**: [ADR 0003 — Embed openccu-data metadata artifacts](./0003-embed-occu-extracts.md)
 

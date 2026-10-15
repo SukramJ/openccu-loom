@@ -6,6 +6,16 @@ pull request.
 > **AI policy:** AI-assisted contributions are welcome; autonomous
 > agent submissions are not. See [`AI_POLICY.md`](./AI_POLICY.md).
 
+OpenCCU-Loom is licensed under the Apache License 2.0 ([`LICENSE`](./LICENSE),
+[`NOTICE`](./NOTICE); [ADR 0085](./docs/adr/0085-apache-2-and-the-cla.md)).
+Every contribution needs the individual contributor licence agreement in
+[`CLA.md`](./CLA.md): write `I have read and agree to CLA.md` in the
+description of your first pull request — the template has the line — and
+every later one from the same account is covered. Pull requests without
+it are not merged. The agreement lets the project be licensed as a whole,
+including under other terms later; it takes nothing from your own rights
+to your work. Commits stay signed off (`git commit -s`, the DCO).
+
 ## Before you open a PR
 
 - Skim [`SPECIFICATION.md`](./SPECIFICATION.md). It is the source of
@@ -43,10 +53,11 @@ Prerequisites:
 - New user-visible behaviour has an entry in `CHANGELOG.md`.
 - Protocol / capability boundaries have a contract test (see
   `tests/contract/`).
-- Every new `.go` file starts with the MIT SPDX header:
+- Every new `.go` file starts with the Apache-2.0 SPDX header
+  (`TestLicenseHeaderOnEveryGoFile` enforces both lines):
 
   ```go
-  // SPDX-License-Identifier: MIT
+  // SPDX-License-Identifier: Apache-2.0
   // Copyright (C) 2026 SukramJ.
   ```
 
@@ -88,7 +99,7 @@ Two local-environment traps that look like real failures:
 
 ## Style notes
 
-- Use MIT SPDX headers consistently — no stray GPL / Apache / BSD
+- Use Apache-2.0 SPDX headers consistently — no stray GPL / MIT / BSD
   headers in `pkg/` or `internal/`. Dependencies keep their own
   licenses (documented in `go.sum` / vendor reports).
 - No CGo. `CGO_ENABLED=0` at all times.

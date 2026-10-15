@@ -104,8 +104,9 @@ Deployment target is a single static binary plus a Docker image
 
 **Project name**: `openccu-loom`
 **Go module**: `github.com/SukramJ/openccu-loom`
-**License**: MIT (source); embedded openccu-data artifacts retain the
-eQ-3 HomeMatic Software License — see ADR 0003.
+**License**: Apache-2.0 (source, ADR 0085; 0.91.0 and earlier stay MIT);
+embedded openccu-data artifacts retain the eQ-3 HomeMatic Software
+License — see ADR 0003.
 **Min Go version**: 1.26.
 **Versioning**: SemVer (`vX.Y.Z`), releases via `goreleaser`.
 
@@ -259,8 +260,9 @@ them needs an ADR.
   adding. The embedded openccu-data archives are non-commercial
   eQ-3 content and are handled by a separate aggregation path
   (ADR 0003).
-- **License of source**: MIT. Every Go file starts with the
-  SPDX-License-Identifier header (CLAUDE.md enforces).
+- **License of source**: Apache-2.0 (ADR 0085). Every Go file starts
+  with the SPDX-License-Identifier header (`TestLicenseHeaderOnEveryGoFile`
+  enforces).
 - **Pure-Go SQLite**: `modernc.org/sqlite`. Switching to a CGo
   driver requires an ADR.
 - **Multi-CCU correctness**: every coordinator, adapter, and store
@@ -606,7 +608,7 @@ Bring-up bug lessons (7 structural bugs from the live chip-tool
 smoke runs, waves 7–12) are recorded in
 **[ADR 0013](docs/adr/0013-matter-commissioning-bring-up.md)**. **Since 0.74.0 the Matter stack is a dependency, not a subtree.** It
 lives in **[`github.com/SukramJ/go-fabric`](https://github.com/SukramJ/go-fabric)**
-(MIT, this project's own module): the protocol substrate, the cluster
+(this project's own module; MIT up to v0.4.0, Apache-2.0 from its next release): the protocol substrate, the cluster
 servers, the interaction model, commissioning, mDNS and the generated
 schema. What stays here is `internal/north/matteradapter` — the walk
 from this daemon's device model to a flat endpoint description — plus
@@ -765,7 +767,7 @@ an ADR.
 | Q4 | Matter implementation form | Pure-Go, hand-rolled (ADR 0012). On-network commissioning only in 0.1.0. No CGo, no Node.js / Rust sidecar. |
 | Q5 | Backup strategy | CLI subcommand + FS-level parallel (both supported) |
 | Q6 | Raw MQTT plane | Yes — raw and HA Discovery planes emitted in parallel |
-| Q7 | Transport licensing | Native Go XML-RPC / BIN-RPC / JSON-RPC; project licensed MIT (ADR 0001) |
+| Q7 | Transport licensing | Native Go XML-RPC / BIN-RPC / JSON-RPC; project licensed Apache-2.0 (ADR 0085; MIT up to 0.91.0, ADR 0001) |
 | Q8 | Setup wizard scope | Admin user + CCU connection + language/theme (no MQTT in wizard) |
 | Q9 | HA Add-on packaging | Delivered post-0.1.0 — Home Assistant add-on (amd64/aarch64/armv7) built on the HA base image (s6-overlay + bashio), with Ingress (sidebar panel) + direct port, packaged from `packaging/ha-addon/`; the repo doubles as a HA add-on repository (root `repository.yaml`). Release build toggled by `BUILD_HA_ADDON` |
 | Q10 | OpenCCU Add-on | Delivered post-0.1.0 — CCU/OpenCCU add-on (amd64/arm64/armv7) packaged from `packaging/ccu-addon/` and attached to each release (ADR 0012 channel) |

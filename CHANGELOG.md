@@ -6,6 +6,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Licence: Apache License 2.0** from this version on
+  ([ADR 0085](./docs/adr/0085-apache-2-and-the-cla.md)) — the licence of
+  matter.js, connectedhomeip and go-fabric, with its patent grant (§3),
+  for the Matter-side code this daemon carries. `LICENSE` is the Apache
+  text, `NOTICE` names the copyright, the matter.js lineage and the eQ-3
+  data layer, every source file's SPDX header reads `Apache-2.0`, and the
+  release archives carry `NOTICE` and `THIRD-PARTY-NOTICES.md` beside
+  `LICENSE`. 0.91.0 and every earlier release stay MIT as published.
+  Contributions need the contributor licence agreement in `CLA.md`,
+  agreed in the first pull request (`.github/PULL_REQUEST_TEMPLATE.md`);
+  the DCO sign-off stays. A new guard, `TestLicenseHeaderOnEveryGoFile`,
+  enforces the header on every Go file (three files had none).
+
 ## [0.91.0] - 2026-10-14
 
 ### Release summary

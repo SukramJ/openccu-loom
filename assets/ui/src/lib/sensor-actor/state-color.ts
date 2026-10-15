@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 //
 // State-color rules for the AutoTile composer.
 // The backend `ui_hint.state_color_rule` carries a named threshold

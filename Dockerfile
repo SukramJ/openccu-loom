@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 # Multi-stage build for openccu-loom. Pure-Go (CGO disabled) so the
 # final image can be distroless-based and statically linked. The Config UI
 # (Svelte SPA) is built from source in its own stage and embedded into the

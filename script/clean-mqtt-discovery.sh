@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 # Copyright (C) 2026 SukramJ.
 #
 # Clears retained MQTT topics published by openccu-loom in two

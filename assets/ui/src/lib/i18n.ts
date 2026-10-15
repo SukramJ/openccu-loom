@@ -1199,7 +1199,7 @@ const EN: Catalog = {
   "about.centrals.update_available": "Update {version} available",
   "about.section.license": "License & links",
   "about.license.text":
-    "OpenCCU-Loom is MIT-licensed open source. The binary embeds CCU metadata extracts covered by the eQ-3 HomeMatic Software License (non-commercial).",
+    "OpenCCU-Loom is open source under the Apache License 2.0. The binary embeds CCU metadata extracts covered by the eQ-3 HomeMatic Software License (non-commercial).",
   "about.links.github": "GitHub",
   "about.links.releases": "Releases & changelog",
   "about.links.notices": "Third-party notices",
@@ -5558,7 +5558,7 @@ const DE: Catalog = {
   "about.centrals.update_available": "Update {version} verfügbar",
   "about.section.license": "Lizenz & Links",
   "about.license.text":
-    "OpenCCU-Loom ist MIT-lizenzierte Open-Source-Software. Das Binary bettet CCU-Metadaten-Extrakte ein, die der eQ-3 HomeMatic Software License (nicht-kommerziell) unterliegen.",
+    "OpenCCU-Loom ist Open-Source-Software unter der Apache License 2.0. Das Binary bettet CCU-Metadaten-Extrakte ein, die der eQ-3 HomeMatic Software License (nicht-kommerziell) unterliegen.",
   "about.links.github": "GitHub",
   "about.links.releases": "Releases & Changelog",
   "about.links.notices": "Third-Party-Hinweise",

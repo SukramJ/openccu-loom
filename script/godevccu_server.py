@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 # Copyright (C) 2026 SukramJ.
 #
 # godevccu_server.py — runs the godevccu simulator for the Python reference

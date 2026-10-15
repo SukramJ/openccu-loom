@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 # Copyright (C) 2026 SukramJ.
 #
 # aiohomematic_snapshot.py — produces the aiohomematic side of the

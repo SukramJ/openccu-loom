@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 //
 // Relative-age stamp for data-point readouts ("3 min ago").
 // Shared by every readout so all of them pick the same unit

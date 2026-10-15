@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 # Release image for goreleaser: packages the pre-built binary — which
 # already has the Svelte SPA embedded (the release workflow runs the Vite
 # build before goreleaser) — into a distroless base. goreleaser copies the

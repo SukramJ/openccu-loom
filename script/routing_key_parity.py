@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 # Copyright (C) 2026 SukramJ.
 #
 # routing_key_parity.py — automatic Go↔Python routing-key parity gate.

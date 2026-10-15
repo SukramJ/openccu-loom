@@ -1,0 +1,28 @@
+OpenCCU-Loom
+Copyright 2026 SukramJ
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may
+not use this software except in compliance with the License. A copy of
+the License is in the file LICENSE. Releases up to and including 0.91.0
+were published under the MIT License and stay so.
+
+The Matter side of OpenCCU-Loom is a semantic port of matter.js
+(https://github.com/matter-js/matter.js), Copyright matter.js contributors,
+licensed under the Apache License 2.0, and runs on go-fabric
+(https://github.com/SukramJ/go-fabric), which carries the same lineage.
+matter.js's NOTICE is reproduced in licenses/NOTICE-matter.js.txt and
+applies to everything mirrored from it: cluster and device-type
+definitions, wire shapes, behaviours and defaults. The attribution of
+every other upstream project and Go module is in THIRD-PARTY-NOTICES.md.
+
+The openccu-loom binary aggregates CCU metadata archives distributed
+under the eQ-3 HomeMatic Software License (non-commercial). They come from
+the github.com/SukramJ/go-openccu-data module and are governed by that
+module's NOTICE.md; they are not covered by the License above. See
+docs/adr/0003-embed-occu-extracts.md and
+docs/adr/0053-go-openccu-data-module.md.
+
+Use of OpenCCU-Loom does not certify any product and does not convey the
+right to describe any device, software, product or service as Matter
+compliant, certified or similar; certification is limited to members of
+the Connectivity Standards Alliance.

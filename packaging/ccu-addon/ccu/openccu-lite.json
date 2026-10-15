@@ -7,7 +7,7 @@
     "en": "Standalone daemon: MQTT with Home Assistant discovery, a REST and WebSocket API, an MCP server, a Matter bridge and a configuration UI for one or more systems. On openccu-lite it talks to occulited's API; system variables and programs do not exist there."
   },
   "homepage": "https://sukramj.github.io/openccu-loom",
-  "licence": "MIT",
+  "licence": "Apache-2.0",
   "release": {
     "github": "SukramJ/openccu-loom",
     "asset": "openccu-loom-ccu-{version}.tar.gz"

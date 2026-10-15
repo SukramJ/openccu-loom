@@ -1,5 +1,5 @@
 #!/usr/bin/env tclsh
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 # Add-on "Settings" entry on the CCU "Additional Software" page. Renders a
 # small branded landing card (OpenCCU-Loom logo + a button into the Config
 # UI), mirroring how ccu-jack presents its own logo on its settings page.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 //
 // Pure-TS composer for AutoTile. Given a channel + its DPs, produces
 // a `ComposedTile` data structure that AutoTile.svelte stamps out.

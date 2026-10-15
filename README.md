@@ -381,8 +381,12 @@ full test, contract and parity suites before it lands.
 
 ## License
 
-The **source code** is [MIT](./LICENSE), aligned with the rest of the
-aiohomematic ecosystem.
+The **source code** is under the [Apache License 2.0](./LICENSE) with
+its [`NOTICE`](./NOTICE) ([ADR 0085](./docs/adr/0085-apache-2-and-the-cla.md):
+the licence of matter.js, connectedhomeip and go-fabric, with their patent
+grant; 0.91.0 and earlier were released under MIT and stay so).
+Contributions need the contributor licence agreement in
+[`CLA.md`](./CLA.md), agreed once per account in the first pull request.
 
 The **binary distribution** additionally ships CCU metadata archives
 sourced from [openccu-data](https://github.com/SukramJ/openccu-data) via

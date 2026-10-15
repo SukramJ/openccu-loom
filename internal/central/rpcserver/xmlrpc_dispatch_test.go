@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 // Copyright (C) 2026 SukramJ.
 
 // xmlrpc_dispatch_test.go exercises the XML-RPC and BIN-RPC callback

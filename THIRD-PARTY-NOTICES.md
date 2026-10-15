@@ -1,6 +1,7 @@
 # Third-Party Notices
 
-OpenCCU-Loom is MIT-licensed (see [`LICENSE`](./LICENSE)). It is built on the
+OpenCCU-Loom is licensed under the Apache License 2.0 (see [`LICENSE`](./LICENSE)
+and [`NOTICE`](./NOTICE); 0.91.0 and earlier were MIT). It is built on the
 prior art of several other projects — it is a Go port of `aiohomematic` for the
 CCU side and a semantic port of `matter.js` for the Matter side, and it learns
 from a handful of further reference implementations. None of their source is
@@ -181,12 +182,16 @@ affiliated with or endorsed by eQ-3.
 
 The Go dependency graph is entirely permissive (MIT / BSD-2/3-Clause /
 Apache-2.0); there is no copyleft (GPL / LGPL / MPL / AGPL) dependency. See
-[ADR 0001](./docs/adr/0001-license-mit.md) for the licensing decision. The
+[ADR 0085](./docs/adr/0085-apache-2-and-the-cla.md) for the licensing decision
+(ADR 0001 for the MIT years). The
 direct dependencies declared in [`go.mod`](./go.mod) include:
 
 | Module | License (family) |
 | --- | --- |
 | `filippo.io/nistec` | BSD-3-Clause |
+| `github.com/SukramJ/go-fabric` | MIT up to v0.4.0; Apache-2.0 from its next release — its `NOTICE` (the matter.js lineage, reproduced in [`licenses/NOTICE-matter.js.txt`](./licenses/NOTICE-matter.js.txt)) applies to what it mirrors |
+| `github.com/SukramJ/go-hamqtt` | MIT |
+| `github.com/SukramJ/go-ha-catalog` | MIT |
 | `github.com/SukramJ/godevccu` | MIT |
 | `github.com/getkin/kin-openapi` | MIT |
 | `github.com/go-chi/chi/v5` | MIT |

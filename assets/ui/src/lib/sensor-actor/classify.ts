@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 //
 // DP role classification for the sensor + actor tile.
 // Pure functions; the tile component consumes the outputs and renders

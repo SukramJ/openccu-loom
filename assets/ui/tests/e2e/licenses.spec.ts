@@ -28,9 +28,9 @@ test.describe('Licenses', () => {
     await expect(page.getByText('OpenCCU-Loom v0.2.0')).toBeVisible();
     await expect(page.getByText('SukramJ', { exact: true })).toBeVisible();
 
-    // Disclaimer panel — localized title, verbatim MIT warranty text.
+    // Disclaimer panel — localized title, verbatim Apache-2.0 §7 warranty text.
     await expect(page.getByRole('heading', { name: 'Disclaimer of Warranty' })).toBeVisible();
-    await expect(page.getByText(/THE SOFTWARE IS PROVIDED "AS IS"/)).toBeVisible();
+    await expect(page.getByText(/on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND/)).toBeVisible();
 
     // Table rows from the fixture: one npm package, one Go module.
     await expect(page.getByText('svelte', { exact: true })).toBeVisible();

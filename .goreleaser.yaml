@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 # Goreleaser v2 configuration for openccu-loom.
 # Exit criteria Phase 0: `goreleaser --snapshot` produces a binary.
 version: 2
@@ -76,6 +76,8 @@ archives:
         formats: [zip]
     files:
       - LICENSE
+      - NOTICE
+      - THIRD-PARTY-NOTICES.md
       - README.md
       - assets/openapi.yaml
   - id: hmcli
@@ -89,6 +91,8 @@ archives:
         formats: [zip]
     files:
       - LICENSE
+      - NOTICE
+      - THIRD-PARTY-NOTICES.md
       - README.md
   - id: openccu-loom-remote
     ids: [openccu-loom-remote]
@@ -98,6 +102,8 @@ archives:
       {{- if .Arm }}v{{ .Arm }}{{ end }}
     files:
       - LICENSE
+      - NOTICE
+      - THIRD-PARTY-NOTICES.md
       - README.md
 
 checksum:
@@ -125,7 +131,7 @@ dockers:
       - "--label=org.opencontainers.image.version={{ .Version }}"
       - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
       - "--label=org.opencontainers.image.source=https://github.com/SukramJ/openccu-loom"
-      - "--label=org.opencontainers.image.licenses=MIT"
+      - "--label=org.opencontainers.image.licenses=Apache-2.0"
     extra_files:
       - assets/openapi.yaml
 
