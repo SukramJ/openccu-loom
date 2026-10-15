@@ -307,8 +307,9 @@ promises ExtendedColorLight with a palette-quantised ColorControl. That
 is a gap against ADR 0012, not a phase-3 regression (the projection
 predates the migration); closed by the palette-quantised ColorControl of
 `FixedColorLight` (`matter_fixedcolor.go`, the chip-tool test
-`TestSendReceive_FixedColor`), whose live check at the BSL is the
-owner's.
+`TestSendReceive_FixedColor`), released as 0.91.1 and confirmed live at
+the owner's HmIP-BSL on 2026-10-15: the colour picker is there and a
+colour change reaches the device.
 
 ## Consequences
 
