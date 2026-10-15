@@ -296,6 +296,17 @@ final explicit command before unpairing; every other device read-only.
 A phase whose live run is not green does not merge; a finding goes into
 `by_design.md` or back into go-fabric, never into a relaxed test.
 
+**Result (2026-10-15, OpenCCU-Loom 0.91.0, Apple Home, phases 1–3
+together):** the existing accessories (switches, thermostats, the lock,
+lights) stayed available and respond with no perceptible delay; newly
+added devices appear in Home after a while; unpairing and re-pairing
+worked without a hitch. One finding: an HmIP-BSL offers brightness in
+Home but no colour picker — the fixed-colour light is bridged as a
+DimmableLight (OnOff + LevelControl) while ADR 0012's mapping table
+promises ExtendedColorLight with a palette-quantised ColorControl. That
+is a gap against ADR 0012, not a phase-3 regression (the projection
+predates the migration), and is tracked as a follow-up of its own.
+
 ## Consequences
 
 - `internal/north/matteradapter` loses the implicit "which clusters does a

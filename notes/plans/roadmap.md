@@ -142,8 +142,11 @@ replace it, and the metrics that say whether it worked.
   responder session parameters. The ADR's phase 3 section lists what is
   adopted as the facade's semantics (the own window at first boot,
   per-exchange PASE always, `concurrent_pairings` and `case.*` inert, the
-  facade's root server set). Still due: the live Apple Home run of the
-  ADR for phases 1–3 together.
+  facade's root server set). The live Apple Home run of the ADR for
+  phases 1–3 together was done on 2026-10-15 with 0.91.0 (green; result
+  recorded in the ADR). Finding from it: the HmIP-BSL shows no colour
+  picker in Home — `FixedColorLight` is bridged without ColorControl,
+  against ADR 0012's palette-quantised HS mapping; follow-up open.
   Each phase ends with the Apple Home run in the ADR. Both cluster follow-ups named there (LevelControl, ColorControl)
   are done, #957 and #961; the Thermostat server (go-fabric #60) is
   done too, #962, and the WindowCovering server (Cover lift-only, Blind
