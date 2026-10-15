@@ -6,6 +6,25 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Matter: the fixed-colour lights offer a colour picker.** The
+  HmIP-BSL, the HmIP-MP3P signal channels and the HmIPW-WGC (profile
+  `FixedColorLight`) are bridged as ExtendedColorLight with a
+  palette-quantised ColorControl, as ADR 0012's mapping table always
+  stated: a controller sees a hue/saturation light (HS and XY features),
+  every colour it writes snaps to the nearest of the device's eight COLOR
+  slots, and the slot the CCU confirms is reported back as that slot's
+  reference colour (a MoveToHue 100° answers SUCCESS and the attributes
+  settle on green's 120°). The reference colours and the snapping bands
+  are the Home Assistant integration's for the same devices, so a colour
+  picked in Apple Home and one picked in Home Assistant land on the same
+  slot; a saturation under 5 % is WHITE whatever the hue. Found in the
+  ADR 0084 live run: Apple Home showed brightness but no colour for an
+  HmIP-BSL. The HmIP-MP3P's LED (`SoundPlayerLED`) keeps its DimmableLight
+  projection, as the same table states. Hermetic chip-tool test
+  `TestSendReceive_FixedColor` on the simulated HmIP-BSL.
+
 ### Changed
 
 - **Licence: Apache License 2.0** from this version on

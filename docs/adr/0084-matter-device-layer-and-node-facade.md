@@ -305,7 +305,10 @@ Home but no colour picker — the fixed-colour light is bridged as a
 DimmableLight (OnOff + LevelControl) while ADR 0012's mapping table
 promises ExtendedColorLight with a palette-quantised ColorControl. That
 is a gap against ADR 0012, not a phase-3 regression (the projection
-predates the migration), and is tracked as a follow-up of its own.
+predates the migration); closed by the palette-quantised ColorControl of
+`FixedColorLight` (`matter_fixedcolor.go`, the chip-tool test
+`TestSendReceive_FixedColor`), whose live check at the BSL is the
+owner's.
 
 ## Consequences
 
