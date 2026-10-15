@@ -637,3 +637,18 @@ func TestAggregateViewHasAnyKeyEmpty(t *testing.T) {
 		t.Error("HasAnyKey(nil) must return false")
 	}
 }
+
+// TestVeluxRegistersBothChannels locks in that the 2-channel
+// HB-LC-Bl1-Velux variant gets a cover on both BLIND channels; the
+// 1-channel variant has no channel 2 and keeps a single cover.
+func TestVeluxRegistersBothChannels(t *testing.T) {
+	var channels []int
+	for _, p := range DefaultRegistry().ForCategory(hmenum.DataPointCategoryCover, "HB-LC-Bl1-Velux") {
+		for _, c := range p.Channels {
+			channels = append(channels, c.Channel)
+		}
+	}
+	if len(channels) != 2 || channels[0] != 1 || channels[1] != 2 {
+		t.Errorf("HB-LC-Bl1-Velux cover channels = %v, want [1 2]", channels)
+	}
+}
