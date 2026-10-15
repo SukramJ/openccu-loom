@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 //
 // Device → type-glyph mapping. The real eQ-3 device picture comes from
 // GET /devices/{addr}/icon (see DeviceImage.svelte); this glyph is its

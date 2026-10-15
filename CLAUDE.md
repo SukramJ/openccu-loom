@@ -66,8 +66,9 @@ Assistant integration, OpenCCU-Loom serves users who want MQTT / REST / UI /
 Matter access without HA.
 
 - **Language**: Go 1.27+ · module `github.com/SukramJ/openccu-loom`
-- **License**: MIT (source); the binary aggregates openccu-data extracts under
-  the eQ-3 HomeMatic Software License (non-commercial) — ADR 0003.
+- **License**: Apache-2.0 (source, ADR 0085; 0.91.0 and earlier stay MIT);
+  contributions come under `CLA.md`. The binary aggregates openccu-data
+  extracts under the eQ-3 HomeMatic Software License (non-commercial) — ADR 0003.
 - **Deployment**: one static binary (`CGO_ENABLED=0`) + Docker
   (linux/amd64, arm64, armv7). No CGo.
 - **Persistence**: SQLite (`modernc.org/sqlite`, pure Go) + filesystem.
@@ -102,7 +103,7 @@ Non-negotiable. Each one is followed by the guard that enforces it, or by
 ### Licensing and build
 
 - **License header** on every Go file:
-  `// SPDX-License-Identifier: MIT` + `// Copyright (C) 2026 SukramJ.`
+  `// SPDX-License-Identifier: Apache-2.0` + `// Copyright (C) 2026 SukramJ.`
   No stray GPL / Apache / BSD headers in `pkg/` or `internal/`; vendored code
   keeps its upstream notice plus a modification line.
 - **No CGo.** `CGO_ENABLED=0` at all times. If you think you need it (crypto,
@@ -714,7 +715,7 @@ Matter-side code and cite it.
 
 **Don't**: `any` without justification · `panic()` outside `main()` or test
 helpers (exception: `Must*` constructors and documented `// invariant:`
-panics) · non-MIT headers · CGo · direct commits to `main` · assume a single
+panics) · non-Apache-2.0 headers · CGo · direct commits to `main` · assume a single
 `CentralUnit` · treat CUxD as JSON-RPC · hard-code callback ports ·
 backwards-compatibility shims for aiohomematic data (this is greenfield) ·
 hand-code Matter constants · audit-tracking codes in code comments.

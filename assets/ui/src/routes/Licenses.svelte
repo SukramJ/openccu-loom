@@ -25,17 +25,19 @@
   const NOTICES_URL = "https://github.com/SukramJ/openccu-loom/blob/main/THIRD-PARTY-NOTICES.md";
   const PRIVACY_URL = "https://sukramj.github.io/openccu-loom/privacy/";
 
-  // Quoted verbatim from the repository's LICENSE (MIT). This paragraph is
-  // the legal text itself, not application copy, so it is deliberately not
-  // routed through t() — it reads the same in both locales.
+  // Quoted verbatim from the repository's LICENSE (Apache License 2.0,
+  // section 7, Disclaimer of Warranty). This paragraph is the legal text
+  // itself, not application copy, so it is deliberately not routed
+  // through t() — it reads the same in both locales.
   const WARRANTY_DISCLAIMER =
-    'THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR ' +
-    "IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, " +
-    "FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE " +
-    "AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER " +
-    "LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, " +
-    "OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE " +
-    "SOFTWARE.";
+    "Unless required by applicable law or agreed to in writing, Licensor " +
+    "provides the Work (and each Contributor provides its Contributions) on " +
+    'an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either ' +
+    "express or implied, including, without limitation, any warranties or " +
+    "conditions of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A " +
+    "PARTICULAR PURPOSE. You are solely responsible for determining the " +
+    "appropriateness of using or redistributing the Work and assume any risks " +
+    "associated with Your exercise of permissions under this License.";
 
   let rows = $state<SbomRow[]>([]);
   let loading = $state(true);

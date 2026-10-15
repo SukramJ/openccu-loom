@@ -5,7 +5,12 @@ August 2026 and then **not adopted**. This note records what it was for, why
 it was dropped, and what it would cost to revive it, so the question does not
 have to be worked out from scratch a second time.
 
-The decision in force: **DCO only** (`git commit -s`), no CLA.
+The decision in force from August to 2026-10-15: **DCO only** (`git commit -s`),
+no CLA. **Revived for openccu-loom on 2026-10-15** by
+[ADR 0085](../../docs/adr/0085-apache-2-and-the-cla.md), in step with
+go-fabric's ADR 0023: `CLA.md` is the short go-fabric text, not the drafts
+below; the DCO stays. The other repositories in the scope table are
+unchanged.
 
 ## What it was for
 

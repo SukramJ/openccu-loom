@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 //
 // Primary-DP lookup table for the sensor + actor tile. For every CCU
 // channel type that has a well-known "headline" parameter, the table

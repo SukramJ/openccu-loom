@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 //
 // Widget selection for a system variable's inline value control.
 // Pure dispatch over the CCU wire value_type (+ value_list presence) so

@@ -1,7 +1,9 @@
 # Credits
 
-OpenCCU-Loom is MIT-licensed (see
-[`LICENSE`](https://github.com/SukramJ/openccu-loom/blob/main/LICENSE)).
+OpenCCU-Loom is licensed under the Apache License 2.0 (see
+[`LICENSE`](https://github.com/SukramJ/openccu-loom/blob/main/LICENSE)
+and [`NOTICE`](https://github.com/SukramJ/openccu-loom/blob/main/NOTICE);
+0.91.0 and earlier were MIT).
 This page records the external projects we have read and learned from,
 and credits the people and licences behind them. None of their code is
 copied verbatim into the OpenCCU-Loom source tree; we cite them in
@@ -27,7 +29,7 @@ machine-oriented list.
   [ADR 0063](adr/0063-self-maintained-device-profiles.md), is maintained in
   this repository rather than regenerated.
 
-Compliance: MIT, same as OpenCCU-Loom. No Python source is reproduced verbatim;
+Compliance: MIT, compatible with OpenCCU-Loom's Apache-2.0. No Python source is reproduced verbatim;
 the Go code is a from-scratch semantic port that cites the aiohomematic file +
 function it mirrors. The CCU side of the project follows aiohomematic as its
 gold standard (see CLAUDE.md §"aiohomematic as a Reference").

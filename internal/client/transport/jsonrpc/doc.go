@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 // Copyright (C) 2026 SukramJ.
 
 // Package jsonrpc is the HTTP JSON-RPC client for the CCU (and, post-0.1.0,

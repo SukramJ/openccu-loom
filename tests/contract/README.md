@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 8 of 550.
+Guards without a doc comment: 8 of 551.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -198,6 +198,7 @@ Guards without a doc comment: 8 of 550.
 | TestJSONRPCClientReleasesSessionOnLogout | jsonrpc_session_contract_test.go | TestJSONRPCClientReleasesSessionOnLogout locks that a client which shuts down hands its slot back. |
 | TestBlindLevelCombinedSurvivesTheShippedDecoder | level_combined_encoding_test.go | TestBlindLevelCombinedSurvivesTheShippedDecoder feeds the string the blind wrote into the decoder that actually runs on the callback path (backends.ParseCombinedParameter) and requires the commanded position back within half a wire quantum. |
 | TestBlindLevelCombinedUsesTheCanonicalEncoder | level_combined_encoding_test.go | TestBlindLevelCombinedUsesTheCanonicalEncoder pins the LEVEL_COMBINED byte encoding across the two places that hold a definition of it: the blind's own write path in internal/model/custom/cover, and the canonical encoder parameter.ConvertHMLevelToCPV. |
+| TestLicenseHeaderOnEveryGoFile | license_header_test.go | TestLicenseHeaderOnEveryGoFile walks the repository and fails naming every .go file that does not carry both header lines ahead of its package clause. |
 | TestLightSetLevelPayloadIsSingleSourced | light_set_level_single_source_test.go | TestLightSetLevelPayloadIsSingleSourced pins the two north-bound seams a light command can arrive through against each other. |
 | TestLockTargetLevelDiscoveryPayloadsMatchServiceWrites | lock_target_level_payload_parity_test.go | TestLockTargetLevelDiscoveryPayloadsMatchServiceWrites crosses the seam between the advertised HA payloads and the wire write: for each of the three lock operations the payload the discovery config offers Home Assistant must equal the value the daemon's own call puts on LOCK_TARGET_LEVEL. |
 | TestLogStreamResume_SSEHandler_BackfillNoDuplicates | log_stream_resume_contract_test.go | TestLogStreamResume_SSEHandler_BackfillNoDuplicates exercises the StreamLogs HTTP handler with ?since= and Last-Event-ID and verifies that no id: value in the SSE body is <= the cursor. |

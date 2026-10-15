@@ -2,7 +2,7 @@
 # (BuildKit can't see that BUILD_FROM / OPENCCU_LOOM_IMAGE / BUILD_VERSION are
 # always supplied as --build-args by the HA builder and script/build_ha_addon.sh;
 # the FROM lines are never actually empty. Silences the static-analysis warning.)
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 # Copyright (C) 2026 SukramJ.
 #
 # Strategy: copy the pre-built static binary and the OpenAPI spec directly

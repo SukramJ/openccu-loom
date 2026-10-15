@@ -1,5 +1,5 @@
 #!/usr/bin/env tclsh
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 # Add-on "Update" entry: report the latest published OpenCCU-Loom release
 # tag (so the CCU add-on page can show "update available"), or forward to
 # the releases page when invoked with cmd=download.

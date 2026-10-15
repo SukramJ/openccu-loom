@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 // CDP-aware widget dispatch. Each kind string returned by the backend
 // (`internal/model/custom/cdpkind`) maps to a Svelte widget that knows
 // how to drive that kind of device through the

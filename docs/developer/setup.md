@@ -93,7 +93,7 @@ A few rules are non-negotiable and are enforced mechanically:
 !!! warning "Hard rules"
     - **License header** on every new `.go` file:
       ```go
-      // SPDX-License-Identifier: MIT
+      // SPDX-License-Identifier: Apache-2.0
       // Copyright (C) 2026 SukramJ.
       ```
     - **No CGo** in the default build — `CGO_ENABLED=0` at all times. SQLite is `modernc.org/sqlite` (pure Go).

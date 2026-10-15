@@ -16,6 +16,12 @@
 
 > **Outcome, 2026-08-28: not adopted. The project stays MIT.**
 >
+> **Revisited 2026-10-15:** [ADR 0085](./0085-apache-2-and-the-cla.md)
+> moves the source to Apache-2.0 with a contributor licence agreement —
+> not the AGPL path below, and for a different reason (the patent grant
+> for the Matter-side code, in step with go-fabric). The analysis below
+> stands as written.
+>
 > The proposal below is kept in full because its analysis is worth reading
 > and because the question will be asked again. What was decided is only the
 > answer, and the answer is no.

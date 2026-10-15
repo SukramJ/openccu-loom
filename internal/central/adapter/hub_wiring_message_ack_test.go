@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 // Copyright (C) 2026 SukramJ.
 
 // hub_wiring_message_ack_test.go covers hubMessageAck in hub_wiring.go: the
