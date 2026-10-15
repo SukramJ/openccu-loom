@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.91.1
+
+No changes to the proxy. The daemon release gives the fixed-colour lights
+a colour picker over Matter and moves the source code to the Apache
+License 2.0 (REST API 13.9.0, unchanged).
+
 # 0.91.0
 
 No changes to the proxy. The daemon release rebuilds the Matter bridge on

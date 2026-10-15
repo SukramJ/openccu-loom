@@ -1,5 +1,15 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.91.1
+
+- **Colour for the fixed-colour lights in Apple Home and other Matter
+  controllers.** HmIP-BSL, the HmIP-MP3P signal channels and HmIPW-WGC
+  show a colour picker; a colour you pick snaps to the nearest of the
+  device's eight colours and the app shows where it landed.
+- Both channels of the 2-channel HB-LC-Bl1-Velux are covers now.
+- **Licence:** the source code moves from MIT to the Apache License 2.0
+  with this release (ADR 0085). Nothing changes for using the add-on.
+
 ## 0.91.0
 
 - **Matter bridge rebuilt on go-fabric v0.4.0.** Every bridged device is
