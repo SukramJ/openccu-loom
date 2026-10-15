@@ -21,6 +21,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the DCO sign-off stays. A new guard, `TestLicenseHeaderOnEveryGoFile`,
   enforces the header on every Go file (three files had none).
 
+### Fixed
+
+- **Both channels of the 2-channel HB-LC-Bl1-Velux become covers.** The
+  AskSin firmware of this homebrew actuator builds as a 1- or a 2-channel
+  device under the same TYPE; only channel 1 was registered, so the second
+  `BLIND` channel got no cover. Channels 1 and 2 are registered now; the
+  1-channel variant has no channel 2 and keeps its single cover and name
+  (SukramJ/aiohomematic#3447).
+
 ## [0.91.0] - 2026-10-14
 
 ### Release summary

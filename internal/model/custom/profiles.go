@@ -375,7 +375,7 @@ func RegisterProfiles(r *Registry) { //nolint:funlen // one registration literal
 		DeviceType:        "hm-lc-bl1-velux",
 		ProductGroup:      hmenum.ProductGroupHM,
 		Category:          hmenum.DataPointCategoryCover,
-		Channels:          []ChannelRoleAssignment{{Channel: 1, Role: ChannelRolePrimary}},
+		Channels:          []ChannelRoleAssignment{{Channel: 1, Role: ChannelRolePrimary}, {Channel: 2, Role: ChannelRolePrimary}},
 		ScheduleChannelNo: nil,
 		Extended:          nil,
 		Config:            ProfileConfigs[hmenum.DeviceProfile("RfCover")],
