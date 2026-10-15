@@ -6,6 +6,25 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Matter: the fixed-colour lights offer a colour picker.** The
+  HmIP-BSL, the HmIP-MP3P signal channels and the HmIPW-WGC (profile
+  `FixedColorLight`) are bridged as ExtendedColorLight with a
+  palette-quantised ColorControl, as ADR 0012's mapping table always
+  stated: a controller sees a hue/saturation light (HS and XY features),
+  every colour it writes snaps to the nearest of the device's eight COLOR
+  slots, and the slot the CCU confirms is reported back as that slot's
+  reference colour (a MoveToHue 100° answers SUCCESS and the attributes
+  settle on green's 120°). The reference colours and the snapping bands
+  are the Home Assistant integration's for the same devices, so a colour
+  picked in Apple Home and one picked in Home Assistant land on the same
+  slot; a saturation under 5 % is WHITE whatever the hue. Found in the
+  ADR 0084 live run: Apple Home showed brightness but no colour for an
+  HmIP-BSL. The HmIP-MP3P's LED (`SoundPlayerLED`) keeps its DimmableLight
+  projection, as the same table states. Hermetic chip-tool test
+  `TestSendReceive_FixedColor` on the simulated HmIP-BSL.
+
 ### Changed
 
 - **Licence: Apache License 2.0** from this version on
@@ -426,6 +445,11 @@ REST API 13.9.0, WebSocket API 1.14 (both additive).
   `naming.IsFunction` now alias go-hamqtt's `topic.FunctionHA` /
   `topic.IsReservedFunction`.
 
+- godevccu v0.9.0 → v0.10.1: the simulator stores an HmIP ENUM written
+  by its label as that label's slot (godevccu #40; before, every label
+  became slot 0, so a CCU-side check could not tell a landed `COLOR`
+  write from a dropped one) and carries the 2-channel HB-LC-Bl1-Velux
+  fixture (#974 registers both channels as covers).
 - Dependency refresh alongside the go-fabric v0.4.0 pin: go-hamqtt
   v0.37.0 → v0.38.0 (built on Go 1.27.2; its new opt-in
   `SupersedeObserved` retraction window is not adopted here — see

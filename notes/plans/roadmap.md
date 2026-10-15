@@ -145,8 +145,9 @@ replace it, and the metrics that say whether it worked.
   facade's root server set). The live Apple Home run of the ADR for
   phases 1–3 together was done on 2026-10-15 with 0.91.0 (green; result
   recorded in the ADR). Finding from it: the HmIP-BSL shows no colour
-  picker in Home — `FixedColorLight` is bridged without ColorControl,
-  against ADR 0012's palette-quantised HS mapping; follow-up open.
+  picker in Home — `FixedColorLight` was bridged without ColorControl,
+  against ADR 0012's palette-quantised HS mapping; the projection is in
+  (`matter_fixedcolor.go`), its live check at the BSL is the owner's.
   Each phase ends with the Apple Home run in the ADR. Both cluster follow-ups named there (LevelControl, ColorControl)
   are done, #957 and #961; the Thermostat server (go-fabric #60) is
   done too, #962, and the WindowCovering server (Cover lift-only, Blind

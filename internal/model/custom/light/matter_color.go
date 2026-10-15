@@ -22,9 +22,11 @@ import (
 // follow-up, with the light's CCU writes as its writer ports and the
 // CCU's confirmed colour fed back through [fabriclight.ColorControlServer.Set].
 //
-// FixedColorLight, EffectLight, DRGDaliLight and SoundPlayerLED stay
-// with the inherited Light projection (OnOff + LevelControl). Effect
-// dispatch and palette quantisation are MQTT-only per ADR 0012 §5.
+// FixedColorLight has its own palette-quantised projection in
+// matter_fixedcolor.go. EffectLight, DRGDaliLight and SoundPlayerLED stay
+// with the inherited Light projection (OnOff + LevelControl): ADR 0012's
+// mapping table bridges them as DimmableLight, and effect dispatch has no
+// Matter cluster.
 var (
 	_ interfaces.MatterEndpointSource = (*ColorLight)(nil)
 	_ interfaces.MatterEndpointSource = (*ColorTempLight)(nil)
