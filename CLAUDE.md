@@ -641,6 +641,55 @@ The reasoning behind all of this is in
 
 ---
 
+## Token use
+
+Set by the owner on 2026-10-14 ("Wichtig ist mir eine effiziente Nutzung
+der Token"), mirrored from go-fabric's rule of the same date. A slice
+costs on the order of half a million to a million tokens per implementing
+agent before the owner's review; the rules below are what keeps that from
+doubling.
+
+- **Read slices, not files.** `sed -n a,bp`, `grep -n` with a tight
+  pattern and `head`; a whole file only when the task is the file. Never
+  re-read what is already in context; cite the earlier read. CCU firmware
+  files are ISO-8859 — `/usr/bin/grep`, not the default `grep`, or the
+  read silently finds nothing.
+- **Delegate first reads.** A source tree's inventory (aiohomematic, the
+  CCU firmware, go-fabric, matter.js, this repo) is a `sweep` or Sonnet
+  read written to the scratchpad with `file:line` for every fact; the
+  owner spot-checks the load-bearing lines and verifies every CCU or
+  Matter fact before it enters a brief, an ADR, a ratchet entry or
+  `notes/parity/` — the agent's result is a map, never a citation.
+- **Logs by their summary.** `make test`, `make contract`, lint and the
+  chip-tool suite run in the background with a summary file (one line
+  per gate, `FAIL`/`ok` lines only); read the summary, and open a log
+  only on failure, with `grep` for `FAIL`, `DATA RACE`, `_test.go:` and
+  the error strings — never `cat`. The same for CI: the job log is
+  fetched once to a file and grepped.
+- **One turn, every independent call.** Reads, checks and background
+  starts that do not depend on each other go out together; a wait is a
+  `Monitor` or an `until` loop in the background, not polling by hand.
+- **Short artefacts.** A brief names files, decisions and the acceptance
+  command, not prose; a report follows the fixed shape of
+  [Sub-Agent Delegation](#sub-agent-delegation) (≤ 250 words, large
+  artefacts as a scratchpad path); a `by_design` entry is one paragraph
+  with the citations and one sentence of reasoning; status messages to
+  the owner are short, outcome first, in German.
+- **Skip what cannot have changed.** No chip-tool run when the bridge's
+  composition and FeatureMaps did not move; no schema or catalogue
+  regeneration for a comment change; no second gate run for a notes-only
+  commit (`--no-verify`, the substitute run named in the PR) — say what
+  was skipped and why.
+- **Edit by script.** Several replacements in several files are one
+  scripted call with asserted anchors, not a chain of interactive edits;
+  a generated file (`spa_dist`, the contract catalogue, the wire
+  snapshots, the discovery goldens) is regenerated, never patched.
+- **Agents read what the brief names.** An implementing agent gets the
+  file list and the pinned sources in the brief, reads those, and reports
+  in the fixed shape; it does not survey the tree. One agent per brief;
+  two agents only on disjoint paths, at most one Opus agent at a time,
+  and the chip-tool harness and the live CCU are one agent's at a time.
+
 ## Interaction Protocol
 
 1. **Describe approach before coding** — files, approach, trade-offs; wait for
