@@ -445,6 +445,11 @@ REST API 13.9.0, WebSocket API 1.14 (both additive).
   `naming.IsFunction` now alias go-hamqtt's `topic.FunctionHA` /
   `topic.IsReservedFunction`.
 
+- godevccu v0.9.0 → v0.10.1: the simulator stores an HmIP ENUM written
+  by its label as that label's slot (godevccu #40; before, every label
+  became slot 0, so a CCU-side check could not tell a landed `COLOR`
+  write from a dropped one) and carries the 2-channel HB-LC-Bl1-Velux
+  fixture (#974 registers both channels as covers).
 - Dependency refresh alongside the go-fabric v0.4.0 pin: go-hamqtt
   v0.37.0 → v0.38.0 (built on Go 1.27.2; its new opt-in
   `SupersedeObserved` retraction window is not adopted here — see
