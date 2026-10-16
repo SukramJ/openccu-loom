@@ -173,23 +173,23 @@ Matter commissioning passcode/salt and DAC key path.
 
 ## Configuration blocks
 
-Defaults shown are the compiled-in values. Keys marked **secret** are
-encrypted at rest. The **env** column lists the overlay variable when
-one exists.
+The field tables — type, class, restart flag and help text of every
+key — are generated from the code into the
+[configuration reference](../reference/configuration.md). The sections
+below explain what the blocks do and name the compiled-in defaults the
+reference does not carry. Keys of class **secret** are encrypted at
+rest; the environment variables that override a key are listed under
+[Environment overlays](#environment-overlays).
 
 ### `locale`
 
-| Key | Type | Default | Env | Secret? |
-|---|---|---|---|---|
-| `locale` | string | `en` | `OPENCCU_LOOM_LOCALE` | no |
+Fields: see [`locale` in the configuration reference](../reference/configuration.md#locale). Defaults not shown in the reference: `locale` `en`.
 
 UI/label language. Catalogues ship for `en` and `de`.
 
 ### `data_dir`
 
-| Key | Type | Default | Env | Secret? |
-|---|---|---|---|---|
-| `data_dir` | path | `./var` | `OPENCCU_LOOM_DATA_DIR` | no |
+Fields: see [`data_dir` in the configuration reference](../reference/configuration.md#data-dir). Defaults not shown in the reference: `data_dir` `./var`.
 
 Directory for the SQLite database (`<data_dir>/openccu-loom.db`), the
 auto-generated `secret.key`, and other on-disk state. This is a
@@ -197,11 +197,7 @@ bootstrap-tier field — set it in YAML/environment.
 
 ### `logging`
 
-| Key | Type | Default | Env | Secret? |
-|---|---|---|---|---|
-| `logging.level` | string | `info` | `OPENCCU_LOOM_LOG_LEVEL` | no |
-| `logging.format` | string | `json` | `OPENCCU_LOOM_LOG_FORMAT` | no |
-| `logging.overrides` | map | — | — | no |
+Fields: see [`logging` in the configuration reference](../reference/configuration.md#logging). Defaults not shown in the reference: `logging.level` `info`; `logging.format` `json`.
 
 `level` is one of `debug`, `info`, `warn`, `error`. `format` is one of
 `json`, `text`, `text-color`. `overrides` maps a dot-separated
@@ -213,15 +209,7 @@ overrides are installed (with a TTL) via the diagnostics API.
 The XML-RPC and BIN-RPC callback servers that receive push events from
 the CCU. The host/ports here must be reachable **from the CCU**.
 
-| Key | Type | Default | Env | Secret? |
-|---|---|---|---|---|
-| `callback.host` | string | `0.0.0.0` | `OPENCCU_LOOM_CALLBACK_HOST` | no |
-| `callback.port` | int | `8120` | `OPENCCU_LOOM_CALLBACK_PORT` | no |
-| `callback.bin_port` | int | `8129` | `OPENCCU_LOOM_CALLBACK_BIN_PORT` | no |
-| `callback.port_range` | string | — | — | no |
-| `callback.public_host` | string | — | `OPENCCU_LOOM_CALLBACK_PUBLIC_HOST` | no |
-| `callback.max_connections` | int | `64` | — | no |
-| `callback.restrict_source_ips` | bool | `false` | — | no |
+Fields: see [`callback` in the configuration reference](../reference/configuration.md#callback). Defaults not shown in the reference: `callback.host` `0.0.0.0`; `callback.port` `8120`; `callback.bin_port` `8129`; `callback.max_connections` `64`.
 
 `port` is the XML-RPC callback (HmIP/BidCos); `bin_port` is the
 BIN-RPC callback (CUxD). A value of `0` is not a dynamic port: it is
@@ -248,19 +236,7 @@ the config editor marks them accordingly.
 The REST + WebSocket server. This is the API surface and the backend
 for the SPA.
 
-| Key | Type | Default | Env | Secret? |
-|---|---|---|---|---|
-| `north.rest.enabled` | bool | `true` | — | no |
-| `north.rest.listen` | string | `:8119` | `OPENCCU_LOOM_REST_LISTEN` | no |
-| `north.rest.cors` | list | — | — | no |
-| `north.rest.csrf_enabled` | bool | `true` | — | no |
-| `north.rest.csrf_secure` | bool | `false` | — | no |
-| `north.rest.openapi_validate` | bool | `true` | `OPENCCU_LOOM_REST_OPENAPI_VALIDATE` | no |
-| `north.rest.openapi_spec_path` | path | — | `OPENCCU_LOOM_REST_OPENAPI_SPEC_PATH` | no |
-| `north.rest.ws.replay_capacity` | int | `1024` | — | no |
-| `north.rest.rate_limit.enabled` | bool | `false` | — | no |
-| `north.rest.rate_limit.requests_per_second` | float | `10` | — | no |
-| `north.rest.rate_limit.burst` | int | `30` | — | no |
+Fields: see [`north.rest` in the configuration reference](../reference/configuration.md#north-rest). Defaults not shown in the reference: `north.rest.csrf_enabled` `true`. `north.rest.listen` (default `:8119`, environment variable `OPENCCU_LOOM_REST_LISTEN`) is bootstrap-tier and therefore not in the reference.
 
 `north.rest.cors` lists the browser origins allowed to call the API
 cross-origin. Entries are matched case-insensitively and a trailing
@@ -275,42 +251,21 @@ concrete origin.
 
 Authentication lives under `north.rest.auth`:
 
-| Key | Type | Default | Env | Secret? |
-|---|---|---|---|---|
-| `north.rest.auth.basic_enabled` | bool (tri-state) | `true` | — | no |
-| `north.rest.auth.bearer_enabled` | bool (tri-state) | `true` | — | no |
-| `north.rest.auth.users` | map (subject→hash) | — | — | **yes** |
-| `north.rest.auth.tokens` | map (token→role) | — | — | **yes** |
-| `north.rest.auth.oidc.enabled` | bool | `false` | — | no |
-| `north.rest.auth.oidc.issuer` | string | — | — | no |
-| `north.rest.auth.oidc.client_id` | string | — | — | no |
-| `north.rest.auth.oidc.client_secret` | string | — | `OPENCCU_LOOM_OIDC_CLIENT_SECRET` | **yes** |
-| `north.rest.auth.oidc.redirect_url` | string | — | — | no |
-| `north.rest.auth.oidc.role_claim` | string | — | — | no |
+`north.rest.auth.users` (secret) is managed through the dedicated user and token surfaces, not the section editor, and therefore not in the reference. `north.rest.auth.tokens` (secret) is managed through the dedicated user and token surfaces, not the section editor, and therefore not in the reference.
 
 Two further login sources delegate authentication elsewhere.
 **CCU-delegated login** (ADR 0043) validates the login form against a
 CCU's own user database and maps the CCU UserLevel onto a Loom role —
 so a break-glass local admin always remains a fallback:
 
-| Key | Type | Default | Env | Secret? |
-|---|---|---|---|---|
-| `north.rest.auth.ccu.enabled` | bool (tri-state) | add-on: `true`, else `false` | — | no |
-| `north.rest.auth.ccu.primary` | bool (tri-state) | `true` (CCU first, local fallback) | — | no |
-| `north.rest.auth.ccu.central` | string | first configured central | — | no |
-| `north.rest.auth.ccu.min_user_level` | int | `1` (guest) | — | no |
-| `north.rest.auth.ccu.role_mapping` | map (level→role) | ADR 0043 defaults | — | no |
+Defaults not shown in the reference: `north.rest.auth.ccu.enabled` add-on: `true`, else `false`; `north.rest.auth.ccu.primary` `true` (CCU first, local fallback); `north.rest.auth.ccu.central` first configured central; `north.rest.auth.ccu.min_user_level` `1` (guest); `north.rest.auth.ccu.role_mapping` ADR 0043 defaults.
 
 **HA Ingress passthrough** (ADR 0044) trusts a request proxied by the
 Home Assistant Supervisor as an admin without a local login. It is a
 deliberate, supervised-only auth bypass; a genuine token or session
 always wins over it:
 
-| Key | Type | Default | Env | Secret? |
-|---|---|---|---|---|
-| `north.rest.auth.ha_ingress.enabled` | bool (tri-state) | supervised add-on: `true`, else `false` | — | no |
-| `north.rest.auth.ha_ingress.trusted_proxy_cidr` | string | `172.30.32.0/23` (Supervisor) | — | no |
-| `north.rest.auth.ha_ingress.role` | string | `admin` | — | no |
+Defaults not shown in the reference: `north.rest.auth.ha_ingress.enabled` supervised add-on: `true`, else `false`; `north.rest.auth.ha_ingress.trusted_proxy_cidr` `172.30.32.0/23` (Supervisor); `north.rest.auth.ha_ingress.role` `admin`.
 
 Authentication setup (Basic, Session, API tokens, OIDC, CCU-delegated
 login, and HA Ingress passthrough) is covered in detail on the auth
@@ -329,28 +284,13 @@ server-rendered HTMX login or `/setup` template.
 REST listener, so there is no separate UI bind address. Delete the key (and
 the `OPENCCU_LOOM_UI_LISTEN` env var) from existing configs.
 
-| Key | Type | Default | Env | Secret? |
-|---|---|---|---|---|
-| `north.ui.enabled` | bool | `true` | — | no |
+Fields: see [`north.ui` in the configuration reference](../reference/configuration.md#north-ui).
 
 ### `north.mqtt`
 
 The MQTT bridge (Home Assistant Discovery and/or raw topic planes).
 
-| Key | Type | Default | Env | Secret? |
-|---|---|---|---|---|
-| `north.mqtt.enabled` | bool | `false` | — | no |
-| `north.mqtt.broker_url` | string | — | `OPENCCU_LOOM_MQTT_BROKER_URL` | no |
-| `north.mqtt.client_id` | string | — | — | no |
-| `north.mqtt.username` | string | — | — | no |
-| `north.mqtt.password` | string | — | `OPENCCU_LOOM_MQTT_PASSWORD` | **yes** |
-| `north.mqtt.topic_base` | string | `openccu-loom` | — | no |
-| `north.mqtt.raw_enabled` | bool | `false` | — | no |
-| `north.mqtt.discovery_enabled` | bool | `false` | — | no |
-| `north.mqtt.discovery_bundles` | bool | `false` | — | no |
-| `north.mqtt.protocol_version` | string | `"5"` | — | no |
-| `north.mqtt.sub_devices_enabled` | bool | `false` | — | no |
-| `north.mqtt.retain_cleanup_window_ms` | int | `2000` | — | no |
+Fields: see [`north.mqtt` in the configuration reference](../reference/configuration.md#north-mqtt). Defaults not shown in the reference: `north.mqtt.topic_base` `openccu-loom`; `north.mqtt.protocol_version` `"5"`; `north.mqtt.retain_cleanup_window_ms` `2000`.
 
 `broker_url` is required when `enabled` is true; accepted schemes are
 `tcp`, `mqtt`, `tls`, `ssl`, `mqtts` (or a bare `host:port`). For the
@@ -441,31 +381,7 @@ high-latency brokers.
 
 The native-Go Matter bridge. Disabled by default; opt-in.
 
-| Key | Type | Default | Env | Secret? |
-|---|---|---|---|---|
-| `north.matter.enabled` | bool | `false` | — | no |
-| `north.matter.listen` | string | `:5540` | — | no |
-| `north.matter.prefer_ipv4` | bool | `false` | — | no |
-| `north.matter.tcp` | string | `off` | — | no |
-| `north.matter.expose_secondary_channels` | bool | `false` | — | no |
-| `north.matter.vendor_id` | uint16 | `0xFFF1` | — | no |
-| `north.matter.product_id` | uint16 | `0x8000` | — | no |
-| `north.matter.node_label` | string | `openccu-loom` | — | no |
-| `north.matter.discriminator` | uint16 | `0xF00` | — | no |
-| `north.matter.mdns_advertise` | string | `zeroconf` | — | no |
-| `north.matter.dev_rotate_unique_ids` | bool | `false` | — | no |
-| `north.matter.enable_time_sync` | bool (tri-state) | `false` | — | no |
-| `north.matter.commissioning.passcode` | uint32 | — | — | **yes** |
-| `north.matter.commissioning.salt` | string | — | — | **yes** |
-| `north.matter.commissioning.iterations` | int | `1000` | — | no |
-| `north.matter.commissioning.concurrent_pairings` | bool | `false` | — | no |
-| `north.matter.commissioning.ephemeral_window` | bool | `false` | — | no |
-| `north.matter.case.node_id` | uint64 | `0` (CASE off) | — | no |
-| `north.matter.case.fabric_id` | uint64 | `0` | — | no |
-| `north.matter.attestation.dac_path` | path | — | — | no |
-| `north.matter.attestation.pai_path` | path | — | — | no |
-| `north.matter.attestation.cd_path` | path | — | — | no |
-| `north.matter.attestation.dac_key_path` | path | — | — | **yes** |
+Fields: see [`north.matter` in the configuration reference](../reference/configuration.md#north-matter). Defaults not shown in the reference: `north.matter.tcp` `off`; `north.matter.enable_time_sync` `false`; `north.matter.case.node_id` `0` (CASE off); `north.matter.case.fabric_id` `0`.
 
 The default vendor/product IDs are development values from the
 test block — never ship them in production. Matter pairing and
@@ -521,11 +437,7 @@ commissioning are covered on the Matter user page (`docs/user/matter.md`).
 The Model Context Protocol server for LLM agents. Disabled by default;
 read-only even when enabled until `allow_writes` is also set.
 
-| Key | Type | Default | Env | Secret? |
-|---|---|---|---|---|
-| `north.mcp.enabled` | bool | `false` | — | no |
-| `north.mcp.allow_writes` | bool | `false` | — | no |
-| `north.mcp.path` | string | `/mcp` | — | no |
+Fields: see [`north.mcp` in the configuration reference](../reference/configuration.md#north-mcp).
 
 The MCP transport is mounted on the existing REST listener. See the
 [MCP client guide](../external-clients/mcp.md).
@@ -540,17 +452,7 @@ that external systems call to set a datapoint or trigger a program;
 these are real device writes, so they carry full authorization weight.
 Both directions are wired once at boot — toggling is restart-required.
 
-| Key | Type | Default | Env | Secret? |
-|---|---|---|---|---|
-| `north.webhook.enabled` | bool | `false` | — | no |
-| `north.webhook.url` | string | — | — | no |
-| `north.webhook.secret` | string | — | — | **yes** |
-| `north.webhook.events` | list | — (all) | — | no |
-| `north.webhook.centrals` | list | — (all) | — | no |
-| `north.webhook.parameter_glob` | string | — | — | no |
-| `north.webhook.timeout_ms` | int | `10000` | — | no |
-| `north.webhook.inbound.enabled` | bool | `false` | — | no |
-| `north.webhook.inbound.token` | string | — | — | **yes** |
+Fields: see [`north.webhook` in the configuration reference](../reference/configuration.md#north-webhook). Defaults not shown in the reference: `north.webhook.events` all; `north.webhook.centrals` all; `north.webhook.timeout_ms` `10000`.
 
 `secret` is the shared key for the `X-OpenCCU-Signature` HMAC-SHA256
 body signature (empty = no signature header). `events` and `centrals`
@@ -564,10 +466,7 @@ header-only caller (e.g. a doorbell) can POST without a session.
 LAN self-advertisement so zeroconf-aware clients (e.g. Home Assistant)
 can auto-discover the daemon.
 
-| Key | Type | Default | Env | Secret? |
-|---|---|---|---|---|
-| `north.discovery.mdns.enabled` | bool | `true` | — | no |
-| `north.discovery.mdns.instance_name` | string | OS hostname | — | no |
+Fields: see [`north.discovery` in the configuration reference](../reference/configuration.md#north-discovery). Defaults not shown in the reference: `north.discovery.mdns.instance_name` OS hostname.
 
 The advertised port mirrors `north.rest.listen`. Disable for
 security-sensitive deployments where LAN visibility is unwanted.
@@ -579,10 +478,7 @@ the LAN (ADR 0046). When enabled the daemon periodically multicasts an
 `M-SEARCH`, follows each responder's `basic_dev.cgi`, and surfaces
 matching CCUs in the UI so the operator can adopt or ignore them.
 
-| Key | Type | Default | Env | Secret? |
-|---|---|---|---|---|
-| `north.discovery.ssdp.enabled` | bool | `true` | — | no |
-| `north.discovery.ssdp.interval` | duration | `60s` | — | no |
+Defaults not shown in the reference: `north.discovery.ssdp.enabled` `true`; `north.discovery.ssdp.interval` `60s`.
 
 This is a **read-only LAN scan** — a multicast probe only; no data
 about the daemon leaves the LAN, and it simply finds nothing where
@@ -594,24 +490,7 @@ default; disable it if unsolicited multicast probes are unwanted.
 One entry per configured CCU. OpenCCU-Loom is multi-CCU from day one;
 see the [multi-CCU guide](../user/multi-ccu.md).
 
-| Key | Type | Default | Env | Secret? |
-|---|---|---|---|---|
-| `name` | string | — (**required**, unique) | — | no |
-| `system_type` | string | `ccu` | — | no |
-| `host` | string | — (**required**) | — | no |
-| `interfaces` | list | — (**required**, ≥1) | — | no |
-| `username` | string | — | — | no |
-| `password` | string | — | — | **yes** |
-| `port` | int | — | — | no |
-| `ports` | map (iface→port) | — | — | no |
-| `json_rpc_port` | int | `80`/`443` | — | no |
-| `tls` | bool | `false` | — | no |
-| `tls_insecure_skip_verify` | bool | `false` | — | no |
-| `api_token` | string | — | — | **yes** |
-| `tls_fingerprint` | string | — | — | no |
-| `primary_interface` | string | (HmIP-RF heuristic) | — | no |
-| `visibility.un_ignore` | list | — | — | no |
-| `check_connection_interval` | duration | `30s` | — | no |
+Fields: see [`centrals` in the configuration reference](../reference/configuration.md#centrals). Required: `centrals.name` (unique), `centrals.host`, `centrals.interfaces` (≥1). Defaults not shown in the reference: `centrals.system_type` `ccu`; `centrals.json_rpc_port` `80`/`443`; `centrals.primary_interface` (HmIP-RF heuristic); `centrals.check_connection_interval` `30s`.
 
 `name` may contain only letters, digits, `-` and `_`. It becomes a path
 segment of the XML-RPC callback URL the daemon announces to that CCU, so
@@ -678,19 +557,7 @@ Each central also carries an optional `behavior:` sub-block of expert
 per-central toggles that shape how devices and hub entities are
 modelled. All are hot-reloadable and default to sensible values:
 
-| Key | Type | Default | Meaning |
-|---|---|---|---|
-| `behavior.light_last_brightness` | bool | `true` | Restore last brightness on turn-on (vs. full) |
-| `behavior.use_group_channel_for_cover_state` | bool | `true` | Report cover position from the group channel |
-| `behavior.enable_sysvar_scan` | bool | `true` | Fetch system variables as hub entities |
-| `behavior.enable_program_scan` | bool | `true` | Fetch programs as hub entities |
-| `behavior.include_internal_sysvars` | bool | `true` | Surface CCU-internal system variables |
-| `behavior.include_internal_programs` | bool | `false` | Surface CCU-internal programs |
-| `behavior.sysvar_markers` | list | — | Marker tokens steering how sysvars arrive (`HAHM`/`HX`/`INTERNAL`) |
-| `behavior.program_markers` | list | — | Marker tokens steering how programs arrive (`HX`/`INTERNAL`) |
-| `behavior.sysvar_scan_interval` | duration | `30s` | Per-central sysvar-refresh cadence; `0` selects the default, values below `3s` are rejected |
-| `behavior.enable_device_firmware_check` | bool | `true` | Expose per-device firmware-update entities |
-| `behavior.delay_new_device_creation` | bool | `true` | Hold a newly-paired device until an operator accepts it under New devices (until then it is listed there flagged `pending_creation` and has no data points) and then releases it (until then it is built but withheld from MQTT, Matter and webhooks). Devices already known are never held. `false` builds and publishes a new device immediately. See [Adding devices](../user/web-ui.md#adding-devices) |
+Defaults not shown in the reference: `centrals.behavior.light_last_brightness` `true`; `centrals.behavior.use_group_channel_for_cover_state` `true`; `centrals.behavior.enable_sysvar_scan` `true`; `centrals.behavior.enable_program_scan` `true`; `centrals.behavior.include_internal_sysvars` `true`; `centrals.behavior.include_internal_programs` `false`; `centrals.behavior.sysvar_scan_interval` `30s`; `centrals.behavior.enable_device_firmware_check` `true`; `centrals.behavior.delay_new_device_creation` `true`.
 
 ### `persistence`
 
@@ -702,27 +569,7 @@ opens a dedicated `history.db`, records numeric VALUES samples, drives
 the SPA charts (`GET /history`), and can optionally push each sample to
 an external time-series store.
 
-| Key | Type | Default | Env | Secret? |
-|---|---|---|---|---|
-| `persistence.values_cache.enabled` | bool | `true` | — | no |
-| `persistence.values_cache.flush_interval` | duration | `60s` | — | no |
-| `persistence.values_cache.disabled_centrals` | list | — | — | no |
-| `persistence.history.enabled` | bool | `false` | — | no |
-| `persistence.history.retention` | duration | `720h` (30 d) | — | no |
-| `persistence.history.retention_hourly` | duration | `390 days` (≈13 months) | — | no |
-| `persistence.history.retention_daily` | duration | `0` (keep forever) | — | no |
-| `persistence.history.flush_interval` | duration | `5s` | — | no |
-| `persistence.history.include` | list | — (all numeric) | — | no |
-| `persistence.history.exclude` | list | — | — | no |
-| `persistence.history.disabled_centrals` | list | — | — | no |
-| `persistence.history.energy_price_per_kwh` | number | `0` (no costs) | — | no |
-| `persistence.history.energy_currency` | string | `€` | — | no |
-| `persistence.history.export.enabled` | bool | `false` | — | no |
-| `persistence.history.export.kind` | string | `influxdb` | — | no |
-| `persistence.history.export.endpoint` | string | — | — | no |
-| `persistence.history.export.org` | string | — | — | no |
-| `persistence.history.export.bucket` | string | — | — | no |
-| `persistence.history.export.token_env` | string | — | — | no |
+Fields: see [`persistence` in the configuration reference](../reference/configuration.md#persistence). Defaults not shown in the reference: `persistence.history.enabled` `false`; `persistence.history.retention_hourly` `390 days` (≈13 months); `persistence.history.retention_daily` `0` (keep forever); `persistence.history.include` all numeric; `persistence.history.energy_price_per_kwh` `0` (no costs); `persistence.history.energy_currency` `€`; `persistence.history.export.enabled` `false`; `persistence.history.export.kind` `influxdb`.
 
 ### Sysvar and program markers
 
@@ -768,10 +615,7 @@ Overrides for the reliability stack (retry / throttle). Both fields
 default to `0`, meaning "use the compiled-in behaviour"; set them only
 to pin a specific timing (e.g. on heavily-loaded BidCos-RF).
 
-| Key | Type | Default | Env | Secret? |
-|---|---|---|---|---|
-| `reliability.command_retry_initial_delay` | duration | `0` (2 s default) | — | no |
-| `reliability.command_throttle_inter_command_delay` | duration | `0` (no pacing) | — | no |
+Fields: see [`reliability` in the configuration reference](../reference/configuration.md#reliability). Defaults not shown in the reference: `reliability.command_throttle_inter_command_delay` `0` (no pacing).
 
 ### `ccu_data`
 
@@ -780,10 +624,7 @@ Optional filesystem overrides for the openccu-data metadata archives
 default — the daemon uses the embedded archives and falls back to raw
 parameter / model names if a path is set but cannot be read.
 
-| Key | Type | Default | Env | Secret? |
-|---|---|---|---|---|
-| `ccu_data.translations_path` | path | — | — | no |
-| `ccu_data.easymode_path` | path | — | — | no |
+Fields: see [`ccu_data` in the configuration reference](../reference/configuration.md#ccu-data).
 
 ### `backup`
 
@@ -793,11 +634,7 @@ REST/UI surface work regardless. Both fields are read when the scheduled
 job is registered at boot, so changing either is restart-required — the
 config editor marks them accordingly.
 
-| Key | Type | Default | Env | Secret? |
-|---|---|---|---|---|
-| `backup.dir` | string | `<data_dir>/backups` | `OPENCCU_LOOM_BACKUP_DIR` | no |
-| `backup.schedule` | duration | `0` (disabled) | — | no |
-| `backup.keep_last` | int | `0` (keep all) | — | no |
+Fields: see [`backup` in the configuration reference](../reference/configuration.md#backup). Defaults not shown in the reference: `backup.dir` `<data_dir>/backups`; `backup.schedule` `0` (disabled); `backup.keep_last` `0` (keep all). Environment override: `backup.dir` is overridden by `OPENCCU_LOOM_BACKUP_DIR`.
 
 `keep_last` prunes the oldest scheduled backups per central beyond the
 given count after each successful run.

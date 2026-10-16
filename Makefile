@@ -574,6 +574,11 @@ generate: ## run all code generators
 	$(GO) generate ./...
 	$(MAKE) export-schemas
 	$(MAKE) ui-types
+	$(MAKE) docs-reference
+
+.PHONY: docs-reference
+docs-reference: ## regenerate docs/reference/{configuration,websocket,rest}.md from the config schema, wsapi.json and openapi.yaml
+	$(GO) run ./script/gen_docs_reference.go
 
 .PHONY: docker
 docker: ## build multi-arch Docker images (requires buildx)

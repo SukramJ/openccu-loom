@@ -88,6 +88,10 @@ nav:
       - Home Assistant Drop-in: external-clients/ha-drop-in-identity-and-scoping.md
       - HA Unique-ID Migration: external-clients/ha-unique-id-migration.md
       - Breaking a Published Identity: external-clients/breaking-change-process.md
+  - Reference:
+      - Configuration: reference/configuration.md
+      - WebSocket: reference/websocket.md
+      - REST API: reference/rest.md
   - Developer:
       - Architecture: developer/architecture.md
       - Development Setup: developer/setup.md

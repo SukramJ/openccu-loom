@@ -53,33 +53,9 @@ mounting. Everything else sits behind `AuthRequire`. Supported credentials are B
 
 ## Endpoint overview
 
-The table groups the major endpoint families. Sample paths are illustrative; the OpenAPI file lists every path, parameter, and response schema.
-
-| Group | Sample paths | Auth |
-| --- | --- | --- |
-| System / info | `GET /info`, `GET /health` | public |
-| Auth | `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` | public (login) / authenticated |
-| Tokens & users (v1) | `GET /auth/users`, `GET\|POST /auth/tokens`, `DELETE /auth/tokens/{id}` | admin |
-| Config (read) | `GET /config`, `GET /config/schema`, `GET /config/effective` | authenticated / admin |
-| Config admin | `GET\|PUT\|DELETE /config/sections/{section}` | admin |
-| Devices & channels | `GET /devices`, `GET /devices/{addr}`, `GET /devices/{addr}/channels`, `GET /devices/{addr}/channels/{no}` | authenticated |
-| Data points | `GET .../data-points`, `GET .../data-points/{param}`, `PUT .../data-points/{param}/value` | read: auth / write: operator |
-| Custom & calculated DPs | `GET /devices/{addr}/cdps`, `POST /devices/{addr}/cdps/{name}/{operation}`, `GET .../calc-dps` | read: auth / write: operator |
-| Paramsets | `GET\|PUT /devices/{addr}/paramsets/{key}`, `GET\|PUT /devices/{addr}/link-ps/{peer}` | read: auth / write: operator |
-| Schedules (climate) | `GET\|PUT /devices/{addr}/channels/{no}/schedule`, `POST .../schedule/active-profile` | read: auth / write: operator |
-| Links (direct) | `GET\|POST\|DELETE /devices/{addr}/links`, `GET .../linkable-channels` | read: auth / write: operator |
-| Hub | `GET /programs`, `POST /programs/{id}/execute`, `GET\|POST /sysvars`, `GET /inbox`, `GET /alarm-messages`, `GET /service-messages` | read: auth / write: operator |
-| Matter | `GET /matter/status`, `GET /matter/fabrics`, `GET /matter/setup-payload`, `GET\|PUT /matter/exposable`, `POST /matter/commissioning/window` | read: auth / admin actions |
-| Visibility | `GET\|PUT /visibility/unignore`, `GET /visibility/unignore/candidates` | read: auth / write: admin |
-| Backup | `GET /backups`, `POST /backups`, `GET /backups/{id}/download`, `POST /backups/{id}/restore` | read: auth / write: admin |
-| Audit | `GET /audit` | authenticated |
-| Diagnostics | `GET /diagnostics/logs`, `GET\|PUT /diagnostics/log-level`, `GET /diagnostics`, `GET /metrics` | mixed (admin for most) |
-| Interfaces | `GET /interfaces`, `GET /interfaces/{id}`, `POST /interfaces/{id}/reconnect` | read: auth / admin reconnect |
-| System admin | `GET /system/ccu`, `POST /system/restart`, `GET /install-mode/interfaces`, `POST /install-mode/search`, `POST /devices/{addr}/install-mode` | admin |
-| v2 CRUD | `GET\|POST /users`, `PATCH\|DELETE /users/{subject}`, `GET\|POST /centrals`, `PUT\|DELETE /centrals/{name}` | admin |
-| Onboarding | `POST /centrals/probe`, `POST\|GET\|DELETE /centrals/pairing[/{id}]`, `GET /centrals/discovered` | admin |
-| Taxonomy | `GET /taxonomy`, `POST\|PATCH\|DELETE /taxonomy/{central}/{enum}/nodes` | read: auth / write: operator |
-| Snapshot | `GET /snapshot` | authenticated |
+Every path, with its method, summary and the minimum role it requires, is
+listed in the generated [REST API reference](../reference/rest.md); the
+OpenAPI file carries the parameters and response schemas.
 
 !!! note "Multi-CCU scoping"
     Device, channel, and hub resources are scoped per CCU. The `central` dimension threads through addresses and snapshot payloads. See [Multi-CCU](../user/multi-ccu.md).

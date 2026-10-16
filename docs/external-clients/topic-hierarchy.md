@@ -248,49 +248,12 @@ configured name or subscribe via wildcard.
 The full broadcast catalogue is machine-readable in
 [`assets/wsapi.json`](https://github.com/SukramJ/openccu-loom/blob/main/assets/wsapi.json) — every entry with
 `"kind": "broadcast"` carries `topic` (pattern) and `payload` (schema
-name in `openapi.yaml`). `assets/wsapi.json` holds 49 broadcast
-entries and is the complete, authoritative list —
+name in `openapi.yaml`). It is the complete, authoritative list;
 `tests/contract/ws_broadcast_emitter_test.go::TestWSBroadcastsHaveProductionEmitter`
-enforces that every one of them has a production emitter. The table
-below covers the core device and system broadcasts only; the `alarm.*`,
-`security.*`, Matter, pairing, schedule and add-on families are in
-`wsapi.json`.
-
-### Core broadcasts (daemon-emitted, openapi-described)
-
-| Type (`name`) | Topic pattern | Payload schema |
-|---|---|---|
-| `datapoint.value_changed` | `device.{address}.channels.{channel}.data_points.{parameter}` | [`DataPointValueChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
-| `datapoint.optimistic_rolled_back` | `device.{address}.channels.{channel}.data_points.{parameter}` | [`OptimisticRollbackPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
-| `custom_data_point.state_changed` | `device.{address}.cdps.{name}` | [`CustomDataPointStateChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
-| `device.trigger` | `device.{address}.channels.{channel}.trigger` | [`DeviceTriggerPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
-| `device.created` | `device.{address}.lifecycle` | [`DeviceCreatedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
-| `device.removed` | `device.{address}.lifecycle` | [`DeviceRemovedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
-| `device.availability_changed` | `device.{address}.lifecycle` | [`DeviceAvailabilityChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
-| `device.refreshed` | `device.{address}.lifecycle` | [`DeviceRefreshedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
-| `central.state_changed` | `central.{name}.state` | [`CentralStateChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
-| `system.status_changed` | `system.{central}.status` | [`SystemStatusChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
-| `daemon_status.changed` | `system.daemon_status` | [`DaemonStatusPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
-| `hub.sysvar_changed` | `hub.{central}.sysvars.{name}` | [`SysvarChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
-| `hub.program_executed` | `hub.{central}.programs.{id}` | [`ProgramExecutedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
-| `hub.install_mode_changed` | `hub.{central}.install_mode` | [`InstallModeChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
-| `hub.alarm_message` | `hub.{central}.alarm_messages` | [`HubCountChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
-| `hub.service_message` | `hub.{central}.service_messages` | [`HubCountChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
-| `hub.inbox_changed` | `hub.{central}.inbox` | [`HubCountChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
-| `hub.metrics_changed` | `hub.{central}.metrics` | [`HubMetricChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
-| `connectivity.changed` | `hub.{central}.connectivity.{interface_id}` | [`HubConnectivityChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
-| `hub.system_update_changed` | `hub.{central}.system_update` | [`HubSystemUpdateChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
-
-### Matter broadcasts
-
-| Topic (also used as `type` in the envelope) | Payload schema |
-|---|---|
-| `matter.exposable_changed` | [`MatterExposureBulkUpdate`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
-| `matter.commissioning_window_opened` | [`MatterCommissioningWindowResponse`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) (credential redacted, see below) |
-| `matter.commissioning_progress` | [`MatterCommissioningProgressPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
-| `matter.fabric_added` | [`MatterFabric`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
-| `matter.fabric_removed` | [`MatterFabricRemovedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
-| `matter.endpoint_assembled` | [`MatterEndpointAssembledPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
+enforces that every broadcast in it has a production emitter. The
+generated [WebSocket reference](../reference/websocket.md#broadcasts)
+renders every broadcast with its topic pattern, payload schema and
+description, grouped by category.
 
 `matter.exposable_changed` always carries the affected rows under
 `items`: one entry for a single-row `PUT /api/v1/matter/exposable`, the

@@ -164,44 +164,52 @@ var dedicatedEditorPaths = map[string]struct{}{
 	"north.ui.profiles": {},
 }
 
+// ConfigSchema computes the typed schema `GET /api/v1/config/schema`
+// serves: every known section plus one descriptor per field the generic
+// section editor renders. It is pure, so the generated configuration
+// reference reads the same list the SPA does.
+func ConfigSchema() SchemaResponse {
+	fields := config.ClassifyFields(&config.Config{})
+	out := SchemaResponse{
+		Sections: make([]string, 0, len(configstore.AllSections())),
+		Fields:   make([]SchemaField, 0, len(fields)),
+	}
+	for _, sec := range configstore.AllSections() {
+		out.Sections = append(out.Sections, string(sec))
+	}
+	unmanaged := configstore.UnmanagedFieldPaths()
+	for _, f := range fields {
+		// Skip fields that are not editable through the section editor:
+		// bootstrap-tier north.rest.listen and the SQLite-managed auth
+		// credentials (north.rest.auth.users / .tokens). They are managed
+		// by BootstrapConfig and the dedicated user/token CRUD surfaces,
+		// so the SPA must not render them as REST-section fields.
+		if _, skip := unmanaged[f.Path]; skip {
+			continue
+		}
+		if _, skip := dedicatedEditorPaths[f.Path]; skip {
+			continue
+		}
+		_, restart := restartRequiredPaths[f.Path]
+		def := consumerDefaults[f.Path]
+		out.Fields = append(out.Fields, SchemaField{
+			Path:            f.Path,
+			Class:           string(f.Class),
+			GoType:          f.GoType,
+			RestartRequired: restart,
+			Default:         def,
+		})
+	}
+	return out
+}
+
 // GetConfigSchema renders the typed schema for the SPA editor. No
 // secrets leave this endpoint — secret-classed fields are listed as
 // `class: "secret"` so the SPA shows a placeholder + env-resolver
 // hint instead of an editor.
 func GetConfigSchema() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		fields := config.ClassifyFields(&config.Config{})
-		out := SchemaResponse{
-			Sections: make([]string, 0, len(configstore.AllSections())),
-			Fields:   make([]SchemaField, 0, len(fields)),
-		}
-		for _, sec := range configstore.AllSections() {
-			out.Sections = append(out.Sections, string(sec))
-		}
-		unmanaged := configstore.UnmanagedFieldPaths()
-		for _, f := range fields {
-			// Skip fields that are not editable through the section editor:
-			// bootstrap-tier north.rest.listen and the SQLite-managed auth
-			// credentials (north.rest.auth.users / .tokens). They are managed
-			// by BootstrapConfig and the dedicated user/token CRUD surfaces,
-			// so the SPA must not render them as REST-section fields.
-			if _, skip := unmanaged[f.Path]; skip {
-				continue
-			}
-			if _, skip := dedicatedEditorPaths[f.Path]; skip {
-				continue
-			}
-			_, restart := restartRequiredPaths[f.Path]
-			def := consumerDefaults[f.Path]
-			out.Fields = append(out.Fields, SchemaField{
-				Path:            f.Path,
-				Class:           string(f.Class),
-				GoType:          f.GoType,
-				RestartRequired: restart,
-				Default:         def,
-			})
-		}
-		JSON(w, http.StatusOK, out)
+	return func(w http.ResponseWriter, _ *http.Request) {
+		JSON(w, http.StatusOK, ConfigSchema())
 	}
 }
 
