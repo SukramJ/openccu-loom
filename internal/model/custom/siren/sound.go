@@ -103,10 +103,6 @@ type SoundPlayer struct {
 	matterLevelOnce sync.Once
 	matterLevelSrv  *levelcontrol.Server
 
-	// matterLevel carries the two LevelControl attributes that describe
-	// the cluster rather than the device — see [speakerLevelState].
-	matterLevel speakerLevelState
-
 	key    hmtypes.DataPointKey
 	writer custom.Writer
 	level  *generic.Float // LEVEL (0..1 volume)

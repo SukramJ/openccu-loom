@@ -1278,9 +1278,11 @@ the re-learn named in the changelog; decided per type, not for the fleet.
 
 ### BD-Matter-LevelControl-NativeRamp — the light's LevelControl runs on go-fabric's hand-off path, the dimmer ramps itself
 
-**Where:** `internal/model/custom/light/matter_level.go` (`lightLevelSource`,
-the host port of `levelcontrol.Server`; `Light.matterLevelServer` builds the
-server with `Transitions` nil).
+**Where:** `internal/model/custom/light/matter_level.go`
+(`Light.matterLevelServer` builds `levelcontrol.Server` with `Transitions`
+nil over go-fabric's `levelcontrol.NewNativeSource`; the host implements
+only `levelcontrol.NativeRamp` — `lightRamp` — and an attribute-only
+`levelcontrol.OnOff` — `lightOnOff`).
 
 **matter.js behaviour:** `LevelControlServer` with
 `managedTransitionTimeHandling` runs every transition itself on
@@ -1328,6 +1330,34 @@ ACTION, the HmIP dimmers none. On that basis:
 **Why not the engine:** radio budget and device truth — the dimmer's own
 ramp is smoother than ten LEVEL writes a second could be, and the CCU would
 refuse or queue that write rate on a busy interface.
+
+**The native source:** go-fabric's `NativeSource` keeps Options and
+OnLevel, applies the ExecuteIfOff gate and turns each of the eight commands
+into one target level and one duration; `lightRamp.Ramp` writes them as
+LEVEL (with RAMP_TIME where the channel ramps), and `lightOnOff.SetOnOff`
+stores the OnOff attribute without a radio write, because the ramp already
+switches the dimmer. Two results follow matter.js rather than the earlier
+host arithmetic: a Step cropped at a bound runs the cropped distance at the
+rate the full step gives, `stepSize / transitionTime * 10` (matter.js
+`packages/node/src/behaviors/level-control/LevelControlServer.ts:464-479`
+`stepLogic`), so it ends sooner than its TransitionTime; and a Step on a
+level the CCU has not reported answers Failure, because `stepLogic` reads the
+`currentLevel` getter (`:478`), which throws `Status.Failure` while
+CurrentLevel is null (`:103-111`).
+
+**The sound player:** the HmIP-MP3P Speaker endpoint
+(`internal/model/custom/siren/sound_matter.go`, `soundRamp` / `soundOnOff`)
+runs on the same `NativeSource`, with LEVEL as its volume, applied at once.
+Move and MoveWithOnOff are declined through `levelcontrol.NativeMover` and
+keep the volume, since a speaker that cannot ramp would otherwise jump to
+full volume or to silence (matter.js lets an implementation replace
+`moveLogic`, `LevelControlServer.ts:378-403`). The "with On/Off" commands
+go through `levelcontrol.NativeSwitcher`, so starting at a volume and
+stopping stay one device write each — the play write and the
+`{LEVEL 0, DURATION_VALUE 0, DURATION_UNIT 0}` StopSound (go-fabric
+BD-Matter-LevelControl-NativeSwitcher); one edge follows: with the playing
+state never observed and the volume already reading 0, a "with On/Off"
+command to 0 finds the endpoint off and at its target and sends no stop.
 
 ### BD-Matter-WindowCovering-SliderDebounce — GoTo*Percentage two-phase slider debounce with accepted-before-written CCU write
 

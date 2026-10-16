@@ -9,6 +9,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/SukramJ/go-fabric/cluster/alarm"
 	"github.com/SukramJ/go-fabric/cluster/onoff"
 
 	matterparity "github.com/SukramJ/go-fabric/parity"
@@ -64,7 +65,7 @@ func clusterByID(s *matterSchema, id uint32) (matterClusterEntry, bool) {
 }
 
 // TestParityMatterJS_SmokeCOMandatoryAttributes asserts that
-// smokeCOServer.MatterAttributes() covers every mandatory attribute per
+// the SmokeCOAlarm server's MatterAttributes() covers every mandatory attribute per
 // matter.js HEAD (packages/model/src/standard/elements/
 // smoke-co-alarm-cluster.element.ts), including HardwareFaultAlert
 // (0x0006) and EndOfServiceAlert (0x0007).
@@ -72,9 +73,20 @@ func clusterByID(s *matterSchema, id uint32) (matterClusterEntry, bool) {
 // SmokeState (conformance "SMOKE") is mandatory here because this
 // projection advertises the SMOKE feature; CoState is not — see
 // TestParityMatterJS_SmokeCOStateIsGatedOnTheCOFeature.
+// smokeAlarmServer returns the SmokeCOAlarm server a fresh SmokeSiren assembles.
+func smokeAlarmServer(t *testing.T) *alarm.Server {
+	t.Helper()
+	s, _, _ := newSmokeSirenRig(t)
+	srv, ok := s.MatterClusterServers()[0].(*alarm.Server)
+	if !ok {
+		t.Fatalf("SmokeSiren assembles %T, want *alarm.Server", s.MatterClusterServers()[0])
+	}
+	return srv
+}
+
 func TestParityMatterJS_SmokeCOMandatoryAttributes(t *testing.T) {
 	t.Parallel()
-	srv := smokeCOServer{s: &SmokeSiren{}}
+	srv := smokeAlarmServer(t)
 	attrs := make(map[uint32]bool, len(srv.MatterAttributes()))
 	for _, id := range srv.MatterAttributes() {
 		attrs[id] = true
@@ -83,12 +95,12 @@ func TestParityMatterJS_SmokeCOMandatoryAttributes(t *testing.T) {
 		id   uint32
 		name string
 	}{
-		{matterAttrSmokeExpressedState, "ExpressedState (0x0000)"},
-		{matterAttrSmokeState, "SmokeState (0x0001)"},
-		{matterAttrBatteryAlert, "BatteryAlert (0x0003)"},
-		{matterAttrHardwareFaultAlert, "HardwareFaultAlert (0x0006)"},
-		{matterAttrEndOfServiceAlert, "EndOfServiceAlert (0x0007)"},
-		{matterAttrTestInProgress, "TestInProgress (0x0008)"},
+		{alarm.AttrExpressedState, "ExpressedState"},
+		{alarm.AttrSmokeState, "SmokeState"},
+		{alarm.AttrBatteryAlert, "BatteryAlert"},
+		{alarm.AttrHardwareFaultAlert, "HardwareFaultAlert"},
+		{alarm.AttrEndOfServiceAlert, "EndOfServiceAlert"},
+		{alarm.AttrTestInProgress, "TestInProgress"},
 	}
 	for _, m := range mandatory {
 		if !attrs[m.id] {
@@ -109,20 +121,20 @@ func TestParityMatterJS_SmokeCOMandatoryAttributes(t *testing.T) {
 // carbon-monoxide reading from a device with no CO sensor.
 func TestParityMatterJS_SmokeCOStateIsGatedOnTheCOFeature(t *testing.T) {
 	t.Parallel()
-	srv := smokeCOServer{s: &SmokeSiren{}}
-	fm, ok := srv.MatterRead(matterAttrFeatureMap)
+	srv := smokeAlarmServer(t)
+	fm, ok := srv.MatterRead(0xFFFC)
 	if !ok {
 		t.Fatal("SmokeCOAlarm MatterRead(FeatureMap) returned ok=false")
 	}
-	if fm.(uint32)&matterSmokeCOFeatureCO != 0 {
+	if fm.(uint32)&uint32(alarm.FeatureCOAlarm) != 0 {
 		t.Fatalf("FeatureMap=%v unexpectedly advertises CO; the rest of this test assumes smoke-only", fm)
 	}
 	for _, id := range srv.MatterAttributes() {
-		if id == matterAttrCOState {
+		if id == alarm.AttrCOState {
 			t.Error("MatterAttributes() lists CoState (0x0002) while the FeatureMap omits CO")
 		}
 	}
-	if _, ok := srv.MatterRead(matterAttrCOState); ok {
+	if _, ok := srv.MatterRead(alarm.AttrCOState); ok {
 		t.Error("MatterRead(0x0002) must return ok=false while the FeatureMap omits CO")
 	}
 }
@@ -136,19 +148,20 @@ func TestParityMatterJS_SmokeExpressedStateUsesItsOwnEnum(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		status SmokeAlarmStatus
-		want   uint8
+		want   alarm.ExpressedState
 	}{
-		{SmokeStatusIdleOff, matterExpressedStateNormal},
-		{SmokeStatusSecondaryAlarm, matterExpressedStateSmokeAlarm},
-		{SmokeStatusPrimaryAlarm, matterExpressedStateSmokeAlarm},
+		{SmokeStatusIdleOff, alarm.ExpressedNormal},
+		{SmokeStatusSecondaryAlarm, alarm.ExpressedSmokeAlarm},
+		{SmokeStatusPrimaryAlarm, alarm.ExpressedSmokeAlarm},
 		// INTRUSION_ALARM is Normal, not SmokeAlarm: the detector is being
 		// used as a sounder for a burglar alarm and its smoke sensor has
 		// detected nothing. See TestIntrusionIsNotReportedAsSmoke.
-		{SmokeStatusIntrusion, matterExpressedStateNormal},
+		{SmokeStatusIntrusion, alarm.ExpressedNormal},
 	}
 	for _, c := range cases {
-		if got := smokeStatusToExpressedState(c.status); got != c.want {
-			t.Errorf("smokeStatusToExpressedState(%v) = %d, want %d", c.status, got, c.want)
+		got, ok := alarmServerFor(t, c.status).MatterRead(alarm.AttrExpressedState)
+		if !ok || got != uint8(c.want) {
+			t.Errorf("ExpressedState(%v) = (%v, %v), want (%d, true)", c.status, got, ok, c.want)
 		}
 	}
 }
@@ -268,8 +281,7 @@ func TestParityMatterJS_SirenClusterRevisions(t *testing.T) {
 		codeRevision uint16
 	}{
 		{onoff.ClusterID, "OnOff", onoff.Revision()},
-		{matterClusterBooleanState, "BooleanState", matterBooleanStateClusterRevision},
-		{matterClusterSmokeCOAlarm, "SmokeCoAlarm", matterSmokeCOAlarmClusterRevision},
+		{alarm.ClusterID, "SmokeCoAlarm", alarm.Revision()},
 	}
 
 	for _, c := range cases {

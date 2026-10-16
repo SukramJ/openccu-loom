@@ -8,10 +8,10 @@
 //
 // Host mapping:
 //   ServerEndpointStores#nextNumber (persisted under NEXT_NUMBER_KEY) maps to
-//   the matter_metadata row next_endpoint_id; assignNumber maps to
-//   [Store.AssignEndpointID] / [Store.UpsertEndpointAssigning]; the
+//   the matter_endpoint_allocation row; assignNumber maps to
+//   [Store.UpsertEndpointAssigning]; the
 //   #allocatedNumbers / #preAllocatedNumbers skip sets map to the occupancy
-//   scan over matter_endpoints.
+//   scan over matter_endpoints (go-fabric's sqlitestore allocator).
 
 package matterendpoint_test
 
@@ -122,19 +122,20 @@ func TestParityMatterJS_EndpointNumberSeedsAboveExistingRows(t *testing.T) {
 
 	for i, id := range []uint16{2, 3, 5} {
 		key := testKey("ccu1", "EEE0005", i+1, matterendpoint.DPKindCustom, "SWITCH")
-		if err := s.UpsertEndpoint(ctx, fabricendpoint.Record{Key: key, EndpointID: id}); err != nil {
+		if _, err := s.UpsertEndpointAssigning(ctx, fabricendpoint.Record{Key: key, EndpointID: id}); err != nil {
 			t.Fatalf("seed row %d: %v", id, err)
 		}
 	}
 	// Drop the counter row to reproduce a database migrated from the
 	// hole-filling allocator.
-	if _, err := db.ExecContext(ctx, `DELETE FROM matter_metadata WHERE key = 'next_endpoint_id'`); err != nil {
+	if _, err := db.ExecContext(ctx, `UPDATE matter_endpoint_allocation SET next_endpoint_id = 2`); err != nil {
 		t.Fatalf("clear counter: %v", err)
 	}
 
-	id, err := s.AssignEndpointID(ctx)
+	keyNew := testKey("ccu1", "EEE0006", 1, matterendpoint.DPKindCustom, "SWITCH")
+	id, err := s.UpsertEndpointAssigning(ctx, fabricendpoint.Record{Key: keyNew})
 	if err != nil {
-		t.Fatalf("AssignEndpointID: %v", err)
+		t.Fatalf("UpsertEndpointAssigning: %v", err)
 	}
 	if id != 6 {
 		t.Errorf("assigned %d, want 6 — the counter must seed above the highest stored number, not fill the hole at 4", id)

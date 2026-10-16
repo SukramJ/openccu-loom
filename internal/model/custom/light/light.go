@@ -80,12 +80,11 @@ type Light struct {
 
 	// matterOnOff holds the OnOff cluster server the Matter projection
 	// serves, built once per light (matter.go); matterLevelSrv the
-	// LevelControl server (matter_level.go), with the cluster-state
-	// attributes it reads from matterLevel.
+	// LevelControl server (matter_level.go), whose native source keeps
+	// the cluster-state attributes Options and OnLevel.
 	matterOnOff     generic.MatterOnOffHolder
 	matterLevelOnce sync.Once
 	matterLevelSrv  *levelcontrol.Server
-	matterLevel     lightLevelState
 	// matterColor holds the ColorControl server a colour variant builds
 	// (matter_color.go); the plain Light never fills it.
 	matterColor matterColorHolder

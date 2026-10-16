@@ -162,39 +162,24 @@ func matterHueToHM(m uint8) int32 {
 // saturationToMatter encodes an HA-canonical saturation (0..100, as reported
 // by [ColorLight.Color]) into Matter CurrentSaturation (0..254).
 func saturationToMatter(s float64) uint8 {
-	if s < 0 {
-		return 0
-	}
-	if s > 100 {
-		return uint8(matterHueScale)
-	}
-	return uint8(s/100*matterHueScale + 0.5)
+	return fabriclight.SaturationPercentToAttr(s)
 }
 
 // matterSaturationToHM is the inverse of [saturationToMatter]: it decodes
 // Matter CurrentSaturation (0..254) into the HA-canonical 0..100 value
 // [ColorLight.SetColor] expects.
 func matterSaturationToHM(m uint8) float64 {
-	if float64(m) >= matterHueScale {
-		return 100
-	}
-	return float64(m) / matterHueScale * 100
+	return fabriclight.AttrToSaturationPercent(m)
 }
 
-// kelvinToMireds converts Kelvin into Matter's reciprocal mireds.
+// kelvinToMireds converts Kelvin into Matter's reciprocal mireds,
+// cropped to the advertised window.
 // Matter spec 3.2.7.10: ColorTemperatureMireds = 1_000_000 / Kelvin.
 func kelvinToMireds(k int32) uint16 {
 	if k <= 0 {
 		return matterMaxMireds
 	}
-	v := 1_000_000 / k
-	if v < int32(matterMinMireds) {
-		return matterMinMireds
-	}
-	if v > int32(matterMaxMireds) {
-		return matterMaxMireds
-	}
-	return uint16(v)
+	return fabriclight.CropMireds(uint16(min(1_000_000/k, 0xFFFF)), matterMinMireds, matterMaxMireds) //nolint:gosec // bounded above
 }
 
 // miredsToKelvin is the inverse of [kelvinToMireds].

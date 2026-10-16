@@ -7,8 +7,23 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/SukramJ/go-fabric/cluster/alarm"
+
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
+
+// alarmServerFor builds a SmokeSiren whose status reads st and returns the
+// SmokeCOAlarm server the siren assembles, so a test asserts what a
+// controller reads rather than an internal mapping.
+func alarmServerFor(t *testing.T, st SmokeAlarmStatus) interface {
+	MatterRead(attrID uint32) (any, bool)
+} {
+	t.Helper()
+	s, _, statusDP := newSmokeSirenRig(t)
+	srv := s.MatterClusterServers()[0]
+	fireSmokeStatus(t, statusDP, string(st))
+	return srv
+}
 
 // TestIntrusionIsNotReportedAsSmoke pins that an intrusion alarm driving the
 // detector as a siren is not published to a Matter controller as a fire.
@@ -30,20 +45,21 @@ func TestIntrusionIsNotReportedAsSmoke(t *testing.T) {
 
 	for _, tc := range []struct {
 		status        SmokeAlarmStatus
-		wantAlarm     uint8
-		wantExpressed uint8
+		wantAlarm     alarm.AlarmState
+		wantExpressed alarm.ExpressedState
 		why           string
 	}{
-		{SmokeStatusIdleOff, matterSmokeAlarmNormal, matterExpressedStateNormal, "idle"},
-		{SmokeStatusPrimaryAlarm, matterSmokeAlarmCritical, matterExpressedStateSmokeAlarm, "this detector sensed smoke"},
-		{SmokeStatusSecondaryAlarm, matterSmokeAlarmWarning, matterExpressedStateSmokeAlarm, "a peer detector sensed smoke"},
-		{SmokeStatusIntrusion, matterSmokeAlarmNormal, matterExpressedStateNormal, "the installation is using the sounder; no smoke was sensed"},
+		{SmokeStatusIdleOff, alarm.AlarmNormal, alarm.ExpressedNormal, "idle"},
+		{SmokeStatusPrimaryAlarm, alarm.AlarmCritical, alarm.ExpressedSmokeAlarm, "this detector sensed smoke"},
+		{SmokeStatusSecondaryAlarm, alarm.AlarmWarning, alarm.ExpressedSmokeAlarm, "a peer detector sensed smoke"},
+		{SmokeStatusIntrusion, alarm.AlarmNormal, alarm.ExpressedNormal, "the installation is using the sounder; no smoke was sensed"},
 	} {
-		if got := smokeStatusToAlarmState(tc.status); got != tc.wantAlarm {
-			t.Errorf("SmokeState(%s) = %d, want %d — %s", tc.status, got, tc.wantAlarm, tc.why)
+		srv := alarmServerFor(t, tc.status)
+		if got, ok := srv.MatterRead(alarm.AttrSmokeState); !ok || got != uint8(tc.wantAlarm) {
+			t.Errorf("SmokeState(%s) = (%v, %v), want (%d, true) — %s", tc.status, got, ok, tc.wantAlarm, tc.why)
 		}
-		if got := smokeStatusToExpressedState(tc.status); got != tc.wantExpressed {
-			t.Errorf("ExpressedState(%s) = %d, want %d — %s", tc.status, got, tc.wantExpressed, tc.why)
+		if got, ok := srv.MatterRead(alarm.AttrExpressedState); !ok || got != uint8(tc.wantExpressed) {
+			t.Errorf("ExpressedState(%s) = (%v, %v), want (%d, true) — %s", tc.status, got, ok, tc.wantExpressed, tc.why)
 		}
 	}
 }
@@ -60,7 +76,7 @@ func TestSmokeMatterPlaneAgreesWithTheDomainsSmokeLabels(t *testing.T) {
 		SmokeStatusIdleOff, SmokeStatusPrimaryAlarm, SmokeStatusSecondaryAlarm, SmokeStatusIntrusion,
 	} {
 		domainSaysSmoke := slices.Contains(hmenum.SmokeDetectorAlarmStatusSmokeLabels(), string(st))
-		matterSaysSmoke := smokeStatusToAlarmState(st) != matterSmokeAlarmNormal
+		matterSaysSmoke := smokeStatusToAlarmState(st) != alarm.AlarmNormal
 		if domainSaysSmoke != matterSaysSmoke {
 			t.Errorf("%s: the domain says smoke=%v, the Matter projection says smoke=%v",
 				st, domainSaysSmoke, matterSaysSmoke)

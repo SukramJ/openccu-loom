@@ -4,7 +4,6 @@
 package main
 
 // daemon_coverage7_test.go — targeted coverage for remaining gaps:
-//   - daemon.go: loadVendorAttestation PAI/CD/key error paths (3038-3051)
 //   - daemon.go: buildPaseAdapterFromCreds verifier error (3203-3204)
 //   - daemon.go: loadAdditionalFabricsForCase ListFabrics error (2357-2360)
 //   - daemon.go: loadAdditionalFabricsForCase NewVerifier error (2382-2386)
@@ -16,8 +15,6 @@ package main
 import (
 	"context"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/SukramJ/go-fabric/secure/operational"
@@ -27,103 +24,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
-
-// ── loadVendorAttestation: PAI error path (lines 3038-3040) ──────────────────
-
-// TestLoadVendorAttestation_PAIError_ReturnsFalse exercises the
-// `if err != nil { logger.Warn("...pai"); return false }` path by providing
-// a valid DAC file (readCertBytes succeeds on 0x30 0x82 prefix) but a
-// nonexistent PAI path.
-func TestLoadVendorAttestation_PAIError_ReturnsFalse(t *testing.T) {
-	t.Parallel()
-	tmp := t.TempDir()
-
-	// Write a DER-like blob that readCertBytes accepts (0x30 0x82 magic).
-	dacPath := filepath.Join(tmp, "dac.der")
-	if err := os.WriteFile(dacPath, []byte{0x30, 0x82, 0x00, 0x04, 0xAB, 0xCD}, 0o600); err != nil {
-		t.Fatalf("WriteFile dac: %v", err)
-	}
-
-	cfg := config.NorthMatterAttestation{
-		DACPath:    dacPath,
-		DACKeyPath: filepath.Join(tmp, "dackey.pem"),
-		PAIPath:    filepath.Join(tmp, "nosuchpai.der"), // does not exist → PAI error
-		CDPath:     filepath.Join(tmp, "cd.bin"),
-	}
-	logger := slog.New(slog.DiscardHandler)
-	_, _, _, _, ok := loadVendorAttestation(cfg, logger)
-	if ok {
-		t.Error("expected ok=false when PAI file missing")
-	}
-}
-
-// TestLoadVendorAttestation_CDError_ReturnsFalse exercises the
-// `logger.Warn("...cd"); return false` path by providing valid DAC + PAI
-// but a nonexistent CD path.
-func TestLoadVendorAttestation_CDError_ReturnsFalse(t *testing.T) {
-	t.Parallel()
-	tmp := t.TempDir()
-
-	derBlob := []byte{0x30, 0x82, 0x00, 0x04, 0xAB, 0xCD}
-	dacPath := filepath.Join(tmp, "dac.der")
-	paiPath := filepath.Join(tmp, "pai.der")
-	if err := os.WriteFile(dacPath, derBlob, 0o600); err != nil {
-		t.Fatalf("WriteFile dac: %v", err)
-	}
-	if err := os.WriteFile(paiPath, derBlob, 0o600); err != nil {
-		t.Fatalf("WriteFile pai: %v", err)
-	}
-
-	cfg := config.NorthMatterAttestation{
-		DACPath:    dacPath,
-		DACKeyPath: filepath.Join(tmp, "dackey.pem"),
-		PAIPath:    paiPath,
-		CDPath:     filepath.Join(tmp, "nosuchcd.bin"), // does not exist → CD error
-	}
-	logger := slog.New(slog.DiscardHandler)
-	_, _, _, _, ok := loadVendorAttestation(cfg, logger)
-	if ok {
-		t.Error("expected ok=false when CD file missing")
-	}
-}
-
-// TestLoadVendorAttestation_DACKeyError_ReturnsFalse exercises the
-// `logger.Warn("...dac_key"); return false` path by providing valid
-// DAC + PAI + CD but a nonexistent key path.
-func TestLoadVendorAttestation_DACKeyError_ReturnsFalse(t *testing.T) {
-	t.Parallel()
-	tmp := t.TempDir()
-
-	derBlob := []byte{0x30, 0x82, 0x00, 0x04, 0xAB, 0xCD}
-	dacPath := filepath.Join(tmp, "dac.der")
-	paiPath := filepath.Join(tmp, "pai.der")
-	cdPath := filepath.Join(tmp, "cd.bin")
-	if err := os.WriteFile(dacPath, derBlob, 0o600); err != nil {
-		t.Fatalf("WriteFile dac: %v", err)
-	}
-	if err := os.WriteFile(paiPath, derBlob, 0o600); err != nil {
-		t.Fatalf("WriteFile pai: %v", err)
-	}
-	if err := os.WriteFile(cdPath, []byte("cd-content"), 0o600); err != nil {
-		t.Fatalf("WriteFile cd: %v", err)
-	}
-
-	cfg := config.NorthMatterAttestation{
-		DACPath:    dacPath,
-		DACKeyPath: filepath.Join(tmp, "nosuchkey.pem"), // does not exist → key error
-		PAIPath:    paiPath,
-		CDPath:     cdPath,
-	}
-	logger := slog.New(slog.DiscardHandler)
-	_, _, _, _, ok := loadVendorAttestation(cfg, logger)
-	if ok {
-		t.Error("expected ok=false when DAC key file missing")
-	}
-}
-
-// ── buildPaseAdapterFromCreds: verifier error (lines 3203-3204) ──────────────
-// NOTE: TestBuildPaseAdapterFromCreds_InvalidIterations_ReturnsError is
-// already in daemon_lifecycle_test.go; only the nil-opCreds variant is new.
 
 // ── loadAdditionalFabricsForCase: ListFabrics error (lines 2357-2360) ────────
 

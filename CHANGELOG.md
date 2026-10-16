@@ -6,6 +6,37 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Matter: go-fabric v0.5.4.** The bridge now uses the library for what
+  the daemon used to carry itself: the bridge's UniqueID pinning, the scene
+  tables and controller-written names of bridged devices, the endpoint
+  numbering, the periodic DNS-SD re-announcement and the loading of a vendor
+  attestation chain (ADR 0084, amendment). Paired controllers keep every
+  accessory: migration 049 carries each endpoint number, name and the
+  numbering counter across.
+- **Matter: a configured attestation chain that does not load shuts new
+  pairing.** With any of `north.matter.attestation.*` set, all four files
+  must load and the key must match the DAC. Before, a broken chain fell back
+  to the CSA test chain with a warning, and a new controller paired as the
+  test vendor. Now the bridge keeps serving every controller already paired
+  and refuses every new pairing — its own window, the REST opener (409, API
+  13.9.1) and sharing from a paired controller (multi-admin) — and reports
+  the cause in Diagnostics under `matter.bridge`. With all four empty the
+  test chain is served as before. The DAC key may now also be a SEC1 key.
+- **Matter: dimmers and the MP3 player follow matter.js on LevelControl
+  edge cases.** Their level handling runs on go-fabric's native-ramp source.
+  A dimmer step that hits the top or bottom of the range now ramps for the
+  shorter time its rate gives, and a step on a dimmer or player that has
+  not reported a level yet answers Failure instead of a silent success.
+  Move on the player still changes nothing, so a held button cannot jump the
+  volume to maximum.
+- **Matter: the smoke detector's SmokeCOAlarm cluster is go-fabric's.**
+  Controllers now receive the SmokeAlarm and AllClear events, and an
+  unread alarm status reads Normal instead of a null the cluster does not
+  allow.
+
+
 ## [0.91.1] - 2026-10-15
 
 ### Release summary

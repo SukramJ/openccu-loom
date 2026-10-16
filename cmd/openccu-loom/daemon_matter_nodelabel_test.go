@@ -21,9 +21,9 @@ const (
 
 // TestStartMatterBridgePersistsBridgedNodeLabel pins, through the daemon's
 // own Matter start path, that a controller-written bridged NodeLabel is
-// persisted in the endpoint-identity store and served again after the
+// persisted in the node's endpoint persistence and served again after the
 // bridge re-assembles its topology. matter.js keeps a written NodeLabel
-// in the endpoint's persisted state; without the store handed to the
+// in the endpoint's persisted state; without the persistence handed to the
 // assembler the label lives in memory only and a restart reverts every
 // controller rename.
 func TestStartMatterBridgePersistsBridgedNodeLabel(t *testing.T) {
@@ -59,9 +59,9 @@ func TestStartMatterBridgePersistsBridgedNodeLabel(t *testing.T) {
 	if key == (matterendpoint.SourceKey{}) {
 		t.Fatalf("no identity row for bridged endpoint %d among %d rows", onOffEP, len(recs))
 	}
-	if got := bundle.identity.LoadNodeLabel(key); got != label {
+	if got := bundle.node.Persistence().NodeLabel(ctx, key); got != label {
 		t.Fatalf("persisted NodeLabel for %s = %q, want %q — "+
-			"startMatterBridge does not wire matteradapter.Config.NodeLabels to the identity store, "+
+			"startMatterBridge does not hand the assembler the node's endpoint persistence, "+
 			"so a controller rename is lost on restart", key, got, label)
 	}
 

@@ -5,17 +5,13 @@ package main
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"crypto/sha256"
-	"crypto/x509"
 	gosql "database/sql"
 	"encoding/hex"
-	"encoding/pem"
+	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -36,7 +32,6 @@ import (
 	"github.com/SukramJ/go-fabric/secure/spake2"
 	matterstore "github.com/SukramJ/go-fabric/store"
 
-	"github.com/SukramJ/openccu-loom/internal/deployment"
 	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 
 	"github.com/SukramJ/openccu-loom/internal/build"
@@ -46,7 +41,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
-	discoverymdns "github.com/SukramJ/openccu-loom/internal/north/discovery/mdns"
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
@@ -176,6 +170,14 @@ type matterBridgeBundle struct {
 	// configured-credentials window, as the daemon did before the facade;
 	// the node itself always has credentials ([matterCommissioningCredentials]).
 	configuredCommissioning bool
+	// commissioningBlocked is why the bridge admits no new controller, nil
+	// when it does. A configured attestation chain that does not load sets
+	// it, and the node carries the same block (Node.SetCommissioningBlocked):
+	// the bridge keeps serving every controller already paired — the chain
+	// is checked only while commissioning — but must not pair a new one as
+	// the CSA test vendor while the operator believes the production chain
+	// is served.
+	commissioningBlocked error
 }
 
 // matterFabricEvents relays the facade's fabric observers to the WebSocket
@@ -299,31 +301,45 @@ func matterCommissioningCredentials(cm config.NorthMatterCommissioning, logger *
 }
 
 // matterAttestation is the device attestation material: the operator's
-// DAC / PAI / CD when configured and consistent, else the facade's CSA
-// test chain for the vendor and product — pairable with every
-// commissioner's test PAA (Apple Home, Google Home and chip-tool accept
-// it without --bypass-attestation-verifier), and not shippable.
-func matterAttestation(mc config.NorthMatter, logger *slog.Logger) node.Attestation {
-	if key, dac, pai, cd, ok := loadVendorAttestation(mc.Attestation, logger); ok {
+// DAC / PAI / CD when configured, else the facade's CSA test chain for the
+// vendor and product — pairable with every commissioner's test PAA (Apple
+// Home, Google Home and chip-tool accept it without
+// --bypass-attestation-verifier), and not shippable.
+//
+// A configured chain that does not load — a path missing, a file
+// unreadable, a key that is not the DAC's — is an error; only a
+// configuration naming no file at all selects the test chain
+// (attestation.ErrNoChainConfigured). The caller decides what the error
+// costs: see [matterBridgeBundle.commissioningBlocked].
+func matterAttestation(mc config.NorthMatter, logger *slog.Logger) (node.Attestation, error) {
+	a := mc.Attestation
+	chain, cd, err := attestation.LoadChainFiles(attestation.ChainFiles{
+		DACPath:    a.DACPath,
+		DACKeyPath: a.DACKeyPath,
+		PAIPath:    a.PAIPath,
+		CDPath:     a.CDPath,
+	})
+	switch {
+	case err == nil:
 		logger.Info("matter.bridge.attestation.vendor",
 			slog.String("hint", "production DAC/PAI/CD loaded from config — chip-tool can validate without --bypass-attestation-verifier"))
-		return node.Attestation{
-			Chain:                    &attestation.Chain{DACKey: key, DAC: dac, PAI: pai},
-			CertificationDeclaration: cd,
-		}
+		return node.Attestation{Chain: chain, CertificationDeclaration: cd}, nil
+	case errors.Is(err, attestation.ErrNoChainConfigured):
+		logger.Info("matter.bridge.attestation.csa_test",
+			slog.String("hint", "CSA Test PAA chain (PAA→PAI→DAC) + signed CD — Apple Home / Google Home / chip-tool accept this without --bypass-attestation-verifier"),
+			slog.String("vendor_id", fmt.Sprintf("0x%04X", mc.VendorID)),
+			slog.String("product_id", fmt.Sprintf("0x%04X", mc.ProductID)))
+		return node.Attestation{}, nil
+	default:
+		return node.Attestation{}, fmt.Errorf("north.matter.attestation: %w", err)
 	}
-	logger.Info("matter.bridge.attestation.csa_test",
-		slog.String("hint", "CSA Test PAA chain (PAA→PAI→DAC) + signed CD — Apple Home / Google Home / chip-tool accept this without --bypass-attestation-verifier"),
-		slog.String("vendor_id", fmt.Sprintf("0x%04X", mc.VendorID)),
-		slog.String("product_id", fmt.Sprintf("0x%04X", mc.ProductID)))
-	return node.Attestation{}
 }
 
 // startMatterBridge constructs and starts the Matter bridge when
 // matter.enabled is set: the daemon's own responsibilities — the enable
 // and database gate, the endpoint-identity and exposure store, the
 // per-central readiness latch, the localized channel word, the topology
-// assembler, the pinned UniqueID, the attestation material, the health
+// assembler, the attestation material, the health
 // probe and gauges — around go-fabric's node facade, which performs the
 // stack-generic bring-up in its documented order (ADR 0084 phase 3).
 // Returns the bundle and a stop function the caller defers; both are nil
@@ -353,6 +369,12 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	}
 
 	store := matterstore.New(db)
+	// Scene tables and commissioner-written bridged NodeLabels are stack
+	// state go-fabric persists (node.EndpointPersistence). The daemon
+	// assembles its own topology, so it builds the persistence before the
+	// assembler and hands the same value to the facade, which then serves
+	// it from Node.Persistence.
+	persistence := node.NewEndpointPersistence(store, logger)
 	// Group membership is stack state, as in matter.js where GroupsServer
 	// keeps it in the root's GroupKeyManagementServer (go-fabric ADR
 	// 0009): one manager over the store feeds the assembler (the bridged
@@ -430,8 +452,8 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		Labels:                  labels,
 		ChannelLabel:            channelLabel,
 		Groups:                  groupMgr,
-		Scenes:                  matterScenesStore{store: store, logger: logger},
-		NodeLabels:              identity,
+		Scenes:                  persistence,
+		NodeLabels:              persistence,
 	}, logger)
 	if err != nil {
 		return fail("matter.bridge.assembler", err)
@@ -452,6 +474,20 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	passcode, salt, iterations, configured, err := matterCommissioningCredentials(mc.Commissioning, logger)
 	if err != nil {
 		return fail("matter.bridge.pase.credentials", err)
+	}
+	attest, attestErr := matterAttestation(mc, logger)
+	if attestErr != nil {
+		// The bridge still starts: attestation is checked only while a
+		// controller commissions, so every controller already paired keeps
+		// working. New commissioning is shut below, before Start, through
+		// the facade's commissioning block, which refuses every window —
+		// the node's own, the REST opener's and a paired controller's
+		// AdministratorCommissioning (multi-admin). The node holds the test
+		// chain meanwhile, which no commissioner can reach.
+		logger.Error("matter.bridge.attestation",
+			slog.String("err", attestErr.Error()),
+			slog.String("hint", "the configured north.matter.attestation chain does not load; paired controllers keep working, new commissioning is disabled until the files are fixed and the daemon restarts"))
+		attest = node.Attestation{}
 	}
 	fabricEvents := &matterFabricEvents{}
 	n, err := node.New(node.Config{
@@ -478,19 +514,21 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 			ProductName:  "openccu-loom Matter Bridge",
 			NodeLabel:    mc.NodeLabel,
 			SerialNumber: rootSerial,
-			// UniqueID carries quality F (fixed for the lifetime of the
-			// device): the value persisted on the first boot is served
-			// verbatim, so a node_label edit never re-identifies the
-			// bridge under a paired controller's cache.
-			UniqueID:              resolveBridgeUniqueID(ctx, store, mc, rootSerial, logger),
+			// UniqueID stays empty: the facade pins it (quality F) under
+			// store.SettingUniqueID on the first boot of the store and
+			// serves the stored value on every later one, so a node_label
+			// edit never re-identifies the bridge under a paired
+			// controller's cache; under dev_rotate_unique_ids it serves a
+			// per-boot value and pins nothing.
 			HardwareVersion:       1,
 			HardwareVersionString: "1.0",
 			SoftwareVersion:       mattercore.SoftwareVersionFromString(build.Version),
 			SoftwareVersionString: build.Version,
 		},
 		Store:                      node.Store{Credentials: store, Endpoints: identity},
+		EndpointPersistence:        persistence,
 		Advertiser:                 advertiser,
-		Attestation:                matterAttestation(mc, logger),
+		Attestation:                attest,
 		Groups:                     groupMgr,
 		Topology:                   matterTopologySnapshotter(assembler, walk),
 		Locales:                    matterLocales(cfg.Locale),
@@ -509,23 +547,14 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		logger.Warn("matter.bridge.time_sync.mounted — TimeSynchronization (0x0038) advertised on RootNode by operator opt-in; some controllers (e.g. Apple Home) may reject pairing")
 	}
 	bridge := n.Bridge()
+	if attestErr != nil {
+		n.SetCommissioningBlocked(ctx, attestErr)
+	}
 	if err := n.Start(ctx); err != nil {
 		stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		_ = n.Stop(stopCtx)
 		cancel()
 		return fail("matter.bridge.start", err)
-	}
-	// mDNS Re-Announce-Loop: grandcat/zeroconf only Probe+Announce on
-	// initial Register; commissioners that miss the announce window
-	// (transient WiFi loss, late join, mDNS cache eviction past TTL)
-	// never see the bridge again. Periodic re-publish at 30 min keeps
-	// the records on the wire (Apple's mDNSResponder caches at TTL=4500
-	// = 75 min; re-emit at less than half-TTL).
-	var stopReannounce func()
-	if z, ok := advertiser.(*mdns.Zeroconf); ok {
-		stopReannounce, _ = z.StartReannounceLoop(ctx, 30*time.Minute)
-		logger.Info("matter.bridge.mdns.reannounce_loop_started",
-			slog.String("interval", "30m"))
 	}
 	logger.Info("matter.bridge.up",
 		slog.String("addr", bridge.LocalAddr()),
@@ -561,13 +590,11 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		unwireReadiness()
-		if stopReannounce != nil {
-			stopReannounce()
-		}
 		// The facade's Stop runs the daemon's shutdown order: the
 		// operational time stored once more, BasicInformation ShutDown,
 		// the PASE providers, the CASE reaper, the subscription engine,
-		// the bridge (mDNS goodbyes on the wire) and the advertiser.
+		// the DNS-SD re-announce loop, the bridge (mDNS goodbyes on the
+		// wire) and the advertiser.
 		if err := n.Stop(stopCtx); err != nil {
 			logger.Warn("matter.bridge.stop", slog.String("err", err.Error()))
 		}
@@ -593,322 +620,8 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		groups:                  groupMgr,
 		fabricEvents:            fabricEvents,
 		configuredCommissioning: configured,
+		commissioningBlocked:    attestErr,
 	}
-}
-
-// resolveBridgeUniqueID returns the root node's stable BasicInformation
-// UniqueID. UniqueID carries Matter §11.1.5.13 quality F — it must not change
-// once a controller has commissioned the bridge — so the value is persisted on
-// first sight and pinned across every later boot, leaving a bridge rename (a
-// node_label change) unable to rotate it. matter.js persists UniqueID through
-// its StorageService and chip through GenerateUniqueId()'s persistent storage
-// for the same reason.
-//
-// The seed reproduces exactly what an un-pinned [mattercore.BasicInformation]
-// would derive — [mattercore.DeriveUniqueID] over the SAME construction
-// NodeLabel and serial the cluster uses (BasicInformation's identityLabel is
-// the construction NodeLabel, not the commissioner-restored one) — so the boot
-// that first persists it on an already-commissioned bridge keeps that bridge's
-// established identity instead of orphaning its pairings.
-//
-// A nil store (test wiring, no persistence) yields the derived value without
-// persisting it — identical to the un-pinned behaviour for that process.
-//
-// north.matter.dev_rotate_unique_ids bypasses pinning entirely: every boot
-// re-derives (with [mattercore.DeriveUniqueID]'s per-boot bootid.Salt(),
-// active only while the flag is on) and re-persists, so the knob keeps
-// rotating the root identity across restarts instead of freezing on the
-// value the first rotated boot happened to persist. The persisted value is
-// tagged with [matterstore.SettingUniqueIDRotated] while rotation writes it,
-// so a later boot with the flag off can tell a leftover salted value apart
-// from a genuinely pinned one and re-derive the deterministic form instead
-// of pinning the stale salt forever.
-func resolveBridgeUniqueID(ctx context.Context, store *matterstore.Store, mc config.NorthMatter, rootSerial string, logger *slog.Logger) string {
-	if store != nil && !mc.DevRotateUniqueIDs {
-		v, ok, err := store.GetSetting(ctx, matterstore.SettingUniqueID)
-		if err != nil {
-			// A failed read is "unknown", not "unset": deriving and
-			// persisting below would silently overwrite a pinned value the
-			// daemon simply could not read this boot, reassigning the
-			// bridge's Matter identity under every paired controller.
-			// Derive an in-memory value for THIS boot only — its inputs are
-			// identical to the pinned derivation whenever the identity
-			// hasn't changed, so this degrades to the same value in the
-			// common case — and leave the store untouched; the next boot
-			// retries the read.
-			logger.Warn("matter.bridge.basicinfo.read_unique_id", slog.String("err", err.Error()))
-			return mattercore.DeriveUniqueID(mc.VendorID, mc.ProductID, mc.NodeLabel, rootSerial)
-		}
-		if ok && v != "" {
-			rotated, rOK, rErr := store.GetSetting(ctx, matterstore.SettingUniqueIDRotated)
-			if rErr != nil || !rOK || rotated != "1" {
-				return v
-			}
-			// The pinned value was salted by a boot that had
-			// dev_rotate_unique_ids enabled; rotation is off now, so this
-			// is a stale one-shot salt, not a real pinned identity. Fall
-			// through to re-derive and persist the deterministic form,
-			// which also clears the rotated marker below.
-		}
-	}
-	uid := mattercore.DeriveUniqueID(mc.VendorID, mc.ProductID, mc.NodeLabel, rootSerial)
-	if store != nil {
-		if err := store.SetSetting(ctx, matterstore.SettingUniqueID, uid); err != nil {
-			logger.Warn("matter.bridge.basicinfo.persist_unique_id", slog.String("err", err.Error()))
-		}
-		rotatedFlag := ""
-		if mc.DevRotateUniqueIDs {
-			rotatedFlag = "1"
-		}
-		if err := store.SetSetting(ctx, matterstore.SettingUniqueIDRotated, rotatedFlag); err != nil {
-			logger.Warn("matter.bridge.basicinfo.persist_unique_id_rotated_marker", slog.String("err", err.Error()))
-		}
-	}
-	return uid
-}
-
-// loadVendorAttestation tries to load DAC/PAI/CD bytes plus the DAC
-// private key from the operator-supplied paths. Returns
-// (nil-everything, false) when any file is missing or unreadable —
-// the caller falls back to [buildDevAttestation]. Returns a
-// populated bundle + true on full load success.
-//
-// Format auto-detection: PEM blocks with `BEGIN CERTIFICATE` /
-// `BEGIN EC PRIVATE KEY` / `BEGIN PRIVATE KEY` are decoded via
-// `encoding/pem` + `crypto/x509`; raw DER bytes are detected by
-// `0x30 0x82` ASN.1 sequence prefix. CD bytes are passed through
-// verbatim — chip-tool decodes the CMS structure on its side.
-//
-// Errors at any step are logged at warn and the function returns
-// false; the daemon then prints the dev-attestation hint.
-func loadVendorAttestation(cfg config.NorthMatterAttestation, logger *slog.Logger) (key *ecdsa.PrivateKey, dac, pai, cd []byte, ok bool) {
-	if cfg.DACPath == "" || cfg.DACKeyPath == "" || cfg.PAIPath == "" || cfg.CDPath == "" {
-		return nil, nil, nil, nil, false
-	}
-	dac, err := readCertBytes(cfg.DACPath)
-	if err != nil {
-		logger.Warn("matter.bridge.attestation.dac", slog.String("path", cfg.DACPath), slog.String("err", err.Error()))
-		return nil, nil, nil, nil, false
-	}
-	pai, err = readCertBytes(cfg.PAIPath)
-	if err != nil {
-		logger.Warn("matter.bridge.attestation.pai", slog.String("path", cfg.PAIPath), slog.String("err", err.Error()))
-		return nil, nil, nil, nil, false
-	}
-	cd, err = os.ReadFile(cfg.CDPath)
-	if err != nil {
-		logger.Warn("matter.bridge.attestation.cd", slog.String("path", cfg.CDPath), slog.String("err", err.Error()))
-		return nil, nil, nil, nil, false
-	}
-	key, err = readECDSAPrivateKey(cfg.DACKeyPath)
-	if err != nil {
-		logger.Warn("matter.bridge.attestation.dac_key", slog.String("path", cfg.DACKeyPath), slog.String("err", err.Error()))
-		return nil, nil, nil, nil, false
-	}
-	// Sanity-check: the DAC private key must match the DAC cert's
-	// public key. Mismatch silently fails commissioning later (chip-tool
-	// signature-verifies the AttestationResponse against the cert), so
-	// fail-fast here instead.
-	cert, err := x509.ParseCertificate(dac)
-	if err != nil {
-		logger.Warn("matter.bridge.attestation.dac_parse", slog.String("err", err.Error()))
-		return nil, nil, nil, nil, false
-	}
-	pub, ok2 := cert.PublicKey.(*ecdsa.PublicKey)
-	//nolint:staticcheck // SA1019: pub.X/Y direct big.Int access kept — Matter wire shape (uncompressed P-256 point, 65 bytes) is checked here, not the modern crypto/ecdh `PublicKey.Bytes()` shape. Migration would force a wire-format audit.
-	if !ok2 || pub.X.Cmp(key.X) != 0 || pub.Y.Cmp(key.Y) != 0 {
-		logger.Warn("matter.bridge.attestation.key_mismatch",
-			slog.String("hint", "DAC certificate public key does not match supplied private key — falling back to the CSA test chain"))
-		return nil, nil, nil, nil, false
-	}
-	return key, dac, pai, cd, true
-}
-
-// readCertBytes reads a certificate file in PEM or raw DER format
-// and returns the DER bytes. Auto-detects format by the leading
-// bytes (`0x30 0x82` for DER ASN.1; otherwise PEM-decoded).
-func readCertBytes(path string) ([]byte, error) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	if len(raw) >= 2 && raw[0] == 0x30 && raw[1] == 0x82 {
-		return raw, nil // DER
-	}
-	block, _ := pem.Decode(raw)
-	if block == nil {
-		return nil, fmt.Errorf("no PEM block in %s", path)
-	}
-	return block.Bytes, nil
-}
-
-// readECDSAPrivateKey reads a PKCS#8 or SEC1 P-256 ECDSA private
-// key from `path`. PEM and DER both accepted via the same auto-
-// detect logic as [readCertBytes].
-func readECDSAPrivateKey(path string) (*ecdsa.PrivateKey, error) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	der := raw
-	if len(raw) < 2 || raw[0] != 0x30 || raw[1] != 0x82 {
-		block, _ := pem.Decode(raw)
-		if block == nil {
-			return nil, fmt.Errorf("no PEM block in %s", path)
-		}
-		der = block.Bytes
-	}
-	// Try PKCS#8 first (most modern tooling default).
-	if k, err := x509.ParsePKCS8PrivateKey(der); err == nil {
-		ec, ok := k.(*ecdsa.PrivateKey)
-		if !ok {
-			return nil, fmt.Errorf("%s: PKCS#8 key is not ECDSA", path)
-		}
-		return ec, nil
-	}
-	// Fall back to SEC1 (`BEGIN EC PRIVATE KEY`).
-	return x509.ParseECPrivateKey(der)
-}
-
-// startMDNSAdvertiser parses the REST listen address, builds the
-// daemon-discovery TXT bundle, and starts a multicast advertiser.
-// Returns (nil, nil) when the listen address has no usable port
-// (Unix socket etc.) so the caller can skip without an error path.
-// Returns (nil, err) when the port is malformed or zeroconf fails to
-// register; the caller is expected to log and continue (mDNS is a
-// convenience, not a hard dependency).
-func startMDNSAdvertiser(ctx context.Context, cfg *config.Config, self mdnsSelf, reg *central.Registry, logger *slog.Logger) (discoverymdns.Advertiser, error) {
-	svc, ok := mdnsServiceFor(cfg, self, len(reg.Names()), mdnsCCUSerials(reg))
-	if !ok {
-		return nil, nil
-	}
-	adv := discoverymdns.NewMulticast(svc)
-	if err := adv.Start(ctx); err != nil {
-		return nil, err
-	}
-	logger.Info("discovery.mdns.started",
-		slog.String("service_type", discoverymdns.ServiceType),
-		slog.Int("port", svc.Port))
-	return adv, nil
-}
-
-// mdnsServiceFor builds the mDNS service advertised for client
-// auto-discovery from the daemon config. Returns ok=false when the
-// REST listen address carries no usable port (mDNS is then skipped).
-//
-// The TXT bundle gives a discovering client everything it needs to
-// reach and label the daemon before authenticating: the API mount
-// path, the wire-contract version (mirrors GET /info), whether the
-// daemon's own listener is TLS (always 0 — TLS is terminated upstream
-// by a reverse proxy / HA ingress), the friendly instance label, a
-// pre-auth hint of how many CCUs this daemon serves, and — per
-// ADR 0058 — the resolved CCU serial suffixes (`ccus=`). Serials
-// resolve during the readiness-gated bring-up and change on live
-// adopt, so the record is re-announced at runtime via
-// [discoverymdns.Advertiser.UpdateTXT]; `GET /api/v1/system/ccu`
-// stays the authoritative post-auth source.
-func mdnsServiceFor(cfg *config.Config, self mdnsSelf, centralCount int, ccuSerials []string) (discoverymdns.Service, bool) {
-	port, ok := splitListenPort(cfg.North.REST.Listen)
-	if !ok {
-		return discoverymdns.Service{}, false
-	}
-	return discoverymdns.Service{
-		InstanceName: cfg.North.Discovery.MDNS.InstanceName,
-		Port:         port,
-		TXT:          mdnsTXT(cfg, self, centralCount, ccuSerials),
-	}, true
-}
-
-// mdnsSelf is the daemon's self-description as the mDNS record carries
-// it: the short form of what `/info` says (ADR 0081). It is built from
-// the values `/info` serves — the resolved deployment and the capability
-// detector's login paths — so the record cannot say something else.
-type mdnsSelf struct {
-	kind       deployment.Kind
-	tls        bool
-	loginPaths []string
-}
-
-// mdnsTXTVersion versions the record's key set (RFC 6763 section 6.7).
-const mdnsTXTVersion = "1"
-
-// mdnsTXT assembles the TXT bundle. Shared by the initial Register and
-// every runtime re-announce so both paths stay identical.
-func mdnsTXT(cfg *config.Config, self mdnsSelf, centralCount int, ccuSerials []string) []string {
-	tls := "0"
-	if self.tls {
-		tls = "1"
-	}
-	txt := []string{
-		"txtvers=" + mdnsTXTVersion,
-		"path=/api/v1",
-		"api_version=" + handlers.APIVersion,
-		"tls=" + tls,
-		"instance=" + cfg.North.Discovery.MDNS.ResolveInstanceName(),
-		"centrals=" + strconv.Itoa(centralCount),
-		"deploy=" + string(self.kind),
-	}
-	if p := self.kind.IngressPath(); p != "" {
-		txt = append(txt, "ingress="+p)
-	}
-	if len(self.loginPaths) > 0 {
-		txt = append(txt, "auth="+strings.Join(self.loginPaths, ","))
-	}
-	if v := mdnsCCUsValue(ccuSerials); v != "" {
-		txt = append(txt, "ccus="+v)
-	}
-	return txt
-}
-
-// mdnsCCUsValue joins the resolved serial suffixes sorted and
-// comma-separated, dropping whole entries once the TXT string would
-// exceed the DNS 255-byte-per-string limit (an invalid record helps
-// nobody; the list is best-effort by contract, ADR 0058).
-func mdnsCCUsValue(serials []string) string {
-	const maxLen = 255 - len("ccus=")
-	sorted := make([]string, 0, len(serials))
-	for _, sn := range serials {
-		if sn != "" {
-			sorted = append(sorted, sn)
-		}
-	}
-	sort.Strings(sorted)
-	out := ""
-	for _, sn := range sorted {
-		next := sn
-		if out != "" {
-			next = out + "," + sn
-		}
-		if len(next) > maxLen {
-			break
-		}
-		out = next
-	}
-	return out
-}
-
-// mdnsCCUSerials collects the canonical (last-10, case-preserved) serial of
-// every registered central; unresolved centrals are skipped and appear on a
-// later re-announce.
-//
-// The value must be the exact string GET /system/ccu reports: the Home
-// Assistant integration de-dupes discovery by matching each serial in the
-// mDNS ccus= TXT against the config entry's unique_id (the /system/ccu
-// serial) with a case-sensitive string compare. The lower-cased routing form
-// ([Registry.SerialSuffix]) never matches an upper-case-hex CCU serial, so HA
-// re-discovers an already-integrated daemon on every restart.
-func mdnsCCUSerials(reg *central.Registry) []string {
-	if reg == nil {
-		return nil
-	}
-	names := reg.Names()
-	out := make([]string, 0, len(names))
-	for _, name := range names {
-		if sn := reg.CanonicalSerial(name); sn != "" {
-			out = append(out, sn)
-		}
-	}
-	return out
 }
 
 // matterWiring carries the Matter REST/WS-facing adapters produced by
@@ -1418,6 +1131,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 		vendorID:      mcfg.VendorID,
 		productID:     mcfg.ProductID,
 		configured:    bundle.configuredCommissioning,
+		blocked:       bundle.commissioningBlocked,
 	}
 	// Wire the Reassemble → WS event emit pipeline so the SPA's
 	// allowlist save flow gets a `matter.endpoint_assembled`
@@ -1444,7 +1158,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 		},
 	}
 	if healthTracker != nil {
-		_ = startMatterHealthProbe(ctx, wiring.statusReader, healthTracker, matterHealthProbeInterval)
+		_ = startMatterHealthProbe(ctx, wiring.statusReader, bundle.commissioningBlocked, healthTracker, matterHealthProbeInterval)
 	}
 	// The REST revoke and the factory reset remove a fabric through the
 	// facade (node.RemoveFabric), which runs the RemoveFabric command's
@@ -1544,8 +1258,7 @@ func (r matterMdnsReporter) MatterMdns() handlers.MatterMdnsDiagnostics {
 	// A no-op advertiser is the explicit "stay quiet" opt-in, not a
 	// fault: reporting it as advertising=false lets the surface say so
 	// instead of listing an empty announcement as a defect.
-	_, isNoop := r.adv.(*mdns.Noop)
-	out.Advertising = !isNoop
+	out.Advertising = mdns.IsEnabled(r.adv)
 
 	services := r.adv.Active()
 	for i := range services {

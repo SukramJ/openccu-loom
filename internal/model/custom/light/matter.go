@@ -6,6 +6,7 @@ package light
 import (
 	"context"
 
+	"github.com/SukramJ/go-fabric/cluster/levelcontrol"
 	"github.com/SukramJ/go-fabric/cluster/onoff"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -199,23 +200,13 @@ func (l *Light) matterOnOffServer() *onoff.Server {
 // Matter LevelControl's CurrentLevel byte. The HM helper
 // [custom.Brightness.Byte] returns 0–255 for HM-internal byte
 // serialisation; that range collides with Matter's null-sentinel 255,
-// so this function clamps to [matterLevelMax] instead.
+// so go-fabric's [levelcontrol.LevelFromUnit] rounds onto 0..254 instead.
 func brightnessToMatter(b custom.Brightness) uint8 {
-	v := b.Level() * float64(matterLevelMax)
-	if v < 0 {
-		return 0
-	}
-	if v > float64(matterLevelMax) {
-		return matterLevelMax
-	}
-	return uint8(v + 0.5)
+	return levelcontrol.LevelFromUnit(b.Level())
 }
 
-// matterLevelToHM decodes Matter LevelControl CurrentLevel back into
-// the 0.0–1.0 HM float range. Values ≥ matterLevelMax saturate to 1.0.
+// matterLevelToHM decodes Matter LevelControl CurrentLevel (0..254) back
+// into the 0.0–1.0 HM float range.
 func matterLevelToHM(m uint8) float64 {
-	if m >= matterLevelMax {
-		return 1.0
-	}
-	return float64(m) / float64(matterLevelMax)
+	return levelcontrol.UnitFromLevel(m)
 }

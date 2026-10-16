@@ -19021,7 +19021,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Commissioning window already open */
+            /** @description Commissioning window already open, or new commissioning is disabled because the configured attestation chain (`north.matter.attestation`) does not load. In the second case the bridge keeps serving every controller already paired; the log names the cause. */
             409: {
                 headers: {
                     [name: string]: unknown;

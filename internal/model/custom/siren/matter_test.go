@@ -10,8 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/go-fabric/cluster/alarm"
 	"github.com/SukramJ/go-fabric/cluster/onoff"
 	onoffspec "github.com/SukramJ/go-fabric/cluster/spec/onoff"
+	fabricdevice "github.com/SukramJ/go-fabric/device"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -330,11 +332,11 @@ func newSmokeRig(t *testing.T) *smokeRig {
 }
 
 // TestSmokeSirenMatterDeviceTypeIsSmokeCOAlarm locks the SmokeCOAlarm
-// (0x0076) device type.
+// device type.
 func TestSmokeSirenMatterDeviceTypeIsSmokeCOAlarm(t *testing.T) {
 	r := newSmokeRig(t)
-	if got := r.siren.MatterDeviceType(); got != 0x0076 {
-		t.Fatalf("MatterDeviceType = 0x%04X, want 0x0076", got)
+	if got := r.siren.MatterDeviceType(); got != fabricdevice.SmokeCoAlarmID {
+		t.Fatalf("MatterDeviceType = 0x%04X, want 0x%04X", got, fabricdevice.SmokeCoAlarmID)
 	}
 }
 
@@ -343,22 +345,22 @@ func TestSmokeSirenMatterDeviceTypeIsSmokeCOAlarm(t *testing.T) {
 func TestSmokeSirenStatusToAlarmState(t *testing.T) {
 	cases := []struct {
 		status SmokeAlarmStatus
-		want   uint8
+		want   alarm.AlarmState
 	}{
-		{SmokeStatusIdleOff, matterSmokeAlarmNormal},
-		{SmokeStatusSecondaryAlarm, matterSmokeAlarmWarning},
-		{SmokeStatusPrimaryAlarm, matterSmokeAlarmCritical},
+		{SmokeStatusIdleOff, alarm.AlarmNormal},
+		{SmokeStatusSecondaryAlarm, alarm.AlarmWarning},
+		{SmokeStatusPrimaryAlarm, alarm.AlarmCritical},
 		// Normal, not Critical: the detector is sounding for a burglar alarm
 		// the installation started, and its smoke sensor detected nothing.
 		// See TestIntrusionIsNotReportedAsSmoke.
-		{SmokeStatusIntrusion, matterSmokeAlarmNormal},
+		{SmokeStatusIntrusion, alarm.AlarmNormal},
 	}
 	for _, tc := range cases {
 		r := newSmokeRig(t)
 		fireSmokeStatus(t, r.status, string(tc.status))
-		srv := findCluster(t, r.siren, 0x005C)
-		v, ok := srv.MatterRead(0x0001) // SmokeState
-		if !ok || v.(uint8) != tc.want {
+		srv := findCluster(t, r.siren, alarm.ClusterID)
+		v, ok := srv.MatterRead(alarm.AttrSmokeState)
+		if !ok || v != uint8(tc.want) {
 			t.Errorf("status=%s: SmokeState=(%v, %v), want (%d, true)", tc.status, v, ok, tc.want)
 		}
 	}
@@ -368,10 +370,13 @@ func TestSmokeSirenStatusToAlarmState(t *testing.T) {
 // is set (no CO sensor on HM-SWSD).
 func TestSmokeSirenFeatureMapAdvertisesSmoke(t *testing.T) {
 	r := newSmokeRig(t)
-	srv := findCluster(t, r.siren, 0x005C)
-	v, _ := srv.MatterRead(0xFFFC)
-	if v.(uint32) != matterSmokeCOFeatureSmoke {
-		t.Fatalf("FeatureMap = 0x%08X, want 0x%08X (SMOKE only)", v.(uint32), matterSmokeCOFeatureSmoke)
+	srv := findCluster(t, r.siren, alarm.ClusterID)
+	v, ok := srv.MatterRead(0xFFFC)
+	if !ok {
+		t.Fatal("the alarm server does not answer the FeatureMap global attribute")
+	}
+	if got := v.(uint32); got != uint32(alarm.FeatureSmokeAlarm) {
+		t.Fatalf("FeatureMap = 0x%08X, want 0x%08X (SMOKE only)", got, uint32(alarm.FeatureSmokeAlarm))
 	}
 }
 
@@ -380,20 +385,28 @@ func TestSmokeSirenFeatureMapAdvertisesSmoke(t *testing.T) {
 // CoState (conformance "CO") must not answer beside it.
 func TestSmokeSirenCOStateNotServedWithoutCOFeature(t *testing.T) {
 	r := newSmokeRig(t)
-	srv := findCluster(t, r.siren, 0x005C)
-	if v, ok := srv.MatterRead(0x0002); ok {
+	srv := findCluster(t, r.siren, alarm.ClusterID)
+	if v, ok := srv.MatterRead(alarm.AttrCOState); ok {
 		t.Fatalf("COState = (%v, %v), want (nil, false) on a smoke-only FeatureMap", v, ok)
 	}
 }
 
-// TestSmokeSirenInvokeRejectsAllCommands locks the deferred command
-// surface — every cmdID returns errMatterUnknownCommand.
-func TestSmokeSirenInvokeRejectsAllCommands(t *testing.T) {
+// TestSmokeSirenInvokeRejectsUnknownCommand: a command the cluster does not
+// define is refused rather than silently accepted.
+// TestSmokeSirenInvokeRejectsUnknownCommand pins that the smoke detector
+// accepts no command: HM-SWSD exposes no self-test over the wire, so the
+// source implements no alarm.SelfTester, SelfTestRequest stays out of
+// AcceptedCommandList, and invoking it is refused like any undefined id.
+func TestSmokeSirenInvokeRejectsUnknownCommand(t *testing.T) {
 	r := newSmokeRig(t)
-	srv := findCluster(t, r.siren, 0x005C)
-	_, err := srv.MatterInvoke(context.Background(), 0x00, nil)
-	if !errors.Is(err, errMatterUnknownCommand) {
-		t.Fatalf("err = %v, want errMatterUnknownCommand", err)
+	srv := findCluster(t, r.siren, alarm.ClusterID)
+	for _, cmd := range []uint32{alarm.CmdSelfTestRequest, 0xFE} {
+		if _, err := srv.MatterInvoke(context.Background(), cmd, nil); err == nil {
+			t.Errorf("MatterInvoke(0x%02X) returned no error", cmd)
+		}
+	}
+	if l, ok := srv.(interface{ MatterAcceptedCommands() []uint32 }); !ok || len(l.MatterAcceptedCommands()) != 0 {
+		t.Errorf("AcceptedCommandList is not empty")
 	}
 }
 

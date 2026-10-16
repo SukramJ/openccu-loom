@@ -10,7 +10,6 @@ package main
 //   - loadPersistentCaseIdentity with valid full identity + invalid privKey + FabricID match
 //   - loadAdditionalFabricsForCase with complete identity records + missing identity
 //   - buildPaseAdapterFromCreds with/without opCreds
-//   - loadVendorAttestation: partial config, key mismatch, full match
 //   - loadTranslations: file path + empty path
 //   - loadEasymode / loadProfiles: embedded paths
 //   - buildTestAttestation: chain + CD
@@ -22,19 +21,10 @@ package main
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/pem"
 	"io"
 	"log/slog"
-	"math/big"
 	"net"
 	"net/http"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -217,135 +207,6 @@ func TestStartMatterBridge_EmptyDataDir_StillStartsWithSharedDB(t *testing.T) {
 	t.Cleanup(bundle.stop)
 }
 
-// ── buildRootClusters: with non-nil store (OpCreds + AccessControl + GKM) ────
-
-func TestLoadVendorAttestation_MissingDACKeyPath_ReturnsFalse(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-
-	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatalf("GenerateKey: %v", err)
-	}
-	certDER := makeSelfSignedDERCert(t, priv)
-	dacPath := filepath.Join(dir, "dac.der")
-	_ = os.WriteFile(dacPath, certDER, 0o600)
-	paiPath := filepath.Join(dir, "pai.der")
-	_ = os.WriteFile(paiPath, certDER, 0o600)
-	cdPath := filepath.Join(dir, "cd.bin")
-	_ = os.WriteFile(cdPath, []byte{0x01, 0x02}, 0o600)
-
-	// DACKeyPath is empty → early return false.
-	cfg := config.NorthMatterAttestation{
-		DACPath:    dacPath,
-		PAIPath:    paiPath,
-		CDPath:     cdPath,
-		DACKeyPath: "",
-	}
-	_, _, _, _, ok := loadVendorAttestation(cfg, slog.New(slog.DiscardHandler))
-	if ok {
-		t.Error("expected ok=false when DACKeyPath is empty")
-	}
-}
-
-// ── loadVendorAttestation: key mismatch → false ───────────────────────────────
-
-func TestLoadVendorAttestation_KeyMismatch2_ReturnsFalse(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-
-	priv1, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	priv2, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-
-	certDER := makeSelfSignedDERCert(t, priv1) // signed by priv1
-	dacPath := filepath.Join(dir, "dac.der")
-	_ = os.WriteFile(dacPath, certDER, 0o600)
-	paiPath := filepath.Join(dir, "pai.der")
-	_ = os.WriteFile(paiPath, certDER, 0o600)
-	cdPath := filepath.Join(dir, "cd.bin")
-	_ = os.WriteFile(cdPath, []byte{0x01}, 0o600)
-
-	// Write priv2 (mismatched) as PEM PKCS#8.
-	der2, err := x509.MarshalPKCS8PrivateKey(priv2)
-	if err != nil {
-		t.Fatalf("MarshalPKCS8: %v", err)
-	}
-	keyPath := filepath.Join(dir, "dac.key")
-	_ = os.WriteFile(keyPath, pem.EncodeToMemory(&pem.Block{
-		Type:  "PRIVATE KEY",
-		Bytes: der2,
-	}), 0o600)
-
-	cfg := config.NorthMatterAttestation{
-		DACPath:    dacPath,
-		PAIPath:    paiPath,
-		CDPath:     cdPath,
-		DACKeyPath: keyPath,
-	}
-	_, _, _, _, ok := loadVendorAttestation(cfg, slog.New(slog.DiscardHandler))
-	if ok {
-		t.Error("expected ok=false for key mismatch")
-	}
-}
-
-// ── loadVendorAttestation: all files correct → ok=true ───────────────────────
-
-func TestLoadVendorAttestation_MatchingKey_ReturnsTrue(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-
-	priv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	certDER := makeSelfSignedDERCert(t, priv)
-
-	dacPath := filepath.Join(dir, "dac.der")
-	_ = os.WriteFile(dacPath, certDER, 0o600)
-	paiPath := filepath.Join(dir, "pai.der")
-	_ = os.WriteFile(paiPath, certDER, 0o600)
-	cdPath := filepath.Join(dir, "cd.bin")
-	_ = os.WriteFile(cdPath, []byte{0xCD}, 0o600)
-
-	// Write matching private key as PKCS#8 PEM.
-	der, err := x509.MarshalPKCS8PrivateKey(priv)
-	if err != nil {
-		t.Fatalf("MarshalPKCS8: %v", err)
-	}
-	keyPath := filepath.Join(dir, "dac.key")
-	_ = os.WriteFile(keyPath, pem.EncodeToMemory(&pem.Block{
-		Type:  "PRIVATE KEY",
-		Bytes: der,
-	}), 0o600)
-
-	cfg := config.NorthMatterAttestation{
-		DACPath:    dacPath,
-		PAIPath:    paiPath,
-		CDPath:     cdPath,
-		DACKeyPath: keyPath,
-	}
-	key, dac, pai, cd, ok := loadVendorAttestation(cfg, slog.New(slog.DiscardHandler))
-	if !ok {
-		t.Fatal("expected ok=true for matching key")
-	}
-	if key == nil || len(dac) == 0 || len(pai) == 0 || len(cd) == 0 {
-		t.Error("expected non-nil/non-empty return values")
-	}
-}
-
-// ── loadVendorAttestation: non-existent DAC file → false ─────────────────────
-
-func TestLoadVendorAttestation_MissingDACFile_ReturnsFalse(t *testing.T) {
-	t.Parallel()
-	cfg := config.NorthMatterAttestation{
-		DACPath:    "/nonexistent/dac.der",
-		PAIPath:    "/nonexistent/pai.der",
-		CDPath:     "/nonexistent/cd.bin",
-		DACKeyPath: "/nonexistent/key.pem",
-	}
-	_, _, _, _, ok := loadVendorAttestation(cfg, slog.New(slog.DiscardHandler))
-	if ok {
-		t.Error("expected ok=false for missing files")
-	}
-}
-
 // ── loadTranslations: non-existent file path → falls back to embedded ─────────
 
 func TestLoadTranslations_NonExistentFilePath_FallsBack(t *testing.T) {
@@ -503,24 +364,4 @@ func TestWireIncidentRecorder_CentralWithCache_SetsRecorder(t *testing.T) {
 	_, closer := wireIncidentRecorder(db, reg, logger)
 	t.Cleanup(closer)
 	// No assertion needed — no panic is the goal.
-}
-
-// ── shared helpers ────────────────────────────────────────────────────────────
-
-// makeSelfSignedDERCert produces a DER-encoded self-signed ECDSA certificate
-// for use in loadVendorAttestation tests.
-func makeSelfSignedDERCert(t *testing.T, priv *ecdsa.PrivateKey) []byte {
-	t.Helper()
-	tmpl := &x509.Certificate{
-		SerialNumber: big.NewInt(1),
-		Subject:      pkix.Name{CommonName: "test"},
-		NotBefore:    time.Now().Add(-time.Hour),
-		NotAfter:     time.Now().Add(time.Hour),
-		KeyUsage:     x509.KeyUsageDigitalSignature,
-	}
-	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &priv.PublicKey, priv)
-	if err != nil {
-		t.Fatalf("CreateCertificate: %v", err)
-	}
-	return der
 }

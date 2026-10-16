@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 13.9.0
+  version: 13.9.1
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -6848,7 +6848,12 @@ paths:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
         "409":
-          description: Commissioning window already open
+          description: >-
+            Commissioning window already open, or new commissioning is
+            disabled because the configured attestation chain
+            (`north.matter.attestation`) does not load. In the second case
+            the bridge keeps serving every controller already paired; the
+            log names the cause.
           content:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }

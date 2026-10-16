@@ -341,7 +341,12 @@ func TestLevelTransitionTimeRampsOnlyWhenTheDeviceRamps(t *testing.T) {
 		{"MoveToLevel 25 tenths", levelcontrol.CmdMoveToLevel, levelcontrol.MoveToLevelRequest{Level: 200, TransitionTime: u16(25)}, true, matterLevelToHM(200), 2.5},
 		{"MoveToLevelWithOnOff MinLevel 30 tenths", levelcontrol.CmdMoveToLevelWithOnOff, levelcontrol.MoveToLevelRequest{Level: 1, TransitionTime: u16(30)}, true, 0, 3.0},
 		{"Step up 15 tenths", levelcontrol.CmdStep, levelcontrol.StepRequest{StepMode: levelcontrol.StepModeUp, StepSize: 20, TransitionTime: u16(15)}, true, matterLevelToHM(147), 1.5},
-		{"StepWithOnOff down to off 10 tenths", levelcontrol.CmdStepWithOnOff, levelcontrol.StepRequest{StepMode: levelcontrol.StepModeDown, StepSize: 250, TransitionTime: u16(10)}, true, 0, 1.0},
+		// A Step cropped at a bound runs the cropped distance at the rate
+		// the full step gives: matter.js stepLogic
+		// (packages/node/src/behaviors/level-control/LevelControlServer.ts:464-479)
+		// derives rate = stepSize / transitionTime * 10 = 250 levels/s, so
+		// 127 -> MinLevel 1 is 126 levels, 0.504 s, carried as 0.5 s.
+		{"StepWithOnOff down to off 10 tenths", levelcontrol.CmdStepWithOnOff, levelcontrol.StepRequest{StepMode: levelcontrol.StepModeDown, StepSize: 250, TransitionTime: u16(10)}, true, 0, 0.5},
 		{"MoveToLevel null TransitionTime", levelcontrol.CmdMoveToLevel, levelcontrol.MoveToLevelRequest{Level: 200}, false, matterLevelToHM(200), 0},
 		{"MoveToLevel zero TransitionTime", levelcontrol.CmdMoveToLevel, levelcontrol.MoveToLevelRequest{Level: 200, TransitionTime: u16(0)}, false, matterLevelToHM(200), 0},
 	}
@@ -514,13 +519,20 @@ func TestLevelStepClampsToTheLevelRange(t *testing.T) {
 	}
 }
 
-// TestLevelStepWithUnknownLevelIsSilentSuccess pins that a Step with no
-// observed level has nothing to step from: Success, no CCU write.
-func TestLevelStepWithUnknownLevelIsSilentSuccess(t *testing.T) {
+// TestLevelStepWithUnknownLevelFails pins that a Step with no observed
+// level has nothing to step from: the command answers Failure and no
+// CCU write goes out. matter.js stepLogic reads the currentLevel getter
+// (packages/node/src/behaviors/level-control/LevelControlServer.ts:478),
+// which throws Status.Failure while CurrentLevel is null (:103-111).
+func TestLevelStepWithUnknownLevelFails(t *testing.T) {
 	for _, cmd := range []uint32{levelcontrol.CmdStep, levelcontrol.CmdStepWithOnOff} {
 		l, w := newLevelRig(t, custom.LightCapabilities{Dimmable: true}, false)
 		eio := levelcontrol.OptionExecuteIfOff
-		invokeLevel(t, l, cmd, levelcontrol.StepRequest{StepMode: levelcontrol.StepModeUp, StepSize: 20, OptionsMask: eio, OptionsOverride: eio})
+		_, err := levelServer(t, l).MatterInvoke(context.Background(), cmd, levelcontrol.StepRequest{StepMode: levelcontrol.StepModeUp, StepSize: 20, OptionsMask: eio, OptionsOverride: eio})
+		var sc im.StatusCodeError
+		if !errors.As(err, &sc) || sc.MatterStatusCode() != im.StatusFailure {
+			t.Fatalf("cmd 0x%02X with unknown level: err = %v, want status Failure", cmd, err)
+		}
 		if calls := w.snapshot(); len(calls) != 0 {
 			t.Fatalf("cmd 0x%02X with unknown level reached the CCU: %+v", cmd, calls)
 		}

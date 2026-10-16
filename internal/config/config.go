@@ -1092,21 +1092,26 @@ func (m NorthMatter) WithDefaults() NorthMatter {
 // NorthMatterAttestation carries vendor-supplied attestation
 // material. All four files are PEM- or DER-encoded; the loader
 // auto-detects format on read. The DAC private key MUST match the
-// public key embedded in the DAC certificate (loader verifies this
-// at startup; mismatch surfaces as a daemon log warning and
-// triggers the dev-attestation fallback).
+// public key embedded in the DAC certificate. All four empty selects the
+// CSA test chain; any path set makes the chain mandatory. A chain that does
+// not load — a file missing, a key that is not the DAC's — shuts new
+// commissioning rather than pairing as the test vendor; the bridge keeps
+// serving the controllers already paired, since attestation is checked only
+// while commissioning.
 //
 // Operators that ship a real device under their own VID + PID
-// populate all four fields. Test deployments leave them empty and
-// pair via `chip-tool --bypass-attestation-verifier true`.
+// populate all four fields. Test deployments leave them empty; the CSA
+// test chain pairs with Apple Home, Google Home and chip-tool without
+// `--bypass-attestation-verifier`.
 type NorthMatterAttestation struct {
 	// DACPath is the filesystem path to the Device Attestation
 	// Certificate. PEM (".pem") or DER (".der") accepted; the
 	// loader sniffs the magic bytes.
 	DACPath string `yaml:"dac_path" json:"dac_path" cfg:"expert"`
 	// DACKeyPath is the filesystem path to the DAC's P-256 private
-	// key. PEM (PKCS#8) or DER accepted. Path itself is operator-
-	// visible; the file's contents are treated as a secret.
+	// key. PEM or DER, PKCS#8 or SEC1 (attestation.LoadChainFiles).
+	// Path itself is operator-visible; the file's contents are treated
+	// as a secret.
 	DACKeyPath string `yaml:"dac_key_path" json:"dac_key_path" cfg:"secret"`
 	// PAIPath is the filesystem path to the Product Attestation
 	// Intermediate cert.
