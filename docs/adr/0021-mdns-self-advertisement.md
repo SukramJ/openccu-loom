@@ -9,7 +9,7 @@
 > [`SPECIFICATION.md`](https://github.com/SukramJ/openccu-loom/blob/main/SPECIFICATION.md)
 > §6.
 
-- **Status**: accepted
+- **Status**: accepted; the TXT decision is partially superseded by [ADR 0058](./0058-mdns-ccu-serials.md)
 - **Date**: 2026-05-24
 - **Related**:
   [ADR 0020 — external-client wire contract](./0020-external-client-wire-contract.md),
