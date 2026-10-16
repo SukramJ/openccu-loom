@@ -56,7 +56,7 @@ func (r lightRamp) Level() (uint8, bool) {
 // the channel carries RAMP_TIME. A "with On/Off" command to MinLevel is
 // LEVEL=0 — an HM dimmer's single knob is its On/Off too, so the device
 // couples the two itself (Matter §1.6.4.1.2, chip
-// LevelControlCluster.cpp:344) — and the OnOff attribute follows the
+// LevelControlCluster.cpp:359-361) — and the OnOff attribute follows the
 // accepted write at once through the OnOff server's own Set: the host's
 // change, so the OnOff Sink is not asked for a second CCU write, and the
 // LEVEL confirmation corrects the value if the device answered otherwise.

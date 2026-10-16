@@ -71,11 +71,13 @@ func matterTCPConfig(mode string) matterbridge.TCPConfig {
 // yields the default multicast advertiser.
 //
 // The closer exists for the subtype responder: it holds two multicast sockets
-// and a receive goroutine per address family, and the Zeroconf close path only
-// retires the subtype NAMES it registered. Every caller therefore has to
-// release it explicitly — on shutdown and on every early return, or a bridge
+// and a receive goroutine per address family. Closing the Zeroconf advertiser
+// closes the responder attached to it, and the node facade's Stop closes the
+// advertiser — but on an early return before the facade exists nothing does.
+// Every caller therefore releases it explicitly on those paths, or a bridge
 // that failed to bind its UDP port leaves both sockets and both goroutines
-// alive for the process lifetime.
+// alive for the process lifetime; on the normal path the call is a harmless
+// second close.
 func buildMatterAdvertiser(mc config.NorthMatter, logger *slog.Logger) (adv mdns.Advertiser, closeAdv func()) {
 	noClose := func() {}
 	switch mc.MDNSAdvertise {

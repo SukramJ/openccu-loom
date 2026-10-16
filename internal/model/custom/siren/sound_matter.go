@@ -194,7 +194,7 @@ type soundRamp struct{ sp *SoundPlayer }
 // Level implements [levelcontrol.NativeRamp]: the HM 0..1 LEVEL on the
 // 0..254 scale. known=false while LEVEL has never been observed, which the
 // server encodes as TLV null — CurrentLevel carries quality X (matter.js
-// level-control.element.ts:29-30), so an unread volume is reported as
+// level-control.element.ts:29-32), so an unread volume is reported as
 // unknown rather than as the real level 0.
 func (r soundRamp) Level() (uint8, bool) {
 	v, ok := r.sp.matterVolume()

@@ -48,14 +48,12 @@ var (
 	_ interfaces.MatterChangeNotifier = (*Light)(nil)
 )
 
-// Matter Device Type IDs and cluster IDs follow the Matter 1.5.1
-// Application Cluster Specification. The OnOff command ids come from
-// go-fabric's cluster/wire, which owns the wire contract; the
-// device types, cluster ids, LT attribute ids, the LT feature bit and the
-// cluster revisions are declared here next to the projection that
-// advertises them. The OnOff half is pinned against the matter.js
-// snapshot by TestHmLgtLightOnOffMatchesMatterJS, so the ids are not
-// reviewed by eye against a second hand-written list.
+// The two device types this projection advertises and the LevelControl
+// bounds the level arithmetic uses. Cluster ids, attribute ids, command
+// ids, feature bits and revisions are not declared here: the clusters are
+// go-fabric's servers (onoff, levelcontrol, light), whose generated
+// definitions carry them. The OnOff half is pinned against the matter.js
+// snapshot by TestHmLgtLightOnOffMatchesMatterJS.
 const (
 	matterDeviceTypeOnOffLight    uint16 = 0x0100
 	matterDeviceTypeDimmableLight uint16 = 0x0101
@@ -100,19 +98,6 @@ const (
 	matterLevelMinDefault     uint8  = 0x01
 	matterAttrFeatureMap      uint32 = 0xFFFC
 	matterAttrClusterRevision uint32 = 0xFFFD
-
-	// The six OnOff command IDs are the wire contract, so they are read
-	// from the package that owns it —
-	// go-fabric cluster/wire/onoff.go — instead of being
-	// transcribed a second time here. matter.js
-	// packages/model/src/standard/elements/on-off.element.ts marks Off "M",
-	// On and Toggle "!OFFONLY", and the three 0x4x commands "LT": all six
-	// are mandatory for the FeatureMap this projection advertises.
-
-	// matterLevelControlClusterRevision pinned to matter.js HEAD
-	// (@matter/model 0.16.11). Matter 1.5 bumped the revision from 6 to 7
-	// with additional level-control refinements (OnTransitionTime /
-	// OffTransitionTime were in 1.4 at rev 6; rev 7 is the 1.5 update).
 
 	// matterLevelMax is the maximum CurrentLevel value Matter
 	// LevelControl carries. Matter reserves 0xFF (255) as the null
@@ -159,7 +144,7 @@ func (l *Light) MatterClusterServers() []interfaces.MatterClusterServer {
 // [onoff.Server.Set], the one path that stores without asking the Sink,
 // so a wall switch or a CCU program reaches a subscribed controller and a
 // confirmed command does not echo into a second write. A timed-on ends
-// through the stack's countdown (OnOffServer.ts:102, whose off reaches
+// through the stack's countdown (OnOffServer.ts:216-232, whose off reaches
 // the Sink) — no CCU-side ON_TIME is written for it.
 //
 // The server starts from the observed brightness, false while nothing was

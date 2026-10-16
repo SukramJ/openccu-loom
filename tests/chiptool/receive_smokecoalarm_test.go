@@ -14,13 +14,13 @@ import (
 )
 
 // TestReceive_SmokeCOAlarm exercises SmokeCOAlarm (0x005C) on HmIP-SWSD
-// (siren.SmokeSiren). smokeCOServer rejects every write/invoke
-// (internal/model/custom/siren/matter.go: MatterWrite always returns
-// errMatterUnknownAttribute, MatterInvoke always returns
-// errMatterUnknownCommand — SmokeCOAlarm has no HM-side command mapped
-// onto SelfTestRequest), so SEND is a negative case. RECEIVE drives the
-// SmokeState/ExpressedState AlarmStateEnum off SMOKE_DETECTOR_ALARM_STATUS
-// (Normal=0 / Warning=1 / Critical=2 — see smokeStatusToAlarmState).
+// (siren.SmokeSiren). The cluster is go-fabric's alarm.Server, which
+// rejects every write (no attribute the smoke detector serves is writable)
+// and SelfTestRequest (the detector offers no self-test, so the command is
+// not in AcceptedCommandList), so SEND is a negative case. RECEIVE drives
+// SmokeState (AlarmStateEnum: Normal=0 / Warning=1 / Critical=2, see
+// smokeStatusToAlarmState) off SMOKE_DETECTOR_ALARM_STATUS; the server
+// derives ExpressedState from it.
 func TestReceive_SmokeCOAlarm(t *testing.T) {
 	b := requireBridge(t)
 	eps := discoverEndpointsWith(t, b, 0x005C, 1)
@@ -38,7 +38,7 @@ func TestReceive_SmokeCOAlarm(t *testing.T) {
 
 	// SEND (negative) — every SmokeCOAlarm attribute is read-only at the
 	// wire layer (schema.AttributeWritable gates the write before it ever
-	// reaches smokeCOServer.MatterWrite); the write must be rejected.
+	// reaches the alarm server's MatterWrite); the write must be rejected.
 	t.Run("negative/write-smoke-state", func(t *testing.T) {
 		out, _ := b.SharedCtl.WriteAttr(ctx, t, "smokecoalarm", "smoke-state", "0", ep)
 		hex, parsed := harness.WriteStatus(out)
@@ -51,8 +51,9 @@ func TestReceive_SmokeCOAlarm(t *testing.T) {
 	})
 
 	// SEND (negative) — SelfTestRequest (the cluster's only client
-	// command) is never mapped onto a HM command; MatterInvoke rejects
-	// every cmdID with errMatterUnknownCommand.
+	// command) is never mapped onto a HM command; the detector offers no
+	// self-test, so the alarm server leaves it out of AcceptedCommandList
+	// and refuses the invoke.
 	t.Run("negative/invoke-self-test-request", func(t *testing.T) {
 		out, _ := b.SharedCtl.Invoke(ctx, t, "smokecoalarm", "self-test-request", ep)
 		hex, parsed := harness.WriteStatus(out)

@@ -6,6 +6,22 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.92.0] - 2026-10-16
+
+### Release summary
+
+**The Matter bridge leaves its library code to go-fabric.** The bridge
+runs on go-fabric v0.5.4, which now carries what the daemon used to do
+itself: the bridge identity, scene tables and device names, endpoint
+numbering, DNS-SD re-announcement, the smoke detector's alarm cluster and
+the dimmer and MP3 player level handling. Paired controllers keep every
+accessory — migration 049 carries each endpoint number and name across.
+A configured vendor attestation chain that does not load no longer pairs
+new controllers as the test vendor: the bridge keeps serving the paired
+ones and refuses every new pairing, multi-admin included. REST API 13.9.1
+(the commissioning-window 409 gains a reason), WebSocket API 1.14,
+unchanged.
+
 ### Changed
 
 - **Matter: go-fabric v0.5.4.** The bridge now uses the library for what
@@ -35,7 +51,6 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Controllers now receive the SmokeAlarm and AllClear events, and an
   unread alarm status reads Normal instead of a null the cluster does not
   allow.
-
 
 ## [0.91.1] - 2026-10-15
 

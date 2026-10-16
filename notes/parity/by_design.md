@@ -1325,7 +1325,8 @@ ACTION, the HmIP dimmers none. On that basis:
   so the server accepts and stores it; nothing couples colour temperature
   to the level on the hand-off path (matter.js does that inside its
   transition engine), so the bit reads back without an effect. The
-  ColorControl follow-up of ADR 0084 is where the coupling would land.
+  ColorControl projections that shipped since (ADR 0084) do not add the
+  coupling either; it stays open.
 
 **Why not the engine:** radio budget and device truth — the dimmer's own
 ramp is smoother than ten LEVEL writes a second could be, and the CCU would
