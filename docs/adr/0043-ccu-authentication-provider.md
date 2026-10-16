@@ -1,6 +1,6 @@
 # ADR 0043 — CCU as an authentication provider (delegate login to the CCU user database)
 
-- **Status**: proposed
+- **Status**: accepted — implemented in 0.12.0 (`internal/auth/ccuauth`, PR #175)
 - **Date**: 2026-06-24
 - **Related**:
   [ADR 0002 — multi-CCU first class](./0002-multi-ccu-first-class.md),

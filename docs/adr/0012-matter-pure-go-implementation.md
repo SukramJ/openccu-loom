@@ -207,7 +207,7 @@ out" once the substrate is in place.
 | `textdisplay.TextDisplay` | No display cluster in Matter. Stays MQTT-only. |
 | `valve.Irrigation`, `valve.Modulating` | No matching cluster. Modulating valves degenerate to Level Control + OnOff if we want to expose them; Irrigation has no clean mapping. Park. |
 | `light.EffectLight`, RGBW effect-mode | Color Control 0x0300 has scenes but no general "effect playlist". Effects expose a P1 read-only attribute via Color Control's `EnhancedColorMode`; full effect dispatch is MQTT/REST-only. |
-| `light.DRGDaliLight` | Maps as a regular dimmable Light + Color Control if RGBW; no DALI-specific surface. |
+| `light.DRGDaliLight` | Serves the ColorTemperatureLight projection it inherits (Color Control in CT mode); no DALI-specific surface, DALI effects stay MQTT/REST-only. |
 | Calculated `INTRUSION_ALARM`, `WINDOW_OPEN` | Both are derived booleans → Boolean State 0x0045 (P1). Listed here to call out that they're not separate clusters. |
 
 ## Custom / Generic / Calculated DP ↔ Matter cluster mapping table
@@ -256,8 +256,8 @@ materialises as.
 | `light.ColorLight` | ExtendedColorLight (0x010D) | OnOff, LevelControl, ColorControl (HS mode), Descriptor | `Color()` (hue,sat) ↔ `CurrentHue`/`CurrentSaturation`; `SetColor` ↔ `MoveToHueAndSaturation` |
 | `light.RGBWLight` | ExtendedColorLight (0x010D) | OnOff, LevelControl, ColorControl (HS+CT modes via `EnhancedColorMode`), Descriptor | `Mode()` ↔ `EnhancedColorMode`; `Kelvin`/`SetKelvin` as ColorTemp; `CurrentHsColor`/`SetColor` as HS; `Effects()`/`Effect()` exposed via vendor-specific list — **effect dispatch P3** |
 | `light.FixedColorLight` | ExtendedColorLight (0x010D) | OnOff, LevelControl, ColorControl (HS mode, palette-quantised) | `Color()` ↔ closest HS approximation per fixed-palette entry; round-trip writes snap to palette |
-| `light.EffectLight` | DimmableLight (0x0101) for the OnOff+Level part | OnOff, LevelControl | Effect attribute exposed as MQTT-only; **no Matter cluster covers effect dispatch** |
-| `light.DRGDaliLight` | DimmableLight (0x0101) | OnOff, LevelControl | DALI is a transport detail; surfaces identically to Light |
+| `light.EffectLight` | ExtendedColorLight (0x010D), inherited from `ColorLight` | OnOff, LevelControl, ColorControl (HS+XY) | Effect attribute exposed as MQTT-only; **no Matter cluster covers effect dispatch** |
+| `light.DRGDaliLight` | ColorTemperatureLight (0x010C), inherited from `ColorTempLight` | OnOff, LevelControl, ColorControl (CT) | DALI is a transport detail; surfaces like the colour-temperature light it embeds |
 | `light.SoundPlayerLED` | DimmableLight (0x0101) | OnOff, LevelControl | LED on a sound device; sound playback is MQTT-only |
 | `cover.Cover` | WindowCovering (0x0202) | WindowCovering (0x0102), Descriptor | `Position()` ↔ `CurrentPositionLiftPercent100ths` (inverted: HM 0=closed↔Matter 100%=closed convention); `SetPosition`/`Open`/`Close`/`Stop` ↔ `GoToLiftPercentage`/`UpOrOpen`/`DownOrClose`/`StopMotion` |
 | `cover.Blind` | WindowCovering (0x0202, type=Tilt+Lift) | WindowCovering (0x0102) | Lift as `Cover`; `TiltPosition()` ↔ `CurrentPositionTiltPercent100ths`; `SetTilt` ↔ `GoToTiltPercentage`; `SetCombined` issues both |

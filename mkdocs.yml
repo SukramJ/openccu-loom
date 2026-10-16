@@ -109,7 +109,7 @@ nav:
           - ADR 0010 — Discovery payload from model: adr/0010-discovery-payload-from-model.md
           - ADR 0011 — MQTT topic and payload architecture: adr/0011-mqtt-topic-and-payload-architecture.md
           - ADR 0012 — Matter pure-Go implementation: adr/0012-matter-pure-go-implementation.md
-          - ADR 0013 — Matter commissioning bring-up: adr/0013-matter-commissioning-bring-up.md
+          - ADR 0013 — Matter commissioning bring-up (moved to go-fabric): adr/0013-matter-commissioning-bring-up.md
           - ADR 0014 — Parameter ignore/unignore mechanics: adr/0014-parameter-ignore-unignore-mechanics.md
           - ADR 0015 — Data-point usage ignored: adr/0015-datapoint-usage-ignored.md
           - ADR 0016 — Custom-DP-aware UI rendering: adr/0016-custom-dp-aware-ui-rendering.md
@@ -122,20 +122,20 @@ nav:
           - ADR 0023 — HmIP-Wired is a product group: adr/0023-hmipwired-is-product-group.md
           - ADR 0024 — Instance and CCU identity: adr/0024-instance-and-ccu-identity.md
           - ADR 0025 — MCP north-bound adapter: adr/0025-mcp-northbound-adapter.md
-          - ADR 0026 — MCP dev mode: adr/0026-mcp-dev-mode.md
+          - ADR 0026 — MCP dev mode (deferred): adr/0026-mcp-dev-mode.md
           - ADR 0027 — Encrypt config secrets at rest: adr/0027-encrypt-config-secrets-at-rest.md
           - ADR 0028 — Contract digest and version guard: adr/0028-contract-digest-and-version-guard.md
           - ADR 0029 — Tier-model stop teardown: adr/0029-tier-model-stop-teardown.md
-          - ADR 0030 — Event-bus dispatch striping rejected: adr/0030-eventbus-dispatch-striping-rejected.md
-          - ADR 0031 — IM opcode dispatch seam: adr/0031-im-opcode-dispatch-seam.md
-          - ADR 0032 — Sigma resume extraction: adr/0032-sigma-resume-extraction.md
-          - ADR 0033 — Groups cluster stays a stub: adr/0033-groups-cluster-stays-stub.md
+          - ADR 0030 — Event-bus dispatch striping (rejected): adr/0030-eventbus-dispatch-striping-rejected.md
+          - ADR 0031 — IM opcode dispatch seam (moved to go-fabric): adr/0031-im-opcode-dispatch-seam.md
+          - ADR 0032 — Sigma resume extraction (moved to go-fabric): adr/0032-sigma-resume-extraction.md
+          - ADR 0033 — Groups cluster stays a stub (moved to go-fabric): adr/0033-groups-cluster-stays-stub.md
           - ADR 0034 — Adapter package taxonomy: adr/0034-adapter-package-taxonomy.md
           - ADR 0035 — Hub refresh-set extraction: adr/0035-hub-refresh-set-extraction.md
-          - ADR 0036 — Bridge decomposition: adr/0036-bridge-decomposition.md
+          - ADR 0036 — Bridge decomposition (moved to go-fabric): adr/0036-bridge-decomposition.md
           - ADR 0037 — OTLP span exporter: adr/0037-otlp-span-exporter.md
           - ADR 0038 — Cross-stack CI gate: adr/0038-cross-stack-ci-gate.md
-          - ADR 0039 — Subscribe dispatch seam: adr/0039-subscribe-dispatch-seam.md
+          - ADR 0039 — Subscribe dispatch seam (moved to go-fabric): adr/0039-subscribe-dispatch-seam.md
           - ADR 0040 — Measurement history: adr/0040-measurement-history.md
           - ADR 0041 — Persist auth sessions: adr/0041-persist-auth-sessions.md
           - ADR 0042 — Clear CCU cache and re-pull: adr/0042-clear-ccu-cache-and-repull.md
@@ -144,7 +144,7 @@ nav:
           - ADR 0045 — Login and onboarding into the SPA: adr/0045-login-and-onboarding-into-spa.md
           - ADR 0046 — SSDP CCU discovery: adr/0046-ssdp-ccu-discovery.md
           - ADR 0047 — North-bound bridge registry: adr/0047-northbound-bridge-registry.md
-          - ADR 0048 — chip-tool/godevccu send-receive matrix: adr/0048-chiptool-godevccu-send-receive-matrix.md
+          - ADR 0048 — chip-tool/godevccu send-receive matrix (moved to go-fabric): adr/0048-chiptool-godevccu-send-receive-matrix.md
           - ADR 0049 — Matter one endpoint per device: adr/0049-matter-one-endpoint-per-device.md
           - ADR 0050 — MQTT transport shared module: adr/0050-mqtt-transport-shared-module.md
           - ADR 0051 — North-bound authorization model: adr/0051-northbound-authorization-model.md
@@ -162,11 +162,11 @@ nav:
           - ADR 0063 — Self-maintained device profiles: adr/0063-self-maintained-device-profiles.md
           - ADR 0064 — Garage projects as a Matter Closure: adr/0064-garage-projects-as-matter-closure.md
           - ADR 0065 — Composition-root wiring is checkable: adr/0065-composition-root-wiring-is-checkable.md
-          - ADR 0066 — Relicense to AGPL-3.0-only: adr/0066-relicense-agpl-commercial-exception.md
+          - ADR 0066 — Relicense to AGPL-3.0-only (rejected): adr/0066-relicense-agpl-commercial-exception.md
           - ADR 0067 — North surface is a model API: adr/0067-north-surface-is-a-model-api.md
           - ADR 0068 — What unique_id promises, per plane: adr/0068-unique-id-stability-per-plane.md
           - ADR 0069 — Master-profile surface serves link data: adr/0069-master-profile-surface-serves-link-data.md
-          - ADR 0070 — Shared HA discovery model module: adr/0070-shared-ha-discovery-model-module.md
+          - ADR 0070 — Shared HA discovery model module (closed): adr/0070-shared-ha-discovery-model-module.md
           - ADR 0071 — South profiles: adr/0071-south-profiles.md
           - ADR 0072 — openccu-lite event stream: adr/0072-openccu-lite-event-stream.md
           - ADR 0073 — Backend-neutral taxonomy: adr/0073-backend-neutral-taxonomy.md
