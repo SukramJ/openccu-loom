@@ -4,14 +4,13 @@
 package contract
 
 import (
-	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/uicatalog"
 )
 
 // TestConfigFieldsHaveLabelsAndHelp enforces the SPA contract: every config
@@ -63,23 +62,18 @@ var nonRenderedConfigPaths = map[string]string{}
 // the set of config.field.* / config.help.* keys present in each.
 func loadConfigI18nKeys(t *testing.T) (en, de map[string]bool) {
 	t.Helper()
-	path := filepath.Join("..", "..", "assets", "ui", "src", "lib", "i18n.ts")
-	raw, err := os.ReadFile(path)
+	cat, err := uicatalog.Load(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatalf("read i18n.ts: %v", err)
 	}
-	src := string(raw)
-	deStart := strings.Index(src, "const DE")
-	if deStart < 0 {
-		t.Fatal("i18n.ts: 'const DE' catalogue marker not found")
-	}
-	keyRe := regexp.MustCompile(`"(config\.(?:field|help)\.[^"]+)"\s*:`)
-	collect := func(block string) map[string]bool {
+	collect := func(block map[string]string) map[string]bool {
 		out := make(map[string]bool)
-		for _, m := range keyRe.FindAllStringSubmatch(block, -1) {
-			out[m[1]] = true
+		for k := range block {
+			if strings.HasPrefix(k, "config.field.") || strings.HasPrefix(k, "config.help.") {
+				out[k] = true
+			}
 		}
 		return out
 	}
-	return collect(src[:deStart]), collect(src[deStart:])
+	return collect(cat.EN), collect(cat.DE)
 }

@@ -18,7 +18,7 @@ GOMAXPROCS=2 go test -p 2 -run TestContractCatalogueIsComplete ./tests/contract/
 build when this file drifts from the guard functions actually present on
 disk, in either direction.
 
-Guards without a doc comment: 8 of 551.
+Guards without a doc comment: 8 of 552.
 
 | Guard | File | Holds |
 |---|---|---|
@@ -150,6 +150,7 @@ Guards without a doc comment: 8 of 551.
 | TestDocPurity | doc_purity_test.go | TestDocPurity walks every .go source file under internal/, pkg/, and cmd/ and fails if any comment line contains a wave-numbering or audit-tag pattern that belongs only to the internal tracking system, not to published documentation, or a provenance reference to a legacy reference project (provenance belongs in the Markdown docs). |
 | TestDocPurity_MarkdownRefsExist | doc_purity_test.go | TestDocPurity_MarkdownRefsExist scans every `//` comment in internal/, pkg/, cmd/ for references that look like markdown file paths and fails when the referenced file does not exist at the project root. |
 | TestGermanWordRuleBites | doc_purity_test.go | TestGermanWordRuleBites measures the rule instead of trusting it. |
+| TestGeneratedReferenceIsFresh | docs_reference_fresh_test.go | TestGeneratedReferenceIsFresh regenerates the reference pages under docs/reference/ and compares them byte for byte with the checked-in copies, so the published configuration, WebSocket and REST references cannot fall behind the config schema, assets/wsapi.json or assets/openapi.yaml. |
 | TestDomainConstantsAreNamedNotRestated | domain_constants_single_source_test.go | TestDomainConstantsAreNamedNotRestated pins three values that a north plane used to spell out beside the domain's own. |
 | TestDownloadStatsWorkflowRecordsEveryAddon | download_stats_workflow_test.go | TestDownloadStatsWorkflowRecordsEveryAddon pins the download-stats workflow to the inputs it samples. |
 | TestReadFunctionsDoNotCollapseFailureIntoEmpty | empty_absent_failed_collapse_test.go | TestReadFunctionsDoNotCollapseFailureIntoEmpty guards against the defect class the round-4 audit found 34 times: a Get*/Load*/Fetch*/ List*/Read*/Query* function that fetches from a source outside the process (the CCU, SQLite, the broker) answering an error branch with the zero value and a nil error, so a caller cannot tell "there is nothing" from "I could not find out". |
