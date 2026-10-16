@@ -21,9 +21,9 @@ how the code defends them:
 | Session cookie | XSS / session theft | `openccu_loom_session` is `HttpOnly` + `SameSite=Lax`; `Secure` is set when the daemon is told it sits behind TLS. 12-hour server-side TTL; revoked on logout. |
 | Mutating REST/UI requests | Cross-site request forgery | Double-submit CSRF token (cookie `openccu_loom_csrf` + `X-CSRF-Token` header / `_csrf` form field), enabled by default. See [CSRF](#csrf). |
 | API tokens and passwords | Timing side-channel on comparison | `crypto/subtle.ConstantTimeCompare` for both bearer-token and Basic-password matching. |
-| Bearer token storage | Token leak from the management API | The raw token is returned **only once at creation**; list/audit views expose just a stable ID and a six-character fingerprint. |
+| Bearer token storage | Token leak from the management API | The raw token is returned **only once at creation**; list/audit views expose just a stable ID: the first 16 hex characters of the token's SHA-256. |
 | ID token from the IdP | Forged / tampered token | RS256 signature verified against the IdP's JWKS; `issuer`, `audience`, and `exp` validated; PKCE (`S256`) protects the code exchange. See [OIDC signature verification](#oidc-signature-verification). |
-| Transport in the clear | Eavesdropping on the LAN | The daemon serves plain HTTP; terminate TLS at a reverse proxy. See [TLS posture](#tls-posture). |
+| Transport in the clear | Eavesdropping on the LAN | Plain HTTP by default; set `north.rest.tls_cert_file` and `tls_key_file` to serve HTTPS directly, or terminate TLS at a reverse proxy. See [TLS posture](#tls-posture). |
 | Request floods | Resource exhaustion on REST | Optional per-identity rate limiter (off by default) plus request timeouts; production should also rate-limit at the proxy. See [Known limitations](#known-limitations). |
 
 ## Authentication flows
@@ -106,11 +106,16 @@ controlled by `north.rest.csrf_enabled` (default **true**).
 
 ## TLS posture
 
-The REST/WebSocket server and the bootstrap UI server **serve plain
-HTTP**. The daemon does not terminate TLS itself.
+The REST/WebSocket listener, which also serves the web UI, speaks
+**plain HTTP by default**. Two ways to HTTPS:
 
-- Put a reverse proxy (Traefik, Caddy, nginx) in front for HTTPS, and
-  set `north.rest.csrf_secure: true` so the CSRF cookie carries the
+- Set `north.rest.tls_cert_file` and `north.rest.tls_key_file`
+  (PEM). The same port then serves API and web UI over HTTPS. The
+  certificate content is reloaded on file change and after an upload
+  through `POST /api/v1/admin/tls/certificate`; switching HTTPS on or
+  off needs a restart.
+- Or put a reverse proxy (Traefik, Caddy, nginx) in front, and set
+  `north.rest.csrf_secure: true` so the CSRF cookie carries the
   `Secure` flag.
 - South-bound to the CCU, set `centrals[].tls: true` to use HTTPS for
   XML-RPC / JSON-RPC. `centrals[].tls_insecure_skip_verify` disables
@@ -156,7 +161,9 @@ callback) verify the ID token before issuing a session:
   user store lives in memory. Login sessions and dynamically created API
   tokens are SQLite-backed and survive a restart: browser sessions
   hydrate from the `auth_sessions` table on boot (save-through cache; see
-  ADR 0041), and tokens are persisted as bcrypt-style hashes. A restart
+  ADR 0041), and tokens are persisted as SHA-256 hashes (a token is a random
+high-entropy secret, so a fast hash suffices; the raw value is never
+stored). A restart
   therefore no longer logs active browsers out.
 
 ## Verify before a release

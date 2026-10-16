@@ -23,7 +23,8 @@ described here have shipped since 0.1.0 and are pinned by contract tests.
 
 - **`central_name`** — Unique identifier for one CCU within the daemon
   process. Attached to every event, every metric, every MQTT topic
-  and every REST path. Free-form, but stable: changing it breaks
+  and every REST path. Letters, digits, `-` and `_` only (it is a path
+  segment of the callback URL), and stable: changing it breaks
   continuity in the topic schema, backups, and persistence.
 - **CentralRegistry** — In-process map `central_name → CentralUnit`.
   Holds every active CCU; every north-bound adapter (MQTT, REST, WS,
@@ -60,8 +61,10 @@ Every other field falls back to the daemon default or is optional.
 
 ### 1.2 Reload strategy
 
-OpenCCU-Loom has no hot-reload for `centrals:`. After editing the
-config:
+Centrals added, changed or removed through the web UI or the REST API
+(`POST /api/v1/centrals`, `PUT`/`DELETE /api/v1/centrals/{name}`) are
+adopted live, without a restart. After editing `centrals:` in the config
+file instead:
 
 ```sh
 systemctl restart openccu-loom     # systemd deployment
@@ -72,8 +75,8 @@ During the restart:
 
 - Existing MQTT discovery configs under the topic base remain
   retained — Home Assistant does not lose any devices.
-- Existing sessions (edit locks, OIDC sessions) stay persisted in
-  SQLite.
+- Browser and OIDC sessions stay persisted in SQLite; edit locks are
+  held in memory and are released by the restart.
 - The XML-RPC callback subscription on the CCU survives for ~2 min;
   events arriving in this window buffer and replay on reconnect.
 
@@ -256,11 +259,11 @@ the registry. Each central owns a separate interface-id namespace.
 
 ### 3.3 Dynamic ports
 
-When `callback.port: 0` or `callback.port_range: "30000-30099"` is
-set, the OS or the range allocator hands out fresh ports on every
-daemon restart. A configured `port_range` wins over `callback.port`.
-The **effective** port is announced to the CCU at
-`init()` time — not the configured `0`. Multiple CCUs share the
+When `callback.port_range: "30000-30099"` is set, the range allocator
+hands out a free port on every daemon restart; a configured
+`port_range` wins over `callback.port`. (`callback.port: 0` is not
+dynamic — it falls back to 8120.) The **effective** port is announced
+to the CCU at `init()` time. Multiple CCUs share the
 same listener; each CCU learns the new port at its first reconnect.
 
 ---
@@ -295,24 +298,11 @@ inline key=value at the end of the line.
 
 ### 4.3 Prometheus metrics
 
-CCU-scoped metrics carry the `central` label:
-
-```
-openccu_loom_client_state{central="ccu-haus",   interface="HmIP-RF", state="CONNECTED"} 1
-openccu_loom_client_state{central="ccu-garage", interface="HmIP-RF", state="CONNECTED"} 1
-openccu_loom_command_count_total{central="ccu-haus",interface="HmIP-RF",method="setValue"} 4173
-```
-
-Adapter-scoped metrics (MQTT publish rate, REST request duration) do
-**not** carry the label — they measure the north-bound side, which is
-process-global.
-
-PromQL example: per-central round-trip-time:
-
-```
-histogram_quantile(0.95,
-  sum by (central, le) (rate(openccu_loom_command_duration_seconds_bucket[5m])))
-```
+`GET /metrics` renders the metric registry as OpenMetrics text and is the
+authoritative list of metric names and labels in your version. Check the
+labels a series carries there before writing per-central queries: not
+every south-bound metric carries a `central` label, and the registry has
+no histograms, so latency percentiles cannot be computed from it.
 
 ### 4.4 REST inspection
 

@@ -35,13 +35,15 @@ A fresh daemon with no users defined cannot be administered until you
 create the first account. The bootstrap UI exposes a single-shot setup
 flow:
 
-1. Browse to `:8119` and open `/setup`.
-2. Submit a username, password, and password confirmation.
-3. The account is created with the **`admin`** role and you are
-   redirected to `/login`.
+1. Browse to `:8119`. On a fresh install the web UI opens the first-run
+   wizard instead of the login screen.
+2. Submit a username, password, and password confirmation (the wizard
+   calls `POST /api/v1/setup`).
+3. The account is created with the **`admin`** role and the web UI
+   continues to the login screen.
 
 !!! warning "Setup runs exactly once"
-    `POST /setup` refuses to run as soon as **any** user exists. It
+    `POST /api/v1/setup` refuses to run as soon as **any** user exists. It
     always creates an `admin`. After the first admin is in place, manage
     further users through the admin API or your configured user store —
     not through `/setup`.
@@ -91,15 +93,15 @@ a `401` is `openccu-loom`.
 
 ## Browser sessions
 
-A successful login (form `POST /login`, or the SPA's
-`POST /api/v1/auth/login`) issues a server-side session and drops the
+A successful login (`POST /api/v1/auth/login`, which the web UI's login
+screen calls) issues a server-side session and drops the
 session cookie. Session resolution is always installed — it is the
 SPA's core login mechanism and has no config gate.
 
 - Cookie name: `openccu_loom_session`, `HttpOnly`, `SameSite=Lax`.
 - Lifetime: 12 hours (server-side TTL; expired sessions are evicted on
   read).
-- Logout (`POST /logout` or `POST /api/v1/auth/logout`) revokes the
+- Logout (`POST /api/v1/auth/logout`) revokes the
   session and clears the cookie.
 - The `Secure` flag is set when the daemon is told it sits behind TLS —
   pair this with `north.rest.csrf_secure: true` behind an HTTPS proxy.

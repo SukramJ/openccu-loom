@@ -71,13 +71,13 @@ MQTT Discovery, the *Homematic(IP) Local* loom backend and the Matter
 bridge each create **their own** Home Assistant entities for the **same**
 physical device. They do not share identities:
 
-- MQTT Discovery emits daemon-namespaced unique IDs
-  (`<central>_<address>_<channel>_<parameter>` under the daemon's own
-  node namespace) — deliberately distinct and pinned, because changing
-  them would orphan every existing MQTT entity.
-- The HA integration builds HA registry unique IDs from the shared
-  routing-key contract (`loom_<serial-suffix>_…`), see
-  [HA unique-ID migration](../external-clients/ha-unique-id-migration.md).
+- MQTT Discovery and the HA integration build their unique IDs from the
+  same routing-key contract (`loom_<routing-key>`, e.g.
+  `loom_vcu1234567_1_state`; see
+  [HA unique-ID migration](../external-clients/ha-unique-id-migration.md)).
+  Home Assistant keys its entity registry per integration, so the same ID
+  under the MQTT integration and under the Homematic(IP) Local integration
+  is still two entities.
 - Matter identities are assigned by the Matter fabric and have nothing
   to do with either.
 
@@ -399,7 +399,8 @@ cases, two answers:
 - Moving to **Matter** or back to a **direct-CCU** setup: neither has an
   alarm surface. The alarm **state and command topics are published
   regardless of the Discovery flag**, so keep MQTT on and configure HA's
-  MQTT alarm panel manually against `<base>/alarm/<zone>/…` — see
+  MQTT alarm panel manually against `<base>/status/alarm/<zone>/panel`
+  (state) and `<base>/set/alarm/<zone>/panel` (command) — see
   [Alarm topics](../mqtt-topic-schema.md#alarm-topics-daemon-level-no-central).
 
 **Bridging to Matter what HA already bridges.** If HA publishes the same
