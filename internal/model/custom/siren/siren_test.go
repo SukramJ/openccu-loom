@@ -10,6 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/go-fabric/cluster/alarm"
+	fabricdevice "github.com/SukramJ/go-fabric/device"
+
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -790,8 +793,8 @@ func TestSmokeSirenMatterDeviceType(t *testing.T) {
 	t.Parallel()
 
 	s, _, _ := newSmokeSirenRig(t)
-	if got := s.MatterDeviceType(); got != matterDeviceTypeSmokeCOAlarm {
-		t.Errorf("SmokeSiren.MatterDeviceType() = 0x%04X, want 0x%04X", got, matterDeviceTypeSmokeCOAlarm)
+	if got := s.MatterDeviceType(); got != fabricdevice.SmokeCoAlarmID {
+		t.Errorf("SmokeSiren.MatterDeviceType() = 0x%04X, want 0x%04X", got, fabricdevice.SmokeCoAlarmID)
 	}
 }
 
@@ -805,57 +808,34 @@ func TestSmokeSirenMatterReadAttributes(t *testing.T) {
 	}
 	srv := servers[0]
 
-	// Unobserved → nil, true.
-	v, ok := srv.MatterRead(matterAttrSmokeExpressedState)
-	if !ok || v != nil {
-		t.Errorf("ExpressedState before observation = %v ok=%v, want (nil, true)", v, ok)
+	// Unobserved -> Normal: ExpressedState is non-nullable, so an unread
+	// status must not surface as TLV null.
+	v, ok := srv.MatterRead(alarm.AttrExpressedState)
+	if !ok || v != uint8(alarm.ExpressedNormal) {
+		t.Errorf("ExpressedState before observation = %v ok=%v, want (%d, true)", v, ok, alarm.ExpressedNormal)
 	}
 
-	// After PRIMARY_ALARM → ExpressedStateEnum SmokeAlarm=1. The
-	// attribute is typed ExpressedStateEnum, where AlarmStateEnum's
-	// Critical=2 would mean CoAlarm.
+	// After PRIMARY_ALARM -> ExpressedStateEnum SmokeAlarm. The attribute
+	// is typed ExpressedStateEnum, where AlarmStateEnum's Critical would
+	// mean CoAlarm.
 	fireSmokeStatus(t, statusDP, string(SmokeStatusPrimaryAlarm))
-	v, ok = srv.MatterRead(matterAttrSmokeExpressedState)
-	if !ok || v != matterExpressedStateSmokeAlarm {
-		t.Errorf("ExpressedState PRIMARY = %v ok=%v, want (%d, true)", v, ok, matterExpressedStateSmokeAlarm)
+	v, ok = srv.MatterRead(alarm.AttrExpressedState)
+	if !ok || v != uint8(alarm.ExpressedSmokeAlarm) {
+		t.Errorf("ExpressedState PRIMARY = %v ok=%v, want (%d, true)", v, ok, alarm.ExpressedSmokeAlarm)
 	}
 
 	// SmokeState carries the AlarmStateEnum severity.
-	v, ok = srv.MatterRead(matterAttrSmokeState)
-	if !ok || v != matterSmokeAlarmCritical {
-		t.Errorf("SmokeState PRIMARY = %v ok=%v, want (%d, true)", v, ok, matterSmokeAlarmCritical)
+	v, ok = srv.MatterRead(alarm.AttrSmokeState)
+	if !ok || v != uint8(alarm.AlarmCritical) {
+		t.Errorf("SmokeState PRIMARY = %v ok=%v, want (%d, true)", v, ok, alarm.AlarmCritical)
 	}
 
-	// CO state → not served; the FeatureMap carries SMOKE only.
-	if v, ok = srv.MatterRead(matterAttrCOState); ok {
+	// CO state -> not served; the FeatureMap carries SMOKE only.
+	if v, ok = srv.MatterRead(alarm.AttrCOState); ok {
 		t.Errorf("COState = %v ok=%v, want (nil, false)", v, ok)
 	}
 
-	// HardwareFaultAlert → false.
-	v, ok = srv.MatterRead(matterAttrHardwareFaultAlert)
-	if !ok || v != false {
-		t.Errorf("HardwareFaultAlert = %v ok=%v, want false", v, ok)
-	}
-
-	// EndOfServiceAlert → 0.
-	v, ok = srv.MatterRead(matterAttrEndOfServiceAlert)
-	if !ok || v != uint8(0) {
-		t.Errorf("EndOfServiceAlert = %v ok=%v, want 0", v, ok)
-	}
-
-	// TestInProgress → false.
-	v, ok = srv.MatterRead(matterAttrTestInProgress)
-	if !ok || v != false {
-		t.Errorf("TestInProgress = %v ok=%v, want false", v, ok)
-	}
-
-	// FeatureMap → SMOKE bit.
-	v, ok = srv.MatterRead(matterAttrFeatureMap)
-	if !ok || v != matterSmokeCOFeatureSmoke {
-		t.Errorf("FeatureMap = %v ok=%v, want %d", v, ok, matterSmokeCOFeatureSmoke)
-	}
-
-	// Unknown attr → false.
+	// Unknown attr -> false.
 	_, ok = srv.MatterRead(0xDEAD)
 	if ok {
 		t.Error("MatterRead unknown attr must return ok=false")
@@ -868,20 +848,8 @@ func TestSmokeSirenMatterWriteAlwaysErrors(t *testing.T) {
 	s, _, _ := newSmokeSirenRig(t)
 	servers := s.MatterClusterServers()
 	srv := servers[0]
-	if err := srv.MatterWrite(context.Background(), matterAttrSmokeExpressedState, nil); err == nil {
-		t.Error("SmokeCO MatterWrite must always return error")
-	}
-}
-
-func TestSmokeSirenMatterInvokeAlwaysErrors(t *testing.T) {
-	t.Parallel()
-
-	s, _, _ := newSmokeSirenRig(t)
-	servers := s.MatterClusterServers()
-	srv := servers[0]
-	_, err := srv.MatterInvoke(context.Background(), 0x00, nil)
-	if err == nil {
-		t.Error("SmokeCO MatterInvoke must always return error")
+	if err := srv.MatterWrite(context.Background(), alarm.AttrExpressedState, nil); err == nil {
+		t.Error("SmokeCO MatterWrite of ExpressedState must return an error")
 	}
 }
 
@@ -903,8 +871,8 @@ func TestSmokeSirenReadBatteryAlert(t *testing.T) {
 	s, _, _ := newSmokeSirenRig(t)
 	servers := s.MatterClusterServers()
 	srv := servers[0]
-	v, ok := srv.MatterRead(matterAttrBatteryAlert)
-	if !ok || v != matterSmokeAlarmNormal {
+	v, ok := srv.MatterRead(alarm.AttrBatteryAlert)
+	if !ok || v != uint8(alarm.AlarmNormal) {
 		t.Errorf("BatteryAlert = %v ok=%v, want (Normal, true)", v, ok)
 	}
 }
@@ -916,8 +884,8 @@ func TestSmokeSirenReadSecondaryAlarmWarning(t *testing.T) {
 	servers := s.MatterClusterServers()
 	srv := servers[0]
 	fireSmokeStatus(t, statusDP, string(SmokeStatusSecondaryAlarm))
-	v, ok := srv.MatterRead(matterAttrSmokeState)
-	if !ok || v != matterSmokeAlarmWarning {
+	v, ok := srv.MatterRead(alarm.AttrSmokeState)
+	if !ok || v != uint8(alarm.AlarmWarning) {
 		t.Errorf("SmokeState SECONDARY = %v ok=%v, want (Warning, true)", v, ok)
 	}
 }

@@ -5,15 +5,21 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
+	matterbridge "github.com/SukramJ/go-fabric/bridge"
+	"github.com/SukramJ/go-fabric/mdns"
 	"github.com/SukramJ/go-fabric/node"
 	mattersetup "github.com/SukramJ/go-fabric/secure/setup"
 	"github.com/SukramJ/go-fabric/secure/spake2"
 	matterstore "github.com/SukramJ/go-fabric/store"
-
-	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
@@ -77,7 +83,10 @@ func TestMatterLocales(t *testing.T) {
 // (a zero node.Attestation); the dev self-signed fallback is gone.
 func TestMatterAttestationWithoutVendorMaterialIsTheFacadesTestChain(t *testing.T) {
 	t.Parallel()
-	got := matterAttestation(config.NorthMatter{VendorID: 0xFFF1, ProductID: 0x8000}, slog.New(slog.DiscardHandler))
+	got, err := matterAttestation(config.NorthMatter{VendorID: 0xFFF1, ProductID: 0x8000}, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatalf("matterAttestation without vendor material: %v", err)
+	}
 	if got.Chain != nil || got.CertificationDeclaration != nil {
 		t.Fatalf("matterAttestation without vendor material = %+v, want the zero value", got)
 	}
@@ -133,21 +142,192 @@ func TestStartMatterBridgeHandsTheFacadeTheAssemblersGroupManager(t *testing.T) 
 	}
 }
 
-// TestMatterScenesStorePersistsTheDaemonsKeys: the daemon's stable keys
-// are matterendpoint.SourceKey values, not endpoint.StringKeys; a scene
-// table saved under one is read back under the same key.
-func TestMatterScenesStorePersistsTheDaemonsKeys(t *testing.T) {
-	t.Parallel()
-	st := matterstore.New(openMigratedTestDB(t, "matter_scenes_store_test.db"))
-	s := matterScenesStore{store: st, logger: slog.New(slog.DiscardHandler)}
-	key := matterendpoint.SourceKey{CentralName: "ccu-01", DeviceAddress: "0001D3C9A4B5C6", ChannelNo: 4, DPKind: matterendpoint.DPKindGeneric, DPKey: "STATE"}
-	s.SaveScenes(key, []byte(`{"scene":1}`))
-	if got := string(s.LoadScenes(key)); got != `{"scene":1}` {
-		t.Fatalf("LoadScenes after SaveScenes = %q, want the saved table", got)
+// matterTestConfig is an enabled Matter configuration on an ephemeral
+// port with the mDNS advertiser off, over one registered central.
+func matterTestConfig(t *testing.T, central string) *config.Config {
+	t.Helper()
+	cfg := config.Default()
+	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
+	cfg.North.Matter.Listen = ":0"
+	cfg.DataDir = t.TempDir()
+	cfg.Centrals = []config.CentralConfig{{Name: central, Host: "127.0.0.1"}}
+	return cfg
+}
+
+// basicInformationAttrUniqueID is the BasicInformation UniqueID attribute
+// id (Matter core spec §11.1.5.13).
+const basicInformationAttrUniqueID uint32 = 0x0012
+
+// inFreshProcess re-runs the calling test alone in a child test process and
+// reports whether the caller is that child. The UniqueID salt
+// (bootid.EnableRotation, set by any start with dev_rotate_unique_ids) is a
+// one-way process-wide switch, so a test that needs the pinned form cannot
+// share a process with the dev-rotation starts elsewhere in this package.
+// The parent fails when the child fails; the caller returns when this
+// reports false.
+func inFreshProcess(t *testing.T) bool {
+	t.Helper()
+	const envKey = "LOOM_FRESH_PROCESS_TEST"
+	if os.Getenv(envKey) == t.Name() {
+		return true
 	}
-	other := key
-	other.ChannelNo = 5
-	if got := s.LoadScenes(other); got != nil {
-		t.Fatalf("LoadScenes of another channel = %q, want nothing", got)
+	cmd := exec.Command(os.Args[0], "-test.run=^"+t.Name()+"$", "-test.count=1") //nolint:gosec // re-executes this very test binary
+	cmd.Env = append(os.Environ(), envKey+"="+t.Name())
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("fresh-process run of %s failed: %v\n%s", t.Name(), err, lastLines(string(out), 12))
+	}
+	return false
+}
+
+func lastLines(s string, n int) string {
+	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return strings.Join(lines, "\n")
+}
+
+// servedUniqueID reads the UniqueID the running root endpoint serves.
+func servedUniqueID(t *testing.T, b *matterBridgeBundle) string {
+	t.Helper()
+	v, ok := b.node.Root().BasicInformation.MatterRead(basicInformationAttrUniqueID)
+	if !ok {
+		t.Fatal("root BasicInformation does not serve a UniqueID")
+	}
+	s, ok := v.(string)
+	if !ok || s == "" {
+		t.Fatalf("root BasicInformation UniqueID = %#v, want a non-empty string", v)
+	}
+	return s
+}
+
+// TestStartMatterBridgeKeepsServingWithABrokenAttestationChain: a
+// configured chain that does not load leaves the bridge running for the
+// controllers already paired — attestation is checked only while
+// commissioning — but blocks new commissioning on the node itself: the
+// uncommissioned node opens no window at Start, and opening one is refused
+// with go-fabric's ErrCommissioningBlocked (the same gate refuses a paired
+// controller's AdministratorCommissioning).
+func TestStartMatterBridgeKeepsServingWithABrokenAttestationChain(t *testing.T) {
+	t.Parallel()
+	cfg := matterTestConfig(t, "ccu-attest-broken")
+	cfg.North.Matter.Commissioning.Passcode = 20202021
+	cfg.North.Matter.Attestation.DACPath = filepath.Join(t.TempDir(), "missing-dac.pem")
+	reg := buildTestRegistry(t, "ccu-attest-broken")
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	bundle := startMatterBridge(ctx, cfg, reg, openTestLoomDB(t), health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	if bundle == nil {
+		t.Fatal("startMatterBridge refused to start on an unloadable attestation chain, want it serving the paired controllers")
+	}
+	t.Cleanup(bundle.stop)
+	if bundle.commissioningBlocked == nil {
+		t.Fatal("bundle.commissioningBlocked is nil on an unloadable attestation chain, want the load error")
+	}
+	window := bundle.node.CommissioningWindow()
+	if window.IsOpen() {
+		t.Error("the uncommissioned node opened its own window, want commissioning blocked")
+	}
+	if err := window.OpenOwnWindow(ctx, 3*time.Minute); !errors.Is(err, matterbridge.ErrCommissioningBlocked) {
+		t.Errorf("OpenOwnWindow err = %v, want ErrCommissioningBlocked", err)
+	}
+}
+
+// TestStartMatterBridgeStartsWithoutAttestationConfig: the same setup with
+// no attestation file configured starts on the facade's test chain.
+func TestStartMatterBridgeStartsWithoutAttestationConfig(t *testing.T) {
+	t.Parallel()
+	cfg := matterTestConfig(t, "ccu-attest-none")
+	reg := buildTestRegistry(t, "ccu-attest-none")
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	bundle := startMatterBridge(ctx, cfg, reg, openTestLoomDB(t), health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	if bundle == nil {
+		t.Fatal("startMatterBridge returned nil without an attestation configuration")
+	}
+	t.Cleanup(bundle.stop)
+	// The negative control of the blocked case: without a block the
+	// uncommissioned node opens its own window at Start.
+	if !bundle.node.CommissioningWindow().IsOpen() {
+		t.Error("the uncommissioned node opened no window without an attestation configuration")
+	}
+}
+
+// TestStartMatterBridgePinsUniqueIDAcrossARename: BasicInformation
+// UniqueID has quality F, so a node_label edit between two boots over the
+// same database must not re-identify the bridge.
+func TestStartMatterBridgePinsUniqueIDAcrossARename(t *testing.T) {
+	if !inFreshProcess(t) {
+		return
+	}
+	db := openTestLoomDB(t)
+	reg := buildTestRegistry(t, "ccu-uid-rename")
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	logger := slog.New(slog.DiscardHandler)
+
+	cfg := matterTestConfig(t, "ccu-uid-rename")
+	cfg.North.Matter.NodeLabel = "Bridge One"
+	first := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, logger)
+	if first == nil {
+		t.Fatal("first startMatterBridge returned nil")
+	}
+	want := servedUniqueID(t, first)
+	first.stop()
+
+	cfg = matterTestConfig(t, "ccu-uid-rename")
+	cfg.North.Matter.NodeLabel = "Bridge Two"
+	// A daemon restart builds a fresh registry; the manifest of the first
+	// one has already declared the readiness seam.
+	second := startMatterBridge(ctx, cfg, buildTestRegistry(t, "ccu-uid-rename"), db, health.NewTracker(), nil, logger)
+	if second == nil {
+		t.Fatal("second startMatterBridge returned nil")
+	}
+	t.Cleanup(second.stop)
+	if got := servedUniqueID(t, second); got != want {
+		t.Fatalf("UniqueID after a node_label rename = %q, want the pinned %q", got, want)
+	}
+}
+
+// TestStartMatterBridgeServesAUniqueIDTheDaemonPinnedBefore: a UniqueID
+// stored under the facade's setting key by an earlier daemon release is
+// served verbatim — the upgrade path keeps paired controllers' identity.
+func TestStartMatterBridgeServesAUniqueIDTheDaemonPinnedBefore(t *testing.T) {
+	if !inFreshProcess(t) {
+		return
+	}
+	const pinned = "0123456789ABCDEF0123456789ABCDEF"
+	db := openTestLoomDB(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	if err := matterstore.New(db).SetSetting(ctx, matterstore.SettingUniqueID, pinned); err != nil {
+		t.Fatalf("SetSetting: %v", err)
+	}
+	cfg := matterTestConfig(t, "ccu-uid-pinned")
+	reg := buildTestRegistry(t, "ccu-uid-pinned")
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	if bundle == nil {
+		t.Fatal("startMatterBridge returned nil")
+	}
+	t.Cleanup(bundle.stop)
+	if got := servedUniqueID(t, bundle); got != pinned {
+		t.Fatalf("served UniqueID = %q, want the previously pinned %q", got, pinned)
+	}
+}
+
+// TestMatterMdnsReporterAdvertisingFollowsTheAdvertiser: the no-op
+// advertiser is the explicit "stay quiet" opt-in and reports not
+// advertising; a real advertiser reports advertising.
+func TestMatterMdnsReporterAdvertisingFollowsTheAdvertiser(t *testing.T) {
+	t.Parallel()
+	if got := (matterMdnsReporter{adv: mdns.NewNoop()}).MatterMdns().Advertising; got {
+		t.Fatal("noop advertiser reported Advertising = true")
+	}
+	z := mdns.NewZeroconf()
+	t.Cleanup(func() { _ = z.Close() })
+	if got := (matterMdnsReporter{adv: z}).MatterMdns().Advertising; !got {
+		t.Fatal("zeroconf advertiser reported Advertising = false")
 	}
 }

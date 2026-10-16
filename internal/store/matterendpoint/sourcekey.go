@@ -5,8 +5,12 @@ package matterendpoint
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 
 	fabricendpoint "github.com/SukramJ/go-fabric/endpoint"
+
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // DPKind classifies a Matter endpoint's source within the model.
@@ -30,12 +34,10 @@ const (
 // matter_exposures.
 //
 // It implements [fabricendpoint.SourceKey], so the bridge module carries
-// it opaquely and hands the very same value back — through
-// [fabricendpoint.Store] and through the assembled endpoint — for this
-// package to recover by type assertion. Nothing parses [String]; the
-// separator is not escaped and a central name may legitimately contain
-// one, so splitting the rendered form back apart would be a guess about
-// operator-supplied data.
+// it opaquely and hands the very same value back through the assembled
+// endpoint. The endpoint store persists only [SourceKey.String] and lists
+// rows back through [DecodeSourceKey]; the store refuses to write a key
+// whose rendering does not decode back to itself ([ErrKeyNotDecodable]).
 type SourceKey struct {
 	CentralName   string
 	DeviceAddress string
@@ -82,4 +84,49 @@ func keyOf(key fabricendpoint.SourceKey) (SourceKey, error) {
 			"matter endpoint store: source key is %T, want %T", key, SourceKey{},
 		)
 	}
+}
+
+// DecodeSourceKey rebuilds a [SourceKey] from its [SourceKey.String]
+// rendering, for go-fabric's sqlitestore (sqlitestore.WithKeyDecoder),
+// which persists only the rendering. The split is unambiguous for every key
+// the store accepts: the central name cannot contain "|"
+// ([hmtypes.ValidateCentralName]), the device address is taken up to the
+// next "|", the channel must re-render to the same decimal, the kind must be
+// one of the [DPKind] values, and the data-point key keeps the remainder,
+// "|" included. A rendering that does not split comes back as an
+// [fabricendpoint.StringKey]; no live source carries that key, so the
+// assembler garbage-collects the row.
+func DecodeSourceKey(rendered string) fabricendpoint.SourceKey {
+	if k, ok := parseSourceKey(rendered); ok {
+		return k
+	}
+	return fabricendpoint.StringKey(rendered)
+}
+
+func parseSourceKey(rendered string) (SourceKey, bool) {
+	central, rest, ok := strings.Cut(rendered, "|")
+	if !ok || !hmtypes.IsValidCentralName(central) {
+		return SourceKey{}, false
+	}
+	parts := strings.SplitN(rest, "|", 4)
+	if len(parts) != 4 {
+		return SourceKey{}, false
+	}
+	channel, err := strconv.Atoi(parts[1])
+	if err != nil || strconv.Itoa(channel) != parts[1] {
+		return SourceKey{}, false
+	}
+	kind := DPKind(parts[2])
+	switch kind {
+	case DPKindCustom, DPKindGeneric, DPKindCalculated, DPKindCombined, DPKindMeasurement:
+	default:
+		return SourceKey{}, false
+	}
+	return SourceKey{
+		CentralName:   central,
+		DeviceAddress: parts[0],
+		ChannelNo:     channel,
+		DPKind:        kind,
+		DPKey:         parts[3],
+	}, true
 }

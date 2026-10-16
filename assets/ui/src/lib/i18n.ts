@@ -1672,9 +1672,9 @@ const EN: Catalog = {
   "config.help.north.matter.case.fabric_id":
     "No effect: the fabric id is the one the commissioner's NOC carries. Kept for compatibility with existing configs.",
   "config.help.north.matter.attestation.dac_path":
-    "Filesystem path to the vendor-supplied Device Attestation Certificate (PEM or DER). Empty falls back to the CSA test chain (test PAA → PAI → DAC) for the configured vendor and product, which Apple Home, Google Home and chip-tool accept but which must not ship.",
+    "Filesystem path to the vendor-supplied Device Attestation Certificate (PEM or DER). With all four attestation paths empty the bridge serves the CSA test chain (test PAA → PAI → DAC) for the configured vendor and product, which Apple Home, Google Home and chip-tool accept but which must not ship. Once any path is set, all four files must load and the key must match the DAC — otherwise the bridge keeps serving the controllers already paired but refuses every new pairing until the files are fixed and the daemon restarts.",
   "config.help.north.matter.attestation.dac_key_path":
-    "Filesystem path to the DAC's P-256 private key (PEM PKCS#8 or DER). MUST match the public key embedded in the DAC certificate.",
+    "Filesystem path to the DAC's P-256 private key (PEM or DER, PKCS#8 or SEC1). MUST match the public key embedded in the DAC certificate; on a mismatch the bridge refuses new pairings.",
   "config.help.north.matter.attestation.pai_path":
     "Filesystem path to the Product Attestation Intermediate certificate. Provided by the CSA along with the DAC.",
   "config.help.north.matter.attestation.cd_path":
@@ -6033,9 +6033,9 @@ const DE: Catalog = {
   "config.help.north.matter.case.fabric_id":
     "Ohne Wirkung: die Fabric-ID steht im NOC des Commissioners. Bleibt für bestehende Konfigurationen erhalten.",
   "config.help.north.matter.attestation.dac_path":
-    "Pfad zum vom Vendor gelieferten Device Attestation Certificate (PEM oder DER). Leer = CSA-Testkette (Test-PAA → PAI → DAC) für Vendor und Produkt, die Apple Home, Google Home und chip-tool akzeptieren, die aber nicht ausgeliefert werden darf.",
+    "Pfad zum vom Vendor gelieferten Device Attestation Certificate (PEM oder DER). Sind alle vier Attestation-Pfade leer, nutzt die Bridge die CSA-Testkette (Test-PAA → PAI → DAC) für Vendor und Produkt, die Apple Home, Google Home und chip-tool akzeptieren, die aber nicht ausgeliefert werden darf. Ist ein Pfad gesetzt, müssen alle vier Dateien laden und der Schlüssel zum DAC passen – sonst bedient die Bridge weiter alle bereits gekoppelten Controller, verweigert aber jede neue Kopplung, bis die Dateien stimmen und der Daemon neu startet.",
   "config.help.north.matter.attestation.dac_key_path":
-    "Pfad zum P-256-Privatschlüssel des DAC (PEM PKCS#8 oder DER). MUSS zum Public-Key im DAC-Zertifikat passen.",
+    "Pfad zum P-256-Privatschlüssel des DAC (PEM oder DER, PKCS#8 oder SEC1). MUSS zum Public-Key im DAC-Zertifikat passen; passt er nicht, verweigert die Bridge neue Kopplungen.",
   "config.help.north.matter.attestation.pai_path":
     "Pfad zum Product Attestation Intermediate-Zertifikat. Wird von der CSA zusammen mit dem DAC ausgeliefert.",
   "config.help.north.matter.attestation.cd_path":

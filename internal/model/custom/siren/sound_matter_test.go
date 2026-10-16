@@ -252,9 +252,10 @@ func TestSoundPlayerMoveToLevelIsGatedWhileSilent(t *testing.T) {
 	t.Parallel()
 
 	sp, direction, _, w := newSpeakerRig(t)
+	_, lvl := speakerServers(t, sp)
 	ctx := context.Background()
 
-	if err := sp.MoveToLevel(ctx, levelcontrol.MoveToLevelRequest{Level: 127}); err != nil {
+	if _, err := lvl.MatterInvoke(ctx, levelcontrol.CmdMoveToLevel, levelcontrol.MoveToLevelRequest{Level: 127}); err != nil {
 		t.Fatalf("MoveToLevel while silent: %v", err)
 	}
 	if _, ok := w.has(hmenum.ParameterLevel); ok {
@@ -262,7 +263,7 @@ func TestSoundPlayerMoveToLevelIsGatedWhileSilent(t *testing.T) {
 	}
 
 	fireDirection(t, direction, "UP")
-	if err := sp.MoveToLevel(ctx, levelcontrol.MoveToLevelRequest{Level: levelcontrol.LevelMax}); err != nil {
+	if _, err := lvl.MatterInvoke(ctx, levelcontrol.CmdMoveToLevel, levelcontrol.MoveToLevelRequest{Level: levelcontrol.LevelMax}); err != nil {
 		t.Fatalf("MoveToLevel while playing: %v", err)
 	}
 	if v, ok := w.has(hmenum.ParameterLevel); !ok || v != 1.0 {
@@ -276,9 +277,10 @@ func TestSoundPlayerMoveToLevelWithOnOffCouplesSilence(t *testing.T) {
 	t.Parallel()
 
 	sp, _, _, w := newSpeakerRig(t)
+	_, lvl := speakerServers(t, sp)
 	ctx := context.Background()
 
-	if err := sp.MoveToLevelWithOnOff(ctx, levelcontrol.MoveToLevelRequest{Level: levelcontrol.LevelMin}); err != nil {
+	if _, err := lvl.MatterInvoke(ctx, levelcontrol.CmdMoveToLevelWithOnOff, levelcontrol.MoveToLevelRequest{Level: levelcontrol.LevelMin}); err != nil {
 		t.Fatalf("MoveToLevelWithOnOff(0): %v", err)
 	}
 	if v, ok := w.has(hmenum.ParameterLevel); !ok || v != float64(0) {
@@ -286,6 +288,75 @@ func TestSoundPlayerMoveToLevelWithOnOffCouplesSilence(t *testing.T) {
 	}
 	if _, ok := w.has(hmenum.ParameterDurationValue); !ok {
 		t.Error("MoveToLevelWithOnOff(0) must stop the player, not only lower the volume")
+	}
+}
+
+// TestSoundPlayerMoveToLevelWithOnOffStartsAtVolume pins the switch-on half
+// of the coupling: a silent player is started at the target volume by the
+// profile's play path (LEVEL written, playback started), not switched on
+// first and turned to the volume second.
+func TestSoundPlayerMoveToLevelWithOnOffStartsAtVolume(t *testing.T) {
+	t.Parallel()
+
+	sp, _, level, w := newSpeakerRig(t)
+	_, lvl := speakerServers(t, sp)
+	level.OnEvent(0.2)
+
+	if _, err := lvl.MatterInvoke(context.Background(), levelcontrol.CmdMoveToLevelWithOnOff,
+		levelcontrol.MoveToLevelRequest{Level: levelcontrol.LevelMax}); err != nil {
+		t.Fatalf("MoveToLevelWithOnOff(max): %v", err)
+	}
+	w.mu.Lock()
+	calls := slices.Clone(w.calls)
+	w.mu.Unlock()
+	if len(calls) != 1 || calls[0].param != hmenum.ParameterLevel || calls[0].value != 1.0 {
+		t.Fatalf("MoveToLevelWithOnOff(max) wrote %v, want one LEVEL=1.0 play write", calls)
+	}
+}
+
+// TestSoundPlayerStepOnUnknownVolumeFails pins that a relative step needs a
+// reported volume: matter.js stepLogic reads currentLevel
+// (LevelControlServer.ts:478), whose getter throws on null (:103-111), so
+// the command answers Failure and nothing reaches the wire.
+func TestSoundPlayerStepOnUnknownVolumeFails(t *testing.T) {
+	t.Parallel()
+
+	sp, direction, _, w := newSpeakerRig(t)
+	_, lvl := speakerServers(t, sp)
+	fireDirection(t, direction, "UP")
+
+	if _, err := lvl.MatterInvoke(context.Background(), levelcontrol.CmdStepWithOnOff,
+		levelcontrol.StepRequest{StepMode: levelcontrol.StepModeUp, StepSize: 10}); err == nil {
+		t.Fatal("StepWithOnOff on an unreported volume succeeded, want Failure")
+	}
+	if _, ok := w.has(hmenum.ParameterLevel); ok {
+		t.Error("StepWithOnOff on an unreported volume reached the wire")
+	}
+}
+
+// TestSoundPlayerSilenceOnSilentUnknownPlayerSendsNoStop documents an edge
+// of the coupling rather than a wish: with DIRECTION never observed the
+// OnOff attribute reads false, and with LEVEL already reporting 0 a
+// MoveToLevelWithOnOff(0) finds the endpoint off and at its target, so the
+// source has nothing to do and no StopSound is sent. A player that is in
+// fact playing at volume 0 is inaudible, so nothing a listener hears is
+// left running.
+func TestSoundPlayerSilenceOnSilentUnknownPlayerSendsNoStop(t *testing.T) {
+	t.Parallel()
+
+	sp, _, level, w := newSpeakerRig(t)
+	_, lvl := speakerServers(t, sp)
+	level.OnEvent(0.0)
+
+	if _, err := lvl.MatterInvoke(context.Background(), levelcontrol.CmdMoveToLevelWithOnOff,
+		levelcontrol.MoveToLevelRequest{Level: levelcontrol.LevelMin}); err != nil {
+		t.Fatalf("MoveToLevelWithOnOff(0): %v", err)
+	}
+	w.mu.Lock()
+	n := len(w.calls)
+	w.mu.Unlock()
+	if n != 0 {
+		t.Fatalf("MoveToLevelWithOnOff(0) on an unknown player at volume 0 wrote %d values, want none", n)
 	}
 }
 

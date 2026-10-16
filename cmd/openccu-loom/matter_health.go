@@ -34,7 +34,7 @@ type matterStatusSnapshot interface {
 // fixed cadence and records the bridge's liveness verdict. Returns a
 // stop function that cancels the goroutine and waits for it to exit.
 // A nil reader or tracker yields a no-op stopper.
-func startMatterHealthProbe(ctx context.Context, reader matterStatusSnapshot, tracker *health.Tracker, interval time.Duration) func() {
+func startMatterHealthProbe(ctx context.Context, reader matterStatusSnapshot, blocked error, tracker *health.Tracker, interval time.Duration) func() {
 	if reader == nil || tracker == nil {
 		return func() {}
 	}
@@ -45,7 +45,7 @@ func startMatterHealthProbe(ctx context.Context, reader matterStatusSnapshot, tr
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		probeMatterOnce(pctx, reader, tracker)
+		probeMatterOnce(pctx, reader, blocked, tracker)
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
@@ -53,7 +53,7 @@ func startMatterHealthProbe(ctx context.Context, reader matterStatusSnapshot, tr
 			case <-pctx.Done():
 				return
 			case <-ticker.C:
-				probeMatterOnce(pctx, reader, tracker)
+				probeMatterOnce(pctx, reader, blocked, tracker)
 			}
 		}
 	}()
@@ -63,7 +63,11 @@ func startMatterHealthProbe(ctx context.Context, reader matterStatusSnapshot, tr
 	}
 }
 
-func probeMatterOnce(ctx context.Context, reader matterStatusSnapshot, tracker *health.Tracker) {
+// probeMatterOnce records one sample. blocked is why new commissioning is
+// shut (matterBridgeBundle.commissioningBlocked); a listening bridge then
+// reports unhealthy, so the cause reaches Diagnostics and not only the log.
+// The component is not critical, so /health degrades and stays 200.
+func probeMatterOnce(ctx context.Context, reader matterStatusSnapshot, blocked error, tracker *health.Tracker) {
 	queryCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	status := reader.MatterStatus(queryCtx)
@@ -85,6 +89,13 @@ func probeMatterOnce(ctx context.Context, reader matterStatusSnapshot, tracker *
 		tracker.Record(matterHealthComponentName, health.Sample{
 			Healthy: false,
 			Note:    "bridge not listening (escalated)",
+		})
+		return
+	}
+	if blocked != nil {
+		tracker.Record(matterHealthComponentName, health.Sample{
+			Healthy: false,
+			Note:    "commissioning disabled: the configured attestation chain does not load (north.matter.attestation)",
 		})
 		return
 	}

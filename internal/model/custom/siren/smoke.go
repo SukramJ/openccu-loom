@@ -39,9 +39,13 @@ type SmokeSiren struct {
 	payload.ServiceRegistry
 
 	// dataVersion tracks the per-cluster monotonic counter (Matter
-	// §10.6.5). SmokeCOAlarm has no client-writable attributes / commands
-	// in 0.1.0; the field is reserved for when SelfTestRequest is wired.
+	// §10.6.5). It is the SmokeCOAlarm server's tracker too
+	// (alarm.Config.DataVersion), so a status change and the server's own
+	// bookkeeping advance one counter.
 	dataVersion hmtypes.DataVersionTracker
+
+	// matterAlarm holds the SmokeCOAlarm server built on first assembly.
+	matterAlarm matterAlarmHolder
 
 	key    hmtypes.DataPointKey
 	writer custom.Writer
@@ -129,7 +133,10 @@ func NewSmokeSiren(cfg SmokeSirenConfig) *SmokeSiren {
 	s.registerSmokeSirenServices()
 	// Matter §10.6.5: DataVersion advances on every CCU-confirmed attribute change.
 	if s.status != nil {
-		_ = s.status.OnConfirmedUpdate(func(_, _ int32) { s.dataVersion.Bump() })
+		_ = s.status.OnConfirmedUpdate(func(_, _ int32) {
+			s.dataVersion.Bump()
+			s.refreshMatterAlarm()
+		})
 	}
 	if s.command != nil {
 		_ = s.command.OnConfirmedUpdate(func(_, _ int32) { s.dataVersion.Bump() })

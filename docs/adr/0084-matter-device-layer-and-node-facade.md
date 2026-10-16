@@ -2,7 +2,8 @@
 
 - **Status**: accepted (2026-10-12); phases 1 and 2 are this repository's
   work, phase 3 done on go-fabric main b11840f (#87, #89 closed), pinned
-  on the go-fabric v0.4.0 release since 2026-10-14
+  on the go-fabric v0.4.0 release since 2026-10-14; amended for go-fabric
+  v0.5.0 (see [Amendment](#amendment--go-fabric-v050))
 - **Related**: [ADR 0012](./0012-matter-pure-go-implementation.md) (pure-Go
   Matter), [ADR 0049](./0049-matter-one-endpoint-per-device.md) (one endpoint
   per device), [ADR 0063](./0063-self-maintained-device-profiles.md) (the
@@ -202,8 +203,7 @@ the i18n channel word, the topology assembler handed to the facade as
 `node.Config.Topology` (one snapshot per central with its own
 completeness — the facade's Aggregator is not used), the shared group
 manager (`node.Config.Groups`, so the endpoints' Groups servers and the
-root GroupKeyManagement run on one state), the pinned UniqueID, the
-attestation material, the health probe and gauges, the REST / WebSocket
+root GroupKeyManagement run on one state), the attestation material, the health probe and gauges, the REST / WebSocket
 adapters over `n.Bridge()`, `n.Root()`, `n.CommissioningWindow()`,
 `n.Store()`, `n.Sessions()` and `n.Subscriptions()`, the REST window over
 `CommissioningWindow().OpenOwnWindow` (configured credentials) and
@@ -259,8 +259,9 @@ matter.js's and chip's:
   +1 per later boot) under the facade's settings key, so it reads 0 once
   after the update; the operational time keeps its key and carries over;
   the
-  development self-signed attestation fallback is gone, the CSA test chain
-  is the fallback.
+  development self-signed attestation fallback is gone; the CSA test chain
+  is served when no attestation file is configured (since the amendment
+  below, a configured chain that does not load shuts new commissioning).
 
 The 50-odd test call sites of `startMatterBridge` kept their helper: it
 boots the facade the same way and hands back the same bundle (bridge,
@@ -310,6 +311,66 @@ predates the migration); closed by the palette-quantised ColorControl of
 `TestSendReceive_FixedColor`), released as 0.91.1 and confirmed live at
 the owner's HmIP-BSL on 2026-10-15: the colour picker is there and a
 colour change reaches the device.
+
+## Amendment — go-fabric v0.5.0
+
+A review of the glue on 2026-10-15 found library code on this side of the
+boundary: copies of what the facade already did, and generic mechanics
+the facade did not yet expose. Six go-fabric issues (#117–#122) moved it;
+go-fabric v0.5.0 ships them, and this daemon now uses them:
+
+- **UniqueID**: the daemon's own pinning is gone; `BasicInformation.UniqueID`
+  stays empty and the facade pins it under the same settings key, so the
+  identity a paired controller knows carries over (#122).
+- **Scenes and bridged NodeLabels**: `node.NewEndpointPersistence` serves
+  both the daemon's assembler and the facade (`node.Config.EndpointPersistence`);
+  the `node_label` column and the daemon's scene store are gone (#117).
+- **Endpoint identity**: `matterendpoint.Store` is go-fabric's
+  `endpoint/sqlitestore` under this daemon's key type
+  (`sqlitestore.WithKeyDecoder(matterendpoint.DecodeSourceKey)`); migration
+  049 rebuilds `matter_endpoints` to go-fabric's schema row for row, keeping
+  every endpoint number, moving the NodeLabels into the settings table and
+  the counter into `matter_endpoint_allocation`. The store refuses a key
+  whose rendering does not decode back to itself, so no row can come back
+  as a foreign key and be garbage-collected (#121).
+- **DNS-SD re-announce**: the facade runs the loop; the daemon no longer
+  type-asserts the advertiser (#119).
+- **Attestation**: `attestation.LoadChainFiles` replaces the daemon's
+  loader (#118). A configured chain that does not load no longer falls back
+  silently to the CSA test chain: pairing as the test vendor while the
+  operator believes a production chain is served would only surface as a
+  controller rejecting the device in the field. Stopping the bridge was
+  rejected, because attestation is checked only while commissioning — the
+  controllers already paired would lose every accessory for a fault that
+  cannot affect them. The bridge therefore keeps serving them and shuts new
+  commissioning through the facade before `Start`
+  (`Node.SetCommissioningBlocked`, go-fabric v0.5.4, #133): the node's own
+  window, the REST opener (409) and a paired controller's
+  AdministratorCommissioning (multi-admin sharing) are all refused, and the
+  `matter.bridge` health component reports the cause (degraded, not 503).
+- **SmokeCOAlarm**: the last hand-written cluster server of the profiles is
+  go-fabric's `cluster/alarm.Server`; the smoke siren gains the SmokeAlarm
+  and AllClear events and stops reporting a null ExpressedState.
+- **LevelControl (#120, #127)**: the light runs on
+  `levelcontrol.NewNativeSource` since go-fabric v0.5.1, which fixed the two
+  places where v0.5.0 departed from matter.js (#127: a rated Move on an
+  unknown level, the switch-off at or below MinLevel). The light implements
+  only `NativeRamp` (one atomic LEVEL / RAMP_TIME write per command) and an
+  attribute-only `OnOff`; `BD-Matter-LevelControl-NativeRamp` carries the
+  details. Two behaviours change towards matter.js: a Step cropped at a
+  bound runs for the shorter time its rate gives (`stepLogic`), and a Step
+  on an unknown level answers Failure (`currentLevel` getter). The light
+  also uses go-fabric's `LevelFromUnit` / `UnitFromLevel` and the saturation
+  and mireds scalers, each equal to the daemon's on every input; the hue
+  scaler stays (the daemon wraps 360° to 0, go-fabric crops).
+  The dimmer keeps switching its OnOff attribute off itself on a "with
+  On/Off" command to the minimum: the source does so only while OnOff still
+  reads on, and the dimmer's OnOff reads its optimistic level, which the
+  accepted LEVEL 0 write has already turned off. The sound player runs on
+  `NativeSource` since go-fabric v0.5.3: it declines Move through
+  `NativeMover` (#129) — on a speaker a jump to the bound is a jump to full
+  volume — and takes the "with On/Off" commands through `NativeSwitcher`
+  (#131), so "play at this volume" and "stop" stay one device write each.
 
 ## Consequences
 

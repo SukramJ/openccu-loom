@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -47,6 +48,9 @@ type matterCommissioningOpenerAdapter struct {
 	// facade (the node itself runs on credentials nobody holds, see
 	// matterCommissioningCredentials).
 	configured bool
+	// blocked, when set, refuses every window: new commissioning is shut
+	// (matterBridgeBundle.commissioningBlocked).
+	blocked error
 	// allowEmptyTopology lifts the bridged-endpoint check (tests of the
 	// window itself).
 	allowEmptyTopology bool
@@ -86,6 +90,9 @@ func (a *matterCommissioningOpenerAdapter) opened(window *matterbridge.Commissio
 func (a *matterCommissioningOpenerAdapter) OpenCommissioningWindow(ctx context.Context, durationSeconds uint16) (handlers.MatterCommissioningWindowResult, error) {
 	if a == nil || a.node == nil {
 		return handlers.MatterCommissioningWindowResult{}, matterbridge.ErrCommissioningWindowNotConfigured
+	}
+	if a.blocked != nil {
+		return handlers.MatterCommissioningWindowResult{}, fmt.Errorf("%w: %w", handlers.ErrCommissioningBlocked, a.blocked)
 	}
 	if a.bridge != nil && !a.allowEmptyTopology {
 		if topo := a.bridge.Topology(); topo != nil {

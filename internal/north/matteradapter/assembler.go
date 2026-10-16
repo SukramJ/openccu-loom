@@ -163,10 +163,12 @@ type Assembler struct {
 }
 
 // NodeLabelStore persists controller-written bridged NodeLabels per
-// endpoint key. Load answers "" for an endpoint no controller renamed.
+// endpoint key; NodeLabel answers "" for an endpoint no controller
+// renamed. go-fabric's node.EndpointPersistence is the production
+// implementation, the same one the daemon hands the facade.
 type NodeLabelStore interface {
-	LoadNodeLabel(key matterendpoint.SourceKey) string
-	SaveNodeLabel(key matterendpoint.SourceKey, label string)
+	OnNodeLabelWritten(key endpoint.SourceKey, label string)
+	NodeLabel(ctx context.Context, key endpoint.SourceKey) string
 }
 
 // bridgedVendorName is the manufacturer served as the
@@ -193,11 +195,8 @@ func New(s endpoint.Store, cfg Config, logger *slog.Logger) (*Assembler, error) 
 		Groups:     cfg.Groups,
 		Scenes:     cfg.Scenes,
 		OnNodeLabelWritten: func(key endpoint.SourceKey, label string) {
-			if cfg.NodeLabels == nil {
-				return
-			}
-			if k, ok := key.(matterendpoint.SourceKey); ok {
-				cfg.NodeLabels.SaveNodeLabel(k, label)
+			if cfg.NodeLabels != nil {
+				cfg.NodeLabels.OnNodeLabelWritten(key, label)
 			}
 		},
 	}, logger)
@@ -419,7 +418,7 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 				return nil, err
 			}
 			if ok {
-				out = append(out, a.makeSpec(centralName, names, dev, ch, matterendpoint.DPKindCustom, dpKey(cdp), src))
+				out = append(out, a.makeSpec(ctx, centralName, names, dev, ch, matterendpoint.DPKindCustom, dpKey(cdp), src))
 			}
 		}
 	}
@@ -435,7 +434,7 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 			if !allowed {
 				continue
 			}
-			out = append(out, a.makeSpec(centralName, names, dev, ch, matterendpoint.DPKindCalculated, key, src))
+			out = append(out, a.makeSpec(ctx, centralName, names, dev, ch, matterendpoint.DPKindCalculated, key, src))
 			continue
 		}
 		if !a.cfg.IncludeMeasurements {
@@ -458,7 +457,7 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 		if !allowed {
 			continue
 		}
-		out = append(out, a.makeMeasurementSpec(centralName, names, dev, ch, matterendpoint.DPKindCalculated, key, meas))
+		out = append(out, a.makeMeasurementSpec(ctx, centralName, names, dev, ch, matterendpoint.DPKindCalculated, key, meas))
 	}
 
 	// Combined DPs.
@@ -474,7 +473,7 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 		if !allowed {
 			continue
 		}
-		out = append(out, a.makeSpec(centralName, names, dev, ch, matterendpoint.DPKindCombined, dpKey(comb), src))
+		out = append(out, a.makeSpec(ctx, centralName, names, dev, ch, matterendpoint.DPKindCombined, dpKey(comb), src))
 	}
 
 	// Generic DPs project to Matter on two paths:
@@ -527,7 +526,7 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 					if !allowed {
 						continue
 					}
-					out = append(out, a.makeSpec(centralName, names, dev, ch, matterendpoint.DPKindGeneric, key, src))
+					out = append(out, a.makeSpec(ctx, centralName, names, dev, ch, matterendpoint.DPKindGeneric, key, src))
 					continue
 				}
 			}
@@ -568,17 +567,17 @@ func (a *Assembler) channelSpecs(ctx context.Context, centralName string, names 
 			continue
 		default:
 		}
-		out = append(out, a.makeMeasurementSpec(centralName, names, dev, ch, matterendpoint.DPKindGeneric, key, meas))
+		out = append(out, a.makeMeasurementSpec(ctx, centralName, names, dev, ch, matterendpoint.DPKindGeneric, key, meas))
 	}
 
 	if len(pressMembers) > 0 {
-		if spec, ok := a.makeButtonGroupSpec(centralName, names, dev, ch, pressMembers); ok {
+		if spec, ok := a.makeButtonGroupSpec(ctx, centralName, names, dev, ch, pressMembers); ok {
 			out = append(out, spec)
 		}
 	}
 
 	if len(electricalMembers) > 0 {
-		if spec, ok := a.makeElectricalGroupSpec(centralName, names, dev, ch, electricalMembers); ok {
+		if spec, ok := a.makeElectricalGroupSpec(ctx, centralName, names, dev, ch, electricalMembers); ok {
 			out = append(out, spec)
 		}
 	}
@@ -608,6 +607,7 @@ const ElectricalGroupDPKey = "ELECTRICAL"
 // one channel from its allowed electrical DPs. The second result is false
 // when no member survives the group's parameter filter.
 func (a *Assembler) makeElectricalGroupSpec(
+	ctx context.Context,
 	centralName string,
 	names NameResolver,
 	dev *device.Device,
@@ -633,7 +633,7 @@ func (a *Assembler) makeElectricalGroupSpec(
 		DPKind:        matterendpoint.DPKindGeneric,
 		DPKey:         ElectricalGroupDPKey,
 	}
-	return a.deviceSpec(specInput{
+	return a.deviceSpec(ctx, specInput{
 		key:          sourceKey,
 		dev:          dev,
 		ch:           ch,
@@ -667,6 +667,7 @@ const ButtonGroupDPKey = "BUTTON"
 // filter — defensive only, since the MomentarySwitch classification and
 // the group's press family enumerate the same parameters.
 func (a *Assembler) makeButtonGroupSpec(
+	ctx context.Context,
 	centralName string,
 	names NameResolver,
 	dev *device.Device,
@@ -688,7 +689,7 @@ func (a *Assembler) makeButtonGroupSpec(
 		DPKind:        matterendpoint.DPKindGeneric,
 		DPKey:         ButtonGroupDPKey,
 	}
-	return a.deviceSpec(specInput{
+	return a.deviceSpec(ctx, specInput{
 		key:        sourceKey,
 		dev:        dev,
 		ch:         ch,
@@ -749,6 +750,7 @@ func genericDPKeyForMeasurement(dp any) string {
 
 // makeSpec describes one source-backed bridged endpoint.
 func (a *Assembler) makeSpec(
+	ctx context.Context,
 	centralName string,
 	names NameResolver,
 	dev *device.Device,
@@ -764,7 +766,7 @@ func (a *Assembler) makeSpec(
 		DPKind:        kind,
 		DPKey:         key,
 	}
-	return a.deviceSpec(specInput{
+	return a.deviceSpec(ctx, specInput{
 		key:          sourceKey,
 		dev:          dev,
 		ch:           ch,
@@ -778,6 +780,7 @@ func (a *Assembler) makeSpec(
 // label carries the parameter suffix, because several measurements of
 // one channel are otherwise indistinguishable in a controller's UI.
 func (a *Assembler) makeMeasurementSpec(
+	ctx context.Context,
 	centralName string,
 	names NameResolver,
 	dev *device.Device,
@@ -793,7 +796,7 @@ func (a *Assembler) makeMeasurementSpec(
 		DPKind:        kind,
 		DPKey:         key,
 	}
-	return a.deviceSpec(specInput{
+	return a.deviceSpec(ctx, specInput{
 		key:          sourceKey,
 		dev:          dev,
 		ch:           ch,
@@ -834,7 +837,7 @@ type specInput struct {
 // type, so the assembly never loses an endpoint over a conformance
 // finding — the finding is reported through the bridge's device-type
 // validator, which judges the hand-built Spec too.
-func (a *Assembler) deviceSpec(in specInput) endpoint.Spec {
+func (a *Assembler) deviceSpec(ctx context.Context, in specInput) endpoint.Spec {
 	handBuilt := endpoint.Spec{
 		StableKey:      in.key,
 		DeviceAddress:  in.dev.Address,
@@ -858,7 +861,7 @@ func (a *Assembler) deviceSpec(in specInput) endpoint.Spec {
 		Reachable:      in.dev.Available,
 	}
 	if a.cfg.NodeLabels != nil {
-		opts.NodeLabel = a.cfg.NodeLabels.LoadNodeLabel(in.key)
+		opts.NodeLabel = a.cfg.NodeLabels.NodeLabel(ctx, in.key)
 	}
 	var with []fabricdevice.Option
 	if in.source != nil {

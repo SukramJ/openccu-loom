@@ -41,6 +41,7 @@ func TestCacheresetGuardNoOperatorStateTouched(t *testing.T) {
 		"matter_group_key_map",
 		"matter_acl_entries",
 		"matter_endpoints",
+		"matter_endpoint_allocation",
 		"matter_exposures",
 		"matter_persistent_subscriptions",
 		"matter_diagnostics",

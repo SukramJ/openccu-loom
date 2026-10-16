@@ -45,8 +45,8 @@ func TestGetEndpoint_Found(t *testing.T) {
 
 	key := testKey("c1", "A:1", 1, matterendpoint.DPKindCustom, "STATE")
 	rec := fabricendpoint.Record{Key: key, EndpointID: 5, DeviceType: 0x0100}
-	if err := s.UpsertEndpoint(ctx, rec); err != nil {
-		t.Fatalf("UpsertEndpoint: %v", err)
+	if _, err := s.UpsertEndpointAssigning(ctx, rec); err != nil {
+		t.Fatalf("UpsertEndpointAssigning: %v", err)
 	}
 
 	got, err := s.GetEndpoint(ctx, key)
@@ -84,8 +84,8 @@ func TestListEndpoints_FilterByCentral(t *testing.T) {
 
 	for i, centralName := range []string{"a", "b", "b"} {
 		key := testKey(centralName, "DEV:1", i+2, matterendpoint.DPKindGeneric, "V")
-		if err := s.UpsertEndpoint(ctx, fabricendpoint.Record{Key: key, EndpointID: uint16(i + 2), DeviceType: 1}); err != nil { //nolint:gosec // loop index is small and positive; uint16 conversion is safe
-			t.Fatalf("UpsertEndpoint: %v", err)
+		if _, err := s.UpsertEndpointAssigning(ctx, fabricendpoint.Record{Key: key, EndpointID: uint16(i + 2), DeviceType: 1}); err != nil { //nolint:gosec // loop index is small and positive; uint16 conversion is safe
+			t.Fatalf("UpsertEndpointAssigning: %v", err)
 		}
 	}
 
@@ -106,8 +106,8 @@ func TestListEndpoints_NoFilter(t *testing.T) {
 
 	for i, centralName := range []string{"x", "y"} {
 		key := testKey(centralName, "DEV:1", i+2, matterendpoint.DPKindGeneric, "V")
-		if err := s.UpsertEndpoint(ctx, fabricendpoint.Record{Key: key, EndpointID: uint16(i + 2), DeviceType: 1}); err != nil { //nolint:gosec // loop index is small and positive; uint16 conversion is safe
-			t.Fatalf("UpsertEndpoint: %v", err)
+		if _, err := s.UpsertEndpointAssigning(ctx, fabricendpoint.Record{Key: key, EndpointID: uint16(i + 2), DeviceType: 1}); err != nil { //nolint:gosec // loop index is small and positive; uint16 conversion is safe
+			t.Fatalf("UpsertEndpointAssigning: %v", err)
 		}
 	}
 
@@ -120,27 +120,56 @@ func TestListEndpoints_NoFilter(t *testing.T) {
 	}
 }
 
-// ---- UpsertEndpoint / update path ----
+// ---- UpsertEndpointAssigning / update path ----
 
-func TestUpsertEndpoint_Update(t *testing.T) {
+func TestUpsertEndpointAssigning_Update(t *testing.T) {
 	t.Parallel()
 	db := openTestDB(t)
 	s := matterendpoint.New(db)
 	ctx := context.Background()
 
 	key := testKey("c1", "B:2", 1, matterendpoint.DPKindMeasurement, "TEMP")
-	if err := s.UpsertEndpoint(ctx, fabricendpoint.Record{Key: key, EndpointID: 10, DeviceType: 1}); err != nil {
+	if _, err := s.UpsertEndpointAssigning(ctx, fabricendpoint.Record{Key: key, EndpointID: 10, DeviceType: 1}); err != nil {
 		t.Fatalf("insert: %v", err)
 	}
-	if err := s.UpsertEndpoint(ctx, fabricendpoint.Record{Key: key, EndpointID: 20, DeviceType: 2}); err != nil {
+	id, err := s.UpsertEndpointAssigning(ctx, fabricendpoint.Record{Key: key, EndpointID: 10, DeviceType: 2})
+	if err != nil {
 		t.Fatalf("update: %v", err)
+	}
+	if id != 10 {
+		t.Errorf("effective ID after update = %d, want 10", id)
 	}
 	got, err := s.GetEndpoint(ctx, key)
 	if err != nil {
 		t.Fatalf("GetEndpoint: %v", err)
 	}
-	if got.EndpointID != 20 {
-		t.Errorf("EndpointID after update = %d, want 20", got.EndpointID)
+	if got.EndpointID != 10 {
+		t.Errorf("EndpointID after update = %d, want 10", got.EndpointID)
+	}
+	if got.DeviceType != 2 {
+		t.Errorf("DeviceType after update = %d, want 2", got.DeviceType)
+	}
+}
+
+// TestUpsertRefusesKeyThatDoesNotDecode pins that a key whose rendering
+// would not split back into itself is refused and leaves no row: the store
+// persists only the rendering, so such a row could never be listed back.
+func TestUpsertRefusesKeyThatDoesNotDecode(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	s := matterendpoint.New(openTestDB(t))
+
+	key := testKey("c1", "AB|1", 1, matterendpoint.DPKindCustom, "STATE")
+	_, err := s.UpsertEndpointAssigning(ctx, fabricendpoint.Record{Key: key})
+	if !errors.Is(err, matterendpoint.ErrKeyNotDecodable) {
+		t.Fatalf("err = %v, want ErrKeyNotDecodable", err)
+	}
+	list, err := s.ListEndpoints(ctx, "")
+	if err != nil {
+		t.Fatalf("ListEndpoints: %v", err)
+	}
+	if len(list) != 0 {
+		t.Errorf("refused key left %d row(s), want 0", len(list))
 	}
 }
 
@@ -153,8 +182,8 @@ func TestRemoveEndpoint_Existing(t *testing.T) {
 	ctx := context.Background()
 
 	key := testKey("c1", "C:3", 1, matterendpoint.DPKindCalculated, "SUM")
-	if err := s.UpsertEndpoint(ctx, fabricendpoint.Record{Key: key, EndpointID: 7, DeviceType: 1}); err != nil {
-		t.Fatalf("UpsertEndpoint: %v", err)
+	if _, err := s.UpsertEndpointAssigning(ctx, fabricendpoint.Record{Key: key, EndpointID: 7, DeviceType: 1}); err != nil {
+		t.Fatalf("UpsertEndpointAssigning: %v", err)
 	}
 	if err := s.RemoveEndpoint(ctx, key); err != nil {
 		t.Fatalf("RemoveEndpoint: %v", err)
@@ -172,46 +201,6 @@ func TestRemoveEndpoint_NonExisting_NoError(t *testing.T) {
 	key := testKey("c1", "D:4", 1, matterendpoint.DPKindCombined, "X")
 	if err := s.RemoveEndpoint(context.Background(), key); err != nil {
 		t.Fatalf("RemoveEndpoint on missing key: %v", err)
-	}
-}
-
-// ---- AssignEndpointID ----
-
-func TestAssignEndpointID_StartsAt2(t *testing.T) {
-	t.Parallel()
-	db := openTestDB(t)
-	s := matterendpoint.New(db)
-	id, err := s.AssignEndpointID(context.Background())
-	if err != nil {
-		t.Fatalf("AssignEndpointID: %v", err)
-	}
-	if id != 2 {
-		t.Errorf("first assigned ID = %d, want 2 (0=root, 1=aggregator)", id)
-	}
-}
-
-func TestAssignEndpointID_Increments(t *testing.T) {
-	t.Parallel()
-	db := openTestDB(t)
-	s := matterendpoint.New(db)
-	ctx := context.Background()
-
-	// Assign and immediately insert so the next call gets the next ID.
-	id1, err := s.AssignEndpointID(ctx)
-	if err != nil {
-		t.Fatalf("first AssignEndpointID: %v", err)
-	}
-	key := testKey("c1", "E:5", 1, matterendpoint.DPKindCustom, "K1")
-	if err := s.UpsertEndpoint(ctx, fabricendpoint.Record{Key: key, EndpointID: id1}); err != nil {
-		t.Fatalf("UpsertEndpoint: %v", err)
-	}
-
-	id2, err := s.AssignEndpointID(ctx)
-	if err != nil {
-		t.Fatalf("second AssignEndpointID: %v", err)
-	}
-	if id2 != id1+1 {
-		t.Errorf("id2=%d, want id1+1=%d", id2, id1+1)
 	}
 }
 
@@ -249,33 +238,6 @@ func TestUpsertEndpointAssigning_CallerProvided(t *testing.T) {
 	}
 }
 
-// TestAssignEndpointID_SkipsHoles verifies that a hole in the stored numbers
-// is not filled: allocation runs off the high-water mark, so IDs 2, 3, 5 in
-// the table yield 6 and leave 4 retired. Reissuing 4 would hand a removed
-// device's endpoint number — and therefore its cached controller identity —
-// to an unrelated device.
-func TestAssignEndpointID_SkipsHoles(t *testing.T) {
-	t.Parallel()
-	db := openTestDB(t)
-	s := matterendpoint.New(db)
-	ctx := context.Background()
-
-	for i, id := range []uint16{2, 3, 5} {
-		key := testKey("gap", "H:1", i+1, matterendpoint.DPKindCustom, "G")
-		if err := s.UpsertEndpoint(ctx, fabricendpoint.Record{Key: key, EndpointID: id}); err != nil {
-			t.Fatalf("UpsertEndpoint id=%d: %v", id, err)
-		}
-	}
-
-	id, err := s.AssignEndpointID(ctx)
-	if err != nil {
-		t.Fatalf("AssignEndpointID: %v", err)
-	}
-	if id != 6 {
-		t.Errorf("assigned ID = %d, want 6 (the hole at 4 stays retired)", id)
-	}
-}
-
 // TestUpsertEndpointAssigning_Roundtrip_Verify confirms that UpsertEndpointAssigning
 // persists in a way GetEndpoint can retrieve.
 func TestUpsertEndpointAssigning_Roundtrip_Verify(t *testing.T) {
@@ -303,7 +265,7 @@ func TestUpsertEndpointAssigning_Roundtrip_Verify(t *testing.T) {
 }
 
 // TestEndpoints_AllDPKinds_Roundtrip verifies all five DPKind constants survive
-// a DB round-trip via UpsertEndpoint.
+// a DB round-trip via UpsertEndpointAssigning.
 func TestEndpoints_AllDPKinds_Roundtrip(t *testing.T) {
 	t.Parallel()
 	db := openTestDB(t)
@@ -326,8 +288,8 @@ func TestEndpoints_AllDPKinds_Roundtrip(t *testing.T) {
 			DPKey:         "K",
 		}
 		rec := fabricendpoint.Record{Key: key, EndpointID: uint16(i + 2), DeviceType: uint16(i)} //nolint:gosec // loop index is small and non-negative; uint16 conversions are safe
-		if err := s.UpsertEndpoint(ctx, rec); err != nil {
-			t.Fatalf("UpsertEndpoint kind=%s: %v", kind, err)
+		if _, err := s.UpsertEndpointAssigning(ctx, rec); err != nil {
+			t.Fatalf("UpsertEndpointAssigning kind=%s: %v", kind, err)
 		}
 		got, err := s.GetEndpoint(ctx, key)
 		if err != nil {
@@ -354,8 +316,8 @@ func TestListEndpoints_OrderedByID(t *testing.T) {
 	// Insert out-of-order IDs.
 	for _, id := range []uint16{5, 3, 4} {
 		key := testKey("ord", "B:1", int(id), matterendpoint.DPKindCustom, "V")
-		if err := s.UpsertEndpoint(ctx, fabricendpoint.Record{Key: key, EndpointID: id}); err != nil {
-			t.Fatalf("UpsertEndpoint id=%d: %v", id, err)
+		if _, err := s.UpsertEndpointAssigning(ctx, fabricendpoint.Record{Key: key, EndpointID: id}); err != nil {
+			t.Fatalf("UpsertEndpointAssigning id=%d: %v", id, err)
 		}
 	}
 
@@ -450,8 +412,8 @@ func TestEndpoints_ListNoFilter(t *testing.T) {
 
 	for i, centralName := range []string{"c1", "c2", "c1"} {
 		key := testKey(centralName, "E:1", i+2, matterendpoint.DPKindCustom, "V")
-		if err := s.UpsertEndpoint(ctx, fabricendpoint.Record{Key: key, EndpointID: uint16(i + 2)}); err != nil { //nolint:gosec // loop index is small and positive; uint16 conversion is safe
-			t.Fatalf("UpsertEndpoint[%d]: %v", i, err)
+		if _, err := s.UpsertEndpointAssigning(ctx, fabricendpoint.Record{Key: key, EndpointID: uint16(i + 2)}); err != nil { //nolint:gosec // loop index is small and positive; uint16 conversion is safe
+			t.Fatalf("UpsertEndpointAssigning[%d]: %v", i, err)
 		}
 	}
 

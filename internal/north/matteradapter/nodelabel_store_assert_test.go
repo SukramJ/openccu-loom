@@ -4,10 +4,12 @@
 package matteradapter_test
 
 import (
+	"github.com/SukramJ/go-fabric/node"
+
 	"github.com/SukramJ/openccu-loom/internal/north/matteradapter"
-	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 )
 
-// The daemon's endpoint-identity store is the NodeLabel store the
-// assembler persists controller-written bridged labels through.
-var _ matteradapter.NodeLabelStore = (*matterendpoint.Store)(nil)
+// go-fabric's endpoint persistence — the one the daemon hands both the
+// assembler and the facade — is the NodeLabel store the assembler persists
+// controller-written bridged labels through.
+var _ matteradapter.NodeLabelStore = node.EndpointPersistence(nil)

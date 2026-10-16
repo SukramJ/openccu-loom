@@ -8,6 +8,8 @@ import (
 	"encoding/hex"
 	"testing"
 
+	fabricendpoint "github.com/SukramJ/go-fabric/endpoint"
+
 	matterendpoint "github.com/SukramJ/openccu-loom/internal/store/matterendpoint"
 )
 
@@ -127,5 +129,56 @@ func TestSourceKeyIsComparable(t *testing.T) {
 	seen[b]++
 	if len(seen) != 2 {
 		t.Errorf("distinct keys collapsed into %d entries, want 2", len(seen))
+	}
+}
+
+// TestDecodeSourceKeyRoundTrip pins that every rendering the store accepts
+// decodes back to the identical key, including a data-point key that
+// itself contains the separator.
+func TestDecodeSourceKeyRoundTrip(t *testing.T) {
+	t.Parallel()
+	kinds := []matterendpoint.DPKind{
+		matterendpoint.DPKindCustom,
+		matterendpoint.DPKindGeneric,
+		matterendpoint.DPKindCalculated,
+		matterendpoint.DPKindCombined,
+		matterendpoint.DPKindMeasurement,
+	}
+	for _, kind := range kinds {
+		for _, ch := range []int{0, 1, 127} {
+			for _, dpKey := range []string{"STATE", "", "A|B|C"} {
+				k := matterendpoint.SourceKey{
+					CentralName: "ccu-1", DeviceAddress: "0001PSM01",
+					ChannelNo: ch, DPKind: kind, DPKey: dpKey,
+				}
+				got := matterendpoint.DecodeSourceKey(k.String())
+				if got != fabricendpoint.SourceKey(k) {
+					t.Errorf("DecodeSourceKey(%q) = %#v, want %#v", k.String(), got, k)
+				}
+			}
+		}
+	}
+}
+
+// TestDecodeSourceKeyRejectsForeignRenderings pins that a string this
+// package could not have rendered comes back as an opaque StringKey, which
+// no live source carries, so the assembler garbage-collects the row.
+func TestDecodeSourceKeyRejectsForeignRenderings(t *testing.T) {
+	t.Parallel()
+	for name, in := range map[string]string{
+		"no separator":         "justonefield",
+		"invalid central name": "bad name|DEV|1|custom|STATE",
+		"three fields only":    "ccu|DEV|1",
+		"channel leading zero": "ccu|DEV|01|custom|STATE",
+		"channel not a number": "ccu|DEV|x|custom|STATE",
+		"unknown kind":         "ccu|DEV|1|foo|STATE",
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			got := matterendpoint.DecodeSourceKey(in)
+			if got != fabricendpoint.SourceKey(fabricendpoint.StringKey(in)) {
+				t.Errorf("DecodeSourceKey(%q) = %#v, want StringKey", in, got)
+			}
+		})
 	}
 }

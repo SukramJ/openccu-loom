@@ -11,12 +11,15 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"errors"
 	"log/slog"
 	"math/big"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/SukramJ/go-fabric/secure/attestation"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 )
@@ -66,115 +69,88 @@ func writePEMKey(t *testing.T, dir string, priv *ecdsa.PrivateKey, name string) 
 	return path
 }
 
-// ── loadVendorAttestation ─────────────────────────────────────────────────────
-
-func TestLoadVendorAttestation_MissingPaths_ReturnsFalse(t *testing.T) {
-	t.Parallel()
-	// All empty → false without reading any file.
-	_, _, _, _, ok := loadVendorAttestation(config.NorthMatterAttestation{}, slog.Default())
-	if ok {
-		t.Error("expected ok=false for empty paths")
+// mustWrite writes data to path or fails the test.
+func mustWrite(t *testing.T, path string, data []byte) {
+	t.Helper()
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("write %s: %v", path, err)
 	}
 }
 
-func TestLoadVendorAttestation_PartialPaths_ReturnsFalse(t *testing.T) {
-	t.Parallel()
-	cfg := config.NorthMatterAttestation{
-		DACPath:    "/some/dac.pem",
-		DACKeyPath: "", // missing → should return false
-		PAIPath:    "/pai.pem",
-		CDPath:     "/cd.bin",
+func newP256Key(t *testing.T) *ecdsa.PrivateKey {
+	t.Helper()
+	k, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
 	}
-	_, _, _, _, ok := loadVendorAttestation(cfg, slog.Default())
-	if ok {
-		t.Error("expected ok=false when any path is empty")
-	}
+	return k
 }
 
-func TestLoadVendorAttestation_DACFileNotFound_ReturnsFalse(t *testing.T) {
-	t.Parallel()
-	var buf bytes.Buffer
-	logger := slog.New(slog.NewTextHandler(&buf, nil))
-	cfg := config.NorthMatterAttestation{
-		DACPath:    "/nonexistent/dac.pem",
-		DACKeyPath: "/nonexistent/key.pem",
-		PAIPath:    "/nonexistent/pai.pem",
-		CDPath:     "/nonexistent/cd.bin",
-	}
-	_, _, _, _, ok := loadVendorAttestation(cfg, logger)
-	if ok {
-		t.Error("expected ok=false when DAC file is missing")
-	}
-}
-
-func TestLoadVendorAttestation_KeyMismatch_ReturnsFalse(t *testing.T) {
+// TestMatterAttestationRefusesAPartialChain: a configuration naming only
+// some of the attestation files is an error, not a silent switch to the
+// test chain.
+func TestMatterAttestationRefusesAPartialChain(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	var buf bytes.Buffer
-	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn}))
-
-	// Create a DAC cert signed by privA, but supply privB as the key.
-	privA, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	privB, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-
-	_, dacPath := writePEMCert(t, dir, privA, "dac")
-	keyPath := writePEMKey(t, dir, privB, "key") // wrong key
-
-	// PAI (same self-signed cert, doesn't matter for this test).
-	_, paiPath := writePEMCert(t, dir, privA, "pai")
-
-	// Empty CD file.
-	cdPath := filepath.Join(dir, "cd.bin")
-	if err := os.WriteFile(cdPath, []byte{}, 0o600); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
-
-	cfg := config.NorthMatterAttestation{
-		DACPath:    dacPath,
-		DACKeyPath: keyPath,
-		PAIPath:    paiPath,
-		CDPath:     cdPath,
-	}
-	_, _, _, _, ok := loadVendorAttestation(cfg, logger)
-	if ok {
-		t.Error("expected ok=false when DAC key does not match cert public key")
-	}
-	if !bytes.Contains(buf.Bytes(), []byte("key_mismatch")) {
-		t.Errorf("expected key_mismatch warning; got:\n%s", buf.String())
+	_, dacPath := writePEMCert(t, dir, newP256Key(t), "dac")
+	mc := config.NorthMatter{}
+	mc.Attestation.DACPath = dacPath
+	if _, err := matterAttestation(mc, slog.New(slog.DiscardHandler)); err == nil {
+		t.Fatal("matterAttestation with only a DAC path returned no error, want a refusal")
 	}
 }
 
-func TestLoadVendorAttestation_MatchingKeyAndCert_ReturnsTrue(t *testing.T) {
+// TestMatterAttestationRefusesAKeyThatIsNotTheDACs: the DAC key must be
+// the DAC's own, or the node would sign attestation with a key the
+// commissioner cannot verify.
+func TestMatterAttestationRefusesAKeyThatIsNotTheDACs(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	logger := slog.Default()
-
-	priv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	der, dacPath := writePEMCert(t, dir, priv, "dac")
-	keyPath := writePEMKey(t, dir, priv, "key")
-
-	// PAI.
-	_, paiPath := writePEMCert(t, dir, priv, "pai")
-
-	cdPath := filepath.Join(dir, "cd.bin")
-	if err := os.WriteFile(cdPath, []byte{0xDE, 0xAD}, 0o600); err != nil {
-		t.Fatalf("WriteFile: %v", err)
+	dacKey := newP256Key(t)
+	_, dacPath := writePEMCert(t, dir, dacKey, "dac")
+	_, paiPath := writePEMCert(t, dir, newP256Key(t), "pai")
+	keyPath := writePEMKey(t, dir, newP256Key(t), "other-key")
+	cdPath := filepath.Join(dir, "cd.der")
+	mustWrite(t, cdPath, []byte{0x30, 0x03, 0x02, 0x01, 0x01})
+	mc := config.NorthMatter{}
+	mc.Attestation.DACPath = dacPath
+	mc.Attestation.DACKeyPath = keyPath
+	mc.Attestation.PAIPath = paiPath
+	mc.Attestation.CDPath = cdPath
+	_, err := matterAttestation(mc, slog.New(slog.DiscardHandler))
+	if !errors.Is(err, attestation.ErrKeyMismatch) {
+		t.Fatalf("matterAttestation with a foreign key = %v, want attestation.ErrKeyMismatch", err)
 	}
+}
 
-	cfg := config.NorthMatterAttestation{
-		DACPath:    dacPath,
-		DACKeyPath: keyPath,
-		PAIPath:    paiPath,
-		CDPath:     cdPath,
+// TestMatterAttestationServesAConfiguredChain: a consistent DAC / key /
+// PAI / CD reaches the node verbatim.
+func TestMatterAttestationServesAConfiguredChain(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	dacKey := newP256Key(t)
+	dacDER, dacPath := writePEMCert(t, dir, dacKey, "dac")
+	paiDER, paiPath := writePEMCert(t, dir, newP256Key(t), "pai")
+	keyPath := writePEMKey(t, dir, dacKey, "dac-key")
+	cd := []byte{0x30, 0x03, 0x02, 0x01, 0x01}
+	cdPath := filepath.Join(dir, "cd.der")
+	mustWrite(t, cdPath, cd)
+	mc := config.NorthMatter{}
+	mc.Attestation.DACPath = dacPath
+	mc.Attestation.DACKeyPath = keyPath
+	mc.Attestation.PAIPath = paiPath
+	mc.Attestation.CDPath = cdPath
+	got, err := matterAttestation(mc, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatalf("matterAttestation: %v", err)
 	}
-	key, gotDAC, _, _, ok := loadVendorAttestation(cfg, logger)
-	if !ok {
-		t.Fatal("expected ok=true for matching key/cert")
+	if got.Chain == nil {
+		t.Fatal("matterAttestation returned no chain for a configured one")
 	}
-	if key == nil {
-		t.Error("expected non-nil private key")
+	if !bytes.Equal(got.Chain.DAC, dacDER) || !bytes.Equal(got.Chain.PAI, paiDER) {
+		t.Fatal("the served DAC / PAI are not the configured certificates")
 	}
-	if !bytes.Equal(gotDAC, der) {
-		t.Error("returned DAC bytes do not match written cert")
+	if !bytes.Equal(got.CertificationDeclaration, cd) {
+		t.Fatalf("CertificationDeclaration = %x, want %x", got.CertificationDeclaration, cd)
 	}
 }

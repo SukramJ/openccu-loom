@@ -6,7 +6,7 @@ package siren
 import (
 	"context"
 	"fmt"
-	"sync"
+	"time"
 
 	"github.com/SukramJ/go-fabric/cluster/levelcontrol"
 	"github.com/SukramJ/go-fabric/cluster/onoff"
@@ -18,12 +18,16 @@ import (
 )
 
 // Compile-time assertions: SoundPlayer participates in the Matter source
-// surface (ADR 0012) as a Speaker (0x0022) endpoint and is the narrow host
-// port behind the library's LevelControl server.
+// surface (ADR 0012) as a Speaker (0x0022) endpoint; soundRamp and
+// soundOnOff are the device and On/Off ports behind go-fabric's
+// [levelcontrol.NativeSource].
 var (
 	_ interfaces.MatterEndpointSource = (*SoundPlayer)(nil)
 	_ interfaces.MatterChangeNotifier = (*SoundPlayer)(nil)
-	_ levelcontrol.LevelSource        = (*SoundPlayer)(nil)
+	_ levelcontrol.NativeRamp         = soundRamp{}
+	_ levelcontrol.NativeMover        = soundRamp{}
+	_ levelcontrol.NativeSwitcher     = soundRamp{}
+	_ levelcontrol.OnOff              = soundOnOff{}
 )
 
 // matterDeviceTypeSpeaker is the Matter Speaker device type. It mandates
@@ -33,19 +37,6 @@ var (
 // either, so the OnOff cluster here advertises an empty FeatureMap rather
 // than the LT baseline the OnOffPlugInUnit projections carry.
 const matterDeviceTypeSpeaker uint16 = 0x0022
-
-// speakerLevelState holds the two LevelControl attributes that describe the
-// cluster rather than the device: Options and OnLevel. Neither has an
-// HmIP-MP3P parameter behind it — they are Matter's own bookkeeping, which
-// matter.js likewise keeps in cluster state — so they live on the data point
-// and survive the server reconstruction that every topology assembly and
-// every eligibility query performs.
-type speakerLevelState struct {
-	mu      sync.RWMutex
-	options uint8
-	// onLevel is nil for the spec's null reading, "OnLevel has no effect".
-	onLevel *uint8
-}
 
 // MatterDeviceType implements [interfaces.MatterEndpointSource].
 func (sp *SoundPlayer) MatterDeviceType() uint16 { return matterDeviceTypeSpeaker }
@@ -61,12 +52,19 @@ func (sp *SoundPlayer) MatterClusterServers() []interfaces.MatterClusterServer {
 	}
 }
 
-// matterLevelServer builds the LevelControl server once, over the
-// player's [levelcontrol.LevelSource] port.
+// matterLevelServer builds the LevelControl server once, on the hand-off
+// path of go-fabric's server (Transitions nil): [levelcontrol.NativeSource]
+// keeps Options and OnLevel — Matter's own bookkeeping, with no HmIP-MP3P
+// parameter behind either — applies the ExecuteIfOff gate, turns each
+// command into one target level, and hands a "with On/Off" command that
+// starts or stops the player to [soundRamp] as one switch. The source lives as long as the server, so both
+// attributes survive every topology assembly and eligibility query
+// (notes/parity/by_design.md BD-Matter-LevelControl-NativeRamp).
 func (sp *SoundPlayer) matterLevelServer() *levelcontrol.Server {
 	sp.matterLevelOnce.Do(func() {
 		sp.matterLevelSrv = levelcontrol.NewServer(levelcontrol.Config{
-			Source:      sp,
+			Source: levelcontrol.NewNativeSource(soundRamp{sp: sp}, soundOnOff{sp: sp},
+				levelcontrol.NativeConfig{Lighting: false}),
 			DataVersion: &sp.DataVersionTracker,
 		})
 	})
@@ -177,10 +175,9 @@ func (sp *SoundPlayer) playVolume(ctx context.Context, volume float64) error {
 	}, matterDispatchPriority)
 }
 
-// ─── LevelControl (0x0008), host port ────────────────────────────────
+// ─── LevelControl (0x0008), device port ──────────────────────────────
 
-// matterVolume reports the observed LEVEL. Separate from [CurrentLevel] so the
-// float stays available to the command paths, which write floats.
+// matterVolume reports the observed LEVEL as the float the write paths take.
 func (sp *SoundPlayer) matterVolume() (float64, bool) {
 	if sp == nil || sp.level == nil {
 		return 0, false
@@ -188,179 +185,107 @@ func (sp *SoundPlayer) matterVolume() (float64, bool) {
 	return sp.level.Value()
 }
 
-// CurrentLevel implements [levelcontrol.LevelSource]: the HM 0..1 LEVEL scaled
-// onto Matter's level byte. known=false while LEVEL has never been observed,
-// which the server encodes as TLV null — CurrentLevel carries quality X
-// (matter.js level-control.element.ts:29-30), so an unread volume is reported
-// as unknown rather than as the real level 0.
-func (sp *SoundPlayer) CurrentLevel() (uint8, bool) {
-	v, ok := sp.matterVolume()
+// soundRamp is the [levelcontrol.NativeRamp] of a [SoundPlayer]: the
+// player's LEVEL knob, which is its volume. The HmIP-MP3P has no
+// controller-driven volume ramp — RAMP_TIME accompanies a play command,
+// not a volume change — so every level is applied at once.
+type soundRamp struct{ sp *SoundPlayer }
+
+// Level implements [levelcontrol.NativeRamp]: the HM 0..1 LEVEL on the
+// 0..254 scale. known=false while LEVEL has never been observed, which the
+// server encodes as TLV null — CurrentLevel carries quality X (matter.js
+// level-control.element.ts:29-30), so an unread volume is reported as
+// unknown rather than as the real level 0.
+func (r soundRamp) Level() (uint8, bool) {
+	v, ok := r.sp.matterVolume()
 	if !ok {
 		return 0, false
 	}
-	return volumeToMatterLevel(v), true
+	return levelcontrol.LevelFromUnit(v), true
 }
 
-// Options implements [levelcontrol.LevelSource].
-func (sp *SoundPlayer) Options() uint8 {
-	if sp == nil {
-		return 0
-	}
-	sp.matterLevel.mu.RLock()
-	defer sp.matterLevel.mu.RUnlock()
-	return sp.matterLevel.options
+// Ramp implements [levelcontrol.NativeRamp]: LEVEL alone, at once (d is
+// ignored, see [soundRamp]), never starting or stopping playback. A "with
+// On/Off" command reaches it only while the player is already playing and
+// the target lies above the minimum; starting and stopping go through
+// [soundRamp.SwitchOn] and [soundRamp.SwitchOff].
+func (r soundRamp) Ramp(ctx context.Context, level uint8, _ time.Duration, _ bool) error {
+	return r.sp.setVolume(ctx, levelcontrol.UnitFromLevel(level))
 }
 
-// SetOptions implements [levelcontrol.LevelSource]. The server has already
-// checked the bitmap against the advertised FeatureMap.
-func (sp *SoundPlayer) SetOptions(_ context.Context, options uint8) error {
-	sp.matterLevel.mu.Lock()
-	defer sp.matterLevel.mu.Unlock()
-	sp.matterLevel.options = options
-	return nil
+// SwitchOn implements [levelcontrol.NativeSwitcher]: a "with On/Off"
+// command that starts the player starts it at the target volume in one
+// write, the profile's own play path. d is ignored, see [soundRamp]. The
+// OnOff attribute is not set here: it follows DIRECTION once the device
+// confirms playback (see [SoundPlayer.matterOnOffServer]).
+func (r soundRamp) SwitchOn(ctx context.Context, level uint8, _ time.Duration) error {
+	return r.sp.playVolume(ctx, levelcontrol.UnitFromLevel(level))
 }
 
-// OnLevel implements [levelcontrol.LevelSource]. Unset means null, which the
-// spec reads as "OnLevel has no effect" — and it has none here: On resumes at
-// the volume the device reports (see [SoundPlayer.matterPlay]).
-func (sp *SoundPlayer) OnLevel() (uint8, bool) {
-	if sp == nil {
-		return 0, false
-	}
-	sp.matterLevel.mu.RLock()
-	defer sp.matterLevel.mu.RUnlock()
-	if sp.matterLevel.onLevel == nil {
-		return 0, false
-	}
-	return *sp.matterLevel.onLevel, true
+// SwitchOff implements [levelcontrol.NativeSwitcher]: a "with On/Off"
+// command that ends at the minimum is silence, so it stops the player in
+// one write — [SoundPlayer.StopSound], which carries LEVEL=0 with the
+// cleared DURATION pair. As with SwitchOn, the OnOff attribute follows
+// the device's DIRECTION confirmation.
+func (r soundRamp) SwitchOff(ctx context.Context, _ time.Duration) error {
+	return r.sp.StopSound(ctx, matterDispatchPriority)
 }
 
-// SetOnLevel implements [levelcontrol.LevelSource]. The value is stored so a
-// controller reads back what it wrote; it is not consulted on On, because the
-// device resumes at its own LEVEL and overriding that would make the Matter
-// path behave differently from every other surface on the same data point.
-func (sp *SoundPlayer) SetOnLevel(_ context.Context, level *uint8) error {
-	sp.matterLevel.mu.Lock()
-	defer sp.matterLevel.mu.Unlock()
-	if level == nil {
-		sp.matterLevel.onLevel = nil
-		return nil
-	}
-	v := *level
-	sp.matterLevel.onLevel = &v
-	return nil
+// Stop implements [levelcontrol.NativeRamp]. No ramp is ever running (see
+// [soundRamp.Ramp]), so there is nothing to halt. It is NOT the OnOff Off
+// path — stopping a level transition and silencing the speaker are
+// different operations, and mapping this one onto StopSound would silence
+// a speaker whenever a controller ended a fade.
+func (soundRamp) Stop(context.Context) error { return nil }
+
+// MoveLevel implements [levelcontrol.NativeMover]: Move and MoveWithOnOff
+// keep the volume where it is. The source's default would jump a speaker
+// to full volume or to silence, because a device that cannot ramp reaches
+// the bound at once; matter.js lets an implementation replace that
+// default, moveLogic (LevelControlServer.ts:378-403), and a continuous
+// move has no reading on this player.
+func (soundRamp) MoveLevel(context.Context, levelcontrol.MoveRequest, bool) error { return nil }
+
+// OnMatterValueChanged forwards [SoundPlayer.OnMatterValueChanged], so the
+// LevelControl server dirty-marks on a volume or playback change at the
+// device, as it did while the player was its source.
+func (r soundRamp) OnMatterValueChanged(cb func()) func() {
+	return r.sp.OnMatterValueChanged(cb)
 }
 
-// MoveToLevel implements [levelcontrol.LevelSource]: a volume change that must
-// not touch OnOff, so it writes LEVEL alone and never starts or stops playback.
-func (sp *SoundPlayer) MoveToLevel(ctx context.Context, req levelcontrol.MoveToLevelRequest) error {
-	if !sp.matterExecutionAllowed(req.OptionsMask, req.OptionsOverride) {
-		return nil
-	}
-	return sp.setVolume(ctx, matterLevelToVolume(req.Level))
-}
+// soundOnOff is the [levelcontrol.OnOff] the player's LevelControl couples
+// to. Unlike a dimmer, whose single LEVEL knob is also its On/Off, volume
+// and playback are separate on this device: a "with On/Off" command must
+// start or stop playback itself, and the attribute follows at once.
+type soundOnOff struct{ sp *SoundPlayer }
 
-// MoveToLevelWithOnOff implements [levelcontrol.LevelSource]: the coupled
-// variant, which drives the endpoint's OnOff state along with the level. Level
-// 0 is silence, so it stops the player; any other level starts it at that
-// volume, which the profile does as one atomic write.
-func (sp *SoundPlayer) MoveToLevelWithOnOff(ctx context.Context, req levelcontrol.MoveToLevelRequest) error {
-	if req.Level == levelcontrol.LevelMin {
-		return sp.StopSound(ctx, matterDispatchPriority)
-	}
-	return sp.playVolume(ctx, matterLevelToVolume(req.Level))
-}
-
-// Move implements [levelcontrol.LevelSource]. The HmIP-MP3P has no
-// controller-driven continuous volume ramp: RAMP_TIME accompanies a play
-// command and runs to a target the caller names, which is a transition, not an
-// open-ended move at a rate. A zero rate is already refused by the server
-// (matter.js LevelControlServer.ts:305-308), so what reaches here is a valid
-// command with nothing behind it and returns Success without acting — the same
-// call the dimmer projection makes in internal/model/custom/light/matter.go.
-func (sp *SoundPlayer) Move(_ context.Context, _ levelcontrol.MoveRequest) error { return nil }
-
-// MoveWithOnOff implements [levelcontrol.LevelSource]. See [SoundPlayer.Move]:
-// there is no move to couple OnOff to.
-func (sp *SoundPlayer) MoveWithOnOff(_ context.Context, _ levelcontrol.MoveRequest) error {
-	return nil
-}
-
-// Step implements [levelcontrol.LevelSource]: one discrete volume step from the
-// level the device reports, clamped to the cluster's range. Plain Step must not
-// touch OnOff, so it writes LEVEL alone.
-func (sp *SoundPlayer) Step(ctx context.Context, req levelcontrol.StepRequest) error {
-	if !sp.matterExecutionAllowed(req.OptionsMask, req.OptionsOverride) {
-		return nil
-	}
-	next, ok := sp.steppedLevel(req)
-	if !ok {
-		return nil
-	}
-	return sp.setVolume(ctx, matterLevelToVolume(next))
-}
-
-// StepWithOnOff implements [levelcontrol.LevelSource]: the coupled variant. A
-// step that lands on the minimum level is silence, which turns the player off
-// (Matter §1.6.7.6, chip LevelControlCluster.cpp compares the post-clamp
-// target); any other target starts playback at that volume.
-func (sp *SoundPlayer) StepWithOnOff(ctx context.Context, req levelcontrol.StepRequest) error {
-	next, ok := sp.steppedLevel(req)
-	if !ok {
-		return nil
-	}
-	if next == levelcontrol.LevelMin {
-		return sp.StopSound(ctx, matterDispatchPriority)
-	}
-	return sp.playVolume(ctx, matterLevelToVolume(next))
-}
-
-// Stop implements [levelcontrol.LevelSource]. Stop halts an in-flight Move or
-// Step transition; this projection starts none (see [SoundPlayer.Move]), so
-// there is nothing to halt and the command succeeds. It is NOT the OnOff Off
-// path — stopping a level transition and silencing the speaker are different
-// operations, and mapping this one onto StopSound would silence a speaker
-// whenever a controller ended a fade.
-func (sp *SoundPlayer) Stop(_ context.Context, _ levelcontrol.StopRequest) error { return nil }
-
-// StopWithOnOff implements [levelcontrol.LevelSource]. See [SoundPlayer.Stop].
-func (sp *SoundPlayer) StopWithOnOff(_ context.Context, _ levelcontrol.StopRequest) error {
-	return nil
-}
-
-// steppedLevel resolves a Step request against the level the device reports.
-// ok is false while LEVEL has never been observed: a step is relative, and
-// stepping from a level nothing confirmed would write a volume derived from a
-// guess.
-func (sp *SoundPlayer) steppedLevel(req levelcontrol.StepRequest) (uint8, bool) {
-	current, known := sp.CurrentLevel()
-	if !known {
-		return 0, false
-	}
-	if req.StepMode == levelcontrol.StepModeDown {
-		if int(current)-int(req.StepSize) < int(levelcontrol.LevelMin) {
-			return levelcontrol.LevelMin, true
-		}
-		return current - req.StepSize, true
-	}
-	if int(current)+int(req.StepSize) > int(levelcontrol.LevelMax) {
-		return levelcontrol.LevelMax, true
-	}
-	return current + req.StepSize, true
-}
-
-// matterExecutionAllowed applies the ExecuteIfOff gate the plain (non-On/Off)
-// commands consult. The bitmap arithmetic belongs to the cluster and comes from
-// [levelcontrol.EffectiveOptions]; the state it is weighed against belongs to
-// the endpoint's OnOff cluster, which the level server cannot see — so it is
-// read here, from the same [SoundPlayer.IsPlaying] the OnOff attribute reports.
-// Mirrors matter.js LevelControlServer.ts:729-736 #optionsAllowExecution.
-func (sp *SoundPlayer) matterExecutionAllowed(mask, override uint8) bool {
-	if levelcontrol.EffectiveOptions(sp.Options(), mask, override)&levelcontrol.OptionExecuteIfOff != 0 {
-		return true
-	}
-	playing, _ := sp.IsPlaying()
+// OnOff implements [levelcontrol.OnOff]: whether a file is playing — the
+// state the OnOff attribute reports, and the one the ExecuteIfOff gate
+// weighs (matter.js LevelControlServer.ts:729-736 #optionsAllowExecution).
+func (o soundOnOff) OnOff() bool {
+	playing, _ := o.sp.IsPlaying()
 	return playing
+}
+
+// SetOnOff implements [levelcontrol.OnOff]: the same play and stop calls
+// the OnOff server's Sink makes, then the attribute through the OnOff
+// server's own Set — the host's change, so the Sink is not called twice;
+// the DIRECTION confirmation corrects it if the device answered otherwise.
+// OnLevel is not applied on switch-on: the player resumes at the volume it
+// reports (see [SoundPlayer.matterPlay]), as On does on every other
+// surface of the same data point.
+func (o soundOnOff) SetOnOff(ctx context.Context, on bool) error {
+	var err error
+	if on {
+		err = o.sp.matterPlay(ctx)
+	} else {
+		err = o.sp.StopSound(ctx, matterDispatchPriority)
+	}
+	if err != nil {
+		return err
+	}
+	o.sp.matterOnOffServer().Set(on)
+	return nil
 }
 
 // setVolume writes LEVEL without touching playback.
@@ -369,20 +294,4 @@ func (sp *SoundPlayer) setVolume(ctx context.Context, volume float64) error {
 		return fmt.Errorf("soundplayer: set volume: channel has no %s data point", hmenum.ParameterLevel)
 	}
 	return sp.level.Set(custom.EnsureContext(ctx), volume, matterDispatchPriority)
-}
-
-// volumeToMatterLevel encodes the HM 0..1 LEVEL onto the Matter level byte.
-// The ceiling is [levelcontrol.LevelMax] (254) and not 255: Matter reserves
-// 0xFF as the null sentinel of a nullable uint8, and CurrentLevel is nullable.
-func volumeToMatterLevel(v float64) uint8 {
-	scaled := custom.NewBrightness(v).Level() * float64(levelcontrol.LevelMax)
-	return uint8(scaled + 0.5)
-}
-
-// matterLevelToVolume decodes a Matter level byte back onto the HM 0..1 range.
-func matterLevelToVolume(level uint8) float64 {
-	if level >= levelcontrol.LevelMax {
-		return 1.0
-	}
-	return float64(level) / float64(levelcontrol.LevelMax)
 }

@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -383,6 +384,30 @@ func TestMatterCommissioningWindow_CommissioningInProgress_Returns409(t *testing
 
 	if w.Code != http.StatusConflict {
 		t.Fatalf("expected 409, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// TestMatterCommissioningWindow_CommissioningBlocked_Returns409: a bridge
+// whose attestation chain does not load refuses the window with 409 and a
+// fixed explanation; the wrapped cause, which can name file paths, stays
+// out of the response.
+func TestMatterCommissioningWindow_CommissioningBlocked_Returns409(t *testing.T) {
+	t.Parallel()
+	cause := errors.New("attestation: open /srv/secret/dac.pem: no such file or directory")
+	opener := &fakeCommissioningOpener{err: fmt.Errorf("%w: %w", ErrCommissioningBlocked, cause)}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/matter/commissioning/window", strings.NewReader(`{"duration_seconds":300}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	MatterCommissioningWindow(opener, nil, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d body=%s", w.Code, w.Body.String())
+	}
+	if strings.Contains(w.Body.String(), "/srv/secret") {
+		t.Errorf("response leaks the cause's file path: %s", w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "attestation") {
+		t.Errorf("response does not name the attestation chain: %s", w.Body.String())
 	}
 }
 

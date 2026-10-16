@@ -350,29 +350,6 @@ func TestLoadTranslations_InvalidGzip_LogsWarnFallsBack(t *testing.T) {
 
 // ── daemon.go: loadPersistentCaseIdentity — empty fabrics (line 2234-2235) ───
 
-// TestReadECDSAPrivateKey_PKCS8NotECDSA_ReturnsError exercises the
-// `if !ok { return nil, fmt.Errorf(...) }` path at lines 3108-3110 of
-// daemon.go when a PKCS#8 file contains a non-ECDSA key (e.g., RSA).
-func TestReadECDSAPrivateKey_PKCS8NotECDSA_ReturnsError(t *testing.T) {
-	t.Parallel()
-	// Generate an ECDSA P-256 key and encode as SEC1 PEM ("BEGIN EC PRIVATE KEY").
-	// We want to test the PKCS#8 non-ECDSA path but generating RSA is slow;
-	// instead write a DER with the 0x30 0x82 header but garbage content.
-	tmp := t.TempDir()
-	// A file starting with 0x30 0x82 (DER header) but garbage body will try
-	// ParsePKCS8PrivateKey (fail), then ParseECPrivateKey (also fail).
-	// That covers line 3114 (return x509.ParseECPrivateKey(der)).
-	derPath := filepath.Join(tmp, "bad.der")
-	badDER := []byte{0x30, 0x82, 0xDE, 0xAD, 0xBE, 0xEF}
-	if err := os.WriteFile(derPath, badDER, 0o600); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
-	_, err := readECDSAPrivateKey(derPath)
-	if err == nil {
-		t.Fatal("expected error for invalid DER, got nil")
-	}
-}
-
 // ── daemon.go: buildAggregatorClusters success (already covered) — skip ──────
 
 // ── visibility_wiring.go: applyVisibilityUnIgnore with devices and LoadUnIgnore success ──

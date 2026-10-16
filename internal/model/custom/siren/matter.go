@@ -5,11 +5,13 @@ package siren
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
+	"sync"
 
+	"github.com/SukramJ/go-fabric/cluster/alarm"
 	"github.com/SukramJ/go-fabric/cluster/onoff"
+	fabricdevice "github.com/SukramJ/go-fabric/device"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -85,71 +87,8 @@ func (s *SmokeSiren) OnMatterValueChanged(cb func()) func() {
 	)
 }
 
-// Matter constants follow the Matter 1.5.1 Application Cluster
-// Specification (§1.5 OnOff, §1.7 BooleanState, §2.11 SmokeCOAlarm).
-// Cluster revisions verified against the Matter cluster sweep
-// (matter.js HEAD packages/model/src/standard/elements/).
-const (
-	matterDeviceTypeOnOffPlugInUnit uint16 = 0x010A
-	matterDeviceTypeSmokeCOAlarm    uint16 = 0x0076
-
-	matterClusterOnOff        uint32 = 0x0006
-	matterClusterBooleanState uint32 = 0x0045
-	matterClusterSmokeCOAlarm uint32 = 0x005C
-
-	// The OnOff cluster's attributes, feature bit and commands are not
-	// declared here: the cluster is go-fabric's onoff.Server (matter.go,
-	// matterOnOffServer), whose generated definition carries them.
-
-	// SmokeCOAlarm attributes (Matter spec 2.11.5).
-	// HardwareFaultAlert (0x0006) and EndOfServiceAlert (0x0007) are
-	// mandatory per matter.js
-	// packages/model/src/standard/elements/smoke-co-alarm.element.ts.
-	matterAttrSmokeExpressedState uint32 = 0x0000
-	matterAttrSmokeState          uint32 = 0x0001
-	matterAttrCOState             uint32 = 0x0002
-	matterAttrBatteryAlert        uint32 = 0x0003
-	matterAttrHardwareFaultAlert  uint32 = 0x0006 // mandatory — bool, false = no fault
-	matterAttrEndOfServiceAlert   uint32 = 0x0007 // mandatory — EndOfServiceEnum: 0=Normal, 1=Expired
-	matterAttrTestInProgress      uint32 = 0x0005 // mandatory bool; 0x08 is InterconnectSmokeAlarm (matter.js smoke-co-alarm-cluster.element.ts)
-
-	matterAttrFeatureMap      uint32 = 0xFFFC
-	matterAttrClusterRevision uint32 = 0xFFFD
-
-	matterBooleanStateClusterRevision uint16 = 3 // matter.js HEAD boolean-state.element.ts:19 default=3
-	// matterSmokeCOAlarmClusterRevision mirrors matter.js HEAD
-	// smoke-co-alarm-cluster.element.ts:21 default=2 (spec 1.5.1).
-	matterSmokeCOAlarmClusterRevision uint16 = 2
-
-	// SmokeCOAlarm AlarmStateEnum (spec 2.11.5.1):
-	// 0 = Normal, 1 = Warning, 2 = Critical. Carried by SmokeState,
-	// CoState and BatteryAlert — matter.js smoke-co-alarm-cluster.element.ts
-	// AlarmStateEnum.
-	matterSmokeAlarmNormal   uint8 = 0
-	matterSmokeAlarmWarning  uint8 = 1
-	matterSmokeAlarmCritical uint8 = 2
-
-	// ExpressedState (0x0000) has its own value space, ExpressedStateEnum:
-	// 0 = Normal, 1 = SmokeAlarm, 2 = CoAlarm, … — matter.js
-	// smoke-co-alarm-cluster.element.ts ExpressedStateEnum. It is NOT
-	// AlarmStateEnum: writing the AlarmStateEnum Critical(2) into it
-	// reports a carbon-monoxide alarm on a device with no CO sensor.
-	matterExpressedStateNormal     uint8 = 0
-	matterExpressedStateSmokeAlarm uint8 = 1
-
-	// SmokeCOAlarm FeatureMap bits (spec 2.11.4):
-	// bit 0 = SMOKE, bit 1 = CO. HM-SWSD reports smoke only.
-	matterSmokeCOFeatureSmoke uint32 = 1 << 0
-	matterSmokeCOFeatureCO    uint32 = 1 << 1
-)
-
-var (
-	errMatterUnknownAttribute = errors.New("matter: unknown attribute")
-	errMatterUnknownCommand   = errors.New("matter: unknown command")
-)
-
 // MatterDeviceType implements [interfaces.MatterEndpointSource].
-func (s *Siren) MatterDeviceType() uint16 { return matterDeviceTypeOnOffPlugInUnit }
+func (s *Siren) MatterDeviceType() uint16 { return fabricdevice.OnOffPlugInUnitID }
 
 // MatterEligibility marks Siren as partially mappable: OnOff covers the
 // alarm on/off command surface; BooleanState is not mounted because it
@@ -159,8 +98,8 @@ func (s *Siren) MatterDeviceType() uint16 { return matterDeviceTypeOnOffPlugInUn
 func (s *Siren) MatterEligibility() interfaces.MatterEligibilityVerdict {
 	return interfaces.MatterEligibilityVerdict{
 		State:      interfaces.MatterEligibilityPartial,
-		DeviceType: matterDeviceTypeOnOffPlugInUnit,
-		Clusters:   []uint32{matterClusterOnOff},
+		DeviceType: fabricdevice.OnOffPlugInUnitID,
+		Clusters:   []uint32{onoff.ClusterID},
 		Reason:     "Siren tone / optical selection is MQTT-only — OnOff covers alarm on/off; BooleanState omitted (non-conformant on OnOffPlugInUnit 0x010A per matter.js).",
 	}
 }
@@ -204,15 +143,15 @@ func (s *Siren) matterOnOffServer() *onoff.Server {
 				return s.TurnOff(ctx, matterDispatchPriority)
 			},
 		})
-		sync := func(_, _ bool) {
+		syncActive := func(_, _ bool) {
 			active, _ := s.IsActive()
 			srv.Set(active)
 		}
 		if s.acousticActive != nil {
-			_ = s.acousticActive.OnConfirmedUpdate(sync)
+			_ = s.acousticActive.OnConfirmedUpdate(syncActive)
 		}
 		if s.opticalActive != nil {
-			_ = s.opticalActive.OnConfirmedUpdate(sync)
+			_ = s.opticalActive.OnConfirmedUpdate(syncActive)
 		}
 		// A confirmation that landed between the initial read and the
 		// hook registration is not lost: the current value is stored
@@ -225,22 +164,78 @@ func (s *Siren) matterOnOffServer() *onoff.Server {
 }
 
 // MatterDeviceType implements [interfaces.MatterEndpointSource].
-func (s *SmokeSiren) MatterDeviceType() uint16 { return matterDeviceTypeSmokeCOAlarm }
+func (s *SmokeSiren) MatterDeviceType() uint16 { return fabricdevice.SmokeCoAlarmID }
 
-// MatterClusterServers returns the SmokeCOAlarm cluster.
+// MatterClusterServers returns the SmokeCOAlarm cluster: go-fabric's
+// alarm.Server over this siren's status, built once so the stack's event
+// baseline and data version survive reassembly.
 func (s *SmokeSiren) MatterClusterServers() []interfaces.MatterClusterServer {
-	return []interfaces.MatterClusterServer{smokeCOServer{s: s}}
+	srv := s.matterAlarm.get(func() *alarm.Server {
+		srv, err := alarm.NewServer(alarm.Config{
+			Source: smokeAlarmSource{s: s},
+			// HM-SWSD carries a smoke sensor only, so the CO feature and
+			// every CO-conformance attribute stay off the wire.
+			Features:    alarm.FeatureSmokeAlarm,
+			DataVersion: &s.dataVersion,
+		})
+		if err != nil {
+			// invariant: the configuration is a constant SMOKE-only
+			// selection the cluster's conformance accepts.
+			panic(fmt.Sprintf("siren: smoke alarm server: %v", err))
+		}
+		return srv
+	})
+	return []interfaces.MatterClusterServer{srv}
 }
 
-// smokeCOServer projects SmokeSiren onto the SmokeCOAlarm cluster.
-// Maps the HM SmokeAlarmStatus enum onto AlarmStateEnum:
-//
-//	IDLE_OFF / INTRUSION_ALARM → Normal (0)
-//	SECONDARY_ALARM            → Warning (1) — a peer detector sensed smoke
-//	PRIMARY_ALARM              → Critical (2) — this detector sensed smoke
-type smokeCOServer struct{ s *SmokeSiren }
+// refreshMatterAlarm lets the alarm server diff the status it now reads
+// against the previous one and emit the SmokeAlarm / AllClear events the
+// change calls for. Before the first assembly there is no server and
+// nothing to tell.
+func (s *SmokeSiren) refreshMatterAlarm() {
+	if srv := s.matterAlarm.current(); srv != nil {
+		srv.Refresh()
+	}
+}
 
-func (s smokeCOServer) MatterClusterID() uint32 { return matterClusterSmokeCOAlarm }
+// smokeAlarmSource is the alarm server's host port over a SmokeSiren.
+// Only SmokeState is the device's to report; ExpressedState is derived by
+// the server from it, and every other attribute keeps the matter.js initial
+// state (no CO sensor, no battery or fault report on this channel). An
+// unread status reports Normal: every SmokeCoAlarm attribute is
+// non-nullable.
+type smokeAlarmSource struct{ s *SmokeSiren }
+
+// SmokeCOState implements alarm.StateSource.
+func (src smokeAlarmSource) SmokeCOState() alarm.State {
+	var st alarm.State
+	if status, ok := src.s.Status(); ok {
+		st.SmokeState = smokeStatusToAlarmState(status)
+	}
+	return st
+}
+
+// matterAlarmHolder builds the alarm server once and hands the same value
+// back on every later assembly.
+type matterAlarmHolder struct {
+	mu  sync.Mutex
+	srv *alarm.Server
+}
+
+func (h *matterAlarmHolder) get(build func() *alarm.Server) *alarm.Server {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.srv == nil {
+		h.srv = build()
+	}
+	return h.srv
+}
+
+func (h *matterAlarmHolder) current() *alarm.Server {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.srv
+}
 
 // smokeStatusToAlarmState maps the HM status onto AlarmStateEnum.
 //
@@ -256,140 +251,12 @@ func (s smokeCOServer) MatterClusterID() uint32 { return matterClusterSmokeCOAla
 // intrusion belongs at Normal however loud the sounder is.
 //
 // Only the severity of a genuine smoke label is decided locally.
-func smokeStatusToAlarmState(st SmokeAlarmStatus) uint8 {
+func smokeStatusToAlarmState(st SmokeAlarmStatus) alarm.AlarmState {
 	if !slices.Contains(hmenum.SmokeDetectorAlarmStatusSmokeLabels(), string(st)) {
-		return matterSmokeAlarmNormal
+		return alarm.AlarmNormal
 	}
 	if st == SmokeStatusSecondaryAlarm {
-		return matterSmokeAlarmWarning
+		return alarm.AlarmWarning
 	}
-	return matterSmokeAlarmCritical
-}
-
-// smokeStatusToExpressedState maps the HM status onto ExpressedStateEnum.
-// The device has one sensor, so every smoke state is expressed as SmokeAlarm;
-// the finer Warning/Critical distinction stays on SmokeState, which is the
-// attribute typed AlarmStateEnum.
-//
-// An intrusion alarm reaches Normal here through the same gate: ExpressedState
-// SmokeAlarm means the device is expressing visual and audible indication of a
-// *smoke* alarm (smoke-co-alarm.d.ts:566-574), and the enum carries no member
-// for "sounding on someone else's behalf". Normal understates what the device
-// is doing; SmokeAlarm would misstate why, and only one of those sends a
-// controller a fire notification.
-func smokeStatusToExpressedState(st SmokeAlarmStatus) uint8 {
-	if smokeStatusToAlarmState(st) == matterSmokeAlarmNormal {
-		return matterExpressedStateNormal
-	}
-
-	return matterExpressedStateSmokeAlarm
-}
-
-// featureMap reports the SmokeCOAlarm features this projection
-// advertises. HM-SWSD carries a smoke sensor only, so the CO bit stays
-// clear — and every CO-conformance attribute stays off the wire with
-// it (see MatterRead / MatterAttributes).
-func (s smokeCOServer) featureMap() uint32 { return matterSmokeCOFeatureSmoke }
-
-func (s smokeCOServer) MatterRead(attrID uint32) (any, bool) {
-	switch attrID {
-	case matterAttrSmokeExpressedState:
-		// Value temporarily unavailable (e.g. CCU circuit-breaker open): return
-		// (nil, true) so the dispatcher encodes TLV null + Success. See
-		// climate/matter.go for the full rationale.
-		st, ok := s.s.Status()
-		if !ok {
-			return nil, true
-		}
-		return smokeStatusToExpressedState(st), true
-	case matterAttrSmokeState:
-		st, ok := s.s.Status()
-		if !ok {
-			return nil, true
-		}
-		return smokeStatusToAlarmState(st), true
-	case matterAttrCOState:
-		// Conformance "CO" (smoke-co-alarm-cluster.element.ts CoState):
-		// the attribute exists only while the FeatureMap carries the CO
-		// bit. HM-SWSD has no CO sensor, so answering it anyway made a
-		// controller build a carbon-monoxide characteristic that reads
-		// Normal forever — feature-gated instead, so a future CO-capable
-		// device lights it up through featureMap alone. Mirrors
-		// matter.js SmokeCoAlarmServer.ts, which gates the same
-		// attribute on `this.features.coAlarm`.
-		if s.featureMap()&matterSmokeCOFeatureCO == 0 {
-			return nil, false
-		}
-		return matterSmokeAlarmNormal, true
-	case matterAttrBatteryAlert:
-		// Battery condition is exposed via Power Source cluster on the
-		// host endpoint (P1, see ADR 0012 §6 generic table). The
-		// SmokeCOAlarm BatteryAlert attribute mirrors but is not
-		// authoritative; report Normal until the Power-Source-cluster
-		// reflection is wired.
-		return matterSmokeAlarmNormal, true
-	case matterAttrHardwareFaultAlert:
-		// HardwareFaultAlert: false = no hardware fault detected.
-		// matter.js smoke-co-alarm.element.ts: mandatory bool attribute.
-		return false, true
-	case matterAttrEndOfServiceAlert:
-		// EndOfServiceAlert: 0 = Normal (not expired).
-		// matter.js smoke-co-alarm.element.ts EndOfServiceEnum: 0=Normal, 1=Expired.
-		return uint8(0), true
-	case matterAttrTestInProgress:
-		return false, true
-	case matterAttrFeatureMap:
-		return s.featureMap(), true
-	case matterAttrClusterRevision:
-		return matterSmokeCOAlarmClusterRevision, true
-	default:
-		return nil, false
-	}
-}
-
-func (s smokeCOServer) MatterWrite(_ context.Context, attrID uint32, _ any) error {
-	return fmt.Errorf("%w: 0x%04X", errMatterUnknownAttribute, attrID)
-}
-
-func (s smokeCOServer) MatterInvoke(_ context.Context, cmdID uint32, _ any) (any, error) {
-	// SmokeCOAlarm has cluster commands (SelfTestRequest etc.) but
-	// HM-SWSD exposes none of them through the wire layer. Reject
-	// every cmdID; a SelfTest mapping is possible if a HM equivalent
-	// surfaces.
-	return nil, fmt.Errorf("%w: 0x%02X", errMatterUnknownCommand, cmdID)
-}
-
-func (s smokeCOServer) MatterReportable() []uint32 {
-	return []uint32{matterAttrSmokeExpressedState, matterAttrSmokeState}
-}
-
-// MatterAttributes lists every SmokeCOAlarm (0x005C) attribute the
-// server implements via MatterRead. Apple Home's HAP service rebuild
-// reads the full attribute set; without this the dispatcher falls back
-// to MatterReportable's two-attribute surface.
-//
-// The list is conformance-driven: SmokeState is "SMOKE" and CoState is
-// "CO", so each is enumerated only while its feature bit is set. The
-// dispatcher builds both the wildcard expansion and the synthesized
-// AttributeList straight from here, so an attribute listed against a
-// FeatureMap that does not carry its feature is a non-conformant pair on
-// every commissioner read.
-func (s smokeCOServer) MatterAttributes() []uint32 {
-	fm := s.featureMap()
-	attrs := make([]uint32, 0, 7)
-	attrs = append(attrs, matterAttrSmokeExpressedState)
-	if fm&matterSmokeCOFeatureSmoke != 0 {
-		attrs = append(attrs, matterAttrSmokeState)
-	}
-	if fm&matterSmokeCOFeatureCO != 0 {
-		attrs = append(attrs, matterAttrCOState)
-	}
-
-	return append(
-		attrs,
-		matterAttrBatteryAlert,
-		matterAttrHardwareFaultAlert,
-		matterAttrEndOfServiceAlert,
-		matterAttrTestInProgress,
-	)
+	return alarm.AlarmCritical
 }

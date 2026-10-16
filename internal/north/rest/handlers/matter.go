@@ -125,6 +125,12 @@ type MatterCommissioningWindowResponse struct {
 // already open. Surfaces as 409 Conflict.
 var ErrCommissioningInProgress = errors.New("matter: commissioning window already open")
 
+// ErrCommissioningBlocked signals that the bridge admits no new
+// controller: the configured attestation chain does not load. Paired
+// controllers keep working. Surfaces as 409 Conflict; the cause (which can
+// name file paths) stays in the log.
+var ErrCommissioningBlocked = errors.New("matter: commissioning is disabled because the configured attestation chain (north.matter.attestation) does not load; fix the files and restart — the log names the cause")
+
 // ErrBridgeTopologyNotReady signals that the Matter bridge has not yet
 // reassembled with at least one bridged endpoint — opening the
 // commissioning window now would let a commissioner subscribe before
@@ -183,6 +189,9 @@ func matterOpenCommissioningWindow(opener MatterCommissioningOpener, publisher M
 			case errors.Is(err, ErrCommissioningInProgress):
 				problem.Write(w, http.StatusConflict,
 					problem.New(problem.TypeConflict, req, title, err.Error()))
+			case errors.Is(err, ErrCommissioningBlocked):
+				problem.Write(w, http.StatusConflict,
+					problem.New(problem.TypeConflict, req, title, ErrCommissioningBlocked.Error()))
 			case errors.Is(err, ErrBridgeTopologyNotReady):
 				w.Header().Set("Retry-After", "30")
 				writeServerError(w, req, http.StatusServiceUnavailable,
