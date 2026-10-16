@@ -10,7 +10,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/internal/docsref"
+	"github.com/SukramJ/openccu-loom/script/docsref"
 )
 
 // TestGeneratedReferenceIsFresh regenerates the reference pages under

@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
-	"github.com/SukramJ/openccu-loom/internal/uicatalog"
+	"github.com/SukramJ/openccu-loom/script/uicatalog"
 )
 
 // configGroup is the heading a field is listed under: its first path

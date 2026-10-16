@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
-	"github.com/SukramJ/openccu-loom/internal/uicatalog"
+	"github.com/SukramJ/openccu-loom/script/uicatalog"
 )
 
 // TestConfigFieldsHaveLabelsAndHelp enforces the SPA contract: every config

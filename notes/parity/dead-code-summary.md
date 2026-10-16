@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 54289deb
-HEAD: 54289deb
+Generated: 432a3205
+HEAD: 432a3205
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 6123 |
-| Reachable | 4013 |
-| Whitelisted | 2054 |
+| Total Exported | 6151 |
+| Reachable | 4028 |
+| Whitelisted | 2067 |
 | **Unreachable** | **56** |
 
 ## What these numbers cannot see

@@ -19,7 +19,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/SukramJ/openccu-loom/internal/docsref"
+	"github.com/SukramJ/openccu-loom/script/docsref"
 )
 
 func main() {
