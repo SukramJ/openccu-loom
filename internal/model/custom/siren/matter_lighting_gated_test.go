@@ -12,7 +12,7 @@ import (
 
 // TestSirenOnOffAdvertisesLighting pins the LT (Lighting) feature on the
 // siren's OnOff cluster: OnOffPlugInUnit (0x010A) mandates it
-// (on-off-plug-in-unit.element.ts:22-25), and with it the four LT-gated
+// (on-off-plug-in-unit.element.ts:27-30), and with it the four LT-gated
 // attributes and three LT-gated commands. A FeatureMap of 0 once left them
 // unimplemented although the device type requires them.
 func TestSirenOnOffAdvertisesLighting(t *testing.T) {

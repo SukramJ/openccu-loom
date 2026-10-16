@@ -1,5 +1,21 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.92.0
+
+- **Matter bridge on go-fabric v0.5.4.** More of the bridge now runs in
+  the Matter library. Pairings, device numbers and the names you gave
+  devices in Apple Home or Google Home carry over; nothing needs to be
+  re-paired.
+- **Broken vendor certificates no longer pair as a test device.** If you
+  configured your own attestation files and they do not load, the bridge
+  keeps serving every paired controller but refuses new pairings, and
+  Diagnostics shows why. Without own attestation files nothing changes.
+- The smoke detector reports alarm and all-clear events to Matter
+  controllers.
+- Dimmers and the MP3 player follow the Matter reference on two rare
+  level edge cases; holding a volume button cannot jump the player to
+  full volume.
+
 ## 0.91.1
 
 - **Colour for the fixed-colour lights in Apple Home and other Matter

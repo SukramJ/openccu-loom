@@ -14,13 +14,14 @@ import (
 )
 
 // DPKind classifies a Matter endpoint's source within the model.
-// Persisted as a TEXT column with a CHECK constraint — the database
-// rejects unknown kinds at insert time.
+// matter_exposures persists it as a TEXT column with a CHECK constraint
+// (migration 009), so the database rejects unknown kinds at insert time;
+// in matter_endpoints it is part of the rendered key.
 // loom:reachable:reason="passed by the adapter when it emits a candidate (internal/north/matteradapter/candidates.go:93); a named string type reached only as an argument is invisible to the analyzer"
 type DPKind string
 
-// DPKind values. The string forms match the dp_kind CHECK constraint in
-// migration 007 and, through [SourceKey.String], the UniqueID hash.
+// DPKind values. The string forms match the dp_kind CHECK constraint of
+// matter_exposures and, through [SourceKey.String], the UniqueID hash.
 const (
 	DPKindCustom      DPKind = "custom"
 	DPKindGeneric     DPKind = "generic"
@@ -30,8 +31,8 @@ const (
 )
 
 // SourceKey identifies the model-side source of a Matter endpoint. The
-// 5-tuple is the primary key of both matter_endpoints and
-// matter_exposures.
+// 5-tuple is the primary key of matter_exposures; matter_endpoints is
+// keyed by its [SourceKey.String] rendering.
 //
 // It implements [fabricendpoint.SourceKey], so the bridge module carries
 // it opaquely and hands the very same value back through the assembled

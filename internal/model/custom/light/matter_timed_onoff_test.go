@@ -21,7 +21,7 @@ import (
 
 // TestOnWithTimedOffExpiryTurnsTheLightOffAtTheCCU pins that the end of
 // an OnWithTimedOff countdown reaches the CCU: the stack counts OnTime
-// down on a 100 ms tick (matter.js OnOffServer.ts:102) and its turn-off
+// down on a 100 ms tick (matter.js OnOffServer.ts:216-232) and its turn-off
 // goes through the light's Sink, so OnTime=2 writes LEVEL=0 about
 // 200 ms after the turn-on. The countdown itself is go-fabric's and is
 // tested there; this pins only that its end is a CCU write.

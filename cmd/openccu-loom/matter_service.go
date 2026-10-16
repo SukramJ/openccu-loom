@@ -13,8 +13,9 @@ import "context"
 // (wireMatterRuntime), not in Start. Its bring-up interleaves construct,
 // handler-attach and start steps in an order the Matter protocol and
 // commissioner interop depend on: the node facade's Start runs the
-// stack bring-up in its documented order, and the daemon's own wiring
-// (readiness, reannounce, the REST surface) attaches around it.
+// stack bring-up in its documented order (the DNS-SD re-announce loop
+// included), and the daemon's own wiring (readiness, the REST surface)
+// attaches around it.
 // Separating start from construct would risk silent Apple/Google
 // Home pair-aborts that take days to attribute, and Matter cannot be
 // interop-verified from a unit test. So this Service deliberately owns only
@@ -43,8 +44,9 @@ func (s *matterService) Name() string { return "matter" }
 // (see the type doc).
 func (s *matterService) Start(context.Context) error { return nil }
 
-// Stop runs the Matter teardown (unwire the readiness hook, stop the
-// reannounce loop, the node facade's Stop, close the advertiser).
+// Stop runs the Matter teardown (unwire the readiness hook, the node
+// facade's Stop — which ends the re-announce loop and closes the
+// advertiser — and the explicit advertiser release).
 // Idempotent via the registry, which calls it at most once.
 func (s *matterService) Stop(context.Context) error {
 	if s.stop != nil {

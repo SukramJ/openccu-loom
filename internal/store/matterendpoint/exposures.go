@@ -12,9 +12,8 @@ import (
 )
 
 // ExposureRecord is the on-disk shape of one row in the
-// `matter_exposures` allowlist (migration 009). The 5-tuple key matches
-// `matter_endpoints`' primary key so allowlist entries can be
-// JOIN-correlated with assigned endpoint IDs.
+// `matter_exposures` allowlist (migration 009), keyed by the same
+// 5-tuple whose rendering keys `matter_endpoints`.
 //
 // Default state of any row is `Enabled = false`: the assembler must see
 // an explicit toggle before bridging the source. An empty
@@ -77,8 +76,9 @@ WHERE central_name = ? AND device_address = ? AND channel_no = ? AND dp_kind = ?
 }
 
 // EnabledKeys returns every 5-tuple with `enabled=1`, optionally
-// filtered by central name (empty = all). Used by a caller that needs
-// the allowlist as a set rather than one probe at a time.
+// filtered by central name (empty = all): the set form of
+// [Store.IsExposed]. No production code calls it; the assembler probes
+// one source at a time.
 func (s *Store) EnabledKeys(ctx context.Context, centralName string) (map[SourceKey]struct{}, error) {
 	var (
 		rows *sql.Rows

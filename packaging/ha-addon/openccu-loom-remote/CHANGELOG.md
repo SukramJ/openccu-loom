@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.92.0
+
+No changes to the proxy. The daemon release moves more of the Matter
+bridge into go-fabric v0.5.4 and stops a broken vendor attestation chain
+from pairing new controllers (REST API 13.9.1).
+
 # 0.91.1
 
 No changes to the proxy. The daemon release gives the fixed-colour lights

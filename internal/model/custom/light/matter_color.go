@@ -23,10 +23,11 @@ import (
 // CCU's confirmed colour fed back through [fabriclight.ColorControlServer.Set].
 //
 // FixedColorLight has its own palette-quantised projection in
-// matter_fixedcolor.go. EffectLight, DRGDaliLight and SoundPlayerLED stay
-// with the inherited Light projection (OnOff + LevelControl): ADR 0012's
-// mapping table bridges them as DimmableLight, and effect dispatch has no
-// Matter cluster.
+// matter_fixedcolor.go. SoundPlayerLED stays with the inherited Light
+// projection (OnOff + LevelControl). EffectLight and DRGDaliLight embed
+// ColorLight and ColorTempLight and serve their ColorControl projections;
+// effect dispatch has no Matter cluster. ADR 0012's mapping table still
+// lists both as DimmableLight, which no longer matches this code.
 var (
 	_ interfaces.MatterEndpointSource = (*ColorLight)(nil)
 	_ interfaces.MatterEndpointSource = (*ColorTempLight)(nil)
@@ -124,8 +125,9 @@ const (
 	//
 	// This pair is what [kelvinToMireds] clamps into — the typical
 	// "warm-cool LED" window. The clamp is loom-local and its width is
-	// **unverified**: matter.js color-control.element.ts constrains the
-	// attribute to the full uint16 range, not to this window, and no
+	// **unverified**: matter.js color-control.element.ts:56-57 constrains
+	// the attribute to the device's ColorTempPhysicalMin/MaxMireds, which
+	// this window stands in for, and no
 	// device descriptor in the fleet names 2000/6535 K. A device
 	// declaring a wider range therefore reaches Home Assistant unclamped
 	// (payload.go derives min/max mireds straight from the bounds) and

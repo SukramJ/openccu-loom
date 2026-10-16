@@ -33,8 +33,9 @@ const matterDispatchPriority = hmenum.CommandPriorityHigh
 
 // Compile-time assertions: Siren and SmokeSiren participate in the
 // Matter source surface (ADR 0012). Siren projects onto an
-// OnOffPlugInUnit (0x010A) endpoint with OnOff + BooleanState clusters
-// — Matter 1.5.1 has no Siren-cluster covering tone/optical configuration,
+// OnOffPlugInUnit (0x010A) endpoint with the OnOff cluster (BooleanState
+// is not conformant there) — Matter has no Siren cluster covering
+// tone/optical configuration,
 // so those features remain MQTT-only per ADR 0012 §5 ("out of Matter
 // scope" table). SmokeSiren projects onto a SmokeCOAlarm (0x0076)
 // endpoint with the SmokeCOAlarm cluster (0x005C). SoundPlayer projects
@@ -53,8 +54,8 @@ var (
 func (s *Siren) MatterDataVersion() uint32 { return s.dataVersion.Current() }
 
 // OnMatterValueChanged implements [interfaces.MatterChangeNotifier] for Siren.
-// The Matter surface is OnOff + BooleanState driven by the acoustic and
-// optical active-state DPs; fan both into the callback so a siren that starts
+// The Matter surface is OnOff, driven by the acoustic and optical
+// active-state DPs; fan both into the callback so a siren that starts
 // or stops outside Apple (triggered by a CCU program or the device itself)
 // dirty-marks the endpoint and reaches Apple's Subscribe. Tone/light
 // selection stays MQTT-only (no Matter cluster), so those DPs are not wired.
@@ -69,8 +70,8 @@ func (s *Siren) OnMatterValueChanged(cb func()) func() {
 }
 
 // MatterDataVersion implements [interfaces.MatterClusterDataVersion] for SmokeSiren.
-// SmokeCOAlarm has no client-writable attributes / commands in 0.1.0; the version
-// is reserved for when SelfTestRequest is wired.
+// It is the SmokeCOAlarm server's own tracker (alarm.Config.DataVersion),
+// bumped on every confirmed status change (smoke.go).
 func (s *SmokeSiren) MatterDataVersion() uint32 { return s.dataVersion.Current() }
 
 // OnMatterValueChanged implements [interfaces.MatterChangeNotifier] for
@@ -92,7 +93,7 @@ func (s *Siren) MatterDeviceType() uint16 { return fabricdevice.OnOffPlugInUnitI
 
 // MatterEligibility marks Siren as partially mappable: OnOff covers the
 // alarm on/off command surface; BooleanState is not mounted because it
-// is non-conformant on OnOffPlugInUnit (see MatterClusterServers).
+// is non-conformant on OnOffPlugInUnit.
 // Tone / optical selection has no Matter cluster equivalent and stays
 // MQTT-only.
 func (s *Siren) MatterEligibility() interfaces.MatterEligibilityVerdict {
@@ -107,7 +108,7 @@ func (s *Siren) MatterEligibility() interfaces.MatterEligibilityVerdict {
 // MatterClusterServers implements [interfaces.MatterEndpointSource]: the
 // OnOff cluster, served by go-fabric's [onoff.Server] (ADR 0084 phase 2).
 // OnOffPlugInUnit (0x010A) mandates the LT (Lighting) feature on OnOff
-// (on-off-plug-in-unit.element.ts:22-25), so the server advertises it;
+// (on-off-plug-in-unit.element.ts:27-30), so the server advertises it;
 // the LT attributes, the timed commands and the scene paths are the
 // stack's. The Groups and ScenesManagement clusters the device type
 // mandates are stack state the endpoint assembler mounts.
@@ -120,7 +121,7 @@ func (s *Siren) MatterClusterServers() []interfaces.MatterClusterServer {
 // [OnConfig] — the device-defined defaults pick the tone and the light —
 // and every switch-off onto [Siren.TurnOff], at [matterDispatchPriority].
 // An OnWithTimedOff now ends the alarm after OnTime through the stack's
-// countdown (OnOffServer.ts:102), whose off reaches the same Sink. The
+// countdown (OnOffServer.ts:216-232), whose off reaches the same Sink. The
 // acoustic and optical ACOUSTIC_ALARM_ACTIVE / OPTICAL_ALARM_ACTIVE
 // confirmations feed the CCU's state back through [onoff.Server.Set],
 // the one path that stores without asking the Sink, so a CCU program
