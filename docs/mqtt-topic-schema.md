@@ -986,5 +986,5 @@ left retained on the broker:
 
 **Reserved central names.** A central whose topic-safe name is `alarm`,
 `security`, `system`, `bridge`, `connected`, `status`, `set`, `get`, `info`,
-`meta` or `maintenance` is now refused at config validation. Unlikely, but a
+`meta`, `maintenance` or `ha` is now refused at config validation. Unlikely, but a
 **hard failure on upgrade**: rename the central before upgrading.

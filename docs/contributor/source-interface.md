@@ -19,9 +19,9 @@ The contract is short:
 
 ```go
 type Source interface {
-    InfoPayload()        map[string]any
-    ConfigPayload()      map[string]any
-    StatePayload()       map[string]any
+    Info()               InfoPayload
+    Config()             ConfigPayload
+    State()              StatePayload
     ServiceMethodNames() []string
     Invoke(ctx context.Context, name string, params map[string]any, priority hmenum.CommandPriority) error
 }
@@ -71,9 +71,7 @@ When you add a new model type, walk this tree:
    (`internal/model/custom/cover/cover.go`).
 
 4. **Implement the three read methods** in a separate file
-   `payload.go` next to your type. Two recommended patterns:
-
-   ### Pattern A — explicit map literals (custom DPs, hub DPs)
+   `payload.go` next to your type, each returning a typed payload struct:
 
    ```go
    // internal/model/custom/foo/payload.go
@@ -83,27 +81,22 @@ When you add a new model type, walk this tree:
 
    var _ payload.Source = (*Foo)(nil)
 
-   func (f *Foo) InfoPayload() map[string]any {
-       if f == nil { return nil }
-       return map[string]any{
-           "address": f.Address,
-           "kind":    string(f.Kind),
+   func (f *Foo) State() payload.StatePayload {
+       if f == nil {
+           return nil
        }
+       return &payload.FooState{ /* fields with json tags */ }
    }
 
-   func (f *Foo) ConfigPayload() map[string]any { ... }
-   func (f *Foo) StatePayload() map[string]any  { ... }
+   func (f *Foo) Info() payload.InfoPayload     { ... }
+   func (f *Foo) Config() payload.ConfigPayload { ... }
    ```
 
-   Use this for types with conditional or computed fields.
-
-   ### Pattern B — struct-tag reflection (generic DPs, simple records)
-
-   Tag struct fields with `payload:"<kind>"` (or `payload:"<kind>,alt=<name>"`)
-   and let `payload.For(...)` build the map. See `internal/payload/payload.go`
-   for tag syntax. The generic-DP layer in
-   `internal/model/generic/payload.go` mixes this pattern with computed
-   fields by overlaying both in the method body.
+   `InfoPayload`, `ConfigPayload` and `StatePayload` are marker types;
+   the concrete payloads are domain structs in `internal/payload`
+   (`state.go`, `config.go`, …) whose `json` tags are the wire keys.
+   `internal/model/custom/lock/payload.go` (`Lock.State` returning
+   `*payload.LockState`) is a compact reference.
 
 5. **Use HA-friendly key names.** State fields should match what HA's
    MQTT platform expects (`hvac_mode`, `current_temperature`,
@@ -113,10 +106,11 @@ When you add a new model type, walk this tree:
    "{{ value_json.val.<field> }}"` — your key names show up verbatim in HA
    templates.
 
-6. **Filter typed-nil values from your maps.** Empty optional fields
-   should be **absent** from the map rather than present with zero
-   values. Mirrors aiohomematic's `if value is not None` filter and
-   keeps the JSON tight.
+6. **Decide per field whether "unknown" is absent or a default.** An
+   optional field that may be unknown is a pointer with `omitempty`, so
+   it is absent from the JSON rather than a misleading zero. Where Home
+   Assistant templates would warn on a missing key, publish a documented
+   default instead (the lock reports `UNLOCKED` before its first event).
 
 7. **Service-method handlers are simple functions.** Decode `params`
    with the helpers in `internal/payload/params.go`:
@@ -140,57 +134,35 @@ When you add a new model type, walk this tree:
 
 ---
 
-## HA-Discovery: implement `HADiscoveryPayloadBuilder`
+## HA-Discovery: implement `HADiscoveryEntityBuilder`
 
-Custom-DP types that should surface as a HA-MQTT-Discovery entity also
-implement [ADR 0010](../adr/0010-discovery-payload-from-model.md)'s
-`HADiscoveryPayloadBuilder` interface:
-
-```go
-HADiscoveryPayload(ctx payload.HADiscoveryContext) (component string, body map[string]any)
-```
-
-The returned `body` carries the HA-platform-specific keys (`min_temp`,
-`mode_state_template`, `preset_modes`, …); the bridge attaches
-`name`, `unique_id`, `default_entity_id`, `availability`, `device`, `origin`
-on top.
-
-Use the `ctx` helpers to assemble topic references:
-
-- `ctx.AggregatedStateTopic()` — the channel's aggregated state topic.
-  Read references (`*_state_topic`) point here with
-  `value_template: "{{ value_json.val.<field> }}"`.
-- `ctx.ServiceMethodCommandTopic(method)` — write references
-  (`*_command_topic`) point at the per-service-method topic. The
-  CommandSubscriber dispatches into `Source.Invoke(method, …)`.
-- `ctx.WireParameterCommandTopic(parameter)` — fallback for
-  HA-platform multiplex topics where one `command_topic` accepts
-  multiple `payload_*` strings (Cover open/close/stop, Lock
-  lock/unlock, Siren on/off). Use sparingly.
-- `ctx.WireParameterStateTopic(parameter)` — same fallback for state.
-
-Pattern (Climate as reference; see
-`internal/model/custom/climate/payload.go`):
+Custom-DP types that should surface as a Home Assistant MQTT-Discovery
+entity implement `payload.HADiscoveryEntityBuilder`
+([ADR 0010](../adr/0010-discovery-payload-from-model.md),
+`internal/payload/discovery_entity.go`):
 
 ```go
-var _ payload.HADiscoveryPayloadBuilder = (*Foo)(nil)
-
-func (f *Foo) HADiscoveryPayload(ctx payload.HADiscoveryContext) (string, map[string]any) {
-    body := map[string]any{
-        "min_temp":                 f.MinTemp(),
-        "max_temp":                 f.MaxTemp(),
-        "mode_state_topic":         ctx.AggregatedStateTopic(),
-        "mode_state_template":      "{{ value_json.val.hvac_mode }}",
-        "mode_command_topic":       ctx.ServiceMethodCommandTopic("set_mode"),
-    }
-    return "climate", body
-}
+HADiscoveryEntity() hamodel.Entity
 ```
 
-The contract test
-`tests/contract/source_completeness_test.go` enforces every Custom-DP
-type implements `Source`; `tests/contract/source_no_dual_source_test.go`
-enforces the no-dual-state-source rule. Add your new type to both.
+The entity describes itself on the shared Home Assistant model
+(`hamodel`, from the go-hamqtt module): a description, the bindings and
+the platform's own vocabulary. It carries **no topics** — it names
+`hamodel.Slot` coordinates, and the bridge renders them through its own
+topic layout, so the topic schema stays the bridge's business. The
+bridge also renders the frame (`unique_id`, `availability`, `device`,
+`origin`, `name`) from the model, because Home Assistant drops
+undeclared keys silently and keys its registries on `unique_id` and the
+device identifiers. Return a literal `nil` to decline (a data point with
+no Home Assistant surface); a typed nil pointer is not `nil` to the
+bridge.
+
+`HADiscoveryEntityBuilder` replaces the older
+`HADiscoveryComponentBuilder` on the channel-aggregate plane. References:
+`internal/model/custom/climate/payload.go` and
+`internal/model/custom/valve/payload.go`.
+
+---
 
 ## What you do **not** need to do
 

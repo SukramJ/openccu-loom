@@ -51,10 +51,11 @@ where the daemon runs.
   address.
 - Open ports `8120/tcp` and `8129/tcp` (or your configured values)
   toward the CCU on any firewall in between.
-- If you use dynamic ports (`callback.port: 0`), the OS assigns an
-  ephemeral port. The daemon re-advertises the **effective** port to
-  the CCU on every `init()` and reconnect, so this is supported — but
-  any firewall rule must allow the configured `port_range`.
+- `callback.port: 0` is not a dynamic port: it falls back to the
+  defaults 8120 / 8129. Only `callback.port_range` (XML-RPC) makes the
+  port vary; the daemon then re-advertises the **effective** port to the
+  CCU on every `init()` and reconnect, and any firewall rule must allow
+  the whole range.
 - Look for `callback.listen` / `callback.binrpc.listen` lines at boot
   to confirm the bound address, and `callback.start.failed` if a bind
   failed.
@@ -67,7 +68,10 @@ where the daemon runs.
 **Cause.** Health is aggregated per central from the interface
 ping/pong window and connection checks. A `degraded` state usually
 means one non-primary interface is marginal; `unhealthy` means the
-primary interface (default: the `HmIP-RF`-matching one) is down.
+primary interface (default: the `HmIP-RF`-matching one) is down. The
+daemon-wide `GET /health` answers `503` only when the database or a
+central is unhealthy, or every interface is down; a single interface
+down makes it `degraded` and it still answers `200`.
 
 **Fix.**
 

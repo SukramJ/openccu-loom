@@ -248,12 +248,13 @@ configured name or subscribe via wildcard.
 The full broadcast catalogue is machine-readable in
 [`assets/wsapi.json`](https://github.com/SukramJ/openccu-loom/blob/main/assets/wsapi.json) — every entry with
 `"kind": "broadcast"` carries `topic` (pattern) and `payload` (schema
-name in `openapi.yaml`). `assets/wsapi.json` holds 23 broadcast
-entries (17 non-Matter + 6 Matter); the table below is the
-human-readable view of all 17 non-Matter broadcasts emitted today —
+name in `openapi.yaml`). `assets/wsapi.json` holds 49 broadcast
+entries and is the complete, authoritative list —
 `tests/contract/ws_broadcast_emitter_test.go::TestWSBroadcastsHaveProductionEmitter`
-enforces that every one of them has a production emitter, so this
-list does not drift from reality.
+enforces that every one of them has a production emitter. The table
+below covers the core device and system broadcasts only; the `alarm.*`,
+`security.*`, Matter, pairing, schedule and add-on families are in
+`wsapi.json`.
 
 ### Core broadcasts (daemon-emitted, openapi-described)
 

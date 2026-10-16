@@ -486,5 +486,7 @@ built:
   entries and reports `truncated: true` plus a total count when there
   are more — but not where to find the remainder. Use the Sources or
   Faults page for the complete list.
-- **No WebSocket surface.** The domain is reachable over REST and MQTT
-  only; there are no `security.*` WebSocket broadcasts or commands.
+- **WebSocket is read-only.** The domain pushes five `security.*`
+  broadcasts on the WebSocket topic `security.state` (state, class, zone
+  and fault changes, notifications); there are no WebSocket commands, so
+  every change goes through REST or MQTT.

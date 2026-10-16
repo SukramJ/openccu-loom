@@ -27,12 +27,14 @@ north:
     # Optional. UDP listen address. Defaults to ":5540".
     listen: ":5540"
     commissioning:
-      # Required for pairing — the Matter setup passcode (00000001..99999998).
-      # Leave 0 (the default) and pairing is disabled.
+      # The Matter setup passcode (00000001..99999998). Leave 0 (the default)
+      # and pair through a one-time window opened in the web UI instead.
       passcode: 20202021
 ```
 
-The bridge listens on UDP port **5540** by default. The pairing **passcode** under `north.matter.commissioning.passcode` is required: if it is left at `0`, the bridge will not accept commissioners and the pairing codes are unavailable.
+The bridge listens on UDP port **5540** by default. With a **passcode** under `north.matter.commissioning.passcode`, the pairing codes are fixed and always available. Left at `0`, the bridge runs on a random passcode nobody holds: there are no fixed pairing codes (`GET /api/v1/matter/setup-payload` answers 503), and you pair by opening a commissioning window in the web UI, which shows one-time codes for that window.
+
+If you configured your own attestation files (`north.matter.attestation.*`) and they do not load, the bridge keeps serving every controller already paired but refuses every new pairing, and the web UI's diagnostics show why. Without own attestation files this does not apply.
 
 For the full set of keys (vendor/product IDs, discriminator, attestation, CASE), see [Configuration](../admin/configuration.md). Restart the daemon after changing the config — see [Getting started](../getting-started.md).
 

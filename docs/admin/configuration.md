@@ -154,8 +154,10 @@ resolved hybrid:
 2. Otherwise an auto-generated key file at `<data_dir>/secret.key`
    (created with mode `0600` on first start).
 
-If no key can be resolved or written, the daemon logs a warning and
-stores secret values in plaintext rather than refusing to boot.
+If no key can be resolved or written, the daemon refuses to store a
+secret it cannot encrypt (for example a CCU password) instead of writing
+it in the clear; `security.allow_plaintext_secrets: true` lifts that
+refusal (ADR 0027).
 
 !!! warning "Back up `secret.key` with your database"
     Without the master key, encrypted secrets in a restored database
@@ -222,8 +224,8 @@ the CCU. The host/ports here must be reachable **from the CCU**.
 | `callback.restrict_source_ips` | bool | `false` | — | no |
 
 `port` is the XML-RPC callback (HmIP/BidCos); `bin_port` is the
-BIN-RPC callback (CUxD). A value of `0` means the OS assigns an
-ephemeral port. `port_range` (e.g. `"30000-30099"`) applies to the
+BIN-RPC callback (CUxD). A value of `0` is not a dynamic port: it is
+replaced by the defaults `8120` and `8129`. `port_range` (e.g. `"30000-30099"`) applies to the
 XML-RPC listener and **takes precedence over `port`**: when it is set
 the listener binds the first free port inside the range and `port` is
 not used. A malformed range is rejected when the config is saved, not
@@ -485,14 +487,18 @@ commissioning are covered on the Matter user page (`docs/user/matter.md`).
   into every endpoint's Matter UniqueID. Enabling it in production breaks
   accessory recognition — controllers must re-link every device after
   each restart. Keep the default `false`.
-- `case.node_id` / `case.fabric_id` pin the operational node/fabric
-  identity; `node_id = 0` disables CASE. `attestation.dac_path`,
-  `pai_path`, and `cd_path` point at production Device Attestation
-  material (DAC + PAI + CD). When all resolve, the bridge presents that
-  material to commissioners; otherwise it uses an ephemeral development
-  DAC that only validates under chip-tool's
-  `--bypass-attestation-verifier`. The DAC private key path
-  (`attestation.dac_key_path`) and the commissioning passcode/salt are
+- `case.*` is accepted for compatibility and has no effect since 0.91.0:
+  the operational identity is the Matter stack's own.
+- `attestation.dac_path`, `dac_key_path`, `pai_path` and `cd_path` point
+  at production Device Attestation material (DAC + key + PAI + CD; PEM or
+  DER, the key PKCS#8 or SEC1). With all four empty the bridge serves the
+  CSA test chain for the configured vendor and product, which Apple Home,
+  Google Home and chip-tool accept without
+  `--bypass-attestation-verifier`. Once any path is set, all four must load
+  and the key must match the DAC; otherwise the bridge keeps serving every
+  controller already paired but refuses every new pairing, multi-admin
+  included, and reports the cause under the `matter.bridge` health
+  component. The DAC key path and the commissioning passcode/salt are
   secrets encrypted at rest.
 - `mdns_advertise` selects the mDNS advertiser: `zeroconf` (default,
   publishes the commissionable records) or `noop` (in-memory only, no
@@ -703,7 +709,7 @@ an external time-series store.
 | `persistence.values_cache.disabled_centrals` | list | — | — | no |
 | `persistence.history.enabled` | bool | `false` | — | no |
 | `persistence.history.retention` | duration | `720h` (30 d) | — | no |
-| `persistence.history.retention_hourly` | duration | `13 months` | — | no |
+| `persistence.history.retention_hourly` | duration | `390 days` (≈13 months) | — | no |
 | `persistence.history.retention_daily` | duration | `0` (keep forever) | — | no |
 | `persistence.history.flush_interval` | duration | `5s` | — | no |
 | `persistence.history.include` | list | — (all numeric) | — | no |

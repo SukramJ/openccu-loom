@@ -39,7 +39,10 @@ client:
   the startup probe; it returns 401 with no active session).
 - `GET /api/v1/setup/status`, `POST /api/v1/setup` — first-run
   onboarding, unauthenticated because no admin exists yet.
-- `GET /api/v1/devices/{addr}/icon` — device-model icon proxy, public
+- `GET /api/v1/devices/{addr}/icon` — device-model icon proxy. It is **not**
+  public: it answers differently for known and unknown addresses, so it sits
+  behind authentication like the rest of the API; the web UI loads it with
+  its session cookie
   like `/health` since it serves only non-sensitive artwork and must
   resolve from a bare `<img>` tag.
 - `GET /api/v1/auth/oidc/start`, `GET /api/v1/auth/oidc/callback` —
@@ -72,7 +75,7 @@ The table groups the major endpoint families. Sample paths are illustrative; the
 | Audit | `GET /audit` | authenticated |
 | Diagnostics | `GET /diagnostics/logs`, `GET\|PUT /diagnostics/log-level`, `GET /diagnostics`, `GET /metrics` | mixed (admin for most) |
 | Interfaces | `GET /interfaces`, `GET /interfaces/{id}`, `POST /interfaces/{id}/reconnect` | read: auth / admin reconnect |
-| System admin | `GET /system/ccu`, `POST /system/restart`, `POST /install-mode` | admin |
+| System admin | `GET /system/ccu`, `POST /system/restart`, `GET /install-mode/interfaces`, `POST /install-mode/search`, `POST /devices/{addr}/install-mode` | admin |
 | v2 CRUD | `GET\|POST /users`, `PATCH\|DELETE /users/{subject}`, `GET\|POST /centrals`, `PUT\|DELETE /centrals/{name}` | admin |
 | Onboarding | `POST /centrals/probe`, `POST\|GET\|DELETE /centrals/pairing[/{id}]`, `GET /centrals/discovered` | admin |
 | Taxonomy | `GET /taxonomy`, `POST\|PATCH\|DELETE /taxonomy/{central}/{enum}/nodes` | read: auth / write: operator |
@@ -213,7 +216,7 @@ Two things to keep in mind:
 const ws = new WebSocket("ws://localhost:8119/api/v1/events");
 
 ws.onopen = () => {
-  ws.send(JSON.stringify({ op: "subscribe", topics: ["devices/#"], since: lastSeq }));
+  ws.send(JSON.stringify({ op: "subscribe", topics: ["device.*"], since: lastSeq }));
 };
 
 ws.onmessage = (ev) => {

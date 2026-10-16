@@ -84,10 +84,10 @@ HmIP-Wired is not a separate south-bound interface — [ADR 0023](https://github
 
 Two listeners run, one per protocol, shared across all centrals:
 
-- **XML-RPC over HTTP** on `rpc_callback.port` (default `:8120`), routed by URL path `/RPC2/<central_name>`.
-- **BIN-RPC over raw TCP** on `rpc_callback.bin_port` (default `:8129`), routed by `interface_id` in the envelope.
+- **XML-RPC over HTTP** on `callback.port` (default `:8120`), routed by URL path `/RPC2/<central_name>`.
+- **BIN-RPC over raw TCP** on `callback.bin_port` (default `:8129`), routed by `interface_id` in the envelope.
 
-Both support fixed, dynamic (`0`, OS-assigned), and range port modes. The **effective** port is re-advertised to the CCU on every `init()` and every reconnect. CUxD always speaks BIN-RPC — never treat it as JSON-RPC.
+The XML-RPC listener binds a fixed port or the first free port of `callback.port_range`; the BIN-RPC listener binds a fixed port only. A port of `0` is not dynamic: it is replaced by the defaults 8120 and 8129. The **effective** port is re-advertised to the CCU on every `init()` and every reconnect. CUxD always speaks BIN-RPC — never treat it as JSON-RPC.
 
 ## South profiles
 

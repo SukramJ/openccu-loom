@@ -165,5 +165,6 @@ No source is reproduced verbatim.
 
 ## Reverse direction
 
-OpenCCU-Loom itself is MIT-licensed. Anyone reading this list to learn
+OpenCCU-Loom itself is licensed under the Apache License 2.0 (since
+0.91.1; earlier releases stay MIT). Anyone reading this list to learn
 from us is welcome to do the same — the LICENSE file applies.

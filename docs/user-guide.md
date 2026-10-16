@@ -112,8 +112,8 @@ listener only binds when `north.matter.enabled: true`.
 ## The bootstrap config tier
 
 A small `config.yaml` covers only the **bootstrap tier** — the values
-the daemon needs before its database opens (data dir, bind addresses,
-log handler, default UI language, callback ports). On a fresh install,
+the daemon needs before its database opens (`data_dir`, `logging`,
+`listen.rest`, the first-run `bootstrap` toggles and `env_file`). On a fresh install,
 anything you list there is seeded into the database on first start;
 after that the database wins and the [web UI](user/web-ui.md) is the
 place to make changes.
@@ -211,7 +211,9 @@ curl -X PUT \
 
 ## MQTT topic layout
 
-Raw plane (always on when MQTT is enabled). The layout follows the
+Raw plane (`north.mqtt.raw_enabled`; off by default, and switched on
+automatically when `north.mqtt.discovery_enabled` is set, because the
+discovery entities read their values from it). The layout follows the
 [mqtt-smarthome 2.0](https://github.com/mqtt-smarthome/mqtt-smarthome/blob/master/SPEC.md)
 convention, `<base>/<function>/<item…>` (ADR 0083): state under `status`,
 commands under `set` on the same item path, descriptors under `meta`.
@@ -310,7 +312,7 @@ The Diagnostics page (admin-only) provides a recording hub for three capture typ
 Click **New recording** and fill in:
 
 - **Type** — Debug-log, RPC traffic, or both.
-- **Duration** — seconds; `0` means open-ended. The server caps all recordings at 60 minutes regardless of the value entered.
+- **Duration** — seconds; `0` means open-ended. The server caps a debug-log capture at 30 minutes and an RPC-traffic recording at 60 minutes, regardless of the value entered.
 - **CCU scope** — all configured CCUs or a specific one.
 - **Anonymise** — when enabled, device-identifying values in RPC traces are hashed before writing to disk.
 
