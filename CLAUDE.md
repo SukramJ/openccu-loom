@@ -117,7 +117,7 @@ Non-negotiable. Each one is followed by the guard that enforces it, or by
 ### Domain invariants
 
 - **CUxD speaks BIN-RPC, not JSON-RPC.** We run our own BIN-RPC callback
-  server. Never treat CUxD as "JSON-RPC only". Guard: `TestCuxdUsesBINRPCBackend`.
+  server. Never treat CUxD as "JSON-RPC only". Guard: `TestCUxDUsesBINRPCBackend`.
 - **`CommandPriority.Critical = 0`.** Never use `if priority != 0` as "set" —
   compare against `hmenum.CommandPriorityCritical`.
 - **Multi-CCU from day one.** Every coordinator, adapter and store is

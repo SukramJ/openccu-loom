@@ -33,9 +33,11 @@ Three mandatory test pillars:
 
 Protocol / capability invariants. Every test states a hard rule and
 blows up if violated. The catalogue lives in `tests/contract/` —
-representative: `TestAllMVPInterfacesHavePingPong`,
-`TestCuxdUsesBINRPCBackend`, `TestDeviceProfileRegistryParity`,
-`TestRecordedReliabilityDefaults` (cross-stack drift detector).
+representative: `TestCUxDUsesBINRPCBackend`,
+`TestPingPongCallerIDDistinguishesDaemons`,
+`TestEveryRegisteredProfileHasConstructor`. The cross-stack drift
+detector `TestRecordedReliabilityDefaults` lives next to its package in
+`pkg/hmreliability/`.
 
 **If you touch a protocol / capability boundary, you must add or
 update a contract test.**
