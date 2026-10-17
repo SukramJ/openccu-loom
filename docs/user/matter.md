@@ -183,7 +183,7 @@ Matter controllers do not implement the specification uniformly — each ecosyst
 - A device must be mappable to a supported Matter type before it can be exposed.
 - The default test vendor identity means ecosystems may treat the bridge as uncertified (see the warning above).
 
-For the technical contract behind the Matter mapping, see [`docs/matter-parity-contract.md`](../matter-parity-contract.md); the per-ecosystem findings behind the caveats above are collected in [Matter Ecosystem Observations](../developer/matter-ecosystem-observations.md).
+For the technical contract behind the Matter mapping, see [`docs/matter-parity-contract.md`](../matter-parity-contract.md); the per-ecosystem findings behind the caveats above are collected in [Matter Ecosystem Observations](https://github.com/SukramJ/go-fabric/blob/main/docs/matter-ecosystem-observations.md).
 
 ## Where to go next
 

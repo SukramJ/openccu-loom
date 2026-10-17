@@ -11,12 +11,12 @@ protocols, so you can use your devices from MQTT, REST/WebSocket
 clients, a browser, or a Matter controller without running Home
 Assistant.
 
-It is a Go port of the Python library
-[`aiohomematic`](https://github.com/SukramJ/aiohomematic) that adds the
-standalone-daemon surface on top. The two projects coexist:
-`aiohomematic` powers the Home Assistant integration *Homematic(IP)
-Local*; OpenCCU-Loom serves users who want MQTT / REST / UI / Matter
-access on their own.
+OpenCCU-Loom began as a Go port of
+[`aiohomematic`](https://github.com/SukramJ/aiohomematic) and now develops
+on its own. The two projects coexist: `aiohomematic` powers the Home
+Assistant integration *Homematic(IP) Local*; OpenCCU-Loom serves users
+who want MQTT / REST / UI / Matter access without it. It is open source
+under the Apache License 2.0.
 
 ---
 
@@ -28,8 +28,14 @@ access on their own.
   event stream.
 - **Config UI** — a Svelte SPA for setup, device configuration, and
   diagnostics.
-- **Matter** — a native-Go Matter bridge (opt-in) so your CCU devices
+- **Matter** — a pure-Go Matter bridge (opt-in, built on
+  [go-fabric](https://github.com/SukramJ/go-fabric)) so your CCU devices
   appear in Apple Home, Google Home, and Alexa.
+- **Alarm system and Security & Safety** — zones, arming, codes and a
+  fault overview across your sensors, on MQTT, REST and the web UI.
+- **History, webhooks and MCP** — measurement history, outbound and
+  inbound webhooks, and an MCP server so an AI assistant can drive the
+  daemon.
 - **Multi-CCU** — one daemon, many centrals, first-class from day one —
   full CCUs and [openccu-lite](admin/openccu-lite.md) boxes side by side.
 
@@ -43,56 +49,62 @@ SQLite plus the filesystem — no external database, no CGo.
 
 ## Where to next
 
-Pick the lane that matches what you want to do.
+The navigation follows three tracks — pick the one that matches what you
+want to do.
 
 <div class="grid cards" markdown>
 
-- :material-account: **For end users**
+- :material-account: **Use**
 
     ---
 
-    Get a CCU bridged and use your devices from a browser, MQTT, or a
+    Get a CCU bridged and use your devices from the web UI, MQTT, or a
     Matter controller.
 
     [:octicons-arrow-right-24: Getting Started](getting-started.md)
 
     [:octicons-arrow-right-24: Concepts](user/concepts.md) ·
     [Web UI](user/web-ui.md) ·
-    [Matter](user/matter.md)
+    [Matter](user/matter.md) ·
+    [Alarm](alarm-user-guide.md)
 
     Running Home Assistant? Start with
     [choosing your integration path](user/home-assistant.md).
 
-- :material-server-network: **For administrators**
+- :material-server-network: **Operate & integrate**
 
     ---
 
-    Install, secure, and operate the daemon — install methods, the
-    config reference, and the security model.
+    Install, configure, secure and run the daemon; connect MQTT, REST,
+    WebSocket and MCP clients.
 
     [:octicons-arrow-right-24: Installation & First Steps](user-guide.md)
 
-    [:octicons-arrow-right-24: Configuration reference](admin/configuration.md) ·
-    [Security](SECURITY.md)
+    [:octicons-arrow-right-24: Configuration](admin/configuration.md) ·
+    [Security](SECURITY.md) ·
+    [REST + WebSocket](integrations/rest-ws.md) ·
+    [Reference](reference/configuration.md)
 
-- :material-code-tags: **For developers & integrators**
+- :material-code-tags: **Develop & architecture**
 
     ---
 
-    Talk to the REST/WebSocket API, understand the architecture, and
-    build from source.
+    How the daemon is built and why: architecture, the Matter boundary,
+    wiring, testing, releases and the decision records.
 
-    [:octicons-arrow-right-24: REST + WebSocket API](integrations/rest-ws.md)
+    [:octicons-arrow-right-24: Architecture](developer/architecture.md)
 
-    [:octicons-arrow-right-24: Architecture](developer/architecture.md) ·
-    [Dev setup](developer/setup.md)
+    [:octicons-arrow-right-24: Dev setup](developer/setup.md) ·
+    [Decisions](developer/adr-index.md)
 
 </div>
 
 ## Project links
 
 - Source: [github.com/SukramJ/openccu-loom](https://github.com/SukramJ/openccu-loom)
-- Reference library: [aiohomematic](https://github.com/SukramJ/aiohomematic)
+- Matter stack: [go-fabric](https://github.com/SukramJ/go-fabric)
+- Sibling project (Home Assistant integration):
+  [aiohomematic](https://github.com/SukramJ/aiohomematic)
 - Upstream OS: [OpenCCU](https://github.com/OpenCCU/OpenCCU) ·
   [openccu.de](https://openccu.de)
 

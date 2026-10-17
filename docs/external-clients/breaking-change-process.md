@@ -83,6 +83,6 @@ is gone, is neither — nothing stored moved.
 ## Where it is written
 
 One section per break in
-[`ha-unique-id-migration.md`](./ha-unique-id-migration.md), added **before**
+[`ha-unique-id-transitions.md`](./ha-unique-id-transitions.md), added **before**
 the change is released rather than after, plus the release-note entries from
 point 6. The ADR records the rule; that page records each application of it.
