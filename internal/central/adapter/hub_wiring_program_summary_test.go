@@ -75,11 +75,20 @@ func TestProgramMetadataNilRunner(t *testing.T) {
 type programSummaryServer struct {
 	srv        *httptest.Server
 	regaResult atomic.Value // string: raw script stdout (a JSON array)
+	programs   []map[string]any
 }
 
 func newProgramSummaryServer(t *testing.T, regaOut string) *programSummaryServer {
 	t.Helper()
-	s := &programSummaryServer{}
+	return newProgramSummaryServerWith(t, regaOut, []map[string]any{
+		{"id": "p1", "name": "Heater", "isActive": true, "isInternal": false},
+	})
+}
+
+// newProgramSummaryServerWith answers Program.getAll with programs.
+func newProgramSummaryServerWith(t *testing.T, regaOut string, programs []map[string]any) *programSummaryServer {
+	t.Helper()
+	s := &programSummaryServer{programs: programs}
 	s.regaResult.Store(regaOut)
 	s.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req map[string]any
@@ -90,9 +99,7 @@ func newProgramSummaryServer(t *testing.T, regaOut string) *programSummaryServer
 		var result any
 		switch req["method"] {
 		case "Program.getAll":
-			result = []map[string]any{
-				{"id": "p1", "name": "Heater", "isActive": true, "isInternal": false},
-			}
+			result = s.programs
 		case "ReGa.runScript":
 			result, _ = s.regaResult.Load().(string)
 		default:

@@ -980,6 +980,9 @@ func hubEnabledDefault(isInternal bool, desc string, markers []hmenum.Descriptio
 // description used for marker filtering, plus the compact rule summaries
 // surfaced to north-bound clients.
 type programMeta struct {
+	// isCopy marks the WebUI editor's working copy of a program; the scan
+	// does not import it.
+	isCopy           bool
 	description      string
 	conditionSummary string
 	activitySummary  string
@@ -1016,6 +1019,7 @@ func programMetadata(ctx context.Context, runner *rega.Runner) map[string]progra
 	}
 	for _, d := range descs {
 		out[d.ID] = programMeta{
+			isCopy:           d.IsCopy,
 			description:      decodeRegaField(d.Description),
 			conditionSummary: truncateRuleSummary(decodeRegaField(d.ConditionSummary)),
 			activitySummary:  truncateRuleSummary(decodeRegaField(d.ActivitySummary)),
@@ -1065,6 +1069,15 @@ func loadPrograms(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, 
 			continue
 		}
 		meta := metaByID[p.ID]
+		// Opening a program in the CCU WebUI editor makes the CCU create a
+		// working copy (new ID, same name, inactive) that it deletes when the
+		// editor is left through OK or Back, and keeps when it is left any
+		// other way. It is not a program of its own: skipping it here also
+		// keeps it out of freshIDs, so a copy imported earlier is removed by
+		// the stale-entry diff below.
+		if meta.isCopy {
+			continue
+		}
 		// Markers do NOT gate import. Every program enters the model; the
 		// markers only decide whether it arrives enabled - see
 		// hubEnabledDefault below and the reference stack's documented
