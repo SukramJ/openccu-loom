@@ -24,6 +24,8 @@ Every WebSocket frame the daemon emits follows the same shape:
 
 ```json
 {
+  "seq":   1247,
+  "kind":  "change",
   "topic": "device.0001ABCDE.channels.1.data_points.LEVEL",
   "type":  "datapoint.value_changed",
   "ts":    "2026-05-24T08:42:13.456789Z",
@@ -31,14 +33,14 @@ Every WebSocket frame the daemon emits follows the same shape:
 }
 ```
 
-- `topic` — present on broadcasts; absent on command replies. The
-  field a client matched a subscription against.
-- `type` — discriminator for the `payload` schema. Matches the `name`
-  field of the corresponding `broadcast` entry in `wsapi.json`.
-- `ts` — RFC3339Nano UTC timestamp of when the event was emitted.
-- `payload` — see the schema referenced under
-  [`components.schemas`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) by the broadcast
-  entry's `payload` field.
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `seq` | uint64 | Monotonic daemon-assigned cursor. Store the last value seen and pass it back as `since` to resume after a reconnect. |
+| `kind` | enum | `initial` \| `change` \| `refresh`. Event-family discriminator; `change` is the dominant case ([ADR 0022](../adr/0022-ws-resume-and-kind.md)). |
+| `topic` | string | Present on broadcasts, absent on command replies; the field a subscription is matched against. |
+| `type` | string | Discriminator for the `payload` schema; matches the `name` of the broadcast entry in `wsapi.json`. |
+| `ts` | string | RFC3339Nano UTC timestamp of when the event was emitted. |
+| `payload` | object | The schema named by the broadcast entry's `payload` field, under [`components.schemas`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml). |
 
 ## Subscription operations
 
@@ -50,9 +52,19 @@ The WS client exchanges three frame ops:
 {"op": "pong"}
 ```
 
-The server responds with `subscribe`/`unsubscribe` acks (omitted here)
-and emits broadcast frames whose topics match any active subscription
-pattern.
+The server answers `{"op":"subscribed","topics":[...]}` and
+`{"op":"unsubscribed","topics":[...]}` — unconditionally, also for an
+empty topic list — and emits broadcast frames whose topics match any
+active subscription pattern.
+
+### Limits
+
+- A connection keeps at most 1024 subscribed topics. Further topics in a
+  `subscribe` are ignored without an error; the subscriptions already
+  held keep working.
+- The outbound queue per connection holds 1000 frames. A client that
+  reads too slowly loses the oldest queued events, not its connection,
+  and receives `replay_lost`.
 
 ## Resume after reconnect
 
@@ -81,6 +93,17 @@ If `since` precedes the oldest event still in the buffer:
 In that case the client must perform a fresh `GET /snapshot` to
 resync state — relying on the event stream alone would silently
 miss the events that aged out of the buffer.
+
+`replay_lost` is also sent outside a resume. Its causes:
+
+- `since` precedes the oldest buffered event.
+- `since` is above the daemon's current sequence — a cursor from before a
+  daemon restart, since the counter restarts at 0.
+- The connection fell behind and the daemon dropped queued events to keep
+  it open (one frame per overflow episode).
+- The daemon has just published a CCU's whole model once that CCU
+  finished coming up; instead of one frame per data point, every
+  connection gets a single `replay_lost`.
 
 The replay buffer ceiling is **1024 events** in the default
 configuration. It is a first-class operator knob:
@@ -204,6 +227,24 @@ The interval and timeout are documented in `wsapi.json` under
 the root-level `heartbeat` object so codegen tools can surface
 them; current values are stable for the v1 API contract. Changes
 to these constants would be a major-version bump per ADR-0020.
+
+### Round-trip time
+
+The ping carries an `echo` token: `{"op":"ping","echo":"<token>"}`. Copy
+it back verbatim — `{"op":"pong","echo":"<token>"}` — and the daemon
+times the round trip and reports it on the following ping as `rtt_ms`:
+
+```json
+{"op":"ping", "echo":"7", "rtt_ms":12.4}
+```
+
+It is absent on the first ping of a connection and after every pong that
+carried no echo. Echoing is optional — a bare `{"op":"pong"}` stays a
+valid heartbeat — and the token is opaque: its encoding is not part of
+the contract. `rtt_ms` measures the link between the client and the
+daemon only; the daemon's own link to the CCU is the separate
+`connection_latency_ms` hub metric, and the two are routinely orders of
+magnitude apart. Never add them or present them as one number.
 
 ## Topic-matching semantics
 

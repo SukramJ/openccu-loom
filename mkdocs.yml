@@ -59,40 +59,42 @@ theme:
 # deliberate: an exclude list silently rots as files are added.
 nav:
   - Home: index.md
-  - User Guide:
+  - Use:
       - Getting Started: getting-started.md
       - Concepts: user/concepts.md
       - Using the Web UI: user/web-ui.md
       - Matter in Apple, Google & Alexa Home: user/matter.md
       - Alarm and Security & Safety: alarm-user-guide.md
-  - Administration:
-      - Installation & First Steps: user-guide.md
-      - Configuration Reference: admin/configuration.md
-      - Authentication & Users: admin/auth.md
-      - Keycloak (OIDC): admin/keycloak-oidc.md
-      - Multi-CCU Operations: user/multi-ccu.md
-      - Connecting openccu-lite: admin/openccu-lite.md
-      - Security: SECURITY.md
-      - Privacy: privacy.md
-      - Backup & Restore: admin/backup.md
-      - Caching & Performance: caching.md
-      - Observability: admin/observability.md
-      - Troubleshooting: admin/troubleshooting.md
-  - Integrations:
-      - Home Assistant — Choosing a Path: user/home-assistant.md
-      - MQTT Topics: mqtt-topic-schema.md
-      - REST & WebSocket API: integrations/rest-ws.md
-      - MCP Server: external-clients/mcp.md
-      - External Client Wire Contract: external-clients/topic-hierarchy.md
-      - Token Pairing: external-clients/pairing.md
-      - Home Assistant Drop-in: external-clients/ha-drop-in-identity-and-scoping.md
-      - HA Unique-ID Migration: external-clients/ha-unique-id-migration.md
-      - Breaking a Published Identity: external-clients/breaking-change-process.md
-  - Reference:
-      - Configuration: reference/configuration.md
-      - WebSocket: reference/websocket.md
-      - REST API: reference/rest.md
-  - Developer:
+  - Operate & Integrate:
+      - Administration:
+          - Installation & First Steps: user-guide.md
+          - Configuration Reference: admin/configuration.md
+          - Authentication & Users: admin/auth.md
+          - Keycloak (OIDC): admin/keycloak-oidc.md
+          - Multi-CCU Operations: user/multi-ccu.md
+          - Connecting openccu-lite: admin/openccu-lite.md
+          - Security: SECURITY.md
+          - Privacy: privacy.md
+          - Backup & Restore: admin/backup.md
+          - Caching & Performance: caching.md
+          - Observability: admin/observability.md
+          - Troubleshooting: admin/troubleshooting.md
+      - Integrations:
+          - Home Assistant — Choosing a Path: user/home-assistant.md
+          - MQTT Topics: mqtt-topic-schema.md
+          - REST & WebSocket API: integrations/rest-ws.md
+          - MCP Server: external-clients/mcp.md
+          - External Client Wire Contract: external-clients/topic-hierarchy.md
+          - Token Pairing: external-clients/pairing.md
+          - Home Assistant Drop-in: external-clients/ha-drop-in-identity-and-scoping.md
+          - HA Unique-ID Migration: external-clients/ha-unique-id-migration.md
+          - Unique-ID Transitions on Record: external-clients/ha-unique-id-transitions.md
+          - Breaking a Published Identity: external-clients/breaking-change-process.md
+      - Reference:
+          - Configuration: reference/configuration.md
+          - WebSocket: reference/websocket.md
+          - REST API: reference/rest.md
+  - Develop & Architecture:
       - Architecture: developer/architecture.md
       - Composition Root and Wiring: developer/composition-root.md
       - The Matter Boundary: developer/matter-and-go-fabric.md
@@ -100,7 +102,6 @@ nav:
       - Development Setup: developer/setup.md
       - Testing: developer/testing.md
       - Matter Parity — Host Side: matter-parity-contract.md
-      - Matter Ecosystem Observations: developer/matter-ecosystem-observations.md
       - Writing a Source: contributor/source-interface.md
       - Architecture Decisions:
           - Overview: developer/adr-index.md

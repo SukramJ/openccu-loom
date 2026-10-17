@@ -160,66 +160,14 @@ ws://<host>:8119/api/v1/events
 
 This is one multiplexed channel. The same connection carries command replies and topic broadcasts. The schema in [`assets/wsapi.json`](https://github.com/SukramJ/openccu-loom/blob/main/assets/wsapi.json) defines both invokable commands and server-pushed broadcasts in one `commands` array; run these against your checkout for the current counts rather than trusting a number here, since the catalogue grows every release: `jq '[.commands[] | select(.kind!="broadcast")] | length' assets/wsapi.json` for invokable commands, `jq '[.commands[] | select(.kind=="broadcast")] | length' assets/wsapi.json` for broadcasts.
 
-### Envelope
-
-Every frame the daemon emits uses the same envelope:
-
-| Field | Type | Meaning |
-| --- | --- | --- |
-| `seq` | uint64 | Monotonic daemon-assigned cursor. Store the last value seen and pass it back as `since` to resume after a reconnect. |
-| `kind` | enum | `initial` \| `change` \| `refresh`. Event-family discriminator; `change` is the dominant case. |
-| `topic` | string | Routing key the client subscribed to (broadcasts only; absent on command replies). |
-| `type` | string | Names the event family; matches the `name` of the matching broadcast entry. |
-| `ts` | string | RFC3339Nano timestamp, UTC. |
-| `payload` | object | Per-frame body; broadcast entries name the OpenAPI schema that pins its structure. |
-
-### Subscribe and resume
-
-Send `{"op":"subscribe", "topics":[...]}` to start receiving broadcasts. The daemon echoes `{"op":"subscribed", "topics":[...]}` as an acknowledgement.
-
-To resume after a reconnect, append `since: N` (your last seen `seq`). The daemon replays buffered events with `seq > N` matching your topics, then sends one control frame:
-
-- `{"op":"replay_done", "seq":N}` — replay finished; `seq` is the last replayed value.
-- `{"op":"replay_lost", "oldest_seq":M}` — the stream cannot bring you to the current state; take a fresh `GET /api/v1/snapshot` to resync.
-
-`replay_lost` is also sent outside a resume. Its causes:
-
-- `since` precedes the oldest buffered event.
-- `since` is above the daemon's current sequence — a cursor from before a daemon restart, since the counter restarts at 0.
-- Your connection fell behind and the daemon dropped queued events to keep it open (one frame per overflow episode).
-- The daemon has just published a CCU's whole model once that CCU finished coming up; instead of one frame per data point, every connection gets a single `replay_lost`.
-
-The replay buffer holds 1024 events by default (`north.rest.ws.replay_capacity`).
-
-Send `{"op":"unsubscribe", "topics":[...]}` to drop topics; the daemon answers `{"op":"unsubscribed", "topics":[...]}`. Both acknowledgements are sent unconditionally, also for an empty topic list.
-
-### Limits
-
-- A connection keeps at most 1024 subscribed topics. Further topics in a `subscribe` are ignored without an error; the subscriptions you already have keep working.
-- The outbound queue per connection holds 1000 frames. A client that reads too slowly loses the oldest queued events, not its connection, and receives `replay_lost`.
-
-### Credentials on a long-lived connection
-
-A connection is authenticated once, at the upgrade, and the daemon closes it when that credential expires. To switch to a fresh API token without reconnecting, send `{"op":"reauth", "token":"<token>"}`. The daemon answers `{"op":"reauth_ok"}` — with `expires_at` when the new token has a server-side deadline — or `{"op":"reauth_failed"}` and closes the connection, after which you reconnect with valid credentials. `GET /api/v1/auth/me` reports the same deadline as `expires_at`. Resume cursor and `kind` semantics are specified in [ADR 0022](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0022-ws-resume-and-kind.md).
-
-### Heartbeat and round-trip time
-
-The daemon sends `{"op":"ping", "echo":"<token>"}` every 30 seconds and closes the connection if no frame arrives from you within 60. Respond with `{"op":"pong"}` to stay connected.
-
-Copy the `echo` token back verbatim — `{"op":"pong", "echo":"<token>"}` — and the daemon times the round trip, reporting it on the following ping as `rtt_ms`:
-
-```json
-{"op":"ping", "echo":"7", "rtt_ms":12.4}
-```
-
-That figure lets a client display its own latency to the daemon without measuring anything itself. It is absent on the first ping of a connection, and on every ping after a pong that carried no echo.
-
-Two things to keep in mind:
-
-- **Echoing is optional.** A bare `{"op":"pong"}` remains a valid heartbeat; the connection simply stays untimed. Clients written before this was added keep working unchanged.
-- **Treat the token as opaque.** Its encoding is not part of the contract and will change without notice.
-
-`rtt_ms` measures the distance between *your client* and the daemon — nothing else. It says nothing about the daemon's own link to the CCU, which is reported separately as the `connection_latency_ms` hub metric. The two are routinely orders of magnitude apart: a browser on the same LAN sees well under a millisecond here while the CCU round trip runs to several, and a client reached through a tunnel or a public host can invert that while the CCU link stays perfectly healthy. Never add them or present them as one number.
+The protocol — envelope fields, subscribe/unsubscribe, resume with
+`since` and the `replay_lost` causes, connection limits, in-band `reauth`
+and the heartbeat with its round-trip measurement — is specified in the
+[External Client Wire Contract](../external-clients/topic-hierarchy.md);
+every broadcast and command is listed in the
+[WebSocket reference](../reference/websocket.md). Resume cursor and
+`kind` semantics are decided in
+[ADR 0022](../adr/0022-ws-resume-and-kind.md).
 
 ### Example
 
