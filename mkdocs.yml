@@ -94,6 +94,9 @@ nav:
       - REST API: reference/rest.md
   - Developer:
       - Architecture: developer/architecture.md
+      - Composition Root and Wiring: developer/composition-root.md
+      - The Matter Boundary: developer/matter-and-go-fabric.md
+      - Release Process: developer/release.md
       - Development Setup: developer/setup.md
       - Testing: developer/testing.md
       - Matter Parity — Host Side: matter-parity-contract.md

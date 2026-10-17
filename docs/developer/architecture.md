@@ -16,7 +16,7 @@ flowchart TB
         rest[rest]
         ws[rest/ws]
         ui[ui · Svelte SPA + no-JS /health,/about]
-        matter[matter]
+        matteradapter[matteradapter · Matter glue]
         mcp[mcp]
     end
     subgraph Core["Domain core"]
@@ -30,13 +30,16 @@ flowchart TB
         xmlrpc[xmlrpc]
         binrpc[binrpc]
         jsonrpc[jsonrpc]
+        occulited[occulited]
     end
-    ccu[(CCU)]
+    fabric[[go-fabric module · Matter stack]]
+    ccu[(CCU / openccu-lite)]
 
     North --> Core
+    matteradapter --> fabric
     Core --> South
     South --> ccu
-    ccu -. callbacks .-> Core
+    ccu -. callbacks / event stream .-> Core
 ```
 
 The dependency rule points inward: adapters depend on the core, never the reverse. Cross-cutting protocol interfaces (the DI contracts shared by `central`, `client`, and north-bound adapters) live in `pkg/interfaces`.
@@ -53,7 +56,10 @@ The public, thin library surface lives under `pkg/`; everything daemon-internal 
 | `internal/central` | `CentralUnit`, coordinators, registries, the callback servers, scheduler. |
 | `internal/client` | `InterfaceClient`, transports, reliability (circuit breaker, retry, throttle), ReGa runner. |
 | `internal/model` | Domain model: devices, channels, data points, custom/calculated/combined profiles, schedules, hub. |
-| `internal/north` | REST, WS, UI, MQTT, Matter, and MCP adapters. |
+| `internal/north` | REST, WS, UI, MQTT, MCP and webhook adapters, plus `matteradapter` — the host side of the Matter bridge, whose stack is the external go-fabric module. |
+| `internal/store/matterendpoint` | Matter endpoint identity and the exposure allowlist, keyed by the Homematic source identity. |
+| `internal/wiring` | The wiring manifest the composition root declares its seams into (ADR 0065). |
+| `cmd/openccu-loom` | The composition root — see [Composition root and wiring](composition-root.md). |
 | `internal/store` | SQLite persistence (migrations, sessions, paramsets, devices, audit) plus in-memory caches. |
 | `internal/auth`, `internal/config`, `internal/health` | Auth backends, config loading, the unified health tracker. |
 | `internal/secret`, `internal/configstore` | Secret handling and config-at-rest. |
@@ -73,16 +79,17 @@ No code path assumes a single central. The rationale is in [ADR 0002](https://gi
 
 ## South-bound transports and callback servers
 
-Three transports cover every interface in the MVP, and every interface supports push callbacks — there is no polling-only path.
+Every interface pushes — callbacks on a CCU, the occulited event stream on an openccu-lite box. There is no polling-only path.
 
 | Transport | Interfaces | Callback server |
 | --- | --- | --- |
 | XML-RPC + JSON-RPC | HmIP-RF, BidCos-RF, BidCos-Wired, VirtualDevices | XML-RPC over HTTP on `:8120` |
 | BIN-RPC | CUxD | BIN-RPC over raw TCP on `:8129` |
+| occulited HTTP API (openccu-lite) | HmIP-RF, BidCos-RF, BidCos-Wired, VirtualDevices | none — one event stream per central ([ADR 0072](../adr/0072-openccu-lite-event-stream.md)) |
 
 HmIP-Wired is not a separate south-bound interface — [ADR 0023](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0023-hmipwired-is-product-group.md) models it as a `ProductGroup` carried on the HmIP-RF interface.
 
-Two listeners run, one per protocol, shared across all centrals:
+For CCU centrals, two listeners run, one per protocol, shared across all centrals:
 
 - **XML-RPC over HTTP** on `callback.port` (default `:8120`), routed by URL path `/RPC2/<central_name>`.
 - **BIN-RPC over raw TCP** on `callback.bin_port` (default `:8129`), routed by `interface_id` in the envelope.
@@ -116,7 +123,7 @@ wired, and what the **hub bring-up** step (identity, names, rooms)
 reads before devices load. What a central cannot do on its openccu-lite
 system — no ReGa, so no system variables, programs or the inbox — is
 expressed as an absent [feature](../admin/openccu-lite.md#feature-keys-and-what-they-need),
-never as a special case sprinkled through the shared code.
+never as a special case sprinkled through the shared code. The decision is recorded in [ADR 0071](../adr/0071-south-profiles.md).
 
 ## Event bus
 
@@ -135,11 +142,14 @@ Persistence is SQLite via `modernc.org/sqlite` — pure Go, no CGo. The default 
 
 ## Matter bridge
 
-The Matter wire stack is not part of this repository. It lives in the [go-fabric](https://github.com/SukramJ/go-fabric) module — a semantic port of matter.js HEAD covering the TLV codec, the Interaction Model, PASE / CASE, MRP over IPv6 UDP, DNS-SD advertisement, the cluster servers and the endpoint assembler — which the daemon embeds as a library. What stays here is the host side: `internal/north/matteradapter/` walks the device model and produces the flat endpoint specs go-fabric turns into a topology, `internal/store/matterendpoint/` backs go-fabric's endpoint store with the persisted source → endpoint-id mapping and the operator's exposure allowlist, and each device profile projects itself in `internal/model/custom/<dp>/matter.go`. The binding contract and standing parity guards are described in the [Matter parity contract](../matter-parity-contract.md); the user-facing view is [Matter](../user/matter.md).
+The Matter wire stack is not part of this repository. It lives in the [go-fabric](https://github.com/SukramJ/go-fabric) module — a semantic port of matter.js HEAD covering the TLV codec, the Interaction Model, PASE / CASE, MRP over IPv6 UDP, DNS-SD advertisement, the cluster servers and the endpoint assembler — which the daemon embeds as a library. What stays here is the host side: `internal/north/matteradapter/` walks the device model and produces the flat endpoint specs go-fabric turns into a topology, `internal/store/matterendpoint/` backs go-fabric's endpoint store with the persisted source → endpoint-id mapping and the operator's exposure allowlist, and each device profile projects itself in `internal/model/custom/<dp>/matter.go`. The binding contract and standing parity guards are described in the [Matter parity contract](../matter-parity-contract.md); the boundary itself, and how a go-fabric release is taken, in [The Matter boundary](matter-and-go-fabric.md); the user-facing view is [Matter](../user/matter.md).
 
 ## Where to read deeper
 
 - [`SPECIFICATION.md`](https://github.com/SukramJ/openccu-loom/blob/main/SPECIFICATION.md) — goals, non-goals, constraints, resolved decisions.
 - [ADR index](adr-index.md) — every architectural decision, with rationale.
+- [Composition root and wiring](composition-root.md) — how subsystems are wired and which guards pin the wiring.
+- [The Matter boundary](matter-and-go-fabric.md) — go-fabric and the Matter glue that stays here.
+- [Release process](release.md) — version carriers, changelogs, tag and follow-ups.
 - [Security guide](../SECURITY.md) — trust boundaries and the threat model.
 - [Source interface](../contributor/source-interface.md) — the strong-model read/write contract.

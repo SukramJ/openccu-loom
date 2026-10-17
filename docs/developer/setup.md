@@ -10,11 +10,11 @@ How to get a working OpenCCU-Loom build on your machine, run it locally, and kee
 | Tool | Version / note |
 | --- | --- |
 | Go | 1.27+ (`go.mod` pins `go 1.27.2`) |
-| `golangci-lint` | v2 (installed by `make setup`; `.golangci.yaml` is v2-format, a v1 binary rejects it) |
-| `gofumpt` | formatter, stricter than `gofmt` |
+| `golangci-lint` | v2.14.0 — `GOLANGCI_LINT_VERSION` in the `Makefile` and in CI, installed by `make setup`; `.golangci.yaml` is v2-format, a v1 binary rejects it |
+| `gofumpt` | v0.10.0 — pinned as `GOFUMPT_VERSION` in the `Makefile` and in CI; `make setup` installs that version. Other versions format differently. |
 | `goose` | SQLite migrations |
 | Node + npm | only to build the Svelte SPA |
-| Python 3.14+ | only for the profile-generator / snapshot scripts |
+| Python 3.14+ | only for the cross-stack snapshot scripts under `script/` |
 | Docker + buildx | integration tests (Mosquitto) and multi-arch images |
 
 The integration tests run a pure-Go CCU simulator, so no Python toolchain is needed to run them — only Mosquitto via Docker.
@@ -70,7 +70,7 @@ make ui-dev    # Vite dev server, proxies /api to :8119
 | `make fmt` / `make fmt-check` | run / verify `gofumpt` + `goimports` |
 | `make vet` | `go vet` |
 | `make vuln` / `make licenses` / `make secrets` | govulncheck / copyleft-license gate / gitleaks |
-| `make generate` | run all code generators |
+| `make generate` | run all code generators (includes `make docs-reference`) |
 | `make snapshot` | full cross-stack model-snapshot pipeline |
 | `make matter-smoke` | chip-tool PASE smoke against the Matter bridge (Linux host) |
 | `make docker` | multi-arch Docker images (buildx) |
@@ -105,4 +105,6 @@ A few rules are non-negotiable and are enforced mechanically:
 
 - [Testing](testing.md) — the test pillars and the release checklist.
 - [Source interface](../contributor/source-interface.md) — the strong-model read/write contract.
+- [Composition root and wiring](composition-root.md) — how new wiring is pinned.
+- [The Matter boundary](matter-and-go-fabric.md) — what lives in go-fabric and what stays here.
 - [Matter parity contract](../matter-parity-contract.md) — the binding rules for Matter-side changes.
