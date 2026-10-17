@@ -11,9 +11,11 @@ The test pillars OpenCCU-Loom is held to, the make target behind each, what the 
 | --- | --- | --- | --- |
 | Unit | per package | `make test` | Regular Go tests; target ≥ 80 % in core packages (`client`, `central`, `model/custom`, `store`). |
 | Contract | `tests/contract/` | `make contract` | Protocol / capability invariants — each test states a hard rule and fails if violated. |
+| Wiring pins | `tests/contract/wiring_pins/` | `make contract` | Pins for production wiring through the composition root — see [Composition root and wiring](composition-root.md). |
 | Golden / replay | `tests/golden/` | `make test` | Recorded CCU sessions replayed against the daemon; assertions compare emitted events / JSON to golden files. |
-| Integration | `tests/integration/` | `make integration` | Daemon run against the in-process `godevccu` simulator plus Mosquitto (Docker); end-to-end behavior. |
-| End-to-end | `tests/e2e/` | `make e2e` | Full black-box end-to-end flows against the built binary (REST, WS, MQTT, SPA, Prometheus, CLI). |
+| Integration | `tests/integration/` (`//go:build integration`) | `make integration` | Daemon run against the in-process `godevccu` simulator plus Mosquitto (Docker); end-to-end behavior. |
+| End-to-end | `tests/e2e/` (`//go:build e2e`) | `make e2e` | Full black-box end-to-end flows against the built binary (REST, WS, MQTT, SPA, Prometheus, CLI). |
+| Matter scenarios | `tests/scenario/` | `make scenarios` | Replays the Matter behaviour corpus under [`notes/parity/matter/scenarios/`](https://github.com/SukramJ/openccu-loom/tree/main/notes/parity/matter/scenarios) against a live go-fabric bridge. It carries no build tag, so `make test` runs it too; `make scenarios` runs it alone and verbose. |
 | Chip-tool commissioner | `tests/chiptool/` (`//go:build chiptool`) | `make chiptool-test`, `make matter-smoke` | Real `chip-tool` commissioner runs against the Matter bridge — the only guard that exercises a real Matter controller, not just parity fixtures. CI-only; cannot run on macOS. |
 | Load test | `tests/loadtest/` | `go test -tags=loadtest ./tests/loadtest/...` | Production-shaped load harness (documented in [`notes/testplans/testplan.md`](https://github.com/SukramJ/openccu-loom/blob/main/notes/testplans/testplan.md)). |
 | Benchmarks | `tests/bench/` | `make bench` | Performance; regressions > 20 % block release. |
@@ -22,7 +24,7 @@ The test pillars OpenCCU-Loom is held to, the make target behind each, what the 
 | SPA browser-e2e | `assets/ui/tests/e2e/` | `cd assets/ui && npm run e2e` | Playwright browser-e2e + light/dark visual-regression baselines, mocked API. Not covered by `make test`. |
 | SPA typecheck | `assets/ui/` | `cd assets/ui && npm run typecheck` | `tsc` type-checking; not covered by `make test` and must be green before a release merge. |
 
-`make test` runs the unit and contract pillars together; `make race` adds `-race`. Integration, e2e, bench, fuzz, chip-tool, load-test, and the SPA suites are heavier and run on their own targets.
+`make test` runs the unit and contract pillars (wiring pins and the scenario corpus included); `make race` adds `-race`. Integration, e2e, bench, fuzz, chip-tool, load-test, and the SPA suites sit behind build tags or their own toolchains and run on their own targets.
 
 For the **openccu-lite** south path the counterpart to `godevccu` is `litefake` — godevccu's [`pkg/litefake`](https://github.com/SukramJ/godevccu/tree/main/pkg/litefake), a fake of a whole box (token auth, the XML-RPC proxy with its init refusal and method tiers, the SSE event stream, metadata, system and pairing APIs) composed over per-interface simulator listeners. The occulited transport tests, the `lite_*` contract and wiring pins, and the lite e2e runs all boot it in-process; the wire contract it implements is kept verbatim in its [`CONTRACT.md`](https://github.com/SukramJ/godevccu/blob/main/pkg/litefake/CONTRACT.md), and `tests/contract/occulited_wire_contract_test.go` pins the production client against it, deviation runs included.
 
@@ -70,7 +72,9 @@ Contract tests in `tests/contract/` lock invariants that must never silently dri
 
 - **Protocol / capability invariants** — that every MVP interface has ping/pong, that CUxD uses the BIN-RPC backend, that the device-profile registry stays in parity, and a cross-stack reliability-defaults drift detector.
 - **Documentation purity** (`doc_purity_test.go`) — code comments carry no audit / wave / drift tracking tags and no German function-words; markdown references in `//` comments must point at files that exist.
-- **Markdown link integrity** — every relative Markdown link across the repo's `.md` files must resolve to a real file on disk.
+- **Markdown link integrity** — every relative Markdown link across the repo's `.md` files must resolve to a real file on disk; `TestPublishedDocsLinksStayInsideDocsDir` additionally rejects a page under `docs/` that links out of `docs/` with a relative path.
+- **Wiring** — the composition-root guards (`TestEveryWiringSetterHasAProductionCaller`, `TestEveryRegistryWalkerHasAnAdoptSeam`, `TestEveryEventTypeHasASubscriber`, …), described in [Composition root and wiring](composition-root.md).
+- **Generated reference** — `TestGeneratedReferenceIsFresh` regenerates the pages under `docs/reference/` (configuration, WebSocket, REST) and compares them byte for byte with the checked-in copies. When it fails after a change to the config schema, `assets/wsapi.json` or `assets/openapi.yaml`, run `make docs-reference` and commit the result.
 
 !!! warning "Touching a boundary means touching a test"
     If you change a protocol, capability, or state-machine boundary, you must add or update a contract test in the same change.

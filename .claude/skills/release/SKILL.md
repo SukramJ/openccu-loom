@@ -5,7 +5,7 @@ description: Cut an OpenCCU-Loom release — bump the version everywhere it is c
 
 # Releasing OpenCCU-Loom
 
-A release touches five version carriers. `release.yml` guards **both** add-on
+A release touches three version-carrying files and three changelogs. `release.yml` guards **both** add-on
 `config.yaml` versions against the tag, so a missed one fails the workflow
 after the tag is already pushed — bump them all in one commit.
 
@@ -21,7 +21,7 @@ fixes, minor for features. The REST `APIVersion` in
 `internal/north/rest/handlers/info.go` is **independent** — bump it only when
 the north-bound contract changed, and follow its own semver.
 
-## 2. Bump the five carriers
+## 2. Bump the three version files
 
 | File | Shape |
 |---|---|
@@ -57,13 +57,15 @@ Invoke the `comment-claims-sweep` skill. Fix or reword every refuted claim
 make lint && make test && make contract
 ```
 
-Two pinned artefacts carry the build version and fail on every bump. Refresh
-them, and check the diff is the version and nothing else:
+The security/combined discovery golden carries the build version
+(`sw_version`) and fails on every bump. The wire-fixture corpus masks its
+version fields as volatile, so refreshing it should produce no diff — a
+diff there is a real wire change. Refresh both and check:
 
 ```sh
 go test -run TestSecurityAndCombinedDiscoveryPayloadsArePinned ./internal/north/mqtt/ -update-security-combined-golden
 go test -run TestWireFixtureCorpusMatchesHandlers ./tests/contract/ -update-wire-fixtures
-git diff internal/north/mqtt/testdata/ assets/wire-fixtures/ | grep '^[-+] '   # only sw_version / version
+git diff internal/north/mqtt/testdata/ assets/wire-fixtures/ | grep '^[-+] '   # only sw_version
 ```
 
 Then commit (`git commit -s`), open the PR, let CI go green, merge, and tag
@@ -113,17 +115,15 @@ How a go-fabric change reaches loom:
    here like any other change — describe the behaviour, not the module
    version.
 
-**Tag or pseudo-version.** The module carries no tags yet, so every bump is a
-pseudo-version. That is deliberate: the API has had one real caller, and a
-`v0.x` tag would freeze port shapes designed against a single consumer. Take
-a tag as soon as go-fabric publishes one — a tag is what makes the pin
-readable and what lets Dependabot do the bump. Until then `@main` and
-`@<commit-sha>` both work and both record the resolved pseudo-version in
-`go.mod`; name the SHA when you need a specific commit rather than the tip.
+**Tags.** go-fabric publishes SemVer tags (`v0.x`); pin a tag
+(`go get github.com/SukramJ/go-fabric@vX.Y.Z`). A tag keeps the pin readable
+and lets Dependabot propose the bump. `@<commit-sha>` still works for an
+unreleased fix and records a pseudo-version — replace it with the tag once
+one is cut.
 
 There is no `go.work` and no filesystem `replace` in the committed tree — CI
 checks out one repository and resolves the module from the proxy. A local
 `go.work` is fine for development and must never reach a commit.
 
-Dependabot's root `gomod` entry covers the module, but has nothing to propose
-while it is untagged — see the comment in `.github/dependabot.yml`.
+Dependabot's root `gomod` entry covers the module and proposes tagged
+releases — see the comment in `.github/dependabot.yml`.
