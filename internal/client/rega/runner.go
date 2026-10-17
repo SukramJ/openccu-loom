@@ -461,7 +461,12 @@ func (r *Runner) GetSerial(ctx context.Context) (string, error) {
 
 // ProgramDescription is one entry returned by [Runner.GetProgramDescriptions].
 type ProgramDescription struct {
-	ID          string `json:"id"`
+	ID string `json:"id"`
+	// IsCopy marks the copy the CCU WebUI's program editor creates while a
+	// program is open in it (same name, new ID, inactive). It is false when
+	// the script predates the field, so an older CCU-side answer filters
+	// nothing.
+	IsCopy      bool   `json:"is_copy"`
 	Description string `json:"description"`
 	// ConditionSummary is a compact, language-neutral rendering of the
 	// program's root-rule trigger conditions (object names joined by the
