@@ -223,6 +223,16 @@ var mqttDocTopicPromises = map[string]docTopicPromise{
 	"homeassistant/<component>/<node_id>/<object_id>/config": {
 		kind: promisePublished, producers: []string{"DiscoveryConfig"},
 	},
+	// north.mqtt.discovery_bundles: one retained document per device, written
+	// by the bundle flush (discovery_bundle_route.go FlushBundles).
+	"homeassistant/device/<node_id>/config": {
+		kind: promisePublished, producers: []string{"publishDeviceBundle"},
+	},
+	"homeassistant/status": {
+		kind: promiseCommand, producers: []string{"HABirthTopic"},
+		why: "Home Assistant's birth topic: BirthSync subscribes to it and re-publishes discovery " +
+			"when HA reports `online`; the daemon never publishes on it",
+	},
 
 	// --- Bridge / hub status --------------------------------------------
 	"<name>/status/<central>/hub/sysvars/<sysvar>": {
