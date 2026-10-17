@@ -11,5 +11,5 @@
 //
 // When you add a new exported method, builder, or subscriber that is wired
 // through an indirect path (factory, closure, reflection), add a pin test
-// here.  See CONTRIBUTING.md §Pin-Tests für neue Wiring.
+// here.  See CONTRIBUTING.md, section "Pin tests for new wiring".
 package wiring_pins
